@@ -3,6 +3,7 @@ export type Wallet = string;
 export type CharacterRole =
   | '班主'
   | '青衣'
+  | '花旦'
   | '小生'
   | '武旦'
   | '老旦'
