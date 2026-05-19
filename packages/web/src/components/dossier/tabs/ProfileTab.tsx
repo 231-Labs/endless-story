@@ -63,8 +63,11 @@ export function ProfileTab({
                     <span className="text-sm tracking-widest text-mute">{label}</span>
                     <span className="font-mono text-lg text-ink">{value}</span>
                   </div>
-                  <div className="mt-3 h-px w-full bg-hairline">
-                    <div className="h-full bg-cinnabar/60" style={{ width: `${value}%` }} />
+                  <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-hairline/80 dark:bg-hairline">
+                    <div
+                      className="h-full rounded-full bg-cinnabar/70 dark:bg-cinnabar/80"
+                      style={{ width: `${value}%` }}
+                    />
                   </div>
                 </div>
               );

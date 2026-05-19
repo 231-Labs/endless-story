@@ -68,7 +68,7 @@ export function Composer() {
           </div>
         </form>
       ) : sent ? (
-        <p className="rounded-md border border-dashed border-jade/40 bg-jade/5 p-4 text-sm text-jade">
+        <p className="rounded-md border border-dashed border-jade/40 bg-jade/10 p-4 text-sm text-jade dark:border-jade/50 dark:bg-jade/15">
           已寄出。她會在下一{sent.kind === 'inject_dream' ? '段夢' : '個 tick'}感應到。
         </p>
       ) : (
