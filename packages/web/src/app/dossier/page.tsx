@@ -3,6 +3,7 @@ import {
   chaptersApi,
   interventionsApi,
   relationshipsApi,
+  soulSongsApi,
   subscriptionsApi,
 } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
@@ -138,11 +139,12 @@ export default async function DossierPage({
 
   const tab = parseTab(params.tab);
   const liveState = getCharacterLiveState(character);
-  const [allCharacters, edges, chapters, interventions] = await Promise.all([
+  const [allCharacters, edges, chapters, interventions, soulSongs] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
     chaptersApi.listPublicChaptersForSubscription(character.id),
     interventionsApi.listInterventions(character.id),
+    soulSongsApi.listSoulSongs(character.id),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
 
@@ -170,6 +172,7 @@ export default async function DossierPage({
             <InterventionTab
               character={character}
               interventions={interventions}
+              soulSongs={soulSongs}
               viewerWallet={viewerWallet}
             />
           ) : null}

@@ -6,3 +6,4 @@ export * from './subscription';
 export * from './intervention';
 export * from './saga';
 export * from './recruitment';
+export * from './soulSong';
