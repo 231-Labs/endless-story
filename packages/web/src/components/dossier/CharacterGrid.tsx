@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Character } from '@endless-story/shared';
 import Link from 'next/link';
 import { SubscribeCard } from '@/components/subscribe/SubscribeCard';
@@ -36,26 +36,26 @@ export function CharacterGrid({
   internalSagaId: string;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const normalizedQuery = searchQuery.toLowerCase().trim();
 
-  const visible = cards.filter(({ character: c }) => {
-    if (filter === 'internal' && c.sagaId !== internalSagaId) return false;
-    if (filter === 'external' && c.sagaId === internalSagaId) return false;
-    if (filter === 'mine' && (!viewerWallet || c.nftOwner !== viewerWallet)) return false;
-    
-    if (searchQuery.trim()) {
-      return c.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
-    }
-    
-    return true;
-  });
+  const visible = useMemo(
+    () =>
+      cards.filter(({ character: c }) => {
+        if (filter === 'internal' && c.sagaId !== internalSagaId) return false;
+        if (filter === 'external' && c.sagaId === internalSagaId) return false;
+        if (filter === 'mine' && (!viewerWallet || c.nftOwner !== viewerWallet)) return false;
+        if (normalizedQuery) return c.name.toLowerCase().includes(normalizedQuery);
+        return true;
+      }),
+    [cards, filter, viewerWallet, internalSagaId, normalizedQuery]
+  );
 
-  // Group cards into pages (3 per page for desktop, 1 per page for mobile)
-  // We'll use CSS grid/flex to handle the responsive layout per snap section
-  const desktopPageSize = 3;
-  const pages = [];
-  for (let i = 0; i < visible.length; i += desktopPageSize) {
-    pages.push(visible.slice(i, i + desktopPageSize));
-  }
+  const pages = useMemo(() => {
+    const pageSize = 3;
+    return Array.from({ length: Math.ceil(visible.length / pageSize) }, (_, i) =>
+      visible.slice(i * pageSize, (i + 1) * pageSize)
+    );
+  }, [visible]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -114,8 +114,8 @@ export function CharacterGrid({
         ) : (
           <div>
             {pages.map((pageCards, pageIndex) => (
-              <section 
-                key={pageIndex} 
+              <section
+                key={pageCards[0]?.character.id ?? `page-${pageIndex}`}
                 className="relative flex min-h-[100dvh] snap-start snap-always items-center justify-center px-5 pt-32 pb-12 sm:px-10 sm:pt-40"
               >
                 <div className="mx-auto w-full max-w-6xl">

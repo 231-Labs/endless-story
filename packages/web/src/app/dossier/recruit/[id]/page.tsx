@@ -58,7 +58,7 @@ export default async function RecruitmentIntentPage({
     <main className="min-h-screen">
       <SiteNav />
       <div className="mx-auto max-w-2xl px-5 py-10 sm:px-10 sm:py-14">
-        <BackButton fallback="/" ariaLabel="返回" />
+        <BackButton fallback="/" label="返回首頁" ariaLabel="返回" />
 
         <div className="mt-8 text-2xs tracking-widest text-mute">
           {recruitment.sagaName}

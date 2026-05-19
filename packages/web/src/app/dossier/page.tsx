@@ -110,17 +110,17 @@ export default async function DossierPage({
       })
     );
 
-  return (
-    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <SiteNav />
-      <CharacterGrid
-        cards={cards}
-        filter={filter}
-        viewerWallet={viewerWallet}
-        internalSagaId={DEMO_SAGA_ID}
-      />
-    </main>
-  );
+    return (
+      <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <SiteNav />
+        <CharacterGrid
+          cards={cards}
+          filter={filter}
+          viewerWallet={viewerWallet}
+          internalSagaId={DEMO_SAGA_ID}
+        />
+      </main>
+    );
   }
 
   // ──────────── Detail view ────────────

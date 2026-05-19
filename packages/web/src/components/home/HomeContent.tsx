@@ -28,9 +28,9 @@ export function HomeContent({
       
       {/* Second Screen: Recruitment */}
       <div className="min-h-[100dvh] snap-start snap-always">
-        <RecruitmentSection 
-          recruitments={initialRecruitments} 
-          onRecruitmentsChange={setOpenRecruitments} 
+        <RecruitmentSection
+          recruitments={openRecruitments}
+          onRecruitmentsChange={setOpenRecruitments}
         />
       </div>
 

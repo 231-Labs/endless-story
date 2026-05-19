@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Recruitment } from '@endless-story/shared';
 
 type Stage = 'closed' | 'prompt' | 'rolling' | 'pick' | 'painting' | 'portrait' | 'done';
@@ -83,6 +84,11 @@ function daysLeft(expiresAt: string): number {
   return Math.max(0, Math.floor((exp - now) / (1000 * 60 * 60 * 24)));
 }
 
+function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'painting'> {
+  if (stage === 'painting') return 'portrait';
+  return stage as Exclude<Stage, 'closed' | 'painting'>;
+}
+
 export function RecruitmentTicket({
   recruitment,
   onOpenChange,
@@ -94,46 +100,38 @@ export function RecruitmentTicket({
   const [prompt, setPrompt] = useState('');
   const [pickedIdx, setPickedIdx] = useState<number | null>(null);
   const [portraitIdx, setPortraitIdx] = useState<number | null>(null);
-  const [collapsing, setCollapsing] = useState(false);
+  const router = useRouter();
+  const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const candidates = getCandidates(recruitment.specialty);
   const isOpen = stage !== 'closed';
+
+  const resetWizard = () => {
+    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+    setStage('closed');
+    setPrompt('');
+    setPickedIdx(null);
+    setPortraitIdx(null);
+  };
 
   useEffect(() => {
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
 
+  useEffect(() => {
+    return () => {
+      if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+    };
+  }, []);
+
   // Reset internal state when the ticket's recruitment changes (carousel switch)
   useEffect(() => {
-    setStage('closed');
-    setPrompt('');
-    setPickedIdx(null);
-    setPortraitIdx(null);
-    setCollapsing(false);
+    resetWizard();
   }, [recruitment.id]);
 
-  const close = () => {
-    setStage('closed');
-    setPrompt('');
-    setPickedIdx(null);
-    setPortraitIdx(null);
-    setCollapsing(false);
-  };
+  const close = () => resetWizard();
 
   const handleOpen = () => setStage('prompt');
-  const handleRoll = () => {
-    if (!prompt.trim()) return;
-    setStage('rolling');
-    setTimeout(() => setStage('pick'), 1400);
-  };
-  const handlePick = (idx: number) => {
-    setPickedIdx(idx);
-    setStage('portrait');
-  };
-  const handlePortraitPick = (idx: number) => {
-    setPortraitIdx(idx);
-    setStage('done');
-  };
 
   const minEntries: [string, number][] = recruitment.minAttributes
     ? Object.entries(recruitment.minAttributes).filter(
@@ -142,17 +140,18 @@ export function RecruitmentTicket({
     : [];
 
   const handleNext = () => {
+    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
+
     if (stage === 'prompt') {
       setStage('rolling');
-      setTimeout(() => setStage('pick'), 1400);
+      stageTimerRef.current = setTimeout(() => setStage('pick'), 1400);
     } else if (stage === 'pick') {
       setStage('painting');
-      setTimeout(() => setStage('portrait'), 2500);
+      stageTimerRef.current = setTimeout(() => setStage('portrait'), 2500);
     } else if (stage === 'portrait') {
       setStage('done');
     } else if (stage === 'done') {
-      // In a real app, this would route to the new character's dossier
-      window.location.href = '/dossier?id=char_cheng_hengyu';
+      router.push('/dossier?id=char_cheng_hengyu');
     }
   };
 
@@ -200,11 +199,7 @@ export function RecruitmentTicket({
     <>
       <div
         className={`relative overflow-hidden rounded-lg bg-surface ring-1 transition-all duration-500 md:min-h-[440px] ${
-          isOpen
-            ? `ring-cinnabar/40 shadow-xl shadow-cinnabar/5 ${
-                collapsing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
-              }`
-            : 'ring-hairline'
+          isOpen ? 'scale-100 opacity-100 ring-cinnabar/40 shadow-xl shadow-cinnabar/5' : 'ring-hairline'
         }`}
       >
         <div className="grid grid-cols-1 md:min-h-[440px] md:grid-cols-[1fr_240px]">
@@ -290,7 +285,7 @@ export function RecruitmentTicket({
 
           <div className="flex min-w-20 items-center justify-center gap-2">
             {STEPS.map((step) => {
-              const isActive = step.key === (stage === 'painting' ? 'portrait' : stage);
+              const isActive = step.key === stepKeyForStage(stage);
               return (
                 <div
                   key={step.key}
@@ -401,7 +396,7 @@ function DefaultStub({
 }
 
 function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
-  const activeKey = stage === 'painting' ? 'portrait' : stage;
+  const activeKey = stepKeyForStage(stage);
   const currentIdx = STEPS.findIndex((s) => s.key === activeKey);
   return (
     <ol className="space-y-3">

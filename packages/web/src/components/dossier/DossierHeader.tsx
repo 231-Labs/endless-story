@@ -3,6 +3,7 @@ import { BackButton } from '@/components/common/BackButton';
 import { CharacterPortrait } from '@/components/common/CharacterPortrait';
 import type { CharacterLiveState } from '@/lib/character-live-state';
 import { truncateAddress, survivalBadgeClasses, survivalLabel } from '@/lib/format';
+import { DEMO_SAGA_ID } from '@/mocks/sagas';
 
 const GENDER_LABEL = { female: '女', male: '男', other: '其他' } as const;
 
@@ -17,7 +18,7 @@ export function DossierHeader({
   liveState,
 }: {
   character: Character;
-  liveState?: CharacterLiveState;
+  liveState: CharacterLiveState;
 }) {
   return (
     <header
@@ -41,7 +42,7 @@ export function DossierHeader({
               <div className="flex items-center gap-3 text-sm tracking-widest text-mute">
                 <span>{character.role}</span>
                 <span className="text-hairline">·</span>
-                <span>{character.sagaId ? '春雪社' : '江湖'}</span>
+                <span>{character.sagaId === DEMO_SAGA_ID ? '春雪社' : '江湖'}</span>
               </div>
               <h1 className="mt-4 font-serif text-5xl tracking-wide text-ink sm:text-6xl lg:text-7xl">
                 {character.name}
@@ -62,18 +63,16 @@ export function DossierHeader({
               </div>
             </div>
 
-            {liveState ? (
-              <div className="mt-12 border-t border-hairline pt-6 sm:mt-auto sm:pt-8">
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
-                  {LIVE_ITEMS.map((item) => (
-                    <div key={item.key} className="min-w-0">
-                      <p className="text-xs tracking-widest text-mute">{item.label}</p>
-                      <p className="mt-2 font-serif text-lg leading-snug text-ink/90">{liveState[item.key]}</p>
-                    </div>
-                  ))}
-                </div>
+            <div className="mt-12 border-t border-hairline pt-6 sm:mt-auto sm:pt-8">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
+                {LIVE_ITEMS.map((item) => (
+                  <div key={item.key} className="min-w-0">
+                    <p className="text-xs tracking-widest text-mute">{item.label}</p>
+                    <p className="mt-2 font-serif text-lg leading-snug text-ink/90">{liveState[item.key]}</p>
+                  </div>
+                ))}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Recruitment } from '@endless-story/shared';
 import { RecruitmentTicket } from './RecruitmentTicket';
 
@@ -26,12 +26,19 @@ export function RecruitmentSection({
   const [wizardOpen, setWizardOpen] = useState(false);
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
   const [ticketVisible, setTicketVisible] = useState(true);
+  const slideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (slideDir == null) return;
     const id = setTimeout(() => setSlideDir(null), 320);
     return () => clearTimeout(id);
   }, [slideDir]);
+
+  useEffect(() => {
+    return () => {
+      if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+    };
+  }, []);
 
   if (recruitments.length === 0) {
     return (
@@ -69,32 +76,28 @@ export function RecruitmentSection({
   const safeIdx = Math.min(activeIdx, recruitments.length - 1);
   const active = recruitments[safeIdx];
 
-  const goPrev = () => {
-    setSlideDir('right');
+  const animateSlide = (dir: 'left' | 'right', nextIdx: number) => {
+    if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
+    setSlideDir(dir);
     setTicketVisible(false);
-    setTimeout(() => {
-      setActiveIdx((i) => (i - 1 + recruitments.length) % recruitments.length);
+    slideTimerRef.current = setTimeout(() => {
+      setActiveIdx(nextIdx);
       setTicketVisible(true);
+      slideTimerRef.current = null;
     }, 160);
   };
 
+  const goPrev = () => {
+    animateSlide('right', (safeIdx - 1 + recruitments.length) % recruitments.length);
+  };
+
   const goNext = () => {
-    setSlideDir('left');
-    setTicketVisible(false);
-    setTimeout(() => {
-      setActiveIdx((i) => (i + 1) % recruitments.length);
-      setTicketVisible(true);
-    }, 160);
+    animateSlide('left', (safeIdx + 1) % recruitments.length);
   };
 
   const goTo = (idx: number) => {
     if (idx === safeIdx) return;
-    setSlideDir(idx > safeIdx ? 'left' : 'right');
-    setTicketVisible(false);
-    setTimeout(() => {
-      setActiveIdx(idx);
-      setTicketVisible(true);
-    }, 160);
+    animateSlide(idx > safeIdx ? 'left' : 'right', idx);
   };
 
   return (
