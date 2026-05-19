@@ -76,7 +76,7 @@ function SceneCard({
       className="group block w-full text-left"
     >
       <div
-        className={`relative aspect-video overflow-hidden rounded-md bg-stone-100 ring-1 transition-all duration-300 ${
+        className={`relative aspect-video overflow-hidden rounded-md bg-stone-100 dark:bg-stone-800 ring-1 transition-all duration-300 ${
           isActive
             ? 'ring-cinnabar shadow-md shadow-cinnabar/10'
             : 'ring-hairline hover:shadow-md hover:shadow-ink/5'
@@ -299,7 +299,7 @@ function SceneFloatingCard({
         type="button"
         onClick={onClose}
         aria-label="關閉"
-        className="absolute right-2 top-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-canvas/80 text-base text-ink/70 backdrop-blur transition-colors hover:bg-canvas hover:text-ink"
+        className="absolute right-2 top-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-surface/85 text-base text-ink/80 backdrop-blur transition-colors hover:bg-surface hover:text-ink"
       >
         ×
       </button>

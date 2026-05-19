@@ -33,9 +33,21 @@ const STEPS: { key: Exclude<Stage, 'closed'>; label: string }[] = [
 ];
 
 const PORTRAIT_TONES = [
-  { bg: 'bg-rose-50', ring: 'ring-rose-100', text: 'text-rose-300' },
-  { bg: 'bg-indigo-50', ring: 'ring-indigo-100', text: 'text-indigo-300' },
-  { bg: 'bg-amber-50', ring: 'ring-amber-100', text: 'text-amber-300' },
+  {
+    bg: 'bg-rose-50 dark:bg-rose-950/40',
+    ring: 'ring-rose-100 dark:ring-rose-900/50',
+    text: 'text-rose-300 dark:text-rose-800',
+  },
+  {
+    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
+    ring: 'ring-indigo-100 dark:ring-indigo-900/50',
+    text: 'text-indigo-300 dark:text-indigo-800',
+  },
+  {
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    ring: 'ring-amber-100 dark:ring-amber-900/50',
+    text: 'text-amber-300 dark:text-amber-700',
+  },
 ];
 
 const MOCK_CANDIDATES_BY_SPECIALTY: Record<string, Candidate[]> = {
@@ -121,8 +133,6 @@ export function RecruitmentTicket({
   const handlePortraitPick = (idx: number) => {
     setPortraitIdx(idx);
     setStage('done');
-    setTimeout(() => setCollapsing(true), 2400);
-    setTimeout(close, 3100);
   };
 
   const minEntries: [string, number][] = recruitment.minAttributes
@@ -147,7 +157,7 @@ export function RecruitmentTicket({
       onClick={!isOpen ? handleOpen : undefined}
       onKeyDown={!isOpen ? handleKey : undefined}
       aria-label={!isOpen ? `應榜 ${recruitment.specialty}` : undefined}
-      className={`group relative overflow-hidden rounded-lg bg-canvas ring-1 transition-all duration-500 md:min-h-[480px] ${
+      className={`group relative overflow-hidden rounded-lg bg-surface ring-1 transition-all duration-500 md:min-h-[480px] ${
         isOpen
           ? `ring-cinnabar/40 shadow-xl shadow-cinnabar/5 ${
               collapsing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
@@ -163,15 +173,14 @@ export function RecruitmentTicket({
           </>
         ) : (
           <>
-        {/* Left main — stage content morphs */}
-        <div className="relative p-6 sm:p-8 md:p-10">
+        {/* Left main — stage content morphs, vertically centered */}
+        <div className="relative flex flex-col justify-center p-6 sm:p-8 md:p-10">
           <div key={stage} className="animate-fade-in-up">
             {stage === 'prompt' ? (
               <PromptStage
                 prompt={prompt}
                 onPromptChange={setPrompt}
                 onSubmit={handleRoll}
-                basePrice={recruitment.basePrice}
               />
             ) : null}
             {stage === 'rolling' ? <RollingStage /> : null}
@@ -186,6 +195,7 @@ export function RecruitmentTicket({
                 candidate={candidates[pickedIdx]}
                 role={recruitment.specialty}
                 portraitTone={PORTRAIT_TONES[portraitIdx]}
+                onClose={close}
               />
             ) : null}
           </div>
@@ -244,7 +254,7 @@ function DefaultMain({
   minEntries: [string, number][];
 }) {
   return (
-    <div className="p-6 sm:p-8 md:p-10">
+    <div className="flex flex-col justify-center p-6 sm:p-8 md:p-10">
       <p className="text-2xs tracking-widest text-mute">
         {recruitment.sagaName} · {recruitment.membership === 'internal' ? '春雪社徵召' : '江湖客串'}
       </p>
@@ -351,12 +361,10 @@ function PromptStage({
   prompt,
   onPromptChange,
   onSubmit,
-  basePrice,
 }: {
   prompt: string;
   onPromptChange: (v: string) => void;
   onSubmit: () => void;
-  basePrice: number;
 }) {
   return (
     <div className="space-y-4">
@@ -369,7 +377,7 @@ function PromptStage({
         rows={5}
         placeholder="他從哪裡來？身上帶著什麼樣的習慣？什麼事會讓他突然安靜下來？"
         maxLength={200}
-        className="w-full resize-none rounded border border-hairline bg-canvas px-3 py-2 text-base leading-relaxed text-ink placeholder:text-mute focus:border-cinnabar focus:outline-none"
+        className="w-full resize-none rounded border border-hairline bg-canvas dark:bg-canvas/40 px-3 py-2 text-base leading-relaxed text-ink placeholder:text-mute focus:border-cinnabar focus:outline-none"
       />
       <div className="flex items-center justify-between gap-3">
         <p className="text-2xs tracking-widest text-mute">{prompt.length} / 200</p>
@@ -377,9 +385,9 @@ function PromptStage({
           type="button"
           onClick={onSubmit}
           disabled={!prompt.trim()}
-          className="rounded bg-cinnabar px-5 py-2.5 text-sm text-canvas transition-colors hover:bg-seal disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded bg-cinnabar px-6 py-2.5 text-sm text-canvas transition-colors hover:bg-seal disabled:cursor-not-allowed disabled:opacity-40"
         >
-          付 {basePrice} Endless · 擲牌
+          擲牌
         </button>
       </div>
     </div>
@@ -435,7 +443,7 @@ function CandidateCard({
     <button
       type="button"
       onClick={onPick}
-      className="flex flex-col gap-3 rounded-md border border-hairline bg-canvas p-4 text-left transition-all hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5"
+      className="flex flex-col gap-3 rounded-md border border-hairline bg-canvas dark:bg-canvas/40 p-4 text-left transition-all hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5"
     >
       <p className="font-serif text-base text-ink">{candidate.name}</p>
       <dl className="grid grid-cols-4 gap-2 text-center">
@@ -490,39 +498,36 @@ function DoneStage({
   candidate,
   role,
   portraitTone,
+  onClose,
 }: {
   candidate: Candidate;
   role: string;
   portraitTone: { bg: string; ring: string; text: string };
+  onClose: () => void;
 }) {
   const [revealStage, setRevealStage] = useState(0);
 
   useEffect(() => {
     const t1 = setTimeout(() => setRevealStage(1), 400);
     const t2 = setTimeout(() => setRevealStage(2), 1100);
+    const t3 = setTimeout(() => setRevealStage(3), 1700);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
     };
   }, []);
 
   const initial = candidate.name[0];
 
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center gap-5 text-center">
+    <div className="flex min-h-[400px] flex-col items-center justify-center gap-6 py-2 text-center">
       <div
-        className={`relative aspect-[3/4] w-36 overflow-hidden rounded-md ring-1 transition-all duration-700 ${portraitTone.bg} ${portraitTone.ring}`}
+        className={`relative aspect-[3/4] w-52 overflow-hidden rounded-md ring-1 transition-all duration-700 ${portraitTone.bg} ${portraitTone.ring}`}
       >
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`font-serif text-7xl ${portraitTone.text}`}>{initial}</span>
+          <span className={`font-serif text-8xl ${portraitTone.text}`}>{initial}</span>
         </div>
-        {revealStage >= 2 ? (
-          <div className="pointer-events-none absolute -right-3 -top-3 -rotate-12 select-none transition-all duration-500">
-            <div className="flex h-12 w-12 items-center justify-center rounded-sm bg-cinnabar font-serif text-lg text-canvas shadow-md ring-1 ring-cinnabar/60">
-              入班
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div
@@ -530,8 +535,38 @@ function DoneStage({
           revealStage >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
         }`}
       >
-        <p className="font-serif text-2xl text-ink">{candidate.name}</p>
-        <p className="mt-1 text-2xs tracking-widest text-mute">{role}</p>
+        <p className="font-serif text-3xl text-ink">{candidate.name}</p>
+        <div className="mt-2 flex items-center justify-center gap-2.5 text-2xs tracking-widest text-mute">
+          <span>{role}</span>
+          {revealStage >= 2 ? (
+            <>
+              <span className="text-hairline">·</span>
+              <span className="rounded-sm bg-cinnabar/10 px-2 py-0.5 text-cinnabar ring-1 ring-cinnabar/30">
+                入班
+              </span>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <div
+        className={`flex items-center gap-3 transition-all duration-500 ${
+          revealStage >= 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+        }`}
+      >
+        <a
+          href="/dossier"
+          className="rounded bg-cinnabar px-6 py-2.5 text-sm text-canvas transition-colors hover:bg-seal"
+        >
+          前往人物誌 →
+        </a>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded border border-hairline px-6 py-2.5 text-sm text-mute transition-colors hover:border-ink/30 hover:text-ink"
+        >
+          關閉
+        </button>
       </div>
     </div>
   );

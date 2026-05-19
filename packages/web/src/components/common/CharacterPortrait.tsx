@@ -3,17 +3,61 @@ import type { Character, CharacterRole } from '@endless-story/shared';
 type Tone = { bg: string; ring: string; text: string };
 
 const TONE_BY_ROLE: Record<CharacterRole, Tone> = {
-  班主: { bg: 'bg-stone-100', ring: 'ring-stone-200', text: 'text-stone-400' },
-  青衣: { bg: 'bg-rose-50', ring: 'ring-rose-100', text: 'text-rose-300' },
-  花旦: { bg: 'bg-pink-50', ring: 'ring-pink-100', text: 'text-pink-300' },
-  小生: { bg: 'bg-indigo-50', ring: 'ring-indigo-100', text: 'text-indigo-300' },
-  武旦: { bg: 'bg-amber-50', ring: 'ring-amber-100', text: 'text-amber-400' },
-  老旦: { bg: 'bg-stone-100', ring: 'ring-stone-200', text: 'text-stone-400' },
-  丑: { bg: 'bg-neutral-100', ring: 'ring-neutral-200', text: 'text-neutral-400' },
-  樂師: { bg: 'bg-emerald-50', ring: 'ring-emerald-100', text: 'text-emerald-300' },
-  箱管: { bg: 'bg-sky-50', ring: 'ring-sky-100', text: 'text-sky-300' },
-  學徒: { bg: 'bg-yellow-50', ring: 'ring-yellow-100', text: 'text-yellow-400' },
-  看客: { bg: 'bg-zinc-100', ring: 'ring-zinc-200', text: 'text-zinc-400' },
+  班主: {
+    bg: 'bg-stone-100 dark:bg-stone-800',
+    ring: 'ring-stone-200 dark:ring-stone-700',
+    text: 'text-stone-400 dark:text-stone-500',
+  },
+  青衣: {
+    bg: 'bg-rose-50 dark:bg-rose-950/40',
+    ring: 'ring-rose-100 dark:ring-rose-900/50',
+    text: 'text-rose-300 dark:text-rose-800',
+  },
+  花旦: {
+    bg: 'bg-pink-50 dark:bg-pink-950/40',
+    ring: 'ring-pink-100 dark:ring-pink-900/50',
+    text: 'text-pink-300 dark:text-pink-800',
+  },
+  小生: {
+    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
+    ring: 'ring-indigo-100 dark:ring-indigo-900/50',
+    text: 'text-indigo-300 dark:text-indigo-800',
+  },
+  武旦: {
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    ring: 'ring-amber-100 dark:ring-amber-900/50',
+    text: 'text-amber-400 dark:text-amber-700',
+  },
+  老旦: {
+    bg: 'bg-stone-100 dark:bg-stone-800',
+    ring: 'ring-stone-200 dark:ring-stone-700',
+    text: 'text-stone-400 dark:text-stone-500',
+  },
+  丑: {
+    bg: 'bg-neutral-100 dark:bg-neutral-800',
+    ring: 'ring-neutral-200 dark:ring-neutral-700',
+    text: 'text-neutral-400 dark:text-neutral-500',
+  },
+  樂師: {
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    ring: 'ring-emerald-100 dark:ring-emerald-900/50',
+    text: 'text-emerald-300 dark:text-emerald-800',
+  },
+  箱管: {
+    bg: 'bg-sky-50 dark:bg-sky-950/40',
+    ring: 'ring-sky-100 dark:ring-sky-900/50',
+    text: 'text-sky-300 dark:text-sky-800',
+  },
+  學徒: {
+    bg: 'bg-yellow-50 dark:bg-yellow-950/40',
+    ring: 'ring-yellow-100 dark:ring-yellow-900/50',
+    text: 'text-yellow-400 dark:text-yellow-700',
+  },
+  看客: {
+    bg: 'bg-zinc-100 dark:bg-zinc-800',
+    ring: 'ring-zinc-200 dark:ring-zinc-700',
+    text: 'text-zinc-400 dark:text-zinc-500',
+  },
 };
 
 const DEFAULT_TONE: Tone = TONE_BY_ROLE['班主'];

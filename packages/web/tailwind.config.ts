@@ -2,16 +2,19 @@ import type { Config } from 'tailwindcss';
 
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        canvas: '#faf8f3',
-        ink: '#18181b',
-        mute: '#71717a',
-        hairline: '#e5e5e0',
-        cinnabar: '#b04a3c',
-        jade: '#6c8a6f',
-        seal: '#a3392a',
+        canvas: 'rgb(var(--color-canvas) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        elevated: 'rgb(var(--color-elevated) / <alpha-value>)',
+        ink: 'rgb(var(--color-ink) / <alpha-value>)',
+        mute: 'rgb(var(--color-mute) / <alpha-value>)',
+        hairline: 'rgb(var(--color-hairline) / <alpha-value>)',
+        cinnabar: 'rgb(var(--color-cinnabar) / <alpha-value>)',
+        jade: 'rgb(var(--color-jade) / <alpha-value>)',
+        seal: 'rgb(var(--color-seal) / <alpha-value>)',
       },
       fontFamily: {
         serif: ['"Noto Serif TC"', '"Songti TC"', 'serif'],

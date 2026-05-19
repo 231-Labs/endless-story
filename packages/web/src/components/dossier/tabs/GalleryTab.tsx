@@ -206,7 +206,7 @@ function AspectFrame({
   const ring = isFeatured ? 'ring-2 ring-cinnabar' : 'ring-1 ring-hairline';
 
   return (
-    <div className={`relative overflow-hidden rounded-md bg-stone-50 ${ring} ${aspectClass}`}>
+    <div className={`relative overflow-hidden rounded-md bg-stone-50 dark:bg-stone-900 ${ring} ${aspectClass}`}>
       <div className="absolute inset-0 flex items-center justify-center">
         <span className="font-serif text-6xl text-stone-300">{initial}</span>
       </div>

@@ -2,8 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────── Theme tokens ───────────
+ * canvas   = page bg (deepest, body)
+ * surface  = elevated panels (nav / cards / sheets) — in light = same as canvas,
+ *            in dark = lifted +16 luminance so card edges are visible
+ * elevated = floating cards / modals — one step higher than surface
+ * ink      = primary text
+ * mute     = secondary text + subtle icons
+ * hairline = borders / dividers — boosted in dark so they're visible on canvas
+ * cinnabar = primary accent (brighter in dark for AA contrast)
+ * jade     = success / secondary accent
+ * seal     = cinnabar hover state (darker)
+ */
 :root {
   color-scheme: light;
+  --color-canvas: 250 248 243;
+  --color-surface: 250 248 243;
+  --color-elevated: 255 254 250;
+  --color-ink: 24 24 27;
+  --color-mute: 113 113 122;
+  --color-hairline: 229 229 224;
+  --color-cinnabar: 176 74 60;
+  --color-jade: 108 138 111;
+  --color-seal: 163 57 42;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-canvas: 22 19 17;
+  --color-surface: 34 30 27;
+  --color-elevated: 46 41 37;
+  --color-ink: 240 234 222;
+  --color-mute: 152 146 138;
+  --color-hairline: 70 62 55;
+  --color-cinnabar: 220 118 95;
+  --color-jade: 142 172 142;
+  --color-seal: 200 100 78;
 }
 
 html {
@@ -13,8 +47,8 @@ html {
 
 html,
 body {
-  background: theme('colors.canvas');
-  color: theme('colors.ink');
+  background: rgb(var(--color-canvas));
+  color: rgb(var(--color-ink));
   font-family: theme('fontFamily.serif');
   line-height: 1.75;
   -webkit-font-smoothing: antialiased;
