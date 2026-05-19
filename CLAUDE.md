@@ -90,31 +90,37 @@ bg-rose-50 dark:bg-rose-950/40
 ```
 /                           HeroTheater + 場景 + 徵召 (HomeContent wrapper)
 /dossier                    9 人卡片網格 + filter (全部/春雪社/江湖/我的)
-/dossier?id=X               個人頁 (header + sticky tabs: 履歷/設定集/連載/託夢)
+/dossier?id=X               個人頁 (header + LiveState sticky banner + tabs: 履歷/設定集/連載/託夢)
+/dossier?as=viewer          切看客視角（mock 錢包選單下拉切）
 /dossier/recruit/[id]       徵召 intent page（候備、目前 RecruitmentTicket 主流程不走這條）
 /feed                       章回列表 + filter (全部/群像/視角)
-/feed/chapter/[id]          章回詳細頁（3-col centered + TOC）
+/feed/chapter/[id]          章回詳細頁（3-col centered + TOC + back to /feed）
+/subscriptions              我的訂閱管理頁（追訂中 / 持有兩段、可取消）
 ```
 
 ### 互動
 
 - 場景卡 click → 右下角 floating card（拖拉移動 + 拐角 resize 鎖 aspect）
 - 徵召票 click → **同框 wizard**（描述/擲牌/選定/繪製/配像/入班 stage morph，含 painting loading stage）
-- 入班 ceremony → 大頭像 + 名字 + 「入班」tag → 用戶決定何時離開（CTA: 查看人物卡 / 關閉）
+- 入班 ceremony → 大頭像 + 名字 + 「入班」tag → 用戶決定何時離開；done CTA 跳 `/dossier?id={新角色 id}`（demo hardcode `char_cheng_hengyu`）
 - Theme toggle in nav（月亮/太陽、localStorage 持久化 + system pref）
-- MockWalletMenu in nav（地址 pill + 我的角色/訂閱/切換視角下拉）
+- Nav 右上錢包 pill → 下拉：我的角色 / 我的訂閱（→ `/subscriptions`）/ 切視角（班主⇄看客）/ 斷開錢包
+- 訂閱管理頁：追訂中（可取消，server action 走 `subscriptionsApi.unsubscribe` + revalidatePath）+ 持有（自動訂閱，不可退）
+- Dossier 個人頁 header 下 sticky banner：她現在 / 她在哪 / 她下一步（三條，每分鐘可重算）
+- 託夢 tab 召心曲：點「請她唱一段」→ fade-up + cinnabar glow 揭曉下一首；7 日 cooldown（localStorage `lastSummonAt`）；池抽乾後顯示「她已將心底攤完」
 
 ### Mock data
 
 `packages/web/src/mocks/`：
 - `sagas.ts` · DEMO_SAGA_ID = `saga_chunxue_demo`
 - `characters.ts` · 9 個角色（沈懷音/葉庭芳/程蘅玉/梁照水/杜聽瀾/唐桂蘭/孟雲屏/蘇小宛/趙鐵面）
-- `chapters.ts` · 含 POV 葉/程/梁、saga_internal 沈班主、暮後合戲長章
-- `subscriptions.ts` · 自動 owner 訂閱 + viewer 訂閱
+- `chapters.ts` · 8 章回（含 POV 葉/程/梁、saga_internal 沈班主、暮後合戲長章）
+- `subscriptions.ts` · 自動 owner 訂閱 + 1 viewer 訂閱 2 角色
 - `recruitments.ts` · 武小生（春雪社、外貌≥80 機敏≥70）+ 富商（江湖、外貌≥60 需男）
-- `relationships.ts` · subjective edges
-- `interventions.ts` · mock 注夢 / 耳語
-- `scenes.ts` · 混合 9/16, 1/1, 16/9, 3/4 aspect 的 clip
+- `relationships.ts` · 5 條 subjective edges
+- `interventions.ts` · 2 條 mock 注夢 / 耳語
+- `soulSongs.ts` · 9 角色共 15 首心曲 pool（mood + setting + 多段 verses，第一首 initiallyRevealed）
+- `scenes.ts` · 4 條 clip（混合 9/16, 1/1, 16/9, 3/4 aspect）
 
 ### API facade
 
@@ -122,20 +128,21 @@ bg-rose-50 dark:bg-rose-950/40
 
 ### 關鍵元件
 
-- `common/CharacterPortrait.tsx` · 行當分色 + inner ring frame + BlobImage 真實圖（imageUrl 自 anchor）；export `characterPortraitTone()` 供他處復用
+- `common/CharacterPortrait.tsx` · 行當分色 + inner ring frame + BlobImage；export `characterPortraitTone()`
 - `common/BlobImage.tsx` · onLoad fade-in、onError 自動隱藏
-- `common/BackButton.tsx` · push to fallback（不再用 router.back()，避免 history 不對）
+- `common/BackButton.tsx` · push to fallback（避免 router.back() history 問題）
 - `common/ThemeToggle.tsx` · 夜間模式 toggle（用 `.es-icon-button`）
-- `common/MockWalletMenu.tsx` · 錢包 pill + dropdown
-- `home/HomeContent.tsx` · 首頁 wrapper（接 SiteNav + HeroTheater + sections）
+- `common/MockWalletMenu.tsx` · 錢包 pill + persona switch（query `?as=`）
+- `home/HomeContent.tsx` · 首頁 wrapper（SiteNav + HeroTheater + sections）
 - `home/HeroTheater.tsx` · 首頁主視覺
 - `home/SceneCarousel.tsx` · 場景卡 + 拖拉懸浮窗
-- `dossier/LiveStateSection.tsx` · 「她現在」live state banner
+- `dossier/LiveStateSection.tsx` · sticky banner 三條（她現在 / 她在哪 / 她下一步）
 - `dossier/RecruitmentTicket.tsx` · 票面 + 同框 wizard（最複雜元件）
 - `dossier/RecruitmentSection.tsx` · ticket carousel + nav
 - `dossier/DossierTabs.tsx` · sticky tab + scroll mini-avatar
 - `dossier/tabs/GalleryTab.tsx` · owner 設角色封面
 - `dossier/tabs/ProfileTab.tsx` · 2-col 敘描 / 外貌 + 天賦 / 開銷 / 關係 sidebar
+- `dossier/tabs/SoulSongPanel.tsx` · 召心曲 client component（cooldown + reveal）
 - `subscribe/SubscribeCard.tsx` · magazine-cover 角色卡
 - `feed/ChapterToc.tsx` · 章回目錄
 
@@ -143,16 +150,19 @@ bg-rose-50 dark:bg-rose-950/40
 
 ## 遷移計劃（舊版 → 新版尚未補齊）
 
-> 完整掃描完成於 2026-05-20。標 ✅ = 已補齊（用戶這輪做了）
+> 完整掃描完成於 2026-05-20。標 ✅ = 已補齊
 
 ### 已自動補齊（不需再做）
 
-- ✅ `MockWalletMenu`
-- ✅ `LiveStateSection`（「她現在」live state）
+- ✅ `MockWalletMenu` + 訂閱管理頁 `/subscriptions`
+- ✅ `LiveStateSection`（三條 live state banner）
 - ✅ `HeroTheater` / `HomeContent`（首頁重組）
 - ✅ `lib/character-live-state.ts`
 - ✅ `ThemeToggle` + 夜間模式 palette（含暖金 cinnabar）
 - ✅ `es-*` utility classes 抽象（globals.css `@layer components`）
+- ✅ 召心曲深層版 → `SoulSongPanel.tsx` + `mocks/soulSongs.ts`
+- ✅ Dark mode polish（DossierTabs、ProfileTab、Composer notice、ChapterToc、BackButton hover）
+- ✅ 入班完成 → done CTA 跳 `?id=char_cheng_hengyu`
 
 ### Round 1 — 最高 ROI（建議先做）
 
@@ -165,37 +175,32 @@ bg-rose-50 dark:bg-rose-950/40
    - 資料來自 `/api/characters/[id]/persona`（mock 化即可）
    - 舊版位置：`packages/web/src/components/dossier/SoulSection.tsx`
 
-3. **Monologue / 召心曲深層**（M）— dossier 託夢 tab 加「請她唱一段」按鈕
-   - 比 daily POV 深兩倍的第一人稱獨白（600–1200 字）
-   - 舊版 endpoint：`/api/characters/[id]/monologue` POST
-   - Mock 化先做：點按鈕 → 假裝跑 LLM → 顯示預寫 markdown
-   - 7 天 cooldown 機制
-
 ### Round 2 — 國際化（比賽英文化前置）
 
-4. **next-intl framework**（L）— `messages/{en,zh-Hant}.json` + namespace
-5. **抽既有文案至 t()**（M）— 漸進，先 5 個關鍵頁面
-6. **`LocaleToggle`**（S）— nav 加「中 / EN」切換
-7. **`romanize-name`**（S）— 中文名 → 拼音（英文 demo 用，e.g. 葉庭芳 / Ye Tingfang）
+3. **next-intl framework**（L）— `messages/{en,zh-Hant}.json` + namespace
+4. **抽既有文案至 t()**（M）— 漸進，先 5 個關鍵頁面
+5. **`LocaleToggle`**（S）— nav 加「中 / EN」切換
+6. **`romanize-name`**（S）— 中文名 → 拼音（英文 demo 用，e.g. 葉庭芳 / Ye Tingfang）
 
 ### Round 3 — 角色頁深化
 
-8. **`HistoryTabs`**（L）— 3 子 tab：**對話 / 內心獨白 / 公報 gazette**
+7. **`HistoryTabs`**（L）— 3 子 tab：**對話 / 內心獨白 / 公報 gazette**
    - 現在「連載」tab 只覆蓋章回，未涵蓋對話 + 獨白 + gazette
-9. **角色 Memory 查閱**（M）— Owner-only：列出 reflection / observation / event_summary
+8. **角色 Memory 查閱**（M）— Owner-only：列出 reflection / observation / event_summary
    - 舊版 endpoint：`/api/characters/[id]/memories?wallet=` + owner gate
    - 新版位置：新 tab「記憶」或併入「託夢」tab 底部
-10. **`RelationshipGraph`**（L）— 視覺化 v3 關係圖
-    - 數據 `mocks/relationships.ts` 已備
-    - 需 zoom-pan hook（舊版 `useZoomPan`）
-    - 可放 dossier `?tab=relations` 或整個 saga 在 `/world`
+   - 建議走 structured journal entries（事件 id + 反思語），與心曲完整獨白區隔
+9. **`RelationshipGraph`**（L）— 視覺化 v3 關係圖
+   - 數據 `mocks/relationships.ts` 已備
+   - 需 zoom-pan hook（舊版 `useZoomPan`）
+   - 可放 dossier `?tab=relations` 或整個 saga 在 `/world`
 
 ### Round 4 — 賽後 / 系統工具
 
-11. **`atlas.ts` + `live-map-layout.ts` + `useZoomPan`** — 世界地圖 `/world` 頁
-12. **`time.ts`**（utcTimeToLocal）— `lib/format.ts` 的 `formatDate` 太簡單
-13. **`useWorldState` hook** — 集中 fetch world / saga / characters（接真鏈會省事）
-14. **`useLocalPortraitUrl` + `character-portraits.ts`** — Portrait URL fallback layer
+10. **`atlas.ts` + `live-map-layout.ts` + `useZoomPan`** — 世界地圖 `/world` 頁
+11. **`time.ts`**（utcTimeToLocal）— `lib/format.ts` 的 `formatDate` 太簡單
+12. **`useWorldState` hook** — 集中 fetch world / saga / characters（接真鏈會省事）
+13. **`useLocalPortraitUrl` + `character-portraits.ts`** — Portrait URL fallback layer
 
 ---
 
@@ -245,9 +250,10 @@ http://localhost:3000/                                  Home (HeroTheater + 場�
 http://localhost:3000/dossier                           人物誌 + filter
 http://localhost:3000/dossier?id=char_ye_tingfang       葉庭芳個人頁 (含 LiveState)
 http://localhost:3000/dossier?id=...&tab=gallery        設定集 + owner 設封面
-http://localhost:3000/dossier?id=...&tab=entrusts       託夢 (owner / viewer)
+http://localhost:3000/dossier?id=...&tab=entrusts       託夢 + 召心曲 (owner / viewer)
 http://localhost:3000/feed                              連載列表
 http://localhost:3000/feed/chapter/chapter_day3_evening_meal   長章 + TOC
+http://localhost:3000/subscriptions?as=viewer           訂閱管理頁（可取消）
 ```
 
 每條都應該：
@@ -259,4 +265,6 @@ http://localhost:3000/feed/chapter/chapter_day3_evening_meal   長章 + TOC
 
 ## Quick win 順序建議
 
-下個 session 建議從 **Round 1 #1 (CharacterLinkifier)** 開始 — 工短且全站獲益。然後吃 #2 (Persona Card) + #3 (Monologue) 把角色頁從「漂亮但靜」升到「有深度」。Round 2 i18n 排在 Round 1 完成後。
+召心曲、dark mode polish、訂閱管理頁已落地。比賽前 P0 只剩 **i18n**；P1 剩 **角色記憶查閱**。
+
+下個 session 建議：先吃 **Round 3 #8 角色記憶查閱**（mock 反思列表，與心曲區隔），再做 **Round 1 #1 CharacterLinkifier**（全站獲益）。i18n 等其他 demo 內容鎖死後最後一發。
