@@ -1,0 +1,19 @@
+import type { Visibility } from './common.js';
+
+export interface Chapter {
+  id: string;
+  sagaId: string;
+  day: number;
+  title: string;
+  body: string;
+  povCharacterId?: string;
+  involvedCharacterIds: string[];
+  sourceEventId?: string;
+  walrusBlobId: string;
+  visibility: Visibility;
+  createdAt: string;
+}
+
+export interface ChapterPOV extends Chapter {
+  povCharacterId: string;
+}
