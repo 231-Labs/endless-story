@@ -2,6 +2,8 @@ import type { BlobRef, CharacterRole, Wallet } from './common';
 
 export type SurvivalLevel = 'critical' | 'low' | 'stable' | 'healthy';
 
+export type Gender = 'female' | 'male' | 'other';
+
 export interface SurvivalStatus {
   funds: number;
   dailyCost: number;
@@ -17,6 +19,13 @@ export interface CharacterDerivativeGallery {
   eventMoments: BlobRef[];
 }
 
+export interface CharacterAttributes {
+  constitution: number;
+  disposition: number;
+  acuity: number;
+  appearance: number;
+}
+
 export interface Character {
   id: string;
   nftOwner: Wallet;
@@ -24,7 +33,10 @@ export interface Character {
   name: string;
   description: string;
   role: CharacterRole;
+  gender: Gender;
+  age: number;
   physicalFacts: string;
+  attributes: CharacterAttributes;
   gallery: CharacterDerivativeGallery;
   survival: SurvivalStatus;
   createdAt: string;
