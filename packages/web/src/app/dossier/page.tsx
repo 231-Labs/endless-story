@@ -13,7 +13,6 @@ import {
 } from '@/components/dossier/CharacterGrid';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
-import { LiveStateSection } from '@/components/dossier/LiveStateSection';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
 import { ChaptersTab } from '@/components/dossier/tabs/ChaptersTab';
@@ -111,17 +110,17 @@ export default async function DossierPage({
       })
     );
 
-    return (
-      <main className="min-h-screen">
-        <SiteNav />
-        <CharacterGrid
-          cards={cards}
-          filter={filter}
-          viewerWallet={viewerWallet}
-          internalSagaId={DEMO_SAGA_ID}
-        />
-      </main>
-    );
+  return (
+    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <SiteNav />
+      <CharacterGrid
+        cards={cards}
+        filter={filter}
+        viewerWallet={viewerWallet}
+        internalSagaId={DEMO_SAGA_ID}
+      />
+    </main>
+  );
   }
 
   // ──────────── Detail view ────────────
@@ -150,10 +149,9 @@ export default async function DossierPage({
   return (
     <main className="min-h-screen">
       <SiteNav />
-      <DossierHeader character={character} />
-      <LiveStateSection state={liveState} />
+      <DossierHeader character={character} liveState={liveState} />
       <DossierTabs character={character} active={tab} />
-      <section className="px-5 py-10 sm:px-10 sm:py-14">
+      <section className="px-5 py-12 sm:px-10 sm:py-16">
         <div className="mx-auto max-w-6xl">
           {tab === 'profile' ? (
             <ProfileTab

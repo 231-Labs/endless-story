@@ -106,3 +106,12 @@ body {
   0%, 100% { transform: translateY(0); opacity: 0.6; }
   50% { transform: translateY(-8px); opacity: 1; }
 }
+
+@keyframes scroll-down-line {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+.animate-scroll-down-line {
+  animation: scroll-down-line 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

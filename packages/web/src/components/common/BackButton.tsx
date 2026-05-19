@@ -12,10 +12,6 @@ export function BackButton({
   const router = useRouter();
 
   const onClick = () => {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back();
-      return;
-    }
     router.push(fallback);
   };
 
@@ -24,9 +20,10 @@ export function BackButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className="es-icon-button h-8 w-8"
+      className="group inline-flex items-center gap-2 text-sm tracking-widest text-mute transition-colors hover:text-ink"
     >
-      <span aria-hidden className="text-base">←</span>
+      <span aria-hidden className="transition-transform group-hover:-translate-x-1">←</span>
+      <span>返回人物誌</span>
     </button>
   );
 }
