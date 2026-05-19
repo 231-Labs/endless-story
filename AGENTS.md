@@ -88,7 +88,8 @@ Tailwind 預設色一定要配 `dark:` 變體。重複 className 組合 → 抽�
 - 場景卡 → 右下角 floating card（拖拉 + resize）
 - 徵召票 → 同框 wizard（描述/擲牌/選定/繪製/配像/入班）
 - 入班 ceremony → 手動 CTA；done 跳 `/dossier?id=char_cheng_hengyu`
-- Theme toggle + MockWalletMenu（我的角色 / 我的訂閱 / 切視角）
+- Theme toggle + MockWalletMenu（我的角色 / 我的訂閱 → `/subscriptions` / 切視角）
+- 訂閱管理頁：追訂中可取消（`subscriptionsApi.unsubscribe` + revalidatePath）；持有不可退
 - LiveState sticky banner：她現在 / 她在哪 / 她下一步
 - 託夢 tab 召心曲：7 日 cooldown、池抽乾提示
 

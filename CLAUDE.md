@@ -103,8 +103,8 @@ bg-rose-50 dark:bg-rose-950/40
 - 場景卡 click → 右下角 floating card（拖拉移動 + 拐角 resize 鎖 aspect）
 - 徵召票 click → **同框 wizard**（描述/擲牌/選定/繪製/配像/入班 stage morph，含 painting loading stage）
 - 入班 ceremony → 大頭像 + 名字 + 「入班」tag → 用戶決定何時離開；done CTA 跳 `/dossier?id={新角色 id}`（demo hardcode `char_cheng_hengyu`）
-- Theme toggle in nav（月亮/太陽、localStorage 持久化 + system pref）
-- Nav 右上錢包 pill → 下拉：我的角色 / 我的訂閱（→ `/subscriptions`）/ 切視角（班主⇄看客）/ 斷開錢包
+- Theme toggle in nav（月亮/太陽 icon、localStorage 持久化 + system pref）
+- Nav 右上錢包 pill（截短地址 + jade dot）→ 下拉：我的角色 / 我的訂閱（→ `/subscriptions`）/ 切視角（班主⇄看客）/ 斷開錢包
 - 訂閱管理頁：追訂中（可取消，server action 走 `subscriptionsApi.unsubscribe` + revalidatePath）+ 持有（自動訂閱，不可退）
 - Dossier 個人頁 header 下 sticky banner：她現在 / 她在哪 / 她下一步（三條，每分鐘可重算）
 - 託夢 tab 召心曲：點「請她唱一段」→ fade-up + cinnabar glow 揭曉下一首；7 日 cooldown（localStorage `lastSummonAt`）；池抽乾後顯示「她已將心底攤完」
@@ -267,4 +267,4 @@ http://localhost:3000/subscriptions?as=viewer           訂閱管理頁（可取
 
 召心曲、dark mode polish、訂閱管理頁已落地。比賽前 P0 只剩 **i18n**；P1 剩 **角色記憶查閱**。
 
-下個 session 建議：先吃 **Round 3 #8 角色記憶查閱**（mock 反思列表，與心曲區隔），再做 **Round 1 #1 CharacterLinkifier**（全站獲益）。i18n 等其他 demo 內容鎖死後最後一發。
+下個 session 建議：先吃 **Round 3 #8 角色記憶查閱**（mock 反思列表，structured journal entries，與心曲完整獨白區隔），再做 **Round 1 #1 CharacterLinkifier**（全站獲益）。i18n 等其他 demo 內容鎖死後最後一發。
