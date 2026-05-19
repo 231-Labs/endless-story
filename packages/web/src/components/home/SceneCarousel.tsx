@@ -37,8 +37,8 @@ export function SceneCarousel({ clips }: { clips: SceneClip[] }) {
 
   return (
     <>
-      <section className="border-t border-hairline px-5 py-12 sm:px-10 sm:py-16">
-        <div className="mx-auto max-w-6xl">
+      <section className="border-t border-hairline px-5 py-14 sm:px-10 sm:py-[4.5rem] lg:flex lg:min-h-[48svh] lg:items-center">
+        <div className="mx-auto w-full max-w-6xl">
           <h2 className="font-serif text-xl tracking-wide text-ink sm:text-2xl">今日場景</h2>
           <div className="mt-6 grid grid-cols-1 gap-5 sm:mt-8 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
             {clips.map((clip) => (
@@ -76,16 +76,17 @@ function SceneCard({
       className="group block w-full text-left"
     >
       <div
-        className={`relative aspect-video overflow-hidden rounded-md bg-stone-100 dark:bg-stone-800 ring-1 transition-all duration-300 ${
+        className={`relative aspect-video overflow-hidden rounded-md bg-surface dark:bg-elevated/45 ring-1 transition-all duration-300 ${
           isActive
             ? 'ring-cinnabar shadow-md shadow-cinnabar/10'
             : 'ring-hairline hover:shadow-md hover:shadow-ink/5'
         }`}
       >
-        <div className="absolute inset-0 flex items-center justify-center text-ink/25 transition-colors group-hover:text-ink/40">
+        <div className="absolute inset-0 bg-gradient-to-b from-elevated/10 via-transparent to-canvas/15" />
+        <div className="absolute inset-0 flex items-center justify-center text-mute/45 transition-colors group-hover:text-cinnabar/70">
           <PlayIcon />
         </div>
-        <div className="absolute right-2 top-2 rounded bg-ink/75 px-2 py-0.5 text-2xs tracking-wider text-canvas">
+        <div className="absolute right-2 top-2 rounded bg-elevated/85 px-2 py-0.5 text-2xs tracking-wider text-ink shadow-sm backdrop-blur">
           {clip.durationSeconds}s
         </div>
       </div>
@@ -271,7 +272,7 @@ function SceneFloatingCard({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      className={`fixed z-50 overflow-hidden rounded-lg bg-ink ring-1 ring-ink/15 shadow-2xl transition-opacity duration-300 ${
+      className={`fixed z-50 overflow-hidden rounded-lg bg-elevated ring-1 ring-hairline shadow-2xl shadow-ink/30 transition-opacity duration-300 ${
         visible ? 'opacity-100' : 'opacity-0'
       }`}
       style={{
@@ -305,18 +306,19 @@ function SceneFloatingCard({
       </button>
 
       {/* Image fills the card */}
-      <div className="absolute inset-0">
-        <div className="flex h-full w-full items-center justify-center text-canvas/30">
+      <div className="absolute inset-0 bg-surface dark:bg-elevated/45">
+        <div className="absolute inset-0 bg-gradient-to-b from-elevated/10 via-transparent to-canvas/20" />
+        <div className="flex h-full w-full items-center justify-center text-mute/45">
           <PlayIcon size={Math.min(box.w, box.h) * 0.18} />
         </div>
-        <div className="absolute left-3 top-3 rounded bg-ink/60 px-2 py-0.5 text-2xs tracking-wider text-canvas backdrop-blur">
+        <div className="absolute left-3 top-3 rounded bg-elevated/85 px-2 py-0.5 text-2xs tracking-wider text-ink shadow-sm backdrop-blur">
           {shownClip.durationSeconds}s
         </div>
       </div>
 
       {/* Bottom overlay — title + day, semi-transparent gradient */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-ink via-ink/70 to-transparent p-4 pt-12 text-canvas">
-        <p className="text-2xs tracking-widest text-canvas/60">DAY {shownClip.day}</p>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-canvas via-canvas/80 to-transparent p-4 pt-12 text-ink">
+        <p className="text-2xs tracking-widest text-mute">DAY {shownClip.day}</p>
         <p className="mt-1 font-serif text-base">{shownClip.title}</p>
         {shownClip.chapterId ? (
           <a
@@ -335,7 +337,7 @@ function SceneFloatingCard({
         className="absolute bottom-0 right-0 z-30 h-5 w-5 cursor-se-resize"
       >
         <svg
-          className="absolute bottom-1 right-1 h-3 w-3 text-canvas/60"
+          className="absolute bottom-1 right-1 h-3 w-3 text-mute"
           viewBox="0 0 12 12"
           fill="none"
         >

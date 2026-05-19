@@ -12,14 +12,20 @@ export function BlobImage({
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return null;
+  const [loaded, setLoaded] = useState(false);
+
+  if (!src || failed) return null;
+
   return (
     <img
       src={src}
       alt={alt}
       loading="lazy"
       onError={() => setFailed(true)}
-      className={className}
+      onLoad={() => setLoaded(true)}
+      className={`${className ?? ''} transition-opacity duration-200 ${
+        loaded ? 'opacity-100' : 'opacity-0'
+      }`}
     />
   );
 }

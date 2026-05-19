@@ -2,7 +2,7 @@ import type { Saga } from '@endless-story/shared';
 
 export function HeroBanner({ saga }: { saga: Saga }) {
   return (
-    <section className="px-5 py-14 sm:px-10 sm:py-20">
+    <section className="flex min-h-[34svh] items-center px-5 py-14 sm:min-h-[38svh] sm:px-10 sm:py-16 lg:min-h-[40svh]">
       <div className="mx-auto max-w-6xl">
         <h1 className="font-serif text-4xl leading-tight tracking-wide text-ink sm:text-5xl">
           {saga.name}

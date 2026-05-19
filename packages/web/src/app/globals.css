@@ -10,7 +10,7 @@
  * ink      = primary text
  * mute     = secondary text + subtle icons
  * hairline = borders / dividers — boosted in dark so they're visible on canvas
- * cinnabar = primary accent (brighter in dark for AA contrast)
+ * cinnabar = primary accent (gold in dark for AA contrast)
  * jade     = success / secondary accent
  * seal     = cinnabar hover state (darker)
  */
@@ -29,15 +29,15 @@
 
 .dark {
   color-scheme: dark;
-  --color-canvas: 22 19 17;
-  --color-surface: 34 30 27;
-  --color-elevated: 46 41 37;
-  --color-ink: 240 234 222;
-  --color-mute: 152 146 138;
-  --color-hairline: 70 62 55;
-  --color-cinnabar: 220 118 95;
-  --color-jade: 142 172 142;
-  --color-seal: 200 100 78;
+  --color-canvas: 15 14 12;
+  --color-surface: 25 22 17;
+  --color-elevated: 37 32 24;
+  --color-ink: 242 232 210;
+  --color-mute: 166 154 128;
+  --color-hairline: 67 56 40;
+  --color-cinnabar: 204 164 92;
+  --color-jade: 144 164 126;
+  --color-seal: 224 184 108;
 }
 
 html {
@@ -70,6 +70,28 @@ body {
 }
 .chapter-prose p + p {
   margin-top: 1.25rem;
+}
+
+@layer components {
+  .es-icon-button {
+    @apply inline-flex items-center justify-center rounded-full text-mute transition-colors hover:bg-ink/5 hover:text-ink dark:hover:bg-elevated;
+  }
+
+  .es-soft-panel {
+    @apply rounded-md border border-hairline bg-surface/70 dark:bg-elevated/35;
+  }
+
+  .es-field {
+    @apply w-full rounded border border-hairline bg-canvas px-3 py-2 text-base leading-relaxed text-ink placeholder:text-mute focus:border-cinnabar focus:outline-none dark:bg-canvas/40;
+  }
+
+  .es-choice-card {
+    @apply rounded-md border border-hairline bg-elevated/65 text-left transition-all hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5 dark:bg-elevated/45;
+  }
+
+  .es-outline-button {
+    @apply rounded border border-hairline bg-surface text-mute transition-colors hover:border-cinnabar hover:text-cinnabar dark:bg-elevated/30;
+  }
 }
 
 @keyframes endless-fade-in-up {

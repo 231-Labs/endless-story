@@ -46,7 +46,7 @@ export function Composer() {
       {kind ? (
         <form
           onSubmit={submit}
-          className="space-y-3 rounded-md border border-hairline bg-stone-50/40 p-4 sm:p-5"
+          className="es-soft-panel space-y-3 p-4 sm:p-5"
         >
           <p className="text-2xs leading-relaxed tracking-widest text-mute">{COPY[kind].hint}</p>
           <textarea
@@ -54,7 +54,7 @@ export function Composer() {
             onChange={(e) => setText(e.target.value)}
             rows={3}
             placeholder={COPY[kind].placeholder}
-            className="w-full resize-none rounded border border-hairline bg-canvas dark:bg-canvas/40 px-3 py-2 text-base leading-relaxed text-ink placeholder:text-mute focus:border-cinnabar focus:outline-none"
+            className="es-field resize-none"
           />
           <div className="flex items-center justify-between gap-3">
             <p className="text-2xs tracking-widest text-mute">寫上 Walrus · Seal 限 owner 可解</p>
@@ -96,7 +96,7 @@ function ActionButton({
       className={`rounded border px-4 py-2 text-sm transition-colors ${
         active
           ? 'border-cinnabar bg-cinnabar/5 text-cinnabar'
-          : 'border-hairline bg-surface text-ink hover:bg-stone-50 dark:hover:bg-stone-900'
+          : 'border-hairline bg-surface text-ink hover:bg-ink/5 dark:bg-elevated/30 dark:hover:bg-elevated'
       }`}
     >
       {label}

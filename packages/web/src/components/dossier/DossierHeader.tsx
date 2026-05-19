@@ -14,8 +14,8 @@ export function DossierHeader({ character }: { character: Character }) {
       <div className="mx-auto max-w-6xl">
         <BackButton fallback="/dossier" ariaLabel="返回" />
       </div>
-      <div className="mx-auto mt-4 flex max-w-6xl flex-col gap-5 sm:mt-5 sm:flex-row sm:items-end sm:gap-10">
-        <div id="dossier-portrait" className="w-24 shrink-0 sm:w-36">
+      <div className="mx-auto mt-4 flex max-w-6xl flex-col gap-5 sm:mt-5 sm:flex-row sm:items-center sm:gap-10">
+        <div id="dossier-portrait" className="w-28 shrink-0 sm:w-40">
           <CharacterPortrait character={character} aspect="3/4" />
         </div>
         <div className="flex-1">

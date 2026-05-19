@@ -157,15 +157,15 @@ export function RecruitmentTicket({
       onClick={!isOpen ? handleOpen : undefined}
       onKeyDown={!isOpen ? handleKey : undefined}
       aria-label={!isOpen ? `應榜 ${recruitment.specialty}` : undefined}
-      className={`group relative overflow-hidden rounded-lg bg-surface ring-1 transition-all duration-500 md:min-h-[480px] ${
+      className={`group relative select-none overflow-hidden rounded-lg bg-surface ring-1 transition-all duration-500 md:min-h-[440px] ${
         isOpen
           ? `ring-cinnabar/40 shadow-xl shadow-cinnabar/5 ${
               collapsing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
             }`
-          : 'cursor-pointer ring-cinnabar/25 hover:shadow-xl hover:shadow-cinnabar/5 hover:ring-cinnabar/40 focus:outline-none focus:ring-cinnabar/50'
+          : 'cursor-pointer ring-cinnabar/25 hover:shadow-xl hover:shadow-cinnabar/5 hover:ring-cinnabar/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-cinnabar/60 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas'
       }`}
     >
-      <div className="grid grid-cols-1 md:min-h-[480px] md:grid-cols-[1fr_240px]">
+      <div className="grid grid-cols-1 md:min-h-[440px] md:grid-cols-[1fr_240px]">
         {!isOpen ? (
           <>
             <DefaultMain recruitment={recruitment} minEntries={minEntries} />
@@ -217,7 +217,7 @@ export function RecruitmentTicket({
             type="button"
             onClick={close}
             aria-label="關閉"
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-base text-mute transition-colors hover:bg-stone-100 hover:text-ink"
+            className="es-icon-button absolute right-3 top-3 h-8 w-8 text-base"
           >
             ×
           </button>
@@ -338,7 +338,7 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
                   ? 'bg-cinnabar text-canvas'
                   : isReached
                     ? 'bg-cinnabar/10 text-cinnabar ring-1 ring-cinnabar/30'
-                    : 'bg-stone-50 text-mute ring-1 ring-hairline'
+                    : 'bg-surface text-mute ring-1 ring-hairline dark:bg-elevated/35'
               }`}
             >
               {i + 1}
@@ -377,7 +377,7 @@ function PromptStage({
         rows={5}
         placeholder="他從哪裡來？身上帶著什麼樣的習慣？什麼事會讓他突然安靜下來？"
         maxLength={200}
-        className="w-full resize-none rounded border border-hairline bg-canvas dark:bg-canvas/40 px-3 py-2 text-base leading-relaxed text-ink placeholder:text-mute focus:border-cinnabar focus:outline-none"
+        className="es-field resize-none"
       />
       <div className="flex items-center justify-between gap-3">
         <p className="text-2xs tracking-widest text-mute">{prompt.length} / 200</p>
@@ -422,7 +422,7 @@ function PickStage({
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-ink/75">三人入帳。挑一個。</p>
+      <p className="text-sm text-ink/75">候選角色已就緒，請選擇一位繼續。</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {candidates.map((c, idx) => (
           <CandidateCard key={idx} candidate={c} onPick={() => onPick(idx)} />
@@ -443,7 +443,7 @@ function CandidateCard({
     <button
       type="button"
       onClick={onPick}
-      className="flex flex-col gap-3 rounded-md border border-hairline bg-canvas dark:bg-canvas/40 p-4 text-left transition-all hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5"
+      className="es-choice-card flex flex-col gap-3 p-4"
     >
       <p className="font-serif text-base text-ink">{candidate.name}</p>
       <dl className="grid grid-cols-4 gap-2 text-center">
@@ -563,7 +563,7 @@ function DoneStage({
         <button
           type="button"
           onClick={onClose}
-          className="rounded border border-hairline px-6 py-2.5 text-sm text-mute transition-colors hover:border-ink/30 hover:text-ink"
+          className="es-outline-button px-6 py-2.5 text-sm hover:border-ink/30 hover:text-ink"
         >
           關閉
         </button>

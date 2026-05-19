@@ -30,7 +30,7 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label={isDark ? '切換為日間模式' : '切換為夜間模式'}
-      className="flex h-8 w-8 items-center justify-center rounded-full text-mute transition-colors hover:bg-ink/5 hover:text-ink"
+      className="es-icon-button h-8 w-8"
     >
       {isDark ? <SunIcon /> : <MoonIcon />}
     </button>

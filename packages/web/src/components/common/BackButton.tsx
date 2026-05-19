@@ -24,7 +24,7 @@ export function BackButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-mute hover:bg-stone-100 hover:text-ink"
+      className="es-icon-button h-8 w-8"
     >
       <span aria-hidden className="text-base">←</span>
     </button>

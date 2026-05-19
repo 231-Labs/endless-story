@@ -40,7 +40,7 @@ export default async function ChapterPage({
         <Link
           href="/feed"
           aria-label="回連載"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-mute hover:bg-stone-100 hover:text-ink"
+          className="es-icon-button h-8 w-8"
         >
           <span aria-hidden className="text-base">←</span>
         </Link>

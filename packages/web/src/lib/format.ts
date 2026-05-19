@@ -25,14 +25,14 @@ export function formatDate(iso: string): string {
 }
 
 const SURVIVAL_TONE: Record<string, string> = {
-  critical: 'text-rose-700 bg-rose-50 ring-rose-200',
-  low: 'text-amber-700 bg-amber-50 ring-amber-200',
-  stable: 'text-emerald-700 bg-emerald-50 ring-emerald-200',
-  healthy: 'text-teal-700 bg-teal-50 ring-teal-200',
+  critical: 'text-rose-700 bg-rose-50 ring-rose-200 dark:text-rose-200 dark:bg-rose-950/35 dark:ring-rose-800/50',
+  low: 'text-amber-700 bg-amber-50 ring-amber-200 dark:text-amber-200 dark:bg-amber-950/35 dark:ring-amber-800/50',
+  stable: 'text-emerald-700 bg-emerald-50 ring-emerald-200 dark:text-emerald-200 dark:bg-emerald-950/35 dark:ring-emerald-800/50',
+  healthy: 'text-teal-700 bg-teal-50 ring-teal-200 dark:text-teal-200 dark:bg-teal-950/35 dark:ring-teal-800/50',
 };
 
 export function survivalBadgeClasses(level: string): string {
-  return SURVIVAL_TONE[level] ?? 'text-stone-600 bg-stone-50 ring-stone-200';
+  return SURVIVAL_TONE[level] ?? 'text-mute bg-surface ring-hairline dark:bg-elevated/35';
 }
 
 const SURVIVAL_LABEL: Record<string, string> = {

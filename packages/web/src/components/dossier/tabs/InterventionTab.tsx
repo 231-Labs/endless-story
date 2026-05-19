@@ -35,7 +35,7 @@ export function InterventionTab({
 
 function LockedNotice({ character }: { character: Character }) {
   return (
-    <section className="rounded-md border border-dashed border-hairline bg-stone-50/40 p-4 text-sm text-mute sm:p-5">
+    <section className="es-soft-panel border-dashed p-4 text-sm text-mute sm:p-5">
       只有持有 {truncateAddress(character.nftOwner)} 能寄夢入她心。
     </section>
   );

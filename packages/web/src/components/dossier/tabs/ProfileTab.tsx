@@ -58,8 +58,8 @@ function Attributes({ attrs }: { attrs: Character['attributes'] }) {
             <span className="font-mono text-xl text-ink">{value}</span>
             <span className="text-2xs tracking-widest text-mute">/ 100</span>
           </dd>
-          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-stone-100">
-            <div className="h-full bg-stone-400" style={{ width: `${value}%` }} />
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-hairline/60">
+            <div className="h-full bg-cinnabar/70 dark:bg-cinnabar/80" style={{ width: `${value}%` }} />
           </div>
         </div>
       ))}

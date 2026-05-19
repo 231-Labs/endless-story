@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import type { BlobRef, Character } from '@endless-story/shared';
 import { BlobImage } from '@/components/common/BlobImage';
 import { truncateBlobId } from '@/lib/format';
@@ -17,34 +18,34 @@ export function GalleryTab({
   const { anchor, costume, makeup, eventMoments } = character.gallery;
   const [featured, setFeatured] = useState<FeaturedKey>('anchor');
 
-  const trio: { key: FeaturedKey; label: string; blob?: BlobRef }[] = [
-    { key: 'anchor', label: '素顏 anchor', blob: anchor },
-    { key: 'costume', label: '行當戲服', blob: costume },
-    { key: 'makeup', label: '戲妝定裝', blob: makeup },
+  const portraitSlots: { key: FeaturedKey; label: string; blob?: BlobRef }[] = [
+    { key: 'anchor', label: '圖像 01', blob: anchor },
+    { key: 'costume', label: '圖像 02', blob: costume },
+    { key: 'makeup', label: '圖像 03', blob: makeup },
   ];
 
   return (
     <div className="space-y-12">
       <section>
-        <h2 className="font-serif text-lg text-ink sm:text-xl">定裝三件</h2>
-        <p className="mt-1 text-2xs tracking-widest text-mute">
-          每張圖都是一個 Walrus blob — owner 改變、戲妝增加、定裝更新都可追溯
-          {isOwner ? ' · 點「設為封面」決定角色對外展示哪一張' : ''}
-        </p>
-        <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3">
-          {trio.map((slot) => (
-            <DerivativeSlot
+        <h2 className="font-serif text-lg text-ink sm:text-xl">角色圖集</h2>
+        <ul className="no-scrollbar -mx-5 mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 py-0.5 pb-4 scroll-px-5 sm:mx-[-2px] sm:gap-6 sm:px-0.5 sm:scroll-px-0.5">
+          {portraitSlots.map((slot) => (
+            <li
               key={slot.key}
-              slotKey={slot.key}
-              label={slot.label}
-              blob={slot.blob}
-              character={character}
-              isFeatured={featured === slot.key}
-              isOwner={isOwner}
-              onSetFeatured={setFeatured}
-            />
+              className="w-[78vw] max-w-[360px] shrink-0 snap-start sm:w-auto sm:basis-[calc((100%_-_3rem)/3)] sm:max-w-none"
+            >
+              <DerivativeSlot
+                slotKey={slot.key}
+                label={slot.label}
+                blob={slot.blob}
+                character={character}
+                isFeatured={featured === slot.key}
+                isOwner={isOwner}
+                onSetFeatured={setFeatured}
+              />
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
 
       <section>
@@ -98,31 +99,19 @@ function DerivativeSlot({
         character={character}
         blob={blob}
         isFeatured={isFeatured}
+        label={label}
+        action={
+          isOwner && blob && !isFeatured ? (
+            <button
+              type="button"
+              onClick={() => onSetFeatured(slotKey)}
+              className="rounded-full bg-elevated/90 px-2.5 py-1 text-2xs tracking-widest text-ink shadow-sm backdrop-blur transition-colors hover:bg-cinnabar hover:text-canvas"
+            >
+              設為封面
+            </button>
+          ) : null
+        }
       />
-      <div>
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-sm text-ink">{label}</p>
-          {isFeatured ? (
-            <span className="text-2xs tracking-widest text-cinnabar">✦ 角色封面</span>
-          ) : null}
-        </div>
-        {blob ? (
-          <p className="mt-1 font-mono text-2xs tracking-widest text-mute">
-            walrus · {truncateBlobId(blob.walrusBlobId)}
-          </p>
-        ) : (
-          <p className="mt-1 text-2xs tracking-widest text-mute">未生成</p>
-        )}
-        {isOwner && blob && !isFeatured ? (
-          <button
-            type="button"
-            onClick={() => onSetFeatured(slotKey)}
-            className="mt-2 rounded border border-hairline px-2.5 py-1 text-2xs tracking-widest text-mute transition-colors hover:border-cinnabar hover:text-cinnabar"
-          >
-            設為封面
-          </button>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -147,19 +136,19 @@ function EventMomentCard({
         character={character}
         blob={blob}
         isFeatured={isFeatured}
+        label={blob.sourceEventId ? `event · ${blob.sourceEventId.slice(-12)}` : '事件瞬間'}
+        action={
+          isOwner && !isFeatured ? (
+            <button
+              type="button"
+              onClick={() => onSetFeatured(blob.walrusBlobId)}
+              className="rounded-full bg-elevated/90 px-2.5 py-1 text-2xs tracking-widest text-ink shadow-sm backdrop-blur transition-colors hover:bg-cinnabar hover:text-canvas"
+            >
+              設為封面
+            </button>
+          ) : null
+        }
       />
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-2xs tracking-widest text-mute">
-          {blob.sourceEventId ? (
-            <span className="font-mono">event · {blob.sourceEventId.slice(-12)}</span>
-          ) : (
-            '事件瞬間'
-          )}
-        </p>
-        <p className="font-mono text-2xs tracking-widest text-mute">
-          walrus · {truncateBlobId(blob.walrusBlobId)}
-        </p>
-      </div>
       <div className="flex items-center justify-between gap-3">
         {blob.sourceChapterId ? (
           <a
@@ -171,17 +160,6 @@ function EventMomentCard({
         ) : (
           <span />
         )}
-        {isFeatured ? (
-          <span className="text-2xs tracking-widest text-cinnabar">✦ 角色封面</span>
-        ) : isOwner ? (
-          <button
-            type="button"
-            onClick={() => onSetFeatured(blob.walrusBlobId)}
-            className="rounded border border-hairline px-2.5 py-1 text-2xs tracking-widest text-mute transition-colors hover:border-cinnabar hover:text-cinnabar"
-          >
-            設為封面
-          </button>
-        ) : null}
       </div>
     </article>
   );
@@ -192,23 +170,29 @@ function AspectFrame({
   character,
   blob,
   isFeatured,
+  label,
+  action,
 }: {
   aspect: '3/4' | '4/3' | '16/9' | '1/1';
   character: Character;
   blob?: BlobRef;
   isFeatured: boolean;
+  label: string;
+  action?: ReactNode;
 }) {
   const aspectClass =
     aspect === '3/4' ? 'aspect-[3/4]' :
     aspect === '4/3' ? 'aspect-[4/3]' :
     aspect === '1/1' ? 'aspect-square' : 'aspect-video';
   const initial = character.name[0];
-  const ring = isFeatured ? 'ring-2 ring-cinnabar' : 'ring-1 ring-hairline';
+  const frame = isFeatured
+    ? 'ring-1 ring-inset ring-cinnabar/45 shadow-md shadow-cinnabar/15'
+    : 'ring-1 ring-inset ring-hairline';
 
   return (
-    <div className={`relative overflow-hidden rounded-md bg-stone-50 dark:bg-stone-900 ${ring} ${aspectClass}`}>
+    <div className={`group relative overflow-hidden rounded-md bg-surface dark:bg-elevated/45 ${frame} ${aspectClass}`}>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="font-serif text-6xl text-stone-300">{initial}</span>
+        <span className="font-serif text-6xl text-mute/40">{initial}</span>
       </div>
       {blob ? (
         <BlobImage
@@ -222,6 +206,26 @@ function AspectFrame({
           ✦ 封面
         </div>
       ) : null}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-canvas via-canvas/85 to-transparent p-3 pt-14 opacity-100 transition-all duration-300 sm:translate-y-3 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100 sm:group-focus-within:translate-y-0 sm:group-focus-within:opacity-100">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-2">
+              <p className="truncate text-sm text-ink">{label}</p>
+              {isFeatured ? (
+                <span className="shrink-0 text-2xs tracking-widest text-cinnabar">✦ 角色封面</span>
+              ) : null}
+            </div>
+            {blob ? (
+              <p className="mt-1 truncate font-mono text-2xs tracking-widest text-mute">
+                walrus · {truncateBlobId(blob.walrusBlobId)}
+              </p>
+            ) : (
+              <p className="mt-1 text-2xs tracking-widest text-mute">未生成</p>
+            )}
+          </div>
+          {action ? <div className="pointer-events-auto shrink-0">{action}</div> : null}
+        </div>
+      </div>
     </div>
   );
 }

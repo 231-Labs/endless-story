@@ -50,8 +50,8 @@ export function RecruitmentSection({ recruitments }: { recruitments: Recruitment
   };
 
   return (
-    <section className="border-t border-hairline px-5 py-12 sm:px-10 sm:py-16">
-      <div className="mx-auto max-w-6xl">
+    <section className="border-t border-hairline px-5 py-14 sm:px-10 sm:py-[4.5rem] lg:flex lg:min-h-[70svh] lg:items-center">
+      <div className="mx-auto w-full max-w-6xl">
         <div className="flex items-baseline justify-between">
           <h2 className="font-serif text-2xl tracking-wide text-ink sm:text-3xl">徵召公告</h2>
           {recruitments.length > 1 ? (
@@ -107,17 +107,10 @@ function CarouselNav({
   onGoTo: (idx: number) => void;
 }) {
   return (
-    <div className="mt-6 flex items-center justify-between">
-      <button
-        type="button"
-        onClick={onPrev}
-        aria-label="上一則"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-mute transition-colors hover:bg-stone-100 hover:text-ink"
-      >
-        ←
-      </button>
+    <div className="mt-6 flex items-center justify-center gap-3">
+      <CarouselButton label="上一則" direction="prev" onClick={onPrev} />
 
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-20 items-center justify-center gap-2">
         {Array.from({ length: count }).map((_, i) => {
           const isActive = i === activeIdx;
           return (
@@ -134,14 +127,30 @@ function CarouselNav({
         })}
       </div>
 
-      <button
-        type="button"
-        onClick={onNext}
-        aria-label="下一則"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-mute transition-colors hover:bg-stone-100 hover:text-ink"
-      >
-        →
-      </button>
+      <CarouselButton label="下一則" direction="next" onClick={onNext} />
     </div>
+  );
+}
+
+function CarouselButton({
+  label,
+  direction,
+  onClick,
+}: {
+  label: string;
+  direction: 'prev' | 'next';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="inline-flex h-9 items-center gap-2 rounded-full border border-hairline bg-surface px-3 text-sm text-mute transition-colors hover:border-cinnabar/60 hover:bg-elevated hover:text-ink"
+    >
+      {direction === 'prev' ? <span aria-hidden>←</span> : null}
+      <span className="text-2xs tracking-widest">{label}</span>
+      {direction === 'next' ? <span aria-hidden>→</span> : null}
+    </button>
   );
 }

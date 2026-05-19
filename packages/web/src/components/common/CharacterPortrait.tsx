@@ -1,4 +1,5 @@
 import type { Character, CharacterRole } from '@endless-story/shared';
+import { BlobImage } from './BlobImage';
 
 type Tone = { bg: string; ring: string; text: string };
 
@@ -62,6 +63,10 @@ const TONE_BY_ROLE: Record<CharacterRole, Tone> = {
 
 const DEFAULT_TONE: Tone = TONE_BY_ROLE['班主'];
 
+export function characterPortraitTone(role: CharacterRole): Tone {
+  return TONE_BY_ROLE[role] ?? DEFAULT_TONE;
+}
+
 export function CharacterPortrait({
   character,
   aspect = '3/4',
@@ -69,18 +74,33 @@ export function CharacterPortrait({
   character: Character;
   aspect?: '1/1' | '3/4' | '4/5' | '16/9';
 }) {
-  const tone = TONE_BY_ROLE[character.role] ?? DEFAULT_TONE;
+  const tone = characterPortraitTone(character.role);
   const initial = character.name[0];
   const aspectClass =
     aspect === '1/1' ? 'aspect-square' :
     aspect === '3/4' ? 'aspect-[3/4]' :
     aspect === '4/5' ? 'aspect-[4/5]' : 'aspect-video';
+  const imageUrl = character.gallery.anchor?.imageUrl;
 
   return (
-    <div className={`relative overflow-hidden rounded-md ring-1 ${aspectClass} ${tone.bg} ${tone.ring}`}>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className={`font-serif text-5xl ${tone.text}`}>{initial}</span>
+    <div className={`relative overflow-hidden rounded-lg bg-surface ring-1 ring-hairline shadow-sm shadow-ink/5 ${aspectClass}`}>
+      <div className={`absolute inset-1 overflow-hidden rounded-md ring-1 ${tone.bg} ${tone.ring}`}>
+        <div className="absolute inset-0 bg-gradient-to-b from-elevated/15 via-transparent to-canvas/20" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={`font-serif text-5xl ${tone.text}`}>{initial}</span>
+        </div>
+        {imageUrl ? (
+          <BlobImage
+            src={imageUrl}
+            alt={`${character.name} portrait`}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : null}
       </div>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-white/45 dark:ring-white/5"
+      />
     </div>
   );
 }
