@@ -27,8 +27,8 @@ export default async function HomePage() {
       <SceneCarousel clips={clips} />
       <LatestChaptersStrip chapters={chapters} charactersById={charactersById} />
       <FeaturedCast characters={featured} />
-      <footer className="border-t border-ink/10 px-8 py-6 text-center text-xs text-ink/40">
-        住在 Walrus 上的梨園 · 訂閱誰，誰用他的視角把今天寫給你
+      <footer className="border-t border-hairline px-5 py-8 text-center text-sm text-mute sm:px-10 sm:py-10">
+        住在 Walrus 上的梨園
       </footer>
     </main>
   );

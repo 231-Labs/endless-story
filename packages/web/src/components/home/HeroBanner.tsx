@@ -2,18 +2,17 @@ import type { Saga } from '@endless-story/shared';
 
 export function HeroBanner({ saga }: { saga: Saga }) {
   return (
-    <section className="border-b border-ink/10 px-8 py-12">
-      <div className="mx-auto max-w-5xl">
-        <p className="text-xs tracking-[0.4em] text-jade uppercase">
-          Endless Story · Walrus Track
-        </p>
-        <h1 className="mt-3 text-4xl font-serif tracking-wider text-ink">
+    <section className="px-5 py-14 sm:px-10 sm:py-20">
+      <div className="mx-auto max-w-6xl">
+        <h1 className="font-serif text-4xl leading-tight tracking-wide text-ink sm:text-5xl">
           {saga.name}
         </h1>
-        <p className="mt-1 text-sm text-ink/60">
-          第 {saga.currentDay} 日 / 全 {saga.totalDays} 日 · {saga.castIds.length} 人在臺
-        </p>
-        <p className="mt-6 max-w-2xl text-base leading-loose text-ink/80">
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-mute sm:mt-4">
+          <span>第 {saga.currentDay} 日 / 全 {saga.totalDays} 日</span>
+          <span className="hidden text-hairline sm:inline">·</span>
+          <span>{saga.castIds.length} 人在臺</span>
+        </div>
+        <p className="mt-6 max-w-prose text-base leading-loose text-ink/85 sm:mt-8 sm:text-lg">
           {saga.premise}
         </p>
       </div>

@@ -6,9 +6,16 @@
   color-scheme: light;
 }
 
+html {
+  font-size: 17px;
+}
+
 html,
 body {
-  background: theme('colors.parchment');
+  background: theme('colors.canvas');
   color: theme('colors.ink');
   font-family: theme('fontFamily.serif');
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
