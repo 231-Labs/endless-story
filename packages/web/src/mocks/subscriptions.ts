@@ -1,5 +1,5 @@
 import type { Subscription } from '@endless-story/shared';
-import { characters, DEMO_OWNERS } from './characters.js';
+import { characters, DEMO_OWNERS } from './characters';
 
 const now = () => '2026-05-17T18:00:00Z';
 

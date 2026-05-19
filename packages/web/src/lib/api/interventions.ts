@@ -1,5 +1,5 @@
 import type { InterventionKind, OwnerIntervention } from '@endless-story/shared';
-import { interventions, listInterventionsForCharacter } from '@/mocks/interventions.js';
+import { interventions, listInterventionsForCharacter } from '@/mocks/interventions';
 
 export async function listInterventions(characterId: string): Promise<OwnerIntervention[]> {
   return listInterventionsForCharacter(characterId);

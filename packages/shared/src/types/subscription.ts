@@ -1,4 +1,4 @@
-import type { Wallet } from './common.js';
+import type { Wallet } from './common';
 
 export type SubscriptionChannel = 'rss' | 'webpush' | 'in_app';
 

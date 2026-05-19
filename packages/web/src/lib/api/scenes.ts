@@ -1,5 +1,5 @@
 import type { SceneClip } from '@endless-story/shared';
-import { listTodaySceneClips, sceneClips } from '@/mocks/scenes.js';
+import { listTodaySceneClips, sceneClips } from '@/mocks/scenes';
 
 export async function listTodayClips(currentDay: number, count = 4): Promise<SceneClip[]> {
   return listTodaySceneClips(currentDay, count);

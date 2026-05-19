@@ -1,5 +1,5 @@
 import type { Chapter } from '@endless-story/shared';
-import { DEMO_SAGA_ID } from './sagas.js';
+import { DEMO_SAGA_ID } from './sagas';
 
 export const chapters: Chapter[] = [
   {

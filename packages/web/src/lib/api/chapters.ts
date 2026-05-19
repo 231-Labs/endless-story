@@ -4,7 +4,7 @@ import {
   getChapterById,
   listChaptersBySaga,
   listPublicChaptersForCharacter,
-} from '@/mocks/chapters.js';
+} from '@/mocks/chapters';
 
 export async function listChapters(sagaId: string): Promise<Chapter[]> {
   return listChaptersBySaga(sagaId);

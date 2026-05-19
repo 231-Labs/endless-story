@@ -1,4 +1,4 @@
-import type { Wallet } from './common.js';
+import type { Wallet } from './common';
 
 export type InterventionKind = 'whisper' | 'inject_dream';
 

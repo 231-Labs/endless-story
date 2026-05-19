@@ -1,5 +1,5 @@
 import type { Character } from '@endless-story/shared';
-import { DEMO_SAGA_ID } from './sagas.js';
+import { DEMO_SAGA_ID } from './sagas';
 
 const OWNER_A = '0xb1fe42b96faf2722b4c47b0d8027022354128f977e3d4338a94e96ce55445870';
 const OWNER_B = '0x4d7a2e5b8f31c046a98b7d2c95e1f04a7b3c6e8d2a1f9c4b7e8d2c5a9f6b3e10';

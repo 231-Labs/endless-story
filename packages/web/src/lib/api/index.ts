@@ -1,7 +1,7 @@
-export * as sagasApi from './sagas.js';
-export * as charactersApi from './characters.js';
-export * as chaptersApi from './chapters.js';
-export * as scenesApi from './scenes.js';
-export * as subscriptionsApi from './subscriptions.js';
-export * as interventionsApi from './interventions.js';
-export * as relationshipsApi from './relationships.js';
+export * as sagasApi from './sagas';
+export * as charactersApi from './characters';
+export * as chaptersApi from './chapters';
+export * as scenesApi from './scenes';
+export * as subscriptionsApi from './subscriptions';
+export * as interventionsApi from './interventions';
+export * as relationshipsApi from './relationships';

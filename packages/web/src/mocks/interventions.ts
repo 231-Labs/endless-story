@@ -1,5 +1,5 @@
 import type { OwnerIntervention } from '@endless-story/shared';
-import { DEMO_OWNERS } from './characters.js';
+import { DEMO_OWNERS } from './characters';
 
 export const interventions: OwnerIntervention[] = [
   {

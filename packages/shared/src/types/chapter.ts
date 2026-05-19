@@ -1,4 +1,4 @@
-import type { Visibility } from './common.js';
+import type { Visibility } from './common';
 
 export interface Chapter {
   id: string;

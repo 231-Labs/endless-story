@@ -1,5 +1,5 @@
 import type { Saga } from '@endless-story/shared';
-import { sagas, getDemoSaga } from '@/mocks/sagas.js';
+import { sagas, getDemoSaga } from '@/mocks/sagas';
 
 export async function listSagas(): Promise<Saga[]> {
   return sagas;

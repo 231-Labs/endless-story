@@ -1,4 +1,4 @@
-import type { BlobRef, CharacterRole, Wallet } from './common.js';
+import type { BlobRef, CharacterRole, Wallet } from './common';
 
 export type SurvivalLevel = 'critical' | 'low' | 'stable' | 'healthy';
 

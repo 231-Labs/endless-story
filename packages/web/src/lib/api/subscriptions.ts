@@ -3,7 +3,7 @@ import {
   listSubscribersForCharacter,
   listSubscriptionsByWallet,
   subscriptions,
-} from '@/mocks/subscriptions.js';
+} from '@/mocks/subscriptions';
 
 export async function listMySubscriptions(wallet: string): Promise<Subscription[]> {
   return listSubscriptionsByWallet(wallet);

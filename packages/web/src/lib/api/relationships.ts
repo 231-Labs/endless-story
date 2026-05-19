@@ -1,5 +1,5 @@
 import type { RelationshipEdge } from '@endless-story/shared';
-import { listEdgesFrom, relationshipEdges } from '@/mocks/relationships.js';
+import { listEdgesFrom, relationshipEdges } from '@/mocks/relationships';
 
 export async function listOutgoingEdges(fromId: string): Promise<RelationshipEdge[]> {
   return listEdgesFrom(fromId);

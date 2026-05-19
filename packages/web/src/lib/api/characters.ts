@@ -1,5 +1,5 @@
 import type { Character } from '@endless-story/shared';
-import { characters, getCharacterById, listCharactersBySaga } from '@/mocks/characters.js';
+import { characters, getCharacterById, listCharactersBySaga } from '@/mocks/characters';
 
 export async function listCharacters(): Promise<Character[]> {
   return characters;
