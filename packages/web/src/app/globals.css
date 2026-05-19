@@ -37,3 +37,16 @@ body {
 .chapter-prose p + p {
   margin-top: 1.25rem;
 }
+
+@keyframes endless-fade-in-up {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: endless-fade-in-up 320ms ease-out;
+}
+
+@keyframes endless-roll {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(-8px); opacity: 1; }
+}

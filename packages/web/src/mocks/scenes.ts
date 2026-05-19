@@ -12,6 +12,7 @@ export const sceneClips: SceneClip[] = [
     videoUrl: '/mock/clips/water_sleeves.mp4',
     thumbnailUrl: '/mock/clips/water_sleeves.jpg',
     durationSeconds: 6,
+    aspect: '9/16',
     createdAt: '2026-05-17T23:55:00Z',
   },
   {
@@ -24,6 +25,7 @@ export const sceneClips: SceneClip[] = [
     videoUrl: '/mock/clips/off_key.mp4',
     thumbnailUrl: '/mock/clips/off_key.jpg',
     durationSeconds: 5,
+    aspect: '1/1',
     createdAt: '2026-05-16T22:50:00Z',
   },
   {
@@ -36,6 +38,7 @@ export const sceneClips: SceneClip[] = [
     videoUrl: '/mock/clips/silver_spear.mp4',
     thumbnailUrl: '/mock/clips/silver_spear.jpg',
     durationSeconds: 5,
+    aspect: '16/9',
     createdAt: '2026-05-18T07:20:00Z',
   },
   {
@@ -48,6 +51,7 @@ export const sceneClips: SceneClip[] = [
     videoUrl: '/mock/clips/board.mp4',
     thumbnailUrl: '/mock/clips/board.jpg',
     durationSeconds: 4,
+    aspect: '3/4',
     createdAt: '2026-05-15T22:40:00Z',
   },
 ];

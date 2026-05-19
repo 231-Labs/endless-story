@@ -5,3 +5,4 @@ export * as scenesApi from './scenes';
 export * as subscriptionsApi from './subscriptions';
 export * as interventionsApi from './interventions';
 export * as relationshipsApi from './relationships';
+export * as recruitmentsApi from './recruitments';

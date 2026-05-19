@@ -3,9 +3,14 @@ import {
   chaptersApi,
   interventionsApi,
   relationshipsApi,
+  subscriptionsApi,
 } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
-import { CharacterGrid, type RosterFilter } from '@/components/dossier/CharacterGrid';
+import {
+  CharacterGrid,
+  type CardData,
+  type RosterFilter,
+} from '@/components/dossier/CharacterGrid';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
@@ -14,6 +19,12 @@ import { ChaptersTab } from '@/components/dossier/tabs/ChaptersTab';
 import { InterventionTab } from '@/components/dossier/tabs/InterventionTab';
 import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
+import {
+  BASE_SUBSCRIBER_COUNT,
+  NEXT_POV_HINT,
+  SIGNATURE_QUOTES,
+} from '@/lib/character-magnetism';
+import { shortChapterTitle } from '@/lib/format';
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'entrusts'];
 const VALID_FILTERS: RosterFilter[] = ['all', 'internal', 'external', 'mine'];
@@ -40,19 +51,63 @@ export default async function DossierPage({
   const params = await searchParams;
   const characterId = params.id;
 
-  // demo viewer: default to OWNER_A (so 我的 / 託夢 features show real state);
-  // override with ?as=viewer (anonymous) or ?as=<wallet>.
   const viewerWallet =
     params.as === 'viewer' ? null : params.as ?? DEMO_OWNERS.OWNER_A;
 
+  // ──────────── List view ────────────
   if (!characterId) {
-    const all = await charactersApi.listCharacters();
+    const characters = await charactersApi.listCharacters();
+    const charactersById = new Map(characters.map((c) => [c.id, c]));
     const filter = parseFilter(params.filter);
+
+    const cards: CardData[] = await Promise.all(
+      characters.map(async (character) => {
+        const sigQuote = SIGNATURE_QUOTES[character.id];
+        const quoteChapter = sigQuote?.chapterId
+          ? await chaptersApi.getChapter(sigQuote.chapterId)
+          : null;
+        const quote = sigQuote
+          ? {
+              text: sigQuote.text,
+              chapterId: sigQuote.chapterId,
+              chapterTitle: quoteChapter
+                ? shortChapterTitle(quoteChapter.title)
+                : undefined,
+            }
+          : undefined;
+
+        const edges = await relationshipsApi.listOutgoingEdges(character.id);
+        const topEdge = edges[0];
+        const target = topEdge ? charactersById.get(topEdge.toId) : null;
+        const tension =
+          topEdge && target
+            ? { targetName: target.name, label: topEdge.label }
+            : undefined;
+
+        const subscribers = await subscriptionsApi.listSubscribers(character.id);
+        const isOwner = viewerWallet != null && character.nftOwner === viewerWallet;
+        const initialSubscribed =
+          isOwner ||
+          (viewerWallet != null &&
+            subscribers.some((s) => s.wallet === viewerWallet && !s.isOwner));
+
+        return {
+          character,
+          quote,
+          tension,
+          initialSubscriberCount: BASE_SUBSCRIBER_COUNT[character.id] ?? 1,
+          initialSubscribed,
+          isOwner,
+          nextPovHint: NEXT_POV_HINT[character.id],
+        };
+      })
+    );
+
     return (
       <main className="min-h-screen">
         <SiteNav />
         <CharacterGrid
-          characters={all}
+          cards={cards}
           filter={filter}
           viewerWallet={viewerWallet}
           internalSagaId={DEMO_SAGA_ID}
@@ -61,6 +116,7 @@ export default async function DossierPage({
     );
   }
 
+  // ──────────── Detail view ────────────
   const character = await charactersApi.getCharacter(characterId);
   if (!character) {
     return (
@@ -96,7 +152,9 @@ export default async function DossierPage({
               charactersById={charactersById}
             />
           ) : null}
-          {tab === 'gallery' ? <GalleryTab character={character} /> : null}
+          {tab === 'gallery' ? (
+            <GalleryTab character={character} isOwner={viewerWallet === character.nftOwner} />
+          ) : null}
           {tab === 'chapters' ? (
             <ChaptersTab chapters={chapters} character={character} />
           ) : null}

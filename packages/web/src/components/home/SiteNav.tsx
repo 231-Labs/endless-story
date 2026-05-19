@@ -9,7 +9,6 @@ export function SiteNav() {
           <a href="/" className="hover:text-ink">今日</a>
           <a href="/dossier" className="hover:text-ink">人物誌</a>
           <a href="/feed" className="hover:text-ink">連載</a>
-          <a href="/subscribe" className="hover:text-ink">訂閱</a>
         </div>
       </div>
     </nav>
