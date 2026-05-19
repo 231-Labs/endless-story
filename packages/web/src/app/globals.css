@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: theme('colors.parchment');
+  color: theme('colors.ink');
+  font-family: theme('fontFamily.serif');
+}

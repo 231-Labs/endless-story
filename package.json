@@ -1,0 +1,10 @@
+{
+  "name": "endless-story",
+  "private": true,
+  "packageManager": "pnpm@10.5.2",
+  "scripts": {
+    "dev": "pnpm --filter @endless-story/web dev",
+    "build": "pnpm -r build",
+    "type-check": "pnpm -r type-check"
+  }
+}
