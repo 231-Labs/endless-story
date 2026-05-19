@@ -13,17 +13,20 @@ import {
 } from '@/components/dossier/CharacterGrid';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
+import { LiveStateSection } from '@/components/dossier/LiveStateSection';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
 import { ChaptersTab } from '@/components/dossier/tabs/ChaptersTab';
 import { InterventionTab } from '@/components/dossier/tabs/InterventionTab';
 import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
+import { DEMO_VIEWER_WALLET } from '@/mocks/subscriptions';
 import {
   BASE_SUBSCRIBER_COUNT,
   NEXT_POV_HINT,
   SIGNATURE_QUOTES,
 } from '@/lib/character-magnetism';
+import { getCharacterLiveState } from '@/lib/character-live-state';
 import { shortChapterTitle } from '@/lib/format';
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'entrusts'];
@@ -43,6 +46,12 @@ function parseFilter(raw: string | string[] | undefined): RosterFilter {
   return 'all';
 }
 
+function resolveViewerWallet(raw: string | undefined): string | null {
+  if (raw === 'viewer') return DEMO_VIEWER_WALLET;
+  if (raw === 'none') return null;
+  return raw ?? DEMO_OWNERS.OWNER_A;
+}
+
 export default async function DossierPage({
   searchParams,
 }: {
@@ -51,8 +60,7 @@ export default async function DossierPage({
   const params = await searchParams;
   const characterId = params.id;
 
-  const viewerWallet =
-    params.as === 'viewer' ? null : params.as ?? DEMO_OWNERS.OWNER_A;
+  const viewerWallet = resolveViewerWallet(params.as);
 
   // ──────────── List view ────────────
   if (!characterId) {
@@ -130,6 +138,7 @@ export default async function DossierPage({
   }
 
   const tab = parseTab(params.tab);
+  const liveState = getCharacterLiveState(character);
   const [allCharacters, edges, chapters, interventions] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
@@ -142,6 +151,7 @@ export default async function DossierPage({
     <main className="min-h-screen">
       <SiteNav />
       <DossierHeader character={character} />
+      <LiveStateSection state={liveState} />
       <DossierTabs character={character} active={tab} />
       <section className="px-5 py-10 sm:px-10 sm:py-14">
         <div className="mx-auto max-w-6xl">

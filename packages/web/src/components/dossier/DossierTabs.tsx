@@ -35,7 +35,7 @@ export function DossierTabs({
   }, []);
 
   return (
-    <nav className="sticky top-[57px] z-30 border-b border-hairline bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/90 sm:top-[65px]">
+    <nav className="sticky top-[113px] z-30 border-b border-hairline bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/90 sm:top-[121px]">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-5 sm:gap-6 sm:px-10">
         <MiniAvatar character={character} visible={stuck} />
         <div className="no-scrollbar flex h-full flex-1 items-center gap-6 overflow-x-auto sm:gap-10">

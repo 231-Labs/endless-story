@@ -555,10 +555,10 @@ function DoneStage({
         }`}
       >
         <a
-          href="/dossier"
+          href="/dossier?id=char_cheng_hengyu"
           className="rounded bg-cinnabar px-6 py-2.5 text-sm text-canvas transition-colors hover:bg-seal"
         >
-          前往人物誌 →
+          查看人物卡 →
         </a>
         <button
           type="button"
