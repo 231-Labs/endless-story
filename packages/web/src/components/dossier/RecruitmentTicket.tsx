@@ -20,8 +20,8 @@ const ATTR_LABEL: Record<string, string> = {
 };
 
 const GENDER_LABEL: Record<string, string> = {
-  male: '需男',
-  female: '需女',
+  male: '男性',
+  female: '女性',
   other: '不限性別',
 };
 
@@ -91,9 +91,11 @@ function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'painting'> {
 
 export function RecruitmentTicket({
   recruitment,
+  index = 0,
   onOpenChange,
 }: {
   recruitment: Recruitment;
+  index?: number;
   onOpenChange?: (open: boolean) => void;
 }) {
   const [stage, setStage] = useState<Stage>('closed');
@@ -202,7 +204,23 @@ export function RecruitmentTicket({
           isOpen ? 'scale-100 opacity-100 ring-cinnabar/40 shadow-xl shadow-cinnabar/5' : 'ring-hairline'
         }`}
       >
-        <div className="grid grid-cols-1 md:min-h-[440px] md:grid-cols-[1fr_240px]">
+        {/* Day/Night Chinese Painting Backgrounds */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-[0.25] dark:opacity-0 transition-opacity duration-700 pointer-events-none"
+          style={{
+            backgroundImage: `url('/ticket-bg/day-${(index % 5) + 1}.png')`
+          }}
+        />
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-0 dark:opacity-[0.35] transition-opacity duration-700 pointer-events-none"
+          style={{
+            backgroundImage: `url('/ticket-bg/night-${(index % 5) + 1}.png')`
+          }}
+        />
+        {/* Subtle overlay to ensure text legibility */}
+        <div className="absolute inset-0 bg-surface/40 pointer-events-none" />
+
+        <div className="relative z-10 grid grid-cols-1 md:min-h-[440px] md:grid-cols-[1fr_240px]">
           {!isOpen ? (
             <>
               <DefaultMain recruitment={recruitment} minEntries={minEntries} />

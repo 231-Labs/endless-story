@@ -130,6 +130,7 @@ export function RecruitmentSection({
             <RecruitmentTicket
               key={active.id}
               recruitment={active}
+              index={safeIdx}
               onOpenChange={setWizardOpen}
             />
           </div>

@@ -36,6 +36,57 @@ export const recruitments: Recruitment[] = [
     minAttributes: { appearance: 60 },
     genderRequirement: 'male',
   },
+  {
+    id: 'rec_chunxue_qingyi',
+    sagaId: DEMO_SAGA_ID,
+    sagaName: '春雪社',
+    specialty: '青衣',
+    roleIntent:
+      '春雪社欲再添一位青衣。不必像杜聽瀾那般烈如刀鋒，但求唱腔幽婉、水袖能舞出一段江南煙雨。' +
+      '她或許帶著不為人知的過去，或許是在某個深夜裡獨自落淚的苦命人。' +
+      '需要一個能用眼波流轉就把台下看客魂魄勾走的角兒。',
+    membership: 'internal',
+    slots: 2,
+    basePrice: 150,
+    expiresAt: '2026-06-10T00:00:00Z',
+    createdAt: '2026-05-20T10:00:00Z',
+    minAttributes: { appearance: 85, disposition: 75 },
+    genderRequirement: 'female',
+  },
+  {
+    id: 'rec_external_reporter',
+    sagaId: DEMO_SAGA_ID,
+    sagaName: '春雪社',
+    specialty: '小報記者',
+    roleIntent:
+      '上海灘的八卦小報記者，筆鋒犀利、嗅覺靈敏。' +
+      '常在春雪社外頭轉悠，跟包廂裡的達官貴人套近乎，也跟後台的小廝打探消息。' +
+      '他是個江湖客串，他的筆下能捧紅一個角，也能毀掉一個角。',
+    membership: 'external',
+    slots: 1,
+    basePrice: 80,
+    expiresAt: '2026-06-05T00:00:00Z',
+    createdAt: '2026-05-21T09:00:00Z',
+    minAttributes: { acuity: 85, disposition: 60 },
+    genderRequirement: 'other',
+  },
+  {
+    id: 'rec_chunxue_laosheng',
+    sagaId: DEMO_SAGA_ID,
+    sagaName: '春雪社',
+    specialty: '老生',
+    roleIntent:
+      '春雪社急需一位能壓陣的老生。年歲不需太大，但嗓音得滄桑厚重，能唱出興亡之歎。' +
+      '他在戲班裡是定海神針，看盡了世態炎涼，對年輕一輩既嚴厲又暗藏慈悲。' +
+      '他或許曾是名滿天下的大角，如今只願在春雪社圖個安穩。',
+    membership: 'internal',
+    slots: 1,
+    basePrice: 120,
+    expiresAt: '2026-06-15T00:00:00Z',
+    createdAt: '2026-05-18T14:00:00Z',
+    minAttributes: { constitution: 70, disposition: 85 },
+    genderRequirement: 'male',
+  }
 ];
 
 export const listActiveRecruitments = (): Recruitment[] => {
