@@ -1,12 +1,12 @@
-import type { Character } from '@endless-story/shared';
+import type { CharacterLiveState } from '@endless-story/shared';
 
-export interface CharacterLiveState {
-  intent: string;
-  location: string;
-  nextPlan: string;
-}
-
-const LIVE_STATE_BY_CHARACTER: Record<string, CharacterLiveState> = {
+/**
+ * 9 角色的 live state mock。
+ *
+ * 接 backend 後此檔可廢 — `lib/api/liveState.ts` 改成 fetch runner perception endpoint
+ * 即可，UI 完全不變。
+ */
+export const liveStatesByCharacterId: Record<string, CharacterLiveState> = {
   char_shen_huaiyin: {
     intent: '核今晚票房，決定哪一箱戲服先送去補線。',
     location: '帳房窗下 · 戌時後',
@@ -53,13 +53,3 @@ const LIVE_STATE_BY_CHARACTER: Record<string, CharacterLiveState> = {
     nextPlan: '明日進班前，先問清這場客串算幾日錢。',
   },
 };
-
-export function getCharacterLiveState(character: Character): CharacterLiveState {
-  return (
-    LIVE_STATE_BY_CHARACTER[character.id] ?? {
-      intent: `整理下一場${character.role}身段，等班主點名。`,
-      location: '後台 · 夜色未散',
-      nextPlan: '先把今日記憶寫下，等下一章回引用。',
-    }
-  );
-}

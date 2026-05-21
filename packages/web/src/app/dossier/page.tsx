@@ -2,6 +2,7 @@ import {
   charactersApi,
   chaptersApi,
   interventionsApi,
+  liveStateApi,
   memoriesApi,
   personasApi,
   relationshipsApi,
@@ -29,7 +30,6 @@ import {
   NEXT_POV_HINT,
   SIGNATURE_QUOTES,
 } from '@/lib/character-magnetism';
-import { getCharacterLiveState } from '@/lib/character-live-state';
 import { shortChapterTitle } from '@/lib/format';
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
@@ -141,17 +141,25 @@ export default async function DossierPage({
   }
 
   const tab = parseTab(params.tab);
-  const liveState = getCharacterLiveState(character);
-  const [allCharacters, edges, chapters, interventions, soulSongs, memories, persona] =
-    await Promise.all([
-      charactersApi.listCharacters(),
-      relationshipsApi.listOutgoingEdges(character.id),
-      chaptersApi.listPublicChaptersForSubscription(character.id),
-      interventionsApi.listInterventions(character.id),
-      soulSongsApi.listSoulSongs(character.id),
-      memoriesApi.listMemories(character.id, viewerWallet),
-      personasApi.getPersona(character.id),
-    ]);
+  const [
+    allCharacters,
+    edges,
+    chapters,
+    interventions,
+    soulSongs,
+    memories,
+    persona,
+    liveState,
+  ] = await Promise.all([
+    charactersApi.listCharacters(),
+    relationshipsApi.listOutgoingEdges(character.id),
+    chaptersApi.listPublicChaptersForSubscription(character.id),
+    interventionsApi.listInterventions(character.id),
+    soulSongsApi.listSoulSongs(character.id),
+    memoriesApi.listMemories(character.id, viewerWallet),
+    personasApi.getPersona(character.id),
+    liveStateApi.getLiveState(character.id),
+  ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
   const memoryChapterIds = Array.from(
     new Set(
@@ -168,6 +176,9 @@ export default async function DossierPage({
       .filter((c): c is NonNullable<typeof c> => Boolean(c))
       .map((c) => [c.id, c])
   );
+  const personaRegenChapter = persona?.lastRegenChapterId
+    ? (await chaptersApi.getChapter(persona.lastRegenChapterId)) ?? null
+    : null;
 
   return (
     <main className="min-h-screen">
@@ -184,6 +195,7 @@ export default async function DossierPage({
             <ProfileTab
               character={character}
               persona={persona}
+              personaRegenChapter={personaRegenChapter}
               outgoingEdges={edges}
               charactersById={charactersById}
             />

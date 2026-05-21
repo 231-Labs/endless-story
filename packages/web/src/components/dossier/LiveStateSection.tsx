@@ -1,4 +1,4 @@
-import type { CharacterLiveState } from '@/lib/character-live-state';
+import type { CharacterLiveState } from '@endless-story/shared';
 
 const ITEMS: { key: keyof CharacterLiveState; label: string }[] = [
   { key: 'intent', label: '她現在' },

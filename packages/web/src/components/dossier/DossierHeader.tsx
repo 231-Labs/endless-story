@@ -1,8 +1,7 @@
-import type { Character } from '@endless-story/shared';
+import type { Character, CharacterLiveState } from '@endless-story/shared';
 import { BackButton } from '@/components/common/BackButton';
 import { CharacterPortrait } from '@/components/common/CharacterPortrait';
 import { Linkified } from '@/components/common/CharacterLinkifier';
-import type { CharacterLiveState } from '@/lib/character-live-state';
 import { truncateAddress, survivalBadgeClasses, survivalLabel } from '@/lib/format';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
 

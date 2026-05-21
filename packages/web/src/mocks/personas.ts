@@ -23,6 +23,8 @@ export const personas: CharacterPersona[] = [
     boundaries: ['不收徒', '不接外戲', '不允許班裡的事被外傳'],
     version: 3,
     updatedAt: STAMP,
+    lastRegenTrigger: 'manual',
+    lastRegenChapterId: 'chapter_day1_first_rehearsal',
   },
 
   // ───── 葉庭芳（青衣） ─────
@@ -41,6 +43,8 @@ export const personas: CharacterPersona[] = [
     boundaries: ['不在後台落淚', '不對小輩示弱', '不在沒人問時主動評論他人'],
     version: 2,
     updatedAt: STAMP,
+    lastRegenTrigger: 'saga_arc',
+    lastRegenChapterId: 'chapter_day3_evening_meal',
   },
 
   // ───── 程蘅玉（小生） ─────
@@ -59,6 +63,8 @@ export const personas: CharacterPersona[] = [
     boundaries: ['不在台下穿小生服', '不接受別人替她梳頭', '戲台上不認師姐妹'],
     version: 2,
     updatedAt: STAMP,
+    lastRegenTrigger: 'saga_arc',
+    lastRegenChapterId: 'chapter_day3_evening_meal',
   },
 
   // ───── 梁照水（樂師助 / 副旦） ─────
