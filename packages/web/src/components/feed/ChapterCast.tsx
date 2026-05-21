@@ -14,8 +14,8 @@ export function ChapterCast({
 
   return (
     <nav aria-label="本章人物">
-      <h3 className="text-2xs tracking-widest text-mute">出場</h3>
-      <ul className="mt-3 space-y-1">
+      <h3 className="text-xs tracking-widest text-ink font-serif text-center mb-6">出場</h3>
+      <ul className="space-y-2">
         {cast.map((char) => (
           <li key={char.id}>
             <CastRow char={char} isPov={char.id === povId} />

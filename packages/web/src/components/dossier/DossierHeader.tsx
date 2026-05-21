@@ -25,10 +25,10 @@ export function DossierHeader({
   return (
     <header
       id="dossier-header"
-      className="px-5 pb-8 pt-8 sm:px-10 sm:pb-12 sm:pt-12"
+      className="px-5 w-full sm:px-10"
     >
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col gap-8 md:flex-row md:items-stretch md:gap-12 lg:gap-16">
+        <div className="flex flex-col gap-8 md:flex-row md:items-center md:gap-12 lg:gap-16">
           <div
             id="dossier-portrait"
             className="w-40 shrink-0 sm:w-56 lg:w-[320px]"
@@ -39,7 +39,7 @@ export function DossierHeader({
             <CharacterPortrait character={character} aspect="3/4" />
           </div>
 
-          <div className="flex flex-1 flex-col justify-between py-2 lg:pt-14 lg:pb-4">
+          <div className="flex flex-1 flex-col justify-center py-2 lg:py-8">
             <div>
               <div className="flex items-center gap-3 text-sm tracking-widest text-mute">
                 <span>{character.role}</span>
@@ -65,7 +65,7 @@ export function DossierHeader({
               </div>
             </div>
 
-            <div className="mt-12 border-t border-hairline pt-6 sm:mt-auto sm:pt-8">
+            <div className="mt-12 border-t border-hairline pt-6 sm:mt-12 sm:pt-8">
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
                 {LIVE_ITEMS.map((item) => (
                   <div key={item.key} className="min-w-0">

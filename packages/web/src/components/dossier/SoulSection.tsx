@@ -29,16 +29,21 @@ export function SoulSection({
 
   return (
     <section>
-      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="font-serif text-2xl text-ink">本色</h2>
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex items-center gap-4">
+          <div className="h-px w-8 bg-cinnabar/40" />
+          <h2 className="font-serif text-2xl tracking-wide text-ink">本色</h2>
+        </div>
         <RegenMeta persona={persona} regenChapter={regenChapter ?? null} />
       </header>
-      <p className="mt-2 text-sm text-mute">她卸了妝、出了戲以後 — 不會丟掉的那些。</p>
+      <div className="mt-8 pl-0 sm:pl-12">
+        <p className="text-sm text-mute/80 tracking-wide">她卸了妝、出了戲以後 — 不會丟掉的那些。</p>
 
-      <div className="mt-8 grid grid-cols-1 gap-10 sm:grid-cols-3 sm:gap-8">
-        <PersonaColumn glyph="軸" lines={persona.axes} />
-        <PersonaColumn glyph="腔" lines={persona.mannerisms} />
-        <PersonaColumn glyph="界" lines={persona.boundaries} />
+        <div className="mt-8 grid grid-cols-1 gap-10 sm:grid-cols-3 sm:gap-8">
+          <PersonaColumn glyph="軸" lines={persona.axes} />
+          <PersonaColumn glyph="腔" lines={persona.mannerisms} />
+          <PersonaColumn glyph="界" lines={persona.boundaries} />
+        </div>
       </div>
     </section>
   );

@@ -47,35 +47,24 @@ export default async function ChapterPage({
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen [scrollbar-gutter:stable]">
       <SiteNav />
-      <div className="mx-auto max-w-6xl px-5 py-10 sm:px-10 sm:py-14">
+      <div className="mx-auto max-w-5xl px-5 py-10 sm:px-10 sm:py-14">
         <Link
           href="/feed"
           aria-label="回連載"
-          className="es-icon-button h-8 w-8"
+          className="es-icon-button h-8 w-8 mb-6"
         >
           <span aria-hidden className="text-base">←</span>
         </Link>
 
-        <div className="mt-6 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_minmax(0,36rem)_1fr] lg:gap-0">
-          <aside className="hidden lg:block lg:justify-self-end lg:pr-8">
-            <div className="sticky top-20 w-40 space-y-10">
-              <ChapterToc
-                chapters={tocChapters}
-                currentId={chapter.id}
-                charactersById={charactersById}
-              />
-              <ChapterCast cast={cast} povId={chapter.povCharacterId} />
-            </div>
-          </aside>
-
-          <article className="lg:col-start-2">
-            <details className="mb-8 rounded-md border border-hairline bg-surface/80 dark:bg-elevated/40 lg:hidden">
-              <summary className="cursor-pointer px-4 py-3 text-sm tracking-wide text-ink">
+        <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_320px] lg:gap-20">
+          <article className="min-w-0">
+            <details className="mb-8 rounded-3xl border border-hairline/50 bg-surface/40 backdrop-blur-sm lg:hidden">
+              <summary className="cursor-pointer px-6 py-4 text-sm tracking-wide text-ink">
                 目錄 · {tocChapters.length} 章 · 出場 {cast.length}
               </summary>
-              <div className="space-y-8 border-t border-hairline px-4 py-4">
+              <div className="space-y-8 border-t border-hairline/50 px-6 py-6">
                 <ChapterToc
                   chapters={tocChapters}
                   currentId={chapter.id}
@@ -85,14 +74,14 @@ export default async function ChapterPage({
               </div>
             </details>
 
-            <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute">
-              <span>DAY {chapter.day}</span>
+            <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
+              <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
               {pov ? (
                 <>
                   <span className="text-hairline">·</span>
                   <Link
                     href={{ pathname: '/dossier', query: { id: pov.id } }}
-                    className="text-cinnabar hover:underline"
+                    className="text-cinnabar font-medium hover:underline"
                   >
                     {pov.name} 視角
                   </Link>
@@ -102,22 +91,58 @@ export default async function ChapterPage({
               <span>{formatDate(chapter.createdAt)}</span>
             </div>
 
-            <h1 className="mt-3 font-serif text-3xl leading-snug text-ink sm:text-4xl">
+            <h1 className="mt-5 font-serif text-4xl leading-snug tracking-wide text-ink sm:text-5xl">
               {chapter.title}
             </h1>
 
-            <LinkifiedProse
-              className="chapter-prose mt-8 text-lg leading-loose text-ink/85"
-              text={chapter.body}
-              characters={sagaCharacters}
-              linkifyNames={false}
-            />
+            {chapter.mediaType === 'video' && chapter.videoUrl ? (
+              <div className="mt-10 overflow-hidden rounded-3xl border border-hairline/50 bg-surface/40 shadow-sm backdrop-blur-sm">
+                <video
+                  src={chapter.videoUrl}
+                  controls
+                  className="w-full aspect-video bg-black"
+                  preload="metadata"
+                />
+              </div>
+            ) : chapter.mediaType === 'gallery' && chapter.coverUrl ? (
+              <div className="mt-10 overflow-hidden rounded-3xl border border-hairline/50 bg-surface/40 shadow-sm backdrop-blur-sm">
+                <img
+                  src={chapter.coverUrl}
+                  alt={chapter.title}
+                  className="w-full object-cover"
+                />
+              </div>
+            ) : null}
 
-            <footer className="mt-12 border-t border-hairline pt-6 text-2xs tracking-widest text-mute">
+            <div className="mt-10">
+              <LinkifiedProse
+                className="chapter-prose text-lg leading-loose text-ink/85 sm:text-xl sm:leading-[2.2]"
+                text={chapter.body}
+                characters={sagaCharacters}
+                linkifyNames={false}
+              />
+            </div>
+
+            <footer className="mt-16 rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs tracking-widest text-mute/70 backdrop-blur-sm">
               <p className="font-mono">walrus blob · {truncateBlobId(chapter.walrusBlobId, 24)}</p>
-              <p className="mt-1">visibility · {chapter.visibility}</p>
+              <p>visibility · {chapter.visibility}</p>
             </footer>
           </article>
+
+          <aside className="hidden lg:block">
+            <div className="sticky top-24 space-y-8">
+              <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+                <ChapterToc
+                  chapters={tocChapters}
+                  currentId={chapter.id}
+                  charactersById={charactersById}
+                />
+              </div>
+              <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+                <ChapterCast cast={cast} povId={chapter.povCharacterId} />
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </main>

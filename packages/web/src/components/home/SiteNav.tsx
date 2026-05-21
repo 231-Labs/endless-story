@@ -38,7 +38,8 @@ export async function SiteNav() {
           無盡敘界
         </a>
         <div className="flex items-center gap-4 text-sm font-medium text-ink/70 sm:gap-8">
-          <a href="/" className="transition-colors hover:text-ink">今日</a>
+          <a href="/" className="transition-colors hover:text-ink">首頁</a>
+          <a href="/saga/saga_chunxue_demo" className="transition-colors hover:text-ink">春雪社</a>
           <a href="/dossier" className="transition-colors hover:text-ink">人物誌</a>
           <a href="/feed" className="transition-colors hover:text-ink">連載</a>
           <Suspense fallback={<div className="h-8 w-24 rounded-full bg-canvas/60 ring-1 ring-hairline" />}>

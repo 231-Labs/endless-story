@@ -133,40 +133,48 @@ export function SoulSongPanel({
   if (orderedPool.length === 0) return null;
 
   return (
-    <section className="space-y-5">
-      <header className="flex items-baseline justify-between gap-3">
-        <h3 className="text-2xs tracking-widest text-mute">心曲</h3>
-        <p className="text-2xs tracking-widest text-mute/80">
+    <section className="space-y-8">
+      <header className="flex items-center gap-4">
+        <div className="h-px w-8 bg-cinnabar/40" />
+        <h2 className="font-serif text-2xl tracking-wide text-ink">心曲</h2>
+        <p className="text-xs tracking-widest text-mute/70 hidden sm:block">
           {isOwner ? '七日內僅能請她唱一段' : '她唱過的幾段'}
         </p>
       </header>
+      <p className="text-xs tracking-widest text-mute/70 pl-12 sm:hidden">
+        {isOwner ? '七日內僅能請她唱一段' : '她唱過的幾段'}
+      </p>
 
-      {isOwner ? (
-        <SummonControl
-          characterName={characterName}
-          hydrated={hydrated}
-          hasNext={!!nextSong}
-          cooldownActive={cooldownActive}
-          cooldownRemaining={cooldownRemaining}
-          onSummon={summon}
-        />
-      ) : null}
+      <div className="pl-0 sm:pl-12 space-y-6">
+        {isOwner ? (
+          <SummonControl
+            characterName={characterName}
+            hydrated={hydrated}
+            hasNext={!!nextSong}
+            cooldownActive={cooldownActive}
+            cooldownRemaining={cooldownRemaining}
+            onSummon={summon}
+          />
+        ) : null}
 
-      {revealedSongs.length > 0 ? (
-        <ol className="space-y-6">
-          {revealedSongs.map((song) => (
-            <SongCard
-              key={song.id}
-              song={song}
-              highlight={song.id === justSummonedId}
-              characters={sagaCharacters}
-              skipId={characterId}
-            />
-          ))}
-        </ol>
-      ) : (
-        <p className="text-sm text-mute">她還未為人唱過。</p>
-      )}
+        {revealedSongs.length > 0 ? (
+          <ol className="space-y-6">
+            {revealedSongs.map((song) => (
+              <SongCard
+                key={song.id}
+                song={song}
+                highlight={song.id === justSummonedId}
+                characters={sagaCharacters}
+                skipId={characterId}
+              />
+            ))}
+          </ol>
+        ) : (
+          <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
+            <p className="text-sm text-mute tracking-wide">她還未為人唱過。</p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -188,13 +196,13 @@ function SummonControl({
 }) {
   if (!hydrated) {
     return (
-      <div className="es-soft-panel h-[68px] p-4 sm:h-[72px] sm:p-5" aria-hidden />
+      <div className="rounded-3xl bg-surface/40 border border-hairline/50 h-[68px] p-4 sm:h-[72px] sm:p-5 backdrop-blur-sm" aria-hidden />
     );
   }
 
   if (!hasNext) {
     return (
-      <div className="es-soft-panel p-4 text-sm text-mute sm:p-5">
+      <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 text-sm text-mute backdrop-blur-sm text-center">
         她已將心底攤完，靜下了。再有新的心曲，得等下一場戲落幕。
       </div>
     );
@@ -202,17 +210,17 @@ function SummonControl({
 
   if (cooldownActive) {
     return (
-      <div className="es-soft-panel flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
-        <div className="space-y-1">
-          <p className="text-sm text-ink/80">下一段心曲還在醞釀。</p>
-          <p className="text-2xs tracking-widest text-mute">
+      <div className="rounded-3xl bg-surface/40 border border-hairline/50 flex flex-wrap items-center justify-between gap-4 p-6 sm:p-8 backdrop-blur-sm">
+        <div className="space-y-2">
+          <p className="text-base text-ink/80 tracking-wide">下一段心曲還在醞釀。</p>
+          <p className="text-xs tracking-widest text-mute">
             約還剩 {formatRemaining(cooldownRemaining)}
           </p>
         </div>
         <button
           type="button"
           disabled
-          className="rounded border border-hairline px-4 py-2 text-sm text-mute"
+          className="rounded-full border border-hairline/50 px-6 py-2.5 text-sm tracking-wide text-mute/50 bg-canvas/30"
         >
           請她唱一段
         </button>
@@ -221,14 +229,14 @@ function SummonControl({
   }
 
   return (
-    <div className="es-soft-panel flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
-      <p className="text-sm leading-relaxed text-ink/80">
+    <div className="rounded-3xl bg-surface/40 border border-hairline/50 flex flex-wrap items-center justify-between gap-4 p-6 sm:p-8 backdrop-blur-sm">
+      <p className="text-base leading-relaxed text-ink/85 tracking-wide">
         {characterName}今夜願意再開口。要請她唱一段嗎？
       </p>
       <button
         type="button"
         onClick={onSummon}
-        className="rounded bg-cinnabar px-4 py-2 text-sm text-canvas transition-colors hover:bg-seal"
+        className="rounded-full bg-cinnabar px-6 py-2.5 text-sm tracking-wide text-canvas shadow-sm shadow-cinnabar/20 transition-all hover:bg-seal hover:shadow-md hover:-translate-y-0.5"
       >
         請她唱一段
       </button>
@@ -257,7 +265,7 @@ function SongCard({
 
   return (
     <li
-      className={`es-soft-panel p-5 transition-all duration-500 ease-out sm:p-6 ${
+      className={`rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-500 ease-out hover:bg-surface hover:shadow-sm ${
         mounted ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
       } ${
         highlight
@@ -265,22 +273,22 @@ function SongCard({
           : ''
       }`}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-3 text-2xs tracking-widest text-mute">
-        <span>{formatDate(song.composedAt)}</span>
-        <span className="flex items-center gap-2">
-          {song.setting ? <span className="text-mute/85">{song.setting}</span> : null}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs tracking-widest text-mute/80">
+        <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">{formatDate(song.composedAt)}</span>
+        <span className="flex items-center gap-3">
+          {song.setting ? <span className="text-mute/70 italic">{song.setting}</span> : null}
           {song.mood ? (
-            <span className="rounded-full border border-hairline px-2 py-0.5 font-serif text-[10px] leading-none text-ink/70">
+            <span className="rounded-full border border-hairline/60 bg-canvas/40 px-3 py-1 font-serif text-[11px] leading-none text-ink/70">
               {MOOD_LABEL[song.mood]}
             </span>
           ) : null}
         </span>
       </div>
-      <div className="mt-4 space-y-4">
+      <div className="mt-6 space-y-5">
         {song.verses.map((verse, i) => (
           <p
             key={i}
-            className="font-serif text-base leading-loose text-ink/85 sm:text-lg"
+            className="font-serif text-lg leading-loose tracking-wide text-ink/85 sm:text-xl"
           >
             <Linkified text={verse} characters={characters} skipId={skipId} />
           </p>

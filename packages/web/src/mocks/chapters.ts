@@ -143,6 +143,33 @@ export const chapters: Chapter[] = [
     visibility: 'saga_internal',
     createdAt: '2026-05-18T23:20:00Z',
   },
+  {
+    id: 'chapter_day4_evening_video',
+    sagaId: DEMO_SAGA_ID,
+    day: 4,
+    title: '《白蛇傳》第四日 · 暮色起（側拍）',
+    body: '這是一段未公開的影像紀錄。夜幕低垂，後台只剩下兩人對詞的聲響。',
+    mediaType: 'video',
+    videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    coverUrl: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=800',
+    involvedCharacterIds: ['char_ye_tingfang', 'char_cheng_hengyu'],
+    walrusBlobId: 'mock_walrus_blob_chapter_day4_video',
+    visibility: 'public_chapter',
+    createdAt: '2026-05-18T18:00:00Z',
+  },
+  {
+    id: 'chapter_day4_gallery_stage',
+    sagaId: DEMO_SAGA_ID,
+    day: 4,
+    title: '《白蛇傳》第四日 · 戲台定裝畫冊',
+    body: '沈班主親自挑選的戲服與頭面。九人的行頭在此定案，從此不改。',
+    mediaType: 'gallery',
+    coverUrl: 'https://images.unsplash.com/photo-1514539079130-25950c84af65?auto=format&fit=crop&q=80&w=800',
+    involvedCharacterIds: ['char_shen_huaiyin', 'char_ye_tingfang', 'char_cheng_hengyu', 'char_du_tinglan'],
+    walrusBlobId: 'mock_walrus_blob_chapter_day4_gallery',
+    visibility: 'public_chapter',
+    createdAt: '2026-05-18T19:00:00Z',
+  },
 ];
 
 export const listChaptersBySaga = (sagaId: string): Chapter[] =>

@@ -43,15 +43,18 @@ function Section({
 }) {
   return (
     <section>
-      <h2 className={`font-serif text-xl ${highlight ? 'text-cinnabar' : 'text-ink'}`}>
-        {title}
-      </h2>
-      <ul className="mt-6 divide-y divide-hairline">
+      <div className="flex items-center gap-4">
+        <div className={`h-px w-8 ${highlight ? 'bg-cinnabar' : 'bg-cinnabar/40'}`} />
+        <h2 className={`font-serif text-2xl tracking-wide ${highlight ? 'text-cinnabar' : 'text-ink'}`}>
+          {title}
+        </h2>
+      </div>
+      <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
         {chapters.map((chapter) => (
           <li key={chapter.id}>
             <Link
               href={`/feed/chapter/${chapter.id}`}
-              className="group block py-6 transition-colors"
+              className="group block rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
             >
               <ChapterRow chapter={chapter} />
             </Link>
@@ -64,15 +67,15 @@ function Section({
 
 function ChapterRow({ chapter }: { chapter: Chapter }) {
   return (
-    <article className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute">
-        <span>DAY {chapter.day}</span>
-        <span className="font-mono">walrus · {truncateBlobId(chapter.walrusBlobId)}</span>
+    <article className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
+        <span className="bg-canvas/50 px-2 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
+        <span className="font-mono text-2xs">walrus · {truncateBlobId(chapter.walrusBlobId)}</span>
       </div>
-      <h3 className="font-serif text-lg text-ink transition-colors group-hover:text-cinnabar sm:text-xl">
+      <h3 className="mt-2 font-serif text-xl tracking-wide text-ink transition-colors group-hover:text-cinnabar sm:text-2xl">
         {chapter.title}
       </h3>
-      <p className="line-clamp-3 max-w-prose text-[15px] leading-loose text-ink/75 transition-colors group-hover:text-ink sm:text-base">
+      <p className="mt-1 line-clamp-3 max-w-prose text-base leading-loose text-ink/70 transition-colors group-hover:text-ink/90">
         {chapter.body}
       </p>
     </article>

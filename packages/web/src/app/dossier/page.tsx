@@ -181,51 +181,68 @@ export default async function DossierPage({
     : null;
 
   return (
-    <main className="min-h-screen">
-      <SiteNav />
-      <DossierHeader
-        character={character}
-        liveState={liveState}
-        sagaCharacters={allCharacters}
-      />
-      <DossierTabs character={character} active={tab} />
-      <section className="px-5 py-12 sm:px-10 sm:py-16">
-        <div className="mx-auto max-w-6xl">
-          {tab === 'profile' ? (
-            <ProfileTab
-              character={character}
-              persona={persona}
-              personaRegenChapter={personaRegenChapter}
-              outgoingEdges={edges}
-              charactersById={charactersById}
-            />
-          ) : null}
-          {tab === 'gallery' ? (
-            <GalleryTab character={character} isOwner={viewerWallet === character.nftOwner} />
-          ) : null}
-          {tab === 'chapters' ? (
-            <ChaptersTab chapters={chapters} character={character} />
-          ) : null}
-          {tab === 'memories' ? (
-            <MemoriesTab
-              character={character}
-              memories={memories}
-              viewerWallet={viewerWallet}
-              sagaCharacters={allCharacters}
-              chaptersById={chaptersById}
-            />
-          ) : null}
-          {tab === 'entrusts' ? (
-            <InterventionTab
-              character={character}
-              interventions={interventions}
-              soulSongs={soulSongs}
-              viewerWallet={viewerWallet}
-              sagaCharacters={allCharacters}
-            />
-          ) : null}
+    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Screen 1: Header */}
+      <div className="flex min-h-[100dvh] flex-col snap-start snap-always relative">
+        <SiteNav />
+        <div className="flex flex-1 flex-col justify-center pb-16">
+          <DossierHeader
+            character={character}
+            liveState={liveState}
+            sagaCharacters={allCharacters}
+          />
         </div>
-      </section>
+        
+        {/* Scroll hint */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-mute/50 pointer-events-none">
+          <span className="text-2xs font-mono tracking-widest uppercase">SCROLL</span>
+          <div className="h-10 w-px overflow-hidden bg-hairline/30">
+            <div className="h-full w-full animate-scroll-down-line bg-mute/50" />
+          </div>
+        </div>
+      </div>
+
+      {/* Screen 2: Content */}
+      <div className="min-h-[100dvh] snap-start snap-always relative pb-32">
+        <DossierTabs character={character} active={tab} />
+        <section className="px-5 py-12 sm:px-10 sm:py-16">
+          <div className="mx-auto max-w-6xl">
+            {tab === 'profile' ? (
+              <ProfileTab
+                character={character}
+                persona={persona}
+                personaRegenChapter={personaRegenChapter}
+                outgoingEdges={edges}
+                charactersById={charactersById}
+              />
+            ) : null}
+            {tab === 'gallery' ? (
+              <GalleryTab character={character} isOwner={viewerWallet === character.nftOwner} />
+            ) : null}
+            {tab === 'chapters' ? (
+              <ChaptersTab chapters={chapters} character={character} />
+            ) : null}
+            {tab === 'memories' ? (
+              <MemoriesTab
+                character={character}
+                memories={memories}
+                viewerWallet={viewerWallet}
+                sagaCharacters={allCharacters}
+                chaptersById={chaptersById}
+              />
+            ) : null}
+            {tab === 'entrusts' ? (
+              <InterventionTab
+                character={character}
+                interventions={interventions}
+                soulSongs={soulSongs}
+                viewerWallet={viewerWallet}
+                sagaCharacters={allCharacters}
+              />
+            ) : null}
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

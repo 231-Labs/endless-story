@@ -79,6 +79,78 @@ export const relationshipEdges: RelationshipEdge[] = [
     confidence: 0.48,
     summary: '我不必開口，她那把胡琴就知道我此刻要的是哪一個調。',
   },
+
+  // ───── 跨界邊：saga 成員 ↔ 江湖 ─────
+  // 沈懷音 ↔ 譚四郎 — 十年舊敵
+  {
+    fromId: 'char_shen_huaiyin',
+    toId: 'char_tan_silang',
+    weight: 8,
+    label: '十年前那一段，他比我先走出來。',
+    lastUpdatedDay: 4,
+    tone: 'rivalry',
+    firstSeenDay: 1,
+    confidence: 0.82,
+    summary: '我們同台爭過《貴妃醉酒》。他輸了卻笑著走 — 我贏了卻一直記到現在。',
+  },
+  {
+    fromId: 'char_tan_silang',
+    toId: 'char_shen_huaiyin',
+    weight: 9,
+    label: '春雪社撐不過今年。',
+    lastUpdatedDay: 4,
+    tone: 'rivalry',
+    firstSeenDay: 1,
+    confidence: 0.88,
+    summary: '她那種演法已經過時了。我只等她哪一天認 — 她不肯認、戲園子會替她認。',
+  },
+  // 葉庭芳 ↔ 譚四郎 — 戒備
+  {
+    fromId: 'char_ye_tingfang',
+    toId: 'char_tan_silang',
+    weight: 4,
+    label: '他來看戲、坐第三排。',
+    lastUpdatedDay: 3,
+    tone: 'wary',
+    firstSeenDay: 2,
+    confidence: 0.55,
+    summary: '他每次來都坐同一個位子。班主不知道。我知道、我不說。',
+  },
+  // 葉庭芳 ↔ 江老闆 — 長期訂閱者
+  {
+    fromId: 'char_ye_tingfang',
+    toId: 'char_jiang_laoban',
+    weight: 6,
+    label: '他訂了三年。每齣都看。',
+    lastUpdatedDay: 4,
+    tone: 'affection',
+    firstSeenDay: 1,
+    confidence: 0.68,
+    summary: '他從沒在後台等過我、沒送過花。可是他每齣都坐在第七排靠左。我演到那一句他會輕輕點頭。',
+  },
+  {
+    fromId: 'char_jiang_laoban',
+    toId: 'char_ye_tingfang',
+    weight: 8,
+    label: '台上那位、我看了三年。',
+    lastUpdatedDay: 4,
+    tone: 'affection',
+    firstSeenDay: 1,
+    confidence: 0.78,
+    summary: '我不去後台、不送花、不打擾她演戲。每月按時付訂閱費，是我這輩子最值得的一筆生意。',
+  },
+  // 沈懷音 ↔ 江老闆 — 票房客
+  {
+    fromId: 'char_shen_huaiyin',
+    toId: 'char_jiang_laoban',
+    weight: 3,
+    label: '老主顧，年年來。',
+    lastUpdatedDay: 4,
+    tone: 'neutral',
+    firstSeenDay: 1,
+    confidence: 0.52,
+    summary: '他是這條街上少數三年不間斷訂閱的人。我不必親自招呼、但我記得他坐第七排。',
+  },
 ];
 
 export const listEdgesFrom = (fromId: string): RelationshipEdge[] =>

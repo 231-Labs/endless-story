@@ -20,7 +20,7 @@ export function InterventionTab({
   const isOwner = viewerWallet === character.nftOwner;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-16">
       <SoulSongPanel
         characterId={character.id}
         characterName={character.name}
@@ -29,25 +29,34 @@ export function InterventionTab({
         sagaCharacters={sagaCharacters}
       />
 
-      {isOwner ? <Composer /> : <LockedNotice character={character} />}
+      <div className="pl-0 sm:pl-12">
+        {isOwner ? <Composer /> : <LockedNotice character={character} />}
+      </div>
 
       <section>
-        <h3 className="text-2xs tracking-widest text-mute">過往</h3>
-        {interventions.length === 0 ? (
-          <p className="mt-4 text-sm text-mute">尚無寄託。</p>
-        ) : (
-          <ul className="mt-5 space-y-6">
-            {interventions.map((intv) => (
-              <InterventionRow
-                key={intv.id}
-                intv={intv}
-                isOwner={isOwner}
-                sagaCharacters={sagaCharacters}
-                selfId={character.id}
-              />
-            ))}
-          </ul>
-        )}
+        <div className="flex items-center gap-4">
+          <div className="h-px w-8 bg-cinnabar/40" />
+          <h2 className="font-serif text-2xl tracking-wide text-ink">過往寄託</h2>
+        </div>
+        <div className="mt-8 pl-0 sm:pl-12">
+          {interventions.length === 0 ? (
+            <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
+              <p className="text-sm text-mute tracking-wide">尚無寄託。</p>
+            </div>
+          ) : (
+            <ul className="space-y-6">
+              {interventions.map((intv) => (
+                <InterventionRow
+                  key={intv.id}
+                  intv={intv}
+                  isOwner={isOwner}
+                  sagaCharacters={sagaCharacters}
+                  selfId={character.id}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -55,8 +64,8 @@ export function InterventionTab({
 
 function LockedNotice({ character }: { character: Character }) {
   return (
-    <section className="es-soft-panel border-dashed p-4 text-sm text-mute sm:p-5">
-      只有持有 {truncateAddress(character.nftOwner)} 能寄夢入她心。
+    <section className="rounded-3xl bg-surface/40 border border-dashed border-hairline/60 p-6 sm:p-8 text-sm text-mute backdrop-blur-sm text-center">
+      只有持有 <span className="font-mono">{truncateAddress(character.nftOwner)}</span> 能寄夢入她心。
     </section>
   );
 }
@@ -73,16 +82,16 @@ function InterventionRow({
   selfId: string;
 }) {
   return (
-    <li>
-      <div className="flex items-baseline justify-between gap-3 text-2xs tracking-widest text-mute">
-        <span>
+    <li className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:shadow-sm">
+      <div className="flex items-baseline justify-between gap-3 text-xs tracking-widest text-mute/80">
+        <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">
           {intv.kind === 'inject_dream' ? '夢' : '語'} · {formatDate(intv.createdAt)}
         </span>
         {intv.acknowledgedAt ? (
-          <span className="text-jade">她已感應</span>
+          <span className="text-jade font-medium">她已感應</span>
         ) : null}
       </div>
-      <p className="mt-2 text-base leading-loose text-ink/80">
+      <p className="mt-5 text-lg leading-loose text-ink/85">
         {isOwner ? (
           <Linkified text={intv.text} characters={sagaCharacters} skipId={selfId} />
         ) : (
@@ -90,7 +99,7 @@ function InterventionRow({
         )}
       </p>
       {!isOwner ? (
-        <p className="mt-1 text-2xs tracking-widest text-mute">內容被 Seal 加密</p>
+        <p className="mt-3 text-2xs tracking-widest text-mute/60">內容被 Seal 加密</p>
       ) : null}
     </li>
   );

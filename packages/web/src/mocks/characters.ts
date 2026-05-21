@@ -23,6 +23,8 @@ const BLOB = {
   mengAnchor: 'Ck3FsHwN6mengAnchor011tLpXbVcRqZ4Y8KwGyM2Jb',
   suAnchor: 'Lq7VsYwH4suAnchor011mTpXcKbRnZ8F3GwQyM5JkDb',
   zhaoAnchor: 'Wn5KsPwHzhaoAnchor011mTb4LpXcRqY9F6GyQwJkB3',
+  tanAnchor: 'Tm4WkPnRtanAnchor011sLpXcHfBvY8K6GwQ3LjMyZx',
+  jiangAnchor: 'Jw9NkPsRjiangAnchor012LpXcRtY8H6FvQ4GjKwMyTb',
 };
 
 const portraitUrl = (blobId: string) => walrusAggregatorUrl(blobId, { network: 'testnet' });
@@ -285,6 +287,56 @@ export const characters: Character[] = [
     },
     survival: { funds: 240, dailyCost: 6, salary: 0, daysLeft: 40, level: 'healthy' },
     createdAt: '2026-05-16T14:00:00Z',
+  },
+
+  // ───── 江湖外連（wild / 不屬於 saga 但有跨界關係）─────
+  {
+    id: 'char_tan_silang',
+    nftOwner: OWNER_B,
+    sagaId: null,
+    name: '譚四郎',
+    description:
+      '對家戲班「永聲社」班主。十年前與沈懷音同台爭過《貴妃醉酒》正本，敗後另開門戶。',
+    role: '班主',
+    gender: 'male',
+    age: 44,
+    physicalFacts: '四十中年，瘦長身形，左眉一道舊疤，常著黑緞長衫、不戴帽。',
+    attributes: { constitution: 65, disposition: 80, acuity: 88, appearance: 70 },
+    gallery: {
+      anchor: {
+        walrusBlobId: BLOB.tanAnchor,
+        imageUrl: portraitUrl(BLOB.tanAnchor),
+        kind: 'anchor',
+        createdAt: '2026-05-12T10:00:00Z',
+      },
+      eventMoments: [],
+    },
+    survival: { funds: 380, dailyCost: 10, salary: 0, daysLeft: 36, level: 'healthy' },
+    createdAt: '2026-05-12T10:00:00Z',
+  },
+  {
+    id: 'char_jiang_laoban',
+    nftOwner: OWNER_C,
+    sagaId: null,
+    name: '江老闆',
+    description:
+      '霞飛路口糧行老闆。生意人氣，戲園子常客 — 三年前一場《牡丹亭》看完便逢戲必到，是葉庭芳的長期訂閱者。',
+    role: '看客',
+    gender: 'male',
+    age: 38,
+    physicalFacts: '三十中半，富態但不肥，圓臉短鬚，常著棉袍配翡翠戒；笑起來有酒窩。',
+    attributes: { constitution: 55, disposition: 75, acuity: 70, appearance: 60 },
+    gallery: {
+      anchor: {
+        walrusBlobId: BLOB.jiangAnchor,
+        imageUrl: portraitUrl(BLOB.jiangAnchor),
+        kind: 'anchor',
+        createdAt: '2026-05-13T09:00:00Z',
+      },
+      eventMoments: [],
+    },
+    survival: { funds: 1500, dailyCost: 18, salary: 0, daysLeft: 83, level: 'healthy' },
+    createdAt: '2026-05-13T09:00:00Z',
   },
 ];
 

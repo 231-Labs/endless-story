@@ -36,12 +36,15 @@ export function ProfileTab({
   charactersById: Map<string, Character>;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-16 lg:grid-cols-[1fr_320px] lg:gap-24">
+    <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1fr_320px] lg:gap-20">
       {/* Main Column */}
-      <div className="space-y-16">
+      <div className="space-y-20">
         <section>
-          <h2 className="font-serif text-2xl text-ink">敘描</h2>
-          <div className="mt-6">
+          <div className="flex items-center gap-4">
+            <div className="h-px w-8 bg-cinnabar/40" />
+            <h2 className="font-serif text-2xl tracking-wide text-ink">敘描</h2>
+          </div>
+          <div className="mt-8 pl-0 sm:pl-12">
             <p className="text-base leading-loose text-ink/85 sm:text-lg sm:leading-loose">
               {character.description}
             </p>
@@ -51,12 +54,15 @@ export function ProfileTab({
         <SoulSection persona={persona} regenChapter={personaRegenChapter} />
 
         <section>
-          <h2 className="font-serif text-2xl text-ink">外貌設定</h2>
-          <div className="mt-6">
+          <div className="flex items-center gap-4">
+            <div className="h-px w-8 bg-cinnabar/40" />
+            <h2 className="font-serif text-2xl tracking-wide text-ink">外貌設定</h2>
+          </div>
+          <div className="mt-8 pl-0 sm:pl-12">
             <p className="text-base leading-loose text-ink/85 sm:text-lg sm:leading-loose">
               {character.physicalFacts}
             </p>
-            <p className="mt-4 text-xs tracking-widest text-mute">
+            <p className="mt-6 text-xs tracking-widest text-mute/70">
               * mint 時寫上鏈、所有 portrait 生成都 anchor 於此
             </p>
           </div>
@@ -64,69 +70,73 @@ export function ProfileTab({
       </div>
 
       {/* Sidebar */}
-      <aside className="space-y-16">
-        <section>
-          <h3 className="font-serif text-xl text-ink">天賦</h3>
-          <div className="mt-8 space-y-6">
-            {ATTR_ORDER.map((key) => {
-              const value = character.attributes[key];
-              const label = ATTR_LABEL[key];
-              return (
-                <div key={key}>
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-sm tracking-widest text-mute">{label}</span>
-                    <span className="font-mono text-lg text-ink">{value}</span>
+      <aside className="space-y-8">
+        <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 space-y-12 backdrop-blur-sm">
+          <section>
+            <h3 className="font-serif text-lg tracking-widest text-ink text-center">天賦</h3>
+            <div className="mt-8 space-y-6">
+              {ATTR_ORDER.map((key) => {
+                const value = character.attributes[key];
+                const label = ATTR_LABEL[key];
+                return (
+                  <div key={key}>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm tracking-widest text-mute">{label}</span>
+                      <span className="font-mono text-lg text-ink">{value}</span>
+                    </div>
+                    <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-hairline/80 dark:bg-hairline">
+                      <div
+                        className="h-full rounded-full bg-cinnabar/70 dark:bg-cinnabar/80"
+                        style={{ width: `${value}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-hairline/80 dark:bg-hairline">
-                    <div
-                      className="h-full rounded-full bg-cinnabar/70 dark:bg-cinnabar/80"
-                      style={{ width: `${value}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+                );
+              })}
+            </div>
+          </section>
 
-        <section>
-          <h3 className="font-serif text-xl text-ink">日常開銷</h3>
-          <div className="mt-8 space-y-5">
-            <div className="flex items-baseline justify-between border-b border-hairline pb-5">
-              <span className="text-sm tracking-widest text-mute">現銀</span>
-              <span className="font-mono text-3xl text-ink">{character.survival.funds}</span>
+          <section>
+            <h3 className="font-serif text-lg tracking-widest text-ink text-center">日常開銷</h3>
+            <div className="mt-8 space-y-5">
+              <div className="flex items-baseline justify-between border-b border-hairline pb-5">
+                <span className="text-sm tracking-widest text-mute">現銀</span>
+                <span className="font-mono text-3xl text-ink">{character.survival.funds}</span>
+              </div>
+              <div className="flex items-baseline justify-between pt-2">
+                <span className="text-sm tracking-widest text-mute">每日開銷</span>
+                <span className="font-mono text-base text-ink">{character.survival.dailyCost}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm tracking-widest text-mute">班中俸</span>
+                <span className="font-mono text-base text-ink">{character.survival.salary}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm tracking-widest text-mute">可撐日數</span>
+                <span className="font-mono text-base text-ink">{character.survival.daysLeft} 日</span>
+              </div>
             </div>
-            <div className="flex items-baseline justify-between pt-2">
-              <span className="text-sm tracking-widest text-mute">每日開銷</span>
-              <span className="font-mono text-base text-ink">{character.survival.dailyCost}</span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm tracking-widest text-mute">班中俸</span>
-              <span className="font-mono text-base text-ink">{character.survival.salary}</span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm tracking-widest text-mute">可撐日數</span>
-              <span className="font-mono text-base text-ink">{character.survival.daysLeft} 日</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
-        <section>
-          <h3 className="font-serif text-xl text-ink">關係</h3>
-          {outgoingEdges.length === 0 ? (
-            <p className="mt-8 text-sm leading-relaxed text-mute">尚未對誰留下顯著的記憶。</p>
-          ) : (
-            <ul className="mt-8 space-y-8">
-              {outgoingEdges.slice(0, 6).map((edge) => (
-                <RelationshipRow
-                  key={`${edge.fromId}-${edge.toId}`}
-                  edge={edge}
-                  target={charactersById.get(edge.toId) ?? null}
-                />
-              ))}
-            </ul>
-          )}
-        </section>
+        <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+          <section>
+            <h3 className="font-serif text-lg tracking-widest text-ink text-center">關係</h3>
+            {outgoingEdges.length === 0 ? (
+              <p className="mt-8 text-sm leading-relaxed text-mute text-center">尚未對誰留下顯著的記憶。</p>
+            ) : (
+              <ul className="mt-8 space-y-8">
+                {outgoingEdges.slice(0, 6).map((edge) => (
+                  <RelationshipRow
+                    key={`${edge.fromId}-${edge.toId}`}
+                    edge={edge}
+                    target={charactersById.get(edge.toId) ?? null}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       </aside>
     </div>
   );

@@ -75,35 +75,43 @@ export function MemoriesTab({
   }
 
   return (
-    <div className="space-y-10">
-      <header className="flex items-baseline justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-2xl text-ink">記憶</h2>
-          <p className="mt-1 text-sm text-mute">
+    <div className="space-y-12">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="h-px w-8 bg-cinnabar/40" />
+          <h2 className="font-serif text-2xl tracking-wide text-ink">記憶</h2>
+          <p className="text-xs tracking-widest text-mute/70 hidden sm:block">
             她記得這些事 — 上鏈寫進 Walrus，只有持有者讀得到。
           </p>
         </div>
-        <p className="text-2xs tracking-widest text-mute">{memories.length} 則</p>
+        <p className="text-xs tracking-widest text-mute/70 pl-12 sm:pl-0">{memories.length} 則</p>
       </header>
+      <p className="text-xs tracking-widest text-mute/70 pl-12 sm:hidden">
+        她記得這些事 — 上鏈寫進 Walrus，只有持有者讀得到。
+      </p>
 
-      {memories.length === 0 ? (
-        <p className="es-soft-panel border-dashed p-6 text-sm text-mute">
-          她暫時還沒留下供你翻閱的記憶。下一場戲落幕後，這裡會陸續長出新的條目。
-        </p>
-      ) : (
-        <ol className="space-y-6">
-          {memories.map((mem) => (
-            <MemoryEntry
-              key={mem.id}
-              memory={mem}
-              sagaCharacters={sagaCharacters}
-              charactersById={charactersById}
-              selfId={character.id}
-              chapter={mem.eventChapterId ? chaptersById.get(mem.eventChapterId) ?? null : null}
-            />
-          ))}
-        </ol>
-      )}
+      <div className="pl-0 sm:pl-12">
+        {memories.length === 0 ? (
+          <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
+            <p className="text-sm text-mute tracking-wide">
+              她暫時還沒留下供你翻閱的記憶。下一場戲落幕後，這裡會陸續長出新的條目。
+            </p>
+          </div>
+        ) : (
+          <ol className="space-y-6">
+            {memories.map((mem) => (
+              <MemoryEntry
+                key={mem.id}
+                memory={mem}
+                sagaCharacters={sagaCharacters}
+                charactersById={charactersById}
+                selfId={character.id}
+                chapter={mem.eventChapterId ? chaptersById.get(mem.eventChapterId) ?? null : null}
+              />
+            ))}
+          </ol>
+        )}
+      </div>
     </div>
   );
 }
@@ -124,10 +132,10 @@ function MemoryEntry({
   const summaryWeight = importanceClass(memory.importance);
 
   return (
-    <li className="es-soft-panel p-5 sm:p-6">
+    <li className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:shadow-sm">
       {/* meta row — kind dot + kind label + date + chapter link */}
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xs tracking-widest text-mute">
-        <span className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs tracking-widest text-mute/80">
+        <span className="flex items-center gap-2 bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">
           <KindDot kind={memory.kind} />
           <span>{KIND_LABEL[memory.kind]}</span>
         </span>
@@ -153,12 +161,12 @@ function MemoryEntry({
       />
 
       {/* summary line — 字重 reflect importance */}
-      <p className={`mt-3 font-serif text-lg leading-snug ${summaryWeight}`}>
+      <p className={`mt-5 font-serif text-xl leading-snug tracking-wide ${summaryWeight}`}>
         <Linkified text={memory.summary} characters={sagaCharacters} skipId={selfId} />
       </p>
 
       {/* body — italic quote 體 with cinnabar left border */}
-      <div className="mt-3 border-l border-cinnabar/35 pl-4 text-[15px] leading-loose text-ink/80 dark:border-cinnabar/45">
+      <div className="mt-4 border-l-2 border-cinnabar/30 pl-5 text-base leading-loose text-ink/75 dark:border-cinnabar/40">
         <Linkified text={memory.body} characters={sagaCharacters} skipId={selfId} />
       </div>
     </li>
@@ -257,11 +265,11 @@ function ProvenanceLine({
 
 function LockedNotice({ character }: { character: Character }) {
   return (
-    <section className="es-soft-panel border-dashed p-6 text-sm leading-relaxed text-mute sm:p-8">
-      <p className="font-serif text-base text-ink/80">記憶是她私有的部分。</p>
-      <p className="mt-2">
+    <section className="rounded-3xl bg-surface/40 border border-dashed border-hairline/60 p-8 sm:p-12 text-sm leading-relaxed text-mute backdrop-blur-sm text-center max-w-2xl mx-auto mt-12">
+      <p className="font-serif text-xl text-ink/80 tracking-wide mb-4">記憶是她私有的部分。</p>
+      <p className="tracking-wide leading-loose">
         只有持有
-        <span className="mx-1.5 font-mono text-mute/90">{truncateAddress(character.nftOwner)}</span>
+        <span className="mx-2 font-mono text-mute/90 bg-canvas/50 px-2 py-1 rounded">{truncateAddress(character.nftOwner)}</span>
         能翻閱她的反思 — 章回是她願意被看見的；記憶是還沒整理好、不確定要不要被看見的那些。
       </p>
     </section>

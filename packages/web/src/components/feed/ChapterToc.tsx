@@ -13,8 +13,8 @@ export function ChapterToc({
 }) {
   return (
     <nav aria-label="章回目錄">
-      <h3 className="text-2xs tracking-widest text-mute">目錄</h3>
-      <ol className="mt-3 space-y-4 text-sm">
+      <h3 className="text-xs tracking-widest text-ink font-serif text-center mb-6">目錄</h3>
+      <ol className="space-y-4 text-sm">
         {chapters.map((chapter) => {
           const isCurrent = chapter.id === currentId;
           const pov = chapter.povCharacterId
@@ -36,7 +36,7 @@ export function ChapterToc({
                   {pov ? <span className="text-cinnabar">{pov.name}</span> : null}
                 </div>
                 <div
-                  className="mt-0.5 font-serif leading-snug"
+                  className="mt-1 font-serif leading-snug tracking-wide"
                   style={{ wordBreak: 'keep-all', overflowWrap: 'break-word' }}
                 >
                   {shortChapterTitle(chapter.title)}

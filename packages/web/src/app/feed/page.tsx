@@ -3,16 +3,16 @@ import { chaptersApi, sagasApi, charactersApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
 import { truncateBlobId } from '@/lib/format';
 
-type FeedMode = 'all' | 'ensemble' | 'pov';
+type FeedMode = 'all' | 'text' | 'visual';
 
 const MODES: { key: FeedMode; label: string }[] = [
   { key: 'all', label: '全部' },
-  { key: 'ensemble', label: '群像' },
-  { key: 'pov', label: '視角' },
+  { key: 'text', label: '文字連載' },
+  { key: 'visual', label: '影像與畫冊' },
 ];
 
 function parseMode(raw: string | string[] | undefined): FeedMode {
-  if (typeof raw === 'string' && (['all', 'ensemble', 'pov'] as const).includes(raw as FeedMode)) {
+  if (typeof raw === 'string' && (['all', 'text', 'visual'] as const).includes(raw as FeedMode)) {
     return raw as FeedMode;
   }
   return 'all';
@@ -34,16 +34,17 @@ export default async function FeedPage({
 
   const publicChapters = chapters.filter((c) => c.visibility === 'public_chapter');
   const visible = publicChapters.filter((c) => {
-    if (mode === 'ensemble') return !c.povCharacterId;
-    if (mode === 'pov') return Boolean(c.povCharacterId);
+    const isVisual = c.mediaType === 'video' || c.mediaType === 'gallery';
+    if (mode === 'text') return !isVisual;
+    if (mode === 'visual') return isVisual;
     return true;
   });
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen [scrollbar-gutter:stable]">
       <SiteNav />
       <section className="px-5 py-12 sm:px-10 sm:py-16">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-4xl">
           <div className="flex items-baseline justify-between">
             <h1 className="font-serif text-3xl tracking-wide text-ink sm:text-4xl">連載</h1>
             <span className="text-sm text-mute">{saga.name} · 第 {saga.currentDay} 日</span>
@@ -73,37 +74,85 @@ export default async function FeedPage({
           </div>
 
           {visible.length === 0 ? (
-            <p className="mt-12 text-center text-sm text-mute">這個範圍裡還沒有章回。</p>
+            <div className="mt-12 rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
+              <p className="text-sm text-mute tracking-wide">這個範圍裡還沒有章回。</p>
+            </div>
           ) : (
-            <ul className="mt-6 divide-y divide-hairline">
+            <div className={`mt-8 ${mode === 'visual' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-6'}`}>
               {visible.map((chapter) => {
                 const pov = chapter.povCharacterId
                   ? charactersById.get(chapter.povCharacterId)
                   : null;
+                const isVisual = chapter.mediaType === 'video' || chapter.mediaType === 'gallery';
+
+                // Visual card layout (Gallery style)
+                if (mode === 'visual' || (mode === 'all' && isVisual)) {
+                  return (
+                    <div key={chapter.id}>
+                      <Link
+                        href={`/feed/chapter/${chapter.id}`}
+                        className="group flex flex-col gap-3 rounded-3xl bg-surface/40 border border-hairline/50 p-4 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
+                      >
+                        <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-surface ring-1 ring-inset ring-hairline/50 dark:bg-elevated/45 transition-transform duration-500 group-hover:shadow-md">
+                          {chapter.coverUrl ? (
+                            <img
+                              src={chapter.coverUrl}
+                              alt={chapter.title}
+                              className="absolute inset-0 h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-[1.02] group-hover:opacity-100"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="font-serif text-3xl text-mute/30">影像</span>
+                            </div>
+                          )}
+                          <div className="absolute right-3 top-3 rounded-full bg-elevated/90 px-3 py-1 text-[10px] tracking-widest text-ink shadow-sm backdrop-blur-md">
+                            {chapter.mediaType === 'video' ? '▶ 影片' : '✦ 畫冊'}
+                          </div>
+                          
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-canvas/95 via-canvas/70 to-transparent p-4 pt-16 transition-opacity duration-500">
+                            <div className="flex items-center gap-2 text-[10px] tracking-widest text-mute uppercase">
+                              <span className="bg-canvas/50 px-2 py-0.5 rounded border border-hairline/50">DAY {chapter.day}</span>
+                            </div>
+                            <h2 className="mt-2 font-serif text-lg leading-snug text-ink transition-colors group-hover:text-cinnabar">
+                              {chapter.title}
+                            </h2>
+                          </div>
+                        </div>
+                        {mode === 'all' && (
+                           <p className="mt-2 px-2 line-clamp-2 text-sm leading-loose text-ink/70">
+                             {chapter.body}
+                           </p>
+                        )}
+                      </Link>
+                    </div>
+                  );
+                }
+
+                // Text list layout
                 return (
-                  <li key={chapter.id}>
+                  <div key={chapter.id}>
                     <Link
                       href={`/feed/chapter/${chapter.id}`}
-                      className="group block py-7 transition-colors"
+                      className="group block rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
                     >
-                      <div className="flex items-center gap-3 text-2xs tracking-widest text-mute">
-                        <span>DAY {chapter.day}</span>
-                        {pov ? <span className="text-cinnabar">{pov.name} 視角</span> : null}
-                        <span className="font-mono ml-auto">
+                      <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
+                        <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
+                        {pov ? <span className="text-cinnabar font-medium">{pov.name} 視角</span> : null}
+                        <span className="font-mono ml-auto text-2xs">
                           walrus · {truncateBlobId(chapter.walrusBlobId)}
                         </span>
                       </div>
-                      <h2 className="mt-2 font-serif text-xl text-ink transition-colors group-hover:text-cinnabar sm:text-2xl">
+                      <h2 className="mt-4 font-serif text-2xl tracking-wide text-ink transition-colors group-hover:text-cinnabar flex items-center gap-2">
                         {chapter.title}
                       </h2>
-                      <p className="mt-2 line-clamp-2 text-[15px] leading-loose text-ink/70 transition-colors group-hover:text-ink sm:text-base">
+                      <p className="mt-3 line-clamp-2 text-base leading-loose text-ink/75 transition-colors group-hover:text-ink/90">
                         {chapter.body}
                       </p>
                     </Link>
-                  </li>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           )}
         </div>
       </section>

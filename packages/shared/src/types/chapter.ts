@@ -6,6 +6,9 @@ export interface Chapter {
   day: number;
   title: string;
   body: string;
+  mediaType?: 'text' | 'video' | 'gallery';
+  videoUrl?: string;
+  coverUrl?: string;
   povCharacterId?: string;
   involvedCharacterIds: string[];
   sourceEventId?: string;
