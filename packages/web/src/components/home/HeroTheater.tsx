@@ -123,9 +123,9 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
         }`}
       >
         {/* Top: Banner Text — frosted glass card */}
-        <div className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-10 sm:py-16 lg:py-20">
+        <div className="flex flex-1 flex-col justify-center px-5 py-4 sm:px-10 sm:py-6 lg:py-8">
           <div className="mx-auto w-full max-w-3xl animate-banner-rise">
-            <div className="rounded-3xl border border-white/40 bg-canvas/55 p-8 shadow-[0_10px_60px_-20px_rgba(0,0,0,0.18)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-canvas/55 dark:shadow-[0_10px_60px_-12px_rgba(0,0,0,0.6)] sm:p-12">
+            <div className="rounded-3xl border border-white/40 bg-canvas/65 p-6 shadow-[0_10px_60px_-20px_rgba(0,0,0,0.18)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-canvas/70 dark:shadow-[0_10px_60px_-12px_rgba(0,0,0,0.6)] sm:p-8">
               <h1 className="font-serif text-5xl leading-tight tracking-wide text-ink sm:text-6xl lg:text-7xl">
                 {saga.name}
               </h1>
@@ -161,10 +161,10 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
         </div>
 
         {/* Bottom: Scene Thumbnails — frosted strip seated on the painting */}
-        <div className="w-full border-t border-white/30 bg-canvas/70 py-6 backdrop-blur-xl dark:border-white/10 dark:bg-canvas/70">
-          <div className="mx-auto max-w-6xl">
+        <div className="w-full border-t border-white/30 bg-canvas/60 pt-6 pb-4 backdrop-blur-xl dark:border-white/10 dark:bg-black/50">
+          <div className="mx-auto max-w-7xl">
             <div className="mb-2 flex items-center justify-between px-5 sm:px-10">
-              <h2 className="font-serif text-xl tracking-wide text-ink">今日場景</h2>
+              <h2 className="font-serif text-lg tracking-widest text-ink/80 dark:text-canvas/80">今日場景</h2>
             </div>
             {/* Scrollable row of scenes */}
             <div className="group/carousel relative">
@@ -192,7 +192,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
 
               <div
                 id="scenes-scroll-container"
-                className="flex gap-4 overflow-x-auto py-6 px-5 sm:gap-5 sm:px-10 snap-x snap-mandatory scroll-smooth scroll-pl-5 sm:scroll-pl-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="flex gap-4 overflow-x-auto py-2 px-5 sm:gap-5 sm:px-10 snap-x snap-mandatory scroll-smooth scroll-pl-5 sm:scroll-pl-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {clips.map((clip) => (
                   <button
