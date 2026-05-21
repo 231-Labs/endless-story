@@ -22,10 +22,12 @@ export function BackButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className="group inline-flex items-center gap-2 text-sm tracking-widest text-mute transition-colors hover:text-ink"
+      className="group inline-flex items-center gap-2 text-sm tracking-widest text-mute transition-colors hover:text-cinnabar"
     >
       <span aria-hidden className="transition-transform group-hover:-translate-x-1">←</span>
-      <span>{label}</span>
+      <span className="border-b border-transparent transition-colors group-hover:border-cinnabar/40">
+        {label}
+      </span>
     </button>
   );
 }

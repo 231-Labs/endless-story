@@ -115,3 +115,20 @@ body {
 .animate-scroll-down-line {
   animation: scroll-down-line 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
+
+@keyframes endless-focus-in {
+  0%   { opacity: 0; transform: scale(1.08); filter: blur(14px); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+.animate-focus-in {
+  animation: endless-focus-in 2400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes endless-banner-rise {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-banner-rise {
+  animation: endless-banner-rise 1200ms cubic-bezier(0.22, 1, 0.36, 1) 700ms both;
+}

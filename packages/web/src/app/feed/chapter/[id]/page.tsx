@@ -57,7 +57,7 @@ export default async function ChapterPage({
           </aside>
 
           <article className="lg:col-start-2">
-            <details className="mb-8 rounded-md border border-hairline lg:hidden">
+            <details className="mb-8 rounded-md border border-hairline bg-surface/80 dark:bg-elevated/40 lg:hidden">
               <summary className="cursor-pointer px-4 py-3 text-sm tracking-wide text-ink">
                 目錄 · {tocChapters.length} 章
               </summary>

@@ -1,20 +1,30 @@
-import type { Character, OwnerIntervention } from '@endless-story/shared';
+import type { Character, OwnerIntervention, SoulSong } from '@endless-story/shared';
 import { Composer } from './Composer';
+import { SoulSongPanel } from './SoulSongPanel';
 import { formatDate, truncateAddress } from '@/lib/format';
 
 export function InterventionTab({
   character,
   interventions,
+  soulSongs,
   viewerWallet,
 }: {
   character: Character;
   interventions: OwnerIntervention[];
+  soulSongs: SoulSong[];
   viewerWallet: string | null;
 }) {
   const isOwner = viewerWallet === character.nftOwner;
 
   return (
     <div className="space-y-10">
+      <SoulSongPanel
+        characterId={character.id}
+        characterName={character.name}
+        songs={soulSongs}
+        isOwner={isOwner}
+      />
+
       {isOwner ? <Composer /> : <LockedNotice character={character} />}
 
       <section>

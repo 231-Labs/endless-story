@@ -43,10 +43,14 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
 
   return (
     <section className="relative flex flex-1 flex-col overflow-hidden bg-canvas transition-colors duration-500">
-      {/* Background for future animation (國畫動畫) */}
-      <div className="absolute inset-0 z-0 opacity-40 mix-blend-multiply dark:opacity-20 dark:mix-blend-screen">
-        {/* 這裡未來可以放入國畫動畫 */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-canvas/50 to-canvas" />
+      {/* Background painting — day / night crossfade + slow-focus reveal on mount */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 z-0 animate-focus-in">
+        <div className="absolute inset-0 bg-cover bg-center transition-opacity duration-700 ease-out bg-[url('/hero/saga-day.webp')] dark:opacity-0" />
+        <div className="absolute inset-0 bg-cover bg-center opacity-0 transition-opacity duration-700 ease-out bg-[url('/hero/saga-night.webp')] dark:opacity-100" />
+        {/* Top whisper of canvas so nav floats; subtle vignette */}
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-canvas/40 to-transparent dark:from-canvas/50" />
+        {/* Bottom fade into surface so today's-scenes panel sits naturally */}
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-canvas via-canvas/70 to-transparent" />
       </div>
 
       {/* Theater Mode Overlay */}
@@ -118,47 +122,49 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
           activeClip ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
       >
-        {/* Top: Banner Text */}
-        <div className="flex flex-1 flex-col justify-center px-5 py-8 sm:px-10 sm:py-12 lg:py-16">
-          <div className="mx-auto w-full max-w-6xl">
-            <h1 className="font-serif text-5xl leading-tight tracking-wide text-ink sm:text-6xl lg:text-7xl">
-              {saga.name}
-            </h1>
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm tracking-widest text-mute sm:mt-6 sm:text-base">
-              <span>第 {saga.currentDay} 日 / 全 {saga.totalDays} 日</span>
-              <span className="hidden text-hairline sm:inline">·</span>
-              <span>{saga.castIds.length} 人在臺</span>
-            </div>
-            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-ink/85 sm:mt-8 sm:text-xl">
-              {saga.premise}
-            </p>
-            
-            {/* CTA Button */}
-            {recruitmentsCount > 0 && (
-              <div className="mt-8 sm:mt-10">
-                <button
-                  onClick={() => {
-                    document.getElementById('recruitment-section')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="group inline-flex items-center gap-3 rounded-full bg-cinnabar px-6 py-3 text-sm tracking-widest text-canvas transition-all hover:bg-seal hover:shadow-lg hover:shadow-cinnabar/20"
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-canvas opacity-75"></span>
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-canvas"></span>
-                  </span>
-                  <span>開放徵召中 ({recruitmentsCount})</span>
-                  <span className="transition-transform group-hover:translate-y-0.5">↓</span>
-                </button>
+        {/* Top: Banner Text — frosted glass card */}
+        <div className="flex flex-1 flex-col justify-center px-5 py-4 sm:px-10 sm:py-6 lg:py-8">
+          <div className="mx-auto w-full max-w-3xl animate-banner-rise">
+            <div className="rounded-3xl border border-white/40 bg-canvas/65 p-6 shadow-[0_10px_60px_-20px_rgba(0,0,0,0.18)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-canvas/70 dark:shadow-[0_10px_60px_-12px_rgba(0,0,0,0.6)] sm:p-8">
+              <h1 className="font-serif text-5xl leading-tight tracking-wide text-ink sm:text-6xl lg:text-7xl">
+                {saga.name}
+              </h1>
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm tracking-widest text-mute sm:mt-5 sm:text-base">
+                <span>第 {saga.currentDay} 日 / 全 {saga.totalDays} 日</span>
+                <span className="hidden text-hairline sm:inline">·</span>
+                <span>{saga.castIds.length} 人在臺</span>
               </div>
-            )}
+              <p className="mt-6 text-lg leading-relaxed text-ink/90 sm:mt-7 sm:text-xl">
+                {saga.premise}
+              </p>
+
+              {/* CTA Button */}
+              {recruitmentsCount > 0 && (
+                <div className="mt-8 sm:mt-10">
+                  <button
+                    onClick={() => {
+                      document.getElementById('recruitment-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="group inline-flex items-center gap-3 rounded-full bg-cinnabar px-6 py-3 text-sm tracking-widest text-canvas transition-all hover:bg-seal hover:shadow-lg hover:shadow-cinnabar/20"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-canvas opacity-75"></span>
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-canvas"></span>
+                    </span>
+                    <span>開放徵召中 ({recruitmentsCount})</span>
+                    <span className="transition-transform group-hover:translate-y-0.5">↓</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Bottom: Scene Thumbnails */}
-        <div className="w-full border-t border-hairline/60 bg-surface/40 py-6 backdrop-blur-md">
-          <div className="mx-auto max-w-6xl">
+        {/* Bottom: Scene Thumbnails — frosted strip seated on the painting */}
+        <div className="w-full border-t border-white/30 bg-canvas/60 pt-6 pb-4 backdrop-blur-xl dark:border-white/10 dark:bg-black/50">
+          <div className="mx-auto max-w-7xl">
             <div className="mb-2 flex items-center justify-between px-5 sm:px-10">
-              <h2 className="font-serif text-xl tracking-wide text-ink">今日場景</h2>
+              <h2 className="font-serif text-lg tracking-widest text-ink/80 dark:text-canvas/80">今日場景</h2>
             </div>
             {/* Scrollable row of scenes */}
             <div className="group/carousel relative">
@@ -186,7 +192,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
 
               <div
                 id="scenes-scroll-container"
-                className="flex gap-4 overflow-x-auto py-6 px-5 sm:gap-5 sm:px-10 snap-x snap-mandatory scroll-smooth scroll-pl-5 sm:scroll-pl-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                className="flex gap-4 overflow-x-auto py-2 px-5 sm:gap-5 sm:px-10 snap-x snap-mandatory scroll-smooth scroll-pl-5 sm:scroll-pl-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {clips.map((clip) => (
                   <button

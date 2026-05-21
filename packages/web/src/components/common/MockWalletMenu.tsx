@@ -51,6 +51,10 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
     as: active.queryValue === defaultPersona.queryValue ? defaultPersona.queryValue : active.queryValue,
   });
 
+  const subscriptionsHref = active.wallet
+    ? `/subscriptions?as=${active.queryValue}`
+    : '/subscriptions';
+
   return (
     <details className="group/menu relative">
       <summary className="flex h-8 cursor-pointer list-none items-center gap-2 rounded-full bg-canvas/55 px-3 text-2xs tracking-widest text-ink/75 ring-1 ring-hairline transition-colors hover:text-ink hover:ring-ink/25 max-sm:w-8 max-sm:justify-center max-sm:px-0 [&::-webkit-details-marker]:hidden">
@@ -82,10 +86,13 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
           <span>我的角色</span>
           <span className="font-mono text-xs text-mute">{active.ownedCount}</span>
         </Link>
-        <div className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75">
+        <Link
+          href={subscriptionsHref}
+          className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
+        >
           <span>我的訂閱</span>
           <span className="font-mono text-xs text-mute">{active.subscriptionCount}</span>
-        </div>
+        </Link>
 
         <div className="my-1 h-px bg-hairline" />
 
