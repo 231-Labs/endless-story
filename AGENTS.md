@@ -1,6 +1,6 @@
 # Endless Story · AGENTS.md
 
-> 給下一個 session 的接班備忘。Repo: [231-Labs/endless-story](https://github.com/231-Labs/endless-story)
+> 給下一個 session 的接班備忘（**唯一維護檔**）。Repo: [231-Labs/endless-story](https://github.com/231-Labs/endless-story)
 > 比賽：Sui Overflow 2026 · Walrus 賽道，提交 deadline **2026-06-21**
 
 ---
@@ -15,19 +15,14 @@
 ## 開發
 
 ```bash
-# Repo root
 cd /Users/harperdelaviga/endless-story-new
-
-# Run dev
-pnpm --filter @endless-story/web dev    # http://localhost:3000
-
-# Type-check
+pnpm --filter @endless-story/web dev          # http://localhost:3000
 pnpm --filter @endless-story/web type-check
 ```
 
-**Preview tools 可用** — `.Codex/launch.json` 已配好 `web` server。直接 `preview_start("web")`。
+**Preview tools 可用** — `.claude/launch.json` 已配好 `web` server。直接 `preview_start("web")`。
 
-舊 repo（`/Users/harperdelaviga/Endless-Story`）= operator / admin 工具，不要動。
+舊 repo（`/Users/harperdelaviga/Endless-Story`）= operator / admin 工具，**不要動**。
 
 ---
 
@@ -39,7 +34,7 @@ pnpm --filter @endless-story/web type-check
 |---|---|---|---|
 | `canvas` | `#faf8f3` | `#0f0e0c` | **body 背景**（最底層） |
 | `surface` | `#faf8f3` | `#191611` | **卡片 / nav / sticky 浮層** |
-| `elevated` | `#fffefa` | `#251f18` | modal / popover |
+| `elevated` | `#fffefa` | `#251f18` | modal / popover / floating |
 | `ink` | `#18181b` | `#f2e8d2` | 主文字 |
 | `mute` | `#71717a` | `#a69a80` | 次文字、icon |
 | `hairline` | `#e5e5e0` | `#43382a` | 邊線 |
@@ -47,25 +42,42 @@ pnpm --filter @endless-story/web type-check
 | `jade` | `#6c8a6f` | `#90a47e` | 次 accent |
 | `seal` | `#a3392a` | `#e0b86c` | cinnabar hover state |
 
-定義位置：`packages/web/src/app/globals.css` 的 `:root` + `.dark`。Tailwind 取用：`bg-canvas`、`text-ink`、`ring-hairline` 等（`tailwind.config.ts`、`darkMode: 'class'`）。
+定義：`packages/web/src/app/globals.css` 的 `:root` + `.dark`。Tailwind：`bg-canvas`、`text-ink` 等（`tailwind.config.ts`、`darkMode: 'class'`）。
 
 ### Dark mode 鐵律
 
 **不要把 canvas 同時當 body 背景跟卡片背景。**
 
 - HTML body → `bg-canvas`
-- Card / nav / sticky panel → `bg-surface`
-- Modal / floating window → `bg-elevated`
+- Card / nav / sticky → `bg-surface`
+- Modal / floating / candidate card → `bg-elevated`
 - Input / 凹陷區 → `bg-canvas dark:bg-canvas/40`
 - 票根 perforation cut-out → 保留 `bg-canvas`
 
-Tailwind 預設色一定要配 `dark:` 變體。重複 className 組合 → 抽到 globals.css 的 `es-*` class（`.es-icon-button`、`.es-field` 等）。
+Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className → 抽到 globals.css 的 `es-*`：
+
+| Class | 用途 |
+|---|---|
+| `.es-icon-button` | 圓形 icon 按鈕 |
+| `.es-soft-panel` | 內凹軟面板 |
+| `.es-field` | input / textarea |
+| `.es-choice-card` | 可點選候選卡 |
+| `.es-outline-button` | outlined secondary |
 
 ### 動畫慣例
 
 - **Enter**：`requestAnimationFrame` 後 toggle → `translate-y-4 opacity-0` → `translate-y-0 opacity-100`，`duration-300 ease-out`
 - **Exit**：反向 + `setTimeout` 280ms 才 unmount
-- **Stage 切換**：`key={stage}` + `animate-fade-in-up`
+- **Stage 切換**：`key={stage}` + `.animate-fade-in-up`
+- **Scroll hint**：`.animate-scroll-down-line`（首頁 Hero 用）
+
+### 靜態資產（近期）
+
+| 路徑 | 用途 |
+|---|---|
+| `/hero/saga-day.webp` · `/hero/saga-night.webp` | `HeroTheater` 日/夜背景（已取代舊 `banner-day/night.png`） |
+| `/ticket-bg/day-{1..5}.png` · `night-{1..5}.png` | 徵召票票面底圖，依 carousel `index % 5` 輪替 |
+| `/walruses.png` | 首頁第三屏 manifesto 上方 Walrus 插畫 |
 
 ---
 
@@ -74,28 +86,45 @@ Tailwind 預設色一定要配 `dark:` 變體。重複 className 組合 → 抽�
 ### 路由
 
 ```
-/                           HeroTheater + 場景 + 徵召
-/dossier                    9 人卡片網格 + filter
-/dossier?id=X               個人頁 (LiveState banner + tabs: 履歷/設定集/連載/託夢)
-/dossier?as=viewer          切看客視角
+/                           三屏 snap：HeroTheater → 徵召 → Manifesto/Footer
+/dossier                    9 人卡片網格 + filter (全部/春雪社/江湖/我的)
+/dossier?id=X               個人頁 (LiveState + tabs: 履歷/設定集/連載/記憶/託夢)
+/dossier?id=X&tab=memories  記憶 tab（owner-only journal）
+/dossier?as=viewer          看客視角（MockWalletMenu 切換）
+/dossier/recruit/[id]       徵召 intent 頁（候備；主流程走首頁 RecruitmentTicket）
 /feed                       章回列表 + filter
-/feed/chapter/[id]          章回詳細頁 + TOC
+/feed/chapter/[id]          章回詳細 + TOC
 /subscriptions              訂閱管理（追訂中可取消 / 持有不可退）
 ```
 
+### 首頁（`HomeContent`）
+
+- **第一屏**：`SiteNav` + `HeroTheater`（場景卡、日/夜 saga 背景、徵召數 badge 滾動至 `#recruitment-section`）
+- **第二屏**：`RecruitmentSection` — 多則徵召 carousel、票開 wizard 時隱藏 nav
+- **第三屏**：manifesto「戲子無情，記憶有痕」+ 梨園戲單 roadmap + footer 連結
+
 ### 互動
 
-- 場景卡 → 右下角 floating card（拖拉 + resize）
-- 徵召票 → 同框 wizard（描述/擲牌/選定/繪製/配像/入班）
-- 入班 ceremony → 手動 CTA；done 跳 `/dossier?id=char_cheng_hengyu`
-- Theme toggle + MockWalletMenu（我的角色 / 我的訂閱 → `/subscriptions` / 切視角）
-- 訂閱管理頁：追訂中可取消（`subscriptionsApi.unsubscribe` + revalidatePath）；持有不可退
-- LiveState sticky banner：她現在 / 她在哪 / 她下一步
+- 場景卡 → 右下角 floating card（拖拉 + resize 鎖 aspect）
+- 徵召票 → 同框 wizard（描述/擲牌/選定/繪製/配像/入班）；票面 day/night 水墨底圖
+- 徵召 carousel：上一則/下一則 + dot；空榜「揭榜處空無一物」+ `[測試] 恢復徵召`
+- 入班 ceremony → 手動 CTA；done 跳 `/dossier?id=char_cheng_hengyu`（demo hardcode）
+- Theme toggle + MockWalletMenu（我的角色 / 我的訂閱 / 切視角）
+- `DossierHeader` live state（她現在/她在哪/她下一步）+ `CharacterLinkifier`
+- 履歷 tab `SoulSection`（軸/腔/界 persona，`personasApi` + `mocks/personas.ts`）
+- **記憶 tab** `MemoriesTab`（owner-only；`memoriesApi` gate + reflection/observation/event journal）
 - 託夢 tab 召心曲：7 日 cooldown、池抽乾提示
 
 ### Mock data
 
-`packages/web/src/mocks/`：`sagas` · `characters`（9 人）· `chapters`（8 章）· `subscriptions` · `recruitments` · `relationships` · `interventions` · `soulSongs` · `scenes`
+`packages/web/src/mocks/`：
+- `sagas.ts` · DEMO_SAGA_ID = `saga_chunxue_demo`
+- `characters.ts` · 9 人
+- `chapters.ts` · 8 章
+- `recruitments.ts` · **5 則** active：武小生、富商、青衣、小報記者、老生（原 2 則已擴充）
+- `personas.ts` · 9 人本色（軸/腔/界）
+- `memories.ts` · owner journal（與 `soulSongs` 心曲區隔）
+- `subscriptions` · `relationships` · `interventions` · `soulSongs` · `scenes`
 
 ### API facade
 
@@ -103,27 +132,99 @@ Tailwind 預設色一定要配 `dark:` 變體。重複 className 組合 → 抽�
 
 ### 關鍵元件
 
-`CharacterPortrait` · `BlobImage` · `BackButton` · `ThemeToggle` · `MockWalletMenu` · `HomeContent` / `HeroTheater` · `SceneCarousel` · `LiveStateSection` · `RecruitmentTicket` / `RecruitmentSection` · `DossierTabs` · `ProfileTab` · `GalleryTab` · `SoulSongPanel` · `SubscribeCard` · `ChapterToc`
+`CharacterPortrait` · `BlobImage` · `CharacterLinkifier` · `BackButton` · `ThemeToggle` · `MockWalletMenu` · `HomeContent` / `HeroTheater` / `SceneCarousel` · `DossierHeader` · `RecruitmentTicket` / `RecruitmentSection` · `DossierTabs` · `ProfileTab` / `SoulSection` · `MemoriesTab` · `GalleryTab` · `SoulSongPanel` · `SubscribeCard` · `ChapterToc`
 
 ---
 
-## 待辦 — 比賽前必做
+## 待辦
 
-### P0 — 阻擋比賽提交
+### P0 — 比賽提交
 
-1. **i18n（next-intl）** — 比賽展示語言是英文
+1. **i18n（next-intl）** — 展示語言需英文
 
-### P1 — Demo 增色
+### P2 — 賽後 / 鏈上
 
-2. **角色記憶查閱** — owner 看 mock Walrus 反思（structured journal，與心曲區隔）
+Move 合約 · MemWal SDK · 真實 LLM · RSS · POV engine · IP 經濟（pitch deck 可提）
 
-### ✅ 已完成
+---
 
-- mock 錢包 + 用戶選單 · LiveState · 入班 → 人物卡 · 召心曲 · dark mode polish · `/subscriptions` 訂閱管理
+## 遷移計劃（舊版 → 新版尚未補齊）
 
-### P2 — 賽後
+> 完整掃描完成於 2026-05-20；2026-05-21 對照 codebase 更新 Round 1/3 狀態。標 ✅ = 已補齊。
+> 舊 repo 路徑：`/Users/harperdelaviga/Endless-Story`（**只讀對照，不要改**）
 
-Move 合約 · MemWal SDK · 真實 LLM · RSS · POV engine · IP 經濟
+### 已自動補齊（不需再做）
+
+- ✅ `MockWalletMenu` + 訂閱管理頁 `/subscriptions`
+- ✅ `LiveStateSection`（三條 live state banner）
+- ✅ `HeroTheater` / `HomeContent`（首頁重組）
+- ✅ 首頁三屏 snap（Hero → 徵召 → Manifesto/Footer）+ 梨園戲單 + `walruses.png`
+- ✅ Hero 背景 `saga-day/night.webp`；徵召票 `ticket-bg` day/night ×5 輪替
+- ✅ `RecruitmentSection` carousel + 空榜狀態；`recruitments` mock 擴至 5 則
+- ✅ `lib/character-live-state.ts`
+- ✅ `ThemeToggle` + 夜間模式 palette（含暖金 cinnabar）
+- ✅ `es-*` utility classes 抽象（globals.css `@layer components`）
+- ✅ 召心曲深層版 → `SoulSongPanel.tsx` + `mocks/soulSongs.ts`
+- ✅ Dark mode polish（DossierTabs、ProfileTab、Composer notice、ChapterToc、BackButton hover）
+- ✅ 入班完成 → done CTA 跳 `?id=char_cheng_hengyu`
+- ✅ **`CharacterLinkifier`** — `components/common/CharacterLinkifier.tsx`（`Linkified` / `LinkifiedProse`）
+  - 已接：章回內文、`DossierHeader` 敘述、記憶/託夢介入/心曲 verse
+  - 待接（有 `HistoryTabs` 後）：對話、內心獨白、公報
+- ✅ **`SoulSection` + Persona** — `SoulSection.tsx` + `mocks/personas.ts` + `lib/api/personas.ts` → `ProfileTab`
+- ✅ **角色 Memory 查閱** — `MemoriesTab` + `?tab=memories` + `mocks/memories.ts` + `lib/api/memories.ts`（owner gate）
+
+### Round 1 — 仍可擴充（核心已落地）
+
+- ⬜ `CharacterLinkifier` 覆蓋面：等 Round 3 `HistoryTabs` 接上對話/獨白/gazette
+- ⬜ 更多角色 mock 記憶條目（目前非全 9 人都有；可對照 `listMemoriesByCharacter`）
+
+### Round 2 — 國際化（比賽英文化前置）
+
+3. **next-intl framework**（L）— `messages/{en,zh-Hant}.json` + namespace
+4. **抽既有文案至 t()**（M）— 漸進，先 5 個關鍵頁面
+5. **`LocaleToggle`**（S）— nav 加「中 / EN」切換
+6. **`romanize-name`**（S）— 中文名 → 拼音（英文 demo 用，e.g. 葉庭芳 / Ye Tingfang）
+
+### Round 3 — 角色頁深化
+
+7. **`HistoryTabs`**（L）— 3 子 tab：**對話 / 內心獨白 / 公報 gazette**
+   - 現在「連載」tab 只覆蓋章回，未涵蓋對話 + 獨白 + gazette
+8. **`RelationshipGraph`**（L）— 視覺化 v3 關係圖
+   - 數據 `mocks/relationships.ts` 已備
+   - 需 zoom-pan hook（舊版 `useZoomPan`）
+   - 可放 dossier `?tab=relations` 或整個 saga 在 `/world`
+
+### Round 4 — 賽後 / 系統工具
+
+10. **`atlas.ts` + `live-map-layout.ts` + `useZoomPan`** — 世界地圖 `/world` 頁
+11. **`time.ts`**（utcTimeToLocal）— `lib/format.ts` 的 `formatDate` 太簡單
+12. **`useWorldState` hook** — 集中 fetch world / saga / characters（接真鏈會省事）
+13. **`useLocalPortraitUrl` + `character-portraits.ts`** — Portrait URL fallback layer
+
+---
+
+## 不遷移（明確排除）
+
+- ❌ 舊 `CastStrip` — 已被 `SubscribeCard` 取代
+- ❌ 舊 `DossierHero` — 已被 `DossierHeader` 取代
+- ❌ 舊 `DrawComposer` — 已被 `RecruitmentTicket` 票面 wizard 取代（更好）
+- ❌ 舊 `Navbar` / `PageHeader` — 已被 `SiteNav` 取代
+- ❌ 舊 `StatusBar` — admin / runner 用
+- ❌ 舊 `lib/skill/*`、`lib/dapp-kit`、`lib/moderation-rules-store`、`lib/recruitments-store` — 後端 / admin
+- ❌ 舊 `clear-narrative-manifest`、`agent-config` — admin / operator
+
+---
+
+## Phase 2（賽後 / 鏈上）
+
+不影響 6/21 提交，但 pitch deck 要提：
+
+- **真實 Sui Move 合約** — recruitment voucher / character mint / Seal access policy
+- **MemWal SDK 接通** — chapter / reflection / event_moment / derivative 圖 → Walrus，policy = subscriber set + owner
+- **真實 LLM** — moderation + 3-candidate draft + portrait curate
+- **RSS feed endpoint** — `/feed/character/[id].xml`
+- **POV 轉寫 engine** — 每個被訂閱的角色每天生一份第一人稱 daily POV
+- **角色 transfer / IP 經濟** — owner 收 saga 補貼 / 票房分潤
 
 ---
 
@@ -135,26 +236,28 @@ Move 合約 · MemWal SDK · 真實 LLM · RSS · POV engine · IP 經濟
 - ❌ 不要繞過 `lib/api/` facade
 - ❌ 不要動老 repo `Endless-Story`
 - ❌ 入班不要自動跳轉
+- ❌ 重複 className → 抽到 `es-*`，不要雙份維護 `AGENTS.md` / `CLAUDE.md`
 
 ---
 
 ## 驗證 checklist
 
 ```
-http://localhost:3000/
+http://localhost:3000/                                  三屏 snap + 徵召 carousel
 http://localhost:3000/dossier
 http://localhost:3000/dossier?id=char_ye_tingfang
 http://localhost:3000/dossier?id=...&tab=gallery
+http://localhost:3000/dossier?id=char_ye_tingfang&tab=memories  記憶 tab（需 owner 錢包）
 http://localhost:3000/dossier?id=...&tab=entrusts
 http://localhost:3000/feed
 http://localhost:3000/feed/chapter/chapter_day3_evening_meal
 http://localhost:3000/subscriptions?as=viewer
 ```
 
-Light / dark mode 正常 · type-check 綠燈
+Light / dark · 徵召票底圖切換 · type-check 綠燈
 
 ---
 
 ## Quick win
 
-下個 session：**角色記憶查閱** → **CharacterLinkifier** → 最後 **i18n**。詳見 `CLAUDE.md` 遷移計劃 Round 1–3。
+Round 1/3#8 已落地。下個 session 優先：**i18n** → **`HistoryTabs`** → **`RelationshipGraph`**。
