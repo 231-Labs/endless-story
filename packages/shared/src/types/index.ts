@@ -7,3 +7,5 @@ export * from './intervention';
 export * from './saga';
 export * from './recruitment';
 export * from './soulSong';
+export * from './memory';
+export * from './persona';

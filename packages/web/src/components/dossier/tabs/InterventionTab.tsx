@@ -1,6 +1,7 @@
 import type { Character, OwnerIntervention, SoulSong } from '@endless-story/shared';
 import { Composer } from './Composer';
 import { SoulSongPanel } from './SoulSongPanel';
+import { Linkified } from '@/components/common/CharacterLinkifier';
 import { formatDate, truncateAddress } from '@/lib/format';
 
 export function InterventionTab({
@@ -8,11 +9,13 @@ export function InterventionTab({
   interventions,
   soulSongs,
   viewerWallet,
+  sagaCharacters,
 }: {
   character: Character;
   interventions: OwnerIntervention[];
   soulSongs: SoulSong[];
   viewerWallet: string | null;
+  sagaCharacters: Character[];
 }) {
   const isOwner = viewerWallet === character.nftOwner;
 
@@ -23,6 +26,7 @@ export function InterventionTab({
         characterName={character.name}
         songs={soulSongs}
         isOwner={isOwner}
+        sagaCharacters={sagaCharacters}
       />
 
       {isOwner ? <Composer /> : <LockedNotice character={character} />}
@@ -34,7 +38,13 @@ export function InterventionTab({
         ) : (
           <ul className="mt-5 space-y-6">
             {interventions.map((intv) => (
-              <InterventionRow key={intv.id} intv={intv} isOwner={isOwner} />
+              <InterventionRow
+                key={intv.id}
+                intv={intv}
+                isOwner={isOwner}
+                sagaCharacters={sagaCharacters}
+                selfId={character.id}
+              />
             ))}
           </ul>
         )}
@@ -54,9 +64,13 @@ function LockedNotice({ character }: { character: Character }) {
 function InterventionRow({
   intv,
   isOwner,
+  sagaCharacters,
+  selfId,
 }: {
   intv: OwnerIntervention;
   isOwner: boolean;
+  sagaCharacters: Character[];
+  selfId: string;
 }) {
   return (
     <li>
@@ -69,7 +83,11 @@ function InterventionRow({
         ) : null}
       </div>
       <p className="mt-2 text-base leading-loose text-ink/80">
-        {isOwner ? intv.text : maskBody(intv.text)}
+        {isOwner ? (
+          <Linkified text={intv.text} characters={sagaCharacters} skipId={selfId} />
+        ) : (
+          maskBody(intv.text)
+        )}
       </p>
       {!isOwner ? (
         <p className="mt-1 text-2xs tracking-widest text-mute">內容被 Seal 加密</p>

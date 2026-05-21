@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { SoulSong, SoulSongMood } from '@endless-story/shared';
+import type { Character, SoulSong, SoulSongMood } from '@endless-story/shared';
+import { Linkified } from '@/components/common/CharacterLinkifier';
 import { formatDate } from '@/lib/format';
 
 const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -60,11 +61,13 @@ export function SoulSongPanel({
   characterName,
   songs,
   isOwner,
+  sagaCharacters,
 }: {
   characterId: string;
   characterName: string;
   songs: SoulSong[];
   isOwner: boolean;
+  sagaCharacters: Character[];
 }) {
   const orderedPool = useMemo(
     () => [...songs].sort((a, b) => a.composedAt.localeCompare(b.composedAt)),
@@ -156,6 +159,8 @@ export function SoulSongPanel({
               key={song.id}
               song={song}
               highlight={song.id === justSummonedId}
+              characters={sagaCharacters}
+              skipId={characterId}
             />
           ))}
         </ol>
@@ -231,7 +236,17 @@ function SummonControl({
   );
 }
 
-function SongCard({ song, highlight }: { song: SoulSong; highlight: boolean }) {
+function SongCard({
+  song,
+  highlight,
+  characters,
+  skipId,
+}: {
+  song: SoulSong;
+  highlight: boolean;
+  characters: Character[];
+  skipId: string;
+}) {
   const [mounted, setMounted] = useState(!highlight);
 
   useEffect(() => {
@@ -267,7 +282,7 @@ function SongCard({ song, highlight }: { song: SoulSong; highlight: boolean }) {
             key={i}
             className="font-serif text-base leading-loose text-ink/85 sm:text-lg"
           >
-            {verse}
+            <Linkified text={verse} characters={characters} skipId={skipId} />
           </p>
         ))}
       </div>

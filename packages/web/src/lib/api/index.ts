@@ -7,3 +7,5 @@ export * as interventionsApi from './interventions';
 export * as relationshipsApi from './relationships';
 export * as recruitmentsApi from './recruitments';
 export * as soulSongsApi from './soulSongs';
+export * as memoriesApi from './memories';
+export * as personasApi from './personas';

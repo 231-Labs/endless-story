@@ -6,3 +6,5 @@ export * from './subscriptions';
 export * from './interventions';
 export * from './relationships';
 export * from './soulSongs';
+export * from './memories';
+export * from './personas';

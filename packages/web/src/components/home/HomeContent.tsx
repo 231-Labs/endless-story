@@ -30,6 +30,7 @@ export function HomeContent({
       <div className="min-h-[100dvh] snap-start snap-always">
         <RecruitmentSection
           recruitments={openRecruitments}
+          seedRecruitments={initialRecruitments}
           onRecruitmentsChange={setOpenRecruitments}
         />
       </div>

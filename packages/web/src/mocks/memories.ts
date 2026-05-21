@@ -1,0 +1,137 @@
+import type { CharacterMemory } from '@endless-story/shared';
+
+/**
+ * 角色記憶（owner-only journal）。與 SoulSong（完整心曲）區隔：
+ *  - SoulSong  = 多段詩體 / 自白 / mood-tagged
+ *  - Memory    = 事件錨點 + 一兩段反思 / 觀察 / 紀事
+ */
+export const memories: CharacterMemory[] = [
+  // ───── 葉庭芳 char_ye_tingfang ─────
+  {
+    id: 'mem_ye_001',
+    characterId: 'char_ye_tingfang',
+    kind: 'event',
+    occurredAt: '2026-05-15T22:00:00Z',
+    summary: '榜貼出來，白蛇旦只掛了一個名字。',
+    body: '我沒看完榜便進廂房。並不是不能看，是看下去就會在後台哭，而我已經三十一歲了，不能再哭給人看。蕭班主寫榜時手抖不抖，那筆畫我都認得 — 不會抖的。',
+    eventChapterId: 'chapter_day1_first_rehearsal',
+    involvedCharacterIds: ['char_shen_huaiyin'],
+  },
+  {
+    id: 'mem_ye_002',
+    characterId: 'char_ye_tingfang',
+    kind: 'observation',
+    occurredAt: '2026-05-16T18:40:00Z',
+    summary: '程蘅玉試《許仙》三段，蕭班主沒評。',
+    body: '她的小生比我以為的穩。可是她唱「斷橋」那段時，她的眼睛是空的 — 她在背詞，不是在懷人。蕭班主沒評，意思是她還不夠；可是不評也意思是她差得不遠了。',
+    eventChapterId: 'chapter_day2_audition',
+    involvedCharacterIds: ['char_cheng_hengyu', 'char_shen_huaiyin'],
+  },
+  {
+    id: 'mem_ye_003',
+    characterId: 'char_ye_tingfang',
+    kind: 'reflection',
+    occurredAt: '2026-05-17T02:30:00Z',
+    summary: '我比她大九歲，可我還在等她出個錯。',
+    body: '這念頭一升起來，我就知道我輸了一半。不是輸給她，是輸給我自己。班裡見過太多老旦這樣 — 從盼新人練好，盼成盼新人別練得太好。我不想成那樣的人，可是今夜我躺在這裡，盼的是她明天扮相裡少一筆眉。',
+    involvedCharacterIds: ['char_cheng_hengyu'],
+  },
+  {
+    id: 'mem_ye_004',
+    characterId: 'char_ye_tingfang',
+    kind: 'event',
+    occurredAt: '2026-05-18T19:20:00Z',
+    summary: '暮後合戲，我與她隔著孟雲屏坐。',
+    body: '兩個人都沒看對方。可是程蘅玉夾魚的時候手停了一拍 — 那拍我聽見了，因為杜聽瀾的胡琴沒響。後台靜得能聽見空氣的縫。蕭班主擱筷子那一下，我曉得他什麼都看見了。',
+    eventChapterId: 'chapter_day3_evening_meal',
+    involvedCharacterIds: ['char_cheng_hengyu', 'char_meng_yunping', 'char_du_tinglan', 'char_shen_huaiyin'],
+  },
+
+  // ───── 程蘅玉 char_cheng_hengyu ─────
+  {
+    id: 'mem_cheng_001',
+    characterId: 'char_cheng_hengyu',
+    kind: 'reflection',
+    occurredAt: '2026-05-16T23:50:00Z',
+    summary: '第一次唱完《許仙》，我不敢回後台。',
+    body: '我在側幕站了大概有兩柱香。觀眾的掌聲是給「許仙」的，不是給我的；可是卸了妝以後，許仙不在了，我也不知道我是誰。我繞到井邊洗了把臉，看見自己在水裡那張臉、男的女的都不像，倒像個藏在台口偷看戲的小孩。',
+    eventChapterId: 'chapter_day2_audition',
+  },
+  {
+    id: 'mem_cheng_002',
+    characterId: 'char_cheng_hengyu',
+    kind: 'observation',
+    occurredAt: '2026-05-17T20:10:00Z',
+    summary: '杜聽瀾的右肩在抖，可她沒停弦。',
+    body: '孟雲屏唱錯那一拍，杜聽瀾的右手抖了一下，可她直接把那個錯音轉成了哭腔的伴奏。事後我去廚房謝她，她正用左手切薑、右手按在膝上 — 她裝沒事，可是我看見了。我不會說出去。',
+    eventChapterId: 'chapter_day2_audition',
+    involvedCharacterIds: ['char_du_tinglan', 'char_meng_yunping'],
+  },
+  {
+    id: 'mem_cheng_003',
+    characterId: 'char_cheng_hengyu',
+    kind: 'reflection',
+    occurredAt: '2026-05-18T00:50:00Z',
+    summary: '葉庭芳沒有罵我，這比她罵我更難受。',
+    body: '我以為她會在試完那夜攔我說話。她沒有。她在後台路過我，像路過一張椅子。我有時候希望她罵我一句，至少我們之間還有那條線；現在那條線被她抹掉了，只剩我自己一個人站在這邊、扮演著她原本扮的人。',
+    involvedCharacterIds: ['char_ye_tingfang'],
+  },
+  {
+    id: 'mem_cheng_004',
+    characterId: 'char_cheng_hengyu',
+    kind: 'event',
+    occurredAt: '2026-05-18T19:30:00Z',
+    summary: '暮後合戲我夾了一筷魚，停了半拍。',
+    body: '我以為沒人看見。可是我抬眼那一瞬，孟雲屏正好放下筷子 — 她沒有看我，可她什麼都知道。我突然不餓了。回廂房的路上我繞了一圈、特意不走葉庭芳那條走廊。',
+    eventChapterId: 'chapter_day3_evening_meal',
+    involvedCharacterIds: ['char_meng_yunping', 'char_ye_tingfang'],
+  },
+
+  // ───── 沈懷音 char_shen_huaiyin（班主、internal saga） ─────
+  {
+    id: 'mem_shen_001',
+    characterId: 'char_shen_huaiyin',
+    kind: 'reflection',
+    occurredAt: '2026-05-15T23:30:00Z',
+    summary: '貼這張榜時我考慮了三日。',
+    body: '葉庭芳的功夫不在程蘅玉之下。但這齣戲我要試的不是功夫 — 我要試誰能在三日內把自己交給角色。葉庭芳會把白蛇收進她自己；程蘅玉會被許仙拿走、然後得想辦法把自己撿回來。後者更危險，可是更有戲。',
+    eventChapterId: 'chapter_day1_first_rehearsal',
+    involvedCharacterIds: ['char_ye_tingfang', 'char_cheng_hengyu'],
+  },
+  {
+    id: 'mem_shen_002',
+    characterId: 'char_shen_huaiyin',
+    kind: 'observation',
+    occurredAt: '2026-05-18T20:00:00Z',
+    summary: '暮後那一筷停了半拍，全班都聽見了。',
+    body: '我擱筷子是要他們曉得我聽見了。不評。一評就斷了線。這班子裡有些事是要讓他們自己消化掉的 — 我評了，他們就會把那情緒轉到我身上，戲反而出不來。',
+    eventChapterId: 'chapter_day3_evening_meal',
+  },
+
+  // ───── 杜聽瀾 char_du_tinglan ─────
+  {
+    id: 'mem_du_001',
+    characterId: 'char_du_tinglan',
+    kind: 'reflection',
+    occurredAt: '2026-05-16T23:00:00Z',
+    summary: '右肩的舊傷，我從未告訴任何人。',
+    body: '今夜程蘅玉端了碗薑湯來。她沒問。她把碗放下、轉身就走了 — 那一刻我曉得她看見了。我從十七歲起就靠這條右手養活自己，現在它在叛變我；可只要還能拉得動弦，沒人需要知道。',
+    involvedCharacterIds: ['char_cheng_hengyu'],
+  },
+  {
+    id: 'mem_du_002',
+    characterId: 'char_du_tinglan',
+    kind: 'event',
+    occurredAt: '2026-05-18T19:40:00Z',
+    summary: '暮後合戲我代了魚湯，沒答話。',
+    body: '蘇小宛問留聲機能不能放戲。我笑而不答 — 那玩意兒會搶走我的飯碗。可是我笑了，因為這話該由蕭班主回，不是我。她們不曉得我心裡也在算一筆帳。',
+    eventChapterId: 'chapter_day3_evening_meal',
+    involvedCharacterIds: ['char_su_xiaowan', 'char_shen_huaiyin'],
+  },
+];
+
+export function listMemoriesByCharacter(characterId: string): CharacterMemory[] {
+  return memories
+    .filter((m) => m.characterId === characterId)
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+}

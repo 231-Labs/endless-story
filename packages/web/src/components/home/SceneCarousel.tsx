@@ -307,10 +307,23 @@ function SceneFloatingCard({
 
       {/* Image fills the card */}
       <div className="absolute inset-0 bg-surface dark:bg-elevated/45">
-        <div className="absolute inset-0 bg-gradient-to-b from-elevated/10 via-transparent to-canvas/20" />
-        <div className="flex h-full w-full items-center justify-center text-mute/45">
-          <PlayIcon size={Math.min(box.w, box.h) * 0.18} />
-        </div>
+        {shownClip.videoUrl ? (
+          <video
+            src={shownClip.videoUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-full h-full object-cover pointer-events-none"
+          />
+        ) : (
+          <>
+            <div className="absolute inset-0 bg-gradient-to-b from-elevated/10 via-transparent to-canvas/20" />
+            <div className="flex h-full w-full items-center justify-center text-mute/45">
+              <PlayIcon size={Math.min(box.w, box.h) * 0.18} />
+            </div>
+          </>
+        )}
         <div className="absolute left-3 top-3 rounded bg-elevated/85 px-2 py-0.5 text-2xs tracking-wider text-ink shadow-sm backdrop-blur">
           {shownClip.durationSeconds}s
         </div>

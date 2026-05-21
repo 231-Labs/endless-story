@@ -60,7 +60,7 @@ export function SubscribeCard({
   };
 
   return (
-    <article className="group relative aspect-[3/4] overflow-hidden rounded-lg ring-1 ring-hairline transition-shadow hover:shadow-lg hover:shadow-ink/5">
+    <article className="group relative isolate aspect-[3/4] overflow-hidden rounded-lg ring-1 ring-hairline transition-shadow hover:shadow-lg hover:shadow-ink/5">
       {/* Background plate — large initial as typographic poster */}
       <div className={`absolute inset-0 flex items-center justify-center ${tone.bg}`}>
         <span
@@ -81,12 +81,12 @@ export function SubscribeCard({
       </Link>
 
       {/* Top-left: subscriber count pill */}
-      <div className="pointer-events-none absolute left-3 top-3 z-20 rounded-full bg-surface/85 px-2.5 py-0.5 text-2xs tracking-widest text-ink/75 backdrop-blur">
+      <div className="pointer-events-none absolute left-3 top-3 z-[11] rounded-full bg-surface/85 px-2.5 py-0.5 text-2xs tracking-widest text-ink/75 backdrop-blur">
         {count} 人在讀
       </div>
 
       {/* Top-right: subscribe action pill */}
-      <div className="absolute right-3 top-3 z-20">
+      <div className="absolute right-3 top-3 z-[11]">
         {isOwner ? (
           <span className="rounded-full bg-surface/85 px-3 py-1 text-2xs tracking-widest text-mute backdrop-blur">
             你的
@@ -107,7 +107,7 @@ export function SubscribeCard({
       </div>
 
       {/* Bottom: gradient + content overlay (pointer-events-none so card-link still receives clicks) */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-15 bg-gradient-to-t from-canvas via-canvas/95 to-transparent p-5 pt-20 sm:p-6 sm:pt-24">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] bg-gradient-to-t from-canvas via-canvas/95 to-transparent p-5 pt-20 sm:p-6 sm:pt-24">
         <p className="text-2xs tracking-widest text-mute">{character.role}</p>
         <h3 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{character.name}</h3>
 

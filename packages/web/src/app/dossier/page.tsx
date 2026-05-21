@@ -2,6 +2,8 @@ import {
   charactersApi,
   chaptersApi,
   interventionsApi,
+  memoriesApi,
+  personasApi,
   relationshipsApi,
   soulSongsApi,
   subscriptionsApi,
@@ -17,6 +19,7 @@ import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
 import { ChaptersTab } from '@/components/dossier/tabs/ChaptersTab';
+import { MemoriesTab } from '@/components/dossier/tabs/MemoriesTab';
 import { InterventionTab } from '@/components/dossier/tabs/InterventionTab';
 import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
@@ -29,7 +32,7 @@ import {
 import { getCharacterLiveState } from '@/lib/character-live-state';
 import { shortChapterTitle } from '@/lib/format';
 
-const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'entrusts'];
+const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
 const VALID_FILTERS: RosterFilter[] = ['all', 'internal', 'external', 'mine'];
 
 function parseTab(raw: string | string[] | undefined): DossierTab {
@@ -139,25 +142,48 @@ export default async function DossierPage({
 
   const tab = parseTab(params.tab);
   const liveState = getCharacterLiveState(character);
-  const [allCharacters, edges, chapters, interventions, soulSongs] = await Promise.all([
-    charactersApi.listCharacters(),
-    relationshipsApi.listOutgoingEdges(character.id),
-    chaptersApi.listPublicChaptersForSubscription(character.id),
-    interventionsApi.listInterventions(character.id),
-    soulSongsApi.listSoulSongs(character.id),
-  ]);
+  const [allCharacters, edges, chapters, interventions, soulSongs, memories, persona] =
+    await Promise.all([
+      charactersApi.listCharacters(),
+      relationshipsApi.listOutgoingEdges(character.id),
+      chaptersApi.listPublicChaptersForSubscription(character.id),
+      interventionsApi.listInterventions(character.id),
+      soulSongsApi.listSoulSongs(character.id),
+      memoriesApi.listMemories(character.id, viewerWallet),
+      personasApi.getPersona(character.id),
+    ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
+  const memoryChapterIds = Array.from(
+    new Set(
+      memories
+        .map((m) => m.eventChapterId)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const memoryChapters = await Promise.all(
+    memoryChapterIds.map((id) => chaptersApi.getChapter(id))
+  );
+  const chaptersById = new Map(
+    memoryChapters
+      .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      .map((c) => [c.id, c])
+  );
 
   return (
     <main className="min-h-screen">
       <SiteNav />
-      <DossierHeader character={character} liveState={liveState} />
+      <DossierHeader
+        character={character}
+        liveState={liveState}
+        sagaCharacters={allCharacters}
+      />
       <DossierTabs character={character} active={tab} />
       <section className="px-5 py-12 sm:px-10 sm:py-16">
         <div className="mx-auto max-w-6xl">
           {tab === 'profile' ? (
             <ProfileTab
               character={character}
+              persona={persona}
               outgoingEdges={edges}
               charactersById={charactersById}
             />
@@ -168,12 +194,22 @@ export default async function DossierPage({
           {tab === 'chapters' ? (
             <ChaptersTab chapters={chapters} character={character} />
           ) : null}
+          {tab === 'memories' ? (
+            <MemoriesTab
+              character={character}
+              memories={memories}
+              viewerWallet={viewerWallet}
+              sagaCharacters={allCharacters}
+              chaptersById={chaptersById}
+            />
+          ) : null}
           {tab === 'entrusts' ? (
             <InterventionTab
               character={character}
               interventions={interventions}
               soulSongs={soulSongs}
               viewerWallet={viewerWallet}
+              sagaCharacters={allCharacters}
             />
           ) : null}
         </div>

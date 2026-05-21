@@ -5,12 +5,13 @@ import { useEffect, useState } from 'react';
 import type { Character } from '@endless-story/shared';
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 
-export type DossierTab = 'profile' | 'gallery' | 'chapters' | 'entrusts';
+export type DossierTab = 'profile' | 'gallery' | 'chapters' | 'memories' | 'entrusts';
 
 const TABS: { key: DossierTab; label: string }[] = [
   { key: 'profile', label: '履歷' },
   { key: 'gallery', label: '設定集' },
   { key: 'chapters', label: '連載' },
+  { key: 'memories', label: '記憶' },
   { key: 'entrusts', label: '託夢' },
 ];
 

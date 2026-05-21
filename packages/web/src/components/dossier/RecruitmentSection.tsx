@@ -5,21 +5,24 @@ import type { Recruitment } from '@endless-story/shared';
 import { RecruitmentTicket } from './RecruitmentTicket';
 
 export function RecruitmentSection({
-  recruitments: initialRecruitments,
+  recruitments,
+  seedRecruitments,
   onRecruitmentsChange,
 }: {
   recruitments: Recruitment[];
+  /** Original server data — used by the test restore button */
+  seedRecruitments: Recruitment[];
   onRecruitmentsChange?: (r: Recruitment[]) => void;
 }) {
-  const [recruitments, setRecruitments] = useState(initialRecruitments);
+  const [recruitmentsState, setRecruitmentsState] = useState(recruitments);
 
   // Sync internal state with props, and notify parent when internal state changes
   useEffect(() => {
-    setRecruitments(initialRecruitments);
-  }, [initialRecruitments]);
+    setRecruitmentsState(recruitments);
+  }, [recruitments]);
 
   const handleSetRecruitments = (newRecruitments: Recruitment[]) => {
-    setRecruitments(newRecruitments);
+    setRecruitmentsState(newRecruitments);
     onRecruitmentsChange?.(newRecruitments);
   };
   const [activeIdx, setActiveIdx] = useState(0);
@@ -40,7 +43,7 @@ export function RecruitmentSection({
     };
   }, []);
 
-  if (recruitments.length === 0) {
+  if (recruitmentsState.length === 0) {
     return (
       <section id="recruitment-section" className="flex min-h-[100dvh] flex-col justify-center border-t border-hairline px-5 py-14 sm:px-10 sm:py-[4.5rem]">
         <div className="mx-auto w-full max-w-6xl">
@@ -48,7 +51,7 @@ export function RecruitmentSection({
             <h2 className="font-serif text-2xl tracking-wide text-ink sm:text-3xl">徵召公告</h2>
             {/* 測試用按鈕：恢復資料 */}
             <button
-              onClick={() => handleSetRecruitments(initialRecruitments)}
+              onClick={() => handleSetRecruitments(seedRecruitments)}
               className="text-2xs tracking-widest text-cinnabar hover:underline"
             >
               [測試] 恢復徵召
@@ -73,8 +76,8 @@ export function RecruitmentSection({
     );
   }
 
-  const safeIdx = Math.min(activeIdx, recruitments.length - 1);
-  const active = recruitments[safeIdx];
+  const safeIdx = Math.min(activeIdx, recruitmentsState.length - 1);
+  const active = recruitmentsState[safeIdx];
 
   const animateSlide = (dir: 'left' | 'right', nextIdx: number) => {
     if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
@@ -88,11 +91,11 @@ export function RecruitmentSection({
   };
 
   const goPrev = () => {
-    animateSlide('right', (safeIdx - 1 + recruitments.length) % recruitments.length);
+    animateSlide('right', (safeIdx - 1 + recruitmentsState.length) % recruitmentsState.length);
   };
 
   const goNext = () => {
-    animateSlide('left', (safeIdx + 1) % recruitments.length);
+    animateSlide('left', (safeIdx + 1) % recruitmentsState.length);
   };
 
   const goTo = (idx: number) => {
@@ -114,7 +117,7 @@ export function RecruitmentSection({
           </button>
         </div>
 
-        <div className="mt-8">
+        <div className="mt-8 relative">
           <div
             className={`transition-all duration-300 ease-out ${
               ticketVisible
@@ -133,12 +136,12 @@ export function RecruitmentSection({
 
           <div
             className={`transition-opacity duration-300 ${
-              wizardOpen || recruitments.length <= 1 ? 'pointer-events-none opacity-0' : 'opacity-100'
+              wizardOpen || recruitmentsState.length <= 1 ? 'absolute bottom-0 left-0 right-0 pointer-events-none opacity-0' : 'relative opacity-100'
             }`}
           >
-            {recruitments.length > 1 ? (
+            {recruitmentsState.length > 1 ? (
               <CarouselNav
-                count={recruitments.length}
+                count={recruitmentsState.length}
                 activeIdx={safeIdx}
                 onPrev={goPrev}
                 onNext={goNext}

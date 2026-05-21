@@ -1,4 +1,5 @@
-import type { Character, RelationshipEdge } from '@endless-story/shared';
+import type { Character, CharacterPersona, RelationshipEdge } from '@endless-story/shared';
+import { SoulSection } from '@/components/dossier/SoulSection';
 
 const ATTR_LABEL: Record<keyof Character['attributes'], string> = {
   constitution: '筋骨',
@@ -16,10 +17,12 @@ const ATTR_ORDER: (keyof Character['attributes'])[] = [
 
 export function ProfileTab({
   character,
+  persona,
   outgoingEdges,
   charactersById,
 }: {
   character: Character;
+  persona: CharacterPersona | null;
   outgoingEdges: RelationshipEdge[];
   charactersById: Map<string, Character>;
 }) {
@@ -35,6 +38,8 @@ export function ProfileTab({
             </p>
           </div>
         </section>
+
+        <SoulSection persona={persona} />
 
         <section>
           <h2 className="font-serif text-2xl text-ink">外貌設定</h2>

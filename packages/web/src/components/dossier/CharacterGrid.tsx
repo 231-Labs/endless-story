@@ -60,7 +60,7 @@ export function CharacterGrid({
   return (
     <div className="flex flex-1 flex-col">
       {/* Header & Filters (Sticky at top of the scroll container) */}
-      <section className="sticky top-[57px] z-20 bg-canvas/90 px-5 pt-8 pb-4 backdrop-blur-md sm:top-[73px] sm:px-10 sm:pt-10">
+      <section className="sticky top-[57px] z-30 bg-canvas/90 px-5 pt-8 pb-4 backdrop-blur-md sm:top-[73px] sm:px-10 sm:pt-10">
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <h1 className="font-serif text-4xl tracking-wide text-ink sm:text-5xl">人物誌</h1>
@@ -108,49 +108,58 @@ export function CharacterGrid({
       {/* Pages */}
       <div className="flex-1">
         {visible.length === 0 ? (
-          <section className="flex min-h-[100dvh] snap-start snap-always items-center justify-center">
+          <section className="flex min-h-[calc(100dvh-265px)] sm:min-h-[calc(100dvh-245px)] snap-start snap-always items-center justify-center scroll-mt-[265px] sm:scroll-mt-[245px]">
             <p className="text-center text-sm text-mute">這個範圍裡還沒有角色。</p>
           </section>
         ) : (
-          <div>
-            {pages.map((pageCards, pageIndex) => (
-              <section
-                key={pageCards[0]?.character.id ?? `page-${pageIndex}`}
-                className="relative flex min-h-[100dvh] snap-start snap-always items-center justify-center px-5 pt-32 pb-12 sm:px-10 sm:pt-40"
-              >
-                <div className="mx-auto w-full max-w-6xl">
-                  {/* Mobile: 1 card per snap (handled by CSS scroll snap inside this container) */}
-                  <div className="no-scrollbar -mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-4 scroll-px-5 md:hidden">
-                    {pageCards.map((card) => (
-                      <div
-                        key={card.character.id}
-                        className="w-[85vw] max-w-[340px] flex-shrink-0 snap-center"
-                      >
-                        <SubscribeCard {...card} />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Tablet+: Grid of up to 3 cards */}
-                  <div className="hidden grid-cols-2 gap-6 md:grid xl:grid-cols-3 xl:gap-8">
-                    {pageCards.map((card) => (
-                      <SubscribeCard key={card.character.id} {...card} />
-                    ))}
-                  </div>
+          <>
+            {/* Mobile: Single horizontal scroll for all cards */}
+            <section className="flex md:hidden min-h-[calc(100dvh-265px)] snap-start snap-always flex-col px-0 pb-4 pt-0 scroll-mt-[265px]">
+              <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-start pt-0 pb-2">
+                <div className="no-scrollbar flex w-full snap-x snap-mandatory gap-4 overflow-x-auto px-5 scroll-px-5">
+                  {visible.map((card) => (
+                    <div
+                      key={card.character.id}
+                      className="w-[min(85vw,340px,calc((100dvh-340px)*3/4))] flex-shrink-0 snap-center"
+                    >
+                      <SubscribeCard {...card} />
+                    </div>
+                  ))}
                 </div>
+              </div>
+            </section>
 
-                {/* Scroll Down Indicator (hidden on the last page) */}
-                {pageIndex < pages.length - 1 && (
-                  <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 flex-col items-center gap-3 opacity-80 transition-opacity hover:opacity-100 sm:bottom-10">
-                    <span className="text-xs tracking-[0.4em] text-cinnabar/80 font-medium">往下翻閱</span>
-                    <div className="h-12 w-px overflow-hidden bg-hairline">
-                      <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
+            {/* Desktop: Paginated grid */}
+            <div className="hidden md:block">
+              {pages.map((pageCards, pageIndex) => (
+                <section
+                  key={pageCards[0]?.character.id ?? `page-${pageIndex}`}
+                  className="flex min-h-[calc(100dvh-245px)] snap-start snap-always flex-col px-10 pb-6 pt-0 scroll-mt-[245px]"
+                >
+                  <div className="mx-auto flex w-full min-h-0 flex-1 flex-col items-center justify-start pt-8 pb-2 max-w-6xl">
+                    <div className="w-full grid-cols-2 gap-6 md:grid xl:grid-cols-3 xl:gap-8">
+                      {pageCards.map((card) => (
+                        <SubscribeCard key={card.character.id} {...card} />
+                      ))}
                     </div>
                   </div>
-                )}
-              </section>
-            ))}
-          </div>
+
+                  {/* Scroll hint */}
+                  {pageIndex < pages.length - 1 ? (
+                    <div
+                      className="pointer-events-none flex shrink-0 flex-col items-center gap-1 pt-1 pb-0.5 opacity-75 [@media(max-height:520px)]:hidden"
+                      aria-hidden
+                    >
+                      <span className="text-2xs tracking-[0.35em] text-cinnabar/80">往下翻閱</span>
+                      <div className="h-5 w-px overflow-hidden bg-hairline">
+                        <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

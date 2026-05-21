@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { chaptersApi, charactersApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
 import { ChapterToc } from '@/components/feed/ChapterToc';
+import { ChapterCast } from '@/components/feed/ChapterCast';
+import { LinkifiedProse } from '@/components/common/CharacterLinkifier';
 import { formatDate, truncateBlobId } from '@/lib/format';
 
 export default async function ChapterPage({
@@ -33,6 +35,17 @@ export default async function ChapterPage({
     .filter((c) => c.visibility === 'public_chapter')
     .sort((a, b) => a.day - b.day || a.createdAt.localeCompare(b.createdAt));
 
+  // 出場 cast：POV 優先，後接 involved（去重）
+  const castIds = Array.from(
+    new Set([
+      ...(chapter.povCharacterId ? [chapter.povCharacterId] : []),
+      ...chapter.involvedCharacterIds,
+    ])
+  );
+  const cast = castIds
+    .map((cid) => charactersById.get(cid))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
   return (
     <main className="min-h-screen">
       <SiteNav />
@@ -47,26 +60,28 @@ export default async function ChapterPage({
 
         <div className="mt-6 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_minmax(0,36rem)_1fr] lg:gap-0">
           <aside className="hidden lg:block lg:justify-self-end lg:pr-8">
-            <div className="sticky top-20 w-40">
+            <div className="sticky top-20 w-40 space-y-10">
               <ChapterToc
                 chapters={tocChapters}
                 currentId={chapter.id}
                 charactersById={charactersById}
               />
+              <ChapterCast cast={cast} povId={chapter.povCharacterId} />
             </div>
           </aside>
 
           <article className="lg:col-start-2">
             <details className="mb-8 rounded-md border border-hairline bg-surface/80 dark:bg-elevated/40 lg:hidden">
               <summary className="cursor-pointer px-4 py-3 text-sm tracking-wide text-ink">
-                目錄 · {tocChapters.length} 章
+                目錄 · {tocChapters.length} 章 · 出場 {cast.length}
               </summary>
-              <div className="border-t border-hairline px-4 py-4">
+              <div className="space-y-8 border-t border-hairline px-4 py-4">
                 <ChapterToc
                   chapters={tocChapters}
                   currentId={chapter.id}
                   charactersById={charactersById}
                 />
+                <ChapterCast cast={cast} povId={chapter.povCharacterId} />
               </div>
             </details>
 
@@ -91,11 +106,12 @@ export default async function ChapterPage({
               {chapter.title}
             </h1>
 
-            <div className="chapter-prose mt-8 text-lg leading-loose text-ink/85">
-              {chapter.body.split(/\n+/).map((para, i) => (
-                <p key={i}>{para}</p>
-              ))}
-            </div>
+            <LinkifiedProse
+              className="chapter-prose mt-8 text-lg leading-loose text-ink/85"
+              text={chapter.body}
+              characters={sagaCharacters}
+              linkifyNames={false}
+            />
 
             <footer className="mt-12 border-t border-hairline pt-6 text-2xs tracking-widest text-mute">
               <p className="font-mono">walrus blob · {truncateBlobId(chapter.walrusBlobId, 24)}</p>

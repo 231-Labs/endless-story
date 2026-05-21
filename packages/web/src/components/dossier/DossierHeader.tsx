@@ -1,6 +1,7 @@
 import type { Character } from '@endless-story/shared';
 import { BackButton } from '@/components/common/BackButton';
 import { CharacterPortrait } from '@/components/common/CharacterPortrait';
+import { Linkified } from '@/components/common/CharacterLinkifier';
 import type { CharacterLiveState } from '@/lib/character-live-state';
 import { truncateAddress, survivalBadgeClasses, survivalLabel } from '@/lib/format';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
@@ -16,9 +17,11 @@ const LIVE_ITEMS: { key: keyof CharacterLiveState; label: string }[] = [
 export function DossierHeader({
   character,
   liveState,
+  sagaCharacters,
 }: {
   character: Character;
   liveState: CharacterLiveState;
+  sagaCharacters: Character[];
 }) {
   return (
     <header
@@ -68,7 +71,13 @@ export function DossierHeader({
                 {LIVE_ITEMS.map((item) => (
                   <div key={item.key} className="min-w-0">
                     <p className="text-xs tracking-widest text-mute">{item.label}</p>
-                    <p className="mt-2 font-serif text-lg leading-snug text-ink/90">{liveState[item.key]}</p>
+                    <p className="mt-2 font-serif text-lg leading-snug text-ink/90">
+                      <Linkified
+                        text={liveState[item.key]}
+                        characters={sagaCharacters}
+                        skipId={character.id}
+                      />
+                    </p>
                   </div>
                 ))}
               </div>
