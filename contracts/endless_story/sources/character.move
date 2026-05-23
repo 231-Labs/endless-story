@@ -2,18 +2,25 @@
 ///
 /// Scope 1: Character + OwnerCap 原型。能 mint，沒生命週期。
 /// Scope 2: ControlCap + lifecycle（issue / revoke / reassign）+ is_valid view。
-///
-/// 後續 scope 接：
-///   - Scope 3: seal_approve_control / seal_approve_owner 與 id layout
+/// Scope 3: SEAL approve（seal_approve_control / seal_approve_owner）+ id layout helper。
 module endless_story::character;
 
+use sui::bcs;
 use sui::event;
 
 // === Errors ===
 
 #[error]
 const EWrongCharacter: vector<u8> =
-    b"OwnerCap does not correspond to this Character";
+    b"Cap does not correspond to this Character";
+
+#[error]
+const ENoAccess: vector<u8> =
+    b"ControlCap epoch does not match current control_epoch (revoked)";
+
+#[error]
+const EInvalidEncryptionId: vector<u8> =
+    b"SEAL id does not target this Character";
 
 // === Structs ===
 
@@ -177,6 +184,69 @@ public fun is_valid(cap: &ControlCap, character: &Character): bool {
     cap.character_id == object::id(character) && cap.epoch == character.control_epoch
 }
 
+// === SEAL approve ===
+//
+// SEAL discovery convention 要求函式名以 `seal_approve` 開頭、第一個參數為 `id: vector<u8>`。
+// 因此這兩個函式的參數順序覆蓋了 sui-move skill 的「primitive 在後」一般規則。
+//
+// 兩個函式都 side-effect free：撤銷的訊號從 character.control_epoch 讀出來，
+// 而不是在 seal_approve 寫 state（SEAL 只能 dry-run，不允許 state change）。
+
+/// Saga 變體：持有當前有效 ControlCap 的人可以解密。
+///
+/// 三層檢查：
+///   1. cap 是這個 character 的 cap（不是別角色的）
+///   2. cap 的 epoch == character 當前 epoch（未被撤銷）
+///   3. SEAL id 的 suffix 指向這個 character（不是別的密文）
+entry fun seal_approve_control(
+    id: vector<u8>,
+    character: &Character,
+    cap: &ControlCap,
+) {
+    assert!(cap.character_id == object::id(character), EWrongCharacter);
+    assert!(cap.epoch == character.control_epoch, ENoAccess);
+    assert!(id_belongs_to_character(&id, object::id(character)), EInvalidEncryptionId);
+}
+
+/// Owner 變體：持有 OwnerCap 的人可解密（唯讀審計）。
+///
+/// owner 的「唯讀」不是在這裡限制（SEAL 只管解密 = 讀）；
+/// 寫入路徑由 app 層保證 owner client 不暴露 remember API。
+entry fun seal_approve_owner(
+    id: vector<u8>,
+    character: &Character,
+    owner_cap: &OwnerCap,
+) {
+    assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
+    assert!(id_belongs_to_character(&id, object::id(character)), EInvalidEncryptionId);
+}
+
+// === SEAL id layout helpers ===
+//
+// id layout：`<namespace_bytes> || bcs::to_bytes(character_id)`
+// SDK 端負責構造（見 memwal_sdk_patch.md 改動 1），Move 端驗 suffix 比對。
+
+/// 驗證 SEAL id 是否以 `bcs::to_bytes(character_id)` 結尾。
+fun id_belongs_to_character(id: &vector<u8>, character_id: ID): bool {
+    let cid_bytes = bcs::to_bytes(&character_id);
+    has_suffix(id, &cid_bytes)
+}
+
+/// `data` 是否以 `suffix` 結尾。提早 return false 短路。
+fun has_suffix(data: &vector<u8>, suffix: &vector<u8>): bool {
+    let dlen = data.length();
+    let slen = suffix.length();
+    if (slen > dlen) return false;
+
+    let offset = dlen - slen;
+    let mut i = 0;
+    while (i < slen) {
+        if (data[offset + i] != suffix[i]) return false;
+        i = i + 1;
+    };
+    true
+}
+
 // === Tests ===
 
 #[test_only]
@@ -260,4 +330,109 @@ fun issue_with_wrong_owner_cap_aborts() {
     destroy(char_b);
     destroy(owner_b);
     destroy(cap);
+}
+
+// --- SEAL approve tests ---
+
+/// SDK 端會構造 `<namespace> || bcs(character_id)`；測試模擬同樣的 layout。
+#[test_only]
+fun make_seal_id(namespace: vector<u8>, character: &Character): vector<u8> {
+    let mut id = namespace;
+    id.append(bcs::to_bytes(&object::id(character)));
+    id
+}
+
+#[test]
+fun seal_approve_control_accepts_valid_cap_and_id() {
+    let mut ctx = tx_context::dummy();
+    let (character, owner_cap) = mint_character(&mut ctx);
+    let cap = issue_control_cap(&character, &owner_cap, &mut ctx);
+    let id = make_seal_id(b"pub", &character);
+
+    seal_approve_control(id, &character, &cap); // 不 abort 即通過
+
+    destroy(character);
+    destroy(owner_cap);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = ENoAccess)]
+fun seal_approve_control_rejects_revoked_cap() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character(&mut ctx);
+    let cap = issue_control_cap(&character, &owner_cap, &mut ctx);
+    let id = make_seal_id(b"pub", &character);
+
+    revoke_all_control(&mut character, &owner_cap);
+
+    // cap 還在持有者手上，但 epoch 對不上 → 預期 ENoAccess。
+    seal_approve_control(id, &character, &cap);
+
+    destroy(character);
+    destroy(owner_cap);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EInvalidEncryptionId)]
+fun seal_approve_control_rejects_id_for_other_character() {
+    let mut ctx = tx_context::dummy();
+    let (char_a, owner_a) = mint_character(&mut ctx);
+    let (char_b, owner_b) = mint_character(&mut ctx);
+    let cap_a = issue_control_cap(&char_a, &owner_a, &mut ctx);
+
+    // id 指向 char_b，卻拿 char_a 的 cap 想解 → 預期 EInvalidEncryptionId。
+    let id = make_seal_id(b"pub", &char_b);
+    seal_approve_control(id, &char_a, &cap_a);
+
+    destroy(char_a);
+    destroy(owner_a);
+    destroy(char_b);
+    destroy(owner_b);
+    destroy(cap_a);
+}
+
+#[test]
+fun seal_approve_owner_accepts_valid_owner_cap_and_id() {
+    let mut ctx = tx_context::dummy();
+    let (character, owner_cap) = mint_character(&mut ctx);
+    let id = make_seal_id(b"prv", &character);
+
+    seal_approve_owner(id, &character, &owner_cap);
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+#[test, expected_failure(abort_code = EInvalidEncryptionId)]
+fun seal_approve_owner_rejects_id_for_other_character() {
+    let mut ctx = tx_context::dummy();
+    let (char_a, owner_a) = mint_character(&mut ctx);
+    let (char_b, owner_b) = mint_character(&mut ctx);
+
+    let id = make_seal_id(b"prv", &char_b);
+    seal_approve_owner(id, &char_a, &owner_a);
+
+    destroy(char_a);
+    destroy(owner_a);
+    destroy(char_b);
+    destroy(owner_b);
+}
+
+#[test]
+fun id_belongs_to_character_matches_bcs_suffix() {
+    let mut ctx = tx_context::dummy();
+    let (character, owner_cap) = mint_character(&mut ctx);
+    let cid = object::id(&character);
+
+    // 有 namespace 前綴
+    assert!(id_belongs_to_character(&make_seal_id(b"any-namespace", &character), cid));
+    // 空 namespace（純 character_id bytes）也算數
+    assert!(id_belongs_to_character(&make_seal_id(b"", &character), cid));
+    // suffix 不符 → false
+    assert!(!id_belongs_to_character(&b"clearly-not-the-right-bytes", cid));
+    // data 比 suffix 短 → false
+    assert!(!id_belongs_to_character(&b"x", cid));
+
+    destroy(character);
+    destroy(owner_cap);
 }
