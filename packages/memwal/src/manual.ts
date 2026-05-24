@@ -142,6 +142,15 @@ export class MemWalManual {
         if (config.suiPrivateKey && config.walletSigner) {
             throw new Error("MemWalManual: provide suiPrivateKey OR walletSigner, not both");
         }
+        // endless-story patch (B3): exactly one cap must be set so recall
+        // can pick the right seal_approve variant without ambiguity.
+        const hasControl = Boolean(config.controlCapId);
+        const hasOwner = Boolean(config.ownerCapId);
+        if (hasControl === hasOwner) {
+            throw new Error(
+                "MemWalManual: set exactly one of controlCapId (Saga) or ownerCapId (Owner audit)",
+            );
+        }
         this.delegatePrivateKey = typeof config.key === "string" ? hexToBytes(config.key) : config.key;
         // LOW-22: default to HTTPS; warn (do not throw) on plaintext HTTP
         // against non-localhost hosts.
@@ -433,16 +442,24 @@ export class MemWalManual {
                 const parsed = EncryptedObject.parse(blob.data);
                 const fullId = parsed.id;
 
-                // Build seal_approve PTB
+                // endless-story patch (B3): route to character::seal_approve_{control,owner}
+                // depending on which cap this client carries. The cap presence
+                // is invariant-checked in the constructor, so exactly one branch
+                // applies and we don't need to handle the "neither set" case here.
                 const idBytes = Array.from(
                     Uint8Array.from(fullId.match(/.{1,2}/g)!.map((b: string) => parseInt(b, 16))),
                 );
                 const tx = new Transaction();
+                const capId = this.config.controlCapId ?? this.config.ownerCapId!;
+                const variant = this.config.controlCapId
+                    ? "seal_approve_control"
+                    : "seal_approve_owner";
                 tx.moveCall({
-                    target: `${this.config.packageId}::account::seal_approve`,
+                    target: `${this.config.packageId}::character::${variant}`,
                     arguments: [
                         tx.pure("vector<u8>", idBytes),
-                        tx.object(this.config.accountId),
+                        tx.object(this.config.characterId),
+                        tx.object(capId),
                     ],
                 });
                 const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });

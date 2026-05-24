@@ -265,11 +265,25 @@ export interface MemWalManualConfig {
      * endless-story patch (B2): Character object id this client is bound to.
      * SEAL ids are scoped to `nsHex + bcs(characterId)` so the on-chain
      * `endless_story::character::seal_approve_*` `has_suffix` check matches
-     * only this character's encrypted blobs. Required when the consumer is
-     * driving the character-bound access model; ignored if you somehow still
-     * have a code path going through the legacy account flow.
+     * only this character's encrypted blobs.
      */
     characterId: string;
+    /**
+     * endless-story patch (B3): ControlCap object id. Set this on a Saga
+     * client — recall will route to `character::seal_approve_control` and
+     * decrypt only succeeds while this cap's epoch matches
+     * `character.control_epoch` (i.e. it has not been revoked / reassigned).
+     * Mutually exclusive with `ownerCapId`.
+     */
+    controlCapId?: string;
+    /**
+     * endless-story patch (B3): OwnerCap object id. Set this on an Owner
+     * audit client — recall will route to `character::seal_approve_owner`
+     * (no epoch check; owner can always read for audit). The writing path
+     * is gated at the app layer (see README) — owner clients should not
+     * call `rememberManual`. Mutually exclusive with `controlCapId`.
+     */
+    ownerCapId?: string;
     /** Sui network (default: mainnet) */
     suiNetwork?: "testnet" | "mainnet";
     /**

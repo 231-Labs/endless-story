@@ -25,5 +25,5 @@ option. See `docs/memwal_sdk_patch.md` (parent repo) for the spec.
 |-------|--------|------|------|
 | B1 | done | — | Vendor v0.0.4 sources as-is, build clean |
 | B2 | done | `src/manual.ts`, `src/types.ts` | `sealEncrypt` id layout → `nsHex + bcs(characterId)`; add `characterId` to config |
-| B3 | pending | `src/manual.ts` | `recallManual` moveCall → `endless_story::character::seal_approve_control` / `_owner` |
+| B3 | done | `src/manual.ts`, `src/types.ts` | `recallManual` moveCall → `character::seal_approve_control`/`_owner`; add `controlCapId`/`ownerCapId` to config (exactly one); constructor enforces |
 | B4 | pending | new files | Adapter wrappers (`SagaMemoryClient` / `OwnerAuditClient`) |
