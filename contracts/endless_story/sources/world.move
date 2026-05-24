@@ -511,6 +511,30 @@ public fun new_world_for_testing(
 }
 
 #[test_only]
+public fun new_location_for_testing(
+    admin_cap: &AdminCap,
+    world: &mut World,
+    info: LocationInfo,
+    position: Position,
+    graph: LocationGraph,
+    created_at_ms: u64,
+    ctx: &mut TxContext,
+): Location {
+    let world_id = object::id(world);
+    assert!(admin_cap.world_id == world_id, ENotAdmin);
+    let location = Location {
+        id: object::new(ctx),
+        world_id,
+        info,
+        position,
+        graph,
+        created_at_ms,
+    };
+    vector::push_back(&mut world.state.location_ids, object::id(&location));
+    location
+}
+
+#[test_only]
 public fun destroy_world_for_testing(world: World, admin_cap: AdminCap) {
     let World { id, info: _, currency: _, rules: _, time_config: _, state: _ } = world;
     id.delete();
