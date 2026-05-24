@@ -118,11 +118,23 @@ packages/
 
 | Phase | 內容 | 何時 |
 |---|---|---|
-| **0** | skill 改名、cli 骨架、sdk scaffold、contract-ids、(site)/(admin) 重構 | 進行中（2026-05-24 起） |
-| **1** | Move 模組依序遷移：currency → world → saga → scene → character (含 voucher) → event → commitment | Phase 0 之後 |
+| **0** | skill 改名、cli 骨架、sdk scaffold、contract-ids、(site)/(admin) 重構 | ✅ 2026-05-24 完成（commit `f99d28f`） |
+| **1** | Move 模組依序遷移：見下方細項 | 進行中（2026-05-24 起） |
 | **2** | SDK 完整（codegen + tx + read）→ admin 一鍵部署 UI | Phase 1 之後 |
 | **3** | Web mock → SDK 真實串接（Subscribe → Recruitment → Memories → ...） | Phase 2 之後 |
 | **4** | Runner 上線（LLM、scheduler、memwal 寫入） | 賽後 |
+
+**Phase 1 模組進度**（依依賴順序）：
+
+| # | 模組 | 狀態 | 備註 |
+|---|---|---|---|
+| 1.1 | `currency.move` | ✅ 2026-05-24 | ENDLESS coin (6 decimals)，用 `coin_registry::new_currency_with_otw` 新 API，metadata 立刻 frozen |
+| 1.2 | `world.move` | ⬜ 待做 | World/Location/WorldRules/WorldTimeConfig |
+| 1.3 | `saga.move` | ⬜ 待做 | Saga/StorytellerCap/RevenueConfig；depends on world + currency |
+| 1.4 | `scene.move` | ⬜ 待做 | Scene/ScenePlacement；depends on saga + world |
+| 1.5 | `character.move` 擴充 | ⬜ 待做 | 在現有 scope 1+2 上加 voucher mint/redeem + world/saga context |
+| 1.6 | `event.move` | ⬜ 待做 | 事件解算、卡片、死亡標記 |
+| 1.7 | `commitment.move` | ⬜ 待做 | 記憶壓縮快照 |
 
 ### Runner 開發鐵律（給未來反覆測試 runner 的 session）
 
