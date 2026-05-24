@@ -52,4 +52,15 @@ export const liveStatesByCharacterId: Record<string, CharacterLiveState> = {
     location: '碼頭茶攤 · 夜深',
     nextPlan: '明日進班前，先問清這場客串算幾日錢。',
   },
+  // ── 江湖外連 ──
+  char_tan_silang: {
+    intent: '隔街看戲樓燈火，盤算她今晚會不會改第三折。',
+    location: '永聲社後巷 · 隔街觀望',
+    nextPlan: '若她真改了，明日就放話給戲評家試試水溫。',
+  },
+  char_jiang_laoban: {
+    intent: '坐第七排靠左，等葉庭芳水袖落下那一句。',
+    location: '春雪社戲樓主台 · 第七排',
+    nextPlan: '戲散後送一支簪到後台，不留名。',
+  },
 };
