@@ -19,7 +19,7 @@ export function HomeContent({
   const [openRecruitments, setOpenRecruitments] = useState<Recruitment[]>(initialRecruitments);
 
   return (
-    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
       {/* First Screen: Nav + Hero */}
       <div className="flex min-h-[100dvh] flex-col snap-start snap-always">
         {children}

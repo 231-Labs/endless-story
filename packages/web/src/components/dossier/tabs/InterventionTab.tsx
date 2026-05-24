@@ -30,7 +30,11 @@ export function InterventionTab({
       />
 
       <div className="pl-0 sm:pl-12">
-        {isOwner ? <Composer /> : <LockedNotice character={character} />}
+        {isOwner && viewerWallet ? (
+          <Composer characterId={character.id} ownerWallet={viewerWallet} />
+        ) : (
+          <LockedNotice character={character} />
+        )}
       </div>
 
       <section>

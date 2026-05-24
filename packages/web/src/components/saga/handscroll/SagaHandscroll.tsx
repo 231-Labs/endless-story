@@ -1,7 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 import type { Chapter, Character, Saga, Scene } from '@endless-story/shared';
 import { SnowPaperBackground } from './SnowPaperBackground';
 import { SceneVignette, type VignetteAnchor } from './SceneVignette';
@@ -9,13 +8,11 @@ import { FloatingQuote } from './FloatingQuote';
 import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
 
 /**
- * 春雪社主螢幕：垂直滾輪 → 橫向手卷展開。
+ * 春雪社主螢幕：原生橫向捲動手卷。
  *
  * 結構：
- *   - 外層 scroll container（h-full overflow-y-auto）
- *   - 內層 tall spacer（~280dvh）驅動 useScroll
- *   - 內含 sticky 100dvh 視窗，放手卷視覺
- *   - 手卷視覺：300vw 寬 motion.div，由 scrollYProgress 推 translateX 0% → -66.67%
+ *   - 外層 scroll container（overflow-x-auto、snap-x）
+ *   - 內容寬度 max(300vw, 1200px) — 小手機仍可橫滑展開、避免過度擠壓標點／題款
  *
  * 點任一場景錨 → 切回舊版 focused-mode（SagaTroupeCanvas 渲染單 scene 細看）。
  */
@@ -37,7 +34,7 @@ const SCENE_ANCHORS: Record<string, VignetteAnchor> = {
 // 場景的題款落點（與錨點錯開 — 戲樓的題款在右方、院落的題款在左方）
 function quotePosition(anchor: VignetteAnchor): { left: number; top: number } {
   if (anchor.zone === 'theater') {
-    return { left: anchor.x + 5, top: anchor.y < 50 ? anchor.y + 18 : anchor.y - 28 };
+    return { left: anchor.x + 5, top: anchor.y < 50 ? anchor.y + 0 : anchor.y - 28 };
   }
   return { left: anchor.x - 5, top: anchor.y < 50 ? anchor.y + 20 : anchor.y - 30 };
 }
@@ -54,44 +51,95 @@ export function SagaHandscroll(props: Props) {
   const { saga, scenes, charactersById, chaptersById, locationLabel } = props;
   const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  const { scrollYProgress } = useScroll({ container: scrollRef, target: trackRef });
-  // 內容寬 300vw → 平移 -200vw 才到底（即 content width 的 -66.67%）
-  const xRaw = useTransform(scrollYProgress, [0, 1], ['0%', '-66.67%']);
-  const x = useSpring(xRaw, { stiffness: 90, damping: 24, mass: 0.6 });
 
   const partOfDay = saga.worldTime?.partOfDay ?? 'noon';
+  const isFocused = focusedSceneId !== null;
 
-  // 若使用者點了 scene → 進入舊版 focused-mode
-  if (focusedSceneId) {
-    return (
-      <SagaTroupeCanvas
-        saga={saga}
-        scenes={scenes}
-        charactersById={charactersById}
-        chaptersById={chaptersById}
-        locationLabel={locationLabel}
-        initialFocusedSceneId={focusedSceneId}
-        onCloseFocused={() => setFocusedSceneId(null)}
-      />
-    );
-  }
+  // 攔截垂直滾輪事件，轉換為段落間的橫向吸附切換
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    let isScrolling = false;
+
+    const handleWheel = (e: WheelEvent) => {
+      // 若使用者已經在進行橫向滑動（如觸控板左右滑），則放行
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+
+      const isScrollDown = e.deltaY > 0;
+      const isScrollUp = e.deltaY < 0;
+
+      const maxScrollLeft = el.scrollWidth - el.clientWidth;
+      const atRightEdge = el.scrollLeft >= maxScrollLeft - 2;
+      const atLeftEdge = el.scrollLeft <= 2;
+
+      const outer = el.closest('main');
+      const canPageDown =
+        outer != null && outer.scrollTop + outer.clientHeight < outer.scrollHeight - 2;
+      const canPageUp = outer != null && outer.scrollTop > 2;
+
+      // 已展卷到最右／最左：垂直滾動改由外層 full-bleed snap，避免卡在一半
+      if (
+        outer &&
+        ((isScrollDown && atRightEdge && canPageDown) || (isScrollUp && atLeftEdge && canPageUp))
+      ) {
+        if (isScrolling) return;
+        e.preventDefault();
+        isScrolling = true;
+        const stride = outer.clientHeight;
+        outer.scrollBy({ top: isScrollDown ? stride : -stride, behavior: 'smooth' });
+        setTimeout(() => {
+          isScrolling = false;
+        }, 700);
+        return;
+      }
+
+      if ((isScrollDown && !atRightEdge) || (isScrollUp && !atLeftEdge)) {
+        e.preventDefault();
+
+        if (isScrolling) return;
+
+        isScrolling = true;
+        const sign = isScrollDown ? 1 : -1;
+        el.scrollBy({ left: sign * window.innerWidth, behavior: 'smooth' });
+
+        setTimeout(() => {
+          isScrolling = false;
+        }, 700);
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   return (
-    <div
-      ref={scrollRef}
-      className="relative h-full w-full overflow-y-auto overflow-x-hidden no-scrollbar"
-    >
-      <div ref={trackRef} style={{ height: '200dvh' }} className="relative w-full">
-        {/* Sticky 視窗：固定在容器頂部、佔滿一個視口高度 */}
-        <div className="sticky top-0 h-[100dvh] w-full overflow-hidden">
-          {/* 手卷內容（300vw 寬，跟著 scrollYProgress 橫向位移） */}
-          <motion.div
-            className="absolute inset-y-0 left-0"
-            style={{ x, width: '300vw' }}
+    <>
+      <div
+        className={`absolute inset-0 ${
+          isFocused ? 'pointer-events-none opacity-0' : 'opacity-100'
+        } transition-opacity duration-300`}
+      >
+        {/* 捲動容器 */}
+        <div
+          ref={scrollRef}
+          className="relative h-full w-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth no-scrollbar overscroll-x-contain touch-pan-x"
+        >
+          <div
+            className="relative h-[100dvh] flex-shrink-0"
+            style={{
+              width: 'max(300vw, 1200px)',
+              minWidth: 'max(300vw, 1200px)',
+            }}
           >
             <SnowPaperBackground partOfDay={partOfDay} />
+
+            {/* 三個段落（各佔總寬 1/3）供 snap-x 吸附 */}
+            <div className="absolute inset-0 flex pointer-events-none">
+              <div className="h-full w-1/3 shrink-0 snap-center snap-always" />
+              <div className="h-full w-1/3 shrink-0 snap-center snap-always" />
+              <div className="h-full w-1/3 shrink-0 snap-center snap-always" />
+            </div>
 
             {/* 場景錨 */}
             {scenes.map((scene) => {
@@ -135,17 +183,31 @@ export function SagaHandscroll(props: Props) {
             <ZoneLabel x="16%" y="18%" main="戲樓" sub="對外 — 對天下開鑼" />
             <ZoneLabel x="41%" y="22%" main="月洞門" sub="一道牆、兩種人生" />
             <ZoneLabel x="63%" y="18%" main="院落" sub="對內 — 卸了妝以後" />
-          </motion.div>
+          </div>
+        </div>
 
-          {/* 固定上覆面板（不跟著手卷移動） */}
-          <FixedOverlay
+        {/* 固定上覆面板（絕對定位在畫卷容器外，與第一屏綁定） */}
+        <FixedOverlay
+          saga={saga}
+          locationLabel={locationLabel}
+        />
+      </div>
+      
+      {/* Scene Detail View */}
+      {isFocused && (
+        <div className="absolute inset-0 z-50 animate-fade-in-up bg-canvas">
+          <SagaTroupeCanvas
             saga={saga}
+            scenes={scenes}
+            charactersById={charactersById}
+            chaptersById={chaptersById}
             locationLabel={locationLabel}
-            scrollYProgress={scrollYProgress}
+            initialFocusedSceneId={focusedSceneId}
+            onCloseFocused={() => setFocusedSceneId(null)}
           />
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }
 
@@ -156,7 +218,7 @@ function ZoneLabel({ x, y, main, sub }: { x: string; y: string; main: string; su
       style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
       aria-hidden
     >
-      <span className="font-serif text-2xl tracking-[0.45em] sm:text-3xl">{main}</span>
+      <span className="font-serif text-xl tracking-[0.42em] sm:text-3xl">{main}</span>
       <span className="text-2xs tracking-widest text-mute/40">{sub}</span>
     </div>
   );
@@ -165,29 +227,28 @@ function ZoneLabel({ x, y, main, sub }: { x: string; y: string; main: string; su
 function FixedOverlay({
   saga,
   locationLabel,
-  scrollYProgress,
 }: {
   saga: Saga;
   locationLabel: string;
-  scrollYProgress: ReturnType<typeof useScroll>['scrollYProgress'];
 }) {
-  const progressWidth = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
   const partOfDay = saga.worldTime?.partOfDay;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
       {/* 標題 + 世界時 */}
-      <div className="absolute top-24 left-6 right-6 flex items-start justify-between gap-4 sm:left-10 sm:right-10">
-        <div className="pointer-events-auto max-w-2xl">
-          <h1 className="font-serif text-5xl tracking-widest text-ink drop-shadow-md sm:text-6xl lg:text-7xl">
+      <div className="absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] top-[max(5.5rem,env(safe-area-inset-top)+4rem)] flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 lg:left-10 lg:right-10 lg:top-24">
+        <div className="pointer-events-auto min-w-0 max-w-2xl">
+          <h1 className="font-serif text-[clamp(2rem,10vw,3.5rem)] tracking-[0.2em] text-ink drop-shadow-md sm:text-6xl sm:tracking-widest lg:text-7xl">
             {saga.name}
           </h1>
-          <p className="mt-2 font-serif text-xs tracking-[0.25em] text-mute/80">{locationLabel}</p>
+          <p className="mt-2 font-serif text-2xs tracking-[0.25em] text-mute/80 sm:text-xs">
+            {locationLabel}
+          </p>
         </div>
         {saga.worldTime ? (
-          <div className="pointer-events-auto text-right text-2xs tracking-[0.3em] text-mute/85">
+          <div className="pointer-events-auto shrink-0 text-right text-2xs tracking-[0.3em] text-mute/85 sm:text-xs">
             <p>{saga.worldTime.label}</p>
-            <p className="mt-1">
+            <p className="mt-1.5 text-2xs">
               Day {saga.worldTime.day}
               {partOfDay ? ` · ${dayPartLabel(partOfDay)}` : ''}
             </p>
@@ -195,25 +256,28 @@ function FixedOverlay({
         ) : null}
       </div>
 
-      {/* Premise（左下） */}
-      <div className="absolute bottom-20 left-6 right-6 sm:left-10 sm:right-10">
-        <div className="pointer-events-auto max-w-xl border-l-2 border-cinnabar/60 pl-5">
-          <p className="font-serif text-2xs tracking-[0.25em] text-mute/80 uppercase mb-2">
-            本回 Premise
-          </p>
-          <p className="font-serif text-sm leading-relaxed text-ink/90 sm:text-base drop-shadow-sm">
-            {saga.premise}
-          </p>
-        </div>
+      {/* 橫向捲動提示：手機強調橫滑；桌面可搭配滾輪步進 */}
+      <div className="absolute bottom-[max(2rem,env(safe-area-inset-bottom)+0.75rem)] left-1/2 flex max-w-[min(92vw,24rem)] -translate-x-1/2 flex-col items-center gap-2 text-mute/60 pointer-events-none sm:flex-row sm:gap-3">
+        <p className="flex items-center gap-3 animate-pulse sm:hidden">
+          <span className="text-base">←</span>
+          <span className="text-center font-serif text-2xs leading-relaxed tracking-widest text-mute">
+            左右滑動「展卷」
+          </span>
+          <span className="text-base">→</span>
+        </p>
+        <p className="hidden animate-pulse items-center gap-3 font-serif text-2xs tracking-widest sm:flex">
+          <span className="text-lg">←</span>
+          <span>上下滾動／左右滑動｜皆可展卷</span>
+          <span className="text-lg">→</span>
+        </p>
       </div>
-
-      {/* 手卷進度線（底部） */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-        <span className="text-2xs tracking-[0.35em] text-cinnabar/80">展卷 · 由戲樓入院落</span>
-        <div className="relative h-px w-48 overflow-hidden bg-hairline">
-          <motion.div className="absolute inset-y-0 left-0 bg-cinnabar/85" style={{ width: progressWidth }} />
+      
+      {/* 往下翻屏提示 */}
+      <div className="absolute -bottom-4 right-10 flex flex-col items-center gap-1.5 opacity-75 pointer-events-none [@media(max-height:520px)]:hidden">
+        <span className="text-2xs tracking-[0.35em] text-cinnabar/80">往下翻閱</span>
+        <div className="h-6 w-px overflow-hidden bg-hairline sm:h-8">
+          <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
         </div>
-        <span className="text-2xs tracking-[0.35em] text-mute/70">滾輪向下 → 展卷</span>
       </div>
     </div>
   );

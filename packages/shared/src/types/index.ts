@@ -10,3 +10,4 @@ export * from './soulSong';
 export * from './memory';
 export * from './persona';
 export * from './liveState';
+export * from './magnetism';

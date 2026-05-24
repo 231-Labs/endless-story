@@ -175,15 +175,6 @@ export function SnowPaperBackground({ partOfDay }: { partOfDay: DayPart }) {
             strokeWidth="1.5"
             fill="none"
           />
-          <text
-            x="1250"
-            y="600"
-            textAnchor="middle"
-            className="font-serif"
-            style={{ fontSize: '20px', letterSpacing: '0.3em', fill: ink(inkOpacity * 0.7) }}
-          >
-            月洞門
-          </text>
         </g>
 
         {/* 院落（右：x≈1500-2300） */}

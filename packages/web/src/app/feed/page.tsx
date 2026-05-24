@@ -41,7 +41,7 @@ export default async function FeedPage({
   });
 
   return (
-    <main className="min-h-screen [scrollbar-gutter:stable]">
+    <main className="min-h-screen">
       <SiteNav />
       <section className="px-5 py-12 sm:px-10 sm:py-16">
         <div className="mx-auto max-w-4xl">

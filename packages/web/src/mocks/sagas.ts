@@ -1,6 +1,6 @@
 import type { Saga, SagaLocation } from '@endless-story/shared';
 
-export const DEMO_SAGA_ID = 'saga_chunxue_demo';
+export const DEMO_SAGA_ID = 'spring-snow';
 // 春雪社涵蓋的兩處 location — 前廂戲樓 + 後廂院落
 export const LOC_THEATER_ID = 'loc_chunxue_theater';
 export const LOC_COMPOUND_ID = 'loc_chunxue_compound';

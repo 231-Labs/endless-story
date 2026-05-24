@@ -50,7 +50,7 @@ export function FloatingQuote({
           {children}
         </span>
         {speaker ? (
-          <span className="mt-3 font-serif text-2xs tracking-[0.3em] text-cinnabar/80">
+          <span className="mt-3 font-serif text-xs tracking-[0.3em] text-cinnabar/80">
             — {speaker.name}
           </span>
         ) : null}

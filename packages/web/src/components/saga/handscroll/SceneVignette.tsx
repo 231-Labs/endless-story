@@ -50,7 +50,7 @@ export function SceneVignette({
   return (
     <div
       ref={ref}
-      className="absolute"
+      className={`absolute transition-z-index duration-300 ${hovered ? 'z-50' : 'z-10'}`}
       style={{
         left: `${anchor.x}%`,
         top: `${anchor.y}%`,
@@ -80,7 +80,7 @@ export function SceneVignette({
           initial={{ opacity: 0, y: 6 }}
           animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded border border-hairline/50 bg-surface/85 px-2.5 py-1 font-serif text-2xs tracking-[0.35em] text-ink/85 shadow-sm backdrop-blur-md dark:bg-elevated/80"
+          className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded border border-hairline/50 bg-surface/85 px-3 py-1.5 font-serif text-xs tracking-[0.35em] text-ink/85 shadow-sm backdrop-blur-md dark:bg-elevated/80"
         >
           {scene.name}
         </motion.span>
@@ -113,22 +113,22 @@ export function SceneVignette({
 
         {/* hover 卡 */}
         {hovered ? (
-          <div className="pointer-events-none absolute left-1/2 top-full z-40 mt-3 w-max max-w-[240px] -translate-x-1/2 rounded-md border border-hairline/55 bg-surface/95 px-3 py-2 text-left shadow-xl backdrop-blur-md dark:bg-elevated/95">
-            <p className="font-serif text-sm text-ink">{scene.name}</p>
-            <p className="mt-1 text-2xs leading-relaxed text-mute">{scene.description}</p>
-            <p className="mt-2 flex items-center gap-1.5 text-2xs tracking-widest text-mute">
+          <div className="pointer-events-none absolute left-1/2 top-full z-40 mt-3 w-max max-w-[280px] -translate-x-1/2 rounded-md border border-hairline/55 bg-surface/95 px-4 py-3 text-left shadow-xl backdrop-blur-md dark:bg-elevated/95">
+            <p className="font-serif text-base text-ink">{scene.name}</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-mute">{scene.description}</p>
+            <p className="mt-3 flex items-center gap-1.5 text-xs tracking-widest text-mute">
               <span
                 aria-hidden
-                className={`inline-block h-1.5 w-1.5 rounded-full ${present.length > 0 ? 'bg-jade' : 'bg-mute/40'}`}
+                className={`inline-block h-2 w-2 rounded-full ${present.length > 0 ? 'bg-jade' : 'bg-mute/40'}`}
               />
               {present.length > 0 ? `${present.length} 人在此` : '— 無人 —'}
             </p>
             {isPerforming && scene.performance ? (
-              <p className="mt-1.5 text-2xs tracking-widest text-cinnabar/90">
+              <p className="mt-2 text-xs tracking-widest text-cinnabar/90">
                 正演《{scene.performance.title}》
               </p>
             ) : null}
-            <p className="mt-2 border-t border-hairline/60 pt-1.5 text-2xs tracking-widest text-cinnabar/90 dark:text-jade">
+            <p className="mt-3 border-t border-hairline/60 pt-2 text-xs tracking-widest text-cinnabar/90 dark:text-jade">
               點進入細看 →
             </p>
           </div>
@@ -136,7 +136,7 @@ export function SceneVignette({
 
         {/* performance 紅印 — 浮在右上角 */}
         {isPerforming && scene.performance ? (
-          <span className="pointer-events-none absolute right-0 top-3 flex items-center gap-1 rounded-full border border-cinnabar/40 bg-surface/90 px-2 py-0.5 text-[10px] tracking-widest text-cinnabar shadow-md backdrop-blur-md dark:bg-elevated/85">
+          <span className="pointer-events-none absolute right-[-10px] top-3 flex items-center gap-1 rounded-full border border-cinnabar/40 bg-surface/90 px-2 py-0.5 text-xs tracking-widest text-cinnabar shadow-md backdrop-blur-md dark:bg-elevated/85">
             <span aria-hidden className="relative flex h-1.5 w-1.5">
               <span className="absolute inset-0 animate-ping rounded-full bg-cinnabar opacity-75" />
               <span className="relative block h-1.5 w-1.5 rounded-full bg-cinnabar" />

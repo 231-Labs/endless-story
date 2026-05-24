@@ -268,13 +268,16 @@ export function CastConstellation({
     ? validEdges.filter((e) => e.fromId === hoveredId || e.toId === hoveredId).sort((a, b) => b.weight - a.weight)
     : [];
 
-  const connectedIds = useMemo(() => {
+  const connectedIds = (() => {
     const set = new Set<string>();
     if (!hoveredId) return set;
     set.add(hoveredId);
-    hoveredEdges.forEach((e) => { set.add(e.fromId); set.add(e.toId); });
+    hoveredEdges.forEach((e) => {
+      set.add(e.fromId);
+      set.add(e.toId);
+    });
     return set;
-  }, [hoveredId, hoveredEdges]);
+  })();
 
   const ink = (a: number) => (isDark ? `rgba(220, 206, 176, ${a})` : `rgba(40, 38, 44, ${a})`);
 
@@ -286,26 +289,18 @@ export function CastConstellation({
     <section className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center overflow-hidden bg-canvas">
       <ConstellationBackdrop ink={ink} />
 
-      {/* 標題 */}
-      <div className="absolute left-6 top-24 z-20 pointer-events-none sm:left-10 sm:top-28">
+      {/* 標題 — 留白配合頂 safe-area（膠囊導覽已改至視窗底部） */}
+      <div className="pointer-events-none absolute left-[max(1.25rem,env(safe-area-inset-left))] top-[max(5rem,calc(env(safe-area-inset-top,0px)+4.75rem))] z-20 sm:left-10 sm:top-24">
         <div className="flex items-center gap-4">
           <div className="h-px w-8 bg-cinnabar/60" />
-          <h2 className="font-serif text-3xl tracking-[0.25em] text-ink drop-shadow-sm sm:text-4xl">
-            人物方位
-          </h2>
+          <h2 className="font-serif text-3xl tracking-[0.25em] text-ink drop-shadow-sm sm:text-4xl">人物方位</h2>
         </div>
-        <p className="mt-3 pl-12 text-2xs tracking-[0.3em] text-mute/80 drop-shadow-sm">
-          班底 {uniqCast.length} 人 · 江湖 {uniqWildCast.length}
-        </p>
-        <p className="mt-1 pl-12 text-[10px] tracking-[0.4em] text-mute/55">
-          牆內為 saga · 牆外為江湖 · 此圖即角色當下所在
-        </p>
       </div>
 
-      {/* hover 便箋 */}
-      <div className="absolute bottom-12 right-6 z-20 pointer-events-none sm:bottom-16 sm:right-10">
+      {/* hover 便箋 — 上移避開視窗底部的固定膠囊；桌面靠右 */}
+      <div className="pointer-events-none absolute bottom-[max(calc(env(safe-area-inset-bottom,0px)+5.75rem),6.5rem)] left-[max(1rem,env(safe-area-inset-left,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-20 sm:right-10 sm:bottom-[max(calc(env(safe-area-inset-bottom,0px)+5.25rem),5.75rem)] sm:left-auto sm:max-w-[min(18rem,calc(100vw-6rem))] lg:right-10">
         {hoveredId && hoveredPos ? (
-          <div className="w-72 rounded-2xl border border-hairline/45 bg-surface/85 px-5 py-4 shadow-2xl backdrop-blur-xl animate-fade-in-up dark:bg-elevated/85">
+          <div className="w-full max-w-md rounded-2xl border border-hairline/45 bg-surface/85 px-4 py-3 shadow-2xl backdrop-blur-xl animate-fade-in-up dark:bg-elevated/85 sm:w-72 sm:px-5 sm:py-4">
             <div className="flex items-end gap-3 border-b border-hairline/40 pb-3">
               <span className="font-serif text-lg text-ink">{hoveredPos.char.name}</span>
               <span className="mb-0.5 text-2xs tracking-[0.3em] text-mute">的牽絆</span>
@@ -377,14 +372,13 @@ export function CastConstellation({
             ) : null}
           </div>
         ) : (
-          <p className="text-2xs tracking-[0.35em] text-mute/60 drop-shadow-sm">
-            游標懸於人物 — 揭其牽絆與當下所在
-          </p>
+          <span className="sr-only">懸浮或聚焦人物節點以檢視牽絆與所在</span>
         )}
       </div>
 
       {/* 平面圖 */}
-      <div className="relative z-10 mx-auto w-full max-w-[calc(100vw-2rem)] sm:max-w-[calc(100vw-4rem)] lg:max-w-[calc(85vh*1.5)]">
+      {/* 平面圖 — 手機留白略增、避免緊貼邊緣 */}
+      <div className="relative z-10 mx-auto w-[min(94vw,calc(100vw-3rem))] max-w-none sm:w-full sm:max-w-[calc(100vw-4rem)] lg:max-w-[calc(85vh*1.5)]">
         <div className="relative w-full" style={{ aspectRatio: `${VIEWBOX_W}/${VIEWBOX_H}` }}>
           <svg
             viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
@@ -413,62 +407,20 @@ export function CastConstellation({
               d={`M ${MOON_DOOR.x1 + 6} ${WALL_Y} A ${MOON_DOOR.r - 6} ${MOON_DOOR.r - 6} 0 0 1 ${MOON_DOOR.x2 - 6} ${WALL_Y}`}
               stroke="rgb(var(--color-cinnabar))" strokeOpacity="0.32" strokeWidth="1" fill="none"
             />
-            <text
-              x={MOON_DOOR.cx} y={WALL_Y - MOON_DOOR.r - 8}
-              textAnchor="middle"
-              style={{ fontSize: '11px', letterSpacing: '0.4em', fill: ink(0.55) }}
-              className="font-serif"
-            >
-              月洞門
-            </text>
 
-            {/* zone label — 在每個 zone 的左上角 */}
-            <text
-              x={SAGA.x + 14} y={SAGA.y + 26}
-              style={{ fontSize: '13px', letterSpacing: '0.4em', fill: 'rgb(var(--color-cinnabar))', fillOpacity: 0.55 }}
-              className="font-serif"
-            >
-              戲樓
-            </text>
-            <text
-              x={SAGA.x + 14} y={WALL_Y + 26}
-              style={{ fontSize: '13px', letterSpacing: '0.4em', fill: 'rgb(var(--color-jade))', fillOpacity: 0.75 }}
-              className="font-serif"
-            >
-              院落
-            </text>
-
-            {/* 江湖標 — 牆外四角 */}
-            <text x={SAGA.x - 18} y={SAGA.y - 18} textAnchor="end"
-              style={{ fontSize: '10px', letterSpacing: '0.5em', fill: ink(0.4) }} className="font-serif">
-              江湖
-            </text>
-            <text x={SAGA.x + SAGA.w + 18} y={SAGA.y + SAGA.h + 30}
-              style={{ fontSize: '10px', letterSpacing: '0.5em', fill: ink(0.4) }} className="font-serif">
-              江湖
-            </text>
-
-            {/* 每個 scene 的小匾標籤 */}
+            {/* scene 占位（淡圈，不額外標字） */}
             {scenes.map((s) => {
               const p = scenePlanXY(s.id);
               if (!p) return null;
               const isHovered = hoveredId && hoveredPos?.scene?.id === s.id;
               return (
                 <g key={`scene-${s.id}`}>
-                  {/* 房間範圍微圈 */}
                   <circle cx={p.x} cy={p.y} r="46"
                     fill="none"
                     stroke={ink(0.18)} strokeWidth="0.6"
                     strokeDasharray="2 4"
                     opacity={isHovered ? 0.75 : 0.4}
                   />
-                  <text
-                    x={p.x} y={p.y - 58} textAnchor="middle"
-                    style={{ fontSize: '10px', letterSpacing: '0.25em', fill: ink(isHovered ? 0.85 : 0.55) }}
-                    className="font-serif transition-opacity"
-                  >
-                    {s.name}
-                  </text>
                 </g>
               );
             })}
@@ -692,11 +644,6 @@ function ConstellationNode({
       >
         {char.name}
       </span>
-      {kind === 'center' ? (
-        <span className="text-[10px] tracking-[0.4em] text-cinnabar/80">班主</span>
-      ) : kind === 'wild' && scene ? (
-        <span className="text-[10px] tracking-[0.35em] text-cinnabar/75">江湖客</span>
-      ) : null}
     </Link>
   );
 }

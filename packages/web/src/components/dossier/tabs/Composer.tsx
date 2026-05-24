@@ -1,6 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useActionState, useState, useEffect } from 'react';
+import {
+  submitInterventionAction,
+  type InterventionFormResult,
+} from '@/lib/actions/interventions';
 
 type Kind = 'inject_dream' | 'whisper';
 
@@ -17,59 +21,78 @@ const COPY: Record<Kind, { hint: string; placeholder: string; submit: string }> 
   },
 };
 
-export function Composer() {
+const INITIAL: InterventionFormResult = { ok: false };
+
+export function Composer({
+  characterId,
+  ownerWallet,
+}: {
+  characterId: string;
+  ownerWallet: string;
+}) {
   const [kind, setKind] = useState<Kind | null>(null);
   const [text, setText] = useState('');
-  const [sent, setSent] = useState<{ kind: Kind; text: string } | null>(null);
+  const [state, formAction, pending] = useActionState(
+    submitInterventionAction,
+    INITIAL
+  );
+
+  // 成功後 reset
+  useEffect(() => {
+    if (state.ok) {
+      setText('');
+      setKind(null);
+    }
+  }, [state.ok]);
 
   const toggle = (next: Kind) => {
     setKind((current) => (current === next ? null : next));
     setText('');
-    setSent(null);
-  };
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!kind || !text.trim()) return;
-    setSent({ kind, text: text.trim() });
-    setText('');
-    setKind(null);
   };
 
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <ActionButton label="注夢" active={kind === 'inject_dream'} onClick={() => toggle('inject_dream')} />
+        <ActionButton
+          label="注夢"
+          active={kind === 'inject_dream'}
+          onClick={() => toggle('inject_dream')}
+        />
         <ActionButton label="耳語" active={kind === 'whisper'} onClick={() => toggle('whisper')} />
       </div>
 
       {kind ? (
-        <form
-          onSubmit={submit}
-          className="es-soft-panel space-y-3 p-4 sm:p-5"
-        >
+        <form action={formAction} className="es-soft-panel space-y-3 p-4 sm:p-5">
+          <input type="hidden" name="characterId" value={characterId} />
+          <input type="hidden" name="ownerWallet" value={ownerWallet} />
+          <input type="hidden" name="kind" value={kind} />
           <p className="text-2xs leading-relaxed tracking-widest text-mute">{COPY[kind].hint}</p>
           <textarea
+            name="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={3}
             placeholder={COPY[kind].placeholder}
             className="es-field resize-none"
+            disabled={pending}
           />
           <div className="flex items-center justify-between gap-3">
             <p className="text-2xs tracking-widest text-mute">寫上 Walrus · Seal 限 owner 可解</p>
             <button
               type="submit"
-              disabled={!text.trim()}
+              disabled={!text.trim() || pending}
               className="rounded bg-cinnabar px-4 py-2 text-sm text-canvas transition-colors hover:bg-seal disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {COPY[kind].submit}
+              {pending ? '寄出中…' : COPY[kind].submit}
             </button>
           </div>
+          {state.error ? (
+            <p className="text-2xs tracking-widest text-cinnabar/85">{state.error}</p>
+          ) : null}
         </form>
-      ) : sent ? (
+      ) : state.ok ? (
         <p className="rounded-md border border-dashed border-jade/40 bg-jade/10 p-4 text-sm text-jade dark:border-jade/50 dark:bg-jade/15">
-          已寄出。她會在下一{sent.kind === 'inject_dream' ? '段夢' : '個 tick'}感應到。
+          已寄出。她會在下一段夢或下一個 tick 感應到。
         </p>
       ) : (
         <p className="text-sm text-mute">

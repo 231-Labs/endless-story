@@ -11,7 +11,7 @@ import { SiteNav } from '@/components/home/SiteNav';
 import { SagaHandscroll } from '@/components/saga/handscroll/SagaHandscroll';
 import { CastConstellation } from '@/components/saga/CastConstellation';
 import { SagaCharterPanel } from '@/components/saga/SagaCharterPanel';
-import { SagaSectionRail } from '@/components/saga/SagaSectionRail';
+import { SagaDetailsTabs } from '@/components/saga/SagaDetailsTabs';
 
 export default async function SagaPage({
   params,
@@ -97,8 +97,7 @@ export default async function SagaPage({
   const allCharactersById = new Map(allCharsForLive.map((c) => [c.id, c]));
 
   return (
-    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-proximity scroll-smooth bg-canvas">
-      <SagaSectionRail />
+    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth bg-canvas">
       {/* Screen 1: Immersive Canvas + Hero + Premise */}
       <section
         id="saga-handscroll"
@@ -116,30 +115,24 @@ export default async function SagaPage({
         />
       </section>
 
-      {/* Screen 2: Constellation */}
-      <section
-        id="saga-constellation"
-        className="relative h-[100dvh] w-full snap-start snap-always overflow-hidden"
-      >
-        <CastConstellation
-          cast={cast}
-          wildCast={wildCast}
-          edges={edges}
-          scenes={scenes}
-          locations={locations}
-          liveStatesById={liveStatesById}
-        />
-      </section>
-
-      {/* Screen 3: Charter */}
-      <section
-        id="saga-charter"
-        className="relative h-[100dvh] w-full snap-start snap-always overflow-y-auto border-t border-hairline/50"
-      >
-        <div className="flex min-h-full flex-col justify-center py-12">
+      {/* Screen 2: Details Tabs (Constellation / Charter) */}
+      <SagaDetailsTabs
+        constellationContent={
+          <div className="relative h-full w-full">
+            <CastConstellation
+              cast={cast}
+              wildCast={wildCast}
+              edges={edges}
+              scenes={scenes}
+              locations={locations}
+              liveStatesById={liveStatesById}
+            />
+          </div>
+        }
+        charterContent={
           <SagaCharterPanel saga={saga} />
-        </div>
-      </section>
+        }
+      />
     </main>
   );
 }

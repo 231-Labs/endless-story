@@ -118,7 +118,7 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 ### Mock data
 
 `packages/web/src/mocks/`：
-- `sagas.ts` · DEMO_SAGA_ID = `saga_chunxue_demo`
+- `sagas.ts` · DEMO_SAGA_ID = `spring-snow`
 - `characters.ts` · 9 人
 - `chapters.ts` · 8 章
 - `recruitments.ts` · **5 則** active：武小生、富商、青衣、小報記者、老生（原 2 則已擴充）
