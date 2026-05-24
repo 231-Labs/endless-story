@@ -132,7 +132,7 @@ packages/
 | 1.1b | `faucet.move` | ✅ 2026-05-24 | Public faucet — anyone can drip；`FaucetAdminCap` 控制 drip_amount / cooldown_ms / total_supply_cap / paused；`admin_mint` 後門繞 cooldown；9 tests |
 | 1.2 | `world.move` | ✅ 2026-05-24 | World/Location/WorldRules/WorldTimeConfig + AdminCap；移除 `#[allow(unused_field)]`、`vector::empty` → `vector[]`；2 個 inline tests 通過 |
 | 1.3 | `saga.move` | ✅ 2026-05-24 | Saga/StorytellerCap/RevenueConfig + card weighting (R3.2) + skill table (R3.3) + Display V2；**新增 `withdraw_from_treasury`**（補老版漏寫）；8 tests |
-| 1.4 | `scene.move` | ⬜ 待做 | Scene/ScenePlacement；depends on saga + world |
+| 1.4 | `scene.move` | ✅ 2026-05-24 | Scene/ScenePlacement/SceneAccess/SceneParams/SceneState + Display V2；**新增 3 個 inline tests**（舊版完全沒 test）；character_count / privacy_level 補 view |
 | 1.5 | `character.move` 擴充 | ⬜ 待做 | 在現有 scope 1+2 上加 voucher mint/redeem + world/saga context |
 | 1.6 | `event.move` | ⬜ 待做 | 事件解算、卡片、死亡標記 |
 | 1.7 | `commitment.move` | ⬜ 待做 | 記憶壓縮快照 |
