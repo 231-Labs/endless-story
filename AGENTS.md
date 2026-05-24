@@ -129,7 +129,7 @@ packages/
 | # | 模組 | 狀態 | 備註 |
 |---|---|---|---|
 | 1.1 | `currency.move` | ✅ 2026-05-24 | ENDLESS coin (6 decimals)，用 `coin_registry::new_currency_with_otw` 新 API，metadata 立刻 frozen |
-| 1.2 | `world.move` | ⬜ 待做 | World/Location/WorldRules/WorldTimeConfig |
+| 1.2 | `world.move` | ✅ 2026-05-24 | World/Location/WorldRules/WorldTimeConfig + AdminCap；移除 `#[allow(unused_field)]`、`vector::empty` → `vector[]`；2 個 inline tests 通過 |
 | 1.3 | `saga.move` | ⬜ 待做 | Saga/StorytellerCap/RevenueConfig；depends on world + currency |
 | 1.4 | `scene.move` | ⬜ 待做 | Scene/ScenePlacement；depends on saga + world |
 | 1.5 | `character.move` 擴充 | ⬜ 待做 | 在現有 scope 1+2 上加 voucher mint/redeem + world/saga context |
