@@ -73,3 +73,14 @@ public fun mint(
     transfer::public_transfer(coin, recipient);
     event::emit(CurrencyMinted { recipient, amount });
 }
+
+// ─── test-only helpers ───────────────────────────────────────────────
+
+/// Create a TreasuryCap<CURRENCY> directly, bypassing init/coin_registry.
+/// Only callable from test code (compile-time gate via `#[test_only]`).
+/// Used by other modules' tests (e.g. faucet) to construct a faucet without
+/// running a full publish.
+#[test_only]
+public fun new_treasury_for_testing(ctx: &mut TxContext): TreasuryCap<CURRENCY> {
+    coin::create_treasury_cap_for_testing<CURRENCY>(ctx)
+}

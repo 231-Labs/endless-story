@@ -128,7 +128,8 @@ packages/
 
 | # | 模組 | 狀態 | 備註 |
 |---|---|---|---|
-| 1.1 | `currency.move` | ✅ 2026-05-24 | ENDLESS coin (6 decimals)，用 `coin_registry::new_currency_with_otw` 新 API，metadata 立刻 frozen |
+| 1.1 | `currency.move` | ✅ 2026-05-24 | ENDLESS coin (6 decimals)，用 `coin_registry::new_currency_with_otw` 新 API，MetadataCap **保留**（可後續更新 icon_url 等） |
+| 1.1b | `faucet.move` | ✅ 2026-05-24 | Public faucet — anyone can drip；`FaucetAdminCap` 控制 drip_amount / cooldown_ms / total_supply_cap / paused；`admin_mint` 後門繞 cooldown；9 tests |
 | 1.2 | `world.move` | ✅ 2026-05-24 | World/Location/WorldRules/WorldTimeConfig + AdminCap；移除 `#[allow(unused_field)]`、`vector::empty` → `vector[]`；2 個 inline tests 通過 |
 | 1.3 | `saga.move` | ⬜ 待做 | Saga/StorytellerCap/RevenueConfig；depends on world + currency |
 | 1.4 | `scene.move` | ⬜ 待做 | Scene/ScenePlacement；depends on saga + world |
