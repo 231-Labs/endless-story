@@ -16,6 +16,8 @@
  */
 :root {
   color-scheme: light;
+  /** 與 SiteNav 實際高度對齊，供 sticky 區塊 / 沈浸頁標題頂距使用 */
+  --es-site-nav-h: 57px;
   --color-canvas: 250 248 243;
   --color-surface: 250 248 243;
   --color-elevated: 255 254 250;
@@ -25,6 +27,12 @@
   --color-cinnabar: 176 74 60;
   --color-jade: 108 138 111;
   --color-seal: 163 57 42;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --es-site-nav-h: 73px;
+  }
 }
 
 .dark {
@@ -42,6 +50,7 @@
 
 html {
   font-size: 17px;
+  scrollbar-gutter: stable;
 }
 
 html,
@@ -52,6 +61,16 @@ body {
   line-height: 1.75;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 全站隱藏捲軸（保留滾動功能） */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+::-webkit-scrollbar {
+  display: none;
 }
 
 .no-scrollbar {
@@ -90,6 +109,16 @@ body {
 
   .es-outline-button {
     @apply rounded border border-hairline bg-surface text-mute transition-colors hover:border-cinnabar hover:text-cinnabar dark:bg-elevated/30;
+  }
+
+  /** 梨園／章回／名冊等「功能頁」主標 — 統一字階、字距，與 SiteNav 對齊 */
+  .es-page-lead-eyebrow {
+    @apply mb-2 font-serif text-2xs tracking-[0.22em] text-mute sm:mb-3 sm:tracking-[0.32em];
+  }
+
+  .es-page-lead-title {
+    @apply font-serif leading-[1.18] tracking-[0.16em] text-ink drop-shadow-sm sm:tracking-[0.2em];
+    font-size: clamp(1.375rem, 4.25vw + 0.65rem, 3.125rem);
   }
 }
 
@@ -130,4 +159,24 @@ body {
 }
 .animate-banner-rise {
   animation: endless-banner-rise 1200ms cubic-bezier(0.22, 1, 0.36, 1) 700ms both;
+}
+
+/* ─────────── Handscroll ambient keyframes ─────────── */
+
+@keyframes es-figure-idle {
+  0%, 100% { transform: translateY(0) rotate(-0.6deg); }
+  50%      { transform: translateY(-2px) rotate(0.6deg); }
+}
+.es-figure-idle {
+  animation: es-figure-idle 4.2s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes es-lantern-flicker {
+  0%, 100% { opacity: 0.75; }
+  35%      { opacity: 1; }
+  65%      { opacity: 0.6; }
+}
+.es-lantern-flicker {
+  animation: es-lantern-flicker 3.8s ease-in-out infinite;
 }

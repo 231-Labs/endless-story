@@ -21,7 +21,8 @@ export const scenes: Scene[] = [
     name: '戲樓主台',
     description: '百花樓的中庭木台。三面開窗，燈火通明時可坐三百客。',
     privacyLevel: 0,
-    currentCharacterIds: [],
+    // 江老闆此刻坐在第七排靠左看戲 — 江湖中人「跨界拜訪」的時刻
+    currentCharacterIds: ['char_jiang_laoban'],
     recentEventChapterId: 'chapter_day3_water_sleeves',
     heatProfile: { cinnabar: 0.6, jade: 0.85, mute: 0.3 },
     pastEvents: [
@@ -55,7 +56,8 @@ export const scenes: Scene[] = [
     name: '後台',
     description: '主台後側的化妝與候場區。卸妝鏡與道具籮並排，常聽見胡琴試弦聲。',
     privacyLevel: 1,
-    currentCharacterIds: ['char_cheng_hengyu', 'char_ye_tingfang'],
+    // 葉庭芳此刻已轉到東廂外廊（與她的 liveState 一致）— 此處剩程蘅玉一人
+    currentCharacterIds: ['char_cheng_hengyu'],
     recentEventChapterId: 'chapter_day3_water_sleeves',
     heatProfile: { cinnabar: 0.95, jade: 0.5, mute: 0.4 },
     pastEvents: [

@@ -19,7 +19,7 @@ export function HomeContent({
   const [openRecruitments, setOpenRecruitments] = useState<Recruitment[]>(initialRecruitments);
 
   return (
-    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
       {/* First Screen: Nav + Hero */}
       <div className="flex min-h-[100dvh] flex-col snap-start snap-always">
         {children}
@@ -105,7 +105,7 @@ export function HomeContent({
             <span className="text-hairline hidden sm:inline">|</span>
             <span className="cursor-default border border-hairline px-2 py-0.5 rounded text-2xs font-mono">SUI OVERFLOW 2026</span>
             <span className="text-hairline hidden sm:inline">|</span>
-            <a href="/dossier" className="hover:text-cinnabar transition-colors">人物誌</a>
+            <a href="/dossier" className="hover:text-cinnabar transition-colors">班底名冊</a>
           </div>
         </div>
       </footer>

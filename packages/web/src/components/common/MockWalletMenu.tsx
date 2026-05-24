@@ -68,7 +68,7 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
         </span>
       </summary>
 
-      <div className="absolute right-0 top-10 z-50 w-72 rounded-lg border border-hairline bg-elevated p-2 text-sm text-ink shadow-2xl shadow-black/20 max-sm:-right-10">
+      <div className="absolute right-0 top-10 z-50 w-72 rounded-lg border border-hairline bg-elevated p-2 text-sm text-ink shadow-2xl shadow-black/20 max-sm:fixed max-sm:left-4 max-sm:right-4 max-sm:top-16 max-sm:w-auto">
         <div className="px-3 py-2">
           <p className="text-2xs tracking-widest text-mute">目前視角</p>
           <p className="mt-1 font-serif text-base text-ink">{active.label}</p>
@@ -93,6 +93,16 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
           <span>我的訂閱</span>
           <span className="font-mono text-xs text-mute">{active.subscriptionCount}</span>
         </Link>
+
+        {active.key === 'owner' && (
+          <Link
+            href="/admin"
+            className="flex items-center justify-between rounded-md px-3 py-2 text-cinnabar/90 transition-colors hover:bg-canvas/70 hover:text-cinnabar"
+          >
+            <span>班主後台</span>
+            <span className="font-mono text-xs text-mute">Admin</span>
+          </Link>
+        )}
 
         <div className="my-1 h-px bg-hairline" />
 

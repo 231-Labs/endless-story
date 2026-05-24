@@ -70,17 +70,31 @@ export function SagaTroupeCanvas({
   charactersById,
   chaptersById,
   locationLabel,
+  initialFocusedSceneId = null,
+  onCloseFocused,
 }: {
   saga: Saga;
   scenes: Scene[];
   charactersById: Map<string, Character>;
   chaptersById: Map<string, Chapter>;
   locationLabel: string;
+  /** 由父層（如 SagaHandscroll）注入時，預設進入該場景 focused-mode */
+  initialFocusedSceneId?: string | null;
+  /** 若提供，按「返回全圖」會回呼此 callback（讓父層重新取回控制權，例如回到手卷）；否則使用內部 overview。 */
+  onCloseFocused?: () => void;
 }) {
-  const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
+  const [focusedSceneId, setFocusedSceneId] = useState<string | null>(initialFocusedSceneId);
   const [povId, setPovId] = useState<string | null>(null);
   const focusedScene = scenes.find((s) => s.id === focusedSceneId) ?? null;
   const worldTime = saga.worldTime;
+
+  const handleBack = () => {
+    if (onCloseFocused) {
+      onCloseFocused();
+    } else {
+      setFocusedSceneId(null);
+    }
+  };
 
   // Reset pov when scene changes
   useEffect(() => {
@@ -110,44 +124,64 @@ export function SagaTroupeCanvas({
       {/* Overlays */}
       <div className="absolute inset-0 pointer-events-none z-20 flex flex-col">
         {/* Header Area (padding for SiteNav) */}
-        <div className="h-20 shrink-0" />
+        <div
+          className="min-h-[max(5rem,calc(env(safe-area-inset-top,0px)+3.75rem))] shrink-0 sm:h-20 sm:min-h-0"
+          aria-hidden
+        />
 
         {focusedScene ? (
-          <div className="flex-1 flex flex-col pointer-events-auto px-4 sm:px-10 pb-8 overflow-y-auto [scrollbar-width:none]">
-            <CanvasHeader
-              worldTime={worldTime}
-              focusedScene={focusedScene}
-              onBack={() => setFocusedSceneId(null)}
-            />
+          <div className="flex flex-1 min-h-0 pl-[env(safe-area-inset-left,0px)] pr-[env(safe-area-inset-right,0px)] pointer-events-auto overflow-y-auto overscroll-contain snap-y snap-mandatory scroll-smooth">
+            {/* Screen 1: Overview */}
+            <div className="flex min-h-full flex-col snap-start snap-always px-4 sm:px-10 pb-12 pt-0">
+              <CanvasHeader
+                worldTime={worldTime}
+                focusedScene={focusedScene}
+                onBack={handleBack}
+              />
 
             {/* Status Cards */}
-            <div className="flex flex-wrap gap-4 mt-6">
-              <div className="rounded-2xl border border-hairline/50 bg-surface/75 px-3 py-2 text-2xs tracking-widest text-mute shadow-sm backdrop-blur-md dark:bg-elevated/55">
-                ◇ 此處在接通後由 AI 即時生成
-                {povId ? '（此視角專屬版本）' : ''}
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
+                <div className="min-w-0 rounded-2xl border border-hairline/50 bg-surface/75 px-3 py-2 text-2xs leading-relaxed tracking-widest text-mute shadow-sm backdrop-blur-md dark:bg-elevated/55 sm:max-w-md">
+                  ◇ 此處在接通後由 AI 即時生成
+                  {povId ? '（此視角專屬版本）' : ''}
+                </div>
+                {focusedScene.performance ? (
+                  <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-full border border-cinnabar/45 bg-surface/80 px-3 py-2 text-2xs leading-relaxed tracking-widest text-cinnabar shadow-md shadow-cinnabar/15 backdrop-blur-md dark:bg-elevated/70">
+                    <span aria-hidden className="relative flex h-2 w-2 shrink-0">
+                      <span className="absolute inset-0 animate-ping rounded-full bg-cinnabar opacity-75" />
+                      <span className="relative h-2 w-2 rounded-full bg-cinnabar" />
+                    </span>
+                    <span className="break-words">
+                      正在演《{focusedScene.performance.title}》
+                    </span>
+                  </div>
+                ) : (
+                  <div className="min-w-0 rounded-2xl border border-hairline/50 bg-surface/75 px-3 py-2 text-2xs tracking-widest text-mute backdrop-blur-md dark:bg-elevated/55">
+                    {focusedScene.pastEvents?.length ?? 0} 段已發生 · 持續累積
+                  </div>
+                )}
               </div>
-              {focusedScene.performance ? (
-                <div className="flex items-center gap-2 rounded-full border border-cinnabar/45 bg-surface/80 px-3 py-2 text-2xs tracking-widest text-cinnabar shadow-md shadow-cinnabar/15 backdrop-blur-md dark:bg-elevated/70">
-                  <span aria-hidden className="relative flex h-2 w-2">
-                    <span className="absolute inset-0 animate-ping rounded-full bg-cinnabar opacity-75" />
-                    <span className="relative h-2 w-2 rounded-full bg-cinnabar" />
-                  </span>
-                  <span>正在演《{focusedScene.performance.title}》</span>
+
+              <div className="mt-auto pt-24 relative">
+                <SceneGhostQuotes
+                  scene={focusedScene}
+                  charactersById={charactersById}
+                  povId={povId}
+                  onPovChange={setPovId}
+                />
+                
+                {/* Scroll hint for the next screen */}
+                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 opacity-75 pointer-events-none [@media(max-height:520px)]:hidden">
+                  <span className="text-2xs tracking-[0.35em] text-cinnabar/80">往下翻閱</span>
+                  <div className="h-6 w-px overflow-hidden bg-hairline sm:h-8">
+                    <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
+                  </div>
                 </div>
-              ) : (
-                <div className="rounded-2xl border border-hairline/50 bg-surface/75 px-3 py-2 text-2xs tracking-widest text-mute backdrop-blur-md dark:bg-elevated/55">
-                  {focusedScene.pastEvents?.length ?? 0} 段已發生 · 持續累積
-                </div>
-              )}
+              </div>
             </div>
 
-            <div className="mt-auto pt-24 flex flex-col gap-12">
-              <SceneGhostQuotes
-                scene={focusedScene}
-                charactersById={charactersById}
-                povId={povId}
-                onPovChange={setPovId}
-              />
+            {/* Screen 2: Details */}
+            <div className="flex min-h-full flex-col snap-start snap-always px-4 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] pt-12 sm:px-10 sm:pb-12">
               <FocusedSceneDetails scene={focusedScene} chaptersById={chaptersById} />
             </div>
           </div>
@@ -175,10 +209,10 @@ export function SagaTroupeCanvas({
 
       {/* Scroll Hint (Only show when not focused) */}
       {!focusedScene && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-mute/50 pointer-events-none z-20">
-          <span className="text-2xs font-mono tracking-widest uppercase">SCROLL</span>
-          <div className="h-6 w-px overflow-hidden bg-hairline/30 sm:h-8">
-            <div className="h-full w-full animate-scroll-down-line bg-mute/50" />
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 opacity-75 pointer-events-none z-20 [@media(max-height:520px)]:hidden">
+          <span className="text-2xs tracking-[0.35em] text-cinnabar/80">往下翻閱</span>
+          <div className="h-6 w-px overflow-hidden bg-hairline sm:h-8">
+            <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
           </div>
         </div>
       )}
@@ -199,19 +233,25 @@ function CanvasHeader({
 }) {
   if (focusedScene) {
     return (
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <div className="flex items-baseline gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <button
             type="button"
             onClick={onBack}
-            className="rounded-full border border-hairline/50 bg-surface/70 px-4 py-2 text-xs tracking-widest text-ink shadow-sm backdrop-blur-md transition-all hover:border-cinnabar/40 hover:text-cinnabar dark:bg-elevated/70"
+            className="min-h-[44px] w-fit touch-manipulation rounded-full border border-hairline/50 bg-surface/70 px-4 py-2.5 text-xs tracking-widest text-ink shadow-sm backdrop-blur-md transition-all hover:border-cinnabar/40 hover:text-cinnabar dark:bg-elevated/70 sm:py-2"
           >
             ← 返回全圖
           </button>
-          <span className="text-hairline">·</span>
-          <p className="text-xs tracking-widest text-mute/90 drop-shadow-sm">{PRIVACY_LABEL[focusedScene.privacyLevel]}</p>
+          <span className="hidden text-hairline sm:inline" aria-hidden>
+            ·
+          </span>
+          <p className="text-xs tracking-widest text-mute/90 drop-shadow-sm">
+            {PRIVACY_LABEL[focusedScene.privacyLevel]}
+          </p>
         </div>
-        <h2 className="font-serif text-3xl tracking-wide text-ink drop-shadow-md sm:text-4xl">{focusedScene.name}</h2>
+        <h2 className="w-full text-balance font-serif text-2xl tracking-wide text-ink drop-shadow-md sm:w-auto sm:max-w-[min(92vw,24rem)] sm:text-end sm:text-4xl lg:max-w-lg">
+          {focusedScene.name}
+        </h2>
       </div>
     );
   }
@@ -479,7 +519,7 @@ function FocusedSceneDetails({
 }) {
   const pastEvents = scene.pastEvents ?? [];
   return (
-    <div className="animate-fade-in-up grid grid-cols-1 gap-6 lg:grid-cols-3 lg:gap-8 max-w-6xl mx-auto w-full">
+    <div className="animate-fade-in-up mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
       <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
         <div className="flex items-center gap-3">
           <div className="h-px w-6 bg-cinnabar/40" />

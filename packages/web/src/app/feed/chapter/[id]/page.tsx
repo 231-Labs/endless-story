@@ -47,18 +47,19 @@ export default async function ChapterPage({
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
   return (
-    <main className="min-h-screen [scrollbar-gutter:stable]">
+    <main className="min-h-screen">
       <SiteNav />
-      <div className="mx-auto max-w-5xl px-5 py-10 sm:px-10 sm:py-14">
-        <Link
-          href="/feed"
-          aria-label="回連載"
-          className="es-icon-button h-8 w-8 mb-6"
-        >
-          <span aria-hidden className="text-base">←</span>
-        </Link>
+      <div className="px-5 py-10 sm:px-10 sm:py-14">
+        <div className="mx-auto max-w-6xl">
+          <Link
+            href="/feed"
+            aria-label="回梨園章回"
+            className="es-icon-button mb-6 h-8 w-8"
+          >
+            <span aria-hidden className="text-base">←</span>
+          </Link>
 
-        <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_320px] lg:gap-20">
+          <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_320px] lg:gap-20">
           <article className="min-w-0">
             <details className="mb-8 rounded-3xl border border-hairline/50 bg-surface/40 backdrop-blur-sm lg:hidden">
               <summary className="cursor-pointer px-6 py-4 text-sm tracking-wide text-ink">
@@ -143,6 +144,7 @@ export default async function ChapterPage({
               </div>
             </div>
           </aside>
+          </div>
         </div>
       </div>
     </main>

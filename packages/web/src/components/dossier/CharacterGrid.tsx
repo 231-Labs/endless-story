@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import type { SVGProps } from 'react';
 import type { Character } from '@endless-story/shared';
 import Link from 'next/link';
+import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SubscribeCard } from '@/components/subscribe/SubscribeCard';
 
 export type RosterFilter = 'all' | 'internal' | 'external' | 'mine';
@@ -60,47 +62,55 @@ export function CharacterGrid({
   return (
     <div className="flex flex-1 flex-col">
       {/* Header & Filters (Sticky at top of the scroll container) */}
-      <section className="sticky top-[57px] z-30 bg-canvas/90 px-5 pt-8 pb-4 backdrop-blur-md sm:top-[73px] sm:px-10 sm:pt-10">
+      <section className="sticky top-[var(--es-site-nav-h)] z-30 bg-canvas/95 px-5 pb-4 pt-8 backdrop-blur-md sm:px-10 sm:pb-6 sm:pt-11">
         <div className="mx-auto max-w-6xl">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <h1 className="font-serif text-4xl tracking-wide text-ink sm:text-5xl">人物誌</h1>
-            
-            {/* Search Input */}
-            <div className="relative w-full sm:w-64">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <SearchIcon className="h-4 w-4 text-mute" />
-              </div>
-              <input
-                type="text"
-                placeholder="搜尋角色名稱..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full rounded-full border-0 bg-surface/50 py-2 pl-10 pr-4 text-sm text-ink ring-1 ring-inset ring-hairline transition-all placeholder:text-mute focus:bg-surface focus:ring-2 focus:ring-inset focus:ring-cinnabar/60"
-              />
-            </div>
-          </div>
+          <PageLeadTitleBlock
+            eyebrow="班底、徵召與訂閱"
+            eyebrowMobile="班底與訂閱"
+            title="人物誌"
+          />
 
-          <div className="mt-6 flex items-baseline justify-between border-b border-hairline sm:mt-8">
-            <div className="flex gap-6 sm:gap-8">
-              {FILTERS.map((f) => {
-                const isActive = f.key === filter;
-                return (
-                  <Link
-                    key={f.key}
-                    href={{ pathname: '/dossier', query: f.key === 'all' ? {} : { filter: f.key } }}
-                    className={`relative pb-3 text-sm tracking-wide transition-colors ${
-                      isActive ? 'text-ink' : 'text-mute hover:text-ink'
-                    }`}
-                  >
-                    {f.label}
-                    {isActive ? (
-                      <span className="absolute inset-x-0 -bottom-px h-0.5 bg-cinnabar" />
-                    ) : null}
-                  </Link>
-                );
-              })}
+          {/* 篩選 + 搜尋 + 人數：桌面與章回 sub-tab 同層次；手機搜尋在篩選下全寬 */}
+          <div className="mt-6 border-b border-hairline sm:mt-8">
+            <div className="flex flex-col gap-4 pb-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+              <div className="-mx-5 flex min-w-0 gap-6 overflow-x-auto px-5 pb-px [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
+                {FILTERS.map((f) => {
+                  const isActive = f.key === filter;
+                  return (
+                    <Link
+                      key={f.key}
+                      href={{ pathname: '/dossier', query: f.key === 'all' ? {} : { filter: f.key } }}
+                      className={`relative shrink-0 pb-3 text-sm tracking-wide transition-colors ${
+                        isActive ? 'text-ink' : 'text-mute hover:text-ink'
+                      }`}
+                    >
+                      {f.label}
+                      {isActive ? (
+                        <span className="absolute inset-x-0 -bottom-px h-0.5 bg-cinnabar" />
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="flex w-full flex-row flex-wrap items-center gap-x-4 gap-y-2 sm:w-auto sm:flex-nowrap">
+                <label className="relative block min-w-0 flex-1 sm:w-52 lg:w-64 sm:flex-none">
+                  <span className="sr-only">搜尋角色名稱</span>
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <SearchIcon className="h-4 w-4 text-mute" />
+                  </div>
+                  <input
+                    type="search"
+                    placeholder="搜尋角色…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoComplete="off"
+                    enterKeyHint="search"
+                    className="es-field block w-full rounded-full border-0 bg-surface/50 py-2.5 pl-10 pr-4 text-sm text-ink shadow-none ring-1 ring-inset ring-hairline transition-all placeholder:text-mute focus:bg-surface focus:ring-2 focus:ring-inset focus:ring-cinnabar/60"
+                  />
+                </label>
+                <span className="shrink-0 text-sm tabular-nums text-mute">{visible.length} 人</span>
+              </div>
             </div>
-            <span className="pb-3 text-sm text-mute">{visible.length} 人</span>
           </div>
         </div>
       </section>
@@ -108,14 +118,14 @@ export function CharacterGrid({
       {/* Pages */}
       <div className="flex-1">
         {visible.length === 0 ? (
-          <section className="flex min-h-[calc(100dvh-265px)] sm:min-h-[calc(100dvh-245px)] snap-start snap-always items-center justify-center scroll-mt-[265px] sm:scroll-mt-[245px]">
+          <section className="flex min-h-[calc(100dvh-265px)] md:min-h-[calc(100dvh-245px)] snap-start snap-always items-center justify-center scroll-mt-[calc(var(--es-site-nav-h)+16rem)] md:scroll-mt-[calc(var(--es-site-nav-h)+13.5rem)]">
             <p className="text-center text-sm text-mute">這個範圍裡還沒有角色。</p>
           </section>
         ) : (
           <>
             {/* Mobile: Single horizontal scroll for all cards */}
-            <section className="flex md:hidden min-h-[calc(100dvh-265px)] snap-start snap-always flex-col px-0 pb-4 pt-0 scroll-mt-[265px]">
-              <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-start pt-0 pb-2">
+            <section className="flex md:hidden min-h-[calc(100dvh-265px)] snap-start snap-always scroll-mt-[calc(var(--es-site-nav-h)+16rem)] flex-col px-0 pb-4 pt-0">
+              <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-start pt-2 pb-2">
                 <div className="no-scrollbar flex w-full snap-x snap-mandatory gap-4 overflow-x-auto px-5 scroll-px-5">
                   {visible.map((card) => (
                     <div
@@ -134,7 +144,7 @@ export function CharacterGrid({
               {pages.map((pageCards, pageIndex) => (
                 <section
                   key={pageCards[0]?.character.id ?? `page-${pageIndex}`}
-                  className="flex min-h-[calc(100dvh-245px)] snap-start snap-always flex-col px-10 pb-6 pt-0 scroll-mt-[245px]"
+                  className="flex min-h-[calc(100dvh-245px)] snap-start snap-always flex-col scroll-mt-[calc(var(--es-site-nav-h)+13.5rem)] px-5 pb-6 pt-0 sm:px-10"
                 >
                   <div className="mx-auto flex w-full min-h-0 flex-1 flex-col items-center justify-start pt-8 pb-2 max-w-6xl">
                     <div className="w-full grid-cols-2 gap-6 md:grid xl:grid-cols-3 xl:gap-8">
@@ -166,7 +176,7 @@ export function CharacterGrid({
   );
 }
 
-function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
+function SearchIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <circle cx="11" cy="11" r="8" />

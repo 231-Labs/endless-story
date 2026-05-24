@@ -25,11 +25,6 @@ import { InterventionTab } from '@/components/dossier/tabs/InterventionTab';
 import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
 import { DEMO_VIEWER_WALLET } from '@/mocks/subscriptions';
-import {
-  BASE_SUBSCRIBER_COUNT,
-  NEXT_POV_HINT,
-  SIGNATURE_QUOTES,
-} from '@/lib/character-magnetism';
 import { shortChapterTitle } from '@/lib/format';
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
@@ -73,7 +68,8 @@ export default async function DossierPage({
 
     const cards: CardData[] = await Promise.all(
       characters.map(async (character) => {
-        const sigQuote = SIGNATURE_QUOTES[character.id];
+        const magnetism = await charactersApi.getMagnetism(character.id);
+        const sigQuote = magnetism?.signatureQuote;
         const quoteChapter = sigQuote?.chapterId
           ? await chaptersApi.getChapter(sigQuote.chapterId)
           : null;
@@ -106,16 +102,16 @@ export default async function DossierPage({
           character,
           quote,
           tension,
-          initialSubscriberCount: BASE_SUBSCRIBER_COUNT[character.id] ?? 1,
+          initialSubscriberCount: magnetism?.subscriberCount ?? 1,
           initialSubscribed,
           isOwner,
-          nextPovHint: NEXT_POV_HINT[character.id],
+          nextPovHint: magnetism?.nextPovHint,
         };
       })
     );
 
     return (
-      <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
         <SiteNav />
         <CharacterGrid
           cards={cards}
@@ -181,7 +177,7 @@ export default async function DossierPage({
     : null;
 
   return (
-    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
       {/* Screen 1: Header */}
       <div className="flex min-h-[100dvh] flex-col snap-start snap-always relative">
         <SiteNav />
@@ -194,10 +190,10 @@ export default async function DossierPage({
         </div>
         
         {/* Scroll hint */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-mute/50 pointer-events-none">
-          <span className="text-2xs font-mono tracking-widest uppercase">SCROLL</span>
-          <div className="h-10 w-px overflow-hidden bg-hairline/30">
-            <div className="h-full w-full animate-scroll-down-line bg-mute/50" />
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 opacity-75 pointer-events-none [@media(max-height:520px)]:hidden">
+          <span className="text-2xs tracking-[0.35em] text-cinnabar/80">往下翻閱</span>
+          <div className="h-8 w-px overflow-hidden bg-hairline">
+            <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
           </div>
         </div>
       </div>

@@ -1,14 +1,17 @@
 import {
   chaptersApi,
   charactersApi,
+  liveStateApi,
   relationshipsApi,
   sagasApi,
   scenesApi,
 } from '@/lib/api/index';
+import type { CharacterLiveState } from '@endless-story/shared';
 import { SiteNav } from '@/components/home/SiteNav';
-import { SagaTroupeCanvas } from '@/components/saga/SagaTroupeCanvas';
+import { SagaHandscroll } from '@/components/saga/handscroll/SagaHandscroll';
 import { CastConstellation } from '@/components/saga/CastConstellation';
 import { SagaCharterPanel } from '@/components/saga/SagaCharterPanel';
+import { SagaDetailsTabs } from '@/components/saga/SagaDetailsTabs';
 
 export default async function SagaPage({
   params,
@@ -83,33 +86,53 @@ export default async function SagaPage({
     ? locations.map((l) => l.name).join(' + ')
     : '無 location';
 
+  // 拉所有 character（cast + wildCast）的 live state — 鏈上「現在在哪」投影
+  const allCharsForLive = [...cast, ...wildCast];
+  const liveStateEntries = await Promise.all(
+    allCharsForLive.map(async (c) => [c.id, await liveStateApi.getLiveState(c.id)] as const)
+  );
+  const liveStatesById: Record<string, CharacterLiveState> = Object.fromEntries(liveStateEntries);
+
+  // 給 handscroll：cast + wildCast 都進 charactersById，wild 在 scene 內也能渲染剪影
+  const allCharactersById = new Map(allCharsForLive.map((c) => [c.id, c]));
+
   return (
-    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-canvas">
+    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth bg-canvas">
       {/* Screen 1: Immersive Canvas + Hero + Premise */}
-      <section className="relative h-[100dvh] w-full snap-start snap-always overflow-hidden">
+      <section
+        id="saga-handscroll"
+        className="relative h-[100dvh] w-full snap-start snap-always overflow-hidden"
+      >
         <div className="absolute top-0 inset-x-0 z-50">
           <SiteNav />
         </div>
-        <SagaTroupeCanvas
+        <SagaHandscroll
           saga={saga}
           scenes={scenes}
-          charactersById={charactersById}
+          charactersById={allCharactersById}
           chaptersById={chaptersById}
           locationLabel={locationLabel}
         />
       </section>
 
-      {/* Screen 2: Constellation */}
-      <section className="relative h-[100dvh] w-full snap-start snap-always overflow-hidden">
-        <CastConstellation cast={cast} wildCast={wildCast} edges={edges} />
-      </section>
-
-      {/* Screen 3: Charter */}
-      <section className="relative h-[100dvh] w-full snap-start snap-always overflow-y-auto border-t border-hairline/50">
-        <div className="flex min-h-full flex-col justify-center py-12">
+      {/* Screen 2: Details Tabs (Constellation / Charter) */}
+      <SagaDetailsTabs
+        constellationContent={
+          <div className="relative h-full w-full">
+            <CastConstellation
+              cast={cast}
+              wildCast={wildCast}
+              edges={edges}
+              scenes={scenes}
+              locations={locations}
+              liveStatesById={liveStatesById}
+            />
+          </div>
+        }
+        charterContent={
           <SagaCharterPanel saga={saga} />
-        </div>
-      </section>
+        }
+      />
     </main>
   );
 }

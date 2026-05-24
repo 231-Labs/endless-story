@@ -63,6 +63,9 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 | `.es-field` | input / textarea |
 | `.es-choice-card` | 可點選候選卡 |
 | `.es-outline-button` | outlined secondary |
+| `.es-page-lead-eyebrow` · `.es-page-lead-title` | 人物誌／梨園章回／梨園手卷覆層等**統一主標**；`:root --es-site-nav-h` 與 SiteNav 高度對齊（sticky 頂距） |
+
+`PageLeadTitleBlock`（`components/common/PageLeadTitleBlock.tsx`）：主標 + 輔題 + 右欄 slot（例如搜尋）。
 
 ### 動畫慣例
 
@@ -92,7 +95,7 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 /dossier?id=X&tab=memories  記憶 tab（owner-only journal）
 /dossier?as=viewer          看客視角（MockWalletMenu 切換）
 /dossier/recruit/[id]       徵召 intent 頁（候備；主流程走首頁 RecruitmentTicket）
-/feed                       章回列表 + filter
+/feed                       梨園章回（公開章回列表 + filter）
 /feed/chapter/[id]          章回詳細 + TOC
 /subscriptions              訂閱管理（追訂中可取消 / 持有不可退）
 ```
@@ -118,7 +121,7 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 ### Mock data
 
 `packages/web/src/mocks/`：
-- `sagas.ts` · DEMO_SAGA_ID = `saga_chunxue_demo`
+- `sagas.ts` · DEMO_SAGA_ID = `spring-snow`
 - `characters.ts` · 9 人
 - `chapters.ts` · 8 章
 - `recruitments.ts` · **5 則** active：武小生、富商、青衣、小報記者、老生（原 2 則已擴充）

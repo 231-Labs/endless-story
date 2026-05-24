@@ -1,0 +1,10 @@
+[package]
+name = "endless_story"
+edition = "2024"
+version = "0.1.0"
+
+# Sui, MoveStdlib, Bridge, SuiSystem are implicit framework deps (Sui 1.45+).
+# Named addresses derive from [package].name (Sui CLI 1.63+) — no [addresses] section.
+
+[environments]
+devnet = "c515b850"

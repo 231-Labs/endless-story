@@ -1,14 +1,15 @@
 import Link from 'next/link';
 import { chaptersApi, sagasApi, charactersApi } from '@/lib/api/index';
+import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SiteNav } from '@/components/home/SiteNav';
 import { truncateBlobId } from '@/lib/format';
 
 type FeedMode = 'all' | 'text' | 'visual';
 
-const MODES: { key: FeedMode; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'text', label: '文字連載' },
-  { key: 'visual', label: '影像與畫冊' },
+const MODES: { key: FeedMode; label: string; shortLabel: string }[] = [
+  { key: 'all', label: '全部', shortLabel: '全部' },
+  { key: 'text', label: '文字連載', shortLabel: '文字' },
+  { key: 'visual', label: '影像與畫冊', shortLabel: '影像' },
 ];
 
 function parseMode(raw: string | string[] | undefined): FeedMode {
@@ -41,44 +42,57 @@ export default async function FeedPage({
   });
 
   return (
-    <main className="min-h-screen [scrollbar-gutter:stable]">
+    <main className="min-h-screen bg-canvas">
       <SiteNav />
-      <section className="px-5 py-12 sm:px-10 sm:py-16">
-        <div className="mx-auto max-w-4xl">
-          <div className="flex items-baseline justify-between">
-            <h1 className="font-serif text-3xl tracking-wide text-ink sm:text-4xl">連載</h1>
-            <span className="text-sm text-mute">{saga.name} · 第 {saga.currentDay} 日</span>
-          </div>
+      <header className="bg-canvas">
+        <div className="px-5 pb-2 pt-8 sm:px-10 sm:pb-3 sm:pt-11">
+          <div className="mx-auto max-w-6xl">
+            <PageLeadTitleBlock
+              eyebrow={`${saga.name} · 第 ${saga.currentDay} 日`}
+              eyebrowMobile={saga.name}
+              title={
+                <>
+                  <span className="sm:hidden">章回</span>
+                  <span className="hidden sm:inline">梨園章回</span>
+                </>
+              }
+            />
 
-          <div className="mt-6 flex gap-6 border-b border-hairline sm:gap-8">
-            {MODES.map((m) => {
-              const isActive = m.key === mode;
-              return (
-                <Link
-                  key={m.key}
-                  href={{
-                    pathname: '/feed',
-                    query: m.key === 'all' ? {} : { mode: m.key },
-                  }}
-                  className={`relative pb-3 text-sm tracking-wide transition-colors ${
-                    isActive ? 'text-ink' : 'text-mute hover:text-ink'
-                  }`}
-                >
-                  {m.label}
-                  {isActive ? (
-                    <span className="absolute inset-x-0 -bottom-px h-0.5 bg-cinnabar" />
-                  ) : null}
-                </Link>
-              );
-            })}
+            <div className="-mx-5 mt-6 flex gap-4 overflow-x-auto border-b border-hairline px-5 pb-px sm:mx-0 sm:mt-8 sm:flex-wrap sm:gap-8 sm:overflow-visible sm:px-0">
+              {MODES.map((m) => {
+                const isActive = m.key === mode;
+                return (
+                  <Link
+                    key={m.key}
+                    href={{
+                      pathname: '/feed',
+                      query: m.key === 'all' ? {} : { mode: m.key },
+                    }}
+                    className={`relative shrink-0 whitespace-nowrap pb-3 text-sm tracking-wide transition-colors ${
+                      isActive ? 'text-ink' : 'text-mute hover:text-ink'
+                    }`}
+                  >
+                    <span className="sm:hidden">{m.shortLabel}</span>
+                    <span className="hidden sm:inline">{m.label}</span>
+                    {isActive ? (
+                      <span className="absolute inset-x-0 -bottom-px h-0.5 bg-cinnabar" />
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
+        </div>
+      </header>
 
+      <section className="px-5 pb-8 pt-4 sm:px-10 sm:pb-14 sm:pt-5">
+        <div className="mx-auto max-w-6xl">
           {visible.length === 0 ? (
-            <div className="mt-12 rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
-              <p className="text-sm text-mute tracking-wide">這個範圍裡還沒有章回。</p>
+            <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
+              <p className="text-sm tracking-wide text-mute">這個範圍裡還沒有章回。</p>
             </div>
           ) : (
-            <div className={`mt-8 ${mode === 'visual' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-6'}`}>
+            <div className={`${mode === 'visual' ? 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3' : 'space-y-6'}`}>
               {visible.map((chapter) => {
                 const pov = chapter.povCharacterId
                   ? charactersById.get(chapter.povCharacterId)

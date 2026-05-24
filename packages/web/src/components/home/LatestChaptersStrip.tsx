@@ -11,7 +11,7 @@ export function LatestChaptersStrip({
   return (
     <section className="border-t border-hairline px-5 py-12 sm:px-10 sm:py-16">
       <div className="mx-auto max-w-6xl">
-        <h2 className="font-serif text-xl tracking-wide text-ink sm:text-2xl">連載</h2>
+        <h2 className="font-serif text-xl tracking-wide text-ink sm:text-2xl">梨園章回</h2>
         <ul className="mt-6 divide-y divide-hairline sm:mt-8">
           {chapters.map((chapter) => (
             <li key={chapter.id}>

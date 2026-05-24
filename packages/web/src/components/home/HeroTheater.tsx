@@ -255,7 +255,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
 
             <div
               id="scenes-scroll-container"
-              className="flex gap-4 overflow-x-auto py-2 px-5 sm:gap-5 sm:px-10 snap-x snap-mandatory scroll-smooth scroll-pl-5 sm:scroll-pl-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="no-scrollbar flex gap-4 overflow-x-auto py-2 px-5 sm:gap-5 sm:px-10 snap-x snap-mandatory scroll-smooth scroll-pl-5 sm:scroll-pl-10"
             >
               {clips.map((clip) => {
                 const isActive = activeClip?.id === clip.id;
