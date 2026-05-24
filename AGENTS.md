@@ -84,6 +84,66 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 
 ---
 
+## 鏈上架構（2026-05-24 拍板，不可漂移）
+
+> 此節是合約 / SDK / runner / web 之間的**契約**。
+> **任何 session 在 runner 反覆測試時都不准踰越這六條原則。**
+> 若需要修改原則，必須在此節留改動紀錄與日期。
+
+### 六條核心原則
+
+1. **依賴單向**
+   `web → sdk → contracts` ／ `runner → sdk + memwal` ／ `cli → sdk + shared`
+   **`sdk` 不准 import `web`。`shared` 不准 import 任何上層。**
+2. **`sdk` 是鏈上互動唯一入口** — web/runner/cli 不准自己 `new SuiClient()`、不准自己手寫 PTB
+3. **`memwal` 是 Walrus / Seal 唯一入口** — 不准在 web/runner 裡直接 import `@mysten/walrus` 或 `@mysten/seal`
+4. **`shared/src/contract-ids.ts` 是部署輸出的單一真相** — `cli` 寫入，sdk/runner/web 只讀
+5. **server actions 優先** — admin 操作走 `web/src/lib/actions/`，除非真正需要 HTTP（webhook / SSE / RSS）才開 `app/api/`
+6. **`(site)` / `(admin)` route group 嚴格隔離** — admin layout + middleware 獨立，user 站台不被 admin 邏輯污染
+
+### 目錄契約
+
+```
+contracts/endless_story/sources/   ← Move 模組（依 Phase 1 依序進場）
+packages/
+  shared/    型別 + 純函式 + contract-ids；零依賴
+  sdk/       generated/ + client.ts + tx/ + read/；鏈上唯一入口
+  memwal/    Walrus + Seal 唯一入口（已有，不動）
+  cli/       deploy / bootstrap / reset / stories；管 publish + 種世界
+  runner/    Agent / scheduler / LLM（Phase 2 才動，目前 stub）
+  web/       UI；app/(site)/* + app/(admin)/* 隔離
+```
+
+### Phase 路線圖
+
+| Phase | 內容 | 何時 |
+|---|---|---|
+| **0** | skill 改名、cli 骨架、sdk scaffold、contract-ids、(site)/(admin) 重構 | 進行中（2026-05-24 起） |
+| **1** | Move 模組依序遷移：currency → world → saga → scene → character (含 voucher) → event → commitment | Phase 0 之後 |
+| **2** | SDK 完整（codegen + tx + read）→ admin 一鍵部署 UI | Phase 1 之後 |
+| **3** | Web mock → SDK 真實串接（Subscribe → Recruitment → Memories → ...） | Phase 2 之後 |
+| **4** | Runner 上線（LLM、scheduler、memwal 寫入） | 賽後 |
+
+### Runner 開發鐵律（給未來反覆測試 runner 的 session）
+
+- ❌ 不要為了 runner 方便，在 web 裡放 runner 邏輯
+- ❌ 不要為了 runner 方便，繞過 sdk 自己呼叫鏈
+- ❌ 不要為了 runner 方便，把 memwal 邏輯 inline 到 runner
+- ❌ 不要為了快，在 `shared/` 塞 runner 專用型別（runner 自己有 src/types/）
+- ❌ 不要為了 demo 直接改 `contract-ids.ts`，要走 cli 部署
+- ✅ runner 缺什麼 API，去 `sdk/` 加；缺什麼型別，去 `shared/` 加；缺什麼 walrus 操作，去 `memwal/` 加
+
+### 部署管線
+
+| skill | 用途 |
+|---|---|
+| `/devnet-bootstrap` | 第一次部署：publish + 種 world/saga/scene/characters |
+| `/devnet-reset` | 整盤重來：清舊資料 + redeploy + reseed |
+
+兩者都呼叫 `packages/cli/scripts/{deploy,bootstrap,reset}.ts`。
+
+---
+
 ## 已落地
 
 ### 路由
@@ -233,13 +293,24 @@ Move 合約 · MemWal SDK · 真實 LLM · RSS · POV engine · IP 經濟（pitc
 
 ## 不要
 
+**UI / 樣式**
 - ❌ 不要重做 `/subscribe`（已併入 `/dossier`）
 - ❌ 不要 raw Tailwind 色不加 `dark:`
 - ❌ 不要用 `bg-canvas` 當卡片背景
-- ❌ 不要繞過 `lib/api/` facade
-- ❌ 不要動老 repo `Endless-Story`
+- ❌ 重複 className → 抽到 `es-*`
 - ❌ 入班不要自動跳轉
-- ❌ 重複 className → 抽到 `es-*`，不要雙份維護 `AGENTS.md` / `CLAUDE.md`
+
+**架構（見「鏈上架構」節）**
+- ❌ 不要繞過 `web/src/lib/api/` facade
+- ❌ 不要繞過 `sdk` 直接 `new SuiClient()`
+- ❌ 不要在 web/runner 直接 import `@mysten/walrus` 或 `@mysten/seal`（走 memwal）
+- ❌ 不要手動編輯 `shared/src/contract-ids.ts`（cli 寫入）
+- ❌ 不要在 `(site)` route 裡放 admin 操作
+
+**Repo / 文件**
+- ❌ 不要動老 repo `Endless-Story`
+- ❌ 不要雙份維護 `AGENTS.md` / `CLAUDE.md`
+- ❌ 不要用拼音 skill 名（已禁 wuxia / xianxia 等）
 
 ---
 
@@ -263,4 +334,6 @@ Light / dark · 徵召票底圖切換 · type-check 綠燈
 
 ## Quick win
 
-Round 1/3#8 已落地。下個 session 優先：**i18n** → **`HistoryTabs`** → **`RelationshipGraph`**。
+**現在進行中（2026-05-24 起）**：Phase 0 — cli 骨架 / sdk scaffold / contract-ids / skill 改名 / (site)+(admin) 重構。詳見「鏈上架構 · Phase 路線圖」。
+
+**已完成的 web 端**（保留供參考）：Round 1 + Round 3#7-#8 設計已落地；i18n 留到比賽前定稿時做。

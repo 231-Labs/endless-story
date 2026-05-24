@@ -21,11 +21,3 @@ source = { root = true }
 use_environment = "devnet"
 manifest_digest = "41D1BDD28F3C119A169CE18934867517916EFC7FB9628B27D00844D146B950C3"
 deps = { std = "MoveStdlib", sui = "Sui" }
-
-[env.devnet]
-chain-id = "c515b850"
-original-published-id = "0xf33b108c88639da40b92b89a441daded94e8bfbad4b2502fa8fe330b2bc8ad4c"
-latest-published-id = "0xf33b108c88639da40b92b89a441daded94e8bfbad4b2502fa8fe330b2bc8ad4c"
-published-version = "1"
-upgrade-cap-id = "0xc83ecbfea20eea535bf79bce8d387f82cc0a2f8b7667916d9a4b394865b70bb4"
-
