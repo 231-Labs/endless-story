@@ -236,9 +236,13 @@ function FixedOverlay({
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
       {/* 標題 + 世界時 */}
-      <div className="absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] top-[max(5.5rem,env(safe-area-inset-top)+4rem)] flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 lg:left-10 lg:right-10 lg:top-24">
+      <div className="absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+1.25rem)] flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:left-10 sm:right-10">
         <div className="pointer-events-auto min-w-0 max-w-2xl">
-          <h1 className="font-serif text-[clamp(2rem,10vw,3.5rem)] tracking-[0.2em] text-ink drop-shadow-md sm:text-6xl sm:tracking-widest lg:text-7xl">
+          <p className="es-page-lead-eyebrow">
+            <span className="sm:hidden">手卷</span>
+            <span className="hidden sm:inline">梨園手卷</span>
+          </p>
+          <h1 className="es-page-lead-title">
             {saga.name}
           </h1>
           <p className="mt-2 font-serif text-2xs tracking-[0.25em] text-mute/80 sm:text-xs">

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 export function BackButton({
   fallback,
-  label = '返回人物誌',
+  label = '返回班底名冊',
   ariaLabel = '返回',
 }: {
   fallback: string;

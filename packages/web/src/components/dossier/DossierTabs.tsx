@@ -10,7 +10,7 @@ export type DossierTab = 'profile' | 'gallery' | 'chapters' | 'memories' | 'entr
 const TABS: { key: DossierTab; label: string }[] = [
   { key: 'profile', label: '履歷' },
   { key: 'gallery', label: '設定集' },
-  { key: 'chapters', label: '連載' },
+  { key: 'chapters', label: '章回' },
   { key: 'memories', label: '記憶' },
   { key: 'entrusts', label: '託夢' },
 ];

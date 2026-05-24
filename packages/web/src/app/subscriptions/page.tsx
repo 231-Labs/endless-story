@@ -115,7 +115,7 @@ export default async function SubscriptionsPage({
                 href={{ pathname: '/dossier', query: params.as ? { as: params.as } : {} }}
                 className="mx-1 border-b border-cinnabar/40 text-cinnabar transition-colors hover:border-cinnabar"
               >
-                人物誌
+                班底名冊
               </Link>
               逛逛。
             </p>
