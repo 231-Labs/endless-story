@@ -1,58 +1,171 @@
-/// Endless Story — Character custody.
+/// Endless Story — Character custody + mint paths.
 ///
-/// Scope 1: Character + OwnerCap 原型。能 mint，沒生命週期。
-/// Scope 2: ControlCap + lifecycle（issue / revoke / reassign）+ is_valid view。
-/// Scope 3: SEAL approve（seal_approve_control / seal_approve_owner）+ id layout helper。
+/// **Scope 1 (legacy):** Character + OwnerCap base structure.
+/// **Scope 2 (legacy):** ControlCap + lifecycle (issue / revoke / reassign).
+/// **Scope 3 (legacy):** SEAL approve (control / owner) + id layout helper.
+/// **Phase 1.5a (new):** Character struct enrichment (profile / physical /
+///   attributes / media / tags / state / image / death) + three mint paths
+///   (genesis / collectible / internal) + validation invariants + death
+///   writer + value-type constructors. Voucher-driven mint lives in the
+///   sibling `recruit` module which calls `mint_character_internal` here.
+///
+/// **Cap matrix:**
+///   - `OwnerCap`   = root ownership (transferrable; holder = owner)
+///   - `ControlCap` = operational delegation (epoch-bound; auto-invalidated
+///     by `revoke_all_control` / `reassign_saga`)
+///
+/// See AGENTS.md → 「鏈上架構」 for module dependency rules.
 module endless_story::character;
 
+use std::string::String;
 use sui::bcs;
+use sui::clock;
 use sui::event;
 
-// === Errors ===
+use endless_story::saga::{Self, Saga, StorytellerCap};
+use endless_story::world::{Self, World};
+use endless_story::scene::{Self, Scene};
+
+// ─── errors ──────────────────────────────────────────────────────────
 
 #[error]
-const EWrongCharacter: vector<u8> =
-    b"Cap does not correspond to this Character";
+const EWrongCharacter: vector<u8> = b"Cap does not correspond to this Character";
 
 #[error]
-const ENoAccess: vector<u8> =
-    b"ControlCap epoch does not match current control_epoch (revoked)";
+const ENoAccess: vector<u8> = b"ControlCap epoch does not match current control_epoch (revoked)";
 
 #[error]
-const EInvalidEncryptionId: vector<u8> =
-    b"SEAL id does not target this Character";
+const EInvalidEncryptionId: vector<u8> = b"SEAL id does not target this Character";
 
-// === Structs ===
+#[error]
+const EInvalidSpecies: vector<u8> = b"Profile species is not declared in world rules";
 
-/// 角色本體。預期由呼叫端 `share` 後成為 shared object。
-/// `control_epoch` 是 ControlCap 撤銷的依據；從 1 起跳，0 保留給
-/// 「無有效託管」語義。
+#[error]
+const EInvalidAttribute: vector<u8> = b"Attribute key/value violates world rules";
+
+#[error]
+const EWorldSagaMismatch: vector<u8> = b"Saga does not belong to the given World";
+
+#[error]
+const ESceneSagaMismatch: vector<u8> = b"Scene does not belong to the given Saga";
+
+// ─── value types ─────────────────────────────────────────────────────
+
+/// On-chain skill / attribute snapshot. `seed` is the deterministic input
+/// used by the off-chain generator that produced `value` (kept on chain so
+/// indexers / explorers can reconstruct the roll).
+public struct AttributeValue has copy, drop, store {
+    key: String,
+    value: u64,
+    seed: vector<u8>,
+}
+
+/// Biology snapshot at mint time. `age_years = 0` means unknown. Mutable
+/// aging is handled off-chain via world tick math; this field is the
+/// "starting age" for storyteller LLM narrative consistency.
+public struct PhysicalFacts has copy, drop, store {
+    species: String,
+    gender: String,
+    body: String,
+    age_years: u8,
+}
+
+public struct CharacterProfile has copy, drop, store {
+    name: String,
+    description: String,
+    physical_facts: PhysicalFacts,
+}
+
+/// Off-chain media reference. `kind` codes the asset type (0=portrait,
+/// 1=audio, ... — caller convention). `walrus_blob_id` is the optional
+/// Walrus blob id; empty vector if asset lives elsewhere.
+public struct MediaAsset has copy, drop, store {
+    kind: u8,
+    uri: String,
+    walrus_blob_id: vector<u8>,
+    metadata_uri: String,
+}
+
+/// Composer-attached tag (e.g. "wounded", "betrayed-by-X"). `source_event_id`
+/// is the event that affirmed the tag, if any (None when set by storyteller
+/// fiat outside an event). Tags are applied/revoked via package-internal
+/// fns called by event.move (1.6).
+public struct Tag has copy, drop, store {
+    label: String,
+    source_event_id: Option<ID>,
+    affirmed_at_ms: u64,
+}
+
+/// Runtime state — what world / saga / scene the character is currently
+/// bound to. `saga_id = None` means wild (between sagas). `current_scene_id`
+/// is None for wild characters who roam locations between scenes.
+///
+/// **Phase 1.5a scope:** struct is fully shaped, but only mint paths
+/// populate it. Movement / transfer / wild release land in 1.5b.
+public struct CharacterState has copy, drop, store {
+    world_id: ID,
+    saga_id: Option<ID>,
+    current_scene_id: Option<ID>,
+    /// Always tracked, even when in a scene (derived from scene's location
+    /// at mint/move time). Wild characters have scene = None but location
+    /// = Some, since they roam the map between locations.
+    current_location_id: Option<ID>,
+    birth_ms: u64,
+}
+
+/// On-chain death record. Composed by storyteller when resolving an event
+/// (with `by_event = Some(event_id)`) or by world daemon on natural
+/// forgetting death (`by_event = None`). `attributed_characters` should be
+/// real Character IDs that played KILL-intent cards (when event-caused).
+/// Empty `attributed` is honest: accident / disaster / no one to blame.
+public struct DeathRecord has copy, drop, store {
+    victim: ID,
+    recorded_at_ms: u64,
+    by_event: Option<ID>,
+    attributed_characters: vector<ID>,
+}
+
+// ─── main resource + caps ────────────────────────────────────────────
+
+/// 角色本體。由 mint_character_internal share 成 shared object。
+/// `control_epoch` 是 ControlCap 撤銷的依據；從 1 起跳。
 public struct Character has key {
     id: UID,
     control_epoch: u64,
+    profile: CharacterProfile,
+    attributes: vector<AttributeValue>,
+    media_assets: vector<MediaAsset>,
+    state: CharacterState,
+    tags: vector<Tag>,
+    /// User-facing display image URL. Defaults to first media asset's uri
+    /// on mint; mutable via `update_character_image` (added in 1.5c).
+    image_url: String,
+    /// `Some` once the character has died. Set by `mark_dead` (called from
+    /// event.move's apply_death in 1.6).
+    death: Option<DeathRecord>,
 }
 
 /// 角色根權限。可轉移；持有者即 owner。角色易主 = transfer 這張 cap。
 public struct OwnerCap has key, store {
     id: UID,
     character_id: ID,
+    world_id: ID,
+    minted_at_ms: u64,
+    /// Phase 2 IP revenue accumulator. Always 0 in Phase 1; revenue
+    /// posting machinery lands post-launch.
+    cumulative_revenue: u64,
 }
 
 /// 營運權限。`epoch` 對應簽發當下的 `character.control_epoch`。
-/// 當 character.control_epoch 變動後，這張 cap 自動失效：
-/// `is_valid` 會回 false，Scope 3 的 seal_approve 會 abort。
+/// 當 character.control_epoch 變動後，這張 cap 自動失效：`is_valid` 回 false、
+/// SEAL approve 會 abort。Phase 1.5b 會擴充 world_id + saga_id 欄位。
 public struct ControlCap has key, store {
     id: UID,
     character_id: ID,
     epoch: u64,
 }
 
-// === Events ===
-
-public struct CharacterCreated has copy, drop {
-    character_id: ID,
-    owner: address,
-}
+// ─── events ──────────────────────────────────────────────────────────
 
 public struct ControlCapIssued has copy, drop {
     character_id: ID,
@@ -71,39 +184,193 @@ public struct SagaReassigned has copy, drop {
     cap_id: ID,
 }
 
-// === Mint ===
+public struct CharacterMinted has copy, drop {
+    character_id: ID,
+    world_id: ID,
+    saga_id: Option<ID>,
+    scene_id: Option<ID>,
+    owner_cap_id: ID,
+    control_cap_id: ID,
+    name: String,
+    owner: address,
+    minted_at_ms: u64,
+}
 
-/// 建立角色並核發 OwnerCap 給 sender。
+public struct CharacterDied has copy, drop {
+    character_id: ID,
+    by_event: Option<ID>,
+    attributed_count: u64,
+    recorded_at_ms: u64,
+}
+
+// ─── mint paths ──────────────────────────────────────────────────────
+
+/// Storyteller mints a canonical character into a specific scene. Used at
+/// bootstrap (genesis cast) and for storyteller-fiat additions mid-saga.
+/// Increments the saga's character count + adds character to scene state.
+public fun mint_genesis_character(
+    cap: &StorytellerCap,
+    saga: &mut Saga,
+    world: &World,
+    scene: &mut Scene,
+    profile: CharacterProfile,
+    media_assets: vector<MediaAsset>,
+    attributes: vector<AttributeValue>,
+    owner_recipient: address,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+): (OwnerCap, ControlCap) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(world::world_id(world) == saga::world_id(saga), EWorldSagaMismatch);
+    assert!(scene::saga_id(scene) == saga_id, ESceneSagaMismatch);
+
+    let scene_id = scene::scene_id(scene);
+    let scene_location_id = scene::location_id(scene);
+    let (owner_cap, control_cap) = mint_character_internal(
+        world,
+        option::some(saga_id),
+        option::some(scene_id),
+        option::some(scene_location_id),
+        profile,
+        media_assets,
+        attributes,
+        owner_recipient,
+        clock::timestamp_ms(clock),
+        ctx,
+    );
+
+    scene::add_character(scene, owner_cap.character_id);
+    saga::increment_character_count(saga);
+    (owner_cap, control_cap)
+}
+
+/// Storyteller mints a non-canon (collectible / external) character into a
+/// saga without placing in a scene. Used for "guest cameo" mints where the
+/// character isn't yet placed on the map.
+public fun mint_collectible_character(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    world: &World,
+    profile: CharacterProfile,
+    media_assets: vector<MediaAsset>,
+    attributes: vector<AttributeValue>,
+    owner_recipient: address,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+): (OwnerCap, ControlCap) {
+    saga::assert_cap(cap, saga);
+    assert!(world::world_id(world) == saga::world_id(saga), EWorldSagaMismatch);
+
+    mint_character_internal(
+        world,
+        option::none<ID>(),
+        option::none<ID>(),
+        option::none<ID>(),
+        profile,
+        media_assets,
+        attributes,
+        owner_recipient,
+        clock::timestamp_ms(clock),
+        ctx,
+    )
+}
+
+/// Package-internal canonical mint. Validates invariants (species,
+/// attribute ranges) inside — callers cannot bypass. Shares Character as
+/// a shared object; returns owner + control caps to the PTB.
 ///
-/// 回傳 `(Character, OwnerCap)`，由呼叫端決定 `share` / `transfer`，
-/// 讓同一個 PTB 可以接續做別的事（例如先寫初始 metadata 再 share）。
-public fun mint_character(ctx: &mut TxContext): (Character, OwnerCap) {
+/// Visibility: `public(package)` so sibling modules (recruit, future
+/// admin paths) can call without re-exposing through entries.
+public(package) fun mint_character_internal(
+    world: &World,
+    saga_id: Option<ID>,
+    current_scene_id: Option<ID>,
+    current_location_id: Option<ID>,
+    profile: CharacterProfile,
+    media_assets: vector<MediaAsset>,
+    attributes: vector<AttributeValue>,
+    owner_recipient: address,
+    minted_at_ms: u64,
+    ctx: &mut TxContext,
+): (OwnerCap, ControlCap) {
+    validate_profile(world, &profile);
+    validate_attributes(world, &attributes);
+
+    let world_id = world::world_id(world);
+    let initial_image_url = if (vector::is_empty(&media_assets)) {
+        b"".to_string()
+    } else {
+        vector::borrow(&media_assets, 0).uri
+    };
     let character = Character {
         id: object::new(ctx),
         control_epoch: 1,
+        profile,
+        attributes,
+        media_assets,
+        state: CharacterState {
+            world_id,
+            saga_id,
+            current_scene_id,
+            current_location_id,
+            birth_ms: minted_at_ms,
+        },
+        tags: vector[],
+        image_url: initial_image_url,
+        death: option::none<DeathRecord>(),
     };
     let character_id = object::id(&character);
+
     let owner_cap = OwnerCap {
         id: object::new(ctx),
         character_id,
+        world_id,
+        minted_at_ms,
+        cumulative_revenue: 0,
     };
+    let owner_cap_id = object::id(&owner_cap);
 
-    event::emit(CharacterCreated {
+    let control_cap = ControlCap {
+        id: object::new(ctx),
         character_id,
-        owner: ctx.sender(),
+        epoch: character.control_epoch,
+    };
+    let control_cap_id = object::id(&control_cap);
+
+    event::emit(CharacterMinted {
+        character_id,
+        world_id,
+        saga_id,
+        scene_id: current_scene_id,
+        owner_cap_id,
+        control_cap_id,
+        name: character.profile.name,
+        owner: owner_recipient,
+        minted_at_ms,
     });
 
-    (character, owner_cap)
-}
-
-/// 把 character 變成 shared object。
-/// 拆成獨立函式（而非 mint 內部處理）以保留 PTB 組合性：
-/// 呼叫端可在 share 之前先初始化 character 的其他狀態。
-public fun share(character: Character) {
     transfer::share_object(character);
+    (owner_cap, control_cap)
 }
 
-// === Cap lifecycle ===
+// ─── validation (private invariants enforced by mint_character_internal) ──
+
+fun validate_profile(world: &World, profile: &CharacterProfile) {
+    assert!(
+        world::is_valid_species(world, &profile.physical_facts.species),
+        EInvalidSpecies,
+    );
+}
+
+fun validate_attributes(world: &World, attributes: &vector<AttributeValue>) {
+    assert!(
+        attributes.all!(|attr| world::is_valid_attribute_value(world, &attr.key, attr.value)),
+        EInvalidAttribute,
+    );
+}
+
+// ─── cap lifecycle ───────────────────────────────────────────────────
 
 /// Owner 簽發一張 ControlCap，綁定當前 `control_epoch`。
 /// 回傳 cap 由呼叫端決定 transfer 對象（PTB 組合性）。
@@ -129,11 +396,8 @@ public fun issue_control_cap(
     cap
 }
 
-/// Owner 撤銷當前所有 ControlCap。
-///
-/// 用 epoch +1 達成，而非 destroy 舊 cap object：
-/// 舊 cap 還在持有者手上，但 `is_valid` 與 SEAL approve 都會拒，
-/// 持有者無從察覺以外的副作用，符合 Sui「不可遠端銷毀別人物件」的限制。
+/// Owner 撤銷當前所有 ControlCap (epoch +1)。舊 cap 物件仍在持有者手上，
+/// 但 `is_valid` / SEAL approve 都會拒。
 public fun revoke_all_control(character: &mut Character, owner_cap: &OwnerCap) {
     assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
 
@@ -147,10 +411,8 @@ public fun revoke_all_control(character: &mut Character, owner_cap: &OwnerCap) {
 }
 
 /// Owner 把角色託管轉給新 Saga：一筆 tx 完成「撤銷舊 + 簽發新」。
-///
-/// 跟連續呼叫 `revoke_all_control` + `issue_control_cap` 在 epoch 上等價，
-/// 但 emit `SagaReassigned`（而非 `ControlRevoked` + `ControlCapIssued`），
-/// 讓 indexer 能區分「主動撤銷」與「換託管」兩種意圖。
+/// emit `SagaReassigned`（而非 `ControlRevoked` + `ControlCapIssued`）讓
+/// indexer 能區分「主動撤銷」與「換託管」兩種意圖。
 public fun reassign_saga(
     character: &mut Character,
     owner_cap: &OwnerCap,
@@ -175,69 +437,161 @@ public fun reassign_saga(
     cap
 }
 
-// === Views ===
+// ─── death writer (called by event.move in 1.6) ──────────────────────
 
-/// 判斷 cap 是否（仍）對 character 有效。
-/// SDK 在 SEAL fetchKeys 前可預檢，省下白費的 dry-run。
-/// 用 method syntax：`cap.is_valid(&character)`。
+/// Mark character dead. Idempotent: re-marking is a no-op (death record
+/// cannot change once recorded). Package-visible so only sibling modules
+/// (event, future world daemon) call it.
+public(package) fun mark_dead(character: &mut Character, record: DeathRecord) {
+    if (character.death.is_none()) {
+        let by_event = record.by_event;
+        let attributed_count = vector::length(&record.attributed_characters);
+        let recorded_at_ms = record.recorded_at_ms;
+        character.death = option::some(record);
+        event::emit(CharacterDied {
+            character_id: object::id(character),
+            by_event,
+            attributed_count,
+            recorded_at_ms,
+        });
+    }
+}
+
+// ─── views ───────────────────────────────────────────────────────────
+
 public fun is_valid(cap: &ControlCap, character: &Character): bool {
     cap.character_id == object::id(character) && cap.epoch == character.control_epoch
 }
 
-// === SEAL approve ===
+// Cap field accessors — needed by sibling modules (recruit) and SDK reads
+// since cross-module direct field access is forbidden.
+
+public fun owner_cap_character_id(cap: &OwnerCap): ID { cap.character_id }
+
+public fun owner_cap_world_id(cap: &OwnerCap): ID { cap.world_id }
+
+public fun owner_cap_minted_at_ms(cap: &OwnerCap): u64 { cap.minted_at_ms }
+
+public fun owner_cap_cumulative_revenue(cap: &OwnerCap): u64 { cap.cumulative_revenue }
+
+public fun control_cap_character_id(cap: &ControlCap): ID { cap.character_id }
+
+public fun control_cap_epoch(cap: &ControlCap): u64 { cap.epoch }
+
+public fun character_id(character: &Character): ID { object::id(character) }
+
+public fun control_epoch(character: &Character): u64 { character.control_epoch }
+
+public fun world_id(character: &Character): ID { character.state.world_id }
+
+public fun saga_id(character: &Character): Option<ID> { character.state.saga_id }
+
+public fun current_scene_id(character: &Character): Option<ID> { character.state.current_scene_id }
+
+public fun current_location_id(character: &Character): Option<ID> {
+    character.state.current_location_id
+}
+
+public fun birth_ms(character: &Character): u64 { character.state.birth_ms }
+
+public fun profile(character: &Character): &CharacterProfile { &character.profile }
+
+public fun physical_facts(profile: &CharacterProfile): &PhysicalFacts { &profile.physical_facts }
+
+public fun profile_name(profile: &CharacterProfile): &String { &profile.name }
+
+public fun profile_description(profile: &CharacterProfile): &String { &profile.description }
+
+public fun physical_species(facts: &PhysicalFacts): &String { &facts.species }
+
+public fun physical_gender(facts: &PhysicalFacts): &String { &facts.gender }
+
+public fun physical_body(facts: &PhysicalFacts): &String { &facts.body }
+
+public fun physical_age_years(facts: &PhysicalFacts): u8 { facts.age_years }
+
+public fun attributes(character: &Character): &vector<AttributeValue> { &character.attributes }
+
+public fun attribute_key(attr: &AttributeValue): &String { &attr.key }
+
+public fun attribute_value(attr: &AttributeValue): u64 { attr.value }
+
+public fun attribute_seed(attr: &AttributeValue): &vector<u8> { &attr.seed }
+
+/// Find the first `AttributeValue` with `key`, or `None`.
+public fun find_attribute_value(character: &Character, key: &String): Option<u64> {
+    let idx_opt = character.attributes.find_index!(|attr| attr.key == *key);
+    if (idx_opt.is_some()) {
+        option::some(vector::borrow(&character.attributes, *idx_opt.borrow()).value)
+    } else {
+        option::none()
+    }
+}
+
+public fun media_assets(character: &Character): &vector<MediaAsset> { &character.media_assets }
+
+public fun image_url(character: &Character): &String { &character.image_url }
+
+public fun has_tag(character: &Character, label: &String): bool {
+    character.tags.any!(|tag| tag.label == *label)
+}
+
+public fun tag_count(character: &Character): u64 { vector::length(&character.tags) }
+
+public fun tags(character: &Character): &vector<Tag> { &character.tags }
+
+public fun tag_label(tag: &Tag): &String { &tag.label }
+
+public fun tag_source_event_id(tag: &Tag): Option<ID> { tag.source_event_id }
+
+public fun tag_affirmed_at_ms(tag: &Tag): u64 { tag.affirmed_at_ms }
+
+public fun is_dead(character: &Character): bool { character.death.is_some() }
+
+public fun death_record(character: &Character): &Option<DeathRecord> { &character.death }
+
+public fun death_victim(record: &DeathRecord): ID { record.victim }
+
+public fun death_by_event(record: &DeathRecord): Option<ID> { record.by_event }
+
+public fun death_attributed(record: &DeathRecord): &vector<ID> { &record.attributed_characters }
+
+public fun death_recorded_at_ms(record: &DeathRecord): u64 { record.recorded_at_ms }
+
+// ─── SEAL approve ────────────────────────────────────────────────────
 //
-// SEAL discovery convention 要求函式名以 `seal_approve` 開頭、第一個參數為 `id: vector<u8>`。
-// 因此這兩個函式的參數順序覆蓋了 sui-move skill 的「primitive 在後」一般規則。
-//
-// 兩個函式都 side-effect free：撤銷的訊號從 character.control_epoch 讀出來，
-// 而不是在 seal_approve 寫 state（SEAL 只能 dry-run，不允許 state change）。
+// SEAL discovery convention: function name starts with `seal_approve`, first
+// param is `id: vector<u8>`. Both fns are side-effect free.
 
 /// Saga 變體：持有當前有效 ControlCap 的人可以解密。
-///
-/// 三層檢查：
-///   1. cap 是這個 character 的 cap（不是別角色的）
-///   2. cap 的 epoch == character 當前 epoch（未被撤銷）
-///   3. SEAL id 的 suffix 指向這個 character（不是別的密文）
-entry fun seal_approve_control(
-    id: vector<u8>,
-    character: &Character,
-    cap: &ControlCap,
-) {
+/// 三層檢查：cap 屬此 character / cap epoch 未撤銷 / SEAL id suffix 指向此 character.
+entry fun seal_approve_control(id: vector<u8>, character: &Character, cap: &ControlCap) {
     assert!(cap.character_id == object::id(character), EWrongCharacter);
     assert!(cap.epoch == character.control_epoch, ENoAccess);
     assert!(id_belongs_to_character(&id, object::id(character)), EInvalidEncryptionId);
 }
 
 /// Owner 變體：持有 OwnerCap 的人可解密（唯讀審計）。
-///
-/// owner 的「唯讀」不是在這裡限制（SEAL 只管解密 = 讀）；
-/// 寫入路徑由 app 層保證 owner client 不暴露 remember API。
-entry fun seal_approve_owner(
-    id: vector<u8>,
-    character: &Character,
-    owner_cap: &OwnerCap,
-) {
+/// owner 的「唯讀」由 app 層保證（owner client 不暴露 remember API）。
+entry fun seal_approve_owner(id: vector<u8>, character: &Character, owner_cap: &OwnerCap) {
     assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
     assert!(id_belongs_to_character(&id, object::id(character)), EInvalidEncryptionId);
 }
 
-// === SEAL id layout helpers ===
+// ─── SEAL id layout helpers ──────────────────────────────────────────
 //
-// id layout：`<namespace_bytes> || bcs::to_bytes(character_id)`
-// SDK 端負責構造（見 memwal_sdk_patch.md 改動 1），Move 端驗 suffix 比對。
+// Layout: `<namespace_bytes> || bcs::to_bytes(character_id)`
+// SDK constructs the id; Move verifies the suffix.
 
-/// 驗證 SEAL id 是否以 `bcs::to_bytes(character_id)` 結尾。
 fun id_belongs_to_character(id: &vector<u8>, character_id: ID): bool {
     let cid_bytes = bcs::to_bytes(&character_id);
     has_suffix(id, &cid_bytes)
 }
 
-/// `data` 是否以 `suffix` 結尾。提早 return false 短路。
 fun has_suffix(data: &vector<u8>, suffix: &vector<u8>): bool {
     let dlen = data.length();
     let slen = suffix.length();
     if (slen > dlen) return false;
-
     let offset = dlen - slen;
     let mut i = 0;
     while (i < slen) {
@@ -247,15 +601,117 @@ fun has_suffix(data: &vector<u8>, suffix: &vector<u8>): bool {
     true
 }
 
-// === Tests ===
+// ─── value-type constructors (used by cli PTB + recruit redeem) ──────
+
+public fun new_attribute_value(key: String, value: u64, seed: vector<u8>): AttributeValue {
+    AttributeValue { key, value, seed }
+}
+
+public fun new_physical_facts(
+    species: String,
+    gender: String,
+    body: String,
+    age_years: u8,
+): PhysicalFacts {
+    PhysicalFacts { species, gender, body, age_years }
+}
+
+public fun new_character_profile(
+    name: String,
+    description: String,
+    physical_facts: PhysicalFacts,
+): CharacterProfile {
+    CharacterProfile { name, description, physical_facts }
+}
+
+public fun new_media_asset(
+    kind: u8,
+    uri: String,
+    walrus_blob_id: vector<u8>,
+    metadata_uri: String,
+): MediaAsset {
+    MediaAsset { kind, uri, walrus_blob_id, metadata_uri }
+}
+
+public fun new_tag(
+    label: String,
+    source_event_id: Option<ID>,
+    affirmed_at_ms: u64,
+): Tag {
+    Tag { label, source_event_id, affirmed_at_ms }
+}
+
+/// Construct a DeathRecord. Caller owns the invariants on attribution
+/// (validity of `attributed_characters` IDs etc.).
+public fun new_death_record(
+    victim: ID,
+    recorded_at_ms: u64,
+    by_event: Option<ID>,
+    attributed_characters: vector<ID>,
+): DeathRecord {
+    DeathRecord { victim, recorded_at_ms, by_event, attributed_characters }
+}
+
+// ─── tests ───────────────────────────────────────────────────────────
 
 #[test_only]
 use std::unit_test::{assert_eq, destroy};
 
+/// Build a minimal Character + OwnerCap pair without going through
+/// mint_character_internal. Used by every cap-lifecycle / SEAL test below
+/// (predates the full mint path).
+#[test_only]
+public fun mint_character_for_testing(ctx: &mut TxContext): (Character, OwnerCap) {
+    let world_id = fake_id(ctx);
+    let character = Character {
+        id: object::new(ctx),
+        control_epoch: 1,
+        profile: CharacterProfile {
+            name: b"Test".to_string(),
+            description: b"".to_string(),
+            physical_facts: PhysicalFacts {
+                species: b"human".to_string(),
+                gender: b"unspecified".to_string(),
+                body: b"".to_string(),
+                age_years: 0,
+            },
+        },
+        attributes: vector[],
+        media_assets: vector[],
+        state: CharacterState {
+            world_id,
+            saga_id: option::none(),
+            current_scene_id: option::none(),
+            current_location_id: option::none(),
+            birth_ms: 0,
+        },
+        tags: vector[],
+        image_url: b"".to_string(),
+        death: option::none(),
+    };
+    let character_id = object::id(&character);
+    let owner_cap = OwnerCap {
+        id: object::new(ctx),
+        character_id,
+        world_id,
+        minted_at_ms: 0,
+        cumulative_revenue: 0,
+    };
+    (character, owner_cap)
+}
+
+#[test_only]
+fun fake_id(ctx: &mut TxContext): ID {
+    let uid = object::new(ctx);
+    let id = object::uid_to_inner(&uid);
+    object::delete(uid);
+    id
+}
+
 #[test]
 fun mint_character_sets_initial_epoch_and_links_owner_cap() {
     let mut ctx = tx_context::dummy();
-    let (character, owner_cap) = mint_character(&mut ctx);
+    let (character, owner_cap) = mint_character_for_testing(&mut ctx);
 
     assert_eq!(character.control_epoch, 1);
     assert_eq!(owner_cap.character_id, object::id(&character));
@@ -267,7 +723,7 @@ fun mint_character_sets_initial_epoch_and_links_owner_cap() {
 #[test]
 fun issue_creates_cap_bound_to_current_epoch() {
     let mut ctx = tx_context::dummy();
-    let (character, owner_cap) = mint_character(&mut ctx);
+    let (character, owner_cap) = mint_character_for_testing(&mut ctx);
 
     let cap = issue_control_cap(&character, &owner_cap, &mut ctx);
 
@@ -283,7 +739,7 @@ fun issue_creates_cap_bound_to_current_epoch() {
 #[test]
 fun revoke_invalidates_existing_cap() {
     let mut ctx = tx_context::dummy();
-    let (mut character, owner_cap) = mint_character(&mut ctx);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
     let cap = issue_control_cap(&character, &owner_cap, &mut ctx);
 
     revoke_all_control(&mut character, &owner_cap);
@@ -299,7 +755,7 @@ fun revoke_invalidates_existing_cap() {
 #[test]
 fun reassign_invalidates_old_cap_and_issues_fresh_one() {
     let mut ctx = tx_context::dummy();
-    let (mut character, owner_cap) = mint_character(&mut ctx);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
     let cap_a = issue_control_cap(&character, &owner_cap, &mut ctx);
 
     let cap_b = reassign_saga(&mut character, &owner_cap, &mut ctx);
@@ -318,13 +774,12 @@ fun reassign_invalidates_old_cap_and_issues_fresh_one() {
 #[test, expected_failure(abort_code = EWrongCharacter)]
 fun issue_with_wrong_owner_cap_aborts() {
     let mut ctx = tx_context::dummy();
-    let (char_a, owner_a) = mint_character(&mut ctx);
-    let (char_b, owner_b) = mint_character(&mut ctx);
+    let (char_a, owner_a) = mint_character_for_testing(&mut ctx);
+    let (char_b, owner_b) = mint_character_for_testing(&mut ctx);
 
     // owner_b 簽發 char_a 的 cap → 預期 abort
     let cap = issue_control_cap(&char_a, &owner_b, &mut ctx);
 
-    // 執行時抵達不了，但 compiler 要求 linear 值在所有路徑被消費。
     destroy(char_a);
     destroy(owner_a);
     destroy(char_b);
@@ -334,7 +789,6 @@ fun issue_with_wrong_owner_cap_aborts() {
 
 // --- SEAL approve tests ---
 
-/// SDK 端會構造 `<namespace> || bcs(character_id)`；測試模擬同樣的 layout。
 #[test_only]
 fun make_seal_id(namespace: vector<u8>, character: &Character): vector<u8> {
     let mut id = namespace;
@@ -345,11 +799,11 @@ fun make_seal_id(namespace: vector<u8>, character: &Character): vector<u8> {
 #[test]
 fun seal_approve_control_accepts_valid_cap_and_id() {
     let mut ctx = tx_context::dummy();
-    let (character, owner_cap) = mint_character(&mut ctx);
+    let (character, owner_cap) = mint_character_for_testing(&mut ctx);
     let cap = issue_control_cap(&character, &owner_cap, &mut ctx);
     let id = make_seal_id(b"pub", &character);
 
-    seal_approve_control(id, &character, &cap); // 不 abort 即通過
+    seal_approve_control(id, &character, &cap);
 
     destroy(character);
     destroy(owner_cap);
@@ -359,13 +813,11 @@ fun seal_approve_control_accepts_valid_cap_and_id() {
 #[test, expected_failure(abort_code = ENoAccess)]
 fun seal_approve_control_rejects_revoked_cap() {
     let mut ctx = tx_context::dummy();
-    let (mut character, owner_cap) = mint_character(&mut ctx);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
     let cap = issue_control_cap(&character, &owner_cap, &mut ctx);
     let id = make_seal_id(b"pub", &character);
 
     revoke_all_control(&mut character, &owner_cap);
-
-    // cap 還在持有者手上，但 epoch 對不上 → 預期 ENoAccess。
     seal_approve_control(id, &character, &cap);
 
     destroy(character);
@@ -376,11 +828,10 @@ fun seal_approve_control_rejects_revoked_cap() {
 #[test, expected_failure(abort_code = EInvalidEncryptionId)]
 fun seal_approve_control_rejects_id_for_other_character() {
     let mut ctx = tx_context::dummy();
-    let (char_a, owner_a) = mint_character(&mut ctx);
-    let (char_b, owner_b) = mint_character(&mut ctx);
+    let (char_a, owner_a) = mint_character_for_testing(&mut ctx);
+    let (char_b, owner_b) = mint_character_for_testing(&mut ctx);
     let cap_a = issue_control_cap(&char_a, &owner_a, &mut ctx);
 
-    // id 指向 char_b，卻拿 char_a 的 cap 想解 → 預期 EInvalidEncryptionId。
     let id = make_seal_id(b"pub", &char_b);
     seal_approve_control(id, &char_a, &cap_a);
 
@@ -394,7 +845,7 @@ fun seal_approve_control_rejects_id_for_other_character() {
 #[test]
 fun seal_approve_owner_accepts_valid_owner_cap_and_id() {
     let mut ctx = tx_context::dummy();
-    let (character, owner_cap) = mint_character(&mut ctx);
+    let (character, owner_cap) = mint_character_for_testing(&mut ctx);
     let id = make_seal_id(b"prv", &character);
 
     seal_approve_owner(id, &character, &owner_cap);
@@ -406,8 +857,8 @@ fun seal_approve_owner_accepts_valid_owner_cap_and_id() {
 #[test, expected_failure(abort_code = EInvalidEncryptionId)]
 fun seal_approve_owner_rejects_id_for_other_character() {
     let mut ctx = tx_context::dummy();
-    let (char_a, owner_a) = mint_character(&mut ctx);
-    let (char_b, owner_b) = mint_character(&mut ctx);
+    let (char_a, owner_a) = mint_character_for_testing(&mut ctx);
+    let (char_b, owner_b) = mint_character_for_testing(&mut ctx);
 
     let id = make_seal_id(b"prv", &char_b);
     seal_approve_owner(id, &char_a, &owner_a);
@@ -421,17 +872,81 @@ fun seal_approve_owner_rejects_id_for_other_character() {
 #[test]
 fun id_belongs_to_character_matches_bcs_suffix() {
     let mut ctx = tx_context::dummy();
-    let (character, owner_cap) = mint_character(&mut ctx);
+    let (character, owner_cap) = mint_character_for_testing(&mut ctx);
     let cid = object::id(&character);
 
-    // 有 namespace 前綴
     assert!(id_belongs_to_character(&make_seal_id(b"any-namespace", &character), cid));
-    // 空 namespace（純 character_id bytes）也算數
     assert!(id_belongs_to_character(&make_seal_id(b"", &character), cid));
-    // suffix 不符 → false
     assert!(!id_belongs_to_character(&b"clearly-not-the-right-bytes", cid));
-    // data 比 suffix 短 → false
     assert!(!id_belongs_to_character(&b"x", cid));
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+// --- death writer tests ---
+
+#[test]
+fun mark_dead_records_death_and_emits_event() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+    assert!(!is_dead(&character));
+
+    let record = new_death_record(
+        object::id(&character),
+        1000,
+        option::none(),
+        vector[],
+    );
+    mark_dead(&mut character, record);
+
+    assert!(is_dead(&character));
+    assert!(character.death.borrow().recorded_at_ms == 1000);
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+#[test]
+fun mark_dead_is_idempotent_keeps_first_record() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    let record_a = new_death_record(object::id(&character), 1000, option::none(), vector[]);
+    let record_b = new_death_record(object::id(&character), 2000, option::none(), vector[]);
+
+    mark_dead(&mut character, record_a);
+    mark_dead(&mut character, record_b); // no-op
+
+    // First record's timestamp survives.
+    assert_eq!(character.death.borrow().recorded_at_ms, 1000);
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+// --- find_attribute_value test ---
+
+#[test]
+fun find_attribute_value_returns_value_or_none() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    vector::push_back(
+        &mut character.attributes,
+        new_attribute_value(b"will".to_string(), 80, vector[]),
+    );
+    vector::push_back(
+        &mut character.attributes,
+        new_attribute_value(b"grace".to_string(), 60, vector[]),
+    );
+
+    let v_will = find_attribute_value(&character, &b"will".to_string());
+    assert!(v_will.is_some());
+    assert_eq!(*v_will.borrow(), 80);
+
+    let v_missing = find_attribute_value(&character, &b"unknown".to_string());
+    assert!(v_missing.is_none());
 
     destroy(character);
     destroy(owner_cap);

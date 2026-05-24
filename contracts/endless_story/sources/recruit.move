@@ -1,0 +1,449 @@
+/// Recruitment — voucher-driven character mint.
+///
+/// Two-step recruitment flow:
+///   1. **Mint voucher**: any address pays ENDLESS into a Saga's treasury
+///      via `mint_genesis_voucher`. Receives a `GenesisVoucher` object
+///      (transferrable, expires after TTL).
+///   2. **Redeem voucher**: the voucher holder hands it to the saga's
+///      storyteller, who co-signs `redeem_voucher_to_character`. The
+///      Character + OwnerCap + ControlCap are minted; voucher is consumed.
+///      Owner_recipient is fixed to `voucher.payer` — storyteller cannot
+///      redirect ownership.
+///
+/// **Design rationale**: separating the payment step from the mint step
+/// lets the off-chain generator preview character stats from
+/// `attribute_seed` before the storyteller commits. If the preview is
+/// rejected, the voucher can be left to expire (refund mechanic — Phase 2;
+/// for now, ENDLESS sits in the saga treasury as the cost of preview).
+///
+/// **Phase 1.5a (this commit)** ships voucher half only. **Phase 1.5b**
+/// adds the wild→saga `JoinIntent` flow (same module).
+///
+/// See AGENTS.md → 「鏈上架構」.
+module endless_story::recruit;
+
+use std::string::String;
+use sui::clock;
+use sui::coin::Coin;
+use sui::event;
+
+use endless_story::character::{Self, AttributeValue, CharacterProfile, ControlCap, MediaAsset, OwnerCap};
+use endless_story::currency::CURRENCY;
+use endless_story::saga::{Self, Saga, StorytellerCap};
+use endless_story::scene::{Self, Scene};
+use endless_story::world::{Self, World};
+
+// ─── errors ──────────────────────────────────────────────────────────
+
+#[error]
+const EVoucherSagaMismatch: vector<u8> = b"Voucher was issued for a different Saga";
+
+#[error]
+const EVoucherExpired: vector<u8> = b"Voucher TTL has elapsed";
+
+#[error]
+const EWorldSagaMismatch: vector<u8> = b"Saga does not belong to the given World";
+
+#[error]
+const ESceneSagaMismatch: vector<u8> = b"Scene does not belong to the given Saga";
+
+#[error]
+const EInvalidTtl: vector<u8> = b"Voucher TTL must be > 0";
+
+// ─── voucher resource ────────────────────────────────────────────────
+
+/// Tradable preview ticket: payer pays ENDLESS to a saga treasury and
+/// receives this object. The off-chain attribute generator (seeded by
+/// `attribute_seed`) shows them a preview character; if they accept, they
+/// hand the voucher to the saga storyteller who calls
+/// `redeem_voucher_to_character` to mint the real Character.
+///
+/// `payer` is fixed at mint time — even if the voucher is transferred to
+/// someone else, redemption mints the character's OwnerCap to the original
+/// payer's address. This prevents storyteller front-running.
+public struct GenesisVoucher has key, store {
+    id: UID,
+    saga_id: ID,
+    payer: address,
+    paid_amount: u64,
+    attribute_seed: vector<u8>,
+    hint: Option<String>,
+    minted_at_ms: u64,
+    expires_at_ms: u64,
+}
+
+// ─── events ──────────────────────────────────────────────────────────
+
+public struct GenesisVoucherMinted has copy, drop {
+    voucher_id: ID,
+    saga_id: ID,
+    payer: address,
+    paid_amount: u64,
+    expires_at_ms: u64,
+}
+
+public struct GenesisVoucherRedeemed has copy, drop {
+    voucher_id: ID,
+    saga_id: ID,
+    character_id: ID,
+    redeemed_at_ms: u64,
+}
+
+// ─── mint voucher ────────────────────────────────────────────────────
+
+/// Pay ENDLESS into the saga treasury; receive a `GenesisVoucher`.
+/// Payer = ctx.sender(). Storyteller does NOT need to sign this step —
+/// vouchers are permissionlessly mintable as long as you can pay.
+public fun mint_genesis_voucher(
+    saga: &mut Saga,
+    payment: Coin<CURRENCY>,
+    attribute_seed: vector<u8>,
+    hint: Option<String>,
+    ttl_ms: u64,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+): GenesisVoucher {
+    assert!(ttl_ms > 0, EInvalidTtl);
+    let now_ms = clock::timestamp_ms(clock);
+    let amount = saga::deposit_to_treasury(saga, payment);
+
+    let voucher = GenesisVoucher {
+        id: object::new(ctx),
+        saga_id: saga::saga_id(saga),
+        payer: ctx.sender(),
+        paid_amount: amount,
+        attribute_seed,
+        hint,
+        minted_at_ms: now_ms,
+        expires_at_ms: now_ms + ttl_ms,
+    };
+    event::emit(GenesisVoucherMinted {
+        voucher_id: object::id(&voucher),
+        saga_id: voucher.saga_id,
+        payer: voucher.payer,
+        paid_amount: amount,
+        expires_at_ms: voucher.expires_at_ms,
+    });
+    voucher
+}
+
+// ─── redeem voucher → character ──────────────────────────────────────
+
+/// Storyteller co-signs to mint the actual Character, consuming the
+/// voucher. `owner_recipient` is **fixed** to `voucher.payer` — the person
+/// who paid is the only legitimate owner of the resulting Character.
+/// Storyteller cannot redirect ownership.
+///
+/// Aborts if voucher's saga != target saga, or if voucher expired, or if
+/// world/scene don't match the saga (sanity), or if profile/attributes
+/// fail `character::mint_character_internal`'s validation.
+public fun redeem_voucher_to_character(
+    cap: &StorytellerCap,
+    saga: &mut Saga,
+    world: &World,
+    scene: &mut Scene,
+    voucher: GenesisVoucher,
+    profile: CharacterProfile,
+    media_assets: vector<MediaAsset>,
+    attributes: vector<AttributeValue>,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+): (OwnerCap, ControlCap) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(voucher.saga_id == saga_id, EVoucherSagaMismatch);
+
+    let now_ms = clock::timestamp_ms(clock);
+    assert!(now_ms <= voucher.expires_at_ms, EVoucherExpired);
+    assert!(world::world_id(world) == saga::world_id(saga), EWorldSagaMismatch);
+    assert!(scene::saga_id(scene) == saga_id, ESceneSagaMismatch);
+
+    let owner_recipient = voucher.payer;
+    let scene_id = scene::scene_id(scene);
+    let scene_location_id = scene::location_id(scene);
+
+    let (owner_cap, control_cap) = character::mint_character_internal(
+        world,
+        option::some(saga_id),
+        option::some(scene_id),
+        option::some(scene_location_id),
+        profile,
+        media_assets,
+        attributes,
+        owner_recipient,
+        now_ms,
+        ctx,
+    );
+
+    scene::add_character(scene, character::owner_cap_character_id(&owner_cap));
+    saga::increment_character_count(saga);
+
+    let voucher_id = object::id(&voucher);
+    let GenesisVoucher {
+        id,
+        saga_id: _,
+        payer: _,
+        paid_amount: _,
+        attribute_seed: _,
+        hint: _,
+        minted_at_ms: _,
+        expires_at_ms: _,
+    } = voucher;
+    id.delete();
+
+    event::emit(GenesisVoucherRedeemed {
+        voucher_id,
+        saga_id,
+        character_id: character::owner_cap_character_id(&owner_cap),
+        redeemed_at_ms: now_ms,
+    });
+
+    (owner_cap, control_cap)
+}
+
+// ─── views ───────────────────────────────────────────────────────────
+
+public fun voucher_saga_id(voucher: &GenesisVoucher): ID { voucher.saga_id }
+
+public fun voucher_payer(voucher: &GenesisVoucher): address { voucher.payer }
+
+public fun voucher_paid_amount(voucher: &GenesisVoucher): u64 { voucher.paid_amount }
+
+public fun voucher_attribute_seed(voucher: &GenesisVoucher): &vector<u8> {
+    &voucher.attribute_seed
+}
+
+public fun voucher_hint(voucher: &GenesisVoucher): &Option<String> { &voucher.hint }
+
+public fun voucher_minted_at_ms(voucher: &GenesisVoucher): u64 { voucher.minted_at_ms }
+
+public fun voucher_expires_at_ms(voucher: &GenesisVoucher): u64 { voucher.expires_at_ms }
+
+// ─── tests ───────────────────────────────────────────────────────────
+
+#[test_only]
+use endless_story::currency;
+#[test_only]
+use sui::coin;
+#[test_only]
+use std::unit_test::{assert_eq, destroy};
+
+#[test_only]
+fun setup_world_saga_scene(
+    ctx: &mut TxContext,
+    clock: &clock::Clock,
+): (World, world::AdminCap, Saga, StorytellerCap, Scene) {
+    let (mut world, admin_cap) = world::new_world_for_testing(
+        world::new_world_info(b"W".to_string(), b"w".to_string()),
+        world::new_currency_display(b"E".to_string(), b"E".to_string()),
+        world::new_world_rules(
+            vector[b"human".to_string()],
+            vector[world::new_attribute_definition(
+                b"will".to_string(),
+                b"Will".to_string(),
+                0,
+                100,
+            )],
+        ),
+        1000,
+        ctx,
+    );
+    let location = world::new_location_for_testing(
+        &admin_cap,
+        &mut world,
+        world::new_location_info(0, b"L".to_string(), b"l".to_string(), b"i".to_string()),
+        world::new_position(0, 0),
+        world::new_location_graph(vector[]),
+        1001,
+        ctx,
+    );
+    let (mut saga, cap) = saga::new_saga_for_testing(
+        &mut world,
+        saga::kind_standard(),
+        b"S".to_string(),
+        b"s".to_string(),
+        b"u".to_string(),
+        4000,
+        5000,
+        1000,
+        vector[world::location_id(&location)],
+        @0xA,
+        1002,
+        clock,
+        ctx,
+    );
+    let scene = scene::new_scene_for_testing(
+        &cap,
+        &mut saga,
+        &location,
+        scene::new_scene_info(
+            b"Scene".to_string(),
+            b"d".to_string(),
+            b"m".to_string(),
+        ),
+        scene::new_scene_access(0),
+        100,
+        100,
+        scene::new_scene_params(500, 300, 200),
+        vector[],
+        1003,
+        ctx,
+    );
+    world::destroy_location_for_testing(location);
+    (world, admin_cap, saga, cap, scene)
+}
+
+#[test_only]
+fun cleanup_world_saga(
+    world: World,
+    admin_cap: world::AdminCap,
+    saga: Saga,
+    storyteller_cap: StorytellerCap,
+) {
+    saga::destroy_saga_for_testing(saga, storyteller_cap);
+    world::destroy_world_for_testing(world, admin_cap);
+}
+
+#[test_only]
+fun sample_profile(): CharacterProfile {
+    character::new_character_profile(
+        b"Test Character".to_string(),
+        b"".to_string(),
+        character::new_physical_facts(
+            b"human".to_string(),
+            b"unspecified".to_string(),
+            b"".to_string(),
+            25,
+        ),
+    )
+}
+
+#[test_only]
+fun sample_attributes(): vector<AttributeValue> {
+    vector[character::new_attribute_value(b"will".to_string(), 80, vector[1, 2, 3])]
+}
+
+#[test]
+fun mint_voucher_deposits_payment_and_emits() {
+    let mut ctx = tx_context::dummy();
+    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, mut saga, storyteller_cap, scene) = setup_world_saga_scene(
+        &mut ctx,
+        &clock,
+    );
+
+    let mut treasury_cap = currency::new_treasury_for_testing(&mut ctx);
+    let payment = coin::mint(&mut treasury_cap, 5_000, &mut ctx);
+
+    let voucher = mint_genesis_voucher(
+        &mut saga,
+        payment,
+        vector[42, 43, 44],
+        option::none(),
+        60_000, // 60s TTL
+        &clock,
+        &mut ctx,
+    );
+
+    assert_eq!(voucher_paid_amount(&voucher), 5_000);
+    assert_eq!(saga::treasury_balance(&saga), 5_000);
+    assert!(voucher_expires_at_ms(&voucher) > voucher_minted_at_ms(&voucher));
+
+    destroy(voucher);
+    destroy(treasury_cap);
+    destroy(scene);
+    cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
+
+#[test]
+fun redeem_voucher_mints_character_and_consumes_voucher() {
+    let mut ctx = tx_context::dummy();
+    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, mut saga, storyteller_cap, mut scene) = setup_world_saga_scene(
+        &mut ctx,
+        &clock,
+    );
+
+    let mut treasury_cap = currency::new_treasury_for_testing(&mut ctx);
+    let payment = coin::mint(&mut treasury_cap, 3_000, &mut ctx);
+    let voucher = mint_genesis_voucher(
+        &mut saga,
+        payment,
+        vector[],
+        option::none(),
+        60_000,
+        &clock,
+        &mut ctx,
+    );
+
+    let chars_before = saga::character_count(&saga);
+    let (owner_cap, control_cap) = redeem_voucher_to_character(
+        &storyteller_cap,
+        &mut saga,
+        &world,
+        &mut scene,
+        voucher,
+        sample_profile(),
+        vector[],
+        sample_attributes(),
+        &clock,
+        &mut ctx,
+    );
+
+    assert_eq!(saga::character_count(&saga), chars_before + 1);
+    assert!(character::owner_cap_world_id(&owner_cap) == world::world_id(&world));
+    assert!(character::control_cap_epoch(&control_cap) == 1);
+
+    destroy(owner_cap);
+    destroy(control_cap);
+    destroy(treasury_cap);
+    destroy(scene);
+    cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = EVoucherExpired)]
+fun redeem_expired_voucher_aborts() {
+    let mut ctx = tx_context::dummy();
+    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, mut saga, storyteller_cap, mut scene) = setup_world_saga_scene(
+        &mut ctx,
+        &clock,
+    );
+
+    let mut treasury_cap = currency::new_treasury_for_testing(&mut ctx);
+    let payment = coin::mint(&mut treasury_cap, 1_000, &mut ctx);
+    let voucher = mint_genesis_voucher(
+        &mut saga,
+        payment,
+        vector[],
+        option::none(),
+        1_000, // 1s TTL
+        &clock,
+        &mut ctx,
+    );
+
+    // Advance time past expiry.
+    sui::clock::increment_for_testing(&mut clock, 2_000);
+
+    let (owner_cap, control_cap) = redeem_voucher_to_character(
+        &storyteller_cap,
+        &mut saga,
+        &world,
+        &mut scene,
+        voucher,
+        sample_profile(),
+        vector[],
+        sample_attributes(),
+        &clock,
+        &mut ctx,
+    ); // ← aborts EVoucherExpired
+
+    destroy(owner_cap);
+    destroy(control_cap);
+    destroy(treasury_cap);
+    destroy(scene);
+    cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
