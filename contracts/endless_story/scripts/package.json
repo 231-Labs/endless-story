@@ -1,0 +1,16 @@
+{
+  "name": "endless-story-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke": "tsx smoke.ts"
+  },
+  "dependencies": {
+    "@mysten/sui": "^1.21.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.5.0"
+  }
+}
