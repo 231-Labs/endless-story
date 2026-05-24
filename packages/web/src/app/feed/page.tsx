@@ -45,7 +45,7 @@ export default async function FeedPage({
     <main className="min-h-screen bg-canvas">
       <SiteNav />
       <header className="bg-canvas">
-        <div className="px-5 pb-6 pt-8 sm:px-10 sm:pb-10 sm:pt-11">
+        <div className="px-5 pb-2 pt-8 sm:px-10 sm:pb-3 sm:pt-11">
           <div className="mx-auto max-w-6xl">
             <PageLeadTitleBlock
               eyebrow={`${saga.name} · 第 ${saga.currentDay} 日`}
@@ -85,7 +85,7 @@ export default async function FeedPage({
         </div>
       </header>
 
-      <section className="px-5 py-8 sm:px-10 sm:py-14">
+      <section className="px-5 pb-8 pt-4 sm:px-10 sm:pb-14 sm:pt-5">
         <div className="mx-auto max-w-6xl">
           {visible.length === 0 ? (
             <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
