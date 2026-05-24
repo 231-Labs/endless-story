@@ -1,11 +1,29 @@
 /**
  * @endless-story/memwal — vendored MemWalManual client.
  *
- * Mirrors the upstream `@mysten-incubation/memwal/manual` entry point.
- * Patches against the upstream sources land in `manual.ts`; see README.md.
+ * Two surfaces:
+ *   - SagaMemoryClient / OwnerAuditClient — character-bound wrappers that
+ *     encode the read-only-Owner vs read-write-Saga split in the type system.
+ *     Prefer these from app code.
+ *   - MemWalManual — the patched upstream class. Exposed for advanced cases
+ *     where the wrappers' surface is too narrow.
+ *
+ * Patches against the upstream sources live in `manual.ts`; see README.md.
  */
 
 export { MemWalManual } from "./manual.js";
+
+export {
+    SagaMemoryClient,
+    OwnerAuditClient,
+} from "./character-clients.js";
+
+export type {
+    CharacterMemoryReader,
+    CharacterMemoryWriter,
+    SagaClientConfig,
+    OwnerAuditClientConfig,
+} from "./character-clients.js";
 
 export type {
     MemWalManualConfig,
