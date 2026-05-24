@@ -540,50 +540,38 @@ export class MemWalManual {
     /**
      * SEAL-encrypt a payload.
      *
-     * LOW-24 (namespace scoping): The `id` passed to SEAL is the on-chain
-     * policy identifier used by `seal_approve` to gate decryption. We scope
-     * encryption keys by namespace so a delegate authorized to decrypt
-     * namespace "A" cannot unwrap ciphertext for namespace "B".
+     * endless-story patch (B2): The on-chain policy is
+     * `endless_story::character::seal_approve_{control,owner}`, both of which
+     * verify `has_suffix(id, bcs::to_bytes(character_id))`. The id MUST
+     * therefore end with the 32 raw bytes of the bound character's object id
+     * (hex on the SEAL side, raw on the Move side).
      *
-     * ENG-1725 fix: The on-chain `seal_approve` does
-     * `has_suffix(id, bcs::to_bytes(account.owner))` for the owner-caller
-     * branch. The id MUST therefore end with the caller's 32 raw address
-     * bytes (in hex form on the SEAL side, raw on the Move side). The
-     * previous LOW-24 layout — `hex(accountId) || hex(namespace)` — used
-     * the MemWalAccount object id (not the owner address) and put the
-     * namespace as the suffix, so `has_suffix` always failed and owners
-     * could no longer recall their own manually-remembered data. (Delegate
-     * decrypt still worked because the delegate branch skips the suffix
-     * check.)
+     * Sui `ID` BCS-encodes as 32 raw bytes (fixed-size, no length prefix),
+     * identical in shape to a Sui address — so we can reuse the same
+     * `0x...32-byte hex` form.
      *
      * Layout:
-     *   id = hex(utf8(namespace)) || hex(callerAddress[2:])
+     *   id = hex(utf8(namespace)) || hex(characterId[2:])
      *
-     * - namespace is the prefix → still distinct keys per namespace, so the
-     *   LOW-24 isolation property is preserved (different ns → different
-     *   SEAL key).
-     * - caller address (32 bytes) is the suffix → `has_suffix` passes for
-     *   owner mode; delegate mode still passes via the delegate-list check
-     *   in `seal_approve` regardless of suffix.
+     * - namespace is the prefix → distinct keys per namespace within one
+     *   character (preserves the upstream LOW-24 isolation property between
+     *   sub-stores of the same character).
+     * - characterId (32 bytes) is the suffix → `has_suffix` passes for both
+     *   Saga (ControlCap) and Owner (OwnerCap) variants, since both
+     *   `seal_approve_*` entries use the same character_id check.
      *
-     * NOTE: Ciphertext written between the original LOW-24 fix and this fix
-     * (id = accountHex + nsHex) is unrecoverable by the owner caller. There
-     * is no production data in that window per the team; if recovery is
-     * needed, decrypt via a delegate key (delegate branch ignores suffix).
+     * Upstream behaviour for reference: suffix was caller address; that
+     * model assumed `seal_approve` was gating per-caller, not per-character.
      */
     private async sealEncrypt(plaintext: Uint8Array, namespace: string): Promise<Uint8Array> {
         const sealClient = await this.getSealClient();
 
-        // Build a namespace-scoped SEAL id whose final 32 bytes are the
-        // caller's address bytes, so the on-chain `seal_approve` owner-branch
-        // `has_suffix(id, bcs::to_bytes(owner))` check passes. Hex-encoded
-        // throughout so the id is a stable ASCII hex string.
-        const callerAddress = await this.getOwnerAddress();
-        const callerHex = callerAddress.startsWith("0x")
-            ? callerAddress.slice(2)
-            : callerAddress;
+        // endless-story patch (B2): bind SEAL id to the character, not the caller.
+        const characterHex = this.config.characterId.startsWith("0x")
+            ? this.config.characterId.slice(2)
+            : this.config.characterId;
         const nsHex = bytesToHex(new TextEncoder().encode(namespace));
-        const scopedId = `${nsHex}${callerHex}`;
+        const scopedId = `${nsHex}${characterHex}`;
 
         const result = await sealClient.encrypt({
             threshold: this.sealThreshold,

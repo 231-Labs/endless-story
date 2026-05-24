@@ -261,6 +261,15 @@ export interface MemWalManualConfig {
     packageId: string;
     /** MemWalAccount object ID (for SEAL seal_approve) */
     accountId: string;
+    /**
+     * endless-story patch (B2): Character object id this client is bound to.
+     * SEAL ids are scoped to `nsHex + bcs(characterId)` so the on-chain
+     * `endless_story::character::seal_approve_*` `has_suffix` check matches
+     * only this character's encrypted blobs. Required when the consumer is
+     * driving the character-bound access model; ignored if you somehow still
+     * have a code path going through the legacy account flow.
+     */
+    characterId: string;
     /** Sui network (default: mainnet) */
     suiNetwork?: "testnet" | "mainnet";
     /**
