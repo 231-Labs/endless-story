@@ -1,29 +1,23 @@
 import type { Recruitment } from '@endless-story/shared';
-import { getRecruitmentById, listActiveRecruitments } from '@/mocks/recruitments';
-import { USE_MOCK } from './config';
-import { httpGet } from './http';
+import { getRecruitmentById } from '@/mocks/recruitments';
+import { getStoreRecruitment, listOpenStoreRecruitments } from '@/lib/actions/recruitments-store';
 
 /**
- * Recruitments API
+ * Recruitments API — facade that reads from the admin-editable JSON store
+ * (`web/data/recruitments.json`). The store seeds itself from the mock list
+ * on first read, so dev runs already have content.
  *
- * 後端對應 endpoints：
- *   GET  /recruitments?status=open       → Recruitment[]
- *   GET  /recruitments/{id}              → Recruitment | 404
- *   POST /recruitments/{id}/voucher      → { voucherObjectId }   (擲牌、簽 mint voucher tx — 走 dapp-kit)
- *
- * Mint voucher 流程在前端走 dapp-kit，backend 只負責提供 recruitment metadata。
+ * No more USE_MOCK gating: the JSON store IS the source. The mock acts as
+ * initial seed only.
  */
 
 export async function listOpenRecruitments(): Promise<Recruitment[]> {
-  if (USE_MOCK) return listActiveRecruitments();
-  return httpGet<Recruitment[]>('/recruitments', { query: { status: 'open' } });
+  return listOpenStoreRecruitments();
 }
 
 export async function getRecruitment(id: string): Promise<Recruitment | null> {
-  if (USE_MOCK) return getRecruitmentById(id) ?? null;
-  try {
-    return await httpGet<Recruitment>(`/recruitments/${id}`);
-  } catch {
-    return null;
-  }
+  const fromStore = await getStoreRecruitment(id);
+  if (fromStore) return fromStore;
+  // Fallback to mock for static / test ids that aren't in the store.
+  return getRecruitmentById(id) ?? null;
 }
