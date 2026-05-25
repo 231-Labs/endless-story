@@ -89,3 +89,124 @@ export async function listCharactersForOwner(
     const characters = await getManyCharacters(client, caps.map((c) => c.characterId));
     return { caps, characters };
 }
+
+/**
+ * One row of the `CharacterMinted` event log (mirrors the on-chain
+ * `character::CharacterMinted` struct, see codegen).
+ */
+export interface CharacterMintedSummary {
+    characterId: string;
+    worldId: string;
+    sagaId: string | null;
+    sceneId: string | null;
+    ownerCapId: string;
+    controlCapId: string;
+    name: string;
+    owner: string;
+    mintedAtMs: string;
+}
+
+export interface ListMintedOptions {
+    /**
+     * Filter by saga membership:
+     *   - undefined → all characters (any saga + wild)
+     *   - string    → only this saga
+     *   - null      → only "wild" characters (saga_id == None on chain)
+     */
+    sagaId?: string | null;
+    /** Cap on events scanned. Default unlimited (paginate to end). */
+    maxEvents?: number;
+}
+
+/**
+ * List every Character ever minted from this package, via event log.
+ *
+ * Sui has no "all characters" index, but `CharacterMinted` events form
+ * a complete log we can scan. Latest-first, deduplicated by character_id
+ * (a mint event fires exactly once per character so dedup is just a
+ * safety net for any future re-publish edge cases).
+ *
+ * **Caveats**: events from BURNED / TRANSFERRED-OUT characters still
+ * appear; caller should treat `getManyCharacters` errors as "no longer
+ * exists" and drop those rows.
+ */
+export async function listMintedCharacterSummaries(
+    client: SuiClient,
+    packageId: string,
+    opts: ListMintedOptions = {},
+): Promise<CharacterMintedSummary[]> {
+    const eventType = `${packageId}::character::CharacterMinted`;
+    const out: CharacterMintedSummary[] = [];
+    const seen = new Set<string>();
+    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
+    const cap = opts.maxEvents ?? Infinity;
+
+    for (;;) {
+        const page = await client.queryEvents({
+            query: { MoveEventType: eventType },
+            cursor,
+            limit: 50,
+            order: 'descending',
+        });
+        for (const ev of page.data) {
+            const parsed = ev.parsedJson as Partial<{
+                character_id: string;
+                world_id: string;
+                saga_id: string | { Some: string } | null;
+                scene_id: string | { Some: string } | null;
+                owner_cap_id: string;
+                control_cap_id: string;
+                name: string;
+                owner: string;
+                minted_at_ms: string | number;
+            }>;
+            const characterId = parsed.character_id;
+            if (!characterId || seen.has(characterId)) continue;
+
+            // Move Option<ID> serializes as string | null in event JSON
+            // (Sui's parsedJson collapses Some/None). Defensive parse below.
+            const sagaIdRaw = parsed.saga_id;
+            const sagaId =
+                sagaIdRaw == null ? null : typeof sagaIdRaw === 'string' ? sagaIdRaw : sagaIdRaw.Some ?? null;
+            const sceneIdRaw = parsed.scene_id;
+            const sceneId =
+                sceneIdRaw == null ? null : typeof sceneIdRaw === 'string' ? sceneIdRaw : sceneIdRaw.Some ?? null;
+
+            // saga filter
+            if (opts.sagaId !== undefined && opts.sagaId !== sagaId) continue;
+
+            seen.add(characterId);
+            out.push({
+                characterId,
+                worldId: parsed.world_id ?? '',
+                sagaId,
+                sceneId,
+                ownerCapId: parsed.owner_cap_id ?? '',
+                controlCapId: parsed.control_cap_id ?? '',
+                name: parsed.name ?? '',
+                owner: parsed.owner ?? '',
+                mintedAtMs: String(parsed.minted_at_ms ?? '0'),
+            });
+            if (out.length >= cap) return out;
+        }
+        if (!page.hasNextPage || !page.nextCursor) break;
+        cursor = page.nextCursor;
+    }
+    return out;
+}
+
+/**
+ * Composes `listMintedCharacterSummaries` + `getManyCharacters`.
+ * Returns the live Character objects in event-mint order (newest first).
+ */
+export async function listMintedCharacters(
+    client: SuiClient,
+    packageId: string,
+    opts: ListMintedOptions = {},
+) {
+    const summaries = await listMintedCharacterSummaries(client, packageId, opts);
+    if (summaries.length === 0)
+        return { summaries, characters: [] as Awaited<ReturnType<typeof getManyCharacters>> };
+    const characters = await getManyCharacters(client, summaries.map((s) => s.characterId));
+    return { summaries, characters };
+}

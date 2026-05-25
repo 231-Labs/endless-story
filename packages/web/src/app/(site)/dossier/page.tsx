@@ -63,9 +63,9 @@ export default async function DossierPage({
   // ──────────── List view ────────────
   if (!characterId) {
     const filter = parseFilter(params.filter);
-    // filter=mine + real wallet address → chain query for owned chars only.
-    // Other filters (all / saga / external) still go through the mock list
-    // until Phase 3 wires saga-wide + global queries.
+    // Facade is chain-first when deployed; mock fallback otherwise.
+    // `filter=mine` branches at the facade level (uses OwnerCap query
+    // for cheaper round-trip than scanning all CharacterMinted events).
     const useOwnedQuery =
       filter === 'mine' && viewerWallet != null && /^0x[0-9a-fA-F]{64}$/.test(viewerWallet);
     const characters = useOwnedQuery

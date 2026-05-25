@@ -123,6 +123,40 @@ export async function fetchOnChainCharactersByOwner(wallet: string): Promise<Cha
     return out;
 }
 
+/**
+ * Fetch all Characters ever minted from the deployed package — uses SDK's
+ * CharacterMinted event log + multi-get. `opts.sagaId`:
+ *   - undefined → everyone (saga + wild)
+ *   - string    → only this saga
+ *   - null      → only "wild" (saga_id == None on chain)
+ *
+ * Empty array if not deployed. Burned/transferred-out characters get
+ * silently dropped (multi-get returns errors → skipped here).
+ */
+export async function fetchOnChainCharacters(opts: { sagaId?: string | null } = {}): Promise<Character[]> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return [];
+    const client = makeSuiClient({ network: resolveNetwork() });
+    let result;
+    try {
+        result = await read.character.listMintedCharacters(client, pkg, { sagaId: opts.sagaId });
+    } catch (err) {
+        console.warn('[character-read] listMintedCharacters failed:', err);
+        return [];
+    }
+    const out: Character[] = [];
+    // summaries and characters are 1:1 by index; summaries carry the
+    // `owner` we can stamp without an extra getObject roundtrip.
+    result.characters.forEach((c, i) => {
+        const json = (c as { json?: unknown }).json as ChainCharacter | undefined;
+        const charId = (c as { objectId?: string }).objectId;
+        if (!json || !charId) return; // burned / transferred → skip
+        const owner = result.summaries[i]?.owner ?? '';
+        out.push(mapChainCharacter(charId, json, owner));
+    });
+    return out;
+}
+
 function mapGender(raw: string): Character['gender'] {
     if (raw === '男' || raw.toLowerCase() === 'male') return 'male';
     if (raw === '女' || raw.toLowerCase() === 'female') return 'female';

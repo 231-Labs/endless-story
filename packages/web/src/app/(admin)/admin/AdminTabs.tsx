@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 
 const TABS = [
   { key: '/admin', label: '總覽' },
@@ -11,6 +12,11 @@ const TABS = [
 
 export function AdminTabs() {
   const pathname = usePathname();
+  const { isSagaAdmin } = useSagaAdmin();
+
+  // Hide the entire admin tab bar for non-班主 — gating the page contents
+  // alone would still leak the existence + names of admin routes.
+  if (!isSagaAdmin) return null;
 
   return (
     <nav className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2 transition-all duration-500 ease-out">
