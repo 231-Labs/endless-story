@@ -1,0 +1,195 @@
+{
+  "id": {
+    "address": "endless_story",
+    "name": "currency"
+  },
+  "doc": " Native protocol coin for Endless Story.\n\n `ENDLESS` is the unit used by saga fees, recruitment vouchers, event\n resolution flows, and revenue splits. One-time witness pattern: the\n `CURRENCY` struct is consumed by `init` and never re-instantiated, so\n supply is bounded by the single `TreasuryCap<CURRENCY>` issued at\n publish time.\n\n **Decimals:** 6 (1 ENDLESS = 1_000_000 base units).\n\n **TreasuryCap owner:** at publish time the cap is transferred to the\n publisher (the address running `sui client publish`). Bootstrap is\n expected to transfer it onward to the runner address — see\n `@endless-story/cli`.\n\n **Metadata:** registered via `coin_registry::new_currency_with_otw`\n (Sui framework 1.45+). The `MetadataCap<CURRENCY>` is **retained**\n (transferred to publisher alongside `TreasuryCap`) so we keep the\n option to update symbol / description / icon_url later. Bootstrap\n can decide whether to freeze (via `delete_metadata_cap`) once the\n final brand is locked.\n\n Phase 1.1 — first module after Phase 0 publish skeleton.",
+  "immediate_dependencies": [
+    {
+      "address": "std",
+      "name": "string"
+    },
+    {
+      "address": "sui",
+      "name": "coin"
+    },
+    {
+      "address": "sui",
+      "name": "coin_registry"
+    },
+    {
+      "address": "sui",
+      "name": "event"
+    },
+    {
+      "address": "sui",
+      "name": "transfer"
+    },
+    {
+      "address": "sui",
+      "name": "tx_context"
+    }
+  ],
+  "attributes": [],
+  "functions": {
+    "init": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Private",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "witness",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "endless_story",
+                "name": "currency"
+              },
+              "name": "CURRENCY",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "mint": {
+      "source_index": 1,
+      "index": 1,
+      "doc": " Mint `amount` (base units) of ENDLESS to `recipient`. Caller must hold\n the `TreasuryCap<CURRENCY>` issued at publish time.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "treasury_cap",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "coin"
+                  },
+                  "name": "TreasuryCap",
+                  "type_arguments": [
+                    {
+                      "phantom": true,
+                      "argument": {
+                        "Datatype": {
+                          "module": {
+                            "address": "endless_story",
+                            "name": "currency"
+                          },
+                          "name": "CURRENCY",
+                          "type_arguments": []
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type_": "u64"
+        },
+        {
+          "name": "recipient",
+          "type_": "address"
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    }
+  },
+  "structs": {
+    "CURRENCY": {
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "dummy_field": {
+            "index": 0,
+            "type_": "bool"
+          }
+        }
+      }
+    },
+    "CurrencyMinted": {
+      "index": 1,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "recipient": {
+            "index": 0,
+            "doc": null,
+            "type_": "address"
+          },
+          "amount": {
+            "index": 1,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}
