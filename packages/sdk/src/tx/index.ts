@@ -4,20 +4,24 @@
  * One file per Move module. Each builder takes a `Transaction` and pushes
  * the calls — the caller decides when to sign / submit.
  *
- * **Pattern:** thin wrappers around generated bindings; add ergonomic
- * argument shapes (string IDs → `tx.object(id)`, etc.) but no business logic.
+ * **Pattern:** thin wrappers around generated bindings; auto-inject the
+ * deployed packageId, expose typed argument shapes. No business logic.
+ * Each module also re-exports `raw` (the full generated namespace) as an
+ * escape hatch for advanced cases.
  *
- * Phase 1 modules land here in order: currency → world → saga → scene →
- * character (including voucher mint/redeem) → event → commitment.
+ * Usage:
+ * ```ts
+ * import { tx } from '@endless-story/sdk';
+ * const ptb = new Transaction();
+ * const reqs = ptb.add(tx.recruit.noRequirements());
+ * ptb.add(tx.recruit.mintGenesisVoucher({ saga, payment, ... }));
+ * ```
  */
 
-// Phase 0: only character.move exists.
-export * as character from './character';
-
-// Phase 1+: re-exports added as modules ship.
-// export * as currency from './currency';
-// export * as world from './world';
-// export * as saga from './saga';
-// export * as scene from './scene';
-// export * as event from './event';
-// export * as commitment from './commitment';
+export * as currency from './currency.js';
+export * as faucet from './faucet.js';
+export * as world from './world.js';
+export * as saga from './saga.js';
+export * as scene from './scene.js';
+export * as character from './character.js';
+export * as recruit from './recruit.js';

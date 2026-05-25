@@ -1,18 +1,24 @@
 /**
  * View queries — read-only on-chain data fetchers.
  *
- * One file per Move module. Each query takes a `SuiClient` + the relevant
- * object ID(s) and returns a parsed TypeScript shape (struct fields decoded).
+ * One file per Move module. Each `get<Name>(client, id)` returns the
+ * parsed TypeScript shape (struct fields decoded via `MoveStruct.get`).
  *
- * **Pattern:** wrap `client.getObject` / `getDynamicFields` / `multiGetObjects`
- * with type-safe decoders generated from bcs schemas.
+ * **Pattern:** thin — no caching, no aggregation, no derived fields.
+ * Each module also re-exports `raw` for event parsing or advanced cases.
  *
- * Phase 1 modules land here in order matching tx/.
+ * Usage:
+ * ```ts
+ * import { read, makeSuiClient } from '@endless-story/sdk';
+ * const client = makeSuiClient({ network: 'devnet' });
+ * const voucher = await read.recruit.getGenesisVoucher(client, '0x…');
+ * ```
  */
 
-// Phase 0: nothing yet.
-// export * as character from './character';
-// export * as world from './world';
-// export * as saga from './saga';
-
-export const _PHASE_0_PLACEHOLDER = true as const;
+export * as currency from './currency.js';
+export * as faucet from './faucet.js';
+export * as world from './world.js';
+export * as saga from './saga.js';
+export * as scene from './scene.js';
+export * as character from './character.js';
+export * as recruit from './recruit.js';
