@@ -7,9 +7,11 @@
     "deploy": "tsx scripts/deploy.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "reset": "tsx scripts/reset.ts",
+    "test-e2e": "tsx scripts/test-recruit-e2e.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@endless-story/llm": "workspace:*",
     "@endless-story/sdk": "workspace:*",
     "@endless-story/shared": "workspace:*",
     "@mysten/sui": "^2.16.0"

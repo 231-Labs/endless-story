@@ -10,6 +10,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@endless-story/llm':
+        specifier: workspace:*
+        version: link:../llm
       '@endless-story/sdk':
         specifier: workspace:*
         version: link:../sdk
@@ -101,9 +104,21 @@ importers:
 
   packages/web:
     dependencies:
+      '@endless-story/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@endless-story/memwal':
+        specifier: workspace:*
+        version: link:../memwal
+      '@endless-story/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@endless-story/shared':
         specifier: workspace:*
         version: link:../shared
+      '@mysten/sui':
+        specifier: ^2.17.0
+        version: 2.17.0(typescript@5.9.3)
       framer-motion:
         specifier: ^12.40.0
         version: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)

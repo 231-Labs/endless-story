@@ -17,9 +17,12 @@ export interface DeploymentSnapshot {
   packageId: string;
   adminCapId: string;
   worldId?: string;
+  locationIds?: string[];
   sagaId?: string;
   storytellerCapId?: string;
   sceneIds?: string[];
+  faucetId?: string;
+  faucetAdminCapId?: string;
   demoCharacters?: DemoCharacterRef[];
   storyId?: string;
 }
@@ -31,9 +34,12 @@ export function renderContractIdsFile(snap: DeploymentSnapshot, deployedAt: stri
     packageId: snap.packageId,
     adminCapId: snap.adminCapId,
     worldId: snap.worldId ?? '',
+    locationIds: snap.locationIds ?? [],
     sagaId: snap.sagaId ?? '',
     storytellerCapId: snap.storytellerCapId ?? '',
     sceneIds: snap.sceneIds ?? [],
+    faucetId: snap.faucetId ?? '',
+    faucetAdminCapId: snap.faucetAdminCapId ?? '',
     demoCharacters: snap.demoCharacters ?? [],
     storyId: snap.storyId ?? '',
     deployedAt,
@@ -71,9 +77,12 @@ export interface EndlessStoryDeployment {
   packageId: string;
   adminCapId: string;
   worldId: string;
+  locationIds: string[];
   sagaId: string;
   storytellerCapId: string;
   sceneIds: string[];
+  faucetId: string;
+  faucetAdminCapId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;

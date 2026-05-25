@@ -43,12 +43,18 @@ export interface EndlessStoryDeployment {
   // ── Phase 1+ fields (empty until corresponding Move module ships) ──
   /** World shared object — Phase 1.2 (world.move). */
   worldId: string;
+  /** Location shared objects keyed to scenes — Phase 2 bootstrap. */
+  locationIds: string[];
   /** Saga shared object — Phase 1.3 (saga.move). */
   sagaId: string;
   /** StorytellerCap delegated to runner — Phase 1.3 (saga.move). */
   storytellerCapId: string;
   /** Anchor scenes within the saga — Phase 1.4 (scene.move). */
   sceneIds: string[];
+  /** Faucet shared object — Phase 2 bootstrap (public drip endpoint). */
+  faucetId: string;
+  /** FaucetAdminCap — Phase 2 bootstrap (admin reseed / config). */
+  faucetAdminCapId: string;
   /** Genesis cast — Phase 1.5 (character.move voucher redeem). */
   demoCharacters: DemoCharacterRef[];
   /** Story-seed JSON id used by bootstrap (e.g. `spring-snow`). */
@@ -67,9 +73,12 @@ export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   packageId: '',
   adminCapId: '',
   worldId: '',
+  locationIds: [],
   sagaId: '',
   storytellerCapId: '',
   sceneIds: [],
+  faucetId: '',
+  faucetAdminCapId: '',
   demoCharacters: [],
   storyId: '',
   deployedAt: '',
