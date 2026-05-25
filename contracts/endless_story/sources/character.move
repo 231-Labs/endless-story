@@ -3,11 +3,14 @@
 /// **Scope 1 (legacy):** Character + OwnerCap base structure.
 /// **Scope 2 (legacy):** ControlCap + lifecycle (issue / revoke / reassign).
 /// **Scope 3 (legacy):** SEAL approve (control / owner) + id layout helper.
-/// **Phase 1.5a (new):** Character struct enrichment (profile / physical /
-///   attributes / media / tags / state / image / death) + three mint paths
-///   (genesis / collectible / internal) + validation invariants + death
-///   writer + value-type constructors. Voucher-driven mint lives in the
-///   sibling `recruit` module which calls `mint_character_internal` here.
+/// **Phase 1.5a (prior):** Character struct enrichment + three mint paths
+///   + validation invariants + death writer + value-type constructors.
+///   Voucher-driven mint lives in the sibling `recruit` module.
+/// **Phase 1.5b (new):** ControlCap.saga_id binding + scene movement
+///   (storyteller-signed) + wild release (storyteller / admin) + wild walk
+///   (owner-signed) + ControlCapKey DOF for wild-mode self-held cap +
+///   `take_wild_control_cap` / `bind_to_saga` public(package) helpers for
+///   recruit::accept_character_into_saga.
 ///
 /// **Cap matrix:**
 ///   - `OwnerCap`   = root ownership (transferrable; holder = owner)
@@ -20,10 +23,11 @@ module endless_story::character;
 use std::string::String;
 use sui::bcs;
 use sui::clock;
+use sui::dynamic_object_field as dof;
 use sui::event;
 
 use endless_story::saga::{Self, Saga, StorytellerCap};
-use endless_story::world::{Self, World};
+use endless_story::world::{Self, AdminCap, Location, World};
 use endless_story::scene::{Self, Scene};
 
 // ─── errors ──────────────────────────────────────────────────────────
@@ -48,6 +52,38 @@ const EWorldSagaMismatch: vector<u8> = b"Saga does not belong to the given World
 
 #[error]
 const ESceneSagaMismatch: vector<u8> = b"Scene does not belong to the given Saga";
+
+// ─── errors added in 1.5b ────────────────────────────────────────────
+
+#[error]
+const ECharacterDead: vector<u8> = b"Character is dead";
+
+#[error]
+const ECharacterSagaMismatch: vector<u8> = b"Character does not belong to this Saga";
+
+#[error]
+const ECharacterSceneMismatch: vector<u8> = b"Character is not in this Scene";
+
+#[error]
+const ESameSourceAndTargetScene: vector<u8> = b"Source and target scene are identical";
+
+#[error]
+const EControlCapMismatch: vector<u8> = b"ControlCap is not for this Character";
+
+#[error]
+const ECharacterNotWild: vector<u8> = b"Character is not currently wild";
+
+#[error]
+const ELocationMismatch: vector<u8> = b"Character is not at the given location";
+
+#[error]
+const ENotAdjacent: vector<u8> = b"Target location is not adjacent to current";
+
+#[error]
+const ESameLocation: vector<u8> = b"Source and target location are identical";
+
+#[error]
+const EAdminWorldMismatch: vector<u8> = b"AdminCap belongs to a different World";
 
 // ─── value types ─────────────────────────────────────────────────────
 
@@ -158,12 +194,23 @@ public struct OwnerCap has key, store {
 
 /// 營運權限。`epoch` 對應簽發當下的 `character.control_epoch`。
 /// 當 character.control_epoch 變動後，這張 cap 自動失效：`is_valid` 回 false、
-/// SEAL approve 會 abort。Phase 1.5b 會擴充 world_id + saga_id 欄位。
+/// SEAL approve 會 abort.
+///
+/// `saga_id` records which saga the cap is bound to (None when issued
+/// against a wild character). Updated by `bind_to_saga` when a wild
+/// character is accepted into a saga via JoinIntent.
 public struct ControlCap has key, store {
     id: UID,
     character_id: ID,
     epoch: u64,
+    saga_id: Option<ID>,
 }
+
+/// DOF marker — when a character goes wild, the saga's ControlCap is
+/// stored at `dof[character.id, ControlCapKey {}]` so the next saga can
+/// extract it via `take_wild_control_cap` (rather than asking the previous
+/// storyteller to hand it back manually).
+public struct ControlCapKey has copy, drop, store {}
 
 // ─── events ──────────────────────────────────────────────────────────
 
@@ -201,6 +248,35 @@ public struct CharacterDied has copy, drop {
     by_event: Option<ID>,
     attributed_count: u64,
     recorded_at_ms: u64,
+}
+
+// ─── events added in 1.5b ────────────────────────────────────────────
+
+public struct CharacterMoved has copy, drop {
+    character_id: ID,
+    from_scene_id: ID,
+    to_scene_id: ID,
+    moved_at_ms: u64,
+}
+
+public struct CharacterWalked has copy, drop {
+    character_id: ID,
+    from_location_id: ID,
+    to_location_id: ID,
+    walked_at_ms: u64,
+}
+
+public struct CharacterTransferredToWild has copy, drop {
+    character_id: ID,
+    from_saga_id: ID,
+    at_ms: u64,
+}
+
+public struct CharacterAcceptedIntoSaga has copy, drop {
+    character_id: ID,
+    saga_id: ID,
+    scene_id: ID,
+    accepted_at_ms: u64,
 }
 
 // ─── mint paths ──────────────────────────────────────────────────────
@@ -335,6 +411,7 @@ public(package) fun mint_character_internal(
         id: object::new(ctx),
         character_id,
         epoch: character.control_epoch,
+        saga_id,
     };
     let control_cap_id = object::id(&control_cap);
 
@@ -385,6 +462,7 @@ public fun issue_control_cap(
         id: object::new(ctx),
         character_id: owner_cap.character_id,
         epoch: character.control_epoch,
+        saga_id: character.state.saga_id,
     };
 
     event::emit(ControlCapIssued {
@@ -426,6 +504,7 @@ public fun reassign_saga(
         id: object::new(ctx),
         character_id: owner_cap.character_id,
         epoch: character.control_epoch,
+        saga_id: character.state.saga_id,
     };
 
     event::emit(SagaReassigned {
@@ -435,6 +514,186 @@ public fun reassign_saga(
     });
 
     cap
+}
+
+// ─── scene movement (storyteller-signed, in-saga) ────────────────────
+
+/// Move a character between two scenes inside the same saga.
+/// Storyteller-signed. Aborts if either scene is in a different saga,
+/// the character isn't in this saga, isn't actually in `from_scene`,
+/// the two scenes are identical, or the character is dead.
+public fun move_character(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    from_scene: &mut Scene,
+    to_scene: &mut Scene,
+    character: &mut Character,
+    clock: &clock::Clock,
+) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(scene::saga_id(from_scene) == saga_id, ESceneSagaMismatch);
+    assert!(scene::saga_id(to_scene) == saga_id, ESceneSagaMismatch);
+    assert!(character.state.saga_id.contains(&saga_id), ECharacterSagaMismatch);
+
+    let from_id = scene::scene_id(from_scene);
+    let to_id = scene::scene_id(to_scene);
+    assert!(from_id != to_id, ESameSourceAndTargetScene);
+    assert!(character.state.current_scene_id.contains(&from_id), ECharacterSceneMismatch);
+    assert!(character.death.is_none(), ECharacterDead);
+
+    let character_id = object::id(character);
+    let _ = scene::remove_character(from_scene, character_id);
+    scene::add_character(to_scene, character_id);
+    character.state.current_scene_id = option::some(to_id);
+    character.state.current_location_id = option::some(scene::location_id(to_scene));
+
+    event::emit(CharacterMoved {
+        character_id,
+        from_scene_id: from_id,
+        to_scene_id: to_id,
+        moved_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
+// ─── wild release (storyteller / admin) ──────────────────────────────
+
+/// Saga storyteller releases a character to wild status. CONSUMES the
+/// ControlCap and stores it on the character via DOF (extracted later by
+/// `recruit::accept_character_into_saga` when a new saga takes custody).
+/// `saga_id` and `current_scene_id` flip to None; `current_location_id`
+/// is preserved (wild characters keep walking from where they left).
+public fun release_character_to_wild(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    control_cap: ControlCap,
+    current_scene: &mut Scene,
+    character: &mut Character,
+    clock: &clock::Clock,
+) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    release_character_to_wild_shared(saga_id, character, current_scene, control_cap, clock);
+}
+
+/// World-admin emergency release. Same end state as
+/// `release_character_to_wild` but bypasses storyteller signature.
+public fun force_release_character(
+    admin_cap: &AdminCap,
+    saga: &Saga,
+    control_cap: ControlCap,
+    current_scene: &mut Scene,
+    character: &mut Character,
+    clock: &clock::Clock,
+) {
+    assert!(world::admin_world_id(admin_cap) == character.state.world_id, EAdminWorldMismatch);
+    assert!(world::admin_world_id(admin_cap) == saga::world_id(saga), EAdminWorldMismatch);
+    let saga_id = saga::saga_id(saga);
+    release_character_to_wild_shared(saga_id, character, current_scene, control_cap, clock);
+}
+
+/// Shared release path. Consumes the control_cap into a DOF on the
+/// character. Asserts the cap matches, the character is in this saga +
+/// scene, and the character isn't dead.
+fun release_character_to_wild_shared(
+    saga_id: ID,
+    character: &mut Character,
+    current_scene: &mut Scene,
+    control_cap: ControlCap,
+    clock: &clock::Clock,
+) {
+    assert!(character.state.saga_id.contains(&saga_id), ECharacterSagaMismatch);
+    assert!(scene::saga_id(current_scene) == saga_id, ESceneSagaMismatch);
+    let scene_id = scene::scene_id(current_scene);
+    assert!(character.state.current_scene_id.contains(&scene_id), ECharacterSceneMismatch);
+    assert!(control_cap.character_id == object::id(character), EControlCapMismatch);
+    assert!(character.death.is_none(), ECharacterDead);
+
+    let character_id = object::id(character);
+    let _ = scene::remove_character(current_scene, character_id);
+    character.state.saga_id = option::none<ID>();
+    character.state.current_scene_id = option::none<ID>();
+
+    dof::add(&mut character.id, ControlCapKey {}, control_cap);
+
+    event::emit(CharacterTransferredToWild {
+        character_id,
+        from_saga_id: saga_id,
+        at_ms: clock::timestamp_ms(clock),
+    });
+}
+
+// ─── wild walk (owner-signed) ────────────────────────────────────────
+
+/// Wild character walks one step on the location graph. Owner-signed via
+/// OwnerCap (auto-driver / sovereign skill both work — rule is "caller
+/// holds OwnerCap", not "caller is a specific service"). Aborts if the
+/// character is in any saga, dead, not actually at `current_location`,
+/// or if `new_location` isn't adjacent.
+public fun walk_in_world(
+    owner_cap: &OwnerCap,
+    character: &mut Character,
+    current_location: &Location,
+    new_location: &Location,
+    clock: &clock::Clock,
+) {
+    assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
+    assert!(character.state.saga_id.is_none(), ECharacterNotWild);
+    assert!(character.death.is_none(), ECharacterDead);
+    let from_id = world::location_id(current_location);
+    let to_id = world::location_id(new_location);
+    assert!(from_id != to_id, ESameLocation);
+    assert!(character.state.current_location_id.contains(&from_id), ELocationMismatch);
+    assert!(world::is_adjacent(current_location, new_location), ENotAdjacent);
+
+    character.state.current_location_id = option::some(to_id);
+
+    event::emit(CharacterWalked {
+        character_id: object::id(character),
+        from_location_id: from_id,
+        to_location_id: to_id,
+        walked_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
+// ─── package-internal: wild ↔ saga transitions (used by recruit) ─────
+
+/// Take a wild character's self-held ControlCap out of DOF. Asserts the
+/// character is currently wild (saga_id == None) and not dead. recruit
+/// calls this from `accept_character_into_saga` after validating intent.
+public(package) fun take_wild_control_cap(character: &mut Character): ControlCap {
+    assert!(character.state.saga_id.is_none(), ECharacterNotWild);
+    assert!(character.death.is_none(), ECharacterDead);
+    dof::remove(&mut character.id, ControlCapKey {})
+}
+
+/// Bind a wild character into a new saga + scene. Updates Character state
+/// (saga_id / scene_id / location_id) and the ControlCap's saga_id
+/// in-place. Emits `CharacterAcceptedIntoSaga`. recruit composes this
+/// with `take_wild_control_cap`.
+///
+/// Note: does NOT add character to scene.current_character_ids — caller
+/// (recruit) does that, because the caller also needs to increment the
+/// saga's character_count (single transaction-level decision).
+public(package) fun bind_to_saga(
+    character: &mut Character,
+    saga_id: ID,
+    scene_id: ID,
+    location_id: ID,
+    control_cap: &mut ControlCap,
+    clock: &clock::Clock,
+) {
+    character.state.saga_id = option::some(saga_id);
+    character.state.current_scene_id = option::some(scene_id);
+    character.state.current_location_id = option::some(location_id);
+    control_cap.saga_id = option::some(saga_id);
+
+    event::emit(CharacterAcceptedIntoSaga {
+        character_id: object::id(character),
+        saga_id,
+        scene_id,
+        accepted_at_ms: clock::timestamp_ms(clock),
+    });
 }
 
 // ─── death writer (called by event.move in 1.6) ──────────────────────
@@ -477,6 +736,8 @@ public fun owner_cap_cumulative_revenue(cap: &OwnerCap): u64 { cap.cumulative_re
 public fun control_cap_character_id(cap: &ControlCap): ID { cap.character_id }
 
 public fun control_cap_epoch(cap: &ControlCap): u64 { cap.epoch }
+
+public fun control_cap_saga_id(cap: &ControlCap): Option<ID> { cap.saga_id }
 
 public fun character_id(character: &Character): ID { object::id(character) }
 
@@ -660,6 +921,50 @@ use std::unit_test::{assert_eq, destroy};
 /// Build a minimal Character + OwnerCap pair without going through
 /// mint_character_internal. Used by every cap-lifecycle / SEAL test below
 /// (predates the full mint path).
+/// Build a Character in wild state (saga_id = None, current_location =
+/// some fake id). For testing the wild path (walk / join intent / accept)
+/// without going through full mint + release_to_wild ceremony.
+#[test_only]
+public fun make_wild_for_testing(ctx: &mut TxContext): (Character, OwnerCap) {
+    let world_id = fake_id(ctx);
+    let location_id = fake_id(ctx);
+    let character = Character {
+        id: object::new(ctx),
+        control_epoch: 1,
+        profile: CharacterProfile {
+            name: b"Wild".to_string(),
+            description: b"".to_string(),
+            physical_facts: PhysicalFacts {
+                species: b"human".to_string(),
+                gender: b"unspecified".to_string(),
+                body: b"".to_string(),
+                age_years: 0,
+            },
+        },
+        attributes: vector[],
+        media_assets: vector[],
+        state: CharacterState {
+            world_id,
+            saga_id: option::none(),
+            current_scene_id: option::none(),
+            current_location_id: option::some(location_id),
+            birth_ms: 0,
+        },
+        tags: vector[],
+        image_url: b"".to_string(),
+        death: option::none(),
+    };
+    let character_id = object::id(&character);
+    let owner_cap = OwnerCap {
+        id: object::new(ctx),
+        character_id,
+        world_id,
+        minted_at_ms: 0,
+        cumulative_revenue: 0,
+    };
+    (character, owner_cap)
+}
+
 #[test_only]
 public fun mint_character_for_testing(ctx: &mut TxContext): (Character, OwnerCap) {
     let world_id = fake_id(ctx);

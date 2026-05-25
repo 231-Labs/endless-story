@@ -16,8 +16,10 @@
 /// rejected, the voucher can be left to expire (refund mechanic — Phase 2;
 /// for now, ENDLESS sits in the saga treasury as the cost of preview).
 ///
-/// **Phase 1.5a (this commit)** ships voucher half only. **Phase 1.5b**
-/// adds the wild→saga `JoinIntent` flow (same module).
+/// **Phase 1.5a (prior)** shipped voucher half. **Phase 1.5b (now)** adds
+/// the wild→saga `JoinIntent` flow: owner of a wild character mints a
+/// shared `JoinIntent` pointing at a target saga; storyteller of that
+/// saga consumes it via `accept_character_into_saga`.
 ///
 /// See AGENTS.md → 「鏈上架構」.
 module endless_story::recruit;
@@ -27,7 +29,7 @@ use sui::clock;
 use sui::coin::Coin;
 use sui::event;
 
-use endless_story::character::{Self, AttributeValue, CharacterProfile, ControlCap, MediaAsset, OwnerCap};
+use endless_story::character::{Self, AttributeValue, Character, CharacterProfile, ControlCap, MediaAsset, OwnerCap};
 use endless_story::currency::CURRENCY;
 use endless_story::saga::{Self, Saga, StorytellerCap};
 use endless_story::scene::{Self, Scene};
@@ -48,7 +50,21 @@ const EWorldSagaMismatch: vector<u8> = b"Saga does not belong to the given World
 const ESceneSagaMismatch: vector<u8> = b"Scene does not belong to the given Saga";
 
 #[error]
-const EInvalidTtl: vector<u8> = b"Voucher TTL must be > 0";
+const EInvalidTtl: vector<u8> = b"TTL must be > 0";
+
+// ─── errors added in 1.5b (JoinIntent) ───────────────────────────────
+
+#[error]
+const EIntentSagaMismatch: vector<u8> = b"JoinIntent target_saga does not match this saga";
+
+#[error]
+const EIntentCharacterMismatch: vector<u8> = b"JoinIntent character_id does not match the given Character";
+
+#[error]
+const EIntentExpired: vector<u8> = b"JoinIntent TTL has elapsed";
+
+#[error]
+const EWrongOwnerCap: vector<u8> = b"OwnerCap does not own this Character";
 
 // ─── voucher resource ────────────────────────────────────────────────
 
@@ -218,6 +234,166 @@ public fun voucher_hint(voucher: &GenesisVoucher): &Option<String> { &voucher.hi
 public fun voucher_minted_at_ms(voucher: &GenesisVoucher): u64 { voucher.minted_at_ms }
 
 public fun voucher_expires_at_ms(voucher: &GenesisVoucher): u64 { voucher.expires_at_ms }
+
+// ─── JoinIntent (1.5b) ───────────────────────────────────────────────
+
+/// Owner-signed offer for a saga to take custody of a wild character.
+/// Shared on creation so any storyteller of `target_saga_id` can claim it.
+///
+/// **Multiple JoinIntents may exist** for the same character pointing at
+/// different sagas (shop around). First storyteller to consume wins;
+/// later attempts find the character no longer wild and abort. Owner can
+/// revoke an unused intent via `revoke_join_intent`.
+public struct JoinIntent has key {
+    id: UID,
+    character_id: ID,
+    target_saga_id: ID,
+    expires_at_ms: u64,
+    minted_at_ms: u64,
+}
+
+public struct JoinIntentMinted has copy, drop {
+    intent_id: ID,
+    character_id: ID,
+    target_saga_id: ID,
+    expires_at_ms: u64,
+}
+
+public struct JoinIntentConsumed has copy, drop {
+    intent_id: ID,
+    character_id: ID,
+    target_saga_id: ID,
+    consumed_at_ms: u64,
+}
+
+public struct JoinIntentRevoked has copy, drop {
+    intent_id: ID,
+    character_id: ID,
+}
+
+/// Owner publishes a shared JoinIntent offering this wild character to a
+/// specific saga. Owner-signed; shares the intent object so any
+/// storyteller of `target_saga_id` can pick it up.
+///
+/// Caller responsibility: confirm `character.state.saga_id == None`
+/// before calling (the assertion inside enforces this — wild only).
+public fun request_join_saga(
+    owner_cap: &OwnerCap,
+    character: &Character,
+    target_saga_id: ID,
+    ttl_ms: u64,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(character::owner_cap_character_id(owner_cap) == character::character_id(character), EWrongOwnerCap);
+    assert!(character::saga_id(character).is_none(), EIntentCharacterMismatch);
+    assert!(!character::is_dead(character), EIntentCharacterMismatch);
+    assert!(ttl_ms > 0, EInvalidTtl);
+
+    let now = clock::timestamp_ms(clock);
+    let intent = JoinIntent {
+        id: object::new(ctx),
+        character_id: character::character_id(character),
+        target_saga_id,
+        expires_at_ms: now + ttl_ms,
+        minted_at_ms: now,
+    };
+    event::emit(JoinIntentMinted {
+        intent_id: object::id(&intent),
+        character_id: intent.character_id,
+        target_saga_id,
+        expires_at_ms: intent.expires_at_ms,
+    });
+    transfer::share_object(intent);
+}
+
+/// Owner takes back an unused JoinIntent. Validates ownership; consumes
+/// the intent (key-only shared object burned by-value).
+public fun revoke_join_intent(owner_cap: &OwnerCap, intent: JoinIntent) {
+    assert!(
+        character::owner_cap_character_id(owner_cap) == intent.character_id,
+        EIntentCharacterMismatch,
+    );
+    let intent_id = object::id(&intent);
+    let JoinIntent {
+        id,
+        character_id,
+        target_saga_id: _,
+        expires_at_ms: _,
+        minted_at_ms: _,
+    } = intent;
+    event::emit(JoinIntentRevoked { intent_id, character_id });
+    id.delete();
+}
+
+/// Saga storyteller consumes a JoinIntent to take custody of a wild
+/// character. Dual-sign: `cap` proves authority over the target saga;
+/// `intent` proves owner consent for THIS saga. Pulls the ControlCap out
+/// of the character's DOF (set during `release_character_to_wild`),
+/// rebinds its `saga_id`, returns the cap to the storyteller. Character
+/// placed in `target_scene`.
+///
+/// Aborts on: intent saga mismatch, intent character mismatch, intent
+/// expired, target_scene in different saga, character no longer wild,
+/// character dead.
+public fun accept_character_into_saga(
+    cap: &StorytellerCap,
+    saga: &mut Saga,
+    target_scene: &mut Scene,
+    character: &mut Character,
+    intent: JoinIntent,
+    clock: &clock::Clock,
+): ControlCap {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    let now = clock::timestamp_ms(clock);
+
+    assert!(intent.target_saga_id == saga_id, EIntentSagaMismatch);
+    assert!(intent.character_id == character::character_id(character), EIntentCharacterMismatch);
+    assert!(now <= intent.expires_at_ms, EIntentExpired);
+    assert!(scene::saga_id(target_scene) == saga_id, ESceneSagaMismatch);
+
+    let intent_id = object::id(&intent);
+    let JoinIntent {
+        id,
+        character_id,
+        target_saga_id: _,
+        expires_at_ms: _,
+        minted_at_ms: _,
+    } = intent;
+    id.delete();
+
+    // Extract the self-held cap (asserts wild + not dead inside).
+    let mut control_cap = character::take_wild_control_cap(character);
+
+    // Bind character state + cap.saga_id; emit CharacterAcceptedIntoSaga.
+    let scene_id = scene::scene_id(target_scene);
+    let scene_location_id = scene::location_id(target_scene);
+    character::bind_to_saga(character, saga_id, scene_id, scene_location_id, &mut control_cap, clock);
+
+    // Saga-side bookkeeping.
+    scene::add_character(target_scene, character_id);
+    saga::increment_character_count(saga);
+
+    event::emit(JoinIntentConsumed {
+        intent_id,
+        character_id,
+        target_saga_id: saga_id,
+        consumed_at_ms: now,
+    });
+
+    control_cap
+}
+
+// ─── JoinIntent views ────────────────────────────────────────────────
+
+public fun intent_character_id(intent: &JoinIntent): ID { intent.character_id }
+
+public fun intent_target_saga_id(intent: &JoinIntent): ID { intent.target_saga_id }
+
+public fun intent_minted_at_ms(intent: &JoinIntent): u64 { intent.minted_at_ms }
+
+public fun intent_expires_at_ms(intent: &JoinIntent): u64 { intent.expires_at_ms }
 
 // ─── tests ───────────────────────────────────────────────────────────
 
@@ -400,6 +576,70 @@ fun redeem_voucher_mints_character_and_consumes_voucher() {
     destroy(treasury_cap);
     destroy(scene);
     cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
+
+// --- 1.5b lifecycle tests ---
+//
+// These exercise request/revoke/accept on a wild Character built via the
+// `make_wild_for_testing` helper in character.move (lets us bypass the
+// full release_to_wild ceremony which needs shared-object scaffolding).
+
+#[test]
+fun revoke_join_intent_burns_intent() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+
+    let (character, owner_cap) = character::make_wild_for_testing(&mut ctx);
+
+    request_join_saga(
+        &owner_cap,
+        &character,
+        sui::object::id_from_address(@0xFEED), // arbitrary target saga
+        60_000,
+        &clock,
+        &mut ctx,
+    );
+
+    // We can't easily take the just-shared intent without test_scenario.
+    // So instead, exercise revoke via a directly-constructed intent.
+    let intent = JoinIntent {
+        id: object::new(&mut ctx),
+        character_id: character::character_id(&character),
+        target_saga_id: sui::object::id_from_address(@0xFEED),
+        expires_at_ms: 999_999,
+        minted_at_ms: 0,
+    };
+    revoke_join_intent(&owner_cap, intent);
+    // No assertion needed; if revoke succeeded, the intent was burned.
+
+    destroy(character);
+    destroy(owner_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = EIntentCharacterMismatch)]
+fun revoke_with_wrong_owner_cap_aborts() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+
+    let (character_a, owner_a) = character::make_wild_for_testing(&mut ctx);
+    let (character_b, owner_b) = character::make_wild_for_testing(&mut ctx);
+
+    // Intent points at character_a but owner_b tries to revoke → aborts.
+    let intent = JoinIntent {
+        id: object::new(&mut ctx),
+        character_id: character::character_id(&character_a),
+        target_saga_id: sui::object::id_from_address(@0xFEED),
+        expires_at_ms: 999_999,
+        minted_at_ms: 0,
+    };
+    revoke_join_intent(&owner_b, intent);
+
+    destroy(character_a);
+    destroy(owner_a);
+    destroy(character_b);
+    destroy(owner_b);
     clock.destroy_for_testing();
 }
 

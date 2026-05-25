@@ -134,7 +134,7 @@ packages/
 | 1.3 | `saga.move` | ✅ 2026-05-24 | Saga/StorytellerCap/RevenueConfig + card weighting (R3.2) + skill table (R3.3) + Display V2；**新增 `withdraw_from_treasury`**（補老版漏寫）；8 tests |
 | 1.4 | `scene.move` | ✅ 2026-05-24 | Scene/ScenePlacement/SceneAccess/SceneParams/SceneState + Display V2；**新增 3 個 inline tests**（舊版完全沒 test）；character_count / privacy_level 補 view |
 | 1.5a | `character.move` 擴充 + `recruit.move` 新增 | ✅ 2026-05-24 | Character 結構全胖（profile/physical/attributes/media/tags/state/image/death）+ 三條 mint 路徑（genesis/collectible/internal）+ validation 私 fn + mark_dead + 全 view + cap accessors。新 `recruit` module 含 GenesisVoucher + mint_genesis_voucher + redeem_voucher_to_character。Move best practice 拆 module（不拆 package）：character 管 Character resource、recruit 管「外部申請加入」入口 |
-| 1.5b | character 擴 + recruit 擴 | ⬜ 待做 | JoinIntent + transfer_character_control + force_release_character + walk_in_world + move_character |
+| 1.5b | character 擴 + recruit 擴 | ✅ 2026-05-24 | **character**: ControlCap.saga_id 欄位 + move_character(in-saga 換場) + release_character_to_wild(storyteller) + force_release_character(admin) + walk_in_world(owner) + take_wild_control_cap / bind_to_saga 兩個 public(package) helper + ControlCapKey DOF。**recruit**: JoinIntent + request_join_saga + revoke_join_intent + accept_character_into_saga。**2 個 lifecycle tests**（revoke happy + wrong-owner abort）；E2E release→walk→accept 留到 SDK 接通後做 integration test |
 | 1.5c | character 擴 | ⬜ 待做 | per-saga skills + update_character_image + Display V2 init |
 | 1.6 | `event.move` | ⬜ 待做 | 事件解算、卡片、死亡標記 |
 | 1.7 | `commitment.move` | ⬜ 待做 | 記憶壓縮快照 |
