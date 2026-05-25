@@ -26,6 +26,7 @@ import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
 import { DEMO_VIEWER_WALLET } from '@/mocks/subscriptions';
 import { shortChapterTitle } from '@/lib/format';
+import { fetchOnChainSagaName } from '@/lib/chain/saga-scene-read';
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
 const VALID_FILTERS: RosterFilter[] = ['all', 'internal', 'external', 'mine'];
@@ -153,6 +154,7 @@ export default async function DossierPage({
     memories,
     persona,
     liveState,
+    sagaName,
   ] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
@@ -162,6 +164,9 @@ export default async function DossierPage({
     memoriesApi.listMemories(character.id, viewerWallet),
     personasApi.getPersona(character.id),
     liveStateApi.getLiveState(character.id),
+    // null when character.sagaId is a mock slug (non-Sui-id) or chain unreachable;
+    // DossierHeader falls back to its legacy DEMO_SAGA_ID slug match in that case.
+    fetchOnChainSagaName(character.sagaId),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
   const memoryChapterIds = Array.from(
@@ -193,6 +198,7 @@ export default async function DossierPage({
             character={character}
             liveState={liveState}
             sagaCharacters={allCharacters}
+            sagaName={sagaName}
           />
         </div>
         

@@ -17,11 +17,20 @@ export function DossierHeader({
   character,
   liveState,
   sagaCharacters,
+  sagaName,
 }: {
   character: Character;
   liveState: CharacterLiveState;
   sagaCharacters: Character[];
+  /**
+   * On-chain saga.info.name fetched by caller (server component). When
+   * passed, overrides the legacy DEMO_SAGA_ID slug match. Null falls
+   * back to '江湖' (wild). Mock characters still use the slug match.
+   */
+  sagaName?: string | null;
 }) {
+  const sagaLabel =
+    sagaName ?? (character.sagaId === DEMO_SAGA_ID ? '春雪社' : '江湖');
   return (
     <header
       id="dossier-header"
@@ -44,7 +53,7 @@ export function DossierHeader({
               <div className="flex items-center gap-3 text-sm tracking-widest text-mute">
                 <span>{character.role}</span>
                 <span className="text-hairline">·</span>
-                <span>{character.sagaId === DEMO_SAGA_ID ? '春雪社' : '江湖'}</span>
+                <span>{sagaLabel}</span>
               </div>
               <h1 className="mt-4 font-serif text-5xl tracking-wide text-ink sm:text-6xl lg:text-7xl">
                 {character.name}

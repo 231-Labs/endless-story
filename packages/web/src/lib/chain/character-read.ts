@@ -27,6 +27,28 @@ export function isSuiObjectId(id: string): boolean {
  * `ownerOverride` lets the list-by-owner path stamp the wallet without
  * paying for a per-character getObject({ showOwner }) round-trip.
  */
+/**
+ * Move `Option<ID>` arrives as one of:
+ *   - null                          (None — RPC json view)
+ *   - string                        (Some — RPC raw json sometimes flattens)
+ *   - { Some: string }              (Some — older codegen)
+ *   - { vec: [string] | [] }        (BCS option canonical encoding via bcs.option)
+ * Normalise to string | null.
+ */
+function unwrapOption(raw: unknown): string | null {
+    if (raw == null) return null;
+    if (typeof raw === 'string') return raw;
+    if (typeof raw !== 'object') return null;
+    const obj = raw as Record<string, unknown>;
+    // { Some: 'value' } form
+    if ('Some' in obj && typeof obj.Some === 'string') return obj.Some;
+    // BCS canonical: { vec: ['value'] } for Some, { vec: [] } for None
+    if ('vec' in obj && Array.isArray(obj.vec)) {
+        return typeof obj.vec[0] === 'string' ? obj.vec[0] : null;
+    }
+    return null;
+}
+
 function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: string): Character {
     const profile = json.profile;
     const physical = profile?.physical_facts;
@@ -45,7 +67,7 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
     return {
         id,
         nftOwner: ownerOverride ?? '',
-        sagaId: json.state?.saga_id ?? null,
+        sagaId: unwrapOption(json.state?.saga_id),
         name: profile?.name ?? '無名',
         description: profile?.description ?? '',
         role: '武小生' as CharacterRole, // chain doesn't store role
