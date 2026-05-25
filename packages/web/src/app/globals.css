@@ -144,6 +144,16 @@ body {
   animation: scroll-down-line 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+@keyframes es-stamp {
+  0% { opacity: 0; transform: scale(3) rotate(-15deg); }
+  50% { opacity: 1; transform: scale(0.95) rotate(15deg); }
+  75% { transform: scale(1.02) rotate(12deg); }
+  100% { opacity: 0.85; transform: scale(1) rotate(12deg); }
+}
+.animate-stamp {
+  animation: es-stamp 0.45s cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
 @keyframes endless-focus-in {
   0%   { opacity: 0; transform: scale(1.08); filter: blur(14px); }
   60%  { opacity: 1; }

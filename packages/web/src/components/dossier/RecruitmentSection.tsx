@@ -4,27 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Recruitment } from '@endless-story/shared';
 import { RecruitmentTicket } from './RecruitmentTicket';
 
-export function RecruitmentSection({
-  recruitments,
-  seedRecruitments,
-  onRecruitmentsChange,
-}: {
-  recruitments: Recruitment[];
-  /** Original server data — used by the test restore button */
-  seedRecruitments: Recruitment[];
-  onRecruitmentsChange?: (r: Recruitment[]) => void;
-}) {
-  const [recruitmentsState, setRecruitmentsState] = useState(recruitments);
-
-  // Sync internal state with props, and notify parent when internal state changes
-  useEffect(() => {
-    setRecruitmentsState(recruitments);
-  }, [recruitments]);
-
-  const handleSetRecruitments = (newRecruitments: Recruitment[]) => {
-    setRecruitmentsState(newRecruitments);
-    onRecruitmentsChange?.(newRecruitments);
-  };
+export function RecruitmentSection({ recruitments }: { recruitments: Recruitment[] }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
@@ -43,20 +23,11 @@ export function RecruitmentSection({
     };
   }, []);
 
-  if (recruitmentsState.length === 0) {
+  if (recruitments.length === 0) {
     return (
       <section id="recruitment-section" className="flex min-h-[100dvh] flex-col justify-center border-t border-hairline px-5 py-14 sm:px-10 sm:py-[4.5rem]">
         <div className="mx-auto w-full max-w-6xl">
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-serif text-2xl tracking-wide text-ink sm:text-3xl">徵召公告</h2>
-            {/* 測試用按鈕：恢復資料 */}
-            <button
-              onClick={() => handleSetRecruitments(seedRecruitments)}
-              className="text-2xs tracking-widest text-cinnabar hover:underline"
-            >
-              [測試] 恢復徵召
-            </button>
-          </div>
+          <h2 className="font-serif text-2xl tracking-wide text-ink sm:text-3xl">徵召公告</h2>
           <div className="mt-8">
             <div className="flex min-h-[440px] flex-col items-center justify-center rounded-lg border border-dashed border-hairline bg-surface/30 px-6 py-12 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface shadow-sm ring-1 ring-hairline">
@@ -76,8 +47,8 @@ export function RecruitmentSection({
     );
   }
 
-  const safeIdx = Math.min(activeIdx, recruitmentsState.length - 1);
-  const active = recruitmentsState[safeIdx];
+  const safeIdx = Math.min(activeIdx, recruitments.length - 1);
+  const active = recruitments[safeIdx];
 
   const animateSlide = (dir: 'left' | 'right', nextIdx: number) => {
     if (slideTimerRef.current) clearTimeout(slideTimerRef.current);
@@ -91,11 +62,11 @@ export function RecruitmentSection({
   };
 
   const goPrev = () => {
-    animateSlide('right', (safeIdx - 1 + recruitmentsState.length) % recruitmentsState.length);
+    animateSlide('right', (safeIdx - 1 + recruitments.length) % recruitments.length);
   };
 
   const goNext = () => {
-    animateSlide('left', (safeIdx + 1) % recruitmentsState.length);
+    animateSlide('left', (safeIdx + 1) % recruitments.length);
   };
 
   const goTo = (idx: number) => {
@@ -106,16 +77,7 @@ export function RecruitmentSection({
   return (
     <section id="recruitment-section" className="flex min-h-[100dvh] flex-col justify-center border-t border-hairline px-5 py-14 sm:px-10 sm:py-[4.5rem]">
       <div className="mx-auto w-full max-w-6xl">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-serif text-2xl tracking-wide text-ink sm:text-3xl">徵召公告</h2>
-          {/* 測試用按鈕：清空資料 */}
-          <button
-            onClick={() => handleSetRecruitments([])}
-            className="text-2xs tracking-widest text-mute hover:text-cinnabar"
-          >
-            [測試] 清空徵召
-          </button>
-        </div>
+        <h2 className="font-serif text-2xl tracking-wide text-ink sm:text-3xl">徵召公告</h2>
 
         <div className="mt-8 relative">
           <div
@@ -137,12 +99,12 @@ export function RecruitmentSection({
 
           <div
             className={`transition-opacity duration-300 ${
-              wizardOpen || recruitmentsState.length <= 1 ? 'absolute bottom-0 left-0 right-0 pointer-events-none opacity-0' : 'relative opacity-100'
+              wizardOpen || recruitments.length <= 1 ? 'absolute bottom-0 left-0 right-0 pointer-events-none opacity-0' : 'relative opacity-100'
             }`}
           >
-            {recruitmentsState.length > 1 ? (
+            {recruitments.length > 1 ? (
               <CarouselNav
-                count={recruitmentsState.length}
+                count={recruitments.length}
                 activeIdx={safeIdx}
                 onPrev={goPrev}
                 onNext={goNext}

@@ -407,19 +407,12 @@ export function RecruitmentTicket({
                     <PickStage candidate={candidate} rolledValues={rolledValues} />
                   )}
                   {stage === 'painting' && <PaintingStage />}
-                  {stage === 'portrait' && candidate && (
+                  {(stage === 'portrait' || stage === 'done') && candidate && (
                     <PortraitStage
                       candidate={candidate}
                       portraitBase64={portraitBase64}
                       portraitUrl={portraitUrl}
-                    />
-                  )}
-                  {stage === 'done' && candidate && (
-                    <DoneStage
-                      candidate={candidate}
-                      role={recruitment.specialty}
-                      portraitBase64={portraitBase64}
-                      portraitUrl={portraitUrl}
+                      isDone={stage === 'done'}
                       characterId={characterId}
                     />
                   )}
@@ -610,7 +603,7 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
 
 function PromptStage({ prompt, onPromptChange }: { prompt: string; onPromptChange: (v: string) => void }) {
   return (
-    <div className="flex flex-col text-left">
+    <div className="flex h-full flex-col justify-center text-left">
       <p className="text-2xs tracking-widest text-mute">寫下你想扮演的角色</p>
       <div className="relative mt-4">
         <textarea
@@ -642,6 +635,36 @@ function ElegantSpinner() {
   );
 }
 
+function DiceSpinner() {
+  return (
+    <div className="relative flex h-24 w-24 items-center justify-center">
+      <div className="absolute inset-0 animate-[spin_3s_linear_infinite] rounded-full border-t-2 border-cinnabar/60 border-l-2 border-l-transparent" />
+      <div className="absolute inset-3 animate-[spin_2s_linear_infinite_reverse] rounded-full border-b-2 border-seal/40 border-r-2 border-r-transparent" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="grid grid-cols-2 gap-1 animate-pulse">
+          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
+          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
+          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
+          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrushSpinner() {
+  return (
+    <div className="relative flex h-24 w-24 items-center justify-center">
+      <div className="absolute inset-0 rounded-full border border-hairline" />
+      <div className="absolute inset-0 animate-[spin_2.5s_ease-in-out_infinite] rounded-full border-t-2 border-ink/80 border-r-2 border-r-transparent" />
+      <div className="absolute inset-2 animate-[spin_4s_ease-in-out_infinite_reverse] rounded-full border-b-2 border-mute/50 border-l-2 border-l-transparent" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-ink/20 to-transparent animate-pulse blur-sm" />
+      </div>
+    </div>
+  );
+}
+
 function RollingStage({ status }: { status: 'moderating' | 'minting' | 'previewing' | null }) {
   const statusText = 
     status === 'moderating' ? '審核意圖…' :
@@ -649,8 +672,8 @@ function RollingStage({ status }: { status: 'moderating' | 'minting' | 'previewi
     status === 'previewing' ? '說書人擬人中…' : '擲牌中…';
 
   return (
-    <div className="flex flex-col items-center justify-center gap-8 py-12">
-      <ElegantSpinner />
+    <div className="flex h-full flex-col items-center justify-center gap-8 py-12">
+      {status === 'minting' ? <DiceSpinner /> : <ElegantSpinner />}
       <div className="text-center">
         <p className="font-serif text-xl text-ink animate-pulse">{statusText}</p>
         <p className="mt-3 text-2xs tracking-widest text-mute">
@@ -663,8 +686,8 @@ function RollingStage({ status }: { status: 'moderating' | 'minting' | 'previewi
 
 function PaintingStage() {
   return (
-    <div className="flex flex-col items-center justify-center gap-8 py-12">
-      <ElegantSpinner />
+    <div className="flex h-full flex-col items-center justify-center gap-8 py-12">
+      <BrushSpinner />
       <div className="text-center">
         <p className="font-serif text-xl text-ink animate-pulse">繪製畫像中…</p>
         <p className="mt-3 text-2xs tracking-widest text-mute">
@@ -677,31 +700,29 @@ function PaintingStage() {
 
 function PickStage({ candidate, rolledValues }: { candidate: CharacterCandidate; rolledValues: RolledAttribute[] }) {
   return (
-    <div className="flex flex-col items-center text-center space-y-6 w-full max-w-xl mx-auto py-2">
-      <p className="text-2xs tracking-widest text-mute shrink-0">骰子已落，揭曉</p>
+    <div className="flex h-full flex-col justify-center text-left">
+      <p className="text-2xs tracking-widest text-mute">
+        骰子已落，揭曉 · {candidate.physicalFacts.gender} · {candidate.physicalFacts.age} 歲 · {candidate.physicalFacts.body}
+      </p>
       
-      <div className="w-full">
-        <h3 className="font-serif text-3xl text-ink">{candidate.name}</h3>
-        <p className="mt-2 text-xs tracking-widest text-mute">
-          {candidate.physicalFacts.gender} · {candidate.physicalFacts.age} 歲 · {candidate.physicalFacts.body}
-        </p>
-        
-        <div className="my-5 mx-auto h-px w-2/3 bg-gradient-to-r from-transparent via-hairline to-transparent" />
-        
-        <p className="text-[15px] leading-loose text-ink/85 sm:text-base text-justify text-indent-2">{candidate.description}</p>
-        
-        <div className="mt-6 flex flex-wrap justify-center gap-2.5">
-          {rolledValues.map((rv) => (
-            <span
-              key={rv.key}
-              className="rounded-full bg-cinnabar/5 px-3 py-1 text-xs tracking-widest text-cinnabar ring-1 ring-cinnabar/20"
-            >
-              {rv.label} <span className="font-serif ml-1">{rv.value}</span>
-            </span>
-          ))}
-        </div>
+      <h3 className="mt-3 font-serif text-3xl text-ink sm:text-4xl">{candidate.name}</h3>
+      
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {rolledValues.map((rv) => (
+          <span
+            key={rv.key}
+            className="rounded-full bg-cinnabar/5 px-2.5 py-0.5 text-2xs tracking-widest text-cinnabar/80 ring-1 ring-cinnabar/20"
+          >
+            {rv.label} {rv.value}
+          </span>
+        ))}
       </div>
-      <p className="text-2xs text-mute shrink-0 pt-2">接受即送入畫師繪像；緣寂則此票自然過期。</p>
+      
+      <p className="mt-5 max-w-prose text-[15px] leading-loose text-ink/75 sm:text-base line-clamp-6">
+        {candidate.description}
+      </p>
+      
+      <p className="mt-6 text-2xs text-mute">接受即送入畫師繪像；緣寂則此票自然過期。</p>
     </div>
   );
 }
@@ -710,10 +731,14 @@ function PortraitStage({
   candidate,
   portraitBase64,
   portraitUrl,
+  isDone,
+  characterId,
 }: {
   candidate: CharacterCandidate;
   portraitBase64: string | null;
   portraitUrl: string | null;
+  isDone: boolean;
+  characterId: string | null;
 }) {
   const src = useMemo(() => {
     if (portraitBase64) return `data:image/png;base64,${portraitBase64}`;
@@ -721,79 +746,62 @@ function PortraitStage({
     return null;
   }, [portraitBase64, portraitUrl]);
 
+  const isEnrolling = isDone && !characterId;
+  const isEnrolled = isDone && !!characterId;
+
   return (
-    <div className="flex flex-col items-center space-y-8 w-full max-w-2xl mx-auto py-4">
-      <p className="text-2xs tracking-widest text-mute shrink-0">配像已成</p>
+    <div className="flex h-full flex-col justify-center text-left">
+      <div className="flex items-center justify-between">
+        <p className="text-2xs tracking-widest text-mute">
+          {isEnrolled ? '已登錄梨園名冊' : isEnrolling ? '上鏈中…' : '配像已成 · 準備入班'}
+        </p>
+        {isEnrolled && characterId && (
+          <p className="text-2xs font-mono text-mute animate-fade-in-up">
+            ID: {characterId.slice(0, 10)}...{characterId.slice(-4)}
+          </p>
+        )}
+      </div>
       
-      <div className="flex flex-col sm:flex-row items-center gap-10 w-full">
-        <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 shrink-0 aspect-[3/4]">
+      <div className="mt-4 flex flex-col sm:flex-row items-center sm:items-start gap-6 w-full relative">
+        <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-xl shadow-cinnabar/5 w-32 shrink-0 aspect-[3/4]">
           {src ? (
-            <img src={src} alt={candidate.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            <img src={src} alt={candidate.name} className={`h-full w-full object-cover transition-transform duration-700 ${isDone ? '' : 'group-hover:scale-105'}`} />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 pointer-events-none" />
-          <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-             <h3 className="font-serif text-2xl text-white drop-shadow-md">{candidate.name}</h3>
-          </div>
+          {isEnrolling && (
+            <div className="absolute inset-0 bg-canvas/30 backdrop-blur-[1px] flex items-center justify-center">
+               <span className="h-5 w-5 rounded-full bg-cinnabar/60 animate-ping" />
+            </div>
+          )}
         </div>
         
-        <div className="flex flex-col text-center sm:text-left flex-1">
-          <h3 className="hidden sm:block font-serif text-3xl text-ink">{candidate.name}</h3>
-          <p className="hidden sm:block mt-2 text-2xs tracking-widest text-mute">準備入班</p>
-          <div className="hidden sm:block my-5 h-px w-full bg-gradient-to-r from-hairline to-transparent sm:from-hairline sm:to-transparent" />
-          <p className="text-sm leading-relaxed text-ink/80 line-clamp-5 text-justify text-indent-2">{candidate.description}</p>
+        <div className="flex flex-col flex-1 relative">
+          <h3 className="font-serif text-3xl text-ink sm:text-4xl">{candidate.name}</h3>
+          <p className="mt-4 max-w-prose text-[15px] leading-loose text-ink/75 sm:text-base line-clamp-5">
+            {candidate.description}
+          </p>
+
+          {isEnrolled && (
+            <div className="absolute -top-2 right-2 sm:right-6 animate-stamp pointer-events-none z-10">
+              <div className="flex items-center justify-center w-[4.5rem] h-[4.5rem] rounded-[3px] border-[3px] border-cinnabar/80 text-cinnabar/90 mix-blend-multiply dark:mix-blend-screen opacity-90 shadow-sm">
+                <div className="flex gap-1 text-[22px] font-serif leading-none">
+                  <div className="flex flex-col"><span className="mb-0.5">登</span><span>錄</span></div>
+                  <div className="flex flex-col"><span className="mb-0.5">梨</span><span>園</span></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function DoneStage({
-  candidate,
-  role,
-  portraitBase64,
-  portraitUrl,
-  characterId,
-}: {
-  candidate: CharacterCandidate;
-  role: string;
-  portraitBase64: string | null;
-  portraitUrl: string | null;
-  characterId: string | null;
-}) {
-  const src = portraitBase64 ? `data:image/png;base64,${portraitBase64}` : portraitUrl;
+function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-4 text-center w-full max-w-2xl mx-auto">
-      <p className="text-2xs tracking-widest text-mute shrink-0 sm:hidden">已登錄梨園名冊</p>
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-10 w-full">
-        <div className="relative overflow-hidden rounded-md bg-canvas ring-1 ring-cinnabar/30 shadow-2xl shadow-cinnabar/20 w-40 aspect-[3/4] shrink-0">
-          {src ? (
-            <img src={src} alt={candidate.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 pointer-events-none" />
-          <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-             <h3 className="font-serif text-xl text-white drop-shadow-md">{candidate.name}</h3>
-             <p className="text-2xs tracking-widest text-white/80 mt-1">{role}</p>
-          </div>
-        </div>
-        
-        <div className="space-y-4 text-center sm:text-left flex-1 max-w-sm">
-          <h3 className="hidden sm:block font-serif text-3xl text-ink">{candidate.name}</h3>
-          <p className="hidden sm:block text-xs tracking-widest text-mute">已登錄梨園名冊 · {role}</p>
-          <div className="hidden sm:block my-4 h-px w-full bg-gradient-to-r from-transparent via-hairline to-transparent sm:from-hairline sm:to-transparent" />
-          <div className="space-y-2">
-            <p className="text-2xs tracking-widest text-mute">鏈上身份標識</p>
-            {characterId ? (
-              <p className="font-mono text-xs text-ink px-4 py-2.5 bg-surface rounded border border-hairline shadow-sm break-all">{characterId}</p>
-            ) : (
-              <p className="text-2xs text-mute animate-pulse">上鏈中…</p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 }
