@@ -1,8 +1,10 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { getDeploymentStatus } from '@/lib/actions/deployment-status';
+import { getFaucetSnapshot } from '@/lib/actions/faucet-config';
 import { listStoryPresets } from '@/lib/stories/loader';
 import { DeployPanel } from './DeployPanel';
+import { FaucetConfigPanel } from './FaucetConfigPanel';
 
 export const metadata = {
     title: '部署管理 | 班主後台',
@@ -11,7 +13,11 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function DeployPage() {
-    const [status, presets] = await Promise.all([getDeploymentStatus(), listStoryPresets()]);
+    const [status, presets, faucetSnapshot] = await Promise.all([
+        getDeploymentStatus(),
+        listStoryPresets(),
+        getFaucetSnapshot(),
+    ]);
     return (
         <>
             <SiteNav />
@@ -20,10 +26,11 @@ export default async function DeployPage() {
                     eyebrow="DEPLOYMENT"
                     eyebrowMobile="DEPLOY"
                     title="梨園地基"
-                    meta="一鍵部署 / 種子化 / 開職缺"
+                    meta="一鍵部署 / 種子化 / 開職缺 / Faucet 設定"
                 />
-                <div className="mt-12">
+                <div className="mt-12 space-y-6">
                     <DeployPanel initialStatus={status} presets={presets} />
+                    <FaucetConfigPanel initial={faucetSnapshot} />
                 </div>
             </main>
         </>

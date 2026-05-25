@@ -610,13 +610,13 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
 
 function PromptStage({ prompt, onPromptChange }: { prompt: string; onPromptChange: (v: string) => void }) {
   return (
-    <div className="flex flex-col w-full max-w-2xl mx-auto space-y-6 py-4">
-      <p className="text-2xs tracking-widest text-mute text-center">寫下你想扮演的角色</p>
-      <div className="relative">
+    <div className="flex flex-col text-left">
+      <p className="text-2xs tracking-widest text-mute">寫下你想扮演的角色</p>
+      <div className="relative mt-4">
         <textarea
           value={prompt}
           onChange={(e) => onPromptChange(e.target.value)}
-          rows={4}
+          rows={5}
           maxLength={1200}
           placeholder="他是誰？從哪兒來？想做什麼？他身上一個讓人忘不掉的細節…"
           className="w-full rounded-lg border-2 border-dashed border-hairline bg-surface/30 px-6 py-5 text-[15px] leading-loose text-ink placeholder:text-mute/60 focus:border-cinnabar/50 focus:bg-surface/80 focus:outline-none transition-all resize-none dark:bg-elevated/20"
