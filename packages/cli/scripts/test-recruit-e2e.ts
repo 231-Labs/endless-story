@@ -22,11 +22,11 @@ import { Transaction } from '@mysten/sui/transactions';
 import { bcs } from '@mysten/sui/bcs';
 import {
   ENDLESS_STORY_DEPLOYMENT,
-  loadKeypair,
   makeSuiClient,
   tx as endlessTx,
   type SuiNetwork,
 } from '@endless-story/sdk';
+import { loadKeypair } from '@endless-story/sdk/node';
 import { generateAttributeSeed, rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { AttributeKey } from '@endless-story/llm/prompts';
 import { hasFlag, requireFlag } from '../src/lib/flags';

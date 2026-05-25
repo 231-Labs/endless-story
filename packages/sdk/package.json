@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
+    "./node": "./src/keypair-node.ts",
     "./tx": "./src/tx/index.ts",
     "./read": "./src/read/index.ts",
     "./generated/*": "./src/generated/*"

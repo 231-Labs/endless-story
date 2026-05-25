@@ -3,8 +3,11 @@
   "configurations": [
     {
       "name": "web",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@endless-story/web", "dev"],
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "source ~/.nvm/nvm.sh && nvm use 23.7.0 > /dev/null && pnpm --filter @endless-story/web dev"
+      ],
       "port": 3000,
       "autoPort": true
     }

@@ -20,7 +20,8 @@
 
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
-import { makeSuiClient, loadKeypair, type SuiClient } from '@endless-story/sdk';
+import { makeSuiClient, type SuiClient } from '@endless-story/sdk';
+import { loadKeypair } from '@endless-story/sdk/node';
 import { resolveNetwork } from './network.js';
 
 let _cached: { keypair: Ed25519Keypair; address: string } | null = null;

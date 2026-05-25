@@ -6,10 +6,14 @@
  * 「鏈上架構」原則 2.
  *
  * Subpath exports:
- *   - `@endless-story/sdk/client` — SuiClient factory + keypair loader
+ *   - `@endless-story/sdk/client` — SuiClient factory (browser-safe)
+ *   - `@endless-story/sdk/node`   — loadKeypair / makeSuiContext (Node-only)
  *   - `@endless-story/sdk/tx`     — PTB builders (one per Move module)
  *   - `@endless-story/sdk/read`   — view queries (one per Move module)
  *   - `@endless-story/sdk/generated/*` — codegen output (do not edit)
+ *
+ * **Browser-safe.** Anything that touches `node:fs` lives behind the
+ * `/node` subpath so it stays out of client bundles.
  */
 
 export * from './client';

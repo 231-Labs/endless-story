@@ -28,12 +28,12 @@ import * as url from 'node:url';
 import { Transaction } from '@mysten/sui/transactions';
 import {
   ENDLESS_STORY_DEPLOYMENT,
-  loadKeypair,
   makeSuiClient,
   tx as endlessTx,
   type SuiClient,
   type SuiNetwork,
 } from '@endless-story/sdk';
+import { loadKeypair } from '@endless-story/sdk/node';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
