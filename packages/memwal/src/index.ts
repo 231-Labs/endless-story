@@ -36,3 +36,10 @@ export type {
     RecallManualHit,
     RecallManualMemory,
 } from "./types.js";
+
+// Raw blob storage — minimal HTTP client over the public Walrus
+// publisher/aggregator. Use this for portraits, attachments, anything that
+// just needs to live on Walrus without the full memory (encrypt + vector)
+// pipeline.
+export * as blob from "./blob.js";
+export type { WalrusNetwork, PutBlobOptions, PutBlobResult } from "./blob.js";
