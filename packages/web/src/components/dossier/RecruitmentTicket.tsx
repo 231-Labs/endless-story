@@ -128,8 +128,16 @@ export function RecruitmentTicket({
 
     setStage('rolling');
 
-    // 1. Moderate
-    const modRes = await moderatePrompt(prompt);
+    // 1. Moderate (server action) — wrap so any network / serialization
+    // failure surfaces with phase context instead of bare "Failed to fetch".
+    let modRes;
+    try {
+      modRes = await moderatePrompt(prompt);
+    } catch (err) {
+      setError(`[moderate] ${err instanceof Error ? err.message : String(err)}`);
+      setStage('prompt');
+      return;
+    }
     if (!modRes.ok) {
       setError(modRes.reason ?? '審核未通過');
       setStage('prompt');
@@ -194,7 +202,7 @@ export function RecruitmentTicket({
       }
       mintedVoucherId = created.objectId;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(`[mint] ${err instanceof Error ? err.message : String(err)}`);
       setStage('prompt');
       return;
     }
@@ -215,7 +223,7 @@ export function RecruitmentTicket({
       setRolledValues(prev.rolledValues);
       setStage('pick');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(`[preview] ${err instanceof Error ? err.message : String(err)}`);
       setStage('prompt');
     }
   };
