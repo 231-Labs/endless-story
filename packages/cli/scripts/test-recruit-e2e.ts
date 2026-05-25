@@ -41,6 +41,9 @@ const SCHEMA: AttributeKey[] = [
 ];
 
 const VOUCHER_TTL_MS = 24n * 60n * 60n * 1000n; // 24h
+const ENDLESS_DECIMALS = 6;
+const VOUCHER_PRICE = 100n * 10n ** BigInt(ENDLESS_DECIMALS); // 100 ENDLESS
+const REFILL_AMOUNT = 1_000n * 10n ** BigInt(ENDLESS_DECIMALS); // 1000 ENDLESS
 
 interface ObjectChange {
   type: string;
@@ -69,7 +72,7 @@ async function main() {
   }
   if (d.network !== env) throw new Error(`network mismatch: deployment=${d.network} --env=${env}`);
 
-  const signer = loadKeypair(0);
+  const signer = loadKeypair();
   const admin = signer.toSuiAddress();
   const client = makeSuiClient({ network: env });
 
@@ -78,35 +81,63 @@ async function main() {
   console.log(`   saga     ${d.sagaId}`);
   console.log(`   scene[0] ${d.sceneIds[0]}`);
 
+  if (!d.faucetAdminCapId) throw new Error('faucetAdminCap missing — re-run bootstrap');
+
   // ═══════════════════════════════════════════════════════════════════
-  // Step 1: drip
+  // Step 1: ensure admin has ≥ VOUCHER_PRICE ENDLESS
+  //  - check current balance first
+  //  - if short, admin_mint (with tiny salt to dodge Sui tx-digest dedup)
   // ═══════════════════════════════════════════════════════════════════
-  if (!skipDrip) {
-    console.log('\n[step 1] drip ENDLESS from faucet…');
+  const coinType = `${d.packageId}::currency::CURRENCY`;
+  let currentCoins = await client.getCoins({ owner: admin, coinType, limit: 20 });
+  let currentBalance = currentCoins.data.reduce((s, c) => s + BigInt(c.balance), 0n);
+  console.log(`\n[step 1] current ENDLESS balance: ${currentBalance}`);
+  if (!skipDrip && currentBalance < VOUCHER_PRICE) {
+    // Salt amount with current ms so each run is a distinct tx payload — Sui's
+    // tx-digest dedup would otherwise reuse the prior run's cached effects.
+    const salt = BigInt(Date.now() % 100_000);
+    const amount = REFILL_AMOUNT + salt;
+    console.log(`         admin_mint ${amount} (REFILL_AMOUNT + ${salt} salt)…`);
     const tx = new Transaction();
-    tx.add(endlessTx.faucet.drip({ faucet: d.faucetId }));
+    tx.add(
+      endlessTx.faucet.adminMint({
+        admin: d.faucetAdminCapId,
+        faucet: d.faucetId,
+        amount,
+        recipient: admin,
+      }),
+    );
     const res = await client.signAndExecuteTransaction({
       transaction: tx,
       signer,
       options: { showEffects: true },
     });
     if (res.effects?.status?.status !== 'success') {
-      throw new Error(`drip failed: ${res.effects?.status?.error}`);
+      throw new Error(`admin_mint failed: ${res.effects?.status?.error}`);
     }
-    console.log(`   digest ${res.digest}`);
-  } else {
-    console.log('\n[step 1] skipped (--skip-drip)');
+    console.log(`         digest ${res.digest}`);
+    // Poll until indexer catches up.
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 800));
+      currentCoins = await client.getCoins({ owner: admin, coinType, limit: 20 });
+      currentBalance = currentCoins.data.reduce((s, c) => s + BigInt(c.balance), 0n);
+      if (currentBalance >= VOUCHER_PRICE) break;
+    }
+    console.log(`         balance after refill: ${currentBalance}`);
+  } else if (skipDrip) {
+    console.log('         skipped (--skip-drip)');
+  }
+  if (currentBalance < VOUCHER_PRICE) {
+    throw new Error(`insufficient ENDLESS after refill: have ${currentBalance}, need ${VOUCHER_PRICE}`);
   }
 
   // ═══════════════════════════════════════════════════════════════════
   // Step 2: find an ENDLESS coin to pay with, then mint the voucher
   // ═══════════════════════════════════════════════════════════════════
   console.log('\n[step 2] mint GenesisVoucher…');
-  const coinType = `${d.packageId}::currency::CURRENCY`;
-  const coinsRes = await client.getCoins({ owner: admin, coinType, limit: 5 });
-  const coin = coinsRes.data[0];
-  if (!coin) throw new Error('no ENDLESS coins owned by admin — drip first');
-  console.log(`   coin    ${coin.coinObjectId} (balance: ${coin.balance})`);
+  // step 1 guaranteed balance ≥ VOUCHER_PRICE; just reuse the snapshot.
+  const coinsRes = currentCoins;
+  console.log(`   coins   ${coinsRes.data.length} (total ${currentBalance})`);
 
   const seed = generateAttributeSeed();
   const seedHex = Array.from(seed)
@@ -115,14 +146,25 @@ async function main() {
   console.log(`   seed    ${seedHex.slice(0, 16)}… (32 bytes)`);
 
   const tx2 = new Transaction();
-  // Use the full ENDLESS coin as payment (refund-on-coin doesn't auto-give change
-  // for an exact-amount Coin, but mint_genesis_voucher accepts the whole coin
-  // amount as paid value).
+  // Merge all coins into the first, then split exactly VOUCHER_PRICE for
+  // payment. This matches what the wizard does — leaves change behind so
+  // subsequent runs still have a balance.
+  const coinIds = coinsRes.data.map((c) => c.coinObjectId);
+  const primary = tx2.object(coinIds[0]);
+  if (coinIds.length > 1) {
+    tx2.mergeCoins(
+      primary,
+      coinIds.slice(1).map((id) => tx2.object(id)),
+    );
+  }
+  const [payment] = tx2.splitCoins(primary, [VOUCHER_PRICE]);
+
   const reqs = tx2.add(endlessTx.recruit.noRequirements());
-  tx2.add(
+  // mint_genesis_voucher returns GenesisVoucher by value — must transfer.
+  const voucher = tx2.add(
     endlessTx.recruit.mintGenesisVoucher({
       saga: d.sagaId,
-      payment: coin.coinObjectId,
+      payment,
       attributeSeed: Array.from(seed),
       hint: null,
       requirements: reqs,
@@ -130,6 +172,7 @@ async function main() {
       ttlMs: VOUCHER_TTL_MS,
     }),
   );
+  tx2.transferObjects([voucher], admin);
   const mintRes = await client.signAndExecuteTransaction({
     transaction: tx2,
     signer,
@@ -137,6 +180,20 @@ async function main() {
   });
   if (mintRes.effects?.status?.status !== 'success') {
     throw new Error(`mint voucher failed: ${mintRes.effects?.status?.error}`);
+  }
+  // Wait for fullnode indexer so step 4 can read the voucher object back.
+  for (let i = 0; i < 15; i++) {
+    try {
+      await client.getObject({ id: '0x6', options: { showOwner: false } }); // cheap ping
+      const probe = await client.getObject({
+        id: findCreated((mintRes.objectChanges ?? []) as ObjectChange[], '::recruit::GenesisVoucher')[0] ?? '0x0',
+        options: { showOwner: false },
+      });
+      if (probe.data) break;
+    } catch {
+      // not yet
+    }
+    await new Promise((r) => setTimeout(r, 600));
   }
   const voucherId = findCreated((mintRes.objectChanges ?? []) as ObjectChange[], '::recruit::GenesisVoucher')[0];
   if (!voucherId) throw new Error('voucher not created');
@@ -190,7 +247,10 @@ async function main() {
     elements: attrElements,
     type: `${d.packageId}::character::AttributeValue`,
   });
-  tx3.add(
+  // redeem_voucher_to_character returns (OwnerCap, ControlCap). Character
+  // itself is transferred internally to voucher.payer (= admin in this test).
+  // Caller must transfer the two returned caps.
+  const caps = tx3.add(
     endlessTx.recruit.redeemVoucherToCharacter({
       cap: d.storytellerCapId,
       saga: d.sagaId,
@@ -202,6 +262,7 @@ async function main() {
       attributes,
     }),
   );
+  tx3.transferObjects([caps[0], caps[1]], admin);
   const redeemRes = await client.signAndExecuteTransaction({
     transaction: tx3,
     signer,

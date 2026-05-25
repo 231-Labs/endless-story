@@ -170,7 +170,7 @@ async function main() {
     return;
   }
 
-  const signer = loadKeypair(0);
+  const signer = loadKeypair();
   const admin = signer.toSuiAddress();
   const client = makeSuiClient({ network: env });
   console.log(`   admin     ${admin}`);

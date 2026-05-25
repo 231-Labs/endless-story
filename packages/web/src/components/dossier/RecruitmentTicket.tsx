@@ -161,7 +161,8 @@ export function RecruitmentTicket({
       const [payment] = tx.splitCoins(primary, [priceBase]);
 
       const reqs = tx.add(endlessTx.recruit.noRequirements());
-      tx.add(
+      // mint_genesis_voucher returns GenesisVoucher by value — must transfer.
+      const voucherObj = tx.add(
         endlessTx.recruit.mintGenesisVoucher({
           saga: sagaId,
           payment,
@@ -172,6 +173,7 @@ export function RecruitmentTicket({
           ttlMs: VOUCHER_TTL_MS,
         }),
       );
+      tx.transferObjects([voucherObj], account.address);
 
       const res = await signAndExecute({ transaction: tx });
       // dapp-kit's signAndExecuteTransaction returns digest only by default;
