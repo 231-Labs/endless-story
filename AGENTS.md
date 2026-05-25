@@ -90,16 +90,19 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 > **任何 session 在 runner 反覆測試時都不准踰越這六條原則。**
 > 若需要修改原則，必須在此節留改動紀錄與日期。
 
-### 六條核心原則
+### 七條核心原則
 
 1. **依賴單向**
-   `web → sdk → contracts` ／ `runner → sdk + memwal` ／ `cli → sdk + shared`
+   `web → sdk + memwal + llm` ／ `runner → sdk + memwal + llm` ／ `cli → sdk + shared`
    **`sdk` 不准 import `web`。`shared` 不准 import 任何上層。**
 2. **`sdk` 是鏈上互動唯一入口** — web/runner/cli 不准自己 `new SuiClient()`、不准自己手寫 PTB
 3. **`memwal` 是 Walrus / Seal 唯一入口** — 不准在 web/runner 裡直接 import `@mysten/walrus` 或 `@mysten/seal`
-4. **`shared/src/contract-ids.ts` 是部署輸出的單一真相** — `cli` 寫入，sdk/runner/web 只讀
-5. **server actions 優先** — admin 操作走 `web/src/lib/actions/`，除非真正需要 HTTP（webhook / SSE / RSS）才開 `app/api/`
-6. **`(site)` / `(admin)` route group 嚴格隔離** — admin layout + middleware 獨立，user 站台不被 admin 邏輯污染
+4. **`llm` 是文字 / 圖片 AI 唯一入口** — 不准在 web/runner 裡直接 `fetch('https://api.poe.com/...')`、import `@anthropic-ai/sdk` / `openai`，也不准散落 prompt 模板
+5. **`shared/src/contract-ids.ts` 是部署輸出的單一真相** — `cli` 寫入，sdk/runner/web 只讀
+6. **server actions 優先** — admin 操作走 `web/src/lib/actions/`，除非真正需要 HTTP（webhook / SSE / RSS）才開 `app/api/`
+7. **`(site)` / `(admin)` route group 嚴格隔離** — admin layout + middleware 獨立，user 站台不被 admin 邏輯污染
+
+> 2026-05-25：原為六原則。加入 `llm` 套件作為外部 AI 服務的唯一入口（與 memwal 同層），把舊 repo 散落在 web/runner 的 Poe/OpenAI 直呼集中管理。
 
 ### 目錄契約
 
@@ -108,9 +111,10 @@ contracts/endless_story/sources/   ← Move 模組（依 Phase 1 依序進場）
 packages/
   shared/    型別 + 純函式 + contract-ids；零依賴
   sdk/       generated/ + client.ts + tx/ + read/；鏈上唯一入口
-  memwal/    Walrus + Seal 唯一入口（已有，不動）
+  memwal/    Walrus + Seal 唯一入口（已有；Phase 2 加 blob API）
+  llm/       Poe / Anthropic 文字 + OpenAI 圖片 唯一入口（Phase 2 新建）
   cli/       deploy / bootstrap / reset / stories；管 publish + 種世界
-  runner/    Agent / scheduler / LLM（Phase 2 才動，目前 stub）
+  runner/    Agent / scheduler（Phase 4 才動，目前 stub；LLM 邏輯已外移到 llm/）
   web/       UI；app/(site)/* + app/(admin)/* 隔離
 ```
 
@@ -120,9 +124,9 @@ packages/
 |---|---|---|
 | **0** | skill 改名、cli 骨架、sdk scaffold、contract-ids、(site)/(admin) 重構 | ✅ 2026-05-24（commit `f99d28f`） |
 | **1** | Move 模組依序遷移：見下方細項。**1.1–1.5c 已完成；1.6 + 1.7 暫緩**（不阻塞前端串接） | 部分完成 |
-| **2** | SDK 完整（codegen + tx + read）→ admin 一鍵部署 UI → 角色徵召 e2e | **下一段**（從 codegen 起手） |
-| **3** | Web mock → SDK 真實串接（Subscribe → Memories → 其餘 mock）| Phase 2 之後 |
-| **4** | Runner 上線（LLM、scheduler、memwal 寫入）+ 補完 1.6 event + 1.7 commitment | 賽後 |
+| **2** | SDK（codegen + tx + read）✅ → `llm` 套件遷移（舊 repo Poe/OpenAI 撿過來）→ `memwal` 加 blob API → admin 一鍵部署 UI → 角色徵召 e2e | **進行中**（2.1/2.2 ✅；llm 遷移啟動） |
+| **3** | Web mock → SDK / llm / memwal 真實串接（Subscribe → Memories → 其餘 mock）| Phase 2 之後 |
+| **4** | Runner 上線（scheduler、daily POV、memwal flush）+ 補完 1.6 event + 1.7 commitment | 賽後 |
 
 **Phase 1 模組進度**（依依賴順序）：
 
@@ -146,7 +150,7 @@ packages/
 - ❌ 不要為了 runner 方便，把 memwal 邏輯 inline 到 runner
 - ❌ 不要為了快，在 `shared/` 塞 runner 專用型別（runner 自己有 src/types/）
 - ❌ 不要為了 demo 直接改 `contract-ids.ts`，要走 cli 部署
-- ✅ runner 缺什麼 API，去 `sdk/` 加；缺什麼型別，去 `shared/` 加；缺什麼 walrus 操作，去 `memwal/` 加
+- ✅ runner 缺什麼 API，去 `sdk/` 加；缺什麼型別，去 `shared/` 加；缺什麼 walrus 操作，去 `memwal/` 加；缺什麼 LLM / 圖片操作，去 `llm/` 加
 
 ### 部署管線
 
@@ -319,6 +323,7 @@ Move 合約 · MemWal SDK · 真實 LLM · RSS · POV engine · IP 經濟（pitc
 - ❌ 不要繞過 `web/src/lib/api/` facade
 - ❌ 不要繞過 `sdk` 直接 `new SuiClient()`
 - ❌ 不要在 web/runner 直接 import `@mysten/walrus` 或 `@mysten/seal`（走 memwal）
+- ❌ 不要在 web/runner 直接 `fetch` Poe / OpenAI / Anthropic，或散落 prompt 模板（走 llm）
 - ❌ 不要手動編輯 `shared/src/contract-ids.ts`（cli 寫入）
 - ❌ 不要在 `(site)` route 裡放 admin 操作
 
@@ -349,16 +354,19 @@ Light / dark · 徵召票底圖切換 · type-check 綠燈
 
 ## Quick win
 
-**現在進行中**：**Phase 2** — SDK + admin 部署 UI + 角色徵召 e2e（從 codegen 起手）。詳見「鏈上架構 · Phase 路線圖」。
+**現在進行中**：**Phase 2.2L / 2.2M / 2.2W** — 從舊 repo 遷移 LLM + Image + server actions 的基礎建設。詳見「下次接班 · Phase 2 推薦路徑」。
 
 **已完成**：
 - Phase 0：foundation + cli + sdk scaffold + route group + skill 改名
 - Phase 1.1–1.5c：currency / faucet / world / saga / scene / character / recruit 全部就位（47 unit tests 綠燈）
 - 鏈上「徵召」完整可用：voucher mint → redeem → character + cap，validation + requirements 內建
+- Phase 2.1：SDK codegen（commit `aa638cc`，7 modules）
+- Phase 2.2：SDK tx / read wrappers（thin、type-friendly、recruit-build acceptance 過）
 
 **暫緩**：
 - Phase 1.6 event.move、1.7 commitment.move（runner 用、前端 demo 不需要）
 - Web 端 i18n（比賽前定稿時做）
+- 角色「轉投別行當」（合約不支援；UX 上用「緣寂」優雅收尾代替）
 
 ---
 
@@ -366,34 +374,49 @@ Light / dark · 徵召票底圖切換 · type-check 綠燈
 
 > 任何新 session 開工前先讀這節。順序不可跳。
 
-### Phase 2 推薦路徑（6 步，每步一個 commit）
+### Phase 2 推薦路徑（每步一個 commit）
 
 | 步驟 | 動作 | 依賴 | 驗收 |
 |---|---|---|---|
-| **2.1** | `pnpm --filter @endless-story/sdk codegen` 跑 `@mysten/codegen`，輸出落 `packages/sdk/src/generated/`；commit | 無 | 7 個 module 都有對應 `.ts`（currency / faucet / world / saga / scene / character / recruit）；type-check 綠 |
-| **2.2** | 手寫 SDK wrappers：`sdk/src/tx/{currency,faucet,world,saga,scene,character,recruit}.ts`（PTB ergonomic builder）+ `sdk/src/read/*.ts`（view query 包裝）。**規則：thin，只加 type 友善，不放商業邏輯** | 2.1 | 至少能 build `mint_genesis_voucher` + `redeem_voucher_to_character` 兩個 tx |
-| **2.3** | 擴 `cli/scripts/bootstrap.ts` — publish 後 PTB 種：world → saga → 8 個 scenes → 1 個 demo voucher（驗證鑄角路徑）| 2.2 + 真實 publish | 跑通 `pnpm exec tsx packages/cli/scripts/bootstrap.ts --env devnet`，`shared/src/contract-ids.ts` 寫入完整 deployment snapshot |
-| **2.4** | admin UI `app/(admin)/admin/page.tsx` — 一鍵 deploy 按鈕 + 顯示部署狀態 + 印出 World/Saga IDs。Server action 包 cli script | 2.3 | admin 頁能觸發部署、即時看到結果 |
-| **2.5** | 「發布職缺」UI（admin 端）— storyteller 表單填 VoucherRequirements + intent_hint，後端執行 `recruit::mint_genesis_voucher`，把 voucher 給 saga treasury 持有當作 inventory | 2.4 | admin 端有徵召管理頁、可發布職缺、職缺出現在首頁徵召 carousel |
-| **2.6** | 前端 `RecruitmentTicket` wizard 串接 — 把現有 mock state machine 換成真的呼叫：擲牌 → mint_genesis_voucher（user 付費）→ 預覽 → 轉 voucher 給 storyteller → redeem → 跳到新角色頁 | 2.5 | 端到端徵召流程在 web 跑得通，新角色真的鑄上 devnet |
+| **2.1** ✅ | `pnpm --filter @endless-story/sdk codegen` → `packages/sdk/src/generated/` | — | 7 個 module 都有 `.ts`；type-check 綠（commit `aa638cc`） |
+| **2.2** ✅ | SDK wrappers `tx/*.ts` + `read/*.ts`，thin、只加 type 友善 | 2.1 | mint_voucher + redeem_voucher 兩條 tx 構造通過（`sdk/src/__check__/recruit-build.ts`） |
+| **2.2L** | **新建 `packages/llm/`** — 舊 repo 的 Poe/Anthropic 文字 + OpenAI 圖片 + prompt 模板乾淨遷移；新增 `seed/roll.ts`（HKDF deterministic roll） | 2.2 | L1–L6 全部 commit；type-check 綠；smoke test 過 |
+| **2.2M** | **`memwal` 加 blob API** — `putBlob(bytes)` + `getBlobUrl(blobId, network)`，餵 portrait → Walrus | 2.2 | M1 commit；type-check 綠 |
+| **2.2W** | **Web server actions** — `lib/actions/{moderate-prompt, preview-character, generate-portrait, redeem-voucher}.ts`。各包 llm + memwal + sdk；admin keypair 自動共簽 redeem | 2.2L + 2.2M | W1 commit；type-check 綠；可獨立測（mock） |
+| **2.3** | 擴 `cli/scripts/bootstrap.ts` — publish + PTB 種 World → Saga → 8 scenes → Faucet 種子；寫回完整 `contract-ids.ts`。寫 `cli/scripts/test-recruit-e2e.ts` 純 cli 走通 drip → mint → redeem | 2.2 | `pnpm exec tsx packages/cli/scripts/bootstrap.ts --env devnet` 通；e2e 腳本印出 character ID |
+| **2.4** | admin UI 一鍵 deploy 按鈕（server action 包 cli script） | 2.3 | admin 頁能觸發部署、即時看到結果 |
+| **2.5** | 「發布職缺」admin UI — **鏈下** JSON/DB CRUD（roleIntent + intentHint + basePrice + VoucherRequirements）。職缺出現在首頁徵召 carousel | 2.4 | admin 端可發布／編輯／停用職缺 |
+| **2.6** | RecruitmentTicket wizard 改造成抽卡模型：`prompt → 付費 mint voucher → LLM rolling → reveal(1 候選) → accept (auto-redeem) / reject (緣寂收尾) → 跳新角色頁`。`/dossier?id=X` 接 SDK read | 2.2W + 2.5 + dapp-kit | user 端走通真實 devnet 徵召 |
+
+**設計拍板**（2026-05-25）：
+
+- **抽卡模型**：1 voucher = 1 roll = 1 candidate。失敗讓 voucher 過期（不退費），UX 上用「緣寂」優雅收尾，**不做轉投別行當**（合約不支援，且破壞抽卡 mental model）
+- **共簽機制**：server action + admin keypair 自動 redeem（storyteller 的策展權在「發布職缺」階段，不在每個 redeem）
+- **預覽生成**：真實 LLM（Poe → Sonnet/GLM-4.6 + OpenAI gpt-image-2）；roll 用 voucher.attribute_seed 做 HKDF 確定性產生（同 seed = 同角色，公平可驗證）
+- **Portrait 儲存**：Walrus（testnet publisher/aggregator）；`character.image_url` 寫 aggregator URL
 
 ### 第一個 session-opening 動作（複製貼上）
 
 ```bash
 # 1. 確認環境
-sui client active-env  # 該是 devnet
-cat /Users/harperdelaviga/endless-story-new/AGENTS.md | head -200  # 重溫架構
+sui client active-env  # 該是 devnet (testnet 也可，但 cli bootstrap 要明示 --env testnet)
+nvm use                # .nvmrc 鎖 23.7.0；codegen 需 ≥ 20.11
 
-# 2. 跑 codegen
+# 2. 重溫架構（必讀，跳步成本很高）
+cat /Users/harperdelaviga/endless-story-new/AGENTS.md | head -200
+
+# 3. type-check 整個 repo（確認接班時是綠的）
 cd /Users/harperdelaviga/endless-story-new
-pnpm --filter @endless-story/sdk codegen
-ls packages/sdk/src/generated/  # 確認 7 個 module 出來
-
-# 3. type-check 整個 repo
 pnpm -r type-check
 ```
 
-如果 codegen 失敗（API 變動 / 不相容），先 debug 不要繞過。如果順利就 commit `generated/`，進 2.2。
+**接班入口判斷**：
+- 如果 `packages/llm/` 不存在 → 從 **2.2L** 開始（看 L0–L6 task list 或重讀此節「設計拍板」）
+- 如果 `packages/llm/` 存在但 `memwal/src/blob.ts` 不存在 → 從 **2.2M** 開始
+- 如果都存在但 `web/src/lib/actions/` 是空的 → 從 **2.2W** 開始
+- 都存在 → 進 **2.3**（cli bootstrap + devnet 部署）
+
+codegen 失敗時先 debug，不要繞過（常見原因：node 版本 < 20.11，請 `nvm use`）。
 
 ### 啟動 prompt 範本
 
@@ -404,8 +427,10 @@ pnpm -r type-check
 
 ### 警示燈
 
-- ❌ 不要跳到 2.6 直接動前端（會發現 SDK 還沒包好）
+- ❌ 不要跳到 2.6 直接動前端（會發現 SDK / llm / memwal blob / server actions 都還沒準備好）
 - ❌ 不要在 web 裡直接 `new SuiClient()`（鐵律原則 2）
-- ❌ 不要手改 `packages/shared/src/contract-ids.ts`（鐵律原則 4）
+- ❌ 不要在 web/runner 直接 `fetch` Poe / OpenAI（鐵律原則 4，走 llm）
+- ❌ 不要為了快，把 LLM 邏輯內聯到 server action（prompt 模板/parsing 都放 `packages/llm/src/prompts/`）
+- ❌ 不要手改 `packages/shared/src/contract-ids.ts`（鐵律原則 5）
 - ❌ devnet 掛了改用 testnet 要明確 flag 跟使用者確認
 - ✅ 任何 SDK / cli / admin 改動前再讀一次「鏈上架構」六原則
