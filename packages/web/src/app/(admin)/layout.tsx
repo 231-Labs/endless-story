@@ -1,3 +1,5 @@
+import { AdminTabs } from './admin/AdminTabs';
+
 /**
  * (admin) route group layout.
  *
@@ -16,6 +18,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div data-route-group="admin">
       {/* TODO: AdminNav once first real admin page (deploy) ships. */}
       {children}
+      <AdminTabs />
     </div>
   );
 }

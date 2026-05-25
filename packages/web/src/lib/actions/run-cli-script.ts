@@ -38,9 +38,13 @@ const REPO_ROOT = path.resolve(process.cwd(), '..', '..');
 
 export async function runCliScript(input: RunCliScriptInput): Promise<RunCliScriptResult> {
     // Note: server actions run from /packages/web; REPO_ROOT resolves to repo root.
+    // `run` is REQUIRED — `pnpm deploy` (without `run`) is a built-in pnpm
+    // command for deploying a workspace package, which would shadow our cli
+    // script and error with ERR_PNPM_INVALID_DEPLOY_TARGET.
     const args = [
         '--filter',
         '@endless-story/cli',
+        'run',
         input.script,
         '--',
         '--env',

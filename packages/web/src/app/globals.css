@@ -104,11 +104,11 @@ body {
   }
 
   .es-choice-card {
-    @apply rounded-md border border-hairline bg-elevated/65 text-left transition-all hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5 dark:bg-elevated/45;
+    @apply p-5 rounded-md border border-hairline bg-elevated/65 text-left transition-all hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5 dark:bg-elevated/45;
   }
 
   .es-outline-button {
-    @apply rounded border border-hairline bg-surface text-mute transition-colors hover:border-cinnabar hover:text-cinnabar dark:bg-elevated/30;
+    @apply rounded border border-hairline bg-surface px-4 py-2 text-mute transition-colors hover:border-cinnabar hover:text-cinnabar dark:bg-elevated/30;
   }
 
   /** 梨園／章回／名冊等「功能頁」主標 — 統一字階、字距，與 SiteNav 對齊 */

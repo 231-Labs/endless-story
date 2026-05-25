@@ -14,7 +14,7 @@ export default async function AdminRecruitmentsPage() {
     return (
         <>
             <SiteNav />
-            <main className="mx-auto max-w-5xl px-4 py-8 sm:px-10 sm:py-16">
+            <main className="mx-auto max-w-5xl px-4 py-8 sm:px-10 sm:py-16 pb-[max(7rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))]">
                 <PageLeadTitleBlock
                     eyebrow="RECRUITMENTS"
                     eyebrowMobile="徵召"

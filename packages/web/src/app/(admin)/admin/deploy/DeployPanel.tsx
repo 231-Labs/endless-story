@@ -34,7 +34,7 @@ export function DeployPanel({ initialStatus }: Props) {
         <div className="space-y-6">
             {/* ── Status snapshot ── */}
             <section className="es-soft-panel overflow-hidden">
-                <div className="border-b border-hairline px-6 py-4 flex items-center justify-between">
+                <div className="border-b border-hairline bg-surface/50 px-6 py-4 flex items-center justify-between">
                     <h2 className="font-serif text-lg text-ink">部署狀態</h2>
                     <span
                         className={`rounded-full px-3 py-0.5 text-xs ${
@@ -63,7 +63,7 @@ export function DeployPanel({ initialStatus }: Props) {
 
             {/* ── Env readiness ── */}
             <section className="es-soft-panel overflow-hidden">
-                <div className="border-b border-hairline px-6 py-4">
+                <div className="border-b border-hairline bg-surface/50 px-6 py-4">
                     <h2 className="font-serif text-lg text-ink">環境變數</h2>
                     <p className="text-xs text-mute mt-1">
                         缺項不會立刻 fail，server actions 觸發時才報錯。請設在 web/.env.local
@@ -103,7 +103,7 @@ export function DeployPanel({ initialStatus }: Props) {
 
             {/* ── Actions ── */}
             <section className="es-soft-panel overflow-hidden">
-                <div className="border-b border-hairline px-6 py-4 flex items-center justify-between">
+                <div className="border-b border-hairline bg-surface/50 px-6 py-4 flex items-center justify-between">
                     <h2 className="font-serif text-lg text-ink">執行</h2>
                     <select
                         value={env}
@@ -142,7 +142,7 @@ export function DeployPanel({ initialStatus }: Props) {
             {/* ── Log output ── */}
             {(log || isPending) && (
                 <section className="es-soft-panel overflow-hidden">
-                    <div className="border-b border-hairline px-6 py-4 flex items-center justify-between">
+                    <div className="border-b border-hairline bg-surface/50 px-6 py-4 flex items-center justify-between">
                         <h2 className="font-serif text-lg text-ink">輸出</h2>
                         {lastResult && (
                             <span

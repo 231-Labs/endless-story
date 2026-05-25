@@ -118,13 +118,13 @@ function RowView({
 }) {
     const expired = new Date(r.expiresAt).getTime() < Date.now();
     return (
-        <div className="grid gap-3 px-6 py-4 sm:grid-cols-[1fr_auto] sm:items-start">
-            <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                    <span className="font-serif text-base text-ink">{r.specialty || '(未命名行當)'}</span>
-                    <span className="text-xs text-mute">· {r.sagaName}</span>
+        <div className="grid gap-4 px-6 py-5 sm:grid-cols-[1fr_auto] sm:items-start">
+            <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                    <span className="font-serif text-lg text-ink">{r.specialty || '(未命名行當)'}</span>
+                    <span className="text-sm text-mute">· {r.sagaName}</span>
                     <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                             r.active && !expired
                                 ? 'bg-jade/15 text-jade'
                                 : expired
@@ -132,18 +132,33 @@ function RowView({
                                   : 'bg-mute/15 text-mute'
                         }`}
                     >
-                        {expired ? '已過期' : r.active ? '上架' : '下架'}
+                        {expired ? '已過期' : r.active ? '上架中' : '已下架'}
                     </span>
                 </div>
-                <p className="text-sm text-mute line-clamp-2">{r.roleIntent || '(無說明)'}</p>
-                <p className="text-xs text-mute">
-                    {r.basePrice} ENDLESS · {r.slots} 缺 · 至 {r.expiresAt.slice(0, 10)}
-                    {r.minAttributes &&
-                        Object.entries(r.minAttributes)
-                            .filter(([, v]) => typeof v === 'number')
-                            .map(([k, v]) => ` · ${k} ≥ ${v}`)
-                            .join('')}
-                </p>
+                <p className="text-sm leading-relaxed text-mute line-clamp-2">{r.roleIntent || '(無說明)'}</p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-mute">
+                    <span className="flex items-center gap-1">
+                        <CoinIcon className="h-3.5 w-3.5" />
+                        {r.basePrice} ENDLESS
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <UserIcon className="h-3.5 w-3.5" />
+                        {r.slots} 缺
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <CalendarIcon className="h-3.5 w-3.5" />
+                        至 {r.expiresAt.slice(0, 10)}
+                    </span>
+                    {r.minAttributes && Object.keys(r.minAttributes).length > 0 && (
+                        <span className="flex items-center gap-1 border-l border-hairline pl-4">
+                            屬性要求: 
+                            {Object.entries(r.minAttributes)
+                                .filter(([, v]) => typeof v === 'number')
+                                .map(([k, v]) => `${k}≥${v}`)
+                                .join(', ')}
+                        </span>
+                    )}
+                </div>
             </div>
             <div className="flex gap-2 self-start">
                 <button
@@ -159,12 +174,43 @@ function RowView({
                 <button
                     type="button"
                     onClick={onDelete}
-                    className="es-outline-button text-xs text-cinnabar"
+                    className="es-outline-button text-xs text-cinnabar hover:border-cinnabar hover:bg-cinnabar/5"
                 >
                     刪除
                 </button>
             </div>
         </div>
+    );
+}
+
+function CoinIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <circle cx="12" cy="12" r="8" />
+            <path d="M12 8v8" />
+            <path d="M10 10h4" />
+            <path d="M10 14h4" />
+        </svg>
+    );
+}
+
+function UserIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+        </svg>
+    );
+}
+
+function CalendarIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+            <line x1="16" x2="16" y1="2" y2="6" />
+            <line x1="8" x2="8" y1="2" y2="6" />
+            <line x1="3" x2="21" y1="10" y2="10" />
+        </svg>
     );
 }
 
@@ -191,136 +237,144 @@ function EditForm({
                 e.preventDefault();
                 onSave(draft);
             }}
-            className="space-y-4 px-6 py-5"
+            className="flex flex-col"
         >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="行當 specialty">
-                    <input
-                        className="es-field w-full"
-                        value={draft.specialty}
-                        onChange={(e) => setDraft({ ...draft, specialty: e.target.value })}
-                        placeholder="武小生 / 青衣 / 老生 / …"
-                        required
-                    />
-                </Field>
-                <Field label="基底價 basePrice">
-                    <input
-                        type="number"
-                        className="es-field w-full"
-                        value={draft.basePrice}
-                        onChange={(e) => setDraft({ ...draft, basePrice: Number(e.target.value) })}
-                        min={0}
-                        required
-                    />
-                </Field>
-                <Field label="缺額 slots">
-                    <input
-                        type="number"
-                        className="es-field w-full"
-                        value={draft.slots}
-                        onChange={(e) => setDraft({ ...draft, slots: Number(e.target.value) })}
-                        min={1}
-                        required
-                    />
-                </Field>
-                <Field label="到期日 expiresAt">
-                    <input
-                        type="date"
-                        className="es-field w-full"
-                        value={draft.expiresAt.slice(0, 10)}
-                        onChange={(e) =>
-                            setDraft({
-                                ...draft,
-                                expiresAt: new Date(e.target.value).toISOString(),
-                            })
-                        }
-                        required
-                    />
-                </Field>
-                <Field label="班別 membership">
-                    <select
-                        className="es-field w-full"
-                        value={draft.membership}
-                        onChange={(e) =>
-                            setDraft({
-                                ...draft,
-                                membership: e.target.value as RecruitmentMembership,
-                            })
-                        }
-                    >
-                        <option value="internal">internal (班內)</option>
-                        <option value="external">external (江湖)</option>
-                    </select>
-                </Field>
-                <Field label="性別限制 gender (空 = 不限)">
-                    <select
-                        className="es-field w-full"
-                        value={draft.genderRequirement ?? ''}
-                        onChange={(e) =>
-                            setDraft({
-                                ...draft,
-                                genderRequirement: (e.target.value || undefined) as AdminRecruitment['genderRequirement'],
-                            })
-                        }
-                    >
-                        <option value="">不限</option>
-                        <option value="male">男性</option>
-                        <option value="female">女性</option>
-                        <option value="other">不限</option>
-                    </select>
-                </Field>
-            </div>
-
-            <Field label="角色定位 roleIntent">
-                <textarea
-                    className="es-field w-full"
-                    rows={4}
-                    value={draft.roleIntent}
-                    onChange={(e) => setDraft({ ...draft, roleIntent: e.target.value })}
-                    placeholder="這個角色在故事中該佔什麼位置、能製造什麼張力…"
-                />
-            </Field>
-
-            <div>
-                <p className="text-sm text-ink mb-2">屬性最低要求 minAttributes (0 = 不要求)</p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {ATTR_KEYS.map((a) => {
-                        const cur =
-                            (draft.minAttributes as Record<string, number> | undefined)?.[a.key] ??
-                            0;
-                        return (
-                            <Field key={a.key} label={a.label}>
-                                <input
-                                    type="number"
-                                    className="es-field w-full"
-                                    value={cur}
-                                    min={0}
-                                    max={100}
-                                    onChange={(e) =>
-                                        updateAttr(a.key, Number(e.target.value) || undefined)
-                                    }
-                                />
-                            </Field>
-                        );
-                    })}
+            <div className="border-b border-hairline bg-surface/50 px-6 py-4 flex items-center justify-between">
+                <h3 className="font-serif text-lg text-ink">編輯職缺</h3>
+                <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="accent-cinnabar"
+                            checked={draft.active}
+                            onChange={(e) => setDraft({ ...draft, active: e.target.checked })}
+                        />
+                        上架
+                    </label>
                 </div>
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                    type="checkbox"
-                    checked={draft.active}
-                    onChange={(e) => setDraft({ ...draft, active: e.target.checked })}
-                />
-                立刻上架（出現在首頁徵召）
-            </label>
+            <div className="space-y-6 px-6 py-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Field label="行當 specialty">
+                        <input
+                            className="es-field w-full"
+                            value={draft.specialty}
+                            onChange={(e) => setDraft({ ...draft, specialty: e.target.value })}
+                            placeholder="武小生 / 青衣 / 老生 / …"
+                            required
+                        />
+                    </Field>
+                    <Field label="基底價 basePrice">
+                        <input
+                            type="number"
+                            className="es-field w-full"
+                            value={draft.basePrice}
+                            onChange={(e) => setDraft({ ...draft, basePrice: Number(e.target.value) })}
+                            min={0}
+                            required
+                        />
+                    </Field>
+                    <Field label="缺額 slots">
+                        <input
+                            type="number"
+                            className="es-field w-full"
+                            value={draft.slots}
+                            onChange={(e) => setDraft({ ...draft, slots: Number(e.target.value) })}
+                            min={1}
+                            required
+                        />
+                    </Field>
+                    <Field label="到期日 expiresAt">
+                        <input
+                            type="date"
+                            className="es-field w-full"
+                            value={draft.expiresAt.slice(0, 10)}
+                            onChange={(e) =>
+                                setDraft({
+                                    ...draft,
+                                    expiresAt: new Date(e.target.value).toISOString(),
+                                })
+                            }
+                            required
+                        />
+                    </Field>
+                    <Field label="班別 membership">
+                        <select
+                            className="es-field w-full"
+                            value={draft.membership}
+                            onChange={(e) =>
+                                setDraft({
+                                    ...draft,
+                                    membership: e.target.value as RecruitmentMembership,
+                                })
+                            }
+                        >
+                            <option value="internal">internal (班內)</option>
+                            <option value="external">external (江湖)</option>
+                        </select>
+                    </Field>
+                    <Field label="性別限制 gender (空 = 不限)">
+                        <select
+                            className="es-field w-full"
+                            value={draft.genderRequirement ?? ''}
+                            onChange={(e) =>
+                                setDraft({
+                                    ...draft,
+                                    genderRequirement: (e.target.value || undefined) as AdminRecruitment['genderRequirement'],
+                                })
+                            }
+                        >
+                            <option value="">不限</option>
+                            <option value="male">男性</option>
+                            <option value="female">女性</option>
+                            <option value="other">不限</option>
+                        </select>
+                    </Field>
+                </div>
 
-            <div className="flex gap-2 pt-2">
-                <button type="submit" className="es-outline-button text-sm">
-                    儲存
-                </button>
+                <Field label="角色定位 roleIntent">
+                    <textarea
+                        className="es-field w-full"
+                        rows={4}
+                        value={draft.roleIntent}
+                        onChange={(e) => setDraft({ ...draft, roleIntent: e.target.value })}
+                        placeholder="這個角色在故事中該佔什麼位置、能製造什麼張力…"
+                    />
+                </Field>
+
+                <div className="rounded-md border border-hairline bg-canvas/40 p-4">
+                    <p className="text-sm text-ink mb-3 font-medium">屬性最低要求 minAttributes <span className="text-mute font-normal text-xs ml-2">(0 = 不要求)</span></p>
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        {ATTR_KEYS.map((a) => {
+                            const cur =
+                                (draft.minAttributes as Record<string, number> | undefined)?.[a.key] ??
+                                0;
+                            return (
+                                <Field key={a.key} label={a.label}>
+                                    <input
+                                        type="number"
+                                        className="es-field w-full"
+                                        value={cur}
+                                        min={0}
+                                        max={100}
+                                        onChange={(e) =>
+                                            updateAttr(a.key, Number(e.target.value) || undefined)
+                                        }
+                                    />
+                                </Field>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            <div className="border-t border-hairline bg-surface/50 px-6 py-4 flex items-center justify-end gap-3">
                 <button type="button" onClick={onCancel} className="es-outline-button text-sm">
                     取消
+                </button>
+                <button type="submit" className="rounded border border-transparent bg-cinnabar px-6 py-2 text-sm text-white transition-colors hover:bg-seal">
+                    儲存職缺
                 </button>
             </div>
         </form>
