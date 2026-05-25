@@ -111,10 +111,10 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
     const tx = new Transaction();
     if (isAdmin && faucetAdminCapId) {
       // Admin → admin_mint to self. Bypasses the 24h cooldown that drip
-      // enforces per-address. Salt the amount so consecutive clicks produce
-      // distinct tx payloads (avoids Sui's tx-digest dedup returning cached
-      // effects from the previous mint).
-      const baseAmount = 10_000_000n; // 10 ENDLESS at 6 decimals
+      // enforces per-address. 1000 ENDLESS = ~10 vouchers at typical prices.
+      // Salt the amount so consecutive clicks produce distinct tx payloads
+      // (avoids Sui's tx-digest dedup returning cached effects).
+      const baseAmount = 1_000_000_000n; // 1000 ENDLESS at 6 decimals
       const salt = BigInt(Date.now() % 100_000);
       tx.add(
         endlessTx.faucet.adminMint({
