@@ -2,6 +2,7 @@
 
 > 給下一個 session 的接班備忘（**唯一維護檔**）。Repo: [231-Labs/endless-story](https://github.com/231-Labs/endless-story)
 > 比賽：Sui Overflow 2026 · Walrus 賽道，提交 deadline **2026-06-21**
+> 舊 repo `/Users/harperdelaviga/Endless-Story`（**只讀對照，不要動**）
 
 ---
 
@@ -16,505 +17,181 @@
 
 ```bash
 cd /Users/harperdelaviga/endless-story-new
+nvm use                                       # .nvmrc 鎖 23.7.0 (codegen 需 ≥ 20.11)
 pnpm --filter @endless-story/web dev          # http://localhost:3000
-pnpm --filter @endless-story/web type-check
+pnpm -r type-check                            # 全 repo 綠燈確認
 ```
 
-**Preview tools 可用** — `.claude/launch.json` 已配好 `web` server。直接 `preview_start("web")`。
-
-舊 repo（`/Users/harperdelaviga/Endless-Story`）= operator / admin 工具，**不要動**。
-
----
-
-## 設計系統
-
-### Theme tokens（semantic、非 Tailwind 預設色）
-
-| Token | Light | Dark | 用途 |
-|---|---|---|---|
-| `canvas` | `#faf8f3` | `#0f0e0c` | **body 背景**（最底層） |
-| `surface` | `#faf8f3` | `#191611` | **卡片 / nav / sticky 浮層** |
-| `elevated` | `#fffefa` | `#251f18` | modal / popover / floating |
-| `ink` | `#18181b` | `#f2e8d2` | 主文字 |
-| `mute` | `#71717a` | `#a69a80` | 次文字、icon |
-| `hairline` | `#e5e5e0` | `#43382a` | 邊線 |
-| `cinnabar` | `#b04a3c` | `#cca45c`（金）| 主 accent（dark = 暖金） |
-| `jade` | `#6c8a6f` | `#90a47e` | 次 accent |
-| `seal` | `#a3392a` | `#e0b86c` | cinnabar hover state |
-
-定義：`packages/web/src/app/globals.css` 的 `:root` + `.dark`。Tailwind：`bg-canvas`、`text-ink` 等（`tailwind.config.ts`、`darkMode: 'class'`）。
-
-### Dark mode 鐵律
-
-**不要把 canvas 同時當 body 背景跟卡片背景。**
-
-- HTML body → `bg-canvas`
-- Card / nav / sticky → `bg-surface`
-- Modal / floating / candidate card → `bg-elevated`
-- Input / 凹陷區 → `bg-canvas dark:bg-canvas/40`
-- 票根 perforation cut-out → 保留 `bg-canvas`
-
-Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className → 抽到 globals.css 的 `es-*`：
-
-| Class | 用途 |
-|---|---|
-| `.es-icon-button` | 圓形 icon 按鈕 |
-| `.es-soft-panel` | 內凹軟面板 |
-| `.es-field` | input / textarea |
-| `.es-choice-card` | 可點選候選卡 |
-| `.es-outline-button` | outlined secondary |
-| `.es-page-lead-eyebrow` · `.es-page-lead-title` | 人物誌／梨園章回／梨園手卷覆層等**統一主標**；`:root --es-site-nav-h` 與 SiteNav 高度對齊（sticky 頂距） |
-
-`PageLeadTitleBlock`（`components/common/PageLeadTitleBlock.tsx`）：主標 + 輔題 + 右欄 slot（例如搜尋）。
-
-### 動畫慣例
-
-- **Enter**：`requestAnimationFrame` 後 toggle → `translate-y-4 opacity-0` → `translate-y-0 opacity-100`，`duration-300 ease-out`
-- **Exit**：反向 + `setTimeout` 280ms 才 unmount
-- **Stage 切換**：`key={stage}` + `.animate-fade-in-up`
-- **Scroll hint**：`.animate-scroll-down-line`（首頁 Hero 用）
-
-### 靜態資產（近期）
-
-| 路徑 | 用途 |
-|---|---|
-| `/hero/saga-day.webp` · `/hero/saga-night.webp` | `HeroTheater` 日/夜背景（已取代舊 `banner-day/night.png`） |
-| `/ticket-bg/day-{1..5}.png` · `night-{1..5}.png` | 徵召票票面底圖，依 carousel `index % 5` 輪替 |
-| `/walruses.png` | 首頁第三屏 manifesto 上方 Walrus 插畫 |
+**Preview tools 可用** — `.claude/launch.json` 配好 `web` server，`preview_start("web")` 即可。
 
 ---
 
 ## 鏈上架構（2026-05-24 拍板，不可漂移）
 
-> 此節是合約 / SDK / runner / web 之間的**契約**。
-> **任何 session 在 runner 反覆測試時都不准踰越這六條原則。**
-> 若需要修改原則，必須在此節留改動紀錄與日期。
+> 合約 / SDK / runner / web 之間的**契約**。任何 session 不准踰越。
 
 ### 七條核心原則
 
-1. **依賴單向**
-   `web → sdk + memwal + llm` ／ `runner → sdk + memwal + llm` ／ `cli → sdk + shared`
-   **`sdk` 不准 import `web`。`shared` 不准 import 任何上層。**
-2. **`sdk` 是鏈上互動唯一入口** — web/runner/cli 不准自己 `new SuiClient()`、不准自己手寫 PTB
-3. **`memwal` 是 Walrus / Seal 唯一入口** — 不准在 web/runner 裡直接 import `@mysten/walrus` 或 `@mysten/seal`
-4. **`llm` 是文字 / 圖片 AI 唯一入口** — 不准在 web/runner 裡直接 `fetch('https://api.poe.com/...')`、import `@anthropic-ai/sdk` / `openai`，也不准散落 prompt 模板
-5. **`shared/src/contract-ids.ts` 是部署輸出的單一真相** — `cli` 寫入，sdk/runner/web 只讀
-6. **server actions 優先** — admin 操作走 `web/src/lib/actions/`，除非真正需要 HTTP（webhook / SSE / RSS）才開 `app/api/`
-7. **`(site)` / `(admin)` route group 嚴格隔離** — admin layout + middleware 獨立，user 站台不被 admin 邏輯污染
-
-> 2026-05-25：原為六原則。加入 `llm` 套件作為外部 AI 服務的唯一入口（與 memwal 同層），把舊 repo 散落在 web/runner 的 Poe/OpenAI 直呼集中管理。
+1. **依賴單向** — `web → sdk + memwal + llm` ／ `runner → sdk + memwal + llm` ／ `cli → sdk + shared`。`sdk` 不准 import `web`；`shared` 不准 import 任何上層
+2. **`sdk` 是鏈上互動唯一入口** — 不准自己 `new SuiClient()`、不准自己手寫 PTB
+3. **`memwal` 是 Walrus / Seal 唯一入口** — 不准 import `@mysten/walrus` 或 `@mysten/seal`
+4. **`llm` 是文字 / 圖片 AI 唯一入口** — 不准 `fetch('https://api.poe.com/...')`、import `@anthropic-ai/sdk` / `openai`、散落 prompt 模板
+5. **`shared/src/contract-ids.ts` 是部署輸出單一真相** — `cli` 寫入，sdk/runner/web 只讀
+6. **server actions 優先** — admin 操作走 `web/src/lib/actions/`，除非要 webhook / SSE / RSS 才開 `app/api/`
+7. **`(site)` / `(admin)` route group 嚴格隔離** — admin layout + middleware 獨立
 
 ### 目錄契約
 
 ```
-contracts/endless_story/sources/   ← Move 模組（依 Phase 1 依序進場）
+contracts/endless_story/sources/   Move 模組
 packages/
-  shared/    型別 + 純函式 + contract-ids；零依賴
-  sdk/       generated/ + client.ts + tx/ + read/；鏈上唯一入口
-  memwal/    Walrus + Seal 唯一入口（已有；Phase 2 加 blob API）
-  llm/       Poe / Anthropic 文字 + OpenAI 圖片 唯一入口（Phase 2 新建）
-  cli/       deploy / bootstrap / reset / stories；管 publish + 種世界
-  runner/    Agent / scheduler（Phase 4 才動，目前 stub；LLM 邏輯已外移到 llm/）
+  shared/    型別 + contract-ids；零依賴
+  sdk/       鏈上唯一入口（generated/ + client.ts + tx/ + read/，node 部分在 ./node 子路徑）
+  memwal/    Walrus + Seal 唯一入口（含 blob put/url helper）
+  llm/       Poe + Anthropic 文字 + OpenAI 圖片 + prompt 模板 + HKDF seed roll
+  cli/       deploy + bootstrap + reset + test-e2e + stories preset JSONs
+  runner/    Agent / scheduler (Phase 4 stub → 賽前要遷移完整版)
   web/       UI；app/(site)/* + app/(admin)/* 隔離
 ```
 
-### Phase 路線圖
+---
 
-| Phase | 內容 | 何時 |
-|---|---|---|
-| **0** | skill 改名、cli 骨架、sdk scaffold、contract-ids、(site)/(admin) 重構 | ✅ 2026-05-24（commit `f99d28f`） |
-| **1** | Move 模組依序遷移：見下方細項。**1.1–1.5c 已完成；1.6 + 1.7 暫緩**（不阻塞前端串接） | 部分完成 |
-| **2** | SDK（codegen + tx + read）✅ → `llm` 套件遷移（舊 repo Poe/OpenAI 撿過來）→ `memwal` 加 blob API → admin 一鍵部署 UI → 角色徵召 e2e | **進行中**（2.1/2.2 ✅；llm 遷移啟動） |
-| **3** | Web mock → SDK / llm / memwal 真實串接（Subscribe → Memories → 其餘 mock）| Phase 2 之後 |
-| **4** | Runner 上線（scheduler、daily POV、memwal flush）+ 補完 1.6 event + 1.7 commitment | 賽後 |
+## 已完成
 
-**Phase 1 模組進度**（依依賴順序）：
+**Phase 0–2 全部就位**（commits `f99d28f` → 最新）：
 
-| # | 模組 | 狀態 | 備註 |
+- **合約 1.1–1.5c**：currency / faucet / world / saga / scene / character / recruit，47 unit tests 綠燈，徵召 voucher mint → redeem → character + cap 完整可用
+- **SDK 2.1/2.2**：codegen + tx/read wrappers（thin、type-friendly、recruit-build acceptance 過）
+- **`packages/llm/`**：Poe + Anthropic 文字 + OpenAI gpt-image-2 + prompt 模板 + HKDF seed roll（smoke test 過）
+- **`memwal` blob API**：putBlob / getBlobUrl（testnet/mainnet publisher endpoint）
+- **Web 4 個 server actions**：moderate-prompt / preview-character / generate-portrait / redeem-voucher
+- **CLI**：bootstrap.ts（4 sequential txs，從 story preset JSON 讀），test-recruit-e2e.ts，story preset 系統 (`packages/cli/scripts/stories/{spring-snow,minimal}.json`)
+- **Admin UI**：
+  - `/admin/deploy`：① deploy / ② bootstrap / ③ seed 職缺（story preset dropdown）
+  - `/admin/recruitments`：鏈下 JSON CRUD（新增 / 編輯 / 上下架 / 刪除）
+  - Faucet 設定面板（drip 量、cooldown、供給上限、暫停 — 全 admin 可調）
+- **User 端**：dapp-kit 1.x 整合 + MockWalletMenu 內整合連結錢包 + ENDLESS 餘額 + 領 ENDLESS（admin 自動走 admin_mint 繞 cooldown）
+- **抽卡 wizard**：RecruitmentTicket 改造完，prompt → moderate → mint voucher (user sign) → LLM preview → accept → portrait → auto-redeem (admin server action) → 跳 `/dossier?id=<chain id>`
+- **`/dossier?id=X`**：偵測 Sui object id → 走 SDK chain-read（fallback mock for demo ids）
+- **Devnet object-version race**：mint PTB 加自動 retry 一次
+
+### 設計拍板（2026-05-25）
+
+- **抽卡模型**：1 voucher = 1 roll = 1 candidate。失敗 voucher 過期不退費，UX 用「緣寂」收尾，**不做轉投別行當**
+- **共簽機制**：server action + admin keypair 自動 redeem（策展權在發布職缺階段，不在每個 redeem）
+- **預覽生成**：真實 LLM（Poe → Sonnet/GLM-4.6 + OpenAI gpt-image-2）；roll 用 voucher.attribute_seed 做 HKDF 確定性（同 seed = 同角色）
+- **Portrait 儲存**：Walrus testnet publisher/aggregator
+- **Story preset**：world + saga + locations + scenes + recruitments 都在 `cli/scripts/stories/<id>.json`，bootstrap 跟 seed 都從 preset 讀
+
+---
+
+## 賽前必做（6/21 deadline，~27 天）
+
+| # | 項目 | 範圍 | 估時 |
 |---|---|---|---|
-| 1.1 | `currency.move` | ✅ 2026-05-24 | ENDLESS coin (6 decimals)，用 `coin_registry::new_currency_with_otw` 新 API，MetadataCap **保留**（可後續更新 icon_url 等） |
-| 1.1b | `faucet.move` | ✅ 2026-05-24 | Public faucet — anyone can drip；`FaucetAdminCap` 控制 drip_amount / cooldown_ms / total_supply_cap / paused；`admin_mint` 後門繞 cooldown；9 tests |
-| 1.2 | `world.move` | ✅ 2026-05-24 | World/Location/WorldRules/WorldTimeConfig + AdminCap；移除 `#[allow(unused_field)]`、`vector::empty` → `vector[]`；2 個 inline tests 通過 |
-| 1.3 | `saga.move` | ✅ 2026-05-24 | Saga/StorytellerCap/RevenueConfig + card weighting (R3.2) + skill table (R3.3) + Display V2；**新增 `withdraw_from_treasury`**（補老版漏寫）；8 tests |
-| 1.4 | `scene.move` | ✅ 2026-05-24 | Scene/ScenePlacement/SceneAccess/SceneParams/SceneState + Display V2；**新增 3 個 inline tests**（舊版完全沒 test）；character_count / privacy_level 補 view |
-| 1.5a | `character.move` 擴充 + `recruit.move` 新增 | ✅ 2026-05-24 | Character 結構全胖（profile/physical/attributes/media/tags/state/image/death）+ 三條 mint 路徑（genesis/collectible/internal）+ validation 私 fn + mark_dead + 全 view + cap accessors。新 `recruit` module 含 GenesisVoucher + mint_genesis_voucher + redeem_voucher_to_character。Move best practice 拆 module（不拆 package）：character 管 Character resource、recruit 管「外部申請加入」入口 |
-| 1.5b | character 擴 + recruit 擴 | ✅ 2026-05-24 | **character**: ControlCap.saga_id 欄位 + move_character(in-saga 換場) + release_character_to_wild(storyteller) + force_release_character(admin) + walk_in_world(owner) + take_wild_control_cap / bind_to_saga 兩個 public(package) helper + ControlCapKey DOF。**recruit**: JoinIntent + request_join_saga + revoke_join_intent + accept_character_into_saga。**2 個 lifecycle tests**（revoke happy + wrong-owner abort）；E2E release→walk→accept 留到 SDK 接通後做 integration test |
-| 1.5c | character 擴 + recruit 擴 | ✅ 2026-05-24 | **character**: SagaSkillsKey DOF + set_character_skill / clear / character_skills_for_saga（強制 saga.saga_attribute_defs 校驗）+ update_image_by_storyteller / update_image_by_owner 雙路徑 + Display V2 init（Character + OwnerCap）+ find_attribute_value_in 公開 helper。**recruit**: VoucherRequirements struct + intent_hint + check_voucher_requirements view + redeem 強制 assert + Display V2 init（GenesisVoucher + JoinIntent）+ no_requirements / new_voucher_requirements constructors。47 tests（+6）|
-| 1.6 | `event.move` | ⏸ 暫緩 | 事件解算、卡片、死亡標記。Runner 邏輯需要、前端 demo 不直接用。等 Phase 2 / 3 真實串接後評估時機（character::mark_dead 已就位，event 接上即可呼叫） |
-| 1.7 | `commitment.move` | ⏸ 暫緩 | 記憶壓縮快照。配套 runner memwal flush，賽後再做。character.state.memory_commit_head 欄位也延後加 |
+| **R** | **Runner 遷移** | scheduler tick / per-character daily POV / memwal flush；舊 repo `/Users/harperdelaviga/Endless-Story/packages/runner` 全套參考 | 3–5d |
+| **C** | **1.6 event.move + 1.7 commitment.move** | runner 動連動補：event 解算 + 卡片 + death 標記 / memory commitment snapshot | 2–3d |
+| **I** | **Web i18n** | `next-intl` framework + 抽既有文案 + LocaleToggle + `romanize-name`（中文 → 拼音） | 2–3d |
+| **V** | **影片產出工具鈕** | demo 影片 / 錄製 / 剖面；具體 scope 待定（screen capture / GIF / 自動鏡頭? OBS macro?） | 1–3d |
 
-### Runner 開發鐵律（給未來反覆測試 runner 的 session）
-
-- ❌ 不要為了 runner 方便，在 web 裡放 runner 邏輯
-- ❌ 不要為了 runner 方便，繞過 sdk 自己呼叫鏈
-- ❌ 不要為了 runner 方便，把 memwal 邏輯 inline 到 runner
-- ❌ 不要為了快，在 `shared/` 塞 runner 專用型別（runner 自己有 src/types/）
-- ❌ 不要為了 demo 直接改 `contract-ids.ts`，要走 cli 部署
-- ✅ runner 缺什麼 API，去 `sdk/` 加；缺什麼型別，去 `shared/` 加；缺什麼 walrus 操作，去 `memwal/` 加；缺什麼 LLM / 圖片操作，去 `llm/` 加
-
-### 部署管線
-
-| skill | 用途 |
-|---|---|
-| `/devnet-bootstrap` | 第一次部署：publish + 種 world/saga/scene/characters |
-| `/devnet-reset` | 整盤重來：清舊資料 + redeploy + reseed |
-
-兩者都呼叫 `packages/cli/scripts/{deploy,bootstrap,reset}.ts`。
+**順序建議**：先 C（合約 first，後面 R 才有 event/commitment 可呼叫）→ R → I（V 可並行）。
 
 ---
 
-## 已落地
+## E2E 跑通手冊（從零到 mint）
 
-### 路由
+> 所有 code path 已就位。**devnet 偶爾整集群掛**（"no healthy upstream"），demo 前切 testnet 比較穩。
 
-```
-/                           三屏 snap：HeroTheater → 徵召 → Manifesto/Footer
-/dossier                    9 人卡片網格 + filter (全部/春雪社/江湖/我的)
-/dossier?id=X               個人頁 (LiveState + tabs: 履歷/設定集/連載/記憶/託夢)
-/dossier?id=X&tab=memories  記憶 tab（owner-only journal）
-/dossier?as=viewer          看客視角（MockWalletMenu 切換）
-/dossier/recruit/[id]       徵召 intent 頁（候備；主流程走首頁 RecruitmentTicket）
-/feed                       梨園章回（公開章回列表 + filter）
-/feed/chapter/[id]          章回詳細 + TOC
-/subscriptions              訂閱管理（追訂中可取消 / 持有不可退）
+**0. 一次性 env 設定**（`packages/web/.env.local`）：
+
+```bash
+nvm use
+sui client switch --env testnet   # 推薦；或 devnet 但要 status.sui.io 確認
+sui client faucet
+
+cat > packages/web/.env.local <<'EOF'
+POE_API_KEY=...                        # https://poe.com/api_key
+OPENAI_API_KEY=sk-...                  # https://platform.openai.com/api-keys
+SUI_ADMIN_PRIVATE_KEY=suiprivkey1...   # 同 cli admin；export 自 sui keytool
+RECRUITMENT_MOD_SECRET=<openssl rand -hex 32>
+EOF
 ```
 
-### 首頁（`HomeContent`）
+**1. 部署 + 種子化**：開 `http://localhost:3000/admin/deploy` → 上方下拉選 STORY (spring-snow / minimal) + ENV → 依序點 ① deploy → ② bootstrap → ③ seed 職缺。`contract-ids.ts` 會被覆寫。
 
-- **第一屏**：`SiteNav` + `HeroTheater`（場景卡、日/夜 saga 背景、徵召數 badge 滾動至 `#recruitment-section`）
-- **第二屏**：`RecruitmentSection` — 多則徵召 carousel、票開 wizard 時隱藏 nav
-- **第三屏**：manifesto「戲子無情，記憶有痕」+ 梨園戲單 roadmap + footer 連結
+**2. （可選）調 Faucet**：同頁底部 Faucet 設定 — 改 drip 量、cooldown 等，套用。
 
-### 互動
+**3. User mint 流程**：
+```
+http://localhost:3000/
+→ 右上 MockWalletMenu hover → 連結錢包 (dapp-kit, 同網路)
+→ 「領 ENDLESS」 (admin 自動走 admin_mint; user 走 drip)
+→ 第二屏徵召 carousel，點任一張票「應榜」
+→ 寫描述 → 擲牌 (moderate → mint_voucher user-sign → LLM preview)
+→ 揭曉 (1 候選 + rolled 屬性) → 接受 → painting (LLM curate + OpenAI + Walrus)
+→ 配像 → 入班 (server action admin keypair auto-redeem)
+→ 跳 /dossier?id=<0x…> 顯示鏈上 Character
+```
 
-- 場景卡 → 右下角 floating card（拖拉 + resize 鎖 aspect）
-- 徵召票 → 同框 wizard（描述/擲牌/選定/繪製/配像/入班）；票面 day/night 水墨底圖
-- 徵召 carousel：上一則/下一則 + dot；空榜「揭榜處空無一物」+ `[測試] 恢復徵召`
-- 入班 ceremony → 手動 CTA；done 跳 `/dossier?id=char_cheng_hengyu`（demo hardcode）
-- Theme toggle + MockWalletMenu（我的角色 / 我的訂閱 / 切視角）
-- `DossierHeader` live state（她現在/她在哪/她下一步）+ `CharacterLinkifier`
-- 履歷 tab `SoulSection`（軸/腔/界 persona，`personasApi` + `mocks/personas.ts`）
-- **記憶 tab** `MemoriesTab`（owner-only；`memoriesApi` gate + reflection/observation/event journal）
-- 託夢 tab 召心曲：7 日 cooldown、池抽乾提示
-
-### Mock data
-
-`packages/web/src/mocks/`：
-- `sagas.ts` · DEMO_SAGA_ID = `spring-snow`
-- `characters.ts` · 9 人
-- `chapters.ts` · 8 章
-- `recruitments.ts` · **5 則** active：武小生、富商、青衣、小報記者、老生（原 2 則已擴充）
-- `personas.ts` · 9 人本色（軸/腔/界）
-- `memories.ts` · owner journal（與 `soulSongs` 心曲區隔）
-- `subscriptions` · `relationships` · `interventions` · `soulSongs` · `scenes`
-
-### API facade
-
-`packages/web/src/lib/api/`：component **不**直接讀 mocks。
-
-### 關鍵元件
-
-`CharacterPortrait` · `BlobImage` · `CharacterLinkifier` · `BackButton` · `ThemeToggle` · `MockWalletMenu` · `HomeContent` / `HeroTheater` / `SceneCarousel` · `DossierHeader` · `RecruitmentTicket` / `RecruitmentSection` · `DossierTabs` · `ProfileTab` / `SoulSection` · `MemoriesTab` · `GalleryTab` · `SoulSongPanel` · `SubscribeCard` · `ChapterToc`
+**失敗排查**：
+- `[mint] unavailable for consumption` → devnet 抖；wizard 已自動 retry 一次，再失敗就刷新瀏覽器或切 testnet
+- `[mint] Failed to fetch wallet-rpc.devnet.sui.io` → Slush 自己內部 RPC 掛了，看 status.sui.io
+- 「請先連結錢包」→ 右上點 ConnectModal
+- 「梨園尚未種子化」→ 跑 admin /deploy ② bootstrap
+- LLM 500 → 檢查 POE_API_KEY / OPENAI_API_KEY
+- redeem 失敗 → 檢查 SUI_ADMIN_PRIVATE_KEY 對 + storyteller cap 在這把鑰匙
 
 ---
 
-## 待辦
+## 設計系統（精簡）
 
-### P0 — 比賽提交
+### Theme tokens（語意色，不是 Tailwind 預設）
 
-1. **i18n（next-intl）** — 展示語言需英文
+`canvas`（body 底）/ `surface`（卡 nav sticky）/ `elevated`（modal popover）/ `ink`（主文字）/ `mute`（次文字）/ `hairline`（邊線）/ `cinnabar`（accent，dark=暖金）/ `jade`（次 accent）/ `seal`（cinnabar hover）
 
-### P2 — 賽後 / 鏈上
+定義在 `packages/web/src/app/globals.css` `:root` + `.dark`。Tailwind 用 `bg-canvas` / `text-ink` 等（`darkMode: 'class'`）。
 
-Move 合約 · MemWal SDK · 真實 LLM · RSS · POV engine · IP 經濟（pitch deck 可提）
+### Dark mode 鐵律
 
----
+**canvas 不能同時當 body 跟卡片背景。** body → `bg-canvas`；卡/nav/sticky → `bg-surface`；modal/floating → `bg-elevated`；input/凹陷 → `bg-canvas dark:bg-canvas/40`。
 
-## 遷移計劃（舊版 → 新版尚未補齊）
+Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className → 抽到 `globals.css @layer components` 的 `.es-*` utility（`.es-icon-button`、`.es-soft-panel`、`.es-field`、`.es-choice-card`、`.es-outline-button`、`.es-page-lead-eyebrow|title`）。
 
-> 完整掃描完成於 2026-05-20；2026-05-21 對照 codebase 更新 Round 1/3 狀態。標 ✅ = 已補齊。
-> 舊 repo 路徑：`/Users/harperdelaviga/Endless-Story`（**只讀對照，不要改**）
+### 動畫
 
-### 已自動補齊（不需再做）
-
-- ✅ `MockWalletMenu` + 訂閱管理頁 `/subscriptions`
-- ✅ `LiveStateSection`（三條 live state banner）
-- ✅ `HeroTheater` / `HomeContent`（首頁重組）
-- ✅ 首頁三屏 snap（Hero → 徵召 → Manifesto/Footer）+ 梨園戲單 + `walruses.png`
-- ✅ Hero 背景 `saga-day/night.webp`；徵召票 `ticket-bg` day/night ×5 輪替
-- ✅ `RecruitmentSection` carousel + 空榜狀態；`recruitments` mock 擴至 5 則
-- ✅ `lib/character-live-state.ts`
-- ✅ `ThemeToggle` + 夜間模式 palette（含暖金 cinnabar）
-- ✅ `es-*` utility classes 抽象（globals.css `@layer components`）
-- ✅ 召心曲深層版 → `SoulSongPanel.tsx` + `mocks/soulSongs.ts`
-- ✅ Dark mode polish（DossierTabs、ProfileTab、Composer notice、ChapterToc、BackButton hover）
-- ✅ 入班完成 → done CTA 跳 `?id=char_cheng_hengyu`
-- ✅ **`CharacterLinkifier`** — `components/common/CharacterLinkifier.tsx`（`Linkified` / `LinkifiedProse`）
-  - 已接：章回內文、`DossierHeader` 敘述、記憶/託夢介入/心曲 verse
-  - 待接（有 `HistoryTabs` 後）：對話、內心獨白、公報
-- ✅ **`SoulSection` + Persona** — `SoulSection.tsx` + `mocks/personas.ts` + `lib/api/personas.ts` → `ProfileTab`
-- ✅ **角色 Memory 查閱** — `MemoriesTab` + `?tab=memories` + `mocks/memories.ts` + `lib/api/memories.ts`（owner gate）
-
-### Round 1 — 仍可擴充（核心已落地）
-
-- ⬜ `CharacterLinkifier` 覆蓋面：等 Round 3 `HistoryTabs` 接上對話/獨白/gazette
-- ⬜ 更多角色 mock 記憶條目（目前非全 9 人都有；可對照 `listMemoriesByCharacter`）
-
-### Round 2 — 國際化（比賽英文化前置）
-
-3. **next-intl framework**（L）— `messages/{en,zh-Hant}.json` + namespace
-4. **抽既有文案至 t()**（M）— 漸進，先 5 個關鍵頁面
-5. **`LocaleToggle`**（S）— nav 加「中 / EN」切換
-6. **`romanize-name`**（S）— 中文名 → 拼音（英文 demo 用，e.g. 葉庭芳 / Ye Tingfang）
-
-### Round 3 — 角色頁深化
-
-7. **`HistoryTabs`**（L）— 3 子 tab：**對話 / 內心獨白 / 公報 gazette**
-   - 現在「連載」tab 只覆蓋章回，未涵蓋對話 + 獨白 + gazette
-8. **`RelationshipGraph`**（L）— 視覺化 v3 關係圖
-   - 數據 `mocks/relationships.ts` 已備
-   - 需 zoom-pan hook（舊版 `useZoomPan`）
-   - 可放 dossier `?tab=relations` 或整個 saga 在 `/world`
-
-### Round 4 — 賽後 / 系統工具
-
-10. **`atlas.ts` + `live-map-layout.ts` + `useZoomPan`** — 世界地圖 `/world` 頁
-11. **`time.ts`**（utcTimeToLocal）— `lib/format.ts` 的 `formatDate` 太簡單
-12. **`useWorldState` hook** — 集中 fetch world / saga / characters（接真鏈會省事）
-13. **`useLocalPortraitUrl` + `character-portraits.ts`** — Portrait URL fallback layer
-
----
-
-## 不遷移（明確排除）
-
-- ❌ 舊 `CastStrip` — 已被 `SubscribeCard` 取代
-- ❌ 舊 `DossierHero` — 已被 `DossierHeader` 取代
-- ❌ 舊 `DrawComposer` — 已被 `RecruitmentTicket` 票面 wizard 取代（更好）
-- ❌ 舊 `Navbar` / `PageHeader` — 已被 `SiteNav` 取代
-- ❌ 舊 `StatusBar` — admin / runner 用
-- ❌ 舊 `lib/skill/*`、`lib/dapp-kit`、`lib/moderation-rules-store`、`lib/recruitments-store` — 後端 / admin
-- ❌ 舊 `clear-narrative-manifest`、`agent-config` — admin / operator
-
----
-
-## Phase 2（賽後 / 鏈上）
-
-不影響 6/21 提交，但 pitch deck 要提：
-
-- **真實 Sui Move 合約** — recruitment voucher / character mint / Seal access policy
-- **MemWal SDK 接通** — chapter / reflection / event_moment / derivative 圖 → Walrus，policy = subscriber set + owner
-- **真實 LLM** — moderation + 3-candidate draft + portrait curate
-- **RSS feed endpoint** — `/feed/character/[id].xml`
-- **POV 轉寫 engine** — 每個被訂閱的角色每天生一份第一人稱 daily POV
-- **角色 transfer / IP 經濟** — owner 收 saga 補貼 / 票房分潤
+- Enter: `requestAnimationFrame` 後 toggle → `translate-y-4 opacity-0` → `translate-y-0 opacity-100`，`duration-300 ease-out`
+- Exit: 反向 + `setTimeout` 280ms 才 unmount
+- Stage 切換: `key={stage}` + `.animate-fade-in-up`
 
 ---
 
 ## 不要
 
-**UI / 樣式**
-- ❌ 不要重做 `/subscribe`（已併入 `/dossier`）
-- ❌ 不要 raw Tailwind 色不加 `dark:`
-- ❌ 不要用 `bg-canvas` 當卡片背景
-- ❌ 重複 className → 抽到 `es-*`
-- ❌ 入班不要自動跳轉
+**架構**
+- ❌ 繞過 `sdk` 直接 `new SuiClient()`（原則 2）
+- ❌ web/runner 直接 import `@mysten/walrus|seal`（走 memwal，原則 3）
+- ❌ web/runner 直接 `fetch` Poe / OpenAI / Anthropic 或散落 prompt（走 llm，原則 4）
+- ❌ 手動編輯 `shared/src/contract-ids.ts`（cli 寫入，原則 5）
+- ❌ 在 `(site)` route 放 admin 操作（原則 7）
+- ❌ 繞過 `web/src/lib/api/` facade
 
-**架構（見「鏈上架構」節）**
-- ❌ 不要繞過 `web/src/lib/api/` facade
-- ❌ 不要繞過 `sdk` 直接 `new SuiClient()`
-- ❌ 不要在 web/runner 直接 import `@mysten/walrus` 或 `@mysten/seal`（走 memwal）
-- ❌ 不要在 web/runner 直接 `fetch` Poe / OpenAI / Anthropic，或散落 prompt 模板（走 llm）
-- ❌ 不要手動編輯 `shared/src/contract-ids.ts`（cli 寫入）
-- ❌ 不要在 `(site)` route 裡放 admin 操作
+**UI**
+- ❌ raw Tailwind 色不加 `dark:`
+- ❌ 用 `bg-canvas` 當卡片背景
+- ❌ 重複 className → 抽 `.es-*`
+- ❌ 入班自動跳轉（要手動 CTA）
 
-**Repo / 文件**
-- ❌ 不要動老 repo `Endless-Story`
-- ❌ 不要雙份維護 `AGENTS.md` / `CLAUDE.md`
-- ❌ 不要用拼音 skill 名（已禁 wuxia / xianxia 等）
-
----
-
-## 驗證 checklist
-
-```
-http://localhost:3000/                                  三屏 snap + 徵召 carousel
-http://localhost:3000/dossier
-http://localhost:3000/dossier?id=char_ye_tingfang
-http://localhost:3000/dossier?id=...&tab=gallery
-http://localhost:3000/dossier?id=char_ye_tingfang&tab=memories  記憶 tab（需 owner 錢包）
-http://localhost:3000/dossier?id=...&tab=entrusts
-http://localhost:3000/feed
-http://localhost:3000/feed/chapter/chapter_day3_evening_meal
-http://localhost:3000/subscriptions?as=viewer
-```
-
-Light / dark · 徵召票底圖切換 · type-check 綠燈
+**Repo / 環境**
+- ❌ 動老 repo `Endless-Story`
+- ❌ 雙份維護 `AGENTS.md` / `CLAUDE.md`
+- ❌ 用拼音 skill 名（已禁 wuxia / xianxia 等）
+- ❌ devnet 掛了切 testnet 不跟使用者確認
 
 ---
 
-## Quick win
-
-**現在進行中**：**E2E 驗證** — 所有 code path 已就位（Phase 2.2L 到 2.6d 全部 commit）；下一步是真實 devnet/testnet 部署 + 跑通完整 mint 流程。詳見「下次接班 · E2E 跑通手冊」。
-
-**已完成**：
-- Phase 0：foundation + cli + sdk scaffold + route group + skill 改名
-- Phase 1.1–1.5c：currency / faucet / world / saga / scene / character / recruit 全部就位（47 unit tests 綠燈）
-- 鏈上「徵召」完整可用：voucher mint → redeem → character + cap，validation + requirements 內建
-- Phase 2.1 / 2.2：SDK codegen + tx/read wrappers（acceptance scratch 過）
-- Phase 2.2L：`packages/llm/` 新建（Poe + Anthropic 文字 + OpenAI 圖片 + prompt 模板 + HKDF seed roll；smoke test 過）
-- Phase 2.2M：`memwal` 加 blob API（putBlob / getBlobUrl，testnet/mainnet publisher endpoint；smoke test 過）
-- Phase 2.2W：Web 4 個 server actions（moderate / preview / portrait / redeem）
-- Phase 2.3：cli `bootstrap.ts`（4-tx World/Faucet/Locations/Saga/Scenes）+ `test-recruit-e2e.ts` 純 cli E2E
-- Phase 2.4：admin `/admin/deploy` 一鍵 deploy + 狀態面板
-- Phase 2.5：admin `/admin/recruitments` 鏈下 JSON CRUD
-- Phase 2.6a：dapp-kit 1.x 整合（WalletProviders + ConnectButton + 顯示 ENDLESS 餘額）
-- Phase 2.6b：Faucet drip 按鈕（user wallet 自己領）
-- Phase 2.6c：RecruitmentTicket wizard 完整改造為抽卡 + 真實鏈上（保留視覺）
-- Phase 2.6d：`/dossier?id=<sui_id>` 接 SDK chain-read（fallback 給 demo mock）
-
-**暫緩**：
-- Phase 1.6 event.move、1.7 commitment.move（runner 用、前端 demo 不需要）
-- Web 端 i18n（比賽前定稿時做）
-- 角色「轉投別行當」（合約不支援；UX 上用「緣寂」優雅收尾代替）
-- 鏈上 image_url 寫入（Phase 2 portrait 走 wizard 內 base64 + Walrus URL，未自動寫回 character.image_url）
-
----
-
-## 下次接班（Session handoff）
-
-> 任何新 session 開工前先讀這節。順序不可跳。
-
-### Phase 2 推薦路徑（每步一個 commit）
-
-| 步驟 | 動作 | 依賴 | 驗收 |
-|---|---|---|---|
-| **2.1** ✅ | `pnpm --filter @endless-story/sdk codegen` → `packages/sdk/src/generated/` | — | 7 個 module 都有 `.ts`；type-check 綠（commit `aa638cc`） |
-| **2.2** ✅ | SDK wrappers `tx/*.ts` + `read/*.ts`，thin、只加 type 友善 | 2.1 | mint_voucher + redeem_voucher 兩條 tx 構造通過（`sdk/src/__check__/recruit-build.ts`） |
-| **2.2L** | **新建 `packages/llm/`** — 舊 repo 的 Poe/Anthropic 文字 + OpenAI 圖片 + prompt 模板乾淨遷移；新增 `seed/roll.ts`（HKDF deterministic roll） | 2.2 | L1–L6 全部 commit；type-check 綠；smoke test 過 |
-| **2.2M** | **`memwal` 加 blob API** — `putBlob(bytes)` + `getBlobUrl(blobId, network)`，餵 portrait → Walrus | 2.2 | M1 commit；type-check 綠 |
-| **2.2W** | **Web server actions** — `lib/actions/{moderate-prompt, preview-character, generate-portrait, redeem-voucher}.ts`。各包 llm + memwal + sdk；admin keypair 自動共簽 redeem | 2.2L + 2.2M | W1 commit；type-check 綠；可獨立測（mock） |
-| **2.3** | 擴 `cli/scripts/bootstrap.ts` — publish + PTB 種 World → Saga → 8 scenes → Faucet 種子；寫回完整 `contract-ids.ts`。寫 `cli/scripts/test-recruit-e2e.ts` 純 cli 走通 drip → mint → redeem | 2.2 | `pnpm exec tsx packages/cli/scripts/bootstrap.ts --env devnet` 通；e2e 腳本印出 character ID |
-| **2.4** | admin UI 一鍵 deploy 按鈕（server action 包 cli script） | 2.3 | admin 頁能觸發部署、即時看到結果 |
-| **2.5** | 「發布職缺」admin UI — **鏈下** JSON/DB CRUD（roleIntent + intentHint + basePrice + VoucherRequirements）。職缺出現在首頁徵召 carousel | 2.4 | admin 端可發布／編輯／停用職缺 |
-| **2.6** | RecruitmentTicket wizard 改造成抽卡模型：`prompt → 付費 mint voucher → LLM rolling → reveal(1 候選) → accept (auto-redeem) / reject (緣寂收尾) → 跳新角色頁`。`/dossier?id=X` 接 SDK read | 2.2W + 2.5 + dapp-kit | user 端走通真實 devnet 徵召 |
-
-**設計拍板**（2026-05-25）：
-
-- **抽卡模型**：1 voucher = 1 roll = 1 candidate。失敗讓 voucher 過期（不退費），UX 上用「緣寂」優雅收尾，**不做轉投別行當**（合約不支援，且破壞抽卡 mental model）
-- **共簽機制**：server action + admin keypair 自動 redeem（storyteller 的策展權在「發布職缺」階段，不在每個 redeem）
-- **預覽生成**：真實 LLM（Poe → Sonnet/GLM-4.6 + OpenAI gpt-image-2）；roll 用 voucher.attribute_seed 做 HKDF 確定性產生（同 seed = 同角色，公平可驗證）
-- **Portrait 儲存**：Walrus（testnet publisher/aggregator）；`character.image_url` 寫 aggregator URL
-
-### E2E 跑通手冊（從零到 mint 出新角色）
-
-> 所有 code path 已就位。下面是按順序執行的清單。
-
-**0. 一次性環境設定**
-
-```bash
-# Node
-nvm use                # .nvmrc 鎖 23.7.0
-
-# Sui CLI active env（決定 deploy 打哪個鏈）
-sui client switch --env devnet   # 或 testnet
-sui client faucet                # 灌 devnet/testnet SUI 給自己付 gas
-
-# Web 端 env vars — 寫到 packages/web/.env.local
-cat > packages/web/.env.local <<EOF
-POE_API_KEY=...                        # https://poe.com/api_key
-OPENAI_API_KEY=sk-...                  # https://platform.openai.com/api-keys
-SUI_ADMIN_PRIVATE_KEY=suiprivkey1...   # 同 cli admin keypair；export 自 sui keytool
-RECRUITMENT_MOD_SECRET=$(openssl rand -hex 32)
-EOF
-```
-
-**1. 部署 + 種子化**
-
-走 admin UI（一鍵）：
-```bash
-pnpm --filter @endless-story/web dev    # http://localhost:3000
-# 開 http://localhost:3000/admin/deploy
-# 點 ① deploy → 等完成
-# 點 ② bootstrap → 等完成（4 個 tx 依序）
-# 點 ③ test-e2e → 確認 cli 端可走通 drip→mint→redeem
-```
-
-或走 terminal：
-```bash
-pnpm --filter @endless-story/cli deploy --env devnet
-pnpm --filter @endless-story/cli bootstrap --env devnet
-pnpm --filter @endless-story/cli test-e2e --env devnet
-```
-
-**2. 發布職缺（admin）**
-
-`/admin/recruitments` → 已預載 mock 5 條（從 mocks/recruitments.ts seed）。
-可以新增、編輯、停用。儲存自動刷新首頁 carousel。
-
-**3. User mint 流程**
+## 接班啟動 prompt
 
 ```
-http://localhost:3000/
-→ SiteNav 右上「連結錢包」(dapp-kit, 同網路)
-→ 點「領 ENDLESS」(faucet drip)
-→ 第二屏徵召 carousel，點任一張票「應榜」
-→ 寫角色描述 → 擲牌
-   (內部：moderate → mint_voucher PTB(user 簽) → LLM 預覽)
-→ 揭曉：1 個候選 + 4 條 rolled 屬性
-  → 接受：painting (LLM curate + OpenAI gpt-image-2 + Walrus)
-  → 緣寂：voucher 自然過期
-→ 配像 → 入班
-   (內部：redeem_voucher_to_character，admin keypair server action 自動簽)
-→ 跳 /dossier?id=<0x...> 顯示鏈上 Character
+讀 /Users/harperdelaviga/endless-story-new/AGENTS.md，照「賽前必做」順序開工。
+從合約 1.6/1.7 開始；不可跳步；每完成一個小步驟跟我回報；commit 由我決定時機。
 ```
-
-**4. 失敗排查**
-
-- 「請先連結錢包」→ 點右上 ConnectButton
-- 「沒有 ENDLESS 幣」→ 點「領 ENDLESS」
-- 「梨園尚未種子化」→ 跑 admin /deploy 的 bootstrap
-- mint_voucher 卡在 wait → testnet RPC 慢，等 ~5s
-- LLM error 500 → 檢查 POE_API_KEY / OPENAI_API_KEY env
-- redeem 失敗 → 檢查 SUI_ADMIN_PRIVATE_KEY 設對 + storyteller cap 在這把鑰匙上
-
----
-
-### 第一個 session-opening 動作（複製貼上）
-
-```bash
-# 1. 確認環境
-sui client active-env  # 該是 devnet (testnet 也可，但 cli bootstrap 要明示 --env testnet)
-nvm use                # .nvmrc 鎖 23.7.0；codegen 需 ≥ 20.11
-
-# 2. 重溫架構（必讀，跳步成本很高）
-cat /Users/harperdelaviga/endless-story-new/AGENTS.md | head -200
-
-# 3. type-check 整個 repo（確認接班時是綠的）
-cd /Users/harperdelaviga/endless-story-new
-pnpm -r type-check
-```
-
-**接班入口判斷**：
-- 如果 `packages/llm/` 不存在 → 從 **2.2L** 開始（看 L0–L6 task list 或重讀此節「設計拍板」）
-- 如果 `packages/llm/` 存在但 `memwal/src/blob.ts` 不存在 → 從 **2.2M** 開始
-- 如果都存在但 `web/src/lib/actions/` 是空的 → 從 **2.2W** 開始
-- 都存在 → 進 **2.3**（cli bootstrap + devnet 部署）
-
-codegen 失敗時先 debug，不要繞過（常見原因：node 版本 < 20.11，請 `nvm use`）。
-
-### 啟動 prompt 範本
-
-```
-讀 /Users/harperdelaviga/endless-story-new/AGENTS.md「下次接班」節，從 Phase 2.1 開始。
-不可跳步。每完成一個小步驟跟我回報，commit 由我決定時機。
-```
-
-### 警示燈
-
-- ❌ 不要跳到 2.6 直接動前端（會發現 SDK / llm / memwal blob / server actions 都還沒準備好）
-- ❌ 不要在 web 裡直接 `new SuiClient()`（鐵律原則 2）
-- ❌ 不要在 web/runner 直接 `fetch` Poe / OpenAI（鐵律原則 4，走 llm）
-- ❌ 不要為了快，把 LLM 邏輯內聯到 server action（prompt 模板/parsing 都放 `packages/llm/src/prompts/`）
-- ❌ 不要手改 `packages/shared/src/contract-ids.ts`（鐵律原則 5）
-- ❌ devnet 掛了改用 testnet 要明確 flag 跟使用者確認
-- ✅ 任何 SDK / cli / admin 改動前再讀一次「鏈上架構」六原則
