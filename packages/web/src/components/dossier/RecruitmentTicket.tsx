@@ -156,59 +156,83 @@ export function RecruitmentTicket({
     const seedHex = bytesToHex(seed);
     setAttributeSeedHex(seedHex);
 
-    let mintedVoucherId: string;
-    try {
-      const coinType = `${packageId}::currency::CURRENCY`;
-      const coins = await suiClient.getCoins({ owner: account.address, coinType, limit: 50 });
-      if (!coins.data || coins.data.length === 0) {
-        throw new Error('沒有 ENDLESS 幣 — 請先用右上「領 ENDLESS」');
-      }
-      const priceBase = BigInt(recruitment.basePrice) * BigInt(10 ** ENDLESS_DECIMALS);
+    // Devnet/testnet RPC frequently serves slightly stale owned-object
+    // versions, especially right after another tx on the same wallet.
+    // Validator rejects with "object … version X unavailable, current Y"
+    // — entirely retryable: re-fetch coins, rebuild PTB, re-sign.
+    // ONE retry is enough in practice.
+    const MINT_RETRIES = 2;
+    let mintedVoucherId: string | null = null;
+    let lastMintErr: unknown = null;
+    for (let attempt = 1; attempt <= MINT_RETRIES; attempt++) {
+      try {
+        const coinType = `${packageId}::currency::CURRENCY`;
+        const coins = await suiClient.getCoins({ owner: account.address, coinType, limit: 50 });
+        if (!coins.data || coins.data.length === 0) {
+          throw new Error('沒有 ENDLESS 幣 — 請先用右上「領 ENDLESS」');
+        }
+        const priceBase = BigInt(recruitment.basePrice) * BigInt(10 ** ENDLESS_DECIMALS);
 
-      const tx = new Transaction();
-      // Split exact amount from gas-merged coin pool.
-      const coinIds = coins.data.map((c) => c.coinObjectId);
-      const primary = tx.object(coinIds[0]);
-      if (coinIds.length > 1) {
-        tx.mergeCoins(primary, coinIds.slice(1).map((id) => tx.object(id)));
-      }
-      const [payment] = tx.splitCoins(primary, [priceBase]);
+        const tx = new Transaction();
+        const coinIds = coins.data.map((c) => c.coinObjectId);
+        const primary = tx.object(coinIds[0]);
+        if (coinIds.length > 1) {
+          tx.mergeCoins(primary, coinIds.slice(1).map((id) => tx.object(id)));
+        }
+        const [payment] = tx.splitCoins(primary, [priceBase]);
 
-      const reqs = tx.add(endlessTx.recruit.noRequirements());
-      // mint_genesis_voucher returns GenesisVoucher by value — must transfer.
-      const voucherObj = tx.add(
-        endlessTx.recruit.mintGenesisVoucher({
-          saga: sagaId,
-          payment,
-          attributeSeed: Array.from(seed),
-          hint: prompt.slice(0, 80),
-          requirements: reqs,
-          intentHint: recruitment.roleIntent.slice(0, 80),
-          ttlMs: VOUCHER_TTL_MS,
-        }),
-      );
-      tx.transferObjects([voucherObj], account.address);
+        const reqs = tx.add(endlessTx.recruit.noRequirements());
+        const voucherObj = tx.add(
+          endlessTx.recruit.mintGenesisVoucher({
+            saga: sagaId,
+            payment,
+            attributeSeed: Array.from(seed),
+            hint: prompt.slice(0, 80),
+            requirements: reqs,
+            intentHint: recruitment.roleIntent.slice(0, 80),
+            ttlMs: VOUCHER_TTL_MS,
+          }),
+        );
+        tx.transferObjects([voucherObj], account.address);
 
-      const res = await signAndExecute({ transaction: tx });
-      // dapp-kit's signAndExecuteTransaction returns digest only by default;
-      // we need to wait for it and re-query the tx for objectChanges.
-      const full = await suiClient.waitForTransaction({
-        digest: res.digest,
-        options: { showObjectChanges: true, showEffects: true },
-      });
-      if (full.effects?.status?.status !== 'success') {
-        throw new Error(full.effects?.status?.error ?? '交易失敗');
+        const res = await signAndExecute({ transaction: tx });
+        const full = await suiClient.waitForTransaction({
+          digest: res.digest,
+          options: { showObjectChanges: true, showEffects: true },
+        });
+        if (full.effects?.status?.status !== 'success') {
+          throw new Error(full.effects?.status?.error ?? '交易失敗');
+        }
+        const voucherType = `${packageId}::recruit::GenesisVoucher`;
+        const created = (full.objectChanges ?? []).find(
+          (c) => c.type === 'created' && 'objectType' in c && c.objectType === voucherType,
+        );
+        if (!created || !('objectId' in created)) {
+          throw new Error('voucher 物件未找到');
+        }
+        mintedVoucherId = created.objectId;
+        break; // success
+      } catch (err) {
+        lastMintErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        const isStaleVersion =
+          msg.includes('unavailable for consumption') ||
+          msg.includes('version unavailable') ||
+          msg.includes('ObjectVersionUnavailableForConsumption');
+        if (isStaleVersion && attempt < MINT_RETRIES) {
+          // Small backoff so RPC has time to settle
+          await new Promise((r) => setTimeout(r, 800));
+          continue;
+        }
+        // Non-retryable, or out of retries — bail
+        setError(`[mint] ${msg}`);
+        setStage('prompt');
+        setRollingStatus(null);
+        return;
       }
-      const voucherType = `${packageId}::recruit::GenesisVoucher`;
-      const created = (full.objectChanges ?? []).find(
-        (c) => c.type === 'created' && 'objectType' in c && c.objectType === voucherType,
-      );
-      if (!created || !('objectId' in created)) {
-        throw new Error('voucher 物件未找到');
-      }
-      mintedVoucherId = created.objectId;
-    } catch (err) {
-      setError(`[mint] ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!mintedVoucherId) {
+      setError(`[mint] ${lastMintErr instanceof Error ? lastMintErr.message : String(lastMintErr)}`);
       setStage('prompt');
       setRollingStatus(null);
       return;
@@ -649,10 +673,10 @@ function PaintingStage() {
 
 function PickStage({ candidate, rolledValues }: { candidate: CharacterCandidate; rolledValues: RolledAttribute[] }) {
   return (
-    <div className="flex flex-col items-center text-center space-y-6">
-      <p className="text-2xs tracking-widest text-mute">骰子已落，揭曉</p>
+    <div className="flex flex-col items-center text-center space-y-6 w-full max-w-lg mx-auto py-4">
+      <p className="text-2xs tracking-widest text-mute shrink-0">骰子已落，揭曉</p>
       
-      <div className="w-full max-w-md rounded-xl border border-cinnabar/20 bg-gradient-to-b from-elevated/80 to-surface/80 p-6 shadow-xl shadow-cinnabar/5 dark:from-elevated/40 dark:to-surface/40 backdrop-blur-sm">
+      <div className="w-full rounded-xl border border-cinnabar/20 bg-gradient-to-b from-elevated/80 to-surface/80 p-6 shadow-xl shadow-cinnabar/5 dark:from-elevated/40 dark:to-surface/40 backdrop-blur-sm">
         <h3 className="font-serif text-3xl text-ink">{candidate.name}</h3>
         <p className="mt-2 text-xs tracking-widest text-mute">
           {candidate.physicalFacts.gender} · {candidate.physicalFacts.age} 歲 · {candidate.physicalFacts.body}
@@ -660,7 +684,7 @@ function PickStage({ candidate, rolledValues }: { candidate: CharacterCandidate;
         
         <div className="my-5 h-px w-full bg-gradient-to-r from-transparent via-hairline to-transparent" />
         
-        <p className="text-sm leading-relaxed text-ink/85 text-justify text-indent-2">{candidate.description}</p>
+        <p className="text-sm leading-relaxed text-ink/85 text-justify text-indent-2 line-clamp-6">{candidate.description}</p>
         
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {rolledValues.map((rv) => (
@@ -673,7 +697,7 @@ function PickStage({ candidate, rolledValues }: { candidate: CharacterCandidate;
           ))}
         </div>
       </div>
-      <p className="text-2xs text-mute">接受即送入畫師繪像；緣寂則此票自然過期。</p>
+      <p className="text-2xs text-mute shrink-0">接受即送入畫師繪像；緣寂則此票自然過期。</p>
     </div>
   );
 }
@@ -694,23 +718,28 @@ function PortraitStage({
   }, [portraitBase64, portraitUrl]);
 
   return (
-    <div className="flex flex-col items-center text-center space-y-6">
-      <p className="text-2xs tracking-widest text-mute">配像已成</p>
+    <div className="flex flex-col items-center space-y-8 w-full max-w-2xl mx-auto py-4">
+      <p className="text-2xs tracking-widest text-mute shrink-0">配像已成</p>
       
-      <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-full max-w-[240px] aspect-[3/4]">
-        {src ? (
-          <img src={src} alt={candidate.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 pointer-events-none" />
-        <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-           <h3 className="font-serif text-2xl text-white drop-shadow-md">{candidate.name}</h3>
+      <div className="flex flex-col sm:flex-row items-center gap-8 w-full">
+        <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 shrink-0 aspect-[3/4]">
+          {src ? (
+            <img src={src} alt={candidate.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 pointer-events-none" />
+          <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
+             <h3 className="font-serif text-2xl text-white drop-shadow-md">{candidate.name}</h3>
+          </div>
         </div>
-      </div>
-      
-      <div className="max-w-sm">
-        <p className="text-sm leading-relaxed text-ink/80 line-clamp-3">{candidate.description}</p>
+        
+        <div className="flex flex-col text-center sm:text-left">
+          <h3 className="hidden sm:block font-serif text-3xl text-ink">{candidate.name}</h3>
+          <p className="hidden sm:block mt-2 text-2xs tracking-widest text-mute">準備入班</p>
+          <div className="hidden sm:block my-4 h-px w-full bg-gradient-to-r from-hairline to-transparent sm:from-hairline sm:to-transparent" />
+          <p className="text-sm leading-relaxed text-ink/80 line-clamp-6 text-justify text-indent-2">{candidate.description}</p>
+        </div>
       </div>
     </div>
   );
@@ -731,8 +760,8 @@ function DoneStage({
 }) {
   const src = portraitBase64 ? `data:image/png;base64,${portraitBase64}` : portraitUrl;
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-4 text-center">
-      <div className="relative overflow-hidden rounded-md bg-canvas ring-1 ring-cinnabar/30 shadow-2xl shadow-cinnabar/20 w-full max-w-[200px] aspect-[3/4]">
+    <div className="flex flex-col items-center justify-center gap-6 py-4 text-center w-full mx-auto">
+      <div className="relative overflow-hidden rounded-md bg-canvas ring-1 ring-cinnabar/30 shadow-2xl shadow-cinnabar/20 w-40 aspect-[3/4]">
         {src ? (
           <img src={src} alt={candidate.name} className="h-full w-full object-cover" />
         ) : (
@@ -740,15 +769,15 @@ function DoneStage({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 pointer-events-none" />
         <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-           <h3 className="font-serif text-2xl text-white drop-shadow-md">{candidate.name}</h3>
+           <h3 className="font-serif text-xl text-white drop-shadow-md">{candidate.name}</h3>
            <p className="text-2xs tracking-widest text-white/80 mt-1">{role}</p>
         </div>
       </div>
       
-      <div className="space-y-2">
+      <div className="space-y-3">
         <p className="text-2xs tracking-widest text-mute">已登錄梨園名冊</p>
         {characterId ? (
-          <p className="font-mono text-2xs text-mute break-all max-w-xs px-4 py-1.5 bg-surface rounded border border-hairline">{characterId}</p>
+          <p className="font-mono text-xs text-ink px-4 py-2 bg-surface rounded border border-hairline shadow-sm">{characterId}</p>
         ) : (
           <p className="text-2xs text-mute animate-pulse">上鏈中…</p>
         )}
