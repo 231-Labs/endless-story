@@ -373,32 +373,32 @@ export function RecruitmentTicket({
 
       return (
         <>
-          <div
-            className={`relative overflow-hidden rounded-lg bg-surface ring-1 transition-all duration-500 flex flex-col min-h-[560px] md:h-[520px] md:min-h-[520px] ${
-              isOpen ? 'scale-100 opacity-100 ring-cinnabar/40 shadow-xl shadow-cinnabar/5' : 'ring-hairline'
-            }`}
-          >
-            {/* Day/Night backgrounds */}
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-[0.25] dark:opacity-0 transition-opacity duration-700 pointer-events-none"
-              style={{ backgroundImage: `url('/ticket-bg/day-${(index % 5) + 1}.png')` }}
-            />
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-0 dark:opacity-[0.35] transition-opacity duration-700 pointer-events-none"
-              style={{ backgroundImage: `url('/ticket-bg/night-${(index % 5) + 1}.png')` }}
-            />
-            <div className="absolute inset-0 bg-surface/40 pointer-events-none" />
+      <div
+        className={`relative overflow-hidden rounded-lg bg-surface ring-1 transition-all duration-500 md:min-h-[440px] ${
+          isOpen ? 'scale-100 opacity-100 ring-cinnabar/40 shadow-xl shadow-cinnabar/5' : 'ring-hairline'
+        }`}
+      >
+        {/* Day/Night backgrounds */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-[0.25] dark:opacity-0 transition-opacity duration-700 pointer-events-none"
+          style={{ backgroundImage: `url('/ticket-bg/day-${(index % 5) + 1}.png')` }}
+        />
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-0 dark:opacity-[0.35] transition-opacity duration-700 pointer-events-none"
+          style={{ backgroundImage: `url('/ticket-bg/night-${(index % 5) + 1}.png')` }}
+        />
+        <div className="absolute inset-0 bg-surface/40 pointer-events-none" />
 
-            <div className="relative z-10 grid grid-cols-1 md:grid-cols-[1fr_240px] flex-1 h-full">
-              {!isOpen ? (
-                <>
-                  <DefaultMain recruitment={recruitment} minEntries={minEntries} />
-                  <DefaultStub recruitment={recruitment} days={daysLeft(recruitment.expiresAt)} onOpen={handleOpen} />
-                </>
-              ) : (
-                <>
-                  <div className="relative flex flex-col p-6 sm:p-8 md:p-10 h-full overflow-y-auto no-scrollbar">
-                    <div key={stage} className="animate-fade-in-up flex-1 flex flex-col justify-center">
+        <div className="relative z-10 grid grid-cols-1 md:min-h-[440px] md:grid-cols-[1fr_240px]">
+          {!isOpen ? (
+            <>
+              <DefaultMain recruitment={recruitment} minEntries={minEntries} />
+              <DefaultStub recruitment={recruitment} days={daysLeft(recruitment.expiresAt)} onOpen={handleOpen} />
+            </>
+          ) : (
+            <>
+              <div className="relative flex flex-col justify-center p-6 sm:p-8 md:p-10">
+                <div key={stage} className="animate-fade-in-up">
                   {stage === 'prompt' && (
                     <PromptStage prompt={prompt} onPromptChange={setPrompt} />
                   )}
@@ -429,14 +429,14 @@ export function RecruitmentTicket({
                     </p>
                   )}
                 </div>
-                  </div>
+              </div>
 
-                  {/* Right stub */}
-                  <div className="relative border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0 h-full flex flex-col">
-                    <span aria-hidden className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2" />
-                    <span aria-hidden className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2" />
+              {/* Right stub */}
+              <div className="relative border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0">
+                <span aria-hidden className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2" />
+                <span aria-hidden className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2" />
 
-                    <div className="flex flex-1 flex-col gap-6 pt-6 md:pt-0">
+                <div className="flex h-full flex-col gap-6 pt-6 md:pt-0">
                   <div>
                     <p className="text-2xs tracking-widest text-mute">{recruitment.sagaName}</p>
                     <h3 className="mt-2 font-serif text-2xl text-ink sm:text-3xl">
@@ -510,7 +510,7 @@ function DefaultMain({
   minEntries: [string, number][];
 }) {
   return (
-    <div className="flex flex-col justify-center p-6 sm:p-8 md:p-10 h-full overflow-y-auto no-scrollbar">
+    <div className="flex flex-col justify-center p-6 sm:p-8 md:p-10">
       <p className="text-2xs tracking-widest text-mute">
         {recruitment.sagaName} · {recruitment.membership === 'internal' ? '春雪社徵召' : '江湖客串'}
       </p>
@@ -554,7 +554,7 @@ function DefaultStub({
     <button
       type="button"
       onClick={onOpen}
-      className="group/stub relative flex flex-col justify-between border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0 text-left transition-colors hover:bg-cinnabar/[0.03] h-full w-full"
+      className="group/stub relative flex flex-col justify-between border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0 text-left transition-colors hover:bg-cinnabar/[0.03]"
     >
       <span aria-hidden className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2" />
       <span aria-hidden className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2" />
@@ -610,17 +610,21 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
 
 function PromptStage({ prompt, onPromptChange }: { prompt: string; onPromptChange: (v: string) => void }) {
   return (
-    <div className="flex flex-col w-full max-w-lg mx-auto space-y-4 py-4">
+    <div className="flex flex-col w-full max-w-2xl mx-auto space-y-6 py-4">
       <p className="text-2xs tracking-widest text-mute text-center">寫下你想扮演的角色</p>
-      <textarea
-        value={prompt}
-        onChange={(e) => onPromptChange(e.target.value)}
-        rows={8}
-        maxLength={1200}
-        placeholder="他是誰？從哪兒來？想做什麼？他身上一個讓人忘不掉的細節…"
-        className="es-field w-full text-sm leading-relaxed resize-none"
-      />
-      <p className="text-2xs text-mute text-right">{prompt.length}/1200</p>
+      <div className="relative">
+        <textarea
+          value={prompt}
+          onChange={(e) => onPromptChange(e.target.value)}
+          rows={4}
+          maxLength={1200}
+          placeholder="他是誰？從哪兒來？想做什麼？他身上一個讓人忘不掉的細節…"
+          className="w-full rounded-lg border-2 border-dashed border-hairline bg-surface/30 px-6 py-5 text-[15px] leading-loose text-ink placeholder:text-mute/60 focus:border-cinnabar/50 focus:bg-surface/80 focus:outline-none transition-all resize-none dark:bg-elevated/20"
+        />
+        <div className="absolute bottom-4 right-6 pointer-events-none">
+          <p className="text-2xs text-mute font-mono">{prompt.length}/1200</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -673,31 +677,31 @@ function PaintingStage() {
 
 function PickStage({ candidate, rolledValues }: { candidate: CharacterCandidate; rolledValues: RolledAttribute[] }) {
   return (
-    <div className="flex flex-col items-center text-center space-y-6 w-full max-w-lg mx-auto py-4">
+    <div className="flex flex-col items-center text-center space-y-6 w-full max-w-xl mx-auto py-2">
       <p className="text-2xs tracking-widest text-mute shrink-0">骰子已落，揭曉</p>
       
-      <div className="w-full rounded-xl border border-cinnabar/20 bg-gradient-to-b from-elevated/80 to-surface/80 p-6 shadow-xl shadow-cinnabar/5 dark:from-elevated/40 dark:to-surface/40 backdrop-blur-sm">
+      <div className="w-full">
         <h3 className="font-serif text-3xl text-ink">{candidate.name}</h3>
         <p className="mt-2 text-xs tracking-widest text-mute">
           {candidate.physicalFacts.gender} · {candidate.physicalFacts.age} 歲 · {candidate.physicalFacts.body}
         </p>
         
-        <div className="my-5 h-px w-full bg-gradient-to-r from-transparent via-hairline to-transparent" />
+        <div className="my-5 mx-auto h-px w-2/3 bg-gradient-to-r from-transparent via-hairline to-transparent" />
         
-        <p className="text-sm leading-relaxed text-ink/85 text-justify text-indent-2 line-clamp-6">{candidate.description}</p>
+        <p className="text-[15px] leading-loose text-ink/85 sm:text-base text-justify text-indent-2">{candidate.description}</p>
         
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <div className="mt-6 flex flex-wrap justify-center gap-2.5">
           {rolledValues.map((rv) => (
             <span
               key={rv.key}
-              className="rounded-full border border-cinnabar/20 bg-cinnabar/5 px-3 py-1 text-xs tracking-widest text-cinnabar"
+              className="rounded-full bg-cinnabar/5 px-3 py-1 text-xs tracking-widest text-cinnabar ring-1 ring-cinnabar/20"
             >
               {rv.label} <span className="font-serif ml-1">{rv.value}</span>
             </span>
           ))}
         </div>
       </div>
-      <p className="text-2xs text-mute shrink-0">接受即送入畫師繪像；緣寂則此票自然過期。</p>
+      <p className="text-2xs text-mute shrink-0 pt-2">接受即送入畫師繪像；緣寂則此票自然過期。</p>
     </div>
   );
 }
@@ -721,7 +725,7 @@ function PortraitStage({
     <div className="flex flex-col items-center space-y-8 w-full max-w-2xl mx-auto py-4">
       <p className="text-2xs tracking-widest text-mute shrink-0">配像已成</p>
       
-      <div className="flex flex-col sm:flex-row items-center gap-8 w-full">
+      <div className="flex flex-col sm:flex-row items-center gap-10 w-full">
         <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 shrink-0 aspect-[3/4]">
           {src ? (
             <img src={src} alt={candidate.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
@@ -734,11 +738,11 @@ function PortraitStage({
           </div>
         </div>
         
-        <div className="flex flex-col text-center sm:text-left">
+        <div className="flex flex-col text-center sm:text-left flex-1">
           <h3 className="hidden sm:block font-serif text-3xl text-ink">{candidate.name}</h3>
           <p className="hidden sm:block mt-2 text-2xs tracking-widest text-mute">準備入班</p>
-          <div className="hidden sm:block my-4 h-px w-full bg-gradient-to-r from-hairline to-transparent sm:from-hairline sm:to-transparent" />
-          <p className="text-sm leading-relaxed text-ink/80 line-clamp-6 text-justify text-indent-2">{candidate.description}</p>
+          <div className="hidden sm:block my-5 h-px w-full bg-gradient-to-r from-hairline to-transparent sm:from-hairline sm:to-transparent" />
+          <p className="text-sm leading-relaxed text-ink/80 line-clamp-5 text-justify text-indent-2">{candidate.description}</p>
         </div>
       </div>
     </div>
@@ -760,27 +764,35 @@ function DoneStage({
 }) {
   const src = portraitBase64 ? `data:image/png;base64,${portraitBase64}` : portraitUrl;
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-4 text-center w-full mx-auto">
-      <div className="relative overflow-hidden rounded-md bg-canvas ring-1 ring-cinnabar/30 shadow-2xl shadow-cinnabar/20 w-40 aspect-[3/4]">
-        {src ? (
-          <img src={src} alt={candidate.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 pointer-events-none" />
-        <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-           <h3 className="font-serif text-xl text-white drop-shadow-md">{candidate.name}</h3>
-           <p className="text-2xs tracking-widest text-white/80 mt-1">{role}</p>
+    <div className="flex flex-col items-center justify-center gap-6 py-4 text-center w-full max-w-2xl mx-auto">
+      <p className="text-2xs tracking-widest text-mute shrink-0 sm:hidden">已登錄梨園名冊</p>
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-10 w-full">
+        <div className="relative overflow-hidden rounded-md bg-canvas ring-1 ring-cinnabar/30 shadow-2xl shadow-cinnabar/20 w-40 aspect-[3/4] shrink-0">
+          {src ? (
+            <img src={src} alt={candidate.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80 pointer-events-none" />
+          <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
+             <h3 className="font-serif text-xl text-white drop-shadow-md">{candidate.name}</h3>
+             <p className="text-2xs tracking-widest text-white/80 mt-1">{role}</p>
+          </div>
         </div>
-      </div>
-      
-      <div className="space-y-3">
-        <p className="text-2xs tracking-widest text-mute">已登錄梨園名冊</p>
-        {characterId ? (
-          <p className="font-mono text-xs text-ink px-4 py-2 bg-surface rounded border border-hairline shadow-sm">{characterId}</p>
-        ) : (
-          <p className="text-2xs text-mute animate-pulse">上鏈中…</p>
-        )}
+        
+        <div className="space-y-4 text-center sm:text-left flex-1 max-w-sm">
+          <h3 className="hidden sm:block font-serif text-3xl text-ink">{candidate.name}</h3>
+          <p className="hidden sm:block text-xs tracking-widest text-mute">已登錄梨園名冊 · {role}</p>
+          <div className="hidden sm:block my-4 h-px w-full bg-gradient-to-r from-transparent via-hairline to-transparent sm:from-hairline sm:to-transparent" />
+          <div className="space-y-2">
+            <p className="text-2xs tracking-widest text-mute">鏈上身份標識</p>
+            {characterId ? (
+              <p className="font-mono text-xs text-ink px-4 py-2.5 bg-surface rounded border border-hairline shadow-sm break-all">{characterId}</p>
+            ) : (
+              <p className="text-2xs text-mute animate-pulse">上鏈中…</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -50,6 +50,35 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
 
   const packageId = ENDLESS_STORY_DEPLOYMENT.packageId;
   const faucetId = ENDLESS_STORY_DEPLOYMENT.faucetId;
+  const faucetAdminCapId = ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId;
+
+  // Detect whether the connected wallet owns the FaucetAdminCap — if so we
+  // can admin_mint (no cooldown) instead of drip (24h cooldown per address).
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (!account || !faucetAdminCapId) {
+      setIsAdmin(false);
+      return;
+    }
+    let cancelled = false;
+    suiClient
+      .getObject({ id: faucetAdminCapId, options: { showOwner: true } })
+      .then((res) => {
+        if (cancelled) return;
+        const owner = res.data?.owner;
+        if (owner && typeof owner === 'object' && 'AddressOwner' in owner) {
+          setIsAdmin(owner.AddressOwner === account.address);
+        } else {
+          setIsAdmin(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setIsAdmin(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [account, suiClient, faucetAdminCapId]);
 
   useEffect(() => {
     if (!account || !packageId) {
@@ -80,7 +109,25 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
     }
     setDripError(null);
     const tx = new Transaction();
-    tx.add(endlessTx.faucet.drip({ faucet: faucetId }));
+    if (isAdmin && faucetAdminCapId) {
+      // Admin → admin_mint to self. Bypasses the 24h cooldown that drip
+      // enforces per-address. Salt the amount so consecutive clicks produce
+      // distinct tx payloads (avoids Sui's tx-digest dedup returning cached
+      // effects from the previous mint).
+      const baseAmount = 10_000_000n; // 10 ENDLESS at 6 decimals
+      const salt = BigInt(Date.now() % 100_000);
+      tx.add(
+        endlessTx.faucet.adminMint({
+          admin: faucetAdminCapId,
+          faucet: faucetId,
+          amount: baseAmount + salt,
+          recipient: account!.address,
+        }),
+      );
+    } else {
+      // Regular user → drip (10 ENDLESS, then 24h cooldown).
+      tx.add(endlessTx.faucet.drip({ faucet: faucetId }));
+    }
     signAndExecute(
       { transaction: tx },
       {
@@ -151,7 +198,7 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
                       disabled={isDripping}
                       className="rounded-full bg-cinnabar/15 px-2.5 py-0.5 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/25 disabled:opacity-50"
                     >
-                      {isDripping ? '領取中…' : '領 ENDLESS'}
+                      {isDripping ? '領取中…' : isAdmin ? 'Admin 補水' : '領 ENDLESS'}
                     </button>
                   )}
                 </div>
