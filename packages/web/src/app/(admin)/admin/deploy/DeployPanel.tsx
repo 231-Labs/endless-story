@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { runCliScript, type CliScript, type RunCliScriptResult } from '@/lib/actions/run-cli-script';
 import { getDeploymentStatus, type DeploymentStatus } from '@/lib/actions/deployment-status';
+import { seedDefaultRecruitments } from '@/lib/actions/recruitments-store';
 
 type Env = 'devnet' | 'testnet' | 'mainnet' | 'localnet';
 
@@ -27,6 +28,35 @@ export function DeployPanel({ initialStatus }: Props) {
             setLastResult(res);
             const newStatus = await getDeploymentStatus();
             setStatus(newStatus);
+        });
+    };
+
+    const handleSeedRecruitments = () => {
+        setLog('Seeding default recruitments…\n');
+        setLastResult(null);
+        startTransition(async () => {
+            const started = Date.now();
+            try {
+                const res = await seedDefaultRecruitments();
+                const durationMs = Date.now() - started;
+                setLog(res.log.join('\n'));
+                setLastResult({
+                    ok: res.ok,
+                    code: res.ok ? 0 : 1,
+                    stdout: res.log.join('\n'),
+                    stderr: '',
+                    durationMs,
+                });
+            } catch (err) {
+                setLog(`FAIL ${err instanceof Error ? err.message : String(err)}`);
+                setLastResult({
+                    ok: false,
+                    code: 1,
+                    stdout: '',
+                    stderr: err instanceof Error ? err.message : String(err),
+                    durationMs: Date.now() - started,
+                });
+            }
         });
     };
 
@@ -131,9 +161,9 @@ export function DeployPanel({ initialStatus }: Props) {
                         disabled={isPending || !status.isDeployed}
                     />
                     <ActionButton
-                        label="③ test-e2e"
-                        sub="drip → mint voucher → redeem"
-                        onClick={() => handleRun('test-e2e')}
+                        label="③ seed 職缺"
+                        sub="批量開 5 個預設行當（武小生 / 富商 / 青衣 / 小報記者 / 老生）"
+                        onClick={handleSeedRecruitments}
                         disabled={isPending || !status.isBootstrapped}
                     />
                 </div>

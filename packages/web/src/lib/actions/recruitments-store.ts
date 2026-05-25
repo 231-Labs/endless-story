@@ -3,21 +3,23 @@
 /**
  * Server-side recruitments store — JSON file at `web/data/recruitments.json`.
  *
- * The user-facing carousel reads via `lib/api/recruitments.ts` which falls
- * back to this when not USE_MOCK. Admin /recruitments page CRUDs it directly.
+ * Read by `lib/api/recruitments.ts` (user-facing carousel + dossier).
+ * Written by `app/(admin)/admin/recruitments/` (CRUD UI) and by the
+ * `seedDefaultRecruitments` server action (admin /admin/deploy ③ button).
  *
- * On first read the file is seeded from the mock list so dev runs already
- * have content. Once admin edits, the JSON wins.
+ * **Starts empty.** No auto-seed from mocks anymore — admin must click
+ * the seed button (or hand-craft via the recruitments UI). Seed data
+ * lives in `lib/recruitment-seeds.ts`.
  *
- * No locking — single-writer assumed (dev / admin local). For production
- * swap to a DB.
+ * No locking — single-writer assumed (dev / admin local). For
+ * production swap to a DB.
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { revalidatePath } from 'next/cache';
 import type { Recruitment } from '@endless-story/shared';
-import { recruitments as MOCK_SEED } from '@/mocks/recruitments';
+import { buildDefaultRecruitments } from '@/lib/recruitment-seeds';
 
 export interface AdminRecruitment extends Recruitment {
     /** Active = appears in user-facing carousel. */
@@ -27,19 +29,15 @@ export interface AdminRecruitment extends Recruitment {
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORE_PATH = path.join(DATA_DIR, 'recruitments.json');
 
-function ensureSeeded(): AdminRecruitment[] {
-    if (fs.existsSync(STORE_PATH)) {
-        try {
-            const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8')) as AdminRecruitment[];
-            if (Array.isArray(raw)) return raw;
-        } catch (err) {
-            console.warn('[recruitments-store] corrupt JSON, re-seeding:', err);
-        }
+function readStore(): AdminRecruitment[] {
+    if (!fs.existsSync(STORE_PATH)) return [];
+    try {
+        const raw = JSON.parse(fs.readFileSync(STORE_PATH, 'utf-8')) as AdminRecruitment[];
+        return Array.isArray(raw) ? raw : [];
+    } catch (err) {
+        console.warn('[recruitments-store] corrupt JSON, treating as empty:', err);
+        return [];
     }
-    const seeded: AdminRecruitment[] = MOCK_SEED.map((r) => ({ ...r, active: true }));
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(STORE_PATH, JSON.stringify(seeded, null, 2), 'utf-8');
-    return seeded;
 }
 
 function persist(items: AdminRecruitment[]) {
@@ -51,22 +49,22 @@ function persist(items: AdminRecruitment[]) {
 }
 
 export async function listAllRecruitments(): Promise<AdminRecruitment[]> {
-    return ensureSeeded();
+    return readStore();
 }
 
 export async function listOpenStoreRecruitments(): Promise<Recruitment[]> {
-    const all = ensureSeeded();
+    const all = readStore();
     const now = new Date().toISOString();
     return all.filter((r) => r.active && r.slots > 0 && r.expiresAt > now);
 }
 
 export async function getStoreRecruitment(id: string): Promise<AdminRecruitment | null> {
-    const all = ensureSeeded();
+    const all = readStore();
     return all.find((r) => r.id === id) ?? null;
 }
 
 export async function upsertRecruitment(input: AdminRecruitment): Promise<AdminRecruitment> {
-    const all = ensureSeeded();
+    const all = readStore();
     const i = all.findIndex((r) => r.id === input.id);
     if (i >= 0) all[i] = input;
     else all.push(input);
@@ -75,13 +73,13 @@ export async function upsertRecruitment(input: AdminRecruitment): Promise<AdminR
 }
 
 export async function deleteRecruitment(id: string): Promise<void> {
-    const all = ensureSeeded();
+    const all = readStore();
     const filtered = all.filter((r) => r.id !== id);
     persist(filtered);
 }
 
 export async function setRecruitmentActive(id: string, active: boolean): Promise<void> {
-    const all = ensureSeeded();
+    const all = readStore();
     const r = all.find((x) => x.id === id);
     if (!r) throw new Error(`recruitment not found: ${id}`);
     r.active = active;
@@ -104,4 +102,44 @@ export async function newRecruitmentDraft(sagaId: string, sagaName: string): Pro
         createdAt: new Date().toISOString(),
         active: false,
     };
+}
+
+export interface SeedDefaultsResult {
+    ok: boolean;
+    inserted: number;
+    skipped: number;
+    /** Summary log lines for admin UI display. */
+    log: string[];
+}
+
+/**
+ * Batch-open the 5 canonical preset recruitments (春雪社 archetypes).
+ * Skips any whose id already exists, so re-running is idempotent and
+ * won't clobber admin edits.
+ */
+export async function seedDefaultRecruitments(): Promise<SeedDefaultsResult> {
+    const existing = readStore();
+    const existingIds = new Set(existing.map((r) => r.id));
+    const defaults = buildDefaultRecruitments();
+
+    const log: string[] = [];
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const seed of defaults) {
+        if (existingIds.has(seed.id)) {
+            log.push(`SKIP  ${seed.id} (${seed.specialty}) — already exists`);
+            skipped++;
+            continue;
+        }
+        existing.push({ ...seed, active: true });
+        log.push(`ADD   ${seed.id} (${seed.specialty})`);
+        inserted++;
+    }
+
+    if (inserted > 0) persist(existing);
+    log.push(`---`);
+    log.push(`inserted: ${inserted}   skipped: ${skipped}   total: ${existing.length}`);
+
+    return { ok: true, inserted, skipped, log };
 }

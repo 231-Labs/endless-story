@@ -1,14 +1,15 @@
 import type { Recruitment } from '@endless-story/shared';
-import { getRecruitmentById } from '@/mocks/recruitments';
 import { getStoreRecruitment, listOpenStoreRecruitments } from '@/lib/actions/recruitments-store';
 
 /**
- * Recruitments API — facade that reads from the admin-editable JSON store
- * (`web/data/recruitments.json`). The store seeds itself from the mock list
- * on first read, so dev runs already have content.
+ * Recruitments API — facade over the admin-edited JSON store
+ * (`web/data/recruitments.json`).
  *
- * No more USE_MOCK gating: the JSON store IS the source. The mock acts as
- * initial seed only.
+ * The store starts EMPTY on fresh install. Admin populates it via:
+ *   - /admin/deploy ③ button (batch open 5 preset 行當)
+ *   - /admin/recruitments (manual CRUD)
+ *
+ * Seed data lives in `lib/recruitment-seeds.ts`.
  */
 
 export async function listOpenRecruitments(): Promise<Recruitment[]> {
@@ -16,8 +17,5 @@ export async function listOpenRecruitments(): Promise<Recruitment[]> {
 }
 
 export async function getRecruitment(id: string): Promise<Recruitment | null> {
-  const fromStore = await getStoreRecruitment(id);
-  if (fromStore) return fromStore;
-  // Fallback to mock for static / test ids that aren't in the store.
-  return getRecruitmentById(id) ?? null;
+  return getStoreRecruitment(id);
 }
