@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { WalletProviders } from '@/lib/providers/WalletProviders';
 
 export const metadata: Metadata = {
   title: 'Endless Story',
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <WalletProviders>{children}</WalletProviders>
+      </body>
     </html>
   );
 }

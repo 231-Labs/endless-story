@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { MockWalletMenu, type WalletPersona } from '@/components/common/MockWalletMenu';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { WalletConnect } from '@/components/common/WalletConnect';
 import { charactersApi, subscriptionsApi } from '@/lib/api/index';
 import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_VIEWER_WALLET } from '@/mocks/subscriptions';
@@ -78,6 +79,7 @@ export async function SiteNav() {
           >
             章回
           </a>
+          <WalletConnect />
           <Suspense fallback={<div className="h-8 w-24 rounded-full bg-canvas/60 ring-1 ring-hairline" />}>
             <MockWalletMenu personas={personas} />
           </Suspense>
