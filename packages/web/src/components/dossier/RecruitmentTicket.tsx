@@ -1,22 +1,25 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 import type { Recruitment } from '@endless-story/shared';
+import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
+import { generateAttributeSeed } from '@endless-story/llm/seed';
+import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
+import { moderatePrompt } from '@/lib/actions/moderate-prompt';
+import { previewCharacter } from '@/lib/actions/preview-character';
+import { generatePortrait } from '@/lib/actions/generate-portrait';
+import { redeemVoucher } from '@/lib/actions/redeem-voucher';
 
 type Stage = 'closed' | 'prompt' | 'rolling' | 'pick' | 'painting' | 'portrait' | 'done';
 
-interface Candidate {
-  name: string;
-  attributes: { 筋骨: number; 心性: number; 機敏: number; 外貌: number };
-  description: string;
-}
-
 const ATTR_LABEL: Record<string, string> = {
-  constitution: '筋骨',
-  disposition: '心性',
-  acuity: '機敏',
   appearance: '外貌',
+  constitution: '筋骨',
+  acuity: '機敏',
+  disposition: '心性',
 };
 
 const GENDER_LABEL: Record<string, string> = {
@@ -28,65 +31,29 @@ const GENDER_LABEL: Record<string, string> = {
 const STEPS: { key: Exclude<Stage, 'closed' | 'painting'>; label: string }[] = [
   { key: 'prompt', label: '描述' },
   { key: 'rolling', label: '擲牌' },
-  { key: 'pick', label: '選定' },
+  { key: 'pick', label: '揭曉' },
   { key: 'portrait', label: '配像' },
   { key: 'done', label: '入班' },
 ];
 
-const PORTRAIT_TONES = [
-  {
-    bg: 'bg-rose-50 dark:bg-rose-950/40',
-    ring: 'ring-rose-100 dark:ring-rose-900/50',
-    text: 'text-rose-300 dark:text-rose-800',
-  },
-  {
-    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
-    ring: 'ring-indigo-100 dark:ring-indigo-900/50',
-    text: 'text-indigo-300 dark:text-indigo-800',
-  },
-  {
-    bg: 'bg-amber-50 dark:bg-amber-950/40',
-    ring: 'ring-amber-100 dark:ring-amber-900/50',
-    text: 'text-amber-300 dark:text-amber-700',
-  },
-];
+const VOUCHER_TTL_MS = 24n * 60n * 60n * 1000n;
+const ENDLESS_DECIMALS = 6;
 
-const MOCK_CANDIDATES_BY_SPECIALTY: Record<string, Candidate[]> = {
-  武小生: [
-    {
-      name: '墨秋雨',
-      attributes: { 筋骨: 72, 心性: 88, 機敏: 80, 外貌: 82 },
-      description:
-        '從蘇州河碼頭走進來的少年。眉峰落得利落、目光卻有點怯，會替人擋酒前先低聲說「我來」。',
-    },
-    {
-      name: '蘇令薰',
-      attributes: { 筋骨: 75, 心性: 65, 機敏: 92, 外貌: 88 },
-      description:
-        '霞飛路口洋行少東家的私生子。穿著比誰都得體、講話比誰都圓滑；只有提到生母時眼神會頓一下。',
-    },
-    {
-      name: '葉子衿',
-      attributes: { 筋骨: 70, 心性: 78, 機敏: 85, 外貌: 95 },
-      description:
-        '京戲班解散後流落到上海。台上的氣場壓得住場、台下卻孤僻；只跟胡琴說話。',
-    },
-  ],
-};
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
-function getCandidates(specialty: string): Candidate[] {
-  return MOCK_CANDIDATES_BY_SPECIALTY[specialty] ?? MOCK_CANDIDATES_BY_SPECIALTY['武小生'];
+function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'painting'> {
+  if (stage === 'painting') return 'portrait';
+  return stage as Exclude<Stage, 'closed' | 'painting'>;
 }
 
 function daysLeft(expiresAt: string): number {
   const now = Date.now();
   const exp = new Date(expiresAt).getTime();
   return Math.max(0, Math.floor((exp - now) / (1000 * 60 * 60 * 24)));
-}
-
-function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'painting'> {
-  if (stage === 'painting') return 'portrait';
-  return stage as Exclude<Stage, 'closed' | 'painting'>;
 }
 
 export function RecruitmentTicket({
@@ -98,22 +65,41 @@ export function RecruitmentTicket({
   index?: number;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const router = useRouter();
+  const account = useCurrentAccount();
+  const suiClient = useSuiClient();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const packageId = ENDLESS_STORY_DEPLOYMENT.packageId;
+  const sagaId = ENDLESS_STORY_DEPLOYMENT.sagaId;
+
   const [stage, setStage] = useState<Stage>('closed');
   const [prompt, setPrompt] = useState('');
-  const [pickedIdx, setPickedIdx] = useState<number | null>(null);
-  const [portraitIdx, setPortraitIdx] = useState<number | null>(null);
-  const router = useRouter();
-  const stageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const candidates = getCandidates(recruitment.specialty);
+  // Flow state — accumulates as steps complete.
+  const [voucherId, setVoucherId] = useState<string | null>(null);
+  const [attributeSeedHex, setAttributeSeedHex] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [candidate, setCandidate] = useState<CharacterCandidate | null>(null);
+  const [rolledValues, setRolledValues] = useState<RolledAttribute[] | null>(null);
+  const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
+  const [portraitBase64, setPortraitBase64] = useState<string | null>(null);
+  const [characterId, setCharacterId] = useState<string | null>(null);
+
   const isOpen = stage !== 'closed';
 
   const resetWizard = () => {
-    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
     setStage('closed');
     setPrompt('');
-    setPickedIdx(null);
-    setPortraitIdx(null);
+    setError(null);
+    setVoucherId(null);
+    setAttributeSeedHex(null);
+    setSignature(null);
+    setCandidate(null);
+    setRolledValues(null);
+    setPortraitUrl(null);
+    setPortraitBase64(null);
+    setCharacterId(null);
   };
 
   useEffect(() => {
@@ -121,19 +107,175 @@ export function RecruitmentTicket({
   }, [isOpen, onOpenChange]);
 
   useEffect(() => {
-    return () => {
-      if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
-    };
-  }, []);
-
-  // Reset internal state when the ticket's recruitment changes (carousel switch)
-  useEffect(() => {
     resetWizard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recruitment.id]);
 
-  const close = () => resetWizard();
+  // ───────────────────────────────────────────────────────────────
+  // Step: prompt → rolling (moderate + mint + preview)
+  // ───────────────────────────────────────────────────────────────
+  const handleRoll = async () => {
+    setError(null);
 
-  const handleOpen = () => setStage('prompt');
+    if (!account) {
+      setError('請先連結錢包');
+      return;
+    }
+    if (!packageId || !sagaId) {
+      setError('梨園尚未種子化 — 請通知 admin 跑 cli bootstrap');
+      return;
+    }
+
+    setStage('rolling');
+
+    // 1. Moderate
+    const modRes = await moderatePrompt(prompt);
+    if (!modRes.ok) {
+      setError(modRes.reason ?? '審核未通過');
+      setStage('prompt');
+      return;
+    }
+    setSignature(modRes.signature!);
+
+    // 2. Mint voucher (real on-chain) — pay basePrice from user's ENDLESS coin
+    const seed = generateAttributeSeed();
+    const seedHex = bytesToHex(seed);
+    setAttributeSeedHex(seedHex);
+
+    let mintedVoucherId: string;
+    try {
+      const coinType = `${packageId}::currency::CURRENCY`;
+      const coins = await suiClient.getCoins({ owner: account.address, coinType, limit: 50 });
+      if (!coins.data || coins.data.length === 0) {
+        throw new Error('沒有 ENDLESS 幣 — 請先用右上「領 ENDLESS」');
+      }
+      const priceBase = BigInt(recruitment.basePrice) * BigInt(10 ** ENDLESS_DECIMALS);
+
+      const tx = new Transaction();
+      // Split exact amount from gas-merged coin pool.
+      const coinIds = coins.data.map((c) => c.coinObjectId);
+      const primary = tx.object(coinIds[0]);
+      if (coinIds.length > 1) {
+        tx.mergeCoins(primary, coinIds.slice(1).map((id) => tx.object(id)));
+      }
+      const [payment] = tx.splitCoins(primary, [priceBase]);
+
+      const reqs = tx.add(endlessTx.recruit.noRequirements());
+      tx.add(
+        endlessTx.recruit.mintGenesisVoucher({
+          saga: sagaId,
+          payment,
+          attributeSeed: Array.from(seed),
+          hint: prompt.slice(0, 80),
+          requirements: reqs,
+          intentHint: recruitment.roleIntent.slice(0, 80),
+          ttlMs: VOUCHER_TTL_MS,
+        }),
+      );
+
+      const res = await signAndExecute({ transaction: tx });
+      // dapp-kit's signAndExecuteTransaction returns digest only by default;
+      // we need to wait for it and re-query the tx for objectChanges.
+      const full = await suiClient.waitForTransaction({
+        digest: res.digest,
+        options: { showObjectChanges: true, showEffects: true },
+      });
+      if (full.effects?.status?.status !== 'success') {
+        throw new Error(full.effects?.status?.error ?? '交易失敗');
+      }
+      const voucherType = `${packageId}::recruit::GenesisVoucher`;
+      const created = (full.objectChanges ?? []).find(
+        (c) => c.type === 'created' && 'objectType' in c && c.objectType === voucherType,
+      );
+      if (!created || !('objectId' in created)) {
+        throw new Error('voucher 物件未找到');
+      }
+      mintedVoucherId = created.objectId;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStage('prompt');
+      return;
+    }
+    setVoucherId(mintedVoucherId);
+
+    // 3. Server preview
+    try {
+      const prev = await previewCharacter({
+        attributeSeedHex: seedHex,
+        userPrompt: prompt,
+        signature: modRes.signature!,
+        recruitmentIntent: recruitment.roleIntent,
+      });
+      if (!prev.ok || !prev.candidate || !prev.rolledValues) {
+        throw new Error(prev.error ?? '預覽失敗');
+      }
+      setCandidate(prev.candidate);
+      setRolledValues(prev.rolledValues);
+      setStage('pick');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStage('prompt');
+    }
+  };
+
+  // ───────────────────────────────────────────────────────────────
+  // Step: pick → painting → portrait
+  // ───────────────────────────────────────────────────────────────
+  const handleAccept = async () => {
+    if (!candidate) return;
+    setStage('painting');
+    setError(null);
+    try {
+      const port = await generatePortrait({
+        character: {
+          description: candidate.description,
+          physical: {
+            gender: candidate.physicalFacts.gender,
+            ageYears: candidate.physicalFacts.age,
+            body: candidate.physicalFacts.body,
+          },
+          attributes: candidate.attributes,
+        },
+        toneHint: '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。',
+        recruitmentIntent: recruitment.roleIntent,
+      });
+      if (!port.ok) {
+        // Continue even on portrait failure — wizard can finish without an image.
+        setError(`(portrait 失敗，仍可繼續): ${port.error}`);
+      }
+      setPortraitUrl(port.url ?? null);
+      setPortraitBase64(port.base64 ?? null);
+      setStage('portrait');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStage('pick');
+    }
+  };
+
+  // ───────────────────────────────────────────────────────────────
+  // Step: portrait → done (auto redeem)
+  // ───────────────────────────────────────────────────────────────
+  const handleEnroll = async () => {
+    if (!candidate || !rolledValues || !attributeSeedHex || !voucherId) return;
+    setStage('done');
+    setError(null);
+    try {
+      const sceneId = ENDLESS_STORY_DEPLOYMENT.sceneIds[0];
+      if (!sceneId) throw new Error('無可用 scene — 種子化未完成');
+      const r = await redeemVoucher({
+        voucherId,
+        sceneId,
+        candidate,
+        rolledValues,
+        attributeSeedHex,
+      });
+      if (!r.ok || !r.characterId) throw new Error(r.error ?? 'redeem 失敗');
+      setCharacterId(r.characterId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStage('portrait');
+    }
+  };
 
   const minEntries: [string, number][] = recruitment.minAttributes
     ? Object.entries(recruitment.minAttributes).filter(
@@ -141,32 +283,19 @@ export function RecruitmentTicket({
       )
     : [];
 
+  // ── Navigation handlers ────────────────────────────────────────
   const handleNext = () => {
-    if (stageTimerRef.current) clearTimeout(stageTimerRef.current);
-
-    if (stage === 'prompt') {
-      setStage('rolling');
-      stageTimerRef.current = setTimeout(() => setStage('pick'), 1400);
-    } else if (stage === 'pick') {
-      setStage('painting');
-      stageTimerRef.current = setTimeout(() => setStage('portrait'), 2500);
-    } else if (stage === 'portrait') {
-      setStage('done');
-    } else if (stage === 'done') {
-      router.push('/dossier?id=char_cheng_hengyu');
-    }
+    if (stage === 'prompt') void handleRoll();
+    else if (stage === 'pick') void handleAccept();
+    else if (stage === 'portrait') void handleEnroll();
+    else if (stage === 'done' && characterId) router.push(`/dossier?id=${characterId}`);
   };
 
   const handlePrev = () => {
-    if (stage === 'prompt' || stage === 'rolling' || stage === 'done') {
-      close();
-    } else if (stage === 'pick') {
-      setStage('prompt');
-    } else if (stage === 'painting') {
-      setStage('pick');
-    } else if (stage === 'portrait') {
-      setStage('pick');
-    }
+    if (stage === 'prompt' || stage === 'rolling') resetWizard();
+    else if (stage === 'pick') resetWizard(); // 緣寂 — voucher will expire
+    else if (stage === 'painting' || stage === 'portrait') setStage('pick');
+    else if (stage === 'done') resetWizard();
   };
 
   let prevLabel = '取消';
@@ -177,25 +306,27 @@ export function RecruitmentTicket({
     nextLabel = '擲牌';
     canNext = prompt.trim().length > 0;
   } else if (stage === 'rolling') {
-    nextLabel = '擲牌中...';
+    nextLabel = '擲牌中…';
     canNext = false;
   } else if (stage === 'pick') {
-    prevLabel = '上一步';
-    nextLabel = '選定';
-    canNext = pickedIdx !== null;
+    prevLabel = '緣寂';
+    nextLabel = '接受';
+    canNext = candidate !== null;
   } else if (stage === 'painting') {
     prevLabel = '上一步';
-    nextLabel = '繪製中...';
+    nextLabel = '繪製中…';
     canNext = false;
   } else if (stage === 'portrait') {
-    prevLabel = '上一步';
-    nextLabel = '配像';
-    canNext = portraitIdx !== null;
+    prevLabel = '重抽';
+    nextLabel = '入班';
+    canNext = true;
   } else if (stage === 'done') {
     prevLabel = '關閉';
-    nextLabel = '查看人物卡';
-    canNext = true;
+    nextLabel = characterId ? '查看人物卡' : '上鏈中…';
+    canNext = characterId !== null;
   }
+
+  const handleOpen = () => setStage('prompt');
 
   return (
     <>
@@ -204,20 +335,15 @@ export function RecruitmentTicket({
           isOpen ? 'scale-100 opacity-100 ring-cinnabar/40 shadow-xl shadow-cinnabar/5' : 'ring-hairline'
         }`}
       >
-        {/* Day/Night Chinese Painting Backgrounds */}
+        {/* Day/Night backgrounds */}
         <div
           className="absolute inset-0 bg-cover bg-center opacity-[0.25] dark:opacity-0 transition-opacity duration-700 pointer-events-none"
-          style={{
-            backgroundImage: `url('/ticket-bg/day-${(index % 5) + 1}.png')`
-          }}
+          style={{ backgroundImage: `url('/ticket-bg/day-${(index % 5) + 1}.png')` }}
         />
         <div
           className="absolute inset-0 bg-cover bg-center opacity-0 dark:opacity-[0.35] transition-opacity duration-700 pointer-events-none"
-          style={{
-            backgroundImage: `url('/ticket-bg/night-${(index % 5) + 1}.png')`
-          }}
+          style={{ backgroundImage: `url('/ticket-bg/night-${(index % 5) + 1}.png')` }}
         />
-        {/* Subtle overlay to ensure text legibility */}
         <div className="absolute inset-0 bg-surface/40 pointer-events-none" />
 
         <div className="relative z-10 grid grid-cols-1 md:min-h-[440px] md:grid-cols-[1fr_240px]">
@@ -228,68 +354,69 @@ export function RecruitmentTicket({
             </>
           ) : (
             <>
-          {/* Left main — stage content morphs, vertically centered */}
-          <div className="relative flex flex-col justify-center p-6 sm:p-8 md:p-10">
-            <div key={stage} className="animate-fade-in-up">
-              {stage === 'prompt' ? (
-                <PromptStage
-                  prompt={prompt}
-                  onPromptChange={setPrompt}
-                />
-              ) : null}
-              {stage === 'rolling' ? <RollingStage /> : null}
-              {stage === 'pick' ? (
-                <PickStage candidates={candidates} pickedIdx={pickedIdx} onPick={setPickedIdx} />
-              ) : null}
-              {stage === 'painting' ? <PaintingStage /> : null}
-              {stage === 'portrait' && pickedIdx != null ? (
-                <PortraitStage candidate={candidates[pickedIdx]} portraitIdx={portraitIdx} onPick={setPortraitIdx} />
-              ) : null}
-              {stage === 'done' && pickedIdx != null && portraitIdx != null ? (
-                <DoneStage
-                  candidate={candidates[pickedIdx]}
-                  role={recruitment.specialty}
-                  portraitTone={PORTRAIT_TONES[portraitIdx]}
-                />
-              ) : null}
-            </div>
-          </div>
-
-          {/* Right stub — perforation + stepper + ticket info */}
-          <div className="relative border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0">
-            {/* Perforation cut-out circles */}
-            <span
-              aria-hidden
-              className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
-            />
-            <span
-              aria-hidden
-              className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2"
-            />
-
-            <div className="flex h-full flex-col gap-6 pt-6 md:pt-0">
-              <div>
-                <p className="text-2xs tracking-widest text-mute">{recruitment.sagaName}</p>
-                <h3 className="mt-2 font-serif text-2xl text-ink sm:text-3xl">{recruitment.specialty}</h3>
+              <div className="relative flex flex-col justify-center p-6 sm:p-8 md:p-10">
+                <div key={stage} className="animate-fade-in-up">
+                  {stage === 'prompt' && (
+                    <PromptStage prompt={prompt} onPromptChange={setPrompt} />
+                  )}
+                  {stage === 'rolling' && <RollingStage />}
+                  {stage === 'pick' && candidate && rolledValues && (
+                    <PickStage candidate={candidate} rolledValues={rolledValues} />
+                  )}
+                  {stage === 'painting' && <PaintingStage />}
+                  {stage === 'portrait' && candidate && (
+                    <PortraitStage
+                      candidate={candidate}
+                      portraitBase64={portraitBase64}
+                      portraitUrl={portraitUrl}
+                    />
+                  )}
+                  {stage === 'done' && candidate && (
+                    <DoneStage
+                      candidate={candidate}
+                      role={recruitment.specialty}
+                      portraitBase64={portraitBase64}
+                      portraitUrl={portraitUrl}
+                      characterId={characterId}
+                    />
+                  )}
+                  {error && (
+                    <p className="mt-4 rounded-md bg-cinnabar/10 px-3 py-2 text-xs text-cinnabar">
+                      {error}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <VerticalStepper stage={stage as Exclude<Stage, 'closed'>} />
+              {/* Right stub */}
+              <div className="relative border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0">
+                <span aria-hidden className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2" />
+                <span aria-hidden className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2" />
 
-              <div className="mt-auto space-y-1 text-2xs tracking-widest text-mute">
-                <p>
-                  <span className="font-serif text-base text-ink">{recruitment.basePrice}</span>{' '}
-                  Endless
-                </p>
-                <p>剩 {recruitment.slots} 位</p>
+                <div className="flex h-full flex-col gap-6 pt-6 md:pt-0">
+                  <div>
+                    <p className="text-2xs tracking-widest text-mute">{recruitment.sagaName}</p>
+                    <h3 className="mt-2 font-serif text-2xl text-ink sm:text-3xl">
+                      {recruitment.specialty}
+                    </h3>
+                  </div>
+
+                  <VerticalStepper stage={stage as Exclude<Stage, 'closed'>} />
+
+                  <div className="mt-auto space-y-1 text-2xs tracking-widest text-mute">
+                    <p>
+                      <span className="font-serif text-base text-ink">{recruitment.basePrice}</span>{' '}
+                      Endless
+                    </p>
+                    <p>剩 {recruitment.slots} 位</p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
             </>
           )}
         </div>
       </div>
 
-      {/* Unified Bottom Navigation for Wizard */}
       {isOpen && (
         <div className="mt-6 flex items-center justify-center gap-3 animate-fade-in-up">
           <button
@@ -300,7 +427,6 @@ export function RecruitmentTicket({
             <span aria-hidden>←</span>
             <span className="text-2xs tracking-widest">{prevLabel}</span>
           </button>
-
           <div className="flex min-w-20 items-center justify-center gap-2">
             {STEPS.map((step) => {
               const isActive = step.key === stepKeyForStage(stage);
@@ -314,7 +440,6 @@ export function RecruitmentTicket({
               );
             })}
           </div>
-
           <button
             type="button"
             onClick={handleNext}
@@ -330,6 +455,10 @@ export function RecruitmentTicket({
   );
 }
 
+// ════════════════════════════════════════════════════════════════
+// Sub-components
+// ════════════════════════════════════════════════════════════════
+
 function DefaultMain({
   recruitment,
   minEntries,
@@ -344,13 +473,13 @@ function DefaultMain({
       </p>
       <h3 className="mt-3 font-serif text-3xl text-ink sm:text-4xl">{recruitment.specialty}</h3>
 
-      {(minEntries.length > 0 || recruitment.genderRequirement) ? (
+      {(minEntries.length > 0 || recruitment.genderRequirement) && (
         <div className="mt-4 flex flex-wrap gap-1.5">
-          {recruitment.genderRequirement && recruitment.genderRequirement !== 'other' ? (
+          {recruitment.genderRequirement && recruitment.genderRequirement !== 'other' && (
             <span className="rounded-full bg-cinnabar/5 px-2.5 py-0.5 text-2xs tracking-widest text-cinnabar/80 ring-1 ring-cinnabar/20">
               {GENDER_LABEL[recruitment.genderRequirement]}
             </span>
-          ) : null}
+          )}
           {minEntries.map(([key, value]) => (
             <span
               key={key}
@@ -360,7 +489,7 @@ function DefaultMain({
             </span>
           ))}
         </div>
-      ) : null}
+      )}
 
       <p className="mt-5 max-w-prose text-[15px] leading-loose text-ink/75 sm:text-base">
         {recruitment.roleIntent}
@@ -384,15 +513,8 @@ function DefaultStub({
       onClick={onOpen}
       className="group/stub relative flex flex-col justify-between border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0 text-left transition-colors hover:bg-cinnabar/[0.03]"
     >
-      <span
-        aria-hidden
-        className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
-      />
-      <span
-        aria-hidden
-        className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2"
-      />
-
+      <span aria-hidden className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2" />
+      <span aria-hidden className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2" />
       <div className="flex h-full w-full flex-col justify-between gap-6 md:gap-8">
         <div>
           <p className="font-serif text-2xl text-ink sm:text-3xl">
@@ -404,7 +526,6 @@ function DefaultStub({
             <p>{days} 日內截止</p>
           </div>
         </div>
-
         <p className="text-sm tracking-wide text-cinnabar transition-transform group-hover/stub:translate-x-1">
           應榜 →
         </p>
@@ -434,11 +555,7 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
             >
               {i + 1}
             </span>
-            <span
-              className={`text-2xs tracking-widest transition-colors ${
-                isCurrent ? 'text-ink' : 'text-mute'
-              }`}
-            >
+            <span className={`text-2xs tracking-widest transition-colors ${isCurrent ? 'text-ink' : 'text-mute'}`}>
               {step.label}
             </span>
           </li>
@@ -448,161 +565,105 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
   );
 }
 
-function PromptStage({
-  prompt,
-  onPromptChange,
-}: {
-  prompt: string;
-  onPromptChange: (v: string) => void;
-}) {
+function PromptStage({ prompt, onPromptChange }: { prompt: string; onPromptChange: (v: string) => void }) {
   return (
-    <div className="space-y-4">
-      <p className="text-sm leading-relaxed text-ink/75">
-        寫一段你對這角色的想像 — 班主會看，過審才擲牌。
-      </p>
+    <div className="space-y-3">
+      <p className="text-2xs tracking-widest text-mute">寫下你想扮演的角色</p>
       <textarea
         value={prompt}
         onChange={(e) => onPromptChange(e.target.value)}
-        rows={5}
-        placeholder="他從哪裡來？身上帶著什麼樣的習慣？什麼事會讓他突然安靜下來？"
-        maxLength={200}
-        className="es-field resize-none"
+        rows={6}
+        maxLength={1200}
+        placeholder="他是誰？從哪兒來？想做什麼？他身上一個讓人忘不掉的細節…"
+        className="es-field w-full text-sm leading-relaxed"
       />
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-2xs tracking-widest text-mute">{prompt.length} / 200</p>
-      </div>
+      <p className="text-2xs text-mute text-right">{prompt.length}/1200</p>
     </div>
   );
 }
 
 function RollingStage() {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center gap-4">
-      <div className="flex gap-3">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="block h-16 w-12 rounded bg-cinnabar/10 ring-1 ring-cinnabar/30"
-            style={{
-              animation: `endless-roll 1.4s ease-in-out ${i * 0.15}s infinite`,
-            }}
-          />
-        ))}
-      </div>
-      <p className="text-sm text-mute">班主在擲牌…</p>
-    </div>
-  );
-}
-
-function PickStage({
-  candidates,
-  pickedIdx,
-  onPick,
-}: {
-  candidates: Candidate[];
-  pickedIdx: number | null;
-  onPick: (idx: number) => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-ink/75">候選角色已就緒，請選擇一位繼續。</p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {candidates.map((c, idx) => (
-          <CandidateCard key={idx} candidate={c} isSelected={pickedIdx === idx} onPick={() => onPick(idx)} />
-        ))}
-      </div>
+    <div className="flex flex-col items-center justify-center gap-5 py-12">
+      <div className="text-5xl animate-pulse">🎴</div>
+      <p className="font-serif text-lg text-ink">擲牌中…</p>
+      <p className="text-2xs tracking-widest text-mute">
+        審核 → 鑄造票券 → 說書人擬人
+      </p>
     </div>
   );
 }
 
 function PaintingStage() {
   return (
-    <div className="flex flex-col items-center justify-center gap-8">
-      <div className="flex gap-4 sm:gap-6">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="relative aspect-[3/4] w-28 sm:w-36 overflow-hidden rounded-md bg-surface ring-1 ring-hairline"
-          >
-            <div
-              className="absolute inset-0 bg-cinnabar/20 animate-pulse"
-              style={{ animationDelay: `${i * 200}ms`, animationDuration: '1.5s' }}
-            />
-          </div>
-        ))}
-      </div>
-      <p className="text-sm tracking-widest text-mute animate-pulse">畫師正在為角色繪製肖像…</p>
+    <div className="flex flex-col items-center justify-center gap-5 py-12">
+      <div className="text-5xl animate-pulse">🖌️</div>
+      <p className="font-serif text-lg text-ink">繪製中…</p>
+      <p className="text-2xs tracking-widest text-mute">
+        為這位角色描一張素顏 anchor
+      </p>
     </div>
   );
 }
 
-function CandidateCard({
-  candidate,
-  isSelected,
-  onPick,
-}: {
-  candidate: Candidate;
-  isSelected: boolean;
-  onPick: () => void;
-}) {
+function PickStage({ candidate, rolledValues }: { candidate: CharacterCandidate; rolledValues: RolledAttribute[] }) {
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      className={`es-choice-card flex flex-col gap-3 p-4 text-left transition-all ${
-        isSelected
-          ? '!ring-2 !ring-cinnabar !bg-cinnabar/5'
-          : 'ring-1 ring-hairline hover:ring-cinnabar/40 hover:bg-surface'
-      }`}
-    >
-      <p className="font-serif text-base text-ink">{candidate.name}</p>
-      <dl className="grid grid-cols-4 gap-2 text-center">
-        {(Object.entries(candidate.attributes) as [string, number][]).map(([k, v]) => (
-          <div key={k}>
-            <dt className="text-2xs tracking-widest text-mute">{k}</dt>
-            <dd className="mt-0.5 font-mono text-base text-ink">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <p className="text-[13px] leading-relaxed text-ink/75 line-clamp-3">
-        {candidate.description}
-      </p>
-    </button>
+    <div className="space-y-4">
+      <p className="text-2xs tracking-widest text-mute">骰子已落，揭曉</p>
+      <div className="rounded-lg border border-cinnabar/30 bg-elevated/60 p-5 dark:bg-elevated/40">
+        <h3 className="font-serif text-2xl text-ink">{candidate.name}</h3>
+        <p className="mt-1 text-2xs tracking-widest text-mute">
+          {candidate.physicalFacts.gender} · {candidate.physicalFacts.age} 歲 · {candidate.physicalFacts.body}
+        </p>
+        <p className="mt-3 text-sm leading-relaxed text-ink/85">{candidate.description}</p>
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {rolledValues.map((rv) => (
+            <span
+              key={rv.key}
+              className="rounded-full bg-cinnabar/10 px-2.5 py-0.5 text-2xs tracking-widest text-cinnabar"
+            >
+              {rv.label} {rv.value}
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="text-2xs text-mute">接受即送入畫師繪像；緣寂則此票自然過期。</p>
+    </div>
   );
 }
 
 function PortraitStage({
   candidate,
-  portraitIdx,
-  onPick,
+  portraitBase64,
+  portraitUrl,
 }: {
-  candidate: Candidate;
-  portraitIdx: number | null;
-  onPick: (idx: number) => void;
+  candidate: CharacterCandidate;
+  portraitBase64: string | null;
+  portraitUrl: string | null;
 }) {
-  const initial = candidate.name[0];
+  const src = useMemo(() => {
+    if (portraitBase64) return `data:image/png;base64,${portraitBase64}`;
+    if (portraitUrl) return portraitUrl;
+    return null;
+  }, [portraitBase64, portraitUrl]);
+
   return (
-    <div className="mx-auto grid max-w-[640px] grid-cols-3 gap-4 sm:gap-6">
-      {PORTRAIT_TONES.map((tone, idx) => {
-        const isSelected = portraitIdx === idx;
-        return (
-          <button
-            key={idx}
-            type="button"
-            onClick={() => onPick(idx)}
-            aria-label={`頭像候選 ${idx + 1}`}
-            className={`group relative aspect-[3/4] overflow-hidden rounded-md transition-all ${
-              isSelected
-                ? `ring-2 ring-cinnabar scale-[1.02] shadow-md ${tone.bg} ${tone.text}`
-                : `ring-1 hover:ring-2 hover:ring-cinnabar/50 ${tone.bg} ${tone.ring} ${tone.text}`
-            }`}
-          >
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="font-serif text-7xl sm:text-8xl">{initial}</span>
-            </div>
-          </button>
-        );
-      })}
+    <div className="space-y-3">
+      <p className="text-2xs tracking-widest text-mute">配像已成</p>
+      <div className="flex items-start gap-4">
+        <div className="h-32 w-24 shrink-0 overflow-hidden rounded-md bg-canvas ring-1 ring-hairline">
+          {src ? (
+            <img src={src} alt={candidate.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
+          )}
+        </div>
+        <div>
+          <h3 className="font-serif text-2xl text-ink">{candidate.name}</h3>
+          <p className="mt-1 text-2xs tracking-widest text-mute">準備入班</p>
+          <p className="mt-2 text-sm text-ink/80 line-clamp-3">{candidate.description}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -610,79 +671,29 @@ function PortraitStage({
 function DoneStage({
   candidate,
   role,
-  portraitTone,
+  portraitBase64,
+  portraitUrl,
+  characterId,
 }: {
-  candidate: Candidate;
+  candidate: CharacterCandidate;
   role: string;
-  portraitTone: { bg: string; ring: string; text: string };
+  portraitBase64: string | null;
+  portraitUrl: string | null;
+  characterId: string | null;
 }) {
-  const [revealStage, setRevealStage] = useState(0);
-
-  useEffect(() => {
-    const t1 = setTimeout(() => setRevealStage(1), 400);
-    const t2 = setTimeout(() => setRevealStage(2), 1100);
-    const t3 = setTimeout(() => setRevealStage(3), 1800);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
-  }, []);
-
-  const initial = candidate.name[0];
-
+  const src = portraitBase64 ? `data:image/png;base64,${portraitBase64}` : portraitUrl;
   return (
-    <div className="flex flex-col sm:flex-row items-center sm:items-stretch justify-center gap-8 sm:gap-12 py-2">
-      {/* Left: Portrait */}
-      <div
-        className={`relative shrink-0 aspect-[3/4] w-48 sm:w-56 overflow-hidden rounded-md ring-1 transition-all duration-700 ${portraitTone.bg} ${portraitTone.ring}`}
-      >
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`font-serif text-8xl ${portraitTone.text}`}>{initial}</span>
-        </div>
-      </div>
-
-      {/* Right: Info & Stats */}
-      <div className="flex flex-col justify-center text-center sm:text-left">
-        <div
-          className={`transition-all duration-500 ${
-            revealStage >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-          }`}
-        >
-          <div className="flex items-center justify-center sm:justify-start gap-3">
-            <p className="font-serif text-3xl sm:text-4xl text-ink">{candidate.name}</p>
-            <span className="rounded-sm bg-cinnabar/10 px-2 py-0.5 text-2xs tracking-widest text-cinnabar ring-1 ring-cinnabar/30">
-              入班
-            </span>
-          </div>
-          <p className="mt-2 text-sm tracking-widest text-mute">{role}</p>
-        </div>
-
-        <div
-          className={`mt-6 sm:mt-8 transition-all duration-500 delay-100 ${
-            revealStage >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-          }`}
-        >
-          <dl className="grid grid-cols-4 gap-4 sm:gap-6 text-center sm:text-left">
-            {(Object.entries(candidate.attributes) as [string, number][]).map(([k, v]) => (
-              <div key={k}>
-                <dt className="text-2xs tracking-widest text-mute">{k}</dt>
-                <dd className="mt-1 font-mono text-xl text-ink">{v}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-
-        <div
-          className={`mt-6 sm:mt-8 max-w-sm transition-all duration-500 delay-200 ${
-            revealStage >= 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-          }`}
-        >
-          <p className="text-sm leading-relaxed text-ink/75">
-            {candidate.description}
-          </p>
-        </div>
-      </div>
+    <div className="flex flex-col items-center justify-center gap-3 py-6 text-center">
+      {src && (
+        <img src={src} alt={candidate.name} className="h-32 w-24 rounded-md object-cover ring-1 ring-cinnabar/30" />
+      )}
+      <p className="font-serif text-2xl text-ink">{candidate.name}</p>
+      <p className="text-2xs tracking-widest text-mute">已入班 · {role}</p>
+      {characterId ? (
+        <p className="font-mono text-2xs text-mute break-all max-w-xs">{characterId}</p>
+      ) : (
+        <p className="text-2xs text-mute">上鏈中…</p>
+      )}
     </div>
   );
 }
