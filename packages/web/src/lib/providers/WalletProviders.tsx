@@ -24,10 +24,10 @@ import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import '@mysten/dapp-kit/dist/index.css';
 
 const { networkConfig } = createNetworkConfig({
-    devnet: { url: getJsonRpcFullnodeUrl('devnet') },
-    testnet: { url: getJsonRpcFullnodeUrl('testnet') },
-    mainnet: { url: getJsonRpcFullnodeUrl('mainnet') },
-    localnet: { url: getJsonRpcFullnodeUrl('localnet') },
+    devnet: { url: getJsonRpcFullnodeUrl('devnet'), network: 'devnet' },
+    testnet: { url: getJsonRpcFullnodeUrl('testnet'), network: 'testnet' },
+    mainnet: { url: getJsonRpcFullnodeUrl('mainnet'), network: 'mainnet' },
+    localnet: { url: getJsonRpcFullnodeUrl('localnet'), network: 'localnet' },
 });
 
 function resolveDefaultNetwork(): 'devnet' | 'testnet' | 'mainnet' | 'localnet' {
