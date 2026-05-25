@@ -354,19 +354,29 @@ Light / dark · 徵召票底圖切換 · type-check 綠燈
 
 ## Quick win
 
-**現在進行中**：**Phase 2.2L / 2.2M / 2.2W** — 從舊 repo 遷移 LLM + Image + server actions 的基礎建設。詳見「下次接班 · Phase 2 推薦路徑」。
+**現在進行中**：**E2E 驗證** — 所有 code path 已就位（Phase 2.2L 到 2.6d 全部 commit）；下一步是真實 devnet/testnet 部署 + 跑通完整 mint 流程。詳見「下次接班 · E2E 跑通手冊」。
 
 **已完成**：
 - Phase 0：foundation + cli + sdk scaffold + route group + skill 改名
 - Phase 1.1–1.5c：currency / faucet / world / saga / scene / character / recruit 全部就位（47 unit tests 綠燈）
 - 鏈上「徵召」完整可用：voucher mint → redeem → character + cap，validation + requirements 內建
-- Phase 2.1：SDK codegen（commit `aa638cc`，7 modules）
-- Phase 2.2：SDK tx / read wrappers（thin、type-friendly、recruit-build acceptance 過）
+- Phase 2.1 / 2.2：SDK codegen + tx/read wrappers（acceptance scratch 過）
+- Phase 2.2L：`packages/llm/` 新建（Poe + Anthropic 文字 + OpenAI 圖片 + prompt 模板 + HKDF seed roll；smoke test 過）
+- Phase 2.2M：`memwal` 加 blob API（putBlob / getBlobUrl，testnet/mainnet publisher endpoint；smoke test 過）
+- Phase 2.2W：Web 4 個 server actions（moderate / preview / portrait / redeem）
+- Phase 2.3：cli `bootstrap.ts`（4-tx World/Faucet/Locations/Saga/Scenes）+ `test-recruit-e2e.ts` 純 cli E2E
+- Phase 2.4：admin `/admin/deploy` 一鍵 deploy + 狀態面板
+- Phase 2.5：admin `/admin/recruitments` 鏈下 JSON CRUD
+- Phase 2.6a：dapp-kit 1.x 整合（WalletProviders + ConnectButton + 顯示 ENDLESS 餘額）
+- Phase 2.6b：Faucet drip 按鈕（user wallet 自己領）
+- Phase 2.6c：RecruitmentTicket wizard 完整改造為抽卡 + 真實鏈上（保留視覺）
+- Phase 2.6d：`/dossier?id=<sui_id>` 接 SDK chain-read（fallback 給 demo mock）
 
 **暫緩**：
 - Phase 1.6 event.move、1.7 commitment.move（runner 用、前端 demo 不需要）
 - Web 端 i18n（比賽前定稿時做）
 - 角色「轉投別行當」（合約不支援；UX 上用「緣寂」優雅收尾代替）
+- 鏈上 image_url 寫入（Phase 2 portrait 走 wizard 內 base64 + Walrus URL，未自動寫回 character.image_url）
 
 ---
 
@@ -394,6 +404,80 @@ Light / dark · 徵召票底圖切換 · type-check 綠燈
 - **共簽機制**：server action + admin keypair 自動 redeem（storyteller 的策展權在「發布職缺」階段，不在每個 redeem）
 - **預覽生成**：真實 LLM（Poe → Sonnet/GLM-4.6 + OpenAI gpt-image-2）；roll 用 voucher.attribute_seed 做 HKDF 確定性產生（同 seed = 同角色，公平可驗證）
 - **Portrait 儲存**：Walrus（testnet publisher/aggregator）；`character.image_url` 寫 aggregator URL
+
+### E2E 跑通手冊（從零到 mint 出新角色）
+
+> 所有 code path 已就位。下面是按順序執行的清單。
+
+**0. 一次性環境設定**
+
+```bash
+# Node
+nvm use                # .nvmrc 鎖 23.7.0
+
+# Sui CLI active env（決定 deploy 打哪個鏈）
+sui client switch --env devnet   # 或 testnet
+sui client faucet                # 灌 devnet/testnet SUI 給自己付 gas
+
+# Web 端 env vars — 寫到 packages/web/.env.local
+cat > packages/web/.env.local <<EOF
+POE_API_KEY=...                        # https://poe.com/api_key
+OPENAI_API_KEY=sk-...                  # https://platform.openai.com/api-keys
+SUI_ADMIN_PRIVATE_KEY=suiprivkey1...   # 同 cli admin keypair；export 自 sui keytool
+RECRUITMENT_MOD_SECRET=$(openssl rand -hex 32)
+EOF
+```
+
+**1. 部署 + 種子化**
+
+走 admin UI（一鍵）：
+```bash
+pnpm --filter @endless-story/web dev    # http://localhost:3000
+# 開 http://localhost:3000/admin/deploy
+# 點 ① deploy → 等完成
+# 點 ② bootstrap → 等完成（4 個 tx 依序）
+# 點 ③ test-e2e → 確認 cli 端可走通 drip→mint→redeem
+```
+
+或走 terminal：
+```bash
+pnpm --filter @endless-story/cli deploy --env devnet
+pnpm --filter @endless-story/cli bootstrap --env devnet
+pnpm --filter @endless-story/cli test-e2e --env devnet
+```
+
+**2. 發布職缺（admin）**
+
+`/admin/recruitments` → 已預載 mock 5 條（從 mocks/recruitments.ts seed）。
+可以新增、編輯、停用。儲存自動刷新首頁 carousel。
+
+**3. User mint 流程**
+
+```
+http://localhost:3000/
+→ SiteNav 右上「連結錢包」(dapp-kit, 同網路)
+→ 點「領 ENDLESS」(faucet drip)
+→ 第二屏徵召 carousel，點任一張票「應榜」
+→ 寫角色描述 → 擲牌
+   (內部：moderate → mint_voucher PTB(user 簽) → LLM 預覽)
+→ 揭曉：1 個候選 + 4 條 rolled 屬性
+  → 接受：painting (LLM curate + OpenAI gpt-image-2 + Walrus)
+  → 緣寂：voucher 自然過期
+→ 配像 → 入班
+   (內部：redeem_voucher_to_character，admin keypair server action 自動簽)
+→ 跳 /dossier?id=<0x...> 顯示鏈上 Character
+```
+
+**4. 失敗排查**
+
+- 「請先連結錢包」→ 點右上 ConnectButton
+- 「沒有 ENDLESS 幣」→ 點「領 ENDLESS」
+- 「梨園尚未種子化」→ 跑 admin /deploy 的 bootstrap
+- mint_voucher 卡在 wait → testnet RPC 慢，等 ~5s
+- LLM error 500 → 檢查 POE_API_KEY / OPENAI_API_KEY env
+- redeem 失敗 → 檢查 SUI_ADMIN_PRIVATE_KEY 設對 + storyteller cap 在這把鑰匙上
+
+---
 
 ### 第一個 session-opening 動作（複製貼上）
 
