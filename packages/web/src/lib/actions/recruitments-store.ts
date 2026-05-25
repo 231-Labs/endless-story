@@ -19,7 +19,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { revalidatePath } from 'next/cache';
 import type { Recruitment } from '@endless-story/shared';
-import { buildDefaultRecruitments } from '@/lib/recruitment-seeds';
+import { loadStoryPreset } from '@/lib/stories/loader';
 
 export interface AdminRecruitment extends Recruitment {
     /** Active = appears in user-facing carousel. */
@@ -108,31 +108,49 @@ export interface SeedDefaultsResult {
     ok: boolean;
     inserted: number;
     skipped: number;
+    storyId: string;
     /** Summary log lines for admin UI display. */
     log: string[];
 }
 
 /**
- * Batch-open the 5 canonical preset recruitments (春雪社 archetypes).
- * Skips any whose id already exists, so re-running is idempotent and
- * won't clobber admin edits.
+ * Batch-open the preset recruitments from a story JSON file
+ * (packages/cli/scripts/stories/<storyId>.json). Skips any whose id
+ * already exists, so re-running is idempotent and won't clobber
+ * admin edits.
+ *
+ * Each preset's `ttl_days` is applied from "now" at seed time so a
+ * static JSON never goes stale.
  */
-export async function seedDefaultRecruitments(): Promise<SeedDefaultsResult> {
+export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefaultsResult> {
+    const preset = await loadStoryPreset(storyId);
+
     const existing = readStore();
     const existingIds = new Set(existing.map((r) => r.id));
-    const defaults = buildDefaultRecruitments();
 
     const log: string[] = [];
+    log.push(`preset: ${preset.id} (${preset.label})`);
+    log.push(`saga:   ${preset.saga.name}`);
+    log.push(`---`);
     let inserted = 0;
     let skipped = 0;
+    const nowIso = new Date().toISOString();
 
-    for (const seed of defaults) {
+    for (const seed of preset.recruitments) {
         if (existingIds.has(seed.id)) {
             log.push(`SKIP  ${seed.id} (${seed.specialty}) — already exists`);
             skipped++;
             continue;
         }
-        existing.push({ ...seed, active: true });
+        const ttlMs = (seed.ttl_days ?? 14) * 86_400_000;
+        existing.push({
+            ...seed,
+            sagaId: preset.id,
+            sagaName: preset.saga.name,
+            createdAt: nowIso,
+            expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+            active: true,
+        });
         log.push(`ADD   ${seed.id} (${seed.specialty})`);
         inserted++;
     }
@@ -141,5 +159,5 @@ export async function seedDefaultRecruitments(): Promise<SeedDefaultsResult> {
     log.push(`---`);
     log.push(`inserted: ${inserted}   skipped: ${skipped}   total: ${existing.length}`);
 
-    return { ok: true, inserted, skipped, log };
+    return { ok: true, inserted, skipped, storyId, log };
 }

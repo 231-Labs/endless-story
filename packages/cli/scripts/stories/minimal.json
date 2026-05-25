@@ -1,0 +1,57 @@
+{
+  "id": "minimal",
+  "label": "Minimal · 單 location 單 scene 測試用",
+  "world": {
+    "name": "Sandbox",
+    "description": "Smoke-test world. 1 location, 1 scene, 1 recruitment — for fast iteration.",
+    "currency": { "name": "Endless", "symbol": "ENDLESS" }
+  },
+  "world_rules": {
+    "species": ["human"],
+    "attributes": [
+      { "key": "appearance", "label": "外貌", "min": 0, "max": 100 },
+      { "key": "constitution", "label": "筋骨", "min": 0, "max": 100 },
+      { "key": "acuity", "label": "機敏", "min": 0, "max": 100 },
+      { "key": "disposition", "label": "心性", "min": 0, "max": 100 }
+    ]
+  },
+  "locations": [
+    {
+      "name": "Town Square",
+      "description": "An empty square. The fountain still works.",
+      "terrain": "urban",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "saga": {
+    "name": "Sandbox Saga",
+    "description": "A throwaway saga for smoke-testing the recruit flow.",
+    "owner_bps": 4000,
+    "storyteller_bps": 4000,
+    "treasury_bps": 2000,
+    "departure_policy": "free"
+  },
+  "scenes": [
+    {
+      "name": "Main Square",
+      "description": "Anyone can wander in.",
+      "location_index": 0,
+      "privacy": 0,
+      "atmosphere": 50,
+      "danger": 0,
+      "prosperity": 50
+    }
+  ],
+  "recruitments": [
+    {
+      "id": "rec_minimal_wanderer",
+      "specialty": "Wanderer",
+      "roleIntent": "Anyone. No requirements. For smoke-testing the full mint flow end-to-end.",
+      "membership": "external",
+      "slots": 5,
+      "basePrice": 1,
+      "ttl_days": 14
+    }
+  ]
+}

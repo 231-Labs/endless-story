@@ -4,25 +4,36 @@ import { useState, useTransition } from 'react';
 import { runCliScript, type CliScript, type RunCliScriptResult } from '@/lib/actions/run-cli-script';
 import { getDeploymentStatus, type DeploymentStatus } from '@/lib/actions/deployment-status';
 import { seedDefaultRecruitments } from '@/lib/actions/recruitments-store';
+import type { StoryPresetSummary } from '@/lib/stories/loader';
 
 type Env = 'devnet' | 'testnet' | 'mainnet' | 'localnet';
 
 interface Props {
     initialStatus: DeploymentStatus;
+    presets: StoryPresetSummary[];
 }
 
-export function DeployPanel({ initialStatus }: Props) {
+export function DeployPanel({ initialStatus, presets }: Props) {
     const [status, setStatus] = useState<DeploymentStatus>(initialStatus);
     const [env, setEnv] = useState<Env>((initialStatus.network as Env) || 'devnet');
+    const [storyId, setStoryId] = useState<string>(
+        // Prefer the currently-deployed story id, else first available, else 'spring-snow'
+        presets.find((p) => p.id === 'spring-snow')?.id ?? presets[0]?.id ?? 'spring-snow',
+    );
     const [log, setLog] = useState<string>('');
     const [lastResult, setLastResult] = useState<RunCliScriptResult | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const handleRun = (script: CliScript) => {
-        setLog(`Running ${script} on ${env}…\n`);
+        setLog(`Running ${script} on ${env} (story: ${storyId})…\n`);
         setLastResult(null);
         startTransition(async () => {
-            const res = await runCliScript({ script, env });
+            // bootstrap consumes --story-id; deploy / test-e2e ignore unknown flags.
+            const res = await runCliScript({
+                script,
+                env,
+                extraArgs: ['--story-id', storyId],
+            });
             const combined = `--- stdout ---\n${res.stdout}\n--- stderr ---\n${res.stderr}\n--- exit ${res.code} in ${res.durationMs}ms`;
             setLog(combined);
             setLastResult(res);
@@ -32,12 +43,12 @@ export function DeployPanel({ initialStatus }: Props) {
     };
 
     const handleSeedRecruitments = () => {
-        setLog('Seeding default recruitments…\n');
+        setLog(`Seeding recruitments from preset "${storyId}"…\n`);
         setLastResult(null);
         startTransition(async () => {
             const started = Date.now();
             try {
-                const res = await seedDefaultRecruitments();
+                const res = await seedDefaultRecruitments(storyId);
                 const durationMs = Date.now() - started;
                 setLog(res.log.join('\n'));
                 setLastResult({
@@ -133,38 +144,59 @@ export function DeployPanel({ initialStatus }: Props) {
 
             {/* ── Actions ── */}
             <section className="es-soft-panel overflow-hidden">
-                <div className="border-b border-hairline bg-surface/50 px-6 py-4 flex items-center justify-between">
+                <div className="border-b border-hairline bg-surface/50 px-6 py-4 flex flex-wrap items-center justify-between gap-3">
                     <h2 className="font-serif text-lg text-ink">執行</h2>
-                    <select
-                        value={env}
-                        onChange={(e) => setEnv(e.target.value as Env)}
-                        className="es-field text-sm"
-                        disabled={isPending}
-                    >
-                        <option value="devnet">devnet</option>
-                        <option value="testnet">testnet</option>
-                        <option value="mainnet">mainnet</option>
-                        <option value="localnet">localnet</option>
-                    </select>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-1.5 text-2xs text-mute tracking-widest">
+                            STORY
+                            <select
+                                value={storyId}
+                                onChange={(e) => setStoryId(e.target.value)}
+                                className="es-field text-sm"
+                                disabled={isPending || presets.length === 0}
+                            >
+                                {presets.length === 0 && <option value="">(no presets found)</option>}
+                                {presets.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.label} · {p.locationCount}L/{p.sceneCount}S/{p.recruitmentCount}R
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="flex items-center gap-1.5 text-2xs text-mute tracking-widest">
+                            ENV
+                            <select
+                                value={env}
+                                onChange={(e) => setEnv(e.target.value as Env)}
+                                className="es-field text-sm"
+                                disabled={isPending}
+                            >
+                                <option value="devnet">devnet</option>
+                                <option value="testnet">testnet</option>
+                                <option value="mainnet">mainnet</option>
+                                <option value="localnet">localnet</option>
+                            </select>
+                        </label>
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 px-6 py-4 sm:grid-cols-3">
                     <ActionButton
                         label="① deploy"
-                        sub="publish 合約 + 寫入 packageId"
+                        sub="publish 合約 + 寫入 packageId（不吃 story）"
                         onClick={() => handleRun('deploy')}
                         disabled={isPending}
                     />
                     <ActionButton
                         label="② bootstrap"
-                        sub="種 World + Saga + Scenes + Faucet"
+                        sub="依 story preset 種 World / Saga / Locations / Scenes / Faucet"
                         onClick={() => handleRun('bootstrap')}
                         disabled={isPending || !status.isDeployed}
                     />
                     <ActionButton
                         label="③ seed 職缺"
-                        sub="批量開 5 個預設行當（武小生 / 富商 / 青衣 / 小報記者 / 老生）"
+                        sub="批量開 story 內 initial_recruitments（idempotent）"
                         onClick={handleSeedRecruitments}
-                        disabled={isPending || !status.isBootstrapped}
+                        disabled={isPending || !status.isBootstrapped || !storyId}
                     />
                 </div>
             </section>

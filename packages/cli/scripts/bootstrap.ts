@@ -23,6 +23,7 @@
  *
  * See AGENTS.md → 「下次接班」Phase 2 step 2.3.
  */
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 import { Transaction } from '@mysten/sui/transactions';
@@ -35,36 +36,11 @@ import {
 } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type { StoryPreset } from '@endless-story/shared';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
 
 const VALID_NETWORKS: ReadonlySet<SuiNetwork> = new Set(['devnet', 'testnet', 'mainnet', 'localnet']);
-
-// 4 world attributes — keep in sync with packages/web/src/lib/chain/schema.ts
-// DEFAULT_ATTRIBUTE_SCHEMA. Server-side rolling and on-chain validation use
-// these exact keys.
-const ATTRIBUTE_DEFS = [
-  { key: 'appearance', label: '外貌', min: 0n, max: 100n },
-  { key: 'constitution', label: '筋骨', min: 0n, max: 100n },
-  { key: 'acuity', label: '機敏', min: 0n, max: 100n },
-  { key: 'disposition', label: '心性', min: 0n, max: 100n },
-] as const;
-
-const SPECIES_KINDS = ['human', 'spirit', 'beast'];
-
-// 3 demo locations (春雪社 in Shanghai, mid-1920s).
-const LOCATIONS = [
-  { name: '春雪社·內庭', description: '梨園後台，戲服箱櫃倚牆而立。', terrain: 'indoor', x: 100n, y: 100n },
-  { name: '上海戲樓', description: '夜半的霓虹打在台口，看客還未散場。', terrain: 'urban', x: 100n, y: 200n },
-  { name: '蘇州河碼頭', description: '貨船汽笛、煤煙、河水的腥味。', terrain: 'urban', x: 200n, y: 100n },
-] as const;
-
-// 1 scene per location for Phase 2; can expand later.
-const SCENES = [
-  { name: '化妝間', description: '燈下整裝，鏡中映出戲妝半完的臉。', privacy: 1, atmosphere: 80n, danger: 0n, prosperity: 50n },
-  { name: '台口看戲', description: '前排正廳，包廂裡有客點頭打拍。', privacy: 0, atmosphere: 90n, danger: 10n, prosperity: 70n },
-  { name: '碼頭夜談', description: '燈油未滅，江湖客在燈籠下交換情報。', privacy: 2, atmosphere: 50n, danger: 40n, prosperity: 30n },
-] as const;
 
 function parseFlags() {
   const env = requireFlag('--env') as SuiNetwork;
@@ -74,6 +50,20 @@ function parseFlags() {
   const dryRun = hasFlag('--dry-run');
   const storyId = flag('--story-id', 'spring-snow')!;
   return { env, dryRun, storyId };
+}
+
+function loadStory(storyId: string): StoryPreset {
+  const here = path.dirname(url.fileURLToPath(import.meta.url));
+  const file = path.join(here, 'stories', `${storyId}.json`);
+  if (!fs.existsSync(file)) {
+    throw new Error(`story preset not found: ${file}`);
+  }
+  const raw = fs.readFileSync(file, 'utf-8');
+  const preset = JSON.parse(raw) as StoryPreset;
+  if (preset.id !== storyId) {
+    console.warn(`[bootstrap] file ${storyId}.json declares id="${preset.id}"`);
+  }
+  return preset;
 }
 
 async function findTreasuryCap(client: SuiClient, owner: string, packageId: string): Promise<string> {
@@ -154,6 +144,11 @@ async function main() {
   console.log(`   storyId   ${storyId}`);
   console.log(`   dryRun    ${dryRun}`);
 
+  const story = loadStory(storyId);
+  console.log(`   preset    ${story.label}`);
+  console.log(`   world     ${story.world.name} · ${story.locations.length} locations · ${story.scenes.length} scenes`);
+  console.log(`   saga      ${story.saga.name}`);
+
   const deployment = ENDLESS_STORY_DEPLOYMENT;
   if (!deployment.packageId) {
     throw new Error(
@@ -185,19 +180,25 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════
   const tx1 = new Transaction();
   const info = tx1.add(
-    endlessTx.world.newWorldInfo({ name: '無盡故事', description: '上海灘的梨園。' }),
+    endlessTx.world.newWorldInfo({
+      name: story.world.name,
+      description: story.world.description,
+    }),
   );
   const currency = tx1.add(
-    endlessTx.world.newCurrencyDisplay({ name: 'Endless', symbol: 'ENDLESS' }),
+    endlessTx.world.newCurrencyDisplay({
+      name: story.world.currency.name,
+      symbol: story.world.currency.symbol,
+    }),
   );
 
-  const attrDefs = ATTRIBUTE_DEFS.map((d) =>
+  const attrDefs = story.world_rules.attributes.map((d) =>
     tx1.add(
       endlessTx.world.newAttributeDefinition({
         key: d.key,
         label: d.label,
-        minValue: d.min,
-        maxValue: d.max,
+        minValue: BigInt(d.min),
+        maxValue: BigInt(d.max),
       }),
     ),
   );
@@ -208,7 +209,7 @@ async function main() {
 
   const rules = tx1.add(
     endlessTx.world.newWorldRules({
-      speciesKinds: SPECIES_KINDS,
+      speciesKinds: [...story.world_rules.species],
       attributeDefinitions: attrDefsVec,
     }),
   );
@@ -238,7 +239,7 @@ async function main() {
   // Tx 2: Locations
   // ═══════════════════════════════════════════════════════════════════
   const tx2 = new Transaction();
-  LOCATIONS.forEach((loc, i) => {
+  story.locations.forEach((loc, i) => {
     const locInfo = tx2.add(
       endlessTx.world.newLocationInfo({
         index: BigInt(i),
@@ -247,7 +248,7 @@ async function main() {
         terrain: loc.terrain,
       }),
     );
-    const pos = tx2.add(endlessTx.world.newPosition({ x: loc.x, y: loc.y }));
+    const pos = tx2.add(endlessTx.world.newPosition({ x: BigInt(loc.x), y: BigInt(loc.y) }));
     const graph = tx2.add(endlessTx.world.newLocationGraph({ adjacentIndices: [] }));
     tx2.add(
       endlessTx.world.createLocation({
@@ -259,10 +260,10 @@ async function main() {
       }),
     );
   });
-  const changes2 = await runTx(client, signer, tx2, 'Tx 2 — 3 Locations');
+  const changes2 = await runTx(client, signer, tx2, `Tx 2 — ${story.locations.length} Locations`);
   const locationIds = findCreatedByType(changes2, '::world::Location');
-  if (locationIds.length !== LOCATIONS.length) {
-    throw new Error(`expected ${LOCATIONS.length} locations, got ${locationIds.length}`);
+  if (locationIds.length !== story.locations.length) {
+    throw new Error(`expected ${story.locations.length} locations, got ${locationIds.length}`);
   }
   console.log(`   locations ${locationIds.length} created`);
 
@@ -275,14 +276,14 @@ async function main() {
     endlessTx.saga.createSaga({
       world: worldId,
       kind,
-      name: '春雪社',
-      description: '民國上海，霓虹半夜，戲樓未散。',
-      metadataUri: '',
-      ownerBps: 4000,
-      storytellerBps: 4000,
-      treasuryBps: 2000,
+      name: story.saga.name,
+      description: story.saga.description,
+      metadataUri: story.saga.metadata_uri ?? '',
+      ownerBps: story.saga.owner_bps,
+      storytellerBps: story.saga.storyteller_bps,
+      treasuryBps: story.saga.treasury_bps,
       coveredLocationIds: locationIds,
-      departurePolicy: 'free',
+      departurePolicy: story.saga.departure_policy,
     }),
   );
   tx3.transferObjects([storytellerCap], admin);
@@ -296,10 +297,15 @@ async function main() {
   console.log(`   sttellerCap  ${storytellerCapId}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // Tx 4: Scenes
+  // Tx 4: Scenes — anchored to locations[scene.location_index]
   // ═══════════════════════════════════════════════════════════════════
   const tx4 = new Transaction();
-  SCENES.forEach((scene, i) => {
+  story.scenes.forEach((scene) => {
+    if (scene.location_index < 0 || scene.location_index >= locationIds.length) {
+      throw new Error(
+        `scene "${scene.name}" location_index ${scene.location_index} out of range (have ${locationIds.length})`,
+      );
+    }
     const sceneInfo = tx4.add(
       endlessTx.scene.newSceneInfo({
         name: scene.name,
@@ -312,16 +318,16 @@ async function main() {
     );
     const sceneParams = tx4.add(
       endlessTx.scene.newSceneParams({
-        atmosphere: scene.atmosphere,
-        danger: scene.danger,
-        prosperity: scene.prosperity,
+        atmosphere: BigInt(scene.atmosphere),
+        danger: BigInt(scene.danger),
+        prosperity: BigInt(scene.prosperity),
       }),
     );
     tx4.add(
       endlessTx.scene.createScene({
         cap: storytellerCapId,
         saga: sagaId,
-        location: locationIds[i],
+        location: locationIds[scene.location_index],
         info: sceneInfo,
         access: sceneAccess,
         posX: 0n,
@@ -331,10 +337,10 @@ async function main() {
       }),
     );
   });
-  const changes4 = await runTx(client, signer, tx4, 'Tx 4 — 3 Scenes');
+  const changes4 = await runTx(client, signer, tx4, `Tx 4 — ${story.scenes.length} Scenes`);
   const sceneIds = findCreatedByType(changes4, '::scene::Scene');
-  if (sceneIds.length !== SCENES.length) {
-    throw new Error(`expected ${SCENES.length} scenes, got ${sceneIds.length}`);
+  if (sceneIds.length !== story.scenes.length) {
+    throw new Error(`expected ${story.scenes.length} scenes, got ${sceneIds.length}`);
   }
   console.log(`   scenes    ${sceneIds.length} created`);
 

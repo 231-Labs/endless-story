@@ -1,6 +1,7 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { getDeploymentStatus } from '@/lib/actions/deployment-status';
+import { listStoryPresets } from '@/lib/stories/loader';
 import { DeployPanel } from './DeployPanel';
 
 export const metadata = {
@@ -10,7 +11,7 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 export default async function DeployPage() {
-    const status = await getDeploymentStatus();
+    const [status, presets] = await Promise.all([getDeploymentStatus(), listStoryPresets()]);
     return (
         <>
             <SiteNav />
@@ -19,10 +20,10 @@ export default async function DeployPage() {
                     eyebrow="DEPLOYMENT"
                     eyebrowMobile="DEPLOY"
                     title="梨園地基"
-                    meta="一鍵部署 / 種子化 / e2e 驗證"
+                    meta="一鍵部署 / 種子化 / 開職缺"
                 />
                 <div className="mt-12">
-                    <DeployPanel initialStatus={status} />
+                    <DeployPanel initialStatus={status} presets={presets} />
                 </div>
             </main>
         </>

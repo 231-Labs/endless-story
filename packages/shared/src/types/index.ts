@@ -11,3 +11,4 @@ export * from './memory';
 export * from './persona';
 export * from './liveState';
 export * from './magnetism';
+export * from './story';
