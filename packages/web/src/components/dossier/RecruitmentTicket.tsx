@@ -403,16 +403,13 @@ export function RecruitmentTicket({
                     <PromptStage prompt={prompt} onPromptChange={setPrompt} />
                   )}
                   {stage === 'rolling' && <RollingStage status={rollingStatus} />}
-                  {stage === 'pick' && candidate && rolledValues && (
-                    <PickStage candidate={candidate} rolledValues={rolledValues} />
-                  )}
-                  {stage === 'painting' && <PaintingStage />}
-                  {(stage === 'portrait' || stage === 'done') && candidate && (
-                    <PortraitStage
+                  {(stage === 'pick' || stage === 'painting' || stage === 'portrait' || stage === 'done') && candidate && rolledValues && (
+                    <RevealStage
+                      stage={stage as 'pick' | 'painting' | 'portrait' | 'done'}
                       candidate={candidate}
+                      rolledValues={rolledValues}
                       portraitBase64={portraitBase64}
                       portraitUrl={portraitUrl}
-                      isDone={stage === 'done'}
                       characterId={characterId}
                     />
                   )}
@@ -698,46 +695,19 @@ function PaintingStage() {
   );
 }
 
-function PickStage({ candidate, rolledValues }: { candidate: CharacterCandidate; rolledValues: RolledAttribute[] }) {
-  return (
-    <div className="flex h-full flex-col justify-center text-left">
-      <p className="text-2xs tracking-widest text-mute">
-        骰子已落，揭曉 · {candidate.physicalFacts.gender} · {candidate.physicalFacts.age} 歲 · {candidate.physicalFacts.body}
-      </p>
-      
-      <h3 className="mt-3 font-serif text-3xl text-ink sm:text-4xl">{candidate.name}</h3>
-      
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {rolledValues.map((rv) => (
-          <span
-            key={rv.key}
-            className="rounded-full bg-cinnabar/5 px-2.5 py-0.5 text-2xs tracking-widest text-cinnabar/80 ring-1 ring-cinnabar/20"
-          >
-            {rv.label} {rv.value}
-          </span>
-        ))}
-      </div>
-      
-      <p className="mt-5 max-w-prose text-[15px] leading-loose text-ink/75 sm:text-base line-clamp-6">
-        {candidate.description}
-      </p>
-      
-      <p className="mt-6 text-2xs text-mute">接受即送入畫師繪像；緣寂則此票自然過期。</p>
-    </div>
-  );
-}
-
-function PortraitStage({
+function RevealStage({
+  stage,
   candidate,
+  rolledValues,
   portraitBase64,
   portraitUrl,
-  isDone,
   characterId,
 }: {
+  stage: 'pick' | 'painting' | 'portrait' | 'done';
   candidate: CharacterCandidate;
+  rolledValues: RolledAttribute[];
   portraitBase64: string | null;
   portraitUrl: string | null;
-  isDone: boolean;
   characterId: string | null;
 }) {
   const src = useMemo(() => {
@@ -746,53 +716,110 @@ function PortraitStage({
     return null;
   }, [portraitBase64, portraitUrl]);
 
-  const isEnrolling = isDone && !characterId;
-  const isEnrolled = isDone && !!characterId;
+  const isEnrolling = stage === 'done' && !characterId;
+  const isEnrolled = stage === 'done' && !!characterId;
+
+  let eyebrow = '骰子已落，揭曉';
+  if (stage === 'painting') eyebrow = '畫師繪製中…';
+  if (stage === 'portrait') eyebrow = '\u00A0';
+  if (isEnrolling) eyebrow = '上鏈中…';
+  if (isEnrolled) eyebrow = '已登錄梨園名冊';
 
   return (
     <div className="flex h-full flex-col justify-center text-left">
       <div className="flex items-center justify-between">
-        <p className="text-2xs tracking-widest text-mute">
-          {isEnrolled ? '已登錄梨園名冊' : isEnrolling ? '上鏈中…' : '配像已成 · 準備入班'}
+        <p className="text-2xs tracking-widest text-mute transition-colors">
+          {eyebrow}
         </p>
-        {isEnrolled && characterId && (
-          <p className="text-2xs font-mono text-mute animate-fade-in-up">
-            ID: {characterId.slice(0, 10)}...{characterId.slice(-4)}
-          </p>
-        )}
       </div>
       
-      <div className="mt-4 flex flex-col sm:flex-row items-center sm:items-start gap-6 w-full relative">
-        <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-xl shadow-cinnabar/5 w-32 shrink-0 aspect-[3/4]">
-          {src ? (
-            <img src={src} alt={candidate.name} className={`h-full w-full object-cover transition-transform duration-700 ${isDone ? '' : 'group-hover:scale-105'}`} />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-2xs text-mute">無像</div>
-          )}
-          {isEnrolling && (
-            <div className="absolute inset-0 bg-canvas/30 backdrop-blur-[1px] flex items-center justify-center">
-               <span className="h-5 w-5 rounded-full bg-cinnabar/60 animate-ping" />
-            </div>
-          )}
-        </div>
-        
-        <div className="flex flex-col flex-1 relative">
-          <h3 className="font-serif text-3xl text-ink sm:text-4xl">{candidate.name}</h3>
-          <p className="mt-4 max-w-prose text-[15px] leading-loose text-ink/75 sm:text-base line-clamp-5">
+      <div className="mt-4 flex flex-col-reverse sm:flex-row items-center sm:items-center gap-8 sm:gap-12 w-full relative">
+        <div className="flex flex-col flex-1 relative w-full pr-0 sm:pr-4">
+          <h3 className="font-serif text-4xl text-ink sm:text-5xl">{candidate.name}</h3>
+          <p className="mt-3 text-xs tracking-widest text-mute">
+            {candidate.physicalFacts.gender} · {candidate.physicalFacts.age} 歲 · {candidate.physicalFacts.body}
+          </p>
+          
+          <div className="mt-5 flex flex-wrap gap-2">
+            {rolledValues.map((rv) => (
+              <span
+                key={rv.key}
+                className="rounded-full bg-cinnabar/5 px-3 py-1 text-xs tracking-widest text-cinnabar/90 ring-1 ring-cinnabar/20"
+              >
+                {rv.label} <span className="font-serif ml-1">{rv.value}</span>
+              </span>
+            ))}
+          </div>
+          
+          <div className="mt-6 h-px w-16 bg-cinnabar/30" />
+          
+          <p className="mt-6 max-w-prose text-[15px] leading-loose text-ink/80 sm:text-base line-clamp-6 text-justify">
             {candidate.description}
           </p>
 
-          {isEnrolled && (
-            <div className="absolute -top-2 right-2 sm:right-6 animate-stamp pointer-events-none z-10">
-              <div className="flex items-center justify-center w-[4.5rem] h-[4.5rem] rounded-[3px] border-[3px] border-cinnabar/80 text-cinnabar/90 mix-blend-multiply dark:mix-blend-screen opacity-90 shadow-sm">
-                <div className="flex gap-1 text-[22px] font-serif leading-none">
-                  <div className="flex flex-col"><span className="mb-0.5">登</span><span>錄</span></div>
-                  <div className="flex flex-col"><span className="mb-0.5">梨</span><span>園</span></div>
-                </div>
+          {isEnrolled && characterId && (
+            <a
+              href={`https://suiscan.xyz/object/${characterId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="absolute -top-4 right-2 sm:right-6 animate-stamp z-10 group cursor-pointer"
+              title="在區塊鏈瀏覽器查看此角色"
+            >
+              <div className="flex items-center justify-center w-[4.5rem] h-[4.5rem] text-cinnabar/90 mix-blend-multiply dark:mix-blend-screen opacity-90 drop-shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:text-cinnabar group-hover:drop-shadow-md">
+                <svg viewBox="0 0 100 100" className="w-full h-full" fill="currentColor">
+                  <defs>
+                    <filter id={`ink-wash-${characterId}`} x="-10%" y="-10%" width="120%" height="120%">
+                      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="3" result="noise" />
+                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G" />
+                      <feGaussianBlur stdDeviation="0.25" />
+                    </filter>
+                    <mask id={`flower-mask-${characterId}`}>
+                      <rect width="100" height="100" fill="white" />
+                      <circle cx="50" cy="50" r="9" fill="black" />
+                      <line x1="50" y1="50" x2="50" y2="28" stroke="black" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="50" y1="50" x2="70.9" y2="43.2" stroke="black" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="50" y1="50" x2="62.9" y2="67.8" stroke="black" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="50" y1="50" x2="37.1" y2="67.8" stroke="black" strokeWidth="1.5" strokeLinecap="round" />
+                      <line x1="50" y1="50" x2="29.1" y2="43.2" stroke="black" strokeWidth="1.5" strokeLinecap="round" />
+                    </mask>
+                  </defs>
+                  <g filter={`url(#ink-wash-${characterId})`}>
+                    <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="3" />
+                    <g mask={`url(#flower-mask-${characterId})`}>
+                      <circle cx="50" cy="26" r="22" />
+                      <circle cx="72.8" cy="42.6" r="22" />
+                      <circle cx="64.1" cy="69.4" r="22" />
+                      <circle cx="35.9" cy="69.4" r="22" />
+                      <circle cx="27.2" cy="42.6" r="22" />
+                    </g>
+                    <circle cx="50" cy="50" r="4" fill="currentColor" />
+                  </g>
+                </svg>
               </div>
-            </div>
+              <div className="absolute -bottom-1 -right-1 opacity-0 transition-opacity duration-300 group-hover:opacity-100 rounded-full bg-surface p-1 text-cinnabar shadow-sm ring-1 ring-hairline">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </div>
+            </a>
           )}
         </div>
+
+        {stage !== 'pick' && (
+          <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 sm:w-56 shrink-0 aspect-[3/4] animate-fade-in-up sm:mr-2 md:mr-4">
+            {stage === 'painting' ? (
+              <div className="flex h-full w-full items-center justify-center bg-surface/50">
+                 <BrushSpinner />
+              </div>
+          ) : src ? (
+            <img src={src} alt={candidate.name} className={`h-full w-full object-cover transition-transform duration-700 ${stage === 'done' ? '' : 'group-hover:scale-105'}`} />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xs text-mute bg-surface/50">無像</div>
+          )}
+        </div>
+        )}
       </div>
     </div>
   );
