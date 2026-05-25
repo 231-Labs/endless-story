@@ -11,6 +11,10 @@
   },
   "dependencies": {
     "@endless-story/shared": "workspace:*",
+    "@endless-story/sdk": "workspace:*",
+    "@endless-story/llm": "workspace:*",
+    "@endless-story/memwal": "workspace:*",
+    "@mysten/sui": "^2.17.0",
     "framer-motion": "^12.40.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
