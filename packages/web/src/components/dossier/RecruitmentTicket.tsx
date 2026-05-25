@@ -75,6 +75,25 @@ export function RecruitmentTicket({
   const [stage, setStage] = useState<Stage>('closed');
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Append-only debug trail. Shows up in the wizard footer when non-empty so
+  // the user can screenshot the exact stack instead of digging in DevTools.
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const log = (label: string, payload: unknown) => {
+    let line: string;
+    if (payload instanceof Error) {
+      const cause = (payload as Error & { cause?: unknown }).cause;
+      line = `${label}: ${payload.name}: ${payload.message}` +
+        (payload.stack ? `\n${payload.stack}` : '') +
+        (cause ? `\n  cause: ${cause instanceof Error ? cause.message : String(cause)}` : '');
+    } else if (typeof payload === 'object') {
+      try { line = `${label}: ${JSON.stringify(payload, null, 2)}`; }
+      catch { line = `${label}: [unstringifiable]`; }
+    } else {
+      line = `${label}: ${String(payload)}`;
+    }
+    setDebugLog((prev) => [...prev, `[${new Date().toISOString().slice(11, 23)}] ${line}`]);
+    console.log('[wizard]', label, payload);
+  };
 
   // Flow state — accumulates as steps complete.
   const [voucherId, setVoucherId] = useState<string | null>(null);
@@ -92,6 +111,7 @@ export function RecruitmentTicket({
     setStage('closed');
     setPrompt('');
     setError(null);
+    setDebugLog([]);
     setVoucherId(null);
     setAttributeSeedHex(null);
     setSignature(null);
@@ -116,6 +136,16 @@ export function RecruitmentTicket({
   // ───────────────────────────────────────────────────────────────
   const handleRoll = async () => {
     setError(null);
+    setDebugLog([]);
+    log('preflight', {
+      hasAccount: !!account,
+      accountAddress: account?.address ?? null,
+      packageId: packageId || '(empty)',
+      sagaId: sagaId || '(empty)',
+      faucetId: ENDLESS_STORY_DEPLOYMENT.faucetId || '(empty)',
+      sceneIdsCount: ENDLESS_STORY_DEPLOYMENT.sceneIds.length,
+      storytellerCapId: ENDLESS_STORY_DEPLOYMENT.storytellerCapId || '(empty)',
+    });
 
     if (!account) {
       setError('請先連結錢包');
@@ -127,13 +157,17 @@ export function RecruitmentTicket({
     }
 
     setStage('rolling');
+    log('start', { saga: sagaId, account: account.address, pkg: packageId });
 
     // 1. Moderate (server action) — wrap so any network / serialization
     // failure surfaces with phase context instead of bare "Failed to fetch".
     let modRes;
     try {
+      log('moderate:start', { promptLen: prompt.length });
       modRes = await moderatePrompt(prompt);
+      log('moderate:result', modRes);
     } catch (err) {
+      log('moderate:throw', err);
       setError(`[moderate] ${err instanceof Error ? err.message : String(err)}`);
       setStage('prompt');
       return;
@@ -153,7 +187,9 @@ export function RecruitmentTicket({
     let mintedVoucherId: string;
     try {
       const coinType = `${packageId}::currency::CURRENCY`;
+      log('mint:getCoins', { owner: account.address, coinType });
       const coins = await suiClient.getCoins({ owner: account.address, coinType, limit: 50 });
+      log('mint:coins', { count: coins.data?.length ?? 0, ids: coins.data?.map((c) => c.coinObjectId) ?? [] });
       if (!coins.data || coins.data.length === 0) {
         throw new Error('沒有 ENDLESS 幣 — 請先用右上「領 ENDLESS」');
       }
@@ -183,13 +219,16 @@ export function RecruitmentTicket({
       );
       tx.transferObjects([voucherObj], account.address);
 
+      log('mint:signAndExecute', { price: priceBase.toString() });
       const res = await signAndExecute({ transaction: tx });
+      log('mint:signed', { digest: res.digest });
       // dapp-kit's signAndExecuteTransaction returns digest only by default;
       // we need to wait for it and re-query the tx for objectChanges.
       const full = await suiClient.waitForTransaction({
         digest: res.digest,
         options: { showObjectChanges: true, showEffects: true },
       });
+      log('mint:finalized', { status: full.effects?.status });
       if (full.effects?.status?.status !== 'success') {
         throw new Error(full.effects?.status?.error ?? '交易失敗');
       }
@@ -201,7 +240,9 @@ export function RecruitmentTicket({
         throw new Error('voucher 物件未找到');
       }
       mintedVoucherId = created.objectId;
+      log('mint:voucherId', mintedVoucherId);
     } catch (err) {
+      log('mint:throw', err);
       setError(`[mint] ${err instanceof Error ? err.message : String(err)}`);
       setStage('prompt');
       return;
@@ -210,12 +251,14 @@ export function RecruitmentTicket({
 
     // 3. Server preview
     try {
+      log('preview:start', { seedPrefix: seedHex.slice(0, 16) });
       const prev = await previewCharacter({
         attributeSeedHex: seedHex,
         userPrompt: prompt,
         signature: modRes.signature!,
         recruitmentIntent: recruitment.roleIntent,
       });
+      log('preview:result', { ok: prev.ok, hasCandidate: !!prev.candidate, error: prev.error });
       if (!prev.ok || !prev.candidate || !prev.rolledValues) {
         throw new Error(prev.error ?? '預覽失敗');
       }
@@ -223,6 +266,7 @@ export function RecruitmentTicket({
       setRolledValues(prev.rolledValues);
       setStage('pick');
     } catch (err) {
+      log('preview:throw', err);
       setError(`[preview] ${err instanceof Error ? err.message : String(err)}`);
       setStage('prompt');
     }
@@ -394,6 +438,16 @@ export function RecruitmentTicket({
                     <p className="mt-4 rounded-md bg-cinnabar/10 px-3 py-2 text-xs text-cinnabar">
                       {error}
                     </p>
+                  )}
+                  {debugLog.length > 0 && (
+                    <details className="mt-3 rounded-md bg-canvas/60 ring-1 ring-hairline">
+                      <summary className="cursor-pointer px-3 py-1.5 text-2xs tracking-widest text-mute hover:text-ink">
+                        Debug log ({debugLog.length})
+                      </summary>
+                      <pre className="max-h-64 overflow-auto px-3 pb-3 pt-1 text-2xs leading-relaxed text-ink/80 whitespace-pre-wrap break-all">
+                        {debugLog.join('\n\n')}
+                      </pre>
+                    </details>
                   )}
                 </div>
               </div>
