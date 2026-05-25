@@ -118,11 +118,11 @@ packages/
 
 | Phase | 內容 | 何時 |
 |---|---|---|
-| **0** | skill 改名、cli 骨架、sdk scaffold、contract-ids、(site)/(admin) 重構 | ✅ 2026-05-24 完成（commit `f99d28f`） |
-| **1** | Move 模組依序遷移：見下方細項 | 進行中（2026-05-24 起） |
-| **2** | SDK 完整（codegen + tx + read）→ admin 一鍵部署 UI | Phase 1 之後 |
-| **3** | Web mock → SDK 真實串接（Subscribe → Recruitment → Memories → ...） | Phase 2 之後 |
-| **4** | Runner 上線（LLM、scheduler、memwal 寫入） | 賽後 |
+| **0** | skill 改名、cli 骨架、sdk scaffold、contract-ids、(site)/(admin) 重構 | ✅ 2026-05-24（commit `f99d28f`） |
+| **1** | Move 模組依序遷移：見下方細項。**1.1–1.5c 已完成；1.6 + 1.7 暫緩**（不阻塞前端串接） | 部分完成 |
+| **2** | SDK 完整（codegen + tx + read）→ admin 一鍵部署 UI → 角色徵召 e2e | **下一段**（從 codegen 起手） |
+| **3** | Web mock → SDK 真實串接（Subscribe → Memories → 其餘 mock）| Phase 2 之後 |
+| **4** | Runner 上線（LLM、scheduler、memwal 寫入）+ 補完 1.6 event + 1.7 commitment | 賽後 |
 
 **Phase 1 模組進度**（依依賴順序）：
 
@@ -136,8 +136,8 @@ packages/
 | 1.5a | `character.move` 擴充 + `recruit.move` 新增 | ✅ 2026-05-24 | Character 結構全胖（profile/physical/attributes/media/tags/state/image/death）+ 三條 mint 路徑（genesis/collectible/internal）+ validation 私 fn + mark_dead + 全 view + cap accessors。新 `recruit` module 含 GenesisVoucher + mint_genesis_voucher + redeem_voucher_to_character。Move best practice 拆 module（不拆 package）：character 管 Character resource、recruit 管「外部申請加入」入口 |
 | 1.5b | character 擴 + recruit 擴 | ✅ 2026-05-24 | **character**: ControlCap.saga_id 欄位 + move_character(in-saga 換場) + release_character_to_wild(storyteller) + force_release_character(admin) + walk_in_world(owner) + take_wild_control_cap / bind_to_saga 兩個 public(package) helper + ControlCapKey DOF。**recruit**: JoinIntent + request_join_saga + revoke_join_intent + accept_character_into_saga。**2 個 lifecycle tests**（revoke happy + wrong-owner abort）；E2E release→walk→accept 留到 SDK 接通後做 integration test |
 | 1.5c | character 擴 + recruit 擴 | ✅ 2026-05-24 | **character**: SagaSkillsKey DOF + set_character_skill / clear / character_skills_for_saga（強制 saga.saga_attribute_defs 校驗）+ update_image_by_storyteller / update_image_by_owner 雙路徑 + Display V2 init（Character + OwnerCap）+ find_attribute_value_in 公開 helper。**recruit**: VoucherRequirements struct + intent_hint + check_voucher_requirements view + redeem 強制 assert + Display V2 init（GenesisVoucher + JoinIntent）+ no_requirements / new_voucher_requirements constructors。47 tests（+6）|
-| 1.6 | `event.move` | ⬜ 待做 | 事件解算、卡片、死亡標記 |
-| 1.7 | `commitment.move` | ⬜ 待做 | 記憶壓縮快照 |
+| 1.6 | `event.move` | ⏸ 暫緩 | 事件解算、卡片、死亡標記。Runner 邏輯需要、前端 demo 不直接用。等 Phase 2 / 3 真實串接後評估時機（character::mark_dead 已就位，event 接上即可呼叫） |
+| 1.7 | `commitment.move` | ⏸ 暫緩 | 記憶壓縮快照。配套 runner memwal flush，賽後再做。character.state.memory_commit_head 欄位也延後加 |
 
 ### Runner 開發鐵律（給未來反覆測試 runner 的 session）
 
@@ -349,6 +349,13 @@ Light / dark · 徵召票底圖切換 · type-check 綠燈
 
 ## Quick win
 
-**現在進行中（2026-05-24 起）**：Phase 0 — cli 骨架 / sdk scaffold / contract-ids / skill 改名 / (site)+(admin) 重構。詳見「鏈上架構 · Phase 路線圖」。
+**現在進行中**：**Phase 2** — SDK + admin 部署 UI + 角色徵召 e2e（從 codegen 起手）。詳見「鏈上架構 · Phase 路線圖」。
 
-**已完成的 web 端**（保留供參考）：Round 1 + Round 3#7-#8 設計已落地；i18n 留到比賽前定稿時做。
+**已完成**：
+- Phase 0：foundation + cli + sdk scaffold + route group + skill 改名
+- Phase 1.1–1.5c：currency / faucet / world / saga / scene / character / recruit 全部就位（47 unit tests 綠燈）
+- 鏈上「徵召」完整可用：voucher mint → redeem → character + cap，validation + requirements 內建
+
+**暫緩**：
+- Phase 1.6 event.move、1.7 commitment.move（runner 用、前端 demo 不需要）
+- Web 端 i18n（比賽前定稿時做）
