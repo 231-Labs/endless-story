@@ -359,3 +359,53 @@ Light / dark · 徵召票底圖切換 · type-check 綠燈
 **暫緩**：
 - Phase 1.6 event.move、1.7 commitment.move（runner 用、前端 demo 不需要）
 - Web 端 i18n（比賽前定稿時做）
+
+---
+
+## 下次接班（Session handoff）
+
+> 任何新 session 開工前先讀這節。順序不可跳。
+
+### Phase 2 推薦路徑（6 步，每步一個 commit）
+
+| 步驟 | 動作 | 依賴 | 驗收 |
+|---|---|---|---|
+| **2.1** | `pnpm --filter @endless-story/sdk codegen` 跑 `@mysten/codegen`，輸出落 `packages/sdk/src/generated/`；commit | 無 | 7 個 module 都有對應 `.ts`（currency / faucet / world / saga / scene / character / recruit）；type-check 綠 |
+| **2.2** | 手寫 SDK wrappers：`sdk/src/tx/{currency,faucet,world,saga,scene,character,recruit}.ts`（PTB ergonomic builder）+ `sdk/src/read/*.ts`（view query 包裝）。**規則：thin，只加 type 友善，不放商業邏輯** | 2.1 | 至少能 build `mint_genesis_voucher` + `redeem_voucher_to_character` 兩個 tx |
+| **2.3** | 擴 `cli/scripts/bootstrap.ts` — publish 後 PTB 種：world → saga → 8 個 scenes → 1 個 demo voucher（驗證鑄角路徑）| 2.2 + 真實 publish | 跑通 `pnpm exec tsx packages/cli/scripts/bootstrap.ts --env devnet`，`shared/src/contract-ids.ts` 寫入完整 deployment snapshot |
+| **2.4** | admin UI `app/(admin)/admin/page.tsx` — 一鍵 deploy 按鈕 + 顯示部署狀態 + 印出 World/Saga IDs。Server action 包 cli script | 2.3 | admin 頁能觸發部署、即時看到結果 |
+| **2.5** | 「發布職缺」UI（admin 端）— storyteller 表單填 VoucherRequirements + intent_hint，後端執行 `recruit::mint_genesis_voucher`，把 voucher 給 saga treasury 持有當作 inventory | 2.4 | admin 端有徵召管理頁、可發布職缺、職缺出現在首頁徵召 carousel |
+| **2.6** | 前端 `RecruitmentTicket` wizard 串接 — 把現有 mock state machine 換成真的呼叫：擲牌 → mint_genesis_voucher（user 付費）→ 預覽 → 轉 voucher 給 storyteller → redeem → 跳到新角色頁 | 2.5 | 端到端徵召流程在 web 跑得通，新角色真的鑄上 devnet |
+
+### 第一個 session-opening 動作（複製貼上）
+
+```bash
+# 1. 確認環境
+sui client active-env  # 該是 devnet
+cat /Users/harperdelaviga/endless-story-new/AGENTS.md | head -200  # 重溫架構
+
+# 2. 跑 codegen
+cd /Users/harperdelaviga/endless-story-new
+pnpm --filter @endless-story/sdk codegen
+ls packages/sdk/src/generated/  # 確認 7 個 module 出來
+
+# 3. type-check 整個 repo
+pnpm -r type-check
+```
+
+如果 codegen 失敗（API 變動 / 不相容），先 debug 不要繞過。如果順利就 commit `generated/`，進 2.2。
+
+### 啟動 prompt 範本
+
+```
+讀 /Users/harperdelaviga/endless-story-new/AGENTS.md「下次接班」節，從 Phase 2.1 開始。
+不可跳步。每完成一個小步驟跟我回報，commit 由我決定時機。
+```
+
+### 警示燈
+
+- ❌ 不要跳到 2.6 直接動前端（會發現 SDK 還沒包好）
+- ❌ 不要在 web 裡直接 `new SuiClient()`（鐵律原則 2）
+- ❌ 不要手改 `packages/shared/src/contract-ids.ts`（鐵律原則 4）
+- ❌ devnet 掛了改用 testnet 要明確 flag 跟使用者確認
+- ✅ 任何 SDK / cli / admin 改動前再讀一次「鏈上架構」六原則
