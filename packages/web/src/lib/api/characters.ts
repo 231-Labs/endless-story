@@ -3,6 +3,7 @@ import { characters, getCharacterById, listCharactersBySaga } from '@/mocks/char
 import { magnetismByCharacterId } from '@/mocks/magnetism';
 import { USE_MOCK } from './config';
 import { httpGet } from './http';
+import { fetchOnChainCharacter, isSuiObjectId } from '@/lib/chain/character-read';
 
 /**
  * Characters API
@@ -11,15 +12,13 @@ import { httpGet } from './http';
  *
  *   GET  /characters                       → Character[]
  *   GET  /characters/{id}                  → Character | 404
- *   GET  /characters?sagaId={id}           → Character[]   (saga 內含 castIds 對應的所有角色)
+ *   GET  /characters?sagaId={id}           → Character[]
  *   GET  /characters?ownedBy={wallet}      → Character[]
  *   GET  /characters/{id}/magnetism        → CharacterMagnetism
  *
- * 後端應該：
- *   - Character.id：可以是 Sui object id（生產）或 mock id（demo）
- *   - listSagaCharacters 回傳 sagaId 屬於 saga 的成員（不含 wild）
- *   - listOwnedCharacters 用 wallet 對 Character.nftOwner 比對
- *   - magnetism subscriberCount 從訂閱表 count(*)、signatureQuote / nextPovHint 由 saga server LLM 算
+ * Phase 2.6d: getCharacter additionally tries on-chain read for ids that
+ * look like Sui object ids — so freshly minted characters (from the
+ * wizard) render at /dossier?id=0x... without backend hops.
  */
 
 export async function listCharacters(): Promise<Character[]> {
@@ -28,6 +27,13 @@ export async function listCharacters(): Promise<Character[]> {
 }
 
 export async function getCharacter(id: string): Promise<Character | null> {
+  // 1. If it's a Sui object id, prefer the live chain read.
+  if (isSuiObjectId(id)) {
+    const onChain = await fetchOnChainCharacter(id);
+    if (onChain) return onChain;
+    // Fall through — mock lookup will return null too, but staying graceful.
+  }
+  // 2. Demo / static id → mock or http.
   if (USE_MOCK) return getCharacterById(id) ?? null;
   try {
     return await httpGet<Character>(`/characters/${id}`);
