@@ -6,11 +6,13 @@
 /// **Phase 1.5a (prior):** Character struct enrichment + three mint paths
 ///   + validation invariants + death writer + value-type constructors.
 ///   Voucher-driven mint lives in the sibling `recruit` module.
-/// **Phase 1.5b (new):** ControlCap.saga_id binding + scene movement
-///   (storyteller-signed) + wild release (storyteller / admin) + wild walk
-///   (owner-signed) + ControlCapKey DOF for wild-mode self-held cap +
-///   `take_wild_control_cap` / `bind_to_saga` public(package) helpers for
-///   recruit::accept_character_into_saga.
+/// **Phase 1.5b (prior):** ControlCap.saga_id binding + scene movement
+///   + wild release + wild walk + ControlCapKey DOF + take/bind helpers.
+/// **Phase 1.5c (new):** per-saga skill table (DOF keyed by SagaSkillsKey)
+///   + image update (two paths: storyteller-signed and owner-signed) +
+///   Display V2 init (Character + OwnerCap visible in wallets) +
+///   `find_attribute_value_in` public helper for recruit's requirements
+///   check.
 ///
 /// **Cap matrix:**
 ///   - `OwnerCap`   = root ownership (transferrable; holder = owner)
@@ -23,8 +25,11 @@ module endless_story::character;
 use std::string::String;
 use sui::bcs;
 use sui::clock;
+use sui::display;
+use sui::dynamic_field as df;
 use sui::dynamic_object_field as dof;
 use sui::event;
+use sui::package;
 
 use endless_story::saga::{Self, Saga, StorytellerCap};
 use endless_story::world::{Self, AdminCap, Location, World};
@@ -84,6 +89,14 @@ const ESameLocation: vector<u8> = b"Source and target location are identical";
 
 #[error]
 const EAdminWorldMismatch: vector<u8> = b"AdminCap belongs to a different World";
+
+// ─── errors added in 1.5c ────────────────────────────────────────────
+
+#[error]
+const ESkillKeyNotInSagaTable: vector<u8> = b"Skill key not declared in saga's attribute_defs";
+
+#[error]
+const ESkillValueOutOfRange: vector<u8> = b"Skill value violates saga's attribute_defs range";
 
 // ─── value types ─────────────────────────────────────────────────────
 
@@ -212,6 +225,15 @@ public struct ControlCap has key, store {
 /// storyteller to hand it back manually).
 public struct ControlCapKey has copy, drop, store {}
 
+/// DOF marker for per-saga skill values attached to a character (R3.3).
+/// Scoped by `saga_id` so a character that's lived in multiple sagas
+/// keeps each saga's skill set as a separate dynamic field — if she ever
+/// re-joins the same saga, her 唱腔 / 身段 scores come back.
+public struct SagaSkillsKey has copy, drop, store { saga_id: ID }
+
+/// One-time witness for Display V2 registration (this module).
+public struct CHARACTER has drop {}
+
 // ─── events ──────────────────────────────────────────────────────────
 
 public struct ControlCapIssued has copy, drop {
@@ -277,6 +299,71 @@ public struct CharacterAcceptedIntoSaga has copy, drop {
     saga_id: ID,
     scene_id: ID,
     accepted_at_ms: u64,
+}
+
+// ─── events added in 1.5c ────────────────────────────────────────────
+
+public struct CharacterImageUpdated has copy, drop {
+    character_id: ID,
+    new_image_url: String,
+    updated_by_owner: bool,
+    updated_at_ms: u64,
+}
+
+public struct SkillSet has copy, drop {
+    character_id: ID,
+    saga_id: ID,
+    key: String,
+    value: u64,
+}
+
+public struct SkillCleared has copy, drop {
+    character_id: ID,
+    saga_id: ID,
+    key: String,
+}
+
+// ─── init (Display V2) ───────────────────────────────────────────────
+
+/// Display V2 registration. Runs once at package publish. Registers
+/// human-readable display templates for Character (name/description/image)
+/// and OwnerCap (so wallets show "Character N's Owner Cap" rather than
+/// the raw object struct).
+fun init(otw: CHARACTER, ctx: &mut TxContext) {
+    let publisher = package::claim(otw, ctx);
+
+    // Character display
+    let mut char_display = display::new_with_fields<Character>(
+        &publisher,
+        vector[
+            b"name".to_string(),
+            b"description".to_string(),
+            b"image_url".to_string(),
+        ],
+        vector[
+            b"{profile.name}".to_string(),
+            b"{profile.description}".to_string(),
+            b"{image_url}".to_string(),
+        ],
+        ctx,
+    );
+    display::update_version(&mut char_display);
+
+    // OwnerCap display
+    let mut owner_display = display::new_with_fields<OwnerCap>(
+        &publisher,
+        vector[b"name".to_string(), b"description".to_string()],
+        vector[
+            b"Character Owner Cap".to_string(),
+            b"Root ownership for character {character_id}".to_string(),
+        ],
+        ctx,
+    );
+    display::update_version(&mut owner_display);
+
+    transfer::public_transfer(publisher, ctx.sender());
+    transfer::public_transfer(char_display, ctx.sender());
+    transfer::public_transfer(owner_display, ctx.sender());
 }
 
 // ─── mint paths ──────────────────────────────────────────────────────
@@ -696,6 +783,152 @@ public(package) fun bind_to_saga(
     });
 }
 
+// ─── per-saga skills (R3.3 — 1.5c) ──────────────────────────────────
+
+/// Set or update a single skill value on a character for a specific saga.
+/// Storyteller of `saga` signs. Validates:
+///   1. cap matches saga
+///   2. character is currently in this saga
+///   3. skill `key` is declared in `saga::saga_attribute_defs`
+///   4. `value` is within the def's [min, max] range
+///   5. character is not dead
+///
+/// Stored as a DOF on the character keyed by `SagaSkillsKey { saga_id }`,
+/// so per-saga skill sets are preserved across saga transitions.
+public fun set_character_skill(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    character: &mut Character,
+    key: String,
+    value: u64,
+    seed: vector<u8>,
+) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(character.state.saga_id.contains(&saga_id), ECharacterSagaMismatch);
+    assert!(character.death.is_none(), ECharacterDead);
+
+    let defs = saga::saga_attribute_defs(saga);
+    assert!(world::is_key_defined(&defs, &key), ESkillKeyNotInSagaTable);
+    assert!(world::is_value_in_definitions(&defs, &key, value), ESkillValueOutOfRange);
+
+    let dof_key = SagaSkillsKey { saga_id };
+    ensure_skills_field(&mut character.id, dof_key);
+    let skills: &mut vector<AttributeValue> = df::borrow_mut(&mut character.id, dof_key);
+
+    let key_copy = key;
+    let idx_opt = skills.find_index!(|attr| attr.key == key_copy);
+    if (idx_opt.is_some()) {
+        let entry = vector::borrow_mut(skills, *idx_opt.borrow());
+        entry.value = value;
+        entry.seed = seed;
+    } else {
+        vector::push_back(
+            skills,
+            AttributeValue { key: key_copy, value, seed },
+        );
+    };
+
+    event::emit(SkillSet {
+        character_id: object::id(character),
+        saga_id,
+        key: key_copy,
+        value,
+    });
+}
+
+/// Remove a per-saga skill entry by key. Storyteller-signed. No-op if
+/// missing (defensive). Note: clearing only removes from this saga's
+/// DOF — other sagas' skill tables on the same character are untouched.
+public fun clear_character_skill(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    character: &mut Character,
+    key: String,
+) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(character.state.saga_id.contains(&saga_id), ECharacterSagaMismatch);
+
+    let dof_key = SagaSkillsKey { saga_id };
+    if (!df::exists(&character.id, dof_key)) return;
+
+    let skills: &mut vector<AttributeValue> = df::borrow_mut(&mut character.id, dof_key);
+    let key_copy = key;
+    let idx_opt = skills.find_index!(|attr| attr.key == key_copy);
+    if (idx_opt.is_some()) {
+        let _ = vector::remove(skills, *idx_opt.borrow());
+        event::emit(SkillCleared {
+            character_id: object::id(character),
+            saga_id,
+            key: key_copy,
+        });
+    }
+}
+
+/// Snapshot a character's per-saga skill table. Returns empty if no skills
+/// have been set for this saga.
+public fun character_skills_for_saga(character: &Character, saga_id: ID): vector<AttributeValue> {
+    let dof_key = SagaSkillsKey { saga_id };
+    if (df::exists(&character.id, dof_key)) {
+        *df::borrow<SagaSkillsKey, vector<AttributeValue>>(&character.id, dof_key)
+    } else {
+        vector[]
+    }
+}
+
+fun ensure_skills_field(uid: &mut UID, dof_key: SagaSkillsKey) {
+    if (!df::exists(uid, dof_key)) {
+        df::add<SagaSkillsKey, vector<AttributeValue>>(uid, dof_key, vector[]);
+    }
+}
+
+// ─── image update (1.5c) ─────────────────────────────────────────────
+
+/// Storyteller-signed image update. Character must be in this saga, not
+/// dead. Used when storyteller's AI portrait generator produces a new
+/// image during saga events.
+public fun update_image_by_storyteller(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    character: &mut Character,
+    new_image_url: String,
+    clock: &clock::Clock,
+) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(character.state.saga_id.contains(&saga_id), ECharacterSagaMismatch);
+    assert!(character.death.is_none(), ECharacterDead);
+
+    character.image_url = new_image_url;
+    event::emit(CharacterImageUpdated {
+        character_id: object::id(character),
+        new_image_url: character.image_url,
+        updated_by_owner: false,
+        updated_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
+/// Owner-signed image update. Allowed at any time (wild or in-saga, dead
+/// or alive — owner's call). Owner may want to refresh their character's
+/// public portrait independently of saga storyteller.
+public fun update_image_by_owner(
+    owner_cap: &OwnerCap,
+    character: &mut Character,
+    new_image_url: String,
+    clock: &clock::Clock,
+) {
+    assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
+
+    character.image_url = new_image_url;
+    event::emit(CharacterImageUpdated {
+        character_id: object::id(character),
+        new_image_url: character.image_url,
+        updated_by_owner: true,
+        updated_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
 // ─── death writer (called by event.move in 1.6) ──────────────────────
 
 /// Mark character dead. Idempotent: re-marking is a no-op (death record
@@ -781,9 +1014,20 @@ public fun attribute_seed(attr: &AttributeValue): &vector<u8> { &attr.seed }
 
 /// Find the first `AttributeValue` with `key`, or `None`.
 public fun find_attribute_value(character: &Character, key: &String): Option<u64> {
-    let idx_opt = character.attributes.find_index!(|attr| attr.key == *key);
+    find_attribute_value_in(&character.attributes, key)
+}
+
+/// Find an attribute by key in any vector<AttributeValue> — same algorithm
+/// as `find_attribute_value` but operates on a raw slice. Used by
+/// `recruit::check_voucher_requirements` to validate proposed attributes
+/// before mint, without needing a Character struct yet.
+public fun find_attribute_value_in(
+    attributes: &vector<AttributeValue>,
+    key: &String,
+): Option<u64> {
+    let idx_opt = attributes.find_index!(|attr| attr.key == *key);
     if (idx_opt.is_some()) {
-        option::some(vector::borrow(&character.attributes, *idx_opt.borrow()).value)
+        option::some(vector::borrow(attributes, *idx_opt.borrow()).value)
     } else {
         option::none()
     }
@@ -1231,6 +1475,58 @@ fun mark_dead_is_idempotent_keeps_first_record() {
 }
 
 // --- find_attribute_value test ---
+
+#[test]
+fun update_image_by_owner_updates_url() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+    assert!(*image_url(&character) == b"".to_string());
+
+    update_image_by_owner(
+        &owner_cap,
+        &mut character,
+        b"https://walrus.example/portrait1.png".to_string(),
+        &clock,
+    );
+    assert!(*image_url(&character) == b"https://walrus.example/portrait1.png".to_string());
+
+    destroy(character);
+    destroy(owner_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = EWrongCharacter)]
+fun update_image_by_owner_wrong_owner_aborts() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut char_a, owner_a) = mint_character_for_testing(&mut ctx);
+    let (char_b, owner_b) = mint_character_for_testing(&mut ctx);
+
+    // owner_b tries to update char_a's image → abort.
+    update_image_by_owner(&owner_b, &mut char_a, b"oops".to_string(), &clock);
+
+    destroy(char_a);
+    destroy(owner_a);
+    destroy(char_b);
+    destroy(owner_b);
+    clock.destroy_for_testing();
+}
+
+#[test]
+fun find_attribute_value_in_finds_in_raw_vector() {
+    let attrs = vector[
+        new_attribute_value(b"will".to_string(), 80, vector[]),
+        new_attribute_value(b"grace".to_string(), 60, vector[]),
+    ];
+
+    let v = find_attribute_value_in(&attrs, &b"will".to_string());
+    assert!(v.is_some());
+    assert_eq!(*v.borrow(), 80);
+
+    let missing = find_attribute_value_in(&attrs, &b"unknown".to_string());
+    assert!(missing.is_none());
+}
 
 #[test]
 fun find_attribute_value_returns_value_or_none() {

@@ -27,7 +27,9 @@ module endless_story::recruit;
 use std::string::String;
 use sui::clock;
 use sui::coin::Coin;
+use sui::display;
 use sui::event;
+use sui::package;
 
 use endless_story::character::{Self, AttributeValue, Character, CharacterProfile, ControlCap, MediaAsset, OwnerCap};
 use endless_story::currency::CURRENCY;
@@ -66,6 +68,45 @@ const EIntentExpired: vector<u8> = b"JoinIntent TTL has elapsed";
 #[error]
 const EWrongOwnerCap: vector<u8> = b"OwnerCap does not own this Character";
 
+// ─── errors added in 1.5c ────────────────────────────────────────────
+
+#[error]
+const EReqsNotMet: vector<u8> = b"Proposed profile/attributes do not satisfy voucher requirements";
+
+#[error]
+const EReqsKeysMismatch: vector<u8> = b"required_attribute_keys and required_attribute_mins must have equal length";
+
+// ─── one-time witness (Display V2) ───────────────────────────────────
+
+public struct RECRUIT has drop {}
+
+// ─── voucher requirements (1.5c — Q1 hybrid) ─────────────────────────
+
+/// Structured requirements that the storyteller's proposed character must
+/// satisfy at `redeem_voucher_to_character` time. Enforced on-chain.
+///
+/// **What's structured (enforced here):**
+///   - allowed genders / species (empty = any)
+///   - min/max age (0 = no check)
+///   - per-attribute minimum values
+///
+/// **What's NOT structured (stays in `intent_hint`):**
+///   - qualitative descriptors like "氣質清冷", "適合演武小生" — these
+///     remain natural language for the storyteller LLM + payer to negotiate
+///     off-chain. The on-chain hint is just text the storyteller sees.
+///
+/// `required_attribute_keys` and `required_attribute_mins` are parallel
+/// vectors (keys[i] must be >= mins[i]). Use `new_voucher_requirements`
+/// constructor to enforce length parity at compile-callsite.
+public struct VoucherRequirements has copy, drop, store {
+    allowed_genders: vector<String>,
+    allowed_species: vector<String>,
+    min_age: u8,
+    max_age: u8,
+    required_attribute_keys: vector<String>,
+    required_attribute_mins: vector<u64>,
+}
+
 // ─── voucher resource ────────────────────────────────────────────────
 
 /// Tradable preview ticket: payer pays ENDLESS to a saga treasury and
@@ -77,6 +118,11 @@ const EWrongOwnerCap: vector<u8> = b"OwnerCap does not own this Character";
 /// `payer` is fixed at mint time — even if the voucher is transferred to
 /// someone else, redemption mints the character's OwnerCap to the original
 /// payer's address. This prevents storyteller front-running.
+///
+/// `requirements` is checked on `redeem_voucher_to_character`. Use
+/// `no_requirements()` for unrestricted vouchers.
+/// `intent_hint` is natural-language guidance for storyteller LLM
+/// (role intent like "武小生" / "清貧書生"), not enforced on chain.
 public struct GenesisVoucher has key, store {
     id: UID,
     saga_id: ID,
@@ -84,6 +130,8 @@ public struct GenesisVoucher has key, store {
     paid_amount: u64,
     attribute_seed: vector<u8>,
     hint: Option<String>,
+    requirements: VoucherRequirements,
+    intent_hint: Option<String>,
     minted_at_ms: u64,
     expires_at_ms: u64,
 }
@@ -105,16 +153,131 @@ public struct GenesisVoucherRedeemed has copy, drop {
     redeemed_at_ms: u64,
 }
 
+// ─── init (Display V2) ───────────────────────────────────────────────
+
+fun init(otw: RECRUIT, ctx: &mut TxContext) {
+    let publisher = package::claim(otw, ctx);
+
+    let mut voucher_display = display::new_with_fields<GenesisVoucher>(
+        &publisher,
+        vector[b"name".to_string(), b"description".to_string()],
+        vector[
+            b"Genesis Voucher".to_string(),
+            b"Recruitment voucher for saga {saga_id}, paid {paid_amount}".to_string(),
+        ],
+        ctx,
+    );
+    display::update_version(&mut voucher_display);
+
+    let mut intent_display = display::new_with_fields<JoinIntent>(
+        &publisher,
+        vector[b"name".to_string(), b"description".to_string()],
+        vector[
+            b"Join Intent".to_string(),
+            b"Character {character_id} offered to saga {target_saga_id}".to_string(),
+        ],
+        ctx,
+    );
+    display::update_version(&mut intent_display);
+
+    transfer::public_transfer(publisher, ctx.sender());
+    transfer::public_transfer(voucher_display, ctx.sender());
+    transfer::public_transfer(intent_display, ctx.sender());
+}
+
+// ─── requirements constructors + check ───────────────────────────────
+
+/// "No restrictions" — typical for permissionless recruit vouchers.
+public fun no_requirements(): VoucherRequirements {
+    VoucherRequirements {
+        allowed_genders: vector[],
+        allowed_species: vector[],
+        min_age: 0,
+        max_age: 0,
+        required_attribute_keys: vector[],
+        required_attribute_mins: vector[],
+    }
+}
+
+/// Construct a VoucherRequirements value. Asserts parallel-vector length
+/// parity so the caller can't accidentally feed mismatched (keys, mins).
+public fun new_voucher_requirements(
+    allowed_genders: vector<String>,
+    allowed_species: vector<String>,
+    min_age: u8,
+    max_age: u8,
+    required_attribute_keys: vector<String>,
+    required_attribute_mins: vector<u64>,
+): VoucherRequirements {
+    assert!(
+        vector::length(&required_attribute_keys) == vector::length(&required_attribute_mins),
+        EReqsKeysMismatch,
+    );
+    VoucherRequirements {
+        allowed_genders,
+        allowed_species,
+        min_age,
+        max_age,
+        required_attribute_keys,
+        required_attribute_mins,
+    }
+}
+
+/// Pure view: does the proposed (profile, attributes) satisfy `voucher.requirements`?
+/// Frontends/SDK should call this before signing redeem to avoid wasting gas
+/// on assertions. Returns false on any failed check.
+public fun check_voucher_requirements(
+    voucher: &GenesisVoucher,
+    profile: &CharacterProfile,
+    attributes: &vector<AttributeValue>,
+): bool {
+    let reqs = &voucher.requirements;
+    let facts = character::physical_facts(profile);
+
+    // Gender (empty allowed_genders = no check)
+    if (!vector::is_empty(&reqs.allowed_genders)) {
+        if (!reqs.allowed_genders.contains(character::physical_gender(facts))) return false;
+    };
+    // Species (empty allowed_species = no check; world rules already screened)
+    if (!vector::is_empty(&reqs.allowed_species)) {
+        if (!reqs.allowed_species.contains(character::physical_species(facts))) return false;
+    };
+
+    let age = character::physical_age_years(facts);
+    if (reqs.min_age > 0 && age < reqs.min_age) return false;
+    if (reqs.max_age > 0 && age > reqs.max_age) return false;
+
+    // Attribute mins
+    let n = vector::length(&reqs.required_attribute_keys);
+    let mut i = 0;
+    while (i < n) {
+        let req_key = vector::borrow(&reqs.required_attribute_keys, i);
+        let req_min = *vector::borrow(&reqs.required_attribute_mins, i);
+        let actual_opt = character::find_attribute_value_in(attributes, req_key);
+        if (actual_opt.is_none()) return false;
+        if (*actual_opt.borrow() < req_min) return false;
+        i = i + 1;
+    };
+
+    true
+}
+
 // ─── mint voucher ────────────────────────────────────────────────────
 
 /// Pay ENDLESS into the saga treasury; receive a `GenesisVoucher`.
 /// Payer = ctx.sender(). Storyteller does NOT need to sign this step —
 /// vouchers are permissionlessly mintable as long as you can pay.
+///
+/// `requirements`: structured constraints enforced on redeem. Pass
+/// `no_requirements()` if any character is acceptable.
+/// `intent_hint`: optional natural-language role intent ("武小生").
 public fun mint_genesis_voucher(
     saga: &mut Saga,
     payment: Coin<CURRENCY>,
     attribute_seed: vector<u8>,
     hint: Option<String>,
+    requirements: VoucherRequirements,
+    intent_hint: Option<String>,
     ttl_ms: u64,
     clock: &clock::Clock,
     ctx: &mut TxContext,
@@ -130,6 +293,8 @@ public fun mint_genesis_voucher(
         paid_amount: amount,
         attribute_seed,
         hint,
+        requirements,
+        intent_hint,
         minted_at_ms: now_ms,
         expires_at_ms: now_ms + ttl_ms,
     };
@@ -173,6 +338,10 @@ public fun redeem_voucher_to_character(
     assert!(now_ms <= voucher.expires_at_ms, EVoucherExpired);
     assert!(world::world_id(world) == saga::world_id(saga), EWorldSagaMismatch);
     assert!(scene::saga_id(scene) == saga_id, ESceneSagaMismatch);
+    assert!(
+        check_voucher_requirements(&voucher, &profile, &attributes),
+        EReqsNotMet,
+    );
 
     let owner_recipient = voucher.payer;
     let scene_id = scene::scene_id(scene);
@@ -202,6 +371,8 @@ public fun redeem_voucher_to_character(
         paid_amount: _,
         attribute_seed: _,
         hint: _,
+        requirements: _,
+        intent_hint: _,
         minted_at_ms: _,
         expires_at_ms: _,
     } = voucher;
@@ -234,6 +405,35 @@ public fun voucher_hint(voucher: &GenesisVoucher): &Option<String> { &voucher.hi
 public fun voucher_minted_at_ms(voucher: &GenesisVoucher): u64 { voucher.minted_at_ms }
 
 public fun voucher_expires_at_ms(voucher: &GenesisVoucher): u64 { voucher.expires_at_ms }
+
+public fun voucher_requirements(voucher: &GenesisVoucher): &VoucherRequirements {
+    &voucher.requirements
+}
+
+public fun voucher_intent_hint(voucher: &GenesisVoucher): &Option<String> {
+    &voucher.intent_hint
+}
+
+// VoucherRequirements field accessors (for SDK reads).
+public fun reqs_allowed_genders(reqs: &VoucherRequirements): &vector<String> {
+    &reqs.allowed_genders
+}
+
+public fun reqs_allowed_species(reqs: &VoucherRequirements): &vector<String> {
+    &reqs.allowed_species
+}
+
+public fun reqs_min_age(reqs: &VoucherRequirements): u8 { reqs.min_age }
+
+public fun reqs_max_age(reqs: &VoucherRequirements): u8 { reqs.max_age }
+
+public fun reqs_required_attribute_keys(reqs: &VoucherRequirements): &vector<String> {
+    &reqs.required_attribute_keys
+}
+
+public fun reqs_required_attribute_mins(reqs: &VoucherRequirements): &vector<u64> {
+    &reqs.required_attribute_mins
+}
 
 // ─── JoinIntent (1.5b) ───────────────────────────────────────────────
 
@@ -516,6 +716,8 @@ fun mint_voucher_deposits_payment_and_emits() {
         payment,
         vector[42, 43, 44],
         option::none(),
+        no_requirements(),
+        option::none(),
         60_000, // 60s TTL
         &clock,
         &mut ctx,
@@ -547,6 +749,8 @@ fun redeem_voucher_mints_character_and_consumes_voucher() {
         &mut saga,
         payment,
         vector[],
+        option::none(),
+        no_requirements(),
         option::none(),
         60_000,
         &clock,
@@ -618,6 +822,141 @@ fun revoke_join_intent_burns_intent() {
     clock.destroy_for_testing();
 }
 
+// --- 1.5c voucher requirements tests ---
+
+#[test_only]
+fun strict_requirements_male_will80(): VoucherRequirements {
+    new_voucher_requirements(
+        vector[b"male".to_string()],       // allowed_genders: only male
+        vector[],                            // any species
+        18,                                  // min_age 18
+        0,                                   // no max age
+        vector[b"will".to_string()],       // require "will" attribute
+        vector[80],                          // min value 80
+    )
+}
+
+#[test_only]
+fun matching_profile(): CharacterProfile {
+    character::new_character_profile(
+        b"Match".to_string(),
+        b"".to_string(),
+        character::new_physical_facts(
+            b"human".to_string(),
+            b"male".to_string(),
+            b"".to_string(),
+            25, // satisfies min_age 18
+        ),
+    )
+}
+
+#[test_only]
+fun matching_attributes(): vector<AttributeValue> {
+    vector[character::new_attribute_value(b"will".to_string(), 90, vector[])]
+}
+
+#[test_only]
+fun female_profile(): CharacterProfile {
+    character::new_character_profile(
+        b"Wrong".to_string(),
+        b"".to_string(),
+        character::new_physical_facts(
+            b"human".to_string(),
+            b"female".to_string(),
+            b"".to_string(),
+            25,
+        ),
+    )
+}
+
+#[test]
+fun check_requirements_passes_when_all_match() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, mut saga, storyteller_cap, scene) = setup_world_saga_scene(
+        &mut ctx,
+        &clock,
+    );
+    let mut treasury_cap = currency::new_treasury_for_testing(&mut ctx);
+    let payment = coin::mint(&mut treasury_cap, 100, &mut ctx);
+    let voucher = mint_genesis_voucher(
+        &mut saga,
+        payment,
+        vector[],
+        option::none(),
+        strict_requirements_male_will80(),
+        option::some(b"武小生".to_string()),
+        60_000,
+        &clock,
+        &mut ctx,
+    );
+
+    assert!(check_voucher_requirements(&voucher, &matching_profile(), &matching_attributes()));
+    assert!(!check_voucher_requirements(&voucher, &female_profile(), &matching_attributes()));
+
+    destroy(voucher);
+    destroy(treasury_cap);
+    destroy(scene);
+    cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = EReqsNotMet)]
+fun redeem_aborts_when_requirements_unmet() {
+    let mut ctx = tx_context::dummy();
+    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, mut saga, storyteller_cap, mut scene) = setup_world_saga_scene(
+        &mut ctx,
+        &clock,
+    );
+
+    let mut treasury_cap = currency::new_treasury_for_testing(&mut ctx);
+    let payment = coin::mint(&mut treasury_cap, 100, &mut ctx);
+    let voucher = mint_genesis_voucher(
+        &mut saga,
+        payment,
+        vector[],
+        option::none(),
+        strict_requirements_male_will80(),
+        option::none(),
+        60_000,
+        &clock,
+        &mut ctx,
+    );
+
+    // Try to redeem with a female profile → aborts EReqsNotMet.
+    let (owner_cap, control_cap) = redeem_voucher_to_character(
+        &storyteller_cap,
+        &mut saga,
+        &world,
+        &mut scene,
+        voucher,
+        female_profile(),
+        vector[],
+        matching_attributes(),
+        &clock,
+        &mut ctx,
+    );
+
+    destroy(owner_cap);
+    destroy(control_cap);
+    destroy(treasury_cap);
+    destroy(scene);
+    cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = EReqsKeysMismatch)]
+fun new_requirements_with_mismatched_parallel_vectors_aborts() {
+    let _ = new_voucher_requirements(
+        vector[],
+        vector[],
+        0, 0,
+        vector[b"a".to_string(), b"b".to_string()], // 2 keys
+        vector[10],                                    // 1 min → mismatch
+    );
+}
+
 #[test, expected_failure(abort_code = EIntentCharacterMismatch)]
 fun revoke_with_wrong_owner_cap_aborts() {
     let mut ctx = tx_context::dummy();
@@ -658,6 +997,8 @@ fun redeem_expired_voucher_aborts() {
         &mut saga,
         payment,
         vector[],
+        option::none(),
+        no_requirements(),
         option::none(),
         1_000, // 1s TTL
         &clock,
