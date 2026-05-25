@@ -3,7 +3,11 @@ import { characters, getCharacterById, listCharactersBySaga } from '@/mocks/char
 import { magnetismByCharacterId } from '@/mocks/magnetism';
 import { USE_MOCK } from './config';
 import { httpGet } from './http';
-import { fetchOnChainCharacter, isSuiObjectId } from '@/lib/chain/character-read';
+import {
+  fetchOnChainCharacter,
+  fetchOnChainCharactersByOwner,
+  isSuiObjectId,
+} from '@/lib/chain/character-read';
 
 /**
  * Characters API
@@ -48,6 +52,11 @@ export async function listSagaCharacters(sagaId: string): Promise<Character[]> {
 }
 
 export async function listOwnedCharacters(wallet: string): Promise<Character[]> {
+  // Chain-first when the caller passes a real Sui address. Falls through
+  // to mock for demo personas (DEMO_OWNERS.OWNER_A etc. are non-Sui slugs).
+  if (isSuiObjectId(wallet)) {
+    return fetchOnChainCharactersByOwner(wallet);
+  }
   if (USE_MOCK) return characters.filter((c) => c.nftOwner === wallet);
   return httpGet<Character[]>('/characters', { query: { ownedBy: wallet } });
 }

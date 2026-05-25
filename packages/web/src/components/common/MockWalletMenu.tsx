@@ -5,14 +5,14 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ConnectModal,
-  useCurrentAccount,
   useDisconnectWallet,
   useSignAndExecuteTransaction,
   useSuiClient,
 } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, read as endlessRead, tx as endlessTx } from '@endless-story/sdk';
 import { truncateAddress } from '@/lib/format';
+import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 
 export interface WalletPersona {
   key: string;
@@ -39,7 +39,7 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
   const defaultPersona = personas[0];
 
   // ── Real wallet (dapp-kit) ───────────────────────────────────────
-  const account = useCurrentAccount();
+  const { account, isSagaAdmin } = useSagaAdmin();
   const { mutate: disconnect } = useDisconnectWallet();
   const { mutate: signAndExecute, isPending: isDripping } = useSignAndExecuteTransaction();
   const suiClient = useSuiClient();
@@ -47,6 +47,9 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
   const [balance, setBalance] = useState<string>('—');
   const [balanceTick, setBalanceTick] = useState(0);
   const [dripError, setDripError] = useState<string | null>(null);
+  // Real on-chain character count for the connected wallet — replaces the
+  // mock persona's ownedCount once a wallet is in. Null until first fetch.
+  const [chainOwnedCount, setChainOwnedCount] = useState<number | null>(null);
 
   const packageId = ENDLESS_STORY_DEPLOYMENT.packageId;
   const faucetId = ENDLESS_STORY_DEPLOYMENT.faucetId;
@@ -54,10 +57,10 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
 
   // Detect whether the connected wallet owns the FaucetAdminCap — if so we
   // can admin_mint (no cooldown) instead of drip (24h cooldown per address).
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isFaucetAdmin, setIsFaucetAdmin] = useState(false);
   useEffect(() => {
     if (!account || !faucetAdminCapId) {
-      setIsAdmin(false);
+      setIsFaucetAdmin(false);
       return;
     }
     let cancelled = false;
@@ -67,18 +70,39 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
         if (cancelled) return;
         const owner = res.data?.owner;
         if (owner && typeof owner === 'object' && 'AddressOwner' in owner) {
-          setIsAdmin(owner.AddressOwner === account.address);
+          setIsFaucetAdmin(owner.AddressOwner === account.address);
         } else {
-          setIsAdmin(false);
+          setIsFaucetAdmin(false);
         }
       })
       .catch(() => {
-        if (!cancelled) setIsAdmin(false);
+        if (!cancelled) setIsFaucetAdmin(false);
       });
     return () => {
       cancelled = true;
     };
   }, [account, suiClient, faucetAdminCapId]);
+
+  // Count of Character NFTs owned by the connected wallet — via OwnerCap
+  // pagination (single round-trip when ≤50 caps). Cleared on disconnect.
+  useEffect(() => {
+    if (!account || !packageId) {
+      setChainOwnedCount(null);
+      return;
+    }
+    let cancelled = false;
+    endlessRead.character
+      .listOwnerCapsForAddress(suiClient, account.address, packageId)
+      .then((caps) => {
+        if (!cancelled) setChainOwnedCount(caps.length);
+      })
+      .catch(() => {
+        if (!cancelled) setChainOwnedCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [account, suiClient, packageId, balanceTick]);
 
   useEffect(() => {
     if (!account || !packageId) {
@@ -109,7 +133,7 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
     }
     setDripError(null);
     const tx = new Transaction();
-    if (isAdmin && faucetAdminCapId) {
+    if (isFaucetAdmin && faucetAdminCapId) {
       // Admin → admin_mint to self. Bypasses the 24h cooldown that drip
       // enforces per-address. 1000 ENDLESS = ~10 vouchers at typical prices.
       // Salt the amount so consecutive clicks produce distinct tx payloads
@@ -157,16 +181,21 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
     return query ? `${pathname}?${query}` : pathname;
   };
 
-  const dossierHref = buildHref({
-    filter: 'mine',
-    as: active.queryValue === defaultPersona.queryValue ? defaultPersona.queryValue : active.queryValue,
-  });
-  const subscriptionsHref = active.wallet
-    ? `/subscriptions?as=${active.queryValue}`
+  const isConnected = !!account;
+  // If a real wallet is connected, prefer THE address as the viewer
+  // — so listOwnedCharacters / listMySubscriptions resolve to the real
+  // identity (chain-read) instead of a mock persona's hardcoded address.
+  const viewerAs = isConnected
+    ? account.address
+    : active.queryValue === defaultPersona.queryValue
+      ? defaultPersona.queryValue
+      : active.queryValue;
+  const dossierHref = buildHref({ filter: 'mine', as: viewerAs });
+  const subscriptionsHref = isConnected || active.wallet
+    ? `/subscriptions?as=${viewerAs}`
     : '/subscriptions';
 
   // ── Pill display priority: real wallet > mock persona ───────────
-  const isConnected = !!account;
   const pillAddress = isConnected ? account.address : active.wallet;
   const pillLabel = isConnected ? truncateAddress(account.address, 4, 4) : active.label;
 
@@ -198,7 +227,7 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
                       disabled={isDripping}
                       className="rounded-full bg-cinnabar/15 px-2.5 py-0.5 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/25 disabled:opacity-50"
                     >
-                      {isDripping ? '領取中…' : isAdmin ? 'Admin 補水' : '領 ENDLESS'}
+                      {isDripping ? '領取中…' : isFaucetAdmin ? 'Admin 補水' : '領 ENDLESS'}
                     </button>
                   )}
                 </div>
@@ -227,17 +256,21 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
             className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
           >
             <span>我的角色</span>
-            <span className="font-mono text-xs text-mute">{active.ownedCount}</span>
+            <span className="font-mono text-xs text-mute">
+              {isConnected ? (chainOwnedCount ?? '—') : active.ownedCount}
+            </span>
           </Link>
           <Link
             href={subscriptionsHref}
             className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
           >
             <span>我的訂閱</span>
-            <span className="font-mono text-xs text-mute">{active.subscriptionCount}</span>
+            <span className="font-mono text-xs text-mute">
+              {isConnected ? '—' : active.subscriptionCount}
+            </span>
           </Link>
 
-          {(active.key === 'owner' || isConnected) && (
+          {isSagaAdmin && (
             <Link
               href="/admin"
               className="flex items-center justify-between rounded-md px-3 py-2 text-cinnabar/90 transition-colors hover:bg-canvas/70 hover:text-cinnabar"

@@ -1,5 +1,6 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
+import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { listAllRecruitments } from '@/lib/actions/recruitments-store';
 import { RecruitmentsPanel } from './RecruitmentsPanel';
 
@@ -22,7 +23,9 @@ export default async function AdminRecruitmentsPage() {
                     meta="發布、編輯、停用職缺"
                 />
                 <div className="mt-12">
-                    <RecruitmentsPanel initial={all} />
+                    <SagaAdminGuard>
+                        <RecruitmentsPanel initial={all} />
+                    </SagaAdminGuard>
                 </div>
             </main>
         </>

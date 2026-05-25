@@ -1,5 +1,6 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
+import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { AdminPanel } from './AdminPanel';
 
 export const metadata = {
@@ -19,7 +20,9 @@ export default function AdminPage() {
         />
 
         <div className="mt-12">
-          <AdminPanel />
+          <SagaAdminGuard>
+            <AdminPanel />
+          </SagaAdminGuard>
         </div>
       </main>
     </>

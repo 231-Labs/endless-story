@@ -10,7 +10,7 @@
  */
 
 import type { Character, CharacterRole } from '@endless-story/shared';
-import { makeSuiClient, read } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
@@ -20,22 +20,14 @@ export function isSuiObjectId(id: string): boolean {
 }
 
 /**
- * Map an on-chain Character.json shape into the UI Character interface.
- * Returns null if the chain object isn't reachable or doesn't decode.
+ * Map a decoded chain Character struct into the UI Character interface.
+ * Shared by single fetch + list fetch — keep them visually identical so
+ * the dossier grid and detail page get the same shape.
+ *
+ * `ownerOverride` lets the list-by-owner path stamp the wallet without
+ * paying for a per-character getObject({ showOwner }) round-trip.
  */
-export async function fetchOnChainCharacter(id: string): Promise<Character | null> {
-    if (!isSuiObjectId(id)) return null;
-
-    const client = makeSuiClient({ network: resolveNetwork() });
-    let res;
-    try {
-        res = await read.character.getCharacter(client, id);
-    } catch {
-        return null;
-    }
-    const json = res.json as unknown as ChainCharacter | undefined;
-    if (!json) return null;
-
+function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: string): Character {
     const profile = json.profile;
     const physical = profile?.physical_facts;
     const attrs = json.attributes ?? [];
@@ -52,11 +44,11 @@ export async function fetchOnChainCharacter(id: string): Promise<Character | nul
 
     return {
         id,
-        nftOwner: '', // owner field requires a separate getObject({ showOwner }) — defer
+        nftOwner: ownerOverride ?? '',
         sagaId: json.state?.saga_id ?? null,
         name: profile?.name ?? '無名',
         description: profile?.description ?? '',
-        role: '武小生' as CharacterRole, // chain doesn't store role; fallback (UI displays)
+        role: '武小生' as CharacterRole, // chain doesn't store role
         gender: mapGender(physical?.gender ?? ''),
         age: Number(physical?.age_years ?? 0),
         physicalFacts: [physical?.species, physical?.body].filter(Boolean).join(' / ') || '—',
@@ -84,6 +76,51 @@ export async function fetchOnChainCharacter(id: string): Promise<Character | nul
         },
         createdAt,
     };
+}
+
+/**
+ * Fetch one Character by object id. Returns null if id format is wrong,
+ * chain unreachable, or decode fails. Caller falls back to mock.
+ */
+export async function fetchOnChainCharacter(id: string): Promise<Character | null> {
+    if (!isSuiObjectId(id)) return null;
+    const client = makeSuiClient({ network: resolveNetwork() });
+    let res;
+    try {
+        res = await read.character.getCharacter(client, id);
+    } catch {
+        return null;
+    }
+    const json = res.json as unknown as ChainCharacter | undefined;
+    if (!json) return null;
+    return mapChainCharacter(id, json);
+}
+
+/**
+ * Fetch every Character owned by `wallet` — uses SDK
+ * `listCharactersForOwner` (paginated OwnerCap lookup + multi-get).
+ * Empty array if not deployed or wallet has none.
+ */
+export async function fetchOnChainCharactersByOwner(wallet: string): Promise<Character[]> {
+    if (!isSuiObjectId(wallet)) return [];
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return [];
+    const client = makeSuiClient({ network: resolveNetwork() });
+    let result;
+    try {
+        result = await read.character.listCharactersForOwner(client, wallet, pkg);
+    } catch (err) {
+        console.warn('[character-read] listCharactersForOwner failed:', err);
+        return [];
+    }
+    const out: Character[] = [];
+    for (const c of result.characters) {
+        const json = (c as { json?: unknown }).json as ChainCharacter | undefined;
+        const charId = (c as { objectId?: string }).objectId;
+        if (!json || !charId) continue;
+        out.push(mapChainCharacter(charId, json, wallet));
+    }
+    return out;
 }
 
 function mapGender(raw: string): Character['gender'] {

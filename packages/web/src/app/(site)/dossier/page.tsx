@@ -62,9 +62,16 @@ export default async function DossierPage({
 
   // ──────────── List view ────────────
   if (!characterId) {
-    const characters = await charactersApi.listCharacters();
-    const charactersById = new Map(characters.map((c) => [c.id, c]));
     const filter = parseFilter(params.filter);
+    // filter=mine + real wallet address → chain query for owned chars only.
+    // Other filters (all / saga / external) still go through the mock list
+    // until Phase 3 wires saga-wide + global queries.
+    const useOwnedQuery =
+      filter === 'mine' && viewerWallet != null && /^0x[0-9a-fA-F]{64}$/.test(viewerWallet);
+    const characters = useOwnedQuery
+      ? await charactersApi.listOwnedCharacters(viewerWallet)
+      : await charactersApi.listCharacters();
+    const charactersById = new Map(characters.map((c) => [c.id, c]));
 
     const cards: CardData[] = await Promise.all(
       characters.map(async (character) => {
