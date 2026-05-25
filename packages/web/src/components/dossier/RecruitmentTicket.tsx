@@ -6,14 +6,15 @@ import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@
 import { Transaction } from '@mysten/sui/transactions';
 import type { Recruitment } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { generateAttributeSeed } from '@endless-story/llm/seed';
+import { generateAttributeSeed, rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
+import { DEFAULT_ATTRIBUTE_SCHEMA } from '@/lib/chain/schema';
 import { moderatePrompt } from '@/lib/actions/moderate-prompt';
 import { previewCharacter } from '@/lib/actions/preview-character';
 import { generatePortrait } from '@/lib/actions/generate-portrait';
 import { redeemVoucher } from '@/lib/actions/redeem-voucher';
 
-type Stage = 'closed' | 'prompt' | 'rolling' | 'pick' | 'painting' | 'portrait' | 'done';
+type Stage = 'closed' | 'minting' | 'rejected' | 'prompt' | 'generating' | 'pick' | 'painting' | 'portrait' | 'done';
 
 const ATTR_LABEL: Record<string, string> = {
   appearance: '外貌',
@@ -28,9 +29,10 @@ const GENDER_LABEL: Record<string, string> = {
   other: '不限性別',
 };
 
-const STEPS: { key: Exclude<Stage, 'closed' | 'painting'>; label: string }[] = [
+const STEPS: { key: Exclude<Stage, 'closed' | 'painting' | 'rejected'>; label: string }[] = [
+  { key: 'minting', label: '擲牌' },
   { key: 'prompt', label: '描述' },
-  { key: 'rolling', label: '擲牌' },
+  { key: 'generating', label: '凝形' },
   { key: 'pick', label: '揭曉' },
   { key: 'portrait', label: '配像' },
   { key: 'done', label: '入班' },
@@ -39,15 +41,83 @@ const STEPS: { key: Exclude<Stage, 'closed' | 'painting'>; label: string }[] = [
 const VOUCHER_TTL_MS = 24n * 60n * 60n * 1000n;
 const ENDLESS_DECIMALS = 6;
 
+/**
+ * Off-chain `Recruitment.genderRequirement` uses English (`male`/`female`/`other`)
+ * but the on-chain `Character.profile.physical_facts.gender` is whatever the
+ * LLM emits — currently the Chinese label (`男`/`女`/`中性`, see
+ * `packages/llm/src/prompts/character.ts`). VoucherRequirements does an exact
+ * string match on redeem, so we have to convert here.
+ */
+const GENDER_CHAIN: Record<'male' | 'female' | 'other', string> = {
+  male: '男',
+  female: '女',
+  other: '中性',
+};
+
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
 
-function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'painting'> {
+/**
+ * Build the parallel-vector inputs the contract's `new_voucher_requirements`
+ * expects, from a Recruitment's `genderRequirement` + `minAttributes`.
+ */
+function recruitmentRequirements(recruitment: Recruitment): {
+  allowedGenders: string[];
+  requiredAttributeKeys: string[];
+  requiredAttributeMins: bigint[];
+} {
+  const allowedGenders = recruitment.genderRequirement
+    ? [GENDER_CHAIN[recruitment.genderRequirement]]
+    : [];
+  const requiredAttributeKeys: string[] = [];
+  const requiredAttributeMins: bigint[] = [];
+  if (recruitment.minAttributes) {
+    for (const [key, min] of Object.entries(recruitment.minAttributes)) {
+      if (typeof min === 'number') {
+        requiredAttributeKeys.push(key);
+        requiredAttributeMins.push(BigInt(min));
+      }
+    }
+  }
+  return { allowedGenders, requiredAttributeKeys, requiredAttributeMins };
+}
+
+/**
+ * Mirrors the contract's `check_voucher_requirements` so the wizard can warn
+ * the user *before* paying for the portrait / redeem if the rolled candidate
+ * won't satisfy the recruitment. Chain still enforces — this is UX only.
+ */
+function candidateMeetsRequirements(
+  recruitment: Recruitment,
+  candidate: CharacterCandidate | null,
+  rolledValues: RolledAttribute[],
+): { ok: true } | { ok: false; reason: string } {
+  if (candidate && recruitment.genderRequirement) {
+    const wanted = GENDER_CHAIN[recruitment.genderRequirement];
+    if (candidate.physicalFacts.gender !== wanted) {
+      return { ok: false, reason: `性別要求：${wanted}，擲出：${candidate.physicalFacts.gender}` };
+    }
+  }
+  if (recruitment.minAttributes) {
+    for (const [key, min] of Object.entries(recruitment.minAttributes)) {
+      if (typeof min !== 'number') continue;
+      const got = rolledValues.find((r) => r.key === key)?.value ?? 0;
+      if (got < min) {
+        const label = ATTR_LABEL[key] ?? key;
+        return { ok: false, reason: `${label} 須 ≥ ${min}，擲出：${got}` };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'painting' | 'rejected'> {
   if (stage === 'painting') return 'portrait';
-  return stage as Exclude<Stage, 'closed' | 'painting'>;
+  if (stage === 'rejected') return 'minting';
+  return stage as Exclude<Stage, 'closed' | 'painting' | 'rejected'>;
 }
 
 function daysLeft(expiresAt: string): number {
@@ -73,7 +143,7 @@ export function RecruitmentTicket({
   const sagaId = ENDLESS_STORY_DEPLOYMENT.sagaId;
 
   const [stage, setStage] = useState<Stage>('closed');
-  const [rollingStatus, setRollingStatus] = useState<'moderating' | 'minting' | 'previewing' | null>(null);
+  const [rollingStatus, setRollingStatus] = useState<'minting' | 'moderating' | 'generating' | null>(null);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +154,7 @@ export function RecruitmentTicket({
   const [candidate, setCandidate] = useState<CharacterCandidate | null>(null);
   const [rolledValues, setRolledValues] = useState<RolledAttribute[] | null>(null);
   const [portraitUrl, setPortraitUrl] = useState<string | null>(null);
+  const [portraitBlobId, setPortraitBlobId] = useState<string | null>(null);
   const [portraitBase64, setPortraitBase64] = useState<string | null>(null);
   const [characterId, setCharacterId] = useState<string | null>(null);
 
@@ -100,6 +171,7 @@ export function RecruitmentTicket({
     setCandidate(null);
     setRolledValues(null);
     setPortraitUrl(null);
+    setPortraitBlobId(null);
     setPortraitBase64(null);
     setCharacterId(null);
   };
@@ -114,53 +186,30 @@ export function RecruitmentTicket({
   }, [recruitment.id]);
 
   // ───────────────────────────────────────────────────────────────
-  // Step: prompt → rolling (moderate + mint + preview)
+  // Step: closed → minting → prompt/rejected
   // ───────────────────────────────────────────────────────────────
-  const handleRoll = async () => {
+  const handleMint = async () => {
     setError(null);
+    setStage('minting');
 
     if (!account) {
       setError('請先連結錢包');
+      setRollingStatus(null);
       return;
     }
     if (!packageId || !sagaId) {
       setError('梨園尚未種子化 — 請通知 admin 跑 cli bootstrap');
-      return;
-    }
-
-    setStage('rolling');
-    setRollingStatus('moderating');
-
-    // 1. Moderate (server action) — wrap so any network / serialization
-    // failure surfaces with phase context instead of bare "Failed to fetch".
-    let modRes;
-    try {
-      modRes = await moderatePrompt(prompt);
-    } catch (err) {
-      setError(`[moderate] ${err instanceof Error ? err.message : String(err)}`);
-      setStage('prompt');
       setRollingStatus(null);
       return;
     }
-    if (!modRes.ok) {
-      setError(modRes.reason ?? '審核未通過');
-      setStage('prompt');
-      setRollingStatus(null);
-      return;
-    }
-    setSignature(modRes.signature!);
 
     setRollingStatus('minting');
-    // 2. Mint voucher (real on-chain) — pay basePrice from user's ENDLESS coin
+
+    // 1. Mint voucher (real on-chain) — pay basePrice from user's ENDLESS coin
     const seed = generateAttributeSeed();
     const seedHex = bytesToHex(seed);
     setAttributeSeedHex(seedHex);
 
-    // Devnet/testnet RPC frequently serves slightly stale owned-object
-    // versions, especially right after another tx on the same wallet.
-    // Validator rejects with "object … version X unavailable, current Y"
-    // — entirely retryable: re-fetch coins, rebuild PTB, re-sign.
-    // ONE retry is enough in practice.
     const MINT_RETRIES = 2;
     let mintedVoucherId: string | null = null;
     let lastMintErr: unknown = null;
@@ -181,13 +230,26 @@ export function RecruitmentTicket({
         }
         const [payment] = tx.splitCoins(primary, [priceBase]);
 
-        const reqs = tx.add(endlessTx.recruit.noRequirements());
+        const cardReqs = recruitmentRequirements(recruitment);
+        const reqs = cardReqs.allowedGenders.length === 0 &&
+          cardReqs.requiredAttributeKeys.length === 0
+          ? tx.add(endlessTx.recruit.noRequirements())
+          : tx.add(
+              endlessTx.recruit.newVoucherRequirements({
+                allowedGenders: cardReqs.allowedGenders,
+                allowedSpecies: [],
+                minAge: 0,
+                maxAge: 0,
+                requiredAttributeKeys: cardReqs.requiredAttributeKeys,
+                requiredAttributeMins: cardReqs.requiredAttributeMins,
+              }),
+            );
         const voucherObj = tx.add(
           endlessTx.recruit.mintGenesisVoucher({
             saga: sagaId,
             payment,
             attributeSeed: Array.from(seed),
-            hint: prompt.slice(0, 80),
+            hint: "", // Prompt is written AFTER minting now
             requirements: reqs,
             intentHint: recruitment.roleIntent.slice(0, 80),
             ttlMs: VOUCHER_TTL_MS,
@@ -220,30 +282,70 @@ export function RecruitmentTicket({
           msg.includes('version unavailable') ||
           msg.includes('ObjectVersionUnavailableForConsumption');
         if (isStaleVersion && attempt < MINT_RETRIES) {
-          // Small backoff so RPC has time to settle
           await new Promise((r) => setTimeout(r, 800));
           continue;
         }
-        // Non-retryable, or out of retries — bail
         setError(`[mint] ${msg}`);
-        setStage('prompt');
+        setStage('minting');
         setRollingStatus(null);
         return;
       }
     }
     if (!mintedVoucherId) {
       setError(`[mint] ${lastMintErr instanceof Error ? lastMintErr.message : String(lastMintErr)}`);
-      setStage('prompt');
+      setStage('minting');
       setRollingStatus(null);
       return;
     }
     setVoucherId(mintedVoucherId);
 
-    setRollingStatus('previewing');
-    // 3. Server preview
+    // 2. Roll attributes locally to verify if candidate meets requirements early
+    const rolled = rollAttributesFromSeed(seed, DEFAULT_ATTRIBUTE_SCHEMA);
+    setRolledValues(rolled);
+    
+    const check = candidateMeetsRequirements(recruitment, null, rolled);
+    if (!check.ok) {
+      setStage('rejected');
+      setRollingStatus(null);
+      return;
+    }
+
+    setStage('prompt');
+    setRollingStatus(null);
+  };
+
+  // ───────────────────────────────────────────────────────────────
+  // Step: prompt → generating (moderate + preview)
+  // ───────────────────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    setError(null);
+    setStage('generating');
+    setRollingStatus('moderating');
+
+    // 1. Moderate (server action)
+    let modRes;
+    try {
+      modRes = await moderatePrompt(prompt);
+    } catch (err) {
+      setError(`[moderate] ${err instanceof Error ? err.message : String(err)}`);
+      setStage('prompt');
+      setRollingStatus(null);
+      return;
+    }
+    if (!modRes.ok) {
+      setError(modRes.reason ?? '審核未通過');
+      setStage('prompt');
+      setRollingStatus(null);
+      return;
+    }
+    setSignature(modRes.signature!);
+
+    setRollingStatus('generating');
+    
+    // 2. Server preview
     try {
       const prev = await previewCharacter({
-        attributeSeedHex: seedHex,
+        attributeSeedHex: attributeSeedHex!,
         userPrompt: prompt,
         signature: modRes.signature!,
         recruitmentIntent: recruitment.roleIntent,
@@ -252,7 +354,6 @@ export function RecruitmentTicket({
         throw new Error(prev.error ?? '預覽失敗');
       }
       setCandidate(prev.candidate);
-      setRolledValues(prev.rolledValues);
       setStage('pick');
     } catch (err) {
       setError(`[preview] ${err instanceof Error ? err.message : String(err)}`);
@@ -287,6 +388,7 @@ export function RecruitmentTicket({
         setError(`(portrait 失敗，仍可繼續): ${port.error}`);
       }
       setPortraitUrl(port.url ?? null);
+      setPortraitBlobId(port.blobId ?? null);
       setPortraitBase64(port.base64 ?? null);
       setStage('portrait');
     } catch (err) {
@@ -311,6 +413,8 @@ export function RecruitmentTicket({
         candidate,
         rolledValues,
         attributeSeedHex,
+        portraitUrl: portraitUrl ?? undefined,
+        portraitBlobId: portraitBlobId ?? undefined,
       });
       if (!r.ok || !r.characterId) throw new Error(r.error ?? 'redeem 失敗');
       setCharacterId(r.characterId);
@@ -326,17 +430,28 @@ export function RecruitmentTicket({
       )
     : [];
 
+  // Client-side mirror of `check_voucher_requirements` — used to block
+  // 接受 when the rolled candidate won't satisfy the recruitment, so the
+  // user doesn't pay for portrait gen + redeem only to abort EReqsNotMet.
+  const reqCheck =
+    candidate && rolledValues
+      ? candidateMeetsRequirements(recruitment, candidate, rolledValues)
+      : null;
+
   // ── Navigation handlers ────────────────────────────────────────
   const handleNext = () => {
-    if (stage === 'prompt') void handleRoll();
+    if (stage === 'minting') void handleMint();
+    else if (stage === 'prompt') void handleGenerate();
+    else if (stage === 'rejected') void handleMint(); // 重抽
     else if (stage === 'pick') void handleAccept();
     else if (stage === 'portrait') void handleEnroll();
     else if (stage === 'done' && characterId) router.push(`/dossier?id=${characterId}`);
   };
 
   const handlePrev = () => {
-    if (stage === 'prompt' || stage === 'rolling') resetWizard();
-    else if (stage === 'pick') resetWizard(); // 緣寂 — voucher will expire
+    if (stage === 'minting') resetWizard();
+    else if (stage === 'prompt' || stage === 'generating') resetWizard(); // Or keep it? reset is fine
+    else if (stage === 'rejected' || stage === 'pick') resetWizard(); // 緣寂
     else if (stage === 'painting' || stage === 'portrait') setStage('pick');
     else if (stage === 'done') resetWizard();
   };
@@ -345,16 +460,23 @@ export function RecruitmentTicket({
   let nextLabel = '下一步';
   let canNext = false;
 
-  if (stage === 'prompt') {
-    nextLabel = '擲牌';
+  if (stage === 'minting') {
+    nextLabel = rollingStatus === 'minting' ? '簽署中…' : '擲牌 (支付)';
+    canNext = rollingStatus !== 'minting';
+  } else if (stage === 'prompt') {
+    nextLabel = '凝形';
     canNext = prompt.trim().length > 0;
-  } else if (stage === 'rolling') {
-    nextLabel = '擲牌中…';
+  } else if (stage === 'generating') {
+    nextLabel = '凝形中…';
     canNext = false;
+  } else if (stage === 'rejected') {
+    prevLabel = '緣寂';
+    nextLabel = '重抽 (支付)';
+    canNext = true;
   } else if (stage === 'pick') {
     prevLabel = '緣寂';
     nextLabel = '接受';
-    canNext = candidate !== null;
+    canNext = candidate !== null && (reqCheck === null || reqCheck.ok);
   } else if (stage === 'painting') {
     prevLabel = '上一步';
     nextLabel = '繪製中…';
@@ -369,7 +491,9 @@ export function RecruitmentTicket({
     canNext = characterId !== null;
   }
 
-  const handleOpen = () => setStage('prompt');
+  const handleOpen = () => {
+    void handleMint();
+  };
 
       return (
         <>
@@ -399,10 +523,19 @@ export function RecruitmentTicket({
             <>
               <div className="relative flex flex-col justify-center p-6 sm:p-8 md:p-10">
                 <div key={stage} className="animate-fade-in-up">
-                  {stage === 'prompt' && (
-                    <PromptStage prompt={prompt} onPromptChange={setPrompt} />
+                  {stage === 'minting' && (
+                    rollingStatus === 'minting' ? <RollingStage status="minting" /> : <RecruitmentDetails recruitment={recruitment} minEntries={minEntries} />
                   )}
-                  {stage === 'rolling' && <RollingStage status={rollingStatus} />}
+                  {stage === 'rejected' && rolledValues && (
+                    <RejectedStage
+                      rolledValues={rolledValues}
+                      reason={reqCheck && !reqCheck.ok ? reqCheck.reason : '不符徵召條件'}
+                    />
+                  )}
+                  {stage === 'prompt' && (
+                    <PromptStage prompt={prompt} onPromptChange={setPrompt} rolledValues={rolledValues} />
+                  )}
+                  {stage === 'generating' && <RollingStage status={rollingStatus} />}
                   {(stage === 'pick' || stage === 'painting' || stage === 'portrait' || stage === 'done') && candidate && rolledValues && (
                     <RevealStage
                       stage={stage as 'pick' | 'painting' | 'portrait' | 'done'}
@@ -411,14 +544,21 @@ export function RecruitmentTicket({
                       portraitBase64={portraitBase64}
                       portraitUrl={portraitUrl}
                       characterId={characterId}
+                      rejectedReason={stage === 'pick' && reqCheck && !reqCheck.ok ? reqCheck.reason : null}
                     />
                   )}
-                  {error && (
-                    <p className="mt-4 rounded-md bg-cinnabar/10 px-3 py-2 text-xs text-cinnabar">
+                </div>
+
+                {error && (
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] md:w-max md:max-w-[85%] flex items-center gap-3 px-4 py-2.5 rounded-full bg-elevated/95 backdrop-blur-md shadow-xl shadow-cinnabar/5 ring-1 ring-cinnabar/30 animate-fade-in-up z-20">
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cinnabar/10 ring-1 ring-cinnabar/20">
+                      <span className="h-1.5 w-1.5 rounded-full bg-cinnabar animate-pulse" />
+                    </div>
+                    <p className="text-xs text-cinnabar font-medium tracking-wide leading-relaxed line-clamp-2">
                       {error}
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Right stub */}
@@ -492,7 +632,7 @@ export function RecruitmentTicket({
 // Sub-components
 // ════════════════════════════════════════════════════════════════
 
-function DefaultMain({
+function RecruitmentDetails({
   recruitment,
   minEntries,
 }: {
@@ -500,7 +640,7 @@ function DefaultMain({
   minEntries: [string, number][];
 }) {
   return (
-    <div className="flex flex-col justify-center p-6 sm:p-8 md:p-10">
+    <div className="flex flex-col text-left">
       <p className="text-2xs tracking-widest text-mute">
         {recruitment.sagaName} · {recruitment.membership === 'internal' ? '春雪社徵召' : '江湖客串'}
       </p>
@@ -527,6 +667,20 @@ function DefaultMain({
       <p className="mt-5 max-w-prose text-[15px] leading-loose text-ink/75 sm:text-base">
         {recruitment.roleIntent}
       </p>
+    </div>
+  );
+}
+
+function DefaultMain({
+  recruitment,
+  minEntries,
+}: {
+  recruitment: Recruitment;
+  minEntries: [string, number][];
+}) {
+  return (
+    <div className="flex flex-col justify-center p-6 sm:p-8 md:p-10">
+      <RecruitmentDetails recruitment={recruitment} minEntries={minEntries} />
     </div>
   );
 }
@@ -598,10 +752,49 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
   );
 }
 
-function PromptStage({ prompt, onPromptChange }: { prompt: string; onPromptChange: (v: string) => void }) {
+function RejectedStage({ rolledValues, reason }: { rolledValues: RolledAttribute[], reason: string }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center text-center">
+      <div className="relative flex items-center justify-center w-24 h-24 text-cinnabar/70 rotate-[-12deg] mix-blend-multiply dark:mix-blend-screen opacity-90 drop-shadow-sm mb-6">
+        <div className="absolute inset-0 border-4 border-double border-cinnabar/70 rounded-md" />
+        <div className="absolute inset-1.5 border border-cinnabar/70 rounded-sm opacity-60" />
+        <span className="font-serif text-3xl font-bold opacity-90 mt-1" style={{ writingMode: 'vertical-rl', letterSpacing: '0.2em' }}>落選</span>
+      </div>
+      <p className="text-sm font-serif font-medium tracking-widest text-cinnabar">不符徵召條件</p>
+      <p className="mt-2 text-xs opacity-75 leading-relaxed text-cinnabar max-w-xs">{reason}</p>
+      
+      <div className="mt-8 flex justify-center flex-wrap gap-2 max-w-sm">
+        {rolledValues.map((rv) => (
+          <span
+            key={rv.key}
+            className="rounded-full bg-surface px-3 py-1 text-xs tracking-widest text-mute ring-1 ring-hairline"
+          >
+            {rv.label} <span className="font-serif ml-1">{rv.value}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PromptStage({ prompt, onPromptChange, rolledValues }: { prompt: string; onPromptChange: (v: string) => void; rolledValues: RolledAttribute[] | null }) {
   return (
     <div className="flex h-full flex-col justify-center text-left">
-      <p className="text-2xs tracking-widest text-mute">寫下你想扮演的角色</p>
+      <div className="flex items-center justify-between">
+        <p className="text-2xs tracking-widest text-mute">寫下你想扮演的角色</p>
+        {rolledValues && (
+          <div className="flex flex-wrap gap-1.5 justify-end max-w-[200px] sm:max-w-none">
+            {rolledValues.map((rv) => (
+              <span
+                key={rv.key}
+                className="rounded-full bg-cinnabar/5 px-2 py-0.5 text-2xs tracking-widest text-cinnabar/80 ring-1 ring-cinnabar/20"
+              >
+                {rv.label} <span className="font-serif ml-0.5">{rv.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="relative mt-4">
         <textarea
           value={prompt}
@@ -662,11 +855,11 @@ function BrushSpinner() {
   );
 }
 
-function RollingStage({ status }: { status: 'moderating' | 'minting' | 'previewing' | null }) {
+function RollingStage({ status }: { status: 'minting' | 'moderating' | 'generating' | null }) {
   const statusText = 
-    status === 'moderating' ? '審核意圖…' :
     status === 'minting' ? '鑄造天命…' :
-    status === 'previewing' ? '說書人擬人中…' : '擲牌中…';
+    status === 'moderating' ? '審核意圖…' :
+    status === 'generating' ? '說書人擬人中…' : '請稍候…';
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 py-12">
@@ -702,6 +895,7 @@ function RevealStage({
   portraitBase64,
   portraitUrl,
   characterId,
+  rejectedReason,
 }: {
   stage: 'pick' | 'painting' | 'portrait' | 'done';
   candidate: CharacterCandidate;
@@ -709,6 +903,7 @@ function RevealStage({
   portraitBase64: string | null;
   portraitUrl: string | null;
   characterId: string | null;
+  rejectedReason?: string | null;
 }) {
   const src = useMemo(() => {
     if (portraitBase64) return `data:image/png;base64,${portraitBase64}`;
@@ -759,7 +954,7 @@ function RevealStage({
 
           {isEnrolled && characterId && (
             <a
-              href={`https://suiscan.xyz/object/${characterId}`}
+              href={`https://suiscan.xyz/${ENDLESS_STORY_DEPLOYMENT.network}/object/${characterId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="absolute -top-4 right-2 sm:right-6 animate-stamp z-10 group cursor-pointer"
@@ -807,7 +1002,7 @@ function RevealStage({
           )}
         </div>
 
-        {stage !== 'pick' && (
+        {stage !== 'pick' ? (
           <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 sm:w-56 shrink-0 aspect-[3/4] animate-fade-in-up sm:mr-2 md:mr-4">
             {stage === 'painting' ? (
               <div className="flex h-full w-full items-center justify-center bg-surface/50">
@@ -819,7 +1014,20 @@ function RevealStage({
             <div className="flex h-full w-full items-center justify-center text-2xs text-mute bg-surface/50">無像</div>
           )}
         </div>
-        )}
+        ) : rejectedReason ? (
+          <div className="w-48 sm:w-56 shrink-0 flex flex-col items-center justify-center animate-fade-in-up sm:mr-2 md:mr-4 select-none">
+            <div className="relative flex items-center justify-center w-24 h-24 text-cinnabar/70 rotate-[-12deg] mix-blend-multiply dark:mix-blend-screen opacity-90 drop-shadow-sm">
+              <div className="absolute inset-0 border-4 border-double border-cinnabar/70 rounded-md" />
+              <div className="absolute inset-1.5 border border-cinnabar/70 rounded-sm opacity-60" />
+              <span className="font-serif text-3xl font-bold opacity-90 mt-1" style={{ writingMode: 'vertical-rl', letterSpacing: '0.2em' }}>落選</span>
+            </div>
+            <div className="mt-8 text-center text-cinnabar">
+              <p className="text-sm font-serif font-medium tracking-widest">不符徵召條件</p>
+              <p className="mt-2 text-xs opacity-75 leading-relaxed max-w-[160px]">{rejectedReason}</p>
+              <p className="mt-3 text-2xs opacity-50 tracking-widest">可選「緣寂」收尾</p>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ConnectModal,
   useDisconnectWallet,
@@ -14,30 +13,7 @@ import { ENDLESS_STORY_DEPLOYMENT, read as endlessRead, tx as endlessTx } from '
 import { truncateAddress } from '@/lib/format';
 import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 
-export interface WalletPersona {
-  key: string;
-  label: string;
-  wallet: string;
-  queryValue: string;
-  ownedCount: number;
-  subscriptionCount: number;
-}
-
-const DISCONNECTED = {
-  key: 'none',
-  label: '未連接',
-  wallet: null,
-  queryValue: 'none',
-  ownedCount: 0,
-  subscriptionCount: 0,
-};
-
-export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const as = searchParams.get('as');
-  const defaultPersona = personas[0];
-
+export function MockWalletMenu() {
   // ── Real wallet (dapp-kit) ───────────────────────────────────────
   const { account, isSagaAdmin } = useSagaAdmin();
   const { mutate: disconnect } = useDisconnectWallet();
@@ -161,43 +137,18 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
     );
   };
 
-  // ── Mock persona (demo data filter) ──────────────────────────────
-  const active =
-    as === 'none'
-      ? DISCONNECTED
-      : personas.find((persona) => persona.queryValue === as || persona.wallet === as) ??
-        defaultPersona;
-
-  const buildHref = (updates: Record<string, string | null>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value == null) {
-        params.delete(key);
-      } else {
-        params.set(key, value);
-      }
-    });
-    const query = params.toString();
-    return query ? `${pathname}?${query}` : pathname;
-  };
-
   const isConnected = !!account;
-  // If a real wallet is connected, prefer THE address as the viewer
-  // — so listOwnedCharacters / listMySubscriptions resolve to the real
-  // identity (chain-read) instead of a mock persona's hardcoded address.
-  const viewerAs = isConnected
-    ? account.address
-    : active.queryValue === defaultPersona.queryValue
-      ? defaultPersona.queryValue
-      : active.queryValue;
-  const dossierHref = buildHref({ filter: 'mine', as: viewerAs });
-  const subscriptionsHref = isConnected || active.wallet
-    ? `/subscriptions?as=${viewerAs}`
+  // Real wallet drives every viewer-scoped link. When disconnected we hide
+  // the personal-content links entirely (see render below), so no fallback
+  // address is needed.
+  const dossierHref = isConnected
+    ? `/dossier?filter=mine&as=${account.address}`
+    : '/dossier';
+  const subscriptionsHref = isConnected
+    ? `/subscriptions?as=${account.address}`
     : '/subscriptions';
 
-  // ── Pill display priority: real wallet > mock persona ───────────
-  const pillAddress = isConnected ? account.address : active.wallet;
-  const pillLabel = isConnected ? truncateAddress(account.address, 4, 4) : active.label;
+  const pillLabel = isConnected ? truncateAddress(account.address, 4, 4) : '未連接';
 
   return (
     <>
@@ -205,7 +156,7 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
         <summary className="flex h-8 cursor-pointer list-none items-center gap-2 rounded-full bg-canvas/55 px-3 text-2xs tracking-widest text-ink/75 ring-1 ring-hairline transition-colors hover:text-ink hover:ring-ink/25 max-sm:w-8 max-sm:justify-center max-sm:px-0 [&::-webkit-details-marker]:hidden">
           <span
             className={`h-2 w-2 rounded-full ${
-              pillAddress ? 'bg-jade shadow-[0_0_12px_rgba(142,172,138,0.35)]' : 'bg-mute/50'
+              isConnected ? 'bg-jade shadow-[0_0_12px_rgba(142,172,138,0.35)]' : 'bg-mute/50'
             }`}
           />
           <span className="max-sm:hidden">{pillLabel}</span>
@@ -248,57 +199,36 @@ export function MockWalletMenu({ personas }: { personas: WalletPersona[] }) {
             )}
           </div>
 
-          <div className="my-1 h-px bg-hairline" />
-
-          {/* ── 視角 / 內容導覽 ── */}
-          <Link
-            href={dossierHref}
-            className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
-          >
-            <span>我的角色</span>
-            <span className="font-mono text-xs text-mute">
-              {isConnected ? (chainOwnedCount ?? '—') : active.ownedCount}
-            </span>
-          </Link>
-          <Link
-            href={subscriptionsHref}
-            className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
-          >
-            <span>我的訂閱</span>
-            <span className="font-mono text-xs text-mute">
-              {isConnected ? '—' : active.subscriptionCount}
-            </span>
-          </Link>
-
-          {isSagaAdmin && (
-            <Link
-              href="/admin"
-              className="flex items-center justify-between rounded-md px-3 py-2 text-cinnabar/90 transition-colors hover:bg-canvas/70 hover:text-cinnabar"
-            >
-              <span>班主後台</span>
-              <span className="font-mono text-xs text-mute">Admin</span>
-            </Link>
-          )}
-
-          <div className="my-1 h-px bg-hairline" />
-
-          {/* ── Demo 視角切換 ── */}
-          <p className="px-3 py-1 text-2xs tracking-widest text-mute">Demo 視角（mock 資料）</p>
-          {personas.map((persona) => (
-            <Link
-              key={persona.key}
-              href={buildHref({ as: persona.queryValue })}
-              className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
-            >
-              <span>{persona.label}</span>
-              {active.queryValue === persona.queryValue ? (
-                <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
-              ) : null}
-            </Link>
-          ))}
-
           {isConnected && (
             <>
+              <div className="my-1 h-px bg-hairline" />
+
+              {/* ── 視角 / 內容導覽 ── */}
+              <Link
+                href={dossierHref}
+                className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
+              >
+                <span>我的角色</span>
+                <span className="font-mono text-xs text-mute">{chainOwnedCount ?? '—'}</span>
+              </Link>
+              <Link
+                href={subscriptionsHref}
+                className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
+              >
+                <span>我的訂閱</span>
+                <span className="font-mono text-xs text-mute">—</span>
+              </Link>
+
+              {isSagaAdmin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center justify-between rounded-md px-3 py-2 text-cinnabar/90 transition-colors hover:bg-canvas/70 hover:text-cinnabar"
+                >
+                  <span>班主後台</span>
+                  <span className="font-mono text-xs text-mute">Admin</span>
+                </Link>
+              )}
+
               <div className="my-1 h-px bg-hairline" />
               <button
                 type="button"

@@ -61,15 +61,27 @@ export function SubscribeCard({
 
   return (
     <article className="group relative isolate aspect-[3/4] overflow-hidden rounded-lg ring-1 ring-hairline transition-shadow hover:shadow-lg hover:shadow-ink/5">
-      {/* Background plate — large initial as typographic poster */}
-      <div className={`absolute inset-0 flex items-center justify-center ${tone.bg}`}>
-        <span
-          className={`font-serif leading-none ${tone.text}`}
-          style={{ fontSize: '11rem', transform: 'translateY(-8%)' }}
-        >
-          {character.name[0]}
-        </span>
-      </div>
+      {/* Background — on-chain portrait (Walrus URL) if minted, else typographic
+          poster fallback. The image is large-area so the gradient overlay below
+          still preserves text legibility at the bottom. */}
+      {character.gallery?.anchor?.imageUrl ? (
+        <img
+          src={character.gallery.anchor.imageUrl}
+          alt={character.name}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className={`absolute inset-0 flex items-center justify-center ${tone.bg}`}>
+          <span
+            className={`font-serif leading-none ${tone.text}`}
+            style={{ fontSize: '11rem', transform: 'translateY(-8%)' }}
+          >
+            {character.name[0]}
+          </span>
+        </div>
+      )}
 
       {/* Clickable overlay → dossier (z-10) */}
       <Link

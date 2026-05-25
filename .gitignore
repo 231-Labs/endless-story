@@ -12,3 +12,6 @@ coverage
 
 # Admin-edited runtime data (auto-seeded from mocks on first read)
 packages/web/data/
+
+# Claude Code runtime artifacts
+.claude/

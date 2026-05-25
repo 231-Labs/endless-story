@@ -31,6 +31,15 @@ export interface RedeemVoucherInput {
      * specific voucher).
      */
     attributeSeedHex: string;
+    /**
+     * Walrus aggregator URL for the generated portrait. When present, gets
+     * encoded as a MediaAsset (kind=0 portrait) at mint — the contract
+     * auto-derives `Character.image_url` from `media_assets[0].uri`, which
+     * is what Display V2 reads for the explorer NFT thumbnail.
+     */
+    portraitUrl?: string;
+    /** Walrus blob id matching portraitUrl. Optional but useful for receipts. */
+    portraitBlobId?: string;
 }
 
 export interface RedeemVoucherResult {
@@ -95,10 +104,26 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         }),
     );
 
-    // Phase 2: empty mediaAssets at mint. Image URL gets attached afterwards
-    // via update_image_by_storyteller in a follow-up tx (or deferred to runner).
+    // Encode the Walrus portrait as the first MediaAsset so
+    // `mint_character_internal` initialises `Character.image_url` from
+    // `media_assets[0].uri`. Display V2's `{image_url}` template then
+    // renders the NFT thumbnail in Sui explorers without a follow-up tx.
+    const mediaElements = input.portraitUrl
+        ? [
+              tx.add(
+                  endlessTx.character.newMediaAsset({
+                      kind: 0, // 0 = portrait (caller convention, see character.move)
+                      uri: input.portraitUrl,
+                      walrusBlobId: input.portraitBlobId
+                          ? Array.from(new TextEncoder().encode(input.portraitBlobId))
+                          : [],
+                      metadataUri: '',
+                  }),
+              ),
+          ]
+        : [];
     const mediaAssets = tx.makeMoveVec({
-        elements: [],
+        elements: mediaElements,
         type: `${deployment.packageId}::character::MediaAsset`,
     });
 
