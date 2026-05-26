@@ -72,7 +72,26 @@ importers:
         version: 5.9.3
 
   packages/runner:
+    dependencies:
+      '@endless-story/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@endless-story/memwal':
+        specifier: workspace:*
+        version: link:../memwal
+      '@endless-story/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@endless-story/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@mysten/sui':
+        specifier: ^2.16.0
+        version: 2.17.0(typescript@5.9.3)
     devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -110,6 +129,9 @@ importers:
       '@endless-story/memwal':
         specifier: workspace:*
         version: link:../memwal
+      '@endless-story/runner':
+        specifier: workspace:*
+        version: link:../runner
       '@endless-story/sdk':
         specifier: workspace:*
         version: link:../sdk

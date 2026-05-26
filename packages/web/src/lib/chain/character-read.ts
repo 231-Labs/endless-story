@@ -96,6 +96,7 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
             daysLeft: 0,
             level: 'stable',
         },
+        subscriberCount: json.subscriber_count != null ? Number(json.subscriber_count) : 0,
         createdAt,
     };
 }
@@ -203,4 +204,5 @@ interface ChainCharacter {
     image_url?: string;
     birth_ms?: number | string;
     birthMs?: number | string;
+    subscriber_count?: number | string;
 }

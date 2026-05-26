@@ -2785,9 +2785,101 @@
         "u64"
       ]
     },
-    "profile": {
+    "subscriber_count": {
       "source_index": 38,
       "index": 38,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "increment_subscriber_count": {
+      "source_index": 39,
+      "index": 39,
+      "doc": " Package-private — only `subscribe.move` should bump this.",
+      "attributes": [],
+      "visibility": "Package",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "decrement_subscriber_count": {
+      "source_index": 40,
+      "index": 40,
+      "doc": " Package-private — only `subscribe.move` should decrement this.\n Saturates at 0 to be defensive against double-unsubscribe bugs.",
+      "attributes": [],
+      "visibility": "Package",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "profile": {
+      "source_index": 41,
+      "index": 41,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2832,8 +2924,8 @@
       ]
     },
     "physical_facts": {
-      "source_index": 39,
-      "index": 39,
+      "source_index": 42,
+      "index": 42,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2878,8 +2970,8 @@
       ]
     },
     "profile_name": {
-      "source_index": 40,
-      "index": 40,
+      "source_index": 43,
+      "index": 43,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2924,8 +3016,8 @@
       ]
     },
     "profile_description": {
-      "source_index": 41,
-      "index": 41,
+      "source_index": 44,
+      "index": 44,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2970,8 +3062,8 @@
       ]
     },
     "physical_species": {
-      "source_index": 42,
-      "index": 42,
+      "source_index": 45,
+      "index": 45,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3016,8 +3108,8 @@
       ]
     },
     "physical_gender": {
-      "source_index": 43,
-      "index": 43,
+      "source_index": 46,
+      "index": 46,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3062,8 +3154,8 @@
       ]
     },
     "physical_body": {
-      "source_index": 44,
-      "index": 44,
+      "source_index": 47,
+      "index": 47,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3108,8 +3200,8 @@
       ]
     },
     "physical_age_years": {
-      "source_index": 45,
-      "index": 45,
+      "source_index": 48,
+      "index": 48,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3140,8 +3232,8 @@
       ]
     },
     "attributes": {
-      "source_index": 46,
-      "index": 46,
+      "source_index": 49,
+      "index": 49,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3188,8 +3280,8 @@
       ]
     },
     "attribute_key": {
-      "source_index": 47,
-      "index": 47,
+      "source_index": 50,
+      "index": 50,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3234,8 +3326,8 @@
       ]
     },
     "attribute_value": {
-      "source_index": 48,
-      "index": 48,
+      "source_index": 51,
+      "index": 51,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3266,8 +3358,8 @@
       ]
     },
     "attribute_seed": {
-      "source_index": 49,
-      "index": 49,
+      "source_index": 52,
+      "index": 52,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3305,8 +3397,8 @@
       ]
     },
     "find_attribute_value": {
-      "source_index": 50,
-      "index": 50,
+      "source_index": 53,
+      "index": 53,
       "doc": " Find the first `AttributeValue` with `key`, or `None`.",
       "attributes": [],
       "visibility": "Public",
@@ -3369,8 +3461,8 @@
       ]
     },
     "find_attribute_value_in": {
-      "source_index": 51,
-      "index": 51,
+      "source_index": 54,
+      "index": 54,
       "doc": " Find an attribute by key in any vector<AttributeValue> — same algorithm\n as `find_attribute_value` but operates on a raw slice. Used by\n `recruit::check_voucher_requirements` to validate proposed attributes\n before mint, without needing a Character struct yet.",
       "attributes": [],
       "visibility": "Public",
@@ -3435,8 +3527,8 @@
       ]
     },
     "media_assets": {
-      "source_index": 52,
-      "index": 52,
+      "source_index": 55,
+      "index": 55,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3483,8 +3575,8 @@
       ]
     },
     "image_url": {
-      "source_index": 53,
-      "index": 53,
+      "source_index": 56,
+      "index": 56,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3529,8 +3621,8 @@
       ]
     },
     "has_tag": {
-      "source_index": 54,
-      "index": 54,
+      "source_index": 57,
+      "index": 57,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3579,8 +3671,8 @@
       ]
     },
     "tag_count": {
-      "source_index": 55,
-      "index": 55,
+      "source_index": 58,
+      "index": 58,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3611,8 +3703,8 @@
       ]
     },
     "tags": {
-      "source_index": 56,
-      "index": 56,
+      "source_index": 59,
+      "index": 59,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3659,8 +3751,8 @@
       ]
     },
     "tag_label": {
-      "source_index": 57,
-      "index": 57,
+      "source_index": 60,
+      "index": 60,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3705,8 +3797,8 @@
       ]
     },
     "tag_source_event_id": {
-      "source_index": 58,
-      "index": 58,
+      "source_index": 61,
+      "index": 61,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3760,8 +3852,8 @@
       ]
     },
     "tag_affirmed_at_ms": {
-      "source_index": 59,
-      "index": 59,
+      "source_index": 62,
+      "index": 62,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3792,8 +3884,8 @@
       ]
     },
     "is_dead": {
-      "source_index": 60,
-      "index": 60,
+      "source_index": 63,
+      "index": 63,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3824,8 +3916,8 @@
       ]
     },
     "death_record": {
-      "source_index": 61,
-      "index": 61,
+      "source_index": 64,
+      "index": 64,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3884,8 +3976,8 @@
       ]
     },
     "death_victim": {
-      "source_index": 62,
-      "index": 62,
+      "source_index": 65,
+      "index": 65,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3925,8 +4017,8 @@
       ]
     },
     "death_by_event": {
-      "source_index": 63,
-      "index": 63,
+      "source_index": 66,
+      "index": 66,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3980,8 +4072,8 @@
       ]
     },
     "death_attributed": {
-      "source_index": 64,
-      "index": 64,
+      "source_index": 67,
+      "index": 67,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4028,8 +4120,8 @@
       ]
     },
     "death_recorded_at_ms": {
-      "source_index": 65,
-      "index": 65,
+      "source_index": 68,
+      "index": 68,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4060,8 +4152,8 @@
       ]
     },
     "seal_approve_control": {
-      "source_index": 66,
-      "index": 66,
+      "source_index": 69,
+      "index": 69,
       "doc": " Saga 變體：持有當前有效 ControlCap 的人可以解密。\n 三層檢查：cap 屬此 character / cap epoch 未撤銷 / SEAL id suffix 指向此 character.",
       "attributes": [],
       "visibility": "Private",
@@ -4114,8 +4206,8 @@
       "return_": []
     },
     "seal_approve_owner": {
-      "source_index": 67,
-      "index": 67,
+      "source_index": 70,
+      "index": 70,
       "doc": " Owner 變體：持有 OwnerCap 的人可解密（唯讀審計）。\n owner 的「唯讀」由 app 層保證（owner client 不暴露 remember API）。",
       "attributes": [],
       "visibility": "Private",
@@ -4168,8 +4260,8 @@
       "return_": []
     },
     "id_belongs_to_character": {
-      "source_index": 68,
-      "index": 68,
+      "source_index": 71,
+      "index": 71,
       "doc": null,
       "attributes": [],
       "visibility": "Private",
@@ -4206,8 +4298,8 @@
       ]
     },
     "has_suffix": {
-      "source_index": 69,
-      "index": 69,
+      "source_index": 72,
+      "index": 72,
       "doc": null,
       "attributes": [],
       "visibility": "Private",
@@ -4242,8 +4334,8 @@
       ]
     },
     "new_attribute_value": {
-      "source_index": 70,
-      "index": 70,
+      "source_index": 73,
+      "index": 73,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4288,8 +4380,8 @@
       ]
     },
     "new_physical_facts": {
-      "source_index": 71,
-      "index": 71,
+      "source_index": 74,
+      "index": 74,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4354,8 +4446,8 @@
       ]
     },
     "new_character_profile": {
-      "source_index": 72,
-      "index": 72,
+      "source_index": 75,
+      "index": 75,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4416,8 +4508,8 @@
       ]
     },
     "new_media_asset": {
-      "source_index": 73,
-      "index": 73,
+      "source_index": 76,
+      "index": 76,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4475,8 +4567,8 @@
       ]
     },
     "new_tag": {
-      "source_index": 74,
-      "index": 74,
+      "source_index": 77,
+      "index": 77,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4542,8 +4634,8 @@
       ]
     },
     "new_death_record": {
-      "source_index": 75,
-      "index": 75,
+      "source_index": 78,
+      "index": 78,
       "doc": " Construct a DeathRecord. Caller owns the invariants on attribution\n (validity of `attributed_characters` IDs etc.).",
       "attributes": [],
       "visibility": "Public",
@@ -5252,6 +5344,11 @@
                 ]
               }
             }
+          },
+          "subscriber_count": {
+            "index": 9,
+            "doc": " Subscriber counter — incremented by `subscribe::subscribe`,\n decremented by `subscribe::unsubscribe`. Used by the runner's\n character POV worker as a demand gate (no subscribers = no\n chapter generated). See AGENTS → Runner v2.",
+            "type_": "u64"
           }
         }
       }

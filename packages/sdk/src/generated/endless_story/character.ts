@@ -95,7 +95,13 @@ export const Character = new MoveStruct({ name: `${$moduleName}::Character`, fie
          * `Some` once the character has died. Set by `mark_dead` (called from event.move's
          * apply_death in 1.6).
          */
-        death: bcs.option(DeathRecord)
+        death: bcs.option(DeathRecord),
+        /**
+         * Subscriber counter — incremented by `subscribe::subscribe`, decremented by
+         * `subscribe::unsubscribe`. Used by the runner's character POV worker as a demand
+         * gate (no subscribers = no chapter generated). See AGENTS → Runner v2.
+         */
+        subscriber_count: bcs.u64()
     } });
 export const OwnerCap = new MoveStruct({ name: `${$moduleName}::OwnerCap`, fields: {
         id: bcs.Address,
@@ -1053,6 +1059,28 @@ export function birthMs(options: BirthMsOptions) {
         package: packageAddress,
         module: 'character',
         function: 'birth_ms',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface SubscriberCountArguments {
+    character: RawTransactionArgument<string>;
+}
+export interface SubscriberCountOptions {
+    package?: string;
+    arguments: SubscriberCountArguments | [
+        character: RawTransactionArgument<string>
+    ];
+}
+export function subscriberCount(options: SubscriberCountOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["character"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'character',
+        function: 'subscriber_count',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

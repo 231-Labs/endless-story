@@ -39,5 +39,12 @@ export interface Character {
   attributes: CharacterAttributes;
   gallery: CharacterDerivativeGallery;
   survival: SurvivalStatus;
+  /**
+   * On-chain subscriber count for this character. Gates runner's POV
+   * worker (no subscribers → no chapter generated). Optional because
+   * mock fixtures pre-date the field; renderers should treat
+   * undefined as 0.
+   */
+  subscriberCount?: number;
   createdAt: string;
 }

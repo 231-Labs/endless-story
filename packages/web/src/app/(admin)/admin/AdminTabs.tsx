@@ -8,6 +8,7 @@ const TABS = [
   { key: '/admin', label: '總覽' },
   { key: '/admin/deploy', label: '部署' },
   { key: '/admin/recruitments', label: '徵召' },
+  { key: '/admin/director', label: '導演' },
 ];
 
 export function AdminTabs() {

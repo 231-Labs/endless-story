@@ -1,0 +1,517 @@
+{
+  "id": {
+    "address": "endless_story",
+    "name": "subscribe"
+  },
+  "doc": " Subscribe — minimal on-chain subscription mechanic.\n\n **Purpose**: gate the runner's character POV worker. A character C\n only gets per-event POV chapters when `C.subscriber_count > 0`.\n Without subscribers there's no demand, so no LLM tokens are burned.\n\n **What this module does**:\n   - mint a `Subscription` object (owned by the subscriber, references\n     character + saga + when it was created)\n   - bump `character.subscriber_count` via the package-private\n     mutator in `character.move`\n   - emit `Subscribed` / `Unsubscribed` events for off-chain indexing\n     (e.g. analytics, revenue accounting)\n\n **What this module does NOT do (yet)**:\n   - charge ENDLESS payment (Phase 1.6 economic module's job)\n   - enforce TTL / auto-expire (a sub never expires until owner burns it)\n   - revenue split (will be wired when subscription pricing arrives)\n\n Demo cadence: subscriber clicks the subscribe button on a character\n card → wallet co-signs → `Subscription` lands in their address →\n counter ticks up → POV worker is now eligible to run for that\n character on its next trigger.",
+  "immediate_dependencies": [
+    {
+      "address": "endless_story",
+      "name": "character"
+    },
+    {
+      "address": "std",
+      "name": "option"
+    },
+    {
+      "address": "sui",
+      "name": "clock"
+    },
+    {
+      "address": "sui",
+      "name": "event"
+    },
+    {
+      "address": "sui",
+      "name": "object"
+    },
+    {
+      "address": "sui",
+      "name": "transfer"
+    },
+    {
+      "address": "sui",
+      "name": "tx_context"
+    }
+  ],
+  "attributes": [],
+  "functions": {
+    "subscribe": {
+      "source_index": 0,
+      "index": 0,
+      "doc": " Anyone can subscribe (Phase 1 — no payment, no whitelist). The\n Subscription is transferred to the caller's address.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "unsubscribe": {
+      "source_index": 1,
+      "index": 1,
+      "doc": " Owner of a Subscription burns it. Counter goes down. Caller is\n trusted to bring the matching Character; we sanity-check the ids\n line up (defensive — wrong Character can't move the counter).",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "sub",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "endless_story",
+                "name": "subscribe"
+              },
+              "name": "Subscription",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "subscription_character_id": {
+      "source_index": 2,
+      "index": 2,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "sub",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "subscribe"
+                  },
+                  "name": "Subscription",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "subscription_subscriber": {
+      "source_index": 3,
+      "index": 3,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "sub",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "subscribe"
+                  },
+                  "name": "Subscription",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "address"
+      ]
+    },
+    "subscription_subscribed_at_ms": {
+      "source_index": 4,
+      "index": 4,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "sub",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "subscribe"
+                  },
+                  "name": "Subscription",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    }
+  },
+  "structs": {
+    "Subscription": {
+      "index": 0,
+      "doc": " A subscription receipt. Owned by the subscriber's address. Burning\n it (via `unsubscribe`) decrements the character's counter.",
+      "attributes": [],
+      "abilities": [
+        "Key"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "UID",
+                "type_arguments": []
+              }
+            }
+          },
+          "character_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id_at_subscribe": {
+            "index": 2,
+            "doc": " Saga the character belongs to at subscribe-time. Snapshot — if\n character later moves to a different saga, this is the saga the\n subscriber originally bought into.",
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "sui",
+                          "name": "object"
+                        },
+                        "name": "ID",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "subscriber": {
+            "index": 3,
+            "doc": null,
+            "type_": "address"
+          },
+          "subscribed_at_ms": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "Subscribed": {
+      "index": 1,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "subscription_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "character_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "sui",
+                          "name": "object"
+                        },
+                        "name": "ID",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "subscriber": {
+            "index": 3,
+            "doc": null,
+            "type_": "address"
+          },
+          "new_subscriber_count": {
+            "index": 4,
+            "doc": " counter after the increment — runner can use this to short-circuit\n \"first subscriber\" branch (e.g. wake POV worker)",
+            "type_": "u64"
+          },
+          "subscribed_at_ms": {
+            "index": 5,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "Unsubscribed": {
+      "index": 2,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "subscription_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "character_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "subscriber": {
+            "index": 2,
+            "doc": null,
+            "type_": "address"
+          },
+          "new_subscriber_count": {
+            "index": 3,
+            "doc": null,
+            "type_": "u64"
+          },
+          "unsubscribed_at_ms": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}

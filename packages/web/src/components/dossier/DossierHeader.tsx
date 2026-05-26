@@ -3,6 +3,7 @@ import { BackButton } from '@/components/common/BackButton';
 import { CharacterPortrait } from '@/components/common/CharacterPortrait';
 import { Linkified } from '@/components/common/CharacterLinkifier';
 import { OwnerDisplay } from '@/components/common/OwnerDisplay';
+import { SubscribeButton } from '@/components/common/SubscribeButton';
 import { survivalBadgeClasses, survivalLabel } from '@/lib/format';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
 
@@ -66,12 +67,16 @@ export function DossierHeader({
                 <span className="text-hairline">·</span>
                 <OwnerDisplay address={character.nftOwner} />
               </div>
-              <div className="mt-6">
+              <div className="mt-6 flex flex-wrap items-center gap-3">
                 <span
                   className={`inline-flex rounded-full px-4 py-1.5 text-sm tracking-widest ring-1 ${survivalBadgeClasses(character.survival.level)}`}
                 >
                   {survivalLabel(character.survival.level)} · 可撐 {character.survival.daysLeft} 日
                 </span>
+                <SubscribeButton
+                  characterId={character.id}
+                  currentCount={character.subscriberCount ?? 0}
+                />
               </div>
             </div>
 

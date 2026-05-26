@@ -1,3 +1,25 @@
-// Scheduler / character agent loop / memory store — ported from old repo in slices.
-// Stub for monorepo workspace wiring only.
-export const RUNNER_PLACEHOLDER = true;
+/**
+ * @endless-story/runner — narrative generation orchestration.
+ *
+ * v2 architecture (2026-05-26 redesign):
+ *   - Each service is an independent subscribe→reduce→emit unit
+ *   - Chain events are the message bus (no in-process shared state)
+ *   - All outputs go through sign-and-anchor (Walrus + commitment::commit)
+ *   - Services usable as `runOnce(input)` for web admin actions; tail
+ *     mode for long-running event subscribers comes later
+ *
+ * See AGENTS.md → 「Runner v2 設計」.
+ */
+
+export * as director from './services/saga-director/index.js';
+export * as characterWorker from './services/character-worker/index.js';
+export * as gazette from './services/gazette-compiler/index.js';
+export * as reflection from './services/reflection-trigger/index.js';
+export * as dream from './services/dream-pipeline/index.js';
+export * as video from './services/video-compiler/index.js';
+
+export * from './types/index.js';
+
+export { fetchEventsSince } from './infra/event-bus.js';
+export { signAndAnchor, pushCommitCall } from './infra/sign-and-anchor.js';
+export { resolveNetwork } from './infra/network.js';

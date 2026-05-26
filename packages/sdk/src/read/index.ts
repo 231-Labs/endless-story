@@ -23,3 +23,4 @@ export * as scene from './scene.js';
 export * as character from './character.js';
 export * as recruit from './recruit.js';
 export * as commitment from './commitment.js';
+export * as subscribe from './subscribe.js';

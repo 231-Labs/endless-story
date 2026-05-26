@@ -192,6 +192,11 @@ public struct Character has key {
     /// `Some` once the character has died. Set by `mark_dead` (called from
     /// event.move's apply_death in 1.6).
     death: Option<DeathRecord>,
+    /// Subscriber counter — incremented by `subscribe::subscribe`,
+    /// decremented by `subscribe::unsubscribe`. Used by the runner's
+    /// character POV worker as a demand gate (no subscribers = no
+    /// chapter generated). See AGENTS → Runner v2.
+    subscriber_count: u64,
 }
 
 /// 角色根權限。可轉移；持有者即 owner。角色易主 = transfer 這張 cap。
@@ -482,6 +487,7 @@ public(package) fun mint_character_internal(
         tags: vector[],
         image_url: initial_image_url,
         death: option::none<DeathRecord>(),
+        subscriber_count: 0,
     };
     let character_id = object::id(&character);
 
@@ -988,6 +994,21 @@ public fun current_location_id(character: &Character): Option<ID> {
 
 public fun birth_ms(character: &Character): u64 { character.state.birth_ms }
 
+public fun subscriber_count(character: &Character): u64 { character.subscriber_count }
+
+/// Package-private — only `subscribe.move` should bump this.
+public(package) fun increment_subscriber_count(character: &mut Character) {
+    character.subscriber_count = character.subscriber_count + 1;
+}
+
+/// Package-private — only `subscribe.move` should decrement this.
+/// Saturates at 0 to be defensive against double-unsubscribe bugs.
+public(package) fun decrement_subscriber_count(character: &mut Character) {
+    if (character.subscriber_count > 0) {
+        character.subscriber_count = character.subscriber_count - 1;
+    }
+}
+
 public fun profile(character: &Character): &CharacterProfile { &character.profile }
 
 public fun physical_facts(profile: &CharacterProfile): &PhysicalFacts { &profile.physical_facts }
@@ -1197,6 +1218,7 @@ public fun make_wild_for_testing(ctx: &mut TxContext): (Character, OwnerCap) {
         tags: vector[],
         image_url: b"".to_string(),
         death: option::none(),
+        subscriber_count: 0,
     };
     let character_id = object::id(&character);
     let owner_cap = OwnerCap {
@@ -1237,6 +1259,7 @@ public fun mint_character_for_testing(ctx: &mut TxContext): (Character, OwnerCap
         tags: vector[],
         image_url: b"".to_string(),
         death: option::none(),
+        subscriber_count: 0,
     };
     let character_id = object::id(&character);
     let owner_cap = OwnerCap {
@@ -1255,6 +1278,25 @@ fun fake_id(ctx: &mut TxContext): ID {
     let id = object::uid_to_inner(&uid);
     object::delete(uid);
     id
+}
+
+#[test_only]
+public fun destroy_wild_for_testing(character: Character, owner_cap: OwnerCap) {
+    let Character {
+        id,
+        control_epoch: _,
+        profile: _,
+        attributes: _,
+        media_assets: _,
+        state: _,
+        tags: _,
+        image_url: _,
+        death: _,
+        subscriber_count: _,
+    } = character;
+    object::delete(id);
+    let OwnerCap { id: owner_id, character_id: _, world_id: _, minted_at_ms: _, cumulative_revenue: _ } = owner_cap;
+    object::delete(owner_id);
 }
 
 #[test]
