@@ -1,0 +1,564 @@
+{
+  "id": {
+    "address": "endless_story",
+    "name": "commitment"
+  },
+  "doc": " Commitment — Layer 1 (產品層) memory provenance anchor.\n\n **What this is**: a saga-scoped, storyteller-signed record on chain that\n says \"blob X (with content hash H) is the canonical thing committed for\n subject Y at time T\". Discovered via the `CommitmentCreated` event log,\n indexed off-chain by (saga_id, subject_id).\n\n **What this is NOT** (intentionally — see Layer 2 notes below):\n   - a chain-of-hashes / parent-linked history\n   - a cryptographic replay proof of agent decisions\n   - a multi-kind commitment registry\n\n **Auth**: caller must hold the `StorytellerCap` of the saga. Anyone can\n READ the resulting shared object or scan events.\n\n **Layer 2 (research) note**: when the博班 \"verifiable agent decision\n chain\" research module gets built, it will live in a SEPARATE package\n and may either (a) wrap these commitments in its own ChainedCommit\n struct, or (b) define an independent commit type. This module makes no\n affordance for that future work — keeping it lean so the product\n surface stays small and stable.",
+  "immediate_dependencies": [
+    {
+      "address": "endless_story",
+      "name": "saga"
+    },
+    {
+      "address": "std",
+      "name": "vector"
+    },
+    {
+      "address": "sui",
+      "name": "clock"
+    },
+    {
+      "address": "sui",
+      "name": "event"
+    },
+    {
+      "address": "sui",
+      "name": "object"
+    },
+    {
+      "address": "sui",
+      "name": "transfer"
+    },
+    {
+      "address": "sui",
+      "name": "tx_context"
+    }
+  ],
+  "attributes": [],
+  "functions": {
+    "commit": {
+      "source_index": 0,
+      "index": 0,
+      "doc": " Publish a commitment. Storyteller-only.\n\n Lifecycle:\n   1. caller hashes the off-chain blob, uploads to Walrus, gets blob_id\n   2. caller invokes `commit(cap, saga, subject_id, hash, blob_id, ...)`\n   3. module creates shared Commitment, emits CommitmentCreated\n\n The caller chooses `subject_id` — it is not validated against any\n existing object on chain. This is deliberate: it lets us commit for\n subjects that may not be Move objects (off-chain entities) and keeps\n the module independent of character/scene module APIs. Misuse (e.g.\n committing for a non-existent id) is caught by the caller's own\n indexing logic, not on chain.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "subject_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "content_hash",
+          "type_": {
+            "vector": "u8"
+          }
+        },
+        {
+          "name": "blob_id",
+          "type_": {
+            "vector": "u8"
+          }
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "commitment_id": {
+      "source_index": 1,
+      "index": 1,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "commitment"
+                  },
+                  "name": "Commitment",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "saga_id": {
+      "source_index": 2,
+      "index": 2,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "commitment"
+                  },
+                  "name": "Commitment",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "subject_id": {
+      "source_index": 3,
+      "index": 3,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "commitment"
+                  },
+                  "name": "Commitment",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "content_hash": {
+      "source_index": 4,
+      "index": 4,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "commitment"
+                  },
+                  "name": "Commitment",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "vector": "u8"
+            }
+          ]
+        }
+      ]
+    },
+    "blob_id": {
+      "source_index": 5,
+      "index": 5,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "commitment"
+                  },
+                  "name": "Commitment",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "vector": "u8"
+            }
+          ]
+        }
+      ]
+    },
+    "committer": {
+      "source_index": 6,
+      "index": 6,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "commitment"
+                  },
+                  "name": "Commitment",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "address"
+      ]
+    },
+    "committed_at_ms": {
+      "source_index": 7,
+      "index": 7,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "commitment"
+                  },
+                  "name": "Commitment",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    }
+  },
+  "structs": {
+    "Commitment": {
+      "index": 0,
+      "doc": " A single committed reference. Shared so any reader (web, indexer,\n future verifier) can fetch by object id without owner gating. Object\n itself is immutable after creation — no setters exposed.",
+      "attributes": [],
+      "abilities": [
+        "Key"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "UID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": " Saga this commitment belongs to. Lets readers filter by world arc.",
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "subject_id": {
+            "index": 2,
+            "doc": " Free-form subject — typically `character_id`, but the module does\n not enforce a type so future surfaces (scene-level commits, saga-\n level commits) can reuse the struct.",
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "content_hash": {
+            "index": 3,
+            "doc": " Hash of the committed content. Caller's responsibility to pick a\n hash function and pre-hash off-chain; module treats it as opaque\n bytes so we don't lock in an algorithm.",
+            "type_": {
+              "vector": "u8"
+            }
+          },
+          "blob_id": {
+            "index": 4,
+            "doc": " Walrus blob id (or any other off-chain storage reference). Opaque\n bytes; readers know how to resolve based on application context.",
+            "type_": {
+              "vector": "u8"
+            }
+          },
+          "committer": {
+            "index": 5,
+            "doc": " Address that signed the commit (= the StorytellerCap holder at\n time of commit). Useful for audit even though the cap itself can\n be transferred later.",
+            "type_": "address"
+          },
+          "committed_at_ms": {
+            "index": 6,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "CommitmentCreated": {
+      "index": 1,
+      "doc": " Emitted on every successful commit. Off-chain indexers tail this and\n build the \"latest commitment for subject X\" lookup. Carries enough\n fields that most UIs don't need to fetch the Commitment object.",
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "commitment_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "subject_id": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "committer": {
+            "index": 3,
+            "doc": null,
+            "type_": "address"
+          },
+          "committed_at_ms": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}

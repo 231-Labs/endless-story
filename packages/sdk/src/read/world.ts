@@ -12,5 +12,8 @@ export const getWorld = (client: SuiClient, worldId: string) =>
 export const getLocation = (client: SuiClient, locationId: string) =>
   gen.Location.get({ client, objectId: locationId });
 
+export const getManyLocations = (client: SuiClient, locationIds: string[]) =>
+  gen.Location.getMany({ client, objectIds: locationIds });
+
 export const getAdminCap = (client: SuiClient, adminCapId: string) =>
   gen.AdminCap.get({ client, objectId: adminCapId });

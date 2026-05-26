@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Chapter, Character, Saga, Scene } from '@endless-story/shared';
+import type { Chapter, Character, Saga, SagaLocation, Scene } from '@endless-story/shared';
 import { SnowPaperBackground } from './SnowPaperBackground';
 import { SceneVignette, type VignetteAnchor } from './SceneVignette';
 import { FloatingQuote } from './FloatingQuote';
@@ -18,6 +18,12 @@ import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
  */
 
 // 手卷三段：戲樓 / 月洞門 / 院落 — 用 % 對應到 300vw 容器
+//
+// 兩條資料路徑（不互為 fallback、各自獨立）：
+//   - chain scene: 帶著 `posX / posY` (chain `Scene.placement.pos_x/pos_y`)
+//   - mock scene : 沒有 pos，靠 id 對到下方字典
+//
+// 兩條都拿不到就 return null（chain pos 為 0 是部署設定漏寫，不在這層補洞）。
 const SCENE_ANCHORS: Record<string, VignetteAnchor> = {
   // 戲樓 zone（左三分之一 0–33%）
   scene_music_shed: { x: 9, y: 60, zone: 'theater' },
@@ -31,6 +37,32 @@ const SCENE_ANCHORS: Record<string, VignetteAnchor> = {
   scene_bunk_room: { x: 75, y: 50, zone: 'compound' },
 };
 
+/**
+ * 三段橫匾的固定排版位置 — left / middle / right。對應到
+ * 300vw 容器內 16% / 41% / 63%（搭配 SnowPaperBackground 三段地紋）。
+ * 內容由 caller 傳入的 `locations[]` 填，不再寫死「戲樓 / 月洞門 / 院落」。
+ */
+const ZONE_POSITIONS: { x: string; y: string }[] = [
+  { x: '16%', y: '18%' },
+  { x: '41%', y: '22%' },
+  { x: '63%', y: '18%' },
+];
+
+function resolveAnchor(scene: Scene): VignetteAnchor | null {
+  // Chain path: posX/posY arrive from chain `Scene.placement.pos_x/pos_y`.
+  if (scene.posX != null && scene.posY != null) {
+    return {
+      x: scene.posX,
+      y: scene.posY,
+      // zone is a UI concept; derive from x. 0–40% reads as theater
+      // (left third + transitional), >=40% as compound (right two-thirds).
+      zone: scene.posX < 40 ? 'theater' : 'compound',
+    };
+  }
+  // Mock path: slug-keyed dict.
+  return SCENE_ANCHORS[scene.id] ?? null;
+}
+
 // 場景的題款落點（與錨點錯開 — 戲樓的題款在右方、院落的題款在左方）
 function quotePosition(anchor: VignetteAnchor): { left: number; top: number } {
   if (anchor.zone === 'theater') {
@@ -42,13 +74,19 @@ function quotePosition(anchor: VignetteAnchor): { left: number; top: number } {
 interface Props {
   saga: Saga;
   scenes: Scene[];
+  /**
+   * Saga 涵蓋的 location（鏈上 `Saga.covered_location_ids` 解出來）。
+   * 渲染為手卷上三個 zone 大字（戲樓 / 月洞門 / 院落 那三個位置）。
+   * 順序即排版順序：locations[0] 在左、[1] 中、[2] 右。
+   */
+  locations: SagaLocation[];
   charactersById: Map<string, Character>;
   chaptersById: Map<string, Chapter>;
   locationLabel: string;
 }
 
 export function SagaHandscroll(props: Props) {
-  const { saga, scenes, charactersById, chaptersById, locationLabel } = props;
+  const { saga, scenes, locations, charactersById, chaptersById, locationLabel } = props;
   const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -143,7 +181,7 @@ export function SagaHandscroll(props: Props) {
 
             {/* 場景錨 */}
             {scenes.map((scene) => {
-              const anchor = SCENE_ANCHORS[scene.id];
+              const anchor = resolveAnchor(scene);
               if (!anchor) return null;
               return (
                 <SceneVignette
@@ -158,7 +196,7 @@ export function SagaHandscroll(props: Props) {
 
             {/* 飄字題款 */}
             {scenes.map((scene) => {
-              const anchor = SCENE_ANCHORS[scene.id];
+              const anchor = resolveAnchor(scene);
               if (!anchor) return null;
               const primary = scene.ghostQuotes?.[0];
               if (!primary) return null;
@@ -179,10 +217,16 @@ export function SagaHandscroll(props: Props) {
               );
             })}
 
-            {/* 三段地名橫匾 — 浮於畫面之上 */}
-            <ZoneLabel x="16%" y="18%" main="戲樓" sub="對外 — 對天下開鑼" />
-            <ZoneLabel x="41%" y="22%" main="月洞門" sub="一道牆、兩種人生" />
-            <ZoneLabel x="63%" y="18%" main="院落" sub="對內 — 卸了妝以後" />
+            {/*
+              三段地名橫匾 — 由鏈上 `Saga.covered_location_ids` 解出的
+              location 名稱填入。順序對應排版 left/middle/right。沒給夠
+              三個就只渲染拿到的那幾個。
+            */}
+            {ZONE_POSITIONS.map((pos, i) => {
+              const loc = locations[i];
+              if (!loc) return null;
+              return <ZoneLabel key={loc.id} x={pos.x} y={pos.y} main={loc.name} />;
+            })}
           </div>
         </div>
 
@@ -211,7 +255,7 @@ export function SagaHandscroll(props: Props) {
   );
 }
 
-function ZoneLabel({ x, y, main, sub }: { x: string; y: string; main: string; sub: string }) {
+function ZoneLabel({ x, y, main, sub }: { x: string; y: string; main: string; sub?: string }) {
   return (
     <div
       className="pointer-events-none absolute z-10 flex flex-col items-center gap-1.5 text-mute/55 drop-shadow-sm"
@@ -219,7 +263,7 @@ function ZoneLabel({ x, y, main, sub }: { x: string; y: string; main: string; su
       aria-hidden
     >
       <span className="font-serif text-xl tracking-[0.42em] sm:text-3xl">{main}</span>
-      <span className="text-2xs tracking-widest text-mute/40">{sub}</span>
+      {sub ? <span className="text-2xs tracking-widest text-mute/40">{sub}</span> : null}
     </div>
   );
 }

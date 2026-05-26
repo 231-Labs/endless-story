@@ -2,6 +2,7 @@ import {
   chaptersApi,
   charactersApi,
   liveStateApi,
+  locationsApi,
   relationshipsApi,
   sagasApi,
   scenesApi,
@@ -36,7 +37,7 @@ export default async function SagaPage({
     charactersApi.listSagaCharacters(saga.id),
     scenesApi.listScenes(saga.id),
     Promise.all(
-      (saga.coveredLocationIds ?? []).map((lid) => sagasApi.getLocation(lid))
+      (saga.coveredLocationIds ?? []).map((lid) => locationsApi.getLocation(lid))
     ).then((arr) => arr.filter((l): l is NonNullable<typeof l> => Boolean(l))),
   ]);
   const charactersById = new Map(cast.map((c) => [c.id, c]));
@@ -109,6 +110,7 @@ export default async function SagaPage({
         <SagaHandscroll
           saga={saga}
           scenes={scenes}
+          locations={locations}
           charactersById={allCharactersById}
           chaptersById={chaptersById}
           locationLabel={locationLabel}

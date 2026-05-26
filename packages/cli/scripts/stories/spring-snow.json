@@ -4,15 +4,42 @@
   "world": {
     "name": "民初",
     "description": "民國初年。袁世凱稱帝的餘震未平，軍閥分地、洋行立旗，租界街燈把舊城照得像一齣沒排完的新戲。霞飛路上電車叮鈴，香粉、煤煙、報紙油墨和後台松香混在一起。",
-    "currency": { "name": "Endless", "symbol": "ENDLESS" }
+    "currency": {
+      "name": "Endless",
+      "symbol": "ENDLESS"
+    }
   },
   "world_rules": {
-    "species": ["human", "spirit", "beast"],
+    "species": [
+      "human",
+      "spirit",
+      "beast"
+    ],
     "attributes": [
-      { "key": "appearance", "label": "外貌", "min": 0, "max": 100 },
-      { "key": "constitution", "label": "筋骨", "min": 0, "max": 100 },
-      { "key": "acuity", "label": "機敏", "min": 0, "max": 100 },
-      { "key": "disposition", "label": "心性", "min": 0, "max": 100 }
+      {
+        "key": "appearance",
+        "label": "外貌",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "key": "constitution",
+        "label": "筋骨",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "key": "acuity",
+        "label": "機敏",
+        "min": 0,
+        "max": 100
+      },
+      {
+        "key": "disposition",
+        "label": "心性",
+        "min": 0,
+        "max": 100
+      }
     ]
   },
   "locations": [
@@ -54,7 +81,9 @@
       "privacy": 0,
       "atmosphere": 90,
       "danger": 10,
-      "prosperity": 70
+      "prosperity": 70,
+      "pos_x": 17,
+      "pos_y": 44
     },
     {
       "name": "後台化妝間",
@@ -63,7 +92,9 @@
       "privacy": 1,
       "atmosphere": 80,
       "danger": 0,
-      "prosperity": 50
+      "prosperity": 50,
+      "pos_x": 25,
+      "pos_y": 58
     },
     {
       "name": "蘇州河夜談",
@@ -72,7 +103,9 @@
       "privacy": 2,
       "atmosphere": 50,
       "danger": 40,
-      "prosperity": 30
+      "prosperity": 30,
+      "pos_x": 67,
+      "pos_y": 60
     }
   ],
   "recruitments": [
@@ -83,7 +116,10 @@
       "membership": "internal",
       "slots": 1,
       "basePrice": 100,
-      "minAttributes": { "appearance": 80, "acuity": 70 },
+      "minAttributes": {
+        "appearance": 80,
+        "acuity": 70
+      },
       "ttl_days": 14
     },
     {
@@ -93,7 +129,9 @@
       "membership": "external",
       "slots": 1,
       "basePrice": 100,
-      "minAttributes": { "appearance": 60 },
+      "minAttributes": {
+        "appearance": 60
+      },
       "genderRequirement": "male",
       "ttl_days": 14
     },
@@ -104,7 +142,10 @@
       "membership": "internal",
       "slots": 2,
       "basePrice": 150,
-      "minAttributes": { "appearance": 85, "disposition": 75 },
+      "minAttributes": {
+        "appearance": 85,
+        "disposition": 75
+      },
       "genderRequirement": "female",
       "ttl_days": 14
     },
@@ -115,7 +156,10 @@
       "membership": "external",
       "slots": 1,
       "basePrice": 80,
-      "minAttributes": { "acuity": 85, "disposition": 60 },
+      "minAttributes": {
+        "acuity": 85,
+        "disposition": 60
+      },
       "genderRequirement": "other",
       "ttl_days": 14
     },
@@ -126,7 +170,10 @@
       "membership": "internal",
       "slots": 1,
       "basePrice": 120,
-      "minAttributes": { "constitution": 70, "disposition": 85 },
+      "minAttributes": {
+        "constitution": 70,
+        "disposition": 85
+      },
       "genderRequirement": "male",
       "ttl_days": 14
     }

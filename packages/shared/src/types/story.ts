@@ -62,6 +62,22 @@ export interface StoryScene {
   atmosphere: number;
   danger: number;
   prosperity: number;
+  /**
+   * UI map coordinates (% of the handscroll canvas, 0–100).
+   * Written to chain as `Scene.placement.pos_x` / `pos_y`.
+   *
+   * Convention for the spring-snow scroll layout:
+   *   - x: 0–33  → 戲樓 zone (theater)
+   *   - x: 33–50 → 月洞門 gap (transitional)
+   *   - x: 50–95 → 院落 zone (compound)
+   *   - y: 30–80 → vertical band that reads natural on 100vh canvas
+   *
+   * Other story presets may use a different visual layout; the chain
+   * doesn't care — these are just UI render hints persisted on chain so
+   * the layout survives republish.
+   */
+  pos_x: number;
+  pos_y: number;
 }
 
 export interface StoryRecruitmentSeed

@@ -5,24 +5,27 @@ import {
   listTodaySceneClips,
   sceneClips,
 } from '@/mocks/scenes';
+import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { USE_MOCK } from './config';
 import { httpGet } from './http';
+import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 
 /**
  * Scenes API（場所 + 派生視覺片段）
  *
- * 後端對應 endpoints：
- *   GET  /scenes?sagaId={id}                                → Scene[]
- *   GET  /scenes/{id}                                       → Scene | 404
- *   GET  /scene-clips?sagaId={id}                           → SceneClip[]
- *   GET  /scene-clips?sagaId={id}&latest={n}&day={current}  → SceneClip[]
+ * Chain-first for `listScenes(sagaId)` when packageId set: resolves
+ * the slug-or-id, reads `Saga.anchor_scene_ids`, batch-fetches each
+ * Scene. SceneClip + getScene(id) stay mock until video pipeline lands.
  *
- * 後端應該：
- *   - Scene 物件對應鏈上 Scene（saga 內細節空間）
- *   - Scene.gallery.anchor blob id 對應 Walrus 寫入
- *   - performance 由 saga server 推送（戲台有 OPEN event 時）
- *   - heatProfile / pastEvents / ghostQuotes / derivativeCounts 由 backend 從 memory store 蒸出
+ * Backend HTTP endpoints (legacy, USE_MOCK=false path):
+ *   GET  /scenes?sagaId={id}
+ *   GET  /scenes/{id}
+ *   GET  /scene-clips?sagaId={id}[&latest={n}&day={current}]
  */
+
+function isDeployed(): boolean {
+  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
+}
 
 // ── Scene 派生視覺片段（video clip）──
 
@@ -39,11 +42,20 @@ export async function listAllClips(sagaId: string): Promise<SceneClip[]> {
 // ── Scene 實體場所 ──
 
 export async function listScenes(sagaId: string): Promise<Scene[]> {
+  if (isDeployed()) {
+    const onChain = await fetchOnChainScenesForSaga(sagaId);
+    if (onChain.length > 0) return onChain;
+    // Empty chain result for a deployed saga: still fall through so
+    // demo slugs (spring-snow) keep showing the mock troupe until the
+    // chain has scenes anchored.
+  }
   if (USE_MOCK) return listScenesBySaga(sagaId);
   return httpGet<Scene[]>('/scenes', { query: { sagaId } });
 }
 
 export async function getScene(id: string): Promise<Scene | null> {
+  // Per-scene chain fetch can be added later; today no caller needs it
+  // (listScenes covers the only consumer — handscroll page).
   if (USE_MOCK) return getSceneById(id) ?? null;
   try {
     return await httpGet<Scene>(`/scenes/${id}`);

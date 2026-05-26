@@ -40,7 +40,9 @@
       "privacy": 0,
       "atmosphere": 50,
       "danger": 0,
-      "prosperity": 50
+      "prosperity": 50,
+      "pos_x": 50,
+      "pos_y": 50
     }
   ],
   "recruitments": [

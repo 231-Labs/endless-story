@@ -4,7 +4,7 @@
  * **Writer:** `@endless-story/cli` (deploy.ts, bootstrap.ts, reset.ts).
  * **Readers:** sdk, runner, web (admin UI). Never edit by hand.
  *
- * Last written: 2026-05-26T03:05:39.269Z
+ * Last written: 2026-05-26T04:28:16.165Z
  *
  * See AGENTS.md → 「鏈上架構」 for the contract.
  */
@@ -42,26 +42,26 @@ export interface EndlessStoryDeployment {
 
 export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "network": "devnet",
-  "packageId": "0xe6aac1d0ed808991926d419898d289a848b91fec3b47b52c0235129b69c195a4",
-  "adminCapId": "0x761188e149b68a3129901c56b748ed6fd9dec9c33e1ddd71640296923e860d1c",
-  "worldId": "0x62b4b5628f7ac75c1d63316ef2b955d53657beafadd9473a9a9d3a10b48cb40a",
+  "packageId": "0xb5169dd07a09ab5f4fe666abf6dce48e5f521f0f82c6e223c0a2efb59f23e7fb",
+  "adminCapId": "0xa1fabe0afb88e8628a01339efa67811f0d9878ab0f754401c6b0b3bcc2a1045b",
+  "worldId": "0xb8439b0f987f142809736e15529797a10eb7ebfaeb5356e31a6577425f9b8387",
   "locationIds": [
-    "0x2907168e8475e45fae91df72e710e4c63abfeb019b6398ea0d8bd1913caf8b10",
-    "0x6ab4078ded71b4e0de2f65bf0fdc7382511df36e347a06d954ad6c6d1d45f8f8",
-    "0xaa72dbd90f537e4665cc73e95cdca8c4bd10623e51473322061e45abb922bc22"
+    "0x3253b69aec28ed16c9a0b5e7a6cc6abbe41a7e171d55729058d770554f72fcbe",
+    "0xa88059da919c68d1b9a723dfa3983afb24f94d54484e7e638c259997793ebdf3",
+    "0xbf3b5c87d21c646a232a03f89e608f4bfebf463fecc524f0eb34f52f57a5ccec"
   ],
-  "sagaId": "0xde9828d9be548ea7a138a839681456ced4e875f5f5114dab11bc88cff1789b53",
-  "storytellerCapId": "0x37554ca371b1a8600aa36d191a38fc2116d45e397ce9b7bc9612abea4c807dea",
+  "sagaId": "0x509a018344262f9b55fdaaaf0269abe6aed0da60c15fc948743c7bf09683d6d7",
+  "storytellerCapId": "0x85f46b190cffafb868f48aa2a064dcfc78a0c27f72dbb7ecb1bceb942c7566c6",
   "sceneIds": [
-    "0x1be3271bf06535ea83fd741a6c49489f5e7d3be1bbe2ca4f20ab9a0bfa442bd5",
-    "0x91b9aa99252156c264d945fd89e598c7a9c5f9684518ce8a4bcc0afd2e55f2fd",
-    "0xb4f563a87d017f78ed1d3a9d053359f94fbc9e778185890b555397a09f6e0da6"
+    "0x16d02842ca47eafd3949bb4b8539fa983e7afb2ddeb2d0fa237dba928773ada4",
+    "0x8e018cd1c7cba8c352743ed0259549c5c122553d5efacf9e99e1b1a8f59962a4",
+    "0x918a2b0b4f275f3360369246a0b247dfd72f69c9309de5bf4fae98885dcf92ad"
   ],
-  "faucetId": "0xb4cd8256c0e02635baa4f420893a8f8ba9fcae73a954547df04fb75e72fe7a57",
-  "faucetAdminCapId": "0x072d8dc7ffa5ab8ae05bf50d6eaef52c89379c2c91a7c50d5a1774e1bc619a10",
+  "faucetId": "0xfb00f1d2cc1f8ca93c29d88f5cc6cfc6dbf141d62770890a7fd7704fbad29afd",
+  "faucetAdminCapId": "0xc9ba5cfb72d9d9bdb39c8ba407659edaf3c2a8490be126401478a520b7eb8330",
   "demoCharacters": [],
   "storyId": "spring-snow",
-  "deployedAt": "2026-05-26T03:05:39.269Z"
+  "deployedAt": "2026-05-26T04:28:16.165Z"
 };
 
 export function isDeployed(d: EndlessStoryDeployment = ENDLESS_STORY_DEPLOYMENT): boolean {

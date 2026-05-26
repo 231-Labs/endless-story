@@ -108,6 +108,13 @@ export interface Scene {
   locationId?: string;
   name: string;
   description: string;
+  /**
+   * 手卷 UI 座標（% of canvas，0–100）— 對應鏈上
+   * `Scene.placement.pos_x` / `pos_y`，由 story preset 寫入。
+   * Mock scenes 沒有此值（id-based 字典 lookup）；chain scenes 一定有。
+   */
+  posX?: number;
+  posY?: number;
   privacyLevel: ScenePrivacyLevel;
   /** 當下站在此 scene 的角色 ids — UI 用小頭像 stack 顯示 */
   currentCharacterIds: string[];
