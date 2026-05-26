@@ -48,6 +48,10 @@ export default async function RecruitmentIntentPage({
     );
   }
 
+  const mintedCount = await recruitmentsApi.getMintedCount(recruitment.id);
+  const slotsRemaining = Math.max(0, recruitment.slots - mintedCount);
+  const full = recruitmentsApi.isFull(recruitment, mintedCount);
+
   const minEntries: [string, number][] = recruitment.minAttributes
     ? Object.entries(recruitment.minAttributes).filter(
         (entry): entry is [string, number] => typeof entry[1] === 'number'
@@ -71,7 +75,7 @@ export default async function RecruitmentIntentPage({
         <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-mute">
           <span className="font-serif text-base text-ink">{recruitment.basePrice} Endless</span>
           <span className="text-hairline">·</span>
-          <span>剩 {recruitment.slots} 位</span>
+          <span>剩 {slotsRemaining} / {recruitment.slots} 位</span>
           <span className="text-hairline">·</span>
           <span>{daysLeft(recruitment.expiresAt)} 日內</span>
         </div>
@@ -111,14 +115,23 @@ export default async function RecruitmentIntentPage({
         </div>
 
         <div className="mt-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href={`/dossier/recruit/${recruitment.id}?step=prompt`}
-            className="rounded bg-cinnabar px-6 py-3 text-center text-base text-canvas transition-colors hover:bg-seal"
-          >
-            進入徵召
-          </Link>
+          {full ? (
+            <span
+              aria-disabled
+              className="cursor-not-allowed rounded bg-mute/30 px-6 py-3 text-center text-base text-mute"
+            >
+              已徵滿
+            </span>
+          ) : (
+            <Link
+              href={`/dossier/recruit/${recruitment.id}?step=prompt`}
+              className="rounded bg-cinnabar px-6 py-3 text-center text-base text-canvas transition-colors hover:bg-seal"
+            >
+              進入徵召
+            </Link>
+          )}
           <p className="text-2xs tracking-widest text-mute">
-            付款即鎖席位 · Voucher 不過期
+            {full ? '名額已用罄，等下批開放' : '付款即鎖席位 · Voucher 不過期'}
           </p>
         </div>
       </div>

@@ -260,7 +260,10 @@ export function RecruitmentTicket({
             saga: sagaId,
             payment,
             attributeSeed: Array.from(seed),
-            hint: "", // Prompt is written AFTER minting now
+            // Stamp the off-chain recruitment id as the voucher hint so
+            // chain-side event readers can group vouchers by their
+            // originating campaign without an extra object fetch.
+            hint: recruitment.id,
             requirements: reqs,
             intentHint: recruitment.roleIntent.slice(0, 80),
             ttlMs: VOUCHER_TTL_MS,

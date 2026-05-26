@@ -1999,6 +1999,62 @@
             "index": 4,
             "doc": null,
             "type_": "u64"
+          },
+          "hint": {
+            "index": 5,
+            "doc": " Caller-supplied tag (e.g. off-chain recruitment id) so indexers\n can group vouchers by their originating campaign without reading\n the voucher object.",
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "intent_hint": {
+            "index": 6,
+            "doc": " Natural-language role intent. Echoed in event for the same\n indexing convenience.",
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
           }
         }
       }
@@ -2061,6 +2117,62 @@
             "index": 3,
             "doc": null,
             "type_": "u64"
+          },
+          "hint": {
+            "index": 4,
+            "doc": " Carried over from the consumed voucher so capacity-tracking\n can be done by joining MintedEvent ∩ RedeemedEvent on\n `voucher_id`, then aggregating by `hint`. Without this, the\n voucher object is destroyed before redeem-time readers can see\n the hint.",
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "intent_hint": {
+            "index": 5,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
           }
         }
       }

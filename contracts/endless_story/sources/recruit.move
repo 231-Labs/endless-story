@@ -144,6 +144,13 @@ public struct GenesisVoucherMinted has copy, drop {
     payer: address,
     paid_amount: u64,
     expires_at_ms: u64,
+    /// Caller-supplied tag (e.g. off-chain recruitment id) so indexers
+    /// can group vouchers by their originating campaign without reading
+    /// the voucher object.
+    hint: Option<String>,
+    /// Natural-language role intent. Echoed in event for the same
+    /// indexing convenience.
+    intent_hint: Option<String>,
 }
 
 public struct GenesisVoucherRedeemed has copy, drop {
@@ -151,6 +158,13 @@ public struct GenesisVoucherRedeemed has copy, drop {
     saga_id: ID,
     character_id: ID,
     redeemed_at_ms: u64,
+    /// Carried over from the consumed voucher so capacity-tracking
+    /// can be done by joining MintedEvent ∩ RedeemedEvent on
+    /// `voucher_id`, then aggregating by `hint`. Without this, the
+    /// voucher object is destroyed before redeem-time readers can see
+    /// the hint.
+    hint: Option<String>,
+    intent_hint: Option<String>,
 }
 
 // ─── init (Display V2) ───────────────────────────────────────────────
@@ -304,6 +318,8 @@ public fun mint_genesis_voucher(
         payer: voucher.payer,
         paid_amount: amount,
         expires_at_ms: voucher.expires_at_ms,
+        hint: voucher.hint,
+        intent_hint: voucher.intent_hint,
     });
     voucher
 }
@@ -370,9 +386,9 @@ public fun redeem_voucher_to_character(
         payer: _,
         paid_amount: _,
         attribute_seed: _,
-        hint: _,
+        hint,
         requirements: _,
-        intent_hint: _,
+        intent_hint,
         minted_at_ms: _,
         expires_at_ms: _,
     } = voucher;
@@ -383,6 +399,8 @@ public fun redeem_voucher_to_character(
         saga_id,
         character_id: character::owner_cap_character_id(&owner_cap),
         redeemed_at_ms: now_ms,
+        hint,
+        intent_hint,
     });
 
     (owner_cap, control_cap)

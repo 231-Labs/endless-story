@@ -7,4 +7,4 @@ version = "0.1.0"
 # Named addresses derive from [package].name (Sui CLI 1.63+) — no [addresses] section.
 
 [environments]
-devnet = "c515b850"
+devnet = "4f0ae125"

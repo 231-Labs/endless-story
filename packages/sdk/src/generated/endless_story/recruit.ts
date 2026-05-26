@@ -62,13 +62,28 @@ export const GenesisVoucherMinted = new MoveStruct({ name: `${$moduleName}::Gene
         saga_id: bcs.Address,
         payer: bcs.Address,
         paid_amount: bcs.u64(),
-        expires_at_ms: bcs.u64()
+        expires_at_ms: bcs.u64(),
+        /**
+         * Caller-supplied tag (e.g. off-chain recruitment id) so indexers can group
+         * vouchers by their originating campaign without reading the voucher object.
+         */
+        hint: bcs.option(bcs.string()),
+        /** Natural-language role intent. Echoed in event for the same indexing convenience. */
+        intent_hint: bcs.option(bcs.string())
     } });
 export const GenesisVoucherRedeemed = new MoveStruct({ name: `${$moduleName}::GenesisVoucherRedeemed`, fields: {
         voucher_id: bcs.Address,
         saga_id: bcs.Address,
         character_id: bcs.Address,
-        redeemed_at_ms: bcs.u64()
+        redeemed_at_ms: bcs.u64(),
+        /**
+         * Carried over from the consumed voucher so capacity-tracking can be done by
+         * joining MintedEvent ∩ RedeemedEvent on `voucher_id`, then aggregating by `hint`.
+         * Without this, the voucher object is destroyed before redeem-time readers can see
+         * the hint.
+         */
+        hint: bcs.option(bcs.string()),
+        intent_hint: bcs.option(bcs.string())
     } });
 export const JoinIntent = new MoveStruct({ name: `${$moduleName}::JoinIntent`, fields: {
         id: bcs.Address,
