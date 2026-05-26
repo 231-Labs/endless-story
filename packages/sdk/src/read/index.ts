@@ -22,3 +22,4 @@ export * as saga from './saga.js';
 export * as scene from './scene.js';
 export * as character from './character.js';
 export * as recruit from './recruit.js';
+export * as commitment from './commitment.js';
