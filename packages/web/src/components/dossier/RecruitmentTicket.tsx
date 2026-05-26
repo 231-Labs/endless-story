@@ -8,7 +8,7 @@ import type { Recruitment } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { generateAttributeSeed, rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
-import { DEFAULT_ATTRIBUTE_SCHEMA } from '@/lib/chain/schema';
+import { DEFAULT_ATTRIBUTE_SCHEMA } from '@/lib/config/attribute-schema';
 import { moderatePrompt } from '@/lib/actions/moderate-prompt';
 import { previewCharacter } from '@/lib/actions/preview-character';
 import { generatePortrait } from '@/lib/actions/generate-portrait';

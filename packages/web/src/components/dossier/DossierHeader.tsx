@@ -2,7 +2,8 @@ import type { Character, CharacterLiveState } from '@endless-story/shared';
 import { BackButton } from '@/components/common/BackButton';
 import { CharacterPortrait } from '@/components/common/CharacterPortrait';
 import { Linkified } from '@/components/common/CharacterLinkifier';
-import { truncateAddress, survivalBadgeClasses, survivalLabel } from '@/lib/format';
+import { OwnerDisplay } from '@/components/common/OwnerDisplay';
+import { survivalBadgeClasses, survivalLabel } from '@/lib/format';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
 
 const GENDER_LABEL = { female: '女', male: '男', other: '其他' } as const;
@@ -63,7 +64,7 @@ export function DossierHeader({
                   {GENDER_LABEL[character.gender]} · {character.age} 歲
                 </span>
                 <span className="text-hairline">·</span>
-                <OwnerHover address={character.nftOwner} />
+                <OwnerDisplay address={character.nftOwner} />
               </div>
               <div className="mt-6">
                 <span
@@ -97,13 +98,3 @@ export function DossierHeader({
   );
 }
 
-function OwnerHover({ address }: { address: string }) {
-  return (
-    <span className="group inline-flex cursor-default items-center">
-      <span>owner</span>
-      <span className="ml-0 max-w-0 overflow-hidden whitespace-nowrap font-mono opacity-0 transition-all duration-300 group-hover:ml-2 group-hover:max-w-[160px] group-hover:opacity-100">
-        {truncateAddress(address)}
-      </span>
-    </span>
-  );
-}

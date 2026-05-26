@@ -25,7 +25,7 @@ import {
     type RolledAttribute,
 } from '@endless-story/llm/prompts';
 import { rollAttributesFromSeed } from '@endless-story/llm/seed';
-import { DEFAULT_ATTRIBUTE_SCHEMA } from '../chain/schema.js';
+import { DEFAULT_ATTRIBUTE_SCHEMA } from '../config/attribute-schema.js';
 import { verifyPromptSignature } from './moderate-prompt.js';
 
 export interface PreviewCharacterInput {

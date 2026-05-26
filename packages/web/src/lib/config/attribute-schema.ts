@@ -1,10 +1,15 @@
 /**
  * Default attribute schema for character rolls.
  *
- * Until Phase 3 wires live World reads, server-side rolling falls back to
- * this constant. `cli/scripts/bootstrap.ts` will seed the on-chain
- * `World.rules.attribute_definitions` with EXACTLY these axes — keep
- * them in sync.
+ * Neutral location (web-internal `lib/config/`, not `lib/chain/`) so both
+ * client components (e.g. RecruitmentTicket wizard) and server actions
+ * (preview-character) can import without the client crossing the facade
+ * boundary.
+ *
+ * Until `lib/chain/world-read` exposes the live `World.rules.attribute_definitions`
+ * read, this constant is the source of truth. `cli/scripts/bootstrap.ts`
+ * seeds the on-chain schema with EXACTLY these axes — keep them in
+ * sync until chain-reader fallback wiring lands.
  *
  * Keys match the off-chain `Recruitment.minAttributes` field
  * (see `packages/web/src/mocks/recruitments.ts`).
