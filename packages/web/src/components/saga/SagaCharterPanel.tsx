@@ -37,22 +37,20 @@ export function SagaCharterPanel({ saga }: { saga: Saga }) {
               </header>
 
               <dl className="grid gap-x-8 gap-y-10 sm:grid-cols-2">
-                <PromptItem
-                  glyph="律"
-                  label="自然節律"
-                  text={sagaPrompts.rhythmHints}
-                />
-                <PromptItem
-                  glyph="氣"
-                  label="事件氣質"
-                  text={sagaPrompts.naturePrompt}
-                />
-                <PromptItem
-                  glyph="界"
-                  label="離職政策"
-                  text={sagaPrompts.departurePolicy}
-                  className="sm:col-span-2"
-                />
+                {sagaPrompts.rhythmHints ? (
+                  <PromptItem glyph="律" label="自然節律" text={sagaPrompts.rhythmHints} />
+                ) : null}
+                {sagaPrompts.naturePrompt ? (
+                  <PromptItem glyph="氣" label="事件氣質" text={sagaPrompts.naturePrompt} />
+                ) : null}
+                {sagaPrompts.departurePolicy ? (
+                  <PromptItem
+                    glyph="界"
+                    label="離職政策"
+                    text={sagaPrompts.departurePolicy}
+                    className="sm:col-span-2"
+                  />
+                ) : null}
               </dl>
             </div>
           ) : null}

@@ -35,11 +35,20 @@ export interface Saga {
  * 跟「角色本色（軸/腔/界）」呼應 — 角色有人格藍圖、戲班有氣質藍圖。
  */
 export interface SagaPersistentPrompts {
-  /** 事件氣質 — 戲外的戲、衝突類型、敘事節奏 */
-  naturePrompt: string;
-  /** 自然節律 — 日出開嗓 / 戌時封箱 / 月不出停戲一日 */
-  rhythmHints: string;
-  /** 離職政策 — 想走的人怎麼結銀錢、章程怎麼寫 */
+  /**
+   * 事件氣質 — 戲外的戲、衝突類型、敘事節奏。
+   * Optional：鏈上沒有此欄位，由 storyteller LLM domain 提供。
+   */
+  naturePrompt?: string;
+  /**
+   * 自然節律 — 日出開嗓 / 戌時封箱 / 月不出停戲一日。
+   * Optional：同上，鏈上沒有。
+   */
+  rhythmHints?: string;
+  /**
+   * 離職政策 — 想走的人怎麼結銀錢、章程怎麼寫。
+   * 鏈上 `Saga.departure_policy` 直接帶出。
+   */
   departurePolicy: string;
 }
 

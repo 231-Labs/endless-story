@@ -14,7 +14,7 @@
  * through to mock fixtures.
  */
 
-import type { Scene, ScenePrivacyLevel } from '@endless-story/shared';
+import type { Scene, SceneHeatProfile, ScenePrivacyLevel } from '@endless-story/shared';
 import { makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 import { fetchSagaAnchorSceneIds } from './saga-read.js';
@@ -29,6 +29,11 @@ interface ChainSceneJson {
         pos_y?: number | string;
     };
     access?: { privacy_level?: number };
+    params?: {
+        atmosphere?: number | string;
+        danger?: number | string;
+        prosperity?: number | string;
+    };
     state?: {
         causal_commitment_ids?: string[];
         current_character_ids?: string[];
@@ -80,10 +85,49 @@ function mapChainScene(id: string, json: ChainSceneJson): Scene {
         posY: posY != null ? Number(posY) : undefined,
         privacyLevel: privacy,
         currentCharacterIds: json.state?.current_character_ids ?? [],
+        heatProfile: synthesizeHeat(json.params),
         // Off-chain enrichment fields stay undefined: imageUrl, pastEvents,
-        // heatProfile, derivativeCounts, ghostQuotes, gallery, performance,
+        // derivativeCounts, ghostQuotes, gallery, performance,
         // recentEventChapterId — all populated by Runner / storyteller UI.
     };
+}
+
+/**
+ * Derive UI `heatProfile` from chain `Scene.params`. Mapping convention:
+ *   - atmosphere → mute     (基調氣場、平靜公共)
+ *   - danger     → cinnabar (險、緊張、衝突)
+ *   - prosperity → jade     (旺、活力、人氣)
+ *
+ * Chain values are u64 in `[0, 100]` (story preset convention); UI heat
+ * expects `[0, 1]`. Clamped + normalised here.
+ *
+ * Returns undefined (UI then skips the radial-gradient bleed layer) only
+ * when chain didn't give us any params at all — i.e. older Scene objects
+ * pre-dating params adoption. Today's bootstrap always writes params,
+ * so in practice this is non-undefined for every fresh deployment.
+ *
+ * When Runner lands and starts producing memory-derived heat, this
+ * synthesis becomes the fallback — callers can override `heatProfile`
+ * after mapping if they have richer data.
+ */
+function synthesizeHeat(params: ChainSceneJson['params']): SceneHeatProfile | undefined {
+    if (!params) return undefined;
+    const atmosphere = clampUnit(params.atmosphere);
+    const danger = clampUnit(params.danger);
+    const prosperity = clampUnit(params.prosperity);
+    if (atmosphere == null && danger == null && prosperity == null) return undefined;
+    return {
+        cinnabar: danger ?? 0,
+        jade: prosperity ?? 0,
+        mute: atmosphere ?? 0,
+    };
+}
+
+function clampUnit(n: number | string | undefined): number | null {
+    if (n == null) return null;
+    const v = typeof n === 'string' ? Number(n) : n;
+    if (!Number.isFinite(v)) return null;
+    return Math.max(0, Math.min(1, v / 100));
 }
 
 function clampPrivacy(n: number | undefined): ScenePrivacyLevel {

@@ -15,6 +15,7 @@
 import type { Saga } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
+import { fetchOnChainWorldTime } from './world-read.js';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -26,10 +27,22 @@ function isSuiObjectId(id: string | null | undefined): id is string {
 interface ChainSagaJson {
     name?: string;
     description?: string;
+    world_id?: string;
     covered_location_ids?: string[];
     anchor_scene_ids?: string[];
     character_count?: number | string;
+    departure_policy?: string;
+    /** Balance<CURRENCY>.value — raw smallest unit. */
+    treasury?: number | string;
+    revenue_config?: {
+        owner_bps?: number | string;
+        storyteller_bps?: number | string;
+        treasury_bps?: number | string;
+    };
 }
+
+/** ENDLESS coin decimals — matches currency.move. */
+const ENDLESS_DECIMALS = 6;
 
 /**
  * Map a URL slug (e.g. `spring-snow`) to a chain Saga object id.
@@ -71,16 +84,54 @@ export async function fetchOnChainSaga(idOrSlug: string): Promise<Saga | null> {
     }
     const json = res.json as unknown as ChainSagaJson | undefined;
     if (!json) return null;
+    const rc = json.revenue_config;
+    // Compose worldTime by reading the saga's parent World. Sequential
+    // (not parallel) because the world_id only comes out of the saga
+    // fetch above; it's one extra RPC. `worldTime` stays undefined if
+    // world unreachable — UI defaults to 'noon' / Day 1 in that case.
+    const worldTime = json.world_id
+        ? (await fetchOnChainWorldTime(json.world_id)) ?? undefined
+        : undefined;
     return {
         id: sagaId,
         name: json.name ?? '無名戲班',
         description: json.description ?? '',
-        // currentDay / premise are storyteller-narrative fields not on
-        // chain. Leave defaults; UI degrades gracefully.
-        currentDay: 1,
+        // currentDay tracks the on-chain world day; falls back to 1 when
+        // worldTime unavailable. premise stays mock-derived (chain has
+        // description but no separate premise concept).
+        currentDay: worldTime?.day ?? 1,
         premise: json.description ?? '',
         castIds: [],
         coveredLocationIds: json.covered_location_ids ?? [],
+        worldTime,
+        sagaPrompts: json.departure_policy
+            ? {
+                  // naturePrompt / rhythmHints are storyteller LLM domain
+                  // (not on chain) — leave undefined; panel skips them.
+                  departurePolicy: json.departure_policy,
+              }
+            : undefined,
+        revenueConfig: rc
+            ? {
+                  ownerBps: Number(rc.owner_bps ?? 0),
+                  storytellerBps: Number(rc.storyteller_bps ?? 0),
+                  treasuryBps: Number(rc.treasury_bps ?? 0),
+              }
+            : undefined,
+        metrics: {
+            // Runner-derived (chapter / subscription accounting) — 0
+            // until that pipeline lands.
+            totalChapters: 0,
+            totalSubscribers: 0,
+            avgSubsPerCharacter: 0,
+            // Chain Saga.treasury is Balance.value (raw smallest unit).
+            // Display in ENDLESS units (divide by 10^decimals).
+            treasuryFunds: json.treasury != null
+                ? Number(json.treasury) / 10 ** ENDLESS_DECIMALS
+                : 0,
+        },
+        // Off-chain enrichment fields stay undefined: worldTime
+        // (storyteller pushes), totalDays (only if arc planned).
     };
 }
 

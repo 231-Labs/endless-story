@@ -164,8 +164,19 @@ export function CastConstellation({
   if (uniqCast.length === 0) return null;
 
   // ── 排版 ──
-  const scenePlanXY = (sceneId: string): { x: number; y: number } | null => {
-    const pos = SCENE_POSITIONS[sceneId];
+  //
+  // 兩條獨立資料源（跟 SagaHandscroll 同 pattern，不互為 fallback）：
+  //   - chain scene: 帶著 posX / posY (% of saga box)
+  //   - mock scene : 沒 pos，靠 sceneLayout.ts 的 slug 字典
+  // 兩條都拿不到就回 null，角色 fallback 到 placeExternal 擺在 saga 牆外。
+  const scenePlanXY = (scene: Scene): { x: number; y: number } | null => {
+    if (scene.posX != null && scene.posY != null) {
+      return {
+        x: SAGA.x + (scene.posX / 100) * SAGA.w,
+        y: SAGA.y + (scene.posY / 100) * SAGA.h,
+      };
+    }
+    const pos = SCENE_POSITIONS[scene.id];
     if (!pos) return null;
     return {
       x: SAGA.x + (pos.x / 100) * SAGA.w,
@@ -186,7 +197,7 @@ export function CastConstellation({
   const positioned: PositionedCharacter[] = [];
 
   const placeInScene = (char: Character, scene: Scene, kind: PositionedCharacter['kind']) => {
-    const base = scenePlanXY(scene.id);
+    const base = scenePlanXY(scene);
     if (!base) return null;
     const occupants = sceneOccupants.get(scene.id) ?? [char.id];
     const idx = occupants.indexOf(char.id);
@@ -410,7 +421,7 @@ export function CastConstellation({
 
             {/* scene 占位（淡圈，不額外標字） */}
             {scenes.map((s) => {
-              const p = scenePlanXY(s.id);
+              const p = scenePlanXY(s);
               if (!p) return null;
               const isHovered = hoveredId && hoveredPos?.scene?.id === s.id;
               return (
