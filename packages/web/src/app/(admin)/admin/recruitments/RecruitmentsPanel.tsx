@@ -314,7 +314,7 @@ function EditForm({
                             <option value="external">external (江湖)</option>
                         </select>
                     </Field>
-                    <Field label="性別限制 gender (空 = 不限)">
+                    <Field label="性別限制 gender">
                         <select
                             className="es-field w-full"
                             value={draft.genderRequirement ?? ''}
@@ -328,7 +328,6 @@ function EditForm({
                             <option value="">不限</option>
                             <option value="male">男性</option>
                             <option value="female">女性</option>
-                            <option value="other">不限</option>
                         </select>
                     </Field>
                 </div>

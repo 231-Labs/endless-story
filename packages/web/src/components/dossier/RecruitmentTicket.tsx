@@ -14,7 +14,7 @@ import { previewCharacter } from '@/lib/actions/preview-character';
 import { generatePortrait } from '@/lib/actions/generate-portrait';
 import { redeemVoucher } from '@/lib/actions/redeem-voucher';
 
-type Stage = 'closed' | 'minting' | 'rejected' | 'prompt' | 'generating' | 'pick' | 'painting' | 'portrait' | 'done';
+type Stage = 'closed' | 'minting' | 'rejected' | 'prompt' | 'generating' | 'pick' | 'done';
 
 const ATTR_LABEL: Record<string, string> = {
   appearance: '外貌',
@@ -29,12 +29,11 @@ const GENDER_LABEL: Record<string, string> = {
   other: '不限性別',
 };
 
-const STEPS: { key: Exclude<Stage, 'closed' | 'painting' | 'rejected'>; label: string }[] = [
+const STEPS: { key: Exclude<Stage, 'closed' | 'rejected'>; label: string }[] = [
   { key: 'minting', label: '擲牌' },
   { key: 'prompt', label: '描述' },
   { key: 'generating', label: '凝形' },
   { key: 'pick', label: '揭曉' },
-  { key: 'portrait', label: '配像' },
   { key: 'done', label: '入班' },
 ];
 
@@ -47,12 +46,23 @@ const ENDLESS_DECIMALS = 6;
  * LLM emits — currently the Chinese label (`男`/`女`/`中性`, see
  * `packages/llm/src/prompts/character.ts`). VoucherRequirements does an exact
  * string match on redeem, so we have to convert here.
+ *
+ * **`'other'` semantics**: the seed data + admin form + display cards have
+ * always used `'other'` (and `undefined`) interchangeably to mean "不限/any
+ * gender". So the chain-side requirement for `'other'` is an *empty* allow
+ * list (no check), NOT the literal `'中性'` character gender. If we ever
+ * want to enforce non-binary specifically, that needs a new requirement
+ * value distinct from `'other'`.
  */
-const GENDER_CHAIN: Record<'male' | 'female' | 'other', string> = {
+const GENDER_CHAIN: Record<'male' | 'female', string> = {
   male: '男',
   female: '女',
-  other: '中性',
 };
+
+/** True when the recruitment imposes no gender filter (`undefined` or 'other'). */
+function isGenderUnrestricted(g: Recruitment['genderRequirement']): boolean {
+  return g === undefined || g === 'other';
+}
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
@@ -69,9 +79,9 @@ function recruitmentRequirements(recruitment: Recruitment): {
   requiredAttributeKeys: string[];
   requiredAttributeMins: bigint[];
 } {
-  const allowedGenders = recruitment.genderRequirement
-    ? [GENDER_CHAIN[recruitment.genderRequirement]]
-    : [];
+  const allowedGenders = isGenderUnrestricted(recruitment.genderRequirement)
+    ? []
+    : [GENDER_CHAIN[recruitment.genderRequirement as 'male' | 'female']];
   const requiredAttributeKeys: string[] = [];
   const requiredAttributeMins: bigint[] = [];
   if (recruitment.minAttributes) {
@@ -95,8 +105,8 @@ function candidateMeetsRequirements(
   candidate: CharacterCandidate | null,
   rolledValues: RolledAttribute[],
 ): { ok: true } | { ok: false; reason: string } {
-  if (candidate && recruitment.genderRequirement) {
-    const wanted = GENDER_CHAIN[recruitment.genderRequirement];
+  if (candidate && !isGenderUnrestricted(recruitment.genderRequirement)) {
+    const wanted = GENDER_CHAIN[recruitment.genderRequirement as 'male' | 'female'];
     if (candidate.physicalFacts.gender !== wanted) {
       return { ok: false, reason: `性別要求：${wanted}，擲出：${candidate.physicalFacts.gender}` };
     }
@@ -114,10 +124,9 @@ function candidateMeetsRequirements(
   return { ok: true };
 }
 
-function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'painting' | 'rejected'> {
-  if (stage === 'painting') return 'portrait';
+function stepKeyForStage(stage: Stage): Exclude<Stage, 'closed' | 'rejected'> {
   if (stage === 'rejected') return 'minting';
-  return stage as Exclude<Stage, 'closed' | 'painting' | 'rejected'>;
+  return stage as Exclude<Stage, 'closed' | 'rejected'>;
 }
 
 function daysLeft(expiresAt: string): number {
@@ -157,6 +166,7 @@ export function RecruitmentTicket({
   const [portraitBlobId, setPortraitBlobId] = useState<string | null>(null);
   const [portraitBase64, setPortraitBase64] = useState<string | null>(null);
   const [characterId, setCharacterId] = useState<string | null>(null);
+  const [isPainting, setIsPainting] = useState(false);
 
   const isOpen = stage !== 'closed';
 
@@ -174,6 +184,7 @@ export function RecruitmentTicket({
     setPortraitBlobId(null);
     setPortraitBase64(null);
     setCharacterId(null);
+    setIsPainting(false);
   };
 
   useEffect(() => {
@@ -355,6 +366,38 @@ export function RecruitmentTicket({
       }
       setCandidate(prev.candidate);
       setStage('pick');
+
+      // 3. Start generating portrait immediately
+      setIsPainting(true);
+      setPortraitUrl(null);
+      setPortraitBase64(null);
+      setPortraitBlobId(null);
+      generatePortrait({
+        character: {
+          description: prev.candidate.description,
+          physical: {
+            gender: prev.candidate.physicalFacts.gender,
+            ageYears: prev.candidate.physicalFacts.age,
+            body: prev.candidate.physicalFacts.body,
+          },
+          attributes: prev.candidate.attributes,
+        },
+        toneHint: '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。',
+        recruitmentIntent: recruitment.roleIntent,
+      }).then(port => {
+        setIsPainting(false);
+        if (port.ok) {
+          setPortraitUrl(port.url ?? null);
+          setPortraitBlobId(port.blobId ?? null);
+          setPortraitBase64(port.base64 ?? null);
+        } else {
+          setError(`(畫像繪製失敗，仍可繼續): ${port.error}`);
+        }
+      }).catch(err => {
+        setIsPainting(false);
+        setError(`(畫像繪製失敗，仍可繼續): ${err instanceof Error ? err.message : String(err)}`);
+      });
+
     } catch (err) {
       setError(`[preview] ${err instanceof Error ? err.message : String(err)}`);
       setStage('prompt');
@@ -363,42 +406,7 @@ export function RecruitmentTicket({
   };
 
   // ───────────────────────────────────────────────────────────────
-  // Step: pick → painting → portrait
-  // ───────────────────────────────────────────────────────────────
-  const handleAccept = async () => {
-    if (!candidate) return;
-    setStage('painting');
-    setError(null);
-    try {
-      const port = await generatePortrait({
-        character: {
-          description: candidate.description,
-          physical: {
-            gender: candidate.physicalFacts.gender,
-            ageYears: candidate.physicalFacts.age,
-            body: candidate.physicalFacts.body,
-          },
-          attributes: candidate.attributes,
-        },
-        toneHint: '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。',
-        recruitmentIntent: recruitment.roleIntent,
-      });
-      if (!port.ok) {
-        // Continue even on portrait failure — wizard can finish without an image.
-        setError(`(portrait 失敗，仍可繼續): ${port.error}`);
-      }
-      setPortraitUrl(port.url ?? null);
-      setPortraitBlobId(port.blobId ?? null);
-      setPortraitBase64(port.base64 ?? null);
-      setStage('portrait');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setStage('pick');
-    }
-  };
-
-  // ───────────────────────────────────────────────────────────────
-  // Step: portrait → done (auto redeem)
+  // Step: pick → done (auto redeem)
   // ───────────────────────────────────────────────────────────────
   const handleEnroll = async () => {
     if (!candidate || !rolledValues || !attributeSeedHex || !voucherId) return;
@@ -420,8 +428,14 @@ export function RecruitmentTicket({
       setCharacterId(r.characterId);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      setStage('portrait');
+      setStage('pick');
     }
+  };
+
+  const handleRegenerate = () => {
+    setError(null);
+    setCandidate(null);
+    void handleGenerate();
   };
 
   const minEntries: [string, number][] = recruitment.minAttributes
@@ -443,22 +457,24 @@ export function RecruitmentTicket({
     if (stage === 'minting') void handleMint();
     else if (stage === 'prompt') void handleGenerate();
     else if (stage === 'rejected') void handleMint(); // 重抽
-    else if (stage === 'pick') void handleAccept();
-    else if (stage === 'portrait') void handleEnroll();
+    else if (stage === 'pick') void handleEnroll();
     else if (stage === 'done' && characterId) router.push(`/dossier?id=${characterId}`);
   };
 
   const handlePrev = () => {
     if (stage === 'minting') resetWizard();
-    else if (stage === 'prompt' || stage === 'generating') resetWizard(); // Or keep it? reset is fine
-    else if (stage === 'rejected' || stage === 'pick') resetWizard(); // 緣寂
-    else if (stage === 'painting' || stage === 'portrait') setStage('pick');
+    else if (stage === 'prompt' || stage === 'generating') resetWizard();
+    else if (stage === 'pick') {
+      if (!isPainting) handleRegenerate();
+    }
+    else if (stage === 'rejected') resetWizard(); // 緣寂
     else if (stage === 'done') resetWizard();
   };
 
   let prevLabel = '取消';
   let nextLabel = '下一步';
   let canNext = false;
+  let canPrev = true;
 
   if (stage === 'minting') {
     nextLabel = rollingStatus === 'minting' ? '簽署中…' : '擲牌 (支付)';
@@ -474,17 +490,10 @@ export function RecruitmentTicket({
     nextLabel = '重抽 (支付)';
     canNext = true;
   } else if (stage === 'pick') {
-    prevLabel = '緣寂';
-    nextLabel = '接受';
-    canNext = candidate !== null && (reqCheck === null || reqCheck.ok);
-  } else if (stage === 'painting') {
-    prevLabel = '上一步';
-    nextLabel = '繪製中…';
-    canNext = false;
-  } else if (stage === 'portrait') {
-    prevLabel = '重抽';
-    nextLabel = '入班';
-    canNext = true;
+    prevLabel = '重新凝形';
+    nextLabel = isPainting ? '繪製畫像中…' : '入班';
+    canNext = !isPainting && candidate !== null && (reqCheck === null || reqCheck.ok);
+    canPrev = !isPainting;
   } else if (stage === 'done') {
     prevLabel = '關閉';
     nextLabel = characterId ? '查看人物卡' : '上鏈中…';
@@ -536,15 +545,16 @@ export function RecruitmentTicket({
                     <PromptStage prompt={prompt} onPromptChange={setPrompt} rolledValues={rolledValues} />
                   )}
                   {stage === 'generating' && <RollingStage status={rollingStatus} />}
-                  {(stage === 'pick' || stage === 'painting' || stage === 'portrait' || stage === 'done') && candidate && rolledValues && (
+                  {(stage === 'pick' || stage === 'done') && candidate && rolledValues && (
                     <RevealStage
-                      stage={stage as 'pick' | 'painting' | 'portrait' | 'done'}
+                      stage={stage as 'pick' | 'done'}
                       candidate={candidate}
                       rolledValues={rolledValues}
                       portraitBase64={portraitBase64}
                       portraitUrl={portraitUrl}
                       characterId={characterId}
                       rejectedReason={stage === 'pick' && reqCheck && !reqCheck.ok ? reqCheck.reason : null}
+                      isPainting={isPainting}
                     />
                   )}
                 </div>
@@ -595,9 +605,17 @@ export function RecruitmentTicket({
           <button
             type="button"
             onClick={handlePrev}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-hairline bg-surface px-4 text-sm text-mute transition-colors hover:border-cinnabar/60 hover:bg-elevated hover:text-ink"
+            disabled={!canPrev}
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-hairline bg-surface px-4 text-sm text-mute transition-colors hover:border-cinnabar/60 hover:bg-elevated hover:text-ink disabled:pointer-events-none disabled:opacity-40"
           >
-            <span aria-hidden>←</span>
+            {stage === 'pick' ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 opacity-70">
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 1 0 2.6-6.6L21 8" />
+              </svg>
+            ) : (
+              <span aria-hidden>←</span>
+            )}
             <span className="text-2xs tracking-widest">{prevLabel}</span>
           </button>
           <div className="flex min-w-20 items-center justify-center gap-2">
@@ -896,14 +914,16 @@ function RevealStage({
   portraitUrl,
   characterId,
   rejectedReason,
+  isPainting,
 }: {
-  stage: 'pick' | 'painting' | 'portrait' | 'done';
+  stage: 'pick' | 'done';
   candidate: CharacterCandidate;
   rolledValues: RolledAttribute[];
   portraitBase64: string | null;
   portraitUrl: string | null;
   characterId: string | null;
   rejectedReason?: string | null;
+  isPainting?: boolean;
 }) {
   const src = useMemo(() => {
     if (portraitBase64) return `data:image/png;base64,${portraitBase64}`;
@@ -915,8 +935,6 @@ function RevealStage({
   const isEnrolled = stage === 'done' && !!characterId;
 
   let eyebrow = '骰子已落，揭曉';
-  if (stage === 'painting') eyebrow = '畫師繪製中…';
-  if (stage === 'portrait') eyebrow = '\u00A0';
   if (isEnrolling) eyebrow = '上鏈中…';
   if (isEnrolled) eyebrow = '已登錄梨園名冊';
 
@@ -1004,7 +1022,7 @@ function RevealStage({
 
         {stage !== 'pick' ? (
           <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 sm:w-56 shrink-0 aspect-[3/4] animate-fade-in-up sm:mr-2 md:mr-4">
-            {stage === 'painting' ? (
+            {isPainting ? (
               <div className="flex h-full w-full items-center justify-center bg-surface/50">
                  <BrushSpinner />
               </div>
@@ -1014,6 +1032,16 @@ function RevealStage({
             <div className="flex h-full w-full items-center justify-center text-2xs text-mute bg-surface/50">無像</div>
           )}
         </div>
+        ) : isPainting ? (
+          <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 sm:w-56 shrink-0 aspect-[3/4] animate-fade-in-up sm:mr-2 md:mr-4">
+            <div className="flex h-full w-full items-center justify-center bg-surface/50">
+               <BrushSpinner />
+            </div>
+          </div>
+        ) : src ? (
+          <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 sm:w-56 shrink-0 aspect-[3/4] animate-fade-in-up sm:mr-2 md:mr-4">
+            <img src={src} alt={candidate.name} className={`h-full w-full object-cover transition-transform duration-700 group-hover:scale-105`} />
+          </div>
         ) : rejectedReason ? (
           <div className="w-48 sm:w-56 shrink-0 flex flex-col items-center justify-center animate-fade-in-up sm:mr-2 md:mr-4 select-none">
             <div className="relative flex items-center justify-center w-24 h-24 text-cinnabar/70 rotate-[-12deg] mix-blend-multiply dark:mix-blend-screen opacity-90 drop-shadow-sm">
@@ -1027,7 +1055,11 @@ function RevealStage({
               <p className="mt-3 text-2xs opacity-50 tracking-widest">可選「緣寂」收尾</p>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="relative group overflow-hidden rounded-md bg-canvas ring-1 ring-hairline shadow-2xl shadow-cinnabar/10 w-48 sm:w-56 shrink-0 aspect-[3/4] animate-fade-in-up sm:mr-2 md:mr-4">
+            <div className="flex h-full w-full items-center justify-center text-2xs text-mute bg-surface/50">無像</div>
+          </div>
+        )}
       </div>
     </div>
   );
