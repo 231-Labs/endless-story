@@ -4,7 +4,6 @@ import { CharacterPortrait } from '@/components/common/CharacterPortrait';
 import { Linkified } from '@/components/common/CharacterLinkifier';
 import { OwnerDisplay } from '@/components/common/OwnerDisplay';
 import { SubscribeButton } from '@/components/common/SubscribeButton';
-import { DreamInjectButton } from '@/components/dossier/DreamInjectButton';
 import { survivalBadgeClasses, survivalLabel } from '@/lib/format';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
 
@@ -77,10 +76,6 @@ export function DossierHeader({
                 <SubscribeButton
                   characterId={character.id}
                   currentCount={character.subscriberCount ?? 0}
-                />
-                <DreamInjectButton
-                  characterId={character.id}
-                  characterNftOwner={character.nftOwner}
                 />
               </div>
             </div>
