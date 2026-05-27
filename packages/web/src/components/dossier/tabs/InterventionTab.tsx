@@ -1,5 +1,5 @@
 import type { Character, OwnerIntervention, SoulSong } from '@endless-story/shared';
-import { Composer } from './Composer';
+import { InterventionComposerGate } from './InterventionComposerGate';
 import { SoulSongPanel } from './SoulSongPanel';
 import { Linkified } from '@/components/common/CharacterLinkifier';
 import { formatDate, truncateAddress } from '@/lib/format';
@@ -17,6 +17,10 @@ export function InterventionTab({
   viewerWallet: string | null;
   sagaCharacters: Character[];
 }) {
+  // SoulSongPanel still uses the URL-param-derived viewerWallet flag
+  // (server-side gate). Composer's owner check is delegated to its
+  // client-side gate (real dapp-kit account check), so it works for
+  // users who haven't passed ?as= but have connected a wallet.
   const isOwner = viewerWallet === character.nftOwner;
 
   return (
@@ -30,11 +34,10 @@ export function InterventionTab({
       />
 
       <div className="pl-0 sm:pl-12">
-        {isOwner && viewerWallet ? (
-          <Composer characterId={character.id} ownerWallet={viewerWallet} />
-        ) : (
-          <LockedNotice character={character} />
-        )}
+        <InterventionComposerGate
+          characterId={character.id}
+          characterNftOwner={character.nftOwner}
+        />
       </div>
 
       <section>
@@ -63,14 +66,6 @@ export function InterventionTab({
         </div>
       </section>
     </div>
-  );
-}
-
-function LockedNotice({ character }: { character: Character }) {
-  return (
-    <section className="rounded-3xl bg-surface/40 border border-dashed border-hairline/60 p-6 sm:p-8 text-sm text-mute backdrop-blur-sm text-center">
-      只有持有 <span className="font-mono">{truncateAddress(character.nftOwner)}</span> 能寄夢入她心。
-    </section>
   );
 }
 
