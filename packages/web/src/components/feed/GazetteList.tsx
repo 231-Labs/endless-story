@@ -1,0 +1,86 @@
+import { objectUrl } from '@/lib/explorer';
+import type { GazetteEntry } from '@/lib/api/gazettes';
+
+/**
+ * Full list of gazettes for a saga, newest first. Each entry expands
+ * inline — gazettes are short enough to read in place without a
+ * dedicated detail page.
+ */
+export async function GazetteList({
+    gazettes,
+    sagaName,
+}: {
+    gazettes: GazetteEntry[];
+    sagaName: string;
+}) {
+    if (gazettes.length === 0) {
+        return (
+            <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
+                <p className="font-serif text-base text-ink">{sagaName} 還沒出過公報</p>
+                <p className="mt-3 text-sm leading-relaxed text-mute">
+                    要等班主在管理後台「編公報並上鏈」按下後，這裡才會有內容。
+                </p>
+            </div>
+        );
+    }
+
+    // Resolve full markdown for each gazette in parallel.
+    const bodies = await Promise.all(gazettes.map((g) => fetchBody(g.blobId)));
+
+    return (
+        <div className="space-y-8">
+            {gazettes.map((g, i) => (
+                <article
+                    key={g.commitmentId}
+                    className="rounded-3xl border border-hairline/60 bg-surface/40 p-6 backdrop-blur-sm sm:p-10"
+                >
+                    <header className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute/80">
+                        <span className="rounded border border-hairline/50 bg-canvas/50 px-2 py-1 font-mono">
+                            commit · {g.commitmentId.slice(0, 8)}…
+                        </span>
+                        <span>
+                            {new Date(Number(g.committedAtMs)).toLocaleString('zh-TW', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            })}
+                        </span>
+                        <a
+                            href={objectUrl(g.commitmentId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-cinnabar"
+                        >
+                            on-chain anchor ↗
+                        </a>
+                        <a
+                            href={`/api/blob/${g.blobId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-cinnabar"
+                        >
+                            walrus ↗
+                        </a>
+                    </header>
+                    <div className="mt-6 max-w-prose whitespace-pre-wrap font-serif text-base leading-loose text-ink/90 sm:text-lg">
+                        {bodies[i] || '— 公報內容暫時無法讀取 —'}
+                    </div>
+                </article>
+            ))}
+        </div>
+    );
+}
+
+async function fetchBody(blobId: string): Promise<string> {
+    try {
+        const res = await fetch(
+            `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`,
+            { cache: 'no-store' },
+        );
+        return res.ok ? await res.text() : '';
+    } catch {
+        return '';
+    }
+}

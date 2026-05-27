@@ -1,19 +1,22 @@
 import Link from 'next/link';
-import { chaptersApi, sagasApi, charactersApi } from '@/lib/api/index';
+import { chaptersApi, gazettesApi, sagasApi, charactersApi } from '@/lib/api/index';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SiteNav } from '@/components/home/SiteNav';
 import { truncateBlobId } from '@/lib/format';
+import { GazetteList } from '@/components/feed/GazetteList';
+import { GazetteTeaser } from '@/components/feed/GazetteTeaser';
 
-type FeedMode = 'all' | 'text' | 'visual';
+type FeedMode = 'all' | 'gazette' | 'text' | 'visual';
 
 const MODES: { key: FeedMode; label: string; shortLabel: string }[] = [
   { key: 'all', label: '全部', shortLabel: '全部' },
+  { key: 'gazette', label: '公報', shortLabel: '公報' },
   { key: 'text', label: '文字連載', shortLabel: '文字' },
   { key: 'visual', label: '影像與畫冊', shortLabel: '影像' },
 ];
 
 function parseMode(raw: string | string[] | undefined): FeedMode {
-  if (typeof raw === 'string' && (['all', 'text', 'visual'] as const).includes(raw as FeedMode)) {
+  if (typeof raw === 'string' && (['all', 'gazette', 'text', 'visual'] as const).includes(raw as FeedMode)) {
     return raw as FeedMode;
   }
   return 'all';
@@ -27,9 +30,13 @@ export default async function FeedPage({
   const params = await searchParams;
   const mode = parseMode(params.mode);
   const saga = await sagasApi.getCurrentSaga();
-  const [chapters, allCharacters] = await Promise.all([
+  const [chapters, allCharacters, gazettes, latestGazette] = await Promise.all([
     chaptersApi.listChapters(saga.id),
     charactersApi.listSagaCharacters(saga.id),
+    // For mode=gazette: full list. For mode=all: also need the latest
+    // one as a teaser. Two reads run in parallel.
+    mode === 'gazette' ? gazettesApi.listGazettes(saga.id) : Promise.resolve([]),
+    mode === 'all' ? gazettesApi.getLatestGazette(saga.id) : Promise.resolve(null),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
 
@@ -87,7 +94,14 @@ export default async function FeedPage({
 
       <section className="px-5 pb-8 pt-4 sm:px-10 sm:pb-14 sm:pt-5">
         <div className="mx-auto max-w-6xl">
-          {visible.length === 0 ? (
+          {mode === 'all' && latestGazette ? (
+            <div className="mb-8">
+              <GazetteTeaser gazette={latestGazette} sagaName={saga.name} />
+            </div>
+          ) : null}
+          {mode === 'gazette' ? (
+            <GazetteList gazettes={gazettes} sagaName={saga.name} />
+          ) : visible.length === 0 ? (
             <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
               <p className="text-sm tracking-wide text-mute">這個範圍裡還沒有章回。</p>
             </div>

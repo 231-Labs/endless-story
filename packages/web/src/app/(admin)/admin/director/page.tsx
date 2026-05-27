@@ -1,6 +1,7 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { DirectorPanel } from './DirectorPanel';
+import { GazettePanel } from './GazettePanel';
 
 /**
  * Admin → 導演 — feed admin intent into the Saga Director LLM, see the
@@ -24,6 +25,18 @@ export default function AdminDirectorPage() {
                     </p>
                     <div className="mt-8">
                         <DirectorPanel />
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">公報 · 編輯出版</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            把最近的鏈上事件 + POV 章回打包成一份 saga 級公報，上鏈 anchor。
+                            公報在 <code className="font-mono text-2xs">/feed?mode=gazette</code> 公開閱覽，
+                            事實全來自鏈，LLM 只負責語氣與排版。
+                        </p>
+                        <div className="mt-6">
+                            <GazettePanel />
+                        </div>
                     </div>
                 </div>
             </SagaAdminGuard>
