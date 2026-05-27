@@ -88,7 +88,7 @@ function ChainPovSection({
                   walrus blob ↗
                 </a>
               </div>
-              <ChainPovBody blobUrl={c.blobUrl} />
+              <ChainPovBody blobId={c.blobId} />
             </div>
           </li>
         ))}
@@ -97,12 +97,17 @@ function ChainPovSection({
   );
 }
 
-async function ChainPovBody({ blobUrl }: { blobUrl: string }) {
-  // Server-side fetch — chapter text lives on Walrus. No-store cache so
-  // freshly-committed chapters appear without manual revalidation.
+async function ChainPovBody({ blobId }: { blobId: string }) {
+  // Server-side fetch from Walrus aggregator DIRECTLY (not via our
+  // /api/blob proxy — Node's fetch needs an absolute URL, and there's
+  // no charset issue server-side since we'll decode as UTF-8 via
+  // .text() regardless of the missing Content-Type header). The proxy
+  // only matters for browser-facing <a href> links where the missing
+  // header makes Chrome render as latin-1 → 亂碼.
+  const aggregatorUrl = `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
   let body: string;
   try {
-    const res = await fetch(blobUrl, { cache: 'no-store' });
+    const res = await fetch(aggregatorUrl, { cache: 'no-store' });
     body = res.ok ? await res.text() : '— 無法讀取章回內容（Walrus 暫時不通） —';
   } catch {
     body = '— 無法讀取章回內容 —';
