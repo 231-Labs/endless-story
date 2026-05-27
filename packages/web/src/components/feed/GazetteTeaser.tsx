@@ -46,12 +46,30 @@ async function fetchExcerpt(blobId: string): Promise<string> {
         );
         if (!res.ok) return '';
         const text = await res.text();
-        // Strip markdown title line + first blank, take next ~120 chars
-        // of body for the teaser.
-        const body = text.replace(/^#[^\n]*\n+/, '').trim();
-        return body.slice(0, 140).replace(/\s+/g, ' ').trim();
+        return stripMarkdown(text).slice(0, 140).trim();
     } catch {
         return '';
     }
+}
+
+/**
+ * Tiny markdown-to-plain-text for inline teasers. The teaser is a
+ * single short line so we can't render full markdown — drop the
+ * markup characters and collapse whitespace.
+ */
+function stripMarkdown(md: string): string {
+    return md
+        // Remove any heading lines entirely (we don't want "公報" header in teaser)
+        .replace(/^#+\s.*$/gm, '')
+        // Remove list markers
+        .replace(/^[\s]*[-*·]\s+/gm, '')
+        // Remove link wrappers [text](url) → text
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        // Remove emphasis markers
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\*([^*]+)\*/g, '$1')
+        // Collapse whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 

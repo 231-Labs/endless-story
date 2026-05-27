@@ -1,5 +1,6 @@
 import { objectUrl } from '@/lib/explorer';
 import type { GazetteEntry } from '@/lib/api/gazettes';
+import { Markdown } from '@/components/common/Markdown';
 
 /**
  * Full list of gazettes for a saga, newest first. Each entry expands
@@ -64,9 +65,11 @@ export async function GazetteList({
                             walrus ↗
                         </a>
                     </header>
-                    <div className="mt-6 max-w-prose whitespace-pre-wrap font-serif text-base leading-loose text-ink/90 sm:text-lg">
-                        {bodies[i] || '— 公報內容暫時無法讀取 —'}
-                    </div>
+                    {bodies[i] ? (
+                        <Markdown source={bodies[i]} className="mt-6" />
+                    ) : (
+                        <p className="mt-6 text-sm text-mute">— 公報內容暫時無法讀取 —</p>
+                    )}
                 </article>
             ))}
         </div>

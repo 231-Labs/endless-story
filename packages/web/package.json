@@ -10,18 +10,19 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@endless-story/shared": "workspace:*",
-    "@endless-story/sdk": "workspace:*",
     "@endless-story/llm": "workspace:*",
     "@endless-story/memwal": "workspace:*",
     "@endless-story/runner": "workspace:*",
+    "@endless-story/sdk": "workspace:*",
+    "@endless-story/shared": "workspace:*",
     "@mysten/dapp-kit": "^1.0.6",
     "@mysten/sui": "^2.17.0",
     "@tanstack/react-query": "^5.66.0",
     "framer-motion": "^12.40.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.39",
