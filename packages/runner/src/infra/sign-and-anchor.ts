@@ -4,22 +4,31 @@
  * Every chapter, gazette, reflection, dream, and video produced by any
  * service flows through this helper:
  *
- *   1. hash(content) → SHA-256 / blake2b (caller picks; opaque to chain)
+ *   1. hash(content) → SHA-256 (opaque to chain; just bytes)
  *   2. memwal.putBlob(content) → Walrus blob id
- *   3. commitment::commit(saga, subject, hash, blob_id, hint?) → chain anchor
- *   4. caller can `emit *Committed` event afterwards if needed
+ *   3. commitment::commit(saga, subject, hash, blob_id) → chain anchor
  *
- * Why centralised: the 4-step sequence has subtle ordering rules (hash
- * MUST come from the exact bytes uploaded, blob id MUST match), and
- * we want all services to write the same shape. Future verifiers (web
- * UI, third-party indexers) read the commitment event log → fetch
- * blob → re-hash → verify in one place.
+ * Why centralised: the 3-step sequence has subtle ordering rules (the
+ * hash MUST match the exact bytes uploaded, the blob id MUST land on
+ * chain alongside it), and every service should emit the same shape.
+ * Future verifiers (web UI, third-party indexers) re-fetch blob →
+ * re-hash → compare against chain commitment in one place.
  *
- * Skeleton only — implementation lands in R2 when first real producer
- * (character POV worker) needs it.
+ * Caller responsibility: supply the signing keypair (typically the
+ * admin / storyteller keypair from `getAdminContext` in web, or
+ * `loadKeypair` from `@endless-story/sdk/node` in a standalone runner).
  */
 
-import type { Transaction } from '@mysten/sui/transactions';
+import { createHash } from 'node:crypto';
+import { Transaction } from '@mysten/sui/transactions';
+import type { Keypair } from '@mysten/sui/cryptography';
+import {
+    ENDLESS_STORY_DEPLOYMENT,
+    makeSuiClient,
+    tx as endlessTx,
+} from '@endless-story/sdk';
+import { blob as memwalBlob } from '@endless-story/memwal';
+import { resolveNetwork } from './network.js';
 
 export interface SignAndAnchorInput {
     /** The off-chain Saga id this content belongs to. */
@@ -29,9 +38,17 @@ export interface SignAndAnchorInput {
     subjectId: string;
     /** Raw content bytes that will be uploaded + hashed. */
     content: Uint8Array;
-    /** Optional caller-supplied tag (e.g. storylet_id, recruitment_id,
-     *  kind discriminator). Echoed in event log for indexing. */
-    hint?: string;
+    /** Signer for the commitment::commit tx. Holds the StorytellerCap. */
+    signer: Keypair;
+    /** MIME-ish hint stored alongside the Walrus blob (e.g. 'text/markdown',
+     *  'application/json'). Default 'application/octet-stream'. */
+    contentType?: string;
+    /** Walrus storage epochs. Default 5. */
+    walrusEpochs?: number;
+    /** Override Walrus network — default 'testnet' (per memwal default).
+     *  Walrus + Sui networks are independent; testnet Walrus works with any
+     *  Sui chain. */
+    walrusNetwork?: 'testnet' | 'mainnet';
 }
 
 export interface SignAndAnchorResult {
@@ -39,31 +56,103 @@ export interface SignAndAnchorResult {
     commitmentId: string;
     /** Walrus blob id where content lives. */
     blobId: string;
+    /** Walrus aggregator URL for direct fetch. */
+    blobUrl: string;
     /** Hex content hash matching the on-chain `content_hash` field. */
     contentHashHex: string;
     /** Transaction digest. */
     digest: string;
 }
 
-/**
- * Anchor content on chain. Returns the commitment id + blob id so
- * caller can emit downstream events referencing this artifact.
- *
- * TODO(R2): wire to memwal.putBlob + endlessTx.commitment.commit. For
- * R0 this is a typed shell only.
- */
-export async function signAndAnchor(_input: SignAndAnchorInput): Promise<SignAndAnchorResult> {
-    throw new Error('signAndAnchor: not yet implemented (lands in R2)');
+export async function signAndAnchor(input: SignAndAnchorInput): Promise<SignAndAnchorResult> {
+    // 1. Hash the exact bytes we're about to upload.
+    const hashBytes = sha256(input.content);
+    const contentHashHex = bytesToHex(hashBytes);
+
+    // 2. Upload to Walrus.
+    const put = await memwalBlob.putBlob(input.content, {
+        network: input.walrusNetwork ?? 'testnet',
+        epochs: input.walrusEpochs ?? 5,
+        contentType: input.contentType,
+    });
+
+    // 3. Anchor on chain. blob_id stored as bytes for parity with
+    //    commitment.move's vector<u8> field.
+    const client = makeSuiClient({ network: resolveNetwork() });
+    const tx = new Transaction();
+    tx.add(
+        endlessTx.commitment.commit({
+            cap: storytellerCapIdFromDeployment(),
+            saga: input.sagaId,
+            subjectId: input.subjectId,
+            contentHash: Array.from(hashBytes),
+            blobId: Array.from(new TextEncoder().encode(put.blobId)),
+        }),
+    );
+    const res = await client.signAndExecuteTransaction({
+        transaction: tx,
+        signer: input.signer,
+        options: { showEffects: true, showObjectChanges: true },
+    });
+
+    const commitmentId = findCreatedCommitmentId({
+        objectChanges: res.objectChanges ?? undefined,
+    });
+    if (!commitmentId) {
+        throw new Error(
+            `signAndAnchor: tx succeeded but no Commitment object found in changes (digest=${res.digest})`,
+        );
+    }
+
+    return {
+        commitmentId,
+        blobId: put.blobId,
+        blobUrl: put.url,
+        contentHashHex,
+        digest: res.digest,
+    };
+}
+
+/* ── internals ──────────────────────────────────────────────────────── */
+
+function sha256(bytes: Uint8Array): Uint8Array {
+    const h = createHash('sha256');
+    h.update(bytes);
+    return new Uint8Array(h.digest());
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+function storytellerCapIdFromDeployment(): string {
+    const cap = ENDLESS_STORY_DEPLOYMENT.storytellerCapId;
+    if (!cap) throw new Error('signAndAnchor: storytellerCapId not set in contract-ids');
+    return cap;
+}
+
+interface ObjectChangeLike {
+    type?: string;
+    objectType?: string;
+    objectId?: string;
+}
+
+function findCreatedCommitmentId(res: { objectChanges?: unknown[] }): string | null {
+    const changes = (res.objectChanges ?? []) as ObjectChangeLike[];
+    for (const c of changes) {
+        if (c.type === 'created' && typeof c.objectType === 'string' && c.objectType.endsWith('::commitment::Commitment')) {
+            return c.objectId ?? null;
+        }
+    }
+    return null;
 }
 
 /**
- * PTB-only variant — for callers building a larger transaction.
- * Pushes the commit call onto an existing Transaction; caller signs
- * and executes. Returns nothing because the commitmentId is only known
- * after execution.
- *
- * TODO(R2): implement.
+ * @deprecated R0 stub kept for callers that might still reference it.
+ * Use `signAndAnchor` instead.
  */
-export function pushCommitCall(_tx: Transaction, _input: SignAndAnchorInput): void {
-    throw new Error('pushCommitCall: not yet implemented (lands in R2)');
+export function pushCommitCall(): void {
+    throw new Error('pushCommitCall: removed — use signAndAnchor for full lifecycle');
 }

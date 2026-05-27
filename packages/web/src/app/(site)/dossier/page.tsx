@@ -27,6 +27,8 @@ import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
 import { DEMO_VIEWER_WALLET } from '@/mocks/subscriptions';
 import { shortChapterTitle } from '@/lib/format';
+import { fetchPovChaptersForCharacter } from '@/lib/chain/pov-read';
+import { PovTriggerButton } from '@/components/dossier/PovTriggerButton';
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
 const VALID_FILTERS: RosterFilter[] = ['all', 'internal', 'external', 'mine'];
@@ -155,6 +157,7 @@ export default async function DossierPage({
     persona,
     liveState,
     sagaName,
+    chainPovChapters,
   ] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
@@ -170,6 +173,10 @@ export default async function DossierPage({
     character.sagaId
       ? sagasApi.getSaga(character.sagaId).then((s) => s?.name ?? null)
       : Promise.resolve(null),
+    // On-chain POV chapters anchored via commitment.move. Empty array
+    // when nothing's been committed yet (no runner POV yet, no
+    // admin-triggered chapter yet).
+    fetchPovChaptersForCharacter(character.id, { limit: 5 }),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
   const memoryChapterIds = Array.from(
@@ -232,7 +239,14 @@ export default async function DossierPage({
               <GalleryTab character={character} isOwner={viewerWallet === character.nftOwner} />
             ) : null}
             {tab === 'chapters' ? (
-              <ChaptersTab chapters={chapters} character={character} />
+              <>
+                <ChaptersTab
+                  chapters={chapters}
+                  character={character}
+                  chainPovChapters={chainPovChapters}
+                />
+                <PovTriggerButton characterId={character.id} />
+              </>
             ) : null}
             {tab === 'memories' ? (
               <MemoriesTab
