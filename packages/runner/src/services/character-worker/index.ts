@@ -41,6 +41,14 @@ export interface RunCharacterWorkerInput {
     recentMemorySnippets?: string[];
     /** Optional: owner-injected dream fragment to weave in (R5). */
     dreamFragment?: string;
+    /**
+     * Optional: role / specialty override (e.g. "富商" from off-chain
+     * Recruitment.specialty). Chain `Character` has no role field, so
+     * caller is expected to look this up and pass in. If omitted,
+     * snapshot defaults to '—' so the LLM doesn't get misled by a
+     * fake role like the previous hardcoded '武小生'.
+     */
+    role?: string;
     /** Override LLM model. */
     model?: string;
     /** Bypass subscriber gate (admin manual trigger). */
@@ -74,7 +82,12 @@ export interface RunCharacterWorkerResult {
 
 export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharacterWorkerResult> {
     const client = makeSuiClient({ network: resolveNetwork() });
-    const snapshot = await fetchCharacterSnapshot(client, input.characterId, input.sagaId);
+    const snapshot = await fetchCharacterSnapshot(
+        client,
+        input.characterId,
+        input.sagaId,
+        input.role,
+    );
     if (!snapshot) {
         return {
             chapter: '',
@@ -163,6 +176,7 @@ async function fetchCharacterSnapshot(
     client: SuiClient,
     characterId: string,
     sagaId: string,
+    roleOverride?: string,
 ): Promise<CharacterSnapshotInternal | null> {
     const [charRes, sagaRes] = await Promise.all([
         read.character.getCharacter(client, characterId).catch(() => null),
@@ -205,9 +219,11 @@ async function fetchCharacterSnapshot(
     return {
         id: characterId,
         name: charJson.profile?.name ?? '無名',
-        // Role is not on chain — leave generic. (UI Character.role is also
-        // hardcoded in chain mapper for the same reason.)
-        role: '武小生',
+        // Role is not on chain — caller supplies via roleOverride
+        // (typically resolved from off-chain Recruitment.specialty
+        // via voucher hint). Without override, render as '—' so the
+        // LLM doesn't get misled into impersonating a wrong role.
+        role: roleOverride ?? '—',
         gender: mapGender(physical?.gender ?? ''),
         ageYears: Number(physical?.age_years ?? 0),
         sagaName: sagaJson?.name ?? '無名戲班',

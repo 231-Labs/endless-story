@@ -70,7 +70,9 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
         sagaId: unwrapOption(json.state?.saga_id),
         name: profile?.name ?? '無名',
         description: profile?.description ?? '',
-        role: '武小生' as CharacterRole, // chain doesn't store role
+        // Chain doesn't store role — placeholder; facade enriches from
+        // voucher hint → Recruitment.specialty before returning to UI.
+        role: '看客' as CharacterRole,
         gender: mapGender(physical?.gender ?? ''),
         age: Number(physical?.age_years ?? 0),
         physicalFacts: [physical?.species, physical?.body].filter(Boolean).join(' / ') || '—',

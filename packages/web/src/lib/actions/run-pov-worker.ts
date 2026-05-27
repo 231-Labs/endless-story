@@ -11,6 +11,8 @@
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { characterWorker as runnerCharacterWorker } from '@endless-story/runner';
 import { getAdminContext } from '@/lib/chain/admin-signer';
+import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
+import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
 
 export interface RunPovInput {
     characterId: string;
@@ -60,11 +62,19 @@ export async function runPovAction(input: RunPovInput): Promise<RunPovResult> {
         input.triggerNarrative?.trim() ||
         '你剛剛在 saga 中經歷了一段時光，請寫下你此刻的心境。';
 
+    // Resolve role from voucher hint → off-chain Recruitment.specialty.
+    // Chain Character has no role field; this is what makes the LLM
+    // address "富商" instead of the placeholder default.
+    const recruitmentId = await fetchRecruitmentIdForCharacter(input.characterId);
+    const recruitment = recruitmentId ? await getStoreRecruitment(recruitmentId) : null;
+    const role = recruitment?.specialty ?? undefined;
+
     try {
         const res = await runnerCharacterWorker.runOnce({
             characterId: input.characterId,
             sagaId: d.sagaId,
             triggerNarrative,
+            role,
             forceRun: input.forceRun ?? true, // admin trigger always bypasses
             dryRun: input.dryRun,
             signer: input.dryRun

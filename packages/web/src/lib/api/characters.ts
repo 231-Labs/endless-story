@@ -1,4 +1,4 @@
-import type { Character, CharacterMagnetism } from '@endless-story/shared';
+import type { Character, CharacterMagnetism, CharacterRole } from '@endless-story/shared';
 import { characters, getCharacterById, listCharactersBySaga } from '@/mocks/characters';
 import { magnetismByCharacterId } from '@/mocks/magnetism';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
@@ -10,6 +10,11 @@ import {
   fetchOnChainCharactersByOwner,
   isSuiObjectId,
 } from '@/lib/chain/character-read';
+import {
+  fetchRecruitmentIdForCharacter,
+  fetchRecruitmentIdMapForCharacters,
+} from '@/lib/chain/voucher-read';
+import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
 
 /**
  * Characters API
@@ -17,6 +22,12 @@ import {
  * Chain-first when the deployment is live (packageId set). Falls back to
  * mocks during local dev / before bootstrap. Magnetism / relationships
  * remain mock-only — they're off-chain enrichment, Phase 4 runner work.
+ *
+ * Role enrichment lives at the facade layer (not in chain mapper):
+ * chain `Character` has no role field, so we trace voucher hint →
+ * off-chain Recruitment.specialty and overlay. Single-character paths
+ * do one event scan; list paths batch via
+ * `fetchRecruitmentIdMapForCharacters` so we don't fan out N scans.
  *
  * Backend HTTP endpoints (legacy, USE_MOCK=false path):
  *   GET  /characters[?sagaId=|ownedBy=]
@@ -28,18 +39,21 @@ function isDeployed(): boolean {
 }
 
 export async function listCharacters(): Promise<Character[]> {
-  // Chain query covers the deployed package's full minted set.
-  if (isDeployed()) return fetchOnChainCharacters();
+  if (isDeployed()) {
+    const chars = await fetchOnChainCharacters();
+    return enrichRoles(chars);
+  }
   if (USE_MOCK) return characters;
   return httpGet<Character[]>('/characters');
 }
 
 export async function getCharacter(id: string): Promise<Character | null> {
-  // Sui object id → live chain read.
   if (isSuiObjectId(id)) {
     const onChain = await fetchOnChainCharacter(id);
-    if (onChain) return onChain;
-    // fall through if chain doesn't know it (might be a demo / burned id)
+    if (onChain) {
+      const role = await resolveRoleFromVoucher(id);
+      return role ? { ...onChain, role } : onChain;
+    }
   }
   if (USE_MOCK) return getCharacterById(id) ?? null;
   try {
@@ -51,20 +65,19 @@ export async function getCharacter(id: string): Promise<Character | null> {
 
 export async function listSagaCharacters(sagaId: string): Promise<Character[]> {
   if (isDeployed()) {
-    // sagaId here may be a chain saga object id OR a demo slug like
-    // 'spring-snow'. For Phase 3 we only chain-filter by REAL saga ids
-    // (since the chain event records the actual Saga object id, not a
-    // human slug). Fall through to mock for demo slugs.
-    if (isSuiObjectId(sagaId)) return fetchOnChainCharacters({ sagaId });
+    if (isSuiObjectId(sagaId)) {
+      const chars = await fetchOnChainCharacters({ sagaId });
+      return enrichRoles(chars);
+    }
   }
   if (USE_MOCK) return listCharactersBySaga(sagaId);
   return httpGet<Character[]>('/characters', { query: { sagaId } });
 }
 
 export async function listOwnedCharacters(wallet: string): Promise<Character[]> {
-  // Chain-first when caller passes a real Sui address.
   if (isSuiObjectId(wallet)) {
-    return fetchOnChainCharactersByOwner(wallet);
+    const chars = await fetchOnChainCharactersByOwner(wallet);
+    return enrichRoles(chars);
   }
   if (USE_MOCK) return characters.filter((c) => c.nftOwner === wallet);
   return httpGet<Character[]>('/characters', { query: { ownedBy: wallet } });
@@ -77,4 +90,40 @@ export async function getMagnetism(characterId: string): Promise<CharacterMagnet
   } catch {
     return null;
   }
+}
+
+/* ── role enrichment helpers ────────────────────────────────────── */
+
+async function resolveRoleFromVoucher(characterId: string): Promise<CharacterRole | null> {
+  const recruitmentId = await fetchRecruitmentIdForCharacter(characterId);
+  if (!recruitmentId) return null;
+  const recruitment = await getStoreRecruitment(recruitmentId);
+  if (!recruitment) return null;
+  // Recruitment.specialty is `CharacterRole | string`; the runtime
+  // value may be outside the union (e.g. "富商"). Cast through —
+  // CharacterPortrait + role-display surfaces all tolerate unknowns.
+  return recruitment.specialty as CharacterRole;
+}
+
+async function enrichRoles(chars: Character[]): Promise<Character[]> {
+  if (chars.length === 0) return chars;
+  const recruitIdMap = await fetchRecruitmentIdMapForCharacters(chars.map((c) => c.id));
+  // Dedupe recruitment ids → single off-chain fetch per id.
+  const uniqRecruitIds = Array.from(
+    new Set(
+      Array.from(recruitIdMap.values()).filter((v): v is string => v != null),
+    ),
+  );
+  const recruitmentsById = new Map<string, Awaited<ReturnType<typeof getStoreRecruitment>>>();
+  await Promise.all(
+    uniqRecruitIds.map(async (rid) => {
+      recruitmentsById.set(rid, await getStoreRecruitment(rid));
+    }),
+  );
+  return chars.map((c) => {
+    const rid = recruitIdMap.get(c.id);
+    const recruitment = rid ? recruitmentsById.get(rid) : null;
+    if (!recruitment) return c;
+    return { ...c, role: recruitment.specialty as CharacterRole };
+  });
 }

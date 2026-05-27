@@ -112,12 +112,13 @@ function PovResult({ result }: { result: RunPovResult }) {
                         commitment
                     </a>
                 ) : null}
-                {result.blobUrl ? (
+                {result.blobId ? (
                     <a
-                        href={result.blobUrl}
+                        href={`/api/blob/${result.blobId}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-cinnabar hover:underline"
+                        title="走 web proxy 補正 content-type，否則中文會亂碼"
                     >
                         walrus
                     </a>

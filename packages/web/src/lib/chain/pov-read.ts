@@ -111,6 +111,11 @@ function decodeBytesHex(raw: number[] | string | undefined): string {
 }
 
 function buildWalrusBlobUrl(blobId: string): string {
-    // Walrus testnet aggregator — same default as memwal package.
-    return `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
+    // Web proxy route — re-emits the Walrus aggregator response with a
+    // proper UTF-8 content-type header so browsers render text blobs
+    // (chapters, gazettes) instead of mojibake. Direct aggregator URL:
+    //   https://aggregator.walrus-testnet.walrus.space/v1/blobs/{id}
+    // returns the same bytes but with no Content-Type (browsers fall
+    // through to octet-stream → 中文亂碼). See /api/blob route handler.
+    return `/api/blob/${blobId}`;
 }
