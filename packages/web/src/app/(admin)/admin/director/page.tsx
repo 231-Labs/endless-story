@@ -2,6 +2,8 @@ import { SiteNav } from '@/components/home/SiteNav';
 import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { DirectorPanel } from './DirectorPanel';
 import { GazettePanel } from './GazettePanel';
+import { DreamConfigPanel } from './DreamConfigPanel';
+import { getDreamConfigSnapshot } from '@/lib/actions/dream-config';
 
 /**
  * Admin → 導演 — feed admin intent into the Saga Director LLM, see the
@@ -10,7 +12,8 @@ import { GazettePanel } from './GazettePanel';
  *
  * Server component shell only; the interactive form is a client child.
  */
-export default function AdminDirectorPage() {
+export default async function AdminDirectorPage() {
+    const dreamConfig = await getDreamConfigSnapshot();
     return (
         <main className="min-h-screen">
             <SiteNav />
@@ -36,6 +39,17 @@ export default function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <GazettePanel />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">注夢 · 經濟設定</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            設定 character owner 注入夢境的價格 (ENDLESS) 與是否暫停。
+                            價格與暫停狀態都即時上鏈，下次 owner 開注夢面板時生效。
+                        </p>
+                        <div className="mt-6">
+                            <DreamConfigPanel initial={dreamConfig} />
                         </div>
                     </div>
                 </div>

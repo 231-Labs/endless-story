@@ -1,0 +1,1116 @@
+{
+  "id": {
+    "address": "endless_story",
+    "name": "dream"
+  },
+  "doc": " Dream — owner-paid memory injection.\n\n **What this is**: a Character owner pays ENDLESS to inject a dream\n fragment into their character's memory. The fragment is moderated\n + optimised off-chain (server-side LLM) before submission, then\n anchored on chain with high importance so the runner's POV worker\n surfaces it on the next chapter.\n\n **Authentication**: caller must hold the `OwnerCap` matching the\n target Character. This binds dream submission to NFT ownership —\n only the rightful character owner can shape their memory.\n\n **Payment**: `submit_dream` takes a `Coin<CURRENCY>` of at least\n `DreamConfig.price` and deposits it into the saga's treasury.\n Admin can adjust price + pause via `set_dream_price` / `set_paused`\n using `DreamAdminCap`. Default price = 50 ENDLESS (50_000_000 raw\n with 6 decimals).\n\n **Visibility**: Dream is a shared object so the runner / web can\n read it without owner gating. The CONTENT lives on Walrus; only\n the hash + blob_id are on chain. `importance: u8` defaults to 8 of\n 10 — when the POV worker pulls memories for prompt, dreams jump\n to the top of recall.\n\n **Why not commitment.move**: dream needs payment + auth that aren't\n in commitment's surface. Keeping commitment lean (Layer 1 product\n anchor) and giving dream its own module is cleaner.",
+  "immediate_dependencies": [
+    {
+      "address": "endless_story",
+      "name": "character"
+    },
+    {
+      "address": "endless_story",
+      "name": "currency"
+    },
+    {
+      "address": "endless_story",
+      "name": "saga"
+    },
+    {
+      "address": "std",
+      "name": "vector"
+    },
+    {
+      "address": "sui",
+      "name": "clock"
+    },
+    {
+      "address": "sui",
+      "name": "coin"
+    },
+    {
+      "address": "sui",
+      "name": "event"
+    },
+    {
+      "address": "sui",
+      "name": "object"
+    },
+    {
+      "address": "sui",
+      "name": "transfer"
+    },
+    {
+      "address": "sui",
+      "name": "tx_context"
+    }
+  ],
+  "attributes": [],
+  "functions": {
+    "create_config": {
+      "source_index": 0,
+      "index": 0,
+      "doc": " Storyteller creates the DreamConfig (one per saga, at bootstrap).\n Default price = 50 ENDLESS. Admin cap transferred to caller.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "initial_price",
+          "type_": "u64"
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "set_dream_price": {
+      "source_index": 1,
+      "index": 1,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "admin",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamAdminCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_price",
+          "type_": "u64"
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "set_paused": {
+      "source_index": 2,
+      "index": 2,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "admin",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamAdminCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "paused",
+          "type_": "bool"
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "submit_dream": {
+      "source_index": 3,
+      "index": 3,
+      "doc": " Owner pays ENDLESS + submits a moderated dream blob ref.\n\n Caller responsibilities (off chain):\n   1. Send raw text to moderator LLM → get optimised text\n   2. Upload optimised text to Walrus → get blob_id\n   3. Hash the optimised bytes → content_hash\n   4. Sign + send this entry with payment Coin\n\n On chain we verify: cap matches character, character belongs to\n saga, config matches saga, not paused, payment >= price. Treasury\n deposit happens here; no refund path (rejected dreams never reach\n the chain — that's the moderator's job).",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner_cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "OwnerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "payment",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "coin"
+              },
+              "name": "Coin",
+              "type_arguments": [
+                {
+                  "phantom": true,
+                  "argument": {
+                    "Datatype": {
+                      "module": {
+                        "address": "endless_story",
+                        "name": "currency"
+                      },
+                      "name": "CURRENCY",
+                      "type_arguments": []
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "content_hash",
+          "type_": {
+            "vector": "u8"
+          }
+        },
+        {
+          "name": "blob_id",
+          "type_": {
+            "vector": "u8"
+          }
+        },
+        {
+          "name": "importance",
+          "type_": "u8"
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "config_price": {
+      "source_index": 4,
+      "index": 4,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "config_paused": {
+      "source_index": 5,
+      "index": 5,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "bool"
+      ]
+    },
+    "config_saga_id": {
+      "source_index": 6,
+      "index": 6,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "c",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "DreamConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "dream_character_id": {
+      "source_index": 7,
+      "index": 7,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "d",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "Dream",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "dream_submitter": {
+      "source_index": 8,
+      "index": 8,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "d",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "Dream",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "address"
+      ]
+    },
+    "dream_importance": {
+      "source_index": 9,
+      "index": 9,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "d",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "Dream",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u8"
+      ]
+    },
+    "dream_content_hash": {
+      "source_index": 10,
+      "index": 10,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "d",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "Dream",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "vector": "u8"
+            }
+          ]
+        }
+      ]
+    },
+    "dream_blob_id": {
+      "source_index": 11,
+      "index": 11,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "d",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "Dream",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "vector": "u8"
+            }
+          ]
+        }
+      ]
+    },
+    "dream_injected_at_ms": {
+      "source_index": 12,
+      "index": 12,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "d",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "dream"
+                  },
+                  "name": "Dream",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    }
+  },
+  "structs": {
+    "DreamConfig": {
+      "index": 0,
+      "doc": " Saga-scoped dream config. Shared object — anyone reads, only admin\n cap writes. One per saga; saga storyteller creates at bootstrap.",
+      "attributes": [],
+      "abilities": [
+        "Key"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "UID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "price": {
+            "index": 2,
+            "doc": " Minimum ENDLESS required to submit a dream (raw units, 6 decimals).",
+            "type_": "u64"
+          },
+          "paused": {
+            "index": 3,
+            "doc": null,
+            "type_": "bool"
+          }
+        }
+      }
+    },
+    "DreamAdminCap": {
+      "index": 1,
+      "doc": " Mint at config creation. Holder can set_dream_price / set_paused.",
+      "attributes": [],
+      "abilities": [
+        "Key",
+        "Store"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "UID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "Dream": {
+      "index": 2,
+      "doc": " Per-injected-dream record. Shared so runner + web can read freely.",
+      "attributes": [],
+      "abilities": [
+        "Key"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "UID",
+                "type_arguments": []
+              }
+            }
+          },
+          "character_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "submitter": {
+            "index": 3,
+            "doc": " Address that paid for + submitted the dream (= OwnerCap holder\n at time of submission).",
+            "type_": "address"
+          },
+          "paid_amount": {
+            "index": 4,
+            "doc": " Raw ENDLESS amount deposited into saga treasury.",
+            "type_": "u64"
+          },
+          "content_hash": {
+            "index": 5,
+            "doc": " Hash of the moderated dream content.",
+            "type_": {
+              "vector": "u8"
+            }
+          },
+          "blob_id": {
+            "index": 6,
+            "doc": " Walrus blob id (caller's responsibility to upload before\n calling this entry).",
+            "type_": {
+              "vector": "u8"
+            }
+          },
+          "importance": {
+            "index": 7,
+            "doc": " 0–10 importance — POV worker uses this to weight recall.\n Server-side moderator picks; default 8.",
+            "type_": "u8"
+          },
+          "injected_at_ms": {
+            "index": 8,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "DreamConfigCreated": {
+      "index": 3,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "config_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "price": {
+            "index": 2,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "DreamConfigUpdated": {
+      "index": 4,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "config_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "new_price": {
+            "index": 2,
+            "doc": null,
+            "type_": "u64"
+          },
+          "paused": {
+            "index": 3,
+            "doc": null,
+            "type_": "bool"
+          },
+          "updated_at_ms": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "DreamInjected": {
+      "index": 5,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "dream_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "character_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "submitter": {
+            "index": 3,
+            "doc": null,
+            "type_": "address"
+          },
+          "paid_amount": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          },
+          "importance": {
+            "index": 5,
+            "doc": null,
+            "type_": "u8"
+          },
+          "injected_at_ms": {
+            "index": 6,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}

@@ -23,6 +23,8 @@ export interface DeploymentSnapshot {
   sceneIds?: string[];
   faucetId?: string;
   faucetAdminCapId?: string;
+  dreamConfigId?: string;
+  dreamAdminCapId?: string;
   demoCharacters?: DemoCharacterRef[];
   storyId?: string;
 }
@@ -40,6 +42,8 @@ export function renderContractIdsFile(snap: DeploymentSnapshot, deployedAt: stri
     sceneIds: snap.sceneIds ?? [],
     faucetId: snap.faucetId ?? '',
     faucetAdminCapId: snap.faucetAdminCapId ?? '',
+    dreamConfigId: snap.dreamConfigId ?? '',
+    dreamAdminCapId: snap.dreamAdminCapId ?? '',
     demoCharacters: snap.demoCharacters ?? [],
     storyId: snap.storyId ?? '',
     deployedAt,
@@ -83,6 +87,8 @@ export interface EndlessStoryDeployment {
   sceneIds: string[];
   faucetId: string;
   faucetAdminCapId: string;
+  dreamConfigId: string;
+  dreamAdminCapId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;

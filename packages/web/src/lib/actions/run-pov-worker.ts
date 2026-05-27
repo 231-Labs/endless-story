@@ -32,6 +32,8 @@ export interface RunPovResult {
     blobId?: string;
     blobUrl?: string;
     digest?: string;
+    /** Owner dream weaved into this chapter, if any. */
+    dreamFragmentUsed?: string;
     error?: string;
 }
 
@@ -90,6 +92,7 @@ export async function runPovAction(input: RunPovInput): Promise<RunPovResult> {
             blobId: res.blobId,
             blobUrl: res.blobUrl,
             digest: res.digest,
+            dreamFragmentUsed: res.dreamFragmentUsed,
         };
     } catch (err) {
         return {

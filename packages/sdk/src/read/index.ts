@@ -24,3 +24,4 @@ export * as character from './character.js';
 export * as recruit from './recruit.js';
 export * as commitment from './commitment.js';
 export * as subscribe from './subscribe.js';
+export * as dream from './dream.js';

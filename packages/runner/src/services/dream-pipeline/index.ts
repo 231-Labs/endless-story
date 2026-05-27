@@ -1,54 +1,120 @@
 /**
- * Dream Pipeline — owner pays ENDLESS to inject a dream into a
- * character's memory.
+ * Dream Pipeline — owner-paid memory injection.
  *
- * **Flow (R5)**:
- *   1. Owner submits raw text + locks ENDLESS payment (configurable
- *      price via DreamConfig admin object, default 50 ENDLESS)
- *   2. Dream Moderator LLM checks (黑詞、越界、世界觀衝突) and
- *      rewrites into a coherent dream fragment that preserves intent
- *      (e.g. "I want her to remember childhood snow" →
- *      "夢中跌進祖母織了一半的圍巾，白色絨線散開來像一場無聲的雪")
- *   3. Approved dream → memwal blob + commitment::commit with
- *      importance=8 + anchor=true (won't be reflection-compressed)
- *   4. Emit DreamInjected event
- *   5. Character's next POV worker run pulls dream to top of recall
- *      queue; chapter metadata marks `influenced_by_dream: <commit_id>`
+ * Flow split into two halves:
  *
- * **Failure modes**:
- *   - Moderation reject → refund 80% (keep 20% as gas + LLM cost)
- *   - LLM optimization diverges too far → owner can reject + full
- *     refund (one chance per submission)
+ * **Server-side (this module)**: moderate raw text + upload optimised
+ * blob to Walrus. Returns the prepared `{ blobId, contentHash,
+ * optimizedText, importance }`. NO chain interaction — payment + dream
+ * object creation happens on the client side where the user's wallet
+ * signs the tx with their own ENDLESS Coin.
  *
- * R0: type-shell only.
+ * **Client-side (web wallet)**: build PTB calling `dream::submit_dream`
+ * with the prepared blob/hash + payment Coin + OwnerCap. User signs.
+ *
+ * Why split: dream submission burns user ENDLESS, so the user MUST sign
+ * — server can't sign on their behalf without breaking the payment
+ * provenance. Moderation needs server-side LLM access (api keys) so
+ * can't run client-side either.
  */
 
-export interface SubmitDreamInput {
-    characterId: string;
-    /** Owner address — verified against character's OwnerCap holder. */
-    ownerAddress: string;
-    /** Raw dream text from owner. */
+import { createHash } from 'node:crypto';
+import { blob as memwalBlob } from '@endless-story/memwal';
+import { moderateDream, type ModerateDreamResult } from './moderator.js';
+
+export interface PrepareDreamInput {
     rawText: string;
-    /** Amount of ENDLESS to lock (default from DreamConfig). */
-    paymentAmount: bigint;
+    /** Character context for the moderator prompt voice. */
+    characterName: string;
+    sagaName: string;
+    eraHint?: string;
     model?: string;
 }
 
-export interface SubmitDreamResult {
-    status: 'accepted' | 'moderation_reject' | 'optimization_diverged';
-    /** Original input echoed back. */
-    rawText: string;
-    /** Moderator-rewritten dream (only set if accepted). */
-    optimizedText?: string;
-    /** Chain commitment id (only if accepted + anchored). */
-    commitmentId?: string;
-    blobId?: string;
-    /** Refund info if rejected. */
-    refundAmount?: bigint;
-    /** Reason for reject. */
-    rejectReason?: string;
+export interface PreparedDream {
+    /** Walrus blob id of the optimised dream fragment. */
+    blobId: string;
+    /** Walrus aggregator URL (informational). */
+    blobUrl: string;
+    /** Hex SHA-256 over the bytes uploaded. */
+    contentHashHex: string;
+    /** Same bytes as Uint8Array — caller may want to display the
+     *  optimised text + use the bytes when constructing the tx. */
+    contentBytes: Uint8Array;
+    /** Moderator-rewritten dream fragment (UTF-8 text). */
+    optimizedText: string;
+    /** 0-10 importance assigned by moderator. */
+    importance: number;
 }
 
-export async function submitDream(_input: SubmitDreamInput): Promise<SubmitDreamResult> {
-    throw new Error('dream-pipeline.submitDream: not yet implemented (lands in R5)');
+export type PrepareDreamResult =
+    | { status: 'accepted'; prepared: PreparedDream }
+    | { status: 'rejected'; rejectReason: string };
+
+/**
+ * Server-side preparation. Returns either prepared data the client
+ * can use to build a `submit_dream` tx, or a rejection reason.
+ */
+export async function prepareDream(input: PrepareDreamInput): Promise<PrepareDreamResult> {
+    const mod = await moderateDream(input);
+    if (mod.status === 'rejected') {
+        return { status: 'rejected', rejectReason: mod.rejectReason ?? '未通過審核' };
+    }
+    const optimized = mod.optimizedText!;
+    const importance = mod.importance ?? 8;
+    const bytes = new TextEncoder().encode(optimized);
+
+    // Hash before upload — content-addressed but we also want SHA-256
+    // since that's what commitment.move stores conceptually.
+    const hash = sha256(bytes);
+    const contentHashHex = bytesToHex(hash);
+
+    // Upload to Walrus testnet (same default as POV chapter pipeline).
+    let put;
+    try {
+        put = await memwalBlob.putBlob(bytes, {
+            network: 'testnet',
+            epochs: 5,
+            contentType: 'text/plain; charset=utf-8',
+        });
+    } catch (err) {
+        return {
+            status: 'rejected',
+            rejectReason: `Walrus 上傳失敗：${err instanceof Error ? err.message : String(err)}`,
+        };
+    }
+
+    return {
+        status: 'accepted',
+        prepared: {
+            blobId: put.blobId,
+            blobUrl: put.url,
+            contentHashHex,
+            contentBytes: bytes,
+            optimizedText: optimized,
+            importance,
+        },
+    };
+}
+
+/**
+ * Convenience: pure moderation (no Walrus upload). Used by an admin
+ * preview UI to test moderator output without committing.
+ */
+export async function moderateOnly(input: PrepareDreamInput): Promise<ModerateDreamResult> {
+    return moderateDream(input);
+}
+
+/* ── helpers ─────────────────────────────────────────────── */
+
+function sha256(bytes: Uint8Array): Uint8Array {
+    const h = createHash('sha256');
+    h.update(bytes);
+    return new Uint8Array(h.digest());
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
 }

@@ -345,6 +345,30 @@ async function main() {
   console.log(`   scenes    ${sceneIds.length} created`);
 
   // ═══════════════════════════════════════════════════════════════════
+  // Tx 5: DreamConfig — owner注夢機制 (default 50 ENDLESS, 6 decimals)
+  // ═══════════════════════════════════════════════════════════════════
+  const DREAM_DEFAULT_PRICE_RAW = 50_000_000n; // 50 ENDLESS
+  const tx5 = new Transaction();
+  tx5.add(
+    endlessTx.dream.createConfig({
+      cap: storytellerCapId,
+      saga: sagaId,
+      initialPrice: DREAM_DEFAULT_PRICE_RAW,
+    }),
+  );
+  const changes5 = await runTx(client, signer, tx5, 'Tx 5 — DreamConfig');
+  const dreamConfigId = firstOrThrow(
+    findCreatedByType(changes5, '::dream::DreamConfig'),
+    'DreamConfig',
+  );
+  const dreamAdminCapId = firstOrThrow(
+    findCreatedByType(changes5, '::dream::DreamAdminCap'),
+    'DreamAdminCap',
+  );
+  console.log(`   dreamConf  ${dreamConfigId}`);
+  console.log(`   dreamAdm   ${dreamAdminCapId}`);
+
+  // ═══════════════════════════════════════════════════════════════════
   // Write contract-ids.ts
   // ═══════════════════════════════════════════════════════════════════
   console.log('\n[contract-ids] writing snapshot…');
@@ -362,6 +386,8 @@ async function main() {
       sceneIds,
       faucetId,
       faucetAdminCapId,
+      dreamConfigId,
+      dreamAdminCapId,
       storyId,
     },
     deployedAt,
@@ -373,6 +399,7 @@ async function main() {
   console.log(`   saga       ${sagaId}`);
   console.log(`   scenes     ${sceneIds.length}`);
   console.log(`   faucet     ${faucetId}`);
+  console.log(`   dreamConf  ${dreamConfigId}`);
   console.log('\nNext: run test-recruit-e2e to verify the full mint flow.');
 }
 

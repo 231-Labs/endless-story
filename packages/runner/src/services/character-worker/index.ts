@@ -18,6 +18,7 @@
 
 import type { Keypair } from '@mysten/sui/cryptography';
 import {
+    ENDLESS_STORY_DEPLOYMENT,
     makeSuiClient,
     read,
     type SuiClient,
@@ -76,6 +77,10 @@ export interface RunCharacterWorkerResult {
     digest?: string;
     /** Snapshot used for prompt — debug aid. */
     snapshot?: CharacterSnapshot;
+    /** When the prompt wove a dream in (caller-supplied OR auto-pulled
+     *  from latest DreamInjected event), this is the resolved fragment.
+     *  UI surfaces it as a「本章受夢境影響」chip. */
+    dreamFragmentUsed?: string;
     /** Errors that didn't abort. */
     errors?: string[];
 }
@@ -108,6 +113,11 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         };
     }
 
+    // Pull latest owner-injected dream (if any) so the prompt can
+    // weave it in. Caller may also pass dreamFragment explicitly to
+    // override (e.g. dry-run test); explicit wins.
+    const resolvedDream = input.dreamFragment ?? (await fetchLatestDreamFragment(client, input.characterId));
+
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
 
@@ -116,7 +126,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         character: stripInternal(snapshot),
         triggerNarrative: input.triggerNarrative,
         recentMemorySnippets: input.recentMemorySnippets ?? [],
-        dreamFragment: input.dreamFragment,
+        dreamFragment: resolvedDream,
     });
 
     const response = await llm.chat({
@@ -136,6 +146,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
             chapter,
             anchored: false,
             snapshot: stripInternal(snapshot),
+            dreamFragmentUsed: resolvedDream,
         };
     }
 
@@ -157,6 +168,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         contentHashHex: anchor.contentHashHex,
         digest: anchor.digest,
         snapshot: stripInternal(snapshot),
+        dreamFragmentUsed: resolvedDream,
     };
 }
 
@@ -256,4 +268,45 @@ function mapGender(raw: string): string {
     if (raw === '男' || raw.toLowerCase() === 'male') return '男';
     if (raw === '女' || raw.toLowerCase() === 'female') return '女';
     return '中性';
+}
+
+/**
+ * Find the latest DreamInjected event for this character, fetch the
+ * Dream object → get blob_id → fetch text from Walrus.
+ *
+ * Returns undefined if no dream exists, or any step fails — the POV
+ * worker degrades gracefully (no dream weaving, normal prompt).
+ *
+ * Smallville convention: only the most recent dream is surfaced per
+ * chapter, since dream is meant to be a fresh emotional anchor. Older
+ * dreams persist on chain but get demoted to memory-tail (R-next).
+ */
+async function fetchLatestDreamFragment(
+    client: SuiClient,
+    characterId: string,
+): Promise<string | undefined> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return undefined;
+    try {
+        const dreams = await read.dream.listDreamInjectedEvents(client, pkg, {
+            characterId,
+            maxEvents: 1,
+        });
+        if (dreams.length === 0) return undefined;
+        const dreamId = dreams[0].dreamId;
+        const res = await read.dream.getDream(client, dreamId);
+        const json = res.json as unknown as { blob_id?: number[] };
+        if (!Array.isArray(json.blob_id)) return undefined;
+        const blobId = new TextDecoder().decode(new Uint8Array(json.blob_id));
+        const r = await fetch(
+            `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`,
+            { cache: 'no-store' },
+        );
+        if (!r.ok) return undefined;
+        const text = await r.text();
+        return text.trim() || undefined;
+    } catch (err) {
+        console.warn('[character-worker] fetchLatestDreamFragment failed:', err);
+        return undefined;
+    }
 }

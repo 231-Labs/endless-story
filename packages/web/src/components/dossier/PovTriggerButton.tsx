@@ -129,6 +129,15 @@ function PovResult({ result }: { result: RunPovResult }) {
                 <div className="text-xs text-cinnabar">錯誤：{result.error}</div>
             ) : null}
 
+            {result.dreamFragmentUsed ? (
+                <div className="rounded border border-jade/30 bg-jade/5 p-3">
+                    <div className="text-2xs tracking-widest text-jade">本章受夢境影響</div>
+                    <p className="mt-1 max-w-prose font-serif text-xs italic leading-loose text-ink/80">
+                        「{result.dreamFragmentUsed}」
+                    </p>
+                </div>
+            ) : null}
+
             {result.chapter ? (
                 <div className="rounded border border-hairline/60 bg-canvas/40 p-3">
                     <p className="font-serif text-sm leading-loose text-ink whitespace-pre-wrap">
