@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { truncateAddress } from '@/lib/format';
+import { accountUrl } from '@/lib/explorer';
 
 /**
  * Owner address pill — shows truncated by default, expands to the full
@@ -26,7 +26,7 @@ export function OwnerDisplay({ address }: { address: string }) {
     }
   };
 
-  const explorerUrl = buildExplorerUrl(address);
+  const explorerUrl = address.startsWith('0x') ? accountUrl(address) : null;
 
   return (
     <span className="group inline-flex items-center gap-1.5 text-mute">
@@ -47,7 +47,7 @@ export function OwnerDisplay({ address }: { address: string }) {
           href={explorerUrl}
           target="_blank"
           rel="noopener noreferrer"
-          title="在 Sui Vision 開啟"
+          title="在 Sui Scan 開啟"
           className="text-mute/60 transition-colors hover:text-cinnabar"
           aria-label="在 Sui 區塊鏈瀏覽器查看"
         >
@@ -56,14 +56,6 @@ export function OwnerDisplay({ address }: { address: string }) {
       ) : null}
     </span>
   );
-}
-
-function buildExplorerUrl(address: string): string | null {
-  if (!address.startsWith('0x')) return null;
-  const network = ENDLESS_STORY_DEPLOYMENT.network;
-  // mainnet has no query suffix on Sui Vision
-  const suffix = network === 'mainnet' ? '' : `?network=${network}`;
-  return `https://suivision.xyz/account/${address}${suffix}`;
 }
 
 function CopyIcon({ copied }: { copied: boolean }) {

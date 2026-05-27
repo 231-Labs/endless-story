@@ -9,6 +9,7 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { generateAttributeSeed, rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
 import { DEFAULT_ATTRIBUTE_SCHEMA } from '@/lib/config/attribute-schema';
+import { objectUrl } from '@/lib/explorer';
 import { moderatePrompt } from '@/lib/actions/moderate-prompt';
 import { previewCharacter } from '@/lib/actions/preview-character';
 import { generatePortrait } from '@/lib/actions/generate-portrait';
@@ -975,7 +976,7 @@ function RevealStage({
 
           {isEnrolled && characterId && (
             <a
-              href={`https://suiscan.xyz/${ENDLESS_STORY_DEPLOYMENT.network}/object/${characterId}`}
+              href={objectUrl(characterId)}
               target="_blank"
               rel="noopener noreferrer"
               className="absolute -top-4 right-2 sm:right-6 animate-stamp z-10 group cursor-pointer"

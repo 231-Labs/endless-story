@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { runDirectorAction, type RunDirectorActionResult } from '@/lib/actions/run-director';
+import { txUrl } from '@/lib/explorer';
 
 export function DirectorPanel() {
     const [intent, setIntent] = useState('想看感情戲');
@@ -68,7 +69,7 @@ function ResultView({ result }: { result: RunDirectorActionResult }) {
                 </span>
                 {result.digest ? (
                     <a
-                        href={`https://suivision.xyz/txblock/${result.digest}?network=devnet`}
+                        href={txUrl(result.digest)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-cinnabar hover:underline"
