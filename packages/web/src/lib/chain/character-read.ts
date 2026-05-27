@@ -118,7 +118,52 @@ export async function fetchOnChainCharacter(id: string): Promise<Character | nul
     }
     const json = res.json as unknown as ChainCharacter | undefined;
     if (!json) return null;
-    return mapChainCharacter(id, json);
+    // Resolve current owner via OwnerCap dynamic lookup. Chain
+    // `Character` is a shared object (no owner field) — the actual
+    // owner is whoever holds the matching OwnerCap. We trace it via
+    // `CharacterMinted.owner_cap_id` + `sui_getObject({showOwner})`
+    // so transferred caps surface the new owner. Best-effort: if any
+    // step fails, fall back to empty string and the UI will degrade
+    // to non-owner state.
+    const owner = await resolveCurrentOwner(id);
+    return mapChainCharacter(id, json, owner ?? undefined);
+}
+
+/**
+ * Trace a Character → its OwnerCap → current cap holder (= current
+ * owner address). Returns null on miss (chain unreachable, no mint
+ * event, cap burnt, etc).
+ *
+ * Why two hops: CharacterMinted gives the owner_cap_id, then we
+ * getObject the cap with `showOwner` so we get the CURRENT holder,
+ * not the mint-time one. Robust against cap transfers.
+ */
+async function resolveCurrentOwner(characterId: string): Promise<string | null> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return null;
+    const client = makeSuiClient({ network: resolveNetwork() });
+    try {
+        // Newest-first event scan. There's exactly one CharacterMinted
+        // per char, so we can short-circuit on first match.
+        const summaries = await read.character.listMintedCharacterSummaries(client, pkg, {});
+        const match = summaries.find((s) => s.characterId === characterId);
+        if (!match || !match.ownerCapId) return null;
+        // Pull current OwnerCap holder via showOwner.
+        const capObj = await client.getObject({
+            id: match.ownerCapId,
+            options: { showOwner: true },
+        });
+        const ownerField = capObj.data?.owner;
+        if (ownerField && typeof ownerField === 'object' && 'AddressOwner' in ownerField) {
+            return (ownerField as { AddressOwner: string }).AddressOwner;
+        }
+        // Fall back to mint-time owner from event (still useful if
+        // the cap is shared/immutable, which it shouldn't be).
+        return match.owner || null;
+    } catch (err) {
+        console.warn('[character-read] resolveCurrentOwner failed:', err);
+        return null;
+    }
 }
 
 /**

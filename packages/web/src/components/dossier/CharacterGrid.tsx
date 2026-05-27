@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { SVGProps } from 'react';
 import type { Character } from '@endless-story/shared';
 import Link from 'next/link';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SubscribeCard } from '@/components/subscribe/SubscribeCard';
 
@@ -40,16 +41,24 @@ export function CharacterGrid({
   const [searchQuery, setSearchQuery] = useState('');
   const normalizedQuery = searchQuery.toLowerCase().trim();
 
+  // Prefer the connected wallet for "我的" filter — server-derived
+  // viewerWallet comes from `?as=` URL param which falls back to a
+  // mock address when absent, so we'd never match the real owner.
+  // Server-side path is kept as fallback for non-wallet flows (e.g.
+  // backend HTTP API w/ session cookie in the future).
+  const account = useCurrentAccount();
+  const effectiveViewerWallet = account?.address ?? viewerWallet;
+
   const visible = useMemo(
     () =>
       cards.filter(({ character: c }) => {
         if (filter === 'internal' && c.sagaId !== internalSagaId) return false;
         if (filter === 'external' && c.sagaId === internalSagaId) return false;
-        if (filter === 'mine' && (!viewerWallet || c.nftOwner !== viewerWallet)) return false;
+        if (filter === 'mine' && (!effectiveViewerWallet || c.nftOwner !== effectiveViewerWallet)) return false;
         if (normalizedQuery) return c.name.toLowerCase().includes(normalizedQuery);
         return true;
       }),
-    [cards, filter, viewerWallet, internalSagaId, normalizedQuery]
+    [cards, filter, effectiveViewerWallet, internalSagaId, normalizedQuery]
   );
 
   const pages = useMemo(() => {
