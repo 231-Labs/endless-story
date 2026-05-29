@@ -3,8 +3,8 @@
  *
  * **Env vars** (all optional individually; need at least one provider key):
  *   POE_API_KEY               — Poe API key (multi-provider via OpenAI-compat endpoint)
- *   POE_MODEL_PRIMARY         — Poe model for creative tasks (default: 'Claude-Sonnet-4.6')
- *   POE_MODEL_CHEAP           — Poe model for decisions / moderation (default: 'Claude-Haiku-4.5')
+ *   POE_MODEL_PRIMARY         — Poe model for creative tasks (default: 'GLM-4.6')
+ *   POE_MODEL_CHEAP           — Poe model for decisions / moderation (default: 'GLM-4.6')
  *   ANTHROPIC_API_KEY         — direct Anthropic Claude key
  *   ANTHROPIC_MODEL_PRIMARY   — direct Anthropic model (default: 'claude-sonnet-4-6')
  *   ANTHROPIC_MODEL_CHEAP     — direct Anthropic cheap model (default: 'claude-haiku-4-5')
@@ -31,8 +31,10 @@ export interface LLMConfig {
 }
 
 const DEFAULTS = {
-  poeModelPrimary: 'Claude-Sonnet-4.6',
-  poeModelCheap: 'Claude-Haiku-4.5',
+  // 中文敘事品質優先：primary / cheap 都用 GLM-4.6。
+  // Claude 中文不如 GLM；要換需顯式設 POE_MODEL_* env。
+  poeModelPrimary: 'GLM-4.6',
+  poeModelCheap: 'GLM-4.6',
   anthropicModelPrimary: 'claude-sonnet-4-6',
   anthropicModelCheap: 'claude-haiku-4-5',
   aiProvider: 'auto' as AIProvider,
