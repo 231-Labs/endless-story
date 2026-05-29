@@ -15,6 +15,7 @@ export * as director from './services/saga-director/index.js';
 export * as characterWorker from './services/character-worker/index.js';
 export * as gazette from './services/gazette-compiler/index.js';
 export * as reflection from './services/reflection-trigger/index.js';
+export * as genesisMemory from './services/genesis-memory/index.js';
 export * as dream from './services/dream-pipeline/index.js';
 export { moderateDream } from './services/dream-pipeline/moderator.js';
 export * as video from './services/video-compiler/index.js';

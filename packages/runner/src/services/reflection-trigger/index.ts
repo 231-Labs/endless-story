@@ -42,6 +42,10 @@ export interface RunReflectionInput {
     /** Active mode only — the owner's question text. Empty/undefined
      *  for passive. */
     ownerQuestion?: string;
+    /** Optional: MemWal-recalled memories (caller supplies; web resolves
+     *  creds + ControlCap). Deepens continuity beyond the chain-read
+     *  recent chapters + previous reflection. */
+    recalledMemories?: string[];
     /** Signer + storyteller cap id. Required unless dryRun. */
     signer?: { keypair: Keypair; storytellerCapId: string };
     /** Override LLM model. */
@@ -97,6 +101,7 @@ export async function runOnce(input: RunReflectionInput): Promise<RunReflectionR
         ownerQuestion: input.ownerQuestion,
         recentChapterSnippets: recentChapters,
         previousReflection: prevReflection ?? undefined,
+        recalledMemories: input.recalledMemories,
     });
 
     const response = await llm.chat({

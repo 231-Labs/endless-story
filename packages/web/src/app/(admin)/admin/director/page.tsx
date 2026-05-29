@@ -4,6 +4,7 @@ import { DirectorPanel } from './DirectorPanel';
 import { GazettePanel } from './GazettePanel';
 import { DreamConfigPanel } from './DreamConfigPanel';
 import { ReflectionPanel } from './ReflectionPanel';
+import { GenesisMemoryPanel } from './GenesisMemoryPanel';
 import { EventPanel } from './EventPanel';
 import { TimePanel } from './TimePanel';
 import { SchedulerPanel } from './SchedulerPanel';
@@ -99,6 +100,17 @@ export default async function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <ReflectionPanel characters={characters} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">初始記憶 · 種下人設</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            從角色描述蒸餾出第一人稱開場記憶寫進 MemWal，讓早期 POV 不飄移人設。
+                            新招募的角色會自動種；這裡是給「在這功能之前就 mint 的角色」補種。
+                        </p>
+                        <div className="mt-6">
+                            <GenesisMemoryPanel characters={characters} />
                         </div>
                     </div>
 

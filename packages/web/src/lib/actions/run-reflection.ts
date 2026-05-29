@@ -13,7 +13,7 @@
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { reflection as runnerReflection } from '@endless-story/runner';
 import { getAdminContext } from '@/lib/chain/admin-signer';
-import { rememberForCharacter } from '@/lib/chain/memory';
+import { recallForCharacter, rememberForCharacter } from '@/lib/chain/memory';
 
 export interface RunReflectionInput {
     characterId: string;
@@ -61,11 +61,24 @@ export async function runReflectionAction(input: RunReflectionInput): Promise<Ru
     }
 
     try {
+        // Recall long-term memory to deepen continuity. The owner's
+        // question (active) or a self-directed cue (passive) is the query.
+        const recallQuery =
+            input.mode === 'active' && input.ownerQuestion?.trim()
+                ? input.ownerQuestion.trim()
+                : '此刻最放不下的事';
+        const recalledMemories = await recallForCharacter(
+            input.characterId,
+            recallQuery,
+            6,
+        );
+
         const res = await runnerReflection.runOnce({
             characterId: input.characterId,
             sagaId: d.sagaId,
             mode: input.mode,
             ownerQuestion: input.ownerQuestion?.trim().slice(0, 500),
+            recalledMemories: recalledMemories.length > 0 ? recalledMemories : undefined,
             dryRun: input.dryRun,
             signer: input.dryRun
                 ? undefined

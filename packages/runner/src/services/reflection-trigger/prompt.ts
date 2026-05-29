@@ -42,6 +42,9 @@ export interface ReflectionPromptInput {
     recentChapterSnippets: string[];
     /** Optional: last reflection snippet (avoid repetition). */
     previousReflection?: string;
+    /** Optional: MemWal-recalled long-term memories (semantic) for deeper
+     *  continuity beyond the last chapter/reflection. */
+    recalledMemories?: string[];
 }
 
 export function buildSystemPrompt(): string {
@@ -70,12 +73,19 @@ export function buildSystemPrompt(): string {
 }
 
 export function buildUserPrompt(input: ReflectionPromptInput): string {
-    const { character, mode, ownerQuestion, recentChapterSnippets, previousReflection } = input;
+    const { character, mode, ownerQuestion, recentChapterSnippets, previousReflection, recalledMemories } = input;
     const chaptersBlock =
         recentChapterSnippets.length > 0
             ? '\n## 最近你寫下的章回（公開版本）\n' +
               recentChapterSnippets
                   .map((s, i) => `${i + 1}. ${s.slice(0, 200)}${s.length > 200 ? '…' : ''}`)
+                  .join('\n')
+            : '';
+    const memoryBlock =
+        recalledMemories && recalledMemories.length > 0
+            ? '\n## 你心底翻起的舊記憶（讓它們滲進此刻的心境，不要逐條複述）\n' +
+              recalledMemories
+                  .map((s, i) => `${i + 1}. ${s.slice(0, 160)}${s.length > 160 ? '…' : ''}`)
                   .join('\n')
             : '';
     const prevBlock = previousReflection
@@ -95,6 +105,7 @@ export function buildUserPrompt(input: ReflectionPromptInput): string {
         attrLine(character.attributes),
         `- 所屬：${character.sagaName}`,
         chaptersBlock,
+        memoryBlock,
         prevBlock,
         questionBlock,
         '',
