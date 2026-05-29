@@ -14,6 +14,8 @@
  * is the character ALONE, late at night, no audience.
  */
 
+import { roleHint } from '@endless-story/shared';
+
 export interface CharacterSnapshot {
     id: string;
     name: string;
@@ -104,6 +106,7 @@ export function buildUserPrompt(input: ReflectionPromptInput): string {
         `- 外形：${character.physicalFacts}`,
         attrLine(character.attributes),
         `- 所屬：${character.sagaName}`,
+        `- 行當聲口：${roleHint(character.role)}`,
         chaptersBlock,
         memoryBlock,
         prevBlock,

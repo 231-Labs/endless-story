@@ -24,6 +24,7 @@
 import { SagaMemoryClient } from '@endless-story/memwal';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
+import { getAdminAddress } from './admin-signer.js';
 
 interface MemEnv {
     delegateKey?: string;
@@ -86,20 +87,43 @@ function relayerUrl(): string {
 }
 
 /**
- * Find the admin-held ControlCap object id for a character via the
- * CharacterMinted event (carries control_cap_id). Stable as long as the
- * cap isn't reassigned (demo flow never reassigns). Null on miss.
+ * Resolve the **current** admin-held ControlCap for a character.
+ *
+ * Prefers the highest-epoch ControlCap owned by the admin address — this
+ * survives `revoke_all_control` / `reassign_saga`, which bump the
+ * character's epoch and strand older caps in the wallet. Falls back to
+ * the mint-time cap from the CharacterMinted event if the owned-objects
+ * scan finds nothing (e.g. admin address unavailable).
+ *
+ * Returns null when no usable cap is found — after a revoke with no
+ * re-issue, the stale cap is still returned but recall will hit
+ * `ENoAccess` at the SEAL key server (epoch mismatch), which the caller
+ * swallows → [] (i.e. access is cut, as intended).
  */
 async function resolveControlCapId(characterId: string): Promise<string | null> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return null;
+    const client = makeSuiClient({ network: resolveNetwork() });
+
+    // Primary: highest-epoch ControlCap the admin currently owns.
     try {
-        const client = makeSuiClient({ network: resolveNetwork() });
+        const admin = getAdminAddress();
+        const caps = await read.character.listControlCapsForAddress(client, admin, pkg);
+        const mine = caps
+            .filter((c) => c.characterId === characterId)
+            .sort((a, b) => b.epoch - a.epoch);
+        if (mine.length > 0) return mine[0].capId;
+    } catch (err) {
+        console.warn('[memory] listControlCapsForAddress failed, falling back:', err);
+    }
+
+    // Fallback: mint-time cap from the CharacterMinted event.
+    try {
         const summaries = await read.character.listMintedCharacterSummaries(client, pkg, {});
         const match = summaries.find((s) => s.characterId === characterId);
         return match?.controlCapId || null;
     } catch (err) {
-        console.warn('[memory] resolveControlCapId failed:', err);
+        console.warn('[memory] resolveControlCapId fallback failed:', err);
         return null;
     }
 }

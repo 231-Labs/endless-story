@@ -5,6 +5,7 @@ import { GazettePanel } from './GazettePanel';
 import { DreamConfigPanel } from './DreamConfigPanel';
 import { ReflectionPanel } from './ReflectionPanel';
 import { GenesisMemoryPanel } from './GenesisMemoryPanel';
+import { CustodyPanel } from './CustodyPanel';
 import { EventPanel } from './EventPanel';
 import { TimePanel } from './TimePanel';
 import { SchedulerPanel } from './SchedulerPanel';
@@ -111,6 +112,17 @@ export default async function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <GenesisMemoryPanel characters={characters} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">託管 · SEAL 撤訪示範</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            撤銷角色的 ControlCap → saga 對她記憶的 MemWal recall 在鏈上被斷（ENoAccess）。
+                            重新授權即恢復。這證明記憶存取由鏈上 cap 把關，不是後端自律。
+                        </p>
+                        <div className="mt-6">
+                            <CustodyPanel characters={characters} />
                         </div>
                     </div>
 

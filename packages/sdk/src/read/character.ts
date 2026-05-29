@@ -35,6 +35,63 @@ export interface OwnerCapRef {
     cumulativeRevenue: string;
 }
 
+/** One `ControlCap` owned by an address. `epoch` matters: a cap is only
+ *  valid while `epoch === character.control_epoch` (revoke / reassign
+ *  bumps the character's epoch, stranding older caps). */
+export interface ControlCapRef {
+    capId: string;
+    characterId: string;
+    epoch: number;
+    sagaId: string | null;
+}
+
+/**
+ * List `ControlCap` objects owned by an address. Used by the memory layer
+ * to find the *current* cap (highest epoch) for a character — robust to
+ * revoke / reassign which leave stale caps in the wallet.
+ */
+export async function listControlCapsForAddress(
+    client: SuiClient,
+    owner: string,
+    packageId: string,
+): Promise<ControlCapRef[]> {
+    const structType = `${packageId}::character::ControlCap`;
+    const out: ControlCapRef[] = [];
+    let cursor: string | null | undefined = null;
+    for (;;) {
+        const page = await client.getOwnedObjects({
+            owner,
+            cursor,
+            limit: 50,
+            filter: { StructType: structType },
+            options: { showType: true, showContent: true },
+        });
+        for (const obj of page.data) {
+            const content = obj.data?.content;
+            if (!content || content.dataType !== 'moveObject') continue;
+            const fields = content.fields as Record<string, unknown>;
+            const characterId = typeof fields.character_id === 'string' ? fields.character_id : '';
+            if (!characterId || !obj.data?.objectId) continue;
+            const sagaRaw = fields.saga_id;
+            const sagaId =
+                typeof sagaRaw === 'string'
+                    ? sagaRaw
+                    : sagaRaw && typeof sagaRaw === 'object' && 'fields' in (sagaRaw as object)
+                      ? null
+                      : null;
+            out.push({
+                capId: obj.data.objectId,
+                characterId,
+                epoch: Number(fields.epoch ?? 0),
+                sagaId,
+            });
+        }
+        if (!page.hasNextPage || !page.nextCursor) break;
+        cursor = page.nextCursor;
+    }
+    return out;
+}
+
 export async function listOwnerCapsForAddress(
     client: SuiClient,
     owner: string,

@@ -8,6 +8,8 @@
  * voice. (Old repo did this via an admin genesis-memory route.)
  */
 
+import { roleHint } from '@endless-story/shared';
+
 export interface GenesisMemoryInput {
     name: string;
     role: string;
@@ -46,6 +48,7 @@ export function buildUserPrompt(input: GenesisMemoryInput): string {
         `# 角色設定`,
         `- 姓名：${input.name}`,
         `- 行當：${input.role}`,
+        `- 行當聲口：${roleHint(input.role)}`,
         `- 性別：${input.gender} · 年齡：${input.ageYears}`,
         `- 外形：${input.physicalFacts}`,
         `- 所屬：${input.sagaName}`,

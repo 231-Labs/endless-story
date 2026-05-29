@@ -11,6 +11,8 @@
  * doesn't restate it, just responds to it.
  */
 
+import { roleHint } from '@endless-story/shared';
+
 export interface CharacterSnapshot {
     id: string;
     name: string;
@@ -81,6 +83,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         `- 外形：${character.physicalFacts}`,
         attrLine(character.attributes),
         `- 所屬：${character.sagaName}${character.sceneName ? ` · 在 ${character.sceneName}` : ''}`,
+        `- 行當聲口：${roleHint(character.role)}`,
         memBlock,
         dreamBlock,
         '',
