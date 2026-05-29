@@ -24,6 +24,7 @@ import {
   runReflectionAction,
   type RunReflectionResult,
 } from '@/lib/actions/run-reflection';
+import { rememberDreamAction } from '@/lib/actions/remember-dream';
 import { txUrl, objectUrl } from '@/lib/explorer';
 
 type Kind = 'inject_dream' | 'whisper' | 'ask_reflection';
@@ -221,6 +222,13 @@ export function Composer({
               );
               setChainResult({ digest: res.digest, dreamId: dream?.objectId });
               setText('');
+              // Persist the dream into her weighted memory (importance 9)
+              // so it surfaces first in future POV / reflection recalls.
+              if (prepared.optimizedText) {
+                void rememberDreamAction(characterId, prepared.optimizedText).catch(
+                  () => {},
+                );
+              }
             } catch (err) {
               setDreamError(
                 err instanceof Error

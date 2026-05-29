@@ -106,7 +106,9 @@ export async function runPovForCharacter(
         // on dry-runs or failed anchors).
         let remembered = false;
         if (res.anchored && res.chapter.trim()) {
-            remembered = await rememberForCharacter(characterId, res.chapter);
+            remembered = await rememberForCharacter(characterId, res.chapter, {
+                kind: 'chapter',
+            });
         }
 
         return {

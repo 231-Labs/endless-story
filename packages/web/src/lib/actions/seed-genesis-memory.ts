@@ -57,7 +57,9 @@ export async function seedGenesisMemoryAction(
 
         let seeded = 0;
         for (const memory of res.memories) {
-            const wrote = await rememberForCharacter(characterId, memory);
+            const wrote = await rememberForCharacter(characterId, memory, {
+                kind: 'genesis',
+            });
             if (wrote) seeded += 1;
         }
         return { ok: true, seeded, generated: res.memories.length };

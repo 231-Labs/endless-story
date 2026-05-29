@@ -87,7 +87,9 @@ export async function runReflectionAction(input: RunReflectionInput): Promise<Ru
         // A reflection is the character's own private memory — write it
         // back to MemWal once anchored (no-op when memory unconfigured).
         if (res.anchored && res.reflection.trim()) {
-            await rememberForCharacter(input.characterId, res.reflection);
+            await rememberForCharacter(input.characterId, res.reflection, {
+                kind: 'reflection',
+            });
         }
 
         return {

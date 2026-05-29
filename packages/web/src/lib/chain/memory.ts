@@ -153,30 +153,102 @@ async function clientFor(characterId: string): Promise<SagaMemoryClient | null> 
     }
 }
 
+/* ── memory type + importance weighting ─────────────────────────────
+ * MemWal stores flat encrypted text; it has no importance/recency/type
+ * scoring of its own. We restore the Smallville weighting (proposal
+ * §5.2) by tagging each stored memory with a tiny parseable header
+ * `[[m|t=<type>|i=<importance>]]` and re-ranking recall results by
+ * importance. The tag is STRIPPED before the text reaches a prompt, and
+ * surfaced structurally for the dossier MemoriesTab UI. */
+
+export type MemoryKind =
+    | 'dream'
+    | 'reflection'
+    | 'chapter'
+    | 'observation'
+    | 'relationship'
+    | 'genesis';
+
+/** Default importance per kind (1-10). Dreams highest (owner paid, must
+ *  surface first — §5.2); observations lowest. */
+const DEFAULT_IMPORTANCE: Record<MemoryKind, number> = {
+    dream: 9,
+    relationship: 8,
+    reflection: 7,
+    genesis: 7,
+    chapter: 5,
+    observation: 4,
+};
+
+const TAG_RE = /^\[\[m\|t=([a-z]+)\|i=(\d+)\]\]\s*([\s\S]*)$/;
+
+export interface RecalledMemory {
+    text: string;
+    kind: MemoryKind | 'unknown';
+    importance: number;
+}
+
+function tagMemory(text: string, kind: MemoryKind, importance: number): string {
+    const i = Math.max(1, Math.min(10, Math.round(importance)));
+    return `[[m|t=${kind}|i=${i}]] ${text}`;
+}
+
+function parseMemory(stored: string): RecalledMemory {
+    const m = stored.match(TAG_RE);
+    if (m) {
+        return {
+            kind: m[1] as MemoryKind,
+            importance: Number(m[2]) || 5,
+            text: m[3].trim(),
+        };
+    }
+    // Untagged (legacy / pre-tagging): treat as mid-importance observation.
+    return { kind: 'unknown', importance: 5, text: stored.trim() };
+}
+
 /**
- * Recall a character's most relevant memories for a query. Returns
- * decrypted text snippets (newest/closest first), [] when unconfigured
- * or on failure.
+ * Recall a character's memories, importance-re-ranked. Returns decrypted
+ * text (tags stripped), highest-importance first, [] when unconfigured.
+ * Over-fetches then re-ranks so a high-importance memory (e.g. an owner
+ * dream) isn't buried under closer-but-trivial observations.
  */
 export async function recallForCharacter(
     characterId: string,
     query: string,
     limit = 6,
 ): Promise<string[]> {
+    const structured = await recallStructuredForCharacter(characterId, query, limit);
+    return structured.map((m) => m.text);
+}
+
+/** Structured recall (kind + importance) for UI surfaces (MemoriesTab). */
+export async function recallStructuredForCharacter(
+    characterId: string,
+    query: string,
+    limit = 6,
+): Promise<RecalledMemory[]> {
     const client = await clientFor(characterId);
     if (!client) return [];
     try {
-        const res = await client.recall(query, limit, namespaceFor(characterId));
-        const snippets: string[] = [];
+        // Over-fetch (2×) so importance re-rank has material to work with.
+        const res = await client.recall(query, limit * 2, namespaceFor(characterId));
+        const parsed: RecalledMemory[] = [];
         for (const hit of res.results) {
             if ('text' in hit && typeof hit.text === 'string' && hit.text.trim()) {
-                snippets.push(hit.text.trim());
+                parsed.push(parseMemory(hit.text));
             }
         }
+        // Stable sort by importance desc (recall already returns by
+        // semantic distance, so equal-importance keeps closest-first).
+        const ranked = parsed
+            .map((m, idx) => ({ m, idx }))
+            .sort((a, b) => b.m.importance - a.m.importance || a.idx - b.idx)
+            .slice(0, limit)
+            .map((x) => x.m);
         console.log(
-            `[memory] recall ${characterId.slice(0, 10)}… → ${snippets.length} memories`,
+            `[memory] recall ${characterId.slice(0, 10)}… → ${ranked.length} memories (re-ranked)`,
         );
-        return snippets;
+        return ranked;
     } catch (err) {
         console.warn('[memory] recall failed:', err);
         return [];
@@ -186,21 +258,24 @@ export async function recallForCharacter(
 }
 
 /**
- * Store a memory for a character. Returns true if written, false when
- * unconfigured or on failure (non-fatal — the chapter is still anchored
- * on chain regardless).
+ * Store a memory for a character, tagged with kind + importance so recall
+ * can weight it. Returns true if written, false when unconfigured / on
+ * failure (non-fatal — chain anchor already happened).
  */
 export async function rememberForCharacter(
     characterId: string,
     text: string,
+    opts?: { kind?: MemoryKind; importance?: number },
 ): Promise<boolean> {
     if (!text.trim()) return false;
     const client = await clientFor(characterId);
     if (!client) return false;
+    const kind = opts?.kind ?? 'observation';
+    const importance = opts?.importance ?? DEFAULT_IMPORTANCE[kind] ?? 5;
     try {
-        await client.remember(text, namespaceFor(characterId));
+        await client.remember(tagMemory(text, kind, importance), namespaceFor(characterId));
         console.log(
-            `[memory] remember ${characterId.slice(0, 10)}… ✓ (${text.length} chars)`,
+            `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}] (${text.length} chars)`,
         );
         return true;
     } catch (err) {
