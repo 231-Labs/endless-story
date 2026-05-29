@@ -3,7 +3,14 @@ import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { DirectorPanel } from './DirectorPanel';
 import { GazettePanel } from './GazettePanel';
 import { DreamConfigPanel } from './DreamConfigPanel';
+import { ReflectionPanel } from './ReflectionPanel';
+import { EventPanel } from './EventPanel';
+import { TimePanel } from './TimePanel';
+import { SchedulerPanel } from './SchedulerPanel';
 import { getDreamConfigSnapshot } from '@/lib/actions/dream-config';
+import { getWorldTimeSnapshot } from '@/lib/actions/world-time';
+import { charactersApi, sagasApi, scenesApi } from '@/lib/api/index';
+import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 
 /**
  * Admin → 導演 — feed admin intent into the Saga Director LLM, see the
@@ -13,7 +20,13 @@ import { getDreamConfigSnapshot } from '@/lib/actions/dream-config';
  * Server component shell only; the interactive form is a client child.
  */
 export default async function AdminDirectorPage() {
-    const dreamConfig = await getDreamConfigSnapshot();
+    const sagaId = ENDLESS_STORY_DEPLOYMENT.sagaId;
+    const [dreamConfig, characters, scenes, worldTime] = await Promise.all([
+        getDreamConfigSnapshot(),
+        charactersApi.listCharacters(),
+        sagaId ? scenesApi.listScenes(sagaId) : Promise.resolve([]),
+        getWorldTimeSnapshot(),
+    ]);
     return (
         <main className="min-h-screen">
             <SiteNav />
@@ -28,6 +41,30 @@ export default async function AdminDirectorPage() {
                     </p>
                     <div className="mt-8">
                         <DirectorPanel />
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">世界時間 · 推進敘事日</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            鏈上 <code className="font-mono text-2xs">WorldState.current_tick</code> 是敘事時鐘。
+                            推進 tick 會跨時辰、累積成「日」，公報標題的「第 N 日」由此而來。
+                            （Phase 2 的 scheduler 上線後會自動推進；現在手動。）
+                        </p>
+                        <div className="mt-6">
+                            <TimePanel initial={worldTime} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">排程 · 推進一日</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            一鍵跑「戲班過一日」：推進 tick →
+                            逐一為角色生成當日 POV 章回（依序，因單一 keypair 不能並簽）。
+                            這是自動循環的手動驅動；之後可由獨立 CLI 定時呼叫同一批次。
+                        </p>
+                        <div className="mt-6">
+                            <SchedulerPanel />
+                        </div>
                     </div>
 
                     <div className="mt-16 border-t border-hairline pt-10">
@@ -50,6 +87,29 @@ export default async function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <DreamConfigPanel initial={dreamConfig} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">反思 · 觸發內心獨白</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            passive：角色獨自在後台、沒人問，寫她最近最壓在心上的那一句。
+                            active：模擬 owner 在 dossier 問了一句，看 LLM 怎麼讓她
+                            被觸動但不直接回答。兩種都上 Walrus + reflection::submit。
+                        </p>
+                        <div className="mt-6">
+                            <ReflectionPanel characters={characters} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">事件 · BudgetEvent 生命週期</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            開事件 → 發牌（每位角色一筆 tx，鏈上 RNG 抽手牌）→ 結算（空 outcomes，後續可加 death / scene-delta editor）。
+                            預設牌組 4 張：斬 / 攻 / 敘 / 觀，每人抽 3 張。角色必須在事件場景內才能發牌。
+                        </p>
+                        <div className="mt-6">
+                            <EventPanel scenes={scenes} characters={characters} />
                         </div>
                     </div>
                 </div>

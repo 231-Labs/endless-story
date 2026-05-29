@@ -4,7 +4,7 @@
  * **Writer:** `@endless-story/cli` (deploy.ts, bootstrap.ts, reset.ts).
  * **Readers:** sdk, runner, web (admin UI). Never edit by hand.
  *
- * Last written: 2026-05-27T15:11:23.766Z
+ * Last written: 2026-05-29T05:19:46.653Z
  *
  * See AGENTS.md → 「鏈上架構」 for the contract.
  */
@@ -43,29 +43,29 @@ export interface EndlessStoryDeployment {
 }
 
 export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
-  "network": "devnet",
-  "packageId": "0xc6e54c841d7c90d17ff5a825e22e8cb0320611009ad26b3671c93a235d7030ae",
-  "adminCapId": "0x0253af66d3274bb0682a61e8ff0cd424aa0c1d25cb55183ed97af35a43e5beb9",
-  "worldId": "0x3b67168114e2a66faf4da03b4aa1ca26058227128566635c76203683f0a6dde3",
+  "network": "testnet",
+  "packageId": "0x6477341b9c7791c073d407b8a66084339de86dc551a47fdd9870c26a6da8c0c7",
+  "adminCapId": "0x4aedd33a8019c86e34911f1c8ced56621d65f06c37d70602fb818d341c753175",
+  "worldId": "0xb6f0be9b75a94cb67a1a5ecdc7b8688a286d27028bbe7b61666f9ee8d4f04958",
   "locationIds": [
-    "0x46241cdfa9f52b75645117d3fa6a955908270ac0733b86761ff316d4dc4fa626",
-    "0xa91e84e5e0080dfe3e2ef3541be6f98da06886d660ce214ca5e221bcabfa811e",
-    "0xe4ccf2c9ff7255117850fafc44126e4c50d298f9b12670b330478abcc5310c83"
+    "0x32bffc96452c6f790182e52b2f676a30806d5311fe57bc2074c7aab573e256e9",
+    "0x6021975aab259727a847ec50b56ddcd0f7faec76ad053ba503f771f6f53f3a1c",
+    "0x83a8ad4130f3f6873811c4e96f496cd4872ef5e26905adc41f332652b7cb8baa"
   ],
-  "sagaId": "0xf967c2158c40189dcfeb8b9cb2d683b5060666a40c2667783c56db4de1661767",
-  "storytellerCapId": "0xb45cb00349d6905f35254af39b080c5d654b04f10b1d2469e484694df7fd14dd",
+  "sagaId": "0x981218d69c1572dfcb926ed9df944cc7c14c019f134ac9f2b9480a89f263f095",
+  "storytellerCapId": "0x49bfeeafb49e9f6c9301f7eee90f5bf3d1def2ad566e4a301f20d6181c97a9f5",
   "sceneIds": [
-    "0x13dedf24b6bc8754731189fffd9f82dcff4b826fd7796ec6be6eb71e90dd4e1b",
-    "0x73fe1785e39edc589b372754b1167396fbeb5731fc55fa74b5361101bc6151b4",
-    "0xed5fe4c6707655d8cdeb7c05abb91c7c13fdbcc70a8f3c011213279cf32c91bc"
+    "0x0f6cbec3e3e470e06622ddb008d90dc12fca11f54bc3b870b106a3fa24a11012",
+    "0xa15c8ae216e6d4d8dc81e5672e268e55ccd3d1daa55f5f68a375bb7aa0ce2aa3",
+    "0xbde173ea65582a0d180a7ea0a58656faa2971cef60a659bae252cd0c5c40de18"
   ],
-  "faucetId": "0x39e0c3a033d8a0fd44c8761259562ce512c9c1497afe5e3b0a651b5cd3bf900b",
-  "faucetAdminCapId": "0x775fdfa61ad334e50bbc41170338c0ad34c54e3b226c51d10791beedfe0a32bc",
-  "dreamConfigId": "0xbae27bbda0a6eac4212882f5000cf7e584d7a4e18f6d79b8f6d2d5c50c45ad88",
-  "dreamAdminCapId": "0xc7cf9e16ee2d8406312c2500336f3588eb8cad9e98d74957952a45078f6e8524",
+  "faucetId": "0xefecda63b922f49c97346c7adb67aba4d7cfad35967a458a0cb447f2c06bce0f",
+  "faucetAdminCapId": "0x67bc47a2a1f92bbda0fe86c805f2d16660c8b89a36dbd528ae17b3e90ae728f1",
+  "dreamConfigId": "0x09134c8d28891ea9a201f9c6869b3cd3e1fcf440ed80d7904cb9bb23384ad16c",
+  "dreamAdminCapId": "0x5beb53275678c015f270ced94682bca17502a411050e8ea5151faaf1c6718b0e",
   "demoCharacters": [],
   "storyId": "spring-snow",
-  "deployedAt": "2026-05-27T15:11:23.766Z"
+  "deployedAt": "2026-05-29T05:19:46.653Z"
 };
 
 export function isDeployed(d: EndlessStoryDeployment = ENDLESS_STORY_DEPLOYMENT): boolean {

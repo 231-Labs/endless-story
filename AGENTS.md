@@ -54,6 +54,23 @@ packages/
   web/       UI；app/(site)/* + app/(admin)/* 隔離
 ```
 
+### 內容存取模型（公開 vs 私密）
+
+> 任何**新的內容 surface** 都要先歸到下面其一，別忘了 gate。
+
+| 內容 | 誰可讀 | 實作 |
+|---|---|---|
+| **公報 gazette** | **公開**（所有人） | `/feed`，無 gate |
+| **POV 章回** | owner + 訂閱者 | `ChainPovSection`（client，`useCurrentAccount` + `listSubscriptionsForAddress`），body client 端 fetch |
+| **反思 reflection** | owner（+ 訂閱者 TODO） | `ReflectionsSection`（client gate） |
+| **夢 / 耳語 intervention** | owner | `InterventionComposerGate` / mask |
+
+**鐵則**：
+- gate 一律 **client 端** 用 `useCurrentAccount()`，**不要**信 server 的 `?as=` viewerWallet（那是 mock-era debug，會 fallback 成假錢包）。
+- 私密 body **client 端才 fetch**（`/api/blob/<id>`），非讀者的 HTML payload **不得**含內文。
+- 非讀者保留 **on-chain anchor** 連結（憑證可公開驗），但**隱藏 walrus 直連**（否則繞過 gate 看明文）。
+- 這層是 **UX gate 不是密碼學 gate** — blob 在 Walrus 上仍明文。真正私密 = Seal（見 seal backlog memory）。
+
 ---
 
 ## 已完成
@@ -114,8 +131,29 @@ POE_API_KEY=...                        # https://poe.com/api_key
 OPENAI_API_KEY=sk-...                  # https://platform.openai.com/api-keys
 SUI_ADMIN_PRIVATE_KEY=suiprivkey1...   # 同 cli admin；export 自 sui keytool
 RECRUITMENT_MOD_SECRET=<openssl rand -hex 32>
+
+# MemWal（角色長期記憶 / recall + remember）— 缺這些時 recall→[]、remember→false，
+# 敘事仍可跑，只是沒有長期記憶。需 testnet（SEAL 不在 devnet）。
+MEMWAL_PRIVATE_KEY=...                  # ed25519 delegate 私鑰（dashboard 產）
+MEMWAL_ACCOUNT_ID=0x...                 # MemWalAccount object id（dashboard 產）
+# MEMWAL_SERVER_URL 可省 — testnet 自動用 staging relayer
 EOF
 ```
+
+> **MemWal 取得憑證**（賽道硬需求 · 不用寫腳本）：到 **dashboard** 直接產
+> delegate key + account id：
+> - **testnet（我們用這個）**：https://staging.memwal.ai → relayer `https://relayer.staging.memwal.ai`
+> - mainnet：https://memwal.ai → relayer `https://relayer.memwal.ai`
+>
+> 把產出的私鑰填 `MEMWAL_PRIVATE_KEY`、account id 填 `MEMWAL_ACCOUNT_ID`。
+> relayer URL 不用填 —`memory.ts` 依網路自動選（testnet→staging）。
+>
+> **架構**：我們走 `MemWalManual`（client 端 SEAL，patch 成打我們的
+> `endless_story::character::seal_approve_control/_owner`，非 upstream
+> `memwal::account`）。accountId 只供 relayer 認證 + 向量索引，**不 gate SEAL**
+> （SEAL 由角色的 ControlCap/OwnerCap 管）。client 端 embed 用 `OPENAI_API_KEY`。
+> 程式碼：`web/lib/chain/memory.ts` → pov-core + run-reflection 已接；
+> `SagaMemoryClient`（ControlCap 寫）/`OwnerAuditClient`（OwnerCap 讀）在 `packages/memwal`。
 
 **1. 部署 + 種子化**：開 `http://localhost:3000/admin/deploy` → 上方下拉選 STORY (spring-snow / minimal) + ENV → 依序點 ① deploy → ② bootstrap → ③ seed 職缺。`contract-ids.ts` 會被覆寫。
 

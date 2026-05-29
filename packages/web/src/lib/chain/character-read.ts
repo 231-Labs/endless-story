@@ -68,6 +68,7 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
         id,
         nftOwner: ownerOverride ?? '',
         sagaId: unwrapOption(json.state?.saga_id),
+        currentSceneId: unwrapOption(json.state?.current_scene_id),
         name: profile?.name ?? '無名',
         description: profile?.description ?? '',
         // Chain doesn't store role — placeholder; facade enriches from
@@ -247,7 +248,7 @@ interface ChainCharacter {
         };
     };
     attributes?: Array<{ key?: string; value?: number | string }>;
-    state?: { saga_id?: string | null };
+    state?: { saga_id?: unknown; current_scene_id?: unknown };
     image_url?: string;
     birth_ms?: number | string;
     birthMs?: number | string;

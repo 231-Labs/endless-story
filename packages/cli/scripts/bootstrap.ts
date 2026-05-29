@@ -128,6 +128,15 @@ async function runTx(
   if (res.effects?.status?.status !== 'success') {
     throw new Error(`tx "${label}" failed: ${res.effects?.status?.error ?? 'unknown'}`);
   }
+  // Wait for the fullnode to index this tx before the next one builds —
+  // otherwise testnet's RPC lag hands the next tx a stale gas-coin version
+  // ("object ... unavailable for consumption"). Devnet was fast enough to
+  // skip this; testnet is not.
+  try {
+    await client.waitForTransaction({ digest: res.digest });
+  } catch {
+    // Best-effort settle; the next tx's gas selection will retry anyway.
+  }
   console.log(`   digest ${res.digest}`);
   return (res.objectChanges ?? []) as ObjectChange[];
 }

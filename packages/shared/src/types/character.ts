@@ -46,5 +46,12 @@ export interface Character {
    * undefined as 0.
    */
   subscriberCount?: number;
+  /**
+   * Sui object id of the current Scene this character is in (chain:
+   * `Character.state.current_scene_id`). `null` for wild characters
+   * (between sagas). Used by EventPanel to gate `deal_participant_hand`
+   * by scene match, and by dossier header to surface where they are.
+   */
+  currentSceneId?: string | null;
   createdAt: string;
 }

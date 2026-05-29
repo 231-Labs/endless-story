@@ -20,9 +20,13 @@ import {
   prepareDreamAction,
   type PrepareDreamActionResult,
 } from '@/lib/actions/prepare-dream';
+import {
+  runReflectionAction,
+  type RunReflectionResult,
+} from '@/lib/actions/run-reflection';
 import { txUrl, objectUrl } from '@/lib/explorer';
 
-type Kind = 'inject_dream' | 'whisper';
+type Kind = 'inject_dream' | 'whisper' | 'ask_reflection';
 
 const ENDLESS_DECIMALS = 6;
 
@@ -36,6 +40,11 @@ const COPY: Record<Kind, { hint: string; placeholder: string; submit: string }> 
     hint: '她在下一個 tick 就會聽見 — 像她自己腦中的一段內心音。可能照辦、可能抗拒、無論如何會被她寫進記憶。',
     placeholder: '一句你想讓她在台口聽見的話…',
     submit: '在她耳邊',
+  },
+  ask_reflection: {
+    hint: '只給她聽 — 她會在卸了妝獨自一人時想這個問題，寫一段「真實的」內心。可能跟她公開的章回對不上、可能避而不答 — 那都是她。內容上鏈 anchor，僅 owner 跟訂閱者可讀。',
+    placeholder: '一句你想問她、但她未必想答的話…',
+    submit: '問她',
   },
 };
 
@@ -94,12 +103,38 @@ export function Composer({
       });
   }, [kind, suiClient]);
 
+  // reflection 'ask_reflection' path: server-side LLM + admin-signed
+  // anchor. Owner just submits text — no wallet sign needed (storyteller
+  // cap holder signs the reflection::submit on chain). Server gates
+  // owner via the InterventionComposerGate upstream.
+  const [reflectionResult, setReflectionResult] = useState<RunReflectionResult | null>(null);
+  const [reflectionError, setReflectionError] = useState<string | null>(null);
+
   const toggle = (next: Kind) => {
     setKind((current) => (current === next ? null : next));
     setText('');
     setPrepared(null);
     setChainResult(null);
     setDreamError(null);
+    setReflectionResult(null);
+    setReflectionError(null);
+  };
+
+  const handleAskReflection = () => {
+    if (!text.trim()) return;
+    setReflectionError(null);
+    setReflectionResult(null);
+    startChainTransition(async () => {
+      const res = await runReflectionAction({
+        characterId,
+        mode: 'active',
+        ownerQuestion: text,
+      });
+      setReflectionResult(res);
+      if (!res.ok) {
+        setReflectionError(res.error ?? '未知錯誤');
+      }
+    });
   };
 
   const handleDreamPrepare = () => {
@@ -209,6 +244,11 @@ export function Composer({
           onClick={() => toggle('inject_dream')}
         />
         <ActionButton label="耳語" active={kind === 'whisper'} onClick={() => toggle('whisper')} />
+        <ActionButton
+          label="問一句"
+          active={kind === 'ask_reflection'}
+          onClick={() => toggle('ask_reflection')}
+        />
       </div>
 
       {kind === 'whisper' ? (
@@ -341,6 +381,83 @@ export function Composer({
 
           {dreamError ? (
             <p className="text-2xs tracking-widest text-cinnabar/85">{dreamError}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {kind === 'ask_reflection' ? (
+        <div className="es-soft-panel space-y-3 p-4 sm:p-5">
+          <p className="text-2xs leading-relaxed tracking-widest text-mute">
+            {COPY.ask_reflection.hint}
+          </p>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            placeholder={COPY.ask_reflection.placeholder}
+            className="es-field resize-none"
+            disabled={chainPending || (reflectionResult?.ok ?? false)}
+          />
+
+          {!reflectionResult ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-2xs tracking-widest text-mute">內心獨白上鏈 anchor · 僅 owner + 訂閱者可讀</p>
+              <button
+                type="button"
+                onClick={handleAskReflection}
+                disabled={!text.trim() || chainPending}
+                className="rounded bg-cinnabar px-4 py-2 text-sm text-canvas transition-colors hover:bg-seal disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {chainPending ? '問著…' : COPY.ask_reflection.submit}
+              </button>
+            </div>
+          ) : null}
+
+          {reflectionResult?.ok ? (
+            <div className="space-y-3">
+              <div className="rounded border border-jade/40 bg-jade/5 p-3">
+                <div className="text-2xs tracking-widest text-jade">她的內心獨白（已上鏈 anchor）</div>
+                <p className="mt-2 max-w-prose whitespace-pre-wrap font-serif text-sm leading-loose text-ink/90">
+                  {reflectionResult.reflection}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 text-2xs tracking-widest">
+                {reflectionResult.digest ? (
+                  <a
+                    href={txUrl(reflectionResult.digest)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-cinnabar hover:underline"
+                  >
+                    tx ↗
+                  </a>
+                ) : null}
+                {reflectionResult.reflectionId ? (
+                  <a
+                    href={objectUrl(reflectionResult.reflectionId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-cinnabar hover:underline"
+                  >
+                    reflection object ↗
+                  </a>
+                ) : null}
+                {reflectionResult.blobId ? (
+                  <a
+                    href={`/api/blob/${reflectionResult.blobId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-cinnabar hover:underline"
+                  >
+                    walrus ↗
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {reflectionError ? (
+            <p className="text-2xs tracking-widest text-cinnabar/85">{reflectionError}</p>
           ) : null}
         </div>
       ) : null}

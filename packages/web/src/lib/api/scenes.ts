@@ -8,7 +8,7 @@ import {
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { USE_MOCK } from './config';
 import { httpGet } from './http';
-import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
+import { fetchOnChainScene, fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 
 /**
  * Scenes API（場所 + 派生視覺片段）
@@ -54,8 +54,12 @@ export async function listScenes(sagaId: string): Promise<Scene[]> {
 }
 
 export async function getScene(id: string): Promise<Scene | null> {
-  // Per-scene chain fetch can be added later; today no caller needs it
-  // (listScenes covers the only consumer — handscroll page).
+  // Chain-first when packageId is set + id looks like a Sui object id.
+  // Falls through to mock for demo slug ids (`backstage` etc.).
+  if (ENDLESS_STORY_DEPLOYMENT.packageId && /^0x[0-9a-fA-F]{64}$/.test(id)) {
+    const chain = await fetchOnChainScene(id);
+    if (chain) return chain;
+  }
   if (USE_MOCK) return getSceneById(id) ?? null;
   try {
     return await httpGet<Scene>(`/scenes/${id}`);

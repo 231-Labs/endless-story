@@ -1058,6 +1058,44 @@ public fun media_assets(character: &Character): &vector<MediaAsset> { &character
 
 public fun image_url(character: &Character): &String { &character.image_url }
 
+// ─── tag writers (called by event.move in 1.6) ──────────────────────
+
+/// Add a tag or refresh an existing one. Idempotent on duplicate label
+/// (mutates the existing entry's `source_event_id` + `affirmed_at_ms`
+/// instead of pushing a new row). Package-private so only sibling
+/// modules (event.move primarily) can write tags.
+///
+/// Per L1 v0.3 §6.6: Move does not enforce semantic uniqueness across
+/// tag labels — composers may apply a tag twice with different
+/// `source_event_id`s; the latest wins.
+public(package) fun apply_tag(
+    character: &mut Character,
+    label: &String,
+    source_event_id: Option<ID>,
+    affirmed_at_ms: u64,
+) {
+    let existing_idx = character.tags.find_index!(|tag| tag.label == *label);
+    if (existing_idx.is_some()) {
+        let tag = vector::borrow_mut(&mut character.tags, *existing_idx.borrow());
+        tag.source_event_id = source_event_id;
+        tag.affirmed_at_ms = affirmed_at_ms;
+    } else {
+        vector::push_back(&mut character.tags, Tag {
+            label: *label,
+            source_event_id,
+            affirmed_at_ms,
+        });
+    }
+}
+
+/// Remove a tag by label. Idempotent: no-op when the label is absent.
+public(package) fun revoke_tag(character: &mut Character, label: &String) {
+    let idx_opt = character.tags.find_index!(|tag| tag.label == *label);
+    if (idx_opt.is_some()) {
+        let _removed = vector::remove(&mut character.tags, *idx_opt.borrow());
+    }
+}
+
 public fun has_tag(character: &Character, label: &String): bool {
     character.tags.any!(|tag| tag.label == *label)
 }
@@ -1590,6 +1628,80 @@ fun find_attribute_value_returns_value_or_none() {
 
     let v_missing = find_attribute_value(&character, &b"unknown".to_string());
     assert!(v_missing.is_none());
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+// --- apply_tag / revoke_tag tests (1.6 prerequisite) ---
+
+#[test]
+fun apply_tag_adds_new_tag_when_label_missing() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    assert!(!has_tag(&character, &b"wounded".to_string()));
+
+    apply_tag(&mut character, &b"wounded".to_string(), option::none(), 1_000);
+
+    assert!(has_tag(&character, &b"wounded".to_string()));
+    assert_eq!(tag_count(&character), 1);
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+#[test]
+fun apply_tag_is_idempotent_on_duplicate_label() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    apply_tag(&mut character, &b"wounded".to_string(), option::none(), 1_000);
+    apply_tag(&mut character, &b"wounded".to_string(), option::none(), 2_000);
+    apply_tag(&mut character, &b"wounded".to_string(), option::none(), 3_000);
+
+    assert_eq!(tag_count(&character), 1);
+    // Latest write wins on affirmed_at_ms.
+    let tag = vector::borrow(&character.tags, 0);
+    assert_eq!(tag.affirmed_at_ms, 3_000);
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+#[test]
+fun revoke_tag_removes_existing_label() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    apply_tag(&mut character, &b"wounded".to_string(), option::none(), 1_000);
+    apply_tag(&mut character, &b"betrayed".to_string(), option::none(), 1_500);
+    assert_eq!(tag_count(&character), 2);
+
+    revoke_tag(&mut character, &b"wounded".to_string());
+
+    assert!(!has_tag(&character, &b"wounded".to_string()));
+    assert!(has_tag(&character, &b"betrayed".to_string()));
+    assert_eq!(tag_count(&character), 1);
+
+    destroy(character);
+    destroy(owner_cap);
+}
+
+#[test]
+fun revoke_tag_is_idempotent_on_missing_label() {
+    let mut ctx = tx_context::dummy();
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    // No-op on empty tag list.
+    revoke_tag(&mut character, &b"never-existed".to_string());
+    assert_eq!(tag_count(&character), 0);
+
+    apply_tag(&mut character, &b"wounded".to_string(), option::none(), 1_000);
+    revoke_tag(&mut character, &b"never-existed".to_string());
+    // The unrelated revoke didn't touch the existing tag.
+    assert_eq!(tag_count(&character), 1);
+    assert!(has_tag(&character, &b"wounded".to_string()));
 
     destroy(character);
     destroy(owner_cap);

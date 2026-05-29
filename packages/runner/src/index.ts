@@ -24,3 +24,11 @@ export * from './types/index.js';
 export { fetchEventsSince } from './infra/event-bus.js';
 export { signAndAnchor, pushCommitCall } from './infra/sign-and-anchor.js';
 export { resolveNetwork } from './infra/network.js';
+export {
+    fetchWorldTime,
+    deriveDay,
+    derivePartOfDay,
+    ticksPerDay,
+    type WorldTime,
+    type PartOfDay,
+} from './infra/world-time.js';

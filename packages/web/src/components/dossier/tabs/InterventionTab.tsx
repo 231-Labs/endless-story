@@ -2,7 +2,9 @@ import type { Character, OwnerIntervention, SoulSong } from '@endless-story/shar
 import { InterventionComposerGate } from './InterventionComposerGate';
 import { SoulSongPanel } from './SoulSongPanel';
 import { Linkified } from '@/components/common/CharacterLinkifier';
-import { formatDate, truncateAddress } from '@/lib/format';
+import { formatDate } from '@/lib/format';
+import type { ReflectionEntry } from '@/lib/chain/reflection-read';
+import { ReflectionsSection } from './ReflectionsSection';
 
 export function InterventionTab({
   character,
@@ -10,12 +12,14 @@ export function InterventionTab({
   soulSongs,
   viewerWallet,
   sagaCharacters,
+  reflections,
 }: {
   character: Character;
   interventions: OwnerIntervention[];
   soulSongs: SoulSong[];
   viewerWallet: string | null;
   sagaCharacters: Character[];
+  reflections: ReflectionEntry[];
 }) {
   // SoulSongPanel still uses the URL-param-derived viewerWallet flag
   // (server-side gate). Composer's owner check is delegated to its
@@ -39,6 +43,11 @@ export function InterventionTab({
           characterNftOwner={character.nftOwner}
         />
       </div>
+
+      <ReflectionsSection
+        reflections={reflections}
+        characterNftOwner={character.nftOwner}
+      />
 
       <section>
         <div className="flex items-center gap-4">

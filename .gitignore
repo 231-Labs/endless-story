@@ -15,3 +15,6 @@ packages/web/data/
 
 # Claude Code runtime artifacts
 .claude/
+
+# Sui CLI publish-state (we re-publish freely; contract-ids.ts is the source of truth)
+**/Published.toml

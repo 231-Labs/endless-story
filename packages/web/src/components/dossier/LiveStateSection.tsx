@@ -1,9 +1,10 @@
 import type { CharacterLiveState } from '@endless-story/shared';
 
+// Gender-neutral labels (matches DossierHeader).
 const ITEMS: { key: keyof CharacterLiveState; label: string }[] = [
-  { key: 'intent', label: '她現在' },
-  { key: 'location', label: '她在哪' },
-  { key: 'nextPlan', label: '她下一步' },
+  { key: 'intent', label: '此刻心境' },
+  { key: 'location', label: '身在何處' },
+  { key: 'nextPlan', label: '將往何方' },
 ];
 
 export function LiveStateSection({ state }: { state: CharacterLiveState }) {

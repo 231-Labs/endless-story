@@ -29,6 +29,7 @@ import {
 import { text as llmText } from '@endless-story/llm';
 import { resolveNetwork } from '../../infra/network.js';
 import { signAndAnchor } from '../../infra/sign-and-anchor.js';
+import { fetchWorldTime } from '../../infra/world-time.js';
 import {
     buildSystemPrompt,
     buildUserPrompt,
@@ -154,13 +155,31 @@ async function fetchGazetteSnapshot(
 
     const charactersRes = pkg
         ? await read.character.listMintedCharacters(client, pkg, { sagaId: input.sagaId })
-        : { summaries: [] as { characterId: string; name: string }[] };
+        : { summaries: [] as { characterId: string; name: string; mintedAtMs: string }[] };
     const charById = new Map(
         charactersRes.summaries.map((c) => [c.characterId, c.name]),
     );
 
     const maxEvents = input.maxEventsPerKind ?? 20;
     const events: GazetteEvent[] = [];
+
+    // New members — CharacterMinted into this saga is news ("X 入班").
+    // We list the most recent few so a freshly-seeded saga (no director
+    // events / POV yet) still produces a non-empty gazette. Once real
+    // activity exists, these become a small tail. Mints are wall-clock
+    // (not tick-based), so we can't cleanly scope to "today" — bounded
+    // to the latest 5 to limit cross-gazette repetition.
+    const recentJoins = [...charactersRes.summaries]
+        .sort((a, b) => Number(b.mintedAtMs ?? 0) - Number(a.mintedAtMs ?? 0))
+        .slice(0, 5);
+    for (const c of recentJoins) {
+        events.push({
+            kind: 'CharacterJoined',
+            summary: `「${c.name}」入班 ${sagaJson.name ?? '春雪社'}`,
+            characterNames: [c.name],
+            timestampMs: c.mintedAtMs ?? '0',
+        });
+    }
 
     // Director events — opened storylets, character calls, attribute pressures.
     if (pkg) {
@@ -192,6 +211,51 @@ async function fetchGazetteSnapshot(
                 // Tolerate per-event-type failures; continue with others.
             }
         }
+
+        // event.move BudgetEvent lifecycle. We fetch the shared object
+        // for the title + participant snapshot because the *Pushed event
+        // only carries ids + counts (title lives in the object). Capped
+        // at maxEvents to stay cheap. Resolved status is joined from the
+        // BudgetEventResolved log.
+        try {
+            const [pushed, resolved] = await Promise.all([
+                read.event.listBudgetEvents(client, pkg, {
+                    sagaId: input.sagaId,
+                    maxEvents,
+                }),
+                read.event.listResolvedBudgetEvents(client, pkg, maxEvents),
+            ]);
+            const resolvedMap = new Map(
+                resolved.map((r) => [r.eventId, r.resolvedAtMs]),
+            );
+            for (const p of pushed) {
+                let title = '一場事件';
+                let participantCount = 0;
+                try {
+                    const objRes = await read.event.getBudgetEvent(client, p.eventId);
+                    const json = objRes.json as unknown as {
+                        meta?: { title?: string };
+                        deck?: { participants?: string[] };
+                    };
+                    if (json.meta?.title) title = json.meta.title;
+                    if (Array.isArray(json.deck?.participants)) {
+                        participantCount = json.deck.participants.length;
+                    }
+                } catch {
+                    // fall through with defaults
+                }
+                const sceneShort = p.sceneId.slice(0, 10);
+                const status = resolvedMap.has(p.eventId) ? '已結算' : '未結算';
+                events.push({
+                    kind: 'BudgetEventOpened',
+                    summary: `${sceneShort}… 開了《${title}》，${participantCount} 人參與，${status}`,
+                    characterNames: [],
+                    timestampMs: p.createdAtMs,
+                });
+            }
+        } catch {
+            // continue without budget events on RPC failure
+        }
     }
 
     // POV chapters — commitment::CommitmentCreated where subject is a
@@ -200,6 +264,11 @@ async function fetchGazetteSnapshot(
     const chapters: GazetteChapter[] = [];
     if (pkg && charById.size > 0) {
         const max = input.maxChapters ?? 10;
+        // One chapter link PER CHARACTER (their latest). listCommitments is
+        // newest-first, so the first time we see a character is their most
+        // recent POV. Without this, a character who wrote 3 POVs across
+        // multiple daily runs shows up 3× in the same gazette — noisy.
+        const seenChars = new Set<string>();
         try {
             const allCommits = await read.commitment.listCommitments(client, pkg, {
                 maxEvents: max * 3, // overshoot, then filter
@@ -208,6 +277,8 @@ async function fetchGazetteSnapshot(
                 if (chapters.length >= max) break;
                 const charName = charById.get(c.subjectId);
                 if (!charName) continue; // not a char in this saga (could be gazette itself)
+                if (seenChars.has(c.subjectId)) continue; // keep only latest per character
+                seenChars.add(c.subjectId);
                 // Fetch blob excerpt for the teaser line in the gazette.
                 const excerpt = await fetchExcerpt(c.commitmentId, client).catch(() => '');
                 chapters.push({
@@ -235,9 +306,21 @@ async function fetchGazetteSnapshot(
         }
     }
 
+    // Narrative day: explicit override wins; otherwise derive from the
+    // World tick (chain-canonical two-layer clock). Falls back to 1 if
+    // the World object is unreadable.
+    let day = input.day ?? 1;
+    if (input.day == null) {
+        const worldId = ENDLESS_STORY_DEPLOYMENT.worldId;
+        if (worldId) {
+            const wt = await fetchWorldTime(client, worldId);
+            day = wt.day;
+        }
+    }
+
     return {
         sagaName: sagaJson.name ?? '無名戲班',
-        day: input.day ?? 1,
+        day,
         events,
         chapters,
         treasuryEndless:

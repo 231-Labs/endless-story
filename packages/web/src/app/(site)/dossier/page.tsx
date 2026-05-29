@@ -28,6 +28,7 @@ import { DEMO_SAGA_ID } from '@/mocks/sagas';
 import { DEMO_VIEWER_WALLET } from '@/mocks/subscriptions';
 import { shortChapterTitle } from '@/lib/format';
 import { fetchPovChaptersForCharacter } from '@/lib/chain/pov-read';
+import { fetchReflectionsForCharacter } from '@/lib/chain/reflection-read';
 import { PovTriggerButton } from '@/components/dossier/PovTriggerButton';
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
@@ -158,6 +159,7 @@ export default async function DossierPage({
     liveState,
     sagaName,
     chainPovChapters,
+    reflections,
   ] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
@@ -177,6 +179,9 @@ export default async function DossierPage({
     // when nothing's been committed yet (no runner POV yet, no
     // admin-triggered chapter yet).
     fetchPovChaptersForCharacter(character.id, { limit: 5 }),
+    // Reflections from reflection.move. Owner sees full body; non-owners
+    // see only metadata (mode + timestamp + chain anchor).
+    fetchReflectionsForCharacter(character.id, { limit: 8 }),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
   const memoryChapterIds = Array.from(
@@ -264,6 +269,7 @@ export default async function DossierPage({
                 soulSongs={soulSongs}
                 viewerWallet={viewerWallet}
                 sagaCharacters={allCharacters}
+                reflections={reflections}
               />
             ) : null}
           </div>

@@ -1,8 +1,8 @@
 import type { Chapter, Character } from '@endless-story/shared';
 import Link from 'next/link';
 import { truncateBlobId } from '@/lib/format';
-import { objectUrl } from '@/lib/explorer';
 import type { PovChapterEntry } from '@/lib/chain/pov-read';
+import { ChainPovSection } from './ChainPovSection';
 
 export function ChaptersTab({
   chapters,
@@ -43,79 +43,6 @@ export function ChaptersTab({
         <Section title="同場群像" chapters={involvedChapters} />
       ) : null}
     </div>
-  );
-}
-
-function ChainPovSection({
-  chapters,
-  character,
-}: {
-  chapters: PovChapterEntry[];
-  character: Character;
-}) {
-  return (
-    <section>
-      <div className="flex items-center gap-4">
-        <div className="h-px w-8 bg-cinnabar" />
-        <h2 className="font-serif text-2xl tracking-wide text-cinnabar">
-          {character.name} 視角 · 鏈上 POV
-        </h2>
-      </div>
-      <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
-        {chapters.map((c) => (
-          <li key={c.commitmentId}>
-            <div className="block rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
-              <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute/80">
-                <span className="rounded border border-hairline/50 bg-canvas/50 px-2 py-1 font-mono">
-                  walrus · {truncateBlobId(c.blobId)}
-                </span>
-                <a
-                  href={objectUrl(c.commitmentId)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-cinnabar"
-                  title="在區塊鏈瀏覽器查看 commitment"
-                >
-                  on-chain anchor ↗
-                </a>
-                <a
-                  href={c.blobUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-cinnabar"
-                  title="在 Walrus 直接讀原文"
-                >
-                  walrus blob ↗
-                </a>
-              </div>
-              <ChainPovBody blobId={c.blobId} />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-async function ChainPovBody({ blobId }: { blobId: string }) {
-  // Server-side fetch from Walrus aggregator DIRECTLY (not via our
-  // /api/blob proxy — Node's fetch needs an absolute URL, and there's
-  // no charset issue server-side since we'll decode as UTF-8 via
-  // .text() regardless of the missing Content-Type header). The proxy
-  // only matters for browser-facing <a href> links where the missing
-  // header makes Chrome render as latin-1 → 亂碼.
-  const aggregatorUrl = `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
-  let body: string;
-  try {
-    const res = await fetch(aggregatorUrl, { cache: 'no-store' });
-    body = res.ok ? await res.text() : '— 無法讀取章回內容（Walrus 暫時不通） —';
-  } catch {
-    body = '— 無法讀取章回內容 —';
-  }
-  return (
-    <p className="mt-4 max-w-prose whitespace-pre-wrap font-serif text-base leading-loose text-ink/85 sm:text-lg">
-      {body}
-    </p>
   );
 }
 

@@ -71,6 +71,25 @@ export async function fetchOnChainScenesForSaga(idOrSlug: string): Promise<Scene
     return out;
 }
 
+/**
+ * Fetch a single Scene by object id. Returns null when id isn't a Sui
+ * id, the chain rejects the fetch, or the json is missing — caller
+ * falls through to mock / off-chain.
+ */
+export async function fetchOnChainScene(id: string): Promise<Scene | null> {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(id)) return null;
+    const client = makeSuiClient({ network: resolveNetwork() });
+    try {
+        const res = await read.scene.getScene(client, id);
+        const json = (res as { json?: unknown }).json as ChainSceneJson | undefined;
+        if (!json) return null;
+        return mapChainScene(id, json);
+    } catch (err) {
+        console.warn('[scene-read] fetchOnChainScene failed:', err);
+        return null;
+    }
+}
+
 function mapChainScene(id: string, json: ChainSceneJson): Scene {
     const privacy = clampPrivacy(json.access?.privacy_level);
     const posX = json.placement?.pos_x;
