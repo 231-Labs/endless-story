@@ -207,25 +207,44 @@ export class MemWalManual {
             if (this.config.suiClient) {
                 this._suiClient = this.config.suiClient;
             } else {
-                // Fallback: create client via dynamic import
-                // @ts-ignore — optional peer dependency
-                const mod = await import("@mysten/sui/client");
-                const SuiClient = (mod as any).SuiClient;
-                if (typeof SuiClient !== "function") {
+                // Fallback: create client via dynamic import.
+                // @mysten/sui v2.17+ renamed `SuiClient` → `SuiJsonRpcClient`
+                // and moved it to the `/jsonRpc` subpath. Try the new path
+                // first; fall back to the legacy `/client` subpath for older
+                // peer-dep installs.
+                const network = this.config.suiNetwork ?? "mainnet";
+                let Ctor: any;
+                let url: string | undefined;
+                try {
+                    // @ts-ignore — optional peer dependency
+                    const mod = await import("@mysten/sui/jsonRpc");
+                    Ctor = (mod as any).SuiJsonRpcClient;
+                    const getUrl = (mod as any).getJsonRpcFullnodeUrl;
+                    if (typeof getUrl === "function") url = getUrl(network);
+                } catch {
+                    // jsonRpc subpath not present — fall through to legacy.
+                }
+                if (typeof Ctor !== "function") {
+                    // @ts-ignore — optional peer dependency
+                    const legacy = await import("@mysten/sui/client");
+                    Ctor = (legacy as any).SuiClient;
+                }
+                if (typeof Ctor !== "function") {
                     throw new Error(
-                        "SuiClient not found in @mysten/sui/client. " +
-                        "For @mysten/sui v2.6.0+, pass suiClient in config " +
-                        "(e.g. from dapp-kit's useSuiClient())"
+                        "Sui client constructor not found in @mysten/sui. " +
+                        "For v2.17+ pass `suiClient` in config " +
+                        "(e.g. from dapp-kit's useSuiClient() or " +
+                        "@endless-story/sdk's makeSuiClient())."
                     );
                 }
-                const network = this.config.suiNetwork ?? "mainnet";
-                const urls: Record<string, string> = {
-                    testnet: "https://fullnode.testnet.sui.io:443",
-                    mainnet: "https://fullnode.mainnet.sui.io:443",
-                };
-                this._suiClient = new SuiClient({
-                    url: urls[network] ?? urls.mainnet,
-                });
+                if (!url) {
+                    const urls: Record<string, string> = {
+                        testnet: "https://fullnode.testnet.sui.io:443",
+                        mainnet: "https://fullnode.mainnet.sui.io:443",
+                    };
+                    url = urls[network] ?? urls.mainnet;
+                }
+                this._suiClient = new Ctor({ url, network });
             }
         }
         return this._suiClient;
