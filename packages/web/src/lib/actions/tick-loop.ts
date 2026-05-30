@@ -1,0 +1,287 @@
+'use server';
+
+/**
+ * N4 — autonomous tick loop. One press = the saga lives one tick on its own.
+ *
+ * This is the integrative step (docs/NARRATIVE_AGENTS.md §6): it chains the
+ * pieces N1–N3 + R-era services into a single self-driving pass, in order:
+ *
+ *   1. ADVANCE   World tick moves (narrative time) — unless dry-run.
+ *   2. ACT       Every character in an open event PLAYS its hand on its own
+ *                (N1 decideCardPlay → submit_action). The world acts without
+ *                an admin clicking each card.
+ *   3. PRODUCE   Each character writes a day-aware POV chapter (subscriber-
+ *                gated unless forced) — recall + relationships threaded in.
+ *   4. REFLECT   Periodic sleep (N2): consolidate scattered memories into
+ *                dense anchored reflections so recall doesn't degrade.
+ *   5. NARRATE   Compile the objective gazette for the day (director side).
+ *
+ * Sequential throughout — one admin keypair can't sign in parallel without
+ * object-version conflicts on the shared StorytellerCap. Demo driver is the
+ * SchedulerPanel button; a standalone CLI can call this on an interval.
+ *
+ * Dry-run produces POV prose only (steps that mutate chain are skipped),
+ * matching the existing daily-batch "preview" semantics.
+ */
+
+import type { Character } from '@endless-story/shared';
+import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
+import { getAdminContext } from '@/lib/chain/admin-signer';
+import { resolveNetwork } from '@/lib/chain/network';
+import { runPovForCharacter } from '@/lib/chain/pov-core';
+import { charactersApi } from '@/lib/api/index';
+import {
+    advanceTickAction,
+    getWorldTimeSnapshot,
+    type WorldTimeSnapshot,
+} from './world-time';
+import { runCharacterTurnAction } from './character-turn';
+import { runSleepAction } from './sleep';
+import { compileGazetteAction } from './compile-gazette';
+
+export interface TickLoopInput {
+    /** Advance a tick before the pass. Default true (ignored on dry-run). */
+    advance?: boolean;
+    /** Cap characters processed for POV/sleep (LLM cost guard). Default 6. */
+    maxCharacters?: number;
+    /** Run the consolidation/sleep pass. Default true. */
+    sleep?: boolean;
+    /** Compile the gazette at the end. Default true. */
+    gazette?: boolean;
+    /** Preview: produce POV prose but don't advance / act / anchor. */
+    dryRun?: boolean;
+}
+
+export interface TickActResult {
+    eventId: string;
+    characterId: string;
+    name?: string;
+    ok: boolean;
+    cardLabel?: string;
+    intent?: string;
+    skipped?: boolean;
+    error?: string;
+}
+
+export interface TickPovResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    anchored: boolean;
+    skipReason?: string;
+    chapter?: string;
+    recalledCount?: number;
+    digest?: string;
+    error?: string;
+}
+
+export interface TickSleepResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    reflections?: string[];
+    anchored?: boolean;
+    skipReason?: string;
+    error?: string;
+}
+
+export interface TickGazetteResult {
+    ok: boolean;
+    eventCount: number;
+    chapterCount: number;
+    anchored: boolean;
+    skipReason?: string;
+    blobId?: string;
+    digest?: string;
+    error?: string;
+}
+
+export interface TickLoopResult {
+    ok: boolean;
+    advanced: boolean;
+    worldTime?: WorldTimeSnapshot;
+    acts: TickActResult[];
+    povs: TickPovResult[];
+    sleeps: TickSleepResult[];
+    gazette?: TickGazetteResult;
+    error?: string;
+}
+
+export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
+    const d = ENDLESS_STORY_DEPLOYMENT;
+    if (!d.sagaId || !d.storytellerCapId) {
+        return { ok: false, advanced: false, acts: [], povs: [], sleeps: [], error: 'saga 尚未種子化' };
+    }
+    let admin;
+    try {
+        admin = getAdminContext();
+    } catch (err) {
+        return {
+            ok: false,
+            advanced: false,
+            acts: [],
+            povs: [],
+            sleeps: [],
+            error: err instanceof Error ? err.message : 'admin keypair 載入失敗',
+        };
+    }
+
+    const dryRun = input.dryRun ?? false;
+    const cap = input.maxCharacters ?? 6;
+
+    // 1. ADVANCE (chain mutation — skipped on dry-run).
+    let advanced = false;
+    if ((input.advance ?? true) && !dryRun) {
+        const adv = await advanceTickAction();
+        advanced = adv.ok;
+    }
+    const worldTime = (await getWorldTimeSnapshot()) ?? undefined;
+    const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
+
+    // Character roster (saga-scoped, with fallback).
+    let characters: Character[] = await charactersApi.listSagaCharacters(d.sagaId).catch(() => []);
+    if (characters.length === 0) {
+        characters = await charactersApi.listCharacters().catch(() => []);
+    }
+    const nameById = new Map(characters.map((c) => [c.id, c.name]));
+    const slice = characters.slice(0, cap);
+
+    // 2. ACT — characters play their own hands in open events (chain mutation).
+    const acts: TickActResult[] = [];
+    if (!dryRun) {
+        try {
+            acts.push(...(await runActPhase(d.sagaId, nameById)));
+        } catch (err) {
+            // Non-fatal: a failed ACT phase shouldn't block POV/narrate.
+            console.warn('[tick-loop] act phase failed:', err);
+        }
+    }
+
+    // 3. PRODUCE — POV chapter per character (subscriber-gated unless forced).
+    const povs: TickPovResult[] = [];
+    for (const c of slice) {
+        const trigger = `${dayLabel} — 戲班又過了一段光景。把你此刻的心境、所見、未說出口的念頭，寫成一段獨白。`;
+        const r = await runPovForCharacter(admin, c.id, {
+            triggerNarrative: trigger,
+            forceRun: true,
+            dryRun,
+        });
+        povs.push({
+            characterId: c.id,
+            name: c.name,
+            ok: r.ok,
+            anchored: r.anchored,
+            skipReason: r.skipReason,
+            chapter: r.chapter,
+            recalledCount: r.recalledCount,
+            digest: r.digest,
+            error: r.error,
+        });
+    }
+
+    // 4. REFLECT — periodic sleep / consolidation (chain mutation).
+    const sleeps: TickSleepResult[] = [];
+    if ((input.sleep ?? true) && !dryRun) {
+        for (const c of slice) {
+            const r = await runSleepAction(c.id);
+            // Surface only meaningful outcomes (skip the "nothing to do" noise
+            // is still recorded so the panel shows it ran).
+            sleeps.push({
+                characterId: c.id,
+                name: c.name,
+                ok: r.ok,
+                reflections: r.reflections,
+                anchored: r.anchored,
+                skipReason: r.skipReason,
+                error: r.error,
+            });
+        }
+    }
+
+    // 5. NARRATE — compile the objective gazette for the day.
+    let gazette: TickGazetteResult | undefined;
+    if ((input.gazette ?? true) && !dryRun) {
+        const g = await compileGazetteAction({ day: worldTime?.day });
+        gazette = {
+            ok: g.ok,
+            eventCount: g.eventCount,
+            chapterCount: g.chapterCount,
+            anchored: g.anchored,
+            skipReason: g.skipReason,
+            blobId: g.blobId,
+            digest: g.digest,
+            error: g.error,
+        };
+    }
+
+    const anyOk =
+        acts.some((a) => a.ok) ||
+        povs.some((p) => p.ok) ||
+        sleeps.some((s) => s.ok && !s.skipReason) ||
+        gazette?.ok === true;
+    return {
+        ok: anyOk || (slice.length === 0),
+        advanced,
+        worldTime,
+        acts,
+        povs,
+        sleeps,
+        gazette,
+    };
+}
+
+/* ── ACT phase ─────────────────────────────────────────────────────────
+ * For every OPEN budget event in the saga, find participants who haven't
+ * acted yet (not in resolution.submitted_actions) and have a non-empty
+ * hand, then let each one DECIDE + submit on its own. Sequential — one
+ * keypair. Already-acted participants are skipped (idempotent re-runs). */
+async function runActPhase(
+    sagaId: string,
+    nameById: Map<string, string>,
+): Promise<TickActResult[]> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return [];
+    const client = makeSuiClient({ network: resolveNetwork() });
+    const summaries = await read.event
+        .listBudgetEvents(client, pkg, { sagaId, maxEvents: 20 })
+        .catch(() => []);
+
+    const out: TickActResult[] = [];
+    for (const s of summaries) {
+        let parsed;
+        try {
+            const res = await read.event.getBudgetEvent(client, s.eventId);
+            parsed = res.json as unknown as {
+                meta?: { status?: number | string };
+                deck?: { participants?: string[]; hands?: Array<Array<number | string>> };
+                resolution?: { submitted_actions?: Array<{ character_id?: string }> };
+            };
+        } catch {
+            continue;
+        }
+        if (Number(parsed.meta?.status ?? 0) !== 0) continue; // resolved/closed
+        const participants = parsed.deck?.participants ?? [];
+        const hands = parsed.deck?.hands ?? [];
+        const acted = new Set(
+            (parsed.resolution?.submitted_actions ?? [])
+                .map((a) => a.character_id)
+                .filter((x): x is string => typeof x === 'string'),
+        );
+        for (let i = 0; i < participants.length; i += 1) {
+            const charId = participants[i];
+            if (!charId || acted.has(charId)) continue;
+            if ((hands[i]?.length ?? 0) === 0) continue; // no hand to play
+            const r = await runCharacterTurnAction(s.eventId, charId);
+            out.push({
+                eventId: s.eventId,
+                characterId: charId,
+                name: nameById.get(charId),
+                ok: r.ok,
+                cardLabel: r.cardLabel,
+                intent: r.intent,
+                error: r.ok ? undefined : r.error,
+            });
+        }
+    }
+    return out;
+}
