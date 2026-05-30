@@ -28,7 +28,7 @@ import type { Character } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
-import { runPovForCharacter } from '@/lib/chain/pov-core';
+import { runPovForCharacter, anchorPovChapter } from '@/lib/chain/pov-core';
 import { charactersApi } from '@/lib/api/index';
 import {
     advanceTickAction,
@@ -78,6 +78,7 @@ export interface TickPovResult {
     skipReason?: string;
     chapter?: string;
     recalledCount?: number;
+    commitmentId?: string;
     digest?: string;
     error?: string;
 }
@@ -240,26 +241,40 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         error: r.error,
     });
     const povs: TickPovResult[] = [];
-    if (dryRun) {
-        const settled = await Promise.all(
-            slice.map(async (c) => ({
-                c,
-                r: await runPovForCharacter(admin, c.id, {
-                    triggerNarrative: trigger,
-                    forceRun: true,
-                    dryRun: true,
-                }),
-            })),
-        );
-        for (const { c, r } of settled) povs.push(mapPov(c, r));
-    } else {
-        for (const c of slice) {
-            const r = await runPovForCharacter(admin, c.id, {
+    // Generate every chapter CONCURRENTLY (no signing in dry mode), then —
+    // for a real run — anchor them ONE AT A TIME (single StorytellerCap).
+    // This is the generate-parallel / anchor-serial win for real ticks: the
+    // slow part (primary LLM × N) collapses to a single max instead of a sum.
+    const generated = await Promise.all(
+        slice.map(async (c) => ({
+            c,
+            r: await runPovForCharacter(admin, c.id, {
                 triggerNarrative: trigger,
                 forceRun: true,
-                dryRun: false,
+                dryRun: true,
+            }),
+        })),
+    );
+    if (dryRun) {
+        for (const { c, r } of generated) povs.push(mapPov(c, r));
+    } else {
+        for (const { c, r } of generated) {
+            if (!r.chapter.trim()) {
+                povs.push(mapPov(c, r)); // generation failed — nothing to anchor
+                continue;
+            }
+            const a = await anchorPovChapter(admin, c.id, d.sagaId, r.chapter);
+            povs.push({
+                characterId: c.id,
+                name: c.name,
+                ok: a.anchored,
+                anchored: a.anchored,
+                chapter: r.chapter,
+                recalledCount: r.recalledCount,
+                commitmentId: a.commitmentId,
+                digest: a.digest,
+                error: a.anchored ? undefined : a.error,
             });
-            povs.push(mapPov(c, r));
         }
     }
 

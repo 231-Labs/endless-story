@@ -12,7 +12,7 @@
  */
 
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { characterWorker as runnerCharacterWorker } from '@endless-story/runner';
+import { characterWorker as runnerCharacterWorker, signAndAnchor } from '@endless-story/runner';
 import type { AdminContext } from '@/lib/chain/admin-signer';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
@@ -62,6 +62,54 @@ export async function resolveRole(characterId: string): Promise<string | undefin
         return recruitment?.specialty ?? undefined;
     } catch {
         return undefined;
+    }
+}
+
+/**
+ * Anchor a PRE-GENERATED POV chapter on chain (Walrus + commitment::commit)
+ * and write it back to MemWal. Pairs with `runPovForCharacter(dryRun:true)`
+ * to enable generate-parallel / anchor-serial in batch loops: generate every
+ * chapter concurrently (no signing), then anchor them one at a time (single
+ * StorytellerCap). Mirrors reflection's `anchorReflectionText` (N2c).
+ */
+export async function anchorPovChapter(
+    admin: AdminContext,
+    characterId: string,
+    sagaId: string,
+    chapter: string,
+): Promise<{
+    anchored: boolean;
+    commitmentId?: string;
+    blobId?: string;
+    blobUrl?: string;
+    digest?: string;
+    remembered?: boolean;
+    error?: string;
+}> {
+    const text = chapter.trim();
+    if (!text) return { anchored: false, error: 'empty_chapter' };
+    try {
+        const anchor = await signAndAnchor({
+            sagaId,
+            subjectId: characterId,
+            content: new TextEncoder().encode(text),
+            contentType: 'text/markdown',
+            signer: admin.signer,
+        });
+        // Write the new chapter into the character's memory (best-effort).
+        const remembered = await rememberForCharacter(characterId, text, {
+            kind: 'chapter',
+        }).catch(() => false);
+        return {
+            anchored: true,
+            commitmentId: anchor.commitmentId,
+            blobId: anchor.blobId,
+            blobUrl: anchor.blobUrl,
+            digest: anchor.digest,
+            remembered,
+        };
+    } catch (err) {
+        return { anchored: false, error: err instanceof Error ? err.message : String(err) };
     }
 }
 
