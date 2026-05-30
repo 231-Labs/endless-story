@@ -30,8 +30,20 @@ export interface SceneLiveStatus {
     latestLine?: { characterId: string; text: string };
 }
 
+export interface OpenEventStatus {
+    eventId: string;
+    title: string;
+    sceneId: string;
+    /** Participant character ids — caller resolves names from its cast map. */
+    participantIds: string[];
+    /** How many have acted vs total — "2/3 已出牌". */
+    actedCount: number;
+}
+
 export interface SagaLiveSnapshot {
     scenes: SceneLiveStatus[];
+    /** Currently-open events in the saga (the live drama). Newest-first. */
+    openEvents: OpenEventStatus[];
     day?: number;
     partOfDay?: string;
 }
@@ -41,8 +53,9 @@ const EVENT_SCAN = 10;
 
 export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnapshot> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
-    if (!pkg || !sagaId) return { scenes: [] };
+    if (!pkg || !sagaId) return { scenes: [], openEvents: [] };
     const client = makeSuiClient({ network: resolveNetwork() });
+    const openEvents: OpenEventStatus[] = [];
 
     // 1. Scenes → presence (fresh read of current_character_ids).
     const scenes = await fetchOnChainScenesForSaga(sagaId).catch(() => []);
@@ -70,7 +83,7 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
             const res = await read.event.getBudgetEvent(client, ev.eventId);
             parsed = res.json as unknown as {
                 meta?: { status?: number | string; scene_id?: string; title?: string };
-                deck?: { catalog?: Array<{ label?: string }> };
+                deck?: { catalog?: Array<{ label?: string }>; participants?: string[] };
                 resolution?: {
                     submitted_actions?: Array<{
                         character_id?: string;
@@ -83,10 +96,24 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
             continue;
         }
         const sceneId = parsed.meta?.scene_id ?? ev.sceneId;
+        const isOpen = Number(parsed.meta?.status ?? 0) === 0;
+
+        if (isOpen) {
+            // Top-level open-events list (the live drama) — even for scenes
+            // not on the handscroll (e.g. unplaced scenes).
+            openEvents.push({
+                eventId: ev.eventId,
+                title: parsed.meta?.title || '一場戲',
+                sceneId,
+                participantIds: parsed.deck?.participants ?? [],
+                actedCount: (parsed.resolution?.submitted_actions ?? []).length,
+            });
+        }
+
         const st = byScene.get(sceneId);
         if (!st) continue;
 
-        if (Number(parsed.meta?.status ?? 0) === 0) {
+        if (isOpen) {
             st.hasOpenEvent = true;
             st.eventTitle = parsed.meta?.title || st.eventTitle;
         }
@@ -128,5 +155,5 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
         }
     }
 
-    return { scenes: [...byScene.values()], day, partOfDay };
+    return { scenes: [...byScene.values()], openEvents, day, partOfDay };
 }

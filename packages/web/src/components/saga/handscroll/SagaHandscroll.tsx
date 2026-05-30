@@ -6,7 +6,9 @@ import { SnowPaperBackground } from './SnowPaperBackground';
 import { SceneVignette, type VignetteAnchor } from './SceneVignette';
 import { FloatingQuote } from './FloatingQuote';
 import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
-import { getSagaLiveSnapshot } from '@/lib/actions/saga-live';
+import { getSagaLiveSnapshot, type OpenEventStatus } from '@/lib/actions/saga-live';
+
+type LiveEvent = OpenEventStatus;
 
 /**
  * 春雪社主螢幕：原生橫向捲動手卷。
@@ -98,6 +100,7 @@ export function SagaHandscroll(props: Props) {
   // Gated to document visibility to save RPC. No-op for mock scenes (the
   // snapshot returns [] when nothing's anchored on chain).
   const [liveScenes, setLiveScenes] = useState<Scene[]>(scenes);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   useEffect(() => {
     if (!saga.id) return;
     let cancelled = false;
@@ -125,6 +128,7 @@ export function SagaHandscroll(props: Props) {
               }),
             );
           }
+          if (!cancelled) setLiveEvents(snap.openEvents ?? []);
         } catch {
           /* transient RPC failure — keep last good state */
         }
@@ -137,6 +141,20 @@ export function SagaHandscroll(props: Props) {
       if (timer) clearTimeout(timer);
     };
   }, [saga.id]);
+
+  // Resolve scene + character names for the live-events panel.
+  const sceneNameById = new Map(liveScenes.map((s) => [s.id, s.name]));
+  const eventCards: EventCard[] = liveEvents.map((e) => ({
+    eventId: e.eventId,
+    sceneId: e.sceneId,
+    title: e.title,
+    sceneName: sceneNameById.get(e.sceneId) ?? '某處',
+    actedCount: e.actedCount,
+    total: e.participantIds.length,
+    castNames: e.participantIds
+      .map((id) => charactersById.get(id)?.name)
+      .filter((n): n is string => Boolean(n)),
+  }));
 
   const partOfDay = saga.worldTime?.partOfDay ?? 'noon';
   const isFocused = focusedSceneId !== null;
@@ -283,6 +301,9 @@ export function SagaHandscroll(props: Props) {
           saga={saga}
           locationLabel={locationLabel}
         />
+
+        {/* 正在上演 — 鏈上開著的事件（每 6s 輪詢，不重整就更新） */}
+        <LiveEventsOverlay events={eventCards} onSelect={setFocusedSceneId} />
       </div>
       
       {/* Scene Detail View */}
@@ -300,6 +321,61 @@ export function SagaHandscroll(props: Props) {
         </div>
       )}
     </>
+  );
+}
+
+interface EventCard {
+  eventId: string;
+  sceneId: string;
+  title: string;
+  sceneName: string;
+  actedCount: number;
+  total: number;
+  castNames: string[];
+}
+
+/**
+ * 「正在上演」live overlay — the saga's currently-open events, polled from
+ * chain. Each card: title · scene · cast · how many have acted. Click to
+ * focus that scene. Hidden when nothing's open.
+ */
+function LiveEventsOverlay({
+  events,
+  onSelect,
+}: {
+  events: EventCard[];
+  onSelect: (sceneId: string) => void;
+}) {
+  if (events.length === 0) return null;
+  return (
+    <div className="pointer-events-none absolute left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+7.5rem)] z-30 flex max-w-[min(86vw,20rem)] flex-col gap-2 sm:left-10 sm:top-[calc(var(--es-site-nav-h)+8.5rem)]">
+      <div className="flex items-center gap-2 text-2xs tracking-[0.3em] text-cinnabar/90">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inset-0 animate-ping rounded-full bg-cinnabar opacity-75" />
+          <span className="relative block h-1.5 w-1.5 rounded-full bg-cinnabar" />
+        </span>
+        正在上演
+      </div>
+      {events.slice(0, 3).map((e) => (
+        <button
+          key={e.eventId}
+          type="button"
+          onClick={() => onSelect(e.sceneId)}
+          className="pointer-events-auto rounded-lg border border-hairline/60 bg-surface/90 px-3 py-2 text-left shadow-lg backdrop-blur-md transition-colors hover:border-cinnabar/50 dark:bg-elevated/85"
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="font-serif text-sm text-ink">《{e.title}》</span>
+            <span className="shrink-0 text-2xs tabular-nums tracking-widest text-mute">
+              {e.actedCount}/{e.total} 出牌
+            </span>
+          </div>
+          <div className="mt-0.5 truncate text-2xs tracking-widest text-mute">
+            {e.sceneName}
+            {e.castNames.length > 0 ? ` · ${e.castNames.join('、')}` : ''}
+          </div>
+        </button>
+      ))}
+    </div>
   );
 }
 
