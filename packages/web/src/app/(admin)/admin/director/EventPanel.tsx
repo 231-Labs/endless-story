@@ -420,14 +420,21 @@ function EventDetailView({
     const inSceneCount = characters.filter(
         (c) => c.currentSceneId === detail.sceneId,
     ).length;
+    // The select's state can lag behind the filtered options (e.g. default
+    // = characters[0] who's already a participant → not in availableForDeal).
+    // Use an "effective" id that's guaranteed to be in the option list so
+    // the displayed option and the dealt id never desync.
+    const effectiveDealId = availableForDeal.some((c) => c.id === pickerCharId)
+        ? pickerCharId
+        : availableForDeal[0]?.id ?? '';
 
     const handleDeal = () => {
-        if (!pickerCharId) return;
+        if (!effectiveDealId) return;
         setActionResult(null);
         startTransition(async () => {
             const r = await dealHandAction({
                 eventId: detail.eventId,
-                characterId: pickerCharId,
+                characterId: effectiveDealId,
             });
             setActionResult(r);
             // Re-sync the detail on EITHER outcome: a failure (e.g.
@@ -501,7 +508,7 @@ function EventDetailView({
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <select
-                            value={pickerCharId}
+                            value={effectiveDealId}
                             onChange={(e) => setPickerCharId(e.target.value)}
                             disabled={isPending || availableForDeal.length === 0}
                             className="rounded border border-hairline bg-canvas px-2 py-1 text-xs text-ink"
