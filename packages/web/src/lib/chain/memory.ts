@@ -234,7 +234,7 @@ function parseMemory(stored: string): RecalledMemory {
 /** Current narrative day from the World tick (chain). Falls back to 1.
  *  Recency uses narrative time (not wall-clock) so a dream fades as the
  *  storyteller advances days — semantically right + demoable. */
-async function currentNarrativeDay(): Promise<number> {
+export async function currentNarrativeDay(): Promise<number> {
     const worldId = ENDLESS_STORY_DEPLOYMENT.worldId;
     if (!worldId) return 1;
     try {

@@ -596,6 +596,9 @@ function EventDetailView({
                                                 {typeof turnResult.recalledCount === 'number'
                                                     ? ` · 憶 ${turnResult.recalledCount}`
                                                     : ''}
+                                                {turnResult.relationshipCount
+                                                    ? ` · 牽絆 ${turnResult.relationshipCount}`
+                                                    : ''}
                                             </div>
                                             <p className="mt-1 font-serif text-sm leading-relaxed text-ink/90">
                                                 「{turnResult.intent}」

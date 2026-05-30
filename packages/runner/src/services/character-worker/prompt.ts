@@ -42,6 +42,9 @@ export interface PovPromptInput {
     /** Optional: owner-injected dream text (R5). One per chapter max.
      *  When set, prompt explicitly asks LLM to weave it in. */
     dreamFragment?: string;
+    /** Optional: director-seeded relationships (N3) — who she's tied to +
+     *  how. Colours how she narrates others in the scene. */
+    relationshipHints?: string[];
 }
 
 export function buildSystemPrompt(): string {
@@ -72,6 +75,11 @@ export function buildUserPrompt(input: PovPromptInput): string {
             ? '\n## 你近期的記憶片段\n' +
               recentMemorySnippets.map((m, i) => `${i + 1}. ${m}`).join('\n')
             : '';
+    const relBlock =
+        input.relationshipHints && input.relationshipHints.length > 0
+            ? '\n## 你與在場人的牽絆（用你的眼睛看他們時帶上這份情感）\n' +
+              input.relationshipHints.map((r) => `- ${r}`).join('\n')
+            : '';
     const dreamBlock = dreamFragment
         ? `\n## 你昨夜的夢（必須引用其中一句意象）\n${dreamFragment}`
         : '';
@@ -85,6 +93,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         `- 所屬：${character.sagaName}${character.sceneName ? ` · 在 ${character.sceneName}` : ''}`,
         `- 行當聲口：${roleHint(character.role)}`,
         memBlock,
+        relBlock,
         dreamBlock,
         '',
         '## 剛才發生',

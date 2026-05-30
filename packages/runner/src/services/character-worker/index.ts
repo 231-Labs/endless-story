@@ -42,6 +42,8 @@ export interface RunCharacterWorkerInput {
     recentMemorySnippets?: string[];
     /** Optional: owner-injected dream fragment to weave in (R5). */
     dreamFragment?: string;
+    /** Optional: director-seeded relationship hints (N3). */
+    relationshipHints?: string[];
     /**
      * Optional: role / specialty override (e.g. "富商" from off-chain
      * Recruitment.specialty). Chain `Character` has no role field, so
@@ -127,6 +129,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         triggerNarrative: input.triggerNarrative,
         recentMemorySnippets: input.recentMemorySnippets ?? [],
         dreamFragment: resolvedDream,
+        relationshipHints: input.relationshipHints,
     });
 
     const response = await llm.chat({

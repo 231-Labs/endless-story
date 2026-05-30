@@ -27,6 +27,7 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { recallForCharacter } from '@/lib/chain/memory';
+import { fetchRelationshipHints } from '@/lib/chain/relationships';
 
 const INTENT_NAME: Record<number, string> = {
     0: '殺意',
@@ -47,6 +48,8 @@ export interface CharacterTurnResult {
     intent?: string;
     reason?: string;
     recalledCount?: number;
+    /** Director-seeded ties fed into the decision (N3). */
+    relationshipCount?: number;
     digest?: string;
     error?: string;
 }
@@ -103,12 +106,14 @@ export async function runCharacterTurnAction(
     if (status !== 0) return { ok: false, error: '事件已結算,無法出牌' };
     if (hand.length === 0) return { ok: false, error: '此角色手牌為空' };
 
-    // 2. Character snapshot + role + recalled memories (the choice lever).
-    const [charRes, sagaRes, role, recalled] = await Promise.all([
+    // 2. Character snapshot + role + recalled memories + relationships
+    //    (the choice levers — past + ties shape the card she plays).
+    const [charRes, sagaRes, role, recalled, relationshipHints] = await Promise.all([
         read.character.getCharacter(client, characterId).catch(() => null),
         read.saga.getSaga(client, d.sagaId).catch(() => null),
         resolveRole(characterId),
         recallForCharacter(characterId, `${eventTitle} ${eventSummary} 衝突 抉擇`, 6),
+        fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
     ]);
     const cj = charRes?.json as unknown as {
         profile?: { name?: string; physical_facts?: { species?: string; body?: string } };
@@ -132,6 +137,7 @@ export async function runCharacterTurnAction(
             eventSummary,
             hand,
             recalledMemories: recalled,
+            relationshipHints,
         });
     } catch (err) {
         return { ok: false, error: 'decide 失敗:' + (err instanceof Error ? err.message : '') };
@@ -169,6 +175,7 @@ export async function runCharacterTurnAction(
             intent: decision.intent,
             reason: decision.reason,
             recalledCount: recalled.length,
+            relationshipCount: relationshipHints.length,
             digest: res.digest,
         };
     } catch (err) {

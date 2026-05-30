@@ -17,6 +17,7 @@ import type { AdminContext } from '@/lib/chain/admin-signer';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
 import { recallForCharacter, rememberForCharacter } from '@/lib/chain/memory';
+import { fetchRelationshipHints } from '@/lib/chain/relationships';
 
 export interface PovCoreOptions {
     triggerNarrative: string;
@@ -79,8 +80,12 @@ export async function runPovForCharacter(
 
     // Recall long-term memory (MemWal) for prompt context. The trigger
     // narrative doubles as the semantic query. No-op ([]) when memory
-    // isn't configured. Merge with any caller-supplied snippets.
-    const recalled = await recallForCharacter(characterId, opts.triggerNarrative, 6);
+    // isn't configured. Merge with any caller-supplied snippets. Director-
+    // seeded relationships (N3) colour how she narrates others in the scene.
+    const [recalled, relationshipHints] = await Promise.all([
+        recallForCharacter(characterId, opts.triggerNarrative, 6),
+        fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
+    ]);
     const recentMemorySnippets = [
         ...(opts.recentMemorySnippets ?? []),
         ...recalled,
@@ -94,6 +99,8 @@ export async function runPovForCharacter(
             role,
             recentMemorySnippets:
                 recentMemorySnippets.length > 0 ? recentMemorySnippets : undefined,
+            relationshipHints:
+                relationshipHints.length > 0 ? relationshipHints : undefined,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun

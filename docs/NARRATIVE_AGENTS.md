@@ -127,8 +127,10 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
   (敘事日衰減,half-life 2 日)× **relevance**(MemWal 向量 distance)。over-fetch 3× →
   三因子重排 top-K。**唯一**跟舊本地 store 的差:只對「語意撈回的候選集」評分、非全量
   掃描(緩解:撈寬 + 必要時定向 recall)。recency 用**敘事日**非牆鐘 → 推進 tick 即衰減、可 demo。
-- **反思壓縮(sleep)**:把零碎觀察壓成高密度反思 + 遺忘已吸收的 → 防 recall 退化成噪音。
-  值得從舊版搬的「機器 idea」(實作 MemWal-native)。**尚未做(N2)**。
+- **反思壓縮(sleep)** ✅:把零碎觀察壓成高密度反思 → 防 recall 退化成噪音。**已做(N2)**:
+  recall 非 anchored 的 observation/chapter → LLM 壓成 1-2 條 → remember(i=8,tag `a=1`
+  排除再壓)→ 上鏈 Reflection。「遺忘已吸收的」採**軟遺忘**(MemWal append-only,無刪除):
+  高密度反思 i=8 直接壓過 observation i=4/chapter i=5,加 recency 衰減,零碎記憶自然沉底。
 - **關係**:導演 relationship_seed → 鏈上 RelationshipSeeded;需建 reader → 注入 prompt +
   餵 ProfileTab(目前 mock)。輕量:per-pair 一句 tone summary,不做完整加權圖。**尚未做(N3)**。
 - **夢**:owner 付 ENDLESS → moderator 改寫 → anchor → MemWal remember(kind=dream,i=9)。
@@ -173,7 +175,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 | # | 缺口 | 內容 | 對應 |
 |---|---|---|---|
 | **N1** | 角色 DECIDE/ACT | **出牌已做 ✅**(character-agent decideCardPlay,依記憶+性格選牌→submit_action;EventPanel「讓她自己出牌」)。**剩**:移動 move_character + 由 tick loop 自動驅動(併入 N4)。 | §2 補權責破口 |
-| **N2** | 反思壓縮 sleep | recall 近期 → 壓縮高密度反思 → remember+anchor;防 recall 退化 | §5 |
+| ~~N2~~ ✅ | 反思壓縮 sleep | **已做**:recallForConsolidation(撈非 anchored 的 observation/chapter)→ consolidateMemories(primary,壓成 1-2 條)→ remember(kind=reflection,i=8,**a=1 anchored 不再被壓**)→ anchorReflectionText 上鏈。admin ReflectionPanel「睡一覺·整理記憶」。 | §5 |
 | **N3** | 關係上鏈讀 | RelationshipSeeded reader → 注入 prompt + ProfileTab 去 mock | §5 |
 | **N4** | tick loop 自治 | 把 §6 迴圈接成可連續跑(先 admin 驅動,後獨立 CLI) | §6 |
 | **N5** | 導演自動化 | judge 自動收尾事件 + ImportanceDebtCrossed 觸發反思 | §3 |

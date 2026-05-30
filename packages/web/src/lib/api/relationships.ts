@@ -2,21 +2,26 @@ import type { RelationshipEdge } from '@endless-story/shared';
 import { listEdgesFrom, relationshipEdges } from '@/mocks/relationships';
 import { USE_MOCK } from './config';
 import { httpGet } from './http';
+import { fetchOnChainEdgesFrom } from '@/lib/chain/relationships';
 
 /**
  * Relationships API
  *
- * 後端對應 endpoints：
+ * Chain-first (N3): when the director has seeded ties (RelationshipSeeded),
+ * surface the REAL on-chain edges. The relationship graph is public (it's
+ * the objective record of who the director tied to whom), so no owner gate.
+ * Falls back to mock / http for demo characters with no on-chain ties.
+ *
+ * 後端對應（legacy mock backend）：
  *   GET   /relationships?fromId={id}      → RelationshipEdge[]   (outgoing)
  *   GET   /relationships                  → RelationshipEdge[]   (all)
- *
- * 後端應該：
- *   - 邊由 sleep cycle 的 subjective-llm 蒸出（每日跑一次、accumulate）
- *   - tone / confidence / summary 由 LLM 評
- *   - 跨界邊（saga 成員 ↔ wild）也走同樣表結構
  */
 
 export async function listOutgoingEdges(fromId: string): Promise<RelationshipEdge[]> {
+  // Chain-first: real director-seeded ties win when present.
+  const onChain = await fetchOnChainEdgesFrom(fromId).catch(() => []);
+  if (onChain.length > 0) return onChain;
+
   if (USE_MOCK) return listEdgesFrom(fromId);
   return httpGet<RelationshipEdge[]>('/relationships', { query: { fromId } });
 }

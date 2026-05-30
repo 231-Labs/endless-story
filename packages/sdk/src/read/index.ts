@@ -27,3 +27,4 @@ export * as subscribe from './subscribe.js';
 export * as dream from './dream.js';
 export * as reflection from './reflection.js';
 export * as event from './event.js';
+export * as director from './director.js';

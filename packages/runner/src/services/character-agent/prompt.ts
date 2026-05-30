@@ -30,6 +30,9 @@ export interface DecideInput {
     hand: HandCard[];
     /** MemWal-recalled memories (three-factor) — the lever for "past shapes choice". */
     recalledMemories: string[];
+    /** Director-seeded relationships (N3) — who she's tied to + how. Shapes
+     *  who she protects, attacks, or hesitates against. */
+    relationshipHints?: string[];
 }
 
 export function buildSystemPrompt(): string {
@@ -54,6 +57,11 @@ export function buildUserPrompt(input: DecideInput): string {
             ? '\n## 你心底翻起的記憶(讓它們影響你的選擇)\n' +
               input.recalledMemories.map((m, i) => `${i + 1}. ${m.slice(0, 160)}`).join('\n')
             : '\n## 你心底翻起的記憶\n（此刻沒有特別浮現的記憶）';
+    const relBlock =
+        input.relationshipHints && input.relationshipHints.length > 0
+            ? '\n## 你與在場人的牽絆(影響你護誰、攻誰、對誰猶豫)\n' +
+              input.relationshipHints.map((r) => `- ${r}`).join('\n')
+            : '';
     const handBlock = input.hand
         .map((c) => `- catalogIndex=${c.catalogIndex} · 「${c.label}」(${c.intent})`)
         .join('\n');
@@ -65,6 +73,7 @@ export function buildUserPrompt(input: DecideInput): string {
         `- 外形:${input.physicalFacts}`,
         `- 所屬:${input.sagaName}`,
         memBlock,
+        relBlock,
         '',
         `## 此刻這場戲`,
         `《${input.eventTitle}》— ${input.eventSummary}`,
