@@ -119,7 +119,7 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 
 ---
 
-## 5. 認知層(MemWal-native — 明確不抄舊三因子 store)
+## 5. 認知層(MemWal-native — 三因子已實作,但不抄舊「全量掃描」版）
 
 - **記憶模型**:MemWal 存加密文字,前綴 `[[m|t=<kind>|i=<imp>|d=<敘事日>]]` tag。
   kind ∈ {dream, relationship, reflection, genesis, chapter, observation, plan}。
@@ -159,8 +159,9 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 
 ## 8. 現況 → C 的差距 + 建置順序
 
-**已到位**:event.move / 時間 / 排程殼 / 公報 / 訂閱 gate / MemWal 加權 + 注夢權重 +
-創世記憶 + 反思 recall + MemoriesTab + 行當 + SEAL 託管 + capability catalog。
+**已到位**:event.move / 時間 / 排程殼 / 公報 / 訂閱 gate / **MemWal 三因子召回(importance ×
+recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesTab(接真 MemWal）+
+行當 + SEAL 託管 + capability catalog。
 
 **到 C 的缺口(依序做,每步 type-check + 不破壞地基)**:
 
