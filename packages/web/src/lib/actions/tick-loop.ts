@@ -24,9 +24,15 @@
  * matching the existing daily-batch "preview" semantics.
  */
 
+import { Transaction } from '@mysten/sui/transactions';
 import type { Character } from '@endless-story/shared';
-import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import {
+    ENDLESS_STORY_DEPLOYMENT,
+    makeSuiClient,
+    read,
+    tx as endlessTx,
+} from '@endless-story/sdk';
+import { getAdminContext, type AdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
 import { charactersApi } from '@/lib/api/index';
@@ -39,7 +45,6 @@ import { runCharacterTurnAction } from './character-turn';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
-import { resolveEventAction } from './budget-event';
 
 /**
  * Max characters whose memory-recall work (PLAN / POV generate) runs at
@@ -232,7 +237,13 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const resolves: TickResolveResult[] = [];
     if (!dryRun) {
         try {
-            const phase = await runActPhase(d.sagaId, nameById, input.autoResolve ?? true);
+            const phase = await runActPhase(
+                admin,
+                d.sagaId,
+                d.storytellerCapId,
+                nameById,
+                input.autoResolve ?? true,
+            );
             acts.push(...phase.acts);
             resolves.push(...phase.resolves);
         } catch (err) {
@@ -379,16 +390,26 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     };
 }
 
-/* ── ACT phase ─────────────────────────────────────────────────────────
- * For every OPEN budget event in the saga, find participants who haven't
- * acted yet (not in resolution.submitted_actions) and have a non-empty
- * hand, then let each one DECIDE + submit on its own. Sequential — one
- * keypair. Already-acted participants are skipped (idempotent re-runs).
- *
- * After acting, if every participant has now acted, the event auto-resolves
- * (N5 judge) so it concludes on its own instead of waiting for an admin. */
+/* ── ACT phase (batched into PTBs) ─────────────────────────────────────
+ * For every OPEN event, characters DECIDE concurrently (bounded — decide
+ * recalls memory), then:
+ *   PTB-1: every submit_action in ONE transaction (one signature).
+ *   PTB-2: resolve_event for every now-fully-acted event in ONE transaction.
+ * Was 2N serial signs (submit + resolve per participant/event); now ≤2.
+ * Already-acted participants are skipped (idempotent re-runs via status +
+ * resolution.submitted_actions). */
+interface EventActState {
+    eventId: string;
+    sceneId: string;
+    participants: string[];
+    acted: Set<string>;
+    pending: string[]; // participant ids that still need to act (have a hand)
+}
+
 async function runActPhase(
+    admin: AdminContext,
     sagaId: string,
+    capId: string,
     nameById: Map<string, string>,
     autoResolve: boolean,
 ): Promise<{ acts: TickActResult[]; resolves: TickResolveResult[] }> {
@@ -399,8 +420,8 @@ async function runActPhase(
         .listBudgetEvents(client, pkg, { sagaId, maxEvents: 20 })
         .catch(() => []);
 
-    const acts: TickActResult[] = [];
-    const resolves: TickResolveResult[] = [];
+    // Gather open events + who still needs to act.
+    const events: EventActState[] = [];
     for (const s of summaries) {
         let parsed;
         try {
@@ -414,7 +435,6 @@ async function runActPhase(
             continue;
         }
         if (Number(parsed.meta?.status ?? 0) !== 0) continue; // resolved/closed
-        const sceneId = parsed.meta?.scene_id ?? s.sceneId;
         const participants = parsed.deck?.participants ?? [];
         const hands = parsed.deck?.hands ?? [];
         if (participants.length === 0) continue;
@@ -423,36 +443,173 @@ async function runActPhase(
                 .map((a) => a.character_id)
                 .filter((x): x is string => typeof x === 'string'),
         );
-        for (let i = 0; i < participants.length; i += 1) {
-            const charId = participants[i];
-            if (!charId || acted.has(charId)) continue;
-            if ((hands[i]?.length ?? 0) === 0) continue; // no hand to play
-            const r = await runCharacterTurnAction(s.eventId, charId);
-            acts.push({
-                eventId: s.eventId,
-                characterId: charId,
-                name: nameById.get(charId),
-                ok: r.ok,
-                cardLabel: r.cardLabel,
-                intent: r.intent,
-                error: r.ok ? undefined : r.error,
-            });
-            if (r.ok) acted.add(charId);
-        }
+        const pending = participants.filter(
+            (p, i) => p && !acted.has(p) && (hands[i]?.length ?? 0) > 0,
+        );
+        events.push({
+            eventId: s.eventId,
+            sceneId: parsed.meta?.scene_id ?? s.sceneId,
+            participants,
+            acted,
+            pending,
+        });
+    }
 
-        // Judge: every participant has acted → conclude the event.
-        const allActed = participants.every((p) => p && acted.has(p));
-        if (autoResolve && allActed && sceneId) {
-            const rr = await resolveEventAction({ eventId: s.eventId, sceneId });
-            resolves.push({
-                eventId: s.eventId,
-                ok: rr.ok,
-                digest: rr.digest,
-                error: rr.ok ? undefined : rr.error,
+    // DECIDE (bounded concurrency — each decide recalls memory → SEAL).
+    const tasks = events.flatMap((e) => e.pending.map((charId) => ({ e, charId })));
+    const decided = await mapPool(tasks, RECALL_CONCURRENCY, async ({ e, charId }) => {
+        try {
+            const r = await runCharacterTurnAction(e.eventId, charId, { decideOnly: true });
+            return { e, charId, r };
+        } catch (err) {
+            return {
+                e,
+                charId,
+                r: {
+                    ok: false,
+                    error: err instanceof Error ? err.message : String(err),
+                } as Awaited<ReturnType<typeof runCharacterTurnAction>>,
+            };
+        }
+    });
+
+    const acts: TickActResult[] = [];
+    const submittable = decided.filter(
+        (d) => d.r.ok && typeof d.r.cardIndex === 'number',
+    );
+    // Failed decisions surface immediately.
+    for (const d of decided) {
+        if (!d.r.ok || typeof d.r.cardIndex !== 'number') {
+            acts.push({
+                eventId: d.e.eventId,
+                characterId: d.charId,
+                name: nameById.get(d.charId),
+                ok: false,
+                error: d.r.error ?? 'decide failed',
             });
         }
     }
+
+    // PTB-1: all submit_action calls in ONE signature. If the batch aborts
+    // (one bad card reverts the whole PTB), fall back to per-item submits so
+    // a single failure doesn't block the rest. Happy path = one tx.
+    if (submittable.length > 0) {
+        const batch = await trySend(admin, (txb) => {
+            for (const d of submittable) {
+                txb.add(
+                    buildSubmitCall(capId, sagaId, d.e.eventId, d.charId, d.r.cardIndex as number),
+                );
+            }
+        });
+        if (batch.ok) {
+            for (const d of submittable) {
+                acts.push({
+                    eventId: d.e.eventId,
+                    characterId: d.charId,
+                    name: nameById.get(d.charId),
+                    ok: true,
+                    cardLabel: d.r.cardLabel,
+                    intent: d.r.intent,
+                });
+                d.e.acted.add(d.charId);
+            }
+        } else {
+            // Fallback: isolate each submit (serial — only on the rare abort).
+            for (const d of submittable) {
+                const one = await trySend(admin, (txb) =>
+                    txb.add(
+                        buildSubmitCall(capId, sagaId, d.e.eventId, d.charId, d.r.cardIndex as number),
+                    ),
+                );
+                acts.push({
+                    eventId: d.e.eventId,
+                    characterId: d.charId,
+                    name: nameById.get(d.charId),
+                    ok: one.ok,
+                    cardLabel: d.r.cardLabel,
+                    intent: d.r.intent,
+                    error: one.ok ? undefined : one.error,
+                });
+                if (one.ok) d.e.acted.add(d.charId);
+            }
+        }
+    }
+
+    // PTB-2: resolve every now-fully-acted event, one signature.
+    const resolves: TickResolveResult[] = [];
+    if (autoResolve) {
+        const toResolve = events.filter(
+            (e) => e.sceneId && e.participants.every((p) => p && e.acted.has(p)),
+        );
+        if (toResolve.length > 0) {
+            const r = await trySend(admin, (txb) => {
+                for (const e of toResolve) {
+                    const outcomes = txb.add(endlessTx.event.emptyOutcomes());
+                    txb.add(
+                        endlessTx.event.resolveEvent({
+                            cap: capId,
+                            saga: sagaId,
+                            budgetEvent: e.eventId,
+                            scene: e.sceneId,
+                            outcomes,
+                        }),
+                    );
+                }
+            });
+            for (const e of toResolve) {
+                resolves.push({
+                    eventId: e.eventId,
+                    ok: r.ok,
+                    digest: r.digest,
+                    error: r.ok ? undefined : r.error,
+                });
+            }
+        }
+    }
+
     return { acts, resolves };
+}
+
+/**
+ * Build + sign + execute one PTB. `build` adds the move-calls. Returns
+ * {ok,digest,error} — never throws (a thrown signer/RPC error is captured),
+ * so callers can branch on ok (e.g. batch → per-item fallback).
+ */
+async function trySend(
+    admin: AdminContext,
+    build: (txb: Transaction) => void,
+): Promise<{ ok: boolean; digest?: string; error?: string }> {
+    try {
+        const txb = new Transaction();
+        build(txb);
+        const res = await admin.client.signAndExecuteTransaction({
+            transaction: txb,
+            signer: admin.signer,
+            options: { showEffects: true },
+        });
+        const ok = res.effects?.status?.status === 'success';
+        await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+        return { ok, digest: res.digest, error: ok ? undefined : res.effects?.status?.error };
+    } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+}
+
+/** Build one submit_action move-call for the batch PTB. */
+function buildSubmitCall(
+    capId: string,
+    sagaId: string,
+    eventId: string,
+    characterId: string,
+    cardIndex: number,
+) {
+    return endlessTx.event.submitAction({
+        cap: capId,
+        saga: sagaId,
+        budgetEvent: eventId,
+        characterId,
+        cardIndex: BigInt(cardIndex),
+    });
 }
 
 /* ── concurrency pool ──────────────────────────────────────────────────

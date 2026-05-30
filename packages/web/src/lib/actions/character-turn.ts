@@ -47,6 +47,9 @@ export interface CharacterTurnResult {
     cardLabel?: string;
     intent?: string;
     reason?: string;
+    /** Chosen catalog index (what submit_action takes). Set even in
+     *  decideOnly mode so a caller can batch the submit itself. */
+    cardIndex?: number;
     recalledCount?: number;
     /** Director-seeded ties fed into the decision (N3). */
     relationshipCount?: number;
@@ -57,6 +60,7 @@ export interface CharacterTurnResult {
 export async function runCharacterTurnAction(
     eventId: string,
     characterId: string,
+    opts?: { decideOnly?: boolean },
 ): Promise<CharacterTurnResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
@@ -143,6 +147,22 @@ export async function runCharacterTurnAction(
         });
     } catch (err) {
         return { ok: false, error: 'decide 失敗:' + (err instanceof Error ? err.message : '') };
+    }
+
+    const chosenLabel = hand.find((c) => c.catalogIndex === decision.catalogIndex)?.label;
+
+    // decideOnly: return the decision without submitting, so a batch caller
+    // (tick loop) can fold every submit_action into one PTB.
+    if (opts?.decideOnly) {
+        return {
+            ok: true,
+            cardLabel: chosenLabel,
+            intent: decision.intent,
+            reason: decision.reason,
+            cardIndex: decision.catalogIndex,
+            recalledCount: recalled.length,
+            relationshipCount: relationshipHints.length,
+        };
     }
 
     // 4. ACT — submit the chosen card on chain.
