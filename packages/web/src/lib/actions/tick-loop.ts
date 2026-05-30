@@ -38,6 +38,7 @@ import { resolveNetwork } from '@/lib/chain/network';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
 import { recallCurrentPlanText } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
+import { recordSceneLine } from '@/lib/chain/scene-lines';
 import { charactersApi } from '@/lib/api/index';
 import {
     advanceTickAction,
@@ -535,6 +536,8 @@ async function runMovePhase(
                 toSceneName: sceneNameById.get(m.dcs.targetSceneId as string),
                 reason: m.dcs.reason,
             });
+            // 手卷 Step 3: the character arrives at the target voicing why.
+            recordSceneLine(m.dcs.targetSceneId, m.c.id, m.dcs.reason, 'move');
         }
     } else {
         // Fallback: isolate each move (a stale scene reverts the whole PTB).
@@ -548,6 +551,7 @@ async function runMovePhase(
                 reason: m.dcs.reason,
                 error: one.ok ? undefined : one.error,
             });
+            if (one.ok) recordSceneLine(m.dcs.targetSceneId, m.c.id, m.dcs.reason, 'move');
         }
     }
     return out;
@@ -675,6 +679,8 @@ async function runActPhase(
                     intent: d.r.intent,
                 });
                 d.e.acted.add(d.charId);
+                // 手卷 Step 3: surface the first-person intent as a ghost quote.
+                recordSceneLine(d.e.sceneId, d.charId, d.r.intent, 'act');
             }
         } else {
             // Fallback: isolate each submit (serial — only on the rare abort).
@@ -693,7 +699,10 @@ async function runActPhase(
                     intent: d.r.intent,
                     error: one.ok ? undefined : one.error,
                 });
-                if (one.ok) d.e.acted.add(d.charId);
+                if (one.ok) {
+                    d.e.acted.add(d.charId);
+                    recordSceneLine(d.e.sceneId, d.charId, d.r.intent, 'act');
+                }
             }
         }
     }

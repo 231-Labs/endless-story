@@ -17,6 +17,7 @@
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from '@/lib/chain/network';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
+import { getLatestSceneLine } from '@/lib/chain/scene-lines';
 
 export interface SceneLiveStatus {
     sceneId: string;
@@ -47,10 +48,15 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
     const scenes = await fetchOnChainScenesForSaga(sagaId).catch(() => []);
     const byScene = new Map<string, SceneLiveStatus>();
     for (const s of scenes) {
+        // 手卷 Step 3: prefer the latest first-person line (decide intent /
+        // move reason) recorded by the tick loop. Falls through to the card
+        // label below only when no fresh line exists for this scene.
+        const cached = getLatestSceneLine(s.id);
         byScene.set(s.id, {
             sceneId: s.id,
             presentCharacterIds: s.currentCharacterIds ?? [],
             hasOpenEvent: false,
+            latestLine: cached ?? undefined,
         });
     }
 
