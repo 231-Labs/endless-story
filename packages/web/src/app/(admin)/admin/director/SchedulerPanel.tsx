@@ -89,6 +89,7 @@ export function SchedulerPanel() {
 
 /* ── N4 — autonomous tick (act + POV + sleep + gazette in one pass) ── */
 function TickLoopSection() {
+    const [plan, setPlan] = useState(true);
     const [sleep, setSleep] = useState(true);
     const [gazette, setGazette] = useState(true);
     const [result, setResult] = useState<TickLoopResult | null>(null);
@@ -97,7 +98,7 @@ function TickLoopSection() {
     const run = (dryRun: boolean) => {
         setResult(null);
         startTransition(async () => {
-            const r = await runTickLoopAction({ sleep, gazette, dryRun });
+            const r = await runTickLoopAction({ plan, sleep, gazette, dryRun });
             setResult(r);
         });
     };
@@ -108,10 +109,20 @@ function TickLoopSection() {
                 自治推進一個 tick（N4 · 世界自己動一輪）
             </div>
             <p className="text-2xs leading-relaxed text-mute">
-                一鍵跑完整迴圈：① 推進時間 → ② 開著的事件中，每個角色**自己出牌** →
-                ③ 每人寫 POV → ④ 週期性睡一覺整理記憶 → ⑤ 編當日公報。全程依序簽（單一 keypair）。
+                一鍵跑完整迴圈：① 推進時間 → ② 每個角色**更新規劃（立志）** → ③ 開著的事件中，
+                每個角色**自己出牌**（全員出完即自動收尾）→ ④ 每人寫 POV → ⑤ 週期性睡一覺整理記憶
+                → ⑥ 編當日公報。全程依序簽（單一 keypair）。
             </p>
             <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+                    <input
+                        type="checkbox"
+                        checked={plan}
+                        onChange={(e) => setPlan(e.target.checked)}
+                        disabled={isPending}
+                    />
+                    含更新規劃
+                </label>
                 <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
                     <input
                         type="checkbox"
@@ -172,6 +183,35 @@ function TickLoopResultView({ result }: { result: TickLoopResult }) {
             </div>
             {result.error ? (
                 <div className="text-sm text-cinnabar">錯誤：{result.error}</div>
+            ) : null}
+
+            {/* PLAN */}
+            {result.plans.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">規劃（立志 · 跨 tick 目標）</div>
+                    <ul className="space-y-1">
+                        {result.plans.map((p) => (
+                            <li key={p.characterId} className="text-xs">
+                                <span
+                                    className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
+                                        p.ok ? 'bg-jade' : 'bg-cinnabar'
+                                    }`}
+                                />
+                                <span className="text-ink">{p.name}</span>
+                                {p.ok ? (
+                                    <span className="text-mute">
+                                        {' '}
+                                        {p.hadPrevious ? '（承前）' : '（初志）'}
+                                        {p.longTermGoal ? `目標：${p.longTermGoal}` : ''}
+                                        {p.dailyPlanHint ? ` · 眼下：${p.dailyPlanHint}` : ''}
+                                    </span>
+                                ) : (
+                                    <span className="text-cinnabar"> {p.error}</span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
             ) : null}
 
             {/* ACT */}

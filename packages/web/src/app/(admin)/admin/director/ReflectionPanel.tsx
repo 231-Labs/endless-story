@@ -6,6 +6,7 @@ import {
     type RunReflectionResult,
 } from '@/lib/actions/run-reflection';
 import { runSleepAction, type RunSleepResult } from '@/lib/actions/sleep';
+import { runPlanAction, type RunPlanResult } from '@/lib/actions/plan';
 import { txUrl, objectUrl } from '@/lib/explorer';
 import type { Character } from '@endless-story/shared';
 
@@ -27,13 +28,19 @@ export function ReflectionPanel({ characters }: { characters: Character[] }) {
     const [question, setQuestion] = useState('');
     const [result, setResult] = useState<RunReflectionResult | null>(null);
     const [sleepResult, setSleepResult] = useState<RunSleepResult | null>(null);
+    const [planResult, setPlanResult] = useState<RunPlanResult | null>(null);
     const [isPending, startTransition] = useTransition();
+
+    const clearAll = () => {
+        setResult(null);
+        setSleepResult(null);
+        setPlanResult(null);
+    };
 
     const handleRun = (dryRun: boolean) => {
         if (!characterId) return;
         if (mode === 'active' && !question.trim()) return;
-        setResult(null);
-        setSleepResult(null);
+        clearAll();
         startTransition(async () => {
             const r = await runReflectionAction({
                 characterId,
@@ -47,11 +54,19 @@ export function ReflectionPanel({ characters }: { characters: Character[] }) {
 
     const handleSleep = (dryRun: boolean) => {
         if (!characterId) return;
-        setResult(null);
-        setSleepResult(null);
+        clearAll();
         startTransition(async () => {
             const r = await runSleepAction(characterId, { dryRun });
             setSleepResult(r);
+        });
+    };
+
+    const handlePlan = (dryRun: boolean) => {
+        if (!characterId) return;
+        clearAll();
+        startTransition(async () => {
+            const r = await runPlanAction(characterId, { dryRun });
+            setPlanResult(r);
         });
     };
 
@@ -173,6 +188,67 @@ export function ReflectionPanel({ characters }: { characters: Character[] }) {
                 </div>
                 {sleepResult ? <SleepResultView result={sleepResult} /> : null}
             </div>
+
+            {/* N6 — plan / 立志 */}
+            <div className="space-y-2 rounded border border-hairline/60 bg-canvas/30 p-3">
+                <div className="text-2xs tracking-widest text-mute">立志 · 更新規劃（N6）</div>
+                <p className="text-2xs leading-relaxed text-mute">
+                    依記憶 + 先前的打算，更新角色的「長期目標 / 眼下打算 / 未竟之事」→ 寫回 MemWal
+                    （kind=plan，i=8）。下次出牌 / POV 會 recall 回來，行為變得有目標、跨 tick 連貫。
+                </p>
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        onClick={() => handlePlan(true)}
+                        disabled={isPending || !characterId}
+                        className="rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-ink hover:bg-elevated disabled:opacity-50"
+                    >
+                        {isPending ? '盤算中…' : 'Dry-Run（只看規劃）'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handlePlan(false)}
+                        disabled={isPending || !characterId}
+                        className="rounded bg-ink px-4 py-2 text-sm tracking-widest text-canvas hover:bg-ink/80 disabled:opacity-50"
+                    >
+                        {isPending ? '立志中…' : '立志 · 寫回 MemWal'}
+                    </button>
+                </div>
+                {planResult ? <PlanResultView result={planResult} /> : null}
+            </div>
+        </div>
+    );
+}
+
+function PlanResultView({ result }: { result: RunPlanResult }) {
+    return (
+        <div className="space-y-2 rounded border border-hairline bg-canvas/40 p-4 text-sm">
+            <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest">
+                <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                        result.ok ? 'bg-jade' : 'bg-cinnabar'
+                    }`}
+                />
+                <span className="text-mute">
+                    {result.error
+                        ? '失敗'
+                        : result.remembered
+                          ? result.hadPrevious
+                              ? '已承前更新並寫回'
+                              : '已立初志並寫回'
+                          : result.ok
+                            ? 'Dry-Run（規劃）'
+                            : result.skipReason ?? '—'}
+                </span>
+            </div>
+            {result.error ? (
+                <div className="text-cinnabar">錯誤：{result.error}</div>
+            ) : null}
+            {result.planText ? (
+                <pre className="overflow-x-auto whitespace-pre-wrap rounded border border-hairline/60 bg-surface p-3 font-serif leading-loose text-ink">
+                    {result.planText}
+                </pre>
+            ) : null}
         </div>
     );
 }

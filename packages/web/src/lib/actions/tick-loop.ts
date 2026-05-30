@@ -37,6 +37,7 @@ import {
 } from './world-time';
 import { runCharacterTurnAction } from './character-turn';
 import { runSleepAction } from './sleep';
+import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
 import { resolveEventAction } from './budget-event';
 
@@ -45,6 +46,8 @@ export interface TickLoopInput {
     advance?: boolean;
     /** Cap characters processed for POV/sleep (LLM cost guard). Default 6. */
     maxCharacters?: number;
+    /** Update each character's standing plan first (N6). Default true. */
+    plan?: boolean;
     /** Run the consolidation/sleep pass. Default true. */
     sleep?: boolean;
     /** Compile the gazette at the end. Default true. */
@@ -76,6 +79,16 @@ export interface TickPovResult {
     chapter?: string;
     recalledCount?: number;
     digest?: string;
+    error?: string;
+}
+
+export interface TickPlanResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    longTermGoal?: string;
+    dailyPlanHint?: string;
+    hadPrevious?: boolean;
     error?: string;
 }
 
@@ -111,6 +124,7 @@ export interface TickLoopResult {
     ok: boolean;
     advanced: boolean;
     worldTime?: WorldTimeSnapshot;
+    plans: TickPlanResult[];
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];
@@ -125,6 +139,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         return {
             ok: false,
             advanced: false,
+            plans: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -139,6 +154,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         return {
             ok: false,
             advanced: false,
+            plans: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -167,7 +183,26 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
     const slice = characters.slice(0, cap);
 
-    // 2. ACT — characters play their own hands in open events; events that
+    // 2. PLAN — each character updates its standing goal first (N6), so the
+    //    fresh plan is recalled by the decide/POV steps below. Chain-free
+    //    (MemWal only), so it runs even on dry-run for preview.
+    const plans: TickPlanResult[] = [];
+    if (input.plan ?? true) {
+        for (const c of slice) {
+            const p = await runPlanAction(c.id, { dryRun });
+            plans.push({
+                characterId: c.id,
+                name: c.name,
+                ok: p.ok,
+                longTermGoal: p.longTermGoal,
+                dailyPlanHint: p.dailyPlanHint,
+                hadPrevious: p.hadPrevious,
+                error: p.ok ? undefined : p.error,
+            });
+        }
+    }
+
+    // 3. ACT — characters play their own hands in open events; events that
     //    everyone has acted in auto-resolve (judge). Chain mutation.
     const acts: TickActResult[] = [];
     const resolves: TickResolveResult[] = [];
@@ -182,7 +217,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 3. PRODUCE — POV chapter per character (subscriber-gated unless forced).
+    // 4. PRODUCE — POV chapter per character (subscriber-gated unless forced).
     const povs: TickPovResult[] = [];
     for (const c of slice) {
         const trigger = `${dayLabel} — 戲班又過了一段光景。把你此刻的心境、所見、未說出口的念頭，寫成一段獨白。`;
@@ -204,7 +239,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         });
     }
 
-    // 4. REFLECT — periodic sleep / consolidation (chain mutation).
+    // 5. REFLECT — periodic sleep / consolidation (chain mutation).
     const sleeps: TickSleepResult[] = [];
     if ((input.sleep ?? true) && !dryRun) {
         for (const c of slice) {
@@ -223,7 +258,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 5. NARRATE — compile the objective gazette for the day.
+    // 6. NARRATE — compile the objective gazette for the day.
     let gazette: TickGazetteResult | undefined;
     if ((input.gazette ?? true) && !dryRun) {
         const g = await compileGazetteAction({ day: worldTime?.day });
@@ -240,6 +275,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     const anyOk =
+        plans.some((p) => p.ok) ||
         acts.some((a) => a.ok) ||
         resolves.some((r) => r.ok) ||
         povs.some((p) => p.ok) ||
@@ -249,6 +285,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         ok: anyOk || (slice.length === 0),
         advanced,
         worldTime,
+        plans,
         acts,
         resolves,
         povs,

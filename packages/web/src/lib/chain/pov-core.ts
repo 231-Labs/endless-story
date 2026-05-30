@@ -16,7 +16,11 @@ import { characterWorker as runnerCharacterWorker } from '@endless-story/runner'
 import type { AdminContext } from '@/lib/chain/admin-signer';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
-import { recallForCharacter, rememberForCharacter } from '@/lib/chain/memory';
+import {
+    recallForCharacter,
+    rememberForCharacter,
+    recallCurrentPlanText,
+} from '@/lib/chain/memory';
 import { fetchRelationshipHints } from '@/lib/chain/relationships';
 
 export interface PovCoreOptions {
@@ -82,9 +86,10 @@ export async function runPovForCharacter(
     // narrative doubles as the semantic query. No-op ([]) when memory
     // isn't configured. Merge with any caller-supplied snippets. Director-
     // seeded relationships (N3) colour how she narrates others in the scene.
-    const [recalled, relationshipHints] = await Promise.all([
+    const [recalled, relationshipHints, planHint] = await Promise.all([
         recallForCharacter(characterId, opts.triggerNarrative, 6),
         fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
+        recallCurrentPlanText(characterId).catch(() => null),
     ]);
     const recentMemorySnippets = [
         ...(opts.recentMemorySnippets ?? []),
@@ -101,6 +106,7 @@ export async function runPovForCharacter(
                 recentMemorySnippets.length > 0 ? recentMemorySnippets : undefined,
             relationshipHints:
                 relationshipHints.length > 0 ? relationshipHints : undefined,
+            planHint: planHint ?? undefined,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun

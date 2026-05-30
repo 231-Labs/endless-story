@@ -33,6 +33,9 @@ export interface DecideInput {
     /** Director-seeded relationships (N3) — who she's tied to + how. Shapes
      *  who she protects, attacks, or hesitates against. */
     relationshipHints?: string[];
+    /** Current plan (N6) — long-term goal + intent + subgoals. Makes the card
+     *  serve her goal, not just react to the scene. */
+    planHint?: string;
 }
 
 export function buildSystemPrompt(): string {
@@ -62,6 +65,9 @@ export function buildUserPrompt(input: DecideInput): string {
             ? '\n## 你與在場人的牽絆(影響你護誰、攻誰、對誰猶豫)\n' +
               input.relationshipHints.map((r) => `- ${r}`).join('\n')
             : '';
+    const planBlock = input.planHint
+        ? `\n## 你心裡的目標與打算(讓這張牌為你的目標服務)\n${input.planHint}`
+        : '';
     const handBlock = input.hand
         .map((c) => `- catalogIndex=${c.catalogIndex} · 「${c.label}」(${c.intent})`)
         .join('\n');
@@ -74,6 +80,7 @@ export function buildUserPrompt(input: DecideInput): string {
         `- 所屬:${input.sagaName}`,
         memBlock,
         relBlock,
+        planBlock,
         '',
         `## 此刻這場戲`,
         `《${input.eventTitle}》— ${input.eventSummary}`,

@@ -26,7 +26,7 @@ type HandCard = characterAgent.HandCard;
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
-import { recallForCharacter } from '@/lib/chain/memory';
+import { recallForCharacter, recallCurrentPlanText } from '@/lib/chain/memory';
 import { fetchRelationshipHints } from '@/lib/chain/relationships';
 
 const INTENT_NAME: Record<number, string> = {
@@ -108,12 +108,13 @@ export async function runCharacterTurnAction(
 
     // 2. Character snapshot + role + recalled memories + relationships
     //    (the choice levers — past + ties shape the card she plays).
-    const [charRes, sagaRes, role, recalled, relationshipHints] = await Promise.all([
+    const [charRes, sagaRes, role, recalled, relationshipHints, planHint] = await Promise.all([
         read.character.getCharacter(client, characterId).catch(() => null),
         read.saga.getSaga(client, d.sagaId).catch(() => null),
         resolveRole(characterId),
         recallForCharacter(characterId, `${eventTitle} ${eventSummary} 衝突 抉擇`, 6),
         fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
+        recallCurrentPlanText(characterId).catch(() => null),
     ]);
     const cj = charRes?.json as unknown as {
         profile?: { name?: string; physical_facts?: { species?: string; body?: string } };
@@ -138,6 +139,7 @@ export async function runCharacterTurnAction(
             hand,
             recalledMemories: recalled,
             relationshipHints,
+            planHint: planHint ?? undefined,
         });
     } catch (err) {
         return { ok: false, error: 'decide 失敗:' + (err instanceof Error ? err.message : '') };

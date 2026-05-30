@@ -45,6 +45,9 @@ export interface PovPromptInput {
     /** Optional: director-seeded relationships (N3) — who she's tied to +
      *  how. Colours how she narrates others in the scene. */
     relationshipHints?: string[];
+    /** Optional: current plan (N6) — her goal + intent. Gives the monologue
+     *  forward tension (what she's reaching for), not just present sensation. */
+    planHint?: string;
 }
 
 export function buildSystemPrompt(): string {
@@ -80,6 +83,9 @@ export function buildUserPrompt(input: PovPromptInput): string {
             ? '\n## 你與在場人的牽絆（用你的眼睛看他們時帶上這份情感）\n' +
               input.relationshipHints.map((r) => `- ${r}`).join('\n')
             : '';
+    const planBlock = input.planHint
+        ? `\n## 你心裡的目標與打算（讓獨白帶上你正在追求的東西）\n${input.planHint}`
+        : '';
     const dreamBlock = dreamFragment
         ? `\n## 你昨夜的夢（必須引用其中一句意象）\n${dreamFragment}`
         : '';
@@ -94,6 +100,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         `- 行當聲口：${roleHint(character.role)}`,
         memBlock,
         relBlock,
+        planBlock,
         dreamBlock,
         '',
         '## 剛才發生',

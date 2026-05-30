@@ -167,13 +167,16 @@ export type MemoryKind =
     | 'chapter'
     | 'observation'
     | 'relationship'
-    | 'genesis';
+    | 'genesis'
+    | 'plan';
 
 /** Default importance per kind (1-10). Dreams highest (owner paid, must
- *  surface first — §5.2); observations lowest. */
+ *  surface first — §5.2); observations lowest. Plans high (i=8) so the
+ *  character's current goal stays near the top of recall (N6). */
 const DEFAULT_IMPORTANCE: Record<MemoryKind, number> = {
     dream: 9,
     relationship: 8,
+    plan: 8,
     reflection: 7,
     genesis: 7,
     chapter: 5,
@@ -371,6 +374,40 @@ export async function recallForConsolidation(
     } catch (err) {
         console.warn('[memory] recallForConsolidation failed:', err);
         return [];
+    } finally {
+        client.destroy();
+    }
+}
+
+/**
+ * Recall the character's CURRENT plan (N6) — the latest kind=plan memory.
+ *
+ * Plans are the character's standing goal + day intent + open subgoals,
+ * rewritten each tick. Recall is recency-driven (newest plan wins) rather
+ * than relevance-driven, so we over-fetch with a plan-flavoured query and
+ * pick the newest kind=plan candidate. Returns null when none / unconfigured.
+ */
+export async function recallCurrentPlanText(characterId: string): Promise<string | null> {
+    const client = await clientFor(characterId);
+    if (!client) return null;
+    try {
+        const res = await client.recall(
+            '我的目標 長期打算 此刻想做的事 未竟之事 計畫',
+            18,
+            namespaceFor(characterId),
+        );
+        let best: RecalledMemory | null = null;
+        for (const hit of res.results) {
+            if ('text' in hit && typeof hit.text === 'string' && hit.text.trim()) {
+                const m = parseMemory(hit.text);
+                if (m.kind !== 'plan') continue;
+                if (!best || (m.day ?? -1) > (best.day ?? -1)) best = m;
+            }
+        }
+        return best?.text ?? null;
+    } catch (err) {
+        console.warn('[memory] recallCurrentPlanText failed:', err);
+        return null;
     } finally {
         client.destroy();
     }
