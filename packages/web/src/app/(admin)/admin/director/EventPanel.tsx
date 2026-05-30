@@ -80,7 +80,11 @@ export function EventPanel({
                         ↻ 重整
                     </button>
                 </div>
-                {loading ? (
+                {loading && events.length === 0 ? (
+                    // Only show the placeholder on the FIRST load. On a refresh
+                    // (events already populated) keep the list mounted so an
+                    // expanded event — and its character-decision result — isn't
+                    // unmounted/collapsed every time you act.
                     <p className="text-sm text-mute">讀取中…</p>
                 ) : events.length === 0 ? (
                     <p className="text-sm text-mute">
@@ -349,7 +353,7 @@ function EventRow({
 
             {expanded ? (
                 <div className="border-t border-hairline/60 p-3 space-y-3">
-                    {detailLoading ? (
+                    {detailLoading && detail == null ? (
                         <p className="text-2xs text-mute">讀取詳情…</p>
                     ) : detail == null ? (
                         <p className="text-2xs text-cinnabar">
