@@ -24,7 +24,8 @@ export * as video from './services/video-compiler/index.js';
 export * from './types/index.js';
 
 export { fetchEventsSince } from './infra/event-bus.js';
-export { signAndAnchor, pushCommitCall } from './infra/sign-and-anchor.js';
+export { signAndAnchor, signAndAnchorBatch, pushCommitCall } from './infra/sign-and-anchor.js';
+export type { AnchorItem, BatchAnchorOptions } from './infra/sign-and-anchor.js';
 export { resolveNetwork } from './infra/network.js';
 export {
     fetchWorldTime,

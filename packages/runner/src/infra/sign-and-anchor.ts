@@ -113,6 +113,105 @@ export async function signAndAnchor(input: SignAndAnchorInput): Promise<SignAndA
     };
 }
 
+/* ── batch anchor (one PTB, one signature) ─────────────────────────────
+ *
+ * The anchor step's only serialization constraint is the single signing
+ * keypair + its gas coin. Batching N commits into ONE Programmable
+ * Transaction Block removes that bottleneck entirely: upload every blob to
+ * Walrus in parallel (off-chain, no Sui), then add N `commitment::commit`
+ * move-calls to a single tx and sign it ONCE. `commit` takes `cap`/`saga`
+ * by reference, so N calls share them in one PTB without conflict.
+ *
+ * Atomic: if any commit aborts, the whole batch reverts (callers guarantee
+ * non-empty content + a valid cap, so in practice it's all-or-nothing on
+ * infra failure, not per-item). Results are returned in input order. */
+
+export interface AnchorItem {
+    sagaId: string;
+    subjectId: string;
+    content: Uint8Array;
+    contentType?: string;
+}
+
+export interface BatchAnchorOptions {
+    signer: Keypair;
+    walrusEpochs?: number;
+    walrusNetwork?: 'testnet' | 'mainnet';
+}
+
+export async function signAndAnchorBatch(
+    items: AnchorItem[],
+    opts: BatchAnchorOptions,
+): Promise<SignAndAnchorResult[]> {
+    if (items.length === 0) return [];
+
+    // 1. Upload every blob to Walrus CONCURRENTLY (off-chain, no signing).
+    const uploaded = await Promise.all(
+        items.map(async (it) => {
+            const hashBytes = sha256(it.content);
+            const put = await memwalBlob.putBlob(it.content, {
+                network: opts.walrusNetwork ?? 'testnet',
+                epochs: opts.walrusEpochs ?? 5,
+                contentType: it.contentType,
+            });
+            return {
+                hashBytes,
+                contentHashHex: bytesToHex(hashBytes),
+                blobId: put.blobId,
+                blobUrl: put.url,
+            };
+        }),
+    );
+
+    // 2. ONE PTB: N commit move-calls, signed once.
+    const cap = storytellerCapIdFromDeployment();
+    const tx = new Transaction();
+    for (let i = 0; i < items.length; i += 1) {
+        tx.add(
+            endlessTx.commitment.commit({
+                cap,
+                saga: items[i].sagaId,
+                subjectId: items[i].subjectId,
+                contentHash: Array.from(uploaded[i].hashBytes),
+                blobId: Array.from(new TextEncoder().encode(uploaded[i].blobId)),
+            }),
+        );
+    }
+    const client = makeSuiClient({ network: resolveNetwork() });
+    const res = await client.signAndExecuteTransaction({
+        transaction: tx,
+        signer: opts.signer,
+        options: { showEffects: true, showEvents: true },
+    });
+
+    // 3. Map CommitmentCreated events (emitted in call order) → items.
+    const commitmentIds = extractCommitmentIds(res.events ?? []);
+    return items.map((_, i) => ({
+        commitmentId: commitmentIds[i] ?? '',
+        blobId: uploaded[i].blobId,
+        blobUrl: uploaded[i].blobUrl,
+        contentHashHex: uploaded[i].contentHashHex,
+        digest: res.digest,
+    }));
+}
+
+interface SuiEventLike {
+    type?: string;
+    parsedJson?: unknown;
+}
+
+/** Commitment ids from CommitmentCreated events, in emission (call) order. */
+function extractCommitmentIds(events: SuiEventLike[]): string[] {
+    const out: string[] = [];
+    for (const ev of events) {
+        if (typeof ev.type === 'string' && ev.type.endsWith('::commitment::CommitmentCreated')) {
+            const id = (ev.parsedJson as { commitment_id?: string } | undefined)?.commitment_id;
+            if (id) out.push(id);
+        }
+    }
+    return out;
+}
+
 /* ── internals ──────────────────────────────────────────────────────── */
 
 function sha256(bytes: Uint8Array): Uint8Array {

@@ -12,7 +12,11 @@
  */
 
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { characterWorker as runnerCharacterWorker, signAndAnchor } from '@endless-story/runner';
+import {
+    characterWorker as runnerCharacterWorker,
+    signAndAnchor,
+    signAndAnchorBatch,
+} from '@endless-story/runner';
 import type { AdminContext } from '@/lib/chain/admin-signer';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
@@ -111,6 +115,70 @@ export async function anchorPovChapter(
     } catch (err) {
         return { anchored: false, error: err instanceof Error ? err.message : String(err) };
     }
+}
+
+export interface BatchAnchorPovResult {
+    characterId: string;
+    anchored: boolean;
+    commitmentId?: string;
+    blobId?: string;
+    digest?: string;
+    remembered?: boolean;
+    error?: string;
+}
+
+/**
+ * Anchor MANY pre-generated chapters in ONE PTB (one signature, one gas
+ * coin, one round-trip) instead of N serial transactions. Uploads every
+ * blob to Walrus in parallel, commits them all in a single
+ * `commitment::commit` ×N programmable transaction, then writes each
+ * chapter back to MemWal. This is the proper fix for the anchor-serial
+ * bottleneck — the whole PRODUCE phase now costs one tx.
+ *
+ * All-or-nothing: if the PTB aborts, every item is reported anchored:false
+ * with the same error (callers can fall back to per-item anchoring).
+ */
+export async function anchorPovChaptersBatch(
+    admin: AdminContext,
+    sagaId: string,
+    items: { characterId: string; chapter: string }[],
+): Promise<BatchAnchorPovResult[]> {
+    const valid = items.filter((i) => i.chapter.trim());
+    if (valid.length === 0) return [];
+
+    let anchors;
+    try {
+        anchors = await signAndAnchorBatch(
+            valid.map((i) => ({
+                sagaId,
+                subjectId: i.characterId,
+                content: new TextEncoder().encode(i.chapter.trim()),
+                contentType: 'text/markdown',
+            })),
+            { signer: admin.signer },
+        );
+    } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        return valid.map((i) => ({ characterId: i.characterId, anchored: false, error }));
+    }
+
+    // Write each chapter back to MemWal (off-chain, parallel).
+    const remembered = await Promise.all(
+        valid.map((i) =>
+            rememberForCharacter(i.characterId, i.chapter.trim(), { kind: 'chapter' }).catch(
+                () => false,
+            ),
+        ),
+    );
+
+    return valid.map((i, idx) => ({
+        characterId: i.characterId,
+        anchored: true,
+        commitmentId: anchors[idx]?.commitmentId || undefined,
+        blobId: anchors[idx]?.blobId,
+        digest: anchors[idx]?.digest,
+        remembered: remembered[idx],
+    }));
 }
 
 /**

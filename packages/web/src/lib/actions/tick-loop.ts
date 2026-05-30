@@ -28,7 +28,7 @@ import type { Character } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
-import { runPovForCharacter, anchorPovChapter } from '@/lib/chain/pov-core';
+import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
 import { charactersApi } from '@/lib/api/index';
 import {
     advanceTickAction,
@@ -241,10 +241,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         error: r.error,
     });
     const povs: TickPovResult[] = [];
-    // Generate every chapter CONCURRENTLY (no signing in dry mode), then —
-    // for a real run — anchor them ONE AT A TIME (single StorytellerCap).
-    // This is the generate-parallel / anchor-serial win for real ticks: the
-    // slow part (primary LLM × N) collapses to a single max instead of a sum.
+    // Generate every chapter CONCURRENTLY (no signing), then — for a real
+    // run — anchor them ALL IN ONE PTB (one signature, one gas coin, one
+    // round-trip). Generation is the slow part (primary LLM × N → max not Σ);
+    // the anchor is now a single transaction instead of N serial ones.
     const generated = await Promise.all(
         slice.map(async (c) => ({
             c,
@@ -258,22 +258,28 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     if (dryRun) {
         for (const { c, r } of generated) povs.push(mapPov(c, r));
     } else {
+        const toAnchor = generated.filter(({ r }) => r.chapter.trim());
         for (const { c, r } of generated) {
-            if (!r.chapter.trim()) {
-                povs.push(mapPov(c, r)); // generation failed — nothing to anchor
-                continue;
-            }
-            const a = await anchorPovChapter(admin, c.id, d.sagaId, r.chapter);
+            if (!r.chapter.trim()) povs.push(mapPov(c, r)); // generation failed
+        }
+        const batch = await anchorPovChaptersBatch(
+            admin,
+            d.sagaId,
+            toAnchor.map(({ c, r }) => ({ characterId: c.id, chapter: r.chapter })),
+        );
+        const byChar = new Map(batch.map((b) => [b.characterId, b]));
+        for (const { c, r } of toAnchor) {
+            const b = byChar.get(c.id);
             povs.push({
                 characterId: c.id,
                 name: c.name,
-                ok: a.anchored,
-                anchored: a.anchored,
+                ok: b?.anchored ?? false,
+                anchored: b?.anchored ?? false,
                 chapter: r.chapter,
                 recalledCount: r.recalledCount,
-                commitmentId: a.commitmentId,
-                digest: a.digest,
-                error: a.anchored ? undefined : a.error,
+                commitmentId: b?.commitmentId,
+                digest: b?.digest,
+                error: b?.anchored ? undefined : b?.error,
             });
         }
     }
