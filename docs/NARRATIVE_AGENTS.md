@@ -135,6 +135,11 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
   **起始最高,但隨 recency 衰減**(被新記憶逐漸超越)—— 不是永久置頂。✅
 - **創世記憶**:mint 時從描述蒸餾,墊底防飄移。✅
 - **行當聲口**:`shared/role-traits.ts` 注入所有 prompt。✅
+- **導演記憶 ≠ 角色記憶(鐵律)**:角色記憶 = 主觀/私密/per-character(**MemWal,SEAL 加密**)。
+  導演記憶 = 客觀/全知/per-saga = **就是鏈上事件日誌**(append-only、不可竄改、神之帳本),
+  導演要回想就讀鏈 event log + saga/scene/location 物件。**禁止**把導演記憶塞進角色的 MemWal
+  namespace。導演的「綜合記憶」(弧/張力/主題/已做過什麼)= saga 級 reflection,存 `saga_<id>`
+  namespace 或鏈上 saga state(屬 N5)。此不對稱剛好對齊存取模型:公報=導演視角=公開;POV/反思=角色視角=私密。
 
 ---
 
@@ -197,6 +202,26 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 - tick loop:`packages/runner/src/`(新 orchestrator)+ web SchedulerPanel(手動驅動)
 - 舊版參照(只讀,挑 idea 不照搬):`/Users/harperdelaviga/Endless-Story/packages/runner/src/`
   {decision,memory,sleep,relationships,event-loop}/
+
+---
+
+---
+
+## 11. 動態出圖 / AI-native NFT（規劃,排 N6 之後）
+
+NFT 的藝術不是靜態 mint 圖,而是**隨故事生長的肖像變體**,每張上鏈可驗。
+
+- **誰決定出圖**:**導演**(只有它有全知敘事視角判斷「此刻值得出圖」)。
+  capability catalog 加 `generate_portrait(character, kind, occasion)`,
+  kind ∈ {設定图 / 戲妝 / 老年 / 日常 / …}。
+- **誰執行**:獨立 stateless **Image Compiler service**(POV/gazette/video compiler 的兄弟),
+  訂閱 `PortraitRequested` → 組 prompt → 出圖 → Walrus → `commitment::commit(subject=character,
+  kind=portrait, hint=occasion)` → 更新 character media_assets。**它是 service 不是自治 agent。**
+- **一致性鐵律**:每張都 condition on mint 時的 **anchor 形象圖**(chain `image_url`,Walrus 永久錨)
+  + physical_facts → 同一個人的不同樣貌,不換臉。(同影片 pipeline 用 portrait 當拍攝指令的招。)
+- **雙觸發(對稱注夢)**:① 導演觸發(敘事驅動,訂閱階梯)② owner 付 ENDLESS 客製一張。兩路 → 同一 service。
+- **成果**:每張變體 = 一筆鏈上 commitment,可追溯觸發它的事件 → 動態 NFT。出圖貴 → 導演判斷 + 付費/訂閱 gate 控成本。
+- **現況**:為省開銷,目前只在 mint 出一張白底形象圖(anchor)。其餘變體 = 未做。
 
 ---
 
