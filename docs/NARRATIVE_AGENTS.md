@@ -149,10 +149,11 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 ## 6. 時間 + 排程 = 自治驅動器
 
 - **兩層時間**:World tick(慢、衰老/經濟)+ Saga partOfDay(燈籠/storylet 篩選);互不強推。✅ 鏈上有。
-- **Tick loop(自治的引擎,待建為獨立 process)**:每 tick →
-  1) 導演若有 intake → DECIDE+EMIT 2) 每個 active 角色跑 §2 迴圈 3) judge 收尾事件
-  4) 推進時間 5) 週期性 reflect(sleep)+ 編公報。
-  demo 期可由 SchedulerPanel 手動驅動;最終為獨立 runner CLI setInterval。
+- **Tick loop(自治的引擎)** ✅ N4:每 tick →
+  1) 導演若有 intake → DECIDE+EMIT(仍 admin 驅動,N5 自動化) 2) 每個 active 角色跑 §2 迴圈
+  ✅(ACT+POV+REFLECT 已串) 3) judge 收尾事件(N5,未做) 4) 推進時間 ✅ 5) 週期性 reflect
+  (sleep)✅ + 編公報 ✅。**已做**:web `runTickLoopAction`(SchedulerPanel 手動驅動);
+  **剩**:獨立 runner CLI setInterval(後置)+ judge 自動收尾(N5)。
 
 ---
 
@@ -178,7 +179,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 | **N1** | 角色 DECIDE/ACT | **出牌已做 ✅**(character-agent decideCardPlay,依記憶+性格選牌→submit_action;EventPanel「讓她自己出牌」)。**剩**:移動 move_character + 由 tick loop 自動驅動(併入 N4)。 | §2 補權責破口 |
 | ~~N2~~ ✅ | 反思壓縮 sleep | **已做**:recallForConsolidation(撈非 anchored 的 observation/chapter)→ consolidateMemories(primary,壓成 1-2 條)→ remember(kind=reflection,i=8,**a=1 anchored 不再被壓**)→ anchorReflectionText 上鏈。admin ReflectionPanel「睡一覺·整理記憶」。 | §5 |
 | ~~N3~~ ✅ | 關係上鏈讀 | **已做**:read.director.listRelationshipEvents → chain/relationships.ts(per-pair tone 聚合,seed 次數→weight)→ facade chain-first(ProfileTab 去 mock)+ fetchRelationshipHints 注入 **decide + POV** prompt。EventPanel 顯示「牽絆 N」。輕量一句 tone,不做加權圖。 | §5 |
-| **N4** | tick loop 自治 | 把 §6 迴圈接成可連續跑(先 admin 驅動,後獨立 CLI) | §6 |
+| ~~N4~~ ✅ | tick loop 自治 | **已做**:tick-loop.ts `runTickLoopAction` 一鍵跑完整輪:ADVANCE→ACT(開著事件中每個未出牌的參與者自動 decide+submit,讀 resolution.submitted_actions 去重)→PRODUCE(POV)→REFLECT(sleep)→NARRATE(公報)。SchedulerPanel「自治推進一個 tick」。**剩**:獨立 CLI setInterval(可後置)+ judge 自動收尾(N5)。 | §6 |
 | **N5** | 導演自動化 | judge 自動收尾事件 + ImportanceDebtCrossed 觸發反思 | §3 |
 | **N6** | 規劃 Plan | 角色 longTermGoal/subgoals 存 MemWal、每 tick 更新 | §2 |
 | 後 | 影片(Seedance)/ 新聞 adapter / 多 saga | 原 proposal R6/R7/R8 | defer |
