@@ -1,0 +1,186 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import {
+    evolvePortraitAction,
+    type EvolvePortraitResult,
+    type PortraitOccasionKind,
+} from '@/lib/actions/evolve-portrait';
+import { txUrl } from '@/lib/explorer';
+import type { Character } from '@endless-story/shared';
+
+/**
+ * Admin panel: evolve a character's portrait (§11 dynamic NFT).
+ *
+ * Renders a new variant conditioned on the same physical_facts + an
+ * occasion, then updates image_url on chain (CharacterImageUpdated event =
+ * the portrait's verifiable evolution trail).
+ */
+const KINDS: { value: PortraitOccasionKind; label: string }[] = [
+    { value: 'reference', label: '設定形象' },
+    { value: 'stage', label: '戲妝登台' },
+    { value: 'aged', label: '老年' },
+    { value: 'daily', label: '日常卸妝' },
+    { value: 'custom', label: '自訂情境' },
+];
+
+export function PortraitEvolvePanel({ characters }: { characters: Character[] }) {
+    const [characterId, setCharacterId] = useState<string>(characters[0]?.id ?? '');
+    const [kind, setKind] = useState<PortraitOccasionKind>('stage');
+    const [occasion, setOccasion] = useState('');
+    const [result, setResult] = useState<EvolvePortraitResult | null>(null);
+    const [isPending, startTransition] = useTransition();
+
+    const run = (dryRun: boolean) => {
+        if (!characterId) return;
+        if (kind === 'custom' && !occasion.trim()) return;
+        setResult(null);
+        startTransition(async () => {
+            const r = await evolvePortraitAction({ characterId, kind, occasion, dryRun });
+            setResult(r);
+        });
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_160px]">
+                <label className="space-y-1.5">
+                    <div className="text-2xs tracking-widest text-mute">角色</div>
+                    <select
+                        value={characterId}
+                        onChange={(e) => setCharacterId(e.target.value)}
+                        disabled={isPending}
+                        className="w-full rounded border border-hairline bg-surface px-3 py-2 text-sm text-ink focus:border-cinnabar focus:outline-none"
+                    >
+                        {characters.length === 0 ? <option value="">— 無角色 —</option> : null}
+                        {characters.map((c) => (
+                            <option key={c.id} value={c.id}>
+                                {c.name} ({c.id.slice(0, 10)}…)
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className="space-y-1.5">
+                    <div className="text-2xs tracking-widest text-mute">情境</div>
+                    <select
+                        value={kind}
+                        onChange={(e) => setKind(e.target.value as PortraitOccasionKind)}
+                        disabled={isPending}
+                        className="w-full rounded border border-hairline bg-surface px-3 py-2 text-sm text-ink focus:border-cinnabar focus:outline-none"
+                    >
+                        {KINDS.map((k) => (
+                            <option key={k.value} value={k.value}>
+                                {k.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            </div>
+
+            <label className="block space-y-1.5">
+                <div className="text-2xs tracking-widest text-mute">
+                    情境補述{kind === 'custom' ? '（必填）' : '（可選）'}
+                </div>
+                <input
+                    type="text"
+                    value={occasion}
+                    onChange={(e) => setOccasion(e.target.value)}
+                    placeholder="如：大火之後，左頰留下舊傷疤"
+                    disabled={isPending}
+                    className="w-full rounded border border-hairline bg-surface px-3 py-2 text-sm text-ink focus:border-cinnabar focus:outline-none"
+                />
+            </label>
+
+            <div className="flex flex-wrap gap-3">
+                <button
+                    type="button"
+                    onClick={() => run(true)}
+                    disabled={isPending || !characterId || (kind === 'custom' && !occasion.trim())}
+                    className="rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-ink hover:bg-elevated disabled:opacity-50"
+                >
+                    {isPending ? '出圖中…' : 'Dry-Run（只看新像）'}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => run(false)}
+                    disabled={isPending || !characterId || (kind === 'custom' && !occasion.trim())}
+                    className="rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal disabled:opacity-50"
+                >
+                    {isPending ? '上鏈中…' : '演化形象 · 寫上鏈'}
+                </button>
+            </div>
+
+            <p className="text-2xs tracking-widest text-mute">
+                出圖 anchor 於 physical_facts（同一人）→ Walrus → update_image_by_storyteller
+                → CharacterImageUpdated（動態 NFT 軌跡）。
+            </p>
+
+            {result ? <ResultView result={result} /> : null}
+        </div>
+    );
+}
+
+function ResultView({ result }: { result: EvolvePortraitResult }) {
+    const src = result.base64
+        ? `data:image/png;base64,${result.base64}`
+        : result.blobId
+          ? `/api/blob/${result.blobId}`
+          : undefined;
+    return (
+        <div className="space-y-3 rounded border border-hairline bg-canvas/40 p-4">
+            <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest">
+                <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                        result.ok ? 'bg-jade' : 'bg-cinnabar'
+                    }`}
+                />
+                <span className="text-mute">
+                    {result.error
+                        ? '失敗'
+                        : result.anchored
+                          ? '已演化並上鏈'
+                          : result.ok
+                            ? 'Dry-Run（新像）'
+                            : '—'}
+                </span>
+                {result.digest ? (
+                    <a
+                        href={txUrl(result.digest)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-cinnabar hover:underline"
+                    >
+                        tx
+                    </a>
+                ) : null}
+                {result.blobId ? (
+                    <a
+                        href={`/api/blob/${result.blobId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-cinnabar hover:underline"
+                    >
+                        walrus
+                    </a>
+                ) : null}
+            </div>
+
+            {result.error ? (
+                <div className="text-sm text-cinnabar">錯誤：{result.error}</div>
+            ) : null}
+
+            {src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={src}
+                    alt="演化後的形象"
+                    className="max-h-72 w-auto rounded border border-hairline/60"
+                />
+            ) : null}
+
+            {result.promptUsed ? (
+                <p className="text-2xs leading-relaxed text-mute">{result.promptUsed}</p>
+            ) : null}
+        </div>
+    );
+}

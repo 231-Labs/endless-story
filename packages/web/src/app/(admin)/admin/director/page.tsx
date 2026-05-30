@@ -6,6 +6,7 @@ import { DreamConfigPanel } from './DreamConfigPanel';
 import { ReflectionPanel } from './ReflectionPanel';
 import { GenesisMemoryPanel } from './GenesisMemoryPanel';
 import { CustodyPanel } from './CustodyPanel';
+import { PortraitEvolvePanel } from './PortraitEvolvePanel';
 import { EventPanel } from './EventPanel';
 import { TimePanel } from './TimePanel';
 import { SchedulerPanel } from './SchedulerPanel';
@@ -123,6 +124,20 @@ export default async function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <CustodyPanel characters={characters} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">
+                            動態形象 · AI-native NFT（§11）
+                        </h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            角色的形象不是凍結的 mint 圖：依同一套 physical_facts（同一人）+ 情境
+                            （戲妝 / 老年 / 日常 / 自訂）出一張新像 → Walrus → 上鏈 update_image。
+                            每次演化都 emit CharacterImageUpdated，形成可驗證的形象演化軌跡。
+                        </p>
+                        <div className="mt-6">
+                            <PortraitEvolvePanel characters={characters} />
                         </div>
                     </div>
 
