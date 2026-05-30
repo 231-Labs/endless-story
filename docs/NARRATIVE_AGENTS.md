@@ -171,6 +171,8 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 **已到位**:event.move / 時間 / 排程殼 / 公報 / 訂閱 gate / **MemWal 三因子召回(importance ×
 recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesTab(接真 MemWal）+
 行當 + SEAL 託管 + capability catalog。
+**+ N1 出牌自決 / N2 睡眠壓縮 / N3 關係注入 / N4 自治 tick loop / N5a judge 自動收尾 / N6 規劃 —
+即 §2 角色迴圈 PERCEIVE→PLAN→DECIDE/ACT→PRODUCE→REFLECT 全通,世界可一鍵自走一輪(C 級骨架成形)。**
 
 **到 C 的缺口(依序做,每步 type-check + 不破壞地基)**:
 
@@ -181,10 +183,16 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 | ~~N3~~ ✅ | 關係上鏈讀 | **已做**:read.director.listRelationshipEvents → chain/relationships.ts(per-pair tone 聚合,seed 次數→weight)→ facade chain-first(ProfileTab 去 mock)+ fetchRelationshipHints 注入 **decide + POV** prompt。EventPanel 顯示「牽絆 N」。輕量一句 tone,不做加權圖。 | §5 |
 | ~~N4~~ ✅ | tick loop 自治 | **已做**:tick-loop.ts `runTickLoopAction` 一鍵跑完整輪:ADVANCE→ACT(開著事件中每個未出牌的參與者自動 decide+submit,讀 resolution.submitted_actions 去重)→PRODUCE(POV)→REFLECT(sleep)→NARRATE(公報)。SchedulerPanel「自治推進一個 tick」。**剩**:獨立 CLI setInterval(可後置)+ judge 自動收尾(N5)。 | §6 |
 | **N5** | 導演自動化 | **judge 自動收尾 ✅**(tick loop ACT 後,全員出牌即 resolve_event 收尾)。**剩 N5b**:ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,未做)。 | §3 |
-| **N6** | 規劃 Plan | 角色 longTermGoal/subgoals 存 MemWal、每 tick 更新 | §2 |
+| ~~N6~~ ✅ | 規劃 Plan | **已做**:character-agent/plan.ts updatePlan(承接舊計畫,不重來)→ MemWal kind=plan(i=8)→ recallCurrentPlanText 在 decide+POV 前撈回注入。tick-loop PLAN phase 最先跑。ReflectionPanel「立志」+ SchedulerPanel「含更新規劃」。**至此 §2 迴圈 PERCEIVE→PLAN→DECIDE/ACT→PRODUCE→REFLECT 全通。** | §2 |
 | 後 | 影片(Seedance)/ 新聞 adapter / 多 saga | 原 proposal R6/R7/R8 | defer |
 
 **順序心法**:N1(角色能動性)→ N2/N3(讓決策有記憶+關係依據)→ N4(串成迴圈)→ N5/N6(導演自動化+規劃)→ 即達 C。
+
+**剩餘(達 C 後的打磨)**:
+- **N5b** ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,可能動 contract)。
+- **獨立 CLI**:把 `runTickLoopAction` 包成 runner `setInterval`(目前 admin 按鈕驅動)。
+- **移動**:`scene::move_character` 自決(目前角色只在事件內出牌,未自主換場景)。
+- **§11** 動態出圖。
 
 ---
 
