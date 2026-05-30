@@ -172,7 +172,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 
 | # | 缺口 | 內容 | 對應 |
 |---|---|---|---|
-| **N1** | 角色 DECIDE/ACT | 角色 agent:perceive 場景/事件 → decide JSON → 出牌(submit_action)/移動。把出牌從 admin 還給角色。 | §2 ★最高優先,補權責破口 |
+| **N1** | 角色 DECIDE/ACT | **出牌已做 ✅**(character-agent decideCardPlay,依記憶+性格選牌→submit_action;EventPanel「讓她自己出牌」)。**剩**:移動 move_character + 由 tick loop 自動驅動(併入 N4)。 | §2 補權責破口 |
 | **N2** | 反思壓縮 sleep | recall 近期 → 壓縮高密度反思 → remember+anchor;防 recall 退化 | §5 |
 | **N3** | 關係上鏈讀 | RelationshipSeeded reader → 注入 prompt + ProfileTab 去 mock | §5 |
 | **N4** | tick loop 自治 | 把 §6 迴圈接成可連續跑(先 admin 驅動,後獨立 CLI) | §6 |
