@@ -38,6 +38,7 @@ import {
 import { runCharacterTurnAction } from './character-turn';
 import { runSleepAction } from './sleep';
 import { compileGazetteAction } from './compile-gazette';
+import { resolveEventAction } from './budget-event';
 
 export interface TickLoopInput {
     /** Advance a tick before the pass. Default true (ignored on dry-run). */
@@ -48,6 +49,9 @@ export interface TickLoopInput {
     sleep?: boolean;
     /** Compile the gazette at the end. Default true. */
     gazette?: boolean;
+    /** Auto-resolve (judge) an event once every participant has acted.
+     *  Default true — events conclude on their own (N5). */
+    autoResolve?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;
 }
@@ -71,6 +75,13 @@ export interface TickPovResult {
     skipReason?: string;
     chapter?: string;
     recalledCount?: number;
+    digest?: string;
+    error?: string;
+}
+
+export interface TickResolveResult {
+    eventId: string;
+    ok: boolean;
     digest?: string;
     error?: string;
 }
@@ -101,6 +112,7 @@ export interface TickLoopResult {
     advanced: boolean;
     worldTime?: WorldTimeSnapshot;
     acts: TickActResult[];
+    resolves: TickResolveResult[];
     povs: TickPovResult[];
     sleeps: TickSleepResult[];
     gazette?: TickGazetteResult;
@@ -110,7 +122,15 @@ export interface TickLoopResult {
 export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
-        return { ok: false, advanced: false, acts: [], povs: [], sleeps: [], error: 'saga 尚未種子化' };
+        return {
+            ok: false,
+            advanced: false,
+            acts: [],
+            resolves: [],
+            povs: [],
+            sleeps: [],
+            error: 'saga 尚未種子化',
+        };
     }
     let admin;
     try {
@@ -120,6 +140,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             ok: false,
             advanced: false,
             acts: [],
+            resolves: [],
             povs: [],
             sleeps: [],
             error: err instanceof Error ? err.message : 'admin keypair 載入失敗',
@@ -146,11 +167,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
     const slice = characters.slice(0, cap);
 
-    // 2. ACT — characters play their own hands in open events (chain mutation).
+    // 2. ACT — characters play their own hands in open events; events that
+    //    everyone has acted in auto-resolve (judge). Chain mutation.
     const acts: TickActResult[] = [];
+    const resolves: TickResolveResult[] = [];
     if (!dryRun) {
         try {
-            acts.push(...(await runActPhase(d.sagaId, nameById)));
+            const phase = await runActPhase(d.sagaId, nameById, input.autoResolve ?? true);
+            acts.push(...phase.acts);
+            resolves.push(...phase.resolves);
         } catch (err) {
             // Non-fatal: a failed ACT phase shouldn't block POV/narrate.
             console.warn('[tick-loop] act phase failed:', err);
@@ -216,6 +241,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     const anyOk =
         acts.some((a) => a.ok) ||
+        resolves.some((r) => r.ok) ||
         povs.some((p) => p.ok) ||
         sleeps.some((s) => s.ok && !s.skipReason) ||
         gazette?.ok === true;
@@ -224,6 +250,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         advanced,
         worldTime,
         acts,
+        resolves,
         povs,
         sleeps,
         gazette,
@@ -234,25 +261,30 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
  * For every OPEN budget event in the saga, find participants who haven't
  * acted yet (not in resolution.submitted_actions) and have a non-empty
  * hand, then let each one DECIDE + submit on its own. Sequential — one
- * keypair. Already-acted participants are skipped (idempotent re-runs). */
+ * keypair. Already-acted participants are skipped (idempotent re-runs).
+ *
+ * After acting, if every participant has now acted, the event auto-resolves
+ * (N5 judge) so it concludes on its own instead of waiting for an admin. */
 async function runActPhase(
     sagaId: string,
     nameById: Map<string, string>,
-): Promise<TickActResult[]> {
+    autoResolve: boolean,
+): Promise<{ acts: TickActResult[]; resolves: TickResolveResult[] }> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
-    if (!pkg) return [];
+    if (!pkg) return { acts: [], resolves: [] };
     const client = makeSuiClient({ network: resolveNetwork() });
     const summaries = await read.event
         .listBudgetEvents(client, pkg, { sagaId, maxEvents: 20 })
         .catch(() => []);
 
-    const out: TickActResult[] = [];
+    const acts: TickActResult[] = [];
+    const resolves: TickResolveResult[] = [];
     for (const s of summaries) {
         let parsed;
         try {
             const res = await read.event.getBudgetEvent(client, s.eventId);
             parsed = res.json as unknown as {
-                meta?: { status?: number | string };
+                meta?: { status?: number | string; scene_id?: string };
                 deck?: { participants?: string[]; hands?: Array<Array<number | string>> };
                 resolution?: { submitted_actions?: Array<{ character_id?: string }> };
             };
@@ -260,8 +292,10 @@ async function runActPhase(
             continue;
         }
         if (Number(parsed.meta?.status ?? 0) !== 0) continue; // resolved/closed
+        const sceneId = parsed.meta?.scene_id ?? s.sceneId;
         const participants = parsed.deck?.participants ?? [];
         const hands = parsed.deck?.hands ?? [];
+        if (participants.length === 0) continue;
         const acted = new Set(
             (parsed.resolution?.submitted_actions ?? [])
                 .map((a) => a.character_id)
@@ -272,7 +306,7 @@ async function runActPhase(
             if (!charId || acted.has(charId)) continue;
             if ((hands[i]?.length ?? 0) === 0) continue; // no hand to play
             const r = await runCharacterTurnAction(s.eventId, charId);
-            out.push({
+            acts.push({
                 eventId: s.eventId,
                 characterId: charId,
                 name: nameById.get(charId),
@@ -281,7 +315,20 @@ async function runActPhase(
                 intent: r.intent,
                 error: r.ok ? undefined : r.error,
             });
+            if (r.ok) acted.add(charId);
+        }
+
+        // Judge: every participant has acted → conclude the event.
+        const allActed = participants.every((p) => p && acted.has(p));
+        if (autoResolve && allActed && sceneId) {
+            const rr = await resolveEventAction({ eventId: s.eventId, sceneId });
+            resolves.push({
+                eventId: s.eventId,
+                ok: rr.ok,
+                digest: rr.digest,
+                error: rr.ok ? undefined : rr.error,
+            });
         }
     }
-    return out;
+    return { acts, resolves };
 }

@@ -203,6 +203,38 @@ function TickLoopResultView({ result }: { result: TickLoopResult }) {
                 <p className="text-2xs text-mute">（沒有開著的事件可出牌）</p>
             )}
 
+            {/* RESOLVE (judge) */}
+            {result.resolves.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">收尾（judge 自動結算）</div>
+                    <ul className="space-y-1">
+                        {result.resolves.map((r, i) => (
+                            <li key={`${r.eventId}-${i}`} className="text-xs">
+                                <span
+                                    className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
+                                        r.ok ? 'bg-jade' : 'bg-cinnabar'
+                                    }`}
+                                />
+                                <span className="text-mute">
+                                    事件 {r.eventId.slice(0, 8)}…{' '}
+                                    {r.ok ? '已收尾' : `失敗：${r.error ?? ''}`}
+                                </span>
+                                {r.digest ? (
+                                    <a
+                                        href={txUrl(r.digest)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="ml-2 text-cinnabar hover:underline"
+                                    >
+                                        tx
+                                    </a>
+                                ) : null}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
             {/* POV */}
             {result.povs.length > 0 ? (
                 <section className="space-y-1">
