@@ -152,8 +152,8 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 - **Tick loop(自治的引擎)** ✅ N4:每 tick →
   1) 導演若有 intake → DECIDE+EMIT(仍 admin 驅動,N5 自動化) 2) 每個 active 角色跑 §2 迴圈
   ✅(ACT+POV+REFLECT 已串) 3) judge 收尾事件(N5,未做) 4) 推進時間 ✅ 5) 週期性 reflect
-  (sleep)✅ + 編公報 ✅。**已做**:web `runTickLoopAction`(SchedulerPanel 手動驅動);
-  **剩**:獨立 runner CLI setInterval(後置)+ judge 自動收尾(N5)。
+  (sleep)✅ + 編公報 ✅。**已做**:web `runTickLoopAction`(SchedulerPanel 手動驅動 **或**
+  cli `world-loop` 無人驅動,經 `/api/tick`)+ judge 自動收尾 ✅(N5a)。**剩**:N5b debt 觸發。
 
 ---
 
@@ -190,7 +190,8 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 
 **剩餘(達 C 後的打磨)**:
 - **N5b** ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,可能動 contract)。
-- **獨立 CLI**:把 `runTickLoopAction` 包成 runner `setInterval`(目前 admin 按鈕驅動)。
+- ~~獨立 CLI~~ ✅:`web POST /api/tick`(headless 執行一 tick,選擇性 `TICK_LOOP_SECRET` 鑑權)
+  + cli `world-loop` 腳本(`--interval`/`--max`,序列等每 tick 完成,永不重疊)。世界可真正無人驅動。
 - ~~手卷 Step 3~~ ✅ 第一人稱飄字:tick-loop 把 decide intent / move reason 寫進 per-scene
   ephemeral cache(`scene-lines.ts`,15-min TTL,記憶體),getSagaLiveSnapshot 優先用它當飄字
   (退回牌名)。飄字從「防守」升級成「我退後半步,手按舊傷」。(持久層仍是 anchored POV/公報。)
