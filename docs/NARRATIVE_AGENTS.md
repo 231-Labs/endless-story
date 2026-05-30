@@ -105,7 +105,7 @@ MONITOR  訂閱事件解算、judge 收尾、importance debt 推進
 NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
          = 導演敘述側;Walrus + commitment(subject=saga)
 ```
-**現況**:capability catalog ✅、gazette ✅、push_event ✅。缺 judge 自動收尾 + ImportanceDebt 觸發。
+**現況**:capability catalog ✅、gazette ✅、push_event ✅、**judge 自動收尾 ✅(N5a,在 tick loop)**。缺 ImportanceDebt 觸發(N5b)。
 
 ---
 
@@ -180,7 +180,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 | ~~N2~~ ✅ | 反思壓縮 sleep | **已做**:recallForConsolidation(撈非 anchored 的 observation/chapter)→ consolidateMemories(primary,壓成 1-2 條)→ remember(kind=reflection,i=8,**a=1 anchored 不再被壓**)→ anchorReflectionText 上鏈。admin ReflectionPanel「睡一覺·整理記憶」。 | §5 |
 | ~~N3~~ ✅ | 關係上鏈讀 | **已做**:read.director.listRelationshipEvents → chain/relationships.ts(per-pair tone 聚合,seed 次數→weight)→ facade chain-first(ProfileTab 去 mock)+ fetchRelationshipHints 注入 **decide + POV** prompt。EventPanel 顯示「牽絆 N」。輕量一句 tone,不做加權圖。 | §5 |
 | ~~N4~~ ✅ | tick loop 自治 | **已做**:tick-loop.ts `runTickLoopAction` 一鍵跑完整輪:ADVANCE→ACT(開著事件中每個未出牌的參與者自動 decide+submit,讀 resolution.submitted_actions 去重)→PRODUCE(POV)→REFLECT(sleep)→NARRATE(公報)。SchedulerPanel「自治推進一個 tick」。**剩**:獨立 CLI setInterval(可後置)+ judge 自動收尾(N5)。 | §6 |
-| **N5** | 導演自動化 | judge 自動收尾事件 + ImportanceDebtCrossed 觸發反思 | §3 |
+| **N5** | 導演自動化 | **judge 自動收尾 ✅**(tick loop ACT 後,全員出牌即 resolve_event 收尾)。**剩 N5b**:ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,未做)。 | §3 |
 | **N6** | 規劃 Plan | 角色 longTermGoal/subgoals 存 MemWal、每 tick 更新 | §2 |
 | 後 | 影片(Seedance)/ 新聞 adapter / 多 saga | 原 proposal R6/R7/R8 | defer |
 
