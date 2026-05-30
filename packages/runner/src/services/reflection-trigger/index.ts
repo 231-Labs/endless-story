@@ -35,6 +35,9 @@ import {
     type CharacterSnapshot,
 } from './prompt.js';
 
+export { consolidateMemories } from './consolidate.js';
+export type { ConsolidateInput, ConsolidateResult } from './consolidate.js';
+
 export interface RunReflectionInput {
     characterId: string;
     sagaId: string;
@@ -122,26 +125,85 @@ export async function runOnce(input: RunReflectionInput): Promise<RunReflectionR
     }
 
     // Anchor: Walrus + reflection::submit.
-    const hashBytes = sha256(new TextEncoder().encode(reflection));
+    const anchor = await anchorReflectionText({
+        client,
+        characterId: input.characterId,
+        sagaId: input.sagaId,
+        text: reflection,
+        mode: input.mode,
+        question: input.ownerQuestion ?? '',
+        importance: input.mode === 'active' ? 7 : 6,
+        signer: input.signer,
+    });
+    if (!anchor.anchored) {
+        return { reflection, anchored: false, snapshot };
+    }
+    return {
+        reflection,
+        anchored: true,
+        reflectionId: anchor.reflectionId,
+        blobId: anchor.blobId,
+        blobUrl: anchor.blobUrl,
+        contentHashHex: anchor.contentHashHex,
+        digest: anchor.digest,
+        snapshot,
+    };
+}
+
+/* ── anchor a ready reflection (shared by runOnce + sleep) ───────────── */
+
+export interface AnchorReflectionInput {
+    characterId: string;
+    sagaId: string;
+    /** The reflection prose to anchor (already produced — not generated here). */
+    text: string;
+    mode: 'active' | 'passive';
+    /** Owner question for active reflections; '' for passive/sleep. */
+    question?: string;
+    /** On-chain importance stamp (1-10). */
+    importance: number;
+    signer: { keypair: Keypair; storytellerCapId: string };
+    /** Reuse an existing client; one is made if omitted. */
+    client?: SuiClient;
+}
+
+export interface AnchorReflectionResult {
+    anchored: boolean;
+    reflectionId?: string;
+    blobId?: string;
+    blobUrl?: string;
+    contentHashHex?: string;
+    digest?: string;
+}
+
+/**
+ * Upload reflection prose to Walrus and anchor it via reflection::submit.
+ * Factored out of runOnce so the sleep/consolidation path (N2) can anchor
+ * pre-made dense reflections without re-generating prose. Returns
+ * `anchored:false` (never throws) if Walrus upload fails — the caller
+ * decides whether that's fatal.
+ */
+export async function anchorReflectionText(
+    input: AnchorReflectionInput,
+): Promise<AnchorReflectionResult> {
+    const text = input.text.trim();
+    if (!text) return { anchored: false };
+    const client = input.client ?? makeSuiClient({ network: resolveNetwork() });
+
+    const hashBytes = sha256(new TextEncoder().encode(text));
     const contentHashHex = bytesToHex(hashBytes);
 
     let put;
     try {
-        put = await memwalBlob.putBlob(new TextEncoder().encode(reflection), {
+        put = await memwalBlob.putBlob(new TextEncoder().encode(text), {
             network: 'testnet',
             epochs: 5,
             contentType: 'text/markdown',
         });
-    } catch (err) {
-        return {
-            reflection,
-            anchored: false,
-            snapshot,
-            skipReason: undefined,
-        };
+    } catch {
+        return { anchored: false };
     }
 
-    const importance = input.mode === 'active' ? 7 : 6;
     const tx = new Transaction();
     tx.add(
         endlessTx.reflection.submit({
@@ -149,10 +211,10 @@ export async function runOnce(input: RunReflectionInput): Promise<RunReflectionR
             saga: input.sagaId,
             characterId: input.characterId,
             mode: input.mode,
-            question: input.ownerQuestion ?? '',
+            question: input.question ?? '',
             contentHash: Array.from(hashBytes),
             blobId: Array.from(new TextEncoder().encode(put.blobId)),
-            importance,
+            importance: input.importance,
         }),
     );
     const res = await client.signAndExecuteTransaction({
@@ -160,17 +222,13 @@ export async function runOnce(input: RunReflectionInput): Promise<RunReflectionR
         signer: input.signer.keypair,
         options: { showEffects: true, showObjectChanges: true },
     });
-
-    const reflectionId = findCreatedReflectionId(res);
     return {
-        reflection,
         anchored: true,
-        reflectionId: reflectionId ?? undefined,
+        reflectionId: findCreatedReflectionId(res) ?? undefined,
         blobId: put.blobId,
         blobUrl: put.url,
         contentHashHex,
         digest: res.digest,
-        snapshot,
     };
 }
 

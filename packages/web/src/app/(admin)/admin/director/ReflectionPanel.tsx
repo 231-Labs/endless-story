@@ -5,6 +5,7 @@ import {
     runReflectionAction,
     type RunReflectionResult,
 } from '@/lib/actions/run-reflection';
+import { runSleepAction, type RunSleepResult } from '@/lib/actions/sleep';
 import { txUrl, objectUrl } from '@/lib/explorer';
 import type { Character } from '@endless-story/shared';
 
@@ -25,12 +26,14 @@ export function ReflectionPanel({ characters }: { characters: Character[] }) {
     const [mode, setMode] = useState<'passive' | 'active'>('passive');
     const [question, setQuestion] = useState('');
     const [result, setResult] = useState<RunReflectionResult | null>(null);
+    const [sleepResult, setSleepResult] = useState<RunSleepResult | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const handleRun = (dryRun: boolean) => {
         if (!characterId) return;
         if (mode === 'active' && !question.trim()) return;
         setResult(null);
+        setSleepResult(null);
         startTransition(async () => {
             const r = await runReflectionAction({
                 characterId,
@@ -39,6 +42,16 @@ export function ReflectionPanel({ characters }: { characters: Character[] }) {
                 dryRun,
             });
             setResult(r);
+        });
+    };
+
+    const handleSleep = (dryRun: boolean) => {
+        if (!characterId) return;
+        setResult(null);
+        setSleepResult(null);
+        startTransition(async () => {
+            const r = await runSleepAction(characterId, { dryRun });
+            setSleepResult(r);
         });
     };
 
@@ -130,6 +143,119 @@ export function ReflectionPanel({ characters }: { characters: Character[] }) {
             </p>
 
             {result ? <ResultView result={result} /> : null}
+
+            {/* N2 — sleep / memory consolidation */}
+            <div className="space-y-2 rounded border border-hairline/60 bg-canvas/30 p-3">
+                <div className="text-2xs tracking-widest text-mute">
+                    睡一覺 · 整理記憶（N2）
+                </div>
+                <p className="text-2xs leading-relaxed text-mute">
+                    把零碎的見聞與章回壓縮成 1–2 條高密度反思 → 寫回 MemWal（anchored，
+                    i=8，不再被壓縮）→ 上鏈一條 Reflection。日子推進、觀察累積後再睡，效果最明顯。
+                </p>
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        onClick={() => handleSleep(true)}
+                        disabled={isPending || !characterId}
+                        className="rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-ink hover:bg-elevated disabled:opacity-50"
+                    >
+                        {isPending ? '沉澱中…' : 'Dry-Run（只看沉澱）'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleSleep(false)}
+                        disabled={isPending || !characterId}
+                        className="rounded bg-ink px-4 py-2 text-sm tracking-widest text-canvas hover:bg-ink/80 disabled:opacity-50"
+                    >
+                        {isPending ? '入睡中…' : '睡一覺 · 整理並上鏈'}
+                    </button>
+                </div>
+                {sleepResult ? <SleepResultView result={sleepResult} /> : null}
+            </div>
+        </div>
+    );
+}
+
+const SLEEP_SKIP_LABEL: Record<string, string> = {
+    memory_unconfigured: 'MemWal 未設定（或召不回記憶）',
+    nothing_to_consolidate: '沒有足夠的零碎記憶可沉澱（先讓她多經歷幾場）',
+};
+
+function SleepResultView({ result }: { result: RunSleepResult }) {
+    return (
+        <div className="space-y-3 rounded border border-hairline bg-canvas/40 p-4">
+            <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest">
+                <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                        result.ok ? 'bg-jade' : 'bg-cinnabar'
+                    }`}
+                />
+                <span className="text-mute">
+                    {result.skipReason
+                        ? `skipped: ${SLEEP_SKIP_LABEL[result.skipReason] ?? result.skipReason}`
+                        : result.anchored
+                          ? '已沉澱並上鏈'
+                          : result.ok
+                            ? 'Dry-Run（沉澱）'
+                            : '失敗'}
+                </span>
+                {typeof result.scatteredCount === 'number' ? (
+                    <span className="text-mute">
+                        素材 {result.scatteredCount} 條 → 反思 {result.reflections?.length ?? 0} 條
+                        {typeof result.remembered === 'number'
+                            ? ` · 寫回 ${result.remembered}`
+                            : ''}
+                    </span>
+                ) : null}
+                {result.digest ? (
+                    <a
+                        href={txUrl(result.digest)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-cinnabar hover:underline"
+                    >
+                        tx
+                    </a>
+                ) : null}
+                {result.reflectionId ? (
+                    <a
+                        href={objectUrl(result.reflectionId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-cinnabar hover:underline"
+                    >
+                        reflection
+                    </a>
+                ) : null}
+                {result.blobId ? (
+                    <a
+                        href={`/api/blob/${result.blobId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-cinnabar hover:underline"
+                    >
+                        walrus
+                    </a>
+                ) : null}
+            </div>
+
+            {result.error ? (
+                <div className="text-sm text-cinnabar">錯誤：{result.error}</div>
+            ) : null}
+
+            {result.reflections && result.reflections.length > 0 ? (
+                <ul className="space-y-2">
+                    {result.reflections.map((r, i) => (
+                        <li
+                            key={i}
+                            className="rounded border border-hairline/60 bg-surface p-3 font-serif text-sm leading-loose text-ink"
+                        >
+                            {r}
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
         </div>
     );
 }

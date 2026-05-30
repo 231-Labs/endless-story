@@ -187,7 +187,12 @@ const DEFAULT_IMPORTANCE: Record<MemoryKind, number> = {
 // `relevance` from MemWal's own vector distance. The one thing we can't
 // match vs a local store: we only score the semantically-retrieved
 // candidate set, not the full memory store (mitigated by over-fetch).
-const TAG_RE = /^\[\[m\|t=([a-z]+)\|i=(\d+)(?:\|d=(\d+))?\]\]\s*([\s\S]*)$/;
+// `a=1` marks a sleep-consolidated reflection: a high-density memory the
+// REFLECT/sleep step produced from scattered observations. The next sleep
+// must NOT re-compress these (else it eats its own output and the dense
+// reflection degrades back into noise) — N2. The flag is optional so all
+// pre-N2 memories parse unchanged.
+const TAG_RE = /^\[\[m\|t=([a-z]+)\|i=(\d+)(?:\|d=(\d+))?(?:\|a=([01]))?\]\]\s*([\s\S]*)$/;
 
 export interface RecalledMemory {
     text: string;
@@ -195,11 +200,20 @@ export interface RecalledMemory {
     importance: number;
     /** Narrative day written (recency); undefined for legacy untagged. */
     day?: number;
+    /** Sleep-consolidated (anchor=true) — excluded from re-consolidation. */
+    anchored?: boolean;
 }
 
-function tagMemory(text: string, kind: MemoryKind, importance: number, day: number): string {
+function tagMemory(
+    text: string,
+    kind: MemoryKind,
+    importance: number,
+    day: number,
+    anchored = false,
+): string {
     const i = Math.max(1, Math.min(10, Math.round(importance)));
-    return `[[m|t=${kind}|i=${i}|d=${Math.max(0, Math.round(day))}]] ${text}`;
+    const a = anchored ? '|a=1' : '';
+    return `[[m|t=${kind}|i=${i}|d=${Math.max(0, Math.round(day))}${a}]] ${text}`;
 }
 
 function parseMemory(stored: string): RecalledMemory {
@@ -209,7 +223,8 @@ function parseMemory(stored: string): RecalledMemory {
             kind: m[1] as MemoryKind,
             importance: Number(m[2]) || 5,
             day: m[3] != null ? Number(m[3]) : undefined,
-            text: m[4].trim(),
+            anchored: m[4] === '1',
+            text: m[5].trim(),
         };
     }
     // Untagged (legacy / pre-tagging): treat as mid-importance observation.
@@ -314,14 +329,65 @@ export async function recallStructuredForCharacter(
 }
 
 /**
+ * Recall the **scattered raw material** for a sleep/consolidation pass (N2).
+ *
+ * Unlike `recallStructuredForCharacter` (which re-ranks for prompt-time
+ * relevance), this returns the low-density memories worth compressing:
+ * observations + POV chapters that are NOT already sleep-consolidated.
+ * It deliberately EXCLUDES anchored reflections, dreams, relationships and
+ * genesis — those are either already dense or must stay verbatim, so feeding
+ * them back into compression would either degrade them or loop. Recency-
+ * biased (newest first) since sleep digests "what just happened".
+ *
+ * Returns [] when unconfigured. The query seeds MemWal's semantic search;
+ * we over-fetch wide then filter by kind/anchored locally.
+ */
+export async function recallForConsolidation(
+    characterId: string,
+    query: string,
+    limit = 12,
+): Promise<RecalledMemory[]> {
+    const client = await clientFor(characterId);
+    if (!client) return [];
+    try {
+        const res = await client.recall(query, limit * 3, namespaceFor(characterId));
+        const candidates: RecalledMemory[] = [];
+        for (const hit of res.results) {
+            if ('text' in hit && typeof hit.text === 'string' && hit.text.trim()) {
+                const m = parseMemory(hit.text);
+                const consolidatable =
+                    !m.anchored &&
+                    (m.kind === 'observation' || m.kind === 'chapter' || m.kind === 'unknown');
+                if (consolidatable) candidates.push(m);
+            }
+        }
+        // Newest-first (sleep digests recent experience); undated last.
+        candidates.sort((a, b) => (b.day ?? -1) - (a.day ?? -1));
+        const out = candidates.slice(0, limit);
+        console.log(
+            `[memory] recallForConsolidation ${characterId.slice(0, 10)}… → ${out.length} scattered`,
+        );
+        return out;
+    } catch (err) {
+        console.warn('[memory] recallForConsolidation failed:', err);
+        return [];
+    } finally {
+        client.destroy();
+    }
+}
+
+/**
  * Store a memory for a character, tagged with kind + importance so recall
  * can weight it. Returns true if written, false when unconfigured / on
  * failure (non-fatal — chain anchor already happened).
+ *
+ * `anchored` marks a sleep-consolidated reflection (N2) so the next sleep
+ * won't re-compress it.
  */
 export async function rememberForCharacter(
     characterId: string,
     text: string,
-    opts?: { kind?: MemoryKind; importance?: number },
+    opts?: { kind?: MemoryKind; importance?: number; anchored?: boolean },
 ): Promise<boolean> {
     if (!text.trim()) return false;
     const client = await clientFor(characterId);
@@ -330,9 +396,14 @@ export async function rememberForCharacter(
     const importance = opts?.importance ?? DEFAULT_IMPORTANCE[kind] ?? 5;
     const day = await currentNarrativeDay();
     try {
-        await client.remember(tagMemory(text, kind, importance, day), namespaceFor(characterId));
+        await client.remember(
+            tagMemory(text, kind, importance, day, opts?.anchored ?? false),
+            namespaceFor(characterId),
+        );
         console.log(
-            `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}] (${text.length} chars)`,
+            `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}${
+                opts?.anchored ? ' anchored' : ''
+            }] (${text.length} chars)`,
         );
         return true;
     } catch (err) {
