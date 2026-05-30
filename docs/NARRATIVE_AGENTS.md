@@ -131,8 +131,9 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
   recall 非 anchored 的 observation/chapter → LLM 壓成 1-2 條 → remember(i=8,tag `a=1`
   排除再壓)→ 上鏈 Reflection。「遺忘已吸收的」採**軟遺忘**(MemWal append-only,無刪除):
   高密度反思 i=8 直接壓過 observation i=4/chapter i=5,加 recency 衰減,零碎記憶自然沉底。
-- **關係**:導演 relationship_seed → 鏈上 RelationshipSeeded;需建 reader → 注入 prompt +
-  餵 ProfileTab(目前 mock)。輕量:per-pair 一句 tone summary,不做完整加權圖。**尚未做(N3)**。
+- **關係** ✅:導演 relationship_seed → 鏈上 RelationshipSeeded → reader 聚合成 per-pair tone
+  → 注入 decide+POV prompt + 餵 ProfileTab(chain-first 去 mock)。輕量:per-pair 一句 tone,
+  不做完整加權圖。**已做(N3)**。屬導演記憶(客觀)→ 角色「感知」到它,但不寫進角色 MemWal。
 - **夢**:owner 付 ENDLESS → moderator 改寫 → anchor → MemWal remember(kind=dream,i=9)。
   **起始最高,但隨 recency 衰減**(被新記憶逐漸超越)—— 不是永久置頂。✅
 - **創世記憶**:mint 時從描述蒸餾,墊底防飄移。✅
@@ -176,7 +177,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 |---|---|---|---|
 | **N1** | 角色 DECIDE/ACT | **出牌已做 ✅**(character-agent decideCardPlay,依記憶+性格選牌→submit_action;EventPanel「讓她自己出牌」)。**剩**:移動 move_character + 由 tick loop 自動驅動(併入 N4)。 | §2 補權責破口 |
 | ~~N2~~ ✅ | 反思壓縮 sleep | **已做**:recallForConsolidation(撈非 anchored 的 observation/chapter)→ consolidateMemories(primary,壓成 1-2 條)→ remember(kind=reflection,i=8,**a=1 anchored 不再被壓**)→ anchorReflectionText 上鏈。admin ReflectionPanel「睡一覺·整理記憶」。 | §5 |
-| **N3** | 關係上鏈讀 | RelationshipSeeded reader → 注入 prompt + ProfileTab 去 mock | §5 |
+| ~~N3~~ ✅ | 關係上鏈讀 | **已做**:read.director.listRelationshipEvents → chain/relationships.ts(per-pair tone 聚合,seed 次數→weight)→ facade chain-first(ProfileTab 去 mock)+ fetchRelationshipHints 注入 **decide + POV** prompt。EventPanel 顯示「牽絆 N」。輕量一句 tone,不做加權圖。 | §5 |
 | **N4** | tick loop 自治 | 把 §6 迴圈接成可連續跑(先 admin 驅動,後獨立 CLI) | §6 |
 | **N5** | 導演自動化 | judge 自動收尾事件 + ImportanceDebtCrossed 觸發反思 | §3 |
 | **N6** | 規劃 Plan | 角色 longTermGoal/subgoals 存 MemWal、每 tick 更新 | §2 |
