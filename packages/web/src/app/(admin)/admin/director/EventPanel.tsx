@@ -10,6 +10,10 @@ import {
     type CreateBudgetEventResult,
 } from '@/lib/actions/budget-event';
 import {
+    runCharacterTurnAction,
+    type CharacterTurnResult,
+} from '@/lib/actions/character-turn';
+import {
     fetchBudgetEvents,
     fetchBudgetEventDetail,
     type BudgetEventEntry,
@@ -389,6 +393,20 @@ function EventDetailView({
     const [pickerCharId, setPickerCharId] = useState<string>(characters[0]?.id ?? '');
     const [actionResult, setActionResult] = useState<ActionResult | null>(null);
     const [isPending, startTransition] = useTransition();
+    // N1: character agent decides its own card play.
+    const [turnCharId, setTurnCharId] = useState<string>('');
+    const [turnResult, setTurnResult] = useState<CharacterTurnResult | null>(null);
+    const [turnPending, startTurnTransition] = useTransition();
+    const handleTurn = () => {
+        const cid = turnCharId || detail.participants[0];
+        if (!cid) return;
+        setTurnResult(null);
+        startTurnTransition(async () => {
+            const r = await runCharacterTurnAction(detail.eventId, cid);
+            setTurnResult(r);
+            onMutated();
+        });
+    };
 
     // Filter to characters in this event's scene + not already a
     // participant. Chain would abort with `EJoinerNotInScene` (18) /
@@ -523,6 +541,67 @@ function EventDetailView({
                     <p className="text-2xs tracking-widest text-mute/70">
                         只能選此事件場景內的角色（共 {inSceneCount} 名）。要換場景的話，請開新事件。
                     </p>
+
+                    {detail.participants.length > 0 ? (
+                        <div className="mt-2 space-y-2 border-t border-hairline/50 pt-2">
+                            <div className="text-2xs tracking-widest text-cinnabar">
+                                角色自決出牌（N1 · 依記憶+性格選牌）
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <select
+                                    value={turnCharId || detail.participants[0]}
+                                    onChange={(e) => setTurnCharId(e.target.value)}
+                                    disabled={turnPending}
+                                    className="rounded border border-hairline bg-canvas px-2 py-1 text-xs text-ink"
+                                >
+                                    {detail.participants.map((pid) => (
+                                        <option key={pid} value={pid}>
+                                            {characters.find((c) => c.id === pid)?.name ??
+                                                pid.slice(0, 8)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={handleTurn}
+                                    disabled={turnPending}
+                                    className="rounded bg-cinnabar px-3 py-1 text-xs text-canvas hover:bg-seal disabled:opacity-50"
+                                >
+                                    {turnPending ? '她在想…' : '讓她自己出牌'}
+                                </button>
+                            </div>
+                            {turnResult ? (
+                                <div
+                                    className={`rounded border p-2 text-2xs ${
+                                        turnResult.ok
+                                            ? 'border-jade/40 bg-jade/5'
+                                            : 'border-cinnabar/40 bg-cinnabar/5 text-cinnabar'
+                                    }`}
+                                >
+                                    {turnResult.ok ? (
+                                        <>
+                                            <div className="text-jade">
+                                                打出「{turnResult.cardLabel}」
+                                                {typeof turnResult.recalledCount === 'number'
+                                                    ? ` · 憶 ${turnResult.recalledCount}`
+                                                    : ''}
+                                            </div>
+                                            <p className="mt-1 font-serif text-sm leading-relaxed text-ink/90">
+                                                「{turnResult.intent}」
+                                            </p>
+                                            {turnResult.reason ? (
+                                                <p className="mt-1 text-mute">
+                                                    （{turnResult.reason}）
+                                                </p>
+                                            ) : null}
+                                        </>
+                                    ) : (
+                                        <span>{turnResult.error}</span>
+                                    )}
+                                </div>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
             ) : (
                 <div className="rounded border border-jade/40 bg-jade/5 p-3 text-2xs text-jade">
