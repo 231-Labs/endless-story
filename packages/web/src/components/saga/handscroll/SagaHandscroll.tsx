@@ -6,6 +6,7 @@ import { SnowPaperBackground } from './SnowPaperBackground';
 import { SceneVignette, type VignetteAnchor } from './SceneVignette';
 import { FloatingQuote } from './FloatingQuote';
 import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
+import { getSagaLiveSnapshot } from '@/lib/actions/saga-live';
 
 /**
  * 春雪社主螢幕：原生橫向捲動手卷。
@@ -89,6 +90,53 @@ export function SagaHandscroll(props: Props) {
   const { saga, scenes, locations, charactersById, chaptersById, locationLabel } = props;
   const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Live overlay: poll fresh chain state (presence / open-event / latest
+  // action line) and merge the volatile fields onto the server-rendered
+  // scenes. Polling (not websockets) because the world only changes on
+  // discrete admin ticks + Sui public-node subscriptions are deprecated.
+  // Gated to document visibility to save RPC. No-op for mock scenes (the
+  // snapshot returns [] when nothing's anchored on chain).
+  const [liveScenes, setLiveScenes] = useState<Scene[]>(scenes);
+  useEffect(() => {
+    if (!saga.id) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        try {
+          const snap = await getSagaLiveSnapshot(saga.id);
+          if (!cancelled && snap.scenes.length > 0) {
+            const byId = new Map(snap.scenes.map((s) => [s.sceneId, s]));
+            setLiveScenes((prev) =>
+              prev.map((s) => {
+                const live = byId.get(s.id);
+                if (!live) return s;
+                return {
+                  ...s,
+                  currentCharacterIds: live.presentCharacterIds,
+                  performance: live.hasOpenEvent
+                    ? { title: live.eventTitle ?? '一場戲', startedAt: s.performance?.startedAt ?? '' }
+                    : undefined,
+                  ghostQuotes: live.latestLine
+                    ? [{ characterId: live.latestLine.characterId, text: live.latestLine.text }]
+                    : s.ghostQuotes,
+                };
+              }),
+            );
+          }
+        } catch {
+          /* transient RPC failure — keep last good state */
+        }
+      }
+      if (!cancelled) timer = setTimeout(tick, 6000);
+    };
+    timer = setTimeout(tick, 6000);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [saga.id]);
 
   const partOfDay = saga.worldTime?.partOfDay ?? 'noon';
   const isFocused = focusedSceneId !== null;
@@ -180,7 +228,7 @@ export function SagaHandscroll(props: Props) {
             </div>
 
             {/* 場景錨 */}
-            {scenes.map((scene) => {
+            {liveScenes.map((scene) => {
               const anchor = resolveAnchor(scene);
               if (!anchor) return null;
               return (
@@ -195,7 +243,7 @@ export function SagaHandscroll(props: Props) {
             })}
 
             {/* 飄字題款 */}
-            {scenes.map((scene) => {
+            {liveScenes.map((scene) => {
               const anchor = resolveAnchor(scene);
               if (!anchor) return null;
               const primary = scene.ghostQuotes?.[0];
