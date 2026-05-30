@@ -41,6 +41,15 @@ import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
 import { resolveEventAction } from './budget-event';
 
+/**
+ * Max characters whose memory-recall work (PLAN / POV generate) runs at
+ * once. Each recall SEAL-decrypts ~18 blobs against a SHARED key server +
+ * Walrus aggregator; an all-at-once burst across the cast 429s them and
+ * recall silently returns empty. 2 keeps a real speedup without tripping
+ * the limit. Tune up if you move off the staging relayer.
+ */
+const RECALL_CONCURRENCY = 2;
+
 export interface TickLoopInput {
     /** Advance a tick before the pass. Default true (ignored on dry-run). */
     advance?: boolean;
@@ -188,13 +197,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     // 2. PLAN — each character updates its standing goal first (N6), so the
     //    fresh plan is recalled by the decide/POV steps below. PLAN does NO
-    //    Sui signing (MemWal writes + reads only), so all characters plan
-    //    CONCURRENTLY — wall-clock collapses from Σ to max.
+    //    Sui signing (MemWal reads + writes only). Run with BOUNDED
+    //    concurrency: each plan SEAL-decrypts a recall, and the shared SEAL
+    //    key server / Walrus aggregator 429s under an all-at-once burst.
     const plans: TickPlanResult[] = [];
     if (input.plan ?? true) {
-        const settled = await Promise.all(
-            slice.map(async (c) => ({ c, p: await runPlanAction(c.id, { dryRun }) })),
-        );
+        const settled = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
+            try {
+                return { c, p: await runPlanAction(c.id, { dryRun }) };
+            } catch (err) {
+                return {
+                    c,
+                    p: { ok: false, error: err instanceof Error ? err.message : String(err) },
+                };
+            }
+        });
         for (const { c, p } of settled) {
             plans.push({
                 characterId: c.id,
@@ -241,20 +258,35 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         error: r.error,
     });
     const povs: TickPovResult[] = [];
-    // Generate every chapter CONCURRENTLY (no signing), then — for a real
-    // run — anchor them ALL IN ONE PTB (one signature, one gas coin, one
-    // round-trip). Generation is the slow part (primary LLM × N → max not Σ);
-    // the anchor is now a single transaction instead of N serial ones.
-    const generated = await Promise.all(
-        slice.map(async (c) => ({
-            c,
-            r: await runPovForCharacter(admin, c.id, {
-                triggerNarrative: trigger,
-                forceRun: true,
-                dryRun: true,
-            }),
-        })),
-    );
+    // Generate chapters with BOUNDED concurrency (each recalls memory →
+    // SEAL decrypt; an unbounded burst 429s the key server), then — for a
+    // real run — anchor them ALL IN ONE PTB (one signature). Generation is
+    // the slow part (primary LLM); the anchor is now a single transaction.
+    // Per-item try/catch so one bad recall (e.g. aggregator DNS blip) can't
+    // reject the whole batch and kill the tick.
+    const generated = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
+        try {
+            return {
+                c,
+                r: await runPovForCharacter(admin, c.id, {
+                    triggerNarrative: trigger,
+                    forceRun: true,
+                    dryRun: true,
+                }),
+            };
+        } catch (err) {
+            return {
+                c,
+                r: {
+                    ok: false,
+                    chapter: '',
+                    anchored: false,
+                    recalledCount: 0,
+                    error: err instanceof Error ? err.message : String(err),
+                } satisfies Awaited<ReturnType<typeof runPovForCharacter>>,
+            };
+        }
+    });
     if (dryRun) {
         for (const { c, r } of generated) povs.push(mapPov(c, r));
     } else {
@@ -421,4 +453,32 @@ async function runActPhase(
         }
     }
     return { acts, resolves };
+}
+
+/* ── concurrency pool ──────────────────────────────────────────────────
+ * Run `fn` over `items` with at most `concurrency` in flight, preserving
+ * input order. Used to throttle recall-heavy phases (PLAN / POV generate)
+ * so the shared SEAL key server + Walrus aggregator don't 429 under an
+ * all-at-once burst. `fn` must not throw — wrap per-item work in try/catch
+ * (a throw rejects the pool). */
+async function mapPool<T, R>(
+    items: T[],
+    concurrency: number,
+    fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+        for (;;) {
+            const i = next;
+            next += 1;
+            if (i >= items.length) return;
+            results[i] = await fn(items[i], i);
+        }
+    };
+    const lanes = Array.from({ length: Math.min(Math.max(1, concurrency), items.length || 1) }, () =>
+        worker(),
+    );
+    await Promise.all(lanes);
+    return results;
 }
