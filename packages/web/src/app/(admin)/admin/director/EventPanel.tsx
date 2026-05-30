@@ -412,7 +412,11 @@ function EventDetailView({
                 characterId: pickerCharId,
             });
             setActionResult(r);
-            if (r.ok) onMutated();
+            // Re-sync the detail on EITHER outcome: a failure (e.g.
+            // EAlreadyParticipant / EEventNotOpen from a stale dropdown)
+            // means the UI was out of date — refetch so it self-heals and
+            // stops offering an already-joined character.
+            onMutated();
         });
     };
 
@@ -424,7 +428,7 @@ function EventDetailView({
                 sceneId: detail.sceneId,
             });
             setActionResult(r);
-            if (r.ok) onMutated();
+            onMutated();
         });
     };
 

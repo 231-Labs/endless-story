@@ -47,6 +47,28 @@ const DEMO_CATALOG: DemoCard[] = [
 
 const DEFAULT_HAND_SIZE = 3;
 
+/** Map event.move abort codes → readable zh messages so the admin sees
+ *  WHY a deal/resolve failed instead of a raw MoveAbort. */
+function humanizeEventAbort(raw: string | undefined): string | null {
+    if (!raw) return null;
+    const m = raw.match(/abort code:\s*(\d+)/i) ?? raw.match(/MoveAbort.*?,\s*(\d+)\)/);
+    const code = m ? Number(m[1]) : NaN;
+    switch (code) {
+        case 1:
+            return '事件已結算或不在開放狀態，無法再操作（請重整）';
+        case 16:
+            return '此角色已經在這個事件裡了（清單過期，已自動重整）';
+        case 17:
+            return '此角色不屬於這個 saga';
+        case 18:
+            return '此角色不在這個事件的場景內（請換到她所在的場景開事件）';
+        case 19:
+            return '此角色已死亡，無法參與';
+        default:
+            return null;
+    }
+}
+
 export interface CreateBudgetEventInput {
     sceneId: string;
     title: string;
@@ -153,7 +175,9 @@ export async function createBudgetEventAction(
     } catch (err) {
         return {
             ok: false,
-            error: err instanceof Error ? err.message : String(err),
+            error:
+                humanizeEventAbort(err instanceof Error ? err.message : String(err)) ??
+                (err instanceof Error ? err.message : String(err)),
         };
     }
 }
@@ -209,7 +233,8 @@ export async function dealHandAction(input: DealHandInput): Promise<ActionResult
         }
         return { ok: true, digest: res.digest };
     } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        const raw = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: humanizeEventAbort(raw) ?? raw };
     }
 }
 
@@ -269,6 +294,7 @@ export async function resolveEventAction(
         }
         return { ok: true, digest: res.digest };
     } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        const raw = err instanceof Error ? err.message : String(err);
+        return { ok: false, error: humanizeEventAbort(raw) ?? raw };
     }
 }
