@@ -3,324 +3,564 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Endless Story · 無盡敘界 — Pitch</title>
+<title>Endless Story · 春雪社 — 為 AI 角色打造永久記憶</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#141009; --bg2:#1d160d;
-  --ink:#F3EBD9; --mute:#A99C84; --faint:#6f6450;
-  --cinnabar:#E0573C; --cinnabar-soft:#7a2a1c;
-  --jade:#5FB89B; --jade-soft:#234f43;
-  --gold:#E3B341; --gold-soft:#5e4a1c;
-  --hair:rgba(243,235,217,.14);
-  --panel:rgba(243,235,217,.045);
-  --panel2:rgba(243,235,217,.08);
-  --serif:"Songti TC","Noto Serif CJK TC","Noto Serif TC",serif;
-  --sans:"PingFang TC","Noto Sans CJK TC","Noto Sans TC","Hiragino Sans GB",system-ui,sans-serif;
+  /* === exact tokens from packages/web/src/app/globals.css · dark 夜戲/墨色 === */
+  --canvas:#16120E; --surface:#1F1A15; --elevated:#2A231C;
+  --ink:#F0E8DC; --mute:#A89A8A; --hair:#3A3026;
+  --cinnabar:#D97650; --jade:#6FA287; --seal:#E08A5F; --gold:#C9A85C;
+  --hair-soft:rgba(240,232,220,.10);
+  --panel:rgba(240,232,220,.035);
+  --serif:"Noto Serif TC","Songti TC",serif;
+  --sans:"Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{
-  background:radial-gradient(120% 90% at 80% 0%, #211810 0%, var(--bg) 55%, #100c07 100%);
-  color:var(--ink); font-family:var(--sans); overflow:hidden;
-  -webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(130% 100% at 82% -10%, #241a12 0%, var(--canvas) 52%, #0f0b07 100%);
+  color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased;
 }
-/* ---------- deck frame ---------- */
-#deck{position:fixed;inset:0}
-.slide{
-  position:absolute;inset:0;display:flex;flex-direction:column;
-  justify-content:center;padding:5vh 6.5vw;opacity:0;pointer-events:none;
-  transition:opacity .5s ease; z-index:1;
-}
+/* faint paper grain */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(rgba(240,232,220,.018) 1px,transparent 1px);background-size:3px 3px}
+
+/* ---------------- deck ---------------- */
+#deck{position:fixed;inset:0;z-index:1}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+  padding:6.4vh 6.4vw;opacity:0;pointer-events:none;transition:opacity .45s ease;z-index:1}
 .slide.active{opacity:1;pointer-events:auto;z-index:2}
-/* reveal animation */
-.r{opacity:0;transform:translateY(22px)}
-.slide.active .r{animation:rise .7s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(var(--i,0)*.09s)}
+.r{opacity:0;transform:translateY(20px)}
+.slide.active .r{animation:rise .66s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(var(--i,0)*.085s)}
 @keyframes rise{to{opacity:1;transform:none}}
-.fade .r{transform:none}
-/* svg path draw */
 .draw{stroke-dasharray:1;stroke-dashoffset:1}
-.slide.active .draw{animation:draw 1.1s ease forwards;animation-delay:calc(.25s + var(--i,0)*.12s)}
+.slide.active .draw{animation:draw 1s ease forwards;animation-delay:calc(.3s + var(--i,0)*.16s)}
 @keyframes draw{to{stroke-dashoffset:0}}
-/* ---------- typography ---------- */
-.eyebrow{font-size:.78rem;letter-spacing:.42em;color:var(--cinnabar);font-weight:700;text-transform:uppercase;margin-bottom:1.1rem}
-h1{font-family:var(--serif);font-weight:700;line-height:1.04;letter-spacing:.01em}
-h2{font-family:var(--serif);font-size:clamp(1.8rem,3.4vw,2.7rem);font-weight:700;line-height:1.14;margin-bottom:.4rem}
-.sub{color:var(--mute);font-size:clamp(.95rem,1.5vw,1.2rem);line-height:1.6;max-width:60ch}
-.tag{display:inline-flex;align-items:center;gap:.5em;font-size:.82rem;color:var(--mute);border:1px solid var(--hair);padding:.4em 1em;border-radius:99px;background:var(--panel)}
-.kbd{font-family:var(--sans);font-size:.72rem;color:var(--faint)}
-b.c{color:var(--cinnabar)} b.j{color:var(--jade)} b.g{color:var(--gold)}
-.mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
-/* ---------- chrome ---------- */
-#bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--cinnabar),var(--gold));z-index:50;transition:width .45s ease;box-shadow:0 0 14px rgba(224,87,60,.6)}
-#dots{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;gap:9px;z-index:50}
-#dots i{width:7px;height:7px;border-radius:99px;background:var(--hair);transition:.3s;cursor:pointer}
-#dots i.on{background:var(--cinnabar);width:22px}
-#pg{position:fixed;bottom:18px;right:26px;color:var(--faint);font-size:.78rem;z-index:50;letter-spacing:.1em}
-#hint{position:fixed;bottom:18px;left:26px;color:var(--faint);font-size:.74rem;z-index:50}
-.brandmark{position:fixed;top:20px;right:28px;z-index:50;font-family:var(--serif);font-size:.9rem;color:var(--faint);letter-spacing:.2em}
-/* ---------- generic blocks ---------- */
-.grid{display:grid;gap:1.4rem}
-.card{background:var(--panel);border:1px solid var(--hair);border-radius:18px;padding:1.5rem 1.6rem;position:relative;overflow:hidden}
-.card .ic{font-size:1.5rem;margin-bottom:.7rem;display:block}
-.card h3{font-size:1.15rem;margin-bottom:.45rem;font-weight:700}
-.card p{color:var(--mute);font-size:.94rem;line-height:1.55}
-.node{border-radius:14px;padding:.85rem 1rem;border:1.5px solid var(--hair);background:var(--panel);text-align:center}
-.node .t{font-weight:700;font-size:1.02rem}
-.node .d{color:var(--mute);font-size:.78rem;margin-top:.25rem}
-.flowrow{display:flex;align-items:center;gap:0;justify-content:center;flex-wrap:wrap}
-.arrow{color:var(--cinnabar);font-size:1.5rem;margin:0 .55rem;animation:pulseA 1.6s ease-in-out infinite}
-@keyframes pulseA{0%,100%{opacity:.45;transform:translateX(0)}50%{opacity:1;transform:translateX(4px)}}
-.glow{position:absolute;border-radius:50%;filter:blur(60px);opacity:.5;z-index:0;pointer-events:none}
-/* seal stamp */
-.seal{position:fixed;bottom:46px;right:34px;width:62px;height:62px;border:2px solid var(--cinnabar-soft);border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);color:var(--cinnabar);font-size:1.5rem;opacity:.35;z-index:40;transform:rotate(-4deg)}
-/* ---------- cover ---------- */
+.appear{opacity:0}
+.slide.active .appear{animation:ap .5s ease forwards;animation-delay:calc(.4s + var(--i,0)*.16s)}
+@keyframes ap{to{opacity:1}}
+
+/* ---------------- typography ---------------- */
+.eyebrow{font-size:.72rem;letter-spacing:.34em;color:var(--cinnabar);font-weight:700;
+  text-transform:uppercase;margin-bottom:1rem;font-family:var(--sans)}
+.eyebrow .zh{color:var(--mute);letter-spacing:.18em}
+h1{font-family:var(--serif);font-weight:900;line-height:1.02;letter-spacing:.02em}
+h2{font-family:var(--serif);font-size:clamp(1.8rem,3.7vw,2.9rem);font-weight:700;line-height:1.12}
+.sub{color:var(--mute);font-size:clamp(1.08rem,1.6vw,1.34rem);line-height:1.68;max-width:62ch}
+b.c{color:var(--cinnabar);font-weight:700}
+b.j{color:var(--jade);font-weight:700}
+b.g{color:var(--gold);font-weight:700}
+.mono{font-family:var(--mono);font-size:.86em;letter-spacing:-.01em}
+.tag{display:inline-flex;align-items:center;gap:.5em;font-size:.9rem;color:var(--mute);
+  border:1px solid var(--hair);padding:.42em 1em;border-radius:999px;background:var(--panel)}
+
+/* ---------------- chrome ---------------- */
+#bar{position:fixed;top:0;left:0;height:2px;z-index:60;
+  background:linear-gradient(90deg,var(--cinnabar),var(--gold));transition:width .4s ease;
+  box-shadow:0 0 12px rgba(217,118,80,.55)}
+#dots{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:60}
+#dots i{width:6px;height:6px;border-radius:99px;background:var(--hair);transition:.3s;cursor:pointer}
+#dots i.on{background:var(--cinnabar);width:20px}
+#pg{position:fixed;bottom:16px;right:24px;color:#6f6450;font-size:.74rem;z-index:60;
+  letter-spacing:.12em;font-family:var(--mono)}
+#hint{position:fixed;bottom:16px;left:24px;color:#6f6450;font-size:.72rem;z-index:60;font-family:var(--mono)}
+.brand{position:fixed;top:18px;right:26px;z-index:60;font-family:var(--serif);font-size:.92rem;
+  color:#7a6e58;letter-spacing:.28em}
+.stamp{position:fixed;bottom:40px;right:30px;width:54px;height:54px;border:1.5px solid var(--seal);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);
+  color:var(--seal);font-size:1.35rem;opacity:.42;z-index:55;transform:rotate(-5deg);font-weight:700}
+
+/* ---------------- engineering diagram primitives ---------------- */
+.diagram{position:relative;border:1px solid var(--hair);border-radius:10px;background:
+  linear-gradient(0deg,rgba(20,15,10,.4),rgba(20,15,10,.4)),
+  repeating-linear-gradient(0deg,transparent,transparent 31px,rgba(240,232,220,.03) 31px,rgba(240,232,220,.03) 32px),
+  repeating-linear-gradient(90deg,transparent,transparent 31px,rgba(240,232,220,.03) 31px,rgba(240,232,220,.03) 32px);
+  overflow:hidden}
+.diagram .cap{position:absolute;top:8px;left:12px;font-family:var(--mono);font-size:.66rem;
+  color:#6f6450;letter-spacing:.12em;text-transform:uppercase}
+svg text{font-family:var(--sans)}
+.t-mono{font-family:var(--mono)}
+
+/* cards / tiers (used sparingly, non-technical slides) */
+.grid{display:grid;gap:1.1rem}
+.card{background:var(--panel);border:1px solid var(--hair);border-radius:14px;padding:1.25rem 1.35rem;position:relative}
+.card h3{font-size:1.18rem;margin-bottom:.45rem;font-weight:700;font-family:var(--serif)}
+.card p{color:var(--mute);font-size:1.02rem;line-height:1.62}
+.tier{display:flex;align-items:center;gap:1.1rem;background:var(--panel);border:1px solid var(--hair);
+  border-left-width:3px;border-radius:12px;padding:.95rem 1.25rem}
+.tier .num{font-family:var(--serif);font-size:1.6rem;width:2rem;text-align:center;flex:none;font-weight:700}
+.tier h3{font-size:1.16rem;margin-bottom:.22rem;font-family:var(--serif)}
+.tier p{color:var(--mute);font-size:1rem;line-height:1.52}
+.glow{position:absolute;border-radius:50%;filter:blur(70px);opacity:.4;z-index:0;pointer-events:none}
+
+/* cover */
 #s0{justify-content:center}
-.cover-wrap{position:relative;z-index:3}
-#s0 h1{font-size:clamp(3.2rem,9vw,7rem)}
-.cn-title{font-size:clamp(1.6rem,3.4vw,2.6rem);color:var(--jade);font-family:var(--serif);margin-top:.4rem;letter-spacing:.08em}
-.cover-tag{margin-top:1.6rem;font-size:clamp(1rem,1.8vw,1.35rem);color:var(--ink)}
-.cover-tag b{color:var(--cinnabar)}
-/* floating particles */
-.particles{position:absolute;inset:0;z-index:1;overflow:hidden}
-.particles span{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--gold);opacity:.0;animation:floatp linear infinite}
-@keyframes floatp{0%{opacity:0;transform:translateY(20px)}10%{opacity:.7}90%{opacity:.5}100%{opacity:0;transform:translateY(-110vh)}}
-/* pipeline */
-.pipe{position:relative;margin-top:1rem}
-.packet{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;
-  background:radial-gradient(circle,#fff,var(--gold));box-shadow:0 0 16px var(--gold);
-  transform:translateY(-50%);left:0}
-.slide.active .packet{animation:travel 3.6s cubic-bezier(.5,0,.5,1) infinite}
-@keyframes travel{0%{left:2%;opacity:0}8%{opacity:1}50%{background:radial-gradient(circle,#fff,var(--cinnabar));box-shadow:0 0 16px var(--cinnabar)}92%{opacity:1}100%{left:96%;opacity:0}}
-.lock{display:inline-block;animation:none}
-.slide.active .lock{animation:lockit 3.6s infinite}
-@keyframes lockit{0%,40%{color:var(--mute);transform:scale(1)}50%{color:var(--cinnabar);transform:scale(1.25)}60%,100%{color:var(--cinnabar);transform:scale(1)}}
-.wnode{transition:.3s}
-.slide.active .wnode{animation:wpulse 3.6s infinite}
-@keyframes wpulse{0%,60%{fill:var(--jade-soft)}72%{fill:var(--jade)}100%{fill:var(--jade-soft)}}
-/* orbit loop */
-.orbit-dot{transform-box:fill-box;transform-origin:center}
-.slide.active #orbitdot{animation:spin 7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-/* flywheel */
-.spin-slow{transform-origin:center}
-.slide.active .spin-slow{animation:spin 26s linear infinite}
-/* tier bars */
-.tier{display:flex;align-items:center;gap:1.1rem;background:var(--panel);border:1px solid var(--hair);border-left-width:4px;border-radius:14px;padding:1rem 1.3rem}
-.tier .num{font-family:var(--serif);font-size:1.7rem;width:2.4rem;text-align:center;flex:none}
-.tier h3{font-size:1.08rem;margin-bottom:.2rem}
-.tier p{color:var(--mute);font-size:.9rem;line-height:1.5}
-/* responsive */
-@media (max-width:820px){.slide{padding:7vh 6vw}.flowrow{font-size:.85rem}}
-/* QA mode: show all stacked */
+#s0 h1{font-size:clamp(3rem,8.5vw,6.6rem)}
+.cn{font-family:var(--serif);color:var(--jade);letter-spacing:.12em}
+.particles{position:absolute;inset:0;z-index:0;overflow:hidden}
+.particles span{position:absolute;width:4px;height:4px;border-radius:50%;opacity:0;animation:fl linear infinite}
+@keyframes fl{0%{opacity:0;transform:translateY(20px)}12%{opacity:.6}90%{opacity:.4}100%{opacity:0;transform:translateY(-105vh)}}
+
+/* goldfish/forget animation (slide 1) */
+.sessbox{border:1px solid var(--hair);border-radius:12px;padding:1.1rem 1.3rem;background:var(--panel);min-width:0}
+.memline{display:flex;align-items:center;gap:.55rem;font-size:1.04rem;margin:.4rem 0;color:var(--ink)}
+.memline .dot{width:7px;height:7px;border-radius:50%;background:var(--jade);flex:none}
+.fade-mem span{opacity:1}
+.slide.active .fade-mem span{animation:forget 3.4s ease-in-out infinite}
+@keyframes forget{0%,30%{opacity:1;filter:none}55%{opacity:.12;filter:blur(2px)}70%,100%{opacity:.06;filter:blur(3px)}}
+.blink{animation:bk 1.1s step-end infinite}
+@keyframes bk{50%{opacity:0}}
+
+/* packet on a path */
+.flowtok{offset-rotate:0deg}
+.slide.active .flowtok{animation:tok 3.4s cubic-bezier(.45,0,.55,1) infinite}
+
+@media (max-width:860px){.slide{padding:7vh 6vw}}
+/* QA stacked mode */
 body.qa{overflow:auto;height:auto}
 body.qa .slide{position:relative;opacity:1;pointer-events:auto;height:100vh;border-bottom:1px solid var(--hair)}
-body.qa .r,body.qa .draw{opacity:1!important;transform:none!important;stroke-dashoffset:0!important;animation:none!important}
+body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!important;stroke-dashoffset:0!important;animation:none!important}
 </style>
 </head>
 <body>
 <div id="bar"></div>
-<div class="brandmark">無盡敘界</div>
+<div class="brand">春雪社</div>
 <div id="deck">
 
-<!-- ============ 0 · COVER ============ -->
+<!-- ===================== 0 · COVER ===================== -->
 <section class="slide" id="s0">
-  <div class="particles" id="parts"></div>
-  <div class="glow" style="width:520px;height:520px;background:var(--cinnabar);top:-10%;right:-5%"></div>
-  <div class="glow" style="width:420px;height:420px;background:var(--jade);bottom:-15%;left:-8%;opacity:.3"></div>
-  <div class="cover-wrap">
-    <div class="eyebrow r" style="--i:0">Sui Overflow · Walrus 賽道</div>
-    <h1 class="r" style="--i:1">Endless&nbsp;Story</h1>
-    <div class="cn-title r" style="--i:2">住在 Walrus 上的梨園</div>
-    <div class="cover-tag r" style="--i:3">角色不是 <b>JPG</b>，是<b>活著的記憶資產</b>。</div>
-    <div class="r" style="--i:4;margin-top:2rem;display:flex;gap:.7rem;flex-wrap:wrap">
-      <span class="tag">🎭 自治 AI 角色</span>
-      <span class="tag">🌊 記憶上鏈 Walrus</span>
-      <span class="tag">🔒 Seal 加密 IP</span>
+  <div class="particles" id="p0"></div>
+  <div class="glow" style="width:520px;height:520px;background:var(--cinnabar);top:-12%;right:-6%"></div>
+  <div class="glow" style="width:400px;height:400px;background:var(--jade);bottom:-16%;left:-8%;opacity:.26"></div>
+  <div style="position:relative;z-index:3">
+    <div class="eyebrow r" style="--i:0">Endless Story &nbsp;·&nbsp; <span class="zh">梨園敘事引擎</span></div>
+    <h1 class="r" style="--i:1">給 AI 角色<br>一份<span class="cn" style="font-size:.92em;color:var(--cinnabar)">不會遺忘</span>的記憶</h1>
+    <div class="r" style="--i:3;margin-top:1.3rem;font-size:clamp(1.05rem,1.9vw,1.4rem);color:var(--mute)">
+      可<b class="j">擁有</b>、可<b class="g">驗證</b>、可<b class="c">變現</b>的記憶層 —— 住在 Walrus 上。
+    </div>
+    <div class="r" style="--i:4;margin-top:1.9rem;display:flex;gap:.6rem;flex-wrap:wrap">
+      <span class="tag">🜂 自治 AI 角色</span>
+      <span class="tag">🌊 MemWal × Walrus</span>
+      <span class="tag">🔒 Seal 門檻加密</span>
     </div>
   </div>
 </section>
 
-<!-- ============ 1 · WHY ============ -->
+<!-- ===================== 1 · PROBLEM (失憶) ===================== -->
 <section class="slide" id="s1">
-  <div class="eyebrow r">Why · 為什麼</div>
-  <h2 class="r" style="--i:1">大多數的 NFT，是一張<b class="c">死掉的圖</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:1.4rem">你買到的是一個靜態檔案——它不會記得任何事，也不會長大。</p>
-  <div class="flowrow r" style="--i:3;margin-top:2.6rem">
-    <div class="node" style="width:240px;border-style:dashed">
-      <div class="t" style="color:var(--mute)">傳統 NFT</div>
-      <div class="d">靜態 JPG · 無記憶 · 不互動</div>
+  <div class="eyebrow r">The Problem &nbsp;·&nbsp; <span class="zh">真正的問題</span></div>
+  <h2 class="r" style="--i:1">今天的 AI 角色，<b class="c">記不住任何事</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:1.8rem">LLM 本質是無狀態的。關掉對話，這個「角色」就死了——它不記得你、不記得自己做過什麼、也不會成長。塞進 context window 的，只是當下的短期記憶。</p>
+  <div class="r" style="--i:3;display:grid;grid-template-columns:1fr auto 1fr;gap:1.6rem;align-items:center;margin-top:.4rem">
+    <div class="sessbox">
+      <div class="mono" style="font-size:.72rem;color:var(--jade);margin-bottom:.6rem">SESSION&nbsp;1</div>
+      <div class="memline fade-mem"><span class="dot"></span><span>「我是雪庵，恨過、也愛過。」</span></div>
+      <div class="memline fade-mem"><span class="dot"></span><span>「我答應過師父守住戲班。」</span></div>
+      <div class="memline fade-mem"><span class="dot"></span><span>「我與沈郎結了梁子。」</span></div>
     </div>
-    <span class="arrow" style="font-size:2rem">→</span>
-    <div class="node" style="width:300px;border-color:var(--cinnabar);background:rgba(224,87,60,.1)">
-      <div class="t" style="color:var(--cinnabar)">活著的角色</div>
-      <div class="d">會感知 · 會決策 · 會記憶 · 會成長</div>
+    <div style="text-align:center;color:var(--mute)">
+      <div style="font-size:1.8rem">⟶</div>
+      <div class="mono" style="font-size:.68rem;margin-top:.3rem">session 結束</div>
+    </div>
+    <div class="sessbox" style="border-style:dashed">
+      <div class="mono" style="font-size:.72rem;color:var(--cinnabar);margin-bottom:.6rem">SESSION&nbsp;2</div>
+      <div class="memline" style="color:var(--mute)"><span class="dot" style="background:var(--hair)"></span><span>「你好，請問我是誰？<span class="blink">▌</span>」</span></div>
+      <div class="memline" style="color:#6f6450;font-size:.82rem;margin-top:.7rem">— 一切從零開始。記憶歸零。</div>
     </div>
   </div>
-  <p class="sub r" style="--i:4;margin-top:2.6rem">
-    我們把一個角色變成<b class="j">自治的 AI agent</b>，它的記憶、章回、衍生作品
-    <b class="g">永久寫進去中心化儲存</b>，由 NFT 持有 IP。
-  </p>
+  <p class="sub r" style="--i:4;margin-top:1.8rem">角色要能「活著」，記憶必須<b class="g">獨立於模型、獨立於平台</b>而存在——而且這份記憶，應該被某個人真正擁有。</p>
 </section>
 
-<!-- ============ 2 · WHAT ============ -->
+<!-- ===================== 2 · INSIGHT ===================== -->
 <section class="slide" id="s2">
-  <div class="eyebrow r">What · 在做什麼</div>
-  <h2 class="r" style="--i:1">一座<b class="c">自己會運轉</b>的故事世界</h2>
-  <p class="sub r" style="--i:2;margin-bottom:2.2rem"><b>春雪社</b>是一個 Saga（故事世界）。放進角色，世界就自己長出劇情——而且每一步都留在鏈上。</p>
-  <div class="grid r" style="--i:3;grid-template-columns:repeat(3,1fr);margin-top:.5rem">
-    <div class="card"><span class="ic">🎭</span><h3>Saga = 活的世界</h3><p>一隻導演 AI 經營一個世界：定目標、開局、推動劇情、產出公報。</p></div>
-    <div class="card"><span class="ic">👤</span><h3>角色 = 自治演員</h3><p>每個角色一隻 AI，自己感知、決策、行動、寫章回、反思、記憶。</p></div>
-    <div class="card"><span class="ic">⛓</span><h3>世界 = 鏈上帳本</h3><p>所有事件、記憶、作品都錨定鏈上，可驗證、可分潤、不被平台綁架。</p></div>
+  <div class="glow" style="width:440px;height:440px;background:var(--gold);top:-18%;right:-8%;opacity:.18"></div>
+  <div class="eyebrow r">The Insight &nbsp;·&nbsp; <span class="zh">我們的切入</span></div>
+  <h2 class="r" style="--i:1">把「記憶」做成一種<b class="g">資產</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:2rem">不是存進某個公司的資料庫，而是寫進去中心化儲存、由密碼學保護、由你持有金鑰。記憶因此有了四個過去 AI 角色沒有的性質：</p>
+  <div class="grid r" style="--i:3;grid-template-columns:repeat(4,1fr)">
+    <div class="card"><h3 style="color:var(--jade)">持久</h3><p>跨 session、跨模型存在。換掉底層 LLM，角色依然記得自己是誰。</p></div>
+    <div class="card"><h3 style="color:var(--gold)">可擁有</h3><p>記憶的解密金鑰綁定鏈上 Cap。持有者＝真正的 IP 擁有者。</p></div>
+    <div class="card"><h3 style="color:var(--cinnabar)">可驗證</h3><p>每段記憶 hash 上鏈錨定，誰、何時、寫了什麼，不可竄改。</p></div>
+    <div class="card"><h3 style="color:var(--ink)">可變現</h3><p>章回訂閱、衍生作品、影像 IP——記憶資產直接接上分潤。</p></div>
   </div>
-</section>
-
-<!-- ============ 3 · ARCHITECTURE OVERVIEW ============ -->
-<section class="slide" id="s3">
-  <div class="eyebrow r">How it runs · 全景</div>
-  <h2 class="r" style="--i:1">導演 × 角色 × <b class="j">鏈上事件匯流排</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:1.4rem">沒有中央伺服器在「跑劇情」。導演發軟事件、角色訂閱回應，全靠鏈上事件溝通。</p>
-  <div class="r" style="--i:3;margin-top:.5rem">
-    <svg viewBox="0 0 1000 360" style="width:100%;max-height:46vh">
-      <defs>
-        <marker id="ah" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#E0573C"/></marker>
-      </defs>
-      <!-- director -->
-      <rect x="40" y="120" width="230" height="120" rx="16" fill="rgba(224,87,60,.12)" stroke="#E0573C" stroke-width="1.5"/>
-      <text x="155" y="165" text-anchor="middle" fill="#F3EBD9" font-size="22" font-weight="700">導演 Director</text>
-      <text x="155" y="192" text-anchor="middle" fill="#A99C84" font-size="13">體驗管理者 · 一個 Saga 一隻</text>
-      <text x="155" y="214" text-anchor="middle" fill="#A99C84" font-size="13">定目標 · 開局 · 公報</text>
-      <!-- bus -->
-      <rect x="400" y="60" width="200" height="240" rx="16" fill="rgba(227,179,65,.1)" stroke="#E3B341" stroke-width="1.5"/>
-      <text x="500" y="150" text-anchor="middle" fill="#E3B341" font-size="20" font-weight="700">鏈上事件</text>
-      <text x="500" y="178" text-anchor="middle" fill="#E3B341" font-size="20" font-weight="700">匯流排</text>
-      <text x="500" y="210" text-anchor="middle" fill="#A99C84" font-size="12">append-only · 神之帳本</text>
-      <!-- characters -->
-      <rect x="730" y="120" width="230" height="120" rx="16" fill="rgba(95,184,155,.12)" stroke="#5FB89B" stroke-width="1.5"/>
-      <text x="845" y="165" text-anchor="middle" fill="#F3EBD9" font-size="22" font-weight="700">角色 Character</text>
-      <text x="845" y="192" text-anchor="middle" fill="#A99C84" font-size="13">自治演員 · 一個角色一隻</text>
-      <text x="845" y="214" text-anchor="middle" fill="#A99C84" font-size="13">感知 · 決策 · 行動 · 反思</text>
-      <!-- arrows -->
-      <path class="draw" style="--i:0" pathLength="1" d="M270,160 L400,130" stroke="#E0573C" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
-      <text x="335" y="128" text-anchor="middle" fill="#A99C84" font-size="12">emit 軟事件</text>
-      <path class="draw" style="--i:1" pathLength="1" d="M600,200 L730,200" stroke="#5FB89B" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
-      <text x="665" y="190" text-anchor="middle" fill="#A99C84" font-size="12">訂閱 · 感知</text>
-      <path class="draw" style="--i:2" pathLength="1" d="M730,225 C620,300 480,300 500,300" stroke="#5FB89B" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
-      <text x="615" y="330" text-anchor="middle" fill="#A99C84" font-size="12">鏈上動作回應（出牌 / 移動 / 寫章回）</text>
-    </svg>
-  </div>
-</section>
-
-<!-- ============ 4 · CORE TECH — MemWal × Walrus × Seal ============ -->
-<section class="slide" id="s4">
-  <div class="glow" style="width:480px;height:480px;background:var(--jade);top:-20%;right:-10%;opacity:.25"></div>
-  <div class="eyebrow r">★ 技術核心 · MemWal × Walrus × Seal</div>
-  <h2 class="r" style="--i:1">角色的記憶，怎麼變成<b class="g">鏈上資產</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:1.2rem">每一段記憶都走同一條管線：加密 → 永久儲存 → 上鏈錨定。可驗證、可分潤、可撤銷。</p>
-
-  <div class="pipe r" style="--i:3;margin-top:1.4rem">
-    <div class="flowrow" style="justify-content:space-between;position:relative;z-index:2">
-      <div class="node" style="width:150px"><div class="t">角色記憶</div><div class="d">章回 · 反思 · 夢</div></div>
-      <div class="node" style="width:160px;border-color:var(--jade)"><div class="t" style="color:var(--jade)">MemWal SDK</div><div class="d">唯一入口</div></div>
-      <div class="node" style="width:150px;border-color:var(--cinnabar)"><div class="t"><span class="lock">🔒</span> Seal</div><div class="d">門檻加密</div></div>
-      <div class="node" style="width:160px;border-color:var(--jade)"><div class="t" style="color:var(--jade)">🌊 Walrus</div><div class="d">永久 blob 儲存</div></div>
-      <div class="node" style="width:160px;border-color:var(--gold)"><div class="t" style="color:var(--gold)">⛓ commitment</div><div class="d">hash 上鏈 Sui</div></div>
-    </div>
-    <!-- moving packet line -->
-    <div style="position:relative;height:30px;margin-top:6px">
-      <div style="position:absolute;top:50%;left:2%;right:2%;height:2px;background:linear-gradient(90deg,var(--jade),var(--cinnabar),var(--gold));opacity:.4;transform:translateY(-50%)"></div>
-      <div class="packet"></div>
-    </div>
-  </div>
-
-  <div class="grid r" style="--i:4;grid-template-columns:repeat(3,1fr);margin-top:1.6rem">
-    <div class="card" style="padding:1.1rem 1.2rem"><h3 style="font-size:1rem">🔒 Seal 控金鑰</h3><p>加解密只在 client 端。金鑰由角色的 <b class="c">ControlCap / OwnerCap</b> 透過 <span class="mono" style="font-size:.82rem">seal_approve</span> 控管。</p></div>
-    <div class="card" style="padding:1.1rem 1.2rem"><h3 style="font-size:1rem">🌊 Walrus 永久</h3><p>blob 寫進去中心化儲存，<b class="j">不依賴單一伺服器</b>，鏈上只放 hash 錨點與憑證。</p></div>
-    <div class="card" style="padding:1.1rem 1.2rem"><h3 style="font-size:1rem">⛓ 可驗證 · 可撤銷</h3><p>撤銷 ControlCap＝<b class="c">斷掉記憶存取</b>。差異化證明＋IP 歸屬都寫在鏈上。</p></div>
-  </div>
-</section>
-
-<!-- ============ 5 · MEMORY ENGINE ============ -->
-<section class="slide" id="s5">
-  <div class="eyebrow r">技術核心 · 記憶引擎</div>
-  <h2 class="r" style="--i:1">不是 KV 資料庫，是<b class="j">會遺忘的語意記憶</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:1.6rem">角色每個回合 recall 一次，三個因子決定「此刻想起什麼」。</p>
-
-  <div class="r" style="--i:3;background:var(--panel);border:1px solid var(--hair);border-radius:16px;padding:1.3rem 1.5rem;text-align:center;margin-bottom:1.5rem">
-    <span style="font-size:clamp(1.1rem,2.4vw,1.7rem);font-family:var(--serif)">召回分數 ＝
-      <b class="c">重要性</b> <span style="color:var(--faint)">×</span>
-      <b class="j">新近性</b> <span style="color:var(--faint)">×</span>
-      <b class="g">相關性</b></span>
-  </div>
-
-  <div class="grid r" style="--i:4;grid-template-columns:repeat(3,1fr)">
-    <div class="card"><h3 style="color:var(--cinnabar)">重要性 importance</h3><p>標籤權重：夢 9 ＞ 關係 8 ＞ 反思 7 ＞ 章回 5 ＞ 觀察 4。</p></div>
-    <div class="card"><h3 style="color:var(--jade)">新近性 recency</h3><p>以「敘事日」衰減（half-life 2 日），時間一推進就變化。</p></div>
-    <div class="card"><h3 style="color:var(--gold)">相關性 relevance</h3><p>MemWal 向量距離，over-fetch 3× 後重排取 top-K。</p></div>
-  </div>
-  <p class="sub r" style="--i:5;margin-top:1.5rem">
-    <b>軟遺忘</b>：睡一覺把零碎觀察壓成 1–2 條高密度反思，瑣事自然沉底——記憶不爆炸、角色不失憶。
+  <p class="sub r" style="--i:4;margin-top:1.9rem;font-size:clamp(1rem,1.7vw,1.3rem);color:var(--ink)">
+    <b class="c">春雪社</b>＝一座讓自治 AI 角色長期生活、且記憶永久上鏈的梨園。
   </p>
 </section>
 
-<!-- ============ 6 · AI HARNESS / RUNNER ============ -->
-<section class="slide" id="s6">
-  <div class="eyebrow r">AI Harness · 我自己開發的 Runner（輔）</div>
-  <h2 class="r" style="--i:1">角色的<b class="c">自治迴圈</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:.6rem">每個 tick，角色自己跑完一圈——全程 chain-first，動作都是鏈上 primitives。</p>
-  <div class="r" style="--i:3;display:flex;gap:3vw;align-items:center;flex-wrap:wrap;margin-top:.2rem">
-    <svg viewBox="0 0 360 360" style="width:min(34vh,320px)">
-      <circle cx="180" cy="180" r="120" fill="none" stroke="var(--hair)" stroke-width="1.5" stroke-dasharray="4 6"/>
-      <g id="orbitdot" class="orbit-dot" style="transform-origin:180px 180px">
-        <circle cx="180" cy="60" r="9" fill="#E3B341" filter="url(#g)"/>
+<!-- ===================== 3 · ARCHITECTURE (engineering layered) ===================== -->
+<section class="slide" id="s3">
+  <div class="eyebrow r">System Architecture &nbsp;·&nbsp; <span class="zh">系統架構 · 依賴單向</span></div>
+  <h2 class="r" style="--i:1">四層 monorepo，<b class="j">每件事只有一個入口</b></h2>
+  <div class="diagram r appear" style="--i:2;margin-top:1rem;height:60vh;min-height:380px">
+    <span class="cap">packages/ · dependency graph (single-direction ↓)</span>
+    <svg viewBox="0 0 1180 560" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="dep" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto"><path d="M0,0 L7.5,3 L0,6 Z" fill="var(--cinnabar)"/></marker>
+        <marker id="ext" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto"><path d="M0,0 L7.5,3 L0,6 Z" fill="var(--jade)"/></marker>
+      </defs>
+      <!-- layer labels -->
+      <g font-family="var(--mono)" font-size="12" fill="#6f6450" text-anchor="end">
+        <text x="150" y="70">APP</text>
+        <text x="150" y="205">DOMAIN ENTRY</text>
+        <text x="150" y="340">FOUNDATION</text>
+        <text x="150" y="470">EXTERNAL</text>
       </g>
-      <defs><filter id="g"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-      <!-- 6 nodes -->
-      <g font-size="13" fill="#F3EBD9" font-weight="700" text-anchor="middle">
-        <text x="180" y="44">① 感知</text>
-        <text x="296" y="130">② 召回</text>
-        <text x="296" y="246">③ 規劃</text>
-        <text x="180" y="330">④ 決策行動</text>
-        <text x="64" y="246">⑤ 產出</text>
-        <text x="64" y="130">⑥ 反思</text>
+      <line x1="170" y1="30" x2="170" y2="530" stroke="var(--hair)" stroke-width="1" stroke-dasharray="2 5"/>
+
+      <!-- APP layer -->
+      <g>
+        <rect x="360" y="40" width="190" height="62" rx="6" fill="rgba(240,232,220,.05)" stroke="var(--ink)" stroke-width="1.4"/>
+        <text x="455" y="70" text-anchor="middle" fill="var(--ink)" font-family="var(--mono)" font-size="19" font-weight="700">web</text>
+        <text x="455" y="90" text-anchor="middle" fill="var(--mute)" font-size="11">玩家 UI · (site)/(admin)</text>
+        <rect x="640" y="40" width="190" height="62" rx="6" fill="rgba(240,232,220,.05)" stroke="var(--ink)" stroke-width="1.4"/>
+        <text x="735" y="70" text-anchor="middle" fill="var(--ink)" font-family="var(--mono)" font-size="19" font-weight="700">runner</text>
+        <text x="735" y="90" text-anchor="middle" fill="var(--mute)" font-size="11">AI Harness · agents</text>
+      </g>
+
+      <!-- DOMAIN ENTRY layer -->
+      <g>
+        <rect x="300" y="170" width="200" height="74" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+        <text x="400" y="200" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="19" font-weight="700">sdk</text>
+        <text x="400" y="222" text-anchor="middle" fill="var(--mute)" font-size="11">鏈上互動唯一入口</text>
+        <text x="400" y="237" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">tx/ · read/ · generated/</text>
+
+        <rect x="540" y="170" width="200" height="74" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+        <text x="640" y="200" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="19" font-weight="700">memwal</text>
+        <text x="640" y="222" text-anchor="middle" fill="var(--mute)" font-size="11">Walrus / Seal 唯一入口</text>
+        <text x="640" y="237" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">blob · SagaMemory · OwnerAudit</text>
+
+        <rect x="780" y="170" width="200" height="74" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+        <text x="880" y="200" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="19" font-weight="700">llm</text>
+        <text x="880" y="222" text-anchor="middle" fill="var(--mute)" font-size="11">文字 / 圖片 AI 唯一入口</text>
+        <text x="880" y="237" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">Poe · OpenAI · prompts</text>
+      </g>
+
+      <!-- FOUNDATION -->
+      <rect x="440" y="305" width="300" height="62" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)" stroke-width="1.6"/>
+      <text x="590" y="335" text-anchor="middle" fill="var(--jade)" font-family="var(--mono)" font-size="18" font-weight="700">shared</text>
+      <text x="590" y="355" text-anchor="middle" fill="var(--mute)" font-size="11">零依賴 · 型別 · contract-ids 單一真相</text>
+
+      <!-- EXTERNAL -->
+      <g>
+        <rect x="300" y="430" width="200" height="64" rx="6" fill="rgba(201,168,92,.08)" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="400" y="458" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700">Sui L1</text>
+        <text x="400" y="478" text-anchor="middle" fill="var(--mute)" font-size="11">Move 合約 · 事件日誌</text>
+        <rect x="540" y="430" width="200" height="64" rx="6" fill="rgba(201,168,92,.08)" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="640" y="458" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700">Walrus</text>
+        <text x="640" y="478" text-anchor="middle" fill="var(--mute)" font-size="11">去中心化 blob 儲存</text>
+        <rect x="780" y="430" width="200" height="64" rx="6" fill="rgba(201,168,92,.08)" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 3"/>
+        <text x="880" y="458" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700">Seal</text>
+        <text x="880" y="478" text-anchor="middle" fill="var(--mute)" font-size="11">門檻加密金鑰伺服器</text>
+      </g>
+
+      <!-- dependency arrows app -> domain -->
+      <path class="draw" style="--i:0" pathLength="1" d="M430,102 L410,170" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
+      <path class="draw" style="--i:1" pathLength="1" d="M470,102 L620,170" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
+      <path class="draw" style="--i:1" pathLength="1" d="M500,102 L850,168" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)" opacity=".8"/>
+      <path class="draw" style="--i:2" pathLength="1" d="M715,102 L660,170" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
+      <path class="draw" style="--i:2" pathLength="1" d="M760,102 L880,168" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
+      <path class="draw" style="--i:2" pathLength="1" d="M700,102 L430,168" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)" opacity=".8"/>
+      <!-- domain -> shared -->
+      <path class="draw" style="--i:3" pathLength="1" d="M430,244 L520,305" stroke="var(--jade)" stroke-width="1.6" fill="none" marker-end="url(#ext)"/>
+      <path class="draw" style="--i:3" pathLength="1" d="M640,244 L620,305" stroke="var(--jade)" stroke-width="1.6" fill="none" marker-end="url(#ext)"/>
+      <path class="draw" style="--i:3" pathLength="1" d="M860,244 L680,305" stroke="var(--jade)" stroke-width="1.6" fill="none" marker-end="url(#ext)"/>
+      <!-- domain -> external -->
+      <path class="draw" style="--i:4" pathLength="1" d="M390,244 L400,430" stroke="var(--gold)" stroke-width="1.6" fill="none" marker-end="url(#ext)" opacity=".85"/>
+      <path class="draw" style="--i:4" pathLength="1" d="M620,244 L640,430" stroke="var(--gold)" stroke-width="1.6" fill="none" marker-end="url(#ext)" opacity=".85"/>
+      <path class="draw" style="--i:4" pathLength="1" d="M660,244 L870,430" stroke="var(--gold)" stroke-width="1.6" fill="none" marker-end="url(#ext)" opacity=".85"/>
+    </svg>
+  </div>
+  <p class="sub r" style="--i:3;margin-top:.7rem;font-size:1.02rem">
+    鐵律：上層不准自己 <span class="mono">new SuiClient()</span>、不准直接打 Walrus/AI API。鏈、儲存、模型三類外部相依，各自封裝在單一邊界後。
+  </p>
+</section>
+
+<!-- ===================== 4 · ★ MEMORY PIPELINE — SEQUENCE DIAGRAM ===================== -->
+<section class="slide" id="s4">
+  <div class="eyebrow r">★ Core · MemWal × Walrus × Seal &nbsp;·&nbsp; <span class="zh">記憶讀寫時序</span></div>
+  <h2 class="r" style="--i:1">一段記憶，怎麼<b class="c">加密上鏈</b>、又怎麼<b class="j">解密召回</b></h2>
+  <div class="diagram r appear" style="--i:2;margin-top:.8rem;height:62vh;min-height:400px">
+    <span class="cap">sequence · write (remember) ─── read (recall)</span>
+    <svg viewBox="0 0 1200 520" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="sync" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--ink)"/></marker>
+        <marker id="ret" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--jade)"/></marker>
+      </defs>
+      <!-- lifeline headers -->
+      <g font-family="var(--mono)" font-weight="700" font-size="14">
+        <g><rect x="40"  y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="125" y="47" text-anchor="middle" fill="var(--ink)">Character</text></g>
+        <g><rect x="290" y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--ink)"/><text x="375" y="47" text-anchor="middle" fill="var(--ink)">MemWal SDK</text></g>
+        <g><rect x="540" y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--seal)"/><text x="625" y="47" text-anchor="middle" fill="var(--ink)">Seal · t-of-n</text></g>
+        <g><rect x="790" y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--gold)"/><text x="875" y="47" text-anchor="middle" fill="var(--ink)">Walrus</text></g>
+        <g><rect x="1015" y="22" width="150" height="40" rx="5" fill="var(--surface)" stroke="var(--jade)"/><text x="1090" y="47" text-anchor="middle" fill="var(--ink)">Sui chain</text></g>
+      </g>
+      <!-- lifelines -->
+      <g stroke="var(--hair)" stroke-width="1" stroke-dasharray="3 5">
+        <line x1="125" y1="62" x2="125" y2="500"/><line x1="375" y1="62" x2="375" y2="500"/>
+        <line x1="625" y1="62" x2="625" y2="500"/><line x1="875" y1="62" x2="875" y2="500"/>
+        <line x1="1090" y1="62" x2="1090" y2="500"/>
+      </g>
+      <!-- WRITE band label -->
+      <rect x="20" y="78" width="120" height="22" rx="11" fill="rgba(217,118,80,.14)"/>
+      <text x="80" y="93" text-anchor="middle" fill="var(--cinnabar)" font-size="11" font-family="var(--mono)" font-weight="700">WRITE 寫入</text>
+
+      <!-- msg 1 -->
+      <g class="appear" style="--i:0">
+        <path d="M125,118 L370,118" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
+        <text x="135" y="111" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">1 remember(text, kind, i)</text>
+      </g>
+      <!-- msg 2 seal encrypt (self loop-ish to Seal) -->
+      <g class="appear" style="--i:1">
+        <path d="M375,150 L620,150" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
+        <text x="385" y="143" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">2 encrypt · seal_approve_control</text>
+        <text x="385" y="166" fill="var(--seal)" font-size="11">ControlCap 授權（client 端加密）</text>
+      </g>
+      <!-- msg 3 putBlob -->
+      <g class="appear" style="--i:2">
+        <path d="M375,202 L870,202" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
+        <text x="385" y="195" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">3 putBlob(ciphertext)</text>
+        <path d="M870,228 L380,228" stroke="var(--jade)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ret)"/>
+        <text x="600" y="244" fill="var(--jade)" font-size="11" font-family="var(--mono)">⟵ blobId</text>
+      </g>
+      <!-- msg 4 commit -->
+      <g class="appear" style="--i:3">
+        <path d="M375,278 L1085,278" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
+        <text x="385" y="271" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">4 commitment::commit(hash, subject, kind)</text>
+      </g>
+      <!-- msg 5 emit -->
+      <g class="appear" style="--i:4">
+        <path d="M1090,304 L130,304" stroke="var(--jade)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ret)"/>
+        <text x="560" y="320" fill="var(--jade)" font-size="11" font-family="var(--mono)">⟵ emit ChapterCommitted（事件廣播）</text>
+      </g>
+
+      <!-- READ band -->
+      <rect x="20" y="338" width="120" height="22" rx="11" fill="rgba(111,162,135,.16)"/>
+      <text x="80" y="353" text-anchor="middle" fill="var(--jade)" font-size="11" font-family="var(--mono)" font-weight="700">READ 召回</text>
+      <!-- msg 6 recall -->
+      <g class="appear" style="--i:5">
+        <path d="M125,382 L370,382" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
+        <text x="135" y="375" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">6 recall(query)  · 向量檢索</text>
+      </g>
+      <!-- msg 7 getBlob -->
+      <g class="appear" style="--i:6">
+        <path d="M375,414 L870,414" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
+        <text x="385" y="407" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">7 getBlob(blobId) ⟶ ciphertext</text>
+      </g>
+      <!-- msg 8 decrypt -->
+      <g class="appear" style="--i:7">
+        <path d="M375,446 L620,446" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
+        <text x="385" y="439" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">8 decrypt · seal_approve_owner</text>
+        <text x="385" y="462" fill="var(--seal)" font-size="11">OwnerCap 授權</text>
+      </g>
+      <!-- msg 9 return topK -->
+      <g class="appear" style="--i:8">
+        <path d="M375,486 L130,486" stroke="var(--jade)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ret)"/>
+        <text x="160" y="480" fill="var(--jade)" font-size="11.5" font-family="var(--mono)">⟵ top-K 明文記憶 → 注入 prompt</text>
       </g>
     </svg>
-    <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:.55rem">
-      <div class="node" style="text-align:left;border-color:var(--jade);padding:.7rem .9rem"><div class="t" style="color:var(--jade)">決策 = 鏈上動作</div><div class="d"><span class="mono">event::submit_action</span>（出牌）· <span class="mono">scene::move_character</span>（移動）</div></div>
-      <div class="node" style="text-align:left;border-color:var(--gold);padding:.7rem .9rem"><div class="t" style="color:var(--gold)">產出 = 簽名上鏈</div><div class="d">寫 POV → hash → Walrus → <span class="mono">commitment::commit</span> → emit</div></div>
-      <div class="node" style="text-align:left;padding:.7rem .9rem"><div class="t">便宜模型決策，貴模型寫章回</div><div class="d">高頻決策省成本，讀者看到的內容才用好模型</div></div>
+  </div>
+  <p class="sub r" style="--i:3;margin-top:.6rem;font-size:1.02rem">
+    關鍵：明文<b class="c">只在 client 端</b>存在。Seal 的解密授權綁定角色的 <span class="mono">ControlCap / OwnerCap</span>——<b class="g">撤銷 Cap＝斷掉記憶存取</b>。
+  </p>
+</section>
+
+<!-- ===================== 5 · RECALL SCORING PIPELINE ===================== -->
+<section class="slide" id="s5">
+  <div class="eyebrow r">Memory Engine &nbsp;·&nbsp; <span class="zh">三因子召回</span></div>
+  <h2 class="r" style="--i:1">不是 KV 查詢，是<b class="j">會遺忘的語意檢索</b></h2>
+  <div class="diagram r appear" style="--i:2;margin-top:.8rem;height:36vh;min-height:230px">
+    <span class="cap">recall pipeline · over-fetch ×3 → score → rerank → top-K</span>
+    <svg viewBox="0 0 1200 300" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs><marker id="pp" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cinnabar)"/></marker></defs>
+      <!-- stages -->
+      <g font-family="var(--mono)">
+        <rect x="30" y="120" width="150" height="60" rx="6" fill="var(--surface)" stroke="var(--ink)"/>
+        <text x="105" y="148" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="700">query</text>
+        <text x="105" y="167" text-anchor="middle" fill="var(--mute)" font-size="10">場景＋上輪意圖</text>
+
+        <rect x="230" y="110" width="200" height="80" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)"/>
+        <text x="330" y="138" text-anchor="middle" fill="var(--jade)" font-size="14" font-weight="700">over-fetch ×3</text>
+        <text x="330" y="158" text-anchor="middle" fill="var(--mute)" font-size="10.5">MemWal 向量候選集</text>
+        <text x="330" y="174" text-anchor="middle" fill="#6f6450" font-size="10">3·K candidates</text>
+
+        <rect x="490" y="96" width="260" height="108" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+        <text x="620" y="124" text-anchor="middle" fill="var(--cinnabar)" font-size="14" font-weight="700">score 重排</text>
+        <text x="620" y="150" text-anchor="middle" fill="var(--ink)" font-size="13">importance × recency</text>
+        <text x="620" y="170" text-anchor="middle" fill="var(--ink)" font-size="13">× relevance</text>
+        <text x="620" y="190" text-anchor="middle" fill="#6f6450" font-size="10">recency = 敘事日衰減 (t½=2d)</text>
+
+        <rect x="810" y="110" width="150" height="80" rx="6" fill="var(--surface)" stroke="var(--ink)"/>
+        <text x="885" y="146" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="700">top-K</text>
+        <text x="885" y="166" text-anchor="middle" fill="var(--mute)" font-size="10.5">取前 K 條</text>
+
+        <rect x="1010" y="120" width="160" height="60" rx="6" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/>
+        <text x="1090" y="148" text-anchor="middle" fill="var(--gold)" font-size="13" font-weight="700">inject prompt</text>
+        <text x="1090" y="167" text-anchor="middle" fill="var(--mute)" font-size="10">注入決策／POV</text>
+      </g>
+      <!-- connectors -->
+      <path class="draw" style="--i:0" pathLength="1" d="M180,150 L228,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
+      <path class="draw" style="--i:1" pathLength="1" d="M430,150 L488,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
+      <path class="draw" style="--i:2" pathLength="1" d="M750,150 L808,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
+      <path class="draw" style="--i:3" pathLength="1" d="M960,150 L1008,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
+      <!-- travelling token -->
+      <circle r="6" fill="var(--gold)">
+        <animateMotion dur="3.4s" repeatCount="indefinite" path="M105,210 L105,250 L1090,250 L1090,210"/>
+      </circle>
+    </svg>
+  </div>
+  <div class="r" style="--i:3;display:grid;grid-template-columns:1.1fr 1fr;gap:1.4rem;margin-top:1.1rem;align-items:center">
+    <div class="diagram" style="height:22vh;min-height:150px">
+      <span class="cap">importance weights · by kind</span>
+      <svg viewBox="0 0 560 200" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+        <!-- bars -->
+        <g font-family="var(--mono)" font-size="12">
+          <!-- dream 9 -->
+          <text x="20" y="42" fill="var(--mute)">dream</text>
+          <rect x="120" y="30" width="0" height="16" rx="3" fill="var(--cinnabar)"><animate attributeName="width" to="396" dur=".9s" begin=".4s" fill="freeze"/></rect>
+          <text x="528" y="42" fill="var(--ink)" text-anchor="end">9</text>
+          <!-- relationship 8 -->
+          <text x="20" y="74" fill="var(--mute)">relationship</text>
+          <rect x="120" y="62" width="0" height="16" rx="3" fill="var(--seal)"><animate attributeName="width" to="352" dur=".9s" begin=".5s" fill="freeze"/></rect>
+          <text x="484" y="74" fill="var(--ink)" text-anchor="end">8</text>
+          <!-- reflection/genesis 7 -->
+          <text x="20" y="106" fill="var(--mute)">reflection</text>
+          <rect x="120" y="94" width="0" height="16" rx="3" fill="var(--gold)"><animate attributeName="width" to="308" dur=".9s" begin=".6s" fill="freeze"/></rect>
+          <text x="440" y="106" fill="var(--ink)" text-anchor="end">7</text>
+          <!-- chapter 5 -->
+          <text x="20" y="138" fill="var(--mute)">chapter</text>
+          <rect x="120" y="126" width="0" height="16" rx="3" fill="var(--jade)"><animate attributeName="width" to="220" dur=".9s" begin=".7s" fill="freeze"/></rect>
+          <text x="352" y="138" fill="var(--ink)" text-anchor="end">5</text>
+          <!-- observation 4 -->
+          <text x="20" y="170" fill="var(--mute)">observation</text>
+          <rect x="120" y="158" width="0" height="16" rx="3" fill="#6f6450"><animate attributeName="width" to="176" dur=".9s" begin=".8s" fill="freeze"/></rect>
+          <text x="308" y="170" fill="var(--ink)" text-anchor="end">4</text>
+        </g>
+      </svg>
+    </div>
+    <p class="sub" style="font-size:1.08rem">
+      <b class="g">軟遺忘</b>（append-only，無刪除）：角色「睡一覺」時，把零碎 <span class="mono">observation</span> 壓縮成 1–2 條高密度 <span class="mono">reflection</span>（i=8、標記 <span class="mono">a=1</span> 不再被壓），靠權重＋衰減讓瑣事自然沉底——
+      <b class="j">記憶不爆炸、角色不失憶</b>。
+    </p>
+  </div>
+</section>
+
+<!-- ===================== 6 · AI HARNESS / RUNNER (state machine) ===================== -->
+<section class="slide" id="s6">
+  <div class="eyebrow r">AI Harness · Runner &nbsp;·&nbsp; <span class="zh">自治迴圈（輔）</span></div>
+  <h2 class="r" style="--i:1">角色每個 tick 的<b class="c">狀態機</b></h2>
+  <div class="r" style="--i:2;display:grid;grid-template-columns:1.05fr .95fr;gap:1.6rem;align-items:center;margin-top:.6rem">
+    <div class="diagram appear" style="--i:0;height:52vh;min-height:340px">
+      <span class="cap">character-agent · perceive→…→reflect (chain-first)</span>
+      <svg viewBox="0 0 460 460" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+        <defs><marker id="sm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cinnabar)"/></marker></defs>
+        <circle cx="230" cy="230" r="150" fill="none" stroke="var(--hair)" stroke-width="1" stroke-dasharray="3 6"/>
+        <!-- orbiting indicator -->
+        <circle r="6" fill="var(--gold)">
+          <animateMotion dur="7s" repeatCount="indefinite" path="M230,80 A150,150 0 1 1 229,80 Z"/>
+        </circle>
+        <!-- 6 state nodes -->
+        <g font-family="var(--mono)" font-size="13" font-weight="700">
+          <g><circle cx="230" cy="80" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="230" y="78" text-anchor="middle" fill="var(--ink)">①感知</text><text x="230" y="92" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">perceive</text></g>
+          <g><circle cx="360" cy="155" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="360" y="153" text-anchor="middle" fill="var(--ink)">②召回</text><text x="360" y="167" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">retrieve</text></g>
+          <g><circle cx="360" cy="305" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="360" y="303" text-anchor="middle" fill="var(--ink)">③規劃</text><text x="360" y="317" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">plan</text></g>
+          <g><circle cx="230" cy="380" r="36" fill="rgba(111,162,135,.14)" stroke="var(--jade)"/><text x="230" y="376" text-anchor="middle" fill="var(--ink)">④決策</text><text x="230" y="392" text-anchor="middle" fill="var(--jade)" font-size="8.5" font-weight="400">act</text></g>
+          <g><circle cx="100" cy="305" r="34" fill="rgba(201,168,92,.12)" stroke="var(--gold)"/><text x="100" y="303" text-anchor="middle" fill="var(--ink)">⑤產出</text><text x="100" y="317" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">produce</text></g>
+          <g><circle cx="100" cy="155" r="34" fill="var(--surface)" stroke="var(--seal)"/><text x="100" y="153" text-anchor="middle" fill="var(--ink)">⑥反思</text><text x="100" y="167" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">reflect</text></g>
+        </g>
+        <!-- directed edges -->
+        <g stroke="var(--cinnabar)" stroke-width="1.6" fill="none" opacity=".75">
+          <path class="draw" style="--i:0" pathLength="1" d="M263,93 A150,150 0 0 1 332,131" marker-end="url(#sm)"/>
+          <path class="draw" style="--i:1" pathLength="1" d="M372,189 A150,150 0 0 1 372,271" marker-end="url(#sm)"/>
+          <path class="draw" style="--i:2" pathLength="1" d="M332,330 A150,150 0 0 1 264,368" marker-end="url(#sm)"/>
+          <path class="draw" style="--i:3" pathLength="1" d="M196,368 A150,150 0 0 1 128,330" marker-end="url(#sm)"/>
+          <path class="draw" style="--i:4" pathLength="1" d="M88,271 A150,150 0 0 1 88,189" marker-end="url(#sm)"/>
+          <path class="draw" style="--i:5" pathLength="1" d="M128,131 A150,150 0 0 1 196,93" marker-end="url(#sm)"/>
+        </g>
+        <text x="230" y="226" text-anchor="middle" fill="#6f6450" font-size="11" font-family="var(--mono)">tick loop</text>
+        <text x="230" y="244" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">↺ 敘事日推進</text>
+      </svg>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.7rem">
+      <div class="card" style="border-left:3px solid var(--jade)">
+        <h3 style="color:var(--jade);font-size:1rem">決策 = 鏈上 primitive</h3>
+        <p><span class="mono">event::submit_action</span>（出牌）<br><span class="mono">scene::move_character</span>（移動）</p>
+      </div>
+      <div class="card" style="border-left:3px solid var(--gold)">
+        <h3 style="color:var(--gold);font-size:1rem">產出 = 簽名上鏈</h3>
+        <p>POV → hash → Walrus → <span class="mono">commitment::commit</span> → emit</p>
+      </div>
+      <div class="card" style="border-left:3px solid var(--cinnabar)">
+        <h3 style="color:var(--cinnabar);font-size:1rem">導演 / 角色分工</h3>
+        <p>導演定目標、發軟事件；角色自己詮釋、回應。靠鏈上事件溝通，不互相寫死。</p>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ============ 7 · WEB3 / ACCESS + IP ============ -->
+<!-- ===================== 7 · OWNERSHIP / ACCESS (cap-based) ===================== -->
 <section class="slide" id="s7">
-  <div class="eyebrow r">Why Web3 · 為什麼要上鏈</div>
+  <div class="eyebrow r">Ownership &nbsp;·&nbsp; <span class="zh">能力金鑰 · 存取控制</span></div>
   <h2 class="r" style="--i:1">公開的世界，<b class="c">私密的靈魂</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:1.6rem">同一套內容，兩種存取；NFT 持有者真正擁有角色的 IP。</p>
-  <div class="grid r" style="--i:3;grid-template-columns:1fr 1fr;gap:1.2rem;margin-bottom:1.5rem">
-    <div class="card" style="border-color:var(--jade)">
-      <h3 style="color:var(--jade)">🌍 公開 · gazette 公報</h3>
-      <p>導演視角的客觀大事記，所有人可讀（/feed），當作世界的門面與流量入口。</p>
+  <div class="r" style="--i:2;display:grid;grid-template-columns:1.15fr .85fr;gap:1.5rem;margin-top:.7rem;align-items:stretch">
+    <div class="diagram appear" style="--i:0;height:44vh;min-height:280px">
+      <span class="cap">cap-based access · seal_approve gating</span>
+      <svg viewBox="0 0 620 400" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+        <defs><marker id="ac" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--ink)"/></marker></defs>
+        <!-- caps -->
+        <rect x="40" y="40" width="180" height="56" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)"/>
+        <text x="130" y="64" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="13" font-weight="700">OwnerCap</text>
+        <text x="130" y="82" text-anchor="middle" fill="var(--mute)" font-size="10">持有者 · 讀私密</text>
+        <rect x="40" y="120" width="180" height="56" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)"/>
+        <text x="130" y="144" text-anchor="middle" fill="var(--jade)" font-family="var(--mono)" font-size="13" font-weight="700">ControlCap</text>
+        <text x="130" y="162" text-anchor="middle" fill="var(--mute)" font-size="10">角色 agent · 寫記憶</text>
+        <!-- seal approve gate -->
+        <rect x="300" y="78" width="150" height="80" rx="6" fill="var(--surface)" stroke="var(--seal)" stroke-width="1.6"/>
+        <text x="375" y="106" text-anchor="middle" fill="var(--seal)" font-family="var(--mono)" font-size="12" font-weight="700">seal_approve</text>
+        <text x="375" y="126" text-anchor="middle" fill="var(--mute)" font-size="10">Move 合約驗證</text>
+        <text x="375" y="142" text-anchor="middle" fill="#6f6450" font-size="9.5" font-family="var(--mono)">on endless_story::character</text>
+        <!-- key servers -->
+        <rect x="500" y="78" width="90" height="80" rx="6" fill="var(--surface)" stroke="var(--gold)"/>
+        <text x="545" y="112" text-anchor="middle" fill="var(--gold)" font-size="12" font-weight="700">Seal</text>
+        <text x="545" y="130" text-anchor="middle" fill="var(--mute)" font-size="9.5">t-of-n key</text>
+        <!-- arrows -->
+        <path d="M220,68 C260,68 270,110 298,110" stroke="var(--ink)" stroke-width="1.6" fill="none" marker-end="url(#ac)"/>
+        <path d="M220,148 C260,148 270,126 298,126" stroke="var(--ink)" stroke-width="1.6" fill="none" marker-end="url(#ac)"/>
+        <path d="M450,118 L498,118" stroke="var(--ink)" stroke-width="1.6" fill="none" marker-end="url(#ac)"/>
+        <!-- revoke -->
+        <path d="M130,176 L130,250" stroke="var(--cinnabar)" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>
+        <text x="138" y="232" fill="var(--cinnabar)" font-size="11" font-family="var(--mono)">撤銷 ControlCap</text>
+        <rect x="40" y="258" width="540" height="46" rx="6" fill="rgba(217,118,80,.08)" stroke="var(--cinnabar)" stroke-dasharray="4 3"/>
+        <text x="310" y="286" text-anchor="middle" fill="var(--ink)" font-size="13">↳ <tspan fill="var(--cinnabar)" font-weight="700">斷掉記憶存取</tspan> —— 差異化證明 · IP 歸屬寫在鏈上</text>
+        <!-- content split -->
+        <text x="40" y="346" fill="var(--mute)" font-size="11.5" font-family="var(--mono)">公開 gazette → /feed（所有人）</text>
+        <text x="40" y="372" fill="var(--mute)" font-size="11.5" font-family="var(--mono)">私密 POV / 反思 / 夢 → owner + 訂閱者</text>
+      </svg>
     </div>
-    <div class="card" style="border-color:var(--cinnabar)">
-      <h3 style="color:var(--cinnabar)">🔒 私密 · POV / 反思 / 夢</h3>
-      <p>owner ＋ 訂閱者才解得開。client 端驗持有者，非讀者只拿得到鏈上錨點，看不到明文。</p>
+    <div style="display:flex;flex-direction:column;justify-content:center;gap:1rem">
+      <p class="sub" style="font-size:1.1rem">同一套內容、兩種存取：世界的客觀公報<b class="j">公開</b>當門面與流量；角色的主觀章回<b class="c">私密</b>，client 端驗持有者才解密。</p>
+      <div class="r" style="display:flex;flex-wrap:wrap;gap:.5rem">
+        <span class="tag" style="border-color:var(--gold);color:var(--gold)">角色 NFT</span>
+        <span class="tag">→ 影像 IP</span>
+        <span class="tag">→ 記憶 IP</span>
+        <span class="tag" style="border-color:var(--jade);color:var(--jade)">→ 章回訂閱分潤</span>
+      </div>
+      <p class="sub" style="font-size:.98rem;color:#8a7f6d">非讀者只拿得到鏈上 anchor（可驗證），拿不到 Walrus 明文——這是真正的「擁有」，不是平台施捨的權限。</p>
     </div>
-  </div>
-  <div class="flowrow r" style="--i:4">
-    <div class="node" style="width:auto;padding:.6rem 1.1rem">角色 NFT</div><span class="arrow">→</span>
-    <div class="node" style="width:auto;padding:.6rem 1.1rem;border-color:var(--gold)"><b class="g">影像 IP</b></div><span class="arrow">→</span>
-    <div class="node" style="width:auto;padding:.6rem 1.1rem;border-color:var(--gold)"><b class="g">記憶 IP</b></div><span class="arrow">→</span>
-    <div class="node" style="width:auto;padding:.6rem 1.1rem;border-color:var(--jade)"><b class="j">章回訂閱分潤</b></div>
   </div>
 </section>
 
-<!-- ============ 8 · BUSINESS MODEL — 3 tiers ============ -->
+<!-- ===================== 8 · BUSINESS MODEL ===================== -->
 <section class="slide" id="s8">
-  <div class="eyebrow r">Business · 商業模型</div>
-  <h2 class="r" style="--i:1">三層用戶，<b class="g">一個飛輪</b></h2>
-  <div style="display:flex;gap:2vw;align-items:center;margin-top:1.2rem;flex-wrap:wrap">
-    <div style="flex:1.4;min-width:340px;display:flex;flex-direction:column;gap:.85rem">
+  <div class="eyebrow r">Business Model &nbsp;·&nbsp; <span class="zh">三層用戶 · 一個飛輪</span></div>
+  <h2 class="r" style="--i:1">記憶資產，怎麼<b class="g">變現</b></h2>
+  <div style="display:flex;gap:2.2vw;align-items:center;margin-top:1rem;flex-wrap:wrap">
+    <div style="flex:1.5;min-width:360px;display:flex;flex-direction:column;gap:.85rem">
       <div class="tier r" style="--i:2;border-left-color:var(--cinnabar)">
         <div class="num" style="color:var(--cinnabar)">1</div>
         <div><h3>創作者 · 經營 Saga</h3><p>用 AI 量產文章、影片等 IP，鋪到傳統通路變現；再賺角色<b class="c">抽卡分潤</b>。</p></div>
@@ -334,50 +574,59 @@ body.qa .r,body.qa .draw{opacity:1!important;transform:none!important;stroke-das
         <div><h3>Web2 消費者 · 讀者觀眾</h3><p>網文／短視頻受眾：訂閱春雪社，或在<b class="j">既有平台</b>消費 Saga 產出，流量反哺回來。</p></div>
       </div>
     </div>
-    <div class="r" style="--i:5;flex:1;min-width:260px;display:flex;justify-content:center">
-      <svg viewBox="0 0 280 280" style="width:min(38vh,300px)">
-        <defs><marker id="fw" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#E3B341"/></marker></defs>
-        <circle cx="140" cy="140" r="78" fill="rgba(227,179,65,.07)" stroke="var(--hair)"/>
-        <g class="spin-slow" style="transform-origin:140px 140px">
-          <path d="M140,40 A100,100 0 0 1 226,190" fill="none" stroke="#E3B341" stroke-width="2.5" marker-end="url(#fw)" opacity=".8"/>
-          <path d="M226,190 A100,100 0 0 1 54,190" fill="none" stroke="#E3B341" stroke-width="2.5" marker-end="url(#fw)" opacity=".8"/>
-          <path d="M54,190 A100,100 0 0 1 140,40" fill="none" stroke="#E3B341" stroke-width="2.5" marker-end="url(#fw)" opacity=".8"/>
+    <div class="r" style="--i:5;flex:1;min-width:300px;display:flex;justify-content:center">
+      <svg viewBox="0 0 340 340" style="width:min(46vh,370px)">
+        <defs>
+          <marker id="fw" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--gold)"/></marker>
+          <filter id="fwg"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <!-- faint base -->
+        <circle cx="170" cy="170" r="120" fill="rgba(201,168,92,.05)"/>
+        <!-- rotating dashed ring : smooth spin, no spinning arrowheads -->
+        <circle cx="170" cy="170" r="120" fill="none" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="4 12" opacity=".5" style="transform-origin:170px 170px">
+          <animateTransform attributeName="transform" type="rotate" from="0 170 170" to="360 170 170" dur="22s" repeatCount="indefinite"/>
+        </circle>
+        <!-- static directional arrows between nodes (clockwise) -->
+        <g fill="none" stroke="var(--gold)" stroke-width="2.4" opacity=".85">
+          <path d="M203.08,54.65 A120,120 0 0 1 286.44,199.03" marker-end="url(#fw)"/>
+          <path d="M253.36,256.31 A120,120 0 0 1 86.64,256.31" marker-end="url(#fw)"/>
+          <path d="M53.56,199.03 A120,120 0 0 1 136.92,54.65" marker-end="url(#fw)"/>
         </g>
-        <text x="140" y="134" text-anchor="middle" fill="#F3EBD9" font-size="16" font-weight="700" font-family="var(--serif)">內容飛輪</text>
-        <text x="140" y="158" text-anchor="middle" fill="#A99C84" font-size="11">產出 → 流量 → 收入 → 再產出</text>
+        <!-- travelling comet -->
+        <circle r="5" fill="var(--gold)" filter="url(#fwg)">
+          <animateMotion dur="6s" repeatCount="indefinite" path="M170,50 A120,120 0 1 1 169.9,50"/>
+        </circle>
+        <!-- nodes -->
+        <g text-anchor="middle">
+          <g><circle cx="170" cy="50" r="32" fill="var(--surface)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+            <text x="170" y="47" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">產出</text>
+            <text x="170" y="65" fill="var(--mute)" font-size="10.5">內容 IP</text></g>
+          <g><circle cx="273.9" cy="230" r="32" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.6"/>
+            <text x="273.9" y="227" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">流量</text>
+            <text x="273.9" y="245" fill="var(--mute)" font-size="10.5">觸及讀者</text></g>
+          <g><circle cx="66.1" cy="230" r="32" fill="var(--surface)" stroke="var(--gold)" stroke-width="1.6"/>
+            <text x="66.1" y="227" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">變現</text>
+            <text x="66.1" y="245" fill="var(--mute)" font-size="10.5">訂閱·分潤</text></g>
+        </g>
+        <!-- center label -->
+        <text x="170" y="165" text-anchor="middle" fill="var(--gold)" font-size="18" font-weight="700" font-family="var(--serif)">內容飛輪</text>
+        <text x="170" y="187" text-anchor="middle" fill="var(--mute)" font-size="11.5">越轉越大</text>
       </svg>
     </div>
   </div>
 </section>
 
-<!-- ============ 9 · STATUS / VISION ============ -->
-<section class="slide" id="s9">
-  <div class="glow" style="width:460px;height:460px;background:var(--cinnabar);bottom:-25%;left:-10%;opacity:.22"></div>
-  <div class="eyebrow r">Status · 現況與願景</div>
-  <h2 class="r" style="--i:1">地基已成，朝 <b class="j">全自治</b> 推進</h2>
-  <div class="grid r" style="--i:2;grid-template-columns:1fr 1fr;gap:1.2rem;margin-top:1rem">
-    <div class="card" style="border-color:var(--jade)">
-      <h3 style="color:var(--jade)">✓ 已跑通</h3>
-      <p style="line-height:1.9">合約 47 unit tests 綠燈 · SDK／LLM／MemWal blob<br>三因子召回 · 反思壓縮 · 關係上鏈<br>抽卡 wizard 全流程（HKDF 確定性生成）</p>
-    </div>
-    <div class="card" style="border-color:var(--cinnabar)">
-      <h3 style="color:var(--cinnabar)">→ 進行中</h3>
-      <p style="line-height:1.9">tick loop 自治驅動 · 導演自動收尾<br>角色長期規劃上鏈<br>動態 NFT：肖像隨故事生長、每張可驗</p>
-    </div>
-  </div>
-  <p class="sub r" style="--i:3;margin-top:1.8rem;font-size:clamp(1.05rem,2vw,1.4rem);color:var(--ink)">
-    讓<b class="c">生成式 AI 角色</b> × <b class="g">可驗證鏈上資產</b>，組成一個能持續生長、權責清楚、可分潤的<b class="j">內容引擎</b>。
-  </p>
-</section>
-
-<!-- ============ 10 · CLOSE ============ -->
-<section class="slide" id="s10" style="justify-content:center;text-align:center">
-  <div class="particles" id="parts2"></div>
-  <div class="glow" style="width:520px;height:520px;background:var(--gold);top:50%;left:50%;transform:translate(-50%,-50%);opacity:.16"></div>
+<!-- ===================== 9 · CLOSE ===================== -->
+<section class="slide" id="s9" style="justify-content:center;text-align:center">
+  <div class="particles" id="p9"></div>
+  <div class="glow" style="width:520px;height:520px;background:var(--gold);top:50%;left:50%;transform:translate(-50%,-50%);opacity:.14"></div>
   <div style="position:relative;z-index:3">
-    <h1 class="r" style="font-size:clamp(2.4rem,6vw,4.4rem)">無盡敘界</h1>
-    <div class="cn-title r" style="--i:1;color:var(--gold);margin-top:.6rem">記憶，住在 Walrus 上</div>
-    <p class="sub r" style="--i:2;margin:1.6rem auto 0">角色不是 JPG，是活著的記憶資產。<br>謝謝聆聽 — 歡迎來春雪社走走。</p>
+    <div class="eyebrow r" style="justify-content:center">Endless Story · 春雪社</div>
+    <h1 class="r" style="--i:1;font-size:clamp(2.2rem,5.6vw,4rem)">記憶，住在 Walrus 上</h1>
+    <p class="sub r" style="--i:2;margin:1.4rem auto 0;text-align:center">
+      讓 AI 角色第一次<b class="c">真正記得自己是誰</b>——<br>而這份記憶，可被擁有、可被驗證、可被變現。
+    </p>
+    <div class="r" style="--i:3;margin-top:1.8rem;color:#6f6450;font-family:var(--mono);font-size:.84rem">謝謝聆聽 · 歡迎來春雪社走走</div>
   </div>
 </section>
 
@@ -385,46 +634,35 @@ body.qa .r,body.qa .draw{opacity:1!important;transform:none!important;stroke-das
 
 <div id="dots"></div>
 <div id="pg"></div>
-<div id="hint" class="kbd">← → 翻頁 · 空白鍵下一頁</div>
-<div class="seal">敘</div>
+<div id="hint">← →  /  空白鍵翻頁 &nbsp;·&nbsp; 加 #all 看全部</div>
+<div class="stamp">敘</div>
 
 <script>
 (function(){
   var slides=[].slice.call(document.querySelectorAll('.slide'));
-  var dots=document.getElementById('dots');
-  var bar=document.getElementById('bar');
-  var pg=document.getElementById('pg');
+  var dots=document.getElementById('dots'), bar=document.getElementById('bar'), pg=document.getElementById('pg');
   var i=0;
   slides.forEach(function(_,n){var d=document.createElement('i');d.onclick=function(){go(n)};dots.appendChild(d);});
-  var dotEls=[].slice.call(dots.children);
+  var de=[].slice.call(dots.children);
   function render(){
-    slides.forEach(function(s,n){
-      if(n===i){ s.classList.remove('active'); void s.offsetWidth; s.classList.add('active'); }
-      else s.classList.remove('active');
-    });
-    dotEls.forEach(function(d,n){d.classList.toggle('on',n===i)});
-    bar.style.width=((i)/(slides.length-1)*100)+'%';
-    pg.textContent=(i+1)+' / '+slides.length;
+    slides.forEach(function(s,n){ if(n===i){s.classList.remove('active');void s.offsetWidth;s.classList.add('active');} else s.classList.remove('active'); });
+    de.forEach(function(d,n){d.classList.toggle('on',n===i)});
+    bar.style.width=(i/(slides.length-1)*100)+'%';
+    pg.textContent=String(i+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
   }
-  function go(n){ i=Math.max(0,Math.min(slides.length-1,n)); render(); }
+  function go(n){i=Math.max(0,Math.min(slides.length-1,n));render();}
   function next(){go(i+1)} function prev(){go(i-1)}
   document.addEventListener('keydown',function(e){
     if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();next();}
     else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();prev();}
     else if(e.key==='Home')go(0); else if(e.key==='End')go(slides.length-1);
   });
-  document.addEventListener('click',function(e){
-    if(e.target.closest('#dots')) return;
-    if(e.clientX > window.innerWidth*0.62) next();
-    else if(e.clientX < window.innerWidth*0.38) prev();
-  });
-  // touch
-  var sx=0; document.addEventListener('touchstart',function(e){sx=e.touches[0].clientX});
-  document.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-sx; if(Math.abs(dx)>50){dx<0?next():prev();}});
-  // particles
-  function seed(id,n){var p=document.getElementById(id);if(!p)return;for(var k=0;k<n;k++){var s=document.createElement('span');var dur=6+Math.random()*10;s.style.left=(Math.random()*100)+'%';s.style.bottom=(-10-Math.random()*20)+'%';s.style.animationDuration=dur+'s';s.style.animationDelay=(-Math.random()*dur)+'s';s.style.background=Math.random()>.5?'var(--gold)':'var(--cinnabar)';s.style.width=s.style.height=(3+Math.random()*4)+'px';p.appendChild(s);}}
-  seed('parts',26); seed('parts2',30);
-  // QA mode
+  document.addEventListener('click',function(e){ if(e.target.closest('#dots'))return;
+    if(e.clientX>innerWidth*0.6)next(); else if(e.clientX<innerWidth*0.4)prev(); });
+  var sx=0;document.addEventListener('touchstart',function(e){sx=e.touches[0].clientX});
+  document.addEventListener('touchend',function(e){var dx=e.changedTouches[0].clientX-sx;if(Math.abs(dx)>50){dx<0?next():prev();}});
+  function seed(id,n){var p=document.getElementById(id);if(!p)return;for(var k=0;k<n;k++){var s=document.createElement('span');var d=7+Math.random()*11;s.style.left=(Math.random()*100)+'%';s.style.bottom=(-8-Math.random()*16)+'%';s.style.animationDuration=d+'s';s.style.animationDelay=(-Math.random()*d)+'s';s.style.background=Math.random()>.5?'var(--gold)':'var(--cinnabar)';s.style.width=s.style.height=(3+Math.random()*3)+'px';p.appendChild(s);}}
+  seed('p0',24); seed('p9',28);
   if(location.hash==='#all'){document.body.classList.add('qa');slides.forEach(function(s){s.classList.add('active')});return;}
   render();
 })();
