@@ -16,6 +16,11 @@ import type {
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 import { BlobImage } from '@/components/common/BlobImage';
 import { shortChapterTitle } from '@/lib/format';
+import {
+  getSceneDetail,
+  type SceneDetailSnapshot,
+  type SceneEventSummary,
+} from '@/lib/actions/scene-detail';
 
 /**
  * 戲樓畫板 — 兩種模式 inline 切換：
@@ -101,6 +106,29 @@ export function SagaTroupeCanvas({
     setPovId(null);
   }, [focusedSceneId]);
 
+  // Fetch this scene's on-chain events (the「過往」+ ghost lines) when
+  // focused. The chain Scene has no UI event history, so without this the
+  // focused view is always empty even after events ran here.
+  const [sceneDetail, setSceneDetail] = useState<SceneDetailSnapshot | null>(null);
+  useEffect(() => {
+    if (!focusedSceneId || !/^0x[0-9a-fA-F]{64}$/.test(focusedSceneId)) {
+      setSceneDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setSceneDetail(null);
+    getSceneDetail(focusedSceneId)
+      .then((d) => {
+        if (!cancelled) setSceneDetail(d);
+      })
+      .catch(() => {
+        if (!cancelled) setSceneDetail(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedSceneId]);
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-canvas">
       {/* Background Canvas (Full Screen) */}
@@ -157,7 +185,7 @@ export function SagaTroupeCanvas({
                   </div>
                 ) : (
                   <div className="min-w-0 rounded-2xl border border-hairline/50 bg-surface/75 px-3 py-2 text-2xs tracking-widest text-mute backdrop-blur-md dark:bg-elevated/55">
-                    {focusedScene.pastEvents?.length ?? 0} 段已發生 · 持續累積
+                    {sceneDetail?.events.length ?? focusedScene.pastEvents?.length ?? 0} 段已發生 · 持續累積
                   </div>
                 )}
               </div>
@@ -168,6 +196,7 @@ export function SagaTroupeCanvas({
                   charactersById={charactersById}
                   povId={povId}
                   onPovChange={setPovId}
+                  liveQuotes={sceneDetail?.ghostQuotes ?? []}
                 />
                 
                 {/* Scroll hint for the next screen */}
@@ -182,7 +211,11 @@ export function SagaTroupeCanvas({
 
             {/* Screen 2: Details */}
             <div className="flex min-h-full flex-col snap-start snap-always px-4 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] pt-12 sm:px-10 sm:pb-12">
-              <FocusedSceneDetails scene={focusedScene} chaptersById={chaptersById} />
+              <FocusedSceneDetails
+                scene={focusedScene}
+                chaptersById={chaptersById}
+                events={sceneDetail?.events ?? []}
+              />
             </div>
           </div>
         ) : (
@@ -357,15 +390,19 @@ function SceneGhostQuotes({
   charactersById,
   povId,
   onPovChange,
+  liveQuotes = [],
 }: {
   scene: Scene;
   charactersById: Map<string, Character>;
   povId: string | null;
   onPovChange: (id: string | null) => void;
+  /** Live chain-derived lines (first-person line + card plays) — N3/§ live. */
+  liveQuotes?: SceneGhostQuote[];
 }) {
   const [ghostIndex, setGhostIndex] = useState(0);
 
-  const ghostQuotes = scene.ghostQuotes ?? [];
+  // Prefer live chain lines; fall back to the scene's static quotes.
+  const ghostQuotes = liveQuotes.length > 0 ? liveQuotes : scene.ghostQuotes ?? [];
   const filteredGhosts: SceneGhostQuote[] = useMemo(() => {
     if (!povId) return ghostQuotes;
     return ghostQuotes.filter((g) => g.characterId === povId);
@@ -513,9 +550,12 @@ function PovChip({
 function FocusedSceneDetails({
   scene,
   chaptersById,
+  events = [],
 }: {
   scene: Scene;
   chaptersById: Map<string, Chapter>;
+  /** On-chain BudgetEvents that happened in this scene (newest-first). */
+  events?: SceneEventSummary[];
 }) {
   const pastEvents = scene.pastEvents ?? [];
   return (
@@ -554,8 +594,14 @@ function FocusedSceneDetails({
           <div className="h-px w-6 bg-cinnabar/40" />
           <h3 className="font-serif text-lg tracking-wide text-ink">過往</h3>
         </div>
-        <p className="mt-3 text-xs text-mute">在此處發生過的章回。</p>
-        {pastEvents.length === 0 ? (
+        <p className="mt-3 text-xs text-mute">在此處發生過的事件。</p>
+        {events.length > 0 ? (
+          <ol className="mt-6 space-y-4">
+            {events.map((ev) => (
+              <SceneEventRow key={ev.eventId} event={ev} />
+            ))}
+          </ol>
+        ) : pastEvents.length === 0 ? (
           <p className="mt-6 text-sm italic text-mute">尚無事件紀錄。</p>
         ) : (
           <ol className="mt-6 space-y-4">
@@ -587,6 +633,33 @@ function FocusedSceneDetails({
         )}
       </section>
     </div>
+  );
+}
+
+function SceneEventRow({ event }: { event: SceneEventSummary }) {
+  return (
+    <li className="border-l-2 border-hairline/60 pl-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-serif text-sm text-ink">《{event.title}》</span>
+        <span
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-2xs tracking-widest ${
+            event.status === 'open'
+              ? 'bg-cinnabar/15 text-cinnabar'
+              : 'bg-jade/15 text-jade'
+          }`}
+        >
+          {event.status === 'open' ? `進行中 ${event.actedCount}/${event.total}` : '已收尾'}
+        </span>
+      </div>
+      {event.summary ? (
+        <p className="mt-1 text-xs leading-relaxed text-mute">{event.summary}</p>
+      ) : null}
+      {event.plays.length > 0 ? (
+        <p className="mt-1.5 text-2xs tracking-widest text-mute/80">
+          {event.plays.map((p) => p.label).join(' · ')}
+        </p>
+      ) : null}
+    </li>
   );
 }
 

@@ -3,17 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Endless Story · 春雪社 — 為 AI 角色打造永久記憶</title>
+<title>Endless Story · 春雪社 — 一座活著的 AI 社會</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  /* === exact tokens from packages/web/src/app/globals.css · dark 夜戲/墨色 === */
+  /* exact dark tokens from packages/web/src/app/globals.css (.dark) */
   --canvas:#16120E; --surface:#1F1A15; --elevated:#2A231C;
   --ink:#F0E8DC; --mute:#A89A8A; --hair:#3A3026;
   --cinnabar:#D97650; --jade:#6FA287; --seal:#E08A5F; --gold:#C9A85C;
-  --hair-soft:rgba(240,232,220,.10);
   --panel:rgba(240,232,220,.035);
   --serif:"Noto Serif TC","Songti TC",serif;
   --sans:"Noto Sans TC","PingFang TC",system-ui,sans-serif;
@@ -22,106 +21,93 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{
-  background:
-    radial-gradient(130% 100% at 82% -10%, #241a12 0%, var(--canvas) 52%, #0f0b07 100%);
+  background:radial-gradient(130% 100% at 82% -10%, #241a12 0%, var(--canvas) 52%, #0f0b07 100%);
   color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased;
 }
-/* faint paper grain */
 body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
   background-image:radial-gradient(rgba(240,232,220,.018) 1px,transparent 1px);background-size:3px 3px}
 
-/* ---------------- deck ---------------- */
 #deck{position:fixed;inset:0;z-index:1}
 .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
-  padding:6.4vh 6.4vw;opacity:0;pointer-events:none;transition:opacity .45s ease;z-index:1}
+  padding:6vh 6.2vw;opacity:0;pointer-events:none;transition:opacity .45s ease;z-index:1}
 .slide.active{opacity:1;pointer-events:auto;z-index:2}
 .r{opacity:0;transform:translateY(20px)}
 .slide.active .r{animation:rise .66s cubic-bezier(.2,.75,.2,1) both;animation-delay:calc(var(--i,0)*.085s)}
 @keyframes rise{to{opacity:1;transform:none}}
 .draw{stroke-dasharray:1;stroke-dashoffset:1}
-.slide.active .draw{animation:draw 1s ease forwards;animation-delay:calc(.3s + var(--i,0)*.16s)}
+.slide.active .draw{animation:draw 1s ease forwards;animation-delay:calc(.3s + var(--i,0)*.15s)}
 @keyframes draw{to{stroke-dashoffset:0}}
 .appear{opacity:0}
-.slide.active .appear{animation:ap .5s ease forwards;animation-delay:calc(.4s + var(--i,0)*.16s)}
+.slide.active .appear{animation:ap .5s ease forwards;animation-delay:calc(.4s + var(--i,0)*.15s)}
 @keyframes ap{to{opacity:1}}
 
-/* ---------------- typography ---------------- */
-.eyebrow{font-size:.72rem;letter-spacing:.34em;color:var(--cinnabar);font-weight:700;
+.eyebrow{font-size:.78rem;letter-spacing:.32em;color:var(--cinnabar);font-weight:700;
   text-transform:uppercase;margin-bottom:1rem;font-family:var(--sans)}
-.eyebrow .zh{color:var(--mute);letter-spacing:.18em}
-h1{font-family:var(--serif);font-weight:900;line-height:1.02;letter-spacing:.02em}
-h2{font-family:var(--serif);font-size:clamp(1.8rem,3.7vw,2.9rem);font-weight:700;line-height:1.12}
-.sub{color:var(--mute);font-size:clamp(1.08rem,1.6vw,1.34rem);line-height:1.68;max-width:62ch}
+.eyebrow .zh{color:var(--mute);letter-spacing:.16em}
+h1{font-family:var(--serif);font-weight:900;line-height:1.04;letter-spacing:.02em}
+h2{font-family:var(--serif);font-size:clamp(2rem,4vw,3.1rem);font-weight:700;line-height:1.12}
+.sub{color:var(--mute);font-size:clamp(1.12rem,1.65vw,1.4rem);line-height:1.7;max-width:64ch}
 b.c{color:var(--cinnabar);font-weight:700}
 b.j{color:var(--jade);font-weight:700}
 b.g{color:var(--gold);font-weight:700}
 .mono{font-family:var(--mono);font-size:.86em;letter-spacing:-.01em}
-.tag{display:inline-flex;align-items:center;gap:.5em;font-size:.9rem;color:var(--mute);
-  border:1px solid var(--hair);padding:.42em 1em;border-radius:999px;background:var(--panel)}
+.tag{display:inline-flex;align-items:center;gap:.5em;font-size:.95rem;color:var(--mute);
+  border:1px solid var(--hair);padding:.45em 1.05em;border-radius:999px;background:var(--panel)}
 
-/* ---------------- chrome ---------------- */
 #bar{position:fixed;top:0;left:0;height:2px;z-index:60;
   background:linear-gradient(90deg,var(--cinnabar),var(--gold));transition:width .4s ease;
   box-shadow:0 0 12px rgba(217,118,80,.55)}
 #dots{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:60}
 #dots i{width:6px;height:6px;border-radius:99px;background:var(--hair);transition:.3s;cursor:pointer}
 #dots i.on{background:var(--cinnabar);width:20px}
-#pg{position:fixed;bottom:16px;right:24px;color:#6f6450;font-size:.74rem;z-index:60;
-  letter-spacing:.12em;font-family:var(--mono)}
-#hint{position:fixed;bottom:16px;left:24px;color:#6f6450;font-size:.72rem;z-index:60;font-family:var(--mono)}
-.brand{position:fixed;top:18px;right:26px;z-index:60;font-family:var(--serif);font-size:.92rem;
-  color:#7a6e58;letter-spacing:.28em}
+#pg{position:fixed;bottom:16px;right:24px;color:#6f6450;font-size:.78rem;z-index:60;letter-spacing:.12em;font-family:var(--mono)}
+#hint{position:fixed;bottom:16px;left:24px;color:#6f6450;font-size:.76rem;z-index:60;font-family:var(--mono)}
+.brand{position:fixed;top:18px;right:26px;z-index:60;font-family:var(--serif);font-size:.96rem;color:#7a6e58;letter-spacing:.28em}
 .stamp{position:fixed;bottom:40px;right:30px;width:54px;height:54px;border:1.5px solid var(--seal);
   border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);
-  color:var(--seal);font-size:1.35rem;opacity:.42;z-index:55;transform:rotate(-5deg);font-weight:700}
+  color:var(--seal);font-size:1.4rem;opacity:.42;z-index:55;transform:rotate(-5deg);font-weight:700}
 
-/* ---------------- engineering diagram primitives ---------------- */
+/* engineering diagram canvas */
 .diagram{position:relative;border:1px solid var(--hair);border-radius:10px;background:
   linear-gradient(0deg,rgba(20,15,10,.4),rgba(20,15,10,.4)),
   repeating-linear-gradient(0deg,transparent,transparent 31px,rgba(240,232,220,.03) 31px,rgba(240,232,220,.03) 32px),
   repeating-linear-gradient(90deg,transparent,transparent 31px,rgba(240,232,220,.03) 31px,rgba(240,232,220,.03) 32px);
   overflow:hidden}
-.diagram .cap{position:absolute;top:8px;left:12px;font-family:var(--mono);font-size:.66rem;
-  color:#6f6450;letter-spacing:.12em;text-transform:uppercase}
+.diagram .cap{position:absolute;top:8px;left:12px;font-family:var(--mono);font-size:.68rem;color:#6f6450;letter-spacing:.12em;text-transform:uppercase}
 svg text{font-family:var(--sans)}
-.t-mono{font-family:var(--mono)}
 
-/* cards / tiers (used sparingly, non-technical slides) */
 .grid{display:grid;gap:1.1rem}
-.card{background:var(--panel);border:1px solid var(--hair);border-radius:14px;padding:1.25rem 1.35rem;position:relative}
-.card h3{font-size:1.18rem;margin-bottom:.45rem;font-weight:700;font-family:var(--serif)}
-.card p{color:var(--mute);font-size:1.02rem;line-height:1.62}
+.card{background:var(--panel);border:1px solid var(--hair);border-radius:14px;padding:1.3rem 1.4rem;position:relative}
+.card h3{font-size:1.22rem;margin-bottom:.45rem;font-weight:700;font-family:var(--serif)}
+.card p{color:var(--mute);font-size:1.04rem;line-height:1.6}
 .tier{display:flex;align-items:center;gap:1.1rem;background:var(--panel);border:1px solid var(--hair);
-  border-left-width:3px;border-radius:12px;padding:.95rem 1.25rem}
-.tier .num{font-family:var(--serif);font-size:1.6rem;width:2rem;text-align:center;flex:none;font-weight:700}
-.tier h3{font-size:1.16rem;margin-bottom:.22rem;font-family:var(--serif)}
-.tier p{color:var(--mute);font-size:1rem;line-height:1.52}
+  border-left-width:3px;border-radius:12px;padding:1rem 1.3rem}
+.tier .num{font-family:var(--serif);font-size:1.7rem;width:2.1rem;text-align:center;flex:none;font-weight:700}
+.tier h3{font-size:1.2rem;margin-bottom:.22rem;font-family:var(--serif)}
+.tier p{color:var(--mute);font-size:1.04rem;line-height:1.52}
 .glow{position:absolute;border-radius:50%;filter:blur(70px);opacity:.4;z-index:0;pointer-events:none}
 
-/* cover */
 #s0{justify-content:center}
-#s0 h1{font-size:clamp(3rem,8.5vw,6.6rem)}
-.cn{font-family:var(--serif);color:var(--jade);letter-spacing:.12em}
+#s0 h1{font-size:clamp(3rem,8vw,6.4rem)}
+.cn{font-family:var(--serif);letter-spacing:.12em}
 .particles{position:absolute;inset:0;z-index:0;overflow:hidden}
 .particles span{position:absolute;width:4px;height:4px;border-radius:50%;opacity:0;animation:fl linear infinite}
 @keyframes fl{0%{opacity:0;transform:translateY(20px)}12%{opacity:.6}90%{opacity:.4}100%{opacity:0;transform:translateY(-105vh)}}
 
-/* goldfish/forget animation (slide 1) */
+/* slide-1 forget animation */
 .sessbox{border:1px solid var(--hair);border-radius:12px;padding:1.1rem 1.3rem;background:var(--panel);min-width:0}
-.memline{display:flex;align-items:center;gap:.55rem;font-size:1.04rem;margin:.4rem 0;color:var(--ink)}
+.memline{display:flex;align-items:center;gap:.55rem;font-size:1.08rem;margin:.42rem 0;color:var(--ink)}
 .memline .dot{width:7px;height:7px;border-radius:50%;background:var(--jade);flex:none}
-.fade-mem span{opacity:1}
 .slide.active .fade-mem span{animation:forget 3.4s ease-in-out infinite}
 @keyframes forget{0%,30%{opacity:1;filter:none}55%{opacity:.12;filter:blur(2px)}70%,100%{opacity:.06;filter:blur(3px)}}
 .blink{animation:bk 1.1s step-end infinite}
 @keyframes bk{50%{opacity:0}}
 
-/* packet on a path */
-.flowtok{offset-rotate:0deg}
-.slide.active .flowtok{animation:tok 3.4s cubic-bezier(.45,0,.55,1) infinite}
+/* pulsing relationship edges */
+.slide.active .edge-pulse{animation:epulse 2.6s ease-in-out infinite}
+@keyframes epulse{0%,100%{opacity:.4}50%{opacity:1}}
 
 @media (max-width:860px){.slide{padding:7vh 6vw}}
-/* QA stacked mode */
 body.qa{overflow:auto;height:auto}
 body.qa .slide{position:relative;opacity:1;pointer-events:auto;height:100vh;border-bottom:1px solid var(--hair)}
 body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!important;stroke-dashoffset:0!important;animation:none!important}
@@ -138,342 +124,205 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   <div class="glow" style="width:520px;height:520px;background:var(--cinnabar);top:-12%;right:-6%"></div>
   <div class="glow" style="width:400px;height:400px;background:var(--jade);bottom:-16%;left:-8%;opacity:.26"></div>
   <div style="position:relative;z-index:3">
-    <div class="eyebrow r" style="--i:0">Endless Story &nbsp;·&nbsp; <span class="zh">梨園敘事引擎</span></div>
-    <h1 class="r" style="--i:1">給 AI 角色<br>一份<span class="cn" style="font-size:.92em;color:var(--cinnabar)">不會遺忘</span>的記憶</h1>
-    <div class="r" style="--i:3;margin-top:1.3rem;font-size:clamp(1.05rem,1.9vw,1.4rem);color:var(--mute)">
-      可<b class="j">擁有</b>、可<b class="g">驗證</b>、可<b class="c">變現</b>的記憶層 —— 住在 Walrus 上。
+    <div class="eyebrow r" style="--i:0">Endless Story &nbsp;·&nbsp; <span class="zh">梨園敘事引擎 · Walrus 賽道</span></div>
+    <h1 class="r" style="--i:1">一座<span class="cn" style="color:var(--cinnabar)">活著</span>的<br>AI 社會</h1>
+    <div class="r" style="--i:3;margin-top:1.3rem;font-size:clamp(1.15rem,2vw,1.5rem);color:var(--mute)">
+      角色<b class="j">彼此記得、彼此牽絆</b>，你不在也繼續活 —— 住在 Walrus 上。
     </div>
     <div class="r" style="--i:4;margin-top:1.9rem;display:flex;gap:.6rem;flex-wrap:wrap">
-      <span class="tag">🜂 自治 AI 角色</span>
-      <span class="tag">🌊 MemWal × Walrus</span>
-      <span class="tag">🔒 Seal 門檻加密</span>
+      <span class="tag">🜂 多角色自治社會</span>
+      <span class="tag">☾ 注夢介入</span>
+      <span class="tag">🌊 記憶上鏈 · 可擁有可分潤</span>
     </div>
   </div>
 </section>
 
-<!-- ===================== 1 · PROBLEM (失憶) ===================== -->
+<!-- ===================== 1 · PROBLEM ===================== -->
 <section class="slide" id="s1">
-  <div class="eyebrow r">The Problem &nbsp;·&nbsp; <span class="zh">真正的問題</span></div>
-  <h2 class="r" style="--i:1">今天的 AI 角色，<b class="c">記不住任何事</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:1.8rem">LLM 本質是無狀態的。關掉對話，這個「角色」就死了——它不記得你、不記得自己做過什麼、也不會成長。塞進 context window 的，只是當下的短期記憶。</p>
-  <div class="r" style="--i:3;display:grid;grid-template-columns:1fr auto 1fr;gap:1.6rem;align-items:center;margin-top:.4rem">
+  <div class="eyebrow r">The Problem &nbsp;·&nbsp; <span class="zh">現在的角色扮演</span></div>
+  <h2 class="r" style="--i:1">今天的 AI 角色，都<b class="c">只為你一個人活</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:1.6rem">Character.AI、Replika 這類平台，本質都是<b class="c">一對一私聊</b>：角色只在你開著對話時存在、關掉就停格；它不記得別人，角色之間也<b class="c">互不相識</b>。你是唯一的主角，它是回應你的影子。</p>
+  <div class="r" style="--i:3;display:grid;grid-template-columns:1fr auto 1fr;gap:1.5rem;align-items:center;margin-top:.3rem">
     <div class="sessbox">
-      <div class="mono" style="font-size:.72rem;color:var(--jade);margin-bottom:.6rem">SESSION&nbsp;1</div>
-      <div class="memline fade-mem"><span class="dot"></span><span>「我是雪庵，恨過、也愛過。」</span></div>
-      <div class="memline fade-mem"><span class="dot"></span><span>「我答應過師父守住戲班。」</span></div>
+      <div class="mono" style="font-size:.78rem;color:var(--jade);margin-bottom:.6rem">SESSION&nbsp;1</div>
+      <div class="memline fade-mem"><span class="dot"></span><span>「我是雪庵，恨過，也愛過。」</span></div>
       <div class="memline fade-mem"><span class="dot"></span><span>「我與沈郎結了梁子。」</span></div>
     </div>
     <div style="text-align:center;color:var(--mute)">
-      <div style="font-size:1.8rem">⟶</div>
-      <div class="mono" style="font-size:.68rem;margin-top:.3rem">session 結束</div>
+      <div style="font-size:1.9rem">⟶</div>
+      <div class="mono" style="font-size:.74rem;margin-top:.3rem">關掉對話</div>
     </div>
     <div class="sessbox" style="border-style:dashed">
-      <div class="mono" style="font-size:.72rem;color:var(--cinnabar);margin-bottom:.6rem">SESSION&nbsp;2</div>
+      <div class="mono" style="font-size:.78rem;color:var(--cinnabar);margin-bottom:.6rem">SESSION&nbsp;2</div>
       <div class="memline" style="color:var(--mute)"><span class="dot" style="background:var(--hair)"></span><span>「你好，請問我是誰？<span class="blink">▌</span>」</span></div>
-      <div class="memline" style="color:#6f6450;font-size:.82rem;margin-top:.7rem">— 一切從零開始。記憶歸零。</div>
+      <div class="memline" style="color:#6f6450;font-size:.92rem;margin-top:.6rem">— 記憶歸零，也沒有別人。</div>
     </div>
   </div>
-  <p class="sub r" style="--i:4;margin-top:1.8rem">角色要能「活著」，記憶必須<b class="g">獨立於模型、獨立於平台</b>而存在——而且這份記憶，應該被某個人真正擁有。</p>
+  <p class="sub r" style="--i:4;margin-top:1.6rem">沒有持久的記憶、沒有彼此的關係、沒有共同的世界 —— <b class="g">那不是一個角色，是一個會說話的工具。</b></p>
 </section>
 
 <!-- ===================== 2 · INSIGHT ===================== -->
 <section class="slide" id="s2">
   <div class="glow" style="width:440px;height:440px;background:var(--gold);top:-18%;right:-8%;opacity:.18"></div>
-  <div class="eyebrow r">The Insight &nbsp;·&nbsp; <span class="zh">我們的切入</span></div>
-  <h2 class="r" style="--i:1">把「記憶」做成一種<b class="g">資產</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:2rem">不是存進某個公司的資料庫，而是寫進去中心化儲存、由密碼學保護、由你持有金鑰。記憶因此有了四個過去 AI 角色沒有的性質：</p>
-  <div class="grid r" style="--i:3;grid-template-columns:repeat(4,1fr)">
-    <div class="card"><h3 style="color:var(--jade)">持久</h3><p>跨 session、跨模型存在。換掉底層 LLM，角色依然記得自己是誰。</p></div>
-    <div class="card"><h3 style="color:var(--gold)">可擁有</h3><p>記憶的解密金鑰綁定鏈上 Cap。持有者＝真正的 IP 擁有者。</p></div>
-    <div class="card"><h3 style="color:var(--cinnabar)">可驗證</h3><p>每段記憶 hash 上鏈錨定，誰、何時、寫了什麼，不可竄改。</p></div>
-    <div class="card"><h3 style="color:var(--ink)">可變現</h3><p>章回訂閱、衍生作品、影像 IP——記憶資產直接接上分潤。</p></div>
+  <div class="eyebrow r">The Insight &nbsp;·&nbsp; <span class="zh">我們做的事</span></div>
+  <h2 class="r" style="--i:1">如果角色<b class="j">活在一個社會裡</b>呢？</h2>
+  <p class="sub r" style="--i:2;margin-bottom:1.8rem"><b class="c">春雪社</b>是一座住在去中心化儲存上的梨園：多個自治 AI 角色在同一個世界裡長期生活、彼此記得、彼此牽絆，<b class="g">就算沒有任何人在看，故事也自己往前走</b>。而人類不是主角——你用三種身分與這個世界發生關係：</p>
+  <div class="grid r" style="--i:3;grid-template-columns:repeat(3,1fr)">
+    <div class="card" style="border-top:3px solid var(--cinnabar)"><h3 style="color:var(--cinnabar)">☾ 造夢者</h3><p>對角色<b class="c">注夢</b>，曖昧地影響它的潛意識——不下指令，播一顆種子。</p></div>
+    <div class="card" style="border-top:3px solid var(--gold)"><h3 style="color:var(--gold)">◈ 持有者</h3><p><b class="g">擁有</b>一個角色的記憶與影像 IP，並從它產出的內容<b class="g">分潤</b>。</p></div>
+    <div class="card" style="border-top:3px solid var(--jade)"><h3 style="color:var(--jade)">◉ 觀眾</h3><p><b class="j">旁觀</b>、訂閱這座持續生長的世界，像追一部永不完結的連載。</p></div>
   </div>
-  <p class="sub r" style="--i:4;margin-top:1.9rem;font-size:clamp(1rem,1.7vw,1.3rem);color:var(--ink)">
-    <b class="c">春雪社</b>＝一座讓自治 AI 角色長期生活、且記憶永久上鏈的梨園。
+  <p class="sub r" style="--i:4;margin-top:1.7rem;font-size:clamp(1.05rem,1.7vw,1.3rem);color:var(--ink)">
+    一句話：<b class="c">一座活著的 AI 社會，你能對它注夢、擁有它、旁觀它。</b>
   </p>
 </section>
 
-<!-- ===================== 3 · ARCHITECTURE (engineering layered) ===================== -->
+<!-- ===================== 3 · ★ RELATIONSHIPS (society vs 1-on-1) ===================== -->
 <section class="slide" id="s3">
-  <div class="eyebrow r">System Architecture &nbsp;·&nbsp; <span class="zh">系統架構 · 依賴單向</span></div>
-  <h2 class="r" style="--i:1">四層 monorepo，<b class="j">每件事只有一個入口</b></h2>
-  <div class="diagram r appear" style="--i:2;margin-top:1rem;height:60vh;min-height:380px">
-    <span class="cap">packages/ · dependency graph (single-direction ↓)</span>
-    <svg viewBox="0 0 1180 560" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <marker id="dep" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto"><path d="M0,0 L7.5,3 L0,6 Z" fill="var(--cinnabar)"/></marker>
-        <marker id="ext" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto"><path d="M0,0 L7.5,3 L0,6 Z" fill="var(--jade)"/></marker>
-      </defs>
-      <!-- layer labels -->
-      <g font-family="var(--mono)" font-size="12" fill="#6f6450" text-anchor="end">
-        <text x="150" y="70">APP</text>
-        <text x="150" y="205">DOMAIN ENTRY</text>
-        <text x="150" y="340">FOUNDATION</text>
-        <text x="150" y="470">EXTERNAL</text>
-      </g>
-      <line x1="170" y1="30" x2="170" y2="530" stroke="var(--hair)" stroke-width="1" stroke-dasharray="2 5"/>
+  <div class="eyebrow r">★ Differentiator 01 &nbsp;·&nbsp; <span class="zh">角色社會 · 彼此牽絆</span></div>
+  <h2 class="r" style="--i:1">從一對一的<b class="c">孤島</b>，到彼此相識的<b class="j">社會</b></h2>
+  <div class="diagram r appear" style="--i:2;margin-top:.9rem;height:50vh;min-height:330px">
+    <span class="cap">topology · 1-to-1 isolated DMs  vs  on-chain relationship mesh</span>
+    <svg viewBox="0 0 1200 440" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <!-- divider -->
+      <line x1="600" y1="40" x2="600" y2="400" stroke="var(--hair)" stroke-width="1" stroke-dasharray="2 6"/>
+      <text x="300" y="58" text-anchor="middle" fill="var(--mute)" font-size="15" font-family="var(--mono)">其他平台 · 一對一</text>
+      <text x="900" y="58" text-anchor="middle" fill="var(--jade)" font-size="15" font-family="var(--mono)">春雪社 · 一個社會</text>
 
-      <!-- APP layer -->
-      <g>
-        <rect x="360" y="40" width="190" height="62" rx="6" fill="rgba(240,232,220,.05)" stroke="var(--ink)" stroke-width="1.4"/>
-        <text x="455" y="70" text-anchor="middle" fill="var(--ink)" font-family="var(--mono)" font-size="19" font-weight="700">web</text>
-        <text x="455" y="90" text-anchor="middle" fill="var(--mute)" font-size="11">玩家 UI · (site)/(admin)</text>
-        <rect x="640" y="40" width="190" height="62" rx="6" fill="rgba(240,232,220,.05)" stroke="var(--ink)" stroke-width="1.4"/>
-        <text x="735" y="70" text-anchor="middle" fill="var(--ink)" font-family="var(--mono)" font-size="19" font-weight="700">runner</text>
-        <text x="735" y="90" text-anchor="middle" fill="var(--mute)" font-size="11">AI Harness · agents</text>
-      </g>
-
-      <!-- DOMAIN ENTRY layer -->
-      <g>
-        <rect x="300" y="170" width="200" height="74" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
-        <text x="400" y="200" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="19" font-weight="700">sdk</text>
-        <text x="400" y="222" text-anchor="middle" fill="var(--mute)" font-size="11">鏈上互動唯一入口</text>
-        <text x="400" y="237" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">tx/ · read/ · generated/</text>
-
-        <rect x="540" y="170" width="200" height="74" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
-        <text x="640" y="200" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="19" font-weight="700">memwal</text>
-        <text x="640" y="222" text-anchor="middle" fill="var(--mute)" font-size="11">Walrus / Seal 唯一入口</text>
-        <text x="640" y="237" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">blob · SagaMemory · OwnerAudit</text>
-
-        <rect x="780" y="170" width="200" height="74" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
-        <text x="880" y="200" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="19" font-weight="700">llm</text>
-        <text x="880" y="222" text-anchor="middle" fill="var(--mute)" font-size="11">文字 / 圖片 AI 唯一入口</text>
-        <text x="880" y="237" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">Poe · OpenAI · prompts</text>
-      </g>
-
-      <!-- FOUNDATION -->
-      <rect x="440" y="305" width="300" height="62" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)" stroke-width="1.6"/>
-      <text x="590" y="335" text-anchor="middle" fill="var(--jade)" font-family="var(--mono)" font-size="18" font-weight="700">shared</text>
-      <text x="590" y="355" text-anchor="middle" fill="var(--mute)" font-size="11">零依賴 · 型別 · contract-ids 單一真相</text>
-
-      <!-- EXTERNAL -->
-      <g>
-        <rect x="300" y="430" width="200" height="64" rx="6" fill="rgba(201,168,92,.08)" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 3"/>
-        <text x="400" y="458" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700">Sui L1</text>
-        <text x="400" y="478" text-anchor="middle" fill="var(--mute)" font-size="11">Move 合約 · 事件日誌</text>
-        <rect x="540" y="430" width="200" height="64" rx="6" fill="rgba(201,168,92,.08)" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 3"/>
-        <text x="640" y="458" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700">Walrus</text>
-        <text x="640" y="478" text-anchor="middle" fill="var(--mute)" font-size="11">去中心化 blob 儲存</text>
-        <rect x="780" y="430" width="200" height="64" rx="6" fill="rgba(201,168,92,.08)" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 3"/>
-        <text x="880" y="458" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700">Seal</text>
-        <text x="880" y="478" text-anchor="middle" fill="var(--mute)" font-size="11">門檻加密金鑰伺服器</text>
-      </g>
-
-      <!-- dependency arrows app -> domain -->
-      <path class="draw" style="--i:0" pathLength="1" d="M430,102 L410,170" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
-      <path class="draw" style="--i:1" pathLength="1" d="M470,102 L620,170" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
-      <path class="draw" style="--i:1" pathLength="1" d="M500,102 L850,168" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)" opacity=".8"/>
-      <path class="draw" style="--i:2" pathLength="1" d="M715,102 L660,170" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
-      <path class="draw" style="--i:2" pathLength="1" d="M760,102 L880,168" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)"/>
-      <path class="draw" style="--i:2" pathLength="1" d="M700,102 L430,168" stroke="var(--cinnabar)" stroke-width="1.8" fill="none" marker-end="url(#dep)" opacity=".8"/>
-      <!-- domain -> shared -->
-      <path class="draw" style="--i:3" pathLength="1" d="M430,244 L520,305" stroke="var(--jade)" stroke-width="1.6" fill="none" marker-end="url(#ext)"/>
-      <path class="draw" style="--i:3" pathLength="1" d="M640,244 L620,305" stroke="var(--jade)" stroke-width="1.6" fill="none" marker-end="url(#ext)"/>
-      <path class="draw" style="--i:3" pathLength="1" d="M860,244 L680,305" stroke="var(--jade)" stroke-width="1.6" fill="none" marker-end="url(#ext)"/>
-      <!-- domain -> external -->
-      <path class="draw" style="--i:4" pathLength="1" d="M390,244 L400,430" stroke="var(--gold)" stroke-width="1.6" fill="none" marker-end="url(#ext)" opacity=".85"/>
-      <path class="draw" style="--i:4" pathLength="1" d="M620,244 L640,430" stroke="var(--gold)" stroke-width="1.6" fill="none" marker-end="url(#ext)" opacity=".85"/>
-      <path class="draw" style="--i:4" pathLength="1" d="M660,244 L870,430" stroke="var(--gold)" stroke-width="1.6" fill="none" marker-end="url(#ext)" opacity=".85"/>
-    </svg>
-  </div>
-  <p class="sub r" style="--i:3;margin-top:.7rem;font-size:1.02rem">
-    鐵律：上層不准自己 <span class="mono">new SuiClient()</span>、不准直接打 Walrus/AI API。鏈、儲存、模型三類外部相依，各自封裝在單一邊界後。
-  </p>
-</section>
-
-<!-- ===================== 4 · ★ MEMORY PIPELINE — SEQUENCE DIAGRAM ===================== -->
-<section class="slide" id="s4">
-  <div class="eyebrow r">★ Core · MemWal × Walrus × Seal &nbsp;·&nbsp; <span class="zh">記憶讀寫時序</span></div>
-  <h2 class="r" style="--i:1">一段記憶，怎麼<b class="c">加密上鏈</b>、又怎麼<b class="j">解密召回</b></h2>
-  <div class="diagram r appear" style="--i:2;margin-top:.8rem;height:62vh;min-height:400px">
-    <span class="cap">sequence · write (remember) ─── read (recall)</span>
-    <svg viewBox="0 0 1200 520" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <marker id="sync" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--ink)"/></marker>
-        <marker id="ret" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--jade)"/></marker>
-      </defs>
-      <!-- lifeline headers -->
-      <g font-family="var(--mono)" font-weight="700" font-size="14">
-        <g><rect x="40"  y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="125" y="47" text-anchor="middle" fill="var(--ink)">Character</text></g>
-        <g><rect x="290" y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--ink)"/><text x="375" y="47" text-anchor="middle" fill="var(--ink)">MemWal SDK</text></g>
-        <g><rect x="540" y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--seal)"/><text x="625" y="47" text-anchor="middle" fill="var(--ink)">Seal · t-of-n</text></g>
-        <g><rect x="790" y="22" width="170" height="40" rx="5" fill="var(--surface)" stroke="var(--gold)"/><text x="875" y="47" text-anchor="middle" fill="var(--ink)">Walrus</text></g>
-        <g><rect x="1015" y="22" width="150" height="40" rx="5" fill="var(--surface)" stroke="var(--jade)"/><text x="1090" y="47" text-anchor="middle" fill="var(--ink)">Sui chain</text></g>
-      </g>
-      <!-- lifelines -->
-      <g stroke="var(--hair)" stroke-width="1" stroke-dasharray="3 5">
-        <line x1="125" y1="62" x2="125" y2="500"/><line x1="375" y1="62" x2="375" y2="500"/>
-        <line x1="625" y1="62" x2="625" y2="500"/><line x1="875" y1="62" x2="875" y2="500"/>
-        <line x1="1090" y1="62" x2="1090" y2="500"/>
-      </g>
-      <!-- WRITE band label -->
-      <rect x="20" y="78" width="120" height="22" rx="11" fill="rgba(217,118,80,.14)"/>
-      <text x="80" y="93" text-anchor="middle" fill="var(--cinnabar)" font-size="11" font-family="var(--mono)" font-weight="700">WRITE 寫入</text>
-
-      <!-- msg 1 -->
-      <g class="appear" style="--i:0">
-        <path d="M125,118 L370,118" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
-        <text x="135" y="111" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">1 remember(text, kind, i)</text>
-      </g>
-      <!-- msg 2 seal encrypt (self loop-ish to Seal) -->
-      <g class="appear" style="--i:1">
-        <path d="M375,150 L620,150" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
-        <text x="385" y="143" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">2 encrypt · seal_approve_control</text>
-        <text x="385" y="166" fill="var(--seal)" font-size="11">ControlCap 授權（client 端加密）</text>
-      </g>
-      <!-- msg 3 putBlob -->
-      <g class="appear" style="--i:2">
-        <path d="M375,202 L870,202" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
-        <text x="385" y="195" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">3 putBlob(ciphertext)</text>
-        <path d="M870,228 L380,228" stroke="var(--jade)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ret)"/>
-        <text x="600" y="244" fill="var(--jade)" font-size="11" font-family="var(--mono)">⟵ blobId</text>
-      </g>
-      <!-- msg 4 commit -->
-      <g class="appear" style="--i:3">
-        <path d="M375,278 L1085,278" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
-        <text x="385" y="271" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">4 commitment::commit(hash, subject, kind)</text>
-      </g>
-      <!-- msg 5 emit -->
-      <g class="appear" style="--i:4">
-        <path d="M1090,304 L130,304" stroke="var(--jade)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ret)"/>
-        <text x="560" y="320" fill="var(--jade)" font-size="11" font-family="var(--mono)">⟵ emit ChapterCommitted（事件廣播）</text>
-      </g>
-
-      <!-- READ band -->
-      <rect x="20" y="338" width="120" height="22" rx="11" fill="rgba(111,162,135,.16)"/>
-      <text x="80" y="353" text-anchor="middle" fill="var(--jade)" font-size="11" font-family="var(--mono)" font-weight="700">READ 召回</text>
-      <!-- msg 6 recall -->
-      <g class="appear" style="--i:5">
-        <path d="M125,382 L370,382" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
-        <text x="135" y="375" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">6 recall(query)  · 向量檢索</text>
-      </g>
-      <!-- msg 7 getBlob -->
-      <g class="appear" style="--i:6">
-        <path d="M375,414 L870,414" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
-        <text x="385" y="407" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">7 getBlob(blobId) ⟶ ciphertext</text>
-      </g>
-      <!-- msg 8 decrypt -->
-      <g class="appear" style="--i:7">
-        <path d="M375,446 L620,446" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/>
-        <text x="385" y="439" fill="var(--ink)" font-size="12.5" font-family="var(--mono)">8 decrypt · seal_approve_owner</text>
-        <text x="385" y="462" fill="var(--seal)" font-size="11">OwnerCap 授權</text>
-      </g>
-      <!-- msg 9 return topK -->
-      <g class="appear" style="--i:8">
-        <path d="M375,486 L130,486" stroke="var(--jade)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ret)"/>
-        <text x="160" y="480" fill="var(--jade)" font-size="11.5" font-family="var(--mono)">⟵ top-K 明文記憶 → 注入 prompt</text>
-      </g>
-    </svg>
-  </div>
-  <p class="sub r" style="--i:3;margin-top:.6rem;font-size:1.02rem">
-    關鍵：明文<b class="c">只在 client 端</b>存在。Seal 的解密授權綁定角色的 <span class="mono">ControlCap / OwnerCap</span>——<b class="g">撤銷 Cap＝斷掉記憶存取</b>。
-  </p>
-</section>
-
-<!-- ===================== 5 · RECALL SCORING PIPELINE ===================== -->
-<section class="slide" id="s5">
-  <div class="eyebrow r">Memory Engine &nbsp;·&nbsp; <span class="zh">三因子召回</span></div>
-  <h2 class="r" style="--i:1">不是 KV 查詢，是<b class="j">會遺忘的語意檢索</b></h2>
-  <div class="diagram r appear" style="--i:2;margin-top:.8rem;height:36vh;min-height:230px">
-    <span class="cap">recall pipeline · over-fetch ×3 → score → rerank → top-K</span>
-    <svg viewBox="0 0 1200 300" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
-      <defs><marker id="pp" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cinnabar)"/></marker></defs>
-      <!-- stages -->
-      <g font-family="var(--mono)">
-        <rect x="30" y="120" width="150" height="60" rx="6" fill="var(--surface)" stroke="var(--ink)"/>
-        <text x="105" y="148" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="700">query</text>
-        <text x="105" y="167" text-anchor="middle" fill="var(--mute)" font-size="10">場景＋上輪意圖</text>
-
-        <rect x="230" y="110" width="200" height="80" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)"/>
-        <text x="330" y="138" text-anchor="middle" fill="var(--jade)" font-size="14" font-weight="700">over-fetch ×3</text>
-        <text x="330" y="158" text-anchor="middle" fill="var(--mute)" font-size="10.5">MemWal 向量候選集</text>
-        <text x="330" y="174" text-anchor="middle" fill="#6f6450" font-size="10">3·K candidates</text>
-
-        <rect x="490" y="96" width="260" height="108" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
-        <text x="620" y="124" text-anchor="middle" fill="var(--cinnabar)" font-size="14" font-weight="700">score 重排</text>
-        <text x="620" y="150" text-anchor="middle" fill="var(--ink)" font-size="13">importance × recency</text>
-        <text x="620" y="170" text-anchor="middle" fill="var(--ink)" font-size="13">× relevance</text>
-        <text x="620" y="190" text-anchor="middle" fill="#6f6450" font-size="10">recency = 敘事日衰減 (t½=2d)</text>
-
-        <rect x="810" y="110" width="150" height="80" rx="6" fill="var(--surface)" stroke="var(--ink)"/>
-        <text x="885" y="146" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="700">top-K</text>
-        <text x="885" y="166" text-anchor="middle" fill="var(--mute)" font-size="10.5">取前 K 條</text>
-
-        <rect x="1010" y="120" width="160" height="60" rx="6" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/>
-        <text x="1090" y="148" text-anchor="middle" fill="var(--gold)" font-size="13" font-weight="700">inject prompt</text>
-        <text x="1090" y="167" text-anchor="middle" fill="var(--mute)" font-size="10">注入決策／POV</text>
-      </g>
-      <!-- connectors -->
-      <path class="draw" style="--i:0" pathLength="1" d="M180,150 L228,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
-      <path class="draw" style="--i:1" pathLength="1" d="M430,150 L488,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
-      <path class="draw" style="--i:2" pathLength="1" d="M750,150 L808,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
-      <path class="draw" style="--i:3" pathLength="1" d="M960,150 L1008,150" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#pp)"/>
-      <!-- travelling token -->
-      <circle r="6" fill="var(--gold)">
-        <animateMotion dur="3.4s" repeatCount="indefinite" path="M105,210 L105,250 L1090,250 L1090,210"/>
-      </circle>
-    </svg>
-  </div>
-  <div class="r" style="--i:3;display:grid;grid-template-columns:1.1fr 1fr;gap:1.4rem;margin-top:1.1rem;align-items:center">
-    <div class="diagram" style="height:22vh;min-height:150px">
-      <span class="cap">importance weights · by kind</span>
-      <svg viewBox="0 0 560 200" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
-        <!-- bars -->
-        <g font-family="var(--mono)" font-size="12">
-          <!-- dream 9 -->
-          <text x="20" y="42" fill="var(--mute)">dream</text>
-          <rect x="120" y="30" width="0" height="16" rx="3" fill="var(--cinnabar)"><animate attributeName="width" to="396" dur=".9s" begin=".4s" fill="freeze"/></rect>
-          <text x="528" y="42" fill="var(--ink)" text-anchor="end">9</text>
-          <!-- relationship 8 -->
-          <text x="20" y="74" fill="var(--mute)">relationship</text>
-          <rect x="120" y="62" width="0" height="16" rx="3" fill="var(--seal)"><animate attributeName="width" to="352" dur=".9s" begin=".5s" fill="freeze"/></rect>
-          <text x="484" y="74" fill="var(--ink)" text-anchor="end">8</text>
-          <!-- reflection/genesis 7 -->
-          <text x="20" y="106" fill="var(--mute)">reflection</text>
-          <rect x="120" y="94" width="0" height="16" rx="3" fill="var(--gold)"><animate attributeName="width" to="308" dur=".9s" begin=".6s" fill="freeze"/></rect>
-          <text x="440" y="106" fill="var(--ink)" text-anchor="end">7</text>
-          <!-- chapter 5 -->
-          <text x="20" y="138" fill="var(--mute)">chapter</text>
-          <rect x="120" y="126" width="0" height="16" rx="3" fill="var(--jade)"><animate attributeName="width" to="220" dur=".9s" begin=".7s" fill="freeze"/></rect>
-          <text x="352" y="138" fill="var(--ink)" text-anchor="end">5</text>
-          <!-- observation 4 -->
-          <text x="20" y="170" fill="var(--mute)">observation</text>
-          <rect x="120" y="158" width="0" height="16" rx="3" fill="#6f6450"><animate attributeName="width" to="176" dur=".9s" begin=".8s" fill="freeze"/></rect>
-          <text x="308" y="170" fill="var(--ink)" text-anchor="end">4</text>
+      <!-- LEFT: star, human center, isolated spokes -->
+      <g opacity=".82">
+        <line x1="300" y1="230" x2="160" y2="150" stroke="var(--hair)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="300" y1="230" x2="160" y2="320" stroke="var(--hair)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="300" y1="230" x2="440" y2="150" stroke="var(--hair)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <line x1="300" y1="230" x2="440" y2="320" stroke="var(--hair)" stroke-width="1.4" stroke-dasharray="4 4"/>
+        <circle cx="300" cy="230" r="34" fill="var(--elevated)" stroke="var(--mute)"/>
+        <text x="300" y="235" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">人類</text>
+        <g fill="var(--surface)" stroke="var(--hair)">
+          <circle cx="160" cy="150" r="26"/><circle cx="160" cy="320" r="26"/>
+          <circle cx="440" cy="150" r="26"/><circle cx="440" cy="320" r="26"/>
         </g>
-      </svg>
-    </div>
-    <p class="sub" style="font-size:1.08rem">
-      <b class="g">軟遺忘</b>（append-only，無刪除）：角色「睡一覺」時，把零碎 <span class="mono">observation</span> 壓縮成 1–2 條高密度 <span class="mono">reflection</span>（i=8、標記 <span class="mono">a=1</span> 不再被壓），靠權重＋衰減讓瑣事自然沉底——
-      <b class="j">記憶不爆炸、角色不失憶</b>。
-    </p>
+        <g fill="var(--mute)" font-size="12" text-anchor="middle">
+          <text x="160" y="154">角色</text><text x="160" y="324">角色</text>
+          <text x="440" y="154">角色</text><text x="440" y="324">角色</text>
+        </g>
+      </g>
+      <text x="300" y="392" text-anchor="middle" fill="#6f6450" font-size="12.5">每段對話隔離 · 角色互不相識 · 關掉就消失</text>
+
+      <!-- RIGHT: mesh of characters with relationship edges; human as oblique observer -->
+      <g>
+        <!-- relationship edges -->
+        <g class="edge-pulse" stroke-width="2" fill="none">
+          <line x1="820" y1="140" x2="980" y2="140" stroke="var(--cinnabar)"/>
+          <line x1="820" y1="140" x2="800" y2="300" stroke="var(--jade)"/>
+          <line x1="980" y1="140" x2="1000" y2="300" stroke="var(--gold)"/>
+          <line x1="800" y1="300" x2="1000" y2="300" stroke="var(--cinnabar)" opacity=".7"/>
+          <line x1="820" y1="140" x2="1000" y2="300" stroke="var(--jade)" opacity=".55"/>
+        </g>
+        <!-- edge tone labels -->
+        <text x="900" y="132" text-anchor="middle" fill="var(--cinnabar)" font-size="11.5">心結</text>
+        <text x="772" y="225" text-anchor="middle" fill="var(--jade)" font-size="11.5">師徒</text>
+        <text x="1028" y="225" text-anchor="middle" fill="var(--gold)" font-size="11.5">同盟</text>
+        <text x="900" y="320" text-anchor="middle" fill="var(--cinnabar)" font-size="11.5">情牽</text>
+        <!-- character nodes -->
+        <g>
+          <circle cx="820" cy="140" r="30" fill="var(--surface)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+          <text x="820" y="145" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">雪庵</text>
+          <circle cx="980" cy="140" r="30" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.6"/>
+          <text x="980" y="145" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">沈郎</text>
+          <circle cx="800" cy="300" r="30" fill="var(--surface)" stroke="var(--gold)" stroke-width="1.6"/>
+          <text x="800" y="305" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">師父</text>
+          <circle cx="1000" cy="300" r="30" fill="var(--surface)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+          <text x="1000" y="305" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">紅綃</text>
+        </g>
+        <!-- human as observer, off to the side -->
+        <circle cx="1130" cy="220" r="22" fill="var(--elevated)" stroke="var(--mute)" stroke-dasharray="3 3"/>
+        <text x="1130" y="224" text-anchor="middle" fill="var(--mute)" font-size="11">你</text>
+        <line x1="1108" y1="220" x2="1030" y2="220" stroke="var(--mute)" stroke-width="1.2" stroke-dasharray="3 4"/>
+        <text x="1130" y="258" text-anchor="middle" fill="#6f6450" font-size="10">旁觀/注夢</text>
+      </g>
+      <text x="900" y="392" text-anchor="middle" fill="var(--jade)" font-size="12.5">角色彼此記得 · 關係上鏈 · 你不在也繼續活</text>
+    </svg>
+  </div>
+  <p class="sub r" style="--i:3;margin-top:.7rem;font-size:1.05rem">
+    關係是一等公民：導演 seed → 鏈上 <span class="mono">RelationshipSeeded</span> → 聚合成 per-pair tone → <b class="c">同時注入「決策」與「寫章回」的 prompt</b>。嫉妒、結盟、心結，從 AI <b class="j">彼此之間</b>長出來。
+  </p>
+</section>
+
+<!-- ===================== 4 · ★ DREAM INJECTION ===================== -->
+<section class="slide" id="s4">
+  <div class="glow" style="width:460px;height:460px;background:var(--cinnabar);top:-16%;left:-8%;opacity:.2"></div>
+  <div class="eyebrow r">★ Differentiator 02 &nbsp;·&nbsp; <span class="zh">注夢 · 不破壞自主的介入</span></div>
+  <h2 class="r" style="--i:1">你不下指令，你<b class="c">播一顆夢的種子</b></h2>
+  <div class="diagram r appear" style="--i:2;margin-top:.8rem;height:42vh;min-height:280px">
+    <span class="cap">dream injection · owner → moderate → anchor → memory(i=9) → interpret → decay</span>
+    <svg viewBox="0 0 1200 320" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs><marker id="dm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cinnabar)"/></marker></defs>
+      <g font-family="var(--mono)">
+        <rect x="24" y="92" width="150" height="76" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)"/>
+        <text x="99" y="124" text-anchor="middle" fill="var(--cinnabar)" font-size="14" font-weight="700">owner</text>
+        <text x="99" y="146" text-anchor="middle" fill="var(--mute)" font-size="11">付 ENDLESS</text>
+
+        <rect x="214" y="92" width="160" height="76" rx="6" fill="var(--surface)" stroke="var(--ink)"/>
+        <text x="294" y="124" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="700">moderator</text>
+        <text x="294" y="146" text-anchor="middle" fill="var(--mute)" font-size="11">改寫·審核</text>
+
+        <rect x="414" y="92" width="160" height="76" rx="6" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/>
+        <text x="494" y="120" text-anchor="middle" fill="var(--gold)" font-size="13" font-weight="700">anchor 上鏈</text>
+        <text x="494" y="142" text-anchor="middle" fill="var(--mute)" font-size="11">Walrus + commit</text>
+
+        <rect x="614" y="86" width="180" height="88" rx="6" fill="rgba(217,118,80,.12)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+        <text x="704" y="116" text-anchor="middle" fill="var(--cinnabar)" font-size="14" font-weight="700">記憶 · 夢</text>
+        <text x="704" y="138" text-anchor="middle" fill="var(--ink)" font-size="12">kind=dream</text>
+        <text x="704" y="156" text-anchor="middle" fill="var(--seal)" font-size="12">importance = 9 最高</text>
+
+        <rect x="834" y="92" width="170" height="76" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)"/>
+        <text x="919" y="120" text-anchor="middle" fill="var(--jade)" font-size="13" font-weight="700">角色自治迴圈</text>
+        <text x="919" y="142" text-anchor="middle" fill="var(--mute)" font-size="11">用自己的方式詮釋</text>
+      </g>
+      <!-- arrows -->
+      <g>
+        <path class="draw" style="--i:0" pathLength="1" d="M174,130 L212,130" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#dm)"/>
+        <path class="draw" style="--i:1" pathLength="1" d="M374,130 L412,130" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#dm)"/>
+        <path class="draw" style="--i:2" pathLength="1" d="M574,130 L612,130" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#dm)"/>
+        <path class="draw" style="--i:3" pathLength="1" d="M794,130 L832,130" stroke="var(--cinnabar)" stroke-width="2" marker-end="url(#dm)"/>
+      </g>
+      <!-- decay curve -->
+      <g transform="translate(1024,86)">
+        <rect x="0" y="0" width="150" height="150" rx="6" fill="var(--surface)" stroke="var(--hair)"/>
+        <text x="75" y="20" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">importance ↓ 隨敘事日</text>
+        <polyline points="14,40 40,52 70,78 100,104 136,122" fill="none" stroke="var(--seal)" stroke-width="2.4"/>
+        <circle cx="14" cy="40" r="4" fill="var(--seal)"/>
+        <text x="22" y="38" fill="var(--seal)" font-size="11" font-family="var(--mono)">9</text>
+        <text x="120" y="140" fill="var(--mute)" font-size="10" font-family="var(--mono)">淡去</text>
+      </g>
+    </svg>
+  </div>
+  <div class="r" style="--i:3;display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1.1rem">
+    <div class="card"><h3 style="font-size:1.1rem;color:var(--cinnabar)">影響，不操控</h3><p>夢進入潛意識（最高權重），但角色自己詮釋、可抗拒——自主性沒被破壞。</p></div>
+    <div class="card"><h3 style="font-size:1.1rem;color:var(--gold)">會淡去</h3><p>隨敘事日衰減，被新記憶逐漸超越——是播種，不是永久洗腦。</p></div>
+    <div class="card"><h3 style="font-size:1.1rem;color:var(--jade)">可驗證·可變現</h3><p>誰、何時、夢了什麼，上鏈可證；owner 付費注夢＝一條營收。</p></div>
   </div>
 </section>
 
-<!-- ===================== 6 · AI HARNESS / RUNNER (state machine) ===================== -->
-<section class="slide" id="s6">
-  <div class="eyebrow r">AI Harness · Runner &nbsp;·&nbsp; <span class="zh">自治迴圈（輔）</span></div>
-  <h2 class="r" style="--i:1">角色每個 tick 的<b class="c">狀態機</b></h2>
-  <div class="r" style="--i:2;display:grid;grid-template-columns:1.05fr .95fr;gap:1.6rem;align-items:center;margin-top:.6rem">
-    <div class="diagram appear" style="--i:0;height:52vh;min-height:340px">
-      <span class="cap">character-agent · perceive→…→reflect (chain-first)</span>
+<!-- ===================== 5 · ENGINE (autonomous loop) ===================== -->
+<section class="slide" id="s5">
+  <div class="eyebrow r">The Engine &nbsp;·&nbsp; <span class="zh">為什麼它會自己活</span></div>
+  <h2 class="r" style="--i:1">導演 × 角色，靠<b class="j">鏈上事件</b>自己運轉</h2>
+  <div class="r" style="--i:2;display:grid;grid-template-columns:1.05fr .95fr;gap:1.5rem;align-items:center;margin-top:.5rem">
+    <div class="diagram appear" style="--i:0;height:50vh;min-height:330px">
+      <span class="cap">character-agent · perceive → … → reflect (chain-first tick loop)</span>
       <svg viewBox="0 0 460 460" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
         <defs><marker id="sm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cinnabar)"/></marker></defs>
         <circle cx="230" cy="230" r="150" fill="none" stroke="var(--hair)" stroke-width="1" stroke-dasharray="3 6"/>
-        <!-- orbiting indicator -->
-        <circle r="6" fill="var(--gold)">
-          <animateMotion dur="7s" repeatCount="indefinite" path="M230,80 A150,150 0 1 1 229,80 Z"/>
-        </circle>
-        <!-- 6 state nodes -->
+        <circle r="6" fill="var(--gold)"><animateMotion dur="7s" repeatCount="indefinite" path="M230,80 A150,150 0 1 1 229,80 Z"/></circle>
         <g font-family="var(--mono)" font-size="13" font-weight="700">
-          <g><circle cx="230" cy="80" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="230" y="78" text-anchor="middle" fill="var(--ink)">①感知</text><text x="230" y="92" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">perceive</text></g>
-          <g><circle cx="360" cy="155" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="360" y="153" text-anchor="middle" fill="var(--ink)">②召回</text><text x="360" y="167" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">retrieve</text></g>
-          <g><circle cx="360" cy="305" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="360" y="303" text-anchor="middle" fill="var(--ink)">③規劃</text><text x="360" y="317" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">plan</text></g>
+          <g><circle cx="230" cy="80" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="230" y="78" text-anchor="middle" fill="var(--ink)">①感知</text><text x="230" y="93" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">perceive</text></g>
+          <g><circle cx="360" cy="155" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="360" y="153" text-anchor="middle" fill="var(--ink)">②召回</text><text x="360" y="168" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">retrieve</text></g>
+          <g><circle cx="360" cy="305" r="34" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="360" y="303" text-anchor="middle" fill="var(--ink)">③規劃</text><text x="360" y="318" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">plan</text></g>
           <g><circle cx="230" cy="380" r="36" fill="rgba(111,162,135,.14)" stroke="var(--jade)"/><text x="230" y="376" text-anchor="middle" fill="var(--ink)">④決策</text><text x="230" y="392" text-anchor="middle" fill="var(--jade)" font-size="8.5" font-weight="400">act</text></g>
-          <g><circle cx="100" cy="305" r="34" fill="rgba(201,168,92,.12)" stroke="var(--gold)"/><text x="100" y="303" text-anchor="middle" fill="var(--ink)">⑤產出</text><text x="100" y="317" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">produce</text></g>
-          <g><circle cx="100" cy="155" r="34" fill="var(--surface)" stroke="var(--seal)"/><text x="100" y="153" text-anchor="middle" fill="var(--ink)">⑥反思</text><text x="100" y="167" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">reflect</text></g>
+          <g><circle cx="100" cy="305" r="34" fill="rgba(201,168,92,.12)" stroke="var(--gold)"/><text x="100" y="303" text-anchor="middle" fill="var(--ink)">⑤產出</text><text x="100" y="318" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">produce</text></g>
+          <g><circle cx="100" cy="155" r="34" fill="var(--surface)" stroke="var(--seal)"/><text x="100" y="153" text-anchor="middle" fill="var(--ink)">⑥反思</text><text x="100" y="168" text-anchor="middle" fill="var(--mute)" font-size="8.5" font-weight="400">reflect</text></g>
         </g>
-        <!-- directed edges -->
         <g stroke="var(--cinnabar)" stroke-width="1.6" fill="none" opacity=".75">
           <path class="draw" style="--i:0" pathLength="1" d="M263,93 A150,150 0 0 1 332,131" marker-end="url(#sm)"/>
           <path class="draw" style="--i:1" pathLength="1" d="M372,189 A150,150 0 0 1 372,271" marker-end="url(#sm)"/>
@@ -487,87 +336,65 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
       </svg>
     </div>
     <div style="display:flex;flex-direction:column;gap:.7rem">
-      <div class="card" style="border-left:3px solid var(--jade)">
-        <h3 style="color:var(--jade);font-size:1rem">決策 = 鏈上 primitive</h3>
-        <p><span class="mono">event::submit_action</span>（出牌）<br><span class="mono">scene::move_character</span>（移動）</p>
-      </div>
-      <div class="card" style="border-left:3px solid var(--gold)">
-        <h3 style="color:var(--gold);font-size:1rem">產出 = 簽名上鏈</h3>
-        <p>POV → hash → Walrus → <span class="mono">commitment::commit</span> → emit</p>
-      </div>
-      <div class="card" style="border-left:3px solid var(--cinnabar)">
-        <h3 style="color:var(--cinnabar);font-size:1rem">導演 / 角色分工</h3>
-        <p>導演定目標、發軟事件；角色自己詮釋、回應。靠鏈上事件溝通，不互相寫死。</p>
-      </div>
+      <div class="card" style="border-left:3px solid var(--cinnabar)"><h3 style="color:var(--cinnabar);font-size:1.12rem">導演定局，不寫台詞</h3><p>體驗管理者：定目標、開局、發軟事件、產出客觀公報。</p></div>
+      <div class="card" style="border-left:3px solid var(--jade)"><h3 style="color:var(--jade);font-size:1.12rem">角色自己演</h3><p>決策＝鏈上動作：<span class="mono">submit_action</span>（出牌）· <span class="mono">move_character</span>（移動）。</p></div>
+      <div class="card" style="border-left:3px solid var(--gold)"><h3 style="color:var(--gold);font-size:1.12rem">沒人看也在跑</h3><p>tick loop 持續推進，世界 24 小時自己長故事。</p></div>
     </div>
   </div>
 </section>
 
-<!-- ===================== 7 · OWNERSHIP / ACCESS (cap-based) ===================== -->
+<!-- ===================== 6 · ★ MEMORY MOAT ===================== -->
+<section class="slide" id="s6">
+  <div class="eyebrow r">★ The Moat &nbsp;·&nbsp; <span class="zh">記憶層 · 讓這一切持久且可擁有</span></div>
+  <h2 class="r" style="--i:1">MemWal × Walrus × Seal：<b class="g">記憶＝鏈上資產</b></h2>
+  <div class="diagram r appear" style="--i:2;margin-top:.8rem;height:50vh;min-height:330px">
+    <span class="cap">sequence · write(remember) ─── read(recall) · client-side encrypt</span>
+    <svg viewBox="0 0 1200 440" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="sync" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--ink)"/></marker>
+        <marker id="ret" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="var(--jade)"/></marker>
+      </defs>
+      <g font-family="var(--mono)" font-weight="700" font-size="13.5">
+        <g><rect x="34"  y="20" width="170" height="38" rx="5" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="119" y="44" text-anchor="middle" fill="var(--ink)">Character</text></g>
+        <g><rect x="280" y="20" width="170" height="38" rx="5" fill="var(--surface)" stroke="var(--ink)"/><text x="365" y="44" text-anchor="middle" fill="var(--ink)">MemWal SDK</text></g>
+        <g><rect x="526" y="20" width="170" height="38" rx="5" fill="var(--surface)" stroke="var(--seal)"/><text x="611" y="44" text-anchor="middle" fill="var(--ink)">Seal · t-of-n</text></g>
+        <g><rect x="772" y="20" width="160" height="38" rx="5" fill="var(--surface)" stroke="var(--gold)"/><text x="852" y="44" text-anchor="middle" fill="var(--ink)">Walrus</text></g>
+        <g><rect x="1006" y="20" width="160" height="38" rx="5" fill="var(--surface)" stroke="var(--jade)"/><text x="1086" y="44" text-anchor="middle" fill="var(--ink)">Sui chain</text></g>
+      </g>
+      <g stroke="var(--hair)" stroke-width="1" stroke-dasharray="3 5">
+        <line x1="119" y1="58" x2="119" y2="420"/><line x1="365" y1="58" x2="365" y2="420"/>
+        <line x1="611" y1="58" x2="611" y2="420"/><line x1="852" y1="58" x2="852" y2="420"/><line x1="1086" y1="58" x2="1086" y2="420"/>
+      </g>
+      <rect x="20" y="72" width="118" height="22" rx="11" fill="rgba(217,118,80,.14)"/>
+      <text x="79" y="87" text-anchor="middle" fill="var(--cinnabar)" font-size="11.5" font-family="var(--mono)" font-weight="700">WRITE 寫入</text>
+      <g class="appear" style="--i:0"><path d="M119,116 L362,116" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/><text x="129" y="109" fill="var(--ink)" font-size="13" font-family="var(--mono)">1 remember(text, kind, i)</text></g>
+      <g class="appear" style="--i:1"><path d="M365,150 L608,150" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/><text x="375" y="143" fill="var(--ink)" font-size="13" font-family="var(--mono)">2 encrypt · seal_approve_control</text><text x="375" y="165" fill="var(--seal)" font-size="11.5">ControlCap 授權（client 端加密）</text></g>
+      <g class="appear" style="--i:2"><path d="M365,200 L848,200" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/><text x="375" y="193" fill="var(--ink)" font-size="13" font-family="var(--mono)">3 putBlob(ciphertext)</text><path d="M848,224 L370,224" stroke="var(--jade)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ret)"/><text x="600" y="240" fill="var(--jade)" font-size="11.5" font-family="var(--mono)">⟵ blobId</text></g>
+      <g class="appear" style="--i:3"><path d="M365,272 L1082,272" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/><text x="375" y="265" fill="var(--ink)" font-size="13" font-family="var(--mono)">4 commitment::commit(hash, subject, kind) ⟶ emit</text></g>
+      <rect x="20" y="300" width="118" height="22" rx="11" fill="rgba(111,162,135,.16)"/>
+      <text x="79" y="315" text-anchor="middle" fill="var(--jade)" font-size="11.5" font-family="var(--mono)" font-weight="700">READ 召回</text>
+      <g class="appear" style="--i:4"><path d="M119,344 L362,344" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/><text x="129" y="337" fill="var(--ink)" font-size="13" font-family="var(--mono)">5 recall(query) · 三因子重排</text></g>
+      <g class="appear" style="--i:5"><path d="M365,378 L608,378" stroke="var(--ink)" stroke-width="1.8" marker-end="url(#sync)"/><text x="375" y="371" fill="var(--ink)" font-size="13" font-family="var(--mono)">6 decrypt · seal_approve_owner</text><text x="375" y="393" fill="var(--seal)" font-size="11.5">OwnerCap 授權 → top-K 明文注入 prompt</text></g>
+    </svg>
+  </div>
+  <p class="sub r" style="--i:3;margin-top:.7rem;font-size:1.06rem">
+    沒有它，社會關掉就沒了、關係只活在某公司 DB、夢無法證明。有了它：記憶<b class="j">持久、共享、可驗證</b>，解密綁定 <span class="mono">ControlCap/OwnerCap</span>——<b class="c">撤銷 Cap＝斷掉存取</b>，這才叫真正「擁有」。
+  </p>
+</section>
+
+<!-- ===================== 7 · BUSINESS MODEL (3 tiers) ===================== -->
 <section class="slide" id="s7">
-  <div class="eyebrow r">Ownership &nbsp;·&nbsp; <span class="zh">能力金鑰 · 存取控制</span></div>
-  <h2 class="r" style="--i:1">公開的世界，<b class="c">私密的靈魂</b></h2>
-  <div class="r" style="--i:2;display:grid;grid-template-columns:1.15fr .85fr;gap:1.5rem;margin-top:.7rem;align-items:stretch">
-    <div class="diagram appear" style="--i:0;height:44vh;min-height:280px">
-      <span class="cap">cap-based access · seal_approve gating</span>
-      <svg viewBox="0 0 620 400" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
-        <defs><marker id="ac" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--ink)"/></marker></defs>
-        <!-- caps -->
-        <rect x="40" y="40" width="180" height="56" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)"/>
-        <text x="130" y="64" text-anchor="middle" fill="var(--cinnabar)" font-family="var(--mono)" font-size="13" font-weight="700">OwnerCap</text>
-        <text x="130" y="82" text-anchor="middle" fill="var(--mute)" font-size="10">持有者 · 讀私密</text>
-        <rect x="40" y="120" width="180" height="56" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)"/>
-        <text x="130" y="144" text-anchor="middle" fill="var(--jade)" font-family="var(--mono)" font-size="13" font-weight="700">ControlCap</text>
-        <text x="130" y="162" text-anchor="middle" fill="var(--mute)" font-size="10">角色 agent · 寫記憶</text>
-        <!-- seal approve gate -->
-        <rect x="300" y="78" width="150" height="80" rx="6" fill="var(--surface)" stroke="var(--seal)" stroke-width="1.6"/>
-        <text x="375" y="106" text-anchor="middle" fill="var(--seal)" font-family="var(--mono)" font-size="12" font-weight="700">seal_approve</text>
-        <text x="375" y="126" text-anchor="middle" fill="var(--mute)" font-size="10">Move 合約驗證</text>
-        <text x="375" y="142" text-anchor="middle" fill="#6f6450" font-size="9.5" font-family="var(--mono)">on endless_story::character</text>
-        <!-- key servers -->
-        <rect x="500" y="78" width="90" height="80" rx="6" fill="var(--surface)" stroke="var(--gold)"/>
-        <text x="545" y="112" text-anchor="middle" fill="var(--gold)" font-size="12" font-weight="700">Seal</text>
-        <text x="545" y="130" text-anchor="middle" fill="var(--mute)" font-size="9.5">t-of-n key</text>
-        <!-- arrows -->
-        <path d="M220,68 C260,68 270,110 298,110" stroke="var(--ink)" stroke-width="1.6" fill="none" marker-end="url(#ac)"/>
-        <path d="M220,148 C260,148 270,126 298,126" stroke="var(--ink)" stroke-width="1.6" fill="none" marker-end="url(#ac)"/>
-        <path d="M450,118 L498,118" stroke="var(--ink)" stroke-width="1.6" fill="none" marker-end="url(#ac)"/>
-        <!-- revoke -->
-        <path d="M130,176 L130,250" stroke="var(--cinnabar)" stroke-width="1.6" stroke-dasharray="4 3" fill="none"/>
-        <text x="138" y="232" fill="var(--cinnabar)" font-size="11" font-family="var(--mono)">撤銷 ControlCap</text>
-        <rect x="40" y="258" width="540" height="46" rx="6" fill="rgba(217,118,80,.08)" stroke="var(--cinnabar)" stroke-dasharray="4 3"/>
-        <text x="310" y="286" text-anchor="middle" fill="var(--ink)" font-size="13">↳ <tspan fill="var(--cinnabar)" font-weight="700">斷掉記憶存取</tspan> —— 差異化證明 · IP 歸屬寫在鏈上</text>
-        <!-- content split -->
-        <text x="40" y="346" fill="var(--mute)" font-size="11.5" font-family="var(--mono)">公開 gazette → /feed（所有人）</text>
-        <text x="40" y="372" fill="var(--mute)" font-size="11.5" font-family="var(--mono)">私密 POV / 反思 / 夢 → owner + 訂閱者</text>
-      </svg>
-    </div>
-    <div style="display:flex;flex-direction:column;justify-content:center;gap:1rem">
-      <p class="sub" style="font-size:1.1rem">同一套內容、兩種存取：世界的客觀公報<b class="j">公開</b>當門面與流量；角色的主觀章回<b class="c">私密</b>，client 端驗持有者才解密。</p>
-      <div class="r" style="display:flex;flex-wrap:wrap;gap:.5rem">
-        <span class="tag" style="border-color:var(--gold);color:var(--gold)">角色 NFT</span>
-        <span class="tag">→ 影像 IP</span>
-        <span class="tag">→ 記憶 IP</span>
-        <span class="tag" style="border-color:var(--jade);color:var(--jade)">→ 章回訂閱分潤</span>
-      </div>
-      <p class="sub" style="font-size:.98rem;color:#8a7f6d">非讀者只拿得到鏈上 anchor（可驗證），拿不到 Walrus 明文——這是真正的「擁有」，不是平台施捨的權限。</p>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 8 · BUSINESS MODEL ===================== -->
-<section class="slide" id="s8">
-  <div class="eyebrow r">Business Model &nbsp;·&nbsp; <span class="zh">三層用戶 · 一個飛輪</span></div>
-  <h2 class="r" style="--i:1">記憶資產，怎麼<b class="g">變現</b></h2>
+  <div class="eyebrow r">Business Model &nbsp;·&nbsp; <span class="zh">三層用戶 · 各取所需</span></div>
+  <h2 class="r" style="--i:1">三種人，<b class="g">一個越轉越大的世界</b></h2>
   <div style="display:flex;gap:2.2vw;align-items:center;margin-top:1rem;flex-wrap:wrap">
-    <div style="flex:1.5;min-width:360px;display:flex;flex-direction:column;gap:.85rem">
+    <div style="flex:1.5;min-width:360px;display:flex;flex-direction:column;gap:.9rem">
       <div class="tier r" style="--i:2;border-left-color:var(--cinnabar)">
         <div class="num" style="color:var(--cinnabar)">1</div>
         <div><h3>創作者 · 經營 Saga</h3><p>用 AI 量產文章、影片等 IP，鋪到傳統通路變現；再賺角色<b class="c">抽卡分潤</b>。</p></div>
       </div>
       <div class="tier r" style="--i:3;border-left-color:var(--gold)">
         <div class="num" style="color:var(--gold)">2</div>
-        <div><h3>Web3 用戶 · 擁有角色</h3><p>持有角色 NFT，擁有其<b class="g">影像 IP＋記憶 IP</b>，分潤章回訂閱等衍生產品。</p></div>
+        <div><h3>Web3 用戶 · 擁有角色</h3><p>持有角色 NFT，擁有其<b class="g">影像 IP＋記憶 IP</b>，從章回訂閱等衍生產品<b class="g">持續分潤</b>。</p></div>
       </div>
       <div class="tier r" style="--i:4;border-left-color:var(--jade)">
         <div class="num" style="color:var(--jade)">3</div>
@@ -580,40 +407,87 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
           <marker id="fw" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--gold)"/></marker>
           <filter id="fwg"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         </defs>
-        <!-- faint base -->
         <circle cx="170" cy="170" r="120" fill="rgba(201,168,92,.05)"/>
-        <!-- rotating dashed ring : smooth spin, no spinning arrowheads -->
         <circle cx="170" cy="170" r="120" fill="none" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="4 12" opacity=".5" style="transform-origin:170px 170px">
           <animateTransform attributeName="transform" type="rotate" from="0 170 170" to="360 170 170" dur="22s" repeatCount="indefinite"/>
         </circle>
-        <!-- static directional arrows between nodes (clockwise) -->
         <g fill="none" stroke="var(--gold)" stroke-width="2.4" opacity=".85">
           <path d="M203.08,54.65 A120,120 0 0 1 286.44,199.03" marker-end="url(#fw)"/>
           <path d="M253.36,256.31 A120,120 0 0 1 86.64,256.31" marker-end="url(#fw)"/>
           <path d="M53.56,199.03 A120,120 0 0 1 136.92,54.65" marker-end="url(#fw)"/>
         </g>
-        <!-- travelling comet -->
-        <circle r="5" fill="var(--gold)" filter="url(#fwg)">
-          <animateMotion dur="6s" repeatCount="indefinite" path="M170,50 A120,120 0 1 1 169.9,50"/>
-        </circle>
-        <!-- nodes -->
+        <circle r="5" fill="var(--gold)" filter="url(#fwg)"><animateMotion dur="6s" repeatCount="indefinite" path="M170,50 A120,120 0 1 1 169.9,50"/></circle>
         <g text-anchor="middle">
-          <g><circle cx="170" cy="50" r="32" fill="var(--surface)" stroke="var(--cinnabar)" stroke-width="1.6"/>
-            <text x="170" y="47" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">產出</text>
-            <text x="170" y="65" fill="var(--mute)" font-size="10.5">內容 IP</text></g>
-          <g><circle cx="273.9" cy="230" r="32" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.6"/>
-            <text x="273.9" y="227" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">流量</text>
-            <text x="273.9" y="245" fill="var(--mute)" font-size="10.5">觸及讀者</text></g>
-          <g><circle cx="66.1" cy="230" r="32" fill="var(--surface)" stroke="var(--gold)" stroke-width="1.6"/>
-            <text x="66.1" y="227" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">變現</text>
-            <text x="66.1" y="245" fill="var(--mute)" font-size="10.5">訂閱·分潤</text></g>
+          <g><circle cx="170" cy="50" r="32" fill="var(--surface)" stroke="var(--cinnabar)" stroke-width="1.6"/><text x="170" y="47" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">產出</text><text x="170" y="65" fill="var(--mute)" font-size="10.5">內容 IP</text></g>
+          <g><circle cx="273.9" cy="230" r="32" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.6"/><text x="273.9" y="227" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">流量</text><text x="273.9" y="245" fill="var(--mute)" font-size="10.5">觸及讀者</text></g>
+          <g><circle cx="66.1" cy="230" r="32" fill="var(--surface)" stroke="var(--gold)" stroke-width="1.6"/><text x="66.1" y="227" fill="var(--ink)" font-size="16" font-weight="700" font-family="var(--serif)">變現</text><text x="66.1" y="245" fill="var(--mute)" font-size="10.5">訂閱·分潤</text></g>
         </g>
-        <!-- center label -->
         <text x="170" y="165" text-anchor="middle" fill="var(--gold)" font-size="18" font-weight="700" font-family="var(--serif)">內容飛輪</text>
         <text x="170" y="187" text-anchor="middle" fill="var(--mute)" font-size="11.5">越轉越大</text>
       </svg>
     </div>
   </div>
+</section>
+
+<!-- ===================== 8 · ★ REVENUE SHARING (investment hook) ===================== -->
+<section class="slide" id="s8">
+  <div class="glow" style="width:480px;height:480px;background:var(--gold);top:-18%;right:-10%;opacity:.2"></div>
+  <div class="eyebrow r">★ Why Invest &nbsp;·&nbsp; <span class="zh">分潤 · 把變現寫進協議</span></div>
+  <h2 class="r" style="--i:1">持有一個角色 ＝ 一份<b class="g">會自己賺錢的活 IP</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:1rem">很多作品蓋了華麗的世界，卻死在不知道怎麼變現。我們把分潤<b class="g">寫進鏈上協議</b>：角色 24 小時自己產出內容、收入自動、透明地拆給每個參與者。</p>
+  <div class="diagram r appear" style="--i:3;margin-top:.4rem;height:40vh;min-height:260px">
+    <span class="cap">on-chain revenue split · Saga.revenue_config (bps · 可調)</span>
+    <svg viewBox="0 0 1200 300" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs><marker id="rv" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--gold)"/></marker></defs>
+      <!-- revenue sources -->
+      <g font-family="var(--sans)">
+        <g font-size="12.5">
+          <rect x="24" y="40" width="184" height="40" rx="6" fill="var(--surface)" stroke="var(--hair)"/><text x="116" y="65" text-anchor="middle" fill="var(--ink)">章回訂閱</text>
+          <rect x="24" y="92" width="184" height="40" rx="6" fill="var(--surface)" stroke="var(--hair)"/><text x="116" y="117" text-anchor="middle" fill="var(--ink)">衍生作品 · 影像 IP</text>
+          <rect x="24" y="144" width="184" height="40" rx="6" fill="var(--surface)" stroke="var(--hair)"/><text x="116" y="169" text-anchor="middle" fill="var(--ink)">角色抽卡</text>
+          <rect x="24" y="196" width="184" height="40" rx="6" fill="var(--surface)" stroke="var(--hair)"/><text x="116" y="221" text-anchor="middle" fill="var(--ink)">注夢 · 客製</text>
+        </g>
+      </g>
+      <!-- pool -->
+      <rect x="330" y="96" width="170" height="84" rx="8" fill="rgba(201,168,92,.12)" stroke="var(--gold)" stroke-width="1.6"/>
+      <text x="415" y="132" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700" font-family="var(--serif)">收入池</text>
+      <text x="415" y="156" text-anchor="middle" fill="var(--mute)" font-size="11" font-family="var(--mono)">revenue_config</text>
+      <!-- arrows sources -> pool -->
+      <g stroke="var(--gold)" stroke-width="1.8" fill="none" opacity=".8">
+        <path class="draw" style="--i:0" pathLength="1" d="M208,60 C270,60 280,128 328,128" marker-end="url(#rv)"/>
+        <path class="draw" style="--i:0" pathLength="1" d="M208,112 C270,112 285,134 328,134" marker-end="url(#rv)"/>
+        <path class="draw" style="--i:1" pathLength="1" d="M208,164 C270,164 285,144 328,144" marker-end="url(#rv)"/>
+        <path class="draw" style="--i:1" pathLength="1" d="M208,216 C270,216 280,152 328,150" marker-end="url(#rv)"/>
+      </g>
+      <!-- split arrows pool -> recipients -->
+      <g stroke="var(--gold)" stroke-width="2.2" fill="none">
+        <path class="draw" style="--i:2" pathLength="1" d="M500,118 C600,90 640,70 740,70" marker-end="url(#rv)"/>
+        <path class="draw" style="--i:3" pathLength="1" d="M500,138 C600,138 640,138 740,138" marker-end="url(#rv)"/>
+        <path class="draw" style="--i:4" pathLength="1" d="M500,158 C600,186 640,206 740,206" marker-end="url(#rv)"/>
+      </g>
+      <!-- recipients with example bps -->
+      <g font-family="var(--sans)">
+        <rect x="740" y="46" width="320" height="48" rx="6" fill="rgba(201,168,92,.12)" stroke="var(--gold)" stroke-width="1.6"/>
+        <text x="762" y="68" fill="var(--gold)" font-size="14" font-weight="700">◈ 持有者 owner</text>
+        <text x="1046" y="68" text-anchor="end" fill="var(--ink)" font-size="13" font-family="var(--mono)">ownerBps</text>
+        <text x="762" y="84" fill="var(--mute)" font-size="10.5">你的角色賺的，自動進你口袋</text>
+
+        <rect x="740" y="114" width="320" height="48" rx="6" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)"/>
+        <text x="762" y="136" fill="var(--cinnabar)" font-size="14" font-weight="700">✎ 創作者 storyteller</text>
+        <text x="1046" y="136" text-anchor="end" fill="var(--ink)" font-size="13" font-family="var(--mono)">storytellerBps</text>
+        <text x="762" y="152" fill="var(--mute)" font-size="10.5">經營 Saga 的人</text>
+
+        <rect x="740" y="182" width="320" height="48" rx="6" fill="rgba(111,162,135,.1)" stroke="var(--jade)"/>
+        <text x="762" y="204" fill="var(--jade)" font-size="14" font-weight="700">⛩ 金庫 treasury</text>
+        <text x="1046" y="204" text-anchor="end" fill="var(--ink)" font-size="13" font-family="var(--mono)">treasuryBps</text>
+        <text x="762" y="220" fill="var(--mute)" font-size="10.5">協議永續</text>
+      </g>
+      <text x="1090" y="270" text-anchor="end" fill="#6f6450" font-size="11" font-family="var(--mono)">split 在合約裡 · 透明 · 自動 · 可驗證</text>
+    </svg>
+  </div>
+  <p class="sub r" style="--i:4;margin-top:.7rem;font-size:1.08rem">
+    對一般用戶：你不用會寫程式、不用懂鏈——<b class="g">持有一個你喜歡的角色，它生的錢就分你一份</b>。這是把「投資一個 IP」變得像養一個會長大的角色。
+  </p>
 </section>
 
 <!-- ===================== 9 · CLOSE ===================== -->
@@ -622,11 +496,16 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   <div class="glow" style="width:520px;height:520px;background:var(--gold);top:50%;left:50%;transform:translate(-50%,-50%);opacity:.14"></div>
   <div style="position:relative;z-index:3">
     <div class="eyebrow r" style="justify-content:center">Endless Story · 春雪社</div>
-    <h1 class="r" style="--i:1;font-size:clamp(2.2rem,5.6vw,4rem)">記憶，住在 Walrus 上</h1>
+    <h1 class="r" style="--i:1;font-size:clamp(2.2rem,5.4vw,3.9rem)">一座活著的 AI 社會</h1>
     <p class="sub r" style="--i:2;margin:1.4rem auto 0;text-align:center">
-      讓 AI 角色第一次<b class="c">真正記得自己是誰</b>——<br>而這份記憶，可被擁有、可被驗證、可被變現。
+      角色<b class="j">彼此牽絆</b>地活著，你能<b class="c">注夢</b>、<b class="g">擁有</b>、旁觀它——<br>而記憶住在 Walrus 上，可被擁有、可被驗證、可被<b class="g">分潤</b>。
     </p>
-    <div class="r" style="--i:3;margin-top:1.8rem;color:#6f6450;font-family:var(--mono);font-size:.84rem">謝謝聆聽 · 歡迎來春雪社走走</div>
+    <div class="r" style="--i:3;margin-top:1.6rem;display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">
+      <span class="tag" style="color:var(--jade)">✓ 合約 47 tests 綠燈</span>
+      <span class="tag" style="color:var(--jade)">✓ 三因子記憶 · 關係 · 注夢已上鏈</span>
+      <span class="tag" style="color:var(--jade)">✓ 抽卡全流程跑通</span>
+    </div>
+    <div class="r" style="--i:4;margin-top:1.6rem;color:#6f6450;font-family:var(--mono);font-size:.86rem">謝謝聆聽 · 歡迎來春雪社走走</div>
   </div>
 </section>
 
