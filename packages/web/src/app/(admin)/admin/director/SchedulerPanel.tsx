@@ -109,9 +109,9 @@ function TickLoopSection() {
                 自治推進一個 tick（N4 · 世界自己動一輪）
             </div>
             <p className="text-2xs leading-relaxed text-mute">
-                一鍵跑完整迴圈：① 推進時間 → ② 每個角色**更新規劃（立志）** → ③ 開著的事件中，
-                每個角色**自己出牌**（全員出完即自動收尾）→ ④ 每人寫 POV → ⑤ 週期性睡一覺整理記憶
-                → ⑥ 編當日公報。全程依序簽（單一 keypair）。
+                一鍵跑完整迴圈：① 推進時間 → ② 每個角色**更新規劃（立志，並行）** → ③ 開著的事件中，
+                每個角色**自己出牌**（全員出完即自動收尾）→ ④ 每人寫 POV（dry-run 並行、上鏈序列）
+                → ⑤ **夜裡**才睡一覺整理記憶 → ⑥ 編當日公報。上鏈步驟依序簽（單一 keypair）。
             </p>
             <div className="flex flex-wrap items-center gap-4">
                 <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
@@ -318,6 +318,9 @@ function TickLoopResultView({ result }: { result: TickLoopResult }) {
             ) : null}
 
             {/* SLEEP */}
+            {result.sleepNote ? (
+                <p className="text-2xs text-mute">睡眠整理：{result.sleepNote}</p>
+            ) : null}
             {result.sleeps.length > 0 ? (
                 <section className="space-y-1">
                     <div className="text-2xs tracking-widest text-mute">睡眠整理（反思壓縮）</div>

@@ -129,6 +129,8 @@ export interface TickLoopResult {
     resolves: TickResolveResult[];
     povs: TickPovResult[];
     sleeps: TickSleepResult[];
+    /** Set when sleep was enabled but skipped (e.g. not night yet). */
+    sleepNote?: string;
     gazette?: TickGazetteResult;
     error?: string;
 }
@@ -184,12 +186,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const slice = characters.slice(0, cap);
 
     // 2. PLAN — each character updates its standing goal first (N6), so the
-    //    fresh plan is recalled by the decide/POV steps below. Chain-free
-    //    (MemWal only), so it runs even on dry-run for preview.
+    //    fresh plan is recalled by the decide/POV steps below. PLAN does NO
+    //    Sui signing (MemWal writes + reads only), so all characters plan
+    //    CONCURRENTLY — wall-clock collapses from Σ to max.
     const plans: TickPlanResult[] = [];
     if (input.plan ?? true) {
-        for (const c of slice) {
-            const p = await runPlanAction(c.id, { dryRun });
+        const settled = await Promise.all(
+            slice.map(async (c) => ({ c, p: await runPlanAction(c.id, { dryRun }) })),
+        );
+        for (const { c, p } of settled) {
             plans.push({
                 characterId: c.id,
                 name: c.name,
@@ -203,7 +208,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     // 3. ACT — characters play their own hands in open events; events that
-    //    everyone has acted in auto-resolve (judge). Chain mutation.
+    //    everyone has acted in auto-resolve (judge). Chain mutation → serial
+    //    (single StorytellerCap, no parallel signing).
     const acts: TickActResult[] = [];
     const resolves: TickResolveResult[] = [];
     if (!dryRun) {
@@ -217,44 +223,69 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 4. PRODUCE — POV chapter per character (subscriber-gated unless forced).
+    // 4. PRODUCE — POV chapter per character.
+    //    Dry-run does NO chain writes → generate every chapter CONCURRENTLY
+    //    (this is the big preview speedup). A real run anchors via
+    //    commitment::commit (Sui signing) → must stay serial.
+    const trigger = `${dayLabel} — 戲班又過了一段光景。把你此刻的心境、所見、未說出口的念頭，寫成一段獨白。`;
+    const mapPov = (c: Character, r: Awaited<ReturnType<typeof runPovForCharacter>>): TickPovResult => ({
+        characterId: c.id,
+        name: c.name,
+        ok: r.ok,
+        anchored: r.anchored,
+        skipReason: r.skipReason,
+        chapter: r.chapter,
+        recalledCount: r.recalledCount,
+        digest: r.digest,
+        error: r.error,
+    });
     const povs: TickPovResult[] = [];
-    for (const c of slice) {
-        const trigger = `${dayLabel} — 戲班又過了一段光景。把你此刻的心境、所見、未說出口的念頭，寫成一段獨白。`;
-        const r = await runPovForCharacter(admin, c.id, {
-            triggerNarrative: trigger,
-            forceRun: true,
-            dryRun,
-        });
-        povs.push({
-            characterId: c.id,
-            name: c.name,
-            ok: r.ok,
-            anchored: r.anchored,
-            skipReason: r.skipReason,
-            chapter: r.chapter,
-            recalledCount: r.recalledCount,
-            digest: r.digest,
-            error: r.error,
-        });
+    if (dryRun) {
+        const settled = await Promise.all(
+            slice.map(async (c) => ({
+                c,
+                r: await runPovForCharacter(admin, c.id, {
+                    triggerNarrative: trigger,
+                    forceRun: true,
+                    dryRun: true,
+                }),
+            })),
+        );
+        for (const { c, r } of settled) povs.push(mapPov(c, r));
+    } else {
+        for (const c of slice) {
+            const r = await runPovForCharacter(admin, c.id, {
+                triggerNarrative: trigger,
+                forceRun: true,
+                dryRun: false,
+            });
+            povs.push(mapPov(c, r));
+        }
     }
 
-    // 5. REFLECT — periodic sleep / consolidation (chain mutation).
+    // 5. REFLECT — periodic sleep / consolidation. Characters sleep at NIGHT,
+    //    not every tick (Generative-Agents reflection is periodic, not per-
+    //    tick — answering "should they all sleep every tick?": no). Sleep
+    //    anchors via reflection::submit (Sui signing) → serial.
+    const isNight = worldTime?.partOfDay === 'night';
     const sleeps: TickSleepResult[] = [];
+    let sleepNote: string | undefined;
     if ((input.sleep ?? true) && !dryRun) {
-        for (const c of slice) {
-            const r = await runSleepAction(c.id);
-            // Surface only meaningful outcomes (skip the "nothing to do" noise
-            // is still recorded so the panel shows it ran).
-            sleeps.push({
-                characterId: c.id,
-                name: c.name,
-                ok: r.ok,
-                reflections: r.reflections,
-                anchored: r.anchored,
-                skipReason: r.skipReason,
-                error: r.error,
-            });
+        if (isNight) {
+            for (const c of slice) {
+                const r = await runSleepAction(c.id);
+                sleeps.push({
+                    characterId: c.id,
+                    name: c.name,
+                    ok: r.ok,
+                    reflections: r.reflections,
+                    anchored: r.anchored,
+                    skipReason: r.skipReason,
+                    error: r.error,
+                });
+            }
+        } else {
+            sleepNote = `非夜晚（現為 ${worldTime?.partOfDay ?? '未知'}），角色不整理記憶 — 推進到夜裡再睡`;
         }
     }
 
@@ -290,6 +321,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         resolves,
         povs,
         sleeps,
+        sleepNote,
         gazette,
     };
 }
