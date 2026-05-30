@@ -180,17 +180,26 @@ const DEFAULT_IMPORTANCE: Record<MemoryKind, number> = {
     observation: 4,
 };
 
-const TAG_RE = /^\[\[m\|t=([a-z]+)\|i=(\d+)\]\]\s*([\s\S]*)$/;
+// Tag carries kind + importance + narrative day `d=` (for recency decay).
+// Three-factor recall score = importance × recency(narrative-day) ×
+// relevance(semantic distance) — Smallville-style, adapted to MemWal:
+// `importance` from our tag, `recency` from the day stamp + decay,
+// `relevance` from MemWal's own vector distance. The one thing we can't
+// match vs a local store: we only score the semantically-retrieved
+// candidate set, not the full memory store (mitigated by over-fetch).
+const TAG_RE = /^\[\[m\|t=([a-z]+)\|i=(\d+)(?:\|d=(\d+))?\]\]\s*([\s\S]*)$/;
 
 export interface RecalledMemory {
     text: string;
     kind: MemoryKind | 'unknown';
     importance: number;
+    /** Narrative day written (recency); undefined for legacy untagged. */
+    day?: number;
 }
 
-function tagMemory(text: string, kind: MemoryKind, importance: number): string {
+function tagMemory(text: string, kind: MemoryKind, importance: number, day: number): string {
     const i = Math.max(1, Math.min(10, Math.round(importance)));
-    return `[[m|t=${kind}|i=${i}]] ${text}`;
+    return `[[m|t=${kind}|i=${i}|d=${Math.max(0, Math.round(day))}]] ${text}`;
 }
 
 function parseMemory(stored: string): RecalledMemory {
@@ -199,11 +208,48 @@ function parseMemory(stored: string): RecalledMemory {
         return {
             kind: m[1] as MemoryKind,
             importance: Number(m[2]) || 5,
-            text: m[3].trim(),
+            day: m[3] != null ? Number(m[3]) : undefined,
+            text: m[4].trim(),
         };
     }
     // Untagged (legacy / pre-tagging): treat as mid-importance observation.
     return { kind: 'unknown', importance: 5, text: stored.trim() };
+}
+
+/** Current narrative day from the World tick (chain). Falls back to 1.
+ *  Recency uses narrative time (not wall-clock) so a dream fades as the
+ *  storyteller advances days — semantically right + demoable. */
+async function currentNarrativeDay(): Promise<number> {
+    const worldId = ENDLESS_STORY_DEPLOYMENT.worldId;
+    if (!worldId) return 1;
+    try {
+        const client = makeSuiClient({ network: resolveNetwork() });
+        const res = await read.world.getWorld(client, worldId);
+        const json = res.json as unknown as {
+            state?: { current_tick?: number | string };
+            time_config?: { days_per_tick_bp?: number | string };
+        };
+        const tick = Number(json.state?.current_tick ?? 0);
+        const bp = Number(json.time_config?.days_per_tick_bp ?? 1670) || 1670;
+        return Math.floor((tick * bp) / 10_000) + 1;
+    } catch {
+        return 1;
+    }
+}
+
+/** Recency decay by narrative day. Half-life 2 days: 2 days old → 0.5,
+ *  4 days → 0.25. A high-importance dream (i=9) thus starts on top but is
+ *  overtaken by fresh memories as days pass. Legacy (no day) → neutral 1. */
+const RECENCY_HALFLIFE_DAYS = 2;
+function recencyWeight(memDay: number | undefined, today: number): number {
+    if (memDay == null) return 1;
+    return Math.pow(0.5, Math.max(0, today - memDay) / RECENCY_HALFLIFE_DAYS);
+}
+
+/** Relevance from MemWal semantic distance (lower = closer). */
+function relevanceWeight(distance: number): number {
+    if (!Number.isFinite(distance)) return 0.5;
+    return Math.max(0.05, 1 - Math.min(1, distance));
 }
 
 /**
@@ -230,19 +276,29 @@ export async function recallStructuredForCharacter(
     const client = await clientFor(characterId);
     if (!client) return [];
     try {
-        // Over-fetch (2×) so importance re-rank has material to work with.
-        const res = await client.recall(query, limit * 2, namespaceFor(characterId));
-        const parsed: RecalledMemory[] = [];
+        // Over-fetch (3×) so three-factor re-rank has candidates to work with.
+        const [res, today] = await Promise.all([
+            client.recall(query, limit * 3, namespaceFor(characterId)),
+            currentNarrativeDay(),
+        ]);
+        const scored: { m: RecalledMemory; score: number; idx: number }[] = [];
+        let idx = 0;
         for (const hit of res.results) {
             if ('text' in hit && typeof hit.text === 'string' && hit.text.trim()) {
-                parsed.push(parseMemory(hit.text));
+                const m = parseMemory(hit.text);
+                const distance =
+                    'distance' in hit && typeof (hit as { distance?: number }).distance === 'number'
+                        ? (hit as { distance: number }).distance
+                        : 0.5;
+                const score =
+                    (m.importance / 10) *
+                    recencyWeight(m.day, today) *
+                    relevanceWeight(distance);
+                scored.push({ m, score, idx: idx++ });
             }
         }
-        // Stable sort by importance desc (recall already returns by
-        // semantic distance, so equal-importance keeps closest-first).
-        const ranked = parsed
-            .map((m, idx) => ({ m, idx }))
-            .sort((a, b) => b.m.importance - a.m.importance || a.idx - b.idx)
+        const ranked = scored
+            .sort((a, b) => b.score - a.score || a.idx - b.idx)
             .slice(0, limit)
             .map((x) => x.m);
         console.log(
@@ -272,8 +328,9 @@ export async function rememberForCharacter(
     if (!client) return false;
     const kind = opts?.kind ?? 'observation';
     const importance = opts?.importance ?? DEFAULT_IMPORTANCE[kind] ?? 5;
+    const day = await currentNarrativeDay();
     try {
-        await client.remember(tagMemory(text, kind, importance), namespaceFor(characterId));
+        await client.remember(tagMemory(text, kind, importance, day), namespaceFor(characterId));
         console.log(
             `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}] (${text.length} chars)`,
         );

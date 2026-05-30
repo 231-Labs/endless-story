@@ -121,15 +121,18 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 
 ## 5. 認知層(MemWal-native — 明確不抄舊三因子 store)
 
-- **記憶模型**:MemWal 存加密文字,我們在文字前綴 `[[m|t=<kind>|i=<imp>]]` tag。
+- **記憶模型**:MemWal 存加密文字,前綴 `[[m|t=<kind>|i=<imp>|d=<敘事日>]]` tag。
   kind ∈ {dream, relationship, reflection, genesis, chapter, observation, plan}。
-- **召回**:語意 recall over-fetch → 依 importance 重排(舊版三因子的 80% 價值)。
-  ⚠️ 限制:語意 top-K 非全量掃描;記憶極多時靠 reflection 壓縮維持。
+- **三因子召回(已實作,MemWal-native)** ✅:score = **importance**(tag)× **recency**
+  (敘事日衰減,half-life 2 日)× **relevance**(MemWal 向量 distance)。over-fetch 3× →
+  三因子重排 top-K。**唯一**跟舊本地 store 的差:只對「語意撈回的候選集」評分、非全量
+  掃描(緩解:撈寬 + 必要時定向 recall)。recency 用**敘事日**非牆鐘 → 推進 tick 即衰減、可 demo。
 - **反思壓縮(sleep)**:把零碎觀察壓成高密度反思 + 遺忘已吸收的 → 防 recall 退化成噪音。
-  這是**唯一值得從舊版搬的「機器 idea」**(實作 MemWal-native)。
+  值得從舊版搬的「機器 idea」(實作 MemWal-native)。**尚未做(N2)**。
 - **關係**:導演 relationship_seed → 鏈上 RelationshipSeeded;需建 reader → 注入 prompt +
-  餵 ProfileTab(目前 mock)。輕量:per-pair 一句 tone summary,不做完整加權圖。
-- **夢**:owner 付 ENDLESS → moderator 改寫 → anchor → MemWal remember(kind=dream,i=9,不壓縮)。✅
+  餵 ProfileTab(目前 mock)。輕量:per-pair 一句 tone summary,不做完整加權圖。**尚未做(N3)**。
+- **夢**:owner 付 ENDLESS → moderator 改寫 → anchor → MemWal remember(kind=dream,i=9)。
+  **起始最高,但隨 recency 衰減**(被新記憶逐漸超越)—— 不是永久置頂。✅
 - **創世記憶**:mint 時從描述蒸餾,墊底防飄移。✅
 - **行當聲口**:`shared/role-traits.ts` 注入所有 prompt。✅
 
@@ -177,7 +180,7 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 
 ## 9. 非目標 / 明確不做
 
-- 不抄舊 15k-LOC 實作(三因子掃全量 store、tellings 結構化八卦傳播 → 除非 demo 需要)。
+- 三因子**已用 MemWal-native 方式做**(不抄舊本地全量掃描版);tellings 結構化八卦傳播暫不做(除非 demo 需要)。
 - 不把 MemWal 當可任意查詢的 KV(它是語意 store,認知放 prompt+壓縮)。
 - LLM 推論 ZK 驗證、去中心 keeper、real-time chat → 不做。
 
