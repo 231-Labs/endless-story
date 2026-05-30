@@ -72,7 +72,7 @@ REFLECT   (sleep,週期性非每 tick)recall 近期 → 壓縮成 1-2 條高密�
 | 動作 | Move call | 狀態 |
 |---|---|---|
 | 出牌 | `event::submit_action` | 鏈上有 ✅,**角色 decide 未接** ❌ |
-| 移動 | `scene::move_character` / `character::walk_in_world` | 鏈上有 ✅,**角色 decide 未接** ❌ |
+| 移動 | `character::move_character` | 鏈上有 ✅,**角色 decideMove 已接 ✅**(tick-loop MOVE,批次 PTB) |
 | 寫 POV | `commitment::commit` | ✅ 已接(被動觸發,需改主動) |
 | 反思 | `reflection::submit` | ✅ 已接(只 trigger,未做壓縮) |
 | 記憶 | MemWal remember/recall | ✅ 已接(加權已做) |
@@ -178,7 +178,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 
 | # | 缺口 | 內容 | 對應 |
 |---|---|---|---|
-| **N1** | 角色 DECIDE/ACT | **出牌已做 ✅**(character-agent decideCardPlay,依記憶+性格選牌→submit_action;EventPanel「讓她自己出牌」)。**剩**:移動 move_character + 由 tick loop 自動驅動(併入 N4)。 | §2 補權責破口 |
+| ~~N1~~ ✅ | 角色 DECIDE/ACT | **出牌 ✅**(decideCardPlay→submit_action)+ **移動 ✅**(character-agent decideMove,依 plan+在場者選 stay/move→move_character;tick-loop MOVE phase 批次成一個 PTB)。兩者都由 tick loop 自動驅動。**動作空間補齊。** | §2 補權責破口 |
 | ~~N2~~ ✅ | 反思壓縮 sleep | **已做**:recallForConsolidation(撈非 anchored 的 observation/chapter)→ consolidateMemories(primary,壓成 1-2 條)→ remember(kind=reflection,i=8,**a=1 anchored 不再被壓**)→ anchorReflectionText 上鏈。admin ReflectionPanel「睡一覺·整理記憶」。 | §5 |
 | ~~N3~~ ✅ | 關係上鏈讀 | **已做**:read.director.listRelationshipEvents → chain/relationships.ts(per-pair tone 聚合,seed 次數→weight)→ facade chain-first(ProfileTab 去 mock)+ fetchRelationshipHints 注入 **decide + POV** prompt。EventPanel 顯示「牽絆 N」。輕量一句 tone,不做加權圖。 | §5 |
 | ~~N4~~ ✅ | tick loop 自治 | **已做**:tick-loop.ts `runTickLoopAction` 一鍵跑完整輪:ADVANCE→ACT(開著事件中每個未出牌的參與者自動 decide+submit,讀 resolution.submitted_actions 去重)→PRODUCE(POV)→REFLECT(sleep)→NARRATE(公報)。SchedulerPanel「自治推進一個 tick」。**剩**:獨立 CLI setInterval(可後置)+ judge 自動收尾(N5)。 | §6 |
@@ -191,8 +191,11 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 **剩餘(達 C 後的打磨)**:
 - **N5b** ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,可能動 contract)。
 - **獨立 CLI**:把 `runTickLoopAction` 包成 runner `setInterval`(目前 admin 按鈕驅動)。
-- **移動**:`scene::move_character` 自決(目前角色只在事件內出牌,未自主換場景)。
+- **手卷 Step 3** 第一人稱飄字(把 decide intent 落地 → 飄字從牌名升級成第一人稱句)。
 - **§11** 動態出圖。
+
+**效能(已做)**:tick loop 全面 PTB 批次化 —— 出牌/收尾/POV commit/移動各包成一個 PTB(一次簽),
+recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEAL 429;sleep 只在夜裡跑。
 
 ---
 
