@@ -90,6 +90,7 @@ export function SchedulerPanel() {
 /* ── N4 — autonomous tick (act + POV + sleep + gazette in one pass) ── */
 function TickLoopSection() {
     const [plan, setPlan] = useState(true);
+    const [move, setMove] = useState(true);
     const [sleep, setSleep] = useState(true);
     const [gazette, setGazette] = useState(true);
     const [result, setResult] = useState<TickLoopResult | null>(null);
@@ -98,7 +99,7 @@ function TickLoopSection() {
     const run = (dryRun: boolean) => {
         setResult(null);
         startTransition(async () => {
-            const r = await runTickLoopAction({ plan, sleep, gazette, dryRun });
+            const r = await runTickLoopAction({ plan, move, sleep, gazette, dryRun });
             setResult(r);
         });
     };
@@ -122,6 +123,15 @@ function TickLoopSection() {
                         disabled={isPending}
                     />
                     含更新規劃
+                </label>
+                <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+                    <input
+                        type="checkbox"
+                        checked={move}
+                        onChange={(e) => setMove(e.target.checked)}
+                        disabled={isPending}
+                    />
+                    含自主移動
                 </label>
                 <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
                     <input
@@ -207,6 +217,34 @@ function TickLoopResultView({ result }: { result: TickLoopResult }) {
                                     </span>
                                 ) : (
                                     <span className="text-cinnabar"> {p.error}</span>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
+            {/* MOVE */}
+            {result.moves.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">移動（自主走位）</div>
+                    <ul className="space-y-1">
+                        {result.moves.map((m) => (
+                            <li key={m.characterId} className="text-xs">
+                                <span
+                                    className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
+                                        m.ok ? 'bg-jade' : 'bg-cinnabar'
+                                    }`}
+                                />
+                                <span className="text-ink">{m.name}</span>
+                                {m.ok ? (
+                                    <span className="text-mute">
+                                        {' '}
+                                        走去「{m.toSceneName ?? '別處'}」
+                                        {m.reason ? ` — ${m.reason}` : ''}
+                                    </span>
+                                ) : (
+                                    <span className="text-cinnabar"> {m.error}</span>
                                 )}
                             </li>
                         ))}

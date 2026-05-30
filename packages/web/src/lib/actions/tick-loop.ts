@@ -25,16 +25,19 @@
  */
 
 import { Transaction } from '@mysten/sui/transactions';
-import type { Character } from '@endless-story/shared';
+import type { Character, Scene } from '@endless-story/shared';
 import {
     ENDLESS_STORY_DEPLOYMENT,
     makeSuiClient,
     read,
     tx as endlessTx,
 } from '@endless-story/sdk';
+import { characterAgent } from '@endless-story/runner';
 import { getAdminContext, type AdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
+import { recallCurrentPlanText } from '@/lib/chain/memory';
+import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { charactersApi } from '@/lib/api/index';
 import {
     advanceTickAction,
@@ -62,6 +65,8 @@ export interface TickLoopInput {
     maxCharacters?: number;
     /** Update each character's standing plan first (N6). Default true. */
     plan?: boolean;
+    /** Let idle characters walk between scenes toward their goals. Default true. */
+    move?: boolean;
     /** Run the consolidation/sleep pass. Default true. */
     sleep?: boolean;
     /** Compile the gazette at the end. Default true. */
@@ -114,6 +119,15 @@ export interface TickResolveResult {
     error?: string;
 }
 
+export interface TickMoveResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    toSceneName?: string;
+    reason?: string;
+    error?: string;
+}
+
 export interface TickSleepResult {
     characterId: string;
     name: string;
@@ -140,6 +154,7 @@ export interface TickLoopResult {
     advanced: boolean;
     worldTime?: WorldTimeSnapshot;
     plans: TickPlanResult[];
+    moves: TickMoveResult[];
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];
@@ -157,6 +172,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             ok: false,
             advanced: false,
             plans: [],
+            moves: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -172,6 +188,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             ok: false,
             advanced: false,
             plans: [],
+            moves: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -227,6 +244,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 hadPrevious: p.hadPrevious,
                 error: p.ok ? undefined : p.error,
             });
+        }
+    }
+
+    // 2.5 MOVE — idle characters walk toward their goals (autonomous
+    //    movement completes the N1 action space). Batched into one PTB.
+    const moves: TickMoveResult[] = [];
+    if ((input.move ?? true) && !dryRun) {
+        try {
+            moves.push(
+                ...(await runMovePhase(admin, d.sagaId, d.storytellerCapId, slice, nameById)),
+            );
+        } catch (err) {
+            console.warn('[tick-loop] move phase failed:', err);
         }
     }
 
@@ -371,6 +401,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     const anyOk =
         plans.some((p) => p.ok) ||
+        moves.some((m) => m.ok) ||
         acts.some((a) => a.ok) ||
         resolves.some((r) => r.ok) ||
         povs.some((p) => p.ok) ||
@@ -381,6 +412,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         advanced,
         worldTime,
         plans,
+        moves,
         acts,
         resolves,
         povs,
@@ -388,6 +420,137 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         sleepNote,
         gazette,
     };
+}
+
+/* ── MOVE phase (autonomous movement, batched into one PTB) ────────────
+ * Idle characters (not bound to an open event) decide — from their plan +
+ * who's where — whether to walk to another scene. All moves go in ONE PTB
+ * (move_character takes cap/saga/scenes/character by ref). Per-item fallback
+ * if the batch aborts (a stale current_scene_id reverts the whole PTB).
+ * The live handscroll reflects the new positions on its next poll. */
+async function runMovePhase(
+    admin: AdminContext,
+    sagaId: string,
+    capId: string,
+    slice: Character[],
+    nameById: Map<string, string>,
+): Promise<TickMoveResult[]> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return [];
+    const client = makeSuiClient({ network: resolveNetwork() });
+
+    const scenes = await fetchOnChainScenesForSaga(sagaId).catch(() => []);
+    if (scenes.length < 2) return []; // nowhere to go
+
+    // character → current scene (from each scene's current_character_ids).
+    const sceneByChar = new Map<string, Scene>();
+    for (const s of scenes) {
+        for (const cid of s.currentCharacterIds ?? []) sceneByChar.set(cid, s);
+    }
+    const sceneNameById = new Map(scenes.map((s) => [s.id, s.name]));
+    const presentNames = (s: Scene): string[] =>
+        (s.currentCharacterIds ?? [])
+            .map((cid) => nameById.get(cid))
+            .filter((n): n is string => Boolean(n));
+
+    // Characters on stage in an open event stay put.
+    const busy = new Set<string>();
+    const summaries = await read.event
+        .listBudgetEvents(client, pkg, { sagaId, maxEvents: 20 })
+        .catch(() => []);
+    for (const ev of summaries) {
+        try {
+            const res = await read.event.getBudgetEvent(client, ev.eventId);
+            const j = res.json as unknown as {
+                meta?: { status?: number | string };
+                deck?: { participants?: string[] };
+            };
+            if (Number(j.meta?.status ?? 0) !== 0) continue;
+            for (const p of j.deck?.participants ?? []) busy.add(p);
+        } catch {
+            /* ignore */
+        }
+    }
+
+    const candidates = slice.filter((c) => sceneByChar.has(c.id) && !busy.has(c.id));
+    if (candidates.length === 0) return [];
+
+    // DECIDE moves (bounded concurrency — recalls plan → SEAL).
+    const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
+        try {
+            const cur = sceneByChar.get(c.id)!;
+            const options = scenes
+                .filter((s) => s.id !== cur.id)
+                .map((s) => ({
+                    sceneId: s.id,
+                    name: s.name,
+                    description: s.description,
+                    presentNames: presentNames(s),
+                }));
+            const planHint = await recallCurrentPlanText(c.id).catch(() => null);
+            const dcs = await characterAgent.decideMove({
+                name: c.name,
+                role: '—',
+                planHint: planHint ?? undefined,
+                currentSceneName: cur.name,
+                options,
+            });
+            return { c, fromId: cur.id, dcs };
+        } catch (err) {
+            return {
+                c,
+                fromId: '',
+                dcs: {
+                    move: false,
+                    reason: err instanceof Error ? err.message : String(err),
+                } as characterAgent.MoveDecideResult,
+            };
+        }
+    });
+
+    const movers = decided.filter(
+        (x) => x.dcs.move && x.dcs.targetSceneId && x.fromId && x.fromId !== x.dcs.targetSceneId,
+    );
+    if (movers.length === 0) return [];
+
+    const buildMove = (m: (typeof movers)[number]) =>
+        endlessTx.character.moveCharacter({
+            cap: capId,
+            saga: sagaId,
+            fromScene: m.fromId,
+            toScene: m.dcs.targetSceneId as string,
+            character: m.c.id,
+        });
+
+    const out: TickMoveResult[] = [];
+    const batch = await trySend(admin, (txb) => {
+        for (const m of movers) txb.add(buildMove(m));
+    });
+    if (batch.ok) {
+        for (const m of movers) {
+            out.push({
+                characterId: m.c.id,
+                name: m.c.name,
+                ok: true,
+                toSceneName: sceneNameById.get(m.dcs.targetSceneId as string),
+                reason: m.dcs.reason,
+            });
+        }
+    } else {
+        // Fallback: isolate each move (a stale scene reverts the whole PTB).
+        for (const m of movers) {
+            const one = await trySend(admin, (txb) => txb.add(buildMove(m)));
+            out.push({
+                characterId: m.c.id,
+                name: m.c.name,
+                ok: one.ok,
+                toSceneName: sceneNameById.get(m.dcs.targetSceneId as string),
+                reason: m.dcs.reason,
+                error: one.ok ? undefined : one.error,
+            });
+        }
+    }
+    return out;
 }
 
 /* ── ACT phase (batched into PTBs) ─────────────────────────────────────

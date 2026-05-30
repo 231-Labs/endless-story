@@ -21,6 +21,8 @@ import {
 export type { HandCard, DecideInput } from './prompt.js';
 export { updatePlan, formatPlanText } from './plan.js';
 export type { PlanInput, PlanResult } from './plan.js';
+export { decideMove } from './move.js';
+export type { MoveDecideInput, MoveDecideResult, MoveSceneOption } from './move.js';
 
 export interface DecideResult {
     /** Chosen catalog index (what submit_action takes). Always one of the
