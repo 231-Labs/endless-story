@@ -191,7 +191,9 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 **剩餘(達 C 後的打磨)**:
 - **N5b** ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,可能動 contract)。
 - **獨立 CLI**:把 `runTickLoopAction` 包成 runner `setInterval`(目前 admin 按鈕驅動)。
-- **手卷 Step 3** 第一人稱飄字(把 decide intent 落地 → 飄字從牌名升級成第一人稱句)。
+- ~~手卷 Step 3~~ ✅ 第一人稱飄字:tick-loop 把 decide intent / move reason 寫進 per-scene
+  ephemeral cache(`scene-lines.ts`,15-min TTL,記憶體),getSagaLiveSnapshot 優先用它當飄字
+  (退回牌名)。飄字從「防守」升級成「我退後半步,手按舊傷」。(持久層仍是 anchored POV/公報。)
 - **§11** 動態出圖。
 
 **效能(已做)**:tick loop 全面 PTB 批次化 —— 出牌/收尾/POV commit/移動各包成一個 PTB(一次簽),
