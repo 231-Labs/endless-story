@@ -26,6 +26,14 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
+## 敘事引擎方向（唯一真相）
+
+> **[docs/NARRATIVE_AGENTS.md](./docs/NARRATIVE_AGENTS.md)** = 敘事層唯一設計文件。
+> 兩個自治 agent（Director 導演 / Character 角色）、目標 C 級全自治、chain-first +
+> MemWal-native 重建（不抄舊實作）。所有敘事開發參照它;§8 有缺口 + 建置順序(N1-N6)。
+
+---
+
 ## 鏈上架構（2026-05-24 拍板，不可漂移）
 
 > 合約 / SDK / runner / web 之間的**契約**。任何 session 不准踰越。
