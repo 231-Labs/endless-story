@@ -19,10 +19,28 @@ import type { Character } from '@endless-story/shared';
 const KINDS: { value: PortraitOccasionKind; label: string }[] = [
     { value: 'reference', label: '設定形象' },
     { value: 'stage', label: '戲妝登台' },
-    { value: 'aged', label: '老年' },
+    { value: 'finery', label: '盛裝華服' },
     { value: 'daily', label: '日常卸妝' },
+    { value: 'youth', label: '少年青澀' },
+    { value: 'aged', label: '老年蒼勁' },
+    { value: 'illness', label: '病中清減' },
+    { value: 'snow', label: '雪夜獨行' },
     { value: 'custom', label: '自訂情境' },
 ];
+
+/** Short demo hint of what each option renders (gist, not the exact prompt;
+ *  Dry-Run shows the real prompt sent). */
+const KIND_HINT: Record<PortraitOccasionKind, string> = {
+    reference: '端正設定形象、純色底、神情沉靜',
+    stage: '勾臉上彩的京劇戲妝、戴頭面、穿蟒袍登台',
+    finery: '上等綢緞華服、雍容貴氣',
+    daily: '後台卸妝、素常服、生活感',
+    youth: '更年輕幾歲、眉眼青澀',
+    aged: '多年以後、白髮皺紋、氣度蒼勁',
+    illness: '久病清減、面色蒼白、形容憔悴',
+    snow: '風雪夜、披斗篷、肩頭落雪',
+    custom: '用下方文字逐字驅動扮相',
+};
 
 export function PortraitEvolvePanel({ characters }: { characters: Character[] }) {
     const [characterId, setCharacterId] = useState<string>(characters[0]?.id ?? '');
@@ -77,15 +95,26 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
                 </label>
             </div>
 
+            {kind !== 'custom' ? (
+                <p className="text-2xs leading-relaxed text-mute">
+                    此選項出：<span className="text-ink/80">{KIND_HINT[kind]}</span>
+                    （同一人、保持體態氣質；水墨工筆畫風）
+                </p>
+            ) : null}
+
             <label className="block space-y-1.5">
                 <div className="text-2xs tracking-widest text-mute">
-                    情境補述{kind === 'custom' ? '（必填）' : '（可選）'}
+                    情境補述{kind === 'custom' ? '（必填）' : '（可選 · 疊加細節）'}
                 </div>
                 <input
                     type="text"
                     value={occasion}
                     onChange={(e) => setOccasion(e.target.value)}
-                    placeholder="如：大火之後，左頰留下舊傷疤"
+                    placeholder={
+                        kind === 'custom'
+                            ? '如：京劇老生扮相，黑三髯口，蟒袍'
+                            : '如：左頰一道舊傷疤（疊加在上面選項之上）'
+                    }
                     disabled={isPending}
                     className="w-full rounded border border-hairline bg-surface px-3 py-2 text-sm text-ink focus:border-cinnabar focus:outline-none"
                 />

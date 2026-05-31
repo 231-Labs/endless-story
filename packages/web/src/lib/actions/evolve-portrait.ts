@@ -27,16 +27,30 @@ import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { generatePortrait } from './generate-portrait';
 
-export type PortraitOccasionKind = 'reference' | 'stage' | 'aged' | 'daily' | 'custom';
+export type PortraitOccasionKind =
+    | 'reference'
+    | 'stage'
+    | 'finery'
+    | 'daily'
+    | 'youth'
+    | 'aged'
+    | 'illness'
+    | 'snow'
+    | 'custom';
 
-/** Per-kind situational framing — drives makeup / costume / scene. The
- *  anchor curator strips these (it's 素顏-only), so the variant builds its
- *  OWN prompt and renders it directly via promptOverride. */
+/** Per-kind situational framing — short, evocative, visually distinct (for
+ *  demo). Drives makeup / costume / age / scene. The anchor curator strips
+ *  these (it's 素顏-only), so the variant builds its OWN prompt and renders
+ *  it directly via promptOverride. */
 const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom'>, string> = {
-    reference: '正式設定形象：端正面對觀者、神情沉靜，純色底、自然光、半身。',
-    stage: '正在戲台上演出 —— **勾臉上彩的京劇戲妝、戴頭面、穿戲服**，舞台燈光，半身或全身入鏡。',
-    aged: '多年以後 —— 白髮、面有風霜皺紋、氣度更見蒼勁，著樸素常服。',
-    daily: '後台卸了妝的尋常一刻 —— 素常服、神情鬆弛、帶生活感。',
+    reference: '正式設定形象：端正面向觀者、神情沉靜，純色底、自然光、半身。',
+    stage: '登台演出：勾臉上彩的京劇戲妝、戴頭面、穿蟒袍戲服，舞台燈光，半身。',
+    finery: '一身上等綢緞華服、配飾講究，雍容貴氣，半身。',
+    daily: '後台卸了妝的尋常一刻：素常服、神情鬆弛、帶生活感。',
+    youth: '更年輕幾歲：眉眼青澀、未脫稚氣，衣著樸素，半身。',
+    aged: '多年以後：白髮、面有風霜皺紋、氣度蒼勁，樸素常服，半身。',
+    illness: '久病清減：面色蒼白、形容憔悴、披衣倚枕，神情倦怠。',
+    snow: '風雪夜中：披斗篷、肩頭落雪、呵氣成霜，神情堅毅。',
 };
 
 const VARIANT_TONE = '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。';
