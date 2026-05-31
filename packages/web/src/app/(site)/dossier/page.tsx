@@ -20,6 +20,7 @@ import { Suspense } from 'react';
 import type { Character } from '@endless-story/shared';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierSkeleton } from '@/components/dossier/DossierSkeleton';
+import { LiveStateBar, LiveStateBarSkeleton } from '@/components/dossier/LiveStateBar';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
@@ -180,7 +181,6 @@ async function DossierDetail({
     interventions,
     soulSongs,
     persona,
-    liveState,
     sagaName,
     chainPovChapters,
     reflections,
@@ -191,7 +191,6 @@ async function DossierDetail({
     interventionsApi.listInterventions(character.id),
     soulSongsApi.listSoulSongs(character.id),
     personasApi.getPersona(character.id),
-    liveStateApi.getLiveState(character.id, { withPlan: true }),
     // null when character.sagaId is null, a mock slug (non-Sui-id), or chain
     // unreachable; DossierHeader falls back to its legacy DEMO_SAGA_ID slug
     // match in that case.
@@ -219,9 +218,12 @@ async function DossierDetail({
         <div className="flex flex-1 flex-col justify-center pb-16">
           <DossierHeader
             character={character}
-            liveState={liveState}
-            sagaCharacters={allCharacters}
             sagaName={sagaName}
+            liveStateSlot={
+              <Suspense fallback={<LiveStateBarSkeleton />}>
+                <LiveStateBarLoader character={character} sagaCharacters={allCharacters} />
+              </Suspense>
+            }
           />
         </div>
         
@@ -284,6 +286,24 @@ async function DossierDetail({
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * Lazy loader for the header's live-state bar. getLiveState(withPlan) does a
+ * SEAL recall for 此刻心境/將往何方; isolating it here lets the header (portrait
+ * + name + meta + chips) paint immediately while this streams in.
+ */
+async function LiveStateBarLoader({
+  character,
+  sagaCharacters,
+}: {
+  character: Character;
+  sagaCharacters: Character[];
+}) {
+  const liveState = await liveStateApi.getLiveState(character.id, { withPlan: true });
+  return (
+    <LiveStateBar liveState={liveState} sagaCharacters={sagaCharacters} characterId={character.id} />
   );
 }
 

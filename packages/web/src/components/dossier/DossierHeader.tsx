@@ -1,7 +1,7 @@
-import type { Character, CharacterLiveState } from '@endless-story/shared';
+import type { ReactNode } from 'react';
+import type { Character } from '@endless-story/shared';
 import { BackButton } from '@/components/common/BackButton';
 import { CharacterPortrait } from '@/components/common/CharacterPortrait';
-import { Linkified } from '@/components/common/CharacterLinkifier';
 import { OwnerDisplay } from '@/components/common/OwnerDisplay';
 import { SubscribeButton } from '@/components/common/SubscribeButton';
 import { survivalBadgeClasses, survivalLabel } from '@/lib/format';
@@ -9,23 +9,18 @@ import { DEMO_SAGA_ID } from '@/mocks/sagas';
 
 const GENDER_LABEL = { female: '女', male: '男', other: '其他' } as const;
 
-// Gender-neutral labels — characters can be any gender, so we use
-// situation-based phrasing instead of pronouns.
-const LIVE_ITEMS: { key: keyof CharacterLiveState; label: string }[] = [
-  { key: 'intent', label: '此刻心境' },
-  { key: 'location', label: '身在何處' },
-  { key: 'nextPlan', label: '將往何方' },
-];
-
 export function DossierHeader({
   character,
-  liveState,
-  sagaCharacters,
+  liveStateSlot,
   sagaName,
 }: {
   character: Character;
-  liveState: CharacterLiveState;
-  sagaCharacters: Character[];
+  /**
+   * The 此刻心境/身在何處/將往何方 bar — passed as a slot so the caller can
+   * stream it in (it depends on a SEAL plan recall). Render a LiveStateBar
+   * (or a Suspense around a loader) here.
+   */
+  liveStateSlot: ReactNode;
   /**
    * On-chain saga.info.name fetched by caller (server component). When
    * passed, overrides the legacy DEMO_SAGA_ID slug match. Null falls
@@ -82,22 +77,7 @@ export function DossierHeader({
               </div>
             </div>
 
-            <div className="mt-12 border-t border-hairline pt-6 sm:mt-12 sm:pt-8">
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
-                {LIVE_ITEMS.map((item) => (
-                  <div key={item.key} className="min-w-0">
-                    <p className="text-xs tracking-widest text-mute">{item.label}</p>
-                    <p className="mt-2 font-serif text-lg leading-snug text-ink/90">
-                      <Linkified
-                        text={liveState[item.key]}
-                        characters={sagaCharacters}
-                        skipId={character.id}
-                      />
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {liveStateSlot}
           </div>
         </div>
       </div>

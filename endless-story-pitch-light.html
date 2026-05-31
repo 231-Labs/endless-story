@@ -398,72 +398,85 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   <div class="glow" style="width:440px;height:440px;background:var(--jade);top:-16%;right:-8%;opacity:.18"></div>
   <div class="eyebrow r">★ Platform &nbsp;·&nbsp; <span class="zh">通用架構 · 不是一個遊戲，是一座引擎</span></div>
   <h2 class="r" style="--i:1">春雪社只是<b class="c">其中一個 Saga</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:.7rem">合約是一套<b class="j">通用的 primitives</b>：World、Saga、Scene、Character 都是可以不斷長出的鏈上物件。一個 World 是共用的世界觀、物種、地理、年代；其上可以同時長出許多 Saga，像碼頭工會、軍閥、街坊市場，各自是同一片天地下的不同敘事。</p>
+  <p class="sub r" style="--i:2;margin-bottom:.7rem">合約是一套<b class="j">通用的 primitives</b>。一個 World 定義共用的世界觀、物種、地理、年代；<b class="g">Location 是 World 的地理屬性</b>，一個 Saga 可覆蓋<b class="j">一到多個 Location</b>，而某個 Location 上也可以沒有任何 Saga。同一個 World 之上能同時長出許多 Saga，像碼頭工會、軍閥、街坊市場。</p>
   <div class="diagram r appear" style="--i:2;margin-top:.4rem;height:50vh;min-height:320px">
-    <span class="cap">object hierarchy · World ⊃ Saga ⊃ { Scene · Character }  (Move structs, on-chain)</span>
+    <span class="cap">object model · World ⊃ Location；Saga covers 1..N Location；Scene · Character ∈ Saga</span>
     <svg viewBox="0 0 1200 440" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
       <defs><marker id="hi" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--jade)"/></marker>
         <marker id="hf" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--hair)"/></marker></defs>
 
-      <!-- WORLD column -->
+      <defs><marker id="hg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--gold)"/></marker></defs>
+
+      <!-- WORLD (root) -->
       <g font-family="var(--mono)">
-        <rect x="36" y="52" width="184" height="82" rx="7" fill="rgba(217,118,80,.12)" stroke="var(--cinnabar)" stroke-width="1.7"/>
-        <text x="128" y="80" text-anchor="middle" fill="var(--cinnabar)" font-size="17" font-weight="700">World</text>
-        <text x="128" y="101" text-anchor="middle" fill="var(--mute)" font-size="10.5">共用世界觀 · 物種</text>
-        <text x="128" y="118" text-anchor="middle" fill="var(--mute)" font-size="10.5">地理 · 年代</text>
-        <!-- faded extra worlds -->
-        <rect x="36" y="158" width="184" height="48" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/>
-        <text x="128" y="187" text-anchor="middle" fill="var(--mute)" font-size="13">World 2</text>
-        <rect x="36" y="222" width="184" height="40" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/>
-        <text x="128" y="247" text-anchor="middle" fill="#7c6a45" font-size="12">World 3 …</text>
-        <text x="128" y="300" text-anchor="middle" fill="var(--mute)" font-size="11">↻ 可有多個 world</text>
+        <rect x="34" y="116" width="172" height="86" rx="7" fill="rgba(217,118,80,.12)" stroke="var(--cinnabar)" stroke-width="1.8"/>
+        <text x="120" y="148" text-anchor="middle" fill="var(--cinnabar)" font-size="17" font-weight="700">World</text>
+        <text x="120" y="170" text-anchor="middle" fill="var(--mute)" font-size="10.5">世界觀 · 物種</text>
+        <text x="120" y="186" text-anchor="middle" fill="var(--mute)" font-size="10.5">地理 · 年代</text>
+        <text x="120" y="232" text-anchor="middle" fill="#7c6a45" font-size="10.5">↻ 可有多個 World</text>
       </g>
 
-      <!-- SAGA column -->
+      <!-- LOCATION (World 的地理屬性) -->
       <g font-family="var(--mono)">
-        <rect x="372" y="40" width="236" height="66" rx="7" fill="rgba(217,118,80,.16)" stroke="var(--cinnabar)" stroke-width="2"/>
-        <text x="490" y="68" text-anchor="middle" fill="var(--ink)" font-size="16" font-weight="700">Saga · 春雪社</text>
-        <text x="490" y="90" text-anchor="middle" fill="var(--seal)" font-size="10.5">world_id · 目前這一個</text>
-
-        <rect x="372" y="122" width="236" height="52" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/>
-        <text x="490" y="146" text-anchor="middle" fill="var(--mute)" font-size="13">Saga · 同世界另一敘事</text>
-        <text x="490" y="163" text-anchor="middle" fill="#7c6a45" font-size="10">碼頭工會 / 軍閥 / 街坊市場 …</text>
-
-        <rect x="372" y="190" width="236" height="48" rx="7" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/>
-        <text x="490" y="212" text-anchor="middle" fill="var(--gold)" font-size="13" font-weight="700">Location ×N</text>
-        <text x="490" y="229" text-anchor="middle" fill="var(--mute)" font-size="10">world 層 · 場景地理</text>
+        <text x="350" y="40" text-anchor="middle" fill="var(--gold)" font-size="12" font-weight="700">Location · World 的屬性</text>
+        <g font-size="12">
+          <rect x="284" y="54" width="132" height="40" rx="7" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/><text x="350" y="79" text-anchor="middle" fill="var(--ink)">戲台</text>
+          <rect x="284" y="104" width="132" height="40" rx="7" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/><text x="350" y="129" text-anchor="middle" fill="var(--ink)">市集</text>
+          <rect x="284" y="154" width="132" height="40" rx="7" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/><text x="350" y="179" text-anchor="middle" fill="var(--ink)">碼頭</text>
+          <rect x="284" y="216" width="132" height="44" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/><text x="350" y="234" text-anchor="middle" fill="var(--mute)">荒灘</text><text x="350" y="250" text-anchor="middle" fill="#7c6a45" font-size="9.5">尚無 Saga</text>
+        </g>
       </g>
 
-      <!-- SCENE / CHARACTER column -->
+      <!-- SAGA (covers 1..N Location) -->
       <g font-family="var(--mono)">
-        <rect x="760" y="34" width="220" height="56" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.7"/>
-        <text x="870" y="58" text-anchor="middle" fill="var(--jade)" font-size="14" font-weight="700">Scene ×N</text>
-        <text x="870" y="76" text-anchor="middle" fill="var(--mute)" font-size="10">saga_id · 一幕一物件</text>
+        <rect x="540" y="64" width="210" height="64" rx="7" fill="rgba(217,118,80,.16)" stroke="var(--cinnabar)" stroke-width="2"/>
+        <text x="645" y="92" text-anchor="middle" fill="var(--ink)" font-size="15" font-weight="700">Saga · 春雪社</text>
+        <text x="645" y="112" text-anchor="middle" fill="var(--seal)" font-size="10">覆蓋 戲台 + 市集</text>
 
-        <rect x="760" y="104" width="220" height="56" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.7"/>
-        <text x="870" y="128" text-anchor="middle" fill="var(--jade)" font-size="14" font-weight="700">Character ×N</text>
-        <text x="870" y="146" text-anchor="middle" fill="var(--mute)" font-size="10">saga_id · 每角一 NFT</text>
+        <rect x="540" y="176" width="210" height="58" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/>
+        <text x="645" y="200" text-anchor="middle" fill="var(--mute)" font-size="13">Saga · 碼頭工會</text>
+        <text x="645" y="218" text-anchor="middle" fill="#7c6a45" font-size="9.5">同 World 的另一敘事 · 覆蓋 碼頭</text>
+      </g>
+
+      <!-- SCENE / CHARACTER (∈ Saga) -->
+      <g font-family="var(--mono)">
+        <rect x="836" y="48" width="196" height="50" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.6"/>
+        <text x="934" y="70" text-anchor="middle" fill="var(--jade)" font-size="13" font-weight="700">Scene ×N</text>
+        <text x="934" y="86" text-anchor="middle" fill="var(--mute)" font-size="9.5">saga_id · 一幕一物件</text>
+
+        <rect x="836" y="110" width="196" height="50" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.6"/>
+        <text x="934" y="132" text-anchor="middle" fill="var(--jade)" font-size="13" font-weight="700">Character ×N</text>
+        <text x="934" y="148" text-anchor="middle" fill="var(--mute)" font-size="9.5">saga_id · 每角一 NFT</text>
       </g>
 
       <!-- CHARACTER instances -->
-      <g font-family="var(--sans)" font-size="11.5" text-anchor="middle">
-        <rect x="1030" y="30" width="64" height="30" rx="15" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="1062" y="49" fill="var(--ink)">雪庵</text>
-        <rect x="1100" y="30" width="64" height="30" rx="15" fill="var(--surface)" stroke="var(--jade)"/><text x="1132" y="49" fill="var(--ink)">沈郎</text>
-        <rect x="1030" y="70" width="64" height="30" rx="15" fill="var(--surface)" stroke="var(--gold)"/><text x="1062" y="89" fill="var(--ink)">紅綃</text>
-        <rect x="1100" y="70" width="64" height="30" rx="15" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="4 3"/><text x="1132" y="89" fill="var(--mute)">+N</text>
+      <g font-family="var(--sans)" font-size="11" text-anchor="middle">
+        <rect x="1066" y="92" width="54" height="28" rx="14" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="1093" y="110" fill="var(--ink)">雪庵</text>
+        <rect x="1124" y="92" width="48" height="28" rx="14" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="4 3"/><text x="1148" y="110" fill="var(--mute)">+N</text>
       </g>
 
-      <!-- edges: World -> Saga -->
+      <!-- edges -->
       <g fill="none">
-        <path class="draw" style="--i:0" pathLength="1" d="M220,86 C300,86 300,73 370,73" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
-        <path class="draw" style="--i:1" pathLength="1" d="M220,96 C300,120 300,148 370,148" stroke="var(--hair)" stroke-width="1.6" marker-end="url(#hf)"/>
-        <path class="draw" style="--i:1" pathLength="1" d="M220,104 C300,160 300,214 370,214" stroke="var(--gold)" stroke-width="1.6" marker-end="url(#hi)" opacity=".8"/>
-        <!-- Saga(春雪社) -> Scene/Character -->
-        <path class="draw" style="--i:2" pathLength="1" d="M608,66 C690,66 690,62 758,62" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
-        <path class="draw" style="--i:2" pathLength="1" d="M608,76 C690,100 690,132 758,132" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
+        <!-- World owns Locations (hairline) -->
+        <path class="draw" style="--i:0" pathLength="1" d="M206,150 C245,150 250,74 282,74" stroke="var(--hair)" stroke-width="1.5" marker-end="url(#hf)"/>
+        <path class="draw" style="--i:0" pathLength="1" d="M206,158 C245,158 250,124 282,124" stroke="var(--hair)" stroke-width="1.5" marker-end="url(#hf)"/>
+        <path class="draw" style="--i:0" pathLength="1" d="M206,166 C245,166 250,174 282,174" stroke="var(--hair)" stroke-width="1.5" marker-end="url(#hf)"/>
+        <path class="draw" style="--i:0" pathLength="1" d="M206,176 C245,200 250,236 282,236" stroke="var(--hair)" stroke-width="1.5" marker-end="url(#hf)"/>
+        <!-- Saga covers Location (gold, 1..N) -->
+        <path class="draw" style="--i:1" pathLength="1" d="M540,90 C480,80 470,74 418,74" stroke="var(--gold)" stroke-width="2" marker-end="url(#hg)"/>
+        <path class="draw" style="--i:1" pathLength="1" d="M540,104 C480,116 470,124 418,124" stroke="var(--gold)" stroke-width="2" marker-end="url(#hg)"/>
+        <path class="draw" style="--i:2" pathLength="1" d="M540,205 C480,200 470,178 418,176" stroke="var(--gold)" stroke-width="1.6" marker-end="url(#hg)" opacity=".75"/>
+        <!-- Saga -> Scene / Character (saga_id) -->
+        <path class="draw" style="--i:3" pathLength="1" d="M750,88 C800,82 800,74 834,74" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
+        <path class="draw" style="--i:3" pathLength="1" d="M750,104 C800,116 800,132 834,134" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
         <!-- Character -> instances -->
-        <path class="draw" style="--i:3" pathLength="1" d="M980,124 C1004,110 1010,70 1028,58" stroke="var(--hair)" stroke-width="1.4" marker-end="url(#hf)"/>
-        <path class="draw" style="--i:3" pathLength="1" d="M980,132 C1006,128 1010,88 1028,84" stroke="var(--hair)" stroke-width="1.4" marker-end="url(#hf)"/>
+        <path class="draw" style="--i:4" pathLength="1" d="M1032,134 C1048,130 1052,112 1064,108" stroke="var(--hair)" stroke-width="1.4" marker-end="url(#hf)"/>
+      </g>
+
+      <!-- legend -->
+      <g font-family="var(--mono)" font-size="10.5">
+        <line x1="540" y1="288" x2="572" y2="288" stroke="var(--gold)" stroke-width="2"/><text x="580" y="292" fill="var(--mute)">Saga 覆蓋 Location（1..N）</text>
+        <line x1="800" y1="288" x2="832" y2="288" stroke="var(--hair)" stroke-width="1.5"/><text x="840" y="292" fill="var(--mute)">World 包含 Location</text>
       </g>
 
       <!-- bottom struct strip -->
