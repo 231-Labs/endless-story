@@ -380,14 +380,33 @@ export async function recallForConsolidation(
 }
 
 /**
+ * Plan recall is a SEAL decrypt, and the tick loop reads the SAME plan up to
+ * 4× per character per tick (PLAN → MOVE → ACT decide → POV). That fan-out
+ * was a big chunk of the runner's SEAL 429s. Cache the plan text per
+ * character with a short TTL so those reads collapse to one decrypt; writing
+ * a new plan (rememberForCharacter kind=plan) invalidates it so the fresh
+ * plan still flows through the rest of the tick.
+ */
+const PLAN_CACHE = new Map<string, { text: string | null; ts: number }>();
+const PLAN_CACHE_TTL_MS = 90_000;
+
+function invalidatePlanCache(characterId: string): void {
+    PLAN_CACHE.delete(characterId);
+}
+
+/**
  * Recall the character's CURRENT plan (N6) — the latest kind=plan memory.
  *
  * Plans are the character's standing goal + day intent + open subgoals,
  * rewritten each tick. Recall is recency-driven (newest plan wins) rather
  * than relevance-driven, so we over-fetch with a plan-flavoured query and
  * pick the newest kind=plan candidate. Returns null when none / unconfigured.
+ * Cached per character (TTL above) to cut redundant SEAL decrypts.
  */
 export async function recallCurrentPlanText(characterId: string): Promise<string | null> {
+    const cached = PLAN_CACHE.get(characterId);
+    if (cached && Date.now() - cached.ts < PLAN_CACHE_TTL_MS) return cached.text;
+
     const client = await clientFor(characterId);
     if (!client) return null;
     try {
@@ -404,7 +423,9 @@ export async function recallCurrentPlanText(characterId: string): Promise<string
                 if (!best || (m.day ?? -1) > (best.day ?? -1)) best = m;
             }
         }
-        return best?.text ?? null;
+        const text = best?.text ?? null;
+        PLAN_CACHE.set(characterId, { text, ts: Date.now() });
+        return text;
     } catch (err) {
         console.warn('[memory] recallCurrentPlanText failed:', err);
         return null;
@@ -437,6 +458,9 @@ export async function rememberForCharacter(
             tagMemory(text, kind, importance, day, opts?.anchored ?? false),
             namespaceFor(characterId),
         );
+        // A new plan supersedes the cached one — drop it so later phases in
+        // this tick recall the fresh plan (then re-cache it).
+        if (kind === 'plan') invalidatePlanCache(characterId);
         console.log(
             `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}${
                 opts?.anchored ? ' anchored' : ''

@@ -51,13 +51,17 @@ import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
 
 /**
- * Max characters whose memory-recall work (PLAN / POV generate) runs at
- * once. Each recall SEAL-decrypts ~18 blobs against a SHARED key server +
- * Walrus aggregator; an all-at-once burst across the cast 429s them and
- * recall silently returns empty. 2 keeps a real speedup without tripping
- * the limit. Tune up if you move off the staging relayer.
+ * Max characters whose memory-recall work (PLAN / MOVE / ACT decide / POV)
+ * runs at once. Each recall SEAL-decrypts ~18 blobs against a SHARED key
+ * server + Walrus aggregator; an all-at-once burst across the cast 429s them
+ * and recall silently returns empty. 2 keeps a real speedup without tripping
+ * the limit; drop to 1 via MEMWAL_RECALL_CONCURRENCY if the relayer is tight
+ * (e.g. running the world-loop continuously), raise it off the staging relayer.
  */
-const RECALL_CONCURRENCY = 2;
+const RECALL_CONCURRENCY = Math.max(
+    1,
+    Number(process.env.MEMWAL_RECALL_CONCURRENCY) || 2,
+);
 
 export interface TickLoopInput {
     /** Advance a tick before the pass. Default true (ignored on dry-run). */
