@@ -168,7 +168,7 @@ export default async function DossierPage({
     soulSongsApi.listSoulSongs(character.id),
     memoriesApi.listMemories(character.id, viewerWallet),
     personasApi.getPersona(character.id),
-    liveStateApi.getLiveState(character.id),
+    liveStateApi.getLiveState(character.id, { withPlan: true }),
     // null when character.sagaId is null, a mock slug (non-Sui-id), or chain
     // unreachable; DossierHeader falls back to its legacy DEMO_SAGA_ID slug
     // match in that case.

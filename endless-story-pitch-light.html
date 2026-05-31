@@ -9,11 +9,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  /* exact dark tokens from packages/web/src/app/globals.css (.dark) */
-  --canvas:#16120E; --surface:#1F1A15; --elevated:#2A231C;
-  --ink:#F0E8DC; --mute:#A89A8A; --hair:#3A3026;
-  --cinnabar:#D97650; --jade:#6FA287; --seal:#E08A5F; --gold:#C9A85C;
-  --panel:rgba(240,232,220,.035);
+  /* light tokens — warm rice-paper (product :root light) */
+  --canvas:#F6F1E6; --surface:#FFFFFF; --elevated:#FFFFFF;
+  --ink:#241F18; --mute:#6E6453; --hair:#DED6C5;
+  --cinnabar:#B0492F; --jade:#5C7D60; --seal:#9A3A29; --gold:#9C7A24;
+  --panel:rgba(40,30,15,.04);
   --serif:"Noto Serif TC","Songti TC",serif;
   --sans:"Noto Sans TC","PingFang TC",system-ui,sans-serif;
   --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;
@@ -21,11 +21,11 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{
-  background:radial-gradient(130% 100% at 82% -10%, #241a12 0%, var(--canvas) 52%, #0f0b07 100%);
+  background:radial-gradient(130% 100% at 82% -10%, #FCF8EF 0%, var(--canvas) 52%, #ECE4D3 100%);
   color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased;
 }
-body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-  background-image:radial-gradient(rgba(240,232,220,.018) 1px,transparent 1px);background-size:3px 3px}
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.55;
+  background-image:radial-gradient(rgba(40,30,15,.022) 1px,transparent 1px);background-size:3px 3px}
 
 #deck{position:fixed;inset:0;z-index:1}
 .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
@@ -60,32 +60,32 @@ b.g{color:var(--gold);font-weight:700}
 #dots{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:60}
 #dots i{width:6px;height:6px;border-radius:99px;background:var(--hair);transition:.3s;cursor:pointer}
 #dots i.on{background:var(--cinnabar);width:20px}
-#pg{position:fixed;bottom:16px;right:24px;color:#6f6450;font-size:.78rem;z-index:60;letter-spacing:.12em;font-family:var(--mono)}
-#hint{position:fixed;bottom:16px;left:24px;color:#6f6450;font-size:.76rem;z-index:60;font-family:var(--mono)}
-.brand{position:fixed;top:16px;right:26px;z-index:60;font-family:var(--serif);font-size:.96rem;color:#9a8c6f;letter-spacing:.22em;display:flex;align-items:center;gap:.45em}
+#pg{position:fixed;bottom:16px;right:24px;color:#7c6a45;font-size:.78rem;z-index:60;letter-spacing:.12em;font-family:var(--mono)}
+#hint{position:fixed;bottom:16px;left:24px;color:#7c6a45;font-size:.76rem;z-index:60;font-family:var(--mono)}
+.brand{position:fixed;top:16px;right:26px;z-index:60;font-family:var(--serif);font-size:.96rem;color:#6E6453;letter-spacing:.22em;display:flex;align-items:center;gap:.45em}
 .stamp{position:fixed;bottom:40px;right:30px;width:54px;height:54px;border:1.5px solid var(--seal);
   border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);
   color:var(--seal);font-size:1.4rem;opacity:.42;z-index:55;transform:rotate(-5deg);font-weight:700}
 
 /* engineering diagram canvas */
 .diagram{position:relative;border:1px solid var(--hair);border-radius:10px;background:
-  linear-gradient(0deg,rgba(20,15,10,.4),rgba(20,15,10,.4)),
-  repeating-linear-gradient(0deg,transparent,transparent 31px,rgba(240,232,220,.03) 31px,rgba(240,232,220,.03) 32px),
-  repeating-linear-gradient(90deg,transparent,transparent 31px,rgba(240,232,220,.03) 31px,rgba(240,232,220,.03) 32px);
-  overflow:hidden}
-.diagram .cap{position:absolute;top:8px;left:12px;font-family:var(--mono);font-size:.68rem;color:#6f6450;letter-spacing:.12em;text-transform:uppercase}
+  linear-gradient(0deg,rgba(255,255,255,.65),rgba(255,255,255,.65)),
+  repeating-linear-gradient(0deg,transparent,transparent 31px,rgba(40,30,15,.05) 31px,rgba(40,30,15,.05) 32px),
+  repeating-linear-gradient(90deg,transparent,transparent 31px,rgba(40,30,15,.05) 31px,rgba(40,30,15,.05) 32px);
+  overflow:hidden;box-shadow:0 1px 2px rgba(40,30,15,.05)}
+.diagram .cap{position:absolute;top:8px;left:12px;font-family:var(--mono);font-size:.68rem;color:#7c6a45;letter-spacing:.12em;text-transform:uppercase}
 svg text{font-family:var(--sans)}
 
 .grid{display:grid;gap:1.1rem}
-.card{background:var(--panel);border:1px solid var(--hair);border-radius:14px;padding:1.3rem 1.4rem;position:relative}
+.card{background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:1.3rem 1.4rem;position:relative;box-shadow:0 1px 4px rgba(40,30,15,.06)}
 .card h3{font-size:1.22rem;margin-bottom:.45rem;font-weight:700;font-family:var(--serif)}
 .card p{color:var(--mute);font-size:1.04rem;line-height:1.6}
-.tier{display:flex;align-items:center;gap:1.1rem;background:var(--panel);border:1px solid var(--hair);
-  border-left-width:3px;border-radius:12px;padding:1rem 1.3rem}
+.tier{display:flex;align-items:center;gap:1.1rem;background:var(--surface);border:1px solid var(--hair);
+  border-left-width:3px;border-radius:12px;padding:1rem 1.3rem;box-shadow:0 1px 4px rgba(40,30,15,.06)}
 .tier .num{font-family:var(--serif);font-size:1.7rem;width:2.1rem;text-align:center;flex:none;font-weight:700}
 .tier h3{font-size:1.2rem;margin-bottom:.22rem;font-family:var(--serif)}
 .tier p{color:var(--mute);font-size:1.04rem;line-height:1.52}
-.glow{position:absolute;border-radius:50%;filter:blur(70px);opacity:.4;z-index:0;pointer-events:none}
+.glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.13;z-index:0;pointer-events:none}
 
 #s0{justify-content:center}
 #s0 h1{font-size:clamp(3rem,8vw,6.4rem)}
@@ -95,7 +95,7 @@ svg text{font-family:var(--sans)}
 @keyframes fl{0%{opacity:0;transform:translateY(20px)}12%{opacity:.6}90%{opacity:.4}100%{opacity:0;transform:translateY(-105vh)}}
 
 /* slide-1 forget animation */
-.sessbox{border:1px solid var(--hair);border-radius:12px;padding:1.1rem 1.3rem;background:var(--panel);min-width:0}
+.sessbox{border:1px solid var(--hair);border-radius:12px;padding:1.1rem 1.3rem;background:var(--surface);min-width:0;box-shadow:0 1px 4px rgba(40,30,15,.06)}
 .memline{display:flex;align-items:center;gap:.55rem;font-size:1.08rem;margin:.42rem 0;color:var(--ink)}
 .memline .dot{width:7px;height:7px;border-radius:50%;background:var(--jade);flex:none}
 .slide.active .fade-mem span{animation:forget 3.4s ease-in-out infinite}
@@ -171,7 +171,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
     <div class="sessbox" style="border-style:dashed">
       <div class="mono" style="font-size:.78rem;color:var(--cinnabar);margin-bottom:.6rem">SESSION&nbsp;2</div>
       <div class="memline" style="color:var(--mute)"><span class="dot" style="background:var(--hair)"></span><span>「你好，請問我是誰？<span class="blink">▌</span>」</span></div>
-      <div class="memline" style="color:#6f6450;font-size:.92rem;margin-top:.6rem">記憶歸零，也沒有別人。</div>
+      <div class="memline" style="color:#7c6a45;font-size:.92rem;margin-top:.6rem">記憶歸零，也沒有別人。</div>
     </div>
   </div>
   <p class="sub r" style="--i:4;margin-top:1.6rem">少了持久的記憶、彼此的關係、共同的世界，<b class="g">角色就比較接近一個會說話的工具，而不是一個有來歷的人。</b></p>
@@ -222,7 +222,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
           <text x="440" y="154">角色</text><text x="440" y="324">角色</text>
         </g>
       </g>
-      <text x="300" y="392" text-anchor="middle" fill="#6f6450" font-size="12.5">每段對話隔離 · 角色互不相識 · 關掉就消失</text>
+      <text x="300" y="392" text-anchor="middle" fill="#7c6a45" font-size="12.5">每段對話隔離 · 角色互不相識 · 關掉就消失</text>
 
       <!-- RIGHT: mesh of characters with relationship edges; human as oblique observer -->
       <g>
@@ -254,7 +254,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <circle cx="1130" cy="220" r="22" fill="var(--elevated)" stroke="var(--mute)" stroke-dasharray="3 3"/>
         <text x="1130" y="224" text-anchor="middle" fill="var(--mute)" font-size="11">人類</text>
         <line x1="1108" y1="220" x2="1030" y2="220" stroke="var(--mute)" stroke-width="1.2" stroke-dasharray="3 4"/>
-        <text x="1130" y="258" text-anchor="middle" fill="#6f6450" font-size="10">旁觀/注夢</text>
+        <text x="1130" y="258" text-anchor="middle" fill="#7c6a45" font-size="10">旁觀/注夢</text>
       </g>
       <text x="900" y="392" text-anchor="middle" fill="var(--jade)" font-size="12.5">角色彼此記得 · 關係上鏈 · 沒人看也繼續活</text>
     </svg>
@@ -305,7 +305,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
       <!-- decay curve -->
       <g transform="translate(1024,86)">
         <rect x="0" y="0" width="150" height="150" rx="6" fill="var(--surface)" stroke="var(--hair)"/>
-        <text x="75" y="20" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">importance ↓ 隨敘事日</text>
+        <text x="75" y="20" text-anchor="middle" fill="#7c6a45" font-size="10" font-family="var(--mono)">importance ↓ 隨敘事日</text>
         <polyline points="14,40 40,52 70,78 100,104 136,122" fill="none" stroke="var(--seal)" stroke-width="2.4"/>
         <circle cx="14" cy="40" r="4" fill="var(--seal)"/>
         <text x="22" y="38" fill="var(--seal)" font-size="11" font-family="var(--mono)">9</text>
@@ -347,8 +347,8 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
           <path class="draw" style="--i:4" pathLength="1" d="M88,271 A150,150 0 0 1 88,189" marker-end="url(#sm)"/>
           <path class="draw" style="--i:5" pathLength="1" d="M128,131 A150,150 0 0 1 196,93" marker-end="url(#sm)"/>
         </g>
-        <text x="230" y="226" text-anchor="middle" fill="#6f6450" font-size="11" font-family="var(--mono)">tick loop</text>
-        <text x="230" y="244" text-anchor="middle" fill="#6f6450" font-size="10" font-family="var(--mono)">↺ 敘事日推進</text>
+        <text x="230" y="226" text-anchor="middle" fill="#7c6a45" font-size="11" font-family="var(--mono)">tick loop</text>
+        <text x="230" y="244" text-anchor="middle" fill="#7c6a45" font-size="10" font-family="var(--mono)">↺ 敘事日推進</text>
       </svg>
     </div>
     <div style="display:flex;flex-direction:column;gap:.7rem">
@@ -420,7 +420,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <rect x="36" y="158" width="184" height="48" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/>
         <text x="128" y="187" text-anchor="middle" fill="var(--mute)" font-size="13">World 2</text>
         <rect x="36" y="222" width="184" height="40" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/>
-        <text x="128" y="247" text-anchor="middle" fill="#6f6450" font-size="12">World 3 …</text>
+        <text x="128" y="247" text-anchor="middle" fill="#7c6a45" font-size="12">World 3 …</text>
         <text x="128" y="300" text-anchor="middle" fill="var(--mute)" font-size="11">↻ 可有多個 world</text>
       </g>
 
@@ -432,7 +432,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
 
         <rect x="372" y="122" width="236" height="52" rx="7" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="5 4"/>
         <text x="490" y="146" text-anchor="middle" fill="var(--mute)" font-size="13">Saga · 同世界另一敘事</text>
-        <text x="490" y="163" text-anchor="middle" fill="#6f6450" font-size="10">碼頭工會 / 軍閥 / 街坊市場 …</text>
+        <text x="490" y="163" text-anchor="middle" fill="#7c6a45" font-size="10">碼頭工會 / 軍閥 / 街坊市場 …</text>
 
         <rect x="372" y="190" width="236" height="48" rx="7" fill="rgba(201,168,92,.1)" stroke="var(--gold)"/>
         <text x="490" y="212" text-anchor="middle" fill="var(--gold)" font-size="13" font-weight="700">Location ×N</text>
@@ -474,7 +474,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
       <!-- bottom struct strip -->
       <line x1="36" y1="346" x2="1164" y2="346" stroke="var(--hair)" stroke-dasharray="2 6"/>
       <g font-family="var(--mono)" font-size="12">
-        <text x="36" y="378" fill="#6f6450">contracts/endless_story/sources/ ·</text>
+        <text x="36" y="378" fill="#7c6a45">contracts/endless_story/sources/ ·</text>
         <text x="330" y="378" fill="var(--cinnabar)">world.move</text>
         <text x="430" y="378" fill="var(--cinnabar)">saga.move</text>
         <text x="525" y="378" fill="var(--jade)">scene.move</text>
@@ -589,7 +589,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <text x="1046" y="204" text-anchor="end" fill="var(--ink)" font-size="13" font-family="var(--mono)">treasuryBps</text>
         <text x="762" y="220" fill="var(--mute)" font-size="10.5">協議永續</text>
       </g>
-      <text x="1090" y="270" text-anchor="end" fill="#6f6450" font-size="11" font-family="var(--mono)">split 在合約裡 · 透明 · 自動 · 可驗證</text>
+      <text x="1090" y="270" text-anchor="end" fill="#7c6a45" font-size="11" font-family="var(--mono)">split 在合約裡 · 透明 · 自動 · 可驗證</text>
     </svg>
   </div>
   <p class="sub r" style="--i:4;margin-top:.7rem;font-size:1.08rem">
@@ -616,7 +616,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
       <span class="tag" style="color:var(--jade)">✓ 三因子記憶 · 關係 · 注夢已上鏈</span>
       <span class="tag" style="color:var(--jade)">✓ 抽卡全流程跑通</span>
     </div>
-    <div class="r" style="--i:4;margin-top:1.6rem;color:#6f6450;font-family:var(--mono);font-size:.86rem">謝謝聆聽 · 歡迎來春雪社走走</div>
+    <div class="r" style="--i:4;margin-top:1.6rem;color:#7c6a45;font-family:var(--mono);font-size:.86rem">謝謝聆聽 · 歡迎來春雪社走走</div>
   </div>
 </section>
 

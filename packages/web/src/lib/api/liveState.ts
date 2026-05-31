@@ -38,7 +38,17 @@ function parsePlanFields(planText: string): {
   };
 }
 
-export async function getLiveState(characterId: string): Promise<CharacterLiveState> {
+/**
+ * @param opts.withPlan  Recall the character's plan from MemWal to fill
+ *   intent / nextPlan. This is a SEAL decrypt (slow + rate-limited), so it's
+ *   OPT-IN: only the dossier header needs it. The saga page calls this for
+ *   the WHOLE cast — passing withPlan there would fire N concurrent SEAL
+ *   recalls per page load (the slowness you saw). Default off → location only.
+ */
+export async function getLiveState(
+  characterId: string,
+  opts?: { withPlan?: boolean },
+): Promise<CharacterLiveState> {
   // Look up the character — try the facade (chain-first, mock fallback)
   // so we always get a Character shape with `currentSceneId` if the
   // chain mapper populated it.
@@ -52,9 +62,10 @@ export async function getLiveState(characterId: string): Promise<CharacterLiveSt
   }
 
   // N6: intent + nextPlan from the character's CURRENT plan (real MemWal).
+  // Opt-in only — this is a SEAL decrypt (see opts.withPlan above).
   let planIntent: string | undefined;
   let planNext: string | undefined;
-  if (isMemoryConfigured()) {
+  if (opts?.withPlan && isMemoryConfigured()) {
     const planText = await recallCurrentPlanText(characterId).catch(() => null);
     if (planText) {
       const f = parsePlanFields(planText);
