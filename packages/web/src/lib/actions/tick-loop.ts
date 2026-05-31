@@ -204,6 +204,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     const dryRun = input.dryRun ?? false;
     const cap = input.maxCharacters ?? 6;
+    const t0 = Date.now();
+    const since = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
+    const tlog = (m: string) => console.log(`[tick ${since()}] ${m}`);
+    tlog(`◆ 開始一輪${dryRun ? '（dry-run）' : ''}`);
 
     // 1. ADVANCE (chain mutation — skipped on dry-run).
     let advanced = false;
@@ -213,6 +217,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
     const worldTime = (await getWorldTimeSnapshot()) ?? undefined;
     const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
+    tlog(`⏱  ${advanced ? '已推進 → ' : ''}${dayLabel}`);
 
     // Character roster (saga-scoped, with fallback).
     let characters: Character[] = await charactersApi.listSagaCharacters(d.sagaId).catch(() => []);
@@ -221,6 +226,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
     const slice = characters.slice(0, cap);
+    tlog(`登場 ${slice.length} 角色：${slice.map((c) => c.name).join('、')}`);
 
     // 2. PLAN — each character updates its standing goal first (N6), so the
     //    fresh plan is recalled by the decide/POV steps below. PLAN does NO
@@ -229,10 +235,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    key server / Walrus aggregator 429s under an all-at-once burst.
     const plans: TickPlanResult[] = [];
     if (input.plan ?? true) {
+        tlog(`① 規劃 ${slice.length} 角色…`);
         const settled = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
             try {
-                return { c, p: await runPlanAction(c.id, { dryRun }) };
+                const p = await runPlanAction(c.id, { dryRun });
+                tlog(`   · 規劃 ${c.name} ✓`);
+                return { c, p };
             } catch (err) {
+                tlog(`   · 規劃 ${c.name} ✗`);
                 return {
                     c,
                     p: { ok: false, error: err instanceof Error ? err.message : String(err) },
@@ -256,10 +266,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    movement completes the N1 action space). Batched into one PTB.
     const moves: TickMoveResult[] = [];
     if ((input.move ?? true) && !dryRun) {
+        tlog(`② 自主移動…`);
         try {
             moves.push(
                 ...(await runMovePhase(admin, d.sagaId, d.storytellerCapId, slice, nameById)),
             );
+            tlog(`   移動 ${moves.filter((m) => m.ok).length} 人`);
         } catch (err) {
             console.warn('[tick-loop] move phase failed:', err);
         }
@@ -271,6 +283,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const acts: TickActResult[] = [];
     const resolves: TickResolveResult[] = [];
     if (!dryRun) {
+        tlog(`③ 出牌決策 + 收尾…`);
         try {
             const phase = await runActPhase(
                 admin,
@@ -281,6 +294,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             );
             acts.push(...phase.acts);
             resolves.push(...phase.resolves);
+            tlog(`   出牌 ${acts.filter((a) => a.ok).length} · 收尾 ${resolves.filter((r) => r.ok).length}`);
         } catch (err) {
             // Non-fatal: a failed ACT phase shouldn't block POV/narrate.
             console.warn('[tick-loop] act phase failed:', err);
@@ -310,17 +324,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // the slow part (primary LLM); the anchor is now a single transaction.
     // Per-item try/catch so one bad recall (e.g. aggregator DNS blip) can't
     // reject the whole batch and kill the tick.
+    tlog(`④ POV 生成 ${slice.length} 篇（慢，每篇一段 LLM）…`);
     const generated = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
         try {
-            return {
-                c,
-                r: await runPovForCharacter(admin, c.id, {
-                    triggerNarrative: trigger,
-                    forceRun: true,
-                    dryRun: true,
-                }),
-            };
+            const r = await runPovForCharacter(admin, c.id, {
+                triggerNarrative: trigger,
+                forceRun: true,
+                dryRun: true,
+            });
+            tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
+            return { c, r };
         } catch (err) {
+            tlog(`   · POV ${c.name} ✗`);
             return {
                 c,
                 r: {
@@ -340,6 +355,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         for (const { c, r } of generated) {
             if (!r.chapter.trim()) povs.push(mapPov(c, r)); // generation failed
         }
+        if (toAnchor.length > 0) tlog(`   章回上鏈（${toAnchor.length} 篇，一個 PTB）…`);
         const batch = await anchorPovChaptersBatch(
             admin,
             d.sagaId,
@@ -371,8 +387,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     let sleepNote: string | undefined;
     if ((input.sleep ?? true) && !dryRun) {
         if (isNight) {
+            tlog(`⑤ 睡眠整理（夜）…`);
             for (const c of slice) {
                 const r = await runSleepAction(c.id);
+                if (r.anchored) tlog(`   · ${c.name} 沉澱 ${r.reflections?.length ?? 0} 條`);
                 sleeps.push({
                     characterId: c.id,
                     name: c.name,
@@ -385,12 +403,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             }
         } else {
             sleepNote = `非夜晚（現為 ${worldTime?.partOfDay ?? '未知'}），角色不整理記憶 — 推進到夜裡再睡`;
+            tlog(`⑤ 睡眠跳過（非夜晚）`);
         }
     }
 
     // 6. NARRATE — compile the objective gazette for the day.
     let gazette: TickGazetteResult | undefined;
     if ((input.gazette ?? true) && !dryRun) {
+        tlog(`⑥ 編公報…`);
         const g = await compileGazetteAction({ day: worldTime?.day });
         gazette = {
             ok: g.ok,
@@ -412,6 +432,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         povs.some((p) => p.ok) ||
         sleeps.some((s) => s.ok && !s.skipReason) ||
         gazette?.ok === true;
+    tlog(
+        `◇ 本輪完成 — 規劃${plans.length}·移動${moves.filter((m) => m.ok).length}·出牌${acts.filter((a) => a.ok).length}·章回${povs.filter((p) => p.anchored).length}·公報${gazette?.anchored ? '✓' : '—'}`,
+    );
     return {
         ok: anyOk || (slice.length === 0),
         advanced,

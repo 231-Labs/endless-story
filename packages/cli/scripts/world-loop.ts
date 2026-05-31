@@ -106,6 +106,12 @@ async function main() {
     for (;;) {
         n += 1;
         const t0 = Date.now();
+        console.log(`\n[tick ${n}] ▶ 開始（一輪約數十秒~數分鐘；伺服器終端有逐步進度）`);
+        // Heartbeat so this terminal isn't silent during the long tick. The
+        // step-by-step detail prints in the `next dev` terminal (server side).
+        const heartbeat = setInterval(() => {
+            process.stdout.write(`   …執行中 ${((Date.now() - t0) / 1000).toFixed(0)}s\r`);
+        }, 3000);
         try {
             const res = await fetch(url, {
                 method: 'POST',
@@ -116,9 +122,11 @@ async function main() {
                 body: JSON.stringify(input),
             });
             const json = (await res.json()) as TickResult;
+            clearInterval(heartbeat);
             const secs = ((Date.now() - t0) / 1000).toFixed(1);
-            console.log(`[tick ${n}] ${summarize(json)} (${secs}s)`);
+            console.log(`[tick ${n}] ✓ ${summarize(json)} (${secs}s)`);
         } catch (err) {
+            clearInterval(heartbeat);
             console.warn(`[tick ${n}] request failed:`, err instanceof Error ? err.message : err);
         }
 
