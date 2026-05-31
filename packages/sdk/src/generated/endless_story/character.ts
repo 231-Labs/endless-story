@@ -189,6 +189,14 @@ export const CharacterImageUpdated = new MoveStruct({ name: `${$moduleName}::Cha
         updated_by_owner: bcs.bool(),
         updated_at_ms: bcs.u64()
     } });
+export const MediaAssetAdded = new MoveStruct({ name: `${$moduleName}::MediaAssetAdded`, fields: {
+        character_id: bcs.Address,
+        kind: bcs.u8(),
+        uri: bcs.string(),
+        index: bcs.u64(),
+        added_by_owner: bcs.bool(),
+        added_at_ms: bcs.u64()
+    } });
 export const SkillSet = new MoveStruct({ name: `${$moduleName}::SkillSet`, fields: {
         character_id: bcs.Address,
         saga_id: bcs.Address,
@@ -726,6 +734,109 @@ export function updateImageByOwner(options: UpdateImageByOwnerOptions) {
         package: packageAddress,
         module: 'character',
         function: 'update_image_by_owner',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface AddMediaAssetByStorytellerArguments {
+    cap: RawTransactionArgument<string>;
+    saga: RawTransactionArgument<string>;
+    character: RawTransactionArgument<string>;
+    asset: TransactionArgument;
+}
+export interface AddMediaAssetByStorytellerOptions {
+    package?: string;
+    arguments: AddMediaAssetByStorytellerArguments | [
+        cap: RawTransactionArgument<string>,
+        saga: RawTransactionArgument<string>,
+        character: RawTransactionArgument<string>,
+        asset: TransactionArgument
+    ];
+}
+/**
+ * Storyteller appends a variant to the gallery (cover unchanged). Used by the AI
+ * portrait pipeline when it produces a new image during the saga.
+ */
+export function addMediaAssetByStoryteller(options: AddMediaAssetByStorytellerOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        null,
+        null,
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["cap", "saga", "character", "asset"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'character',
+        function: 'add_media_asset_by_storyteller',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface AddMediaAssetByOwnerArguments {
+    ownerCap: RawTransactionArgument<string>;
+    character: RawTransactionArgument<string>;
+    asset: TransactionArgument;
+}
+export interface AddMediaAssetByOwnerOptions {
+    package?: string;
+    arguments: AddMediaAssetByOwnerArguments | [
+        ownerCap: RawTransactionArgument<string>,
+        character: RawTransactionArgument<string>,
+        asset: TransactionArgument
+    ];
+}
+/**
+ * Owner appends a variant to the gallery (cover unchanged). Allowed any time (the
+ * owner's character, the owner's call).
+ */
+export function addMediaAssetByOwner(options: AddMediaAssetByOwnerOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        null,
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["ownerCap", "character", "asset"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'character',
+        function: 'add_media_asset_by_owner',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface SetCoverFromMediaArguments {
+    ownerCap: RawTransactionArgument<string>;
+    character: RawTransactionArgument<string>;
+    index: RawTransactionArgument<number | bigint>;
+}
+export interface SetCoverFromMediaOptions {
+    package?: string;
+    arguments: SetCoverFromMediaArguments | [
+        ownerCap: RawTransactionArgument<string>,
+        character: RawTransactionArgument<string>,
+        index: RawTransactionArgument<number | bigint>
+    ];
+}
+/**
+ * Owner sets the cover to the gallery entry at `index`. This is the
+ * "browse 設定集 → 選封面" flow: the owner picks one of their accumulated variants
+ * as the public portrait. Aborts if the index is out of range.
+ */
+export function setCoverFromMedia(options: SetCoverFromMediaOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        'u64',
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["ownerCap", "character", "index"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'character',
+        function: 'set_cover_from_media',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

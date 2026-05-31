@@ -57,6 +57,16 @@ export const updateImageByStoryteller = (args: gen.UpdateImageByStorytellerArgum
 export const updateImageByOwner = (args: gen.UpdateImageByOwnerArguments) =>
   gen.updateImageByOwner({ package: pkg(), arguments: args });
 
+// ── Gallery: 設定集 (append variants + owner cover selection) ───────────
+export const addMediaAssetByStoryteller = (args: gen.AddMediaAssetByStorytellerArguments) =>
+  gen.addMediaAssetByStoryteller({ package: pkg(), arguments: args });
+
+export const addMediaAssetByOwner = (args: gen.AddMediaAssetByOwnerArguments) =>
+  gen.addMediaAssetByOwner({ package: pkg(), arguments: args });
+
+export const setCoverFromMedia = (args: gen.SetCoverFromMediaArguments) =>
+  gen.setCoverFromMedia({ package: pkg(), arguments: args });
+
 // ── Seal access policy ─────────────────────────────────────────────────
 export const sealApproveControl = (args: gen.SealApproveControlArguments) =>
   gen.sealApproveControl({ package: pkg(), arguments: args });

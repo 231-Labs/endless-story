@@ -98,6 +98,9 @@ const ESkillKeyNotInSagaTable: vector<u8> = b"Skill key not declared in saga's a
 #[error]
 const ESkillValueOutOfRange: vector<u8> = b"Skill value violates saga's attribute_defs range";
 
+#[error]
+const EMediaIndexOutOfRange: vector<u8> = b"media_assets index out of range";
+
 // ─── value types ─────────────────────────────────────────────────────
 
 /// On-chain skill / attribute snapshot. `seed` is the deterministic input
@@ -313,6 +316,18 @@ public struct CharacterImageUpdated has copy, drop {
     new_image_url: String,
     updated_by_owner: bool,
     updated_at_ms: u64,
+}
+
+/// A variant was appended to the character's gallery (`media_assets`).
+/// `index` is its position in the vector. Lets indexers build the 設定集
+/// without re-fetching the whole Character object.
+public struct MediaAssetAdded has copy, drop {
+    character_id: ID,
+    kind: u8,
+    uri: String,
+    index: u64,
+    added_by_owner: bool,
+    added_at_ms: u64,
 }
 
 public struct SkillSet has copy, drop {
@@ -927,6 +942,81 @@ public fun update_image_by_owner(
     assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
 
     character.image_url = new_image_url;
+    event::emit(CharacterImageUpdated {
+        character_id: object::id(character),
+        new_image_url: character.image_url,
+        updated_by_owner: true,
+        updated_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
+// ─── gallery: 設定集 (append variants + owner cover selection) ─────────
+//
+// `media_assets` was previously write-once (mint only). These let the
+// portrait variants (§11) accumulate into the gallery WITHOUT changing the
+// live cover, then let the OWNER pick which one is the cover. The cover
+// stays `image_url`; the gallery is the full `media_assets` vector.
+
+/// Storyteller appends a variant to the gallery (cover unchanged). Used by
+/// the AI portrait pipeline when it produces a new image during the saga.
+public fun add_media_asset_by_storyteller(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    character: &mut Character,
+    asset: MediaAsset,
+    clock: &clock::Clock,
+) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(character.state.saga_id.contains(&saga_id), ECharacterSagaMismatch);
+    add_media_asset_internal(character, asset, false, clock);
+}
+
+/// Owner appends a variant to the gallery (cover unchanged). Allowed any
+/// time (the owner's character, the owner's call).
+public fun add_media_asset_by_owner(
+    owner_cap: &OwnerCap,
+    character: &mut Character,
+    asset: MediaAsset,
+    clock: &clock::Clock,
+) {
+    assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
+    add_media_asset_internal(character, asset, true, clock);
+}
+
+fun add_media_asset_internal(
+    character: &mut Character,
+    asset: MediaAsset,
+    by_owner: bool,
+    clock: &clock::Clock,
+) {
+    let kind = asset.kind;
+    let uri = asset.uri;
+    vector::push_back(&mut character.media_assets, asset);
+    event::emit(MediaAssetAdded {
+        character_id: object::id(character),
+        kind,
+        uri,
+        index: vector::length(&character.media_assets) - 1,
+        added_by_owner: by_owner,
+        added_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
+/// Owner sets the cover to the gallery entry at `index`. This is the
+/// "browse 設定集 → 選封面" flow: the owner picks one of their accumulated
+/// variants as the public portrait. Aborts if the index is out of range.
+public fun set_cover_from_media(
+    owner_cap: &OwnerCap,
+    character: &mut Character,
+    index: u64,
+    clock: &clock::Clock,
+) {
+    assert!(owner_cap.character_id == object::id(character), EWrongCharacter);
+    assert!(index < vector::length(&character.media_assets), EMediaIndexOutOfRange);
+
+    let uri = vector::borrow(&character.media_assets, index).uri;
+    character.image_url = uri;
     event::emit(CharacterImageUpdated {
         character_id: object::id(character),
         new_image_url: character.image_url,
@@ -1585,6 +1675,88 @@ fun update_image_by_owner_wrong_owner_aborts() {
 
     // owner_b tries to update char_a's image → abort.
     update_image_by_owner(&owner_b, &mut char_a, b"oops".to_string(), &clock);
+
+    destroy(char_a);
+    destroy(owner_a);
+    destroy(char_b);
+    destroy(owner_b);
+    clock.destroy_for_testing();
+}
+
+// --- gallery (設定集) tests ---
+
+#[test]
+fun add_media_asset_appends_without_changing_cover() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+    // mint_character_for_testing mints with empty media_assets + empty cover.
+    assert!(vector::length(media_assets(&character)) == 0);
+
+    add_media_asset_by_owner(
+        &owner_cap,
+        &mut character,
+        new_media_asset(0, b"https://walrus.example/stage.png".to_string(), vector[], b"".to_string()),
+        &clock,
+    );
+    // Gallery grew; cover (image_url) is untouched.
+    assert!(vector::length(media_assets(&character)) == 1);
+    assert!(*image_url(&character) == b"".to_string());
+
+    destroy(character);
+    destroy(owner_cap);
+    clock.destroy_for_testing();
+}
+
+#[test]
+fun set_cover_from_media_picks_gallery_entry() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    add_media_asset_by_owner(
+        &owner_cap, &mut character,
+        new_media_asset(0, b"a.png".to_string(), vector[], b"".to_string()), &clock,
+    );
+    add_media_asset_by_owner(
+        &owner_cap, &mut character,
+        new_media_asset(0, b"b.png".to_string(), vector[], b"".to_string()), &clock,
+    );
+
+    // Owner picks gallery[1] as the cover.
+    set_cover_from_media(&owner_cap, &mut character, 1, &clock);
+    assert!(*image_url(&character) == b"b.png".to_string());
+
+    destroy(character);
+    destroy(owner_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = EMediaIndexOutOfRange)]
+fun set_cover_from_media_out_of_range_aborts() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+
+    // Empty gallery → index 0 is out of range.
+    set_cover_from_media(&owner_cap, &mut character, 0, &clock);
+
+    destroy(character);
+    destroy(owner_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = EWrongCharacter)]
+fun add_media_asset_wrong_owner_aborts() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut char_a, owner_a) = mint_character_for_testing(&mut ctx);
+    let (char_b, owner_b) = mint_character_for_testing(&mut ctx);
+
+    add_media_asset_by_owner(
+        &owner_b, &mut char_a,
+        new_media_asset(0, b"oops.png".to_string(), vector[], b"".to_string()), &clock,
+    );
 
     destroy(char_a);
     destroy(owner_a);
