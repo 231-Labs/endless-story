@@ -63,6 +63,7 @@ b.g{color:var(--gold);font-weight:700}
 #pg{position:fixed;bottom:16px;right:24px;color:#7c6a45;font-size:.78rem;z-index:60;letter-spacing:.12em;font-family:var(--mono)}
 #hint{position:fixed;bottom:16px;left:24px;color:#7c6a45;font-size:.76rem;z-index:60;font-family:var(--mono)}
 .brand{position:fixed;top:16px;right:26px;z-index:60;font-family:var(--serif);font-size:.96rem;color:#6E6453;letter-spacing:.22em;display:flex;align-items:center;gap:.45em}
+.logo-img{display:block;object-fit:contain;flex:none;border-radius:8px}
 .stamp{position:fixed;bottom:40px;right:30px;width:54px;height:54px;border:1.5px solid var(--seal);
   border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--serif);
   color:var(--seal);font-size:1.4rem;opacity:.42;z-index:55;transform:rotate(-5deg);font-weight:700}
@@ -116,10 +117,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
 <body>
 <div id="bar"></div>
 <div class="brand">
-  <svg viewBox="0 0 260 108" width="27" height="11" style="vertical-align:-1px" aria-hidden="true">
-    <rect x="2" y="2" width="256" height="104" rx="14" fill="#1C2B4A"/>
-    <path d="M232 28 C184 56 148 50 112 82 C94 98 80 102 56 106 C82 105 100 98 122 86 C160 65 184 68 236 42 Z" fill="#FFFFFF"/>
-  </svg>
+  <img src="packages/web/public/logo.png" alt="" width="28" height="28" class="logo-img" aria-hidden="true">
   無盡敘界
 </div>
 <div id="deck">
@@ -131,10 +129,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   <div class="glow" style="width:400px;height:400px;background:var(--jade);bottom:-16%;left:-8%;opacity:.26"></div>
   <div style="position:relative;z-index:3">
     <div class="r" style="--i:0;display:flex;align-items:center;gap:1rem;margin-bottom:1.6rem">
-      <svg viewBox="0 0 260 108" width="120" height="50" aria-label="Endless Story 無盡敘界">
-        <rect x="2" y="2" width="256" height="104" rx="14" fill="#1C2B4A"/>
-        <path d="M232 28 C184 56 148 50 112 82 C94 98 80 102 56 106 C82 105 100 98 122 86 C160 65 184 68 236 42 Z" fill="#FFFFFF"/>
-      </svg>
+      <img src="packages/web/public/logo.png" alt="Endless Story 無盡敘界" width="56" height="56" class="logo-img">
       <div style="line-height:1.2">
         <div style="font-family:var(--serif);font-size:1.5rem;font-weight:700;color:var(--ink)">無盡敘界</div>
         <div style="font-family:var(--mono);font-size:.82rem;letter-spacing:.18em;color:var(--mute)">ENDLESS STORY</div>
@@ -602,10 +597,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   <div class="particles" id="p9"></div>
   <div class="glow" style="width:520px;height:520px;background:var(--gold);top:50%;left:50%;transform:translate(-50%,-50%);opacity:.14"></div>
   <div style="position:relative;z-index:3">
-    <svg class="r" viewBox="0 0 260 108" width="152" height="63" style="--i:0;margin:0 auto .4rem;display:block" aria-label="Endless Story 無盡敘界">
-      <rect x="2" y="2" width="256" height="104" rx="14" fill="#1C2B4A"/>
-      <path d="M232 28 C184 56 148 50 112 82 C94 98 80 102 56 106 C82 105 100 98 122 86 C160 65 184 68 236 42 Z" fill="#FFFFFF"/>
-    </svg>
+    <img class="r logo-img" src="packages/web/public/logo.png" alt="Endless Story 無盡敘界" width="72" height="72" style="--i:0;margin:0 auto .4rem">
     <div class="eyebrow r" style="--i:1;justify-content:center">無盡敘界 · Endless Story</div>
     <h1 class="r" style="--i:2;font-size:clamp(2.2rem,5.4vw,3.9rem)">一座活著的 AI 社會</h1>
     <p class="sub r" style="--i:2;margin:1.4rem auto 0;text-align:center">
