@@ -17,6 +17,7 @@ import {
   type RosterFilter,
 } from '@/components/dossier/CharacterGrid';
 import { Suspense } from 'react';
+import type { Character } from '@endless-story/shared';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierSkeleton } from '@/components/dossier/DossierSkeleton';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
@@ -168,13 +169,16 @@ async function DossierDetail({
     );
   }
 
+  // NOTE: memories are deliberately NOT fetched here — `listMemories` is a
+  // 24-memory SEAL recall (72 candidates decrypted) that took 20-60s and
+  // blocked the WHOLE dossier even on the profile tab. It now loads lazily
+  // inside its own Suspense, only when the 記憶 tab is open (see below).
   const [
     allCharacters,
     edges,
     chapters,
     interventions,
     soulSongs,
-    memories,
     persona,
     liveState,
     sagaName,
@@ -186,7 +190,6 @@ async function DossierDetail({
     chaptersApi.listPublicChaptersForSubscription(character.id),
     interventionsApi.listInterventions(character.id),
     soulSongsApi.listSoulSongs(character.id),
-    memoriesApi.listMemories(character.id, viewerWallet),
     personasApi.getPersona(character.id),
     liveStateApi.getLiveState(character.id, { withPlan: true }),
     // null when character.sagaId is null, a mock slug (non-Sui-id), or chain
@@ -204,21 +207,6 @@ async function DossierDetail({
     fetchReflectionsForCharacter(character.id, { limit: 8 }),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
-  const memoryChapterIds = Array.from(
-    new Set(
-      memories
-        .map((m) => m.eventChapterId)
-        .filter((id): id is string => Boolean(id))
-    )
-  );
-  const memoryChapters = await Promise.all(
-    memoryChapterIds.map((id) => chaptersApi.getChapter(id))
-  );
-  const chaptersById = new Map(
-    memoryChapters
-      .filter((c): c is NonNullable<typeof c> => Boolean(c))
-      .map((c) => [c.id, c])
-  );
   const personaRegenChapter = persona?.lastRegenChapterId
     ? (await chaptersApi.getChapter(persona.lastRegenChapterId)) ?? null
     : null;
@@ -274,13 +262,13 @@ async function DossierDetail({
               </>
             ) : null}
             {tab === 'memories' ? (
-              <MemoriesTab
-                character={character}
-                memories={memories}
-                viewerWallet={viewerWallet}
-                sagaCharacters={allCharacters}
-                chaptersById={chaptersById}
-              />
+              <Suspense fallback={<MemoriesTabSkeleton />}>
+                <MemoriesTabLoader
+                  character={character}
+                  viewerWallet={viewerWallet}
+                  sagaCharacters={allCharacters}
+                />
+              </Suspense>
             ) : null}
             {tab === 'entrusts' ? (
               <InterventionTab
@@ -296,5 +284,60 @@ async function DossierDetail({
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * Lazy loader for the 記憶 tab. `listMemories` is a SEAL recall (slow +
+ * rate-limited), so it's isolated here behind a Suspense and only runs when
+ * the memories tab is open — never blocking the header / other tabs.
+ */
+async function MemoriesTabLoader({
+  character,
+  viewerWallet,
+  sagaCharacters,
+}: {
+  character: Character;
+  viewerWallet: string | null;
+  sagaCharacters: Character[];
+}) {
+  const memories = await memoriesApi.listMemories(character.id, viewerWallet);
+  const memoryChapterIds = Array.from(
+    new Set(
+      memories.map((m) => m.eventChapterId).filter((id): id is string => Boolean(id)),
+    ),
+  );
+  const memoryChapters = await Promise.all(
+    memoryChapterIds.map((id) => chaptersApi.getChapter(id)),
+  );
+  const chaptersById = new Map(
+    memoryChapters
+      .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      .map((c) => [c.id, c]),
+  );
+  return (
+    <MemoriesTab
+      character={character}
+      memories={memories}
+      viewerWallet={viewerWallet}
+      sagaCharacters={sagaCharacters}
+      chaptersById={chaptersById}
+    />
+  );
+}
+
+function MemoriesTabSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4">
+      <div className="h-4 w-40 rounded bg-hairline/60 dark:bg-hairline" />
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="rounded-xl border border-hairline/50 p-5">
+          <div className="h-3 w-24 rounded bg-hairline/60 dark:bg-hairline" />
+          <div className="mt-3 h-4 w-full rounded bg-hairline/60 dark:bg-hairline" />
+          <div className="mt-2 h-4 w-3/4 rounded bg-hairline/60 dark:bg-hairline" />
+        </div>
+      ))}
+      <p className="pt-2 text-center text-2xs tracking-widest text-mute">解密記憶中…</p>
+    </div>
   );
 }
