@@ -398,14 +398,17 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   <div class="glow" style="width:440px;height:440px;background:var(--jade);top:-16%;right:-8%;opacity:.18"></div>
   <div class="eyebrow r">★ Platform &nbsp;·&nbsp; <span class="zh">通用架構 · 不是一個遊戲，是一座引擎</span></div>
   <h2 class="r" style="--i:1">春雪社只是<b class="c">其中一個 Saga</b></h2>
-  <p class="sub r" style="--i:2;margin-bottom:.7rem">合約是一套<b class="j">通用的 primitives</b>。一個 World 定義共用的世界觀、物種、地理、年代；<b class="g">Location 是 World 的地理屬性</b>，一個 Saga 可覆蓋<b class="j">一到多個 Location</b>，而某個 Location 上也可以沒有任何 Saga。同一個 World 之上能同時長出許多 Saga，像碼頭工會、軍閥、街坊市場。</p>
+  <p class="sub r" style="--i:2;margin-bottom:.7rem">合約是一套<b class="j">通用的 primitives</b>。<b class="g">Location 是 World 的地理屬性</b>，一個 Saga 可覆蓋<b class="j">一到多個 Location</b>，Location 上也可以沒有任何 Saga。Scene 是具體場景（如後台化妝間）；當一個 <b class="c">Scene 裡有 Character 在場</b>，即可在該場景觸發 <b class="c">Event</b>。</p>
   <div class="diagram r appear" style="--i:2;margin-top:.4rem;height:50vh;min-height:320px">
-    <span class="cap">object model · World ⊃ Location；Saga covers 1..N Location；Scene · Character ∈ Saga</span>
+    <span class="cap">object model · Location ∈ World · Saga covers 1..N Location · Character ∈ Scene · Scene + Character → Event</span>
     <svg viewBox="0 0 1200 440" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
       <defs><marker id="hi" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--jade)"/></marker>
         <marker id="hf" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--hair)"/></marker></defs>
 
-      <defs><marker id="hg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--gold)"/></marker></defs>
+      <defs>
+        <marker id="hg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--gold)"/></marker>
+        <marker id="he" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cinnabar)"/></marker>
+      </defs>
 
       <!-- WORLD (root) -->
       <g font-family="var(--mono)">
@@ -438,21 +441,23 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <text x="645" y="218" text-anchor="middle" fill="#7c6a45" font-size="9.5">同 World 的另一敘事 · 覆蓋 碼頭</text>
       </g>
 
-      <!-- SCENE / CHARACTER (∈ Saga) -->
+      <!-- SCENE (∈ Saga) -->
       <g font-family="var(--mono)">
-        <rect x="836" y="48" width="196" height="50" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.6"/>
-        <text x="934" y="70" text-anchor="middle" fill="var(--jade)" font-size="13" font-weight="700">Scene ×N</text>
-        <text x="934" y="86" text-anchor="middle" fill="var(--mute)" font-size="9.5">saga_id · 一幕一物件</text>
+        <rect x="800" y="40" width="196" height="56" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.6"/>
+        <text x="898" y="64" text-anchor="middle" fill="var(--jade)" font-size="12.5" font-weight="700">Scene · 後台化妝間</text>
+        <text x="898" y="82" text-anchor="middle" fill="var(--mute)" font-size="9.5">saga_id · 具體場景</text>
 
-        <rect x="836" y="110" width="196" height="50" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.6"/>
-        <text x="934" y="132" text-anchor="middle" fill="var(--jade)" font-size="13" font-weight="700">Character ×N</text>
-        <text x="934" y="148" text-anchor="middle" fill="var(--mute)" font-size="9.5">saga_id · 每角一 NFT</text>
+        <!-- CHARACTER (∈ Saga, 處於某 Scene) -->
+        <rect x="800" y="156" width="196" height="56" rx="7" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="1.6"/>
+        <text x="898" y="180" text-anchor="middle" fill="var(--jade)" font-size="13" font-weight="700">Character</text>
+        <text x="898" y="198" text-anchor="middle" fill="var(--mute)" font-size="9.5">current_scene_id · 每角一 NFT</text>
       </g>
 
-      <!-- CHARACTER instances -->
-      <g font-family="var(--sans)" font-size="11" text-anchor="middle">
-        <rect x="1066" y="92" width="54" height="28" rx="14" fill="var(--surface)" stroke="var(--cinnabar)"/><text x="1093" y="110" fill="var(--ink)">雪庵</text>
-        <rect x="1124" y="92" width="48" height="28" rx="14" fill="var(--surface)" stroke="var(--hair)" stroke-dasharray="4 3"/><text x="1148" y="110" fill="var(--mute)">+N</text>
+      <!-- EVENT (Scene + 在場 Character → 觸發) -->
+      <g font-family="var(--mono)">
+        <rect x="1036" y="98" width="140" height="56" rx="7" fill="rgba(217,118,80,.14)" stroke="var(--cinnabar)" stroke-width="1.8"/>
+        <text x="1106" y="122" text-anchor="middle" fill="var(--cinnabar)" font-size="13" font-weight="700">Event 觸發</text>
+        <text x="1106" y="141" text-anchor="middle" fill="var(--mute)" font-size="9.5">push_event</text>
       </g>
 
       <!-- edges -->
@@ -467,16 +472,25 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <path class="draw" style="--i:1" pathLength="1" d="M540,104 C480,116 470,124 418,124" stroke="var(--gold)" stroke-width="2" marker-end="url(#hg)"/>
         <path class="draw" style="--i:2" pathLength="1" d="M540,205 C480,200 470,178 418,176" stroke="var(--gold)" stroke-width="1.6" marker-end="url(#hg)" opacity=".75"/>
         <!-- Saga -> Scene / Character (saga_id) -->
-        <path class="draw" style="--i:3" pathLength="1" d="M750,88 C800,82 800,74 834,74" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
-        <path class="draw" style="--i:3" pathLength="1" d="M750,104 C800,116 800,132 834,134" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
-        <!-- Character -> instances -->
-        <path class="draw" style="--i:4" pathLength="1" d="M1032,134 C1048,130 1052,112 1064,108" stroke="var(--hair)" stroke-width="1.4" marker-end="url(#hf)"/>
+        <path class="draw" style="--i:3" pathLength="1" d="M750,86 C775,76 778,69 798,69" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
+        <path class="draw" style="--i:3" pathLength="1" d="M750,110 C775,150 778,184 798,184" stroke="var(--jade)" stroke-width="2" marker-end="url(#hi)"/>
+        <!-- Character ∈ Scene (current_scene_id, 在場) -->
+        <path class="draw" style="--i:4" pathLength="1" d="M898,156 L898,98" stroke="var(--seal)" stroke-width="1.8" stroke-dasharray="5 3" marker-end="url(#he)"/>
+        <!-- Scene + Character -> Event -->
+        <path class="draw" style="--i:5" pathLength="1" d="M996,78 C1018,90 1020,114 1034,118" stroke="var(--cinnabar)" stroke-width="2.2" marker-end="url(#he)"/>
+        <path class="draw" style="--i:5" pathLength="1" d="M996,178 C1018,166 1020,142 1034,138" stroke="var(--cinnabar)" stroke-width="2.2" marker-end="url(#he)"/>
       </g>
 
+      <!-- in-scene label + trigger caption -->
+      <text x="910" y="132" fill="var(--seal)" font-size="10" font-family="var(--mono)">在場</text>
+      <text x="1012" y="230" text-anchor="middle" fill="var(--cinnabar)" font-size="10.5" font-family="var(--mono)">Scene + Character → Event</text>
+
       <!-- legend -->
-      <g font-family="var(--mono)" font-size="10.5">
-        <line x1="540" y1="288" x2="572" y2="288" stroke="var(--gold)" stroke-width="2"/><text x="580" y="292" fill="var(--mute)">Saga 覆蓋 Location（1..N）</text>
-        <line x1="800" y1="288" x2="832" y2="288" stroke="var(--hair)" stroke-width="1.5"/><text x="840" y="292" fill="var(--mute)">World 包含 Location</text>
+      <g font-family="var(--mono)" font-size="10">
+        <line x1="300" y1="296" x2="328" y2="296" stroke="var(--hair)" stroke-width="1.5"/><text x="336" y="300" fill="var(--mute)">World 含 Location</text>
+        <line x1="480" y1="296" x2="508" y2="296" stroke="var(--gold)" stroke-width="2"/><text x="516" y="300" fill="var(--mute)">Saga 覆蓋 Location</text>
+        <line x1="668" y1="296" x2="696" y2="296" stroke="var(--jade)" stroke-width="2"/><text x="704" y="300" fill="var(--mute)">saga_id 歸屬</text>
+        <line x1="826" y1="296" x2="854" y2="296" stroke="var(--cinnabar)" stroke-width="2"/><text x="862" y="300" fill="var(--mute)">在場 → 觸發 Event</text>
       </g>
 
       <!-- bottom struct strip -->
