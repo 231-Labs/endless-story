@@ -29,20 +29,18 @@ import { generatePortrait } from './generate-portrait';
 
 export type PortraitOccasionKind = 'reference' | 'stage' | 'aged' | 'daily' | 'custom';
 
-/** Per-kind situational framing folded into the variant prompt. */
+/** Per-kind situational framing — drives makeup / costume / scene. The
+ *  anchor curator strips these (it's 素顏-only), so the variant builds its
+ *  OWN prompt and renders it directly via promptOverride. */
 const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom'>, string> = {
-    reference: '正式設定形象，端正面對觀者，神情沉靜。',
-    stage: '此刻正登台演出，著戲服、上了濃重戲妝，眼神入戲。',
-    aged: '多年以後，歲月在臉上留下痕跡，氣度更見蒼勁。',
-    daily: '後台卸了妝的尋常一刻，神情鬆弛、帶著生活感。',
+    reference: '正式設定形象：端正面對觀者、神情沉靜，純色底、自然光、半身。',
+    stage: '正在戲台上演出 —— **勾臉上彩的京劇戲妝、戴頭面、穿戲服**，舞台燈光，半身或全身入鏡。',
+    aged: '多年以後 —— 白髮、面有風霜皺紋、氣度更見蒼勁，著樸素常服。',
+    daily: '後台卸了妝的尋常一刻 —— 素常服、神情鬆弛、帶生活感。',
 };
 
-const ATTR_LABEL: Record<string, string> = {
-    appearance: '外貌',
-    constitution: '筋骨',
-    acuity: '機敏',
-    disposition: '心性',
-};
+const VARIANT_TONE = '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。';
+const VARIANT_NEG = '不要動漫感、不要油畫感、不要寫實照片。';
 
 export interface EvolvePortraitInput {
     characterId: string;
@@ -93,43 +91,36 @@ export async function evolvePortraitAction(
         };
         attributes?: Array<{ key?: string; value?: number | string }>;
     };
-    const name = cj.profile?.name ?? '無名';
     const pf = cj.profile?.physical_facts ?? {};
     const physicalFacts = [pf.species, pf.body].filter(Boolean).join(' / ') || '—';
 
-    const occasionText =
+    const framing =
         input.kind === 'custom'
             ? input.occasion?.trim() || '一個尋常的午後'
             : [OCCASION_BY_KIND[input.kind], input.occasion?.trim()].filter(Boolean).join(' ');
 
-    // Variant description — anchored on physical_facts (same person) + occasion.
-    const description = [
-        `${name}，${role ?? '梨園中人'}。`,
-        `外形（必須一致）：${physicalFacts}。`,
-        `此刻情境：${occasionText}`,
-    ].join(' ');
+    // Build the variant prompt DIRECTLY (the anchor curator would strip the
+    // occasion — it's hardwired to 素顏/無戲妝). Anchor on physical_facts +
+    // role so it stays the same person; the framing drives makeup/costume.
+    const genderAge = `${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
+    const personLine = `${role ?? '梨園中人'}，${genderAge}，${physicalFacts}（同一個人，保持體態與氣質一致）。`;
+    const variantPrompt = [VARIANT_TONE, personLine, framing, VARIANT_NEG]
+        .filter(Boolean)
+        .join('\n');
 
-    const attributes = (cj.attributes ?? [])
-        .filter((a): a is { key: string; value: number | string } => typeof a?.key === 'string')
-        .map((a) => ({
-            key: a.key,
-            label: ATTR_LABEL[a.key] ?? a.key,
-            value: Number(a.value ?? 0),
-        }));
-
-    // Reuse the curate→render→Walrus pipeline.
+    // Render the exact prompt (skip anchor curation) → Walrus.
     const gen = await generatePortrait({
         character: {
-            description,
+            description: personLine,
             physical: {
                 gender: mapGender(pf.gender ?? ''),
                 ageYears: Number(pf.age_years ?? 0),
                 body: pf.body ?? '',
             },
-            attributes,
+            attributes: [],
         },
-        toneHint: '', // default ink-wash tone keeps the series visually consistent
-        recruitmentIntent: occasionText,
+        toneHint: VARIANT_TONE,
+        promptOverride: variantPrompt,
     });
     if (!gen.ok || !gen.url) {
         return { ok: false, error: gen.error ?? '出圖失敗', base64: gen.base64, promptUsed: gen.promptUsed };

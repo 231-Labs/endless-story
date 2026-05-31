@@ -30,6 +30,12 @@ export interface GeneratePortraitInput {
     /** Saga's portrait style anchor — usually from Recruitment.sagaToneHint. */
     toneHint: string;
     recruitmentIntent?: string;
+    /**
+     * Skip the bare-face ANCHOR curation and render this exact prompt. Used
+     * by portrait VARIANTS (§11 evolve-portrait), whose occasion (戲妝/老年/…)
+     * the anchor curator would otherwise strip (it's hardwired to 素顏/無戲妝).
+     */
+    promptOverride?: string;
 }
 
 export interface GeneratePortraitResult {
@@ -53,8 +59,11 @@ function defaultToneHint(): string {
 export async function generatePortrait(input: GeneratePortraitInput): Promise<GeneratePortraitResult> {
     const tone = input.toneHint.trim() || defaultToneHint();
 
-    // ── Stage 1: curate ────────────────────────────────────────────────
+    // ── Stage 1: curate (skipped when caller supplies an exact prompt) ──
     let curated: string;
+    if (input.promptOverride?.trim()) {
+        curated = input.promptOverride.trim();
+    } else
     try {
         const text = createTextClient({ kind: 'cheap' });
         const opts: PortraitCurationOptions = { toneHint: tone, recruitmentIntent: input.recruitmentIntent };
