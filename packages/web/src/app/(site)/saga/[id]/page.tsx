@@ -1,7 +1,6 @@
 import {
   chaptersApi,
   charactersApi,
-  liveStateApi,
   locationsApi,
   relationshipsApi,
   sagasApi,
@@ -87,12 +86,28 @@ export default async function SagaPage({
     ? locations.map((l) => l.name).join(' + ')
     : '無 location';
 
-  // 拉所有 character（cast + wildCast）的 live state — 鏈上「現在在哪」投影
+  // Build live state LOCALLY from data already loaded (scenes + cast) instead
+  // of N× getLiveState (each = getCharacter + getScene chain round-trips, all
+  // redundant here). Location = the character's current scene name; intent /
+  // nextPlan stay placeholder on the constellation (the dossier opens the
+  // real plan). This is the bulk of the saga page's per-load cost removed.
   const allCharsForLive = [...cast, ...wildCast];
-  const liveStateEntries = await Promise.all(
-    allCharsForLive.map(async (c) => [c.id, await liveStateApi.getLiveState(c.id)] as const)
+  const sceneNameById = new Map(scenes.map((s) => [s.id, s.name]));
+  const liveStatesById: Record<string, CharacterLiveState> = Object.fromEntries(
+    allCharsForLive.map((c) => {
+      const location = c.currentSceneId
+        ? (sceneNameById.get(c.currentSceneId) ?? '別處')
+        : '江湖之間';
+      return [
+        c.id,
+        {
+          intent: `等班主點名，整理${c.role ?? ''}身段。`,
+          location,
+          nextPlan: '待下一章回。',
+        } satisfies CharacterLiveState,
+      ];
+    }),
   );
-  const liveStatesById: Record<string, CharacterLiveState> = Object.fromEntries(liveStateEntries);
 
   // 給 handscroll：cast + wildCast 都進 charactersById，wild 在 scene 內也能渲染剪影
   const allCharactersById = new Map(allCharsForLive.map((c) => [c.id, c]));
