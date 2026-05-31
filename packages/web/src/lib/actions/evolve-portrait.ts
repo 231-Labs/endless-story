@@ -137,7 +137,14 @@ export async function evolvePortraitAction(
         promptOverride: variantPrompt,
     });
     if (!gen.ok || !gen.url) {
-        return { ok: false, error: gen.error ?? '出圖失敗', base64: gen.base64, promptUsed: gen.promptUsed };
+        // Distinguish "image render failed" from "rendered but Walrus upload
+        // was rate-limited" (gen.ok + base64 present, just no url).
+        const error =
+            gen.error ??
+            (gen.base64
+                ? '圖已生成，但 Walrus 上傳被限流（429）。請稍後重試，並避免同時跑 world-loop（會搶 Walrus publisher）。'
+                : '出圖失敗');
+        return { ok: false, error, base64: gen.base64, promptUsed: gen.promptUsed };
     }
 
     if (input.dryRun) {

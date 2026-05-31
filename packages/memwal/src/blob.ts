@@ -36,7 +36,14 @@ export interface PutBlobOptions {
     publisherUrl?: string;
     /** Content-Type for the bytes; default 'application/octet-stream'. */
     contentType?: string;
+    /** Retries on transient publisher failure (429 / 5xx / network).
+     *  Default 4. The public publisher is shared + rate-limited, so a burst
+     *  (e.g. a tick uploading several blobs) commonly 429s — a short backoff
+     *  usually clears it. */
+    retries?: number;
 }
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export interface PutBlobResult {
     blobId: string;
@@ -79,17 +86,43 @@ export async function putBlob(
     const epochs = opts.epochs ?? 5;
     const base = opts.publisherUrl ?? PUBLISHERS[network];
     const url = `${base.replace(/\/$/, '')}/v1/blobs?epochs=${epochs}`;
+    const maxRetries = Math.max(0, opts.retries ?? 4);
 
-    // Wrap in Blob — TS5 lib types reject `body: Uint8Array<ArrayBufferLike>`
-    // even though fetch accepts it at runtime. Blob is the portable form.
-    const body = new Blob([bytes as BlobPart], {
-        type: opts.contentType ?? 'application/octet-stream',
-    });
-    const res = await fetch(url, { method: 'PUT', body });
-
-    if (!res.ok) {
+    // Retry on transient publisher failures (429 / 5xx / network). Backoff
+    // grows with jitter: ~1s, 2.5s, 5s, 10s … The image bytes are the same
+    // each attempt, so a successful retry dedupes to the same blob id.
+    let res: Response | undefined;
+    let lastErr = '';
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        if (attempt > 0) {
+            const backoff = Math.min(10_000, 1000 * 2 ** (attempt - 1));
+            await sleep(backoff + Math.floor(backoff * 0.3 * (attempt % 3) / 2));
+        }
+        // Fresh Blob per attempt (a consumed body can't be re-sent).
+        const body = new Blob([bytes as BlobPart], {
+            type: opts.contentType ?? 'application/octet-stream',
+        });
+        try {
+            res = await fetch(url, { method: 'PUT', body });
+        } catch (err) {
+            lastErr = `network: ${err instanceof Error ? err.message : String(err)}`;
+            res = undefined;
+            continue; // network blip → retry
+        }
+        if (res.ok) break;
+        // Retry on rate-limit / server errors; fail fast on 4xx (bad request).
+        if (res.status === 429 || res.status >= 500) {
+            lastErr = `HTTP ${res.status}`;
+            continue;
+        }
         const text = await res.text().catch(() => '');
         throw new Error(`walrus publisher HTTP ${res.status}: ${text.slice(0, 300)}`);
+    }
+
+    if (!res || !res.ok) {
+        throw new Error(
+            `walrus publisher failed after ${maxRetries + 1} attempts (${lastErr || 'unknown'}): the publisher is rate-limited — retry shortly or avoid concurrent uploads`,
+        );
     }
 
     const data = (await res.json()) as PublisherSuccess;
