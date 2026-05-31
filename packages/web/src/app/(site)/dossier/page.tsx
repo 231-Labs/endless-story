@@ -16,7 +16,9 @@ import {
   type CardData,
   type RosterFilter,
 } from '@/components/dossier/CharacterGrid';
+import { Suspense } from 'react';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
+import { DossierSkeleton } from '@/components/dossier/DossierSkeleton';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
@@ -135,6 +137,25 @@ export default async function DossierPage({
   }
 
   // ──────────── Detail view ────────────
+  // Keyed Suspense so a cold entry AND a character→character switch (same
+  // /dossier segment, different ?id) both show the skeleton instead of
+  // sitting on the previous character while the chain fan-out loads.
+  return (
+    <Suspense key={characterId} fallback={<DossierSkeleton />}>
+      <DossierDetail characterId={characterId} viewerWallet={viewerWallet} tab={parseTab(params.tab)} />
+    </Suspense>
+  );
+}
+
+async function DossierDetail({
+  characterId,
+  viewerWallet,
+  tab,
+}: {
+  characterId: string;
+  viewerWallet: string | null;
+  tab: DossierTab;
+}) {
   const character = await charactersApi.getCharacter(characterId);
   if (!character) {
     return (
@@ -147,7 +168,6 @@ export default async function DossierPage({
     );
   }
 
-  const tab = parseTab(params.tab);
   const [
     allCharacters,
     edges,
