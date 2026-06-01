@@ -28,12 +28,15 @@ export function DeployPanel({ initialStatus, presets }: Props) {
         setLog(`Running ${script} on ${env} (story: ${storyId})…\n`);
         setLastResult(null);
         startTransition(async () => {
-            // bootstrap consumes --story-id; deploy / test-e2e ignore unknown flags.
-            const res = await runCliScript({
-                script,
-                env,
-                extraArgs: ['--story-id', storyId],
-            });
+            // Per-script args:
+            //  - deploy: lower gas budget (admin wallet may hold < 2 SUI) + force-republish
+            //    (strip stale Published.toml entry so a re-deploy isn't refused).
+            //  - bootstrap: --story-id selects the preset. test-e2e ignores unknown flags.
+            const extraArgs =
+                script === 'deploy'
+                    ? ['--gas-budget', '800000000', '--force-republish']
+                    : ['--story-id', storyId];
+            const res = await runCliScript({ script, env, extraArgs });
             const combined = `--- stdout ---\n${res.stdout}\n--- stderr ---\n${res.stderr}\n--- exit ${res.code} in ${res.durationMs}ms`;
             setLog(combined);
             setLastResult(res);

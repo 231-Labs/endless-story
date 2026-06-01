@@ -378,6 +378,33 @@ async function main() {
   console.log(`   dreamAdm   ${dreamAdminCapId}`);
 
   // ═══════════════════════════════════════════════════════════════════
+  // Tx 6: Drama resource — the contested 孟雲屏 partnership slot (capacity 1)
+  //
+  // This is the SUPPLY side of the Desire/Resource engine: one scarce, conserved
+  // resource the cast contends over. Seeding it is what makes the off-chain DEMAND
+  // engine (tick-loop phase 2.7) light up — `defaultDesiresForCast` auto-derives a
+  // "want one unit" desire for every character because capacity (1) < cast size, so
+  // no per-character on-chain desire seeding is needed. Without this single object
+  // the drama layer stays a graceful no-op.
+  // ═══════════════════════════════════════════════════════════════════
+  const tx6 = new Transaction();
+  tx6.add(
+    endlessTx.resource.instantiate({
+      cap: storytellerCapId,
+      saga: sagaId,
+      archetype: 'capacity-1-slot',
+      label: 'partnership:孟雲屏',
+      capacity: 1n,
+    }),
+  );
+  const changes6 = await runTx(client, signer, tx6, 'Tx 6 — Drama resource (孟雲屏 partnership)');
+  const dramaResourceId = firstOrThrow(
+    findCreatedByType(changes6, '::resource::DramaResource'),
+    'DramaResource',
+  );
+  console.log(`   dramaRes   ${dramaResourceId}`);
+
+  // ═══════════════════════════════════════════════════════════════════
   // Write contract-ids.ts
   // ═══════════════════════════════════════════════════════════════════
   console.log('\n[contract-ids] writing snapshot…');

@@ -19,6 +19,7 @@
  */
 import * as path from 'node:path';
 import * as url from 'node:url';
+import * as fs from 'node:fs';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
 import { assertActiveEnv, suiPublish } from '../src/lib/sui-publish';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
@@ -34,6 +35,11 @@ async function main() {
   }
   const gasBudget = flag('--gas-budget', '2000000000')!;
   const dryRun = hasFlag('--dry-run');
+  // --force-republish: strip this env's entry from Published.toml so `sui client publish`
+  // doesn't refuse with "package is already published". Opt-in (never auto) so a stray
+  // re-deploy can't silently orphan a live package. This is "republish as a NEW package",
+  // not an upgrade — intended for devnet/testnet demo resets.
+  const forceRepublish = hasFlag('--force-republish');
 
   // ─── resolve paths ─────────────────────────────────────────────
   const here = path.dirname(url.fileURLToPath(import.meta.url));
@@ -55,8 +61,27 @@ async function main() {
     return;
   }
 
+  // ─── force-republish: strip this env's Published.toml entry ────
+  if (forceRepublish) {
+    const publishedToml = path.join(contractsDir, 'Published.toml');
+    if (fs.existsSync(publishedToml)) {
+      const before = fs.readFileSync(publishedToml, 'utf-8');
+      // remove the [published.<env>] section (up to the next [section] or EOF)
+      const re = new RegExp(`\\n?\\[published\\.${env}\\][\\s\\S]*?(?=\\n\\[|$)`, 'g');
+      const after = before.replace(re, '');
+      if (after !== before) {
+        fs.writeFileSync(publishedToml, after);
+        console.log(`\n[force-republish] removed [published.${env}] from Published.toml`);
+      } else {
+        console.log(`\n[force-republish] no [published.${env}] entry to remove`);
+      }
+    }
+  }
+
   // ─── publish ───────────────────────────────────────────────────
-  const result = suiPublish({ contractsDir, network: env, gasBudget });
+  // Signed with SUI_ADMIN_PRIVATE_KEY (not the CLI active-address) for testnet/mainnet,
+  // so the package owner always matches the bootstrap signer. See sui-publish.ts.
+  const result = await suiPublish({ contractsDir, network: env, gasBudget });
 
   // ─── write contract-ids.ts ─────────────────────────────────────
   console.log(`\n[contract-ids] writing snapshot…`);
