@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // This package runs standalone under `node --test` (native TS type-stripping), which
+    // requires explicit `.ts` extensions on relative imports. allowImportingTsExtensions
+    // lets tsc accept them; it's valid because the base sets noEmit (tsc only type-checks).
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*", "driver/**/*", "scenarios/**/*", "test/**/*"]
+}

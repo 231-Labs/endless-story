@@ -1,0 +1,4 @@
+node_modules/
+*.tsbuildinfo
+# regenerable from `node driver/export-traces.ts`; PNGs in figures/ are committed
+figures/traces.json
