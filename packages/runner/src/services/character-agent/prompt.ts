@@ -36,6 +36,10 @@ export interface DecideInput {
     /** Current plan (N6) — long-term goal + intent + subgoals. Makes the card
      *  serve her goal, not just react to the scene. */
     planHint?: string;
+    /** Drama-engine tension (DR-6) — her dominant UNMET desire over a scarce,
+     *  contested resource, derived deterministically from the on-chain ledger.
+     *  Pushes the choice toward what she lacks + aches for, not just the scene. */
+    dramaHint?: string;
 }
 
 export function buildSystemPrompt(): string {
@@ -68,6 +72,9 @@ export function buildUserPrompt(input: DecideInput): string {
     const planBlock = input.planHint
         ? `\n## 你心裡的目標與打算(讓這張牌為你的目標服務)\n${input.planHint}`
         : '';
+    const dramaBlock = input.dramaHint
+        ? `\n## 你此刻的渴與不甘(稀缺之物落在誰手裡 —— 讓這份張力推著你出牌)\n${input.dramaHint}`
+        : '';
     const handBlock = input.hand
         .map((c) => `- catalogIndex=${c.catalogIndex} · 「${c.label}」(${c.intent})`)
         .join('\n');
@@ -81,6 +88,7 @@ export function buildUserPrompt(input: DecideInput): string {
         memBlock,
         relBlock,
         planBlock,
+        dramaBlock,
         '',
         `## 此刻這場戲`,
         `《${input.eventTitle}》— ${input.eventSummary}`,

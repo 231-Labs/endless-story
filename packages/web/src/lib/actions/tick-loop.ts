@@ -36,6 +36,7 @@ import { characterAgent } from '@endless-story/runner';
 import { getAdminContext, type AdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
+import { deriveAndCommitDramaBeat, tensionFraction } from '@/lib/chain/drama';
 import { recallCurrentPlanText } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { recordSceneLine } from '@/lib/chain/scene-lines';
@@ -154,12 +155,28 @@ export interface TickGazetteResult {
     error?: string;
 }
 
+/** DR-6 — drama-engine tension derived this tick from the on-chain ledger. */
+export interface TickDramaResult {
+    /** true when contested resources existed and tension was derived. */
+    active: boolean;
+    /** number of contested resources read. */
+    resourceCount: number;
+    /** why drama was dormant (when active === false), e.g. 'no-resources'. */
+    skipped?: string;
+    /** commitment id of the self-verifying beat anchored on chain (real runs). */
+    commitmentId?: string;
+    /** top tension rows for the UI (capped), highest-first. */
+    top?: { characterId: string; name?: string; statement: string; tension: number }[];
+}
+
 export interface TickLoopResult {
     ok: boolean;
     advanced: boolean;
     worldTime?: WorldTimeSnapshot;
     plans: TickPlanResult[];
     moves: TickMoveResult[];
+    /** DR-6: scarce-resource tension derived (+ committed) before decisions. */
+    drama?: TickDramaResult;
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];
@@ -277,6 +294,45 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.7 DRAMA — derive each character's tension over scarce, CONTESTED
+    //    on-chain resources (DR-6), and commit a self-verifying beat. The
+    //    SUPPLY (who holds the slot) is on chain; the DEMAND (how badly each
+    //    character aches for it) is recomputed deterministically here. The
+    //    returned hints steer decide + POV toward what each character LACKS,
+    //    not just what the scene offers. Dormant no-op until resource.move is
+    //    deployed + resources instantiated — never blocks the tick.
+    let dramaHints: Record<string, string> = {};
+    let drama: TickDramaResult | undefined;
+    if (slice.length > 0) {
+        try {
+            const r = await deriveAndCommitDramaBeat({
+                sagaId: d.sagaId,
+                cast: slice.map((c) => ({ id: c.id, name: c.name })),
+                signer: dryRun ? undefined : admin.signer, // dry-run = derive, don't anchor
+            });
+            dramaHints = r.hints;
+            drama = {
+                active: r.active,
+                resourceCount: r.resourceCount,
+                skipped: r.skipped,
+                commitmentId: r.commitmentId,
+                top: r.tensions.slice(0, 6).map((t) => ({
+                    characterId: t.agentId,
+                    name: nameById.get(t.agentId),
+                    statement: t.statement,
+                    tension: tensionFraction(t.value),
+                })),
+            };
+            if (r.active) {
+                tlog(
+                    `②′ 張力推導：${r.resourceCount} 個爭用資源 · ${Object.keys(r.hints).length} 人有張力${r.commitmentId ? ' · 已上鏈承諾' : ''}`,
+                );
+            }
+        } catch (err) {
+            console.warn('[tick-loop] drama phase failed:', err);
+        }
+    }
+
     // 3. ACT — characters play their own hands in open events; events that
     //    everyone has acted in auto-resolve (judge). Chain mutation → serial
     //    (single StorytellerCap, no parallel signing).
@@ -291,6 +347,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 d.storytellerCapId,
                 nameById,
                 input.autoResolve ?? true,
+                dramaHints,
             );
             acts.push(...phase.acts);
             resolves.push(...phase.resolves);
@@ -331,6 +388,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 triggerNarrative: trigger,
                 forceRun: true,
                 dryRun: true,
+                dramaHint: dramaHints[c.id],
             });
             tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
             return { c, r };
@@ -441,6 +499,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         worldTime,
         plans,
         moves,
+        drama,
         acts,
         resolves,
         povs,
@@ -606,6 +665,7 @@ async function runActPhase(
     capId: string,
     nameById: Map<string, string>,
     autoResolve: boolean,
+    dramaHints: Record<string, string> = {},
 ): Promise<{ acts: TickActResult[]; resolves: TickResolveResult[] }> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return { acts: [], resolves: [] };
@@ -653,7 +713,10 @@ async function runActPhase(
     const tasks = events.flatMap((e) => e.pending.map((charId) => ({ e, charId })));
     const decided = await mapPool(tasks, RECALL_CONCURRENCY, async ({ e, charId }) => {
         try {
-            const r = await runCharacterTurnAction(e.eventId, charId, { decideOnly: true });
+            const r = await runCharacterTurnAction(e.eventId, charId, {
+                decideOnly: true,
+                dramaHint: dramaHints[charId],
+            });
             return { e, charId, r };
         } catch (err) {
             return {

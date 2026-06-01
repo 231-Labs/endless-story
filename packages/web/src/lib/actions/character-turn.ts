@@ -60,7 +60,7 @@ export interface CharacterTurnResult {
 export async function runCharacterTurnAction(
     eventId: string,
     characterId: string,
-    opts?: { decideOnly?: boolean },
+    opts?: { decideOnly?: boolean; dramaHint?: string },
 ): Promise<CharacterTurnResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
@@ -144,6 +144,7 @@ export async function runCharacterTurnAction(
             recalledMemories: recalled,
             relationshipHints,
             planHint: planHint ?? undefined,
+            dramaHint: opts?.dramaHint,
         });
     } catch (err) {
         return { ok: false, error: 'decide 失敗:' + (err instanceof Error ? err.message : '') };

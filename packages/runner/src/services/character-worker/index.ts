@@ -46,6 +46,8 @@ export interface RunCharacterWorkerInput {
     relationshipHints?: string[];
     /** Optional: current plan text (N6). */
     planHint?: string;
+    /** Optional: drama-engine tension hint (DR-6) — dominant unmet desire. */
+    dramaHint?: string;
     /**
      * Optional: role / specialty override (e.g. "富商" from off-chain
      * Recruitment.specialty). Chain `Character` has no role field, so
@@ -133,6 +135,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         dreamFragment: resolvedDream,
         relationshipHints: input.relationshipHints,
         planHint: input.planHint,
+        dramaHint: input.dramaHint,
     });
 
     const response = await llm.chat({

@@ -7,9 +7,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@endless-story/drama": "workspace:*",
     "@endless-story/llm": "workspace:*",
     "@endless-story/memwal": "workspace:*",
     "@endless-story/runner": "workspace:*",

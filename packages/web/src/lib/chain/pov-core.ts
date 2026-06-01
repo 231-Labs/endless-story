@@ -33,6 +33,9 @@ export interface PovCoreOptions {
     dryRun?: boolean;
     /** Phase 3: MemWal recall snippets to weave into the prompt. */
     recentMemorySnippets?: string[];
+    /** DR-6: drama-engine tension hint (dominant unmet desire over a scarce
+     *  on-chain resource). Derived once per tick by the loop's DRAMA phase. */
+    dramaHint?: string;
 }
 
 export interface PovCoreResult {
@@ -223,6 +226,7 @@ export async function runPovForCharacter(
             relationshipHints:
                 relationshipHints.length > 0 ? relationshipHints : undefined,
             planHint: planHint ?? undefined,
+            dramaHint: opts.dramaHint,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun

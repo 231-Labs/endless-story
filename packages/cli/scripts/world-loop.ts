@@ -58,6 +58,7 @@ interface TickResult {
     worldTime?: { day?: number; partOfDay?: string };
     plans?: unknown[];
     moves?: { ok: boolean }[];
+    drama?: { active?: boolean; resourceCount?: number; commitmentId?: string };
     acts?: { ok: boolean }[];
     resolves?: { ok: boolean }[];
     povs?: { anchored?: boolean }[];
@@ -72,10 +73,14 @@ function summarize(r: TickResult): string {
     const anchored = (arr?: { anchored?: boolean }[]) =>
         (arr ?? []).filter((x) => x.anchored).length;
     const day = r.worldTime?.day != null ? `第${r.worldTime.day}日·${r.worldTime.partOfDay}` : '—';
+    const drama = r.drama?.active
+        ? `張力${r.drama.resourceCount ?? 0}${r.drama.commitmentId ? '⛓' : ''}`
+        : null;
     return [
         day,
         `規劃${(r.plans ?? []).length}`,
         `移動${ok(r.moves)}`,
+        ...(drama ? [drama] : []),
         `出牌${ok(r.acts)}`,
         `收尾${ok(r.resolves)}`,
         `章回${anchored(r.povs)}`,

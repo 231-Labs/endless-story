@@ -48,6 +48,9 @@ export interface PovPromptInput {
     /** Optional: current plan (N6) — her goal + intent. Gives the monologue
      *  forward tension (what she's reaching for), not just present sensation. */
     planHint?: string;
+    /** Optional: drama-engine tension (DR-6) — her dominant unmet desire over a
+     *  scarce on-chain resource. Lets the monologue ache for what she lacks. */
+    dramaHint?: string;
 }
 
 export function buildSystemPrompt(): string {
@@ -86,6 +89,9 @@ export function buildUserPrompt(input: PovPromptInput): string {
     const planBlock = input.planHint
         ? `\n## 你心裡的目標與打算（讓獨白帶上你正在追求的東西）\n${input.planHint}`
         : '';
+    const dramaBlock = input.dramaHint
+        ? `\n## 你此刻的渴與不甘（稀缺之物落在誰手裡 —— 讓這份張力滲進你的獨白）\n${input.dramaHint}`
+        : '';
     const dreamBlock = dreamFragment
         ? `\n## 你昨夜的夢（必須引用其中一句意象）\n${dreamFragment}`
         : '';
@@ -101,6 +107,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         memBlock,
         relBlock,
         planBlock,
+        dramaBlock,
         dreamBlock,
         '',
         '## 剛才發生',

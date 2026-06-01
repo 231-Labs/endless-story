@@ -4,6 +4,10 @@
     "jsx": "preserve",
     "allowJs": true,
     "noEmit": true,
+    // @endless-story/drama ships pure TS that runs standalone under `node --test`,
+    // so its source uses explicit `.ts` import specifiers. Let our type-check
+    // follow them (valid: noEmit is set, so tsc only type-checks, never emits).
+    "allowImportingTsExtensions": true,
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"]
