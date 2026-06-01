@@ -18,6 +18,3 @@ packages/web/data/
 
 # Sui CLI publish-state (we re-publish freely; contract-ids.ts is the source of truth)
 **/Published.toml
-
-# Pitch deck HTML (local working copies)
-pitch/
