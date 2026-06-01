@@ -13,11 +13,13 @@
  * Returns the on-chain Character object id, ready for `/dossier?id=<id>`.
  */
 
+import { after } from 'next/server';
 import { Transaction } from '@mysten/sui/transactions';
 import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
 import { getAdminContext } from '../chain/admin-signer.js';
 import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
+import { generateAdditionalViews } from './generate-additional-views.js';
 
 export interface RedeemVoucherInput {
     voucherId: string;
@@ -219,6 +221,27 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         }
     } catch (err) {
         console.warn(`[redeem-voucher] genesis memory seeding failed for ${characterId}:`, err);
+    }
+
+    // §11 additional views (frontal + 人物美術設定 art sheet) via img2img, using the
+    // mint-time 45° portrait as the reference. Runs AFTER the response (Next `after`)
+    // so it never blocks the mint or the UI — the views land in the 設定集 gallery
+    // asynchronously. Skipped silently if no portrait reference was provided.
+    if (input.portraitUrl) {
+        const charId = characterId;
+        const refUrl = input.portraitUrl;
+        after(async () => {
+            try {
+                const r = await generateAdditionalViews({ characterId: charId, referenceUrl: refUrl });
+                console.log(
+                    `[redeem-voucher] additional views for ${charId}: appended=${r.appended}` +
+                        (r.skipped ? ` skipped=${r.skipped}` : '') +
+                        (r.error ? ` error=${r.error}` : ''),
+                );
+            } catch (err) {
+                console.warn(`[redeem-voucher] additional views failed for ${charId}:`, err);
+            }
+        });
     }
 
     return { ok: true, characterId, ownerCapId, digest: result.digest, seededMemories };

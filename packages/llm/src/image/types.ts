@@ -38,8 +38,31 @@ export interface ImageResponse {
   images: GeneratedImage[];
 }
 
+/**
+ * img2img edit request — one or more reference images guide a new render of the
+ * SAME subject (§11 face-consistency). The model keeps the reference's identity
+ * while following the prompt for the new angle / framing / scene.
+ */
+export interface ImageEditRequest {
+  prompt: string;
+  /** Reference image bytes (PNG). The first is the primary subject anchor. */
+  images: Uint8Array[];
+  /** 1–9; default 1. */
+  n?: number;
+  /** Default '1:1'. */
+  aspectRatio?: AspectRatio;
+  quality?: ImageQuality;
+  model?: string;
+}
+
 export interface ImageClient {
   provider: ImageProvider;
   defaultModel: string;
   generate(req: ImageRequest): Promise<ImageResponse>;
+  /**
+   * img2img edit: render a new image of the SAME subject as the reference
+   * image(s), following `prompt` for the new angle / composition. Backed by
+   * OpenAI /v1/images/edits (gpt-image-2). This is the §11 face-consistency path.
+   */
+  edit(req: ImageEditRequest): Promise<ImageResponse>;
 }
