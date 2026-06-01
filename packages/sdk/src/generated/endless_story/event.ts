@@ -37,12 +37,19 @@ export const TagOp = new MoveStruct({ name: `${$moduleName}::TagOp`, fields: {
         kind: bcs.u8(),
         label: bcs.string()
     } });
+export const ResourceTransferOp = new MoveStruct({ name: `${$moduleName}::ResourceTransferOp`, fields: {
+        resource_id: bcs.Address,
+        from: bcs.option(bcs.Address),
+        to: bcs.Address,
+        amount: bcs.u64()
+    } });
 export const EventOutcomes = new MoveStruct({ name: `${$moduleName}::EventOutcomes`, fields: {
         currency_transfers: bcs.vector(CurrencyTransfer),
         scene_deltas: bcs.vector(SceneParamDelta),
         tag_ops: bcs.vector(TagOp),
         commitment_ids: bcs.vector(bcs.Address),
-        deaths: bcs.vector(character.DeathRecord)
+        deaths: bcs.vector(character.DeathRecord),
+        resource_transfers: bcs.vector(ResourceTransferOp)
     } });
 export const EventMeta = new MoveStruct({ name: `${$moduleName}::EventMeta`, fields: {
         saga_id: bcs.Address,
@@ -358,6 +365,50 @@ export function applyDeath(options: ApplyDeathOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface ApplyResourceTransfersArguments {
+    cap: RawTransactionArgument<string>;
+    saga: RawTransactionArgument<string>;
+    budgetEvent: RawTransactionArgument<string>;
+    dramaResource: RawTransactionArgument<string>;
+}
+export interface ApplyResourceTransfersOptions {
+    package?: string;
+    arguments: ApplyResourceTransfersArguments | [
+        cap: RawTransactionArgument<string>,
+        saga: RawTransactionArgument<string>,
+        budgetEvent: RawTransactionArgument<string>,
+        dramaResource: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Apply this resolved event's resource transfers FOR ONE DramaResource.
+ * Storyteller calls it once per (event, resource) after `resolve_event`. We gather
+ * every op naming this resource — in recorded (canonical) order — into a batch and
+ * hand it to `resource::apply_transfers`, which re-validates conservation and
+ * applies atomically (any violation aborts the whole tx → no partial state, the TS
+ * RESOURCE-PHASE mirror).
+ *
+ * Multi-resource events: call once per resource; each call is its own atomic
+ * batch. The `resource_id` on each op guards against passing the wrong
+ * DramaResource object.
+ */
+export function applyResourceTransfers(options: ApplyResourceTransfersOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        null,
+        null,
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["cap", "saga", "budgetEvent", "dramaResource"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'event',
+        function: 'apply_resource_transfers',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface ApplyTagOpArguments {
     cap: RawTransactionArgument<string>;
     saga: RawTransactionArgument<string>;
@@ -410,6 +461,89 @@ export function emptyOutcomes(options: EmptyOutcomesOptions = {}) {
         package: packageAddress,
         module: 'event',
         function: 'empty_outcomes',
+    });
+}
+export interface NewResourceTransferOpArguments {
+    resourceId: RawTransactionArgument<string>;
+    from: RawTransactionArgument<string | null>;
+    to: RawTransactionArgument<string>;
+    amount: RawTransactionArgument<number | bigint>;
+}
+export interface NewResourceTransferOpOptions {
+    package?: string;
+    arguments: NewResourceTransferOpArguments | [
+        resourceId: RawTransactionArgument<string>,
+        from: RawTransactionArgument<string | null>,
+        to: RawTransactionArgument<string>,
+        amount: RawTransactionArgument<number | bigint>
+    ];
+}
+/**
+ * Production constructor for a resource-transfer op (the SDK builds these for
+ * resolve).
+ */
+export function newResourceTransferOp(options: NewResourceTransferOpOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        '0x2::object::ID',
+        '0x1::option::Option<0x2::object::ID>',
+        '0x2::object::ID',
+        'u64'
+    ] satisfies (string | null)[];
+    const parameterNames = ["resourceId", "from", "to", "amount"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'event',
+        function: 'new_resource_transfer_op',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface OutcomesWithResourceTransfersArguments {
+    resourceTransfers: TransactionArgument;
+}
+export interface OutcomesWithResourceTransfersOptions {
+    package?: string;
+    arguments: OutcomesWithResourceTransfersArguments | [
+        resourceTransfers: TransactionArgument
+    ];
+}
+/**
+ * Build outcomes that carry ONLY resource transfers (the common drama path); other
+ * dimensions empty. Keeps the SDK/test call sites terse.
+ */
+export function outcomesWithResourceTransfers(options: OutcomesWithResourceTransfersOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        'vector<null>'
+    ] satisfies (string | null)[];
+    const parameterNames = ["resourceTransfers"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'event',
+        function: 'outcomes_with_resource_transfers',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface ResourceTransferCountArguments {
+    budgetEvent: RawTransactionArgument<string>;
+}
+export interface ResourceTransferCountOptions {
+    package?: string;
+    arguments: ResourceTransferCountArguments | [
+        budgetEvent: RawTransactionArgument<string>
+    ];
+}
+export function resourceTransferCount(options: ResourceTransferCountOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["budgetEvent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'event',
+        function: 'resource_transfer_count',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
 export interface DeathCountArguments {

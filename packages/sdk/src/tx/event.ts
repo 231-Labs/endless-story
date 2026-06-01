@@ -46,6 +46,31 @@ export const newCardTemplate = (args: gen.NewCardTemplateArguments) =>
 export const emptyOutcomes = () =>
     gen.emptyOutcomes({ package: pkg(), arguments: [] });
 
+/* ── Drama engine: resource-transfer outcomes (DR-2) ──────────────────
+ * The SUPPLY-side bridge. `resolve_event` validates a resolved event's
+ * `resource_transfers` (every from?/to must be a participant); then
+ * `applyResourceTransfers` settles them against ONE DramaResource per
+ * call (re-checking conservation). Build the `vector<ResourceTransferOp>`
+ * with `tx.makeMoveVec` from `newResourceTransferOp` results, mirroring
+ * the `newCardTemplate` → `vector<CardTemplate>` pattern. */
+
+/** Construct one resource-transfer op (resource_id, from?: Option<ID>, to, amount). */
+export const newResourceTransferOp = (args: gen.NewResourceTransferOpArguments) =>
+    gen.newResourceTransferOp({ package: pkg(), arguments: args });
+
+/** Build EventOutcomes carrying ONLY resource transfers (the common drama path). */
+export const outcomesWithResourceTransfers = (
+    args: gen.OutcomesWithResourceTransfersArguments,
+) => gen.outcomesWithResourceTransfers({ package: pkg(), arguments: args });
+
+/** Settle a resolved event's transfers for ONE DramaResource (atomic, conservation-checked). */
+export const applyResourceTransfers = (args: gen.ApplyResourceTransfersArguments) =>
+    gen.applyResourceTransfers({ package: pkg(), arguments: args });
+
+/** View: how many resource-transfer ops a resolved event carries. */
+export const resourceTransferCount = (args: gen.ResourceTransferCountArguments) =>
+    gen.resourceTransferCount({ package: pkg(), arguments: args });
+
 /* Constant readers — handy for off-chain TagOp construction. */
 export const tagOpKindAdd = () =>
     gen.tagOpKindAdd({ package: pkg(), arguments: [] });

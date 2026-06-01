@@ -97,6 +97,13 @@ public struct CardWeightTableKey has copy, drop, store {}
 /// skills".
 public struct SagaAttributeDefsKey has copy, drop, store {}
 
+/// DOF marker for the per-saga contested-resource registry (drama engine). Absent DOF ==
+/// saga has no on-chain resources yet. `resource::instantiate` calls `register_resource`
+/// (same pattern as scenes via `add_anchor_scene`), so off-chain services can read the
+/// saga's resource set directly from the object instead of replaying ResourceInstantiated
+/// events. Append-only; mirrors SagaAttributeDefsKey — no Saga struct migration.
+public struct SagaResourcesKey has copy, drop, store {}
+
 public struct RevenueConfig has copy, drop, store {
     owner_bps: u16,
     storyteller_bps: u16,
@@ -568,6 +575,32 @@ public fun saga_attribute_defs(saga: &Saga): vector<world::AttributeDefinition> 
             &saga.id,
             SagaAttributeDefsKey {},
         )
+    } else {
+        vector[]
+    }
+}
+
+// ─── saga resource registry (drama engine, R-DR) ─────────────────────
+
+/// Register a contested resource under this saga. Package-internal: called by
+/// `resource::instantiate` (the same way `add_anchor_scene` is called by `scene::create`).
+/// Idempotent on duplicate id. Auto-attaches the DOF on first call; absent DOF == no
+/// resources. Append-only — no Saga struct field, no migration.
+public(package) fun register_resource(saga: &mut Saga, resource_id: ID) {
+    if (!df::exists(&saga.id, SagaResourcesKey {})) {
+        df::add<SagaResourcesKey, vector<ID>>(&mut saga.id, SagaResourcesKey {}, vector[]);
+    };
+    let ids: &mut vector<ID> = df::borrow_mut(&mut saga.id, SagaResourcesKey {});
+    if (!ids.contains(&resource_id)) {
+        vector::push_back(ids, resource_id);
+    };
+}
+
+/// Snapshot of the saga's registered resource ids (empty if none). Off-chain reads this to
+/// discover the saga's contested resources without replaying ResourceInstantiated events.
+public fun saga_resource_ids(saga: &Saga): vector<ID> {
+    if (df::exists(&saga.id, SagaResourcesKey {})) {
+        *df::borrow<SagaResourcesKey, vector<ID>>(&saga.id, SagaResourcesKey {})
     } else {
         vector[]
     }

@@ -11,6 +11,10 @@
     },
     {
       "address": "endless_story",
+      "name": "resource"
+    },
+    {
+      "address": "endless_story",
       "name": "saga"
     },
     {
@@ -1013,9 +1017,111 @@
       ],
       "return_": []
     },
-    "apply_tag_op": {
+    "apply_resource_transfers": {
       "source_index": 10,
       "index": 10,
+      "doc": " Apply this resolved event's resource transfers FOR ONE DramaResource. Storyteller calls\n it once per (event, resource) after `resolve_event`. We gather every op naming this\n resource — in recorded (canonical) order — into a batch and hand it to\n `resource::apply_transfers`, which re-validates conservation and applies atomically\n (any violation aborts the whole tx → no partial state, the TS RESOURCE-PHASE mirror).\n\n Multi-resource events: call once per resource; each call is its own atomic batch. The\n `resource_id` on each op guards against passing the wrong DramaResource object.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "drama_resource",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "resource"
+                  },
+                  "name": "DramaResource",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "apply_tag_op": {
+      "source_index": 11,
+      "index": 11,
       "doc": " Apply one TagOp recorded in a resolved BudgetEvent to the targeted Character.\n Storyteller calls this once per (event, op_index, character) triple; per L1 v0.3\n §6.6 Move does not enforce semantic uniqueness, but apply_tag is idempotent\n on duplicate label and revoke_tag is idempotent on missing label.",
       "attributes": [],
       "visibility": "Public",
@@ -1120,8 +1226,8 @@
       "return_": []
     },
     "empty_outcomes": {
-      "source_index": 11,
-      "index": 11,
+      "source_index": 12,
+      "index": 12,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1141,9 +1247,159 @@
         }
       ]
     },
+    "new_resource_transfer_op": {
+      "source_index": 13,
+      "index": 13,
+      "doc": " Production constructor for a resource-transfer op (the SDK builds these for resolve).",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "resource_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "from",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "option"
+              },
+              "name": "Option",
+              "type_arguments": [
+                {
+                  "phantom": false,
+                  "argument": {
+                    "Datatype": {
+                      "module": {
+                        "address": "sui",
+                        "name": "object"
+                      },
+                      "name": "ID",
+                      "type_arguments": []
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "to",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "type_": "u64"
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "event"
+            },
+            "name": "ResourceTransferOp",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "outcomes_with_resource_transfers": {
+      "source_index": 14,
+      "index": 14,
+      "doc": " Build outcomes that carry ONLY resource transfers (the common drama path); other\n dimensions empty. Keeps the SDK/test call sites terse.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "resource_transfers",
+          "type_": {
+            "vector": {
+              "Datatype": {
+                "module": {
+                  "address": "endless_story",
+                  "name": "event"
+                },
+                "name": "ResourceTransferOp",
+                "type_arguments": []
+              }
+            }
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "event"
+            },
+            "name": "EventOutcomes",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "resource_transfer_count": {
+      "source_index": 15,
+      "index": 15,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
     "death_count": {
-      "source_index": 12,
-      "index": 12,
+      "source_index": 16,
+      "index": 16,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1174,8 +1430,8 @@
       ]
     },
     "event_id": {
-      "source_index": 13,
-      "index": 13,
+      "source_index": 17,
+      "index": 17,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1215,8 +1471,8 @@
       ]
     },
     "status": {
-      "source_index": 14,
-      "index": 14,
+      "source_index": 18,
+      "index": 18,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1247,134 +1503,6 @@
       ]
     },
     "submitted_action_count": {
-      "source_index": 15,
-      "index": 15,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "scene_delta_count": {
-      "source_index": 16,
-      "index": 16,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "tag_op_count": {
-      "source_index": 17,
-      "index": 17,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "commitment_id_count": {
-      "source_index": 18,
-      "index": 18,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "currency_transfer_count": {
       "source_index": 19,
       "index": 19,
       "doc": null,
@@ -1406,9 +1534,137 @@
         "u64"
       ]
     },
-    "tag_op_kind_add": {
+    "scene_delta_count": {
       "source_index": 20,
       "index": 20,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "tag_op_count": {
+      "source_index": 21,
+      "index": 21,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "commitment_id_count": {
+      "source_index": 22,
+      "index": 22,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "currency_transfer_count": {
+      "source_index": 23,
+      "index": 23,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "tag_op_kind_add": {
+      "source_index": 24,
+      "index": 24,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1420,8 +1676,8 @@
       ]
     },
     "tag_op_kind_remove": {
-      "source_index": 21,
-      "index": 21,
+      "source_index": 25,
+      "index": 25,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1433,8 +1689,8 @@
       ]
     },
     "new_card_template": {
-      "source_index": 22,
-      "index": 22,
+      "source_index": 26,
+      "index": 26,
       "doc": " Production constructor for `CardTemplate`. Needed because off-chain\n storytellers (Skill API / runner orchestrator) build the catalog\n for `push_event` and Move's pure-arg rules forbid passing a\n struct vector directly via BCS-encoded bytes (`vector<CardTemplate>`\n is not a pure type). With this constructor, callers do\n `tx.makeMoveVec({ type: …::CardTemplate, elements: cards.map(c =>\n tx.moveCall(new_card_template(...))) })`.",
       "attributes": [],
       "visibility": "Public",
@@ -1767,8 +2023,85 @@
         }
       }
     },
-    "EventOutcomes": {
+    "ResourceTransferOp": {
       "index": 6,
+      "doc": " Drama-engine supply-side outcome: a reallocation of a contested resource. `resource_id`\n names the on-chain DramaResource; (from?, to, amount) is one unit-of-work. Holders are\n Character IDs that MUST be event participants (re-validated at resolve time). The actual\n ledger mutation + conservation re-check happens in `apply_resource_transfers` against the\n shared DramaResource object (one mut ref per call, mirroring the apply_death pattern).",
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop",
+        "Store"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "resource_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "from": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "sui",
+                          "name": "object"
+                        },
+                        "name": "ID",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "to": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "amount": {
+            "index": 3,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "EventOutcomes": {
+      "index": 7,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -1859,12 +2192,28 @@
                 }
               }
             }
+          },
+          "resource_transfers": {
+            "index": 5,
+            "doc": null,
+            "type_": {
+              "vector": {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "ResourceTransferOp",
+                  "type_arguments": []
+                }
+              }
+            }
           }
         }
       }
     },
     "EventMeta": {
-      "index": 7,
+      "index": 8,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -1956,7 +2305,7 @@
       }
     },
     "EventDeck": {
-      "index": 8,
+      "index": 9,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2018,7 +2367,7 @@
       }
     },
     "EventResolution": {
-      "index": 9,
+      "index": 10,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2064,7 +2413,7 @@
       }
     },
     "BudgetEvent": {
-      "index": 10,
+      "index": 11,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2134,7 +2483,7 @@
       }
     },
     "BudgetEventPushed": {
-      "index": 11,
+      "index": 12,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2206,7 +2555,7 @@
       }
     },
     "EventActionSubmitted": {
-      "index": 12,
+      "index": 13,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2259,7 +2608,7 @@
       }
     },
     "BudgetEventResolved": {
-      "index": 13,
+      "index": 14,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2293,7 +2642,7 @@
       }
     },
     "CharacterJoinedEvent": {
-      "index": 14,
+      "index": 15,
       "doc": null,
       "attributes": [],
       "abilities": [

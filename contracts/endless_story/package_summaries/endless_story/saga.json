@@ -1431,9 +1431,95 @@
         }
       ]
     },
-    "verify_cap": {
+    "register_resource": {
       "source_index": 25,
       "index": 25,
+      "doc": " Register a contested resource under this saga. Package-internal: called by\n `resource::instantiate` (the same way `add_anchor_scene` is called by `scene::create`).\n Idempotent on duplicate id. Auto-attaches the DOF on first call; absent DOF == no\n resources. Append-only — no Saga struct field, no migration.",
+      "attributes": [],
+      "visibility": "Package",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "resource_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        }
+      ],
+      "return_": []
+    },
+    "saga_resource_ids": {
+      "source_index": 26,
+      "index": 26,
+      "doc": " Snapshot of the saga's registered resource ids (empty if none). Off-chain reads this to\n discover the saga's contested resources without replaying ResourceInstantiated events.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "vector": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        }
+      ]
+    },
+    "verify_cap": {
+      "source_index": 27,
+      "index": 27,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1482,8 +1568,8 @@
       ]
     },
     "assert_cap": {
-      "source_index": 26,
-      "index": 26,
+      "source_index": 28,
+      "index": 28,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1530,8 +1616,8 @@
       "return_": []
     },
     "saga_id": {
-      "source_index": 27,
-      "index": 27,
+      "source_index": 29,
+      "index": 29,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1571,8 +1657,8 @@
       ]
     },
     "world_id": {
-      "source_index": 28,
-      "index": 28,
+      "source_index": 30,
+      "index": 30,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1612,8 +1698,8 @@
       ]
     },
     "character_count": {
-      "source_index": 29,
-      "index": 29,
+      "source_index": 31,
+      "index": 31,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1644,8 +1730,8 @@
       ]
     },
     "saga_kind": {
-      "source_index": 30,
-      "index": 30,
+      "source_index": 32,
+      "index": 32,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1685,8 +1771,8 @@
       ]
     },
     "is_active": {
-      "source_index": 31,
-      "index": 31,
+      "source_index": 33,
+      "index": 33,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1717,8 +1803,8 @@
       ]
     },
     "kind_standard": {
-      "source_index": 32,
-      "index": 32,
+      "source_index": 34,
+      "index": 34,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1739,8 +1825,8 @@
       ]
     },
     "kind_reincarnation": {
-      "source_index": 33,
-      "index": 33,
+      "source_index": 35,
+      "index": 35,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1761,8 +1847,8 @@
       ]
     },
     "new_revenue_config": {
-      "source_index": 34,
-      "index": 34,
+      "source_index": 36,
+      "index": 36,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1895,8 +1981,28 @@
         }
       }
     },
-    "RevenueConfig": {
+    "SagaResourcesKey": {
       "index": 4,
+      "doc": " DOF marker for the per-saga contested-resource registry (drama engine). Absent DOF ==\n saga has no on-chain resources yet. `resource::instantiate` calls `register_resource`\n (same pattern as scenes via `add_anchor_scene`), so off-chain services can read the\n saga's resource set directly from the object instead of replaying ResourceInstantiated\n events. Append-only; mirrors SagaAttributeDefsKey — no Saga struct migration.",
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop",
+        "Store"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "dummy_field": {
+            "index": 0,
+            "type_": "bool"
+          }
+        }
+      }
+    },
+    "RevenueConfig": {
+      "index": 5,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -1927,7 +2033,7 @@
       }
     },
     "StorytellerCap": {
-      "index": 5,
+      "index": 6,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -1970,7 +2076,7 @@
       }
     },
     "Saga": {
-      "index": 6,
+      "index": 7,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2176,7 +2282,7 @@
       }
     },
     "SagaCreated": {
-      "index": 7,
+      "index": 8,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2271,7 +2377,7 @@
       }
     },
     "SagaMarkedInactive": {
-      "index": 8,
+      "index": 9,
       "doc": " Admin flipped saga off. Characters are **not** auto-released here —\n follow with `transfer_character_control` batch or `force_release_character`.",
       "attributes": [],
       "abilities": [
@@ -2314,7 +2420,7 @@
       }
     },
     "AnchorSceneAdded": {
-      "index": 9,
+      "index": 10,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2357,7 +2463,7 @@
       }
     },
     "LocationCovered": {
-      "index": 10,
+      "index": 11,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2400,35 +2506,6 @@
       }
     },
     "DeparturePolicyUpdated": {
-      "index": 11,
-      "doc": null,
-      "attributes": [],
-      "abilities": [
-        "Copy",
-        "Drop"
-      ],
-      "type_parameters": [],
-      "fields": {
-        "positional_fields": false,
-        "fields": {
-          "saga_id": {
-            "index": 0,
-            "doc": null,
-            "type_": {
-              "Datatype": {
-                "module": {
-                  "address": "sui",
-                  "name": "object"
-                },
-                "name": "ID",
-                "type_arguments": []
-              }
-            }
-          }
-        }
-      }
-    },
-    "CardWeightingEnabled": {
       "index": 12,
       "doc": null,
       "attributes": [],
@@ -2457,7 +2534,7 @@
         }
       }
     },
-    "CardWeightingDisabled": {
+    "CardWeightingEnabled": {
       "index": 13,
       "doc": null,
       "attributes": [],
@@ -2486,8 +2563,37 @@
         }
       }
     },
-    "CardWeightRuleSet": {
+    "CardWeightingDisabled": {
       "index": 14,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "saga_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "CardWeightRuleSet": {
+      "index": 15,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2526,7 +2632,7 @@
       }
     },
     "CardWeightRuleCleared": {
-      "index": 15,
+      "index": 16,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2560,49 +2666,6 @@
       }
     },
     "SagaAttributeDefined": {
-      "index": 16,
-      "doc": null,
-      "attributes": [],
-      "abilities": [
-        "Copy",
-        "Drop"
-      ],
-      "type_parameters": [],
-      "fields": {
-        "positional_fields": false,
-        "fields": {
-          "saga_id": {
-            "index": 0,
-            "doc": null,
-            "type_": {
-              "Datatype": {
-                "module": {
-                  "address": "sui",
-                  "name": "object"
-                },
-                "name": "ID",
-                "type_arguments": []
-              }
-            }
-          },
-          "key": {
-            "index": 1,
-            "doc": null,
-            "type_": {
-              "Datatype": {
-                "module": {
-                  "address": "std",
-                  "name": "string"
-                },
-                "name": "String",
-                "type_arguments": []
-              }
-            }
-          }
-        }
-      }
-    },
-    "SagaAttributeCleared": {
       "index": 17,
       "doc": null,
       "attributes": [],
@@ -2645,8 +2708,51 @@
         }
       }
     },
-    "TreasuryDeposited": {
+    "SagaAttributeCleared": {
       "index": 18,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "saga_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "key": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "TreasuryDeposited": {
+      "index": 19,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2685,7 +2791,7 @@
       }
     },
     "TreasuryWithdrawn": {
-      "index": 19,
+      "index": 20,
       "doc": null,
       "attributes": [],
       "abilities": [

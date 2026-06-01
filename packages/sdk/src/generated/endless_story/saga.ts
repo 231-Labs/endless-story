@@ -49,6 +49,9 @@ export const CardWeightTableKey = new MoveStruct({ name: `${$moduleName}::CardWe
 export const SagaAttributeDefsKey = new MoveStruct({ name: `${$moduleName}::SagaAttributeDefsKey`, fields: {
         dummy_field: bcs.bool()
     } });
+export const SagaResourcesKey = new MoveStruct({ name: `${$moduleName}::SagaResourcesKey`, fields: {
+        dummy_field: bcs.bool()
+    } });
 export const RevenueConfig = new MoveStruct({ name: `${$moduleName}::RevenueConfig`, fields: {
         owner_bps: bcs.u16(),
         storyteller_bps: bcs.u16(),
@@ -775,6 +778,33 @@ export function sagaAttributeDefs(options: SagaAttributeDefsOptions) {
         package: packageAddress,
         module: 'saga',
         function: 'saga_attribute_defs',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface SagaResourceIdsArguments {
+    saga: RawTransactionArgument<string>;
+}
+export interface SagaResourceIdsOptions {
+    package?: string;
+    arguments: SagaResourceIdsArguments | [
+        saga: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Snapshot of the saga's registered resource ids (empty if none). Off-chain reads
+ * this to discover the saga's contested resources without replaying
+ * ResourceInstantiated events.
+ */
+export function sagaResourceIds(options: SagaResourceIdsOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["saga"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'saga',
+        function: 'saga_resource_ids',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

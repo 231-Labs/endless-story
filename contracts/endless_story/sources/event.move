@@ -8,6 +8,7 @@ module endless_story::event {
     use endless_story::saga::{Self, Saga, StorytellerCap};
     use endless_story::scene::{Self, Scene};
     use endless_story::character::{Self, Character, DeathRecord};
+    use endless_story::resource::{Self, DramaResource, Transfer};
 
     const STATUS_OPEN: u8 = 0;
     const STATUS_RESOLVED: u8 = 1;
@@ -45,6 +46,8 @@ module endless_story::event {
     const EInvalidHandSize: u64 = 21;
     const EHandSizeExceedsCatalog: u64 = 22;
     const ECardNotInHand: u64 = 23;
+    const EResourceTransferFromNotParticipant: u64 = 24;
+    const EResourceTransferToNotParticipant: u64 = 25;
 
     public struct CardTemplate has copy, drop, store {
         id: u16,
@@ -83,12 +86,25 @@ module endless_story::event {
         label: String,
     }
 
+    /// Drama-engine supply-side outcome: a reallocation of a contested resource. `resource_id`
+    /// names the on-chain DramaResource; (from?, to, amount) is one unit-of-work. Holders are
+    /// Character IDs that MUST be event participants (re-validated at resolve time). The actual
+    /// ledger mutation + conservation re-check happens in `apply_resource_transfers` against the
+    /// shared DramaResource object (one mut ref per call, mirroring the apply_death pattern).
+    public struct ResourceTransferOp has copy, drop, store {
+        resource_id: ID,
+        from: Option<ID>,
+        to: ID,
+        amount: u64,
+    }
+
     public struct EventOutcomes has copy, drop, store {
         currency_transfers: vector<CurrencyTransfer>,
         scene_deltas: vector<SceneParamDelta>,
         tag_ops: vector<TagOp>,
         commitment_ids: vector<ID>,
         deaths: vector<DeathRecord>,
+        resource_transfers: vector<ResourceTransferOp>,
     }
 
     public struct EventMeta has copy, drop, store {
@@ -508,6 +524,28 @@ module endless_story::event {
             i = i + 1;
         };
 
+        // Validate resource_transfers: every holder (from?, to) must be an event participant.
+        // The ledger MUTATION (+ conservation re-check) is applied separately, per resource,
+        // in `apply_resource_transfers` — one DramaResource mut ref per call, mirroring how
+        // `apply_death` defers the Character mutation. Here we only validate participant scope;
+        // resolve_event takes no DramaResource ref so a multi-resource event stays composable.
+        let mut i = 0;
+        let n = vector::length(&outcomes.resource_transfers);
+        while (i < n) {
+            let op = vector::borrow(&outcomes.resource_transfers, i);
+            if (option::is_some(&op.from)) {
+                assert!(
+                    budget_event.deck.participants.contains(option::borrow(&op.from)),
+                    EResourceTransferFromNotParticipant,
+                );
+            };
+            assert!(
+                budget_event.deck.participants.contains(&op.to),
+                EResourceTransferToNotParticipant,
+            );
+            i = i + 1;
+        };
+
         let resolved_at_ms = clock::timestamp_ms(clock);
         budget_event.meta.status = STATUS_RESOLVED;
         budget_event.meta.resolved_at_ms = resolved_at_ms;
@@ -564,6 +602,43 @@ module endless_story::event {
         character::mark_dead(character, record);
     }
 
+    /// Apply this resolved event's resource transfers FOR ONE DramaResource. Storyteller calls
+    /// it once per (event, resource) after `resolve_event`. We gather every op naming this
+    /// resource — in recorded (canonical) order — into a batch and hand it to
+    /// `resource::apply_transfers`, which re-validates conservation and applies atomically
+    /// (any violation aborts the whole tx → no partial state, the TS RESOURCE-PHASE mirror).
+    ///
+    /// Multi-resource events: call once per resource; each call is its own atomic batch. The
+    /// `resource_id` on each op guards against passing the wrong DramaResource object.
+    public fun apply_resource_transfers(
+        cap: &StorytellerCap,
+        saga: &Saga,
+        budget_event: &BudgetEvent,
+        drama_resource: &mut DramaResource,
+        clock: &clock::Clock,
+    ) {
+        saga::assert_cap(cap, saga);
+        assert!(budget_event.meta.status == STATUS_RESOLVED, EEventNotResolved);
+        let rid = object::id(drama_resource);
+        let ops = &budget_event.resolution.outcomes.resource_transfers;
+        let mut batch = vector::empty<Transfer>();
+        let mut i = 0;
+        let n = vector::length(ops);
+        while (i < n) {
+            let op = vector::borrow(ops, i);
+            if (op.resource_id == rid) {
+                if (option::is_some(&op.from)) {
+                    vector::push_back(&mut batch, resource::reallocate(*option::borrow(&op.from), op.to, op.amount));
+                } else {
+                    vector::push_back(&mut batch, resource::acquire(op.to, op.amount));
+                };
+            };
+            i = i + 1;
+        };
+        // apply the gathered batch atomically (conservation re-checked inside)
+        resource::apply_transfers(cap, saga, drama_resource, batch, clock);
+    }
+
     /// Apply one TagOp recorded in a resolved BudgetEvent to the targeted Character.
     /// Storyteller calls this once per (event, op_index, character) triple; per L1 v0.3
     /// §6.6 Move does not enforce semantic uniqueness, but apply_tag is idempotent
@@ -608,7 +683,37 @@ module endless_story::event {
             tag_ops: vector::empty<TagOp>(),
             commitment_ids: vector::empty<ID>(),
             deaths: vector::empty<DeathRecord>(),
+            resource_transfers: vector::empty<ResourceTransferOp>(),
         }
+    }
+
+    /// Production constructor for a resource-transfer op (the SDK builds these for resolve).
+    public fun new_resource_transfer_op(
+        resource_id: ID,
+        from: Option<ID>,
+        to: ID,
+        amount: u64,
+    ): ResourceTransferOp {
+        ResourceTransferOp { resource_id, from, to, amount }
+    }
+
+    /// Build outcomes that carry ONLY resource transfers (the common drama path); other
+    /// dimensions empty. Keeps the SDK/test call sites terse.
+    public fun outcomes_with_resource_transfers(
+        resource_transfers: vector<ResourceTransferOp>,
+    ): EventOutcomes {
+        EventOutcomes {
+            currency_transfers: vector::empty<CurrencyTransfer>(),
+            scene_deltas: vector::empty<SceneParamDelta>(),
+            tag_ops: vector::empty<TagOp>(),
+            commitment_ids: vector::empty<ID>(),
+            deaths: vector::empty<DeathRecord>(),
+            resource_transfers,
+        }
+    }
+
+    public fun resource_transfer_count(budget_event: &BudgetEvent): u64 {
+        vector::length(&budget_event.resolution.outcomes.resource_transfers)
     }
 
     public fun death_count(budget_event: &BudgetEvent): u64 {
@@ -709,7 +814,10 @@ module endless_story::event {
         commitment_ids: vector<ID>,
         deaths: vector<DeathRecord>,
     ): EventOutcomes {
-        EventOutcomes { currency_transfers, scene_deltas, tag_ops, commitment_ids, deaths }
+        EventOutcomes {
+            currency_transfers, scene_deltas, tag_ops, commitment_ids, deaths,
+            resource_transfers: vector::empty<ResourceTransferOp>(),
+        }
     }
 
     #[test_only]
