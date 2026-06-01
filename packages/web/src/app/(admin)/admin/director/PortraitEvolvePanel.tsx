@@ -13,8 +13,8 @@ import type { Character } from '@endless-story/shared';
  * Admin panel: evolve a character's portrait (§11 dynamic NFT).
  *
  * Renders a new variant conditioned on the same physical_facts + an
- * occasion, then updates image_url on chain (CharacterImageUpdated event =
- * the portrait's verifiable evolution trail).
+ * occasion, then appends it to the on-chain setting gallery. The public cover
+ * stays owner-controlled from the dossier gallery tab.
  */
 const KINDS: { value: PortraitOccasionKind; label: string }[] = [
     { value: 'reference', label: '設定形象' },
@@ -135,13 +135,13 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
                     disabled={isPending || !characterId || (kind === 'custom' && !occasion.trim())}
                     className="rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal disabled:opacity-50"
                 >
-                    {isPending ? '上鏈中…' : '演化形象 · 寫上鏈'}
+                    {isPending ? '上鏈中…' : '演化形象 · 加入設定集'}
                 </button>
             </div>
 
             <p className="text-2xs tracking-widest text-mute">
-                出圖 anchor 於 physical_facts（同一人）→ Walrus → update_image_by_storyteller
-                → CharacterImageUpdated（動態 NFT 軌跡）。
+                出圖 anchor 於 physical_facts（同一人）→ Walrus → add_media_asset_by_storyteller
+                加入設定集；封面由 owner 在角色頁選定。
             </p>
 
             {result ? <ResultView result={result} /> : null}
@@ -167,7 +167,7 @@ function ResultView({ result }: { result: EvolvePortraitResult }) {
                     {result.error
                         ? '失敗'
                         : result.anchored
-                          ? '已演化並上鏈'
+                          ? `已加入設定集${result.mediaIndex != null ? ` #${result.mediaIndex}` : ''}`
                           : result.ok
                             ? 'Dry-Run（新像）'
                             : '—'}

@@ -18,7 +18,17 @@ export type Visibility = 'public_chapter' | 'saga_internal' | 'private';
 export interface BlobRef {
   walrusBlobId: string;
   imageUrl: string;
-  kind: 'anchor' | 'costume' | 'makeup' | 'event_moment' | 'scene_clip';
+  kind:
+    | 'anchor'
+    | 'setting_sheet'
+    | 'portrait_variant'
+    | 'costume'
+    | 'makeup'
+    | 'event_moment'
+    | 'scene_clip';
+  /** Index in character.media_assets, when this image comes from the on-chain gallery. */
+  mediaIndex?: number;
+  label?: string;
   sourceEventId?: string;
   sourceChapterId?: string;
   createdAt: string;

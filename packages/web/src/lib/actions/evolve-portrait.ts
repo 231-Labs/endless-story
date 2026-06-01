@@ -6,10 +6,10 @@
  * The NFT's art isn't a frozen mint image: it GROWS with the story. This
  * action renders a new portrait variant conditioned on the same person
  * (physical_facts = the durable anchor) + an OCCASION (戲妝 / 老年 / 日常 / a
- * dramatic moment), uploads it to Walrus, and updates `image_url` on chain
- * via `update_image_by_storyteller` — which emits `CharacterImageUpdated`.
- * That event chain IS the dynamic-NFT trail: a verifiable history of how the
- * portrait evolved, each variant anchored.
+ * dramatic moment), uploads it to Walrus, then appends it to the on-chain
+ * gallery via `add_media_asset_by_storyteller`. It deliberately does NOT
+ * update `image_url`; the owner later chooses the public cover from the
+ * accumulated setting gallery with `set_cover_from_media`.
  *
  * Consistency rule (§11 鐵律): every variant is conditioned on the mint-time
  * physical_facts so it's the SAME person in a new moment, not a new face.
@@ -67,11 +67,13 @@ export interface EvolvePortraitInput {
 
 export interface EvolvePortraitResult {
     ok: boolean;
-    /** New Walrus aggregator URL written to image_url. */
+    /** New Walrus aggregator URL appended to the setting gallery. */
     url?: string;
     /** Base64 PNG for immediate preview before Walrus settles. */
     base64?: string;
     blobId?: string;
+    /** Index in Character.media_assets when anchored. */
+    mediaIndex?: number;
     promptUsed?: string;
     digest?: string;
     anchored?: boolean;
@@ -158,7 +160,7 @@ export async function evolvePortraitAction(
         };
     }
 
-    // Anchor on chain: update image_url + emit CharacterImageUpdated.
+    // Anchor on chain: append to media_assets; cover stays owner-controlled.
     let admin;
     try {
         admin = getAdminContext();
@@ -167,26 +169,36 @@ export async function evolvePortraitAction(
     }
     try {
         const txb = new Transaction();
+        const asset = txb.add(
+            endlessTx.character.newMediaAsset({
+                kind: mediaKindForOccasion(input.kind),
+                uri: gen.url,
+                walrusBlobId: gen.blobId ? Array.from(new TextEncoder().encode(gen.blobId)) : [],
+                metadataUri: buildVariantMetadataUri(input.kind, input.occasion),
+            }),
+        );
         txb.add(
-            endlessTx.character.updateImageByStoryteller({
+            endlessTx.character.addMediaAssetByStoryteller({
                 cap: d.storytellerCapId,
                 saga: d.sagaId,
                 character: input.characterId,
-                newImageUrl: gen.url,
+                asset,
             }),
         );
         const res = await admin.client.signAndExecuteTransaction({
             transaction: txb,
             signer: admin.signer,
-            options: { showEffects: true },
+            options: { showEffects: true, showEvents: true },
         });
         const okChain = res.effects?.status?.status === 'success';
         await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+        const mediaIndex = extractMediaAssetIndex(res.events ?? []);
         return {
             ok: okChain,
             url: gen.url,
             base64: gen.base64,
             blobId: gen.blobId,
+            mediaIndex,
             promptUsed: gen.promptUsed,
             anchored: okChain,
             digest: res.digest,
@@ -207,4 +219,33 @@ function mapGender(raw: string): string {
     if (raw === '男' || raw.toLowerCase() === 'male') return '男';
     if (raw === '女' || raw.toLowerCase() === 'female') return '女';
     return '中性';
+}
+
+function mediaKindForOccasion(kind: PortraitOccasionKind): number {
+    if (kind === 'reference') return 6; // setting sheet / stable reference
+    if (kind === 'stage') return 3; // makeup
+    if (kind === 'finery') return 2; // costume
+    return 0; // portrait variant
+}
+
+function buildVariantMetadataUri(kind: PortraitOccasionKind, occasion?: string): string {
+    const params = new URLSearchParams({ kind });
+    const trimmed = occasion?.trim();
+    if (trimmed) params.set('occasion', trimmed);
+    return `endless://portrait-variant?${params.toString()}`;
+}
+
+interface SuiEventLike {
+    type?: string;
+    parsedJson?: unknown;
+}
+
+function extractMediaAssetIndex(events: SuiEventLike[]): number | undefined {
+    for (const ev of events) {
+        if (!ev.type?.endsWith('::character::MediaAssetAdded')) continue;
+        const parsed = ev.parsedJson as { index?: string | number } | undefined;
+        const n = Number(parsed?.index);
+        return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
 }

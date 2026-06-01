@@ -14,6 +14,8 @@ export interface SurvivalStatus {
 
 export interface CharacterDerivativeGallery {
   anchor: BlobRef;
+  /** Full on-chain setting gallery (`Character.media_assets`) when available. */
+  variants?: BlobRef[];
   costume?: BlobRef;
   makeup?: BlobRef;
   eventMoments: BlobRef[];

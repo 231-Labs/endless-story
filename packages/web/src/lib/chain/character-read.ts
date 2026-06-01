@@ -9,7 +9,7 @@
  * are populated by runner (Phase 4) writing to off-chain stores.
  */
 
-import type { Character, CharacterRole } from '@endless-story/shared';
+import type { BlobRef, Character, CharacterRole } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 
@@ -64,6 +64,10 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
     const birthMs = typeof birthMsRaw === 'string' ? Number(birthMsRaw) : Number(birthMsRaw);
     const createdAt = birthMs > 0 ? new Date(birthMs).toISOString() : new Date().toISOString();
 
+    const mediaAssets = mapMediaAssets(json.media_assets ?? [], createdAt);
+    const coverAsset = mediaAssets.find((m) => m.imageUrl === json.image_url);
+    const firstAsset = mediaAssets[0];
+
     return {
         id,
         nftOwner: ownerOverride ?? '',
@@ -85,12 +89,17 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
         },
         gallery: {
             anchor: {
-                walrusBlobId: '',
+                walrusBlobId: coverAsset?.walrusBlobId ?? firstAsset?.walrusBlobId ?? '',
                 imageUrl: json.image_url ?? '',
                 kind: 'anchor',
+                mediaIndex: coverAsset?.mediaIndex,
+                label: '封面',
                 createdAt,
             },
-            eventMoments: [],
+            variants: mediaAssets,
+            costume: mediaAssets.find((m) => m.kind === 'costume'),
+            makeup: mediaAssets.find((m) => m.kind === 'makeup'),
+            eventMoments: mediaAssets.filter((m) => m.kind === 'event_moment'),
         },
         survival: {
             funds: 0,
@@ -234,6 +243,76 @@ function mapGender(raw: string): Character['gender'] {
     return 'other';
 }
 
+const textDecoder = new TextDecoder();
+
+function mapMediaAssets(rawAssets: ChainMediaAsset[], createdAt: string): BlobRef[] {
+    return rawAssets
+        .map((asset, index): BlobRef | null => {
+            const uri = typeof asset.uri === 'string' ? asset.uri : '';
+            if (!uri) return null;
+            const kindNum = Number(asset.kind ?? 0);
+            const metadata = typeof asset.metadata_uri === 'string' ? asset.metadata_uri : '';
+            return {
+                walrusBlobId: decodeWalrusBlobId(asset.walrus_blob_id),
+                imageUrl: uri,
+                kind: mapMediaKind(kindNum, index),
+                mediaIndex: index,
+                label: labelForMediaKind(kindNum, index, metadata),
+                createdAt,
+            } satisfies BlobRef;
+        })
+        .filter((x): x is BlobRef => x != null);
+}
+
+function decodeWalrusBlobId(raw: unknown): string {
+    if (typeof raw === 'string') return raw;
+    if (raw instanceof Uint8Array) return textDecoder.decode(raw);
+    if (Array.isArray(raw)) {
+        const bytes = raw
+            .map((n) => Number(n))
+            .filter((n) => Number.isInteger(n) && n >= 0 && n <= 255);
+        return bytes.length > 0 ? textDecoder.decode(new Uint8Array(bytes)) : '';
+    }
+    return '';
+}
+
+function mapMediaKind(kind: number, index: number): BlobRef['kind'] {
+    if (kind === 6) return 'setting_sheet';
+    if (kind === 2) return 'costume';
+    if (kind === 3) return 'makeup';
+    if (kind === 4) return 'event_moment';
+    if (kind === 5) return 'scene_clip';
+    return index === 0 ? 'anchor' : 'portrait_variant';
+}
+
+function labelForMediaKind(kind: number, index: number, metadata: string): string {
+    const fromMetadata = parseMetadataLabel(metadata);
+    if (fromMetadata) return fromMetadata;
+    if (kind === 6) return '設定形象';
+    if (kind === 2) return '服裝設定';
+    if (kind === 3) return '戲妝設定';
+    if (kind === 4) return '事件瞬間';
+    return index === 0 ? '初始形象' : '形象變體';
+}
+
+function parseMetadataLabel(metadata: string): string | null {
+    const match = metadata.match(/[?&]kind=([^&]+)/);
+    if (!match) return null;
+    const kind = decodeURIComponent(match[1]);
+    const labels: Record<string, string> = {
+        reference: '設定形象',
+        stage: '戲妝登台',
+        finery: '盛裝華服',
+        daily: '日常卸妝',
+        youth: '少年青澀',
+        aged: '老年蒼勁',
+        illness: '病中清減',
+        snow: '雪夜獨行',
+        custom: '自訂情境',
+    };
+    return labels[kind] ?? null;
+}
+
 /* ── chain shape (minimal — matches `character::Character` MoveStruct) ── */
 
 interface ChainCharacter {
@@ -248,9 +327,17 @@ interface ChainCharacter {
         };
     };
     attributes?: Array<{ key?: string; value?: number | string }>;
+    media_assets?: ChainMediaAsset[];
     state?: { saga_id?: unknown; current_scene_id?: unknown };
     image_url?: string;
     birth_ms?: number | string;
     birthMs?: number | string;
     subscriber_count?: number | string;
+}
+
+interface ChainMediaAsset {
+    kind?: number | string;
+    uri?: string;
+    walrus_blob_id?: unknown;
+    metadata_uri?: string;
 }
