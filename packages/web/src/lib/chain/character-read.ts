@@ -296,6 +296,16 @@ function labelForMediaKind(kind: number, index: number, metadata: string): strin
 }
 
 function parseMetadataLabel(metadata: string): string | null {
+    // §11 img2img additional views carry `?view=frontal|art-sheet`.
+    const viewMatch = metadata.match(/[?&]view=([^&]+)/);
+    if (viewMatch) {
+        const view = decodeURIComponent(viewMatch[1]);
+        const viewLabels: Record<string, string> = {
+            frontal: '正面形象',
+            'art-sheet': '人物設定',
+        };
+        if (viewLabels[view]) return viewLabels[view];
+    }
     const match = metadata.match(/[?&]kind=([^&]+)/);
     if (!match) return null;
     const kind = decodeURIComponent(match[1]);
