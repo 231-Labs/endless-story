@@ -31,7 +31,7 @@ export interface SeedGenesisResult {
 
 export async function seedGenesisMemoryAction(
     characterId: string,
-    count = 4,
+    count = 6,
 ): Promise<SeedGenesisResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId) {

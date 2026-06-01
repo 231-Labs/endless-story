@@ -17,6 +17,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
 import { getAdminContext } from '../chain/admin-signer.js';
+import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
 
 export interface RedeemVoucherInput {
     voucherId: string;
@@ -51,6 +52,8 @@ export interface RedeemVoucherResult {
     ownerCapId?: string;
     /** Transaction digest for receipts / explorer links. */
     digest?: string;
+    /** # of genesis memories seeded immediately after mint (0 if MemWal unconfigured). */
+    seededMemories?: number;
 }
 
 export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVoucherResult> {
@@ -200,5 +203,23 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         };
     }
 
-    return { ok: true, characterId, ownerCapId, digest: result.digest };
+    // Seed age/gender/role-appropriate genesis memories immediately after the mint lands —
+    // server-side and AWAITED (not the old client-side fire-and-forget, which failed silently
+    // and left characters memory-less). Generation reads the on-chain profile, so it must run
+    // after the Character object exists. A MemWal/LLM failure must NOT fail the mint (the
+    // Character is already on chain), so we swallow errors and just report how many seeded.
+    let seededMemories = 0;
+    try {
+        const seedRes = await seedGenesisMemoryAction(characterId);
+        seededMemories = seedRes.seeded ?? 0;
+        if (seedRes.skipped) {
+            console.warn(`[redeem-voucher] genesis memory skipped (${seedRes.skipped}) for ${characterId}`);
+        } else {
+            console.log(`[redeem-voucher] seeded ${seededMemories} genesis memories for ${characterId}`);
+        }
+    } catch (err) {
+        console.warn(`[redeem-voucher] genesis memory seeding failed for ${characterId}:`, err);
+    }
+
+    return { ok: true, characterId, ownerCapId, digest: result.digest, seededMemories };
 }

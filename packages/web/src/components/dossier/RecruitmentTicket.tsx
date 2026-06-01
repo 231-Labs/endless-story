@@ -14,7 +14,6 @@ import { moderatePrompt } from '@/lib/actions/moderate-prompt';
 import { previewCharacter } from '@/lib/actions/preview-character';
 import { generatePortrait } from '@/lib/actions/generate-portrait';
 import { redeemVoucher } from '@/lib/actions/redeem-voucher';
-import { seedGenesisMemoryAction } from '@/lib/actions/seed-genesis-memory';
 
 type Stage = 'closed' | 'minting' | 'rejected' | 'prompt' | 'generating' | 'pick' | 'done';
 
@@ -431,10 +430,9 @@ export function RecruitmentTicket({
       });
       if (!r.ok || !r.characterId) throw new Error(r.error ?? 'redeem 失敗');
       setCharacterId(r.characterId);
-      // Fire-and-forget: distill genesis memories from her description into
-      // MemWal so early POV chapters don't drift the persona. No-op when
-      // MemWal isn't configured; failure here never blocks the mint.
-      void seedGenesisMemoryAction(r.characterId).catch(() => {});
+      // Genesis memories are now seeded SERVER-SIDE inside redeemVoucher (awaited,
+      // logged, failure-isolated) — see redeem-voucher.ts. r.seededMemories carries
+      // how many landed. No client-side fire-and-forget needed anymore.
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStage('pick');

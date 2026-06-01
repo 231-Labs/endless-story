@@ -61,11 +61,11 @@ export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisM
                 }),
             },
         ],
-        maxTokens: 1200,
-        temperature: 0.9,
+        maxTokens: 2400,
+        temperature: 0.95,
     });
 
-    return { memories: parseMemories(response.text, input.count ?? 4) };
+    return { memories: parseMemories(response.text, input.count ?? 6) };
 }
 
 interface Snapshot {
