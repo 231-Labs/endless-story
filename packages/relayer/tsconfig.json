@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // Runs standalone under bare `node` (native TS type-stripping), which requires explicit
+    // `.ts` extensions on relative imports. allowImportingTsExtensions lets tsc accept them.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*"]
+}
