@@ -11,6 +11,7 @@
 
 import type { BlobRef, Character, CharacterRole } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
+import { lazySettle } from '@endless-story/economy';
 import { resolveNetwork } from './network.js';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
@@ -49,7 +50,7 @@ function unwrapOption(raw: unknown): string | null {
     return null;
 }
 
-function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: string): Character {
+function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: string, narrativeDay = 1): Character {
     const profile = json.profile;
     const physical = profile?.physical_facts;
     const attrs = json.attributes ?? [];
@@ -59,6 +60,8 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
             attrMap[a.key] = Number(a.value);
         }
     }
+
+    const roleStr = roleFromTags(json.tags ?? []) ?? '看客';
 
     const birthMsRaw = json.birth_ms ?? json.birthMs ?? 0;
     const birthMs = typeof birthMsRaw === 'string' ? Number(birthMsRaw) : Number(birthMsRaw);
@@ -77,7 +80,7 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
         description: profile?.description ?? '',
         // Chain stores public identity as tags (e.g. `role:小生`). The
         // facade may still enrich from voucher hints for older untagged mints.
-        role: (roleFromTags(json.tags ?? []) ?? '看客') as CharacterRole,
+        role: roleStr as CharacterRole,
         gender: mapGender(physical?.gender ?? ''),
         age: Number(physical?.age_years ?? 0),
         physicalFacts: [physical?.species, physical?.body].filter(Boolean).join(' / ') || '—',
@@ -102,13 +105,7 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
             makeup: mediaAssets.find((m) => m.kind === 'makeup'),
             eventMoments: mediaAssets.filter((m) => m.kind === 'event_moment'),
         },
-        survival: {
-            funds: 0,
-            dailyCost: 1,
-            salary: 0,
-            daysLeft: 0,
-            level: 'stable',
-        },
+        survival: computeSurvival(json, attrMap, roleStr, narrativeDay),
         subscriberCount: json.subscriber_count != null ? Number(json.subscriber_count) : 0,
         createdAt,
     };
@@ -137,7 +134,8 @@ export async function fetchOnChainCharacter(id: string): Promise<Character | nul
     // step fails, fall back to empty string and the UI will degrade
     // to non-owner state.
     const owner = await resolveCurrentOwner(id);
-    return mapChainCharacter(id, json, owner ?? undefined);
+    const narrativeDay = await fetchNarrativeDay(client);
+    return mapChainCharacter(id, json, owner ?? undefined, narrativeDay);
 }
 
 /**
@@ -194,12 +192,13 @@ export async function fetchOnChainCharactersByOwner(wallet: string): Promise<Cha
         console.warn('[character-read] listCharactersForOwner failed:', err);
         return [];
     }
+    const narrativeDay = await fetchNarrativeDay(client);
     const out: Character[] = [];
     for (const c of result.characters) {
         const json = (c as { json?: unknown }).json as ChainCharacter | undefined;
         const charId = (c as { objectId?: string }).objectId;
         if (!json || !charId) continue;
-        out.push(mapChainCharacter(charId, json, wallet));
+        out.push(mapChainCharacter(charId, json, wallet, narrativeDay));
     }
     return out;
 }
@@ -225,6 +224,7 @@ export async function fetchOnChainCharacters(opts: { sagaId?: string | null } = 
         console.warn('[character-read] listMintedCharacters failed:', err);
         return [];
     }
+    const narrativeDay = await fetchNarrativeDay(client);
     const out: Character[] = [];
     // summaries and characters are 1:1 by index; summaries carry the
     // `owner` we can stamp without an extra getObject roundtrip.
@@ -233,7 +233,7 @@ export async function fetchOnChainCharacters(opts: { sagaId?: string | null } = 
         const charId = (c as { objectId?: string }).objectId;
         if (!json || !charId) return; // burned / transferred → skip
         const owner = result.summaries[i]?.owner ?? '';
-        out.push(mapChainCharacter(charId, json, owner));
+        out.push(mapChainCharacter(charId, json, owner, narrativeDay));
     });
     return out;
 }
@@ -244,6 +244,63 @@ function roleFromTags(tags: ChainTag[]): string | null {
         if (label.startsWith('role:')) return label.slice('role:'.length);
     }
     return null;
+}
+
+/**
+ * Off-chain survival snapshot via the validated economy core (@endless-story/economy).
+ * Stateless + deterministic: `lazySettle(null, …)` settles birth→today on every read, so it
+ * needs NO persistence and works on serverless. `memory_count` uses an age proxy until the
+ * self-hosted relayer's per-namespace count is wired. Uses DESIGN constants (the in-game
+ * ENDLESS scale is a narrative lever, not the real ~$ cost).
+ */
+function computeSurvival(
+    json: ChainCharacter,
+    attrMap: Record<string, number>,
+    role: string,
+    narrativeDay: number,
+): Character['survival'] {
+    const today = Math.max(0, Math.round(narrativeDay));
+    const { snapshot } = lazySettle(null, {
+        role,
+        constitution: attrMap.constitution ?? 50,
+        appearance: attrMap.appearance ?? 50,
+        acuity: attrMap.acuity ?? 50,
+        ageYearsStart: Number(json.profile?.physical_facts?.age_years ?? 0),
+        memoryCount: 5 + today * 3, // genesis + ~3/active-day proxy
+        subscribers: json.subscriber_count != null ? Number(json.subscriber_count) : 0,
+        today,
+    });
+    const r1 = (x: number) => Math.round(x * 10) / 10;
+    return {
+        funds: Math.round(snapshot.funds),
+        dailyCost: r1(snapshot.dailyCost),
+        salary: r1(snapshot.salary),
+        daysLeft: snapshot.daysLeft,
+        level: snapshot.level,
+        memoryCount: snapshot.memoryCount,
+        memoryRent: r1(snapshot.memoryRent),
+        vitality: Math.round(snapshot.vitality),
+        vitalityState: snapshot.vitalityState,
+        lifeStage: snapshot.lifeStage,
+    };
+}
+
+/** Current narrative day from the World tick (chain). Falls back to 1. */
+async function fetchNarrativeDay(client: ReturnType<typeof makeSuiClient>): Promise<number> {
+    const worldId = ENDLESS_STORY_DEPLOYMENT.worldId;
+    if (!worldId) return 1;
+    try {
+        const res = await read.world.getWorld(client, worldId);
+        const j = res.json as unknown as {
+            state?: { current_tick?: number | string };
+            time_config?: { days_per_tick_bp?: number | string };
+        };
+        const tick = Number(j.state?.current_tick ?? 0);
+        const bp = Number(j.time_config?.days_per_tick_bp ?? 1670) || 1670;
+        return Math.floor((tick * bp) / 10_000) + 1;
+    } catch {
+        return 1;
+    }
 }
 
 function mapTags(tags: ChainTag[]): Character['publicTags'] {

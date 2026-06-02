@@ -97,7 +97,16 @@ export function ProfileTab({
           </section>
 
           <section>
-            <h3 className="font-serif text-lg tracking-widest text-ink text-center">日常開銷</h3>
+            <div className="flex items-center justify-center gap-3">
+              <h3 className="font-serif text-lg tracking-widest text-ink text-center">日常開銷</h3>
+              {character.survival.lifeStage ? (
+                <span className="rounded-full border border-hairline px-2 py-0.5 text-2xs tracking-widest text-mute">
+                  {{ birth: '初生', growth: '成長', golden: '黃金', aging: '老化', decline: '衰退' }[
+                    character.survival.lifeStage
+                  ]}
+                </span>
+              ) : null}
+            </div>
             <div className="mt-8 space-y-5">
               <div className="flex items-baseline justify-between border-b border-hairline pb-5">
                 <span className="text-sm tracking-widest text-mute">現銀</span>
@@ -107,14 +116,52 @@ export function ProfileTab({
                 <span className="text-sm tracking-widest text-mute">每日開銷</span>
                 <span className="font-mono text-base text-ink">{character.survival.dailyCost}</span>
               </div>
+              {character.survival.memoryRent != null ? (
+                <div className="flex items-baseline justify-between -mt-3">
+                  <span className="pl-3 text-2xs tracking-widest text-mute/70">其中記憶租金</span>
+                  <span className="font-mono text-2xs text-mute/70">{character.survival.memoryRent}</span>
+                </div>
+              ) : null}
               <div className="flex items-baseline justify-between">
                 <span className="text-sm tracking-widest text-mute">班中俸</span>
                 <span className="font-mono text-base text-ink">{character.survival.salary}</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-sm tracking-widest text-mute">可撐日數</span>
-                <span className="font-mono text-base text-ink">{character.survival.daysLeft} 日</span>
+                <span className="font-mono text-base text-ink">
+                  {character.survival.daysLeft >= 999 ? '—' : `${character.survival.daysLeft} 日`}
+                </span>
               </div>
+              {character.survival.memoryCount != null ? (
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm tracking-widest text-mute">記憶（厚度）</span>
+                  <span className="font-mono text-base text-ink">{character.survival.memoryCount}</span>
+                </div>
+              ) : null}
+              {character.survival.vitality != null ? (
+                <div>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm tracking-widest text-mute">氣血</span>
+                    <span className="font-mono text-base text-ink">{character.survival.vitality}</span>
+                  </div>
+                  <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-hairline/80 dark:bg-hairline">
+                    <div
+                      className={`h-full rounded-full ${
+                        character.survival.vitalityState === 'healthy'
+                          ? 'bg-jade'
+                          : character.survival.vitalityState === 'strained'
+                            ? 'bg-cinnabar/60'
+                            : character.survival.vitalityState === 'failing'
+                              ? 'bg-cinnabar'
+                              : 'bg-mute'
+                      }`}
+                      style={{
+                        width: `${Math.max(0, Math.min(100, character.survival.vitality))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
           </section>
         </div>

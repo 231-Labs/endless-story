@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@endless-story/drama": "workspace:*",
+    "@endless-story/economy": "workspace:*",
     "@endless-story/llm": "workspace:*",
     "@endless-story/memwal": "workspace:*",
     "@endless-story/runner": "workspace:*",

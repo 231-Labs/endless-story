@@ -42,6 +42,15 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  packages/economy:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
   packages/llm:
     dependencies:
       '@noble/hashes':
@@ -76,6 +85,15 @@ importers:
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.41
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/relayer:
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
@@ -135,6 +153,9 @@ importers:
       '@endless-story/drama':
         specifier: workspace:*
         version: link:../drama
+      '@endless-story/economy':
+        specifier: workspace:*
+        version: link:../economy
       '@endless-story/llm':
         specifier: workspace:*
         version: link:../llm

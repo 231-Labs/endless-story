@@ -43,3 +43,5 @@ export {
 } from "./derive.ts";
 export { settleDay, totalAccounted, conserves } from "./settle.ts";
 export type { PerCharLedger, DayFlows, DaySettle } from "./settle.ts";
+export { lazySettle, SEED_FUNDS_MICRO } from "./survival.ts";
+export type { SurvivalInput, PersistedEcon, SurvivalSnapshot } from "./survival.ts";

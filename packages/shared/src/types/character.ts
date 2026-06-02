@@ -2,6 +2,12 @@ import type { BlobRef, CharacterRole, Wallet } from './common';
 
 export type SurvivalLevel = 'critical' | 'low' | 'stable' | 'healthy';
 
+/** 氣血 bucket for the vitality bar / life-cycle state machine. */
+export type VitalityState = 'healthy' | 'strained' | 'failing' | 'dead';
+
+/** Coarse life-cycle stage (character economy). */
+export type LifeStage = 'birth' | 'growth' | 'golden' | 'aging' | 'decline';
+
 export type Gender = 'female' | 'male' | 'other';
 
 export interface SurvivalStatus {
@@ -10,6 +16,16 @@ export interface SurvivalStatus {
   salary: number;
   daysLeft: number;
   level: SurvivalLevel;
+  // ── character-economy fields (optional: mock fixtures pre-date them;
+  //    renderers treat undefined as "not available") ──
+  /** real memory total (age proxy now, relayer count later) — drives storage rent. */
+  memoryCount?: number;
+  /** ENDLESS/day storage-rent component of dailyCost (C_mem × memoryCount). */
+  memoryRent?: number;
+  /** 氣血 0..100. */
+  vitality?: number;
+  vitalityState?: VitalityState;
+  lifeStage?: LifeStage;
 }
 
 export interface CharacterDerivativeGallery {
