@@ -195,6 +195,28 @@ export interface RecallManualOptions {
     namespace?: string;
 }
 
+/**
+ * Optional index metadata sent on remember so a three-factor relayer can rank the FULL
+ * namespace by importance × recency × relevance (not just re-rank a top-K-by-distance set).
+ * The managed relayer ignores unknown fields → fully backward compatible.
+ */
+export interface RememberMeta {
+    importance?: number;
+    day?: number;
+    kind?: string;
+    anchored?: boolean;
+}
+
+/** Optional recall scoring hints for a self-hosted three-factor relayer. Managed relayer ignores. */
+export interface RecallOpts {
+    /** current narrative day, for recency decay */
+    today?: number;
+    /** recency half-life in narrative days */
+    halfLife?: number;
+    /** drop non-pinned memories below this cosine similarity */
+    relevanceFloor?: number;
+}
+
 /** A single search hit — raw blobId + distance (no decrypted text) */
 export interface RecallManualHit {
     blob_id: string;

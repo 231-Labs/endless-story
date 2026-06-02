@@ -12,6 +12,8 @@ import type {
     MemWalManualConfig,
     RecallManualResult,
     RememberManualResult,
+    RememberMeta,
+    RecallOpts,
 } from "./types.js";
 
 export interface CharacterMemoryReader {
@@ -19,12 +21,13 @@ export interface CharacterMemoryReader {
         query: string,
         limit?: number,
         namespace?: string,
+        opts?: RecallOpts,
     ): Promise<RecallManualResult>;
     destroy(): void;
 }
 
 export interface CharacterMemoryWriter extends CharacterMemoryReader {
-    remember(text: string, namespace?: string): Promise<RememberManualResult>;
+    remember(text: string, namespace?: string, meta?: RememberMeta): Promise<RememberManualResult>;
 }
 
 type BaseConfig = Omit<MemWalManualConfig, "controlCapId" | "ownerCapId">;
@@ -53,16 +56,17 @@ export class SagaMemoryClient implements CharacterMemoryWriter {
         );
     }
 
-    remember(text: string, namespace?: string): Promise<RememberManualResult> {
-        return this.inner.rememberManual(text, namespace);
+    remember(text: string, namespace?: string, meta?: RememberMeta): Promise<RememberManualResult> {
+        return this.inner.rememberManual(text, namespace, meta);
     }
 
     recall(
         query: string,
         limit: number = 10,
         namespace?: string,
+        opts?: RecallOpts,
     ): Promise<RecallManualResult> {
-        return this.inner.recallManual(query, limit, namespace);
+        return this.inner.recallManual(query, limit, namespace, opts);
     }
 
     destroy(): void {
@@ -93,8 +97,9 @@ export class OwnerAuditClient implements CharacterMemoryReader {
         query: string,
         limit: number = 10,
         namespace?: string,
+        opts?: RecallOpts,
     ): Promise<RecallManualResult> {
-        return this.inner.recallManual(query, limit, namespace);
+        return this.inner.recallManual(query, limit, namespace, opts);
     }
 
     destroy(): void {

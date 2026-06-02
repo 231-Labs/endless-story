@@ -35,6 +35,8 @@ import type {
     RecallManualMemory,
     RestoreResult,
     SealServerConfig,
+    RememberMeta,
+    RecallOpts,
 } from "./types.js";
 import { sha256hex, hexToBytes, bytesToHex, normalizeServerUrl, sanitizeServerError } from "./utils.js";
 
@@ -348,7 +350,7 @@ export class MemWalManual {
      * 2. SEAL encrypt locally (no wallet signature needed)
      * 3. Send {encrypted_data, vector} to server — server handles Walrus upload relay
      */
-    async rememberManual(text: string, namespace?: string): Promise<RememberManualResult> {
+    async rememberManual(text: string, namespace?: string, meta?: RememberMeta): Promise<RememberManualResult> {
         if (!text) throw new Error("Text cannot be empty");
 
         const ns = namespace ?? this.namespace;
@@ -364,11 +366,17 @@ export class MemWalManual {
         // Step 3: Send encrypted bytes (base64) + vector to server.
         // Server will upload to Walrus via upload-relay and return the blob_id.
         const encryptedBase64 = btoa(String.fromCharCode(...encrypted));
-        return this.signedRequest<RememberManualResult>("POST", "/api/remember/manual", {
+        const body: Record<string, unknown> = {
             encrypted_data: encryptedBase64,
             vector,
             namespace: ns,
-        });
+        };
+        // Index metadata for a three-factor relayer (managed relayer ignores unknown fields).
+        if (meta?.importance != null) body.importance = meta.importance;
+        if (meta?.day != null) body.day = meta.day;
+        if (meta?.kind != null) body.kind = meta.kind;
+        if (meta?.anchored != null) body.anchored = meta.anchored;
+        return this.signedRequest<RememberManualResult>("POST", "/api/remember/manual", body);
     }
 
     /**
@@ -378,7 +386,7 @@ export class MemWalManual {
      * 3. Download blobs from Walrus
      * 4. SEAL decrypt each blob
      */
-    async recallManual(query: string, limit: number = 10, namespace?: string): Promise<RecallManualResult> {
+    async recallManual(query: string, limit: number = 10, namespace?: string, opts?: RecallOpts): Promise<RecallManualResult> {
         if (!query) throw new Error("Query cannot be empty");
 
         const ns = namespace ?? this.namespace;
@@ -387,10 +395,16 @@ export class MemWalManual {
         const vector = await this.embed(query);
 
         // Step 2: Search server
+        const body: Record<string, unknown> = { vector, limit, namespace: ns };
+        // Three-factor scoring hints for a self-hosted relayer (managed relayer ignores these →
+        // it returns top-K by distance and the web layer still re-ranks, so this is safe either way).
+        if (opts?.today != null) body.today = opts.today;
+        if (opts?.halfLife != null) body.halfLife = opts.halfLife;
+        if (opts?.relevanceFloor != null) body.relevanceFloor = opts.relevanceFloor;
         const searchResult = await this.signedRequest<{ results: { blob_id: string; distance: number }[]; total: number }>(
             "POST",
             "/api/recall/manual",
-            { vector, limit, namespace: ns },
+            body,
         );
 
         if (searchResult.results.length === 0) {

@@ -294,11 +294,11 @@ export async function recallStructuredForCharacter(
     const client = await clientFor(characterId);
     if (!client) return [];
     try {
-        // Over-fetch (3×) so three-factor re-rank has candidates to work with.
-        const [res, today] = await Promise.all([
-            client.recall(query, limit * 3, namespaceFor(characterId)),
-            currentNarrativeDay(),
-        ]);
+        // Pass `today` to the relayer: a self-hosted three-factor relayer ranks the FULL
+        // namespace by importance × recency × relevance; the managed relayer ignores it and we
+        // re-rank below — correct with either backend. Still over-fetch (3×) as a safety net.
+        const today = await currentNarrativeDay();
+        const res = await client.recall(query, limit * 3, namespaceFor(characterId), { today });
         const scored: { m: RecalledMemory; score: number; idx: number }[] = [];
         let idx = 0;
         for (const hit of res.results) {
@@ -457,6 +457,9 @@ export async function rememberForCharacter(
         await client.remember(
             tagMemory(text, kind, importance, day, opts?.anchored ?? false),
             namespaceFor(characterId),
+            // Index metadata so a self-hosted three-factor relayer can rank the full namespace.
+            // The encrypted blob still carries the tag (above), so display/parse is unchanged.
+            { importance, day, kind, anchored: opts?.anchored ?? false },
         );
         // A new plan supersedes the cached one — drop it so later phases in
         // this tick recall the fresh plan (then re-cache it).

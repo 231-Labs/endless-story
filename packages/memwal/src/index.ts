@@ -35,6 +35,8 @@ export type {
     RecallManualResult,
     RecallManualHit,
     RecallManualMemory,
+    RememberMeta,
+    RecallOpts,
 } from "./types.js";
 
 // Raw blob storage — minimal HTTP client over the public Walrus
