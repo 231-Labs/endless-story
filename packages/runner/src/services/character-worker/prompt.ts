@@ -67,11 +67,14 @@ export function buildSystemPrompt(): string {
         '5. **不要濫用回憶**。記憶片段只挑一條化成比喻、動作或一句未說出口的話；不要逐條複述，不要把章回寫成回憶錄。',
         '6. **允許少量對白**，最多兩句短對白。對白必須推動關係或遮掩情緒，不要讓人物直接說出主題。',
         '7. **不得發明重大新事實**：不可突然死亡、成親、揭露血緣、改寫事件結果。可以補小型生活細節，如茶盞、袖口、台階、燈影、誰移開眼。',
+        '8. **身份不得漂移**。若身份欄沒有寫「班主／師父／名角／跛足／重病／新來」，就不得自稱或暗示自己是那些身份。行當是「—」時，只當作戲班中一名未明確行當的人，不要自行升格成班主或核心權力者。',
+        '9. **身體缺陷與秘密物件要有來源**。不得憑空寫跛腿、棺材、屍首、血跡、重病、私藏玉鐲、巨額債務等強設定；除非事件材料、記憶、外形欄明確提供。',
         '',
         '**聲音與質地**：',
         '- 風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。',
         '- 角色扁平時，寧可低調寫觀察、身段、職業習慣與眼前利害，不要硬灌劇烈人格創傷。',
         '- 讓每個角色的行當、年紀、身體狀況、機敏程度改變句子的速度與注意力：花旦看妝面與目光，小生看身位與輸贏，樂師先聽聲，班主先看秩序。',
+        '- 禁用廉價黑化意象：不要用「像屍首／棺材／血跡／殺氣騰騰／命都押上」來製造重量。若要沉重，用一個準確的小動作代替。',
         '- 結尾要留一個未解的小鉤子或轉身，不要總結人生道理，不要「於是我明白了」。',
         '',
         '**篇幅與格式**：',
@@ -83,10 +86,11 @@ export function buildSystemPrompt(): string {
 export function buildUserPrompt(input: PovPromptInput): string {
     const { character, triggerNarrative, recentMemorySnippets, dreamFragment } = input;
     const craftBlock = buildCraftDirective(character);
+    const safeMemorySnippets = filterPovMemorySnippets(recentMemorySnippets, character);
     const memBlock =
-        recentMemorySnippets.length > 0
+        safeMemorySnippets.length > 0
             ? '\n## 可用記憶材料（只可取一兩個細節，化入場面；不可逐條複述）\n' +
-              recentMemorySnippets
+              safeMemorySnippets
                   .slice(0, 5)
                   .map((m, i) => `${i + 1}. ${m.slice(0, 220)}${m.length > 220 ? '…' : ''}`)
                   .join('\n')
@@ -157,12 +161,41 @@ function buildCraftDirective(character: CharacterSnapshot): string {
     ].join('\n');
 }
 
+function filterPovMemorySnippets(snippets: string[], character: CharacterSnapshot): string[] {
+    const identityText = [
+        character.role,
+        character.physicalFacts,
+        character.sceneName,
+    ].join(' ');
+    return snippets.filter((snippet) => !isUngroundedHeavyMotif(snippet, identityText));
+}
+
+function isUngroundedHeavyMotif(snippet: string, identityText: string): boolean {
+    const heavyMotifs = [
+        '跛',
+        '厚底靴',
+        '膝蓋',
+        '藥酒',
+        '跌打',
+        '棺',
+        '屍',
+        '死人',
+        '血跡',
+        '殺氣',
+        '靈堂',
+        '紙紮',
+    ];
+    const hasHeavyMotif = heavyMotifs.some((word) => snippet.includes(word));
+    if (!hasHeavyMotif) return false;
+    return !heavyMotifs.some((word) => identityText.includes(word));
+}
+
 function attributeDirective(a: CharacterSnapshot['attributes']): string {
     const notes: string[] = [];
     if ((a.acuity ?? 0) >= 75) notes.push('他會先注意細節與破綻');
     if ((a.disposition ?? 0) >= 75) notes.push('情緒外放要克制，讓禮數或沉默承壓');
     if ((a.disposition ?? 100) <= 45) notes.push('衝動可以有，但用一句話或一個動作表現，不要長篇喊叫');
-    if ((a.constitution ?? 100) <= 55) notes.push('身體有限制，疲弱或舊痛可影響節奏');
+    if ((a.constitution ?? 100) <= 55) notes.push('體力稍弱可影響節奏，但不可發明殘疾、重病或舊傷');
     if ((a.appearance ?? 0) >= 85) notes.push('他知道目光會落在自己身上，但不要自戀式自述');
     return notes.length > 0 ? notes.join('；') : '設定不完整時，採低調寫法：先寫眼前物與行當習慣，再讓情緒慢慢浮出';
 }
