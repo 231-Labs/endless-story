@@ -30,9 +30,11 @@ export interface DecideInput {
     hand: HandCard[];
     /** MemWal-recalled memories (three-factor) — the lever for "past shapes choice". */
     recalledMemories: string[];
-    /** Director-seeded relationships (N3) — who she's tied to + how. Shapes
-     *  who she protects, attacks, or hesitates against. */
+    /** Subjective relationship memories + public director ties. Shapes who
+     *  she protects, attacks, or hesitates against. */
     relationshipHints?: string[];
+    /** Public saga roster lines: name / role / scene. Not private feeling. */
+    rosterContext?: string[];
     /** Current plan (N6) — long-term goal + intent + subgoals. Makes the card
      *  serve her goal, not just react to the scene. */
     planHint?: string;
@@ -66,8 +68,13 @@ export function buildUserPrompt(input: DecideInput): string {
             : '\n## 你心底翻起的記憶\n（此刻沒有特別浮現的記憶）';
     const relBlock =
         input.relationshipHints && input.relationshipHints.length > 0
-            ? '\n## 你與在場人的牽絆(影響你護誰、攻誰、對誰猶豫)\n' +
+            ? '\n## 人物印象與公開關係(影響你護誰、攻誰、對誰猶豫)\n' +
               input.relationshipHints.map((r) => `- ${r}`).join('\n')
+            : '';
+    const rosterBlock =
+        input.rosterContext && input.rosterContext.length > 0
+            ? '\n## 同 saga 公開名冊（公開身份與所在；不代表你私下熟識）\n' +
+              input.rosterContext.map((r) => `- ${r}`).join('\n')
             : '';
     const planBlock = input.planHint
         ? `\n## 你心裡的目標與打算(讓這張牌為你的目標服務)\n${input.planHint}`
@@ -86,6 +93,7 @@ export function buildUserPrompt(input: DecideInput): string {
         `- 外形:${input.physicalFacts}`,
         `- 所屬:${input.sagaName}`,
         memBlock,
+        rosterBlock,
         relBlock,
         planBlock,
         dramaBlock,

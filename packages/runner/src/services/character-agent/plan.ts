@@ -29,6 +29,8 @@ export interface PlanInput {
     currentPlan?: string;
     /** Optional: a short line on what just happened (recent events). */
     recentSituation?: string;
+    /** Public saga roster lines: name / role / scene. Not private memory. */
+    rosterContext?: string[];
 }
 
 export interface PlanResult {
@@ -65,6 +67,11 @@ function buildUserPrompt(input: PlanInput): string {
         ? `\n## 你先前的打算(在此基礎上推進)\n${input.currentPlan}`
         : '';
     const sitBlock = input.recentSituation ? `\n## 近來發生\n${input.recentSituation}` : '';
+    const rosterBlock =
+        input.rosterContext && input.rosterContext.length > 0
+            ? '\n## 同 saga 公開名冊（只作公開身份與位置，不代表你私下熟識）\n' +
+              input.rosterContext.map((r) => `- ${r}`).join('\n')
+            : '';
     return [
         `# 你是誰`,
         `- 姓名:${input.name}`,
@@ -75,6 +82,7 @@ function buildUserPrompt(input: PlanInput): string {
         memBlock,
         planBlock,
         sitBlock,
+        rosterBlock,
         '',
         '請輸出你此刻的規劃(JSON)。',
     ]

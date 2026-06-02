@@ -54,7 +54,7 @@ export interface RedeemVoucherResult {
     ownerCapId?: string;
     /** Transaction digest for receipts / explorer links. */
     digest?: string;
-    /** # of genesis memories seeded immediately after mint (0 if MemWal unconfigured). */
+    /** # of cognition memories seeded immediately after mint (0 if MemWal unconfigured). */
     seededMemories?: number;
 }
 
@@ -217,7 +217,7 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         if (seedRes.skipped) {
             console.warn(`[redeem-voucher] genesis memory skipped (${seedRes.skipped}) for ${characterId}`);
         } else {
-            console.log(`[redeem-voucher] seeded ${seededMemories} genesis memories for ${characterId}`);
+            console.log(`[redeem-voucher] seeded ${seededMemories} cognition memories for ${characterId}`);
         }
     } catch (err) {
         console.warn(`[redeem-voucher] genesis memory seeding failed for ${characterId}:`, err);

@@ -23,6 +23,12 @@ export { updatePlan, formatPlanText } from './plan.js';
 export type { PlanInput, PlanResult } from './plan.js';
 export { decideMove } from './move.js';
 export type { MoveDecideInput, MoveDecideResult, MoveSceneOption } from './move.js';
+export { decideSocialAction } from './social.js';
+export type {
+    SocialActionInput,
+    SocialActionResult,
+    SocialSceneMate,
+} from './social.js';
 
 export interface DecideResult {
     /** Chosen catalog index (what submit_action takes). Always one of the

@@ -26,7 +26,12 @@ import {
 import { text as llmText } from '@endless-story/llm';
 import { resolveNetwork } from '../../infra/network.js';
 import { signAndAnchor } from '../../infra/sign-and-anchor.js';
-import { buildSystemPrompt, buildUserPrompt, type CharacterSnapshot } from './prompt.js';
+import {
+    buildSystemPrompt,
+    buildUserPrompt,
+    findUngroundedHeavyMotifs,
+    type CharacterSnapshot,
+} from './prompt.js';
 
 export interface RunCharacterWorkerInput {
     /** Character to write POV for. */
@@ -42,8 +47,10 @@ export interface RunCharacterWorkerInput {
     recentMemorySnippets?: string[];
     /** Optional: owner-injected dream fragment to weave in (R5). */
     dreamFragment?: string;
-    /** Optional: director-seeded relationship hints (N3). */
+    /** Optional: subjective relationship memories + public director ties. */
     relationshipHints?: string[];
+    /** Optional: public saga roster lines: name / role / scene. */
+    rosterContext?: string[];
     /** Optional: current plan text (N6). */
     planHint?: string;
     /** Optional: drama-engine tension hint (DR-6) — dominant unmet desire. */
@@ -107,6 +114,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
             errors: [`character ${input.characterId} not readable from chain`],
         };
     }
+    const publicSnapshot = stripInternal(snapshot);
 
     // Subscriber gate: skip if 0 and not forced.
     const subCount = snapshot.subscriberCount ?? 0;
@@ -115,7 +123,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
             chapter: '',
             anchored: false,
             skipReason: 'no_subscribers',
-            snapshot: stripInternal(snapshot),
+            snapshot: publicSnapshot,
         };
     }
 
@@ -129,11 +137,12 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
 
     const system = buildSystemPrompt();
     const user = buildUserPrompt({
-        character: stripInternal(snapshot),
+        character: publicSnapshot,
         triggerNarrative: input.triggerNarrative,
         recentMemorySnippets: input.recentMemorySnippets ?? [],
         dreamFragment: resolvedDream,
         relationshipHints: input.relationshipHints,
+        rosterContext: input.rosterContext,
         planHint: input.planHint,
         dramaHint: input.dramaHint,
     });
@@ -148,13 +157,45 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         temperature: 0.72,
     });
 
-    const chapter = response.text.trim();
+    let chapter = response.text.trim();
+    let heavyMotifs = findUngroundedHeavyMotifs(chapter, publicSnapshot);
+    for (let attempt = 0; attempt < 2 && heavyMotifs.length > 0; attempt += 1) {
+        const revision = await llm.chat({
+            model: modelId,
+            system: buildRevisionSystemPrompt(),
+            messages: [{ role: 'user', content: buildRevisionUserPrompt(chapter, heavyMotifs) }],
+            maxTokens: 1800,
+            temperature: 0.25,
+        });
+        const candidate = revision.text.trim();
+        if (candidate) {
+            const remainingMotifs = findUngroundedHeavyMotifs(candidate, publicSnapshot);
+            if (remainingMotifs.length === 0) {
+                chapter = candidate;
+                heavyMotifs = [];
+                break;
+            }
+            if (remainingMotifs.length < heavyMotifs.length) {
+                chapter = candidate;
+                heavyMotifs = remainingMotifs;
+                continue;
+            }
+        }
+        break;
+    }
+    if (heavyMotifs.length > 0) {
+        const softened = softenUnsupportedMotifs(chapter);
+        const remainingMotifs = findUngroundedHeavyMotifs(softened, publicSnapshot);
+        if (remainingMotifs.length < heavyMotifs.length) {
+            chapter = softened;
+        }
+    }
 
     if (input.dryRun || !input.signer) {
         return {
             chapter,
             anchored: false,
-            snapshot: stripInternal(snapshot),
+            snapshot: publicSnapshot,
             dreamFragmentUsed: resolvedDream,
         };
     }
@@ -176,10 +217,66 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         blobUrl: anchor.blobUrl,
         contentHashHex: anchor.contentHashHex,
         digest: anchor.digest,
-        snapshot: stripInternal(snapshot),
+        snapshot: publicSnapshot,
         dreamFragmentUsed: resolvedDream,
     };
 }
+
+function buildRevisionSystemPrompt(): string {
+    return [
+        '你是一位嚴格但低調的小說編修，任務是把一段角色 POV 章回改回設定可支持的版本。',
+        '只做必要刪改：保留人物、場景、關係壓力、事件方向與第一人稱視角。',
+        '移除設定沒有支持的強烈創傷意象：肢體殘疾、腿腳舊痛、特殊鞋具、療傷用品、喪葬死亡、血腥威嚇等。',
+        '用梨園職業動作承接壓力：身段、台步、站位、槍花、妝面、袖口、眼神、停頓。',
+        '不得新增重大事實，不得解釋你如何修改。只輸出改寫後正文。',
+    ].join('\n');
+}
+
+function buildRevisionUserPrompt(chapter: string, motifs: string[]): string {
+    return [
+        '請改寫下面章回，讓它像同一場戲的更克制版本。',
+        '要求：不改事件結果；不補新身世；不加入新災禍；不要寫成心得或摘要；只輸出正文。',
+        `新文不得包含這些未被設定支持的字串：${motifs.join('、')}`,
+        '',
+        chapter,
+    ].join('\n');
+}
+
+function softenUnsupportedMotifs(chapter: string): string {
+    let text = chapter;
+    for (const [from, to] of SOFTEN_MOTIF_REPLACEMENTS) {
+        text = text.split(from).join(to);
+    }
+    return text;
+}
+
+const SOFTEN_MOTIF_REPLACEMENTS: Array<[string, string]> = [
+    ['提刀殺人', '提槍登台'],
+    ['厚底靴', '戲靴'],
+    ['厚底', '靴底'],
+    ['膝蓋', '腿腳'],
+    ['藥酒', '茶水'],
+    ['跌打', '筋骨'],
+    ['舊傷', '疲意'],
+    ['燒刀子', '熱茶'],
+    ['擋酒', '擋場'],
+    ['拿命', '下功夫'],
+    ['腳下一軟', '身位一亂'],
+    ['腳趾頭', '腳底'],
+    ['這條腿', '這身架'],
+    ['腿彎', '肩背'],
+    ['棺材', '戲箱'],
+    ['棺', '箱'],
+    ['屍首', '影子'],
+    ['屍', '影'],
+    ['死人', '舊人'],
+    ['血跡', '胭脂痕'],
+    ['殺氣', '鋒芒'],
+    ['煞氣', '壓迫感'],
+    ['殺人', '逼人'],
+    ['靈堂', '後堂'],
+    ['紙紮', '紙扇'],
+];
 
 /* ── snapshot ────────────────────────────────────────────────────── */
 

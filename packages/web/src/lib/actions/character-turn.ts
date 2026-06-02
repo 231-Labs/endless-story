@@ -51,7 +51,7 @@ export interface CharacterTurnResult {
      *  decideOnly mode so a caller can batch the submit itself. */
     cardIndex?: number;
     recalledCount?: number;
-    /** Director-seeded ties fed into the decision (N3). */
+    /** Subjective + public relationship hints fed into the decision. */
     relationshipCount?: number;
     digest?: string;
     error?: string;
@@ -60,7 +60,7 @@ export interface CharacterTurnResult {
 export async function runCharacterTurnAction(
     eventId: string,
     characterId: string,
-    opts?: { decideOnly?: boolean; dramaHint?: string },
+    opts?: { decideOnly?: boolean; dramaHint?: string; rosterContext?: string[] },
 ): Promise<CharacterTurnResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
@@ -143,6 +143,7 @@ export async function runCharacterTurnAction(
             hand,
             recalledMemories: recalled,
             relationshipHints,
+            rosterContext: opts?.rosterContext,
             planHint: planHint ?? undefined,
             dramaHint: opts?.dramaHint,
         });

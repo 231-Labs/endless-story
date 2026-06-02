@@ -14,7 +14,7 @@
 import type { RelationshipEdge, RelationshipTone } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
-import { currentNarrativeDay } from './memory.js';
+import { currentNarrativeDay, recallStructuredForCharacter } from './memory.js';
 
 const TONES: RelationshipTone[] = [
     'affection',
@@ -107,21 +107,38 @@ export async function fetchOnChainEdgesFrom(characterId: string): Promise<Relati
 }
 
 /**
- * Short relationship hints for prompt injection (decide / POV). Resolves the
- * other character's name. e.g. "與 程慕聲 之間：師徒（導演牽起）".
- * Empty array when no ties — callers omit the section.
+ * Short relationship hints for prompt injection (decide / POV).
+ *
+ * Dual-source by design:
+ *   1. subjective MemWal `relationship` memories: what this character thinks;
+ *   2. on-chain RelationshipSeeded: public/director-seeded ties.
+ *
+ * The labels intentionally keep those sources apart so public relationship
+ * edges are not mistaken for private feeling.
  */
 export async function fetchRelationshipHints(
     characterId: string,
     limit = 6,
 ): Promise<string[]> {
+    const subjective = await recallStructuredForCharacter(
+        characterId,
+        '人物印象 關係 牽掛 競爭 戒備 搭檔 同場',
+        Math.max(3, limit),
+    )
+        .then((memories) =>
+            memories
+                .filter((m) => m.kind === 'relationship')
+                .map((m) => `你自己的人物印象：${m.text.slice(0, 150)}`),
+        )
+        .catch(() => [] as string[]);
+
     const pairs = await aggregatePairs(characterId).catch(() => []);
-    if (pairs.length === 0) return [];
+    if (pairs.length === 0) return subjective.slice(0, limit);
     const client = makeSuiClient({ network: resolveNetwork() });
     // Strongest ties first (more seeds = more salient).
     pairs.sort((a, b) => b.count - a.count);
-    const top = pairs.slice(0, limit);
-    const hints = await Promise.all(
+    const top = pairs.slice(0, Math.max(0, limit - subjective.length));
+    const publicHints = await Promise.all(
         top.map(async (p) => {
             const name = await read.character
                 .getCharacter(client, p.otherId)
@@ -131,8 +148,8 @@ export async function fetchRelationshipHints(
                 )
                 .catch(() => undefined);
             const who = name ?? `某人(${p.otherId.slice(0, 8)}…)`;
-            return `與 ${who} 之間：${TONE_ZH[p.tone]}`;
+            return `導演公開牽起的關係：與 ${who} 之間：${TONE_ZH[p.tone]}`;
         }),
     );
-    return hints;
+    return [...subjective, ...publicHints].slice(0, limit);
 }

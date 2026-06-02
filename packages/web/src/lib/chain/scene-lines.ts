@@ -18,7 +18,7 @@
  * Server-only (written by the tick loop, read by getSagaLiveSnapshot).
  */
 
-export type SceneLineKind = 'act' | 'move';
+export type SceneLineKind = 'act' | 'move' | 'social';
 
 interface SceneLine {
     characterId: string;

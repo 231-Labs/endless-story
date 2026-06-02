@@ -5,7 +5,7 @@
  * scene, conditioned on its PLAN (where it's trying to get) + who/what is in
  * each reachable scene. This is the second half of the character action
  * space (docs/NARRATIVE_AGENTS.md §2): 出牌 ✅ + 移動. A character chasing
- * "搭上孟老闆" will drift toward the scene 孟老闆 is in.
+ * "搭上某位名角的搭檔位" will drift toward that character's scene.
  *
  * Pure LLM (cheap tier — per character per tick). The web action reads the
  * scenes + does the move_character tx. Output is clamped to a reachable
@@ -15,12 +15,20 @@
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
 
+export interface MovePresentCharacter {
+    id: string;
+    name: string;
+    role: string;
+}
+
 export interface MoveSceneOption {
     sceneId: string;
     name: string;
     description?: string;
-    /** Names of characters currently in this scene (for social pull). */
-    presentNames: string[];
+    /** Characters currently in this scene (for social pull). */
+    presentCharacters: MovePresentCharacter[];
+    /** Legacy alias; callers should prefer presentCharacters. */
+    presentNames?: string[];
 }
 
 export interface MoveDecideInput {
@@ -51,7 +59,7 @@ function buildSystemPrompt(): string {
         '4. reason 用第一人稱、≤30 字,寫出你**為什麼**走(或留)。',
         '',
         '**輸出**:嚴格只輸出一個 JSON 物件,例如',
-        '`{"move": true, "targetSceneId": "0x123…", "reason": "我得去帳房找孟老闆,這條線不能斷"}`',
+        '`{"move": true, "targetSceneId": "0x123…", "reason": "我得去後台找那位花旦,搭檔位不能斷"}`',
         '或 `{"move": false, "reason": "戲還沒散,我守在後台"}`。不要 markdown、不要多餘文字。',
     ].join('\n');
 }
@@ -59,7 +67,12 @@ function buildSystemPrompt(): string {
 function buildUserPrompt(input: MoveDecideInput): string {
     const opts = input.options
         .map((o) => {
-            const who = o.presentNames.length > 0 ? `在場:${o.presentNames.join('、')}` : '無人';
+            const present = o.presentCharacters.length > 0
+                ? o.presentCharacters
+                      .map((p) => `${p.name}${p.role && p.role !== '—' ? `(${p.role})` : ''}`)
+                      .join('、')
+                : (o.presentNames ?? []).join('、');
+            const who = present ? `在場:${present}` : '無人';
             const desc = o.description ? ` —— ${o.description.slice(0, 40)}` : '';
             return `- sceneId=${o.sceneId} 「${o.name}」(${who})${desc}`;
         })

@@ -17,20 +17,36 @@ import {
 } from '@endless-story/sdk';
 import { text as llmText } from '@endless-story/llm';
 import { resolveNetwork } from '../../infra/network.js';
-import { buildSystemPrompt, buildUserPrompt } from './prompt.js';
+import { buildSystemPrompt, buildUserPrompt, type GenesisRosterEntry } from './prompt.js';
+
+export type { GenesisRosterEntry } from './prompt.js';
+
+export interface GenesisRelationshipMemory {
+    otherId: string;
+    otherName: string;
+    text: string;
+    importance: number;
+}
 
 export interface RunGenesisMemoryInput {
     characterId: string;
     sagaId: string;
     /** Off-chain role (voucher specialty). Optional; caller resolves it. */
     role?: string;
-    /** How many memories to generate. Default 4. */
+    /** Recruitment role intent that minted this character, if available. */
+    recruitmentRoleIntent?: string;
+    /** Public same-saga roster for first impressions. */
+    roster?: GenesisRosterEntry[];
+    /** How many self memories to generate. Default 5. */
     count?: number;
     /** Override LLM model. */
     model?: string;
 }
 
 export interface RunGenesisMemoryResult {
+    selfMemories: string[];
+    relationshipMemories: GenesisRelationshipMemory[];
+    /** Compatibility alias for the old caller contract. */
     memories: string[];
     skipReason?: 'character_unreachable';
 }
@@ -38,7 +54,14 @@ export interface RunGenesisMemoryResult {
 export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisMemoryResult> {
     const client = makeSuiClient({ network: resolveNetwork() });
     const snap = await fetchSnapshot(client, input.characterId, input.sagaId);
-    if (!snap) return { memories: [], skipReason: 'character_unreachable' };
+    if (!snap) {
+        return {
+            selfMemories: [],
+            relationshipMemories: [],
+            memories: [],
+            skipReason: 'character_unreachable',
+        };
+    }
 
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
@@ -57,15 +80,18 @@ export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisM
                     sagaName: snap.sagaName,
                     physicalFacts: snap.physicalFacts,
                     description: snap.description,
+                    recruitmentRoleIntent: input.recruitmentRoleIntent,
+                    roster: input.roster,
                     count: input.count,
                 }),
             },
         ],
-        maxTokens: 2400,
+        maxTokens: 3200,
         temperature: 0.95,
     });
 
-    return { memories: parseMemories(response.text, input.count ?? 6) };
+    const parsed = parseGenesisResponse(response.text, input.count ?? 5);
+    return { ...parsed, memories: parsed.selfMemories };
 }
 
 interface Snapshot {
@@ -108,20 +134,88 @@ async function fetchSnapshot(
     };
 }
 
-/** Parse the LLM's JSON array of strings; tolerant of stray prose. */
-function parseMemories(raw: string, max: number): string[] {
+/** Parse the LLM's JSON object; tolerant of legacy array output + stray prose. */
+function parseGenesisResponse(
+    raw: string,
+    maxSelf: number,
+): Pick<RunGenesisMemoryResult, 'selfMemories' | 'relationshipMemories'> {
+    const objectMatch = raw.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+        try {
+            const obj = JSON.parse(objectMatch[0]) as {
+                selfMemories?: unknown;
+                memories?: unknown;
+                relationshipMemories?: unknown;
+            };
+            const selfMemories = parseStringArray(obj.selfMemories ?? obj.memories, maxSelf);
+            const relationshipMemories = parseRelationshipMemories(obj.relationshipMemories);
+            return { selfMemories, relationshipMemories };
+        } catch {
+            // Fall through to legacy array parser.
+        }
+    }
+    return { selfMemories: parseLegacyMemoryArray(raw, maxSelf), relationshipMemories: [] };
+}
+
+function parseLegacyMemoryArray(raw: string, max: number): string[] {
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) return [];
     try {
-        const arr = JSON.parse(match[0]);
-        if (!Array.isArray(arr)) return [];
-        return arr
-            .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-            .map((s) => s.trim())
-            .slice(0, max);
+        return parseStringArray(JSON.parse(match[0]), max);
     } catch {
         return [];
     }
+}
+
+function parseStringArray(raw: unknown, max: number): string[] {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+        .map((s) => clampText(s.trim(), 220))
+        .slice(0, max);
+}
+
+function parseRelationshipMemories(raw: unknown): GenesisRelationshipMemory[] {
+    if (!Array.isArray(raw)) return [];
+    const out: GenesisRelationshipMemory[] = [];
+    for (const item of raw) {
+        if (!item || typeof item !== 'object') continue;
+        const obj = item as {
+            otherId?: unknown;
+            otherName?: unknown;
+            text?: unknown;
+            importance?: unknown;
+        };
+        if (typeof obj.otherId !== 'string' || typeof obj.otherName !== 'string') continue;
+        if (typeof obj.text !== 'string' || !obj.text.trim()) continue;
+        const otherName = clampText(obj.otherName.trim(), 32);
+        out.push({
+            otherId: obj.otherId.trim(),
+            otherName,
+            text: sanitizeRelationshipText(obj.text.trim(), otherName),
+            importance: clampImportance(Number(obj.importance ?? 8)),
+        });
+        if (out.length >= 4) break;
+    }
+    return out;
+}
+
+const UNAUTHORIZED_SHARED_PAST_RE =
+    /多年同門|舊情|舊愛|血緣|親兄|親弟|親姊|親妹|父女|母女|父子|母子|青梅竹馬|從小相識|一同長大|舊仇|宿怨|前世|拜過師|師徒舊恩/;
+
+function sanitizeRelationshipText(text: string, otherName: string): string {
+    const trimmed = clampText(text, 180);
+    if (!UNAUTHORIZED_SHARED_PAST_RE.test(trimmed)) return trimmed;
+    return `我今日才從班中人的眼色裡認得「${otherName}」這個名字；只知此人已在此處有位置，至於交情深淺，還不敢妄認。`;
+}
+
+function clampImportance(n: number): number {
+    if (!Number.isFinite(n)) return 8;
+    return Math.max(1, Math.min(10, Math.round(n)));
+}
+
+function clampText(text: string, max: number): string {
+    return text.length > max ? text.slice(0, max) : text;
 }
 
 function mapGender(raw: string): string {

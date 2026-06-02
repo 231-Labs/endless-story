@@ -37,9 +37,19 @@ import { getAdminContext, type AdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
 import { deriveAndCommitDramaBeat, tensionFraction } from '@/lib/chain/drama';
-import { recallCurrentPlanText } from '@/lib/chain/memory';
+import {
+    recallCurrentPlanText,
+    recallForCharacter,
+    rememberForCharacter,
+} from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { recordSceneLine } from '@/lib/chain/scene-lines';
+import { fetchRelationshipHints } from '@/lib/chain/relationships';
+import {
+    buildSagaRoster,
+    rosterLines,
+    type SagaRosterEntry,
+} from '@/lib/chain/roster';
 import { charactersApi } from '@/lib/api/index';
 import {
     advanceTickAction,
@@ -129,7 +139,23 @@ export interface TickMoveResult {
     characterId: string;
     name: string;
     ok: boolean;
+    fromSceneId?: string;
+    toSceneId?: string;
     toSceneName?: string;
+    reason?: string;
+    error?: string;
+}
+
+export interface TickSocialResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    kind: 'observe' | 'talk' | 'idle';
+    targetCharacterId?: string;
+    targetName?: string;
+    line?: string;
+    observation?: string;
+    relationshipMemory?: string;
     reason?: string;
     error?: string;
 }
@@ -177,6 +203,7 @@ export interface TickLoopResult {
     moves: TickMoveResult[];
     /** DR-6: scarce-resource tension derived (+ committed) before decisions. */
     drama?: TickDramaResult;
+    socials: TickSocialResult[];
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];
@@ -195,6 +222,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             advanced: false,
             plans: [],
             moves: [],
+            socials: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -211,6 +239,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             advanced: false,
             plans: [],
             moves: [],
+            socials: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -243,6 +272,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
     const slice = characters.slice(0, cap);
+    const scenes = await fetchOnChainScenesForSaga(d.sagaId).catch(() => []);
+    const roster = await buildSagaRoster(d.sagaId, { characters, scenes }).catch(
+        () => [] as SagaRosterEntry[],
+    );
+    let activeScenes = scenes;
+    let activeRoster = roster;
+    let rosterById = new Map(activeRoster.map((r) => [r.id, r]));
+    let roleById = new Map(activeRoster.map((r) => [r.id, r.role || '—']));
+    let rosterContextById = buildRosterContextById(slice, activeRoster);
     tlog(`登場 ${slice.length} 角色：${slice.map((c) => c.name).join('、')}`);
 
     // 2. PLAN — each character updates its standing goal first (N6), so the
@@ -255,7 +293,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         tlog(`① 規劃 ${slice.length} 角色…`);
         const settled = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
             try {
-                const p = await runPlanAction(c.id, { dryRun });
+                const p = await runPlanAction(c.id, {
+                    dryRun,
+                    rosterContext: rosterContextById.get(c.id),
+                });
                 tlog(`   · 規劃 ${c.name} ✓`);
                 return { c, p };
             } catch (err) {
@@ -282,13 +323,30 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // 2.5 MOVE — idle characters walk toward their goals (autonomous
     //    movement completes the N1 action space). Batched into one PTB.
     const moves: TickMoveResult[] = [];
-    if ((input.move ?? true) && !dryRun) {
+    if (input.move ?? true) {
         tlog(`② 自主移動…`);
         try {
             moves.push(
-                ...(await runMovePhase(admin, d.sagaId, d.storytellerCapId, slice, nameById)),
+                ...(await runMovePhase({
+                    admin,
+                    sagaId: d.sagaId,
+                    capId: d.storytellerCapId,
+                    slice,
+                    scenes: activeScenes,
+                    nameById,
+                    rosterById,
+                    roleById,
+                    dryRun,
+                })),
             );
-            tlog(`   移動 ${moves.filter((m) => m.ok).length} 人`);
+            tlog(`   移動 ${moves.filter((m) => m.ok).length} 人${dryRun ? '（預演）' : ''}`);
+            if (moves.some((m) => m.ok && m.toSceneId)) {
+                activeScenes = applyMoveResultsToScenes(activeScenes, moves);
+                activeRoster = applyMoveResultsToRoster(activeRoster, activeScenes, moves);
+                rosterById = new Map(activeRoster.map((r) => [r.id, r]));
+                roleById = new Map(activeRoster.map((r) => [r.id, r.role || '—']));
+                rosterContextById = buildRosterContextById(slice, activeRoster);
+            }
         } catch (err) {
             console.warn('[tick-loop] move phase failed:', err);
         }
@@ -310,7 +368,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 cast: slice.map((c) => ({
                     id: c.id,
                     name: c.name,
-                    tags: c.publicTags?.map((t) => t.label),
+                    tags: publicTagsWithRole(c, roleById.get(c.id)),
                 })),
                 signer: dryRun ? undefined : admin.signer, // dry-run = derive, don't anchor
             });
@@ -337,6 +395,31 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.8 SOCIAL — idle, same-scene lightweight observation / talk. This
+    // writes subjective observations/relationship memories (unless dry-run),
+    // which the next POV can recall without turning Director facts into
+    // private feelings.
+    const socials: TickSocialResult[] = [];
+    if (slice.length > 0) {
+        tlog(`②″ 輕量互動…`);
+        try {
+            socials.push(
+                ...(await runSocialPhase({
+                    sagaId: d.sagaId,
+                    slice,
+                    scenes: activeScenes,
+                    rosterById,
+                    roleById,
+                    dramaHints,
+                    dryRun,
+                })),
+            );
+            tlog(`   互動 ${socials.filter((s) => s.ok && s.kind !== 'idle').length} 件${dryRun ? '（預演）' : ''}`);
+        } catch (err) {
+            console.warn('[tick-loop] social phase failed:', err);
+        }
+    }
+
     // 3. ACT — characters play their own hands in open events; events that
     //    everyone has acted in auto-resolve (judge). Chain mutation → serial
     //    (single StorytellerCap, no parallel signing).
@@ -352,6 +435,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 nameById,
                 input.autoResolve ?? true,
                 dramaHints,
+                rosterContextById,
             );
             acts.push(...phase.acts);
             resolves.push(...phase.resolves);
@@ -393,6 +477,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 forceRun: true,
                 dryRun: true,
                 dramaHint: dramaHints[c.id],
+                rosterContext: rosterContextById.get(c.id),
             });
             tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
             return { c, r };
@@ -489,13 +574,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const anyOk =
         plans.some((p) => p.ok) ||
         moves.some((m) => m.ok) ||
+        socials.some((s) => s.ok && s.kind !== 'idle') ||
         acts.some((a) => a.ok) ||
         resolves.some((r) => r.ok) ||
         povs.some((p) => p.ok) ||
         sleeps.some((s) => s.ok && !s.skipReason) ||
         gazette?.ok === true;
     tlog(
-        `◇ 本輪完成 — 規劃${plans.length}·移動${moves.filter((m) => m.ok).length}·出牌${acts.filter((a) => a.ok).length}·章回${povs.filter((p) => p.anchored).length}·公報${gazette?.anchored ? '✓' : '—'}`,
+        `◇ 本輪完成 — 規劃${plans.length}·移動${moves.filter((m) => m.ok).length}·互動${socials.filter((s) => s.ok && s.kind !== 'idle').length}·出牌${acts.filter((a) => a.ok).length}·章回${povs.filter((p) => p.anchored).length}·公報${gazette?.anchored ? '✓' : '—'}`,
     );
     return {
         ok: anyOk || (slice.length === 0),
@@ -504,6 +590,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         plans,
         moves,
         drama,
+        socials,
         acts,
         resolves,
         povs,
@@ -513,75 +600,119 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     };
 }
 
+function buildRosterContextById(
+    slice: Character[],
+    roster: SagaRosterEntry[],
+): Map<string, string[]> {
+    return new Map(
+        slice.map((c) => [c.id, rosterLines(roster.filter((r) => r.id !== c.id), 12)]),
+    );
+}
+
+function applyMoveResultsToScenes(scenes: Scene[], moves: TickMoveResult[]): Scene[] {
+    const applied = moves.filter((m) => m.ok && m.fromSceneId && m.toSceneId);
+    if (applied.length === 0) return scenes;
+    const byId = new Map(scenes.map((scene) => [
+        scene.id,
+        { ...scene, currentCharacterIds: [...(scene.currentCharacterIds ?? [])] },
+    ]));
+    for (const move of applied) {
+        const from = byId.get(move.fromSceneId as string);
+        const to = byId.get(move.toSceneId as string);
+        if (!from || !to) continue;
+        from.currentCharacterIds = from.currentCharacterIds.filter((id) => id !== move.characterId);
+        if (!to.currentCharacterIds.includes(move.characterId)) {
+            to.currentCharacterIds.push(move.characterId);
+        }
+    }
+    return scenes.map((scene) => byId.get(scene.id) ?? scene);
+}
+
+function applyMoveResultsToRoster(
+    roster: SagaRosterEntry[],
+    scenes: Scene[],
+    moves: TickMoveResult[],
+): SagaRosterEntry[] {
+    const moved = new Set(moves.filter((m) => m.ok && m.toSceneId).map((m) => m.characterId));
+    if (moved.size === 0) return roster;
+    const sceneByChar = new Map<string, { id: string; name: string }>();
+    for (const scene of scenes) {
+        for (const cid of scene.currentCharacterIds ?? []) {
+            sceneByChar.set(cid, { id: scene.id, name: scene.name });
+        }
+    }
+    return roster.map((entry) => {
+        if (!moved.has(entry.id)) return entry;
+        const scene = sceneByChar.get(entry.id);
+        return scene
+            ? { ...entry, currentSceneId: scene.id, currentSceneName: scene.name }
+            : entry;
+    });
+}
+
 /* ── MOVE phase (autonomous movement, batched into one PTB) ────────────
  * Idle characters (not bound to an open event) decide — from their plan +
  * who's where — whether to walk to another scene. All moves go in ONE PTB
  * (move_character takes cap/saga/scenes/character by ref). Per-item fallback
  * if the batch aborts (a stale current_scene_id reverts the whole PTB).
  * The live handscroll reflects the new positions on its next poll. */
-async function runMovePhase(
-    admin: AdminContext,
-    sagaId: string,
-    capId: string,
-    slice: Character[],
-    nameById: Map<string, string>,
-): Promise<TickMoveResult[]> {
+async function runMovePhase(input: {
+    admin: AdminContext;
+    sagaId: string;
+    capId: string;
+    slice: Character[];
+    scenes: Scene[];
+    nameById: Map<string, string>;
+    rosterById: Map<string, SagaRosterEntry>;
+    roleById: Map<string, string>;
+    dryRun: boolean;
+}): Promise<TickMoveResult[]> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return [];
-    const client = makeSuiClient({ network: resolveNetwork() });
-
-    const scenes = await fetchOnChainScenesForSaga(sagaId).catch(() => []);
-    if (scenes.length < 2) return []; // nowhere to go
+    if (input.scenes.length < 2) return []; // nowhere to go
 
     // character → current scene (from each scene's current_character_ids).
     const sceneByChar = new Map<string, Scene>();
-    for (const s of scenes) {
+    for (const s of input.scenes) {
         for (const cid of s.currentCharacterIds ?? []) sceneByChar.set(cid, s);
     }
-    const sceneNameById = new Map(scenes.map((s) => [s.id, s.name]));
-    const presentNames = (s: Scene): string[] =>
+    const sceneNameById = new Map(input.scenes.map((s) => [s.id, s.name]));
+    const presentCharacters = (s: Scene): Array<{ id: string; name: string; role: string }> =>
         (s.currentCharacterIds ?? [])
-            .map((cid) => nameById.get(cid))
-            .filter((n): n is string => Boolean(n));
+            .map((cid) => {
+                const roster = input.rosterById.get(cid);
+                const name = roster?.name ?? input.nameById.get(cid);
+                if (!name) return null;
+                return {
+                    id: cid,
+                    name,
+                    role: roster?.role ?? input.roleById.get(cid) ?? '—',
+                };
+            })
+            .filter((p): p is { id: string; name: string; role: string } => p != null);
 
     // Characters on stage in an open event stay put.
-    const busy = new Set<string>();
-    const summaries = await read.event
-        .listBudgetEvents(client, pkg, { sagaId, maxEvents: 20 })
-        .catch(() => []);
-    for (const ev of summaries) {
-        try {
-            const res = await read.event.getBudgetEvent(client, ev.eventId);
-            const j = res.json as unknown as {
-                meta?: { status?: number | string };
-                deck?: { participants?: string[] };
-            };
-            if (Number(j.meta?.status ?? 0) !== 0) continue;
-            for (const p of j.deck?.participants ?? []) busy.add(p);
-        } catch {
-            /* ignore */
-        }
-    }
+    const busy = await fetchBusyCharacterIds(input.sagaId);
 
-    const candidates = slice.filter((c) => sceneByChar.has(c.id) && !busy.has(c.id));
+    const candidates = input.slice.filter((c) => sceneByChar.has(c.id) && !busy.has(c.id));
     if (candidates.length === 0) return [];
 
     // DECIDE moves (bounded concurrency — recalls plan → SEAL).
     const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
         try {
             const cur = sceneByChar.get(c.id)!;
-            const options = scenes
+            const options = input.scenes
                 .filter((s) => s.id !== cur.id)
                 .map((s) => ({
                     sceneId: s.id,
                     name: s.name,
                     description: s.description,
-                    presentNames: presentNames(s),
+                    presentCharacters: presentCharacters(s),
                 }));
             const planHint = await recallCurrentPlanText(c.id).catch(() => null);
             const dcs = await characterAgent.decideMove({
                 name: c.name,
-                role: '—',
+                role: input.roleById.get(c.id) ?? '—',
                 planHint: planHint ?? undefined,
                 currentSceneName: cur.name,
                 options,
@@ -606,15 +737,30 @@ async function runMovePhase(
 
     const buildMove = (m: (typeof movers)[number]) =>
         endlessTx.character.moveCharacter({
-            cap: capId,
-            saga: sagaId,
+            cap: input.capId,
+            saga: input.sagaId,
             fromScene: m.fromId,
             toScene: m.dcs.targetSceneId as string,
             character: m.c.id,
         });
 
     const out: TickMoveResult[] = [];
-    const batch = await trySend(admin, (txb) => {
+    if (input.dryRun) {
+        for (const m of movers) {
+            out.push({
+                characterId: m.c.id,
+                name: m.c.name,
+                ok: true,
+                fromSceneId: m.fromId,
+                toSceneId: m.dcs.targetSceneId as string,
+                toSceneName: sceneNameById.get(m.dcs.targetSceneId as string),
+                reason: m.dcs.reason,
+            });
+        }
+        return out;
+    }
+
+    const batch = await trySend(input.admin, (txb) => {
         for (const m of movers) txb.add(buildMove(m));
     });
     if (batch.ok) {
@@ -623,6 +769,8 @@ async function runMovePhase(
                 characterId: m.c.id,
                 name: m.c.name,
                 ok: true,
+                fromSceneId: m.fromId,
+                toSceneId: m.dcs.targetSceneId as string,
                 toSceneName: sceneNameById.get(m.dcs.targetSceneId as string),
                 reason: m.dcs.reason,
             });
@@ -632,11 +780,13 @@ async function runMovePhase(
     } else {
         // Fallback: isolate each move (a stale scene reverts the whole PTB).
         for (const m of movers) {
-            const one = await trySend(admin, (txb) => txb.add(buildMove(m)));
+            const one = await trySend(input.admin, (txb) => txb.add(buildMove(m)));
             out.push({
                 characterId: m.c.id,
                 name: m.c.name,
                 ok: one.ok,
+                fromSceneId: m.fromId,
+                toSceneId: m.dcs.targetSceneId as string,
                 toSceneName: sceneNameById.get(m.dcs.targetSceneId as string),
                 reason: m.dcs.reason,
                 error: one.ok ? undefined : one.error,
@@ -645,6 +795,180 @@ async function runMovePhase(
         }
     }
     return out;
+}
+
+async function runSocialPhase(input: {
+    sagaId: string;
+    slice: Character[];
+    scenes: Scene[];
+    rosterById: Map<string, SagaRosterEntry>;
+    roleById: Map<string, string>;
+    dramaHints: Record<string, string>;
+    dryRun: boolean;
+}): Promise<TickSocialResult[]> {
+    if (input.scenes.length === 0) return [];
+    const busy = await fetchBusyCharacterIds(input.sagaId);
+    const sceneByChar = new Map<string, Scene>();
+    for (const scene of input.scenes) {
+        for (const cid of scene.currentCharacterIds ?? []) sceneByChar.set(cid, scene);
+    }
+    const candidates = input.slice.filter((c) => sceneByChar.has(c.id) && !busy.has(c.id));
+    if (candidates.length === 0) return [];
+
+    return mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
+        const scene = sceneByChar.get(c.id);
+        if (!scene) {
+            return { characterId: c.id, name: c.name, ok: false, kind: 'idle', error: 'no_scene' };
+        }
+        const othersInScene = (scene.currentCharacterIds ?? [])
+            .filter((cid) => cid !== c.id)
+            .map((cid) => {
+                const r = input.rosterById.get(cid);
+                if (!r) return null;
+                return { id: cid, name: r.name, role: r.role ?? '—' };
+            })
+            .filter((r): r is { id: string; name: string; role: string } => r != null);
+        if (othersInScene.length === 0) {
+            return {
+                characterId: c.id,
+                name: c.name,
+                ok: true,
+                kind: 'idle',
+                reason: '此刻同場無人',
+            };
+        }
+
+        try {
+            const names = othersInScene.map((o) => o.name).join(' ');
+            const [planHint, recentMemories, relationshipHints] = await Promise.all([
+                recallCurrentPlanText(c.id).catch(() => null),
+                recallForCharacter(c.id, `${scene.name} ${names} 人物印象 關係 今日觀察`, 5),
+                fetchRelationshipHints(c.id, 5).catch(() => [] as string[]),
+            ]);
+            const raw = await characterAgent.decideSocialAction({
+                name: c.name,
+                role: input.roleById.get(c.id) ?? '—',
+                sceneName: scene.name,
+                planHint: planHint ?? undefined,
+                recentMemories,
+                relationshipHints,
+                dramaHint: input.dramaHints[c.id],
+                othersInScene,
+            });
+            const target = raw.targetCharacterId
+                ? othersInScene.find((o) => o.id === raw.targetCharacterId)
+                : undefined;
+            const kind = raw.kind === 'talk' && !target
+                ? raw.observation
+                    ? 'observe'
+                    : 'idle'
+                : raw.kind;
+
+            if (!input.dryRun) {
+                const speakerObservation = buildSpeakerObservation({
+                    speakerName: c.name,
+                    sceneName: scene.name,
+                    kind,
+                    targetName: target?.name,
+                    line: raw.line,
+                    observation: raw.observation,
+                    reason: raw.reason,
+                });
+                if (speakerObservation) {
+                    await rememberForCharacter(c.id, speakerObservation, {
+                        kind: 'observation',
+                        importance: kind === 'talk' ? 5 : 4,
+                    }).catch(() => false);
+                }
+                if (raw.relationshipMemory) {
+                    await rememberForCharacter(c.id, raw.relationshipMemory, {
+                        kind: 'relationship',
+                        importance: 8,
+                    }).catch(() => false);
+                }
+                if (kind === 'talk' && target) {
+                    const heard = `[聽見：${c.name}] ${raw.line ?? raw.observation ?? raw.reason ?? '向我搭了一句話'}`;
+                    await rememberForCharacter(target.id, heard, {
+                        kind: 'observation',
+                        importance: 5,
+                    }).catch(() => false);
+                    recordSceneLine(scene.id, c.id, raw.line ?? raw.observation ?? raw.reason, 'social');
+                } else if (kind === 'observe') {
+                    recordSceneLine(scene.id, c.id, raw.observation ?? raw.reason, 'social');
+                }
+            }
+
+            return {
+                characterId: c.id,
+                name: c.name,
+                ok: true,
+                kind,
+                targetCharacterId: target?.id,
+                targetName: target?.name,
+                line: kind === 'talk' ? raw.line : undefined,
+                observation: raw.observation,
+                relationshipMemory: raw.relationshipMemory,
+                reason: raw.reason,
+            };
+        } catch (err) {
+            return {
+                characterId: c.id,
+                name: c.name,
+                ok: false,
+                kind: 'idle',
+                error: err instanceof Error ? err.message : String(err),
+            };
+        }
+    });
+}
+
+function buildSpeakerObservation(input: {
+    speakerName: string;
+    sceneName: string;
+    kind: TickSocialResult['kind'];
+    targetName?: string;
+    line?: string;
+    observation?: string;
+    reason?: string;
+}): string | null {
+    if (input.observation) return input.observation;
+    if (input.kind === 'talk' && input.targetName && input.line) {
+        return `我在「${input.sceneName}」向「${input.targetName}」搭了一句：「${input.line}」`;
+    }
+    if (input.kind === 'observe' && input.reason) {
+        return `我在「${input.sceneName}」留意到一點：${input.reason}`;
+    }
+    return null;
+}
+
+function publicTagsWithRole(character: Character, role: string | undefined): string[] {
+    const tags = new Set(character.publicTags?.map((t) => t.label).filter(Boolean) ?? []);
+    if (role && role !== '—') tags.add(`role:${role}`);
+    return [...tags];
+}
+
+async function fetchBusyCharacterIds(sagaId: string): Promise<Set<string>> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    const busy = new Set<string>();
+    if (!pkg) return busy;
+    const client = makeSuiClient({ network: resolveNetwork() });
+    const summaries = await read.event
+        .listBudgetEvents(client, pkg, { sagaId, maxEvents: 20 })
+        .catch(() => []);
+    for (const ev of summaries) {
+        try {
+            const res = await read.event.getBudgetEvent(client, ev.eventId);
+            const j = res.json as unknown as {
+                meta?: { status?: number | string };
+                deck?: { participants?: string[] };
+            };
+            if (Number(j.meta?.status ?? 0) !== 0) continue;
+            for (const p of j.deck?.participants ?? []) busy.add(p);
+        } catch {
+            /* ignore one event read */
+        }
+    }
+    return busy;
 }
 
 /* ── ACT phase (batched into PTBs) ─────────────────────────────────────
@@ -670,6 +994,7 @@ async function runActPhase(
     nameById: Map<string, string>,
     autoResolve: boolean,
     dramaHints: Record<string, string> = {},
+    rosterContextById: Map<string, string[]> = new Map(),
 ): Promise<{ acts: TickActResult[]; resolves: TickResolveResult[] }> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return { acts: [], resolves: [] };
@@ -720,6 +1045,7 @@ async function runActPhase(
             const r = await runCharacterTurnAction(e.eventId, charId, {
                 decideOnly: true,
                 dramaHint: dramaHints[charId],
+                rosterContext: rosterContextById.get(charId),
             });
             return { e, charId, r };
         } catch (err) {

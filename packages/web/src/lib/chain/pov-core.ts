@@ -37,6 +37,8 @@ export interface PovCoreOptions {
     /** DR-6: drama-engine tension hint (dominant unmet desire over a scarce
      *  on-chain resource). Derived once per tick by the loop's DRAMA phase. */
     dramaHint?: string;
+    /** Public saga roster context: name / role / scene. */
+    rosterContext?: string[];
 }
 
 export interface PovCoreResult {
@@ -238,6 +240,7 @@ export async function runPovForCharacter(
                 recentMemorySnippets.length > 0 ? recentMemorySnippets : undefined,
             relationshipHints:
                 relationshipHints.length > 0 ? relationshipHints : undefined,
+            rosterContext: opts.rosterContext,
             planHint: planHint ?? undefined,
             dramaHint: opts.dramaHint,
             forceRun: opts.forceRun ?? true,

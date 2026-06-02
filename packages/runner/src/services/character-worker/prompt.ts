@@ -43,9 +43,11 @@ export interface PovPromptInput {
     /** Optional: owner-injected dream text (R5). One per chapter max.
      *  When set, prompt explicitly asks LLM to weave it in. */
     dreamFragment?: string;
-    /** Optional: director-seeded relationships (N3) — who she's tied to +
-     *  how. Colours how she narrates others in the scene. */
+    /** Optional: subjective relationship memories + public director ties.
+     *  Colours how she narrates others in the scene. */
     relationshipHints?: string[];
+    /** Optional: public saga roster lines. Not private feeling. */
+    rosterContext?: string[];
     /** Optional: current plan (N6) — her goal + intent. Gives the monologue
      *  forward tension (what she's reaching for), not just present sensation. */
     planHint?: string;
@@ -100,6 +102,11 @@ export function buildUserPrompt(input: PovPromptInput): string {
             ? '\n## 關係壓力（讓它影響你看誰、避開誰、對誰說半句話）\n' +
               input.relationshipHints.map((r) => `- ${r}`).join('\n')
             : '';
+    const rosterBlock =
+        input.rosterContext && input.rosterContext.length > 0
+            ? '\n## 同 saga 公開名冊（公開身份與所在；不代表你私下熟識）\n' +
+              input.rosterContext.map((r) => `- ${r}`).join('\n')
+            : '';
     const planBlock = input.planHint
         ? `\n## 當下目標（讓場面有方向，不要直接宣告）\n${input.planHint}`
         : '';
@@ -120,6 +127,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         `- 行當聲口：${roleHint(character.role)}`,
         craftBlock,
         memBlock,
+        rosterBlock,
         relBlock,
         planBlock,
         dramaBlock,
@@ -140,7 +148,7 @@ function buildCraftDirective(character: CharacterSnapshot): string {
         '以一件可觸摸的小物開場：袖口、茶盞、簪釵、票紙、戲箱、槍桿、琴弦都可以；讓手先說話。',
         '以聲音開場：隔壁一句唱腔、木板響、雨聲、鑼鼓餘音、有人壓低的咳嗽；先聽見，再看見。',
         '以光與空間開場：燈影、台口、後台窄廊、鏡面、窗格；讓角色的位置透露他的處境。',
-        '以身體微感開場：粉黏在頸側、衣料勒住、舊傷發熱、喉頭發乾；不要誇張，只寫一處。',
+        '以身體微感開場：粉黏在頸側、衣料勒住、肩背發緊、喉頭發乾；不要誇張，只寫一處。',
         '以別人的一個小動作開場：避開目光、放慢步子、收住半句話；讓角色先誤讀它。',
         '以移動開場：從台口退回、穿過後廊、繞過桌角、跨過箱籠；讓章回有一個方向。',
     ][seed % 6];
@@ -162,33 +170,42 @@ function buildCraftDirective(character: CharacterSnapshot): string {
 }
 
 function filterPovMemorySnippets(snippets: string[], character: CharacterSnapshot): string[] {
+    return snippets.filter((snippet) => findUngroundedHeavyMotifs(snippet, character).length === 0);
+}
+
+export function findUngroundedHeavyMotifs(text: string, character: CharacterSnapshot): string[] {
     const identityText = [
         character.role,
         character.physicalFacts,
         character.sceneName,
     ].join(' ');
-    return snippets.filter((snippet) => !isUngroundedHeavyMotif(snippet, identityText));
+    return HEAVY_MOTIFS.filter((word) => text.includes(word) && !identityText.includes(word));
 }
 
-function isUngroundedHeavyMotif(snippet: string, identityText: string): boolean {
-    const heavyMotifs = [
-        '跛',
-        '厚底靴',
-        '膝蓋',
-        '藥酒',
-        '跌打',
-        '棺',
-        '屍',
-        '死人',
-        '血跡',
-        '殺氣',
-        '靈堂',
-        '紙紮',
-    ];
-    const hasHeavyMotif = heavyMotifs.some((word) => snippet.includes(word));
-    if (!hasHeavyMotif) return false;
-    return !heavyMotifs.some((word) => identityText.includes(word));
-}
+const HEAVY_MOTIFS = [
+    '跛',
+    '厚底靴',
+    '膝蓋',
+    '藥酒',
+    '跌打',
+    '舊傷',
+    '燒刀子',
+    '擋酒',
+    '拿命',
+    '腿彎',
+    '腳下一軟',
+    '腳趾頭',
+    '這條腿',
+    '棺',
+    '屍',
+    '死人',
+    '血跡',
+    '殺氣',
+    '煞氣',
+    '殺人',
+    '靈堂',
+    '紙紮',
+];
 
 function attributeDirective(a: CharacterSnapshot['attributes']): string {
     const notes: string[] = [];
