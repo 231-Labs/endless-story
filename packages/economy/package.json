@@ -1,0 +1,22 @@
+{
+  "name": "@endless-story/economy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./driver": "./driver/index.ts",
+    "./scenarios": "./scenarios/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "report": "node driver/report.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^5.5.0"
+  }
+}

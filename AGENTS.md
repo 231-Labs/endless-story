@@ -31,6 +31,11 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 > **[docs/NARRATIVE_AGENTS.md](./docs/NARRATIVE_AGENTS.md)** = 敘事層唯一設計文件。
 > 兩個自治 agent（Director 導演 / Character 角色）、目標 C 級全自治、chain-first +
 > MemWal-native 重建（不抄舊實作）。所有敘事開發參照它;§8 有缺口 + 建置順序(N1-N6)。
+>
+> **[docs/CHARACTER_ECONOMY.md](./docs/CHARACTER_ECONOMY.md)** = 角色經濟 life cycle 設計
+> （NARRATIVE_AGENTS §7 經濟層的展開）。dailyCost / saga 混合發薪 / 真實持幣+角色間轉帳 /
+> 雙軌死亡(經濟+隱藏年齡 hazard) / 世代交替。機制已用純模擬 `packages/economy` 學術驗證通過
+> (12/12 測試、6 假說成立)；產品化 Part D 為 gate-after。分支 `feat/character-economy`。
 
 ---
 
