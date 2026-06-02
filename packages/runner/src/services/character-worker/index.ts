@@ -142,10 +142,10 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         model: modelId,
         system,
         messages: [{ role: 'user', content: user }],
-        // POV is literary — let it breathe. User said variable length OK,
-        // cap at 3000 to leave headroom even for long emotional pieces.
-        maxTokens: 3000,
-        temperature: 0.85,
+        // POV is literary, but should read like controlled fiction rather
+        // than an emotional free-write. Keep enough room for 3-6 paragraphs.
+        maxTokens: 1800,
+        temperature: 0.72,
     });
 
     const chapter = response.text.trim();

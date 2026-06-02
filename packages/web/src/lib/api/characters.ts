@@ -51,6 +51,8 @@ export async function getCharacter(id: string): Promise<Character | null> {
   if (isSuiObjectId(id)) {
     const onChain = await fetchOnChainCharacter(id);
     if (onChain) {
+      const taggedRole = roleFromPublicTags(onChain);
+      if (taggedRole) return { ...onChain, role: taggedRole as CharacterRole };
       const role = await resolveRoleFromVoucher(id);
       return role ? { ...onChain, role } : onChain;
     }
@@ -121,9 +123,16 @@ async function enrichRoles(chars: Character[]): Promise<Character[]> {
     }),
   );
   return chars.map((c) => {
+    const taggedRole = roleFromPublicTags(c);
+    if (taggedRole) return { ...c, role: taggedRole as CharacterRole };
     const rid = recruitIdMap.get(c.id);
     const recruitment = rid ? recruitmentsById.get(rid) : null;
     if (!recruitment) return c;
     return { ...c, role: recruitment.specialty as CharacterRole };
   });
+}
+
+function roleFromPublicTags(character: Character): string | null {
+  const tag = character.publicTags?.find((t) => t.label.startsWith('role:'));
+  return tag ? tag.label.slice('role:'.length) : null;
 }

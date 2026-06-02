@@ -41,13 +41,13 @@ export function PovTriggerButton({ characterId }: { characterId: string }) {
 
             <div className="mt-4 space-y-3">
                 <label className="block text-2xs tracking-widest text-mute">
-                    觸發語（可空 — 預設「請寫下你此刻心境」）
+                    觸發語（可空 — 預設生成一個角色視角場面）
                 </label>
                 <textarea
                     value={triggerNarrative}
                     onChange={(e) => setTriggerNarrative(e.target.value)}
                     rows={2}
-                    placeholder="你剛剛在後台化妝間與林某起了口角…"
+                    placeholder="後台化妝間有人提起孟雲屏的搭檔位，眾人一時都不說話…"
                     disabled={isPending}
                     className="w-full rounded border border-hairline bg-surface px-3 py-2 text-sm text-ink focus:border-cinnabar focus:outline-none"
                 />

@@ -63,6 +63,14 @@ export const outcomesWithResourceTransfers = (
     args: gen.OutcomesWithResourceTransfersArguments,
 ) => gen.outcomesWithResourceTransfers({ package: pkg(), arguments: args });
 
+/** Construct one public identity/status tag op (e.g. `role:小生`). */
+export const newTagOp = (args: gen.NewTagOpArguments) =>
+    gen.newTagOp({ package: pkg(), arguments: args });
+
+/** Build EventOutcomes carrying ONLY tag operations. */
+export const outcomesWithTagOps = (args: gen.OutcomesWithTagOpsArguments) =>
+    gen.outcomesWithTagOps({ package: pkg(), arguments: args });
+
 /** Settle a resolved event's transfers for ONE DramaResource (atomic, conservation-checked). */
 export const applyResourceTransfers = (args: gen.ApplyResourceTransfersArguments) =>
     gen.applyResourceTransfers({ package: pkg(), arguments: args });

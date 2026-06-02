@@ -524,6 +524,66 @@ export function outcomesWithResourceTransfers(options: OutcomesWithResourceTrans
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface NewTagOpArguments {
+    characterId: RawTransactionArgument<string>;
+    kind: RawTransactionArgument<number>;
+    label: RawTransactionArgument<string>;
+}
+export interface NewTagOpOptions {
+    package?: string;
+    arguments: NewTagOpArguments | [
+        characterId: RawTransactionArgument<string>,
+        kind: RawTransactionArgument<number>,
+        label: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Production constructor for one public identity/status tag operation. The
+ * operation is recorded in `BudgetEvent.resolution.outcomes`, then applied to the
+ * target `Character` via `apply_tag_op` after resolution.
+ */
+export function newTagOp(options: NewTagOpOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        '0x2::object::ID',
+        'u8',
+        '0x1::string::String'
+    ] satisfies (string | null)[];
+    const parameterNames = ["characterId", "kind", "label"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'event',
+        function: 'new_tag_op',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface OutcomesWithTagOpsArguments {
+    tagOps: TransactionArgument;
+}
+export interface OutcomesWithTagOpsOptions {
+    package?: string;
+    arguments: OutcomesWithTagOpsArguments | [
+        tagOps: TransactionArgument
+    ];
+}
+/**
+ * Build outcomes that carry ONLY tag operations. This is the public identity path:
+ * the event log says when a social label such as `role:小生` or `status:二太太`
+ * became externally affirmed.
+ */
+export function outcomesWithTagOps(options: OutcomesWithTagOpsOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        'vector<null>'
+    ] satisfies (string | null)[];
+    const parameterNames = ["tagOps"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'event',
+        function: 'outcomes_with_tag_ops',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface ResourceTransferCountArguments {
     budgetEvent: RawTransactionArgument<string>;
 }

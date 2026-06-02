@@ -171,6 +171,7 @@ function normalizeId(name: unknown): string | null {
 export interface DramaCharacter {
     id: string;
     name?: string;
+    tags?: string[];
 }
 
 export interface DramaBeatResult {
@@ -217,12 +218,19 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     const resources = await readResourceLedger(client, packageId, opts.sagaId);
     if (resources.length === 0) return { ...empty, skipped: 'no-resources' };
 
-    // 1. assemble agent specs (authored desires, else default contention desires)
-    const defaults = defaultDesiresForCast(resources, opts.cast.length);
+    // 1. assemble agent specs (authored desires, else default contention desires).
+    // Defaults can depend on the agent name: a star named in
+    // `partnership:孟雲屏` should not receive "I want to partner with 孟雲屏".
     const agents: AgentSpec[] = opts.cast.map((c) => ({
         id: c.id,
         name: c.name,
-        desires: opts.desiresByCharacter?.[c.id] ?? defaults,
+        tags: c.tags,
+        desires:
+            opts.desiresByCharacter?.[c.id] ??
+            defaultDesiresForCast(resources, opts.cast.length, {
+                agentName: c.name,
+                agentTags: c.tags,
+            }),
     }));
 
     // 2. build world from chain + prior satisfaction
@@ -340,11 +348,21 @@ export async function deriveDramaForSaga(
     client?: SuiClient,
 ): Promise<DramaBeatResult> {
     const c = client ?? makeSuiClient({ network: resolveNetwork() });
-    const summaries = await read.character
-        .listMintedCharacterSummaries(c, ENDLESS_STORY_DEPLOYMENT.packageId, { sagaId })
-        .catch(() => [] as Awaited<ReturnType<typeof read.character.listMintedCharacterSummaries>>);
-    const cast: DramaCharacter[] = summaries.map((s) => ({ id: s.characterId, name: s.name }));
+    const result = await read.character
+        .listMintedCharacters(c, ENDLESS_STORY_DEPLOYMENT.packageId, { sagaId })
+        .catch(() => null);
+    const cast: DramaCharacter[] =
+        result?.summaries.map((s, i) => ({
+            id: s.characterId,
+            name: s.name,
+            tags: extractTagLabels((result.characters[i] as { json?: unknown } | undefined)?.json),
+        })) ?? [];
     return deriveAndCommitDramaBeat({ sagaId, cast, signer, client: c });
+}
+
+function extractTagLabels(json: unknown): string[] {
+    const tags = (json as { tags?: Array<{ label?: unknown }> } | undefined)?.tags ?? [];
+    return tags.map((t) => t.label).filter((x): x is string => typeof x === 'string');
 }
 
 export { satKey, tensionFraction };

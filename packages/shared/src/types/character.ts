@@ -28,6 +28,12 @@ export interface CharacterAttributes {
   appearance: number;
 }
 
+export interface CharacterTag {
+  label: string;
+  sourceEventId?: string | null;
+  affirmedAtMs?: string;
+}
+
 export interface Character {
   id: string;
   nftOwner: Wallet;
@@ -38,6 +44,8 @@ export interface Character {
   gender: Gender;
   age: number;
   physicalFacts: string;
+  /** Public on-chain social labels, e.g. `role:小生`, `status:二太太`. */
+  publicTags?: CharacterTag[];
   attributes: CharacterAttributes;
   gallery: CharacterDerivativeGallery;
   survival: SurvivalStatus;

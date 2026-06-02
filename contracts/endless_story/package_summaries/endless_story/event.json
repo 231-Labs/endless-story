@@ -1365,9 +1365,100 @@
         }
       ]
     },
-    "resource_transfer_count": {
+    "new_tag_op": {
       "source_index": 15,
       "index": 15,
+      "doc": " Production constructor for one public identity/status tag operation.\n The operation is recorded in `BudgetEvent.resolution.outcomes`, then\n applied to the target `Character` via `apply_tag_op` after resolution.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "character_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "kind",
+          "type_": "u8"
+        },
+        {
+          "name": "label",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "event"
+            },
+            "name": "TagOp",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "outcomes_with_tag_ops": {
+      "source_index": 16,
+      "index": 16,
+      "doc": " Build outcomes that carry ONLY tag operations. This is the public\n identity path: the event log says when a social label such as\n `role:小生` or `status:二太太` became externally affirmed.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "tag_ops",
+          "type_": {
+            "vector": {
+              "Datatype": {
+                "module": {
+                  "address": "endless_story",
+                  "name": "event"
+                },
+                "name": "TagOp",
+                "type_arguments": []
+              }
+            }
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "event"
+            },
+            "name": "EventOutcomes",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "resource_transfer_count": {
+      "source_index": 17,
+      "index": 17,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1398,8 +1489,8 @@
       ]
     },
     "death_count": {
-      "source_index": 16,
-      "index": 16,
+      "source_index": 18,
+      "index": 18,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1430,8 +1521,8 @@
       ]
     },
     "event_id": {
-      "source_index": 17,
-      "index": 17,
+      "source_index": 19,
+      "index": 19,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1471,8 +1562,8 @@
       ]
     },
     "status": {
-      "source_index": 18,
-      "index": 18,
+      "source_index": 20,
+      "index": 20,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1503,70 +1594,6 @@
       ]
     },
     "submitted_action_count": {
-      "source_index": 19,
-      "index": 19,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "scene_delta_count": {
-      "source_index": 20,
-      "index": 20,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "tag_op_count": {
       "source_index": 21,
       "index": 21,
       "doc": null,
@@ -1598,7 +1625,7 @@
         "u64"
       ]
     },
-    "commitment_id_count": {
+    "scene_delta_count": {
       "source_index": 22,
       "index": 22,
       "doc": null,
@@ -1630,7 +1657,7 @@
         "u64"
       ]
     },
-    "currency_transfer_count": {
+    "tag_op_count": {
       "source_index": 23,
       "index": 23,
       "doc": null,
@@ -1662,9 +1689,73 @@
         "u64"
       ]
     },
-    "tag_op_kind_add": {
+    "commitment_id_count": {
       "source_index": 24,
       "index": 24,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "currency_transfer_count": {
+      "source_index": 25,
+      "index": 25,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "tag_op_kind_add": {
+      "source_index": 26,
+      "index": 26,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1676,8 +1767,8 @@
       ]
     },
     "tag_op_kind_remove": {
-      "source_index": 25,
-      "index": 25,
+      "source_index": 27,
+      "index": 27,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1689,8 +1780,8 @@
       ]
     },
     "new_card_template": {
-      "source_index": 26,
-      "index": 26,
+      "source_index": 28,
+      "index": 28,
       "doc": " Production constructor for `CardTemplate`. Needed because off-chain\n storytellers (Skill API / runner orchestrator) build the catalog\n for `push_event` and Move's pure-arg rules forbid passing a\n struct vector directly via BCS-encoded bytes (`vector<CardTemplate>`\n is not a pure type). With this constructor, callers do\n `tx.makeMoveVec({ type: …::CardTemplate, elements: cards.map(c =>\n tx.moveCall(new_card_template(...))) })`.",
       "attributes": [],
       "visibility": "Public",

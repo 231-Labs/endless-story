@@ -11,7 +11,7 @@
  * also thread MemWal recall snippets through here.
  */
 
-import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import {
     characterWorker as runnerCharacterWorker,
     signAndAnchor,
@@ -26,6 +26,7 @@ import {
     recallCurrentPlanText,
 } from '@/lib/chain/memory';
 import { fetchRelationshipHints } from '@/lib/chain/relationships';
+import { resolveNetwork } from '@/lib/chain/network';
 
 export interface PovCoreOptions {
     triggerNarrative: string;
@@ -63,6 +64,13 @@ export interface PovCoreResult {
  */
 export async function resolveRole(characterId: string): Promise<string | undefined> {
     try {
+        const client = makeSuiClient({ network: resolveNetwork() });
+        const character = await read.character.getCharacter(client, characterId).catch(() => null);
+        const taggedRole = roleFromCharacterJson(
+            (character?.json as { tags?: Array<{ label?: string }> } | undefined)?.tags,
+        );
+        if (taggedRole) return taggedRole;
+
         const recruitmentId = await fetchRecruitmentIdForCharacter(characterId);
         if (!recruitmentId) return undefined;
         const recruitment = await getStoreRecruitment(recruitmentId);
@@ -70,6 +78,11 @@ export async function resolveRole(characterId: string): Promise<string | undefin
     } catch {
         return undefined;
     }
+}
+
+function roleFromCharacterJson(tags: Array<{ label?: string }> | undefined): string | undefined {
+    const roleTag = tags?.find((t) => typeof t.label === 'string' && t.label.startsWith('role:'));
+    return roleTag?.label?.slice('role:'.length) || undefined;
 }
 
 /**

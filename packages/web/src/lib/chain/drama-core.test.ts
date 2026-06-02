@@ -23,6 +23,7 @@ import {
 
 const LIU = '0xliu';
 const BAI = '0xbai';
+const MENG = '0xmeng';
 const R1 = '0xr1';
 
 function slot(allocations: Record<string, bigint>): ResourceSnapshot {
@@ -61,6 +62,30 @@ test('default desires: a capacity-1 slot among 2 cast members is contested → 1
 test('default desires: a resource everyone fits in (capacity ≥ cast) is NOT contested', () => {
     const roomy: ResourceSnapshot = { ...slot({}), capacity: 5n };
     assert.equal(defaultDesiresForCast([roomy], 2).length, 0);
+});
+
+test('default desires: a named partnership target does NOT desire their own slot', () => {
+    assert.equal(
+        defaultDesiresForCast([slot({})], 3, {
+            agentName: '孟雲屏',
+            agentTags: ['role:花旦'],
+        }).length,
+        0,
+    );
+    assert.equal(
+        defaultDesiresForCast([slot({})], 3, {
+            agentName: '柳生春',
+            agentTags: ['role:小生'],
+        }).length,
+        1,
+    );
+});
+
+test('default desires: tagged partnership eligibility is 小生-side only', () => {
+    assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:小生'] }).length, 1);
+    assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:武小生'] }).length, 1);
+    assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:花旦'] }).length, 0);
+    assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['status:二太太'] }).length, 0);
 });
 
 test('derive: the holder ends LESS tense than the contender (scarcity bites)', () => {
@@ -119,4 +144,5 @@ test('hint: dominant unmet desire renders a non-empty Chinese line', () => {
     assert.ok(baiHint && baiHint.includes('張力'), `contender should get a tension hint, got: ${baiHint}`);
     // an agent with no desires gets no hint
     assert.equal(dramaHintForAgent(next, '0xnobody'), null);
+    assert.equal(dramaHintForAgent(next, MENG), null);
 });

@@ -712,6 +712,27 @@ module endless_story::event {
         }
     }
 
+    /// Production constructor for one public identity/status tag operation.
+    /// The operation is recorded in `BudgetEvent.resolution.outcomes`, then
+    /// applied to the target `Character` via `apply_tag_op` after resolution.
+    public fun new_tag_op(character_id: ID, kind: u8, label: String): TagOp {
+        TagOp { character_id, kind, label }
+    }
+
+    /// Build outcomes that carry ONLY tag operations. This is the public
+    /// identity path: the event log says when a social label such as
+    /// `role:小生` or `status:二太太` became externally affirmed.
+    public fun outcomes_with_tag_ops(tag_ops: vector<TagOp>): EventOutcomes {
+        EventOutcomes {
+            currency_transfers: vector::empty<CurrencyTransfer>(),
+            scene_deltas: vector::empty<SceneParamDelta>(),
+            tag_ops,
+            commitment_ids: vector::empty<ID>(),
+            deaths: vector::empty<DeathRecord>(),
+            resource_transfers: vector::empty<ResourceTransferOp>(),
+        }
+    }
+
     public fun resource_transfer_count(budget_event: &BudgetEvent): u64 {
         vector::length(&budget_event.resolution.outcomes.resource_transfers)
     }
@@ -960,6 +981,22 @@ module endless_story::event {
         assert!(card.intent == INTENT_KILL, 21);
         assert!(card.label == b"strike".to_string(), 22);
         assert!(card.payload == b"payload", 23);
+    }
+
+    #[test]
+    fun new_tag_op_and_outcomes_with_tag_ops_round_trips_fields() {
+        let character_id = object::id_from_address(@0xBEEF);
+        let op = new_tag_op(character_id, TAG_OP_KIND_ADD, b"role:小生".to_string());
+        assert!(op.character_id == character_id, 24);
+        assert!(op.kind == TAG_OP_KIND_ADD, 25);
+        assert!(op.label == b"role:小生".to_string(), 26);
+
+        let outcomes = outcomes_with_tag_ops(vector[op]);
+        assert!(vector::length(&outcomes.tag_ops) == 1, 27);
+        assert!(vector::length(&outcomes.resource_transfers) == 0, 28);
+        let recorded = vector::borrow(&outcomes.tag_ops, 0);
+        assert!(recorded.character_id == character_id, 29);
+        assert!(recorded.label == b"role:小生".to_string(), 30);
     }
 
     #[test]

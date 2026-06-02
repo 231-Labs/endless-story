@@ -1,14 +1,15 @@
 /**
  * Character POV chapter — prompt builder.
  *
- * Two rules baked in:
- *   - Assume the reader saw the gazette. DO NOT recap public facts.
- *   - Write interiority, not narration. Sensation + memory + reaction.
+ * POV here means "a short literary scene told through this character's
+ * limited perception", not a mirror-facing reflection. Reflection prompts live
+ * in `reflection-trigger`; chapter prose should have scene, pressure, gesture,
+ * and subtext.
  *
  * `triggerNarrative` is the runner-supplied "what just happened" line
  * (e.g. "saga director 在後台化妝間開了 storylet confession_after_show，
- * 涉及你和林某"). The character LLM treats this as ground truth —
- * doesn't restate it, just responds to it.
+ * 涉及你和林某"). The character LLM treats this as ground truth and turns it
+ * into one concrete moment, without recapping it like a report.
  */
 
 import { roleHint } from '@endless-story/shared';
@@ -55,45 +56,54 @@ export interface PovPromptInput {
 
 export function buildSystemPrompt(): string {
     return [
-        '你正在以指定角色的第一人稱（**嚴禁第三人稱**）寫一段 POV 章回。',
+        '你是一位連載小說家，正在為「無盡故事」寫一小節角色 POV 章回。',
+        'POV 的意思是：鏡頭、感官、誤解與判斷都綁在這個角色身上；它不是反思、不是日記、不是情緒摘要。',
         '',
-        '**身份鐵則**：',
-        '你**就是**下方「你的身份」段落描述的那個人。不是寫他、不是看他、不是描述他。**你開口時用「我」**。',
-        '即使你的「行當」欄位寫的是「—」或不熟悉的角色，**也要堅守第一人稱**，根據姓名、外形、屬性建構一個自洽的「我」。',
-        '不要因為角色設定不齊全就退回旁觀視角。',
+        '**敘事鐵則**：',
+        '1. **第一人稱限定視角**。可以寫「我」，但不要每段都用「我心裡／我感到／我忽然」開頭。讀者只能知道此人看見、聽見、猜到、誤會到的事。',
+        '2. **寫一個可拍的場面，不寫一份心情報告**。每章至少要有：一個具體空間、一件可觸摸的小物或身體細節、一個正在發生的外部動作。',
+        '3. **公報已交代過大事 — 不要 recap**。不要把 trigger 改寫成摘要；只取其中最能刺到此人的一瞬，讓它在場面裡發酵。',
+        '4. **情緒要有節制**。強烈情緒只能透過停頓、閃避、錯看、手上小動作、對別人的一句話露出來；避免連續使用「崩潰、撕裂、瘋狂、命運、燃燒、痛到不能呼吸」這類大詞。',
+        '5. **不要濫用回憶**。記憶片段只挑一條化成比喻、動作或一句未說出口的話；不要逐條複述，不要把章回寫成回憶錄。',
+        '6. **允許少量對白**，最多兩句短對白。對白必須推動關係或遮掩情緒，不要讓人物直接說出主題。',
+        '7. **不得發明重大新事實**：不可突然死亡、成親、揭露血緣、改寫事件結果。可以補小型生活細節，如茶盞、袖口、台階、燈影、誰移開眼。',
         '',
-        '**寫作鐵則**：',
-        '1. **公報已交代過事實 — 不要 recap**。讀者已知「誰在哪做了什麼」，請直接進入你的內心、感官、聯想。',
-        '2. 字數 200–800 之間，由你判斷情緒密度自由發揮，**不要為了長度灌水**。',
-        '3. 寫**感官細節**（光、聲、味、觸）+ **心境湧動**（回憶、預感、矛盾）+ **微動作**（一個小動作勝過一段心理描述）。',
-        '4. 風格：所在 saga 的時代設定（如「春雪社」是民初上海戲園 → 舊白話 + 文言夾雜）。避免明顯違和的現代詞彙（手機、能量場、心靈雞湯）。',
-        '5. 若有「夢境片段」標記，你的章回**必須引用其中一句意象**作為情緒錨點。',
-        '6. **不要寫對白以外的場景敘述**（如「下午三點，戲台後方……」）— 公報那邊有了。直接從你的眼睛、耳朵、皮膚開始。',
+        '**聲音與質地**：',
+        '- 風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。',
+        '- 角色扁平時，寧可低調寫觀察、身段、職業習慣與眼前利害，不要硬灌劇烈人格創傷。',
+        '- 讓每個角色的行當、年紀、身體狀況、機敏程度改變句子的速度與注意力：花旦看妝面與目光，小生看身位與輸贏，樂師先聽聲，班主先看秩序。',
+        '- 結尾要留一個未解的小鉤子或轉身，不要總結人生道理，不要「於是我明白了」。',
         '',
-        '**輸出格式**：純散文，不要 markdown 標題、不要分段標號、不要前言「以下是我的章回」之類。直接開始寫，第一個字就是「我」或感官描述。',
+        '**篇幅與格式**：',
+        '- 450–900 個中文字，3–6 個自然段。短句與長句交錯，讓它像小說頁面，不像 prompt 產物。',
+        '- 純散文。不要 markdown 標題、不要分段標號、不要前言「以下是」。直接進入正文。',
     ].join('\n');
 }
 
 export function buildUserPrompt(input: PovPromptInput): string {
     const { character, triggerNarrative, recentMemorySnippets, dreamFragment } = input;
+    const craftBlock = buildCraftDirective(character);
     const memBlock =
         recentMemorySnippets.length > 0
-            ? '\n## 你近期的記憶片段\n' +
-              recentMemorySnippets.map((m, i) => `${i + 1}. ${m}`).join('\n')
+            ? '\n## 可用記憶材料（只可取一兩個細節，化入場面；不可逐條複述）\n' +
+              recentMemorySnippets
+                  .slice(0, 5)
+                  .map((m, i) => `${i + 1}. ${m.slice(0, 220)}${m.length > 220 ? '…' : ''}`)
+                  .join('\n')
             : '';
     const relBlock =
         input.relationshipHints && input.relationshipHints.length > 0
-            ? '\n## 你與在場人的牽絆（用你的眼睛看他們時帶上這份情感）\n' +
+            ? '\n## 關係壓力（讓它影響你看誰、避開誰、對誰說半句話）\n' +
               input.relationshipHints.map((r) => `- ${r}`).join('\n')
             : '';
     const planBlock = input.planHint
-        ? `\n## 你心裡的目標與打算（讓獨白帶上你正在追求的東西）\n${input.planHint}`
+        ? `\n## 當下目標（讓場面有方向，不要直接宣告）\n${input.planHint}`
         : '';
     const dramaBlock = input.dramaHint
-        ? `\n## 你此刻的渴與不甘（稀缺之物落在誰手裡 —— 讓這份張力滲進你的獨白）\n${input.dramaHint}`
+        ? `\n## 稀缺張力（讓它變成行動或視線，不要變成喊口號）\n${input.dramaHint}`
         : '';
     const dreamBlock = dreamFragment
-        ? `\n## 你昨夜的夢（必須引用其中一句意象）\n${dreamFragment}`
+        ? `\n## 夢境片段（必須取其中一個意象，變成場面裡的感官錨點）\n${dreamFragment}`
         : '';
     return [
         `# 你的身份`,
@@ -104,19 +114,66 @@ export function buildUserPrompt(input: PovPromptInput): string {
         attrLine(character.attributes),
         `- 所屬：${character.sagaName}${character.sceneName ? ` · 在 ${character.sceneName}` : ''}`,
         `- 行當聲口：${roleHint(character.role)}`,
+        craftBlock,
         memBlock,
         relBlock,
         planBlock,
         dramaBlock,
         dreamBlock,
         '',
-        '## 剛才發生',
+        '## 事件材料（這是背景，不是正文摘要）',
         triggerNarrative,
         '',
-        '請以你的視角寫這段 POV 章回。',
+        '請把上述材料寫成一小節角色限定視角小說。不要寫反思；不要解釋你如何寫作；直接輸出正文。',
     ]
         .filter((s) => s !== '')
         .join('\n');
+}
+
+function buildCraftDirective(character: CharacterSnapshot): string {
+    const seed = hashString(`${character.id}:${character.name}:${character.role}`);
+    const openingLens = [
+        '以一件可觸摸的小物開場：袖口、茶盞、簪釵、票紙、戲箱、槍桿、琴弦都可以；讓手先說話。',
+        '以聲音開場：隔壁一句唱腔、木板響、雨聲、鑼鼓餘音、有人壓低的咳嗽；先聽見，再看見。',
+        '以光與空間開場：燈影、台口、後台窄廊、鏡面、窗格；讓角色的位置透露他的處境。',
+        '以身體微感開場：粉黏在頸側、衣料勒住、舊傷發熱、喉頭發乾；不要誇張，只寫一處。',
+        '以別人的一個小動作開場：避開目光、放慢步子、收住半句話；讓角色先誤讀它。',
+        '以移動開場：從台口退回、穿過後廊、繞過桌角、跨過箱籠；讓章回有一個方向。',
+    ][seed % 6];
+    const narrativeMove = [
+        '中段安排一個小阻礙，讓角色不得不做選擇：沉默、伸手、退半步、說一句不完整的話。',
+        '中段讓角色看見一個人，卻真正寫的是自己不願承認的欲望。',
+        '中段放一個短對白或未出口的稱呼，讓關係變緊，不要讓人物直接表白。',
+        '中段讓記憶只閃一下，像錯落的燈，不要進入長篇追憶。',
+        '中段把注意力轉到一個職業細節：身段、調門、妝面、站位、台下眼色。',
+    ][Math.floor(seed / 7) % 5];
+    const attributePressure = attributeDirective(character.attributes);
+    return [
+        '',
+        '## 本章工法（為了避免每個 POV 長得一樣，請嚴格遵守）',
+        `- 開場鏡頭：${openingLens}`,
+        `- 場面推進：${narrativeMove}`,
+        `- 角色質地：${attributePressure}`,
+    ].join('\n');
+}
+
+function attributeDirective(a: CharacterSnapshot['attributes']): string {
+    const notes: string[] = [];
+    if ((a.acuity ?? 0) >= 75) notes.push('他會先注意細節與破綻');
+    if ((a.disposition ?? 0) >= 75) notes.push('情緒外放要克制，讓禮數或沉默承壓');
+    if ((a.disposition ?? 100) <= 45) notes.push('衝動可以有，但用一句話或一個動作表現，不要長篇喊叫');
+    if ((a.constitution ?? 100) <= 55) notes.push('身體有限制，疲弱或舊痛可影響節奏');
+    if ((a.appearance ?? 0) >= 85) notes.push('他知道目光會落在自己身上，但不要自戀式自述');
+    return notes.length > 0 ? notes.join('；') : '設定不完整時，採低調寫法：先寫眼前物與行當習慣，再讓情緒慢慢浮出';
+}
+
+function hashString(text: string): number {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i += 1) {
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
 }
 
 function attrLine(a: CharacterSnapshot['attributes']): string {

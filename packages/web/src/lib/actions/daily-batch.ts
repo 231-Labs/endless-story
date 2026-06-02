@@ -122,7 +122,7 @@ export async function runDailyBatchAction(
     // 5. Sequential POV generation.
     const results: DailyBatchCharResult[] = [];
     for (const c of slice) {
-        const trigger = `${dayLabel} — 戲班又過了一段光景。把你此刻的心境、所見、未說出口的念頭，寫成一段獨白。`;
+        const trigger = `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
         const r = await runPovForCharacter(admin, c.id, {
             triggerNarrative: trigger,
             forceRun: mode === 'all',

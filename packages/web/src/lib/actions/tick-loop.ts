@@ -307,7 +307,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         try {
             const r = await deriveAndCommitDramaBeat({
                 sagaId: d.sagaId,
-                cast: slice.map((c) => ({ id: c.id, name: c.name })),
+                cast: slice.map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    tags: c.publicTags?.map((t) => t.label),
+                })),
                 signer: dryRun ? undefined : admin.signer, // dry-run = derive, don't anchor
             });
             dramaHints = r.hints;
@@ -362,7 +366,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    Dry-run does NO chain writes → generate every chapter CONCURRENTLY
     //    (this is the big preview speedup). A real run anchors via
     //    commitment::commit (Sui signing) → must stay serial.
-    const trigger = `${dayLabel} — 戲班又過了一段光景。把你此刻的心境、所見、未說出口的念頭，寫成一段獨白。`;
+    const trigger = `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
     const mapPov = (c: Character, r: Awaited<ReturnType<typeof runPovForCharacter>>): TickPovResult => ({
         characterId: c.id,
         name: c.name,

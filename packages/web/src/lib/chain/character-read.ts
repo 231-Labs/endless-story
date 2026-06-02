@@ -75,12 +75,13 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
         currentSceneId: unwrapOption(json.state?.current_scene_id),
         name: profile?.name ?? '無名',
         description: profile?.description ?? '',
-        // Chain doesn't store role — placeholder; facade enriches from
-        // voucher hint → Recruitment.specialty before returning to UI.
-        role: '看客' as CharacterRole,
+        // Chain stores public identity as tags (e.g. `role:小生`). The
+        // facade may still enrich from voucher hints for older untagged mints.
+        role: (roleFromTags(json.tags ?? []) ?? '看客') as CharacterRole,
         gender: mapGender(physical?.gender ?? ''),
         age: Number(physical?.age_years ?? 0),
         physicalFacts: [physical?.species, physical?.body].filter(Boolean).join(' / ') || '—',
+        publicTags: mapTags(json.tags ?? []),
         attributes: {
             constitution: attrMap.constitution ?? 50,
             disposition: attrMap.disposition ?? 50,
@@ -237,6 +238,28 @@ export async function fetchOnChainCharacters(opts: { sagaId?: string | null } = 
     return out;
 }
 
+function roleFromTags(tags: ChainTag[]): string | null {
+    for (const tag of tags) {
+        const label = typeof tag?.label === 'string' ? tag.label : '';
+        if (label.startsWith('role:')) return label.slice('role:'.length);
+    }
+    return null;
+}
+
+function mapTags(tags: ChainTag[]): Character['publicTags'] {
+    const out: NonNullable<Character['publicTags']> = [];
+    for (const tag of tags) {
+        const label = typeof tag?.label === 'string' ? tag.label : '';
+        if (!label) continue;
+        out.push({
+            label,
+            sourceEventId: unwrapOption(tag.source_event_id),
+            affirmedAtMs: tag.affirmed_at_ms != null ? String(tag.affirmed_at_ms) : undefined,
+        });
+    }
+    return out;
+}
+
 function mapGender(raw: string): Character['gender'] {
     if (raw === '男' || raw.toLowerCase() === 'male') return 'male';
     if (raw === '女' || raw.toLowerCase() === 'female') return 'female';
@@ -338,11 +361,18 @@ interface ChainCharacter {
     };
     attributes?: Array<{ key?: string; value?: number | string }>;
     media_assets?: ChainMediaAsset[];
+    tags?: ChainTag[];
     state?: { saga_id?: unknown; current_scene_id?: unknown };
     image_url?: string;
     birth_ms?: number | string;
     birthMs?: number | string;
     subscriber_count?: number | string;
+}
+
+interface ChainTag {
+    label?: string;
+    source_event_id?: unknown;
+    affirmed_at_ms?: number | string;
 }
 
 interface ChainMediaAsset {

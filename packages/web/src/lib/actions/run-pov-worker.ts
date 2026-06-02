@@ -15,7 +15,7 @@ import { runPovForCharacter, type PovCoreResult } from '@/lib/chain/pov-core';
 export interface RunPovInput {
     characterId: string;
     /** Override the trigger narrative — when empty, server falls back to
-     *  "你剛剛在 saga 中經歷了一段時光，請寫下你此刻的心境。" */
+     *  a neutral scene prompt instead of an introspection prompt. */
     triggerNarrative?: string;
     forceRun?: boolean;
     dryRun?: boolean;
@@ -38,7 +38,7 @@ export async function runPovAction(input: RunPovInput): Promise<RunPovResult> {
 
     const triggerNarrative =
         input.triggerNarrative?.trim() ||
-        '你剛剛在 saga 中經歷了一段時光，請寫下你此刻的心境。';
+        '請截取這個角色此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。';
 
     return runPovForCharacter(admin, input.characterId, {
         triggerNarrative,
