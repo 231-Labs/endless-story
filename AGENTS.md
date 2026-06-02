@@ -39,6 +39,42 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
+## 目前進度（2026-06-02）
+
+**一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder；目前進入「demo 穩定化 + 部署 + 影片素材」階段。
+
+### 已經落地
+
+- **合約 1.6 / 1.7 已有**：`event.move`、`commitment.move` 在 repo 內，runner 章回 / 公報 / drama beat 都走 Walrus + `commitment::commit` anchor。
+- **Runner 自治 tick v1 已接通**：`runTickLoopAction` 順序為 `PLAN → MOVE → DRAMA → SOCIAL → ACT → POV → SLEEP → GAZETTE`。
+- **角色認知 v1 已接通**：
+  - mint 後 `redeemVoucher → seedGenesisMemoryAction` 會 seed self genesis、主觀 relationship memories、最多 3 位既有角色的 reciprocal observation。
+  - 每輪 tick 建 saga roster snapshot：`id/name/role/gender/age/brief/currentScene`。
+  - `role` 來源：chain `role:*` tag → recruitment specialty → `—`。
+  - roster 會注入 `PLAN / MOVE / SOCIAL / ACT / POV`，讓角色知道誰是花旦、小生、同場人物。
+  - relationship hint 是雙源：先讀角色自己的 MemWal `relationship` memory，再合併 on-chain `RelationshipSeeded`（標明「自己的人物印象」vs「導演公開牽起」）。
+- **輕量 SOCIAL phase 已接通**：
+  - 只跑不在 open event 的角色。
+  - 輸出 `observe | talk | idle`；`talk` 目標必須同 scene。
+  - 成功互動會寫 speaker observation、target `[聽見：角色名]` observation、必要時寫 speaker relationship memory，並更新 `scene-lines` 供前端手卷顯示。
+  - 已修正：MOVE 後本輪 in-memory scene snapshot 會更新，避免 SOCIAL 用移動前位置造成跨 scene 對話。
+- **Drama 整合已驗證方向正確**：用孟雲屏 / 顧驚鴻 / 柳生春 dry-run 時，`與孟雲屏搭戲` 張力落在顧 / 柳身上，孟雲屏本人不會被當作搶搭檔位的人。
+- **MemWal 三因子 metadata / 自架 relayer 方向已開**：
+  - `packages/relayer` 已有自架 relayer skeleton。
+  - MemWal remember 會把 kind / importance / day metadata 送進 relayer，支援真三因子召回。
+  - 人物頁 memory count 已能走 relayer `/api/count`，不再只是 placeholder。
+- **角色經濟驗證已完成**：`packages/economy` 純模擬 12/12 綠，角色頁 survival 已接 off-chain shadow；產品化 tick settle / give phase 還沒進主 loop。
+- **部署文件已補**：見 `docs/DEPLOYMENT.md`，方向是 Vercel 放 web，Zeabur/Contabo 放 relayer + world-loop。
+
+### 已驗證 / 已知限制
+
+- `pnpm --filter @endless-story/runner type-check` 綠。
+- `pnpm --filter @endless-story/web type-check` 綠。
+- repo-wide `pnpm -r type-check` 可能因未安裝 `packages/economy` 的 local deps / `tsc` 而失敗；不要把它誤判成 runner/web 改動失敗。
+- 連續多輪 dry-run 會打到 MemWal / SEAL `fetchKeys` 429。自架 MemWal relayer 可改善 indexing/recall 壓力，但 SEAL key server 429 是另一層；demo 前先用 `MEMWAL_RECALL_CONCURRENCY=1`、降低 recall limit、做 per-tick recall cache。
+
+---
+
 ## 鏈上架構（2026-05-24 拍板，不可漂移）
 
 > 合約 / SDK / runner / web 之間的**契約**。任何 session 不准踰越。
@@ -88,7 +124,7 @@ packages/
 
 ## 已完成
 
-**Phase 0–2 全部就位**（commits `f99d28f` → 最新）：
+**Phase 0–2 全部就位 + Runner v1 已可 demo**（commits `f99d28f` → 最新）：
 
 - **合約 1.1–1.5c**：currency / faucet / world / saga / scene / character / recruit，47 unit tests 綠燈，徵召 voucher mint → redeem → character + cap 完整可用
 - **SDK 2.1/2.2**：codegen + tx/read wrappers（thin、type-friendly、recruit-build acceptance 過）
@@ -104,6 +140,10 @@ packages/
 - **抽卡 wizard**：RecruitmentTicket 改造完，prompt → moderate → mint voucher (user sign) → LLM preview → accept → portrait → auto-redeem (admin server action) → 跳 `/dossier?id=<chain id>`
 - **`/dossier?id=X`**：偵測 Sui object id → 走 SDK chain-read（fallback mock for demo ids）
 - **Devnet object-version race**：mint PTB 加自動 retry 一次
+- **Runner v1**：PLAN / MOVE / DRAMA / SOCIAL / ACT / POV / SLEEP / GAZETTE 已串成一鍵 tick；SOCIAL / roster cognition / subjective relationship memory 已接。
+- **Drama engine**：`packages/drama` + scarce resource tension 已接進 tick；role tag / recruitment fallback 已能讓小生競爭搭檔位。
+- **Relayer / MemWal metadata**：自架 relayer skeleton + three-factor metadata + memory count API 已有。
+- **Economy shadow**：角色頁 survival 已接 off-chain shadow；純模擬驗證完成。
 
 ### 設計拍板（2026-05-25）
 
@@ -115,16 +155,17 @@ packages/
 
 ---
 
-## 賽前必做（6/21 deadline，~27 天）
+## 下一步（6/21 deadline 前）
 
 | # | 項目 | 範圍 | 估時 |
 |---|---|---|---|
-| **R** | **Runner 遷移** | scheduler tick / per-character daily POV / memwal flush；舊 repo `/Users/harperdelaviga/Endless-Story/packages/runner` 全套參考 | 3–5d |
-| **C** | **1.6 event.move + 1.7 commitment.move** | runner 動連動補：event 解算 + 卡片 + death 標記 / memory commitment snapshot | 2–3d |
+| **S** | **Runner 穩定化 / Demo acceptance** | per-tick recall cache、SEAL 429 backoff、`MEMWAL_RECALL_CONCURRENCY=1` 預設、顧/柳/孟 2 tick 驗證、SOCIAL memory 不寫未授權重設定 | 1–2d |
+| **D** | **部署策略落地** | Vercel web + Zeabur/Contabo relayer + world-loop；設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
+| **E** | **角色經濟產品化 Part D** | web adapter / SETTLE phase / GIVE phase / 日界發薪扣 cost / vitality & death hook；若 demo 時間不夠可先保留 shadow | 2–4d |
 | **I** | **Web i18n** | `next-intl` framework + 抽既有文案 + LocaleToggle + `romanize-name`（中文 → 拼音） | 2–3d |
-| **V** | **影片產出工具鈕** | demo 影片 / 錄製 / 剖面；具體 scope 待定（screen capture / GIF / 自動鏡頭? OBS macro?） | 1–3d |
+| **V** | **Demo / Trailer 素材** | 跑 2–3 tick 產章回 + 手卷錄屏；剪 trailer；首頁 placeholder 換真內容；需要預留 LLM/影片生成時間 | 2–4d |
 
-**順序建議**：先 C（合約 first，後面 R 才有 event/commitment 可呼叫）→ R → I（V 可並行）。
+**順序建議**：先 S（否則 demo 不穩）→ D（部署可跑）→ V（開始攢素材）；E / I 視時間切入。不要再從舊 repo 搬大 runner，只補現在 v1 的缺口。
 
 ---
 
@@ -149,7 +190,8 @@ RECRUITMENT_MOD_SECRET=<openssl rand -hex 32>
 # 敘事仍可跑，只是沒有長期記憶。需 testnet（SEAL 不在 devnet）。
 MEMWAL_PRIVATE_KEY=...                  # ed25519 delegate 私鑰（dashboard 產）
 MEMWAL_ACCOUNT_ID=0x...                 # MemWalAccount object id（dashboard 產）
-# MEMWAL_SERVER_URL 可省 — testnet 自動用 staging relayer
+# MEMWAL_SERVER_URL 可省 — testnet 自動用 staging relayer；自架後填 https://<relayer>
+MEMWAL_RECALL_CONCURRENCY=1             # demo 建議先 1；連續 dry-run 易打到 SEAL fetchKeys 429
 EOF
 ```
 
@@ -159,7 +201,10 @@ EOF
 > - mainnet：https://memwal.ai → relayer `https://relayer.memwal.ai`
 >
 > 把產出的私鑰填 `MEMWAL_PRIVATE_KEY`、account id 填 `MEMWAL_ACCOUNT_ID`。
-> relayer URL 不用填 —`memory.ts` 依網路自動選（testnet→staging）。
+> relayer URL 可先不填 —`memory.ts` 依網路自動選（testnet→staging）。
+> 若用自架 relayer（建議 demo 前做），填 `MEMWAL_SERVER_URL=https://<你的 relayer>`。
+> 注意：自架 relayer 主要解 indexing / recall 服務壓力；SEAL key server 的 `fetchKeys`
+> 429 是另一層，仍需用低 concurrency / cache / backoff 控制。
 >
 > **架構**：我們走 `MemWalManual`（client 端 SEAL，patch 成打我們的
 > `endless_story::character::seal_approve_control/_owner`，非 upstream
@@ -243,6 +288,8 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 ## 接班啟動 prompt
 
 ```
-讀 /Users/harperdelaviga/endless-story-new/AGENTS.md，照「賽前必做」順序開工。
-從合約 1.6/1.7 開始；不可跳步；每完成一個小步驟跟我回報；commit 由我決定時機。
+讀 /Users/harperdelaviga/endless-story-new/AGENTS.md，照「下一步」順序開工。
+先做 S：Runner 穩定化 / Demo acceptance（per-tick recall cache、SEAL 429 backoff、
+顧/柳/孟 2 tick 驗證）。不要回頭從 1.6/1.7 開始；不要搬舊 repo 大 runner。
+每完成一個小步驟跟我回報；commit 由我決定時機。
 ```
