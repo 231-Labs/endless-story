@@ -13,6 +13,7 @@ import type { BlobRef, Character, CharacterRole } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { lazySettle } from '@endless-story/economy';
 import { resolveNetwork } from './network.js';
+import { getMemoryCount } from './memory-counter.js';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -50,7 +51,7 @@ function unwrapOption(raw: unknown): string | null {
     return null;
 }
 
-function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: string, narrativeDay = 1): Character {
+function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: string, narrativeDay = 1, memoryCount?: number): Character {
     const profile = json.profile;
     const physical = profile?.physical_facts;
     const attrs = json.attributes ?? [];
@@ -105,7 +106,7 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
             makeup: mediaAssets.find((m) => m.kind === 'makeup'),
             eventMoments: mediaAssets.filter((m) => m.kind === 'event_moment'),
         },
-        survival: computeSurvival(json, attrMap, roleStr, narrativeDay),
+        survival: computeSurvival(json, attrMap, roleStr, narrativeDay, memoryCount),
         subscriberCount: json.subscriber_count != null ? Number(json.subscriber_count) : 0,
         createdAt,
     };
@@ -135,7 +136,8 @@ export async function fetchOnChainCharacter(id: string): Promise<Character | nul
     // to non-owner state.
     const owner = await resolveCurrentOwner(id);
     const narrativeDay = await fetchNarrativeDay(client);
-    return mapChainCharacter(id, json, owner ?? undefined, narrativeDay);
+    const memoryCount = await getMemoryCount(id);
+    return mapChainCharacter(id, json, owner ?? undefined, narrativeDay, memoryCount ?? undefined);
 }
 
 /**
@@ -258,6 +260,7 @@ function computeSurvival(
     attrMap: Record<string, number>,
     role: string,
     narrativeDay: number,
+    memoryCountOverride?: number,
 ): Character['survival'] {
     const today = Math.max(0, Math.round(narrativeDay));
     const { snapshot } = lazySettle(null, {
@@ -266,7 +269,8 @@ function computeSurvival(
         appearance: attrMap.appearance ?? 50,
         acuity: attrMap.acuity ?? 50,
         ageYearsStart: Number(json.profile?.physical_facts?.age_years ?? 0),
-        memoryCount: 5 + today * 3, // genesis + ~3/active-day proxy
+        // real per-namespace count from the relayer when available; else an age proxy.
+        memoryCount: memoryCountOverride ?? 5 + today * 3,
         subscribers: json.subscriber_count != null ? Number(json.subscriber_count) : 0,
         today,
     });

@@ -72,6 +72,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
   }
 
+  // per-namespace memory count — lets the web show a character's REAL memory thickness
+  // (drives storage rent in the economy) instead of an age proxy. Open + cheap (just a length).
+  if (req.method === "GET" && path === "/api/count") {
+    const ns = url.searchParams.get("namespace");
+    if (!ns) return send(res, 400, { error: "namespace query param required" });
+    return send(res, 200, { namespace: ns, count: store.recall(ns).length });
+  }
+
   // dev-local blob fetch
   if (req.method === "GET" && path.startsWith("/api/blob/")) {
     const id = decodeURIComponent(path.slice("/api/blob/".length));
