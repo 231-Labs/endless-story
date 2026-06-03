@@ -62,12 +62,12 @@ const SYSTEM_PROMPT = [
     '- importance 大多給 8。情感強烈（如重大思念、深沉恐懼）給 9。輕薄玩鬧給 6-7',
 ].join('\n');
 
-export async function moderateDream(input: ModerateDreamInput): Promise<ModerateDreamResult> {
-    // Cheap tier — moderation doesn't need creative writing power.
-    const llm = llmText.createTextClient({ kind: 'cheap' });
-    const modelId = input.model ?? llm.defaultModel;
+export function buildDreamModeratorSystemPrompt(): string {
+    return SYSTEM_PROMPT;
+}
 
-    const userPrompt = [
+export function buildDreamModeratorUserPrompt(input: ModerateDreamInput): string {
+    return [
         `# 角色`,
         `- 姓名：${input.characterName}`,
         `- 所屬：${input.sagaName}`,
@@ -80,11 +80,17 @@ export async function moderateDream(input: ModerateDreamInput): Promise<Moderate
     ]
         .filter(Boolean)
         .join('\n');
+}
+
+export async function moderateDream(input: ModerateDreamInput): Promise<ModerateDreamResult> {
+    // Cheap tier — moderation doesn't need creative writing power.
+    const llm = llmText.createTextClient({ kind: 'cheap' });
+    const modelId = input.model ?? llm.defaultModel;
 
     const response = await llm.chat({
         model: modelId,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
+        system: buildDreamModeratorSystemPrompt(),
+        messages: [{ role: 'user', content: buildDreamModeratorUserPrompt(input) }],
         maxTokens: 800,
         temperature: 0.6,
     });

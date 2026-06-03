@@ -28,6 +28,12 @@ import { buildSystemPrompt, buildUserPrompt, type SagaSnapshot } from './prompt.
 import { parseDirectorResponse } from './parse.js';
 import { buildDispatchTransaction } from './dispatch.js';
 
+export {
+    buildSystemPrompt as buildDirectorSystemPrompt,
+    buildUserPrompt as buildDirectorUserPrompt,
+    type SagaSnapshot,
+} from './prompt.js';
+
 export interface RunDirectorInput {
     sagaId: string;
     /** Free-form admin intent, e.g. "想看感情戲". */

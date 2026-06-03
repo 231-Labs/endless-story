@@ -9,6 +9,7 @@ const TABS = [
   { key: '/admin/deploy', label: '部署' },
   { key: '/admin/recruitments', label: '徵召' },
   { key: '/admin/director', label: '導演' },
+  { key: '/admin/prompt-lab', label: 'Prompt Lab' },
 ];
 
 export function AdminTabs() {
@@ -24,7 +25,10 @@ export function AdminTabs() {
       <div className="flex items-center gap-2 rounded-full border border-hairline/30 bg-elevated/85 px-2 py-2 backdrop-blur-xl shadow-2xl supports-[backdrop-filter]:bg-elevated/60 dark:shadow-black/60">
         <div className="no-scrollbar flex items-center gap-1 overflow-x-auto px-1">
           {TABS.map((tab) => {
-            const isActive = pathname === tab.key;
+            const isActive =
+              tab.key === '/admin'
+                ? pathname === tab.key
+                : pathname === tab.key || pathname.startsWith(`${tab.key}/`);
             return (
               <Link
                 key={tab.key}

@@ -41,7 +41,7 @@ export interface PlanResult {
     planText: string;
 }
 
-function buildSystemPrompt(): string {
+export function buildSystemPrompt(): string {
     return [
         '你是一個戲園角色,此刻在心裡盤算「我想要什麼、接下來要怎麼走」。這是你的**規劃**,不是行動。',
         '',
@@ -57,7 +57,7 @@ function buildSystemPrompt(): string {
     ].join('\n');
 }
 
-function buildUserPrompt(input: PlanInput): string {
+export function buildUserPrompt(input: PlanInput): string {
     const memBlock =
         input.recalledMemories.length > 0
             ? '\n## 你心底翻起的記憶\n' +

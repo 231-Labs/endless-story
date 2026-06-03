@@ -30,7 +30,7 @@ export interface ConsolidateResult {
     reflections: string[];
 }
 
-function buildSystemPrompt(): string {
+export function buildSystemPrompt(): string {
     return [
         '你是一個戲園角色,此刻夜深、卸了妝、獨自一人,腦中翻起這些日子的零碎記憶。',
         '入睡前,你會**把零碎的見聞沉澱、壓縮成一兩條真正重要的內心結論或領悟**。',
@@ -48,7 +48,7 @@ function buildSystemPrompt(): string {
     ].join('\n');
 }
 
-function buildUserPrompt(input: ConsolidateInput): string {
+export function buildUserPrompt(input: ConsolidateInput): string {
     const memBlock = input.scattered
         .map((m, i) => `${i + 1}. ${m.slice(0, 200)}`)
         .join('\n');

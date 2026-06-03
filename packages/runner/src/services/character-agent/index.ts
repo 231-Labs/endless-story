@@ -19,15 +19,31 @@ import {
 } from './prompt.js';
 
 export type { HandCard, DecideInput } from './prompt.js';
+export {
+    buildSystemPrompt as buildActSystemPrompt,
+    buildUserPrompt as buildActUserPrompt,
+} from './prompt.js';
 export { updatePlan, formatPlanText } from './plan.js';
 export type { PlanInput, PlanResult } from './plan.js';
+export {
+    buildSystemPrompt as buildPlanSystemPrompt,
+    buildUserPrompt as buildPlanUserPrompt,
+} from './plan.js';
 export { decideMove } from './move.js';
 export type { MoveDecideInput, MoveDecideResult, MoveSceneOption } from './move.js';
+export {
+    buildSystemPrompt as buildMoveSystemPrompt,
+    buildUserPrompt as buildMoveUserPrompt,
+} from './move.js';
 export { decideSocialAction } from './social.js';
 export type {
     SocialActionInput,
     SocialActionResult,
     SocialSceneMate,
+} from './social.js';
+export {
+    buildSystemPrompt as buildSocialSystemPrompt,
+    buildUserPrompt as buildSocialUserPrompt,
 } from './social.js';
 
 export interface DecideResult {

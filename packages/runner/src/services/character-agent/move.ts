@@ -48,7 +48,7 @@ export interface MoveDecideResult {
     reason?: string;
 }
 
-function buildSystemPrompt(): string {
+export function buildSystemPrompt(): string {
     return [
         '你是一個戲園角色,此刻不在戲中,可以選擇**留在原地**或**走到另一個場景**。',
         '',
@@ -64,7 +64,7 @@ function buildSystemPrompt(): string {
     ].join('\n');
 }
 
-function buildUserPrompt(input: MoveDecideInput): string {
+export function buildUserPrompt(input: MoveDecideInput): string {
     const opts = input.options
         .map((o) => {
             const present = o.presentCharacters.length > 0

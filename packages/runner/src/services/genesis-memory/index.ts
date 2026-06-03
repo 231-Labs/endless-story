@@ -19,7 +19,12 @@ import { text as llmText } from '@endless-story/llm';
 import { resolveNetwork } from '../../infra/network.js';
 import { buildSystemPrompt, buildUserPrompt, type GenesisRosterEntry } from './prompt.js';
 
-export type { GenesisRosterEntry } from './prompt.js';
+export {
+    buildSystemPrompt as buildGenesisSystemPrompt,
+    buildUserPrompt as buildGenesisUserPrompt,
+    type GenesisMemoryInput,
+    type GenesisRosterEntry,
+} from './prompt.js';
 
 export interface GenesisRelationshipMemory {
     otherId: string;

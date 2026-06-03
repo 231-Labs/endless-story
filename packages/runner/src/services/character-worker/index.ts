@@ -33,6 +33,13 @@ import {
     type CharacterSnapshot,
 } from './prompt.js';
 
+export {
+    buildSystemPrompt as buildPovSystemPrompt,
+    buildUserPrompt as buildPovUserPrompt,
+    type CharacterSnapshot,
+    type PovPromptInput,
+} from './prompt.js';
+
 export interface RunCharacterWorkerInput {
     /** Character to write POV for. */
     characterId: string;
@@ -222,7 +229,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
     };
 }
 
-function buildRevisionSystemPrompt(): string {
+export function buildRevisionSystemPrompt(): string {
     return [
         '你是一位嚴格但低調的小說編修，任務是把一段角色 POV 章回改回設定可支持的版本。',
         '只做必要刪改：保留人物、場景、關係壓力、事件方向與第一人稱視角。',
@@ -232,7 +239,7 @@ function buildRevisionSystemPrompt(): string {
     ].join('\n');
 }
 
-function buildRevisionUserPrompt(chapter: string, motifs: string[]): string {
+export function buildRevisionUserPrompt(chapter: string, motifs: string[]): string {
     return [
         '請改寫下面章回，讓它像同一場戲的更克制版本。',
         '要求：不改事件結果；不補新身世；不加入新災禍；不要寫成心得或摘要；只輸出正文。',

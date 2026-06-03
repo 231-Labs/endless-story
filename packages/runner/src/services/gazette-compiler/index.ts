@@ -38,6 +38,14 @@ import {
     type GazetteSnapshot,
 } from './prompt.js';
 
+export {
+    buildSystemPrompt as buildGazetteSystemPrompt,
+    buildUserPrompt as buildGazetteUserPrompt,
+    type GazetteChapter,
+    type GazetteEvent,
+    type GazetteSnapshot,
+} from './prompt.js';
+
 export interface CompileGazetteInput {
     sagaId: string;
     /** Narrative day boundary. If omitted, derived from saga world tick

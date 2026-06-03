@@ -22,6 +22,13 @@ import { createHash } from 'node:crypto';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { moderateDream, type ModerateDreamResult } from './moderator.js';
 
+export {
+    buildDreamModeratorSystemPrompt,
+    buildDreamModeratorUserPrompt,
+    type ModerateDreamInput,
+    type ModerateDreamResult,
+} from './moderator.js';
+
 export interface PrepareDreamInput {
     rawText: string;
     /** Character context for the moderator prompt voice. */

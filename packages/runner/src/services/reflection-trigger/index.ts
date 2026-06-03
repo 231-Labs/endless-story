@@ -37,6 +37,16 @@ import {
 
 export { consolidateMemories } from './consolidate.js';
 export type { ConsolidateInput, ConsolidateResult } from './consolidate.js';
+export {
+    buildSystemPrompt as buildConsolidateSystemPrompt,
+    buildUserPrompt as buildConsolidateUserPrompt,
+} from './consolidate.js';
+export {
+    buildSystemPrompt as buildReflectionSystemPrompt,
+    buildUserPrompt as buildReflectionUserPrompt,
+    type CharacterSnapshot as ReflectionCharacterSnapshot,
+    type ReflectionPromptInput,
+} from './prompt.js';
 
 export interface RunReflectionInput {
     characterId: string;

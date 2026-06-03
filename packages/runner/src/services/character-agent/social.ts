@@ -36,7 +36,7 @@ export interface SocialActionResult {
     reason?: string;
 }
 
-function buildSystemPrompt(): string {
+export function buildSystemPrompt(): string {
     return [
         '你是一個戲園角色,此刻不在公開事件裡,但與旁人在同一個場景。',
         '你可以做一個很小的社交動作: observe(觀察)、talk(搭一句話)、idle(暫且不動)。',
@@ -54,7 +54,7 @@ function buildSystemPrompt(): string {
     ].join('\n');
 }
 
-function buildUserPrompt(input: SocialActionInput): string {
+export function buildUserPrompt(input: SocialActionInput): string {
     const others = input.othersInScene.length > 0
         ? input.othersInScene
               .map((p) => `- id=${p.id} 「${p.name}」${p.role && p.role !== '—' ? `（${p.role}）` : ''}`)
