@@ -33,3 +33,10 @@ export {
   type CharacterForPortrait,
   type PortraitCurationOptions,
 } from './portrait.js';
+
+export {
+  buildPersonaPrompt,
+  parsePersonaResponse,
+  type BuildPersonaPromptOptions,
+  type DistilledPersona,
+} from './persona.js';

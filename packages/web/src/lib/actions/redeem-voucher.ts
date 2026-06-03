@@ -20,6 +20,7 @@ import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/pro
 import { getAdminContext } from '../chain/admin-signer.js';
 import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
+import { generatePersonaAction } from './generate-persona.js';
 
 export interface RedeemVoucherInput {
     voucherId: string;
@@ -240,6 +241,26 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
                 );
             } catch (err) {
                 console.warn(`[redeem-voucher] additional views failed for ${charId}:`, err);
+            }
+        });
+    }
+
+    // §persona (本色) — distil 軸/腔/界 from the on-chain profile and anchor it on the content
+    // road (Walrus blob + commitment, first_run). Runs AFTER the response so it never blocks the
+    // mint; failure is swallowed (the Character is already on chain). Needs gas on the admin wallet.
+    {
+        const charId = characterId;
+        after(async () => {
+            try {
+                const r = await generatePersonaAction(charId);
+                console.log(
+                    `[redeem-voucher] persona for ${charId}: ok=${r.ok}` +
+                        (r.version ? ` v${r.version}` : '') +
+                        (r.skipped ? ` skipped=${r.skipped}` : '') +
+                        (r.error ? ` error=${r.error}` : ''),
+                );
+            } catch (err) {
+                console.warn(`[redeem-voucher] persona generation failed for ${charId}:`, err);
             }
         });
     }

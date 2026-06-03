@@ -1,25 +1,20 @@
 import type { CharacterPersona } from '@endless-story/shared';
 import { getPersonaByCharacter } from '@/mocks/personas';
 import { USE_MOCK } from './config';
-import { httpGet } from './http';
+import { isSuiObjectId } from '@/lib/chain/character-read';
+import { fetchOnChainPersona } from '@/lib/chain/persona-read';
 
 /**
- * Personas API（本色卡 — 半永久人格藍圖）
+ * Personas API（本色卡 — 半永久人格藍圖）.
  *
- * 後端對應 endpoints：
- *   GET  /characters/{id}/persona        → CharacterPersona | 404
- *
- * 後端應該：
- *   - persona 由 saga server 在角色首次成卷時 LLM 生成
- *   - 累積 reflections / saga arc 結束時偶發重蒸（version++）
- *   - lastRegenChapterId 紀錄觸發此版的章回
+ * Chain-first: a real on-chain character (Sui object id) reads its persona from the content road
+ * (Walrus blob + `commitment::commit`, see `lib/chain/persona-read`). A real character with no
+ * persona anchored yet → null (SoulSection hides). Demo slugs fall back to the static mock.
+ * Persona is generated + anchored at mint (`generate-persona` from redeemVoucher's `after()`).
  */
-
 export async function getPersona(characterId: string): Promise<CharacterPersona | null> {
-  if (USE_MOCK) return getPersonaByCharacter(characterId) ?? null;
-  try {
-    return await httpGet<CharacterPersona>(`/characters/${characterId}/persona`);
-  } catch {
-    return null;
+  if (isSuiObjectId(characterId)) {
+    return (await fetchOnChainPersona(characterId)) ?? null;
   }
+  return USE_MOCK ? getPersonaByCharacter(characterId) ?? null : null;
 }
