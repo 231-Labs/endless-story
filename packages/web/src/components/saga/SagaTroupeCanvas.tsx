@@ -547,6 +547,15 @@ function PovChip({
 
 /* ─────────── Focused 底部三欄詳情 ─────────── */
 
+function PanelHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="h-px w-6 bg-cinnabar/40" />
+      <h3 className="font-serif text-lg tracking-wide text-ink">{title}</h3>
+    </div>
+  );
+}
+
 function FocusedSceneDetails({
   scene,
   chaptersById,
@@ -557,70 +566,49 @@ function FocusedSceneDetails({
   /** On-chain BudgetEvents that happened in this scene (newest-first). */
   events?: SceneEventSummary[];
 }) {
-  const pastEvents = scene.pastEvents ?? [];
+  const openEvents = events.filter((e) => e.status === 'open');
+  const resolvedEvents = events.filter((e) => e.status === 'resolved');
+  const hasLive = openEvents.length > 0;
+
   return (
     <div className="animate-fade-in-up mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+      {/* 氣 — scene base tone, heats up while a 戲 is open */}
       <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
-        <div className="flex items-center gap-3">
-          <div className="h-px w-6 bg-cinnabar/40" />
-          <h3 className="font-serif text-lg tracking-wide text-ink">氣</h3>
-        </div>
-        <p className="mt-3 text-xs text-mute">由相關記憶的情感類型蒸出。</p>
+        <PanelHeader title="氣" />
+        <p className="mt-3 text-xs text-mute">場景基調；有戲開鑼時隨之翻湧。</p>
         {scene.heatProfile ? (
-          <ul className="mt-6 space-y-4 text-sm">
-            <HeatRow
-              label="朱熱（內在衝突）"
-              value={scene.heatProfile.cinnabar}
-              color="bg-cinnabar"
-            />
-            <HeatRow
-              label="青觀(旁觀 / 師承)"
-              value={scene.heatProfile.jade}
-              color="bg-jade"
-            />
-            <HeatRow
-              label="灰沉(事務 / 平靜)"
-              value={scene.heatProfile.mute}
-              color="bg-mute"
-            />
-          </ul>
+          <>
+            <ul className="mt-6 space-y-4 text-sm">
+              <HeatRow label="朱熱（內在衝突）" value={scene.heatProfile.cinnabar} color="bg-cinnabar" pulse={hasLive} />
+              <HeatRow label="青觀（旁觀 / 師承）" value={scene.heatProfile.jade} color="bg-jade" />
+              <HeatRow label="灰沉（事務 / 平靜）" value={scene.heatProfile.mute} color="bg-mute" />
+            </ul>
+            {hasLive ? (
+              <p className="mt-6 flex items-center gap-2 rounded-full border border-cinnabar/40 bg-cinnabar/[0.06] px-3 py-1.5 text-2xs tracking-widest text-cinnabar">
+                <span aria-hidden className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inset-0 animate-ping rounded-full bg-cinnabar opacity-75" />
+                  <span className="relative h-1.5 w-1.5 rounded-full bg-cinnabar" />
+                </span>
+                此刻 · 戲正酣，氣場翻湧
+              </p>
+            ) : null}
+          </>
         ) : (
           <p className="mt-6 text-sm italic text-mute">尚未累積。</p>
         )}
       </section>
 
-      <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
-        <div className="flex items-center gap-3">
-          <div className="h-px w-6 bg-cinnabar/40" />
-          <h3 className="font-serif text-lg tracking-wide text-ink">過往</h3>
-        </div>
-        <p className="mt-3 text-xs text-mute">在此處發生過的事件。</p>
-        {events.length > 0 ? (
-          <ol className="mt-6 space-y-4">
-            {events.map((ev) => (
-              <SceneEventRow key={ev.eventId} event={ev} />
-            ))}
-          </ol>
-        ) : pastEvents.length === 0 ? (
-          <p className="mt-6 text-sm italic text-mute">尚無事件紀錄。</p>
-        ) : (
-          <ol className="mt-6 space-y-4">
-            {pastEvents.map((ev) => (
-              <PastEventRow
-                key={ev.chapterId}
-                event={ev}
-                chapter={chaptersById.get(ev.chapterId) ?? null}
-              />
-            ))}
-          </ol>
-        )}
-      </section>
+      {/* 過往 — live events up top, resolved collapsed */}
+      <ScenePastPanel
+        openEvents={openEvents}
+        resolvedEvents={resolvedEvents}
+        pastEvents={scene.pastEvents ?? []}
+        chaptersById={chaptersById}
+      />
 
+      {/* 派生 IP — real footprint, not a dead placeholder */}
       <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
-        <div className="flex items-center gap-3">
-          <div className="h-px w-6 bg-cinnabar/40" />
-          <h3 className="font-serif text-lg tracking-wide text-ink">派生 IP</h3>
-        </div>
+        <PanelHeader title="派生 IP" />
         <p className="mt-3 text-xs text-mute">此處長出的內容資產。</p>
         {scene.derivativeCounts ? (
           <ul className="mt-6 space-y-4 text-sm">
@@ -628,11 +616,91 @@ function FocusedSceneDetails({
             <DerivativeRow label="角色記憶" count={scene.derivativeCounts.memories} suffix="條" />
             <DerivativeRow label="心曲創作" count={scene.derivativeCounts.soulSongs} suffix="曲" />
           </ul>
+        ) : events.length > 0 ? (
+          <div className="mt-6 space-y-4">
+            <DerivativeRow label="上演過的戲" count={events.length} suffix="場" />
+            <p className="text-2xs leading-relaxed tracking-widest text-mute/80">
+              每場戲都會譜成章回、沉澱為角色記憶 —— 派生資產正在累積。
+            </p>
+          </div>
         ) : (
           <p className="mt-6 text-sm italic text-mute">尚未派生。</p>
         )}
       </section>
     </div>
+  );
+}
+
+/** 過往 panel — open events stay expanded; resolved ones collapse behind a toggle. */
+function ScenePastPanel({
+  openEvents,
+  resolvedEvents,
+  pastEvents,
+  chaptersById,
+}: {
+  openEvents: SceneEventSummary[];
+  resolvedEvents: SceneEventSummary[];
+  pastEvents: ScenePastEvent[];
+  chaptersById: Map<string, Chapter>;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const COLLAPSED = 2;
+  const hasChainEvents = openEvents.length > 0 || resolvedEvents.length > 0;
+  const visibleResolved = showAll ? resolvedEvents : resolvedEvents.slice(0, COLLAPSED);
+  const hidden = resolvedEvents.length - visibleResolved.length;
+
+  return (
+    <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
+      <PanelHeader title="過往" />
+      <p className="mt-3 text-xs text-mute">在此處發生過的事件。</p>
+      {hasChainEvents ? (
+        <div className="mt-6 space-y-6">
+          {openEvents.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-2xs tracking-[0.3em] text-cinnabar/80">進行中</p>
+              <ol className="space-y-4">
+                {openEvents.map((ev) => (
+                  <SceneEventRow key={ev.eventId} event={ev} />
+                ))}
+              </ol>
+            </div>
+          ) : null}
+          {resolvedEvents.length > 0 ? (
+            <div className="space-y-3">
+              {openEvents.length > 0 ? (
+                <p className="text-2xs tracking-[0.3em] text-mute/55">已收尾</p>
+              ) : null}
+              <ol className="space-y-4">
+                {visibleResolved.map((ev) => (
+                  <SceneEventRow key={ev.eventId} event={ev} />
+                ))}
+              </ol>
+              {resolvedEvents.length > COLLAPSED ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAll((v) => !v)}
+                  className="text-2xs tracking-widest text-cinnabar/80 transition-colors hover:text-cinnabar"
+                >
+                  {showAll ? '收合' : `展開另 ${hidden} 場已收尾 ▾`}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : pastEvents.length === 0 ? (
+        <p className="mt-6 text-sm italic text-mute">尚無事件紀錄。</p>
+      ) : (
+        <ol className="mt-6 space-y-4">
+          {pastEvents.map((ev) => (
+            <PastEventRow
+              key={ev.chapterId}
+              event={ev}
+              chapter={chaptersById.get(ev.chapterId) ?? null}
+            />
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 
@@ -663,7 +731,17 @@ function SceneEventRow({ event }: { event: SceneEventSummary }) {
   );
 }
 
-function HeatRow({ label, value, color }: { label: string; value: number; color: string }) {
+function HeatRow({
+  label,
+  value,
+  color,
+  pulse = false,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  pulse?: boolean;
+}) {
   const pct = Math.round(value * 100);
   return (
     <li>
@@ -672,7 +750,7 @@ function HeatRow({ label, value, color }: { label: string; value: number; color:
         <span className="font-mono text-xs tabular-nums text-mute">{pct}</span>
       </div>
       <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-hairline/50">
-        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full ${color} ${pulse ? 'animate-pulse' : ''}`} style={{ width: `${pct}%` }} />
       </div>
     </li>
   );
