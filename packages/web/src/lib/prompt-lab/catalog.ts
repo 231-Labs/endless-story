@@ -2,6 +2,7 @@ export type PromptLabCallId =
     | 'recruit.moderation'
     | 'recruit.character'
     | 'recruit.portraitCuration'
+    | 'persona.distill'
     | 'director.intent'
     | 'tick.plan'
     | 'tick.move'
@@ -84,6 +85,30 @@ export const PROMPT_LAB_CALLS: PromptLabCallDefinition[] = [
                 { key: 'acuity', label: '機敏', value: 84 },
                 { key: 'disposition', label: '心性', value: 56 },
             ],
+        },
+    },
+    {
+        id: 'persona.distill',
+        phase: 'CHARACTER',
+        title: '本色蒸餾',
+        shortTitle: 'Persona',
+        kind: 'primary',
+        summary: '把角色公開設定蒸成「卸妝後」的軸 / 腔 / 界（本色卡）。mint 時 first_run 生成，上 Walrus + commitment。',
+        outputShape: '{"axes":["…"],"mannerisms":["…"],"boundaries":["…"]}',
+        defaultTemperature: 0.85,
+        existingTool: {
+            label: '角色頁 本色',
+            href: '/dossier',
+            note: 'mint 時 redeemVoucher.after() 生成並 anchor；Lab 用 fixture 測蒸餾品質。',
+        },
+        defaultInput: {
+            name: '柳生春',
+            role: '小生',
+            gender: 'female',
+            ageYears: 22,
+            physicalFacts: '廿二歲，短髮束於腦後，眉如墨畫，肩線清瘦；右耳後一痣。',
+            description:
+                '外地來的女小生，台上英氣，台下怕冷，總把一枚舊銅錢縫在袖口；嘴上不肯服輸，卻不願說自己為何離開舊班。',
         },
     },
     {

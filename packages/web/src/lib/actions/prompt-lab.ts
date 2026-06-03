@@ -4,7 +4,9 @@ import { createTextClient, type ChatMessage, type ChatResponse } from '@endless-
 import {
     buildCharacterGenPrompt,
     buildModerationPrompt,
+    buildPersonaPrompt,
     buildPortraitCurationPrompt,
+    parsePersonaResponse,
     parseCharacterCandidate,
     parseModerationResult,
     parsePortraitPrompt,
@@ -364,6 +366,17 @@ function buildPrompt(
                 temperature,
             );
             return prosePrompt(prompt, 'reflection prose stats');
+        }
+        case 'persona.distill': {
+            const prompt = fromBuildPromptResult(
+                buildPersonaPrompt(typed<Parameters<typeof buildPersonaPrompt>[0]>(obj)),
+                'primary',
+                temperature,
+            );
+            return {
+                prompt,
+                parseOutput: (raw) => ({ parsed: parsePersonaResponse(raw), note: 'persona 軸/腔/界 parser' }),
+            };
         }
         default:
             return assertNever(callId);
