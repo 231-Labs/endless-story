@@ -257,7 +257,13 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
             );
             const res = await signAndAnchor({
                 sagaId: opts.sagaId,
-                subjectId: opts.sagaId, // saga-subject: this is a world-level affect snapshot
+                // World-level affect snapshot. Subject = worldId (NOT sagaId) so these
+                // machine-readable JSON beats never collide with the saga's prose 公報
+                // commitments (subject = sagaId) and never surface in the gazette feed.
+                // The saga is still recorded via the commitment's saga_id field + the beat
+                // JSON. Fall back to sagaId only if worldId is unset (gazette-read also
+                // content-filters drama beats as a safety net for older saga-subject ones).
+                subjectId: ENDLESS_STORY_DEPLOYMENT.worldId || opts.sagaId,
                 content: encodeBeat(beat),
                 signer: opts.signer,
                 contentType: 'application/json',
