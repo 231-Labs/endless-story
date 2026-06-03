@@ -83,6 +83,28 @@ export interface CompileGazetteResult {
     errors?: string[];
 }
 
+/**
+ * Rewrite the gazette's POV "讀全文" links from the raw Walrus blob
+ * (`/api/blob/<blobId>`) to the rendered, access-gated dossier 章回 tab
+ * (`/dossier?id=<characterId>&tab=chapters`). Two reasons:
+ *   1. the raw blob link bypassed the owner+subscriber gate (公報 is public,
+ *      POV bodies are not) — a privacy leak;
+ *   2. it dumped raw markdown instead of our rendered chapter view.
+ * Deterministic (not LLM-trusted): we map each chapter's blobId→characterId.
+ */
+function rewriteChapterLinks(
+    markdown: string,
+    chapters: ReadonlyArray<{ characterId: string; blobId: string }>,
+): string {
+    let out = markdown;
+    for (const c of chapters) {
+        if (!c.blobId || !c.characterId) continue;
+        const dossier = `/dossier?id=${c.characterId}&tab=chapters`;
+        out = out.split(`/api/blob/${c.blobId}`).join(dossier);
+    }
+    return out;
+}
+
 export async function runOnce(input: CompileGazetteInput): Promise<CompileGazetteResult> {
     const client = makeSuiClient({ network: resolveNetwork() });
     const snapshot = await fetchGazetteSnapshot(client, input);
@@ -111,7 +133,7 @@ export async function runOnce(input: CompileGazetteInput): Promise<CompileGazett
         maxTokens: 1500,
         temperature: 0.5,
     });
-    const markdown = response.text.trim();
+    const markdown = rewriteChapterLinks(response.text.trim(), snapshot.chapters);
 
     if (input.dryRun || !input.signer) {
         return {
