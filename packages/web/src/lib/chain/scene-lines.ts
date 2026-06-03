@@ -1,5 +1,5 @@
 /**
- * Scene lines — ephemeral "what was just said/done here" per scene (手卷 Step 3).
+ * Scene lines — "what was just said/done here" per scene (手卷 Step 3).
  *
  * The character agent generates a first-person line every time it acts
  * (decide intent: 「我退後半步，手按舊傷」) or moves (reason: 「我得去帳房找孟老闆」).
@@ -8,23 +8,26 @@
  * line per scene so the live handscroll can float it as a ghost quote
  * instead of the bare card label.
  *
- * Deliberately in-memory + ephemeral: ghost quotes are transient "now"
- * flavour, not provenance — the durable record is the POV chapter + gazette
- * (those ARE anchored). It resets on restart and isn't shared across instances,
- * which is fine for a transient UI hint. TTL keeps stale lines from lingering.
+ * **File-backed (single source of truth on disk).** It must be shared by two
+ * *different processes / module graphs*:
+ *   - the WRITER — the tick loop, reached via the `/api/tick` route handler
+ *     (or run headless from a script);
+ *   - the READER — `getSagaLiveSnapshot`, a server action behind the handscroll.
+ * Next compiles route handlers and server actions into separate bundles (and
+ * HMR re-instantiates modules), so a module-level `Map` gave them *different*
+ * maps and the rich line never reached the UI (it fell back to the card label).
+ * A small JSON file fixes that AND survives a dev-server restart, so the line
+ * doesn't vanish every time the process recycles. TTL still ages lines out so a
+ * quiet scene goes silent. Durable record is still the POV chapter + gazette
+ * (those are anchored on chain); this file is just the transient "now" texture.
  *
- * **Process-global on purpose.** The writer (tick loop, reached via the
- * `/api/tick` route handler) and the reader (`getSagaLiveSnapshot` server
- * action) live in DIFFERENT module bundles under Next — and HMR re-instantiates
- * modules in dev — so a plain `const LINES = new Map()` gives them two separate
- * maps and the rich first-person line never reaches the handscroll (it falls
- * back to the bare card label). Pinning the map to `globalThis` makes the whole
- * process share ONE map, so the line the tick records is the line the snapshot
- * reads. (Single-process only; multi-instance / serverless still needs an
- * external store — Redis/KV keyed by sceneId — see the deploy note in the PR.)
+ * Single machine only — for multi-instance / serverless, swap `readStore`/
+ * `writeStore` for Redis/KV keyed by sceneId (the I/O is isolated here).
  *
- * Server-only (written by the tick loop, read by getSagaLiveSnapshot).
+ * Server-only (Node runtime; uses fs).
  */
+
+import { readFileSync, writeFileSync } from 'node:fs';
 
 export type SceneLineKind = 'act' | 'move' | 'social';
 
@@ -35,14 +38,30 @@ interface SceneLine {
     ts: number;
 }
 
-// Process-global singleton (see header): survive Next's separate route/action
-// bundles + dev HMR so writer and reader share one map.
-const globalForLines = globalThis as unknown as {
-    __endlessSceneLines?: Map<string, SceneLine>;
-};
-const LINES: Map<string, SceneLine> =
-    globalForLines.__endlessSceneLines ?? (globalForLines.__endlessSceneLines = new Map());
+// Fixed, TMPDIR-independent path so every process agrees (writer + reader may
+// run under different TMPDIR values — e.g. a headless tick script vs the dev
+// server — and os.tmpdir() would then resolve to different files). Override via
+// SCENE_LINES_FILE on non-POSIX hosts.
+const STORE_FILE = process.env.SCENE_LINES_FILE ?? '/tmp/endless-story-scene-lines.json';
 const TTL_MS = 15 * 60 * 1000; // 15 min — a quiet scene goes silent
+
+function readStore(): Record<string, SceneLine> {
+    try {
+        const raw = readFileSync(STORE_FILE, 'utf8');
+        const parsed = JSON.parse(raw) as Record<string, SceneLine>;
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+        return {}; // missing / unreadable / corrupt → empty
+    }
+}
+
+function writeStore(store: Record<string, SceneLine>): void {
+    try {
+        writeFileSync(STORE_FILE, JSON.stringify(store));
+    } catch {
+        /* disk full / read-only fs → drop the line; it's only transient texture */
+    }
+}
 
 /** Record the latest line for a scene (newest wins). No-op on empty input. */
 export function recordSceneLine(
@@ -52,17 +71,21 @@ export function recordSceneLine(
     kind: SceneLineKind,
 ): void {
     if (!sceneId || !characterId || !text?.trim()) return;
-    LINES.set(sceneId, { characterId, text: text.trim(), kind, ts: Date.now() });
+    const store = readStore();
+    store[sceneId] = { characterId, text: text.trim(), kind, ts: Date.now() };
+    writeStore(store);
 }
 
 /** Latest non-expired line for a scene, or null. Expired entries are pruned. */
 export function getLatestSceneLine(
     sceneId: string,
 ): { characterId: string; text: string } | null {
-    const l = LINES.get(sceneId);
+    const store = readStore();
+    const l = store[sceneId];
     if (!l) return null;
     if (Date.now() - l.ts > TTL_MS) {
-        LINES.delete(sceneId);
+        delete store[sceneId];
+        writeStore(store);
         return null;
     }
     return { characterId: l.characterId, text: l.text };
