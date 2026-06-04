@@ -1,0 +1,17 @@
+{
+  "clips": [
+    {
+      "id": "demo_trailer_gu_vs_liu",
+      "sagaId": "spring-snow",
+      "chapterId": "chapter_or_commitment_id",
+      "day": 1,
+      "title": "顧柳爭位",
+      "caption": "同一場戲，不同人眼中的搭檔位。",
+      "videoUrl": "/demo/clips/gu-liu-trailer.mp4",
+      "thumbnailUrl": "/demo/clips/gu-liu-trailer.jpg",
+      "durationSeconds": 15,
+      "aspect": "16/9",
+      "createdAt": "2026-06-03T00:00:00Z"
+    }
+  ]
+}

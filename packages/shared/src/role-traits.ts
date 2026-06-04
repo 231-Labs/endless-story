@@ -48,6 +48,20 @@ const ROLE_TRAITS: RoleTrait[] = [
     },
 ];
 
+const PUBLIC_ROLE_PATTERNS: Array<{ role: string; match: string[] }> = [
+    { role: '武小生', match: ['武小生'] },
+    { role: '文小生', match: ['文小生'] },
+    { role: '小生', match: ['小生'] },
+    { role: '武旦', match: ['武旦', '刀馬旦'] },
+    { role: '花旦', match: ['花旦'] },
+    { role: '青衣', match: ['青衣'] },
+    { role: '旦', match: ['坤伶', '名伶', '旦角'] },
+    { role: '老生', match: ['老生', '鬚生'] },
+    { role: '老旦', match: ['老旦'] },
+    { role: '樂師', match: ['琴師', '樂師', '文武場'] },
+    { role: '班主', match: ['班主'] },
+];
+
 /**
  * Returns a one-line voice hint for a role, or a generic instruction when
  * the role is unknown / placeholder ('—'). Always returns something the
@@ -63,4 +77,19 @@ export function roleHint(role: string | undefined): string {
     }
     // Unknown but non-empty role: tell the LLM to commit to it hard.
     return `你的行當是「${r}」。讓這個行當徹底決定你的聲口、用詞、關注的事與慣用意象，每一句都要像「${r}」的人，而不是泛泛的戲子。`;
+}
+
+/**
+ * Best-effort extraction from public chain prose. This is only a fallback
+ * after explicit `role:*` tags / recruitment specialty; it rescues older demo
+ * characters whose profile description already says "花旦" or "小生" but were
+ * minted before tags were applied.
+ */
+export function inferRoleFromText(text: string | undefined): string | undefined {
+    const source = (text ?? '').trim();
+    if (!source) return undefined;
+    for (const p of PUBLIC_ROLE_PATTERNS) {
+        if (p.match.some((m) => source.includes(m))) return p.role;
+    }
+    return undefined;
 }

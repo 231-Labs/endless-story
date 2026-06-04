@@ -16,6 +16,7 @@ import type { Saga } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 import { fetchOnChainWorldTime } from './world-read.js';
+import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -32,6 +33,8 @@ interface ChainSagaJson {
     anchor_scene_ids?: string[];
     character_count?: number | string;
     departure_policy?: string;
+    nature_prompt?: string;
+    rhythm_hints?: string;
     /** Balance<CURRENCY>.value — raw smallest unit. */
     treasury?: number | string;
     revenue_config?: {
@@ -74,6 +77,14 @@ export function resolveSagaIdFromSlug(slug: string | null | undefined): string |
 export async function fetchOnChainSaga(idOrSlug: string): Promise<Saga | null> {
     const sagaId = resolveSagaIdFromSlug(idOrSlug);
     if (!sagaId) return null;
+    return cachedPublicRead(
+        `saga:${resolveNetwork()}:${sagaId}`,
+        publicChainReadTtl(15_000),
+        () => fetchOnChainSagaFresh(sagaId),
+    );
+}
+
+async function fetchOnChainSagaFresh(sagaId: string): Promise<Saga | null> {
     const client = makeSuiClient({ network: resolveNetwork() });
     let res;
     try {
@@ -92,6 +103,17 @@ export async function fetchOnChainSaga(idOrSlug: string): Promise<Saga | null> {
     const worldTime = json.world_id
         ? (await fetchOnChainWorldTime(json.world_id)) ?? undefined
         : undefined;
+    // Saga soul (F): departure_policy + nature_prompt + rhythm_hints are all
+    // on chain now. Build sagaPrompts when any is non-empty so SagaCharterPanel
+    // shows real values and generation can read them. departurePolicy is the
+    // type's required field → default '' if only nature/rhythm are set.
+    const naturePrompt = json.nature_prompt?.trim() || undefined;
+    const rhythmHints = json.rhythm_hints?.trim() || undefined;
+    const departurePolicy = json.departure_policy?.trim() || undefined;
+    const sagaPrompts =
+        departurePolicy || naturePrompt || rhythmHints
+            ? { departurePolicy: departurePolicy ?? '', naturePrompt, rhythmHints }
+            : undefined;
     return {
         id: sagaId,
         name: json.name ?? '無名戲班',
@@ -104,13 +126,7 @@ export async function fetchOnChainSaga(idOrSlug: string): Promise<Saga | null> {
         castIds: [],
         coveredLocationIds: json.covered_location_ids ?? [],
         worldTime,
-        sagaPrompts: json.departure_policy
-            ? {
-                  // naturePrompt / rhythmHints are storyteller LLM domain
-                  // (not on chain) — leave undefined; panel skips them.
-                  departurePolicy: json.departure_policy,
-              }
-            : undefined,
+        sagaPrompts,
         revenueConfig: rc
             ? {
                   ownerBps: Number(rc.owner_bps ?? 0),
@@ -139,6 +155,14 @@ export async function fetchOnChainSaga(idOrSlug: string): Promise<Saga | null> {
 export async function fetchSagaAnchorSceneIds(idOrSlug: string): Promise<string[]> {
     const sagaId = resolveSagaIdFromSlug(idOrSlug);
     if (!sagaId) return [];
+    return cachedPublicRead(
+        `saga-scenes:${resolveNetwork()}:${sagaId}`,
+        publicChainReadTtl(15_000),
+        () => fetchSagaAnchorSceneIdsFresh(sagaId),
+    );
+}
+
+async function fetchSagaAnchorSceneIdsFresh(sagaId: string): Promise<string[]> {
     const client = makeSuiClient({ network: resolveNetwork() });
     try {
         const res = await read.saga.getSaga(client, sagaId);

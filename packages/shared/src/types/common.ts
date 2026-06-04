@@ -13,6 +13,8 @@ export type CharacterRole =
   | '學徒'
   | '看客';
 
+export type CharacterMembership = 'internal' | 'external';
+
 export type Visibility = 'public_chapter' | 'saga_internal' | 'private';
 
 export interface BlobRef {

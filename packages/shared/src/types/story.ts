@@ -50,6 +50,11 @@ export interface StorySaga {
   storyteller_bps: number;
   treasury_bps: number;
   departure_policy: string;
+  /** 事件氣質 — per-saga narrative DNA (F). Layered onto the genre baseline
+   *  so each戲班 reads in a distinct voice. Optional; '' when unset. */
+  nature_prompt?: string;
+  /** 自然節律 — dawn warm-up / dusk curtain cues (F). Optional; '' when unset. */
+  rhythm_hints?: string;
 }
 
 export interface StoryScene {

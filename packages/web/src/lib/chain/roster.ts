@@ -7,6 +7,7 @@
  */
 
 import type { Character, Scene } from '@endless-story/shared';
+import { inferRoleFromText } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { charactersApi } from '@/lib/api/index';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
@@ -53,7 +54,7 @@ export async function buildSagaRoster(
 }
 
 export async function resolveRosterRoles(
-    characters: Array<Pick<Character, 'id' | 'role' | 'publicTags'>>,
+    characters: Array<Pick<Character, 'id' | 'role' | 'publicTags' | 'description'>>,
 ): Promise<Map<string, string>> {
     const out = new Map<string, string>();
     const needsRecruitment = characters.filter((c) => !roleFromPublicTags(c.publicTags));
@@ -82,6 +83,11 @@ export async function resolveRosterRoles(
             : undefined;
         if (recruitmentRole) {
             out.set(c.id, recruitmentRole);
+            continue;
+        }
+        const publicProfileRole = inferRoleFromText(c.description);
+        if (publicProfileRole) {
+            out.set(c.id, publicProfileRole);
             continue;
         }
         // In mock mode, c.role is authored fixture data. On chain, an untagged

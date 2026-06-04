@@ -18,6 +18,7 @@ import type { Scene, SceneHeatProfile, ScenePrivacyLevel } from '@endless-story/
 import { makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 import { fetchSagaAnchorSceneIds } from './saga-read.js';
+import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
 
 interface ChainSceneJson {
     info?: { name?: string; description?: string; metadata_uri?: string };
@@ -50,6 +51,14 @@ interface ChainSceneJson {
  * shared) get silently dropped at the multi-get layer.
  */
 export async function fetchOnChainScenesForSaga(idOrSlug: string): Promise<Scene[]> {
+    return cachedPublicRead(
+        `scenes-for-saga:${resolveNetwork()}:${idOrSlug}`,
+        publicChainReadTtl(15_000),
+        () => fetchOnChainScenesForSagaFresh(idOrSlug),
+    );
+}
+
+async function fetchOnChainScenesForSagaFresh(idOrSlug: string): Promise<Scene[]> {
     const sceneIds = await fetchSagaAnchorSceneIds(idOrSlug);
     if (sceneIds.length === 0) return [];
 
@@ -78,6 +87,14 @@ export async function fetchOnChainScenesForSaga(idOrSlug: string): Promise<Scene
  */
 export async function fetchOnChainScene(id: string): Promise<Scene | null> {
     if (!/^0x[0-9a-fA-F]{64}$/.test(id)) return null;
+    return cachedPublicRead(
+        `scene:${resolveNetwork()}:${id}`,
+        publicChainReadTtl(15_000),
+        () => fetchOnChainSceneFresh(id),
+    );
+}
+
+async function fetchOnChainSceneFresh(id: string): Promise<Scene | null> {
     const client = makeSuiClient({ network: resolveNetwork() });
     try {
         const res = await read.scene.getScene(client, id);

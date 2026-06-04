@@ -8,16 +8,12 @@
  * legal and needs no contract change. Read = latest persona commitment for that subject →
  * decode the Walrus blob id → fetch the public blob → parse the persona JSON.
  */
-import { createHash } from 'node:crypto';
 import type { CharacterPersona } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
-
-/** Deterministic per-character persona subject address (own commitment namespace). */
-export function personaSubject(characterId: string): string {
-  return '0x' + createHash('sha256').update(characterId.toLowerCase() + ':persona').digest('hex');
-}
+export { personaSubject } from './persona-subject.js';
+import { personaSubject } from './persona-subject.js';
 
 function walrusNetwork(): 'testnet' | 'mainnet' {
   return resolveNetwork() === 'mainnet' ? 'mainnet' : 'testnet';

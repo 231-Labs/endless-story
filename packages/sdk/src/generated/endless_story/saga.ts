@@ -12,7 +12,8 @@
  * - economics (`RevenueConfig` owner/storyteller/treasury bps + `treasury`
  *   Balance<CURRENCY>)
  * - coverage (`covered_location_ids` + `anchor_scene_ids`)
- * - LLM hints (`departure_policy` free-form text — not enforced on-chain)
+ * - LLM hints (`departure_policy` / `nature_prompt` / `rhythm_hints` free-form
+ *   text — not enforced on-chain)
  * - per-saga DOF tables: card-weight rules (R3.2) and saga skill defs (R3.3)
  * 
  * **Caps:**
@@ -91,6 +92,14 @@ export const Saga = new MoveStruct({ name: `${$moduleName}::Saga`, fields: {
          * enforce it on `transfer_character_control`; enforcement is social/reputation.
          */
         departure_policy: bcs.string(),
+        /**
+         * Per-saga narrative DNA (F — saga soul). Free-form text the character/storyteller
+         * LLM layers on top of the genre baseline so different sagas read in distinct
+         * voices. Not enforced on-chain. `nature_prompt` = 事件氣質 (conflict type /
+         * narrative rhythm); `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues).
+         */
+        nature_prompt: bcs.string(),
+        rhythm_hints: bcs.string(),
         created_at_ms: bcs.u64()
     } });
 export const SagaCreated = new MoveStruct({ name: `${$moduleName}::SagaCreated`, fields: {
@@ -115,6 +124,9 @@ export const LocationCovered = new MoveStruct({ name: `${$moduleName}::LocationC
         location_id: bcs.Address
     } });
 export const DeparturePolicyUpdated = new MoveStruct({ name: `${$moduleName}::DeparturePolicyUpdated`, fields: {
+        saga_id: bcs.Address
+    } });
+export const SagaSoulUpdated = new MoveStruct({ name: `${$moduleName}::SagaSoulUpdated`, fields: {
         saga_id: bcs.Address
     } });
 export const CardWeightingEnabled = new MoveStruct({ name: `${$moduleName}::CardWeightingEnabled`, fields: {
@@ -163,6 +175,8 @@ export interface CreateSagaArguments {
     treasuryBps: RawTransactionArgument<number>;
     coveredLocationIds: RawTransactionArgument<Array<string>>;
     departurePolicy: RawTransactionArgument<string>;
+    naturePrompt: RawTransactionArgument<string>;
+    rhythmHints: RawTransactionArgument<string>;
 }
 export interface CreateSagaOptions {
     package?: string;
@@ -176,7 +190,9 @@ export interface CreateSagaOptions {
         storytellerBps: RawTransactionArgument<number>,
         treasuryBps: RawTransactionArgument<number>,
         coveredLocationIds: RawTransactionArgument<Array<string>>,
-        departurePolicy: RawTransactionArgument<string>
+        departurePolicy: RawTransactionArgument<string>,
+        naturePrompt: RawTransactionArgument<string>,
+        rhythmHints: RawTransactionArgument<string>
     ];
 }
 export function createSaga(options: CreateSagaOptions) {
@@ -192,9 +208,11 @@ export function createSaga(options: CreateSagaOptions) {
         'u16',
         'vector<0x2::object::ID>',
         '0x1::string::String',
+        '0x1::string::String',
+        '0x1::string::String',
         '0x2::clock::Clock'
     ] satisfies (string | null)[];
-    const parameterNames = ["world", "kind", "name", "description", "metadataUri", "ownerBps", "storytellerBps", "treasuryBps", "coveredLocationIds", "departurePolicy"];
+    const parameterNames = ["world", "kind", "name", "description", "metadataUri", "ownerBps", "storytellerBps", "treasuryBps", "coveredLocationIds", "departurePolicy", "naturePrompt", "rhythmHints"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'saga',
@@ -381,6 +399,88 @@ export function departurePolicy(options: DeparturePolicyOptions) {
         package: packageAddress,
         module: 'saga',
         function: 'departure_policy',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface SetSagaSoulArguments {
+    cap: RawTransactionArgument<string>;
+    saga: RawTransactionArgument<string>;
+    naturePrompt: RawTransactionArgument<string>;
+    rhythmHints: RawTransactionArgument<string>;
+}
+export interface SetSagaSoulOptions {
+    package?: string;
+    arguments: SetSagaSoulArguments | [
+        cap: RawTransactionArgument<string>,
+        saga: RawTransactionArgument<string>,
+        naturePrompt: RawTransactionArgument<string>,
+        rhythmHints: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Replace this saga's narrative-DNA hints (F — saga soul). Like
+ * `departure_policy`, these are natural-language guidance for the LLM, not
+ * enforced by Move. The soul is read as a unit, so both are set together — pass
+ * the current value to leave one unchanged. Updating mid-saga is allowed (run
+ * different tonal eras).
+ */
+export function setSagaSoul(options: SetSagaSoulOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        '0x1::string::String',
+        '0x1::string::String'
+    ] satisfies (string | null)[];
+    const parameterNames = ["cap", "saga", "naturePrompt", "rhythmHints"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'saga',
+        function: 'set_saga_soul',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface NaturePromptArguments {
+    saga: RawTransactionArgument<string>;
+}
+export interface NaturePromptOptions {
+    package?: string;
+    arguments: NaturePromptArguments | [
+        saga: RawTransactionArgument<string>
+    ];
+}
+export function naturePrompt(options: NaturePromptOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["saga"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'saga',
+        function: 'nature_prompt',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RhythmHintsArguments {
+    saga: RawTransactionArgument<string>;
+}
+export interface RhythmHintsOptions {
+    package?: string;
+    arguments: RhythmHintsArguments | [
+        saga: RawTransactionArgument<string>
+    ];
+}
+export function rhythmHints(options: RhythmHintsOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["saga"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'saga',
+        function: 'rhythm_hints',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

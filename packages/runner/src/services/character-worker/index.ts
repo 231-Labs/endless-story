@@ -31,6 +31,7 @@ import {
     buildUserPrompt,
     findUngroundedHeavyMotifs,
     type CharacterSnapshot,
+    type SagaSoul,
 } from './prompt.js';
 
 export {
@@ -38,6 +39,7 @@ export {
     buildUserPrompt as buildPovUserPrompt,
     type CharacterSnapshot,
     type PovPromptInput,
+    type SagaSoul,
 } from './prompt.js';
 
 export interface RunCharacterWorkerInput {
@@ -62,6 +64,13 @@ export interface RunCharacterWorkerInput {
     planHint?: string;
     /** Optional: drama-engine tension hint (DR-6) — dominant unmet desire. */
     dramaHint?: string;
+    /**
+     * Optional: per-saga tonal DNA layered onto the genre baseline (F).
+     * When omitted, `runOnce` derives a Tier-1 soul (premise + departure
+     * policy) from the saga it already reads. Pass this to enrich with
+     * Tier-2 fields (naturePrompt / rhythmHints); provided fields win.
+     */
+    sagaSoul?: SagaSoul;
     /**
      * Optional: role / specialty override (e.g. "富商" from off-chain
      * Recruitment.specialty). Chain `Character` has no role field, so
@@ -107,13 +116,13 @@ export interface RunCharacterWorkerResult {
 
 export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharacterWorkerResult> {
     const client = makeSuiClient({ network: resolveNetwork() });
-    const snapshot = await fetchCharacterSnapshot(
+    const fetched = await fetchCharacterSnapshot(
         client,
         input.characterId,
         input.sagaId,
         input.role,
     );
-    if (!snapshot) {
+    if (!fetched) {
         return {
             chapter: '',
             anchored: false,
@@ -121,6 +130,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
             errors: [`character ${input.characterId} not readable from chain`],
         };
     }
+    const { snapshot, soul: chainSoul } = fetched;
     const publicSnapshot = stripInternal(snapshot);
 
     // Subscriber gate: skip if 0 and not forced.
@@ -142,7 +152,10 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
 
-    const system = buildSystemPrompt();
+    // Per-saga soul: chain-derived (Tier 1) merged under any caller override
+    // (Tier 2: nature/rhythm). Caller-provided fields win; chain fills the rest.
+    const soul: SagaSoul = { ...chainSoul, ...(input.sagaSoul ?? {}) };
+    const system = buildSystemPrompt(soul);
     const user = buildUserPrompt({
         character: publicSnapshot,
         triggerNarrative: input.triggerNarrative,
@@ -302,7 +315,7 @@ async function fetchCharacterSnapshot(
     characterId: string,
     sagaId: string,
     roleOverride?: string,
-): Promise<CharacterSnapshotInternal | null> {
+): Promise<{ snapshot: CharacterSnapshotInternal; soul: SagaSoul } | null> {
     const [charRes, sagaRes] = await Promise.all([
         read.character.getCharacter(client, characterId).catch(() => null),
         read.saga.getSaga(client, sagaId).catch(() => null),
@@ -322,7 +335,15 @@ async function fetchCharacterSnapshot(
         state?: { current_scene_id?: string | null };
         subscriber_count?: number | string;
     };
-    const sagaJson = sagaRes?.json as unknown as { name?: string } | undefined;
+    const sagaJson = sagaRes?.json as unknown as
+        | {
+              name?: string;
+              description?: string;
+              departure_policy?: string;
+              nature_prompt?: string;
+              rhythm_hints?: string;
+          }
+        | undefined;
 
     // Resolve scene name (optional — null if character not in any scene).
     const sceneIdRaw = unwrapOption(charJson.state?.current_scene_id);
@@ -341,7 +362,7 @@ async function fetchCharacterSnapshot(
     }
     const physical = charJson.profile?.physical_facts;
 
-    return {
+    const snapshot: CharacterSnapshotInternal = {
         id: characterId,
         name: charJson.profile?.name ?? '無名',
         // Role is not on chain — caller supplies via roleOverride
@@ -363,6 +384,20 @@ async function fetchCharacterSnapshot(
         },
         subscriberCount: charJson.subscriber_count != null ? Number(charJson.subscriber_count) : 0,
     };
+
+    // Saga soul from the saga object we already fetched above. All fields are
+    // on chain (F Tier 2), so the full soul — premise + departure policy +
+    // nature/rhythm — is derived here with no extra fetch. Callers may still
+    // override via input.sagaSoul (merged in runOnce).
+    const soul: SagaSoul = {
+        sagaName: sagaJson?.name ?? '無名戲班',
+        premise: sagaJson?.description?.trim() || undefined,
+        departurePolicy: sagaJson?.departure_policy?.trim() || undefined,
+        naturePrompt: sagaJson?.nature_prompt?.trim() || undefined,
+        rhythmHints: sagaJson?.rhythm_hints?.trim() || undefined,
+    };
+
+    return { snapshot, soul };
 }
 
 function unwrapOption(raw: unknown): string | null {

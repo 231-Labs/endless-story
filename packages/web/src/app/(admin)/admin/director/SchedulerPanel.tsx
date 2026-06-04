@@ -8,6 +8,12 @@ import {
 import { runTickLoopAction, type TickLoopResult } from '@/lib/actions/tick-loop';
 import { txUrl, objectUrl } from '@/lib/explorer';
 
+const DEMO_CAST_IDS = [
+    '0x1dff99a3adf385874ae06066a1064a308d9d32907b35ef2ae63023ef9776a349',
+    '0xa6832662d55a02c09d556c41d4d8bc44c17f0fb3e6338f70c332f63458cdafc7',
+    '0xc162a7e009a4d63ccf89c7773ea5fc0e3516eca05a536e4d40a042c9883509f6',
+];
+
 /**
  * Admin panel: run one "day of life" for the whole saga.
  *
@@ -87,19 +93,35 @@ export function SchedulerPanel() {
     );
 }
 
-/* ── N4 — autonomous tick (act + POV + sleep + gazette in one pass) ── */
+/* ── N4 — autonomous tick (plan + move + drama + social + act + POV) ── */
 function TickLoopSection() {
     const [plan, setPlan] = useState(true);
     const [move, setMove] = useState(true);
+    const [pov, setPov] = useState(true);
     const [sleep, setSleep] = useState(true);
     const [gazette, setGazette] = useState(true);
+    const [maxCharacters, setMaxCharacters] = useState('6');
+    const [characterIdsText, setCharacterIdsText] = useState('');
     const [result, setResult] = useState<TickLoopResult | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const run = (dryRun: boolean) => {
         setResult(null);
         startTransition(async () => {
-            const r = await runTickLoopAction({ plan, move, sleep, gazette, dryRun });
+            const parsedMax = Number(maxCharacters);
+            const characterIds = parseCharacterIds(characterIdsText);
+            const r = await runTickLoopAction({
+                plan,
+                move,
+                pov,
+                sleep,
+                gazette,
+                dryRun,
+                ...(Number.isFinite(parsedMax) && parsedMax > 0
+                    ? { maxCharacters: Math.floor(parsedMax) }
+                    : {}),
+                ...(characterIds.length > 0 ? { characterIds } : {}),
+            });
             setResult(r);
         });
     };
@@ -110,9 +132,12 @@ function TickLoopSection() {
                 自治推進一個 tick（N4 · 世界自己動一輪）
             </div>
             <p className="text-2xs leading-relaxed text-mute">
-                一鍵跑完整迴圈：① 推進時間 → ② 每個角色**更新規劃（立志，並行）** → ③ 開著的事件中，
-                每個角色**自己出牌**（全員出完即自動收尾）→ ④ 每人寫 POV（dry-run 並行、上鏈序列）
-                → ⑤ **夜裡**才睡一覺整理記憶 → ⑥ 編當日公報。上鏈步驟依序簽（單一 keypair）。
+                一鍵跑完整迴圈：PLAN 更新規劃 → MOVE 自主走位 → DRAMA 推導稀缺張力
+                → SOCIAL 同場觀察/搭話 → ACT 開著事件中角色自己出牌 → POV 章回
+                → 夜裡 SLEEP 整理記憶 → GAZETTE 編公報。上鏈步驟依序簽（單一 keypair）。
+                若只要檢查 DRAMA/SOCIAL，可先關掉 POV 省下最慢的章回生成。
+                Dry-run 不寫入 memory、scene-lines 或鏈上 anchor；它只能驗本輪決策，
+                不能驗第二輪記憶召回。
             </p>
             <div className="flex flex-wrap items-center gap-4">
                 <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
@@ -136,6 +161,15 @@ function TickLoopSection() {
                 <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
                     <input
                         type="checkbox"
+                        checked={pov}
+                        onChange={(e) => setPov(e.target.checked)}
+                        disabled={isPending}
+                    />
+                    含 POV 章回
+                </label>
+                <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+                    <input
+                        type="checkbox"
                         checked={sleep}
                         onChange={(e) => setSleep(e.target.checked)}
                         disabled={isPending}
@@ -152,6 +186,44 @@ function TickLoopSection() {
                     含編公報
                 </label>
             </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_1fr]">
+                <label className="flex flex-col gap-1 text-2xs tracking-widest text-mute">
+                    上限
+                    <input
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={maxCharacters}
+                        onChange={(e) => setMaxCharacters(e.target.value)}
+                        disabled={isPending}
+                        className="rounded border border-hairline bg-surface px-2 py-1 text-sm text-ink"
+                    />
+                </label>
+                <label className="flex flex-col gap-1 text-2xs tracking-widest text-mute">
+                    <span className="flex items-center justify-between gap-2">
+                        角色 IDS
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMaxCharacters('3');
+                                setCharacterIdsText(DEMO_CAST_IDS.join('\n'));
+                            }}
+                            disabled={isPending}
+                            className="rounded border border-hairline bg-surface px-2 py-0.5 text-2xs text-ink hover:bg-elevated disabled:opacity-50"
+                        >
+                            孟/顧/柳
+                        </button>
+                    </span>
+                    <textarea
+                        value={characterIdsText}
+                        onChange={(e) => setCharacterIdsText(e.target.value)}
+                        disabled={isPending}
+                        rows={2}
+                        placeholder="0x... , 0x... 或換行貼上"
+                        className="rounded border border-hairline bg-surface px-2 py-1 font-mono text-xs text-ink"
+                    />
+                </label>
+            </div>
             <div className="flex flex-wrap gap-3">
                 <button
                     type="button"
@@ -159,7 +231,7 @@ function TickLoopSection() {
                     disabled={isPending}
                     className="rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-ink hover:bg-elevated disabled:opacity-50"
                 >
-                    {isPending ? '跑輪中…' : 'Dry-Run（只預覽 POV）'}
+                    {isPending ? '跑輪中…' : pov ? 'Dry-Run（預覽 POV）' : 'Dry-Run（快速檢查）'}
                 </button>
                 <button
                     type="button"
@@ -173,6 +245,18 @@ function TickLoopSection() {
             {result ? <TickLoopResultView result={result} /> : null}
         </div>
     );
+}
+
+function parseCharacterIds(text: string): string[] {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const raw of text.split(/[\s,，]+/)) {
+        const id = raw.trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+    }
+    return ids;
 }
 
 function TickLoopResultView({ result }: { result: TickLoopResult }) {
@@ -193,6 +277,18 @@ function TickLoopResultView({ result }: { result: TickLoopResult }) {
             </div>
             {result.error ? (
                 <div className="text-sm text-cinnabar">錯誤：{result.error}</div>
+            ) : null}
+            {result.memoryWarnings && result.memoryWarnings.length > 0 ? (
+                <section className="space-y-1 rounded border border-cinnabar/30 bg-cinnabar/5 p-2">
+                    <div className="text-2xs tracking-widest text-cinnabar">記憶召回降級</div>
+                    <ul className="space-y-1">
+                        {result.memoryWarnings.map((warning, i) => (
+                            <li key={`${warning}-${i}`} className="text-xs text-cinnabar">
+                                {warning}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
             ) : null}
 
             {/* PLAN */}
@@ -240,12 +336,72 @@ function TickLoopResultView({ result }: { result: TickLoopResult }) {
                                 {m.ok ? (
                                     <span className="text-mute">
                                         {' '}
-                                        走去「{m.toSceneName ?? '別處'}」
+                                        {m.toSceneId
+                                            ? `走去「${m.toSceneName ?? '別處'}」`
+                                            : '留在原處'}
                                         {m.reason ? ` — ${m.reason}` : ''}
                                     </span>
                                 ) : (
                                     <span className="text-cinnabar"> {m.error}</span>
                                 )}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
+            {/* DRAMA */}
+            {result.drama ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">張力（Drama · 稀缺資源）</div>
+                    {result.drama.active ? (
+                        <ul className="space-y-1">
+                            {(result.drama.top ?? []).map((t) => (
+                                <li key={t.characterId} className="text-xs">
+                                    <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-cinnabar" />
+                                    <span className="text-ink">{t.name ?? t.characterId.slice(0, 8)}</span>
+                                    <span className="text-mute">
+                                        {' '}
+                                        {t.statement} · 張力 {t.tension.toFixed(2)}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-2xs text-mute">
+                            （沒有可推導張力的爭用資源{result.drama.skipped ? `：${result.drama.skipped}` : ''}）
+                        </p>
+                    )}
+                </section>
+            ) : null}
+
+            {/* SOCIAL */}
+            {result.socials.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">互動（Social · 同場觀察/搭話）</div>
+                    <ul className="space-y-1">
+                        {result.socials.map((s) => (
+                            <li key={s.characterId} className="text-xs">
+                                <span
+                                    className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
+                                        s.ok && s.kind !== 'idle'
+                                            ? 'bg-jade'
+                                            : s.ok
+                                              ? 'bg-mute'
+                                              : 'bg-cinnabar'
+                                    }`}
+                                />
+                                <span className="text-ink">{s.name}</span>
+                                <span className="text-mute">
+                                    {' '}
+                                    {s.kind}
+                                    {s.targetName ? ` → ${s.targetName}` : ''}
+                                    {s.line ? `：「${s.line}」` : ''}
+                                    {s.observation ? ` · 見：${s.observation}` : ''}
+                                    {s.relationshipMemory ? ` · 記：${s.relationshipMemory}` : ''}
+                                    {s.reason ? ` · ${s.reason}` : ''}
+                                </span>
+                                {s.error ? <span className="text-cinnabar"> {s.error}</span> : null}
                             </li>
                         ))}
                     </ul>

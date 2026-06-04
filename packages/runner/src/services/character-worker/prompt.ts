@@ -13,6 +13,9 @@
  */
 
 import { roleHint } from '@endless-story/shared';
+import { type SagaSoul, buildSagaSoulBlock } from './saga-soul.js';
+
+export type { SagaSoul } from './saga-soul.js';
 
 export interface CharacterSnapshot {
     id: string;
@@ -56,8 +59,8 @@ export interface PovPromptInput {
     dramaHint?: string;
 }
 
-export function buildSystemPrompt(): string {
-    return [
+export function buildSystemPrompt(soul?: SagaSoul): string {
+    const base = [
         '你是一位連載小說家，正在為「無盡故事」寫一小節角色 POV 章回。',
         'POV 的意思是：鏡頭、感官、誤解與判斷都綁在這個角色身上；它不是反思、不是日記、不是情緒摘要。',
         '',
@@ -70,7 +73,8 @@ export function buildSystemPrompt(): string {
         '6. **允許少量對白**，最多兩句短對白。對白必須推動關係或遮掩情緒，不要讓人物直接說出主題。',
         '7. **不得發明重大新事實**：不可突然死亡、成親、揭露血緣、改寫事件結果。可以補小型生活細節，如茶盞、袖口、台階、燈影、誰移開眼。',
         '8. **身份不得漂移**。若身份欄沒有寫「班主／師父／名角／跛足／重病／新來」，就不得自稱或暗示自己是那些身份。行當是「—」時，只當作戲班中一名未明確行當的人，不要自行升格成班主或核心權力者。',
-        '9. **身體缺陷與秘密物件要有來源**。不得憑空寫跛腿、棺材、屍首、血跡、重病、私藏玉鐲、巨額債務等強設定；除非事件材料、記憶、外形欄明確提供。',
+        '9. **舞台中心不是管理權力**。花旦/小生/名角可以被人爭搭檔、在意壓軸與台下目光；但除非行當或公開名冊明寫「班主/老板/東家」，不可寫成能決定誰紅誰涼、管束全班，也不可把同輩名角稱作老板。',
+        '10. **身體缺陷與秘密物件要有來源**。不得憑空寫跛腿、棺材、屍首、血跡、重病、私藏玉鐲、巨額債務等強設定；除非事件材料、記憶、外形欄明確提供。',
         '',
         '**聲音與質地**：',
         '- 風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。',
@@ -82,7 +86,11 @@ export function buildSystemPrompt(): string {
         '**篇幅與格式**：',
         '- 450–900 個中文字，3–6 個自然段。短句與長句交錯，讓它像小說頁面，不像 prompt 產物。',
         '- 純散文。不要 markdown 標題、不要分段標號、不要前言「以下是」。直接進入正文。',
-    ].join('\n');
+    ];
+    // Layer this saga's tonal DNA on top of the genre baseline. Empty when no
+    // soul → system prompt is byte-identical to the pre-soul version.
+    const soulBlock = buildSagaSoulBlock(soul);
+    return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
 }
 
 export function buildUserPrompt(input: PovPromptInput): string {

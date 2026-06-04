@@ -270,6 +270,57 @@ function relevanceWeight(distance: number): number {
     return Math.max(0.05, 1 - Math.min(1, distance));
 }
 
+const MEMORY_WARNINGS: string[] = [];
+
+function pushMemoryWarning(message: string): void {
+    MEMORY_WARNINGS.push(message);
+    if (MEMORY_WARNINGS.length > 80) MEMORY_WARNINGS.shift();
+}
+
+export function drainMemoryWarnings(): string[] {
+    return MEMORY_WARNINGS.splice(0, MEMORY_WARNINGS.length);
+}
+
+function isRateLimitError(err: unknown): boolean {
+    if (!err) return false;
+    const e = err as { status?: number; statusText?: string; message?: string };
+    return (
+        e.status === 429 ||
+        /429|too many requests|rate.?limit/i.test(e.statusText ?? '') ||
+        /429|too many requests|rate.?limit/i.test(e.message ?? '')
+    );
+}
+
+async function sleepMs(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withMemoryRetry<T>(
+    label: string,
+    characterId: string,
+    op: () => Promise<T>,
+): Promise<T> {
+    const maxAttempts = Math.max(1, Number(process.env.MEMWAL_RECALL_RETRY_ATTEMPTS) || 3);
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            return await op();
+        } catch (err) {
+            lastErr = err;
+            if (!isRateLimitError(err) || attempt >= maxAttempts) break;
+            const wait = 450 * attempt + Math.floor(Math.random() * 250);
+            console.warn(
+                `[memory] ${label} rate-limited for ${characterId.slice(0, 10)}… retry ${attempt}/${maxAttempts - 1} in ${wait}ms`,
+            );
+            await sleepMs(wait);
+        }
+    }
+    if (isRateLimitError(lastErr)) {
+        pushMemoryWarning(`${characterId.slice(0, 10)}… ${label} hit MemWal/SEAL 429`);
+    }
+    throw lastErr;
+}
+
 /**
  * Recall a character's memories, importance-re-ranked. Returns decrypted
  * text (tags stripped), highest-importance first, [] when unconfigured.
@@ -298,7 +349,9 @@ export async function recallStructuredForCharacter(
         // namespace by importance × recency × relevance; the managed relayer ignores it and we
         // re-rank below — correct with either backend. Still over-fetch (3×) as a safety net.
         const today = await currentNarrativeDay();
-        const res = await client.recall(query, limit * 3, namespaceFor(characterId), { today });
+        const res = await withMemoryRetry('recall', characterId, () =>
+            client.recall(query, limit * 3, namespaceFor(characterId), { today }),
+        );
         const scored: { m: RecalledMemory; score: number; idx: number }[] = [];
         let idx = 0;
         for (const hit of res.results) {
@@ -353,7 +406,9 @@ export async function recallForConsolidation(
     const client = await clientFor(characterId);
     if (!client) return [];
     try {
-        const res = await client.recall(query, limit * 3, namespaceFor(characterId));
+        const res = await withMemoryRetry('recallForConsolidation', characterId, () =>
+            client.recall(query, limit * 3, namespaceFor(characterId)),
+        );
         const candidates: RecalledMemory[] = [];
         for (const hit of res.results) {
             if ('text' in hit && typeof hit.text === 'string' && hit.text.trim()) {
@@ -410,10 +465,15 @@ export async function recallCurrentPlanText(characterId: string): Promise<string
     const client = await clientFor(characterId);
     if (!client) return null;
     try {
-        const res = await client.recall(
-            '我的目標 長期打算 此刻想做的事 未竟之事 計畫',
-            18,
-            namespaceFor(characterId),
+        const res = await withMemoryRetry(
+            'recallCurrentPlan',
+            characterId,
+            () =>
+                client.recall(
+                    '我的目標 長期打算 此刻想做的事 未竟之事 計畫',
+                    18,
+                    namespaceFor(characterId),
+                ),
         );
         let best: RecalledMemory | null = null;
         for (const hit of res.results) {
@@ -461,9 +521,9 @@ export async function rememberForCharacter(
             // The encrypted blob still carries the tag (above), so display/parse is unchanged.
             { importance, day, kind, anchored: opts?.anchored ?? false },
         );
-        // A new plan supersedes the cached one — drop it so later phases in
-        // this tick recall the fresh plan (then re-cache it).
-        if (kind === 'plan') invalidatePlanCache(characterId);
+        // A new plan supersedes the cached one — keep it hot so MOVE/SOCIAL/POV
+        // in the same tick don't immediately decrypt it again.
+        if (kind === 'plan') PLAN_CACHE.set(characterId, { text, ts: Date.now() });
         console.log(
             `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}${
                 opts?.anchored ? ' anchored' : ''

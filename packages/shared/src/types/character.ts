@@ -1,4 +1,4 @@
-import type { BlobRef, CharacterRole, Wallet } from './common';
+import type { BlobRef, CharacterMembership, CharacterRole, Wallet } from './common';
 
 export type SurvivalLevel = 'critical' | 'low' | 'stable' | 'healthy';
 
@@ -58,6 +58,12 @@ export interface Character {
   id: string;
   nftOwner: Wallet;
   sagaId: string | null;
+  /**
+   * Public roster bucket for the saga UI. Unlike `sagaId`, this comes from
+   * the originating recruitment and distinguishes troupe members from guest
+   * / outside-world characters who still participate in the same saga.
+   */
+  membership?: CharacterMembership;
   name: string;
   description: string;
   role: CharacterRole;

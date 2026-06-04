@@ -4,7 +4,8 @@
 ///   - identity (kind / name / description / metadata_uri / operator)
 ///   - economics (`RevenueConfig` owner/storyteller/treasury bps + `treasury` Balance<CURRENCY>)
 ///   - coverage (`covered_location_ids` + `anchor_scene_ids`)
-///   - LLM hints (`departure_policy` free-form text — not enforced on-chain)
+///   - LLM hints (`departure_policy` / `nature_prompt` / `rhythm_hints`
+///     free-form text — not enforced on-chain)
 ///   - per-saga DOF tables: card-weight rules (R3.2) and saga skill defs (R3.3)
 ///
 /// **Caps:**
@@ -136,6 +137,13 @@ public struct Saga has key {
     /// character's leave intent. Move does NOT enforce it on
     /// `transfer_character_control`; enforcement is social/reputation.
     departure_policy: String,
+    /// Per-saga narrative DNA (F — saga soul). Free-form text the
+    /// character/storyteller LLM layers on top of the genre baseline so
+    /// different sagas read in distinct voices. Not enforced on-chain.
+    /// `nature_prompt` = 事件氣質 (conflict type / narrative rhythm);
+    /// `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues).
+    nature_prompt: String,
+    rhythm_hints: String,
     created_at_ms: u64,
 }
 
@@ -169,6 +177,10 @@ public struct LocationCovered has copy, drop {
 }
 
 public struct DeparturePolicyUpdated has copy, drop {
+    saga_id: ID,
+}
+
+public struct SagaSoulUpdated has copy, drop {
     saga_id: ID,
 }
 
@@ -250,6 +262,8 @@ public fun create_saga(
     treasury_bps: u16,
     covered_location_ids: vector<ID>,
     departure_policy: String,
+    nature_prompt: String,
+    rhythm_hints: String,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ): StorytellerCap {
@@ -271,6 +285,8 @@ public fun create_saga(
         anchor_scene_ids: vector[],
         character_count: 0,
         departure_policy,
+        nature_prompt,
+        rhythm_hints,
         created_at_ms,
     };
     let saga_id = object::id(&saga);
@@ -395,6 +411,29 @@ public fun set_saga_departure_policy(cap: &StorytellerCap, saga: &mut Saga, new_
 }
 
 public fun departure_policy(saga: &Saga): &String { &saga.departure_policy }
+
+// ─── saga soul (LLM hint — F) ────────────────────────────────────────
+
+/// Replace this saga's narrative-DNA hints (F — saga soul). Like
+/// `departure_policy`, these are natural-language guidance for the LLM,
+/// not enforced by Move. The soul is read as a unit, so both are set
+/// together — pass the current value to leave one unchanged. Updating
+/// mid-saga is allowed (run different tonal eras).
+public fun set_saga_soul(
+    cap: &StorytellerCap,
+    saga: &mut Saga,
+    nature_prompt: String,
+    rhythm_hints: String,
+) {
+    assert_cap(cap, saga);
+    saga.nature_prompt = nature_prompt;
+    saga.rhythm_hints = rhythm_hints;
+    event::emit(SagaSoulUpdated { saga_id: object::id(saga) });
+}
+
+public fun nature_prompt(saga: &Saga): &String { &saga.nature_prompt }
+
+public fun rhythm_hints(saga: &Saga): &String { &saga.rhythm_hints }
 
 public fun covered_location_count(saga: &Saga): u64 {
     vector::length(&saga.covered_location_ids)
@@ -719,6 +758,50 @@ fun test_cover_location_and_set_departure_policy() {
     clock.destroy_for_testing();
 }
 
+#[test]
+fun test_set_saga_soul() {
+    let mut ctx = sui::tx_context::dummy();
+    let mut clock = clock::create_for_testing(&mut ctx);
+    clock.set_for_testing(8700);
+    let (mut world, admin_cap) = world::new_world_for_testing(
+        world::new_world_info(b"W".to_string(), b"w".to_string()),
+        world::new_currency_display(b"E".to_string(), b"E".to_string()),
+        world::new_world_rules(vector[b"human".to_string()], vector[]),
+        8700,
+        &mut ctx,
+    );
+    let (mut saga, cap) = new_saga_for_testing(
+        &mut world,
+        kind_standard(),
+        b"S".to_string(),
+        b"s".to_string(),
+        b"s".to_string(),
+        4000,
+        5000,
+        1000,
+        vector[],
+        @0xA,
+        8701,
+        &clock,
+        &mut ctx,
+    );
+
+    assert!(*nature_prompt(&saga) == b"".to_string(), 60);
+    assert!(*rhythm_hints(&saga) == b"".to_string(), 61);
+    set_saga_soul(
+        &cap,
+        &mut saga,
+        b"intrigue, knives in the dark".to_string(),
+        b"dawn warm-ups, dusk curtain".to_string(),
+    );
+    assert!(*nature_prompt(&saga) == b"intrigue, knives in the dark".to_string(), 62);
+    assert!(*rhythm_hints(&saga) == b"dawn warm-ups, dusk curtain".to_string(), 63);
+
+    destroy_saga_for_testing(saga, cap);
+    world::destroy_world_for_testing(world, admin_cap);
+    clock.destroy_for_testing();
+}
+
 #[test, expected_failure(abort_code = ELocationAlreadyCovered)]
 fun test_cover_location_rejects_duplicate() {
     let mut ctx = sui::tx_context::dummy();
@@ -998,6 +1081,8 @@ public fun new_saga_for_testing(
         anchor_scene_ids: vector[],
         character_count: 0,
         departure_policy: b"".to_string(),
+        nature_prompt: b"".to_string(),
+        rhythm_hints: b"".to_string(),
         created_at_ms,
     };
     let saga_id = object::id(&saga);
@@ -1023,6 +1108,8 @@ public fun destroy_saga_for_testing(saga: Saga, cap: StorytellerCap) {
         anchor_scene_ids: _,
         character_count: _,
         departure_policy: _,
+        nature_prompt: _,
+        rhythm_hints: _,
         created_at_ms: _,
     } = saga;
     let _ = balance::destroy_for_testing(treasury);

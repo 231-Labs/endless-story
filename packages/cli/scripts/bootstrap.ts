@@ -293,6 +293,8 @@ async function main() {
       treasuryBps: story.saga.treasury_bps,
       coveredLocationIds: locationIds,
       departurePolicy: story.saga.departure_policy,
+      naturePrompt: story.saga.nature_prompt ?? '',
+      rhythmHints: story.saga.rhythm_hints ?? '',
     }),
   );
   tx3.transferObjects([storytellerCap], admin);

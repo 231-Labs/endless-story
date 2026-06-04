@@ -17,6 +17,7 @@ import {
     signAndAnchor,
     signAndAnchorBatch,
 } from '@endless-story/runner';
+import { inferRoleFromText } from '@endless-story/shared';
 import type { AdminContext } from '@/lib/chain/admin-signer';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
@@ -39,6 +40,12 @@ export interface PovCoreOptions {
     dramaHint?: string;
     /** Public saga roster context: name / role / scene. */
     rosterContext?: string[];
+    /** Precomputed relationship hints from the tick memory context. */
+    relationshipHints?: string[];
+    /** Precomputed current plan from the tick memory context. */
+    planHint?: string | null;
+    /** Use only caller-provided memory snippets; avoids duplicate decrypts in tick loop. */
+    skipMemoryRecall?: boolean;
 }
 
 export interface PovCoreResult {
@@ -52,8 +59,8 @@ export interface PovCoreResult {
     digest?: string;
     dreamFragmentUsed?: string;
     error?: string;
-    /** How many MemWal memories were recalled into the prompt (0 when
-     *  memory not configured). */
+    /** How many memory snippets were threaded into the prompt (0 when
+     *  memory not configured or no snippets matched). */
     recalledCount?: number;
     /** Whether the new chapter was written back to MemWal. */
     remembered?: boolean;
@@ -68,15 +75,15 @@ export async function resolveRole(characterId: string): Promise<string | undefin
     try {
         const client = makeSuiClient({ network: resolveNetwork() });
         const character = await read.character.getCharacter(client, characterId).catch(() => null);
-        const taggedRole = roleFromCharacterJson(
-            (character?.json as { tags?: Array<{ label?: string }> } | undefined)?.tags,
-        );
+        const characterJson = character?.json as
+            | { tags?: Array<{ label?: string }>; profile?: { description?: string } }
+            | undefined;
+        const taggedRole = roleFromCharacterJson(characterJson?.tags);
         if (taggedRole) return taggedRole;
 
         const recruitmentId = await fetchRecruitmentIdForCharacter(characterId);
-        if (!recruitmentId) return undefined;
-        const recruitment = await getStoreRecruitment(recruitmentId);
-        return recruitment?.specialty ?? undefined;
+        const recruitment = recruitmentId ? await getStoreRecruitment(recruitmentId) : null;
+        return recruitment?.specialty ?? inferRoleFromText(characterJson?.profile?.description);
     } catch {
         return undefined;
     }
@@ -221,9 +228,15 @@ export async function runPovForCharacter(
     // isn't configured. Merge with any caller-supplied snippets. Director-
     // seeded relationships (N3) colour how she narrates others in the scene.
     const [recalled, relationshipHints, planHint] = await Promise.all([
-        recallForCharacter(characterId, opts.triggerNarrative, 6),
-        fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
-        recallCurrentPlanText(characterId).catch(() => null),
+        opts.skipMemoryRecall
+            ? Promise.resolve([] as string[])
+            : recallForCharacter(characterId, opts.triggerNarrative, 6),
+        opts.relationshipHints
+            ? Promise.resolve(opts.relationshipHints)
+            : fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
+        typeof opts.planHint !== 'undefined'
+            ? Promise.resolve(opts.planHint)
+            : recallCurrentPlanText(characterId).catch(() => null),
     ]);
     const recentMemorySnippets = [
         ...(opts.recentMemorySnippets ?? []),
@@ -270,7 +283,7 @@ export async function runPovForCharacter(
             blobUrl: res.blobUrl,
             digest: res.digest,
             dreamFragmentUsed: res.dreamFragmentUsed,
-            recalledCount: recalled.length,
+            recalledCount: recentMemorySnippets.length,
             remembered,
         };
     } catch (err) {

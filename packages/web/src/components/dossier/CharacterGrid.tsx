@@ -17,6 +17,10 @@ const FILTERS: { key: RosterFilter; label: string }[] = [
   { key: 'mine', label: '我的' },
 ];
 
+function rosterMembership(character: Character, internalSagaId: string): 'internal' | 'external' {
+  return character.membership ?? (character.sagaId === internalSagaId ? 'internal' : 'external');
+}
+
 export interface CardData {
   character: Character;
   quote?: { text: string; chapterId?: string; chapterTitle?: string };
@@ -52,8 +56,9 @@ export function CharacterGrid({
   const visible = useMemo(
     () =>
       cards.filter(({ character: c }) => {
-        if (filter === 'internal' && c.sagaId !== internalSagaId) return false;
-        if (filter === 'external' && c.sagaId === internalSagaId) return false;
+        const membership = rosterMembership(c, internalSagaId);
+        if (filter === 'internal' && membership !== 'internal') return false;
+        if (filter === 'external' && membership !== 'external') return false;
         if (filter === 'mine' && (!effectiveViewerWallet || c.nftOwner !== effectiveViewerWallet)) return false;
         if (normalizedQuery) return c.name.toLowerCase().includes(normalizedQuery);
         return true;

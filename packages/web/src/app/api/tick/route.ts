@@ -4,15 +4,17 @@
  * This is the headless execution endpoint behind the standalone world-loop
  * CLI (packages/cli/scripts/world-loop.ts). It runs the same
  * `runTickLoopAction` the admin SchedulerPanel button does — advance time →
- * plan → move → act → POV → sleep → gazette — so the world can run with no
- * human in the loop.
+ * plan → move → drama → social → act → POV → sleep → gazette — so the world
+ * can run with no human in the loop.
  *
  * Auth: if `TICK_LOOP_SECRET` is set, requires `Authorization: Bearer <secret>`
  * (the CLI reads the same env). When unset, the route is open — convenient in
  * local dev; SET THE SECRET before exposing this anywhere.
  *
- * Body (optional JSON): a partial TickLoopInput — { advance, plan, move,
- * sleep, gazette, autoResolve, maxCharacters, dryRun }. Empty body = defaults.
+ * Body (optional JSON): a partial TickLoopInput — { advance, plan, move, pov,
+ * sleep, gazette, autoResolve, maxCharacters, characterIds, dryRun }. Empty body = defaults.
+ * DRAMA + SOCIAL are part of the loop; SOCIAL is skipped only for characters
+ * already busy inside open events.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';

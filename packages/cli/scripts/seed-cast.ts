@@ -11,15 +11,18 @@
  * Usage:
  *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet
  *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --only 孟雲屏
+ *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing
  *
  * Flags:
  *   --env devnet|testnet|mainnet|localnet  (required, must match deployment)
+ *   --tag-existing                         apply missing role:* tags to existing same-name cast; do not mint
  */
 import { Transaction } from '@mysten/sui/transactions';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import {
   ENDLESS_STORY_DEPLOYMENT,
   makeSuiClient,
+  read,
   tx as endlessTx,
   type SuiNetwork,
 } from '@endless-story/sdk';
@@ -52,9 +55,9 @@ interface CastSpec {
 const FULL_CAST: CastSpec[] = [
   {
     name: '孟雲屏',
-    description: '梨園中聲名最盛的花旦名角，身段沉靜、眼風極冷，壓軸戲由他定調。誰能與他同台，誰便被全班看見；他越不表態，越使眾人心火暗起。',
+    description: '梨園中聲名最盛的花旦名角，身段沉靜、眼風極冷。她的下一折戲常是眾人暗中爭的搭檔位；她越不表態，越使眾人心火暗起。',
     role: '花旦',
-    gender: '男',
+    gender: '女',
     ageYears: 28,
     attrs: { appearance: 95, constitution: 62, acuity: 90, disposition: 82 },
   },
@@ -191,6 +194,67 @@ async function resolveAndApplyRoleTag(
   return res.digest;
 }
 
+function hasFlag(name: string): boolean {
+  return process.argv.includes(name);
+}
+
+function characterName(row: unknown): string | null {
+  return ((row as { json?: { profile?: { name?: string } } })?.json?.profile?.name) ?? null;
+}
+
+function characterTags(row: unknown): string[] {
+  const tags = (row as { json?: { tags?: Array<{ label?: string }> } })?.json?.tags ?? [];
+  return tags.map((t) => t.label).filter((t): t is string => Boolean(t));
+}
+
+async function tagExistingCast(params: {
+  client: SuiClient;
+  signer: Ed25519Keypair;
+  packageId: string;
+  storytellerCapId: string;
+  sagaId: string;
+  sceneId: string;
+  cast: CastSpec[];
+}): Promise<void> {
+  const listed = await read.character.listMintedCharacters(params.client, params.packageId, {
+    sagaId: params.sagaId,
+  });
+  const rows = listed.summaries.map((summary, index) => ({
+    characterId: summary.characterId,
+    row: listed.characters[index],
+  }));
+
+  let applied = 0;
+  for (const spec of params.cast) {
+    const matches = rows.filter(({ row }) => characterName(row) === spec.name);
+    if (matches.length === 0) {
+      console.warn(`   ! ${spec.name}: no existing character found`);
+      continue;
+    }
+    for (const match of matches) {
+      const want = `role:${spec.role}`;
+      if (characterTags(match.row).includes(want)) {
+        console.log(`   · ${spec.name}  ${match.characterId} already ${want}`);
+        continue;
+      }
+      const roleTag = await affirmRoleTag({
+        client: params.client,
+        signer: params.signer,
+        packageId: params.packageId,
+        storytellerCapId: params.storytellerCapId,
+        sagaId: params.sagaId,
+        sceneId: params.sceneId,
+        characterId: match.characterId,
+        name: spec.name,
+        role: spec.role,
+      });
+      applied += 1;
+      console.log(`   ✓ ${spec.name}  ${match.characterId}  ${want} via ${roleTag.eventId}`);
+    }
+  }
+  console.log(`\n[done] existing cast role tags applied: ${applied}`);
+}
+
 async function main() {
   const env = requireFlag('--env') as SuiNetwork;
   if (!VALID.has(env)) throw new Error(`--env must be one of ${[...VALID].join(' / ')}`);
@@ -198,6 +262,7 @@ async function main() {
   // --only "名字" mints just that one (idempotent re-runs after a partial mint).
   const onlyIdx = process.argv.indexOf('--only');
   const only = onlyIdx >= 0 ? process.argv[onlyIdx + 1] : undefined;
+  const tagExisting = hasFlag('--tag-existing');
   const CAST = only ? FULL_CAST.filter((c) => c.name === only) : FULL_CAST;
   if (only && CAST.length === 0) throw new Error(`--only "${only}" matched no cast member`);
 
@@ -219,6 +284,19 @@ async function main() {
   console.log(`   saga     ${d.sagaId}`);
   console.log(`   scene    ${scene}`);
   console.log(`   admin    ${admin}\n`);
+
+  if (tagExisting) {
+    await tagExistingCast({
+      client,
+      signer,
+      packageId: d.packageId,
+      storytellerCapId: d.storytellerCapId,
+      sagaId: d.sagaId,
+      sceneId: scene,
+      cast: CAST,
+    });
+    return;
+  }
 
   const minted: { name: string; role: string; characterId: string; roleEventId: string }[] = [];
 

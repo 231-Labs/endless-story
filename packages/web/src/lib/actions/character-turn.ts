@@ -60,7 +60,14 @@ export interface CharacterTurnResult {
 export async function runCharacterTurnAction(
     eventId: string,
     characterId: string,
-    opts?: { decideOnly?: boolean; dramaHint?: string; rosterContext?: string[] },
+    opts?: {
+        decideOnly?: boolean;
+        dramaHint?: string;
+        rosterContext?: string[];
+        recalledMemories?: string[];
+        relationshipHints?: string[];
+        planHint?: string | null;
+    },
 ): Promise<CharacterTurnResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
@@ -116,9 +123,15 @@ export async function runCharacterTurnAction(
         read.character.getCharacter(client, characterId).catch(() => null),
         read.saga.getSaga(client, d.sagaId).catch(() => null),
         resolveRole(characterId),
-        recallForCharacter(characterId, `${eventTitle} ${eventSummary} 衝突 抉擇`, 6),
-        fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
-        recallCurrentPlanText(characterId).catch(() => null),
+        opts?.recalledMemories
+            ? Promise.resolve(opts.recalledMemories)
+            : recallForCharacter(characterId, `${eventTitle} ${eventSummary} 衝突 抉擇`, 6),
+        opts?.relationshipHints
+            ? Promise.resolve(opts.relationshipHints)
+            : fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
+        typeof opts?.planHint !== 'undefined'
+            ? Promise.resolve(opts.planHint)
+            : recallCurrentPlanText(characterId).catch(() => null),
     ]);
     const cj = charRes?.json as unknown as {
         profile?: { name?: string; physical_facts?: { species?: string; body?: string } };

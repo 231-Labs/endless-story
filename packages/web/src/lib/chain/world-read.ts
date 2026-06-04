@@ -11,6 +11,7 @@
 import type { DayPart, SagaWorldTime } from '@endless-story/shared';
 import { makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
+import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -49,6 +50,14 @@ interface ChainWorldJson {
  */
 export async function fetchOnChainWorldTime(worldId: string): Promise<SagaWorldTime | null> {
     if (!isSuiObjectId(worldId)) return null;
+    return cachedPublicRead(
+        `world-time:${resolveNetwork()}:${worldId}`,
+        publicChainReadTtl(10_000),
+        () => fetchOnChainWorldTimeFresh(worldId),
+    );
+}
+
+async function fetchOnChainWorldTimeFresh(worldId: string): Promise<SagaWorldTime | null> {
     const client = makeSuiClient({ network: resolveNetwork() });
     let res;
     try {

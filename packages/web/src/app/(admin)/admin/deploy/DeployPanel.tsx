@@ -29,13 +29,16 @@ export function DeployPanel({ initialStatus, presets }: Props) {
         setLastResult(null);
         startTransition(async () => {
             // Per-script args:
-            //  - deploy: lower gas budget (admin wallet may hold < 2 SUI) + force-republish
+            //  - deploy-preflight: read-only env/gas/build readiness report.
+            //  - deploy: explicit 2 SUI gas budget + force-republish
             //    (strip stale Published.toml entry so a re-deploy isn't refused).
             //  - bootstrap: --story-id selects the preset. test-e2e ignores unknown flags.
             const extraArgs =
-                script === 'deploy'
-                    ? ['--gas-budget', '800000000', '--force-republish']
-                    : ['--story-id', storyId];
+                script === 'deploy-preflight'
+                    ? ['--json-out=/private/tmp/endless-story-deploy-preflight.json']
+                    : script === 'deploy'
+                      ? ['--gas-budget', '2000000000', '--force-republish']
+                      : ['--story-id', storyId];
             const res = await runCliScript({ script, env, extraArgs });
             const combined = `--- stdout ---\n${res.stdout}\n--- stderr ---\n${res.stderr}\n--- exit ${res.code} in ${res.durationMs}ms`;
             setLog(combined);
@@ -131,17 +134,50 @@ export function DeployPanel({ initialStatus, presets }: Props) {
                     ))}
                     <li className="flex items-start justify-between px-6 py-3 text-sm">
                         <div>
-                            <div className="font-mono text-ink">~/.endless-wuxia/keypair.json</div>
-                            <div className="text-xs text-mute">cli 部署用 keypair (deploy.ts / bootstrap.ts)</div>
+                            <div className="font-mono text-ink">SUI_ADMIN_SIGNER</div>
+                            <div className="text-xs text-mute">
+                                {status.adminSignerAddress || status.adminSignerError || '無法從 SUI_ADMIN_PRIVATE_KEY 解出地址'}
+                            </div>
                         </div>
-                        <span
-                            className={`shrink-0 rounded-full px-3 py-0.5 text-xs ${
-                                status.keypairFilePresent ? 'bg-jade/15 text-jade' : 'bg-mute/15 text-mute'
-                            }`}
-                        >
-                            {status.keypairFilePresent ? '存在' : '未找到'}
-                        </span>
+                        {status.adminFaucetUrl ? (
+                            <a
+                                href={status.adminFaucetUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 rounded-full bg-cinnabar/15 px-3 py-0.5 text-xs text-cinnabar hover:bg-cinnabar/20"
+                            >
+                                faucet
+                            </a>
+                        ) : (
+                            <span className="shrink-0 rounded-full bg-mute/15 px-3 py-0.5 text-xs text-mute">
+                                未設定
+                            </span>
+                        )}
                     </li>
+                </ul>
+            </section>
+
+            {/* ── Runtime readiness ── */}
+            <section className="es-soft-panel overflow-hidden">
+                <div className="border-b border-hairline bg-surface/50 px-6 py-4">
+                    <h2 className="font-serif text-lg text-ink">Runtime 連線</h2>
+                    <p className="text-xs text-mute mt-1">
+                        部署後真正會用到的 relayer、runner control、首頁影片素材與短快取狀態。
+                    </p>
+                </div>
+                <ul className="divide-y divide-hairline">
+                    {status.runtimeChecks.map((c) => (
+                        <li key={c.key} className="flex items-start justify-between gap-4 px-6 py-3 text-sm">
+                            <div className="min-w-0">
+                                <div className="font-mono text-ink">{c.label}</div>
+                                <div className="break-words text-xs text-mute">{c.detail}</div>
+                                {c.url ? <div className="truncate font-mono text-2xs text-mute/70">{c.url}</div> : null}
+                            </div>
+                            <span className={`shrink-0 rounded-full px-3 py-0.5 text-xs ${runtimeStatusClass(c.status)}`}>
+                                {runtimeStatusText(c.status)}
+                            </span>
+                        </li>
+                    ))}
                 </ul>
             </section>
 
@@ -182,7 +218,13 @@ export function DeployPanel({ initialStatus, presets }: Props) {
                         </label>
                     </div>
                 </div>
-                <div className="grid grid-cols-1 gap-3 px-6 py-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 px-6 py-4 sm:grid-cols-4">
+                    <ActionButton
+                        label="0 preflight"
+                        sub="只讀檢查 active-env / signer / gas / Move build"
+                        onClick={() => handleRun('deploy-preflight')}
+                        disabled={isPending}
+                    />
                     <ActionButton
                         label="① deploy"
                         sub="publish 合約 + 寫入 packageId（不吃 story）"
@@ -227,6 +269,20 @@ export function DeployPanel({ initialStatus, presets }: Props) {
             )}
         </div>
     );
+}
+
+function runtimeStatusClass(status: DeploymentStatus['runtimeChecks'][number]['status']): string {
+    if (status === 'ok') return 'bg-jade/15 text-jade';
+    if (status === 'warn') return 'bg-cinnabar/15 text-cinnabar';
+    if (status === 'fail') return 'bg-cinnabar/15 text-cinnabar';
+    return 'bg-mute/15 text-mute';
+}
+
+function runtimeStatusText(status: DeploymentStatus['runtimeChecks'][number]['status']): string {
+    if (status === 'ok') return 'OK';
+    if (status === 'warn') return 'WARN';
+    if (status === 'fail') return 'FAIL';
+    return '未設定';
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

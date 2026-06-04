@@ -1,9 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
+import {
+  getRunnerControlStateAction,
+  setRunnerPausedAction,
+  type RunnerControlState,
+} from '@/lib/actions/runner-control';
 
 export function AdminPanel() {
-  const [isRunnerEnabled, setIsRunnerEnabled] = useState(false);
+  const [control, setControl] = useState<RunnerControlState | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const isRunnerEnabled = Boolean(control?.configured && !control.paused && !control.error);
+
+  useEffect(() => {
+    let alive = true;
+    getRunnerControlStateAction().then((state) => {
+      if (alive) setControl(state);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const toggleRunner = () => {
+    if (!control?.configured || isPending) return;
+    startTransition(async () => {
+      const next = await setRunnerPausedAction({ paused: isRunnerEnabled });
+      setControl(next);
+    });
+  };
 
   return (
     <div className="es-soft-panel overflow-hidden">
@@ -19,16 +44,26 @@ export function AdminPanel() {
           <div>
             <h3 className="font-medium text-ink">Runner 自動化腳本</h3>
             <p className="mt-1 text-sm text-mute">
-              啟用後，系統將自動推進章回與角色記憶。
+              控制 VPS world-loop 是否推進章回與角色記憶。
+            </p>
+            <p className="mt-1 text-2xs tracking-widest text-mute">
+              {control
+                ? control.configured
+                  ? control.error
+                    ? `控制端錯誤：${control.error}`
+                    : `目前：${control.paused ? 'paused' : 'running'}`
+                  : '尚未設定 RUNNER_CONTROL_URL'
+                : '讀取控制端…'}
             </p>
           </div>
           
           <button
             type="button"
-            onClick={() => setIsRunnerEnabled(!isRunnerEnabled)}
+            onClick={toggleRunner}
+            disabled={!control?.configured || isPending}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
               isRunnerEnabled ? 'bg-jade' : 'bg-mute/30'
-            }`}
+            } disabled:cursor-not-allowed disabled:opacity-50`}
             role="switch"
             aria-checked={isRunnerEnabled}
           >

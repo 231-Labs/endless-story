@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "deploy": "tsx --env-file-if-exists=../web/.env.local scripts/deploy.ts",
+    "deploy-preflight": "tsx --env-file-if-exists=../web/.env.local scripts/deploy-preflight.ts",
     "bootstrap": "tsx --env-file-if-exists=../web/.env.local scripts/bootstrap.ts",
     "reset": "tsx --env-file-if-exists=../web/.env.local scripts/reset.ts",
     "test-e2e": "tsx --env-file-if-exists=../web/.env.local scripts/test-recruit-e2e.ts",
     "seed-cast": "tsx --env-file-if-exists=../web/.env.local scripts/seed-cast.ts",
     "world-loop": "tsx --env-file-if-exists=../web/.env.local scripts/world-loop.ts",
+    "start": "pnpm run world-loop",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

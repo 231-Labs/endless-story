@@ -1,4 +1,5 @@
 import type { Character, CharacterMagnetism, CharacterRole } from '@endless-story/shared';
+import { inferRoleFromText } from '@endless-story/shared';
 import { characters, getCharacterById, listCharactersBySaga } from '@/mocks/characters';
 import { magnetismByCharacterId } from '@/mocks/magnetism';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
@@ -51,10 +52,18 @@ export async function getCharacter(id: string): Promise<Character | null> {
   if (isSuiObjectId(id)) {
     const onChain = await fetchOnChainCharacter(id);
     if (onChain) {
+      const recruitment = await resolveRecruitmentForCharacter(id);
       const taggedRole = roleFromPublicTags(onChain);
-      if (taggedRole) return { ...onChain, role: taggedRole as CharacterRole };
-      const role = await resolveRoleFromVoucher(id);
-      return role ? { ...onChain, role } : onChain;
+      const enriched = {
+        ...onChain,
+        ...(recruitment ? { membership: recruitment.membership } : {}),
+        ...(taggedRole
+          ? { role: taggedRole as CharacterRole }
+          : recruitment
+            ? { role: recruitment.specialty as CharacterRole }
+            : {}),
+      };
+      return taggedRole || recruitment ? enriched : enrichRoleFromDescription(onChain);
     }
   }
   if (USE_MOCK) return getCharacterById(id) ?? null;
@@ -96,15 +105,12 @@ export async function getMagnetism(characterId: string): Promise<CharacterMagnet
 
 /* ── role enrichment helpers ────────────────────────────────────── */
 
-async function resolveRoleFromVoucher(characterId: string): Promise<CharacterRole | null> {
+async function resolveRecruitmentForCharacter(
+  characterId: string,
+): Promise<Awaited<ReturnType<typeof getStoreRecruitment>>> {
   const recruitmentId = await fetchRecruitmentIdForCharacter(characterId);
   if (!recruitmentId) return null;
-  const recruitment = await getStoreRecruitment(recruitmentId);
-  if (!recruitment) return null;
-  // Recruitment.specialty is `CharacterRole | string`; the runtime
-  // value may be outside the union (e.g. "富商"). Cast through —
-  // CharacterPortrait + role-display surfaces all tolerate unknowns.
-  return recruitment.specialty as CharacterRole;
+  return getStoreRecruitment(recruitmentId);
 }
 
 async function enrichRoles(chars: Character[]): Promise<Character[]> {
@@ -124,15 +130,25 @@ async function enrichRoles(chars: Character[]): Promise<Character[]> {
   );
   return chars.map((c) => {
     const taggedRole = roleFromPublicTags(c);
-    if (taggedRole) return { ...c, role: taggedRole as CharacterRole };
     const rid = recruitIdMap.get(c.id);
     const recruitment = rid ? recruitmentsById.get(rid) : null;
-    if (!recruitment) return c;
-    return { ...c, role: recruitment.specialty as CharacterRole };
+    if (taggedRole || recruitment) {
+      return {
+        ...c,
+        ...(recruitment ? { membership: recruitment.membership } : {}),
+        role: (taggedRole ?? recruitment?.specialty ?? c.role) as CharacterRole,
+      };
+    }
+    return enrichRoleFromDescription(c);
   });
 }
 
 function roleFromPublicTags(character: Character): string | null {
   const tag = character.publicTags?.find((t) => t.label.startsWith('role:'));
   return tag ? tag.label.slice('role:'.length) : null;
+}
+
+function enrichRoleFromDescription(character: Character): Character {
+  const inferred = inferRoleFromText(character.description);
+  return inferred ? { ...character, role: inferred as CharacterRole } : character;
 }

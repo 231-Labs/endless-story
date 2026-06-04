@@ -3,22 +3,22 @@
 /**
  * Server action — execute a cli script via pnpm filter and return its output.
  *
- * Used by the admin UI to trigger deploy / bootstrap / e2e from a button
+ * Used by the admin UI to trigger deploy / bootstrap / preflight / e2e from a button
  * instead of dropping to a terminal. Output is captured (not streamed) so
  * the UI receives the full log after the script exits.
  *
  * Constraints:
  * - Node runtime only (uses child_process). Must NOT run on edge.
  * - The `sui` binary needs to be on PATH for deploy.
- * - The keypair must already exist at ~/.endless-wuxia/keypair.json (or
- *   SUI_ADMIN_PRIVATE_KEY env var for redeem-voucher).
+ * - CLI deploy/bootstrap use the same SUI_ADMIN_PRIVATE_KEY env var as web
+ *   server actions; no keypair-file fallback.
  * - `sui client active-env` must match the --env passed.
  */
 
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
-export type CliScript = 'deploy' | 'bootstrap' | 'test-e2e';
+export type CliScript = 'deploy-preflight' | 'deploy' | 'bootstrap' | 'test-e2e';
 
 export interface RunCliScriptInput {
     script: CliScript;

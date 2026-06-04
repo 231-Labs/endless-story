@@ -61,10 +61,15 @@ export async function runPlanAction(
         : '某日';
 
     // Recall: what's on her mind + her previous plan.
-    const [recalled, currentPlan] = await Promise.all([
+    const [recalledRaw, currentPlanRaw] = await Promise.all([
         recallForCharacter(characterId, `${name} 目標 心事 處境 ${sagaName}`, 6),
         recallCurrentPlanText(characterId),
     ]);
+    const effectiveRole = role ?? '—';
+    const recalled = recalledRaw.filter((m) => !hasAuthorityRoleDrift(m, effectiveRole));
+    const currentPlan = hasAuthorityRoleDrift(currentPlanRaw, effectiveRole)
+        ? null
+        : currentPlanRaw;
     // If memory isn't configured, recall returns [] + null — planning is a
     // no-op (it needs to persist + be recalled to matter).
     if (recalled.length === 0 && currentPlan == null) {
@@ -77,7 +82,7 @@ export async function runPlanAction(
     try {
         result = await characterAgent.updatePlan({
             name,
-            role: role ?? '—',
+            role: effectiveRole,
             sagaName,
             dayLabel,
             recalledMemories: recalled,
@@ -115,4 +120,10 @@ export async function runPlanAction(
         remembered,
         skipReason: remembered ? undefined : 'memory_unconfigured',
     };
+}
+
+function hasAuthorityRoleDrift(text: string | null | undefined, role: string): boolean {
+    if (!text) return false;
+    if (role.includes('班主')) return false;
+    return /班主|老闆|老板|當家|掌事|東家/.test(text);
 }

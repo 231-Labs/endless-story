@@ -15,6 +15,8 @@ import { getWorldTimeSnapshot } from '@/lib/actions/world-time';
 import { charactersApi, sagasApi, scenesApi } from '@/lib/api/index';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Admin → 導演 — feed admin intent into the Saga Director LLM, see the
  * structured capability calls it picks, optionally dispatch them on

@@ -7,14 +7,14 @@
  * pieces N1–N3 + R-era services into a single self-driving pass, in order:
  *
  *   1. ADVANCE   World tick moves (narrative time) — unless dry-run.
- *   2. ACT       Every character in an open event PLAYS its hand on its own
- *                (N1 decideCardPlay → submit_action). The world acts without
- *                an admin clicking each card.
- *   3. PRODUCE   Each character writes a day-aware POV chapter (subscriber-
- *                gated unless forced) — recall + relationships threaded in.
- *   4. REFLECT   Periodic sleep (N2): consolidate scattered memories into
- *                dense anchored reflections so recall doesn't degrade.
- *   5. NARRATE   Compile the objective gazette for the day (director side).
+ *   2. PLAN      Each character updates a standing goal (MemWal plan).
+ *   3. MOVE      Idle characters walk toward goals / relevant cast.
+ *   4. DRAMA     Derive scarce-resource tension (deterministic).
+ *   5. SOCIAL    Same-scene observe / talk / idle; writes subjective memory.
+ *   6. ACT       Characters in open events play their own hand.
+ *   7. PRODUCE   Each character writes a day-aware POV chapter.
+ *   8. REFLECT   Periodic sleep (N2): consolidate scattered memories.
+ *   9. NARRATE   Compile the objective gazette for the day.
  *
  * Sequential throughout — one admin keypair can't sign in parallel without
  * object-version conflicts on the shared StorytellerCap. Demo driver is the
@@ -38,6 +38,7 @@ import { resolveNetwork } from '@/lib/chain/network';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
 import { deriveAndCommitDramaBeat, tensionFraction } from '@/lib/chain/drama';
 import {
+    drainMemoryWarnings,
     recallCurrentPlanText,
     recallForCharacter,
     rememberForCharacter,
@@ -62,16 +63,14 @@ import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
 
 /**
- * Max characters whose memory-recall work (PLAN / MOVE / ACT decide / POV)
- * runs at once. Each recall SEAL-decrypts ~18 blobs against a SHARED key
- * server + Walrus aggregator; an all-at-once burst across the cast 429s them
- * and recall silently returns empty. 2 keeps a real speedup without tripping
- * the limit; drop to 1 via MEMWAL_RECALL_CONCURRENCY if the relayer is tight
- * (e.g. running the world-loop continuously), raise it off the staging relayer.
+ * Max characters whose memory-recall work runs at once. Default to 1 for demo:
+ * SEAL key servers rate-limit quickly when one tick fans out PLAN/SOCIAL/POV
+ * across the cast. Raise MEMWAL_RECALL_CONCURRENCY only after a self-hosted
+ * relayer + stable SEAL config are in place.
  */
 const RECALL_CONCURRENCY = Math.max(
     1,
-    Number(process.env.MEMWAL_RECALL_CONCURRENCY) || 2,
+    Number(process.env.MEMWAL_RECALL_CONCURRENCY) || 1,
 );
 
 export interface TickLoopInput {
@@ -79,12 +78,16 @@ export interface TickLoopInput {
     advance?: boolean;
     /** Cap characters processed for POV/sleep (LLM cost guard). Default 6. */
     maxCharacters?: number;
+    /** Optional exact character ids to process, in order. Useful for demo acceptance. */
+    characterIds?: string[];
     /** Update each character's standing plan first (N6). Default true. */
     plan?: boolean;
     /** Let idle characters walk between scenes toward their goals. Default true. */
     move?: boolean;
     /** Run the consolidation/sleep pass. Default true. */
     sleep?: boolean;
+    /** Generate and anchor/preview POV chapters. Default true. */
+    pov?: boolean;
     /** Compile the gazette at the end. Default true. */
     gazette?: boolean;
     /** Auto-resolve (judge) an event once every participant has acted.
@@ -143,6 +146,7 @@ export interface TickMoveResult {
     toSceneId?: string;
     toSceneName?: string;
     reason?: string;
+    skipped?: boolean;
     error?: string;
 }
 
@@ -211,6 +215,8 @@ export interface TickLoopResult {
     /** Set when sleep was enabled but skipped (e.g. not night yet). */
     sleepNote?: string;
     gazette?: TickGazetteResult;
+    memoryWarnings?: string[];
+    memoryDegraded?: boolean;
     error?: string;
 }
 
@@ -249,7 +255,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     const dryRun = input.dryRun ?? false;
+    drainMemoryWarnings(); // discard stale warnings from previous local dev requests
+    const memoryContext = new TickMemoryContext();
     const cap = input.maxCharacters ?? 6;
+    const requestedIds = normalizeCharacterIds(input.characterIds);
     const t0 = Date.now();
     const since = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
     const tlog = (m: string) => console.log(`[tick ${since()}] ${m}`);
@@ -270,8 +279,29 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     if (characters.length === 0) {
         characters = await charactersApi.listCharacters().catch(() => []);
     }
+    if (requestedIds.length > 0) {
+        const byId = new Map(characters.map((c) => [c.id, c]));
+        const missing = requestedIds.filter((id) => !byId.has(id));
+        if (missing.length > 0) {
+            const fetched = await Promise.all(
+                missing.map((id) => charactersApi.getCharacter(id).catch(() => null)),
+            );
+            for (const c of fetched) {
+                if (c && !byId.has(c.id)) {
+                    characters.push(c);
+                    byId.set(c.id, c);
+                }
+            }
+        }
+    }
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
-    const slice = characters.slice(0, cap);
+    const slice =
+        requestedIds.length > 0
+            ? requestedIds
+                  .map((id) => characters.find((c) => c.id === id))
+                  .filter((c): c is Character => Boolean(c))
+                  .slice(0, cap)
+            : characters.slice(0, cap);
     const scenes = await fetchOnChainScenesForSaga(d.sagaId).catch(() => []);
     const roster = await buildSagaRoster(d.sagaId, { characters, scenes }).catch(
         () => [] as SagaRosterEntry[],
@@ -308,6 +338,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             }
         });
         for (const { c, p } of settled) {
+            if (p.ok && p.planText) memoryContext.setPlan(c.id, p.planText);
             plans.push({
                 characterId: c.id,
                 name: c.name,
@@ -336,10 +367,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     nameById,
                     rosterById,
                     roleById,
+                    memoryContext,
                     dryRun,
                 })),
             );
-            tlog(`   移動 ${moves.filter((m) => m.ok).length} 人${dryRun ? '（預演）' : ''}`);
+            tlog(`   移動 ${moves.filter((m) => m.ok && m.toSceneId).length} 人${dryRun ? '（預演）' : ''}`);
             if (moves.some((m) => m.ok && m.toSceneId)) {
                 activeScenes = applyMoveResultsToScenes(activeScenes, moves);
                 activeRoster = applyMoveResultsToRoster(activeRoster, activeScenes, moves);
@@ -410,6 +442,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     scenes: activeScenes,
                     rosterById,
                     roleById,
+                    memoryContext,
                     dramaHints,
                     dryRun,
                 })),
@@ -436,6 +469,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 input.autoResolve ?? true,
                 dramaHints,
                 rosterContextById,
+                memoryContext,
             );
             acts.push(...phase.acts);
             resolves.push(...phase.resolves);
@@ -446,83 +480,96 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 4. PRODUCE — POV chapter per character.
-    //    Dry-run does NO chain writes → generate every chapter CONCURRENTLY
-    //    (this is the big preview speedup). A real run anchors via
-    //    commitment::commit (Sui signing) → must stay serial.
-    const trigger = `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
-    const mapPov = (c: Character, r: Awaited<ReturnType<typeof runPovForCharacter>>): TickPovResult => ({
-        characterId: c.id,
-        name: c.name,
-        ok: r.ok,
-        anchored: r.anchored,
-        skipReason: r.skipReason,
-        chapter: r.chapter,
-        recalledCount: r.recalledCount,
-        digest: r.digest,
-        error: r.error,
-    });
     const povs: TickPovResult[] = [];
-    // Generate chapters with BOUNDED concurrency (each recalls memory →
-    // SEAL decrypt; an unbounded burst 429s the key server), then — for a
-    // real run — anchor them ALL IN ONE PTB (one signature). Generation is
-    // the slow part (primary LLM); the anchor is now a single transaction.
-    // Per-item try/catch so one bad recall (e.g. aggregator DNS blip) can't
-    // reject the whole batch and kill the tick.
-    tlog(`④ POV 生成 ${slice.length} 篇（慢，每篇一段 LLM）…`);
-    const generated = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
-        try {
-            const r = await runPovForCharacter(admin, c.id, {
-                triggerNarrative: trigger,
-                forceRun: true,
-                dryRun: true,
-                dramaHint: dramaHints[c.id],
-                rosterContext: rosterContextById.get(c.id),
-            });
-            tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
-            return { c, r };
-        } catch (err) {
-            tlog(`   · POV ${c.name} ✗`);
-            return {
-                c,
-                r: {
-                    ok: false,
-                    chapter: '',
-                    anchored: false,
-                    recalledCount: 0,
-                    error: err instanceof Error ? err.message : String(err),
-                } satisfies Awaited<ReturnType<typeof runPovForCharacter>>,
-            };
+    if (input.pov ?? true) {
+        // 4. PRODUCE — POV chapter per character.
+        //    Dry-run does NO chain writes → generate every chapter CONCURRENTLY
+        //    (this is the big preview speedup). A real run anchors via
+        //    commitment::commit (Sui signing) → must stay serial.
+        const trigger = `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
+        const mapPov = (c: Character, r: Awaited<ReturnType<typeof runPovForCharacter>>): TickPovResult => ({
+            characterId: c.id,
+            name: c.name,
+            ok: r.ok,
+            anchored: r.anchored,
+            skipReason: r.skipReason,
+            chapter: r.chapter,
+            recalledCount: r.recalledCount,
+            digest: r.digest,
+            error: r.error,
+        });
+        // Generate chapters with BOUNDED concurrency (each recalls memory →
+        // SEAL decrypt; an unbounded burst 429s the key server), then — for a
+        // real run — anchor them ALL IN ONE PTB (one signature). Generation is
+        // the slow part (primary LLM); the anchor is now a single transaction.
+        // Per-item try/catch so one bad recall (e.g. aggregator DNS blip) can't
+        // reject the whole batch and kill the tick.
+        tlog(`④ POV 生成 ${slice.length} 篇（慢，每篇一段 LLM）…`);
+        const generated = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
+            try {
+                const r = await runPovForCharacter(admin, c.id, {
+                    triggerNarrative: trigger,
+                    forceRun: true,
+                    dryRun: true,
+                    dramaHint: dramaHints[c.id],
+                    rosterContext: rosterContextById.get(c.id),
+                    recentMemorySnippets: await memoryContext.recent(
+                        c.id,
+                        trigger,
+                        4,
+                        'pov',
+                    ),
+                    relationshipHints: await memoryContext.relationshipHints(c.id, 5),
+                    planHint: await memoryContext.plan(c.id),
+                    skipMemoryRecall: true,
+                });
+                tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
+                return { c, r };
+            } catch (err) {
+                tlog(`   · POV ${c.name} ✗`);
+                return {
+                    c,
+                    r: {
+                        ok: false,
+                        chapter: '',
+                        anchored: false,
+                        recalledCount: 0,
+                        error: err instanceof Error ? err.message : String(err),
+                    } satisfies Awaited<ReturnType<typeof runPovForCharacter>>,
+                };
+            }
+        });
+        if (dryRun) {
+            for (const { c, r } of generated) povs.push(mapPov(c, r));
+        } else {
+            const toAnchor = generated.filter(({ r }) => r.chapter.trim());
+            for (const { c, r } of generated) {
+                if (!r.chapter.trim()) povs.push(mapPov(c, r)); // generation failed
+            }
+            if (toAnchor.length > 0) tlog(`   章回上鏈（${toAnchor.length} 篇，一個 PTB）…`);
+            const batch = await anchorPovChaptersBatch(
+                admin,
+                d.sagaId,
+                toAnchor.map(({ c, r }) => ({ characterId: c.id, chapter: r.chapter })),
+            );
+            const byChar = new Map(batch.map((b) => [b.characterId, b]));
+            for (const { c, r } of toAnchor) {
+                const b = byChar.get(c.id);
+                povs.push({
+                    characterId: c.id,
+                    name: c.name,
+                    ok: b?.anchored ?? false,
+                    anchored: b?.anchored ?? false,
+                    chapter: r.chapter,
+                    recalledCount: r.recalledCount,
+                    commitmentId: b?.commitmentId,
+                    digest: b?.digest,
+                    error: b?.anchored ? undefined : b?.error,
+                });
+            }
         }
-    });
-    if (dryRun) {
-        for (const { c, r } of generated) povs.push(mapPov(c, r));
     } else {
-        const toAnchor = generated.filter(({ r }) => r.chapter.trim());
-        for (const { c, r } of generated) {
-            if (!r.chapter.trim()) povs.push(mapPov(c, r)); // generation failed
-        }
-        if (toAnchor.length > 0) tlog(`   章回上鏈（${toAnchor.length} 篇，一個 PTB）…`);
-        const batch = await anchorPovChaptersBatch(
-            admin,
-            d.sagaId,
-            toAnchor.map(({ c, r }) => ({ characterId: c.id, chapter: r.chapter })),
-        );
-        const byChar = new Map(batch.map((b) => [b.characterId, b]));
-        for (const { c, r } of toAnchor) {
-            const b = byChar.get(c.id);
-            povs.push({
-                characterId: c.id,
-                name: c.name,
-                ok: b?.anchored ?? false,
-                anchored: b?.anchored ?? false,
-                chapter: r.chapter,
-                recalledCount: r.recalledCount,
-                commitmentId: b?.commitmentId,
-                digest: b?.digest,
-                error: b?.anchored ? undefined : b?.error,
-            });
-        }
+        tlog(`④ POV 略過（pov=false）`);
     }
 
     // 5. REFLECT — periodic sleep / consolidation. Characters sleep at NIGHT,
@@ -581,8 +628,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         sleeps.some((s) => s.ok && !s.skipReason) ||
         gazette?.ok === true;
     tlog(
-        `◇ 本輪完成 — 規劃${plans.length}·移動${moves.filter((m) => m.ok).length}·互動${socials.filter((s) => s.ok && s.kind !== 'idle').length}·出牌${acts.filter((a) => a.ok).length}·章回${povs.filter((p) => p.anchored).length}·公報${gazette?.anchored ? '✓' : '—'}`,
+        `◇ 本輪完成 — 規劃${plans.length}·移動${moves.filter((m) => m.ok && m.toSceneId).length}·互動${socials.filter((s) => s.ok && s.kind !== 'idle').length}·出牌${acts.filter((a) => a.ok).length}·章回${povs.filter((p) => p.anchored).length}·公報${gazette?.anchored ? '✓' : '—'}`,
     );
+    const memoryWarnings = drainMemoryWarnings();
     return {
         ok: anyOk || (slice.length === 0),
         advanced,
@@ -597,7 +645,62 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         sleeps,
         sleepNote,
         gazette,
+        memoryWarnings,
+        memoryDegraded: memoryWarnings.length > 0,
     };
+}
+
+function normalizeCharacterIds(ids: unknown): string[] {
+    if (!Array.isArray(ids)) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of ids) {
+        if (typeof raw !== 'string') continue;
+        const id = raw.trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push(id);
+    }
+    return out;
+}
+
+class TickMemoryContext {
+    private plans = new Map<string, Promise<string | null>>();
+    private relationships = new Map<string, Promise<string[]>>();
+    private recentMemories = new Map<string, Promise<string[]>>();
+
+    plan(characterId: string): Promise<string | null> {
+        let p = this.plans.get(characterId);
+        if (!p) {
+            p = recallCurrentPlanText(characterId).catch(() => null);
+            this.plans.set(characterId, p);
+        }
+        return p;
+    }
+
+    setPlan(characterId: string, text: string | null): void {
+        this.plans.set(characterId, Promise.resolve(text));
+    }
+
+    relationshipHints(characterId: string, limit = 5): Promise<string[]> {
+        const key = `${characterId}:rel:${limit}`;
+        let p = this.relationships.get(key);
+        if (!p) {
+            p = fetchRelationshipHints(characterId, limit).catch(() => [] as string[]);
+            this.relationships.set(key, p);
+        }
+        return p;
+    }
+
+    recent(characterId: string, query: string, limit = 4, purpose = 'recent'): Promise<string[]> {
+        const key = `${characterId}:${purpose}:${limit}:${query}`;
+        let p = this.recentMemories.get(key);
+        if (!p) {
+            p = recallForCharacter(characterId, query, limit).catch(() => [] as string[]);
+            this.recentMemories.set(key, p);
+        }
+        return p;
+    }
 }
 
 function buildRosterContextById(
@@ -665,6 +768,7 @@ async function runMovePhase(input: {
     nameById: Map<string, string>;
     rosterById: Map<string, SagaRosterEntry>;
     roleById: Map<string, string>;
+    memoryContext: TickMemoryContext;
     dryRun: boolean;
 }): Promise<TickMoveResult[]> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
@@ -694,8 +798,23 @@ async function runMovePhase(input: {
     // Characters on stage in an open event stay put.
     const busy = await fetchBusyCharacterIds(input.sagaId);
 
+    const out: TickMoveResult[] = [];
+    for (const c of input.slice) {
+        const cur = sceneByChar.get(c.id);
+        if (cur && busy.has(c.id)) {
+            out.push({
+                characterId: c.id,
+                name: c.name,
+                ok: true,
+                fromSceneId: cur.id,
+                reason: '正在 open event 中，暫不移動',
+                skipped: true,
+            });
+        }
+    }
+
     const candidates = input.slice.filter((c) => sceneByChar.has(c.id) && !busy.has(c.id));
-    if (candidates.length === 0) return [];
+    if (candidates.length === 0) return out;
 
     // DECIDE moves (bounded concurrency — recalls plan → SEAL).
     const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
@@ -709,7 +828,7 @@ async function runMovePhase(input: {
                     description: s.description,
                     presentCharacters: presentCharacters(s),
                 }));
-            const planHint = await recallCurrentPlanText(c.id).catch(() => null);
+            const planHint = await input.memoryContext.plan(c.id);
             const dcs = await characterAgent.decideMove({
                 name: c.name,
                 role: input.roleById.get(c.id) ?? '—',
@@ -733,7 +852,19 @@ async function runMovePhase(input: {
     const movers = decided.filter(
         (x) => x.dcs.move && x.dcs.targetSceneId && x.fromId && x.fromId !== x.dcs.targetSceneId,
     );
-    if (movers.length === 0) return [];
+    for (const d of decided) {
+        if (!movers.includes(d)) {
+            out.push({
+                characterId: d.c.id,
+                name: d.c.name,
+                ok: true,
+                fromSceneId: d.fromId || undefined,
+                reason: d.dcs.reason || '判斷此刻留在原處',
+                skipped: true,
+            });
+        }
+    }
+    if (movers.length === 0) return out;
 
     const buildMove = (m: (typeof movers)[number]) =>
         endlessTx.character.moveCharacter({
@@ -744,7 +875,6 @@ async function runMovePhase(input: {
             character: m.c.id,
         });
 
-    const out: TickMoveResult[] = [];
     if (input.dryRun) {
         for (const m of movers) {
             out.push({
@@ -803,6 +933,7 @@ async function runSocialPhase(input: {
     scenes: Scene[];
     rosterById: Map<string, SagaRosterEntry>;
     roleById: Map<string, string>;
+    memoryContext: TickMemoryContext;
     dramaHints: Record<string, string>;
     dryRun: boolean;
 }): Promise<TickSocialResult[]> {
@@ -812,10 +943,19 @@ async function runSocialPhase(input: {
     for (const scene of input.scenes) {
         for (const cid of scene.currentCharacterIds ?? []) sceneByChar.set(cid, scene);
     }
+    const skippedBusy: TickSocialResult[] = input.slice
+        .filter((c) => sceneByChar.has(c.id) && busy.has(c.id))
+        .map((c) => ({
+            characterId: c.id,
+            name: c.name,
+            ok: true,
+            kind: 'idle' as const,
+            reason: '正在 open event 中，SOCIAL 跳過',
+        }));
     const candidates = input.slice.filter((c) => sceneByChar.has(c.id) && !busy.has(c.id));
-    if (candidates.length === 0) return [];
+    if (candidates.length === 0) return skippedBusy;
 
-    return mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
+    const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c): Promise<TickSocialResult> => {
         const scene = sceneByChar.get(c.id);
         if (!scene) {
             return { characterId: c.id, name: c.name, ok: false, kind: 'idle', error: 'no_scene' };
@@ -841,9 +981,14 @@ async function runSocialPhase(input: {
         try {
             const names = othersInScene.map((o) => o.name).join(' ');
             const [planHint, recentMemories, relationshipHints] = await Promise.all([
-                recallCurrentPlanText(c.id).catch(() => null),
-                recallForCharacter(c.id, `${scene.name} ${names} 人物印象 關係 今日觀察`, 5),
-                fetchRelationshipHints(c.id, 5).catch(() => [] as string[]),
+                input.memoryContext.plan(c.id),
+                input.memoryContext.recent(
+                    c.id,
+                    `${scene.name} ${names} 人物印象 關係 今日觀察`,
+                    4,
+                    'social',
+                ),
+                input.memoryContext.relationshipHints(c.id, 5),
             ]);
             const raw = await characterAgent.decideSocialAction({
                 name: c.name,
@@ -858,7 +1003,7 @@ async function runSocialPhase(input: {
             const target = raw.targetCharacterId
                 ? othersInScene.find((o) => o.id === raw.targetCharacterId)
                 : undefined;
-            const kind = raw.kind === 'talk' && !target
+            const kind: TickSocialResult['kind'] = raw.kind === 'talk' && !target
                 ? raw.observation
                     ? 'observe'
                     : 'idle'
@@ -920,6 +1065,7 @@ async function runSocialPhase(input: {
             };
         }
     });
+    return [...skippedBusy, ...decided];
 }
 
 function buildSpeakerObservation(input: {
@@ -995,6 +1141,7 @@ async function runActPhase(
     autoResolve: boolean,
     dramaHints: Record<string, string> = {},
     rosterContextById: Map<string, string[]> = new Map(),
+    memoryContext = new TickMemoryContext(),
 ): Promise<{ acts: TickActResult[]; resolves: TickResolveResult[] }> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return { acts: [], resolves: [] };
@@ -1046,6 +1193,14 @@ async function runActPhase(
                 decideOnly: true,
                 dramaHint: dramaHints[charId],
                 rosterContext: rosterContextById.get(charId),
+                recalledMemories: await memoryContext.recent(
+                    charId,
+                    `${e.eventId} 衝突 抉擇 出牌`,
+                    4,
+                    `act:${e.eventId}`,
+                ),
+                relationshipHints: await memoryContext.relationshipHints(charId, 5),
+                planHint: await memoryContext.plan(charId),
             });
             return { e, charId, r };
         } catch (err) {

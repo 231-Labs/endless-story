@@ -34,6 +34,7 @@ import {
     buildUserPrompt,
     type CharacterSnapshot,
 } from './prompt.js';
+import type { SagaSoul } from '../character-worker/saga-soul.js';
 
 export { consolidateMemories } from './consolidate.js';
 export type { ConsolidateInput, ConsolidateResult } from './consolidate.js';
@@ -88,14 +89,15 @@ export interface RunReflectionResult {
 
 export async function runOnce(input: RunReflectionInput): Promise<RunReflectionResult> {
     const client = makeSuiClient({ network: resolveNetwork() });
-    const snapshot = await fetchCharacterSnapshot(client, input.characterId, input.sagaId);
-    if (!snapshot) {
+    const fetched = await fetchCharacterSnapshot(client, input.characterId, input.sagaId);
+    if (!fetched) {
         return {
             reflection: '',
             anchored: false,
             skipReason: 'character_unreachable',
         };
     }
+    const { snapshot, soul } = fetched;
 
     // Pull recent POV chapters + previous reflection for prompt context.
     const [recentChapters, prevReflection] = await Promise.all([
@@ -107,7 +109,7 @@ export async function runOnce(input: RunReflectionInput): Promise<RunReflectionR
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
 
-    const system = buildSystemPrompt();
+    const system = buildSystemPrompt(soul);
     const user = buildUserPrompt({
         character: snapshot,
         mode: input.mode,
@@ -248,7 +250,7 @@ async function fetchCharacterSnapshot(
     client: SuiClient,
     characterId: string,
     sagaId: string,
-): Promise<CharacterSnapshot | null> {
+): Promise<{ snapshot: CharacterSnapshot; soul: SagaSoul } | null> {
     const [charRes, sagaRes] = await Promise.all([
         read.character.getCharacter(client, characterId).catch(() => null),
         read.saga.getSaga(client, sagaId).catch(() => null),
@@ -266,7 +268,15 @@ async function fetchCharacterSnapshot(
         };
         attributes?: Array<{ key?: string; value?: number | string }>;
     };
-    const sagaJson = sagaRes?.json as unknown as { name?: string } | undefined;
+    const sagaJson = sagaRes?.json as unknown as
+        | {
+              name?: string;
+              description?: string;
+              departure_policy?: string;
+              nature_prompt?: string;
+              rhythm_hints?: string;
+          }
+        | undefined;
 
     const attrMap: Record<string, number> = {};
     for (const a of charJson.attributes ?? []) {
@@ -276,7 +286,7 @@ async function fetchCharacterSnapshot(
     }
     const physical = charJson.profile?.physical_facts;
 
-    return {
+    const snapshot: CharacterSnapshot = {
         id: characterId,
         name: charJson.profile?.name ?? '無名',
         // Role isn't on chain; caller may have a better source (off-chain
@@ -295,6 +305,18 @@ async function fetchCharacterSnapshot(
             disposition: attrMap.disposition,
         },
     };
+
+    // Saga soul (F) from the saga object already fetched above — same shape
+    // the POV worker derives, so reflection reads in the saga's voice too.
+    const soul: SagaSoul = {
+        sagaName: sagaJson?.name ?? '無名戲班',
+        premise: sagaJson?.description?.trim() || undefined,
+        departurePolicy: sagaJson?.departure_policy?.trim() || undefined,
+        naturePrompt: sagaJson?.nature_prompt?.trim() || undefined,
+        rhythmHints: sagaJson?.rhythm_hints?.trim() || undefined,
+    };
+
+    return { snapshot, soul };
 }
 
 async function fetchRecentChapterSnippets(

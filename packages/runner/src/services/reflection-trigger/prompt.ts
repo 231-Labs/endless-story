@@ -15,6 +15,7 @@
  */
 
 import { roleHint } from '@endless-story/shared';
+import { type SagaSoul, buildSagaSoulBlock } from '../character-worker/saga-soul.js';
 
 export interface CharacterSnapshot {
     id: string;
@@ -49,8 +50,8 @@ export interface ReflectionPromptInput {
     recalledMemories?: string[];
 }
 
-export function buildSystemPrompt(): string {
-    return [
+export function buildSystemPrompt(soul?: SagaSoul): string {
+    const base = [
         '你正在以角色的內在獨白寫一段「反思」。**第一人稱**、私密、不為任何人表演。',
         '',
         '**鐵則 — 內在 vs 對外的分裂**：',
@@ -71,7 +72,10 @@ export function buildSystemPrompt(): string {
         '- 不要交代「我剛剛在什麼場景做了什麼」— 公報跟章回都記過了',
         '',
         '**輸出格式**：純散文。不要 markdown 標題、不要前言「以下是我的反思」之類。第一個字就是「我」或一個感官 / 內心動詞。',
-    ].join('\n');
+    ];
+    // Same per-saga tonal DNA the POV prompt uses (rule 6 above points here).
+    const soulBlock = buildSagaSoulBlock(soul);
+    return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
 }
 
 export function buildUserPrompt(input: ReflectionPromptInput): string {

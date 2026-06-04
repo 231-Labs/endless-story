@@ -6,6 +6,8 @@ import {
 import { SiteNav } from '@/components/home/SiteNav';
 import { HomeContent } from '@/components/home/HomeContent';
 
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   const saga = await sagasApi.getCurrentSaga();
   const [clips, openRecruitments] = await Promise.all([

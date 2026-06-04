@@ -39,7 +39,7 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
-## 目前進度（2026-06-02）
+## 目前進度（2026-06-03）
 
 **一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder；目前進入「demo 穩定化 + 部署 + 影片素材」階段。
 
@@ -50,7 +50,7 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 - **角色認知 v1 已接通**：
   - mint 後 `redeemVoucher → seedGenesisMemoryAction` 會 seed self genesis、主觀 relationship memories、最多 3 位既有角色的 reciprocal observation。
   - 每輪 tick 建 saga roster snapshot：`id/name/role/gender/age/brief/currentScene`。
-  - `role` 來源：chain `role:*` tag → recruitment specialty → `—`。
+  - `role` 來源：chain `role:*` tag → recruitment specialty → chain profile description 行當詞 fallback → `—`。
   - roster 會注入 `PLAN / MOVE / SOCIAL / ACT / POV`，讓角色知道誰是花旦、小生、同場人物。
   - relationship hint 是雙源：先讀角色自己的 MemWal `relationship` memory，再合併 on-chain `RelationshipSeeded`（標明「自己的人物印象」vs「導演公開牽起」）。
 - **輕量 SOCIAL phase 已接通**：
@@ -58,20 +58,64 @@ pnpm -r type-check                            # 全 repo 綠燈確認
   - 輸出 `observe | talk | idle`；`talk` 目標必須同 scene。
   - 成功互動會寫 speaker observation、target `[聽見：角色名]` observation、必要時寫 speaker relationship memory，並更新 `scene-lines` 供前端手卷顯示。
   - 已修正：MOVE 後本輪 in-memory scene snapshot 會更新，避免 SOCIAL 用移動前位置造成跨 scene 對話。
+- **Runner 穩定化第一輪已做**：
+  - `MEMWAL_RECALL_CONCURRENCY` code default 改成 1（demo 優先穩定）。
+  - MemWal recall 遇到 429 會 retry + jitter backoff，並把 memory warning 帶回 tick result。
+  - tick loop 有 per-tick memory context，MOVE / SOCIAL / ACT / POV 共用 plan / relationship / recent recall，降低同輪重複 SEAL decrypt。
+  - Admin SchedulerPanel 會顯示 DRAMA / SOCIAL / memory degraded，方便前端直接驗 runner 是否工作；MOVE/SOCIAL 即使因 open event 忙碌而跳過也會回 idle/stay reason，不再看起來像沒跑。
+  - PLAN / POV prompt 已加「舞台中心不是管理權力」防線；非班主角色的舊 plan 若含「老板/當家/掌事」等身份漂移會被丟棄，生成後若仍出現管理權力漂移會回退成行當目標。
 - **Drama 整合已驗證方向正確**：用孟雲屏 / 顧驚鴻 / 柳生春 dry-run 時，`與孟雲屏搭戲` 張力落在顧 / 柳身上，孟雲屏本人不會被當作搶搭檔位的人。
 - **MemWal 三因子 metadata / 自架 relayer 方向已開**：
   - `packages/relayer` 已有自架 relayer skeleton。
   - MemWal remember 會把 kind / importance / day metadata 送進 relayer，支援真三因子召回。
   - 人物頁 memory count 已能走 relayer `/api/count`，不再只是 placeholder。
+- **角色本色 persona anchor 已接上**：
+  - `redeemVoucher` 成功後會用 `after()` 背景跑 `generatePersonaAction`，從公開 profile 蒸餾「軸/腔/界」，上傳 Walrus 並用 `commitment::commit` anchor；失敗不擋 mint。
+  - `/dossier` 的 persona 讀取已改成 chain-first：Sui object id 讀 `personaSubject(characterId)` 的最新 commitment，沒有才隱藏本色區；demo slug 仍 fallback mock。
 - **角色經濟驗證已完成**：`packages/economy` 純模擬 12/12 綠，角色頁 survival 已接 off-chain shadow；產品化 tick settle / give phase 還沒進主 loop。
 - **部署文件已補**：見 `docs/DEPLOYMENT.md`，方向是 Vercel 放 web，Zeabur/Contabo 放 relayer + world-loop。
+- **首頁影片素材 override 已接**：`scenesApi.listTodayClips` 會優先讀 `DEMO_CLIPS_URL`、`DEMO_CLIPS_FILE`、`public/demo-clips.json`，再 fallback 現有 mock clips；格式見 `packages/web/public/demo-clips.example.json`。
+- **短 TTL chain-read cache 已接**：公開 Saga / World time / Scene reads 會走 process-local read-through cache，預設 10–15s，`CHAIN_READ_CACHE_TTL_MS=0` 可關閉；不碰 MemWal / 私密內容。
 
 ### 已驗證 / 已知限制
 
-- `pnpm --filter @endless-story/runner type-check` 綠。
-- `pnpm --filter @endless-story/web type-check` 綠。
+- `pnpm --filter @endless-story/runner type-check` 綠（2026-06-03）。
+- `pnpm --filter @endless-story/web type-check` 綠（2026-06-03）。
+- `pnpm --filter @endless-story/shared type-check` / `@endless-story/cli type-check` 綠（2026-06-03）。
+- `POST /api/tick` dry-run 已在本地 dev server 跑通：
+  - `maxCharacters=3`：PLAN / DRAMA / POV 成功，MOVE/SOCIAL 回 open-event busy idle reason，`memoryWarnings=[]`。
+  - `maxCharacters=1`（孟雲屏）：role description fallback + 身份漂移防線生效，不再輸出「孟老板/當家」；`recalledCount=4`。
+- `world-loop` headless dry-run 已跑通（2026-06-03）：
+  `pnpm --filter @endless-story/cli run world-loop -- --max=1 --dry-run --max-characters=1 --no-sleep --no-gazette`
+  → `第1日·日午 · 規劃1 · 移動0 · 張力2 · 互動0 · 出牌0 · 收尾0 · 章回1 · 睡0 · 公報—`。
+- `pnpm --filter @endless-story/web build` 綠（2026-06-03）。已把 `/` 與 `/admin/director` 標成 dynamic，避免 Vercel build-time 去讀 testnet 並把空/舊資料烤成靜態頁。
+- `WORLD_LOOP_URL` 可填 web base URL 或完整 `/api/tick`；已用 `WORLD_LOOP_URL=http://localhost:3002/api/tick` 跑通 headless dry-run。
+- `packages/cli` 已有 `start` script 指向 `world-loop`；Zeabur/Railway service root 設 `packages/cli` 後可直接用 `pnpm start`。
+- `world-loop --max=N` 有任何 HTTP / non-JSON / `ok:false` 失敗會 exit 1，可當部署 smoke gate；已用關閉的 `127.0.0.1:9` 驗過 failure exit 1，再用 3002 dev server 驗過 success exit 0。
+- `world-loop` 支援 `RUNNER_CONTROL_URL=https://<relayer>/control`（或 fallback `MEMWAL_SERVER_URL/control`）；每輪 tick 前若讀到 `{paused:true}` 會跳過本輪，控制端暫時不可用時只 warning 並照跑，避免 relayer 抖動把世界停死。已驗 paused smoke：
+  - `RUNNER_CONTROL_URL='data:application/json,%7B%22paused%22%3Atrue%7D'` + 關閉的 `WORLD_LOOP_URL` → 不打 `/api/tick`，exit 0，JSON `records[0].skipped=true`。
+  - `MEMWAL_SERVER_URL=http://127.0.0.1:8788` fallback → 讀 `http://127.0.0.1:8788/control`，同樣 skipped/exit 0。
+- `/admin` 的 Runner 開關已不是 local state：它會透過 server action 讀/寫 `RUNNER_CONTROL_URL`（fallback `MEMWAL_SERVER_URL/control`），控制 relayer `/control` 的 paused flag。
+- `world-loop` 支援 `--character-ids=<comma-separated ids>`，可精準跑 demo cast 而不是取前 N 個。已用孟/顧/柳 targeted dry-run 跑通（187.8s，仍低於 `/api/tick` 300s maxDuration）：
+  - 孟雲屏 `0x1dff99a3adf385874ae06066a1064a308d9d32907b35ef2ae63023ef9776a349`
+  - 顧驚鴻 `0xa6832662d55a02c09d556c41d4d8bc44c17f0fb3e6338f70c332f63458cdafc7`
+  - 柳生春 `0xc162a7e009a4d63ccf89c7773ea5fc0e3516eca05a536e4d40a042c9883509f6`
+- `world-loop` 支援 `--no-pov`，可快速檢查 DRAMA / SOCIAL / 角色定位，不用每次等章回 LLM。已用孟/顧/柳 targeted dry-run 跑過 fast smoke（62.0s）：`規劃3 · 張力2 · 章回0`，`memoryWarnings=[]`。
+  - Fast smoke 顯示 `partnership:孟雲屏` 仍只落在顧/柳：「與孟雲屏搭戲」。
+  - 另有通用資源 `頭牌名額` 會讓孟/顧/柳都進張力；這是 spotlight/head-slot 資源設計，不是孟雲屏把自己當小生搶搭檔。
+  - `/admin/director` 的自治 tick 面板已接「含 POV 章回」checkbox；關掉後等同 `pov=false`，可快速看 DRAMA/SOCIAL。面板也有上限、角色 IDs 和「孟/顧/柳」快捷填入，等同 CLI `--character-ids=<孟>,<顧>,<柳> --max-characters=3`。
+- `world-loop` 支援 `--json-out=/path/report.json`，會保存完整 tick result / HTTP status / 耗時。已用 `/private/tmp/endless-story-meng-dryrun.json` 驗過：`tickCount=1, failures=0, chapters=1`。
+- 注意：dry-run 不寫 memory、scene-lines 或鏈上 anchor；它只能驗本輪 decision / prompt / role routing，不能驗「第二輪 POV 召回第一輪 SOCIAL memory」。這個 acceptance 要在補 gas、redeploy/bootstrap 後用真跑或測試專用記憶層驗。
 - repo-wide `pnpm -r type-check` 可能因未安裝 `packages/economy` 的 local deps / `tsc` 而失敗；不要把它誤判成 runner/web 改動失敗。
 - 連續多輪 dry-run 會打到 MemWal / SEAL `fetchKeys` 429。自架 MemWal relayer 可改善 indexing/recall 壓力，但 SEAL key server 429 是另一層；demo 前先用 `MEMWAL_RECALL_CONCURRENCY=1`、降低 recall limit、做 per-tick recall cache。
+- 目前 testnet 部署（`contract-ids.ts` last written 2026-06-01）與最新 `event.move` / generated SDK 不完全一致；`pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing` 會在 `new_card_template` 路徑遇到 `FunctionNotFound`。重新 deploy/bootstrap 後再跑此命令補既有 cast role tags。
+- `deploy-preflight` 已新增（2026-06-03）：`pnpm --filter @endless-story/cli run deploy-preflight -- --env testnet --json-out=/private/tmp/endless-story-deploy-preflight.json` 會檢查 active-env、admin signer、gas、Move build，並保存 JSON readiness report；它不 publish、不改 `contract-ids.ts`。
+  - `/admin/deploy` 也已接 `0 preflight` 按鈕，走同一個 CLI script；失敗時會把 stdout/stderr 留在頁面輸出區。
+  - `/admin/deploy` 環境區會直接顯示 `SUI_ADMIN_PRIVATE_KEY` 解出的 `SUI_ADMIN_SIGNER` 與 faucet link；不要再看舊的 `~/.endless-wuxia/keypair.json`。
+  - `/admin/deploy` Runtime 連線區會顯示 relayer `/health`、runner `/control`、首頁 demo clips override、短 TTL chain-read cache 狀態；未設定會明確顯示 fallback。
+  - `/admin/deploy` 的 `① deploy` 會用 `--gas-budget 2000000000 --force-republish`，和 preflight 2.5 SUI 建議相容。
+  - 目前 preflight 前置檢查：Sui active-env=testnet，`SUI_ADMIN_PRIVATE_KEY` signer 與 active-address 同為 `0xb1fe42b96faf2722b4c47b0d8027022354128f977e3d4338a94e96ce55445870`，`sui move build --dump-bytecode-as-base64` 綠。
+  - 最新 preflight（2026-06-03，`--skip-build`）硬擋只剩 gas：admin wallet 有 `2.018562684 SUI`，低於 preflight 建議 `2.5 SUI`；需要去 `https://faucet.sui.io/?address=0xb1fe42b96faf2722b4c47b0d8027022354128f977e3d4338a94e96ce55445870` 補氣後再真 redeploy。
 
 ---
 
@@ -159,7 +203,7 @@ packages/
 
 | # | 項目 | 範圍 | 估時 |
 |---|---|---|---|
-| **S** | **Runner 穩定化 / Demo acceptance** | per-tick recall cache、SEAL 429 backoff、`MEMWAL_RECALL_CONCURRENCY=1` 預設、顧/柳/孟 2 tick 驗證、SOCIAL memory 不寫未授權重設定 | 1–2d |
+| **S** | **Runner demo acceptance** | 已做 cache/backoff/default=1/UI 顯示；剩顧/柳/孟 2 tick 真跑驗證、確認第二輪 POV 召回第一輪 SOCIAL memory、檢查 SOCIAL memory 不寫未授權重設定 | 0.5–1d |
 | **D** | **部署策略落地** | Vercel web + Zeabur/Contabo relayer + world-loop；設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
 | **E** | **角色經濟產品化 Part D** | web adapter / SETTLE phase / GIVE phase / 日界發薪扣 cost / vitality & death hook；若 demo 時間不夠可先保留 shadow | 2–4d |
 | **I** | **Web i18n** | `next-intl` framework + 抽既有文案 + LocaleToggle + `romanize-name`（中文 → 拼音） | 2–3d |
@@ -214,6 +258,45 @@ EOF
 > `SagaMemoryClient`（ControlCap 寫）/`OwnerAuditClient`（OwnerCap 讀）在 `packages/memwal`。
 
 **1. 部署 + 種子化**：開 `http://localhost:3000/admin/deploy` → 上方下拉選 STORY (spring-snow / minimal) + ENV → 依序點 ① deploy → ② bootstrap → ③ seed 職缺。`contract-ids.ts` 會被覆寫。
+
+CLI 路徑先跑 preflight，避免半途才發現 gas / env / build 問題：
+
+```bash
+pnpm --filter @endless-story/cli run deploy-preflight -- --env testnet --json-out=/private/tmp/endless-story-deploy-preflight.json
+```
+
+**1.5. （Drama demo cast）補行當 tags**：若用 `seed-cast` 直接 mint 孟/顧/柳/白，最新腳本會同時寫 role tags；若是舊 cast 已存在，redeploy 到含 tag-op helpers 的 package 後跑：
+
+```bash
+pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing
+```
+
+**1.6. Headless tick smoke（不上鏈）**：部署或本機 server 起來後先跑一輪安全 smoke：
+
+```bash
+pnpm --filter @endless-story/cli run world-loop -- --max=1 --dry-run --max-characters=1 --no-sleep --no-gazette
+```
+
+**1.7. 顧/柳/孟 targeted dry-run（不上鏈）**：驗 demo cast 時不要靠排序，直接指定三人：
+
+```bash
+WORLD_LOOP_URL=http://localhost:3000 \
+pnpm --filter @endless-story/cli run world-loop -- \
+  --max=1 --dry-run --max-characters=3 \
+  --character-ids=0x1dff99a3adf385874ae06066a1064a308d9d32907b35ef2ae63023ef9776a349,0xa6832662d55a02c09d556c41d4d8bc44c17f0fb3e6338f70c332f63458cdafc7,0xc162a7e009a4d63ccf89c7773ea5fc0e3516eca05a536e4d40a042c9883509f6 \
+  --no-sleep --no-gazette \
+  --json-out=/private/tmp/endless-story-gu-liu-meng-dryrun.json
+```
+
+快速只看 DRAMA / SOCIAL 時加 `--no-pov`，會跳過最慢的章回生成：
+
+```bash
+WORLD_LOOP_URL=http://localhost:3000 \
+pnpm --filter @endless-story/cli run world-loop -- \
+  --max=1 --dry-run --max-characters=3 \
+  --character-ids=0x1dff99a3adf385874ae06066a1064a308d9d32907b35ef2ae63023ef9776a349,0xa6832662d55a02c09d556c41d4d8bc44c17f0fb3e6338f70c332f63458cdafc7,0xc162a7e009a4d63ccf89c7773ea5fc0e3516eca05a536e4d40a042c9883509f6 \
+  --no-pov --no-sleep --no-gazette
+```
 
 **2. （可選）調 Faucet**：同頁底部 Faucet 設定 — 改 drip 量、cooldown 等，套用。
 

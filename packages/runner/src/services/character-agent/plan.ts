@@ -50,9 +50,11 @@ export function buildSystemPrompt(): string {
         '2. **用你的記憶與性格定目標**:目標要像「這個人」會有的執念,不是泛泛的好聽話。',
         '3. 三個層次:**長期目標**(數日~數月的執念,1 句)、**眼下打算**(這一兩日要做的事,1 句)、**未竟之事**(2-3 個具體小目標)。',
         '4. 第一人稱、具體、可被行動驗證。不要心靈雞湯、不要現代詞彙。',
+        '5. **身份不得漂移**:行當不是「班主」時,不得自稱班主、老板、當家的、掌事人;只能從自己的行當與眼前利害長出目標。',
+        '6. **舞台中心不是管理權力**:花旦/小生/名角可以在意壓軸、戲份、搭檔、台下目光,但不能決定誰紅誰涼、敲打全班或管束新角兒。',
         '',
         '**輸出**:嚴格只輸出一個 JSON 物件,例如',
-        '`{"longTermGoal":"我要在這戲班掙到能贖回師妹的身價","dailyPlanHint":"先設法搭上孟老闆這條線","openSubgoals":["探明孟老闆的喜好","別讓關北生看出我的底"]}`',
+        '`{"longTermGoal":"我要在這戲班掙到一個穩當小生位","dailyPlanHint":"先設法接住孟雲屏下一折戲","openSubgoals":["探明孟雲屏今日願不願搭戲","別讓關北生看出我的底"]}`',
         '不要 markdown、不要多餘文字。',
     ].join('\n');
 }
@@ -139,15 +141,47 @@ export async function updatePlan(
                 }),
         };
     }
-    const plan = {
+    const plan = sanitizePlanForRole(input, {
         longTermGoal: parsed.longTermGoal?.trim() || '活下去,在這戲班站穩腳跟',
         dailyPlanHint: parsed.dailyPlanHint?.trim() || '把眼前這場戲演好',
         openSubgoals: (parsed.openSubgoals ?? [])
             .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
             .map((s) => s.trim())
             .slice(0, 3),
-    };
+    });
     return { ...plan, planText: formatPlanText(plan) };
+}
+
+function sanitizePlanForRole(
+    input: PlanInput,
+    plan: { longTermGoal: string; dailyPlanHint: string; openSubgoals: string[] },
+): { longTermGoal: string; dailyPlanHint: string; openSubgoals: string[] } {
+    if (input.role.includes('班主')) return plan;
+    const joined = [plan.longTermGoal, plan.dailyPlanHint, ...plan.openSubgoals].join(' ');
+    if (!hasAuthorityDrift(joined)) return plan;
+    if (/花旦|青衣|旦|名伶|坤伶/.test(input.role)) {
+        return {
+            longTermGoal: `我要把${input.name}這個花旦名號唱到台下人人記得`,
+            dailyPlanHint: '先穩住今日妝面、身段與下一折戲的搭檔分寸',
+            openSubgoals: ['看清誰在爭搭檔位', '別讓旁人的目光亂了自己的身段'],
+        };
+    }
+    if (/小生|武生/.test(input.role)) {
+        return {
+            longTermGoal: `我要在這戲班站穩${input.role}的位置`,
+            dailyPlanHint: '先把今日要接的戲與身段磨穩',
+            openSubgoals: ['看清誰在爭同一個台口', '別把急切露得太白'],
+        };
+    }
+    return {
+        longTermGoal: `我要以${input.role && input.role !== '—' ? input.role : '自己的本事'}在這戲班站住腳`,
+        dailyPlanHint: '先把眼前這場戲做穩，不讓旁人看出破綻',
+        openSubgoals: ['留意同場人物的眼色', '守住自己的分寸'],
+    };
+}
+
+function hasAuthorityDrift(text: string): boolean {
+    return /班主|老闆|老板|當家|掌事|東家|掌控全班|管住全班|捏在手心|讓誰紅誰就紅|讓誰涼誰就涼|敲打.*角|新來.*安分/.test(text);
 }
 
 function parsePlan(
