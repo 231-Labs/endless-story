@@ -435,9 +435,10 @@ export function RecruitmentTicket({
       });
       if (!r.ok || !r.characterId) throw new Error(r.error ?? 'redeem 失敗');
       setCharacterId(r.characterId);
-      // Genesis memories are now seeded SERVER-SIDE inside redeemVoucher (awaited,
-      // logged, failure-isolated) — see redeem-voucher.ts. r.seededMemories carries
-      // how many landed. No client-side fire-and-forget needed anymore.
+      // Genesis memories seed SERVER-SIDE in the background (Next `after`) inside
+      // redeemVoucher — see redeem-voucher.ts. We don't block on them here, so the
+      // success seal stamps the moment characterId lands instead of waiting out the
+      // full LLM + MemWal seeding (which previously hung the "上鏈中…" screen).
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setStage('pick');

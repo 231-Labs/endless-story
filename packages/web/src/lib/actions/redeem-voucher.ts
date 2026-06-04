@@ -60,8 +60,6 @@ export interface RedeemVoucherResult {
     ownerCapId?: string;
     /** Transaction digest for receipts / explorer links. */
     digest?: string;
-    /** # of cognition memories seeded immediately after mint (0 if MemWal unconfigured). */
-    seededMemories?: number;
 }
 
 export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVoucherResult> {
@@ -211,22 +209,29 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         };
     }
 
-    // Seed age/gender/role-appropriate genesis memories immediately after the mint lands —
-    // server-side and AWAITED (not the old client-side fire-and-forget, which failed silently
-    // and left characters memory-less). Generation reads the on-chain profile, so it must run
-    // after the Character object exists. A MemWal/LLM failure must NOT fail the mint (the
-    // Character is already on chain), so we swallow errors and just report how many seeded.
-    let seededMemories = 0;
-    try {
-        const seedRes = await seedGenesisMemoryAction(characterId);
-        seededMemories = seedRes.seeded ?? 0;
-        if (seedRes.skipped) {
-            console.warn(`[redeem-voucher] genesis memory skipped (${seedRes.skipped}) for ${characterId}`);
-        } else {
-            console.log(`[redeem-voucher] seeded ${seededMemories} cognition memories for ${characterId}`);
-        }
-    } catch (err) {
-        console.warn(`[redeem-voucher] genesis memory seeding failed for ${characterId}:`, err);
+    // Seed age/gender/role-appropriate genesis memories. Runs AFTER the response
+    // (Next `after`) — the heavy LLM generation + ~11 sequential MemWal writes must
+    // NOT block the mint response. When awaited inline they pinned the client on
+    // "上鏈中…" for the full seeding time (10-40s on testnet) and the success seal
+    // couldn't stamp until characterId arrived; a single hung MemWal write blocked it
+    // forever even though the Character was already minted. `after` keeps the work
+    // server-side (unlike the old client-side fire-and-forget that died on unmount and
+    // left characters memory-less). Generation reads the on-chain profile, which exists
+    // post-tx. Failure is logged only — the Character is already on chain.
+    {
+        const charId = characterId;
+        after(async () => {
+            try {
+                const seedRes = await seedGenesisMemoryAction(charId);
+                if (seedRes.skipped) {
+                    console.warn(`[redeem-voucher] genesis memory skipped (${seedRes.skipped}) for ${charId}`);
+                } else {
+                    console.log(`[redeem-voucher] seeded ${seedRes.seeded ?? 0} cognition memories for ${charId}`);
+                }
+            } catch (err) {
+                console.warn(`[redeem-voucher] genesis memory seeding failed for ${charId}:`, err);
+            }
+        });
     }
 
     // Public on-chain tags — `role:*` plus visible social identity labels such as
@@ -304,5 +309,5 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         });
     }
 
-    return { ok: true, characterId, ownerCapId, digest: result.digest, seededMemories };
+    return { ok: true, characterId, ownerCapId, digest: result.digest };
 }
