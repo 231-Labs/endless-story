@@ -21,6 +21,7 @@ import { getAdminContext } from '../chain/admin-signer.js';
 import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { generatePersonaAction } from './generate-persona.js';
+import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 
 export interface RedeemVoucherInput {
     voucherId: string;
@@ -44,6 +45,10 @@ export interface RedeemVoucherInput {
     portraitUrl?: string;
     /** Walrus blob id matching portraitUrl. Optional but useful for receipts. */
     portraitBlobId?: string;
+    /** Off-chain recruitment specialty. Used to write the public `role:*` identity tag. */
+    recruitmentSpecialty?: string;
+    /** Off-chain recruitment role intent. Used to derive visible social identity tags. */
+    recruitmentIntent?: string;
 }
 
 export interface RedeemVoucherResult {
@@ -222,6 +227,40 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         }
     } catch (err) {
         console.warn(`[redeem-voucher] genesis memory seeding failed for ${characterId}:`, err);
+    }
+
+    // Public on-chain tags — `role:*` plus visible social identity labels such as
+    // 麗質天生 / 武場底子 / 摩登新派. These describe how strangers read the
+    // character, so they belong on the public Character tags vector. Runs AFTER
+    // the response; failure is logged only and must not block mint.
+    {
+        const charId = characterId;
+        const sceneId = input.sceneId;
+        const candidate = input.candidate;
+        const rolledValues = input.rolledValues;
+        const recruitmentSpecialty = input.recruitmentSpecialty;
+        const recruitmentIntent = input.recruitmentIntent;
+        after(async () => {
+            try {
+                const r = await affirmMintPublicTagsAction({
+                    characterId: charId,
+                    sceneId,
+                    characterName: candidate.name,
+                    candidate,
+                    rolledValues,
+                    recruitmentSpecialty,
+                    recruitmentIntent,
+                });
+                console.log(
+                    `[redeem-voucher] public tags for ${charId}: ok=${r.ok}` +
+                        (r.tags?.length ? ` tags=${r.tags.join('|')}` : '') +
+                        (r.llmSkipped ? ` llmSkipped=${r.llmSkipped}` : '') +
+                        (r.error ? ` error=${r.error}` : ''),
+                );
+            } catch (err) {
+                console.warn(`[redeem-voucher] public tag affirmation failed for ${charId}:`, err);
+            }
+        });
     }
 
     // §11 additional views (frontal + 人物美術設定 art sheet) via img2img, using the

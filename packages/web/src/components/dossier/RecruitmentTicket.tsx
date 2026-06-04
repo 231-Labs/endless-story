@@ -430,6 +430,8 @@ export function RecruitmentTicket({
         attributeSeedHex,
         portraitUrl: portraitUrl ?? undefined,
         portraitBlobId: portraitBlobId ?? undefined,
+        recruitmentSpecialty: recruitment.specialty,
+        recruitmentIntent: recruitment.roleIntent,
       });
       if (!r.ok || !r.characterId) throw new Error(r.error ?? 'redeem 失敗');
       setCharacterId(r.characterId);

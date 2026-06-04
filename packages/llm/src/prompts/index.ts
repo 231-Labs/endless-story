@@ -40,3 +40,10 @@ export {
   type BuildPersonaPromptOptions,
   type DistilledPersona,
 } from './persona.js';
+
+export {
+  buildPublicTagsPrompt,
+  parsePublicTags,
+  type BuildPublicTagsPromptOptions,
+  type PublicTagsResult,
+} from './public-tags.js';
