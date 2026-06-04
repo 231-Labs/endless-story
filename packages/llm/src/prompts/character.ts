@@ -58,6 +58,13 @@ export interface BuildCharacterGenPromptOptions {
   schemaKeys: AttributeKey[];
   /** Server-rolled values (one per schemaKey, in same order). */
   rolledValues: RolledAttribute[];
+  /**
+   * Hard gender requirement from the recruitment (`genderRequirement`). When set,
+   * the prompt instructs the LLM that the candidate's gender MUST be this — the
+   * dice only roll the 4 attributes, so gender is otherwise the LLM's free choice
+   * and a wrong pick fails `check_voucher_requirements` on chain.
+   */
+  requiredGender?: '男' | '女';
 }
 
 export function buildCharacterGenPrompt(
@@ -76,6 +83,9 @@ export function buildCharacterGenPrompt(
   const rolledLine = opts.rolledValues
     .map((t) => `${t.label}=${t.value}`)
     .join('，');
+  const genderRule = opts.requiredGender
+    ? `\n\n【性別 · 硬性要求,不可違反】此徵召只收「${opts.requiredGender}」。physicalFacts.gender **必須**為「${opts.requiredGender}」—— 這是鏈上會驗的硬條件,違反則整張角色作廢。`
+    : '';
   const rangeLine = opts.schemaKeys
     .map((s) => `${s.label} ${s.min}-${s.max}`)
     .join(' · ');
@@ -95,7 +105,7 @@ ${intent}
 【玩家設定 · 此角色的背景與個性】
 """
 ${opts.userPrompt}
-"""
+"""${genderRule}
 
 【現有角色名單，不可重名】
 ${castLine}
@@ -117,7 +127,7 @@ ${rolledLine}
 請設計：
 1. name：2-4 字中文名，不與現有名單重複
 2. description：100-160 字人物敘述（出身 / 性格 / 行事風格 / 顯眼外貌 / 一條可被人捕捉的執念或缺陷）—— **必須讓讀者從敘述裡讀得出該候選的數值高低，但不能報出分數、屬性名或括號評分**
-3. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——體型應與「筋骨」軸對位（若有此 key）
+3. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——體型應與「筋骨」軸對位（若有此 key）${opts.requiredGender ? `；**gender 必須為「${opts.requiredGender}」(徵召硬性要求,不可改)**` : ''}
 
 **不要在 JSON 裡寫 attributes、innateTraits 或任何分數文字**：數值已鎖死，server 會直接 attach。
 

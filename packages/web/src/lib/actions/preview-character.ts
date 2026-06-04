@@ -37,6 +37,8 @@ export interface PreviewCharacterInput {
     signature: string;
     /** Saga role intent text (off-chain Recruitment). */
     recruitmentIntent?: string;
+    /** Hard gender requirement ('男'/'女') — forces the candidate's gender. */
+    requiredGender?: '男' | '女';
     /** Existing cast names in the saga (avoid name collision). */
     castNames?: string[];
     /** Atmosphere tags. */
@@ -95,6 +97,7 @@ export async function previewCharacter(input: PreviewCharacterInput): Promise<Pr
         storyTags: input.storyTags,
         schemaKeys: DEFAULT_ATTRIBUTE_SCHEMA,
         rolledValues,
+        requiredGender: input.requiredGender,
     });
 
     let text: string;

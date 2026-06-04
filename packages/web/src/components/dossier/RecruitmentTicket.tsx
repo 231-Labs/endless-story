@@ -154,6 +154,9 @@ export function RecruitmentTicket({
 
   const [stage, setStage] = useState<Stage>('closed');
   const [rollingStatus, setRollingStatus] = useState<'minting' | 'moderating' | 'generating' | null>(null);
+  // 單抽 vs 一口價 (bulk): bulk rerolls the cheap local dice until the 4 attrs
+  // meet the recruitment's hard requirements, then mints ONE matching voucher.
+  const [drawMode, setDrawMode] = useState<'single' | 'bulk'>('single');
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -217,8 +220,30 @@ export function RecruitmentTicket({
 
     setRollingStatus('minting');
 
-    // 1. Mint voucher (real on-chain) — pay basePrice from user's ENDLESS coin
-    const seed = generateAttributeSeed();
+    // 1. Mint voucher (real on-chain) — pay basePrice from user's ENDLESS coin.
+    //
+    // 一口價 (bulk): reroll the CHEAP local dice (no LLM / no chain / no image)
+    // until the 4 attributes meet the recruitment's minAttributes, then mint ONE
+    // voucher with that winning seed — guaranteed attribute match, single payment.
+    // Gender is not rolled: it's forced in the preview prompt (requiredGender) and
+    // enforced on chain, so we only gate on attributes here (candidate = null).
+    let seed = generateAttributeSeed();
+    if (drawMode === 'bulk') {
+      const MAX_REROLL = 1000;
+      let rolled = rollAttributesFromSeed(seed, DEFAULT_ATTRIBUTE_SCHEMA);
+      let tries = 1;
+      while (!candidateMeetsRequirements(recruitment, null, rolled).ok && tries < MAX_REROLL) {
+        seed = generateAttributeSeed();
+        rolled = rollAttributesFromSeed(seed, DEFAULT_ATTRIBUTE_SCHEMA);
+        tries += 1;
+      }
+      if (!candidateMeetsRequirements(recruitment, null, rolled).ok) {
+        setError(`一口價：${MAX_REROLL} 抽仍未湊齊四維門檻，請改用單抽或調低要求`);
+        setStage('minting');
+        setRollingStatus(null);
+        return;
+      }
+    }
     const seedHex = bytesToHex(seed);
     setAttributeSeedHex(seedHex);
 
@@ -364,6 +389,12 @@ export function RecruitmentTicket({
         userPrompt: prompt,
         signature: modRes.signature!,
         recruitmentIntent: recruitment.roleIntent,
+        requiredGender:
+          recruitment.genderRequirement === 'male'
+            ? '男'
+            : recruitment.genderRequirement === 'female'
+              ? '女'
+              : undefined,
       });
       if (!prev.ok || !prev.candidate || !prev.rolledValues) {
         throw new Error(prev.error ?? '預覽失敗');
@@ -490,7 +521,12 @@ export function RecruitmentTicket({
   let canPrev = true;
 
   if (stage === 'minting') {
-    nextLabel = rollingStatus === 'minting' ? '簽署中…' : '擲牌 (支付)';
+    nextLabel =
+      rollingStatus === 'minting'
+        ? '簽署中…'
+        : drawMode === 'bulk'
+          ? '一口價 (支付)'
+          : '擲牌 (支付)';
     canNext = rollingStatus !== 'minting';
   } else if (stage === 'prompt') {
     nextLabel = '凝形';
@@ -539,7 +575,13 @@ export function RecruitmentTicket({
           {!isOpen ? (
             <>
               <DefaultMain recruitment={recruitment} minEntries={minEntries} />
-              <DefaultStub recruitment={recruitment} days={daysLeft(recruitment.expiresAt)} onOpen={handleOpen} />
+              <DefaultStub
+                recruitment={recruitment}
+                days={daysLeft(recruitment.expiresAt)}
+                onOpen={handleOpen}
+                drawMode={drawMode}
+                onDrawModeChange={setDrawMode}
+              />
             </>
           ) : (
             <>
@@ -612,6 +654,34 @@ export function RecruitmentTicket({
           )}
         </div>
       </div>
+
+      {isOpen && stage === 'minting' && rollingStatus !== 'minting' && (
+        <div className="mt-5 flex items-center justify-center gap-2 animate-fade-in-up">
+          <span className="text-2xs tracking-widest text-mute">抽法</span>
+          <div className="inline-flex items-center rounded-full border border-hairline/70 bg-surface p-0.5 text-2xs tracking-widest">
+            <button
+              type="button"
+              onClick={() => setDrawMode('single')}
+              title="單抽：一筆一抽，先天條件隨緣"
+              className={`rounded-full px-3 py-1 transition-colors ${
+                drawMode === 'single' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
+              }`}
+            >
+              單抽
+            </button>
+            <button
+              type="button"
+              onClick={() => setDrawMode('bulk')}
+              title="一口價：自動重骰四維到符合徵召門檻，一次付清"
+              className={`rounded-full px-3 py-1 transition-colors ${
+                drawMode === 'bulk' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
+              }`}
+            >
+              一口價
+            </button>
+          </div>
+        </div>
+      )}
 
       {isOpen && (
         <div className="mt-6 flex items-center justify-center gap-3 animate-fade-in-up">
@@ -720,16 +790,27 @@ function DefaultStub({
   recruitment,
   days,
   onOpen,
+  drawMode,
+  onDrawModeChange,
 }: {
   recruitment: Recruitment;
   days: number;
   onOpen: () => void;
+  drawMode: 'single' | 'bulk';
+  onDrawModeChange: (mode: 'single' | 'bulk') => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className="group/stub relative flex flex-col justify-between border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0 text-left transition-colors hover:bg-cinnabar/[0.03]"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="group/stub relative flex cursor-pointer flex-col justify-between border-t-2 border-dashed border-cinnabar/25 bg-cinnabar/[0.015] p-6 sm:p-8 md:border-l-2 md:border-t-0 text-left transition-colors hover:bg-cinnabar/[0.03]"
     >
       <span aria-hidden className="absolute -top-2 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:left-0 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2" />
       <span aria-hidden className="absolute -top-2 right-1/2 hidden h-4 w-4 -translate-x-1/2 rounded-full bg-canvas ring-1 ring-cinnabar/25 md:bottom-0 md:left-0 md:top-auto md:right-auto md:block md:-translate-x-1/2 md:translate-y-1/2" />
@@ -743,12 +824,43 @@ function DefaultStub({
             <p>剩 {recruitment.slots} 位</p>
             <p>{days} 日內截止</p>
           </div>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="mt-4 inline-flex items-center rounded-full border border-hairline/70 bg-surface p-0.5 text-2xs tracking-widest"
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDrawModeChange('single');
+              }}
+              title="單抽：一筆一抽，先天條件隨緣"
+              className={`rounded-full px-3 py-1 transition-colors ${
+                drawMode === 'single' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
+              }`}
+            >
+              單抽
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDrawModeChange('bulk');
+              }}
+              title="一口價：自動重骰四維到符合徵召門檻，一次付清"
+              className={`rounded-full px-3 py-1 transition-colors ${
+                drawMode === 'bulk' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
+              }`}
+            >
+              一口價
+            </button>
+          </div>
         </div>
         <p className="text-sm tracking-wide text-cinnabar transition-transform group-hover/stub:translate-x-1">
           應榜 →
         </p>
       </div>
-    </button>
+    </div>
   );
 }
 
