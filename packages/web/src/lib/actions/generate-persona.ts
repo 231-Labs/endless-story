@@ -1,3 +1,5 @@
+'use server';
+
 /**
  * Generate + anchor a character's 本色 (persona).
  *
@@ -22,6 +24,9 @@ export interface GeneratePersonaResult {
   commitmentId?: string;
   skipped?: string;
   error?: string;
+  /** The freshly distilled persona — returned so an admin re-distill UI can
+   *  show the new 軸/腔/界 without a (possibly lagging) chain re-read. */
+  persona?: CharacterPersona;
 }
 
 export async function generatePersonaAction(characterId: string): Promise<GeneratePersonaResult> {
@@ -83,7 +88,7 @@ export async function generatePersonaAction(characterId: string): Promise<Genera
       ],
       { signer: admin.signer },
     );
-    return { ok: true, version: 1, commitmentId: anchor?.commitmentId };
+    return { ok: true, version: 1, commitmentId: anchor?.commitmentId, persona };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

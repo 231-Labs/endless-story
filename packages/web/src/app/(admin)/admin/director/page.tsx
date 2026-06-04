@@ -5,6 +5,7 @@ import { GazettePanel } from './GazettePanel';
 import { DreamConfigPanel } from './DreamConfigPanel';
 import { ReflectionPanel } from './ReflectionPanel';
 import { GenesisMemoryPanel } from './GenesisMemoryPanel';
+import { PersonaRedistillPanel } from './PersonaRedistillPanel';
 import { CustodyPanel } from './CustodyPanel';
 import { ProfileDescriptionPatchPanel } from './ProfileDescriptionPatchPanel';
 import { AdditionalViewsBackfillPanel } from './AdditionalViewsBackfillPanel';
@@ -130,6 +131,18 @@ export default async function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <GenesisMemoryPanel characters={characters} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">本色 · 重蒸人設</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            重新從鏈上公開 profile 蒸餾角色的 <strong className="text-ink">軸 / 腔 / 界</strong>，
+                            anchor 一筆新的 commitment。讀取永遠取最新，所以會直接覆蓋舊本色。
+                            和「對帳補漏」不同 —— 那個只補沒有本色的角色，這裡可對「已經有本色」的角色強制重蒸。
+                        </p>
+                        <div className="mt-6">
+                            <PersonaRedistillPanel characters={characters} />
                         </div>
                     </div>
 
