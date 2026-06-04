@@ -36,6 +36,7 @@ export function newChar(cfg: CharConfig, seedFunds: bigint): CharState {
     balance: seedFunds,
     vitality: VIT_FULL,
     memoryCount: 5n,
+    imageCount: 0n,
     livedDays: 0n,
     subscribers: 0n,
     heldSlot: false,

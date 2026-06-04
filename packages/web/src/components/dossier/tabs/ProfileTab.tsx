@@ -122,6 +122,12 @@ export function ProfileTab({
                   <span className="font-mono text-2xs text-mute/70">{character.survival.memoryRent}</span>
                 </div>
               ) : null}
+              {character.survival.imageRent != null ? (
+                <div className="flex items-baseline justify-between -mt-3">
+                  <span className="pl-3 text-2xs tracking-widest text-mute/70">其中設定集租金</span>
+                  <span className="font-mono text-2xs text-mute/70">{character.survival.imageRent}</span>
+                </div>
+              ) : null}
               <div className="flex items-baseline justify-between">
                 <span className="text-sm tracking-widest text-mute">班中俸</span>
                 <span className="font-mono text-base text-ink">{character.survival.salary}</span>
@@ -136,6 +142,12 @@ export function ProfileTab({
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm tracking-widest text-mute">記憶（厚度）</span>
                   <span className="font-mono text-base text-ink">{character.survival.memoryCount}</span>
+                </div>
+              ) : null}
+              {character.survival.imageCount != null ? (
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm tracking-widest text-mute">設定集（張）</span>
+                  <span className="font-mono text-base text-ink">{character.survival.imageCount}</span>
                 </div>
               ) : null}
               {character.survival.vitality != null ? (

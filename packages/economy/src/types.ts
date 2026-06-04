@@ -53,6 +53,9 @@ export interface CharState {
   vitality: bigint;
   /** append-only memory total (MemWal never deletes) — drives storage rent. */
   memoryCount: bigint;
+  /** 設定集 image count (portrait + costume/makeup/event-moment/variants) — grows over time
+   *  (events add moments, evolve-portrait adds variants); drives image storage rent. */
+  imageCount: bigint;
   /** narrative days lived since birth. */
   livedDays: bigint;
   /** current subscriber_count (set by driver subscriber dynamics). */
@@ -97,6 +100,7 @@ export interface EconConfig {
   // ── dailyCost (A2) ──
   cRun: bigint;            // money/day at activeFactor = 1.0 (AI inference floor)
   cMem: bigint;            // money per stored memory per day (MemWal storage rent)
+  cImg: bigint;            // money per 設定集 image per day (Walrus image storage rent)
   cSeal: bigint;           // money per recall (Seal decrypt + vector query)
   activeLiveMilli: bigint; // activeFactor when subscriber_count ≥ 1 (×1000)
   activeDormantMilli: bigint; // activeFactor when subscriber_count == 0 (×1000)

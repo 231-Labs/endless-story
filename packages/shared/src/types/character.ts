@@ -20,8 +20,12 @@ export interface SurvivalStatus {
   //    renderers treat undefined as "not available") ──
   /** real memory total (age proxy now, relayer count later) — drives storage rent. */
   memoryCount?: number;
-  /** ENDLESS/day storage-rent component of dailyCost (C_mem × memoryCount). */
+  /** ENDLESS/day memory storage-rent component of dailyCost (C_mem × memoryCount). */
   memoryRent?: number;
+  /** 設定集 image count (gallery assets) — grows with event moments / evolve-portrait. */
+  imageCount?: number;
+  /** ENDLESS/day 設定集 image storage-rent component of dailyCost (C_img × imageCount). */
+  imageRent?: number;
   /** 氣血 0..100. */
   vitality?: number;
   vitalityState?: VitalityState;

@@ -76,6 +76,9 @@ lines.push(`     (~${(0.02 / memStorageUsdPerDay).toExponential(1)}x bigger). So
 lines.push("     you SET for narrative tension, NOT a pass-through of Walrus cost (which is ~0).");
 lines.push("  => small-blob floor: batching memories into periodic checkpoint blobs collapses it further.");
 lines.push("  => (separate, unpriced: the MemWal vector-index / relay SERVER is a flat protocol infra cost.)");
+lines.push("  => 設定集 images are ALSO < 10MB -> floor-dominated, same negligible per-blob storage as memories.");
+lines.push("     The REAL image cost is GENERATION (gpt-image-2 ~$0.047/img, one-time at mint/evolve), not storage,");
+lines.push("     so C_img (0.1 ENDLESS/img/day) is likewise a DESIGN lever, not a Walrus pass-through.");
 
 // ── mint cost (saga bears it; mint fee = saga revenue) ──
 lines.push("\n# Mint cost (image generation) — saga's COGS, recovered by the mint fee");

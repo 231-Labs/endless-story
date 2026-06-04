@@ -53,14 +53,15 @@ injected ≡ ownerSink + storytellerSink + protocolSink + sagaTreasury + Σ 角�
 ## 2. 每日開銷 dailyCost（角色 → 協議）
 
 ```
-dailyCost = C_run · activeFactor + C_mem · memory_count + C_seal · recallCount
+dailyCost = C_run · activeFactor + C_mem · memory_count + C_img · image_count + C_seal · recallCount
 ```
 每結算從角色 Balance 扣 dailyCost 轉入協議金庫（付真實基建）。
 
 | 項 | 對應真實成本 | 常數（顯示值 ENDLESS） | 變數 |
 |---|---|---|---|
 | `C_run · activeFactor` | AI 推論（LLM token） | `C_run = 6.0` | `activeFactor ∈ {0.3 休眠, 1.0 活躍}` |
-| `C_mem · memory_count` | MemWal/Walrus 儲存租金（單調↑） | `C_mem = 0.02` /記憶 | 真實計數器（§6） |
+| `C_mem · memory_count` | MemWal/Walrus 記憶儲存租金（單調↑） | `C_mem = 0.02` /記憶 | 真實計數器（§6） |
+| `C_img · image_count` | 設定集圖片儲存租金（隨 event moment / evolve-portrait 累積↑） | `C_img = 0.1` /張 | 鏈上 `media_assets` 數 |
 | `C_seal · recallCount` | Seal 解密 + 向量查詢 | `C_seal = 0.25` /召回 | ≈ 4/活躍日，休眠退化為 ~1 |
 
 **訂閱 gate**（呼應 `subscribe.move` POV gate）：`subscriber_count==0 → activeFactor 0.3`（休眠：跑最小 plan/sleep 推論，不跑 POV、recall 退化）；`≥1 → 1.0`。**關鍵：休眠能逃推論費，逃不掉記憶租金**（`C_mem·memory_count` 照扣）→ 冷門角色＝緩慢自然死。

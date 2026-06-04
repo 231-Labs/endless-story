@@ -20,6 +20,7 @@ import {
 export const DEFAULT_ECON: EconConfig = {
   cRun: 6n * MUNIT,
   cMem: 20_000n, // 0.02 ENDLESS per memory
+  cImg: 100_000n, // 0.1 ENDLESS per 設定集 image (heavier asset, far fewer than memories)
   cSeal: 250_000n, // 0.25 ENDLESS per recall
   activeLiveMilli: 1_000n,
   activeDormantMilli: 300n,
@@ -97,8 +98,9 @@ export function recallCount(c: CharState, cfg: EconConfig): bigint {
 export function dailyCost(c: CharState, cfg: EconConfig): bigint {
   const run = mulDiv(cfg.cRun, activeMilli(c, cfg), 1_000n);
   const mem = cfg.cMem * c.memoryCount;
+  const img = cfg.cImg * c.imageCount;
   const seal = cfg.cSeal * recallCount(c, cfg);
-  return run + mem + seal;
+  return run + mem + img + seal;
 }
 
 /** Current age in milli-years = startYears + livedDays/yearLen. */

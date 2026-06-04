@@ -49,6 +49,8 @@ export interface SurvivalInput {
   ageYearsStart: number;
   /** real memory total (off-chain counter) — drives storage rent. */
   memoryCount: number;
+  /** 設定集 image count (gallery assets) — drives image storage rent. Optional → 0. */
+  imageCount?: number;
   /** current subscriber_count — drives income + the active/dormant gate. */
   subscribers: number;
   heldSlot?: boolean;
@@ -75,7 +77,9 @@ export interface SurvivalSnapshot {
   daysLeft: number; // 999 = effectively infinite (net non-negative)
   level: SurvivalLevel;
   memoryCount: number;
-  memoryRent: number; // ENDLESS/day from storage rent (C_mem × memory_count)
+  memoryRent: number; // ENDLESS/day from memory storage rent (C_mem × memory_count)
+  imageCount: number;
+  imageRent: number; // ENDLESS/day from 設定集 image storage rent (C_img × image_count)
   vitality: number; // 0..100
   vitalityState: VitalityState;
   lifeStage: LifeStage;
@@ -99,6 +103,7 @@ function buildState(input: SurvivalInput, balance: bigint, vitality: bigint, str
     balance,
     vitality,
     memoryCount: BigInt(Math.max(0, Math.round(input.memoryCount))),
+    imageCount: BigInt(Math.max(0, Math.round(input.imageCount ?? 0))),
     livedDays: BigInt(Math.max(0, livedDays)),
     subscribers: BigInt(Math.max(0, Math.round(input.subscribers))),
     heldSlot: !!input.heldSlot,
@@ -160,6 +165,8 @@ export function lazySettle(prior: PersistedEcon | null, input: SurvivalInput, cf
     level: vitality <= 0n ? "critical" : survivalLevel(sal, c, cfg),
     memoryCount: input.memoryCount,
     memoryRent: toE(cfg.cMem * BigInt(Math.max(0, Math.round(input.memoryCount)))),
+    imageCount: input.imageCount ?? 0,
+    imageRent: toE(cfg.cImg * BigInt(Math.max(0, Math.round(input.imageCount ?? 0)))),
     vitality: Number(vitality) / Number(VIT_PT),
     vitalityState: vitalityState(c),
     lifeStage: lifeStage(sal, c, cfg),
