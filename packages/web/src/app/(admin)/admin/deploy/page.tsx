@@ -1,6 +1,5 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
-import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { getDeploymentStatus } from '@/lib/actions/deployment-status';
 import { getFaucetSnapshot } from '@/lib/actions/faucet-config';
 import { listStoryPresets } from '@/lib/stories/loader';
@@ -30,10 +29,8 @@ export default async function DeployPage() {
                     meta="一鍵部署 / 種子化 / 開職缺 / Faucet 設定"
                 />
                 <div className="mt-12 space-y-6">
-                    <SagaAdminGuard>
-                        <DeployPanel initialStatus={status} presets={presets} />
-                        <FaucetConfigPanel initial={faucetSnapshot} />
-                    </SagaAdminGuard>
+                    <DeployPanel initialStatus={status} presets={presets} />
+                    <FaucetConfigPanel initial={faucetSnapshot} />
                 </div>
             </main>
         </>
