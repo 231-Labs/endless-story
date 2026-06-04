@@ -7,7 +7,9 @@
  * - Same prompt + 500 chars of face / clothing / props / background → photoreal
  *
  * Image models have a "style keyword vs character detail" attention budget;
- * too much detail drowns the style keyword. This builder forces ≤ 160 chars.
+ * too much detail drowns the style keyword. This builder forces ≤ 90 chars
+ * (style sentence + one character sentence) and lets the deterministic guard
+ * append composition, so the watercolor style stays the dominant signal.
  *
  * The output of `buildPortraitCurationPrompt` is itself fed to a cheap text
  * model (Haiku-tier); the model's response IS the prompt for the image model.
@@ -35,10 +37,10 @@ export interface PortraitCurationOptions {
 }
 
 export const UNIVERSAL_PORTRAIT_TONE =
-  '水墨工筆人物肖像，宣紙暈染邊緣，淡墨線描 + 水彩設色；統一純白背景，民國上海氣質只體現在髮型與常服。不要動漫感、不要油畫感、不要寫實照片。';
+  '淡彩水墨工筆肖像：淡墨細線勾勒，清透水彩薄塗，設色清淡通透，大面積留白，宣紙暈染質感；統一純白背景，民國上海氣質只見於髮型與常服。';
 
 export const UNIVERSAL_PORTRAIT_GUARD =
-  '單人素顏頭肩肖像，純白背景，四分之三側面 45°，自然光。畫面只包含人物與空白背景；無字、無題款、無印記、無出版物、無紙張道具、無邊框版面。';
+  '素顏頭肩半身、四分之三側面 45°、純白背景、自然光；全圖淡彩薄塗、筆觸鬆透、留白為主，畫面只有人物，無文字、印章、票券、道具與邊框。';
 
 const SYSTEM_PROMPT = `你是「無盡故事」的角色 anchor 畫師。寫一段極短的「**素顏臉部 anchor**」prompt
 給圖像模型（gpt-image-2）。
@@ -48,18 +50,18 @@ Anchor = 這位角色的**長期 reference 圖**：素顏、無戲妝、頭肩 c
 所有演員與非演員工種（班主、樂師、箱管、經理、武行等）都使用同一種 portrait 畫面格式；
 只能用年齡、氣質、髮型與常服差異表現身份，不得改成海報、票券、設定卡或插畫版面。
 
-【Anchor 構圖鐵則】
+【Anchor 構圖鐵則 · 這是背景知識,系統會自動接這段構圖,你「不要」把它寫進輸出】
 - **只能純白背景**，不要灰底、米色底、花枝、山水、紙張邊框或任何裝飾背景
 - 自然光、無誇張舞台燈
 - 頭肩 close-up、半身偏上、**固定四分之三側面（約 45°）朝向觀者**（不要純正面、不要全側面）
 - **不上戲妝、不戴頭面、不穿戲服**——只是這個人「卸了戲的素顏」
 - 衣著：簡單常服（旗袍 / 中式短衫 / 棉布素衫）一個詞帶過
 
-【輸出結構 · 嚴格 ≤ 160 字】
-1. 風格 keyword（saga toneHint 開頭 1-2 句，照抄）
-2. 一句人物（≤ 30 字）：性別 + 年齡 + 最多 1-2 個顯眼特徵
-3. 一句構圖：「素顏臉部 anchor / 純白底 / 自然光 / 頭肩 close-up / 四分之三側面 45°」
-4. 風格再強調 1 句（saga toneHint 的 negative 部分，照抄）
+【輸出結構 · 嚴格 ≤ 90 字】
+1. 風格句（**完整照抄 saga toneHint**——這是最重要的，畫風全靠它，必須排在最前面）
+2. 一句人物（≤ 25 字）：性別 + 年齡 + 最多 1 個顯眼特徵；素顏、簡單常服一詞帶過
+**不要再寫構圖、背景、光線、攝影詞或任何「不要…」負面句**——系統會自動接上素顏 anchor 構圖與留白安全句。
+鐵律：全篇以畫風為主，人物細節越少越好。細節一多，模型就會吃掉淡彩畫風、退回厚塗寫實。
 
 【行當 / 性別表現 · 重要】
 讀角色 description 推斷行當：
@@ -89,16 +91,14 @@ Anchor = 這位角色的**長期 reference 圖**：素顏、無戲妝、頭肩 c
 
 【鐵則】
 - 繁體中文
-- **總長 ≤ 160 字，違規視為失敗**
+- **總長 ≤ 90 字，違規視為失敗**（風格句 + 一句人物即可，不要構圖、不要負面句）
 - 不寫人名（給玩家保留命名空間）
 - 不解釋、不 markdown、純 prompt 文字直出
 
 【範例 · 你該寫成這樣】
-"水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。
-二十六歲女子，眉目清麗、髮髻簡單，棉布素衫。
-素顏臉部 anchor，純白底，自然光，頭肩 close-up，四分之三側面 45°。
-不要動漫感、不要油畫感、不要寫實照片。"
-（共 ~80 字，model 自行填細節）
+"淡彩水墨工筆肖像，淡墨細線、清透水彩薄塗、大面積留白、宣紙質感。
+二十六歲女子，眉目清麗、髮髻簡單，棉布素衫。"
+（共 ~45 字；構圖與留白安全句由系統自動接，你不要寫）
 
 【女小生氣質提示】
 若角色是女小生 / 坤生，人物句仍必須使用「基本事實」裡的實際年齡；
@@ -146,6 +146,8 @@ export function parsePortraitPrompt(text: string): string {
   const stripped = text
     .trim()
     .replace(/[，、；。\s]*[^，、；。\n]*(?:文字|題字|書法|簽名|印章|紅章|票券|唱片封套|戲報|報紙|書頁|海報|月份牌|設定卡|道具|邊框|標籤|卡片|刊物|版面設計)[^，、；。\n]*/g, '')
+    // gpt-image 把「不要油畫/寫實/動漫」當正向關鍵字 → 反招來它。整句負面照拿掉。
+    .replace(/(?:[，、；。\n]\s*)?不要[^。\n]*(?:動漫|卡通|油畫|寫實|照片|渲染|3D|CG)[^。\n]*。?/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return [stripped, UNIVERSAL_PORTRAIT_GUARD].filter(Boolean).join('\n');
