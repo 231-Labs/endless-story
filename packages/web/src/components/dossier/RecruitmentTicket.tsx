@@ -670,7 +670,7 @@ function RecruitmentDetails({
   return (
     <div className="flex flex-col text-left">
       <p className="text-2xs tracking-widest text-mute">
-        {recruitment.sagaName} · {recruitment.membership === 'internal' ? '春雪社徵召' : '江湖客串'}
+        {recruitment.sagaName} · {recruitment.membership === 'internal' ? `${recruitment.sagaName}徵召` : '江湖客串'}
       </p>
       <h3 className="mt-3 font-serif text-3xl text-ink sm:text-4xl">{recruitment.specialty}</h3>
 

@@ -117,7 +117,8 @@ export interface SeedDefaultsResult {
  * Batch-open the preset recruitments from a story JSON file
  * (packages/cli/scripts/stories/<storyId>.json). Skips any whose id
  * already exists, so re-running is idempotent and won't clobber
- * admin edits.
+ * admin edits. Stale rows generated from an older preset for the same
+ * story are deactivated, but hand-crafted admin rows are left alone.
  *
  * Each preset's `ttl_days` is applied from "now" at seed time so a
  * static JSON never goes stale.
@@ -127,6 +128,7 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
 
     const existing = readStore();
     const existingIds = new Set(existing.map((r) => r.id));
+    const presetIds = new Set(preset.recruitments.map((r) => r.id));
 
     const log: string[] = [];
     log.push(`preset: ${preset.id} (${preset.label})`);
@@ -134,7 +136,17 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
     log.push(`---`);
     let inserted = 0;
     let skipped = 0;
+    let deactivated = 0;
     const nowIso = new Date().toISOString();
+
+    for (const row of existing) {
+        const wasPresetSeed = (row as { ttl_days?: unknown }).ttl_days !== undefined;
+        if (row.sagaId === preset.id && wasPresetSeed && !presetIds.has(row.id) && row.active) {
+            row.active = false;
+            deactivated++;
+            log.push(`OFF   ${row.id} (${row.specialty}) — stale preset row`);
+        }
+    }
 
     for (const seed of preset.recruitments) {
         if (existingIds.has(seed.id)) {
@@ -155,9 +167,9 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
         inserted++;
     }
 
-    if (inserted > 0) persist(existing);
+    if (inserted > 0 || deactivated > 0) persist(existing);
     log.push(`---`);
-    log.push(`inserted: ${inserted}   skipped: ${skipped}   total: ${existing.length}`);
+    log.push(`inserted: ${inserted}   skipped: ${skipped}   deactivated: ${deactivated}   total: ${existing.length}`);
 
     return { ok: true, inserted, skipped, storyId, log };
 }
