@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import {
     runDailyBatchAction,
     type DailyBatchResult,
@@ -105,25 +105,76 @@ function TickLoopSection() {
     const [result, setResult] = useState<TickLoopResult | null>(null);
     const [isPending, startTransition] = useTransition();
 
+    const [intervalSec, setIntervalSec] = useState('60');
+    const [loopRunning, setLoopRunning] = useState(false);
+    const [loopCount, setLoopCount] = useState(0);
+    const [loopLast, setLoopLast] = useState<TickLoopResult | null>(null);
+    const [loopError, setLoopError] = useState<string | null>(null);
+    const runningRef = useRef(false);
+
+    // Stop the local runner if the panel unmounts (tab close / navigation away).
+    useEffect(() => () => {
+        runningRef.current = false;
+    }, []);
+
+    const buildInput = (dryRun: boolean) => {
+        const parsedMax = Number(maxCharacters);
+        const characterIds = parseCharacterIds(characterIdsText);
+        return {
+            plan,
+            move,
+            pov,
+            sleep,
+            gazette,
+            dryRun,
+            ...(Number.isFinite(parsedMax) && parsedMax > 0
+                ? { maxCharacters: Math.floor(parsedMax) }
+                : {}),
+            ...(characterIds.length > 0 ? { characterIds } : {}),
+        };
+    };
+
     const run = (dryRun: boolean) => {
         setResult(null);
         startTransition(async () => {
-            const parsedMax = Number(maxCharacters);
-            const characterIds = parseCharacterIds(characterIdsText);
-            const r = await runTickLoopAction({
-                plan,
-                move,
-                pov,
-                sleep,
-                gazette,
-                dryRun,
-                ...(Number.isFinite(parsedMax) && parsedMax > 0
-                    ? { maxCharacters: Math.floor(parsedMax) }
-                    : {}),
-                ...(characterIds.length > 0 ? { characterIds } : {}),
-            });
+            const r = await runTickLoopAction(buildInput(dryRun));
             setResult(r);
         });
+    };
+
+    // Local "runner": drive REAL ticks on an interval, sequential + non-overlapping
+    // (mirrors packages/cli/scripts/world-loop.ts, but browser-driven). Options +
+    // interval are snapshotted at start; change them and restart to apply.
+    const startLoop = () => {
+        if (runningRef.current) return;
+        const input = buildInput(false);
+        const sec = Math.max(5, Math.floor(Number(intervalSec) || 60));
+        runningRef.current = true;
+        setLoopRunning(true);
+        setLoopError(null);
+        setLoopCount(0);
+        void (async () => {
+            while (runningRef.current) {
+                setLoopCount((n) => n + 1);
+                try {
+                    const r = await runTickLoopAction(input);
+                    setLoopLast(r);
+                    setLoopError(r.ok ? null : r.error ?? 'tick 失敗');
+                } catch (e) {
+                    setLoopError(e instanceof Error ? e.message : String(e));
+                }
+                // Interruptible sleep: 100ms chunks so 「停止」 responds promptly.
+                for (let i = 0; i < sec * 10 && runningRef.current; i += 1) {
+                    await new Promise((res) => setTimeout(res, 100));
+                }
+            }
+            setLoopRunning(false);
+        })();
+    };
+
+    const stopLoop = () => {
+        runningRef.current = false;
+        setLoopRunning(false);
     };
 
     return (
@@ -228,7 +279,7 @@ function TickLoopSection() {
                 <button
                     type="button"
                     onClick={() => run(true)}
-                    disabled={isPending}
+                    disabled={isPending || loopRunning}
                     className="rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-ink hover:bg-elevated disabled:opacity-50"
                 >
                     {isPending ? '跑輪中…' : pov ? 'Dry-Run（預覽 POV）' : 'Dry-Run（快速檢查）'}
@@ -236,12 +287,65 @@ function TickLoopSection() {
                 <button
                     type="button"
                     onClick={() => run(false)}
-                    disabled={isPending}
+                    disabled={isPending || loopRunning}
                     className="rounded bg-ink px-4 py-2 text-sm tracking-widest text-canvas hover:bg-ink/80 disabled:opacity-50"
                 >
                     {isPending ? '世界運轉中…' : '自治推進一個 tick'}
                 </button>
             </div>
+
+            {/* 本機 Runner — 連續自治迴圈（瀏覽器驅動,等同 CLI world-loop） */}
+            <div className="space-y-2 rounded border border-jade/30 bg-jade/5 p-3">
+                <div className="text-2xs tracking-widest text-mute">
+                    本機 Runner · 連續自治（每 N 秒一 tick · 真實上鏈 · 序列不重疊）
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+                        間隔（秒）
+                        <input
+                            type="number"
+                            min={5}
+                            value={intervalSec}
+                            onChange={(e) => setIntervalSec(e.target.value)}
+                            disabled={loopRunning}
+                            className="w-20 rounded border border-hairline bg-surface px-2 py-1 text-sm text-ink"
+                        />
+                    </label>
+                    {loopRunning ? (
+                        <button
+                            type="button"
+                            onClick={stopLoop}
+                            className="rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal"
+                        >
+                            ■ 停止
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={startLoop}
+                            disabled={isPending}
+                            className="rounded bg-jade px-4 py-2 text-sm tracking-widest text-canvas hover:bg-jade/80 disabled:opacity-50"
+                        >
+                            ▶ 啟動本機 Runner
+                        </button>
+                    )}
+                    {loopRunning ? (
+                        <span className="flex items-center gap-2 text-2xs tracking-widest text-jade">
+                            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-jade" />
+                            運轉中 · 已跑 {loopCount} tick
+                        </span>
+                    ) : loopCount > 0 ? (
+                        <span className="text-2xs tracking-widest text-mute">已停止 · 共 {loopCount} tick</span>
+                    ) : null}
+                </div>
+                {loopError ? <div className="text-xs text-cinnabar">最近錯誤：{loopError}</div> : null}
+                <p className="text-2xs leading-relaxed text-mute">
+                    以上方的勾選 / 上限 / 角色 IDS 當每輪參數（啟動當下快照,改動需重新啟動）。
+                    這顆等同 CLI 的 world-loop,只是在瀏覽器驅動;關掉此分頁即自動停止。
+                </p>
+                {loopLast ? <TickLoopResultView result={loopLast} /> : null}
+            </div>
+
             {result ? <TickLoopResultView result={result} /> : null}
         </div>
     );
