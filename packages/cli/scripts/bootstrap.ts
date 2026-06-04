@@ -1,13 +1,17 @@
 /**
  * Phase 2.3 bootstrap — seed the world after `deploy.ts` publishes the package.
  *
- * 4 sequential txs (Sui rule: an object shared in tx N can only be used by
+ * Sequential txs (Sui rule: an object shared in tx N can only be used by
  * shared-ref in tx N+1):
  *
  *   1. World + Faucet — create the shared World + Faucet, transfer caps to admin
- *   2. Locations      — 3 shared Locations under the World
+ *   1b. Time config   — optional story override for WorldTimeConfig
+ *   2. Locations      — shared Locations under the World
  *   3. Saga           — 1 shared Saga, transfer StorytellerCap to admin
- *   4. Scenes         — 3 shared Scenes anchored to the locations
+ *   4. Saga config    — optional saga skill defs + card weighting
+ *   5. Scenes         — shared Scenes anchored to the locations
+ *   6. DreamConfig    — owner dream pricing
+ *   7. Resources      — contested drama resources
  *
  * Reads `packageId` from `contract-ids.ts` (so `deploy.ts` must have run).
  * Discovers the publisher's `TreasuryCap<CURRENCY>` automatically.
@@ -171,6 +175,9 @@ async function main() {
 
   if (dryRun) {
     console.log('\n[dry-run] flags + packageId OK. Skipping submission.');
+    console.log(`   sagaAttrs ${story.saga_attributes?.length ?? 0}`);
+    console.log(`   cardRules ${story.card_weight_rules?.length ?? 0}`);
+    console.log(`   resources ${story.drama_resources?.length ?? 0}`);
     return;
   }
 
@@ -245,6 +252,25 @@ async function main() {
   console.log(`   fAdminCap ${faucetAdminCapId}`);
 
   // ═══════════════════════════════════════════════════════════════════
+  // Tx 1b: Optional WorldTimeConfig override
+  // ═══════════════════════════════════════════════════════════════════
+  if (story.world.time_config) {
+    const tx1b = new Transaction();
+    tx1b.add(
+      endlessTx.world.setTimeConfig({
+        adminCap: adminCapId,
+        world: worldId,
+        daysPerTickBp: BigInt(story.world.time_config.days_per_tick_bp),
+        tickIntervalMs: BigInt(story.world.time_config.tick_interval_ms),
+      }),
+    );
+    await runTx(client, signer, tx1b, 'Tx 1b — World time config');
+    console.log(
+      `   time      ${story.world.time_config.days_per_tick_bp}bp · ${story.world.time_config.tick_interval_ms}ms`,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
   // Tx 2: Locations
   // ═══════════════════════════════════════════════════════════════════
   const tx2 = new Transaction();
@@ -258,7 +284,15 @@ async function main() {
       }),
     );
     const pos = tx2.add(endlessTx.world.newPosition({ x: BigInt(loc.x), y: BigInt(loc.y) }));
-    const graph = tx2.add(endlessTx.world.newLocationGraph({ adjacentIndices: [] }));
+    const adjacent = loc.adjacent_indices ?? [];
+    for (const idx of adjacent) {
+      if (idx < 0 || idx >= story.locations.length) {
+        throw new Error(`location "${loc.name}" adjacent index ${idx} out of range`);
+      }
+    }
+    const graph = tx2.add(
+      endlessTx.world.newLocationGraph({ adjacentIndices: adjacent.map((idx) => BigInt(idx)) }),
+    );
     tx2.add(
       endlessTx.world.createLocation({
         adminCap: adminCapId,
@@ -309,7 +343,61 @@ async function main() {
   console.log(`   sttellerCap  ${storytellerCapId}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // Tx 4: Scenes — anchored to locations[scene.location_index]
+  // Tx 4: Saga config — optional per-saga skills + card draw weights
+  // ═══════════════════════════════════════════════════════════════════
+  const sagaAttributes = story.saga_attributes ?? [];
+  const cardWeightRules = story.card_weight_rules ?? [];
+  if (sagaAttributes.length > 0 || cardWeightRules.length > 0) {
+    const tx4 = new Transaction();
+    const seenAttrs = new Set<string>();
+    for (const attr of sagaAttributes) {
+      if (seenAttrs.has(attr.key)) throw new Error(`duplicate saga attribute key: ${attr.key}`);
+      if (attr.min > attr.max) throw new Error(`invalid saga attribute range for ${attr.key}`);
+      seenAttrs.add(attr.key);
+      tx4.add(
+        endlessTx.saga.defineSagaAttribute({
+          cap: storytellerCapId,
+          saga: sagaId,
+          key: attr.key,
+          label: attr.label,
+          minValue: BigInt(attr.min),
+          maxValue: BigInt(attr.max),
+        }),
+      );
+    }
+    if (cardWeightRules.length > 0) {
+      const knownAttributeKeys = new Set([
+        ...story.world_rules.attributes.map((attr) => attr.key),
+        ...sagaAttributes.map((attr) => attr.key),
+      ]);
+      tx4.add(endlessTx.saga.enableCardWeighting({ cap: storytellerCapId, saga: sagaId }));
+      for (const rule of cardWeightRules) {
+        if (!knownAttributeKeys.has(rule.attribute_key)) {
+          throw new Error(`card weight rule references unknown attribute: ${rule.attribute_key}`);
+        }
+        tx4.add(
+          endlessTx.saga.setCardWeightRule({
+            cap: storytellerCapId,
+            saga: sagaId,
+            intent: rule.intent,
+            attributeKey: rule.attribute_key,
+            bonusPerPoint: rule.bonus_per_point,
+          }),
+        );
+      }
+    }
+    await runTx(
+      client,
+      signer,
+      tx4,
+      `Tx 4 — Saga config (${sagaAttributes.length} attrs, ${cardWeightRules.length} card rules)`,
+    );
+    console.log(`   sagaAttrs ${sagaAttributes.length}`);
+    console.log(`   cardRules ${cardWeightRules.length}`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Tx 5: Scenes — anchored to locations[scene.location_index]
   // ═══════════════════════════════════════════════════════════════════
   const tx4 = new Transaction();
   story.scenes.forEach((scene) => {
@@ -322,7 +410,7 @@ async function main() {
       endlessTx.scene.newSceneInfo({
         name: scene.name,
         description: scene.description,
-        metadataUri: '',
+        metadataUri: scene.metadata_uri ?? '',
       }),
     );
     const sceneAccess = tx4.add(
@@ -349,7 +437,7 @@ async function main() {
       }),
     );
   });
-  const changes4 = await runTx(client, signer, tx4, `Tx 4 — ${story.scenes.length} Scenes`);
+  const changes4 = await runTx(client, signer, tx4, `Tx 5 — ${story.scenes.length} Scenes`);
   const sceneIds = findCreatedByType(changes4, '::scene::Scene');
   if (sceneIds.length !== story.scenes.length) {
     throw new Error(`expected ${story.scenes.length} scenes, got ${sceneIds.length}`);
@@ -357,7 +445,7 @@ async function main() {
   console.log(`   scenes    ${sceneIds.length} created`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // Tx 5: DreamConfig — owner注夢機制 (default 50 ENDLESS, 6 decimals)
+  // Tx 6: DreamConfig — owner注夢機制 (default 50 ENDLESS, 6 decimals)
   // ═══════════════════════════════════════════════════════════════════
   const DREAM_DEFAULT_PRICE_RAW = 50_000_000n; // 50 ENDLESS
   const tx5 = new Transaction();
@@ -368,7 +456,7 @@ async function main() {
       initialPrice: DREAM_DEFAULT_PRICE_RAW,
     }),
   );
-  const changes5 = await runTx(client, signer, tx5, 'Tx 5 — DreamConfig');
+  const changes5 = await runTx(client, signer, tx5, 'Tx 6 — DreamConfig');
   const dreamConfigId = firstOrThrow(
     findCreatedByType(changes5, '::dream::DreamConfig'),
     'DreamConfig',
@@ -381,31 +469,40 @@ async function main() {
   console.log(`   dreamAdm   ${dreamAdminCapId}`);
 
   // ═══════════════════════════════════════════════════════════════════
-  // Tx 6: Drama resource — the contested 孟雲屏 partnership slot (capacity 1)
+  // Tx 7: Drama resources — contested scarce slots for the drama engine
   //
   // This is the SUPPLY side of the Desire/Resource engine: one scarce, conserved
-  // resource the cast contends over. Seeding it is what makes the off-chain DEMAND
+  // resource per configured slot. Seeding them makes the off-chain DEMAND
   // engine (tick-loop phase 2.7) light up — `defaultDesiresForCast` auto-derives a
-  // "want one unit" desire for every character because capacity (1) < cast size, so
-  // no per-character on-chain desire seeding is needed. Without this single object
-  // the drama layer stays a graceful no-op.
+  // "want one unit" desire for eligible characters when capacity < cast size. Without
+  // these objects the drama layer stays a graceful no-op.
   // ═══════════════════════════════════════════════════════════════════
-  const tx6 = new Transaction();
-  tx6.add(
-    endlessTx.resource.instantiate({
-      cap: storytellerCapId,
-      saga: sagaId,
-      archetype: 'capacity-1-slot',
-      label: 'partnership:孟雲屏',
-      capacity: 1n,
-    }),
-  );
-  const changes6 = await runTx(client, signer, tx6, 'Tx 6 — Drama resource (孟雲屏 partnership)');
-  const dramaResourceId = firstOrThrow(
-    findCreatedByType(changes6, '::resource::DramaResource'),
-    'DramaResource',
-  );
-  console.log(`   dramaRes   ${dramaResourceId}`);
+  const dramaResources = story.drama_resources ?? [];
+  if (dramaResources.length > 0) {
+    const tx6 = new Transaction();
+    for (const resource of dramaResources) {
+      if (resource.capacity <= 0) throw new Error(`drama resource "${resource.label}" capacity must be > 0`);
+      tx6.add(
+        endlessTx.resource.instantiate({
+          cap: storytellerCapId,
+          saga: sagaId,
+          archetype: resource.archetype,
+          label: resource.label,
+          capacity: BigInt(resource.capacity),
+        }),
+      );
+    }
+    const changes6 = await runTx(client, signer, tx6, `Tx 7 — ${dramaResources.length} Drama resources`);
+    const dramaResourceIds = findCreatedByType(changes6, '::resource::DramaResource');
+    if (dramaResourceIds.length !== dramaResources.length) {
+      throw new Error(`expected ${dramaResources.length} drama resources, got ${dramaResourceIds.length}`);
+    }
+    dramaResourceIds.forEach((id, i) => {
+      console.log(`   dramaRes   ${id} (${dramaResources[i]?.label ?? 'resource'})`);
+    });
+  } else {
+    console.log('   dramaRes   none configured');
+  }
 
   // ═══════════════════════════════════════════════════════════════════
   // Write contract-ids.ts

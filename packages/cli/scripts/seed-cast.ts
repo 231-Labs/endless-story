@@ -1,21 +1,26 @@
 /**
- * Seed a minimal contesting cast for the drama-engine demo.
+ * Debug-only helper for the Spring Snow drama-engine demo cast.
  *
- * Directly mints named genesis characters into the saga's first scene via the
- * StorytellerCap — NO voucher / recruit flow (admin IS the storyteller, this is
- * the authority's short path, not a bypass). 孟雲屏 is the named star at the
- * centre; 小生-side performers contend for the capacity-1 partnership slot that
- * `bootstrap` seeded. Public `role:*` tags are affirmed through BudgetEvent
- * outcomes so drama/default POV can consume identity from chain state.
+ * Normal demo setup should NOT use this script to mint characters. Direct mint
+ * bypasses the recruitment wizard's portrait / persona / setting-gallery flow,
+ * leaving characters with no base image. Use `/admin/deploy` ③ seed recruitments,
+ * then mint the main cast through the user-facing flow.
+ *
+ * This script remains as an explicit escape hatch:
+ *   - `--tag-existing` applies role:* tags to same-name characters you minted
+ *     through the normal flow.
+ *   - `--allow-no-media` permits the old no-image direct mint path for local
+ *     debugging only.
  *
  * Usage:
- *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet
- *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --only 孟雲屏
  *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing
+ *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --allow-no-media
+ *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --allow-no-media --only 溫照棠
  *
  * Flags:
  *   --env devnet|testnet|mainnet|localnet  (required, must match deployment)
  *   --tag-existing                         apply missing role:* tags to existing same-name cast; do not mint
+ *   --allow-no-media                       debug only: mint without portrait/media assets
  */
 import { Transaction } from '@mysten/sui/transactions';
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -54,36 +59,44 @@ interface CastSpec {
 
 const FULL_CAST: CastSpec[] = [
   {
-    name: '孟雲屏',
-    description: '梨園中聲名最盛的花旦名角，身段沉靜、眼風極冷。她的下一折戲常是眾人暗中爭的搭檔位；她越不表態，越使眾人心火暗起。',
+    name: '溫照棠',
+    description: '春雪社台柱花旦，一折悲戲能唱出亮色，也懂得把沉默賣成滿座屏息。她厭惡被當成苦命招牌，真正想守住的是女班自己定價、自己選搭檔的權利。',
     role: '花旦',
     gender: '女',
-    ageYears: 28,
-    attrs: { appearance: 95, constitution: 62, acuity: 90, disposition: 82 },
+    ageYears: 27,
+    attrs: { appearance: 94, constitution: 64, acuity: 88, disposition: 84 },
   },
   {
-    name: '顧驚鴻',
-    description: '新近冒頭的小生，眉眼鋒利、勝負心極重。孟雲屏的壓軸搭檔位一旦空出，他便視為證明自己能站上台心的試金石。',
-    role: '小生',
-    gender: '男',
+    name: '陸明漪',
+    description: '春雪社坤生，女扮少年郎時眉眼清亮，台下又懂新式合同與報紙語氣。她想接住溫照棠下一折戲，也想證明坤生不是上海噱頭。',
+    role: '坤生 / 小生',
+    gender: '女',
     ageYears: 24,
-    attrs: { appearance: 86, constitution: 72, acuity: 82, disposition: 64 },
+    attrs: { appearance: 88, constitution: 70, acuity: 86, disposition: 70 },
   },
   {
-    name: '柳生春',
-    description: '當紅武小生，嗓如裂帛、身段風流。執意要與名角孟雲屏搭一齣戲，視那壓軸的搭檔位為畢生所願。',
-    role: '武小生',
+    name: '江鴻笙',
+    description: '外班客座乾生，從大世界男班戲台轉來，嗓子穩、台步老辣，嘴上說不信女班小生能撐大本戲，心裡卻知道春雪社的台口比他想像得難站。',
+    role: '客座乾生 / 男小生',
     gender: '男',
-    ageYears: 22,
-    attrs: { appearance: 88, constitution: 60, acuity: 80, disposition: 72 },
+    ageYears: 26,
+    attrs: { appearance: 84, constitution: 76, acuity: 78, disposition: 62 },
   },
   {
-    name: '白牡丹',
-    description: '後起之秀的花旦，明豔逼人、心氣極高。她覬覦的是班中話語權與鏡頭，不是孟雲屏的搭檔位。',
-    role: '花旦',
+    name: '沈照夜',
+    description: '春雪社刀馬旦，京班武場出身，穿靠使槍時像把整座雲錦台劈亮。她不是逞勇的打女，越是熱鬧武場，越藏著她不肯說的舊傷。',
+    role: '刀馬旦 / 武旦',
     gender: '女',
-    ageYears: 20,
-    attrs: { appearance: 92, constitution: 55, acuity: 78, disposition: 68 },
+    ageYears: 25,
+    attrs: { appearance: 86, constitution: 88, acuity: 74, disposition: 76 },
+  },
+  {
+    name: '何晚舟',
+    description: '春雪社主胡高手，不上台卻掌全台呼吸。一弓能托住溫照棠失音，一個停頓也能讓刀馬旦翻身前的空氣忽然發緊。',
+    role: '主胡高手',
+    gender: '女',
+    ageYears: 31,
+    attrs: { appearance: 72, constitution: 68, acuity: 92, disposition: 80 },
   },
 ];
 
@@ -263,6 +276,7 @@ async function main() {
   const onlyIdx = process.argv.indexOf('--only');
   const only = onlyIdx >= 0 ? process.argv[onlyIdx + 1] : undefined;
   const tagExisting = hasFlag('--tag-existing');
+  const allowNoMedia = hasFlag('--allow-no-media');
   const CAST = only ? FULL_CAST.filter((c) => c.name === only) : FULL_CAST;
   if (only && CAST.length === 0) throw new Error(`--only "${only}" matched no cast member`);
 
@@ -272,6 +286,16 @@ async function main() {
   }
   if (!d.packageId || !d.sagaId || !d.sceneIds?.[0]) {
     throw new Error('deployment missing packageId / sagaId / sceneIds — run deploy + bootstrap first.');
+  }
+
+  if (!tagExisting && !allowNoMedia) {
+    console.log('[seed-cast] direct mint disabled by default.');
+    console.log('   Reason: direct genesis mint has empty mediaAssets and bypasses portrait/persona/setting-gallery generation.');
+    console.log('   Use `/admin/deploy` ③ seed 職缺, then mint cast through the normal recruitment wizard.');
+    console.log('   After normal mint, run this only if needed:');
+    console.log('     pnpm --filter @endless-story/cli run seed-cast -- --env <env> --tag-existing');
+    console.log('   Debug escape hatch for no-image mints: add --allow-no-media');
+    return;
   }
 
   const signer = loadKeypair();
@@ -377,7 +401,7 @@ async function main() {
     console.log(`   ✓ ${c.name}  ${characterId}  role:${c.role}`);
   }
 
-  console.log('\n[done] cast seeded — 孟雲屏 is present; 小生-side rivals can contend for the partnership slot.');
+  console.log('\n[done] cast seeded — 溫照棠 is present; 小生-side rivals can contend for the partnership slot.');
   console.log('   next: pnpm --filter @endless-story/cli run world-loop -- --max=3');
   console.log('   characters:');
   for (const m of minted) console.log(`     ${m.name}  ${m.characterId}  role:${m.role}  via ${m.roleEventId}`);

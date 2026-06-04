@@ -265,11 +265,13 @@ CLI 路徑先跑 preflight，避免半途才發現 gas / env / build 問題：
 pnpm --filter @endless-story/cli run deploy-preflight -- --env testnet --json-out=/private/tmp/endless-story-deploy-preflight.json
 ```
 
-**1.5. （Drama demo cast）補行當 tags**：若用 `seed-cast` 直接 mint 孟/顧/柳/白，最新腳本會同時寫 role tags；若是舊 cast 已存在，redeploy 到含 tag-op helpers 的 package 後跑：
+**1.5. （Drama demo cast）正常 mint + 補行當 tags**：不要用 `seed-cast` 直接 mint demo cast，因為直 mint 會繞過 portrait / persona / setting gallery，角色會沒有基礎圖。先用 ③ seed 職缺，走首頁一般 recruitment wizard mint 主要角色；若 mint 出同名角色後需要補 `role:*` tags，再跑：
 
 ```bash
 pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing
 ```
+
+`seed-cast` 的無圖直 mint 已被 `--allow-no-media` gate 起來，只留給本機 debug，不作 demo/redeploy 預設流程。
 
 **1.6. Headless tick smoke（不上鏈）**：部署或本機 server 起來後先跑一輪安全 smoke：
 
@@ -277,15 +279,15 @@ pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing
 pnpm --filter @endless-story/cli run world-loop -- --max=1 --dry-run --max-characters=1 --no-sleep --no-gazette
 ```
 
-**1.7. 顧/柳/孟 targeted dry-run（不上鏈）**：驗 demo cast 時不要靠排序，直接指定三人：
+**1.7. Targeted dry-run（不上鏈）**：驗 demo cast 時不要靠排序。等用一般流程 mint 完主要角色後，從 `/admin/director` 或 `/dossier` 抄角色 object ids，直接指定 2–3 位：
 
 ```bash
 WORLD_LOOP_URL=http://localhost:3000 \
 pnpm --filter @endless-story/cli run world-loop -- \
   --max=1 --dry-run --max-characters=3 \
-  --character-ids=0x1dff99a3adf385874ae06066a1064a308d9d32907b35ef2ae63023ef9776a349,0xa6832662d55a02c09d556c41d4d8bc44c17f0fb3e6338f70c332f63458cdafc7,0xc162a7e009a4d63ccf89c7773ea5fc0e3516eca05a536e4d40a042c9883509f6 \
+  --character-ids=<char-id-1>,<char-id-2>,<char-id-3> \
   --no-sleep --no-gazette \
-  --json-out=/private/tmp/endless-story-gu-liu-meng-dryrun.json
+  --json-out=/private/tmp/endless-story-targeted-dryrun.json
 ```
 
 快速只看 DRAMA / SOCIAL 時加 `--no-pov`，會跳過最慢的章回生成：
@@ -294,7 +296,7 @@ pnpm --filter @endless-story/cli run world-loop -- \
 WORLD_LOOP_URL=http://localhost:3000 \
 pnpm --filter @endless-story/cli run world-loop -- \
   --max=1 --dry-run --max-characters=3 \
-  --character-ids=0x1dff99a3adf385874ae06066a1064a308d9d32907b35ef2ae63023ef9776a349,0xa6832662d55a02c09d556c41d4d8bc44c17f0fb3e6338f70c332f63458cdafc7,0xc162a7e009a4d63ccf89c7773ea5fc0e3516eca05a536e4d40a042c9883509f6 \
+  --character-ids=<char-id-1>,<char-id-2>,<char-id-3> \
   --no-pov --no-sleep --no-gazette
 ```
 

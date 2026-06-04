@@ -20,6 +20,12 @@ export interface StoryWorld {
   name: string;
   description: string;
   currency: { name: string; symbol: string };
+  /** Optional override for world.move WorldTimeConfig. Omit to use contract defaults. */
+  time_config?: {
+    /** basis points: 1670 ~= 1/6 day per tick. */
+    days_per_tick_bp: number;
+    tick_interval_ms: number;
+  };
 }
 
 export interface StoryAttributeDef {
@@ -40,6 +46,8 @@ export interface StoryLocation {
   terrain: string;
   x: number;
   y: number;
+  /** Optional graph edges by location index. Omit for no explicit adjacency. */
+  adjacent_indices?: number[];
 }
 
 export interface StorySaga {
@@ -62,6 +70,8 @@ export interface StorySaga {
 export interface StoryScene {
   name: string;
   description: string;
+  /** Optional Display image / metadata URI persisted on SceneInfo. */
+  metadata_uri?: string;
   /** Index into `locations[]`. */
   location_index: number;
   /** u8: privacy level. 0 = public, higher = more private. */
@@ -87,6 +97,26 @@ export interface StoryScene {
   pos_y: number;
 }
 
+export interface StorySagaAttribute {
+  key: string;
+  label: string;
+  min: number;
+  max: number;
+}
+
+export interface StoryCardWeightRule {
+  /** event.move CardTemplate.intent: 0 KILL, 1 ATTACK, 2 DEFEND, 3 HEAL, 4 SOCIAL, 5 FLEE, 6 WITNESS, 7 INTIMATE, 8 CUSTOM. */
+  intent: number;
+  attribute_key: string;
+  bonus_per_point: number;
+}
+
+export interface StoryDramaResource {
+  archetype: string;
+  label: string;
+  capacity: number;
+}
+
 export interface StoryRecruitmentSeed
   extends Omit<Recruitment, 'createdAt' | 'expiresAt' | 'sagaId' | 'sagaName'> {
   /** TTL applied when the seed action runs. Default 14. */
@@ -102,6 +132,12 @@ export interface StoryPreset {
   world_rules: StoryWorldRules;
   locations: StoryLocation[];
   saga: StorySaga;
+  /** Per-saga skill definitions stored on saga.move dynamic fields. */
+  saga_attributes?: StorySagaAttribute[];
+  /** Optional card draw bias rules. Requires saga_attributes/world attributes keyed by attribute_key. */
+  card_weight_rules?: StoryCardWeightRule[];
+  /** Contested resources that activate the drama engine. */
+  drama_resources?: StoryDramaResource[];
   scenes: StoryScene[];
   recruitments: StoryRecruitmentSeed[];
 }
