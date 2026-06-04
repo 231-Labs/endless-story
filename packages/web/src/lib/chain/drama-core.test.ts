@@ -23,14 +23,14 @@ import {
 
 const LIU = '0xliu';
 const BAI = '0xbai';
-const MENG = '0xmeng';
+const WEN = '0xwen';
 const R1 = '0xr1';
 
 function slot(allocations: Record<string, bigint>): ResourceSnapshot {
     return {
         id: R1,
         archetype: 'capacity-1-slot',
-        label: 'partnership:孟雲屏',
+        label: 'partnership:溫照棠',
         capacity: 1n,
         allocations,
     };
@@ -56,7 +56,7 @@ test('default desires: a capacity-1 slot among 2 cast members is contested → 1
     assert.equal(specs[0].claims[0].ref, R1);
     assert.equal(specs[0].claims[0].claim, 1n);
     // statement is narrative-derived from the partnership label
-    assert.match(specs[0].statement, /孟雲屏/);
+    assert.match(specs[0].statement, /溫照棠/);
 });
 
 test('default desires: a resource everyone fits in (capacity ≥ cast) is NOT contested', () => {
@@ -67,14 +67,14 @@ test('default desires: a resource everyone fits in (capacity ≥ cast) is NOT co
 test('default desires: a named partnership target does NOT desire their own slot', () => {
     assert.equal(
         defaultDesiresForCast([slot({})], 3, {
-            agentName: '孟雲屏',
+            agentName: '溫照棠',
             agentTags: ['role:花旦'],
         }).length,
         0,
     );
     assert.equal(
         defaultDesiresForCast([slot({})], 3, {
-            agentName: '柳生春',
+            agentName: '陸明漪',
             agentTags: ['role:小生'],
         }).length,
         1,
@@ -144,5 +144,5 @@ test('hint: dominant unmet desire renders a non-empty Chinese line', () => {
     assert.ok(baiHint && baiHint.includes('張力'), `contender should get a tension hint, got: ${baiHint}`);
     // an agent with no desires gets no hint
     assert.equal(dramaHintForAgent(next, '0xnobody'), null);
-    assert.equal(dramaHintForAgent(next, MENG), null);
+    assert.equal(dramaHintForAgent(next, WEN), null);
 });

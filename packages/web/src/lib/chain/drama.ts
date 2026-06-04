@@ -219,8 +219,8 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     if (resources.length === 0) return { ...empty, skipped: 'no-resources' };
 
     // 1. assemble agent specs (authored desires, else default contention desires).
-    // Defaults can depend on the agent name: a star named in
-    // `partnership:孟雲屏` should not receive "I want to partner with 孟雲屏".
+    // Defaults can depend on the agent name: a star named in a label like
+    // `partnership:溫照棠` should not receive "I want to partner with 溫照棠".
     const agents: AgentSpec[] = opts.cast.map((c) => ({
         id: c.id,
         name: c.name,
