@@ -321,6 +321,13 @@ public fun is_valid_attribute_value(world: &World, key: &String, value: u64): bo
     value >= def.min_value && value <= def.max_value
 }
 
+/// True iff `location_id` is a Location registered under this World. Lets
+/// other modules (e.g. `saga::create_saga`) validate caller-supplied location
+/// ids without holding the Location objects.
+public fun is_location_registered(world: &World, location_id: ID): bool {
+    world.state.location_ids.contains(&location_id)
+}
+
 // ─── view: location ──────────────────────────────────────────────────
 
 public fun location_world_id(location: &Location): ID { location.world_id }

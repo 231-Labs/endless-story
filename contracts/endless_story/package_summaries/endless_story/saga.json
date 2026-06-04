@@ -253,6 +253,19 @@
           }
         },
         {
+          "name": "portrait_tone",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
           "name": "clock",
           "type_": {
             "Reference": [
@@ -849,6 +862,19 @@
               "type_arguments": []
             }
           }
+        },
+        {
+          "name": "portrait_tone",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
         }
       ],
       "return_": []
@@ -945,9 +971,55 @@
         }
       ]
     },
-    "covered_location_count": {
+    "portrait_tone": {
       "source_index": 14,
       "index": 14,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "covered_location_count": {
+      "source_index": 15,
+      "index": 15,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -978,8 +1050,8 @@
       ]
     },
     "is_location_covered": {
-      "source_index": 15,
-      "index": 15,
+      "source_index": 16,
+      "index": 16,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1023,8 +1095,8 @@
       ]
     },
     "enable_card_weighting": {
-      "source_index": 16,
-      "index": 16,
+      "source_index": 17,
+      "index": 17,
       "doc": " Attach an empty card-weight rule list as a dynamic field on the saga.\n Required before any `set_card_weight_rule` call. Aborts if already\n enabled (composer drift signal — easier to debug than silent no-op).",
       "attributes": [],
       "visibility": "Public",
@@ -1071,8 +1143,8 @@
       "return_": []
     },
     "disable_card_weighting": {
-      "source_index": 17,
-      "index": 17,
+      "source_index": 18,
+      "index": 18,
       "doc": " Detach the card-weight rule list (back to uniform draw). All rules are\n discarded; no record kept. Aborts if not currently enabled.",
       "attributes": [],
       "visibility": "Public",
@@ -1119,8 +1191,8 @@
       "return_": []
     },
     "set_card_weight_rule": {
-      "source_index": 18,
-      "index": 18,
+      "source_index": 19,
+      "index": 19,
       "doc": " Upsert a rule: replaces any existing rule with the same\n (intent, attribute_key) tuple, otherwise appends. Aborts if weighting\n is not enabled.",
       "attributes": [],
       "visibility": "Public",
@@ -1188,8 +1260,8 @@
       "return_": []
     },
     "clear_card_weight_rule": {
-      "source_index": 19,
-      "index": 19,
+      "source_index": 20,
+      "index": 20,
       "doc": " Remove the (intent, attribute_key) rule if present. No-op (no abort)\n if the rule wasn't there — safe to call defensively.",
       "attributes": [],
       "visibility": "Public",
@@ -1253,8 +1325,8 @@
       "return_": []
     },
     "card_weighting_enabled": {
-      "source_index": 20,
-      "index": 20,
+      "source_index": 21,
+      "index": 21,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1285,8 +1357,8 @@
       ]
     },
     "card_weight_rules": {
-      "source_index": 21,
-      "index": 21,
+      "source_index": 22,
+      "index": 22,
       "doc": " Snapshot the saga's current weight rules. Returns empty vector when\n card weighting is disabled — callers (e.g. `event::deal_*`) can treat\n empty == uniform without a separate predicate.",
       "attributes": [],
       "visibility": "Public",
@@ -1328,8 +1400,8 @@
       ]
     },
     "card_weight_intent": {
-      "source_index": 22,
-      "index": 22,
+      "source_index": 23,
+      "index": 23,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1360,8 +1432,8 @@
       ]
     },
     "card_weight_attribute_key": {
-      "source_index": 23,
-      "index": 23,
+      "source_index": 24,
+      "index": 24,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1406,8 +1478,8 @@
       ]
     },
     "card_weight_bonus_per_point": {
-      "source_index": 24,
-      "index": 24,
+      "source_index": 25,
+      "index": 25,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1438,8 +1510,8 @@
       ]
     },
     "define_saga_attribute": {
-      "source_index": 25,
-      "index": 25,
+      "source_index": 26,
+      "index": 26,
       "doc": " Append a new saga-specific attribute definition. The table is\n auto-attached on first call. Aborts if `key` is already defined (for\n the same saga) so storytellers can't accidentally redefine what a skill\n range means mid-game.",
       "attributes": [],
       "visibility": "Public",
@@ -1520,8 +1592,8 @@
       "return_": []
     },
     "clear_saga_attribute": {
-      "source_index": 26,
-      "index": 26,
+      "source_index": 27,
+      "index": 27,
       "doc": " Remove a saga-specific attribute definition by key. No-op if missing.\n Note: this does NOT clear existing character skills keyed under the\n removed name — those become stale data on chain (still readable, just\n no longer enforced or weighted).",
       "attributes": [],
       "visibility": "Public",
@@ -1581,8 +1653,8 @@
       "return_": []
     },
     "saga_attribute_defs": {
-      "source_index": 27,
-      "index": 27,
+      "source_index": 28,
+      "index": 28,
       "doc": " Snapshot of saga's own attribute definitions (empty if none).\n `event::compute_card_weights` and `character::set_character_skill` both\n look here when validating / resolving an attribute key.",
       "attributes": [],
       "visibility": "Public",
@@ -1624,8 +1696,8 @@
       ]
     },
     "register_resource": {
-      "source_index": 28,
-      "index": 28,
+      "source_index": 29,
+      "index": 29,
       "doc": " Register a contested resource under this saga. Package-internal: called by\n `resource::instantiate` (the same way `add_anchor_scene` is called by `scene::create`).\n Idempotent on duplicate id. Auto-attaches the DOF on first call; absent DOF == no\n resources. Append-only — no Saga struct field, no migration.",
       "attributes": [],
       "visibility": "Package",
@@ -1667,8 +1739,8 @@
       "return_": []
     },
     "saga_resource_ids": {
-      "source_index": 29,
-      "index": 29,
+      "source_index": 30,
+      "index": 30,
       "doc": " Snapshot of the saga's registered resource ids (empty if none). Off-chain reads this to\n discover the saga's contested resources without replaying ResourceInstantiated events.",
       "attributes": [],
       "visibility": "Public",
@@ -1710,8 +1782,8 @@
       ]
     },
     "verify_cap": {
-      "source_index": 30,
-      "index": 30,
+      "source_index": 31,
+      "index": 31,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1760,8 +1832,8 @@
       ]
     },
     "assert_cap": {
-      "source_index": 31,
-      "index": 31,
+      "source_index": 32,
+      "index": 32,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1808,47 +1880,6 @@
       "return_": []
     },
     "saga_id": {
-      "source_index": 32,
-      "index": 32,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "saga",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "saga"
-                  },
-                  "name": "Saga",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "sui",
-              "name": "object"
-            },
-            "name": "ID",
-            "type_arguments": []
-          }
-        }
-      ]
-    },
-    "world_id": {
       "source_index": 33,
       "index": 33,
       "doc": null,
@@ -1889,9 +1920,50 @@
         }
       ]
     },
-    "character_count": {
+    "world_id": {
       "source_index": 34,
       "index": 34,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "character_count": {
+      "source_index": 35,
+      "index": 35,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1922,8 +1994,8 @@
       ]
     },
     "saga_kind": {
-      "source_index": 35,
-      "index": 35,
+      "source_index": 36,
+      "index": 36,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1963,8 +2035,8 @@
       ]
     },
     "is_active": {
-      "source_index": 36,
-      "index": 36,
+      "source_index": 37,
+      "index": 37,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1995,28 +2067,6 @@
       ]
     },
     "kind_standard": {
-      "source_index": 37,
-      "index": 37,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [],
-      "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "endless_story",
-              "name": "saga"
-            },
-            "name": "SagaKind",
-            "type_arguments": []
-          }
-        }
-      ]
-    },
-    "kind_reincarnation": {
       "source_index": 38,
       "index": 38,
       "doc": null,
@@ -2038,9 +2088,31 @@
         }
       ]
     },
-    "new_revenue_config": {
+    "kind_reincarnation": {
       "source_index": 39,
       "index": 39,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "saga"
+            },
+            "name": "SagaKind",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "new_revenue_config": {
+      "source_index": 40,
+      "index": 40,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2467,7 +2539,7 @@
           },
           "nature_prompt": {
             "index": 14,
-            "doc": " Per-saga narrative DNA (F — saga soul). Free-form text the\n character/storyteller LLM layers on top of the genre baseline so\n different sagas read in distinct voices. Not enforced on-chain.\n `nature_prompt` = 事件氣質 (conflict type / narrative rhythm);\n `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues).",
+            "doc": " Per-saga narrative DNA (F — saga soul). Free-form text the\n character/storyteller LLM layers on top of the genre baseline so\n different sagas read in distinct voices. Not enforced on-chain.\n `nature_prompt` = 事件氣質 (conflict type / narrative rhythm);\n `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues);\n `portrait_tone` = 畫風 (per-saga portrait art direction, used at\n recruitment so characters are rendered in this troupe's visual key).",
             "type_": {
               "Datatype": {
                 "module": {
@@ -2493,8 +2565,22 @@
               }
             }
           },
-          "created_at_ms": {
+          "portrait_tone": {
             "index": 16,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          },
+          "created_at_ms": {
+            "index": 17,
             "doc": null,
             "type_": "u64"
           }
@@ -2872,8 +2958,22 @@
             "doc": null,
             "type_": "u8"
           },
-          "bonus_per_point": {
+          "attribute_key": {
             "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          },
+          "bonus_per_point": {
+            "index": 3,
             "doc": null,
             "type_": "u16"
           }
@@ -2910,6 +3010,20 @@
             "index": 1,
             "doc": null,
             "type_": "u8"
+          },
+          "attribute_key": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
           }
         }
       }

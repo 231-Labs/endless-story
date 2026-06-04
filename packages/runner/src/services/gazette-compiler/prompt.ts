@@ -16,8 +16,13 @@
  * the events + chapters as ground truth.
  */
 
+import { type SagaSoul, buildSagaSoulBlock } from '../character-worker/saga-soul.js';
+
 export interface GazetteSnapshot {
     sagaName: string;
+    /** Per-saga tonal DNA (F) — colours the gazette's tagline/voice while the
+     *  objective-reporter rules keep facts intact. Optional. */
+    soul?: SagaSoul;
     /** 1-indexed narrative day. */
     day: number;
     /** Recent director / scene / character events. */
@@ -50,8 +55,8 @@ export interface GazetteChapter {
     committedAtMs: string;
 }
 
-export function buildSystemPrompt(): string {
-    return [
+export function buildSystemPrompt(soul?: SagaSoul): string {
+    const base = [
         '你是「公報」編輯。一份公報是戲班一日的對外通報，**第三人稱客觀**、簡潔有節奏感，不是文學連載。',
         '',
         '**鐵則**：',
@@ -69,7 +74,11 @@ export function buildSystemPrompt(): string {
         '5. 風格：民初報紙快訊的口吻，乾、緊、有節奏感。',
         '',
         '**輸出**：純 markdown，不要 ```fence``` 包裹。直接從 `# ` 開始。',
-    ].join('\n');
+    ];
+    // Saga soul colours the tagline / 白話 voice only — the 鐵則 above still
+    // forbid inventing facts, so the gazette stays objective.
+    const soulBlock = buildSagaSoulBlock(soul);
+    return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
 }
 
 export function buildUserPrompt(s: GazetteSnapshot): string {

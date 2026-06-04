@@ -123,7 +123,7 @@ export async function runOnce(input: CompileGazetteInput): Promise<CompileGazett
     const llm = llmText.createTextClient({ kind: 'cheap' });
     const modelId = input.model ?? llm.defaultModel;
 
-    const system = buildSystemPrompt();
+    const system = buildSystemPrompt(snapshot.soul);
     const user = buildUserPrompt(snapshot);
 
     const response = await llm.chat({
@@ -181,6 +181,17 @@ async function fetchGazetteSnapshot(
         name?: string;
         treasury?: number | string;
         character_count?: number | string;
+        description?: string;
+        departure_policy?: string;
+        nature_prompt?: string;
+        rhythm_hints?: string;
+    };
+    const soul = {
+        sagaName: sagaJson.name ?? '無名戲班',
+        premise: sagaJson.description?.trim() || undefined,
+        departurePolicy: sagaJson.departure_policy?.trim() || undefined,
+        naturePrompt: sagaJson.nature_prompt?.trim() || undefined,
+        rhythmHints: sagaJson.rhythm_hints?.trim() || undefined,
     };
 
     const charactersRes = pkg
@@ -350,6 +361,7 @@ async function fetchGazetteSnapshot(
 
     return {
         sagaName: sagaJson.name ?? '無名戲班',
+        soul,
         day,
         events,
         chapters,

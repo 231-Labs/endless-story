@@ -497,6 +497,36 @@ export function isValidAttributeValue(options: IsValidAttributeValueOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface IsLocationRegisteredArguments {
+    world: RawTransactionArgument<string>;
+    locationId: RawTransactionArgument<string>;
+}
+export interface IsLocationRegisteredOptions {
+    package?: string;
+    arguments: IsLocationRegisteredArguments | [
+        world: RawTransactionArgument<string>,
+        locationId: RawTransactionArgument<string>
+    ];
+}
+/**
+ * True iff `location_id` is a Location registered under this World. Lets other
+ * modules (e.g. `saga::create_saga`) validate caller-supplied location ids without
+ * holding the Location objects.
+ */
+export function isLocationRegistered(options: IsLocationRegisteredOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        '0x2::object::ID'
+    ] satisfies (string | null)[];
+    const parameterNames = ["world", "locationId"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'world',
+        function: 'is_location_registered',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface LocationWorldIdArguments {
     location: RawTransactionArgument<string>;
 }

@@ -886,17 +886,17 @@
         "bool"
       ]
     },
-    "location_world_id": {
+    "is_location_registered": {
       "source_index": 16,
       "index": 16,
-      "doc": null,
+      "doc": " True iff `location_id` is a Location registered under this World. Lets\n other modules (e.g. `saga::create_saga`) validate caller-supplied location\n ids without holding the Location objects.",
       "attributes": [],
       "visibility": "Public",
       "entry": false,
       "type_parameters": [],
       "parameters": [
         {
-          "name": "location",
+          "name": "world",
           "type_": {
             "Reference": [
               false,
@@ -906,28 +906,32 @@
                     "address": "endless_story",
                     "name": "world"
                   },
-                  "name": "Location",
+                  "name": "World",
                   "type_arguments": []
                 }
               }
             ]
           }
+        },
+        {
+          "name": "location_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
         }
       ],
       "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "sui",
-              "name": "object"
-            },
-            "name": "ID",
-            "type_arguments": []
-          }
-        }
+        "bool"
       ]
     },
-    "location_id": {
+    "location_world_id": {
       "source_index": 17,
       "index": 17,
       "doc": null,
@@ -968,9 +972,50 @@
         }
       ]
     },
-    "location_index": {
+    "location_id": {
       "source_index": 18,
       "index": 18,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "location",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "world"
+                  },
+                  "name": "Location",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "location_index": {
+      "source_index": 19,
+      "index": 19,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1001,8 +1046,8 @@
       ]
     },
     "is_adjacent": {
-      "source_index": 19,
-      "index": 19,
+      "source_index": 20,
+      "index": 20,
       "doc": " Two locations are adjacent iff `current.graph` lists `target.info.index`.\n Caller is responsible for passing two locations from the same World;\n adjacency itself is a graph-only check.",
       "attributes": [],
       "visibility": "Public",
@@ -1051,8 +1096,8 @@
       ]
     },
     "new_attribute_definition": {
-      "source_index": 20,
-      "index": 20,
+      "source_index": 21,
+      "index": 21,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1108,52 +1153,6 @@
       ]
     },
     "attribute_definition_key": {
-      "source_index": 21,
-      "index": 21,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "def",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "world"
-                  },
-                  "name": "AttributeDefinition",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Reference": [
-            false,
-            {
-              "Datatype": {
-                "module": {
-                  "address": "std",
-                  "name": "string"
-                },
-                "name": "String",
-                "type_arguments": []
-              }
-            }
-          ]
-        }
-      ]
-    },
-    "attribute_definition_label": {
       "source_index": 22,
       "index": 22,
       "doc": null,
@@ -1199,7 +1198,7 @@
         }
       ]
     },
-    "attribute_definition_min": {
+    "attribute_definition_label": {
       "source_index": 23,
       "index": 23,
       "doc": null,
@@ -1228,10 +1227,24 @@
         }
       ],
       "return_": [
-        "u64"
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          ]
+        }
       ]
     },
-    "attribute_definition_max": {
+    "attribute_definition_min": {
       "source_index": 24,
       "index": 24,
       "doc": null,
@@ -1263,9 +1276,41 @@
         "u64"
       ]
     },
-    "is_value_in_definitions": {
+    "attribute_definition_max": {
       "source_index": 25,
       "index": 25,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "def",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "world"
+                  },
+                  "name": "AttributeDefinition",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "is_value_in_definitions": {
+      "source_index": 26,
+      "index": 26,
       "doc": " Validate `value` against an arbitrary list of AttributeDefinitions —\n used by saga-side skill tables that don't live on World.",
       "attributes": [],
       "visibility": "Public",
@@ -1320,8 +1365,8 @@
       ]
     },
     "is_key_defined": {
-      "source_index": 26,
-      "index": 26,
+      "source_index": 27,
+      "index": 27,
       "doc": " True iff `key` exists in the definitions list.",
       "attributes": [],
       "visibility": "Public",
@@ -1372,8 +1417,8 @@
       ]
     },
     "new_world_info": {
-      "source_index": 27,
-      "index": 27,
+      "source_index": 28,
+      "index": 28,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1421,8 +1466,8 @@
       ]
     },
     "new_currency_display": {
-      "source_index": 28,
-      "index": 28,
+      "source_index": 29,
+      "index": 29,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1470,8 +1515,8 @@
       ]
     },
     "new_world_rules": {
-      "source_index": 29,
-      "index": 29,
+      "source_index": 30,
+      "index": 30,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1523,8 +1568,8 @@
       ]
     },
     "new_location_info": {
-      "source_index": 30,
-      "index": 30,
+      "source_index": 31,
+      "index": 31,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1589,8 +1634,8 @@
       ]
     },
     "new_position": {
-      "source_index": 31,
-      "index": 31,
+      "source_index": 32,
+      "index": 32,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1620,8 +1665,8 @@
       ]
     },
     "new_location_graph": {
-      "source_index": 32,
-      "index": 32,
+      "source_index": 33,
+      "index": 33,
       "doc": null,
       "attributes": [],
       "visibility": "Public",

@@ -295,6 +295,7 @@ async function main() {
       departurePolicy: story.saga.departure_policy,
       naturePrompt: story.saga.nature_prompt ?? '',
       rhythmHints: story.saga.rhythm_hints ?? '',
+      portraitTone: story.saga.portrait_tone ?? '',
     }),
   );
   tx3.transferObjects([storytellerCap], admin);

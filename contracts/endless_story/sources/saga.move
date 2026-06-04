@@ -46,6 +46,7 @@ const ESagaAlreadyInactive: u64 = 8;
 const EWorldAdminMismatch: u64 = 9;
 const EInsufficientTreasury: u64 = 10;
 const EInvalidWithdrawAmount: u64 = 11;
+const ESagaAttributeRangeInvalid: u64 = 12;
 
 const BPS_DENOMINATOR: u16 = 10_000;
 
@@ -141,9 +142,12 @@ public struct Saga has key {
     /// character/storyteller LLM layers on top of the genre baseline so
     /// different sagas read in distinct voices. Not enforced on-chain.
     /// `nature_prompt` = 事件氣質 (conflict type / narrative rhythm);
-    /// `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues).
+    /// `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues);
+    /// `portrait_tone` = 畫風 (per-saga portrait art direction, used at
+    /// recruitment so characters are rendered in this troupe's visual key).
     nature_prompt: String,
     rhythm_hints: String,
+    portrait_tone: String,
     created_at_ms: u64,
 }
 
@@ -195,12 +199,14 @@ public struct CardWeightingDisabled has copy, drop {
 public struct CardWeightRuleSet has copy, drop {
     saga_id: ID,
     intent: u8,
+    attribute_key: String,
     bonus_per_point: u16,
 }
 
 public struct CardWeightRuleCleared has copy, drop {
     saga_id: ID,
     intent: u8,
+    attribute_key: String,
 }
 
 public struct SagaAttributeDefined has copy, drop {
@@ -264,12 +270,28 @@ public fun create_saga(
     departure_policy: String,
     nature_prompt: String,
     rhythm_hints: String,
+    portrait_tone: String,
     clock: &clock::Clock,
     ctx: &mut TxContext,
 ): StorytellerCap {
     let config = new_revenue_config(owner_bps, storyteller_bps, treasury_bps);
     let created_at_ms = clock::timestamp_ms(clock);
     let world_id = world::world_id(world);
+    // Validate caller-supplied coverage to the same standard `cover_location`
+    // enforces (audit): every id must be a Location registered under THIS
+    // world (kills foreign-world / non-existent ids), and no duplicates.
+    let mut ci = 0;
+    let cn = vector::length(&covered_location_ids);
+    while (ci < cn) {
+        let loc_id = *vector::borrow(&covered_location_ids, ci);
+        assert!(world::is_location_registered(world, loc_id), ELocationWorldMismatch);
+        let mut cj = ci + 1;
+        while (cj < cn) {
+            assert!(*vector::borrow(&covered_location_ids, cj) != loc_id, ELocationAlreadyCovered);
+            cj = cj + 1;
+        };
+        ci = ci + 1;
+    };
     let saga = Saga {
         id: object::new(ctx),
         world_id,
@@ -287,6 +309,7 @@ public fun create_saga(
         departure_policy,
         nature_prompt,
         rhythm_hints,
+        portrait_tone,
         created_at_ms,
     };
     let saga_id = object::id(&saga);
@@ -424,16 +447,20 @@ public fun set_saga_soul(
     saga: &mut Saga,
     nature_prompt: String,
     rhythm_hints: String,
+    portrait_tone: String,
 ) {
     assert_cap(cap, saga);
     saga.nature_prompt = nature_prompt;
     saga.rhythm_hints = rhythm_hints;
+    saga.portrait_tone = portrait_tone;
     event::emit(SagaSoulUpdated { saga_id: object::id(saga) });
 }
 
 public fun nature_prompt(saga: &Saga): &String { &saga.nature_prompt }
 
 public fun rhythm_hints(saga: &Saga): &String { &saga.rhythm_hints }
+
+public fun portrait_tone(saga: &Saga): &String { &saga.portrait_tone }
 
 public fun covered_location_count(saga: &Saga): u64 {
     vector::length(&saga.covered_location_ids)
@@ -500,6 +527,7 @@ public fun set_card_weight_rule(
     event::emit(CardWeightRuleSet {
         saga_id: object::id(saga),
         intent,
+        attribute_key,
         bonus_per_point,
     });
 }
@@ -522,7 +550,11 @@ public fun clear_card_weight_rule(
         let r = vector::borrow(table, i);
         if (r.intent == intent && r.attribute_key == attribute_key) {
             let _ = vector::remove(table, i);
-            event::emit(CardWeightRuleCleared { saga_id: object::id(saga), intent });
+            event::emit(CardWeightRuleCleared {
+                saga_id: object::id(saga),
+                intent,
+                attribute_key,
+            });
             return
         };
         i = i + 1;
@@ -568,6 +600,9 @@ public fun define_saga_attribute(
     max_value: u64,
 ) {
     assert_cap(cap, saga);
+    // A skill range must be well-formed; an inverted range (min > max) makes
+    // every value both fail-low and fail-high downstream (audit).
+    assert!(min_value <= max_value, ESagaAttributeRangeInvalid);
     if (!df::exists(&saga.id, SagaAttributeDefsKey {})) {
         df::add<SagaAttributeDefsKey, vector<world::AttributeDefinition>>(
             &mut saga.id,
@@ -788,15 +823,52 @@ fun test_set_saga_soul() {
 
     assert!(*nature_prompt(&saga) == b"".to_string(), 60);
     assert!(*rhythm_hints(&saga) == b"".to_string(), 61);
+    assert!(*portrait_tone(&saga) == b"".to_string(), 62);
     set_saga_soul(
         &cap,
         &mut saga,
         b"intrigue, knives in the dark".to_string(),
         b"dawn warm-ups, dusk curtain".to_string(),
+        b"ink-wash, cinnabar accents".to_string(),
     );
-    assert!(*nature_prompt(&saga) == b"intrigue, knives in the dark".to_string(), 62);
-    assert!(*rhythm_hints(&saga) == b"dawn warm-ups, dusk curtain".to_string(), 63);
+    assert!(*nature_prompt(&saga) == b"intrigue, knives in the dark".to_string(), 63);
+    assert!(*rhythm_hints(&saga) == b"dawn warm-ups, dusk curtain".to_string(), 64);
+    assert!(*portrait_tone(&saga) == b"ink-wash, cinnabar accents".to_string(), 65);
 
+    destroy_saga_for_testing(saga, cap);
+    world::destroy_world_for_testing(world, admin_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = ESagaAttributeRangeInvalid)]
+fun test_define_saga_attribute_rejects_inverted_range() {
+    let mut ctx = sui::tx_context::dummy();
+    let mut clock = clock::create_for_testing(&mut ctx);
+    clock.set_for_testing(8650);
+    let (mut world, admin_cap) = world::new_world_for_testing(
+        world::new_world_info(b"W".to_string(), b"w".to_string()),
+        world::new_currency_display(b"E".to_string(), b"E".to_string()),
+        world::new_world_rules(vector[b"human".to_string()], vector[]),
+        8650,
+        &mut ctx,
+    );
+    let (mut saga, cap) = new_saga_for_testing(
+        &mut world,
+        kind_standard(),
+        b"S".to_string(),
+        b"s".to_string(),
+        b"s".to_string(),
+        4000,
+        5000,
+        1000,
+        vector[],
+        @0xA,
+        8651,
+        &clock,
+        &mut ctx,
+    );
+    // min (100) > max (0) → ESagaAttributeRangeInvalid
+    define_saga_attribute(&cap, &mut saga, b"唱腔".to_string(), b"唱".to_string(), 100, 0);
     destroy_saga_for_testing(saga, cap);
     world::destroy_world_for_testing(world, admin_cap);
     clock.destroy_for_testing();
@@ -1083,6 +1155,7 @@ public fun new_saga_for_testing(
         departure_policy: b"".to_string(),
         nature_prompt: b"".to_string(),
         rhythm_hints: b"".to_string(),
+        portrait_tone: b"".to_string(),
         created_at_ms,
     };
     let saga_id = object::id(&saga);
@@ -1110,6 +1183,7 @@ public fun destroy_saga_for_testing(saga: Saga, cap: StorytellerCap) {
         departure_policy: _,
         nature_prompt: _,
         rhythm_hints: _,
+        portrait_tone: _,
         created_at_ms: _,
     } = saga;
     let _ = balance::destroy_for_testing(treasury);

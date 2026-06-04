@@ -50,6 +50,12 @@ export interface SagaPersistentPrompts {
    * 鏈上 `Saga.departure_policy` 直接帶出。
    */
   departurePolicy: string;
+  /**
+   * 畫風 — per-saga portrait art direction (F). 鏈上 `Saga.portrait_tone`。
+   * Optional; recruitment portrait generation falls back to a default ink-wash
+   * tone when unset.
+   */
+  portraitTone?: string;
 }
 
 /** 一日中的時段 — 影響 scene lighting variation 的觸發 */

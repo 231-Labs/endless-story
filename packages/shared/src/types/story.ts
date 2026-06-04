@@ -55,6 +55,8 @@ export interface StorySaga {
   nature_prompt?: string;
   /** 自然節律 — dawn warm-up / dusk curtain cues (F). Optional; '' when unset. */
   rhythm_hints?: string;
+  /** 畫風 — per-saga portrait art direction (F). Optional; '' when unset. */
+  portrait_tone?: string;
 }
 
 export interface StoryScene {

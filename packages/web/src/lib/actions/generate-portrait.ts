@@ -24,11 +24,16 @@ import {
     type PortraitCurationOptions,
 } from '@endless-story/llm/prompts';
 import { blob } from '@endless-story/memwal';
+import { fetchOnChainSaga } from '@/lib/chain/saga-read';
 
 export interface GeneratePortraitInput {
     character: CharacterForPortrait;
-    /** Saga's portrait style anchor — usually from Recruitment.sagaToneHint. */
+    /** Explicit portrait style anchor. When empty, the saga's on-chain
+     *  `portrait_tone` (resolved via `sagaId`) is used; else a default
+     *  ink-wash tone. */
     toneHint: string;
+    /** Saga to resolve `portrait_tone` from when `toneHint` is empty (F). */
+    sagaId?: string;
     recruitmentIntent?: string;
     /**
      * Skip the bare-face ANCHOR curation and render this exact prompt. Used
@@ -56,8 +61,29 @@ function defaultToneHint(): string {
     return '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。不要動漫感、不要油畫感、不要寫實照片。';
 }
 
+/**
+ * Resolve the portrait art-direction tone (F — saga soul, 畫風):
+ *   explicit toneHint → saga's on-chain portrait_tone → default ink-wash.
+ * The saga read is cached (saga-read TTL) so repeated recruitment portraits
+ * in a session don't re-hit RPC.
+ */
+async function resolveToneHint(input: GeneratePortraitInput): Promise<string> {
+    const explicit = input.toneHint.trim();
+    if (explicit) return explicit;
+    if (input.sagaId) {
+        try {
+            const saga = await fetchOnChainSaga(input.sagaId);
+            const tone = saga?.sagaPrompts?.portraitTone?.trim();
+            if (tone) return tone;
+        } catch {
+            /* fall through to default on any read failure */
+        }
+    }
+    return defaultToneHint();
+}
+
 export async function generatePortrait(input: GeneratePortraitInput): Promise<GeneratePortraitResult> {
-    const tone = input.toneHint.trim() || defaultToneHint();
+    const tone = await resolveToneHint(input);
 
     // ── Stage 1: curate (skipped when caller supplies an exact prompt) ──
     let curated: string;

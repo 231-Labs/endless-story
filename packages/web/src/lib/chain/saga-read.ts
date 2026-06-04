@@ -35,6 +35,7 @@ interface ChainSagaJson {
     departure_policy?: string;
     nature_prompt?: string;
     rhythm_hints?: string;
+    portrait_tone?: string;
     /** Balance<CURRENCY>.value — raw smallest unit. */
     treasury?: number | string;
     revenue_config?: {
@@ -109,10 +110,11 @@ async function fetchOnChainSagaFresh(sagaId: string): Promise<Saga | null> {
     // type's required field → default '' if only nature/rhythm are set.
     const naturePrompt = json.nature_prompt?.trim() || undefined;
     const rhythmHints = json.rhythm_hints?.trim() || undefined;
+    const portraitTone = json.portrait_tone?.trim() || undefined;
     const departurePolicy = json.departure_policy?.trim() || undefined;
     const sagaPrompts =
-        departurePolicy || naturePrompt || rhythmHints
-            ? { departurePolicy: departurePolicy ?? '', naturePrompt, rhythmHints }
+        departurePolicy || naturePrompt || rhythmHints || portraitTone
+            ? { departurePolicy: departurePolicy ?? '', naturePrompt, rhythmHints, portraitTone }
             : undefined;
     return {
         id: sagaId,

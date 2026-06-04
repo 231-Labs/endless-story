@@ -9,10 +9,13 @@
  */
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
+import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
 
 export interface PovChapterEntry {
     commitmentId: string;
+    sagaId: string;
+    subjectId: string;
     committedAtMs: string;
     /** Walrus blob id (we stored as bytes; need to decode back to string). */
     blobId: string;
@@ -25,6 +28,15 @@ export interface PovChapterEntry {
 export interface FetchPovChaptersOptions {
     /** Max entries returned (newest first). Default 3. */
     limit?: number;
+}
+
+export interface FetchSagaPovChaptersOptions extends FetchPovChaptersOptions {
+    /**
+     * Valid POV subjects for this saga. Passing this lets callers exclude
+     * other commitment-road docs (persona JSON, gazette, drama beat) without
+     * needing a content-type field on-chain.
+     */
+    characterIds?: string[];
 }
 
 export async function fetchPovChaptersForCharacter(
@@ -64,6 +76,8 @@ export async function fetchPovChaptersForCharacter(
             if (!blobId) continue;
             out.push({
                 commitmentId: s.commitmentId,
+                sagaId: s.sagaId,
+                subjectId: s.subjectId,
                 committedAtMs: s.committedAtMs,
                 blobId,
                 blobUrl: buildWalrusBlobUrl(blobId),
@@ -77,6 +91,89 @@ export async function fetchPovChaptersForCharacter(
     return out;
 }
 
+export async function fetchPovChaptersForSaga(
+    sagaId: string,
+    opts: FetchSagaPovChaptersOptions = {},
+): Promise<PovChapterEntry[]> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return [];
+    const limit = opts.limit ?? 20;
+    const characterIds = opts.characterIds ? new Set(opts.characterIds) : null;
+    const client = makeSuiClient({ network: resolveNetwork() });
+
+    let summaries: Awaited<ReturnType<typeof read.commitment.listCommitments>>;
+    try {
+        summaries = await read.commitment.listCommitments(client, pkg, {
+            sagaId,
+            // Over-fetch because saga-subject gazettes and derived persona
+            // subjects share the same commitment event stream.
+            maxEvents: Math.max(limit * 4, limit + 24),
+        });
+    } catch (err) {
+        console.warn('[pov-read] list saga commitments failed:', err);
+        return [];
+    }
+
+    const out: PovChapterEntry[] = [];
+    for (const s of summaries) {
+        if (out.length >= limit) break;
+        if (s.subjectId === sagaId) continue;
+        if (characterIds && !characterIds.has(s.subjectId)) continue;
+        try {
+            const res = await read.commitment.getCommitment(client, s.commitmentId);
+            const json = res.json as unknown as {
+                blob_id?: number[] | string;
+                content_hash?: number[] | string;
+            };
+            const blobId = decodeByteString(json.blob_id);
+            if (!blobId) continue;
+            out.push({
+                commitmentId: s.commitmentId,
+                sagaId: s.sagaId,
+                subjectId: s.subjectId,
+                committedAtMs: s.committedAtMs,
+                blobId,
+                blobUrl: buildWalrusBlobUrl(blobId),
+                contentHashHex: decodeBytesHex(json.content_hash),
+            });
+        } catch {
+            // Skip unreadable commitments; the rest of the feed can still render.
+        }
+    }
+    return out;
+}
+
+export async function fetchPovChapterByCommitment(
+    commitmentId: string,
+): Promise<PovChapterEntry | null> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return null;
+    const client = makeSuiClient({ network: resolveNetwork() });
+    try {
+        const res = await read.commitment.getCommitment(client, commitmentId);
+        const json = res.json as unknown as {
+            saga_id?: string;
+            subject_id?: string;
+            committed_at_ms?: string | number;
+            blob_id?: number[] | string;
+            content_hash?: number[] | string;
+        };
+        const blobId = decodeByteString(json.blob_id);
+        if (!blobId) return null;
+        return {
+            commitmentId,
+            sagaId: json.saga_id ?? ENDLESS_STORY_DEPLOYMENT.sagaId,
+            subjectId: json.subject_id ?? '',
+            committedAtMs: String(json.committed_at_ms ?? '0'),
+            blobId,
+            blobUrl: buildWalrusBlobUrl(blobId),
+            contentHashHex: decodeBytesHex(json.content_hash),
+        };
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Fetch the actual chapter text from Walrus.
  *
@@ -85,7 +182,7 @@ export async function fetchPovChaptersForCharacter(
  * cache-control public + 24h max-age.
  */
 export async function fetchChapterText(blobUrl: string): Promise<string> {
-    const res = await fetch(blobUrl);
+    const res = await fetch(resolveServerFetchUrl(blobUrl));
     if (!res.ok) throw new Error(`walrus aggregator HTTP ${res.status}`);
     return res.text();
 }
@@ -118,4 +215,10 @@ function buildWalrusBlobUrl(blobId: string): string {
     // returns the same bytes but with no Content-Type (browsers fall
     // through to octet-stream → 中文亂碼). See /api/blob route handler.
     return `/api/blob/${blobId}`;
+}
+
+function resolveServerFetchUrl(blobUrl: string): string {
+    const match = blobUrl.match(/^\/api\/blob\/([^/?#]+)/);
+    if (!match) return blobUrl;
+    return memwalBlob.getBlobUrl(decodeURIComponent(match[1]), 'testnet');
 }

@@ -96,10 +96,13 @@ export const Saga = new MoveStruct({ name: `${$moduleName}::Saga`, fields: {
          * Per-saga narrative DNA (F — saga soul). Free-form text the character/storyteller
          * LLM layers on top of the genre baseline so different sagas read in distinct
          * voices. Not enforced on-chain. `nature_prompt` = 事件氣質 (conflict type /
-         * narrative rhythm); `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues).
+         * narrative rhythm); `rhythm_hints` = 自然節律 (dawn warm-up / dusk curtain cues);
+         * `portrait_tone` = 畫風 (per-saga portrait art direction, used at recruitment so
+         * characters are rendered in this troupe's visual key).
          */
         nature_prompt: bcs.string(),
         rhythm_hints: bcs.string(),
+        portrait_tone: bcs.string(),
         created_at_ms: bcs.u64()
     } });
 export const SagaCreated = new MoveStruct({ name: `${$moduleName}::SagaCreated`, fields: {
@@ -138,11 +141,13 @@ export const CardWeightingDisabled = new MoveStruct({ name: `${$moduleName}::Car
 export const CardWeightRuleSet = new MoveStruct({ name: `${$moduleName}::CardWeightRuleSet`, fields: {
         saga_id: bcs.Address,
         intent: bcs.u8(),
+        attribute_key: bcs.string(),
         bonus_per_point: bcs.u16()
     } });
 export const CardWeightRuleCleared = new MoveStruct({ name: `${$moduleName}::CardWeightRuleCleared`, fields: {
         saga_id: bcs.Address,
-        intent: bcs.u8()
+        intent: bcs.u8(),
+        attribute_key: bcs.string()
     } });
 export const SagaAttributeDefined = new MoveStruct({ name: `${$moduleName}::SagaAttributeDefined`, fields: {
         saga_id: bcs.Address,
@@ -177,6 +182,7 @@ export interface CreateSagaArguments {
     departurePolicy: RawTransactionArgument<string>;
     naturePrompt: RawTransactionArgument<string>;
     rhythmHints: RawTransactionArgument<string>;
+    portraitTone: RawTransactionArgument<string>;
 }
 export interface CreateSagaOptions {
     package?: string;
@@ -192,7 +198,8 @@ export interface CreateSagaOptions {
         coveredLocationIds: RawTransactionArgument<Array<string>>,
         departurePolicy: RawTransactionArgument<string>,
         naturePrompt: RawTransactionArgument<string>,
-        rhythmHints: RawTransactionArgument<string>
+        rhythmHints: RawTransactionArgument<string>,
+        portraitTone: RawTransactionArgument<string>
     ];
 }
 export function createSaga(options: CreateSagaOptions) {
@@ -210,9 +217,10 @@ export function createSaga(options: CreateSagaOptions) {
         '0x1::string::String',
         '0x1::string::String',
         '0x1::string::String',
+        '0x1::string::String',
         '0x2::clock::Clock'
     ] satisfies (string | null)[];
-    const parameterNames = ["world", "kind", "name", "description", "metadataUri", "ownerBps", "storytellerBps", "treasuryBps", "coveredLocationIds", "departurePolicy", "naturePrompt", "rhythmHints"];
+    const parameterNames = ["world", "kind", "name", "description", "metadataUri", "ownerBps", "storytellerBps", "treasuryBps", "coveredLocationIds", "departurePolicy", "naturePrompt", "rhythmHints", "portraitTone"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'saga',
@@ -407,6 +415,7 @@ export interface SetSagaSoulArguments {
     saga: RawTransactionArgument<string>;
     naturePrompt: RawTransactionArgument<string>;
     rhythmHints: RawTransactionArgument<string>;
+    portraitTone: RawTransactionArgument<string>;
 }
 export interface SetSagaSoulOptions {
     package?: string;
@@ -414,7 +423,8 @@ export interface SetSagaSoulOptions {
         cap: RawTransactionArgument<string>,
         saga: RawTransactionArgument<string>,
         naturePrompt: RawTransactionArgument<string>,
-        rhythmHints: RawTransactionArgument<string>
+        rhythmHints: RawTransactionArgument<string>,
+        portraitTone: RawTransactionArgument<string>
     ];
 }
 /**
@@ -430,9 +440,10 @@ export function setSagaSoul(options: SetSagaSoulOptions) {
         null,
         null,
         '0x1::string::String',
+        '0x1::string::String',
         '0x1::string::String'
     ] satisfies (string | null)[];
-    const parameterNames = ["cap", "saga", "naturePrompt", "rhythmHints"];
+    const parameterNames = ["cap", "saga", "naturePrompt", "rhythmHints", "portraitTone"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'saga',
@@ -481,6 +492,28 @@ export function rhythmHints(options: RhythmHintsOptions) {
         package: packageAddress,
         module: 'saga',
         function: 'rhythm_hints',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface PortraitToneArguments {
+    saga: RawTransactionArgument<string>;
+}
+export interface PortraitToneOptions {
+    package?: string;
+    arguments: PortraitToneArguments | [
+        saga: RawTransactionArgument<string>
+    ];
+}
+export function portraitTone(options: PortraitToneOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["saga"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'saga',
+        function: 'portrait_tone',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

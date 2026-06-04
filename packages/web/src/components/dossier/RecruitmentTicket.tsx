@@ -386,7 +386,10 @@ export function RecruitmentTicket({
           },
           attributes: prev.candidate.attributes,
         },
-        toneHint: '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。',
+        // Empty toneHint → server resolves this saga's on-chain portrait_tone
+        // (F — 畫風 soul), falling back to a default ink-wash when unset.
+        toneHint: '',
+        sagaId: recruitment.sagaId,
         recruitmentIntent: recruitment.roleIntent,
       }).then(port => {
         setIsPainting(false);
