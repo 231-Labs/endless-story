@@ -330,6 +330,13 @@ public struct MediaAssetAdded has copy, drop {
     added_at_ms: u64,
 }
 
+public struct CharacterProfileDescriptionUpdated has copy, drop {
+    character_id: ID,
+    saga_id: ID,
+    new_description: String,
+    updated_at_ms: u64,
+}
+
 public struct SkillSet has copy, drop {
     character_id: ID,
     saga_id: ID,
@@ -904,6 +911,33 @@ fun ensure_skills_field(uid: &mut UID, dof_key: SagaSkillsKey) {
     }
 }
 
+// ─── profile repair (storyteller-signed) ─────────────────────────────
+
+/// Storyteller-signed profile-description repair. Character must currently
+/// belong to `saga` and be alive. There is deliberately no owner-signed
+/// variant: public NFT biography is saga-authored canon, not owner-editable
+/// free text.
+public fun update_profile_description_by_storyteller(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    character: &mut Character,
+    new_description: String,
+    clock: &clock::Clock,
+) {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(character.state.saga_id.contains(&saga_id), ECharacterSagaMismatch);
+    assert!(character.death.is_none(), ECharacterDead);
+
+    character.profile.description = new_description;
+    event::emit(CharacterProfileDescriptionUpdated {
+        character_id: object::id(character),
+        saga_id,
+        new_description: character.profile.description,
+        updated_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
 // ─── image update (1.5c) ─────────────────────────────────────────────
 
 /// Storyteller-signed image update. Character must be in this saga, not
@@ -1409,6 +1443,44 @@ fun fake_id(ctx: &mut TxContext): ID {
 }
 
 #[test_only]
+fun setup_saga_for_profile_test(
+    ctx: &mut TxContext,
+    clock: &clock::Clock,
+): (World, world::AdminCap, Saga, StorytellerCap) {
+    let (mut world, admin_cap) = world::new_world_for_testing(
+        world::new_world_info(b"W".to_string(), b"w".to_string()),
+        world::new_currency_display(b"E".to_string(), b"E".to_string()),
+        world::new_world_rules(
+            vector[b"human".to_string()],
+            vector[world::new_attribute_definition(
+                b"will".to_string(),
+                b"Will".to_string(),
+                0,
+                100,
+            )],
+        ),
+        1000,
+        ctx,
+    );
+    let (saga, cap) = saga::new_saga_for_testing(
+        &mut world,
+        saga::kind_standard(),
+        b"S".to_string(),
+        b"s".to_string(),
+        b"u".to_string(),
+        4000,
+        5000,
+        1000,
+        vector[],
+        @0xA,
+        1001,
+        clock,
+        ctx,
+    );
+    (world, admin_cap, saga, cap)
+}
+
+#[test_only]
 public fun destroy_wild_for_testing(character: Character, owner_cap: OwnerCap) {
     let Character {
         id,
@@ -1680,6 +1752,86 @@ fun update_image_by_owner_wrong_owner_aborts() {
     destroy(owner_a);
     destroy(char_b);
     destroy(owner_b);
+    clock.destroy_for_testing();
+}
+
+#[test]
+fun update_profile_description_by_storyteller_updates_description() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, saga, cap) = setup_saga_for_profile_test(&mut ctx, &clock);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+    character.state.saga_id = option::some(saga::saga_id(&saga));
+
+    update_profile_description_by_storyteller(
+        &cap,
+        &saga,
+        &mut character,
+        b"patched profile".to_string(),
+        &clock,
+    );
+
+    assert_eq!(
+        *profile_description(profile(&character)),
+        b"patched profile".to_string(),
+    );
+
+    destroy(character);
+    destroy(owner_cap);
+    saga::destroy_saga_for_testing(saga, cap);
+    world::destroy_world_for_testing(world, admin_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = saga::ECapSagaMismatch)]
+fun update_profile_description_by_storyteller_rejects_wrong_cap() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (world_a, admin_a, saga_a, cap_a) = setup_saga_for_profile_test(&mut ctx, &clock);
+    let (world_b, admin_b, saga_b, cap_b) = setup_saga_for_profile_test(&mut ctx, &clock);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+    character.state.saga_id = option::some(saga::saga_id(&saga_a));
+
+    update_profile_description_by_storyteller(
+        &cap_b,
+        &saga_a,
+        &mut character,
+        b"bad patch".to_string(),
+        &clock,
+    );
+
+    destroy(character);
+    destroy(owner_cap);
+    saga::destroy_saga_for_testing(saga_a, cap_a);
+    saga::destroy_saga_for_testing(saga_b, cap_b);
+    world::destroy_world_for_testing(world_a, admin_a);
+    world::destroy_world_for_testing(world_b, admin_b);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = ECharacterSagaMismatch)]
+fun update_profile_description_by_storyteller_rejects_character_outside_saga() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (world_a, admin_a, saga_a, cap_a) = setup_saga_for_profile_test(&mut ctx, &clock);
+    let (world_b, admin_b, saga_b, cap_b) = setup_saga_for_profile_test(&mut ctx, &clock);
+    let (mut character, owner_cap) = mint_character_for_testing(&mut ctx);
+    character.state.saga_id = option::some(saga::saga_id(&saga_a));
+
+    update_profile_description_by_storyteller(
+        &cap_b,
+        &saga_b,
+        &mut character,
+        b"bad patch".to_string(),
+        &clock,
+    );
+
+    destroy(character);
+    destroy(owner_cap);
+    saga::destroy_saga_for_testing(saga_a, cap_a);
+    saga::destroy_saga_for_testing(saga_b, cap_b);
+    world::destroy_world_for_testing(world_a, admin_a);
+    world::destroy_world_for_testing(world_b, admin_b);
     clock.destroy_for_testing();
 }
 

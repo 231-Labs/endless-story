@@ -51,6 +51,10 @@ export const clearCharacterSkill = (args: gen.ClearCharacterSkillArguments) =>
   gen.clearCharacterSkill({ package: pkg(), arguments: args });
 
 // ── Image update (dual path) ───────────────────────────────────────────
+export const updateProfileDescriptionByStoryteller = (
+  args: gen.UpdateProfileDescriptionByStorytellerArguments,
+) => gen.updateProfileDescriptionByStoryteller({ package: pkg(), arguments: args });
+
 export const updateImageByStoryteller = (args: gen.UpdateImageByStorytellerArguments) =>
   gen.updateImageByStoryteller({ package: pkg(), arguments: args });
 

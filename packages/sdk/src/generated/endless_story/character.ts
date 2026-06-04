@@ -197,6 +197,12 @@ export const MediaAssetAdded = new MoveStruct({ name: `${$moduleName}::MediaAsse
         added_by_owner: bcs.bool(),
         added_at_ms: bcs.u64()
     } });
+export const CharacterProfileDescriptionUpdated = new MoveStruct({ name: `${$moduleName}::CharacterProfileDescriptionUpdated`, fields: {
+        character_id: bcs.Address,
+        saga_id: bcs.Address,
+        new_description: bcs.string(),
+        updated_at_ms: bcs.u64()
+    } });
 export const SkillSet = new MoveStruct({ name: `${$moduleName}::SkillSet`, fields: {
         character_id: bcs.Address,
         saga_id: bcs.Address,
@@ -663,6 +669,43 @@ export function characterSkillsForSaga(options: CharacterSkillsForSagaOptions) {
         package: packageAddress,
         module: 'character',
         function: 'character_skills_for_saga',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface UpdateProfileDescriptionByStorytellerArguments {
+    cap: RawTransactionArgument<string>;
+    saga: RawTransactionArgument<string>;
+    character: RawTransactionArgument<string>;
+    newDescription: RawTransactionArgument<string>;
+}
+export interface UpdateProfileDescriptionByStorytellerOptions {
+    package?: string;
+    arguments: UpdateProfileDescriptionByStorytellerArguments | [
+        cap: RawTransactionArgument<string>,
+        saga: RawTransactionArgument<string>,
+        character: RawTransactionArgument<string>,
+        newDescription: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Storyteller-signed profile-description repair. Character must currently belong
+ * to `saga` and be alive. There is deliberately no owner-signed variant: public
+ * NFT biography is saga-authored canon, not owner-editable free text.
+ */
+export function updateProfileDescriptionByStoryteller(options: UpdateProfileDescriptionByStorytellerOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        null,
+        '0x1::string::String',
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["cap", "saga", "character", "newDescription"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'character',
+        function: 'update_profile_description_by_storyteller',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

@@ -4,7 +4,7 @@
  * **Writer:** `@endless-story/cli` (deploy.ts, bootstrap.ts, reset.ts).
  * **Readers:** sdk, runner, web (admin UI). Never edit by hand.
  *
- * Last written: 2026-06-04T10:04:34.304Z
+ * Last written: 2026-06-04T15:57:17.144Z
  *
  * See AGENTS.md → 「鏈上架構」 for the contract.
  */
@@ -26,7 +26,10 @@ export interface DemoCharacterRef {
  */
 export interface EndlessStoryDeployment {
   network: SuiNetwork;
+  /** Original package id. Struct type filters and type arguments stay anchored here after upgrades. */
   packageId: string;
+  /** Latest package id. Move calls should target this after a Sui package upgrade. */
+  latestPackageId: string;
   adminCapId: string;
   worldId: string;
   locationIds: string[];
@@ -45,6 +48,7 @@ export interface EndlessStoryDeployment {
 export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "network": "testnet",
   "packageId": "0x2e8f555d7c93c61ca2d4a3f257a43394059354d3648335fdf9b330736491e1a9",
+  "latestPackageId": "0x5adba6e0f4c19f0b9d77302426fce5cc6e4ec50b3a816195354e1f986c27ae16",
   "adminCapId": "0x4355b2456bf2179bf1177397fda15b8e7a66729ec107ec27d7f10adcd1bba1e3",
   "worldId": "0xba6883f7267d28a2eca57913f2e723373be61d593e12e4975ca72201bac50d82",
   "locationIds": [
@@ -71,7 +75,7 @@ export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "dreamAdminCapId": "0x12d4a371b62a0c6fe27a60a6d0cee93aab4a6c4cf4accb60a69c12b6ba2a192e",
   "demoCharacters": [],
   "storyId": "spring-snow",
-  "deployedAt": "2026-06-04T10:04:34.304Z"
+  "deployedAt": "2026-06-04T15:57:17.144Z"
 };
 
 export function isDeployed(d: EndlessStoryDeployment = ENDLESS_STORY_DEPLOYMENT): boolean {

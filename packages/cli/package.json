@@ -6,6 +6,7 @@
   "scripts": {
     "deploy": "tsx --env-file-if-exists=../web/.env.local scripts/deploy.ts",
     "deploy-preflight": "tsx --env-file-if-exists=../web/.env.local scripts/deploy-preflight.ts",
+    "upgrade": "tsx --env-file-if-exists=../web/.env.local scripts/upgrade.ts",
     "bootstrap": "tsx --env-file-if-exists=../web/.env.local scripts/bootstrap.ts",
     "reset": "tsx --env-file-if-exists=../web/.env.local scripts/reset.ts",
     "test-e2e": "tsx --env-file-if-exists=../web/.env.local scripts/test-recruit-e2e.ts",

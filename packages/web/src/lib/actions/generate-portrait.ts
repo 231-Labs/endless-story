@@ -20,6 +20,7 @@ import { createImageClient } from '@endless-story/llm/image';
 import {
     buildPortraitCurationPrompt,
     parsePortraitPrompt,
+    UNIVERSAL_PORTRAIT_TONE,
     type CharacterForPortrait,
     type PortraitCurationOptions,
 } from '@endless-story/llm/prompts';
@@ -58,7 +59,7 @@ export interface GeneratePortraitResult {
 }
 
 function defaultToneHint(): string {
-    return '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。不要動漫感、不要油畫感、不要寫實照片。';
+    return UNIVERSAL_PORTRAIT_TONE;
 }
 
 function anchorSafeToneHint(raw: string): string {
@@ -68,12 +69,17 @@ function anchorSafeToneHint(raw: string): string {
     // Some saga-level tones are written for later costume / setting-gallery
     // images. Recruitment portraits are plain face anchors, so strip costume
     // and make-up directives before handing the prompt to the image model.
-    if (tone.includes('海派水墨工筆') || tone.includes('月份牌')) {
-        return '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色；民國上海梨園肖像，帶唱片封套與戲報名角氣。不要動漫感、不要油畫感、不要寫實照片。';
+    if (
+        /海派水墨工筆|月份牌|唱片封套|戲報|票券|報紙|書頁|題字|書法|印章|海報|設定卡|版面設計/.test(
+            tone,
+        )
+    ) {
+        return defaultToneHint();
     }
 
     return tone
         .replace(/；?戲服和妝面精細[^。；]*[。；]?/g, '；')
+        .replace(/；?[^。；]*(?:文字|題字|書法|簽名|印章|紅章|票券|唱片封套|戲報|報紙|書頁|海報|月份牌|設定卡|道具|邊框|標籤|卡片|刊物|版面設計)[^。；]*[。；]?/g, '；')
         .replace(/；{2,}/g, '；')
         .replace(/；。/g, '。')
         .trim();
@@ -118,7 +124,7 @@ export async function generatePortrait(input: GeneratePortraitInput): Promise<Ge
     } catch (err) {
         // Fallback to a raw assembly so the flow doesn't break on curator failure.
         const desc = input.character.description.slice(0, 60);
-        curated = `${tone}\n${desc}\n素顏臉部 anchor，純白底，自然光，頭肩 close-up。`;
+        curated = parsePortraitPrompt(`${tone}\n${desc}\n素顏臉部 anchor，純白底，自然光，頭肩 close-up，四分之三側面 45°。`);
         console.warn('[generate-portrait] curator failed, using fallback prompt:', err);
     }
 

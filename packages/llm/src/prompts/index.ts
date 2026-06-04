@@ -30,6 +30,7 @@ export {
 export {
   buildPortraitCurationPrompt,
   parsePortraitPrompt,
+  UNIVERSAL_PORTRAIT_TONE,
   type CharacterForPortrait,
   type PortraitCurationOptions,
 } from './portrait.js';

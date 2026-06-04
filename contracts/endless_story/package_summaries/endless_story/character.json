@@ -1931,9 +1931,106 @@
       ],
       "return_": []
     },
-    "update_image_by_storyteller": {
+    "update_profile_description_by_storyteller": {
       "source_index": 20,
       "index": 20,
+      "doc": " Storyteller-signed profile-description repair. Character must currently\n belong to `saga` and be alive. There is deliberately no owner-signed\n variant: public NFT biography is saga-authored canon, not owner-editable\n free text.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_description",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "update_image_by_storyteller": {
+      "source_index": 21,
+      "index": 21,
       "doc": " Storyteller-signed image update. Character must be in this saga, not\n dead. Used when storyteller's AI portrait generator produces a new\n image during saga events.",
       "attributes": [],
       "visibility": "Public",
@@ -2029,8 +2126,8 @@
       "return_": []
     },
     "update_image_by_owner": {
-      "source_index": 21,
-      "index": 21,
+      "source_index": 22,
+      "index": 22,
       "doc": " Owner-signed image update. Allowed at any time (wild or in-saga, dead\n or alive — owner's call). Owner may want to refresh their character's\n public portrait independently of saga storyteller.",
       "attributes": [],
       "visibility": "Public",
@@ -2108,8 +2205,8 @@
       "return_": []
     },
     "add_media_asset_by_storyteller": {
-      "source_index": 22,
-      "index": 22,
+      "source_index": 23,
+      "index": 23,
       "doc": " Storyteller appends a variant to the gallery (cover unchanged). Used by\n the AI portrait pipeline when it produces a new image during the saga.",
       "attributes": [],
       "visibility": "Public",
@@ -2205,8 +2302,8 @@
       "return_": []
     },
     "add_media_asset_by_owner": {
-      "source_index": 23,
-      "index": 23,
+      "source_index": 24,
+      "index": 24,
       "doc": " Owner appends a variant to the gallery (cover unchanged). Allowed any\n time (the owner's character, the owner's call).",
       "attributes": [],
       "visibility": "Public",
@@ -2284,8 +2381,8 @@
       "return_": []
     },
     "add_media_asset_internal": {
-      "source_index": 24,
-      "index": 24,
+      "source_index": 25,
+      "index": 25,
       "doc": null,
       "attributes": [],
       "visibility": "Private",
@@ -2349,8 +2446,8 @@
       "return_": []
     },
     "set_cover_from_media": {
-      "source_index": 25,
-      "index": 25,
+      "source_index": 26,
+      "index": 26,
       "doc": " Owner sets the cover to the gallery entry at `index`. This is the\n \"browse 設定集 → 選封面\" flow: the owner picks one of their accumulated\n variants as the public portrait. Aborts if the index is out of range.",
       "attributes": [],
       "visibility": "Public",
@@ -2419,8 +2516,8 @@
       "return_": []
     },
     "mark_dead": {
-      "source_index": 26,
-      "index": 26,
+      "source_index": 27,
+      "index": 27,
       "doc": " Mark character dead. Idempotent: re-marking is a no-op (death record\n cannot change once recorded). Package-visible so only sibling modules\n (event, future world daemon) call it.",
       "attributes": [],
       "visibility": "Package",
@@ -2462,8 +2559,8 @@
       "return_": []
     },
     "is_valid": {
-      "source_index": 27,
-      "index": 27,
+      "source_index": 28,
+      "index": 28,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2512,47 +2609,6 @@
       ]
     },
     "owner_cap_character_id": {
-      "source_index": 28,
-      "index": 28,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "cap",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "character"
-                  },
-                  "name": "OwnerCap",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "sui",
-              "name": "object"
-            },
-            "name": "ID",
-            "type_arguments": []
-          }
-        }
-      ]
-    },
-    "owner_cap_world_id": {
       "source_index": 29,
       "index": 29,
       "doc": null,
@@ -2593,7 +2649,7 @@
         }
       ]
     },
-    "owner_cap_minted_at_ms": {
+    "owner_cap_world_id": {
       "source_index": 30,
       "index": 30,
       "doc": null,
@@ -2622,10 +2678,19 @@
         }
       ],
       "return_": [
-        "u64"
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
       ]
     },
-    "owner_cap_cumulative_revenue": {
+    "owner_cap_minted_at_ms": {
       "source_index": 31,
       "index": 31,
       "doc": null,
@@ -2657,9 +2722,41 @@
         "u64"
       ]
     },
-    "control_cap_character_id": {
+    "owner_cap_cumulative_revenue": {
       "source_index": 32,
       "index": 32,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "OwnerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "control_cap_character_id": {
+      "source_index": 33,
+      "index": 33,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2699,8 +2796,8 @@
       ]
     },
     "control_cap_epoch": {
-      "source_index": 33,
-      "index": 33,
+      "source_index": 34,
+      "index": 34,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2731,8 +2828,8 @@
       ]
     },
     "control_cap_saga_id": {
-      "source_index": 34,
-      "index": 34,
+      "source_index": 35,
+      "index": 35,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2786,8 +2883,8 @@
       ]
     },
     "character_id": {
-      "source_index": 35,
-      "index": 35,
+      "source_index": 36,
+      "index": 36,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2827,8 +2924,8 @@
       ]
     },
     "control_epoch": {
-      "source_index": 36,
-      "index": 36,
+      "source_index": 37,
+      "index": 37,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2859,8 +2956,8 @@
       ]
     },
     "world_id": {
-      "source_index": 37,
-      "index": 37,
+      "source_index": 38,
+      "index": 38,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2900,61 +2997,6 @@
       ]
     },
     "saga_id": {
-      "source_index": 38,
-      "index": 38,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "character",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "character"
-                  },
-                  "name": "Character",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "std",
-              "name": "option"
-            },
-            "name": "Option",
-            "type_arguments": [
-              {
-                "phantom": false,
-                "argument": {
-                  "Datatype": {
-                    "module": {
-                      "address": "sui",
-                      "name": "object"
-                    },
-                    "name": "ID",
-                    "type_arguments": []
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "current_scene_id": {
       "source_index": 39,
       "index": 39,
       "doc": null,
@@ -3009,7 +3051,7 @@
         }
       ]
     },
-    "current_location_id": {
+    "current_scene_id": {
       "source_index": 40,
       "index": 40,
       "doc": null,
@@ -3064,7 +3106,7 @@
         }
       ]
     },
-    "birth_ms": {
+    "current_location_id": {
       "source_index": 41,
       "index": 41,
       "doc": null,
@@ -3093,10 +3135,33 @@
         }
       ],
       "return_": [
-        "u64"
+        {
+          "Datatype": {
+            "module": {
+              "address": "std",
+              "name": "option"
+            },
+            "name": "Option",
+            "type_arguments": [
+              {
+                "phantom": false,
+                "argument": {
+                  "Datatype": {
+                    "module": {
+                      "address": "sui",
+                      "name": "object"
+                    },
+                    "name": "ID",
+                    "type_arguments": []
+                  }
+                }
+              }
+            ]
+          }
+        }
       ]
     },
-    "subscriber_count": {
+    "birth_ms": {
       "source_index": 42,
       "index": 42,
       "doc": null,
@@ -3128,9 +3193,41 @@
         "u64"
       ]
     },
-    "increment_subscriber_count": {
+    "subscriber_count": {
       "source_index": 43,
       "index": 43,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "increment_subscriber_count": {
+      "source_index": 44,
+      "index": 44,
       "doc": " Package-private — only `subscribe.move` should bump this.",
       "attributes": [],
       "visibility": "Package",
@@ -3159,8 +3256,8 @@
       "return_": []
     },
     "decrement_subscriber_count": {
-      "source_index": 44,
-      "index": 44,
+      "source_index": 45,
+      "index": 45,
       "doc": " Package-private — only `subscribe.move` should decrement this.\n Saturates at 0 to be defensive against double-unsubscribe bugs.",
       "attributes": [],
       "visibility": "Package",
@@ -3189,8 +3286,8 @@
       "return_": []
     },
     "profile": {
-      "source_index": 45,
-      "index": 45,
+      "source_index": 46,
+      "index": 46,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3235,8 +3332,8 @@
       ]
     },
     "physical_facts": {
-      "source_index": 46,
-      "index": 46,
+      "source_index": 47,
+      "index": 47,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3281,52 +3378,6 @@
       ]
     },
     "profile_name": {
-      "source_index": 47,
-      "index": 47,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "profile",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "character"
-                  },
-                  "name": "CharacterProfile",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Reference": [
-            false,
-            {
-              "Datatype": {
-                "module": {
-                  "address": "std",
-                  "name": "string"
-                },
-                "name": "String",
-                "type_arguments": []
-              }
-            }
-          ]
-        }
-      ]
-    },
-    "profile_description": {
       "source_index": 48,
       "index": 48,
       "doc": null,
@@ -3372,7 +3423,7 @@
         }
       ]
     },
-    "physical_species": {
+    "profile_description": {
       "source_index": 49,
       "index": 49,
       "doc": null,
@@ -3382,7 +3433,7 @@
       "type_parameters": [],
       "parameters": [
         {
-          "name": "facts",
+          "name": "profile",
           "type_": {
             "Reference": [
               false,
@@ -3392,7 +3443,7 @@
                     "address": "endless_story",
                     "name": "character"
                   },
-                  "name": "PhysicalFacts",
+                  "name": "CharacterProfile",
                   "type_arguments": []
                 }
               }
@@ -3418,7 +3469,7 @@
         }
       ]
     },
-    "physical_gender": {
+    "physical_species": {
       "source_index": 50,
       "index": 50,
       "doc": null,
@@ -3464,7 +3515,7 @@
         }
       ]
     },
-    "physical_body": {
+    "physical_gender": {
       "source_index": 51,
       "index": 51,
       "doc": null,
@@ -3510,9 +3561,55 @@
         }
       ]
     },
-    "physical_age_years": {
+    "physical_body": {
       "source_index": 52,
       "index": 52,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "facts",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "PhysicalFacts",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "physical_age_years": {
+      "source_index": 53,
+      "index": 53,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3543,8 +3640,8 @@
       ]
     },
     "attributes": {
-      "source_index": 53,
-      "index": 53,
+      "source_index": 54,
+      "index": 54,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3591,8 +3688,8 @@
       ]
     },
     "attribute_key": {
-      "source_index": 54,
-      "index": 54,
+      "source_index": 55,
+      "index": 55,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3637,8 +3734,8 @@
       ]
     },
     "attribute_value": {
-      "source_index": 55,
-      "index": 55,
+      "source_index": 56,
+      "index": 56,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3669,8 +3766,8 @@
       ]
     },
     "attribute_seed": {
-      "source_index": 56,
-      "index": 56,
+      "source_index": 57,
+      "index": 57,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3708,8 +3805,8 @@
       ]
     },
     "find_attribute_value": {
-      "source_index": 57,
-      "index": 57,
+      "source_index": 58,
+      "index": 58,
       "doc": " Find the first `AttributeValue` with `key`, or `None`.",
       "attributes": [],
       "visibility": "Public",
@@ -3772,8 +3869,8 @@
       ]
     },
     "find_attribute_value_in": {
-      "source_index": 58,
-      "index": 58,
+      "source_index": 59,
+      "index": 59,
       "doc": " Find an attribute by key in any vector<AttributeValue> — same algorithm\n as `find_attribute_value` but operates on a raw slice. Used by\n `recruit::check_voucher_requirements` to validate proposed attributes\n before mint, without needing a Character struct yet.",
       "attributes": [],
       "visibility": "Public",
@@ -3838,8 +3935,8 @@
       ]
     },
     "media_assets": {
-      "source_index": 59,
-      "index": 59,
+      "source_index": 60,
+      "index": 60,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3886,8 +3983,8 @@
       ]
     },
     "image_url": {
-      "source_index": 60,
-      "index": 60,
+      "source_index": 61,
+      "index": 61,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -3932,8 +4029,8 @@
       ]
     },
     "apply_tag": {
-      "source_index": 61,
-      "index": 61,
+      "source_index": 62,
+      "index": 62,
       "doc": " Add a tag or refresh an existing one. Idempotent on duplicate label\n (mutates the existing entry's `source_event_id` + `affirmed_at_ms`\n instead of pushing a new row). Package-private so only sibling\n modules (event.move primarily) can write tags.\n\n Per L1 v0.3 §6.6: Move does not enforce semantic uniqueness across\n tag labels — composers may apply a tag twice with different\n `source_event_id`s; the latest wins.",
       "attributes": [],
       "visibility": "Package",
@@ -4011,8 +4108,8 @@
       "return_": []
     },
     "revoke_tag": {
-      "source_index": 62,
-      "index": 62,
+      "source_index": 63,
+      "index": 63,
       "doc": " Remove a tag by label. Idempotent: no-op when the label is absent.",
       "attributes": [],
       "visibility": "Package",
@@ -4059,8 +4156,8 @@
       "return_": []
     },
     "has_tag": {
-      "source_index": 63,
-      "index": 63,
+      "source_index": 64,
+      "index": 64,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4109,8 +4206,8 @@
       ]
     },
     "tag_count": {
-      "source_index": 64,
-      "index": 64,
+      "source_index": 65,
+      "index": 65,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4141,8 +4238,8 @@
       ]
     },
     "tags": {
-      "source_index": 65,
-      "index": 65,
+      "source_index": 66,
+      "index": 66,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4189,8 +4286,8 @@
       ]
     },
     "tag_label": {
-      "source_index": 66,
-      "index": 66,
+      "source_index": 67,
+      "index": 67,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4235,8 +4332,8 @@
       ]
     },
     "tag_source_event_id": {
-      "source_index": 67,
-      "index": 67,
+      "source_index": 68,
+      "index": 68,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4290,8 +4387,8 @@
       ]
     },
     "tag_affirmed_at_ms": {
-      "source_index": 68,
-      "index": 68,
+      "source_index": 69,
+      "index": 69,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4322,8 +4419,8 @@
       ]
     },
     "is_dead": {
-      "source_index": 69,
-      "index": 69,
+      "source_index": 70,
+      "index": 70,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4354,8 +4451,8 @@
       ]
     },
     "death_record": {
-      "source_index": 70,
-      "index": 70,
+      "source_index": 71,
+      "index": 71,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4414,8 +4511,8 @@
       ]
     },
     "death_victim": {
-      "source_index": 71,
-      "index": 71,
+      "source_index": 72,
+      "index": 72,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4455,8 +4552,8 @@
       ]
     },
     "death_by_event": {
-      "source_index": 72,
-      "index": 72,
+      "source_index": 73,
+      "index": 73,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4510,8 +4607,8 @@
       ]
     },
     "death_attributed": {
-      "source_index": 73,
-      "index": 73,
+      "source_index": 74,
+      "index": 74,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4558,8 +4655,8 @@
       ]
     },
     "death_recorded_at_ms": {
-      "source_index": 74,
-      "index": 74,
+      "source_index": 75,
+      "index": 75,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4590,8 +4687,8 @@
       ]
     },
     "seal_approve_control": {
-      "source_index": 75,
-      "index": 75,
+      "source_index": 76,
+      "index": 76,
       "doc": " Saga 變體：持有當前有效 ControlCap 的人可以解密。\n 三層檢查：cap 屬此 character / cap epoch 未撤銷 / SEAL id suffix 指向此 character.",
       "attributes": [],
       "visibility": "Private",
@@ -4644,8 +4741,8 @@
       "return_": []
     },
     "seal_approve_owner": {
-      "source_index": 76,
-      "index": 76,
+      "source_index": 77,
+      "index": 77,
       "doc": " Owner 變體：持有 OwnerCap 的人可解密（唯讀審計）。\n owner 的「唯讀」由 app 層保證（owner client 不暴露 remember API）。",
       "attributes": [],
       "visibility": "Private",
@@ -4698,8 +4795,8 @@
       "return_": []
     },
     "id_belongs_to_character": {
-      "source_index": 77,
-      "index": 77,
+      "source_index": 78,
+      "index": 78,
       "doc": null,
       "attributes": [],
       "visibility": "Private",
@@ -4736,8 +4833,8 @@
       ]
     },
     "has_suffix": {
-      "source_index": 78,
-      "index": 78,
+      "source_index": 79,
+      "index": 79,
       "doc": null,
       "attributes": [],
       "visibility": "Private",
@@ -4772,8 +4869,8 @@
       ]
     },
     "new_attribute_value": {
-      "source_index": 79,
-      "index": 79,
+      "source_index": 80,
+      "index": 80,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4818,8 +4915,8 @@
       ]
     },
     "new_physical_facts": {
-      "source_index": 80,
-      "index": 80,
+      "source_index": 81,
+      "index": 81,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4884,8 +4981,8 @@
       ]
     },
     "new_character_profile": {
-      "source_index": 81,
-      "index": 81,
+      "source_index": 82,
+      "index": 82,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -4946,8 +5043,8 @@
       ]
     },
     "new_media_asset": {
-      "source_index": 82,
-      "index": 82,
+      "source_index": 83,
+      "index": 83,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -5005,8 +5102,8 @@
       ]
     },
     "new_tag": {
-      "source_index": 83,
-      "index": 83,
+      "source_index": 84,
+      "index": 84,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -5072,8 +5169,8 @@
       ]
     },
     "new_death_record": {
-      "source_index": 84,
-      "index": 84,
+      "source_index": 85,
+      "index": 85,
       "doc": " Construct a DeathRecord. Caller owns the invariants on attribution\n (validity of `attributed_characters` IDs etc.).",
       "attributes": [],
       "visibility": "Public",
@@ -6700,8 +6797,70 @@
         }
       }
     },
-    "SkillSet": {
+    "CharacterProfileDescriptionUpdated": {
       "index": 24,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "character_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "new_description": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          },
+          "updated_at_ms": {
+            "index": 3,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "SkillSet": {
+      "index": 25,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -6763,7 +6922,7 @@
       }
     },
     "SkillCleared": {
-      "index": 25,
+      "index": 26,
       "doc": null,
       "attributes": [],
       "abilities": [

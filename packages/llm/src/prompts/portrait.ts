@@ -34,14 +34,22 @@ export interface PortraitCurationOptions {
   recruitmentIntent?: string;
 }
 
+export const UNIVERSAL_PORTRAIT_TONE =
+  '水墨工筆人物肖像，宣紙暈染邊緣，淡墨線描 + 水彩設色；統一純白背景，民國上海氣質只體現在髮型與常服。不要動漫感、不要油畫感、不要寫實照片。';
+
+export const UNIVERSAL_PORTRAIT_GUARD =
+  '單人素顏頭肩肖像，純白背景，四分之三側面 45°，自然光。畫面只包含人物與空白背景；無字、無題款、無印記、無出版物、無紙張道具、無邊框版面。';
+
 const SYSTEM_PROMPT = `你是「無盡故事」的角色 anchor 畫師。寫一段極短的「**素顏臉部 anchor**」prompt
 給圖像模型（gpt-image-2）。
 
 Anchor = 這位角色的**長期 reference 圖**：素顏、無戲妝、頭肩 close-up、純色底。
 未來不同戲碼會生戲妝版、不同章回會生全身版，但 Anchor 永遠是這張素顏。
+所有演員與非演員工種（班主、樂師、箱管、經理、武行等）都使用同一種 portrait 畫面格式；
+只能用年齡、氣質、髮型與常服差異表現身份，不得改成海報、票券、設定卡或插畫版面。
 
 【Anchor 構圖鐵則】
-- 純色背景（白底 / 灰底 / 米色底）
+- **只能純白背景**，不要灰底、米色底、花枝、山水、紙張邊框或任何裝飾背景
 - 自然光、無誇張舞台燈
 - 頭肩 close-up、半身偏上、**固定四分之三側面（約 45°）朝向觀者**（不要純正面、不要全側面）
 - **不上戲妝、不戴頭面、不穿戲服**——只是這個人「卸了戲的素顏」
@@ -64,6 +72,8 @@ Anchor = 這位角色的**長期 reference 圖**：素顏、無戲妝、頭肩 c
 - 「樂師 / 箱管」→ 素衫常服
 
 【絕對不要寫】
+- 任何文字、題字、書法、簽名、印章、紅章、票券、唱片封套、戲報、報紙、書頁、海報、月份牌、設定卡
+- 任何道具、版面設計、邊框、貼紙、標籤、卡片、刊物
 - 戲妝 / 頭面 / 油彩 / 點翠 / 水袖（這些在 Anchor 階段全省）
 - 妝面細節（眉骨、眼尾、唇形）
 - 衣紋 / 衣領 / 袖口紋樣
@@ -86,7 +96,7 @@ Anchor = 這位角色的**長期 reference 圖**：素顏、無戲妝、頭肩 c
 【範例 · 你該寫成這樣】
 "水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。
 二十六歲女子，眉目清麗、髮髻簡單，棉布素衫。
-素顏臉部 anchor，純白底，自然光，頭肩 close-up。
+素顏臉部 anchor，純白底，自然光，頭肩 close-up，四分之三側面 45°。
 不要動漫感、不要油畫感、不要寫實照片。"
 （共 ~80 字，model 自行填細節）
 
@@ -128,8 +138,15 @@ ${intentBlock}
 
 /**
  * Portrait curation has no JSON structure — the LLM output IS the prompt.
- * Caller just trims whitespace.
+ * Caller sends this directly to the image model, so enforce the universal
+ * anchor guard deterministically in case the cheap curator leaks poster or
+ * ticket language from saga lore.
  */
 export function parsePortraitPrompt(text: string): string {
-  return text.trim();
+  const stripped = text
+    .trim()
+    .replace(/[，、；。\s]*[^，、；。\n]*(?:文字|題字|書法|簽名|印章|紅章|票券|唱片封套|戲報|報紙|書頁|海報|月份牌|設定卡|道具|邊框|標籤|卡片|刊物|版面設計)[^，、；。\n]*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return [stripped, UNIVERSAL_PORTRAIT_GUARD].filter(Boolean).join('\n');
 }

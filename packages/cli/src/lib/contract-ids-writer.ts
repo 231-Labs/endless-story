@@ -14,7 +14,10 @@ import type {
 
 export interface DeploymentSnapshot {
   network: SuiNetwork;
+  /** Original package id. Struct type filters stay anchored here after upgrades. */
   packageId: string;
+  /** Latest package id. Move calls target this after upgrades. */
+  latestPackageId?: string;
   adminCapId: string;
   worldId?: string;
   locationIds?: string[];
@@ -34,6 +37,7 @@ export function renderContractIdsFile(snap: DeploymentSnapshot, deployedAt: stri
   const d: EndlessStoryDeployment = {
     network: snap.network,
     packageId: snap.packageId,
+    latestPackageId: snap.latestPackageId ?? snap.packageId,
     adminCapId: snap.adminCapId,
     worldId: snap.worldId ?? '',
     locationIds: snap.locationIds ?? [],
@@ -78,7 +82,10 @@ export interface DemoCharacterRef {
  */
 export interface EndlessStoryDeployment {
   network: SuiNetwork;
+  /** Original package id. Struct type filters and type arguments stay anchored here after upgrades. */
   packageId: string;
+  /** Latest package id. Move calls should target this after a Sui package upgrade. */
+  latestPackageId: string;
   adminCapId: string;
   worldId: string;
   locationIds: string[];

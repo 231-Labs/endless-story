@@ -98,6 +98,7 @@ async function main() {
     {
       network: env,
       packageId: result.packageId,
+      latestPackageId: result.packageId,
       adminCapId: result.adminCapId ?? '',
     },
     deployedAt,

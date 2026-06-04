@@ -514,6 +514,7 @@ async function main() {
     {
       network: env,
       packageId: deployment.packageId,
+      latestPackageId: deployment.latestPackageId,
       adminCapId,
       worldId,
       locationIds,
