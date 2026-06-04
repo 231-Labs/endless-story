@@ -139,7 +139,8 @@ function RowView({
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-mute">
                     <span className="flex items-center gap-1">
                         <CoinIcon className="h-3.5 w-3.5" />
-                        {r.basePrice} ENDLESS
+                        {r.basePrice}
+                        {r.bulkPrice != null && r.bulkPrice !== r.basePrice ? ` / ${r.bulkPrice}` : ''} ENDLESS
                     </span>
                     <span className="flex items-center gap-1">
                         <UserIcon className="h-3.5 w-3.5" />
@@ -265,7 +266,7 @@ function EditForm({
                             required
                         />
                     </Field>
-                    <Field label="基底價 basePrice">
+                    <Field label="單抽價 basePrice">
                         <input
                             type="number"
                             className="es-field w-full"
@@ -273,6 +274,15 @@ function EditForm({
                             onChange={(e) => setDraft({ ...draft, basePrice: Number(e.target.value) })}
                             min={0}
                             required
+                        />
+                    </Field>
+                    <Field label="一口價 bulkPrice（包骰到符合）">
+                        <input
+                            type="number"
+                            className="es-field w-full"
+                            value={draft.bulkPrice ?? draft.basePrice}
+                            onChange={(e) => setDraft({ ...draft, bulkPrice: Number(e.target.value) })}
+                            min={0}
                         />
                     </Field>
                     <Field label="缺額 slots">

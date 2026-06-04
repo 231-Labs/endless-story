@@ -257,7 +257,9 @@ export function RecruitmentTicket({
         if (!coins.data || coins.data.length === 0) {
           throw new Error('沒有 ENDLESS 幣 — 請先用右上「領 ENDLESS」');
         }
-        const priceBase = BigInt(recruitment.basePrice) * BigInt(10 ** ENDLESS_DECIMALS);
+        const unitPrice =
+          drawMode === 'bulk' ? recruitment.bulkPrice ?? recruitment.basePrice : recruitment.basePrice;
+        const priceBase = BigInt(unitPrice) * BigInt(10 ** ENDLESS_DECIMALS);
 
         const tx = new Transaction();
         const coinIds = coins.data.map((c) => c.coinObjectId);
@@ -643,7 +645,9 @@ export function RecruitmentTicket({
 
                   <div className="mt-auto space-y-1 text-2xs tracking-widest text-mute">
                     <p>
-                      <span className="font-serif text-base text-ink">{recruitment.basePrice}</span>{' '}
+                      <span className="font-serif text-base text-ink">
+                        {drawMode === 'bulk' ? recruitment.bulkPrice ?? recruitment.basePrice : recruitment.basePrice}
+                      </span>{' '}
                       Endless
                     </p>
                     <p>剩 {recruitment.slots} 位</p>
@@ -817,7 +821,7 @@ function DefaultStub({
       <div className="flex h-full w-full flex-col justify-between gap-6 md:gap-8">
         <div>
           <p className="font-serif text-2xl text-ink sm:text-3xl">
-            {recruitment.basePrice}
+            {drawMode === 'bulk' ? recruitment.bulkPrice ?? recruitment.basePrice : recruitment.basePrice}
             <span className="ml-1.5 text-base text-mute">Endless</span>
           </p>
           <div className="mt-3 space-y-1 text-2xs tracking-widest text-mute">

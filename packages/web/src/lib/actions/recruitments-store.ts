@@ -98,6 +98,7 @@ export async function newRecruitmentDraft(sagaId: string, sagaName: string): Pro
         membership: 'internal',
         slots: 1,
         basePrice: 100,
+        bulkPrice: 300,
         expiresAt,
         createdAt: new Date().toISOString(),
         active: false,
