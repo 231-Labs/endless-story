@@ -1,5 +1,6 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
+import { DeployAdminGuard } from '@/components/common/DeployAdminGuard';
 import { getDeploymentStatus } from '@/lib/actions/deployment-status';
 import { getFaucetSnapshot } from '@/lib/actions/faucet-config';
 import { listStoryPresets } from '@/lib/stories/loader';
@@ -29,8 +30,13 @@ export default async function DeployPage() {
                     meta="一鍵部署 / 種子化 / 開職缺 / Faucet 設定"
                 />
                 <div className="mt-12 space-y-6">
-                    <DeployPanel initialStatus={status} presets={presets} />
-                    <FaucetConfigPanel initial={faucetSnapshot} />
+                    <DeployAdminGuard
+                        adminSignerAddress={status.adminSignerAddress}
+                        adminSignerError={status.adminSignerError}
+                    >
+                        <DeployPanel initialStatus={status} presets={presets} />
+                        <FaucetConfigPanel initial={faucetSnapshot} />
+                    </DeployAdminGuard>
                 </div>
             </main>
         </>
