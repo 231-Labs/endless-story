@@ -12,6 +12,7 @@ import { PortraitEvolvePanel } from './PortraitEvolvePanel';
 import { EventPanel } from './EventPanel';
 import { TimePanel } from './TimePanel';
 import { SchedulerPanel } from './SchedulerPanel';
+import { ReconcilePanel } from './ReconcilePanel';
 import { getDreamConfigSnapshot } from '@/lib/actions/dream-config';
 import { getWorldTimeSnapshot } from '@/lib/actions/world-time';
 import { charactersApi, sagasApi, scenesApi } from '@/lib/api/index';
@@ -71,6 +72,18 @@ export default async function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <SchedulerPanel />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">對帳 · 補齊角色缺漏</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            一鍵掃描全班,把 mint 當下漏掉的 <strong className="text-ink">主圖 / 設定集 / 標籤 / 本色 / 記憶</strong> 補齊。
+                            idempotent —— 已有的會跳過,可安心重跑。這也是「入班不等圖」的後盾:即使 mint 完全沒生圖,
+                            這裡也能把主圖補上。
+                        </p>
+                        <div className="mt-6">
+                            <ReconcilePanel />
                         </div>
                     </div>
 
