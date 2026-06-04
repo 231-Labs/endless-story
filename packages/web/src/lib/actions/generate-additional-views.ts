@@ -130,9 +130,10 @@ export async function generateAdditionalViews(
     let appended = 0;
     const urls: Partial<Record<ViewSpec['label'], string>> = {};
 
-    // Serial: each view is one img2img call + one Walrus upload + one append tx.
-    // Serial avoids hammering the SEAL/Walrus publisher and keeps the saga/char
-    // object versions from clashing across the two append txs.
+    // ── 1) render every view first (img2img), collect the successes ──
+    // Image generation is the flaky step; render all before storing so a single
+    // failed view never aborts the batch.
+    const rendered: Array<{ view: ViewSpec; bytes: Uint8Array }> = [];
     for (const view of VIEWS) {
         try {
             const res = await imgClient.edit({
@@ -152,17 +153,60 @@ export async function generateAdditionalViews(
                 console.warn(`[additional-views] ${view.label}: empty image`);
                 continue;
             }
-            const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
-            urls[view.label] = put.url;
+            rendered.push({ view, bytes });
+        } catch (err) {
+            console.warn(`[additional-views] ${view.label} render failed:`, err instanceof Error ? err.message : err);
+        }
+    }
+    if (rendered.length === 0) return { ok: true, appended: 0 };
 
-            if (input.dryRun || !admin) continue;
+    // ── 2) store the whole mint gallery as ONE Walrus quilt ──
+    // The mint-time setting views are produced together → batch them into a
+    // single quilt: one publisher round-trip (less 429), one Sui blob tx, shared
+    // metadata floor. Each view stays individually addressable by its quilt patch
+    // id. (Quilts are immutable, so later additions — evolve-portrait, event
+    // moments — are their own blobs; this quilt is just the mint batch.) Falls
+    // back to per-blob upload if the quilt endpoint is unavailable.
+    const stored = new Map<ViewSpec['label'], { url: string; chainId: string }>();
+    try {
+        const quilt = await blob.putQuilt(
+            rendered.map((r) => ({
+                identifier: r.view.label,
+                bytes: r.bytes,
+                contentType: 'image/png',
+                tags: { kind: String(r.view.kind), view: r.view.label },
+            })),
+            { network: 'testnet', epochs: 5 },
+        );
+        for (const p of quilt.patches) {
+            stored.set(p.identifier as ViewSpec['label'], { url: p.url, chainId: p.quiltPatchId });
+        }
+    } catch (err) {
+        console.warn('[additional-views] quilt upload failed, falling back to per-blob:', err instanceof Error ? err.message : err);
+        for (const r of rendered) {
+            try {
+                const put = await blob.putBlob(r.bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+                stored.set(r.view.label, { url: put.url, chainId: put.blobId });
+            } catch (e) {
+                console.warn(`[additional-views] ${r.view.label} upload failed:`, e instanceof Error ? e.message : e);
+            }
+        }
+    }
 
+    // ── 3) anchor each stored view to the on-chain gallery (one append tx each) ──
+    // Separate txs keep the saga/character object versions from clashing.
+    for (const { view } of rendered) {
+        const s = stored.get(view.label);
+        if (!s) continue;
+        urls[view.label] = s.url;
+        if (input.dryRun || !admin) continue;
+        try {
             const txb = new Transaction();
             const asset = txb.add(
                 endlessTx.character.newMediaAsset({
                     kind: view.kind,
-                    uri: put.url,
-                    walrusBlobId: put.blobId ? Array.from(new TextEncoder().encode(put.blobId)) : [],
+                    uri: s.url,
+                    walrusBlobId: s.chainId ? Array.from(new TextEncoder().encode(s.chainId)) : [],
                     metadataUri: `endless://additional-view?view=${view.label}`,
                 }),
             );
@@ -183,7 +227,7 @@ export async function generateAdditionalViews(
             if (txr.effects?.status?.status === 'success') appended += 1;
             else console.warn(`[additional-views] ${view.label} append failed:`, txr.effects?.status?.error);
         } catch (err) {
-            console.warn(`[additional-views] ${view.label} failed:`, err instanceof Error ? err.message : err);
+            console.warn(`[additional-views] ${view.label} anchor failed:`, err instanceof Error ? err.message : err);
         }
     }
 
