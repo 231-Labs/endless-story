@@ -90,6 +90,10 @@ Anchor = 這位角色的**長期 reference 圖**：素顏、無戲妝、頭肩 c
 不要動漫感、不要油畫感、不要寫實照片。"
 （共 ~80 字，model 自行填細節）
 
+【女小生氣質提示】
+若角色是女小生 / 坤生，人物句仍必須使用「基本事實」裡的實際年齡；
+氣質可寫眉目英朗清潤、束髮、中性短衫。不要照抄固定歲數，不要嫵媚。
+
 只輸出 prompt 文字，無 JSON 無說明。`;
 
 export function buildPortraitCurationPrompt(

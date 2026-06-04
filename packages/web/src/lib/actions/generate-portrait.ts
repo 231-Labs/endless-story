@@ -61,6 +61,24 @@ function defaultToneHint(): string {
     return '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。不要動漫感、不要油畫感、不要寫實照片。';
 }
 
+function anchorSafeToneHint(raw: string): string {
+    const tone = raw.trim();
+    if (!tone) return defaultToneHint();
+
+    // Some saga-level tones are written for later costume / setting-gallery
+    // images. Recruitment portraits are plain face anchors, so strip costume
+    // and make-up directives before handing the prompt to the image model.
+    if (tone.includes('海派水墨工筆') || tone.includes('月份牌')) {
+        return '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色；民國上海梨園肖像，帶唱片封套與戲報名角氣。不要動漫感、不要油畫感、不要寫實照片。';
+    }
+
+    return tone
+        .replace(/；?戲服和妝面精細[^。；]*[。；]?/g, '；')
+        .replace(/；{2,}/g, '；')
+        .replace(/；。/g, '。')
+        .trim();
+}
+
 /**
  * Resolve the portrait art-direction tone (F — saga soul, 畫風):
  *   explicit toneHint → saga's on-chain portrait_tone → default ink-wash.
@@ -69,12 +87,12 @@ function defaultToneHint(): string {
  */
 async function resolveToneHint(input: GeneratePortraitInput): Promise<string> {
     const explicit = input.toneHint.trim();
-    if (explicit) return explicit;
+    if (explicit) return anchorSafeToneHint(explicit);
     if (input.sagaId) {
         try {
             const saga = await fetchOnChainSaga(input.sagaId);
             const tone = saga?.sagaPrompts?.portraitTone?.trim();
-            if (tone) return tone;
+            if (tone) return anchorSafeToneHint(tone);
         } catch {
             /* fall through to default on any read failure */
         }

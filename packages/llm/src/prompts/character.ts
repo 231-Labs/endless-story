@@ -107,17 +107,19 @@ ${tagLine}
 ${rolledLine}
 
 值域：${rangeLine}。值高代表該軸強、值低代表弱。
-**敘事必須讓讀者從文字裡讀得出這組數值的高低分佈**：
-- 例如「機敏=85」要在描述裡出現靈巧、反應快、看人準的細節
-- 例如「筋骨=20」要顯出體弱、勞作易喘、肩窄等具體痕跡
+**這些分數只供你判斷角色強弱，不得出現在候選 JSON 的任何文字欄位。**
+**敘事必須讓讀者從具體行為、身體痕跡、語氣和社交反應裡讀得出高低分佈**：
+- 機敏高：寫她反應快、看人準、能從兩句寒暄裡聽出對方真正要價
+- 筋骨低：寫她勞作易喘、肩窄、久站後會扶一扶桌沿
 - 絕不可把高值寫成弱、低值寫成強
+- 絕不可在 description 直接寫出「外貌88」「筋骨 39」「機敏=99」「心性34」這類屬性名、阿拉伯數字、括號評分或分數評語
 
 請設計：
 1. name：2-4 字中文名，不與現有名單重複
-2. description：100-160 字人物敘述（出身 / 性格 / 行事風格 / 顯眼外貌 / 一條可被人捕捉的執念或缺陷）—— **必須讓讀者從敘述裡讀得出該候選的數值高低**
+2. description：100-160 字人物敘述（出身 / 性格 / 行事風格 / 顯眼外貌 / 一條可被人捕捉的執念或缺陷）—— **必須讓讀者從敘述裡讀得出該候選的數值高低，但不能報出分數、屬性名或括號評分**
 3. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——體型應與「筋骨」軸對位（若有此 key）
 
-**不要在 JSON 裡寫 attributes 或 innateTraits**：數值已鎖死，server 會直接 attach。
+**不要在 JSON 裡寫 attributes、innateTraits 或任何分數文字**：數值已鎖死，server 會直接 attach。
 
 要求：
 - 忠於玩家描述的核心意象
@@ -135,6 +137,59 @@ ${rolledLine}
 
 const VALID_GENDERS = new Set(['男', '女', '中性']);
 const VALID_BODIES = new Set(['瘦削', '豐潤', '粗壯', '孱弱', '勻稱']);
+const DEFAULT_ATTRIBUTE_SCORE_TERMS = [
+  '外貌',
+  '筋骨',
+  '機敏',
+  '心性',
+  'appearance',
+  'constitution',
+  'acuity',
+  'disposition',
+];
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripAttributeScoreLeaks(input: string, rolledValues: RolledAttribute[]): string {
+  const terms = Array.from(
+    new Set(
+      [
+        ...DEFAULT_ATTRIBUTE_SCORE_TERMS,
+        ...rolledValues.flatMap((attr) => [attr.label, attr.key]),
+      ]
+        .map((term) => term.trim())
+        .filter(Boolean),
+    ),
+  );
+  const axisPattern = terms.map(escapeRegExp).join('|');
+  if (!axisPattern) return input.trim();
+
+  const parenScoreLeak = new RegExp(
+    `[（(][^（）()\\n]*(?:${axisPattern})(?:\\s*(?:分數|數值|值))?\\s*[=:：]?\\s*\\d{1,3}(?:\\s*/\\s*100)?[^（）()\\n]*[）)]`,
+    'giu',
+  );
+  const inlineScoreLeak = new RegExp(
+    `(?:${axisPattern})(?:\\s*(?:分數|數值|值))?\\s*[=:：]?\\s*\\d{1,3}(?:\\s*/\\s*100)?`,
+    'giu',
+  );
+  const reversedInlineScoreLeak = new RegExp(
+    `\\d{1,3}(?:\\s*/\\s*100)?\\s*(?:分)?\\s*(?:${axisPattern})`,
+    'giu',
+  );
+
+  return input
+    .replace(parenScoreLeak, '')
+    .replace(inlineScoreLeak, '')
+    .replace(reversedInlineScoreLeak, '')
+    .replace(/[（(]\s*[）)]/g, '')
+    .replace(/\s+([，。；、！？])/g, '$1')
+    .replace(/([，、；;])\s*([，、；;。！？])/g, '$2')
+    .replace(/[，、；;]\s*$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 
 /**
  * Parse LLM output into a `CharacterCandidate`. Attaches the server-locked
@@ -158,7 +213,10 @@ export function parseCharacterCandidate(
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, unknown>;
   const name = typeof obj.name === 'string' ? obj.name.trim() : '';
-  const description = typeof obj.description === 'string' ? obj.description.trim() : '';
+  const description =
+    typeof obj.description === 'string'
+      ? stripAttributeScoreLeaks(obj.description, rolledValues)
+      : '';
   if (!name || !description) return null;
 
   const pf = (obj.physicalFacts ?? obj.physical_facts) as Record<string, unknown> | undefined;

@@ -215,6 +215,24 @@ function testPrompts() {
   assert(candidate?.name === '林霽虹', 'char: name parse');
   assert(candidate?.attributes.length === 3, 'char: attributes attached');
   assert(candidate?.physicalFacts.gender === '男', 'char: gender normalized');
+  const leakedCandidate = parseCharacterCandidate(
+    '{"name":"柳生春","description":"眉眼如書，風流偶像，那張讓女學生癡迷的臉龐（外貌88）全是天賦。生得單薄，肩窄如削，稍重的行頭便壓得她氣喘（筋骨39）。但她心眼靈動到極，一眼便能看穿台下誰是捧角兒的誰是拆台的（機敏99），總能替人圓場。只是這份機靈全用場面，心裡卻是個怕散的軟骨頭，一想到要與孟雪棠分離便心慌意亂，毫無主見（心性34）。","physicalFacts":{"gender":"女","age":27,"body":"瘦削"}}',
+    [
+      ...rolled,
+      { key: 'disposition', label: '心性', value: 34 },
+    ],
+  );
+  assert(leakedCandidate !== null, 'char: score-leak parse should still succeed');
+  assert(
+    !/[（(][^）)]*(?:外貌|筋骨|機敏|心性)[^）)]*\d{1,3}[^）)]*[）)]/.test(
+      leakedCandidate?.description ?? '',
+    ),
+    'char: parenthetical attribute scores stripped',
+  );
+  assert(
+    !/(?:外貌|筋骨|機敏|心性)\s*[=:：]?\s*\d{1,3}/.test(leakedCandidate?.description ?? ''),
+    'char: inline attribute scores stripped',
+  );
 
   // portrait curate
   const portraitPrompt = buildPortraitCurationPrompt(

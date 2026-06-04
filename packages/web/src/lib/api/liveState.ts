@@ -16,8 +16,8 @@ import { isMemoryConfigured, recallCurrentPlanText } from '@/lib/chain/memory';
  *
  * The plan is written each tick by the PLAN step (runPlanAction) and recalled
  * here, so the dossier header「此刻心境 / 將往何方」reflects what she's actually
- * striving for, not a placeholder. Falls back to the old placeholders when
- * MemWal isn't configured or the character has no plan yet.
+ * striving for, not a placeholder. Falls back to neutral blanks when MemWal
+ * isn't configured or the character has no plan yet.
  *
  * Note: this surfaces the plan's goal/intent publicly (the live-state bar is
  * not owner-gated). The plan body itself stays SEAL-encrypted; this is just
@@ -80,11 +80,11 @@ export async function getLiveState(
       ? { ...direct }
       : character
         ? {
-            intent: `整理下一場${character.role}身段，等班主點名。`,
+            intent: '無',
             location: locationLabel,
-            nextPlan: '先把今日記憶寫下，等下一章回引用。',
+            nextPlan: '無',
           }
-        : { intent: '靜默。', location: '無蹤', nextPlan: '待章回引用。' };
+        : { intent: '無', location: '無蹤', nextPlan: '無' };
     return {
       intent: planIntent ?? base.intent,
       location: character || direct ? locationLabel : base.location,

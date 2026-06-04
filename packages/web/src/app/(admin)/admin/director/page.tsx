@@ -6,6 +6,7 @@ import { DreamConfigPanel } from './DreamConfigPanel';
 import { ReflectionPanel } from './ReflectionPanel';
 import { GenesisMemoryPanel } from './GenesisMemoryPanel';
 import { CustodyPanel } from './CustodyPanel';
+import { AdditionalViewsBackfillPanel } from './AdditionalViewsBackfillPanel';
 import { PortraitEvolvePanel } from './PortraitEvolvePanel';
 import { EventPanel } from './EventPanel';
 import { TimePanel } from './TimePanel';
@@ -138,7 +139,8 @@ export default async function AdminDirectorPage() {
                             （戲妝 / 老年 / 日常 / 自訂）出一張新像 → Walrus → 上鏈 update_image。
                             每次演化都 emit CharacterImageUpdated，形成可驗證的形象演化軌跡。
                         </p>
-                        <div className="mt-6">
+                        <div className="mt-6 space-y-6">
+                            <AdditionalViewsBackfillPanel characters={characters} />
                             <PortraitEvolvePanel characters={characters} />
                         </div>
                     </div>

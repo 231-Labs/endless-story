@@ -35,6 +35,8 @@ export interface AdditionalViewsInput {
     characterId: string;
     /** Walrus aggregator URL of the mint-time 45° portrait — the img2img reference. */
     referenceUrl: string;
+    /** Generate only selected standard views. Defaults to both mint-time views. */
+    views?: Array<ViewSpec['label']>;
     /** Skip on-chain anchoring (render + upload only) — for testing. */
     dryRun?: boolean;
 }
@@ -86,6 +88,11 @@ export async function generateAdditionalViews(
     if (!input.referenceUrl?.trim()) {
         return { ok: false, appended: 0, skipped: 'no_reference' };
     }
+    const requested = new Set(input.views ?? VIEWS.map((view) => view.label));
+    const views = VIEWS.filter((view) => requested.has(view.label));
+    if (views.length === 0) {
+        return { ok: true, appended: 0, skipped: 'no_views' };
+    }
 
     // ── fetch the reference portrait bytes (the img2img anchor) ──
     let refBytes: Uint8Array;
@@ -134,7 +141,7 @@ export async function generateAdditionalViews(
     // Image generation is the flaky step; render all before storing so a single
     // failed view never aborts the batch.
     const rendered: Array<{ view: ViewSpec; bytes: Uint8Array }> = [];
-    for (const view of VIEWS) {
+    for (const view of views) {
         try {
             const res = await imgClient.edit({
                 prompt: view.prompt(person),
