@@ -44,4 +44,11 @@ export type {
 // just needs to live on Walrus without the full memory (encrypt + vector)
 // pipeline.
 export * as blob from "./blob.js";
-export type { WalrusNetwork, PutBlobOptions, PutBlobResult } from "./blob.js";
+export type {
+    WalrusNetwork,
+    PutBlobOptions,
+    PutBlobResult,
+    QuiltFile,
+    QuiltPatch,
+    PutQuiltResult,
+} from "./blob.js";

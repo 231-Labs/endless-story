@@ -157,6 +157,210 @@ export function getBlobUrl(blobId: string, network: WalrusNetwork = 'testnet'): 
     return `${base}/v1/blobs/${blobId}`;
 }
 
+// ───────────────────────── Quilt (batch small blobs) ─────────────────────────
+//
+// A Quilt packs up to MAX_FILES_IN_QUILT small files into ONE Walrus blob, so
+// they SHARE the per-blob metadata floor (~420x cheaper for 10KB files, ~106x
+// for 100KB) and cost ONE Sui tx instead of N. Each file stays individually
+// retrievable by `identifier` or `quiltPatchId` — no unbundling.
+//
+// USE FOR batch WRITES on the content road (a character's 設定集 gallery at mint,
+// a gazette bundle). NOT for the per-memory hot path (memories are SEAL-encrypted
+// + written one-at-a-time through the relayer; and a quilt — like any blob — is
+// IMMUTABLE: you can't append, you write a fresh quilt per batch).
+//
+// Wire format confirmed against a live Walrus daemon's OpenAPI + MystenLabs'
+// own k6 client (scripts/k6/src/flows/{publisher,aggregator}.ts):
+//   write : PUT /v1/quilts?epochs=N   multipart/form-data, one part per file
+//           whose FIELD NAME is the identifier; optional `_metadata` JSON part
+//           carries Walrus-native tags.  413 ⇒ quilt too large.
+//   read  : GET /v1/blobs/by-quilt-patch-id/{quiltPatchId}
+//           GET /v1/blobs/by-quilt-id/{quiltId}/{identifier}
+
+/** Publisher hard cap on files per quilt (Walrus `MAX_FILES_IN_QUILT`). */
+export const MAX_FILES_IN_QUILT = 666;
+
+export interface QuiltFile {
+    /** Unique-within-the-quilt name; used to read the patch back. */
+    identifier: string;
+    bytes: Uint8Array;
+    /** Optional content-type for this file's part. */
+    contentType?: string;
+    /** Optional Walrus-native metadata tags, e.g. `{ kind: 'event-moment' }`. */
+    tags?: Record<string, string>;
+}
+
+export interface QuiltPatch {
+    /** The identifier this file was stored under. */
+    identifier: string;
+    /** Stable id to fetch just this file: GET /v1/blobs/by-quilt-patch-id/<id>. */
+    quiltPatchId: string;
+    /** Aggregator URL for this file's bytes. */
+    url: string;
+}
+
+export interface PutQuiltResult {
+    /** The container quilt's own blob id (== a normal Walrus blob id). */
+    quiltId?: string;
+    /** Sui object id of the on-chain Blob NFT (when newly created). */
+    suiObjectId?: string;
+    endEpoch?: number;
+    /** True when the identical quilt bytes were already stored (deduped). */
+    alreadyCertified: boolean;
+    /** One entry per stored file. */
+    patches: QuiltPatch[];
+}
+
+interface QuiltStoreResponse {
+    blobStoreResult?: PublisherSuccess;
+    storedQuiltBlobs?: Array<{ identifier: string; quiltPatchId: string }>;
+}
+
+/**
+ * Store many small files as a single Walrus quilt; return the container id +
+ * one `QuiltPatch` per file. Mirrors {@link putBlob}'s retry/backoff against the
+ * shared (rate-limited) public publisher.
+ *
+ * @throws if `files` is empty, exceeds {@link MAX_FILES_IN_QUILT}, has duplicate
+ *   identifiers, or the publisher rejects the quilt (413 ⇒ split into batches).
+ */
+export async function putQuilt(
+    files: QuiltFile[],
+    opts: PutBlobOptions = {},
+): Promise<PutQuiltResult> {
+    if (files.length === 0) throw new Error('putQuilt: no files');
+    if (files.length > MAX_FILES_IN_QUILT) {
+        throw new Error(
+            `putQuilt: ${files.length} files exceeds MAX_FILES_IN_QUILT (${MAX_FILES_IN_QUILT}) — split into batches`,
+        );
+    }
+    const ids = new Set<string>();
+    for (const f of files) {
+        if (!f.identifier) throw new Error('putQuilt: every file needs a non-empty identifier');
+        if (ids.has(f.identifier)) throw new Error(`putQuilt: duplicate identifier "${f.identifier}"`);
+        ids.add(f.identifier);
+    }
+
+    const network = opts.network ?? 'testnet';
+    const epochs = opts.epochs ?? 5;
+    const base = opts.publisherUrl ?? PUBLISHERS[network];
+    const url = `${base.replace(/\/$/, '')}/v1/quilts?epochs=${epochs}`;
+    const maxRetries = Math.max(0, opts.retries ?? 4);
+
+    // FormData with Blob parts is rebuilt per attempt (a consumed body can't be
+    // re-sent). Each part's FIELD NAME is the file's identifier.
+    const buildForm = (): FormData => {
+        const form = new FormData();
+        for (const f of files) {
+            const blob = new Blob([f.bytes as BlobPart], {
+                type: f.contentType ?? 'application/octet-stream',
+            });
+            form.append(f.identifier, blob, f.identifier);
+        }
+        const meta = files
+            .filter((f) => f.tags && Object.keys(f.tags).length > 0)
+            .map((f) => ({ identifier: f.identifier, tags: f.tags }));
+        if (meta.length > 0) form.append('_metadata', JSON.stringify(meta));
+        return form;
+    };
+
+    let res: Response | undefined;
+    let lastErr = '';
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        if (attempt > 0) {
+            const backoff = Math.min(10_000, 1000 * 2 ** (attempt - 1));
+            await sleep(backoff + Math.floor(backoff * 0.3 * (attempt % 3) / 2));
+        }
+        try {
+            res = await fetch(url, { method: 'PUT', body: buildForm() });
+        } catch (err) {
+            lastErr = `network: ${err instanceof Error ? err.message : String(err)}`;
+            res = undefined;
+            continue;
+        }
+        if (res.ok) break;
+        if (res.status === 429 || res.status >= 500) {
+            lastErr = `HTTP ${res.status}`;
+            continue;
+        }
+        const text = await res.text().catch(() => '');
+        if (res.status === 413) {
+            throw new Error(`walrus quilt too large (HTTP 413) — split into smaller batches: ${text.slice(0, 200)}`);
+        }
+        throw new Error(`walrus publisher HTTP ${res.status}: ${text.slice(0, 300)}`);
+    }
+
+    if (!res || !res.ok) {
+        throw new Error(
+            `walrus quilt store failed after ${maxRetries + 1} attempts (${lastErr || 'unknown'}): publisher rate-limited — retry shortly`,
+        );
+    }
+
+    const data = (await res.json()) as QuiltStoreResponse;
+    const stored = data.storedQuiltBlobs ?? [];
+    const patches: QuiltPatch[] = stored.map((s) => ({
+        identifier: s.identifier,
+        quiltPatchId: s.quiltPatchId,
+        url: getQuiltPatchUrl(s.quiltPatchId, network),
+    }));
+
+    const sr = data.blobStoreResult;
+    if (sr?.newlyCreated) {
+        return {
+            quiltId: sr.newlyCreated.blobObject.blobId,
+            suiObjectId: sr.newlyCreated.blobObject.id,
+            endEpoch: sr.newlyCreated.blobObject.storage.endEpoch,
+            alreadyCertified: false,
+            patches,
+        };
+    }
+    if (sr?.alreadyCertified) {
+        return {
+            quiltId: sr.alreadyCertified.blobId,
+            endEpoch: sr.alreadyCertified.endEpoch,
+            alreadyCertified: true,
+            patches,
+        };
+    }
+    // Patches present but no recognizable store-result shape: still usable.
+    return { alreadyCertified: false, patches };
+}
+
+/** Aggregator URL to fetch a single quilt file by its `quiltPatchId`. */
+export function getQuiltPatchUrl(quiltPatchId: string, network: WalrusNetwork = 'testnet'): string {
+    return `${AGGREGATORS[network]}/v1/blobs/by-quilt-patch-id/${quiltPatchId}`;
+}
+
+/** Aggregator URL to fetch a single quilt file by its quilt id + identifier. */
+export function getQuiltFileUrl(
+    quiltId: string,
+    identifier: string,
+    network: WalrusNetwork = 'testnet',
+): string {
+    return `${AGGREGATORS[network]}/v1/blobs/by-quilt-id/${quiltId}/${encodeURIComponent(identifier)}`;
+}
+
+/** Fetch one quilt file's bytes by `quiltPatchId` (from {@link putQuilt}). */
+export async function fetchQuiltPatch(
+    quiltPatchId: string,
+    network: WalrusNetwork = 'testnet',
+): Promise<Uint8Array> {
+    const res = await fetch(getQuiltPatchUrl(quiltPatchId, network));
+    if (!res.ok) throw new Error(`walrus aggregator HTTP ${res.status} for quilt patch ${quiltPatchId}`);
+    return new Uint8Array(await res.arrayBuffer());
+}
+
+/** Fetch one quilt file's bytes by quilt id + the identifier it was stored under. */
+export async function fetchQuiltFile(
+    quiltId: string,
+    identifier: string,
+    network: WalrusNetwork = 'testnet',
+): Promise<Uint8Array> {
+    const res = await fetch(getQuiltFileUrl(quiltId, identifier, network));
+    if (!res.ok) throw new Error(`walrus aggregator HTTP ${res.status} for ${quiltId}/${identifier}`);
+    return new Uint8Array(await res.arrayBuffer());
+}
+
 /**
  * Convenience: fetch a blob's bytes back from the aggregator.
  * Caller decodes as needed (e.g. `new Uint8Array(await res.arrayBuffer())`).
