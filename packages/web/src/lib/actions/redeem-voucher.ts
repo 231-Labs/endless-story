@@ -62,6 +62,38 @@ export interface RedeemVoucherResult {
     digest?: string;
 }
 
+/**
+ * Run a post-mint enrichment step with light retry. Retries on a thrown error
+ * OR a returned `{ ok: false }` (the actions catch their own errors and report
+ * via `ok`, so a bare try/catch wouldn't see a failed tx). Used to ride out the
+ * occasional transient publisher / SEAL / gas hiccup now that the steps run
+ * serially (no more concurrent admin-gas contention to retry around).
+ */
+async function withRetry<T extends { ok?: boolean }>(
+    label: string,
+    fn: () => Promise<T>,
+    tries = 2,
+): Promise<T | null> {
+    for (let attempt = 1; attempt <= tries; attempt += 1) {
+        try {
+            const r = await fn();
+            if (r?.ok !== false) return r;
+            console.warn(
+                `[redeem-voucher] ${label} attempt ${attempt}/${tries} not ok:`,
+                (r as { error?: string }).error ?? '',
+            );
+        } catch (err) {
+            console.warn(
+                `[redeem-voucher] ${label} attempt ${attempt}/${tries} threw:`,
+                err instanceof Error ? err.message : err,
+            );
+        }
+        if (attempt < tries) await new Promise((res) => setTimeout(res, 1500 * attempt));
+    }
+    console.warn(`[redeem-voucher] ${label} gave up after ${tries} attempts`);
+    return null;
+}
+
 export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVoucherResult> {
     const deployment = ENDLESS_STORY_DEPLOYMENT;
     if (!deployment.packageId) {
@@ -209,35 +241,16 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         };
     }
 
-    // Seed age/gender/role-appropriate genesis memories. Runs AFTER the response
-    // (Next `after`) — the heavy LLM generation + ~11 sequential MemWal writes must
-    // NOT block the mint response. When awaited inline they pinned the client on
-    // "上鏈中…" for the full seeding time (10-40s on testnet) and the success seal
-    // couldn't stamp until characterId arrived; a single hung MemWal write blocked it
-    // forever even though the Character was already minted. `after` keeps the work
-    // server-side (unlike the old client-side fire-and-forget that died on unmount and
-    // left characters memory-less). Generation reads the on-chain profile, which exists
-    // post-tx. Failure is logged only — the Character is already on chain.
-    {
-        const charId = characterId;
-        after(async () => {
-            try {
-                const seedRes = await seedGenesisMemoryAction(charId);
-                if (seedRes.skipped) {
-                    console.warn(`[redeem-voucher] genesis memory skipped (${seedRes.skipped}) for ${charId}`);
-                } else {
-                    console.log(`[redeem-voucher] seeded ${seedRes.seeded ?? 0} cognition memories for ${charId}`);
-                }
-            } catch (err) {
-                console.warn(`[redeem-voucher] genesis memory seeding failed for ${charId}:`, err);
-            }
-        });
-    }
-
-    // Public on-chain tags — `role:*` plus visible social identity labels such as
-    // 麗質天生 / 武場底子 / 摩登新派. These describe how strangers read the
-    // character, so they belong on the public Character tags vector. Runs AFTER
-    // the response; failure is logged only and must not block mint.
+    // Post-mint enrichment — runs in ONE `after()` (post-response, never blocks the
+    // mint UI) and SEQUENTIALLY. The admin-signed steps (tags → persona → views) all
+    // sign with the SAME gas coin; as separate concurrent after() blocks they raced +
+    // equivocated, so a character could silently land with no tags / no persona while
+    // another got everything. Serial = no contention; each step has light retry and is
+    // failure-isolated (the Character is already on chain). Memory seeding (MemWal, no
+    // gas) runs last. All steps read the on-chain profile, which exists post-tx.
+    //
+    // NOTE: this is the same work the reconciler (admin 對帳/補發) performs — anything
+    // missed here is recoverable there, so the mint never has to wait on it.
     {
         const charId = characterId;
         const sceneId = input.sceneId;
@@ -245,9 +258,11 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         const rolledValues = input.rolledValues;
         const recruitmentSpecialty = input.recruitmentSpecialty;
         const recruitmentIntent = input.recruitmentIntent;
+        const portraitUrl = input.portraitUrl;
         after(async () => {
-            try {
-                const r = await affirmMintPublicTagsAction({
+            // 1) public identity tags (role:* + social labels)
+            const tagRes = await withRetry('public-tags', () =>
+                affirmMintPublicTagsAction({
                     characterId: charId,
                     sceneId,
                     characterName: candidate.name,
@@ -255,56 +270,37 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
                     rolledValues,
                     recruitmentSpecialty,
                     recruitmentIntent,
-                });
-                console.log(
-                    `[redeem-voucher] public tags for ${charId}: ok=${r.ok}` +
-                        (r.tags?.length ? ` tags=${r.tags.join('|')}` : '') +
-                        (r.llmSkipped ? ` llmSkipped=${r.llmSkipped}` : '') +
-                        (r.error ? ` error=${r.error}` : ''),
-                );
-            } catch (err) {
-                console.warn(`[redeem-voucher] public tag affirmation failed for ${charId}:`, err);
-            }
-        });
-    }
+                }),
+            );
+            console.log(
+                `[redeem-voucher] tags for ${charId}: ` +
+                    (tagRes?.ok ? (tagRes.tags ?? []).join('|') : 'failed'),
+            );
 
-    // §11 additional views (frontal + 人物美術設定 art sheet) via img2img, using the
-    // mint-time 45° portrait as the reference. Runs AFTER the response (Next `after`)
-    // so it never blocks the mint or the UI — the views land in the 設定集 gallery
-    // asynchronously. Skipped silently if no portrait reference was provided.
-    if (input.portraitUrl) {
-        const charId = characterId;
-        const refUrl = input.portraitUrl;
-        after(async () => {
-            try {
-                const r = await generateAdditionalViews({ characterId: charId, referenceUrl: refUrl });
-                console.log(
-                    `[redeem-voucher] additional views for ${charId}: appended=${r.appended}` +
-                        (r.skipped ? ` skipped=${r.skipped}` : '') +
-                        (r.error ? ` error=${r.error}` : ''),
-                );
-            } catch (err) {
-                console.warn(`[redeem-voucher] additional views failed for ${charId}:`, err);
-            }
-        });
-    }
+            // 2) persona (本色) — distil + anchor on the content road
+            const personaRes = await withRetry('persona', () => generatePersonaAction(charId));
+            console.log(
+                `[redeem-voucher] persona for ${charId}: ` +
+                    (personaRes?.ok ? `v${personaRes.version}` : `failed${personaRes?.skipped ? `(${personaRes.skipped})` : ''}`),
+            );
 
-    // §persona (本色) — distil 軸/腔/界 from the on-chain profile and anchor it on the content
-    // road (Walrus blob + commitment, first_run). Runs AFTER the response so it never blocks the
-    // mint; failure is swallowed (the Character is already on chain). Needs gas on the admin wallet.
-    {
-        const charId = characterId;
-        after(async () => {
+            // 3) §11 additional 設定集 views (frontal + art sheet) via img2img
+            if (portraitUrl) {
+                const viewsRes = await withRetry('additional-views', () =>
+                    generateAdditionalViews({ characterId: charId, referenceUrl: portraitUrl }),
+                );
+                console.log(`[redeem-voucher] views for ${charId}: appended=${viewsRes?.appended ?? 0}`);
+            }
+
+            // 4) genesis memories (MemWal — no admin gas, so it can't contend; run last)
             try {
-                const r = await generatePersonaAction(charId);
+                const seedRes = await seedGenesisMemoryAction(charId);
                 console.log(
-                    `[redeem-voucher] persona for ${charId}: ok=${r.ok}` +
-                        (r.version ? ` v${r.version}` : '') +
-                        (r.skipped ? ` skipped=${r.skipped}` : '') +
-                        (r.error ? ` error=${r.error}` : ''),
+                    `[redeem-voucher] memories for ${charId}: ` +
+                        (seedRes.skipped ? `skipped(${seedRes.skipped})` : String(seedRes.seeded ?? 0)),
                 );
             } catch (err) {
-                console.warn(`[redeem-voucher] persona generation failed for ${charId}:`, err);
+                console.warn(`[redeem-voucher] genesis memory seeding failed for ${charId}:`, err);
             }
         });
     }
