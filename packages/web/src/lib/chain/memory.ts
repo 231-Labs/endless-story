@@ -514,13 +514,31 @@ export async function rememberForCharacter(
     const importance = opts?.importance ?? DEFAULT_IMPORTANCE[kind] ?? 5;
     const day = await currentNarrativeDay();
     try {
-        await client.remember(
-            tagMemory(text, kind, importance, day, opts?.anchored ?? false),
-            namespaceFor(characterId),
-            // Index metadata so a self-hosted three-factor relayer can rank the full namespace.
-            // The encrypted blob still carries the tag (above), so display/parse is unchanged.
-            { importance, day, kind, anchored: opts?.anchored ?? false },
-        );
+        const tagged = tagMemory(text, kind, importance, day, opts?.anchored ?? false);
+        const ns = namespaceFor(characterId);
+        // Index metadata so a self-hosted three-factor relayer can rank the full namespace.
+        // The encrypted blob still carries the tag (above), so display/parse is unchanged.
+        const meta = { importance, day, kind, anchored: opts?.anchored ?? false };
+        // MemWal's testnet relayer / SEAL occasionally 500s (or 429s / drops the
+        // connection) transiently. Retry those a couple times with backoff so a
+        // single hiccup doesn't leave a character memory-less; 4xx (bad payload /
+        // auth) fail fast since retrying won't help.
+        const MAX_TRIES = 3;
+        for (let attempt = 1; ; attempt += 1) {
+            try {
+                await client.remember(tagged, ns, meta);
+                break;
+            } catch (err) {
+                const status = (err as { status?: number })?.status;
+                const transient = status === undefined || status >= 500 || status === 429;
+                if (!transient || attempt >= MAX_TRIES) throw err;
+                console.warn(
+                    `[memory] remember ${characterId.slice(0, 10)}… attempt ${attempt}/${MAX_TRIES} ` +
+                        `transient(${status ?? 'net'}); retrying…`,
+                );
+                await new Promise((r) => setTimeout(r, 600 * attempt));
+            }
+        }
         // A new plan supersedes the cached one — keep it hot so MOVE/SOCIAL/POV
         // in the same tick don't immediately decrypt it again.
         if (kind === 'plan') PLAN_CACHE.set(characterId, { text, ts: Date.now() });
@@ -531,7 +549,7 @@ export async function rememberForCharacter(
         );
         return true;
     } catch (err) {
-        console.warn('[memory] remember failed:', err);
+        console.warn('[memory] remember failed (after retries):', err);
         return false;
     } finally {
         client.destroy();
