@@ -90,6 +90,8 @@ export interface TickLoopInput {
     pov?: boolean;
     /** Compile the gazette at the end. Default true. */
     gazette?: boolean;
+    /** Open a storylet (dramatic spine) when drama tension is live. Default true. */
+    storylet?: boolean;
     /** Auto-resolve (judge) an event once every participant has acted.
      *  Default true — events conclude on their own (N5). */
     autoResolve?: boolean;
@@ -199,6 +201,22 @@ export interface TickDramaResult {
     top?: { characterId: string; name?: string; statement: string; tension: number }[];
 }
 
+/** A storylet opened this tick — the discrete incident POV chapters anchor to. */
+export interface TickStoryletResult {
+    sceneId: string;
+    sceneName: string;
+    /** open_storylet template id (e.g. 'contention:spotlight'). */
+    templateId: string;
+    /** Human-readable incident framing fed to involved characters' POV. */
+    label: string;
+    characterIds: string[];
+    names: string[];
+    /** Whether StoryletOpened was emitted on chain (false on dry-run / failure). */
+    opened: boolean;
+    digest?: string;
+    error?: string;
+}
+
 export interface TickLoopResult {
     ok: boolean;
     advanced: boolean;
@@ -207,6 +225,8 @@ export interface TickLoopResult {
     moves: TickMoveResult[];
     /** DR-6: scarce-resource tension derived (+ committed) before decisions. */
     drama?: TickDramaResult;
+    /** The storylet opened this tick (dramatic spine), if any. */
+    storylet?: TickStoryletResult;
     socials: TickSocialResult[];
     acts: TickActResult[];
     resolves: TickResolveResult[];
@@ -218,6 +238,20 @@ export interface TickLoopResult {
     memoryWarnings?: string[];
     memoryDegraded?: boolean;
     error?: string;
+}
+
+/** Map the top drama tension to a readable scene-incident framing for a storylet.
+ *  Deterministic — no LLM. The template id doubles as the on-chain StoryletOpened
+ *  template_id; the label is the human framing fed into involved characters' POV. */
+function storyletFraming(statement?: string): { templateId: string; label: string } {
+    const s = statement ?? '';
+    if (s.includes('頭牌') || s.includes('spotlight'))
+        return { templateId: 'contention:spotlight', label: '今晚誰壓軸、誰站台心的暗潮浮上了檯面' };
+    if (s.includes('唱片') || s.includes('recording') || s.includes('灌錄'))
+        return { templateId: 'contention:recording', label: '首張唱片該由誰來灌，成了繞不開的話題' };
+    if (s.includes('搭戲') || s.includes('partnership'))
+        return { templateId: 'contention:partnership', label: '誰與誰搭戲的盤算，在這一場裡較上了勁' };
+    return { templateId: 'storylet:tension', label: '一樁懸而未決的較量，在這一場裡發酵' };
 }
 
 export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
@@ -427,6 +461,72 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.75 STORYLET — give the day a dramatic SPINE. When drama tension is live
+    //   and a scene holds ≥2 of the cast, the director opens ONE storylet there
+    //   (open_storylet → StoryletOpened), framing the top contested resource as a
+    //   scene incident. This is the discrete EVENT the POV phase then anchors to,
+    //   so chapters narrate「今天發生了 X」from each angle instead of an ambient
+    //   slice. Deterministic (no LLM); admin-signed so it stays serial.
+    let storylet: TickStoryletResult | undefined;
+    if ((input.storylet ?? true) && drama?.active && slice.length > 0) {
+        const byScene = new Map<string, Character[]>();
+        for (const c of slice) {
+            const sid = rosterById.get(c.id)?.currentSceneId;
+            if (!sid) continue;
+            const arr = byScene.get(sid);
+            if (arr) arr.push(c);
+            else byScene.set(sid, [c]);
+        }
+        const busiest = [...byScene.entries()]
+            .filter(([, cs]) => cs.length >= 2)
+            .sort((a, b) => b[1].length - a[1].length)[0];
+        if (busiest) {
+            const [sid, cs] = busiest;
+            const sceneName =
+                rosterById.get(cs[0].id)?.currentSceneName ??
+                activeScenes.find((s) => s.id === sid)?.name ??
+                '戲班';
+            const framing = storyletFraming(drama?.top?.[0]?.statement);
+            storylet = {
+                sceneId: sid,
+                sceneName,
+                templateId: framing.templateId,
+                label: framing.label,
+                characterIds: cs.map((c) => c.id),
+                names: cs.map((c) => c.name),
+                opened: false,
+            };
+            if (!dryRun) {
+                try {
+                    const txb = new Transaction();
+                    txb.add(
+                        endlessTx.director.openStorylet({
+                            cap: d.storytellerCapId,
+                            saga: d.sagaId,
+                            templateId: framing.templateId,
+                            sceneId: sid,
+                            characterIds: storylet.characterIds,
+                        }),
+                    );
+                    const res = await admin.client.signAndExecuteTransaction({
+                        transaction: txb,
+                        signer: admin.signer,
+                        options: { showEffects: true },
+                    });
+                    storylet.opened = res.effects?.status?.status === 'success';
+                    storylet.digest = res.digest;
+                    await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+                } catch (err) {
+                    storylet.error = err instanceof Error ? err.message : String(err);
+                }
+            }
+            tlog(
+                `②‴ 開戲：${sceneName} · ${framing.label}（${storylet.names.join('、')}）` +
+                    `${dryRun ? '（預演）' : storylet.opened ? ' ✓上鏈' : ' ✗'}`,
+            );
+        }
+    }
+
     // 2.8 SOCIAL — idle, same-scene lightweight observation / talk. This
     // writes subjective observations/relationship memories (unless dry-run),
     // which the next POV can recall without turning Director facts into
@@ -515,7 +615,6 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         //    Dry-run does NO chain writes → generate every chapter CONCURRENTLY
         //    (this is the big preview speedup). A real run anchors via
         //    commitment::commit (Sui signing) → must stay serial.
-        const trigger = `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
         const mapPov = (c: Character, r: Awaited<ReturnType<typeof runPovForCharacter>>): TickPovResult => ({
             characterId: c.id,
             name: c.name,
@@ -542,6 +641,25 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                           .filter((b) => b.actorId !== c.id)
                           .map((b) => b.text)
                     : [];
+                // EVENT-anchored trigger: today's storylet in this character's
+                // scene + their own event plays. Falls back to the ambient line.
+                const triggerParts: string[] = [];
+                if (storylet && storylet.sceneId === sceneId) {
+                    const others = storylet.names.filter((n) => n !== c.name);
+                    triggerParts.push(
+                        `在${storylet.sceneName}，${storylet.label}` +
+                            (others.length ? `（同場還有${others.join('、')}）` : ''),
+                    );
+                }
+                for (const a of acts) {
+                    if (a.characterId === c.id && a.ok && a.cardLabel) {
+                        triggerParts.push(`你打出了〔${a.cardLabel}〕${a.intent ? `（${a.intent}）` : ''}`);
+                    }
+                }
+                const trigger =
+                    triggerParts.length > 0
+                        ? `${dayLabel} — 今日，${triggerParts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`
+                        : `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
                 const r = await runPovForCharacter(admin, c.id, {
                     triggerNarrative: trigger,
                     forceRun: true,
@@ -674,6 +792,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         plans,
         moves,
         drama,
+        storylet,
         socials,
         acts,
         resolves,
