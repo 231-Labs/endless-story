@@ -24,6 +24,7 @@ const TONES: RelationshipTone[] = [
     'wary',
     'tension',
     'estrangement',
+    'acquaintance',
     'neutral',
 ];
 
@@ -35,6 +36,7 @@ const TONE_ZH: Record<RelationshipTone, string> = {
     wary: '戒備',
     tension: '緊張',
     estrangement: '隔閡',
+    acquaintance: '故舊',
     neutral: '平淡',
 };
 

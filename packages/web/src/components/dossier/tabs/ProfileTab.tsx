@@ -215,6 +215,7 @@ export function ProfileTab({
 //   戒備 wary        → ○ mute     （灰環 / 保持距離）
 //   緊張 tension     → ○ cinnabar （朱環 / 內熱外冷）
 //   隔閡 estrangement→ ● faint    （淡圓 / 已遠）
+//   故舊 acquaintance→ ○ jade     （青環 / 舊識有淵源、當下分寸）
 //   平淡 neutral     → ● faint    （淡圓 / 未起）
 
 type ToneShape = 'filled' | 'ring' | 'diamond';
@@ -228,6 +229,7 @@ const TONE_LABEL: Record<RelationshipTone, string> = {
   wary: '戒備',
   tension: '緊張',
   estrangement: '隔閡',
+  acquaintance: '故舊',
   neutral: '平淡',
 };
 
@@ -239,6 +241,7 @@ const TONE_VISUAL: Record<RelationshipTone, { shape: ToneShape; color: ToneColor
   wary: { shape: 'ring', color: 'mute' },
   tension: { shape: 'ring', color: 'cinnabar' },
   estrangement: { shape: 'filled', color: 'faint' },
+  acquaintance: { shape: 'ring', color: 'jade' },
   neutral: { shape: 'filled', color: 'faint' },
 };
 

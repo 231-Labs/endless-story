@@ -55,6 +55,7 @@ const TONE_COLOR: Record<RelationshipTone, string> = {
   wary: 'rgb(var(--color-mute))',
   tension: 'rgb(var(--color-cinnabar))',
   estrangement: 'rgb(var(--color-mute))',
+  acquaintance: 'rgb(var(--color-jade))',
   neutral: 'rgb(var(--color-hairline))',
 };
 
@@ -66,6 +67,7 @@ const TONE_DASH: Record<RelationshipTone, string> = {
   wary: '2 5',
   tension: '',
   estrangement: '1 6',
+  acquaintance: '4 4',
   neutral: '',
 };
 
@@ -77,6 +79,7 @@ const TONE_LABEL: Record<RelationshipTone, string> = {
   wary: '戒備',
   tension: '緊張',
   estrangement: '疏離',
+  acquaintance: '故舊',
   neutral: '平淡',
 };
 

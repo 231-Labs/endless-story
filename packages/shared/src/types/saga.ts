@@ -100,6 +100,7 @@ export type RelationshipTone =
   | 'wary' // 戒備
   | 'tension' // 緊張
   | 'estrangement' // 隔閡
+  | 'acquaintance' // 故舊（舊識/故人，故事前就認識，當下情感色彩未定）
   | 'neutral'; // 平淡
 
 export interface RelationshipEdge {

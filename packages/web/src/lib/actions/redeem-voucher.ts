@@ -22,6 +22,7 @@ import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
+import { assessAndApplyRelationshipsAction } from './assess-relationships.js';
 
 export interface RedeemVoucherInput {
     voucherId: string;
@@ -302,6 +303,21 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
             } catch (err) {
                 console.warn(`[redeem-voucher] genesis memory seeding failed for ${charId}:`, err);
             }
+
+            // 5) relationship ties — assess this character vs the roster from public
+            //    descriptions, then seed symmetric director ties (公開關係圖) + symmetric
+            //    memories on both sides. Admin-signed (relationship_seed), so it runs after
+            //    the other admin-gas steps. Idempotent (skips pairs already tied) → the
+            //    admin 關係補帳 panel can re-run / backfill earlier characters safely.
+            const relRes = await withRetry('relationships', () =>
+                assessAndApplyRelationshipsAction(charId),
+            );
+            console.log(
+                `[redeem-voucher] relationships for ${charId}: ` +
+                    (relRes?.ok
+                        ? `seeded=${relRes.seeded}${relRes.skipped ? ` skipped(${relRes.skipped})` : ''}`
+                        : 'failed'),
+            );
         });
     }
 

@@ -6,6 +6,7 @@ import { DreamConfigPanel } from './DreamConfigPanel';
 import { ReflectionPanel } from './ReflectionPanel';
 import { GenesisMemoryPanel } from './GenesisMemoryPanel';
 import { PersonaRedistillPanel } from './PersonaRedistillPanel';
+import { RelationshipAssessPanel } from './RelationshipAssessPanel';
 import { CustodyPanel } from './CustodyPanel';
 import { ProfileDescriptionPatchPanel } from './ProfileDescriptionPatchPanel';
 import { AdditionalViewsBackfillPanel } from './AdditionalViewsBackfillPanel';
@@ -143,6 +144,18 @@ export default async function AdminDirectorPage() {
                         </p>
                         <div className="mt-6">
                             <PersonaRedistillPanel characters={characters} />
+                        </div>
+                    </div>
+
+                    <div className="mt-16 border-t border-hairline pt-10">
+                        <h2 className="font-serif text-2xl tracking-wide text-ink">關係 · 評估與補帳</h2>
+                        <p className="mt-3 text-sm leading-relaxed text-mute">
+                            依公開描述評估角色與名冊的關係（含<strong className="text-ink">故舊</strong>——故事前就認識），
+                            審核後 seed 成<strong className="text-ink">導演公開對稱 tie</strong>（會顯示在關係圖）＋雙向記憶。
+                            mint 後會自動跑一次；這裡可手動重評、或用「全班補帳」補上 mint 順序錯過的舊識。冪等可安心重跑。
+                        </p>
+                        <div className="mt-6">
+                            <RelationshipAssessPanel characters={characters} />
                         </div>
                     </div>
 
