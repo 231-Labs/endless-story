@@ -651,6 +651,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             (others.length ? `（同場還有${others.join('、')}）` : ''),
                     );
                 }
+                const myTalk = socials.find(
+                    (s) => s.characterId === c.id && s.kind === 'talk' && s.line,
+                );
+                if (myTalk) {
+                    triggerParts.push(
+                        `你方才${myTalk.targetName ? `對${myTalk.targetName}` : ''}說過「${myTalk.line}」`,
+                    );
+                }
                 for (const a of acts) {
                     if (a.characterId === c.id && a.ok && a.cardLabel) {
                         triggerParts.push(`你打出了〔${a.cardLabel}〕${a.intent ? `（${a.intent}）` : ''}`);
