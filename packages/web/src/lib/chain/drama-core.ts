@@ -220,7 +220,7 @@ function resolveRef(ref: string, byId: Map<string, ResourceSnapshot>): string | 
 
 /** Stable key for one desire's satisfaction across beats. */
 export function satKey(agentId: string, desireId: string): string {
-    return `${agentId} ${desireId}`;
+    return `${agentId} ${desireId}`;
 }
 
 /** Pull every desire's satisfaction out of a world into a flat carry-over map. */
