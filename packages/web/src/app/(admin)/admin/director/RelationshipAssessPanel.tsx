@@ -5,19 +5,16 @@ import type { Character } from '@endless-story/shared';
 import {
     assessRelationshipsAction,
     applyRelationshipTiesAction,
-    backfillAllRelationshipsAction,
     type ProposedTie,
-    type BackfillRelationshipsResult,
 } from '@/lib/actions/assess-relationships';
 
 /**
- * Admin panel: assess a character's relationships to the saga roster from
+ * Admin panel: assess ONE character's relationships to the saga roster from
  * public descriptions, review the LLM proposals, then seed them as symmetric
  * director ties (公開關係圖) + symmetric memories on both sides.
  *
- * 「全班補帳」re-sweeps every character vs the current full roster — the cure
- * for mint-ordering (a character minted before its 故舊 arrived gets the tie
- * filled in now). Idempotent: pairs already tied are skipped.
+ * Saga-wide relationship 補帳 lives in the reconciler (對帳全班) — the single
+ * batch entry. This panel is for reviewed, targeted single-character seeding.
  */
 
 const TONE_ZH: Record<string, string> = {
@@ -38,17 +35,14 @@ export function RelationshipAssessPanel({ characters }: { characters: Character[
     const [include, setInclude] = useState<Record<number, boolean>>({});
     const [assessNote, setAssessNote] = useState<string | null>(null);
     const [applyNote, setApplyNote] = useState<string | null>(null);
-    const [backfill, setBackfill] = useState<BackfillRelationshipsResult | null>(null);
     const [isAssessing, startAssess] = useTransition();
     const [isApplying, startApply] = useTransition();
-    const [isBackfilling, startBackfill] = useTransition();
 
     const handleAssess = () => {
         if (!characterId) return;
         setTies(null);
         setApplyNote(null);
         setAssessNote(null);
-        setBackfill(null);
         startAssess(async () => {
             const r = await assessRelationshipsAction(characterId);
             if (!r.ok) {
@@ -86,18 +80,7 @@ export function RelationshipAssessPanel({ characters }: { characters: Character[
         });
     };
 
-    const handleBackfill = () => {
-        setBackfill(null);
-        setApplyNote(null);
-        setAssessNote(null);
-        setTies(null);
-        startBackfill(async () => {
-            const r = await backfillAllRelationshipsAction();
-            setBackfill(r);
-        });
-    };
-
-    const busy = isAssessing || isApplying || isBackfilling;
+    const busy = isAssessing || isApplying;
     const selectedCount = ties ? ties.filter((_, i) => include[i]).length : 0;
 
     return (
@@ -127,19 +110,12 @@ export function RelationshipAssessPanel({ characters }: { characters: Character[
                 >
                     {isAssessing ? '評估中…' : '評估關係'}
                 </button>
-                <button
-                    type="button"
-                    onClick={handleBackfill}
-                    disabled={busy}
-                    className="rounded border border-hairline px-4 py-2 text-sm tracking-widest text-ink hover:border-cinnabar disabled:opacity-50"
-                >
-                    {isBackfilling ? '全班補帳中…' : '全班補帳'}
-                </button>
             </div>
 
             <p className="text-2xs tracking-widest text-mute">
                 依公開描述評估此角色與名冊的關係（含「故舊」——故事前就認識），審核後 seed 成導演公開對稱 tie
-                + 雙向記憶。「全班補帳」重掃全班補上順序錯過的 tie。冪等：已有的 pair 會自動跳過。需要 admin 錢包有 gas。
+                + 雙向記憶。冪等：已有的 pair 會自動跳過。需要 admin 錢包有 gas。
+                <br />全班批次補帳請用上方的「對帳全班 · 補齊缺漏」（已含關係）。
             </p>
 
             {assessNote ? <p className="text-2xs tracking-widest text-mute">{assessNote}</p> : null}
@@ -184,24 +160,6 @@ export function RelationshipAssessPanel({ characters }: { characters: Character[
             ) : null}
 
             {applyNote ? <p className="text-2xs tracking-widest text-mute">{applyNote}</p> : null}
-
-            {backfill ? (
-                <div className="space-y-1 rounded border border-hairline bg-surface/60 p-3 text-2xs tracking-widest">
-                    <div className="text-ink">
-                        全班補帳：共 seed {backfill.totalSeeded} 條
-                        {backfill.error ? ` · 錯誤：${backfill.error}` : ''}
-                    </div>
-                    {backfill.perCharacter
-                        .filter((c) => c.seeded > 0 || c.error)
-                        .map((c) => (
-                            <div key={c.id} className="text-mute">
-                                {c.name}：seed {c.seeded}
-                                {c.skipped ? ` (${c.skipped})` : ''}
-                                {c.error ? ` · ${c.error}` : ''}
-                            </div>
-                        ))}
-                </div>
-            ) : null}
         </div>
     );
 }

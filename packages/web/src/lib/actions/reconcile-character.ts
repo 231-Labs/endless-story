@@ -23,6 +23,7 @@ import { generateAdditionalViews } from './generate-additional-views.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
+import { assessAndApplyRelationshipsAction } from './assess-relationships.js';
 import { fetchOnChainPersona } from '../chain/persona-read.js';
 import { resolveRole } from '../chain/pov-core.js';
 import { getMemoryCount } from '../chain/memory-counter.js';
@@ -39,7 +40,7 @@ const ATTR_LABEL: Record<string, string> = {
 /** kind=6 setting_sheet marks "additional 設定集 views were generated". */
 const SETTING_SHEET_KIND = 6;
 
-export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'memory';
+export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'memory' | 'relationship';
 export type ReconcileStatus = 'ok' | 'skip' | 'fail';
 
 export interface ReconcileStep {
@@ -238,6 +239,20 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
         } catch (err) {
             steps.push({ step: 'memory', status: 'fail', detail: err instanceof Error ? err.message : String(err) });
         }
+    }
+
+    // ── 6) relationship ties (assess vs roster → director public ties + memories) ─
+    //     Idempotent: pairs already tied are skipped. A full-saga reconcile is the
+    //     single batch entry for relationship 補帳 (mint-ordering backfill).
+    try {
+        const r = await assessAndApplyRelationshipsAction(characterId);
+        steps.push({
+            step: 'relationship',
+            status: !r.ok ? 'fail' : r.seeded > 0 ? 'ok' : 'skip',
+            detail: !r.ok ? (r.error ?? 'failed') : r.skipped ? r.skipped : `seeded ${r.seeded}`,
+        });
+    } catch (err) {
+        steps.push({ step: 'relationship', status: 'fail', detail: err instanceof Error ? err.message : String(err) });
     }
 
     return { ok: !steps.some((s) => s.status === 'fail'), characterId, name, steps };

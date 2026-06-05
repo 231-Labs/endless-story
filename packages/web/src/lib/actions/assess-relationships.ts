@@ -260,38 +260,7 @@ export async function assessAndApplyRelationshipsAction(
     return { ok: applied.ok, seeded: applied.seeded, error: applied.error };
 }
 
-export interface BackfillRelationshipsResult {
-    ok: boolean;
-    totalSeeded: number;
-    perCharacter: Array<{ id: string; name: string; seeded: number; skipped?: string; error?: string }>;
-    error?: string;
-}
-
-/**
- * 全班補帳 — re-assess every saga character against the current full roster and
- * seed any missing ties. This is the cure for the mint-ordering asymmetry: a
- * character minted before its 故舊 arrived never got that tie at mint, but a
- * full-roster sweep now fills it. Idempotent (apply skips pairs already tied),
- * so it's safe to re-run. Sequential — admin keypair signs one pair-batch at a
- * time (no gas contention). Heavy (one LLM call per character); admin-triggered.
- */
-export async function backfillAllRelationshipsAction(): Promise<BackfillRelationshipsResult> {
-    const d = ENDLESS_STORY_DEPLOYMENT;
-    if (!d.sagaId) return { ok: false, totalSeeded: 0, perCharacter: [], error: 'saga 尚未種子化' };
-
-    let roster: SagaRosterEntry[] = [];
-    try {
-        roster = await buildSagaRoster(d.sagaId);
-    } catch (err) {
-        return { ok: false, totalSeeded: 0, perCharacter: [], error: err instanceof Error ? err.message : String(err) };
-    }
-
-    const perCharacter: BackfillRelationshipsResult['perCharacter'] = [];
-    let totalSeeded = 0;
-    for (const entry of roster) {
-        const r = await assessAndApplyRelationshipsAction(entry.id);
-        if (r.seeded) totalSeeded += r.seeded;
-        perCharacter.push({ id: entry.id, name: entry.name, seeded: r.seeded, skipped: r.skipped, error: r.error });
-    }
-    return { ok: true, totalSeeded, perCharacter };
-}
+// NOTE: saga-wide relationship backfill is now folded into the reconciler
+// (reconcile-character.ts step 6 / 對帳全班) — the single batch entry point —
+// so there's no separate backfillAll here. Per-character assess+apply lives in
+// the admin RelationshipAssessPanel for reviewed, targeted seeding.

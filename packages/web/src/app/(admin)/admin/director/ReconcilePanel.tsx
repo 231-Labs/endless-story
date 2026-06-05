@@ -15,6 +15,7 @@ const STEP_LABEL: Record<ReconcileStepName, string> = {
     tags: '標籤',
     persona: '本色',
     memory: '記憶',
+    relationship: '關係',
 };
 
 const STATUS_DOT: Record<ReconcileStatus, string> = {
@@ -25,8 +26,9 @@ const STATUS_DOT: Record<ReconcileStatus, string> = {
 
 /**
  * 對帳 / 補發 — one idempotent button that makes every saga character WHOLE.
- * Reuses the mint generators; only fills the gaps (主圖 / 設定集 / 標籤 / 本色 / 記憶),
- * so re-running is safe (everything already present just shows「跳過」).
+ * Reuses the mint generators; only fills the gaps (主圖 / 設定集 / 標籤 / 本色 / 記憶 / 關係),
+ * so re-running is safe (everything already present just shows「跳過」). This is the
+ * SINGLE saga-wide batch entry — incl. relationship 補帳 (mint-ordering backfill).
  */
 export function ReconcilePanel() {
     const [results, setResults] = useState<ReconcileResult[] | null>(null);
@@ -54,8 +56,9 @@ export function ReconcilePanel() {
                 {isPending ? '對帳中…（可能生圖 + 上鏈,需數十秒）' : '對帳全班 · 補齊缺漏'}
             </button>
             <p className="text-2xs leading-relaxed text-mute">
-                掃描全班,逐一補齊缺的<strong className="text-ink">主圖 / 設定集 / 標籤 / 本色 / 記憶</strong>。
+                掃描全班,逐一補齊缺的<strong className="text-ink">主圖 / 設定集 / 標籤 / 本色 / 記憶 / 關係</strong>。
                 idempotent —— 已有的會「跳過」,可安心重跑。序列執行(單一 keypair),角色多時較慢。
+                這是<strong className="text-ink">唯一的全班批次入口</strong>(含關係補帳)。
             </p>
             {error ? <div className="text-sm text-cinnabar">錯誤：{error}</div> : null}
             {results ? (
