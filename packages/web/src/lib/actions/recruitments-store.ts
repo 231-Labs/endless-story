@@ -20,6 +20,7 @@ import * as path from 'node:path';
 import { revalidatePath } from 'next/cache';
 import type { Recruitment } from '@endless-story/shared';
 import { loadStoryPreset } from '@/lib/stories/loader';
+import { suggestedBulkPrice, DEFAULT_BULK_MARGIN } from '@/lib/recruit-pricing';
 
 export interface AdminRecruitment extends Recruitment {
     /** Active = appears in user-facing carousel. */
@@ -98,7 +99,8 @@ export async function newRecruitmentDraft(sagaId: string, sagaName: string): Pro
         membership: 'internal',
         slots: 1,
         basePrice: 100,
-        bulkPrice: 300,
+        // bulkPrice left unset (= basePrice until the admin sets minAttributes and
+        // clicks 「建議」, or runs batch auto-pricing).
         expiresAt,
         createdAt: new Date().toISOString(),
         active: false,
@@ -160,6 +162,9 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
             ...seed,
             sagaId: preset.id,
             sagaName: preset.saga.name,
+            // Seeds may omit bulkPrice — derive it from the requirement difficulty
+            // so fresh deploys are priced correctly without hand-editing the JSON.
+            bulkPrice: seed.bulkPrice ?? suggestedBulkPrice(seed.basePrice, seed.minAttributes),
             createdAt: nowIso,
             expiresAt: new Date(Date.now() + ttlMs).toISOString(),
             active: true,
@@ -173,4 +178,25 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
     log.push(`inserted: ${inserted}   skipped: ${skipped}   deactivated: ${deactivated}   total: ${existing.length}`);
 
     return { ok: true, inserted, skipped, storyId, log };
+}
+
+/**
+ * Batch re-price every recruitment's 一口價 from its requirement difficulty
+ * (basePrice × E[draws] × margin — see docs/WHITEPAPER.md §1). Idempotent;
+ * returns how many rows changed.
+ */
+export async function autoPriceAllRecruitments(
+    margin = DEFAULT_BULK_MARGIN,
+): Promise<{ ok: boolean; updated: number }> {
+    const items = readStore();
+    let updated = 0;
+    for (const r of items) {
+        const next = suggestedBulkPrice(r.basePrice, r.minAttributes, margin);
+        if (r.bulkPrice !== next) {
+            r.bulkPrice = next;
+            updated += 1;
+        }
+    }
+    if (updated > 0) persist(items);
+    return { ok: true, updated };
 }

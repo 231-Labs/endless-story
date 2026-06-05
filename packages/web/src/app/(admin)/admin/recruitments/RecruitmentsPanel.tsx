@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import type { RecruitmentMembership } from '@endless-story/shared';
 import {
+    autoPriceAllRecruitments,
     deleteRecruitment,
     listAllRecruitments,
     newRecruitmentDraft,
@@ -10,6 +11,7 @@ import {
     upsertRecruitment,
     type AdminRecruitment,
 } from '@/lib/actions/recruitments-store';
+import { suggestedBulkPrice } from '@/lib/recruit-pricing';
 
 const DEFAULT_SAGA_ID = 'spring-snow';
 const DEFAULT_SAGA_NAME = '春雪社';
@@ -34,6 +36,14 @@ export function RecruitmentsPanel({ initial }: { initial: AdminRecruitment[] }) 
             await upsertRecruitment(draft);
             await refresh();
             setEditingId(draft.id);
+        });
+    };
+
+    const handleAutoPrice = () => {
+        startTransition(async () => {
+            const r = await autoPriceAllRecruitments();
+            await refresh();
+            alert(`一口價已批次更新 ${r.updated} 筆（base × 平均達標抽數 × 0.85）`);
         });
     };
 
@@ -66,14 +76,25 @@ export function RecruitmentsPanel({ initial }: { initial: AdminRecruitment[] }) 
                 <p className="text-sm text-mute">
                     共 {items.length} 條；活躍 {items.filter((r) => r.active).length} 條
                 </p>
-                <button
-                    type="button"
-                    onClick={handleNew}
-                    disabled={isPending}
-                    className="es-outline-button text-sm"
-                >
-                    + 新增職缺
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleAutoPrice}
+                        disabled={isPending}
+                        className="es-outline-button text-sm"
+                        title="依各職缺四維門檻批次設一口價：base × 平均達標抽數 × 0.85"
+                    >
+                        批次定一口價
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleNew}
+                        disabled={isPending}
+                        className="es-outline-button text-sm"
+                    >
+                        + 新增職缺
+                    </button>
+                </div>
             </div>
 
             <ul className="space-y-3">
@@ -277,13 +298,28 @@ function EditForm({
                         />
                     </Field>
                     <Field label="一口價 bulkPrice（包骰到符合）">
-                        <input
-                            type="number"
-                            className="es-field w-full"
-                            value={draft.bulkPrice ?? draft.basePrice}
-                            onChange={(e) => setDraft({ ...draft, bulkPrice: Number(e.target.value) })}
-                            min={0}
-                        />
+                        <div className="flex gap-2">
+                            <input
+                                type="number"
+                                className="es-field w-full"
+                                value={draft.bulkPrice ?? draft.basePrice}
+                                onChange={(e) => setDraft({ ...draft, bulkPrice: Number(e.target.value) })}
+                                min={0}
+                            />
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setDraft({
+                                        ...draft,
+                                        bulkPrice: suggestedBulkPrice(draft.basePrice, draft.minAttributes),
+                                    })
+                                }
+                                className="es-outline-button shrink-0 text-xs"
+                                title="依四維門檻自動算：base × 平均達標抽數 × 0.85"
+                            >
+                                建議
+                            </button>
+                        </div>
                     </Field>
                     <Field label="缺額 slots">
                         <input
