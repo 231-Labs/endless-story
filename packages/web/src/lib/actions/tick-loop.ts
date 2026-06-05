@@ -480,6 +480,35 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // ── OBJECTIVE per-scene beat ledger (POV consistency) ──────────────
+    // Project this tick's observable acts (talk lines, arrivals/exits, card
+    // plays) onto the scene they happened in. Every same-scene character's POV
+    // then receives the SAME facts, so their chapters interpret one shared
+    // reality instead of independently inventing contradictory ones. Private
+    // observations are excluded — those stay subjective in each MemWal.
+    const beatsByScene = new Map<string, Array<{ actorId: string; text: string }>>();
+    const pushBeat = (sceneId: string | undefined, actorId: string, text: string) => {
+        if (!sceneId) return;
+        const list = beatsByScene.get(sceneId);
+        if (list) list.push({ actorId, text });
+        else beatsByScene.set(sceneId, [{ actorId, text }]);
+    };
+    for (const m of moves) {
+        if (!m.ok || !m.toSceneId) continue;
+        pushBeat(m.toSceneId, m.characterId, `${m.name}自他處走了進來`);
+        pushBeat(m.fromSceneId, m.characterId, `${m.name}往${m.toSceneName ?? '別處'}去了`);
+    }
+    for (const s of socials) {
+        if (!s.ok || s.kind !== 'talk' || !s.line) continue;
+        const sceneId = rosterById.get(s.characterId)?.currentSceneId;
+        pushBeat(sceneId, s.characterId, `${s.name}${s.targetName ? `對${s.targetName}` : ''}說：「${s.line}」`);
+    }
+    for (const a of acts) {
+        if (!a.ok || !a.cardLabel) continue;
+        const sceneId = rosterById.get(a.characterId)?.currentSceneId;
+        pushBeat(sceneId, a.characterId, `${a.name ?? '某人'}打出〔${a.cardLabel}〕${a.intent ? `（${a.intent}）` : ''}`);
+    }
+
     const povs: TickPovResult[] = [];
     if (input.pov ?? true) {
         // 4. PRODUCE — POV chapter per character.
@@ -507,11 +536,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         tlog(`④ POV 生成 ${slice.length} 篇（慢，每篇一段 LLM）…`);
         const generated = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
             try {
+                const sceneId = rosterById.get(c.id)?.currentSceneId;
+                const sceneBeats = sceneId
+                    ? (beatsByScene.get(sceneId) ?? [])
+                          .filter((b) => b.actorId !== c.id)
+                          .map((b) => b.text)
+                    : [];
                 const r = await runPovForCharacter(admin, c.id, {
                     triggerNarrative: trigger,
                     forceRun: true,
                     dryRun: true,
                     dramaHint: dramaHints[c.id],
+                    sceneBeats: sceneBeats.length > 0 ? sceneBeats : undefined,
                     rosterContext: rosterContextById.get(c.id),
                     recentMemorySnippets: await memoryContext.recent(
                         c.id,

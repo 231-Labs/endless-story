@@ -57,6 +57,12 @@ export interface PovPromptInput {
     /** Optional: drama-engine tension (DR-6) — her dominant unmet desire over a
      *  scarce on-chain resource. Lets the monologue ache for what she lacks. */
     dramaHint?: string;
+    /** Optional: OBJECTIVE same-scene beats this tick — the observable acts of
+     *  OTHER characters in this character's scene (talk lines, arrivals/exits,
+     *  card plays). Every same-scene POV gets the SAME list, so their angles
+     *  complement (interpret the same facts) rather than contradict (invent
+     *  who-did-what). Private observations are deliberately excluded. */
+    sceneBeats?: string[];
 }
 
 export function buildSystemPrompt(soul?: SagaSoul): string {
@@ -75,6 +81,7 @@ export function buildSystemPrompt(soul?: SagaSoul): string {
         '8. **身份不得漂移**。若身份欄沒有寫「班主／師父／名角／跛足／重病／新來」，就不得自稱或暗示自己是那些身份。行當是「—」時，只當作戲班中一名未明確行當的人，不要自行升格成班主或核心權力者。',
         '9. **舞台中心不是管理權力**。花旦/小生/名角可以被人爭搭檔、在意壓軸與台下目光；但除非行當或公開名冊明寫「班主/老板/東家」，不可寫成能決定誰紅誰涼、管束全班，也不可把同輩名角稱作老板。',
         '10. **身體缺陷與秘密物件要有來源**。不得憑空寫跛腿、棺材、屍首、血跡、重病、私藏玉鐲、巨額債務等強設定；除非事件材料、記憶、外形欄明確提供。',
+        '11. **同場客觀事實不可改寫**。若「本場此刻」列出了同場其他人剛剛的動作或話語，那是已發生的事實：你可以寫你如何看見、誤讀、回應、忽視它，但不可寫成「沒發生」、「相反地發生」、或「換成別人做」。你的視角是對同一現實的不同詮釋，不是另一個現實。同場另一個人之後也會寫到這一刻，你們必須對得上。',
         '',
         '**聲音與質地**：',
         '- 風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。',
@@ -124,6 +131,11 @@ export function buildUserPrompt(input: PovPromptInput): string {
     const dreamBlock = dreamFragment
         ? `\n## 夢境片段（必須取其中一個意象，變成場面裡的感官錨點）\n${dreamFragment}`
         : '';
+    const sceneBeatsBlock =
+        input.sceneBeats && input.sceneBeats.length > 0
+            ? '\n## 本場此刻（客觀事實 — 同場其他人剛剛的舉動，你必須認帳，只可詮釋、不可改寫）\n' +
+              input.sceneBeats.slice(0, 8).map((b) => `- ${b}`).join('\n')
+            : '';
     return [
         `# 你的身份`,
         `- 姓名：${character.name}`,
@@ -140,6 +152,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         planBlock,
         dramaBlock,
         dreamBlock,
+        sceneBeatsBlock,
         '',
         '## 事件材料（這是背景，不是正文摘要）',
         triggerNarrative,

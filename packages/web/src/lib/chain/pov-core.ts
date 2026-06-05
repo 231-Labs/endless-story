@@ -44,6 +44,9 @@ export interface PovCoreOptions {
     relationshipHints?: string[];
     /** Precomputed current plan from the tick memory context. */
     planHint?: string | null;
+    /** Objective same-scene beats this tick (other characters' visible acts) —
+     *  shared across same-scene POVs so they complement, not contradict. */
+    sceneBeats?: string[];
     /** Use only caller-provided memory snippets; avoids duplicate decrypts in tick loop. */
     skipMemoryRecall?: boolean;
 }
@@ -256,6 +259,7 @@ export async function runPovForCharacter(
             rosterContext: opts.rosterContext,
             planHint: planHint ?? undefined,
             dramaHint: opts.dramaHint,
+            sceneBeats: opts.sceneBeats,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun

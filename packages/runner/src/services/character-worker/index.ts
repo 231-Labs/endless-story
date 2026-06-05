@@ -64,6 +64,9 @@ export interface RunCharacterWorkerInput {
     planHint?: string;
     /** Optional: drama-engine tension hint (DR-6) — dominant unmet desire. */
     dramaHint?: string;
+    /** Optional: objective same-scene beats this tick (other characters' visible
+     *  acts) — keeps same-scene POVs consistent. See PovPromptInput.sceneBeats. */
+    sceneBeats?: string[];
     /**
      * Optional: per-saga tonal DNA layered onto the genre baseline (F).
      * When omitted, `runOnce` derives a Tier-1 soul (premise + departure
@@ -165,6 +168,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         rosterContext: input.rosterContext,
         planHint: input.planHint,
         dramaHint: input.dramaHint,
+        sceneBeats: input.sceneBeats,
     });
 
     const response = await llm.chat({
