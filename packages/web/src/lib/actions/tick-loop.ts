@@ -88,6 +88,11 @@ export interface TickLoopInput {
     sleep?: boolean;
     /** Generate and anchor/preview POV chapters. Default true. */
     pov?: boolean;
+    /** Generate a chapter for EVERY processed character regardless of whether an
+     *  event touched them this tick. Default false → event-driven cadence: only
+     *  characters in this tick's storylet / event get a chapter (an "episode" =
+     *  one event's multi-POV coverage). Set true for ambient / testing. */
+    povAll?: boolean;
     /** Compile the gazette at the end. Default true. */
     gazette?: boolean;
     /** Open a storylet (dramatic spine) when drama tension is live. Default true. */
@@ -611,10 +616,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     const povs: TickPovResult[] = [];
     if (input.pov ?? true) {
-        // 4. PRODUCE — POV chapter per character.
-        //    Dry-run does NO chain writes → generate every chapter CONCURRENTLY
-        //    (this is the big preview speedup). A real run anchors via
-        //    commitment::commit (Sui signing) → must stay serial.
+        // 4. PRODUCE — POV chapter per character WITH A NARRATABLE BEAT this tick.
+        //    Event-driven cadence: only characters in this tick's storylet or
+        //    event get a chapter, so an "episode" = one event's multi-POV coverage
+        //    (followable, not per-tick filler). `povAll` forces every character.
+        //    Dry-run does NO chain writes → generate concurrently; a real run
+        //    anchors via commitment::commit (Sui signing) → serial.
+        const narratable = new Set<string>();
+        if (storylet) for (const id of storylet.characterIds) narratable.add(id);
+        for (const a of acts) if (a.ok) narratable.add(a.characterId);
+        const povSlice = (input.povAll ?? false)
+            ? slice
+            : slice.filter((c) => narratable.has(c.id));
         const mapPov = (c: Character, r: Awaited<ReturnType<typeof runPovForCharacter>>): TickPovResult => ({
             characterId: c.id,
             name: c.name,
@@ -632,8 +645,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         // the slow part (primary LLM); the anchor is now a single transaction.
         // Per-item try/catch so one bad recall (e.g. aggregator DNS blip) can't
         // reject the whole batch and kill the tick.
-        tlog(`④ POV 生成 ${slice.length} 篇（慢，每篇一段 LLM）…`);
-        const generated = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
+        tlog(
+            povSlice.length === 0
+                ? '④ POV 略過（本 tick 無事件牽動角色；要每人都出章用 povAll）'
+                : `④ POV 生成 ${povSlice.length} 篇（事件相關角色；慢，每篇一段 LLM）…`,
+        );
+        const generated = await mapPool(povSlice, RECALL_CONCURRENCY, async (c) => {
             try {
                 const sceneId = rosterById.get(c.id)?.currentSceneId;
                 const sceneBeats = sceneId
