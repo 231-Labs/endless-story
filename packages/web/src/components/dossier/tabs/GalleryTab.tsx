@@ -138,15 +138,15 @@ export function GalleryTab({
           <h2 className="font-serif text-2xl tracking-wide text-ink">角色設定集</h2>
         </div>
         <div className="mt-8 pl-0 sm:pl-12">
-          <ul className="no-scrollbar -mx-5 flex snap-x snap-mandatory gap-6 overflow-x-auto px-5 py-2 pb-8 scroll-px-5 sm:mx-[-2px] sm:px-0.5 sm:scroll-px-0.5">
+          {/* Wrapping grid (not a horizontal carousel) so EVERY setting image is
+              visible at once — the old overflow-x scroller hid items 5+ off-screen
+              behind a hidden scrollbar, reading as「只有 4 張」. */}
+          <ul className="grid grid-cols-2 gap-5 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4">
             {settingImages.map((blob, i) => {
               const key = blobKey(blob);
               const isCover = !!blob.imageUrl && blob.imageUrl === coverUrl;
               return (
-                <li
-                  key={key}
-                  className="w-[72vw] max-w-[320px] shrink-0 snap-start sm:w-auto sm:basis-[calc((100%_-_3rem)/3)] sm:max-w-none lg:basis-[calc((100%_-_4.5rem)/4)]"
-                >
+                <li key={key}>
                   <DerivativeCard
                     label={blob.label ?? defaultBlobLabel(blob, i)}
                     blob={blob}
