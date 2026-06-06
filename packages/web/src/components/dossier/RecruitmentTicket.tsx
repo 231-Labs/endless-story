@@ -203,7 +203,8 @@ export function RecruitmentTicket({
   // ───────────────────────────────────────────────────────────────
   // Step: closed → minting → prompt/rejected
   // ───────────────────────────────────────────────────────────────
-  const handleMint = async () => {
+  const handleMint = async (modeOverride?: 'single' | 'bulk') => {
+    const mode = modeOverride ?? drawMode;
     setError(null);
     setStage('minting');
 
@@ -228,7 +229,7 @@ export function RecruitmentTicket({
     // Gender is not rolled: it's forced in the preview prompt (requiredGender) and
     // enforced on chain, so we only gate on attributes here (candidate = null).
     let seed = generateAttributeSeed();
-    if (drawMode === 'bulk') {
+    if (mode === 'bulk') {
       const MAX_REROLL = 1000;
       let rolled = rollAttributesFromSeed(seed, DEFAULT_ATTRIBUTE_SCHEMA);
       let tries = 1;
@@ -258,7 +259,7 @@ export function RecruitmentTicket({
           throw new Error('沒有 ENDLESS 幣 — 請先用右上「領 ENDLESS」');
         }
         const unitPrice =
-          drawMode === 'bulk' ? recruitment.bulkPrice ?? recruitment.basePrice : recruitment.basePrice;
+          mode === 'bulk' ? recruitment.bulkPrice ?? recruitment.basePrice : recruitment.basePrice;
         const priceBase = BigInt(unitPrice) * BigInt(10 ** ENDLESS_DECIMALS);
 
         const tx = new Transaction();
@@ -499,6 +500,13 @@ export function RecruitmentTicket({
       : null;
 
   // ── Navigation handlers ────────────────────────────────────────
+  // From the 落選 card: flip to 一口價 and immediately re-draw (guaranteed match).
+  // Pass the mode explicitly so the reroll doesn't race React's state update.
+  const switchToBulkAndRedraw = () => {
+    setDrawMode('bulk');
+    void handleMint('bulk');
+  };
+
   const handleNext = () => {
     if (stage === 'minting') void handleMint();
     else if (stage === 'prompt') void handleGenerate();
@@ -538,7 +546,7 @@ export function RecruitmentTicket({
     canNext = false;
   } else if (stage === 'rejected') {
     prevLabel = '緣寂';
-    nextLabel = '重抽 (支付)';
+    nextLabel = drawMode === 'bulk' ? '一口價重抽 (支付)' : '重抽 (支付)';
     canNext = true;
   } else if (stage === 'pick') {
     prevLabel = '重新凝形';
@@ -596,6 +604,8 @@ export function RecruitmentTicket({
                     <RejectedStage
                       rolledValues={rolledValues}
                       reason={reqCheck && !reqCheck.ok ? reqCheck.reason : '不符徵召條件'}
+                      bulkPrice={recruitment.bulkPrice ?? recruitment.basePrice}
+                      onSwitchToBulk={switchToBulkAndRedraw}
                     />
                   )}
                   {stage === 'prompt' && (
@@ -889,7 +899,17 @@ function VerticalStepper({ stage }: { stage: Exclude<Stage, 'closed'> }) {
   );
 }
 
-function RejectedStage({ rolledValues, reason }: { rolledValues: RolledAttribute[], reason: string }) {
+function RejectedStage({
+  rolledValues,
+  reason,
+  bulkPrice,
+  onSwitchToBulk,
+}: {
+  rolledValues: RolledAttribute[];
+  reason: string;
+  bulkPrice: number;
+  onSwitchToBulk: () => void;
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <div className="relative flex items-center justify-center w-24 h-24 text-cinnabar/70 rotate-[-12deg] mix-blend-multiply dark:mix-blend-screen opacity-90 drop-shadow-sm mb-6">
@@ -910,6 +930,20 @@ function RejectedStage({ rolledValues, reason }: { rolledValues: RolledAttribute
           </span>
         ))}
       </div>
+
+      {/* 落選引導:骰不到 → 一鍵改用一口價（包骰到符合，保證入選） */}
+      <button
+        type="button"
+        onClick={onSwitchToBulk}
+        className="mt-8 inline-flex items-center gap-2 rounded-full bg-cinnabar px-5 py-2.5 text-sm tracking-widest text-canvas shadow-sm transition-colors hover:bg-seal"
+      >
+        <span className="text-base leading-none">∞</span>
+        改用一口價 · 保證入選
+      </button>
+      <p className="mt-2.5 text-2xs leading-relaxed tracking-widest text-mute max-w-xs">
+        系統自動重骰先天，直到符合徵召門檻才入選 ·{' '}
+        <span className="text-ink">{bulkPrice} Endless</span>
+      </p>
     </div>
   );
 }
