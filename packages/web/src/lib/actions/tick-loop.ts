@@ -25,7 +25,7 @@
  */
 
 import { Transaction } from '@mysten/sui/transactions';
-import type { Character, Scene } from '@endless-story/shared';
+import type { Character, Scene, ChapterProvenance } from '@endless-story/shared';
 import {
     ENDLESS_STORY_DEPLOYMENT,
     makeSuiClient,
@@ -712,7 +712,29 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             const batch = await anchorPovChaptersBatch(
                 admin,
                 d.sagaId,
-                toAnchor.map(({ c, r }) => ({ characterId: c.id, chapter: r.chapter })),
+                toAnchor.map(({ c, r }) => {
+                    const cSceneId = rosterById.get(c.id)?.currentSceneId;
+                    // The on-chain event this chapter narrates (when the storylet
+                    // opened in this character's scene) — its tx digest is the proof.
+                    const ev = storylet && storylet.sceneId === cSceneId ? storylet : undefined;
+                    const provenance: ChapterProvenance = {
+                        v: 1,
+                        day: worldTime?.day,
+                        sceneId: cSceneId,
+                        sceneName: rosterById.get(c.id)?.currentSceneName,
+                        povCharacterId: c.id,
+                        ...(ev
+                            ? {
+                                  eventKind: 'storylet',
+                                  eventTemplate: ev.templateId,
+                                  eventLabel: ev.label,
+                                  eventTx: ev.digest,
+                                  involvedIds: ev.characterIds,
+                              }
+                            : {}),
+                    };
+                    return { characterId: c.id, chapter: r.chapter, provenance };
+                }),
             );
             const byChar = new Map(batch.map((b) => [b.characterId, b]));
             for (const { c, r } of toAnchor) {

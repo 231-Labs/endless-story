@@ -18,6 +18,8 @@ import {
     signAndAnchorBatch,
 } from '@endless-story/runner';
 import { inferRoleFromText } from '@endless-story/shared';
+import type { ChapterProvenance } from '@endless-story/shared';
+import { embedProvenance } from '@/lib/chain/chapter-provenance';
 import type { AdminContext } from '@/lib/chain/admin-signer';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
@@ -169,7 +171,7 @@ export interface BatchAnchorPovResult {
 export async function anchorPovChaptersBatch(
     admin: AdminContext,
     sagaId: string,
-    items: { characterId: string; chapter: string }[],
+    items: { characterId: string; chapter: string; provenance?: ChapterProvenance }[],
 ): Promise<BatchAnchorPovResult[]> {
     const valid = items.filter((i) => i.chapter.trim());
     if (valid.length === 0) return [];
@@ -180,7 +182,13 @@ export async function anchorPovChaptersBatch(
             valid.map((i) => ({
                 sagaId,
                 subjectId: i.characterId,
-                content: new TextEncoder().encode(i.chapter.trim()),
+                // Embed provenance INTO the anchored blob so the chapter↔event link
+                // is itself immutable + chain-verifiable. MemWal keeps clean prose.
+                content: new TextEncoder().encode(
+                    i.provenance
+                        ? embedProvenance(i.chapter.trim(), i.provenance)
+                        : i.chapter.trim(),
+                ),
                 contentType: 'text/markdown',
             })),
             { signer: admin.signer },

@@ -5,6 +5,7 @@ import { ChapterToc } from '@/components/feed/ChapterToc';
 import { ChapterCast } from '@/components/feed/ChapterCast';
 import { LinkifiedProse } from '@/components/common/CharacterLinkifier';
 import { formatDate, truncateBlobId } from '@/lib/format';
+import { txUrl, objectUrl } from '@/lib/explorer';
 
 export default async function ChapterPage({
   params,
@@ -45,6 +46,12 @@ export default async function ChapterPage({
   const cast = castIds
     .map((cid) => charactersById.get(cid))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+  // Same on-chain event, other characters' angles — the verifiable multi-POV.
+  const eventTx = chapter.provenance?.eventTx;
+  const siblingPovs = eventTx
+    ? sagaChapters.filter((c) => c.id !== chapter.id && c.provenance?.eventTx === eventTx)
+    : [];
 
   return (
     <main className="min-h-screen">
@@ -95,6 +102,58 @@ export default async function ChapterPage({
             <h1 className="mt-5 font-serif text-4xl leading-snug tracking-wide text-ink sm:text-5xl">
               {chapter.title}
             </h1>
+
+            {chapter.provenance?.eventLabel ? (
+              <div className="mt-6 rounded-2xl border border-cinnabar/25 bg-cinnabar/[0.04] px-5 py-4">
+                <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/70">
+                  鏈上事件 · 已證實發生
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-ink">
+                  本章是
+                  {pov ? <span className="text-cinnabar"> {pov.name} </span> : ' 角色 '}
+                  對「{chapter.provenance.eventLabel}」的視角
+                  {chapter.provenance.sceneName ? ` · ${chapter.provenance.sceneName}` : ''}
+                  {chapter.provenance.day ? ` · 第 ${chapter.provenance.day} 日` : ''}。
+                </p>
+                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-2xs tracking-widest">
+                  {chapter.provenance.eventTx ? (
+                    <a
+                      href={txUrl(chapter.provenance.eventTx)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-cinnabar hover:underline"
+                    >
+                      在區塊鏈瀏覽器查驗此事件 ↗
+                    </a>
+                  ) : null}
+                  <a
+                    href={objectUrl(chapter.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-mute hover:text-ink hover:underline"
+                  >
+                    此章上鏈承諾 ↗
+                  </a>
+                </div>
+                {siblingPovs.length > 0 ? (
+                  <div className="mt-3 border-t border-hairline/50 pt-3 text-2xs tracking-widest">
+                    <span className="text-mute">同一事件的其他視角：</span>
+                    {siblingPovs.map((s) => {
+                      const sp = s.povCharacterId ? charactersById.get(s.povCharacterId) : undefined;
+                      return (
+                        <Link
+                          key={s.id}
+                          href={`/feed/chapter/${s.id}`}
+                          className="ml-2 text-cinnabar hover:underline"
+                        >
+                          {sp?.name ?? '另一視角'}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {chapter.mediaType === 'video' && chapter.videoUrl ? (
               <div className="mt-10 overflow-hidden rounded-3xl border border-hairline/50 bg-surface/40 shadow-sm backdrop-blur-sm">

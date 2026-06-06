@@ -20,6 +20,7 @@ import {
   fetchOnChainCharacters,
   isSuiObjectId,
 } from '@/lib/chain/character-read';
+import { parseProvenance } from '@/lib/chain/chapter-provenance';
 
 /**
  * Chapters API
@@ -110,23 +111,34 @@ async function entriesToChapters(
   const dayByCommitment = buildOrdinalDayMap(entries);
   const chapters = await Promise.all(
     entries.map(async (entry): Promise<Chapter | null> => {
-      let body = '';
+      let raw = '';
       try {
-        body = (await fetchChapterText(entry.blobUrl)).trim();
+        raw = (await fetchChapterText(entry.blobUrl)).trim();
       } catch {
-        body = '';
+        raw = '';
       }
+      if (!raw) return null;
+      // Split off the embedded provenance header → verifiable source event +
+      // real involved cast; render only the clean prose.
+      const { provenance, body: parsedBody } = parseProvenance(raw);
+      const body = parsedBody.trim();
       if (!body) return null;
       const character = charactersById.get(entry.subjectId);
+      const involved =
+        provenance?.involvedIds && provenance.involvedIds.length > 0
+          ? provenance.involvedIds
+          : [entry.subjectId];
       return {
         id: entry.commitmentId,
         sagaId: entry.sagaId,
-        day: extractDay(body) ?? dayByCommitment.get(entry.commitmentId) ?? 1,
+        day: provenance?.day ?? extractDay(body) ?? dayByCommitment.get(entry.commitmentId) ?? 1,
         title: titleForChapter(body, character),
         body,
         mediaType: 'text',
         povCharacterId: entry.subjectId,
-        involvedCharacterIds: [entry.subjectId],
+        involvedCharacterIds: involved,
+        sourceEventId: provenance?.eventTx,
+        provenance,
         walrusBlobId: entry.blobId,
         visibility: 'public_chapter',
         createdAt: dateFromMs(entry.committedAtMs),
