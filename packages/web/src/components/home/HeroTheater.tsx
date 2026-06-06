@@ -34,7 +34,7 @@ function aspectRatio(aspect?: ClipAspect): number {
   return ASPECT_RATIO[aspect ?? '16/9'];
 }
 
-export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; clips: SceneClip[]; recruitmentsCount: number }) {
+export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: { saga: Saga; clips: SceneClip[]; recruitmentsCount: number; castCount?: number }) {
   const [activeClip, setActiveClip] = useState<SceneClip | null>(null);
   const [lastActiveClip, setLastActiveClip] = useState<SceneClip | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -208,6 +208,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
                 第 {saga.currentDay} 日
                 {saga.worldTime?.partOfDay ? ` · ${DAY_PART_LABEL[saga.worldTime.partOfDay] ?? ''}` : ''}
               </span>
+              {castCount > 0 ? <span>· {castCount} 位角色</span> : null}
               {saga.totalDays ? <span>· 全 {saga.totalDays} 日</span> : null}
             </div>
             <p className="mt-6 text-lg leading-relaxed text-ink/90 sm:mt-7 sm:text-xl">

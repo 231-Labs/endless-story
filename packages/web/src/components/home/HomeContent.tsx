@@ -8,11 +8,13 @@ export function HomeContent({
   saga,
   clips,
   initialRecruitments,
+  castCount = 0,
   children,
 }: {
   saga: Saga;
   clips: SceneClip[];
   initialRecruitments: Recruitment[];
+  castCount?: number;
   children: React.ReactNode;
 }) {
   return (
@@ -20,7 +22,7 @@ export function HomeContent({
       {/* First Screen: Nav + Hero */}
       <div className="flex min-h-[100dvh] flex-col snap-start snap-always">
         {children}
-        <HeroTheater saga={saga} clips={clips} recruitmentsCount={initialRecruitments.length} />
+        <HeroTheater saga={saga} clips={clips} recruitmentsCount={initialRecruitments.length} castCount={castCount} />
       </div>
       
       {/* Second Screen: Recruitment */}

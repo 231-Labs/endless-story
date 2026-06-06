@@ -1,4 +1,5 @@
 import {
+  charactersApi,
   recruitmentsApi,
   sagasApi,
   scenesApi,
@@ -10,10 +11,15 @@ export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   const saga = await sagasApi.getCurrentSaga();
-  const [clips, openRecruitments] = await Promise.all([
+  const [clips, openRecruitments, sagaCharacters] = await Promise.all([
     scenesApi.listTodayClips(saga.currentDay, 4),
     recruitmentsApi.listOpenRecruitments(),
+    // saga.castIds isn't populated by the on-chain saga read (characters
+    // reference the saga, not vice versa) — count the saga's characters for
+    // the hero meta. Resilient: chain hiccup → 0 → the count just hides.
+    charactersApi.listSagaCharacters(saga.id).catch(() => []),
   ]);
+  const castCount = sagaCharacters.length;
 
   // Chain-side capacity check: drop recruitments whose mintedCount has
   // already hit `slots`. Single batched event-log scan via the facade —
@@ -27,7 +33,7 @@ export default async function HomePage() {
   );
 
   return (
-    <HomeContent saga={saga} clips={clips} initialRecruitments={availableRecruitments}>
+    <HomeContent saga={saga} clips={clips} initialRecruitments={availableRecruitments} castCount={castCount}>
       <SiteNav />
     </HomeContent>
   );
