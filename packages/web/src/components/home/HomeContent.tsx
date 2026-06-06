@@ -40,22 +40,21 @@ export function HomeContent({
               <img src="/walruses.png" alt="Walrus Trio" className="h-auto w-full object-contain pointer-events-none" />
             </div>
             <h2 className="font-serif text-3xl font-medium tracking-widest text-ink sm:text-4xl leading-tight">
-              戲子無情，<br className="hidden lg:block" />
-              <span className="text-cinnabar">記憶有痕。</span>
+              戲未落幕，<br className="hidden lg:block" />
+              <span className="text-cinnabar">記憶上鏈。</span>
             </h2>
             <div className="space-y-5 text-sm leading-loose tracking-wider text-mute sm:text-base">
               <p>
-                當速食的 AI 短劇氾濫，<br className="hidden lg:block" />
-                我們渴望能沉澱的靈魂。
+                Endless Story 是一套通用的 AI 敘事協議。<br className="hidden lg:block" />
+                創作者可以定義世界觀、角色規則與故事資產，讓不同主題的世界在同一套合約上運行。
               </p>
               <p>
-                這裡沒有拋棄式的生成對話，<br className="hidden lg:block" />
-                也沒有靜止不動的二次元圖檔。<br className="hidden lg:block" />
-                每一段連載、每一次的託夢交心，<br className="hidden lg:block" />
-                都化作不可篡改的印記，永久銘刻於 Walrus。
+                春雪社只是第一座舞台。<br className="hidden lg:block" />
+                在這裡，角色會累積記憶、形成關係，並把重要狀態留下可驗證的痕跡。
               </p>
               <p className="text-ink/80 font-medium">
-                大幕初啟，好戲正要上場。
+                故事不再只是被生成，<br className="hidden lg:block" />
+                而是可以被擁有、被追溯、被延續。
               </p>
             </div>
           </div>
