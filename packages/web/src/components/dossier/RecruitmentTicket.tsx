@@ -649,6 +649,12 @@ export function RecruitmentTicket({
                         {drawMode === 'bulk' ? recruitment.bulkPrice ?? recruitment.basePrice : recruitment.basePrice}
                       </span>{' '}
                       Endless
+                      {stage === 'minting' && rollingStatus !== 'minting' ? (
+                        <DrawModeToggle
+                          drawMode={drawMode}
+                          onToggle={() => setDrawMode(drawMode === 'bulk' ? 'single' : 'bulk')}
+                        />
+                      ) : null}
                     </p>
                     <p>剩 {recruitment.slots} 位</p>
                   </div>
@@ -658,34 +664,6 @@ export function RecruitmentTicket({
           )}
         </div>
       </div>
-
-      {isOpen && stage === 'minting' && rollingStatus !== 'minting' && (
-        <div className="mt-5 flex items-center justify-center gap-2 animate-fade-in-up">
-          <span className="text-2xs tracking-widest text-mute">抽法</span>
-          <div className="inline-flex items-center rounded-full border border-hairline/70 bg-surface p-0.5 text-2xs tracking-widest">
-            <button
-              type="button"
-              onClick={() => setDrawMode('single')}
-              title="單抽：一筆一抽，先天條件隨緣"
-              className={`rounded-full px-3 py-1 transition-colors ${
-                drawMode === 'single' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
-              }`}
-            >
-              單抽
-            </button>
-            <button
-              type="button"
-              onClick={() => setDrawMode('bulk')}
-              title="一口價：自動重骰四維到符合徵召門檻，一次付清"
-              className={`rounded-full px-3 py-1 transition-colors ${
-                drawMode === 'bulk' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
-              }`}
-            >
-              一口價
-            </button>
-          </div>
-        </div>
-      )}
 
       {isOpen && (
         <div className="mt-6 flex items-center justify-center gap-3 animate-fade-in-up">
@@ -823,41 +801,15 @@ function DefaultStub({
           <p className="font-serif text-2xl text-ink sm:text-3xl">
             {drawMode === 'bulk' ? recruitment.bulkPrice ?? recruitment.basePrice : recruitment.basePrice}
             <span className="ml-1.5 text-base text-mute">Endless</span>
+            <DrawModeToggle
+              drawMode={drawMode}
+              onToggle={() => onDrawModeChange(drawMode === 'bulk' ? 'single' : 'bulk')}
+              stopPropagation
+            />
           </p>
           <div className="mt-3 space-y-1 text-2xs tracking-widest text-mute">
             <p>剩 {recruitment.slots} 位</p>
             <p>{days} 日內截止</p>
-          </div>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="mt-4 inline-flex items-center rounded-full border border-hairline/70 bg-surface p-0.5 text-2xs tracking-widest"
-          >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDrawModeChange('single');
-              }}
-              title="單抽：一筆一抽，先天條件隨緣"
-              className={`rounded-full px-3 py-1 transition-colors ${
-                drawMode === 'single' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
-              }`}
-            >
-              單抽
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDrawModeChange('bulk');
-              }}
-              title="一口價：自動重骰四維到符合徵召門檻，一次付清"
-              className={`rounded-full px-3 py-1 transition-colors ${
-                drawMode === 'bulk' ? 'bg-cinnabar text-canvas' : 'text-mute hover:text-ink'
-              }`}
-            >
-              一口價
-            </button>
           </div>
         </div>
         <p className="text-sm tracking-wide text-cinnabar transition-transform group-hover/stub:translate-x-1">
@@ -865,6 +817,44 @@ function DefaultStub({
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Tiny ∞ glyph that sits right after the price and toggles 單抽 ⇄ 一口價.
+ * Lit (cinnabar) when 一口價 is active. `stopPropagation` for use inside the
+ * clickable resting card so it doesn't also open the ticket.
+ */
+function DrawModeToggle({
+  drawMode,
+  onToggle,
+  stopPropagation,
+}: {
+  drawMode: 'single' | 'bulk';
+  onToggle: () => void;
+  stopPropagation?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        if (stopPropagation) e.stopPropagation();
+        onToggle();
+      }}
+      aria-label="切換抽法（單抽 / 一口價）"
+      title={
+        drawMode === 'bulk'
+          ? '一口價：包骰到符合徵召門檻，一次付清 · 點此切回單抽'
+          : '單抽：一筆一抽，先天隨緣 · 點此切換一口價（包骰到符合）'
+      }
+      className={`ml-2 inline-flex h-5 w-5 translate-y-[-1px] items-center justify-center rounded-full align-middle text-base leading-none transition-colors ${
+        drawMode === 'bulk'
+          ? 'bg-cinnabar/15 text-cinnabar ring-1 ring-cinnabar/40'
+          : 'text-mute hover:text-cinnabar'
+      }`}
+    >
+      ∞
+    </button>
   );
 }
 
