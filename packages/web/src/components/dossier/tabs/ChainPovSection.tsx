@@ -5,9 +5,10 @@ import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
 import { ENDLESS_STORY_DEPLOYMENT, read } from '@endless-story/sdk';
 import type { Character } from '@endless-story/shared';
 import { Markdown } from '@/components/common/Markdown';
-import { objectUrl } from '@/lib/explorer';
+import { objectUrl, txUrl } from '@/lib/explorer';
 import { truncateBlobId } from '@/lib/format';
 import type { PovChapterEntry } from '@/lib/chain/pov-read';
+import { parseProvenance } from '@/lib/chain/chapter-provenance';
 
 /**
  * On-chain POV chapters — owner + subscriber gated.
@@ -118,7 +119,7 @@ export function ChainPovSection({
 
 /** Client-side Walrus fetch (only mounts when authorized). */
 function ClientPovBody({ blobId }: { blobId: string }) {
-    const [body, setBody] = useState<string | null>(null);
+    const [raw, setRaw] = useState<string | null>(null);
     const [failed, setFailed] = useState(false);
 
     useEffect(() => {
@@ -126,7 +127,7 @@ function ClientPovBody({ blobId }: { blobId: string }) {
         fetch(`/api/blob/${blobId}`)
             .then((r) => (r.ok ? r.text() : Promise.reject(new Error('walrus fail'))))
             .then((txt) => {
-                if (!cancelled) setBody(txt);
+                if (!cancelled) setRaw(txt);
             })
             .catch(() => {
                 if (!cancelled) setFailed(true);
@@ -139,10 +140,32 @@ function ClientPovBody({ blobId }: { blobId: string }) {
     if (failed) {
         return <p className="mt-4 text-sm text-mute">— 章回內容暫時讀不到 —</p>;
     }
-    if (body == null) {
+    if (raw == null) {
         return <p className="mt-4 text-sm text-mute">讀取中…</p>;
     }
-    return <Markdown source={body} className="mt-4" />;
+    // Strip the embedded on-chain-event provenance header before rendering;
+    // surface it as a verifiable source line instead of leaking the raw comment.
+    const { provenance, body } = parseProvenance(raw.trim());
+    return (
+        <>
+            {provenance?.eventLabel ? (
+                <p className="mt-3 text-2xs tracking-widest text-cinnabar/70">
+                    本回出自鏈上事件「{provenance.eventLabel}」
+                    {provenance.eventTx ? (
+                        <a
+                            href={txUrl(provenance.eventTx)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 hover:underline"
+                        >
+                            查驗 ↗
+                        </a>
+                    ) : null}
+                </p>
+            ) : null}
+            <Markdown source={body} className="mt-4" />
+        </>
+    );
 }
 
 function LockedNotice() {
