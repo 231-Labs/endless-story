@@ -181,7 +181,7 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
 }
 
 /**
- * Batch re-price every recruitment's 一口價 from its requirement difficulty
+ * Batch re-price every recruitment's 必應 from its requirement difficulty
  * (basePrice × E[draws] × margin — see docs/WHITEPAPER.md §1). Idempotent;
  * returns how many rows changed.
  */

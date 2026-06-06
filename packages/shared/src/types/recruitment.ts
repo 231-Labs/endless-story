@@ -13,7 +13,7 @@ export interface Recruitment {
   slots: number;
   basePrice: number; // ENDLESS (世界貨幣) — 單抽價
   /**
-   * 一口價（包骰到符合四維門檻）的價格。未設則沿用 `basePrice`。通常設得比
+   * 必應（包骰到符合四維門檻）的價格。未設則沿用 `basePrice`。通常設得比
    * `basePrice` 高，作為「保證達標」的溢價。
    */
   bulkPrice?: number;

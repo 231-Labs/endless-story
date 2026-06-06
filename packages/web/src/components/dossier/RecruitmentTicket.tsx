@@ -154,7 +154,7 @@ export function RecruitmentTicket({
 
   const [stage, setStage] = useState<Stage>('closed');
   const [rollingStatus, setRollingStatus] = useState<'minting' | 'moderating' | 'generating' | null>(null);
-  // 單抽 vs 一口價 (bulk): bulk rerolls the cheap local dice until the 4 attrs
+  // 單抽 vs 必應 (bulk): bulk rerolls the cheap local dice until the 4 attrs
   // meet the recruitment's hard requirements, then mints ONE matching voucher.
   const [drawMode, setDrawMode] = useState<'single' | 'bulk'>('single');
   const [prompt, setPrompt] = useState('');
@@ -223,7 +223,7 @@ export function RecruitmentTicket({
 
     // 1. Mint voucher (real on-chain) — pay basePrice from user's ENDLESS coin.
     //
-    // 一口價 (bulk): reroll the CHEAP local dice (no LLM / no chain / no image)
+    // 必應 (bulk): reroll the CHEAP local dice (no LLM / no chain / no image)
     // until the 4 attributes meet the recruitment's minAttributes, then mint ONE
     // voucher with that winning seed — guaranteed attribute match, single payment.
     // Gender is not rolled: it's forced in the preview prompt (requiredGender) and
@@ -239,7 +239,7 @@ export function RecruitmentTicket({
         tries += 1;
       }
       if (!candidateMeetsRequirements(recruitment, null, rolled).ok) {
-        setError(`一口價：${MAX_REROLL} 抽仍未湊齊四維門檻，請改用單抽或調低要求`);
+        setError(`必應：${MAX_REROLL} 抽仍未湊齊四維門檻，請改用單抽或調低要求`);
         setStage('minting');
         setRollingStatus(null);
         return;
@@ -500,7 +500,7 @@ export function RecruitmentTicket({
       : null;
 
   // ── Navigation handlers ────────────────────────────────────────
-  // From the 落選 card: flip to 一口價 and immediately re-draw (guaranteed match).
+  // From the 落選 card: flip to 必應 and immediately re-draw (guaranteed match).
   // Pass the mode explicitly so the reroll doesn't race React's state update.
   const switchToBulkAndRedraw = () => {
     setDrawMode('bulk');
@@ -535,7 +535,7 @@ export function RecruitmentTicket({
       rollingStatus === 'minting'
         ? '簽署中…'
         : drawMode === 'bulk'
-          ? '一口價 (支付)'
+          ? '必應 (支付)'
           : '擲牌 (支付)';
     canNext = rollingStatus !== 'minting';
   } else if (stage === 'prompt') {
@@ -546,7 +546,7 @@ export function RecruitmentTicket({
     canNext = false;
   } else if (stage === 'rejected') {
     prevLabel = '緣寂';
-    nextLabel = drawMode === 'bulk' ? '一口價重抽 (支付)' : '重抽 (支付)';
+    nextLabel = drawMode === 'bulk' ? '必應重抽 (支付)' : '重抽 (支付)';
     canNext = true;
   } else if (stage === 'pick') {
     prevLabel = '重新凝形';
@@ -831,8 +831,8 @@ function DefaultStub({
 }
 
 /**
- * Tiny ∞ glyph that sits right after the price and toggles 單抽 ⇄ 一口價.
- * Lit (cinnabar) when 一口價 is active. `stopPropagation` for use inside the
+ * Tiny ∞ glyph that sits right after the price and toggles 單抽 ⇄ 必應.
+ * Lit (cinnabar) when 必應 is active. `stopPropagation` for use inside the
  * clickable resting card so it doesn't also open the ticket.
  */
 function DrawModeToggle({
@@ -851,11 +851,11 @@ function DrawModeToggle({
         if (stopPropagation) e.stopPropagation();
         onToggle();
       }}
-      aria-label="切換抽法（單抽 / 一口價）"
+      aria-label="切換抽法（單抽 / 必應）"
       title={
         drawMode === 'bulk'
-          ? '一口價：包骰到符合徵召門檻，一次付清 · 點此切回單抽'
-          : '單抽：一筆一抽，先天隨緣 · 點此切換一口價（包骰到符合）'
+          ? '必應：包骰到符合徵召門檻，一次付清 · 點此切回單抽'
+          : '單抽：一筆一抽，先天隨緣 · 點此切換必應（包骰到符合）'
       }
       className={`ml-2 inline-flex h-5 w-5 translate-y-[-1px] items-center justify-center rounded-full align-middle text-base leading-none transition-colors ${
         drawMode === 'bulk'
@@ -931,19 +931,17 @@ function RejectedStage({
         ))}
       </div>
 
-      {/* 落選引導:骰不到 → 一鍵改用一口價（包骰到符合，保證入選） */}
+      {/* 落選引導:骰不到 → 一鍵轉必應（包骰到符合，必得入選） */}
       <button
         type="button"
         onClick={onSwitchToBulk}
-        className="mt-8 inline-flex items-center gap-2 rounded-full bg-cinnabar px-5 py-2.5 text-sm tracking-widest text-canvas shadow-sm transition-colors hover:bg-seal"
+        title={`必應：自動重骰先天，直到符合徵召門檻才入選 · ${bulkPrice} Endless`}
+        className="mt-7 inline-flex items-center gap-1.5 rounded-full border border-cinnabar/35 px-4 py-1.5 text-xs tracking-widest text-cinnabar transition-colors hover:border-cinnabar hover:bg-cinnabar hover:text-canvas"
       >
-        <span className="text-base leading-none">∞</span>
-        改用一口價 · 保證入選
+        <span className="text-sm leading-none">∞</span>
+        改投必應 · 必得入選
       </button>
-      <p className="mt-2.5 text-2xs leading-relaxed tracking-widest text-mute max-w-xs">
-        系統自動重骰先天，直到符合徵召門檻才入選 ·{' '}
-        <span className="text-ink">{bulkPrice} Endless</span>
-      </p>
+      <p className="mt-2 text-2xs tracking-widest text-mute">重骰至達標 · {bulkPrice} Endless</p>
     </div>
   );
 }

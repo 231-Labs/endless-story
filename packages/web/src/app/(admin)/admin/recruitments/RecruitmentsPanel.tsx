@@ -43,7 +43,7 @@ export function RecruitmentsPanel({ initial }: { initial: AdminRecruitment[] }) 
         startTransition(async () => {
             const r = await autoPriceAllRecruitments();
             await refresh();
-            alert(`一口價已批次更新 ${r.updated} 筆（base × 平均達標抽數 × 0.85）`);
+            alert(`必應已批次更新 ${r.updated} 筆（base × 平均達標抽數 × 0.85）`);
         });
     };
 
@@ -82,9 +82,9 @@ export function RecruitmentsPanel({ initial }: { initial: AdminRecruitment[] }) 
                         onClick={handleAutoPrice}
                         disabled={isPending}
                         className="es-outline-button text-sm"
-                        title="依各職缺四維門檻批次設一口價：base × 平均達標抽數 × 0.85"
+                        title="依各職缺四維門檻批次設必應：base × 平均達標抽數 × 0.85"
                     >
-                        批次定一口價
+                        批次定必應
                     </button>
                     <button
                         type="button"
@@ -297,7 +297,7 @@ function EditForm({
                             required
                         />
                     </Field>
-                    <Field label="一口價 bulkPrice（包骰到符合）">
+                    <Field label="必應 bulkPrice（包骰到符合）">
                         <div className="flex gap-2">
                             <input
                                 type="number"

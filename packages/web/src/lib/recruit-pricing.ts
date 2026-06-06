@@ -9,7 +9,7 @@
  * and the joint hit probability across required axes is their product. The number
  * of single draws until a hit is geometric, so E[draws] = 1 / p.
  *
- * 一口價 sells "the expected grind you skip" + guarantee + instant, so the fair
+ * 必應 sells "the expected grind you skip" + guarantee + instant, so the fair
  * anchor is basePrice × E[draws]; `margin` (< 1 = slight discount) nudges players
  * toward it and smooths revenue.
  */
@@ -36,8 +36,8 @@ export function expectedDrawsToMeet(
 }
 
 /**
- * Suggested 一口價: basePrice × E[draws] × margin, rounded to `roundTo`, never
- * below basePrice (一口價 must not undercut 單抽).
+ * Suggested 必應: basePrice × E[draws] × margin, rounded to `roundTo`, never
+ * below basePrice (必應 must not undercut 單抽).
  */
 export function suggestedBulkPrice(
     basePrice: number,
