@@ -96,7 +96,7 @@ export default async function FeedPage({
         <div className="mx-auto max-w-6xl">
           {mode === 'all' && latestGazette ? (
             <div className="mb-8">
-              <GazetteTeaser gazette={latestGazette} sagaName={saga.name} />
+              <GazetteTeaser gazette={latestGazette} sagaName={saga.name} sagaId={saga.id} />
             </div>
           ) : null}
           {mode === 'gazette' ? (

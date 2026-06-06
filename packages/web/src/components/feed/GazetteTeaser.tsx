@@ -1,22 +1,30 @@
 import Link from 'next/link';
 import type { GazetteEntry } from '@/lib/api/gazettes';
+import { fetchTensionHeadline } from '@/lib/chain/drama';
 
 /**
  * Slim teaser shown at the top of /feed?mode=all when a gazette exists.
  * Click → /feed?mode=gazette to read full.
  *
- * Server-rendered: we fetch the first paragraph of the gazette
- * markdown directly from Walrus so the teaser shows real prose, not
- * a generic placeholder.
+ * Server-rendered: we fetch the first paragraph of the gazette markdown
+ * directly from Walrus (free public plot content) PLUS a live, LLM-free
+ * 「此刻張力」headline (the top contested resources right now) — so a
+ * not-yet-onboarded reader can see at a glance where the heat is and read
+ * some story for free, the top of the subscribe funnel.
  */
 export async function GazetteTeaser({
     gazette,
     sagaName,
+    sagaId,
 }: {
     gazette: GazetteEntry;
     sagaName: string;
+    sagaId: string;
 }) {
-    const excerpt = await fetchExcerpt(gazette.blobId);
+    const [excerpt, tension] = await Promise.all([
+        fetchExcerpt(gazette.blobId),
+        fetchTensionHeadline(sagaId),
+    ]);
     return (
         <Link
             href="/feed?mode=gazette"
@@ -27,6 +35,11 @@ export async function GazetteTeaser({
                 <div className="mt-1 font-serif text-base text-ink">{sagaName}</div>
             </div>
             <div className="min-w-0 flex-1">
+                {tension ? (
+                    <p className="mb-2 text-2xs tracking-widest text-cinnabar/90">
+                        此刻張力 · {tension}
+                    </p>
+                ) : null}
                 <p className="line-clamp-2 max-w-prose font-serif text-sm leading-loose text-ink/85 sm:text-base">
                     {excerpt || '— 公報內容載入中 —'}
                 </p>

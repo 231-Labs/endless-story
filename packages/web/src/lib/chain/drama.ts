@@ -366,6 +366,41 @@ export async function deriveDramaForSaga(
     return deriveAndCommitDramaBeat({ sagaId, cast, signer, client: c });
 }
 
+/**
+ * A short, public, LLM-free「此刻張力在哪」headline for the gazette teaser —
+ * the top contested resources right now (deterministic, read-only: no signer →
+ * derive without committing). Returns null when drama is dormant / on any error
+ * so the teaser falls back to the plain gazette excerpt.
+ */
+export async function fetchTensionHeadline(sagaId: string, max = 2): Promise<string | null> {
+    try {
+        const r = await deriveDramaForSaga(sagaId); // no signer = read-only derive
+        if (!r.active || r.tensions.length === 0) return null;
+        const ranked = [...r.tensions].sort((a, b) =>
+            b.value > a.value ? 1 : b.value < a.value ? -1 : 0,
+        );
+        const seen = new Set<string>();
+        const labels: string[] = [];
+        for (const t of ranked) {
+            const label = humanResourceFromStatement(t.statement);
+            if (!label || seen.has(label)) continue;
+            seen.add(label);
+            labels.push(label);
+            if (labels.length >= max) break;
+        }
+        return labels.length > 0 ? labels.join('、') : null;
+    } catch {
+        return null;
+    }
+}
+
+/** "爭得「spotlight:春雪社頭牌名額」" → "春雪社頭牌名額"; "與溫照棠搭戲" → "與溫照棠搭戲". */
+function humanResourceFromStatement(statement: string): string {
+    const m = statement.match(/「([^」]+)」/);
+    const inner = m ? m[1] : statement;
+    return inner.replace(/^[a-z]+:/, '').trim();
+}
+
 function extractTagLabels(json: unknown): string[] {
     const tags = (json as { tags?: Array<{ label?: unknown }> } | undefined)?.tags ?? [];
     return tags.map((t) => t.label).filter((x): x is string => typeof x === 'string');
