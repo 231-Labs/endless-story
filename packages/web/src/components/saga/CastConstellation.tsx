@@ -103,7 +103,7 @@ export function CastConstellation({
   scenes = [],
   locations = [],
   liveStatesById = {},
-  centerId = 'char_shen_huaiyin',
+  centerId: centerIdProp,
 }: {
   cast: Character[];
   wildCast?: Character[];
@@ -111,6 +111,7 @@ export function CastConstellation({
   scenes?: Scene[];
   locations?: SagaLocation[];
   liveStatesById?: Record<string, CharacterLiveState>;
+  /** 指定主角節點（放大）。不給或不在 cast 內 → 自動挑牽絆最多的那位。 */
   centerId?: string;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -123,6 +124,28 @@ export function CastConstellation({
     return dedupeById(wildCast).filter((c) => !castIds.has(c.id));
   }, [wildCast, uniqCast]);
   const uniqEdges = useMemo(() => dedupeEdges(edges), [edges]);
+
+  // 主角節點：用呼叫端指定且確實在 cast 裡的；否則挑牽絆最多的那位放大。
+  // （舊版寫死 char_shen_huaiyin，換 saga 後沒有任何節點被當主角。）
+  const centerId = useMemo(() => {
+    if (centerIdProp && uniqCast.some((c) => c.id === centerIdProp)) return centerIdProp;
+    const castIds = new Set(uniqCast.map((c) => c.id));
+    const deg = new Map<string, number>();
+    for (const e of uniqEdges) {
+      if (castIds.has(e.fromId)) deg.set(e.fromId, (deg.get(e.fromId) ?? 0) + 1);
+      if (castIds.has(e.toId)) deg.set(e.toId, (deg.get(e.toId) ?? 0) + 1);
+    }
+    let best = uniqCast[0]?.id;
+    let bestN = -1;
+    for (const c of uniqCast) {
+      const d = deg.get(c.id) ?? 0;
+      if (d > bestN) {
+        bestN = d;
+        best = c.id;
+      }
+    }
+    return best;
+  }, [centerIdProp, uniqCast, uniqEdges]);
 
   // scene 所屬 zone（由 location name 推）
   const sceneZoneById = useMemo(() => {
@@ -274,6 +297,13 @@ export function CastConstellation({
     if (sc) placeInScene(ch, sc, 'wild');
     else placeExternal(ch, wildPrimaryCast.get(ch.id), 'wild');
   }
+
+  // ── 去重疊 ──
+  // 開場時全班常被放進同一個 scene（一條開場 storylet）。placeInScene 的小半徑
+  // jitter 讓 60–76px 頭像疊成一團，房內牽絆曲線縮成藏在頭像底下的短線。做幾輪碰撞
+  // 鬆弛：任兩節點靠太近就互推開，直到彼此露出、曲線有可見長度。語意（誰在哪間房）
+  // 仍由初始落點承載，這裡只把擠在一起的撥開。
+  relaxOverlaps(positioned);
 
   const posById = new Map(positioned.map((p) => [p.char.id, p]));
   const validEdges = uniqEdges.filter((e) => posById.has(e.fromId) && posById.has(e.toId));
@@ -517,6 +547,67 @@ export function CastConstellation({
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** 節點碰撞半徑（viewBox 單位 ≈ 螢幕 px，容器寬約等於 viewBox 1200）：頭像半徑 + 名牌留白。 */
+function nodeCollisionRadius(kind: PositionedCharacter['kind']): number {
+  if (kind === 'center') return 46;
+  if (kind === 'cast') return 38;
+  return 32; // wild
+}
+
+/**
+ * 碰撞鬆弛：把疊在一起的節點互相推開，直到牽絆曲線露得出來。
+ * 純幾何、確定性（無亂數）；初始落點承載「誰在哪」的語意，這裡只解重疊。
+ */
+function relaxOverlaps(nodes: PositionedCharacter[]): void {
+  const n = nodes.length;
+  if (n < 2) return;
+  const PAD = 10;
+
+  // 完全重合的先用 index 角度撥開一點，鬆弛才有方向可推。
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (nodes[i].x === nodes[j].x && nodes[i].y === nodes[j].y) {
+        const a = (j / n) * Math.PI * 2;
+        nodes[j].x += Math.cos(a) * 0.5;
+        nodes[j].y += Math.sin(a) * 0.5;
+      }
+    }
+  }
+
+  for (let iter = 0; iter < 90; iter++) {
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = nodes[i];
+        const b = nodes[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.sqrt(dx * dx + dy * dy);
+        const min = nodeCollisionRadius(a.kind) + nodeCollisionRadius(b.kind) + PAD;
+        if (d >= min) continue;
+        if (d < 1e-3) {
+          dx = j - i;
+          dy = (i + j) % 2 === 0 ? 1 : -1;
+          d = Math.sqrt(dx * dx + dy * dy);
+        }
+        const push = (min - d) / 2;
+        const ux = dx / d;
+        const uy = dy / d;
+        a.x -= ux * push;
+        a.y -= uy * push;
+        b.x += ux * push;
+        b.y += uy * push;
+        moved = true;
+      }
+    }
+    for (const p of nodes) {
+      p.x = clamp(p.x, 60, VIEWBOX_W - 60);
+      p.y = clamp(p.y, 60, VIEWBOX_H - 60);
+    }
+    if (!moved) break;
+  }
 }
 
 function dedupeById<T extends { id: string }>(arr: T[]): T[] {

@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chapter, Character, Saga, SagaLocation, Scene } from '@endless-story/shared';
-import { SnowPaperBackground } from './SnowPaperBackground';
+import { SagaScrollBackdrop } from './SagaScrollBackdrop';
 import { SceneVignette, type VignetteAnchor } from './SceneVignette';
 import { FloatingQuote } from './FloatingQuote';
 import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
+import { computeHandscrollLayout, type ScenePlacement } from './handscrollLayout';
 import { getSagaLiveSnapshot, type OpenEventStatus } from '@/lib/actions/saga-live';
 
 type LiveEvent = OpenEventStatus;
@@ -20,58 +21,23 @@ type LiveEvent = OpenEventStatus;
  * 點任一場景錨 → 切回舊版 focused-mode（SagaTroupeCanvas 渲染單 scene 細看）。
  */
 
-// 手卷三段：戲樓 / 月洞門 / 院落 — 用 % 對應到 300vw 容器
-//
-// 兩條資料路徑（不互為 fallback、各自獨立）：
-//   - chain scene: 帶著 `posX / posY` (chain `Scene.placement.pos_x/pos_y`)
-//   - mock scene : 沒有 pos，靠 id 對到下方字典
-//
-// 兩條都拿不到就 return null（chain pos 為 0 是部署設定漏寫，不在這層補洞）。
-const SCENE_ANCHORS: Record<string, VignetteAnchor> = {
-  // 戲樓 zone（左三分之一 0–33%）
-  scene_music_shed: { x: 9, y: 60, zone: 'theater' },
-  scene_main_stage: { x: 17, y: 44, zone: 'theater' },
-  scene_backstage: { x: 25, y: 58, zone: 'theater' },
-  scene_trunk_room: { x: 30, y: 74, zone: 'theater' },
-  // 院落 zone（右三分之二 50–95%）
-  scene_east_hall: { x: 52, y: 54, zone: 'compound' },
-  scene_accounting: { x: 59, y: 70, zone: 'compound' },
-  scene_courtyard: { x: 67, y: 60, zone: 'compound' },
-  scene_bunk_room: { x: 75, y: 50, zone: 'compound' },
-};
+// 手卷橫軸佈局改為資料驅動（見 handscrollLayout.ts）：每個 covered location 一段、
+// scene 鋪在自己那段內。場景錨點 = ScenePlacement 的 xPct/yPct（整卷寬高的百分比）。
 
-/**
- * 三段橫匾的固定排版位置 — left / middle / right。對應到
- * 300vw 容器內 16% / 41% / 63%（搭配 SnowPaperBackground 三段地紋）。
- * 內容由 caller 傳入的 `locations[]` 填，不再寫死「戲樓 / 月洞門 / 院落」。
- */
-const ZONE_POSITIONS: { x: string; y: string }[] = [
-  { x: '16%', y: '18%' },
-  { x: '41%', y: '22%' },
-  { x: '63%', y: '18%' },
-];
-
-function resolveAnchor(scene: Scene): VignetteAnchor | null {
-  // Chain path: posX/posY arrive from chain `Scene.placement.pos_x/pos_y`.
-  if (scene.posX != null && scene.posY != null) {
-    return {
-      x: scene.posX,
-      y: scene.posY,
-      // zone is a UI concept; derive from x. 0–40% reads as theater
-      // (left third + transitional), >=40% as compound (right two-thirds).
-      zone: scene.posX < 40 ? 'theater' : 'compound',
-    };
-  }
-  // Mock path: slug-keyed dict.
-  return SCENE_ANCHORS[scene.id] ?? null;
+function placementAnchor(p: ScenePlacement): VignetteAnchor {
+  return { x: p.xPct, y: p.yPct, zone: p.zone };
 }
 
-// 場景的題款落點（與錨點錯開 — 戲樓的題款在右方、院落的題款在左方）
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+// 題款落點（頂端對位）。直書欄很高，所以把上緣壓在標題下方（~30%）這條帶子，
+// 只往下方留白長；left 夾在 [5,95]% 避免段邊場景的題款被推出視窗左右緣。
 function quotePosition(anchor: VignetteAnchor): { left: number; top: number } {
-  if (anchor.zone === 'theater') {
-    return { left: anchor.x + 5, top: anchor.y < 50 ? anchor.y + 0 : anchor.y - 28 };
-  }
-  return { left: anchor.x - 5, top: anchor.y < 50 ? anchor.y + 20 : anchor.y - 30 };
+  const left = clamp(anchor.x + (anchor.zone === 'theater' ? 4 : -4), 5, 95);
+  const top = clamp(anchor.y - 26, 30, 36);
+  return { left, top };
 }
 
 interface Props {
@@ -135,7 +101,9 @@ export function SagaHandscroll(props: Props) {
       }
       if (!cancelled) timer = setTimeout(tick, 6000);
     };
-    timer = setTimeout(tick, 6000);
+    // 進場就抓一次 live（題款 / 在場 / 開演事件），不必等滿 6s 才首次浮現；
+    // 之後維持 6s 輪詢。300ms 讓 hydration 先安定。
+    timer = setTimeout(tick, 300);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
@@ -158,6 +126,26 @@ export function SagaHandscroll(props: Props) {
 
   const partOfDay = saga.worldTime?.partOfDay ?? 'noon';
   const isFocused = focusedSceneId !== null;
+
+  // 資料驅動佈局：每個 covered location 一段，scene 鋪進自己那段。位置只依場景集合 +
+  // locationId（不隨 live presence 變），故用穩定的 `scenes`／`locations` 算，再用 id 對
+  // 回 liveScenes 渲染即時狀態。
+  const layout = useMemo(() => computeHandscrollLayout(locations, scenes), [locations, scenes]);
+  const placementById = useMemo(() => {
+    const m = new Map<string, ScenePlacement>();
+    for (const seg of layout.segments) for (const sp of seg.scenes) m.set(sp.scene.id, sp);
+    return m;
+  }, [layout]);
+  const segmentCount = layout.segmentCount;
+  // 整卷寬度隨段數伸縮：每段約 80vw（至少撐滿舊的 300vw）。
+  const scrollVw = Math.max(segmentCount * 80, 300);
+  // 場景區塊越多越窄，避免同段相鄰場景相疊。
+  const vignetteWidthPct = Math.min(12, (100 / segmentCount) * 0.55);
+  // 副標的地名串跟橫軸一致：只列「本 saga 真的有戲」的 location（與 layout 同一套過濾），
+  // 不再把世界裡 saga 沒涉足的 location（如純招募用地）也列進去。
+  const shownLocationLabel = layout.segments.length
+    ? layout.segments.map((s) => s.location.name).join(' + ')
+    : locationLabel;
 
   // 攔截垂直滾輪事件，轉換為段落間的橫向吸附切換
   useEffect(() => {
@@ -232,44 +220,49 @@ export function SagaHandscroll(props: Props) {
           <div
             className="relative h-[100dvh] flex-shrink-0"
             style={{
-              width: 'max(300vw, 1200px)',
-              minWidth: 'max(300vw, 1200px)',
+              width: `max(${scrollVw}vw, 1200px)`,
+              minWidth: `max(${scrollVw}vw, 1200px)`,
             }}
           >
-            <SnowPaperBackground partOfDay={partOfDay} />
+            <SagaScrollBackdrop segments={layout.segments} partOfDay={partOfDay} />
 
-            {/* 三個段落（各佔總寬 1/3）供 snap-x 吸附 */}
+            {/* 每個 location 一段（等寬）供 snap-x 吸附 */}
             <div className="absolute inset-0 flex pointer-events-none">
-              <div className="h-full w-1/3 shrink-0 snap-center snap-always" />
-              <div className="h-full w-1/3 shrink-0 snap-center snap-always" />
-              <div className="h-full w-1/3 shrink-0 snap-center snap-always" />
+              {layout.segments.map((seg) => (
+                <div
+                  key={seg.location.id}
+                  className="h-full shrink-0 snap-center snap-always"
+                  style={{ width: `${100 / segmentCount}%` }}
+                />
+              ))}
             </div>
 
-            {/* 場景錨 */}
+            {/* 場景錨 — 各自落在所屬 location 段內 */}
             {liveScenes.map((scene) => {
-              const anchor = resolveAnchor(scene);
-              if (!anchor) return null;
+              const placement = placementById.get(scene.id);
+              if (!placement) return null;
               return (
                 <SceneVignette
                   key={scene.id}
                   scene={scene}
-                  anchor={anchor}
+                  anchor={placementAnchor(placement)}
                   charactersById={charactersById}
                   onSelect={setFocusedSceneId}
+                  widthPct={vignetteWidthPct}
                 />
               );
             })}
 
             {/* 飄字題款 */}
             {liveScenes.map((scene) => {
-              const anchor = resolveAnchor(scene);
-              if (!anchor) return null;
+              const placement = placementById.get(scene.id);
+              if (!placement) return null;
               const primary = scene.ghostQuotes?.[0];
               if (!primary) return null;
               const speaker = charactersById.get(primary.characterId) ?? null;
-              const { left, top } = quotePosition(anchor);
+              const { left, top } = quotePosition(placementAnchor(placement));
               const text = primary.text;
-              const truncated = text.length > 22 ? `${text.slice(0, 22)}…` : text;
+              const truncated = text.length > 12 ? `${text.slice(0, 12)}…` : text;
               return (
                 <FloatingQuote
                   key={`quote-${scene.id}`}
@@ -283,23 +276,23 @@ export function SagaHandscroll(props: Props) {
               );
             })}
 
-            {/*
-              三段地名橫匾 — 由鏈上 `Saga.covered_location_ids` 解出的
-              location 名稱填入。順序對應排版 left/middle/right。沒給夠
-              三個就只渲染拿到的那幾個。
-            */}
-            {ZONE_POSITIONS.map((pos, i) => {
-              const loc = locations[i];
-              if (!loc) return null;
-              return <ZoneLabel key={loc.id} x={pos.x} y={pos.y} main={loc.name} />;
-            })}
+            {/* 地名匾 — 每個 covered location 一塊，置於該段正中、落在院落下方的雪地上
+                （避開左上角的固定標題；像地圖上的地名）。 */}
+            {layout.segments.map((seg) => (
+              <ZoneLabel
+                key={seg.location.id}
+                x={`${seg.labelXPct}%`}
+                y="78%"
+                main={seg.location.name}
+              />
+            ))}
           </div>
         </div>
 
         {/* 固定上覆面板（絕對定位在畫卷容器外，與第一屏綁定） */}
         <FixedOverlay
           saga={saga}
-          locationLabel={locationLabel}
+          locationLabel={shownLocationLabel}
         />
 
         {/* 正在上演 — 鏈上開著的事件（每 6s 輪詢，不重整就更新） */}

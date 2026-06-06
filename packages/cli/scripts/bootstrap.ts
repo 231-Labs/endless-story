@@ -34,6 +34,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import {
   ENDLESS_STORY_DEPLOYMENT,
   makeSuiClient,
+  read,
   tx as endlessTx,
   type SuiClient,
   type SuiNetwork,
@@ -304,11 +305,47 @@ async function main() {
     );
   });
   const changes2 = await runTx(client, signer, tx2, `Tx 2 — ${story.locations.length} Locations`);
-  const locationIds = findCreatedByType(changes2, '::world::Location');
-  if (locationIds.length !== story.locations.length) {
-    throw new Error(`expected ${story.locations.length} locations, got ${locationIds.length}`);
+  const locationIdsRaw = findCreatedByType(changes2, '::world::Location');
+  if (locationIdsRaw.length !== story.locations.length) {
+    throw new Error(`expected ${story.locations.length} locations, got ${locationIdsRaw.length}`);
   }
-  console.log(`   locations ${locationIds.length} created`);
+  // Sui `objectChanges` 不保證按 PTB 建立順序回傳（多半按 objectId 排序），所以
+  // findCreatedByType 拿到的順序 ≠ story.locations 順序。每個 Location 的 `info.index`
+  // 才是權威序（建立時寫入 = story 索引）。依 index 重排，否則
+  // `locationIds[scene.location_index]` 會錨到錯的 location、`coveredLocationIds` 也亂序。
+  const locWithIndex = await Promise.all(
+    locationIdsRaw.map(async (id) => {
+      const r = await read.world.getLocation(client, id);
+      const idx = Number(
+        (r.json as { info?: { index?: number | string } } | undefined)?.info?.index ?? -1,
+      );
+      return { id, idx };
+    }),
+  );
+  if (locWithIndex.some((l) => l.idx < 0)) {
+    throw new Error('bootstrap: a created Location is missing info.index — cannot order locations');
+  }
+  locWithIndex.sort((a, b) => a.idx - b.idx);
+  const locationIds = locWithIndex.map((l) => l.id);
+  console.log(`   locations ${locationIds.length} created (ordered by info.index)`);
+
+  // Saga 認領（敘事權）的 location 子集。story 可用 `saga.covered_location_indices`
+  // 指定；省略 = 覆蓋全部（向後相容）。索引對 `locations[]`，因 locationIds 已依
+  // info.index 排序，locationIds[idx] 即第 idx 個 story location。
+  const coveredIndices =
+    story.saga.covered_location_indices ?? locationIds.map((_, i) => i);
+  for (const idx of coveredIndices) {
+    if (!Number.isInteger(idx) || idx < 0 || idx >= locationIds.length) {
+      throw new Error(
+        `saga.covered_location_indices contains out-of-range index ${idx} (have ${locationIds.length} locations)`,
+      );
+    }
+  }
+  const dedupCovered = [...new Set(coveredIndices)];
+  const coveredLocationIds = dedupCovered.map((i) => locationIds[i]);
+  console.log(
+    `   saga covers ${coveredLocationIds.length}/${locationIds.length} locations (indices ${dedupCovered.join(', ')})`,
+  );
 
   // ═══════════════════════════════════════════════════════════════════
   // Tx 3: Saga
@@ -325,7 +362,7 @@ async function main() {
       ownerBps: story.saga.owner_bps,
       storytellerBps: story.saga.storyteller_bps,
       treasuryBps: story.saga.treasury_bps,
-      coveredLocationIds: locationIds,
+      coveredLocationIds,
       departurePolicy: story.saga.departure_policy,
       naturePrompt: story.saga.nature_prompt ?? '',
       rhythmHints: story.saga.rhythm_hints ?? '',

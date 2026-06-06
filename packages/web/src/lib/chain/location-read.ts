@@ -39,5 +39,6 @@ export async function fetchOnChainLocation(locationId: string): Promise<SagaLoca
         id: locationId,
         name: json.info?.name ?? '無名之地',
         description: json.info?.description ?? '',
+        terrain: json.info?.terrain,
     };
 }

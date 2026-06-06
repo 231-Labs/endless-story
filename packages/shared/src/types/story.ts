@@ -57,6 +57,13 @@ export interface StorySaga {
   owner_bps: number;
   storyteller_bps: number;
   treasury_bps: number;
+  /**
+   * 本 saga 認領（有敘事權）的 location，以 `locations[]` 的索引表示。
+   * 這就是鏈上 `Saga.covered_location_ids`，也是手卷橫軸畫哪些地點的依據。
+   * 不必每個都已安排 scene（暫時沒戲的地點仍算覆蓋、畫成空院落）。
+   * 省略 = 覆蓋世界裡全部 location（向後相容；單一 saga 的舊行為）。
+   */
+  covered_location_indices?: number[];
   departure_policy: string;
   /** 事件氣質 — per-saga narrative DNA (F). Layered onto the genre baseline
    *  so each戲班 reads in a distinct voice. Optional; '' when unset. */

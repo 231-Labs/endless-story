@@ -21,11 +21,14 @@ export function SceneVignette({
   anchor,
   charactersById,
   onSelect,
+  widthPct = 12,
 }: {
   scene: Scene;
   anchor: VignetteAnchor;
   charactersById: Map<string, Character>;
   onSelect?: (sceneId: string) => void;
+  /** 區塊寬度（整卷寬度的百分比）。整卷越寬（location 越多）越窄，避免相鄰場景相疊。 */
+  widthPct?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { amount: 0.4, margin: '-15% 0px -15% 0px' });
@@ -54,7 +57,7 @@ export function SceneVignette({
       style={{
         left: `${anchor.x}%`,
         top: `${anchor.y}%`,
-        width: '12%',
+        width: `${widthPct}%`,
         height: '28%',
         transform: 'translate(-50%, -50%)',
       }}
@@ -110,6 +113,12 @@ export function SceneVignette({
             }`}
           />
         </span>
+
+        {/* 落影 — 讓場景錨像落在手卷卷面上，而非飄在半空 */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-1/2 h-2 w-7 -translate-x-1/2 translate-y-3 rounded-[50%] bg-ink/15 blur-[2px] dark:bg-black/35"
+        />
 
         {/* hover 卡 */}
         {hovered ? (

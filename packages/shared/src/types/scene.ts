@@ -140,6 +140,11 @@ export interface SagaLocation {
   id: string;
   name: string;
   description: string;
+  /**
+   * 鏈上 `Location.info.terrain`（如 wharf / compound / press-teahouse / street）。
+   * 手卷背景據此挑院落母題；mock / 舊資料可能沒有，渲染端需容忍 undefined。
+   */
+  terrain?: string;
 }
 
 export type ClipAspect = '16/9' | '9/16' | '1/1' | '4/3' | '3/4';

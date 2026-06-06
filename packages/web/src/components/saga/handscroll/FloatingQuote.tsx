@@ -23,7 +23,9 @@ export function FloatingQuote({
   delaySeconds?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { amount: 0.4, margin: '-15% 0px -15% 0px' });
+  // once + 低門檻：第一屏進場（即使只露一部分）就觸發、之後不再隱回，
+  // 避免「要滑到下一個場景再回來才跳出來」。
+  const inView = useInView(ref, { once: true, amount: 0.1 });
 
   return (
     <div
@@ -32,7 +34,11 @@ export function FloatingQuote({
       style={{
         left: `${leftPct}%`,
         top: `${topPct}%`,
+        // 頂端對位：topPct 壓在標題下方，直書欄只往「下方留白」長，上緣絕不犯標題。
         transform: 'translate(-50%, 0)',
+        // 高度上限 + 裁切：保底不讓特別長的題款掉出視窗底部（已先截斷 12 字，極少觸發）。
+        maxHeight: '44dvh',
+        overflow: 'hidden',
       }}
     >
       <motion.div
@@ -46,7 +52,7 @@ export function FloatingQuote({
         className="flex flex-col items-center rounded-md bg-surface/55 px-2 py-3 backdrop-blur-sm dark:bg-elevated/45"
         style={{ writingMode: 'vertical-rl' as const }}
       >
-        <span className="font-serif text-sm leading-snug tracking-[0.18em] text-ink/85 drop-shadow-sm sm:text-base">
+        <span className="font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm">
           {children}
         </span>
         {speaker ? (

@@ -12,6 +12,7 @@ import { SagaHandscroll } from '@/components/saga/handscroll/SagaHandscroll';
 import { CastConstellation } from '@/components/saga/CastConstellation';
 import { SagaCharterPanel } from '@/components/saga/SagaCharterPanel';
 import { SagaDetailsTabs } from '@/components/saga/SagaDetailsTabs';
+import { OffTurfBoard } from '@/components/saga/OffTurfBoard';
 
 export default async function SagaPage({
   params,
@@ -112,6 +113,39 @@ export default async function SagaPage({
   // 給 handscroll：cast + wildCast 都進 charactersById，wild 在 scene 內也能渲染剪影
   const allCharactersById = new Map(allCharsForLive.map((c) => [c.id, c]));
 
+  // 江湖在外：本 saga 成員（saga_id 綁定 = cast）中，當前不在覆蓋 turf 的人。
+  // scenes 可能 anchor 在未覆蓋的外部 location（堂子/會館等），補抓這些 location 名以標示「在哪」。
+  const coveredLocIds = new Set(locations.map((l) => l.id));
+  const sceneById = new Map(scenes.map((s) => [s.id, s]));
+  const externalLocIds = Array.from(
+    new Set(
+      scenes
+        .map((s) => s.locationId)
+        .filter((id): id is string => typeof id === 'string' && !coveredLocIds.has(id)),
+    ),
+  );
+  const externalLocs = (
+    await Promise.all(externalLocIds.map((id) => locationsApi.getLocation(id)))
+  ).filter((l): l is NonNullable<typeof l> => Boolean(l));
+  const locationNameById = new Map(
+    [...locations, ...externalLocs].map((l) => [l.id, l.name]),
+  );
+  const offTurfEntries = cast
+    .map((c) => {
+      const sc = c.currentSceneId ? sceneById.get(c.currentSceneId) : undefined;
+      const onTurf = !!(sc?.locationId && coveredLocIds.has(sc.locationId));
+      if (onTurf) return null;
+      return {
+        id: c.id,
+        name: c.name,
+        role: c.role,
+        imageUrl: c.gallery?.anchor?.imageUrl,
+        sceneName: sc?.name,
+        locationName: sc?.locationId ? locationNameById.get(sc.locationId) : undefined,
+      };
+    })
+    .filter((e): e is NonNullable<typeof e> => Boolean(e));
+
   return (
     <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth bg-canvas">
       {/* Screen 1: Immersive Canvas + Hero + Premise */}
@@ -146,6 +180,7 @@ export default async function SagaPage({
             />
           </div>
         }
+        offTurfContent={<OffTurfBoard entries={offTurfEntries} />}
         charterContent={
           <SagaCharterPanel saga={saga} />
         }

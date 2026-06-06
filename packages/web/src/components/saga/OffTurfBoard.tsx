@@ -1,0 +1,112 @@
+import Link from 'next/link';
+import type { CharacterRole } from '@endless-story/shared';
+import { characterPortraitTone } from '@/components/common/CharacterPortrait';
+import { BlobImage } from '@/components/common/BlobImage';
+
+/**
+ * 江湖在外 — 分鏡追蹤板。
+ *
+ * 追蹤「屬於本 saga（saga_id 綁定 = 在冊）、但此刻人不在 saga 地界內」的角色。
+ * 「在外」= 當前 scene 落在未覆蓋的 location（堂子／會館／大世界等外部點），或當前無
+ * scene（行蹤不在台上）。內外部看的是 membership × 當前位置兩條軸，不是經濟。
+ *
+ * 一張卡 = 一個在外的成員：誰 · 現在在哪。沒人在外就顯示空狀態（全班在地界內）。
+ * 資料由 saga 頁在 server 端備好（見 page.tsx），這裡只負責排版。
+ */
+
+export interface OffTurfEntry {
+  id: string;
+  name: string;
+  role: CharacterRole;
+  imageUrl?: string;
+  /** 當前 scene 名（在外部地點的房間）；無 scene 則 undefined。 */
+  sceneName?: string;
+  /** 當前 scene 所屬的外部 location 名；無從得知則 undefined。 */
+  locationName?: string;
+}
+
+function whereLabel(e: OffTurfEntry): string {
+  if (e.locationName && e.sceneName) return `${e.locationName} · ${e.sceneName}`;
+  if (e.locationName) return e.locationName;
+  if (e.sceneName) return e.sceneName;
+  return '江湖之間 · 行蹤不在台上';
+}
+
+export function OffTurfBoard({ entries }: { entries: OffTurfEntry[] }) {
+  return (
+    <section className="flex h-full w-full flex-col bg-canvas">
+      {/* 標題 */}
+      <div className="shrink-0 px-[max(env(safe-area-inset-left,0px),1.25rem)] pt-[max(5rem,calc(env(safe-area-inset-top,0px)+4.75rem))] sm:px-10 sm:pt-24">
+        <div className="flex items-center gap-4">
+          <div className="h-px w-8 bg-cinnabar/60" />
+          <h2 className="font-serif text-3xl tracking-[0.25em] text-ink drop-shadow-sm sm:text-4xl">
+            江湖在外
+          </h2>
+        </div>
+        <p className="mt-3 max-w-xl text-2xs leading-relaxed tracking-[0.2em] text-mute sm:text-xs">
+          春雪社的人，此刻不在戲班地界內：在堂子、會館、碼頭或更遠的上海。
+        </p>
+      </div>
+
+      {/* 分鏡卡 */}
+      <div className="mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain px-[max(env(safe-area-inset-left,0px),1rem)] pb-[max(7rem,calc(env(safe-area-inset-bottom,0px)+6rem))] sm:px-10">
+        {entries.length === 0 ? (
+          <div className="flex h-full min-h-[40vh] items-center justify-center">
+            <p className="font-serif text-sm tracking-[0.25em] text-mute/80">
+              全班都在地界內。
+            </p>
+          </div>
+        ) : (
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+            {entries.map((e) => (
+              <OffTurfCard key={e.id} entry={e} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OffTurfCard({ entry }: { entry: OffTurfEntry }) {
+  const tone = characterPortraitTone(entry.role);
+  return (
+    <li>
+      <Link
+        href={{ pathname: '/dossier', query: { id: entry.id } }}
+        className="group flex h-full flex-col items-center gap-2.5 rounded-2xl border border-hairline/45 bg-surface/70 px-3 py-4 text-center shadow-sm backdrop-blur-sm transition-colors hover:border-cinnabar/45 dark:bg-elevated/55"
+      >
+        <span
+          className={`relative h-16 w-16 overflow-hidden rounded-full shadow-md ring-2 ring-surface ${tone.ring} ${tone.bg}`}
+        >
+          <span
+            className={`absolute inset-0 flex items-center justify-center font-serif text-xl ${tone.text}`}
+          >
+            {entry.name[0]}
+          </span>
+          {entry.imageUrl ? (
+            <BlobImage
+              src={entry.imageUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
+        </span>
+
+        <div className="min-w-0">
+          <p className="truncate font-serif text-sm tracking-[0.12em] text-ink group-hover:text-ink">
+            {entry.name}
+          </p>
+          <p className="mt-0.5 truncate text-2xs tracking-[0.2em] text-mute/80">{entry.role}</p>
+        </div>
+
+        <div className="mt-auto w-full rounded-md border border-cinnabar/25 bg-cinnabar/[0.04] px-2 py-1.5">
+          <p className="text-2xs tracking-[0.3em] text-cinnabar/80">現在在</p>
+          <p className="mt-0.5 line-clamp-2 font-serif text-xs leading-snug text-ink/90">
+            {whereLabel(entry)}
+          </p>
+        </div>
+      </Link>
+    </li>
+  );
+}
