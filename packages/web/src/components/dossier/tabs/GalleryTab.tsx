@@ -509,7 +509,7 @@ function Lightbox({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/90 p-4 backdrop-blur-md sm:p-8"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/90 p-4 backdrop-blur-md dark:bg-black/90 sm:p-8"
       role="dialog"
       aria-modal="true"
       aria-label={`${characterName} 設定集圖`}
@@ -519,7 +519,7 @@ function Lightbox({
         type="button"
         onClick={onClose}
         aria-label="關閉"
-        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-canvas/10 text-canvas backdrop-blur transition-colors hover:bg-canvas/25 sm:right-6 sm:top-6"
+        className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-canvas/10 text-canvas backdrop-blur transition-colors hover:bg-canvas/25 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 sm:right-6 sm:top-6"
       >
         <CloseIcon />
       </button>
@@ -533,7 +533,7 @@ function Lightbox({
               go(-1);
             }}
             aria-label="上一張"
-            className="absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-canvas/10 text-canvas backdrop-blur transition-colors hover:bg-canvas/25 sm:left-6"
+            className="absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-canvas/10 text-canvas backdrop-blur transition-colors hover:bg-canvas/25 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 sm:left-6"
           >
             <ChevronIcon dir="left" />
           </button>
@@ -544,7 +544,7 @@ function Lightbox({
               go(1);
             }}
             aria-label="下一張"
-            className="absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-canvas/10 text-canvas backdrop-blur transition-colors hover:bg-canvas/25 sm:right-6"
+            className="absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-canvas/10 text-canvas backdrop-blur transition-colors hover:bg-canvas/25 dark:bg-white/10 dark:text-white dark:hover:bg-white/20 sm:right-6"
           >
             <ChevronIcon dir="right" />
           </button>
@@ -562,8 +562,8 @@ function Lightbox({
           className="max-h-[80vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
         />
         <figcaption className="flex flex-col items-center gap-1 text-center">
-          <span className="font-serif text-base tracking-wide text-canvas">{current.label}</span>
-          <span className="font-mono text-2xs tracking-widest text-canvas/55">
+          <span className="font-serif text-base tracking-wide text-canvas dark:text-white">{current.label}</span>
+          <span className="font-mono text-2xs tracking-widest text-canvas/55 dark:text-white/55">
             {current.blob.walrusBlobId
               ? `walrus · ${truncateBlobId(current.blob.walrusBlobId)}`
               : current.blob.mediaIndex != null
