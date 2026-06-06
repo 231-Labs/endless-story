@@ -61,6 +61,8 @@ import { runCharacterTurnAction } from './character-turn';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
+import { generateEventMomentAction } from './generate-event-moment';
+import { after } from 'next/server';
 
 /**
  * Max characters whose memory-recall work runs at once. Default to 1 for demo:
@@ -97,6 +99,8 @@ export interface TickLoopInput {
     gazette?: boolean;
     /** Open a storylet (dramatic spine) when drama tension is live. Default true. */
     storylet?: boolean;
+    /** Render the event's multi-character 時刻 scene image (background). Default true. */
+    eventImage?: boolean;
     /** Auto-resolve (judge) an event once every participant has acted.
      *  Default true — events conclude on their own (N5). */
     autoResolve?: boolean;
@@ -530,6 +534,31 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     `${dryRun ? '（預演）' : storylet.opened ? ' ✓上鏈' : ' ✗'}`,
             );
         }
+    }
+
+    // 2.76 EVENT MOMENT — render the storylet's multi-character 時刻 scene image in
+    //   the BACKGROUND (img2img off each participant's anchor → faces don't drift),
+    //   append as kind=4 to every participant + tag the source event tx. Never
+    //   blocks the tick (after()); only on live runs where the storylet anchored.
+    if ((input.eventImage ?? true) && !dryRun && storylet?.opened && storylet.characterIds.length >= 2) {
+        const st = storylet;
+        after(async () => {
+            try {
+                const r = await generateEventMomentAction({
+                    characterIds: st.characterIds,
+                    sceneName: st.sceneName,
+                    label: st.label,
+                    eventTx: st.digest,
+                });
+                console.log(
+                    `[tick-loop] event moment (${st.templateId}): appended=${r.appended}` +
+                        (r.skipped ? ` skipped=${r.skipped}` : '') +
+                        (r.error ? ` error=${r.error}` : ''),
+                );
+            } catch (err) {
+                console.warn('[tick-loop] event moment failed:', err);
+            }
+        });
     }
 
     // 2.8 SOCIAL — idle, same-scene lightweight observation / talk. This
