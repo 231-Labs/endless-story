@@ -36,6 +36,11 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 > （NARRATIVE_AGENTS §7 經濟層的展開）。dailyCost / saga 混合發薪 / 真實持幣+角色間轉帳 /
 > 雙軌死亡(經濟+隱藏年齡 hazard) / 世代交替。機制已用純模擬 `packages/economy` 學術驗證通過
 > (12/12 測試、6 假說成立)；產品化 Part D 為 gate-after。分支 `feat/character-economy`。
+>
+> **[docs/WALRUS_ASSETS.md](./docs/WALRUS_ASSETS.md)** = Walrus 資產管理 + 續費(設計與規格)。
+> 後台統一管 hero 影片/角色圖/章回等長存資產的上傳·上下架·到期追蹤·續租。決策鎖定:通用面板
+> ＋ Hybrid 續費。自架 publisher+aggregator+relayer 上 Contabo(Tier A/B 可現在先上,前端定案只動
+> 一個 env＋一行 CORS)。relayer 加 asset service(零依賴,Walrus 寫入 shell out `walrus` CLI)。**待動工。**
 
 ---
 
