@@ -19,6 +19,13 @@ const ASPECT_RATIO: Record<ClipAspect, number> = {
   '3/4': 3 / 4,
 };
 
+const DAY_PART_LABEL: Record<string, string> = {
+  morning: '朝',
+  noon: '午',
+  dusk: '暮',
+  night: '夜',
+};
+
 function aspectClass(aspect?: ClipAspect): string {
   return ASPECT_CLASS[aspect ?? '16/9'];
 }
@@ -193,10 +200,15 @@ export function HeroTheater({ saga, clips, recruitmentsCount }: { saga: Saga; cl
             <h1 className="font-serif text-5xl leading-tight tracking-wide text-ink sm:text-6xl lg:text-7xl">
               {saga.name}
             </h1>
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm tracking-widest text-mute sm:mt-5 sm:text-base">
-              <span>第 {saga.currentDay} 日 / 全 {saga.totalDays} 日</span>
-              <span className="hidden text-hairline sm:inline">·</span>
-              <span>{saga.castIds.length} 人在臺</span>
+            {/* Living world-clock: 第 N 日 · 時辰. Drops the meaningless「全 N 日」
+                (endless sagas have no fixed end → totalDays usually unset) and the
+                misleading「0 人在臺」. 全 N 日 only shows for a planned-end arc. */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm tracking-widest text-mute sm:mt-5 sm:text-base">
+              <span>
+                第 {saga.currentDay} 日
+                {saga.worldTime?.partOfDay ? ` · ${DAY_PART_LABEL[saga.worldTime.partOfDay] ?? ''}` : ''}
+              </span>
+              {saga.totalDays ? <span>· 全 {saga.totalDays} 日</span> : null}
             </div>
             <p className="mt-6 text-lg leading-relaxed text-ink/90 sm:mt-7 sm:text-xl">
               {saga.premise}
