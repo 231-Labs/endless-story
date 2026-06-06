@@ -25,6 +25,7 @@ const KINDS: { value: PortraitOccasionKind; label: string }[] = [
     { value: 'aged', label: '老年蒼勁' },
     { value: 'illness', label: '病中清減' },
     { value: 'snow', label: '雪夜獨行' },
+    { value: 'realistic', label: '真人版' },
     { value: 'custom', label: '自訂情境' },
 ];
 
@@ -39,6 +40,7 @@ const KIND_HINT: Record<PortraitOccasionKind, string> = {
     aged: '多年以後、白髮皺紋、氣度蒼勁',
     illness: '久病清減、面色蒼白、形容憔悴',
     snow: '風雪夜、披斗篷、肩頭落雪',
+    realistic: '以基底肖像為參考、img2img 出寫實真人版（同一張臉）',
     custom: '用下方文字逐字驅動扮相',
 };
 
@@ -98,7 +100,7 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
             {kind !== 'custom' ? (
                 <p className="text-2xs leading-relaxed text-mute">
                     此選項出：<span className="text-ink/80">{KIND_HINT[kind]}</span>
-                    （同一人、保持體態氣質；水墨工筆畫風）
+                    （同一人、保持體態氣質；{kind === 'realistic' ? '寫實攝影風' : '水墨工筆畫風'}）
                 </p>
             ) : null}
 

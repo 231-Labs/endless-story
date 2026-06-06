@@ -22,6 +22,8 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read, tx as endlessTx } from '@endless-story/sdk';
+import { createImageClient } from '@endless-story/llm/image';
+import { blob } from '@endless-story/memwal';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
@@ -36,13 +38,14 @@ export type PortraitOccasionKind =
     | 'aged'
     | 'illness'
     | 'snow'
+    | 'realistic'
     | 'custom';
 
 /** Per-kind situational framing — short, evocative, visually distinct (for
  *  demo). Drives makeup / costume / age / scene. The anchor curator strips
  *  these (it's 素顏-only), so the variant builds its OWN prompt and renders
  *  it directly via promptOverride. */
-const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom'>, string> = {
+const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realistic'>, string> = {
     reference: '正式設定形象：端正面向觀者、神情沉靜，純色底、自然光、半身。',
     stage: '登台演出：勾臉上彩的京劇戲妝、戴頭面、穿蟒袍戲服，舞台燈光，半身。',
     finery: '一身上等綢緞華服、配飾講究，雍容貴氣，半身。',
@@ -55,6 +58,8 @@ const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom'>, string> 
 
 const VARIANT_TONE = '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。';
 const VARIANT_NEG = '不要動漫感、不要油畫感、不要寫實照片。';
+/** 真人版 wants realism (the opposite of VARIANT_NEG); only forbid stray text. */
+const REALISTIC_NEG = '畫面中不得出現任何文字、浮水印、邊框或排版框線。';
 
 export interface EvolvePortraitInput {
     characterId: string;
@@ -96,6 +101,8 @@ export async function evolvePortraitAction(
     if (!charRes) return { ok: false, error: '讀取角色失敗' };
 
     const cj = charRes.json as unknown as {
+        image_url?: string;
+        media_assets?: Array<{ uri?: string }>;
         profile?: {
             name?: string;
             physical_facts?: {
@@ -110,34 +117,44 @@ export async function evolvePortraitAction(
     const pf = cj.profile?.physical_facts ?? {};
     const physicalFacts = [pf.species, pf.body].filter(Boolean).join(' / ') || '—';
 
-    const framing =
-        input.kind === 'custom'
-            ? input.occasion?.trim() || '一個尋常的午後'
-            : [OCCASION_BY_KIND[input.kind], input.occasion?.trim()].filter(Boolean).join(' ');
+    // 真人版 (realistic): unlike the ink-wash variants, this needs the actual
+    // FACE preserved, so it's img2img off the character's anchor portrait (the
+    // edit endpoint) with a photographic prompt — NOT the text-anchored path
+    // (which only reproduces physical_facts, a look-alike). The prompt asks for
+    // realism (opposite of the other variants'「不要寫實」).
+    let gen: { ok: boolean; url?: string; base64?: string; blobId?: string; promptUsed?: string; error?: string };
+    if (input.kind === 'realistic') {
+        gen = await renderRealisticFromAnchor(cj, role ?? undefined, input.occasion);
+    } else {
+        const framing =
+            input.kind === 'custom'
+                ? input.occasion?.trim() || '一個尋常的午後'
+                : [OCCASION_BY_KIND[input.kind], input.occasion?.trim()].filter(Boolean).join(' ');
 
-    // Build the variant prompt DIRECTLY (the anchor curator would strip the
-    // occasion — it's hardwired to 素顏/無戲妝). Anchor on physical_facts +
-    // role so it stays the same person; the framing drives makeup/costume.
-    const genderAge = `${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
-    const personLine = `${role ?? '梨園中人'}，${genderAge}，${physicalFacts}（同一個人，保持體態與氣質一致）。`;
-    const variantPrompt = [VARIANT_TONE, personLine, framing, VARIANT_NEG]
-        .filter(Boolean)
-        .join('\n');
+        // Build the variant prompt DIRECTLY (the anchor curator would strip the
+        // occasion — it's hardwired to 素顏/無戲妝). Anchor on physical_facts +
+        // role so it stays the same person; the framing drives makeup/costume.
+        const genderAge = `${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
+        const personLine = `${role ?? '梨園中人'}，${genderAge}，${physicalFacts}（同一個人，保持體態與氣質一致）。`;
+        const variantPrompt = [VARIANT_TONE, personLine, framing, VARIANT_NEG]
+            .filter(Boolean)
+            .join('\n');
 
-    // Render the exact prompt (skip anchor curation) → Walrus.
-    const gen = await generatePortrait({
-        character: {
-            description: personLine,
-            physical: {
-                gender: mapGender(pf.gender ?? ''),
-                ageYears: Number(pf.age_years ?? 0),
-                body: pf.body ?? '',
+        // Render the exact prompt (skip anchor curation) → Walrus.
+        gen = await generatePortrait({
+            character: {
+                description: personLine,
+                physical: {
+                    gender: mapGender(pf.gender ?? ''),
+                    ageYears: Number(pf.age_years ?? 0),
+                    body: pf.body ?? '',
+                },
+                attributes: [],
             },
-            attributes: [],
-        },
-        toneHint: VARIANT_TONE,
-        promptOverride: variantPrompt,
-    });
+            toneHint: VARIANT_TONE,
+            promptOverride: variantPrompt,
+        });
+    }
     if (!gen.ok || !gen.url) {
         // Distinguish "image render failed" from "rendered but Walrus upload
         // was rate-limited" (gen.ok + base64 present, just no url).
@@ -219,6 +236,77 @@ function mapGender(raw: string): string {
     if (raw === '男' || raw.toLowerCase() === 'male') return '男';
     if (raw === '女' || raw.toLowerCase() === 'female') return '女';
     return '中性';
+}
+
+/**
+ * 真人版 — render a photorealistic portrait of the SAME person by feeding the
+ * character's anchor base portrait into the image-edit (img2img) endpoint as a
+ * reference, so the actual face/features survive. Returns the same shape as
+ * `generatePortrait` so the caller's anchor-on-chain path is unchanged.
+ */
+async function renderRealisticFromAnchor(
+    cj: {
+        image_url?: string;
+        media_assets?: Array<{ uri?: string }>;
+        profile?: { physical_facts?: { gender?: string; age_years?: number | string } };
+    },
+    role: string | undefined,
+    occasion?: string,
+): Promise<{ ok: boolean; url?: string; base64?: string; blobId?: string; promptUsed?: string; error?: string }> {
+    const pf = cj.profile?.physical_facts ?? {};
+    const person = `${role ?? '梨園中人'}，${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
+    const extra = occasion?.trim() ? `（${occasion.trim()}）` : '';
+    const prompt =
+        `寫實真人肖像攝影：與參考圖**同一個人、同一張臉**（五官、髮型、神態保持一致），${person}${extra}。` +
+        `自然光、真實膚質與衣料質感、淺景深、半身正面肖像，照片寫真感。${REALISTIC_NEG}`;
+
+    const anchorUrl = cj.image_url || cj.media_assets?.[0]?.uri || '';
+    if (!anchorUrl) return { ok: false, promptUsed: prompt, error: '此角色尚無基底肖像可作參考' };
+
+    let refBytes: Uint8Array;
+    try {
+        const r = await fetch(anchorUrl);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        refBytes = new Uint8Array(await r.arrayBuffer());
+        if (refBytes.length === 0) throw new Error('empty reference');
+    } catch (err) {
+        return { ok: false, promptUsed: prompt, error: `讀取基底肖像失敗：${err instanceof Error ? err.message : String(err)}` };
+    }
+
+    let imgClient;
+    try {
+        imgClient = createImageClient();
+    } catch {
+        return { ok: false, promptUsed: prompt, error: 'image 服務未設定（缺 OPENAI_API_KEY）' };
+    }
+
+    try {
+        const res = await imgClient.edit({
+            prompt,
+            images: [refBytes],
+            aspectRatio: '4:5',
+            quality: 'medium',
+            n: 1,
+        });
+        const img = res.images[0];
+        const bytes = img?.base64
+            ? Uint8Array.from(Buffer.from(img.base64, 'base64'))
+            : img?.url
+              ? new Uint8Array(await (await fetch(img.url)).arrayBuffer())
+              : null;
+        if (!bytes || bytes.length === 0) return { ok: false, promptUsed: prompt, error: '出圖為空' };
+        const base64 = img?.base64 ?? Buffer.from(bytes).toString('base64');
+        try {
+            const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+            return { ok: true, url: put.url, base64, blobId: put.blobId, promptUsed: prompt };
+        } catch {
+            // Rendered but Walrus upload was rate-limited — still return the
+            // base64 so the lab can preview it (caller handles missing url).
+            return { ok: true, base64, promptUsed: prompt };
+        }
+    } catch (err) {
+        return { ok: false, promptUsed: prompt, error: err instanceof Error ? err.message : String(err) };
+    }
 }
 
 function mediaKindForOccasion(kind: PortraitOccasionKind): number {
