@@ -20,6 +20,7 @@ import { Suspense } from 'react';
 import type { Character } from '@endless-story/shared';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierSkeleton } from '@/components/dossier/DossierSkeleton';
+import { RosterSkeletonInner } from '@/components/dossier/RosterSkeleton';
 import { LiveStateBar, LiveStateBarSkeleton } from '@/components/dossier/LiveStateBar';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
@@ -69,71 +70,17 @@ export default async function DossierPage({
   const viewerWallet = resolveViewerWallet(params.as);
 
   // ──────────── List view ────────────
+  // The static shell (SiteNav) renders immediately; only the per-card chain
+  // fan-out streams under <Suspense>, so the roster header + filters appear at
+  // once and only the character cards show a (roster-shaped) skeleton.
   if (!characterId) {
     const filter = parseFilter(params.filter);
-    // Facade is chain-first when deployed; mock fallback otherwise.
-    // `filter=mine` branches at the facade level (uses OwnerCap query
-    // for cheaper round-trip than scanning all CharacterMinted events).
-    const useOwnedQuery =
-      filter === 'mine' && viewerWallet != null && /^0x[0-9a-fA-F]{64}$/.test(viewerWallet);
-    const characters = useOwnedQuery
-      ? await charactersApi.listOwnedCharacters(viewerWallet)
-      : await charactersApi.listCharacters();
-    const charactersById = new Map(characters.map((c) => [c.id, c]));
-
-    const cards: CardData[] = await Promise.all(
-      characters.map(async (character) => {
-        const magnetism = await charactersApi.getMagnetism(character.id);
-        const sigQuote = magnetism?.signatureQuote;
-        const quoteChapter = sigQuote?.chapterId
-          ? await chaptersApi.getChapter(sigQuote.chapterId)
-          : null;
-        const quote = sigQuote
-          ? {
-              text: sigQuote.text,
-              chapterId: sigQuote.chapterId,
-              chapterTitle: quoteChapter
-                ? shortChapterTitle(quoteChapter.title)
-                : undefined,
-            }
-          : undefined;
-
-        const edges = await relationshipsApi.listOutgoingEdges(character.id);
-        const topEdge = edges[0];
-        const target = topEdge ? charactersById.get(topEdge.toId) : null;
-        const tension =
-          topEdge && target
-            ? { targetName: target.name, label: topEdge.label }
-            : undefined;
-
-        const subscribers = await subscriptionsApi.listSubscribers(character.id);
-        const isOwner = viewerWallet != null && character.nftOwner === viewerWallet;
-        const initialSubscribed =
-          isOwner ||
-          (viewerWallet != null &&
-            subscribers.some((s) => s.wallet === viewerWallet && !s.isOwner));
-
-        return {
-          character,
-          quote,
-          tension,
-          initialSubscriberCount: magnetism?.subscriberCount ?? 1,
-          initialSubscribed,
-          isOwner,
-          nextPovHint: magnetism?.nextPovHint,
-        };
-      })
-    );
-
     return (
       <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
         <SiteNav />
-        <CharacterGrid
-          cards={cards}
-          filter={filter}
-          viewerWallet={viewerWallet}
-          internalSagaId={DEMO_SAGA_ID}
-        />
+        <Suspense fallback={<RosterSkeletonInner filter={filter} />}>
+          <RosterCards filter={filter} viewerWallet={viewerWallet} />
+        </Suspense>
       </main>
     );
   }
@@ -146,6 +93,72 @@ export default async function DossierPage({
     <Suspense key={characterId} fallback={<DossierSkeleton />}>
       <DossierDetail characterId={characterId} viewerWallet={viewerWallet} tab={parseTab(params.tab)} />
     </Suspense>
+  );
+}
+
+async function RosterCards({
+  filter,
+  viewerWallet,
+}: {
+  filter: RosterFilter;
+  viewerWallet: string | null;
+}) {
+  // Facade is chain-first when deployed; mock fallback otherwise.
+  // `filter=mine` branches at the facade level (uses OwnerCap query
+  // for cheaper round-trip than scanning all CharacterMinted events).
+  const useOwnedQuery =
+    filter === 'mine' && viewerWallet != null && /^0x[0-9a-fA-F]{64}$/.test(viewerWallet);
+  const characters = useOwnedQuery
+    ? await charactersApi.listOwnedCharacters(viewerWallet)
+    : await charactersApi.listCharacters();
+  const charactersById = new Map(characters.map((c) => [c.id, c]));
+
+  const cards: CardData[] = await Promise.all(
+    characters.map(async (character) => {
+      const magnetism = await charactersApi.getMagnetism(character.id);
+      const sigQuote = magnetism?.signatureQuote;
+      const quoteChapter = sigQuote?.chapterId
+        ? await chaptersApi.getChapter(sigQuote.chapterId)
+        : null;
+      const quote = sigQuote
+        ? {
+            text: sigQuote.text,
+            chapterId: sigQuote.chapterId,
+            chapterTitle: quoteChapter ? shortChapterTitle(quoteChapter.title) : undefined,
+          }
+        : undefined;
+
+      const edges = await relationshipsApi.listOutgoingEdges(character.id);
+      const topEdge = edges[0];
+      const target = topEdge ? charactersById.get(topEdge.toId) : null;
+      const tension =
+        topEdge && target ? { targetName: target.name, label: topEdge.label } : undefined;
+
+      const subscribers = await subscriptionsApi.listSubscribers(character.id);
+      const isOwner = viewerWallet != null && character.nftOwner === viewerWallet;
+      const initialSubscribed =
+        isOwner ||
+        (viewerWallet != null && subscribers.some((s) => s.wallet === viewerWallet && !s.isOwner));
+
+      return {
+        character,
+        quote,
+        tension,
+        initialSubscriberCount: magnetism?.subscriberCount ?? 1,
+        initialSubscribed,
+        isOwner,
+        nextPovHint: magnetism?.nextPovHint,
+      };
+    })
+  );
+
+  return (
+    <CharacterGrid
+      cards={cards}
+      filter={filter}
+      viewerWallet={viewerWallet}
+      internalSagaId={DEMO_SAGA_ID}
+    />
   );
 }
 
