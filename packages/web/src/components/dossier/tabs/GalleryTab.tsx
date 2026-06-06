@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
@@ -506,10 +507,15 @@ function Lightbox({
   }, [go, onClose]);
 
   if (!current?.blob.imageUrl) return null;
+  if (typeof document === 'undefined') return null;
 
-  return (
+  // Portal to <body> so the full-viewport overlay escapes any ancestor with a
+  // transform / backdrop-filter (the dossier's blurred scroll container), which
+  // would otherwise become the containing block for `fixed` and leave the top
+  // strip uncovered when scrolled past the header.
+  return createPortal(
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/90 p-4 backdrop-blur-md dark:bg-black/90 sm:p-8"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/90 p-4 backdrop-blur-md dark:bg-black/90 sm:p-8"
       role="dialog"
       aria-modal="true"
       aria-label={`${characterName} 設定集圖`}
@@ -573,7 +579,8 @@ function Lightbox({
           </span>
         </figcaption>
       </figure>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
