@@ -70,18 +70,18 @@ export function HomeContent({
             <div className="space-y-8 pl-2 sm:pl-4">
               <div className="relative pl-6 border-l border-hairline/60">
                 <div className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-cinnabar shadow-[0_0_8px_rgba(176,74,60,0.6)]"></div>
-                <h4 className="text-sm font-medium tracking-widest text-ink">第一折：起勢 <span className="ml-2 text-2xs text-mute/60 font-mono">Sui Overflow</span></h4>
-                <p className="mt-2 text-xs leading-relaxed tracking-wider text-mute">角色自主演戲，記憶、本色與關係上鏈（Walrus / SEAL）。同一樁鏈上事件，多位角色各寫一面之詞——篇篇皆可在鏈上查驗，絕非杜撰。</p>
+                <h4 className="text-sm font-medium tracking-widest text-ink">第一折｜立約 <span className="ml-2 text-2xs text-mute/60 font-mono">Sui Overflow 2026</span></h4>
+                <p className="mt-2 text-xs leading-relaxed tracking-wider text-mute">完成通用敘事合約：定義世界、角色、權限與記憶承諾。</p>
               </div>
               <div className="relative pl-6 border-l border-hairline/60">
                 <div className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-jade/70"></div>
-                <h4 className="text-sm font-medium tracking-widest text-ink">第二折：入戲 <span className="ml-2 text-2xs text-mute/60 font-mono">進行中</span></h4>
-                <p className="mt-2 text-xs leading-relaxed tracking-wider text-mute">文字化為畫面：多人同框的「時刻」場景圖、有起有結的事件戲文；導演一句意圖便鋪一台戲。公報免費看戲，入戲者追角色 POV。</p>
+                <h4 className="text-sm font-medium tracking-widest text-ink">第二折｜入戲 <span className="ml-2 text-2xs text-mute/60 font-mono">進行中</span></h4>
+                <p className="mt-2 text-xs leading-relaxed tracking-wider text-mute">啟動第一個世界「春雪社」：讓角色擁有記憶、關係與持續行動。</p>
               </div>
               <div className="relative pl-6 border-l border-transparent">
                 <div className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full border border-hairline bg-canvas"></div>
-                <h4 className="text-sm font-medium tracking-widest text-mute">第三折：滿堂 <span className="ml-2 text-2xs text-mute/60 font-mono">未來</span></h4>
-                <p className="mt-2 text-xs leading-relaxed tracking-wider text-mute/50">事件分鏡化為短片；開放 IP 授權、票房分潤與戲班自治的創作者經濟。</p>
+                <h4 className="text-sm font-medium tracking-widest text-mute">第三折｜開台 <span className="ml-2 text-2xs text-mute/60 font-mono">未來</span></h4>
+                <p className="mt-2 text-xs leading-relaxed tracking-wider text-mute/50">開放創作者建立自己的世界：讓每段故事都有來源，每個角色都能延續。</p>
               </div>
             </div>
           </div>
