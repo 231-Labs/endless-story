@@ -393,7 +393,7 @@ function AspectFrame({
 
   return (
     <div
-      className={`group relative ${blob && isWideBlob(blob) ? 'aspect-[16/9]' : 'aspect-[2/3]'} overflow-hidden rounded-2xl bg-surface/80 backdrop-blur-sm transition-all duration-500 hover:shadow-md dark:bg-elevated/45 ${frame} ${clickable ? 'cursor-zoom-in' : ''}`}
+      className={`group relative ${blob && isWideBlob(blob) ? 'aspect-[3/2]' : 'aspect-[2/3]'} overflow-hidden rounded-2xl bg-surface/80 backdrop-blur-sm transition-all duration-500 hover:shadow-md dark:bg-elevated/45 ${frame} ${clickable ? 'cursor-zoom-in' : ''}`}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       onClick={clickable ? onOpen : undefined}
@@ -612,8 +612,9 @@ function ChevronIcon({ dir }: { dir: 'left' | 'right' }) {
   );
 }
 
-/** Landscape kinds (rendered 16:9): the art sheet + event scene moments. They
- *  get a 16:9 frame instead of the 2/3 portrait one, and span 2 grid cells. */
+/** Landscape kinds (the art sheet + event scene moments). gpt-image only emits
+ *  1:1 / 3:2 / 2:3, and these are requested landscape → 1536×1024 = 3:2, so they
+ *  get a 3:2 frame (exact fit, no matte) and span 2 grid cells. */
 function isWideBlob(blob: BlobRef): boolean {
   return blob.kind === 'setting_sheet' || blob.kind === 'event_moment';
 }
