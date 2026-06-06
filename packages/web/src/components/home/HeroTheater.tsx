@@ -196,7 +196,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
         }`}
       >
         <div className="mx-auto w-full max-w-3xl animate-banner-rise">
-          <div className="rounded-3xl border border-white/40 bg-canvas/65 p-6 shadow-[0_10px_60px_-20px_rgba(0,0,0,0.18)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-canvas/70 dark:shadow-[0_10px_60px_-12px_rgba(0,0,0,0.6)] sm:p-8">
+          <div className="rounded-3xl border border-white/40 bg-canvas/85 p-6 shadow-[0_10px_60px_-20px_rgba(0,0,0,0.18)] backdrop-blur-2xl backdrop-saturate-150 dark:border-white/10 dark:bg-canvas/70 dark:shadow-[0_10px_60px_-12px_rgba(0,0,0,0.6)] sm:p-8">
             <h1 className="font-serif text-5xl leading-tight tracking-wide text-ink sm:text-6xl lg:text-7xl">
               {saga.name}
             </h1>
