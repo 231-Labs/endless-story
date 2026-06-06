@@ -84,7 +84,9 @@ export async function generateEventMomentAction(input: EventMomentInput): Promis
         const cj = charRes?.json as
             | { image_url?: string; profile?: { name?: string }; media_assets?: Array<{ uri?: string }> }
             | undefined;
-        const anchorUrl = cj?.image_url || cj?.media_assets?.[0]?.uri;
+        // Use the BASE anchor = media_assets[0] (mint-time portrait), not image_url
+        // (owner-set cover) — a stable identity reference across every scene image.
+        const anchorUrl = cj?.media_assets?.[0]?.uri || cj?.image_url;
         if (!anchorUrl) continue;
         let bytes: Uint8Array | null = null;
         try {

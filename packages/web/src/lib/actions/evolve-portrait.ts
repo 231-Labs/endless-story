@@ -260,7 +260,9 @@ async function renderRealisticFromAnchor(
         `寫實真人肖像攝影：與參考圖**同一個人、同一張臉**（五官、髮型、神態保持一致），${person}${extra}。` +
         `自然光、真實膚質與衣料質感、淺景深、半身正面肖像，照片寫真感。${REALISTIC_NEG}`;
 
-    const anchorUrl = cj.image_url || cj.media_assets?.[0]?.uri || '';
+    // ALWAYS use the BASE anchor = media_assets[0] (the mint-time portrait), NOT
+    // image_url (the owner-set cover, which may point at any later variant).
+    const anchorUrl = cj.media_assets?.[0]?.uri || cj.image_url || '';
     if (!anchorUrl) return { ok: false, promptUsed: prompt, error: '此角色尚無基底肖像可作參考' };
 
     let refBytes: Uint8Array;
