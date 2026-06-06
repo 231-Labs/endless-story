@@ -32,11 +32,23 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-// 題款落點（頂端對位）。直書欄很高，所以把上緣壓在標題下方（~30%）這條帶子，
-// 只往下方留白長；left 夾在 [5,95]% 避免段邊場景的題款被推出視窗左右緣。
-function quotePosition(anchor: VignetteAnchor): { left: number; top: number } {
+/** Stable per-scene hash → deterministic jitter (no Math.random, SSR-safe). */
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// 題款落點（頂端對位）。直書欄很高，所以上緣仍壓在標題下方（≥30%）不犯標題、
+// 下方靠 maxHeight 收住；但每個題款用穩定 hash 給一段高低落差（30–50%），
+// 不再幾乎齊平。left 夾在 [5,95]% 避免段邊場景的題款被推出視窗左右緣。
+function quotePosition(anchor: VignetteAnchor, sceneId: string): { left: number; top: number } {
   const left = clamp(anchor.x + (anchor.zone === 'theater' ? 4 : -4), 5, 95);
-  const top = clamp(anchor.y - 26, 30, 36);
+  const spread = hashStr(sceneId) % 17; // 0–16，穩定 per scene
+  const top = clamp(30 + spread + (anchor.y - 56) * 0.3, 30, 50);
   return { left, top };
 }
 
@@ -137,8 +149,8 @@ export function SagaHandscroll(props: Props) {
     return m;
   }, [layout]);
   const segmentCount = layout.segmentCount;
-  // 整卷寬度隨段數伸縮：每段約 80vw（至少撐滿舊的 300vw）。
-  const scrollVw = Math.max(segmentCount * 80, 300);
+  // 整卷寬度隨段數伸縮：每段約 96vw（再長一些，展卷更舒展；至少 360vw）。
+  const scrollVw = Math.max(segmentCount * 96, 360);
   // 場景區塊越多越窄，避免同段相鄰場景相疊。
   const vignetteWidthPct = Math.min(12, (100 / segmentCount) * 0.55);
   // 副標的地名串跟橫軸一致：只列「本 saga 真的有戲」的 location（與 layout 同一套過濾），
@@ -260,7 +272,7 @@ export function SagaHandscroll(props: Props) {
               const primary = scene.ghostQuotes?.[0];
               if (!primary) return null;
               const speaker = charactersById.get(primary.characterId) ?? null;
-              const { left, top } = quotePosition(placementAnchor(placement));
+              const { left, top } = quotePosition(placementAnchor(placement), scene.id);
               const text = primary.text;
               const truncated = text.length > 12 ? `${text.slice(0, 12)}…` : text;
               return (
