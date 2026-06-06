@@ -28,8 +28,10 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 
-const TONE = '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。';
-const NEG = '不要動漫感、不要油畫感、不要寫實照片。';
+const TONE = '淡彩水墨工筆畫風：淡墨細線、清透水彩薄塗、大面積留白、宣紙質感。';
+// These views are used as CLEAN reference anchors for downstream multi-character
+// scene images, so the image must be pure figure art — no text whatsoever.
+const NEG = '全圖純畫面，無任何文字、標籤、題字、印章、邊框、數字或排版框線。';
 
 export interface AdditionalViewsInput {
     characterId: string;
@@ -73,8 +75,8 @@ const VIEWS: ViewSpec[] = [
         aspect: '16:9',
         prompt: (person) =>
             `${TONE}\n與參考圖**同一個人、同一張臉**（保持五官、髮型、氣質一致）。${person}\n` +
-            `橫向**人物美術設定圖（character art sheet）**：同一人物的多角度呈現 —— 正面全身、` +
-            `四分之三側面、背面，並附頭部特寫；純色底、設定集排版、標註感。${NEG}`,
+            `橫向**人物多角度設定圖**：同一人物的正面全身、四分之三側面、背面，並附頭部特寫；` +
+            `統一純色底、各角度之間以留白分隔，不做任何排版標註。${NEG}`,
     },
 ];
 
