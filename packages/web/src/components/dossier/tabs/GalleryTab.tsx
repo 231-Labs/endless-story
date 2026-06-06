@@ -146,7 +146,7 @@ export function GalleryTab({
               const key = blobKey(blob);
               const isCover = !!blob.imageUrl && blob.imageUrl === coverUrl;
               return (
-                <li key={key}>
+                <li key={key} className={isWideBlob(blob) ? 'col-span-2' : undefined}>
                   <DerivativeCard
                     label={blob.label ?? defaultBlobLabel(blob, i)}
                     blob={blob}
@@ -392,7 +392,7 @@ function AspectFrame({
 
   return (
     <div
-      className={`group relative aspect-[2/3] overflow-hidden rounded-2xl bg-surface/80 backdrop-blur-sm transition-all duration-500 hover:shadow-md dark:bg-elevated/45 ${frame} ${clickable ? 'cursor-zoom-in' : ''}`}
+      className={`group relative ${blob && isWideBlob(blob) ? 'aspect-[16/9]' : 'aspect-[2/3]'} overflow-hidden rounded-2xl bg-surface/80 backdrop-blur-sm transition-all duration-500 hover:shadow-md dark:bg-elevated/45 ${frame} ${clickable ? 'cursor-zoom-in' : ''}`}
       role={clickable ? 'button' : undefined}
       tabIndex={clickable ? 0 : undefined}
       onClick={clickable ? onOpen : undefined}
@@ -603,6 +603,12 @@ function ChevronIcon({ dir }: { dir: 'left' | 'right' }) {
       {dir === 'left' ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
     </svg>
   );
+}
+
+/** Landscape kinds (rendered 16:9): the art sheet + event scene moments. They
+ *  get a 16:9 frame instead of the 2/3 portrait one, and span 2 grid cells. */
+function isWideBlob(blob: BlobRef): boolean {
+  return blob.kind === 'setting_sheet' || blob.kind === 'event_moment';
 }
 
 function blobKey(blob: BlobRef): FeaturedKey {
