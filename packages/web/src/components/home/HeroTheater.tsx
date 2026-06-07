@@ -283,11 +283,25 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                     }`}
                   >
                     <div className={`relative w-full ${aspectClass('16/9')} overflow-hidden bg-elevated/50 dark:bg-canvas/50`}>
+                      {/* Optional dimmed poster — stays calm over the busy painting; solid card when absent */}
+                      {clip.thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={clip.thumbnailUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover opacity-75 saturate-[0.9] transition-transform duration-500 group-hover:scale-110"
+                        />
+                      ) : null}
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent to-ink/5 dark:to-black/20" />
-                      <div className={`absolute inset-0 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 ${
-                        isActive ? 'text-cinnabar' : 'text-mute/40 group-hover:text-cinnabar/80'
-                      }`}>
-                        <PlayIcon size={32} />
+                      {/* Circular play button — the universal「this is a video」affordance */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className={`flex h-12 w-12 items-center justify-center rounded-full ring-1 shadow-sm backdrop-blur-sm transition-all duration-300 group-hover:scale-110 ${
+                          isActive
+                            ? 'bg-cinnabar text-canvas ring-cinnabar'
+                            : 'bg-surface/80 text-mute ring-white/50 group-hover:bg-cinnabar group-hover:text-canvas dark:bg-elevated/90 dark:text-cinnabar dark:ring-0'
+                        }`}>
+                          <span className="translate-x-px"><PlayIcon size={20} /></span>
+                        </span>
                       </div>
                       <div className="absolute right-2 top-2 rounded bg-elevated/90 px-2 py-0.5 font-mono text-2xs tracking-wider text-ink shadow-sm backdrop-blur">
                         {clip.durationSeconds}s
