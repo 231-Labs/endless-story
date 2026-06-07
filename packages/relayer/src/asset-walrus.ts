@@ -205,7 +205,9 @@ function parseEndEpoch(out: string): number | null {
 
 function parseCurrentEpoch(out: string): number | null {
   const j = asJson(out);
-  const e = num(pick(j, "epoch", "currentEpoch", "current_epoch"));
+  // `walrus info --json` nests it under epochInfo.currentEpoch (top-level fallback kept).
+  const epochInfo = (pick(j, "epochInfo", "epoch_info") as Record<string, unknown> | undefined) ?? {};
+  const e = num(pick(epochInfo, "currentEpoch", "current_epoch") ?? pick(j, "epoch", "currentEpoch", "current_epoch"));
   return e > 0 ? e : null;
 }
 
