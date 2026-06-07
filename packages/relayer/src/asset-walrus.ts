@@ -143,31 +143,37 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function blobObjectOf(j: Record<string, unknown>): Record<string, unknown> {
-  const created = j.newlyCreated as Record<string, unknown> | undefined;
-  const certified = j.alreadyCertified as Record<string, unknown> | undefined;
-  const obj =
-    (created?.blobObject as Record<string, unknown> | undefined) ??
-    (j.blobObject as Record<string, unknown> | undefined) ??
-    certified ??
-    j;
-  return obj ?? {};
+// `walrus store --json` 回的是「陣列」,每元素再包一層 `blobStoreResult`,內含
+// { newlyCreated.blobObject | alreadyCertified }。解到內層那個結果物件。
+function storeResultOf(out: string): Record<string, any> {
+  let root: any;
+  try {
+    root = JSON.parse(out);
+  } catch {
+    return {};
+  }
+  const first = Array.isArray(root) ? root[0] : root;
+  return (first?.blobStoreResult ?? first ?? {}) as Record<string, any>;
+}
+
+function blobFields(sr: Record<string, any>): StoreResult {
+  const created = sr?.newlyCreated;
+  const certified = sr?.alreadyCertified;
+  const blobObject = created?.blobObject ?? sr?.blobObject ?? {};
+  const blobId = blobObject?.blobId ?? certified?.blobId ?? "";
+  const suiObjectId = blobObject?.id ?? "";
+  const endEpoch = num(blobObject?.storage?.endEpoch ?? certified?.endEpoch ?? blobObject?.endEpoch ?? 0);
+  return { blobId: String(blobId), suiObjectId: String(suiObjectId), endEpoch };
 }
 
 function parseStore(out: string): StoreResult {
-  const obj = blobObjectOf(asJson(out));
-  const blobId = String(pick(obj, "blobId", "blob_id") ?? "");
-  const suiObjectId = String(pick(obj, "id", "blobObjectId", "objectId", "object_id") ?? "");
-  const storage = (pick(obj, "storage") as Record<string, unknown> | undefined) ?? {};
-  const endEpoch = num(pick(storage, "endEpoch", "end_epoch") ?? pick(obj, "endEpoch", "end_epoch"));
-  if (!blobId) throw new Error(`walrus store: no blobId in output: ${out.slice(0, 300)}`);
-  return { blobId, suiObjectId, endEpoch };
+  const f = blobFields(storeResultOf(out));
+  if (!f.blobId) throw new Error(`walrus store: no blobId in output: ${out.slice(0, 400)}`);
+  return f;
 }
 
 function parseEndEpoch(out: string): number | null {
-  const obj = blobObjectOf(asJson(out));
-  const storage = (pick(obj, "storage") as Record<string, unknown> | undefined) ?? {};
-  const e = num(pick(storage, "endEpoch", "end_epoch") ?? pick(obj, "endEpoch", "end_epoch"));
+  const e = blobFields(storeResultOf(out)).endEpoch;
   return e > 0 ? e : null;
 }
 
