@@ -11,12 +11,15 @@
 
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CLI = process.env.WALRUS_CLI?.trim(); // e.g. "walrus"; unset → dev-local mock
 const CONTEXT = process.env.WALRUS_CONTEXT?.trim(); // walrus client config context (optional)
+const NETWORK = process.env.WALRUS_NETWORK?.trim() ?? "testnet";
+const SUI_RPC =
+  NETWORK === "mainnet" ? "https://fullnode.mainnet.sui.io:443" : "https://fullnode.testnet.sui.io:443";
 
 export interface StoreResult {
   blobId: string;
@@ -90,11 +93,32 @@ export class AssetWalrus {
     }
   }
 
-  /** Publisher wallet SUI + WAL balance (for the dashboard low-water warning). */
+  /**
+   * Publisher wallet SUI + WAL balance (for the dashboard low-water warning).
+   * `walrus info` carries NO balance — read the wallet address from the sui client
+   * config and ask the Sui fullnode (`suix_getAllBalances`). Balances are in MIST (9 decimals).
+   */
   async wallet(): Promise<WalletBalance> {
     if (this.local) return { sui: 999, wal: 999 };
+    const addr = walletAddress();
+    if (!addr) return { sui: null, wal: null };
     try {
-      return parseWallet(await this.run(["info", "--json"]));
+      const res = await fetch(SUI_RPC, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "suix_getAllBalances", params: [addr] }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const j = (await res.json()) as { result?: Array<{ coinType?: string; totalBalance?: string }> };
+      let sui: number | null = null;
+      let wal: number | null = null;
+      for (const b of j.result ?? []) {
+        const amt = num(b.totalBalance) / 1e9;
+        if (b.coinType?.endsWith("::sui::SUI")) sui = amt;
+        else if (b.coinType?.endsWith("::wal::WAL")) wal = amt;
+      }
+      // result omits coins with zero balance → treat "present address, coin absent" as 0
+      return { sui: sui ?? 0, wal: wal ?? 0 };
     } catch {
       return { sui: null, wal: null };
     }
@@ -185,12 +209,14 @@ function parseCurrentEpoch(out: string): number | null {
   return e > 0 ? e : null;
 }
 
-function parseWallet(out: string): WalletBalance {
-  const j = asJson(out);
-  const sui = pick(j, "sui", "suiBalance", "sui_balance");
-  const wal = pick(j, "wal", "walBalance", "wal_balance");
-  return {
-    sui: sui == null ? null : num(sui),
-    wal: wal == null ? null : num(wal),
-  };
+/** Read the active Sui address from the sui client config the entrypoint wrote (for balance RPC). */
+function walletAddress(): string | null {
+  try {
+    const home = process.env.HOME ?? "/root";
+    const yaml = readFileSync(join(home, ".sui", "sui_config", "client.yaml"), "utf8");
+    const m = yaml.match(/active_address:\s*"?(0x[0-9a-fA-F]+)"?/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
 }
