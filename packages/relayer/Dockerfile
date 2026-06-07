@@ -25,6 +25,8 @@ RUN apt-get update \
 # packages/relayer/src)。若改用 repo 根當 context,請改成 `COPY packages/relayer/src ./src`。
 WORKDIR /app
 COPY src ./src
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # 服務組態(其餘以 Zeabur Variables 覆寫:SUI_KEYSTORE / WALRUS_NETWORK / WALRUS_CLI /
 # RELAYER_SECRET / RELAYER_CORS_ORIGIN / PUBLIC_AGGREGATOR_BASE / 續租門檻 …)
@@ -37,9 +39,7 @@ ENV DATA_DIR=/data \
 VOLUME ["/data"]
 EXPOSE 8788
 
-# cmdoss/walrus 的原 ENTRYPOINT 會依 MODE 分派服務、不會執行我們的 CMD(MODE 未設時它只印
-# "CLI tool only" 然後退出 → crash loop)。覆寫掉它,直接起 asset server(絕對路徑,免 CWD 問題)。
-# 設 ENTRYPOINT 會自動清掉 base image 的 CMD,故無殘留參數。
-# 注意:這會「跳過」base image 的 walrus client config 自動生成 —— /health 與 manifest 不受影響;
-# 真實上傳/續租(walrus store/extend)前需另備 config(Volume 掛入 /config,或啟動腳本生成)。
-ENTRYPOINT ["node", "/app/src/assets-server.ts"]
+# 覆寫 cmdoss/walrus 的原 ENTRYPOINT(它依 MODE 分派服務、不跑我們的 app)。
+# 改用我們的啟動腳本:先用 SUI_KEYSTORE + 內建 testnet/mainnet 設定備好 walrus/sui config,
+# 再 exec node 起 asset server。設 ENTRYPOINT 會自動清掉 base image 的 CMD,故無殘留參數。
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
