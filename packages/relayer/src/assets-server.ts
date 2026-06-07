@@ -218,7 +218,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (method === "DELETE") {
       if (asset.deletable) {
         try {
-          await walrus.delete(asset.suiObjectId);
+          await walrus.delete(asset.blobId);
         } catch (err) {
           return send(res, 502, { error: `walrus delete failed: ${String(err)}` });
         }

@@ -68,14 +68,16 @@ export class AssetWalrus {
    */
   async extend(suiObjectId: string, epochs: number): Promise<number> {
     if (this.local) return 0;
-    const out = await this.run(["extend", "--blob-obj-id", suiObjectId, "--epochs", String(epochs), "--json"]);
+    // CLI: `walrus extend --blob-obj-id <id> --epochs-extended <n>` (no --json → parse fails →
+    // caller uses additive fallback oldEndEpoch+epochs, which is exactly right for extend-by-N).
+    const out = await this.run(["extend", "--blob-obj-id", suiObjectId, "--epochs-extended", String(epochs)]);
     return parseEndEpoch(out) ?? 0;
   }
 
-  /** Delete a (deletable) blob to reclaim storage. */
-  async delete(suiObjectId: string): Promise<void> {
+  /** Delete a (deletable) blob to reclaim storage. CLI deletes by blobId via `--blob-ids`. */
+  async delete(blobId: string): Promise<void> {
     if (this.local) return;
-    await this.run(["delete", "--blob-obj-id", suiObjectId, "--yes"]);
+    await this.run(["delete", "--blob-ids", blobId, "--yes"]);
   }
 
   /** Current Walrus epoch — for to-expiry math. null if unavailable. */
