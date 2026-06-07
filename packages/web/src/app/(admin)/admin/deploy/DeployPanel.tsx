@@ -30,14 +30,14 @@ export function DeployPanel({ initialStatus, presets }: Props) {
         startTransition(async () => {
             // Per-script args:
             //  - deploy-preflight: read-only env/gas/build readiness report.
-            //  - deploy: explicit 2 SUI gas budget + force-republish
+            //  - deploy: explicit 1 SUI gas budget + force-republish
             //    (strip stale Published.toml entry so a re-deploy isn't refused).
             //  - bootstrap: --story-id selects the preset. test-e2e ignores unknown flags.
             const extraArgs =
                 script === 'deploy-preflight'
                     ? ['--json-out=/private/tmp/endless-story-deploy-preflight.json']
                     : script === 'deploy'
-                      ? ['--gas-budget', '2000000000', '--force-republish']
+                      ? ['--gas-budget', '1000000000', '--force-republish']
                       : ['--story-id', storyId];
             const res = await runCliScript({ script, env, extraArgs });
             const combined = `--- stdout ---\n${res.stdout}\n--- stderr ---\n${res.stderr}\n--- exit ${res.code} in ${res.durationMs}ms`;

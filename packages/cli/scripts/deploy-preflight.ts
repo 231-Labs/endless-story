@@ -80,9 +80,16 @@ function checkSigner(): { check: Check; address?: string } {
   }
 }
 
-function checkGas(minGasMist: bigint, faucetUrl?: string): Check {
+function checkGas(minGasMist: bigint, address: string | undefined, faucetUrl?: string): Check {
+  // Must query the SIGNER's wallet (SUI_ADMIN_PRIVATE_KEY → address), NOT the CLI
+  // `sui client active-address`. deploy.ts signs with the private key, so the active
+  // address can be a totally different account and `sui client gas` (no owner arg)
+  // would report the wrong balance.
+  if (!address) {
+    return { label: 'admin gas', ok: false, hard: true, detail: 'no signer address (admin signer check failed)' };
+  }
   try {
-    const raw = run('sui client gas --json');
+    const raw = run(`sui client gas ${address} --json`);
     const coins = JSON.parse(raw) as Array<{ mistBalance?: number | string; suiBalance?: string }>;
     const total = coins.reduce((sum, coin) => sum + BigInt(String(coin.mistBalance ?? 0)), 0n);
     const ok = total >= minGasMist;
@@ -91,7 +98,7 @@ function checkGas(minGasMist: bigint, faucetUrl?: string): Check {
       label: 'admin gas',
       ok,
       hard: !ok,
-      detail: `${formatSui(total)} SUI across ${coins.length} coin(s); need >= ${formatSui(minGasMist)} SUI${refillHint}`,
+      detail: `${formatSui(total)} SUI across ${coins.length} coin(s) @ ${address.slice(0, 10)}…; need >= ${formatSui(minGasMist)} SUI${refillHint}`,
     };
   } catch (err) {
     return { label: 'admin gas', ok: false, hard: true, detail: (err as Error).message };
@@ -161,7 +168,7 @@ async function main() {
   if (!VALID_NETWORKS.has(env)) {
     throw new Error(`--env must be one of ${[...VALID_NETWORKS].join(' / ')}, got "${env}"`);
   }
-  const minGasMist = parseSuiToMist(optionalFlag('--min-gas-sui') ?? '2.5');
+  const minGasMist = parseSuiToMist(optionalFlag('--min-gas-sui') ?? '1');
   const skipBuild = hasFlag('--skip-build');
   const jsonOut = optionalFlag('--json-out');
 
@@ -180,7 +187,7 @@ async function main() {
   const checks: Check[] = [];
   checks.push(checkActiveEnv(env));
   checks.push(signer.check);
-  checks.push(checkGas(minGasMist, adminFaucetUrl));
+  checks.push(checkGas(minGasMist, signer.address, adminFaucetUrl));
   checks.push(checkDeploymentSnapshot(env));
   if (!skipBuild) checks.push(checkBuild(contractsDir));
 

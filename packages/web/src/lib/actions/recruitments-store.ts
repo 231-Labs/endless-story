@@ -130,7 +130,6 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
     const preset = await loadStoryPreset(storyId);
 
     const existing = readStore();
-    const existingIds = new Set(existing.map((r) => r.id));
     const presetIds = new Set(preset.recruitments.map((r) => r.id));
 
     const log: string[] = [];
@@ -138,6 +137,7 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
     log.push(`saga:   ${preset.saga.name}`);
     log.push(`---`);
     let inserted = 0;
+    let updated = 0;
     let skipped = 0;
     let deactivated = 0;
     const nowIso = new Date().toISOString();
@@ -152,13 +152,8 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
     }
 
     for (const seed of preset.recruitments) {
-        if (existingIds.has(seed.id)) {
-            log.push(`SKIP  ${seed.id} (${seed.specialty}) — already exists`);
-            skipped++;
-            continue;
-        }
         const ttlMs = (seed.ttl_days ?? 14) * 86_400_000;
-        existing.push({
+        const fresh: AdminRecruitment = {
             ...seed,
             sagaId: preset.id,
             sagaName: preset.saga.name,
@@ -168,14 +163,36 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
             createdAt: nowIso,
             expiresAt: new Date(Date.now() + ttlMs).toISOString(),
             active: true,
-        });
-        log.push(`ADD   ${seed.id} (${seed.specialty})`);
-        inserted++;
+        };
+
+        const idx = existing.findIndex((r) => r.id === seed.id);
+        if (idx === -1) {
+            existing.push(fresh);
+            log.push(`ADD   ${seed.id} (${seed.specialty})`);
+            inserted++;
+            continue;
+        }
+
+        const prev = existing[idx];
+        const wasPresetSeed = (prev as { ttl_days?: unknown }).ttl_days !== undefined;
+        if (!wasPresetSeed) {
+            // 人工在 admin UI 建的 row（無 ttl_days）— 不覆蓋。
+            log.push(`SKIP  ${seed.id} (${seed.specialty}) — manual row, kept`);
+            skipped++;
+            continue;
+        }
+        // preset 種過的 row：用最新 preset「整筆覆寫」（連被移除的欄位如 genderRequirement
+        // 也一併更新），只保留原 createdAt。這樣改 json 後 reseed 就會反映新描述/設定。
+        existing[idx] = { ...fresh, createdAt: prev.createdAt ?? nowIso };
+        log.push(`UPD   ${seed.id} (${seed.specialty})`);
+        updated++;
     }
 
-    if (inserted > 0 || deactivated > 0) persist(existing);
+    if (inserted > 0 || updated > 0 || deactivated > 0) persist(existing);
     log.push(`---`);
-    log.push(`inserted: ${inserted}   skipped: ${skipped}   deactivated: ${deactivated}   total: ${existing.length}`);
+    log.push(
+        `inserted: ${inserted}   updated: ${updated}   skipped: ${skipped}   deactivated: ${deactivated}   total: ${existing.length}`,
+    );
 
     return { ok: true, inserted, skipped, storyId, log };
 }
