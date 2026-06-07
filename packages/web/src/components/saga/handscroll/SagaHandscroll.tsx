@@ -7,6 +7,7 @@ import { SceneVignette, type VignetteAnchor } from './SceneVignette';
 import { FloatingQuote } from './FloatingQuote';
 import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
 import { computeHandscrollLayout, type ScenePlacement } from './handscrollLayout';
+import { SagaTabBar } from '../SagaTabBar';
 import { getSagaLiveSnapshot, type OpenEventStatus } from '@/lib/actions/saga-live';
 
 type LiveEvent = OpenEventStatus;
@@ -309,6 +310,11 @@ export function SagaHandscroll(props: Props) {
 
         {/* 正在上演 — 鏈上開著的事件（每 6s 輪詢，不重整就更新） */}
         <LiveEventsOverlay events={eventCards} onSelect={setFocusedSceneId} />
+
+        {/* 底部膠囊：四頁（手卷／星圖／江湖／規章），與第二屏同一顆。
+            手卷在第一屏即高亮；點其他頁 → 捲到第二屏並停在該頁。
+            取代了原本「上下滾動／左右滑動」那行提示。 */}
+        <SagaTabBar />
       </div>
       
       {/* Scene Detail View */}
@@ -433,29 +439,11 @@ function FixedOverlay({
         ) : null}
       </div>
 
-      {/* 橫向捲動提示：手機強調橫滑；桌面可搭配滾輪步進 */}
-      <div className="absolute bottom-[max(2rem,env(safe-area-inset-bottom)+0.75rem)] left-1/2 flex max-w-[min(92vw,24rem)] -translate-x-1/2 flex-col items-center gap-2 text-mute/60 pointer-events-none sm:flex-row sm:gap-3">
-        <p className="flex items-center gap-3 animate-pulse sm:hidden">
-          <span className="text-base">←</span>
-          <span className="text-center font-serif text-2xs leading-relaxed tracking-widest text-mute">
-            左右滑動「展卷」
-          </span>
-          <span className="text-base">→</span>
-        </p>
-        <p className="hidden animate-pulse items-center gap-3 font-serif text-2xs tracking-widest sm:flex">
-          <span className="text-lg">←</span>
-          <span>上下滾動／左右滑動｜皆可展卷</span>
-          <span className="text-lg">→</span>
-        </p>
-      </div>
-      
-      {/* 往下翻屏提示 */}
-      <div className="absolute -bottom-4 right-10 flex flex-col items-center gap-1.5 opacity-75 pointer-events-none [@media(max-height:520px)]:hidden">
-        <span className="text-2xs tracking-[0.35em] text-cinnabar/80">往下翻閱</span>
-        <div className="h-6 w-px overflow-hidden bg-hairline sm:h-8">
-          <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
-        </div>
-      </div>
+      {/* 展卷小提示：手機提醒可左右滑（桌面用底部膠囊導覽，不再贅述滾動方式）。
+          置於膠囊上方，避免與膠囊重疊。 */}
+      <p className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+4.25rem)] left-1/2 -translate-x-1/2 animate-pulse whitespace-nowrap font-serif text-2xs tracking-widest text-mute/55 sm:hidden">
+        ← 左右滑動展卷 →
+      </p>
     </div>
   );
 }

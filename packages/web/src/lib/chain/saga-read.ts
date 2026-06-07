@@ -37,7 +37,7 @@ interface ChainSagaJson {
     rhythm_hints?: string;
     portrait_tone?: string;
     /** Balance<CURRENCY>.value — raw smallest unit. */
-    treasury?: number | string;
+    treasury?: number | string | { value?: number | string };
     revenue_config?: {
         owner_bps?: number | string;
         storyteller_bps?: number | string;
@@ -47,6 +47,21 @@ interface ChainSagaJson {
 
 /** ENDLESS coin decimals — matches currency.move. */
 const ENDLESS_DECIMALS = 6;
+
+/**
+ * Chain `Saga.treasury` is a `Balance<CURRENCY>`, serialised as `{ value: "<u64>" }`
+ * (sometimes a bare string/number). Extract the raw smallest-unit value safely and
+ * convert to display ENDLESS units. Returns 0 on missing / non-numeric (never NaN).
+ */
+function treasuryToFunds(treasury: ChainSagaJson['treasury']): number {
+    const raw =
+        treasury == null
+            ? 0
+            : typeof treasury === 'object'
+              ? Number((treasury as { value?: number | string }).value ?? 0)
+              : Number(treasury);
+    return Number.isFinite(raw) ? raw / 10 ** ENDLESS_DECIMALS : 0;
+}
 
 /**
  * Map a URL slug (e.g. `spring-snow`) to a chain Saga object id.
@@ -142,11 +157,11 @@ async function fetchOnChainSagaFresh(sagaId: string): Promise<Saga | null> {
             totalChapters: 0,
             totalSubscribers: 0,
             avgSubsPerCharacter: 0,
-            // Chain Saga.treasury is Balance.value (raw smallest unit).
-            // Display in ENDLESS units (divide by 10^decimals).
-            treasuryFunds: json.treasury != null
-                ? Number(json.treasury) / 10 ** ENDLESS_DECIMALS
-                : 0,
+            // Chain Saga.treasury is a `Balance<CURRENCY>`, which serialises as
+            // `{ value: "<u64>" }` (not a bare number) — `Number({…})` was NaN.
+            // Pull the raw smallest-unit value (object .value OR primitive),
+            // guard non-finite, then display in ENDLESS units (÷ 10^decimals).
+            treasuryFunds: treasuryToFunds(json.treasury),
         },
         // Off-chain enrichment fields stay undefined: worldTime
         // (storyteller pushes), totalDays (only if arc planned).

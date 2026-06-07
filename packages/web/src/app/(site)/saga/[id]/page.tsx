@@ -13,6 +13,7 @@ import { CastConstellation } from '@/components/saga/CastConstellation';
 import { SagaCharterPanel } from '@/components/saga/SagaCharterPanel';
 import { SagaDetailsTabs } from '@/components/saga/SagaDetailsTabs';
 import { OffTurfBoard } from '@/components/saga/OffTurfBoard';
+import { SagaTabsProvider } from '@/components/saga/SagaTabsContext';
 
 export default async function SagaPage({
   params,
@@ -147,6 +148,7 @@ export default async function SagaPage({
     .filter((e): e is NonNullable<typeof e> => Boolean(e));
 
   return (
+    <SagaTabsProvider>
     <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth bg-canvas">
       {/* Screen 1: Immersive Canvas + Hero + Premise */}
       <section
@@ -186,5 +188,6 @@ export default async function SagaPage({
         }
       />
     </main>
+    </SagaTabsProvider>
   );
 }
