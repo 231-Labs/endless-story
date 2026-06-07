@@ -37,4 +37,9 @@ ENV DATA_DIR=/data \
 VOLUME ["/data"]
 EXPOSE 8788
 
-CMD ["node", "src/assets-server.ts"]
+# cmdoss/walrus 的原 ENTRYPOINT 會依 MODE 分派服務、不會執行我們的 CMD(MODE 未設時它只印
+# "CLI tool only" 然後退出 → crash loop)。覆寫掉它,直接起 asset server(絕對路徑,免 CWD 問題)。
+# 設 ENTRYPOINT 會自動清掉 base image 的 CMD,故無殘留參數。
+# 注意:這會「跳過」base image 的 walrus client config 自動生成 —— /health 與 manifest 不受影響;
+# 真實上傳/續租(walrus store/extend)前需另備 config(Volume 掛入 /config,或啟動腳本生成)。
+ENTRYPOINT ["node", "/app/src/assets-server.ts"]
