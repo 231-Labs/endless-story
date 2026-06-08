@@ -13,17 +13,19 @@ import { getSagaLiveSnapshot, type OpenEventStatus } from '@/lib/actions/saga-li
 type LiveEvent = OpenEventStatus;
 
 /**
- * 春雪社主螢幕：原生橫向捲動手卷。
+ * Main saga screen: a native horizontally-scrolling handscroll.
  *
- * 結構：
- *   - 外層 scroll container（overflow-x-auto、snap-x）
- *   - 內容寬度 max(300vw, 1200px) — 小手機仍可橫滑展開、避免過度擠壓標點／題款
+ * Structure:
+ *   - outer scroll container (overflow-x-auto, snap-x)
+ *   - content width max(300vw, 1200px) — small phones can still swipe it open
+ *     without crushing punctuation / quotes.
  *
- * 點任一場景錨 → 切回舊版 focused-mode（SagaTroupeCanvas 渲染單 scene 細看）。
+ * Clicking a scene anchor → back to focused-mode (SagaTroupeCanvas renders one scene).
  */
 
-// 手卷橫軸佈局改為資料驅動（見 handscrollLayout.ts）：每個 covered location 一段、
-// scene 鋪在自己那段內。場景錨點 = ScenePlacement 的 xPct/yPct（整卷寬高的百分比）。
+// Handscroll horizontal layout is data-driven (see handscrollLayout.ts): one
+// segment per covered location, scenes placed within their segment. A scene
+// anchor = ScenePlacement xPct/yPct (percent of full scroll width/height).
 
 function placementAnchor(p: ScenePlacement): VignetteAnchor {
   return { x: p.xPct, y: p.yPct, zone: p.zone };
@@ -43,12 +45,13 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
-// 題款落點（頂端對位）。直書欄很高，所以上緣仍壓在標題下方（≥30%）不犯標題、
-// 下方靠 maxHeight 收住；但每個題款用穩定 hash 給一段高低落差（30–50%），
-// 不再幾乎齊平。left 夾在 [5,95]% 避免段邊場景的題款被推出視窗左右緣。
+// Quote position (top-aligned). Vertical columns are tall, so the top edge stays
+// below the title (≥30%) and maxHeight caps the bottom; a stable per-scene hash
+// staggers each top (30-50%) so they aren't all level. left clamped to [5,95]%
+// so edge-of-segment quotes aren't pushed past the viewport's left/right.
 function quotePosition(anchor: VignetteAnchor, sceneId: string): { left: number; top: number } {
   const left = clamp(anchor.x + (anchor.zone === 'theater' ? 4 : -4), 5, 95);
-  const spread = hashStr(sceneId) % 17; // 0–16，穩定 per scene
+  const spread = hashStr(sceneId) % 17; // 0-16, stable per scene
   const top = clamp(30 + spread + (anchor.y - 56) * 0.3, 30, 50);
   return { left, top };
 }
@@ -57,9 +60,9 @@ interface Props {
   saga: Saga;
   scenes: Scene[];
   /**
-   * Saga 涵蓋的 location（鏈上 `Saga.covered_location_ids` 解出來）。
-   * 渲染為手卷上三個 zone 大字（戲樓 / 月洞門 / 院落 那三個位置）。
-   * 順序即排版順序：locations[0] 在左、[1] 中、[2] 右。
+   * Locations the saga covers (resolved from `Saga.covered_location_ids`).
+   * Rendered as the large zone labels along the handscroll.
+   * Order = layout order: locations[0] left, [1] middle, [2] right.
    */
   locations: SagaLocation[];
   charactersById: Map<string, Character>;
@@ -114,8 +117,8 @@ export function SagaHandscroll(props: Props) {
       }
       if (!cancelled) timer = setTimeout(tick, 6000);
     };
-    // 進場就抓一次 live（題款 / 在場 / 開演事件），不必等滿 6s 才首次浮現；
-    // 之後維持 6s 輪詢。300ms 讓 hydration 先安定。
+    // Fetch live data once on mount (quotes / presence / open events) so it
+    // appears before the first 6s tick; then poll every 6s. 300ms lets hydration settle.
     timer = setTimeout(tick, 300);
     return () => {
       cancelled = true;
@@ -140,9 +143,9 @@ export function SagaHandscroll(props: Props) {
   const partOfDay = saga.worldTime?.partOfDay ?? 'noon';
   const isFocused = focusedSceneId !== null;
 
-  // 資料驅動佈局：每個 covered location 一段，scene 鋪進自己那段。位置只依場景集合 +
-  // locationId（不隨 live presence 變），故用穩定的 `scenes`／`locations` 算，再用 id 對
-  // 回 liveScenes 渲染即時狀態。
+  // Data-driven layout: one segment per covered location, scenes placed within.
+  // Position depends only on the scene set + locationId (not live presence), so
+  // compute from stable `scenes`/`locations`, then map by id back to liveScenes.
   const layout = useMemo(() => computeHandscrollLayout(locations, scenes), [locations, scenes]);
   const placementById = useMemo(() => {
     const m = new Map<string, ScenePlacement>();
@@ -150,17 +153,17 @@ export function SagaHandscroll(props: Props) {
     return m;
   }, [layout]);
   const segmentCount = layout.segmentCount;
-  // 整卷寬度隨段數伸縮：每段約 96vw（再長一些，展卷更舒展；至少 360vw）。
+  // Scroll width scales with segment count: ~96vw each (roomier; min 360vw).
   const scrollVw = Math.max(segmentCount * 96, 360);
-  // 場景區塊越多越窄，避免同段相鄰場景相疊。
+  // More scenes → narrower vignettes, so adjacent scenes don't overlap.
   const vignetteWidthPct = Math.min(12, (100 / segmentCount) * 0.55);
-  // 副標的地名串跟橫軸一致：只列「本 saga 真的有戲」的 location（與 layout 同一套過濾），
-  // 不再把世界裡 saga 沒涉足的 location（如純招募用地）也列進去。
+  // Subtitle location list matches the axis: only locations this saga actually
+  // plays in (same filter as layout), not recruitment-only or unvisited ones.
   const shownLocationLabel = layout.segments.length
     ? layout.segments.map((s) => s.location.name).join(' + ')
     : locationLabel;
 
-  // 攔截垂直滾輪事件，轉換為段落間的橫向吸附切換
+  // Intercept vertical wheel events and turn them into horizontal snap between segments
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -168,7 +171,7 @@ export function SagaHandscroll(props: Props) {
     let isScrolling = false;
 
     const handleWheel = (e: WheelEvent) => {
-      // 若使用者已經在進行橫向滑動（如觸控板左右滑），則放行
+      // If the user is already scrolling horizontally (e.g. trackpad), let it through
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
 
       const isScrollDown = e.deltaY > 0;
@@ -183,7 +186,7 @@ export function SagaHandscroll(props: Props) {
         outer != null && outer.scrollTop + outer.clientHeight < outer.scrollHeight - 2;
       const canPageUp = outer != null && outer.scrollTop > 2;
 
-      // 已展卷到最右／最左：垂直滾動改由外層 full-bleed snap，避免卡在一半
+      // Scrolled to far right/left: hand vertical scroll to the outer full-bleed snap, avoid getting stuck mid-way
       if (
         outer &&
         ((isScrollDown && atRightEdge && canPageDown) || (isScrollUp && atLeftEdge && canPageUp))
@@ -346,7 +349,7 @@ interface EventCard {
 }
 
 /**
- * 「正在上演」live overlay — the saga's currently-open events, polled from
+ * "Now playing" live overlay — the saga's currently-open events, polled from
  * chain. Each card: title · scene · cast · how many have acted. Click to
  * focus that scene. Hidden when nothing's open.
  */

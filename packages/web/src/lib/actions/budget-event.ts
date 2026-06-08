@@ -17,10 +17,10 @@
  *      v1; we just flip status → RESOLVED so the lifecycle is provable.
  *
  * Catalog cards in `DEMO_CATALOG`:
- *   - 0: KILL    · 「斬」
- *   - 1: ATTACK  · 「攻」
- *   - 2: SOCIAL  · 「敘」
- *   - 3: WITNESS · 「觀」
+ *   - 0: KILL
+ *   - 1: ATTACK
+ *   - 2: SOCIAL
+ *   - 3: WITNESS
  */
 
 import { Transaction } from '@mysten/sui/transactions';

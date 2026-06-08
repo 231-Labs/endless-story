@@ -10,7 +10,7 @@ const FILTERS: { key: RosterFilter; label: string }[] = [
 ];
 
 /**
- * Roster (人物誌) skeleton — mirrors `CharacterGrid`, NOT the character-detail
+ * Roster (cast) skeleton — mirrors `CharacterGrid`, NOT the character-detail
  * `DossierSkeleton`. The header (title + filter tabs + search) renders for real
  * since it needs no data; only the character CARDS (the per-card chain fan-out)
  * show pulsing image placeholders. Used as the in-page <Suspense> fallback while

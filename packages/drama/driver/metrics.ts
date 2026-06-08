@@ -184,7 +184,7 @@ export function analyze(result: RunResult, th: Thresholds = DEFAULT_THRESHOLDS):
 }
 
 // ---------------------------------------------------------------------------------------
-// Intra-agent trade-off analysis (Step 2 — the 柳生春 moment)
+// Intra-agent trade-off analysis (Step 2 — the Liu moment)
 // ---------------------------------------------------------------------------------------
 export interface TradeoffAnalysis {
   /**

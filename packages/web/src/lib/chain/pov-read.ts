@@ -213,7 +213,7 @@ function buildWalrusBlobUrl(blobId: string): string {
     // (chapters, gazettes) instead of mojibake. Direct aggregator URL:
     //   https://aggregator.walrus-testnet.walrus.space/v1/blobs/{id}
     // returns the same bytes but with no Content-Type (browsers fall
-    // through to octet-stream → 中文亂碼). See /api/blob route handler.
+    // through to octet-stream → mojibake). See /api/blob route handler.
     return `/api/blob/${blobId}`;
 }
 

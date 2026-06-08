@@ -4,8 +4,8 @@
  * Between ticks an idle character decides whether to stay or walk to another
  * scene, conditioned on its PLAN (where it's trying to get) + who/what is in
  * each reachable scene. This is the second half of the character action
- * space (docs/NARRATIVE_AGENTS.md §2): 出牌 ✅ + 移動. A character chasing
- * "搭上某位名角的搭檔位" will drift toward that character's scene.
+ * space (docs/NARRATIVE_AGENTS.md §2): play-a-card + move. A character chasing
+ * a co-star slot will drift toward that character's scene.
  *
  * Pure LLM (cheap tier — per character per tick). The web action reads the
  * scenes + does the move_character tx. Output is clamped to a reachable

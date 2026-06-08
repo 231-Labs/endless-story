@@ -4,7 +4,7 @@
  * Server action — storyteller (admin keypair) signs `redeem_voucher_to_character`
  * to mint the actual Character, consuming the user's voucher.
  *
- * The 抽卡 model: once the user clicks "accept" on the LLM preview, this
+ * The gacha model: once the user clicks "accept" on the LLM preview, this
  * runs server-side so the user doesn't need a second wallet signature.
  * Storyteller curation is encoded in the off-chain Recruitment (admin
  * published the job; that's the strategic decision), so per-redeem
@@ -250,7 +250,7 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
     // failure-isolated (the Character is already on chain). Memory seeding (MemWal, no
     // gas) runs last. All steps read the on-chain profile, which exists post-tx.
     //
-    // NOTE: this is the same work the reconciler (admin 對帳/補發) performs — anything
+    // NOTE: this is the same work the reconciler (admin reconcile/reissue) performs — anything
     // missed here is recoverable there, so the mint never has to wait on it.
     {
         const charId = characterId;
@@ -278,14 +278,14 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
                     (tagRes?.ok ? (tagRes.tags ?? []).join('|') : 'failed'),
             );
 
-            // 2) persona (本色) — distil + anchor on the content road
+            // 2) persona — distil + anchor on the content road
             const personaRes = await withRetry('persona', () => generatePersonaAction(charId));
             console.log(
                 `[redeem-voucher] persona for ${charId}: ` +
                     (personaRes?.ok ? `v${personaRes.version}` : `failed${personaRes?.skipped ? `(${personaRes.skipped})` : ''}`),
             );
 
-            // 3) §11 additional 設定集 views (frontal + art sheet) via img2img
+            // 3) §11 additional gallery views (frontal + art sheet) via img2img
             if (portraitUrl) {
                 const viewsRes = await withRetry('additional-views', () =>
                     generateAdditionalViews({ characterId: charId, referenceUrl: portraitUrl }),
@@ -307,10 +307,10 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
             }
 
             // 5) relationship ties — assess this character vs the roster from public
-            //    descriptions, then seed symmetric director ties (公開關係圖) + symmetric
+            //    descriptions, then seed symmetric director ties (public relationship graph) + symmetric
             //    memories on both sides. Admin-signed (relationship_seed), so it runs after
             //    the other admin-gas steps. Idempotent (skips pairs already tied) → the
-            //    admin 關係補帳 panel can re-run / backfill earlier characters safely.
+            //    admin relationship-backfill panel can re-run / backfill earlier characters safely.
             const relRes = await withRetry('relationships', () =>
                 assessAndApplyRelationshipsAction(charId),
             );

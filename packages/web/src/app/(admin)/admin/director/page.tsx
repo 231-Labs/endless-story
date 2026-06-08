@@ -23,7 +23,7 @@ import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 export const dynamic = 'force-dynamic';
 
 /**
- * Admin → 導演 — feed admin intent into the Saga Director LLM, see the
+ * Admin → Director — feed admin intent into the Saga Director LLM, see the
  * structured capability calls it picks, optionally dispatch them on
  * chain.
  *
@@ -50,7 +50,6 @@ export default async function AdminDirectorPage() {
                         <strong className="text-ink">互動與治理</strong>。
                     </p>
 
-                    {/* ───────────── 一 · 敘事推進 ───────────── */}
                     <section className="mt-14 border-t border-hairline pt-10">
                         <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/60">一 · 敘事推進</div>
                         <h2 className="mt-1 font-serif text-2xl tracking-wide text-ink">驅動世界向前</h2>
@@ -94,7 +93,6 @@ export default async function AdminDirectorPage() {
                         </div>
                     </section>
 
-                    {/* ───────────── 二 · 角色工坊 ───────────── */}
                     <section className="mt-14 border-t border-hairline pt-10">
                         <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/60">二 · 角色工坊</div>
                         <h2 className="mt-1 font-serif text-2xl tracking-wide text-ink">單一角色的補完與重生</h2>
@@ -153,7 +151,6 @@ export default async function AdminDirectorPage() {
                         </div>
                     </section>
 
-                    {/* ───────────── 三 · 全班對帳 ───────────── */}
                     <section className="mt-14 border-t border-hairline pt-10">
                         <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/60">三 · 全班對帳</div>
                         <h2 className="mt-1 font-serif text-2xl tracking-wide text-ink">一鍵補齊所有缺漏</h2>
@@ -165,7 +162,6 @@ export default async function AdminDirectorPage() {
                         <div className="mt-8"><ReconcilePanel /></div>
                     </section>
 
-                    {/* ───────────── 四 · 互動與治理 ───────────── */}
                     <section className="mt-14 border-t border-hairline pt-10">
                         <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/60">四 · 互動與治理</div>
                         <h2 className="mt-1 font-serif text-2xl tracking-wide text-ink">觸發、事件與設定</h2>

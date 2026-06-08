@@ -1,7 +1,7 @@
 /**
- * 春雪社場景的平面圖座標 — 戲樓 (y < 50) / 院落 (y > 50)。
- * 由 SagaTroupeCanvas 提出，CastConstellation 平面圖也共用同一份。
- * 數值是百分比（0-100），讓不同 viewBox 都能重新投影。
+ * Floor-plan coordinates for the demo saga's scenes — theater (y < 50) /
+ * courtyard (y > 50). Shared by SagaTroupeCanvas and CastConstellation.
+ * Values are percentages (0-100) so any viewBox can re-project them.
  */
 export interface ScenePlanPosition {
   x: number; // 0-100 (%)
@@ -9,12 +9,12 @@ export interface ScenePlanPosition {
 }
 
 export const SCENE_POSITIONS: Record<string, ScenePlanPosition> = {
-  // 戲樓 zone（上半）
+  // theater zone (top half)
   scene_main_stage: { x: 50, y: 25 },
   scene_music_shed: { x: 30, y: 35 },
   scene_backstage: { x: 70, y: 35 },
   scene_trunk_room: { x: 75, y: 48 },
-  // 院落 zone（下半）
+  // courtyard zone (bottom half)
   scene_east_hall: { x: 25, y: 65 },
   scene_courtyard: { x: 50, y: 72 },
   scene_bunk_room: { x: 75, y: 65 },

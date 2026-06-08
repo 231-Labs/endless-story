@@ -13,7 +13,7 @@ import { parseProvenance } from '@/lib/chain/chapter-provenance';
 /**
  * On-chain POV chapters — owner + subscriber gated.
  *
- * Access model: 公報 (gazette) is public; a character's POV chapters are
+ * Access model: the gazette is public; a character's POV chapters are
  * private to the **owner** and her **subscribers**. We gate client-side
  * (real dapp-kit account, not the URL ?as= param) and fetch the body on
  * the client only when authorized — so a non-reader's HTML never carries

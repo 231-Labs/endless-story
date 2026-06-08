@@ -1,13 +1,16 @@
-// Walrus 寫入 — 走容器內 `walrus` CLI(store / extend / delete / status / wallet)。
-// 同一顆錢包既 store 又 extend ⇒ 鏈上 Blob object ownership 永遠一致(避開 publisher 子錢包模糊)。
+// Walrus writes — via the in-container `walrus` CLI (store / extend / delete / status /
+// wallet). One wallet does both store and extend, so on-chain Blob object ownership stays
+// consistent (avoids publisher sub-wallet ambiguity).
 //
-// dev-local fallback:未設 `WALRUS_CLI` 時,把 bytes 落地到 DATA_DIR/asset-blobs/、偽造
-// blobId/suiObjectId/endEpoch,讓服務 *離線可跑*(本機開發 + type-check;不需裝 walrus)。
+// dev-local fallback: when `WALRUS_CLI` is unset, write bytes to DATA_DIR/asset-blobs/ and
+// fake blobId/suiObjectId/endEpoch so the service runs offline (local dev + type-check; no
+// walrus install needed).
 //
-// ⚠️ CLI 旗標名稱與 --json 輸出形狀依 walrus 版本而異。下面的 args 與 parse* 是合理預設,
-//    Phase 0 在 VPS 上對「實際安裝的 walrus 版本」校一次即可(parse* 已做防禦式多鍵嘗試)。
-//    校驗點:`walrus store <file> --epochs N [--deletable] --json`、`walrus extend`、
-//    `walrus delete`、`walrus info --json`、global `--context <name>`。
+// ⚠️ CLI flag names and --json output shapes vary by walrus version. The args and parse*
+//    below are reasonable defaults; calibrate once against the actually-installed walrus
+//    version on the VPS (parse* already tries multiple keys defensively). Check:
+//    `walrus store <file> --epochs N [--deletable] --json`, `walrus extend`,
+//    `walrus delete`, `walrus info --json`, global `--context <name>`.
 
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -169,8 +172,8 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-// `walrus store --json` 回的是「陣列」,每元素再包一層 `blobStoreResult`,內含
-// { newlyCreated.blobObject | alreadyCertified }。解到內層那個結果物件。
+// `walrus store --json` returns an array; each element wraps a `blobStoreResult` holding
+// { newlyCreated.blobObject | alreadyCertified }. Unwrap to that inner result object.
 function storeResultOf(out: string): Record<string, any> {
   let root: any;
   try {

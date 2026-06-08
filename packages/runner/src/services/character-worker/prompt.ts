@@ -7,8 +7,8 @@
  * and subtext.
  *
  * `triggerNarrative` is the runner-supplied "what just happened" line
- * (e.g. "saga director 在後台化妝間開了 storylet confession_after_show，
- * 涉及你和林某"). The character LLM treats this as ground truth and turns it
+ * (e.g. "saga director opened storylet confession_after_show in the backstage
+ * dressing room, involving you and Lin"). The character LLM treats this as ground truth and turns it
  * into one concrete moment, without recapping it like a report.
  */
 

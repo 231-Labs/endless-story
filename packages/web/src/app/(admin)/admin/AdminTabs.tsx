@@ -17,7 +17,7 @@ export function AdminTabs() {
   const pathname = usePathname();
   const { isSagaAdmin } = useSagaAdmin();
 
-  // Hide the entire admin tab bar for non-班主 — gating the page contents
+  // Hide the entire admin tab bar for non-admins — gating the page contents
   // alone would still leak the existence + names of admin routes.
   if (!isSagaAdmin) return null;
 

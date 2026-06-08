@@ -189,7 +189,7 @@ export function ReflectionPanel({ characters }: { characters: Character[] }) {
                 {sleepResult ? <SleepResultView result={sleepResult} /> : null}
             </div>
 
-            {/* N6 — plan / 立志 */}
+            {/* N6 — plan / set ambition */}
             <div className="space-y-2 rounded border border-hairline/60 bg-canvas/30 p-3">
                 <div className="text-2xs tracking-widest text-mute">立志 · 更新規劃（N6）</div>
                 <p className="text-2xs leading-relaxed text-mute">

@@ -36,7 +36,7 @@ export default async function ChapterPage({
     .filter((c) => c.visibility === 'public_chapter')
     .sort((a, b) => a.day - b.day || a.createdAt.localeCompare(b.createdAt));
 
-  // 出場 cast：POV 優先，後接 involved（去重）
+  // On-stage cast: POV first, then involved (deduped)
   const castIds = Array.from(
     new Set([
       ...(chapter.povCharacterId ? [chapter.povCharacterId] : []),

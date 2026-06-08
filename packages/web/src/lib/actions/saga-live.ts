@@ -5,7 +5,7 @@
  *
  * Returns the volatile, per-scene state the handscroll wants to surface in
  * (near) real time: who's standing where, which scenes have a live event
- * ("開鑼"), and the latest action line as a ghost quote. All derived from
+ * (curtain-up), and the latest action line as a ghost quote. All derived from
  * chain reads — no websockets. The client polls this every few seconds.
  *
  * Why polling, not push: the world only mutates on discrete admin ticks,
@@ -36,7 +36,7 @@ export interface OpenEventStatus {
     sceneId: string;
     /** Participant character ids — caller resolves names from its cast map. */
     participantIds: string[];
-    /** How many have acted vs total — "2/3 已出牌". */
+    /** How many have acted vs total — e.g. "2/3 have played their card". */
     actedCount: number;
 }
 
@@ -61,7 +61,7 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
     const scenes = await fetchOnChainScenesForSaga(sagaId).catch(() => []);
     const byScene = new Map<string, SceneLiveStatus>();
     for (const s of scenes) {
-        // 手卷 Step 3: prefer the latest first-person line (decide intent /
+        // Handscroll Step 3: prefer the latest first-person line (decide intent /
         // move reason) recorded by the tick loop. Falls through to the card
         // label below only when no fresh line exists for this scene.
         const cached = getLatestSceneLine(s.id);

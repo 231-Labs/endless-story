@@ -38,8 +38,8 @@ export interface GeneratePortraitInput {
     recruitmentIntent?: string;
     /**
      * Skip the bare-face ANCHOR curation and render this exact prompt. Used
-     * by portrait VARIANTS (§11 evolve-portrait), whose occasion (戲妝/老年/…)
-     * the anchor curator would otherwise strip (it's hardwired to 素顏/無戲妝).
+     * by portrait VARIANTS (§11 evolve-portrait), whose occasion (stage makeup / old age / …)
+     * the anchor curator would otherwise strip (it's hardwired to bare-face / no-stage-makeup).
      */
     promptOverride?: string;
 }
@@ -80,8 +80,9 @@ function anchorSafeToneHint(raw: string): string {
     return tone
         .replace(/；?戲服和妝面精細[^。；]*[。；]?/g, '；')
         .replace(/；?[^。；]*(?:文字|題字|書法|簽名|印章|紅章|票券|唱片封套|戲報|報紙|書頁|海報|月份牌|設定卡|道具|邊框|標籤|卡片|刊物|版面設計)[^。；]*[。；]?/g, '；')
-        // gpt-image 把「不要油畫/寫實/動漫」當成正向關鍵字 → 反招來厚塗寫實。
-        // 淡彩畫風靠正面描述（tone 開頭 + GUARD 結尾）鎖，這裡把負面句整句濾掉。
+        // gpt-image treats "no oil-painting/realism/anime" as POSITIVE keywords → it
+        // backfires into thick-paint realism. Light-wash style is locked by positive
+        // description instead (tone prefix + GUARD suffix), so drop negative clauses whole.
         .replace(/；?[^。；]*不要[^。；]*(?:動漫|卡通|油畫|寫實|照片|渲染|3D|CG)[^。；]*[。；]?/g, '；')
         .replace(/；{2,}/g, '；')
         .replace(/；。/g, '。')
@@ -90,7 +91,7 @@ function anchorSafeToneHint(raw: string): string {
 }
 
 /**
- * Resolve the portrait art-direction tone (F — saga soul, 畫風):
+ * Resolve the portrait art-direction tone (F — saga soul, art style):
  *   explicit toneHint → saga's on-chain portrait_tone → default ink-wash.
  * The saga read is cached (saga-read TTL) so repeated recruitment portraits
  * in a session don't re-hit RPC.

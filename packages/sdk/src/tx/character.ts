@@ -61,7 +61,7 @@ export const updateImageByStoryteller = (args: gen.UpdateImageByStorytellerArgum
 export const updateImageByOwner = (args: gen.UpdateImageByOwnerArguments) =>
   gen.updateImageByOwner({ package: pkg(), arguments: args });
 
-// ── Gallery: 設定集 (append variants + owner cover selection) ───────────
+// Gallery (append variants + owner cover selection).
 export const addMediaAssetByStoryteller = (args: gen.AddMediaAssetByStorytellerArguments) =>
   gen.addMediaAssetByStoryteller({ package: pkg(), arguments: args });
 

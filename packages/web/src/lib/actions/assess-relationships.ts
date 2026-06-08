@@ -7,7 +7,7 @@
  * first-person memories into both characters' MemWal.
  *
  * Why the director channel (not private genesis memory): a pre-existing tie
- * (柳生春 ↔ 孟雪棠 "知道彼此很久了") is objective, shared canon — it must be
+ * (Liu ↔ Meng "have known each other a long time") is objective, shared canon — it must be
  * symmetric and visible to both sides. Director events are read symmetrically
  * (so mint order stops mattering — the ordering asymmetry disappears) and are
  * the only source the relationship graph (ProfileTab / CastConstellation) reads.
@@ -15,7 +15,7 @@
  * Two-step by design so the admin panel can REVIEW before seeding:
  *   - assessRelationshipsAction → LLM proposals, no writes
  *   - applyRelationshipTiesAction → seed events + memories (idempotent: skips
- *     pairs that already have a public tie, so re-runs / 全班補帳 don't dup)
+ *     pairs that already have a public tie, so re-runs / full-troupe backfill don't dup)
  * `assessAndApplyRelationshipsAction` chains both for the auto-after-mint path.
  */
 
@@ -35,7 +35,7 @@ import { getStoreRecruitment } from './recruitments-store';
 export interface ProposedTie {
     otherId: string;
     otherName: string;
-    /** RelationshipTone string (incl. 'acquaintance' / 故舊). */
+    /** RelationshipTone string (incl. 'acquaintance' / prior acquaintance). */
     tone: string;
     kind: 'prior' | 'first_impression';
     selfMemory: string;
@@ -173,7 +173,7 @@ export async function applyRelationshipTiesAction(
 
     // Resolve scene + the new character's own name in one roster read. selfName
     // is used to attribute the reciprocal memory written into the OTHER
-    // character's namespace, so reading it back shows WHO it's about (not 他/她).
+    // character's namespace, so reading it back shows WHO it's about (not just he/she).
     let selfName: string | undefined;
     let resolvedScene = sceneIdHint ?? null;
     try {
@@ -227,8 +227,9 @@ export async function applyRelationshipTiesAction(
     let memoriesWritten = 0;
     if (isMemoryConfigured()) {
         for (const t of fresh) {
-            // Deterministic "對「名字」：" prefix so the memory is attributable when
-            // read back out of context — even if the body uses 他/她. The self side
+            // Deterministic "about <name>:" style prefix (see selfText/otherText below) so the
+            // memory is attributable when read back out of context — even if the body uses
+            // he/she. The self side
             // names the other person; the other side names this new character.
             const selfText = `對「${t.otherName}」：${t.selfMemory}`;
             const otherText = selfName ? `對「${selfName}」：${t.otherMemory}` : t.otherMemory;
@@ -261,6 +262,6 @@ export async function assessAndApplyRelationshipsAction(
 }
 
 // NOTE: saga-wide relationship backfill is now folded into the reconciler
-// (reconcile-character.ts step 6 / 對帳全班) — the single batch entry point —
+// (reconcile-character.ts step 6 / reconcile whole troupe) — the single batch entry point —
 // so there's no separate backfillAll here. Per-character assess+apply lives in
 // the admin RelationshipAssessPanel for reviewed, targeted seeding.

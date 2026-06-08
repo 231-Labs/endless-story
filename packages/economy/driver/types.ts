@@ -16,7 +16,7 @@ export interface ScenarioPolicy {
   births?: { everyDays: bigint; max: bigint; make: (day: bigint, n: bigint) => CharConfig };
   /** Enable patronage: wealthy healthy characters top up failing allies to keep them solvent. */
   alliances?: boolean;
-  /** Owner subsidy (挹注): external top-up the human owner injects into a character to keep a
+  /** Owner subsidy: external top-up the human owner injects into a character to keep a
    *  beloved, reader-less character alive. Returns the amount to inject this day (0 = none). */
   ownerSubsidy?: (c: CharState, cfg: EconConfig) => bigint;
 }
@@ -55,7 +55,7 @@ export interface DayRecord {
   births: number;
   deaths: number;
   rescues: number;
-  /** owner subsidy (挹注) injected this day, base units. */
+  /** owner subsidy injected this day, base units. */
   subsidy: bigint;
   totalBalance: bigint;
   perChar: Record<string, CharSnapshot>;
@@ -77,7 +77,7 @@ export interface RunResult {
   everSpawned: number;
   /** total rescues (patronage transfers) over the run. */
   totalRescues: number;
-  /** total owner subsidy (挹注) injected over the run, base units. */
+  /** total owner subsidy injected over the run, base units. */
   ownerSubsidyTotal: bigint;
   /** conservation held on every single day. */
   conservedEveryDay: boolean;

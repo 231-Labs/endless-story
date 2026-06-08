@@ -5,8 +5,8 @@
  *
  * Why this exists: the public Walrus testnet aggregator returns blobs
  * with `x-content-type-options: nosniff` but no `Content-Type` header.
- * In a browser that means UTF-8 text gets rendered as latin-1 → 中文
- * 變亂碼. We re-fetch server-side and stream back with the right
+ * In a browser that means UTF-8 text gets rendered as latin-1 → CJK
+ * turns to mojibake. We re-fetch server-side and stream back with the right
  * header. Body is still the raw bytes; no transformation.
  *
  * Default content-type is `text/plain; charset=utf-8` which works for

@@ -1,14 +1,14 @@
 'use server';
 
 /**
- * Event "moment" image (時刻) — the multi-character scene image of one on-chain
+ * Event "moment" image — the multi-character scene image of one on-chain
  * event, the text→image bridge.
  *
  * When an event (storylet) involves ≥2 characters, render ONE scene image of the
  * incident using EACH involved character's clean anchor portrait as an img2img
  * reference (OpenAI /v1/images/edits, multi-reference) — so faces/builds don't
  * drift. The single image is then appended as a `kind=4` event_moment media asset
- * to EVERY involved character, so it surfaces in each one's 設定集「事件瞬間」, and
+ * to EVERY involved character, so it surfaces in each one's gallery "event moments", and
  * its metadata carries the source on-chain event tx (provenance). Same image,
  * shared across the cast — like the multi-POV chapters, one objective moment.
  *
@@ -46,7 +46,7 @@ export interface EventMomentResult {
     ok: boolean;
     url?: string;
     blobId?: string;
-    /** How many characters got this moment in their 時刻. */
+    /** How many characters got this moment in their gallery. */
     appended: number;
     skipped?: string;
     error?: string;
@@ -126,7 +126,7 @@ export async function generateEventMomentAction(input: EventMomentInput): Promis
     }
     if (!bytes || bytes.length === 0) return { ok: false, appended: 0, error: 'empty_image' };
 
-    // ── store ONCE; the same blob is shared by every participant's 時刻 ──
+    // ── store ONCE; the same blob is shared by every participant's gallery ──
     let url: string;
     let blobId: string;
     try {

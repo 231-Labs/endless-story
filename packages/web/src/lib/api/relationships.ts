@@ -12,7 +12,7 @@ import { fetchOnChainEdgesFrom } from '@/lib/chain/relationships';
  * the objective record of who the director tied to whom), so no owner gate.
  * Falls back to mock / http for demo characters with no on-chain ties.
  *
- * 後端對應（legacy mock backend）：
+ * Backend (legacy mock backend):
  *   GET   /relationships?fromId={id}      → RelationshipEdge[]   (outgoing)
  *   GET   /relationships                  → RelationshipEdge[]   (all)
  */

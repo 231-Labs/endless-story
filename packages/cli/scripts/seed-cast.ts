@@ -15,7 +15,7 @@
  * Usage:
  *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing
  *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --allow-no-media
- *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --allow-no-media --only 溫照棠
+ *   pnpm --filter @endless-story/cli run seed-cast -- --env testnet --allow-no-media --only <name>
  *
  * Flags:
  *   --env devnet|testnet|mainnet|localnet  (required, must match deployment)
@@ -272,7 +272,7 @@ async function main() {
   const env = requireFlag('--env') as SuiNetwork;
   if (!VALID.has(env)) throw new Error(`--env must be one of ${[...VALID].join(' / ')}`);
 
-  // --only "名字" mints just that one (idempotent re-runs after a partial mint).
+  // --only "<name>" mints just that one (idempotent re-runs after a partial mint).
   const onlyIdx = process.argv.indexOf('--only');
   const only = onlyIdx >= 0 ? process.argv[onlyIdx + 1] : undefined;
   const tagExisting = hasFlag('--tag-existing');

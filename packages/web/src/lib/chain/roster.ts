@@ -91,7 +91,7 @@ export async function resolveRosterRoles(
             continue;
         }
         // In mock mode, c.role is authored fixture data. On chain, an untagged
-        // character mapper uses "看客" as a UI fallback, so do not promote it
+        // character mapper uses the "onlooker" UI fallback, so do not promote it
         // into public cognition unless it came from a tag or recruitment.
         if (!ENDLESS_STORY_DEPLOYMENT.packageId && c.role) out.set(c.id, c.role);
         else out.set(c.id, '—');

@@ -1,7 +1,7 @@
 // Driver-side types. The driver is the OFFLINE script that advances the world: it runs a
 // Planner each tick to turn world state into proposed Actions, applies the pure transition,
 // and records a trace. NONE of this is the pure core — in particular goal-persistence
-// hysteresis lives HERE (locked decision #2: "放在 Planner、不進純 transition").
+// hysteresis lives HERE (locked decision #2: in the Planner, not the pure transition).
 
 import type { Action, TuningConfig, WorldState } from "../src/index.ts";
 

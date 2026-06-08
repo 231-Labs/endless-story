@@ -1,14 +1,14 @@
 import type { CharacterMemory } from '@endless-story/shared';
 
 /**
- * 角色記憶（owner-only journal）。對齊舊版 runner MemoryStore 8 種 kind：
- *  - reflection / observation / event 三條主幹
- *  - dream（班主寄夢）/ artifact（她的創作物 — Walrus anchor 候選）
- *  - heard_memory（從別人口中聽來）
- *  - relationship / claimed_backstory（v2 再加）
+ * Character memories (owner-only journal). Mirrors the old runner MemoryStore's 8 kinds:
+ *  - reflection / observation / event — the three main trunks
+ *  - dream (troupe-master's sent dream) / artifact (her creation — Walrus anchor candidate)
+ *  - heard_memory (heard from someone else)
+ *  - relationship / claimed_backstory (added in v2)
  */
 export const memories: CharacterMemory[] = [
-  // ───── 葉庭芳 char_ye_tingfang ─────
+  // ───── Ye char_ye_tingfang ─────
   {
     id: 'mem_ye_001',
     characterId: 'char_ye_tingfang',
@@ -86,7 +86,7 @@ export const memories: CharacterMemory[] = [
     provenance: { source: 'self' },
   },
 
-  // ───── 程蘅玉 char_cheng_hengyu ─────
+  // ───── Cheng char_cheng_hengyu ─────
   {
     id: 'mem_cheng_001',
     characterId: 'char_cheng_hengyu',
@@ -160,7 +160,7 @@ export const memories: CharacterMemory[] = [
     provenance: { source: 'self' },
   },
 
-  // ───── 沈懷音 char_shen_huaiyin（班主、internal saga） ─────
+  // ───── Shen char_shen_huaiyin (troupe master, internal saga) ─────
   {
     id: 'mem_shen_001',
     characterId: 'char_shen_huaiyin',
@@ -185,7 +185,7 @@ export const memories: CharacterMemory[] = [
     provenance: { source: 'self' },
   },
 
-  // ───── 杜聽瀾 char_du_tinglan ─────
+  // ───── Du char_du_tinglan ─────
   {
     id: 'mem_du_001',
     characterId: 'char_du_tinglan',

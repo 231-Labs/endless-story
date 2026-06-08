@@ -5,9 +5,9 @@ import { motion, useInView } from 'framer-motion';
 import type { Character } from '@endless-story/shared';
 
 /**
- * 場景進入 viewport 時，題款由下而上浮升、淡出時下沉。
- * vertical-rl 直書顯示。
- * children 是內容 — 為將來 LLM streaming token 預留接口。
+ * As a scene enters the viewport the quote floats up, then sinks as it fades.
+ * Rendered vertical-rl (top-to-bottom columns).
+ * `children` is the content — left open for future LLM token streaming.
  */
 export function FloatingQuote({
   speaker,
@@ -18,13 +18,13 @@ export function FloatingQuote({
 }: {
   speaker?: Character | null;
   children: ReactNode;
-  leftPct: number; // 相對於手卷容器
+  leftPct: number; // relative to the handscroll container
   topPct: number;
   delaySeconds?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  // once + 低門檻：第一屏進場（即使只露一部分）就觸發、之後不再隱回，
-  // 避免「要滑到下一個場景再回來才跳出來」。
+  // once + low threshold: fire as soon as it's partly on the first screen and
+  // never hide again, so it doesn't require scrolling away and back to appear.
   const inView = useInView(ref, { once: true, amount: 0.1 });
 
   return (
@@ -34,9 +34,9 @@ export function FloatingQuote({
       style={{
         left: `${leftPct}%`,
         top: `${topPct}%`,
-        // 頂端對位：topPct 壓在標題下方，直書欄只往「下方留白」長，上緣絕不犯標題。
+        // Top-aligned: topPct sits below the title; the column only grows downward, never over the title.
         transform: 'translate(-50%, 0)',
-        // 高度上限 + 裁切：保底不讓特別長的題款掉出視窗底部（已先截斷 12 字，極少觸發）。
+        // Max height + clip: keep very long quotes from spilling off the bottom (already truncated to 12 chars, rarely hits).
         maxHeight: '44dvh',
         overflow: 'hidden',
       }}

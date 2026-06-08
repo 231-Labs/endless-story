@@ -2,8 +2,8 @@
  * Character candidate generation — given a rolled attribute set + saga context,
  * ask the LLM to write 1 character whose narrative MATCHES the rolled values.
  *
- * **Phase 2 抽卡 model: always 1 candidate per voucher.** No "pick from 3" —
- * one roll, one result. See AGENTS.md「下次接班」設計拍板.
+ * **Phase 2 gacha model: always 1 candidate per voucher.** No "pick from 3" —
+ * one roll, one result. See the design decisions in AGENTS.md.
  *
  * Values are LOCKED — rolled deterministically from voucher.attribute_seed
  * (see `seed/roll.ts`) before this is called. The LLM only writes the

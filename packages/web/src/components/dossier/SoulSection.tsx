@@ -3,14 +3,9 @@ import type { Chapter, CharacterPersona, PersonaRegenTrigger } from '@endless-st
 import { shortChapterTitle } from '@/lib/format';
 
 /**
- * 本色 — 角色卸了妝、出戲以後的結構性面貌。
- * 三欄：軸 / 腔 / 界。每欄是 2–4 句短語。
- *
- * 視覺語彙：
- *   - 大字 cinnabar serif 單字當欄標題（軸 腔 界）
- *   - 短句以 hairline 細線左邊條呈現，serif italic — 像一行行小註
- *   - 右上 meta 行：「半永久 · v2 · 暮後合戲落幕後重蒸」— 顯示她在演化
- *   - 整體不喧賓奪主、留白多，與「敘描」段並置時有節奏對比
+ * Soul — the character's structural self once out of character.
+ * Three columns (axis / voice / bounds), each 2-4 short phrases.
+ * The top-right meta line signals the persona evolves over time.
  */
 export function SoulSection({
   persona,

@@ -31,8 +31,8 @@ export interface LLMConfig {
 }
 
 const DEFAULTS = {
-  // 中文敘事品質優先：primary / cheap 都用 GLM-4.6。
-  // Claude 中文不如 GLM；要換需顯式設 POE_MODEL_* env。
+  // Chinese-prose quality first: both primary and cheap use GLM-4.6 (Claude's Chinese
+  // is weaker than GLM here). Override explicitly via POE_MODEL_* env to switch.
   poeModelPrimary: 'GLM-4.6',
   poeModelCheap: 'GLM-4.6',
   anthropicModelPrimary: 'claude-sonnet-4-6',

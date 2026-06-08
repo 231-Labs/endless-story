@@ -48,7 +48,7 @@ export interface RunCharacterWorkerInput {
     /** Saga the character is in (used for commitment + signer cap). */
     sagaId: string;
     /** Runner-supplied "what just happened" line — typically from a chain
-     *  event (e.g. "saga director 在後台化妝間開了 storylet ..."). */
+     *  event (e.g. "saga director opened a storylet in the backstage dressing room ..."). */
     triggerNarrative: string;
     /** Signer + the StorytellerCap id it controls. Required unless dryRun. */
     signer?: { keypair: Keypair; storytellerCapId: string };
@@ -75,11 +75,11 @@ export interface RunCharacterWorkerInput {
      */
     sagaSoul?: SagaSoul;
     /**
-     * Optional: role / specialty override (e.g. "富商" from off-chain
+     * Optional: role / specialty override (e.g. "wealthy merchant" from off-chain
      * Recruitment.specialty). Chain `Character` has no role field, so
      * caller is expected to look this up and pass in. If omitted,
      * snapshot defaults to '—' so the LLM doesn't get misled by a
-     * fake role like the previous hardcoded '武小生'.
+     * fake hardcoded role.
      */
     role?: string;
     /** Override LLM model. */
@@ -111,7 +111,7 @@ export interface RunCharacterWorkerResult {
     snapshot?: CharacterSnapshot;
     /** When the prompt wove a dream in (caller-supplied OR auto-pulled
      *  from latest DreamInjected event), this is the resolved fragment.
-     *  UI surfaces it as a「本章受夢境影響」chip. */
+     *  UI surfaces it as a "chapter influenced by dream" chip. */
     dreamFragmentUsed?: string;
     /** Errors that didn't abort. */
     errors?: string[];

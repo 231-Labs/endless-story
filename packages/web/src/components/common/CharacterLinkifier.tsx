@@ -14,9 +14,9 @@ type Token = NameToken | TextToken;
 interface BaseProps {
   text: string;
   characters: Character[];
-  /** 排除自己（在自己的 dossier 頁面就不要把自己 linkify） */
+  /** Exclude self (don't linkify the character on their own dossier page) */
   skipId?: string;
-  /** 關掉名字 linkify 但保留 markdown / 斷行 */
+  /** Turn off name linkify but keep markdown / line breaks */
   linkifyNames?: boolean;
 }
 

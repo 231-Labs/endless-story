@@ -1,5 +1,5 @@
 /**
- * 抽角定價 (gacha pricing) — pure math, shared by the admin form (auto-suggest)
+ * Gacha pricing — pure math, shared by the admin form (auto-suggest)
  * and the batch re-pricing action. See docs/WHITEPAPER.md §1 for the derivation.
  *
  * Each of the 4 attribute axes is rolled UNIFORMLY on [0, ATTRIBUTE_MAX] and the
@@ -9,7 +9,7 @@
  * and the joint hit probability across required axes is their product. The number
  * of single draws until a hit is geometric, so E[draws] = 1 / p.
  *
- * 必應 sells "the expected grind you skip" + guarantee + instant, so the fair
+ * The guaranteed bulk-buy sells "the expected grind you skip" + guarantee + instant, so the fair
  * anchor is basePrice × E[draws]; `margin` (< 1 = slight discount) nudges players
  * toward it and smooths revenue.
  */
@@ -36,8 +36,8 @@ export function expectedDrawsToMeet(
 }
 
 /**
- * Suggested 必應: basePrice × E[draws] × margin, rounded to `roundTo`, never
- * below basePrice (必應 must not undercut 單抽).
+ * Suggested bulk-buy price: basePrice × E[draws] × margin, rounded to `roundTo`, never
+ * below basePrice (bulk-buy must not undercut a single draw).
  */
 export function suggestedBulkPrice(
     basePrice: number,

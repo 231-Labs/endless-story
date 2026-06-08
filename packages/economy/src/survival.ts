@@ -35,7 +35,7 @@ import {
   vitalityState,
 } from "./derive.ts";
 
-/** Newborn seed grant (安家費). */
+/** Newborn seed grant. */
 export const SEED_FUNDS_MICRO = 56n * MUNIT;
 /** Cap how far back a cold/never-settled character replays (perf guard). */
 const MAX_CATCHUP_DAYS = 3650;
@@ -49,7 +49,7 @@ export interface SurvivalInput {
   ageYearsStart: number;
   /** real memory total (off-chain counter) — drives storage rent. */
   memoryCount: number;
-  /** 設定集 image count (gallery assets) — drives image storage rent. Optional → 0. */
+  /** gallery image count — drives image storage rent. Optional → 0. */
   imageCount?: number;
   /** current subscriber_count — drives income + the active/dormant gate. */
   subscribers: number;
@@ -79,7 +79,7 @@ export interface SurvivalSnapshot {
   memoryCount: number;
   memoryRent: number; // ENDLESS/day from memory storage rent (C_mem × memory_count)
   imageCount: number;
-  imageRent: number; // ENDLESS/day from 設定集 image storage rent (C_img × image_count)
+  imageRent: number; // ENDLESS/day from gallery image storage rent (C_img × image_count)
   vitality: number; // 0..100
   vitalityState: VitalityState;
   lifeStage: LifeStage;

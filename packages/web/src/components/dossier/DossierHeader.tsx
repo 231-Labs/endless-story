@@ -16,15 +16,15 @@ export function DossierHeader({
 }: {
   character: Character;
   /**
-   * The 此刻心境/身在何處/將往何方 bar — passed as a slot so the caller can
-   * stream it in (it depends on a SEAL plan recall). Render a LiveStateBar
-   * (or a Suspense around a loader) here.
+   * The live-state bar (mood / where / next) — passed as a slot so the
+   * caller can stream it in (it depends on a SEAL plan recall). Render a
+   * LiveStateBar (or a Suspense around a loader) here.
    */
   liveStateSlot: ReactNode;
   /**
    * On-chain saga.info.name fetched by caller (server component). When
    * passed, overrides the legacy DEMO_SAGA_ID slug match. Null falls
-   * back to '江湖' (wild). Mock characters still use the slug match.
+   * back to the "wild" label. Mock characters still use the slug match.
    */
   sagaName?: string | null;
 }) {

@@ -76,7 +76,7 @@ export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisM
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
 
-    // 數量隨年齡:活得越久、記憶層次越多(8–14)。呼叫端可用 input.count 覆寫。
+    // Count scales with age: older = more memory layers (8–14). Caller can override via input.count.
     const count = input.count ?? deriveGenesisCount(snap.ageYears);
 
     const response = await llm.chat({
@@ -100,7 +100,7 @@ export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisM
                 }),
             },
         ],
-        // 記憶條數變多(且每條要有畫面),放寬 token 上限避免被截斷。
+        // More memories (each needs imagery) — raise token cap to avoid truncation.
         maxTokens: 5200,
         temperature: 0.95,
     });
@@ -110,8 +110,8 @@ export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisM
 }
 
 /**
- * 依年齡推導 genesis 記憶條數:年長者活得久、記憶層次該更多。
- * 夾在 8–14 之間(舊預設 5 太少、角色沒厚度)。
+ * Derive genesis memory count from age: older characters get more layers.
+ * Clamped to 8–14 (old default of 5 was too thin).
  */
 function deriveGenesisCount(ageYears: number): number {
     if (!Number.isFinite(ageYears) || ageYears <= 0) return 10;

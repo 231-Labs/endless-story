@@ -1,55 +1,56 @@
-// Walrus 資產服務 — 型別。
+// Walrus asset service — types.
 //
-// 此服務 *獨立* 於 MemWAL relayer(見 docs/WALRUS_ASSETS.md 決策 ⑦)。它管「人工策展、
-// 要長存」的 Walrus blob — hero 影片 / 角色圖 / 場景錨 / 章回 — 的上傳·上下架·到期追蹤·續租。
-// MemWAL 的「記憶 blob」不在此列(由 runner/MemWal 自管)。
+// This service is independent of the MemWAL relayer (see docs/WALRUS_ASSETS.md
+// decision ⑦). It manages human-curated, long-lived Walrus blobs — hero video /
+// portraits / scene anchors / chapters — covering upload, publish state, expiry
+// tracking, and renewal. MemWAL "memory blobs" are not in scope (runner/MemWal owns those).
 //
-// registry 只存最小映射;到期判定 = 我們自己維護的 endEpoch(store/extend 後更新 → 權威值,
-// 不會 stale,因為只有本服務會動這些 blob)＋ 列表時即時取的 currentEpoch。
+// The registry stores a minimal mapping; expiry = our own endEpoch (authoritative,
+// updated after store/extend, never stale since only this service touches these blobs)
+// plus the currentEpoch fetched at list time.
 
 export type AssetCategory = "hero-clip" | "character-image" | "scene-anchor" | "chapter-text";
 
 export type AssetStatus = "live" | "unpublished";
 
-/** registry 一筆。 */
 export interface WalrusAsset {
-  /** 我們的穩定 id(manifest / 前端引用用,不等於 blobId)。 */
+  // Our stable id (for the manifest / frontend refs); not the blobId.
   id: string;
   category: AssetCategory;
-  /** 後台顯示名("顧柳爭位 trailer")。 */
   label: string;
-  /** content hash — 讀取:`<aggregator>/v1/blobs/:blobId`。 */
+  // Content hash — read at `<aggregator>/v1/blobs/:blobId`.
   blobId: string;
-  /** 鏈上 Blob object — extend / delete 的把手(只有 owner 能動)。 */
+  // On-chain Blob object — the handle for extend / delete (owner only).
   suiObjectId: string;
   contentType: string;
   sizeBytes: number;
-  /** 上傳時帶的 flag;true 才能主動刪 blob 回收儲存。 */
+  // Set at upload; must be true to delete the blob and reclaim storage.
   deletable: boolean;
-  /** 上/下架:是否出現在對外 manifest(blob 可留可刪)。 */
+  // Publish state: whether it appears in the public manifest (blob may stay or go).
   status: AssetStatus;
-  /** Hybrid 續費:per-asset 覆寫;預設跟 category 預設值走。 */
+  // Hybrid renewal: per-asset override; defaults to the category default.
   autoRenew: boolean;
-  /** 目前租到的 epoch(store / extend 後更新)。 */
+  // Epoch the lease currently runs to (updated after store / extend).
   endEpoch: number;
-  /** 各 category 形狀見 docs/WALRUS_ASSETS.md §3;hero-clip 即 demo-clips.json 一筆的欄位。 */
+  // Per-category shape in docs/WALRUS_ASSETS.md §3; hero-clip = one demo-clips.json entry.
   meta: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
 }
 
-/** 列表回傳:registry + 即時換算的到期資訊。 */
+// List response: registry rows plus derived expiry info.
 export interface WalrusAssetView extends WalrusAsset {
   currentEpoch: number | null;
-  /** endEpoch − currentEpoch;null = currentEpoch 取不到。 */
+  // endEpoch − currentEpoch; null when currentEpoch is unavailable.
   epochsRemaining: number | null;
-  /** ISO;null = 無法判定(epoch 時長未知)。 */
+  // ISO; null when undeterminable (epoch duration unknown).
   expiresAt: string | null;
   expiringSoon: boolean;
 }
 
 export interface CategoryDefault {
-  /** 預設租期(epoch 數;實際時長隨網路:testnet ≈ 1 天/epoch,mainnet ≈ 14 天/epoch)。 */
+  // Default lease (epoch count); real duration varies by network: testnet ≈ 1 day/epoch,
+  // mainnet ≈ 14 days/epoch.
   epochs: number;
   autoRenew: boolean;
   deletable: boolean;

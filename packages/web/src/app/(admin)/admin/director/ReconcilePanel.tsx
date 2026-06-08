@@ -25,10 +25,10 @@ const STATUS_DOT: Record<ReconcileStatus, string> = {
 };
 
 /**
- * 對帳 / 補發 — one idempotent button that makes every saga character WHOLE.
- * Reuses the mint generators; only fills the gaps (主圖 / 設定集 / 標籤 / 本色 / 記憶 / 關係),
- * so re-running is safe (everything already present just shows「跳過」). This is the
- * SINGLE saga-wide batch entry — incl. relationship 補帳 (mint-ordering backfill).
+ * Reconcile / re-issue — one idempotent button that makes every saga character WHOLE.
+ * Reuses the mint generators; only fills the gaps (portrait / profile / tags / persona / memories / relationships),
+ * so re-running is safe (anything already present just shows "skipped"). This is the
+ * SINGLE saga-wide batch entry — incl. relationship backfill (mint-ordering backfill).
  */
 export function ReconcilePanel() {
     const [results, setResults] = useState<ReconcileResult[] | null>(null);

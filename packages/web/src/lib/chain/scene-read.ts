@@ -130,9 +130,9 @@ function mapChainScene(id: string, json: ChainSceneJson): Scene {
 
 /**
  * Derive UI `heatProfile` from chain `Scene.params`. Mapping convention:
- *   - atmosphere → mute     (基調氣場、平靜公共)
- *   - danger     → cinnabar (險、緊張、衝突)
- *   - prosperity → jade     (旺、活力、人氣)
+ *   - atmosphere → mute     (baseline mood, calm/public)
+ *   - danger     → cinnabar (peril, tension, conflict)
+ *   - prosperity → jade     (vitality, energy, popularity)
  *
  * Chain values are u64 in `[0, 100]` (story preset convention); UI heat
  * expects `[0, 1]`. Clamped + normalised here.

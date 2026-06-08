@@ -1,9 +1,9 @@
 import type { Saga } from '@endless-story/shared';
 
 /**
- * 班規 + 經營 — 春雪社的兩面契約。
- * 視覺隱喻：立班契約與帳房印記。
- * 移除分潤，將 Saga Prompts 與 Metrics 整合為一張精緻的長卷/牌匾。
+ * Charter + operations — the saga's two-sided contract.
+ * Visual metaphor: a troupe charter with a counting-house seal.
+ * Merges Saga Prompts and Metrics into a single scroll/plaque (no revenue split).
  */
 export function SagaCharterPanel({ saga }: { saga: Saga }) {
   const { sagaPrompts, metrics } = saga;
@@ -143,9 +143,7 @@ function MetricRow({
   );
 }
 
-/**
- * 裝飾性朱文印（春雪印記）
- */
+/** Decorative cinnabar seal */
 function RedSeal() {
   return (
     <svg width="64" height="64" viewBox="0 0 100 100" className="rotate-[-4deg]" aria-hidden>

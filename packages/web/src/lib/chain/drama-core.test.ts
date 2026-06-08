@@ -89,7 +89,7 @@ test('default desires: tagged partnership eligibility is 小生-side only', () =
 });
 
 test('derive: the holder ends LESS tense than the contender (scarcity bites)', () => {
-    const world = castWorld(LIU); // 柳 holds the slot, 白 does not
+    const world = castWorld(LIU); // Liu holds the slot, Bai does not
     const { next } = deriveBeat(world);
     const liuT = tensionOf(next, LIU);
     const baiT = tensionOf(next, BAI);
@@ -112,7 +112,7 @@ test('continuity: prior satisfaction carries forward (the slot-holder keeps rela
     const carried = extractSatisfaction(first.next);
     const secondWorld = castWorld(LIU, carried);
     const second = deriveBeat(secondWorld);
-    // 柳 keeps holding → its satisfaction should be ≥ after the first beat (monotone toward SCALE)
+    // Liu keeps holding → its satisfaction should be ≥ after the first beat (monotone toward SCALE)
     const s1 = first.next.agents.find((a) => a.id === LIU)!.desires[0].satisfaction;
     const s2 = second.next.agents.find((a) => a.id === LIU)!.desires[0].satisfaction;
     assert.ok(s2 >= s1, `held-slot satisfaction should not regress: ${s1} → ${s2}`);

@@ -168,7 +168,7 @@ export function runScenario(scenario: Scenario): RunResult {
     // C. contested slot
     if (scenario.policy.slotCapacity1) assignSlot(world);
 
-    // C2. owner subsidy (挹注) — external top-up the human owner injects into a beloved
+    // C2. owner subsidy — external top-up the human owner injects into a beloved
     // (possibly reader-less) character. Counts as external injection → conservation preserved.
     let subsidyToday = 0n;
     if (scenario.policy.ownerSubsidy) {

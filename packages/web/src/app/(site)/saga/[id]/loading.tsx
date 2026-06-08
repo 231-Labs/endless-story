@@ -21,7 +21,7 @@ export default function SagaLoading() {
       <div className="relative h-[100dvh] w-full animate-pulse">
         {/* title block (top-left, matches FixedOverlay) */}
         <div className="absolute left-6 top-[calc(var(--es-site-nav-h)+1.5rem)] flex flex-col gap-3 sm:left-10">
-          <Bar className="h-3 w-20" /> {/* 梨園手卷 eyebrow */}
+          <Bar className="h-3 w-20" /> {/* handscroll eyebrow */}
           <Bar className="h-9 w-56 sm:w-72" /> {/* saga name */}
           <Bar className="h-3 w-40" /> {/* location label */}
         </div>
@@ -39,7 +39,7 @@ export default function SagaLoading() {
         <Bar className="absolute left-[62%] top-[48%] h-3 w-3 rounded-full" />
         <Bar className="absolute left-[74%] top-[60%] h-3 w-3 rounded-full" />
 
-        {/*展卷 hint */}
+        {/* unroll hint */}
         <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
           <Bar className="h-3 w-48" />
         </div>

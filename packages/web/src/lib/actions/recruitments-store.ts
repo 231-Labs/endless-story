@@ -80,8 +80,8 @@ export async function deleteRecruitment(id: string): Promise<void> {
 }
 
 /**
- * 一鍵清空招募紀錄 —— 把整個 store 倒空(連人工建的 row 也清)。
- * 給「清乾淨再 seed 重種」的測試流程用。回傳清掉幾筆。
+ * One-click wipe of all recruitment records — empties the whole store (including manually-created rows).
+ * For the "clear then reseed" test flow. Returns how many were cleared.
  */
 export async function clearAllRecruitments(): Promise<{ ok: boolean; cleared: number }> {
     const cleared = readStore().length;
@@ -110,7 +110,7 @@ export async function newRecruitmentDraft(sagaId: string, sagaName: string): Pro
         slots: 1,
         basePrice: 100,
         // bulkPrice left unset (= basePrice until the admin sets minAttributes and
-        // clicks 「建議」, or runs batch auto-pricing).
+        // clicks "suggest", or runs batch auto-pricing).
         expiresAt,
         createdAt: new Date().toISOString(),
         active: false,
@@ -186,13 +186,14 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
         const prev = existing[idx];
         const wasPresetSeed = (prev as { ttl_days?: unknown }).ttl_days !== undefined;
         if (!wasPresetSeed) {
-            // 人工在 admin UI 建的 row（無 ttl_days）— 不覆蓋。
+            // Row created manually in the admin UI (no ttl_days) — do not overwrite.
             log.push(`SKIP  ${seed.id} (${seed.specialty}) — manual row, kept`);
             skipped++;
             continue;
         }
-        // preset 種過的 row：用最新 preset「整筆覆寫」（連被移除的欄位如 genderRequirement
-        // 也一併更新），只保留原 createdAt。這樣改 json 後 reseed 就會反映新描述/設定。
+        // Preset-seeded row: full overwrite from the latest preset (including removed fields
+        // like genderRequirement), keeping only the original createdAt. So editing the json then
+        // reseeding reflects the new description/settings.
         existing[idx] = { ...fresh, createdAt: prev.createdAt ?? nowIso };
         log.push(`UPD   ${seed.id} (${seed.specialty})`);
         updated++;
@@ -208,7 +209,7 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
 }
 
 /**
- * Batch re-price every recruitment's 必應 from its requirement difficulty
+ * Batch re-price every recruitment's bulk-buy from its requirement difficulty
  * (basePrice × E[draws] × margin — see docs/WHITEPAPER.md §1). Idempotent;
  * returns how many rows changed.
  */

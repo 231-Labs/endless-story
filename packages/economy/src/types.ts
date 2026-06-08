@@ -5,12 +5,12 @@
 //
 // UNITS (all bigint, Move-mappable):
 //   money    — ENDLESS base units. 1 ENDLESS = MUNIT (6 decimals, matches currency.move).
-//   vitality — milli-points in [0, VIT_FULL]. 100.000 氣血 = VIT_FULL.
+//   vitality — milli-points in [0, VIT_FULL]. 100.000 vitality = VIT_FULL.
 //   age      — milli-years (×1000) so sub-year fractions stay exact integers.
 
 /** 1 ENDLESS in base units (currency.move uses 6 decimals). */
 export const MUNIT = 1_000_000n;
-/** Vitality (氣血) full bar = 100.000 points, stored as milli-points. */
+/** Vitality full bar = 100.000 points, stored as milli-points. */
 export const VIT_FULL = 100_000n;
 /** 1 vitality point in milli-points. */
 export const VIT_PT = 1_000n;
@@ -32,7 +32,7 @@ export type VitalityState = "healthy" | "strained" | "failing" | "dead";
  */
 export interface CharConfig {
   id: string;
-  /** role group key matched against ROLE_BASE_FLOOR (e.g. "花旦"). */
+  /** role-name key, substring-matched against the ROLE_BASE_FLOOR keyword table. */
   role: string;
   /** attribute snapshot 0..100. disposition is intentionally excluded from salary. */
   constitution: number;
@@ -49,11 +49,11 @@ export interface CharState {
   cfg: CharConfig;
   /** real ENDLESS base units held by the character NFT (Balance<CURRENCY>); ≥ 0. */
   balance: bigint;
-  /** 氣血, milli-points, [0, VIT_FULL]. */
+  /** vitality, milli-points, [0, VIT_FULL]. */
   vitality: bigint;
   /** append-only memory total (MemWal never deletes) — drives storage rent. */
   memoryCount: bigint;
-  /** 設定集 image count (portrait + costume/makeup/event-moment/variants) — grows over time
+  /** gallery image count (portrait + costume/makeup/event-moment/variants) — grows over time
    *  (events add moments, evolve-portrait adds variants); drives image storage rent. */
   imageCount: bigint;
   /** narrative days lived since birth. */
@@ -78,7 +78,7 @@ export interface Accounts {
   injected: bigint;
   /** owner revenue (owner_bps share) + estates of the dead. */
   ownerSink: bigint;
-  /** storyteller (班主) cut. */
+  /** storyteller cut. */
   storytellerSink: bigint;
   /** dailyCost collected from characters — funds real infra (AI/MemWal/Seal). */
   protocolSink: bigint;
@@ -100,7 +100,7 @@ export interface EconConfig {
   // ── dailyCost (A2) ──
   cRun: bigint;            // money/day at activeFactor = 1.0 (AI inference floor)
   cMem: bigint;            // money per stored memory per day (MemWal storage rent)
-  cImg: bigint;            // money per 設定集 image per day (Walrus image storage rent)
+  cImg: bigint;            // money per gallery image per day (Walrus image storage rent)
   cSeal: bigint;           // money per recall (Seal decrypt + vector query)
   activeLiveMilli: bigint; // activeFactor when subscriber_count ≥ 1 (×1000)
   activeDormantMilli: bigint; // activeFactor when subscriber_count == 0 (×1000)

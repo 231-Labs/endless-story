@@ -18,6 +18,7 @@ import {
 } from '@/components/dossier/CharacterGrid';
 import { Suspense } from 'react';
 import type { Character } from '@endless-story/shared';
+import { byId } from '@/lib/collections';
 import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierSkeleton } from '@/components/dossier/DossierSkeleton';
 import { RosterSkeletonInner } from '@/components/dossier/RosterSkeleton';
@@ -111,7 +112,7 @@ async function RosterCards({
   const characters = useOwnedQuery
     ? await charactersApi.listOwnedCharacters(viewerWallet)
     : await charactersApi.listCharacters();
-  const charactersById = new Map(characters.map((c) => [c.id, c]));
+  const charactersById = byId(characters);
 
   const cards: CardData[] = await Promise.all(
     characters.map(async (character) => {
@@ -186,7 +187,7 @@ async function DossierDetail({
   // NOTE: memories are deliberately NOT fetched here — `listMemories` is a
   // 24-memory SEAL recall (72 candidates decrypted) that took 20-60s and
   // blocked the WHOLE dossier even on the profile tab. It now loads lazily
-  // inside its own Suspense, only when the 記憶 tab is open (see below).
+  // inside its own Suspense, only when the memories tab is open (see below).
   const [
     allCharacters,
     edges,
@@ -218,7 +219,7 @@ async function DossierDetail({
     // see only metadata (mode + timestamp + chain anchor).
     fetchReflectionsForCharacter(character.id, { limit: 8 }),
   ]);
-  const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
+  const charactersById = byId(allCharacters);
   const personaRegenChapter = persona?.lastRegenChapterId
     ? (await chaptersApi.getChapter(persona.lastRegenChapterId)) ?? null
     : null;
@@ -304,7 +305,7 @@ async function DossierDetail({
 
 /**
  * Lazy loader for the header's live-state bar. getLiveState(withPlan) does a
- * SEAL recall for 此刻心境/將往何方; isolating it here lets the header (portrait
+ * SEAL recall for current mood / next plan; isolating it here lets the header (portrait
  * + name + meta + chips) paint immediately while this streams in.
  */
 async function LiveStateBarLoader({
@@ -321,7 +322,7 @@ async function LiveStateBarLoader({
 }
 
 /**
- * Lazy loader for the 記憶 tab. `listMemories` is a SEAL recall (slow +
+ * Lazy loader for the memories tab. `listMemories` is a SEAL recall (slow +
  * rate-limited), so it's isolated here behind a Suspense and only runs when
  * the memories tab is open — never blocking the header / other tabs.
  */

@@ -18,7 +18,7 @@ import {
  * the wizard stamps at mint time.
  *
  * The store starts EMPTY on fresh install. Admin populates it via:
- *   - /admin/deploy ③ button (batch open 5 preset 行當)
+ *   - /admin/deploy ③ button (batch open 5 preset role-types)
  *   - /admin/recruitments (manual CRUD)
  *
  * Seed data lives in `lib/recruitment-seeds.ts`.

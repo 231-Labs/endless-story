@@ -10,10 +10,10 @@ export function truncateBlobId(blobId: string, tail = 10): string {
 }
 
 export function shortChapterTitle(title: string): string {
-  // POV format: 〈event〉· 角色名視角 → keep 〈event〉
+  // POV format "〈event〉· <character> POV" → keep the event in angle brackets
   const povMatch = title.match(/^〈([^〉]+)〉/);
   if (povMatch) return povMatch[1];
-  // Ensemble format: 《saga》第N日 · event → keep event
+  // Ensemble format "《saga》day-N · event" → keep the trailing event
   const ensembleMatch = title.match(/^《[^》]+》第[^·]+·\s*(.+)$/);
   if (ensembleMatch) return ensembleMatch[1].trim();
   return title;

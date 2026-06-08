@@ -1,9 +1,9 @@
 /**
- * Admin 影片/資產上傳代傳 — 瀏覽器 multipart → 此 route → asset 服務 `POST /api/assets`。
- * 密鑰(ASSET_SERVICE_SECRET / RELAYER_SECRET)只在 server 端,不進前端。
+ * Admin video/asset upload proxy — browser multipart → this route → asset service `POST /api/assets`.
+ * Secrets (ASSET_SERVICE_SECRET / RELAYER_SECRET) stay server-side, never reach the frontend.
  *
- * ⚠️ Vercel serverless 請求 body 上限約 4.5MB。Hero loop 影片本來就該壓小(<4.5MB)。
- *    日後要傳大檔,改成「前端直傳 asset 服務 + 簽章授權」即可繞過 Vercel(另案)。
+ * ⚠️ Vercel serverless request body cap is ~4.5MB. Hero loop videos should be small anyway (<4.5MB).
+ *    To upload larger files later, switch to "frontend direct-upload to asset service + signed auth" to bypass Vercel (separate task).
  */
 import { NextResponse } from 'next/server';
 

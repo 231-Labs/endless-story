@@ -32,7 +32,7 @@ export interface Analysis {
   /** Gini of alive balances on the final day (0 = equal, 1 = one holder). */
   giniFinal: number;
   totalRescues: number;
-  /** total owner subsidy (挹注) over the run, ENDLESS. */
+  /** total owner subsidy over the run, ENDLESS. */
   ownerSubsidyEndless: number;
   /** mean owner subsidy per alive char-day, ENDLESS — the cost to keep a beloved character. */
   ownerBurnPerCharDayEndless: number;

@@ -1,14 +1,15 @@
 'use server';
 
 /**
- * Admin server actions — proxy to the self-hosted Walrus **asset 服務**
- * (docs/WALRUS_ASSETS.md;Zeabur,assets.zeabur.app)。密鑰留 server 端。
+ * Admin server actions — proxy to the self-hosted Walrus asset service
+ * (docs/WALRUS_ASSETS.md; Zeabur, assets.zeabur.app). Secret stays server-side.
  *
- * 上傳(大檔)走 route handler `app/api/admin/assets/upload`,不走 server action
- * (Next.js server action body 預設 1MB;影片要走 route handler)。
+ * Uploads (large files) go through the route handler `app/api/admin/assets/upload`,
+ * NOT a server action (Next.js server action body defaults to 1MB; video must use the
+ * route handler).
  *
- * env:`ASSET_SERVICE_URL`(= https://assets.<domain>)、`ASSET_SERVICE_SECRET`(= asset
- * 服務的 RELAYER_SECRET;fallback RELAYER_SECRET)。
+ * env: `ASSET_SERVICE_URL` (= https://assets.<domain>), `ASSET_SERVICE_SECRET` (= the asset
+ * service's RELAYER_SECRET; fallback RELAYER_SECRET).
  */
 
 export type AssetCategory = 'hero-clip' | 'character-image' | 'scene-anchor' | 'chapter-text';

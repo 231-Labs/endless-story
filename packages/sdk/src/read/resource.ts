@@ -36,7 +36,7 @@ export interface ResourceInstantiatedSummary {
     sagaId: string;
     /** structural "bone" kind (e.g. "capacity-1-slot"); narrative-facing. */
     archetype: string;
-    /** human label (e.g. "partnership:孟雲屏"); narrative-facing. */
+    /** human label (e.g. "partnership:<name>"); narrative-facing. */
     label: string;
     capacity: string;
     createdAtMs: string;

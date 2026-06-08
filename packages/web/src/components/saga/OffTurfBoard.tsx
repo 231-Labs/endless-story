@@ -4,14 +4,13 @@ import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 import { BlobImage } from '@/components/common/BlobImage';
 
 /**
- * 江湖在外 — 分鏡追蹤板。
+ * Off-turf tracking board.
  *
- * 追蹤「屬於本 saga（saga_id 綁定 = 在冊）、但此刻人不在 saga 地界內」的角色。
- * 「在外」= 當前 scene 落在未覆蓋的 location（堂子／會館／大世界等外部點），或當前無
- * scene（行蹤不在台上）。內外部看的是 membership × 當前位置兩條軸，不是經濟。
- *
- * 一張卡 = 一個在外的成員：誰 · 現在在哪。沒人在外就顯示空狀態（全班在地界內）。
- * 資料由 saga 頁在 server 端備好（見 page.tsx），這裡只負責排版。
+ * Tracks members of this saga (bound by saga_id) who are NOT currently within
+ * the saga's covered locations — i.e. their scene is in an uncovered location
+ * (external venue) or they have no current scene. Axes are membership x current
+ * position, not economy. One card = one off-turf member (who · where now);
+ * empty state when everyone is on-turf. Data is prepared server-side (page.tsx).
  */
 
 export interface OffTurfEntry {
@@ -19,9 +18,9 @@ export interface OffTurfEntry {
   name: string;
   role: CharacterRole;
   imageUrl?: string;
-  /** 當前 scene 名（在外部地點的房間）；無 scene 則 undefined。 */
+  /** Current scene name (a room at an external location); undefined if no scene. */
   sceneName?: string;
-  /** 當前 scene 所屬的外部 location 名；無從得知則 undefined。 */
+  /** External location name the current scene belongs to; undefined if unknown. */
   locationName?: string;
 }
 

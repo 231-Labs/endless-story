@@ -1,12 +1,12 @@
 /**
- * Saga soul — per-戲班 narrative flavour layered on top of the hardcoded
- * 梨園 genre baseline in the POV system prompt.
+ * Saga soul — per-troupe narrative flavour layered on top of the hardcoded
+ * opera-world genre baseline in the POV system prompt.
  *
- * The world is a 民初梨園 world, so the *craft* rules (limited POV, restrained
- * emotion, no inventing facts…) stay genre-fixed in `buildSystemPrompt`. What
- * varies per saga is its tonal DNA — its 本事 (premise), 事件氣質, 自然節律,
- * 離班規矩. Today every saga would share one voice because none of this reaches
- * generation; this block is how each troupe tilts the prose toward itself.
+ * The world is an early-Republic opera world, so the *craft* rules (limited POV,
+ * restrained emotion, no inventing facts…) stay genre-fixed in `buildSystemPrompt`.
+ * What varies per saga is its tonal DNA — premise, event temperament, natural
+ * rhythm, departure policy. Today every saga would share one voice because none
+ * of this reaches generation; this block is how each troupe tilts the prose toward itself.
  *
  * Zero-dependency on purpose: the pure block builder is unit-testable without
  * pulling the prompt module's `@endless-story/shared` import (mirrors how
@@ -14,24 +14,24 @@
  */
 
 export interface SagaSoul {
-    /** Saga display name (戲班名). Carried for other consumers (gazette /
+    /** Saga display name. Carried for other consumers (gazette /
      *  portrait); intentionally NOT rendered into the POV block — the user
-     *  prompt already states 所屬. */
+     *  prompt already states the affiliation. */
     sagaName?: string;
-    /** Premise — on-chain `Saga.description`: 這個戲班在演什麼局. */
+    /** Premise — on-chain `Saga.description`: what this troupe is staging. */
     premise?: string;
-    /** 事件氣質 — 戲外的戲、衝突類型、敘事節奏 (richer, off-baseline; Tier 2). */
+    /** Event temperament — off-stage drama, conflict type, narrative pace (richer, off-baseline; Tier 2). */
     naturePrompt?: string;
-    /** 自然節律 — 日出開嗓 / 戌時封箱 / 月不出停戲一日 (Tier 2). */
+    /** Natural rhythm — e.g. open at sunrise / pack up at dusk / no show on a moonless night (Tier 2). */
     rhythmHints?: string;
-    /** 離班規矩 — on-chain `Saga.departure_policy`. */
+    /** Departure policy — on-chain `Saga.departure_policy`. */
     departurePolicy?: string;
-    /** 畫風 tone — portrait 用 (Tier 2); 不進 POV system prompt. */
+    /** Art-style tone — for portraits (Tier 2); not fed into the POV system prompt. */
     portraitTone?: string;
 }
 
 /**
- * Build the「戲班氣質」block appended to the POV system prompt.
+ * Build the troupe-temperament block appended to the POV system prompt.
  *
  * Returns '' when no tone-bearing field is present, so a soul-less saga yields
  * a byte-identical system prompt to before (graceful regression). `portraitTone`

@@ -1,6 +1,6 @@
 // H4 ablation: the ONLY difference between allianceOn and allianceOff is policy.alliances.
 // Same cast, same seed, same everything else — so any death-rate / lifespan gap is CAUSED by
-// patronage (角色間 Endless 流通). A rich patron (many subscribers) tops up failing allies.
+// patronage (Endless transfers between characters). A rich patron (many subscribers) tops up failing allies.
 
 import { DEFAULT_ECON, type CharConfig } from "../src/index.ts";
 import type { Scenario } from "../driver/types.ts";

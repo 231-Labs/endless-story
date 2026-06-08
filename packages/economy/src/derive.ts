@@ -20,7 +20,7 @@ import {
 export const DEFAULT_ECON: EconConfig = {
   cRun: 6n * MUNIT,
   cMem: 20_000n, // 0.02 ENDLESS per memory
-  cImg: 100_000n, // 0.1 ENDLESS per 設定集 image (heavier asset, far fewer than memories)
+  cImg: 100_000n, // 0.1 ENDLESS per gallery image (heavier asset, far fewer than memories)
   cSeal: 250_000n, // 0.25 ENDLESS per recall
   activeLiveMilli: 1_000n,
   activeDormantMilli: 300n,
@@ -48,7 +48,7 @@ export function makeOnset(varianceYears: number): bigint {
 }
 
 // ─── role base-floor salary table (A3.1), ENDLESS/day ────────────────────────
-// Ordered: more specific groups (武小生) before broader (小生). base is whole ENDLESS.
+// Ordered: more specific role keywords before broader ones (substring match). base is whole ENDLESS.
 const ROLE_BASE_FLOOR_GROUPS: { match: string[]; base: bigint }[] = [
   { match: ["富商", "商", "老闆", "東家", "金主"], base: 12n },
   { match: ["武小生", "武生", "武旦", "刀馬"], base: 9n },

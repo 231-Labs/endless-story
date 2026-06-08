@@ -7,17 +7,17 @@
  *
  * Layer 2 (Saga part-of-day): derived from the tick position within a
  * day. `days_per_tick_bp` (basis-points, 1/10000) sets the rhythm:
- *   1670 bp = 0.167 day/tick ≈ 6 ticks/day (戲班 default)
+ *   1670 bp = 0.167 day/tick ≈ 6 ticks/day (troupe default)
  *   10000 bp = 1.0 day/tick (one tick = one whole day)
  *
- * Day number is 1-indexed: tick 0 → 第 1 日.
+ * Day number is 1-indexed: tick 0 → day 1.
  */
 
 import { read, type SuiClient } from '@endless-story/sdk';
 
 const BP_DENOM = 10_000;
 
-/** Six 時辰-style parts for a 6-tick day; index clamps for other rhythms. */
+/** Six time-of-day parts for a 6-tick day; index clamps for other rhythms. */
 const PARTS_OF_DAY = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
 export type PartOfDay = (typeof PARTS_OF_DAY)[number];
 
@@ -60,7 +60,7 @@ export function derivePartOfDay(currentTick: number, daysPerTickBp: number): Par
 
 /**
  * Fetch the live World time. Returns sensible defaults (tick 0 → day 1,
- * 清晨) if the World object can't be read so callers degrade gracefully.
+ * first part-of-day) if the World object can't be read so callers degrade gracefully.
  */
 export async function fetchWorldTime(
     client: SuiClient,

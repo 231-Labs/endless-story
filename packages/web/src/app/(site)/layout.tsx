@@ -10,7 +10,7 @@
  * Future: hoist SiteNav + ThemeToggle + footer here once homepage's
  * nav-hide behaviour is refactored into a context.
  *
- * See AGENTS.md → 「鏈上架構」原則 6 (route group 嚴格隔離).
+ * See AGENTS.md → "on-chain architecture" principle 6 (strict route-group isolation).
  */
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>;

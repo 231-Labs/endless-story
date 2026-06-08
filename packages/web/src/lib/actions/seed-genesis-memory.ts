@@ -9,7 +9,7 @@
  * from drifting the persona — they now have something to recall.
  *
  * SCOPE: genesis writes ONLY the character's own life (selfMemories).
- * Cross-character relationships — first impressions AND pre-existing 故舊 —
+ * Cross-character relationships — first impressions AND pre-existing acquaintances —
  * are owned by the relationship-assess pass (assess-relationships.ts):
  * symmetric public director ties + dual-side memories, mint-ordering-fixed.
  * Keeping relationships out of genesis avoids the contradiction where genesis
@@ -41,10 +41,11 @@ export interface SeedGenesisResult {
 
 export async function seedGenesisMemoryAction(
     characterId: string,
-    // 不指定 → 交給 runner 依角色年齡推導(8–14;見 genesis-memory deriveGenesisCount)。
-    // mint 流程(redeem-voucher)不帶 count,所以新角色自動拿到隨年齡的記憶數量。
+    // unset → let the runner derive from character age (8–14; see genesis-memory deriveGenesisCount).
+    // The mint flow (redeem-voucher) passes no count, so new characters get an age-scaled memory count.
     count?: number,
-    // 私密內幕(candidate.secret)— 不上鏈、不另存,只在此餵給 genesis,讓它化成私密記憶。
+    // Private secret (candidate.secret) — not on chain, not stored; only fed to genesis here so it
+    // becomes a private memory.
     secret?: string,
 ): Promise<SeedGenesisResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;

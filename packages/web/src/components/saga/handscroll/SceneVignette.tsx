@@ -6,15 +6,16 @@ import type { Character, Scene } from '@endless-story/shared';
 import { WanderingFigure } from './WanderingFigure';
 
 export interface VignetteAnchor {
-  // 百分比（相對於手卷容器 300vw × 100vh）
+  // Percent, relative to the handscroll container (300vw x 100vh)
   x: number;
   y: number;
   zone: 'theater' | 'compound';
 }
 
 /**
- * 手卷上單一場景的標記區塊：場景小匾、heat bleed、人物剪影、performance 紅印。
- * 不負責 ghost quote（由 SagaHandscroll 在更大尺度上佈置）。
+ * One scene's marker block on the handscroll: scene plaque, heat bleed,
+ * character silhouettes, performance seal. Does not handle the ghost quote
+ * (SagaHandscroll lays that out at a larger scale).
  */
 export function SceneVignette({
   scene,
@@ -27,7 +28,7 @@ export function SceneVignette({
   anchor: VignetteAnchor;
   charactersById: Map<string, Character>;
   onSelect?: (sceneId: string) => void;
-  /** 區塊寬度（整卷寬度的百分比）。整卷越寬（location 越多）越窄，避免相鄰場景相疊。 */
+  /** Block width (percent of full scroll width). Wider scroll (more locations) → narrower, so adjacent scenes don't overlap. */
   widthPct?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);

@@ -8,13 +8,13 @@ import {
 } from '@/lib/actions/generate-persona';
 
 /**
- * Admin panel: re-distill a character's 本色 (persona).
+ * Admin panel: re-distill a character's persona.
  *
  * New mints auto-distil persona via redeemVoucher's `after()`; ReconcilePanel
  * only BACKFILLS missing personas (it skips characters that already have one).
  * This panel force-re-distils the selected character: `generatePersonaAction`
  * always anchors a fresh commitment and reads take the latest, so the new
- * 軸/腔/界 immediately supersede the old — no force flag / version bump needed.
+ * axis/register/boundary immediately supersede the old — no force flag / version bump needed.
  */
 export function PersonaRedistillPanel({ characters }: { characters: Character[] }) {
     const [characterId, setCharacterId] = useState<string>(characters[0]?.id ?? '');

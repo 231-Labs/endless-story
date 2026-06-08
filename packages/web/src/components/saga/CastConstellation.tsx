@@ -1,100 +1,46 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   Character,
   CharacterLiveState,
   RelationshipEdge,
-  RelationshipTone,
   SagaLocation,
   Scene,
 } from '@endless-story/shared';
-import { characterPortraitTone } from '@/components/common/CharacterPortrait';
-import { BlobImage } from '@/components/common/BlobImage';
 import { SCENE_POSITIONS } from './sceneLayout';
+import {
+  MOON_DOOR,
+  SAGA,
+  TONE_COLOR,
+  TONE_DASH,
+  TONE_LABEL,
+  VIEWBOX_H,
+  VIEWBOX_W,
+  WALL_Y,
+  clamp,
+  dedupeById,
+  dedupeEdges,
+  relaxOverlaps,
+  useIsDark,
+  type PositionedCharacter,
+  type Zone,
+} from './constellationLayout';
+import { ConstellationBackdrop, ConstellationNode } from './ConstellationNode';
 
 /**
- * 春雪社人物方位圖（平面 / 俯瞰）— 與手卷同一個鏈上世界，但換成俯視。
+ * Cast-positions map (top-down floor plan) — same on-chain world as the handscroll,
+ * seen from above.
  *
- *  · 一張方形 saga 平面 — 上半 戲樓 zone、下半 院落 zone，中段橫向隔牆有月洞門。
- *  · 每個 scene 是一間「房」，依 SCENE_POSITIONS 標位。
- *  · 每個角色（cast / wild）依其當下 currentScene 擺進房裡（多人聚成小團）。
- *  · 沒有 currentScene 但有 liveState.location 的角色 → 擺在 saga 牆外，帶上他的「現在在」標籤
- *    例：譚四郎 在永聲社後巷、江老闆 此刻坐在 主台第七排（→ 落在 saga 內了！）。
- *  · 邊線（牽絆）一樣是墨筆曲線 — 跨牆的線在視覺上立即可見。
+ *  · A square saga plan — top half theater zone, bottom half courtyard zone, with a
+ *    horizontal dividing wall and moon-gate in the middle.
+ *  · Each scene is a "room", positioned via SCENE_POSITIONS.
+ *  · Each character (cast / wild) is placed in their current scene's room (clustering when many).
+ *  · A character with no currentScene but a liveState.location → placed outside the saga walls,
+ *    tagged with their "now at" label (e.g. Tan in another troupe's alley; Boss Jiang now in
+ *    row 7 of the main stage → which lands inside the saga!).
+ *  · Edges (bonds) are ink-brush curves — cross-wall lines are immediately visible.
  */
-
-const VIEWBOX_W = 1200;
-const VIEWBOX_H = 800;
-const SAGA = { x: 200, y: 100, w: 800, h: 600 };
-const WALL_Y = SAGA.y + SAGA.h / 2; // 戲樓 / 院落 分隔
-const MOON_DOOR = { x1: 560, x2: 640, cx: 600, r: 40 };
-const CAST_NODE_PX_CENTER = 76;
-const CAST_NODE_PX_OTHER = 60;
-const WILD_NODE_PX = 48;
-
-type Zone = 'theater' | 'compound' | 'outside';
-
-interface PositionedCharacter {
-  char: Character;
-  x: number;
-  y: number;
-  /** saga 內哪個 scene；外人 = null */
-  scene: Scene | null;
-  /** liveState.location 字串 — 外人專用 */
-  externalLabel?: string;
-  kind: 'center' | 'cast' | 'wild';
-}
-
-const TONE_COLOR: Record<RelationshipTone, string> = {
-  affection: 'rgb(var(--color-cinnabar))',
-  romance: 'rgb(var(--color-cinnabar))',
-  mentorship: 'rgb(var(--color-jade))',
-  rivalry: 'rgb(var(--color-cinnabar))',
-  wary: 'rgb(var(--color-mute))',
-  tension: 'rgb(var(--color-cinnabar))',
-  estrangement: 'rgb(var(--color-mute))',
-  acquaintance: 'rgb(var(--color-jade))',
-  neutral: 'rgb(var(--color-hairline))',
-};
-
-const TONE_DASH: Record<RelationshipTone, string> = {
-  affection: '',
-  romance: '',
-  mentorship: '',
-  rivalry: '',
-  wary: '2 5',
-  tension: '',
-  estrangement: '1 6',
-  acquaintance: '4 4',
-  neutral: '',
-};
-
-const TONE_LABEL: Record<RelationshipTone, string> = {
-  affection: '親近',
-  romance: '戀慕',
-  mentorship: '師承',
-  rivalry: '競爭',
-  wary: '戒備',
-  tension: '緊張',
-  estrangement: '疏離',
-  acquaintance: '故舊',
-  neutral: '平淡',
-};
-
-function useIsDark() {
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const html = document.documentElement;
-    const update = () => setIsDark(html.classList.contains('dark'));
-    update();
-    const obs = new MutationObserver(update);
-    obs.observe(html, { attributes: true, attributeFilter: ['class'] });
-    return () => obs.disconnect();
-  }, []);
-  return isDark;
-}
 
 export function CastConstellation({
   cast,
@@ -111,14 +57,14 @@ export function CastConstellation({
   scenes?: Scene[];
   locations?: SagaLocation[];
   liveStatesById?: Record<string, CharacterLiveState>;
-  /** 指定主角節點（放大）。不給或不在 cast 內 → 自動挑牽絆最多的那位。 */
+  /** Designate the center node (enlarged). Unset or not in cast → auto-pick the most-bonded one. */
   centerId?: string;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const isDark = useIsDark();
   const ink = (a: number) => (isDark ? `rgba(220, 206, 176, ${a})` : `rgba(40, 38, 44, ${a})`);
 
-  // ── 防禦性去重 ──
+  // ── Defensive dedupe ──
   const uniqCast = useMemo(() => dedupeById(cast), [cast]);
   const uniqWildCast = useMemo(() => {
     const castIds = new Set(uniqCast.map((c) => c.id));
@@ -126,8 +72,9 @@ export function CastConstellation({
   }, [wildCast, uniqCast]);
   const uniqEdges = useMemo(() => dedupeEdges(edges), [edges]);
 
-  // 主角節點：用呼叫端指定且確實在 cast 裡的；否則挑牽絆最多的那位放大。
-  // （舊版寫死 char_shen_huaiyin，換 saga 後沒有任何節點被當主角。）
+  // Center node: use the caller-specified id if it's actually in cast; else
+  // enlarge the most-bonded one. (Old version hard-coded char_shen_huaiyin,
+  // so other sagas had no center node.)
   const centerId = useMemo(() => {
     if (centerIdProp && uniqCast.some((c) => c.id === centerIdProp)) return centerIdProp;
     const castIds = new Set(uniqCast.map((c) => c.id));
@@ -148,7 +95,7 @@ export function CastConstellation({
     return best;
   }, [centerIdProp, uniqCast, uniqEdges]);
 
-  // scene 所屬 zone（由 location name 推）
+  // Scene's zone (inferred from location name)
   const sceneZoneById = useMemo(() => {
     const locZone = new Map<string, Zone>();
     for (const loc of locations) {
@@ -160,7 +107,7 @@ export function CastConstellation({
     );
   }, [scenes, locations]);
 
-  // 每角色的場景出現史 — 給 hover panel 「常駐之地」
+  // Per-character scene-appearance history — for the hover panel's "usual haunts"
   const charScenesById = useMemo(() => {
     const map = new Map<string, { scene: Scene; weight: number; zone: Zone }[]>();
     for (const ch of [...uniqCast, ...uniqWildCast]) {
@@ -177,7 +124,7 @@ export function CastConstellation({
     return map;
   }, [uniqCast, uniqWildCast, scenes, sceneZoneById]);
 
-  // currentScene by char — 鏈上「現在在」投影
+  // currentScene by char — projection of the on-chain "now at"
   const currentSceneByCharId = useMemo(() => {
     const map = new Map<string, Scene>();
     for (const s of scenes) {
@@ -211,12 +158,12 @@ export function CastConstellation({
     );
   }
 
-  // ── 排版 ──
+  // ── Layout ──
   //
-  // 兩條獨立資料源（跟 SagaHandscroll 同 pattern，不互為 fallback）：
-  //   - chain scene: 帶著 posX / posY (% of saga box)
-  //   - mock scene : 沒 pos，靠 sceneLayout.ts 的 slug 字典
-  // 兩條都拿不到就回 null，角色 fallback 到 placeExternal 擺在 saga 牆外。
+  // Two independent data sources (same pattern as SagaHandscroll, not fallbacks for each other):
+  //   - chain scene: carries posX / posY (% of saga box)
+  //   - mock scene : no pos, uses sceneLayout.ts's slug dictionary
+  // If neither resolves, return null and the character falls back to placeExternal (outside the walls).
   const scenePlanXY = (scene: Scene): { x: number; y: number } | null => {
     if (scene.posX != null && scene.posY != null) {
       return {
@@ -232,7 +179,7 @@ export function CastConstellation({
     };
   };
 
-  // 把每個 scene 在房間裡的人收齊，方便算 jitter
+  // Gather everyone in each scene's room, to compute jitter
   const sceneOccupants = new Map<string, string[]>();
   for (const ch of [...uniqCast, ...uniqWildCast]) {
     const sc = currentSceneByCharId.get(ch.id);
@@ -261,7 +208,7 @@ export function CastConstellation({
     return positioned[positioned.length - 1];
   };
 
-  // 預計算 cast 連 wild 的方向（給外人擺位用）
+  // Precompute each wild's strongest cast link (used to position outsiders)
   const castIds = new Set(uniqCast.map((c) => c.id));
   const wildPrimaryCast = new Map<string, string>(); // wildId → strongest cast id
   for (const e of uniqEdges) {
@@ -273,10 +220,10 @@ export function CastConstellation({
     if (!prev) wildPrimaryCast.set(wildId, sagaId);
   }
 
-  // 外圍象限佔位（避免外人重疊）
+  // Outer-ring slot allocation (keeps outsiders from overlapping)
   const usedExternalSlots = new Set<string>();
   const placeExternal = (char: Character, anchorId: string | undefined, kind: PositionedCharacter['kind']) => {
-    // 由 anchor cast 在 saga 中心的相對位置算朝外方向
+    // Derive the outward direction from the anchor cast's position relative to saga center
     let baseAngle = -Math.PI / 2; // default = above
     if (anchorId) {
       const anchorPos = positioned.find((p) => p.char.id === anchorId);
@@ -306,25 +253,27 @@ export function CastConstellation({
     });
   };
 
-  // 先放 cast（按角色 id 在 currentSceneByCharId 找）
+  // Place cast first (look up by character id in currentSceneByCharId)
   for (const ch of uniqCast) {
     const sc = currentSceneByCharId.get(ch.id);
     const kind: PositionedCharacter['kind'] = ch.id === centerId ? 'center' : 'cast';
     if (sc) placeInScene(ch, sc, kind);
     else placeExternal(ch, undefined, kind);
   }
-  // 再放 wild：若在 saga scene 裡 → 進房；否則外圍
+  // Then place wild: in a saga scene → into the room; otherwise outer ring
   for (const ch of uniqWildCast) {
     const sc = currentSceneByCharId.get(ch.id);
     if (sc) placeInScene(ch, sc, 'wild');
     else placeExternal(ch, wildPrimaryCast.get(ch.id), 'wild');
   }
 
-  // ── 去重疊 ──
-  // 開場時全班常被放進同一個 scene（一條開場 storylet）。placeInScene 的小半徑
-  // jitter 讓 60–76px 頭像疊成一團，房內牽絆曲線縮成藏在頭像底下的短線。做幾輪碰撞
-  // 鬆弛：任兩節點靠太近就互推開，直到彼此露出、曲線有可見長度。語意（誰在哪間房）
-  // 仍由初始落點承載，這裡只把擠在一起的撥開。
+  // ── De-overlap ──
+  // At opening the whole cast often lands in one scene (a single opening storylet).
+  // placeInScene's small-radius jitter leaves 60-76px avatars piled up, with bond
+  // curves shrunk to stubs hidden under them. Run a few rounds of collision
+  // relaxation: any two too-close nodes push apart until they're visible and curves
+  // have length. Semantics (who's in which room) still come from the initial
+  // placement; this only spreads out the pile.
   relaxOverlaps(positioned);
 
   const posById = new Map(positioned.map((p) => [p.char.id, p]));
@@ -560,215 +509,5 @@ export function CastConstellation({
         </div>
       </div>
     </section>
-  );
-}
-
-// ── Helpers ──
-
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v));
-}
-
-/** 節點碰撞半徑（viewBox 單位 ≈ 螢幕 px，容器寬約等於 viewBox 1200）：頭像半徑 + 名牌留白。 */
-function nodeCollisionRadius(kind: PositionedCharacter['kind']): number {
-  if (kind === 'center') return 46;
-  if (kind === 'cast') return 38;
-  return 32; // wild
-}
-
-/**
- * 碰撞鬆弛：把疊在一起的節點互相推開，直到牽絆曲線露得出來。
- * 純幾何、確定性（無亂數）；初始落點承載「誰在哪」的語意，這裡只解重疊。
- */
-function relaxOverlaps(nodes: PositionedCharacter[]): void {
-  const n = nodes.length;
-  if (n < 2) return;
-  const PAD = 10;
-
-  // 完全重合的先用 index 角度撥開一點，鬆弛才有方向可推。
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      if (nodes[i].x === nodes[j].x && nodes[i].y === nodes[j].y) {
-        const a = (j / n) * Math.PI * 2;
-        nodes[j].x += Math.cos(a) * 0.5;
-        nodes[j].y += Math.sin(a) * 0.5;
-      }
-    }
-  }
-
-  for (let iter = 0; iter < 90; iter++) {
-    let moved = false;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const a = nodes[i];
-        const b = nodes[j];
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let d = Math.sqrt(dx * dx + dy * dy);
-        const min = nodeCollisionRadius(a.kind) + nodeCollisionRadius(b.kind) + PAD;
-        if (d >= min) continue;
-        if (d < 1e-3) {
-          dx = j - i;
-          dy = (i + j) % 2 === 0 ? 1 : -1;
-          d = Math.sqrt(dx * dx + dy * dy);
-        }
-        const push = (min - d) / 2;
-        const ux = dx / d;
-        const uy = dy / d;
-        a.x -= ux * push;
-        a.y -= uy * push;
-        b.x += ux * push;
-        b.y += uy * push;
-        moved = true;
-      }
-    }
-    for (const p of nodes) {
-      p.x = clamp(p.x, 60, VIEWBOX_W - 60);
-      p.y = clamp(p.y, 60, VIEWBOX_H - 60);
-    }
-    if (!moved) break;
-  }
-}
-
-function dedupeById<T extends { id: string }>(arr: T[]): T[] {
-  const seen = new Set<string>();
-  const out: T[] = [];
-  for (const item of arr) {
-    if (seen.has(item.id)) continue;
-    seen.add(item.id);
-    out.push(item);
-  }
-  return out;
-}
-
-function dedupeEdges(edges: RelationshipEdge[]): RelationshipEdge[] {
-  const seen = new Set<string>();
-  const out: RelationshipEdge[] = [];
-  for (const e of edges) {
-    const k = `${e.fromId}::${e.toId}::${e.tone ?? 'none'}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(e);
-  }
-  return out;
-}
-
-function ConstellationBackdrop({ ink }: { ink: (a: number) => string }) {
-  return (
-    <>
-      <div className="absolute inset-0 bg-gradient-to-b from-canvas via-surface to-canvas dark:from-canvas dark:via-elevated/55 dark:to-canvas" />
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 65% at 50% 50%, rgba(var(--color-cinnabar) / 0.04), transparent 70%)',
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.04] mix-blend-overlay"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E\")",
-        }}
-      />
-      {/* 兩側枯枝 — 暗示「江湖」是真實的外世界 */}
-      <svg viewBox="0 0 1600 900" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
-        <g stroke={ink(0.32)} strokeWidth="1.1" fill="none" strokeLinecap="round">
-          <g transform="translate(60, 110)">
-            <path d="M 0 200 L 0 0" strokeWidth="1.8" />
-            <path d="M 0 110 L -28 70" />
-            <path d="M -28 70 L -42 45" />
-            <path d="M 0 90 L 30 60" />
-            <path d="M 0 150 L -22 120" />
-          </g>
-          <g transform="translate(1540, 130)">
-            <path d="M 0 180 L 0 0" strokeWidth="1.8" />
-            <path d="M 0 100 L 28 65" />
-            <path d="M 28 65 L 42 40" />
-            <path d="M 0 80 L -30 55" />
-            <path d="M 0 140 L 22 110" />
-          </g>
-          <g transform="translate(120, 720)">
-            <path d="M 0 150 L 0 0" strokeWidth="1.6" />
-            <path d="M 0 80 L -24 50" />
-            <path d="M 0 60 L 26 40" />
-          </g>
-        </g>
-        {/* 一條極淡的遠山 */}
-        <path
-          d="M 0 720 Q 200 680 400 700 T 800 690 T 1200 700 T 1600 690 L 1600 900 L 0 900 Z"
-          fill={ink(0.06)}
-        />
-      </svg>
-    </>
-  );
-}
-
-function ConstellationNode({
-  positioned, isDimmed, onMouseEnter, onMouseLeave,
-}: {
-  positioned: PositionedCharacter;
-  isDimmed: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-}) {
-  const { char, x, y, kind, scene } = positioned;
-  const tone = characterPortraitTone(char.role);
-  const imageUrl = char.gallery?.anchor?.imageUrl;
-  const sizePx = kind === 'center' ? CAST_NODE_PX_CENTER : kind === 'cast' ? CAST_NODE_PX_OTHER : WILD_NODE_PX;
-  const ringClass =
-    kind === 'wild'
-      ? scene
-        ? 'ring-2 ring-cinnabar/40 ring-offset-1 ring-offset-canvas/50'
-        : 'ring-1 ring-mute/50'
-      : kind === 'center'
-        ? `ring-2 ring-cinnabar/55 ${tone.ring}`
-        : `ring-2 ring-surface ${tone.ring}`;
-
-  const sceneTag = scene?.name ?? null;
-
-  return (
-    <Link
-      href={{ pathname: '/dossier', query: { id: char.id } }}
-      title={`${char.name} · ${char.role}${kind === 'wild' ? ' · 江湖' : ''}${sceneTag ? ` · 現在於 ${sceneTag}` : ''}`}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className={`group absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 outline-none ring-offset-2 ring-offset-transparent transition-all duration-500 hover:scale-110 focus-visible:ring-2 focus-visible:ring-cinnabar active:scale-100 ${
-        isDimmed ? 'opacity-25 grayscale-[0.5]' : 'opacity-100'
-      }`}
-      style={{ left: `${(x / VIEWBOX_W) * 100}%`, top: `${(y / VIEWBOX_H) * 100}%` }}
-    >
-      <span
-        className={`relative overflow-hidden rounded-full shadow-md transition-transform duration-300 group-hover:scale-105 ${ringClass} ${
-          kind === 'wild' ? 'bg-canvas/80 backdrop-blur-sm' : tone.bg
-        }`}
-        style={{ width: sizePx, height: sizePx }}
-      >
-        <span
-          className={`absolute inset-0 flex items-center justify-center font-serif ${
-            kind === 'wild' ? 'text-mute' : tone.text
-          }`}
-          style={{ fontSize: kind === 'center' ? 24 : kind === 'cast' ? 20 : 14 }}
-        >
-          {char.name[0]}
-        </span>
-        {imageUrl ? (
-          <BlobImage src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-        ) : null}
-      </span>
-      <span
-        className={`whitespace-nowrap font-serif tracking-[0.18em] drop-shadow-sm transition-colors group-hover:text-ink ${
-          kind === 'wild'
-            ? 'text-2xs italic text-mute/90'
-            : kind === 'center'
-              ? 'text-sm text-ink'
-              : 'text-xs text-ink/85'
-        }`}
-      >
-        {char.name}
-      </span>
-    </Link>
   );
 }

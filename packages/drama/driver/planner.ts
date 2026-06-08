@@ -134,7 +134,7 @@ function buildActionForDesire(
  * rest by tension), STOPPING when the budget runs out. With an abundant budget it can fund
  * every desire each tick (no trade-off). With a scarce budget it can only fund the top
  * one(s) → the lower-priority desire starves. That trade-off is *derived* from the budget
- * being finite — never declared. The 柳生春 moment lives exactly here.
+ * being finite — never declared. The Liu moment lives exactly here.
  *
  * (Budget read is pre-refill; applyTick refills before debiting, so every planned action is
  * guaranteed affordable — the planner is conservative, never overspends.)

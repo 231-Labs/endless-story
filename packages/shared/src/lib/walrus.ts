@@ -14,7 +14,7 @@ const AGGREGATOR_BY_NETWORK: Record<WalrusNetwork, string> = {
 /**
  * Resolve the aggregator base. Self-hosted override via
  * `NEXT_PUBLIC_WALRUS_AGGREGATOR` (e.g. https://walrus.231labs.xyz) routes ALL
- * Walrus reads (角色圖 / 章回 / 影片) through our own CDN-fronted aggregator.
+ * Walrus reads (portraits / chapters / video) through our own CDN-fronted aggregator.
  * Next inlines NEXT_PUBLIC_* into the client bundle; unset → public per-network.
  */
 export function walrusAggregatorBase(network: WalrusNetwork = 'testnet'): string {

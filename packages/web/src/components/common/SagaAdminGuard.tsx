@@ -2,7 +2,7 @@
 
 /**
  * SagaAdminGuard — only render children if the connected wallet holds the
- * saga's StorytellerCap (the 班主 role).
+ * saga's StorytellerCap (the showrunner role).
  *
  * Server actions inside /admin already run with the admin keypair, but the
  * UI shouldn't expose those forms to non-admin visitors. This is a
@@ -10,7 +10,7 @@
  *
  * States:
  *   - loading (cap fetch in flight) → spinner-y placeholder
- *   - disconnected                  → "connect 班主 wallet" CTA
+ *   - disconnected                  → "connect showrunner wallet" CTA
  *   - connected but not admin       → denial copy with the wrong address
  *   - admin                         → children
  */

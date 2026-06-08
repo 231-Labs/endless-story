@@ -3,7 +3,7 @@
 /**
  * Server action — preview the 1 character that this voucher would mint.
  *
- * The 抽卡 model: same `attribute_seed` → same rolled values → (modulo LLM
+ * The gacha model: same `attribute_seed` → same rolled values → (modulo LLM
  * temperature) same character narrative. Once the user accepts, the rolled
  * values + LLM-generated profile flow into `redeem-voucher`.
  *
@@ -37,7 +37,7 @@ export interface PreviewCharacterInput {
     signature: string;
     /** Saga role intent text (off-chain Recruitment). */
     recruitmentIntent?: string;
-    /** Hard gender requirement ('男'/'女') — forces the candidate's gender. */
+    /** Hard gender requirement (male/female) — forces the candidate's gender. */
     requiredGender?: '男' | '女';
     /** Existing cast names in the saga (avoid name collision). */
     castNames?: string[];

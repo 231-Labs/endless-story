@@ -247,11 +247,3 @@ function findCreatedCommitmentId(res: { objectChanges?: unknown[] }): string | n
     }
     return null;
 }
-
-/**
- * @deprecated R0 stub kept for callers that might still reference it.
- * Use `signAndAnchor` instead.
- */
-export function pushCommitCall(): void {
-    throw new Error('pushCommitCall: removed — use signAndAnchor for full lifecycle');
-}

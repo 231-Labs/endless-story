@@ -9,8 +9,8 @@ const LIVE_ITEMS: { key: keyof CharacterLiveState; label: string }[] = [
 ];
 
 /**
- * The 此刻心境 / 身在何處 / 將往何方 bar. Split out of DossierHeader so it can
- * STREAM in: 此刻心境 + 將往何方 come from the character's plan, a SEAL recall
+ * The mood / location / next-plan bar. Split out of DossierHeader so it can
+ * STREAM in: mood + next-plan come from the character's plan, a SEAL recall
  * that would otherwise block the header's first paint. The header renders the
  * skeleton immediately and swaps this in when the recall resolves.
  */

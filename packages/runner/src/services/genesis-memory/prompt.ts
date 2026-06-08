@@ -34,8 +34,8 @@ export interface GenesisMemoryInput {
     /** Recruitment role intent that minted this character, if available. */
     recruitmentRoleIntent?: string;
     /**
-     * 心底秘密 — 角色對外絕不明說、只放在心裡的那層內幕（由 candidate.secret 而來）。
-     * 不會出現在公開描述/鏈上;此處用來讓記憶帶出隱痛的根源。空字串表示沒有。
+     * Innermost secret — the layer the character never reveals, kept private (from candidate.secret).
+     * Never in the public description / on-chain; used here to root memories in hidden pain. Empty string = none.
      */
     privateBackstory?: string;
     /** Public same-saga roster. Used only for first impressions, never secret backstory. */

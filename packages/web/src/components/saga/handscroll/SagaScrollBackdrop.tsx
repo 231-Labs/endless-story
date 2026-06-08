@@ -5,21 +5,24 @@ import type { DayPart } from '@endless-story/shared';
 import type { LocationSegment } from './handscrollLayout';
 
 /**
- * 資料驅動的手卷底紙 — 范寬／郭熙風雪景寒林，但院落是「一個 location 一段」生成的。
+ * Data-driven handscroll backdrop — Fan Kuan / Guo Xi snowy-forest style, but the
+ * compounds are generated one-segment-per-location.
  *
- * （取代了早期把戲樓／月洞門／院落畫死在 3000 寬固定畫布的做法；換 saga 就對不上。）
- * 這裡改成：viewBox 寬 = segmentCount × SEG，每個 location 段中央依其 terrain／
- * 名稱挑一個院落母題（碼頭／茶樓／院落／街坊／遊樂場／後巷／戲台…），段與段之間沿地面
- * 連一道矮牆、牆上開月洞門當「相鄰」暗示。遠山、雪地、枯枝、燈籠橫貫整卷、隨段數伸縮。
+ * (Replaces the old fixed 3000-wide canvas with hard-coded buildings, which broke
+ * on any other saga.) Now: viewBox width = segmentCount x SEG; each location
+ * segment center picks a courtyard motif by terrain/name (dock / teahouse /
+ * courtyard / street / playground / alley / stage...), with a low wall along the
+ * ground between segments and a moon-gate hinting "adjacent". Distant hills, snow,
+ * bare branches, and lanterns span the whole scroll and scale with segment count.
  *
- * 墨色採 --color-ink / --color-mute 隨主題切換（暗色模式轉暖灰米色）。
+ * Ink colors use --color-ink / --color-mute and follow the theme (warm grey-beige in dark mode).
  */
 
-const SEG = 1000; // 每段在 viewBox 內的寬度單位
-const VH = 1000; // viewBox 高
-const GROUND_Y = 700; // 建築坐落的地平線
+const SEG = 1000; // width unit per segment in the viewBox
+const VH = 1000; // viewBox height
+const GROUND_Y = 700; // ground line buildings sit on
 const WALL_Y = 712;
-const MOON_R = 64; // 月洞門半徑
+const MOON_R = 64; // moon-gate radius
 
 const DAY_PART_PAPER: Record<DayPart, string> = {
   morning: 'rgba(255, 248, 232, 0.10)',
@@ -93,17 +96,17 @@ export function SagaScrollBackdrop({
 
   return (
     <div className="absolute inset-0">
-      {/* 紙底 */}
+      {/* paper base */}
       <div className="absolute inset-0 bg-gradient-to-b from-canvas via-surface to-canvas dark:from-canvas dark:via-elevated/55 dark:to-canvas" />
 
-      {/* 晝夜色洗 */}
+      {/* day/night color wash */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 mix-blend-soft-light dark:mix-blend-screen"
         style={{ background: DAY_PART_PAPER[partOfDay] }}
       />
 
-      {/* 紙質顆粒 */}
+      {/* paper grain */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.04] mix-blend-overlay"
@@ -113,7 +116,7 @@ export function SagaScrollBackdrop({
         }}
       />
 
-      {/* 主畫面 SVG — 山水 / 院落 / 雪林，寬度隨段數伸縮 */}
+      {/* main SVG — landscape / courtyards / snow forest, width scales with segment count */}
       <svg
         viewBox={`0 0 ${W} ${VH}`}
         preserveAspectRatio="none"
@@ -136,13 +139,13 @@ export function SagaScrollBackdrop({
         <RemoteMountains width={W} fill={inkFaint} />
         <MidMountains width={W} fill={inkSoft} />
 
-        {/* 雪地高光 */}
+        {/* snow ground highlight */}
         <rect x="0" y={GROUND_Y + 20} width={W} height={VH - GROUND_Y - 20} fill="url(#snowGround)" />
 
-        {/* 段間矮牆 + 月洞門（連續感 + 相鄰暗示） */}
+        {/* inter-segment low wall + moon-gate (continuity + adjacency hint) */}
         <DividerWalls count={n} inkColor={inkColor} inkSoft={inkSoft} />
 
-        {/* 每個 location 一座院落 */}
+        {/* one courtyard per location */}
         {segments.map((seg, i) => {
           const motif = pickMotif(seg.location.terrain, seg.location.name);
           return (
@@ -157,7 +160,7 @@ export function SagaScrollBackdrop({
           );
         })}
 
-        {/* 枯枝 — 每段一兩株，錯落 */}
+        {/* bare branches — one or two per segment, staggered */}
         <g stroke={inkColor} strokeWidth="1.2" fill="none" strokeLinecap="round">
           {Array.from({ length: n }).map((_, i) => {
             const bx = i * SEG + (i % 2 === 0 ? 120 : SEG - 150);
@@ -166,7 +169,7 @@ export function SagaScrollBackdrop({
           })}
         </g>
 
-        {/* 燈籠 — 每段兩盞，黃昏／夜晚發光 */}
+        {/* lanterns — two per segment, glowing at dusk/night */}
         {Array.from({ length: n }).map((_, i) =>
           [0.32, 0.68].map((f, k) => {
             const lx = i * SEG + SEG * f;
@@ -193,10 +196,10 @@ export function SagaScrollBackdrop({
   );
 }
 
-// ── 山水 ──
+// ── Landscape ──
 
 function RemoteMountains({ width, fill }: { width: number; fill: string }) {
-  // 一條連續遠山，沿整卷起伏
+  // One continuous distant ridge undulating across the whole scroll
   const step = 360;
   let d = `M 0 540`;
   for (let x = step; x <= width; x += step) {
@@ -220,7 +223,7 @@ function MidMountains({ width, fill }: { width: number; fill: string }) {
   return <path d={d} fill={fill} />;
 }
 
-// ── 段間矮牆 + 月洞門 ──
+// ── Inter-segment low wall + moon-gate ──
 
 function DividerWalls({
   count,
@@ -231,7 +234,7 @@ function DividerWalls({
   inkColor: string;
   inkSoft: string;
 }) {
-  // count 段 → count-1 道隔牆（段之間）
+  // count segments → count-1 dividing walls (between segments)
   const boundaries = Array.from({ length: Math.max(0, count - 1) }, (_, k) => k + 1);
   return (
     <>
@@ -239,10 +242,10 @@ function DividerWalls({
         const x = i * SEG;
         return (
           <g key={i}>
-            {/* 牆基往兩側鋪一小段 */}
+            {/* short wall base extending to either side */}
             <line x1={x - 130} y1={WALL_Y} x2={x - MOON_R} y2={WALL_Y} stroke={inkColor} strokeWidth="2" />
             <line x1={x + MOON_R} y1={WALL_Y} x2={x + 130} y2={WALL_Y} stroke={inkColor} strokeWidth="2" />
-            {/* 月洞門拱 */}
+            {/* moon-gate arch */}
             <path
               d={`M ${x - MOON_R} ${WALL_Y} A ${MOON_R} ${MOON_R} 0 0 1 ${x + MOON_R} ${WALL_Y}`}
               stroke={inkColor}
@@ -256,7 +259,7 @@ function DividerWalls({
               strokeWidth="1.5"
               fill="none"
             />
-            {/* 門洞內透出的淡影 */}
+            {/* faint shadow showing through the gate opening */}
             <path
               d={`M ${x - MOON_R + 8} ${WALL_Y} A ${MOON_R - 8} ${MOON_R - 8} 0 0 1 ${x + MOON_R - 8} ${WALL_Y} Z`}
               fill={inkSoft}
@@ -269,7 +272,7 @@ function DividerWalls({
   );
 }
 
-// ── 枯枝 ──
+// ── Bare branches ──
 
 function BareTree({ x, groundY, h }: { x: number; groundY: number; h: number }) {
   return (
@@ -286,10 +289,11 @@ function BareTree({ x, groundY, h }: { x: number; groundY: number; h: number }) 
   );
 }
 
-// ── 院落母題 ──
+// ── Courtyard motifs ──
 //
-// 每座院落是一段純剪影（inkColor / inkSoft），坐落在 GROUND_Y。座標相對 x0（段左緣）。
-// 母題只求「一眼能分出不同地方」，不追細節；換 saga 仍成立。
+// Each courtyard is a flat silhouette (inkColor / inkSoft) sitting on GROUND_Y,
+// with coordinates relative to x0 (segment left edge). Motifs only aim to make
+// places visually distinguishable at a glance, not detailed; holds for any saga.
 
 function Courtyard({
   x0,
@@ -310,29 +314,29 @@ function Courtyard({
     case 'stage':
       return (
         <g>
-          {/* 歇山頂戲台 */}
+          {/* hip-and-gable roofed stage */}
           <path d={`M ${cx - 160} ${g - 180} L ${cx - 60} ${g - 270} L ${cx + 60} ${g - 270} L ${cx + 160} ${g - 180} Z`} fill={inkColor} stroke={inkColor} strokeLinejoin="round" />
           <path d={`M ${cx - 90} ${g - 180} L ${cx} ${g - 240} L ${cx + 90} ${g - 180} Z`} fill={inkSoft} />
           <rect x={cx - 130} y={g - 180} width={260} height={180} fill={inkSoft} opacity="0.7" />
           {[-90, -30, 30, 90].map((d) => (
             <line key={d} x1={cx + d} y1={g - 180} x2={cx + d} y2={g} stroke={inkColor} strokeWidth="2" />
           ))}
-          {/* 台前低欄 */}
+          {/* low railing in front of the stage */}
           <rect x={cx - 170} y={g - 24} width={340} height={24} fill={inkSoft} opacity="0.6" />
         </g>
       );
     case 'teahouse':
       return (
         <g>
-          {/* 二層茶樓 */}
+          {/* two-story teahouse */}
           <rect x={cx - 110} y={g - 240} width={220} height={120} fill={inkSoft} opacity="0.8" />
           <rect x={cx - 130} y={g - 120} width={260} height={120} fill={inkSoft} opacity="0.7" />
           <path d={`M ${cx - 150} ${g - 240} L ${cx} ${g - 300} L ${cx + 150} ${g - 240} Z`} fill={inkColor} stroke={inkColor} strokeLinejoin="round" />
-          {/* 欄杆 */}
+          {/* railing */}
           {[-100, -60, -20, 20, 60, 100].map((d) => (
             <line key={d} x1={cx + d} y1={g - 132} x2={cx + d} y2={g - 120} stroke={inkColor} strokeWidth="2" />
           ))}
-          {/* 招幌 */}
+          {/* shop banner */}
           <line x1={cx + 130} y1={g - 200} x2={cx + 130} y2={g - 60} stroke={inkColor} strokeWidth="2" />
           <rect x={cx + 122} y={g - 200} width={16} height={60} fill="rgb(var(--color-cinnabar))" opacity="0.4" />
         </g>
@@ -340,19 +344,19 @@ function Courtyard({
     case 'courtyard':
       return (
         <g>
-          {/* 圍牆 + 院門 + 內進屋頂 */}
+          {/* perimeter wall + gate + inner roof */}
           <rect x={cx - 200} y={g - 70} width={400} height={70} fill={inkFaint} stroke={inkSoft} strokeWidth="1.5" />
           <path d={`M ${cx - 200} ${g - 70} L ${cx - 200} ${g - 110} L ${cx - 60} ${g - 110}`} stroke={inkSoft} strokeWidth="1.5" fill="none" />
           <path d={`M ${cx - 60} ${g - 200} L ${cx + 40} ${g - 250} L ${cx + 140} ${g - 200} Z`} fill={inkColor} stroke={inkColor} strokeLinejoin="round" />
           <rect x={cx - 40} y={g - 200} width={160} height={130} fill={inkSoft} opacity="0.75" />
-          {/* 院門 */}
+          {/* courtyard gate */}
           <rect x={cx - 150} y={g - 60} width={48} height={60} fill={inkColor} opacity="0.85" />
         </g>
       );
     case 'street':
       return (
         <g>
-          {/* 牌坊 + 沿街連排店面 */}
+          {/* memorial archway + row of shopfronts along the street */}
           <line x1={cx - 150} y1={g - 220} x2={cx - 150} y2={g} stroke={inkColor} strokeWidth="3" />
           <line x1={cx + 150} y1={g - 220} x2={cx + 150} y2={g} stroke={inkColor} strokeWidth="3" />
           <path d={`M ${cx - 175} ${g - 220} L ${cx} ${g - 252} L ${cx + 175} ${g - 220} Z`} fill={inkColor} stroke={inkColor} strokeLinejoin="round" />
@@ -365,13 +369,13 @@ function Courtyard({
     case 'wharf':
       return (
         <g>
-          {/* 水線 + 木樁 + 停泊小舟 */}
+          {/* waterline + pilings + moored boat */}
           <path d={`M ${x0 + 40} ${g - 10} Q ${cx} ${g - 26} ${x0 + SEG - 40} ${g - 10}`} stroke={inkSoft} strokeWidth="2" fill="none" opacity="0.7" />
           <path d={`M ${x0 + 60} ${g + 18} Q ${cx} ${g + 2} ${x0 + SEG - 60} ${g + 18}`} stroke={inkSoft} strokeWidth="1.5" fill="none" opacity="0.5" />
           {[-180, -120, 120, 180].map((d) => (
             <line key={d} x1={cx + d} y1={g - 40} x2={cx + d} y2={g + 6} stroke={inkColor} strokeWidth="3" />
           ))}
-          {/* 小舟 */}
+          {/* small boat */}
           <path d={`M ${cx - 90} ${g - 30} Q ${cx} ${g + 6} ${cx + 90} ${g - 30} Z`} fill={inkColor} opacity="0.85" />
           <line x1={cx} y1={g - 30} x2={cx} y2={g - 130} stroke={inkColor} strokeWidth="2.5" />
           <path d={`M ${cx} ${g - 130} L ${cx + 70} ${g - 90} L ${cx} ${g - 70} Z`} fill={inkSoft} opacity="0.7" />
@@ -380,7 +384,7 @@ function Courtyard({
     case 'amusement':
       return (
         <g>
-          {/* 圓頂遊樂場 + 旗桿 */}
+          {/* domed amusement hall + flagpole */}
           <path d={`M ${cx - 160} ${g} A 160 150 0 0 1 ${cx + 160} ${g} Z`} fill={inkSoft} opacity="0.8" stroke={inkColor} strokeWidth="1.5" />
           <line x1={cx} y1={g - 150} x2={cx} y2={g - 280} stroke={inkColor} strokeWidth="3" />
           <path d={`M ${cx} ${g - 280} L ${cx + 70} ${g - 262} L ${cx} ${g - 244} Z`} fill="rgb(var(--color-cinnabar))" opacity="0.45" />
@@ -395,12 +399,12 @@ function Courtyard({
     case 'alley':
       return (
         <g>
-          {/* 兩棟窄高樓夾出後巷 */}
+          {/* two narrow tall buildings forming an alley */}
           <rect x={cx - 170} y={g - 240} width={120} height={240} fill={inkSoft} opacity="0.8" />
           <rect x={cx + 50} y={g - 280} width={120} height={280} fill={inkSoft} opacity="0.75" />
           <path d={`M ${cx - 178} ${g - 240} L ${cx - 110} ${g - 280} L ${cx - 42} ${g - 240} Z`} fill={inkColor} />
           <path d={`M ${cx + 42} ${g - 280} L ${cx + 110} ${g - 320} L ${cx + 178} ${g - 280} Z`} fill={inkColor} />
-          {/* 巷中燈 */}
+          {/* alley lamp */}
           <line x1={cx} y1={g - 120} x2={cx} y2={g - 96} stroke={inkColor} strokeWidth="1.5" />
           <ellipse cx={cx} cy={g - 92} rx="6" ry="8" fill="rgb(var(--color-cinnabar))" opacity="0.4" />
         </g>

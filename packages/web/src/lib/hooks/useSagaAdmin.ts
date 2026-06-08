@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * useSagaAdmin — is the connected wallet the saga 班主 (StorytellerCap holder)?
+ * useSagaAdmin — is the connected wallet the saga owner (StorytellerCap holder)?
  *
  * The StorytellerCap struct itself only carries `id` + `saga_id`; ownership
  * is encoded in the Sui object's `AddressOwner` metadata. So we read the

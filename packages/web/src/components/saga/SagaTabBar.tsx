@@ -3,10 +3,11 @@
 import { SAGA_TABS, useSagaTabs } from './SagaTabsContext';
 
 /**
- * 共用的膠囊分頁列（手卷 / 星圖 / 江湖 / 規章），錨定在所在區塊底部中央。
- * 第一屏手卷與第二屏 details 都用它，共享同一個 view（見 SagaTabsContext）。
+ * Shared capsule tab bar (handscroll / constellation / off-turf / charter),
+ * anchored bottom-center of its section. Used by both the first-screen
+ * handscroll and the second-screen details, sharing one view (SagaTabsContext).
  *
- * 點選即捲到對應的屏：手卷 → 第一屏；其餘 → 第二屏並切到該頁。
+ * Clicking scrolls to the matching screen: handscroll → first; others → second + that tab.
  */
 export function SagaTabBar() {
   const { view, setView } = useSagaTabs();

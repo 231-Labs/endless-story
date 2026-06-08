@@ -7,8 +7,8 @@
  * the character is on chain, we use that portrait as a VISUAL REFERENCE (OpenAI
  * /v1/images/edits) to render — of the SAME face —:
  *   1. a frontal portrait   (kind=0 portrait_variant)
- *   2. a horizontal 人物美術設定 art sheet (kind=6 setting_sheet)
- * Each is uploaded to Walrus and appended to the character's gallery (設定集) via
+ *   2. a horizontal character model-sheet art sheet (kind=6 setting_sheet)
+ * Each is uploaded to Walrus and appended to the character's gallery via
  * `add_media_asset_by_storyteller`. The public cover (image_url) is NOT touched —
  * the mint UI keeps showing the original 45° portrait.
  *
@@ -71,7 +71,7 @@ const VIEWS: ViewSpec[] = [
     },
     {
         label: 'art-sheet',
-        kind: 6, // setting_sheet / 人物美術設定
+        kind: 6, // setting_sheet / character model-sheet
         aspect: '16:9',
         prompt: (person) =>
             `${TONE}\n與參考圖**同一個人、同一張臉**（保持五官、髮型、氣質一致）。${person}\n` +

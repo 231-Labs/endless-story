@@ -6,7 +6,7 @@
  * narrates (storylet tx digest, scene, day, cast). Because the header rides
  * inside the SAME immutable blob that `commitment::commit` anchors, the
  * chapter→event link is itself chain-verifiable — an article or a derived video
- * can prove「這件事真的在鏈上發生過」and group every character's angle on the
+ * can prove "this event really happened on chain" and group every character's angle on the
  * same event. The header is stripped before the prose is rendered.
  */
 

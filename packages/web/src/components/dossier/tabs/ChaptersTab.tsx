@@ -13,7 +13,7 @@ export function ChaptersTab({
   character: Character;
   /**
    * On-chain POV chapters anchored via `commitment.move`. Rendered as
-   * the topmost section ("鏈上 POV") above the legacy mock sections.
+   * the topmost section ("on-chain POV") above the legacy mock sections.
    * When runner R3+ wires the gazette + memory tier, this becomes the
    * primary surface and mock sections get retired.
    */

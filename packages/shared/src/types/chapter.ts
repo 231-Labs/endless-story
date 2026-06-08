@@ -3,8 +3,8 @@ import type { Visibility } from './common';
 /**
  * Verifiable provenance for a POV chapter: which on-chain event it narrates.
  * Embedded in the anchored Walrus blob (so it's immutable + chain-anchored),
- * letting any article OR derived video prove「這件事真的在鏈上發生過」and group
- * every character's angle on the SAME event.
+ * letting any article OR derived video prove the event really happened on-chain,
+ * and group every character's angle on the SAME event.
  */
 export interface ChapterProvenance {
   /** schema version. */
