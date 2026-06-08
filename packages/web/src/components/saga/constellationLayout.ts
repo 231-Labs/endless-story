@@ -153,14 +153,22 @@ export function dedupeById<T extends { id: string }>(arr: T[]): T[] {
   return out;
 }
 
+/**
+ * Dedupe ties — treat as undirected: A→B and B→A are the two subjective records
+ * of the same relationship (edges are collected per character's outgoing list,
+ * see saga page). Key by the sorted endpoints and keep one per tone (highest
+ * weight wins) so the hover note doesn't repeat the same person/feeling and the
+ * curves don't draw on top of each other.
+ * Asymmetric feelings (one side romance, the other wary — different tones) are
+ * still each kept as a separate edge.
+ */
 export function dedupeEdges(edges: RelationshipEdge[]): RelationshipEdge[] {
-  const seen = new Set<string>();
-  const out: RelationshipEdge[] = [];
+  const byKey = new Map<string, RelationshipEdge>();
   for (const e of edges) {
-    const k = `${e.fromId}::${e.toId}::${e.tone ?? 'none'}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(e);
+    const [a, b] = e.fromId < e.toId ? [e.fromId, e.toId] : [e.toId, e.fromId];
+    const k = `${a}::${b}::${e.tone ?? 'none'}`;
+    const prev = byKey.get(k);
+    if (!prev || (e.weight ?? 0) > (prev.weight ?? 0)) byKey.set(k, e);
   }
-  return out;
+  return [...byKey.values()];
 }
