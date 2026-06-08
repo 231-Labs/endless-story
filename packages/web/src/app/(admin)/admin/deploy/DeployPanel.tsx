@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { runCliScript, type CliScript, type RunCliScriptResult } from '@/lib/actions/run-cli-script';
 import { getDeploymentStatus, type DeploymentStatus } from '@/lib/actions/deployment-status';
-import { seedDefaultRecruitments } from '@/lib/actions/recruitments-store';
+import { seedDefaultRecruitments, clearAllRecruitments } from '@/lib/actions/recruitments-store';
 import type { StoryPresetSummary } from '@/lib/stories/loader';
 
 type Env = 'devnet' | 'testnet' | 'mainnet' | 'localnet';
@@ -45,6 +45,30 @@ export function DeployPanel({ initialStatus, presets }: Props) {
             setLastResult(res);
             const newStatus = await getDeploymentStatus();
             setStatus(newStatus);
+        });
+    };
+
+    const handleClearRecruitments = () => {
+        if (!window.confirm('清空所有招募紀錄(含人工建立的)?清完可按 ③ seed 重種。')) return;
+        setLog('Clearing recruitments store…\n');
+        setLastResult(null);
+        startTransition(async () => {
+            const started = Date.now();
+            try {
+                const res = await clearAllRecruitments();
+                const msg = `cleared ${res.cleared} recruitment(s). 招募已清空,按 ③ seed 重種。`;
+                setLog(msg);
+                setLastResult({ ok: true, code: 0, stdout: msg, stderr: '', durationMs: Date.now() - started });
+            } catch (err) {
+                setLog(`FAIL ${err instanceof Error ? err.message : String(err)}`);
+                setLastResult({
+                    ok: false,
+                    code: 1,
+                    stdout: '',
+                    stderr: err instanceof Error ? err.message : String(err),
+                    durationMs: Date.now() - started,
+                });
+            }
         });
     };
 
@@ -239,9 +263,15 @@ export function DeployPanel({ initialStatus, presets }: Props) {
                     />
                     <ActionButton
                         label="③ seed 職缺"
-                        sub="批量開 story 內 initial_recruitments（idempotent）"
+                        sub="依 story preset 種職缺；既有的會用最新 preset 覆寫(idempotent)"
                         onClick={handleSeedRecruitments}
                         disabled={isPending || !status.isBootstrapped || !storyId}
+                    />
+                    <ActionButton
+                        label="🗑 清空職缺"
+                        sub="倒空招募 store(含人工 row)；清乾淨再按 ③ 重種"
+                        onClick={handleClearRecruitments}
+                        disabled={isPending}
                     />
                 </div>
             </section>

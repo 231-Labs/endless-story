@@ -79,6 +79,16 @@ export async function deleteRecruitment(id: string): Promise<void> {
     persist(filtered);
 }
 
+/**
+ * 一鍵清空招募紀錄 —— 把整個 store 倒空(連人工建的 row 也清)。
+ * 給「清乾淨再 seed 重種」的測試流程用。回傳清掉幾筆。
+ */
+export async function clearAllRecruitments(): Promise<{ ok: boolean; cleared: number }> {
+    const cleared = readStore().length;
+    persist([]);
+    return { ok: true, cleared };
+}
+
 export async function setRecruitmentActive(id: string, active: boolean): Promise<void> {
     const all = readStore();
     const r = all.find((x) => x.id === id);
