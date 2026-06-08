@@ -18,11 +18,10 @@ import { Transaction } from '@mysten/sui/transactions';
 import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
 import { getAdminContext } from '../chain/admin-signer.js';
-import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
+import { inductCharacterAction } from './induct-character.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
-import { assessAndApplyRelationshipsAction } from './assess-relationships.js';
 
 export interface RedeemVoucherInput {
     voucherId: string;
@@ -293,32 +292,22 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
                 console.log(`[redeem-voucher] views for ${charId}: appended=${viewsRes?.appended ?? 0}`);
             }
 
-            // 4) genesis memories (MemWal — no admin gas, so it can't contend; run last).
-            //    Pass the candidate's private `secret` (never on-chain) so the inner
-            //    backstory surfaces as private recalled memories.
-            try {
-                const seedRes = await seedGenesisMemoryAction(charId, undefined, input.candidate.secret);
-                console.log(
-                    `[redeem-voucher] memories for ${charId}: ` +
-                        (seedRes.skipped ? `skipped(${seedRes.skipped})` : String(seedRes.seeded ?? 0)),
-                );
-            } catch (err) {
-                console.warn(`[redeem-voucher] genesis memory seeding failed for ${charId}:`, err);
-            }
-
-            // 5) relationship ties — assess this character vs the roster from public
-            //    descriptions, then seed symmetric director ties (public relationship graph) + symmetric
-            //    memories on both sides. Admin-signed (relationship_seed), so it runs after
-            //    the other admin-gas steps. Idempotent (skips pairs already tied) → the
-            //    admin relationship-backfill panel can re-run / backfill earlier characters safely.
-            const relRes = await withRetry('relationships', () =>
-                assessAndApplyRelationshipsAction(charId),
+            // 4) induction — ONE coordinated pass: self memories (incl the private
+            //    `secret`, which never touches chain) + relationships to the existing
+            //    roster, seeding symmetric public director ties + dual memories. Mode
+            //    'newcomer': a freshly-minted user character is a stranger to the cast
+            //    unless their own description names a prior tie. Runs last (MemWal +
+            //    admin-signed relationship_seed); idempotent on the relationship side →
+            //    re-run / relationship backfill safe.
+            const indRes = await withRetry('induction', () =>
+                inductCharacterAction(charId, { mode: 'newcomer', secret: input.candidate.secret }),
             );
             console.log(
-                `[redeem-voucher] relationships for ${charId}: ` +
-                    (relRes?.ok
-                        ? `seeded=${relRes.seeded}${relRes.skipped ? ` skipped(${relRes.skipped})` : ''}`
-                        : 'failed'),
+                `[redeem-voucher] induction for ${charId}: ` +
+                    (indRes?.ok
+                        ? `self=${indRes.selfSeeded}/${indRes.selfGenerated} ties=${indRes.tiesSeeded}` +
+                          (indRes.skipped ? ` skipped(${indRes.skipped})` : '')
+                        : `failed${indRes?.error ? `(${indRes.error})` : ''}`),
             );
         });
     }

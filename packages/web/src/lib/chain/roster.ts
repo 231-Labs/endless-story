@@ -9,10 +9,11 @@
 import type { Character, Scene } from '@endless-story/shared';
 import { inferRoleFromText } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { charactersApi } from '@/lib/api/index';
+import { charactersApi, sagasApi } from '@/lib/api/index';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
 import { fetchRecruitmentIdMapForCharacters } from './voucher-read';
 import { fetchOnChainScenesForSaga } from './scene-read';
+import { fetchOnChainEdgesFrom } from './relationships';
 
 export interface SagaRosterEntry {
     id: string;
@@ -51,6 +52,75 @@ export async function buildSagaRoster(
             currentSceneName: sceneByChar.name.get(c.id),
             currentSceneId: c.currentSceneId ?? sceneByChar.id.get(c.id),
         }));
+}
+
+export interface TroupeTie {
+    aId: string;
+    bId: string;
+    tone: string;
+}
+
+export interface TroupeSnapshot {
+    saga: {
+        name: string;
+        premise: string;
+        naturePrompt?: string;
+        rhythmHints?: string;
+        worldTimeLabel?: string;
+    };
+    members: SagaRosterEntry[];
+    /** 成員之間目前的公開關係 tone(去重、無向)。讓 induction 把新人鑲進現有關係網。 */
+    ties: TroupeTie[];
+}
+
+/**
+ * 戲班公開現況快照 — 給 mint induction 用。
+ *
+ * **只公開**:saga 氣質 + 現有成員(公開描述/行當/性別/年齡/當前場景)+ 成員間既有
+ * 關係 tone。**絕不含任何人的私密記憶**(那是 owner-only / SEAL);induction 據此把新人
+ * 的記憶與關係鑲進現有戲班,而非憑空。
+ */
+export async function buildTroupeSnapshot(
+    sagaId: string,
+    opts: { characters?: Character[]; scenes?: Scene[] } = {},
+): Promise<TroupeSnapshot> {
+    const [members, saga] = await Promise.all([
+        buildSagaRoster(sagaId, opts),
+        sagasApi.getSaga(sagaId).catch(() => null),
+    ]);
+    const ties = await collectMemberTies(members);
+    return {
+        saga: {
+            name: saga?.name ?? '',
+            premise: saga?.premise || saga?.description || '',
+            naturePrompt: saga?.sagaPrompts?.naturePrompt,
+            rhythmHints: saga?.sagaPrompts?.rhythmHints,
+            worldTimeLabel: saga?.worldTime?.label,
+        },
+        members,
+        ties,
+    };
+}
+
+/** 收集成員之間既有的公開關係 tone(去重、無向)。best-effort:任一讀取失敗就略過。 */
+async function collectMemberTies(members: SagaRosterEntry[]): Promise<TroupeTie[]> {
+    const memberIds = new Set(members.map((m) => m.id));
+    const perMember = await Promise.all(
+        members.map((m) => fetchOnChainEdgesFrom(m.id).catch(() => [])),
+    );
+    const seen = new Set<string>();
+    const ties: TroupeTie[] = [];
+    for (const edges of perMember) {
+        for (const e of edges) {
+            if (!memberIds.has(e.fromId) || !memberIds.has(e.toId)) continue;
+            const [a, b] = e.fromId < e.toId ? [e.fromId, e.toId] : [e.toId, e.fromId];
+            const key = `${a}::${b}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            ties.push({ aId: a, bId: b, tone: e.tone ?? 'neutral' });
+        }
+    }
+    return ties;
 }
 
 export async function resolveRosterRoles(
