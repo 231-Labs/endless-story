@@ -116,6 +116,7 @@ export function CastConstellation({
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const isDark = useIsDark();
+  const ink = (a: number) => (isDark ? `rgba(220, 206, 176, ${a})` : `rgba(40, 38, 44, ${a})`);
 
   // ── 防禦性去重 ──
   const uniqCast = useMemo(() => dedupeById(cast), [cast]);
@@ -187,7 +188,28 @@ export function CastConstellation({
     return map;
   }, [scenes]);
 
-  if (uniqCast.length === 0) return null;
+  if (uniqCast.length === 0) {
+    return (
+      <section className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center overflow-hidden bg-canvas">
+        <ConstellationBackdrop ink={ink} />
+
+        {/* 標題 — 與有資料時一致 */}
+        <div className="pointer-events-none absolute left-[max(1.25rem,env(safe-area-inset-left))] top-[max(5rem,calc(env(safe-area-inset-top,0px)+4.75rem))] z-20 sm:left-10 sm:top-24">
+          <div className="flex items-center gap-4">
+            <div className="h-px w-8 bg-cinnabar/60" />
+            <h2 className="font-serif text-3xl tracking-[0.25em] text-ink drop-shadow-sm sm:text-4xl">人物方位</h2>
+          </div>
+        </div>
+
+        <div className="relative z-10 flex max-w-sm flex-col items-center gap-3 px-8 text-center">
+          <p className="font-serif text-base tracking-[0.3em] text-ink/80 sm:text-lg">名冊未錄一人</p>
+          <p className="text-2xs leading-relaxed tracking-[0.2em] text-mute/80 sm:text-xs">
+            此卷尚無人物登場。待春雪社的角色入冊，方位圖便會在此鋪展。
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   // ── 排版 ──
   //
@@ -322,8 +344,6 @@ export function CastConstellation({
     });
     return set;
   })();
-
-  const ink = (a: number) => (isDark ? `rgba(220, 206, 176, ${a})` : `rgba(40, 38, 44, ${a})`);
 
   const hoveredPos = hoveredId ? posById.get(hoveredId) : null;
   const hoveredTopScenes = hoveredId ? (charScenesById.get(hoveredId) ?? []).slice(0, 2) : [];
