@@ -15,8 +15,10 @@ import { EventPanel } from './EventPanel';
 import { TimePanel } from './TimePanel';
 import { SchedulerPanel } from './SchedulerPanel';
 import { ReconcilePanel } from './ReconcilePanel';
+import { FoundingCastPanel } from './FoundingCastPanel';
 import { getDreamConfigSnapshot } from '@/lib/actions/dream-config';
 import { getWorldTimeSnapshot } from '@/lib/actions/world-time';
+import { listAllRecruitments } from '@/lib/actions/recruitments-store';
 import { charactersApi, sagasApi, scenesApi } from '@/lib/api/index';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 
@@ -31,12 +33,18 @@ export const dynamic = 'force-dynamic';
  */
 export default async function AdminDirectorPage() {
     const sagaId = ENDLESS_STORY_DEPLOYMENT.sagaId;
-    const [dreamConfig, characters, scenes, worldTime] = await Promise.all([
+    const [dreamConfig, characters, scenes, worldTime, recruitments] = await Promise.all([
         getDreamConfigSnapshot(),
         charactersApi.listCharacters(),
         sagaId ? scenesApi.listScenes(sagaId) : Promise.resolve([]),
         getWorldTimeSnapshot(),
+        listAllRecruitments().catch(() => []),
     ]);
+    const roleSlots = recruitments.map((r) => ({
+        specialty: String(r.specialty),
+        roleIntent: r.roleIntent,
+        genderRequirement: r.genderRequirement,
+    }));
     return (
         <main className="min-h-screen">
             <SiteNav />
@@ -57,6 +65,15 @@ export default async function AdminDirectorPage() {
                             下達導演意圖、推進時間、跑每日章回、出版公報。
                         </p>
                         <div className="mt-8 space-y-12">
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">創世班底 · 一次立班</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    開局時直接鑄造一批<strong className="text-ink">彼此早已相識</strong>的原始班底(不走職缺抽卡)。
+                                    手填或載入劇本職缺當骨架,一鍵生畫像 → 上鏈 → 批次入科:同時種下各自的自身記憶
+                                    與整張關係網(共同往事只寫一次、雙向對稱)。用戶之後抽卡進來的才是全新陌生人。
+                                </p>
+                                <div className="mt-5"><FoundingCastPanel roleSlots={roleSlots} /></div>
+                            </div>
                             <div>
                                 <h3 className="font-serif text-lg tracking-wide text-ink">班主意圖 · 導演 LLM</h3>
                                 <p className="mt-2 text-sm leading-relaxed text-mute">
