@@ -1,3 +1,4 @@
+import { walrusAggregatorUrl } from '@endless-story/shared';
 import { objectUrl } from '@/lib/explorer';
 import type { GazetteEntry } from '@/lib/api/gazettes';
 import { Markdown } from '@/components/common/Markdown';
@@ -78,10 +79,9 @@ export async function GazetteList({
 
 async function fetchBody(blobId: string): Promise<string> {
     try {
-        const res = await fetch(
-            `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`,
-            { cache: 'no-store' },
-        );
+        const res = await fetch(walrusAggregatorUrl(blobId, { network: 'testnet' }), {
+            cache: 'no-store',
+        });
         return res.ok ? await res.text() : '';
     } catch {
         return '';

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { walrusAggregatorUrl } from '@endless-story/shared';
 import type { GazetteEntry } from '@/lib/api/gazettes';
 import { fetchTensionHeadline } from '@/lib/chain/drama';
 
@@ -53,10 +54,9 @@ export async function GazetteTeaser({
 
 async function fetchExcerpt(blobId: string): Promise<string> {
     try {
-        const res = await fetch(
-            `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`,
-            { cache: 'no-store' },
-        );
+        const res = await fetch(walrusAggregatorUrl(blobId, { network: 'testnet' }), {
+            cache: 'no-store',
+        });
         if (!res.ok) return '';
         const text = await res.text();
         return stripMarkdown(text).slice(0, 140).trim();

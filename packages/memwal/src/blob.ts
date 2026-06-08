@@ -27,6 +27,18 @@ const AGGREGATORS: Record<WalrusNetwork, string> = {
     mainnet: 'https://aggregator.walrus.space',
 };
 
+/**
+ * Aggregator base — self-hosted override via `NEXT_PUBLIC_WALRUS_AGGREGATOR`
+ * (e.g. https://walrus.231labs.xyz). Drives the URL written into
+ * `character.image_url` at mint time, so new mints serve through our own CDN.
+ * Unset → public per-network.
+ */
+function aggregatorBase(network: WalrusNetwork): string {
+    const env = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR;
+    const base = env && env.trim() ? env.trim() : AGGREGATORS[network];
+    return base.replace(/\/$/, '');
+}
+
 export interface PutBlobOptions {
     /** Default 'testnet'. */
     network?: WalrusNetwork;
@@ -153,8 +165,7 @@ export async function putBlob(
  * is the value to store in `character.image_url` etc.
  */
 export function getBlobUrl(blobId: string, network: WalrusNetwork = 'testnet'): string {
-    const base = AGGREGATORS[network];
-    return `${base}/v1/blobs/${blobId}`;
+    return `${aggregatorBase(network)}/v1/blobs/${blobId}`;
 }
 
 // ───────────────────────── Quilt (batch small blobs) ─────────────────────────
@@ -328,7 +339,7 @@ export async function putQuilt(
 
 /** Aggregator URL to fetch a single quilt file by its `quiltPatchId`. */
 export function getQuiltPatchUrl(quiltPatchId: string, network: WalrusNetwork = 'testnet'): string {
-    return `${AGGREGATORS[network]}/v1/blobs/by-quilt-patch-id/${quiltPatchId}`;
+    return `${aggregatorBase(network)}/v1/blobs/by-quilt-patch-id/${quiltPatchId}`;
 }
 
 /** Aggregator URL to fetch a single quilt file by its quilt id + identifier. */
@@ -337,7 +348,7 @@ export function getQuiltFileUrl(
     identifier: string,
     network: WalrusNetwork = 'testnet',
 ): string {
-    return `${AGGREGATORS[network]}/v1/blobs/by-quilt-id/${quiltId}/${encodeURIComponent(identifier)}`;
+    return `${aggregatorBase(network)}/v1/blobs/by-quilt-id/${quiltId}/${encodeURIComponent(identifier)}`;
 }
 
 /** Fetch one quilt file's bytes by `quiltPatchId` (from {@link putQuilt}). */

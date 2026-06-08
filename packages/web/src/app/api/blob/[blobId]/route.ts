@@ -16,7 +16,11 @@
 
 import { NextResponse } from 'next/server';
 
-const AGGREGATOR_BASE = 'https://aggregator.walrus-testnet.walrus.space/v1/blobs';
+// Self-hosted override via NEXT_PUBLIC_WALRUS_AGGREGATOR (e.g. https://walrus.231labs.xyz);
+// unset → public testnet aggregator.
+const AGGREGATOR_BASE =
+    (process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR?.trim().replace(/\/$/, '') ??
+        'https://aggregator.walrus-testnet.walrus.space') + '/v1/blobs';
 
 export async function GET(
     req: Request,
