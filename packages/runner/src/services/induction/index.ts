@@ -30,6 +30,17 @@ export {
     type GenesisRosterEntry,
 } from './prompt.js';
 
+export {
+    runBatchFounding,
+    buildBatchSystemPrompt,
+    buildBatchUserPrompt,
+    type FoundingMember,
+    type BatchTie,
+    type BatchSelfResult,
+    type RunBatchInput,
+    type RunBatchResult,
+} from './batch.js';
+
 export interface InductionTie {
     otherId: string;
     otherName: string;
