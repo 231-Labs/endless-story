@@ -49,7 +49,10 @@ async function loadDemoClipOverride(): Promise<SceneClip[]> {
   const url = process.env.DEMO_CLIPS_URL?.trim();
   if (url) {
     try {
-      const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+      // 12s, not 5s: the manifest host (Zeabur free tier) cold-starts and can take
+      // >5s on the first hit — too tight a timeout drops the real clips and falls
+      // back to mock (broken video URLs). Warm requests still return in ~1s.
+      const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(12000) });
       if (res.ok) return normalizeClips(await res.json());
       console.warn(`[scene-clips] DEMO_CLIPS_URL returned ${res.status} ${res.statusText}`);
     } catch (err) {
