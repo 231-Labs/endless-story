@@ -35,13 +35,7 @@ export {
   type PortraitCurationOptions,
 } from './portrait.js';
 
-export {
-  definePrompt,
-  type PromptDefinition,
-  type PromptMeta,
-  type PromptKind,
-  type ParsedOutput,
-} from './definition.js';
+export { type PromptBehavior, type ParsedOutput } from './definition.js';
 
 export {
   buildPersonaPrompt,

@@ -1,60 +1,58 @@
 # Prompt management
 
-Status: **in progress** — registry foundation landed (`persona.distill` converted as the proof slice). Rollout of the remaining prompts + lab rewire is pending.
+Status: **done** for the lab dispatch — the 240-line `buildPrompt` switch is gone; behavior
+lives in a registry. Phase 3 (A/B + i18n hooks) is still optional/future.
 
 ## The problem
 
-LLM prompts live in three layers, which is fine — but each prompt is currently defined in **three places that must stay in sync**:
+Each lab prompt used to be defined in **three places that had to stay in sync**:
 
 1. **Builder fns** — `packages/llm/src/prompts/*.ts` and `packages/runner/src/services/*/prompt.ts`
    (`build*Prompt()` or `build*SystemPrompt()` + `build*UserPrompt()`, plus a `parse*`).
-2. **Catalog metadata** — `packages/web/src/lib/prompt-lab/catalog.ts` (`PROMPT_LAB_CALLS`), hand-maintained.
-3. **Dispatch + parser wiring** — the ~240-line `buildPrompt` switch in `packages/web/src/lib/actions/prompt-lab.ts`.
+2. **Catalog metadata** — `packages/web/src/lib/prompt-lab/catalog.ts` (`PROMPT_LAB_CALLS`).
+3. **Dispatch + parser wiring** — the ~240-line `buildPrompt` switch in `lib/actions/prompt-lab.ts`.
 
-Adding or changing a prompt means editing all three. That triple-bookkeeping is the real cost, not "the files are scattered."
+Adding or changing a prompt meant editing all three. That triple-bookkeeping was the real cost.
 
 ## What we are NOT doing
 
 A single shared "prompt kernel" of merged prose. An audit found **almost no byte-identical
 duplication**: the voice/format guidance recurs conceptually (e.g. the 民初 vernacular tone shows
-up in the POV, reflection, and genesis prompts) but each is **locally tuned**, and the banned-imagery
-list / JSON-output lines are not shared verbatim. Merging them would canonicalize divergent,
-intentionally-different prose — an unverifiable behavior change to demo-critical prompts. We leave
-prompt *text* alone.
+up in the POV, reflection, and genesis prompts) but each is **locally tuned**. Merging them would
+canonicalize divergent, intentionally-different prose — an unverifiable behavior change to
+demo-critical prompts. We leave prompt *text* alone.
 
-## The design: a prompt registry
+## The design: metadata (client) + behavior registry (server)
 
-Define each prompt **once** as a `PromptDefinition` (type in `packages/llm/src/prompts/definition.ts`):
+The hard constraint is the **client/server boundary**: the prompt-lab admin panel is a *client*
+component that imports the catalog for the prompt list + fixtures, but the builders import `runner`
+(which pulls `node:crypto`) and must stay server-only. So a prompt's two halves live apart:
+
+- **Metadata + fixtures — client-safe — `prompt-lab/catalog.ts`.** `PROMPT_LAB_CALLS` (id, phase,
+  title, kind, summary, outputShape, `defaultInput`). Pure data, no builder imports. One source.
+- **Behavior — server-only — `prompt-lab/registry.ts` (+ `registry/*.ts`).** A
+  `Record<PromptLabCallId, PromptBehavior>` keyed by id. One source for build/parse; replaces the switch.
 
 ```ts
-interface PromptDefinition<TInput, TOutput> {
-  meta: PromptMeta;                       // id, phase, title, kind, summary, outputShape, …
-  defaultInput: TInput;                   // lab fixture
-  build(input: TInput): BuildPromptResult; // verbatim wrap of the existing builder(s)
-  parse(raw: string, input: TInput): { parsed: TOutput; note?: string };
+// type in packages/llm/src/prompts/definition.ts
+interface PromptBehavior<TInput, TOutput> {
+  build(input: TInput): BuildPromptResult;          // wraps the existing builder(s) verbatim
+  parse(raw: string, input: TInput): { parsed: TOutput; note?: string };  // input: char parser reattaches rolled attrs
 }
 ```
 
-- The **type lives in `llm`** as a reusable contract; `BuildPromptResult` is already an llm type.
-- The **registry is assembled in `web`** (`packages/web/src/lib/prompt-lab/registry.ts`), keyed by
-  `PromptLabCallId`. It must be here, not co-located in each module: the lab's per-prompt input
-  assembly pulls from **web config** (e.g. `DEFAULT_ATTRIBUTE_SCHEMA`) and composes **both llm and
-  runner** builders — only the web layer can import all three (llm/runner never import web/each-other).
-- `parse` takes `input` too, because some parsers need it (the character candidate parser reattaches
-  the server-rolled attributes).
-- `catalog.ts` metadata becomes **derived** from the registry (no more drift).
-- The `prompt-lab.ts` switch collapses to `registry[id].build(input)` / `registry[id].parse(raw, input)`.
+- The behavior defs are grouped by area: `registry/recruit.ts` (llm builders), `registry/agent.ts`
+  and `registry/world.ts` (runner builders), `registry/helpers.ts` (shared input-coercion / output
+  parsing). The registry lives in web because only web can compose llm + runner builders with web
+  config (`DEFAULT_ATTRIBUTE_SCHEMA`); llm/runner never import web or each other.
+- `prompt-lab.ts` (`'use server'`) is the only importer of the registry. `buildPrompt` is now a
+  lookup: `PROMPT_REGISTRY[id].build(input)`, paired with the catalog's `kind` + temperature, and
+  `parseOutput = raw => PROMPT_REGISTRY[id].parse(raw, input)`.
 
-This hits all four goals without touching prompt text: DRY wiring, one discoverable registry,
-`version`/`variants` hooks for A/B, and a `locale` hook for i18n / per-saga voice (ties into the
-planned `next-intl` work).
+Adding a prompt now = one catalog entry (metadata + fixture) + one registry behavior. No switch.
 
-## Rollout phases
+## Future (optional)
 
-- **Phase 1 — definitions.** Add each call's `PromptDefinition` to `prompt-lab/registry.ts`
-  (consolidating its catalog metadata + switch case). *(`persona.distill` done as the proof slice;
-  16 calls remain — see `PromptLabCallId`.)*
-- **Phase 2 — collapse the lab.** Registry lookup replaces the `buildPrompt` switch; `catalog.ts`
-  derives from the registry. This is where the lab stops drifting.
-- **Phase 3 — opt-in extras.** `meta.version` / `variants` + a lab selector (A/B); thread a `locale`
-  arg through `build` (i18n / per-saga voice).
+- **A/B** — add a `variants` map to `PromptBehavior` + a selector in the lab.
+- **i18n / per-saga voice** — thread a `locale` arg through `build` (ties into the planned `next-intl`
+  work). Prompt *text* edits remain out of scope unless deliberately localized.
