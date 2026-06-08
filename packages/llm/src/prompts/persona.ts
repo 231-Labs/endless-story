@@ -5,6 +5,7 @@
  * decodes the JSON output.
  */
 import type { BuildPromptResult } from './moderation.js';
+import { definePrompt } from './definition.js';
 
 export interface BuildPersonaPromptOptions {
   name: string;
@@ -23,16 +24,16 @@ export interface DistilledPersona {
   boundaries: string[];
 }
 
-const SYSTEM = `你是「無盡故事」說書平台的角色心理蒸餾師。給你一個戲曲角色的公開設定，蒸餾出他「卸了妝、出了戲以後」不會丟掉的結構性本色，分三類：
+const SYSTEM = `你是「無盡故事」說書平台的角色心理蒸餾師。給你一個戲曲角色的公開設定，蒸餾出角色「卸了妝、出了戲以後」不會丟掉的結構性本色，分三類：
 - axes(軸)：不變的傾向、底層動機。
-- mannerisms(腔)：辨識他的方式 — 說話與行事的調。
+- mannerisms(腔)：辨識角色的方式 — 說話與行事的調。
 - boundaries(界)：不肯退的線 — 碰了會炸的點。
 每類給 2~4 個凝練的短語(不是整段)，用這個角色自己的氣質寫，避免通用形容詞。只輸出 JSON，不要任何解釋或 markdown。`;
 
 export function buildPersonaPrompt(opts: BuildPersonaPromptOptions): BuildPromptResult {
   const mem =
     opts.genesisMemories && opts.genesisMemories.length
-      ? `\n他最初的幾段記憶：\n${opts.genesisMemories.map((m) => `- ${m}`).join('\n')}\n`
+      ? `\n角色最初的幾段記憶：\n${opts.genesisMemories.map((m) => `- ${m}`).join('\n')}\n`
       : '';
   const user = `角色設定：
 名：${opts.name}
@@ -68,3 +69,33 @@ export function parsePersonaResponse(text: string): DistilledPersona | null {
     return null;
   }
 }
+
+// Registry definition — bundles metadata + builder + parser in one place.
+export const personaPromptDef = definePrompt<BuildPersonaPromptOptions, DistilledPersona | null>({
+  meta: {
+    id: 'persona.distill',
+    phase: 'CHARACTER',
+    title: '本色蒸餾',
+    shortTitle: 'Persona',
+    kind: 'primary',
+    summary: '把角色公開設定蒸成「卸妝後」的軸 / 腔 / 界（本色卡）。mint 時 first_run 生成，上 Walrus + commitment。',
+    outputShape: '{"axes":["…"],"mannerisms":["…"],"boundaries":["…"]}',
+    defaultTemperature: 0.85,
+    existingTool: {
+      label: '角色頁 本色',
+      href: '/dossier',
+      note: 'mint 時 redeemVoucher.after() 生成並 anchor；Lab 用 fixture 測蒸餾品質。',
+    },
+  },
+  defaultInput: {
+    name: '柳生春',
+    role: '小生',
+    gender: 'female',
+    ageYears: 22,
+    physicalFacts: '廿二歲，短髮束於腦後，眉如墨畫，肩線清瘦；右耳後一痣。',
+    description:
+      '外地來的女小生，台上英氣，台下怕冷，總把一枚舊銅錢縫在袖口；嘴上不肯服輸，卻不願說自己為何離開舊班。',
+  },
+  build: buildPersonaPrompt,
+  parse: (raw) => ({ parsed: parsePersonaResponse(raw) }),
+});

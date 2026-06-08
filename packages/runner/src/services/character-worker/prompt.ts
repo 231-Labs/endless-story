@@ -168,7 +168,7 @@ function buildCraftDirective(character: CharacterSnapshot): string {
     const openingLens = [
         '以一件可觸摸的小物開場：袖口、茶盞、簪釵、票紙、戲箱、槍桿、琴弦都可以；讓手先說話。',
         '以聲音開場：隔壁一句唱腔、木板響、雨聲、鑼鼓餘音、有人壓低的咳嗽；先聽見，再看見。',
-        '以光與空間開場：燈影、台口、後台窄廊、鏡面、窗格；讓角色的位置透露他的處境。',
+        '以光與空間開場：燈影、台口、後台窄廊、鏡面、窗格；讓角色的位置透露其處境。',
         '以身體微感開場：粉黏在頸側、衣料勒住、肩背發緊、喉頭發乾；不要誇張，只寫一處。',
         '以別人的一個小動作開場：避開目光、放慢步子、收住半句話；讓角色先誤讀它。',
         '以移動開場：從台口退回、穿過後廊、繞過桌角、跨過箱籠；讓章回有一個方向。',
@@ -230,11 +230,11 @@ const HEAVY_MOTIFS = [
 
 function attributeDirective(a: CharacterSnapshot['attributes']): string {
     const notes: string[] = [];
-    if ((a.acuity ?? 0) >= 75) notes.push('他會先注意細節與破綻');
+    if ((a.acuity ?? 0) >= 75) notes.push('會先注意細節與破綻');
     if ((a.disposition ?? 0) >= 75) notes.push('情緒外放要克制，讓禮數或沉默承壓');
     if ((a.disposition ?? 100) <= 45) notes.push('衝動可以有，但用一句話或一個動作表現，不要長篇喊叫');
     if ((a.constitution ?? 100) <= 55) notes.push('體力稍弱可影響節奏，但不可發明殘疾、重病或舊傷');
-    if ((a.appearance ?? 0) >= 85) notes.push('他知道目光會落在自己身上，但不要自戀式自述');
+    if ((a.appearance ?? 0) >= 85) notes.push('知道目光會落在自己身上，但不要自戀式自述');
     return notes.length > 0 ? notes.join('；') : '設定不完整時，採低調寫法：先寫眼前物與行當習慣，再讓情緒慢慢浮出';
 }
 

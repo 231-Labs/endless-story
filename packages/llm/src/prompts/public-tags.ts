@@ -31,7 +31,7 @@ export function buildPublicTagsPrompt(opts: BuildPublicTagsPromptOptions): Build
       ? opts.fallbackTags.join('、')
       : '（無）';
 
-  const userText = `你是「無盡故事」的梨園檔案編修。角色剛透過 UI mint 入班，系統已經知道她/他的行當、公開背景與擲出的能力值。
+  const userText = `你是「無盡故事」的梨園檔案編修。角色剛透過 UI mint 入班，系統已經知道其行當、公開背景與擲出的能力值。
 
 你的任務：替這個角色補 2-4 個「公開社會標籤」。這些標籤會寫上鏈，代表陌生人第一眼或聽聞名聲時，會怎麼把此人放進社會與梨園秩序裡。
 
