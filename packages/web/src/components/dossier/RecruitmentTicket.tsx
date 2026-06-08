@@ -450,8 +450,12 @@ export function RecruitmentTicket({
     canNext = true;
   } else if (stage === 'pick') {
     prevLabel = '重新凝形';
-    nextLabel = isPainting ? '繪製畫像中…' : '入班';
-    canNext = !isPainting && candidate !== null && (reqCheck === null || reqCheck.ok);
+    // Portrait no longer blocks 入班 — if it's still painting, mint goes ahead
+    // without it and the cover is generated + patched on chain server-side
+    // (see ensure-portrait in redeem-voucher's after()). If it finished, the
+    // ready url is passed and baked into the mint tx directly.
+    nextLabel = isPainting ? '入班（畫像續繪）' : '入班';
+    canNext = candidate !== null && (reqCheck === null || reqCheck.ok);
     canPrev = !isPainting;
   } else if (stage === 'done') {
     prevLabel = '關閉';
