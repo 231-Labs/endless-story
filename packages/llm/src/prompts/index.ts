@@ -36,8 +36,17 @@ export {
 } from './portrait.js';
 
 export {
+  definePrompt,
+  type PromptDefinition,
+  type PromptMeta,
+  type PromptKind,
+  type ParsedOutput,
+} from './definition.js';
+
+export {
   buildPersonaPrompt,
   parsePersonaResponse,
+  personaPromptDef,
   type BuildPersonaPromptOptions,
   type DistilledPersona,
 } from './persona.js';
