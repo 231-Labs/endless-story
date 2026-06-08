@@ -46,7 +46,6 @@ export {
 export {
   buildPersonaPrompt,
   parsePersonaResponse,
-  personaPromptDef,
   type BuildPersonaPromptOptions,
   type DistilledPersona,
 } from './persona.js';

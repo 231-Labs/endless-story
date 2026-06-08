@@ -5,8 +5,9 @@
 // A PromptDefinition bundles all three so the lab (and any caller) can be driven from
 // a single registry. The builder text is unchanged; this only changes how it's wired.
 //
-// Lives in `llm` (the lowest AI layer) so both llm and runner prompt modules can
-// export a definition without violating dependency direction (runner → llm, never up).
+// The TYPE lives in `llm` (the lowest AI layer) as a reusable contract. The registry
+// itself is assembled in `web/lib/prompt-lab` (the only layer that can compose llm +
+// runner builders together with web config); see docs/PROMPTS.md.
 
 import type { BuildPromptResult } from './moderation.js';
 
@@ -38,7 +39,9 @@ export interface PromptDefinition<TInput, TOutput> {
   // Build the chat prompt (system + messages + maxTokens). Verbatim wrap of the
   // existing build*Prompt() / build*SystemPrompt()+build*UserPrompt() functions.
   build(input: TInput): BuildPromptResult;
-  parse(raw: string): ParsedOutput<TOutput>;
+  // Parse the model output. Takes `input` too, since some parsers need it (e.g. the
+  // character candidate parser reattaches the server-rolled attributes).
+  parse(raw: string, input: TInput): ParsedOutput<TOutput>;
 }
 
 // Identity helper for inference + a single place to evolve the contract.
