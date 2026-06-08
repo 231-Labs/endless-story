@@ -23,7 +23,7 @@ export function ChaptersTab({
   if (!hasAny) {
     return (
       <div className="py-12 text-center text-mute">
-        她還沒出場到任何已公開的章回。
+        還沒出場到任何已公開的章回。
       </div>
     );
   }

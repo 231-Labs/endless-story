@@ -61,7 +61,7 @@ function humanizeEventAbort(raw: string | undefined): string | null {
         case 17:
             return '此角色不屬於這個 saga';
         case 18:
-            return '此角色不在這個事件的場景內（請換到她所在的場景開事件）';
+            return '此角色不在這個事件的場景內（請換到角色所在的場景開事件）';
         case 19:
             return '此角色已死亡，無法參與';
         default:

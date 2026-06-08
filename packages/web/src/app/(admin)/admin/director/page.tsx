@@ -172,8 +172,8 @@ export default async function AdminDirectorPage() {
                             <div>
                                 <h3 className="font-serif text-lg tracking-wide text-ink">反思 · 觸發內心獨白</h3>
                                 <p className="mt-2 text-sm leading-relaxed text-mute">
-                                    passive:角色獨自在後台、沒人問,寫她最近最壓心上的那一句。
-                                    active:模擬 owner 在 dossier 問一句,看 LLM 怎麼讓她被觸動但不直答。
+                                    passive:角色獨自在後台、沒人問,寫下最近最壓心上的那一句。
+                                    active:模擬 owner 在 dossier 問一句,看 LLM 怎麼讓角色被觸動但不直答。
                                     兩種都上 Walrus + reflection::submit。
                                 </p>
                                 <div className="mt-5"><ReflectionPanel characters={characters} /></div>
@@ -196,7 +196,7 @@ export default async function AdminDirectorPage() {
                             <div>
                                 <h3 className="font-serif text-lg tracking-wide text-ink">託管 · SEAL 撤訪示範</h3>
                                 <p className="mt-2 text-sm leading-relaxed text-mute">
-                                    撤銷角色 ControlCap → saga 對她記憶的 MemWal recall 在鏈上被斷(ENoAccess);
+                                    撤銷角色 ControlCap → saga 對該角色記憶的 MemWal recall 在鏈上被斷(ENoAccess);
                                     重新授權即恢復。證明記憶存取由鏈上 cap 把關,不是後端自律。
                                 </p>
                                 <div className="mt-5"><CustodyPanel characters={characters} /></div>

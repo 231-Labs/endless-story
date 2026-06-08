@@ -74,20 +74,20 @@ export function MemoriesTab({
           <div className="h-px w-8 bg-cinnabar/40" />
           <h2 className="font-serif text-2xl tracking-wide text-ink">記憶</h2>
           <p className="text-xs tracking-widest text-mute/70 hidden sm:block">
-            她記得這些事 — 上鏈寫進 Walrus，只有持有者讀得到。
+            記得的事 — 都上鏈寫進 Walrus，只有持有者讀得到。
           </p>
         </div>
         <p className="text-xs tracking-widest text-mute/70 pl-12 sm:pl-0">{memories.length} 則</p>
       </header>
       <p className="text-xs tracking-widest text-mute/70 pl-12 sm:hidden">
-        她記得這些事 — 上鏈寫進 Walrus，只有持有者讀得到。
+        記得的事 — 都上鏈寫進 Walrus，只有持有者讀得到。
       </p>
 
       <div className="pl-0 sm:pl-12">
         {memories.length === 0 ? (
           <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
             <p className="text-sm text-mute tracking-wide">
-              她暫時還沒留下供你翻閱的記憶。下一場戲落幕後，這裡會陸續長出新的條目。
+              暫時還沒留下供你翻閱的記憶。下一場戲落幕後，這裡會陸續長出新的條目。
             </p>
           </div>
         ) : (
@@ -259,11 +259,11 @@ function ProvenanceLine({
 function LockedNotice({ character }: { character: Character }) {
   return (
     <section className="rounded-3xl bg-surface/40 border border-dashed border-hairline/60 p-8 sm:p-12 text-sm leading-relaxed text-mute backdrop-blur-sm text-center max-w-2xl mx-auto mt-12">
-      <p className="font-serif text-xl text-ink/80 tracking-wide mb-4">記憶是她私有的部分。</p>
+      <p className="font-serif text-xl text-ink/80 tracking-wide mb-4">記憶是私有的部分。</p>
       <p className="tracking-wide leading-loose">
         只有持有
         <span className="mx-2 font-mono text-mute/90 bg-canvas/50 px-2 py-1 rounded">{truncateAddress(character.nftOwner)}</span>
-        能翻閱她的反思 — 章回是她願意被看見的；記憶是還沒整理好、不確定要不要被看見的那些。
+        能翻閱這些反思 — 章回是願意被看見的；記憶是還沒整理好、不確定要不要被看見的那些。
       </p>
     </section>
   );

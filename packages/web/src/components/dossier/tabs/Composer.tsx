@@ -33,19 +33,19 @@ const ENDLESS_DECIMALS = 6;
 
 const COPY: Record<Kind, { hint: string; placeholder: string; submit: string }> = {
   inject_dream: {
-    hint: '她下一次出場才會夢到。內容會經審稿員改寫成戲園意象，再上鏈 anchor 在 Sui + Walrus — owner 付 ENDLESS，永久可驗證影響。',
+    hint: '要等下一次出場才會夢到。內容會經審稿員改寫成戲園意象，再上鏈 anchor 在 Sui + Walrus — owner 付 ENDLESS，永久可驗證影響。',
     placeholder: '夢的素材 — 一個人、一句話、一個畫面…',
     submit: '送審 + 上鏈',
   },
   whisper: {
-    hint: '她在下一個 tick 就會聽見 — 像她自己腦中的一段內心音。可能照辦、可能抗拒、無論如何會被她寫進記憶。',
-    placeholder: '一句你想讓她在台口聽見的話…',
-    submit: '在她耳邊',
+    hint: '下一個 tick 就會聽見 — 像自己腦中的一段內心音。可能照辦、可能抗拒，無論如何都會被寫進記憶。',
+    placeholder: '一句你想讓角色在台口聽見的話…',
+    submit: '附耳低語',
   },
   ask_reflection: {
-    hint: '只給她聽 — 她會在卸了妝獨自一人時想這個問題，寫一段「真實的」內心。可能跟她公開的章回對不上、可能避而不答 — 那都是她。內容上鏈 anchor，僅 owner 跟訂閱者可讀。',
-    placeholder: '一句你想問她、但她未必想答的話…',
-    submit: '問她',
+    hint: '只給角色一個人聽 — 會在卸了妝獨自一人時想這個問題，寫一段「真實的」內心。可能跟公開的章回對不上、可能避而不答 — 那都是真實的一面。內容上鏈 anchor，僅 owner 跟訂閱者可讀。',
+    placeholder: '一句你想問、卻未必有答案的話…',
+    submit: '問一句',
   },
 };
 
@@ -363,7 +363,7 @@ export function Composer({
 
           {chainResult ? (
             <div className="rounded border border-jade/40 bg-jade/5 p-3 text-sm">
-              <div className="text-jade">已注入。她將在下次出場時想起這段夢。</div>
+              <div className="text-jade">已注入。下次出場時就會想起這段夢。</div>
               <div className="mt-2 flex flex-wrap gap-3 text-2xs tracking-widest">
                 <a
                   href={txUrl(chainResult.digest)}
@@ -424,7 +424,7 @@ export function Composer({
           {reflectionResult?.ok ? (
             <div className="space-y-3">
               <div className="rounded border border-jade/40 bg-jade/5 p-3">
-                <div className="text-2xs tracking-widest text-jade">她的內心獨白（已上鏈 anchor）</div>
+                <div className="text-2xs tracking-widest text-jade">內心獨白（已上鏈 anchor）</div>
                 <p className="mt-2 max-w-prose whitespace-pre-wrap font-serif text-sm leading-loose text-ink/90">
                   {reflectionResult.reflection}
                 </p>
@@ -473,11 +473,11 @@ export function Composer({
       {!kind ? (
         whisperState.ok ? (
           <p className="rounded-md border border-dashed border-jade/40 bg-jade/10 p-4 text-sm text-jade dark:border-jade/50 dark:bg-jade/15">
-            已寄出。她會在下一段夢或下一個 tick 感應到。
+            已寄出。下一段夢或下一個 tick 就會感應到。
           </p>
         ) : (
           <p className="text-sm text-mute">
-            注夢藏在夢裡、慢、深、可能被她遺忘；耳語直接傳入她當下心緒、快、淺、不易藏。
+            注夢藏在夢裡、慢、深、可能被遺忘；耳語直接傳入當下心緒、快、淺、不易藏。
           </p>
         )
       ) : null}

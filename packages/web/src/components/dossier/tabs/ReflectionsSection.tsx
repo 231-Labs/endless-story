@@ -41,18 +41,18 @@ export function ReflectionsSection({
         <section>
             <div className="flex items-center gap-4">
                 <div className="h-px w-8 bg-cinnabar/40" />
-                <h2 className="font-serif text-2xl tracking-wide text-ink">她的內心獨白</h2>
+                <h2 className="font-serif text-2xl tracking-wide text-ink">內心獨白</h2>
             </div>
             <p className="mt-2 pl-12 text-2xs tracking-widest text-mute/70">
                 {isOwner
-                    ? '只有你與她的訂閱者能讀到這段 — 公開的章回不會說的話。'
-                    : '訂閱她之後可讀；目前你只看見鏈上 anchor 與時間戳。'}
+                    ? '只有你與訂閱者能讀到這段 — 公開的章回不會說的話。'
+                    : '訂閱之後可讀；目前你只看見鏈上 anchor 與時間戳。'}
             </p>
             <div className="mt-8 pl-0 sm:pl-12">
                 {reflections.length === 0 ? (
                     <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
                         <p className="text-sm text-mute tracking-wide">
-                            她還沒寫過反思。owner 問一句，或讓她在台後獨自待一會兒。
+                            還沒寫過反思。owner 問一句，或讓角色在台後獨自待一會兒。
                         </p>
                     </div>
                 ) : (

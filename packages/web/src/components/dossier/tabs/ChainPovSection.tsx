@@ -71,9 +71,9 @@ export function ChainPovSection({
             <p className="mt-2 pl-12 text-2xs tracking-widest text-mute/70">
                 {canRead
                     ? isOwner
-                        ? '你是班主，能讀她的每一回。'
-                        : '你已訂閱，能讀她的每一回。'
-                    : '訂閱她之後可讀全文；此刻只見鏈上憑證。'}
+                        ? '你是班主，每一回都讀得到。'
+                        : '你已訂閱，每一回都讀得到。'
+                    : '訂閱之後可讀全文；此刻只見鏈上憑證。'}
             </p>
             <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
                 {chapters.map((c) => (
@@ -173,7 +173,7 @@ function LockedNotice() {
         <div className="mt-4 rounded-2xl border border-dashed border-hairline/60 bg-canvas/30 p-6 text-center">
             <p className="text-sm text-mute">這一回只給班主與訂閱者。</p>
             <p className="mt-1 text-2xs tracking-widest text-mute/60">
-                訂閱她，便能讀她台前幕後的每一個念頭。
+                訂閱後，台前幕後的每一個念頭都讀得到。
             </p>
         </div>
     );

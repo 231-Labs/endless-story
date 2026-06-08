@@ -96,7 +96,7 @@ function InterventionRow({
           {intv.kind === 'inject_dream' ? '夢' : '語'} · {formatDate(intv.createdAt)}
         </span>
         {intv.acknowledgedAt ? (
-          <span className="text-jade font-medium">她已感應</span>
+          <span className="text-jade font-medium">已感應</span>
         ) : null}
       </div>
       <p className="mt-5 text-lg leading-loose text-ink/85">

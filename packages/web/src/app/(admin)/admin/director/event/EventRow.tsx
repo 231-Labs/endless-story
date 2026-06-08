@@ -316,7 +316,7 @@ function EventDetailView({
                                     disabled={turnPending}
                                     className="rounded bg-cinnabar px-3 py-1 text-xs text-canvas hover:bg-seal disabled:opacity-50"
                                 >
-                                    {turnPending ? '她在想…' : '讓她自己出牌'}
+                                    {turnPending ? '思量中…' : '讓角色自己出牌'}
                                 </button>
                             </div>
                             {turnResult ? (

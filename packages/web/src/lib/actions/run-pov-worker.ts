@@ -38,7 +38,7 @@ export async function runPovAction(input: RunPovInput): Promise<RunPovResult> {
 
     const triggerNarrative =
         input.triggerNarrative?.trim() ||
-        '請截取這個角色此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。';
+        '請截取這個角色此刻的一個具體場面：身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。';
 
     return runPovForCharacter(admin, input.characterId, {
         triggerNarrative,

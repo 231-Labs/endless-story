@@ -255,7 +255,7 @@ function PlanResultView({ result }: { result: RunPlanResult }) {
 
 const SLEEP_SKIP_LABEL: Record<string, string> = {
     memory_unconfigured: 'MemWal 未設定（或召不回記憶）',
-    nothing_to_consolidate: '沒有足夠的零碎記憶可沉澱（先讓她多經歷幾場）',
+    nothing_to_consolidate: '沒有足夠的零碎記憶可沉澱（先讓角色多經歷幾場）',
 };
 
 function SleepResultView({ result }: { result: RunSleepResult }) {

@@ -73,7 +73,7 @@ export async function listMemories(
       // re-ranks by importance so dreams / relationships float up.
       const recalled = await recallStructuredForCharacter(
         characterId,
-        '她的記憶 心事 經歷 關係 夢 此刻最在意的事',
+        '記憶 心事 經歷 關係 夢 此刻最在意的事',
         24,
       );
       if (recalled.length > 0) {

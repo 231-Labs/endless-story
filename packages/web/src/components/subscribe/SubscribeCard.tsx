@@ -140,7 +140,7 @@ export function SubscribeCard({
 
           {tension ? (
             <p className="mt-3 text-2xs tracking-widest text-mute">
-              她在意 · <span className="font-serif text-ink">{tension.targetName}</span>
+              在意 · <span className="font-serif text-ink">{tension.targetName}</span>
             </p>
           ) : null}
 

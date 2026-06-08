@@ -255,7 +255,7 @@ export function PromptStage({ prompt, onPromptChange, rolledValues }: { prompt: 
           onChange={(e) => onPromptChange(e.target.value)}
           rows={5}
           maxLength={1200}
-          placeholder="他是誰？從哪兒來？想做什麼？他身上一個讓人忘不掉的細節…"
+          placeholder="是誰？從哪兒來？想做什麼？身上一個讓人忘不掉的細節…"
           className="w-full rounded-lg border-2 border-dashed border-hairline bg-surface/30 px-6 py-5 text-[15px] leading-loose text-ink placeholder:text-mute/60 focus:border-cinnabar/50 focus:bg-surface/80 focus:outline-none transition-all resize-none dark:bg-elevated/20"
         />
         <div className="absolute bottom-4 right-6 pointer-events-none">

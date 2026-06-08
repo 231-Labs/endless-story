@@ -572,7 +572,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 const trigger =
                     triggerParts.length > 0
                         ? `${dayLabel} — 今日，${triggerParts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`
-                        : `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：他身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
+                        : `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
                 const r = await runPovForCharacter(admin, c.id, {
                     triggerNarrative: trigger,
                     forceRun: true,

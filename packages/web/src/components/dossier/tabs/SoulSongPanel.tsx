@@ -138,11 +138,11 @@ export function SoulSongPanel({
         <div className="h-px w-8 bg-cinnabar/40" />
         <h2 className="font-serif text-2xl tracking-wide text-ink">心曲</h2>
         <p className="text-xs tracking-widest text-mute/70 hidden sm:block">
-          {isOwner ? '七日內僅能請她唱一段' : '她唱過的幾段'}
+          {isOwner ? '七日內僅能請唱一段' : '唱過的幾段'}
         </p>
       </header>
       <p className="text-xs tracking-widest text-mute/70 pl-12 sm:hidden">
-        {isOwner ? '七日內僅能請她唱一段' : '她唱過的幾段'}
+        {isOwner ? '七日內僅能請唱一段' : '唱過的幾段'}
       </p>
 
       <div className="pl-0 sm:pl-12 space-y-6">
@@ -171,7 +171,7 @@ export function SoulSongPanel({
           </ol>
         ) : (
           <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
-            <p className="text-sm text-mute tracking-wide">她還未為人唱過。</p>
+            <p className="text-sm text-mute tracking-wide">還未為人唱過。</p>
           </div>
         )}
       </div>
@@ -203,7 +203,7 @@ function SummonControl({
   if (!hasNext) {
     return (
       <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 text-sm text-mute backdrop-blur-sm text-center">
-        她已將心底攤完，靜下了。再有新的心曲，得等下一場戲落幕。
+        心底已攤完，靜下了。再有新的心曲，得等下一場戲落幕。
       </div>
     );
   }
@@ -222,7 +222,7 @@ function SummonControl({
           disabled
           className="rounded-full border border-hairline/50 px-6 py-2.5 text-sm tracking-wide text-mute/50 bg-canvas/30"
         >
-          請她唱一段
+          請唱一段
         </button>
       </div>
     );
@@ -231,14 +231,14 @@ function SummonControl({
   return (
     <div className="rounded-3xl bg-surface/40 border border-hairline/50 flex flex-wrap items-center justify-between gap-4 p-6 sm:p-8 backdrop-blur-sm">
       <p className="text-base leading-relaxed text-ink/85 tracking-wide">
-        {characterName}今夜願意再開口。要請她唱一段嗎？
+        {characterName}今夜願意再開口。要請唱一段心曲嗎？
       </p>
       <button
         type="button"
         onClick={onSummon}
         className="rounded-full bg-cinnabar px-6 py-2.5 text-sm tracking-wide text-canvas shadow-sm shadow-cinnabar/20 transition-all hover:bg-seal hover:shadow-md hover:-translate-y-0.5"
       >
-        請她唱一段
+        請唱一段
       </button>
     </div>
   );

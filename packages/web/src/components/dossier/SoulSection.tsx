@@ -32,7 +32,7 @@ export function SoulSection({
         <RegenMeta persona={persona} regenChapter={regenChapter ?? null} />
       </header>
       <div className="mt-8 pl-0 sm:pl-12">
-        <p className="text-sm text-mute/80 tracking-wide">她卸了妝、出了戲以後 — 不會丟掉的那些。</p>
+        <p className="text-sm text-mute/80 tracking-wide">卸了妝、出了戲以後 — 不會丟掉的那些。</p>
 
         <div className="mt-8 grid grid-cols-1 gap-10 sm:grid-cols-3 sm:gap-8">
           <PersonaColumn glyph="軸" lines={persona.axes} />
@@ -113,6 +113,6 @@ function PersonaColumn({ glyph, lines }: { glyph: string; lines: string[] }) {
 
 const GLYPH_HINT: Record<string, string> = {
   軸: '不變的傾向',
-  腔: '辨識她的方式',
+  腔: '辨識角色的方式',
   界: '不肯退的線',
 };

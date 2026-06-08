@@ -31,7 +31,7 @@ export function InterventionComposerGate({
     if (!account) {
         return (
             <section className="rounded-3xl bg-surface/40 border border-dashed border-hairline/60 p-6 sm:p-8 text-sm text-mute backdrop-blur-sm text-center">
-                請先連接錢包，確認你是 <span className="font-mono">{truncateAddress(characterNftOwner)}</span> 後才能寄夢入她心。
+                請先連接錢包，確認你是 <span className="font-mono">{truncateAddress(characterNftOwner)}</span> 後才能寄夢入心。
             </section>
         );
     }
@@ -39,7 +39,7 @@ export function InterventionComposerGate({
     if (account.address !== characterNftOwner) {
         return (
             <section className="rounded-3xl bg-surface/40 border border-dashed border-hairline/60 p-6 sm:p-8 text-sm text-mute backdrop-blur-sm text-center">
-                只有持有 <span className="font-mono">{truncateAddress(characterNftOwner)}</span> 能寄夢入她心。
+                只有持有 <span className="font-mono">{truncateAddress(characterNftOwner)}</span> 能寄夢入心。
                 <br />
                 <span className="text-2xs">（你連的是 {truncateAddress(account.address)}）</span>
             </section>
