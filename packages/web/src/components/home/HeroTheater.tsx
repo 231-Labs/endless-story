@@ -283,15 +283,10 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                     }`}
                   >
                     <div className={`relative w-full ${aspectClass('16/9')} overflow-hidden bg-elevated/50 dark:bg-canvas/50`}>
-                      {/* Optional dimmed poster — stays calm over the busy painting; solid card when absent */}
-                      {clip.thumbnailUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={clip.thumbnailUrl}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-cover opacity-75 saturate-[0.9] transition-transform duration-500 group-hover:scale-110"
-                        />
-                      ) : null}
+                      {/* Preview: clip poster if any, else the video's first frame
+                          (#t=0.1, metadata-only). Both degrade to the solid card via
+                          onError — a broken/unreachable URL never shows a broken icon. */}
+                      <ClipPoster clip={clip} />
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent to-ink/5 dark:to-black/20" />
                       {/* Circular play button — the universal「this is a video」affordance */}
                       <div className="absolute inset-0 flex items-center justify-center">
@@ -325,6 +320,44 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
       </div>
     </section>
   );
+}
+
+/**
+ * Card preview image. Uses the clip's poster if it has one, otherwise paints the
+ * video's first frame (#t=0.1, metadata-only — no autoplay, no extra processing).
+ * Either source failing (unreachable / non-range host) calls onError → we drop to
+ * the solid card instead of showing a broken-image icon.
+ */
+function ClipPoster({ clip }: { clip: SceneClip }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const [vidFailed, setVidFailed] = useState(false);
+  // Calm at rest (slight blur + fade + desaturate); sharpens on hover so the
+  // focused card pops — keeps the strip rich without making the screen busy.
+  // scale-105 at rest hides the blur's edge fuzz inside the rounded frame.
+  const cls =
+    'absolute inset-0 h-full w-full object-cover scale-105 opacity-60 saturate-[0.9] blur-[1px] transition-all duration-500 group-hover:scale-110 group-hover:opacity-100 group-hover:saturate-100 group-hover:blur-0';
+
+  if (clip.thumbnailUrl && !imgFailed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={clip.thumbnailUrl} alt="" onError={() => setImgFailed(true)} className={cls} />
+    );
+  }
+  if (clip.videoUrl && !vidFailed) {
+    return (
+      <video
+        src={`${clip.videoUrl}#t=0.1`}
+        preload="metadata"
+        muted
+        playsInline
+        aria-hidden
+        tabIndex={-1}
+        onError={() => setVidFailed(true)}
+        className={`pointer-events-none ${cls}`}
+      />
+    );
+  }
+  return null;
 }
 
 function PlayIcon({ size = 36 }: { size?: number }) {

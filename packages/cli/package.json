@@ -11,18 +11,21 @@
     "reset": "tsx --env-file-if-exists=../web/.env.local scripts/reset.ts",
     "test-e2e": "tsx --env-file-if-exists=../web/.env.local scripts/test-recruit-e2e.ts",
     "seed-cast": "tsx --env-file-if-exists=../web/.env.local scripts/seed-cast.ts",
+    "clip-thumbs": "tsx --env-file-if-exists=../web/.env.local scripts/clip-thumbs.ts",
     "world-loop": "tsx --env-file-if-exists=../web/.env.local scripts/world-loop.ts",
     "start": "pnpm run world-loop",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@endless-story/llm": "workspace:*",
+    "@endless-story/memwal": "workspace:*",
     "@endless-story/sdk": "workspace:*",
     "@endless-story/shared": "workspace:*",
     "@mysten/sui": "^2.16.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "ffmpeg-static": "^5.2.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0"
   }
