@@ -34,7 +34,7 @@ export interface InductionTie {
     otherId: string;
     otherName: string;
     tone: RelationshipToneValue;
-    /** true = 故事前就認識（prior）；false = 初見（first_impression）。 */
+    /** true = knew each other before the story (prior); false = first meeting (first_impression). */
     priorPast: boolean;
     /** First-person memory from the NEW character's POV. */
     selfMemory: string;
@@ -105,7 +105,7 @@ export async function runOnce(input: RunInductionInput): Promise<RunInductionRes
                 }),
             },
         ],
-        // selfMemories + 雙向 ties 一次輸出,放寬上限避免截斷。
+        // selfMemories + symmetric ties in one shot; raise the cap to avoid truncation.
         maxTokens: 6400,
         temperature: 0.95,
     });
@@ -113,7 +113,7 @@ export async function runOnce(input: RunInductionInput): Promise<RunInductionRes
     return parseInduction(response.text, count, roster);
 }
 
-/** 自身記憶條數隨年齡(8–14);與 genesis 同曲線。 */
+/** Self-memory count scales with age (8–14); same curve as genesis. */
 function deriveCount(ageYears: number): number {
     if (!Number.isFinite(ageYears) || ageYears <= 0) return 10;
     return Math.min(14, Math.max(8, Math.round(ageYears / 3.5)));

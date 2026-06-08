@@ -69,16 +69,17 @@ export interface TroupeSnapshot {
         worldTimeLabel?: string;
     };
     members: SagaRosterEntry[];
-    /** 成員之間目前的公開關係 tone(去重、無向)。讓 induction 把新人鑲進現有關係網。 */
+    /** Current public tie tones between members (deduped, undirected). Lets induction fit a newcomer into the existing web. */
     ties: TroupeTie[];
 }
 
 /**
- * 戲班公開現況快照 — 給 mint induction 用。
+ * Public snapshot of the troupe's current state — for mint induction.
  *
- * **只公開**:saga 氣質 + 現有成員(公開描述/行當/性別/年齡/當前場景)+ 成員間既有
- * 關係 tone。**絕不含任何人的私密記憶**(那是 owner-only / SEAL);induction 據此把新人
- * 的記憶與關係鑲進現有戲班,而非憑空。
+ * Public only: saga flavour + existing members (public description/role/gender/
+ * age/current scene) + existing tie tones between members. Never contains
+ * anyone's private memories (those are owner-only / SEAL); induction uses this to
+ * fit a newcomer's memories and ties into the existing troupe, not from thin air.
  */
 export async function buildTroupeSnapshot(
     sagaId: string,
@@ -102,7 +103,7 @@ export async function buildTroupeSnapshot(
     };
 }
 
-/** 收集成員之間既有的公開關係 tone(去重、無向)。best-effort:任一讀取失敗就略過。 */
+/** Collect existing public tie tones between members (deduped, undirected). Best-effort: skip any read that fails. */
 async function collectMemberTies(members: SagaRosterEntry[]): Promise<TroupeTie[]> {
     const memberIds = new Set(members.map((m) => m.id));
     const perMember = await Promise.all(

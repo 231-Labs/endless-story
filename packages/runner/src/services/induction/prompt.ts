@@ -1,15 +1,20 @@
 /**
  * Induction — prompt builder (merges genesis-memory + relationship-assess).
  *
- * 一次把新角色「種進戲班」:同時產出 TA 的自身記憶(selfMemories)與 TA 對既有成員的
- * 關係(ties:tone + 雙向記憶 + prior/first_impression)。比舊的兩段(genesis 自身 +
- * assess 關係)更一致 —— 同一顆腦袋看著整個戲班現況,一次安排記憶與關係。
+ * Inducts a new character into the troupe in one shot: emits both their own self
+ * memories (selfMemories) and their relationships to existing members (ties: tone
+ * + symmetric dual memories + prior/first_impression). More coherent than the old
+ * two passes (genesis self + assess relationships) — one mind, looking at the
+ * whole troupe at once, arranging memories and ties together.
  *
- * mode 決定「關係前提」的預設:
- *   · founding —— 創世班底,彼此本就同立此世,預設已相識(故舊);描述明示則寫深。
- *   · newcomer —— 後加的新人,預設陌生、只寫初見;唯有新人描述明確點名舊識才寫 prior。
+ * `mode` sets the default relationship premise:
+ *   · founding — creation-time cast that founded this world together; assume they
+ *     already know each other (prior); write deeper when the description says so.
+ *   · newcomer — a later arrival; assume strangers, write first_impression only;
+ *     only write prior when the newcomer's own description names a prior tie.
  *
- * 只吃公開資料(描述/行當/場景/既有 tone)+ 該角色自己的私密 secret(只長自身記憶)。
+ * Public data only (description/role/scene/existing tone) + the character's own
+ * private secret (which feeds self memories only).
  */
 
 import { roleHint } from '@endless-story/shared';
@@ -31,7 +36,7 @@ const TONE_ZH: Record<RelationshipToneValue, string> = {
     neutral: '平淡',
 };
 
-/** 既有成員之間的關係 tone(用姓名表示,給 LLM 當「現有關係網」參考)。 */
+/** Tone of an existing tie between two members (by name); gives the LLM the current relationship web as context. */
 export interface ExistingTieHint {
     aName: string;
     bName: string;
@@ -45,19 +50,19 @@ export interface InductionPromptInput {
     ageYears: number;
     sagaName: string;
     physicalFacts: string;
-    /** 公開描述(最高人設依據)。 */
+    /** Public description (the primary basis for the persona). */
     description: string;
-    /** 私密 secret —— 只長自身記憶,絕不外洩、不寫進關係。空字串表示沒有。 */
+    /** Private secret — feeds self memories only; never leaked, never written into ties. Empty string = none. */
     privateBackstory?: string;
     recruitmentRoleIntent?: string;
     mode: InductionMode;
-    /** 自身記憶條數。 */
+    /** Number of self memories. */
     count: number;
-    /** 同 saga 既有成員(已排除自己)。 */
+    /** Existing same-saga members (self already excluded). */
     roster: GenesisRosterEntry[];
-    /** 成員之間既有的公開關係(讓新人鑲進現有關係網)。 */
+    /** Existing public ties between members (so the newcomer fits the current web). */
     existingTies?: ExistingTieHint[];
-    /** saga 氣質 / 節律 / 前提(公開)。 */
+    /** Saga flavour / rhythm / premise (public). */
     sagaPremise?: string;
     sagaNature?: string;
     sagaRhythm?: string;
