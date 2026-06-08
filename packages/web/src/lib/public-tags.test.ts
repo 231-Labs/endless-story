@@ -10,6 +10,7 @@ import {
 const candidate = {
     name: '沈照夜',
     description: '百貨公司模特轉入梨園，穿洋裝也能提槍翻身，台下不太服人。',
+    secret: '',
     physicalFacts: { gender: '女', age: 22, body: '勻稱' },
     attributes: [],
 };

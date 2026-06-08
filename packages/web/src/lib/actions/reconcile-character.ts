@@ -106,6 +106,9 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
     const candidate = {
         name,
         description: json.profile?.description ?? '',
+        // Reconcile rebuilds from on-chain (public) data only; the private
+        // secret was never persisted, so it cannot be recovered here.
+        secret: '',
         physicalFacts: {
             gender: String(pf.gender ?? '中性'),
             age: Number(pf.age_years ?? 0),

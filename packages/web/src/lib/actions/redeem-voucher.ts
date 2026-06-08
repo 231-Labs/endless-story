@@ -293,9 +293,11 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
                 console.log(`[redeem-voucher] views for ${charId}: appended=${viewsRes?.appended ?? 0}`);
             }
 
-            // 4) genesis memories (MemWal — no admin gas, so it can't contend; run last)
+            // 4) genesis memories (MemWal — no admin gas, so it can't contend; run last).
+            //    Pass the candidate's private `secret` (never on-chain) so the inner
+            //    backstory surfaces as private recalled memories.
             try {
-                const seedRes = await seedGenesisMemoryAction(charId);
+                const seedRes = await seedGenesisMemoryAction(charId, undefined, input.candidate.secret);
                 console.log(
                     `[redeem-voucher] memories for ${charId}: ` +
                         (seedRes.skipped ? `skipped(${seedRes.skipped})` : String(seedRes.seeded ?? 0)),

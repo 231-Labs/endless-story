@@ -41,7 +41,11 @@ export interface SeedGenesisResult {
 
 export async function seedGenesisMemoryAction(
     characterId: string,
-    count = 5,
+    // 不指定 → 交給 runner 依角色年齡推導(8–14;見 genesis-memory deriveGenesisCount)。
+    // mint 流程(redeem-voucher)不帶 count,所以新角色自動拿到隨年齡的記憶數量。
+    count?: number,
+    // 私密內幕(candidate.secret)— 不上鏈、不另存,只在此餵給 genesis,讓它化成私密記憶。
+    secret?: string,
 ): Promise<SeedGenesisResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId) {
@@ -66,6 +70,7 @@ export async function seedGenesisMemoryAction(
             role: role ?? recruitment?.specialty,
             recruitmentRoleIntent: recruitment?.roleIntent,
             count,
+            privateBackstory: secret,
         });
         if (res.skipReason) {
             return { ok: false, seeded: 0, generated: 0, skipped: res.skipReason };

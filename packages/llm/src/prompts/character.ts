@@ -32,7 +32,15 @@ export interface RolledAttribute {
 
 export interface CharacterCandidate {
   name: string;
+  /** Public blurb — shown + written on-chain. Must NOT reveal `secret`. */
   description: string;
+  /**
+   * The character's private inner backstory — what they keep to themselves
+   * (the real reason behind the public facade). NEVER written on-chain or
+   * displayed; carried only to genesis-memory seeding so it surfaces as
+   * private recalled memories. '' when the player wrote no hidden layer.
+   */
+  secret: string;
   physicalFacts: {
     /** Free text: '男' / '女' / '中性' / ... */
     gender: string;
@@ -126,8 +134,12 @@ ${rolledLine}
 
 請設計：
 1. name：2-4 字中文名，不與現有名單重複
-2. description：100-160 字人物敘述（出身 / 性格 / 行事風格 / 顯眼外貌 / 一條可被人捕捉的執念或缺陷）—— **必須讓讀者從敘述裡讀得出該候選的數值高低，但不能報出分數、屬性名或括號評分**
-3. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——體型應與「筋骨」軸對位（若有此 key）${opts.requiredGender ? `；**gender 必須為「${opts.requiredGender}」(徵召硬性要求,不可改)**` : ''}
+2. description（**公開**）：100-160 字人物敘述（出身 / 性格 / 行事風格 / 顯眼外貌 / 一條可被人捕捉的執念或缺陷）—— **必須讓讀者從敘述裡讀得出該候選的數值高低，但不能報出分數、屬性名或括號評分**。這段會公開顯示並上鏈，**絕不可洩漏 secret 的內容**，只寫對外說得出口的版本。
+3. secret（**不公開**）：這名角色「放在心裡、對外絕不明說」的那一層 —— 公開門面背後的真正緣由（隱痛、心結、未癒的情、不可告人的因果）。
+   · 若玩家描述裡寫了「沒人知道 / 其實 / 心底 / 不曾對人說」之類的隱情，**務必收進 secret，並從 description 抹去**；description 只留公開版本。
+   · 玩家若沒寫隱情，你可依人設**合理補一段**不外顯的心事（不得與 description 矛盾）。
+   · 80-200 字，要具體（有對象、有事件、有那一刻），它日後會化成此角色的私密記憶。沒有可寫就給空字串 ""。
+4. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——體型應與「筋骨」軸對位（若有此 key）${opts.requiredGender ? `；**gender 必須為「${opts.requiredGender}」(徵召硬性要求,不可改)**` : ''}
 
 **不要在 JSON 裡寫 attributes、innateTraits 或任何分數文字**：數值已鎖死，server 會直接 attach。
 
@@ -137,7 +149,7 @@ ${rolledLine}
 - 繁體中文
 
 只輸出 JSON 物件，不要任何前綴或解釋：
-{"name": "...", "description": "...", "physicalFacts": {"gender":"...","age":..,"body":"..."}}`;
+{"name": "...", "description": "...", "secret": "...", "physicalFacts": {"gender":"...","age":..,"body":"..."}}`;
 
   return {
     messages: [{ role: 'user', content: userText }],
@@ -229,6 +241,12 @@ export function parseCharacterCandidate(
       : '';
   if (!name || !description) return null;
 
+  // Private inner backstory — kept off-chain, only fed to genesis-memory.
+  const secret =
+    typeof obj.secret === 'string'
+      ? stripAttributeScoreLeaks(obj.secret, rolledValues).trim()
+      : '';
+
   const pf = (obj.physicalFacts ?? obj.physical_facts) as Record<string, unknown> | undefined;
   const rawGender = typeof pf?.gender === 'string' ? pf.gender.trim() : '中性';
   const gender = VALID_GENDERS.has(rawGender) ? rawGender : '中性';
@@ -248,6 +266,7 @@ export function parseCharacterCandidate(
   return {
     name,
     description,
+    secret,
     physicalFacts: { gender, age, body },
     attributes: rolledValues,
   };

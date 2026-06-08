@@ -1082,6 +1082,9 @@ function RevealStage({
     return null;
   }, [portraitBase64, portraitUrl]);
 
+  // 公開描述 / 心底秘密 切換(同一塊文字區,不撐高戲票)。
+  const [showSecret, setShowSecret] = useState(false);
+
   const isEnrolling = stage === 'done' && !characterId;
   const isEnrolled = stage === 'done' && !!characterId;
 
@@ -1115,10 +1118,28 @@ function RevealStage({
             ))}
           </div>
           
-          <div className="mt-6 h-px w-16 bg-cinnabar/30" />
-          
-          <p className="mt-6 max-w-prose text-[15px] leading-loose text-ink/80 sm:text-base line-clamp-6 text-justify">
-            {candidate.description}
+          {/* 分隔線 + 心底秘密切換(有秘密才出現)。切換不撐高戲票:同一塊文字區在
+              公開描述／心底秘密之間切。秘密不上鏈、不公開,僅化成角色私密記憶。 */}
+          <div className="mt-6 flex items-center gap-3">
+            <div className="h-px w-16 bg-cinnabar/30" />
+            {candidate.secret ? (
+              <button
+                type="button"
+                onClick={() => setShowSecret((v) => !v)}
+                aria-pressed={showSecret}
+                className="ml-auto text-2xs tracking-[0.25em] text-mute/70 transition-colors hover:text-cinnabar/90"
+              >
+                {showSecret ? '看公開簡述' : '心底秘密'}
+              </button>
+            ) : null}
+          </div>
+
+          <p
+            className={`mt-6 max-w-prose text-[15px] leading-loose sm:text-base line-clamp-6 text-justify transition-colors ${
+              showSecret ? 'italic text-ink/70' : 'text-ink/80'
+            }`}
+          >
+            {showSecret ? candidate.secret : candidate.description}
           </p>
 
           {isEnrolled && characterId && (

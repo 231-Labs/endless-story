@@ -40,6 +40,11 @@ export interface RunGenesisMemoryInput {
     role?: string;
     /** Recruitment role intent that minted this character, if available. */
     recruitmentRoleIntent?: string;
+    /**
+     * Private inner backstory the character hides (candidate.secret). NEVER on-chain;
+     * feeds genesis so the hidden layer surfaces as wrenching private memories.
+     */
+    privateBackstory?: string;
     /** Public same-saga roster for first impressions. */
     roster?: GenesisRosterEntry[];
     /** How many self memories to generate. Default 5. */
@@ -71,6 +76,9 @@ export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisM
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
 
+    // 數量隨年齡:活得越久、記憶層次越多(8–14)。呼叫端可用 input.count 覆寫。
+    const count = input.count ?? deriveGenesisCount(snap.ageYears);
+
     const response = await llm.chat({
         model: modelId,
         system: buildSystemPrompt(),
@@ -86,17 +94,28 @@ export async function runOnce(input: RunGenesisMemoryInput): Promise<RunGenesisM
                     physicalFacts: snap.physicalFacts,
                     description: snap.description,
                     recruitmentRoleIntent: input.recruitmentRoleIntent,
+                    privateBackstory: input.privateBackstory,
                     roster: input.roster,
-                    count: input.count,
+                    count,
                 }),
             },
         ],
-        maxTokens: 3200,
+        // 記憶條數變多(且每條要有畫面),放寬 token 上限避免被截斷。
+        maxTokens: 5200,
         temperature: 0.95,
     });
 
-    const parsed = parseGenesisResponse(response.text, input.count ?? 5);
+    const parsed = parseGenesisResponse(response.text, count);
     return { ...parsed, memories: parsed.selfMemories };
+}
+
+/**
+ * 依年齡推導 genesis 記憶條數:年長者活得久、記憶層次該更多。
+ * 夾在 8–14 之間(舊預設 5 太少、角色沒厚度)。
+ */
+function deriveGenesisCount(ageYears: number): number {
+    if (!Number.isFinite(ageYears) || ageYears <= 0) return 10;
+    return Math.min(14, Math.max(8, Math.round(ageYears / 3.5)));
 }
 
 interface Snapshot {

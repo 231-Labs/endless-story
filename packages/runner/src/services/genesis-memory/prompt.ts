@@ -33,6 +33,11 @@ export interface GenesisMemoryInput {
     description: string;
     /** Recruitment role intent that minted this character, if available. */
     recruitmentRoleIntent?: string;
+    /**
+     * 心底秘密 — 角色對外絕不明說、只放在心裡的那層內幕（由 candidate.secret 而來）。
+     * 不會出現在公開描述/鏈上;此處用來讓記憶帶出隱痛的根源。空字串表示沒有。
+     */
+    privateBackstory?: string;
     /** Public same-saga roster. Used only for first impressions, never secret backstory. */
     roster?: GenesisRosterEntry[];
     /** How many self memories to generate. Default 5. */
@@ -43,6 +48,7 @@ export function buildSystemPrompt(): string {
     return [
         '你是一位寫人物前傳的小說家。要為一個角色寫下 TA「此生至今」的若干段第一人稱記憶 —— 這是 TA 的長期記憶基底，',
         'TA 日後的一切言行、章回都從這裡長出來。所以這些記憶必須**像一個真實的人活過的痕跡**，而非戲班宣傳冊。',
+        '寧可多寫幾條、把人寫厚，也不要單薄敷衍。',
         '',
         '**第一鐵則：時間縱深。** 記憶必須橫跨 TA 的一生，依年齡分配，不可全擠在「入行受訓」這一段。大致：',
         '  · **童年（記事～約十歲）**：家世、父母、故鄉、第一次的恐懼或歡喜、一件影響一生的小事。至少 1–2 條。',
@@ -57,7 +63,14 @@ export function buildSystemPrompt(): string {
         '**第三鐵則：扣緊設定，並合理補完。** 玩家的描述是最高依據；其中沒寫到的人生空白（尤其童年），',
         '  你要依 TA 的性別、行當、外形、年齡、時代**合情合理地虛構補完**，但不得與描述矛盾。',
         '',
+        '**第四鐵則：心底秘密是記憶的根。** 若提供「心底秘密」，那是 TA 公開門面背後的真正緣由（隱痛／心結／未癒的情）。',
+        '  要讓**數條記憶從它長出來** —— 例如那段關係的初見、轉折、無法挽回的一刻、以及它如何改變了 TA 的此後。',
+        '  但記憶是「當事人私下的回想」，寫得隱微、痛、真，是 TA 從不對人說的東西；**絕非對外宣告或自我解釋**。',
+        '  秘密本身不必整段複述，而是化進具體場景；公開描述沒提的，這裡正好補成 TA 心裡最重的幾塊。',
+        '',
         '**質感要求**：',
+        '  · **真有其事**：每條都要釘住可考的錨點 —— 一個地名、一個年份或節氣、一件具體物事、一個數字、一個人名 ——',
+        '    讓它讀起來像「真的發生過、被記下來」的事，而非籠統感想。寧具體而小，不空泛而大。',
         '  · 第一人稱。每條是一個**有畫面、有感官、有情緒**的具體場景或習慣，不是抽象評語。',
         '  · **點名**：凡記憶裡出現別人，首次提及就要給名字或明確稱謂（如「母親」「啟蒙師父周先生」',
         '    「初戀阿沅」），不要通篇只用「他/她」—— 每條記憶會被單獨讀取，認不出對象就失去意義。',
@@ -76,7 +89,7 @@ export function buildSystemPrompt(): string {
 }
 
 export function buildUserPrompt(input: GenesisMemoryInput): string {
-    const count = input.count ?? 5;
+    const count = input.count ?? 10;
     // life-stage budget hint so the model spreads memories across a lifetime, weighted by age
     const age = input.ageYears;
     const childhood = age <= 16 ? Math.max(2, Math.ceil(count * 0.4)) : Math.max(1, Math.round(count * 0.3));
@@ -115,6 +128,9 @@ export function buildUserPrompt(input: GenesisMemoryInput): string {
         input.recruitmentRoleIntent
             ? `\n## 招募意圖（公開職缺語境；可影響此人看待同班人物）\n${input.recruitmentRoleIntent}`
             : '',
+        input.privateBackstory && input.privateBackstory.trim()
+            ? `\n## 心底秘密（只 ${input.name} 自己知道，對外絕不明說 —— 但它是 TA 此生最重的根）\n${input.privateBackstory.trim()}`
+            : '',
         rosterBlock,
         '',
         `## 本次要求`,
@@ -122,6 +138,11 @@ export function buildUserPrompt(input: GenesisMemoryInput): string {
         `  · 童年約 ${childhood} 條（家世／故鄉／父母／幼時一件難忘的事）`,
         `  · 少年入行約 ${youth} 條（如何走上這行／啟蒙者／初次登台或挫敗／暗中立的志）`,
         `  · 近年約 ${recent} 條（當下的牽掛／慾望／關係／秘密／未癒的傷）`,
+        `**年齡時間線**：所有記憶都要吻合 TA 現在 ${age} 歲 —— 最近一條就落在接近當下的年紀，`,
+        `  不可出現會讓 TA 顯得更老或更年輕的事；童年記憶以「如今 ${age} 歲回望」的口吻記起。`,
+        input.privateBackstory && input.privateBackstory.trim()
+            ? `**心底秘密**：務必讓其中 2–3 條記憶從上面的「心底秘密」長出來（初見／轉折／無法挽回的一刻／它如何改變了 TA），寫得隱微而痛，是 TA 從不對人說的；不要整段複述秘密，化進具體場景。`
+            : '',
         input.roster && input.roster.length > 0
             ? `另請從名冊中挑最多 4 位與「${input.name}」行當、同場或招募意圖最有關的人，寫 relationshipMemories。每條都必須是第一眼/當下觀察，不得暗示舊識。`
             : 'relationshipMemories 請輸出空陣列。',
