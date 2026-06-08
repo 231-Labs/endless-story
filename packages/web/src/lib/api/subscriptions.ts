@@ -10,16 +10,16 @@ import { httpDelete, httpGet, httpPost } from './http';
 /**
  * Subscriptions API
  *
- * 後端對應 endpoints：
+ * Backend endpoints:
  *   GET    /subscriptions?wallet={addr}             → Subscription[]
  *   GET    /subscriptions?characterId={id}          → Subscription[]
  *   POST   /subscriptions                           → Subscription   body: { wallet, characterId, channel }
  *   DELETE /subscriptions?wallet={addr}&characterId={id}
  *
- * 後端應該：
- *   - subscribe 重複請求 idempotent — 已存在直接回現有 record
- *   - unsubscribe 只移 isOwner=false 的條目（owner 訂閱自動且不可退）
- *   - 鏈上付費：subscribe 應對應到 subscribe_pay 交易 — backend 監聽事件後寫 DB
+ * Backend should:
+ *   - subscribe is idempotent — if it already exists, return the existing record
+ *   - unsubscribe only removes isOwner=false entries (owner subscription is automatic, non-cancellable)
+ *   - on-chain payment: subscribe maps to a subscribe_pay tx — backend writes DB on event
  */
 
 export async function listMySubscriptions(wallet: string): Promise<Subscription[]> {

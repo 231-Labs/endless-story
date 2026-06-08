@@ -3,7 +3,7 @@
  *
  * web / runner / cli must import from here (or `./client`, `./tx`, `./read`).
  * Never `new SuiClient()` outside this package — see AGENTS.md
- * 「鏈上架構」原則 2.
+ * on-chain-architecture principle 2.
  *
  * Subpath exports:
  *   - `@endless-story/sdk/client` — SuiClient factory (browser-safe)

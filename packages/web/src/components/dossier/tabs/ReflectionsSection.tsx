@@ -8,7 +8,7 @@ import { formatDate, truncateAddress } from '@/lib/format';
 import type { ReflectionEntry } from '@/lib/chain/reflection-read';
 
 /**
- * Owner-gated "她的內心獨白" section.
+ * Owner-gated inner-monologue section.
  *
  * Same reason as InterventionComposerGate this is client-side: the
  * dossier page's server-side `viewerWallet` falls back to a demo wallet

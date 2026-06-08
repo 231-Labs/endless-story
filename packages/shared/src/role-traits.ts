@@ -1,19 +1,15 @@
-/**
- * Role (行當) voice traits — used to differentiate generated prose by the
- * character's recruitment specialty so a 武小生 doesn't sound like a
- * 小報記者. Consumed by runner prompts (POV / reflection / genesis).
- *
- * `role` is a free-form off-chain string (recruitment.specialty), so we
- * match a handful of known 行當 and fall back to a generic instruction.
- * The hint is injected into prompts as guidance, not a hard template —
- * the LLM already knows what these archetypes sound like; we just point
- * it hard at the role so it stops drifting to a generic stage voice.
- */
+// Role voice traits — differentiate generated prose by the character's
+// recruitment specialty so roles don't all sound alike. Consumed by runner prompts
+// (POV / reflection / genesis). `role` is a free-form off-chain string
+// (recruitment.specialty); we match a handful of known roles and otherwise fall back
+// to a generic instruction. The hint is prompt guidance, not a hard template — it just
+// points the LLM hard at the role so it stops drifting to a generic stage voice.
+// (Hint strings stay in-world Chinese; they are LLM-facing content, not comments.)
 
 interface RoleTrait {
-    /** Substrings that map to this trait (matched against the role string). */
+    // Substrings that map to this trait (matched against the role string).
     match: string[];
-    /** One-line voice/concern guidance, in-world (民初戲園). */
+    // One-line in-world voice/concern guidance.
     hint: string;
 }
 
@@ -79,12 +75,9 @@ export function roleHint(role: string | undefined): string {
     return `你的行當是「${r}」。讓這個行當徹底決定你的聲口、用詞、關注的事與慣用意象，每一句都要像「${r}」的人，而不是泛泛的戲子。`;
 }
 
-/**
- * Best-effort extraction from public chain prose. This is only a fallback
- * after explicit `role:*` tags / recruitment specialty; it rescues older demo
- * characters whose profile description already says "花旦" or "小生" but were
- * minted before tags were applied.
- */
+// Best-effort role extraction from public chain prose. Only a fallback after explicit
+// `role:*` tags / recruitment specialty; rescues older demo characters whose profile
+// description already names a role but that were minted before tags were applied.
 export function inferRoleFromText(text: string | undefined): string | undefined {
     const source = (text ?? '').trim();
     if (!source) return undefined;

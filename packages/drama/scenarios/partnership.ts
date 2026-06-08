@@ -1,5 +1,5 @@
 // Step 1 scenarios: 2 performers contend for ONE capacity-1 resource — the partnership
-// with 孟雲屏 (孟雲屏 is the SLOT, not an agent). Whoever holds it is 孟's stage partner;
+// with Meng (Meng is the SLOT, not an agent). Whoever holds it is Meng's stage partner;
 // the other's `partner` desire necessarily reads target 0. Forced zero-sum (spec §4).
 //
 // We model three shapes to avoid single-scene overfit (brief Step 1: "run > 1 scenario"):
@@ -90,7 +90,6 @@ const basePlanner: PlannerConfig = {
   scheduleResourceId: scheduleId,
 };
 
-// ---- A. contested rivalry --------------------------------------------------------------
 // budget cap == action cost, refill 1/tick → a performer can re-seize only every ~budgetCap
 // ticks. That sets the flip PERIOD: each reign lasts long enough for the holder to savour
 // the slot (satisfaction climbs) while the loser stews to a tension spike before reclaiming
@@ -121,7 +120,7 @@ export const uneven: Scenario = {
     ],
   }),
   tuning: TUNING,
-  // low cost so 柳生春 easily takes the free slot once; high seize margin so the weak rival
+  // low cost so Liu easily takes the free slot once; high seize margin so the weak rival
   // (max tension ≈ 0.34) can never clear holder+margin → it never flips back.
   planner: { ...basePlanner, actionCost: 3n, seizeMargin: pct(0.5) },
   horizon: 80,

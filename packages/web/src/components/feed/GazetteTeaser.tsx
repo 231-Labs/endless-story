@@ -9,7 +9,7 @@ import { fetchTensionHeadline } from '@/lib/chain/drama';
  *
  * Server-rendered: we fetch the first paragraph of the gazette markdown
  * directly from Walrus (free public plot content) PLUS a live, LLM-free
- * 「此刻張力」headline (the top contested resources right now) — so a
+ * "current tension" headline (the top contested resources right now) — so a
  * not-yet-onboarded reader can see at a glance where the heat is and read
  * some story for free, the top of the subscribe funnel.
  */
@@ -72,7 +72,7 @@ async function fetchExcerpt(blobId: string): Promise<string> {
  */
 function stripMarkdown(md: string): string {
     return md
-        // Remove any heading lines entirely (we don't want "公報" header in teaser)
+        // Remove any heading lines entirely (we don't want the gazette header in the teaser)
         .replace(/^#+\s.*$/gm, '')
         // Remove list markers
         .replace(/^[\s]*[-*·]\s+/gm, '')

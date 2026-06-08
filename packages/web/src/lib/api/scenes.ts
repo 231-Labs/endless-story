@@ -13,7 +13,7 @@ import { httpGet } from './http';
 import { fetchOnChainScene, fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 
 /**
- * Scenes API（場所 + 派生視覺片段）
+ * Scenes API (locations + derived video clips)
  *
  * Chain-first for `listScenes(sagaId)` when packageId set: resolves
  * the slug-or-id, reads `Saga.anchor_scene_ids`, batch-fetches each
@@ -29,7 +29,7 @@ function isDeployed(): boolean {
   return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
 }
 
-// ── Scene 派生視覺片段（video clip）──
+// ── Scene derived video clips ──
 
 export async function listTodayClips(currentDay: number, count = 4): Promise<SceneClip[]> {
   const override = await loadDemoClipOverride();
@@ -131,7 +131,7 @@ function clipAspect(value: unknown): SceneClip['aspect'] {
     : '16/9';
 }
 
-// ── Scene 實體場所 ──
+// ── Scene physical locations ──
 
 export async function listScenes(sagaId: string): Promise<Scene[]> {
   if (isDeployed()) {

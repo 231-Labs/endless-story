@@ -1,12 +1,12 @@
 // Regression: attribute SCORES must never leak into the public NFT description.
 //
-// At mint, the candidate-generation LLM is GIVEN the rolled axis scores (外貌 /
-// 筋骨 / 機敏 / 心性) only to judge the character's strength — it must convey them
-// through prose, never print the numbers. `parseCharacterCandidate` enforces this
-// with `stripAttributeScoreLeaks` (added in b9b76e7). A real legacy character,
-// 柳生春, was minted BEFORE that guard and had the four numbers baked into the
-// prose as （外貌88）（筋骨39）（機敏99）（心性34）. These tests pin the stripper so
-// the leak can never come back — and so the cleanup never mangles clean prose.
+// At mint, the candidate-generation LLM is GIVEN the four rolled axis scores
+// (appearance / physique / acuity / disposition) only to judge the character's
+// strength — it must convey them through prose, never print the numbers.
+// `parseCharacterCandidate` enforces this with `stripAttributeScoreLeaks` (added in
+// b9b76e7). A real legacy character was minted BEFORE that guard and had the four
+// numbers baked into the prose as parenthetical "(<axis><score>)" tags. These tests
+// pin the stripper so the leak can never come back — and never mangles clean prose.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

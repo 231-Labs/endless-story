@@ -1,12 +1,12 @@
 import type { SoulSong } from '@endless-story/shared';
 
 /**
- * 心曲 pool — 每位角色的內心深處獨白。比 daily POV 深兩倍。
- * 第一首通常 initiallyRevealed: true，讓進到 dossier 第一眼就有東西讀。
- * 其餘是「召心曲」按鈕呼叫後客戶端解鎖。
+ * Soul-song pool — each character's deepest inner monologue. Roughly twice as deep as a daily POV.
+ * The first song is usually initiallyRevealed: true so the dossier has something to read at first glance.
+ * The rest are unlocked client-side after the "summon soul song" button is pressed.
  */
 export const soulSongs: SoulSong[] = [
-  // ───── 葉庭芳 char_ye_tingfang ─────
+  // ───── Ye char_ye_tingfang ─────
   {
     id: 'song_ye_001',
     characterId: 'char_ye_tingfang',
@@ -44,7 +44,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 沈懷音 char_shen_huaiyin ─────
+  // ───── Shen char_shen_huaiyin ─────
   {
     id: 'song_shen_001',
     characterId: 'char_shen_huaiyin',
@@ -70,7 +70,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 程蘅玉 char_cheng_hengyu ─────
+  // ───── Cheng char_cheng_hengyu ─────
   {
     id: 'song_cheng_001',
     characterId: 'char_cheng_hengyu',
@@ -96,7 +96,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 梁照水 char_liang_zhaoshui ─────
+  // ───── Liang char_liang_zhaoshui ─────
   {
     id: 'song_liang_001',
     characterId: 'char_liang_zhaoshui',
@@ -121,7 +121,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 蘇小宛 char_su_xiaowan ─────
+  // ───── Su char_su_xiaowan ─────
   {
     id: 'song_su_001',
     characterId: 'char_su_xiaowan',
@@ -146,7 +146,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 杜聽瀾 char_du_tinglan ─────
+  // ───── Du char_du_tinglan ─────
   {
     id: 'song_du_001',
     characterId: 'char_du_tinglan',
@@ -160,7 +160,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 唐桂蘭 char_tang_guilan ─────
+  // ───── Tang char_tang_guilan ─────
   {
     id: 'song_tang_001',
     characterId: 'char_tang_guilan',
@@ -174,7 +174,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 孟雲屏 char_meng_yunping ─────
+  // ───── Meng char_meng_yunping ─────
   {
     id: 'song_meng_001',
     characterId: 'char_meng_yunping',
@@ -188,7 +188,7 @@ export const soulSongs: SoulSong[] = [
     ],
   },
 
-  // ───── 趙鐵面 char_zhao_tiemian ─────
+  // ───── Zhao char_zhao_tiemian ─────
   {
     id: 'song_zhao_001',
     characterId: 'char_zhao_tiemian',

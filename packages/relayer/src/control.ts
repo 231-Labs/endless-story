@@ -1,4 +1,4 @@
-// Runner control flag. The web admin "Runner 開關" POSTs here; the world-loop runner GETs it
+// Runner control flag. The web admin "Runner toggle" POSTs here; the world-loop runner GETs it
 // each cycle and skips the tick when paused. This is what turns the (currently cosmetic) admin
 // toggle into a real remote pause/resume for the VPS autonomous engine. Persisted so it
 // survives relayer restarts.

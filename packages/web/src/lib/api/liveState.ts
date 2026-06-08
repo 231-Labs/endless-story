@@ -7,15 +7,15 @@ import { httpGet } from './http';
 import { isMemoryConfigured, recallCurrentPlanText } from '@/lib/chain/memory';
 
 /**
- * Live State API（角色當下狀態）
+ * Live State API (character's current state)
  *
  * Three fields, all now real when the world is running:
  *   - location  ← chain `Character.state.current_scene_id` → Scene name
- *   - intent    ← the character's CURRENT PLAN「眼下打算」(N6, MemWal)
- *   - nextPlan  ← the character's CURRENT PLAN「長期目標」(N6, MemWal)
+ *   - intent    ← the character's CURRENT PLAN immediate-intent (N6, MemWal)
+ *   - nextPlan  ← the character's CURRENT PLAN long-term-goal (N6, MemWal)
  *
  * The plan is written each tick by the PLAN step (runPlanAction) and recalled
- * here, so the dossier header「此刻心境 / 將往何方」reflects what she's actually
+ * here, so the dossier header (current mood / where bound) reflects what she's actually
  * striving for, not a placeholder. Falls back to neutral blanks when MemWal
  * isn't configured or the character has no plan yet.
  *
@@ -25,7 +25,7 @@ import { isMemoryConfigured, recallCurrentPlanText } from '@/lib/chain/memory';
  * hidden from non-owners.
  */
 
-/** Pull「眼下打算」+「長期目標」out of the stored plan text (formatPlanText). */
+/** Pull immediate-intent + long-term-goal out of the stored plan text (formatPlanText). */
 function parsePlanFields(planText: string): {
   longTermGoal?: string;
   dailyPlanHint?: string;
@@ -69,8 +69,8 @@ export async function getLiveState(
     const planText = await recallCurrentPlanText(characterId).catch(() => null);
     if (planText) {
       const f = parsePlanFields(planText);
-      planIntent = f.dailyPlanHint; // 此刻心境 = 眼下打算
-      planNext = f.longTermGoal; //   將往何方 = 長期目標
+      planIntent = f.dailyPlanHint; // current mood = immediate intent
+      planNext = f.longTermGoal; //   where bound = long-term goal
     }
   }
 

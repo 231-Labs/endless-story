@@ -2,7 +2,7 @@ import type { BlobRef, CharacterMembership, CharacterRole, Wallet } from './comm
 
 export type SurvivalLevel = 'critical' | 'low' | 'stable' | 'healthy';
 
-/** 氣血 bucket for the vitality bar / life-cycle state machine. */
+// Vitality bucket for the vitality bar / life-cycle state machine.
 export type VitalityState = 'healthy' | 'strained' | 'failing' | 'dead';
 
 /** Coarse life-cycle stage (character economy). */
@@ -22,11 +22,11 @@ export interface SurvivalStatus {
   memoryCount?: number;
   /** ENDLESS/day memory storage-rent component of dailyCost (C_mem × memoryCount). */
   memoryRent?: number;
-  /** 設定集 image count (gallery assets) — grows with event moments / evolve-portrait. */
+  /** gallery image count — grows with event moments / evolve-portrait. */
   imageCount?: number;
-  /** ENDLESS/day 設定集 image storage-rent component of dailyCost (C_img × imageCount). */
+  /** ENDLESS/day gallery image storage-rent component of dailyCost (C_img × imageCount). */
   imageRent?: number;
-  /** 氣血 0..100. */
+  /** vitality 0..100. */
   vitality?: number;
   vitalityState?: VitalityState;
   lifeStage?: LifeStage;
@@ -70,7 +70,7 @@ export interface Character {
   gender: Gender;
   age: number;
   physicalFacts: string;
-  /** Public on-chain social labels, e.g. `role:小生`, `status:二太太`. */
+  /** Public on-chain social labels, e.g. `role:<role>`, `status:<status>`. */
   publicTags?: CharacterTag[];
   attributes: CharacterAttributes;
   gallery: CharacterDerivativeGallery;

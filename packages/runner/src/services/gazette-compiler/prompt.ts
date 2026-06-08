@@ -4,7 +4,7 @@
  * Compiler philosophy: **80% template-driven, 20% LLM smoothing**.
  *
  * Why: the old failed runner attempt let the LLM write the saga
- * narrative free-form → repetitive, recapping, "不知所云". The fix:
+ * narrative free-form → repetitive, recapping, incoherent. The fix:
  *   - All FACTS come from chain events (typed, structured)
  *   - All POV character names + links come from chain commitments
  *   - LLM ONLY writes:
@@ -75,7 +75,7 @@ export function buildSystemPrompt(soul?: SagaSoul): string {
         '',
         '**輸出**：純 markdown，不要 ```fence``` 包裹。直接從 `# ` 開始。',
     ];
-    // Saga soul colours the tagline / 白話 voice only — the 鐵則 above still
+    // Saga soul colours the tagline / vernacular voice only — the hard rules above still
     // forbid inventing facts, so the gazette stays objective.
     const soulBlock = buildSagaSoulBlock(soul);
     return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');

@@ -1,6 +1,6 @@
 /**
- * 本色 (persona) distillation prompt — turns a character's public profile into the structural
- * "who they are off-stage": 軸 (axes) / 腔 (mannerisms) / 界 (boundaries). Web-action level
+ * Persona distillation prompt — turns a character's public profile into the structural
+ * "who they are off-stage": axes / mannerisms / boundaries. Web-action level
  * prompt (mirrors moderation/character), fed to `TextClient.chat`; `parsePersonaResponse`
  * decodes the JSON output.
  */

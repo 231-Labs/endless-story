@@ -6,7 +6,7 @@
  *      direct OOC commands like "kill X"), or threatens the saga's
  *      integrity (admin-level meta references).
  *   2. Re-write approved content into a coherent dream FRAGMENT in
- *      the saga's voice (民初白話 + 詩意意象 for spring-snow).
+ *      the saga's voice (early-Republic vernacular + poetic imagery for spring-snow).
  *
  * The runner doesn't enforce — it just labels. Callers decide what to
  * do with reject vs approve. For demo we drop rejected dreams (no
@@ -21,7 +21,7 @@ export interface ModerateDreamInput {
      *  optimisation voice. */
     characterName: string;
     sagaName: string;
-    /** Optional era / style hint (e.g. "民初上海戲園"). */
+    /** Optional era / style hint (e.g. "early-Republic Shanghai opera house"). */
     eraHint?: string;
     model?: string;
 }

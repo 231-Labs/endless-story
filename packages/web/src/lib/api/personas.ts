@@ -5,7 +5,7 @@ import { isSuiObjectId } from '@/lib/chain/character-read';
 import { fetchOnChainPersona } from '@/lib/chain/persona-read';
 
 /**
- * Personas API（本色卡 — 半永久人格藍圖）.
+ * Personas API (persona card — semi-permanent personality blueprint).
  *
  * Chain-first: a real on-chain character (Sui object id) reads its persona from the content road
  * (Walrus blob + `commitment::commit`, see `lib/chain/persona-read`). A real character with no

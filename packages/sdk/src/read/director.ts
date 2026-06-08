@@ -2,8 +2,9 @@
  * Director event-log view queries.
  *
  * The director's "memory" is the on-chain event log (NARRATIVE_AGENTS.md
- * §5: 導演記憶 = 客觀/全知 = 鏈上事件日誌). These readers scan those soft
- * events so the web + character agents can perceive what the director did.
+ * §5: director memory = objective/omniscient = on-chain event log). These
+ * readers scan those soft events so the web + character agents can perceive
+ * what the director did.
  */
 import type { SuiClient } from '../client.js';
 

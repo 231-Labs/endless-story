@@ -18,8 +18,8 @@ const ROLE_TINT: Record<string, string> = {
 };
 
 /**
- * 一名「活在景中」的小剪影 — 在 scene 區帶內微擺。
- * hover 揭名 / role。將來可換成 character.gallery.anchor 的微縮頭像。
+ * A small "living in the scene" silhouette that sways within the scene band.
+ * Hover reveals name / role. Could later use a thumbnail from character.gallery.anchor.
  */
 export function WanderingFigure({
   character,

@@ -1,5 +1,5 @@
 /**
- * Gazette Compiler — saga-level daily 公報 aggregator.
+ * Gazette Compiler — saga-level daily gazette aggregator.
  *
  * **Inputs read from chain** (all happen in the runOnce):
  *   - Saga state (name + character_count + treasury)
@@ -84,10 +84,10 @@ export interface CompileGazetteResult {
 }
 
 /**
- * Rewrite the gazette's POV "讀全文" links from the raw Walrus blob
- * (`/api/blob/<blobId>`) to the rendered, access-gated dossier 章回 tab
+ * Rewrite the gazette's POV "read full text" links from the raw Walrus blob
+ * (`/api/blob/<blobId>`) to the rendered, access-gated dossier chapters tab
  * (`/dossier?id=<characterId>&tab=chapters`). Two reasons:
- *   1. the raw blob link bypassed the owner+subscriber gate (公報 is public,
+ *   1. the raw blob link bypassed the owner+subscriber gate (gazette is public,
  *      POV bodies are not) — a privacy leak;
  *   2. it dumped raw markdown instead of our rendered chapter view.
  * Deterministic (not LLM-trusted): we map each chapter's blobId→characterId.
@@ -204,7 +204,7 @@ async function fetchGazetteSnapshot(
     const maxEvents = input.maxEventsPerKind ?? 20;
     const events: GazetteEvent[] = [];
 
-    // New members — CharacterMinted into this saga is news ("X 入班").
+    // New members — CharacterMinted into this saga is news ("X joins the troupe").
     // We list the most recent few so a freshly-seeded saga (no director
     // events / POV yet) still produces a non-empty gazette. Once real
     // activity exists, these become a small tail. Mints are wall-clock

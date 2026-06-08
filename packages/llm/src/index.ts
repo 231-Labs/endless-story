@@ -3,7 +3,7 @@
  *
  * Mirrors `@endless-story/memwal`: web / runner / cli MUST go through here.
  * Never call Poe / Anthropic / OpenAI directly from app code — see AGENTS.md
- * 「鏈上架構」原則 4.
+ * on-chain-architecture principle 4.
  *
  * Subpath exports:
  *   - `@endless-story/llm/text`    — Poe / Anthropic chat completions

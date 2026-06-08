@@ -2,7 +2,7 @@
  * Writes packages/shared/src/contract-ids.ts after a successful deploy.
  *
  * **Single source of truth contract**: this is the only function in the repo
- * that mutates contract-ids.ts. See AGENTS.md 「鏈上架構」原則 4.
+ * that mutates contract-ids.ts. See AGENTS.md on-chain-architecture principle 4.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';

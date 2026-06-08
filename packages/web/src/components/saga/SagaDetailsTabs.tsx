@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useSagaTabs } from './SagaTabsContext';
 import { SagaTabBar } from './SagaTabBar';
 
-/** 為區塊底部膠囊導覽留白 */
+/** Bottom padding to clear the floating capsule nav */
 const BOTTOM_CAPSULE_GAP = 'pb-[max(7rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))]';
 
 const SM_MIN = '(min-width: 640px)';
@@ -25,12 +25,13 @@ function useIsSmUp() {
 }
 
 /**
- * Saga 頁下半：頁籤切換（星圖 / 江湖 / 規章）。view 由 SagaTabsContext 共用，所以第一屏
- * 手卷底部的膠囊也能切到這裡的頁。星圖只在大螢幕掛載（手機改顯示提示）；江湖與規章是
- * 卡片／文字，手機桌面皆可看。
+ * Lower half of the saga page: tabbed views (constellation / off-turf / charter).
+ * `view` is shared via SagaTabsContext so the first-screen handscroll capsule can
+ * switch tabs here too. Constellation mounts on large screens only (mobile shows a
+ * hint); off-turf and charter are cards/text, fine on any size.
  *
- * 另外掛一個 IntersectionObserver：使用者直接捲動（非點膠囊）在兩屏之間移動時，把 view
- * 同步到目前所在那一屏，膠囊高亮才不會錯亂。
+ * An IntersectionObserver syncs `view` to whichever screen the user scrolls to
+ * directly (not via the capsule) so the capsule highlight stays correct.
  */
 export function SagaDetailsTabs({
   constellationContent,
@@ -44,15 +45,15 @@ export function SagaDetailsTabs({
   const smUp = useIsSmUp();
   const { view, setView } = useSagaTabs();
 
-  // 捲動 → view 同步（避免高亮錯亂）。用 ref 讀目前 view，effect 不必隨 view 重綁。
+  // Scroll → sync view. Read current view via ref so the effect needn't rebind on view.
   const viewRef = useRef(view);
   viewRef.current = view;
   useEffect(() => {
     const handscroll = document.getElementById('saga-handscroll');
     const details = document.getElementById('saga-details');
     if (!handscroll || !details) return;
-    // 門檻取 0.9：只在某一屏「停穩」（幾乎佔滿視窗）時才同步 view，不在捲動過程中觸發，
-    // 否則會跟點膠囊的導航搶（過場時手卷還露一半就把 view 改回 handscroll）。
+    // Threshold 0.9: only sync view once a screen has settled (nearly fills the
+    // viewport), not mid-scroll — otherwise it races the capsule navigation.
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -60,7 +61,7 @@ export function SagaDetailsTabs({
           if (e.target.id === 'saga-handscroll') {
             if (viewRef.current !== 'handscroll') setView('handscroll');
           } else if (viewRef.current === 'handscroll') {
-            // 從手卷捲進第二屏，但沒指定面板 → 預設星圖。
+            // Scrolled from handscroll into the second screen with no panel chosen → default to constellation.
             setView('constellation');
           }
         }
@@ -72,7 +73,7 @@ export function SagaDetailsTabs({
     return () => io.disconnect();
   }, [setView]);
 
-  // 第二屏實際面板：手卷不是面板，落在第二屏時預設星圖。
+  // Actual second-screen panel: handscroll isn't a panel, so default to constellation.
   const panel = view === 'handscroll' ? 'constellation' : view;
 
   return (

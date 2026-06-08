@@ -220,7 +220,7 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
 
     // 1. assemble agent specs (authored desires, else default contention desires).
     // Defaults can depend on the agent name: a star named in a label like
-    // `partnership:溫照棠` should not receive "I want to partner with 溫照棠".
+    // `partnership:Wen` should not receive "I want to partner with Wen".
     const agents: AgentSpec[] = opts.cast.map((c) => ({
         id: c.id,
         name: c.name,
@@ -258,7 +258,7 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
             const res = await signAndAnchor({
                 sagaId: opts.sagaId,
                 // World-level affect snapshot. Subject = worldId (NOT sagaId) so these
-                // machine-readable JSON beats never collide with the saga's prose 公報
+                // machine-readable JSON beats never collide with the saga's prose gazette
                 // commitments (subject = sagaId) and never surface in the gazette feed.
                 // The saga is still recorded via the commitment's saga_id field + the beat
                 // JSON. Fall back to sagaId only if worldId is unset (gazette-read also
@@ -367,7 +367,7 @@ export async function deriveDramaForSaga(
 }
 
 /**
- * A short, public, LLM-free「此刻張力在哪」headline for the gazette teaser —
+ * A short, public, LLM-free "where the tension is right now" headline for the gazette teaser —
  * the top contested resources right now (deterministic, read-only: no signer →
  * derive without committing). Returns null when drama is dormant / on any error
  * so the teaser falls back to the plain gazette excerpt.
@@ -394,7 +394,7 @@ export async function fetchTensionHeadline(sagaId: string, max = 2): Promise<str
     }
 }
 
-/** "爭得「spotlight:春雪社頭牌名額」" → "春雪社頭牌名額"; "與溫照棠搭戲" → "與溫照棠搭戲". */
+/** Strip the 「…」 wrapper and any `prefix:` from a statement, e.g. "win 「spotlight:X」" → "X". */
 function humanResourceFromStatement(statement: string): string {
     const m = statement.match(/「([^」]+)」/);
     const inner = m ? m[1] : statement;

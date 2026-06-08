@@ -4,7 +4,7 @@
  *
  * Thin wrappers around `generated/endless_story/resource.ts`. A
  * `DramaResource` is a saga-scoped, conserved scarce resource that
- * characters contend over (e.g. the 孟雲屏 partnership slot, capacity 1).
+ * characters contend over (e.g. the <name> partnership slot, capacity 1).
  * The DEMAND side (satisfaction / tension) is recomputed OFF-CHAIN from
  * this ledger's allocation history (see `@endless-story/drama`).
  *

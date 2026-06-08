@@ -5,13 +5,13 @@
  *
  * The NFT's art isn't a frozen mint image: it GROWS with the story. This
  * action renders a new portrait variant conditioned on the same person
- * (physical_facts = the durable anchor) + an OCCASION (戲妝 / 老年 / 日常 / a
+ * (physical_facts = the durable anchor) + an OCCASION (stage-makeup / old-age / everyday / a
  * dramatic moment), uploads it to Walrus, then appends it to the on-chain
  * gallery via `add_media_asset_by_storyteller`. It deliberately does NOT
  * update `image_url`; the owner later chooses the public cover from the
  * accumulated setting gallery with `set_cover_from_media`.
  *
- * Consistency rule (§11 鐵律): every variant is conditioned on the mint-time
+ * Consistency rule (§11 iron law): every variant is conditioned on the mint-time
  * physical_facts so it's the SAME person in a new moment, not a new face.
  * (gpt-image-2 is text-to-image, so we anchor via the physical_facts text
  * rather than an image reference.)
@@ -43,7 +43,7 @@ export type PortraitOccasionKind =
 
 /** Per-kind situational framing — short, evocative, visually distinct (for
  *  demo). Drives makeup / costume / age / scene. The anchor curator strips
- *  these (it's 素顏-only), so the variant builds its OWN prompt and renders
+ *  these (it's bare-face-only), so the variant builds its OWN prompt and renders
  *  it directly via promptOverride. */
 const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realistic'>, string> = {
     reference: '正式設定形象：端正面向觀者、神情沉靜，純色底、自然光、半身。',
@@ -58,7 +58,7 @@ const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realist
 
 const VARIANT_TONE = '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。';
 const VARIANT_NEG = '不要動漫感、不要油畫感、不要寫實照片。';
-/** 真人版 wants realism (the opposite of VARIANT_NEG); only forbid stray text. */
+/** Realistic variant wants realism (the opposite of VARIANT_NEG); only forbid stray text. */
 const REALISTIC_NEG = '畫面中不得出現任何文字、浮水印、邊框或排版框線。';
 
 export interface EvolvePortraitInput {
@@ -117,11 +117,11 @@ export async function evolvePortraitAction(
     const pf = cj.profile?.physical_facts ?? {};
     const physicalFacts = [pf.species, pf.body].filter(Boolean).join(' / ') || '—';
 
-    // 真人版 (realistic): unlike the ink-wash variants, this needs the actual
+    // Realistic variant: unlike the ink-wash variants, this needs the actual
     // FACE preserved, so it's img2img off the character's anchor portrait (the
     // edit endpoint) with a photographic prompt — NOT the text-anchored path
     // (which only reproduces physical_facts, a look-alike). The prompt asks for
-    // realism (opposite of the other variants'「不要寫實」).
+    // realism (opposite of the other variants' "no realism").
     let gen: { ok: boolean; url?: string; base64?: string; blobId?: string; promptUsed?: string; error?: string };
     if (input.kind === 'realistic') {
         gen = await renderRealisticFromAnchor(cj, role ?? undefined, input.occasion);
@@ -132,7 +132,7 @@ export async function evolvePortraitAction(
                 : [OCCASION_BY_KIND[input.kind], input.occasion?.trim()].filter(Boolean).join(' ');
 
         // Build the variant prompt DIRECTLY (the anchor curator would strip the
-        // occasion — it's hardwired to 素顏/無戲妝). Anchor on physical_facts +
+        // occasion — it's hardwired to bare-face/no-stage-makeup). Anchor on physical_facts +
         // role so it stays the same person; the framing drives makeup/costume.
         const genderAge = `${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
         const personLine = `${role ?? '梨園中人'}，${genderAge}，${physicalFacts}（同一個人，保持體態與氣質一致）。`;
@@ -239,7 +239,7 @@ function mapGender(raw: string): string {
 }
 
 /**
- * 真人版 — render a photorealistic portrait of the SAME person by feeding the
+ * Realistic variant — render a photorealistic portrait of the SAME person by feeding the
  * character's anchor base portrait into the image-edit (img2img) endpoint as a
  * reference, so the actual face/features survive. Returns the same shape as
  * `generatePortrait` so the caller's anchor-on-chain path is unchanged.

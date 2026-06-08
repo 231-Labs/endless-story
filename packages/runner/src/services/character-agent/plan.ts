@@ -21,7 +21,7 @@ export interface PlanInput {
     name: string;
     role: string;
     sagaName: string;
-    /** "第 N 日 · 時辰" for time-grounding. */
+    /** "day N · time-of-day" for time-grounding. */
     dayLabel: string;
     /** MemWal-recalled memories (three-factor) — what's on her mind. */
     recalledMemories: string[];

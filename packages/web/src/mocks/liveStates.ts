@@ -1,10 +1,10 @@
 import type { CharacterLiveState } from '@endless-story/shared';
 
 /**
- * 9 角色的 live state mock。
+ * Live state mock for the 9 characters.
  *
- * 接 backend 後此檔可廢 — `lib/api/liveState.ts` 改成 fetch runner perception endpoint
- * 即可，UI 完全不變。
+ * Removable once the backend lands — just switch `lib/api/liveState.ts` to fetch the runner
+ * perception endpoint; the UI is unchanged.
  */
 export const liveStatesByCharacterId: Record<string, CharacterLiveState> = {
   char_shen_huaiyin: {
@@ -52,7 +52,7 @@ export const liveStatesByCharacterId: Record<string, CharacterLiveState> = {
     location: '碼頭茶攤 · 夜深',
     nextPlan: '明日進班前，先問清這場客串算幾日錢。',
   },
-  // ── 江湖外連 ──
+  // ── Outside-world (wild) links ──
   char_tan_silang: {
     intent: '隔街看戲樓燈火，盤算她今晚會不會改第三折。',
     location: '永聲社後巷 · 隔街觀望',

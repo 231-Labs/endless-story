@@ -56,7 +56,7 @@ export const relationshipEdges: RelationshipEdge[] = [
     confidence: 0.7,
     summary: '我不會跟她說 — 說了她會更不肯鬆。但她在後台慢慢走遠的那個側影、跟我十年前一模一樣。',
   },
-  // 新增：給 ye_tingfang 多一條 outgoing，讓 relationship sidebar 更立體
+  // Added: an extra outgoing edge for ye_tingfang to flesh out the relationship sidebar
   {
     fromId: 'char_ye_tingfang',
     toId: 'char_shen_huaiyin',
@@ -80,8 +80,8 @@ export const relationshipEdges: RelationshipEdge[] = [
     summary: '我不必開口，她那把胡琴就知道我此刻要的是哪一個調。',
   },
 
-  // ───── 跨界邊：saga 成員 ↔ 江湖 ─────
-  // 沈懷音 ↔ 譚四郎 — 十年舊敵
+  // ───── Cross-world edges: saga members ↔ outside-world ─────
+  // Shen ↔ Tan — ten-year-old enemies
   {
     fromId: 'char_shen_huaiyin',
     toId: 'char_tan_silang',
@@ -104,7 +104,7 @@ export const relationshipEdges: RelationshipEdge[] = [
     confidence: 0.88,
     summary: '她那種演法已經過時了。我只等她哪一天認 — 她不肯認、戲園子會替她認。',
   },
-  // 葉庭芳 ↔ 譚四郎 — 戒備
+  // Ye ↔ Tan — wary
   {
     fromId: 'char_ye_tingfang',
     toId: 'char_tan_silang',
@@ -116,7 +116,7 @@ export const relationshipEdges: RelationshipEdge[] = [
     confidence: 0.55,
     summary: '他每次來都坐同一個位子。班主不知道。我知道、我不說。',
   },
-  // 葉庭芳 ↔ 江老闆 — 長期訂閱者
+  // Ye ↔ Boss Jiang — long-term subscriber
   {
     fromId: 'char_ye_tingfang',
     toId: 'char_jiang_laoban',
@@ -139,7 +139,7 @@ export const relationshipEdges: RelationshipEdge[] = [
     confidence: 0.78,
     summary: '我不去後台、不送花、不打擾她演戲。每月按時付訂閱費，是我這輩子最值得的一筆生意。',
   },
-  // 沈懷音 ↔ 江老闆 — 票房客
+  // Shen ↔ Boss Jiang — box-office patron
   {
     fromId: 'char_shen_huaiyin',
     toId: 'char_jiang_laoban',

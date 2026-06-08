@@ -5,18 +5,18 @@ import type { InterventionKind } from '@endless-story/shared';
 import { interventionsApi } from '@/lib/api/index';
 
 /**
- * Owner 寄夢 / 耳語 server action — Composer 用 form action 呼叫此函式。
+ * Owner send-dream / whisper server action — called by the Composer form action.
  *
- * 後端對應：interventionsApi.submitIntervention (POST /interventions)
+ * Backend: interventionsApi.submitIntervention (POST /interventions)
  *
- * 行為：
- *   1. 驗 ownerWallet 是該 character.nftOwner（後端 endpoint 內也要驗）
- *   2. 寫入 mock / 真實後端
- *   3. revalidatePath('/dossier') — owner 視角下「過往」區會立即出現
+ * Behaviour:
+ *   1. verify ownerWallet is the character.nftOwner (backend endpoint also verifies)
+ *   2. write to mock / real backend
+ *   3. revalidatePath('/dossier') — the owner-view "past" section shows it immediately
  *
- * 失敗模式：
- *   - 缺欄位 → return { error }
- *   - 非 owner → 後端會拒、UI 顯示「無權」訊息
+ * Failure modes:
+ *   - missing fields → return { error }
+ *   - non-owner → backend rejects, UI shows a "no permission" message
  */
 export interface InterventionFormResult {
   ok: boolean;

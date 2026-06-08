@@ -65,7 +65,7 @@ export interface ResourceSnapshot {
     id: string;
     /** structural "bone" kind (e.g. "capacity-1-slot"). */
     archetype: string;
-    /** human label (e.g. "partnership:孟雲屏"). */
+    /** human label (e.g. "partnership:Meng"). */
     label: string;
     capacity: bigint;
     /** holder (Character id) -> units held, straight from the on-chain Table. */
@@ -90,7 +90,7 @@ export interface AgentSpec {
     id: string;
     /** display name (narrative-facing; used for prompt hints). */
     name?: string;
-    /** Public chain tags such as `role:小生`. */
+    /** Public chain tags such as `role:<role-type>`. */
     tags?: string[];
     desires: DesireSpec[];
 }
@@ -100,7 +100,7 @@ export interface AgentSpec {
 export interface DefaultDesireOptions {
     /** Current agent display name. Used to avoid giving a named target a self-partnership desire. */
     agentName?: string;
-    /** Public chain tags such as `role:小生`. */
+    /** Public chain tags such as `role:<role-type>`. */
     agentTags?: string[];
 }
 
@@ -128,10 +128,11 @@ export function defaultDesiresForCast(
         // named star should not want a partnership with themself.
         if (opts.agentName && isSelfPartnership(r, opts.agentName)) continue;
         if (isPartnership(r) && !isEligiblePartnershipAgent(opts)) continue;
-        // Stage-performer resources (頭牌 spotlight / 唱片 recording) are contested
-        // only among 角兒. A confirmed backstage role (樂師/胡琴/場面/箱管/經理/報人…)
-        // never competes for them — a 主胡 desiring 「頭牌名額」 was the role-resource
-        // mismatch bug (partnership is already gated to 小生-side above).
+        // Stage-performer resources (headliner spotlight / recording) are contested
+        // only among on-stage actors. A confirmed backstage role (musician / wardrobe /
+        // business / press) never competes for them — a lead-fiddle desiring the
+        // headliner spotlight was the role-resource mismatch bug (partnership is already
+        // gated to the young-male-lead side above).
         if (isPerformerResource(r) && isBackstageAgent(opts)) continue;
         const want = r.capacity > 0n ? 1n : 0n; // want one unit of the scarce thing
         if (want === 0n) continue;
@@ -151,16 +152,15 @@ function isPartnership(r: ResourceSnapshot): boolean {
     return r.label.startsWith('partnership:');
 }
 
-/** Resources only stage performers (角兒) compete for: the headliner spotlight
- *  and the recording slot. (partnership is handled by its own 小生-side gate.) */
+/** Resources only on-stage actors compete for: the headliner spotlight
+ *  and the recording slot. (partnership is handled by its own young-male-lead gate.) */
 function isPerformerResource(r: ResourceSnapshot): boolean {
     return r.label.startsWith('spotlight:') || r.label.startsWith('recording:');
 }
 
 /** True only when a role tag POSITIVELY marks the agent as backstage —
- *  musicians (主胡/胡琴/場面/文武場/伴奏), wardrobe (箱管/衣箱/梳頭/檢場/跟包),
- *  or business/press (經理/帳房/票房/掮客/副刊/記者/報人/攝影). We never infer
- *  backstage from absence of a tag, so real performers are never excluded. */
+ *  musicians, wardrobe, or business/press (see isBackstageRole regex). We never
+ *  infer backstage from absence of a tag, so real performers are never excluded. */
 function isBackstageAgent(opts: DefaultDesireOptions): boolean {
     return (opts.agentTags ?? [])
         .filter((tag) => tag.startsWith('role:'))
@@ -178,8 +178,8 @@ function isEligiblePartnershipAgent(opts: DefaultDesireOptions): boolean {
     const roleTags = (opts.agentTags ?? [])
         .filter((tag) => tag.startsWith('role:'))
         .map((tag) => tag.slice('role:'.length));
-    // New tagged characters are strict: only 小生-side roles can desire a
-    // partnership slot with a 花旦/名旦 target.
+    // New tagged characters are strict: only young-male-lead-side roles can desire a
+    // partnership slot with a female-lead target.
     if (roleTags.length > 0) return roleTags.some(isXiaoshengRole);
     // If tags are present but none says role, do not infer eligibility from
     // unrelated public status labels.

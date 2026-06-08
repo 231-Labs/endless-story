@@ -1,11 +1,11 @@
-// Step 2 — the 柳生春 moment: an EMERGENT intra-agent trade-off.
+// Step 2 — the Liu moment: an EMERGENT intra-agent trade-off.
 //
-// 柳生春 carries two desires (partner: 陪孟雲屏排戲; fame: 搶壓軸) drawing from two different
-// capacity-1 resources, both funded from its ONE finite schedule budget. 白牡丹 is a fixed
-// rival that keeps poaching both slots, so 柳生春 must re-seize to stay satisfied.
+// Liu carries two desires (partner: rehearse with Meng; fame: grab the headliner slot) drawing
+// from two different capacity-1 resources, both funded from its ONE finite schedule budget. Bai
+// is a fixed rival that keeps poaching both slots, so Liu must re-seize to stay satisfied.
 //
 // The trade-off is never declared anywhere — no code says "you can't have both". It falls
-// out of the budget being finite. We prove that by ABLATION: relax ONLY 柳生春's budget
+// out of the budget being finite. We prove that by ABLATION: relax ONLY Liu's budget
 // (single changed variable) and the trade-off disappears. If it were authored, it would
 // survive the ablation. It does not.
 
@@ -35,8 +35,8 @@ test("scarce: 柳生春 is visibly torn — its focus alternates between the two
 });
 
 test("scarce: pursuing fame really does starve partnership (and vice versa) over the run", () => {
-  // Across the run, whenever 柳生春 holds the spotlight it must NOT also hold partnership —
-  // the resources are won by spending the same budget, so they trade off tick by tick.
+  // Whenever Liu holds the spotlight it must NOT also hold partnership — both are won by
+  // spending the same budget, so they trade off tick by tick.
   const r = runScenario(scarce);
   let bothHeld = 0;
   for (const rec of r.trace) {
@@ -46,13 +46,13 @@ test("scarce: pursuing fame really does starve partnership (and vice versa) over
 });
 
 // =========================================================================================
-// ABLATION: relax ONLY 柳生春's budget → the trade-off vanishes (so the budget caused it)
+// ABLATION: relax ONLY Liu's budget → the trade-off vanishes (so the budget caused it)
 // =========================================================================================
 test("ablation: relaxing ONLY 柳生春's budget removes the trade-off (scarce vs abundant)", () => {
   const s = analyzeTradeoff(runScenario(scarce), LIU);
   const a = analyzeTradeoff(runScenario(abundant), LIU);
   // The two discriminators of the trade-off, contrasted across the single-variable ablation:
-  // forced choices collapse, and 柳生春 goes from NEVER holding both satisfied to holding both
+  // forced choices collapse, and Liu goes from NEVER holding both satisfied to holding both
   // for most of the run. (focusSwitches stays similar — that's mere attention rotation, not
   // the trade-off; abundant still relabels its "focus" as the two tensions cross, even though
   // it funds both. The trade-off is about *funding*, which is what forcedChoice/bothHigh track.)
@@ -63,7 +63,7 @@ test("ablation: relaxing ONLY 柳生春's budget removes the trade-off (scarce v
 });
 
 test("ablation isolates the budget: scarce vs abundant differ ONLY in 柳生春's budget", () => {
-  // The only difference between the two scenarios is 柳生春's schedule cap/refill. Same rival,
+  // The only difference between the two scenarios is Liu's schedule cap/refill. Same rival,
   // same tuning, same desires. So any behavioural difference is attributable to the budget.
   const sFn = scarce.makeWorld();
   const aFn = abundant.makeWorld();

@@ -1,7 +1,7 @@
 import type { Saga, SagaLocation } from '@endless-story/shared';
 
 export const DEMO_SAGA_ID = 'spring-snow';
-// 春雪社涵蓋的兩處 location — 前廂戲樓 + 後廂院落
+// The two locations the Spring Snow troupe covers — front theater + rear compound
 export const LOC_THEATER_ID = 'loc_chunxue_theater';
 export const LOC_COMPOUND_ID = 'loc_chunxue_compound';
 
@@ -25,7 +25,7 @@ export const sagas: Saga[] = [
     description:
       '民國七年盤下的小型戲園。原是清末官紳在霞飛路口蓋的私家戲樓，門楣上「百花樓」三字仍是舊匾。',
     currentDay: 4,
-    // endless story — 不設終點
+    // endless story — no fixed ending
     castIds: [
       'char_shen_huaiyin',
       'char_ye_tingfang',

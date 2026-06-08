@@ -36,7 +36,7 @@ export {
 
 export interface RunDirectorInput {
     sagaId: string;
-    /** Free-form admin intent, e.g. "想看感情戲". */
+    /** Free-form admin intent, e.g. "want a romance scene". */
     intent: string;
     /** Storyteller signer + the StorytellerCap id it controls. Required
      *  unless dryRun. */

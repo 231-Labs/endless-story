@@ -6,7 +6,7 @@ import {
 } from '@/lib/chain/gazette-read';
 
 /**
- * Gazettes API — facade for saga-level 公報 commitments.
+ * Gazettes API — facade for saga-level gazette commitments.
  *
  * Chain-first only. There's no mock fallback because gazette is a
  * post-MVP concept (added in R3); pre-R3 deployments simply have no

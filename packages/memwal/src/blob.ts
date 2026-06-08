@@ -175,7 +175,7 @@ export function getBlobUrl(blobId: string, network: WalrusNetwork = 'testnet'): 
 // for 100KB) and cost ONE Sui tx instead of N. Each file stays individually
 // retrievable by `identifier` or `quiltPatchId` — no unbundling.
 //
-// USE FOR batch WRITES on the content road (a character's 設定集 gallery at mint,
+// USE FOR batch WRITES on the content road (a character's setting gallery at mint,
 // a gazette bundle). NOT for the per-memory hot path (memories are SEAL-encrypted
 // + written one-at-a-time through the relayer; and a quilt — like any blob — is
 // IMMUTABLE: you can't append, you write a fresh quilt per batch).

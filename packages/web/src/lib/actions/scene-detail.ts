@@ -5,7 +5,7 @@
  * focused-scene view on the saga handscroll).
  *
  * The chain Scene object doesn't carry an event history in a UI shape, so
- * the focused view's「過往」was always empty. This reads the BudgetEvents
+ * the focused view's "past" section was always empty. This reads the BudgetEvents
  * anchored to the scene (the dramatic happenings) + the recent action lines,
  * so a scene that has hosted events actually shows them.
  *

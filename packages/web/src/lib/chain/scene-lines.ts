@@ -1,8 +1,8 @@
 /**
- * Scene lines — "what was just said/done here" per scene (手卷 Step 3).
+ * Scene lines — "what was just said/done here" per scene (handscroll Step 3).
  *
  * The character agent generates a first-person line every time it acts
- * (decide intent: 「我退後半步，手按舊傷」) or moves (reason: 「我得去帳房找孟老闆」).
+ * (decide intent) or moves (reason), e.g. "I step back, hand on the old wound".
  * Those lines are the believable-agent texture, but they're NOT on chain
  * (submit_action only stores a card index). This module keeps the latest
  * line per scene so the live handscroll can float it as a ghost quote

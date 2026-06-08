@@ -1,8 +1,8 @@
 // Cross-layer conformance: the off-chain applyTick must compute the SAME allocation result
-// that the on-chain Move ledger produces for the same (柳 holds cap-1 slot → 白 seizes) beat.
+// that the on-chain Move ledger produces for the same (Liu holds cap-1 slot → Bai seizes) beat.
 //
 // This is the last link of the E2E claim "anyone can re-run and get the same tension":
-//   - Move side (contracts: tests/drama_e2e.move) settles the ledger on-chain: 柳=0, 白=1, total=1.
+//   - Move side (contracts: tests/drama_e2e.move) settles the ledger on-chain: Liu=0, Bai=1, total=1.
 //   - TS side (here) runs the SAME transfer through applyTick's RESOURCE PHASE and must land on
 //     the byte-identical allocation, then derives tension from it (SATISFACTION PHASE).
 // If these two ever diverge, the "verifiable" story breaks — so this test is the guard rail.
@@ -23,7 +23,7 @@ const SLOT = "partnership:孟雲屏";
 // Same tuning the simulator/product commit to (must be committed alongside state per WRITEUP §2).
 const TUNING: TuningConfig = { alphaUp: 300_000n, alphaDown: 600_000n, gamma: 50_000n };
 
-// World mirroring the Move E2E start state: capacity-1 slot, 柳 holds it; both perform-ers
+// World mirroring the Move E2E start state: capacity-1 slot, Liu holds it; both performers
 // carry a `partner` desire drawing 1 unit from the slot.
 function startWorld(): WorldState {
   const partnerDesire = (s: bigint) => ({
@@ -38,17 +38,17 @@ function startWorld(): WorldState {
   return {
     tick: 0n,
     resources: {
-      [SLOT]: { id: SLOT, capacity: 1n, allocations: { [LIU]: 1n } }, // 柳 holds it
+      [SLOT]: { id: SLOT, capacity: 1n, allocations: { [LIU]: 1n } }, // Liu holds it
     },
     agents: [
-      { id: LIU, desires: [partnerDesire(900_000n)] }, // 柳 currently satisfied (holds slot)
-      { id: BAI, desires: [partnerDesire(50_000n)] }, // 白 starved (doesn't hold it)
+      { id: LIU, desires: [partnerDesire(900_000n)] }, // Liu currently satisfied (holds slot)
+      { id: BAI, desires: [partnerDesire(50_000n)] }, // Bai starved (doesn't hold it)
     ],
   };
 }
 
-// The seize: 白 takes the 1 unit of the slot from 柳 — identical to the Move E2E's
-// ResourceTransferOp{ from: 柳, to: 白, amount: 1 }.
+// The seize: Bai takes the 1 unit of the slot from Liu — identical to the Move E2E's
+// ResourceTransferOp{ from: Liu, to: Bai, amount: 1 }.
 const seizeAction: Action = {
   actor: BAI,
   transfers: [{ resource_id: SLOT, from: LIU, to: BAI, amount: 1n }],
@@ -67,7 +67,7 @@ test("conformance: TS RESOURCE PHASE produces the SAME ledger as the Move on-cha
 });
 
 test("conformance: the seize is rejected whole if it would break conservation (atomic-reject mirror)", () => {
-  // 白 tries to take 2 from 柳 who only holds 1 → the WHOLE action is rejected, ledger untouched.
+  // Bai tries to take 2 from Liu who only holds 1 → the WHOLE action is rejected, ledger untouched.
   const overReach: Action = {
     actor: BAI,
     transfers: [{ resource_id: SLOT, from: LIU, to: BAI, amount: 2n }],
@@ -75,15 +75,15 @@ test("conformance: the seize is rejected whole if it would break conservation (a
   };
   const { world: next, results } = applyTickVerbose(startWorld(), [overReach], TUNING);
   assert.equal(results[0].accepted, false, "infeasible transfer must be rejected (== Move abort)");
-  // ledger unchanged: 柳 still holds it
+  // ledger unchanged: Liu still holds it
   assert.equal(next.resources[SLOT].allocations[LIU] ?? 0n, 1n, "rejected action leaves 柳 holding the slot");
   assert.equal(next.resources[SLOT].allocations[BAI] ?? 0n, 0n, "白 gained nothing");
 });
 
 test("conformance: tension responds to the seize in the right direction (the affect the chain enables)", () => {
   // SATISFACTION PHASE reads the on-chain allocation result and evolves felt state. The
-  // meaningful causal claim is DIRECTIONAL: losing the slot makes 柳 tenser than it was,
-  // winning it makes 白 less tense than it was. (We do NOT claim 柳 > 白 in absolute terms —
+  // meaningful causal claim is DIRECTIONAL: losing the slot makes Liu tenser than it was,
+  // winning it makes Bai less tense than it was. (We do NOT claim Liu > Bai in absolute terms —
   // with loss aversion + different start states the absolute ordering depends on history;
   // that's a feature, asserting it would be wrong.)
   const before = startWorld();
@@ -97,7 +97,7 @@ test("conformance: tension responds to the seize in the right direction (the aff
   assert.ok(liuAfter > liuBefore, `柳 lost the slot → its tension must RISE: ${liuBefore} → ${liuAfter}`);
   assert.ok(baiAfter < baiBefore, `白 won the slot → its tension must FALL: ${baiBefore} → ${baiAfter}`);
 
-  // loss aversion check: 柳's rise (fast, alphaDown) should out-magnitude 白's fall (slow, alphaUp)
+  // loss aversion check: Liu's rise (fast, alphaDown) should out-magnitude Bai's fall (slow, alphaUp)
   const liuRise = liuAfter - liuBefore;
   const baiFall = baiBefore - baiAfter;
   assert.ok(liuRise > baiFall,

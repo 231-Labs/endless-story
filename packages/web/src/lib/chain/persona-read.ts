@@ -1,5 +1,5 @@
 /**
- * On-chain persona (本色) read — public, verifiable, no backend/DB.
+ * On-chain persona read — public, verifiable, no backend/DB.
  *
  * Persona is stored on the **content road** (Walrus blob + `commitment::commit`), the same as
  * POV chapters / gazette. To avoid colliding with chapter commitments (which use

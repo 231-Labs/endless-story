@@ -1,17 +1,17 @@
 import { getApiBaseUrl } from './config';
 
 /**
- * 後端 endpoints 的薄 fetch wrapper。
+ * Thin fetch wrapper for backend endpoints.
  *
- * 用法（在 facade method 內）：
+ * Usage (inside a facade method):
  *   if (USE_MOCK) return mockImpl();
  *   return httpGet<Saga[]>('/sagas');
  *
- * 設計：
- *   - 統一 baseUrl 從 config.getApiBaseUrl()
- *   - 統一錯誤 — non-2xx 直接 throw ApiError
- *   - 不做 runtime validation（TS type 信任後端契約）
- *   - 預設 cache: 'no-store' — facade 通常拉動態資料；caller 需要 cache 自己包
+ * Design:
+ *   - baseUrl unified via config.getApiBaseUrl()
+ *   - errors unified — non-2xx throws ApiError
+ *   - no runtime validation (trust the backend contract via TS types)
+ *   - cache defaults to 'no-store' — facades usually pull dynamic data; callers wrap their own cache
  */
 export class ApiError extends Error {
   constructor(
@@ -25,13 +25,13 @@ export class ApiError extends Error {
 }
 
 interface HttpOptions {
-  /** 是否啟用 Next.js fetch cache。預設 'no-store'（每次 fresh） */
+  /** Whether to enable the Next.js fetch cache. Defaults to 'no-store' (fresh each time). */
   cache?: RequestCache;
-  /** Next.js revalidate 秒數 */
+  /** Next.js revalidate seconds. */
   revalidate?: number;
-  /** 額外 headers */
+  /** Extra headers. */
   headers?: Record<string, string>;
-  /** Query params — 自動編碼到 URL */
+  /** Query params — auto-encoded into the URL. */
   query?: Record<string, string | number | boolean | undefined | null>;
 }
 
@@ -107,8 +107,8 @@ export async function httpDelete<T>(endpoint: string, opts: HttpOptions = {}): P
 }
 
 /**
- * Phase 1 (now) stub — 給尚未實作的 endpoint，會 throw clear error。
- * 等 backend ready 後刪除此 helper 並讓 facade 直接呼叫對應 httpGet/Post。
+ * Phase 1 (now) stub — for not-yet-implemented endpoints; throws a clear error.
+ * Once the backend is ready, delete this helper and have facades call httpGet/Post directly.
  */
 export function notImplemented(endpoint: string): never {
   throw new ApiError(

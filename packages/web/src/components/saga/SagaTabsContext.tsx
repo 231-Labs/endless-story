@@ -3,16 +3,18 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
 /**
- * Saga 頁的「目前視圖」狀態，提升到頁層級共用 —— 兩屏底部用同一顆膠囊。
+ * "Current view" state for the saga page, lifted to page level so both screens
+ * share one capsule.
  *
- * 四個 view：手卷（第一屏）+ 第二屏的三頁（星圖 / 江湖 / 規章）。膠囊高亮 = 目前 view，
- * 點手卷 → 捲回第一屏；點其他 → 捲到第二屏並切到該頁。手動捲動時由 IntersectionObserver
- * （見 SagaDetailsTabs）把 view 同步到目前所在的那一屏，避免高亮錯亂。
+ * Four views: handscroll (first screen) + the second screen's three tabs
+ * (constellation / off-turf / charter). Highlight = current view. Handscroll →
+ * scroll to first screen; others → scroll to second screen and switch tab.
+ * Manual scrolls are synced back by an IntersectionObserver (see SagaDetailsTabs).
  */
 
 export type SagaView = 'handscroll' | 'constellation' | 'offturf' | 'charter';
 
-/** 第二屏實際渲染的面板（手卷不是面板，落在第二屏時預設星圖）。 */
+/** Panel actually rendered on the second screen (handscroll isn't one; defaults to constellation). */
 export type SagaDetailPanel = 'constellation' | 'offturf' | 'charter';
 
 export const SAGA_TABS: { key: SagaView; label: string }[] = [

@@ -45,7 +45,7 @@ export function CharacterGrid({
   const [searchQuery, setSearchQuery] = useState('');
   const normalizedQuery = searchQuery.toLowerCase().trim();
 
-  // Prefer the connected wallet for "我的" filter — server-derived
+  // Prefer the connected wallet for the "mine" filter — server-derived
   // viewerWallet comes from `?as=` URL param which falls back to a
   // mock address when absent, so we'd never match the real owner.
   // Server-side path is kept as fallback for non-wallet flows (e.g.

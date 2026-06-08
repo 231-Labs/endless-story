@@ -1,7 +1,7 @@
-// Walrus 資產 registry — in-memory map persisted to a JSON file (DATA_DIR/walrus-assets.json),
-// 與 MemWAL 的 memory index 同模式(見 store.ts 的 InMemoryStore)、但 *獨立檔案*,互不干擾。
-//
-// 規模很小(數十~數百筆策展資產),JSON 綽綽有餘。要 sqlite 等之後換實作、介面不變即可。
+// Walrus asset registry — an in-memory map persisted to a JSON file
+// (DATA_DIR/walrus-assets.json). Same pattern as MemWAL's memory index (InMemoryStore
+// in store.ts) but a separate file. Scale is tiny (tens to hundreds of curated assets),
+// so JSON is plenty; swap in sqlite later behind the same interface if needed.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";

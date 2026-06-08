@@ -1,5 +1,5 @@
 // Step 1 — "minimal but dramatic": 2 performers contend for ONE capacity-1 partnership
-// slot (孟雲屏). These tests are the spec §8 failure-mode assertions made executable, plus
+// slot (Meng). These tests are the spec §8 failure-mode assertions made executable, plus
 // the brief's Step 1 exit criteria:
 //   - contention produces legible escalation (loser spikes → drives a counter-seize)
 //   - tension tracks allocation (whoever lacks the slot is the tenser one)

@@ -5,7 +5,7 @@ import { dailyCost, DEFAULT_ECON, makeOnset, MUNIT, type CharConfig, type CharSt
 import { newChar } from "../driver/run.ts";
 import type { Scenario } from "../driver/types.ts";
 
-export const SEED_FUNDS = 56n * MUNIT; // 安家費 ≈ one week of median cost
+export const SEED_FUNDS = 56n * MUNIT; // seed grant ≈ one week of median cost
 
 /** Build a CharConfig. `onsetVar` shifts the hidden mortality onset (whole years, ±). */
 export function char(
@@ -40,7 +40,7 @@ export function world(configs: CharConfig[], seed = SEED_FUNDS): () => WorldEcon
 /** Flat, stable subscriber base (a well-supported troupe). */
 export const constSub = (n: bigint) => () => n;
 
-/** Owner-subsidy policy: top a character up to `targetRunwayDays` of cost each day (挹注). */
+/** Owner-subsidy policy: top a character up to `targetRunwayDays` of cost each day. */
 export function keepSolvent(targetRunwayDays: bigint) {
   return (c: CharState, cfg: EconConfig): bigint => {
     const target = dailyCost(c, cfg) * targetRunwayDays;
@@ -123,7 +123,7 @@ export const mixedCohort: Scenario = {
   seed: 3,
 };
 
-/** Payroll-stress: many mouths, thin subscriptions → base prorated (全班一起縮). */
+/** Payroll-stress: many mouths, thin subscriptions → base floor prorated across the whole troupe. */
 export const payrollStress: Scenario = {
   id: "payroll-stress",
   description: "人多訂閱薄：sagaInflow<Σ保底 → 保底按比例打折，全班一起縮、慢性死。",
@@ -142,7 +142,7 @@ export const payrollStress: Scenario = {
   seed: 4,
 };
 
-/** H6: a reader-less but owner-loved character (市井攤販) — kept alive by 挹注 at bounded cost.
+/** H6: a reader-less but owner-loved character — kept alive by owner subsidy at bounded cost.
  *  Same reader-less start as `starving`, but owner subsidy → survives; dormant gate keeps the
  *  owner's daily burn cheap (and rising only slowly with accumulated memory). */
 export const vendor: Scenario = {

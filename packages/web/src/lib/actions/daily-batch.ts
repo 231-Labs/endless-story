@@ -6,7 +6,7 @@
  * This is the Phase 2 scheduler core, driven manually by an admin button
  * (and reusable by a future standalone CLI loop). One run:
  *   1. (optional) advance the World tick — Layer-1 narrative time moves
- *   2. read the new World time → derive 第 N 日 / 時辰
+ *   2. read the new World time → derive day-N / time-of-day
  *   3. list the saga's characters (all, or subscribed-only)
  *   4. for each, generate a day/part-aware POV chapter (sequential —
  *      one admin keypair can't sign in parallel without object-version

@@ -11,7 +11,7 @@ import { txUrl } from '@/lib/explorer';
 /**
  * Admin panel: advance the World tick (the chain-canonical narrative
  * clock). Day / part-of-day are derived from tick + days_per_tick_bp.
- * The gazette compiler reads this to title each issue 「第 N 日」.
+ * The gazette compiler reads this to title each issue "Day N".
  *
  * This is the manual driver until the Phase 2 scheduler advances ticks
  * automatically.

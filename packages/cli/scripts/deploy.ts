@@ -15,7 +15,7 @@
  *   --gas-budget 2000000000                 (default)
  *   --dry-run                               (validate flags, do not publish)
  *
- * See AGENTS.md → 「鏈上架構」 + skill `/devnet-bootstrap`.
+ * See AGENTS.md → on-chain-architecture + skill `/devnet-bootstrap`.
  */
 import * as path from 'node:path';
 import * as url from 'node:url';

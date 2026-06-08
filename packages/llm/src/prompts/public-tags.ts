@@ -3,7 +3,7 @@
  * would socially read a newly minted character.
  *
  * These are public identity/status labels, not private memories:
- *   - good: 麗質天生, 武場底子, 摩登新派, 文墨清通
+ *   - good: visible traits, training background, social style, literacy
  *   - bad: secret lineage, future achievements, relationship claims
  */
 

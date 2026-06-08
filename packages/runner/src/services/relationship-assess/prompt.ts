@@ -3,7 +3,7 @@
  *
  * After a character is minted we ask the LLM to judge, from the public
  * DESCRIPTIONS alone, which existing saga members this character plausibly
- * already has a tie with — INCLUDING pre-existing acquaintance (故舊), since a
+ * already has a tie with — INCLUDING pre-existing acquaintance (old ties), since a
  * character is pulled into the saga "from the middle of their life" and may
  * carry old ties, not just first impressions.
  *
@@ -21,15 +21,15 @@ export type { GenesisRosterEntry };
 /** Mirrors `RelationshipTone` in @endless-story/shared (kept as a literal list
  *  so the runner doesn't depend on the web/shared tone enum at runtime). */
 export const RELATIONSHIP_TONES = [
-    'affection', // 親近
-    'romance', // 戀慕
-    'mentorship', // 師徒
-    'rivalry', // 競爭
-    'wary', // 戒備
-    'tension', // 緊張
-    'estrangement', // 隔閡
-    'acquaintance', // 故舊（故事前就認識，當下情感色彩未定）
-    'neutral', // 平淡
+    'affection',
+    'romance',
+    'mentorship',
+    'rivalry',
+    'wary',
+    'tension',
+    'estrangement',
+    'acquaintance', // knew each other before the story; current tone undefined
+    'neutral',
 ] as const;
 export type RelationshipToneValue = (typeof RELATIONSHIP_TONES)[number];
 

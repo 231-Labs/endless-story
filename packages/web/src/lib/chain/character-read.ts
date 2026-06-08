@@ -79,7 +79,7 @@ function mapChainCharacter(id: string, json: ChainCharacter, ownerOverride?: str
         currentSceneId: unwrapOption(json.state?.current_scene_id),
         name: profile?.name ?? '無名',
         description: profile?.description ?? '',
-        // Chain stores public identity as tags (e.g. `role:小生`). The
+        // Chain stores public identity as tags (e.g. `role:<role-type>`). The
         // facade may still enrich from voucher hints for older untagged mints.
         role: roleStr as CharacterRole,
         gender: mapGender(physical?.gender ?? ''),
@@ -271,7 +271,7 @@ function computeSurvival(
         ageYearsStart: Number(json.profile?.physical_facts?.age_years ?? 0),
         // real per-namespace count from the relayer when available; else an age proxy.
         memoryCount: memoryCountOverride ?? 5 + today * 3,
-        // 設定集 image count (on-chain media_assets) — grows with event moments / evolve-portrait.
+        // Gallery image count (on-chain media_assets) — grows with event moments / evolve-portrait.
         imageCount: Array.isArray(json.media_assets) ? json.media_assets.length : 0,
         subscribers: json.subscriber_count != null ? Number(json.subscriber_count) : 0,
         today,

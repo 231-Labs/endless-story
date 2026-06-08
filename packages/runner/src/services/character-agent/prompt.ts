@@ -3,7 +3,7 @@
  *
  * The character, in an event, chooses which card from their dealt hand to
  * play. The choice is conditioned on persona + role voice + RECALLED
- * MEMORIES — so a war-scarred reporter and a brash 武小生 dealt the same
+ * MEMORIES — so a war-scarred reporter and a brash martial-role actor dealt the same
  * hand play differently. This is the believable-agent core: memory →
  * choice, not RNG.
  */

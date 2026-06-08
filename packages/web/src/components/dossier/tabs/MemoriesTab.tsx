@@ -21,17 +21,10 @@ const KIND_LABEL: Record<CharacterMemoryKind, string> = {
 };
 
 /**
- * 三色 × 三形 視覺分層 — 第一眼讀出「她是怎麼記得這條的」。
- *
- * 顏色：
- *  - cinnabar（朱）= 內在 / 主要記得
- *  - jade（青）   = 關於他人 / 旁觀
- *  - mute（灰）   = 事實 / 未驗證
- *
- * 形狀：
- *  - filled  圓 = 親身、可信
- *  - ring    環 = 外來 / 未驗證 / 夢
- *  - diamond ◆ = 永久性 / 複合（artifact 寫進 Walrus / relationship 對人）
+ * 3-tone x 3-shape encoding of how a memory is held.
+ * Tone:  cinnabar = inner/primary, jade = about others, mute = fact/unverified.
+ * Shape: filled = firsthand/trusted, ring = external/unverified/dream,
+ *        diamond = permanent/composite (artifact in Walrus / relationship).
  */
 type DotShape = 'filled' | 'ring' | 'diamond';
 type DotTone = 'cinnabar' | 'jade' | 'mute' | 'faint';
@@ -154,18 +147,18 @@ function MemoryEntry({
         ) : null}
       </div>
 
-      {/* provenance micro line — 只在非 self 時顯示 */}
+      {/* provenance micro line — only shown for non-self */}
       <ProvenanceLine
         provenance={memory.provenance}
         charactersById={charactersById}
       />
 
-      {/* summary line — 字重 reflect importance */}
+      {/* summary line — weight reflects importance */}
       <p className={`mt-5 font-serif text-xl leading-snug tracking-wide ${summaryWeight}`}>
         <Linkified text={memory.summary} characters={sagaCharacters} skipId={selfId} />
       </p>
 
-      {/* body — italic quote 體 with cinnabar left border */}
+      {/* body — italic quote style with cinnabar left border */}
       <div className="mt-4 border-l-2 border-cinnabar/30 pl-5 text-base leading-loose text-ink/75 dark:border-cinnabar/40">
         <Linkified text={memory.body} characters={sagaCharacters} skipId={selfId} />
       </div>
@@ -173,7 +166,7 @@ function MemoryEntry({
   );
 }
 
-/** importance（1-10）→ summary 字重，視覺上的「她記得多深」 */
+/** importance (1-10) → summary font weight, visually "how deeply remembered" */
 function importanceClass(importance: number): string {
   if (importance >= 9) return 'font-medium text-ink';
   if (importance >= 6) return 'text-ink';

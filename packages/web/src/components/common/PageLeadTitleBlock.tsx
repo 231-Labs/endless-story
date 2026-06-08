@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 
 /**
- * 全站「功能頁」主標區：與 SiteNav 以下首屏標題字階、字距、留白對齊。
+ * Site-wide lead title block for utility pages — aligns type scale, tracking,
+ * and spacing with the first-screen heading below SiteNav.
  */
 export function PageLeadTitleBlock({
   eyebrow,
@@ -12,12 +13,12 @@ export function PageLeadTitleBlock({
   className = '',
 }: {
   eyebrow?: string;
-  /** 窄螢顯示較短的輔標（sm 以上仍用 eyebrow） */
+  /** Shorter eyebrow for narrow screens (sm and up still use `eyebrow`) */
   eyebrowMobile?: string;
   title: ReactNode;
-  /** 標題下輔助說明（選用） */
+  /** Optional helper text below the title */
   meta?: ReactNode;
-  /** 右側欄：搜尋、篩選等 */
+  /** Right-side slot: search, filters, etc. */
   end?: ReactNode;
   className?: string;
 }) {

@@ -4,17 +4,17 @@ import { USE_MOCK } from './config';
 import { httpGet, httpPost } from './http';
 
 /**
- * Interventions API（owner 寄夢 / 耳語）
+ * Interventions API (owner send-dream / whisper)
  *
- * 後端對應 endpoints：
+ * Backend endpoints:
  *   GET   /interventions?characterId={id}                  → OwnerIntervention[]
  *   POST  /interventions                                   → OwnerIntervention  body: { characterId, ownerWallet, kind, text }
  *
- * 後端應該：
- *   - 寫入時驗證 ownerWallet 是該 character.nftOwner
- *   - 內容 Seal 加密、看客視角只看到「夢/語 · 已感應」、看不到 body
- *   - 角色下次 perceive 時把 dream 投影進 perception bundle
- *   - acknowledgedAt 由 saga server 在角色採納 / 拒絕後寫
+ * Backend should:
+ *   - on write, verify ownerWallet is the character.nftOwner
+ *   - Seal-encrypt the content; onlookers see only "dream/word · sensed", not the body
+ *   - project the dream into the perception bundle on the character's next perceive
+ *   - acknowledgedAt is written by the saga server after the character accepts / rejects
  */
 
 export async function listInterventions(characterId: string): Promise<OwnerIntervention[]> {

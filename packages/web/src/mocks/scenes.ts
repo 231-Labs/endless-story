@@ -2,16 +2,16 @@ import type { Scene, SceneClip } from '@endless-story/shared';
 import { LOC_COMPOUND_ID, LOC_THEATER_ID, DEMO_SAGA_ID } from './sagas';
 
 /**
- * 春雪社擁有的 scenes — 戲樓內外的細節空間。
- * 對應舊版 chain 上 Scene 物件（saga 在 location 內建立）。
+ * Scenes owned by the Spring Snow troupe — the detailed spaces in and around the theater.
+ * Maps to the old on-chain Scene object (saga creates them inside a location).
  *
- * privacyLevel：
- *   0 公開大庭廣眾   · 戲樓主台 / 院中空地
- *   1 工作場所       · 後台 / 樂棚 / 帳房 / 箱房
- *   2 半私密         · 廂房 / 雜物間門口
- *   3 幽僻           · 後巷
- *   4 夜宿共寢       · 通鋪
- *   5 獨處私房       · 班主帳房內室
+ * privacyLevel:
+ *   0 fully public      · main stage / open courtyard
+ *   1 workplace         · backstage / music pit / counting-room / wardrobe room
+ *   2 semi-private      · side rooms / storeroom doorway
+ *   3 secluded          · back alley
+ *   4 shared sleeping   · communal bunks
+ *   5 private quarters  · troupe-master's inner counting-room
  */
 export const scenes: Scene[] = [
   {
@@ -21,7 +21,7 @@ export const scenes: Scene[] = [
     name: '戲樓主台',
     description: '百花樓的中庭木台。三面開窗，燈火通明時可坐三百客。',
     privacyLevel: 0,
-    // 江老闆此刻坐在第七排靠左看戲 — 江湖中人「跨界拜訪」的時刻
+    // Boss Jiang is watching from row 7, left side — an outside-world figure's "cross-over visit" moment
     currentCharacterIds: ['char_jiang_laoban'],
     recentEventChapterId: 'chapter_day3_water_sleeves',
     heatProfile: { cinnabar: 0.6, jade: 0.85, mute: 0.3 },
@@ -56,7 +56,7 @@ export const scenes: Scene[] = [
     name: '後台',
     description: '主台後側的化妝與候場區。卸妝鏡與道具籮並排，常聽見胡琴試弦聲。',
     privacyLevel: 1,
-    // 葉庭芳此刻已轉到東廂外廊（與她的 liveState 一致）— 此處剩程蘅玉一人
+    // Ye has moved to the east-wing outer corridor (consistent with her liveState) — only Cheng remains here
     currentCharacterIds: ['char_cheng_hengyu'],
     recentEventChapterId: 'chapter_day3_water_sleeves',
     heatProfile: { cinnabar: 0.95, jade: 0.5, mute: 0.4 },

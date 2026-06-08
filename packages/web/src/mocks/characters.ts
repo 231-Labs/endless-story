@@ -289,7 +289,7 @@ export const characters: Character[] = [
     createdAt: '2026-05-16T14:00:00Z',
   },
 
-  // ───── 江湖外連（wild / 不屬於 saga 但有跨界關係）─────
+  // ───── Outside-world links (wild / not in the saga but cross-linked) ─────
   {
     id: 'char_tan_silang',
     nftOwner: OWNER_B,

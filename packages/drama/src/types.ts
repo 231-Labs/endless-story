@@ -42,7 +42,7 @@ export interface Desire {
  * Optional deterministic per-tick top-up for a resource — the locked "fixed per-tick
  * refill" action-budget decision (brief §3.1). It lives INSIDE applyTick (a REFILL phase),
  * NOT in the driver, so re-running applyTick alone reproduces budget state and the whole
- * transition stays on-chain verifiable. Contested zero-sum resources (the 孟雲屏 partnership
+ * transition stays on-chain verifiable. Contested zero-sum resources (the Meng partnership
  * slot) simply omit `refill`.
  */
 export interface ResourceRefill {

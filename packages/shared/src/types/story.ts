@@ -57,20 +57,18 @@ export interface StorySaga {
   owner_bps: number;
   storyteller_bps: number;
   treasury_bps: number;
-  /**
-   * 本 saga 認領（有敘事權）的 location，以 `locations[]` 的索引表示。
-   * 這就是鏈上 `Saga.covered_location_ids`，也是手卷橫軸畫哪些地點的依據。
-   * 不必每個都已安排 scene（暫時沒戲的地點仍算覆蓋、畫成空院落）。
-   * 省略 = 覆蓋世界裡全部 location（向後相容；單一 saga 的舊行為）。
-   */
+  // Locations this saga claims (has narrative rights over), as indices into
+  // `locations[]` — on-chain `Saga.covered_location_ids`, and what the handscroll
+  // draws. A claimed location needs no scene yet (drawn as an empty courtyard).
+  // Omit = cover every location in the world (back-compat single-saga behavior).
   covered_location_indices?: number[];
   departure_policy: string;
-  /** 事件氣質 — per-saga narrative DNA (F). Layered onto the genre baseline
-   *  so each戲班 reads in a distinct voice. Optional; '' when unset. */
+  // Per-saga narrative DNA, layered onto the genre baseline so each troupe reads in
+  // a distinct voice. '' when unset.
   nature_prompt?: string;
-  /** 自然節律 — dawn warm-up / dusk curtain cues (F). Optional; '' when unset. */
+  // Natural rhythm: dawn warm-up / dusk curtain cues. '' when unset.
   rhythm_hints?: string;
-  /** 畫風 — per-saga portrait art direction (F). Optional; '' when unset. */
+  // Per-saga portrait art direction. '' when unset.
   portrait_tone?: string;
 }
 
@@ -91,9 +89,9 @@ export interface StoryScene {
    * Written to chain as `Scene.placement.pos_x` / `pos_y`.
    *
    * Convention for the spring-snow scroll layout:
-   *   - x: 0–33  → 戲樓 zone (theater)
-   *   - x: 33–50 → 月洞門 gap (transitional)
-   *   - x: 50–95 → 院落 zone (compound)
+   *   - x: 0–33  → theater zone
+   *   - x: 33–50 → moon-gate gap (transitional)
+   *   - x: 50–95 → compound zone
    *   - y: 30–80 → vertical band that reads natural on 100vh canvas
    *
    * Other story presets may use a different visual layout; the chain

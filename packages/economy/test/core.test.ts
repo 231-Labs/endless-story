@@ -64,7 +64,7 @@ test("determinism: settleDay is a pure function (does not mutate input)", () => 
 });
 
 test("golden vector: hand-computed single-day settle", () => {
-  // 1 char, role 小生 (base 8), attrs all 50 ⇒ attrModifier = 1.000, no slot, onset far away.
+  // 1 char, role base 8, attrs all 50 ⇒ attrModifier = 1.000, no slot, onset far away.
   const cfg: CharConfig = { id: "x", role: "小生", constitution: 50, appearance: 50, acuity: 50, ageYearsStart: 20, onsetMilliYears: 100_000n };
   const c = newChar(cfg, 56_000_000n); // seed 56 ENDLESS
   c.subscribers = 4n;

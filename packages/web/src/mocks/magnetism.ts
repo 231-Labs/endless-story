@@ -1,12 +1,12 @@
 import type { CharacterMagnetism } from '@endless-story/shared';
 
 /**
- * 9 角色的 magnetism 數據 — 由舊版 `lib/character-magnetism.ts` 收進 mocks layer。
+ * Magnetism data for the 9 characters — moved into the mocks layer from the old `lib/character-magnetism.ts`.
  *
- * 未來接 backend 時：
- *   - subscriberCount → 從訂閱表 count(*) where character_id = ?
- *   - signatureQuote  → 由 LLM / saga server 從 reflections / chapters 挑出
- *   - nextPovHint     → 由 saga server runner schedule 推算
+ * When wired to a backend later:
+ *   - subscriberCount → count(*) from the subscriptions table where character_id = ?
+ *   - signatureQuote  → picked from reflections / chapters by the LLM / saga server
+ *   - nextPovHint     → derived from the saga server runner schedule
  */
 export const magnetismByCharacterId: Record<string, CharacterMagnetism> = {
   char_shen_huaiyin: {

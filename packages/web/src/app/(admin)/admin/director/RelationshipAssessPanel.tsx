@@ -11,9 +11,9 @@ import {
 /**
  * Admin panel: assess ONE character's relationships to the saga roster from
  * public descriptions, review the LLM proposals, then seed them as symmetric
- * director ties (公開關係圖) + symmetric memories on both sides.
+ * director ties (public relationship graph) + symmetric memories on both sides.
  *
- * Saga-wide relationship 補帳 lives in the reconciler (對帳全班) — the single
+ * Saga-wide relationship backfill lives in the reconciler (reconcile-all) — the single
  * batch entry. This panel is for reviewed, targeted single-character seeding.
  */
 

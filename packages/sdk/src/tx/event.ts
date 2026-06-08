@@ -63,7 +63,7 @@ export const outcomesWithResourceTransfers = (
     args: gen.OutcomesWithResourceTransfersArguments,
 ) => gen.outcomesWithResourceTransfers({ package: pkg(), arguments: args });
 
-/** Construct one public identity/status tag op (e.g. `role:小生`). */
+/** Construct one public identity/status tag op (e.g. `role:<value>`). */
 export const newTagOp = (args: gen.NewTagOpArguments) =>
     gen.newTagOp({ package: pkg(), arguments: args });
 

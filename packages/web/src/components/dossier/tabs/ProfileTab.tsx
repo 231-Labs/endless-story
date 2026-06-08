@@ -203,20 +203,15 @@ export function ProfileTab({
 
 // ─────────────── Relationship row ───────────────
 //
-// 設計：tone dot（色 × 形）+ label + weight 一行
-//      summary（fallback 用 label）作引文體
-//      日 X — 日 Y · 信度 N% 作微 meta
+// Layout: tone dot (color x shape) + label + weight on one line,
+//   summary as a quote, date range + confidence as micro meta.
 //
-// tone 視覺對映 — 與 MemoriesTab 的 KindDot 共用色 / 形語彙：
-//   親近 affection   → ● cinnabar （朱圓 / 樸實親）
-//   戀慕 romance     → ◆ cinnabar （朱菱 / 獨特熱烈）
-//   師徒 mentorship  → ● jade     （青圓 / 生長關係）
-//   競爭 rivalry     → ◆ mute     （灰菱 / 理性對峙）
-//   戒備 wary        → ○ mute     （灰環 / 保持距離）
-//   緊張 tension     → ○ cinnabar （朱環 / 內熱外冷）
-//   隔閡 estrangement→ ● faint    （淡圓 / 已遠）
-//   故舊 acquaintance→ ○ jade     （青環 / 舊識有淵源、當下分寸）
-//   平淡 neutral     → ● faint    （淡圓 / 未起）
+// Tone → visual (shares the dot vocabulary with MemoriesTab's KindDot):
+//   affection    → ● cinnabar      romance      → ◆ cinnabar
+//   mentorship   → ● jade          rivalry      → ◆ mute
+//   wary         → ○ mute          tension      → ○ cinnabar
+//   estrangement → ● faint         acquaintance → ○ jade
+//   neutral      → ● faint
 
 type ToneShape = 'filled' | 'ring' | 'diamond';
 type ToneColor = 'cinnabar' | 'jade' | 'mute' | 'faint';

@@ -7,6 +7,7 @@ import {
   scenesApi,
 } from '@/lib/api/index';
 import type { CharacterLiveState } from '@endless-story/shared';
+import { byId } from '@/lib/collections';
 import { SiteNav } from '@/components/home/SiteNav';
 import { SagaHandscroll } from '@/components/saga/handscroll/SagaHandscroll';
 import { CastConstellation } from '@/components/saga/CastConstellation';
@@ -41,15 +42,15 @@ export default async function SagaPage({
       (saga.coveredLocationIds ?? []).map((lid) => locationsApi.getLocation(lid))
     ).then((arr) => arr.filter((l): l is NonNullable<typeof l> => Boolean(l))),
   ]);
-  const charactersById = new Map(cast.map((c) => [c.id, c]));
+  const charactersById = byId(cast);
 
-  // 收 cast 之間 + cast → wild 的所有 outgoing edges
+  // All outgoing edges: cast↔cast + cast→wild
   const allEdgesArrays = await Promise.all(
     cast.map((c) => relationshipsApi.listOutgoingEdges(c.id))
   );
   const allCastEdges = allEdgesArrays.flat();
 
-  // 找出 cast 外被指到的 wild 角色 ids
+  // Wild character ids pointed at from outside the cast
   const wildCharIds = Array.from(
     new Set(allCastEdges.filter((e) => !charactersById.has(e.toId)).map((e) => e.toId))
   );
@@ -58,13 +59,13 @@ export default async function SagaPage({
   );
   const wildCast = wildCharsRaw.filter((c): c is NonNullable<typeof c> => Boolean(c));
 
-  // 還要拿 wild → cast 反向邊（顯示江湖對 saga 的視角）
+  // Also fetch wild→cast reverse edges (jianghu's view of the saga)
   const wildEdgesArrays = await Promise.all(
     wildCast.map((c) => relationshipsApi.listOutgoingEdges(c.id))
   );
   const wildEdges = wildEdgesArrays.flat().filter((e) => charactersById.has(e.toId));
 
-  // 全圖能 render 的 character ids（cast + wildCast）
+  // All renderable character ids (cast + wildCast)
   const allCharIds = new Set([...cast.map((c) => c.id), ...wildCast.map((c) => c.id)]);
   const edges = [...allCastEdges, ...wildEdges].filter((e) => allCharIds.has(e.toId));
 
@@ -111,13 +112,13 @@ export default async function SagaPage({
     }),
   );
 
-  // 給 handscroll：cast + wildCast 都進 charactersById，wild 在 scene 內也能渲染剪影
-  const allCharactersById = new Map(allCharsForLive.map((c) => [c.id, c]));
+  // For handscroll: cast + wildCast both go in charactersById so wild can render silhouettes in-scene
+  const allCharactersById = byId(allCharsForLive);
 
-  // 江湖在外：本 saga 成員（saga_id 綁定 = cast）中，當前不在覆蓋 turf 的人。
-  // scenes 可能 anchor 在未覆蓋的外部 location（堂子/會館等），補抓這些 location 名以標示「在哪」。
+  // "Out in jianghu": saga members (saga_id-bound = cast) not currently on covered turf.
+  // Scenes may anchor at uncovered external locations; fetch those names to label "where".
   const coveredLocIds = new Set(locations.map((l) => l.id));
-  const sceneById = new Map(scenes.map((s) => [s.id, s]));
+  const sceneById = byId(scenes);
   const externalLocIds = Array.from(
     new Set(
       scenes

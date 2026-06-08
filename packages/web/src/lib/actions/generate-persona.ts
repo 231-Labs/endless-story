@@ -1,9 +1,9 @@
 'use server';
 
 /**
- * Generate + anchor a character's 本色 (persona).
+ * Generate + anchor a character's persona.
  *
- * Distils 軸/腔/界 from the on-chain public profile via the LLM, then anchors the persona JSON on
+ * Distils the three persona axes from the on-chain public profile via the LLM, then anchors the persona JSON on
  * the content road (public Walrus blob + `commitment::commit`, on its own derived subject
  * namespace — see persona-read.ts). Public + verifiable, no backend/DB.
  *
@@ -25,7 +25,7 @@ export interface GeneratePersonaResult {
   skipped?: string;
   error?: string;
   /** The freshly distilled persona — returned so an admin re-distill UI can
-   *  show the new 軸/腔/界 without a (possibly lagging) chain re-read. */
+   *  show the new persona axes without a (possibly lagging) chain re-read. */
   persona?: CharacterPersona;
 }
 
@@ -39,7 +39,7 @@ export async function generatePersonaAction(characterId: string): Promise<Genera
   if (!character) return { ok: false, skipped: 'character_unreachable' };
   if (!character.sagaId) return { ok: false, skipped: 'no_saga' };
 
-  // 1. Distil 軸/腔/界 from the public profile.
+  // 1. Distil the persona axes from the public profile.
   let distilled;
   try {
     const llm = llmText.createTextClient({ kind: 'primary' });

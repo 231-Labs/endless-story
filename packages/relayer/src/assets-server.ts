@@ -1,9 +1,10 @@
-// Walrus 資產服務 — HTTP server。獨立於 MemWAL relayer(server.ts)的另一個進程/service。
-// 零 npm dep、node:http、原生 TS:`node src/assets-server.ts`。預設 PORT 8788(relayer = 8787)。
+// Walrus asset service — HTTP server. A separate process from the MemWAL relayer
+// (server.ts). Zero npm deps, node:http, plain TS: `node src/assets-server.ts`.
+// Default PORT 8788 (relayer = 8787).
 //
-// 端點(規格見 docs/WALRUS_ASSETS.md §4):
+// Endpoints (spec in docs/WALRUS_ASSETS.md §4):
 //   GET    /health                       → { ok, walrus, assets, network }
-//   GET    /api/manifest/hero-clips       → { clips:[...] }   (公開;前端 DEMO_CLIPS_URL 打這支)
+//   GET    /api/manifest/hero-clips       → { clips:[...] }   (public; frontend DEMO_CLIPS_URL hits this)
 //   GET    /api/assets[?category=]        → { assets:[view], currentEpoch }   (authed)
 //   POST   /api/assets?category=&label=&epochs=&deletable=&meta=  body=raw bytes  (authed)
 //   GET    /api/assets/wallet             → { sui, wal }                       (authed)
@@ -11,7 +12,8 @@
 //   PATCH  /api/assets/:id  { status?, autoRenew?, label? }                    (authed)
 //   DELETE /api/assets/:id                                                     (authed)
 //
-// Auth: 若設 RELAYER_SECRET,除 /health 與 manifest 外全程 `Authorization: Bearer <s>`。
+// Auth: when RELAYER_SECRET is set, everything except /health and the manifest requires
+// `Authorization: Bearer <s>`.
 
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -39,7 +41,8 @@ const PUBLIC_AGGREGATOR_BASE = (
     : "https://aggregator.walrus-testnet.walrus.space")
 ).replace(/\/$/, "");
 const RENEW_THRESHOLD_EPOCHS = Number(process.env.RENEW_THRESHOLD_EPOCHS ?? 5);
-// epoch 時長(ms)— 換算到期日用。testnet ≈ 1 天、mainnet ≈ 14 天;可用 WALRUS_EPOCH_MS 覆寫。
+// Epoch duration (ms) — used to derive expiry dates. testnet ≈ 1 day, mainnet ≈ 14 days;
+// override with WALRUS_EPOCH_MS.
 const EPOCH_MS = Number(process.env.WALRUS_EPOCH_MS ?? (NETWORK === "mainnet" ? 14 : 1) * 86_400_000);
 
 const store = new AssetStore(join(DATA_DIR, "walrus-assets.json"));
@@ -68,7 +71,7 @@ function boolParam(v: string | null, dflt: boolean): boolean {
   return v === "1" || v === "true" || v === "yes";
 }
 
-/** hero-clip asset → demo-clips.json 一筆 clip(scenes.ts loadDemoClipOverride 會 normalize)。 */
+// hero-clip asset → one demo-clips.json clip (scenes.ts loadDemoClipOverride normalizes it).
 function toClip(a: WalrusAsset): Record<string, unknown> {
   const m = a.meta ?? {};
   return {
@@ -104,7 +107,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     });
   }
 
-  // public manifest for the homepage hero (前端 DEMO_CLIPS_URL 打這支;不需 auth)
+  // public manifest for the homepage hero (frontend DEMO_CLIPS_URL hits this; no auth)
   if (method === "GET" && path === "/api/manifest/hero-clips") {
     const clips = store
       .list()

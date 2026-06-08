@@ -1,16 +1,16 @@
-// Step 2 — the 柳生春 moment: intra-agent trade-off.
+// Step 2 — the Liu moment: intra-agent trade-off.
 //
 // Each performer now carries TWO desires drawing from TWO different capacity-1 resources:
-//   - partner : 與孟雲屏搭戲   (draws from partnership:孟雲屏)
-//   - fame    : 搶壓軸          (draws from spotlight:壓軸)
+//   - partner : be Meng's stage partner   (draws from the Meng partnership slot)
+//   - fame    : grab the headliner slot    (draws from the spotlight slot)
 // Both are contested across the two performers (zero-sum), AND — crucially — both of a
 // performer's desires are funded from that performer's ONE finite schedule budget. So
-// chasing 壓軸 spends the budget that would have gone to defending 孟雲屏 partnership.
+// chasing the headliner slot spends the budget that would have defended the partnership.
 //
 // The trade-off is NEVER declared. It is *derived* from the budget being finite: when the
 // budget can fund only one pursuit per cycle, the performer is forced to neglect the other,
 // and we watch the neglected desire's satisfaction slide. The emergent, legible "torn
-// between two ambitions" moment is 柳生春's.
+// between two ambitions" moment is Liu's.
 //
 // Two variants prove it is budget-caused, not scripted:
 //   scarce   — tight budget → forced-choice ticks pile up, focus alternates (the trade-off).
@@ -90,12 +90,12 @@ const basePlanner: PlannerConfig = {
   scheduleResourceId: scheduleId,
 };
 
-// 柳生春 is the protagonist of the trade-off; 白牡丹 is the FIXED rival that keeps poaching
-// both slots, forcing 柳生春 to re-defend them. Crucial design point discovered while
+// Liu is the protagonist of the trade-off; Bai is the FIXED rival that keeps poaching
+// both slots, forcing Liu to re-defend them. Crucial design point discovered while
 // calibrating: the intra-agent budget trade-off only stays *live* under ongoing contention —
-// holding a slot is free once acquired, so without a rival 柳生春 would simply grab both and
+// holding a slot is free once acquired, so without a rival Liu would simply grab both and
 // rest. The trade-off is "I must re-seize BOTH every cycle but can only afford ONE". So the
-// clean ablation varies ONLY 柳生春's budget and holds 白牡丹's poaching pressure constant.
+// clean ablation varies ONLY Liu's budget and holds Bai's poaching pressure constant.
 const RIVAL_BAI: PerformerSpec = { id: BAI, partnerWeight: pct(0.82), fameWeight: pct(0.8), budgetCap: 8n, refill: 1n };
 const liu = (budgetCap: bigint, refill: bigint): PerformerSpec => ({
   id: LIU,
@@ -106,9 +106,10 @@ const liu = (budgetCap: bigint, refill: bigint): PerformerSpec => ({
 });
 
 // ---- scarce: the trade-off is live ----------------------------------------------------
-// 柳生春 budget cap == cost, refill 1/tick → it can re-seize ~one slot per 8 ticks. With
-// 白牡丹 poaching both, 柳生春 must pick which to reclaim each cycle → the other stays lost.
-// The 柳生春 moment: torn between 陪孟雲屏排戲 and 搶壓軸, it cannot hold both.
+// Liu's budget cap == cost, refill 1/tick → it can re-seize ~one slot per 8 ticks. With
+// Bai poaching both, Liu must pick which to reclaim each cycle → the other stays lost.
+// The Liu moment: torn between rehearsing with Meng and grabbing the headliner slot,
+// it cannot hold both.
 export const scarce: Scenario = {
   id: "fame-scarce",
   description: "柳生春's two desires share one tight budget while 白牡丹 poaches both slots → emergent trade-off",
@@ -120,8 +121,8 @@ export const scarce: Scenario = {
 };
 
 // ---- abundant: ablation removing the scarcity -----------------------------------------
-// SAME world & SAME 白牡丹 pressure; only 柳生春's budget is made abundant (refill ≥ 2×cost).
-// Now 柳生春 can re-seize BOTH slots every tick, out-competing 白牡丹 → it holds both → the
+// SAME world & SAME Bai pressure; only Liu's budget is made abundant (refill ≥ 2×cost).
+// Now Liu can re-seize BOTH slots every tick, out-competing Bai → it holds both → the
 // trade-off vanishes. The single changed variable is the budget, so the budget IS the cause.
 export const abundant: Scenario = {
   id: "fame-abundant",

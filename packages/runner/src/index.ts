@@ -8,7 +8,7 @@
  *   - Services usable as `runOnce(input)` for web admin actions; tail
  *     mode for long-running event subscribers comes later
  *
- * See AGENTS.md → 「Runner v2 設計」.
+ * See AGENTS.md → "Runner v2 design".
  */
 
 export * as director from './services/saga-director/index.js';
@@ -25,7 +25,7 @@ export * as video from './services/video-compiler/index.js';
 export * from './types/index.js';
 
 export { fetchEventsSince } from './infra/event-bus.js';
-export { signAndAnchor, signAndAnchorBatch, pushCommitCall } from './infra/sign-and-anchor.js';
+export { signAndAnchor, signAndAnchorBatch } from './infra/sign-and-anchor.js';
 export type { AnchorItem, BatchAnchorOptions } from './infra/sign-and-anchor.js';
 export { resolveNetwork } from './infra/network.js';
 export {

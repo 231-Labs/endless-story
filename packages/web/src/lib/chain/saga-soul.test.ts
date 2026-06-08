@@ -1,4 +1,4 @@
-// Unit tests for the runner POV「戲班氣質」block (F — saga soul).
+// Unit tests for the runner POV troupe-temperament block (F — saga soul).
 // Kept node-clean: imports the zero-dependency builder directly (mirrors
 // role-inference.test.ts importing shared/role-traits.ts) so `node --test`
 // needn't load the prompt module's @endless-story/shared import.

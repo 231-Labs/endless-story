@@ -74,7 +74,7 @@ export interface PovCoreResult {
 /**
  * Resolve a character's role from voucher hint → off-chain
  * Recruitment.specialty. Chain Character has no role field; this is what
- * makes the LLM address「富商」instead of a placeholder.
+ * makes the LLM address a role like "wealthy merchant" instead of a placeholder.
  */
 export async function resolveRole(characterId: string): Promise<string | undefined> {
     try {

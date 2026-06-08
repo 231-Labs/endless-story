@@ -8,7 +8,7 @@
  * BUT saga-subject is also used by DR-6 drama-beat commitments (a
  * machine-readable affect snapshot, content-type application/json). The
  * on-chain Commitment carries no `kind`, so those would otherwise surface
- * here and render as raw JSON in the 公報 feed. We skip them by peeking at
+ * here and render as raw JSON in the gazette feed. We skip them by peeking at
  * the blob content (drama beats are `{"v":N,"kind":"drama-beat",...}`).
  *
  * Returns newest-first. Caller fetches the actual gazette markdown

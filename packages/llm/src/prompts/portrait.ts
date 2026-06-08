@@ -146,7 +146,8 @@ export function parsePortraitPrompt(text: string): string {
   const stripped = text
     .trim()
     .replace(/[，、；。\s]*[^，、；。\n]*(?:文字|題字|書法|簽名|印章|紅章|票券|唱片封套|戲報|報紙|書頁|海報|月份牌|設定卡|道具|邊框|標籤|卡片|刊物|版面設計)[^，、；。\n]*/g, '')
-    // gpt-image 把「不要油畫/寫實/動漫」當正向關鍵字 → 反招來它。整句負面照拿掉。
+    // gpt-image treats negations like "no oil-painting/photoreal/anime" as positive
+    // keywords, summoning the very thing. Drop the whole negative clause.
     .replace(/(?:[，、；。\n]\s*)?不要[^。\n]*(?:動漫|卡通|油畫|寫實|照片|渲染|3D|CG)[^。\n]*。?/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

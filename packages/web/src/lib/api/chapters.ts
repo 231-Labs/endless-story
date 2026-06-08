@@ -25,16 +25,16 @@ import { parseProvenance } from '@/lib/chain/chapter-provenance';
 /**
  * Chapters API
  *
- * 後端對應 endpoints：
- *   GET  /chapters?sagaId={id}                       → Chapter[]      (saga 全部章回)
- *   GET  /chapters?sagaId={id}&visibility=public     → Chapter[]      (僅公開)
- *   GET  /chapters?sagaId={id}&latest={n}            → Chapter[]      (最近 N 章)
- *   GET  /chapters?characterId={id}                  → Chapter[]      (該角色出場的公開章回)
+ * Backend endpoints:
+ *   GET  /chapters?sagaId={id}                       → Chapter[]      (all chapters of a saga)
+ *   GET  /chapters?sagaId={id}&visibility=public     → Chapter[]      (public only)
+ *   GET  /chapters?sagaId={id}&latest={n}            → Chapter[]      (latest N chapters)
+ *   GET  /chapters?characterId={id}                  → Chapter[]      (public chapters this character appears in)
  *   GET  /chapters/{id}                              → Chapter | 404
  *
- * 後端應該：
- *   - Chapter.body 從 Walrus blob 拉，blob id 寫在 chapter 上
- *   - visibility = saga_internal 只給 owner / storyteller 看
+ * Backend should:
+ *   - Chapter.body is pulled from a Walrus blob; the blob id is stored on the chapter
+ *   - visibility = saga_internal is visible only to owner / storyteller
  */
 
 function isDeployed(): boolean {

@@ -3,7 +3,7 @@
 /**
  * Reconciler (B) — make a character WHOLE, no matter what mint missed.
  *
- * Mint enrichment (portrait / 設定集 views / tags / persona / memories) runs
+ * Mint enrichment (portrait / gallery views / tags / persona / memories) runs
  * post-response and best-effort, so a character can land missing pieces (legacy
  * mints, a hung step, a transient failure). This action reads the current
  * on-chain state, detects what's absent, and backfills ONLY the gaps —
@@ -12,7 +12,7 @@
  * It reuses the exact same generators as the mint path, in the same order,
  * sequentially (admin-signed steps never contend for the gas coin).
  *
- * This is also what unblocks "入班不等圖": because the cover portrait itself is
+ * This is also what unblocks "join the troupe without waiting for art": because the cover portrait itself is
  * reconcilable here, mint can later complete with NO image and let this fill it.
  */
 
@@ -37,7 +37,7 @@ const ATTR_LABEL: Record<string, string> = {
     disposition: '心性',
 };
 
-/** kind=6 setting_sheet marks "additional 設定集 views were generated". */
+/** kind=6 setting_sheet marks "additional gallery views were generated". */
 const SETTING_SHEET_KIND = 6;
 
 export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'memory' | 'relationship';
@@ -169,7 +169,7 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
         steps.push({ step: 'portrait', status: 'skip', detail: 'has_cover' });
     }
 
-    // ── 2) 設定集 additional views (gate on the kind=6 art sheet) ──────
+    // ── 2) gallery additional views (gate on the kind=6 art sheet) ──────
     const hasViews = mediaAssets.some((a) => Number(a.kind) === SETTING_SHEET_KIND);
     if (!hasViews && coverUrl) {
         try {
@@ -212,7 +212,7 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
         }
     }
 
-    // ── 4) persona (本色) ─────────────────────────────────────────────
+    // ── 4) persona ─────────────────────────────────────────────
     const hasPersona = (await fetchOnChainPersona(characterId).catch(() => null)) != null;
     if (hasPersona) {
         steps.push({ step: 'persona', status: 'skip', detail: 'has_persona' });
@@ -246,7 +246,7 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
 
     // ── 6) relationship ties (assess vs roster → director public ties + memories) ─
     //     Idempotent: pairs already tied are skipped. A full-saga reconcile is the
-    //     single batch entry for relationship 補帳 (mint-ordering backfill).
+    //     single batch entry for relationship backfill (mint-ordering backfill).
     try {
         const r = await assessAndApplyRelationshipsAction(characterId);
         steps.push({

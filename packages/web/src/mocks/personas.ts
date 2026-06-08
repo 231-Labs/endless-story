@@ -3,11 +3,11 @@ import type { CharacterPersona } from '@endless-story/shared';
 const STAMP = '2026-05-15T00:00:00Z';
 
 /**
- * 9 個角色的本色 — 軸 / 腔 / 界 三欄。
- * 短句、單句不超過 24 字，列表頁直接讀完。
+ * Persona for the 9 characters — three columns (axis / register / boundary).
+ * Short phrases, each under ~24 chars, readable at a glance on the list page.
  */
 export const personas: CharacterPersona[] = [
-  // ───── 沈懷音（班主） ─────
+  // ───── Shen (troupe master) ─────
   {
     characterId: 'char_shen_huaiyin',
     axes: [
@@ -27,7 +27,7 @@ export const personas: CharacterPersona[] = [
     lastRegenChapterId: 'chapter_day1_first_rehearsal',
   },
 
-  // ───── 葉庭芳（青衣） ─────
+  // ───── Ye (qingyi / female lead) ─────
   {
     characterId: 'char_ye_tingfang',
     axes: [
@@ -47,7 +47,7 @@ export const personas: CharacterPersona[] = [
     lastRegenChapterId: 'chapter_day3_evening_meal',
   },
 
-  // ───── 程蘅玉（小生） ─────
+  // ───── Cheng (young male lead) ─────
   {
     characterId: 'char_cheng_hengyu',
     axes: [
@@ -67,7 +67,7 @@ export const personas: CharacterPersona[] = [
     lastRegenChapterId: 'chapter_day3_evening_meal',
   },
 
-  // ───── 梁照水（樂師助 / 副旦） ─────
+  // ───── Liang (musician assistant / secondary female) ─────
   {
     characterId: 'char_liang_zhaoshui',
     axes: [
@@ -81,7 +81,7 @@ export const personas: CharacterPersona[] = [
     updatedAt: STAMP,
   },
 
-  // ───── 杜聽瀾（樂師） ─────
+  // ───── Du (musician) ─────
   {
     characterId: 'char_du_tinglan',
     axes: [
@@ -95,7 +95,7 @@ export const personas: CharacterPersona[] = [
     updatedAt: STAMP,
   },
 
-  // ───── 唐桂蘭（箱管） ─────
+  // ───── Tang (wardrobe) ─────
   {
     characterId: 'char_tang_guilan',
     axes: [
@@ -109,7 +109,7 @@ export const personas: CharacterPersona[] = [
     updatedAt: STAMP,
   },
 
-  // ───── 孟雲屏（武旦） ─────
+  // ───── Meng (martial female role) ─────
   {
     characterId: 'char_meng_yunping',
     axes: [
@@ -126,7 +126,7 @@ export const personas: CharacterPersona[] = [
     updatedAt: STAMP,
   },
 
-  // ───── 蘇小宛（學徒） ─────
+  // ───── Su (apprentice) ─────
   {
     characterId: 'char_su_xiaowan',
     axes: [
@@ -140,7 +140,7 @@ export const personas: CharacterPersona[] = [
     updatedAt: STAMP,
   },
 
-  // ───── 趙鐵面（外場 / 江湖） ─────
+  // ───── Zhao (outside / wandering) ─────
   {
     characterId: 'char_zhao_tiemian',
     axes: [

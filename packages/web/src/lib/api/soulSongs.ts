@@ -4,15 +4,15 @@ import { USE_MOCK } from './config';
 import { httpGet } from './http';
 
 /**
- * Soul Songs API（角色心曲）
+ * Soul Songs API (character soul songs)
  *
- * 後端對應 endpoints：
+ * Backend endpoints:
  *   GET  /soul-songs?characterId={id}    → SoulSong[]
  *
- * 後端應該：
- *   - 心曲池由 LLM 在 saga arc / 情緒事件後生成
- *   - revealed 狀態（解鎖了哪幾首）由前端 localStorage 維護、未來可上鏈
- *   - 7 日 cooldown 是 client-side 限制
+ * Backend should:
+ *   - the song pool is LLM-generated after a saga arc / emotional event
+ *   - revealed state (which songs are unlocked) is kept in client localStorage, may go on-chain later
+ *   - the 7-day cooldown is a client-side limit
  */
 
 export async function listSoulSongs(characterId: string): Promise<SoulSong[]> {

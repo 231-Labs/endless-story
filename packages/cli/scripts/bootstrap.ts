@@ -25,7 +25,7 @@
  *   --dry-run                              (print plan, don't submit)
  *   --story-id spring-snow                 (default 'spring-snow')
  *
- * See AGENTS.md → 「下次接班」Phase 2 step 2.3.
+ * See AGENTS.md → handoff Phase 2 step 2.3.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -309,10 +309,11 @@ async function main() {
   if (locationIdsRaw.length !== story.locations.length) {
     throw new Error(`expected ${story.locations.length} locations, got ${locationIdsRaw.length}`);
   }
-  // Sui `objectChanges` 不保證按 PTB 建立順序回傳（多半按 objectId 排序），所以
-  // findCreatedByType 拿到的順序 ≠ story.locations 順序。每個 Location 的 `info.index`
-  // 才是權威序（建立時寫入 = story 索引）。依 index 重排，否則
-  // `locationIds[scene.location_index]` 會錨到錯的 location、`coveredLocationIds` 也亂序。
+  // Sui `objectChanges` doesn't preserve PTB creation order (usually sorts by
+  // objectId), so findCreatedByType's order != story.locations order. Each
+  // Location's `info.index` is the authoritative order (written at creation =
+  // story index). Re-sort by index, else `locationIds[scene.location_index]`
+  // anchors to the wrong location and `coveredLocationIds` is scrambled too.
   const locWithIndex = await Promise.all(
     locationIdsRaw.map(async (id) => {
       const r = await read.world.getLocation(client, id);
@@ -329,9 +330,10 @@ async function main() {
   const locationIds = locWithIndex.map((l) => l.id);
   console.log(`   locations ${locationIds.length} created (ordered by info.index)`);
 
-  // Saga 認領（敘事權）的 location 子集。story 可用 `saga.covered_location_indices`
-  // 指定；省略 = 覆蓋全部（向後相容）。索引對 `locations[]`，因 locationIds 已依
-  // info.index 排序，locationIds[idx] 即第 idx 個 story location。
+  // Subset of locations the saga claims (narrative authority). story may set
+  // `saga.covered_location_indices`; omitted = cover all (backward compat).
+  // Indices map to `locations[]`; since locationIds is already sorted by
+  // info.index, locationIds[idx] is the idx-th story location.
   const coveredIndices =
     story.saga.covered_location_indices ?? locationIds.map((_, i) => i);
   for (const idx of coveredIndices) {
@@ -481,9 +483,7 @@ async function main() {
   }
   console.log(`   scenes    ${sceneIds.length} created`);
 
-  // ═══════════════════════════════════════════════════════════════════
-  // Tx 6: DreamConfig — owner注夢機制 (default 50 ENDLESS, 6 decimals)
-  // ═══════════════════════════════════════════════════════════════════
+  // Tx 6: DreamConfig — owner dream-injection mechanism (default 50 ENDLESS, 6 decimals)
   const DREAM_DEFAULT_PRICE_RAW = 50_000_000n; // 50 ENDLESS
   const tx5 = new Transaction();
   tx5.add(
