@@ -282,6 +282,8 @@ export function CastConstellation({
   const hoveredEdges = hoveredId
     ? validEdges.filter((e) => e.fromId === hoveredId || e.toId === hoveredId).sort((a, b) => b.weight - a.weight)
     : [];
+  // 牽絆面板只列「深刻」關係，隱藏平淡/無 tone（neutral）的連結；星圖連線與節點高亮仍用完整 hoveredEdges。
+  const hoveredBonds = hoveredEdges.filter((e) => e.tone && e.tone !== 'neutral');
 
   const connectedIds = (() => {
     const set = new Set<string>();
@@ -331,9 +333,9 @@ export function CastConstellation({
               </div>
             ) : null}
 
-            <ul className="mt-3 max-h-[26vh] space-y-2 overflow-y-auto overscroll-contain pr-1">
-              {hoveredEdges.length > 0 ? (
-                hoveredEdges.map((e) => {
+            <ul className="mt-3 grid max-h-[34vh] grid-cols-2 gap-x-4 gap-y-1.5 overflow-y-auto overscroll-contain pr-1">
+              {hoveredBonds.length > 0 ? (
+                hoveredBonds.map((e) => {
                   const targetId = e.fromId === hoveredId ? e.toId : e.fromId;
                   const target = posById.get(targetId)?.char;
                   const toneLabel = e.tone ? TONE_LABEL[e.tone] : '平淡';
@@ -341,7 +343,7 @@ export function CastConstellation({
                   return (
                     <li
                       key={`${e.fromId}::${e.toId}::${e.tone ?? 'none'}`}
-                      className="flex items-center justify-between gap-3"
+                      className="flex items-center justify-between gap-2"
                     >
                       <span className="text-sm text-ink/90">{target?.name}</span>
                       <span className="text-2xs tracking-[0.3em]" style={{ color: toneColor }}>
@@ -351,7 +353,7 @@ export function CastConstellation({
                   );
                 })
               ) : (
-                <li className="text-xs italic text-mute">尚無深刻牽絆</li>
+                <li className="col-span-2 text-xs italic text-mute">尚無深刻牽絆</li>
               )}
             </ul>
 
