@@ -1,0 +1,11 @@
+# web build context (repo root). Exclude only the clearly-safe heavy/irrelevant stuff —
+# install fresh, build fresh. (Only applies to the repo-root Dockerfile / web service;
+# the relayer service builds from packages/relayer with its own context.)
+**/node_modules
+**/.next
+.git
+.claude
+.DS_Store
+**/*.log
+.env.local
+**/.env.local
