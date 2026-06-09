@@ -15,7 +15,14 @@ export type PromptLabCallId =
     | 'tick.gazette'
     | 'memory.genesis'
     | 'dream.moderator'
-    | 'reflection.character';
+    | 'reflection.character'
+    | 'character.publicTags'
+    | 'relationship.assess'
+    | 'induction.intro'
+    | 'image.portraitVariant'
+    | 'image.artSheet'
+    | 'image.evolve'
+    | 'image.eventMoment';
 
 export type PromptLabExecutionMode = 'inspect' | 'run';
 export type PromptLabKind = 'cheap' | 'primary' | 'deterministic';
@@ -542,6 +549,176 @@ export const PROMPT_LAB_CALLS: PromptLabCallDefinition[] = [
             ],
             previousReflection: '我總說自己只是要站穩，其實最怕的是又被人從名冊上抹去。',
             recalledMemories: ['離開舊班那夜，門房把我的箱子放在雪地裡，沒有人多說一句。'],
+        },
+    },
+    {
+        id: 'character.publicTags',
+        phase: 'RECRUIT',
+        title: '公開社會標籤',
+        shortTitle: 'PublicTags',
+        kind: 'cheap',
+        summary: '角色 mint 後補 2-4 個公開社會標籤（行當 / 出身 / 聲名），寫上鏈。',
+        outputShape: '{"tags":["…","…"]}',
+        defaultTemperature: 0.6,
+        existingTool: {
+            label: '入班 affirm',
+            href: '/dossier',
+            note: 'mint 後 affirmMintPublicTags 生成並上鏈；Lab 用 fixture 測標籤品質。',
+        },
+        defaultInput: {
+            candidate: {
+                name: '柳生春',
+                description: '外地來的女小生，台上英氣，台下怕冷，總把一枚舊銅錢縫在袖口。',
+                secret: '',
+                physicalFacts: { gender: '女', age: 22, body: '瘦削' },
+                attributes: [
+                    { key: 'appearance', label: '外貌', value: 72 },
+                    { key: 'constitution', label: '筋骨', value: 38 },
+                    { key: 'acuity', label: '機敏', value: 84 },
+                    { key: 'disposition', label: '心性', value: 56 },
+                ],
+            },
+            rolledValues: [
+                { key: 'appearance', label: '外貌', value: 72 },
+                { key: 'constitution', label: '筋骨', value: 38 },
+                { key: 'acuity', label: '機敏', value: 84 },
+                { key: 'disposition', label: '心性', value: 56 },
+            ],
+            recruitmentSpecialty: '小生',
+            recruitmentIntent: '能與花旦搭戲、又能在後台製造競爭張力的小生。',
+            fallbackTags: ['武場底子'],
+        },
+    },
+    {
+        id: 'relationship.assess',
+        phase: 'RELATIONSHIP',
+        title: '入班關係評估',
+        shortTitle: 'Relations',
+        kind: 'primary',
+        summary: '新角色入班時，評估與既有成員的初始關係（prior / first_impression）。',
+        outputShape: '{"ties":[{"otherName":"…","tone":"…","summary":"…"}]}',
+        defaultTemperature: 0.7,
+        existingTool: {
+            label: '導演 對帳全班',
+            href: '/admin/director',
+            note: '入班 / reconcile 時跑；Lab 用 fixture 測關係品質。',
+        },
+        defaultInput: {
+            name: '柳生春',
+            role: '小生',
+            gender: 'female',
+            ageYears: 22,
+            sagaName: '春雪社',
+            physicalFacts: '廿二歲，短髮束於腦後，眉如墨畫，肩線清瘦；右耳後一痣。',
+            description: '外地來的女小生，台上英氣，台下怕冷，總把一枚舊銅錢縫在袖口。',
+            recruitmentRoleIntent: '能與花旦搭戲、又能在後台製造競爭張力的小生。',
+            roster: [
+                { id: '0xmeng', name: '孟雲屏', role: '花旦', gender: 'female', ageYears: 24, brief: '班裡頭牌花旦' },
+                { id: '0xgu', name: '顧驚鴻', role: '小生', gender: 'male', ageYears: 23, brief: '與孟雲屏常搭戲的小生' },
+            ],
+        },
+    },
+    {
+        id: 'induction.intro',
+        phase: 'INDUCTION',
+        title: '入班（self 記憶 + 關係）',
+        shortTitle: 'Induction',
+        kind: 'primary',
+        summary: '新角色入班：一次生成 self genesis 記憶 + 與既有成員的關係，融進現有人物網。',
+        outputShape: '{"selfMemories":["…"],"ties":["…"]}',
+        defaultTemperature: 0.85,
+        existingTool: {
+            label: 'mint redeemVoucher',
+            href: '/',
+            note: 'mint 後 redeemVoucher.after() 跑 induction；Lab 用 fixture 測。',
+        },
+        defaultInput: {
+            name: '柳生春',
+            role: '小生',
+            gender: 'female',
+            ageYears: 22,
+            sagaName: '春雪社',
+            physicalFacts: '廿二歲，短髮束於腦後，眉如墨畫，肩線清瘦；右耳後一痣。',
+            description: '外地來的女小生，台上英氣，台下怕冷，總把一枚舊銅錢縫在袖口。',
+            privateBackstory: '其實是為了躲開舊班一樁沒結清的恩怨才南下。',
+            recruitmentRoleIntent: '能與花旦搭戲、又能在後台製造競爭張力的小生。',
+            mode: 'newcomer',
+            count: 8,
+            roster: [
+                { id: '0xmeng', name: '孟雲屏', role: '花旦', gender: 'female', ageYears: 24, brief: '班裡頭牌花旦' },
+                { id: '0xgu', name: '顧驚鴻', role: '小生', gender: 'male', ageYears: 23, brief: '與孟雲屏常搭戲的小生' },
+            ],
+            existingTies: [{ aName: '孟雲屏', bName: '顧驚鴻', tone: '長期搭戲' }],
+            sagaPremise: '民初梨園，一個求生與成名交織的小戲班。',
+            sagaNature: '',
+            sagaRhythm: '',
+        },
+    },
+    {
+        id: 'image.portraitVariant',
+        phase: 'IMAGE',
+        title: '影像：正面變體 prompt',
+        shortTitle: 'Portrait+',
+        kind: 'deterministic',
+        summary: '由 anchor 出額外正面肖像（端正正面、頭肩 close-up）的 image prompt。確定性模板、無 LLM。',
+        outputShape: 'image prompt（送 gpt-image edit）',
+        existingTool: {
+            label: '動態形象面板',
+            href: '/admin/director',
+            note: 'generate-additional-views frontal；Lab 只組出 prompt 給你看。',
+        },
+        defaultInput: { person: '廿二歲女小生，短髮束於腦後，眉如墨畫，肩線清瘦，右耳後一痣。' },
+    },
+    {
+        id: 'image.artSheet',
+        phase: 'IMAGE',
+        title: '影像：多角度設定圖 prompt',
+        shortTitle: 'ArtSheet',
+        kind: 'deterministic',
+        summary: '由 anchor 出橫向人物多角度設定圖的 image prompt。確定性模板、無 LLM。',
+        outputShape: 'image prompt（送 gpt-image edit）',
+        existingTool: {
+            label: '動態形象面板',
+            href: '/admin/director',
+            note: 'generate-additional-views art-sheet；Lab 只組出 prompt 給你看。',
+        },
+        defaultInput: { person: '廿二歲女小生，短髮束於腦後，眉如墨畫，肩線清瘦，右耳後一痣。' },
+    },
+    {
+        id: 'image.evolve',
+        phase: 'IMAGE',
+        title: '影像：情境變體 prompt',
+        shortTitle: 'Evolve',
+        kind: 'deterministic',
+        summary: '由 anchor + 情境（framing）出帶妝 / 戲服變體肖像的 image prompt。確定性模板、無 LLM。',
+        outputShape: 'image prompt（送 gpt-image edit）',
+        existingTool: {
+            label: '動態形象面板',
+            href: '/admin/director',
+            note: 'evolve-portrait；Lab 只組出 prompt 給你看。',
+        },
+        defaultInput: {
+            personLine: '小生，女，22 歲，廿二歲短髮束於腦後，眉如墨畫，肩線清瘦（同一個人，保持體態與氣質一致）。',
+            framing: '雪夜的後台，半卸了妝，提著一盞舊燈。',
+        },
+    },
+    {
+        id: 'image.eventMoment',
+        phase: 'IMAGE',
+        title: '影像：事件群像 prompt',
+        shortTitle: 'EventMoment',
+        kind: 'deterministic',
+        summary: '多角色同場事件的群像 image prompt（各人五官對齊各自 anchor）。確定性模板、無 LLM。',
+        outputShape: 'image prompt（送 gpt-image edit）',
+        existingTool: {
+            label: '導演 / 事件',
+            href: '/admin/director',
+            note: 'generate-event-moment；Lab 只組出 prompt 給你看。',
+        },
+        defaultInput: {
+            cast: '孟雲屏（花旦）、顧驚鴻（小生）、柳生春（小生）',
+            sceneName: '小戲台',
+            label: '三人首度同台，暗潮浮上檯面',
         },
     },
 ];

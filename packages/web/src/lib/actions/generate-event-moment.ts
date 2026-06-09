@@ -22,10 +22,9 @@ import { blob } from '@endless-story/memwal';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
+import { eventMomentPrompt } from '@/lib/image-prompts';
 
 const EVENT_MOMENT_KIND = 4;
-const TONE = '淡彩水墨工筆畫風：淡墨細線、清透水彩薄塗、大面積留白、宣紙質感。';
-const NEG = '全圖純畫面，無任何文字、標籤、題字、印章、邊框、數字或排版框線。';
 /** OpenAI edits accepts a handful of refs; cap to keep cost + identity stable. */
 const MAX_REFS = 4;
 
@@ -102,10 +101,7 @@ export async function generateEventMomentAction(input: EventMomentInput): Promis
 
     // ── render ONE multi-character scene, faces matching each anchor ──
     const cast = refs.map((r) => `${r.name}（${r.role}）`).join('、');
-    const prompt =
-        `${TONE}\n一幅多人物場景圖：${input.sceneName}，${input.label}。` +
-        `畫面同時呈現 ${cast}；每個人的五官、髮型、氣質與其對應參考圖保持一致，` +
-        `依各自身份與此刻處境安排站位、神態與互動，構圖完整、自然光。${NEG}`;
+    const prompt = eventMomentPrompt({ cast, sceneName: input.sceneName, label: input.label });
     let bytes: Uint8Array | null = null;
     try {
         const res = await imgClient.edit({

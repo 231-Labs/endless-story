@@ -85,11 +85,7 @@ export async function runPromptLabAction(
             input,
             prompt: built.prompt,
             parsedOutput:
-                built.prompt.kind === 'deterministic'
-                    ? {
-                          note: 'DRAMA is deterministic. Inspect tick-loop drama output and the dramaHint injected into ACT / POV prompts.',
-                      }
-                    : undefined,
+                built.prompt.kind === 'deterministic' ? built.parseOutput('').parsed : undefined,
         };
     }
 

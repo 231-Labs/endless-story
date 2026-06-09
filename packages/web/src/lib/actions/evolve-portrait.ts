@@ -27,6 +27,7 @@ import { blob } from '@endless-story/memwal';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
+import { evolveVariantPrompt, evolveVariantTone } from '@/lib/image-prompts';
 import { generatePortrait } from './generate-portrait';
 
 export type PortraitOccasionKind =
@@ -56,9 +57,7 @@ const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realist
     snow: '風雪夜中：披斗篷、肩頭落雪、呵氣成霜，神情堅毅。',
 };
 
-const VARIANT_TONE = '水墨工筆畫風格，宣紙暈染邊緣，淡墨線描 + 水彩設色。';
-const VARIANT_NEG = '不要動漫感、不要油畫感、不要寫實照片。';
-/** Realistic variant wants realism (the opposite of VARIANT_NEG); only forbid stray text. */
+/** Realistic variant wants realism (the opposite of the ink-wash VARIANT_NEG); only forbid stray text. */
 const REALISTIC_NEG = '畫面中不得出現任何文字、浮水印、邊框或排版框線。';
 
 export interface EvolvePortraitInput {
@@ -136,9 +135,7 @@ export async function evolvePortraitAction(
         // role so it stays the same person; the framing drives makeup/costume.
         const genderAge = `${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
         const personLine = `${role ?? '梨園中人'}，${genderAge}，${physicalFacts}（同一個人，保持體態與氣質一致）。`;
-        const variantPrompt = [VARIANT_TONE, personLine, framing, VARIANT_NEG]
-            .filter(Boolean)
-            .join('\n');
+        const variantPrompt = evolveVariantPrompt(personLine, framing);
 
         // Render the exact prompt (skip anchor curation) → Walrus.
         gen = await generatePortrait({
@@ -151,7 +148,7 @@ export async function evolvePortraitAction(
                 },
                 attributes: [],
             },
-            toneHint: VARIANT_TONE,
+            toneHint: evolveVariantTone,
             promptOverride: variantPrompt,
         });
     }
