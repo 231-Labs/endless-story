@@ -184,7 +184,7 @@ export function ProfileTab({
             {outgoingEdges.length === 0 ? (
               <p className="mt-8 text-sm leading-relaxed text-mute text-center">尚未對誰留下顯著的記憶。</p>
             ) : (
-              <ul className="mt-8 space-y-8">
+              <ul className="mt-8 space-y-6">
                 {outgoingEdges.slice(0, 6).map((edge) => (
                   <RelationshipRow
                     key={`${edge.fromId}-${edge.toId}`}
@@ -255,19 +255,17 @@ function RelationshipRow({
   target: Character | null;
 }) {
   const name = target?.name ?? edge.toId;
+  // 只在有真區間時顯示日期；單日（多半就是當前敘事日）對讀者沒有訊息。
   const dayRange =
     edge.firstSeenDay != null && edge.firstSeenDay !== edge.lastUpdatedDay
       ? `日 ${edge.firstSeenDay} — 日 ${edge.lastUpdatedDay}`
-      : `日 ${edge.lastUpdatedDay}`;
-  const confidence =
-    typeof edge.confidence === 'number'
-      ? `信度 ${Math.round(edge.confidence * 100)}%`
       : null;
-  const quote = edge.summary?.trim() || edge.label;
+  // 只顯示真‧敘事 summary；不再 fallback 到 label（label 多是 tone 詞，會與右側標籤重複）。
+  const quote = edge.summary?.trim() || null;
 
   return (
     <li>
-      {/* 第一行：名字（連結到 dossier）+ tone + weight */}
+      {/* 第一行：名字（連結到 dossier）+ tone */}
       <div className="flex items-baseline justify-between gap-2">
         {target ? (
           <Link
@@ -279,27 +277,23 @@ function RelationshipRow({
         ) : (
           <span className="font-serif text-lg text-ink">{name}</span>
         )}
-        <span className="flex items-center gap-2 text-2xs tabular-nums tracking-widest text-mute">
-          {edge.tone ? <ToneDot tone={edge.tone} /> : null}
-          {edge.tone ? <span>{TONE_LABEL[edge.tone]}</span> : null}
-          {edge.tone ? <span className="text-hairline">·</span> : null}
-          <span>w {edge.weight}</span>
-        </span>
+        {edge.tone ? (
+          <span className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+            <ToneDot tone={edge.tone} />
+            <span>{TONE_LABEL[edge.tone]}</span>
+          </span>
+        ) : null}
       </div>
 
-      {/* 主敘述：summary（fallback label）*/}
-      <p className="mt-2 text-sm italic leading-relaxed text-ink/75">「{quote}」</p>
+      {/* 主敘述：僅在有真 summary 時顯示，否則整行省略 */}
+      {quote ? (
+        <p className="mt-2 text-sm italic leading-relaxed text-ink/75">「{quote}」</p>
+      ) : null}
 
-      {/* 微 meta：日期範圍 + 信度 */}
-      <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-2xs tracking-widest text-mute/85">
-        <span>{dayRange}</span>
-        {confidence ? (
-          <>
-            <span className="text-hairline">·</span>
-            <span>{confidence}</span>
-          </>
-        ) : null}
-      </p>
+      {/* 微 meta：僅在有真日期區間時顯示 */}
+      {dayRange ? (
+        <p className="mt-2 text-2xs tracking-widest text-mute/85">{dayRange}</p>
+      ) : null}
     </li>
   );
 }

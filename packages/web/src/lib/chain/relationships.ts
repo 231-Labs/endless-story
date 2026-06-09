@@ -100,7 +100,8 @@ export async function fetchOnChainEdgesFrom(characterId: string): Promise<Relati
             lastUpdatedDay: day,
             tone: p.tone,
             confidence: Math.min(1, 0.34 * p.count),
-            summary: `班主在戲裡牽起的一段「${TONE_ZH[p.tone]}」。`,
+            // summary 省略：先前是寫死的模板（只把 tone 詞再塞一次），對讀者是冗餘。
+            // 真‧關係描述未來由敘事引擎寫入 summary；在那之前詳情頁只顯示名字＋tone。
         }));
     } catch (err) {
         console.warn('[relationships] fetchOnChainEdgesFrom failed:', err);
