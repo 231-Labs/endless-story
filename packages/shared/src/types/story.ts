@@ -128,6 +128,25 @@ export interface StoryRecruitmentSeed
   ttl_days?: number;
 }
 
+/**
+ * A founding-cast member — the saga's initial, pre-acquainted troupe. Created
+ * directly (no voucher) via the admin 創世入口 panel, then woven together by a
+ * batch founding induction. NOT a gacha slot: roles uniquely filled here should
+ * be dropped from `recruitments` so users can't mint a duplicate (e.g. a 2nd 班主).
+ */
+export interface StoryFoundingMember {
+  name: string;
+  ageYears: number;
+  /** '男' | '女' | '中性'. */
+  gender: string;
+  /** 行當 / specialty (also the public role tag). */
+  role: string;
+  /** Public description (on-chain / displayed; must not reveal `secret`). */
+  description: string;
+  /** Private secret — only seeds this member's private memories. */
+  secret?: string;
+}
+
 export interface StoryPreset {
   /** Slug — matches filename `<id>.json`. */
   id: string;
@@ -145,4 +164,6 @@ export interface StoryPreset {
   drama_resources?: StoryDramaResource[];
   scenes: StoryScene[];
   recruitments: StoryRecruitmentSeed[];
+  /** Optional initial cast for the 創世入口 (admin direct-mint + batch induction). */
+  founding_cast?: StoryFoundingMember[];
 }

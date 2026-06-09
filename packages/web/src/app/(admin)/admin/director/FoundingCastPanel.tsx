@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import {
     createFoundingCastAction,
+    loadFoundingPresetAction,
     type FoundingCharSpec,
     type CreateFoundingCastResult,
 } from '@/lib/actions/create-founding-cast';
@@ -51,22 +52,31 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
     const add = () => setRows((prev) => [...prev, blankRow()]);
 
     const loadPreset = () => {
-        if (roleSlots.length === 0) {
-            setNote('沒有可載入的劇本職缺（先去「招募」種子化）');
-            return;
-        }
-        setRows(
-            roleSlots.map((s) => ({
-                name: '',
-                ageYears: 0,
-                gender: mapGender(s.genderRequirement),
-                role: s.specialty,
-                description: '',
-                secret: '',
-                hint: s.roleIntent,
-            })),
-        );
-        setNote(`已載入 ${roleSlots.length} 個劇本職缺作為骨架 — 填入姓名、年齡、性別、描述即可。`);
+        start(async () => {
+            // Prefer the preset's full founding bios; fall back to recruitment-role scaffold.
+            const cast = await loadFoundingPresetAction();
+            if (cast.length > 0) {
+                setRows(cast.map((c) => ({ ...c, secret: c.secret ?? '' })));
+                setNote(`已載入 ${cast.length} 位劇本創世班底（含背景，可直接立班或微調）。`);
+                return;
+            }
+            if (roleSlots.length === 0) {
+                setNote('劇本沒有 founding_cast,也沒有職缺可當骨架（先去「招募」種子化)。');
+                return;
+            }
+            setRows(
+                roleSlots.map((s) => ({
+                    name: '',
+                    ageYears: 0,
+                    gender: mapGender(s.genderRequirement),
+                    role: s.specialty,
+                    description: '',
+                    secret: '',
+                    hint: s.roleIntent,
+                })),
+            );
+            setNote(`劇本沒有 founding_cast,改載入 ${roleSlots.length} 個職缺作骨架 — 填入姓名、年齡、性別、描述。`);
+        });
     };
 
     const valid = (r: Row) => r.name.trim() && r.description.trim() && r.ageYears > 0 && r.gender.trim() && r.role.trim();

@@ -26,6 +26,7 @@ import type { CharacterCandidate } from '@endless-story/llm/prompts';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { isMemoryConfigured, rememberForCharacter } from '@/lib/chain/memory';
 import { sagasApi } from '@/lib/api/index';
+import { listStoryPresets, loadStoryPreset } from '@/lib/stories/loader';
 import { DEFAULT_ATTRIBUTE_SCHEMA } from '../config/attribute-schema.js';
 import { generatePortrait } from './generate-portrait.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
@@ -292,4 +293,37 @@ export async function createFoundingCastAction(
         tiesSeeded,
         inductionSkipped: memoryOn ? undefined : 'memory_unconfigured',
     };
+}
+
+/**
+ * Load the founding cast bios from the story preset (`founding_cast`) so the
+ * admin panel can pre-fill the rows. Returns [] when the preset has none, so the
+ * panel falls back to its recruitment-role scaffold.
+ */
+export async function loadFoundingPresetAction(): Promise<FoundingCharSpec[]> {
+    try {
+        const presets = await listStoryPresets();
+        // Prefer a preset that actually declares a founding cast; else first; else slug.
+        let chosen: string | undefined;
+        for (const p of presets) {
+            const preset = await loadStoryPreset(p.id).catch(() => null);
+            if (preset?.founding_cast?.length) {
+                chosen = p.id;
+                break;
+            }
+        }
+        const id = chosen ?? presets[0]?.id ?? 'spring-snow';
+        const preset = await loadStoryPreset(id);
+        const cast = preset.founding_cast ?? [];
+        return cast.map((c) => ({
+            name: c.name,
+            ageYears: c.ageYears,
+            gender: c.gender,
+            role: c.role,
+            description: c.description,
+            secret: c.secret,
+        }));
+    } catch {
+        return [];
+    }
 }
