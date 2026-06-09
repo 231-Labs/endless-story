@@ -237,6 +237,12 @@ public fun scene_id(scene: &Scene): ID { object::id(scene) }
 
 public fun saga_id(scene: &Scene): ID { scene.placement.saga_id }
 
+// ── chamber.move support: package-visible UID accessors ──────────────
+// Let the sibling `chamber` module attach/read a furnishing dynamic field
+// on the Scene's UID without touching the Scene struct or its constructors.
+public(package) fun uid(scene: &Scene): &UID { &scene.id }
+public(package) fun uid_mut(scene: &mut Scene): &mut UID { &mut scene.id }
+
 public fun world_id(scene: &Scene): ID { scene.placement.world_id }
 
 public fun location_id(scene: &Scene): ID { scene.placement.location_id }
