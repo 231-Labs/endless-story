@@ -133,7 +133,7 @@ export async function createFoundingCastAction(
                     portraitBlobId = port.blobId;
                 }
             } catch {
-                /* mint headless; ensure-portrait / reconcile can backfill */
+                /* portrait gen failed — mint headless; the reconciler can backfill a cover */
             }
 
             // mint via mint_genesis_character (no voucher)

@@ -405,13 +405,27 @@ export function RevealStage({
             ) : null}
           </div>
 
-          <p
-            className={`mt-6 max-w-prose text-[15px] leading-loose sm:text-base line-clamp-6 text-justify transition-colors ${
-              showSecret ? 'italic text-ink/70' : 'text-ink/80'
-            }`}
-          >
-            {showSecret ? candidate.secret : candidate.description}
-          </p>
+          {/* Public description / inner secret stacked in ONE grid cell: the block
+              height is always max(both) regardless of which is shown, so toggling
+              just cross-fades the text — the name + 屬性 rows above never shift. */}
+          <div className="mt-6 grid max-w-prose">
+            <p
+              className={`col-start-1 row-start-1 text-[15px] leading-loose sm:text-base line-clamp-6 text-justify text-ink/80 transition-opacity duration-300 ${
+                showSecret ? 'opacity-0 pointer-events-none' : 'opacity-100'
+              }`}
+            >
+              {candidate.description}
+            </p>
+            {candidate.secret ? (
+              <p
+                className={`col-start-1 row-start-1 text-[15px] leading-loose sm:text-base line-clamp-6 text-justify italic text-ink/70 transition-opacity duration-300 ${
+                  showSecret ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+              >
+                {candidate.secret}
+              </p>
+            ) : null}
+          </div>
 
           {isEnrolled && characterId && (
             <a

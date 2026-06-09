@@ -19,7 +19,6 @@ import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
 import { getAdminContext } from '../chain/admin-signer.js';
 import { inductCharacterAction } from './induct-character.js';
-import { ensurePortraitForCharacter } from './ensure-portrait.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
@@ -285,42 +284,15 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
                     (personaRes?.ok ? `v${personaRes.version}` : `failed${personaRes?.skipped ? `(${personaRes.skipped})` : ''}`),
             );
 
-            // 3) cover portrait — non-blocking mint may have skipped the art wait,
-            //    so the portrait can be absent at this point. If it was baked at mint
-            //    (portraitUrl present) this is a no-op; otherwise generate it server-side
-            //    and patch it on chain (update_image_by_storyteller). Survives the client
-            //    navigating away the instant the user clicked 入班.
-            const portraitRes = await withRetry('portrait', () =>
-                ensurePortraitForCharacter(charId, {
-                    character: {
-                        description: candidate.description,
-                        physical: {
-                            gender: candidate.physicalFacts.gender,
-                            ageYears: candidate.physicalFacts.age,
-                            body: candidate.physicalFacts.body,
-                        },
-                        attributes: rolledValues,
-                    },
-                    recruitmentIntent,
-                    existingUrl: portraitUrl,
-                }),
-            );
-            const coverUrl = portraitRes?.url;
-            console.log(
-                `[redeem-voucher] portrait for ${charId}: ` +
-                    (portraitRes?.ok ? `${portraitRes.skipped ?? 'generated'} ${coverUrl ?? ''}` : `failed${portraitRes?.error ? `(${portraitRes.error})` : ''}`),
-            );
-
-            // 4) §11 additional gallery views (frontal + art sheet) via img2img —
-            //    needs a cover to img2img from, so it runs after the portrait step.
-            if (coverUrl) {
+            // 3) §11 additional gallery views (frontal + art sheet) via img2img
+            if (portraitUrl) {
                 const viewsRes = await withRetry('additional-views', () =>
-                    generateAdditionalViews({ characterId: charId, referenceUrl: coverUrl }),
+                    generateAdditionalViews({ characterId: charId, referenceUrl: portraitUrl }),
                 );
                 console.log(`[redeem-voucher] views for ${charId}: appended=${viewsRes?.appended ?? 0}`);
             }
 
-            // 5) induction — ONE coordinated pass: self memories (incl the private
+            // 4) induction — ONE coordinated pass: self memories (incl the private
             //    `secret`, which never touches chain) + relationships to the existing
             //    roster, seeding symmetric public director ties + dual memories. Mode
             //    'newcomer': a freshly-minted user character is a stranger to the cast
