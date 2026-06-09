@@ -136,10 +136,15 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
   不做完整加權圖。**已做(N3)**。屬導演記憶(客觀)→ 角色「感知」到它,但不寫進角色 MemWal。
 - **夢**:owner 付 ENDLESS → moderator 改寫 → anchor → MemWal remember(kind=dream,i=9)。
   **起始最高,但隨 recency 衰減**(被新記憶逐漸超越)—— 不是永久置頂。✅
-- **創世記憶 / 入科(induction)**:mint 時一次蒸餾「自身記憶 + 對既有班底的關係」,墊底防飄移。✅
-  路徑:`runner/services/induction`(snapshot →一次 LLM →`{selfMemories, ties}`)←`web/lib/actions/induct-character.ts`
-  (寫私密 selfMemories + 重用 assess 的 idempotent apply 種對稱 ties);`redeem-voucher` 尾端呼叫(mode `newcomer`)。
-  `founding` 模式(創世班底彼此本就相識)為 Phase 2。
+- **入科 induction(自身記憶 + 關係,一次寫)** ✅:角色被種進戲班時,一顆 LLM 同時產出「自身記憶 + 對班底的關係」,墊底防飄移。
+  - **newcomer(用戶抽卡)**:`runner/services/induction` runOnce(snapshot →`{selfMemories, ties}`)←`web/.../induct-character.ts`
+    (寫私密 selfMemories + 重用 assess 的 idempotent apply 種對稱 ties);`redeem-voucher` 尾端呼叫。預設陌生、只寫初見,
+    唯有描述明確點名舊識才寫 prior。
+  - **founding(創世班底,mode B)** ✅:saga 主在 admin「創世入口」一次直鑄整班(`character::mint_genesis_character`,免 voucher,
+    cap+cap 歸班主),再跑 `runner/services/induction` **runBatchFounding** —— 一次看整批 → 各自 selfMemories + **整張兩兩 prior 關係網**,
+    **共同往事只寫一次(雙向對稱)**,修掉 per-character genesis 各編一版會打架的問題(如「桂花糕方向相反」)。
+    prompt 內含**爛梗黑名單 + 因果連貫**(出自記憶品質 review)。路徑:`web/.../create-founding-cast.ts` + `FoundingCastPanel`;
+    班底背景存 `story preset.founding_cast`。
 - **主觀記憶 / 不強制 canon(設計鐵則,刻意保留 — 勿當 bug 修)**:角色私密記憶是**主觀、視角化**的,
   系統**不維護全知統一真相**。因隱私界線,角色入科時只看得到別人的**公開描述**(看不到別人的私密 secret),
   所以 TA 對別人秘密的理解只能**自己長一個版本** → 同一事件,不同角色心裡各有一版(可能互相矛盾、也可能互補成
@@ -153,6 +158,12 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
     → 同一樁「封箱」,班主心裡是白蘭、唐桂蘭心裡是軍閥;兩版私密記憶**互不知情、皆未外洩**,系統零跨角色
     滲漏即自然產生「視角化真相」。可讀成唐桂蘭的**善意誤解**,或讀成同一危局的**第二層真相**(私情×公難並存)——
     系統不替你裁決,錯位本身就是日後章回的戲。這正是 SEAL/隱私界線「不是缺陷、是敘事引擎」的活證。
+- **非阻塞頭像 mint(join now, art later)** ✅:抽卡看到描述即可「入班」,不等畫像。畫像若已好就烤進 mint tx;
+  沒好則 mint 後 **server 端**補生 + `character::update_image_by_storyteller` 上鏈(`web/.../ensure-portrait.ts`,與 reconciler 同路),
+  不靠 client 停留。reconciler 仍是最後保險。**創世班底**則先生圖再鑄造,確保不出無頭像的人。
+- **創世班底 ≠ 抽卡職缺(避免重複)**:`founding_cast`(preset)= 有名有姓的開班 principals(班主沈雪笙…),由創世入口直鑄;
+  `recruitments` = 開放給用戶抽卡的職缺。**創世獨佔的唯一行當(班主/丑/副刊記者)已從 seed 扣掉**,多人行當
+  (花旦/小生/刀馬旦/衣箱/龍套/樂師…)保留開放,讓用戶在創世 principals 之上再補人。
 - **行當聲口**:`shared/role-traits.ts` 注入所有 prompt。✅
 - **導演記憶 ≠ 角色記憶(鐵律)**:角色記憶 = 主觀/私密/per-character(**MemWal,SEAL 加密**)。
   導演記憶 = 客觀/全知/per-saga = **就是鏈上事件日誌**(append-only、不可竄改、神之帳本),
