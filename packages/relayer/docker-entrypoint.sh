@@ -9,6 +9,15 @@
 # 驗證過(本機 walrus 1.41 / sui 1.72):import → switch → 寫 config → `walrus list-blobs` 全綠。
 # 不用 `set -e`:就算錢包設定失敗,服務仍要起得來(/health、manifest 不需錢包)。
 
+# ── Service 分流:同一 Dockerfile 跑兩個服務(asset / MemWAL relayer)──
+# SERVICE=memwal → MemWAL relayer(記憶 recall/remember;零依賴 node:http,不需 walrus CLI/錢包,
+#                  記憶 blob 上傳走 WALRUS_PUBLISHER_URL 的 HTTP publisher)。
+# 其他(未設)→ asset 服務(下方備 walrus/sui config 後起 assets-server.ts)。
+if [ "$SERVICE" = "memwal" ] || [ "$SERVICE" = "relayer" ]; then
+  echo "[entrypoint] starting MemWAL relayer (server.ts)"
+  exec node /app/src/server.ts
+fi
+
 NETWORK="${WALRUS_NETWORK:-testnet}"
 export HOME="${HOME:-/root}"
 SUI_DIR="$HOME/.sui/sui_config"
