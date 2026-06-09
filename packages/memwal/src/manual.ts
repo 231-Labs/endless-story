@@ -358,8 +358,11 @@ export class MemWalManual {
         // Step 1 & 2: Embed + SEAL encrypt concurrently
         // LOW-24: Scope SEAL encryption id by namespace so a delegate key
         // authorized for one namespace cannot unwrap ciphertext for another.
+        // Embed `meta.embedText` when provided (e.g. the raw text without the
+        // `[[m|...]]` tag) so the tag doesn't pollute the vector; always store/encrypt
+        // the full `text` so the blob is unchanged.
         const [vector, encrypted] = await Promise.all([
-            this.embed(text),
+            this.embed(meta?.embedText ?? text),
             this.sealEncrypt(new TextEncoder().encode(text), ns),
         ]);
 

@@ -205,6 +205,12 @@ export interface RememberMeta {
     day?: number;
     kind?: string;
     anchored?: boolean;
+    /**
+     * Text to embed for the vector, when it should differ from the stored/encrypted
+     * text — e.g. the raw memory WITHOUT the `[[m|...]]` tag, so the tag doesn't
+     * pollute the embedding. Falls back to the stored text when unset.
+     */
+    embedText?: string;
 }
 
 /** Optional recall scoring hints for a self-hosted three-factor relayer. Managed relayer ignores. */

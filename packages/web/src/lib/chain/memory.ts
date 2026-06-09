@@ -78,6 +78,18 @@ function namespaceFor(characterId: string): string {
  * Defaulting wrong (e.g. mainnet relayer with a testnet account) yields
  * 401s, so we pick by network unless MEMWAL_SERVER_URL overrides.
  */
+/**
+ * True once the SELF-HOSTED three-factor relayer is live (set
+ * `MEMWAL_RELAYER_THREE_FACTOR=1`). It ranks the FULL namespace by
+ * importance × recency × relevance and returns the true top-N, so recall fetches
+ * only N blobs (≈3× fewer SEAL decrypts → much faster) and trusts its order.
+ * Default off → managed relayer (top-K by distance) + client-side re-rank.
+ */
+function relayerRanksThreeFactor(): boolean {
+    const v = process.env.MEMWAL_RELAYER_THREE_FACTOR;
+    return v === '1' || v === 'true';
+}
+
 function relayerUrl(): string {
     const override = memEnv().serverUrl;
     if (override) return override;
@@ -345,10 +357,29 @@ export async function recallStructuredForCharacter(
     const client = await clientFor(characterId);
     if (!client) return [];
     try {
-        // Pass `today` to the relayer: a self-hosted three-factor relayer ranks the FULL
-        // namespace by importance × recency × relevance; the managed relayer ignores it and we
-        // re-rank below — correct with either backend. Still over-fetch (3×) as a safety net.
         const today = await currentNarrativeDay();
+
+        // Self-hosted three-factor relayer: it already ranked the FULL namespace by
+        // importance × recency × relevance and returned the true top-N. Fetch only N
+        // blobs (≈3× fewer SEAL decrypts) and keep the relayer's order — no client re-rank.
+        if (relayerRanksThreeFactor()) {
+            const res = await withMemoryRetry('recall', characterId, () =>
+                client.recall(query, limit, namespaceFor(characterId), { today }),
+            );
+            const out: RecalledMemory[] = [];
+            for (const hit of res.results) {
+                if ('text' in hit && typeof hit.text === 'string' && hit.text.trim()) {
+                    out.push(parseMemory(hit.text));
+                }
+            }
+            console.log(
+                `[memory] recall ${characterId.slice(0, 10)}… → ${out.length} memories (relayer three-factor)`,
+            );
+            return out.slice(0, limit);
+        }
+
+        // Managed relayer (top-K by distance): over-fetch ×3 then re-rank client-side by
+        // importance × recency × relevance — correct without a three-factor backend.
         const res = await withMemoryRetry('recall', characterId, () =>
             client.recall(query, limit * 3, namespaceFor(characterId), { today }),
         );
@@ -517,8 +548,9 @@ export async function rememberForCharacter(
         const tagged = tagMemory(text, kind, importance, day, opts?.anchored ?? false);
         const ns = namespaceFor(characterId);
         // Index metadata so a self-hosted three-factor relayer can rank the full namespace.
-        // The encrypted blob still carries the tag (above), so display/parse is unchanged.
-        const meta = { importance, day, kind, anchored: opts?.anchored ?? false };
+        // The encrypted blob still carries the tag (`tagged`), so display/parse is unchanged;
+        // `embedText` is the RAW text so the `[[m|...]]` tag doesn't pollute the vector.
+        const meta = { importance, day, kind, anchored: opts?.anchored ?? false, embedText: text };
         // MemWal's testnet relayer / SEAL occasionally 500s (or 429s / drops the
         // connection) transiently. Retry those a couple times with backoff so a
         // single hiccup doesn't leave a character memory-less; 4xx (bad payload /
