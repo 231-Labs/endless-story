@@ -1,19 +1,17 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 import type { CSSProperties } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { ChamberLights } from './ChamberLights.js';
-import { ChamberDiorama } from './ChamberDiorama.js';
-import { ChamberRoom } from './ChamberRoom.js';
-import { Decor } from './Decor.js';
-import { SkyBackdrop } from './SkyBackdrop.js';
-import { Weather } from './Weather.js';
-import { Lanterns } from './Lanterns.js';
+import { SceneRenderer } from './SceneRenderer.js';
 import { ChamberEffects } from './ChamberEffects.js';
+import { CharacterAvatar } from './CharacterAvatar.js';
+import { ErrorBoundary } from './ErrorBoundary.js';
+import { buildGroupFromCode } from './runSceneCode.js';
 import { deriveEnvironment, deriveRoomDims, paletteForEnv } from './environment.js';
-import type { ChamberEnvironment, ChamberLayout } from './types.js';
+import { deterministicDesign } from './scene-design.js';
+import type { ChamberAvatar, ChamberEnvironment, ChamberLayout } from './types.js';
 
 export interface ChamberCanvasProps {
   className?: string;
@@ -23,12 +21,13 @@ export interface ChamberCanvasProps {
   roomScale?: number;
 }
 
-/**
- * The 廂房 — an open 青綠山水 water-court stage: a reflective 水台 mirroring the
- * figures, a free-standing 月洞門 against a painted landscape, bamboo / 太湖石 /
- * 古琴, parametric weather + lighting, post-processing. Inspired by classical
- * Chinese stage design.
- */
+/** Front standing spots for overlaying real character standees on a code scene. */
+const OVERLAY_SPOTS: [number, number, number][] = [
+  [0, 0, 1.4],
+  [-1.7, 0, 0.9],
+  [1.7, 0, 0.9],
+];
+
 export function ChamberCanvas({
   className,
   style,
@@ -36,16 +35,27 @@ export function ChamberCanvas({
   envOverride,
   roomScale = 1,
 }: ChamberCanvasProps) {
-  const env: ChamberEnvironment = { ...deriveEnvironment(layout?.params), ...envOverride };
+  const design = layout?.design ?? deterministicDesign();
+  const base = deriveEnvironment(layout?.params);
+  const env: ChamberEnvironment = {
+    ...base,
+    timeOfDay: design.mood.timeOfDay,
+    season: design.mood.season ?? base.season,
+    weather: design.mood.weather,
+    atmosphere: design.mood.atmosphere ?? base.atmosphere,
+    ...envOverride,
+  };
   const palette = paletteForEnv(env);
   const dims = deriveRoomDims(layout?.params, roomScale);
-  const dark = env.timeOfDay === 'dusk' || env.timeOfDay === 'night';
+  const avatars: ChamberAvatar[] = layout?.avatars ?? [];
 
-  const camPos: [number, number, number] = [
-    dims.width * 0.5,
-    dims.height * 0.55,
-    dims.depth * 0.95 + 3.4,
-  ];
+  // EXPERIMENT (option 3): GLM-authored Three.js scene.
+  const generated = useMemo(
+    () => (layout?.code ? buildGroupFromCode(layout.code) : null),
+    [layout?.code],
+  );
+
+  const camPos: [number, number, number] = [dims.width * 0.5, dims.height * 0.55, dims.depth * 0.95 + 3.4];
 
   return (
     <Canvas
@@ -57,20 +67,31 @@ export function ChamberCanvas({
     >
       <fog attach="fog" args={[palette.bg, dims.depth * 1.4, dims.depth * 5 + 14]} />
 
-      <SkyBackdrop env={env} />
-      <ChamberLights palette={palette} />
-      <ChamberRoom env={env} dims={dims} />
-      <Decor dims={dims} />
-      {dark ? <Lanterns dims={dims} /> : null}
-      <Weather weather={env.weather} dims={dims} />
-
-      <Suspense fallback={null}>
-        {layout ? <ChamberDiorama layout={layout} dims={dims} /> : null}
-      </Suspense>
+      {generated ? (
+        <>
+          {/* safety lights in case the generated code didn't add any */}
+          <ambientLight color="#dfe6df" intensity={0.6} />
+          <directionalLight position={[8, 16, 10]} intensity={0.9} castShadow />
+          <Suspense fallback={null}>
+            <ErrorBoundary
+              fallback={<SceneRenderer design={design} env={env} avatars={avatars} dims={dims} />}
+            >
+              <primitive object={generated} />
+            </ErrorBoundary>
+          </Suspense>
+          {/* overlay the real character standees on top of the generated set */}
+          {avatars.slice(0, 3).map((a, i) => (
+            <group key={a.id} position={OVERLAY_SPOTS[i]}>
+              <CharacterAvatar isSelf={a.isSelf} portraitUrl={a.portraitUrl} />
+            </group>
+          ))}
+        </>
+      ) : (
+        <SceneRenderer design={design} env={env} avatars={avatars} dims={dims} />
+      )}
 
       <ChamberEffects />
 
-      {/* orbit 觀賞相機 — no first-person / controller / collision */}
       <OrbitControls
         makeDefault
         enableDamping

@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import type { TimeOfDay, Weather } from '@endless-story/chamber-3d';
-import { generateChamberLayout, type ChamberGeneration } from '@/lib/actions/generate-chamber-layout';
+import {
+  generateChamberLayout,
+  generateChamberFromReference,
+  generateChamberCode,
+  type ChamberGeneration,
+} from '@/lib/actions/generate-chamber-layout';
 
 const WEATHERS: { key: Weather; label: string }[] = [
   { key: 'clear', label: '晴' },
@@ -60,6 +65,30 @@ export function ChamberView({ characterId }: { characterId: string }) {
     [characterId],
   );
 
+  const runVision = useCallback(() => {
+    setRegenerating(true);
+    generateChamberFromReference(characterId, true)
+      .then((g) => {
+        if (aliveRef.current) setGen(g);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (aliveRef.current) setRegenerating(false);
+      });
+  }, [characterId]);
+
+  const runCode = useCallback(() => {
+    setRegenerating(true);
+    generateChamberCode(characterId, true)
+      .then((g) => {
+        if (aliveRef.current) setGen(g);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (aliveRef.current) setRegenerating(false);
+      });
+  }, [characterId]);
+
   useEffect(() => {
     aliveRef.current = true;
     run(false);
@@ -93,7 +122,25 @@ export function ChamberView({ characterId }: { characterId: string }) {
               disabled={busy}
               className="es-outline-button text-sm disabled:opacity-50"
             >
-              {regenerating ? '重生中…' : '↻ 重生佈置'}
+              {regenerating ? '生成中…' : '↻ 重生佈置'}
+            </button>
+            <button
+              type="button"
+              onClick={runVision}
+              disabled={busy}
+              title="把參考圖餵給 glm-4.6v，讓它看圖佈置（擺道具）"
+              className="es-outline-button text-sm disabled:opacity-50"
+            >
+              ✨ 看圖佈置
+            </button>
+            <button
+              type="button"
+              onClick={runCode}
+              disabled={busy}
+              title="實驗：讓 glm-4.6v 看圖直接寫 Three.js 程式碼生成整個場景（沙箱執行，壞了退回 spec）"
+              className="es-outline-button text-sm disabled:opacity-50"
+            >
+              🧪 GLM 寫場景
             </button>
           </div>
         </div>
@@ -166,9 +213,9 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </div>
 
         {/* object chips — data-driven from the generated layout */}
-        {layout && layout.placements.length > 0 ? (
+        {layout && (layout.placements?.length ?? 0) > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {layout.placements.map((p, i) => (
+            {(layout.placements ?? []).map((p, i) => (
               <span
                 key={`${p.tag ?? p.kind}:${i}`}
                 className="rounded-full border border-hairline bg-surface px-3 py-1 text-xs text-mute"
@@ -207,6 +254,10 @@ function phaseLabel(phase: ChamberGeneration['log'][number]['phase']): string {
   switch (phase) {
     case 'sceneSpec':
       return '生成佈局';
+    case 'vision':
+      return '看圖生成';
+    case 'code':
+      return 'GLM 寫場景';
     case 'revise':
       return '依建議重生';
     case 'critique':

@@ -6,6 +6,10 @@ import { catalogById, resolveStill } from './prop-catalog';
 /** metres (origin = room centre) → offset-encoded millimetres (chain convention). */
 const enc = (meters: number): number => Math.round(ORIGIN_MM + meters * 1000);
 
+/** Clamp model-supplied coords to a sane room volume (some models drift). */
+const clampXZ = (v: number): number => Math.max(-2.6, Math.min(2.6, v));
+const clampY = (v: number): number => Math.max(0, Math.min(3, v));
+
 const TAG_LABEL: Record<string, string> = {
   desk: '書案',
   lamp: '燈架',
@@ -39,9 +43,9 @@ export function specToPlacements(spec: SceneSpec): ChamberPlacement[] {
     const base = {
       assetBlobId: '',
       sourceObject: null,
-      xMm: enc(x),
-      yMm: enc(Math.max(0, y)),
-      zMm: enc(z),
+      xMm: enc(clampXZ(x)),
+      yMm: enc(clampY(y)),
+      zMm: enc(clampXZ(z)),
       yawDeg: o.yaw,
       scalePct: o.scale,
     } as const;

@@ -86,7 +86,7 @@ export function ChamberDiorama({
         </group>
       ))}
 
-      {layout.placements.map((p, i) => (
+      {(layout.placements ?? []).map((p, i) => (
         <PlacedProp key={`${p.tag ?? p.kind}:${i}`} p={p} />
       ))}
     </group>

@@ -116,7 +116,12 @@ export interface ChamberLayout {
   params?: ChamberParams | null;
   /** parametric environment; renderer derives a default from `params` if absent. */
   env?: ChamberEnvironment | null;
-  placements: ChamberPlacement[];
+  /** full scene design (backdrop/floor/mood/elements) the renderer assembles. */
+  design?: import('./scene-design.js').SceneDesign;
+  /** EXPERIMENTAL: GLM-authored Three.js `(THREE)=>Group` code (option 3). */
+  code?: string;
+  /** legacy flat prop list (now folded into `design.elements`); kept for chips. */
+  placements?: ChamberPlacement[];
 }
 
 /** Decode one offset-encoded millimetre axis to metres. */

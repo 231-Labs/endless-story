@@ -69,15 +69,19 @@ export interface BuildSceneSpecPromptOptions {
   issues?: string[];
 }
 
-const SYSTEM = `你是「無盡故事」說書平台的廂房佈置師。給你一個戲曲角色的本色與近況、一份固定的「道具目錄」、以及可用的劇照清單，你要為這個角色佈置一座漂浮在虛空中的廂房。
+const SYSTEM = `你是「無盡故事」說書平台的廂房佈置師，懂中國戲曲的舞台美學。給你一個戲曲角色的本色與近況、一份固定的「道具目錄」、以及可用的劇照清單，你要為這個角色佈置一座青綠山水間的水台廂房。
+
+核心美學——意境，不是堆砌：
+- 戲曲講究「一桌二椅」：寥寥數件即可代表萬象，重的是意境、象徵、留白，不是把東西擺滿。
+- 寧少勿多、寧空勿擠。每一件都要有存在的理由，能以一當十。
 
 規則：
 - 只能從目錄挑 catalog_id，不可自創物件。
 - static 直接擺；still 必須指定劇照（誰在畫面、哪個時刻）。
 - 座標用公尺，原點在房間正中，x→右、y→上、z→朝觀者；|x|、|z| 控制在 2.4 以內，y≥0（落地）或擺在家具上。
-- 構圖規則（重要，避免擠成一堆）：家具盡量靠平台邊緣或後方（z 取負值、或 |x| 較大）；中前方（z>0 一帶）留給角色站位，不要放大型家具擋住角色。物件彼此至少間隔 0.6m，不可重疊堆疊。
-- 每件物件給一句 reason，把它扣回角色的近況/本色。
-- 至少放 1 張劇照掛軸。控制在 4~6 件，克制、有敘事密度，不要塞滿。
+- 構圖：物件盡量靠邊或後方，中前方留給角色；物件彼此至少間隔 0.7m，不可重疊；大量留白。
+- 每件物件給一句 reason，把它扣回角色的近況/本色，且說明它「象徵什麼意境」。
+- 總數 **2~5 件**（含至多 1 張劇照掛軸）。少即是多。
 - 只輸出 JSON，不要任何解釋或 markdown。`;
 
 export function buildSceneSpecPrompt(opts: BuildSceneSpecPromptOptions): BuildPromptResult {
@@ -163,15 +167,115 @@ export function parseSceneSpecResponse(text: string): SceneSpec | null {
   }
 }
 
+export interface BuildVisionScenePromptOptions {
+  name: string;
+  role: string;
+  catalog: CatalogEntryForPrompt[];
+  /** data: URL (base64) of the reference image. */
+  imageDataUrl: string;
+}
+
+/**
+ * Vision room-gen — feed a reference image to a multimodal model (glm-4.6v):
+ * "look at this 戲曲 stage, capture its 意境, lay out the chamber from our
+ * catalog accordingly." Output is the same Scene Spec as the text path, so
+ * `parseSceneSpecResponse` decodes it.
+ */
+export function buildVisionScenePrompt(opts: BuildVisionScenePromptOptions): BuildPromptResult {
+  const catalogLines = opts.catalog
+    .map((c) => `- ${c.id}（${c.type}）tags:${c.tags.join('/')}`)
+    .join('\n');
+  const text = `這是一張中國戲曲舞台的參考圖。請仔細觀察它的構圖、意境、用色、留白、道具配置與整體氛圍。
+
+然後為角色「${opts.name}（${opts.role}）」佈置一座「同樣意境」的青綠山水水台廂房——抓住參考圖的精神（青綠、空靈、留白、一桌二椅、以少勝多），但只能從下面的道具目錄挑件。
+
+道具目錄：
+${catalogLines}
+
+座標用公尺、原點房中、x→右、y→上、z→朝觀者、|x|及|z|≤2.4、物件間隔≥0.7m、總數 2~5 件、至多 1 張掛軸、大量留白。
+輸出 JSON：
+{"room":{"style":"…","palette":["…"],"lighting":"…"},"objects":[{"catalogId":"…","pos":[x,y,z],"yaw":0,"scale":100,"reason":"它呼應參考圖的什麼意境"}]}
+只輸出 JSON，不要任何解釋或 markdown。`;
+
+  return {
+    system: SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text },
+          { type: 'image_url', image_url: { url: opts.imageDataUrl } },
+        ],
+      },
+    ],
+    maxTokens: 1600,
+  };
+}
+
+export interface BuildCodeScenePromptOptions {
+  name: string;
+  role: string;
+  imageDataUrl: string;
+}
+
+const CODE_SYSTEM = `你是 Three.js 場景生成器。看參考圖後，**只輸出一段 JavaScript 箭頭函式**（不要 markdown、不要解釋、不要 import），形如：
+(THREE) => { const group = new THREE.Group(); /* …建場景… */ return group; }
+
+硬規則：
+- 只能用注入的 THREE；**絕不可**使用 window/document/fetch/eval/import/require/setTimeout。
+- 迴圈不可超過 200 次。
+- 單位公尺；地面在 y=0；場景約 8×8m，正面俯視觀賞。
+- 自己建地板、背景（可用大球 BackSide + 顏色當天）、物件、必要的燈（AmbientLight + DirectionalLight）。
+- 抓住參考圖意境：青綠山水、鏡面水台、月洞門、竹、太湖石、留白、以少勝多。`;
+
+export function buildCodeScenePrompt(opts: BuildCodeScenePromptOptions): BuildPromptResult {
+  const text = `為角色「${opts.name}（${opts.role}）」，依這張中國戲曲舞台參考圖的意境，寫一段 Three.js 程式碼重建整個場景。只輸出 (THREE)=>{…return group} 的函式，其餘規則見 system。`;
+  return {
+    system: CODE_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text },
+          { type: 'image_url', image_url: { url: opts.imageDataUrl } },
+        ],
+      },
+    ],
+    maxTokens: 3000,
+  };
+}
+
+const FORBIDDEN = /\b(window|document|fetch|eval|import|require|setTimeout|setInterval|XMLHttpRequest|globalThis|process)\b/;
+
+/**
+ * Extract the generated scene function. Strips fences, basic-validates it's a
+ * `(THREE)=>{…}` that returns, and rejects obviously unsafe tokens. Returns null
+ * if it looks malformed/unsafe (→ caller falls back to the spec scene).
+ */
+export function parseCodeResponse(text: string): string | null {
+  let code = text.trim();
+  const fence = code.match(/```(?:js|javascript)?\s*([\s\S]*?)```/);
+  if (fence) code = fence[1].trim();
+  const start = code.indexOf('(THREE)');
+  if (start >= 0) code = code.slice(start);
+  if (!code.includes('THREE') || !code.includes('return')) return null;
+  if (FORBIDDEN.test(code)) return null;
+  if (code.length > 12000) return null;
+  return code;
+}
+
 export interface BuildCritiquePromptOptions {
   spec: SceneSpec;
   chapters: string[];
   catalog: CatalogEntryForPrompt[];
 }
 
-const CRITIC_SYSTEM = `你是廂房佈置的審稿人。對照角色近況章回，檢查這版佈置有沒有「漏掉重要意象」「擺了矛盾的東西」「沒有任何劇照掛軸」「物件擠成一堆」等問題。
-- 若佈置已能呼應近況、合理，回 {"ok":true,"issues":[]}。
-- 否則回 {"ok":false,"issues":["…","…"]}，每條 issue 是一句可執行的修正建議。
+const CRITIC_SYSTEM = `你是懂戲曲意境的廂房審稿人。戲曲重「一桌二椅」的留白與象徵，少即是多——**不要因為「缺某物件」就要求補滿**，除非那個意象對角色近況真的關鍵。重點檢查：
+- 物件是否重疊/穿模、是否擠成一堆（該疏不疏）。
+- 是否有與角色近況「矛盾」的東西。
+- 整體意境是否成立（寧可空靈，不要雜亂）。
+- 若已疏朗、合理、有意境，回 {"ok":true,"issues":[]}。
+- 否則回 {"ok":false,"issues":["…"]}，每條是一句可執行修正（優先「移除/挪開」而非「再加」）。
 只輸出 JSON。`;
 
 export function buildCritiquePrompt(opts: BuildCritiquePromptOptions): BuildPromptResult {

@@ -1,5 +1,14 @@
 export { ChamberCanvas } from './ChamberCanvas.js';
 export type { ChamberCanvasProps } from './ChamberCanvas.js';
+export { SceneRenderer } from './SceneRenderer.js';
+export { deterministicDesign } from './scene-design.js';
+export type {
+  SceneDesign,
+  SceneElement,
+  ElementKind,
+  BackdropStyle,
+  FloorType,
+} from './scene-design.js';
 export { ChamberDiorama } from './ChamberDiorama.js';
 export { ChamberLights } from './ChamberLights.js';
 export { CharacterStandee } from './CharacterStandee.js';
