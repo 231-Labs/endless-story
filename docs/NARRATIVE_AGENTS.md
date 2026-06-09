@@ -127,6 +127,18 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
   (敘事日衰減,half-life 2 日)× **relevance**(MemWal 向量 distance)。over-fetch 3× →
   三因子重排 top-K。**唯一**跟舊本地 store 的差:只對「語意撈回的候選集」評分、非全量
   掃描(緩解:撈寬 + 必要時定向 recall)。recency 用**敘事日**非牆鐘 → 推進 tick 即衰減、可 demo。
+- **自架 relayer = 真·全 namespace 三因子(client 已接好,待部署)**:`packages/relayer`(plaintext-blind,
+  存 向量+純量 metadata+Walrus blob id)對**整個 namespace** 算 importance×recency×relevance、回真 top-N,
+  取代託管版的「top-K by distance + client 重排」。**client 接線已完成**:remember 送 metadata + 用
+  `RememberMeta.embedText` 嵌**去 tag 的原文**(向量不被 tag 污染);recall 在 **`MEMWAL_RELAYER_THREE_FACTOR=1`**
+  時只撈 top-N、信 relayer 排序(**少 ~3× SEAL 解密 → recall 快很多**,即使並發=1)。預設關 → 維持託管行為。
+  · **部署**:relayer 上自架 VPS(最好跟自架 Walrus publisher/aggregator 同機,relayer→Walrus 走本機),
+    web 設 `MEMWAL_SERVER_URL` 指過去 + 開 flag。
+  · **⚠️ 認證錯位**:自架 relayer 只認 `RELAYER_SECRET` 的 Bearer,但 client 送的是簽章 header(relayer 不驗)→
+    **別設 `RELAYER_SECRET`**(會 401),改用防火牆/CORS 鎖;要 Bearer 得另在 client 加。
+- **並發 = 1(SEAL key server 限流)**:`MEMWAL_RECALL_CONCURRENCY` 預設 1,PLAN/POV 串行避開 SEAL 429。
+  要放寬 → **自架 SEAL key server**(`MemWalManual` 的 `sealServerConfigs`/`sealThreshold` 可配)+ 自架 Walrus,
+  兩者到位才提高並發。**尚未做**;「慢但能跑」可接受,世界本就慢速自治。
 - **反思壓縮(sleep)** ✅:把零碎觀察壓成高密度反思 → 防 recall 退化成噪音。**已做(N2)**:
   recall 非 anchored 的 observation/chapter → LLM 壓成 1-2 條 → remember(i=8,tag `a=1`
   排除再壓)→ 上鏈 Reflection。「遺忘已吸收的」採**軟遺忘**(MemWal append-only,無刪除):
