@@ -10,6 +10,8 @@ import {
   parsePortraitPrompt,
   buildPersonaPrompt,
   parsePersonaResponse,
+  buildPublicTagsPrompt,
+  parsePublicTags,
   type PromptBehavior,
 } from '@endless-story/llm/prompts';
 import { DEFAULT_ATTRIBUTE_SCHEMA } from '@/lib/config/attribute-schema';
@@ -60,5 +62,9 @@ export const recruitDefs: Partial<Record<PromptLabCallId, PromptBehavior<unknown
   'persona.distill': {
     build: (input) => buildPersonaPrompt(typed(input)),
     parse: (raw) => ({ parsed: parsePersonaResponse(raw), note: 'persona 軸/腔/界 parser' }),
+  },
+  'character.publicTags': {
+    build: (input) => buildPublicTagsPrompt(typed(input)),
+    parse: (raw) => ({ parsed: parsePublicTags(raw) ?? { tags: [] }, note: 'public tags parser' }),
   },
 };

@@ -27,11 +27,7 @@ import { blob } from '@endless-story/memwal';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
-
-const TONE = '淡彩水墨工筆畫風：淡墨細線、清透水彩薄塗、大面積留白、宣紙質感。';
-// These views are used as CLEAN reference anchors for downstream multi-character
-// scene images, so the image must be pure figure art — no text whatsoever.
-const NEG = '全圖純畫面，無任何文字、標籤、題字、印章、邊框、數字或排版框線。';
+import { portraitVariantPrompt, artSheetPrompt } from '@/lib/image-prompts';
 
 export interface AdditionalViewsInput {
     characterId: string;
@@ -65,18 +61,13 @@ const VIEWS: ViewSpec[] = [
         label: 'frontal',
         kind: 0, // portrait_variant
         aspect: '4:5',
-        prompt: (person) =>
-            `${TONE}\n與參考圖**同一個人、同一張臉**（保持五官、髮型、氣質一致）。${person}\n` +
-            `改為**端正正面**朝向觀者、神情沉靜，素顏、純色底、自然光、頭肩 close-up。${NEG}`,
+        prompt: (person) => portraitVariantPrompt(person),
     },
     {
         label: 'art-sheet',
         kind: 6, // setting_sheet / character model-sheet
         aspect: '16:9',
-        prompt: (person) =>
-            `${TONE}\n與參考圖**同一個人、同一張臉**（保持五官、髮型、氣質一致）。${person}\n` +
-            `橫向**人物多角度設定圖**：同一人物的正面全身、四分之三側面、背面，並附頭部特寫；` +
-            `統一純色底、各角度之間以留白分隔，不做任何排版標註。${NEG}`,
+        prompt: (person) => artSheetPrompt(person),
     },
 ];
 
