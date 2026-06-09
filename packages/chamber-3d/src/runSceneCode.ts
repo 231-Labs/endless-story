@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Object3D, Mesh } from 'three';
+import { buildHelpers } from './sceneHelpers.js';
 
 /**
  * EXPERIMENT (option 3): run GLM-authored Three.js code `(THREE)=>Group` and
@@ -11,9 +12,10 @@ import type { Object3D, Mesh } from 'three';
  */
 export function buildGroupFromCode(code: string): Object3D | null {
   try {
+    const helpers = buildHelpers(THREE);
     // eslint-disable-next-line no-new-func
-    const fn = new Function('THREE', `"use strict"; return (${code})(THREE);`);
-    const obj = fn(THREE) as Object3D | undefined;
+    const fn = new Function('THREE', 'helpers', `"use strict"; return (${code})(THREE, helpers);`);
+    const obj = fn(THREE, helpers) as Object3D | undefined;
     if (obj && (obj as Object3D).isObject3D) {
       obj.traverse((o) => {
         const m = o as Mesh;

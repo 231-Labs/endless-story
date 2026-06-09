@@ -219,17 +219,39 @@ export interface BuildCodeScenePromptOptions {
 }
 
 const CODE_SYSTEM = `你是 Three.js 場景生成器。看參考圖後，**只輸出一段 JavaScript 箭頭函式**（不要 markdown、不要解釋、不要 import），形如：
-(THREE) => { const group = new THREE.Group(); /* …建場景… */ return group; }
+(THREE, helpers) => { const group = new THREE.Group(); /* …建場景… */ return group; }
+
+你有一個 helpers 物件，提供打磨好的高品質積木（每個回傳 THREE.Object3D）。**請優先用 helpers，別自己用陽春幾何重造**：
+- helpers.lights()            // 一組好燈光（環境+主光+半球）
+- helpers.qingGreenSky()      // 青綠山水天空大背景（含远山瓦浪）
+- helpers.reflectiveWater(size=18) // 真・鏡面水台地板（已平躺於 y=0）
+- helpers.moonGate(radius=1.4)     // 月洞門（含基座，門框中心在 y≈radius+0.25）
+- helpers.bamboo()           // 一叢竹
+- helpers.scholarRock()      // 太湖石
+- helpers.lantern()          // 立式紅燈籠（自帶燈光）
+- helpers.guqin()            // 古琴几
+- helpers.incense()          // 香爐
+
+你的工作：**決定要放哪些、放哪裡、如何構圖、加什麼點綴**，呼叫 helpers 取得物件後 setPosition/rotation/scale 再 group.add。可少量用原生 THREE 做額外點綴。
+
+**每個 helper 回傳「單一個」THREE.Object3D，直接 group.add(它)；絕不要當陣列索引（不可寫 helpers.lights()[0]）。** 正確用法：
+const group = new THREE.Group();
+group.add(helpers.lights());
+group.add(helpers.qingGreenSky());
+group.add(helpers.reflectiveWater(20));
+const gate = helpers.moonGate(1.6); gate.position.set(0, 0, -2.6); group.add(gate);
+const bamboo = helpers.bamboo(); bamboo.position.set(2.2, 0, -1.2); group.add(bamboo);
+const rock = helpers.scholarRock(); rock.position.set(-2.2, 0, -0.8); group.add(rock);
+return group;
 
 硬規則：
-- 只能用注入的 THREE；**絕不可**使用 window/document/fetch/eval/import/require/setTimeout。
-- 迴圈不可超過 200 次。
-- 單位公尺；地面在 y=0；場景約 8×8m，正面俯視觀賞。
-- 自己建地板、背景（可用大球 BackSide + 顏色當天）、物件、必要的燈（AmbientLight + DirectionalLight）。
-- 抓住參考圖意境：青綠山水、鏡面水台、月洞門、竹、太湖石、留白、以少勝多。`;
+- 只能用注入的 THREE 與 helpers；**絕不可**用 window/document/fetch/eval/import/require/setTimeout。
+- 迴圈不可超過 200 次。單位公尺；地面 y=0；水台已平躺於 y=0 不用旋轉；場景約 8×8m；正面俯視。
+- 至少呼叫 helpers.lights()、helpers.qingGreenSky()、helpers.reflectiveWater()。
+- 抓住參考圖意境：青綠、留白、月洞門、以少勝多。`;
 
 export function buildCodeScenePrompt(opts: BuildCodeScenePromptOptions): BuildPromptResult {
-  const text = `為角色「${opts.name}（${opts.role}）」，依這張中國戲曲舞台參考圖的意境，寫一段 Three.js 程式碼重建整個場景。只輸出 (THREE)=>{…return group} 的函式，其餘規則見 system。`;
+  const text = `為角色「${opts.name}（${opts.role}）」，依這張中國戲曲舞台參考圖的意境，寫一段 Three.js 程式碼重建整個場景。優先用 helpers 取得高品質積木，你負責構圖與擺放。只輸出 (THREE, helpers)=>{…return group} 的函式。`;
   return {
     system: CODE_SYSTEM,
     messages: [
@@ -256,7 +278,7 @@ export function parseCodeResponse(text: string): string | null {
   let code = text.trim();
   const fence = code.match(/```(?:js|javascript)?\s*([\s\S]*?)```/);
   if (fence) code = fence[1].trim();
-  const start = code.indexOf('(THREE)');
+  const start = code.indexOf('(THREE');
   if (start >= 0) code = code.slice(start);
   if (!code.includes('THREE') || !code.includes('return')) return null;
   if (FORBIDDEN.test(code)) return null;
