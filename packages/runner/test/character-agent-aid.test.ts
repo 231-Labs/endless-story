@@ -8,37 +8,40 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseAid, clampAidAmount } from '../src/services/character-agent/parse.ts';
+import { parseAid } from '../src/services/character-agent/parse.ts';
+import { clampAidAmount } from '../src/services/character-agent/aid-prompt.ts';
 
-test('parseAid: a well-formed give decision is parsed verbatim', () => {
-    const o = parseAid('{"doAid":true,"recipientId":"0xally","amount":12,"memo":"patronage","reason":"她要斷炊了"}');
+test('parseAid: a multi-gift decision is parsed verbatim', () => {
+    const o = parseAid('{"gifts":[{"recipientId":"0xmentor","amount":18,"memo":"tribute","manner":"via-proxy","reason":"保他體面"},{"recipientId":"0xlover","amount":12,"memo":"gift"}],"reason":"先救恩情"}');
     assert.ok(o);
-    assert.equal(o.doAid, true);
-    assert.equal(o.recipientId, '0xally');
-    assert.equal(o.amount, 12);
-    assert.equal(o.memo, 'patronage');
-    assert.equal(o.reason, '她要斷炊了');
+    assert.equal(o.gifts.length, 2);
+    assert.equal(o.gifts[0].recipientId, '0xmentor');
+    assert.equal(o.gifts[0].amount, 18);
+    assert.equal(o.gifts[0].memo, 'tribute');
+    assert.equal(o.gifts[0].manner, 'via-proxy');
+    assert.equal(o.gifts[1].memo, 'gift');
+    assert.equal(o.reason, '先救恩情');
 });
 
-test('parseAid: a no-aid decision parses with doAid false', () => {
-    const o = parseAid('{"doAid":false,"reason":"眾人氣色都還穩"}');
-    assert.ok(o);
-    assert.equal(o.doAid, false);
-    assert.equal(o.recipientId, undefined);
+test('parseAid: an empty gift list (no-aid) parses', () => {
+    assert.deepEqual(parseAid('{"gifts":[],"reason":"眾人氣色都還穩"}'), { gifts: [], reason: '眾人氣色都還穩' });
+    assert.deepEqual(parseAid('{"doAid":false,"reason":"罷了"}'), { gifts: [], reason: '罷了' });
 });
 
-test('parseAid: doAid only counts when strictly true (no truthy coercion)', () => {
-    assert.equal(parseAid('{"doAid":"yes"}')?.doAid, false);
-    assert.equal(parseAid('{"doAid":1}')?.doAid, false);
+test('parseAid: tolerates a bare single-gift object (model dropped the array)', () => {
+    const o = parseAid('{"recipientId":"0x1","amount":5,"memo":"loan"}');
+    assert.equal(o?.gifts.length, 1);
+    assert.equal(o?.gifts[0].memo, 'loan');
 });
 
-test('parseAid: an unknown / missing memo defaults to gift', () => {
-    assert.equal(parseAid('{"doAid":true,"recipientId":"0x1","amount":5,"memo":"贈與"}')?.memo, 'gift');
-    assert.equal(parseAid('{"doAid":true,"recipientId":"0x1","amount":5}')?.memo, 'gift');
+test('parseAid: unknown memo → gift, unknown manner → undefined', () => {
+    const o = parseAid('{"gifts":[{"recipientId":"0x1","amount":5,"memo":"贈與","manner":"硬塞"}]}');
+    assert.equal(o?.gifts[0].memo, 'gift');
+    assert.equal(o?.gifts[0].manner, undefined);
 });
 
 test('parseAid: prose with an embedded JSON object still parses; pure garbage is null', () => {
-    assert.ok(parseAid('我想了想：{"doAid":true,"recipientId":"0x1","amount":3}'));
+    assert.ok(parseAid('我想了想：{"gifts":[{"recipientId":"0x1","amount":3,"memo":"gift"}]}'));
     assert.equal(parseAid('沒有 JSON 在這裡'), null);
 });
 
