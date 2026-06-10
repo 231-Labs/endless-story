@@ -25,7 +25,7 @@ export const STEPS: { key: Exclude<Stage, 'closed' | 'rejected'>; label: string 
 ];
 
 export const VOUCHER_TTL_MS = 24n * 60n * 60n * 1000n;
-export const ENDLESS_DECIMALS = 6;
+export { ENDLESS_DECIMALS } from '@endless-story/shared';
 
 /**
  * Off-chain `Recruitment.genderRequirement` uses English (`male`/`female`/`other`)
