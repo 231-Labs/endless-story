@@ -37,6 +37,7 @@ import { charactersApi } from '@/lib/api/index';
 import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
+import { selectContention, pushRecentTemplate } from '@/lib/chain/event-planner';
 import { compileGazetteAction } from './compile-gazette';
 import { compileEventChapterAction } from './compile-event-chapter';
 import { generateEventMomentAction } from './generate-event-moment';
@@ -88,19 +89,14 @@ import {
 import { runSocialPhase } from './tick-phases/social';
 import { runActPhase } from './tick-phases/act';
 
-/** Map the top drama tension to a readable scene-incident framing for a storylet.
- *  Deterministic — no LLM. The template id doubles as the on-chain StoryletOpened
- *  template_id; the label is the human framing fed into involved characters' POV. */
-function storyletFraming(statement?: string): { templateId: string; label: string } {
-    const s = statement ?? '';
-    if (s.includes('頭牌') || s.includes('spotlight'))
-        return { templateId: 'contention:spotlight', label: '今晚誰壓軸、誰站台心的暗潮浮上了檯面' };
-    if (s.includes('唱片') || s.includes('recording') || s.includes('灌錄'))
-        return { templateId: 'contention:recording', label: '首張唱片該由誰來灌，成了繞不開的話題' };
-    if (s.includes('搭戲') || s.includes('partnership'))
-        return { templateId: 'contention:partnership', label: '誰與誰搭戲的盤算，在這一場裡較上了勁' };
-    return { templateId: 'storylet:tension', label: '一樁懸而未決的較量，在這一場裡發酵' };
-}
+/** Map the top drama tension to a readable scene-incident framing — now with
+ *  anti-repeat so the world rotates contentions instead of locking on one (the
+ *  "always the recording slot" bug). Pure selection lives in event-planner; the
+ *  recent-topic history is process-level (one server process drives the loop).
+ *  NOTE: this is the deterministic-relief layer; the real fix (resolve the event
+ *  → settle the resource → demand moves) is the multi-tick spine in
+ *  docs/EVENT_LIFECYCLE.md. */
+const recentTopicsBySaga = new Map<string, string[]>();
 
 export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
@@ -334,7 +330,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 rosterById.get(cs[0].id)?.currentSceneName ??
                 activeScenes.find((s) => s.id === sid)?.name ??
                 '戲班';
-            const framing = storyletFraming(drama?.top?.[0]?.statement);
+            const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
+            const picked = selectContention(drama?.top ?? [], recentTopics);
+            const framing = { templateId: picked.templateId, label: picked.label };
+            recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
             storylet = {
                 sceneId: sid,
                 sceneName,
