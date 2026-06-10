@@ -14,11 +14,11 @@
 // Conservation (asserted in tests) holds across every step:
 //   injected === ownerSink + storytellerSink + protocolSink + sagaTreasury + Σ balance
 
-import { bclamp, bmax, bmin } from "./fixed.ts";
-import { ageHazard, baseFloorAdj, dailyCost } from "./derive.ts";
+import { bmin } from "./fixed.ts";
+import { baseFloorAdj, dailyCost } from "./derive.ts";
+import { stepVitality } from "./vitality.ts";
 import {
   BPS,
-  VIT_FULL,
   type Accounts,
   type CharState,
   type EconConfig,
@@ -117,13 +117,10 @@ export function settleDay(state: WorldEconState, cfg: EconConfig): DaySettle {
     costCollected += pay;
     const insolvent = pay < dc;
 
-    // 4. vitality: economic track + age track
-    if (insolvent) c.insolventStreak += 1n;
-    else c.insolventStreak = 0n;
-    const econDamage = insolvent ? cfg.econBase * c.insolventStreak : 0n;
-    const recovery = insolvent ? 0n : cfg.vitRecovery;
-    const ageHaz = ageHazard(c, cfg);
-    c.vitality = bclamp(c.vitality + recovery - econDamage - ageHaz, 0n, VIT_FULL);
+    // 4. vitality: economic track + age track (extracted pure step → src/vitality.ts)
+    const vit = stepVitality(c, insolvent, cfg);
+    c.insolventStreak = vit.insolventStreak;
+    c.vitality = vit.vitality;
 
     // 6. accrual (append-only memory + age) — happens whether or not death follows
     c.memoryCount += c.subscribers > 0n ? cfg.memPerDayActive : cfg.memPerDayDormant;
@@ -131,7 +128,7 @@ export function settleDay(state: WorldEconState, cfg: EconConfig): DaySettle {
 
     // 5. death — vitality bottomed out
     let diedToday = false;
-    if (c.vitality <= 0n) {
+    if (vit.dead) {
       c.dead = true;
       c.diedOnDay = state.day;
       acc.ownerSink += c.balance; // estate → owner (conserved)

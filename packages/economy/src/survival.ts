@@ -11,7 +11,7 @@
 // Constants are the DESIGN set (DEFAULT_ECON), not the real ~$ cost: the in-game ENDLESS
 // figures (esp. memory rent) are a narrative/economy design lever, not a Walrus pass-through.
 
-import { bclamp, bmin } from "./fixed.ts";
+import { bmin } from "./fixed.ts";
 import {
   BPS,
   MUNIT,
@@ -25,7 +25,6 @@ import {
   type VitalityState,
 } from "./types.ts";
 import {
-  ageHazard,
   dailyCost,
   DEFAULT_ECON,
   lifeStage,
@@ -34,6 +33,7 @@ import {
   survivalLevel,
   vitalityState,
 } from "./derive.ts";
+import { stepVitality } from "./vitality.ts";
 
 /** Newborn seed grant. */
 export const SEED_FUNDS_MICRO = 56n * MUNIT;
@@ -135,12 +135,10 @@ export function lazySettle(prior: PersistedEcon | null, input: SurvivalInput, cf
     const avail = balance + sal;
     const pay = bmin(avail, dc);
     balance = avail - pay;
-    const insolvent = pay < dc;
-    streak = insolvent ? streak + 1 : 0;
-    const econDmg = insolvent ? cfg.econBase * BigInt(streak) : 0n;
-    const recov = insolvent ? 0n : cfg.vitRecovery;
-    vitality = bclamp(vitality + recov - econDmg - ageHazard(c, cfg), 0n, VIT_FULL);
-    if (vitality <= 0n) {
+    const vit = stepVitality(c, pay < dc, cfg); // same dual-track step as the cohort settle
+    streak = Number(vit.insolventStreak);
+    vitality = vit.vitality;
+    if (vit.dead) {
       day = target; // dead — stop settling
       break;
     }

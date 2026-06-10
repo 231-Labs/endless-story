@@ -41,7 +41,11 @@ export {
   vitalityState,
   lifeStage,
 } from "./derive.ts";
+export { stepVitality } from "./vitality.ts";
+export type { VitalityStep } from "./vitality.ts";
 export { settleDay, totalAccounted, conserves } from "./settle.ts";
 export type { PerCharLedger, DayFlows, DaySettle } from "./settle.ts";
+export { applyTransfer, applyTransfers } from "./transfer.ts";
+export type { TransferMemo, TransferReject, TransferRequest, TransferResult, BatchResult } from "./transfer.ts";
 export { lazySettle, SEED_FUNDS_MICRO } from "./survival.ts";
 export type { SurvivalInput, PersistedEcon, SurvivalSnapshot } from "./survival.ts";
