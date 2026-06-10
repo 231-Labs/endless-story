@@ -112,6 +112,49 @@ export function parseSocial(raw: string): SocialActionResult | null {
     }
 }
 
+/* ── AID (give money) ───────────────────────────────────────────────── */
+
+const AID_MEMOS = new Set(['gift', 'patronage', 'loan', 'repay', 'bribe', 'tribute']);
+
+/** Clamp the LLM's proposed amount into [0, funds] — the hard no-overdraft safety, NOT a
+ *  judgment. Floors to a whole ENDLESS; non-finite / negative → 0 (treated as no gift). */
+export function clampAidAmount(amount: unknown, funds: number): number {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    const capped = Math.min(Math.floor(n), Math.max(0, Math.floor(funds)));
+    return capped > 0 ? capped : 0;
+}
+
+/** Parse the aid decision. The model owns doAid / recipient / amount / memo; this layer only
+ *  shapes types and defaults an unknown memo to 'gift'. Affordability + recipient validity are
+ *  enforced by the caller (decideAidAction) against the real peer list + funds. */
+export function parseAid(
+    raw: string,
+): { doAid: boolean; recipientId?: string; amount?: number; memo?: 'gift' | 'patronage' | 'loan' | 'repay' | 'bribe' | 'tribute'; reason?: string } | null {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+        const o = JSON.parse(m[0]) as {
+            doAid?: unknown;
+            recipientId?: unknown;
+            amount?: unknown;
+            memo?: unknown;
+            reason?: unknown;
+        };
+        const doAid = o.doAid === true;
+        const memoRaw = typeof o.memo === 'string' ? o.memo : '';
+        return {
+            doAid,
+            recipientId: typeof o.recipientId === 'string' ? o.recipientId : undefined,
+            amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : undefined,
+            memo: (AID_MEMOS.has(memoRaw) ? memoRaw : 'gift') as 'gift' | 'patronage' | 'loan' | 'repay' | 'bribe' | 'tribute',
+            reason: clamp(typeof o.reason === 'string' ? o.reason : undefined, 60),
+        };
+    } catch {
+        return null;
+    }
+}
+
 /* ── PLAN ───────────────────────────────────────────────────────────── */
 
 export function parsePlan(
