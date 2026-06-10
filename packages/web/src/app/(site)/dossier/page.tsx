@@ -28,6 +28,8 @@ import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
 import { ChaptersTab } from '@/components/dossier/tabs/ChaptersTab';
 import { MemoriesTab } from '@/components/dossier/tabs/MemoriesTab';
+import { MemoriesTabClient } from '@/components/dossier/tabs/MemoriesTabClient';
+import { isMemoryConfigured, sealNetwork } from '@/lib/chain/memory';
 import { InterventionTab } from '@/components/dossier/tabs/InterventionTab';
 import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
@@ -278,13 +280,27 @@ async function DossierDetail({
               </>
             ) : null}
             {tab === 'memories' ? (
-              <Suspense fallback={<MemoriesTabSkeleton />}>
-                <MemoriesTabLoader
+              // Real (MemWal-configured) memories are cap-gated: the browser
+              // verifies the connected wallet holds the OwnerCap and decrypts
+              // locally via seal_approve_owner — the server hands out
+              // ciphertext only. The spoofable `?as=` viewerWallet is never
+              // consulted on this path; it survives only in the mock fallback
+              // below (demo fixtures, nothing private).
+              isMemoryConfigured() ? (
+                <MemoriesTabClient
                   character={character}
-                  viewerWallet={viewerWallet}
                   sagaCharacters={allCharacters}
+                  suiNetwork={sealNetwork()}
                 />
-              </Suspense>
+              ) : (
+                <Suspense fallback={<MemoriesTabSkeleton />}>
+                  <MemoriesTabLoader
+                    character={character}
+                    viewerWallet={viewerWallet}
+                    sagaCharacters={allCharacters}
+                  />
+                </Suspense>
+              )
             ) : null}
             {tab === 'entrusts' ? (
               <InterventionTab
@@ -322,9 +338,11 @@ async function LiveStateBarLoader({
 }
 
 /**
- * Lazy loader for the memories tab. `listMemories` is a SEAL recall (slow +
- * rate-limited), so it's isolated here behind a Suspense and only runs when
- * the memories tab is open — never blocking the header / other tabs.
+ * Lazy loader for the memories tab — MOCK / http fallback only (used when
+ * MemWal isn't configured). Real memories never pass through here: they go
+ * ciphertext-only via /api/memories/encrypted and decrypt in the browser
+ * against the viewer's OwnerCap (MemoriesTabClient). The `?as=`-derived
+ * viewerWallet below therefore gates nothing but demo fixtures.
  */
 async function MemoriesTabLoader({
   character,
@@ -353,7 +371,7 @@ async function MemoriesTabLoader({
     <MemoriesTab
       character={character}
       memories={memories}
-      viewerWallet={viewerWallet}
+      isOwner={viewerWallet != null && viewerWallet === character.nftOwner}
       sagaCharacters={sagaCharacters}
       chaptersById={chaptersById}
     />
