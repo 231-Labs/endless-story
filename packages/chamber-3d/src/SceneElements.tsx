@@ -11,6 +11,145 @@ import type { Group } from 'three';
  * procedural East-Asian elements — the pieces GLM composes a scene from.
  */
 
+// ── 四面台 (open-on-four-sides opera stage) ──────────────────────────
+/**
+ * A minimal-modern 四面台: raised lacquer platform over the water, four
+ * slender vermilion columns, a shallow 攢尖 canopy with a gold finial, corner
+ * lantern bulbs. The stage TOP sits at local y=0 so placements/figures stand
+ * on it unchanged; the plinth descends toward the (lowered) water plane.
+ */
+export function OperaStage() {
+  const COL = 3.05; // column inset from centre
+  const corners: [number, number][] = [
+    [-COL, -COL],
+    [COL, -COL],
+    [-COL, COL],
+    [COL, COL],
+  ];
+  return (
+    <group>
+      {/* plinth → body → lacquer floor (top at y≈0) */}
+      <mesh position={[0, -0.56, 0]} receiveShadow>
+        <boxGeometry args={[7.4, 0.34, 7.4]} />
+        <meshStandardMaterial color="#454039" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, -0.235, 0]} receiveShadow>
+        <boxGeometry args={[6.8, 0.33, 6.8]} />
+        <meshStandardMaterial color="#5d2a1e" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, -0.045, 0]} receiveShadow>
+        <boxGeometry args={[6.5, 0.09, 6.5]} />
+        <meshStandardMaterial color="#2c2420" roughness={0.34} metalness={0.12} />
+      </mesh>
+      {/* gold edge lines */}
+      {[
+        [0, 3.27, 6.56, 0.05] as const,
+        [0, -3.27, 6.56, 0.05] as const,
+      ].map(([x, z, w], i) => (
+        <mesh key={`gx${i}`} position={[x, -0.012, z]}>
+          <boxGeometry args={[w, 0.035, 0.05]} />
+          <meshStandardMaterial color="#caa64a" metalness={0.45} roughness={0.4} />
+        </mesh>
+      ))}
+      {[
+        [3.27, 0] as const,
+        [-3.27, 0] as const,
+      ].map(([x, z], i) => (
+        <mesh key={`gz${i}`} position={[x, -0.012, z]}>
+          <boxGeometry args={[0.05, 0.035, 6.56]} />
+          <meshStandardMaterial color="#caa64a" metalness={0.45} roughness={0.4} />
+        </mesh>
+      ))}
+      {/* four slender vermilion columns */}
+      {corners.map(([x, z], i) => (
+        <mesh key={`c${i}`} position={[x, 1.5, z]} castShadow>
+          <cylinderGeometry args={[0.085, 0.095, 3.0, 12]} />
+          <meshStandardMaterial color="#7e2a1d" roughness={0.5} />
+        </mesh>
+      ))}
+      {/* top ring beams */}
+      <mesh position={[0, 3.04, -COL]} castShadow>
+        <boxGeometry args={[6.4, 0.12, 0.12]} />
+        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 3.04, COL]} castShadow>
+        <boxGeometry args={[6.4, 0.12, 0.12]} />
+        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
+      </mesh>
+      <mesh position={[-COL, 3.04, 0]} castShadow>
+        <boxGeometry args={[0.12, 0.12, 6.4]} />
+        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
+      </mesh>
+      <mesh position={[COL, 3.04, 0]} castShadow>
+        <boxGeometry args={[0.12, 0.12, 6.4]} />
+        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
+      </mesh>
+      {/* shallow 攢尖 canopy (4-sided) + 寶頂 finial */}
+      <mesh position={[0, 3.62, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[4.7, 1.1, 4]} />
+        <meshStandardMaterial color="#333a40" roughness={0.65} flatShading />
+      </mesh>
+      <mesh position={[0, 4.28, 0]}>
+        <cylinderGeometry args={[0.06, 0.1, 0.22, 10]} />
+        <meshStandardMaterial color="#caa64a" metalness={0.55} roughness={0.35} />
+      </mesh>
+      <mesh position={[0, 4.45, 0]}>
+        <sphereGeometry args={[0.1, 12, 12]} />
+        <meshStandardMaterial color="#caa64a" metalness={0.55} roughness={0.35} emissive="#7a5a1e" emissiveIntensity={0.25} />
+      </mesh>
+      {/* corner lantern bulbs + one warm stage light */}
+      {corners.map(([x, z], i) => (
+        <mesh key={`l${i}`} position={[x * 0.93, 2.66, z * 0.93]}>
+          <sphereGeometry args={[0.09, 12, 12]} />
+          <meshStandardMaterial color="#b3261d" emissive="#ff5a32" emissiveIntensity={1.5} roughness={0.5} />
+        </mesh>
+      ))}
+      <pointLight position={[0, 2.5, 0]} color="#ffb070" intensity={1.5} distance={7.5} decay={2} />
+    </group>
+  );
+}
+
+// ── 一桌二椅 — the opera convention itself ────────────────────────────
+/** Red-skirted table + two chairs with 椅帔; gold trim. 以一當十. */
+export function TableChairs() {
+  const chair = (x: number) => (
+    <group position={[x, 0, -0.55]}>
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <boxGeometry args={[0.42, 0.5, 0.42]} />
+        <meshStandardMaterial color="#b3261d" roughness={0.55} />
+      </mesh>
+      <mesh position={[0, 0.53, 0]}>
+        <boxGeometry args={[0.44, 0.05, 0.44]} />
+        <meshStandardMaterial color="#caa64a" metalness={0.4} roughness={0.4} />
+      </mesh>
+      <mesh position={[0, 0.95, -0.19]} castShadow>
+        <boxGeometry args={[0.44, 0.8, 0.05]} />
+        <meshStandardMaterial color="#b3261d" roughness={0.55} />
+      </mesh>
+    </group>
+  );
+  return (
+    <group>
+      <group>
+        <mesh position={[0, 0.42, 0]} castShadow>
+          <boxGeometry args={[1.06, 0.8, 0.64]} />
+          <meshStandardMaterial color="#b3261d" roughness={0.55} />
+        </mesh>
+        <mesh position={[0, 0.74, 0]}>
+          <boxGeometry args={[1.1, 0.05, 0.68]} />
+          <meshStandardMaterial color="#caa64a" metalness={0.4} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.83, 0]} castShadow>
+          <boxGeometry args={[1.16, 0.07, 0.74]} />
+          <meshStandardMaterial color="#2c2420" roughness={0.4} />
+        </mesh>
+      </group>
+      {chair(-0.95)}
+      {chair(0.95)}
+    </group>
+  );
+}
+
 // ── 月洞門 ────────────────────────────────────────────────────────────
 export function MoonGate() {
   const r = 1.4;

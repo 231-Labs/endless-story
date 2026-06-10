@@ -1,23 +1,26 @@
 import type { ChamberParams, ChamberPlacement, SceneDesign, SceneElement } from '@endless-story/chamber-3d';
 import { mmToMeters } from '@endless-story/chamber-3d';
 
-/** Character standing spots (self front-centre). */
+/** Character standing spots on the stage (self front-centre). */
 const FIGURE_SPOTS: [number, number, number][] = [
-  [0, 0, 0.7],
-  [-1.6, 0, 0.2],
-  [1.6, 0, 0.2],
-  [0, 0, -0.9],
+  [0, 0, 0.9],
+  [-1.7, 0, 0.35],
+  [1.7, 0, 0.35],
+  [0, 0, 2.0],
 ];
 
 /**
- * Fixed decor — 詩意虛無: only the moon gate, a thread of incense and one
- * small rock anchor the stage; everything else (and the emptiness between)
- * is the agent's 一桌二椅 props. 留白 is deliberate.
+ * Fixed decor — a 四面台 over the water dressed with the opera convention
+ * itself (一桌二椅 + incense); a distant moon gate and one rock breathe at
+ * water level. The agent's props are the character-specific 意象 on top;
+ * 留白 carries the rest.
  */
 const DECOR: SceneElement[] = [
-  { kind: 'moon_gate', pos: [0, 0, -2.4], scale: 1.15 },
-  { kind: 'scholar_rock', pos: [-2.5, 0, -1.2], scale: 0.8 },
-  { kind: 'incense', pos: [1.1, 0, -0.4], scale: 0.9 },
+  { kind: 'stage', pos: [0, 0, 0] },
+  { kind: 'table_chairs', pos: [0, 0, -1.35] },
+  { kind: 'incense', pos: [2.45, 0, 2.25], scale: 0.85 },
+  { kind: 'moon_gate', pos: [0, -0.75, -6.2], scale: 1.8 },
+  { kind: 'scholar_rock', pos: [-4.6, -0.75, -2.2] },
 ];
 
 /**
@@ -47,7 +50,7 @@ export function buildDesign(
   }));
   return {
     backdrop: { style: '青綠山水' },
-    floor: { type: 'water' },
+    floor: { type: 'water', y: -0.75 },
     mood: { timeOfDay: 'day', season: 'spring', weather: 'clear', atmosphere: params?.atmosphere },
     elements: [...DECOR, ...props, ...chars],
   };

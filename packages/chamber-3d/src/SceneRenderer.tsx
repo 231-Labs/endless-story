@@ -13,9 +13,11 @@ import {
   Incense,
   Lantern,
   MoonGate,
+  OperaStage,
   PlumBranch,
   ScholarRock,
   Screen,
+  TableChairs,
 } from './SceneElements.js';
 import { GlbProp } from './GlbProp.js';
 import { PropPrimitive } from './PropPrimitive.js';
@@ -35,13 +37,25 @@ const WATER: Record<string, string> = {
   night: '#161e2a',
 };
 
-function Floor({ type, color, dims, timeOfDay }: { type: FloorType; color?: string; dims: RoomDims; timeOfDay: string }) {
+function Floor({
+  type,
+  color,
+  y = 0,
+  dims,
+  timeOfDay,
+}: {
+  type: FloorType;
+  color?: string;
+  y?: number;
+  dims: RoomDims;
+  timeOfDay: string;
+}) {
   if (type === 'void') return null;
   const w = dims.width * 2.6;
   const d = dims.depth * 1.8;
   if (type === 'water') {
     return (
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -dims.depth * 0.1]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, -dims.depth * 0.1]}>
         <planeGeometry args={[w, d]} />
         <MeshReflectorMaterial
           resolution={512}
@@ -60,7 +74,7 @@ function Floor({ type, color, dims, timeOfDay }: { type: FloorType; color?: stri
   }
   const flat = type === 'wood' ? (color ?? '#6e5238') : (color ?? '#9a9386');
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -dims.depth * 0.1]} receiveShadow>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, -dims.depth * 0.1]} receiveShadow>
       <planeGeometry args={[w, d]} />
       <meshStandardMaterial color={flat} roughness={type === 'wood' ? 0.82 : 0.9} metalness={0.04} />
     </mesh>
@@ -78,6 +92,10 @@ function Element({ el, avatars }: { el: SceneElement; avatars: ChamberAvatar[] }
   );
 
   switch (el.kind) {
+    case 'stage':
+      return wrap(<OperaStage />);
+    case 'table_chairs':
+      return wrap(<TableChairs />);
     case 'moon_gate':
       return wrap(<MoonGate />);
     case 'bamboo':
@@ -149,13 +167,21 @@ export function SceneRenderer({
     <group>
       <SkyBackdrop env={env} />
       <ChamberLights palette={palette} />
-      <Floor type={design.floor.type} color={design.floor.color} dims={dims} timeOfDay={env.timeOfDay} />
-      <Weather weather={env.weather} dims={dims} />
-      {/* 雲氣 — the 虛無 layer: slow mist breathing over the water */}
-      <DriftingMist
+      <Floor
+        type={design.floor.type}
+        color={design.floor.color}
+        y={design.floor.y ?? 0}
         dims={dims}
-        tone={env.timeOfDay === 'dusk' || env.timeOfDay === 'night' ? '#aab6c6' : '#f2f5f1'}
+        timeOfDay={env.timeOfDay}
       />
+      <Weather weather={env.weather} dims={dims} />
+      {/* 雲氣 — the 虛無 layer: mist hugging the water plane */}
+      <group position={[0, design.floor.y ?? 0, 0]}>
+        <DriftingMist
+          dims={dims}
+          tone={env.timeOfDay === 'dusk' || env.timeOfDay === 'night' ? '#aab6c6' : '#f2f5f1'}
+        />
+      </group>
       {design.elements.map((el, i) => (
         <Element key={`${el.kind}:${i}`} el={el} avatars={avatars} />
       ))}

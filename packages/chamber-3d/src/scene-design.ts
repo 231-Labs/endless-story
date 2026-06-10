@@ -13,6 +13,8 @@ export type FloorType = 'water' | 'wood' | 'stone' | 'void';
 
 /** The placeable block vocabulary. */
 export type ElementKind =
+  | 'stage' // 四面台 — raised opera stage (top at local y=0)
+  | 'table_chairs' // 一桌二椅 — the opera convention
   | 'moon_gate' // 月洞門
   | 'screen' // 屏風
   | 'bamboo' // 竹
@@ -51,29 +53,33 @@ export interface SceneElement {
 
 export interface SceneDesign {
   backdrop: { style: BackdropStyle; palette?: string[] };
-  floor: { type: FloorType; color?: string };
+  /** `y` lowers the floor plane (e.g. -0.75 puts the water below a stage). */
+  floor: { type: FloorType; color?: string; y?: number };
   mood: { timeOfDay: TimeOfDay; season?: Season; weather: Weather; atmosphere?: number };
   elements: SceneElement[];
 }
 
 /**
- * Deterministic default — 詩意虛無: a near-empty breath of a stage (one moon
- * gate on the water mirror, a thread of incense smoke, one small rock). Most
- * of the scene is emptiness + drifting mist — 留白 IS the design. Always
- * coherent (no LLM key, parse failure, etc.); the GLM path layers onto it.
+ * Deterministic default — a 四面台 over the water mirror, dressed only with
+ * the opera convention itself (一桌二椅 + a thread of incense); a distant moon
+ * gate and one rock breathe in the mist at water level. Objects are 意象, not
+ * furniture — 留白 carries the rest. Always coherent (no LLM key, parse
+ * failure, etc.); the GLM path layers onto it.
  */
 export function deterministicDesign(): SceneDesign {
   return {
     backdrop: { style: '青綠山水' },
-    floor: { type: 'water' },
+    floor: { type: 'water', y: -0.75 },
     mood: { timeOfDay: 'day', season: 'spring', weather: 'clear' },
     elements: [
-      { kind: 'moon_gate', pos: [0, 0, -2.4], scale: 1.15 },
-      { kind: 'scholar_rock', pos: [-2.5, 0, -1.2], scale: 0.8 },
-      { kind: 'incense', pos: [1.1, 0, -0.4], scale: 0.9 },
-      { kind: 'character', pos: [0, 0, 0.7], characterIndex: 0 },
-      { kind: 'character', pos: [-1.6, 0, 0.2], characterIndex: 1 },
-      { kind: 'character', pos: [1.6, 0, 0.2], characterIndex: 2 },
+      { kind: 'stage', pos: [0, 0, 0] },
+      { kind: 'table_chairs', pos: [0, 0, -1.35] },
+      { kind: 'incense', pos: [2.45, 0, 2.25], scale: 0.85 },
+      { kind: 'moon_gate', pos: [0, -0.75, -6.2], scale: 1.8 },
+      { kind: 'scholar_rock', pos: [-4.6, -0.75, -2.2] },
+      { kind: 'character', pos: [0, 0, 0.9], characterIndex: 0 },
+      { kind: 'character', pos: [-1.7, 0, 0.35], characterIndex: 1 },
+      { kind: 'character', pos: [1.7, 0, 0.35], characterIndex: 2 },
     ],
   };
 }
