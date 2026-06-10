@@ -28,19 +28,24 @@ export function ChaptersTab({
     );
   }
 
-  const povChapters = chapters.filter((c) => c.povCharacterId === character.id);
-  const involvedChapters = chapters.filter((c) => c.povCharacterId !== character.id);
+  // IA: event-centric (see docs/CONTENT_PIPELINE.md §8.2). A dossier slices a
+  // character INTO the events ("回") she appears in; the feed slices an event
+  // OUT into its characters. So here we lead with the events this character is
+  // in (her POV + same-scene group cuts merged — "same scene" == same event),
+  // then her on-chain POV raw feed (the per-character / future-PV material).
+  const participatedChapters = chapters;
 
   return (
     <div className="space-y-12">
+      {participatedChapters.length > 0 ? (
+        <Section
+          title={`${character.name} 參與的回`}
+          chapters={participatedChapters}
+          highlight
+        />
+      ) : null}
       {chainPovChapters.length > 0 ? (
         <ChainPovSection chapters={chainPovChapters} character={character} />
-      ) : null}
-      {povChapters.length > 0 ? (
-        <Section title={`${character.name} 視角`} chapters={povChapters} highlight />
-      ) : null}
-      {involvedChapters.length > 0 ? (
-        <Section title="同場群像" chapters={involvedChapters} />
       ) : null}
     </div>
   );
