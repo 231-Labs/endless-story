@@ -12,7 +12,7 @@
  * mock fixtures.
  */
 
-import type { Saga } from '@endless-story/shared';
+import { ENDLESS_DECIMALS, type Saga } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 import { fetchOnChainWorldTime } from './world-read.js';
@@ -44,9 +44,6 @@ interface ChainSagaJson {
         treasury_bps?: number | string;
     };
 }
-
-/** ENDLESS coin decimals — matches currency.move. */
-const ENDLESS_DECIMALS = 6;
 
 /**
  * Chain `Saga.treasury` is a `Balance<CURRENCY>`, serialised as `{ value: "<u64>" }`

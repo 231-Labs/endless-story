@@ -6,8 +6,7 @@ import {
     setFaucetConfig,
     type FaucetSnapshot,
 } from '@/lib/actions/faucet-config';
-
-const ENDLESS_DECIMALS = 6;
+import { ENDLESS_DECIMALS } from '@endless-story/shared';
 
 function rawToHuman(raw: string | bigint): string {
     const n = BigInt(raw);

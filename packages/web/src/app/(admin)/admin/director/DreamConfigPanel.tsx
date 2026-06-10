@@ -8,8 +8,7 @@ import {
     type DreamConfigSnapshot,
 } from '@/lib/actions/dream-config';
 import { txUrl } from '@/lib/explorer';
-
-const ENDLESS_DECIMALS = 6;
+import { ENDLESS_DECIMALS } from '@endless-story/shared';
 
 function rawToHuman(raw: string | bigint): string {
     try {

@@ -26,10 +26,9 @@ import {
 } from '@/lib/actions/run-reflection';
 import { rememberDreamAction } from '@/lib/actions/remember-dream';
 import { txUrl, objectUrl } from '@/lib/explorer';
+import { ENDLESS_DECIMALS } from '@endless-story/shared';
 
 type Kind = 'inject_dream' | 'whisper' | 'ask_reflection';
-
-const ENDLESS_DECIMALS = 6;
 
 const COPY: Record<Kind, { hint: string; placeholder: string; submit: string }> = {
   inject_dream: {
