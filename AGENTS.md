@@ -44,7 +44,7 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
-## 目前進度（2026-06-03）
+## 目前進度（2026-06-10）
 
 **一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder；目前進入「demo 穩定化 + 部署 + 影片素材」階段。
 
@@ -78,7 +78,9 @@ pnpm -r type-check                            # 全 repo 綠燈確認
   - `redeemVoucher` 成功後會用 `after()` 背景跑 `generatePersonaAction`，從公開 profile 蒸餾「軸/腔/界」，上傳 Walrus 並用 `commitment::commit` anchor；失敗不擋 mint。
   - `/dossier` 的 persona 讀取已改成 chain-first：Sui object id 讀 `personaSubject(characterId)` 的最新 commitment，沒有才隱藏本色區；demo slug 仍 fallback mock。
 - **角色經濟驗證已完成**：`packages/economy` 純模擬 12/12 綠，角色頁 survival 已接 off-chain shadow；產品化 tick settle / give phase 還沒進主 loop。
-- **部署文件已補**：見 `docs/DEPLOYMENT.md`，方向是 Vercel 放 web，Zeabur/Contabo 放 relayer + world-loop。
+- **部署已上自架 VPS（2026-06-10）**：web 已部署在自己的 VPS，不再依賴 Vercel（也就沒有 300s maxDuration 上限）；relayer + world-loop 部署細節仍見 `docs/DEPLOYMENT.md`（文內 Vercel 段落視為歷史方案）。
+- **Tick loop 已模組化（2026-06-10）**：`web/lib/actions/tick-loop-internal.ts` 已拆成 `lib/actions/tick-phases/{support,chain,move,social,act}.ts`（共用 helper／鏈上送簽／三個 phase 各一檔），`tick-loop.ts` 只剩 orchestrator。行為不變，純搬家。
+- **Runner parse 防線已可測（2026-06-10）**：character-agent 的 LLM 輸出解析＋身份漂移防線抽到 `runner/src/services/character-agent/parse.ts`（純函數）；新增 `pnpm --filter @endless-story/runner test`（node --test fixture 測試：director capability 驗證 + move/act/social/plan 解析，27 綠）。自主跑 loop 前壞輸出會退化成 stay/idle/fallback plan，不會 throw。
 - **首頁影片素材 override 已接**：`scenesApi.listTodayClips` 會優先讀 `DEMO_CLIPS_URL`、`DEMO_CLIPS_FILE`、`public/demo-clips.json`，再 fallback 現有 mock clips；格式見 `packages/web/public/demo-clips.example.json`。
 - **短 TTL chain-read cache 已接**：公開 Saga / World time / Scene reads 會走 process-local read-through cache，預設 10–15s，`CHAIN_READ_CACHE_TTL_MS=0` 可關閉；不碰 MemWal / 私密內容。
 
@@ -133,7 +135,7 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 1. **依賴單向** — `web → sdk + memwal + llm` ／ `runner → sdk + memwal + llm` ／ `cli → sdk + shared`。`sdk` 不准 import `web`；`shared` 不准 import 任何上層
 2. **`sdk` 是鏈上互動唯一入口** — 不准自己 `new SuiClient()`、不准自己手寫 PTB
 3. **`memwal` 是 Walrus / Seal 唯一入口** — 不准 import `@mysten/walrus` 或 `@mysten/seal`
-4. **`llm` 是文字 / 圖片 AI 唯一入口** — 不准 `fetch('https://api.poe.com/...')`、import `@anthropic-ai/sdk` / `openai`、散落 prompt 模板
+4. **`llm` 是文字 / 圖片 AI client 唯一入口** — 不准 `fetch('https://api.poe.com/...')`、import `@anthropic-ai/sdk` / `openai`。prompt 模板 **colocate 在使用它的 service**（runner 各 service 的 `prompt.ts`；mint 流程模板在 `llm/prompts`），不集中堆回 llm。唯一既定例外：`memwal` client 端 embedding 直打 OpenAI（設計如此，不要仿效擴散）
 5. **`shared/src/contract-ids.ts` 是部署輸出單一真相** — `cli` 寫入，sdk/runner/web 只讀
 6. **server actions 優先** — admin 操作走 `web/src/lib/actions/`，除非要 webhook / SSE / RSS 才開 `app/api/`
 7. **`(site)` / `(admin)` route group 嚴格隔離** — admin layout + middleware 獨立
@@ -209,7 +211,7 @@ packages/
 | # | 項目 | 範圍 | 估時 |
 |---|---|---|---|
 | **S** | **Runner demo acceptance** | 已做 cache/backoff/default=1/UI 顯示；剩顧/柳/孟 2 tick 真跑驗證、確認第二輪 POV 召回第一輪 SOCIAL memory、檢查 SOCIAL memory 不寫未授權重設定 | 0.5–1d |
-| **D** | **部署策略落地** | Vercel web + Zeabur/Contabo relayer + world-loop；設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
+| **D** | **部署策略落地** | web 已上自架 VPS；剩 relayer + world-loop 服務化、設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
 | **E** | **角色經濟產品化 Part D** | web adapter / SETTLE phase / GIVE phase / 日界發薪扣 cost / vitality & death hook；若 demo 時間不夠可先保留 shadow | 2–4d |
 | **I** | **Web i18n** | `next-intl` framework + 抽既有文案 + LocaleToggle + `romanize-name`（中文 → 拼音） | 2–3d |
 | **V** | **Demo / Trailer 素材** | 跑 2–3 tick 產章回 + 手卷錄屏；剪 trailer；首頁 placeholder 換真內容；需要預留 LLM/影片生成時間 | 2–4d |
@@ -356,7 +358,7 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 **架構**
 - ❌ 繞過 `sdk` 直接 `new SuiClient()`（原則 2）
 - ❌ web/runner 直接 import `@mysten/walrus|seal`（走 memwal，原則 3）
-- ❌ web/runner 直接 `fetch` Poe / OpenAI / Anthropic 或散落 prompt（走 llm，原則 4）
+- ❌ web/runner 直接 `fetch` Poe / OpenAI / Anthropic 或 import AI SDK（走 llm，原則 4；唯一既定例外＝memwal client 端 embedding）
 - ❌ 手動編輯 `shared/src/contract-ids.ts`（cli 寫入，原則 5）
 - ❌ 在 `(site)` route 放 admin 操作（原則 7）
 - ❌ 繞過 `web/src/lib/api/` facade

@@ -16,6 +16,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
+import { parsePlan, sanitizePlanForRole } from './parse.js';
 
 export interface PlanInput {
     name: string;
@@ -150,56 +151,4 @@ export async function updatePlan(
             .slice(0, 3),
     });
     return { ...plan, planText: formatPlanText(plan) };
-}
-
-function sanitizePlanForRole(
-    input: PlanInput,
-    plan: { longTermGoal: string; dailyPlanHint: string; openSubgoals: string[] },
-): { longTermGoal: string; dailyPlanHint: string; openSubgoals: string[] } {
-    if (input.role.includes('班主')) return plan;
-    const joined = [plan.longTermGoal, plan.dailyPlanHint, ...plan.openSubgoals].join(' ');
-    if (!hasAuthorityDrift(joined)) return plan;
-    if (/花旦|青衣|旦|名伶|坤伶/.test(input.role)) {
-        return {
-            longTermGoal: `我要把${input.name}這個花旦名號唱到台下人人記得`,
-            dailyPlanHint: '先穩住今日妝面、身段與下一折戲的搭檔分寸',
-            openSubgoals: ['看清誰在爭搭檔位', '別讓旁人的目光亂了自己的身段'],
-        };
-    }
-    if (/小生|武生/.test(input.role)) {
-        return {
-            longTermGoal: `我要在這戲班站穩${input.role}的位置`,
-            dailyPlanHint: '先把今日要接的戲與身段磨穩',
-            openSubgoals: ['看清誰在爭同一個台口', '別把急切露得太白'],
-        };
-    }
-    return {
-        longTermGoal: `我要以${input.role && input.role !== '—' ? input.role : '自己的本事'}在這戲班站住腳`,
-        dailyPlanHint: '先把眼前這場戲做穩，不讓旁人看出破綻',
-        openSubgoals: ['留意同場人物的眼色', '守住自己的分寸'],
-    };
-}
-
-function hasAuthorityDrift(text: string): boolean {
-    return /班主|老闆|老板|當家|掌事|東家|掌控全班|管住全班|捏在手心|讓誰紅誰就紅|讓誰涼誰就涼|敲打.*角|新來.*安分/.test(text);
-}
-
-function parsePlan(
-    raw: string,
-): { longTermGoal?: string; dailyPlanHint?: string; openSubgoals?: string[] } | null {
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try {
-        const o = JSON.parse(m[0]) as {
-            longTermGoal?: string;
-            dailyPlanHint?: string;
-            openSubgoals?: string[];
-        };
-        if (!o || (typeof o.longTermGoal !== 'string' && typeof o.dailyPlanHint !== 'string')) {
-            return null;
-        }
-        return o;
-    } catch {
-        return null;
-    }
 }

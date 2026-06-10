@@ -25,39 +25,16 @@
  */
 
 import { Transaction } from '@mysten/sui/transactions';
-import type { Character, Scene, ChapterProvenance } from '@endless-story/shared';
-import {
-    ENDLESS_STORY_DEPLOYMENT,
-    makeSuiClient,
-    read,
-    tx as endlessTx,
-} from '@endless-story/sdk';
-import { characterAgent } from '@endless-story/runner';
-import { getAdminContext, type AdminContext } from '@/lib/chain/admin-signer';
-import { resolveNetwork } from '@/lib/chain/network';
+import type { Character, ChapterProvenance } from '@endless-story/shared';
+import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
+import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
 import { deriveAndCommitDramaBeat, tensionFraction } from '@/lib/chain/drama';
-import {
-    drainMemoryWarnings,
-    recallCurrentPlanText,
-    recallForCharacter,
-    rememberForCharacter,
-} from '@/lib/chain/memory';
+import { drainMemoryWarnings } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
-import { recordSceneLine } from '@/lib/chain/scene-lines';
-import { fetchRelationshipHints } from '@/lib/chain/relationships';
-import {
-    buildSagaRoster,
-    rosterLines,
-    type SagaRosterEntry,
-} from '@/lib/chain/roster';
+import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
 import { charactersApi } from '@/lib/api/index';
-import {
-    advanceTickAction,
-    getWorldTimeSnapshot,
-    type WorldTimeSnapshot,
-} from './world-time';
-import { runCharacterTurnAction } from './character-turn';
+import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
@@ -99,14 +76,16 @@ import {
     normalizeCharacterIds,
     TickMemoryContext,
     buildRosterContextById,
+    publicTagsWithRole,
+    mapPool,
+} from './tick-phases/support';
+import {
+    runMovePhase,
     applyMoveResultsToScenes,
     applyMoveResultsToRoster,
-    runMovePhase,
-    runSocialPhase,
-    publicTagsWithRole,
-    runActPhase,
-    mapPool,
-} from './tick-loop-internal';
+} from './tick-phases/move';
+import { runSocialPhase } from './tick-phases/social';
+import { runActPhase } from './tick-phases/act';
 
 /** Map the top drama tension to a readable scene-incident framing for a storylet.
  *  Deterministic — no LLM. The template id doubles as the on-chain StoryletOpened
