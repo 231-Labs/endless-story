@@ -2,6 +2,7 @@
 
 import type { Saga, SceneClip, Recruitment } from '@endless-story/shared';
 import { HeroTheater } from '@/components/home/HeroTheater';
+import { WelcomeNotice } from '@/components/home/WelcomeNotice';
 import { RecruitmentSection } from '@/components/dossier/RecruitmentSection';
 
 export function HomeContent({
@@ -22,6 +23,7 @@ export function HomeContent({
       {/* First Screen: Nav + Hero */}
       <div className="flex min-h-[100dvh] flex-col snap-start snap-always">
         {children}
+        <WelcomeNotice />
         <HeroTheater saga={saga} clips={clips} recruitmentsCount={initialRecruitments.length} castCount={castCount} />
       </div>
       

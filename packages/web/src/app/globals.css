@@ -63,6 +63,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 鍵盤導航可見性 — 全站統一的 focus ring（滑鼠點擊不觸發） */
+:focus-visible {
+  outline: 2px solid rgb(var(--color-cinnabar) / 0.7);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 動效敏感用戶：關閉裝飾性動畫與平滑捲動（WCAG 2.3.3） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* 全站隱藏捲軸（保留滾動功能） */
 * {
   scrollbar-width: none;

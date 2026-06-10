@@ -81,7 +81,7 @@ export function CharacterGrid({
           <PageLeadTitleBlock
             eyebrow="班底、徵召與訂閱"
             eyebrowMobile="班底與訂閱"
-            title="人物誌"
+            title="班底名冊"
           />
 
           {/* 篩選 + 搜尋 + 人數：桌面與章回 sub-tab 同層次；手機搜尋在篩選下全寬 */}

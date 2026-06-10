@@ -37,6 +37,33 @@ import { fetchPovChaptersForCharacter } from '@/lib/chain/pov-read';
 import { fetchReflectionsForCharacter } from '@/lib/chain/reflection-read';
 import { PovTriggerButton } from '@/components/dossier/PovTriggerButton';
 
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
+  const { id } = await searchParams;
+  if (!id) {
+    return {
+      title: '班底名冊',
+      description: '春雪社的角色名冊 — 每一位都是活著的記憶資產，可訂閱、可持有。',
+    };
+  }
+  const character = await charactersApi.getCharacter(id).catch(() => null);
+  if (!character) return { title: '找不到角色' };
+  const description = `${character.role} · ${character.description.slice(0, 100)}`;
+  const portrait = character.gallery?.anchor?.imageUrl;
+  return {
+    title: character.name,
+    description,
+    openGraph: {
+      title: `${character.name} · 無盡敘界`,
+      description,
+      ...(portrait ? { images: [{ url: portrait }] } : {}),
+    },
+  };
+}
+
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
 const VALID_FILTERS: RosterFilter[] = ['all', 'internal', 'external', 'mine'];
 

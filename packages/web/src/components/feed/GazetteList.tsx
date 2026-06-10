@@ -20,7 +20,8 @@ export async function GazetteList({
             <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
                 <p className="font-serif text-base text-ink">{sagaName} 還沒出過公報</p>
                 <p className="mt-3 text-sm leading-relaxed text-mute">
-                    要等班主在管理後台「編公報並上鏈」按下後，這裡才會有內容。
+                    公報是班主不定期張貼的園中大事節錄，發行後會永久上鏈存證。
+                    先去「文字連載」讀角色們的章回吧。
                 </p>
             </div>
         );

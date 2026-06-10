@@ -8,6 +8,8 @@ import { DEMO_VIEWER_WALLET } from '@/mocks/subscriptions';
 import { formatDate, truncateAddress } from '@/lib/format';
 import type { Subscription, SubscriptionChannel } from '@endless-story/shared';
 
+export const metadata = { title: '我的訂閱' };
+
 const CHANNEL_LABEL: Record<SubscriptionChannel, string> = {
   in_app: '站內',
   rss: 'RSS',
@@ -59,13 +61,27 @@ export default async function SubscriptionsPage({
     charactersApi.listCharacters(),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
+  // 訂閱對象不一定在 listCharacters 裡（江湖角色 / 鏈讀部分失敗）——逐筆補抓，
+  // 否則「N 筆」的計數會和下方列表對不上。
+  await Promise.all(
+    subscriptions
+      .filter((s) => !charactersById.has(s.characterId))
+      .map(async (s) => {
+        const c = await charactersApi.getCharacter(s.characterId).catch(() => null);
+        if (c) charactersById.set(c.id, c);
+      }),
+  );
 
-  const owned = subscriptions.filter((s) => s.isOwner);
-  const following = subscriptions
+  // 只計入真的渲染得出來的訂閱，標題數字才不會說謊。
+  const renderable = subscriptions.filter((s) => charactersById.has(s.characterId));
+  const owned = renderable.filter((s) => s.isOwner);
+  const following = renderable
     .filter((s) => !s.isOwner)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const personaLabel = PERSONA_LABEL[viewerWallet] ?? truncateAddress(viewerWallet);
+  // 沒帶 ?as= 時是預設示範身份，不是訪客真的連上了錢包 — 要對用戶誠實。
+  const isDemoPersona = params.as == null || PERSONA_LABEL[viewerWallet] != null;
 
   return (
     <main className="min-h-screen">
@@ -82,6 +98,12 @@ export default async function SubscriptionsPage({
             {personaLabel} · <span className="font-mono">{truncateAddress(viewerWallet)}</span>
           </p>
         </header>
+        {isDemoPersona ? (
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-hairline/70 bg-surface/60 px-3.5 py-1.5 text-2xs tracking-widest text-mute">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-jade/70" />
+            示範視角 — 正式版將以你連接的錢包身分顯示訂閱
+          </p>
+        ) : null}
 
         {following.length > 0 ? (
           <section className="mt-12">
@@ -122,7 +144,21 @@ export default async function SubscriptionsPage({
           </section>
         )}
 
-        {owned.length > 0 ? (
+        {owned.length === 0 ? (
+          <section className="mt-16">
+            <h2 className="text-2xs tracking-widest text-mute">持有（自動訂閱）</h2>
+            <p className="mt-5 text-sm leading-relaxed text-mute">
+              還沒持有任何角色。持有角色 NFT 即擁有這條 IP，並自動訂閱其視角章回 — 留意首頁的
+              <Link
+                href="/#recruitment-section"
+                className="mx-1 border-b border-cinnabar/40 text-cinnabar transition-colors hover:border-cinnabar"
+              >
+                徵召公告
+              </Link>
+              。
+            </p>
+          </section>
+        ) : (
           <section className="mt-16">
             <h2 className="text-2xs tracking-widest text-mute">持有（自動訂閱）</h2>
             <ul className="mt-5 space-y-4">
@@ -145,7 +181,7 @@ export default async function SubscriptionsPage({
               })}
             </ul>
           </section>
-        ) : null}
+        )}
       </section>
     </main>
   );

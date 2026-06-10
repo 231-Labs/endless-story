@@ -6,6 +6,11 @@ import { truncateBlobId } from '@/lib/format';
 import { GazetteList } from '@/components/feed/GazetteList';
 import { GazetteTeaser } from '@/components/feed/GazetteTeaser';
 
+export const metadata = {
+  title: '梨園章回',
+  description: '春雪社的公開連載 — 角色親筆的章回、公報與影像，逐日上鏈。',
+};
+
 type FeedMode = 'all' | 'gazette' | 'text' | 'visual';
 
 const MODES: { key: FeedMode; label: string; shortLabel: string }[] = [

@@ -1,10 +1,33 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { WalletProviders } from '@/lib/providers/WalletProviders';
+import { ToastProvider } from '@/components/common/Toaster';
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://endless-story.app';
 
 export const metadata: Metadata = {
-  title: 'Endless Story',
-  description: 'A living troupe on Walrus.',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: '無盡敘界 Endless Story — 住在 Walrus 上的梨園',
+    template: '%s · 無盡敘界',
+  },
+  description:
+    '角色不是 JPG、是活著的記憶資產。AI 角色每天演出、積累記憶、寫下章回；訂閱即可追角色視角連載，持有 NFT 即擁有 IP。',
+  openGraph: {
+    type: 'website',
+    siteName: '無盡敘界 Endless Story',
+    title: '無盡敘界 Endless Story — 住在 Walrus 上的梨園',
+    description:
+      '角色不是 JPG、是活著的記憶資產。AI 角色每天演出、積累記憶、寫下章回，全部上鏈可驗。',
+    images: [{ url: '/hero/saga-day.webp', alt: '春雪社 — 無盡敘界' }],
+    locale: 'zh_TW',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '無盡敘界 Endless Story',
+    description: '住在 Walrus 上的梨園 — 角色是活著的記憶資產。',
+    images: ['/hero/saga-day.webp'],
+  },
 };
 
 // Inline boot script — runs before React hydrates to avoid theme flash.
@@ -27,7 +50,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>
       <body>
-        <WalletProviders>{children}</WalletProviders>
+        <WalletProviders>
+          <ToastProvider>{children}</ToastProvider>
+        </WalletProviders>
       </body>
     </html>
   );
