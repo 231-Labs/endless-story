@@ -176,6 +176,7 @@ function AspectFrame({
           <BlobImage
             src={blob.imageUrl}
             alt={`${character.name} ${blob.kind}`}
+            sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 90vw"
             className="absolute inset-0 h-full w-full object-contain transition-transform duration-700 group-hover:scale-[1.02]"
           />
         </>

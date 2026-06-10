@@ -1,7 +1,19 @@
 import type { Metadata } from 'next';
+import { Noto_Serif_TC } from 'next/font/google';
 import './globals.css';
 import { WalletProviders } from '@/lib/providers/WalletProviders';
 import { ToastProvider } from '@/components/common/Toaster';
+
+// 全站書卷感的根基：真的把宋體網頁字體載進來（next/font 會在 build 時
+// 下載並 self-host、按 unicode-range 切片 — 瀏覽器只抓用到的字）。
+// 先前只在 Tailwind 宣告 font-family，等於賭訪客裝了這套字：
+// macOS 有內建 Songti TC 所以好看，Android / 多數環境直接退回系統字。
+const notoSerifTC = Noto_Serif_TC({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-serif',
+});
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://endless-story.app';
 
@@ -45,7 +57,7 @@ const themeBoot = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-Hant" suppressHydrationWarning>
+    <html lang="zh-Hant" suppressHydrationWarning className={notoSerifTC.variable}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>

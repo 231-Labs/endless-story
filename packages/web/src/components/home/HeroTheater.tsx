@@ -127,7 +127,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
         className={`absolute inset-x-0 top-0 flex items-center justify-center transition-all duration-700 ${
           activeClip ? 'opacity-100 pointer-events-auto scale-100' : 'opacity-0 pointer-events-none scale-95'
         } ${
-          isFullscreen ? 'bottom-0 z-[60] bg-black/95' : 'bottom-[176px] sm:bottom-[204px] z-30'
+          isFullscreen ? 'bottom-0 z-[60] bg-black/95' : 'bottom-[200px] sm:bottom-[116px] z-30'
         }`}
       >
         {/* Click-away background */}
@@ -142,7 +142,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
 
         {displayClip && (
           <div className={`group/player relative z-10 flex flex-col items-center justify-center w-full h-full transition-all duration-500 ${
-            isFullscreen ? 'p-0' : 'p-4 pb-14 sm:p-8 sm:pb-16'
+            isFullscreen ? 'p-0' : 'p-4 pb-16 sm:p-8 sm:pb-20'
           }`}>
             <div
               className={`group relative flex items-center justify-center overflow-hidden bg-black shadow-2xl ring-1 ring-white/10 transition-all duration-500 ease-out ${
@@ -197,9 +197,9 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                 </div>
               )}
 
-              {/* Bottom Controls Overlay — progress + play / time / mute / fullscreen */}
+              {/* Bottom Controls Overlay — 原設計的毛玻璃圓鈕語彙；進度條與時間融入同一片漸層 */}
               <div
-                className={`absolute bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pb-3 pt-10 sm:px-6 sm:pb-4 transition-opacity duration-300 ${
+                className={`absolute bottom-0 left-0 right-0 z-40 flex flex-col gap-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 sm:p-6 transition-opacity duration-300 ${
                   showControls ? 'opacity-100' : 'opacity-0 lg:group-hover:opacity-100'
                 }`}
                 onClick={(e) => e.stopPropagation()}
@@ -223,38 +223,41 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                     }}
                   />
                 ) : null}
-                <div className="mt-2 flex items-center gap-3 sm:mt-2.5 sm:gap-4">
-                  {displayClip.videoUrl ? (
-                    <>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {displayClip.videoUrl ? (
+                      <>
+                        <button
+                          onClick={togglePlay}
+                          className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md ring-1 ring-white/20 transition-all hover:bg-white/20 hover:text-white hover:scale-105 shadow-lg"
+                          aria-label={playing ? '暫停' : '播放'}
+                        >
+                          {playing ? <PauseIcon /> : <span className="translate-x-px"><PlayIcon size={18} /></span>}
+                        </button>
+                        <span className="font-mono text-xs tracking-wider text-white/75 drop-shadow-md tabular-nums">
+                          {formatTime(time)} / {formatTime(duration)}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {displayClip.videoUrl ? (
                       <button
-                        onClick={togglePlay}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 transition-all hover:bg-white/15 hover:text-white"
-                        aria-label={playing ? '暫停' : '播放'}
+                        onClick={() => { setMuted(!muted); setShowControls(true); }}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md ring-1 ring-white/20 transition-all hover:bg-white/20 hover:text-white hover:scale-105 shadow-lg"
+                        aria-label={muted ? '開啟聲音' : '靜音'}
                       >
-                        {playing ? <PauseIcon /> : <span className="translate-x-px"><PlayIcon size={18} /></span>}
+                        {muted ? <VolumeMutedIcon /> : <VolumeOnIcon />}
                       </button>
-                      <span className="font-mono text-xs tracking-wider text-white/70 tabular-nums">
-                        {formatTime(time)} / {formatTime(duration)}
-                      </span>
-                    </>
-                  ) : null}
-                  <div className="flex-1" />
-                  {displayClip.videoUrl ? (
+                    ) : null}
                     <button
-                      onClick={() => { setMuted(!muted); setShowControls(true); }}
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 transition-all hover:bg-white/15 hover:text-white"
-                      aria-label={muted ? '開啟聲音' : '靜音'}
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md ring-1 ring-white/20 transition-all hover:bg-white/20 hover:text-white hover:scale-105 shadow-lg"
+                      aria-label={isFullscreen ? '退出全螢幕' : '全螢幕播放'}
                     >
-                      {muted ? <VolumeMutedIcon /> : <VolumeOnIcon />}
+                      {isFullscreen ? <HeroMinimizeIcon /> : <HeroMaximizeIcon />}
                     </button>
-                  ) : null}
-                  <button
-                    onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-white/90 transition-all hover:bg-white/15 hover:text-white"
-                    aria-label={isFullscreen ? '退出全螢幕' : '全螢幕播放'}
-                  >
-                    {isFullscreen ? <HeroMinimizeIcon /> : <HeroMaximizeIcon />}
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -366,7 +369,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                   <button
                     key={clip.id}
                     onClick={() => setActiveClip(isActive ? null : clip)}
-                    className={`group relative flex-none snap-start w-[62vw] max-w-[240px] sm:w-72 sm:max-w-none overflow-hidden rounded-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+                    className={`group relative flex-none snap-start w-[75vw] max-w-[280px] sm:w-72 sm:max-w-none overflow-hidden rounded-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
                       isActive 
                         ? 'ring-2 ring-cinnabar shadow-lg shadow-cinnabar/20 bg-elevated dark:bg-elevated/80 -translate-y-1' 
                         : 'ring-1 ring-hairline bg-surface hover:ring-cinnabar hover:shadow-cinnabar/10 dark:bg-elevated/40'

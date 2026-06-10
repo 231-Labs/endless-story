@@ -95,7 +95,7 @@ export function ProfileTab({
 
       {/* Sidebar */}
       <aside className="space-y-8">
-        <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 space-y-12 backdrop-blur-sm">
+        <div className="es-card p-6 sm:p-8 space-y-12">
           <section>
             <h3 className="font-serif text-lg tracking-widest text-ink text-center">天賦</h3>
             <div className="mt-8 space-y-6">
@@ -190,7 +190,7 @@ export function ProfileTab({
           </section>
         </div>
 
-        <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+        <div className="es-card p-6 sm:p-8">
           <section>
             <h3 className="font-serif text-lg tracking-widest text-ink text-center">關係</h3>
             {bondRows.length === 0 ? (

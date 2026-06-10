@@ -6,6 +6,7 @@ import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@
 import { Transaction } from '@mysten/sui/transactions';
 import { tx as endlessTx } from '@endless-story/sdk';
 import { useToast } from '@/components/common/Toaster';
+import { BlobImage } from '@/components/common/BlobImage';
 import type { Character, CharacterRole } from '@endless-story/shared';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
@@ -110,24 +111,23 @@ export function SubscribeCard({
       {/* Background — on-chain portrait (Walrus URL) if minted, else typographic
           poster fallback. The image is large-area so the gradient overlay below
           still preserves text legibility at the bottom. */}
+      {/* 字形海報恆常墊底；肖像載入失敗（BlobImage → null）時自動露出 */}
+      <div className={`absolute inset-0 flex items-center justify-center ${tone.bg}`}>
+        <span
+          className={`font-serif leading-none ${tone.text}`}
+          style={{ fontSize: '11rem', transform: 'translateY(-8%)' }}
+        >
+          {character.name[0]}
+        </span>
+      </div>
       {character.gallery?.anchor?.imageUrl ? (
-        <img
+        <BlobImage
           src={character.gallery.anchor.imageUrl}
           alt={character.name}
-          loading="lazy"
-          decoding="async"
+          sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           className="absolute inset-0 h-full w-full object-cover"
         />
-      ) : (
-        <div className={`absolute inset-0 flex items-center justify-center ${tone.bg}`}>
-          <span
-            className={`font-serif leading-none ${tone.text}`}
-            style={{ fontSize: '11rem', transform: 'translateY(-8%)' }}
-          >
-            {character.name[0]}
-          </span>
-        </div>
-      )}
+      ) : null}
 
       {/* Clickable overlay → dossier (z-10) */}
       <Link

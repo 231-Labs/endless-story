@@ -44,7 +44,7 @@ export default async function SagaPage({
           <p className="mt-3 text-sm text-mute">這座園子還沒開張，或匾額已經摘了。</p>
           <a
             href="/"
-            className="mt-8 rounded-full border border-hairline bg-surface px-6 py-2.5 text-sm tracking-widest text-mute transition-colors hover:border-cinnabar/50 hover:text-cinnabar"
+            className="mt-8 es-button-ghost"
           >
             回戲園子
           </a>

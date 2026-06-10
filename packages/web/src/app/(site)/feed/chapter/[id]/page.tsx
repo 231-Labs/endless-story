@@ -40,7 +40,7 @@ export default async function ChapterPage({
           <p className="mt-3 text-sm text-mute">可能已下檔，或網址抄錯了一個字。</p>
           <Link
             href="/feed"
-            className="mt-8 rounded-full border border-hairline bg-surface px-6 py-2.5 text-sm tracking-widest text-mute transition-colors hover:border-cinnabar/50 hover:text-cinnabar"
+            className="mt-8 es-button-ghost"
           >
             回梨園章回
           </Link>
@@ -97,7 +97,7 @@ export default async function ChapterPage({
 
           <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_320px] lg:gap-20">
           <article className="min-w-0">
-            <details className="mb-8 rounded-3xl border border-hairline/50 bg-surface/40 backdrop-blur-sm lg:hidden">
+            <details className="mb-8 es-card lg:hidden">
               <summary className="cursor-pointer px-6 py-4 text-sm tracking-wide text-ink">
                 目錄 · {tocChapters.length} 章 · 出場 {cast.length}
               </summary>
@@ -185,7 +185,7 @@ export default async function ChapterPage({
             ) : null}
 
             {chapter.mediaType === 'video' && chapter.videoUrl ? (
-              <div className="mt-10 overflow-hidden rounded-3xl border border-hairline/50 bg-surface/40 shadow-sm backdrop-blur-sm">
+              <div className="mt-10 overflow-hidden es-card shadow-sm">
                 <video
                   src={chapter.videoUrl}
                   controls
@@ -194,7 +194,7 @@ export default async function ChapterPage({
                 />
               </div>
             ) : chapter.mediaType === 'gallery' && chapter.coverUrl ? (
-              <div className="mt-10 overflow-hidden rounded-3xl border border-hairline/50 bg-surface/40 shadow-sm backdrop-blur-sm">
+              <div className="mt-10 overflow-hidden es-card shadow-sm">
                 <img
                   src={chapter.coverUrl}
                   alt={chapter.title}
@@ -215,7 +215,7 @@ export default async function ChapterPage({
             {/* 章末迴圈：追視角 + 上一章 / 下一章。鏈上佐證在上方 provenance 區，不在此重複。 */}
             <footer className="mt-16 space-y-6">
               {pov ? (
-                <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-6 text-center backdrop-blur-sm sm:p-8">
+                <div className="es-card p-6 text-center sm:p-8">
                   <p className="text-sm leading-relaxed text-mute">
                     這是 <span className="font-serif text-ink">{pov.name}</span> 眼中的春雪社。
                   </p>
@@ -263,14 +263,14 @@ export default async function ChapterPage({
 
           <aside className="hidden lg:block">
             <div className="sticky top-24 space-y-8">
-              <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+              <div className="es-card p-6 sm:p-8">
                 <ChapterToc
                   chapters={tocChapters}
                   currentId={chapter.id}
                   charactersById={charactersById}
                 />
               </div>
-              <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+              <div className="es-card p-6 sm:p-8">
                 <ChapterCast cast={cast} povId={chapter.povCharacterId} />
               </div>
             </div>

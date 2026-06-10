@@ -18,13 +18,13 @@ export default function NotFound() {
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/"
-            className="rounded-full bg-cinnabar px-6 py-2.5 text-sm tracking-widest text-canvas transition-colors hover:bg-seal"
+            className="es-button-primary"
           >
             回戲園子
           </Link>
           <Link
             href="/feed"
-            className="rounded-full border border-hairline bg-surface px-6 py-2.5 text-sm tracking-widest text-mute transition-colors hover:border-cinnabar/50 hover:text-cinnabar"
+            className="es-button-ghost"
           >
             讀章回
           </Link>

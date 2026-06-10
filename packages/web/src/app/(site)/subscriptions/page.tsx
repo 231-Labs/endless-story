@@ -211,7 +211,7 @@ function SubscriptionRow({
         className="block w-16 shrink-0 transition-opacity hover:opacity-80 sm:w-20"
         aria-label={`查看 ${characterName}`}
       >
-        <CharacterPortrait character={characterAnchor} aspect="1/1" />
+        <CharacterPortrait character={characterAnchor} aspect="1/1" sizes="80px" />
       </Link>
 
       <div className="min-w-0 flex-1">

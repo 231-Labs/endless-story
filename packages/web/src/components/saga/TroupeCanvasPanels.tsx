@@ -192,7 +192,7 @@ function PovChip({
             {character.name[0]}
           </span>
           {imageUrl ? (
-            <BlobImage src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <BlobImage src={imageUrl} alt="" sizes="48px" className="absolute inset-0 h-full w-full object-cover" />
           ) : null}
         </span>
         <span>{character.name}</span>

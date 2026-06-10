@@ -48,6 +48,7 @@ function CastRow({ char, isPov }: { char: Character; isPov: boolean }) {
           <BlobImage
             src={imageUrl}
             alt=""
+            sizes="28px"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : null}

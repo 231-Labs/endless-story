@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import type { Saga, SceneClip, Recruitment } from '@endless-story/shared';
 import { HeroTheater } from '@/components/home/HeroTheater';
 import { WelcomeNotice } from '@/components/home/WelcomeNotice';
@@ -39,7 +40,13 @@ export function HomeContent({
           <div className="flex flex-1 flex-col justify-center space-y-8 text-center lg:text-left">
             {/* Small Cute Walrus Logo above Manifesto */}
             <div className="mx-auto mb-6 w-24 opacity-80 mix-blend-multiply transition-opacity hover:opacity-100 dark:invert dark:opacity-60 dark:mix-blend-screen lg:mx-0 sm:w-28">
-              <img src="/walruses.png" alt="Walrus Trio" className="h-auto w-full object-contain pointer-events-none" />
+              <Image
+                src="/walruses.png"
+                alt="Walrus Trio"
+                width={224}
+                height={224}
+                className="pointer-events-none h-auto w-full object-contain"
+              />
             </div>
             <h2 className="font-serif text-3xl font-medium tracking-widest text-ink sm:text-4xl leading-tight">
               戲未落幕，<br className="hidden lg:block" />

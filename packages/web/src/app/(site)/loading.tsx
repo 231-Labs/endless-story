@@ -2,6 +2,8 @@
  * (site) 群組的通用冷導航 skeleton — 沒有自己 loading.tsx 的路由
  * （首頁等）冷進入時不再白屏。最近的 loading 邊界優先，
  * 所以 saga / dossier / feed / subscriptions 各自的 skeleton 不受影響。
+ *
+ * 中央是「開鑼」圖樣動畫：鑼面受擊微顫，三圈音波漣漪外擴。
  */
 export default function SiteLoading() {
   return (
@@ -16,11 +18,34 @@ export default function SiteLoading() {
           </div>
         </div>
       </div>
-      <div className="flex flex-1 flex-col items-center justify-center gap-4">
-        <span className="font-serif text-2xl tracking-[0.4em] text-mute/50">開鑼中</span>
-        <span aria-hidden className="h-px w-16 overflow-hidden bg-hairline">
-          <span className="block h-full w-1/2 animate-pulse bg-cinnabar/70" />
-        </span>
+      <div className="flex flex-1 items-center justify-center" role="status">
+        <div aria-hidden className="relative flex h-28 w-28 items-center justify-center">
+          {/* 音波漣漪 ×3，錯拍外擴 */}
+          <span
+            className="absolute inset-0 rounded-full border border-cinnabar/45"
+            style={{ animation: 'es-ripple 2.2s ease-out infinite' }}
+          />
+          <span
+            className="absolute inset-0 rounded-full border border-cinnabar/30"
+            style={{ animation: 'es-ripple 2.2s ease-out 0.7s infinite' }}
+          />
+          <span
+            className="absolute inset-0 rounded-full border border-ink/20"
+            style={{ animation: 'es-ripple 2.2s ease-out 1.4s infinite' }}
+          />
+          {/* 鑼面：外緣 — 內圈 — 鑼臍 */}
+          <svg
+            viewBox="0 0 48 48"
+            className="relative h-16 w-16 drop-shadow-sm"
+            style={{ animation: 'es-gong-strike 2.2s ease-out infinite' }}
+          >
+            <circle cx="24" cy="24" r="22" className="fill-surface stroke-ink/50" strokeWidth="1.6" />
+            <circle cx="24" cy="24" r="15" fill="none" className="stroke-ink/25" strokeWidth="1" />
+            <circle cx="24" cy="24" r="9" fill="none" className="stroke-cinnabar/30" strokeWidth="0.8" />
+            <circle cx="24" cy="24" r="5.5" className="fill-cinnabar/90" />
+          </svg>
+        </div>
+        <span className="sr-only">開鑼中，載入頁面</span>
       </div>
     </main>
   );

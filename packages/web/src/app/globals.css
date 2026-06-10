@@ -110,6 +110,21 @@ body {
 }
 
 @layer components {
+  /** 全站最常見的容器語彙：浮在 canvas 上的毛玻璃卡片 */
+  .es-card {
+    @apply rounded-3xl border border-hairline/50 bg-surface/40 backdrop-blur-sm;
+  }
+
+  /** 主要動作 — 朱砂膠囊 */
+  .es-button-primary {
+    @apply rounded-full bg-cinnabar px-6 py-2.5 text-sm tracking-widest text-canvas transition-colors hover:bg-seal;
+  }
+
+  /** 次要動作 — 髮絲線膠囊 */
+  .es-button-ghost {
+    @apply rounded-full border border-hairline bg-surface px-6 py-2.5 text-sm tracking-widest text-mute transition-colors hover:border-cinnabar/50 hover:text-cinnabar;
+  }
+
   .es-icon-button {
     @apply inline-flex items-center justify-center rounded-full text-mute transition-colors hover:bg-ink/5 hover:text-ink dark:hover:bg-elevated;
   }
@@ -246,6 +261,34 @@ body {
 }
 
 /* ─────────── Handscroll ambient keyframes ─────────── */
+
+/* ─────────── 載入／等待 圖樣動畫 ───────────
+ * es-ripple：鑼音 / 墨暈外擴。es-seal-breathe：方印呼吸。
+ * es-wait-dot：等待中的三點墨痕。prefers-reduced-motion 時全部停用（見上）。 */
+@keyframes es-ripple {
+  0%   { transform: scale(0.55); opacity: 0.5; }
+  70%  { opacity: 0.16; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes es-gong-strike {
+  0%, 100% { transform: scale(1); }
+  8%       { transform: scale(1.05); }
+  18%      { transform: scale(0.99); }
+  28%      { transform: scale(1.012); }
+  38%      { transform: scale(1); }
+}
+
+@keyframes es-seal-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.055); }
+}
+
+@keyframes es-wait-dot {
+  0%, 60%, 100% { opacity: 0.18; transform: translateY(0); }
+  30%           { opacity: 1; transform: translateY(-1.5px); }
+}
+
 
 @keyframes es-figure-idle {
   0%, 100% { transform: translateY(0) rotate(-0.6deg); }

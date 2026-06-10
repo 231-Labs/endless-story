@@ -20,7 +20,7 @@ export default function FeedLoading() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="animate-pulse rounded-3xl border border-hairline/50 bg-surface/40 p-6 sm:p-8"
+              className="animate-pulse es-card p-6 sm:p-8"
             >
               <div className="flex items-center gap-3">
                 <div className="h-6 w-16 rounded bg-hairline/50" />

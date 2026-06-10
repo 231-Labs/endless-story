@@ -17,7 +17,7 @@ export async function GazetteList({
 }) {
     if (gazettes.length === 0) {
         return (
-            <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
+            <div className="es-card p-12 text-center">
                 <p className="font-serif text-base text-ink">{sagaName} 還沒出過公報</p>
                 <p className="mt-3 text-sm leading-relaxed text-mute">
                     公報是班主不定期張貼的園中大事節錄，發行後會永久上鏈存證。

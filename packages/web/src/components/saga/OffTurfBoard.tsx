@@ -87,6 +87,7 @@ function OffTurfCard({ entry }: { entry: OffTurfEntry }) {
             <BlobImage
               src={entry.imageUrl}
               alt=""
+              sizes="64px"
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : null}

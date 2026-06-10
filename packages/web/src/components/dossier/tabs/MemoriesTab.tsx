@@ -85,7 +85,7 @@ export function MemoriesTab({
 
       <div className="pl-0 sm:pl-12">
         {memories.length === 0 ? (
-          <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
+          <div className="es-card p-12 text-center">
             <p className="text-sm text-mute tracking-wide">
               暫時還沒留下供你翻閱的記憶。下一場戲落幕後，這裡會陸續長出新的條目。
             </p>
@@ -125,7 +125,7 @@ function MemoryEntry({
   const summaryWeight = importanceClass(memory.importance);
 
   return (
-    <li className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:shadow-sm">
+    <li className="es-card p-6 sm:p-8 transition-all duration-300 hover:bg-surface hover:shadow-sm">
       {/* meta row — kind dot + kind label + date + chapter link */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs tracking-widest text-mute/80">
         <span className="flex items-center gap-2 bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">
