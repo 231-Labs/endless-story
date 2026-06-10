@@ -80,6 +80,9 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [colophonOpen, setColophonOpen] = useState(true);
   const [poemIdx, setPoemIdx] = useState(0);
+  // 墨暈 covers only the first beats; then the deterministic scene shows while
+  // the agent keeps painting in the background (progressive load).
+  const [inkOverlay, setInkOverlay] = useState(true);
   const aliveRef = useRef(true);
 
   /** Apply a generation: preload its imagery first, then ring the motif. */
@@ -141,6 +144,18 @@ export function ChamberView({ characterId }: { characterId: string }) {
     if (!loading) return;
     const t = setInterval(() => setPoemIdx((i) => (i + 1) % POEMS.length), 3500);
     return () => clearInterval(t);
+  }, [loading]);
+
+  // progressive load: lift the 墨暈 after a few beats even if the agent is
+  // still painting — the deterministic scene plays underneath meanwhile.
+  useEffect(() => {
+    if (!loading) {
+      setInkOverlay(false);
+      return;
+    }
+    setInkOverlay(true);
+    const t = setTimeout(() => setInkOverlay(false), 4500);
+    return () => clearTimeout(t);
   }, [loading]);
 
   const busy = loading || regenerating;
@@ -315,20 +330,20 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </aside>
       ) : null}
 
-      {/* regenerating wisp */}
-      {regenerating ? (
+      {/* painting-in-progress wisp (initial background gen or regeneration) */}
+      {regenerating || (loading && !inkOverlay) ? (
         <div className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full bg-black/40 px-4 py-1.5 text-xs tracking-widest text-[#e8b08a] backdrop-blur-md">
-          重新作畫中…
+          {regenerating ? '重新作畫中…' : 'agent 作畫中 · 先入畫一觀'}
         </div>
       ) : null}
 
-      {/* 墨暈 loading overlay */}
-      {loading ? (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-gradient-to-b from-[#0e1114]/90 to-[#090b0e]/95">
+      {/* 墨暈 opening overlay — lifts after a few beats (progressive load) */}
+      {loading && inkOverlay ? (
+        <div className="absolute inset-0 z-40 grid place-items-center bg-gradient-to-b from-[#0e1114]/90 to-[#090b0e]/95 transition-opacity duration-700">
           <div className="flex flex-col items-center gap-6">
             <div className="h-16 w-16 animate-pulse rounded-full bg-[radial-gradient(circle,rgba(214,226,221,0.85),rgba(86,110,104,0.3)_55%,transparent_72%)]" />
             <p className="font-serif text-base tracking-[0.4em] text-white/80">{POEMS[poemIdx]}</p>
-            <p className="text-xs tracking-wider text-white/40">首次生成約一兩分鐘 · 之後快取秒開</p>
+            <p className="text-xs tracking-wider text-white/40">agent 正在作畫 · 完成後自動換景</p>
           </div>
         </div>
       ) : null}
