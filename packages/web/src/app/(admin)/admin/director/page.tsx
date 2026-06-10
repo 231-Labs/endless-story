@@ -2,6 +2,7 @@ import { SiteNav } from '@/components/home/SiteNav';
 import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { DirectorPanel } from './DirectorPanel';
 import { GazettePanel } from './GazettePanel';
+import { EventCutPanel } from './EventCutPanel';
 import { DreamConfigPanel } from './DreamConfigPanel';
 import { ReflectionPanel } from './ReflectionPanel';
 import { GenesisMemoryPanel } from './GenesisMemoryPanel';
@@ -106,6 +107,14 @@ export default async function AdminDirectorPage() {
                                     <code className="font-mono text-2xs">/feed?mode=gazette</code> 公開閱覽。
                                 </p>
                                 <div className="mt-5"><GazettePanel /></div>
+                            </div>
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">章回 · 事件合本（織一回）</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    把同一樁事件裡幾位角色的 POV 織成一回多視角章回（event_cut）、上鏈 anchor。
+                                    自治 tick 收尾後會自動織；此處可手動補織或預覽品質。
+                                </p>
+                                <div className="mt-5"><EventCutPanel /></div>
                             </div>
                         </div>
                     </section>

@@ -251,18 +251,27 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | 動作 | 落點 | 風險 | 狀態 |
 |---|---|---|---|
 | 本檔（canonical） | `docs/CONTENT_PIPELINE.md` | — | ✅ |
-| shared 型別接縫：`ChapterKind`（pov/event_cut）、`StillProvenance`、`SceneMoment` | `shared/types/` | 低（additive） | ⏳ |
-| `event-chapter-compiler` 型殼 | `runner/services/event-chapter-compiler/` | 低（不接 tick） | ⏳ |
-| `still-compiler` 型殼 | `runner/services/still-compiler/` | 低（不接 tick） | ⏳ |
-| 全鏈路蓋 provenance | tick-loop ACT/POV phase | 中 | TODO |
+| shared 型別接縫：`ChapterKind`/`EventCutChapter`/`EventStill` | `shared/types/` | 低（additive） | ✅ |
+| **合本 compiler（runOnce + 純 weave + 單元測試）** | `runner/services/event-chapter-compiler/` | 低 | ✅ |
+| **合本接進 tick loop**（POV anchored ≥2 → after() 織回） | `web/lib/actions/tick-loop.ts` | 中 | ✅ |
+| **合本 server action + admin 面板（手動補織/預覽）** | `web/.../compile-event-chapter.ts` · `EventCutPanel` | 低 | ✅ |
+| **合本鏈上讀 + facade + `/feed` 章回 mode** | `cut-read.ts` · `api/cuts.ts` · `CutList` · feed | 中（前端） | ✅ |
+| `/feed` IA 四 mode（全部/公報/章回/影像） | `app/(site)/feed/page.tsx` | 中（前端） | ✅ |
+| dossier 章回 IA（參與的回 / 視角原料） | `components/dossier/tabs/ChaptersTab.tsx` | 低（前端） | ✅ |
+| 全鏈路蓋 POV provenance（eventTx/involvedIds） | tick-loop（`anchorPovChaptersBatch`+`embedProvenance`） | — | ✅（既有） |
+| 事件級劇照（多角色 anchor 條件化、kind=4、eventTx metadata） | `web/.../generate-event-moment.ts`（tick after()） | — | ✅（既有） |
+| `still-compiler` 型殼（beat 級 + teaser/full 分級的演進） | `runner/services/still-compiler/` | 低 | ✅（型殼） |
+| beat 級劇照（越張力門檻可配置截 + 分級） | `still-compiler` runOnce | 中 | TODO |
 | 公報升級成漏斗（頭條=事件+劇照+鉤子） | `gazette-compiler/prompt.ts` | 中 | TODO |
 | 影片改 image-to-video（劇照當 first frame） | `video-compiler`（R6 stub） | 高 | TODO |
-| `/feed` IA 三 mode（公報/章回/影像） | `app/(site)/feed/page.tsx` | 中（前端） | ⏳ |
-| dossier 章回 IA（參與的回 / 視角原料） | `components/dossier/tabs/ChaptersTab.tsx` | 低（前端） | ⏳ |
 | 角色 PV mode | `video-compiler` `character_pv` | — | defer |
 
-**順序建議**：型別接縫 → compiler 型殼（占位）→ dossier IA（自包、可先做）→ 合本 compiler 接線
-→ 劇照 compiler → 公報漏斗化 → 影片 → 角色 PV。每步 type-check、不破壞地基。
+**合本可見性（MVP 取捨）**：§1 表標「gated（premium）」是目標態；合本橫跨多角色，
+「跨角色付費 gate」的規則未定，故 **MVP 先公開**（合本＝展示漏斗的主秀，公開可分享）。
+premium 全文 gate 待 subscribe 跨角色規則定義後再收。
+
+**已完成的順序**：型別接縫 → 合本 compiler（+測試）→ tick 接線 → server action/admin →
+鏈上讀/facade/feed → dossier IA。**剩**：beat 級劇照 compiler → 公報漏斗化 → 影片 → 角色 PV。
 
 ---
 

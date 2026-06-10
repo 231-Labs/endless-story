@@ -38,6 +38,7 @@ import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { compileGazetteAction } from './compile-gazette';
+import { compileEventChapterAction } from './compile-event-chapter';
 import { generateEventMomentAction } from './generate-event-moment';
 import { after } from 'next/server';
 import type {
@@ -634,6 +635,50 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     digest: b?.digest,
                     error: b?.anchored ? undefined : b?.error,
                 });
+            }
+
+            // 4.5 EVENT CUT — weave this event's POVs into the canonical 「回」
+            //   (event_cut) in the BACKGROUND. Only when the storylet opened and
+            //   ≥2 of its cast actually wrote a POV this tick. Failure-isolated
+            //   (after()) so a weave error never blocks the tick. The cut is the
+            //   commercial unit; POVs stay the per-character raw feed.
+            //   See docs/CONTENT_PIPELINE.md §2.
+            if ((input.eventChapter ?? true) && storylet?.opened) {
+                const st = storylet;
+                const castSet = new Set(st.characterIds);
+                const cutPovs = toAnchor
+                    .filter(({ c, r }) => castSet.has(c.id) && r.chapter.trim())
+                    .map(({ c, r }) => {
+                        const role = roleById.get(c.id);
+                        return {
+                            characterId: c.id,
+                            characterName: c.name,
+                            role: role && role !== '—' ? role : undefined,
+                            body: r.chapter,
+                        };
+                    });
+                if (cutPovs.length >= 2) {
+                    after(async () => {
+                        try {
+                            const cut = await compileEventChapterAction({
+                                sceneId: st.sceneId,
+                                sceneName: st.sceneName,
+                                eventTx: st.digest,
+                                eventLabel: st.label,
+                                day: worldTime?.day,
+                                povs: cutPovs,
+                            });
+                            console.log(
+                                `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
+                                    ` anchored=${cut.anchored}` +
+                                    (cut.skipReason ? ` skipped=${cut.skipReason}` : '') +
+                                    (cut.error ? ` error=${cut.error}` : ''),
+                            );
+                        } catch (err) {
+                            console.warn('[tick-loop] event cut failed:', err);
+                        }
+                    });
+                }
             }
         }
     } else {

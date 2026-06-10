@@ -26,6 +26,9 @@ export interface TickLoopInput {
     storylet?: boolean;
     /** Render the event's multi-character moment scene image (background). Default true. */
     eventImage?: boolean;
+    /** Weave this event's POVs into the canonical "回" (event_cut) in the
+     *  background, when ≥2 cast wrote a POV. Default true. */
+    eventChapter?: boolean;
     /** Auto-resolve (judge) an event once every participant has acted.
      *  Default true — events conclude on their own (N5). */
     autoResolve?: boolean;
