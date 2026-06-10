@@ -33,12 +33,13 @@ import type {
     RememberManualResult,
     RecallManualResult,
     RecallManualMemory,
+    RecallEncryptedResult,
     RestoreResult,
     SealServerConfig,
     RememberMeta,
     RecallOpts,
 } from "./types.js";
-import { sha256hex, hexToBytes, bytesToHex, normalizeServerUrl, sanitizeServerError } from "./utils.js";
+import { sha256hex, hexToBytes, bytesToHex, bytesToBase64, normalizeServerUrl, sanitizeServerError } from "./utils.js";
 
 // ============================================================
 // Constants
@@ -117,6 +118,17 @@ function resolveSealServerConfigs(config: MemWalManualConfig, network: string): 
 
 function sealServerConfigTotalWeight(configs: ResolvedSealServerConfig[]): number {
     return configs.reduce((sum, config) => sum + config.weight, 0);
+}
+
+/**
+ * Default SEAL key-server configs for a network. Exposed so standalone
+ * decrypt surfaces (owner-decrypt.ts) encrypt/decrypt against the same
+ * committee as this client without duplicating the table.
+ */
+export function defaultSealServerConfigsFor(
+    network: "testnet" | "mainnet",
+): SealServerConfig[] {
+    return (DEFAULT_SEAL_SERVER_CONFIGS[network] ?? []).map((c) => ({ ...c }));
 }
 
 // ============================================================
@@ -383,13 +395,18 @@ export class MemWalManual {
     }
 
     /**
-     * Recall (manual/full client-side):
-     * 1. Embed query (OpenAI)
-     * 2. Search server for matching vectors
-     * 3. Download blobs from Walrus
-     * 4. SEAL decrypt each blob
+     * Steps 1–3 of recall: embed query, vector-search the relayer, download
+     * the matching SEAL ciphertext blobs from Walrus. No cap is exercised and
+     * nothing is decrypted — shared by recallManual (which then decrypts with
+     * this client's cap) and recallEncrypted (which hands ciphertext out for
+     * the holder of another cap, e.g. an Owner wallet, to decrypt).
      */
-    async recallManual(query: string, limit: number = 10, namespace?: string, opts?: RecallOpts): Promise<RecallManualResult> {
+    private async searchAndDownload(
+        query: string,
+        limit: number,
+        namespace?: string,
+        opts?: RecallOpts,
+    ): Promise<{ blob_id: string; data: Uint8Array; distance: number }[]> {
         if (!query) throw new Error("Query cannot be empty");
 
         const ns = namespace ?? this.namespace;
@@ -411,7 +428,7 @@ export class MemWalManual {
         );
 
         if (searchResult.results.length === 0) {
-            return { results: [], total: 0 };
+            return [];
         }
 
         // Step 3: Download all encrypted blobs from Walrus concurrently
@@ -424,9 +441,46 @@ export class MemWalManual {
                 return null;
             }
         });
-        const downloadedBlobs = (await Promise.all(downloadTasks)).filter(
+        return (await Promise.all(downloadTasks)).filter(
             (d): d is { blob_id: string; data: Uint8Array; distance: number } => d !== null,
         );
+    }
+
+    /**
+     * Recall, but stop before decryption: returns the SEAL ciphertext blobs
+     * (base64) instead of plaintext. The caller forwards these to whoever
+     * actually holds a decryption cap — e.g. a web server hands them to the
+     * character Owner's browser, where the wallet + OwnerCap decrypt via
+     * `decryptWithOwnerCap` (owner-decrypt.ts). This keeps the server from
+     * ever exercising its own cap on behalf of an unauthenticated viewer.
+     *
+     * Requires only the delegate key (relayer auth) + embedding key; the
+     * cap this client carries is NOT used.
+     */
+    async recallEncrypted(
+        query: string,
+        limit: number = 10,
+        namespace?: string,
+        opts?: RecallOpts,
+    ): Promise<RecallEncryptedResult> {
+        const downloadedBlobs = await this.searchAndDownload(query, limit, namespace, opts);
+        const results = downloadedBlobs.map((blob) => ({
+            blob_id: blob.blob_id,
+            data_b64: bytesToBase64(blob.data),
+            distance: blob.distance,
+        }));
+        return { results, total: results.length };
+    }
+
+    /**
+     * Recall (manual/full client-side):
+     * 1. Embed query (OpenAI)
+     * 2. Search server for matching vectors
+     * 3. Download blobs from Walrus
+     * 4. SEAL decrypt each blob
+     */
+    async recallManual(query: string, limit: number = 10, namespace?: string, opts?: RecallOpts): Promise<RecallManualResult> {
+        const downloadedBlobs = await this.searchAndDownload(query, limit, namespace, opts);
 
         if (downloadedBlobs.length === 0) {
             return { results: [], total: 0 };

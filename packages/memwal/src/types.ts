@@ -365,6 +365,24 @@ export interface RecallManualMemory {
     distance: number;
 }
 
+/**
+ * One encrypted blob from recallEncrypted() — SEAL ciphertext, still sealed.
+ * Safe to hand to an untrusted client: decryption requires a cap holder to
+ * pass `character::seal_approve_{control,owner}` at the SEAL key servers.
+ */
+export interface EncryptedRecallBlob {
+    blob_id: string;
+    /** SEAL ciphertext bytes, base64-encoded. */
+    data_b64: string;
+    distance: number;
+}
+
+/** Result from recallEncrypted() — search + download, no decryption. */
+export interface RecallEncryptedResult {
+    results: EncryptedRecallBlob[];
+    total: number;
+}
+
 /** Result from recallManual() — full client-side variant with decrypted text */
 export interface RecallManualResult {
     results: (RecallManualHit | RecallManualMemory)[];
