@@ -505,6 +505,17 @@ async function main() {
   console.log(`   dreamConf  ${dreamConfigId}`);
   console.log(`   dreamAdm   ${dreamAdminCapId}`);
 
+  // Tx 6.5: StillRegistry — 劇照 edition ledger (one per saga). Backs the
+  // collect-to-mint loop: editions auto-increment on-chain per moment.
+  const txStill = new Transaction();
+  txStill.add(endlessTx.still.createRegistry({ cap: storytellerCapId, saga: sagaId }));
+  const changesStill = await runTx(client, signer, txStill, 'Tx 6.5 — StillRegistry');
+  const stillRegistryId = firstOrThrow(
+    findCreatedByType(changesStill, '::still::StillRegistry'),
+    'StillRegistry',
+  );
+  console.log(`   stillReg   ${stillRegistryId}`);
+
   // ═══════════════════════════════════════════════════════════════════
   // Tx 7: Drama resources — contested scarce slots for the drama engine
   //
@@ -562,6 +573,7 @@ async function main() {
       faucetAdminCapId,
       dreamConfigId,
       dreamAdminCapId,
+      stillRegistryId,
       storyId,
     },
     deployedAt,

@@ -40,6 +40,7 @@ export interface EndlessStoryDeployment {
   faucetAdminCapId: string;
   dreamConfigId: string;
   dreamAdminCapId: string;
+  stillRegistryId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;
@@ -79,6 +80,7 @@ export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "faucetAdminCapId": "0x6b7671677ab1da850445ba1d8ec0c91b46860040448770d458f07e4a5010cc0c",
   "dreamConfigId": "0x6c245b47d7d45f5d24173f928b4a455f7adeac72d531c87d2b6b15b1f2e175cb",
   "dreamAdminCapId": "0xad55b1d0278bbdd3c587cbbd9361daa8b05a1430f5263599d9dddd781e612333",
+  "stillRegistryId": "",
   "demoCharacters": [],
   "storyId": "spring-snow",
   "deployedAt": "2026-06-07T12:54:07.199Z"

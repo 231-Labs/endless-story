@@ -20,14 +20,12 @@ import { getAdminContext } from '../chain/admin-signer.js';
 export interface MintStillInput {
   /** character the moment belongs to (royalty target, follow-up). */
   characterId: string;
-  /** Walrus blob id of the image (canonical). */
+  /** Walrus blob id of the image — also the moment key for editioning. */
   walrusBlobId: string;
   /** resolved aggregator url for wallets/Display. */
   imageUrl: string;
   /** 題名, e.g. 「水袖那一夜」. */
   title: string;
-  /** 1-based edition number. */
-  edition?: number;
   /** recipient wallet; defaults to the admin (custodial until claimed). */
   recipient?: string;
 }
@@ -45,6 +43,10 @@ export async function mintStillAction(input: MintStillInput): Promise<MintStillR
   if (!d.storytellerCapId || !d.sagaId) {
     return { ok: false, error: '世界尚未種子化 — 缺 storytellerCap / saga。' };
   }
+  const registryId = d.stillRegistryId || process.env.STILL_REGISTRY_ID || '';
+  if (!registryId) {
+    return { ok: false, error: '缺 StillRegistry — 需要含 still.move 的部署 + bootstrap（Tx 6.5）。' };
+  }
   if (!input.characterId || !input.walrusBlobId || !input.title) {
     return { ok: false, error: '缺少 characterId / walrusBlobId / title。' };
   }
@@ -61,11 +63,11 @@ export async function mintStillAction(input: MintStillInput): Promise<MintStillR
     endlessTx.still.mintStill({
       cap: d.storytellerCapId,
       saga: d.sagaId,
+      registry: registryId,
       characterId: input.characterId,
       walrusBlobId: input.walrusBlobId,
       imageUrl: input.imageUrl,
       title: input.title,
-      edition: BigInt(input.edition ?? 1),
     }),
   );
   tx.transferObjects([still], input.recipient ?? admin.address);

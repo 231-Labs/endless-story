@@ -28,6 +28,8 @@ export interface DeploymentSnapshot {
   faucetAdminCapId?: string;
   dreamConfigId?: string;
   dreamAdminCapId?: string;
+  /** shared StillRegistry (劇照 edition ledger), created at bootstrap. */
+  stillRegistryId?: string;
   demoCharacters?: DemoCharacterRef[];
   storyId?: string;
 }
@@ -48,6 +50,7 @@ export function renderContractIdsFile(snap: DeploymentSnapshot, deployedAt: stri
     faucetAdminCapId: snap.faucetAdminCapId ?? '',
     dreamConfigId: snap.dreamConfigId ?? '',
     dreamAdminCapId: snap.dreamAdminCapId ?? '',
+    stillRegistryId: snap.stillRegistryId ?? '',
     demoCharacters: snap.demoCharacters ?? [],
     storyId: snap.storyId ?? '',
     deployedAt,
@@ -96,6 +99,7 @@ export interface EndlessStoryDeployment {
   faucetAdminCapId: string;
   dreamConfigId: string;
   dreamAdminCapId: string;
+  stillRegistryId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;
