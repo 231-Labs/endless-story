@@ -71,6 +71,8 @@ interface ChamberContext {
   params: ChamberParams | null;
   sceneId: string | null;
   chapters: string[];
+  /** the character's own event-moment 劇照 urls — hung as 掛軸. */
+  stills: string[];
 }
 
 async function loadContext(characterId: string): Promise<ChamberContext> {
@@ -124,7 +126,17 @@ async function loadContext(characterId: string): Promise<ChamberContext> {
   }
 
   if (avatars.length === 0) avatars = [{ id: characterId || 'demo', isSelf: true }];
-  return { subject, avatars, params, sceneId, chapters };
+
+  // the character's own narrative imagery — event moments first, then any
+  // other gallery media (costume / setting sheets) so the wall stays personal.
+  const stills = [
+    ...(subject?.gallery?.eventMoments ?? []).map((m) => m.imageUrl),
+    ...(subject?.gallery?.variants ?? [])
+      .filter((m) => m.kind !== 'anchor')
+      .map((m) => m.imageUrl),
+  ].filter((u): u is string => !!u && u.length > 0);
+
+  return { subject, avatars, params, sceneId, chapters, stills };
 }
 
 function assemble(
@@ -135,7 +147,7 @@ function assemble(
   usedModel: string | undefined,
   now: number,
 ): ChamberGeneration {
-  const placements = specToPlacements(spec);
+  const placements = specToPlacements(spec, ctx.stills);
   const design = buildDesign(placements, ctx.avatars.length, ctx.params);
   return {
     layout: {

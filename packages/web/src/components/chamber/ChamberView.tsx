@@ -10,6 +10,32 @@ import {
   generateChamberCode,
   type ChamberGeneration,
 } from '@/lib/actions/generate-chamber-layout';
+import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/chamber/sound';
+
+/** Preload the layout's images (portraits + 掛軸) so the reveal has no pop-in. */
+function preloadImages(gen: ChamberGeneration, timeoutMs = 4000): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  const urls = [
+    ...gen.layout.avatars.map((a) => a.portraitUrl),
+    ...(gen.layout.placements ?? []).filter((p) => p.kind === 1).map((p) => p.assetUrl),
+  ].filter((u): u is string => !!u);
+  if (urls.length === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    let left = urls.length;
+    const done = () => {
+      left -= 1;
+      if (left <= 0) resolve();
+    };
+    const timer = setTimeout(resolve, timeoutMs);
+    void timer;
+    for (const u of urls) {
+      const img = new Image();
+      img.onload = done;
+      img.onerror = done;
+      img.src = u;
+    }
+  });
+}
 
 const ChamberCanvas = dynamic(
   () => import('@endless-story/chamber-3d').then((m) => m.ChamberCanvas),
@@ -56,14 +82,20 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const [poemIdx, setPoemIdx] = useState(0);
   const aliveRef = useRef(true);
 
+  /** Apply a generation: preload its imagery first, then ring the motif. */
+  const applyGen = useCallback(async (g: ChamberGeneration) => {
+    await preloadImages(g);
+    if (!aliveRef.current) return;
+    setGen(g);
+    if (audioUnlocked()) playRevealMotif();
+  }, []);
+
   const run = useCallback(
     (force: boolean) => {
       if (force) setRegenerating(true);
       else setLoading(true);
       generateChamberLayout(characterId, force)
-        .then((g) => {
-          if (aliveRef.current) setGen(g);
-        })
+        .then((g) => applyGen(g))
         .catch(() => {
           if (aliveRef.current && !force) setGen(null);
         })
@@ -73,32 +105,28 @@ export function ChamberView({ characterId }: { characterId: string }) {
           setRegenerating(false);
         });
     },
-    [characterId],
+    [characterId, applyGen],
   );
 
   const runVision = useCallback(() => {
     setRegenerating(true);
     generateChamberFromReference(characterId, true)
-      .then((g) => {
-        if (aliveRef.current) setGen(g);
-      })
+      .then((g) => applyGen(g))
       .catch(() => {})
       .finally(() => {
         if (aliveRef.current) setRegenerating(false);
       });
-  }, [characterId]);
+  }, [characterId, applyGen]);
 
   const runCode = useCallback(() => {
     setRegenerating(true);
     generateChamberCode(characterId, true)
-      .then((g) => {
-        if (aliveRef.current) setGen(g);
-      })
+      .then((g) => applyGen(g))
       .catch(() => {})
       .finally(() => {
         if (aliveRef.current) setRegenerating(false);
       });
-  }, [characterId]);
+  }, [characterId, applyGen]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -120,8 +148,21 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const self = layout?.avatars.find((a) => a.isSelf);
   const others = layout?.avatars.filter((a) => !a.isSelf) ?? [];
 
+  const firstTouchRef = useRef(false);
+  const handleFirstPointer = useCallback(() => {
+    unlockAudio();
+    if (!firstTouchRef.current) {
+      firstTouchRef.current = true;
+      // 撥動畫軸 — one soft low string on first touch
+      playPluck(146.8, 0.07);
+    }
+  }, []);
+
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#0b0d10]">
+    <div
+      className="relative h-full w-full overflow-hidden bg-[#0b0d10]"
+      onPointerDownCapture={handleFirstPointer}
+    >
       {/* the scroll itself */}
       <div className="absolute inset-0">
         <ChamberCanvas
@@ -240,9 +281,13 @@ export function ChamberView({ characterId }: { characterId: string }) {
           {busy && !gen ? (
             <p className="text-sm text-white/60">執行中…</p>
           ) : gen && gen.log.length > 0 ? (
-            <ol className="flex flex-col gap-2">
+            <ol key={gen.generatedAt ?? 0} className="flex flex-col gap-2">
               {gen.log.map((s, i) => (
-                <li key={i} className="rounded-md border border-white/10 bg-white/5 p-2 text-xs">
+                <li
+                  key={i}
+                  className="animate-fade-in-up rounded-md border border-white/10 bg-white/5 p-2 text-xs"
+                  style={{ animationDelay: `${i * 130}ms`, animationFillMode: 'backwards' }}
+                >
                   <span className="font-medium text-[#e8b08a]">{phaseLabel(s.phase)}</span>
                   {s.model ? <span className="ml-1 text-white/45">{s.model}</span> : null}
                   <p className="mt-0.5 leading-relaxed text-white/70">{s.note}</p>

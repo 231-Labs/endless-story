@@ -34,7 +34,9 @@ export const PROP_CATALOG: PropCatalogItem[] = [
   { id: 'wooden_chest', kind: 0, type: 'static', tag: 'chest', assetUrl: `${KIT}/wooden_chest.glb`, fitHeight: 0.9, tags: ['家具', '收納'] },
   { id: 'shelf', kind: 0, type: 'static', tag: 'shelf', assetUrl: `${KIT}/shelf.glb`, fitHeight: 1.8, tags: ['家具', '收納', '書房'] },
   { id: 'vase', kind: 0, type: 'static', tag: 'vase', assetUrl: `${KIT}/vase_static.glb`, fitHeight: 0.35, tags: ['擺設'] },
-  { id: 'scroll_still', kind: 1, type: 'still', tag: 'scroll', assetUrl: '/hero/saga-day.webp', tags: ['掛軸', '劇照'] },
+  // no fixed assetUrl: 掛軸 resolves to the character's own event-moment 劇照
+  // (specToPlacements characterStills), falling back to the generic pool.
+  { id: 'scroll_still', kind: 1, type: 'still', tag: 'scroll', tags: ['掛軸', '劇照'] },
 ];
 
 /** Image pool for stills until chapter key-art / 人物誌 images are wired. */

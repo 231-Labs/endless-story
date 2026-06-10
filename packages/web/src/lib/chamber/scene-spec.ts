@@ -32,9 +32,18 @@ function stillLabel(o: SceneSpecObject): string {
  * Resolve a parsed Scene Spec against the catalog into the renderer's
  * `ChamberPlacement[]`. Kind-0 items carry their kit GLB url + fitHeight (the
  * renderer auto-normalises scale); items without a GLB fall back to a primitive.
+ *
+ * `characterStills` — the character's REAL event-moment images (劇照 from their
+ * narrative); used for 掛軸 before the generic pool, so each chamber hangs that
+ * character's own story on the wall.
  */
-export function specToPlacements(spec: SceneSpec): ChamberPlacement[] {
+export function specToPlacements(
+  spec: SceneSpec,
+  characterStills: string[] = [],
+): ChamberPlacement[] {
   const out: ChamberPlacement[] = [];
+  const pickStill = (i: number): string =>
+    characterStills.length > 0 ? characterStills[i % characterStills.length] : resolveStill(i);
   let stillIdx = 0;
   for (const o of spec.objects) {
     const item = catalogById(o.catalogId);
@@ -54,7 +63,7 @@ export function specToPlacements(spec: SceneSpec): ChamberPlacement[] {
       out.push({
         ...base,
         kind: PLACEMENT_KIND.SCROLL,
-        assetUrl: item.assetUrl ?? resolveStill(stillIdx++),
+        assetUrl: item.assetUrl ?? pickStill(stillIdx++),
         tag: item.tag,
         label: stillLabel(o),
       });
