@@ -247,10 +247,9 @@ async function main() {
     elements: attrElements,
     type: `${d.packageId}::character::AttributeValue`,
   });
-  // redeem_voucher_to_character returns (OwnerCap, ControlCap). Character
-  // itself is transferred internally to voucher.payer (= admin in this test).
-  // Caller must transfer the two returned caps.
-  const caps = tx3.add(
+  // redeem_voucher_to_character transfers the OwnerCap to voucher.payer
+  // (= admin in this test) on-chain and returns only the ControlCap.
+  const controlCap = tx3.add(
     endlessTx.recruit.redeemVoucherToCharacter({
       cap: d.storytellerCapId,
       saga: d.sagaId,
@@ -262,7 +261,7 @@ async function main() {
       attributes,
     }),
   );
-  tx3.transferObjects([caps[0], caps[1]], admin);
+  tx3.transferObjects([controlCap], admin);
   const redeemRes = await client.signAndExecuteTransaction({
     transaction: tx3,
     signer,

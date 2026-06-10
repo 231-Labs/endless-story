@@ -345,7 +345,7 @@ public fun redeem_voucher_to_character(
     attributes: vector<AttributeValue>,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): (OwnerCap, ControlCap) {
+): ControlCap {
     saga::assert_cap(cap, saga);
     let saga_id = saga::saga_id(saga);
     assert!(voucher.saga_id == saga_id, EVoucherSagaMismatch);
@@ -363,7 +363,11 @@ public fun redeem_voucher_to_character(
     let scene_id = scene::scene_id(scene);
     let scene_location_id = scene::location_id(scene);
 
-    let (owner_cap, control_cap) = character::mint_character_internal(
+    // mint_character_internal transfers the OwnerCap straight to
+    // `owner_recipient` (= voucher.payer) on-chain, so the co-signing
+    // storyteller can never keep or redirect the buyer's ownership. We get
+    // back only the character id (for bookkeeping) + the ControlCap.
+    let (character_id, control_cap) = character::mint_character_internal(
         world,
         option::some(saga_id),
         option::some(scene_id),
@@ -376,7 +380,7 @@ public fun redeem_voucher_to_character(
         ctx,
     );
 
-    scene::add_character(scene, character::owner_cap_character_id(&owner_cap));
+    scene::add_character(scene, character_id);
     saga::increment_character_count(saga);
 
     let voucher_id = object::id(&voucher);
@@ -397,13 +401,13 @@ public fun redeem_voucher_to_character(
     event::emit(GenesisVoucherRedeemed {
         voucher_id,
         saga_id,
-        character_id: character::owner_cap_character_id(&owner_cap),
+        character_id,
         redeemed_at_ms: now_ms,
         hint,
         intent_hint,
     });
 
-    (owner_cap, control_cap)
+    control_cap
 }
 
 // ─── views ───────────────────────────────────────────────────────────
@@ -776,7 +780,10 @@ fun redeem_voucher_mints_character_and_consumes_voucher() {
     );
 
     let chars_before = saga::character_count(&saga);
-    let (owner_cap, control_cap) = redeem_voucher_to_character(
+    // OwnerCap is now transferred on-chain to voucher.payer; redeem returns
+    // only the ControlCap. (The payer-receipt can't be re-fetched here
+    // without test_scenario, so we assert on character_count + the cap epoch.)
+    let control_cap = redeem_voucher_to_character(
         &storyteller_cap,
         &mut saga,
         &world,
@@ -790,10 +797,8 @@ fun redeem_voucher_mints_character_and_consumes_voucher() {
     );
 
     assert_eq!(saga::character_count(&saga), chars_before + 1);
-    assert!(character::owner_cap_world_id(&owner_cap) == world::world_id(&world));
     assert!(character::control_cap_epoch(&control_cap) == 1);
 
-    destroy(owner_cap);
     destroy(control_cap);
     destroy(treasury_cap);
     destroy(scene);
@@ -943,7 +948,7 @@ fun redeem_aborts_when_requirements_unmet() {
     );
 
     // Try to redeem with a female profile → aborts EReqsNotMet.
-    let (owner_cap, control_cap) = redeem_voucher_to_character(
+    let control_cap = redeem_voucher_to_character(
         &storyteller_cap,
         &mut saga,
         &world,
@@ -956,7 +961,6 @@ fun redeem_aborts_when_requirements_unmet() {
         &mut ctx,
     );
 
-    destroy(owner_cap);
     destroy(control_cap);
     destroy(treasury_cap);
     destroy(scene);
@@ -1026,7 +1030,7 @@ fun redeem_expired_voucher_aborts() {
     // Advance time past expiry.
     sui::clock::increment_for_testing(&mut clock, 2_000);
 
-    let (owner_cap, control_cap) = redeem_voucher_to_character(
+    let control_cap = redeem_voucher_to_character(
         &storyteller_cap,
         &mut saga,
         &world,
@@ -1039,7 +1043,6 @@ fun redeem_expired_voucher_aborts() {
         &mut ctx,
     ); // ← aborts EVoucherExpired
 
-    destroy(owner_cap);
     destroy(control_cap);
     destroy(treasury_cap);
     destroy(scene);

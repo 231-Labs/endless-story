@@ -184,11 +184,11 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         type: `${deployment.packageId}::character::AttributeValue`,
     });
 
-    // redeem returns (OwnerCap, ControlCap). Character is transferred
-    // internally to voucher.payer (= user, NOT admin). Caller PTB must
-    // transfer the two returned caps: OwnerCap → user (matches Character),
-    // ControlCap → admin (storyteller retains delegation).
-    const caps = tx.add(
+    // redeem now returns ONLY the ControlCap. The contract transfers the
+    // OwnerCap to voucher.payer (= the user who paid) on-chain, so the
+    // storyteller co-signing this tx can't keep or redirect ownership.
+    // We just route the ControlCap to admin (runner delegation).
+    const controlCap = tx.add(
         endlessTx.recruit.redeemVoucherToCharacter({
             cap: deployment.storytellerCapId,
             saga: deployment.sagaId,
@@ -200,12 +200,7 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
             attributes,
         }),
     );
-    // We don't have the user address here — read voucher.payer from chain
-    // then send OwnerCap there. ControlCap stays with admin (this signer).
-    // Simpler shortcut: transfer BOTH to admin, then a follow-up Phase 3
-    // step migrates OwnerCap to user. For Phase 2 demo where admin and
-    // user are often the same dev wallet, this is fine.
-    tx.transferObjects([caps[0], caps[1]], admin.address);
+    tx.transferObjects([controlCap], admin.address);
 
     let result;
     try {
