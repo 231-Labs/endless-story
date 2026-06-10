@@ -57,9 +57,10 @@ export interface SceneDesign {
 }
 
 /**
- * Deterministic default — the curated 青綠山水 water-stage as a SceneDesign, so
- * the renderer always has a coherent scene (no LLM key, parse failure, etc.).
- * The GLM path replaces this with its own design.
+ * Deterministic default — 詩意虛無: a near-empty breath of a stage (one moon
+ * gate on the water mirror, a thread of incense smoke, one small rock). Most
+ * of the scene is emptiness + drifting mist — 留白 IS the design. Always
+ * coherent (no LLM key, parse failure, etc.); the GLM path layers onto it.
  */
 export function deterministicDesign(): SceneDesign {
   return {
@@ -67,15 +68,12 @@ export function deterministicDesign(): SceneDesign {
     floor: { type: 'water' },
     mood: { timeOfDay: 'day', season: 'spring', weather: 'clear' },
     elements: [
-      { kind: 'moon_gate', pos: [0, 0, -2.2], scale: 1 },
-      { kind: 'bamboo', pos: [2.2, 0, -1.2], scale: 1 },
-      { kind: 'scholar_rock', pos: [-2.1, 0, -0.8], scale: 1.1 },
-      { kind: 'guqin', pos: [-0.9, 0, 0.3], yaw: 10 },
-      { kind: 'incense', pos: [1.2, 0, 0.4] },
+      { kind: 'moon_gate', pos: [0, 0, -2.4], scale: 1.15 },
+      { kind: 'scholar_rock', pos: [-2.5, 0, -1.2], scale: 0.8 },
+      { kind: 'incense', pos: [1.1, 0, -0.4], scale: 0.9 },
       { kind: 'character', pos: [0, 0, 0.7], characterIndex: 0 },
       { kind: 'character', pos: [-1.6, 0, 0.2], characterIndex: 1 },
       { kind: 'character', pos: [1.6, 0, 0.2], characterIndex: 2 },
-      { kind: 'scroll', pos: [-1.9, 1.2, -1.6], yaw: 60, assetUrl: '/hero/saga-day.webp', label: '掛軸' },
     ],
   };
 }

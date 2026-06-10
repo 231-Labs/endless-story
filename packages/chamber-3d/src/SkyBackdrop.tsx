@@ -22,10 +22,10 @@ interface SkyStops {
 }
 
 const SKY: Record<string, SkyStops> = {
-  // bright 青綠山水 — the reference look
+  // bright 青綠山水, washed toward 水墨 — paler ranges, more 留白
   day: {
-    top: '#cfe8e6', mid: '#a9d6d2', horizon: '#e6f1ec',
-    far: '#9fc6bf', near: '#5f9e92', ridge: '#3f7a72', stars: false, moon: false,
+    top: '#d8ebe8', mid: '#bcdcd6', horizon: '#eef4f0',
+    far: '#b4d0c9', near: '#84ada2', ridge: '#5e8a80', stars: false, moon: false,
   },
   dawn: {
     top: '#bcd9dd', mid: '#d9b6ac', horizon: '#f3dcc6',

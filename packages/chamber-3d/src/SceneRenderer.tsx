@@ -6,6 +6,7 @@ import { MeshReflectorMaterial } from '@react-three/drei';
 import { ChamberLights } from './ChamberLights.js';
 import { SkyBackdrop } from './SkyBackdrop.js';
 import { Weather } from './Weather.js';
+import { DriftingMist } from './Mist.js';
 import {
   Bamboo,
   Guqin,
@@ -150,6 +151,11 @@ export function SceneRenderer({
       <ChamberLights palette={palette} />
       <Floor type={design.floor.type} color={design.floor.color} dims={dims} timeOfDay={env.timeOfDay} />
       <Weather weather={env.weather} dims={dims} />
+      {/* 雲氣 — the 虛無 layer: slow mist breathing over the water */}
+      <DriftingMist
+        dims={dims}
+        tone={env.timeOfDay === 'dusk' || env.timeOfDay === 'night' ? '#aab6c6' : '#f2f5f1'}
+      />
       {design.elements.map((el, i) => (
         <Element key={`${el.kind}:${i}`} el={el} avatars={avatars} />
       ))}

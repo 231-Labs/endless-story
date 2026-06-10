@@ -9,13 +9,15 @@ const FIGURE_SPOTS: [number, number, number][] = [
   [0, 0, -0.9],
 ];
 
-/** Fixed 青綠山水 decor (step 1: not yet GLM-designed — see step 2). */
+/**
+ * Fixed decor — 詩意虛無: only the moon gate, a thread of incense and one
+ * small rock anchor the stage; everything else (and the emptiness between)
+ * is the agent's 一桌二椅 props. 留白 is deliberate.
+ */
 const DECOR: SceneElement[] = [
-  { kind: 'moon_gate', pos: [0, 0, -2.4] },
-  { kind: 'bamboo', pos: [2.3, 0, -1.2] },
-  { kind: 'scholar_rock', pos: [-2.2, 0, -0.8], scale: 1.1 },
-  { kind: 'guqin', pos: [-0.9, 0, 0.4], yaw: 10 },
-  { kind: 'incense', pos: [1.1, 0, 0.5] },
+  { kind: 'moon_gate', pos: [0, 0, -2.4], scale: 1.15 },
+  { kind: 'scholar_rock', pos: [-2.5, 0, -1.2], scale: 0.8 },
+  { kind: 'incense', pos: [1.1, 0, -0.4], scale: 0.9 },
 ];
 
 /**

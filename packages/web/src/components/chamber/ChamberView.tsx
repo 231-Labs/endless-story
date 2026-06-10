@@ -162,6 +162,8 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const layout = gen?.layout ?? null;
   const self = layout?.avatars.find((a) => a.isSelf);
   const others = layout?.avatars.filter((a) => !a.isSelf) ?? [];
+  // 顯影遮罩分日夜兩種: 晨午 = 宣紙白霧 (light), 暮夜 = 墨黑 (dark)
+  const darkScene = timeOfDay === 'dusk' || timeOfDay === 'night';
 
   const firstTouchRef = useRef(false);
   const handleFirstPointer = useCallback(() => {
@@ -332,18 +334,46 @@ export function ChamberView({ characterId }: { characterId: string }) {
 
       {/* painting-in-progress wisp (initial background gen or regeneration) */}
       {regenerating || (loading && !inkOverlay) ? (
-        <div className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full bg-black/40 px-4 py-1.5 text-xs tracking-widest text-[#e8b08a] backdrop-blur-md">
+        <div
+          className={[
+            'absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs tracking-widest backdrop-blur-md',
+            darkScene ? 'bg-black/40 text-[#e8b08a]' : 'bg-white/55 text-[#8a4a26]',
+          ].join(' ')}
+        >
           {regenerating ? '重新作畫中…' : 'agent 作畫中 · 先入畫一觀'}
         </div>
       ) : null}
 
-      {/* 墨暈 opening overlay — lifts after a few beats (progressive load) */}
+      {/* 顯影 opening overlay — 墨黑 for 暮夜, 宣紙白霧 for 晨午; lifts after a few beats */}
       {loading && inkOverlay ? (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-gradient-to-b from-[#0e1114]/90 to-[#090b0e]/95 transition-opacity duration-700">
+        <div
+          className={[
+            'absolute inset-0 z-40 grid place-items-center transition-opacity duration-700',
+            darkScene
+              ? 'bg-gradient-to-b from-[#0e1114]/90 to-[#090b0e]/95'
+              : 'bg-gradient-to-b from-[#f5f2e8]/95 to-[#e9e3d3]/95',
+          ].join(' ')}
+        >
           <div className="flex flex-col items-center gap-6">
-            <div className="h-16 w-16 animate-pulse rounded-full bg-[radial-gradient(circle,rgba(214,226,221,0.85),rgba(86,110,104,0.3)_55%,transparent_72%)]" />
-            <p className="font-serif text-base tracking-[0.4em] text-white/80">{POEMS[poemIdx]}</p>
-            <p className="text-xs tracking-wider text-white/40">agent 正在作畫 · 完成後自動換景</p>
+            <div
+              className={[
+                'h-16 w-16 animate-pulse rounded-full',
+                darkScene
+                  ? 'bg-[radial-gradient(circle,rgba(214,226,221,0.85),rgba(86,110,104,0.3)_55%,transparent_72%)]'
+                  : 'bg-[radial-gradient(circle,rgba(56,62,58,0.7),rgba(96,108,100,0.25)_55%,transparent_72%)]',
+              ].join(' ')}
+            />
+            <p
+              className={[
+                'font-serif text-base tracking-[0.4em]',
+                darkScene ? 'text-white/80' : 'text-[#46443a]',
+              ].join(' ')}
+            >
+              {POEMS[poemIdx]}
+            </p>
+            <p className={['text-xs tracking-wider', darkScene ? 'text-white/40' : 'text-[#8a8573]'].join(' ')}>
+              agent 正在作畫 · 完成後自動換景
+            </p>
           </div>
         </div>
       ) : null}
