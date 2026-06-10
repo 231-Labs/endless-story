@@ -375,29 +375,31 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.76 EVENT MOMENT — render the storylet's multi-character moment scene image in
-    //   the BACKGROUND (img2img off each participant's anchor → faces don't drift),
-    //   append as kind=4 to every participant + tag the source event tx. Never
-    //   blocks the tick (after()); only on live runs where the storylet anchored.
+    // 2.76 EVENT MOMENT + 4.5 EVENT CUT are both BACKGROUND StorytellerCap txs.
+    //   We capture them as jobs here / below and run them SERIALLY in one after()
+    //   after the POV phase — never concurrently, or the two owned-cap txs race on
+    //   the cap's object version (the same reason the sync phases sign serially).
+    let momentJob: (() => Promise<void>) | null = null;
+    let cutJob: (() => Promise<void>) | null = null;
+
+    // 2.76 EVENT MOMENT — the storylet's multi-character moment scene image
+    //   (img2img off each participant's anchor → faces don't drift), appended as
+    //   kind=4 to every participant + tagged with the source event tx.
     if ((input.eventImage ?? true) && !dryRun && storylet?.opened && storylet.characterIds.length >= 2) {
         const st = storylet;
-        after(async () => {
-            try {
-                const r = await generateEventMomentAction({
-                    characterIds: st.characterIds,
-                    sceneName: st.sceneName,
-                    label: st.label,
-                    eventTx: st.digest,
-                });
-                console.log(
-                    `[tick-loop] event moment (${st.templateId}): appended=${r.appended}` +
-                        (r.skipped ? ` skipped=${r.skipped}` : '') +
-                        (r.error ? ` error=${r.error}` : ''),
-                );
-            } catch (err) {
-                console.warn('[tick-loop] event moment failed:', err);
-            }
-        });
+        momentJob = async () => {
+            const r = await generateEventMomentAction({
+                characterIds: st.characterIds,
+                sceneName: st.sceneName,
+                label: st.label,
+                eventTx: st.digest,
+            });
+            console.log(
+                `[tick-loop] event moment (${st.templateId}): appended=${r.appended}` +
+                    (r.skipped ? ` skipped=${r.skipped}` : '') +
+                    (r.error ? ` error=${r.error}` : ''),
+            );
+        };
     }
 
     // 2.8 SOCIAL — idle, same-scene lightweight observation / talk. This
@@ -658,31 +660,49 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         };
                     });
                 if (cutPovs.length >= 2) {
-                    after(async () => {
-                        try {
-                            const cut = await compileEventChapterAction({
-                                sceneId: st.sceneId,
-                                sceneName: st.sceneName,
-                                eventTx: st.digest,
-                                eventLabel: st.label,
-                                day: worldTime?.day,
-                                povs: cutPovs,
-                            });
-                            console.log(
-                                `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
-                                    ` anchored=${cut.anchored}` +
-                                    (cut.skipReason ? ` skipped=${cut.skipReason}` : '') +
-                                    (cut.error ? ` error=${cut.error}` : ''),
-                            );
-                        } catch (err) {
-                            console.warn('[tick-loop] event cut failed:', err);
-                        }
-                    });
+                    cutJob = async () => {
+                        const cut = await compileEventChapterAction({
+                            sceneId: st.sceneId,
+                            sceneName: st.sceneName,
+                            eventTx: st.digest,
+                            eventLabel: st.label,
+                            day: worldTime?.day,
+                            povs: cutPovs,
+                        });
+                        console.log(
+                            `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
+                                ` anchored=${cut.anchored}` +
+                                (cut.skipReason ? ` skipped=${cut.skipReason}` : '') +
+                                (cut.error ? ` error=${cut.error}` : ''),
+                        );
+                    };
                 }
             }
         }
     } else {
         tlog(`④ POV 略過（pov=false）`);
+    }
+
+    // Run the captured background StorytellerCap jobs SERIALLY (moment → cut) in
+    // one after(): two owned-cap txs must not overlap or they conflict on the
+    // cap's object version. Each is independently failure-isolated.
+    if (!dryRun && (momentJob || cutJob)) {
+        after(async () => {
+            if (momentJob) {
+                try {
+                    await momentJob();
+                } catch (err) {
+                    console.warn('[tick-loop] event moment failed:', err);
+                }
+            }
+            if (cutJob) {
+                try {
+                    await cutJob();
+                } catch (err) {
+                    console.warn('[tick-loop] event cut failed:', err);
+                }
+            }
+        });
     }
 
     // 5. REFLECT — periodic sleep / consolidation. Characters sleep at NIGHT,

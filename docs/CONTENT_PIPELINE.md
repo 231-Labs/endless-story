@@ -262,7 +262,9 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | 事件級劇照（多角色 anchor 條件化、kind=4、eventTx metadata） | `web/.../generate-event-moment.ts`（tick after()） | — | ✅（既有） |
 | `still-compiler` 型殼（beat 級 + teaser/full 分級的演進） | `runner/services/still-compiler/` | 低 | ✅（型殼） |
 | beat 級劇照（越張力門檻可配置截 + 分級） | `still-compiler` runOnce | 中 | TODO |
-| 公報升級成漏斗（頭條=事件+劇照+鉤子） | `gazette-compiler/prompt.ts` | 中 | TODO |
+| 公報漏斗化（本日頭條 hook + 連載預告 CTA → `/feed?mode=chapter`） | `gazette-compiler/prompt.ts` | 低（純 prompt） | ✅ |
+| 公報頭條嵌劇照縮圖（threading 事件 still URL） | `gazette-compiler` snapshot | 中 | TODO |
+| tick 背景簽名序列化（moment→cut 同一 after()，避免 owned cap 撞版本） | `tick-loop.ts` | — | ✅ |
 | 影片改 image-to-video（劇照當 first frame） | `video-compiler`（R6 stub） | 高 | TODO |
 | 角色 PV mode | `video-compiler` `character_pv` | — | defer |
 
