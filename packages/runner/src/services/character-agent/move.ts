@@ -14,6 +14,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
+import { parseMove } from './parse.js';
 
 export interface MovePresentCharacter {
     id: string;
@@ -118,21 +119,4 @@ export async function decideMove(
         return { move: false, reason: parsed?.reason };
     }
     return { move: true, targetSceneId: parsed.targetSceneId, reason: parsed.reason };
-}
-
-function parseMove(
-    raw: string,
-): { move?: boolean; targetSceneId?: string; reason?: string } | null {
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try {
-        const o = JSON.parse(m[0]) as {
-            move?: boolean;
-            targetSceneId?: string;
-            reason?: string;
-        };
-        return o;
-    } catch {
-        return null;
-    }
 }

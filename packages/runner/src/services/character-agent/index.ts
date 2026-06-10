@@ -17,6 +17,7 @@ import {
     type DecideInput,
     type HandCard,
 } from './prompt.js';
+import { parseDecision } from './parse.js';
 
 export type { HandCard, DecideInput } from './prompt.js';
 export {
@@ -88,23 +89,4 @@ export async function decideCardPlay(
 
 function pickLabel(hand: HandCard[], idx: number): string {
     return hand.find((c) => c.catalogIndex === idx)?.label ?? '出牌';
-}
-
-function parseDecision(
-    raw: string,
-): { catalogIndex: number; intent?: string; reason?: string } | null {
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try {
-        const o = JSON.parse(m[0]) as {
-            catalogIndex?: number | string;
-            intent?: string;
-            reason?: string;
-        };
-        const ci = Number(o.catalogIndex);
-        if (!Number.isFinite(ci)) return null;
-        return { catalogIndex: ci, intent: o.intent, reason: o.reason };
-    } catch {
-        return null;
-    }
 }
