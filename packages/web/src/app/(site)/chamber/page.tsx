@@ -23,6 +23,19 @@ export default async function ChamberPage({
 }) {
   const { id } = await searchParams;
 
+  // The chamber itself is presented full-bleed, like a hanging scroll —
+  // SiteNav on top, the living painting fills the rest of the viewport.
+  if (id) {
+    return (
+      <main className="flex h-screen min-h-screen flex-col overflow-hidden bg-canvas">
+        <SiteNav />
+        <div className="min-h-0 flex-1">
+          <ChamberView characterId={id} />
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-canvas">
       <SiteNav />
@@ -31,19 +44,15 @@ export default async function ChamberPage({
           <div className="mx-auto max-w-6xl">
             <PageLeadTitleBlock
               eyebrow="廂房 CHAMBER"
-              title={id ? '廂房' : '我的廂房'}
-              meta={
-                id
-                  ? '青綠山水間的一方水台廂房，環繞觀賞。'
-                  : '連結錢包，選一位你持有的角色，環繞觀賞它在青綠山水間的水台廂房。'
-              }
+              title="我的廂房"
+              meta="連結錢包，選一位你持有的角色，環繞觀賞它在青綠山水間的水台廂房。"
             />
           </div>
         </div>
       </header>
       <section className="px-5 pb-16 sm:px-10">
         <div className="mx-auto max-w-6xl">
-          {id ? <ChamberView characterId={id} /> : <ChamberRoster />}
+          <ChamberRoster />
         </div>
       </section>
     </main>

@@ -11,6 +11,11 @@ import {
   type ChamberGeneration,
 } from '@/lib/actions/generate-chamber-layout';
 
+const ChamberCanvas = dynamic(
+  () => import('@endless-story/chamber-3d').then((m) => m.ChamberCanvas),
+  { ssr: false, loading: () => null },
+);
+
 const WEATHERS: { key: Weather; label: string }[] = [
   { key: 'clear', label: '晴' },
   { key: 'snow', label: '雪' },
@@ -24,25 +29,31 @@ const TIMES: { key: TimeOfDay; label: string }[] = [
   { key: 'night', label: '夜' },
 ];
 
-const ChamberCanvas = dynamic(
-  () => import('@endless-story/chamber-3d').then((m) => m.ChamberCanvas),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full w-full items-center justify-center text-sm text-mute">
-        載入廂房…
-      </div>
-    ),
-  },
-);
+/** Loading verses — cycled while the agent paints the room. */
+const POEMS = [
+  '磨墨候場，簾影未動',
+  '青綠未乾，且候片刻',
+  '香線初燃，水台將顯',
+  '一桌二椅，自有萬象',
+];
 
+/** Frosted pill button used across the floating UI. */
+const PILL =
+  'rounded-full border border-white/20 bg-black/25 px-4 py-1.5 text-sm text-white/85 backdrop-blur-md transition-colors hover:bg-black/40 disabled:opacity-40 disabled:hover:bg-black/25';
+
+/**
+ * 廂房 — presented as a living 立軸: full-bleed diorama, vertical painting
+ * title with a red seal, floating frosted controls, and the generation run
+ * record styled as a 題跋 (colophon) strip.
+ */
 export function ChamberView({ characterId }: { characterId: string }) {
   const [gen, setGen] = useState<ChamberGeneration | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
-  // parametric-environment toggles — default 晴・午 (the bright 青綠山水 look)
   const [weather, setWeather] = useState<Weather>('clear');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
+  const [colophonOpen, setColophonOpen] = useState(true);
+  const [poemIdx, setPoemIdx] = useState(0);
   const aliveRef = useRef(true);
 
   const run = useCallback(
@@ -97,155 +108,185 @@ export function ChamberView({ characterId }: { characterId: string }) {
     };
   }, [run]);
 
+  // cycle the loading verse
+  useEffect(() => {
+    if (!loading) return;
+    const t = setInterval(() => setPoemIdx((i) => (i + 1) % POEMS.length), 3500);
+    return () => clearInterval(t);
+  }, [loading]);
+
   const busy = loading || regenerating;
   const layout = gen?.layout ?? null;
   const self = layout?.avatars.find((a) => a.isSelf);
   const others = layout?.avatars.filter((a) => !a.isSelf) ?? [];
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row">
-      {/* diorama */}
-      <div className="flex flex-1 flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <Link href="/chamber" className="es-outline-button text-sm">
-            ← 回名冊
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-mute">
-              {gen?.usedModel ? `GLM 生成 · ${gen.usedModel}` : '示意佈局 · 未接 LLM'}
-              {layout?.sceneId ? ' · 已讀場景' : ''}
-              {gen?.cached ? ' · 快取' : ''}
-            </span>
-            <button
-              type="button"
-              onClick={() => run(true)}
-              disabled={busy}
-              className="es-outline-button text-sm disabled:opacity-50"
-            >
-              {regenerating ? '生成中…' : '↻ 重生佈置'}
-            </button>
-            <button
-              type="button"
-              onClick={runVision}
-              disabled={busy}
-              title="把參考圖餵給 glm-4.6v，讓它看圖佈置（擺道具）"
-              className="es-outline-button text-sm disabled:opacity-50"
-            >
-              ✨ 看圖佈置
-            </button>
-            <button
-              type="button"
-              onClick={runCode}
-              disabled={busy}
-              title="實驗：讓 glm-4.6v 看圖直接寫 Three.js 程式碼生成整個場景（沙箱執行，壞了退回 spec）"
-              className="es-outline-button text-sm disabled:opacity-50"
-            >
-              🧪 GLM 寫場景
-            </button>
-          </div>
-        </div>
-
-        {/* parametric environment toggles */}
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          <span className="text-mute">天氣</span>
-          <div className="flex gap-1">
-            {WEATHERS.map((w) => (
-              <button
-                key={w.key}
-                type="button"
-                onClick={() => setWeather(w.key)}
-                className={[
-                  'rounded-md border px-2.5 py-1 transition-colors',
-                  weather === w.key
-                    ? 'border-cinnabar/60 bg-cinnabar/10 text-ink'
-                    : 'border-hairline bg-canvas/30 text-mute hover:bg-canvas/50',
-                ].join(' ')}
-              >
-                {w.label}
-              </button>
-            ))}
-          </div>
-          <span className="ml-2 text-mute">時辰</span>
-          <div className="flex gap-1">
-            {TIMES.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTimeOfDay(t.key)}
-                className={[
-                  'rounded-md border px-2.5 py-1 transition-colors',
-                  timeOfDay === t.key
-                    ? 'border-cinnabar/60 bg-cinnabar/10 text-ink'
-                    : 'border-hairline bg-canvas/30 text-mute hover:bg-canvas/50',
-                ].join(' ')}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative h-[58vh] overflow-hidden rounded-lg border border-hairline bg-canvas lg:h-[72vh]">
-          <ChamberCanvas
-            style={{ width: '100%', height: '100%' }}
-            layout={layout ?? undefined}
-            envOverride={{ weather, timeOfDay, season: 'spring' }}
-          />
-
-          {/* regenerating overlay — keep the current room visible underneath */}
-          {regenerating ? (
-            <div className="absolute right-3 top-3 rounded-md bg-elevated/80 px-3 py-1.5 text-xs text-cinnabar backdrop-blur">
-              重生佈置中…
-            </div>
-          ) : null}
-
-          <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-elevated/80 px-3 py-1.5 text-xs text-mute backdrop-blur">
-            {loading ? (
-              <span>生成佈置…（首次約 1–2 分鐘，之後快取秒開）</span>
-            ) : (
-              <>
-                <span className="text-ink">{self?.name ?? '此角色'}</span> 的廂房
-                {gen?.roomStyle ? <span className="ml-1">· {gen.roomStyle}</span> : null}
-                {others.length > 0 ? <span className="ml-1">· 同住 {others.length} 人</span> : null}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* object chips — data-driven from the generated layout */}
-        {layout && (layout.placements?.length ?? 0) > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {(layout.placements ?? []).map((p, i) => (
-              <span
-                key={`${p.tag ?? p.kind}:${i}`}
-                className="rounded-full border border-hairline bg-surface px-3 py-1 text-xs text-mute"
-              >
-                {p.label ?? p.tag ?? (p.kind === 1 ? '掛軸' : '物件')}
-              </span>
-            ))}
-          </div>
-        ) : null}
+    <div className="relative h-full w-full overflow-hidden bg-[#0b0d10]">
+      {/* the scroll itself */}
+      <div className="absolute inset-0">
+        <ChamberCanvas
+          style={{ width: '100%', height: '100%' }}
+          layout={layout ?? undefined}
+          envOverride={{ weather, timeOfDay, season: 'spring' }}
+          cinematic
+        />
       </div>
 
-      {/* generation run record (the self-check loop) */}
-      <aside className="es-soft-panel flex w-full flex-col gap-2 rounded-lg p-4 lg:w-72">
-        <h2 className="text-sm font-medium text-ink">生成記錄</h2>
-        {loading ? (
-          <p className="text-sm text-mute">執行中…</p>
-        ) : gen && gen.log.length > 0 ? (
-          <ol className="flex flex-col gap-2">
-            {gen.log.map((s, i) => (
-              <li key={i} className="rounded-md border border-hairline bg-canvas/30 p-2 text-xs">
-                <span className="font-medium text-cinnabar">{phaseLabel(s.phase)}</span>
-                {s.model ? <span className="ml-1 text-mute">{s.model}</span> : null}
-                <p className="mt-0.5 text-mute">{s.note}</p>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="text-sm text-mute">—</p>
-        )}
-      </aside>
+      {/* legibility scrims */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/35 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/45 to-transparent" />
+
+      {/* top bar */}
+      <div className="absolute left-5 top-4 z-20">
+        <Link href="/chamber" className={PILL}>
+          ← 名冊
+        </Link>
+      </div>
+      <div className="absolute right-5 top-4 z-20 flex items-center gap-2">
+        <span className="rounded-full bg-black/25 px-3 py-1 text-xs text-white/55 backdrop-blur-md">
+          {gen?.usedModel ? `GLM 生成 · ${gen.usedModel}` : '示意佈局'}
+          {layout?.sceneId ? ' · 已讀場景' : ''}
+          {gen?.cached ? ' · 快取' : ''}
+        </span>
+        <button
+          type="button"
+          onClick={() => setColophonOpen((v) => !v)}
+          className={PILL}
+          title="生成題跋（agent 運行記錄）"
+        >
+          題跋
+        </button>
+      </div>
+
+      {/* 畫題 + 印章 (bottom-left, vertical) */}
+      <div className="pointer-events-none absolute bottom-24 left-7 z-20 flex items-start gap-3">
+        <h1
+          style={{ writingMode: 'vertical-rl' }}
+          className="font-serif text-2xl leading-snug tracking-[0.4em] text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
+        >
+          {(self?.name ?? '無名') + '之廂房'}
+        </h1>
+        <span className="grid h-9 w-9 rotate-2 place-items-center rounded-[3px] bg-[#a03226] font-serif text-lg leading-none text-[#f3e7d3] shadow-lg">
+          廂
+        </span>
+      </div>
+      <div className="pointer-events-none absolute bottom-16 left-7 z-20 text-xs tracking-widest text-white/65 drop-shadow">
+        {gen?.roomStyle ? `${gen.roomStyle}` : ''}
+        {others.length > 0 ? `${gen?.roomStyle ? ' · ' : ''}同住 ${others.length} 人` : ''}
+      </div>
+
+      {/* floating control bar (bottom-center) */}
+      <div className="absolute inset-x-0 bottom-5 z-20 flex justify-center">
+        <div className="flex max-w-full flex-wrap items-center gap-2 rounded-full border border-white/15 bg-black/30 px-3 py-2 backdrop-blur-md">
+          {WEATHERS.map((w) => (
+            <button
+              key={w.key}
+              type="button"
+              onClick={() => setWeather(w.key)}
+              className={[
+                'grid h-8 w-8 place-items-center rounded-full font-serif text-sm transition-colors',
+                weather === w.key ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
+              ].join(' ')}
+            >
+              {w.label}
+            </button>
+          ))}
+          <span className="mx-1 h-5 w-px bg-white/20" />
+          {TIMES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTimeOfDay(t.key)}
+              className={[
+                'grid h-8 w-8 place-items-center rounded-full font-serif text-sm transition-colors',
+                timeOfDay === t.key ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
+              ].join(' ')}
+            >
+              {t.label}
+            </button>
+          ))}
+          <span className="mx-1 h-5 w-px bg-white/20" />
+          <button type="button" onClick={() => run(true)} disabled={busy} className={PILL}>
+            ↻ 章回重生
+          </button>
+          <button
+            type="button"
+            onClick={runVision}
+            disabled={busy}
+            className={PILL}
+            title="glm-4.6v 看參考圖佈置"
+          >
+            ✨ 看圖佈置
+          </button>
+          <button
+            type="button"
+            onClick={runCode}
+            disabled={busy}
+            className={PILL}
+            title="glm-4.6v 看圖寫 Three.js，設計整個場景"
+          >
+            🖌 寫景
+          </button>
+        </div>
+      </div>
+
+      {/* 題跋 — the agent's run record as a colophon strip */}
+      {colophonOpen ? (
+        <aside className="absolute bottom-24 right-5 top-16 z-20 w-72 overflow-y-auto rounded-lg border border-white/15 bg-black/35 p-4 backdrop-blur-md">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h2 className="font-serif text-sm tracking-[0.3em] text-white/90">生成題跋</h2>
+            <span className="text-[10px] text-white/40">agent 運行記錄</span>
+          </div>
+          {busy && !gen ? (
+            <p className="text-sm text-white/60">執行中…</p>
+          ) : gen && gen.log.length > 0 ? (
+            <ol className="flex flex-col gap-2">
+              {gen.log.map((s, i) => (
+                <li key={i} className="rounded-md border border-white/10 bg-white/5 p-2 text-xs">
+                  <span className="font-medium text-[#e8b08a]">{phaseLabel(s.phase)}</span>
+                  {s.model ? <span className="ml-1 text-white/45">{s.model}</span> : null}
+                  <p className="mt-0.5 leading-relaxed text-white/70">{s.note}</p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-sm text-white/50">—</p>
+          )}
+          {layout && (layout.placements?.length ?? 0) > 0 ? (
+            <div className="mt-4 border-t border-white/10 pt-3">
+              <p className="mb-2 text-[10px] tracking-widest text-white/40">陳設</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(layout.placements ?? []).map((p, i) => (
+                  <span
+                    key={`${p.tag ?? p.kind}:${i}`}
+                    className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[11px] text-white/65"
+                  >
+                    {p.label ?? p.tag ?? (p.kind === 1 ? '掛軸' : '物件')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </aside>
+      ) : null}
+
+      {/* regenerating wisp */}
+      {regenerating ? (
+        <div className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-full bg-black/40 px-4 py-1.5 text-xs tracking-widest text-[#e8b08a] backdrop-blur-md">
+          重新作畫中…
+        </div>
+      ) : null}
+
+      {/* 墨暈 loading overlay */}
+      {loading ? (
+        <div className="absolute inset-0 z-40 grid place-items-center bg-gradient-to-b from-[#0e1114]/90 to-[#090b0e]/95">
+          <div className="flex flex-col items-center gap-6">
+            <div className="h-16 w-16 animate-pulse rounded-full bg-[radial-gradient(circle,rgba(214,226,221,0.85),rgba(86,110,104,0.3)_55%,transparent_72%)]" />
+            <p className="font-serif text-base tracking-[0.4em] text-white/80">{POEMS[poemIdx]}</p>
+            <p className="text-xs tracking-wider text-white/40">首次生成約一兩分鐘 · 之後快取秒開</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
