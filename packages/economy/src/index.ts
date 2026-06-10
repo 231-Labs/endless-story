@@ -47,5 +47,7 @@ export { settleDay, totalAccounted, conserves } from "./settle.ts";
 export type { PerCharLedger, DayFlows, DaySettle } from "./settle.ts";
 export { applyTransfer, applyTransfers } from "./transfer.ts";
 export type { TransferMemo, TransferReject, TransferRequest, TransferResult, BatchResult } from "./transfer.ts";
+export { decideAid, decideAccept, DEFAULT_AID } from "./aid.ts";
+export type { Relation, AidCandidate, AidParams, AidReason, AidDecision, AcceptReason, AcceptDecision } from "./aid.ts";
 export { lazySettle, SEED_FUNDS_MICRO } from "./survival.ts";
 export type { SurvivalInput, PersistedEcon, SurvivalSnapshot } from "./survival.ts";
