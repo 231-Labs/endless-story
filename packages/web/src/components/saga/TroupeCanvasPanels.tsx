@@ -240,7 +240,7 @@ export function FocusedSceneDetails({
   const hasLive = openEvents.length > 0;
 
   return (
-    <div className="animate-fade-in-up mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
+    <div className="animate-fade-in-up mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-3">
       {/* 氣 — scene base tone, heats up while a 戲 is open */}
       <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
         <PanelHeader title="氣" />

@@ -1,28 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useSagaTabs } from './SagaTabsContext';
 import { SagaTabBar } from './SagaTabBar';
 
 /** Bottom padding to clear the floating capsule nav */
 const BOTTOM_CAPSULE_GAP = 'pb-[max(7rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))]';
-
-const SM_MIN = '(min-width: 640px)';
-
-function useIsSmUp() {
-  const [smUp, setSmUp] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const mq = window.matchMedia(SM_MIN);
-    const sync = () => setSmUp(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
-
-  return smUp;
-}
 
 /**
  * Lower half of the saga page: tabbed views (constellation / off-turf / charter).
@@ -42,7 +26,6 @@ export function SagaDetailsTabs({
   offTurfContent: ReactNode;
   charterContent: ReactNode;
 }) {
-  const smUp = useIsSmUp();
   const { view, setView } = useSagaTabs();
 
   // Scroll → sync view. Read current view via ref so the effect needn't rebind on view.
@@ -82,10 +65,8 @@ export function SagaDetailsTabs({
       className={`relative h-[100dvh] w-full snap-start snap-always overflow-hidden bg-canvas ${BOTTOM_CAPSULE_GAP}`}
     >
       <div className="relative h-full w-full pt-[calc(env(safe-area-inset-top,0px)+0.75rem)] sm:pt-4">
-        {/* 星圖 — 僅大螢幕掛載，手機顯示提示 */}
-        <TabPanel active={panel === 'constellation'}>
-          {smUp === true ? constellationContent : <ConstellationMobileNotice />}
-        </TabPanel>
+        {/* 星圖 — 手機為可橫向平移的寬畫布（見 CastConstellation），桌面整幅置中 */}
+        <TabPanel active={panel === 'constellation'}>{constellationContent}</TabPanel>
 
         {/* 江湖 — 分鏡板，手機桌面皆可 */}
         <TabPanel active={panel === 'offturf'}>{offTurfContent}</TabPanel>
@@ -128,16 +109,3 @@ function TabPanel({
   );
 }
 
-function ConstellationMobileNotice() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center px-[max(env(safe-area-inset-left,0px),1.5rem)] text-center">
-      <p className="font-serif text-base leading-relaxed tracking-wide text-ink">
-        「人物星圖」適合較大螢幕閱覽
-      </p>
-      <p className="mt-2 text-2xs leading-relaxed tracking-widest text-mute">
-        請以平板直立、電腦或橫屏再瀏覽星圖。<br />
-        「在外」與「規章」手機亦可閱覽。
-      </p>
-    </div>
-  );
-}

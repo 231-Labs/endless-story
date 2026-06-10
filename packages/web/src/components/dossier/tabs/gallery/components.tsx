@@ -181,7 +181,7 @@ function AspectFrame({
         </>
       ) : null}
       {clickable ? (
-        <div className="pointer-events-none absolute left-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-ink/35 text-canvas opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="pointer-events-none absolute left-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-ink/35 text-canvas opacity-0 backdrop-blur-md transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-70">
           <ZoomIcon />
         </div>
       ) : null}

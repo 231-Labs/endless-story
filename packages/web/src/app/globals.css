@@ -122,6 +122,61 @@ body {
   }
 }
 
+/* ─────────── Theater video progress bar ───────────
+ * appearance-none range input；軌道由 inline linear-gradient 畫出已播進度，
+ * thumb 平時縮小、hover / 拖曳時放大，維持戲台的安靜感。 */
+.theater-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  width: 100%;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  transition: height 0.2s ease;
+}
+.theater-range:hover,
+.theater-range:active {
+  height: 6px;
+}
+.theater-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: scale(0);
+  transition: transform 0.2s ease;
+}
+.theater-range:hover::-webkit-slider-thumb,
+.theater-range:active::-webkit-slider-thumb {
+  transform: scale(1);
+}
+.theater-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: scale(0);
+  transition: transform 0.2s ease;
+}
+.theater-range:hover::-moz-range-thumb,
+.theater-range:active::-moz-range-thumb {
+  transform: scale(1);
+}
+@media (hover: none) {
+  .theater-range::-webkit-slider-thumb {
+    transform: scale(1);
+  }
+  .theater-range::-moz-range-thumb {
+    transform: scale(1);
+  }
+}
+
 @keyframes endless-fade-in-up {
   0% { opacity: 0; transform: translateY(6px); }
   100% { opacity: 1; transform: translateY(0); }

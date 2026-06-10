@@ -36,10 +36,7 @@ export async function GazetteList({
                     key={g.commitmentId}
                     className="rounded-3xl border border-hairline/60 bg-surface/40 p-6 backdrop-blur-sm sm:p-10"
                 >
-                    <header className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute/80">
-                        <span className="rounded border border-hairline/50 bg-canvas/50 px-2 py-1 font-mono">
-                            commit · {g.commitmentId.slice(0, 8)}…
-                        </span>
+                    <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 text-2xs tracking-widest text-mute/80">
                         <span>
                             {new Date(Number(g.committedAtMs)).toLocaleString('zh-TW', {
                                 year: 'numeric',
@@ -49,22 +46,24 @@ export async function GazetteList({
                                 minute: '2-digit',
                             })}
                         </span>
-                        <a
-                            href={objectUrl(g.commitmentId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-cinnabar"
-                        >
-                            on-chain anchor ↗
-                        </a>
-                        <a
-                            href={`/api/blob/${g.blobId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-cinnabar"
-                        >
-                            walrus ↗
-                        </a>
+                        <span className="flex items-center gap-4">
+                            <a
+                                href={objectUrl(g.commitmentId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-cinnabar"
+                            >
+                                上鏈紀錄 ↗
+                            </a>
+                            <a
+                                href={`/api/blob/${g.blobId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-cinnabar"
+                            >
+                                原文 ↗
+                            </a>
+                        </span>
                     </header>
                     {bodies[i] ? (
                         <Markdown source={bodies[i]} className="mt-6" />

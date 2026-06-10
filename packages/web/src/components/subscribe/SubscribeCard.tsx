@@ -123,8 +123,8 @@ export function SubscribeCard({
         <p className="text-2xs tracking-widest text-mute">{character.role}</p>
         <h3 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{character.name}</h3>
 
-        {/* Hover-reveal block */}
-        <div className="mt-3 max-h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:max-h-48 group-hover:opacity-100">
+        {/* Hover-reveal block — 觸控裝置（無 hover）直接常駐顯示 */}
+        <div className="mt-3 max-h-0 overflow-hidden opacity-0 transition-all duration-300 group-hover:max-h-48 group-hover:opacity-100 [@media(hover:none)]:max-h-48 [@media(hover:none)]:opacity-100">
           {quote ? (
             <blockquote className="border-l-2 border-cinnabar/40 pl-3">
               <p className="font-serif text-[13.5px] leading-relaxed text-ink/80">

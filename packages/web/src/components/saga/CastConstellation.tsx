@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Character,
   CharacterLiveState,
@@ -61,6 +61,18 @@ export function CastConstellation({
   centerId?: string;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // 觸控的 tap 會在 click 前觸發合成 mouseenter（把 hoveredId 設好），
+  // 所以「第一次點先聚焦」要用 pointerdown 當下的聚焦狀態來判斷。
+  const hoveredAtPointerDownRef = useRef<string | null>(null);
+  // 手機上平面圖是可橫向平移的寬畫布（節點是固定 px、縮成整幅會疊成一團）；
+  // 初始把捲動定在畫布中央（戲班院落）。
+  const planScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = planScrollRef.current;
+    if (el && el.scrollWidth > el.clientWidth) {
+      el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+    }
+  }, []);
   const isDark = useIsDark();
   const ink = (a: number) => (isDark ? `rgba(220, 206, 176, ${a})` : `rgba(40, 38, 44, ${a})`);
 
@@ -279,11 +291,37 @@ export function CastConstellation({
   const posById = new Map(positioned.map((p) => [p.char.id, p]));
   const validEdges = uniqEdges.filter((e) => posById.has(e.fromId) && posById.has(e.toId));
 
+  // 方向保真索引：`from::to` → 該方向最強的一條邊。dedupeEdges 會把「同 tone 的雙向」
+  // 摺成一條（畫線用），這裡用原始 edges 重建方向，供面板呈現「A 戀慕 B、B 卻無感」。
+  const directedBest = new Map<string, RelationshipEdge>();
+  for (const e of edges) {
+    if (!posById.has(e.fromId) || !posById.has(e.toId)) continue;
+    const k = `${e.fromId}::${e.toId}`;
+    const prev = directedBest.get(k);
+    if (!prev || (e.weight ?? 0) > (prev.weight ?? 0)) directedBest.set(k, e);
+  }
+
   const hoveredEdges = hoveredId
     ? validEdges.filter((e) => e.fromId === hoveredId || e.toId === hoveredId).sort((a, b) => b.weight - a.weight)
     : [];
-  // 牽絆面板只列「深刻」關係，隱藏平淡/無 tone（neutral）的連結；星圖連線與節點高亮仍用完整 hoveredEdges。
-  const hoveredBonds = hoveredEdges.filter((e) => e.tone && e.tone !== 'neutral');
+  // 牽絆面板：每位相關角色一列，分開「此人所感 →」與「← 對方所感」。
+  // 缺向＝無感；雙向皆平淡者不列。星圖連線與節點高亮仍用完整 hoveredEdges。
+  const hoveredPairs = (() => {
+    if (!hoveredId) return [];
+    const partners = new Set<string>();
+    for (const e of hoveredEdges) partners.add(e.fromId === hoveredId ? e.toId : e.fromId);
+    return [...partners]
+      .map((otherId) => {
+        const out = directedBest.get(`${hoveredId}::${otherId}`);
+        const inc = directedBest.get(`${otherId}::${hoveredId}`);
+        return { otherId, out, inc, w: Math.max(out?.weight ?? 0, inc?.weight ?? 0) };
+      })
+      .filter(
+        (r) =>
+          (r.out?.tone && r.out.tone !== 'neutral') || (r.inc?.tone && r.inc.tone !== 'neutral'),
+      )
+      .sort((a, b) => b.w - a.w);
+  })();
 
   const connectedIds = (() => {
     const set = new Set<string>();
@@ -301,7 +339,10 @@ export function CastConstellation({
   const hoveredLive = hoveredId ? liveStatesById[hoveredId] : undefined;
 
   return (
-    <section className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center overflow-hidden bg-canvas">
+    <section
+      className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center overflow-hidden bg-canvas"
+      onClick={() => setHoveredId(null)}
+    >
       <ConstellationBackdrop ink={ink} />
 
       {/* 標題 — 留白配合頂 safe-area（膠囊導覽已改至視窗底部） */}
@@ -310,6 +351,9 @@ export function CastConstellation({
           <div className="h-px w-8 bg-cinnabar/60" />
           <h2 className="font-serif text-3xl tracking-[0.25em] text-ink drop-shadow-sm sm:text-4xl">人物方位</h2>
         </div>
+        <p className="mt-2 pl-12 text-2xs tracking-[0.25em] text-mute/70 sm:hidden">
+          左右平移 · 點人物看牽絆
+        </p>
       </div>
 
       {/* hover 便箋 — 上移避開視窗底部的固定膠囊；桌面靠右 */}
@@ -333,29 +377,43 @@ export function CastConstellation({
               </div>
             ) : null}
 
-            <ul className="mt-3 grid max-h-[34vh] grid-cols-2 gap-x-4 gap-y-1.5 overflow-y-auto overscroll-contain pr-1">
-              {hoveredBonds.length > 0 ? (
-                hoveredBonds.map((e) => {
-                  const targetId = e.fromId === hoveredId ? e.toId : e.fromId;
-                  const target = posById.get(targetId)?.char;
-                  const toneLabel = e.tone ? TONE_LABEL[e.tone] : '平淡';
-                  const toneColor = e.tone ? TONE_COLOR[e.tone] : TONE_COLOR.neutral;
+            <ul className="mt-3 max-h-[34vh] space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+              {hoveredPairs.length > 0 ? (
+                hoveredPairs.map(({ otherId, out, inc }) => {
+                  const target = posById.get(otherId)?.char;
+                  const mutual = out?.tone && inc?.tone && out.tone === inc.tone;
                   return (
-                    <li
-                      key={`${e.fromId}::${e.toId}::${e.tone ?? 'none'}`}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span className="text-sm text-ink/90">{target?.name}</span>
-                      <span className="text-2xs tracking-[0.3em]" style={{ color: toneColor }}>
-                        {toneLabel}
-                      </span>
+                    <li key={otherId} className="flex items-baseline justify-between gap-3">
+                      <span className="shrink-0 text-sm text-ink/90">{target?.name}</span>
+                      {mutual ? (
+                        <span
+                          className="text-2xs tracking-[0.25em]"
+                          style={{ color: TONE_COLOR[out!.tone!] }}
+                        >
+                          ⇄ {TONE_LABEL[out!.tone!]}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2 text-2xs tracking-[0.2em]">
+                          <BondToneTag edge={out} dir="→" />
+                          <span className="text-mute/30">·</span>
+                          <BondToneTag edge={inc} dir="←" />
+                        </span>
+                      )}
                     </li>
                   );
                 })
               ) : (
-                <li className="col-span-2 text-xs italic text-mute">尚無深刻牽絆</li>
+                <li className="text-xs italic text-mute">尚無深刻牽絆</li>
               )}
             </ul>
+            {hoveredPairs.some(({ out, inc }) => !(out?.tone && inc?.tone && out.tone === inc.tone)) ? (
+              <p className="mt-2 text-right text-[10px] tracking-[0.2em] text-mute/55">
+                → 此人所感 · ← 對方所感
+              </p>
+            ) : null}
+            <p className="mt-2 hidden text-[10px] tracking-[0.2em] text-mute/55 [@media(hover:none)]:block">
+              再點一次頭像，開啟人物檔案
+            </p>
 
             {/* 常駐之地 — 歷史出現權重前 2 */}
             {hoveredTopScenes.length > 0 ? (
@@ -391,10 +449,15 @@ export function CastConstellation({
         )}
       </div>
 
-      {/* 平面圖 */}
-      {/* 平面圖 — 手機留白略增、避免緊貼邊緣 */}
-      <div className="relative z-10 mx-auto w-[min(94vw,calc(100vw-3rem))] max-w-none sm:w-full sm:max-w-[calc(100vw-4rem)] lg:max-w-[calc(85vh*1.5)]">
-        <div className="relative w-full" style={{ aspectRatio: `${VIEWBOX_W}/${VIEWBOX_H}` }}>
+      {/* 平面圖 — 手機：橫向可平移的寬畫布；sm+：整幅置中 */}
+      <div
+        ref={planScrollRef}
+        className="no-scrollbar relative z-10 w-full overflow-x-auto overflow-y-hidden px-3 sm:mx-auto sm:w-full sm:max-w-[calc(100vw-4rem)] sm:overflow-visible sm:px-0 lg:max-w-[calc(85vh*1.5)]"
+      >
+        <div
+          className="relative w-[185vw] min-w-[600px] sm:w-full sm:min-w-0"
+          style={{ aspectRatio: `${VIEWBOX_W}/${VIEWBOX_H}` }}
+        >
           <svg
             viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
             className="pointer-events-none absolute inset-0 h-full w-full"
@@ -466,15 +529,37 @@ export function CastConstellation({
               const cx = midX + nx * offset;
               const cy = midY + ny * offset;
 
+              // 方向箭羽：聚焦時，單向（或雙向不同感）的邊畫一枚小箭羽指向受方；
+              // 「互相同感」已被摺成一條無向線，不標方向。
+              const reverse = directedBest.get(`${edge.toId}::${edge.fromId}`);
+              const mutualSameTone = !!(reverse && (reverse.tone ?? 'neutral') === (edge.tone ?? 'neutral'));
+              const t = 0.62;
+              const mt = 1 - t;
+              const chevX = mt * mt * from.x + 2 * mt * t * cx + t * t * to.x;
+              const chevY = mt * mt * from.y + 2 * mt * t * cy + t * t * to.y;
+              const tanX = 2 * mt * (cx - from.x) + 2 * t * (to.x - cx);
+              const tanY = 2 * mt * (cy - from.y) + 2 * t * (to.y - cy);
+              const chevAngle = (Math.atan2(tanY, tanX) * 180) / Math.PI;
+
               return (
-                <path
-                  key={`${edge.fromId}::${edge.toId}::${edge.tone ?? 'none'}::${idx}`}
-                  d={`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`}
-                  stroke={stroke} strokeWidth={strokeWidth}
-                  strokeDasharray={finalDash || undefined}
-                  strokeLinecap="round" fill="none" opacity={opacity}
-                  className="transition-all duration-500"
-                />
+                <g key={`${edge.fromId}::${edge.toId}::${edge.tone ?? 'none'}::${idx}`}>
+                  <path
+                    d={`M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`}
+                    stroke={stroke} strokeWidth={strokeWidth}
+                    strokeDasharray={finalDash || undefined}
+                    strokeLinecap="round" fill="none" opacity={opacity}
+                    className="transition-all duration-500"
+                  />
+                  {isHovered && !mutualSameTone ? (
+                    <path
+                      d="M -6 -4.5 L 2 0 L -6 4.5"
+                      transform={`translate(${chevX} ${chevY}) rotate(${chevAngle})`}
+                      stroke={stroke} strokeWidth={Math.max(1.6, strokeWidth)}
+                      strokeLinecap="round" strokeLinejoin="round" fill="none"
+                      opacity={opacity}
+                    />
+                  ) : null}
+                </g>
               );
             })}
           </svg>
@@ -487,7 +572,28 @@ export function CastConstellation({
                 key={`${p.char.id}::${p.kind}::${idx}`}
                 positioned={p} isDimmed={isDimmed}
                 onMouseEnter={() => setHoveredId(p.char.id)}
-                onMouseLeave={() => setHoveredId(null)}
+                onMouseLeave={() => {
+                  // 觸控裝置：tap 後瀏覽器會發合成 mouseleave，會把剛聚焦的人物清掉；
+                  // 無 hover 環境改由「點空白處」收合（見 section onClick）。
+                  if (typeof window !== 'undefined' && window.matchMedia?.('(hover: none)').matches) return;
+                  setHoveredId(null);
+                }}
+                onFocus={() => setHoveredId(p.char.id)}
+                onPointerDown={() => {
+                  hoveredAtPointerDownRef.current = hoveredId;
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // 觸控裝置（無 hover）：第一次點選只聚焦顯示牽絆，第二次才開人物檔案。
+                  if (
+                    typeof window !== 'undefined' &&
+                    window.matchMedia?.('(hover: none)').matches &&
+                    hoveredAtPointerDownRef.current !== p.char.id
+                  ) {
+                    e.preventDefault();
+                    setHoveredId(p.char.id);
+                  }
+                }}
               />
             );
           })}
@@ -511,5 +617,21 @@ export function CastConstellation({
         </div>
       </div>
     </section>
+  );
+}
+
+/** 牽絆面板的方向 tone 標籤：→ 此人所感 / ← 對方所感；缺向＝無感。 */
+function BondToneTag({ edge, dir }: { edge?: RelationshipEdge; dir: '→' | '←' }) {
+  if (!edge?.tone || edge.tone === 'neutral') {
+    return (
+      <span className="italic text-mute/45">
+        {dir} {edge?.tone === 'neutral' ? '平淡' : '無感'}
+      </span>
+    );
+  }
+  return (
+    <span style={{ color: TONE_COLOR[edge.tone] }}>
+      {dir} {TONE_LABEL[edge.tone]}
+    </span>
   );
 }

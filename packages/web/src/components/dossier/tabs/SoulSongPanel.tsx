@@ -141,9 +141,6 @@ export function SoulSongPanel({
           {isOwner ? '七日內僅能請唱一段' : '唱過的幾段'}
         </p>
       </header>
-      <p className="text-xs tracking-widest text-mute/70 pl-12 sm:hidden">
-        {isOwner ? '七日內僅能請唱一段' : '唱過的幾段'}
-      </p>
 
       <div className="pl-0 sm:pl-12 space-y-6">
         {isOwner ? (

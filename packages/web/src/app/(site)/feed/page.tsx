@@ -166,7 +166,8 @@ export default async function FeedPage({
                       <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
                         <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
                         {pov ? <span className="text-cinnabar font-medium">{pov.name} 視角</span> : null}
-                        <span className="font-mono ml-auto text-2xs">
+                        {/* Walrus blob id 是技術佐證，手機上只留敘事資訊 */}
+                        <span className="ml-auto hidden font-mono text-2xs sm:inline">
                           walrus · {truncateBlobId(chapter.walrusBlobId)}
                         </span>
                       </div>

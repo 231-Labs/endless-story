@@ -191,6 +191,7 @@ async function DossierDetail({
   const [
     allCharacters,
     edges,
+    incomingEdges,
     chapters,
     interventions,
     soulSongs,
@@ -201,6 +202,7 @@ async function DossierDetail({
   ] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
+    relationshipsApi.listIncomingEdges(character.id),
     chaptersApi.listPublicChaptersForSubscription(character.id),
     interventionsApi.listInterventions(character.id),
     soulSongsApi.listSoulSongs(character.id),
@@ -220,6 +222,20 @@ async function DossierDetail({
     fetchReflectionsForCharacter(character.id, { limit: 8 }),
   ]);
   const charactersById = byId(allCharacters);
+  // 關係對象可能是名冊外的江湖角色（不在 listCharacters 裡）——補抓，
+  // 否則關係欄會顯示原始 id 而不是名字。
+  const partnerIds = new Set([
+    ...edges.map((e) => e.toId),
+    ...incomingEdges.map((e) => e.fromId),
+  ]);
+  const missingPartners = await Promise.all(
+    [...partnerIds]
+      .filter((pid) => pid !== character.id && !charactersById.has(pid))
+      .map((pid) => charactersApi.getCharacter(pid)),
+  );
+  for (const partner of missingPartners) {
+    if (partner) charactersById.set(partner.id, partner);
+  }
   const personaRegenChapter = persona?.lastRegenChapterId
     ? (await chaptersApi.getChapter(persona.lastRegenChapterId)) ?? null
     : null;
@@ -261,6 +277,7 @@ async function DossierDetail({
                 persona={persona}
                 personaRegenChapter={personaRegenChapter}
                 outgoingEdges={edges}
+                incomingEdges={incomingEdges}
                 charactersById={charactersById}
               />
             ) : null}
