@@ -122,6 +122,13 @@ import { runActPhase } from './tick-phases/act';
  *  docs/EVENT_LIFECYCLE.md. */
 const recentTopicsBySaga = new Map<string, string[]>();
 
+/** Read a TICK_* feature flag from the environment (deploy-wide default for an
+ *  auto-running runner). Truthy = '1' | 'true' | 'yes' | 'on' (case-insensitive). */
+function envFlag(name: string): boolean {
+    const v = (process.env[name] ?? '').trim().toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
 export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
@@ -161,15 +168,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     const dryRun = input.dryRun ?? false;
-    // EXPERIMENTAL spine: only in live runs (it does chain writes); dry-run keeps
-    // the storylet preview path. See docs/EVENT_LIFECYCLE.md.
-    const eventSpine = (input.eventSpine ?? false) && !dryRun;
-    // Stage 1: drive MANY events at once (one per contention axis). Implies spine
-    // mode; live-only. Stage 2: couple each character's parallel desires through a
-    // finite attention budget so concurrent events pull on each other.
-    const parallelEvents = (input.parallelEvents ?? false) && !dryRun;
-    const attentionBudget = input.attentionBudget ?? false;
-    const maxConcurrentEvents = Math.max(1, input.maxConcurrentEvents ?? 2);
+    // EXPERIMENTAL flags resolve as: explicit POST body  >  env default  >  off.
+    // The env defaults let an auto-running deploy (web runner / scheduler) turn
+    // features on with NO flag-passing — just set TICK_* in the environment.
+    const eventSpine = (input.eventSpine ?? envFlag('TICK_EVENT_SPINE')) && !dryRun;
+    const parallelEvents = (input.parallelEvents ?? envFlag('TICK_PARALLEL_EVENTS')) && !dryRun;
+    const attentionBudget = input.attentionBudget ?? envFlag('TICK_ATTENTION_BUDGET');
+    const llmFraming = input.llmFraming ?? envFlag('TICK_LLM_FRAMING');
+    const directorResources = input.directorResources ?? envFlag('TICK_DIRECTOR_RESOURCES');
+    const rivalGravity = input.rivalGravity ?? envFlag('TICK_RIVAL_GRAVITY');
+    const maxConcurrentEvents = Math.max(
+        1,
+        input.maxConcurrentEvents ?? (Number(process.env.TICK_MAX_CONCURRENT_EVENTS) || 2),
+    );
     const spineMode = eventSpine || parallelEvents;
     drainMemoryWarnings(); // discard stale warnings from previous local dev requests
     const memoryContext = new TickMemoryContext();
@@ -281,7 +292,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             // relief terms (settled-resource cooldown + holder exclusion) keep it
             // from gluing. Decay cooldowns once, then compute this tick's pulls.
             let gravityTargets: Map<string, string> | undefined;
-            if ((input.rivalGravity ?? false) && !dryRun) {
+            if (rivalGravity && !dryRun) {
                 try {
                     tickResourceCooldowns();
                     const resources = await readResourceLedger(admin.client, d.packageId, d.sagaId);
@@ -394,7 +405,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   one. Validated + rate-limited (propose-resources.ts); the new slot is
     //   desired (defaultDesiresForCast) + settled (spine) on a LATER tick — we
     //   don't read it back this tick. Failure-isolated; never blocks the loop.
-    if ((input.directorResources ?? false) && !dryRun && drama?.active && slice.length >= 2) {
+    if (directorResources && !dryRun && drama?.active && slice.length >= 2) {
         try {
             const r = await proposeResourceAction({
                 sagaId: d.sagaId,
@@ -433,7 +444,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   incident; the deterministic label is the fallback (event-framing.ts).
     //   Selection (which contention) stays deterministic — only the prose moves.
     const frameLabel = async (picked: { label: string; statement?: string }, cast?: string[], sceneName?: string): Promise<string> =>
-        (input.llmFraming ?? false) && !dryRun
+        llmFraming && !dryRun
             ? await frameIncident({
                   statement: picked.statement,
                   fallback: picked.label,
@@ -450,7 +461,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         });
         let candidates = buildAxisCandidates(drama?.top ?? [], occupancy, framingForStatement);
         // LLM-frame only the axes that could open this tick (bounded LLM spend).
-        if ((input.llmFraming ?? false) && candidates.length > 0) {
+        if (llmFraming && candidates.length > 0) {
             candidates = await Promise.all(
                 candidates.map(async (c, i) =>
                     i < maxConcurrentEvents
