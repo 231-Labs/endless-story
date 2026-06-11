@@ -43,9 +43,9 @@ export default async function ChamberPage({
         <div className="px-5 pb-2 pt-8 sm:px-10 sm:pb-3 sm:pt-11">
           <div className="mx-auto max-w-6xl">
             <PageLeadTitleBlock
-              eyebrow="廂房 CHAMBER"
-              title="我的廂房"
-              meta="連結錢包，選一位你持有的角色，環繞觀賞它在青綠山水間的水台廂房。"
+              eyebrow="藏閣 VAULT"
+              title="我的藏閣"
+              meta="連結錢包，選一位你持有的角色，走進以它為心的收藏穹廳——劇照與珍玩，各懸一柱光。"
             />
           </div>
         </div>

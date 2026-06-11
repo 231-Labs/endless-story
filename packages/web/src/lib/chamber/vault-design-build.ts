@@ -1,0 +1,88 @@
+import type { SceneDesign, SceneElement } from '@endless-story/chamber-3d';
+
+/**
+ * 藏閣 layout — orbit slots around the collector: 劇照 on the outer ring
+ * (glass plates facing the centre), 珍玩 on the inner ring, the collector's
+ * standee at the heart. Slot-based curation keeps the room gallery-grade with
+ * zero effort; 自由布局 (transform editing) comes in slice 2.
+ */
+
+export interface VaultStillItem {
+  url: string;
+  title: string;
+  subtitle: string;
+}
+
+export interface VaultCurioItem {
+  assetUrl?: string;
+  fitHeight?: number;
+  tag?: string;
+  title: string;
+  subtitle: string;
+}
+
+const STILL_RADIUS = 5.1;
+const CURIO_RADIUS = 2.5;
+
+/** yaw (deg) so the element's local +z faces the centre from position (x,z). */
+function faceCentreYaw(x: number, z: number): number {
+  return (Math.atan2(-x, -z) * 180) / Math.PI;
+}
+
+export function buildVaultDesign(
+  stills: VaultStillItem[],
+  curios: VaultCurioItem[],
+  avatarCount: number,
+): SceneDesign {
+  const elements: SceneElement[] = [];
+
+  // outer ring: 劇照 light shafts, evenly spread, front gap for the camera
+  const n = Math.min(stills.length, 10);
+  for (let i = 0; i < n; i++) {
+    // arc from 36° to 324° (leave the front opening toward the camera)
+    const t = n === 1 ? 0.5 : i / (n - 1);
+    const theta = ((36 + t * 288) * Math.PI) / 180;
+    const x = Math.sin(theta) * STILL_RADIUS;
+    const z = Math.cos(theta) * STILL_RADIUS;
+    elements.push({
+      kind: 'display_still',
+      pos: [x, 0, z],
+      yaw: faceCentreYaw(x, z),
+      assetUrl: stills[i].url,
+      label: stills[i].title,
+      params: { subtitle: stills[i].subtitle, phase: i * 0.9 },
+    });
+  }
+
+  // inner ring: 珍玩 plinths flanking the centre
+  const m = Math.min(curios.length, 4);
+  for (let i = 0; i < m; i++) {
+    const theta = ((120 + i * (360 / Math.max(m, 2))) * Math.PI) / 180;
+    const x = Math.sin(theta) * CURIO_RADIUS;
+    const z = Math.cos(theta) * CURIO_RADIUS;
+    elements.push({
+      kind: 'display_curio',
+      pos: [x, 0, z],
+      yaw: faceCentreYaw(x, z),
+      assetUrl: curios[i].assetUrl,
+      fitHeight: curios[i].fitHeight,
+      tag: curios[i].tag,
+      label: curios[i].title,
+      params: { subtitle: curios[i].subtitle, phase: i * 1.7 },
+    });
+  }
+
+  // the collector at the heart
+  if (avatarCount > 0) {
+    elements.push({ kind: 'character', pos: [0, 0, 0.2], characterIndex: 0 });
+  }
+  // a breath of incense beside them
+  elements.push({ kind: 'incense', pos: [1.1, 0, -0.6], scale: 0.85 });
+
+  return {
+    backdrop: { style: '藏閣' },
+    floor: { type: 'lacquer' },
+    mood: { timeOfDay: 'night', season: 'spring', weather: 'clear', atmosphere: 0.45 },
+    elements,
+  };
+}

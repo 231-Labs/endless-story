@@ -114,7 +114,9 @@ export function ChamberCanvas({
           ))}
         </>
       ) : (
-        <SceneRenderer design={design} env={env} avatars={avatars} dims={dims} />
+        <ErrorBoundary fallback={<mesh position={[0, 1, 0]}><boxGeometry args={[0.5, 0.5, 0.5]} /><meshBasicMaterial color="#a03226" /></mesh>}>
+          <SceneRenderer design={design} env={env} avatars={avatars} dims={dims} />
+        </ErrorBoundary>
       )}
 
       <ChamberEffects />

@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import { MeshReflectorMaterial } from '@react-three/drei';
 import { ChamberLights } from './ChamberLights.js';
 import { SkyBackdrop } from './SkyBackdrop.js';
+import { VaultBackdrop } from './VaultBackdrop.js';
+import { DisplayCurio, DisplayStill } from './VaultDisplays.js';
 import { Weather } from './Weather.js';
 import { DriftingMist } from './Mist.js';
 import {
@@ -101,6 +103,26 @@ function Element({ el, avatars }: { el: SceneElement; avatars: ChamberAvatar[] }
   );
 
   switch (el.kind) {
+    case 'display_still':
+      return wrap(
+        <DisplayStill
+          url={el.assetUrl}
+          title={el.label ?? '劇照'}
+          subtitle={String(el.params?.subtitle ?? '')}
+          phase={(el.params?.phase as number) ?? 0}
+        />,
+      );
+    case 'display_curio':
+      return wrap(
+        <DisplayCurio
+          assetUrl={el.assetUrl}
+          fitHeight={el.fitHeight}
+          tag={el.tag}
+          title={el.label ?? '珍玩'}
+          subtitle={String(el.params?.subtitle ?? '')}
+          phase={(el.params?.phase as number) ?? 0}
+        />,
+      );
     case 'stage':
       return wrap(<OperaStage />);
     case 'table_chairs':
@@ -174,7 +196,7 @@ export function SceneRenderer({
 
   return (
     <group>
-      <SkyBackdrop env={env} />
+      {design.backdrop.style === '藏閣' ? <VaultBackdrop /> : <SkyBackdrop env={env} />}
       <ChamberLights palette={palette} />
       <Floor
         type={design.floor.type}
