@@ -178,6 +178,27 @@ export interface TickStoryletResult {
     error?: string;
 }
 
+/** SETTLE phase — the off-chain economy advanced one day-boundary: treasury-funded wages paid,
+ *  daily cost deducted, vitality/death updated, and this tick's accepted GIVE transfers applied
+ *  to the persisted shadow balances. */
+export interface TickSettleResult {
+    ok: boolean;
+    /** narrative day settled to. */
+    day: number;
+    /** on-chain saga treasury (ENDLESS) that funds the payroll pool. */
+    treasuryFunds: number;
+    /** accepted gift transfers moved this tick. */
+    transfersApplied: number;
+    /** total wages paid across the cohort this settle (ENDLESS). */
+    wagesPaid: number;
+    settledCount: number;
+    /** characters whose vitality bottomed out (dead in the shadow). */
+    dead: { id: string; name: string }[];
+    /** set when settle was skipped (e.g. dry-run). */
+    skipped?: string;
+    error?: string;
+}
+
 export interface TickLoopResult {
     ok: boolean;
     advanced: boolean;
@@ -189,8 +210,10 @@ export interface TickLoopResult {
     /** The storylet opened this tick (dramatic spine), if any. */
     storylet?: TickStoryletResult;
     socials: TickSocialResult[];
-    /** GIVE phase: character-to-character aid decided this tick (balance move deferred to D1/D5). */
+    /** GIVE phase: character-to-character aid decided this tick. */
     gives: TickGiveResult[];
+    /** SETTLE phase: the off-chain economy advanced + accepted gifts applied. */
+    settle?: TickSettleResult;
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];

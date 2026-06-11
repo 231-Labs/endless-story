@@ -66,6 +66,9 @@ export interface PersistedCharEcon {
   insolventStreak: number;
   livedDays: number;
   dead: boolean;
+  /** most recent settled daily salary — carried so transfer-only calls (0 days elapsed) still
+   *  show a stable 班中俸 instead of 0. */
+  lastSalaryMicro: string;
 }
 
 /** JSON-safe persisted saga economy state. */
@@ -157,12 +160,15 @@ export function settleSagaTo(
   //    cost tracks reality (not settleDay's internal accrual). ──
   let day = prior ? prior.settledDay : 0;
   if (target - day > MAX_CATCHUP_DAYS) day = target - MAX_CATCHUP_DAYS;
-  let lastSalary = new Map<string, bigint>();
+  // carry last salary across calls so a transfer-only call (0 days) still shows a real wage
+  const salaryById = new Map<string, bigint>(
+    prior ? Object.entries(prior.chars).map(([id, p]) => [id, BigInt(p.lastSalaryMicro ?? "0")]) : [],
+  );
   for (; day < target; day++) {
     for (const c of world.chars) c.memoryCount = realCountById.get(c.cfg.id) ?? c.memoryCount;
     const settled = settleDay(world, cfg);
     world = settled.next;
-    lastSalary = new Map(Object.entries(settled.perChar).map(([id, l]) => [id, l.salary]));
+    for (const [id, l] of Object.entries(settled.perChar)) salaryById.set(id, l.salary);
   }
   // re-pin after the final accrual so the snapshot's dailyCost uses the real count
   for (const c of world.chars) c.memoryCount = realCountById.get(c.cfg.id) ?? c.memoryCount;
@@ -176,7 +182,7 @@ export function settleSagaTo(
   const snapshots: Record<string, SurvivalSnapshot> = {};
   const nextChars: Record<string, PersistedCharEcon> = {};
   for (const c of world.chars) {
-    const salary = lastSalary.get(c.cfg.id) ?? 0n;
+    const salary = salaryById.get(c.cfg.id) ?? 0n;
     const dc = dailyCost(c, cfg);
     const runway = runwayDays(salary, c, cfg);
     snapshots[c.cfg.id] = {
@@ -201,6 +207,7 @@ export function settleSagaTo(
       insolventStreak: Number(c.insolventStreak),
       livedDays: Number(c.livedDays),
       dead: c.dead,
+      lastSalaryMicro: salary.toString(),
     };
   }
 
