@@ -25,6 +25,20 @@ import { SagaMemoryClient } from '@endless-story/memwal';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 import { getAdminAddress } from './admin-signer.js';
+import {
+    DEFAULT_IMPORTANCE,
+    parseMemory,
+    recencyWeight,
+    relevanceWeight,
+    tagMemory,
+    type MemoryKind,
+    type RecalledMemory,
+} from './memory-tags.js';
+
+// Tag format + scoring live in memory-tags.ts (client-safe, shared with the
+// Owner-side browser decrypt path). Re-exported so existing imports hold.
+export { parseMemory, recencyWeight, relevanceWeight } from './memory-tags.js';
+export type { MemoryKind, RecalledMemory } from './memory-tags.js';
 
 interface MemEnv {
     delegateKey?: string;
@@ -56,8 +70,10 @@ export function isMemoryConfigured(): boolean {
     );
 }
 
-/** SEAL only runs on testnet/mainnet; clamp anything else to testnet. */
-function sealNetwork(): 'testnet' | 'mainnet' {
+/** SEAL only runs on testnet/mainnet; clamp anything else to testnet.
+ *  Exported so the dossier page can hand the network to the Owner-side
+ *  browser decrypt component. */
+export function sealNetwork(): 'testnet' | 'mainnet' {
     return resolveNetwork() === 'mainnet' ? 'mainnet' : 'testnet';
 }
 
@@ -165,87 +181,6 @@ async function clientFor(characterId: string): Promise<SagaMemoryClient | null> 
     }
 }
 
-/* ── memory type + importance weighting ─────────────────────────────
- * MemWal stores flat encrypted text; it has no importance/recency/type
- * scoring of its own. We restore the Smallville weighting (proposal
- * §5.2) by tagging each stored memory with a tiny parseable header
- * `[[m|t=<type>|i=<importance>]]` and re-ranking recall results by
- * importance. The tag is STRIPPED before the text reaches a prompt, and
- * surfaced structurally for the dossier MemoriesTab UI. */
-
-export type MemoryKind =
-    | 'dream'
-    | 'reflection'
-    | 'chapter'
-    | 'observation'
-    | 'relationship'
-    | 'genesis'
-    | 'plan';
-
-/** Default importance per kind (1-10). Dreams highest (owner paid, must
- *  surface first — §5.2); observations lowest. Plans high (i=8) so the
- *  character's current goal stays near the top of recall (N6). */
-const DEFAULT_IMPORTANCE: Record<MemoryKind, number> = {
-    dream: 9,
-    relationship: 8,
-    plan: 8,
-    reflection: 7,
-    genesis: 7,
-    chapter: 5,
-    observation: 4,
-};
-
-// Tag carries kind + importance + narrative day `d=` (for recency decay).
-// Three-factor recall score = importance × recency(narrative-day) ×
-// relevance(semantic distance) — Smallville-style, adapted to MemWal:
-// `importance` from our tag, `recency` from the day stamp + decay,
-// `relevance` from MemWal's own vector distance. The one thing we can't
-// match vs a local store: we only score the semantically-retrieved
-// candidate set, not the full memory store (mitigated by over-fetch).
-// `a=1` marks a sleep-consolidated reflection: a high-density memory the
-// REFLECT/sleep step produced from scattered observations. The next sleep
-// must NOT re-compress these (else it eats its own output and the dense
-// reflection degrades back into noise) — N2. The flag is optional so all
-// pre-N2 memories parse unchanged.
-const TAG_RE = /^\[\[m\|t=([a-z]+)\|i=(\d+)(?:\|d=(\d+))?(?:\|a=([01]))?\]\]\s*([\s\S]*)$/;
-
-export interface RecalledMemory {
-    text: string;
-    kind: MemoryKind | 'unknown';
-    importance: number;
-    /** Narrative day written (recency); undefined for legacy untagged. */
-    day?: number;
-    /** Sleep-consolidated (anchor=true) — excluded from re-consolidation. */
-    anchored?: boolean;
-}
-
-function tagMemory(
-    text: string,
-    kind: MemoryKind,
-    importance: number,
-    day: number,
-    anchored = false,
-): string {
-    const i = Math.max(1, Math.min(10, Math.round(importance)));
-    const a = anchored ? '|a=1' : '';
-    return `[[m|t=${kind}|i=${i}|d=${Math.max(0, Math.round(day))}${a}]] ${text}`;
-}
-
-function parseMemory(stored: string): RecalledMemory {
-    const m = stored.match(TAG_RE);
-    if (m) {
-        return {
-            kind: m[1] as MemoryKind,
-            importance: Number(m[2]) || 5,
-            day: m[3] != null ? Number(m[3]) : undefined,
-            anchored: m[4] === '1',
-            text: m[5].trim(),
-        };
-    }
-    // Untagged (legacy / pre-tagging): treat as mid-importance observation.
-    return { kind: 'unknown', importance: 5, text: stored.trim() };
-}
-
 /** Current narrative day from the World tick (chain). Falls back to 1.
  *  Recency uses narrative time (not wall-clock) so a dream fades as the
  *  storyteller advances days — semantically right + demoable. */
@@ -265,21 +200,6 @@ export async function currentNarrativeDay(): Promise<number> {
     } catch {
         return 1;
     }
-}
-
-/** Recency decay by narrative day. Half-life 2 days: 2 days old → 0.5,
- *  4 days → 0.25. A high-importance dream (i=9) thus starts on top but is
- *  overtaken by fresh memories as days pass. Legacy (no day) → neutral 1. */
-const RECENCY_HALFLIFE_DAYS = 2;
-function recencyWeight(memDay: number | undefined, today: number): number {
-    if (memDay == null) return 1;
-    return Math.pow(0.5, Math.max(0, today - memDay) / RECENCY_HALFLIFE_DAYS);
-}
-
-/** Relevance from MemWal semantic distance (lower = closer). */
-function relevanceWeight(distance: number): number {
-    if (!Number.isFinite(distance)) return 0.5;
-    return Math.max(0.05, 1 - Math.min(1, distance));
 }
 
 const MEMORY_WARNINGS: string[] = [];
@@ -409,6 +329,58 @@ export async function recallStructuredForCharacter(
         return ranked;
     } catch (err) {
         console.warn('[memory] recall failed:', err);
+        return [];
+    } finally {
+        client.destroy();
+    }
+}
+
+/** One still-sealed memory blob, JSON-safe for the encrypted-recall API. */
+export interface EncryptedMemoryBlob {
+    blobId: string;
+    /** SEAL ciphertext, base64. Useless without an OwnerCap/ControlCap. */
+    dataB64: string;
+    distance: number;
+}
+
+/**
+ * Search + download a character's memory blobs WITHOUT decrypting them.
+ *
+ * This is the server half of the Owner read path: the server only embeds
+ * the query, asks the relayer for the top-N blob ids, and fetches the SEAL
+ * ciphertext from Walrus. The admin ControlCap is never exercised — the
+ * blobs go back still sealed, and only a browser holding the character's
+ * OwnerCap can open them (`decryptWithOwnerCap` + `seal_approve_owner`).
+ * Handing ciphertext to an unauthenticated caller is safe by construction:
+ * the same bytes are already public on Walrus.
+ *
+ * No over-fetch ×3 here (unlike recallStructuredForCharacter): every extra
+ * blob is an extra wallet-side SEAL decrypt, so we trust distance order for
+ * the candidate set and re-rank by importance × recency × relevance after
+ * decryption on the client.
+ */
+export async function recallEncryptedForCharacter(
+    characterId: string,
+    query: string,
+    limit = 24,
+): Promise<EncryptedMemoryBlob[]> {
+    const client = await clientFor(characterId);
+    if (!client) return [];
+    try {
+        const today = await currentNarrativeDay();
+        const res = await withMemoryRetry('recallEncrypted', characterId, () =>
+            client.recallEncrypted(query, limit, namespaceFor(characterId), { today }),
+        );
+        console.log(
+            `[memory] recallEncrypted ${characterId.slice(0, 10)}… → ${res.results.length} sealed blobs`,
+        );
+        return res.results.map((b) => ({
+            blobId: b.blob_id,
+            dataB64: b.data_b64,
+            distance: b.distance,
+        }));
+    } catch (err) {
+        console.warn('[memory] recallEncrypted failed:', err);
         return [];
     } finally {
         client.destroy();

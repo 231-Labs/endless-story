@@ -25,6 +25,14 @@ export type {
     OwnerAuditClientConfig,
 } from "./character-clients.js";
 
+// Owner-side wallet decryption of recallEncrypted blobs (browser-safe).
+export { decryptWithOwnerCap } from "./owner-decrypt.js";
+export type {
+    OwnerWalletSigner,
+    OwnerDecryptParams,
+    OwnerDecryptResult,
+} from "./owner-decrypt.js";
+
 export type {
     MemWalManualConfig,
     SealServerConfig,
@@ -35,6 +43,8 @@ export type {
     RecallManualResult,
     RecallManualHit,
     RecallManualMemory,
+    EncryptedRecallBlob,
+    RecallEncryptedResult,
     RememberMeta,
     RecallOpts,
 } from "./types.js";

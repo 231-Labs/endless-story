@@ -10,6 +10,7 @@
 import { MemWalManual } from "./manual.js";
 import type {
     MemWalManualConfig,
+    RecallEncryptedResult,
     RecallManualResult,
     RememberManualResult,
     RememberMeta,
@@ -67,6 +68,21 @@ export class SagaMemoryClient implements CharacterMemoryWriter {
         opts?: RecallOpts,
     ): Promise<RecallManualResult> {
         return this.inner.recallManual(query, limit, namespace, opts);
+    }
+
+    /**
+     * Search + download ciphertext only — this client's ControlCap is NOT
+     * exercised. Used by the web server to hand still-sealed blobs to an
+     * Owner's browser, which decrypts with its own wallet + OwnerCap
+     * (`decryptWithOwnerCap`).
+     */
+    recallEncrypted(
+        query: string,
+        limit: number = 10,
+        namespace?: string,
+        opts?: RecallOpts,
+    ): Promise<RecallEncryptedResult> {
+        return this.inner.recallEncrypted(query, limit, namespace, opts);
     }
 
     destroy(): void {

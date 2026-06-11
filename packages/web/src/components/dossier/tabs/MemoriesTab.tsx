@@ -50,17 +50,18 @@ const PROVENANCE_LABEL = {
 export function MemoriesTab({
   character,
   memories,
-  viewerWallet,
+  isOwner,
   sagaCharacters,
   chaptersById,
 }: {
   character: Character;
   memories: CharacterMemory[];
-  viewerWallet: string | null;
+  /** Caller must derive this from a verifiable source (connected wallet /
+   *  on-chain OwnerCap), never from the spoofable `?as=` URL param. */
+  isOwner: boolean;
   sagaCharacters: Character[];
   chaptersById: Map<string, Chapter>;
 }) {
-  const isOwner = viewerWallet === character.nftOwner;
   const charactersById = new Map(sagaCharacters.map((c) => [c.id, c]));
 
   if (!isOwner) {
@@ -256,7 +257,7 @@ function ProvenanceLine({
   );
 }
 
-function LockedNotice({ character }: { character: Character }) {
+export function LockedNotice({ character }: { character: Character }) {
   return (
     <section className="rounded-3xl bg-surface/40 border border-dashed border-hairline/60 p-8 sm:p-12 text-sm leading-relaxed text-mute backdrop-blur-sm text-center max-w-2xl mx-auto mt-12">
       <p className="font-serif text-xl text-ink/80 tracking-wide mb-4">記憶是私有的部分。</p>
