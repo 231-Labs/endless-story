@@ -86,15 +86,21 @@ async function run(live: boolean, model?: string): Promise<number> {
 }
 
 const args = process.argv.slice(2);
+const live = args.includes('--live');
 const modelArg = args.find((a) => a.startsWith('--model='))?.slice('--model='.length);
-const models = modelArg ? modelArg.split(',').map((m) => m.trim()).filter(Boolean) : [undefined];
+// Default the live comparison to the two models under evaluation; override with --model=a,b.
+const DEFAULT_LIVE_MODELS = ['GLM-4.6', 'GLM-5.1-FW'];
+const models: (string | undefined)[] = modelArg
+    ? modelArg.split(',').map((m) => m.trim()).filter(Boolean)
+    : live
+      ? DEFAULT_LIVE_MODELS
+      : [undefined];
 
 async function main(): Promise<void> {
     if (args.includes('--print')) {
         printPrompts();
         return;
     }
-    const live = args.includes('--live');
     let worst = 0;
     for (const m of models) {
         if (live && models.length > 1) console.log('\n' + '#'.repeat(76) + `\n# MODEL: ${m}\n` + '#'.repeat(76));
