@@ -1,14 +1,16 @@
 /**
- * Aid-decision eval runner. Three modes:
+ * Aid-decision eval runner. Modes:
  *
- *   node aid-eval.ts --print     # render the EXACT system + per-scenario prompts a character
- *                                # reasons over (no key). This is "what the agent actually sees".
- *   node aid-eval.ts             # offline: feed each scenario's recorded stand-in answer through
- *                                # the REAL parseAid + finalizeAid guards and grade it (no key).
- *   node aid-eval.ts --live      # call the live cheap-tier model per scenario (needs POE/ANTHROPIC key).
+ *   tsx aid-eval.ts --print                    # render the EXACT system + per-scenario prompts
+ *                                              # a character reasons over (no key).
+ *   tsx aid-eval.ts                            # offline: grade the recorded stand-in answers
+ *                                              # through the REAL parseAid + finalizeAid (no key).
+ *   tsx aid-eval.ts --live --model=GLM-4.6,GLM-5.1  # call the live model(s) per scenario and grade.
+ *                                              # Needs POE_API_KEY (or ANTHROPIC_API_KEY). The
+ *                                              # `model` string is passed straight to Poe's bot id.
  *
- * The judgment is the model's; the harness only checks that clear-cut cases come out reasonable
- * and prints every decision + reason so the persona-driven (judgment) ones can be read by eye.
+ * The judgment is the model's; the harness checks that clear-cut cases come out reasonable and
+ * prints every decision + reason so the persona-driven (judgment) ones can be read by eye.
  */
 
 import { parseAid } from '../parse.js';
@@ -60,12 +62,12 @@ function printDecision(s: AidScenario, r: AidActionResult, ok: boolean): void {
     console.log(`  整體緣由：${r.reason ?? '(none)'}`);
 }
 
-async function run(live: boolean): Promise<void> {
+async function run(live: boolean, model?: string): Promise<number> {
     // live mode is dynamically imported so the offline default never loads the LLM/shared deps.
     let judge: ((input: AidActionInput) => Promise<AidActionResult>) | null = null;
     if (live) {
         const { decideAidAction } = await import('../aid.js');
-        judge = (input) => decideAidAction(input);
+        judge = (input) => decideAidAction(input, { model });
     }
     let hardPass = 0;
     let hardTotal = 0;
@@ -78,12 +80,29 @@ async function run(live: boolean): Promise<void> {
         }
         printDecision(s, r, ok);
     }
-    console.log(`\nhard-case score: ${hardPass}/${hardTotal}${live ? ' (live cheap-tier)' : ' (offline stand-in)'}`);
-    if (hardPass < hardTotal) process.exitCode = 1;
+    const tag = live ? `live: ${model ?? '(default cheap)'}` : 'offline stand-in';
+    console.log(`\nhard-case score: ${hardPass}/${hardTotal} (${tag})`);
+    return hardPass < hardTotal ? 1 : 0;
 }
 
-const arg = process.argv[2];
-const main = arg === '--print' ? async () => printPrompts() : () => run(arg === '--live');
+const args = process.argv.slice(2);
+const modelArg = args.find((a) => a.startsWith('--model='))?.slice('--model='.length);
+const models = modelArg ? modelArg.split(',').map((m) => m.trim()).filter(Boolean) : [undefined];
+
+async function main(): Promise<void> {
+    if (args.includes('--print')) {
+        printPrompts();
+        return;
+    }
+    const live = args.includes('--live');
+    let worst = 0;
+    for (const m of models) {
+        if (live && models.length > 1) console.log('\n' + '#'.repeat(76) + `\n# MODEL: ${m}\n` + '#'.repeat(76));
+        worst = Math.max(worst, await run(live, m));
+    }
+    process.exitCode = worst;
+}
+
 main().catch((e) => {
     console.error(e);
     process.exitCode = 1;
