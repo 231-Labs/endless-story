@@ -33,9 +33,49 @@ export function getAdminAddress(): string {
     return _cached!.address;
 }
 
-/** Build a Sui client targeting the deployed network. */
+/* ── process-wide admin-tx serialization ──────────────────────────────────
+ * Every tx signed by THIS keypair consumes the admin's gas coin + (usually) the
+ * StorytellerCap — both OWNED objects, version-locked. If two admin txs overlap
+ * — parallel event opens, or a previous tick's background `after()` job (event
+ * moment / spine resolve) still running when the next tick's foreground deals
+ * fire — they race on those versions and abort with "version unavailable" or
+ * (when a dependent object hasn't propagated yet) "object does not exist". We
+ * chain admin txs strictly one-at-a-time and waitForTransaction INSIDE the lock,
+ * so each tx's created objects + owned-object versions are settled on the node
+ * before the next tx builds. Module-level → shared across every request and
+ * after() in this server process. */
+let adminTxChain: Promise<unknown> = Promise.resolve();
+
+/** Run `fn` after all previously-queued admin txs settle — the process-wide
+ *  serialization primitive. Use it to wrap ANY admin-keypair tx that does NOT go
+ *  through `getAdminClient`'s wrapped client (e.g. the runner's `signAndAnchor`,
+ *  which builds its own client) so it can't race the others on the shared gas
+ *  coin / StorytellerCap. */
+export function withAdminLock<T>(fn: () => Promise<T>): Promise<T> {
+    const run = adminTxChain.then(fn, fn);
+    adminTxChain = run.then(
+        () => {},
+        () => {},
+    );
+    return run;
+}
+
+function serializeAdminTxs(client: SuiClient): SuiClient {
+    const raw = client.signAndExecuteTransaction.bind(client);
+    type Args = Parameters<typeof raw>[0];
+    client.signAndExecuteTransaction = ((args: Args) =>
+        withAdminLock(async () => {
+            const res = await raw(args);
+            if (res?.digest) await client.waitForTransaction({ digest: res.digest }).catch(() => {});
+            return res;
+        })) as typeof client.signAndExecuteTransaction;
+    return client;
+}
+
+/** Build a Sui client targeting the deployed network. Admin txs through this
+ *  client are serialized process-wide (see `serializeAdminTxs`). */
 export function getAdminClient(): SuiClient {
-    return makeSuiClient({ network: resolveNetwork() });
+    return serializeAdminTxs(makeSuiClient({ network: resolveNetwork() }));
 }
 
 /** Pair: client + signer, for admin server actions. */

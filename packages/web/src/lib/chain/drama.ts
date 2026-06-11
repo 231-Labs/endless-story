@@ -34,6 +34,7 @@ import {
 } from '@endless-story/sdk';
 import { signAndAnchor } from '@endless-story/runner';
 import { resolveNetwork } from './network.js';
+import { withAdminLock } from './admin-signer.js';
 import {
     buildBeat,
     buildWorld,
@@ -248,6 +249,7 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     let commitmentId: string | undefined;
     let blobUrl: string | undefined;
     if (opts.signer) {
+        const signer = opts.signer;
         try {
             const beat = buildBeat(
                 opts.sagaId,
@@ -255,19 +257,21 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
                 derived,
                 lastBeatCommitmentBySaga.get(opts.sagaId) ?? null,
             );
-            const res = await signAndAnchor({
-                sagaId: opts.sagaId,
-                // World-level affect snapshot. Subject = worldId (NOT sagaId) so these
-                // machine-readable JSON beats never collide with the saga's prose gazette
-                // commitments (subject = sagaId) and never surface in the gazette feed.
-                // The saga is still recorded via the commitment's saga_id field + the beat
-                // JSON. Fall back to sagaId only if worldId is unset (gazette-read also
-                // content-filters drama beats as a safety net for older saga-subject ones).
-                subjectId: ENDLESS_STORY_DEPLOYMENT.worldId || opts.sagaId,
-                content: encodeBeat(beat),
-                signer: opts.signer,
-                contentType: 'application/json',
-            });
+            const res = await withAdminLock(() =>
+                signAndAnchor({
+                    sagaId: opts.sagaId,
+                    // World-level affect snapshot. Subject = worldId (NOT sagaId) so these
+                    // machine-readable JSON beats never collide with the saga's prose gazette
+                    // commitments (subject = sagaId) and never surface in the gazette feed.
+                    // The saga is still recorded via the commitment's saga_id field + the beat
+                    // JSON. Fall back to sagaId only if worldId is unset (gazette-read also
+                    // content-filters drama beats as a safety net for older saga-subject ones).
+                    subjectId: ENDLESS_STORY_DEPLOYMENT.worldId || opts.sagaId,
+                    content: encodeBeat(beat),
+                    signer,
+                    contentType: 'application/json',
+                }),
+            );
             commitmentId = res.commitmentId;
             blobUrl = res.blobUrl;
             lastBeatCommitmentBySaga.set(opts.sagaId, res.commitmentId);
