@@ -37,9 +37,17 @@ export interface ChamberGeneration {
   log: GenStep[];
   usedModel?: string;
   roomStyle?: string;
+  /** 桌上點睛之物 label, e.g. 「一盞燈」 (agent's pick for the 一桌二椅). */
+  tableItemLabel?: string;
   generatedAt?: number;
   cached?: boolean;
 }
+
+const TABLE_ITEM_LABEL: Record<string, string> = {
+  lamp: '一盞燈',
+  letter: '一封信',
+  sword: '一把劍',
+};
 
 const MAX_ITERS = 2;
 const STILL_LABELS = ['同台舊照', '章回 key-art', '人物誌設定圖'];
@@ -148,7 +156,8 @@ function assemble(
   now: number,
 ): ChamberGeneration {
   const placements = specToPlacements(spec, ctx.stills);
-  const design = buildDesign(placements, ctx.avatars.length, ctx.params);
+  const tableItem = spec.room.tableItem ?? 'lamp';
+  const design = buildDesign(placements, ctx.avatars.length, ctx.params, tableItem);
   return {
     layout: {
       characterId,
@@ -162,6 +171,7 @@ function assemble(
     log,
     usedModel,
     roomStyle: spec.room.style,
+    tableItemLabel: TABLE_ITEM_LABEL[tableItem],
     generatedAt: now,
     cached: false,
   };

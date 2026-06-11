@@ -26,7 +26,7 @@ import { CharacterAvatar } from './CharacterAvatar.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { paletteForEnv } from './environment.js';
 import type { ChamberAvatar, ChamberEnvironment, RoomDims } from './types.js';
-import type { FloorType, SceneDesign, SceneElement } from './scene-design.js';
+import type { FloorType, SceneDesign, SceneElement, TableItem } from './scene-design.js';
 
 const GLB_RE = /\.(glb|gltf)(\?|#|$)/i;
 
@@ -35,6 +35,14 @@ const WATER: Record<string, string> = {
   dawn: '#46545e',
   dusk: '#2a3142',
   night: '#161e2a',
+};
+
+/** polished dark stage floor — the whole ground IS the stage. */
+const LACQUER: Record<string, string> = {
+  day: '#332b26',
+  dawn: '#352d28',
+  dusk: '#262019',
+  night: '#1a1512',
 };
 
 function Floor({
@@ -53,21 +61,22 @@ function Floor({
   if (type === 'void') return null;
   const w = dims.width * 2.6;
   const d = dims.depth * 1.8;
-  if (type === 'water') {
+  if (type === 'water' || type === 'lacquer') {
+    const base = type === 'lacquer' ? LACQUER : WATER;
     return (
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, -dims.depth * 0.1]}>
         <planeGeometry args={[w, d]} />
         <MeshReflectorMaterial
           resolution={512}
-          blur={[420, 180]}
-          mixBlur={1.1}
-          mixStrength={2.4}
-          roughness={0.75}
+          blur={type === 'lacquer' ? [340, 120] : [420, 180]}
+          mixBlur={type === 'lacquer' ? 0.85 : 1.1}
+          mixStrength={type === 'lacquer' ? 1.9 : 2.4}
+          roughness={type === 'lacquer' ? 0.55 : 0.75}
           depthScale={1.1}
           minDepthThreshold={0.4}
           maxDepthThreshold={1.3}
-          color={color ?? WATER[timeOfDay] ?? WATER.day}
-          metalness={0.55}
+          color={color ?? base[timeOfDay] ?? base.day}
+          metalness={type === 'lacquer' ? 0.25 : 0.55}
         />
       </mesh>
     );
@@ -95,7 +104,7 @@ function Element({ el, avatars }: { el: SceneElement; avatars: ChamberAvatar[] }
     case 'stage':
       return wrap(<OperaStage />);
     case 'table_chairs':
-      return wrap(<TableChairs />);
+      return wrap(<TableChairs item={(el.params?.item as TableItem) ?? 'lamp'} />);
     case 'moon_gate':
       return wrap(<MoonGate />);
     case 'bamboo':

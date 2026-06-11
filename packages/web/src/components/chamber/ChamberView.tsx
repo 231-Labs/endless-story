@@ -229,8 +229,13 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </span>
       </div>
       <div className="pointer-events-none absolute bottom-16 left-7 z-20 text-xs tracking-widest text-white/65 drop-shadow">
-        {gen?.roomStyle ? `${gen.roomStyle}` : ''}
-        {others.length > 0 ? `${gen?.roomStyle ? ' · ' : ''}同住 ${others.length} 人` : ''}
+        {[
+          gen?.roomStyle,
+          gen?.tableItemLabel ? `桌上${gen.tableItemLabel}` : null,
+          others.length > 0 ? `同住 ${others.length} 人` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </div>
 
       {/* floating control bar (bottom-center) */}

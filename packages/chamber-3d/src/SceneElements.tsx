@@ -2,8 +2,9 @@
 
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { CanvasTexture, DoubleSide, SRGBColorSpace } from 'three';
+import { CanvasTexture, CatmullRomCurve3, DoubleSide, SRGBColorSpace, Vector3 } from 'three';
 import type { Group } from 'three';
+import type { TableItem } from './scene-design.js';
 
 /**
  * The placeable block vocabulary for `SceneDesign`. Each renders at local origin;
@@ -13,41 +14,59 @@ import type { Group } from 'three';
 
 // ── 四面台 (open-on-four-sides opera stage) ──────────────────────────
 /**
- * A minimal-modern 四面台: raised lacquer platform over the water, four
- * slender vermilion columns, a shallow 攢尖 canopy with a gold finial, corner
- * lantern bulbs. The stage TOP sits at local y=0 so placements/figures stand
- * on it unchanged; the plinth descends toward the (lowered) water plane.
+ * The canopy structure of a minimal-modern 四面台 standing directly on the
+ * lacquer stage floor (the WHOLE ground is the stage — no plinth island):
+ * a gold inlay square marks the playing area, four slender vermilion columns,
+ * a 攢尖 canopy with 飛簷 (curved ridge + eave tubes kicking up at the
+ * corners), gold 寶頂, corner lantern bulbs and 紅綢流蘇 hangers.
  */
 export function OperaStage() {
   const COL = 3.05; // column inset from centre
+  const EAVE = 3.55; // eave-tip reach
+  const TIP = 3.5; // eave-tip height (kicked up)
   const corners: [number, number][] = [
     [-COL, -COL],
     [COL, -COL],
     [-COL, COL],
     [COL, COL],
   ];
+
+  // 飛簷 curves: 4 sagging eave edges between kicked tips + 4 戧脊 from apex
+  const { eaves, ridges } = useMemo(() => {
+    const tips: [number, number][] = [
+      [-EAVE, EAVE],
+      [EAVE, EAVE],
+      [EAVE, -EAVE],
+      [-EAVE, -EAVE],
+    ];
+    const eaves = tips.map((t, i) => {
+      const n = tips[(i + 1) % 4];
+      return new CatmullRomCurve3([
+        new Vector3(t[0], TIP, t[1]),
+        new Vector3(((t[0] + n[0]) / 2) * 1.05, 3.0, ((t[1] + n[1]) / 2) * 1.05),
+        new Vector3(n[0], TIP, n[1]),
+      ]);
+    });
+    const ridges = tips.map(
+      (t) =>
+        new CatmullRomCurve3([
+          new Vector3(0, 4.08, 0),
+          new Vector3(t[0] * 0.55, 3.38, t[1] * 0.55),
+          new Vector3(t[0], TIP, t[1]),
+        ]),
+    );
+    return { eaves, ridges };
+  }, []);
+
   return (
     <group>
-      {/* plinth → body → lacquer floor (top at y≈0) */}
-      <mesh position={[0, -0.56, 0]} receiveShadow>
-        <boxGeometry args={[7.4, 0.34, 7.4]} />
-        <meshStandardMaterial color="#454039" roughness={0.9} />
-      </mesh>
-      <mesh position={[0, -0.235, 0]} receiveShadow>
-        <boxGeometry args={[6.8, 0.33, 6.8]} />
-        <meshStandardMaterial color="#5d2a1e" roughness={0.6} />
-      </mesh>
-      <mesh position={[0, -0.045, 0]} receiveShadow>
-        <boxGeometry args={[6.5, 0.09, 6.5]} />
-        <meshStandardMaterial color="#2c2420" roughness={0.34} metalness={0.12} />
-      </mesh>
-      {/* gold edge lines */}
+      {/* gold inlay square marking the playing area on the lacquer floor */}
       {[
-        [0, 3.27, 6.56, 0.05] as const,
-        [0, -3.27, 6.56, 0.05] as const,
+        [0, 3.27, 6.59, 0.05] as const,
+        [0, -3.27, 6.59, 0.05] as const,
       ].map(([x, z, w], i) => (
-        <mesh key={`gx${i}`} position={[x, -0.012, z]}>
-          <boxGeometry args={[w, 0.035, 0.05]} />
+        <mesh key={`gx${i}`} position={[x, 0.006, z]}>
+          <boxGeometry args={[w, 0.012, 0.05]} />
           <meshStandardMaterial color="#caa64a" metalness={0.45} roughness={0.4} />
         </mesh>
       ))}
@@ -55,11 +74,12 @@ export function OperaStage() {
         [3.27, 0] as const,
         [-3.27, 0] as const,
       ].map(([x, z], i) => (
-        <mesh key={`gz${i}`} position={[x, -0.012, z]}>
-          <boxGeometry args={[0.05, 0.035, 6.56]} />
+        <mesh key={`gz${i}`} position={[x, 0.006, z]}>
+          <boxGeometry args={[0.05, 0.012, 6.59]} />
           <meshStandardMaterial color="#caa64a" metalness={0.45} roughness={0.4} />
         </mesh>
       ))}
+
       {/* four slender vermilion columns */}
       {corners.map(([x, z], i) => (
         <mesh key={`c${i}`} position={[x, 1.5, z]} castShadow>
@@ -68,35 +88,76 @@ export function OperaStage() {
         </mesh>
       ))}
       {/* top ring beams */}
-      <mesh position={[0, 3.04, -COL]} castShadow>
-        <boxGeometry args={[6.4, 0.12, 0.12]} />
-        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
-      </mesh>
-      <mesh position={[0, 3.04, COL]} castShadow>
-        <boxGeometry args={[6.4, 0.12, 0.12]} />
-        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
-      </mesh>
-      <mesh position={[-COL, 3.04, 0]} castShadow>
-        <boxGeometry args={[0.12, 0.12, 6.4]} />
-        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
-      </mesh>
-      <mesh position={[COL, 3.04, 0]} castShadow>
-        <boxGeometry args={[0.12, 0.12, 6.4]} />
-        <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
-      </mesh>
-      {/* shallow 攢尖 canopy (4-sided) + 寶頂 finial */}
-      <mesh position={[0, 3.62, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <coneGeometry args={[4.7, 1.1, 4]} />
+      {[
+        { pos: [0, 3.04, -COL] as [number, number, number], args: [6.4, 0.12, 0.12] as [number, number, number] },
+        { pos: [0, 3.04, COL] as [number, number, number], args: [6.4, 0.12, 0.12] as [number, number, number] },
+        { pos: [-COL, 3.04, 0] as [number, number, number], args: [0.12, 0.12, 6.4] as [number, number, number] },
+        { pos: [COL, 3.04, 0] as [number, number, number], args: [0.12, 0.12, 6.4] as [number, number, number] },
+      ].map((b, i) => (
+        <mesh key={`b${i}`} position={b.pos} castShadow>
+          <boxGeometry args={b.args} />
+          <meshStandardMaterial color="#3a2a1c" roughness={0.7} />
+        </mesh>
+      ))}
+
+      {/* roof body (slightly inside the curved edges) */}
+      <mesh position={[0, 3.56, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[4.35, 0.95, 4]} />
         <meshStandardMaterial color="#333a40" roughness={0.65} flatShading />
       </mesh>
-      <mesh position={[0, 4.28, 0]}>
+      {/* 飛簷 — curved eave edges + 戧脊 ridges */}
+      {eaves.map((c, i) => (
+        <mesh key={`e${i}`} castShadow>
+          <tubeGeometry args={[c, 24, 0.075, 8, false]} />
+          <meshStandardMaterial color="#2c3238" roughness={0.6} />
+        </mesh>
+      ))}
+      {ridges.map((c, i) => (
+        <mesh key={`r${i}`} castShadow>
+          <tubeGeometry args={[c, 24, 0.065, 8, false]} />
+          <meshStandardMaterial color="#2c3238" roughness={0.6} />
+        </mesh>
+      ))}
+      {/* gold beads on the four kicked tips */}
+      {[
+        [-EAVE, EAVE] as const,
+        [EAVE, EAVE] as const,
+        [EAVE, -EAVE] as const,
+        [-EAVE, -EAVE] as const,
+      ].map(([x, z], i) => (
+        <mesh key={`t${i}`} position={[x, TIP + 0.06, z]}>
+          <sphereGeometry args={[0.06, 10, 10]} />
+          <meshStandardMaterial color="#caa64a" metalness={0.55} roughness={0.35} />
+        </mesh>
+      ))}
+      {/* 寶頂 finial */}
+      <mesh position={[0, 4.2, 0]}>
         <cylinderGeometry args={[0.06, 0.1, 0.22, 10]} />
         <meshStandardMaterial color="#caa64a" metalness={0.55} roughness={0.35} />
       </mesh>
-      <mesh position={[0, 4.45, 0]}>
+      <mesh position={[0, 4.38, 0]}>
         <sphereGeometry args={[0.1, 12, 12]} />
         <meshStandardMaterial color="#caa64a" metalness={0.55} roughness={0.35} emissive="#7a5a1e" emissiveIntensity={0.25} />
       </mesh>
+
+      {/* 紅綢 + 流蘇 at each corner */}
+      {corners.map(([x, z], i) => (
+        <group key={`s${i}`} position={[x * 0.93, 0, z * 0.93]} rotation={[0, Math.atan2(x, z), 0]}>
+          <mesh position={[0, 2.5, 0]}>
+            <planeGeometry args={[0.16, 1.05]} />
+            <meshStandardMaterial color="#b3261d" roughness={0.6} side={DoubleSide} />
+          </mesh>
+          <mesh position={[0, 1.93, 0]}>
+            <cylinderGeometry args={[0.035, 0.035, 0.07, 8]} />
+            <meshStandardMaterial color="#caa64a" metalness={0.45} roughness={0.4} />
+          </mesh>
+          <mesh position={[0, 1.78, 0]} rotation={[Math.PI, 0, 0]}>
+            <coneGeometry args={[0.05, 0.24, 8]} />
+            <meshStandardMaterial color="#b3261d" roughness={0.65} />
+          </mesh>
+        </group>
+      ))}
+
       {/* corner lantern bulbs + one warm stage light */}
       {corners.map(([x, z], i) => (
         <mesh key={`l${i}`} position={[x * 0.93, 2.66, z * 0.93]}>
@@ -110,8 +171,75 @@ export function OperaStage() {
 }
 
 // ── 一桌二椅 — the opera convention itself ────────────────────────────
+
+/** 桌上點睛之物 — one symbolic item the agent picks (一盞燈/一封信/一把劍). */
+function TableTopItem({ item }: { item: TableItem }) {
+  const TOP = 0.865; // tabletop height
+  if (item === 'lamp') {
+    return (
+      <group position={[0, TOP, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[0.055, 0.07, 0.05, 12]} />
+          <meshStandardMaterial color="#caa64a" metalness={0.45} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.09, 0]}>
+          <sphereGeometry args={[0.055, 12, 12]} />
+          <meshStandardMaterial color="#ffdf9e" emissive="#ffb347" emissiveIntensity={1.3} roughness={0.4} />
+        </mesh>
+        <pointLight position={[0, 0.12, 0]} color="#ffcf86" intensity={1.1} distance={2.6} decay={2} />
+      </group>
+    );
+  }
+  if (item === 'letter') {
+    return (
+      <group position={[0, TOP, 0]}>
+        <mesh position={[0, 0.008, 0]} rotation={[0, 0.18, 0]} castShadow>
+          <boxGeometry args={[0.3, 0.012, 0.2]} />
+          <meshStandardMaterial color="#e9e2d0" roughness={0.85} />
+        </mesh>
+        <mesh position={[0.04, 0.022, 0.02]} rotation={[0, -0.32, 0]} castShadow>
+          <boxGeometry args={[0.28, 0.012, 0.19]} />
+          <meshStandardMaterial color="#f0ead9" roughness={0.85} />
+        </mesh>
+        {/* 封蠟 red seal */}
+        <mesh position={[0.07, 0.034, 0.04]}>
+          <cylinderGeometry args={[0.022, 0.022, 0.012, 10]} />
+          <meshStandardMaterial color="#a03226" roughness={0.5} />
+        </mesh>
+      </group>
+    );
+  }
+  if (item === 'sword') {
+    return (
+      <group position={[0, TOP, 0]} rotation={[0, 0.5, 0]}>
+        {/* two tiny rests */}
+        {[-0.28, 0.28].map((x) => (
+          <mesh key={x} position={[x, 0.025, 0]}>
+            <boxGeometry args={[0.04, 0.05, 0.1]} />
+            <meshStandardMaterial color="#3b2f24" roughness={0.7} />
+          </mesh>
+        ))}
+        {/* blade + guard + hilt */}
+        <mesh position={[0.1, 0.065, 0]} castShadow>
+          <boxGeometry args={[0.78, 0.018, 0.055]} />
+          <meshStandardMaterial color="#b8c2cc" metalness={0.75} roughness={0.25} />
+        </mesh>
+        <mesh position={[-0.31, 0.065, 0]}>
+          <boxGeometry args={[0.035, 0.05, 0.1]} />
+          <meshStandardMaterial color="#caa64a" metalness={0.5} roughness={0.35} />
+        </mesh>
+        <mesh position={[-0.43, 0.065, 0]}>
+          <boxGeometry args={[0.2, 0.03, 0.04]} />
+          <meshStandardMaterial color="#42302a" roughness={0.6} />
+        </mesh>
+      </group>
+    );
+  }
+  return null;
+}
+
 /** Red-skirted table + two chairs with 椅帔; gold trim. 以一當十. */
-export function TableChairs() {
+export function TableChairs({ item = 'lamp' }: { item?: TableItem }) {
   const chair = (x: number) => (
     <group position={[x, 0, -0.55]}>
       <mesh position={[0, 0.25, 0]} castShadow>
@@ -143,6 +271,7 @@ export function TableChairs() {
           <boxGeometry args={[1.16, 0.07, 0.74]} />
           <meshStandardMaterial color="#2c2420" roughness={0.4} />
         </mesh>
+        <TableTopItem item={item} />
       </group>
       {chair(-0.95)}
       {chair(0.95)}

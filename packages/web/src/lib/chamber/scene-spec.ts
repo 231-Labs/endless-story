@@ -88,7 +88,7 @@ export function specToPlacements(
  */
 export function deterministicSpec(): SceneSpec {
   return {
-    room: { style: '民初書齋', palette: ['暗木', '靛藍'], lighting: '昏暗單盞燈' },
+    room: { style: '民初書齋', palette: ['暗木', '靛藍'], lighting: '昏暗單盞燈', tableItem: 'lamp' },
     objects: [
       { catalogId: 'writing_desk', pos: [1.35, 0, -0.4], yaw: 200, scale: 100, reason: '案上的茶涼了' },
       { catalogId: 'stool', pos: [1.2, 0, 0.5], yaw: 20, scale: 100, reason: '案前的杌凳' },

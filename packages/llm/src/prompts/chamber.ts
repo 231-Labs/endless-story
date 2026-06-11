@@ -41,11 +41,16 @@ export interface SceneSpecObject {
   reason: string;
 }
 
+/** 桌上點睛之物 for the 一桌二椅 (mirrors chamber-3d's TableItem). */
+export type SpecTableItem = 'lamp' | 'letter' | 'sword' | 'none';
+
 export interface SceneSpec {
   room: {
     style: string;
     palette: string[];
     lighting: string;
+    /** the agent's pick for what sits on the 一桌二椅 table. */
+    tableItem?: SpecTableItem;
   };
   objects: SceneSpecObject[];
 }
@@ -82,6 +87,9 @@ const SYSTEM = `你是「無盡故事」說書平台的廂房佈置師，懂中�
 - 構圖：物件盡量靠邊或後方，中前方留給角色；物件彼此至少間隔 0.7m，不可重疊；大量留白。
 - 每件物件給一句 reason，把它扣回角色的近況/本色，且說明它「象徵什麼意境」。
 - 總數 **2~5 件**（含至多 1 張劇照掛軸）。少即是多。
+- 台心常駐「一桌二椅」。請依角色近況選一件**桌上點睛之物** table_item：
+  "lamp"（一盞燈——孤夜、等待）、"letter"（一封信——心事、牽掛）、
+  "sword"（一把劍——殺伐、武行、決意）、"none"（空桌——萬事皆休）。
 - 只輸出 JSON，不要任何解釋或 markdown。`;
 
 export function buildSceneSpecPrompt(opts: BuildSceneSpecPromptOptions): BuildPromptResult {
@@ -113,7 +121,7 @@ ${stillLines}
 ${repair}
 
 輸出 JSON，嚴格格式：
-{"room":{"style":"…","palette":["…"],"lighting":"…"},"objects":[{"catalogId":"…","params":{},"stillRef":{"characters":["…"],"moment":"…"},"pos":[x,y,z],"yaw":0,"scale":100,"reason":"…"}]}`;
+{"room":{"style":"…","palette":["…"],"lighting":"…","table_item":"lamp|letter|sword|none"},"objects":[{"catalogId":"…","params":{},"stillRef":{"characters":["…"],"moment":"…"},"pos":[x,y,z],"yaw":0,"scale":100,"reason":"…"}]}`;
 
   return {
     system: SYSTEM,
@@ -154,11 +162,18 @@ export function parseSceneSpecResponse(text: string): SceneSpec | null {
       });
     }
     if (objects.length === 0) return null;
+    const rawItem = (room as { table_item?: unknown; tableItem?: unknown }).table_item
+      ?? (room as { tableItem?: unknown }).tableItem;
+    const tableItem: SpecTableItem | undefined =
+      rawItem === 'lamp' || rawItem === 'letter' || rawItem === 'sword' || rawItem === 'none'
+        ? rawItem
+        : undefined;
     return {
       room: {
         style: String(room.style ?? ''),
         palette: Array.isArray(room.palette) ? room.palette.map(String) : [],
         lighting: String(room.lighting ?? ''),
+        tableItem,
       },
       objects,
     };
@@ -194,7 +209,7 @@ ${catalogLines}
 
 座標用公尺、原點房中、x→右、y→上、z→朝觀者、|x|及|z|≤2.4、物件間隔≥0.7m、總數 2~5 件、至多 1 張掛軸、大量留白。
 輸出 JSON：
-{"room":{"style":"…","palette":["…"],"lighting":"…"},"objects":[{"catalogId":"…","pos":[x,y,z],"yaw":0,"scale":100,"reason":"它呼應參考圖的什麼意境"}]}
+{"room":{"style":"…","palette":["…"],"lighting":"…","table_item":"lamp|letter|sword|none"},"objects":[{"catalogId":"…","pos":[x,y,z],"yaw":0,"scale":100,"reason":"它呼應參考圖的什麼意境"}]}
 只輸出 JSON，不要任何解釋或 markdown。`;
 
   return {

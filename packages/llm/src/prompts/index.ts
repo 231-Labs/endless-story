@@ -63,6 +63,7 @@ export {
   type CatalogEntryForPrompt,
   type SceneSpec,
   type SceneSpecObject,
+  type SpecTableItem,
   type Critique,
   type BuildSceneSpecPromptOptions,
   type BuildCritiquePromptOptions,

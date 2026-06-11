@@ -9,7 +9,11 @@ import type { Season, TimeOfDay, Weather } from './types.js';
  */
 
 export type BackdropStyle = '青綠山水' | '水墨遠山' | '暮山' | '夜空' | '雪山' | '素白';
-export type FloorType = 'water' | 'wood' | 'stone' | 'void';
+/** 'lacquer' = polished dark stage floor (reflective) — the whole ground IS the stage. */
+export type FloorType = 'water' | 'lacquer' | 'wood' | 'stone' | 'void';
+
+/** 桌上點睛之物 — the agent picks one symbolic item for the 一桌二椅. */
+export type TableItem = 'lamp' | 'letter' | 'sword' | 'none';
 
 /** The placeable block vocabulary. */
 export type ElementKind =
@@ -60,23 +64,23 @@ export interface SceneDesign {
 }
 
 /**
- * Deterministic default — a 四面台 over the water mirror, dressed only with
- * the opera convention itself (一桌二椅 + a thread of incense); a distant moon
- * gate and one rock breathe in the mist at water level. Objects are 意象, not
- * furniture — 留白 carries the rest. Always coherent (no LLM key, parse
- * failure, etc.); the GLM path layers onto it.
+ * Deterministic default — the whole ground IS the stage: a polished lacquer
+ * floor stretching to the mist (reflections come from the floor, like a real
+ * stage), a 四面台 canopy with 飛簷 standing on it, dressed only with the
+ * opera convention itself (一桌二椅 + a thread of incense); a distant moon
+ * gate and one rock breathe in the haze. Objects are 意象, not furniture.
  */
 export function deterministicDesign(): SceneDesign {
   return {
     backdrop: { style: '青綠山水' },
-    floor: { type: 'water', y: -0.75 },
+    floor: { type: 'lacquer' },
     mood: { timeOfDay: 'day', season: 'spring', weather: 'clear' },
     elements: [
       { kind: 'stage', pos: [0, 0, 0] },
-      { kind: 'table_chairs', pos: [0, 0, -1.35] },
+      { kind: 'table_chairs', pos: [0, 0, -1.35], params: { item: 'lamp' } },
       { kind: 'incense', pos: [2.45, 0, 2.25], scale: 0.85 },
-      { kind: 'moon_gate', pos: [0, -0.75, -6.2], scale: 1.8 },
-      { kind: 'scholar_rock', pos: [-4.6, -0.75, -2.2] },
+      { kind: 'moon_gate', pos: [0, 0, -6.2], scale: 1.8 },
+      { kind: 'scholar_rock', pos: [-4.6, 0, -2.2] },
       { kind: 'character', pos: [0, 0, 0.9], characterIndex: 0 },
       { kind: 'character', pos: [-1.7, 0, 0.35], characterIndex: 1 },
       { kind: 'character', pos: [1.7, 0, 0.35], characterIndex: 2 },

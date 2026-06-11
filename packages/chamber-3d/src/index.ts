@@ -8,6 +8,7 @@ export type {
   ElementKind,
   BackdropStyle,
   FloorType,
+  TableItem,
 } from './scene-design.js';
 export { ChamberDiorama } from './ChamberDiorama.js';
 export { ChamberLights } from './ChamberLights.js';
