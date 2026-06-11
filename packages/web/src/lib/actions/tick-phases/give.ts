@@ -98,6 +98,7 @@ export async function runGivePhase(input: {
                 input.memoryContext.relationshipHints(c.id, 6),
             ]);
             const roster = input.rosterById.get(c.id);
+            const relById = new Map(needyPeers.map((p) => [p.id, relationFromHints(relationshipHints, p.name)]));
             const result = await characterAgent.decideAidAction({
                 name: c.name,
                 role: input.roleById.get(c.id) ?? roster?.role ?? '—',
@@ -126,10 +127,28 @@ export async function runGivePhase(input: {
                 }),
             });
 
-            const gifts = (result.gifts ?? []).filter((g) => input.charactersById.has(g.recipientId));
+            // Receiving is a choice (§5.2): a rival won't take charity → refuses. v1 uses the
+            // coarse tie; pride/LLM-judged refusal can layer on later.
+            const gifts = (result.gifts ?? [])
+                .filter((g) => input.charactersById.has(g.recipientId))
+                .map((g) => ({ ...g, refused: relById.get(g.recipientId) === 'rival' }));
             if (!input.dryRun) {
                 for (const g of gifts) {
                     const label = MEMO_LABEL[g.memo] ?? '接濟';
+                    if (g.refused) {
+                        await rememberForCharacter(
+                            c.id,
+                            `我在「${scene.name}」要接濟「${g.recipientName ?? ''}」，卻被回絕，傷了和氣`,
+                            { kind: 'relationship', importance: 7 },
+                        ).catch(() => false);
+                        await rememberForCharacter(
+                            g.recipientId,
+                            `[回絕：${c.name}] 我在「${scene.name}」回絕了他的施捨`,
+                            { kind: 'relationship', importance: 7 },
+                        ).catch(() => false);
+                        recordSceneLine(scene.id, g.recipientId, `回絕了「${c.name}」的施捨`, 'social');
+                        continue;
+                    }
                     await rememberForCharacter(
                         c.id,
                         `我在「${scene.name}」${label}了「${g.recipientName ?? ''}」${g.amount} 兩：${g.reason ?? ''}`.trim(),
@@ -144,11 +163,12 @@ export async function runGivePhase(input: {
                 }
             }
 
+            const accepted = gifts.filter((g) => !g.refused);
             return {
                 characterId: c.id,
                 name: c.name,
                 ok: true,
-                gave: gifts.length > 0,
+                gave: accepted.length > 0,
                 gifts: gifts.map((g) => ({
                     recipientId: g.recipientId,
                     recipientName: g.recipientName,
@@ -156,6 +176,7 @@ export async function runGivePhase(input: {
                     memo: g.memo,
                     manner: g.manner,
                     reason: g.reason,
+                    refused: g.refused,
                 })),
                 reason: result.reason,
                 deferred: true,

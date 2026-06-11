@@ -117,6 +117,8 @@ export interface TickGiveResult {
         memo: string;
         manner?: string;
         reason?: string;
+        /** the recipient refused the gift (e.g. a rival won't take charity) — no money moves. */
+        refused?: boolean;
     }[];
     /** overall reasoning / why nothing was given. */
     reason?: string;
