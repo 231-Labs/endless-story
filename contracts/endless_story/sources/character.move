@@ -409,7 +409,7 @@ public fun mint_genesis_character(
     owner_recipient: address,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): (OwnerCap, ControlCap) {
+): ControlCap {
     saga::assert_cap(cap, saga);
     let saga_id = saga::saga_id(saga);
     assert!(world::world_id(world) == saga::world_id(saga), EWorldSagaMismatch);
@@ -417,7 +417,10 @@ public fun mint_genesis_character(
 
     let scene_id = scene::scene_id(scene);
     let scene_location_id = scene::location_id(scene);
-    let (owner_cap, control_cap) = mint_character_internal(
+    // OwnerCap is transferred to `owner_recipient` inside mint_character_internal
+    // (the storyteller cannot withhold or redirect it); only the ControlCap
+    // is returned for the caller to delegate to the runner.
+    let (character_id, control_cap) = mint_character_internal(
         world,
         option::some(saga_id),
         option::some(scene_id),
@@ -430,9 +433,9 @@ public fun mint_genesis_character(
         ctx,
     );
 
-    scene::add_character(scene, owner_cap.character_id);
+    scene::add_character(scene, character_id);
     saga::increment_character_count(saga);
-    (owner_cap, control_cap)
+    control_cap
 }
 
 /// Storyteller mints a non-canon (collectible / external) character into a
@@ -448,11 +451,12 @@ public fun mint_collectible_character(
     owner_recipient: address,
     clock: &clock::Clock,
     ctx: &mut TxContext,
-): (OwnerCap, ControlCap) {
+): ControlCap {
     saga::assert_cap(cap, saga);
     assert!(world::world_id(world) == saga::world_id(saga), EWorldSagaMismatch);
 
-    mint_character_internal(
+    // OwnerCap goes to `owner_recipient` inside; only ControlCap is returned.
+    let (_character_id, control_cap) = mint_character_internal(
         world,
         option::none<ID>(),
         option::none<ID>(),
@@ -463,12 +467,19 @@ public fun mint_collectible_character(
         owner_recipient,
         clock::timestamp_ms(clock),
         ctx,
-    )
+    );
+    control_cap
 }
 
 /// Package-internal canonical mint. Validates invariants (species,
 /// attribute ranges) inside — callers cannot bypass. Shares Character as
-/// a shared object; returns owner + control caps to the PTB.
+/// a shared object.
+///
+/// **Ownership guarantee (enforced on-chain, not by the PTB):** the
+/// `OwnerCap` is transferred to `owner_recipient` here — a storyteller /
+/// admin building the redeem PTB cannot keep or redirect it. Only the
+/// `ControlCap` (runner delegation) is returned, alongside the new
+/// character's `ID` so the caller can do scene / saga bookkeeping.
 ///
 /// Visibility: `public(package)` so sibling modules (recruit, future
 /// admin paths) can call without re-exposing through entries.
@@ -483,7 +494,7 @@ public(package) fun mint_character_internal(
     owner_recipient: address,
     minted_at_ms: u64,
     ctx: &mut TxContext,
-): (OwnerCap, ControlCap) {
+): (ID, ControlCap) {
     validate_profile(world, &profile);
     validate_attributes(world, &attributes);
 
@@ -543,7 +554,10 @@ public(package) fun mint_character_internal(
     });
 
     transfer::share_object(character);
-    (owner_cap, control_cap)
+    // OwnerCap → the rightful owner (voucher payer / chosen recipient). Done
+    // on-chain so no PTB can withhold it. ControlCap returned to the caller.
+    transfer::public_transfer(owner_cap, owner_recipient);
+    (character_id, control_cap)
 }
 
 // ─── validation (private invariants enforced by mint_character_internal) ──

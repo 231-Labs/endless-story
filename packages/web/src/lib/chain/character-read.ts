@@ -223,8 +223,11 @@ export async function fetchOnChainCharacters(opts: { sagaId?: string | null } = 
     try {
         result = await read.character.listMintedCharacters(client, pkg, { sagaId: opts.sagaId });
     } catch (err) {
+        // Rethrow so the API facade can tell "chain unreachable"（→ 退回示範名冊）
+        // from "chain reachable but genuinely empty"（→ 真的沒人）。先前這裡吞掉
+        // 錯誤回 []，節點一抖整個名冊就顯示成「0 人」的正常空狀態。
         console.warn('[character-read] listMintedCharacters failed:', err);
-        return [];
+        throw err;
     }
     const narrativeDay = await fetchNarrativeDay(client);
     const out: Character[] = [];

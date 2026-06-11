@@ -193,3 +193,30 @@ export async function delegateKeyToPublicKey(privateKeyHex: string): Promise<Uin
     return ed.getPublicKeyAsync(hexToBytes(privateKeyHex));
 }
 
+
+/**
+ * Encode bytes as base64. Works in Node and browsers; chunked so large
+ * blobs don't blow the argument-spread limit of String.fromCharCode.
+ */
+export function bytesToBase64(bytes: Uint8Array): string {
+    if (typeof Buffer !== "undefined") {
+        return Buffer.from(bytes).toString("base64");
+    }
+    let binary = "";
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(binary);
+}
+
+/** Decode base64 to bytes. Works in Node and browsers. */
+export function base64ToBytes(b64: string): Uint8Array {
+    if (typeof Buffer !== "undefined") {
+        return new Uint8Array(Buffer.from(b64, "base64"));
+    }
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+}

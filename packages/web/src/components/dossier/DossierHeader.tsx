@@ -36,50 +36,49 @@ export function DossierHeader({
       className="px-5 w-full sm:px-10"
     >
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col gap-8 md:flex-row md:items-center md:gap-12 lg:gap-16">
+        <div className="mb-4 md:mb-6">
+          <BackButton fallback="/dossier" ariaLabel="返回" />
+        </div>
+        {/* 手機：肖像與姓名並排，整個首屏才塞得進一個視窗高；桌面照舊左肖像右資訊 */}
+        <div className="flex flex-row items-center gap-5 sm:gap-8 md:gap-12 lg:gap-16">
           <div
             id="dossier-portrait"
-            className="w-40 shrink-0 sm:w-56 lg:w-[320px]"
+            className="w-28 shrink-0 sm:w-44 md:w-56 lg:w-[320px]"
           >
-            <div className="mb-6">
-              <BackButton fallback="/dossier" ariaLabel="返回" />
-            </div>
             <CharacterPortrait character={character} aspect="3/4" />
           </div>
 
-          <div className="flex flex-1 flex-col justify-center py-2 lg:py-8">
-            <div>
-              <div className="flex items-center gap-3 text-sm tracking-widest text-mute">
-                <span>{character.role}</span>
-                <span className="text-hairline">·</span>
-                <span>{sagaLabel}</span>
-              </div>
-              <h1 className="mt-4 font-serif text-5xl tracking-wide text-ink sm:text-6xl lg:text-7xl">
-                {character.name}
-              </h1>
-              <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-base text-mute">
-                <span>
-                  {GENDER_LABEL[character.gender]} · {character.age} 歲
-                </span>
-                <span className="text-hairline">·</span>
-                <OwnerDisplay address={character.nftOwner} />
-              </div>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <span
-                  className={`inline-flex rounded-full px-4 py-1.5 text-sm tracking-widest ring-1 ${survivalBadgeClasses(character.survival.level)}`}
-                >
-                  {survivalLabel(character.survival.level)} · 可撐 {character.survival.daysLeft} 日
-                </span>
-                <SubscribeButton
-                  characterId={character.id}
-                  currentCount={character.subscriberCount ?? 0}
-                />
-              </div>
+          <div className="flex min-w-0 flex-1 flex-col justify-center py-2 lg:py-8">
+            <div className="flex items-center gap-3 text-sm tracking-widest text-mute">
+              <span>{character.role}</span>
+              <span className="text-hairline">·</span>
+              <span>{sagaLabel}</span>
             </div>
-
-            {liveStateSlot}
+            <h1 className="mt-2 font-serif text-4xl tracking-wide text-ink sm:mt-4 sm:text-6xl lg:text-7xl">
+              {character.name}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-mute sm:mt-6 sm:text-base">
+              <span>
+                {GENDER_LABEL[character.gender]} · {character.age} 歲
+              </span>
+              <span className="hidden text-hairline sm:inline">·</span>
+              <OwnerDisplay address={character.nftOwner} />
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 sm:mt-6">
+              <span
+                className={`inline-flex rounded-full px-4 py-1.5 text-sm tracking-widest ring-1 ${survivalBadgeClasses(character.survival.level)}`}
+              >
+                {survivalLabel(character.survival.level)} · 可撐 {character.survival.daysLeft} 日
+              </span>
+              <SubscribeButton
+                characterId={character.id}
+                currentCount={character.subscriberCount ?? 0}
+              />
+            </div>
           </div>
         </div>
+
+        {liveStateSlot}
       </div>
     </header>
   );

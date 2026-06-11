@@ -41,8 +41,15 @@ function isDeployed(): boolean {
 
 export async function listCharacters(): Promise<Character[]> {
   if (isDeployed()) {
-    const chars = await fetchOnChainCharacters();
-    return enrichRoles(chars);
+    try {
+      const chars = await fetchOnChainCharacters();
+      return enrichRoles(chars);
+    } catch {
+      // 鏈不可達 ≠ 名冊是空的：示範模式退回 mock 名冊讓產品仍可瀏覽；
+      // 非示範模式往上拋給 error boundary，而不是渲染成「0 人」。
+      if (USE_MOCK) return characters;
+      throw new Error('鏈上節點暫時沒回話，名冊讀不出來');
+    }
   }
   if (USE_MOCK) return characters;
   return httpGet<Character[]>('/characters');
@@ -77,8 +84,13 @@ export async function getCharacter(id: string): Promise<Character | null> {
 export async function listSagaCharacters(sagaId: string): Promise<Character[]> {
   if (isDeployed()) {
     if (isSuiObjectId(sagaId)) {
-      const chars = await fetchOnChainCharacters({ sagaId });
-      return enrichRoles(chars);
+      try {
+        const chars = await fetchOnChainCharacters({ sagaId });
+        return enrichRoles(chars);
+      } catch {
+        if (USE_MOCK) return listCharactersBySaga(sagaId);
+        throw new Error('鏈上節點暫時沒回話，班底讀不出來');
+      }
     }
   }
   if (USE_MOCK) return listCharactersBySaga(sagaId);

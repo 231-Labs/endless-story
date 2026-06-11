@@ -100,12 +100,25 @@ export async function fetchOnChainEdgesFrom(characterId: string): Promise<Relati
             lastUpdatedDay: day,
             tone: p.tone,
             confidence: Math.min(1, 0.34 * p.count),
-            summary: `班主在戲裡牽起的一段「${TONE_ZH[p.tone]}」。`,
+            // summary 省略：先前是寫死的模板（只把 tone 詞再塞一次），對讀者是冗餘。
+            // 真‧關係描述未來由敘事引擎寫入 summary；在那之前詳情頁只顯示名字＋tone。
         }));
     } catch (err) {
         console.warn('[relationships] fetchOnChainEdgesFrom failed:', err);
         return [];
     }
+}
+
+/**
+ * Incoming edges (who feels what toward `characterId`). On chain the seeded
+ * ties are pair-level (RelationshipSeeded is undirected), so incoming is the
+ * outgoing projection with endpoints swapped — direction-true asymmetry only
+ * exists in mock / future subjective-memory edges, but the API shape stays
+ * symmetric so the UI can render both directions from any source.
+ */
+export async function fetchOnChainEdgesTo(characterId: string): Promise<RelationshipEdge[]> {
+    const outgoing = await fetchOnChainEdgesFrom(characterId);
+    return outgoing.map((e) => ({ ...e, fromId: e.toId, toId: e.fromId }));
 }
 
 /**

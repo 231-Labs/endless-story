@@ -28,6 +28,8 @@ import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
 import { ChaptersTab } from '@/components/dossier/tabs/ChaptersTab';
 import { MemoriesTab } from '@/components/dossier/tabs/MemoriesTab';
+import { MemoriesTabClient } from '@/components/dossier/tabs/MemoriesTabClient';
+import { isMemoryConfigured, sealNetwork } from '@/lib/chain/memory';
 import { InterventionTab } from '@/components/dossier/tabs/InterventionTab';
 import { DEMO_OWNERS } from '@/mocks/characters';
 import { DEMO_SAGA_ID } from '@/mocks/sagas';
@@ -36,6 +38,33 @@ import { shortChapterTitle } from '@/lib/format';
 import { fetchPovChaptersForCharacter } from '@/lib/chain/pov-read';
 import { fetchReflectionsForCharacter } from '@/lib/chain/reflection-read';
 import { PovTriggerButton } from '@/components/dossier/PovTriggerButton';
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
+  const { id } = await searchParams;
+  if (!id) {
+    return {
+      title: '班底名冊',
+      description: '春雪社的角色名冊 — 每一位都是活著的記憶資產，可訂閱、可持有。',
+    };
+  }
+  const character = await charactersApi.getCharacter(id).catch(() => null);
+  if (!character) return { title: '找不到角色' };
+  const description = `${character.role} · ${character.description.slice(0, 100)}`;
+  const portrait = character.gallery?.anchor?.imageUrl;
+  return {
+    title: character.name,
+    description,
+    openGraph: {
+      title: `${character.name} · 無盡敘界`,
+      description,
+      ...(portrait ? { images: [{ url: portrait }] } : {}),
+    },
+  };
+}
 
 const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
 const VALID_FILTERS: RosterFilter[] = ['all', 'internal', 'external', 'mine'];
@@ -191,6 +220,7 @@ async function DossierDetail({
   const [
     allCharacters,
     edges,
+    incomingEdges,
     chapters,
     interventions,
     soulSongs,
@@ -201,6 +231,7 @@ async function DossierDetail({
   ] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
+    relationshipsApi.listIncomingEdges(character.id),
     chaptersApi.listPublicChaptersForSubscription(character.id),
     interventionsApi.listInterventions(character.id),
     soulSongsApi.listSoulSongs(character.id),
@@ -220,6 +251,20 @@ async function DossierDetail({
     fetchReflectionsForCharacter(character.id, { limit: 8 }),
   ]);
   const charactersById = byId(allCharacters);
+  // 關係對象可能是名冊外的江湖角色（不在 listCharacters 裡）——補抓，
+  // 否則關係欄會顯示原始 id 而不是名字。
+  const partnerIds = new Set([
+    ...edges.map((e) => e.toId),
+    ...incomingEdges.map((e) => e.fromId),
+  ]);
+  const missingPartners = await Promise.all(
+    [...partnerIds]
+      .filter((pid) => pid !== character.id && !charactersById.has(pid))
+      .map((pid) => charactersApi.getCharacter(pid)),
+  );
+  for (const partner of missingPartners) {
+    if (partner) charactersById.set(partner.id, partner);
+  }
   const personaRegenChapter = persona?.lastRegenChapterId
     ? (await chaptersApi.getChapter(persona.lastRegenChapterId)) ?? null
     : null;
@@ -261,6 +306,7 @@ async function DossierDetail({
                 persona={persona}
                 personaRegenChapter={personaRegenChapter}
                 outgoingEdges={edges}
+                incomingEdges={incomingEdges}
                 charactersById={charactersById}
               />
             ) : null}
@@ -278,13 +324,27 @@ async function DossierDetail({
               </>
             ) : null}
             {tab === 'memories' ? (
-              <Suspense fallback={<MemoriesTabSkeleton />}>
-                <MemoriesTabLoader
+              // Real (MemWal-configured) memories are cap-gated: the browser
+              // verifies the connected wallet holds the OwnerCap and decrypts
+              // locally via seal_approve_owner — the server hands out
+              // ciphertext only. The spoofable `?as=` viewerWallet is never
+              // consulted on this path; it survives only in the mock fallback
+              // below (demo fixtures, nothing private).
+              isMemoryConfigured() ? (
+                <MemoriesTabClient
                   character={character}
-                  viewerWallet={viewerWallet}
                   sagaCharacters={allCharacters}
+                  suiNetwork={sealNetwork()}
                 />
-              </Suspense>
+              ) : (
+                <Suspense fallback={<MemoriesTabSkeleton />}>
+                  <MemoriesTabLoader
+                    character={character}
+                    viewerWallet={viewerWallet}
+                    sagaCharacters={allCharacters}
+                  />
+                </Suspense>
+              )
             ) : null}
             {tab === 'entrusts' ? (
               <InterventionTab
@@ -322,9 +382,11 @@ async function LiveStateBarLoader({
 }
 
 /**
- * Lazy loader for the memories tab. `listMemories` is a SEAL recall (slow +
- * rate-limited), so it's isolated here behind a Suspense and only runs when
- * the memories tab is open — never blocking the header / other tabs.
+ * Lazy loader for the memories tab — MOCK / http fallback only (used when
+ * MemWal isn't configured). Real memories never pass through here: they go
+ * ciphertext-only via /api/memories/encrypted and decrypt in the browser
+ * against the viewer's OwnerCap (MemoriesTabClient). The `?as=`-derived
+ * viewerWallet below therefore gates nothing but demo fixtures.
  */
 async function MemoriesTabLoader({
   character,
@@ -353,7 +415,7 @@ async function MemoriesTabLoader({
     <MemoriesTab
       character={character}
       memories={memories}
-      viewerWallet={viewerWallet}
+      isOwner={viewerWallet != null && viewerWallet === character.nftOwner}
       sagaCharacters={sagaCharacters}
       chaptersById={chaptersById}
     />

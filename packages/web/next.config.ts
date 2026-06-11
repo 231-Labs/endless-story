@@ -1,6 +1,24 @@
 import type { NextConfig } from 'next';
 
+// Walrus aggregator hosts whose images go through next/image optimization
+// (resize + webp)。自架 aggregator 由 NEXT_PUBLIC_WALRUS_AGGREGATOR 帶入。
+const walrusRemotePatterns: { protocol: 'https'; hostname: string }[] = [
+  { protocol: 'https', hostname: 'aggregator.walrus-testnet.walrus.space' },
+  { protocol: 'https', hostname: 'aggregator.walrus.space' },
+];
+try {
+  const selfHosted = process.env.NEXT_PUBLIC_WALRUS_AGGREGATOR;
+  if (selfHosted) {
+    walrusRemotePatterns.push({ protocol: 'https', hostname: new URL(selfHosted).hostname });
+  }
+} catch {
+  /* malformed env → 只用公共 aggregator */
+}
+
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: walrusRemotePatterns,
+  },
   // Workspace packages that ship TS source (no build step) — Next must
   // transpile them via SWC instead of treating them as pre-built modules.
   transpilePackages: [

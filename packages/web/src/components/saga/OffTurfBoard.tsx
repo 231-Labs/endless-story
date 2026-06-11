@@ -50,7 +50,7 @@ export function OffTurfBoard({ entries }: { entries: OffTurfEntry[] }) {
       {/* 分鏡卡 */}
       <div className="mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain px-[max(env(safe-area-inset-left,0px),1rem)] pb-[max(7rem,calc(env(safe-area-inset-bottom,0px)+6rem))] sm:px-10">
         {entries.length === 0 ? (
-          <div className="flex h-full min-h-[40vh] items-center justify-center">
+          <div className="flex h-full min-h-[24vh] items-center justify-center">
             <p className="font-serif text-sm tracking-[0.25em] text-mute/80">
               全班都在地界內。
             </p>
@@ -87,6 +87,7 @@ function OffTurfCard({ entry }: { entry: OffTurfEntry }) {
             <BlobImage
               src={entry.imageUrl}
               alt=""
+              sizes="64px"
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : null}
@@ -99,9 +100,8 @@ function OffTurfCard({ entry }: { entry: OffTurfEntry }) {
           <p className="mt-0.5 truncate text-2xs tracking-[0.2em] text-mute/80">{entry.role}</p>
         </div>
 
-        <div className="mt-auto w-full rounded-md border border-cinnabar/25 bg-cinnabar/[0.04] px-2 py-1.5">
-          <p className="text-2xs tracking-[0.3em] text-cinnabar/80">現在在</p>
-          <p className="mt-0.5 line-clamp-2 font-serif text-xs leading-snug text-ink/90">
+        <div className="mt-auto w-full border-t border-hairline/40 pt-1.5">
+          <p className="line-clamp-2 font-serif text-xs leading-snug text-mute">
             {whereLabel(entry)}
           </p>
         </div>

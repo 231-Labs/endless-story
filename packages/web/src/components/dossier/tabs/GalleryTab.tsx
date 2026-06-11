@@ -186,7 +186,7 @@ export function GalleryTab({
         </div>
         <div className="mt-8 pl-0 sm:pl-12">
           {eventMoments.length === 0 ? (
-            <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
+            <div className="es-card p-12 text-center">
               <p className="text-sm tracking-wide text-mute">尚無瞬間。下一場戲還沒開鑼。</p>
             </div>
           ) : (

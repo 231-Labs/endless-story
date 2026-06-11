@@ -19,7 +19,6 @@ import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
 import { getAdminContext } from '../chain/admin-signer.js';
 import { inductCharacterAction } from './induct-character.js';
-import { ensurePortraitForCharacter } from './ensure-portrait.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
@@ -122,101 +121,148 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         return { ok: false, error: 'attributeSeedHex 格式錯誤' };
     }
 
-    const tx = new Transaction();
+    // PTB 組裝包成函式：Transaction 物件一次性，相容回退時要整包重建。
+    //
+    // mode 'current'：repo 內合約簽名 — redeem 只回 ControlCap，OwnerCap 由
+    //   合約在鏈上直接轉給 voucher.payer（所有權結構性保證）。
+    // mode 'legacy'：鏈上若仍是改動前的舊部署 — redeem 回 (OwnerCap, ControlCap)
+    //   兩個值；PTB 把 OwnerCap 轉給付款人（而非改動前「全轉 admin」的舊行為）、
+    //   ControlCap 轉 admin。redeploy 後第一次嘗試就會成功，這條路徑自然停用。
+    const buildRedeemTx = (mode: 'current' | 'legacy', ownerRecipient?: string): Transaction => {
+        const tx = new Transaction();
 
-    // Build the inline structs:
-    //   1. PhysicalFacts
-    //   2. CharacterProfile (wraps PhysicalFacts)
-    //   3. media (empty for Phase 2 — image_url set via separate update tx)
-    //   4. attributes vector (each with provenance seed)
-    const physical = tx.add(
-        endlessTx.character.newPhysicalFacts({
-            species: 'human',
-            gender: input.candidate.physicalFacts.gender,
-            body: input.candidate.physicalFacts.body,
-            ageYears: input.candidate.physicalFacts.age,
-        }),
-    );
-
-    const profile = tx.add(
-        endlessTx.character.newCharacterProfile({
-            name: input.candidate.name,
-            description: input.candidate.description,
-            physicalFacts: physical,
-        }),
-    );
-
-    // Encode the Walrus portrait as the first MediaAsset so
-    // `mint_character_internal` initialises `Character.image_url` from
-    // `media_assets[0].uri`. Display V2's `{image_url}` template then
-    // renders the NFT thumbnail in Sui explorers without a follow-up tx.
-    const mediaElements = input.portraitUrl
-        ? [
-              tx.add(
-                  endlessTx.character.newMediaAsset({
-                      kind: 0, // 0 = portrait (caller convention, see character.move)
-                      uri: input.portraitUrl,
-                      walrusBlobId: input.portraitBlobId
-                          ? Array.from(new TextEncoder().encode(input.portraitBlobId))
-                          : [],
-                      metadataUri: '',
-                  }),
-              ),
-          ]
-        : [];
-    const mediaAssets = tx.makeMoveVec({
-        elements: mediaElements,
-        type: `${deployment.packageId}::character::MediaAsset`,
-    });
-
-    // Attributes — locked rolled values, each tagged with the voucher seed
-    // for provenance verification.
-    const attrElements = input.rolledValues.map((rv) =>
-        tx.add(
-            endlessTx.character.newAttributeValue({
-                key: rv.key,
-                value: BigInt(rv.value),
-                seed: seedBytes,
+        // Build the inline structs:
+        //   1. PhysicalFacts
+        //   2. CharacterProfile (wraps PhysicalFacts)
+        //   3. media (empty for Phase 2 — image_url set via separate update tx)
+        //   4. attributes vector (each with provenance seed)
+        const physical = tx.add(
+            endlessTx.character.newPhysicalFacts({
+                species: 'human',
+                gender: input.candidate.physicalFacts.gender,
+                body: input.candidate.physicalFacts.body,
+                ageYears: input.candidate.physicalFacts.age,
             }),
-        ),
-    );
-    const attributes = tx.makeMoveVec({
-        elements: attrElements,
-        type: `${deployment.packageId}::character::AttributeValue`,
-    });
+        );
 
-    // redeem returns (OwnerCap, ControlCap). Character is transferred
-    // internally to voucher.payer (= user, NOT admin). Caller PTB must
-    // transfer the two returned caps: OwnerCap → user (matches Character),
-    // ControlCap → admin (storyteller retains delegation).
-    const caps = tx.add(
-        endlessTx.recruit.redeemVoucherToCharacter({
-            cap: deployment.storytellerCapId,
-            saga: deployment.sagaId,
-            world: deployment.worldId,
-            scene: input.sceneId,
-            voucher: input.voucherId,
-            profile,
-            mediaAssets,
-            attributes,
-        }),
-    );
-    // We don't have the user address here — read voucher.payer from chain
-    // then send OwnerCap there. ControlCap stays with admin (this signer).
-    // Simpler shortcut: transfer BOTH to admin, then a follow-up Phase 3
-    // step migrates OwnerCap to user. For Phase 2 demo where admin and
-    // user are often the same dev wallet, this is fine.
-    tx.transferObjects([caps[0], caps[1]], admin.address);
+        const profile = tx.add(
+            endlessTx.character.newCharacterProfile({
+                name: input.candidate.name,
+                description: input.candidate.description,
+                physicalFacts: physical,
+            }),
+        );
 
-    let result;
-    try {
-        result = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
+        // Encode the Walrus portrait as the first MediaAsset so
+        // `mint_character_internal` initialises `Character.image_url` from
+        // `media_assets[0].uri`. Display V2's `{image_url}` template then
+        // renders the NFT thumbnail in Sui explorers without a follow-up tx.
+        const mediaElements = input.portraitUrl
+            ? [
+                  tx.add(
+                      endlessTx.character.newMediaAsset({
+                          kind: 0, // 0 = portrait (caller convention, see character.move)
+                          uri: input.portraitUrl,
+                          walrusBlobId: input.portraitBlobId
+                              ? Array.from(new TextEncoder().encode(input.portraitBlobId))
+                              : [],
+                          metadataUri: '',
+                      }),
+                  ),
+              ]
+            : [];
+        const mediaAssets = tx.makeMoveVec({
+            elements: mediaElements,
+            type: `${deployment.packageId}::character::MediaAsset`,
+        });
+
+        // Attributes — locked rolled values, each tagged with the voucher seed
+        // for provenance verification.
+        const attrElements = input.rolledValues.map((rv) =>
+            tx.add(
+                endlessTx.character.newAttributeValue({
+                    key: rv.key,
+                    value: BigInt(rv.value),
+                    seed: seedBytes,
+                }),
+            ),
+        );
+        const attributes = tx.makeMoveVec({
+            elements: attrElements,
+            type: `${deployment.packageId}::character::AttributeValue`,
+        });
+
+        const redeemed = tx.add(
+            endlessTx.recruit.redeemVoucherToCharacter({
+                cap: deployment.storytellerCapId!,
+                saga: deployment.sagaId!,
+                world: deployment.worldId!,
+                scene: input.sceneId,
+                voucher: input.voucherId,
+                profile,
+                mediaAssets,
+                attributes,
+            }),
+        );
+        if (mode === 'current') {
+            // 單一回傳值 = ControlCap → admin（runner delegation）
+            tx.transferObjects([redeemed], admin.address);
+        } else {
+            // 舊簽名 (OwnerCap, ControlCap)
+            tx.transferObjects([redeemed[0]], ownerRecipient!);
+            tx.transferObjects([redeemed[1]], admin.address);
+        }
+        return tx;
+    };
+
+    const execute = (transaction: Transaction) =>
+        admin.client.signAndExecuteTransaction({
+            transaction,
             signer: admin.signer,
             options: { showEffects: true, showObjectChanges: true },
         });
+
+    let result;
+    try {
+        result = await execute(buildRedeemTx('current'));
     } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        const msg = err instanceof Error ? err.message : String(err);
+        // InvalidResultArity on the redeem result = 鏈上還是舊版簽名
+        // （(OwnerCap, ControlCap) 兩個回傳值）。讀 voucher.payer 後用舊版
+        // PTB 重試，所有權仍歸付款人。
+        if (!msg.includes('InvalidResultArity')) {
+            return { ok: false, error: msg };
+        }
+        console.warn(
+            '[redeem-voucher] deployed package still has the LEGACY redeem signature ' +
+                '(OwnerCap, ControlCap). Falling back to the legacy PTB (OwnerCap → payer). ' +
+                'Redeploy contracts to enforce ownership on-chain (see AGENTS.md).',
+        );
+        let payer: string | undefined;
+        try {
+            const voucherObj = await admin.client.getObject({
+                id: input.voucherId,
+                options: { showContent: true },
+            });
+            const content = voucherObj.data?.content as
+                | { dataType?: string; fields?: { payer?: string } }
+                | null
+                | undefined;
+            payer = content?.fields?.payer;
+        } catch {
+            /* fall through to the guard below */
+        }
+        if (!payer) {
+            return {
+                ok: false,
+                error: '舊版合約相容路徑：讀不到 voucher.payer，無法安全轉移 OwnerCap。',
+            };
+        }
+        try {
+            result = await execute(buildRedeemTx('legacy', payer));
+        } catch (err2) {
+            return { ok: false, error: err2 instanceof Error ? err2.message : String(err2) };
+        }
     }
 
     // Parse Character + OwnerCap from objectChanges.
@@ -285,42 +331,15 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
                     (personaRes?.ok ? `v${personaRes.version}` : `failed${personaRes?.skipped ? `(${personaRes.skipped})` : ''}`),
             );
 
-            // 3) cover portrait — non-blocking mint may have skipped the art wait,
-            //    so the portrait can be absent at this point. If it was baked at mint
-            //    (portraitUrl present) this is a no-op; otherwise generate it server-side
-            //    and patch it on chain (update_image_by_storyteller). Survives the client
-            //    navigating away the instant the user clicked 入班.
-            const portraitRes = await withRetry('portrait', () =>
-                ensurePortraitForCharacter(charId, {
-                    character: {
-                        description: candidate.description,
-                        physical: {
-                            gender: candidate.physicalFacts.gender,
-                            ageYears: candidate.physicalFacts.age,
-                            body: candidate.physicalFacts.body,
-                        },
-                        attributes: rolledValues,
-                    },
-                    recruitmentIntent,
-                    existingUrl: portraitUrl,
-                }),
-            );
-            const coverUrl = portraitRes?.url;
-            console.log(
-                `[redeem-voucher] portrait for ${charId}: ` +
-                    (portraitRes?.ok ? `${portraitRes.skipped ?? 'generated'} ${coverUrl ?? ''}` : `failed${portraitRes?.error ? `(${portraitRes.error})` : ''}`),
-            );
-
-            // 4) §11 additional gallery views (frontal + art sheet) via img2img —
-            //    needs a cover to img2img from, so it runs after the portrait step.
-            if (coverUrl) {
+            // 3) §11 additional gallery views (frontal + art sheet) via img2img
+            if (portraitUrl) {
                 const viewsRes = await withRetry('additional-views', () =>
-                    generateAdditionalViews({ characterId: charId, referenceUrl: coverUrl }),
+                    generateAdditionalViews({ characterId: charId, referenceUrl: portraitUrl }),
                 );
                 console.log(`[redeem-voucher] views for ${charId}: appended=${viewsRes?.appended ?? 0}`);
             }
 
-            // 5) induction — ONE coordinated pass: self memories (incl the private
+            // 4) induction — ONE coordinated pass: self memories (incl the private
             //    `secret`, which never touches chain) + relationships to the existing
             //    roster, seeding symmetric public director ties + dual memories. Mode
             //    'newcomer': a freshly-minted user character is a stranger to the cast

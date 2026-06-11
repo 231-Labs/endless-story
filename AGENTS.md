@@ -44,7 +44,7 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
-## 目前進度（2026-06-03）
+## 目前進度（2026-06-10）
 
 **一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder；目前進入「demo 穩定化 + 部署 + 影片素材」階段。
 
@@ -78,7 +78,17 @@ pnpm -r type-check                            # 全 repo 綠燈確認
   - `redeemVoucher` 成功後會用 `after()` 背景跑 `generatePersonaAction`，從公開 profile 蒸餾「軸/腔/界」，上傳 Walrus 並用 `commitment::commit` anchor；失敗不擋 mint。
   - `/dossier` 的 persona 讀取已改成 chain-first：Sui object id 讀 `personaSubject(characterId)` 的最新 commitment，沒有才隱藏本色區；demo slug 仍 fallback mock。
 - **角色經濟驗證已完成**：`packages/economy` 純模擬 12/12 綠，角色頁 survival 已接 off-chain shadow；產品化 tick settle / give phase 還沒進主 loop。
-- **部署文件已補**：見 `docs/DEPLOYMENT.md`，方向是 Vercel 放 web，Zeabur/Contabo 放 relayer + world-loop。
+- **接濟「金流合理性」已驗證（2026-06-10，Part D D8 純決策核心）**：擔心 LLM 亂給錢→金流變假。處理原則＝**錢不由 LLM 決定**：新增 `src/aid.ts` `decideAid`（需求接地的純決策：自己快死/沒餘額就不給；沒人真的缺就不給＝anti-「太假」守衛；有缺才救最需要的人，金額 = min(自身 surplus, 補到 target runway)，仇家不資助）＋ `decideAccept`（受方可拒：仇家拒、高傲者沒到瀕死也拒）。LLM 層（runner，待接）只供「要不要出手＋措辭＋關係 tone」，且被這些守衛 + `applyTransfer`（不可負/不可給死人/仇家）夾死。`test/aid.test.ts` 8 綠，含 living-world 整合：**無接濟 150 日死 3/4、開接濟死 0/4（413 筆轉帳）、逐日守恆**——透過決策核心重現 H4，非寫死 `runPatronage`。`pnpm --filter @endless-story/economy test` 35 綠、type-check 綠。（註：此 `decideAid` 後改為**確定性 fallback/baseline**，正式 give/no-give 改交 LLM——見下條。）
+- **接濟拍板改「LLM 判斷版」（2026-06-10）**：owner 要的是**角色自己判斷要不要給，不要寫死規則**。故 runner `character-agent/aid.ts` `decideAidAction`（鏡像 `decideSocialAction`：cheap LLM＋prompt 給足經濟＋關係信號）負責 give/no-give/給誰/給多少。**確定性層只剩硬守衛**（`parse.ts` `parseAid`/`clampAidAmount`：收款人須在 peer 名單、金額 clamp 到 ≤餘額＝no-overdraft，對齊 `applyTransfer`）——不再決定該不該給。eval harness `__eval__/aid-{scenarios,eval}.ts`（6 情境＝3 hard 必過＋3 judgment 觀察；`--print` 出 prompt、有 key 對真 cheap 模型自動評分）。`test/character-agent-aid.test.ts` 7 綠（守衛層；`pnpm --filter @endless-story/runner test` 34 綠）。**已用 Claude 自當模型把 6 情境跑過：hard 3/3、judgment 3 例皆有理**（富裕救瀕死盟友、無人缺不散財、自己拮据只小額還情、瀕死仇家講理拒、雙缺先救命懸一線者、想要非急需不傾囊）；**待補 Poe key 對 cheap-tier 實跑**（這容器無金鑰＋出站受限）。runner type-check 在本容器因未 build sdk 報 `../sdk/*` 既有錯，與本次新檔無關。
+- 經濟 Part D 待續：`economy.move` D1 `transfer_between_characters`/`owner_fund_character`/settle 上鏈（需 sui 環境 build+test）＋ tick-loop GIVE phase 接 `decideAidAction`→送鏈。
+- **金流／高齡死亡已解耦成獨立純 step（2026-06-10）**：先前「角色間轉帳」只埋在 driver `runPatronage` 的貪婪策略裡（驗過 H4 但沒抽出來），「年齡死／vitality」也內聯在 `settleDay`。現各自抽成單一真理純函式：`src/transfer.ts`（`applyTransfer`/`applyTransfers`，含 memo_kind＋self/dead/overdraft 守衛，守恆 net-0）＋ `src/vitality.ts`（`stepVitality`，雙軌死亡）。`settleDay`、web `lazySettle` 影子、driver patronage 全改呼叫它們（不重寫）。新增 `test/transfer.test.ts`＋`test/vitality.test.ts`（含 settleDay parity 守衛），`pnpm --filter @endless-story/economy test` 27 綠、type-check 綠、`driver/report.ts` 全 PASS 且 H4(rescues=50/death on0 off3)＋逐日守恆 byte-identical（純解耦、零行為變更）。之後 Part D 的 `transfer_between_characters` / `economy.move` settle / runner `decideAid` 直接移植這兩支。
+- **部署已上自架 VPS（2026-06-10）**：web 已部署在自己的 VPS，不再依賴 Vercel（也就沒有 300s maxDuration 上限）；relayer + world-loop 部署細節仍見 `docs/DEPLOYMENT.md`（文內 Vercel 段落視為歷史方案）。
+- **Tick loop 已模組化（2026-06-10）**：`web/lib/actions/tick-loop-internal.ts` 已拆成 `lib/actions/tick-phases/{support,chain,move,social,act}.ts`（共用 helper／鏈上送簽／三個 phase 各一檔），`tick-loop.ts` 只剩 orchestrator。行為不變，純搬家。
+- **Runner parse 防線已可測（2026-06-10）**：character-agent 的 LLM 輸出解析＋身份漂移防線抽到 `runner/src/services/character-agent/parse.ts`（純函數）；新增 `pnpm --filter @endless-story/runner test`（node --test fixture 測試：director capability 驗證 + move/act/social/plan 解析，27 綠）。自主跑 loop 前壞輸出會退化成 stay/idle/fallback plan，不會 throw。
+- **角色所有權已改為鏈上強制（2026-06-10，⚠️ 待本地 Move 驗證）**：`mint_character_internal` 現在在合約內把 `OwnerCap` `public_transfer` 給 `owner_recipient`（redeem 路徑＝voucher.payer），只回傳 `(ID, ControlCap)`；`mint_genesis_character` / `mint_collectible_character` / `redeem_voucher_to_character` 只回 ControlCap。storyteller PTB 從此碰不到 OwnerCap——「持有 IP」變成鏈上結構性保證。TS 呼叫端（redeem-voucher / create-founding-cast / seed-cast / test-recruit-e2e）已同步，type-check 綠。**遠端容器無 sui CLI：redeploy 前必跑 `sui move build && sui move test`。**
+- **ENDLESS decimals 已確認 = 6（2026-06-10）**：`currency.move` `new_currency_with_otw(witness, 6, …)`，前端全鏈路按 6（faucet 10e6=10、dream 50e6=50）。repo 內所有 1e9/9-decimals 都是 WAL/MIST（gas），與 ENDLESS 無關。常數已抽單一來源 `shared/src/currency.ts`（`ENDLESS_DECIMALS`），web 五處改 import。若 explorer 顯示非 6＝舊部署，redeploy 即對齊。
+- **分潤現況（認知校正，2026-06-10）**：分潤**不是沒規劃**——完整設計在 `docs/CHARACTER_ECONOMY.md`（§1 金流、§3 混合發薪、Part D D1 `add_owner_revenue`），且**被刻意 gate**（「Part D 為 gate-after，須 owner 認可後另起」）。未實作的上游卡點：`subscribe.move` 目前不收費（註明 Phase 1.6），沒有金流自然分無可分；`RevenueConfig` 三段 bps 與 `OwnerCap.cumulative_revenue` 欄位都已就位等接。**2026-06-10 拍板：本輪不建分潤 primitive**，留待有 sui 工具鏈的環境照 Part D 做（付費訂閱 → 按 RevenueConfig 拆 → owner 份額累進 + 可 claim）。
+- **記憶解密已改 cap-enforced（2026-06-10，⚠️ 待錢包環境實測）**：修掉「不連錢包（或任意 `?as=`）就能看任意角色解密記憶」的洞。舊路徑是 server 拿 admin ControlCap 當萬能解密 oracle、只用可竄改的 `?as=` 字串比對 owner（fallback 還是 OWNER_A）。現在對齊合約 SEAL 模型（解密＝ControlCap 持有者 saga server / OwnerCap 持有者 owner 兩種人）：server 新增 `/api/memories/encrypted` 只回**密文**（`MemWalManual.recallEncrypted`，不動 cap）；owner 在瀏覽器用真錢包＋鏈上查到的 OwnerCap 走 `decryptWithOwnerCap` → `seal_approve_owner` 解密（一次簽名、client 端三因子重排）。`lib/api/memories.ts` 的 server 解密分支已刪，mock fallback 保留（僅 demo fixtures）。tag 解析/評分抽到 client-safe `lib/chain/memory-tags.ts`；`MemoriesTab` 改吃 `isOwner` prop。runner / tick 的 saga ControlCap recall 路徑不變。**遠端容器無錢包：需在有錢包環境實點一輪（連錢包→解密→簽名→出記憶）。**
 - **首頁影片素材 override 已接**：`scenesApi.listTodayClips` 會優先讀 `DEMO_CLIPS_URL`、`DEMO_CLIPS_FILE`、`public/demo-clips.json`，再 fallback 現有 mock clips；格式見 `packages/web/public/demo-clips.example.json`。
 - **短 TTL chain-read cache 已接**：公開 Saga / World time / Scene reads 會走 process-local read-through cache，預設 10–15s，`CHAIN_READ_CACHE_TTL_MS=0` 可關閉；不碰 MemWal / 私密內容。
 
@@ -133,7 +143,7 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 1. **依賴單向** — `web → sdk + memwal + llm` ／ `runner → sdk + memwal + llm` ／ `cli → sdk + shared`。`sdk` 不准 import `web`；`shared` 不准 import 任何上層
 2. **`sdk` 是鏈上互動唯一入口** — 不准自己 `new SuiClient()`、不准自己手寫 PTB
 3. **`memwal` 是 Walrus / Seal 唯一入口** — 不准 import `@mysten/walrus` 或 `@mysten/seal`
-4. **`llm` 是文字 / 圖片 AI 唯一入口** — 不准 `fetch('https://api.poe.com/...')`、import `@anthropic-ai/sdk` / `openai`、散落 prompt 模板
+4. **`llm` 是文字 / 圖片 AI client 唯一入口** — 不准 `fetch('https://api.poe.com/...')`、import `@anthropic-ai/sdk` / `openai`。prompt 模板 **colocate 在使用它的 service**（runner 各 service 的 `prompt.ts`；mint 流程模板在 `llm/prompts`），不集中堆回 llm。唯一既定例外：`memwal` client 端 embedding 直打 OpenAI（設計如此，不要仿效擴散）
 5. **`shared/src/contract-ids.ts` 是部署輸出單一真相** — `cli` 寫入，sdk/runner/web 只讀
 6. **server actions 優先** — admin 操作走 `web/src/lib/actions/`，除非要 webhook / SSE / RSS 才開 `app/api/`
 7. **`(site)` / `(admin)` route group 嚴格隔離** — admin layout + middleware 獨立
@@ -209,7 +219,7 @@ packages/
 | # | 項目 | 範圍 | 估時 |
 |---|---|---|---|
 | **S** | **Runner demo acceptance** | 已做 cache/backoff/default=1/UI 顯示；剩顧/柳/孟 2 tick 真跑驗證、確認第二輪 POV 召回第一輪 SOCIAL memory、檢查 SOCIAL memory 不寫未授權重設定 | 0.5–1d |
-| **D** | **部署策略落地** | Vercel web + Zeabur/Contabo relayer + world-loop；設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
+| **D** | **部署策略落地** | web 已上自架 VPS；剩 relayer + world-loop 服務化、設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
 | **E** | **角色經濟產品化 Part D** | web adapter / SETTLE phase / GIVE phase / 日界發薪扣 cost / vitality & death hook；若 demo 時間不夠可先保留 shadow | 2–4d |
 | **I** | **Web i18n** | `next-intl` framework + 抽既有文案 + LocaleToggle + `romanize-name`（中文 → 拼音） | 2–3d |
 | **V** | **Demo / Trailer 素材** | 跑 2–3 tick 產章回 + 手卷錄屏；剪 trailer；首頁 placeholder 換真內容；需要預留 LLM/影片生成時間 | 2–4d |
@@ -356,7 +366,7 @@ Tailwind 預設色（`bg-stone-*` 等）一定要配 `dark:`。重複 className 
 **架構**
 - ❌ 繞過 `sdk` 直接 `new SuiClient()`（原則 2）
 - ❌ web/runner 直接 import `@mysten/walrus|seal`（走 memwal，原則 3）
-- ❌ web/runner 直接 `fetch` Poe / OpenAI / Anthropic 或散落 prompt（走 llm，原則 4）
+- ❌ web/runner 直接 `fetch` Poe / OpenAI / Anthropic 或 import AI SDK（走 llm，原則 4；唯一既定例外＝memwal client 端 embedding）
 - ❌ 手動編輯 `shared/src/contract-ids.ts`（cli 寫入，原則 5）
 - ❌ 在 `(site)` route 放 admin 操作（原則 7）
 - ❌ 繞過 `web/src/lib/api/` facade

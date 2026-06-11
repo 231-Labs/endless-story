@@ -205,6 +205,12 @@ export interface RememberMeta {
     day?: number;
     kind?: string;
     anchored?: boolean;
+    /**
+     * Text to embed for the vector, when it should differ from the stored/encrypted
+     * text — e.g. the raw memory WITHOUT the `[[m|...]]` tag, so the tag doesn't
+     * pollute the embedding. Falls back to the stored text when unset.
+     */
+    embedText?: string;
 }
 
 /** Optional recall scoring hints for a self-hosted three-factor relayer. Managed relayer ignores. */
@@ -357,6 +363,24 @@ export interface RecallManualMemory {
     blob_id: string;
     text: string;
     distance: number;
+}
+
+/**
+ * One encrypted blob from recallEncrypted() — SEAL ciphertext, still sealed.
+ * Safe to hand to an untrusted client: decryption requires a cap holder to
+ * pass `character::seal_approve_{control,owner}` at the SEAL key servers.
+ */
+export interface EncryptedRecallBlob {
+    blob_id: string;
+    /** SEAL ciphertext bytes, base64-encoded. */
+    data_b64: string;
+    distance: number;
+}
+
+/** Result from recallEncrypted() — search + download, no decryption. */
+export interface RecallEncryptedResult {
+    results: EncryptedRecallBlob[];
+    total: number;
 }
 
 /** Result from recallManual() — full client-side variant with decrypted text */

@@ -9,6 +9,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
+import { parseSocial } from './parse.js';
 
 export interface SocialSceneMate {
     id: string;
@@ -135,61 +136,4 @@ export async function decideSocialAction(
         };
     }
     return { kind: 'idle', reason: parsed.reason };
-}
-
-function parseSocial(raw: string): SocialActionResult | null {
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try {
-        const o = JSON.parse(m[0]) as {
-            kind?: unknown;
-            targetCharacterId?: unknown;
-            line?: unknown;
-            observation?: unknown;
-            relationshipMemory?: unknown;
-            reason?: unknown;
-        };
-        const kind =
-            o.kind === 'talk' || o.kind === 'observe' || o.kind === 'idle'
-                ? o.kind
-                : 'idle';
-        const observation = sanitizeSocialMemory(
-            clamp(typeof o.observation === 'string' ? o.observation : undefined, 90),
-        );
-        const relationshipMemory = sanitizeSocialMemory(
-            clamp(typeof o.relationshipMemory === 'string' ? o.relationshipMemory : undefined, 110),
-        );
-        const reason = sanitizeSocialMemory(
-            clamp(typeof o.reason === 'string' ? o.reason : undefined, 50),
-        );
-        return {
-            kind,
-            targetCharacterId: typeof o.targetCharacterId === 'string' ? o.targetCharacterId : undefined,
-            line: clamp(typeof o.line === 'string' ? o.line : undefined, 32),
-            observation,
-            relationshipMemory,
-            reason,
-        };
-    } catch {
-        return null;
-    }
-}
-
-const UNAUTHORIZED_SHARED_PAST_RE =
-    /多年同門|舊情|舊愛|血緣|親兄|親弟|親姊|親妹|父女|母女|父子|母子|青梅竹馬|從小相識|一同長大|舊仇|宿怨|前世|拜過師|師徒舊恩/;
-const UNSUPPORTED_HEAVY_MOTIF_RE =
-    /跛|膝蓋|腿傷|舊傷|重病|病入膏肓|血跡|血污|棺材|屍|死人|死亡|巨債|玉鐲|信物|厚底靴/;
-
-function sanitizeSocialMemory(text: string | undefined): string | undefined {
-    if (!text) return undefined;
-    if (!UNAUTHORIZED_SHARED_PAST_RE.test(text) && !UNSUPPORTED_HEAVY_MOTIF_RE.test(text)) {
-        return text;
-    }
-    return undefined;
-}
-
-function clamp(text: string | undefined, max: number): string | undefined {
-    const trimmed = text?.trim();
-    if (!trimmed) return undefined;
-    return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }

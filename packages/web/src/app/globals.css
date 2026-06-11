@@ -63,6 +63,25 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 鍵盤導航可見性 — 全站統一的 focus ring（滑鼠點擊不觸發） */
+:focus-visible {
+  outline: 2px solid rgb(var(--color-cinnabar) / 0.7);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 動效敏感用戶：關閉裝飾性動畫與平滑捲動（WCAG 2.3.3） */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* 全站隱藏捲軸（保留滾動功能） */
 * {
   scrollbar-width: none;
@@ -91,6 +110,21 @@ body {
 }
 
 @layer components {
+  /** 全站最常見的容器語彙：浮在 canvas 上的毛玻璃卡片 */
+  .es-card {
+    @apply rounded-3xl border border-hairline/50 bg-surface/40 backdrop-blur-sm;
+  }
+
+  /** 主要動作 — 朱砂膠囊 */
+  .es-button-primary {
+    @apply rounded-full bg-cinnabar px-6 py-2.5 text-sm tracking-widest text-canvas transition-colors hover:bg-seal;
+  }
+
+  /** 次要動作 — 髮絲線膠囊 */
+  .es-button-ghost {
+    @apply rounded-full border border-hairline bg-surface px-6 py-2.5 text-sm tracking-widest text-mute transition-colors hover:border-cinnabar/50 hover:text-cinnabar;
+  }
+
   .es-icon-button {
     @apply inline-flex items-center justify-center rounded-full text-mute transition-colors hover:bg-ink/5 hover:text-ink dark:hover:bg-elevated;
   }
@@ -119,6 +153,61 @@ body {
   .es-page-lead-title {
     @apply font-serif leading-[1.18] tracking-[0.16em] text-ink drop-shadow-sm sm:tracking-[0.2em];
     font-size: clamp(1.375rem, 4.25vw + 0.65rem, 3.125rem);
+  }
+}
+
+/* ─────────── Theater video progress bar ───────────
+ * appearance-none range input；軌道由 inline linear-gradient 畫出已播進度，
+ * thumb 平時縮小、hover / 拖曳時放大，維持戲台的安靜感。 */
+.theater-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  width: 100%;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  transition: height 0.2s ease;
+}
+.theater-range:hover,
+.theater-range:active {
+  height: 6px;
+}
+.theater-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: scale(0);
+  transition: transform 0.2s ease;
+}
+.theater-range:hover::-webkit-slider-thumb,
+.theater-range:active::-webkit-slider-thumb {
+  transform: scale(1);
+}
+.theater-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: scale(0);
+  transition: transform 0.2s ease;
+}
+.theater-range:hover::-moz-range-thumb,
+.theater-range:active::-moz-range-thumb {
+  transform: scale(1);
+}
+@media (hover: none) {
+  .theater-range::-webkit-slider-thumb {
+    transform: scale(1);
+  }
+  .theater-range::-moz-range-thumb {
+    transform: scale(1);
   }
 }
 
@@ -172,6 +261,34 @@ body {
 }
 
 /* ─────────── Handscroll ambient keyframes ─────────── */
+
+/* ─────────── 載入／等待 圖樣動畫 ───────────
+ * es-ripple：鑼音 / 墨暈外擴。es-seal-breathe：方印呼吸。
+ * es-wait-dot：等待中的三點墨痕。prefers-reduced-motion 時全部停用（見上）。 */
+@keyframes es-ripple {
+  0%   { transform: scale(0.55); opacity: 0.5; }
+  70%  { opacity: 0.16; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes es-gong-strike {
+  0%, 100% { transform: scale(1); }
+  8%       { transform: scale(1.05); }
+  18%      { transform: scale(0.99); }
+  28%      { transform: scale(1.012); }
+  38%      { transform: scale(1); }
+}
+
+@keyframes es-seal-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.055); }
+}
+
+@keyframes es-wait-dot {
+  0%, 60%, 100% { opacity: 0.18; transform: translateY(0); }
+  30%           { opacity: 1; transform: translateY(-1.5px); }
+}
+
 
 @keyframes es-figure-idle {
   0%, 100% { transform: translateY(0) rotate(-0.6deg); }

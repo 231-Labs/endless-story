@@ -133,7 +133,7 @@ export async function createFoundingCastAction(
                     portraitBlobId = port.blobId;
                 }
             } catch {
-                /* mint headless; ensure-portrait / reconcile can backfill */
+                /* portrait gen failed — mint headless; the reconciler can backfill a cover */
             }
 
             // mint via mint_genesis_character (no voucher)
@@ -171,7 +171,9 @@ export async function createFoundingCastAction(
                 elements: attrElements,
                 type: `${d.packageId}::character::AttributeValue`,
             });
-            const caps = tx.add(
+            // mint_genesis_character transfers the OwnerCap to ownerRecipient
+            // (= admin here) on-chain and returns only the ControlCap.
+            const controlCap = tx.add(
                 endlessTx.character.mintGenesisCharacter({
                     cap: d.storytellerCapId,
                     saga: d.sagaId,
@@ -183,7 +185,7 @@ export async function createFoundingCastAction(
                     ownerRecipient: admin.address,
                 }),
             );
-            tx.transferObjects([caps[0], caps[1]], admin.address);
+            tx.transferObjects([controlCap], admin.address);
 
             const res = await admin.client.signAndExecuteTransaction({
                 transaction: tx,

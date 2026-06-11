@@ -11,7 +11,9 @@
     "./types": "./src/types/index.ts"
   },
   "scripts": {
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "eval:aid": "tsx --env-file-if-exists=../web/.env.local src/services/character-agent/__eval__/aid-eval.ts"
   },
   "dependencies": {
     "@endless-story/llm": "workspace:*",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "tsx": "^4.19.0",
     "typescript": "^5.5.0"
   }
 }

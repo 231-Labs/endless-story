@@ -24,8 +24,8 @@ export function LiveStateBar({
   characterId: string;
 }) {
   return (
-    <div className="mt-12 border-t border-hairline pt-6 sm:mt-12 sm:pt-8">
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
+    <div className="mt-8 border-t border-hairline pt-5 sm:mt-12 sm:pt-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-8">
         {LIVE_ITEMS.map((item) => (
           <div key={item.key} className="min-w-0">
             <p className="text-xs tracking-widest text-mute">{item.label}</p>
@@ -45,8 +45,8 @@ export function LiveStateBar({
 
 export function LiveStateBarSkeleton() {
   return (
-    <div className="mt-12 border-t border-hairline pt-6 sm:mt-12 sm:pt-8">
-      <div className="grid animate-pulse grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
+    <div className="mt-8 border-t border-hairline pt-5 sm:mt-12 sm:pt-8">
+      <div className="grid animate-pulse grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-8">
         {[0, 1, 2].map((i) => (
           <div key={i} className="min-w-0">
             <div className="h-3 w-16 rounded bg-hairline/60 dark:bg-hairline" />

@@ -127,6 +127,18 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
   (敘事日衰減,half-life 2 日)× **relevance**(MemWal 向量 distance)。over-fetch 3× →
   三因子重排 top-K。**唯一**跟舊本地 store 的差:只對「語意撈回的候選集」評分、非全量
   掃描(緩解:撈寬 + 必要時定向 recall)。recency 用**敘事日**非牆鐘 → 推進 tick 即衰減、可 demo。
+- **自架 relayer = 真·全 namespace 三因子(client 已接好,待部署)**:`packages/relayer`(plaintext-blind,
+  存 向量+純量 metadata+Walrus blob id)對**整個 namespace** 算 importance×recency×relevance、回真 top-N,
+  取代託管版的「top-K by distance + client 重排」。**client 接線已完成**:remember 送 metadata + 用
+  `RememberMeta.embedText` 嵌**去 tag 的原文**(向量不被 tag 污染);recall 在 **`MEMWAL_RELAYER_THREE_FACTOR=1`**
+  時只撈 top-N、信 relayer 排序(**少 ~3× SEAL 解密 → recall 快很多**,即使並發=1)。預設關 → 維持託管行為。
+  · **部署**:relayer 上自架 VPS(最好跟自架 Walrus publisher/aggregator 同機,relayer→Walrus 走本機),
+    web 設 `MEMWAL_SERVER_URL` 指過去 + 開 flag。
+  · **⚠️ 認證錯位**:自架 relayer 只認 `RELAYER_SECRET` 的 Bearer,但 client 送的是簽章 header(relayer 不驗)→
+    **別設 `RELAYER_SECRET`**(會 401),改用防火牆/CORS 鎖;要 Bearer 得另在 client 加。
+- **並發 = 1(SEAL key server 限流)**:`MEMWAL_RECALL_CONCURRENCY` 預設 1,PLAN/POV 串行避開 SEAL 429。
+  要放寬 → **自架 SEAL key server**(`MemWalManual` 的 `sealServerConfigs`/`sealThreshold` 可配)+ 自架 Walrus,
+  兩者到位才提高並發。**尚未做**;「慢但能跑」可接受,世界本就慢速自治。
 - **反思壓縮(sleep)** ✅:把零碎觀察壓成高密度反思 → 防 recall 退化成噪音。**已做(N2)**:
   recall 非 anchored 的 observation/chapter → LLM 壓成 1-2 條 → remember(i=8,tag `a=1`
   排除再壓)→ 上鏈 Reflection。「遺忘已吸收的」採**軟遺忘**(MemWal append-only,無刪除):
@@ -158,9 +170,9 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
     → 同一樁「封箱」,班主心裡是白蘭、唐桂蘭心裡是軍閥;兩版私密記憶**互不知情、皆未外洩**,系統零跨角色
     滲漏即自然產生「視角化真相」。可讀成唐桂蘭的**善意誤解**,或讀成同一危局的**第二層真相**(私情×公難並存)——
     系統不替你裁決,錯位本身就是日後章回的戲。這正是 SEAL/隱私界線「不是缺陷、是敘事引擎」的活證。
-- **非阻塞頭像 mint(join now, art later)** ✅:抽卡看到描述即可「入班」,不等畫像。畫像若已好就烤進 mint tx;
-  沒好則 mint 後 **server 端**補生 + `character::update_image_by_storyteller` 上鏈(`web/.../ensure-portrait.ts`,與 reconciler 同路),
-  不靠 client 停留。reconciler 仍是最後保險。**創世班底**則先生圖再鑄造,確保不出無頭像的人。
+- **抽卡 mint = 阻塞式(等畫像好才上鏈)**:畫像 client 端生好 → 烤進 mint tx(NFT 縮圖即時、且**鏈上 = 票卡顯示同一張**)→ 才能按「入班」。
+  曾試過「不等畫像、上鏈即蓋章、背景補圖」的非阻塞版,但 `after()` / 背景 server action 在本環境**沒真的背景化**(印章卡在等全部 enrich 跑完),且 server 重生的圖與顯示的不同張 —— 已**回退**。日後要再做非阻塞,需先解決 after() 不背景化的問題,並讓「補上鏈的圖 = 顯示的那張」(前端把自己那張 patch,而非 server 重生)。
+  · **創世班底**:先生圖再鑄造,確保不出無頭像的人(見 §2 founding)。
 - **創世班底 ≠ 抽卡職缺(避免重複)**:`founding_cast`(preset)= 有名有姓的開班 principals(班主沈雪笙…),由創世入口直鑄;
   `recruitments` = 開放給用戶抽卡的職缺。**創世獨佔的唯一行當(班主/丑/副刊記者)已從 seed 扣掉**,多人行當
   (花旦/小生/刀馬旦/衣箱/龍套/樂師…)保留開放,讓用戶在創世 principals 之上再補人。

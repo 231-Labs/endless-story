@@ -356,7 +356,7 @@ async function main() {
       type: `${d.packageId}::character::AttributeValue`,
     });
 
-    const caps = tx.add(
+    const controlCap = tx.add(
       endlessTx.character.mintGenesisCharacter({
         cap: d.storytellerCapId,
         saga: d.sagaId,
@@ -368,8 +368,9 @@ async function main() {
         ownerRecipient: admin,
       }),
     );
-    // mint returns (OwnerCap, ControlCap) — admin keeps both for the demo.
-    tx.transferObjects([caps[0], caps[1]], admin);
+    // mint transfers the OwnerCap to ownerRecipient (= admin) on-chain and
+    // returns only the ControlCap; admin keeps the ControlCap for delegation.
+    tx.transferObjects([controlCap], admin);
 
     const res = await client.signAndExecuteTransaction({
       transaction: tx,
