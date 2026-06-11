@@ -76,6 +76,32 @@ export interface SagaLocation {
   terrain?: string;
 }
 
+/**
+ * Event still (劇照) — a verifiable freeze-frame of one beat of an on-chain
+ * event (see docs/CONTENT_PIPELINE.md §5). Stored in SceneGallery.moments as a
+ * BlobRef; this carries the extra provenance + tiering metadata the still
+ * compiler stamps. Composited img2img off the scene anchor + each involved
+ * character's anchor portrait, so identity stays consistent (no face swap).
+ */
+export interface EventStill {
+  /** On-chain event this still depicts (commitment subject_id). */
+  eventId: string;
+  /** tx digest of the event emission — the proof it really happened. */
+  eventTx?: string;
+  sceneId?: string;
+  /** Which beat (tick) of the event this freezes. */
+  beatIndex: number;
+  /** Characters visible in the frame (their anchor portraits conditioned it). */
+  involvedCharacterIds: string[];
+  /** Full-resolution still (gated). */
+  fullBlobId: string;
+  /** Low-res / watermarked teaser (public — gazette headline + social). */
+  teaserBlobId?: string;
+  /** Heat at the captured beat — drove palette/intensity + the capture gate. */
+  heat?: SceneHeatProfile;
+  createdAt: string;
+}
+
 export type ClipAspect = '16/9' | '9/16' | '1/1' | '4/3' | '3/4';
 
 export interface SceneClip {

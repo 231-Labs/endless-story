@@ -7,9 +7,15 @@
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
+/** A part of a multimodal message — text or an image (vision models). */
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
 export interface ChatMessage {
   role: ChatRole;
-  content: string;
+  /** plain text, or multimodal parts (text + image_url) for vision models. */
+  content: string | ChatContentPart[];
 }
 
 export interface ChatRequest {

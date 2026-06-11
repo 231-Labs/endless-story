@@ -1,28 +1,32 @@
 import Link from 'next/link';
-import { chaptersApi, gazettesApi, sagasApi, charactersApi } from '@/lib/api/index';
+import { chaptersApi, gazettesApi, cutsApi, sagasApi, charactersApi } from '@/lib/api/index';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SiteNav } from '@/components/home/SiteNav';
 import { truncateBlobId } from '@/lib/format';
 import { BlobImage } from '@/components/common/BlobImage';
 import { GazetteList } from '@/components/feed/GazetteList';
 import { GazetteTeaser } from '@/components/feed/GazetteTeaser';
+import { CutList } from '@/components/feed/CutList';
 
 export const metadata = {
   title: '梨園章回',
   description: '春雪社的公開連載 — 角色親筆的章回、公報與影像，逐日上鏈。',
 };
 
-type FeedMode = 'all' | 'gazette' | 'text' | 'visual';
+// IA (docs/CONTENT_PIPELINE.md §8.1): the canonical chapter is the event CUT
+// (woven multi-POV); single POVs are demoted to per-character feeds on the
+// dossier. Modes: 全部 landing · 公報 free funnel · 章回 the woven cuts · 影像.
+type FeedMode = 'all' | 'gazette' | 'chapter' | 'visual';
 
 const MODES: { key: FeedMode; label: string; shortLabel: string }[] = [
   { key: 'all', label: '全部', shortLabel: '全部' },
   { key: 'gazette', label: '公報', shortLabel: '公報' },
-  { key: 'text', label: '文字連載', shortLabel: '文字' },
+  { key: 'chapter', label: '章回 · 合本', shortLabel: '章回' },
   { key: 'visual', label: '影像與畫冊', shortLabel: '影像' },
 ];
 
 function parseMode(raw: string | string[] | undefined): FeedMode {
-  if (typeof raw === 'string' && (['all', 'gazette', 'text', 'visual'] as const).includes(raw as FeedMode)) {
+  if (typeof raw === 'string' && (['all', 'gazette', 'chapter', 'visual'] as const).includes(raw as FeedMode)) {
     return raw as FeedMode;
   }
   return 'all';
@@ -36,20 +40,22 @@ export default async function FeedPage({
   const params = await searchParams;
   const mode = parseMode(params.mode);
   const saga = await sagasApi.getCurrentSaga();
-  const [chapters, allCharacters, gazettes, latestGazette] = await Promise.all([
+  const [chapters, allCharacters, gazettes, latestGazette, cuts] = await Promise.all([
     chaptersApi.listChapters(saga.id),
     charactersApi.listSagaCharacters(saga.id),
     // For mode=gazette: full list. For mode=all: also need the latest
-    // one as a teaser. Two reads run in parallel.
+    // one as a teaser. Reads run in parallel.
     mode === 'gazette' ? gazettesApi.listGazettes(saga.id) : Promise.resolve([]),
     mode === 'all' ? gazettesApi.getLatestGazette(saga.id) : Promise.resolve(null),
+    // The canonical chapter = event cut. Fetched for the 章回 mode and the
+    // 全部 landing (where a few lead the page under the gazette teaser).
+    mode === 'chapter' || mode === 'all' ? cutsApi.listEventCuts(saga.id) : Promise.resolve([]),
   ]);
   const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
 
   const publicChapters = chapters.filter((c) => c.visibility === 'public_chapter');
   const visible = publicChapters.filter((c) => {
     const isVisual = c.mediaType === 'video' || c.mediaType === 'gallery';
-    if (mode === 'text') return !isVisual;
     if (mode === 'visual') return isVisual;
     return true;
   });
@@ -105,8 +111,16 @@ export default async function FeedPage({
               <GazetteTeaser gazette={latestGazette} sagaName={saga.name} sagaId={saga.id} />
             </div>
           ) : null}
+          {mode === 'all' && cuts.length > 0 ? (
+            <div className="mb-10">
+              <h2 className="mb-5 font-serif text-xl tracking-wide text-ink">章回 · 事件合本</h2>
+              <CutList cuts={cuts.slice(0, 3)} sagaName={saga.name} />
+            </div>
+          ) : null}
           {mode === 'gazette' ? (
             <GazetteList gazettes={gazettes} sagaName={saga.name} />
+          ) : mode === 'chapter' ? (
+            <CutList cuts={cuts} sagaName={saga.name} />
           ) : visible.length === 0 ? (
             <div className="es-card p-12 text-center">
               <p className="text-sm tracking-wide text-mute">這個範圍裡還沒有章回。</p>

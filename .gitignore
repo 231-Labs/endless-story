@@ -18,3 +18,6 @@ packages/web/data/
 
 # Sui CLI publish-state (we re-publish freely; contract-ids.ts is the source of truth)
 **/Published.toml
+
+# copyrighted dev reference image (vision/code experiment)
+packages/web/public/chamber/ref/

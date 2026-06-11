@@ -26,9 +26,35 @@ export interface TickLoopInput {
     storylet?: boolean;
     /** Render the event's multi-character moment scene image (background). Default true. */
     eventImage?: boolean;
+    /** Weave this event's POVs into the canonical "回" (event_cut) in the
+     *  background, when ≥2 cast wrote a POV. Default true. */
+    eventChapter?: boolean;
     /** Auto-resolve (judge) an event once every participant has acted.
      *  Default true — events conclude on their own (N5). */
     autoResolve?: boolean;
+    /** EXPERIMENTAL (default false): drive a 回 as a multi-tick BudgetEvent that
+     *  lingers OPEN across ticks and resolves WITH a resource transfer (the world
+     *  steps), instead of a per-tick storylet. When on, the spine owns event
+     *  resolution (autoResolve is forced off) and the cut weaves only at resolve.
+     *  See docs/EVENT_LIFECYCLE.md. Not chain-verified — flag on in a chain session. */
+    eventSpine?: boolean;
+    /** EXPERIMENTAL (default false): run MANY events at once — one per contention
+     *  axis (爭灌錄權 ∥ 爭某人的愛). Implies spine mode; live-only. See Stage 1. */
+    parallelEvents?: boolean;
+    /** Concurrency cap for `parallelEvents` (default 2). */
+    maxConcurrentEvents?: number;
+    /** EXPERIMENTAL (default false): couple each character's parallel desires
+     *  through a finite attention budget, so concurrent events pull on each other
+     *  (the 柳生春 trade-off, cross-event). Off-chain steering overlay. Stage 2. */
+    attentionBudget?: boolean;
+    /** EXPERIMENTAL (default false): let the LLM director NAME each incident
+     *  (event-framing.ts) instead of the deterministic keyword→string map. Pure
+     *  narration; falls back to the deterministic label on any failure. */
+    llmFraming?: boolean;
+    /** EXPERIMENTAL (default false): let the LLM director ADD a contested
+     *  resource mid-story (propose-resources.ts), validated + rate-limited. The
+     *  new slot is desired + settled next tick. See EVENT_LIFECYCLE Phase 3. */
+    directorResources?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;
 }
@@ -100,6 +126,48 @@ export interface TickSocialResult {
     error?: string;
 }
 
+/** ASK phase — a needy character decides whether to lower itself to ask a same-scene, solvent
+ *  character for help (the "pull" side of money). The grant is handled by the GIVE phase. */
+export interface TickAskResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    asked: boolean;
+    targetId?: string;
+    targetName?: string;
+    amount?: number;
+    kind?: string;
+    reason?: string;
+    error?: string;
+}
+
+/** GIVE phase — a character decides whether to aid a same-scene peer in need.
+ *  The give/no-give judgment is the LLM's; the balance MOVE is deferred to the
+ *  on-chain economy (Part D D1 transfer_between_characters) / off-chain settle
+ *  shadow (D5) — until that rail lands, `gifts` is the recorded INTENT and the
+ *  effect is narrative + relationship-tone only (`deferred: true`). */
+export interface TickGiveResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    gave: boolean;
+    gifts?: {
+        recipientId: string;
+        recipientName?: string;
+        amount: number;
+        memo: string;
+        manner?: string;
+        reason?: string;
+        /** the recipient refused the gift (e.g. a rival won't take charity) — no money moves. */
+        refused?: boolean;
+    }[];
+    /** overall reasoning / why nothing was given. */
+    reason?: string;
+    /** true while the actual balance move awaits the on-chain / settle rail (D1/D5). */
+    deferred?: boolean;
+    error?: string;
+}
+
 export interface TickSleepResult {
     characterId: string;
     name: string;
@@ -151,6 +219,27 @@ export interface TickStoryletResult {
     error?: string;
 }
 
+/** SETTLE phase — the off-chain economy advanced one day-boundary: treasury-funded wages paid,
+ *  daily cost deducted, vitality/death updated, and this tick's accepted GIVE transfers applied
+ *  to the persisted shadow balances. */
+export interface TickSettleResult {
+    ok: boolean;
+    /** narrative day settled to. */
+    day: number;
+    /** on-chain saga treasury (ENDLESS) that funds the payroll pool. */
+    treasuryFunds: number;
+    /** accepted gift transfers moved this tick. */
+    transfersApplied: number;
+    /** total wages paid across the cohort this settle (ENDLESS). */
+    wagesPaid: number;
+    settledCount: number;
+    /** characters whose vitality bottomed out (dead in the shadow). */
+    dead: { id: string; name: string }[];
+    /** set when settle was skipped (e.g. dry-run). */
+    skipped?: string;
+    error?: string;
+}
+
 export interface TickLoopResult {
     ok: boolean;
     advanced: boolean;
@@ -159,9 +248,18 @@ export interface TickLoopResult {
     moves: TickMoveResult[];
     /** DR-6: scarce-resource tension derived (+ committed) before decisions. */
     drama?: TickDramaResult;
-    /** The storylet opened this tick (dramatic spine), if any. */
+    /** The storylet opened this tick (dramatic spine), if any. In parallel mode
+     *  this is the first of `storylets` (back-compat). */
     storylet?: TickStoryletResult;
+    /** EVERY event live this tick (Stage 1 parallel events); ≤1 in single mode. */
+    storylets?: TickStoryletResult[];
     socials: TickSocialResult[];
+    /** ASK phase: needy characters who opened their mouth to ask for help this tick. */
+    asks: TickAskResult[];
+    /** GIVE phase: character-to-character aid decided this tick. */
+    gives: TickGiveResult[];
+    /** SETTLE phase: the off-chain economy advanced + accepted gifts applied. */
+    settle?: TickSettleResult;
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];

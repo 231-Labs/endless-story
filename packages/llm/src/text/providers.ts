@@ -40,7 +40,9 @@ export function isRetryableError(err: unknown): boolean {
 
 /** POST to Poe's OpenAI-compatible endpoint. */
 export async function callPoe(apiKey: string, req: ChatRequest): Promise<ChatResponse> {
-  const messages: Array<{ role: string; content: string }> = [];
+  // content may be a string or multimodal parts (image_url) for vision models;
+  // the OpenAI-compatible endpoint accepts both, so pass through verbatim.
+  const messages: Array<{ role: string; content: unknown }> = [];
   if (req.system) messages.push({ role: 'system', content: req.system });
   messages.push(...req.messages.map((m) => ({ role: m.role, content: m.content })));
 

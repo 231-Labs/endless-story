@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     '@endless-story/shared',
     '@endless-story/sdk',
+    '@endless-story/chamber-3d',
     '@endless-story/llm',
     '@endless-story/memwal',
     '@endless-story/drama',

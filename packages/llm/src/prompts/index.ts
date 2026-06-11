@@ -50,3 +50,22 @@ export {
   type BuildPublicTagsPromptOptions,
   type PublicTagsResult,
 } from './public-tags.js';
+
+export {
+  buildSceneSpecPrompt,
+  parseSceneSpecResponse,
+  buildCritiquePrompt,
+  parseCritiqueResponse,
+  buildVisionScenePrompt,
+  buildCodeScenePrompt,
+  parseCodeResponse,
+  type BuildCodeScenePromptOptions,
+  type CatalogEntryForPrompt,
+  type SceneSpec,
+  type SceneSpecObject,
+  type SpecTableItem,
+  type Critique,
+  type BuildSceneSpecPromptOptions,
+  type BuildCritiquePromptOptions,
+  type BuildVisionScenePromptOptions,
+} from './chamber.js';
