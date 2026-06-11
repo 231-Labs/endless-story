@@ -37,6 +37,24 @@
 
 ---
 
+## 1.5 關鍵機制限制：合約是「單回合」的（影響「多 tick」的定義）
+
+調查 `act.ts` 收尾條件：`resolve_event` 在 `participants.every(acted)` 當下就翻牌，而一個
+參與者**出一張牌就算 acted**。所以部署中的合約機制是 **single-round**——「每 tick 各出一張、
+連打數 tick」的真·多回合周旋**需要 redeploy**（多回合手牌 / 分回合收尾）。
+
+因此「事件跨 tick」在現有合約下的**可達定義**（spine 採此模型）：
+
+```
+tick T     開回   pushEvent + 發牌；該回合的卡一次打完（單回合）
+T..T+n     續回   事件維持 OPEN（autoResolve 關）；POV／反應／互動跨 tick 累積，全部鎖同一 event id
+T+n        收回   resolve_event 帶 resource transfer（贏家奪下稀缺標的）→ 需求轉移 → 世界前進；
+                  合本在此把整回累積的 POV 一次織成一回
+```
+
+即：一回 = **一次動作回合 + 跨 tick 的反應／POV 累積 + 帶結算的收尾**。戲劇張力在「餘波與
+結算」，不在重複出牌。真·多回合出牌列為 Phase 4（需 redeploy）。
+
 ## 2. 可用的鏈上 primitive（關鍵：不需 redeploy）
 
 全部已部署、TS 可直接編排：
@@ -60,22 +78,29 @@ ACT phase（`tick-phases/act.ts`）已會處理 OPEN budget event：decide→sub
   `recentTopicsBySaga` 歷史。**型別 + 測試綠。⚠️ 未在真鏈跑過一輪。**
 - 這是 deterministic 緩解層，也是 Phase 2 spine 重用的選擇腦。
 
-### Phase 2 — 事件 spine（storylet → 跨 tick BudgetEvent）⏳ 需鏈上驗證
-> ⚠️ 改的是 tick-loop 最核心段，**無鏈環境無法驗**；建議在有 sui/錢包/testnet 的 session 做，
-> 或先 flag-gate（`eventSpine` 預設關，保留現行 storylet 路徑當 fallback）再逐步切換。
+### Phase 2 — 事件 spine（storylet → 跨 tick BudgetEvent）🟡 已建 / flag-gate / 待鏈上驗
+> **狀態**：程式碼已落、flag-gate（`eventSpine` 預設 **關**，保留 storylet 路徑當 fallback）、
+> 型別 + 純邏輯單元測試綠。**⚠️ 尚未在真 tick 跑過**——本容器無鏈。開 flag 前須在有
+> sui/錢包/testnet 的 session 驗一輪。
 
-1. **開場**：當 `selectContention` 選出一樁「目前沒有對應 OPEN 事件」的 contention，且某 scene
-   有 ≥2 在場者 → `pushEvent`（用該 contention 的 card catalog + 參與者）開一個 BudgetEvent。
-   記錄 `eventId`（= 跨 tick 穩定身分）。
-2. **發展（多拍）**：之後每 tick ACT phase 讓 OPEN 事件的參與者各出一張牌（已有）。事件**跨
-   數 tick** 才走到全員出完（靠 hand size / 分批出牌控制節奏）。每拍的 POV `provenance.eventTx =
-   eventId`（穩定），不再用逐 tick storylet digest。
-3. **收尾 + 結算**：全員出完 → `resolveEvent`，且用 **`outcomesWithResourceTransfers`** 把稀缺
-   標的轉給贏家（贏家判定 = drama/Director 規則）→ `applyResourceTransfers` 落鏈 → allocation 變
-   → 下輪 `selectContention` 的張力自然移到別的標的 → **世界前進**。
-4. **合本在收尾織**：把這個 `eventId` 跨拍累積的所有 POV 一次織成一回（`event-chapter-compiler`
-   已能吃多 POV；改成在 resolve 時、用 eventId 聚合的 POV 觸發，subject 改 eventId 或維持 scene）。
-   → Q2 解決：合本 = 一整樁事件的多視角章回。
+已落的檔案：
+- `lib/chain/spine-core.ts`（純，13 測試）：`decideSpineStep`（開/續/收回的生命週期狀態機）、
+  `chooseSettlementWinner`（誰奪標的）、`planResourceTransfer`（從現持有者→贏家的一單位轉移）、
+  `resourceForContention`。
+- `lib/actions/event-spine.ts`（鏈膠水，型別已驗）：process 級 registry（每 saga 一個 OPEN 事件 +
+  跨 tick POV 累積）；`spinePlanAndOpen`（決策→`createBudgetEventAction`+`dealHandAction` 開回）、
+  `spineAccumulatePovs`、`spineResolveAndWeave`（結算 + 織合本）。**唯一新 tx 形狀** = resolve_event
+  帶 `outcomes_with_resource_transfers`（`acquire`/`reallocate` → `makeMoveVec` → outcomes）。
+- `tick-loop.ts`：`eventSpine` on 時，storylet 開場改走 spine、ACT 的 autoResolve 強制關、合本
+  改成**只在收回時**用累積 POV 織（不再逐 tick 快照）。off 時行為與原本逐字相同。
+
+**安全設計**：結算每一步都包了 fallback——任何失敗（提案無效、resource.move 沒套上、RPC）都
+退回 `empty_outcomes` 純收尾，**事件必定關閉**，open 事件絕不會卡住 loop。世界只是該回沒結算。
+
+**收 flag 前必須在鏈上驗的點**：①結算提案是否被 `resolve_event` 接受（conservation 重驗）；
+②`readResourceLedger` 的 `snapshot.id` 是否等於 `apply_resource_transfers` 要的 DramaResource
+**物件 id**（疑點，見 drama.ts:115）；③節奏（minTicks/maxTicks）手感；④背景 after() 收回與下
+一 tick 讀 registry 的競態（已 failure-isolated，但值得看一眼）。
 
 ### Phase 3 — Director（LLM）授權標的 ⏳ 需鏈上 + 接自治導演
 - capability catalog 加 `instantiate_resource(label, capacity, archetype)` / `retire_resource(id)`。
@@ -84,10 +109,17 @@ ACT phase（`tick-phases/act.ts`）已會處理 OPEN budget event：decide→sub
 
 ---
 
+### Phase 4 — 真·多回合出牌 ⏳ 需 redeploy
+若要「每 tick 各出一張、連打數 tick 周旋」（而非單回合 + 餘波），需改 `event.move`：多回合手牌
+或分回合 resolve 條件。非當前 demo 範圍。
+
 ## 4. 現況一句話
 
-Phase 1 已落（反鬼打牆 + 純選擇腦 + 測試），**世界該開始輪流換衝突**——但這只是緩解；
-事件仍是逐 tick 軟 storylet，合本仍是單 tick 快照。**Q2（合本=整樁事件）+ Q1 的根治（資源易手
-推進世界）要等 Phase 2 的跨 tick 事件 spine**，那段必須在能跑真 tick 的環境建/驗。
+- **Phase 1**（反鬼打牆 + 純選擇腦）✅ 已落並接上 storylet 路徑——世界該開始輪流換衝突。
+- **Phase 2**（跨 tick 事件 spine：lingering + 收回結算 + 合本在收回織）🟡 **程式碼已落、flag-gate
+  （預設關）、型別 + 純測試綠**，但**未在真鏈驗**。開 `eventSpine` flag 前，在能跑真 tick 的
+  session 驗 §3 那四點。off 時 demo 行為完全不變。
+- **Phase 3**（LLM 導演授權標的）⏳ 待接自治導演。
+- **Phase 4**（真·多回合出牌）⏳ 需 redeploy。
 
 _本檔是活文件；每推進一個 Phase，更新 §3 狀態。_

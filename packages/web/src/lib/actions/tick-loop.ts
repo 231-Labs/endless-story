@@ -38,6 +38,14 @@ import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { selectContention, pushRecentTemplate } from '@/lib/chain/event-planner';
+import type { SpineStep } from '@/lib/chain/spine-core';
+import {
+    spineNextTick,
+    spinePlanAndOpen,
+    spineAccumulatePovs,
+    spineResolveAndWeave,
+    type SpineCtx,
+} from './event-spine';
 import { compileGazetteAction } from './compile-gazette';
 import { compileEventChapterAction } from './compile-event-chapter';
 import { generateEventMomentAction } from './generate-event-moment';
@@ -133,6 +141,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     const dryRun = input.dryRun ?? false;
+    // EXPERIMENTAL spine: only in live runs (it does chain writes); dry-run keeps
+    // the storylet preview path. See docs/EVENT_LIFECYCLE.md.
+    const eventSpine = (input.eventSpine ?? false) && !dryRun;
     drainMemoryWarnings(); // discard stale warnings from previous local dev requests
     const memoryContext = new TickMemoryContext();
     const cap = input.maxCharacters ?? 6;
@@ -312,7 +323,45 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   so chapters narrate "X happened today" from each angle instead of an ambient
     //   slice. Deterministic (no LLM); admin-signed so it stays serial.
     let storylet: TickStoryletResult | undefined;
-    if ((input.storylet ?? true) && drama?.active && slice.length > 0) {
+    let spineStep: SpineStep | undefined;
+    let spineCtx: SpineCtx | undefined;
+    if (eventSpine && drama?.active && slice.length > 0) {
+        // SPINE MODE — open/linger/resolve ONE multi-tick BudgetEvent as the 回.
+        const occupancy = slice.flatMap((c) => {
+            const sid = rosterById.get(c.id)?.currentSceneId;
+            return sid ? [{ characterId: c.id, sceneId: sid }] : [];
+        });
+        const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
+        const picked = selectContention(drama?.top ?? [], recentTopics);
+        recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+        spineCtx = {
+            sagaId: d.sagaId,
+            capId: d.storytellerCapId,
+            contention: { templateId: picked.templateId, label: picked.label, statement: picked.statement },
+            occupancy,
+            sceneNameById: new Map(activeScenes.map((s) => [s.id, s.name])),
+            nameById,
+            roleById,
+            tensions: (drama?.top ?? []).map((t) => ({
+                characterId: t.characterId,
+                statement: t.statement,
+                tension: t.tension,
+            })),
+        };
+        const nowTick = spineNextTick(d.sagaId);
+        const r = await spinePlanAndOpen(admin, spineCtx, nowTick);
+        storylet = r.storylet;
+        spineStep = r.step;
+        if (storylet) {
+            const verb =
+                spineStep.action === 'open'
+                    ? '開回'
+                    : spineStep.action === 'resolve'
+                      ? '收回'
+                      : '續回';
+            tlog(`②‴ ${verb}：${storylet.sceneName} · ${storylet.label}（${storylet.names.join('、')}）`);
+        }
+    } else if ((input.storylet ?? true) && drama?.active && slice.length > 0) {
         const byScene = new Map<string, Character[]>();
         for (const c of slice) {
             const sid = rosterById.get(c.id)?.currentSceneId;
@@ -440,7 +489,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 d.sagaId,
                 d.storytellerCapId,
                 nameById,
-                input.autoResolve ?? true,
+                (input.autoResolve ?? true) && !eventSpine,
                 dramaHints,
                 rosterContextById,
                 memoryContext,
@@ -658,7 +707,23 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             body: r.chapter,
                         };
                     });
-                if (cutPovs.length >= 2) {
+                if (eventSpine && spineStep && spineCtx && st.digest) {
+                    // SPINE MODE — accumulate this tick's cast POVs under the event
+                    // (keyed by its stable id); the cut weaves only when the event
+                    // RESOLVES, covering the whole multi-tick 回 (not a per-tick snapshot).
+                    spineAccumulatePovs(st.digest, cutPovs);
+                    const step = spineStep;
+                    const ctx = spineCtx;
+                    cutJob = async () => {
+                        const r = await spineResolveAndWeave(admin, ctx, step, worldTime?.day);
+                        if (r.resolved) {
+                            console.log(
+                                `[tick-loop] spine resolve (${st.templateId}): settled=${r.settled}` +
+                                    ` cutPovs=${r.cutPovCount}`,
+                            );
+                        }
+                    };
+                } else if (cutPovs.length >= 2) {
                     cutJob = async () => {
                         const cut = await compileEventChapterAction({
                             sceneId: st.sceneId,

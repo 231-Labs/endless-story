@@ -32,6 +32,12 @@ export interface TickLoopInput {
     /** Auto-resolve (judge) an event once every participant has acted.
      *  Default true — events conclude on their own (N5). */
     autoResolve?: boolean;
+    /** EXPERIMENTAL (default false): drive a 回 as a multi-tick BudgetEvent that
+     *  lingers OPEN across ticks and resolves WITH a resource transfer (the world
+     *  steps), instead of a per-tick storylet. When on, the spine owns event
+     *  resolution (autoResolve is forced off) and the cut weaves only at resolve.
+     *  See docs/EVENT_LIFECYCLE.md. Not chain-verified — flag on in a chain session. */
+    eventSpine?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;
 }
