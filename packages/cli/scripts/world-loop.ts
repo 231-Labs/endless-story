@@ -27,6 +27,7 @@
  *   --director-resources   Phase 3-B: let the LLM director add scarce resources
  *   --parallel-events      Stage 1: run many events at once (one per axis)
  *   --attention-budget     Stage 2: concurrent events pull on shared characters
+ *   --rival-gravity        draw contenders toward their contest so events form
  *   --max-concurrent-events=<n>  cap for --parallel-events (default 2)
  *      (all default off; see docs/EVENT_LIFECYCLE.md §5–§7 for what to watch)
  *
@@ -81,6 +82,7 @@ function parseArgs(argv: string[]): LoopOpts {
     if (has('director-resources')) input.directorResources = true; // Phase 3-B: LLM adds scarcity
     if (has('parallel-events')) input.parallelEvents = true; // Stage 1: many events at once
     if (has('attention-budget')) input.attentionBudget = true; // Stage 2: cross-event attention pull
+    if (has('rival-gravity')) input.rivalGravity = true; // draw contenders together so events form
     const maxConcurrent = Number(get('max-concurrent-events'));
     if (Number.isFinite(maxConcurrent) && maxConcurrent > 0) input.maxConcurrentEvents = Math.floor(maxConcurrent);
 

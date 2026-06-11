@@ -27,6 +27,12 @@ import { Transaction } from '@mysten/sui/transactions';
 import type { Keypair } from '@mysten/sui/cryptography';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, type SuiClient } from '@endless-story/sdk';
 import { readResourceLedger, settleResolvedTransfers } from '@/lib/chain/drama';
+import { coolResource } from '@/lib/chain/gravity-core';
+
+/** How long a just-settled resource stops pulling rivals (rival-gravity ticks,
+ *  decremented once per loop). Long enough that a ≥3-way contest disperses
+ *  between rounds — see gravity-sim.test.ts (C). */
+const GRAVITY_COOLDOWN_TICKS = 6;
 import {
     decideSpineStep,
     decideSpineSteps,
@@ -281,6 +287,9 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
             allocations: r.allocations,
         }));
         const resource = resourceForContention(views, ev.templateId);
+        // RIVAL GRAVITY relief #1: the contest is decided — stop drawing rivals to
+        // this resource for a while (else a ≥3-way slot thrashes; gravity-sim (C)).
+        if (resource) coolResource(resource.resourceId, GRAVITY_COOLDOWN_TICKS);
         const keyword = ev.templateId.split(':')[1] ?? '';
         const winner = resource
             ? chooseSettlementWinner(ev.participantIds, ctx.tensions, keyword)

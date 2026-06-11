@@ -29,7 +29,9 @@ import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
-import { deriveAndCommitDramaBeat, tensionFraction } from '@/lib/chain/drama';
+import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
+import { computeGravityTargets } from '@/lib/chain/rival-gravity';
+import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
@@ -274,6 +276,31 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     if (input.move ?? true) {
         tlog(`② 自主移動…`);
         try {
+            // RIVAL GRAVITY (flag-gated): draw contenders toward their contest so
+            // events reliably FORM. Verified in gravity-{core,sim}.test.ts; the
+            // relief terms (settled-resource cooldown + holder exclusion) keep it
+            // from gluing. Decay cooldowns once, then compute this tick's pulls.
+            let gravityTargets: Map<string, string> | undefined;
+            if ((input.rivalGravity ?? false) && !dryRun) {
+                try {
+                    tickResourceCooldowns();
+                    const resources = await readResourceLedger(admin.client, d.packageId, d.sagaId);
+                    if (resources.length > 0) {
+                        gravityTargets = computeGravityTargets(
+                            resources,
+                            slice.map((c) => ({
+                                id: c.id,
+                                name: c.name,
+                                tags: publicTagsWithRole(c, roleById.get(c.id)),
+                                sceneId: rosterById.get(c.id)?.currentSceneId,
+                            })),
+                        );
+                        if (gravityTargets.size > 0) tlog(`②◦ 相吸：${gravityTargets.size} 人被爭端牽引`);
+                    }
+                } catch (err) {
+                    console.warn('[tick-loop] rival gravity failed:', err);
+                }
+            }
             moves.push(
                 ...(await runMovePhase({
                     admin,
@@ -286,6 +313,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     roleById,
                     memoryContext,
                     dryRun,
+                    gravityTargets,
                 })),
             );
             tlog(`   移動 ${moves.filter((m) => m.ok && m.toSceneId).length} 人${dryRun ? '（預演）' : ''}`);
