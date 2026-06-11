@@ -21,12 +21,21 @@ export const newVoucherRequirements = (args: gen.NewVoucherRequirementsArguments
 export const checkVoucherRequirements = (args: gen.CheckVoucherRequirementsArguments) =>
   gen.checkVoucherRequirements({ package: pkg(), arguments: args });
 
+export const checkRedeemIntentRequirements = (args: gen.CheckRedeemIntentRequirementsArguments) =>
+  gen.checkRedeemIntentRequirements({ package: pkg(), arguments: args });
+
 // ── Voucher lifecycle (mint → redeem) ───────────────────────────────────
 export const mintGenesisVoucher = (args: gen.MintGenesisVoucherArguments) =>
   gen.mintGenesisVoucher({ package: pkg(), arguments: args });
 
+export const requestRedeemVoucher = (args: gen.RequestRedeemVoucherArguments) =>
+  gen.requestRedeemVoucher({ package: pkg(), arguments: args });
+
 export const redeemVoucherToCharacter = (args: gen.RedeemVoucherToCharacterArguments) =>
   gen.redeemVoucherToCharacter({ package: pkg(), arguments: args });
+
+export const redeemIntentToCharacter = (args: gen.RedeemIntentToCharacterArguments) =>
+  gen.redeemIntentToCharacter({ package: pkg(), arguments: args });
 
 // ── JoinIntent (wild → saga) ────────────────────────────────────────────
 export const requestJoinSaga = (args: gen.RequestJoinSagaArguments) =>

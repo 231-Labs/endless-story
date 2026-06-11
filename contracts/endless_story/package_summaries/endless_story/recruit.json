@@ -3,7 +3,7 @@
     "address": "endless_story",
     "name": "recruit"
   },
-  "doc": " Recruitment — voucher-driven character mint.\n\n Two-step recruitment flow:\n   1. **Mint voucher**: any address pays ENDLESS into a Saga's treasury\n      via `mint_genesis_voucher`. Receives a `GenesisVoucher` object\n      (transferrable, expires after TTL).\n   2. **Redeem voucher**: the voucher holder hands it to the saga's\n      storyteller, who co-signs `redeem_voucher_to_character`. The\n      Character + OwnerCap + ControlCap are minted; voucher is consumed.\n      Owner_recipient is fixed to `voucher.payer` — storyteller cannot\n      redirect ownership.\n\n **Design rationale**: separating the payment step from the mint step\n lets the off-chain generator preview character stats from\n `attribute_seed` before the storyteller commits. If the preview is\n rejected, the voucher can be left to expire (refund mechanic — Phase 2;\n for now, ENDLESS sits in the saga treasury as the cost of preview).\n\n **Phase 1.5a (prior)** shipped voucher half. **Phase 1.5b (now)** adds\n the wild→saga `JoinIntent` flow: owner of a wild character mints a\n shared `JoinIntent` pointing at a target saga; storyteller of that\n saga consumes it via `accept_character_into_saga`.\n\n See AGENTS.md → 「鏈上架構」.",
+  "doc": " Recruitment — voucher-driven character mint.\n\n Two-step recruitment flow:\n   1. **Mint voucher**: any address pays ENDLESS into a Saga's treasury\n      via `mint_genesis_voucher`. Receives a `GenesisVoucher` object\n      (transferrable, expires after TTL).\n   2. **Request redeem**: the voucher holder consumes the voucher into a\n      shared `RedeemIntent`, proving wallet consent without giving the\n      storyteller access to the holder's owned object.\n   3. **Redeem intent**: the saga storyteller consumes that shared intent\n      via `redeem_intent_to_character`. The Character + OwnerCap +\n      ControlCap are minted. Owner_recipient is fixed to `voucher.payer` —\n      storyteller cannot redirect ownership.\n\n **Design rationale**: separating the payment step from the mint step\n lets the off-chain generator preview character stats from\n `attribute_seed` before the storyteller commits. If the preview is\n rejected, the voucher can be left to expire (refund mechanic — Phase 2;\n for now, ENDLESS sits in the saga treasury as the cost of preview).\n\n **Phase 1.5a (prior)** shipped voucher half. **Phase 1.5b (now)** adds\n the wild→saga `JoinIntent` flow: owner of a wild character mints a\n shared `JoinIntent` pointing at a target saga; storyteller of that\n saga consumes it via `accept_character_into_saga`.\n\n See AGENTS.md → 「鏈上架構」.",
   "immediate_dependencies": [
     {
       "address": "endless_story",
@@ -289,9 +289,149 @@
         "bool"
       ]
     },
-    "mint_genesis_voucher": {
+    "check_redeem_intent_requirements": {
       "source_index": 4,
       "index": 4,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "CharacterProfile",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "attributes",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "vector": {
+                  "Datatype": {
+                    "module": {
+                      "address": "endless_story",
+                      "name": "character"
+                    },
+                    "name": "AttributeValue",
+                    "type_arguments": []
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "bool"
+      ]
+    },
+    "check_requirements": {
+      "source_index": 5,
+      "index": 5,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Private",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "reqs",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "VoucherRequirements",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "profile",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "CharacterProfile",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "attributes",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "vector": {
+                  "Datatype": {
+                    "module": {
+                      "address": "endless_story",
+                      "name": "character"
+                    },
+                    "name": "AttributeValue",
+                    "type_arguments": []
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "bool"
+      ]
+    },
+    "mint_genesis_voucher": {
+      "source_index": 6,
+      "index": 6,
       "doc": " Pay ENDLESS into the saga treasury; receive a `GenesisVoucher`.\n Payer = ctx.sender(). Storyteller does NOT need to sign this step —\n vouchers are permissionlessly mintable as long as you can pay.\n\n `requirements`: structured constraints enforced on redeem. Pass\n `no_requirements()` if any character is acceptable.\n `intent_hint`: optional natural-language role intent (\"武小生\").",
       "attributes": [],
       "visibility": "Public",
@@ -470,9 +610,81 @@
         }
       ]
     },
+    "request_redeem_voucher": {
+      "source_index": 7,
+      "index": 7,
+      "doc": " Voucher holder accepts the off-chain preview and turns their owned voucher\n into a shared `RedeemIntent`. This is the user-signed half of redemption:\n the later storyteller transaction consumes a shared object, not the user's\n owned voucher, so no multi-owner PTB is required.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "voucher",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "endless_story",
+                "name": "recruit"
+              },
+              "name": "GenesisVoucher",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
     "redeem_voucher_to_character": {
-      "source_index": 5,
-      "index": 5,
+      "source_index": 8,
+      "index": 8,
       "doc": " Storyteller co-signs to mint the actual Character, consuming the\n voucher. `owner_recipient` is **fixed** to `voucher.payer` — the person\n who paid is the only legitimate owner of the resulting Character.\n Storyteller cannot redirect ownership.\n\n Aborts if voucher's saga != target saga, or if voucher expired, or if\n world/scene don't match the saga (sanity), or if profile/attributes\n fail `character::mint_character_internal`'s validation.",
       "attributes": [],
       "visibility": "Public",
@@ -651,10 +863,187 @@
               "address": "endless_story",
               "name": "character"
             },
-            "name": "OwnerCap",
+            "name": "ControlCap",
             "type_arguments": []
           }
+        }
+      ]
+    },
+    "redeem_intent_to_character": {
+      "source_index": 9,
+      "index": 9,
+      "doc": " Storyteller consumes a shared `RedeemIntent` produced by the voucher\n holder. This is the production path for non-admin wallets: user consent is\n captured when the owned voucher is burned into the shared intent, then the\n admin/storyteller can mint without touching any user-owned object.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
         },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "world",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "world"
+                  },
+                  "name": "World",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "scene",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "scene"
+                  },
+                  "name": "Scene",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "intent",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "endless_story",
+                "name": "recruit"
+              },
+              "name": "RedeemIntent",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "profile",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "endless_story",
+                "name": "character"
+              },
+              "name": "CharacterProfile",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "media_assets",
+          "type_": {
+            "vector": {
+              "Datatype": {
+                "module": {
+                  "address": "endless_story",
+                  "name": "character"
+                },
+                "name": "MediaAsset",
+                "type_arguments": []
+              }
+            }
+          }
+        },
+        {
+          "name": "attributes",
+          "type_": {
+            "vector": {
+              "Datatype": {
+                "module": {
+                  "address": "endless_story",
+                  "name": "character"
+                },
+                "name": "AttributeValue",
+                "type_arguments": []
+              }
+            }
+          }
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
         {
           "Datatype": {
             "module": {
@@ -668,8 +1057,8 @@
       ]
     },
     "voucher_saga_id": {
-      "source_index": 6,
-      "index": 6,
+      "source_index": 10,
+      "index": 10,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -709,8 +1098,8 @@
       ]
     },
     "voucher_payer": {
-      "source_index": 7,
-      "index": 7,
+      "source_index": 11,
+      "index": 11,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -741,8 +1130,8 @@
       ]
     },
     "voucher_paid_amount": {
-      "source_index": 8,
-      "index": 8,
+      "source_index": 12,
+      "index": 12,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -773,8 +1162,8 @@
       ]
     },
     "voucher_attribute_seed": {
-      "source_index": 9,
-      "index": 9,
+      "source_index": 13,
+      "index": 13,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -812,176 +1201,6 @@
       ]
     },
     "voucher_hint": {
-      "source_index": 10,
-      "index": 10,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "voucher",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "recruit"
-                  },
-                  "name": "GenesisVoucher",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Reference": [
-            false,
-            {
-              "Datatype": {
-                "module": {
-                  "address": "std",
-                  "name": "option"
-                },
-                "name": "Option",
-                "type_arguments": [
-                  {
-                    "phantom": false,
-                    "argument": {
-                      "Datatype": {
-                        "module": {
-                          "address": "std",
-                          "name": "string"
-                        },
-                        "name": "String",
-                        "type_arguments": []
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    "voucher_minted_at_ms": {
-      "source_index": 11,
-      "index": 11,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "voucher",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "recruit"
-                  },
-                  "name": "GenesisVoucher",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "voucher_expires_at_ms": {
-      "source_index": 12,
-      "index": 12,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "voucher",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "recruit"
-                  },
-                  "name": "GenesisVoucher",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "voucher_requirements": {
-      "source_index": 13,
-      "index": 13,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "voucher",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "recruit"
-                  },
-                  "name": "GenesisVoucher",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Reference": [
-            false,
-            {
-              "Datatype": {
-                "module": {
-                  "address": "endless_story",
-                  "name": "recruit"
-                },
-                "name": "VoucherRequirements",
-                "type_arguments": []
-              }
-            }
-          ]
-        }
-      ]
-    },
-    "voucher_intent_hint": {
       "source_index": 14,
       "index": 14,
       "doc": null,
@@ -1041,9 +1260,594 @@
         }
       ]
     },
-    "reqs_allowed_genders": {
+    "voucher_minted_at_ms": {
       "source_index": 15,
       "index": 15,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "voucher",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "GenesisVoucher",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "voucher_expires_at_ms": {
+      "source_index": 16,
+      "index": 16,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "voucher",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "GenesisVoucher",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "voucher_requirements": {
+      "source_index": 17,
+      "index": 17,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "voucher",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "GenesisVoucher",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "endless_story",
+                  "name": "recruit"
+                },
+                "name": "VoucherRequirements",
+                "type_arguments": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "voucher_intent_hint": {
+      "source_index": 18,
+      "index": 18,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "voucher",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "GenesisVoucher",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "redeem_intent_voucher_id": {
+      "source_index": 19,
+      "index": 19,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "redeem_intent_saga_id": {
+      "source_index": 20,
+      "index": 20,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "redeem_intent_payer": {
+      "source_index": 21,
+      "index": 21,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "address"
+      ]
+    },
+    "redeem_intent_paid_amount": {
+      "source_index": 22,
+      "index": 22,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "redeem_intent_attribute_seed": {
+      "source_index": 23,
+      "index": 23,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "vector": "u8"
+            }
+          ]
+        }
+      ]
+    },
+    "redeem_intent_hint": {
+      "source_index": 24,
+      "index": 24,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "redeem_intent_minted_at_ms": {
+      "source_index": 25,
+      "index": 25,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "redeem_intent_expires_at_ms": {
+      "source_index": 26,
+      "index": 26,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "redeem_intent_requirements": {
+      "source_index": 27,
+      "index": 27,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "endless_story",
+                  "name": "recruit"
+                },
+                "name": "VoucherRequirements",
+                "type_arguments": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "redeem_intent_intent_hint": {
+      "source_index": 28,
+      "index": 28,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "intent",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "recruit"
+                  },
+                  "name": "RedeemIntent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "reqs_allowed_genders": {
+      "source_index": 29,
+      "index": 29,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1090,8 +1894,8 @@
       ]
     },
     "reqs_allowed_species": {
-      "source_index": 16,
-      "index": 16,
+      "source_index": 30,
+      "index": 30,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1138,8 +1942,8 @@
       ]
     },
     "reqs_min_age": {
-      "source_index": 17,
-      "index": 17,
+      "source_index": 31,
+      "index": 31,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1170,8 +1974,8 @@
       ]
     },
     "reqs_max_age": {
-      "source_index": 18,
-      "index": 18,
+      "source_index": 32,
+      "index": 32,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1202,8 +2006,8 @@
       ]
     },
     "reqs_required_attribute_keys": {
-      "source_index": 19,
-      "index": 19,
+      "source_index": 33,
+      "index": 33,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1250,8 +2054,8 @@
       ]
     },
     "reqs_required_attribute_mins": {
-      "source_index": 20,
-      "index": 20,
+      "source_index": 34,
+      "index": 34,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1289,8 +2093,8 @@
       ]
     },
     "request_join_saga": {
-      "source_index": 21,
-      "index": 21,
+      "source_index": 35,
+      "index": 35,
       "doc": " Owner publishes a shared JoinIntent offering this wild character to a\n specific saga. Owner-signed; shares the intent object so any\n storyteller of `target_saga_id` can pick it up.\n\n Caller responsibility: confirm `character.state.saga_id == None`\n before calling (the assertion inside enforces this — wild only).",
       "attributes": [],
       "visibility": "Public",
@@ -1390,8 +2194,8 @@
       "return_": []
     },
     "revoke_join_intent": {
-      "source_index": 22,
-      "index": 22,
+      "source_index": 36,
+      "index": 36,
       "doc": " Owner takes back an unused JoinIntent. Validates ownership; consumes\n the intent (key-only shared object burned by-value).",
       "attributes": [],
       "visibility": "Public",
@@ -1433,8 +2237,8 @@
       "return_": []
     },
     "accept_character_into_saga": {
-      "source_index": 23,
-      "index": 23,
+      "source_index": 37,
+      "index": 37,
       "doc": " Saga storyteller consumes a JoinIntent to take custody of a wild\n character. Dual-sign: `cap` proves authority over the target saga;\n `intent` proves owner consent for THIS saga. Pulls the ControlCap out\n of the character's DOF (set during `release_character_to_wild`),\n rebinds its `saga_id`, returns the cap to the storyteller. Character\n placed in `target_scene`.\n\n Aborts on: intent saga mismatch, intent character mismatch, intent\n expired, target_scene in different saga, character no longer wild,\n character dead.",
       "attributes": [],
       "visibility": "Public",
@@ -1559,8 +2363,8 @@
       ]
     },
     "intent_character_id": {
-      "source_index": 24,
-      "index": 24,
+      "source_index": 38,
+      "index": 38,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1600,8 +2404,8 @@
       ]
     },
     "intent_target_saga_id": {
-      "source_index": 25,
-      "index": 25,
+      "source_index": 39,
+      "index": 39,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1641,8 +2445,8 @@
       ]
     },
     "intent_minted_at_ms": {
-      "source_index": 26,
-      "index": 26,
+      "source_index": 40,
+      "index": 40,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1673,8 +2477,8 @@
       ]
     },
     "intent_expires_at_ms": {
-      "source_index": 27,
-      "index": 27,
+      "source_index": 41,
+      "index": 41,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1945,8 +2749,161 @@
         }
       }
     },
-    "GenesisVoucherMinted": {
+    "RedeemIntent": {
       "index": 3,
+      "doc": " Shared consent object created by the voucher holder after accepting the\n off-chain preview. The storyteller can consume this shared object with\n `StorytellerCap` without needing to sign for the user's owned voucher.",
+      "attributes": [],
+      "abilities": [
+        "Key"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "UID",
+                "type_arguments": []
+              }
+            }
+          },
+          "voucher_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "payer": {
+            "index": 3,
+            "doc": null,
+            "type_": "address"
+          },
+          "paid_amount": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          },
+          "attribute_seed": {
+            "index": 5,
+            "doc": null,
+            "type_": {
+              "vector": "u8"
+            }
+          },
+          "hint": {
+            "index": 6,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "requirements": {
+            "index": 7,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "endless_story",
+                  "name": "recruit"
+                },
+                "name": "VoucherRequirements",
+                "type_arguments": []
+              }
+            }
+          },
+          "intent_hint": {
+            "index": 8,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "minted_at_ms": {
+            "index": 9,
+            "doc": null,
+            "type_": "u64"
+          },
+          "expires_at_ms": {
+            "index": 10,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "GenesisVoucherMinted": {
+      "index": 4,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2060,7 +3017,7 @@
       }
     },
     "GenesisVoucherRedeemed": {
-      "index": 4,
+      "index": 5,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2177,8 +3134,136 @@
         }
       }
     },
+    "RedeemIntentCreated": {
+      "index": 6,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "intent_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "voucher_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 2,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "payer": {
+            "index": 3,
+            "doc": null,
+            "type_": "address"
+          },
+          "paid_amount": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          },
+          "expires_at_ms": {
+            "index": 5,
+            "doc": null,
+            "type_": "u64"
+          },
+          "hint": {
+            "index": 6,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "intent_hint": {
+            "index": 7,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "option"
+                },
+                "name": "Option",
+                "type_arguments": [
+                  {
+                    "phantom": false,
+                    "argument": {
+                      "Datatype": {
+                        "module": {
+                          "address": "std",
+                          "name": "string"
+                        },
+                        "name": "String",
+                        "type_arguments": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "JoinIntent": {
-      "index": 5,
+      "index": 7,
       "doc": " Owner-signed offer for a saga to take custody of a wild character.\n Shared on creation so any storyteller of `target_saga_id` can claim it.\n\n **Multiple JoinIntents may exist** for the same character pointing at\n different sagas (shop around). First storyteller to consume wins;\n later attempts find the character no longer wild and abort. Owner can\n revoke an unused intent via `revoke_join_intent`.",
       "attributes": [],
       "abilities": [
@@ -2244,7 +3329,7 @@
       }
     },
     "JoinIntentMinted": {
-      "index": 6,
+      "index": 8,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2306,7 +3391,7 @@
       }
     },
     "JoinIntentConsumed": {
-      "index": 7,
+      "index": 9,
       "doc": null,
       "attributes": [],
       "abilities": [
@@ -2368,7 +3453,7 @@
       }
     },
     "JoinIntentRevoked": {
-      "index": 8,
+      "index": 10,
       "doc": null,
       "attributes": [],
       "abilities": [

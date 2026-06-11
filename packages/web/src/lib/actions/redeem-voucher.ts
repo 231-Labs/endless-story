@@ -1,11 +1,12 @@
 'use server';
 
 /**
- * Server action — storyteller (admin keypair) signs `redeem_voucher_to_character`
- * to mint the actual Character, consuming the user's voucher.
+ * Server action — storyteller (admin keypair) signs `redeem_intent_to_character`
+ * to mint the actual Character, consuming the user's shared RedeemIntent.
  *
  * The gacha model: once the user clicks "accept" on the LLM preview, this
- * runs server-side so the user doesn't need a second wallet signature.
+ * runs server-side after the user's wallet has converted the voucher into a
+ * shared redeem intent. The admin tx never touches user-owned objects.
  * Storyteller curation is encoded in the off-chain Recruitment (admin
  * published the job; that's the strategic decision), so per-redeem
  * curation is unnecessary.
@@ -24,7 +25,7 @@ import { generatePersonaAction } from './generate-persona.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 
 export interface RedeemVoucherInput {
-    voucherId: string;
+    redeemIntentId: string;
     sceneId: string;
     /** The previewed candidate the user accepted. */
     candidate: CharacterCandidate;
@@ -121,14 +122,7 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         return { ok: false, error: 'attributeSeedHex 格式錯誤' };
     }
 
-    // PTB 組裝包成函式：Transaction 物件一次性，相容回退時要整包重建。
-    //
-    // mode 'current'：repo 內合約簽名 — redeem 只回 ControlCap，OwnerCap 由
-    //   合約在鏈上直接轉給 voucher.payer（所有權結構性保證）。
-    // mode 'legacy'：鏈上若仍是改動前的舊部署 — redeem 回 (OwnerCap, ControlCap)
-    //   兩個值；PTB 把 OwnerCap 轉給付款人（而非改動前「全轉 admin」的舊行為）、
-    //   ControlCap 轉 admin。redeploy 後第一次嘗試就會成功，這條路徑自然停用。
-    const buildRedeemTx = (mode: 'current' | 'legacy', ownerRecipient?: string): Transaction => {
+    const buildRedeemTx = (): Transaction => {
         const tx = new Transaction();
 
         // Build the inline structs:
@@ -193,76 +187,32 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         });
 
         const redeemed = tx.add(
-            endlessTx.recruit.redeemVoucherToCharacter({
+            endlessTx.recruit.redeemIntentToCharacter({
                 cap: deployment.storytellerCapId!,
                 saga: deployment.sagaId!,
                 world: deployment.worldId!,
                 scene: input.sceneId,
-                voucher: input.voucherId,
+                intent: input.redeemIntentId,
                 profile,
                 mediaAssets,
                 attributes,
             }),
         );
-        if (mode === 'current') {
-            // 單一回傳值 = ControlCap → admin（runner delegation）
-            tx.transferObjects([redeemed], admin.address);
-        } else {
-            // 舊簽名 (OwnerCap, ControlCap)
-            tx.transferObjects([redeemed[0]], ownerRecipient!);
-            tx.transferObjects([redeemed[1]], admin.address);
-        }
+        // 單一回傳值 = ControlCap → admin（runner delegation）.
+        // OwnerCap is transferred on-chain to the original voucher payer.
+        tx.transferObjects([redeemed], admin.address);
         return tx;
     };
 
-    const execute = (transaction: Transaction) =>
-        admin.client.signAndExecuteTransaction({
-            transaction,
+    let result;
+    try {
+        result = await admin.client.signAndExecuteTransaction({
+            transaction: buildRedeemTx(),
             signer: admin.signer,
             options: { showEffects: true, showObjectChanges: true },
         });
-
-    let result;
-    try {
-        result = await execute(buildRedeemTx('current'));
     } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // InvalidResultArity on the redeem result = 鏈上還是舊版簽名
-        // （(OwnerCap, ControlCap) 兩個回傳值）。讀 voucher.payer 後用舊版
-        // PTB 重試，所有權仍歸付款人。
-        if (!msg.includes('InvalidResultArity')) {
-            return { ok: false, error: msg };
-        }
-        console.warn(
-            '[redeem-voucher] deployed package still has the LEGACY redeem signature ' +
-                '(OwnerCap, ControlCap). Falling back to the legacy PTB (OwnerCap → payer). ' +
-                'Redeploy contracts to enforce ownership on-chain (see AGENTS.md).',
-        );
-        let payer: string | undefined;
-        try {
-            const voucherObj = await admin.client.getObject({
-                id: input.voucherId,
-                options: { showContent: true },
-            });
-            const content = voucherObj.data?.content as
-                | { dataType?: string; fields?: { payer?: string } }
-                | null
-                | undefined;
-            payer = content?.fields?.payer;
-        } catch {
-            /* fall through to the guard below */
-        }
-        if (!payer) {
-            return {
-                ok: false,
-                error: '舊版合約相容路徑：讀不到 voucher.payer，無法安全轉移 OwnerCap。',
-            };
-        }
-        try {
-            result = await execute(buildRedeemTx('legacy', payer));
-        } catch (err2) {
-            return { ok: false, error: err2 instanceof Error ? err2.message : String(err2) };
-        }
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 
     // Parse Character + OwnerCap from objectChanges.

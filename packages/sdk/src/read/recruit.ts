@@ -11,6 +11,9 @@ export { gen as raw };
 export const getGenesisVoucher = (client: SuiClient, voucherId: string) =>
   gen.GenesisVoucher.get({ client, objectId: voucherId });
 
+export const getRedeemIntent = (client: SuiClient, intentId: string) =>
+  gen.RedeemIntent.get({ client, objectId: intentId });
+
 export const getJoinIntent = (client: SuiClient, intentId: string) =>
   gen.JoinIntent.get({ client, objectId: intentId });
 

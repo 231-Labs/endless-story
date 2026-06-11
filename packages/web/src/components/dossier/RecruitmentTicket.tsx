@@ -62,6 +62,7 @@ export function RecruitmentTicket({
 
   // Flow state — accumulates as steps complete.
   const [voucherId, setVoucherId] = useState<string | null>(null);
+  const [redeemIntentId, setRedeemIntentId] = useState<string | null>(null);
   const [attributeSeedHex, setAttributeSeedHex] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [candidate, setCandidate] = useState<CharacterCandidate | null>(null);
@@ -80,6 +81,7 @@ export function RecruitmentTicket({
     setPrompt('');
     setError(null);
     setVoucherId(null);
+    setRedeemIntentId(null);
     setAttributeSeedHex(null);
     setSignature(null);
     setCandidate(null);
@@ -356,8 +358,30 @@ export function RecruitmentTicket({
     try {
       const sceneId = ENDLESS_STORY_DEPLOYMENT.sceneIds[0];
       if (!sceneId) throw new Error('無可用 scene — 種子化未完成');
+      let intentId = redeemIntentId;
+      if (!intentId) {
+        const consentTx = new Transaction();
+        consentTx.add(endlessTx.recruit.requestRedeemVoucher({ voucher: voucherId }));
+        const consentRes = await signAndExecute({ transaction: consentTx });
+        const consentFull = await suiClient.waitForTransaction({
+          digest: consentRes.digest,
+          options: { showObjectChanges: true, showEffects: true },
+        });
+        if (consentFull.effects?.status?.status !== 'success') {
+          throw new Error(consentFull.effects?.status?.error ?? '建立入班同意失敗');
+        }
+        const intentType = `${packageId}::recruit::RedeemIntent`;
+        const intent = (consentFull.objectChanges ?? []).find(
+          (c) => c.type === 'created' && 'objectType' in c && c.objectType === intentType,
+        );
+        if (!intent || !('objectId' in intent)) {
+          throw new Error('RedeemIntent 物件未找到');
+        }
+        intentId = intent.objectId;
+        setRedeemIntentId(intentId);
+      }
       const r = await redeemVoucher({
-        voucherId,
+        redeemIntentId: intentId,
         sceneId,
         candidate,
         rolledValues,

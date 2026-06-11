@@ -11,10 +11,13 @@
  * 1.  **Mint voucher**: any address pays ENDLESS into a Saga's treasury via
  *     `mint_genesis_voucher`. Receives a `GenesisVoucher` object (transferrable,
  *     expires after TTL).
- * 2.  **Redeem voucher**: the voucher holder hands it to the saga's storyteller,
- *     who co-signs `redeem_voucher_to_character`. The Character + OwnerCap +
- *     ControlCap are minted; voucher is consumed. Owner_recipient is fixed to
- *     `voucher.payer` — storyteller cannot redirect ownership.
+ * 2.  **Request redeem**: the voucher holder consumes the voucher into a shared
+ *     `RedeemIntent`, proving wallet consent without giving the storyteller access
+ *     to the holder's owned object.
+ * 3.  **Redeem intent**: the saga storyteller consumes that shared intent via
+ *     `redeem_intent_to_character`. The Character + OwnerCap + ControlCap are
+ *     minted. Owner_recipient is fixed to `voucher.payer` — storyteller cannot
+ *     redirect ownership.
  * 
  * **Design rationale**: separating the payment step from the mint step lets the
  * off-chain generator preview character stats from `attribute_seed` before the
@@ -57,6 +60,19 @@ export const GenesisVoucher = new MoveStruct({ name: `${$moduleName}::GenesisVou
         minted_at_ms: bcs.u64(),
         expires_at_ms: bcs.u64()
     } });
+export const RedeemIntent = new MoveStruct({ name: `${$moduleName}::RedeemIntent`, fields: {
+        id: bcs.Address,
+        voucher_id: bcs.Address,
+        saga_id: bcs.Address,
+        payer: bcs.Address,
+        paid_amount: bcs.u64(),
+        attribute_seed: bcs.vector(bcs.u8()),
+        hint: bcs.option(bcs.string()),
+        requirements: VoucherRequirements,
+        intent_hint: bcs.option(bcs.string()),
+        minted_at_ms: bcs.u64(),
+        expires_at_ms: bcs.u64()
+    } });
 export const GenesisVoucherMinted = new MoveStruct({ name: `${$moduleName}::GenesisVoucherMinted`, fields: {
         voucher_id: bcs.Address,
         saga_id: bcs.Address,
@@ -82,6 +98,16 @@ export const GenesisVoucherRedeemed = new MoveStruct({ name: `${$moduleName}::Ge
          * Without this, the voucher object is destroyed before redeem-time readers can see
          * the hint.
          */
+        hint: bcs.option(bcs.string()),
+        intent_hint: bcs.option(bcs.string())
+    } });
+export const RedeemIntentCreated = new MoveStruct({ name: `${$moduleName}::RedeemIntentCreated`, fields: {
+        intent_id: bcs.Address,
+        voucher_id: bcs.Address,
+        saga_id: bcs.Address,
+        payer: bcs.Address,
+        paid_amount: bcs.u64(),
+        expires_at_ms: bcs.u64(),
         hint: bcs.option(bcs.string()),
         intent_hint: bcs.option(bcs.string())
     } });
@@ -196,6 +222,34 @@ export function checkVoucherRequirements(options: CheckVoucherRequirementsOption
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface CheckRedeemIntentRequirementsArguments {
+    intent: RawTransactionArgument<string>;
+    profile: TransactionArgument;
+    attributes: TransactionArgument;
+}
+export interface CheckRedeemIntentRequirementsOptions {
+    package?: string;
+    arguments: CheckRedeemIntentRequirementsArguments | [
+        intent: RawTransactionArgument<string>,
+        profile: TransactionArgument,
+        attributes: TransactionArgument
+    ];
+}
+export function checkRedeemIntentRequirements(options: CheckRedeemIntentRequirementsOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        'vector<null>'
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent", "profile", "attributes"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'check_redeem_intent_requirements',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface MintGenesisVoucherArguments {
     saga: RawTransactionArgument<string>;
     payment: RawTransactionArgument<string>;
@@ -243,6 +297,35 @@ export function mintGenesisVoucher(options: MintGenesisVoucherOptions) {
         package: packageAddress,
         module: 'recruit',
         function: 'mint_genesis_voucher',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RequestRedeemVoucherArguments {
+    voucher: RawTransactionArgument<string>;
+}
+export interface RequestRedeemVoucherOptions {
+    package?: string;
+    arguments: RequestRedeemVoucherArguments | [
+        voucher: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Voucher holder accepts the off-chain preview and turns their owned voucher into
+ * a shared `RedeemIntent`. This is the user-signed half of redemption: the later
+ * storyteller transaction consumes a shared object, not the user's owned voucher,
+ * so no multi-owner PTB is required.
+ */
+export function requestRedeemVoucher(options: RequestRedeemVoucherOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["voucher"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'request_redeem_voucher',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
@@ -297,6 +380,56 @@ export function redeemVoucherToCharacter(options: RedeemVoucherToCharacterOption
         package: packageAddress,
         module: 'recruit',
         function: 'redeem_voucher_to_character',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentToCharacterArguments {
+    cap: RawTransactionArgument<string>;
+    saga: RawTransactionArgument<string>;
+    world: RawTransactionArgument<string>;
+    scene: RawTransactionArgument<string>;
+    intent: RawTransactionArgument<string>;
+    profile: TransactionArgument;
+    mediaAssets: TransactionArgument;
+    attributes: TransactionArgument;
+}
+export interface RedeemIntentToCharacterOptions {
+    package?: string;
+    arguments: RedeemIntentToCharacterArguments | [
+        cap: RawTransactionArgument<string>,
+        saga: RawTransactionArgument<string>,
+        world: RawTransactionArgument<string>,
+        scene: RawTransactionArgument<string>,
+        intent: RawTransactionArgument<string>,
+        profile: TransactionArgument,
+        mediaAssets: TransactionArgument,
+        attributes: TransactionArgument
+    ];
+}
+/**
+ * Storyteller consumes a shared `RedeemIntent` produced by the voucher holder.
+ * This is the production path for non-admin wallets: user consent is captured when
+ * the owned voucher is burned into the shared intent, then the admin/storyteller
+ * can mint without touching any user-owned object.
+ */
+export function redeemIntentToCharacter(options: RedeemIntentToCharacterOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        'vector<null>',
+        'vector<null>',
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["cap", "saga", "world", "scene", "intent", "profile", "mediaAssets", "attributes"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_to_character',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
@@ -495,6 +628,226 @@ export function voucherIntentHint(options: VoucherIntentHintOptions) {
         package: packageAddress,
         module: 'recruit',
         function: 'voucher_intent_hint',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentVoucherIdArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentVoucherIdOptions {
+    package?: string;
+    arguments: RedeemIntentVoucherIdArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentVoucherId(options: RedeemIntentVoucherIdOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_voucher_id',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentSagaIdArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentSagaIdOptions {
+    package?: string;
+    arguments: RedeemIntentSagaIdArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentSagaId(options: RedeemIntentSagaIdOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_saga_id',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentPayerArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentPayerOptions {
+    package?: string;
+    arguments: RedeemIntentPayerArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentPayer(options: RedeemIntentPayerOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_payer',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentPaidAmountArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentPaidAmountOptions {
+    package?: string;
+    arguments: RedeemIntentPaidAmountArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentPaidAmount(options: RedeemIntentPaidAmountOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_paid_amount',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentAttributeSeedArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentAttributeSeedOptions {
+    package?: string;
+    arguments: RedeemIntentAttributeSeedArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentAttributeSeed(options: RedeemIntentAttributeSeedOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_attribute_seed',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentHintArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentHintOptions {
+    package?: string;
+    arguments: RedeemIntentHintArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentHint(options: RedeemIntentHintOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_hint',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentMintedAtMsArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentMintedAtMsOptions {
+    package?: string;
+    arguments: RedeemIntentMintedAtMsArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentMintedAtMs(options: RedeemIntentMintedAtMsOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_minted_at_ms',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentExpiresAtMsArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentExpiresAtMsOptions {
+    package?: string;
+    arguments: RedeemIntentExpiresAtMsArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentExpiresAtMs(options: RedeemIntentExpiresAtMsOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_expires_at_ms',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentRequirementsArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentRequirementsOptions {
+    package?: string;
+    arguments: RedeemIntentRequirementsArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentRequirements(options: RedeemIntentRequirementsOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_requirements',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface RedeemIntentIntentHintArguments {
+    intent: RawTransactionArgument<string>;
+}
+export interface RedeemIntentIntentHintOptions {
+    package?: string;
+    arguments: RedeemIntentIntentHintArguments | [
+        intent: RawTransactionArgument<string>
+    ];
+}
+export function redeemIntentIntentHint(options: RedeemIntentIntentHintOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["intent"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recruit',
+        function: 'redeem_intent_intent_hint',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

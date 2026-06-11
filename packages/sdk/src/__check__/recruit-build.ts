@@ -1,6 +1,7 @@
 /**
- * Phase 2.2 acceptance: prove the SDK can build the two end-to-end PTBs
- * for the recruit flow — `mint_genesis_voucher` and `redeem_voucher_to_character`.
+ * Phase 2.2 acceptance: prove the SDK can build the end-to-end PTBs
+ * for the recruit flow — `mint_genesis_voucher`, `request_redeem_voucher`,
+ * and `redeem_intent_to_character`.
  *
  * Run: `pnpm exec tsx packages/sdk/src/__check__/recruit-build.ts`
  *
@@ -49,14 +50,32 @@ function buildMintVoucher(opts: {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// Build 2: redeem_voucher_to_character
+// Build 2: request_redeem_voucher
 // ───────────────────────────────────────────────────────────────────────
-function buildRedeemVoucher(opts: {
+function buildRequestRedeemVoucher(opts: { voucherId: string }): Transaction {
+  const tx = new Transaction();
+
+  tx.add(
+    recruitTx.raw.requestRedeemVoucher({
+      package: STUB_PKG,
+      arguments: {
+        voucher: opts.voucherId,
+      },
+    }),
+  );
+
+  return tx;
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Build 3: redeem_intent_to_character
+// ───────────────────────────────────────────────────────────────────────
+function buildRedeemIntent(opts: {
   storytellerCapId: string;
   sagaId: string;
   worldId: string;
   sceneId: string;
-  voucherId: string;
+  intentId: string;
 }): Transaction {
   const tx = new Transaction();
 
@@ -88,14 +107,14 @@ function buildRedeemVoucher(opts: {
   const attrs = tx.makeMoveVec({ elements: [] });
 
   tx.add(
-    recruitTx.raw.redeemVoucherToCharacter({
+    recruitTx.raw.redeemIntentToCharacter({
       package: STUB_PKG,
       arguments: {
         cap: opts.storytellerCapId,
         saga: opts.sagaId,
         world: opts.worldId,
         scene: opts.sceneId,
-        voucher: opts.voucherId,
+        intent: opts.intentId,
         profile,
         mediaAssets,
         attributes: attrs,
@@ -124,6 +143,19 @@ function _sugarParityCheck() {
       ttlMs: 1,
     }),
   );
+  tx.add(recruitTx.requestRedeemVoucher({ voucher: '0x0' }));
+  tx.add(
+    recruitTx.redeemIntentToCharacter({
+      cap: '0x0',
+      saga: '0x0',
+      world: '0x0',
+      scene: '0x0',
+      intent: '0x0',
+      profile: reqs,
+      mediaAssets: reqs,
+      attributes: reqs,
+    }),
+  );
 }
 void _sugarParityCheck; // keep referenced for tsc
 
@@ -142,24 +174,31 @@ function main() {
     paymentCoinId: '0x' + 'b'.repeat(64),
   });
 
-  const redeemTx = buildRedeemVoucher({
+  const requestTx = buildRequestRedeemVoucher({
+    voucherId: '0x' + 'f'.repeat(64),
+  });
+
+  const redeemTx = buildRedeemIntent({
     storytellerCapId: '0x' + 'c'.repeat(64),
     sagaId: '0x' + 'a'.repeat(64),
     worldId: '0x' + 'd'.repeat(64),
     sceneId: '0x' + 'e'.repeat(64),
-    voucherId: '0x' + 'f'.repeat(64),
+    intentId: '0x' + 'f'.repeat(64),
   });
 
   const mintCalls = countMoveCalls(mintTx);
+  const requestCalls = countMoveCalls(requestTx);
   const redeemCalls = countMoveCalls(redeemTx);
 
   // mint:   no_requirements + mint_genesis_voucher       = 2 calls
+  // request: request_redeem_voucher                      = 1 call
   // redeem: new_physical_facts + new_character_profile +
-  //         redeem_voucher_to_character                  = 3 calls
+  //         redeem_intent_to_character                   = 3 calls
   console.log(`OK  mint_genesis_voucher        PTB — ${mintCalls} moveCalls`);
-  console.log(`OK  redeem_voucher_to_character PTB — ${redeemCalls} moveCalls`);
+  console.log(`OK  request_redeem_voucher      PTB — ${requestCalls} moveCalls`);
+  console.log(`OK  redeem_intent_to_character  PTB — ${redeemCalls} moveCalls`);
 
-  if (mintCalls !== 2 || redeemCalls !== 3) {
+  if (mintCalls !== 2 || requestCalls !== 1 || redeemCalls !== 3) {
     console.error('FAIL unexpected moveCall counts');
     process.exit(1);
   }

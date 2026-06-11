@@ -4,11 +4,13 @@
 ///   1. **Mint voucher**: any address pays ENDLESS into a Saga's treasury
 ///      via `mint_genesis_voucher`. Receives a `GenesisVoucher` object
 ///      (transferrable, expires after TTL).
-///   2. **Redeem voucher**: the voucher holder hands it to the saga's
-///      storyteller, who co-signs `redeem_voucher_to_character`. The
-///      Character + OwnerCap + ControlCap are minted; voucher is consumed.
-///      Owner_recipient is fixed to `voucher.payer` — storyteller cannot
-///      redirect ownership.
+///   2. **Request redeem**: the voucher holder consumes the voucher into a
+///      shared `RedeemIntent`, proving wallet consent without giving the
+///      storyteller access to the holder's owned object.
+///   3. **Redeem intent**: the saga storyteller consumes that shared intent
+///      via `redeem_intent_to_character`. The Character + OwnerCap +
+///      ControlCap are minted. Owner_recipient is fixed to `voucher.payer` —
+///      storyteller cannot redirect ownership.
 ///
 /// **Design rationale**: separating the payment step from the mint step
 /// lets the off-chain generator preview character stats from
@@ -136,6 +138,23 @@ public struct GenesisVoucher has key, store {
     expires_at_ms: u64,
 }
 
+/// Shared consent object created by the voucher holder after accepting the
+/// off-chain preview. The storyteller can consume this shared object with
+/// `StorytellerCap` without needing to sign for the user's owned voucher.
+public struct RedeemIntent has key {
+    id: UID,
+    voucher_id: ID,
+    saga_id: ID,
+    payer: address,
+    paid_amount: u64,
+    attribute_seed: vector<u8>,
+    hint: Option<String>,
+    requirements: VoucherRequirements,
+    intent_hint: Option<String>,
+    minted_at_ms: u64,
+    expires_at_ms: u64,
+}
+
 // ─── events ──────────────────────────────────────────────────────────
 
 public struct GenesisVoucherMinted has copy, drop {
@@ -167,6 +186,17 @@ public struct GenesisVoucherRedeemed has copy, drop {
     intent_hint: Option<String>,
 }
 
+public struct RedeemIntentCreated has copy, drop {
+    intent_id: ID,
+    voucher_id: ID,
+    saga_id: ID,
+    payer: address,
+    paid_amount: u64,
+    expires_at_ms: u64,
+    hint: Option<String>,
+    intent_hint: Option<String>,
+}
+
 // ─── init (Display V2) ───────────────────────────────────────────────
 
 fun init(otw: RECRUIT, ctx: &mut TxContext) {
@@ -183,6 +213,17 @@ fun init(otw: RECRUIT, ctx: &mut TxContext) {
     );
     display::update_version(&mut voucher_display);
 
+    let mut redeem_display = display::new_with_fields<RedeemIntent>(
+        &publisher,
+        vector[b"name".to_string(), b"description".to_string()],
+        vector[
+            b"Redeem Intent".to_string(),
+            b"Accepted recruitment voucher {voucher_id} for saga {saga_id}".to_string(),
+        ],
+        ctx,
+    );
+    display::update_version(&mut redeem_display);
+
     let mut intent_display = display::new_with_fields<JoinIntent>(
         &publisher,
         vector[b"name".to_string(), b"description".to_string()],
@@ -196,6 +237,7 @@ fun init(otw: RECRUIT, ctx: &mut TxContext) {
 
     transfer::public_transfer(publisher, ctx.sender());
     transfer::public_transfer(voucher_display, ctx.sender());
+    transfer::public_transfer(redeem_display, ctx.sender());
     transfer::public_transfer(intent_display, ctx.sender());
 }
 
@@ -245,7 +287,22 @@ public fun check_voucher_requirements(
     profile: &CharacterProfile,
     attributes: &vector<AttributeValue>,
 ): bool {
-    let reqs = &voucher.requirements;
+    check_requirements(&voucher.requirements, profile, attributes)
+}
+
+public fun check_redeem_intent_requirements(
+    intent: &RedeemIntent,
+    profile: &CharacterProfile,
+    attributes: &vector<AttributeValue>,
+): bool {
+    check_requirements(&intent.requirements, profile, attributes)
+}
+
+fun check_requirements(
+    reqs: &VoucherRequirements,
+    profile: &CharacterProfile,
+    attributes: &vector<AttributeValue>,
+): bool {
     let facts = character::physical_facts(profile);
 
     // Gender (empty allowed_genders = no check)
@@ -322,6 +379,63 @@ public fun mint_genesis_voucher(
         intent_hint: voucher.intent_hint,
     });
     voucher
+}
+
+// ─── voucher holder consent → shared redeem intent ───────────────────
+
+/// Voucher holder accepts the off-chain preview and turns their owned voucher
+/// into a shared `RedeemIntent`. This is the user-signed half of redemption:
+/// the later storyteller transaction consumes a shared object, not the user's
+/// owned voucher, so no multi-owner PTB is required.
+public fun request_redeem_voucher(
+    voucher: GenesisVoucher,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+): ID {
+    let now_ms = clock::timestamp_ms(clock);
+    assert!(now_ms <= voucher.expires_at_ms, EVoucherExpired);
+
+    let voucher_id = object::id(&voucher);
+    let GenesisVoucher {
+        id,
+        saga_id,
+        payer,
+        paid_amount,
+        attribute_seed,
+        hint,
+        requirements,
+        intent_hint,
+        minted_at_ms,
+        expires_at_ms,
+    } = voucher;
+    id.delete();
+
+    let intent = RedeemIntent {
+        id: object::new(ctx),
+        voucher_id,
+        saga_id,
+        payer,
+        paid_amount,
+        attribute_seed,
+        hint,
+        requirements,
+        intent_hint,
+        minted_at_ms,
+        expires_at_ms,
+    };
+    let intent_id = object::id(&intent);
+    event::emit(RedeemIntentCreated {
+        intent_id,
+        voucher_id,
+        saga_id: intent.saga_id,
+        payer: intent.payer,
+        paid_amount: intent.paid_amount,
+        expires_at_ms: intent.expires_at_ms,
+        hint: intent.hint,
+        intent_hint: intent.intent_hint,
+    });
+    transfer::share_object(intent);
+    intent_id
 }
 
 // ─── redeem voucher → character ──────────────────────────────────────
@@ -410,6 +524,82 @@ public fun redeem_voucher_to_character(
     control_cap
 }
 
+/// Storyteller consumes a shared `RedeemIntent` produced by the voucher
+/// holder. This is the production path for non-admin wallets: user consent is
+/// captured when the owned voucher is burned into the shared intent, then the
+/// admin/storyteller can mint without touching any user-owned object.
+public fun redeem_intent_to_character(
+    cap: &StorytellerCap,
+    saga: &mut Saga,
+    world: &World,
+    scene: &mut Scene,
+    intent: RedeemIntent,
+    profile: CharacterProfile,
+    media_assets: vector<MediaAsset>,
+    attributes: vector<AttributeValue>,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+): ControlCap {
+    saga::assert_cap(cap, saga);
+    let saga_id = saga::saga_id(saga);
+    assert!(intent.saga_id == saga_id, EVoucherSagaMismatch);
+
+    let now_ms = clock::timestamp_ms(clock);
+    assert!(now_ms <= intent.expires_at_ms, EVoucherExpired);
+    assert!(world::world_id(world) == saga::world_id(saga), EWorldSagaMismatch);
+    assert!(scene::saga_id(scene) == saga_id, ESceneSagaMismatch);
+    assert!(
+        check_redeem_intent_requirements(&intent, &profile, &attributes),
+        EReqsNotMet,
+    );
+
+    let owner_recipient = intent.payer;
+    let scene_id = scene::scene_id(scene);
+    let scene_location_id = scene::location_id(scene);
+
+    let (character_id, control_cap) = character::mint_character_internal(
+        world,
+        option::some(saga_id),
+        option::some(scene_id),
+        option::some(scene_location_id),
+        profile,
+        media_assets,
+        attributes,
+        owner_recipient,
+        now_ms,
+        ctx,
+    );
+
+    scene::add_character(scene, character_id);
+    saga::increment_character_count(saga);
+
+    let RedeemIntent {
+        id,
+        voucher_id,
+        saga_id: _,
+        payer: _,
+        paid_amount: _,
+        attribute_seed: _,
+        hint,
+        requirements: _,
+        intent_hint,
+        minted_at_ms: _,
+        expires_at_ms: _,
+    } = intent;
+    id.delete();
+
+    event::emit(GenesisVoucherRedeemed {
+        voucher_id,
+        saga_id,
+        character_id,
+        redeemed_at_ms: now_ms,
+        hint,
+        intent_hint,
+    });
+
+    control_cap
+}
+
 // ─── views ───────────────────────────────────────────────────────────
 
 public fun voucher_saga_id(voucher: &GenesisVoucher): ID { voucher.saga_id }
@@ -434,6 +624,32 @@ public fun voucher_requirements(voucher: &GenesisVoucher): &VoucherRequirements 
 
 public fun voucher_intent_hint(voucher: &GenesisVoucher): &Option<String> {
     &voucher.intent_hint
+}
+
+public fun redeem_intent_voucher_id(intent: &RedeemIntent): ID { intent.voucher_id }
+
+public fun redeem_intent_saga_id(intent: &RedeemIntent): ID { intent.saga_id }
+
+public fun redeem_intent_payer(intent: &RedeemIntent): address { intent.payer }
+
+public fun redeem_intent_paid_amount(intent: &RedeemIntent): u64 { intent.paid_amount }
+
+public fun redeem_intent_attribute_seed(intent: &RedeemIntent): &vector<u8> {
+    &intent.attribute_seed
+}
+
+public fun redeem_intent_hint(intent: &RedeemIntent): &Option<String> { &intent.hint }
+
+public fun redeem_intent_minted_at_ms(intent: &RedeemIntent): u64 { intent.minted_at_ms }
+
+public fun redeem_intent_expires_at_ms(intent: &RedeemIntent): u64 { intent.expires_at_ms }
+
+public fun redeem_intent_requirements(intent: &RedeemIntent): &VoucherRequirements {
+    &intent.requirements
+}
+
+public fun redeem_intent_intent_hint(intent: &RedeemIntent): &Option<String> {
+    &intent.intent_hint
 }
 
 // VoucherRequirements field accessors (for SDK reads).
@@ -801,6 +1017,84 @@ fun redeem_voucher_mints_character_and_consumes_voucher() {
 
     destroy(control_cap);
     destroy(treasury_cap);
+    destroy(scene);
+    cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
+
+#[test]
+fun request_redeem_voucher_consumes_voucher_and_shares_intent() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, mut saga, storyteller_cap, scene) = setup_world_saga_scene(
+        &mut ctx,
+        &clock,
+    );
+
+    let mut treasury_cap = currency::new_treasury_for_testing(&mut ctx);
+    let payment = coin::mint(&mut treasury_cap, 3_000, &mut ctx);
+    let voucher = mint_genesis_voucher(
+        &mut saga,
+        payment,
+        vector[9, 9, 9],
+        option::some(b"campaign".to_string()),
+        no_requirements(),
+        option::some(b"武小生".to_string()),
+        60_000,
+        &clock,
+        &mut ctx,
+    );
+
+    let intent_id = request_redeem_voucher(voucher, &clock, &mut ctx);
+    assert!(intent_id != sui::object::id_from_address(@0x0));
+
+    destroy(treasury_cap);
+    destroy(scene);
+    cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
+    clock.destroy_for_testing();
+}
+
+#[test]
+fun redeem_intent_mints_character_and_consumes_intent() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (world, admin_cap, mut saga, storyteller_cap, mut scene) = setup_world_saga_scene(
+        &mut ctx,
+        &clock,
+    );
+
+    let intent = RedeemIntent {
+        id: object::new(&mut ctx),
+        voucher_id: sui::object::id_from_address(@0xBEEF),
+        saga_id: saga::saga_id(&saga),
+        payer: @0xCAFE,
+        paid_amount: 3_000,
+        attribute_seed: vector[1, 2, 3],
+        hint: option::some(b"campaign".to_string()),
+        requirements: no_requirements(),
+        intent_hint: option::some(b"武小生".to_string()),
+        minted_at_ms: 0,
+        expires_at_ms: 999_999,
+    };
+
+    let chars_before = saga::character_count(&saga);
+    let control_cap = redeem_intent_to_character(
+        &storyteller_cap,
+        &mut saga,
+        &world,
+        &mut scene,
+        intent,
+        sample_profile(),
+        vector[],
+        sample_attributes(),
+        &clock,
+        &mut ctx,
+    );
+
+    assert_eq!(saga::character_count(&saga), chars_before + 1);
+    assert!(character::control_cap_epoch(&control_cap) == 1);
+
+    destroy(control_cap);
     destroy(scene);
     cleanup_world_saga(world, admin_cap, saga, storyteller_cap);
     clock.destroy_for_testing();

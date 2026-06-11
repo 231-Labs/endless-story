@@ -287,16 +287,6 @@
               "address": "endless_story",
               "name": "character"
             },
-            "name": "OwnerCap",
-            "type_arguments": []
-          }
-        },
-        {
-          "Datatype": {
-            "module": {
-              "address": "endless_story",
-              "name": "character"
-            },
             "name": "ControlCap",
             "type_arguments": []
           }
@@ -457,16 +447,6 @@
               "address": "endless_story",
               "name": "character"
             },
-            "name": "OwnerCap",
-            "type_arguments": []
-          }
-        },
-        {
-          "Datatype": {
-            "module": {
-              "address": "endless_story",
-              "name": "character"
-            },
             "name": "ControlCap",
             "type_arguments": []
           }
@@ -476,7 +456,7 @@
     "mint_character_internal": {
       "source_index": 3,
       "index": 3,
-      "doc": " Package-internal canonical mint. Validates invariants (species,\n attribute ranges) inside — callers cannot bypass. Shares Character as\n a shared object; returns owner + control caps to the PTB.\n\n Visibility: `public(package)` so sibling modules (recruit, future\n admin paths) can call without re-exposing through entries.",
+      "doc": " Package-internal canonical mint. Validates invariants (species,\n attribute ranges) inside — callers cannot bypass. Shares Character as\n a shared object.\n\n **Ownership guarantee (enforced on-chain, not by the PTB):** the\n `OwnerCap` is transferred to `owner_recipient` here — a storyteller /\n admin building the redeem PTB cannot keep or redirect it. Only the\n `ControlCap` (runner delegation) is returned, alongside the new\n character's `ID` so the caller can do scene / saga bookkeeping.\n\n Visibility: `public(package)` so sibling modules (recruit, future\n admin paths) can call without re-exposing through entries.",
       "attributes": [],
       "visibility": "Package",
       "entry": false,
@@ -655,10 +635,10 @@
         {
           "Datatype": {
             "module": {
-              "address": "endless_story",
-              "name": "character"
+              "address": "sui",
+              "name": "object"
             },
-            "name": "OwnerCap",
+            "name": "ID",
             "type_arguments": []
           }
         },

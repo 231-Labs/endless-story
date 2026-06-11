@@ -517,50 +517,9 @@
         }
       ]
     },
-    "saga_id": {
+    "uid": {
       "source_index": 8,
       "index": 8,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "scene",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "scene"
-                  },
-                  "name": "Scene",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "sui",
-              "name": "object"
-            },
-            "name": "ID",
-            "type_arguments": []
-          }
-        }
-      ]
-    },
-    "uid": {
-      "source_index": 9,
-      "index": 9,
       "doc": null,
       "attributes": [],
       "visibility": "Package",
@@ -605,8 +564,8 @@
       ]
     },
     "uid_mut": {
-      "source_index": 10,
-      "index": 10,
+      "source_index": 9,
+      "index": 9,
       "doc": null,
       "attributes": [],
       "visibility": "Package",
@@ -647,6 +606,47 @@
               }
             }
           ]
+        }
+      ]
+    },
+    "saga_id": {
+      "source_index": 10,
+      "index": 10,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "scene",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "scene"
+                  },
+                  "name": "Scene",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
         }
       ]
     },
