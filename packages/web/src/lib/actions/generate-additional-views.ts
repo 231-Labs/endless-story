@@ -5,9 +5,11 @@
  *
  * The mint-time portrait is a fixed 45° three-quarter view (see portrait.ts). Once
  * the character is on chain, we use that portrait as a VISUAL REFERENCE (OpenAI
- * /v1/images/edits) to render — of the SAME face —:
+ * /v1/images/edits) to render — of the SAME face and same pale-ink style —:
  *   1. a frontal portrait   (kind=0 portrait_variant)
  *   2. a horizontal character model-sheet art sheet (kind=6 setting_sheet)
+ *   3. a pale-ink human reference portrait (kind=0 portrait_variant)
+ *   4. a role-aware stage-makeup portrait (kind=3 makeup)
  * Each is uploaded to Walrus and appended to the character's gallery via
  * `add_media_asset_by_storyteller`. The public cover (image_url) is NOT touched —
  * the mint UI keeps showing the original 45° portrait.
@@ -27,7 +29,7 @@ import { blob } from '@endless-story/memwal';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
-import { portraitVariantPrompt, artSheetPrompt } from '@/lib/image-prompts';
+import { portraitVariantPrompt, artSheetPrompt, humanReferencePrompt, stageMakeupPrompt } from '@/lib/image-prompts';
 
 export interface AdditionalViewsInput {
     characterId: string;
@@ -45,12 +47,14 @@ export interface AdditionalViewsResult {
     appended: number;
     frontalUrl?: string;
     artSheetUrl?: string;
+    humanReferenceUrl?: string;
+    stageMakeupUrl?: string;
     error?: string;
     skipped?: string;
 }
 
 interface ViewSpec {
-    label: 'frontal' | 'art-sheet';
+    label: 'frontal' | 'art-sheet' | 'human-reference' | 'stage-makeup';
     kind: number; // MediaAsset.kind
     aspect: '4:5' | '16:9';
     prompt: (person: string) => string;
@@ -68,6 +72,18 @@ const VIEWS: ViewSpec[] = [
         kind: 6, // setting_sheet / character model-sheet
         aspect: '16:9',
         prompt: (person) => artSheetPrompt(person),
+    },
+    {
+        label: 'human-reference',
+        kind: 0, // portrait_variant
+        aspect: '4:5',
+        prompt: (person) => humanReferencePrompt(person),
+    },
+    {
+        label: 'stage-makeup',
+        kind: 3, // makeup
+        aspect: '4:5',
+        prompt: (person) => stageMakeupPrompt(person, stageRoleForPerson(person)),
     },
 ];
 
@@ -108,7 +124,7 @@ export async function generateAdditionalViews(
         profile?: { physical_facts?: { species?: string; gender?: string; body?: string; age_years?: number | string } };
     };
     const pf = cj.profile?.physical_facts ?? {};
-    const physical = [pf.species, pf.body].filter(Boolean).join(' / ') || '—';
+    const physical = [mapSpecies(pf.species ?? ''), pf.body].filter(Boolean).join(' / ') || '—';
     const person = `${role ?? '梨園中人'}，${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲，${physical}`;
 
     let imgClient;
@@ -236,6 +252,8 @@ export async function generateAdditionalViews(
         appended,
         frontalUrl: urls['frontal'],
         artSheetUrl: urls['art-sheet'],
+        humanReferenceUrl: urls['human-reference'],
+        stageMakeupUrl: urls['stage-makeup'],
     };
 }
 
@@ -243,4 +261,35 @@ function mapGender(raw: string): string {
     if (raw === '男' || raw.toLowerCase() === 'male') return '男';
     if (raw === '女' || raw.toLowerCase() === 'female') return '女';
     return '中性';
+}
+
+function mapSpecies(raw: string): string {
+    const lower = raw.toLowerCase();
+    if (!raw || lower === 'human' || raw === '人') return '人';
+    return raw;
+}
+
+function stageRoleForPerson(person: string): string {
+    if (/刀馬旦|武旦|女武生|武生/.test(person)) {
+        return '刀馬旦或武旦扮相：利落短打或靠旗意象，英氣眼線，身段有武戲張力';
+    }
+    if (/女小生|坤生|小生/.test(person)) {
+        return '越劇小生扮相：書生或少年才子類角色，眉眼乾淨，中性戲服與束髮頭套';
+    }
+    if (/青衣|正旦/.test(person)) {
+        return '青衣扮相：端莊婦人或貞靜才女類角色，素雅水袖與柔和旦角妝';
+    }
+    if (/花旦/.test(person)) {
+        return '花旦扮相：活潑少女或伶俐閨閣角色，明快旦角妝與輕巧戲服';
+    }
+    if (/老旦|老生/.test(person)) {
+        return '老旦或老生扮相：年長角色，淡墨皺紋、沉穩眉眼與樸素戲服';
+    }
+    if (/丑/.test(person)) {
+        return '丑角扮相：輕巧喜劇角色，小塊白鼻或淡彩丑妝，表情機敏';
+    }
+    if (/樂師|箱管|掌事|班主|經理/.test(person)) {
+        return '後台人員偶登台的配角扮相：簡潔戲服，淡妝，身份克制不搶主角';
+    }
+    return '越劇常規角色扮相：依其氣質選擇小生、旦角或配角方向，淡彩戲妝';
 }

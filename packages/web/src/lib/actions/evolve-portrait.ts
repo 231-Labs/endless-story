@@ -48,7 +48,7 @@ export type PortraitOccasionKind =
  *  it directly via promptOverride. */
 const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realistic'>, string> = {
     reference: '正式設定形象：端正面向觀者、神情沉靜，純色底、自然光、半身。',
-    stage: '登台演出：勾臉上彩的京劇戲妝、戴頭面、穿蟒袍戲服，舞台燈光，半身。',
+    stage: '登台演出：越劇戲妝，依角色行當選擇小生、旦角或配角扮相；妝面、頭飾與戲服都用淡彩薄塗，半身或七分身，純白背景。',
     finery: '一身上等綢緞華服、配飾講究，雍容貴氣，半身。',
     daily: '後台卸了妝的尋常一刻：素常服、神情鬆弛、帶生活感。',
     youth: '更年輕幾歲：眉眼青澀、未脫稚氣，衣著樸素，半身。',
@@ -57,8 +57,8 @@ const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realist
     snow: '風雪夜中：披斗篷、肩頭落雪、呵氣成霜，神情堅毅。',
 };
 
-/** Realistic variant wants realism (the opposite of the ink-wash VARIANT_NEG); only forbid stray text. */
-const REALISTIC_NEG = '畫面中不得出現任何文字、浮水印、邊框或排版框線。';
+/** Human-reference variant keeps real-actor bone structure while staying pale-ink. */
+const HUMAN_REFERENCE_GUARD = '淡彩水墨工筆畫風，純白背景，無任何文字、浮水印、邊框、數字、字母或排版框線。';
 
 export interface EvolvePortraitInput {
     characterId: string;
@@ -116,11 +116,10 @@ export async function evolvePortraitAction(
     const pf = cj.profile?.physical_facts ?? {};
     const physicalFacts = [pf.species, pf.body].filter(Boolean).join(' / ') || '—';
 
-    // Realistic variant: unlike the ink-wash variants, this needs the actual
+    // Human-reference variant: unlike the text-anchored variants, this needs the actual
     // FACE preserved, so it's img2img off the character's anchor portrait (the
-    // edit endpoint) with a photographic prompt — NOT the text-anchored path
-    // (which only reproduces physical_facts, a look-alike). The prompt asks for
-    // realism (opposite of the other variants' "no realism").
+    // edit endpoint) with a pale-ink real-actor prompt — NOT the text-anchored path
+    // (which only reproduces physical_facts, a look-alike).
     let gen: { ok: boolean; url?: string; base64?: string; blobId?: string; promptUsed?: string; error?: string };
     if (input.kind === 'realistic') {
         gen = await renderRealisticFromAnchor(cj, role ?? undefined, input.occasion);
@@ -236,7 +235,7 @@ function mapGender(raw: string): string {
 }
 
 /**
- * Realistic variant — render a photorealistic portrait of the SAME person by feeding the
+ * Human-reference variant — render a real-actor-feeling pale-ink portrait of the SAME person by feeding the
  * character's anchor base portrait into the image-edit (img2img) endpoint as a
  * reference, so the actual face/features survive. Returns the same shape as
  * `generatePortrait` so the caller's anchor-on-chain path is unchanged.
@@ -254,8 +253,8 @@ async function renderRealisticFromAnchor(
     const person = `${role ?? '梨園中人'}，${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
     const extra = occasion?.trim() ? `（${occasion.trim()}）` : '';
     const prompt =
-        `寫實真人肖像攝影：與參考圖**同一個人、同一張臉**（五官、髮型、神態保持一致），${person}${extra}。` +
-        `自然光、真實膚質與衣料質感、淺景深、半身正面肖像，照片寫真感。${REALISTIC_NEG}`;
+        `真人感淡彩肖像：與參考圖同一個人、同一張臉，五官、髮型、神態與年齡感保持一致，${person}${extra}。` +
+        `骨相、膚色、生活痕跡與日常神態更接近真實演員，畫法仍保持淡彩水墨工筆；半身正面，自然光。${HUMAN_REFERENCE_GUARD}`;
 
     // ALWAYS use the BASE anchor = media_assets[0] (the mint-time portrait), NOT
     // image_url (the owner-set cover, which may point at any later variant).

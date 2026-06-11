@@ -33,14 +33,14 @@ const KINDS: { value: PortraitOccasionKind; label: string }[] = [
  *  Dry-Run shows the real prompt sent). */
 const KIND_HINT: Record<PortraitOccasionKind, string> = {
     reference: '端正設定形象、純色底、神情沉靜',
-    stage: '勾臉上彩的京劇戲妝、戴頭面、穿蟒袍登台',
+    stage: '越劇戲妝、依行當出小生/旦角/配角扮相、淡彩薄塗',
     finery: '上等綢緞華服、雍容貴氣',
     daily: '後台卸妝、素常服、生活感',
     youth: '更年輕幾歲、眉眼青澀',
     aged: '多年以後、白髮皺紋、氣度蒼勁',
     illness: '久病清減、面色蒼白、形容憔悴',
     snow: '風雪夜、披斗篷、肩頭落雪',
-    realistic: '以基底肖像為參考、img2img 出寫實真人版（同一張臉）',
+    realistic: '以基底肖像為參考、img2img 出真人感淡彩版（同一張臉）',
     custom: '用下方文字逐字驅動扮相',
 };
 
@@ -100,7 +100,7 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
             {kind !== 'custom' ? (
                 <p className="text-2xs leading-relaxed text-mute">
                     此選項出：<span className="text-ink/80">{KIND_HINT[kind]}</span>
-                    （同一人、保持體態氣質；{kind === 'realistic' ? '寫實攝影風' : '水墨工筆畫風'}）
+                    （同一人、保持體態氣質；{kind === 'realistic' ? '真人感淡彩' : '水墨工筆畫風'}）
                 </p>
             ) : null}
 
@@ -114,7 +114,7 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
                     onChange={(e) => setOccasion(e.target.value)}
                     placeholder={
                         kind === 'custom'
-                            ? '如：京劇老生扮相，黑三髯口，蟒袍'
+                            ? '如：越劇老生扮相，淡墨髯口，素雅戲服'
                             : '如：左頰一道舊傷疤（疊加在上面選項之上）'
                     }
                     disabled={isPending}

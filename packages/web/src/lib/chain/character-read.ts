@@ -439,6 +439,8 @@ function parseMetadataLabel(metadata: string): string | null {
         const viewLabels: Record<string, string> = {
             frontal: '正面形象',
             'art-sheet': '人物設定',
+            'human-reference': '真人感設定',
+            'stage-makeup': '戲妝設定',
         };
         if (viewLabels[view]) return viewLabels[view];
     }
