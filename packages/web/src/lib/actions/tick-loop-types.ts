@@ -100,6 +100,31 @@ export interface TickSocialResult {
     error?: string;
 }
 
+/** GIVE phase — a character decides whether to aid a same-scene peer in need.
+ *  The give/no-give judgment is the LLM's; the balance MOVE is deferred to the
+ *  on-chain economy (Part D D1 transfer_between_characters) / off-chain settle
+ *  shadow (D5) — until that rail lands, `gifts` is the recorded INTENT and the
+ *  effect is narrative + relationship-tone only (`deferred: true`). */
+export interface TickGiveResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    gave: boolean;
+    gifts?: {
+        recipientId: string;
+        recipientName?: string;
+        amount: number;
+        memo: string;
+        manner?: string;
+        reason?: string;
+    }[];
+    /** overall reasoning / why nothing was given. */
+    reason?: string;
+    /** true while the actual balance move awaits the on-chain / settle rail (D1/D5). */
+    deferred?: boolean;
+    error?: string;
+}
+
 export interface TickSleepResult {
     characterId: string;
     name: string;
@@ -162,6 +187,8 @@ export interface TickLoopResult {
     /** The storylet opened this tick (dramatic spine), if any. */
     storylet?: TickStoryletResult;
     socials: TickSocialResult[];
+    /** GIVE phase: character-to-character aid decided this tick (balance move deferred to D1/D5). */
+    gives: TickGiveResult[];
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];

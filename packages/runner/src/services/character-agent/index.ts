@@ -46,6 +46,22 @@ export {
     buildSystemPrompt as buildSocialSystemPrompt,
     buildUserPrompt as buildSocialUserPrompt,
 } from './social.js';
+export { decideAidAction } from './aid.js';
+export type {
+    AidActionInput,
+    AidActionResult,
+    AidPeer,
+    AidGift,
+    AidRelation,
+    AidSituation,
+    AidMemo,
+    AidManner,
+    AidVitality,
+} from './aid.js';
+export {
+    buildSystemPrompt as buildAidSystemPrompt,
+    buildUserPrompt as buildAidUserPrompt,
+} from './aid.js';
 
 export interface DecideResult {
     /** Chosen catalog index (what submit_action takes). Always one of the

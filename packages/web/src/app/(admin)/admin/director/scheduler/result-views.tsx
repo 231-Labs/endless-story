@@ -163,6 +163,35 @@ export function TickLoopResultView({ result }: { result: TickLoopResult }) {
                 </section>
             ) : null}
 
+            {/* GIVE */}
+            {result.gives && result.gives.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">接濟（Give · 角色間金流 · 待上鏈結算）</div>
+                    <ul className="space-y-1">
+                        {result.gives.map((g) => (
+                            <li key={g.characterId} className="text-xs">
+                                <span
+                                    className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
+                                        g.ok && g.gave ? 'bg-jade' : g.ok ? 'bg-mute' : 'bg-cinnabar'
+                                    }`}
+                                />
+                                <span className="text-ink">{g.name}</span>
+                                <span className="text-mute">
+                                    {g.gave && g.gifts
+                                        ? ` ${g.gifts
+                                              .map((x) => `→ ${x.recipientName ?? x.recipientId} ${x.amount}（${x.memo}${x.manner ? '／' + x.manner : ''}）`)
+                                              .join('；')}`
+                                        : ' 未接濟'}
+                                    {g.reason ? ` · ${g.reason}` : ''}
+                                    {g.deferred ? ' · 待結算' : ''}
+                                </span>
+                                {g.error ? <span className="text-cinnabar"> {g.error}</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
             {/* ACT */}
             {result.acts.length > 0 ? (
                 <section className="space-y-1">

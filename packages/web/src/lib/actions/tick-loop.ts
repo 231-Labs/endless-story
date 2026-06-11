@@ -48,6 +48,7 @@ import type {
     TickResolveResult,
     TickMoveResult,
     TickSocialResult,
+    TickGiveResult,
     TickSleepResult,
     TickGazetteResult,
     TickDramaResult,
@@ -64,6 +65,7 @@ export type {
     TickResolveResult,
     TickMoveResult,
     TickSocialResult,
+    TickGiveResult,
     TickSleepResult,
     TickGazetteResult,
     TickDramaResult,
@@ -85,6 +87,7 @@ import {
     applyMoveResultsToRoster,
 } from './tick-phases/move';
 import { runSocialPhase } from './tick-phases/social';
+import { runGivePhase } from './tick-phases/give';
 import { runActPhase } from './tick-phases/act';
 
 /** Map the top drama tension to a readable scene-incident framing for a storylet.
@@ -110,6 +113,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             plans: [],
             moves: [],
             socials: [],
+            gives: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -127,6 +131,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             plans: [],
             moves: [],
             socials: [],
+            gives: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -425,6 +430,32 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.9 GIVE — a solvent character may aid a same-scene peer in need
+    // (decideAidAction; the give/no-give judgment is the LLM's). The balance
+    // MOVE is deferred to the on-chain economy (D1) / settle shadow (D5); for
+    // now this records the gift as relationship-tone memory + a scene line.
+    const gives: TickGiveResult[] = [];
+    if (slice.length > 0) {
+        tlog(`②‴ 接濟…`);
+        try {
+            gives.push(
+                ...(await runGivePhase({
+                    sagaId: d.sagaId,
+                    slice,
+                    charactersById: new Map(characters.map((c) => [c.id, c])),
+                    scenes: activeScenes,
+                    rosterById,
+                    roleById,
+                    memoryContext,
+                    dryRun,
+                })),
+            );
+            tlog(`   接濟 ${gives.filter((g) => g.ok && g.gave).length} 件${dryRun ? '（預演）' : ''}`);
+        } catch (err) {
+            console.warn('[tick-loop] give phase failed:', err);
+        }
+    }
+
     // 3. ACT — characters play their own hands in open events; events that
     //    everyone has acted in auto-resolve (judge). Chain mutation → serial
     //    (single StorytellerCap, no parallel signing).
@@ -708,6 +739,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         drama,
         storylet,
         socials,
+        gives,
         acts,
         resolves,
         povs,
