@@ -36,6 +36,14 @@ const TONE_ZH: Record<RelationshipToneValue, string> = {
     neutral: '平淡',
 };
 
+function normalizeGenderLabel(raw: string): string {
+    const value = raw.trim().toLowerCase();
+    if (value === 'female' || raw.includes('女')) return '女';
+    if (value === 'male' || raw.includes('男')) return '男';
+    if (value === 'neutral' || value === 'other' || raw.includes('中性')) return '中性';
+    return raw.trim() || '中性';
+}
+
 /** Tone of an existing tie between two members (by name); gives the LLM the current relationship web as context. */
 export interface ExistingTieHint {
     aName: string;
@@ -95,9 +103,13 @@ export function buildSystemPrompt(mode: InductionMode): string {
         '  · **反模板**:嚴禁千人一面;特別避免「被師父責打/罰站樁」當主旋律。有喜有悲有光有暗,讓這一個人獨一無二。',
         '  · **真有其事**:每條釘住可考的錨點(地名/年份節氣/具體物事/數字/人名),像真被記下來的事,非籠統感想。',
         `  · **年齡一致**:所有記憶吻合 TA 現在的歲數,最近一條落在接近當下;童年以「如今回望」的口吻記起。`,
+        '  · **身份不可漂移**:性別、年齡、行當必須嚴格跟輸入一致。女小生/坤生/女武生是「女性演員扮小生或武生」,',
+        '    生命經驗仍是女性;不可因小生、公子、男裝就把 TA 寫成男性,也不可把別人的性別改掉。',
         '  · 第一人稱、有畫面有感官有情緒;出現別人首次就點名;每條約 40–110 字;民初戲園時代語感,避免現代詞與翻譯腔。',
         '  · **心底秘密是記憶的根**:若提供「心底秘密」,要讓 2–3 條記憶從它長出來(初見/轉折/無法挽回的一刻…),',
-        '    寫得隱微而痛、是 TA 從不對人說的;不整段複述、化進場景。**秘密絕不可寫進關係 ties、也不可外洩。**',
+        '    寫得隱微、有牽掛、有刺,但不必黑暗;不整段複述、化進場景。**秘密絕不可寫進關係 ties、也不可外洩。**',
+        '  · **秘密調性邊界**:優先寫藝術、名聲、契約、分成、身體限制、感情不敢說、怕被取代、欠人情、舊班名聲等正常壓力;',
+        '    不要自動加仇家追殺、黑幫、重傷垂死、殺人、血債、性暴力、被賣、綁架、復仇等狗血黑暗橋段,除非輸入明寫。',
         '',
         '═══ (B) 關係 ties ═══',
         'TA 不是憑空誕生,而是「從人生的一半被拉進來」。只憑各人**公開描述**判斷 TA 與名冊中哪些人理應有關係,',
@@ -134,7 +146,7 @@ export function buildUserPrompt(input: InductionPromptInput): string {
                       `otherId=${r.id}`,
                       `姓名=${r.name}`,
                       `行當=${r.role || '—'}`,
-                      r.gender ? `性別=${r.gender}` : '',
+                      r.gender ? `性別=${normalizeGenderLabel(r.gender)}` : '',
                       r.ageYears ? `年齡=${r.ageYears}` : '',
                       r.currentSceneName ? `所在=${r.currentSceneName}` : '',
                   ].filter(Boolean);
@@ -164,7 +176,7 @@ export function buildUserPrompt(input: InductionPromptInput): string {
         `# 角色設定`,
         `- 姓名：${input.name}`,
         `- 行當：${input.role}（聲口：${roleHint(input.role)}）`,
-        `- 性別：${input.gender} · 年齡：${input.ageYears} 歲`,
+        `- 性別：${normalizeGenderLabel(input.gender)} · 年齡：${input.ageYears} 歲`,
         `- 外形：${input.physicalFacts}`,
         `- 所屬：${input.sagaName}`,
         '',
@@ -182,8 +194,9 @@ export function buildUserPrompt(input: InductionPromptInput): string {
         '',
         `## 本次要求`,
         `(A) 輸出 **${count}** 條 selfMemories,橫跨一生,建議:童年約 ${childhood}、少年入行約 ${youth}、近年約 ${recent}。`,
+        `   身份校驗:${input.name} 是「${normalizeGenderLabel(input.gender)}」,行當是「${input.role}」;女小生/坤生/女武生仍按女性生命經驗書寫。`,
         input.privateBackstory && input.privateBackstory.trim()
-            ? `   其中 2–3 條須從「心底秘密」長出來,隱微而痛、化進場景,不整段複述。`
+            ? `   其中 2–3 條須從「心底秘密」長出來,隱微、有牽掛、有刺,但不要自動變成追殺、血債或重傷垂死。`
             : '',
         `(B) 判斷「${input.name}」與名冊中哪些人理應有關係,依本次模式決定 prior/first_impression,雙向對稱;`,
         `至少 2 條(first_impression 不需過往依據)、最多 6 條;只有名冊為空才輸出空陣列。`,

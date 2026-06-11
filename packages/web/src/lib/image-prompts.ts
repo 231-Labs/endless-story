@@ -13,7 +13,7 @@ const TONE =
     '淡彩水墨工筆畫風：淡墨細線勾勒，清透水彩薄塗，設色清淡通透，大面積留白，宣紙暈染質感；統一純白背景。';
 
 const FACE_LOCK =
-    '與參考圖同一個人、同一張臉，保持五官、髮型、年齡感、體態與氣質一致；保留平實五官、原本骨相與生活痕跡。';
+    '與參考圖同一個人、同一張臉，保持五官、髮型、年齡感、體態與氣質一致；五官清秀耐看，保留原本骨相、個性與生活痕跡。';
 
 // These views are used as CLEAN reference anchors for downstream multi-character
 // scene images, so the image must be pure figure art — no text whatsoever.

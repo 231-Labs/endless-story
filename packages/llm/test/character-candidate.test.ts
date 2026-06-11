@@ -26,6 +26,15 @@ function parse(description: string) {
   return parseCharacterCandidate(json, []);
 }
 
+function parseWithGender(gender: string, requiredGender?: '男' | '女') {
+  const json = JSON.stringify({
+    name: '柳生春',
+    description: '外地來的女小生，台上英氣，台下怕冷，總把一枚舊銅錢縫在袖口。',
+    physicalFacts: { gender, age: 27, body: '瘦削' },
+  });
+  return parseCharacterCandidate(json, [], requiredGender);
+}
+
 test('strips the real 柳生春 leak: （外貌88）（筋骨39）（機敏99）（心性34）', () => {
   const out = parse(
     '眉眼如畫，風流倜儻，那張讓女學生痴迷的臉龐（外貌88）全是天賦。生得單薄，肩窄如削，' +
@@ -70,4 +79,14 @@ test('axis WORDS without numbers are allowed (only numbers are forbidden)', () =
   assert.match(out.description, /機敏過人/);
   assert.match(out.description, /筋骨偏弱/);
   assert.doesNotMatch(out.description, AXIS_NUM);
+});
+
+test('normalizes English gender labels from model output', () => {
+  assert.equal(parseWithGender('female')?.physicalFacts.gender, '女');
+  assert.equal(parseWithGender('male')?.physicalFacts.gender, '男');
+  assert.equal(parseWithGender('other')?.physicalFacts.gender, '中性');
+});
+
+test('required gender wins over model output', () => {
+  assert.equal(parseWithGender('男', '女')?.physicalFacts.gender, '女');
 });

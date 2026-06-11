@@ -92,7 +92,7 @@ export function buildCharacterGenPrompt(
     .map((t) => `${t.label}=${t.value}`)
     .join('，');
   const genderRule = opts.requiredGender
-    ? `\n\n【性別 · 硬性要求,不可違反】此徵召只收「${opts.requiredGender}」。physicalFacts.gender **必須**為「${opts.requiredGender}」—— 這是鏈上會驗的硬條件,違反則整張角色作廢。`
+    ? `\n\n【性別 · 硬性要求,不可違反】此徵召只收「${opts.requiredGender}」。physicalFacts.gender **必須**為「${opts.requiredGender}」—— 這是鏈上會驗的硬條件,違反則整張角色作廢。description 與 secret 也必須全篇符合此性別,不可把角色寫成另一性別。`
     : '';
   const rangeLine = opts.schemaKeys
     .map((s) => `${s.label} ${s.min}-${s.max}`)
@@ -137,9 +137,21 @@ ${rolledLine}
 2. description（**公開**）：100-160 字人物敘述（出身 / 性格 / 行事風格 / 顯眼外貌 / 一條可被人捕捉的執念或缺陷）—— **必須讓讀者從敘述裡讀得出該候選的數值高低，但不能報出分數、屬性名或括號評分**。這段會公開顯示並上鏈，**絕不可洩漏 secret 的內容**，只寫對外說得出口的版本。
 3. secret（**不公開**）：這名角色「放在心裡、對外絕不明說」的那一層 —— 公開門面背後的真正緣由（隱痛、心結、未癒的情、不可告人的因果）。
    · 若玩家描述裡寫了「沒人知道 / 其實 / 心底 / 不曾對人說」之類的隱情，**務必收進 secret，並從 description 抹去**；description 只留公開版本。
-   · 玩家若沒寫隱情，你可依人設**合理補一段**不外顯的心事（不得與 description 矛盾）。
+   · 玩家若沒寫隱情，你可依人設**合理補一段**不外顯的心事（不得與 description 矛盾），但調性應是正常人會藏著的心事，不是狗血慘案。
    · 80-200 字，要具體（有對象、有事件、有那一刻），它日後會化成此角色的私密記憶。沒有可寫就給空字串 ""。
 4. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——體型應與「筋骨」軸對位（若有此 key）${opts.requiredGender ? `；**gender 必須為「${opts.requiredGender}」(徵召硬性要求,不可改)**` : ''}
+
+【性別 / 行當一致性 · 很重要】
+- 「女小生 / 坤生 / 女武生」= **女性演員扮小生或武生**,角色性別仍是女,文本用「她」的生命經驗;不可寫成男性,不可讓她被當作男角本人。
+- 「小生」若徵召要求為女,就是女小生/坤生;若徵召要求為男,才可寫男小生或乾生。
+- 不要因「小生」「公子」「男裝」就改掉 physicalFacts.gender;台上扮相和台下性別要分清。
+- description、secret、physicalFacts.gender 必須互相一致;不要同一段裡一會兒「他」一會兒「她」。
+
+【secret 調性邊界 · 避免狗血黑暗】
+- secret 應偏向:未說出口的感情、利益算計、唱片合約壓力、師承心結、身體隱疾、怕被取代、欠一份人情、對行當身份的矛盾、家庭責任、舊班未了的名聲或契約。
+- **不要自動生成**仇家追殺、黑幫追殺、殺人滅口、重傷垂死、被賣、強迫賣身、血債、性暴力、虐待、滅門、綁架、復仇等重口橋段;除非玩家明確寫了這些。
+- 若涉及「粉戲 / 煙花地 / 風月場」等語境,把它寫成民初梨園邊緣生計、名聲與合約壓力,不要加羞辱、獵奇、暴力或道德審判。
+- 角色可以精明、有刺、有自保,但不要每個秘密都變成犯罪片或苦情戲。
 
 **不要在 JSON 裡寫 attributes、innateTraits 或任何分數文字**：數值已鎖死，server 會直接 attach。
 
@@ -172,6 +184,14 @@ const DEFAULT_ATTRIBUTE_SCORE_TERMS = [
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeCandidateGender(raw: string): '男' | '女' | '中性' {
+  const value = raw.trim().toLowerCase();
+  if (value === 'female' || raw.includes('女')) return '女';
+  if (value === 'male' || raw.includes('男')) return '男';
+  if (value === 'neutral' || value === 'other' || raw.includes('中性')) return '中性';
+  return VALID_GENDERS.has(raw) ? (raw as '男' | '女' | '中性') : '中性';
 }
 
 function stripAttributeScoreLeaks(input: string, rolledValues: RolledAttribute[]): string {
@@ -222,6 +242,7 @@ function stripAttributeScoreLeaks(input: string, rolledValues: RolledAttribute[]
 export function parseCharacterCandidate(
   text: string,
   rolledValues: RolledAttribute[],
+  requiredGender?: '男' | '女',
 ): CharacterCandidate | null {
   // Grab the first `{ ... }` (greedy to end of last `}`).
   const match = text.match(/\{[\s\S]*\}/);
@@ -249,7 +270,7 @@ export function parseCharacterCandidate(
 
   const pf = (obj.physicalFacts ?? obj.physical_facts) as Record<string, unknown> | undefined;
   const rawGender = typeof pf?.gender === 'string' ? pf.gender.trim() : '中性';
-  const gender = VALID_GENDERS.has(rawGender) ? rawGender : '中性';
+  const gender = requiredGender ?? normalizeCandidateGender(rawGender);
 
   const ageRaw = pf?.age;
   const ageNum =

@@ -75,6 +75,14 @@ const TONE_ZH: Record<RelationshipToneValue, string> = {
     neutral: '平淡',
 };
 
+function normalizeGenderLabel(raw: string): string {
+    const value = raw.trim().toLowerCase();
+    if (value === 'female' || raw.includes('女')) return '女';
+    if (value === 'male' || raw.includes('男')) return '男';
+    if (value === 'neutral' || value === 'other' || raw.includes('中性')) return '中性';
+    return raw.trim() || '中性';
+}
+
 /** Self-memory count from age (8–11); same tightened curve as runOnce — keeps a
  *  small age signal without the old 8–14 spread that read as uneven seeding. */
 function deriveCount(ageYears: number): number {
@@ -114,11 +122,15 @@ export function buildBatchSystemPrompt(): string {
         '    近年(當下牽掛/慾望/未癒的傷)。年紀越大近年層次越多。',
         '  · **真有其事**:每條釘住可考的錨點(地名/年份節氣/具體物事/數字/人名),像真被記下來的事。',
         '  · **年齡一致**:所有記憶吻合該角色現在的歲數;童年以「如今回望」口吻記起。',
+        '  · **身份不可漂移**:每個人的性別、年齡、行當必須嚴格跟名冊一致。女小生/坤生/女武生是「女性演員扮小生或武生」,',
+        '    生命經驗仍是女性;不可因小生、公子、男裝就把她寫成男性,也不可把任何人的性別改掉。',
         '  · 第一人稱、有畫面有感官有情緒;每條約 40–110 字;民初戲園時代語感,避免現代詞與翻譯腔。',
         '  · **因果連貫**:家世與入行途徑要接得起來 —— 若寫了疼愛的家庭,入行就需有合理變故橋接(家道中落/天災/喪親),',
         '    不可無故「被賣」。',
-        '  · **心底秘密是根**:若該角色有「心底秘密」,讓 2–3 條記憶從它長出來、隱微而痛、是他從不對人說的;',
-        '    **某人的秘密只能進他自己的 selfMemories,絕不可寫進別人的記憶、也不可寫進 ties。**',
+        '  · **心底秘密是根**:若該角色有「心底秘密」,讓 2–3 條記憶從它長出來、隱微、有牽掛、有刺,但不必黑暗;',
+        '    **某人的秘密只能進該角色自己的 selfMemories,絕不可寫進別人的記憶、也不可寫進 ties。**',
+        '  · **秘密調性邊界**:優先寫藝術、名聲、契約、分成、身體限制、感情不敢說、怕被取代、欠人情、舊班名聲等正常壓力;',
+        '    不要自動加仇家追殺、黑幫、重傷垂死、殺人、血債、性暴力、被賣、綁架、復仇等狗血黑暗橋段,除非輸入明寫。',
         '  · **反模板 · 爛梗黑名單**:嚴禁千人一面,尤其避免這些被用爛的橋段 ——',
         '    「X 歲被賣進科班/戲班」「初次登台腿肚子直轉筋」「《樓台會》當開蒙戲」「卸妝對鏡看見細紋」',
         '    「被師父拿戒尺/煙桿打手心」。每個人的童年、入行、創傷都要獨一無二。',
@@ -159,10 +171,10 @@ export function buildBatchUserPrompt(
             `### 成員 ${i + 1} — id=${m.id}`,
             `- 姓名:${m.name}`,
             `- 行當:${m.role || '—'}(聲口:${roleHint(m.role)})`,
-            `- 性別:${m.gender} · 年齡:${m.ageYears} 歲`,
+            `- 性別:${normalizeGenderLabel(m.gender)} · 年齡:${m.ageYears} 歲`,
             `- 公開描述:${m.description || '（無）'}`,
             m.secret && m.secret.trim()
-                ? `- 心底秘密（只 ${m.name} 自己知道,只長他自己的 selfMemories,絕不外洩、不寫進別人的記憶或 ties）:${m.secret.trim()}`
+                ? `- 心底秘密（只 ${m.name} 自己知道,只長該角色自己的 selfMemories,絕不外洩、不寫進別人的記憶或 ties）:${m.secret.trim()}`
                 : '',
             `- 要求:輸出 ${count} 條 selfMemories(童年/少年入行/近年橫跨一生)。`,
         ].filter(Boolean);
@@ -177,6 +189,7 @@ export function buildBatchUserPrompt(
         '',
         '# 本次要求',
         '(A) 為**每一位**成員輸出其 selfMemories(條數見各自要求)。',
+        '    性別/行當照名冊硬守:女小生/坤生/女武生仍是女性;秘密可有刺,但不要自動寫成追殺、血債、重傷垂死。',
         '(B) 判斷成員兩兩之間理應有的關係,以 prior 為主,**共同場景只寫進 ties 一次(雙向對稱)**,不要在 selfMemories 重複。',
         '只輸出 JSON 物件。',
     ].join('\n');

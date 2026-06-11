@@ -45,6 +45,14 @@ const TONE_ZH: Record<RelationshipToneValue, string> = {
     neutral: '平淡',
 };
 
+function normalizeGenderLabel(raw: string): string {
+    const value = raw.trim().toLowerCase();
+    if (value === 'female' || raw.includes('女')) return '女';
+    if (value === 'male' || raw.includes('男')) return '男';
+    if (value === 'neutral' || value === 'other' || raw.includes('中性')) return '中性';
+    return raw.trim() || '中性';
+}
+
 export interface RelationshipAssessInput {
     name: string;
     role: string;
@@ -69,6 +77,9 @@ export function buildSystemPrompt(): string {
         '**判準鐵則**：',
         '  · 只在雙方描述有**實質文本依據**時才連線（同鄉、同師門、舊情暗示、行當宿敵、',
         '    名字互相提及、明顯互補或對立的人設…）。沒有依據就**不要硬連**。寧缺勿濫。',
+        '  · **身份不可漂移**:性別、年齡、行當必須嚴格跟輸入一致。女小生/坤生/女武生是女性演員扮小生或武生,',
+        '    生命經驗仍是女性;不可因小生、公子、男裝就把她寫成男性。',
+        '  · **關係調性**:競爭、欠人情、舊班牽掛都可以有張力,但不要把普通恩怨自動升級成仇家追殺、血債、重傷垂死或復仇。',
         '  · 一個新角色通常 0–4 條關係就夠；最多 6 條。完全沒有合理對象時輸出空陣列。',
         '',
         '**kind 兩種**：',
@@ -103,7 +114,7 @@ export function buildUserPrompt(input: RelationshipAssessInput): string {
                       `otherId=${r.id}`,
                       `姓名=${r.name}`,
                       `行當=${r.role || '—'}`,
-                      r.gender ? `性別=${r.gender}` : '',
+                      r.gender ? `性別=${normalizeGenderLabel(r.gender)}` : '',
                       r.ageYears ? `年齡=${r.ageYears}` : '',
                       r.currentSceneName ? `所在=${r.currentSceneName}` : '',
                   ].filter(Boolean);
@@ -115,7 +126,7 @@ export function buildUserPrompt(input: RelationshipAssessInput): string {
         `# 新角色`,
         `- 姓名：${input.name}`,
         `- 行當：${input.role}（聲口：${roleHint(input.role)}）`,
-        `- 性別：${input.gender} · 年齡：${input.ageYears} 歲`,
+        `- 性別：${normalizeGenderLabel(input.gender)} · 年齡：${input.ageYears} 歲`,
         `- 外形：${input.physicalFacts}`,
         `- 所屬：${input.sagaName}`,
         '',
@@ -130,6 +141,7 @@ export function buildUserPrompt(input: RelationshipAssessInput): string {
         '',
         `## 本次要求`,
         `判斷「${input.name}」與名冊中哪些人理應已有關係或初見即生張力，為每一對輸出 tie。`,
+        `性別/行當照上方硬守;女小生仍是女性,不要把普通競爭寫成追殺或血債。`,
         `prior 要寫雙向對稱的共同過去；first_impression 寫雙向初見。寧缺勿濫，最多 6 條，只輸出 JSON 物件。`,
     ].join('\n');
 }

@@ -108,7 +108,7 @@ export async function previewCharacter(input: PreviewCharacterInput): Promise<Pr
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 
-    const candidate = parseCharacterCandidate(text, rolledValues);
+    const candidate = parseCharacterCandidate(text, rolledValues, input.requiredGender);
     if (!candidate) {
         return { ok: false, error: 'LLM 回應無法解析為角色，請重試。' };
     }
