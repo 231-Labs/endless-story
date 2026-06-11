@@ -37,13 +37,15 @@ import { charactersApi } from '@/lib/api/index';
 import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
-import { selectContention, pushRecentTemplate } from '@/lib/chain/event-planner';
+import { selectContention, pushRecentTemplate, framingForStatement } from '@/lib/chain/event-planner';
 import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
-import type { SpineStep } from '@/lib/chain/spine-core';
+import { coupleAttention } from '@/lib/chain/attention-core';
+import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineNextTick,
     spinePlanAndOpen,
+    spinePlanAndOpenAll,
     spineAccumulatePovs,
     spineResolveAndWeave,
     type SpineCtx,
@@ -146,6 +148,13 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // EXPERIMENTAL spine: only in live runs (it does chain writes); dry-run keeps
     // the storylet preview path. See docs/EVENT_LIFECYCLE.md.
     const eventSpine = (input.eventSpine ?? false) && !dryRun;
+    // Stage 1: drive MANY events at once (one per contention axis). Implies spine
+    // mode; live-only. Stage 2: couple each character's parallel desires through a
+    // finite attention budget so concurrent events pull on each other.
+    const parallelEvents = (input.parallelEvents ?? false) && !dryRun;
+    const attentionBudget = input.attentionBudget ?? false;
+    const maxConcurrentEvents = Math.max(1, input.maxConcurrentEvents ?? 2);
+    const spineMode = eventSpine || parallelEvents;
     drainMemoryWarnings(); // discard stale warnings from previous local dev requests
     const memoryContext = new TickMemoryContext();
     const cap = input.maxCharacters ?? 6;
@@ -296,17 +305,24 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 signer: dryRun ? undefined : admin.signer, // dry-run = derive, don't anchor
             });
             dramaHints = r.hints;
+            // Map ALL tension rows to fractions first; (Stage 2) couple each
+            // character's parallel desires through a finite attention budget so
+            // neglected axes ache more, then re-sort + take the top. Off-chain
+            // steering overlay only — the committed beat is untouched.
+            const allTop = r.tensions.map((t) => ({
+                characterId: t.agentId,
+                name: nameById.get(t.agentId),
+                statement: t.statement,
+                tension: tensionFraction(t.value),
+            }));
+            const steered = attentionBudget ? coupleAttention(allTop) : allTop;
+            steered.sort((a, b) => b.tension - a.tension);
             drama = {
                 active: r.active,
                 resourceCount: r.resourceCount,
                 skipped: r.skipped,
                 commitmentId: r.commitmentId,
-                top: r.tensions.slice(0, 6).map((t) => ({
-                    characterId: t.agentId,
-                    name: nameById.get(t.agentId),
-                    statement: t.statement,
-                    tension: tensionFraction(t.value),
-                })),
+                top: steered.slice(0, 6),
             };
             if (r.active) {
                 tlog(
@@ -349,22 +365,77 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   scene incident. This is the discrete EVENT the POV phase then anchors to,
     //   so chapters narrate "X happened today" from each angle instead of an ambient
     //   slice. Deterministic (no LLM); admin-signed so it stays serial.
-    let storylet: TickStoryletResult | undefined;
-    let spineStep: SpineStep | undefined;
+    // Stage 1: a saga may run MANY events at once (one per axis). `storylets`
+    //   holds every event LIVE this tick (open/continuing); `spineSteps` carries
+    //   the per-event plan (so each resolve weaves its own 回). Single-mode paths
+    //   just fill length-1 arrays so the downstream POV/cut code is one path.
+    let storylets: TickStoryletResult[] = [];
+    let spineSteps: SpineStep[] = [];
     let spineCtx: SpineCtx | undefined;
+    const verbFor = (action: SpineStep['action']) =>
+        action === 'open' ? '開回' : action === 'resolve' ? '收回' : action === 'continue' ? '續回' : '—';
     // FRAMING (flag-gated, default off) — the LLM director NAMES the chosen
     //   incident; the deterministic label is the fallback (event-framing.ts).
     //   Selection (which contention) stays deterministic — only the prose moves.
-    const frameLabel = async (picked: { label: string; statement?: string }): Promise<string> =>
+    const frameLabel = async (picked: { label: string; statement?: string }, cast?: string[], sceneName?: string): Promise<string> =>
         (input.llmFraming ?? false) && !dryRun
             ? await frameIncident({
                   statement: picked.statement,
                   fallback: picked.label,
-                  cast: slice.map((c) => c.name),
-                  sceneName: activeScenes[0]?.name ?? '戲班',
+                  cast: cast ?? slice.map((c) => c.name),
+                  sceneName: sceneName ?? activeScenes[0]?.name ?? '戲班',
               })
             : picked.label;
-    if (eventSpine && drama?.active && slice.length > 0) {
+    const sceneNameById = new Map(activeScenes.map((s) => [s.id, s.name]));
+    if (parallelEvents && drama?.active && slice.length > 0) {
+        // PARALLEL SPINE — open/linger/resolve MANY axis events at once.
+        const occupancy = slice.flatMap((c) => {
+            const sid = rosterById.get(c.id)?.currentSceneId;
+            return sid ? [{ characterId: c.id, sceneId: sid }] : [];
+        });
+        let candidates = buildAxisCandidates(drama?.top ?? [], occupancy, framingForStatement);
+        // LLM-frame only the axes that could open this tick (bounded LLM spend).
+        if ((input.llmFraming ?? false) && candidates.length > 0) {
+            candidates = await Promise.all(
+                candidates.map(async (c, i) =>
+                    i < maxConcurrentEvents
+                        ? {
+                              ...c,
+                              label: await frameLabel(
+                                  { label: c.label, statement: c.statement },
+                                  c.participantIds.map((id) => nameById.get(id) ?? '某人'),
+                                  sceneNameById.get(c.sceneId),
+                              ),
+                          }
+                        : c,
+                ),
+            );
+        }
+        spineCtx = {
+            sagaId: d.sagaId,
+            capId: d.storytellerCapId,
+            contention: null,
+            candidates,
+            maxConcurrent: maxConcurrentEvents,
+            occupancy,
+            sceneNameById,
+            nameById,
+            roleById,
+            tensions: (drama?.top ?? []).map((t) => ({
+                characterId: t.characterId,
+                statement: t.statement,
+                tension: t.tension,
+            })),
+        };
+        const nowTick = spineNextTick(d.sagaId);
+        const r = await spinePlanAndOpenAll(admin, spineCtx, nowTick);
+        storylets = r.storylets;
+        spineSteps = r.steps;
+        const opened = spineSteps.filter((s) => s.action === 'open').length;
+        const resolving = spineSteps.filter((s) => s.action === 'resolve').length;
+        for (const st of storylets) tlog(`②‴ 在演：${st.sceneName} · ${st.label}（${st.names.join('、')}）`);
+        tlog(`②‴ 並行事件：${storylets.length} 個在演（本 tick 開 ${opened}、收 ${resolving}）`);
+    } else if (eventSpine && drama?.active && slice.length > 0) {
         // SPINE MODE — open/linger/resolve ONE multi-tick BudgetEvent as the 回.
         const occupancy = slice.flatMap((c) => {
             const sid = rosterById.get(c.id)?.currentSceneId;
@@ -379,7 +450,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             capId: d.storytellerCapId,
             contention: { templateId: picked.templateId, label: spineLabel, statement: picked.statement },
             occupancy,
-            sceneNameById: new Map(activeScenes.map((s) => [s.id, s.name])),
+            sceneNameById,
             nameById,
             roleById,
             tensions: (drama?.top ?? []).map((t) => ({
@@ -390,16 +461,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         };
         const nowTick = spineNextTick(d.sagaId);
         const r = await spinePlanAndOpen(admin, spineCtx, nowTick);
-        storylet = r.storylet;
-        spineStep = r.step;
-        if (storylet) {
-            const verb =
-                spineStep.action === 'open'
-                    ? '開回'
-                    : spineStep.action === 'resolve'
-                      ? '收回'
-                      : '續回';
-            tlog(`②‴ ${verb}：${storylet.sceneName} · ${storylet.label}（${storylet.names.join('、')}）`);
+        if (r.storylet) storylets = [r.storylet];
+        spineSteps = [r.step];
+        if (r.storylet) {
+            tlog(`②‴ ${verbFor(r.step.action)}：${r.storylet.sceneName} · ${r.storylet.label}（${r.storylet.names.join('、')}）`);
         }
     } else if ((input.storylet ?? true) && drama?.active && slice.length > 0) {
         const byScene = new Map<string, Character[]>();
@@ -423,7 +488,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             const picked = selectContention(drama?.top ?? [], recentTopics);
             const framing = { templateId: picked.templateId, label: await frameLabel(picked) };
             recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
-            storylet = {
+            const st: TickStoryletResult = {
                 sceneId: sid,
                 sceneName,
                 templateId: framing.templateId,
@@ -441,7 +506,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             saga: d.sagaId,
                             templateId: framing.templateId,
                             sceneId: sid,
-                            characterIds: storylet.characterIds,
+                            characterIds: st.characterIds,
                         }),
                     );
                     const res = await admin.client.signAndExecuteTransaction({
@@ -449,16 +514,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         signer: admin.signer,
                         options: { showEffects: true },
                     });
-                    storylet.opened = res.effects?.status?.status === 'success';
-                    storylet.digest = res.digest;
+                    st.opened = res.effects?.status?.status === 'success';
+                    st.digest = res.digest;
                     await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
                 } catch (err) {
-                    storylet.error = err instanceof Error ? err.message : String(err);
+                    st.error = err instanceof Error ? err.message : String(err);
                 }
             }
+            storylets = [st];
             tlog(
-                `②‴ 開戲：${sceneName} · ${framing.label}（${storylet.names.join('、')}）` +
-                    `${dryRun ? '（預演）' : storylet.opened ? ' ✓上鏈' : ' ✗'}`,
+                `②‴ 開戲：${sceneName} · ${framing.label}（${st.names.join('、')}）` +
+                    `${dryRun ? '（預演）' : st.opened ? ' ✓上鏈' : ' ✗'}`,
             );
         }
     }
@@ -467,15 +533,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   We capture them as jobs here / below and run them SERIALLY in one after()
     //   after the POV phase — never concurrently, or the two owned-cap txs race on
     //   the cap's object version (the same reason the sync phases sign serially).
-    let momentJob: (() => Promise<void>) | null = null;
-    let cutJob: (() => Promise<void>) | null = null;
+    const momentJobs: Array<() => Promise<void>> = [];
+    const cutJobs: Array<() => Promise<void>> = [];
+    // The event covering a character this tick: the (parallel) event whose cast
+    // includes them, else the one staged in their scene. Single-event modes have
+    // ≤1 storylet so this is exactly the old `storylet.sceneId === sceneId` check.
+    const eventForChar = (charId: string, sceneId?: string): TickStoryletResult | undefined =>
+        storylets.find((s) => s.characterIds.includes(charId)) ??
+        (sceneId ? storylets.find((s) => s.sceneId === sceneId) : undefined);
 
-    // 2.76 EVENT MOMENT — the storylet's multi-character moment scene image
+    // 2.76 EVENT MOMENT — each opened event's multi-character moment scene image
     //   (img2img off each participant's anchor → faces don't drift), appended as
     //   kind=4 to every participant + tagged with the source event tx.
-    if ((input.eventImage ?? true) && !dryRun && storylet?.opened && storylet.characterIds.length >= 2) {
-        const st = storylet;
-        momentJob = async () => {
+    for (const st of storylets) {
+        if (!((input.eventImage ?? true) && !dryRun && st.opened && st.characterIds.length >= 2)) continue;
+        momentJobs.push(async () => {
             const r = await generateEventMomentAction({
                 characterIds: st.characterIds,
                 sceneName: st.sceneName,
@@ -487,7 +559,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     (r.skipped ? ` skipped=${r.skipped}` : '') +
                     (r.error ? ` error=${r.error}` : ''),
             );
-        };
+        });
     }
 
     // 2.8 SOCIAL — idle, same-scene lightweight observation / talk. This
@@ -529,7 +601,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 d.sagaId,
                 d.storytellerCapId,
                 nameById,
-                (input.autoResolve ?? true) && !eventSpine,
+                (input.autoResolve ?? true) && !spineMode,
                 dramaHints,
                 rosterContextById,
                 memoryContext,
@@ -581,7 +653,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         //    Dry-run does NO chain writes → generate concurrently; a real run
         //    anchors via commitment::commit (Sui signing) → serial.
         const narratable = new Set<string>();
-        if (storylet) for (const id of storylet.characterIds) narratable.add(id);
+        for (const st of storylets) for (const id of st.characterIds) narratable.add(id);
         for (const a of acts) if (a.ok) narratable.add(a.characterId);
         const povSlice = (input.povAll ?? false)
             ? slice
@@ -619,10 +691,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 // EVENT-anchored trigger: today's storylet in this character's
                 // scene + their own event plays. Falls back to the ambient line.
                 const triggerParts: string[] = [];
-                if (storylet && storylet.sceneId === sceneId) {
-                    const others = storylet.names.filter((n) => n !== c.name);
+                const myEvent = eventForChar(c.id, sceneId);
+                if (myEvent) {
+                    const others = myEvent.names.filter((n) => n !== c.name);
                     triggerParts.push(
-                        `在${storylet.sceneName}，${storylet.label}` +
+                        `在${myEvent.sceneName}，${myEvent.label}` +
                             (others.length ? `（同場還有${others.join('、')}）` : ''),
                     );
                 }
@@ -689,9 +762,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 d.sagaId,
                 toAnchor.map(({ c, r }) => {
                     const cSceneId = rosterById.get(c.id)?.currentSceneId;
-                    // The on-chain event this chapter narrates (when the storylet
-                    // opened in this character's scene) — its tx digest is the proof.
-                    const ev = storylet && storylet.sceneId === cSceneId ? storylet : undefined;
+                    // The on-chain event this chapter narrates (the parallel event
+                    // covering this character) — its tx digest is the proof.
+                    const ev = eventForChar(c.id, cSceneId);
                     const provenance: ChapterProvenance = {
                         v: 1,
                         day: worldTime?.day,
@@ -733,53 +806,64 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             //   (after()) so a weave error never blocks the tick. The cut is the
             //   commercial unit; POVs stay the per-character raw feed.
             //   See docs/CONTENT_PIPELINE.md §2.
-            if ((input.eventChapter ?? true) && storylet?.opened) {
-                const st = storylet;
-                const castSet = new Set(st.characterIds);
-                const cutPovs = toAnchor
-                    .filter(({ c, r }) => castSet.has(c.id) && r.chapter.trim())
-                    .map(({ c, r }) => {
-                        const role = roleById.get(c.id);
-                        return {
-                            characterId: c.id,
-                            characterName: c.name,
-                            role: role && role !== '—' ? role : undefined,
-                            body: r.chapter,
-                        };
-                    });
-                if (eventSpine && spineStep && spineCtx && st.digest) {
-                    // SPINE MODE — accumulate this tick's cast POVs under the event
-                    // (keyed by its stable id); the cut weaves only when the event
-                    // RESOLVES, covering the whole multi-tick 回 (not a per-tick snapshot).
-                    spineAccumulatePovs(st.digest, cutPovs);
-                    const step = spineStep;
-                    const ctx = spineCtx;
-                    cutJob = async () => {
-                        const r = await spineResolveAndWeave(admin, ctx, step, worldTime?.day);
-                        if (r.resolved) {
-                            console.log(
-                                `[tick-loop] spine resolve (${st.templateId}): settled=${r.settled}` +
-                                    ` cutPovs=${r.cutPovCount}`,
-                            );
-                        }
-                    };
-                } else if (cutPovs.length >= 2) {
-                    cutJob = async () => {
-                        const cut = await compileEventChapterAction({
-                            sceneId: st.sceneId,
-                            sceneName: st.sceneName,
-                            eventTx: st.digest,
-                            eventLabel: st.label,
-                            day: worldTime?.day,
-                            povs: cutPovs,
+            if (input.eventChapter ?? true) {
+                const povsFor = (st: TickStoryletResult) => {
+                    const castSet = new Set(st.characterIds);
+                    return toAnchor
+                        .filter(({ c, r }) => castSet.has(c.id) && r.chapter.trim())
+                        .map(({ c, r }) => {
+                            const role = roleById.get(c.id);
+                            return {
+                                characterId: c.id,
+                                characterName: c.name,
+                                role: role && role !== '—' ? role : undefined,
+                                body: r.chapter,
+                            };
                         });
-                        console.log(
-                            `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
-                                ` anchored=${cut.anchored}` +
-                                (cut.skipReason ? ` skipped=${cut.skipReason}` : '') +
-                                (cut.error ? ` error=${cut.error}` : ''),
-                        );
-                    };
+                };
+                // Each LIVE event accumulates this tick's cast POVs under its
+                // stable id (spine mode); a non-spine storylet weaves immediately.
+                for (const st of storylets) {
+                    if (!st.opened) continue;
+                    const cutPovs = povsFor(st);
+                    if (spineMode && spineCtx && st.digest) {
+                        spineAccumulatePovs(st.digest, cutPovs);
+                    } else if (cutPovs.length >= 2) {
+                        cutJobs.push(async () => {
+                            const cut = await compileEventChapterAction({
+                                sceneId: st.sceneId,
+                                sceneName: st.sceneName,
+                                eventTx: st.digest,
+                                eventLabel: st.label,
+                                day: worldTime?.day,
+                                povs: cutPovs,
+                            });
+                            console.log(
+                                `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
+                                    ` anchored=${cut.anchored}` +
+                                    (cut.skipReason ? ` skipped=${cut.skipReason}` : '') +
+                                    (cut.error ? ` error=${cut.error}` : ''),
+                            );
+                        });
+                    }
+                }
+                // SPINE MODE — each RESOLVE step settles its resource + weaves the
+                // whole multi-tick 回 from accumulated POVs, in the background.
+                if (spineMode && spineCtx) {
+                    const ctx = spineCtx;
+                    for (const step of spineSteps) {
+                        if (step.action !== 'resolve') continue;
+                        const s = step;
+                        cutJobs.push(async () => {
+                            const r = await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
+                            if (r.resolved) {
+                                console.log(
+                                    `[tick-loop] spine resolve (${s.eventId.slice(0, 10)}…): settled=${r.settled}` +
+                                        ` cutPovs=${r.cutPovCount}`,
+                                );
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -790,18 +874,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // Run the captured background StorytellerCap jobs SERIALLY (moment → cut) in
     // one after(): two owned-cap txs must not overlap or they conflict on the
     // cap's object version. Each is independently failure-isolated.
-    if (!dryRun && (momentJob || cutJob)) {
+    if (!dryRun && (momentJobs.length > 0 || cutJobs.length > 0)) {
         after(async () => {
-            if (momentJob) {
+            // moments first, then cuts — all serial (owned-cap txs must not overlap).
+            for (const job of momentJobs) {
                 try {
-                    await momentJob();
+                    await job();
                 } catch (err) {
                     console.warn('[tick-loop] event moment failed:', err);
                 }
             }
-            if (cutJob) {
+            for (const job of cutJobs) {
                 try {
-                    await cutJob();
+                    await job();
                 } catch (err) {
                     console.warn('[tick-loop] event cut failed:', err);
                 }
@@ -875,7 +960,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         plans,
         moves,
         drama,
-        storylet,
+        storylet: storylets[0],
+        storylets,
         socials,
         acts,
         resolves,

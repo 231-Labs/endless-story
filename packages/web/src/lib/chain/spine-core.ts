@@ -104,6 +104,153 @@ export function decideSpineStep(input: SpineDecisionInput): SpineStep {
     };
 }
 
+/* ── PARALLEL events (Stage 1): many open events per saga, one per axis ────── */
+
+/** A potential event to open: one contention AXIS, its best quorum scene, and
+ *  the co-located characters who actually ache for it. Built by the glue from
+ *  the (attention-coupled) tension rows + occupancy. */
+export interface AxisCandidate {
+    templateId: string;
+    label: string;
+    statement?: string;
+    sceneId: string;
+    participantIds: string[];
+    /** max tension across this axis's desirers — candidates are tried in this order. */
+    priority: number;
+}
+
+export interface MultiSpineInput {
+    /** every event currently tracked OPEN for this saga (one per axis). */
+    openEvents: ReadonlyArray<SpineOpenEvent>;
+    nowTick: number;
+    minTicks: number;
+    maxTicks: number;
+    /** at most this many events may be OPEN at once (after this tick). */
+    maxConcurrent: number;
+    /** axis candidates, highest priority first. */
+    candidates: ReadonlyArray<AxisCandidate>;
+    minCast: number;
+}
+
+/**
+ * Decide EVERY spine step this tick across all axes (Stage 1 parallel events).
+ * Each open event lingers/​resolves by age independently; then, while under the
+ * concurrency cap, the highest-priority axes that have NO open event and meet
+ * quorum are opened. One event per axis at a time (you can't hold two
+ * simultaneous fights over the SAME slot); orthogonal axes (e.g. recording vs
+ * partnership) run concurrently. An axis being resolved this tick is NOT
+ * reopened the same tick (anti-flap). Pure.
+ */
+export function decideSpineSteps(input: MultiSpineInput): SpineStep[] {
+    const { openEvents, nowTick, minTicks, maxTicks } = input;
+    const steps: SpineStep[] = [];
+    const openAxes = new Set<string>();
+    let live = 0; // events still OPEN after this tick (continued + newly opened)
+
+    for (const ev of openEvents) {
+        openAxes.add(ev.templateId);
+        const age = nowTick - ev.openedAtTick;
+        if (age >= maxTicks) steps.push({ action: 'resolve', eventId: ev.eventId, reason: 'maxAge' });
+        else if (age >= minTicks) steps.push({ action: 'resolve', eventId: ev.eventId, reason: 'settled' });
+        else {
+            steps.push({ action: 'continue', eventId: ev.eventId, age });
+            live++;
+        }
+    }
+
+    const minCast = Math.max(2, input.minCast);
+    const cap = Math.max(1, input.maxConcurrent);
+    for (const c of input.candidates) {
+        if (live >= cap) break;
+        if (openAxes.has(c.templateId)) continue; // one event per axis (or just resolved)
+        if (c.participantIds.length < minCast) continue;
+        steps.push({
+            action: 'open',
+            sceneId: c.sceneId,
+            templateId: c.templateId,
+            label: c.label,
+            participantIds: c.participantIds,
+        });
+        openAxes.add(c.templateId);
+        live++;
+    }
+
+    if (steps.length === 0) steps.push({ action: 'idle', reason: 'no open events, no quorum axis' });
+    return steps;
+}
+
+/** A tension row as seen by candidate-building (post attention-coupling). */
+export interface AxisTensionRow {
+    characterId: string;
+    statement: string;
+    tension: number;
+}
+
+/**
+ * Group tension rows into per-axis candidates: map each desire statement to its
+ * contention framing, gather the co-located desirers, and stage each axis in the
+ * scene holding the most of them. Returns candidates sorted by priority (max
+ * tension on the axis) desc. Pure — `framingOf` is injected (event-planner's
+ * `framingForStatement`) so this stays unit-testable without that import.
+ */
+export function buildAxisCandidates(
+    rows: ReadonlyArray<AxisTensionRow>,
+    occupancy: ReadonlyArray<SceneOccupant>,
+    framingOf: (statement?: string) => { templateId: string; label: string },
+): AxisCandidate[] {
+    const sceneOf = new Map<string, string>();
+    for (const o of occupancy) sceneOf.set(o.characterId, o.sceneId);
+
+    // axis → { label, statement, priority, per-scene desirer ids }
+    interface Acc {
+        templateId: string;
+        label: string;
+        statement?: string;
+        priority: number;
+        byScene: Map<string, Set<string>>;
+    }
+    const axes = new Map<string, Acc>();
+    for (const r of rows) {
+        if (r.tension <= 0) continue;
+        const sceneId = sceneOf.get(r.characterId);
+        if (!sceneId) continue; // not co-located anywhere this tick
+        const framing = framingOf(r.statement);
+        let acc = axes.get(framing.templateId);
+        if (!acc) {
+            acc = { templateId: framing.templateId, label: framing.label, statement: r.statement, priority: r.tension, byScene: new Map() };
+            axes.set(framing.templateId, acc);
+        }
+        if (r.tension > acc.priority) {
+            acc.priority = r.tension;
+            acc.label = framing.label;
+            acc.statement = r.statement;
+        }
+        const set = acc.byScene.get(sceneId) ?? new Set<string>();
+        set.add(r.characterId);
+        acc.byScene.set(sceneId, set);
+    }
+
+    const candidates: AxisCandidate[] = [];
+    for (const acc of axes.values()) {
+        // stage the axis in the scene with the most of its desirers
+        let best: { sceneId: string; ids: string[] } | null = null;
+        for (const [sceneId, ids] of acc.byScene) {
+            if (!best || ids.size > best.ids.length) best = { sceneId, ids: [...ids] };
+        }
+        if (!best) continue;
+        candidates.push({
+            templateId: acc.templateId,
+            label: acc.label,
+            statement: acc.statement,
+            sceneId: best.sceneId,
+            participantIds: best.ids,
+            priority: acc.priority,
+        });
+    }
+    candidates.sort((a, b) => b.priority - a.priority);
+    return candidates;
+}
+
 /* ── settlement: who seizes the contested resource, and the transfer ──────── */
 
 export interface AllocationView {

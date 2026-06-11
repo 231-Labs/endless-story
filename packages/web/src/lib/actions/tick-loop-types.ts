@@ -38,6 +38,15 @@ export interface TickLoopInput {
      *  resolution (autoResolve is forced off) and the cut weaves only at resolve.
      *  See docs/EVENT_LIFECYCLE.md. Not chain-verified — flag on in a chain session. */
     eventSpine?: boolean;
+    /** EXPERIMENTAL (default false): run MANY events at once — one per contention
+     *  axis (爭灌錄權 ∥ 爭某人的愛). Implies spine mode; live-only. See Stage 1. */
+    parallelEvents?: boolean;
+    /** Concurrency cap for `parallelEvents` (default 2). */
+    maxConcurrentEvents?: number;
+    /** EXPERIMENTAL (default false): couple each character's parallel desires
+     *  through a finite attention budget, so concurrent events pull on each other
+     *  (the 柳生春 trade-off, cross-event). Off-chain steering overlay. Stage 2. */
+    attentionBudget?: boolean;
     /** EXPERIMENTAL (default false): let the LLM director NAME each incident
      *  (event-framing.ts) instead of the deterministic keyword→string map. Pure
      *  narration; falls back to the deterministic label on any failure. */
@@ -176,8 +185,11 @@ export interface TickLoopResult {
     moves: TickMoveResult[];
     /** DR-6: scarce-resource tension derived (+ committed) before decisions. */
     drama?: TickDramaResult;
-    /** The storylet opened this tick (dramatic spine), if any. */
+    /** The storylet opened this tick (dramatic spine), if any. In parallel mode
+     *  this is the first of `storylets` (back-compat). */
     storylet?: TickStoryletResult;
+    /** EVERY event live this tick (Stage 1 parallel events); ≤1 in single mode. */
+    storylets?: TickStoryletResult[];
     socials: TickSocialResult[];
     acts: TickActResult[];
     resolves: TickResolveResult[];

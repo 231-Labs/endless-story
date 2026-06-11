@@ -29,6 +29,7 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, type SuiClient } from '@endl
 import { readResourceLedger, settleResolvedTransfers } from '@/lib/chain/drama';
 import {
     decideSpineStep,
+    decideSpineSteps,
     resourceForContention,
     chooseSettlementWinner,
     planResourceTransfer,
@@ -38,6 +39,7 @@ import {
     type SceneOccupant,
     type TensionView,
     type AllocationView,
+    type AxisCandidate,
 } from '@/lib/chain/spine-core';
 import { createBudgetEventAction, dealHandAction } from './budget-event';
 import { compileEventChapterAction } from './compile-event-chapter';
@@ -52,10 +54,23 @@ interface CutPov {
     body: string;
 }
 
-/* ── per-process registries (same lifetime model as recentTopicsBySaga) ───── */
-const openBySaga = new Map<string, SpineOpenEvent>();
+/* ── per-process registries (same lifetime model as recentTopicsBySaga) ─────
+ * Stage 1: a saga may hold MANY open events at once (one per contention axis).
+ * Single-mode (`spinePlanAndOpen`) just keeps the array at length ≤ 1. */
+const openBySaga = new Map<string, SpineOpenEvent[]>();
 const tickBySaga = new Map<string, number>();
 const povsByEvent = new Map<string, CutPov[]>();
+
+const openList = (sagaId: string): SpineOpenEvent[] => openBySaga.get(sagaId) ?? [];
+function addOpen(sagaId: string, ev: SpineOpenEvent): void {
+    const arr = openBySaga.get(sagaId) ?? [];
+    arr.push(ev);
+    openBySaga.set(sagaId, arr);
+}
+function removeOpen(sagaId: string, eventId: string): void {
+    const arr = openBySaga.get(sagaId);
+    if (arr) openBySaga.set(sagaId, arr.filter((e) => e.eventId !== eventId));
+}
 
 /** Advance the saga's monotonic spine tick (call once per loop run). */
 export function spineNextTick(sagaId: string): number {
@@ -67,7 +82,12 @@ export function spineNextTick(sagaId: string): number {
 export interface SpineCtx {
     sagaId: string;
     capId: string;
+    /** single-mode contention (spinePlanAndOpen). */
     contention: ContentionPick | null;
+    /** parallel-mode axis candidates (spinePlanAndOpenAll), highest priority first. */
+    candidates?: AxisCandidate[];
+    /** parallel-mode concurrency cap (default 2). */
+    maxConcurrent?: number;
     occupancy: SceneOccupant[];
     sceneNameById: Map<string, string>;
     nameById: Map<string, string>;
@@ -104,7 +124,7 @@ export async function spinePlanAndOpen(
     nowTick: number,
 ): Promise<{ storylet?: TickStoryletResult; step: SpineStep }> {
     const step = decideSpineStep({
-        open: openBySaga.get(ctx.sagaId) ?? null,
+        open: openList(ctx.sagaId)[0] ?? null,
         nowTick,
         minTicks: ctx.minTicks ?? 2,
         maxTicks: ctx.maxTicks ?? 4,
@@ -114,36 +134,86 @@ export async function spinePlanAndOpen(
     });
 
     if (step.action === 'open') {
-        const created = await createBudgetEventAction({
-            sceneId: step.sceneId,
-            title: step.label,
-            summary: '',
-            scale: 3,
-        });
-        if (!created.ok || !created.eventId) {
-            console.warn('[event-spine] open failed:', created.error);
-            return { step: { action: 'idle', reason: 'open failed' } };
-        }
-        // Deal each participant their hand so the ACT phase sees pending hands.
-        for (const id of step.participantIds) {
-            const dealt = await dealHandAction({ eventId: created.eventId, characterId: id });
-            if (!dealt.ok) console.warn(`[event-spine] deal ${id} failed:`, dealt.error);
-        }
-        const ev: SpineOpenEvent = {
-            eventId: created.eventId,
-            sceneId: step.sceneId,
-            templateId: step.templateId,
-            label: step.label,
-            participantIds: step.participantIds,
-            openedAtTick: nowTick,
-        };
-        openBySaga.set(ctx.sagaId, ev);
+        const ev = await openOneEvent(ctx, step, nowTick);
+        if (!ev) return { step: { action: 'idle', reason: 'open failed' } };
         return { storylet: descriptorFor(ev, ctx), step };
     }
 
-    const open = openBySaga.get(ctx.sagaId);
+    const open = openList(ctx.sagaId)[0];
     if (open) return { storylet: descriptorFor(open, ctx), step };
     return { step };
+}
+
+/** Push a BudgetEvent + deal hands for one OPEN step; registers + returns it, or
+ *  null on chain failure. Shared by single- and parallel-mode planning. */
+async function openOneEvent(
+    ctx: SpineCtx,
+    step: Extract<SpineStep, { action: 'open' }>,
+    nowTick: number,
+): Promise<SpineOpenEvent | null> {
+    const created = await createBudgetEventAction({
+        sceneId: step.sceneId,
+        title: step.label,
+        summary: '',
+        scale: 3,
+    });
+    if (!created.ok || !created.eventId) {
+        console.warn('[event-spine] open failed:', created.error);
+        return null;
+    }
+    // Deal each participant their hand so the ACT phase sees pending hands.
+    for (const id of step.participantIds) {
+        const dealt = await dealHandAction({ eventId: created.eventId, characterId: id });
+        if (!dealt.ok) console.warn(`[event-spine] deal ${id} failed:`, dealt.error);
+    }
+    const ev: SpineOpenEvent = {
+        eventId: created.eventId,
+        sceneId: step.sceneId,
+        templateId: step.templateId,
+        label: step.label,
+        participantIds: step.participantIds,
+        openedAtTick: nowTick,
+    };
+    addOpen(ctx.sagaId, ev);
+    return ev;
+}
+
+/**
+ * PARALLEL mode (Stage 1): plan EVERY axis this tick. Lingers/​resolves each
+ * open event by age and opens the highest-priority quorum axes up to the
+ * concurrency cap. Returns one storylet descriptor per event that is OPEN this
+ * tick (newly opened OR continuing — NOT the resolving ones, whose cut weaves
+ * from already-accumulated POVs) and the full step list (so the caller runs a
+ * resolve+weave per resolve step). Chain opens run serially (one keypair).
+ */
+export async function spinePlanAndOpenAll(
+    admin: Admin,
+    ctx: SpineCtx,
+    nowTick: number,
+): Promise<{ storylets: TickStoryletResult[]; steps: SpineStep[] }> {
+    const steps = decideSpineSteps({
+        openEvents: openList(ctx.sagaId),
+        nowTick,
+        minTicks: ctx.minTicks ?? 2,
+        maxTicks: ctx.maxTicks ?? 4,
+        maxConcurrent: ctx.maxConcurrent ?? 2,
+        candidates: ctx.candidates ?? [],
+        minCast: ctx.minCast ?? 2,
+    });
+
+    const storylets: TickStoryletResult[] = [];
+    const byId = new Map(openList(ctx.sagaId).map((e) => [e.eventId, e]));
+    for (const step of steps) {
+        if (step.action === 'open') {
+            const ev = await openOneEvent(ctx, step, nowTick);
+            if (ev) storylets.push(descriptorFor(ev, ctx));
+        } else if (step.action === 'continue') {
+            const ev = byId.get(step.eventId);
+            if (ev) storylets.push(descriptorFor(ev, ctx));
+        }
+        // resolve / idle → no live descriptor (resolve weaves from accumulated POVs)
+    }
+    return { storylets, steps };
 }
 
 /** Accumulate a tick's cast POVs under the event so the cut covers the whole 回. */
@@ -166,10 +236,8 @@ export async function spineResolveAndWeave(
     day?: number,
 ): Promise<{ resolved: boolean; settled: boolean; cutPovCount: number }> {
     if (step.action !== 'resolve') return { resolved: false, settled: false, cutPovCount: 0 };
-    const ev = openBySaga.get(ctx.sagaId);
-    if (!ev || ev.eventId !== step.eventId) {
-        return { resolved: false, settled: false, cutPovCount: 0 };
-    }
+    const ev = openList(ctx.sagaId).find((e) => e.eventId === step.eventId);
+    if (!ev) return { resolved: false, settled: false, cutPovCount: 0 };
 
     const settled = await settleEvent(admin, ctx, ev);
 
@@ -192,7 +260,7 @@ export async function spineResolveAndWeave(
         }
     }
 
-    openBySaga.delete(ctx.sagaId);
+    removeOpen(ctx.sagaId, ev.eventId);
     povsByEvent.delete(ev.eventId);
     return { resolved: true, settled, cutPovCount };
 }

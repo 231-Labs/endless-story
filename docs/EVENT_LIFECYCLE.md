@@ -133,6 +133,39 @@ LLM、上限 `MAX_DIRECTOR_RESOURCES`=3 個導演標的。全程 failure-isolate
 
 ---
 
+### Phase 2.5 — 並行事件 + 注意力耦合 🟡 已建 / flag-gate / 待鏈上驗（2026-06-11）
+> **狀態**：Stage 1（並行）+ Stage 2（互相影響）程式碼已落、flag-gate（`parallelEvents` /
+> `attentionBudget` 預設 **關**）、純測試 + 型別綠（70 測試）、**未在真鏈驗**。
+
+**動機**：原 spine 一個 saga 一次只開一個事件——但這是 off-chain 簡化，**不是鏈的限制**
+（`push_event` 每次新建獨立 BudgetEvent，鏈上可同時多個 open）。爭灌錄權與爭某人的愛是**正交
+軸**、不碰同一守恆池，本該並行且互相影響。
+
+**Stage 1 — 並行事件（`parallelEvents`）**：事件按**資源軸**切分。
+- `spine-core.decideSpineSteps`（純）：每個 open event 各自按齡 linger/resolve；在並行上限
+  （`maxConcurrentEvents`，預設 2）內，開出張力最高、**尚無 open event 的軸**。一軸一事件
+  （不能同時兩場搶同一個 slot）；正交軸並行；本 tick 收回的軸本 tick 不重開（anti-flap）。
+- `spine-core.buildAxisCandidates`（純）：把張力列依 framing 分軸、聚合**該軸的在場渴望者**、
+  在人最多的場景開。
+- `event-spine.ts`：`openBySaga` 由單格 → 陣列；`spinePlanAndOpenAll` 開全部、每個 resolve 各自
+  結算 + 織回。tick-loop 下游（POV/合本歸屬/劇照/cut）統一成 `storylets[]` 一條路徑，單事件模式
+  只是長度 1，行為不變。
+
+**Stage 2 — 注意力耦合（`attentionBudget`）**：讓並行事件**互相拉扯**。
+- 根因：live drama 模型把 per-character 共享預算耦合砍了（`drama-core.ts:290`，只活在 offline
+  sim），所以兩個不碰同資源的事件本來零互動。
+- `attention-core.coupleAttention`（純）：每角色只「全額供養」前 `focus`（預設 1）個欲望，再往下
+  的欲望**被冷落、張力放大**（rank 越後乘越多）。聚合到全體 → 被冷落的軸總張力升 → 選題/spine
+  下一步轉向它 → 兩事件透過共享的人**互相牽動**（柳生春時刻，跨事件版）。
+- 是 off-chain DEMAND 訊號的純疊加（套在 `drama.top`），**不動鏈上可驗的 beat**：供給/守恆照舊
+  可驗，注意力是其上的 attention-economy overlay。
+
+**邊界**：Stage 2 目前只耦合 `drama.top`（驅動選題 + spine 結算），**未耦合 dramaHint**
+（POV/decide 的提詞）——角色「感覺到」被冷落的是行為層尚未接，列為小修。並行 + 注意力都
+flag-gate，關掉與主線完全一致。
+
+---
+
 ### Phase 4 — 真·多回合出牌 ⏳ 需 redeploy
 若要「每 tick 各出一張、連打數 tick 周旋」（而非單回合 + 餘波），需改 `event.move`：多回合手牌
 或分回合 resolve 條件。非當前 demo 範圍。
@@ -145,6 +178,8 @@ LLM、上限 `MAX_DIRECTOR_RESOURCES`=3 個導演標的。全程 failure-isolate
   session 驗 §3 那四點。off 時 demo 行為完全不變。
 - **Phase 3**（LLM 導演授權標的：A 框題 + B 立題）🟡 **程式碼已落、flag-gate（預設關）、
   純測試 + 型別綠**，但**未在真鏈驗**。開 `llmFraming` / `directorResources` 前見 §6。
+- **Phase 2.5**（並行事件 + 注意力耦合）🟡 **程式碼已落、flag-gate（預設關）、純測試 + 型別綠**，
+  但**未在真鏈驗**。開 `parallelEvents` / `attentionBudget` 前見 §7。
 - **Phase 4**（真·多回合出牌）⏳ 需 redeploy。
 
 ## 5. 開 flag 驗證 runbook（在能跑真 tick 的 session 執行）
@@ -222,5 +257,38 @@ LLM、上限 `MAX_DIRECTOR_RESOURCES`=3 個導演標的。全程 failure-isolate
 
 通過 1–11 → 才考慮把任一 flag 預設開、或在 UI 露出切換。任何一步卡住且非小修 → 回報，
 別硬推 demo 分支。`retire_resource`（標的清場）尚未接，目前只增不減（見 §3 Phase 3 末）。
+
+## 7. Phase 2.5（並行事件 / 注意力耦合）驗證清單
+
+> 在能跑真 tick 的 session。`parallelEvents` 是 spine 的超集（implies spine），所以**先過完 §5
+> spine 驗證**再開。兩 flag 各自獨立、預設關，關掉與主線一致。runner 起手式：
+> `world-loop --parallel-events --attention-budget --llm-framing --interval=45`。
+
+### 先驗回退
+1. 兩 flag 都關跑一輪 → 與現行 demo 零差異（POV/合本/劇照歸屬不變）。
+
+### Stage 1 — 並行事件（`parallelEvents:true`，`attentionBudget` 先關）
+2. **真的並行**：drama 有 ≥2 個正交軸有張力時（如 recording + partnership），`②‴ 並行事件：N
+   個在演` 的 N 應 ≥2。`②‴ 在演：…` 每個事件一行、標的不同。
+3. **一軸一事件**：同一個 `contention:<kind>` 不應同時有兩個 open（log 不會對同軸開兩次）。
+4. **各自生命週期**：每個事件按齡獨立 `[tick-loop] spine resolve (event …): settled=?`——
+   兩事件可在不同 tick 收回，不是綁在一起。
+5. **合本歸屬分得開**：每個事件的 cut 只收**自己 cast** 的 POV（不同事件的 POV 不混進同一回）。
+   去鏈上看兩個 event_cut 的 povCharacterId 應各自對應其參與者。
+6. **並行上限**：`--max-concurrent-events=2` 時，就算有 3 個軸有張力，同時 open 的也 ≤2；
+   有事件收回騰位後，下一 tick 才補開第 3 軸。
+
+### Stage 2 — 注意力耦合（`attentionBudget:true`，配合 `parallelEvents`）
+7. **被冷落的軸會抬頭**：找一個**同時渴望兩軸**的角色（如柳生春既想灌錄權又想搭戲）。開
+   `attentionBudget` 後，`②′` 的 `drama.top` 裡他**次要那軸的張力應被放大**、可能反超主軸——
+   對照關 flag 時的同一 tick。
+8. **選題/結算轉向**：連跑數回，確認被放大的軸更常被選中開事件、或結算時更常贏走資源——
+   即「追一個就餓到另一個」透過共享的人傳導到世界。對照只開 Stage 1（無耦合）時兩軸的輪換頻率。
+9. **不破壞守恆**：耦合只動 `drama.top`；鏈上 allocation / `settled` 路徑與關 flag 時一致
+   （Stage 2 是 off-chain overlay，不應改變任何上鏈結算的正確性）。
+10. **退化安全**：單欲望角色不受影響（`focus` 全額供養）；`coupleAttention` 對單軸世界是恆等。
+
+通過 1–10 → 才考慮預設開。已知邊界：dramaHint（POV/decide 提詞）**尚未**耦合，所以角色「行為上」
+還沒真的因被冷落而轉向——只有世界級的選題/結算反映了拉扯（§3 Phase 2.5 末）。
 
 _本檔是活文件；每推進一個 Phase，更新 §3 狀態。_
