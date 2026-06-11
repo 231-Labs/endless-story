@@ -62,6 +62,20 @@ export {
     buildSystemPrompt as buildAidSystemPrompt,
     buildUserPrompt as buildAidUserPrompt,
 } from './aid.js';
+export { decideAskAction } from './ask.js';
+export type {
+    AskActionInput,
+    AskActionResult,
+    AskCandidate,
+    AskKind,
+    AskRelation,
+    AskVitality,
+} from './ask.js';
+export {
+    buildAskSystemPrompt,
+    buildAskUserPrompt,
+    askKindLabel,
+} from './ask.js';
 
 export interface DecideResult {
     /** Chosen catalog index (what submit_action takes). Always one of the

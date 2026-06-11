@@ -165,6 +165,32 @@ export function parseAid(raw: string): { gifts: ParsedAidGift[]; reason?: string
     }
 }
 
+/* ── ASK (request money) ────────────────────────────────────────────── */
+
+const ASK_KINDS = new Set(['loan', 'plea', 'patronage']);
+
+/** Parse the ask decision. The model owns whether / whom / how much / how; this only shapes
+ *  types and defaults an unknown kind to 'plea'. Target validity is enforced by finalizeAsk. */
+export function parseAsk(
+    raw: string,
+): { doAsk: boolean; targetId?: string; amount?: number; kind?: 'loan' | 'plea' | 'patronage'; reason?: string } | null {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+        const o = JSON.parse(m[0]) as Record<string, unknown>;
+        const kindRaw = typeof o.kind === 'string' ? o.kind : '';
+        return {
+            doAsk: o.doAsk === true,
+            targetId: typeof o.targetId === 'string' ? o.targetId : undefined,
+            amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : undefined,
+            kind: (ASK_KINDS.has(kindRaw) ? kindRaw : 'plea') as 'loan' | 'plea' | 'patronage',
+            reason: clamp(typeof o.reason === 'string' ? o.reason : undefined, 60),
+        };
+    } catch {
+        return null;
+    }
+}
+
 /* ── PLAN ───────────────────────────────────────────────────────────── */
 
 export function parsePlan(
