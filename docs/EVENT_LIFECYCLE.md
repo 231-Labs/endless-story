@@ -122,4 +122,33 @@ ACT phase（`tick-phases/act.ts`）已會處理 OPEN budget event：decide→sub
 - **Phase 3**（LLM 導演授權標的）⏳ 待接自治導演。
 - **Phase 4**（真·多回合出牌）⏳ 需 redeploy。
 
+## 5. 開 flag 驗證 runbook（在能跑真 tick 的 session 執行）
+
+目標：在不污染 demo 的前提下，把 §3 那四個未驗點逐一確認，再決定是否預設開 `eventSpine`。
+
+**前置**：sui/錢包/testnet 可用、saga 已種子化、有 ≥2 角色同場、drama 有張力（有 DramaResource）。
+
+**步驟**
+1. **單回 dry 觀察**：`eventSpine: true` 連跑到一回走完（開→續→收，約 maxTicks=4 tick）。看 server log：
+   - 開回那 tick：`②‴ 開回…` + 之後 `[event-spine] open` 無 warn；ACT 有 submit、**無** resolve（autoResolve 已關）。
+   - 續回 tick：`②‴ 續回…`；ACT 無新 submit（單回合，已 acted）。
+   - 收回 tick：`②‴ 收回…` + `[tick-loop] spine resolve (...): settled=? cutPovs=N`。
+2. **驗點① 結算提案被接受**：收回 log 的 `settled=true` 即代表 `resolve_event(outcomes_with_resource_transfers)`
+   + `apply_resource_transfers` 都成功。若 `settled=false` 看 warn：
+   - `settling resolve aborted` → 提案被 `resolve_event` 拒（conservation / 參與者檢查）。
+   - `apply_resource_transfers failed` → 多半是**驗點②**。
+3. **驗點② resourceId**：若 apply 一直失敗，比對 `readResourceLedger` 回的 `snapshot.id`（drama.ts:115，
+   取自 `json.id`）與該 DramaResource 的**物件 id**是否一致。不一致 → 在 `readResourceLedger` 用
+   `live[].resourceId`（物件 id）取代 `json.id`，或在 spine 結算用物件 id。
+4. **驗點③ 節奏**：覺得太快/太慢，調 `spineResolveAndWeave` 上游的 `minTicks`/`maxTicks`（現 2/4，
+   走 `SpineCtx`）。
+5. **驗點④ 競態**：背景 `after()` 收回 vs 下一 tick 讀 registry。連跑數回，若 log 出現對已收回事件
+   重複 resolve 的 abort（無害、failure-isolated），可把 `openBySaga.delete` 提前到 `spinePlanAndOpen`
+   偵測到 resolve step 時即刪。
+6. **驗世界前進**：連跑 2–3 回，確認 `selectContention` 的 top 張力**有換標的**（allocation 真的變了），
+   而非靠 anti-repeat 硬輪。這是 Q1 根治的判準。
+7. **回退驗證**：`eventSpine: false` 跑一輪，確認與主線行為一致（storylet 路徑無回歸）。
+
+通過 1–7 → 才考慮把預設改開、或在 UI 露出切換。任何一步卡住且非小修 → 回報，別硬推 demo 分支。
+
 _本檔是活文件；每推進一個 Phase，更新 §3 狀態。_
