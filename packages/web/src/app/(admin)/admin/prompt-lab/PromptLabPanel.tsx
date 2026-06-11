@@ -302,7 +302,13 @@ function PromptView({ prompt }: { prompt: PromptLabPromptView }) {
                 <OutputBlock
                     key={`${message.role}-${index}`}
                     title={`${message.role.toUpperCase()} ${index + 1}`}
-                    value={message.content}
+                    value={
+                        typeof message.content === 'string'
+                            ? message.content
+                            : message.content
+                                  .map((p) => (p.type === 'text' ? p.text : '[image]'))
+                                  .join('\n')
+                    }
                     compact
                 />
             ))}

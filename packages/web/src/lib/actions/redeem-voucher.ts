@@ -121,96 +121,148 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
         return { ok: false, error: 'attributeSeedHex 格式錯誤' };
     }
 
-    const tx = new Transaction();
+    // PTB 組裝包成函式：Transaction 物件一次性，相容回退時要整包重建。
+    //
+    // mode 'current'：repo 內合約簽名 — redeem 只回 ControlCap，OwnerCap 由
+    //   合約在鏈上直接轉給 voucher.payer（所有權結構性保證）。
+    // mode 'legacy'：鏈上若仍是改動前的舊部署 — redeem 回 (OwnerCap, ControlCap)
+    //   兩個值；PTB 把 OwnerCap 轉給付款人（而非改動前「全轉 admin」的舊行為）、
+    //   ControlCap 轉 admin。redeploy 後第一次嘗試就會成功，這條路徑自然停用。
+    const buildRedeemTx = (mode: 'current' | 'legacy', ownerRecipient?: string): Transaction => {
+        const tx = new Transaction();
 
-    // Build the inline structs:
-    //   1. PhysicalFacts
-    //   2. CharacterProfile (wraps PhysicalFacts)
-    //   3. media (empty for Phase 2 — image_url set via separate update tx)
-    //   4. attributes vector (each with provenance seed)
-    const physical = tx.add(
-        endlessTx.character.newPhysicalFacts({
-            species: 'human',
-            gender: input.candidate.physicalFacts.gender,
-            body: input.candidate.physicalFacts.body,
-            ageYears: input.candidate.physicalFacts.age,
-        }),
-    );
-
-    const profile = tx.add(
-        endlessTx.character.newCharacterProfile({
-            name: input.candidate.name,
-            description: input.candidate.description,
-            physicalFacts: physical,
-        }),
-    );
-
-    // Encode the Walrus portrait as the first MediaAsset so
-    // `mint_character_internal` initialises `Character.image_url` from
-    // `media_assets[0].uri`. Display V2's `{image_url}` template then
-    // renders the NFT thumbnail in Sui explorers without a follow-up tx.
-    const mediaElements = input.portraitUrl
-        ? [
-              tx.add(
-                  endlessTx.character.newMediaAsset({
-                      kind: 0, // 0 = portrait (caller convention, see character.move)
-                      uri: input.portraitUrl,
-                      walrusBlobId: input.portraitBlobId
-                          ? Array.from(new TextEncoder().encode(input.portraitBlobId))
-                          : [],
-                      metadataUri: '',
-                  }),
-              ),
-          ]
-        : [];
-    const mediaAssets = tx.makeMoveVec({
-        elements: mediaElements,
-        type: `${deployment.packageId}::character::MediaAsset`,
-    });
-
-    // Attributes — locked rolled values, each tagged with the voucher seed
-    // for provenance verification.
-    const attrElements = input.rolledValues.map((rv) =>
-        tx.add(
-            endlessTx.character.newAttributeValue({
-                key: rv.key,
-                value: BigInt(rv.value),
-                seed: seedBytes,
+        // Build the inline structs:
+        //   1. PhysicalFacts
+        //   2. CharacterProfile (wraps PhysicalFacts)
+        //   3. media (empty for Phase 2 — image_url set via separate update tx)
+        //   4. attributes vector (each with provenance seed)
+        const physical = tx.add(
+            endlessTx.character.newPhysicalFacts({
+                species: 'human',
+                gender: input.candidate.physicalFacts.gender,
+                body: input.candidate.physicalFacts.body,
+                ageYears: input.candidate.physicalFacts.age,
             }),
-        ),
-    );
-    const attributes = tx.makeMoveVec({
-        elements: attrElements,
-        type: `${deployment.packageId}::character::AttributeValue`,
-    });
+        );
 
-    // redeem now returns ONLY the ControlCap. The contract transfers the
-    // OwnerCap to voucher.payer (= the user who paid) on-chain, so the
-    // storyteller co-signing this tx can't keep or redirect ownership.
-    // We just route the ControlCap to admin (runner delegation).
-    const controlCap = tx.add(
-        endlessTx.recruit.redeemVoucherToCharacter({
-            cap: deployment.storytellerCapId,
-            saga: deployment.sagaId,
-            world: deployment.worldId,
-            scene: input.sceneId,
-            voucher: input.voucherId,
-            profile,
-            mediaAssets,
-            attributes,
-        }),
-    );
-    tx.transferObjects([controlCap], admin.address);
+        const profile = tx.add(
+            endlessTx.character.newCharacterProfile({
+                name: input.candidate.name,
+                description: input.candidate.description,
+                physicalFacts: physical,
+            }),
+        );
 
-    let result;
-    try {
-        result = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
+        // Encode the Walrus portrait as the first MediaAsset so
+        // `mint_character_internal` initialises `Character.image_url` from
+        // `media_assets[0].uri`. Display V2's `{image_url}` template then
+        // renders the NFT thumbnail in Sui explorers without a follow-up tx.
+        const mediaElements = input.portraitUrl
+            ? [
+                  tx.add(
+                      endlessTx.character.newMediaAsset({
+                          kind: 0, // 0 = portrait (caller convention, see character.move)
+                          uri: input.portraitUrl,
+                          walrusBlobId: input.portraitBlobId
+                              ? Array.from(new TextEncoder().encode(input.portraitBlobId))
+                              : [],
+                          metadataUri: '',
+                      }),
+                  ),
+              ]
+            : [];
+        const mediaAssets = tx.makeMoveVec({
+            elements: mediaElements,
+            type: `${deployment.packageId}::character::MediaAsset`,
+        });
+
+        // Attributes — locked rolled values, each tagged with the voucher seed
+        // for provenance verification.
+        const attrElements = input.rolledValues.map((rv) =>
+            tx.add(
+                endlessTx.character.newAttributeValue({
+                    key: rv.key,
+                    value: BigInt(rv.value),
+                    seed: seedBytes,
+                }),
+            ),
+        );
+        const attributes = tx.makeMoveVec({
+            elements: attrElements,
+            type: `${deployment.packageId}::character::AttributeValue`,
+        });
+
+        const redeemed = tx.add(
+            endlessTx.recruit.redeemVoucherToCharacter({
+                cap: deployment.storytellerCapId!,
+                saga: deployment.sagaId!,
+                world: deployment.worldId!,
+                scene: input.sceneId,
+                voucher: input.voucherId,
+                profile,
+                mediaAssets,
+                attributes,
+            }),
+        );
+        if (mode === 'current') {
+            // 單一回傳值 = ControlCap → admin（runner delegation）
+            tx.transferObjects([redeemed], admin.address);
+        } else {
+            // 舊簽名 (OwnerCap, ControlCap)
+            tx.transferObjects([redeemed[0]], ownerRecipient!);
+            tx.transferObjects([redeemed[1]], admin.address);
+        }
+        return tx;
+    };
+
+    const execute = (transaction: Transaction) =>
+        admin.client.signAndExecuteTransaction({
+            transaction,
             signer: admin.signer,
             options: { showEffects: true, showObjectChanges: true },
         });
+
+    let result;
+    try {
+        result = await execute(buildRedeemTx('current'));
     } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        const msg = err instanceof Error ? err.message : String(err);
+        // InvalidResultArity on the redeem result = 鏈上還是舊版簽名
+        // （(OwnerCap, ControlCap) 兩個回傳值）。讀 voucher.payer 後用舊版
+        // PTB 重試，所有權仍歸付款人。
+        if (!msg.includes('InvalidResultArity')) {
+            return { ok: false, error: msg };
+        }
+        console.warn(
+            '[redeem-voucher] deployed package still has the LEGACY redeem signature ' +
+                '(OwnerCap, ControlCap). Falling back to the legacy PTB (OwnerCap → payer). ' +
+                'Redeploy contracts to enforce ownership on-chain (see AGENTS.md).',
+        );
+        let payer: string | undefined;
+        try {
+            const voucherObj = await admin.client.getObject({
+                id: input.voucherId,
+                options: { showContent: true },
+            });
+            const content = voucherObj.data?.content as
+                | { dataType?: string; fields?: { payer?: string } }
+                | null
+                | undefined;
+            payer = content?.fields?.payer;
+        } catch {
+            /* fall through to the guard below */
+        }
+        if (!payer) {
+            return {
+                ok: false,
+                error: '舊版合約相容路徑：讀不到 voucher.payer，無法安全轉移 OwnerCap。',
+            };
+        }
+        try {
+            result = await execute(buildRedeemTx('legacy', payer));
+        } catch (err2) {
+            return { ok: false, error: err2 instanceof Error ? err2.message : String(err2) };
+        }
     }
 
     // Parse Character + OwnerCap from objectChanges.

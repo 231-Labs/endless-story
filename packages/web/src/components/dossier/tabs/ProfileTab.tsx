@@ -27,18 +27,45 @@ export function ProfileTab({
   persona,
   personaRegenChapter,
   outgoingEdges,
+  incomingEdges = [],
   charactersById,
 }: {
   character: Character;
   persona: CharacterPersona | null;
   personaRegenChapter: Chapter | null;
   outgoingEdges: RelationshipEdge[];
+  incomingEdges?: RelationshipEdge[];
   charactersById: Map<string, Character>;
 }) {
+  // 配對視角：同一位對象的「此人所感」與「對方所感」併成一列，
+  // 才能呈現雙向不對稱（A 戀慕 B、B 卻無感／另有所感）。
+  const incomingByFromId = new Map<string, RelationshipEdge>();
+  for (const e of incomingEdges) {
+    const prev = incomingByFromId.get(e.fromId);
+    if (!prev || (e.weight ?? 0) > (prev.weight ?? 0)) incomingByFromId.set(e.fromId, e);
+  }
+  const outgoingPartnerIds = new Set(outgoingEdges.map((e) => e.toId));
+  const incomingOnly = incomingEdges
+    .filter((e) => !outgoingPartnerIds.has(e.fromId) && e.tone && e.tone !== 'neutral')
+    .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+  const bondRows = [
+    ...outgoingEdges.map((edge) => ({
+      key: `${edge.fromId}-${edge.toId}`,
+      partnerId: edge.toId,
+      out: edge as RelationshipEdge | null,
+      inc: incomingByFromId.get(edge.toId) ?? null,
+    })),
+    ...incomingOnly.map((edge) => ({
+      key: `${edge.fromId}-${edge.toId}-in`,
+      partnerId: edge.fromId,
+      out: null,
+      inc: edge,
+    })),
+  ].slice(0, 6);
   return (
-    <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1fr_320px] lg:gap-20">
+    <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_320px] lg:gap-20">
       {/* Main Column */}
-      <div className="space-y-20">
+      <div className="space-y-14 sm:space-y-20">
         <section>
           <div className="flex items-center gap-4">
             <div className="h-px w-8 bg-cinnabar/40" />
@@ -62,16 +89,13 @@ export function ProfileTab({
             <p className="text-base leading-loose text-ink/85 sm:text-lg sm:leading-loose">
               {character.physicalFacts}
             </p>
-            <p className="mt-6 text-xs tracking-widest text-mute/70">
-              * mint 時寫上鏈、所有 portrait 生成都 anchor 於此
-            </p>
           </div>
         </section>
       </div>
 
       {/* Sidebar */}
       <aside className="space-y-8">
-        <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 space-y-12 backdrop-blur-sm">
+        <div className="es-card p-6 sm:p-8 space-y-12">
           <section>
             <h3 className="font-serif text-lg tracking-widest text-ink text-center">天賦</h3>
             <div className="mt-8 space-y-6">
@@ -116,18 +140,6 @@ export function ProfileTab({
                 <span className="text-sm tracking-widest text-mute">每日開銷</span>
                 <span className="font-mono text-base text-ink">{character.survival.dailyCost}</span>
               </div>
-              {character.survival.memoryRent != null ? (
-                <div className="flex items-baseline justify-between -mt-3">
-                  <span className="pl-3 text-2xs tracking-widest text-mute/70">其中記憶租金</span>
-                  <span className="font-mono text-2xs text-mute/70">{character.survival.memoryRent}</span>
-                </div>
-              ) : null}
-              {character.survival.imageRent != null ? (
-                <div className="flex items-baseline justify-between -mt-3">
-                  <span className="pl-3 text-2xs tracking-widest text-mute/70">其中設定集租金</span>
-                  <span className="font-mono text-2xs text-mute/70">{character.survival.imageRent}</span>
-                </div>
-              ) : null}
               <div className="flex items-baseline justify-between">
                 <span className="text-sm tracking-widest text-mute">班中俸</span>
                 <span className="font-mono text-base text-ink">{character.survival.salary}</span>
@@ -178,18 +190,20 @@ export function ProfileTab({
           </section>
         </div>
 
-        <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+        <div className="es-card p-6 sm:p-8">
           <section>
             <h3 className="font-serif text-lg tracking-widest text-ink text-center">關係</h3>
-            {outgoingEdges.length === 0 ? (
+            {bondRows.length === 0 ? (
               <p className="mt-8 text-sm leading-relaxed text-mute text-center">尚未對誰留下顯著的記憶。</p>
             ) : (
               <ul className="mt-8 space-y-6">
-                {outgoingEdges.slice(0, 6).map((edge) => (
+                {bondRows.map((row) => (
                   <RelationshipRow
-                    key={`${edge.fromId}-${edge.toId}`}
-                    edge={edge}
-                    target={charactersById.get(edge.toId) ?? null}
+                    key={row.key}
+                    out={row.out}
+                    inc={row.inc}
+                    target={charactersById.get(row.partnerId) ?? null}
+                    fallbackName={row.partnerId}
                   />
                 ))}
               </ul>
@@ -248,24 +262,32 @@ const TONE_CSS: Record<ToneColor, { bg: string; ring: string }> = {
 };
 
 function RelationshipRow({
-  edge,
+  out,
+  inc,
   target,
+  fallbackName,
 }: {
-  edge: RelationshipEdge;
+  /** 此人對對方的感受；null = 此人未對其留下記憶（只有對方有感） */
+  out: RelationshipEdge | null;
+  /** 對方對此人的感受；null = 對方未有所感 */
+  inc: RelationshipEdge | null;
   target: Character | null;
+  fallbackName: string;
 }) {
-  const name = target?.name ?? edge.toId;
+  const name = target?.name ?? fallbackName;
+  const primary = out ?? inc!;
   // 只在有真區間時顯示日期；單日（多半就是當前敘事日）對讀者沒有訊息。
   const dayRange =
-    edge.firstSeenDay != null && edge.firstSeenDay !== edge.lastUpdatedDay
-      ? `日 ${edge.firstSeenDay} — 日 ${edge.lastUpdatedDay}`
+    primary.firstSeenDay != null && primary.firstSeenDay !== primary.lastUpdatedDay
+      ? `日 ${primary.firstSeenDay} — 日 ${primary.lastUpdatedDay}`
       : null;
   // 只顯示真‧敘事 summary；不再 fallback 到 label（label 多是 tone 詞，會與右側標籤重複）。
-  const quote = edge.summary?.trim() || null;
+  const quote = out?.summary?.trim() || null;
+  const mutual = !!(out?.tone && inc?.tone && out.tone === inc.tone);
 
   return (
     <li>
-      {/* 第一行：名字（連結到 dossier）+ tone */}
+      {/* 第一行：名字（連結到 dossier）+ 此人所感（→）；互相同感標 ⇄ */}
       <div className="flex items-baseline justify-between gap-2">
         {target ? (
           <Link
@@ -277,10 +299,18 @@ function RelationshipRow({
         ) : (
           <span className="font-serif text-lg text-ink">{name}</span>
         )}
-        {edge.tone ? (
+        {out?.tone ? (
           <span className="flex items-center gap-2 text-2xs tracking-widest text-mute">
-            <ToneDot tone={edge.tone} />
-            <span>{TONE_LABEL[edge.tone]}</span>
+            <ToneDot tone={out.tone} />
+            <span>
+              {mutual ? '⇄ ' : ''}
+              {TONE_LABEL[out.tone]}
+            </span>
+          </span>
+        ) : inc?.tone ? (
+          <span className="flex items-center gap-2 text-2xs tracking-widest text-mute/70">
+            <ToneDot tone={inc.tone} />
+            <span>← {TONE_LABEL[inc.tone]}</span>
           </span>
         ) : null}
       </div>
@@ -288,6 +318,21 @@ function RelationshipRow({
       {/* 主敘述：僅在有真 summary 時顯示，否則整行省略 */}
       {quote ? (
         <p className="mt-2 text-sm italic leading-relaxed text-ink/75">「{quote}」</p>
+      ) : null}
+
+      {/* 雙向不對稱：對方所感與此人不同（或一方無感）時，標出彼端心緒 */}
+      {!mutual && out?.tone && out.tone !== 'neutral' ? (
+        inc?.tone && inc.tone !== 'neutral' ? (
+          <p className="mt-2 flex items-center gap-2 text-2xs tracking-widest text-mute/85">
+            <ToneDot tone={inc.tone} />
+            <span>對方所感 ← {TONE_LABEL[inc.tone]}</span>
+          </p>
+        ) : (
+          <p className="mt-2 text-2xs italic tracking-widest text-mute/55">對方未有所感</p>
+        )
+      ) : null}
+      {!out && inc ? (
+        <p className="mt-2 text-2xs italic tracking-widest text-mute/55">此人未有回應</p>
       ) : null}
 
       {/* 微 meta：僅在有真日期區間時顯示 */}

@@ -17,10 +17,11 @@ export async function GazetteList({
 }) {
     if (gazettes.length === 0) {
         return (
-            <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
+            <div className="es-card p-12 text-center">
                 <p className="font-serif text-base text-ink">{sagaName} 還沒出過公報</p>
                 <p className="mt-3 text-sm leading-relaxed text-mute">
-                    要等班主在管理後台「編公報並上鏈」按下後，這裡才會有內容。
+                    公報是班主不定期張貼的園中大事節錄，發行後會永久上鏈存證。
+                    先去「文字連載」讀角色們的章回吧。
                 </p>
             </div>
         );
@@ -36,10 +37,7 @@ export async function GazetteList({
                     key={g.commitmentId}
                     className="rounded-3xl border border-hairline/60 bg-surface/40 p-6 backdrop-blur-sm sm:p-10"
                 >
-                    <header className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute/80">
-                        <span className="rounded border border-hairline/50 bg-canvas/50 px-2 py-1 font-mono">
-                            commit · {g.commitmentId.slice(0, 8)}…
-                        </span>
+                    <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 text-2xs tracking-widest text-mute/80">
                         <span>
                             {new Date(Number(g.committedAtMs)).toLocaleString('zh-TW', {
                                 year: 'numeric',
@@ -49,22 +47,24 @@ export async function GazetteList({
                                 minute: '2-digit',
                             })}
                         </span>
-                        <a
-                            href={objectUrl(g.commitmentId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-cinnabar"
-                        >
-                            on-chain anchor ↗
-                        </a>
-                        <a
-                            href={`/api/blob/${g.blobId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-cinnabar"
-                        >
-                            walrus ↗
-                        </a>
+                        <span className="flex items-center gap-4">
+                            <a
+                                href={objectUrl(g.commitmentId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-cinnabar"
+                            >
+                                上鏈紀錄 ↗
+                            </a>
+                            <a
+                                href={`/api/blob/${g.blobId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-cinnabar"
+                            >
+                                原文 ↗
+                            </a>
+                        </span>
                     </header>
                     {bodies[i] ? (
                         <Markdown source={bodies[i]} className="mt-6" />

@@ -163,6 +163,75 @@ export function TickLoopResultView({ result }: { result: TickLoopResult }) {
                 </section>
             ) : null}
 
+            {/* ASK */}
+            {result.asks && result.asks.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">求助（Ask · 開口要錢）</div>
+                    <ul className="space-y-1">
+                        {result.asks.map((a) => (
+                            <li key={a.characterId} className="text-xs">
+                                <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${a.ok && a.asked ? 'bg-jade' : a.ok ? 'bg-mute' : 'bg-cinnabar'}`} />
+                                <span className="text-ink">{a.name}</span>
+                                <span className="text-mute">
+                                    {a.asked ? ` → 向 ${a.targetName ?? a.targetId} 求 ${a.amount}（${a.kind ?? ''}）` : ' 未開口'}
+                                    {a.reason ? ` · ${a.reason}` : ''}
+                                </span>
+                                {a.error ? <span className="text-cinnabar"> {a.error}</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
+            {/* SETTLE */}
+            {result.settle ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">結算（Settle · 經濟影子日界）</div>
+                    <p className="text-xs text-mute">
+                        {result.settle.skipped ? (
+                            <span>已跳過：{result.settle.skipped}</span>
+                        ) : (
+                            <>
+                                第 {result.settle.day} 日 · 金庫 {result.settle.treasuryFunds} · 發薪 {result.settle.wagesPaid} · 轉帳 {result.settle.transfersApplied} 筆 · 結算 {result.settle.settledCount} 人
+                                {result.settle.dead.length > 0 ? (
+                                    <span className="text-cinnabar"> · 殞 {result.settle.dead.map((d) => d.name).join('、')}</span>
+                                ) : null}
+                                {result.settle.error ? <span className="text-cinnabar"> · {result.settle.error}</span> : null}
+                            </>
+                        )}
+                    </p>
+                </section>
+            ) : null}
+
+            {/* GIVE */}
+            {result.gives && result.gives.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">接濟（Give · 角色間金流 · SETTLE 落帳）</div>
+                    <ul className="space-y-1">
+                        {result.gives.map((g) => (
+                            <li key={g.characterId} className="text-xs">
+                                <span
+                                    className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${
+                                        g.ok && g.gave ? 'bg-jade' : g.ok ? 'bg-mute' : 'bg-cinnabar'
+                                    }`}
+                                />
+                                <span className="text-ink">{g.name}</span>
+                                <span className="text-mute">
+                                    {g.gave && g.gifts
+                                        ? ` ${g.gifts
+                                              .map((x) => `→ ${x.recipientName ?? x.recipientId} ${x.amount}（${x.memo}${x.manner ? '／' + x.manner : ''}）`)
+                                              .join('；')}`
+                                        : ' 未接濟'}
+                                    {g.reason ? ` · ${g.reason}` : ''}
+                                    {g.deferred ? ' · 待結算' : ''}
+                                </span>
+                                {g.error ? <span className="text-cinnabar"> {g.error}</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
             {/* ACT */}
             {result.acts.length > 0 ? (
                 <section className="space-y-1">

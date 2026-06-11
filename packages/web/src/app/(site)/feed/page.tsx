@@ -3,9 +3,15 @@ import { chaptersApi, gazettesApi, cutsApi, sagasApi, charactersApi } from '@/li
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SiteNav } from '@/components/home/SiteNav';
 import { truncateBlobId } from '@/lib/format';
+import { BlobImage } from '@/components/common/BlobImage';
 import { GazetteList } from '@/components/feed/GazetteList';
 import { GazetteTeaser } from '@/components/feed/GazetteTeaser';
 import { CutList } from '@/components/feed/CutList';
+
+export const metadata = {
+  title: '梨園章回',
+  description: '春雪社的公開連載 — 角色親筆的章回、公報與影像，逐日上鏈。',
+};
 
 // IA (docs/CONTENT_PIPELINE.md §8.1): the canonical chapter is the event CUT
 // (woven multi-POV); single POVs are demoted to per-character feeds on the
@@ -116,7 +122,7 @@ export default async function FeedPage({
           ) : mode === 'chapter' ? (
             <CutList cuts={cuts} sagaName={saga.name} />
           ) : visible.length === 0 ? (
-            <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
+            <div className="es-card p-12 text-center">
               <p className="text-sm tracking-wide text-mute">這個範圍裡還沒有章回。</p>
             </div>
           ) : (
@@ -133,13 +139,14 @@ export default async function FeedPage({
                     <div key={chapter.id}>
                       <Link
                         href={`/feed/chapter/${chapter.id}`}
-                        className="group flex flex-col gap-3 rounded-3xl bg-surface/40 border border-hairline/50 p-4 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
+                        className="group flex flex-col gap-3 es-card p-4 transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
                       >
                         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-surface ring-1 ring-inset ring-hairline/50 dark:bg-elevated/45 transition-transform duration-500 group-hover:shadow-md">
                           {chapter.coverUrl ? (
-                            <img
+                            <BlobImage
                               src={chapter.coverUrl}
                               alt={chapter.title}
+                              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                               className="absolute inset-0 h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-[1.02] group-hover:opacity-100"
                             />
                           ) : (
@@ -175,12 +182,13 @@ export default async function FeedPage({
                   <div key={chapter.id}>
                     <Link
                       href={`/feed/chapter/${chapter.id}`}
-                      className="group block rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
+                      className="group block es-card p-6 sm:p-8 transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
                     >
                       <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
                         <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
                         {pov ? <span className="text-cinnabar font-medium">{pov.name} 視角</span> : null}
-                        <span className="font-mono ml-auto text-2xs">
+                        {/* Walrus blob id 是技術佐證，手機上只留敘事資訊 */}
+                        <span className="ml-auto hidden font-mono text-2xs sm:inline">
                           walrus · {truncateBlobId(chapter.walrusBlobId)}
                         </span>
                       </div>

@@ -126,6 +126,48 @@ export interface TickSocialResult {
     error?: string;
 }
 
+/** ASK phase — a needy character decides whether to lower itself to ask a same-scene, solvent
+ *  character for help (the "pull" side of money). The grant is handled by the GIVE phase. */
+export interface TickAskResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    asked: boolean;
+    targetId?: string;
+    targetName?: string;
+    amount?: number;
+    kind?: string;
+    reason?: string;
+    error?: string;
+}
+
+/** GIVE phase — a character decides whether to aid a same-scene peer in need.
+ *  The give/no-give judgment is the LLM's; the balance MOVE is deferred to the
+ *  on-chain economy (Part D D1 transfer_between_characters) / off-chain settle
+ *  shadow (D5) — until that rail lands, `gifts` is the recorded INTENT and the
+ *  effect is narrative + relationship-tone only (`deferred: true`). */
+export interface TickGiveResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    gave: boolean;
+    gifts?: {
+        recipientId: string;
+        recipientName?: string;
+        amount: number;
+        memo: string;
+        manner?: string;
+        reason?: string;
+        /** the recipient refused the gift (e.g. a rival won't take charity) — no money moves. */
+        refused?: boolean;
+    }[];
+    /** overall reasoning / why nothing was given. */
+    reason?: string;
+    /** true while the actual balance move awaits the on-chain / settle rail (D1/D5). */
+    deferred?: boolean;
+    error?: string;
+}
+
 export interface TickSleepResult {
     characterId: string;
     name: string;
@@ -177,6 +219,27 @@ export interface TickStoryletResult {
     error?: string;
 }
 
+/** SETTLE phase — the off-chain economy advanced one day-boundary: treasury-funded wages paid,
+ *  daily cost deducted, vitality/death updated, and this tick's accepted GIVE transfers applied
+ *  to the persisted shadow balances. */
+export interface TickSettleResult {
+    ok: boolean;
+    /** narrative day settled to. */
+    day: number;
+    /** on-chain saga treasury (ENDLESS) that funds the payroll pool. */
+    treasuryFunds: number;
+    /** accepted gift transfers moved this tick. */
+    transfersApplied: number;
+    /** total wages paid across the cohort this settle (ENDLESS). */
+    wagesPaid: number;
+    settledCount: number;
+    /** characters whose vitality bottomed out (dead in the shadow). */
+    dead: { id: string; name: string }[];
+    /** set when settle was skipped (e.g. dry-run). */
+    skipped?: string;
+    error?: string;
+}
+
 export interface TickLoopResult {
     ok: boolean;
     advanced: boolean;
@@ -191,6 +254,12 @@ export interface TickLoopResult {
     /** EVERY event live this tick (Stage 1 parallel events); ≤1 in single mode. */
     storylets?: TickStoryletResult[];
     socials: TickSocialResult[];
+    /** ASK phase: needy characters who opened their mouth to ask for help this tick. */
+    asks: TickAskResult[];
+    /** GIVE phase: character-to-character aid decided this tick. */
+    gives: TickGiveResult[];
+    /** SETTLE phase: the off-chain economy advanced + accepted gifts applied. */
+    settle?: TickSettleResult;
     acts: TickActResult[];
     resolves: TickResolveResult[];
     povs: TickPovResult[];

@@ -73,7 +73,7 @@ function Section({
           <li key={chapter.id}>
             <Link
               href={`/feed/chapter/${chapter.id}`}
-              className="group block rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
+              className="group block es-card p-6 sm:p-8 transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
             >
               <ChapterRow chapter={chapter} />
             </Link>

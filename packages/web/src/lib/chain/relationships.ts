@@ -110,6 +110,18 @@ export async function fetchOnChainEdgesFrom(characterId: string): Promise<Relati
 }
 
 /**
+ * Incoming edges (who feels what toward `characterId`). On chain the seeded
+ * ties are pair-level (RelationshipSeeded is undirected), so incoming is the
+ * outgoing projection with endpoints swapped — direction-true asymmetry only
+ * exists in mock / future subjective-memory edges, but the API shape stays
+ * symmetric so the UI can render both directions from any source.
+ */
+export async function fetchOnChainEdgesTo(characterId: string): Promise<RelationshipEdge[]> {
+    const outgoing = await fetchOnChainEdgesFrom(characterId);
+    return outgoing.map((e) => ({ ...e, fromId: e.toId, toId: e.fromId }));
+}
+
+/**
  * Short relationship hints for prompt injection (decide / POV).
  *
  * Dual-source by design:

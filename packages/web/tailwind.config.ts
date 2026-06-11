@@ -17,8 +17,10 @@ const config: Config = {
         seal: 'rgb(var(--color-seal) / <alpha-value>)',
       },
       fontFamily: {
-        serif: ['"Noto Serif TC"', '"Songti TC"', 'serif'],
-        sans: ['"Inter"', 'system-ui', 'sans-serif'],
+        // var(--font-serif) 由 next/font (Noto Serif TC) 提供；Songti TC 是
+        // macOS/iOS 的本機後備，最後才退到通用 serif。
+        serif: ['var(--font-serif)', '"Noto Serif TC"', '"Songti TC"', 'serif'],
+        sans: ['system-ui', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['11px', { lineHeight: '1.6' }],

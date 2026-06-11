@@ -14,6 +14,7 @@ import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sd
 import { lazySettle } from '@endless-story/economy';
 import { resolveNetwork } from './network.js';
 import { getMemoryCount } from './memory-counter.js';
+import { settleSagaCohort, snapshotToSurvival } from '../economy/saga-economy.js';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -137,7 +138,20 @@ export async function fetchOnChainCharacter(id: string): Promise<Character | nul
     const owner = await resolveCurrentOwner(id);
     const narrativeDay = await fetchNarrativeDay(client);
     const memoryCount = await getMemoryCount(id);
-    return mapChainCharacter(id, json, owner ?? undefined, narrativeDay, memoryCount ?? undefined);
+    const character = mapChainCharacter(id, json, owner ?? undefined, narrativeDay, memoryCount ?? undefined);
+    // Upgrade survival from the single-character lazySettle to the treasury-funded cohort settle
+    // (real 班中俸). Best-effort: the cohort settle is cached, and on any failure we keep the
+    // lazySettle survival already on `character`.
+    if (character.sagaId) {
+        try {
+            const cohort = await fetchOnChainCharacters({ sagaId: character.sagaId });
+            const self = cohort.find((c) => c.id === id);
+            if (self?.survival) character.survival = self.survival;
+        } catch {
+            /* keep lazySettle survival */
+        }
+    }
+    return character;
 }
 
 /**
@@ -223,8 +237,11 @@ export async function fetchOnChainCharacters(opts: { sagaId?: string | null } = 
     try {
         result = await read.character.listMintedCharacters(client, pkg, { sagaId: opts.sagaId });
     } catch (err) {
+        // Rethrow so the API facade can tell "chain unreachable"（→ 退回示範名冊）
+        // from "chain reachable but genuinely empty"（→ 真的沒人）。先前這裡吞掉
+        // 錯誤回 []，節點一抖整個名冊就顯示成「0 人」的正常空狀態。
         console.warn('[character-read] listMintedCharacters failed:', err);
-        return [];
+        throw err;
     }
     const narrativeDay = await fetchNarrativeDay(client);
     const out: Character[] = [];
@@ -237,7 +254,38 @@ export async function fetchOnChainCharacters(opts: { sagaId?: string | null } = 
         const owner = result.summaries[i]?.owner ?? '';
         out.push(mapChainCharacter(charId, json, owner, narrativeDay));
     });
+    // Overlay treasury-funded cohort survival (real salary) over the per-character lazySettle.
+    if (typeof opts.sagaId === 'string' && opts.sagaId && out.length > 0) {
+        await overlaySagaEcon(client, opts.sagaId, out, narrativeDay);
+    }
     return out;
+}
+
+/**
+ * Replace each character's lazySettle survival with the saga-wide settle shadow: the role
+ * base-floor wage is paid from the on-chain treasury (mint/dream fees), so 班中俸 > 0 even with
+ * zero subscribers. Best-effort + side-effecting (mutates `characters[i].survival`).
+ */
+async function overlaySagaEcon(
+    client: ReturnType<typeof makeSuiClient>,
+    sagaId: string,
+    characters: Character[],
+    today: number,
+): Promise<void> {
+    let treasuryFunds = 0;
+    try {
+        const res = await read.saga.getSaga(client, sagaId);
+        const t = (res.json as { treasury?: { value?: number | string } | number | string } | undefined)?.treasury;
+        const raw = t == null ? 0 : typeof t === 'object' ? Number(t.value ?? 0) : Number(t);
+        treasuryFunds = Number.isFinite(raw) ? raw / 1_000_000 : 0; // ENDLESS decimals = 6
+    } catch {
+        return; // treasury unknown → keep lazySettle survival rather than show a false 0
+    }
+    const snaps = settleSagaCohort(sagaId, characters, treasuryFunds, today);
+    for (const c of characters) {
+        const s = snaps[c.id];
+        if (s) c.survival = snapshotToSurvival(s);
+    }
 }
 
 function roleFromTags(tags: ChainTag[]): string | null {

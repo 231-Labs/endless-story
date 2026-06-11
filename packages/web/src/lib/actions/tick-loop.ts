@@ -35,6 +35,7 @@ import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
 import { charactersApi } from '@/lib/api/index';
 import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
+import { isShadowDead } from '@/lib/economy/saga-economy';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { selectContention, pushRecentTemplate, framingForStatement } from '@/lib/chain/event-planner';
@@ -62,6 +63,9 @@ import type {
     TickResolveResult,
     TickMoveResult,
     TickSocialResult,
+    TickAskResult,
+    TickGiveResult,
+    TickSettleResult,
     TickSleepResult,
     TickGazetteResult,
     TickDramaResult,
@@ -78,6 +82,9 @@ export type {
     TickResolveResult,
     TickMoveResult,
     TickSocialResult,
+    TickAskResult,
+    TickGiveResult,
+    TickSettleResult,
     TickSleepResult,
     TickGazetteResult,
     TickDramaResult,
@@ -99,6 +106,9 @@ import {
     applyMoveResultsToRoster,
 } from './tick-phases/move';
 import { runSocialPhase } from './tick-phases/social';
+import { runAskPhase } from './tick-phases/ask';
+import { runGivePhase } from './tick-phases/give';
+import { runSettlePhase } from './tick-phases/settle';
 import { runActPhase } from './tick-phases/act';
 
 /** Map the top drama tension to a readable scene-incident framing — now with
@@ -119,6 +129,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             plans: [],
             moves: [],
             socials: [],
+            asks: [],
+            gives: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -136,6 +148,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             plans: [],
             moves: [],
             socials: [],
+            asks: [],
+            gives: [],
             acts: [],
             resolves: [],
             povs: [],
@@ -195,13 +209,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
+    // The economy shadow can mark a character dead (vitality → 0); drop them from the acting set
+    // so death actually retires them from the stage (they keep their persisted state for settle).
+    const alive = characters.filter((c) => !isShadowDead(d.sagaId, c.id));
     const slice =
         requestedIds.length > 0
             ? requestedIds
-                  .map((id) => characters.find((c) => c.id === id))
+                  .map((id) => alive.find((c) => c.id === id))
                   .filter((c): c is Character => Boolean(c))
                   .slice(0, cap)
-            : characters.slice(0, cap);
+            : alive.slice(0, cap);
     const scenes = await fetchOnChainScenesForSaga(d.sagaId).catch(() => []);
     const roster = await buildSagaRoster(d.sagaId, { characters, scenes }).catch(
         () => [] as SagaRosterEntry[],
@@ -598,6 +615,80 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.9 GIVE — a solvent character may aid a same-scene peer in need
+    // (decideAidAction; the give/no-give judgment is the LLM's). The balance
+    // MOVE is deferred to the on-chain economy (D1) / settle shadow (D5); for
+    // now this records the gift as relationship-tone memory + a scene line.
+    // 2.85 ASK — needy characters open their mouth to ask a solvent same-scene character for
+    // help (the "pull" side). The asks are handed to GIVE so the chosen giver sees an explicit
+    // request; the grant is GIVE's decideAid.
+    const charactersById = new Map(characters.map((c) => [c.id, c]));
+    const asks: TickAskResult[] = [];
+    let asksByGiver = new Map<string, import('./tick-phases/give').IncomingAsk[]>();
+    if (slice.length > 0) {
+        tlog(`②⁗ 求助…`);
+        try {
+            const askPhase = await runAskPhase({
+                sagaId: d.sagaId,
+                slice,
+                charactersById,
+                scenes: activeScenes,
+                rosterById,
+                roleById,
+                memoryContext,
+                dryRun,
+            });
+            asks.push(...askPhase.results);
+            asksByGiver = askPhase.asksByGiver;
+            tlog(`   求助 ${asks.filter((a) => a.ok && a.asked).length} 件${dryRun ? '（預演）' : ''}`);
+        } catch (err) {
+            console.warn('[tick-loop] ask phase failed:', err);
+        }
+    }
+
+    const gives: TickGiveResult[] = [];
+    if (slice.length > 0) {
+        tlog(`②‴ 接濟…`);
+        try {
+            gives.push(
+                ...(await runGivePhase({
+                    sagaId: d.sagaId,
+                    slice,
+                    charactersById,
+                    scenes: activeScenes,
+                    rosterById,
+                    roleById,
+                    memoryContext,
+                    asksByGiver,
+                    dryRun,
+                })),
+            );
+            tlog(`   接濟 ${gives.filter((g) => g.ok && g.gave).length} 件${dryRun ? '（預演）' : ''}`);
+        } catch (err) {
+            console.warn('[tick-loop] give phase failed:', err);
+        }
+    }
+
+    // 2.95 SETTLE — advance the off-chain economy to today (treasury-funded wages → cost →
+    // vitality → death) and apply this tick's ACCEPTED gifts as real transfers. This is the rail
+    // the GIVE phase's deferred gifts were waiting for; the shadow persists (process-local).
+    let settle: TickSettleResult | undefined;
+    if (!dryRun && slice.length > 0) {
+        tlog(`②⁗ 結算…`);
+        try {
+            settle = await runSettlePhase({
+                sagaId: d.sagaId,
+                characters,
+                gives,
+                today: worldTime?.day ?? 1,
+                dryRun,
+            });
+            tlog(`   結算 ${settle.settledCount} 人 · 發薪 ${settle.wagesPaid} · 轉帳 ${settle.transfersApplied}${settle.dead.length ? ` · 殞 ${settle.dead.length}` : ''}`);
+        } catch (err) {
+            console.warn('[tick-loop] settle phase failed:', err);
+        }
+    }
+
     // 3. ACT — characters play their own hands in open events; events that
     //    everyone has acted in auto-resolve (judge). Chain mutation → serial
     //    (single StorytellerCap, no parallel signing).
@@ -973,6 +1064,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         storylet: storylets[0],
         storylets,
         socials,
+        asks,
+        gives,
+        settle,
         acts,
         resolves,
         povs,

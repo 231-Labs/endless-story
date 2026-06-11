@@ -12,6 +12,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, read as endlessRead, tx as endlessTx } from '@endless-story/sdk';
 import { truncateAddress } from '@/lib/format';
 import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
+import { useToast } from '@/components/common/Toaster';
 
 export function MockWalletMenu() {
   // ── Real wallet (dapp-kit) ───────────────────────────────────────
@@ -20,6 +21,7 @@ export function MockWalletMenu() {
   const { mutate: signAndExecute, isPending: isDripping } = useSignAndExecuteTransaction();
   const suiClient = useSuiClient();
   const [connectOpen, setConnectOpen] = useState(false);
+  const toast = useToast();
   const [balance, setBalance] = useState<string>('—');
   const [balanceTick, setBalanceTick] = useState(0);
   const [dripError, setDripError] = useState<string | null>(null);
@@ -131,8 +133,15 @@ export function MockWalletMenu() {
     signAndExecute(
       { transaction: tx },
       {
-        onSuccess: () => setBalanceTick((n) => n + 1),
-        onError: (err) => setDripError(err instanceof Error ? err.message : String(err)),
+        onSuccess: () => {
+          setBalanceTick((n) => n + 1);
+          toast('銀子到帳，餘額更新中', 'success');
+        },
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          setDripError(msg);
+          toast(`領銀沒成：${msg.slice(0, 60)}`, 'error');
+        },
       },
     );
   };
