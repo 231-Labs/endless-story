@@ -179,7 +179,7 @@ async function fetchGazetteSnapshot(
     const sagaRes = await read.saga.getSaga(client, input.sagaId);
     const sagaJson = sagaRes.json as unknown as {
         name?: string;
-        treasury?: number | string;
+        treasury?: number | string | { value?: number | string };
         character_count?: number | string;
         description?: string;
         departure_policy?: string;
@@ -365,11 +365,23 @@ async function fetchGazetteSnapshot(
         day,
         events,
         chapters,
-        treasuryEndless:
-            sagaJson.treasury != null ? Number(sagaJson.treasury) / 1_000_000 : undefined,
+        treasuryEndless: treasuryToEndless(sagaJson.treasury),
         characterCount:
             sagaJson.character_count != null ? Number(sagaJson.character_count) : undefined,
     };
+}
+
+/**
+ * Sui returns a `Balance<CURRENCY>` field as `{ value: "<micro>" }` (and sometimes
+ * a bare number/string). A plain `Number({value})` is NaN — which is exactly what
+ * surfaced as「班費: NaN ENDLESS」in the gazette. Extract the raw micro amount and
+ * convert to display ENDLESS (6 decimals), matching web saga-read `treasuryToFunds`.
+ */
+function treasuryToEndless(treasury: number | string | { value?: number | string } | undefined): number | undefined {
+    if (treasury == null) return undefined;
+    const raw =
+        typeof treasury === 'object' ? Number(treasury.value ?? NaN) : Number(treasury);
+    return Number.isFinite(raw) ? raw / 1_000_000 : undefined;
 }
 
 async function fetchExcerpt(commitmentId: string, client: SuiClient): Promise<string> {

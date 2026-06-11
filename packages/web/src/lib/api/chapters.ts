@@ -21,6 +21,17 @@ import {
   isSuiObjectId,
 } from '@/lib/chain/character-read';
 import { parseProvenance } from '@/lib/chain/chapter-provenance';
+import { cachedPublicRead, publicChainReadTtl } from '@/lib/chain/read-cache';
+
+/**
+ * The chapter detail page calls listChapters() on every load (to build the TOC +
+ * prev/next nav). Without this cache that meant re-scanning the saga's commitments
+ * and re-reading every chapter body from Walrus on each navigation — seconds of
+ * blank page that also made the wallet look disconnected. Short TTL: new chapters
+ * still surface within the window; bodies themselves are cached harder (immutable)
+ * in pov-read.fetchChapterText.
+ */
+const SAGA_CHAPTERS_TTL_MS = 30_000;
 
 /**
  * Chapters API
@@ -43,12 +54,20 @@ function isDeployed(): boolean {
 
 export async function listChapters(sagaId: string): Promise<Chapter[]> {
   if (isDeployed() && isSuiObjectId(sagaId)) {
-    const characters = await fetchOnChainCharacters({ sagaId }).catch(() => [] as Character[]);
-    const entries = await fetchPovChaptersForSaga(sagaId, {
-      limit: 40,
-      characterIds: characters.map((c) => c.id),
-    });
-    return entriesToChapters(entries, new Map(characters.map((c) => [c.id, c])));
+    return cachedPublicRead(
+      `chapters:saga:${sagaId}`,
+      publicChainReadTtl(SAGA_CHAPTERS_TTL_MS),
+      async () => {
+        const characters = await fetchOnChainCharacters({ sagaId }).catch(() => [] as Character[]);
+        const entries = await fetchPovChaptersForSaga(sagaId, {
+          limit: 40,
+          characterIds: characters.map((c) => c.id),
+        });
+        return entriesToChapters(entries, new Map(characters.map((c) => [c.id, c])));
+      },
+      // TTL rollover serves the old list instantly + refreshes in background.
+      { staleTtlMs: 10 * 60 * 1000 },
+    );
   }
   if (USE_MOCK) return listChaptersBySaga(sagaId);
   return httpGet<Chapter[]>('/chapters', { query: { sagaId } });

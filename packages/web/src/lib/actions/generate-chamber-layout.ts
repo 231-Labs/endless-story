@@ -54,7 +54,7 @@ const STILL_LABELS = ['同台舊照', '章回 key-art', '人物誌設定圖'];
 /** Creative Scene Spec model (override via CHAMBER_MODEL). */
 const CHAMBER_MODEL = process.env.CHAMBER_MODEL || 'glm-5.1-fw';
 /** Faster critique model (glm-5.1-fw is slow ~55s/call). */
-const CHAMBER_CRITIC_MODEL = process.env.CHAMBER_CRITIC_MODEL || 'glm-4.7-flash';
+const CHAMBER_CRITIC_MODEL = process.env.CHAMBER_CRITIC_MODEL || 'GLM-4.7-FlashX';
 /** Vision model that reads the reference image. */
 const CHAMBER_VISION_MODEL = process.env.CHAMBER_VISION_MODEL || 'glm-4.6v';
 const REF_IMAGE = 'public/chamber/ref/green.jpg';

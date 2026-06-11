@@ -14,6 +14,7 @@
  *    runs (so a static JSON doesn't go stale).
  */
 
+import type { CharacterAttributes } from './character';
 import type { Recruitment } from './recruitment';
 
 export interface StoryWorld {
@@ -145,6 +146,13 @@ export interface StoryFoundingMember {
   description: string;
   /** Private secret — only seeds this member's private memories. */
   secret?: string;
+  /**
+   * Per-axis attribute floors for this 行當 (台柱班底應遠高於抽卡下限). The genesis
+   * roll is clamped UP to these so a 花旦 always rolls 明豔、a 小生 always俊秀 —
+   * the rolled stats drive the portrait + persona, so a low roll = a 醜 / 不對行當
+   * 的角色. Omit to let `roleAttributeFloors(role)` supply sensible defaults.
+   */
+  minAttributes?: Partial<CharacterAttributes>;
 }
 
 export interface StoryPreset {

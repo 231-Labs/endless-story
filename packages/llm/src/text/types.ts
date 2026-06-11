@@ -37,13 +37,13 @@ export interface ChatResponse {
   /** Provider model id that actually served the request (may differ on fallback). */
   model: string;
   /** Provider tag. */
-  provider: 'poe' | 'anthropic';
+  provider: 'zai' | 'poe' | 'anthropic';
   /** Token usage if available. */
   usage?: { inputTokens?: number; outputTokens?: number };
 }
 
 export interface TextClient {
-  provider: 'poe' | 'anthropic';
+  provider: 'zai' | 'poe' | 'anthropic';
   /** Default model id for this client (primary or cheap, depending on construction). */
   defaultModel: string;
   chat(req: Omit<ChatRequest, 'model'> & { model?: string }): Promise<ChatResponse>;

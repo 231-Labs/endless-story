@@ -63,6 +63,9 @@ export function MemoriesTab({
   chaptersById: Map<string, Chapter>;
 }) {
   const charactersById = new Map(sagaCharacters.map((c) => [c.id, c]));
+  // Collapse exact-duplicate entries: a relationship can be seeded by genesis AND
+  // re-observed in a social tick, surfacing the identical line twice in recall.
+  const deduped = dedupeMemories(memories);
 
   if (!isOwner) {
     return <LockedNotice character={character} />;
@@ -78,14 +81,14 @@ export function MemoriesTab({
             記得的事 — 都上鏈寫進 Walrus，只有持有者讀得到。
           </p>
         </div>
-        <p className="text-xs tracking-widest text-mute/70 pl-12 sm:pl-0">{memories.length} 則</p>
+        <p className="text-xs tracking-widest text-mute/70 pl-12 sm:pl-0">{deduped.length} 則</p>
       </header>
       <p className="text-xs tracking-widest text-mute/70 pl-12 sm:hidden">
         記得的事 — 都上鏈寫進 Walrus，只有持有者讀得到。
       </p>
 
       <div className="pl-0 sm:pl-12">
-        {memories.length === 0 ? (
+        {deduped.length === 0 ? (
           <div className="es-card p-12 text-center">
             <p className="text-sm text-mute tracking-wide">
               暫時還沒留下供你翻閱的記憶。下一場戲落幕後，這裡會陸續長出新的條目。
@@ -93,7 +96,7 @@ export function MemoriesTab({
           </div>
         ) : (
           <ol className="space-y-6">
-            {memories.map((mem) => (
+            {deduped.map((mem) => (
               <MemoryEntry
                 key={mem.id}
                 memory={mem}
@@ -165,6 +168,20 @@ function MemoryEntry({
       </div>
     </li>
   );
+}
+
+/** Drop exact-duplicate memories (same kind + normalised body), keeping the first
+ *  (recall is already importance/recency-ranked, so the first is the best-ranked copy). */
+function dedupeMemories(memories: CharacterMemory[]): CharacterMemory[] {
+  const seen = new Set<string>();
+  const out: CharacterMemory[] = [];
+  for (const m of memories) {
+    const key = `${m.kind}|${m.body.replace(/\s+/g, ' ').trim()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
 }
 
 /** importance (1-10) → summary font weight, visually "how deeply remembered" */

@@ -1,6 +1,7 @@
 import {
   charactersApi,
   chaptersApi,
+  cutsApi,
   interventionsApi,
   liveStateApi,
   memoriesApi,
@@ -10,6 +11,7 @@ import {
   soulSongsApi,
   subscriptionsApi,
 } from '@/lib/api/index';
+import { isSuiObjectId } from '@/lib/chain/character-read';
 import { SiteNav } from '@/components/home/SiteNav';
 import {
   CharacterGrid,
@@ -158,11 +160,16 @@ async function RosterCards({
           }
         : undefined;
 
+      // Only surface a relationship when the character genuinely feels something
+      // strong toward someone — skip 平淡(neutral) / 故舊(acquaintance), and pick the
+      // strongest tie by weight rather than whatever edge happened to be first.
       const edges = await relationshipsApi.listOutgoingEdges(character.id);
-      const topEdge = edges[0];
-      const target = topEdge ? charactersById.get(topEdge.toId) : null;
+      const strongEdge = edges
+        .filter((e) => e.tone && e.tone !== 'neutral' && e.tone !== 'acquaintance')
+        .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))[0];
+      const target = strongEdge ? charactersById.get(strongEdge.toId) : null;
       const tension =
-        topEdge && target ? { targetName: target.name, label: topEdge.label } : undefined;
+        strongEdge && target ? { targetName: target.name, label: strongEdge.label } : undefined;
 
       const subscribers = await subscriptionsApi.listSubscribers(character.id);
       const isOwner = viewerWallet != null && character.nftOwner === viewerWallet;
@@ -217,11 +224,17 @@ async function DossierDetail({
   // 24-memory SEAL recall (72 candidates decrypted) that took 20-60s and
   // blocked the WHOLE dossier even on the profile tab. It now loads lazily
   // inside its own Suspense, only when the memories tab is open (see below).
+  // Chain characters: 參與的回 = event cuts (metadata-only, cached); the old
+  // listPublicChaptersForSubscription path re-read up to 12 POV bodies from
+  // Walrus per dossier visit just to build cards — kept only as the mock
+  // fallback for demo-slug characters.
+  const isChainCharacter = isSuiObjectId(character.id);
   const [
     allCharacters,
     edges,
     incomingEdges,
     chapters,
+    sagaCuts,
     interventions,
     soulSongs,
     persona,
@@ -232,7 +245,12 @@ async function DossierDetail({
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
     relationshipsApi.listIncomingEdges(character.id),
-    chaptersApi.listPublicChaptersForSubscription(character.id),
+    isChainCharacter
+      ? Promise.resolve([])
+      : chaptersApi.listPublicChaptersForSubscription(character.id),
+    isChainCharacter && character.sagaId
+      ? cutsApi.listEventCuts(character.sagaId).catch(() => [])
+      : Promise.resolve([]),
     interventionsApi.listInterventions(character.id),
     soulSongsApi.listSoulSongs(character.id),
     personasApi.getPersona(character.id),
@@ -319,6 +337,9 @@ async function DossierDetail({
                   chapters={chapters}
                   character={character}
                   chainPovChapters={chainPovChapters}
+                  participatedCuts={sagaCuts.filter((c) =>
+                    c.povCharacterIds.includes(character.id),
+                  )}
                 />
                 <PovTriggerButton characterId={character.id} />
               </>

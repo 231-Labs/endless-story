@@ -2,10 +2,16 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import type { Character } from '@endless-story/shared';
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
+import { BlobImage } from '@/components/common/BlobImage';
 
 export type DossierTab = 'profile' | 'gallery' | 'chapters' | 'memories' | 'entrusts';
+
+/** 記憶 / 託夢 are owner-only surfaces (private memory + dream intervention), so they
+ *  only appear in the menu for the connected OwnerCap holder. The rest are public. */
+const OWNER_ONLY_TABS = new Set<DossierTab>(['memories', 'entrusts']);
 
 const TABS: { key: DossierTab; label: string }[] = [
   { key: 'profile', label: '履歷' },
@@ -23,6 +29,10 @@ export function DossierTabs({
   active: DossierTab;
 }) {
   const [stuck, setStuck] = useState(false);
+  // Owner gate is client-side (real connected wallet), never the spoofable ?as= param.
+  const account = useCurrentAccount();
+  const isOwner = !!account && account.address === character.nftOwner;
+  const visibleTabs = TABS.filter((tab) => isOwner || !OWNER_ONLY_TABS.has(tab.key));
 
   useEffect(() => {
     const target = document.getElementById('dossier-header');
@@ -47,7 +57,7 @@ export function DossierTabs({
         </div>
         <div className="hidden sm:block h-6 w-px bg-hairline/50 mx-1" />
         <div className="no-scrollbar flex items-center gap-1 overflow-x-auto px-1">
-          {TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const isActive = tab.key === active;
             return (
               <Link
@@ -72,6 +82,7 @@ export function DossierTabs({
 
 function MiniAvatar({ character, visible }: { character: Character; visible: boolean }) {
   const tone = characterPortraitTone(character.role);
+  const portraitUrl = character.gallery.anchor?.imageUrl;
   return (
     <div
       aria-hidden={!visible}
@@ -80,8 +91,18 @@ function MiniAvatar({ character, visible }: { character: Character; visible: boo
       }`}
     >
       <div className="py-0.5 pl-0.5">
-        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-1 ${tone.bg} ${tone.ring}`}>
+        {/* Real portrait when we have one; the tinted name-initial stays as the
+            fallback layer beneath (BlobImage renders null on missing/failed src). */}
+        <span className={`relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ${tone.bg} ${tone.ring}`}>
           <span className={`font-serif text-sm leading-none ${tone.text}`}>{character.name[0]}</span>
+          {portraitUrl ? (
+            <BlobImage
+              src={portraitUrl}
+              alt={character.name}
+              sizes="28px"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
         </span>
       </div>
       <span className="whitespace-nowrap font-serif text-sm leading-normal text-ink pr-2">{character.name}</span>

@@ -11,6 +11,16 @@
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
+import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
+
+/**
+ * Walrus blobs are immutable + content-addressed (the id IS the content hash),
+ * so a chapter body never changes once written. Cache the fetched text hard:
+ * this is what stops the chapter page from re-reading up to 40 bodies from the
+ * aggregator on every navigation (the cause of the multi-second blank load that
+ * also delayed wallet auto-connect). Honors CHAIN_READ_CACHE_TTL_MS=0 to disable.
+ */
+const BLOB_TEXT_TTL_MS = 6 * 60 * 60 * 1000;
 
 export interface PovChapterEntry {
     commitmentId: string;
@@ -148,6 +158,19 @@ export async function fetchPovChapterByCommitment(
 ): Promise<PovChapterEntry | null> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return null;
+    // A Commitment object is write-once (blob id / subject never change), so the
+    // decoded entry can cache hard. generateMetadata + the page render both call
+    // getChapter → this makes the second call (and every back-navigation) free.
+    return cachedPublicRead(
+        `pov:commitment:${commitmentId}`,
+        publicChainReadTtl(60 * 60 * 1000),
+        () => fetchPovChapterByCommitmentUncached(commitmentId),
+    );
+}
+
+async function fetchPovChapterByCommitmentUncached(
+    commitmentId: string,
+): Promise<PovChapterEntry | null> {
     const client = makeSuiClient({ network: resolveNetwork() });
     try {
         const res = await read.commitment.getCommitment(client, commitmentId);
@@ -182,9 +205,11 @@ export async function fetchPovChapterByCommitment(
  * cache-control public + 24h max-age.
  */
 export async function fetchChapterText(blobUrl: string): Promise<string> {
-    const res = await fetch(resolveServerFetchUrl(blobUrl));
-    if (!res.ok) throw new Error(`walrus aggregator HTTP ${res.status}`);
-    return res.text();
+    return cachedPublicRead(`walrus:text:${blobUrl}`, publicChainReadTtl(BLOB_TEXT_TTL_MS), async () => {
+        const res = await fetch(resolveServerFetchUrl(blobUrl));
+        if (!res.ok) throw new Error(`walrus aggregator HTTP ${res.status}`);
+        return res.text();
+    });
 }
 
 /* ── internals ──────────────────────────────────────────────────── */

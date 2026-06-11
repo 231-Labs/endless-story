@@ -68,7 +68,10 @@ export function DossierHeader({
               <span
                 className={`inline-flex rounded-full px-4 py-1.5 text-sm tracking-widest ring-1 ${survivalBadgeClasses(character.survival.level)}`}
               >
-                {survivalLabel(character.survival.level)} · 可撐 {character.survival.daysLeft} 日
+                {survivalLabel(character.survival.level)} ·{' '}
+                {character.survival.daysLeft >= 999
+                  ? '收支有餘'
+                  : `可撐 ${character.survival.daysLeft} 日`}
               </span>
               <SubscribeButton
                 characterId={character.id}

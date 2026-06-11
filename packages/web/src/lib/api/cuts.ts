@@ -1,5 +1,10 @@
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { fetchEventCutsForSaga, type EventCutEntry } from '@/lib/chain/cut-read';
+import {
+    fetchEventCut,
+    fetchEventCutsForSaga,
+    type EventCutDetail,
+    type EventCutEntry,
+} from '@/lib/chain/cut-read';
 
 /**
  * Event-cut API — facade for the canonical "回" (woven multi-POV chapters).
@@ -18,4 +23,10 @@ export async function listEventCuts(sagaId: string): Promise<EventCutEntry[]> {
     return fetchEventCutsForSaga(sagaId, { limit: 20 });
 }
 
-export type { EventCutEntry } from '@/lib/chain/cut-read';
+/** One cut with its full prose — the /feed/cut/[id] reading page. */
+export async function getEventCut(commitmentId: string): Promise<EventCutDetail | null> {
+    if (!isDeployed()) return null;
+    return fetchEventCut(commitmentId);
+}
+
+export type { EventCutDetail, EventCutEntry } from '@/lib/chain/cut-read';

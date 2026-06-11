@@ -90,6 +90,7 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
             role: r.role.trim(),
             description: r.description.trim(),
             secret: r.secret?.trim() || undefined,
+            minAttributes: r.minAttributes,
         }));
         if (specs.length === 0) {
             setNote('沒有完整的角色（每人需姓名、年齡、性別、行當、描述）');
@@ -221,7 +222,7 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
             {result ? (
                 <div className="space-y-2 rounded border border-hairline bg-surface/40 p-4 text-2xs leading-relaxed">
                     <div className="tracking-widest text-ink">
-                        鑄造 {result.minted.length} 人 · 自身記憶 {result.selfSeeded} 條 · 關係 {result.tiesSeeded} 對
+                        鑄造 {result.minted.length} 人 · 自身記憶 {result.selfSeeded} 條 · 關係 {result.tiesSeeded} 對 · 設定集 {result.viewsSeeded} 張
                         {result.inductionSkipped ? `（記憶未配置:${result.inductionSkipped}）` : ''}
                     </div>
                     {result.minted.map((m) => (
@@ -240,7 +241,7 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
             <p className="text-2xs leading-relaxed text-mute/70">
                 直接 admin 簽名鑄造（不走職缺抽卡），OwnerCap + ControlCap 歸班主。這批人視為
                 <strong className="text-ink">創世班底 · 彼此早已相識</strong>:一次批次 induction 同時種下各自的自身記憶
-                與彼此的關係網（共同往事只寫一次,雙向對稱）。每人會先生畫像再鑄造,避免無頭像。需 admin 錢包有 gas。
+                與彼此的關係網（共同往事只寫一次,雙向對稱）。每人會先生畫像再鑄造,鑄造後再補正面 + 設定集圖,避免無頭像或缺設定集。需 admin 錢包有 gas。
             </p>
         </div>
     );

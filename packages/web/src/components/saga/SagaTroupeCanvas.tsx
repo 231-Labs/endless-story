@@ -149,14 +149,6 @@ export function SagaTroupeCanvas({
                   onPovChange={setPovId}
                   liveQuotes={sceneDetail?.ghostQuotes ?? []}
                 />
-
-                {/* Scroll hint for the next screen */}
-                <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 opacity-75 pointer-events-none [@media(max-height:520px)]:hidden">
-                  <span className="text-2xs tracking-[0.35em] text-cinnabar/80">往下翻閱</span>
-                  <div className="h-6 w-px overflow-hidden bg-hairline sm:h-8">
-                    <div className="h-full w-full bg-cinnabar/90 animate-scroll-down-line" />
-                  </div>
-                </div>
               </div>
             </div>
 

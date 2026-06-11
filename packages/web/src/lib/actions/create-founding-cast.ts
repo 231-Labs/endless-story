@@ -23,12 +23,14 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { induction as runnerInduction } from '@endless-story/runner';
 import { rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { CharacterCandidate } from '@endless-story/llm/prompts';
+import type { CharacterAttributes } from '@endless-story/shared';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { isMemoryConfigured, rememberForCharacter } from '@/lib/chain/memory';
 import { sagasApi } from '@/lib/api/index';
 import { listStoryPresets, loadStoryPreset } from '@/lib/stories/loader';
 import { DEFAULT_ATTRIBUTE_SCHEMA } from '../config/attribute-schema.js';
 import { generatePortrait } from './generate-portrait.js';
+import { generateAdditionalViews } from './generate-additional-views.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { applyRelationshipTiesAction, type ProposedTie } from './assess-relationships.js';
@@ -45,6 +47,56 @@ export interface FoundingCharSpec {
     secret?: string;
     /** Body free-text; default '勻稱'. */
     body?: string;
+    /** Per-axis attribute floors (行當下限). Omit → `roleAttributeFloors(role)`. */
+    minAttributes?: Partial<CharacterAttributes>;
+}
+
+type AttrFloors = Partial<CharacterAttributes>;
+
+/**
+ * 行當 → attribute floors for FOUNDING cast (the marquee troupe). Deliberately
+ * higher than the gacha `minAttributes` in the preset: these are台柱, so a founding
+ * 花旦 must read 明豔、a 小生 俊秀、a 刀馬旦 身手俐落. The rolled stats drive the portrait
+ * + persona, so a low roll = a 醜 / 不對行當 的角色 — exactly the "參數太低" the owner hit.
+ * Substring match, more specific keywords first; a lucky roll above the floor is kept.
+ */
+const ROLE_ATTRIBUTE_FLOORS: { match: string[]; floors: AttrFloors }[] = [
+    { match: ['刀馬旦', '武旦', '武生', '武小生'], floors: { constitution: 86, disposition: 76, appearance: 82, acuity: 74 } },
+    { match: ['花旦', '青衣', '正旦', '名伶', '坤伶'], floors: { appearance: 88, disposition: 80, acuity: 74, constitution: 62 } },
+    { match: ['坤生', '乾生', '小生'], floors: { appearance: 86, acuity: 80, disposition: 72, constitution: 66 } },
+    { match: ['老生', '鬚生', '老旦'], floors: { acuity: 80, disposition: 78, appearance: 64, constitution: 64 } },
+    { match: ['丑'], floors: { acuity: 84, disposition: 74, constitution: 66, appearance: 58 } },
+    { match: ['淨', '大面', '花臉'], floors: { constitution: 82, disposition: 66, acuity: 66, appearance: 62 } },
+    { match: ['班主', '掌事', '當家', '東家'], floors: { acuity: 84, disposition: 82, appearance: 70, constitution: 64 } },
+    { match: ['記者', '報', '筆', '文人'], floors: { acuity: 86, disposition: 72, appearance: 62, constitution: 56 } },
+    { match: ['琴師', '樂師', '鼓', '場面', '文武場', '司鼓'], floors: { acuity: 82, disposition: 70, appearance: 56, constitution: 60 } },
+    { match: ['衣箱', '管箱', '箱'], floors: { acuity: 78, disposition: 70, appearance: 54, constitution: 58 } },
+    { match: ['龍套', '武行', '檢場', '道具'], floors: { constitution: 66, acuity: 64, disposition: 56, appearance: 54 } },
+];
+const FALLBACK_FLOORS: AttrFloors = { appearance: 72, constitution: 64, acuity: 74, disposition: 70 };
+
+function roleAttributeFloors(role: string): AttrFloors {
+    const r = role || '';
+    for (const g of ROLE_ATTRIBUTE_FLOORS) {
+        if (g.match.some((kw) => r.includes(kw))) return g.floors;
+    }
+    return FALLBACK_FLOORS;
+}
+
+/**
+ * Raise each rolled axis to at least its floor (台柱不能擲出歪瓜裂棗). Caps at 100.
+ * The on-chain `seed` is kept as provenance; founding cast aren't reproducible gacha,
+ * so a clamped value diverging from the raw seed-roll is intended, not a bug.
+ */
+function applyAttributeFloors(
+    rolled: ReturnType<typeof rollAttributesFromSeed>,
+    floors: AttrFloors,
+): ReturnType<typeof rollAttributesFromSeed> {
+    return rolled.map((rv) => {
+        const floor = (floors as Record<string, number | undefined>)[rv.key];
+        if (floor == null || rv.value >= floor) return rv;
+        return { ...rv, value: Math.min(100, floor) };
+    });
 }
 
 export interface CreateFoundingCastInput {
@@ -69,11 +121,13 @@ export interface CreateFoundingCastResult {
     selfSeeded: number;
     /** Pairwise ties seeded. */
     tiesSeeded: number;
+    /** Setting-gallery views (frontal + art sheet) appended across the cast. */
+    viewsSeeded: number;
     inductionSkipped?: 'memory_unconfigured';
     error?: string;
 }
 
-const EMPTY = { minted: [] as FoundingMintedEntry[], failures: [] as { name: string; error: string }[], selfSeeded: 0, tiesSeeded: 0 };
+const EMPTY = { minted: [] as FoundingMintedEntry[], failures: [] as { name: string; error: string }[], selfSeeded: 0, tiesSeeded: 0, viewsSeeded: 0 };
 
 export async function createFoundingCastAction(
     input: CreateFoundingCastInput,
@@ -98,6 +152,8 @@ export async function createFoundingCastAction(
     const minted: FoundingMintedEntry[] = [];
     const failures: { name: string; error: string }[] = [];
     const members: runnerInduction.FoundingMember[] = [];
+    // (characterId, portraitUrl) for the post-mint setting-gallery pass below.
+    const viewTargets: { characterId: string; referenceUrl: string }[] = [];
 
     // ── per spec: roll → portrait → mint → tags + persona ──
     for (const spec of specs) {
@@ -105,7 +161,10 @@ export async function createFoundingCastAction(
             const body = spec.body?.trim() || '勻稱';
             const seed = randomBytes(32);
             const seedBytes = Array.from(seed);
-            const rolled = rollAttributesFromSeed(seed, DEFAULT_ATTRIBUTE_SCHEMA);
+            const rolled = applyAttributeFloors(
+                rollAttributesFromSeed(seed, DEFAULT_ATTRIBUTE_SCHEMA),
+                spec.minAttributes ?? roleAttributeFloors(spec.role),
+            );
             const candidate: CharacterCandidate = {
                 name: spec.name.trim(),
                 description: spec.description.trim(),
@@ -205,6 +264,7 @@ export async function createFoundingCastAction(
             }
 
             minted.push({ id: characterId, name: candidate.name, digest: res.digest, portrait: Boolean(portraitUrl) });
+            if (portraitUrl) viewTargets.push({ characterId, referenceUrl: portraitUrl });
             members.push({
                 id: characterId,
                 name: candidate.name,
@@ -239,7 +299,24 @@ export async function createFoundingCastAction(
     }
 
     if (members.length === 0) {
-        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, error: minted.length ? undefined : '全部 mint 失敗' };
+        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, viewsSeeded: 0, error: minted.length ? undefined : '全部 mint 失敗' };
+    }
+
+    // ── §11 setting-gallery views (frontal + art sheet) ──
+    // The mint above bakes in only the 45° cover portrait; the gacha redeem path
+    // (redeem-voucher.ts) follows it with generateAdditionalViews to fill the 設定集.
+    // Founding cast skipped that, so they had a cover but no frontal / art-sheet.
+    // Run it as its own pass AFTER all mints so the on-chain mints aren't held up
+    // behind img2img, and isolate each so one failure can't sink the batch
+    // (the reconciler can still backfill any that fail here).
+    let viewsSeeded = 0;
+    for (const t of viewTargets) {
+        try {
+            const r = await generateAdditionalViews({ characterId: t.characterId, referenceUrl: t.referenceUrl });
+            if (r.ok) viewsSeeded += r.appended;
+        } catch {
+            /* best-effort — reconcile can backfill the gallery */
+        }
     }
 
     // ── batch founding induction (mode B) ──
@@ -256,7 +333,7 @@ export async function createFoundingCastAction(
             },
         });
     } catch (err) {
-        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, error: `induction 失敗：${err instanceof Error ? err.message : String(err)}` };
+        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, viewsSeeded, error: `induction 失敗：${err instanceof Error ? err.message : String(err)}` };
     }
 
     // write self memories into each MemWal
@@ -293,6 +370,7 @@ export async function createFoundingCastAction(
         failures,
         selfSeeded,
         tiesSeeded,
+        viewsSeeded,
         inductionSkipped: memoryOn ? undefined : 'memory_unconfigured',
     };
 }
@@ -324,6 +402,7 @@ export async function loadFoundingPresetAction(): Promise<FoundingCharSpec[]> {
             role: c.role,
             description: c.description,
             secret: c.secret,
+            minAttributes: c.minAttributes,
         }));
     } catch {
         return [];

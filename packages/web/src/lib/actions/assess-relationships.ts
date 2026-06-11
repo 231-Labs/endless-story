@@ -224,8 +224,25 @@ export async function applyRelationshipTiesAction(
 
     // Symmetric private memories — both sides remember the same relationship.
     // MemWal absence is not an error (the public tie already landed).
+    // A SILENT one-sided failure here is what made「對彼此的觀察」asymmetric:
+    // the public tie exists but one character can't recall why — so each side
+    // gets one extra retry, and a final failure is loudly logged for reconcile.
     let memoriesWritten = 0;
     if (isMemoryConfigured()) {
+        const writeSide = async (charId: string, text: string, importance: number, label: string) => {
+            for (let attempt = 1; attempt <= 2; attempt += 1) {
+                try {
+                    if (await rememberForCharacter(charId, text, { kind: 'relationship', importance })) {
+                        return true;
+                    }
+                } catch {
+                    /* rememberForCharacter normally swallows; belt-and-braces */
+                }
+                if (attempt === 1) await new Promise((r) => setTimeout(r, 800));
+            }
+            console.warn(`[assess-relationships] relationship memory LOST (${label}) — tie on chain but ${charId.slice(0, 10)}… has no memory of it`);
+            return false;
+        };
         for (const t of fresh) {
             // Deterministic "about <name>:" style prefix (see selfText/otherText below) so the
             // memory is attributable when read back out of context — even if the body uses
@@ -233,16 +250,8 @@ export async function applyRelationshipTiesAction(
             // names the other person; the other side names this new character.
             const selfText = `對「${t.otherName}」：${t.selfMemory}`;
             const otherText = selfName ? `對「${selfName}」：${t.otherMemory}` : t.otherMemory;
-            try {
-                if (await rememberForCharacter(characterId, selfText, { kind: 'relationship', importance: t.importance })) {
-                    memoriesWritten += 1;
-                }
-                if (await rememberForCharacter(t.otherId, otherText, { kind: 'relationship', importance: t.importance })) {
-                    memoriesWritten += 1;
-                }
-            } catch (err) {
-                console.warn(`[assess-relationships] memory write failed for pair ${characterId}↔${t.otherId}:`, err);
-            }
+            if (await writeSide(characterId, selfText, t.importance, `self→${t.otherName}`)) memoriesWritten += 1;
+            if (await writeSide(t.otherId, otherText, t.importance, `${t.otherName}→self`)) memoriesWritten += 1;
         }
     }
 

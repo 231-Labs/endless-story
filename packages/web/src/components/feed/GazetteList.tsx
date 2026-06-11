@@ -1,5 +1,5 @@
-import { walrusAggregatorUrl } from '@endless-story/shared';
 import { objectUrl } from '@/lib/explorer';
+import { fetchChapterText } from '@/lib/chain/pov-read';
 import type { GazetteEntry } from '@/lib/api/gazettes';
 import { Markdown } from '@/components/common/Markdown';
 
@@ -79,10 +79,8 @@ export async function GazetteList({
 
 async function fetchBody(blobId: string): Promise<string> {
     try {
-        const res = await fetch(walrusAggregatorUrl(blobId, { network: 'testnet' }), {
-            cache: 'no-store',
-        });
-        return res.ok ? await res.text() : '';
+        // Immutable blob → shared hard cache (same entry the list scan peeked).
+        return await fetchChapterText(`/api/blob/${blobId}`);
     } catch {
         return '';
     }

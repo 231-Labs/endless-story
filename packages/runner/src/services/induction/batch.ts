@@ -75,10 +75,11 @@ const TONE_ZH: Record<RelationshipToneValue, string> = {
     neutral: '平淡',
 };
 
-/** Self-memory count from age (8–14); same curve as genesis / runOnce. */
+/** Self-memory count from age (8–11); same tightened curve as runOnce — keeps a
+ *  small age signal without the old 8–14 spread that read as uneven seeding. */
 function deriveCount(ageYears: number): number {
-    if (!Number.isFinite(ageYears) || ageYears <= 0) return 10;
-    return Math.min(14, Math.max(8, Math.round(ageYears / 3.5)));
+    if (!Number.isFinite(ageYears) || ageYears <= 0) return 9;
+    return Math.min(11, Math.max(8, Math.round(ageYears / 4)));
 }
 
 export async function runBatchFounding(input: RunBatchInput): Promise<RunBatchResult> {
@@ -126,6 +127,8 @@ export function buildBatchSystemPrompt(): string {
         '這批人是創世班底 —— **預設彼此早已相識**(至少同班共事的故舊),關係 kind 多為 `prior`。',
         '描述若明示更深的共同過往(同科班、舊情、師承、血緣、舊仇)就寫深;只有當兩人實在不該認識時才用 `first_impression`。',
         '  · 為**每一對理應有關係**的人寫一條(無向:A↔B 只寫一條,不要 A→B 又 B→A)。寧缺勿濫,但創世班底彼此關係通常較密。',
+        '  · **覆蓋要求**:每位成員至少要出現在 2 條 ties 裡(名冊僅兩人時至少 1 條)——同班撐起一個班子的人',
+        '    不可能有人對所有同伴都毫無關係;關係最薄的人也至少有「同班共事的故舊」這層。',
         '  · **共同場景只寫一次**:兩人的共同往事,寫成這條 tie 的**雙向對稱記憶** ——',
         '    `aMemory`(A 視角)+`bMemory`(B 視角)指向**同一件事/同一個場景**,立場情緒不同但事實一致(誰給誰、誰先到、發生什麼,兩邊要對得上,不可矛盾)。',
         '    **不要**讓這段共同往事又各自出現在兩人的 selfMemories 裡(避免重複、避免兩版打架)。',

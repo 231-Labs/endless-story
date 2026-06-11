@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { walrusAggregatorUrl } from '@endless-story/shared';
 import type { GazetteEntry } from '@/lib/api/gazettes';
 import { fetchTensionHeadline } from '@/lib/chain/drama';
+import { fetchChapterText } from '@/lib/chain/pov-read';
+import { cachedPublicRead, publicChainReadTtl } from '@/lib/chain/read-cache';
 
 /**
  * Slim teaser shown at the top of /feed?mode=all when a gazette exists.
@@ -24,7 +25,15 @@ export async function GazetteTeaser({
 }) {
     const [excerpt, tension] = await Promise.all([
         fetchExcerpt(gazette.blobId),
-        fetchTensionHeadline(sagaId),
+        // The "current tension" headline re-derives the whole drama state from
+        // chain events — fine once a minute, far too heavy per page view. SWR:
+        // a rollover serves the old headline and refreshes in the background.
+        cachedPublicRead(
+            `drama:headline:${sagaId}`,
+            publicChainReadTtl(60_000),
+            () => fetchTensionHeadline(sagaId).catch(() => null),
+            { staleTtlMs: 10 * 60 * 1000 },
+        ),
     ]);
     return (
         <Link
@@ -54,11 +63,9 @@ export async function GazetteTeaser({
 
 async function fetchExcerpt(blobId: string): Promise<string> {
     try {
-        const res = await fetch(walrusAggregatorUrl(blobId, { network: 'testnet' }), {
-            cache: 'no-store',
-        });
-        if (!res.ok) return '';
-        const text = await res.text();
+        // Shared immutable-blob cache — the gazette list renders the same body,
+        // so the teaser's excerpt is free after the first fetch.
+        const text = await fetchChapterText(`/api/blob/${blobId}`);
         return stripMarkdown(text).slice(0, 140).trim();
     } catch {
         return '';

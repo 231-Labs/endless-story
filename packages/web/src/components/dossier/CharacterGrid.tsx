@@ -161,7 +161,7 @@ export function CharacterGrid({
                   className="flex min-h-[calc(100dvh-245px)] snap-start snap-always flex-col scroll-mt-[calc(var(--es-site-nav-h)+13.5rem)] px-5 pb-6 pt-0 sm:px-10"
                 >
                   <div className="mx-auto flex w-full min-h-0 flex-1 flex-col items-center justify-start pt-8 pb-2 max-w-6xl">
-                    <div className="w-full grid-cols-2 gap-6 md:grid xl:grid-cols-3 xl:gap-8">
+                    <div className="w-full gap-6 md:grid md:grid-cols-3 xl:gap-8">
                       {pageCards.map((card) => (
                         <SubscribeCard key={card.character.id} {...card} />
                       ))}

@@ -1,11 +1,26 @@
 import Link from 'next/link';
-import { chaptersApi, charactersApi } from '@/lib/api/index';
+import { Suspense } from 'react';
+import type { Chapter, Character } from '@endless-story/shared';
+import { chaptersApi, charactersApi, cutsApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
 import { ChapterToc } from '@/components/feed/ChapterToc';
 import { ChapterCast } from '@/components/feed/ChapterCast';
 import { LinkifiedProse } from '@/components/common/CharacterLinkifier';
 import { formatDate } from '@/lib/format';
 import { txUrl, objectUrl } from '@/lib/explorer';
+
+/**
+ * 視角（POV）閱讀頁 — a single character's first-person raw material.
+ *
+ * IA (docs/CONTENT_PIPELINE.md §2): the canonical public "回" is the woven
+ * event cut (/feed/cut/[id]); this page is one character's angle on it, so it
+ * declares itself as 視角原料 and links UP to the cut when one exists.
+ *
+ * Perf: the prose needs only immutable cached reads (commitment + blob) plus
+ * the saga roster — it renders immediately. Everything that needs the saga-wide
+ * chapter scan (TOC, prev/next, sibling POVs, the cut link) streams in via
+ * Suspense so navigation never blocks on 40 Walrus reads.
+ */
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -49,15 +64,15 @@ export default async function ChapterPage({
     );
   }
 
-  const [pov, sagaChapters, sagaCharacters] = await Promise.all([
-    chapter.povCharacterId ? charactersApi.getCharacter(chapter.povCharacterId) : null,
-    chaptersApi.listChapters(chapter.sagaId),
-    charactersApi.listSagaCharacters(chapter.sagaId),
-  ]);
+  // Fast path only: the roster read is short-TTL cached; no body scans here.
+  const sagaCharacters = await charactersApi
+    .listSagaCharacters(chapter.sagaId)
+    .catch(() => [] as Character[]);
   const charactersById = new Map(sagaCharacters.map((c) => [c.id, c]));
-  const tocChapters = sagaChapters
-    .filter((c) => c.visibility === 'public_chapter')
-    .sort((a, b) => a.day - b.day || a.createdAt.localeCompare(b.createdAt));
+  const pov = chapter.povCharacterId
+    ? charactersById.get(chapter.povCharacterId) ??
+      (await charactersApi.getCharacter(chapter.povCharacterId).catch(() => null))
+    : null;
 
   // On-stage cast: POV first, then involved (deduped)
   const castIds = Array.from(
@@ -70,17 +85,7 @@ export default async function ChapterPage({
     .map((cid) => charactersById.get(cid))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
-  // Same on-chain event, other characters' angles — the verifiable multi-POV.
   const eventTx = chapter.provenance?.eventTx;
-  const siblingPovs = eventTx
-    ? sagaChapters.filter((c) => c.id !== chapter.id && c.provenance?.eventTx === eventTx)
-    : [];
-
-  // 連載迴圈：讀完這章接得上下一章。POV-only 章（不在公開目錄）只給返回。
-  const tocIdx = tocChapters.findIndex((c) => c.id === chapter.id);
-  const prevChapter = tocIdx > 0 ? tocChapters[tocIdx - 1] : null;
-  const nextChapter =
-    tocIdx >= 0 && tocIdx < tocChapters.length - 1 ? tocChapters[tocIdx + 1] : null;
 
   return (
     <main className="min-h-screen">
@@ -99,20 +104,26 @@ export default async function ChapterPage({
           <article className="min-w-0">
             <details className="mb-8 es-card lg:hidden">
               <summary className="cursor-pointer px-6 py-4 text-sm tracking-wide text-ink">
-                目錄 · {tocChapters.length} 章 · 出場 {cast.length}
+                目錄 · 出場 {cast.length}
               </summary>
               <div className="space-y-8 border-t border-hairline/50 px-6 py-6">
-                <ChapterToc
-                  chapters={tocChapters}
-                  currentId={chapter.id}
-                  charactersById={charactersById}
-                />
+                <Suspense fallback={<TocSkeleton />}>
+                  <ChapterTocLoader
+                    sagaId={chapter.sagaId}
+                    currentId={chapter.id}
+                    charactersById={charactersById}
+                  />
+                </Suspense>
                 <ChapterCast cast={cast} povId={chapter.povCharacterId} />
               </div>
             </details>
 
             <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
               <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
+              {/* IA: this surface is the per-character raw material, not the woven 回 */}
+              <span className="rounded border border-cinnabar/30 bg-cinnabar/[0.06] px-2.5 py-1 text-cinnabar/90">
+                視角原料{pov ? ` · ${pov.name} 的第一人稱` : ''}
+              </span>
               {pov ? (
                 <>
                   <span className="text-hairline">·</span>
@@ -138,7 +149,7 @@ export default async function ChapterPage({
                   鏈上事件 · 已證實發生
                 </div>
                 <p className="mt-2 text-sm leading-relaxed text-ink">
-                  本章是
+                  本篇是
                   {pov ? <span className="text-cinnabar"> {pov.name} </span> : ' 角色 '}
                   對「{chapter.provenance.eventLabel}」的視角
                   {chapter.provenance.sceneName ? ` · ${chapter.provenance.sceneName}` : ''}
@@ -164,22 +175,15 @@ export default async function ChapterPage({
                     此章上鏈承諾 ↗
                   </a>
                 </div>
-                {siblingPovs.length > 0 ? (
-                  <div className="mt-3 border-t border-hairline/50 pt-3 text-2xs tracking-widest">
-                    <span className="text-mute">同一事件的其他視角：</span>
-                    {siblingPovs.map((s) => {
-                      const sp = s.povCharacterId ? charactersById.get(s.povCharacterId) : undefined;
-                      return (
-                        <Link
-                          key={s.id}
-                          href={`/feed/chapter/${s.id}`}
-                          className="ml-2 text-cinnabar hover:underline"
-                        >
-                          {sp?.name ?? '另一視角'}
-                        </Link>
-                      );
-                    })}
-                  </div>
+                {eventTx ? (
+                  <Suspense fallback={null}>
+                    <EventCrossLinks
+                      sagaId={chapter.sagaId}
+                      currentId={chapter.id}
+                      eventTx={eventTx}
+                      charactersById={charactersById}
+                    />
+                  </Suspense>
                 ) : null}
               </div>
             ) : null}
@@ -217,7 +221,7 @@ export default async function ChapterPage({
               {pov ? (
                 <div className="es-card p-6 text-center sm:p-8">
                   <p className="text-sm leading-relaxed text-mute">
-                    這是 <span className="font-serif text-ink">{pov.name}</span> 眼中的春雪社。
+                    這是 <span className="font-serif text-ink">{pov.name}</span> 眼中的世界。
                   </p>
                   <Link
                     href={{ pathname: '/dossier', query: { id: pov.id } }}
@@ -228,47 +232,22 @@ export default async function ChapterPage({
                 </div>
               ) : null}
 
-              <nav aria-label="章回導覽" className="grid grid-cols-2 gap-3">
-                {prevChapter ? (
-                  <Link
-                    href={`/feed/chapter/${prevChapter.id}`}
-                    className="group rounded-2xl border border-hairline/60 bg-surface/40 p-4 backdrop-blur-sm transition-colors hover:border-cinnabar/40 sm:p-5"
-                  >
-                    <p className="text-2xs tracking-[0.3em] text-mute">← 上一章</p>
-                    <p className="mt-2 truncate font-serif text-sm text-ink transition-colors group-hover:text-cinnabar sm:text-base">
-                      {prevChapter.title}
-                    </p>
-                  </Link>
-                ) : (
-                  <span aria-hidden />
-                )}
-                {nextChapter ? (
-                  <Link
-                    href={`/feed/chapter/${nextChapter.id}`}
-                    className="group rounded-2xl border border-hairline/60 bg-surface/40 p-4 text-right backdrop-blur-sm transition-colors hover:border-cinnabar/40 sm:p-5"
-                  >
-                    <p className="text-2xs tracking-[0.3em] text-mute">下一章 →</p>
-                    <p className="mt-2 truncate font-serif text-sm text-ink transition-colors group-hover:text-cinnabar sm:text-base">
-                      {nextChapter.title}
-                    </p>
-                  </Link>
-                ) : (
-                  <p className="flex items-center justify-end pr-2 text-2xs tracking-[0.3em] text-mute/60">
-                    已是最新一章 · 戲還在演
-                  </p>
-                )}
-              </nav>
+              <Suspense fallback={<NavSkeleton />}>
+                <ChapterPagerNav sagaId={chapter.sagaId} currentId={chapter.id} />
+              </Suspense>
             </footer>
           </article>
 
           <aside className="hidden lg:block">
             <div className="sticky top-24 space-y-8">
               <div className="es-card p-6 sm:p-8">
-                <ChapterToc
-                  chapters={tocChapters}
-                  currentId={chapter.id}
-                  charactersById={charactersById}
-                />
+                <Suspense fallback={<TocSkeleton />}>
+                  <ChapterTocLoader
+                    sagaId={chapter.sagaId}
+                    currentId={chapter.id}
+                    charactersById={charactersById}
+                  />
+                </Suspense>
               </div>
               <div className="es-card p-6 sm:p-8">
                 <ChapterCast cast={cast} povId={chapter.povCharacterId} />
@@ -279,5 +258,144 @@ export default async function ChapterPage({
         </div>
       </div>
     </main>
+  );
+}
+
+/* ── streamed sections (saga-wide scans live behind these) ─────────────── */
+
+async function loadTocChapters(sagaId: string): Promise<Chapter[]> {
+  const sagaChapters = await chaptersApi.listChapters(sagaId).catch(() => [] as Chapter[]);
+  return sagaChapters
+    .filter((c) => c.visibility === 'public_chapter')
+    .sort((a, b) => a.day - b.day || a.createdAt.localeCompare(b.createdAt));
+}
+
+async function ChapterTocLoader({
+  sagaId,
+  currentId,
+  charactersById,
+}: {
+  sagaId: string;
+  currentId: string;
+  charactersById: Map<string, Character>;
+}) {
+  const tocChapters = await loadTocChapters(sagaId);
+  if (tocChapters.length === 0) return null;
+  return (
+    <ChapterToc chapters={tocChapters} currentId={currentId} charactersById={charactersById} />
+  );
+}
+
+/** 同事件互鏈：合本(向上) + 其他角色視角(平行)。 */
+async function EventCrossLinks({
+  sagaId,
+  currentId,
+  eventTx,
+  charactersById,
+}: {
+  sagaId: string;
+  currentId: string;
+  eventTx: string;
+  charactersById: Map<string, Character>;
+}) {
+  const [sagaChapters, cuts] = await Promise.all([
+    chaptersApi.listChapters(sagaId).catch(() => [] as Chapter[]),
+    cutsApi.listEventCuts(sagaId).catch(() => []),
+  ]);
+  const cut = cuts.find((c) => c.eventTx === eventTx);
+  const siblingPovs = sagaChapters.filter(
+    (c) => c.id !== currentId && c.provenance?.eventTx === eventTx,
+  );
+  if (!cut && siblingPovs.length === 0) return null;
+  return (
+    <div className="mt-3 border-t border-hairline/50 pt-3 text-2xs tracking-widest">
+      {cut ? (
+        <Link
+          href={`/feed/cut/${cut.commitmentId}`}
+          className="mr-4 inline-block rounded-full border border-cinnabar/40 px-3 py-1 text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas"
+        >
+          讀本事件的合本「回」→
+        </Link>
+      ) : null}
+      {siblingPovs.length > 0 ? (
+        <>
+          <span className="text-mute">同一事件的其他視角：</span>
+          {siblingPovs.map((s) => {
+            const sp = s.povCharacterId ? charactersById.get(s.povCharacterId) : undefined;
+            return (
+              <Link
+                key={s.id}
+                href={`/feed/chapter/${s.id}`}
+                className="ml-2 text-cinnabar hover:underline"
+              >
+                {sp?.name ?? '另一視角'}
+              </Link>
+            );
+          })}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+async function ChapterPagerNav({ sagaId, currentId }: { sagaId: string; currentId: string }) {
+  const tocChapters = await loadTocChapters(sagaId);
+  const tocIdx = tocChapters.findIndex((c) => c.id === currentId);
+  const prevChapter = tocIdx > 0 ? tocChapters[tocIdx - 1] : null;
+  const nextChapter =
+    tocIdx >= 0 && tocIdx < tocChapters.length - 1 ? tocChapters[tocIdx + 1] : null;
+  return (
+    <nav aria-label="章回導覽" className="grid grid-cols-2 gap-3">
+      {prevChapter ? (
+        <Link
+          href={`/feed/chapter/${prevChapter.id}`}
+          className="group rounded-2xl border border-hairline/60 bg-surface/40 p-4 backdrop-blur-sm transition-colors hover:border-cinnabar/40 sm:p-5"
+        >
+          <p className="text-2xs tracking-[0.3em] text-mute">← 上一章</p>
+          <p className="mt-2 truncate font-serif text-sm text-ink transition-colors group-hover:text-cinnabar sm:text-base">
+            {prevChapter.title}
+          </p>
+        </Link>
+      ) : (
+        <span aria-hidden />
+      )}
+      {nextChapter ? (
+        <Link
+          href={`/feed/chapter/${nextChapter.id}`}
+          className="group rounded-2xl border border-hairline/60 bg-surface/40 p-4 text-right backdrop-blur-sm transition-colors hover:border-cinnabar/40 sm:p-5"
+        >
+          <p className="text-2xs tracking-[0.3em] text-mute">下一章 →</p>
+          <p className="mt-2 truncate font-serif text-sm text-ink transition-colors group-hover:text-cinnabar sm:text-base">
+            {nextChapter.title}
+          </p>
+        </Link>
+      ) : (
+        <p className="flex items-center justify-end pr-2 text-2xs tracking-[0.3em] text-mute/60">
+          已是最新一章 · 戲還在演
+        </p>
+      )}
+    </nav>
+  );
+}
+
+/* ── skeletons ─────────────────────────────────────────────────────────── */
+
+function TocSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4" aria-hidden>
+      <div className="mx-auto h-3 w-12 rounded bg-hairline/50" />
+      {[...Array(5)].map((_, i) => (
+        <div key={i} className="h-8 rounded bg-hairline/30" style={{ width: `${90 - (i % 2) * 12}%` }} />
+      ))}
+    </div>
+  );
+}
+
+function NavSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-3" aria-hidden>
+      <div className="h-20 animate-pulse rounded-2xl bg-hairline/30" />
+      <div className="h-20 animate-pulse rounded-2xl bg-hairline/30" />
+    </div>
   );
 }

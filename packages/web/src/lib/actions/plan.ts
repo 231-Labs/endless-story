@@ -34,7 +34,8 @@ export interface RunPlanResult {
     /** Whether a previous plan was found + evolved. */
     hadPrevious?: boolean;
     remembered?: boolean;
-    skipReason?: 'memory_unconfigured';
+    /** 'unchanged' = plan identical to the stored one, so no new memory was written. */
+    skipReason?: 'memory_unconfigured' | 'unchanged';
     error?: string;
 }
 
@@ -105,10 +106,18 @@ export async function runPlanAction(
         };
     }
 
-    const remembered = await rememberForCharacter(characterId, result.planText, {
-        kind: 'plan',
-        importance: 8,
-    });
+    // Don't append an identical plan every tick — that's what bloated the memory
+    // store with repeated「長期目標」. The standing plan is recalled latest-first, so
+    // re-writing an unchanged plan adds noise without changing behaviour.
+    const normalize = (t: string | null | undefined) => (t ?? '').replace(/\s+/g, ' ').trim();
+    const unchanged = currentPlanRaw != null && normalize(currentPlanRaw) === normalize(result.planText);
+
+    const remembered = unchanged
+        ? false
+        : await rememberForCharacter(characterId, result.planText, {
+              kind: 'plan',
+              importance: 8,
+          });
 
     return {
         ok: true,
@@ -118,7 +127,7 @@ export async function runPlanAction(
         planText: result.planText,
         hadPrevious: currentPlan != null,
         remembered,
-        skipReason: remembered ? undefined : 'memory_unconfigured',
+        skipReason: unchanged ? 'unchanged' : remembered ? undefined : 'memory_unconfigured',
     };
 }
 

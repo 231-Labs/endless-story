@@ -102,8 +102,10 @@ export function buildSystemPrompt(mode: InductionMode): string {
         '═══ (B) 關係 ties ═══',
         'TA 不是憑空誕生,而是「從人生的一半被拉進來」。只憑各人**公開描述**判斷 TA 與名冊中哪些人理應有關係,',
         '為每一對寫關係。注意現有的「成員間既有關係」,讓新關係鑲進這張網、別與之矛盾。',
-        '  · 只在雙方描述有**實質文本依據**時才連(同鄉/同師門/舊情暗示/行當宿敵/名字互提/明顯互補對立…)。',
-        '    沒依據不要硬連,寧缺勿濫:通常 0–4 條、最多 6 條;沒有合理對象就空陣列。',
+        '  · `prior`(共同過去)只在雙方描述有**實質文本依據**時才寫(同鄉/同師門/舊情暗示/行當宿敵/名字互提…),沒依據不要硬編過往。',
+        '  · 但**初見印象不需要任何過往依據** —— 同一個班子裡的人照面是必然的。至少為名冊中最相關的 2 人',
+        '    (同場/同行當/描述上最該注意到彼此的)各寫一條 `first_impression`;通常 2–4 條、最多 6 條。',
+        '    只有名冊為空時才允許空陣列 —— 不可讓一個活人對整個班子毫無印象。',
         '  · **kind**:`prior`(故事前就認識,可寫共同過去)或 `first_impression`(此前不認識,初次照面觀感)。',
         ...modeRule,
         '  · **雙向對稱**:每對寫兩段第一人稱記憶 —— `selfMemory`(新角色視角)+`otherMemory`(對方視角),',
@@ -183,7 +185,8 @@ export function buildUserPrompt(input: InductionPromptInput): string {
         input.privateBackstory && input.privateBackstory.trim()
             ? `   其中 2–3 條須從「心底秘密」長出來,隱微而痛、化進場景,不整段複述。`
             : '',
-        `(B) 判斷「${input.name}」與名冊中哪些人理應有關係,依本次模式決定 prior/first_impression,雙向對稱、寧缺勿濫(最多 6)。`,
+        `(B) 判斷「${input.name}」與名冊中哪些人理應有關係,依本次模式決定 prior/first_impression,雙向對稱;`,
+        `至少 2 條(first_impression 不需過往依據)、最多 6 條;只有名冊為空才輸出空陣列。`,
         `只輸出 JSON 物件。`,
     ]
         .filter((line) => line !== '')

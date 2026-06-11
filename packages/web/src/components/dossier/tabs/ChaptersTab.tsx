@@ -2,24 +2,32 @@ import type { Chapter, Character } from '@endless-story/shared';
 import Link from 'next/link';
 import { truncateBlobId } from '@/lib/format';
 import type { PovChapterEntry } from '@/lib/chain/pov-read';
+import type { EventCutEntry } from '@/lib/api/cuts';
 import { ChainPovSection } from './ChainPovSection';
 
 export function ChaptersTab({
   chapters,
   character,
   chainPovChapters = [],
+  participatedCuts = [],
 }: {
+  /** Legacy/mock chapters — only rendered when there are no on-chain cuts. */
   chapters: Chapter[];
   character: Character;
   /**
-   * On-chain POV chapters anchored via `commitment.move`. Rendered as
-   * the topmost section ("on-chain POV") above the legacy mock sections.
-   * When runner R3+ wires the gazette + memory tier, this becomes the
-   * primary surface and mock sections get retired.
+   * On-chain POV chapters anchored via `commitment.move` — the character's
+   * own first-person raw material (owner/subscriber gated below).
    */
   chainPovChapters?: PovChapterEntry[];
+  /**
+   * Event cuts this character was woven into — the canonical public "回"
+   * (docs/CONTENT_PIPELINE.md §8.2). Metadata-only cards; the prose lives
+   * on /feed/cut/[id].
+   */
+  participatedCuts?: EventCutEntry[];
 }) {
-  const hasAny = chapters.length > 0 || chainPovChapters.length > 0;
+  const hasAny =
+    chapters.length > 0 || chainPovChapters.length > 0 || participatedCuts.length > 0;
   if (!hasAny) {
     return (
       <div className="py-12 text-center text-mute">
@@ -30,24 +38,60 @@ export function ChaptersTab({
 
   // IA: event-centric (see docs/CONTENT_PIPELINE.md §8.2). A dossier slices a
   // character INTO the events ("回") she appears in; the feed slices an event
-  // OUT into its characters. So here we lead with the events this character is
-  // in (her POV + same-scene group cuts merged — "same scene" == same event),
-  // then her on-chain POV raw feed (the per-character / future-PV material).
-  const participatedChapters = chapters;
-
+  // OUT into its characters. So here we lead with the woven cuts this
+  // character is in, then her on-chain POV raw feed (per-character material).
   return (
     <div className="space-y-12">
-      {participatedChapters.length > 0 ? (
-        <Section
-          title={`${character.name} 參與的回`}
-          chapters={participatedChapters}
-          highlight
-        />
+      {participatedCuts.length > 0 ? (
+        <CutSection character={character} cuts={participatedCuts} />
+      ) : chapters.length > 0 ? (
+        <Section title={`${character.name} 參與的回`} chapters={chapters} highlight />
       ) : null}
       {chainPovChapters.length > 0 ? (
         <ChainPovSection chapters={chainPovChapters} character={character} />
       ) : null}
     </div>
+  );
+}
+
+/** 參與的回 — the woven event cuts this character appears in. */
+function CutSection({ character, cuts }: { character: Character; cuts: EventCutEntry[] }) {
+  return (
+    <section>
+      <div className="flex items-center gap-4">
+        <div className="h-px w-8 bg-cinnabar" />
+        <h2 className="font-serif text-2xl tracking-wide text-cinnabar">
+          {character.name} 參與的回
+        </h2>
+      </div>
+      <p className="mt-2 pl-12 text-2xs tracking-widest text-mute/70">
+        多視角織成的公開章回 — {character.name} 是其中一條視角。
+      </p>
+      <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
+        {cuts.map((cut) => (
+          <li key={cut.commitmentId}>
+            <Link
+              href={`/feed/cut/${cut.commitmentId}`}
+              className="group block es-card p-6 sm:p-8 transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
+            >
+              <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
+                {cut.day != null ? (
+                  <span className="bg-canvas/50 px-2 py-1 rounded border border-hairline/50">
+                    DAY {cut.day}
+                  </span>
+                ) : null}
+                {cut.sceneName ? <span>{cut.sceneName}</span> : null}
+                <span className="text-cinnabar/80">{cut.povCharacterIds.length} 視角合本</span>
+              </div>
+              <h3 className="mt-3 font-serif text-xl tracking-wide text-ink transition-colors group-hover:text-cinnabar sm:text-2xl">
+                {cut.eventLabel ? `「${cut.eventLabel}」` : `第 ${cut.day ?? '—'} 日的一回`}
+              </h3>
+              <p className="mt-2 text-sm tracking-widest text-cinnabar">讀這一回 →</p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -13,7 +13,7 @@
 
 import { loadLLMConfig, resolveTextProvider, type LLMConfig } from '../config.js';
 import { getFallbackModels } from './models.js';
-import { callAnthropic, callPoe } from './providers.js';
+import { callAnthropic, callPoe, callZAI } from './providers.js';
 import { chatWithFallback } from './fallback.js';
 import type { ChatRequest, ChatResponse, TextClient } from './types.js';
 
@@ -34,27 +34,37 @@ export function createTextClient(opts: CreateTextClientOptions = {}): TextClient
   if (!provider) {
     throw new Error(
       '@endless-story/llm: no text provider configured. ' +
-        'Set POE_API_KEY or ANTHROPIC_API_KEY in environment.',
+        'Set ZAI_API_KEY (or POE_API_KEY / ANTHROPIC_API_KEY) in environment.',
     );
   }
 
   const cheap = opts.kind === 'cheap';
-  const defaultModel =
-    provider === 'poe'
-      ? cheap
-        ? cfg.poeModelCheap
-        : cfg.poeModelPrimary
-      : cheap
-        ? cfg.anthropicModelCheap
-        : cfg.anthropicModelPrimary;
+  let defaultModel: string;
+  let callOne: (req: ChatRequest) => Promise<ChatResponse>;
+  let extraFallback: string[];
 
-  const apiKey = provider === 'poe' ? cfg.poeApiKey! : cfg.anthropicApiKey!;
-  const callOne = (req: ChatRequest): Promise<ChatResponse> =>
-    provider === 'poe' ? callPoe(apiKey, req) : callAnthropic(apiKey, req);
+  if (provider === 'zai') {
+    defaultModel = cheap ? cfg.zaiModelCheap : cfg.zaiModelPrimary;
+    const apiKey = cfg.zaiApiKey!;
+    const baseUrl = cfg.zaiBaseUrl;
+    callOne = (req) => callZAI(apiKey, baseUrl, req);
+    // Only two Z.AI models in play: on overload the primary degrades to the cheap one.
+    extraFallback = cheap ? [] : [cfg.zaiModelCheap];
+  } else if (provider === 'poe') {
+    defaultModel = cheap ? cfg.poeModelCheap : cfg.poeModelPrimary;
+    const apiKey = cfg.poeApiKey!;
+    callOne = (req) => callPoe(apiKey, req);
+    extraFallback = getFallbackModels('poe', cheap);
+  } else {
+    defaultModel = cheap ? cfg.anthropicModelCheap : cfg.anthropicModelPrimary;
+    const apiKey = cfg.anthropicApiKey!;
+    callOne = (req) => callAnthropic(apiKey, req);
+    extraFallback = getFallbackModels('anthropic', cheap);
+  }
 
   const fallbackChain = opts.disableFallback
     ? null
-    : [defaultModel, ...getFallbackModels(provider, cheap).filter((m) => m !== defaultModel)];
+    : [defaultModel, ...extraFallback.filter((m) => m !== defaultModel)];
 
   const chat: TextClient['chat'] = async (req) => {
     const model = req.model ?? defaultModel;

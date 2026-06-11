@@ -166,6 +166,10 @@ export function MemoriesTabClient({
       });
       const ranked = scored
         .sort((a, b) => b.score - a.score || a.idx - b.idx)
+        // 'plan' is the character's internal standing goal — re-written most ticks
+        // and surfaced in the live-state bar, not a readable 記憶 entry. Excluding it
+        // stops the「長期目標一直重複寫入」clutter in the memory list.
+        .filter((x) => x.m.kind !== 'plan')
         .map((x, i) => recalledToCharacterMemory(x.m, character.id, i));
       setMemories(ranked);
       setPhase('done');

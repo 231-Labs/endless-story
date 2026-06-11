@@ -124,10 +124,12 @@ export async function runOnce(input: RunInductionInput): Promise<RunInductionRes
     return parseInduction(response.text, count, roster);
 }
 
-/** Self-memory count scales with age (8–14); same curve as genesis. */
+/** Self-memory count scales gently with age (8–11). The old 8–14 band made a
+ *  44-year-old visibly "richer" than a 24-year-old (6 extra memories) — which
+ *  read as a bug on the dossier. Keep a small age signal, not a divergence. */
 function deriveCount(ageYears: number): number {
-    if (!Number.isFinite(ageYears) || ageYears <= 0) return 10;
-    return Math.min(14, Math.max(8, Math.round(ageYears / 3.5)));
+    if (!Number.isFinite(ageYears) || ageYears <= 0) return 9;
+    return Math.min(11, Math.max(8, Math.round(ageYears / 4)));
 }
 
 interface Snapshot {

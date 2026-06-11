@@ -1,10 +1,10 @@
 /**
- * Provider HTTP adapters — Poe (OpenAI-compat) and Anthropic (direct).
+ * Provider HTTP adapters — Z.AI / Poe (OpenAI-compat) and Anthropic (direct).
  *
  * Direct `fetch` to provider REST endpoints — no SDK dependencies.
  * Edge-runtime safe (uses only stdlib fetch / Headers).
  *
- * Both adapters return the same `ChatResponse` shape; callers should never
+ * All adapters return the same `ChatResponse` shape; callers should never
  * branch on which one served the request.
  */
 
@@ -14,11 +14,12 @@ import type { ChatRequest, ChatResponse } from './types.js';
 const POE_ENDPOINT = 'https://api.poe.com/v1/chat/completions';
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
+const ZAI_MIN_MAX_TOKENS = 1024;
 
 export class LLMHttpError extends Error {
   constructor(
     public status: number,
-    public provider: 'poe' | 'anthropic',
+    public provider: 'zai' | 'poe' | 'anthropic',
     public model: string,
     bodySnippet: string,
   ) {
@@ -36,6 +37,56 @@ export function isRetryableError(err: unknown): boolean {
   if (e?.status === 429 || e?.status === 503 || e?.status === 529) return true;
   const msg = (e?.message ?? '').toLowerCase();
   return msg.includes('overloaded') || msg.includes('rate_limit') || msg.includes('rate limit');
+}
+
+/**
+ * POST to Z.AI's OpenAI-compatible /chat/completions endpoint.
+ * `baseUrl` is the Z.AI v4 base (e.g. https://api.z.ai/api/paas/v4); we append
+ * /chat/completions. GLM models take standard OpenAI params (model / messages /
+ * max_tokens / temperature) — no Poe-style `thinking` block.
+ */
+export async function callZAI(apiKey: string, baseUrl: string, req: ChatRequest): Promise<ChatResponse> {
+  const messages: Array<{ role: string; content: unknown }> = [];
+  if (req.system) messages.push({ role: 'system', content: req.system });
+  messages.push(...req.messages.map((m) => ({ role: m.role, content: m.content })));
+
+  const body: Record<string, unknown> = {
+    model: req.model,
+    messages,
+    max_tokens: Math.max(req.maxTokens, ZAI_MIN_MAX_TOKENS),
+    stream: false,
+  };
+  if (typeof req.temperature === 'number') body.temperature = req.temperature;
+
+  const endpoint = `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new LLMHttpError(res.status, 'zai', req.model, text.slice(0, 200));
+  }
+
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+
+  return {
+    text: data.choices?.[0]?.message?.content ?? '',
+    model: req.model,
+    provider: 'zai',
+    usage:
+      data.usage
+        ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens }
+        : undefined,
+  };
 }
 
 /** POST to Poe's OpenAI-compatible endpoint. */
