@@ -20,7 +20,7 @@ import {
 import { inferRoleFromText } from '@endless-story/shared';
 import type { ChapterProvenance } from '@endless-story/shared';
 import { embedProvenance } from '@/lib/chain/chapter-provenance';
-import type { AdminContext } from '@/lib/chain/admin-signer';
+import { withAdminLock, type AdminContext } from '@/lib/chain/admin-signer';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
 import {
@@ -123,13 +123,15 @@ export async function anchorPovChapter(
     const text = chapter.trim();
     if (!text) return { anchored: false, error: 'empty_chapter' };
     try {
-        const anchor = await signAndAnchor({
-            sagaId,
-            subjectId: characterId,
-            content: new TextEncoder().encode(text),
-            contentType: 'text/markdown',
-            signer: admin.signer,
-        });
+        const anchor = await withAdminLock(() =>
+            signAndAnchor({
+                sagaId,
+                subjectId: characterId,
+                content: new TextEncoder().encode(text),
+                contentType: 'text/markdown',
+                signer: admin.signer,
+            }),
+        );
         // Write the new chapter into the character's memory (best-effort).
         const remembered = await rememberForCharacter(characterId, text, {
             kind: 'chapter',
@@ -178,20 +180,22 @@ export async function anchorPovChaptersBatch(
 
     let anchors;
     try {
-        anchors = await signAndAnchorBatch(
-            valid.map((i) => ({
-                sagaId,
-                subjectId: i.characterId,
-                // Embed provenance INTO the anchored blob so the chapter↔event link
-                // is itself immutable + chain-verifiable. MemWal keeps clean prose.
-                content: new TextEncoder().encode(
-                    i.provenance
-                        ? embedProvenance(i.chapter.trim(), i.provenance)
-                        : i.chapter.trim(),
-                ),
-                contentType: 'text/markdown',
-            })),
-            { signer: admin.signer },
+        anchors = await withAdminLock(() =>
+            signAndAnchorBatch(
+                valid.map((i) => ({
+                    sagaId,
+                    subjectId: i.characterId,
+                    // Embed provenance INTO the anchored blob so the chapter↔event link
+                    // is itself immutable + chain-verifiable. MemWal keeps clean prose.
+                    content: new TextEncoder().encode(
+                        i.provenance
+                            ? embedProvenance(i.chapter.trim(), i.provenance)
+                            : i.chapter.trim(),
+                    ),
+                    contentType: 'text/markdown',
+                })),
+                { signer: admin.signer },
+            ),
         );
     } catch (err) {
         const error = err instanceof Error ? err.message : String(err);

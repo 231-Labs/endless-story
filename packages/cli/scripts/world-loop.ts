@@ -22,6 +22,13 @@
  *   --json-out=<path>      write full tick JSON records for acceptance review
  *   --no-advance           don't advance the World tick each pass
  *   --no-move | --no-pov | --no-sleep | --no-gazette | --no-plan   skip that phase
+ *   --event-spine          Phase 2: drive a 回 as a multi-tick BudgetEvent spine
+ *   --llm-framing          Phase 3-A: let the LLM director name each incident
+ *   --director-resources   Phase 3-B: let the LLM director add scarce resources
+ *   --parallel-events      Stage 1: run many events at once (one per axis)
+ *   --attention-budget     Stage 2: concurrent events pull on shared characters
+ *   --max-concurrent-events=<n>  cap for --parallel-events (default 2)
+ *      (all default off; see docs/EVENT_LIFECYCLE.md §5–§7 for what to watch)
  *
  * Env (from ../web/.env.local):
  *   WORLD_LOOP_URL    web base url or full /api/tick url (default http://localhost:3000)
@@ -68,6 +75,14 @@ function parseArgs(argv: string[]): LoopOpts {
     if (has('no-pov')) input.pov = false;
     if (has('no-sleep')) input.sleep = false;
     if (has('no-gazette')) input.gazette = false;
+    // EVENT_LIFECYCLE experiments (default off; opt-in for observation runs).
+    if (has('event-spine')) input.eventSpine = true; // Phase 2: multi-tick BudgetEvent spine
+    if (has('llm-framing')) input.llmFraming = true; // Phase 3-A: LLM names each incident
+    if (has('director-resources')) input.directorResources = true; // Phase 3-B: LLM adds scarcity
+    if (has('parallel-events')) input.parallelEvents = true; // Stage 1: many events at once
+    if (has('attention-budget')) input.attentionBudget = true; // Stage 2: cross-event attention pull
+    const maxConcurrent = Number(get('max-concurrent-events'));
+    if (Number.isFinite(maxConcurrent) && maxConcurrent > 0) input.maxConcurrentEvents = Math.floor(maxConcurrent);
 
     return {
         intervalMs: Math.max(5, Number.isFinite(interval) ? interval : 60) * 1000,

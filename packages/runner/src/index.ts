@@ -14,6 +14,7 @@
 export * as director from './services/saga-director/index.js';
 export * as characterWorker from './services/character-worker/index.js';
 export * as gazette from './services/gazette-compiler/index.js';
+export * as eventChapter from './services/event-chapter-compiler/index.js';
 export * as reflection from './services/reflection-trigger/index.js';
 export * as genesisMemory from './services/genesis-memory/index.js';
 export * as relationshipAssess from './services/relationship-assess/index.js';

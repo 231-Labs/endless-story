@@ -26,9 +26,35 @@ export interface TickLoopInput {
     storylet?: boolean;
     /** Render the event's multi-character moment scene image (background). Default true. */
     eventImage?: boolean;
+    /** Weave this event's POVs into the canonical "回" (event_cut) in the
+     *  background, when ≥2 cast wrote a POV. Default true. */
+    eventChapter?: boolean;
     /** Auto-resolve (judge) an event once every participant has acted.
      *  Default true — events conclude on their own (N5). */
     autoResolve?: boolean;
+    /** EXPERIMENTAL (default false): drive a 回 as a multi-tick BudgetEvent that
+     *  lingers OPEN across ticks and resolves WITH a resource transfer (the world
+     *  steps), instead of a per-tick storylet. When on, the spine owns event
+     *  resolution (autoResolve is forced off) and the cut weaves only at resolve.
+     *  See docs/EVENT_LIFECYCLE.md. Not chain-verified — flag on in a chain session. */
+    eventSpine?: boolean;
+    /** EXPERIMENTAL (default false): run MANY events at once — one per contention
+     *  axis (爭灌錄權 ∥ 爭某人的愛). Implies spine mode; live-only. See Stage 1. */
+    parallelEvents?: boolean;
+    /** Concurrency cap for `parallelEvents` (default 2). */
+    maxConcurrentEvents?: number;
+    /** EXPERIMENTAL (default false): couple each character's parallel desires
+     *  through a finite attention budget, so concurrent events pull on each other
+     *  (the 柳生春 trade-off, cross-event). Off-chain steering overlay. Stage 2. */
+    attentionBudget?: boolean;
+    /** EXPERIMENTAL (default false): let the LLM director NAME each incident
+     *  (event-framing.ts) instead of the deterministic keyword→string map. Pure
+     *  narration; falls back to the deterministic label on any failure. */
+    llmFraming?: boolean;
+    /** EXPERIMENTAL (default false): let the LLM director ADD a contested
+     *  resource mid-story (propose-resources.ts), validated + rate-limited. The
+     *  new slot is desired + settled next tick. See EVENT_LIFECYCLE Phase 3. */
+    directorResources?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;
 }
@@ -222,8 +248,11 @@ export interface TickLoopResult {
     moves: TickMoveResult[];
     /** DR-6: scarce-resource tension derived (+ committed) before decisions. */
     drama?: TickDramaResult;
-    /** The storylet opened this tick (dramatic spine), if any. */
+    /** The storylet opened this tick (dramatic spine), if any. In parallel mode
+     *  this is the first of `storylets` (back-compat). */
     storylet?: TickStoryletResult;
+    /** EVERY event live this tick (Stage 1 parallel events); ≤1 in single mode. */
+    storylets?: TickStoryletResult[];
     socials: TickSocialResult[];
     /** ASK phase: needy characters who opened their mouth to ask for help this tick. */
     asks: TickAskResult[];

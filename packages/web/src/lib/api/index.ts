@@ -2,6 +2,7 @@ export * as sagasApi from './sagas';
 export * as locationsApi from './locations';
 export * as charactersApi from './characters';
 export * as gazettesApi from './gazettes';
+export * as cutsApi from './cuts';
 export * as chaptersApi from './chapters';
 export * as scenesApi from './scenes';
 export * as subscriptionsApi from './subscriptions';

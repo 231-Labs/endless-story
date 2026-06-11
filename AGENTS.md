@@ -37,6 +37,14 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 > 雙軌死亡(經濟+隱藏年齡 hazard) / 世代交替。機制已用純模擬 `packages/economy` 學術驗證通過
 > (12/12 測試、6 假說成立)；產品化 Part D 為 gate-after。分支 `feat/character-economy`。
 >
+> **[docs/CONTENT_PIPELINE.md](./docs/CONTENT_PIPELINE.md)** = 內容產製鏈路唯一真相
+> (事件→POV→章回→公報→劇照→影片)。拍板:**章回=事件合本**(單 POV 退為原料/角色 PV 素材)、
+> **劇照=越張力門檻 beat 可配置截**、text→image→video **逐層 condition on anchor**(不換臉)。
+> 角色 PV defer。**合本 compiler 已做完並接進 tick loop**(POV anchored ≥2 → after() 織回 →
+> commitment subject=scene + `es:cut` header 帶 eventTx)、有 server action + admin「事件合本」面板、
+> 鏈上讀(`cut-read`)+ facade(`cutsApi`)+ `/feed` 章回 mode(`CutList`)+ dossier 章回 IA(參與的回/POV原料)。
+> 35 runner 測試綠、shared/runner/web type-check 綠。**剩**:beat 級劇照 compiler、公報漏斗化、影片、角色 PV。
+>
 > **[docs/WALRUS_ASSETS.md](./docs/WALRUS_ASSETS.md)** = Walrus 資產管理 + 續費(設計與規格)。
 > 後台統一管 hero 影片/角色圖/章回等長存資產的上傳·上下架·到期追蹤·續租。決策鎖定:通用面板
 > ＋ Hybrid 續費。自架 publisher+aggregator+relayer 上 Contabo(Tier A/B 可現在先上,前端定案只動
