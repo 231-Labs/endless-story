@@ -4,6 +4,7 @@
 
 import {
   ageHazard,
+  applyTransfers,
   conserves,
   dailyCost,
   lifeStage,
@@ -12,10 +13,10 @@ import {
   vitalityState,
   MUNIT,
   VIT_FULL,
-  VIT_PT,
   type CharConfig,
   type CharState,
   type EconConfig,
+  type TransferRequest,
   type WorldEconState,
 } from "../src/index.ts";
 import type { DayRecord, DeathLog, RunResult, Scenario } from "./types.ts";
@@ -65,8 +66,14 @@ function assignSlot(world: WorldEconState): void {
   for (const c of world.chars) c.heldSlot = winner !== null && c.cfg.id === winner.cfg.id && !c.dead;
 }
 
-/** Patronage: the richest healthy character tops up failing allies to a ~week runway. */
-function runPatronage(world: WorldEconState, cfg: EconConfig): number {
+/**
+ * Patronage: the richest healthy character tops up failing allies to a ~week runway.
+ * This is the BETWEEN-DAY POLICY (who gives, to whom, how much) — a greedy decideAid stand-in.
+ * The actual money move goes through the pure `applyTransfer` primitive (memo "patronage"), so
+ * the driver, the on-chain `transfer_between_characters`, and the runner's GIVE phase share one
+ * conservation-preserving transition. Returns the new world + how many rescues were applied.
+ */
+function runPatronage(world: WorldEconState, cfg: EconConfig): { world: WorldEconState; rescues: number } {
   const alive = world.chars.filter((c) => !c.dead).sort((a, b) => (a.cfg.id < b.cfg.id ? -1 : 1));
   const reserve = 30n * MUNIT; // patron keeps this for itself
   let patron: CharState | null = null;
@@ -75,23 +82,26 @@ function runPatronage(world: WorldEconState, cfg: EconConfig): number {
       if (!patron || c.balance > patron.balance) patron = c;
     }
   }
-  if (!patron) return 0;
-  let rescues = 0;
+  if (!patron) return { world, rescues: 0 };
   const allies = alive
     .filter((c) => c !== patron && (vitalityState(c) !== "healthy" || c.balance < dailyCost(c, cfg) * 3n))
     .sort((a, b) => (a.vitality < b.vitality ? -1 : a.vitality > b.vitality ? 1 : a.cfg.id < b.cfg.id ? -1 : 1));
+  // Plan transfers against a projected patron balance (the policy decision), then apply the
+  // batch through the shared primitive (the conservation-preserving state change).
+  const reqs: TransferRequest[] = [];
+  let projected = patron.balance;
   for (const ally of allies) {
-    const surplus = patron.balance - reserve;
+    const surplus = projected - reserve;
     if (surplus <= 0n) break;
     const target = dailyCost(ally, cfg) * 7n;
     const need = target > ally.balance ? target - ally.balance : 0n;
     if (need <= 0n) continue;
     const amount = need < surplus ? need : surplus;
-    patron.balance -= amount;
-    ally.balance += amount;
-    rescues += 1;
+    reqs.push({ fromId: patron.cfg.id, toId: ally.cfg.id, amount, memo: "patronage" });
+    projected -= amount;
   }
-  return rescues;
+  const r = applyTransfers(world, reqs);
+  return { world: r.next, rescues: r.applied };
 }
 
 function record(
@@ -208,7 +218,9 @@ export function runScenario(scenario: Scenario): RunResult {
     // E. patronage (post-settle: rescue failing allies for the next day)
     let rescuesToday = 0;
     if (scenario.policy.alliances) {
-      rescuesToday = runPatronage(world, cfg);
+      const p = runPatronage(world, cfg);
+      world = p.world;
+      rescuesToday = p.rescues;
       totalRescues += rescuesToday;
     }
 
