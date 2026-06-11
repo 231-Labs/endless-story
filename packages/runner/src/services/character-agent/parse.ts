@@ -112,6 +112,59 @@ export function parseSocial(raw: string): SocialActionResult | null {
     }
 }
 
+/* ── AID (give money) ───────────────────────────────────────────────── */
+
+type AidMemo = 'gift' | 'patronage' | 'loan' | 'repay' | 'bribe' | 'tribute';
+type AidManner = 'direct' | 'disguised' | 'via-proxy' | 'as-loan' | 'as-repay';
+const AID_MEMOS = new Set<AidMemo>(['gift', 'patronage', 'loan', 'repay', 'bribe', 'tribute']);
+const AID_MANNERS = new Set<AidManner>(['direct', 'disguised', 'via-proxy', 'as-loan', 'as-repay']);
+
+export interface ParsedAidGift {
+    recipientId?: string;
+    amount?: number;
+    memo: AidMemo;
+    manner?: AidManner;
+    reason?: string;
+}
+
+function parseOneGift(o: Record<string, unknown>): ParsedAidGift {
+    const memoRaw = typeof o.memo === 'string' ? (o.memo as AidMemo) : ('' as AidMemo);
+    const mannerRaw = typeof o.manner === 'string' ? (o.manner as AidManner) : undefined;
+    return {
+        recipientId: typeof o.recipientId === 'string' ? o.recipientId : undefined,
+        amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : undefined,
+        memo: AID_MEMOS.has(memoRaw) ? memoRaw : 'gift',
+        manner: mannerRaw && AID_MANNERS.has(mannerRaw) ? mannerRaw : undefined,
+        reason: clamp(typeof o.reason === 'string' ? o.reason : undefined, 60),
+    };
+}
+
+/**
+ * Parse the aid decision (multi-recipient). The model owns whom / how much / what name / how;
+ * this layer only shapes types and defaults an unknown memo to 'gift'. Recipient validity and
+ * the no-overdraft clamp are enforced by finalizeAid (aid-prompt.ts) against the real peers.
+ * Accepts the canonical `{ gifts: [...] }` shape, and tolerates a bare single-gift object.
+ */
+export function parseAid(raw: string): { gifts: ParsedAidGift[]; reason?: string } | null {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+        const o = JSON.parse(m[0]) as Record<string, unknown>;
+        const reason = clamp(typeof o.reason === 'string' ? o.reason : undefined, 60);
+        if (Array.isArray(o.gifts)) {
+            const gifts = o.gifts
+                .filter((g): g is Record<string, unknown> => !!g && typeof g === 'object')
+                .map(parseOneGift);
+            return { gifts, reason };
+        }
+        // tolerate a single-gift object (model dropped the array) or an explicit no-aid.
+        if (o.doAid === false || (o.recipientId == null && o.amount == null)) return { gifts: [], reason };
+        return { gifts: [parseOneGift(o)], reason };
+    } catch {
+        return null;
+    }
+}
+
 /* ── PLAN ───────────────────────────────────────────────────────────── */
 
 export function parsePlan(

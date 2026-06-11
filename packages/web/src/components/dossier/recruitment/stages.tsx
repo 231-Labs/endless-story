@@ -266,33 +266,55 @@ export function PromptStage({ prompt, onPromptChange, rolledValues }: { prompt: 
   );
 }
 
-export function ElegantSpinner() {
+/**
+ * 鑄印等待動畫 — 取代先前的通用旋轉圈圈。
+ * 中央一方硃砂印緩緩呼吸（印未落定）、外圈篆刻虛線環慢轉（刻字中）、
+ * 墨暈漣漪錯拍外擴（餘韻）。glyph 隨階段換字：命／審／書。
+ */
+export function SealWait({ glyph }: { glyph: string }) {
   return (
-    <div className="relative flex h-24 w-24 items-center justify-center">
-      <div className="absolute inset-0 animate-[spin_4s_linear_infinite] rounded-full border-t-2 border-cinnabar/40 border-r-2 border-r-transparent" />
-      <div className="absolute inset-2 animate-[spin_3s_linear_infinite_reverse] rounded-full border-b-2 border-jade/40 border-l-2 border-l-transparent" />
-      <div className="absolute inset-4 animate-[spin_5s_linear_infinite] rounded-full border-t-2 border-ink/20 border-l-2 border-l-transparent" />
-      <div className="absolute inset-0 flex items-center justify-center animate-pulse">
-         <span className="h-2.5 w-2.5 rounded-full bg-cinnabar/60" />
-      </div>
+    <div aria-hidden className="relative flex h-28 w-28 items-center justify-center">
+      {/* 墨暈漣漪 ×2 */}
+      <span
+        className="absolute inset-1 rounded-full border border-cinnabar/35"
+        style={{ animation: 'es-ripple 2.6s ease-out infinite' }}
+      />
+      <span
+        className="absolute inset-1 rounded-full border border-ink/20"
+        style={{ animation: 'es-ripple 2.6s ease-out 1.3s infinite' }}
+      />
+      {/* 篆刻環 — 緩轉的虛線圓 */}
+      <span
+        className="absolute inset-3 rounded-full border border-dashed border-cinnabar/35"
+        style={{ animation: 'spin 16s linear infinite' }}
+      />
+      <span
+        className="absolute inset-[1.1rem] rounded-full border border-hairline/60"
+        style={{ animation: 'spin 24s linear infinite reverse' }}
+      />
+      {/* 方印 */}
+      <span
+        className="relative flex h-12 w-12 items-center justify-center rounded-md bg-cinnabar shadow-lg shadow-cinnabar/25 ring-1 ring-seal/40"
+        style={{ animation: 'es-seal-breathe 2.6s ease-in-out infinite' }}
+      >
+        <span className="select-none font-serif text-2xl leading-none text-canvas">{glyph}</span>
+      </span>
     </div>
   );
 }
 
-export function DiceSpinner() {
+/** 等待中的三點墨痕 — 取代 animate-pulse 文字的廉價閃爍。 */
+export function InkDots() {
   return (
-    <div className="relative flex h-24 w-24 items-center justify-center">
-      <div className="absolute inset-0 animate-[spin_3s_linear_infinite] rounded-full border-t-2 border-cinnabar/60 border-l-2 border-l-transparent" />
-      <div className="absolute inset-3 animate-[spin_2s_linear_infinite_reverse] rounded-full border-b-2 border-seal/40 border-r-2 border-r-transparent" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="grid grid-cols-2 gap-1 animate-pulse">
-          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
-          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
-          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
-          <span className="h-1.5 w-1.5 rounded-full bg-cinnabar" />
-        </div>
-      </div>
-    </div>
+    <span aria-hidden className="ml-1.5 inline-flex items-baseline gap-1">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="inline-block h-1 w-1 rounded-full bg-ink/70"
+          style={{ animation: `es-wait-dot 1.5s ease-in-out ${i * 0.22}s infinite` }}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -310,16 +332,23 @@ export function BrushSpinner() {
 }
 
 export function RollingStage({ status }: { status: 'minting' | 'moderating' | 'generating' | null }) {
-  const statusText =
-    status === 'minting' ? '鑄造天命…' :
-    status === 'moderating' ? '審核意圖…' :
-    status === 'generating' ? '說書人擬人中…' : '請稍候…';
+  const { glyph, text } =
+    status === 'minting'
+      ? { glyph: '命', text: '鑄造天命' }
+      : status === 'moderating'
+        ? { glyph: '審', text: '審核意圖' }
+        : status === 'generating'
+          ? { glyph: '書', text: '說書人擬人中' }
+          : { glyph: '候', text: '請稍候' };
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 py-12">
-      {status === 'minting' ? <DiceSpinner /> : <ElegantSpinner />}
-      <div className="text-center">
-        <p className="font-serif text-xl text-ink animate-pulse">{statusText}</p>
+      <SealWait glyph={glyph} />
+      <div className="text-center" role="status">
+        <p className="font-serif text-xl tracking-[0.15em] text-ink">
+          {text}
+          <InkDots />
+        </p>
         <p className="mt-3 text-2xs tracking-widest text-mute">
           請靜候片刻，切勿關閉視窗
         </p>

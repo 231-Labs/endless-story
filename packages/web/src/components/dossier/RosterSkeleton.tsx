@@ -22,7 +22,7 @@ export function RosterSkeletonInner({ filter = 'all' }: { filter?: RosterFilter 
       {/* Header & filters — real, needs no data */}
       <section className="sticky top-[var(--es-site-nav-h)] z-30 bg-canvas/95 px-5 pb-4 pt-8 backdrop-blur-md sm:px-10 sm:pb-6 sm:pt-11">
         <div className="mx-auto max-w-6xl">
-          <PageLeadTitleBlock eyebrow="班底、徵召與訂閱" eyebrowMobile="班底與訂閱" title="人物誌" />
+          <PageLeadTitleBlock eyebrow="班底、徵召與訂閱" eyebrowMobile="班底與訂閱" title="班底名冊" />
 
           <div className="mt-6 border-b border-hairline sm:mt-8">
             <div className="flex flex-col gap-4 pb-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">

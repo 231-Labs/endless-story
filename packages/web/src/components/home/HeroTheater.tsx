@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Saga, SceneClip, ClipAspect } from '@endless-story/shared';
 
 const ASPECT_CLASS: Record<ClipAspect, string> = {
@@ -34,27 +34,62 @@ function aspectRatio(aspect?: ClipAspect): number {
   return ASPECT_RATIO[aspect ?? '16/9'];
 }
 
+function formatTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: { saga: Saga; clips: SceneClip[]; recruitmentsCount: number; castCount?: number }) {
   const [activeClip, setActiveClip] = useState<SceneClip | null>(null);
   const [lastActiveClip, setLastActiveClip] = useState<SceneClip | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
 
+  // Playback state — autoplay must start muted (browser policy); the unmute
+  // choice persists across clips within the session.
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(true);
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [scrubbing, setScrubbing] = useState(false);
+
   useEffect(() => {
     if (activeClip) {
       setLastActiveClip(activeClip);
       setShowControls(true);
+      setPlaying(true);
+      setTime(0);
+      setDuration(0);
     } else {
       setIsFullscreen(false);
     }
   }, [activeClip]);
 
-  // Auto-hide controls after 3s of inactivity
+  // Auto-hide controls after 3s of inactivity — but stay visible while paused
+  // or while the user is dragging the progress bar.
   useEffect(() => {
-    if (!activeClip || !showControls) return;
+    if (!activeClip || !showControls || !playing || scrubbing) return;
     const timer = setTimeout(() => setShowControls(false), 3000);
     return () => clearTimeout(timer);
-  }, [activeClip, showControls]);
+  }, [activeClip, showControls, playing, scrubbing]);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) void v.play();
+    else v.pause();
+    setShowControls(true);
+  }, []);
+
+  const seekTo = useCallback((t: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.currentTime = t;
+    setTime(t);
+  }, []);
 
   // ESC closes theater or exits fullscreen
   useEffect(() => {
@@ -92,7 +127,7 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
         className={`absolute inset-x-0 top-0 flex items-center justify-center transition-all duration-700 ${
           activeClip ? 'opacity-100 pointer-events-auto scale-100' : 'opacity-0 pointer-events-none scale-95'
         } ${
-          isFullscreen ? 'bottom-0 z-[60] bg-black/95' : 'bottom-[100px] sm:bottom-[116px] z-30'
+          isFullscreen ? 'bottom-0 z-[60] bg-black/95' : 'bottom-[200px] sm:bottom-[116px] z-30'
         }`}
       >
         {/* Click-away background */}
@@ -141,11 +176,18 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
               {/* Video Player */}
               {displayClip.videoUrl ? (
                 <video
+                  ref={videoRef}
+                  key={displayClip.id}
                   src={displayClip.videoUrl}
                   autoPlay
                   loop
-                  muted
+                  muted={muted}
                   playsInline
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onTimeUpdate={(e) => { if (!scrubbing) setTime(e.currentTarget.currentTime); }}
+                  onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                  onDurationChange={(e) => setDuration(e.currentTarget.duration)}
                   className="w-full h-full object-cover pointer-events-none"
                 />
               ) : (
@@ -155,17 +197,68 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                 </div>
               )}
 
-              {/* Bottom Controls Overlay (Fullscreen Toggle) */}
-              <div className={`absolute bottom-0 left-0 right-0 flex items-end justify-end p-4 sm:p-6 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-40 transition-opacity duration-300 ${
-                showControls ? 'opacity-100' : 'opacity-0 lg:group-hover:opacity-100'
-              }`}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setIsFullscreen(!isFullscreen); }}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md ring-1 ring-white/20 transition-all hover:bg-white/20 hover:text-white shadow-lg"
-                  aria-label={isFullscreen ? "退出全螢幕" : "全螢幕播放"}
-                >
-                  {isFullscreen ? <HeroMinimizeIcon /> : <HeroMaximizeIcon />}
-                </button>
+              {/* Bottom Controls Overlay — 原設計的毛玻璃圓鈕語彙；進度條與時間融入同一片漸層 */}
+              <div
+                className={`absolute bottom-0 left-0 right-0 z-40 flex flex-col gap-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 sm:p-6 transition-opacity duration-300 ${
+                  showControls ? 'opacity-100' : 'opacity-0 lg:group-hover:opacity-100'
+                }`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {displayClip.videoUrl ? (
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 0}
+                    step={0.05}
+                    value={Math.min(time, duration || 0)}
+                    aria-label="播放進度"
+                    onChange={(e) => seekTo(Number(e.target.value))}
+                    onPointerDown={() => setScrubbing(true)}
+                    onPointerUp={() => setScrubbing(false)}
+                    className="theater-range block"
+                    style={{
+                      background: `linear-gradient(to right, rgb(var(--color-cinnabar)) ${
+                        duration ? (Math.min(time, duration) / duration) * 100 : 0
+                      }%, rgba(255,255,255,0.28) 0%)`,
+                    }}
+                  />
+                ) : null}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {displayClip.videoUrl ? (
+                      <>
+                        <button
+                          onClick={togglePlay}
+                          className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md ring-1 ring-white/20 transition-all hover:bg-white/20 hover:text-white hover:scale-105 shadow-lg"
+                          aria-label={playing ? '暫停' : '播放'}
+                        >
+                          {playing ? <PauseIcon /> : <span className="translate-x-px"><PlayIcon size={18} /></span>}
+                        </button>
+                        <span className="font-mono text-xs tracking-wider text-white/75 drop-shadow-md tabular-nums">
+                          {formatTime(time)} / {formatTime(duration)}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {displayClip.videoUrl ? (
+                      <button
+                        onClick={() => { setMuted(!muted); setShowControls(true); }}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md ring-1 ring-white/20 transition-all hover:bg-white/20 hover:text-white hover:scale-105 shadow-lg"
+                        aria-label={muted ? '開啟聲音' : '靜音'}
+                      >
+                        {muted ? <VolumeMutedIcon /> : <VolumeOnIcon />}
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => setIsFullscreen(!isFullscreen)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white/90 backdrop-blur-md ring-1 ring-white/20 transition-all hover:bg-white/20 hover:text-white hover:scale-105 shadow-lg"
+                      aria-label={isFullscreen ? '退出全螢幕' : '全螢幕播放'}
+                    >
+                      {isFullscreen ? <HeroMinimizeIcon /> : <HeroMaximizeIcon />}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -301,9 +394,9 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                       <div className="absolute right-2 top-2 rounded bg-elevated/90 px-2 py-0.5 font-mono text-2xs tracking-wider text-ink shadow-sm backdrop-blur">
                         {clip.durationSeconds}s
                       </div>
-                      {/* Hover-reveal text overlay */}
+                      {/* Text overlay — always visible on touch (no hover), hover-reveal on desktop */}
                       <div className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-canvas via-canvas/90 to-transparent p-3 pt-10 text-left transition-opacity duration-300 ${
-                        isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        isActive ? 'opacity-100' : 'opacity-100 lg:opacity-0 lg:group-hover:opacity-100'
                       }`}>
                         <p className="truncate font-serif text-base text-ink">
                           {clip.title}
@@ -364,6 +457,35 @@ function PlayIcon({ size = 36 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
       <polygon points="6 4 20 12 6 20" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+      <rect x="6" y="4" width="4" height="16" fill="currentColor" rx="1" />
+      <rect x="14" y="4" width="4" height="16" fill="currentColor" rx="1" />
+    </svg>
+  );
+}
+
+function VolumeOnIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  );
+}
+
+function VolumeMutedIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+      <line x1="23" y1="9" x2="17" y2="15" />
+      <line x1="17" y1="9" x2="23" y2="15" />
     </svg>
   );
 }

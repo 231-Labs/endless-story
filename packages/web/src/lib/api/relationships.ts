@@ -1,8 +1,8 @@
 import type { RelationshipEdge } from '@endless-story/shared';
-import { listEdgesFrom, relationshipEdges } from '@/mocks/relationships';
+import { listEdgesFrom, listEdgesTo, relationshipEdges } from '@/mocks/relationships';
 import { USE_MOCK } from './config';
 import { httpGet } from './http';
-import { fetchOnChainEdgesFrom } from '@/lib/chain/relationships';
+import { fetchOnChainEdgesFrom, fetchOnChainEdgesTo } from '@/lib/chain/relationships';
 
 /**
  * Relationships API
@@ -24,6 +24,15 @@ export async function listOutgoingEdges(fromId: string): Promise<RelationshipEdg
 
   if (USE_MOCK) return listEdgesFrom(fromId);
   return httpGet<RelationshipEdge[]>('/relationships', { query: { fromId } });
+}
+
+/** Incoming edges — who feels what toward this character (direction-true). */
+export async function listIncomingEdges(toId: string): Promise<RelationshipEdge[]> {
+  const onChain = await fetchOnChainEdgesTo(toId).catch(() => []);
+  if (onChain.length > 0) return onChain;
+
+  if (USE_MOCK) return listEdgesTo(toId);
+  return httpGet<RelationshipEdge[]>('/relationships', { query: { toId } });
 }
 
 export async function listAllEdges(): Promise<RelationshipEdge[]> {

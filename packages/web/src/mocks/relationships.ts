@@ -155,3 +155,6 @@ export const relationshipEdges: RelationshipEdge[] = [
 
 export const listEdgesFrom = (fromId: string): RelationshipEdge[] =>
   relationshipEdges.filter((e) => e.fromId === fromId).sort((a, b) => b.weight - a.weight);
+
+export const listEdgesTo = (toId: string): RelationshipEdge[] =>
+  relationshipEdges.filter((e) => e.toId === toId).sort((a, b) => b.weight - a.weight);
