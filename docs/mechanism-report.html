@@ -199,7 +199,7 @@ API_CONTRACT / DEPLOYMENT 開頭加「歷史段落」警語。其餘維持現狀
 張力來自「慾望投射到守恆的稀缺資源上」這條邊，由確定性引擎結算，不靠 LLM 編。</p></div>
 <div class="card"><h4>經濟側（讓世界有重量）</h4>
 <p style="font-size:.92rem">記憶 append-only、永不刪 → 儲存租金只增不減 → 角色必須把「記憶厚度」換成讀者
-才能活。機制保證死亡（無永生），也保證好營運能賺錢——這是已被 12/12 測試驗證的設計。</p></div>
+才能活。機制保證死亡（無永生），也保證好營運能賺錢——這是已被 35 個測試、6 條假說驗證的設計。</p></div>
 </div>
 <div class="callout"><div class="t">核心差異化（一句話版）</div>
 「LLM proposes，deterministic layer disposes」——LLM 負責提案與敘述，
@@ -402,9 +402,11 @@ tension = weight · (SCALE − s)/SCALE</div>
 
 <!-- ════════ 8 ════════ -->
 <section id="s8">
-<h2><span class="no">8</span>角色經濟生命週期 <span class="b sim">🧪 模擬 12/12 全綠</span> <span class="b gate">🚧 產品化 Part D gated</span><a class="toplink" href="#toc">↑</a></h2>
+<h2><span class="no">8</span>角色經濟生命週期 <span class="b sim">🧪 模擬 35 測試全綠</span> <span class="b gate">🚧 鏈上結算 Part D gated</span><a class="toplink" href="#toc">↑</a></h2>
 <p>來源：<code>docs/CHARACTER_ECONOMY.md</code> + <code>packages/economy</code>。
-全站單一幣 ENDLESS（6 位小數）。角色頁 survival 已接 off-chain shadow，鏈上結算（Part D）刻意 gate-after。</p>
+全站單一幣 ENDLESS（6 位小數）。角色頁 survival 已接 off-chain shadow；
+轉帳 / 雙軌死亡已抽成單一真理純函式（<code>transfer.ts</code> <code>applyTransfer</code> / <code>vitality.ts</code> <code>stepVitality</code>，
+守恆 net-0、settleDay parity 守衛），日後 <code>economy.move</code> 直接移植這兩支。鏈上結算（Part D）刻意 gate-after。</p>
 
 <h3>8.1 金流閉環與守恆</h3>
 <div class="flow">
@@ -443,7 +445,7 @@ C_run=6 · C_mem=0.02/記憶 · C_img=0.1/張 · C_seal=0.25/召回</div>
 <table>
 <tr><th>機制</th><th>內容</th></tr>
 <tr><td>Owner 挹注（豢養）</td><td><code>owner_fund_character</code>（OwnerCap gated）。沒讀者 ≠ 該餓死：休眠 gate 讓零讀者角色每日只燒 ~5.5 ENDLESS，<strong>有界可負擔</strong>（H6 驗證）。owner 的愛是一條獨立於市場的續命線</td></tr>
-<tr><td>角色間接濟 skill</td><td><code>decideAid</code>：給/受都是 <strong>AI 自決</strong>（高傲角色可拒絕施捨；接受 = 欠人情），與出牌/移動同構。瀕死可被恩主 patronage 續命 → 報恩/背叛敘事。接濟事件回餵關係 tone</td></tr>
+<tr><td>角色間接濟 skill <span class="b live">✅ 決策核心已實作</span></td><td>拍板「LLM 判斷版」：runner <code>decideAidAction</code>（cheap LLM，prompt 給足經濟＋關係信號）決定 give/no-give/給誰/給多少——<strong>角色自己判斷，不寫死規則</strong>；確定性層只剩硬守衛（收款人須在 peer 名單、金額 clamp ≤ 餘額、不可給死人/透支）。給/受都是 AI 自決（高傲角色可拒絕施捨）。living-world 驗證：無接濟 150 日死 3/4、開接濟死 0/4（413 筆轉帳、逐日守恆）——透過決策核心重現 H4。6 情境 eval harness 已過（hard 3/3）。<strong>剩</strong>：tick-loop GIVE phase 接鏈 + <code>economy.move</code> 上鏈</td></tr>
 </table>
 
 <h3>8.6 六假說驗證結果（純確定性模擬，bigint 定點數）</h3>
@@ -495,7 +497,8 @@ C_run=6 · C_mem=0.02/記憶 · C_img=0.1/張 · C_seal=0.25/召回</div>
 <tr><td>自架 MemWal relayer（真三因子）</td><td><span class="b live">✅ code</span></td><td>client 接線完成；flag 預設關；待部署切換</td></tr>
 <tr><td>Drama Engine 確定性核心</td><td><span class="b live">✅</span> <span class="b sim">26/26</span></td><td>已接進 tick DRAMA 相位；Move 移植（Step 4 鏈上帳本）未做</td></tr>
 <tr><td>動態出圖（AI-native NFT）</td><td><span class="b live">✅ MVP</span></td><td>剩 owner 付費觸發、導演自動觸發、時間軸 gallery</td></tr>
-<tr><td>角色經濟 life cycle</td><td><span class="b sim">🧪 12/12 · 6 假說</span> <span class="b gate">🚧 Part D</span></td><td>角色頁已接 off-chain shadow；鏈上 settle/GIVE phase 未進主 loop</td></tr>
+<tr><td>Web 商業級打磨（mobile RWD / 錯誤頁 / SEO / a11y / onboarding / 不對稱關係顯示）</td><td><span class="b live">✅</span></td><td>2026-06-11 併入 main；redeem 已相容兩個合約世代</td></tr>
+<tr><td>角色經濟 life cycle</td><td><span class="b sim">🧪 35 測試 · 6 假說</span> <span class="b gate">🚧 Part D</span></td><td>survival shadow 已接；transfer/vitality 純函式 + 接濟決策核心（LLM 判斷＋硬守衛）已實作；剩 GIVE phase 接鏈、economy.move 上鏈</td></tr>
 <tr><td>付費訂閱 + 分潤</td><td><span class="b gate">🚧 刻意 gate</span></td><td>subscribe.move 不收費（Phase 1.6 註明）；RevenueConfig 欄位已就位等接</td></tr>
 <tr><td>Walrus 資產管理 + 續租面板</td><td><span class="b plan">📐</span></td><td>規格完整（決策已鎖）；待動工</td></tr>
 <tr><td>N5b ImportanceDebt 觸發反思</td><td><span class="b plan">📐</span></td><td>需動 contract，與 gallery 合約一起下次 redeploy</td></tr>
