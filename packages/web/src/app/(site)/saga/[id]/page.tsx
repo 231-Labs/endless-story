@@ -16,6 +16,17 @@ import { SagaDetailsTabs } from '@/components/saga/SagaDetailsTabs';
 import { OffTurfBoard } from '@/components/saga/OffTurfBoard';
 import { SagaTabsProvider } from '@/components/saga/SagaTabsContext';
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const saga = await sagasApi.getSaga(id).catch(() => null);
+  if (!saga) return { title: '找不到戲班' };
+  return {
+    title: `${saga.name} · 手卷`,
+    description: saga.premise.slice(0, 120),
+    openGraph: { title: `${saga.name} · 無盡敘界`, description: saga.premise.slice(0, 120) },
+  };
+}
+
 export default async function SagaPage({
   params,
 }: {
@@ -28,8 +39,15 @@ export default async function SagaPage({
     return (
       <main className="min-h-screen">
         <SiteNav />
-        <section className="px-5 py-20 text-center text-mute sm:px-10">
-          找不到這個戲班。
+        <section className="flex flex-col items-center px-5 py-24 text-center sm:px-10">
+          <p className="font-serif text-xl tracking-[0.2em] text-ink">找不到這個戲班</p>
+          <p className="mt-3 text-sm text-mute">這座園子還沒開張，或匾額已經摘了。</p>
+          <a
+            href="/"
+            className="mt-8 es-button-ghost"
+          >
+            回戲園子
+          </a>
         </section>
       </main>
     );

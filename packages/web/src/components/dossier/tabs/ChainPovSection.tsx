@@ -78,7 +78,7 @@ export function ChainPovSection({
             <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
                 {chapters.map((c) => (
                     <li key={c.commitmentId}>
-                        <div className="block rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm">
+                        <div className="block es-card p-6 sm:p-8">
                             <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute/80">
                                 <span className="rounded border border-hairline/50 bg-canvas/50 px-2 py-1 font-mono">
                                     walrus · {truncateBlobId(c.blobId)}

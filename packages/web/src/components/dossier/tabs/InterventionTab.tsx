@@ -56,7 +56,7 @@ export function InterventionTab({
         </div>
         <div className="mt-8 pl-0 sm:pl-12">
           {interventions.length === 0 ? (
-            <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
+            <div className="es-card p-12 text-center">
               <p className="text-sm text-mute tracking-wide">尚無寄託。</p>
             </div>
           ) : (
@@ -90,7 +90,7 @@ function InterventionRow({
   selfId: string;
 }) {
   return (
-    <li className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-300 hover:bg-surface hover:shadow-sm">
+    <li className="es-card p-6 sm:p-8 transition-all duration-300 hover:bg-surface hover:shadow-sm">
       <div className="flex items-baseline justify-between gap-3 text-xs tracking-widest text-mute/80">
         <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">
           {intv.kind === 'inject_dream' ? '夢' : '語'} · {formatDate(intv.createdAt)}

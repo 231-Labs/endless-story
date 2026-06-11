@@ -70,9 +70,12 @@ export function characterPortraitTone(role: CharacterRole): Tone {
 export function CharacterPortrait({
   character,
   aspect = '3/4',
+  sizes = '(min-width: 1024px) 320px, 50vw',
 }: {
   character: Character;
   aspect?: '1/1' | '3/4' | '4/5' | '16/9';
+  /** next/image responsive hint — 按實際渲染寬度傳（如訂閱列的 "80px"）。 */
+  sizes?: string;
 }) {
   const tone = characterPortraitTone(character.role);
   const initial = character.name[0];
@@ -93,6 +96,7 @@ export function CharacterPortrait({
           <BlobImage
             src={imageUrl}
             alt={`${character.name} portrait`}
+            sizes={sizes}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : null}

@@ -146,10 +146,14 @@ function CarouselNav({
               type="button"
               onClick={() => onGoTo(i)}
               aria-label={`第 ${i + 1} 則 / ${count}`}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                isActive ? 'w-8 bg-cinnabar' : 'w-1.5 bg-hairline hover:bg-ink/30'
-              }`}
-            />
+              className="flex h-8 items-center px-0.5"
+            >
+              <span
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  isActive ? 'w-8 bg-cinnabar' : 'w-2.5 bg-hairline group-hover:bg-ink/30'
+                }`}
+              />
+            </button>
           );
         })}
       </div>

@@ -185,6 +185,7 @@ function NameCard({ char, anchor }: { char: Character; anchor: HTMLElement }) {
               <BlobImage
                 src={imageUrl}
                 alt=""
+                sizes="44px"
                 className="absolute inset-0 h-full w-full object-cover"
               />
             ) : null}

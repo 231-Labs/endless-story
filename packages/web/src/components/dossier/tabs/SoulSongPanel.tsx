@@ -141,9 +141,6 @@ export function SoulSongPanel({
           {isOwner ? '七日內僅能請唱一段' : '唱過的幾段'}
         </p>
       </header>
-      <p className="text-xs tracking-widest text-mute/70 pl-12 sm:hidden">
-        {isOwner ? '七日內僅能請唱一段' : '唱過的幾段'}
-      </p>
 
       <div className="pl-0 sm:pl-12 space-y-6">
         {isOwner ? (
@@ -170,7 +167,7 @@ export function SoulSongPanel({
             ))}
           </ol>
         ) : (
-          <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-12 text-center backdrop-blur-sm">
+          <div className="es-card p-12 text-center">
             <p className="text-sm text-mute tracking-wide">還未為人唱過。</p>
           </div>
         )}
@@ -196,13 +193,13 @@ function SummonControl({
 }) {
   if (!hydrated) {
     return (
-      <div className="rounded-3xl bg-surface/40 border border-hairline/50 h-[68px] p-4 sm:h-[72px] sm:p-5 backdrop-blur-sm" aria-hidden />
+      <div className="es-card h-[68px] p-4 sm:h-[72px] sm:p-5" aria-hidden />
     );
   }
 
   if (!hasNext) {
     return (
-      <div className="rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 text-sm text-mute backdrop-blur-sm text-center">
+      <div className="es-card p-6 sm:p-8 text-sm text-mute text-center">
         心底已攤完，靜下了。再有新的心曲，得等下一場戲落幕。
       </div>
     );
@@ -210,7 +207,7 @@ function SummonControl({
 
   if (cooldownActive) {
     return (
-      <div className="rounded-3xl bg-surface/40 border border-hairline/50 flex flex-wrap items-center justify-between gap-4 p-6 sm:p-8 backdrop-blur-sm">
+      <div className="es-card flex flex-wrap items-center justify-between gap-4 p-6 sm:p-8">
         <div className="space-y-2">
           <p className="text-base text-ink/80 tracking-wide">下一段心曲還在醞釀。</p>
           <p className="text-xs tracking-widest text-mute">
@@ -229,7 +226,7 @@ function SummonControl({
   }
 
   return (
-    <div className="rounded-3xl bg-surface/40 border border-hairline/50 flex flex-wrap items-center justify-between gap-4 p-6 sm:p-8 backdrop-blur-sm">
+    <div className="es-card flex flex-wrap items-center justify-between gap-4 p-6 sm:p-8">
       <p className="text-base leading-relaxed text-ink/85 tracking-wide">
         {characterName}今夜願意再開口。要請唱一段心曲嗎？
       </p>
@@ -265,7 +262,7 @@ function SongCard({
 
   return (
     <li
-      className={`rounded-3xl bg-surface/40 border border-hairline/50 p-6 sm:p-8 backdrop-blur-sm transition-all duration-500 ease-out hover:bg-surface hover:shadow-sm ${
+      className={`es-card p-6 sm:p-8 transition-all duration-500 ease-out hover:bg-surface hover:shadow-sm ${
         mounted ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'
       } ${
         highlight

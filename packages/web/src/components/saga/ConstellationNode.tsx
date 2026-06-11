@@ -1,5 +1,6 @@
 'use client';
 
+import type { MouseEvent } from 'react';
 import Link from 'next/link';
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 import { BlobImage } from '@/components/common/BlobImage';
@@ -66,12 +67,15 @@ export function ConstellationBackdrop({ ink }: { ink: (a: number) => string }) {
 }
 
 export function ConstellationNode({
-  positioned, isDimmed, onMouseEnter, onMouseLeave,
+  positioned, isDimmed, onMouseEnter, onMouseLeave, onFocus, onPointerDown, onClick,
 }: {
   positioned: PositionedCharacter;
   isDimmed: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  onFocus?: () => void;
+  onPointerDown?: () => void;
+  onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   const { char, x, y, kind, scene } = positioned;
   const tone = characterPortraitTone(char.role);
@@ -94,6 +98,9 @@ export function ConstellationNode({
       title={`${char.name} · ${char.role}${kind === 'wild' ? ' · 江湖' : ''}${sceneTag ? ` · 現在於 ${sceneTag}` : ''}`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onFocus={onFocus}
+      onPointerDown={onPointerDown}
+      onClick={onClick}
       className={`group absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 outline-none ring-offset-2 ring-offset-transparent transition-all duration-500 hover:scale-110 focus-visible:ring-2 focus-visible:ring-cinnabar active:scale-100 ${
         isDimmed ? 'opacity-25 grayscale-[0.5]' : 'opacity-100'
       }`}
@@ -114,7 +121,7 @@ export function ConstellationNode({
           {char.name[0]}
         </span>
         {imageUrl ? (
-          <BlobImage src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <BlobImage src={imageUrl} alt="" sizes="96px" className="absolute inset-0 h-full w-full object-cover" />
         ) : null}
       </span>
       <span
