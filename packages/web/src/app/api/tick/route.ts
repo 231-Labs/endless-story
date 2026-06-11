@@ -19,10 +19,31 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { runTickLoopAction, type TickLoopInput } from '@/lib/actions/tick-loop';
+import type { TickLoopResult } from '@/lib/actions/tick-loop-types';
 
-// A tick fans out several LLM calls + chain writes — give it room.
+// A tick fans out several LLM calls + chain writes — give it room. A tick can run
+// well past 300s (6 plans + social + POV, each LLM-bound); if the response is cut
+// off mid-tick the world-loop fires the next POST and the two tick bodies overlap,
+// corrupting the shared spine / registry / world-tick state.
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 1800;
+
+// Process-wide tick mutex: only ONE tick body runs at a time. Even if a slow
+// tick's HTTP response is cut off (maxDuration) while its body runs on, the next
+// request WAITS here instead of overlapping. Covers the headless world-loop; the
+// admin SchedulerPanel calls runTickLoopAction directly but is manual/rare.
+let tickChain: Promise<unknown> = Promise.resolve();
+function runSerializedTick(input: TickLoopInput): Promise<TickLoopResult> {
+    const run = tickChain.then(
+        () => runTickLoopAction(input),
+        () => runTickLoopAction(input),
+    );
+    tickChain = run.then(
+        () => {},
+        () => {},
+    );
+    return run;
+}
 
 function authorized(req: NextRequest): boolean {
     const secret = process.env.TICK_LOOP_SECRET;
@@ -42,7 +63,7 @@ export async function POST(req: NextRequest) {
         /* empty / invalid body → defaults */
     }
     try {
-        const result = await runTickLoopAction(input);
+        const result = await runSerializedTick(input);
         return NextResponse.json(result);
     } catch (err) {
         return NextResponse.json(
