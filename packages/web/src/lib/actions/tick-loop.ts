@@ -49,6 +49,7 @@ import type {
     TickMoveResult,
     TickSocialResult,
     TickGiveResult,
+    TickSettleResult,
     TickSleepResult,
     TickGazetteResult,
     TickDramaResult,
@@ -66,6 +67,7 @@ export type {
     TickMoveResult,
     TickSocialResult,
     TickGiveResult,
+    TickSettleResult,
     TickSleepResult,
     TickGazetteResult,
     TickDramaResult,
@@ -88,6 +90,7 @@ import {
 } from './tick-phases/move';
 import { runSocialPhase } from './tick-phases/social';
 import { runGivePhase } from './tick-phases/give';
+import { runSettlePhase } from './tick-phases/settle';
 import { runActPhase } from './tick-phases/act';
 
 /** Map the top drama tension to a readable scene-incident framing for a storylet.
@@ -456,6 +459,26 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.95 SETTLE — advance the off-chain economy to today (treasury-funded wages → cost →
+    // vitality → death) and apply this tick's ACCEPTED gifts as real transfers. This is the rail
+    // the GIVE phase's deferred gifts were waiting for; the shadow persists (process-local).
+    let settle: TickSettleResult | undefined;
+    if (!dryRun && slice.length > 0) {
+        tlog(`②⁗ 結算…`);
+        try {
+            settle = await runSettlePhase({
+                sagaId: d.sagaId,
+                characters,
+                gives,
+                today: worldTime?.day ?? 1,
+                dryRun,
+            });
+            tlog(`   結算 ${settle.settledCount} 人 · 發薪 ${settle.wagesPaid} · 轉帳 ${settle.transfersApplied}${settle.dead.length ? ` · 殞 ${settle.dead.length}` : ''}`);
+        } catch (err) {
+            console.warn('[tick-loop] settle phase failed:', err);
+        }
+    }
+
     // 3. ACT — characters play their own hands in open events; events that
     //    everyone has acted in auto-resolve (judge). Chain mutation → serial
     //    (single StorytellerCap, no parallel signing).
@@ -740,6 +763,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         storylet,
         socials,
         gives,
+        settle,
         acts,
         resolves,
         povs,

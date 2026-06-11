@@ -163,10 +163,30 @@ export function TickLoopResultView({ result }: { result: TickLoopResult }) {
                 </section>
             ) : null}
 
+            {/* SETTLE */}
+            {result.settle ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">結算（Settle · 經濟影子日界）</div>
+                    <p className="text-xs text-mute">
+                        {result.settle.skipped ? (
+                            <span>已跳過：{result.settle.skipped}</span>
+                        ) : (
+                            <>
+                                第 {result.settle.day} 日 · 金庫 {result.settle.treasuryFunds} · 發薪 {result.settle.wagesPaid} · 轉帳 {result.settle.transfersApplied} 筆 · 結算 {result.settle.settledCount} 人
+                                {result.settle.dead.length > 0 ? (
+                                    <span className="text-cinnabar"> · 殞 {result.settle.dead.map((d) => d.name).join('、')}</span>
+                                ) : null}
+                                {result.settle.error ? <span className="text-cinnabar"> · {result.settle.error}</span> : null}
+                            </>
+                        )}
+                    </p>
+                </section>
+            ) : null}
+
             {/* GIVE */}
             {result.gives && result.gives.length > 0 ? (
                 <section className="space-y-1">
-                    <div className="text-2xs tracking-widest text-mute">接濟（Give · 角色間金流 · 待上鏈結算）</div>
+                    <div className="text-2xs tracking-widest text-mute">接濟（Give · 角色間金流 · SETTLE 落帳）</div>
                     <ul className="space-y-1">
                         {result.gives.map((g) => (
                             <li key={g.characterId} className="text-xs">

@@ -51,6 +51,22 @@ test("GIVE transfers move balances after settle (no overdraft)", () => {
   assert.ok(withGift.snapshots["hua"].funds < before + Number(seed.snapshots["hua"].salary) + 5, "giver debited");
 });
 
+test("per-tick transfer at the SAME day moves money without re-paying wages, wage stays stable", () => {
+  const seed = settleSagaTo(null, { today: 5, treasuryBalanceMicro: 800n * MUNIT, chars: cast });
+  const huaWage = seed.snapshots["hua"].salary;
+  assert.ok(huaWage > 0, "wage paid on the day-settle");
+  // same day (5 → 5): 0 days elapse, but a gift is applied. No second wage; balances move.
+  const tick = settleSagaTo(seed.next, {
+    today: 5,
+    treasuryBalanceMicro: BigInt(seed.next.lastOnchainTreasuryMicro),
+    chars: cast,
+    transfers: [{ fromId: "hua", toId: "lao", amount: 20n * MUNIT, memo: "patronage" }],
+  });
+  assert.equal(tick.snapshots["hua"].salary, huaWage, "wage carried, not recomputed to 0");
+  assert.equal(tick.snapshots["hua"].funds, seed.snapshots["hua"].funds - 20, "giver debited exactly the gift");
+  assert.equal(tick.snapshots["lao"].funds, seed.snapshots["lao"].funds + 20, "recipient credited exactly the gift");
+});
+
 test("determinism + lazy split-invariance: settle(0→3)+(3→6) == settle(0→6)", () => {
   const ser = (s: object) => JSON.stringify(s);
   const input = (today: number): SagaSettleInput => ({ today, treasuryBalanceMicro: 600n * MUNIT, chars: cast });
