@@ -51,3 +51,5 @@ export { decideAid, decideAccept, DEFAULT_AID } from "./aid.ts";
 export type { Relation, AidCandidate, AidParams, AidReason, AidDecision, AcceptReason, AcceptDecision } from "./aid.ts";
 export { lazySettle, SEED_FUNDS_MICRO } from "./survival.ts";
 export type { SurvivalInput, PersistedEcon, SurvivalSnapshot } from "./survival.ts";
+export { settleSagaTo } from "./saga-settle.ts";
+export type { SagaCharInput, SagaSettleInput, SagaSettleResult, SagaEconState, PersistedCharEcon } from "./saga-settle.ts";
