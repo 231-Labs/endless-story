@@ -36,7 +36,27 @@ export interface SelectedContention extends ContentionFraming {
     statement?: string;
 }
 
-/** Map a drama desire statement to a discrete incident framing. */
+/**
+ * Director-authored resources (EVENT_LIFECYCLE Phase 3 / `resource-proposal.ts`)
+ * surface as `爭得「<kind>:<display>」` desire statements. Recover the structural
+ * `<kind>` so the templateId stays `contention:<kind>` — that keyword is what the
+ * spine's `resourceForContention` / `chooseSettlementWinner` match against the
+ * resource label + tension statement, so a runtime-instantiated slot settles
+ * exactly like the built-ins. Returns null for built-in / unlabelled statements.
+ */
+export function parseDirectorContention(statement?: string): ContentionFraming | null {
+    const m = /「([a-z][a-z0-9-]{1,20}):([^」]+)」/.exec(statement ?? '');
+    if (!m) return null;
+    const [, kind, display] = m;
+    return {
+        templateId: `contention:${kind}`,
+        label: `圍繞「${display.trim()}」的爭奪，在這一場裡浮上了檯面`,
+    };
+}
+
+/** Map a drama desire statement to a discrete incident framing. Built-in slots
+ *  win first (hand-authored framing); a director-created slot is then recovered
+ *  structurally so its templateId stays coherent; everything else is generic. */
 export function framingForStatement(statement?: string): ContentionFraming {
     const s = statement ?? '';
     if (s.includes('頭牌') || s.includes('spotlight'))
@@ -45,6 +65,8 @@ export function framingForStatement(statement?: string): ContentionFraming {
         return { templateId: 'contention:recording', label: '首張唱片該由誰來灌，成了繞不開的話題' };
     if (s.includes('搭戲') || s.includes('partnership'))
         return { templateId: 'contention:partnership', label: '誰與誰搭戲的盤算，在這一場裡較上了勁' };
+    const director = parseDirectorContention(s);
+    if (director) return director;
     return { templateId: 'storylet:tension', label: '一樁懸而未決的較量，在這一場裡發酵' };
 }
 

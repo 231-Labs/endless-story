@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     framingForStatement,
+    parseDirectorContention,
     selectContention,
     pushRecentTemplate,
 } from './event-planner.ts';
@@ -18,6 +19,17 @@ test('framingForStatement maps each contested resource to its template', () => {
     assert.equal(framingForStatement('爭得「recording:首張唱片灌錄權」').templateId, 'contention:recording');
     assert.equal(framingForStatement('與溫照棠搭戲').templateId, 'contention:partnership');
     assert.equal(framingForStatement('something else').templateId, 'storylet:tension');
+});
+
+test('director-created resources recover a coherent contention:<kind> templateId', () => {
+    // A runtime-instantiated slot `feud:春雪社班底` → statement 爭得「feud:春雪社班底」.
+    // Its templateId keyword must equal the label prefix so the spine settles it.
+    const f = framingForStatement('爭得「feud:春雪社班底」');
+    assert.equal(f.templateId, 'contention:feud');
+    assert.equal(f.templateId.split(':')[1], 'feud');
+    // parseDirectorContention returns null for built-in / plain statements.
+    assert.equal(parseDirectorContention('與溫照棠搭戲'), null);
+    assert.equal(parseDirectorContention('something else'), null);
 });
 
 test('selectContention picks the globally highest tension when nothing is recent', () => {

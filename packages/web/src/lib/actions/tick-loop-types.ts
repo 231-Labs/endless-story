@@ -38,6 +38,14 @@ export interface TickLoopInput {
      *  resolution (autoResolve is forced off) and the cut weaves only at resolve.
      *  See docs/EVENT_LIFECYCLE.md. Not chain-verified — flag on in a chain session. */
     eventSpine?: boolean;
+    /** EXPERIMENTAL (default false): let the LLM director NAME each incident
+     *  (event-framing.ts) instead of the deterministic keyword→string map. Pure
+     *  narration; falls back to the deterministic label on any failure. */
+    llmFraming?: boolean;
+    /** EXPERIMENTAL (default false): let the LLM director ADD a contested
+     *  resource mid-story (propose-resources.ts), validated + rate-limited. The
+     *  new slot is desired + settled next tick. See EVENT_LIFECYCLE Phase 3. */
+    directorResources?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;
 }

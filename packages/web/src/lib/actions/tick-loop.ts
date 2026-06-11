@@ -38,6 +38,8 @@ import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { selectContention, pushRecentTemplate } from '@/lib/chain/event-planner';
+import { frameIncident } from './event-framing';
+import { proposeResourceAction } from './propose-resources';
 import type { SpineStep } from '@/lib/chain/spine-core';
 import {
     spineNextTick,
@@ -316,6 +318,31 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.72 DIRECTOR SCARCITY (flag-gated, default off) — let the LLM director
+    //   立題: ADD a contested resource mid-story when the cast's tensions call for
+    //   one. Validated + rate-limited (propose-resources.ts); the new slot is
+    //   desired (defaultDesiresForCast) + settled (spine) on a LATER tick — we
+    //   don't read it back this tick. Failure-isolated; never blocks the loop.
+    if ((input.directorResources ?? false) && !dryRun && drama?.active && slice.length >= 2) {
+        try {
+            const r = await proposeResourceAction({
+                sagaId: d.sagaId,
+                capId: d.storytellerCapId,
+                cast: slice.map((c) => ({ name: c.name, role: roleById.get(c.id) })),
+                tensions: (drama?.top ?? []).map((t) => ({ statement: t.statement, tension: t.tension })),
+                signer: admin.signer,
+                client: admin.client,
+            });
+            if (r.ok && r.created) {
+                tlog(`②² 導演立題：新增爭奪「${r.created.label}」（容量 ${r.created.capacity}）${r.resourceId ? ' ✓上鏈' : ''}`);
+            } else if (r.reason && r.reason !== 'cooldown') {
+                tlog(`②² 導演按下不表（${r.reason}）`);
+            }
+        } catch (err) {
+            console.warn('[tick-loop] director resource phase failed:', err);
+        }
+    }
+
     // 2.75 STORYLET — give the day a dramatic SPINE. When drama tension is live
     //   and a scene holds ≥2 of the cast, the director opens ONE storylet there
     //   (open_storylet → StoryletOpened), framing the top contested resource as a
@@ -325,6 +352,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     let storylet: TickStoryletResult | undefined;
     let spineStep: SpineStep | undefined;
     let spineCtx: SpineCtx | undefined;
+    // FRAMING (flag-gated, default off) — the LLM director NAMES the chosen
+    //   incident; the deterministic label is the fallback (event-framing.ts).
+    //   Selection (which contention) stays deterministic — only the prose moves.
+    const frameLabel = async (picked: { label: string; statement?: string }): Promise<string> =>
+        (input.llmFraming ?? false) && !dryRun
+            ? await frameIncident({
+                  statement: picked.statement,
+                  fallback: picked.label,
+                  cast: slice.map((c) => c.name),
+                  sceneName: activeScenes[0]?.name ?? '戲班',
+              })
+            : picked.label;
     if (eventSpine && drama?.active && slice.length > 0) {
         // SPINE MODE — open/linger/resolve ONE multi-tick BudgetEvent as the 回.
         const occupancy = slice.flatMap((c) => {
@@ -334,10 +373,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
         const picked = selectContention(drama?.top ?? [], recentTopics);
         recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+        const spineLabel = await frameLabel(picked);
         spineCtx = {
             sagaId: d.sagaId,
             capId: d.storytellerCapId,
-            contention: { templateId: picked.templateId, label: picked.label, statement: picked.statement },
+            contention: { templateId: picked.templateId, label: spineLabel, statement: picked.statement },
             occupancy,
             sceneNameById: new Map(activeScenes.map((s) => [s.id, s.name])),
             nameById,
@@ -381,7 +421,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 '戲班';
             const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
             const picked = selectContention(drama?.top ?? [], recentTopics);
-            const framing = { templateId: picked.templateId, label: picked.label };
+            const framing = { templateId: picked.templateId, label: await frameLabel(picked) };
             recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
             storylet = {
                 sceneId: sid,
