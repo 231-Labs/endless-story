@@ -43,6 +43,11 @@ export interface TickLoopInput {
     parallelEvents?: boolean;
     /** Concurrency cap for `parallelEvents` (default 2). */
     maxConcurrentEvents?: number;
+    /** EXPERIMENTAL (default false): draw contenders toward their contest in the
+     *  move phase so events reliably FORM (rival gravity). A settled resource
+     *  cools down so it can't glue a ≥3-way rivalry. Verified in
+     *  gravity-{core,sim}.test.ts. Pairs with parallelEvents. */
+    rivalGravity?: boolean;
     /** EXPERIMENTAL (default false): couple each character's parallel desires
      *  through a finite attention budget, so concurrent events pull on each other
      *  (the 柳生春 trade-off, cross-event). Off-chain steering overlay. Stage 2. */

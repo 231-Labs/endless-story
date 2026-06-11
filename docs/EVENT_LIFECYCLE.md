@@ -181,6 +181,13 @@ hint，餵進該角色的 decide/POV——拉扯從世界級選題落到人物�
   純測試 + 型別綠**，但**未在真鏈驗**。開 `llmFraming` / `directorResources` 前見 §6。
 - **Phase 2.5**（並行事件 + 注意力耦合）🟡 **程式碼已落、flag-gate（預設關）、純測試 + 型別綠**，
   但**未在真鏈驗**。開 `parallelEvents` / `attentionBudget` 前見 §7。
+- **相吸移動（rivalGravity）**🟡 已建/flag-gate/數學已驗、待真鏈：事件太稀疏的根因是「對手不
+  相吸」（移動跟張力脫鉤）。`gravity-core`（純，全域 plurality 吸引子 → 所有 contender 算出同一
+  目標、收斂不震盪）接進移動階段；剛結算的標的上 cooldown（`coolResource`，6 tick）避免 ≥3 人
+  搶單一名額時黏死。**先解耦數學驗證**（`gravity-core.test.ts` 機制 + `gravity-sim.test.ts` 200
+  seeds × 150 ticks 動力系統）：兩人之爭 1 tick 收斂、99% 時間散開、最長黏 2 tick；三人之爭是健康
+  極限環（成局→結算→散→再成局）；拿掉 cooldown+輸家轉移則永久黏死（145/150）——證明 relief 是
+  必要設計前提。live wiring flag-gate（`rivalGravity`，預設關，配 `parallelEvents`）。
 - **Phase 4**（真·多回合出牌）⏳ 需 redeploy。
 
 ## 5. 開 flag 驗證 runbook（在能跑真 tick 的 session 執行）

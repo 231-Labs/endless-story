@@ -69,6 +69,10 @@ export async function runMovePhase(input: {
     roleById: Map<string, string>;
     memoryContext: TickMemoryContext;
     dryRun: boolean;
+    /** characterId → attractor sceneId (rival gravity). When set for a character,
+     *  it overrides the LLM move: pull them to the contest (or hold them there).
+     *  See gravity-core / rival-gravity; flag-gated upstream. */
+    gravityTargets?: Map<string, string>;
 }): Promise<TickMoveResult[]> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return [];
@@ -119,6 +123,20 @@ export async function runMovePhase(input: {
     const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
         try {
             const cur = sceneByChar.get(c.id)!;
+            // RIVAL GRAVITY override (verified mechanism): if a contest pulls this
+            // character, go deterministically — to the stage, or HOLD there
+            // (cohesion). Skips the LLM call; converges contenders so events form.
+            const pull = input.gravityTargets?.get(c.id);
+            if (pull) {
+                if (pull === cur.id) {
+                    return { c, fromId: cur.id, dcs: { move: false, reason: '守在爭端的風口，不離開' } as characterAgent.MoveDecideResult };
+                }
+                return {
+                    c,
+                    fromId: cur.id,
+                    dcs: { move: true, targetSceneId: pull, reason: '冤家路窄，循著爭端走了過去' } as characterAgent.MoveDecideResult,
+                };
+            }
             const options = input.scenes
                 .filter((s) => s.id !== cur.id)
                 .map((s) => ({
