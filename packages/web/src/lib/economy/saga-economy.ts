@@ -82,6 +82,12 @@ export function toTransferAmount(endless: number): bigint {
     return BigInt(Math.max(0, Math.round(endless * 1_000_000)));
 }
 
+/** True once a character's vitality has bottomed out in the persisted shadow. The tick loop uses
+ *  this to drop the dead from the acting set so death has a visible consequence. */
+export function isShadowDead(sagaId: string, charId: string): boolean {
+    return STORE.get(sagaId)?.state.chars[charId]?.dead ?? false;
+}
+
 const r1 = (x: number): number => Math.round(x * 10) / 10;
 
 /** Map the economy snapshot onto the UI's SurvivalStatus (same rounding as computeSurvival). */

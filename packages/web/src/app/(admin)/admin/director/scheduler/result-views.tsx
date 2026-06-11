@@ -163,6 +163,26 @@ export function TickLoopResultView({ result }: { result: TickLoopResult }) {
                 </section>
             ) : null}
 
+            {/* ASK */}
+            {result.asks && result.asks.length > 0 ? (
+                <section className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">求助（Ask · 開口要錢）</div>
+                    <ul className="space-y-1">
+                        {result.asks.map((a) => (
+                            <li key={a.characterId} className="text-xs">
+                                <span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${a.ok && a.asked ? 'bg-jade' : a.ok ? 'bg-mute' : 'bg-cinnabar'}`} />
+                                <span className="text-ink">{a.name}</span>
+                                <span className="text-mute">
+                                    {a.asked ? ` → 向 ${a.targetName ?? a.targetId} 求 ${a.amount}（${a.kind ?? ''}）` : ' 未開口'}
+                                    {a.reason ? ` · ${a.reason}` : ''}
+                                </span>
+                                {a.error ? <span className="text-cinnabar"> {a.error}</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            ) : null}
+
             {/* SETTLE */}
             {result.settle ? (
                 <section className="space-y-1">

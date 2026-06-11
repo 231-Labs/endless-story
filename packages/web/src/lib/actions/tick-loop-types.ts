@@ -100,6 +100,21 @@ export interface TickSocialResult {
     error?: string;
 }
 
+/** ASK phase — a needy character decides whether to lower itself to ask a same-scene, solvent
+ *  character for help (the "pull" side of money). The grant is handled by the GIVE phase. */
+export interface TickAskResult {
+    characterId: string;
+    name: string;
+    ok: boolean;
+    asked: boolean;
+    targetId?: string;
+    targetName?: string;
+    amount?: number;
+    kind?: string;
+    reason?: string;
+    error?: string;
+}
+
 /** GIVE phase — a character decides whether to aid a same-scene peer in need.
  *  The give/no-give judgment is the LLM's; the balance MOVE is deferred to the
  *  on-chain economy (Part D D1 transfer_between_characters) / off-chain settle
@@ -210,6 +225,8 @@ export interface TickLoopResult {
     /** The storylet opened this tick (dramatic spine), if any. */
     storylet?: TickStoryletResult;
     socials: TickSocialResult[];
+    /** ASK phase: needy characters who opened their mouth to ask for help this tick. */
+    asks: TickAskResult[];
     /** GIVE phase: character-to-character aid decided this tick. */
     gives: TickGiveResult[];
     /** SETTLE phase: the off-chain economy advanced + accepted gifts applied. */

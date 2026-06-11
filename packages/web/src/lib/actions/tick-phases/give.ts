@@ -19,48 +19,17 @@ import type { SagaRosterEntry } from '@/lib/chain/roster';
 import type { TickGiveResult } from '../tick-loop-types';
 import { RECALL_CONCURRENCY, mapPool, type TickMemoryContext } from './support';
 import { fetchBusyCharacterIds } from './chain';
+import { canSpare, inNeed, relationFromHints, situationOf, distressOf } from './econ-helpers';
 
 const MEMO_LABEL: Record<string, string> = {
     gift: '餽贈', patronage: '接濟', loan: '借貸', repay: '還情', bribe: '打點', tribute: '報恩',
 };
 
-/** A character is a plausible GIVER when its own survival is comfortable. */
-function canSpare(c: Character): boolean {
-    const lvl = c.survival?.level;
-    return (lvl === 'healthy' || lvl === 'stable') && (c.survival?.funds ?? 0) > 0;
-}
-
-/** A character is visibly IN NEED (a candidate recipient). */
-function inNeed(c: Character | undefined): boolean {
-    if (!c) return false;
-    const lvl = c.survival?.level;
-    const vit = c.survival?.vitalityState;
-    return lvl === 'low' || lvl === 'critical' || vit === 'strained' || vit === 'failing';
-}
-
-/** Coarse tie from the giver's relationship hints about a named peer (live data has
- *  tone, not the eval's typed lover/mentor). Defaults to neutral. */
-function relationFromHints(hints: string[], peerName: string): 'ally' | 'neutral' | 'rival' {
-    const about = hints.find((h) => h.includes(peerName));
-    if (!about) return 'neutral';
-    if (/仇|怨|隙|敵|爭|惡/.test(about)) return 'rival';
-    if (/情|恩|盟|摯|親|愛|知己|師|義/.test(about)) return 'ally';
-    return 'neutral';
-}
-
-function situationOf(c: Character): 'dire-need' | 'tight' | 'stable' {
-    const lvl = c.survival?.level;
-    const vit = c.survival?.vitalityState;
-    if (lvl === 'critical' || vit === 'failing') return 'dire-need';
-    if (lvl === 'low' || vit === 'strained') return 'tight';
-    return 'stable';
-}
-
-function distressOf(c: Character): string {
-    const s = c.survival;
-    const days = s?.daysLeft != null && s.daysLeft < 999 ? `約撐 ${s.daysLeft} 日` : '勉力支應';
-    const vit = s?.vitalityState === 'failing' ? '、氣血瀕危' : s?.vitalityState === 'strained' ? '、見疲態' : '';
-    return `現銀約 ${Math.round(s?.funds ?? 0)}、${days}${vit}`;
+/** A character asked this giver for help (from the ASK phase). */
+export interface IncomingAsk {
+    askerId: string;
+    amount: number;
+    kind: string;
 }
 
 export async function runGivePhase(input: {
@@ -71,6 +40,8 @@ export async function runGivePhase(input: {
     rosterById: Map<string, SagaRosterEntry>;
     roleById: Map<string, string>;
     memoryContext: TickMemoryContext;
+    /** who asked whom this tick (from the ASK phase): giverId → the requests aimed at them. */
+    asksByGiver?: Map<string, IncomingAsk[]>;
     dryRun: boolean;
 }): Promise<TickGiveResult[]> {
     if (input.scenes.length === 0) return [];
@@ -86,10 +57,13 @@ export async function runGivePhase(input: {
 
     const decided = await mapPool(givers, RECALL_CONCURRENCY, async (c): Promise<TickGiveResult | null> => {
         const scene = sceneByChar.get(c.id)!;
+        const asks = input.asksByGiver?.get(c.id) ?? [];
+        const askAmountById = new Map(asks.map((a) => [a.askerId, a.amount]));
+        // Consider same-scene peers who are in need OR who explicitly asked this giver.
         const needyPeers = (scene.currentCharacterIds ?? [])
             .filter((pid) => pid !== c.id)
             .map((pid) => input.charactersById.get(pid))
-            .filter((p): p is Character => inNeed(p));
+            .filter((p): p is Character => !!p && (inNeed(p) || askAmountById.has(p.id)));
         if (needyPeers.length === 0) return null; // nobody same-scene needs help → don't even ask
 
         try {
@@ -119,9 +93,11 @@ export async function runGivePhase(input: {
                         role: input.roleById.get(p.id) ?? pr?.role ?? '—',
                         relation: relationFromHints(relationshipHints, p.name),
                         personality: (pr?.brief || p.description || '').slice(0, 80) || '同班之人',
-                        situation: situationOf(p),
+                        // a peer who explicitly asked is surfaced as a loan-request with the amount
+                        situation: askAmountById.has(p.id) ? ('loan-request' as const) : situationOf(p),
                         distress: distressOf(p),
                         runwayDays: p.survival?.daysLeft,
+                        askAmount: askAmountById.get(p.id),
                         recentMemory: about,
                     };
                 }),
