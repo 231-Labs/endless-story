@@ -4,7 +4,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { coupleAttention } from './attention-core.ts';
+import { coupleAttention, neglectHintFor } from './attention-core.ts';
 
 const r = (characterId: string, statement: string, tension: number) => ({ characterId, statement, tension });
 
@@ -62,4 +62,31 @@ test('characters do not bleed into each other', () => {
     // extra fields preserved
     const rich = coupleAttention([{ characterId: 'a', statement: 's', tension: 0.5, name: '柳' }], {});
     assert.equal(rich[0].name, '柳');
+});
+
+/* ── neglectHintFor: the torn feeling reaches the character layer ────────── */
+
+test('neglectHintFor fires only when neglect flips the dominant ache', () => {
+    const original = [
+        r('liu', '爭得「recording:唱片」', 0.6),
+        r('liu', '與孟雲屏搭戲', 0.5),
+    ];
+    const coupled = coupleAttention(original, { focus: 1, spill: 0.35 }); // 0.5→0.675 > 0.6 → flip
+    const hint = neglectHintFor(original, coupled, 'liu');
+    assert.ok(hint, 'flip → hint');
+    assert.ok(hint!.includes('爭得「recording:唱片」'), 'names the funded pursuit');
+    assert.ok(hint!.includes('與孟雲屏搭戲'), 'names the neglected one');
+    assert.ok(hint!.startsWith('【內在張力】'), 'same prefix as the default drama hint');
+});
+
+test('neglectHintFor is null when nothing flips, single desire, or unknown character', () => {
+    // no flip: neglected stays below the funded top (0.2*1.35 = 0.27 < 0.8)
+    const original = [r('liu', 'a', 0.8), r('liu', 'b', 0.2)];
+    const coupled = coupleAttention(original, { focus: 1, spill: 0.35 });
+    assert.equal(neglectHintFor(original, coupled, 'liu'), null);
+    // single desire
+    const one = [r('bai', 'only', 0.9)];
+    assert.equal(neglectHintFor(one, coupleAttention(one), 'bai'), null);
+    // unknown character
+    assert.equal(neglectHintFor(original, coupled, 'ghost'), null);
 });

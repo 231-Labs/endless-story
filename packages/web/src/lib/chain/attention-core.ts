@@ -75,3 +75,41 @@ export function coupleAttention<T extends AttentionRow>(
     }
     return out as T[];
 }
+
+/* ── character-layer hint (the torn feeling reaches behavior) ───────────── */
+
+/**
+ * When the attention coupling FLIPPED a character's dominant ache — their funded
+ * top pursuit got outranked by a neglected one — return a Chinese hint line that
+ * carries the torn state into their decide/POV prompts (replacing the default
+ * single-desire hint from drama-core). Returns null when nothing flipped (the
+ * default hint already says the right thing), the character has < 2 desires, or
+ * they're absent from the rows. Pure.
+ *
+ * @param original the character's tension rows BEFORE coupling
+ * @param coupled  the SAME rows after `coupleAttention`
+ */
+export function neglectHintFor(
+    original: ReadonlyArray<AttentionRow>,
+    coupled: ReadonlyArray<AttentionRow>,
+    characterId: string,
+): string | null {
+    const topOf = (rows: ReadonlyArray<AttentionRow>): AttentionRow | null => {
+        let best: AttentionRow | null = null;
+        for (const r of rows) {
+            if (r.characterId !== characterId) continue;
+            if (!best || r.tension > best.tension) best = r;
+        }
+        return best;
+    };
+    const mineCount = original.filter((r) => r.characterId === characterId).length;
+    if (mineCount < 2) return null; // single pursuit → nothing to neglect
+    const funded = topOf(original);
+    const ached = topOf(coupled);
+    if (!funded || !ached || ached.statement === funded.statement) return null; // no flip
+    return (
+        `【內在張力】你近來把心力都押在「${funded.statement}」上；` +
+        `被你冷落的「${ached.statement}」此刻反而更灼人（張力 ${ached.tension.toFixed(2)}）` +
+        `——顧此失彼的滋味正堵在心頭。`
+    );
+}

@@ -40,7 +40,7 @@ import { runPlanAction } from './plan';
 import { selectContention, pushRecentTemplate, framingForStatement } from '@/lib/chain/event-planner';
 import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
-import { coupleAttention } from '@/lib/chain/attention-core';
+import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineNextTick,
@@ -316,6 +316,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 tension: tensionFraction(t.value),
             }));
             const steered = attentionBudget ? coupleAttention(allTop) : allTop;
+            // Character layer: when the coupling FLIPPED someone's dominant ache
+            // (their funded pursuit got outranked by a neglected one), replace
+            // their decide/POV hint with the torn line — the trade-off reaches
+            // behavior, not just world-level selection.
+            if (attentionBudget) {
+                for (const id of new Set(allTop.map((t) => t.characterId))) {
+                    const torn = neglectHintFor(allTop, steered, id);
+                    if (torn) dramaHints[id] = torn;
+                }
+            }
             steered.sort((a, b) => b.tension - a.tension);
             drama = {
                 active: r.active,

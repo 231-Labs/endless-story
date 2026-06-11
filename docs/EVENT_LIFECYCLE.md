@@ -160,9 +160,10 @@ LLM、上限 `MAX_DIRECTOR_RESOURCES`=3 個導演標的。全程 failure-isolate
 - 是 off-chain DEMAND 訊號的純疊加（套在 `drama.top`），**不動鏈上可驗的 beat**：供給/守恆照舊
   可驗，注意力是其上的 attention-economy overlay。
 
-**邊界**：Stage 2 目前只耦合 `drama.top`（驅動選題 + spine 結算），**未耦合 dramaHint**
-（POV/decide 的提詞）——角色「感覺到」被冷落的是行為層尚未接，列為小修。並行 + 注意力都
-flag-gate，關掉與主線完全一致。
+**人物層（2026-06-11 補）**：耦合也接到了 dramaHint——當某角色的主渴望被翻轉（供養中的
+追求被「被冷落的」反超），`attention-core.neglectHintFor`（純）生成「顧此失彼」提詞替換預設
+hint，餵進該角色的 decide/POV——拉扯從世界級選題落到人物的台詞與決策。未翻轉時保持原 hint
+（單欲望角色永不受影響）。並行 + 注意力都 flag-gate，關掉與主線完全一致。
 
 ---
 
@@ -287,8 +288,10 @@ flag-gate，關掉與主線完全一致。
 9. **不破壞守恆**：耦合只動 `drama.top`；鏈上 allocation / `settled` 路徑與關 flag 時一致
    （Stage 2 是 off-chain overlay，不應改變任何上鏈結算的正確性）。
 10. **退化安全**：單欲望角色不受影響（`focus` 全額供養）；`coupleAttention` 對單軸世界是恆等。
+11. **人物層流露**：當某角色主渴望被翻轉，他那 tick 的 POV/台詞應出現「顧此失彼」的色彩
+    （hint 換成 `你近來把心力都押在「A」上；被你冷落的「B」此刻反而更灼人…`）。對照未翻轉
+    的角色——hint 應仍是預設單渴望句。這驗 `neglectHintFor` 接到了行為層。
 
-通過 1–10 → 才考慮預設開。已知邊界：dramaHint（POV/decide 提詞）**尚未**耦合，所以角色「行為上」
-還沒真的因被冷落而轉向——只有世界級的選題/結算反映了拉扯（§3 Phase 2.5 末）。
+通過 1–11 → 才考慮預設開。
 
 _本檔是活文件；每推進一個 Phase，更新 §3 狀態。_
