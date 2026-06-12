@@ -29,6 +29,10 @@ import {
   evolvePortraitAction,
   type EvolvePortraitInput,
 } from '@/lib/actions/evolve-portrait';
+import {
+  getRunnerControlStateAction,
+  setRunnerPausedAction,
+} from '@/lib/actions/runner-control';
 import { runWorldAudit } from './audit';
 import { fetchRecentGazetteTexts } from './observe';
 import { saveArcPlan } from './memory-store';
@@ -99,6 +103,13 @@ const TOOLS: DirectorToolDef[] = [
     execute: () => runWorldAudit(),
   },
   {
+    name: 'get_runner_state',
+    tier: 'read',
+    description: '查 VPS world-loop runner 的狀態（是否設定、是否暫停）。',
+    argsSpec: '{}',
+    execute: () => getRunnerControlStateAction(),
+  },
+  {
     name: 'read_recent_gazettes',
     tier: 'read',
     description: '讀最近幾期公報內文（舊→新）——回答「最近劇情如何」先看這個。',
@@ -147,6 +158,14 @@ const TOOLS: DirectorToolDef[] = [
         day: typeof args.day === 'number' ? args.day : undefined,
         dryRun: args.dryRun === true,
       }),
+  },
+  {
+    name: 'set_runner_paused',
+    tier: 'narrative',
+    description:
+      '暫停或恢復 VPS 上的 world-loop runner（世界總開關）。注意：心跳由 world-loop 觸發，暫停後心跳也會停，恢復只能靠 admin 或對話指令。用於發現世界狀態異常需要停機檢修，或 admin 明確要求。',
+    argsSpec: '{"paused": true|false}',
+    execute: (args) => setRunnerPausedAction({ paused: args.paused === true }),
   },
   {
     name: 'update_arc_plan',
