@@ -184,7 +184,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const spineMode = eventSpine || parallelEvents;
     drainMemoryWarnings(); // discard stale warnings from previous local dev requests
     const memoryContext = new TickMemoryContext();
-    const cap = input.maxCharacters ?? 6;
+    const cap = input.maxCharacters ?? (Number(process.env.TICK_MAX_CHARACTERS) || 6);
     const requestedIds = normalizeCharacterIds(input.characterIds);
     const t0 = Date.now();
     const since = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
@@ -225,13 +225,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // The economy shadow can mark a character dead (vitality → 0); drop them from the acting set
     // so death actually retires them from the stage (they keep their persisted state for settle).
     const alive = characters.filter((c) => !isShadowDead(d.sagaId, c.id));
+    // When the cast exceeds the cap, rotate the acting window by world tick so
+    // everyone cycles onto the stage — a fixed slice(0, cap) would star the
+    // same N characters forever and the rest would never act.
+    const rotated = (() => {
+        if (alive.length <= cap) return alive;
+        const start = ((worldTime?.currentTick ?? 0) * cap) % alive.length;
+        return [...alive.slice(start), ...alive.slice(0, start)];
+    })();
     const slice =
         requestedIds.length > 0
             ? requestedIds
                   .map((id) => alive.find((c) => c.id === id))
                   .filter((c): c is Character => Boolean(c))
                   .slice(0, cap)
-            : alive.slice(0, cap);
+            : rotated.slice(0, cap);
     const scenes = await fetchOnChainScenesForSaga(d.sagaId).catch(() => []);
     const roster = await buildSagaRoster(d.sagaId, { characters, scenes }).catch(
         () => [] as SagaRosterEntry[],
