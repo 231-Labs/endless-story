@@ -188,6 +188,8 @@ export interface CurateItem {
   key: string;
   title: string;
   type: 'still' | 'curio';
+  /** current selection state in the collector's room */
+  selected?: boolean;
 }
 
 export interface CurateCurrent {
@@ -209,6 +211,11 @@ export interface CurateResult {
   /** one-line curator's note (策展語), shown to the collector. */
   note: string;
   arrangement: CuratePlacement[];
+  /**
+   * When the AI changes the exhibition selection (e.g. "只展柳生春作品"),
+   * it returns the keys to exhibit; omitted = keep existing selection.
+   */
+  selectedKeys?: string[];
 }
 
 export interface BuildCuratePromptOptions {
@@ -221,30 +228,36 @@ export interface BuildCuratePromptOptions {
 
 const CURATE_SYSTEM = `你是「無盡敘界」藏閣的策展人，為收藏家在一座黑暗鏡面展廳裡佈展。每件展品懸在自己的一柱聚光裡：劇照(still)是懸浮玻璃版畫、珍玩(curio)立於台座。
 
-你的工作：依展品的題名語意與收藏家的指示，決定每件展品的位置、朝向、大小，並為每件**配燈**（色溫與強度——例：含情的戲對暖一點 #f6e0c8、雪夜白蛇冷一點 #dbe6f2、肅殺的劍寒白 #e8eef4；主角展品燈強、陪襯燈弱）。
+你的工作有兩個面向：
+1. **選件**：依收藏家指示決定要展示哪些展品。清單中標記 [✓] 的是目前已選展品、[ ] 是目前未選。若指示要求改動展示清單（例如「只展柳生春相關」、「全部展出」），在回傳 JSON 中加入 selectedKeys 陣列（只列出要展示的 key）；若不改動選件，省略 selectedKeys。
+2. **佈置與配燈**：依展品題名語意與指示，決定 selectedKeys（若有）或目前 [✓] 展品的位置、朝向、大小，並為每件配燈（色溫與強度——例：含情的戲對暖一點 #f6e0c8、雪夜白蛇冷一點 #dbe6f2、肅殺的劍寒白 #e8eef4；主角展品燈強、陪襯燈弱）。
 
 硬規則：
 - 座標公尺，原點展廳中心，x→右、z→朝觀者，y 固定 0；|x|、|z| ≤ 6。
 - 展品間距 ≥ 1.6m，不可重疊；劇照 yaw 應讓畫面朝向中心或觀眾（z 正向）。
 - scale 介於 0.6–1.8；light.intensity 介於 6–30；light.color 用 hex。
 - 系列作（題名相關者）宜相鄰成組；留出走入展廳的中軸視線。
-- 每個 key 必須出現一次，不可增刪。note 用一句話說明策展構想。
+- arrangement 只含最終要展示的展品（selectedKeys 中的 key，或若 selectedKeys 省略則含所有 [✓] key），每個 key 出現一次。
+- note 用一句話說明策展構想（選了什麼、為什麼）。
 - 只輸出 JSON，不要任何解釋或 markdown。`;
 
 export function buildCuratePrompt(opts: BuildCuratePromptOptions): BuildPromptResult {
   const itemLines = opts.items
-    .map((i) => `- key:${i.key} 〔${i.type === 'still' ? '劇照' : '珍玩'}〕${i.title}`)
+    .map((i) => {
+      const mark = i.selected === false ? '[ ]' : '[✓]';
+      return `- ${mark} key:${i.key} 〔${i.type === 'still' ? '劇照' : '珍玩'}〕${i.title}`;
+    })
     .join('\n');
   const currentBlock = opts.current?.length
     ? `\n目前擺位（迭代調整的基準，未被指示提到的可保持不動）：\n${JSON.stringify(opts.current)}\n`
     : '';
-  const user = `展品清單：
+  const user = `藏品庫（[✓]=目前展出 [ ]=目前收藏）：
 ${itemLines}
 ${currentBlock}
 收藏家的指示：${opts.instruction || '（無特別指示，請自由策展）'}
 
-輸出 JSON，嚴格格式：
-{"note":"…","arrangement":[{"key":"…","pos":[x,0,z],"yaw":0,"scale":1,"light":{"color":"#f6e0c8","intensity":16}}]}`;
+輸出 JSON，嚴格格式（selectedKeys 選填，僅當需改動展示清單時才加入）：
+{"note":"…","selectedKeys":["key1","key2"],"arrangement":[{"key":"…","pos":[x,0,z],"yaw":0,"scale":1,"light":{"color":"#f6e0c8","intensity":16}}]}`;
   return {
     system: CURATE_SYSTEM,
     messages: [{ role: 'user', content: user }],
@@ -279,7 +292,11 @@ export function parseCurateResponse(text: string): CurateResult | null {
       });
     }
     if (arrangement.length === 0) return null;
-    return { note: String(obj.note ?? ''), arrangement };
+    const rawSelected = (obj as { selectedKeys?: unknown }).selectedKeys;
+    const selectedKeys = Array.isArray(rawSelected) && rawSelected.length > 0
+      ? rawSelected.map(String).filter(Boolean)
+      : undefined;
+    return { note: String(obj.note ?? ''), arrangement, selectedKeys };
   } catch {
     return null;
   }

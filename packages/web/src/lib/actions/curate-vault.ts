@@ -26,7 +26,7 @@ export interface CurateVaultResult {
 }
 
 export async function curateVault(input: CurateVaultInput): Promise<CurateVaultResult> {
-  if (!input.items.length) return { ok: false, error: '沒有勾選任何展品。' };
+  if (!input.items.length) return { ok: false, error: '藏品庫是空的。' };
   if (!process.env.POE_API_KEY && !process.env.ZAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     return { ok: false, error: '未設定 LLM API key。' };
   }

@@ -150,6 +150,9 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const [instruction, setInstruction] = useState('');
   const [curating, setCurating] = useState(false);
   const [curateError, setCurateError] = useState<string | null>(null);
+  // 展品庫 篩選
+  const [invFilter, setInvFilter] = useState<'all' | 'still' | 'curio'>('all');
+  const [invSearch, setInvSearch] = useState('');
   const aliveRef = useRef(true);
 
   // load inventory (server pieces + locally acquired 戲坊 wares) + 佈置
@@ -316,18 +319,18 @@ export function ChamberView({ characterId }: { characterId: string }) {
 
   // AI 策展
   const runCurate = useCallback(async () => {
-    if (!inventory || !room || !layout?.design) return;
+    if (!inventory || !room) return;
     setCurating(true);
     setCurateError(null);
-    const itemsByKey = new Map<string, { title: string; type: 'still' | 'curio' }>();
-    for (const s of inventory.stills) itemsByKey.set(s.key, { title: s.title, type: 'still' });
-    for (const c of inventory.curios) itemsByKey.set(c.key, { title: c.title, type: 'curio' });
-    const items = room.keys
-      .filter((k) => itemsByKey.has(k))
-      .map((k) => ({ key: k, ...itemsByKey.get(k)! }));
-    const current = layout.design.elements
+    // Pass the full inventory so the AI can re-select which items to exhibit.
+    const selectedKeys = new Set(room.keys);
+    const items = [
+      ...inventory.stills.map((s) => ({ key: s.key, title: s.title, type: 'still' as const, selected: selectedKeys.has(s.key) })),
+      ...inventory.curios.map((c) => ({ key: c.key, title: c.title, type: 'curio' as const, selected: selectedKeys.has(c.key) })),
+    ];
+    const current = layout?.design?.elements
       .map((el, i) => ({ el, k: elKey(el, i) }))
-      .filter(({ el, k }) => itemsByKey.has(k) && (el.kind === 'display_still' || el.kind === 'display_curio'))
+      .filter(({ el, k }) => selectedKeys.has(k) && (el.kind === 'display_still' || el.kind === 'display_curio'))
       .map(({ el, k }) => ({
         key: k,
         pos: el.pos,
@@ -349,6 +352,8 @@ export function ChamberView({ characterId }: { characterId: string }) {
     }
     updateRoom((r) => ({
       ...r,
+      // If the AI selected a different set of items, apply it; else keep current keys.
+      keys: res.result!.selectedKeys ?? r.keys,
       overrides: { ...r.overrides, ...overrides },
       lights: { ...r.lights, ...lights },
       note: res.result!.note,
@@ -358,6 +363,19 @@ export function ChamberView({ characterId }: { characterId: string }) {
   }, [inventory, room, layout, instruction, updateRoom]);
 
   const exhibitedCount = room?.keys.length ?? 0;
+
+  // Filtered inventory for the panel list
+  const allInventoryItems = inventory ? [...inventory.stills, ...inventory.curios] : [];
+  const filteredInventoryItems = allInventoryItems.filter((it) => {
+    const isStill = 'url' in it;
+    if (invFilter === 'still' && !isStill) return false;
+    if (invFilter === 'curio' && isStill) return false;
+    if (invSearch) {
+      const q = invSearch.toLowerCase();
+      return it.title.toLowerCase().includes(q) || it.subtitle.toLowerCase().includes(q);
+    }
+    return true;
+  });
 
   return (
     <div
@@ -509,6 +527,35 @@ export function ChamberView({ characterId }: { characterId: string }) {
             </div>
           </div>
 
+          {/* 篩選列 — filter tabs + search */}
+          <div className={['border-b px-3 pb-2 pt-2', UI.hairline].join(' ')}>
+            <div className="flex items-center gap-1.5">
+              {(['all', 'still', 'curio'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setInvFilter(f)}
+                  className={[
+                    'rounded-full px-2.5 py-0.5 text-[11px] transition-colors',
+                    invFilter === f ? UI.tabOn : UI.tabOff,
+                  ].join(' ')}
+                >
+                  {f === 'all' ? '全部' : f === 'still' ? '劇照' : '珍玩'}
+                </button>
+              ))}
+              <input
+                type="search"
+                value={invSearch}
+                onChange={(e) => setInvSearch(e.target.value)}
+                placeholder="搜尋…"
+                className={[
+                  'ml-auto w-24 rounded-md border px-2 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:w-32 transition-all',
+                  UI.input,
+                ].join(' ')}
+              />
+            </div>
+          </div>
+
           {/* inventory — thumbnail rows, check to exhibit */}
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
             <p className={['mb-2 px-1 text-[10px] tracking-widest', UI.mute].join(' ')}>
@@ -517,8 +564,13 @@ export function ChamberView({ characterId }: { characterId: string }) {
             {loading ? (
               <p className={['px-1 text-sm', UI.soft].join(' ')}>啟封中…</p>
             ) : inventory ? (
+              filteredInventoryItems.length === 0 ? (
+                <p className={['px-1 text-xs', UI.mute].join(' ')}>
+                  {invSearch ? '沒有符合的展品' : '此分類沒有展品'}
+                </p>
+              ) : (
               <ol className="flex flex-col gap-1.5">
-                {[...inventory.stills, ...inventory.curios].map((it) => {
+                {filteredInventoryItems.map((it) => {
                   const checked = room?.keys.includes(it.key) ?? false;
                   const idx = layout?.design?.elements.findIndex(
                     (el, i) => elKey(el, i) === it.key,
@@ -581,6 +633,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
                   );
                 })}
               </ol>
+              )
             ) : (
               <p className={['px-1 text-sm', UI.mute].join(' ')}>展品庫載入失敗。</p>
             )}
@@ -591,7 +644,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
             <textarea
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
-              placeholder="給策展人的指示，例：白蛇傳三張排成一排居中，整體燈光冷一點…"
+              placeholder="給策展人的指示，例：只展柳生春相關、白蛇傳三張排成一排、整體燈光冷一點…"
               rows={2}
               className={[
                 'w-full resize-none rounded-md border p-2 text-xs focus:outline-none focus:ring-1',
@@ -605,7 +658,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
               <button
                 type="button"
                 onClick={runCurate}
-                disabled={curating || loading || exhibitedCount === 0}
+                disabled={curating || loading || allInventoryItems.length === 0}
                 className={[
                   'shrink-0 rounded-full border px-4 py-1.5 text-xs transition-colors disabled:opacity-40',
                   UI.aiBtn,
