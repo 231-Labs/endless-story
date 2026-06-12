@@ -350,10 +350,16 @@ export function ChamberView({ characterId }: { characterId: string }) {
       overrides[a.key] = { pos: a.pos, yawDeg: a.yaw, scale: a.scale };
       lights[a.key] = a.light;
     }
+    // Merge arrangement keys into selectedKeys as a safety net: AI sometimes
+    // mentions a curio in its reasoning but omits it from selectedKeys.
+    // Items the AI placed are definitionally selected.
+    const arrangementKeys = res.result.arrangement.map((a) => a.key);
+    const finalKeys = res.result.selectedKeys
+      ? [...new Set([...res.result.selectedKeys, ...arrangementKeys])]
+      : undefined;
     updateRoom((r) => ({
       ...r,
-      // If the AI selected a different set of items, apply it; else keep current keys.
-      keys: res.result!.selectedKeys ?? r.keys,
+      keys: finalKeys ?? r.keys,
       overrides: { ...r.overrides, ...overrides },
       lights: { ...r.lights, ...lights },
       note: res.result!.note,
