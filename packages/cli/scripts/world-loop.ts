@@ -34,10 +34,22 @@
  *                          after every n ticks (default 0 = off; see
  *                          docs/NARRATIVE_AGENTS.md §12.2)
  *
- * Env (from ../web/.env.local):
+ * Env (from ../web/.env.local locally, or the service's own EnvironmentFile
+ * when deployed standalone). Every flag above has an env fallback
+ * (flag > env > default), so a service deployment is tuned entirely via env:
  *   WORLD_LOOP_URL    web base url or full /api/tick url (default http://localhost:3000)
  *   TICK_LOOP_SECRET  bearer token, if the /api/tick route is secured
- *   SHOWRUNNER_EVERY_TICKS fallback for --showrunner-every
+ *   WORLD_LOOP_INTERVAL       fallback for --interval (seconds)
+ *   WORLD_LOOP_MAX_TICKS      fallback for --max
+ *   WORLD_LOOP_MAX_CHARACTERS fallback for --max-characters
+ *   SHOWRUNNER_EVERY_TICKS    fallback for --showrunner-every
+ *   TICK_EVENT_SPINE / TICK_LLM_FRAMING / TICK_DIRECTOR_RESOURCES /
+ *   TICK_PARALLEL_EVENTS / TICK_ATTENTION_BUDGET / TICK_RIVAL_GRAVITY /
+ *   TICK_MAX_CONCURRENT_EVENTS
+ *                     experimental gates — same names as the web-side env
+ *                     resolution, so one .env works on either service (set
+ *                     here they're forwarded in the POST body; truthy =
+ *                     1/true/yes/on; body only ever forces ON)
  *   RUNNER_CONTROL_URL optional relayer /control URL; {paused:true} skips the tick
  *   MEMWAL_SERVER_URL fallback base URL for control when RUNNER_CONTROL_URL is unset
  *   RUNNER_CONTROL_SECRET optional bearer token for RUNNER_CONTROL_URL
@@ -55,6 +67,12 @@ interface LoopOpts {
     showrunnerEvery: number;
 }
 
+/** '1' / 'true' / 'yes' / 'on' — same semantics as the web-side TICK_* gates. */
+function envFlag(name: string): boolean {
+    const v = (process.env[name] ?? '').trim().toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
 function parseArgs(argv: string[]): LoopOpts {
     const get = (name: string): string | undefined => {
         const hit = argv.find((a) => a.startsWith(`--${name}=`));
@@ -62,10 +80,13 @@ function parseArgs(argv: string[]): LoopOpts {
     };
     const has = (name: string): boolean => argv.includes(`--${name}`);
 
-    const interval = Number(get('interval') ?? 60);
-    const max = Number(get('max') ?? 0);
+    // Every knob resolves flag > env > default, so a standalone service
+    // deployment (systemd/pm2 with an EnvironmentFile) can be tuned without
+    // editing the unit's ExecStart line.
+    const interval = Number(get('interval') ?? process.env.WORLD_LOOP_INTERVAL ?? 60);
+    const max = Number(get('max') ?? process.env.WORLD_LOOP_MAX_TICKS ?? 0);
     const jsonOut = get('json-out');
-    const maxCharacters = Number(get('max-characters'));
+    const maxCharacters = Number(get('max-characters') ?? process.env.WORLD_LOOP_MAX_CHARACTERS);
     const characterIds = (get('character-ids') ?? '')
         .split(',')
         .map((id) => id.trim())
@@ -83,13 +104,17 @@ function parseArgs(argv: string[]): LoopOpts {
     if (has('no-sleep')) input.sleep = false;
     if (has('no-gazette')) input.gazette = false;
     // EVENT_LIFECYCLE experiments (default off; opt-in for observation runs).
-    if (has('event-spine')) input.eventSpine = true; // Phase 2: multi-tick BudgetEvent spine
-    if (has('llm-framing')) input.llmFraming = true; // Phase 3-A: LLM names each incident
-    if (has('director-resources')) input.directorResources = true; // Phase 3-B: LLM adds scarcity
-    if (has('parallel-events')) input.parallelEvents = true; // Stage 1: many events at once
-    if (has('attention-budget')) input.attentionBudget = true; // Stage 2: cross-event attention pull
-    if (has('rival-gravity')) input.rivalGravity = true; // draw contenders together so events form
-    const maxConcurrent = Number(get('max-concurrent-events'));
+    // Env names match the web-side gates (TICK_*), so the same .env works on
+    // either service: set here → forwarded in the POST body; set on the web
+    // service → resolved there. Body only ever forces ON (never sends false),
+    // so the two layers compose instead of fighting.
+    if (has('event-spine') || envFlag('TICK_EVENT_SPINE')) input.eventSpine = true; // Phase 2: multi-tick BudgetEvent spine
+    if (has('llm-framing') || envFlag('TICK_LLM_FRAMING')) input.llmFraming = true; // Phase 3-A: LLM names each incident
+    if (has('director-resources') || envFlag('TICK_DIRECTOR_RESOURCES')) input.directorResources = true; // Phase 3-B: LLM adds scarcity
+    if (has('parallel-events') || envFlag('TICK_PARALLEL_EVENTS')) input.parallelEvents = true; // Stage 1: many events at once
+    if (has('attention-budget') || envFlag('TICK_ATTENTION_BUDGET')) input.attentionBudget = true; // Stage 2: cross-event attention pull
+    if (has('rival-gravity') || envFlag('TICK_RIVAL_GRAVITY')) input.rivalGravity = true; // draw contenders together so events form
+    const maxConcurrent = Number(get('max-concurrent-events') ?? process.env.TICK_MAX_CONCURRENT_EVENTS);
     if (Number.isFinite(maxConcurrent) && maxConcurrent > 0) input.maxConcurrentEvents = Math.floor(maxConcurrent);
     const showrunnerEvery = Number(get('showrunner-every') ?? process.env.SHOWRUNNER_EVERY_TICKS ?? 0);
 
