@@ -7,8 +7,8 @@
  *   ZAI_MODEL_CHEAP           — Z.AI model for decisions / moderation (default: 'GLM-4.7-FlashX')
  *   ZAI_BASE_URL              — Z.AI base URL (default: 'https://api.z.ai/api/paas/v4')
  *   POE_API_KEY               — Poe API key (multi-provider via OpenAI-compat endpoint)
- *   POE_MODEL_PRIMARY         — Poe model for creative tasks (default: 'GLM-4.6')
- *   POE_MODEL_CHEAP           — Poe model for decisions / moderation (default: 'GLM-4.6')
+ *   POE_MODEL_PRIMARY         — Poe model for creative tasks (default: 'GLM-5.1-FW')
+ *   POE_MODEL_CHEAP           — Poe model for decisions / moderation (default: 'GLM-4.7-N')
  *   ANTHROPIC_API_KEY         — direct Anthropic Claude key
  *   ANTHROPIC_MODEL_PRIMARY   — direct Anthropic model (default: 'claude-sonnet-4-6')
  *   ANTHROPIC_MODEL_CHEAP     — direct Anthropic cheap model (default: 'claude-haiku-4-5')
@@ -44,10 +44,10 @@ const DEFAULTS = {
   zaiModelPrimary: 'glm-5.1',
   zaiModelCheap: 'GLM-4.7-FlashX',
   zaiBaseUrl: 'https://api.z.ai/api/paas/v4',
-  // Chinese-prose quality first: both primary and cheap use GLM-4.6 (Claude's Chinese
-  // is weaker than GLM here). Override explicitly via POE_MODEL_* env to switch.
-  poeModelPrimary: 'GLM-4.6',
-  poeModelCheap: 'GLM-4.6',
+  // Poe: GLM-5.1-FW for creative writing, GLM-4.7-N for decisions / moderation.
+  // Override via POE_MODEL_* env.
+  poeModelPrimary: 'GLM-5.1-FW',
+  poeModelCheap: 'GLM-4.7-N',
   anthropicModelPrimary: 'claude-sonnet-4-6',
   anthropicModelCheap: 'claude-haiku-4-5',
   aiProvider: 'auto' as AIProvider,

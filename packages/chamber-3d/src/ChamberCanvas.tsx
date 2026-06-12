@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { Fog } from 'three';
-import { SceneRenderer } from './SceneRenderer.js';
+import { SceneRenderer, type SceneEditProps } from './SceneRenderer.js';
 import { ChamberEffects } from './ChamberEffects.js';
 import { CharacterAvatar } from './CharacterAvatar.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
@@ -14,7 +14,7 @@ import { deriveEnvironment, deriveRoomDims, paletteForEnv } from './environment.
 import { deterministicDesign } from './scene-design.js';
 import type { ChamberAvatar, ChamberEnvironment, ChamberLayout } from './types.js';
 
-export interface ChamberCanvasProps {
+export interface ChamberCanvasProps extends SceneEditProps {
   className?: string;
   style?: CSSProperties;
   layout?: ChamberLayout;
@@ -57,6 +57,11 @@ export function ChamberCanvas({
   envOverride,
   roomScale = 1,
   cinematic = false,
+  editable,
+  selectedIndex,
+  transformMode,
+  onSelect,
+  onCommit,
 }: ChamberCanvasProps) {
   const design = layout?.design ?? deterministicDesign();
   const base = deriveEnvironment(layout?.params);
@@ -79,8 +84,13 @@ export function ChamberCanvas({
     [layout?.code],
   );
 
-  const fogNear = dims.depth * 1.4;
-  const fogFar = dims.depth * 5 + 14;
+  const isVault = design.backdrop.style === '藏閣';
+  const bright = env.timeOfDay === 'day' || env.timeOfDay === 'dawn';
+  // 明閣: pull the fog back and tint it paper, or every still reads washed-out
+  const fogScale = isVault && bright ? 1.9 : 1;
+  const fogColor = isVault && bright ? '#e7dfcd' : palette.bg;
+  const fogNear = dims.depth * 1.4 * fogScale;
+  const fogFar = (dims.depth * 5 + 14) * fogScale;
   const camPos: [number, number, number] = [dims.width * 0.5, dims.height * 0.55, dims.depth * 0.95 + 3.4];
 
   return (
@@ -90,8 +100,9 @@ export function ChamberCanvas({
       shadows
       dpr={[1, 2]}
       camera={{ fov: 50, near: 0.1, far: 300, position: camPos }}
+      onPointerMissed={editable ? () => onSelect?.(null) : undefined}
     >
-      <fog attach="fog" args={[palette.bg, fogNear, fogFar]} />
+      <fog attach="fog" args={[fogColor, fogNear, fogFar]} />
       {cinematic ? <MistReveal near={fogNear} far={fogFar} /> : null}
 
       {generated ? (
@@ -114,10 +125,22 @@ export function ChamberCanvas({
           ))}
         </>
       ) : (
-        <SceneRenderer design={design} env={env} avatars={avatars} dims={dims} />
+        <ErrorBoundary fallback={<mesh position={[0, 1, 0]}><boxGeometry args={[0.5, 0.5, 0.5]} /><meshBasicMaterial color="#a03226" /></mesh>}>
+          <SceneRenderer
+            design={design}
+            env={env}
+            avatars={avatars}
+            dims={dims}
+            editable={editable}
+            selectedIndex={selectedIndex}
+            transformMode={transformMode}
+            onSelect={onSelect}
+            onCommit={onCommit}
+          />
+        </ErrorBoundary>
       )}
 
-      <ChamberEffects />
+      <ChamberEffects bright={bright} />
 
       <OrbitControls
         makeDefault
@@ -127,7 +150,7 @@ export function ChamberCanvas({
         minDistance={3}
         maxDistance={dims.width * 1.9}
         maxPolarAngle={Math.PI * 0.52}
-        autoRotate={cinematic && !interacted}
+        autoRotate={cinematic && !interacted && !editable}
         autoRotateSpeed={0.45}
         onStart={() => setInteracted(true)}
       />

@@ -11,6 +11,7 @@ import {
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, read as endlessRead, tx as endlessTx } from '@endless-story/sdk';
 import { truncateAddress } from '@/lib/format';
+import { getMySubscriptionsPageData } from '@/lib/actions/subscriptions-page';
 import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 import { useToast } from '@/components/common/Toaster';
 
@@ -28,6 +29,7 @@ export function MockWalletMenu() {
   // Real on-chain character count for the connected wallet — replaces the
   // mock persona's ownedCount once a wallet is in. Null until first fetch.
   const [chainOwnedCount, setChainOwnedCount] = useState<number | null>(null);
+  const [subscriptionCount, setSubscriptionCount] = useState<number | null>(null);
 
   const packageId = ENDLESS_STORY_DEPLOYMENT.packageId;
   const faucetId = ENDLESS_STORY_DEPLOYMENT.faucetId;
@@ -81,6 +83,26 @@ export function MockWalletMenu() {
       cancelled = true;
     };
   }, [account, suiClient, packageId, balanceTick]);
+
+  useEffect(() => {
+    if (!account) {
+      setSubscriptionCount(null);
+      return;
+    }
+    let cancelled = false;
+    getMySubscriptionsPageData(account.address)
+      .then(({ subscriptions, characters }) => {
+        if (cancelled) return;
+        const charIds = new Set(characters.map((c) => c.id));
+        setSubscriptionCount(subscriptions.filter((s) => charIds.has(s.characterId)).length);
+      })
+      .catch(() => {
+        if (!cancelled) setSubscriptionCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [account, balanceTick]);
 
   useEffect(() => {
     if (!account || !packageId) {
@@ -153,9 +175,10 @@ export function MockWalletMenu() {
   const dossierHref = isConnected
     ? `/dossier?filter=mine&as=${account.address}`
     : '/dossier';
-  const subscriptionsHref = isConnected
-    ? `/subscriptions?as=${account.address}`
-    : '/subscriptions';
+  const chamberHref = isConnected
+    ? `/chamber?id=${account.address}`
+    : '/chamber';
+  const subscriptionsHref = '/subscriptions';
 
   const pillLabel = isConnected ? truncateAddress(account.address, 4, 4) : '未連接';
 
@@ -221,11 +244,18 @@ export function MockWalletMenu() {
                 <span className="font-mono text-xs text-mute">{chainOwnedCount ?? '—'}</span>
               </Link>
               <Link
+                href={chamberHref}
+                className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
+              >
+                <span>我的藏閣</span>
+                <span className="font-serif text-xs text-mute">藏</span>
+              </Link>
+              <Link
                 href={subscriptionsHref}
                 className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
               >
                 <span>我的訂閱</span>
-                <span className="font-mono text-xs text-mute">—</span>
+                <span className="font-mono text-xs text-mute">{subscriptionCount ?? '—'}</span>
               </Link>
 
               {isSagaAdmin && (

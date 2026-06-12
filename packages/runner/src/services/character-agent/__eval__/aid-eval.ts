@@ -5,7 +5,7 @@
  *                                              # a character reasons over (no key).
  *   tsx aid-eval.ts                            # offline: grade the recorded stand-in answers
  *                                              # through the REAL parseAid + finalizeAid (no key).
- *   tsx aid-eval.ts --live --model=GLM-4.6,GLM-5.1  # call the live model(s) per scenario and grade.
+ *   tsx aid-eval.ts --live --model=GLM-4.7-N,GLM-5.1-FW  # call the live model(s) per scenario and grade.
  *                                              # Needs POE_API_KEY (or ANTHROPIC_API_KEY). The
  *                                              # `model` string is passed straight to Poe's bot id.
  *
@@ -89,7 +89,7 @@ const args = process.argv.slice(2);
 const live = args.includes('--live');
 const modelArg = args.find((a) => a.startsWith('--model='))?.slice('--model='.length);
 // Default the live comparison to the two models under evaluation; override with --model=a,b.
-const DEFAULT_LIVE_MODELS = ['GLM-4.6', 'GLM-5.1-FW'];
+const DEFAULT_LIVE_MODELS = ['GLM-4.7-N', 'GLM-5.1-FW'];
 const models: (string | undefined)[] = modelArg
     ? modelArg.split(',').map((m) => m.trim()).filter(Boolean)
     : live

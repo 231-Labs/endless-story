@@ -3,8 +3,6 @@ import { Suspense } from 'react';
 import type { Chapter, Character } from '@endless-story/shared';
 import { chaptersApi, charactersApi, cutsApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
-import { ChapterToc } from '@/components/feed/ChapterToc';
-import { ChapterCast } from '@/components/feed/ChapterCast';
 import { LinkifiedProse } from '@/components/common/CharacterLinkifier';
 import { formatDate } from '@/lib/format';
 import { txUrl, objectUrl } from '@/lib/explorer';
@@ -17,9 +15,8 @@ import { txUrl, objectUrl } from '@/lib/explorer';
  * declares itself as 視角原料 and links UP to the cut when one exists.
  *
  * Perf: the prose needs only immutable cached reads (commitment + blob) plus
- * the saga roster — it renders immediately. Everything that needs the saga-wide
- * chapter scan (TOC, prev/next, sibling POVs, the cut link) streams in via
- * Suspense so navigation never blocks on 40 Walrus reads.
+ * the saga roster — it renders immediately. Prev/next nav streams in via
+ * Suspense so navigation never blocks on a saga-wide chapter scan.
  */
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
@@ -74,24 +71,13 @@ export default async function ChapterPage({
       (await charactersApi.getCharacter(chapter.povCharacterId).catch(() => null))
     : null;
 
-  // On-stage cast: POV first, then involved (deduped)
-  const castIds = Array.from(
-    new Set([
-      ...(chapter.povCharacterId ? [chapter.povCharacterId] : []),
-      ...chapter.involvedCharacterIds,
-    ])
-  );
-  const cast = castIds
-    .map((cid) => charactersById.get(cid))
-    .filter((c): c is NonNullable<typeof c> => Boolean(c));
-
   const eventTx = chapter.provenance?.eventTx;
 
   return (
     <main className="min-h-screen">
       <SiteNav />
       <div className="px-5 py-10 sm:px-10 sm:py-14">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-3xl">
           <Link
             href="/feed"
             aria-label="回梨園章回"
@@ -100,24 +86,7 @@ export default async function ChapterPage({
             <span aria-hidden className="text-base">←</span>
           </Link>
 
-          <div className="mt-8 grid grid-cols-1 gap-12 lg:grid-cols-[1fr_320px] lg:gap-20">
           <article className="min-w-0">
-            <details className="mb-8 es-card lg:hidden">
-              <summary className="cursor-pointer px-6 py-4 text-sm tracking-wide text-ink">
-                目錄 · 出場 {cast.length}
-              </summary>
-              <div className="space-y-8 border-t border-hairline/50 px-6 py-6">
-                <Suspense fallback={<TocSkeleton />}>
-                  <ChapterTocLoader
-                    sagaId={chapter.sagaId}
-                    currentId={chapter.id}
-                    charactersById={charactersById}
-                  />
-                </Suspense>
-                <ChapterCast cast={cast} povId={chapter.povCharacterId} />
-              </div>
-            </details>
-
             <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
               <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
               {/* IA: this surface is the per-character raw material, not the woven 回 */}
@@ -237,24 +206,6 @@ export default async function ChapterPage({
               </Suspense>
             </footer>
           </article>
-
-          <aside className="hidden lg:block">
-            <div className="sticky top-24 space-y-8">
-              <div className="es-card p-6 sm:p-8">
-                <Suspense fallback={<TocSkeleton />}>
-                  <ChapterTocLoader
-                    sagaId={chapter.sagaId}
-                    currentId={chapter.id}
-                    charactersById={charactersById}
-                  />
-                </Suspense>
-              </div>
-              <div className="es-card p-6 sm:p-8">
-                <ChapterCast cast={cast} povId={chapter.povCharacterId} />
-              </div>
-            </div>
-          </aside>
-          </div>
         </div>
       </div>
     </main>
@@ -268,22 +219,6 @@ async function loadTocChapters(sagaId: string): Promise<Chapter[]> {
   return sagaChapters
     .filter((c) => c.visibility === 'public_chapter')
     .sort((a, b) => a.day - b.day || a.createdAt.localeCompare(b.createdAt));
-}
-
-async function ChapterTocLoader({
-  sagaId,
-  currentId,
-  charactersById,
-}: {
-  sagaId: string;
-  currentId: string;
-  charactersById: Map<string, Character>;
-}) {
-  const tocChapters = await loadTocChapters(sagaId);
-  if (tocChapters.length === 0) return null;
-  return (
-    <ChapterToc chapters={tocChapters} currentId={currentId} charactersById={charactersById} />
-  );
 }
 
 /** 同事件互鏈：合本(向上) + 其他角色視角(平行)。 */
@@ -379,17 +314,6 @@ async function ChapterPagerNav({ sagaId, currentId }: { sagaId: string; currentI
 }
 
 /* ── skeletons ─────────────────────────────────────────────────────────── */
-
-function TocSkeleton() {
-  return (
-    <div className="animate-pulse space-y-4" aria-hidden>
-      <div className="mx-auto h-3 w-12 rounded bg-hairline/50" />
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="h-8 rounded bg-hairline/30" style={{ width: `${90 - (i % 2) * 12}%` }} />
-      ))}
-    </div>
-  );
-}
 
 function NavSkeleton() {
   return (

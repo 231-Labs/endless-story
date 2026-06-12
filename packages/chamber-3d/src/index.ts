@@ -1,6 +1,6 @@
 export { ChamberCanvas } from './ChamberCanvas.js';
 export type { ChamberCanvasProps } from './ChamberCanvas.js';
-export { SceneRenderer } from './SceneRenderer.js';
+export { SceneRenderer, type SceneEditProps } from './SceneRenderer.js';
 export { deterministicDesign } from './scene-design.js';
 export type {
   SceneDesign,
@@ -11,6 +11,7 @@ export type {
   TableItem,
 } from './scene-design.js';
 export { ChamberDiorama } from './ChamberDiorama.js';
+export { CurioPreview } from './CurioPreview.js';
 export { ChamberLights } from './ChamberLights.js';
 export { CharacterStandee } from './CharacterStandee.js';
 export {

@@ -47,6 +47,8 @@ export interface GazetteChapter {
     /** Character name + Sui id. */
     characterId: string;
     characterName: string;
+    /** On-chain commitment id — used for /feed/chapter/{id} links. */
+    commitmentId: string;
     /** Walrus blob id (we don't embed the full prose in the gazette;
      *  just headline + link via /api/blob/<blobId>). */
     blobId: string;

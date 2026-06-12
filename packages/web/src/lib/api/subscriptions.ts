@@ -1,11 +1,18 @@
 import type { Subscription, SubscriptionChannel } from '@endless-story/shared';
+import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import {
   listSubscribersForCharacter,
   listSubscriptionsByWallet,
   subscriptions,
 } from '@/mocks/subscriptions';
+import { fetchMySubscriptionsFromChain } from '@/lib/chain/subscription-read';
+import { isSuiObjectId } from '@/lib/chain/character-read';
 import { USE_MOCK } from './config';
 import { httpDelete, httpGet, httpPost } from './http';
+
+function isDeployed(): boolean {
+  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
+}
 
 /**
  * Subscriptions API
@@ -23,6 +30,9 @@ import { httpDelete, httpGet, httpPost } from './http';
  */
 
 export async function listMySubscriptions(wallet: string): Promise<Subscription[]> {
+  if (isDeployed() && isSuiObjectId(wallet)) {
+    return fetchMySubscriptionsFromChain(wallet);
+  }
   if (USE_MOCK) return listSubscriptionsByWallet(wallet);
   return httpGet<Subscription[]>('/subscriptions', { query: { wallet } });
 }

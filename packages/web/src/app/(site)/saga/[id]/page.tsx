@@ -108,10 +108,8 @@ export default async function SagaPage({
     : '無 location';
 
   // Build live state LOCALLY from data already loaded (scenes + cast) instead
-  // of N× getLiveState (each = getCharacter + getScene chain round-trips, all
-  // redundant here). Location = the character's current scene name; intent /
-  // nextPlan stay placeholder on the constellation (the dossier opens the
-  // real plan). This is the bulk of the saga page's per-load cost removed.
+  // of N× getLiveState chain round-trips. Location = current scene name;
+  // intent is fetched on hover in CastConstellation (MemWal plan, one at a time).
   const allCharsForLive = [...cast, ...wildCast];
   const sceneNameById = new Map(scenes.map((s) => [s.id, s.name]));
   const liveStatesById: Record<string, CharacterLiveState> = Object.fromEntries(
@@ -122,9 +120,9 @@ export default async function SagaPage({
       return [
         c.id,
         {
-          intent: `等班主點名，整理${c.role ?? ''}身段。`,
+          intent: '',
           location,
-          nextPlan: '待下一章回。',
+          nextPlan: '',
         } satisfies CharacterLiveState,
       ];
     }),

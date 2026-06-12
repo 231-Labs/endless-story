@@ -1,10 +1,14 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { MeshReflectorMaterial } from '@react-three/drei';
+import type { Group } from 'three';
+import type { ThreeEvent } from '@react-three/fiber';
+import { MeshReflectorMaterial, TransformControls } from '@react-three/drei';
 import { ChamberLights } from './ChamberLights.js';
 import { SkyBackdrop } from './SkyBackdrop.js';
+import { VaultBackdrop } from './VaultBackdrop.js';
+import { DisplayCurio, DisplayStill } from './VaultDisplays.js';
 import { Weather } from './Weather.js';
 import { DriftingMist } from './Mist.js';
 import {
@@ -45,6 +49,17 @@ const LACQUER: Record<string, string> = {
   night: '#1a1512',
 };
 
+/** darken a hex colour for the slab's side faces. */
+function darkenHex(hex: string, f: number): string {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(v, 16);
+  const c = (x: number) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0');
+  return `#${c(((n >> 16) & 255) * f)}${c(((n >> 8) & 255) * f)}${c((n & 255) * f)}`;
+}
+
+const SLAB_H = 0.22;
+
 function Floor({
   type,
   color,
@@ -61,46 +76,123 @@ function Floor({
   if (type === 'void') return null;
   const w = dims.width * 2.6;
   const d = dims.depth * 1.8;
+  const zOff = -dims.depth * 0.1;
   if (type === 'water' || type === 'lacquer') {
     const base = type === 'lacquer' ? LACQUER : WATER;
+    const top = color ?? base[timeOfDay] ?? base.day;
     return (
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, -dims.depth * 0.1]}>
-        <planeGeometry args={[w, d]} />
-        <MeshReflectorMaterial
-          resolution={512}
-          blur={type === 'lacquer' ? [340, 120] : [420, 180]}
-          mixBlur={type === 'lacquer' ? 0.85 : 1.1}
-          mixStrength={type === 'lacquer' ? 1.9 : 2.4}
-          roughness={type === 'lacquer' ? 0.55 : 0.75}
-          depthScale={1.1}
-          minDepthThreshold={0.4}
-          maxDepthThreshold={1.3}
-          color={color ?? base[timeOfDay] ?? base.day}
-          metalness={type === 'lacquer' ? 0.25 : 0.55}
-        />
-      </mesh>
+      <group>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, zOff]}>
+          <planeGeometry args={[w, d]} />
+          <MeshReflectorMaterial
+            resolution={512}
+            blur={type === 'lacquer' ? [340, 120] : [420, 180]}
+            mixBlur={type === 'lacquer' ? 0.85 : 1.1}
+            mixStrength={type === 'lacquer' ? 1.9 : 2.4}
+            roughness={type === 'lacquer' ? 0.55 : 0.75}
+            depthScale={1.1}
+            minDepthThreshold={0.4}
+            maxDepthThreshold={1.3}
+            color={top}
+            metalness={type === 'lacquer' ? 0.25 : 0.55}
+          />
+        </mesh>
+        {/* the floor is a slab, not a film — visible side faces give it mass */}
+        <mesh position={[0, y - SLAB_H / 2 - 0.001, zOff]}>
+          <boxGeometry args={[w, SLAB_H, d]} />
+          <meshStandardMaterial color={darkenHex(top, 0.55)} roughness={0.85} metalness={0.05} />
+        </mesh>
+      </group>
     );
   }
   const flat = type === 'wood' ? (color ?? '#6e5238') : (color ?? '#9a9386');
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, -dims.depth * 0.1]} receiveShadow>
-      <planeGeometry args={[w, d]} />
-      <meshStandardMaterial color={flat} roughness={type === 'wood' ? 0.82 : 0.9} metalness={0.04} />
-    </mesh>
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, zOff]} receiveShadow>
+        <planeGeometry args={[w, d]} />
+        <meshStandardMaterial color={flat} roughness={type === 'wood' ? 0.82 : 0.9} metalness={0.04} />
+      </mesh>
+      <mesh position={[0, y - SLAB_H / 2 - 0.001, zOff]}>
+        <boxGeometry args={[w, SLAB_H, d]} />
+        <meshStandardMaterial color={darkenHex(flat, 0.55)} roughness={0.9} metalness={0.04} />
+      </mesh>
+    </group>
   );
 }
 
-function Element({ el, avatars }: { el: SceneElement; avatars: ChamberAvatar[] }) {
+/** Element kinds the collector can re-arrange in 自由布局. */
+const MOVABLE = new Set(['display_still', 'display_curio', 'character', 'incense']);
+
+function Element({
+  el,
+  avatars,
+  index,
+  bright,
+  editable,
+  onSelect,
+  setRef,
+}: {
+  el: SceneElement;
+  avatars: ChamberAvatar[];
+  index: number;
+  /** 明閣 (day theme): captions switch to ink, light pools soften. */
+  bright?: boolean;
+  editable?: boolean;
+  onSelect?: (index: number) => void;
+  setRef?: (index: number, group: Group | null) => void;
+}) {
   const pos = el.pos;
   const rot: [number, number, number] = [0, ((el.yaw ?? 0) * Math.PI) / 180, 0];
   const scale = el.scale ?? 1;
+  const selectable = !!editable && MOVABLE.has(el.kind);
   const wrap = (node: ReactNode) => (
-    <group position={pos} rotation={rot} scale={scale}>
+    <group
+      ref={(g) => setRef?.(index, g)}
+      position={pos}
+      rotation={rot}
+      scale={scale}
+      onClick={
+        selectable
+          ? (e: ThreeEvent<MouseEvent>) => {
+              e.stopPropagation();
+              onSelect?.(index);
+            }
+          : undefined
+      }
+    >
       {node}
     </group>
   );
 
+  const light = el.params?.light as { color?: string; intensity?: number } | undefined;
+
   switch (el.kind) {
+    case 'display_still':
+      return wrap(
+        <DisplayStill
+          url={el.assetUrl}
+          title={el.label ?? '劇照'}
+          subtitle={String(el.params?.subtitle ?? '')}
+          phase={(el.params?.phase as number) ?? 0}
+          lightColor={light?.color}
+          lightIntensity={light?.intensity}
+          bright={bright}
+        />,
+      );
+    case 'display_curio':
+      return wrap(
+        <DisplayCurio
+          assetUrl={el.assetUrl}
+          fitHeight={el.fitHeight}
+          tag={el.tag}
+          title={el.label ?? '珍玩'}
+          subtitle={String(el.params?.subtitle ?? '')}
+          phase={(el.params?.phase as number) ?? 0}
+          lightColor={light?.color}
+          lightIntensity={light?.intensity}
+          bright={bright}
+        />,
+      );
     case 'stage':
       return wrap(<OperaStage />);
     case 'table_chairs':
@@ -159,22 +251,56 @@ function Element({ el, avatars }: { el: SceneElement; avatars: ChamberAvatar[] }
  * backdrop + floor + mood lighting/weather + every placed element. This is the
  * generic renderer that makes "GLM designs the whole scene" possible.
  */
+export interface SceneEditProps {
+  /** 自由布局: items become clickable and a transform gizmo attaches. */
+  editable?: boolean;
+  selectedIndex?: number | null;
+  transformMode?: 'translate' | 'rotate' | 'scale';
+  onSelect?: (index: number | null) => void;
+  /** fired on gizmo release with the element's new pos / yaw / uniform scale. */
+  onCommit?: (
+    index: number,
+    pos: [number, number, number],
+    yawDeg: number,
+    scale: number,
+  ) => void;
+}
+
 export function SceneRenderer({
   design,
   env,
   avatars,
   dims,
+  editable,
+  selectedIndex,
+  transformMode = 'translate',
+  onSelect,
+  onCommit,
 }: {
   design: SceneDesign;
   env: ChamberEnvironment;
   avatars: ChamberAvatar[];
   dims: RoomDims;
-}) {
+} & SceneEditProps) {
   const palette = paletteForEnv(env);
+  const bright = env.timeOfDay === 'day' || env.timeOfDay === 'dawn';
+  const refs = useRef(new Map<number, Group>());
+  const setRef = (index: number, group: Group | null) => {
+    if (group) refs.current.set(index, group);
+    else refs.current.delete(index);
+  };
+  const rawSelected = editable && selectedIndex != null ? refs.current.get(selectedIndex) : undefined;
+  // Only attach TransformControls to objects in the live scene graph.
+  // Stale refs (element removed by AI re-selection) have no parent and would throw.
+  const selectedObject = rawSelected?.parent != null ? rawSelected : undefined;
 
   return (
     <group>
-      <SkyBackdrop env={env} />
+      {design.backdrop.style === '藏閣' ? (
+        <VaultBackdrop tone={bright ? 'day' : 'night'} />
+      ) : (
+        <SkyBackdrop env={env} />
+      )}
       <ChamberLights palette={palette} />
       <Floor
         type={design.floor.type}
@@ -184,16 +310,53 @@ export function SceneRenderer({
         timeOfDay={env.timeOfDay}
       />
       <Weather weather={env.weather} dims={dims} />
-      {/* 雲氣 — the 虛無 layer: mist hugging the water plane */}
+      {/* 雲氣 — the 虛無 layer: mist hugging the water plane (thinner by day,
+          so the exhibits stay crisp under paper light) */}
       <group position={[0, design.floor.y ?? 0, 0]}>
         <DriftingMist
           dims={dims}
-          tone={env.timeOfDay === 'dusk' || env.timeOfDay === 'night' ? '#aab6c6' : '#f2f5f1'}
+          tone={bright ? '#f2f5f1' : '#aab6c6'}
+          opacity={bright ? 0.06 : 0.16}
         />
       </group>
       {design.elements.map((el, i) => (
-        <Element key={`${el.kind}:${i}`} el={el} avatars={avatars} />
+        <Element
+          key={`${el.kind}:${i}`}
+          el={el}
+          avatars={avatars}
+          index={i}
+          bright={bright}
+          editable={editable}
+          onSelect={onSelect}
+          setRef={setRef}
+        />
       ))}
+
+      {/* 自由布局 gizmo — translate on the floor plane / rotate about Y */}
+      {selectedObject ? (
+        <TransformControls
+          object={selectedObject}
+          mode={transformMode}
+          showX={transformMode !== 'rotate'}
+          showZ={transformMode !== 'rotate'}
+          showY={transformMode !== 'translate'}
+          size={0.8}
+          onMouseUp={() => {
+            if (selectedIndex == null) return;
+            const o = refs.current.get(selectedIndex);
+            if (!o || !onCommit) return;
+            // keep scale uniform: average the gizmo's per-axis result
+            const s = (o.scale.x + o.scale.y + o.scale.z) / 3;
+            o.scale.set(s, s, s);
+            onCommit(
+              selectedIndex,
+              [o.position.x, o.position.y, o.position.z],
+              (o.rotation.y * 180) / Math.PI,
+              s,
+            );
+          }}
+        />
+      ) : null}
     </group>
   );
 }

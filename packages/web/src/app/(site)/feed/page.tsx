@@ -163,7 +163,7 @@ async function FeedContent({
             </div>
           ) : null}
           {mode === 'gazette' ? (
-            <GazetteList gazettes={gazettes} sagaName={saga.name} />
+            <GazetteList gazettes={gazettes} sagaName={saga.name} sagaId={saga.id} />
           ) : mode === 'chapter' ? (
             <CutList cuts={cuts} sagaName={saga.name} />
           ) : mode === 'visual' ? (

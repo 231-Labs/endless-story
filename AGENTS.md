@@ -52,9 +52,9 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
-## 目前進度（2026-06-10）
+## 目前進度（2026-06-12）
 
-**一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder；目前進入「demo 穩定化 + 部署 + 影片素材」階段。
+**一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder；目前進入「demo 穩定化 + 部署 + 影片素材」階段。藏閣 Slice 1–2.6 全部落地，AI 策展（選品 + 場景道具）可用；下一個大步是 Slice 3 實體交易入場。
 
 ### 已經落地
 
@@ -103,6 +103,20 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 - **記憶解密已改 cap-enforced（2026-06-10，⚠️ 待錢包環境實測）**：修掉「不連錢包（或任意 `?as=`）就能看任意角色解密記憶」的洞。舊路徑是 server 拿 admin ControlCap 當萬能解密 oracle、只用可竄改的 `?as=` 字串比對 owner（fallback 還是 OWNER_A）。現在對齊合約 SEAL 模型（解密＝ControlCap 持有者 saga server / OwnerCap 持有者 owner 兩種人）：server 新增 `/api/memories/encrypted` 只回**密文**（`MemWalManual.recallEncrypted`，不動 cap）；owner 在瀏覽器用真錢包＋鏈上查到的 OwnerCap 走 `decryptWithOwnerCap` → `seal_approve_owner` 解密（一次簽名、client 端三因子重排）。`lib/api/memories.ts` 的 server 解密分支已刪，mock fallback 保留（僅 demo fixtures）。tag 解析/評分抽到 client-safe `lib/chain/memory-tags.ts`；`MemoriesTab` 改吃 `isOwner` prop。runner / tick 的 saga ControlCap recall 路徑不變。**遠端容器無錢包：需在有錢包環境實點一輪（連錢包→解密→簽名→出記憶）。**
 - **首頁影片素材 override 已接**：`scenesApi.listTodayClips` 會優先讀 `DEMO_CLIPS_URL`、`DEMO_CLIPS_FILE`、`public/demo-clips.json`，再 fallback 現有 mock clips；格式見 `packages/web/public/demo-clips.example.json`。
 - **短 TTL chain-read cache 已接**：公開 Saga / World time / Scene reads 會走 process-local read-through cache，預設 10–15s，`CHAIN_READ_CACHE_TTL_MS=0` 可關閉；不碰 MemWal / 私密內容。
+- **藏閣 Slice 1–2.6 全部落地（2026-06-12，分支 `claude/loving-leavitt-159db3`）**：
+  - **Slice 1**：基本 3D 藏閣佈局（`packages/chamber-3d`）：展品環形排列、`display_still` / `display_curio` 渲染、聚光燈。
+  - **Slice 2**：自由布局：TransformControls 移位 / 旋轉 / 縮放 + localStorage 持久化（`LayoutOverride`）。
+  - **Slice 2.5**：AI 策展代理人（GLM `buildCuratePrompt` + `parseCurateResponse`）、多展間方案（`Arrangement[]`）、gpt-image-2 台上劇照生成、明閣日間態、戲坊角色紀念品店（`ShopTab`）。
+  - **Slice 2.6（本輪）**：
+    - **AI 選品**：AI 返回 `selectedKeys[]` 直接控制哪些藏品打勾展出（「只展柳生春相關」→ 自動勾選）；client 安全網：arrangement 中的 key 一定併入 selectedKeys，防 AI 漏填。
+    - **展品庫篩選**：全部 / 劇照 / 珍玩 分類 tab + 即時搜尋框（`invFilter` + `invSearch` state）。
+    - **AI 場景道具（`CurateProp`）**：AI 可擺放佈景道具（月洞門 / 竹林 / 假山 / 燈籠 / 屏風等 10 種），儲存在 `Arrangement.props[]` + localStorage，場景在展品環後注入為 `SceneElement`。
+    - **Key 格式根本 bug 修正**：原 `key:seed:liu_xiaosheng` 在 GLM 中被解讀為 `key:` label → value 截在第二個冒號，所有 selectedKey 對不到 inventory；改成 `(key="seed:liu_xiaosheng")` 引號包值。
+    - **TransformControls stale ref 修正**：AI 改 `selectedKeys` 重渲染後舊 ref 的 `parent==null` → `SceneRenderer` 加 guard + `runCurate` 後 `setSelected(null)`。
+    - **藏閣入口遷移**：我的藏閣移入錢包下拉選單（`MockWalletMenu`），`/chamber` 改純以 wallet address 為 id，刪除舊角色 roster 頁（`ChamberRoster.tsx`）。
+    - **AI 模型升級**：`CURATE_MODEL` 預設從 `glm-4.7-flash` → `GLM-4.7-FlashX`（修 HTTP 429 過載）。
+  - **⬜ Slice 3 (next)**：展品 Kiosk 交易（在場景內列出 / 購入 / 撤架，接 `still.move` 版次帳本，紅絹價籤 UI）。
+  - **⬜ Slice 4**：鏈上佈局保存（`chamber::decorate` server action，工具列「鏈上保存」按鈕 — 待 redeploy 後接通）。
 
 ### 已驗證 / 已知限制
 
@@ -232,11 +246,13 @@ packages/
 |---|---|---|---|
 | **S** | **Runner demo acceptance** | 已做 cache/backoff/default=1/UI 顯示；剩顧/柳/孟 2 tick 真跑驗證、確認第二輪 POV 召回第一輪 SOCIAL memory、檢查 SOCIAL memory 不寫未授權重設定 | 0.5–1d |
 | **D** | **部署策略落地** | web 已上自架 VPS；剩 relayer + world-loop 服務化、設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
-| **E** | **角色經濟產品化 Part D** | web adapter / SETTLE phase / GIVE phase / 日界發薪扣 cost / vitality & death hook；若 demo 時間不夠可先保留 shadow | 2–4d |
+| **E** | **角色經濟產品化 Part D** | GIVE/ASK/SETTLE phase 已進 tick-loop；剩 D1 `economy.move` 鏈上轉帳 + relayer KV 持久化 + accept/refuse 升 LLM；若 demo 時間不夠可先保留 shadow | 1–2d |
+| **C3** | **藏閣 Slice 3：展品 Kiosk 交易** | 在場景內建紅絹價籤（`KioskCard`）、接 `still.move` 版次帳本 `listing / purchaseAndResolve / withdraw`；demo-local 先 mock，接通後才鏈上 | 2–3d |
+| **C4** | **藏閣 Slice 4：鏈上佈局保存** | `chamber::decorate` server action + 工具列「鏈上保存」按鈕（現在顯示「待部署」）；需先 redeploy 合約 | 1d post-redeploy |
 | **I** | **Web i18n** | `next-intl` framework + 抽既有文案 + LocaleToggle + `romanize-name`（中文 → 拼音） | 2–3d |
 | **V** | **Demo / Trailer 素材** | 跑 2–3 tick 產章回 + 手卷錄屏；剪 trailer；首頁 placeholder 換真內容；需要預留 LLM/影片生成時間 | 2–4d |
 
-**順序建議**：先 S（否則 demo 不穩）→ D（部署可跑）→ V（開始攢素材）；E / I 視時間切入。不要再從舊 repo 搬大 runner，只補現在 v1 的缺口。
+**順序建議**：先 S（否則 demo 不穩）→ D（部署可跑）→ C3（藏閣有真實交易流）→ V（開始攢素材）；E / C4 / I 視時間切入。不要再從舊 repo 搬大 runner，只補現在 v1 的缺口。
 
 ---
 

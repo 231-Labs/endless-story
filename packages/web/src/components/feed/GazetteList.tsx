@@ -1,6 +1,8 @@
 import { objectUrl } from '@/lib/explorer';
 import { fetchChapterText } from '@/lib/chain/pov-read';
+import { chaptersApi } from '@/lib/api/index';
 import type { GazetteEntry } from '@/lib/api/gazettes';
+import { rewriteGazettePovLinks } from '@/lib/feed/gazette-links';
 import { Markdown } from '@/components/common/Markdown';
 
 /**
@@ -11,9 +13,11 @@ import { Markdown } from '@/components/common/Markdown';
 export async function GazetteList({
     gazettes,
     sagaName,
+    sagaId,
 }: {
     gazettes: GazetteEntry[];
     sagaName: string;
+    sagaId: string;
 }) {
     if (gazettes.length === 0) {
         return (
@@ -28,7 +32,10 @@ export async function GazetteList({
     }
 
     // Resolve full markdown for each gazette in parallel.
-    const bodies = await Promise.all(gazettes.map((g) => fetchBody(g.blobId)));
+    const [bodies, chapters] = await Promise.all([
+        Promise.all(gazettes.map((g) => fetchBody(g.blobId))),
+        chaptersApi.listChapters(sagaId).catch(() => []),
+    ]);
 
     return (
         <div className="space-y-8">
@@ -67,7 +74,14 @@ export async function GazetteList({
                         </span>
                     </header>
                     {bodies[i] ? (
-                        <Markdown source={bodies[i]} className="mt-6" />
+                        <Markdown
+                            source={rewriteGazettePovLinks(
+                                bodies[i],
+                                chapters,
+                                Number(g.committedAtMs),
+                            )}
+                            className="mt-6"
+                        />
                     ) : (
                         <p className="mt-6 text-sm text-mute">— 公報內容暫時無法讀取 —</p>
                     )}

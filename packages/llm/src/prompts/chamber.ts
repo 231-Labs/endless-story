@@ -182,6 +182,176 @@ export function parseSceneSpecResponse(text: string): SceneSpec | null {
   }
 }
 
+// ── 藏閣策展 — AI curates the collector's exhibition ──────────────────
+
+export interface CurateItem {
+  key: string;
+  title: string;
+  type: 'still' | 'curio';
+  /** current selection state in the collector's room */
+  selected?: boolean;
+}
+
+export interface CurateCurrent {
+  key: string;
+  pos: [number, number, number];
+  yaw: number;
+  scale: number;
+}
+
+export interface CuratePlacement {
+  key: string;
+  pos: [number, number, number];
+  yaw: number;
+  scale: number;
+  light: { color: string; intensity: number };
+}
+
+/** A scene prop placed by the AI curator to dress the gallery atmosphere. */
+export interface CurateProp {
+  /** Element kind: moon_gate | bamboo | scholar_rock | lantern | screen | plum_branch | guqin | incense */
+  kind: string;
+  pos: [number, number, number];
+  yaw?: number;
+  scale?: number;
+}
+
+export interface CurateResult {
+  /** one-line curator's note (策展語), shown to the collector. */
+  note: string;
+  arrangement: CuratePlacement[];
+  /**
+   * When the AI changes the exhibition selection (e.g. "只展柳生春作品"),
+   * it returns the keys to exhibit; omitted = keep existing selection.
+   */
+  selectedKeys?: string[];
+  /** Scene props chosen by the AI to dress the gallery (0–3 elements). */
+  props?: CurateProp[];
+}
+
+export interface BuildCuratePromptOptions {
+  items: CurateItem[];
+  /** the collector's instruction, e.g. 「白蛇傳三張排成一排，燈光冷一點」. */
+  instruction: string;
+  /** current arrangement, for iterative adjustment. */
+  current?: CurateCurrent[];
+}
+
+const PROP_CATALOG = `可用場景道具（0~3 件，用 props 陣列選填，座標 |x|/|z| ≤ 8，y=0，scale 0.3~2）：
+moon_gate(月洞門·通幽入境)、bamboo(竹·清雅空靈)、scholar_rock(太湖石·文人山水)、
+lantern(燈籠·溫暖節慶)、screen(屏風·隱秘雅緻)、plum_branch(梅枝·清冷高潔)、
+guqin(古琴·靜默文雅)、incense(香爐·禮儀)
+道具輔助意境，不可擋住展品視線。`;
+
+const CURATE_SYSTEM = `你是「無盡敘界」藏閣的策展人，為收藏家在一座黑暗鏡面展廳裡佈展。每件展品懸在自己的一柱聚光裡：劇照(still)是懸浮玻璃版畫、珍玩(curio)立於台座。
+
+你的工作有三個面向：
+1. **選件**：依收藏家指示決定要展示哪些展品。清單格式為 [✓/空] 〔類型〕標題 (key="真實key值")。劇照（still）和珍玩（curio）都是可選展品，地位完全相同。若指示要求改動展示清單，在回傳 JSON 中加入 selectedKeys 陣列，填入要展示的展品的 key 值（直接從清單的 key="…" 中複製，保留所有冒號與原始格式）；不改動選件則省略 selectedKeys。
+2. **佈置與配燈**：為最終要展示的展品（selectedKeys 或目前 [✓] 展品）決定位置、朝向、大小，並為每件配燈（色溫與強度——例：含情的戲對暖一點 #f6e0c8、雪夜白蛇冷一點 #dbe6f2、肅殺的劍寒白 #e8eef4；主角展品燈強、陪襯燈弱）。
+3. **場景佈景**：視主題選 0~3 件場景道具（見下方目錄）放入 props 陣列，強化展廳意境。
+
+${PROP_CATALOG}
+
+硬規則：
+- 展品座標公尺，原點展廳中心，x→右、z→朝觀者，y 固定 0；|x|、|z| ≤ 6。
+- 展品間距 ≥ 1.6m，不可重疊；劇照 yaw 讓畫面朝向中心（z 正向）。
+- scale 介於 0.6–1.8；light.intensity 介於 6–30；light.color 用 hex。
+- 系列作相鄰成組；留出走入展廳的中軸視線。
+- **key 值**：arrangement 和 selectedKeys 裡的 key 必須與清單的 key="…" 完全一致（含冒號，例如 "seed:liu_xiaosheng"），不可截斷或改寫。
+- selectedKeys 必須包含 arrangement 每一個 key。
+- note 一句說明策展構想。只輸出 JSON，不要任何解釋或 markdown。`;
+
+export function buildCuratePrompt(opts: BuildCuratePromptOptions): BuildPromptResult {
+  const itemLines = opts.items
+    .map((i) => {
+      const mark = i.selected === false ? '[ ]' : '[✓]';
+      // Put key in quotes after the title so "key:" label + "seed:xxx" value don't
+      // look like a single colon-delimited token to the LLM.
+      return `- ${mark} 〔${i.type === 'still' ? '劇照' : '珍玩'}〕${i.title}  (key="${i.key}")`;
+    })
+    .join('\n');
+  const currentBlock = opts.current?.length
+    ? `\n目前擺位（迭代調整的基準，未被指示提到的可保持不動）：\n${JSON.stringify(opts.current)}\n`
+    : '';
+  // Use a concrete key example so the model copies the full colon-containing value.
+  const exampleKey = opts.items[0]?.key ?? 'seed:example';
+  const user = `藏品庫（[✓]=目前展出 [ ]=目前收藏）：
+${itemLines}
+${currentBlock}
+收藏家的指示：${opts.instruction || '（無特別指示，請自由策展）'}
+
+輸出嚴格 JSON（selectedKeys/props 均為選填）：
+{"note":"…","selectedKeys":["${exampleKey}"],"props":[{"kind":"moon_gate","pos":[0,0,-5],"yaw":0,"scale":1}],"arrangement":[{"key":"${exampleKey}","pos":[1.5,0,2],"yaw":0,"scale":1,"light":{"color":"#f6e0c8","intensity":16}}]}`;
+  return {
+    system: CURATE_SYSTEM,
+    messages: [{ role: 'user', content: user }],
+    maxTokens: 2000,
+  };
+}
+
+/** Parse the curation JSON (tolerant); null if malformed. */
+export function parseCurateResponse(text: string): CurateResult | null {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    const obj = JSON.parse(text.slice(start, end + 1)) as Partial<CurateResult>;
+    const raw = Array.isArray(obj.arrangement) ? obj.arrangement : [];
+    const arrangement: CuratePlacement[] = [];
+    for (const a of raw) {
+      const aa = a as Partial<CuratePlacement>;
+      if (!aa.key || !Array.isArray(aa.pos) || aa.pos.length !== 3) continue;
+      const clampXZ = (v: number) => Math.max(-6, Math.min(6, Number(v) || 0));
+      arrangement.push({
+        key: String(aa.key),
+        pos: [clampXZ(aa.pos[0]), 0, clampXZ(aa.pos[2])],
+        yaw: ((Math.round(Number(aa.yaw) || 0) % 360) + 360) % 360,
+        scale: Math.max(0.6, Math.min(1.8, Number(aa.scale) || 1)),
+        light: {
+          color: typeof aa.light?.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(aa.light.color)
+            ? aa.light.color
+            : '#f3e9d6',
+          intensity: Math.max(6, Math.min(30, Number(aa.light?.intensity) || 16)),
+        },
+      });
+    }
+    if (arrangement.length === 0) return null;
+    const rawSelected = (obj as { selectedKeys?: unknown }).selectedKeys;
+    const selectedKeys = Array.isArray(rawSelected) && rawSelected.length > 0
+      ? rawSelected.map(String).filter(Boolean)
+      : undefined;
+    // Parse optional scene props (moon_gate, bamboo, etc.)
+    const VALID_PROP_KINDS = new Set([
+      'moon_gate', 'bamboo', 'scholar_rock', 'lantern', 'screen',
+      'plum_branch', 'guqin', 'incense', 'stage', 'table_chairs',
+    ]);
+    const rawProps = (obj as { props?: unknown }).props;
+    const props: CurateProp[] = [];
+    if (Array.isArray(rawProps)) {
+      for (const p of rawProps) {
+        const pp = p as Partial<CurateProp>;
+        if (!pp.kind || !VALID_PROP_KINDS.has(pp.kind) || !Array.isArray(pp.pos) || pp.pos.length !== 3) continue;
+        const clampP = (v: number) => Math.max(-8, Math.min(8, Number(v) || 0));
+        props.push({
+          kind: String(pp.kind),
+          pos: [clampP(pp.pos[0]), 0, clampP(pp.pos[2])],
+          yaw: pp.yaw != null ? ((Math.round(Number(pp.yaw)) % 360) + 360) % 360 : 0,
+          scale: pp.scale != null ? Math.max(0.3, Math.min(2, Number(pp.scale))) : 1,
+        });
+        if (props.length >= 3) break;
+      }
+    }
+    return {
+      note: String(obj.note ?? ''),
+      arrangement,
+      selectedKeys,
+      props: props.length ? props : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface BuildVisionScenePromptOptions {
   name: string;
   role: string;

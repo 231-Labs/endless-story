@@ -7,7 +7,7 @@ import type { Character } from '@endless-story/shared';
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 import { BlobImage } from '@/components/common/BlobImage';
 
-export type DossierTab = 'profile' | 'gallery' | 'chapters' | 'memories' | 'entrusts';
+export type DossierTab = 'profile' | 'gallery' | 'chapters' | 'shop' | 'memories' | 'entrusts';
 
 /** 記憶 / 託夢 are owner-only surfaces (private memory + dream intervention), so they
  *  only appear in the menu for the connected OwnerCap holder. The rest are public. */
@@ -17,6 +17,7 @@ const TABS: { key: DossierTab; label: string }[] = [
   { key: 'profile', label: '履歷' },
   { key: 'gallery', label: '設定集' },
   { key: 'chapters', label: '章回' },
+  { key: 'shop', label: '戲坊' },
   { key: 'memories', label: '記憶' },
   { key: 'entrusts', label: '託夢' },
 ];

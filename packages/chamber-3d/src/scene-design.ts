@@ -8,7 +8,7 @@ import type { Season, TimeOfDay, Weather } from './types.js';
  * what makes "GLM designs the whole scene" reliable + 3D + cheap.
  */
 
-export type BackdropStyle = '青綠山水' | '水墨遠山' | '暮山' | '夜空' | '雪山' | '素白';
+export type BackdropStyle = '青綠山水' | '水墨遠山' | '暮山' | '夜空' | '雪山' | '素白' | '藏閣';
 /** 'lacquer' = polished dark stage floor (reflective) — the whole ground IS the stage. */
 export type FloorType = 'water' | 'lacquer' | 'wood' | 'stone' | 'void';
 
@@ -17,6 +17,8 @@ export type TableItem = 'lamp' | 'letter' | 'sword' | 'none';
 
 /** The placeable block vocabulary. */
 export type ElementKind =
+  | 'display_still' // 藏閣: a collected 劇照 in its own light shaft
+  | 'display_curio' // 藏閣: a collected 珍玩 on a lit plinth
   | 'stage' // 四面台 — raised opera stage (top at local y=0)
   | 'table_chairs' // 一桌二椅 — the opera convention
   | 'moon_gate' // 月洞門
@@ -64,13 +66,23 @@ export interface SceneDesign {
 }
 
 /**
- * Deterministic default — the whole ground IS the stage: a polished lacquer
- * floor stretching to the mist (reflections come from the floor, like a real
- * stage), a 四面台 canopy with 飛簷 standing on it, dressed only with the
- * opera convention itself (一桌二椅 + a thread of incense); a distant moon
- * gate and one rock breathe in the haze. Objects are 意象, not furniture.
+ * Deterministic default — an empty 藏閣 (the vault before its collection
+ * loads): darkness, the lacquer mirror floor, drifting mist, one breath of
+ * incense at the centre. The loader replaces this with the collection layout.
  */
 export function deterministicDesign(): SceneDesign {
+  return {
+    backdrop: { style: '藏閣' },
+    floor: { type: 'lacquer' },
+    mood: { timeOfDay: 'night', season: 'spring', weather: 'clear', atmosphere: 0.45 },
+    elements: [{ kind: 'incense', pos: [0, 0, 0], scale: 0.9 }],
+  };
+}
+
+/**
+ * The previous curated 戲台 scene, kept for reference / future narrative mode.
+ */
+export function stageDesign(): SceneDesign {
   return {
     backdrop: { style: '青綠山水' },
     floor: { type: 'lacquer' },

@@ -28,6 +28,7 @@ import { LiveStateBar, LiveStateBarSkeleton } from '@/components/dossier/LiveSta
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
+import { ShopTab } from '@/components/dossier/tabs/ShopTab';
 import { ChaptersTab } from '@/components/dossier/tabs/ChaptersTab';
 import { MemoriesTab } from '@/components/dossier/tabs/MemoriesTab';
 import { MemoriesTabClient } from '@/components/dossier/tabs/MemoriesTabClient';
@@ -68,7 +69,7 @@ export async function generateMetadata({
   };
 }
 
-const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'memories', 'entrusts'];
+const VALID_TABS: DossierTab[] = ['profile', 'gallery', 'chapters', 'shop', 'memories', 'entrusts'];
 const VALID_FILTERS: RosterFilter[] = ['all', 'internal', 'external', 'mine'];
 
 function parseTab(raw: string | string[] | undefined): DossierTab {
@@ -345,6 +346,7 @@ async function DossierDetail({
             {tab === 'gallery' ? (
               <GalleryTab character={character} isOwner={viewerWallet === character.nftOwner} />
             ) : null}
+            {tab === 'shop' ? <ShopTab character={character} /> : null}
             {tab === 'chapters' ? (
               <>
                 <ChaptersTab

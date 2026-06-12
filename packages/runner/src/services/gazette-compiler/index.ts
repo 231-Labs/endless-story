@@ -85,22 +85,18 @@ export interface CompileGazetteResult {
 
 /**
  * Rewrite the gazette's POV "read full text" links from the raw Walrus blob
- * (`/api/blob/<blobId>`) to the rendered, access-gated dossier chapters tab
- * (`/dossier?id=<characterId>&tab=chapters`). Two reasons:
- *   1. the raw blob link bypassed the owner+subscriber gate (gazette is public,
- *      POV bodies are not) — a privacy leak;
- *   2. it dumped raw markdown instead of our rendered chapter view.
- * Deterministic (not LLM-trusted): we map each chapter's blobId→characterId.
+ * (`/api/blob/<blobId>`) to the rendered chapter page
+ * (`/feed/chapter/<commitmentId>`). Deterministic (not LLM-trusted).
  */
 function rewriteChapterLinks(
     markdown: string,
-    chapters: ReadonlyArray<{ characterId: string; blobId: string }>,
+    chapters: ReadonlyArray<{ commitmentId: string; blobId: string }>,
 ): string {
     let out = markdown;
     for (const c of chapters) {
-        if (!c.blobId || !c.characterId) continue;
-        const dossier = `/dossier?id=${c.characterId}&tab=chapters`;
-        out = out.split(`/api/blob/${c.blobId}`).join(dossier);
+        if (!c.blobId || !c.commitmentId) continue;
+        const chapterUrl = `/feed/chapter/${c.commitmentId}`;
+        out = out.split(`/api/blob/${c.blobId}`).join(chapterUrl);
     }
     return out;
 }
@@ -325,6 +321,7 @@ async function fetchGazetteSnapshot(
                 chapters.push({
                     characterId: c.subjectId,
                     characterName: charName,
+                    commitmentId: c.commitmentId,
                     blobId: '', // filled below from commitment object
                     excerpt,
                     committedAtMs: c.committedAtMs,
