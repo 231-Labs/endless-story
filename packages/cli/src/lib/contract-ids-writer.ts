@@ -103,6 +103,8 @@ export interface EndlessStoryDeployment {
   dreamConfigId: string;
   dreamAdminCapId: string;
   stillRegistryId: string;
+  /** shared TransferPolicy<Still>, created at deploy time via still::init. */
+  stillTransferPolicyId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;
