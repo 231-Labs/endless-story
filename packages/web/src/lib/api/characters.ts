@@ -61,16 +61,21 @@ export async function getCharacter(id: string): Promise<Character | null> {
     if (onChain) {
       const recruitment = await resolveRecruitmentForCharacter(id);
       const taggedRole = roleFromPublicTags(onChain);
+      const fallbackMembership = fallbackMembershipForCharacter(onChain);
       const enriched = {
         ...onChain,
-        ...(recruitment ? { membership: recruitment.membership } : {}),
+        ...(recruitment
+          ? { membership: recruitment.membership }
+          : fallbackMembership
+            ? { membership: fallbackMembership }
+            : {}),
         ...(taggedRole
           ? { role: taggedRole as CharacterRole }
           : recruitment
             ? { role: recruitment.specialty as CharacterRole }
             : {}),
       };
-      return taggedRole || recruitment ? enriched : enrichRoleFromDescription(onChain);
+      return taggedRole || recruitment || fallbackMembership ? enriched : enrichRoleFromDescription(onChain);
     }
   }
   if (USE_MOCK) return getCharacterById(id) ?? null;
@@ -144,14 +149,20 @@ async function enrichRoles(chars: Character[]): Promise<Character[]> {
     const taggedRole = roleFromPublicTags(c);
     const rid = recruitIdMap.get(c.id);
     const recruitment = rid ? recruitmentsById.get(rid) : null;
+    const fallbackMembership = fallbackMembershipForCharacter(c);
     if (taggedRole || recruitment) {
       return {
         ...c,
-        ...(recruitment ? { membership: recruitment.membership } : {}),
+        ...(recruitment
+          ? { membership: recruitment.membership }
+          : fallbackMembership
+            ? { membership: fallbackMembership }
+            : {}),
         role: (taggedRole ?? recruitment?.specialty ?? c.role) as CharacterRole,
       };
     }
-    return enrichRoleFromDescription(c);
+    const enriched = enrichRoleFromDescription(c);
+    return fallbackMembership ? { ...enriched, membership: fallbackMembership } : enriched;
   });
 }
 
@@ -163,4 +174,13 @@ function roleFromPublicTags(character: Character): string | null {
 function enrichRoleFromDescription(character: Character): Character {
   const inferred = inferRoleFromText(character.description);
   return inferred ? { ...character, role: inferred as CharacterRole } : character;
+}
+
+function fallbackMembershipForCharacter(character: Character): Character['membership'] | null {
+  if (character.membership) return character.membership;
+  // Direct founding-cast mints bypass the recruitment/voucher path, so there is
+  // no GenesisVoucherRedeemed.hint to recover membership from. If the character
+  // is already anchored to the deployed saga, treat it as 春雪社 unless a
+  // recruitment record above says otherwise.
+  return character.sagaId && character.sagaId === ENDLESS_STORY_DEPLOYMENT.sagaId ? 'internal' : null;
 }
