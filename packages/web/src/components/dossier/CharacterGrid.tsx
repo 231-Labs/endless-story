@@ -26,6 +26,7 @@ export interface CardData {
   quote?: { text: string; chapterId?: string; chapterTitle?: string };
   tension?: { targetName: string; label: string };
   initialSubscriberCount: number;
+  subscriberWallets: string[];
   initialSubscribed: boolean;
   isOwner: boolean;
   nextPovHint?: string;
@@ -34,24 +35,17 @@ export interface CardData {
 export function CharacterGrid({
   cards,
   filter,
-  viewerWallet,
   internalSagaId,
 }: {
   cards: CardData[];
   filter: RosterFilter;
-  viewerWallet: string | null;
   internalSagaId: string;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const normalizedQuery = searchQuery.toLowerCase().trim();
 
-  // Prefer the connected wallet for the "mine" filter — server-derived
-  // viewerWallet comes from `?as=` URL param which falls back to a
-  // mock address when absent, so we'd never match the real owner.
-  // Server-side path is kept as fallback for non-wallet flows (e.g.
-  // backend HTTP API w/ session cookie in the future).
   const account = useCurrentAccount();
-  const effectiveViewerWallet = account?.address ?? viewerWallet;
+  const connectedWallet = account?.address ?? null;
 
   const visible = useMemo(
     () =>
@@ -59,11 +53,11 @@ export function CharacterGrid({
         const membership = rosterMembership(c, internalSagaId);
         if (filter === 'internal' && membership !== 'internal') return false;
         if (filter === 'external' && membership !== 'external') return false;
-        if (filter === 'mine' && (!effectiveViewerWallet || c.nftOwner !== effectiveViewerWallet)) return false;
+        if (filter === 'mine' && (!connectedWallet || !sameWallet(c.nftOwner, connectedWallet))) return false;
         if (normalizedQuery) return c.name.toLowerCase().includes(normalizedQuery);
         return true;
       }),
-    [cards, filter, effectiveViewerWallet, internalSagaId, normalizedQuery]
+    [cards, filter, connectedWallet, internalSagaId, normalizedQuery]
   );
 
   const pages = useMemo(() => {
@@ -146,7 +140,7 @@ export function CharacterGrid({
                       key={card.character.id}
                       className="w-[min(85vw,340px,calc((100dvh-340px)*3/4))] flex-shrink-0 snap-center"
                     >
-                      <SubscribeCard {...card} />
+                      <SubscribeCard {...withConnectedWallet(card, connectedWallet)} />
                     </div>
                   ))}
                 </div>
@@ -163,7 +157,7 @@ export function CharacterGrid({
                   <div className="mx-auto flex w-full min-h-0 flex-1 flex-col items-center justify-start pt-8 pb-2 max-w-6xl">
                     <div className="w-full gap-6 md:grid md:grid-cols-3 xl:gap-8">
                       {pageCards.map((card) => (
-                        <SubscribeCard key={card.character.id} {...card} />
+                        <SubscribeCard key={card.character.id} {...withConnectedWallet(card, connectedWallet)} />
                       ))}
                     </div>
                   </div>
@@ -188,6 +182,20 @@ export function CharacterGrid({
       </div>
     </div>
   );
+}
+
+function withConnectedWallet(card: CardData, connectedWallet: string | null): CardData {
+  if (!connectedWallet) return { ...card, initialSubscribed: false, isOwner: false };
+  const isOwner = sameWallet(card.character.nftOwner, connectedWallet);
+  return {
+    ...card,
+    isOwner,
+    initialSubscribed: isOwner || card.subscriberWallets.some((wallet) => sameWallet(wallet, connectedWallet)),
+  };
+}
+
+function sameWallet(a: string | null | undefined, b: string | null | undefined): boolean {
+  return !!a && !!b && a.toLowerCase() === b.toLowerCase();
 }
 
 function SearchIcon(props: SVGProps<SVGSVGElement>) {

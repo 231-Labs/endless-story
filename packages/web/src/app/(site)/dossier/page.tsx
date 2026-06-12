@@ -111,7 +111,7 @@ export default async function DossierPage({
       <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
         <SiteNav />
         <Suspense fallback={<RosterSkeletonInner filter={filter} />}>
-          <RosterCards filter={filter} viewerWallet={viewerWallet} />
+          <RosterCards filter={filter} />
         </Suspense>
       </main>
     );
@@ -130,19 +130,13 @@ export default async function DossierPage({
 
 async function RosterCards({
   filter,
-  viewerWallet,
 }: {
   filter: RosterFilter;
-  viewerWallet: string | null;
 }) {
   // Facade is chain-first when deployed; mock fallback otherwise.
-  // `filter=mine` branches at the facade level (uses OwnerCap query
-  // for cheaper round-trip than scanning all CharacterMinted events).
-  const useOwnedQuery =
-    filter === 'mine' && viewerWallet != null && /^0x[0-9a-fA-F]{64}$/.test(viewerWallet);
-  const characters = useOwnedQuery
-    ? await charactersApi.listOwnedCharacters(viewerWallet)
-    : await charactersApi.listCharacters();
+  // The "mine" roster filter is evaluated in CharacterGrid from the connected
+  // dapp-kit wallet. The server cannot trust URL `?as=` for ownership.
+  const characters = await charactersApi.listCharacters();
   const charactersById = byId(characters);
 
   const cards: CardData[] = await Promise.all(
@@ -172,18 +166,23 @@ async function RosterCards({
         strongEdge && target ? { targetName: target.name, label: strongEdge.label } : undefined;
 
       const subscribers = await subscriptionsApi.listSubscribers(character.id);
-      const isOwner = viewerWallet != null && character.nftOwner === viewerWallet;
-      const initialSubscribed =
-        isOwner ||
-        (viewerWallet != null && subscribers.some((s) => s.wallet === viewerWallet && !s.isOwner));
+      const subscriberWallets = uniqueWallets(
+        subscribers
+          .filter((s) => !s.isOwner)
+          .map((s) => s.wallet)
+          .filter(Boolean)
+          .filter((wallet) => !sameWallet(wallet, character.nftOwner))
+      );
+      const readerCount = subscriberWallets.length + 1;
 
       return {
         character,
         quote,
         tension,
-        initialSubscriberCount: magnetism?.subscriberCount ?? 1,
-        initialSubscribed,
-        isOwner,
+        initialSubscriberCount: readerCount,
+        subscriberWallets,
+        initialSubscribed: false,
+        isOwner: false,
         nextPovHint: magnetism?.nextPovHint,
       };
     })
@@ -193,10 +192,25 @@ async function RosterCards({
     <CharacterGrid
       cards={cards}
       filter={filter}
-      viewerWallet={viewerWallet}
       internalSagaId={DEMO_SAGA_ID}
     />
   );
+}
+
+function uniqueWallets(wallets: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const wallet of wallets) {
+    const key = wallet.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(wallet);
+  }
+  return out;
+}
+
+function sameWallet(a: string | null | undefined, b: string | null | undefined): boolean {
+  return !!a && !!b && a.toLowerCase() === b.toLowerCase();
 }
 
 async function DossierDetail({

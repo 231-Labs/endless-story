@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, type MouseEvent } from 'react';
+import { useEffect, useState, useTransition, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
@@ -61,6 +61,14 @@ export function SubscribeCard({
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const toast = useToast();
   const tone = TONE_BY_ROLE[character.role] ?? TONE_BY_ROLE['班主'];
+
+  useEffect(() => {
+    setSubscribed(initialSubscribed);
+  }, [initialSubscribed]);
+
+  useEffect(() => {
+    setCount(initialSubscriberCount);
+  }, [initialSubscriberCount]);
 
   // 鏈上角色（Sui object id）→ 真 subscribe::subscribe 交易；
   // 示範角色（mock slug）→ 本地示意 + 明示「尚未上鏈」，不假裝成功。
