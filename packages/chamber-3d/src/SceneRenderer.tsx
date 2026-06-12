@@ -289,8 +289,10 @@ export function SceneRenderer({
     if (group) refs.current.set(index, group);
     else refs.current.delete(index);
   };
-  const selectedObject =
-    editable && selectedIndex != null ? refs.current.get(selectedIndex) : undefined;
+  const rawSelected = editable && selectedIndex != null ? refs.current.get(selectedIndex) : undefined;
+  // Only attach TransformControls to objects in the live scene graph.
+  // Stale refs (element removed by AI re-selection) have no parent and would throw.
+  const selectedObject = rawSelected?.parent != null ? rawSelected : undefined;
 
   return (
     <group>

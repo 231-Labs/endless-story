@@ -358,6 +358,8 @@ export function ChamberView({ characterId }: { characterId: string }) {
       lights: { ...r.lights, ...lights },
       note: res.result!.note,
     }));
+    // Clear gizmo selection: the element list may have changed, stale index → invalid ref.
+    setSelected(null);
     if (audioUnlocked()) playRevealMotif();
     setCurating(false);
   }, [inventory, room, layout, instruction, updateRoom]);
