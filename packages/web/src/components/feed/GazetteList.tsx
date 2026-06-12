@@ -1,9 +1,10 @@
 import { objectUrl } from '@/lib/explorer';
 import { fetchChapterText } from '@/lib/chain/pov-read';
-import { chaptersApi } from '@/lib/api/index';
+import { chaptersApi, charactersApi } from '@/lib/api/index';
 import type { GazetteEntry } from '@/lib/api/gazettes';
 import { rewriteGazettePovLinks } from '@/lib/feed/gazette-links';
 import { Markdown } from '@/components/common/Markdown';
+import { isValidWalrusBlobId } from '@endless-story/shared';
 
 /**
  * Full list of gazettes for a saga, newest first. Each entry expands
@@ -32,10 +33,12 @@ export async function GazetteList({
     }
 
     // Resolve full markdown for each gazette in parallel.
-    const [bodies, chapters] = await Promise.all([
+    const [bodies, chapters, characters] = await Promise.all([
         Promise.all(gazettes.map((g) => fetchBody(g.blobId))),
         chaptersApi.listChapters(sagaId).catch(() => []),
+        charactersApi.listSagaCharacters(sagaId).catch(() => []),
     ]);
+    const characterNamesById = new Map(characters.map((c) => [c.id, c.name]));
 
     return (
         <div className="space-y-8">
@@ -79,6 +82,7 @@ export async function GazetteList({
                                 bodies[i],
                                 chapters,
                                 Number(g.committedAtMs),
+                                characterNamesById,
                             )}
                             className="mt-6"
                         />
@@ -92,6 +96,7 @@ export async function GazetteList({
 }
 
 async function fetchBody(blobId: string): Promise<string> {
+    if (!isValidWalrusBlobId(blobId)) return '';
     try {
         // Immutable blob → shared hard cache (same entry the list scan peeked).
         return await fetchChapterText(`/api/blob/${blobId}`);

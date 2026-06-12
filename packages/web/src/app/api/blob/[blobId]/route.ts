@@ -15,6 +15,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { isValidWalrusBlobId } from '@endless-story/shared';
 
 // Self-hosted override via NEXT_PUBLIC_WALRUS_AGGREGATOR (e.g. https://walrus.231labs.xyz);
 // unset → public testnet aggregator.
@@ -27,7 +28,7 @@ export async function GET(
     { params }: { params: Promise<{ blobId: string }> },
 ) {
     const { blobId } = await params;
-    if (!blobId || !/^[A-Za-z0-9_-]+$/.test(blobId)) {
+    if (!isValidWalrusBlobId(blobId)) {
         return new NextResponse('invalid blob id', { status: 400 });
     }
 
