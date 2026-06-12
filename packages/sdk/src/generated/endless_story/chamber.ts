@@ -62,6 +62,217 @@ export const ChamberDecorated = new MoveStruct({ name: `${$moduleName}::ChamberD
         object_count: bcs.u64(),
         layout_version: bcs.u64()
     } });
+export const VaultTicket = new MoveStruct({ name: `${$moduleName}::VaultTicket`, fields: {
+        id: bcs.Address,
+        vault_id: bcs.Address,
+        kiosk_id: bcs.Address
+    } });
+export const PersonalVault = new MoveStruct({ name: `${$moduleName}::PersonalVault`, fields: {
+        id: bcs.Address,
+        owner: bcs.Address,
+        kiosk_id: bcs.Address,
+        /**
+         * Walrus blob id of the full layout JSON (positions, lights, AI props). `none`
+         * until the first `save_layout` call.
+         */
+        layout_blob_id: bcs.option(bcs.string()),
+        layout_version: bcs.u64()
+    } });
+export const PersonalVaultCreated = new MoveStruct({ name: `${$moduleName}::PersonalVaultCreated`, fields: {
+        vault_id: bcs.Address,
+        kiosk_id: bcs.Address,
+        owner: bcs.Address
+    } });
+export interface CreatePersonalVaultArguments {
+    initialLayoutBlobId: RawTransactionArgument<string | null>;
+}
+export interface CreatePersonalVaultOptions {
+    package?: string;
+    arguments: CreatePersonalVaultArguments | [
+        initialLayoutBlobId: RawTransactionArgument<string | null>
+    ];
+}
+/**
+ * Any wallet calls this once. Creates a Kiosk + PersonalVault atomically. Returns
+ * (KioskOwnerCap, VaultTicket) — caller's PTB must
+ * `transferObjects([cap, ticket], ctx.sender())`. Pass `option::some(blob_id)` in
+ * `initial_layout_blob_id` to save an initial layout in the same transaction;
+ * `option::none()` otherwise.
+ */
+export function createPersonalVault(options: CreatePersonalVaultOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        '0x1::option::Option<0x1::string::String>'
+    ] satisfies (string | null)[];
+    const parameterNames = ["initialLayoutBlobId"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'create_personal_vault',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface SaveLayoutArguments {
+    vault: RawTransactionArgument<string>;
+    blobId: RawTransactionArgument<string>;
+}
+export interface SaveLayoutOptions {
+    package?: string;
+    arguments: SaveLayoutArguments | [
+        vault: RawTransactionArgument<string>,
+        blobId: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Anchor a new Walrus layout blob for the vault. Only the wallet that created the
+ * vault (vault.owner) may call this.
+ */
+export function saveLayout(options: SaveLayoutOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        '0x1::string::String'
+    ] satisfies (string | null)[];
+    const parameterNames = ["vault", "blobId"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'save_layout',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface VaultOwnerArguments {
+    v: RawTransactionArgument<string>;
+}
+export interface VaultOwnerOptions {
+    package?: string;
+    arguments: VaultOwnerArguments | [
+        v: RawTransactionArgument<string>
+    ];
+}
+export function vaultOwner(options: VaultOwnerOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["v"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'vault_owner',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface VaultKioskIdArguments {
+    v: RawTransactionArgument<string>;
+}
+export interface VaultKioskIdOptions {
+    package?: string;
+    arguments: VaultKioskIdArguments | [
+        v: RawTransactionArgument<string>
+    ];
+}
+export function vaultKioskId(options: VaultKioskIdOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["v"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'vault_kiosk_id',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface VaultLayoutBlobIdArguments {
+    v: RawTransactionArgument<string>;
+}
+export interface VaultLayoutBlobIdOptions {
+    package?: string;
+    arguments: VaultLayoutBlobIdArguments | [
+        v: RawTransactionArgument<string>
+    ];
+}
+export function vaultLayoutBlobId(options: VaultLayoutBlobIdOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["v"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'vault_layout_blob_id',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface VaultLayoutVersionArguments {
+    v: RawTransactionArgument<string>;
+}
+export interface VaultLayoutVersionOptions {
+    package?: string;
+    arguments: VaultLayoutVersionArguments | [
+        v: RawTransactionArgument<string>
+    ];
+}
+export function vaultLayoutVersion(options: VaultLayoutVersionOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["v"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'vault_layout_version',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface TicketVaultIdArguments {
+    t: RawTransactionArgument<string>;
+}
+export interface TicketVaultIdOptions {
+    package?: string;
+    arguments: TicketVaultIdArguments | [
+        t: RawTransactionArgument<string>
+    ];
+}
+export function ticketVaultId(options: TicketVaultIdOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["t"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'ticket_vault_id',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface TicketKioskIdArguments {
+    t: RawTransactionArgument<string>;
+}
+export interface TicketKioskIdOptions {
+    package?: string;
+    arguments: TicketKioskIdArguments | [
+        t: RawTransactionArgument<string>
+    ];
+}
+export function ticketKioskId(options: TicketKioskIdOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["t"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'ticket_kiosk_id',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface NewPlacementArguments {
     kind: RawTransactionArgument<number>;
     assetBlobId: RawTransactionArgument<Array<number>>;

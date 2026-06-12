@@ -83,6 +83,16 @@ async function main() {
   // so the package owner always matches the bootstrap signer. See sui-publish.ts.
   const result = await suiPublish({ contractsDir, network: env, gasBudget });
 
+  // ─── extract init-time objects ────────────────────────────────
+  // still::init creates TransferPolicy<Still> automatically on publish.
+  // Its type contains the new packageId, so we match by substring.
+  const stillPolicyType = `${result.packageId}::still::Still`;
+  const stillTransferPolicyId =
+    result.createdObjects.find(
+      (o) => o.type.startsWith('0x2::transfer_policy::TransferPolicy<') &&
+             o.type.includes(stillPolicyType),
+    )?.id ?? '';
+
   // ─── write contract-ids.ts ─────────────────────────────────────
   console.log(`\n[contract-ids] writing snapshot…`);
   if (!result.adminCapId) {
@@ -92,6 +102,10 @@ async function main() {
         '     Writing empty adminCapId; bootstrap will set it later.',
     );
   }
+  if (!stillTransferPolicyId) {
+    console.warn('   ! TransferPolicy<Still> not found in publish output — kiosk purchase will fail.\n' +
+      '     Verify still::init creates it and re-run deploy.');
+  }
   const deployedAt = new Date().toISOString();
   writeContractIds(
     sharedSrcDir,
@@ -100,17 +114,19 @@ async function main() {
       packageId: result.packageId,
       latestPackageId: result.packageId,
       adminCapId: result.adminCapId ?? '',
+      stillTransferPolicyId,
     },
     deployedAt,
   );
 
   // ─── summary ───────────────────────────────────────────────────
   console.log('\n[done] Phase 0 deploy complete.');
-  console.log(`   packageId    ${result.packageId}`);
-  console.log(`   adminCapId   ${result.adminCapId ?? '(none)'}`);
-  console.log(`   digest       ${result.digest}`);
-  console.log(`   deployedAt   ${deployedAt}`);
-  console.log('\nNext: Phase 1 module migration. See AGENTS.md → 「鏈上架構 · Phase 路線圖」.');
+  console.log(`   packageId          ${result.packageId}`);
+  console.log(`   adminCapId         ${result.adminCapId ?? '(none)'}`);
+  console.log(`   stillTransferPolicy ${stillTransferPolicyId || '(not found)'}`);
+  console.log(`   digest             ${result.digest}`);
+  console.log(`   deployedAt         ${deployedAt}`);
+  console.log('\nNext: run bootstrap (② in /admin/deploy). See AGENTS.md → 「下一步」.');
 }
 
 main().catch((e) => {

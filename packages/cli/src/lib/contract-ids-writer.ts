@@ -30,6 +30,8 @@ export interface DeploymentSnapshot {
   dreamAdminCapId?: string;
   /** shared StillRegistry (劇照 edition ledger), created at bootstrap. */
   stillRegistryId?: string;
+  /** shared TransferPolicy<Still>, created at deploy time via still::init. */
+  stillTransferPolicyId?: string;
   demoCharacters?: DemoCharacterRef[];
   storyId?: string;
 }
@@ -51,6 +53,7 @@ export function renderContractIdsFile(snap: DeploymentSnapshot, deployedAt: stri
     dreamConfigId: snap.dreamConfigId ?? '',
     dreamAdminCapId: snap.dreamAdminCapId ?? '',
     stillRegistryId: snap.stillRegistryId ?? '',
+    stillTransferPolicyId: snap.stillTransferPolicyId ?? '',
     demoCharacters: snap.demoCharacters ?? [],
     storyId: snap.storyId ?? '',
     deployedAt,
