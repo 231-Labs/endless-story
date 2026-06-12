@@ -5,12 +5,11 @@ import { usePathname } from 'next/navigation';
 import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 
 const TABS = [
-  { key: '/admin', label: '總覽' },
-  { key: '/admin/deploy', label: '部署' },
+  { key: '/admin', label: '駕駛艙' },
+  { key: '/admin/troupe', label: '劇團' },
+  { key: '/admin/stage', label: '戲台' },
   { key: '/admin/recruitments', label: '徵召' },
-  { key: '/admin/director', label: '導演' },
-  { key: '/admin/showrunner', label: 'Showrunner' },
-  { key: '/admin/prompt-lab', label: 'Prompt Lab' },
+  { key: '/admin/deploy', label: '系統' },
   { key: '/admin/assets', label: '資產' },
 ];
 
