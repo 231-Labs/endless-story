@@ -36,6 +36,11 @@ import {
 import { runWorldAudit } from './audit';
 import { fetchRecentGazetteTexts } from './observe';
 import { saveArcPlan } from './memory-store';
+import {
+  fetchCharacterDetail,
+  fetchSagaRosterSnapshot,
+  resolveCharacterId,
+} from './character-inspect';
 
 export type ToolTier = 'read' | 'narrative' | 'config';
 
@@ -79,12 +84,44 @@ const TOOLS: DirectorToolDef[] = [
   {
     name: 'get_saga_live',
     tier: 'read',
-    description: '讀現場快照：各場景在場角色、開放中的事件（誰出牌了/還差誰）。',
+    description:
+      '讀現場快照：各場景在場角色 id、開放中的事件（誰出牌了/還差誰）、最新 scene line。要角色名與所在請用 list_saga_roster；要 persona/關係/記憶請用 get_character_detail。',
     argsSpec: '{}',
     execute: () => {
       const sagaId = ENDLESS_STORY_DEPLOYMENT.sagaId;
       if (!sagaId) throw new Error('saga 尚未種子化');
       return getSagaLiveSnapshot(sagaId);
+    },
+  },
+  {
+    name: 'list_saga_roster',
+    tier: 'read',
+    description:
+      '讀全班名冊：每名角色的 id、行當、性別、年齡、公開簡介、目前場景（含「誰擠在哪」分組）。查「全班現在在哪」或找 characterId 時先用這個。',
+    argsSpec: '{}',
+    execute: async () => {
+      const snap = await fetchSagaRosterSnapshot();
+      if (!snap) throw new Error('saga 尚未種子化');
+      return snap;
+    },
+  },
+  {
+    name: 'get_character_detail',
+    tier: 'read',
+    description:
+      '讀單一角色完整狀態：公開 profile、本色 persona（軸/腔/界）、鏈上關係圖、主觀 relationship hints、近期記憶片段、經濟 survival、所在場景與最新對白。**查角色設定/OOC 防線用這個**，不是 reconcile_character。',
+    argsSpec: '{"characterId": "0x...", "name": "方競西"}（二選一；也可都填）',
+    execute: async (args) => {
+      const resolved = await resolveCharacterId({
+        characterId: typeof args.characterId === 'string' ? args.characterId : undefined,
+        name: typeof args.name === 'string' ? args.name : undefined,
+      });
+      if (!resolved.id) {
+        throw new Error(resolved.hint ?? '找不到角色');
+      }
+      const detail = await fetchCharacterDetail(resolved.id);
+      if (!detail) throw new Error(`角色 ${resolved.id} 讀取失敗`);
+      return detail;
     },
   },
   {
@@ -124,7 +161,7 @@ const TOOLS: DirectorToolDef[] = [
     name: 'reconcile_character',
     tier: 'narrative',
     description:
-      '把一名角色補完整（缺什麼補什麼：肖像→圖集→標籤→persona→創世記憶→關係），冪等、可重跑。巡檢回報 character_gap 時用這個。',
+      '把一名角色補完整（缺什麼補什麼：肖像→圖集→標籤→persona→創世記憶→關係），冪等、可重跑。巡檢回報 character_gap 時用這個。**只回報補漏步驟，不回傳 persona 內文**——查角色現況請用 get_character_detail。',
     argsSpec: '{"characterId": "0x..."}',
     execute: (args) => reconcileCharacterAction(str(args, 'characterId')),
   },

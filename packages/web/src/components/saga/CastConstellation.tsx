@@ -27,6 +27,7 @@ import {
   type Zone,
 } from './constellationLayout';
 import { ConstellationBackdrop, ConstellationNode } from './ConstellationNode';
+import { getCharacterLiveIntent } from '@/lib/actions/live-state';
 
 /**
  * Cast-positions map (top-down floor plan) — same on-chain world as the handscroll,
@@ -61,6 +62,9 @@ export function CastConstellation({
   centerId?: string;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [hoveredIntent, setHoveredIntent] = useState<string | null>(null);
+  const [intentLoading, setIntentLoading] = useState(false);
+  const intentCacheRef = useRef<Record<string, string>>({});
   // 觸控的 tap 會在 click 前觸發合成 mouseenter（把 hoveredId 設好），
   // 所以「第一次點先聚焦」要用 pointerdown 當下的聚焦狀態來判斷。
   const hoveredAtPointerDownRef = useRef<string | null>(null);
@@ -73,6 +77,39 @@ export function CastConstellation({
       el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
     }
   }, []);
+
+  // 懸浮時才拉 MemWal plan（[眼下打算]），避免 saga 頁 N 次 SEAL 解密。
+  useEffect(() => {
+    if (!hoveredId) {
+      setHoveredIntent(null);
+      setIntentLoading(false);
+      return;
+    }
+
+    const cached = intentCacheRef.current[hoveredId];
+    if (cached) {
+      setHoveredIntent(cached);
+      setIntentLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setHoveredIntent(null);
+    setIntentLoading(true);
+    getCharacterLiveIntent(hoveredId)
+      .then((intent) => {
+        if (cancelled) return;
+        if (intent) intentCacheRef.current[hoveredId] = intent;
+        setHoveredIntent(intent);
+      })
+      .finally(() => {
+        if (!cancelled) setIntentLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hoveredId]);
   const isDark = useIsDark();
   const ink = (a: number) => (isDark ? `rgba(220, 206, 176, ${a})` : `rgba(40, 38, 44, ${a})`);
 
@@ -336,7 +373,6 @@ export function CastConstellation({
 
   const hoveredPos = hoveredId ? posById.get(hoveredId) : null;
   const hoveredTopScenes = hoveredId ? (charScenesById.get(hoveredId) ?? []).slice(0, 2) : [];
-  const hoveredLive = hoveredId ? liveStatesById[hoveredId] : undefined;
 
   return (
     <section
@@ -438,9 +474,13 @@ export function CastConstellation({
               </div>
             ) : null}
 
-            {hoveredLive?.intent ? (
+            {intentLoading ? (
+              <p className="mt-3 border-t border-hairline/35 pt-3 text-2xs italic tracking-widest text-mute/50">
+                讀取心境…
+              </p>
+            ) : hoveredIntent ? (
               <p className="mt-3 border-t border-hairline/35 pt-3 text-2xs italic leading-relaxed text-mute/90">
-                「{hoveredLive.intent}」
+                「{hoveredIntent}」
               </p>
             ) : null}
           </div>
