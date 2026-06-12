@@ -1,8 +1,10 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { MeshReflectorMaterial } from '@react-three/drei';
+import type { Group } from 'three';
+import type { ThreeEvent } from '@react-three/fiber';
+import { MeshReflectorMaterial, TransformControls } from '@react-three/drei';
 import { ChamberLights } from './ChamberLights.js';
 import { SkyBackdrop } from './SkyBackdrop.js';
 import { VaultBackdrop } from './VaultBackdrop.js';
@@ -92,12 +94,43 @@ function Floor({
   );
 }
 
-function Element({ el, avatars }: { el: SceneElement; avatars: ChamberAvatar[] }) {
+/** Element kinds the collector can re-arrange in 自由布局. */
+const MOVABLE = new Set(['display_still', 'display_curio', 'character', 'incense']);
+
+function Element({
+  el,
+  avatars,
+  index,
+  editable,
+  onSelect,
+  setRef,
+}: {
+  el: SceneElement;
+  avatars: ChamberAvatar[];
+  index: number;
+  editable?: boolean;
+  onSelect?: (index: number) => void;
+  setRef?: (index: number, group: Group | null) => void;
+}) {
   const pos = el.pos;
   const rot: [number, number, number] = [0, ((el.yaw ?? 0) * Math.PI) / 180, 0];
   const scale = el.scale ?? 1;
+  const selectable = !!editable && MOVABLE.has(el.kind);
   const wrap = (node: ReactNode) => (
-    <group position={pos} rotation={rot} scale={scale}>
+    <group
+      ref={(g) => setRef?.(index, g)}
+      position={pos}
+      rotation={rot}
+      scale={scale}
+      onClick={
+        selectable
+          ? (e: ThreeEvent<MouseEvent>) => {
+              e.stopPropagation();
+              onSelect?.(index);
+            }
+          : undefined
+      }
+    >
       {node}
     </group>
   );
@@ -181,18 +214,40 @@ function Element({ el, avatars }: { el: SceneElement; avatars: ChamberAvatar[] }
  * backdrop + floor + mood lighting/weather + every placed element. This is the
  * generic renderer that makes "GLM designs the whole scene" possible.
  */
+export interface SceneEditProps {
+  /** 自由布局: items become clickable and a transform gizmo attaches. */
+  editable?: boolean;
+  selectedIndex?: number | null;
+  transformMode?: 'translate' | 'rotate';
+  onSelect?: (index: number | null) => void;
+  /** fired on gizmo release with the element's new pos / yaw. */
+  onCommit?: (index: number, pos: [number, number, number], yawDeg: number) => void;
+}
+
 export function SceneRenderer({
   design,
   env,
   avatars,
   dims,
+  editable,
+  selectedIndex,
+  transformMode = 'translate',
+  onSelect,
+  onCommit,
 }: {
   design: SceneDesign;
   env: ChamberEnvironment;
   avatars: ChamberAvatar[];
   dims: RoomDims;
-}) {
+} & SceneEditProps) {
   const palette = paletteForEnv(env);
+  const refs = useRef(new Map<number, Group>());
+  const setRef = (index: number, group: Group | null) => {
+    if (group) refs.current.set(index, group);
+    else refs.current.delete(index);
+  };
+  const selectedObject =
+    editable && selectedIndex != null ? refs.current.get(selectedIndex) : undefined;
 
   return (
     <group>
@@ -214,8 +269,38 @@ export function SceneRenderer({
         />
       </group>
       {design.elements.map((el, i) => (
-        <Element key={`${el.kind}:${i}`} el={el} avatars={avatars} />
+        <Element
+          key={`${el.kind}:${i}`}
+          el={el}
+          avatars={avatars}
+          index={i}
+          editable={editable}
+          onSelect={onSelect}
+          setRef={setRef}
+        />
       ))}
+
+      {/* 自由布局 gizmo — translate on the floor plane / rotate about Y */}
+      {selectedObject ? (
+        <TransformControls
+          object={selectedObject}
+          mode={transformMode}
+          showX={transformMode === 'translate'}
+          showZ={transformMode === 'translate'}
+          showY={transformMode === 'rotate'}
+          size={0.8}
+          onMouseUp={() => {
+            if (selectedIndex == null) return;
+            const o = refs.current.get(selectedIndex);
+            if (!o || !onCommit) return;
+            onCommit(
+              selectedIndex,
+              [o.position.x, o.position.y, o.position.z],
+              (o.rotation.y * 180) / Math.PI,
+            );
+          }}
+        />
+      ) : null}
     </group>
   );
 }

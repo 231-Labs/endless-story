@@ -1,10 +1,46 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import type { ChamberLayout } from '@endless-story/chamber-3d';
 import { getVaultData, type VaultData } from '@/lib/actions/vault-collection';
 import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/chamber/sound';
+
+/** 自由布局 local persistence (on-chain `decorate` lands with the redeploy). */
+interface LayoutOverride {
+  pos: [number, number, number];
+  yawDeg: number;
+}
+type Overrides = Record<string, LayoutOverride>;
+
+function overridesKey(characterId: string): string {
+  return `vault-layout:${characterId || 'demo'}`;
+}
+
+function loadOverrides(characterId: string): Overrides {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(overridesKey(characterId)) ?? '{}') as Overrides;
+  } catch {
+    return {};
+  }
+}
+
+/** apply saved overrides onto the auto-curated layout. */
+function applyOverrides(layout: ChamberLayout, overrides: Overrides): ChamberLayout {
+  if (!layout.design || Object.keys(overrides).length === 0) return layout;
+  return {
+    ...layout,
+    design: {
+      ...layout.design,
+      elements: layout.design.elements.map((el, i) => {
+        const o = overrides[`${el.kind}:${i}`];
+        return o ? { ...el, pos: o.pos, yaw: o.yawDeg } : el;
+      }),
+    },
+  };
+}
 
 const ChamberCanvas = dynamic(
   () => import('@endless-story/chamber-3d').then((m) => m.ChamberCanvas),
@@ -54,7 +90,16 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const [catalogueOpen, setCatalogueOpen] = useState(true);
   const [poemIdx, setPoemIdx] = useState(0);
   const [inkOverlay, setInkOverlay] = useState(true);
+  // 自由布局
+  const [arrange, setArrange] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [tMode, setTMode] = useState<'translate' | 'rotate'>('translate');
+  const [overrides, setOverrides] = useState<Overrides>({});
   const aliveRef = useRef(true);
+
+  useEffect(() => {
+    setOverrides(loadOverrides(characterId));
+  }, [characterId]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -106,10 +151,40 @@ export function ChamberView({ characterId }: { characterId: string }) {
     }
   }, []);
 
-  const layout = vault?.layout ?? null;
   const items = vault?.items ?? [];
   const stillCount = items.filter((i) => i.type === 'still').length;
   const curioCount = items.length - stillCount;
+  const layout = useMemo(
+    () => (vault ? applyOverrides(vault.layout, overrides) : null),
+    [vault, overrides],
+  );
+
+  const commitTransform = useCallback(
+    (index: number, pos: [number, number, number], yawDeg: number) => {
+      const el = layout?.design?.elements[index];
+      if (!el) return;
+      setOverrides((prev) => {
+        const next = { ...prev, [`${el.kind}:${index}`]: { pos, yawDeg } };
+        try {
+          localStorage.setItem(overridesKey(characterId), JSON.stringify(next));
+        } catch {
+          // storage full/blocked — keep in-memory only
+        }
+        return next;
+      });
+    },
+    [layout, characterId],
+  );
+
+  const resetLayout = useCallback(() => {
+    setOverrides({});
+    setSelected(null);
+    try {
+      localStorage.removeItem(overridesKey(characterId));
+    } catch {
+      // ignore
+    }
+  }, [characterId]);
 
   return (
     <div
@@ -117,7 +192,16 @@ export function ChamberView({ characterId }: { characterId: string }) {
       onPointerDownCapture={handleFirstPointer}
     >
       <div className="absolute inset-0">
-        <ChamberCanvas style={{ width: '100%', height: '100%' }} layout={layout ?? undefined} cinematic />
+        <ChamberCanvas
+          style={{ width: '100%', height: '100%' }}
+          layout={layout ?? undefined}
+          cinematic={!arrange}
+          editable={arrange}
+          selectedIndex={selected}
+          transformMode={tMode}
+          onSelect={setSelected}
+          onCommit={commitTransform}
+        />
       </div>
 
       {/* legibility scrims */}
@@ -134,10 +218,64 @@ export function ChamberView({ characterId }: { characterId: string }) {
         <span className="rounded-full bg-black/25 px-3 py-1 text-xs text-white/55 backdrop-blur-md">
           藏閣 · {items.length} 件藏品
         </span>
+        <button
+          type="button"
+          onClick={() => {
+            setArrange((v) => {
+              if (v) setSelected(null);
+              return !v;
+            });
+          }}
+          disabled={!vault}
+          className={[
+            PILL,
+            arrange ? 'border-[#caa64a]/70 text-[#e8cd84]' : '',
+          ].join(' ')}
+          title="自由布局：點選藏品拖移／旋轉"
+        >
+          {arrange ? '完成布局' : '布局'}
+        </button>
         <button type="button" onClick={() => setCatalogueOpen((v) => !v)} className={PILL}>
           藏品冊
         </button>
       </div>
+
+      {/* 自由布局 toolbar */}
+      {arrange ? (
+        <div className="absolute inset-x-0 bottom-5 z-20 flex justify-center">
+          <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-md">
+            <span className="px-1 text-xs tracking-wider text-white/55">
+              點選藏品{selected != null ? ` · 已選 #${selected + 1}` : ''}
+            </span>
+            <span className="h-5 w-px bg-white/20" />
+            <button
+              type="button"
+              onClick={() => setTMode('translate')}
+              className={[
+                'rounded-full px-3 py-1 text-xs transition-colors',
+                tMode === 'translate' ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
+              ].join(' ')}
+            >
+              移動
+            </button>
+            <button
+              type="button"
+              onClick={() => setTMode('rotate')}
+              className={[
+                'rounded-full px-3 py-1 text-xs transition-colors',
+                tMode === 'rotate' ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
+              ].join(' ')}
+            >
+              旋轉
+            </button>
+            <span className="h-5 w-px bg-white/20" />
+            <button type="button" onClick={resetLayout} className="rounded-full px-3 py-1 text-xs text-white/75 hover:bg-white/15">
+              還原
+            </button>
+            <span className="px-1 text-[10px] text-white/35">本地保存 · 鏈上保存待部署</span>
+          </div>
+        </div>
+      ) : null}
 
       {/* 畫題 + 印章 */}
       <div className="pointer-events-none absolute bottom-24 left-7 z-20 flex items-start gap-3">
@@ -169,7 +307,14 @@ export function ChamberView({ characterId }: { characterId: string }) {
               {items.map((it, i) => (
                 <li
                   key={i}
-                  className="animate-fade-in-up rounded-md border border-white/10 bg-white/5 p-2 text-xs"
+                  onClick={arrange ? () => setSelected(i) : undefined}
+                  className={[
+                    'animate-fade-in-up rounded-md border p-2 text-xs',
+                    arrange ? 'cursor-pointer' : '',
+                    arrange && selected === i
+                      ? 'border-[#caa64a]/70 bg-[#caa64a]/10'
+                      : 'border-white/10 bg-white/5',
+                  ].join(' ')}
                   style={{ animationDelay: `${i * 90}ms`, animationFillMode: 'backwards' }}
                 >
                   <div className="flex items-baseline justify-between gap-2">

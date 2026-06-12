@@ -1,6 +1,6 @@
 export { ChamberCanvas } from './ChamberCanvas.js';
 export type { ChamberCanvasProps } from './ChamberCanvas.js';
-export { SceneRenderer } from './SceneRenderer.js';
+export { SceneRenderer, type SceneEditProps } from './SceneRenderer.js';
 export { deterministicDesign } from './scene-design.js';
 export type {
   SceneDesign,
