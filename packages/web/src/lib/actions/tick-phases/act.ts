@@ -29,6 +29,46 @@ interface EventActState {
     pending: string[]; // participant ids that still need to act (have a hand)
     handCounts: number[]; // hand size per participant (0 = can never act)
     createdAtMs: number; // 0 when the chain object lacks the field
+    hands: string[][]; // card template ids per participant
+    catalog: Array<{ id: string; label: string; intent: number }>;
+    /** All known plays (chain + this tick), for the deterministic verdict. */
+    plays: Array<{ characterId: string; cardIndex: number; atMs: number }>;
+}
+
+/**
+ * Deterministic verdict from on-chain plays — the chain fact the narrative
+ * layer can quote for win/loss (resolve itself carries empty outcomes today).
+ * Rule: the most aggressive card wins (catalog intent ascending: 斬0 攻1 敘4
+ * 觀6); ties break by earliest submission. Pure derivation — reproducible by
+ * anyone from the BudgetEvent object.
+ */
+function deriveVerdict(
+    e: EventActState,
+    nameById: Map<string, string>,
+): { winnerId: string; text: string } | null {
+    const ranked = e.plays
+        .map((p) => {
+            const pi = e.participants.indexOf(p.characterId);
+            const templateId = pi >= 0 ? e.hands[pi]?.[p.cardIndex] : undefined;
+            const card = e.catalog.find((c) => String(c.id) === String(templateId));
+            return card ? { ...p, label: card.label, intent: card.intent } : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null)
+        .sort((a, b) => a.intent - b.intent || a.atMs - b.atMs);
+    if (ranked.length === 0) return null;
+    const w = ranked[0];
+    const winnerName = nameById.get(w.characterId) ?? '某角';
+    if (ranked.length === 1) {
+        return { winnerId: w.characterId, text: `${winnerName}打出〔${w.label}〕，無人接招，這一局由${winnerName}收場` };
+    }
+    const losers = ranked
+        .slice(1)
+        .map((l) => `${nameById.get(l.characterId) ?? '某角'}的〔${l.label}〕`)
+        .join('、');
+    return {
+        winnerId: w.characterId,
+        text: `${winnerName}的〔${w.label}〕壓過${losers}，這一局${winnerName}佔了上風`,
+    };
 }
 
 /** All-acted events may linger this long in spine mode before the janitor closes them. */
@@ -63,8 +103,21 @@ export async function runActPhase(
             const res = await read.event.getBudgetEvent(client, s.eventId);
             parsed = res.json as unknown as {
                 meta?: { status?: number | string; scene_id?: string; created_at_ms?: number | string };
-                deck?: { participants?: string[]; hands?: Array<Array<number | string>> };
-                resolution?: { submitted_actions?: Array<{ character_id?: string }> };
+                deck?: {
+                    participants?: string[];
+                    hands?: Array<Array<number | string>>;
+                    catalog?: Array<
+                        | { id?: number | string; label?: string; intent?: number | string }
+                        | { fields?: { id?: number | string; label?: string; intent?: number | string } }
+                    >;
+                };
+                resolution?: {
+                    submitted_actions?: Array<{
+                        character_id?: string;
+                        card_index?: number | string;
+                        submitted_at_ms?: number | string;
+                    }>;
+                };
             };
         } catch {
             continue;
@@ -81,6 +134,27 @@ export async function runActPhase(
         const pending = participants.filter(
             (p, i) => p && !acted.has(p) && (hands[i]?.length ?? 0) > 0,
         );
+        const catalog = (parsed.deck?.catalog ?? []).map((raw) => {
+            const f = ('fields' in raw && raw.fields ? raw.fields : raw) as {
+                id?: number | string;
+                label?: string;
+                intent?: number | string;
+            };
+            return {
+                id: String(f.id ?? ''),
+                label: String(f.label ?? '?'),
+                intent: Number(f.intent ?? 99),
+            };
+        });
+        const plays = (parsed.resolution?.submitted_actions ?? [])
+            .filter((a): a is { character_id: string; card_index?: number | string; submitted_at_ms?: number | string } =>
+                typeof a.character_id === 'string',
+            )
+            .map((a) => ({
+                characterId: a.character_id,
+                cardIndex: Number(a.card_index ?? 0),
+                atMs: Number(a.submitted_at_ms ?? 0),
+            }));
         events.push({
             eventId: s.eventId,
             sceneId: parsed.meta?.scene_id ?? s.sceneId,
@@ -89,6 +163,9 @@ export async function runActPhase(
             pending,
             handCounts: participants.map((_, i) => hands[i]?.length ?? 0),
             createdAtMs: Number(parsed.meta?.created_at_ms ?? 0) || 0,
+            hands: participants.map((_, i) => (hands[i] ?? []).map((h) => String(h))),
+            catalog,
+            plays,
         });
     }
 
@@ -161,6 +238,7 @@ export async function runActPhase(
                     intent: d.r.intent,
                 });
                 d.e.acted.add(d.charId);
+                d.e.plays.push({ characterId: d.charId, cardIndex: d.r.cardIndex as number, atMs: Date.now() });
                 // Handscroll Step 3: surface the first-person intent as a ghost quote.
                 recordSceneLine(d.e.sceneId, d.charId, d.r.intent, 'act');
             }
@@ -183,6 +261,7 @@ export async function runActPhase(
                 });
                 if (one.ok) {
                     d.e.acted.add(d.charId);
+                    d.e.plays.push({ characterId: d.charId, cardIndex: d.r.cardIndex as number, atMs: Date.now() });
                     recordSceneLine(d.e.sceneId, d.charId, d.r.intent, 'act');
                 }
             }
@@ -233,11 +312,21 @@ export async function runActPhase(
                 }
             });
             for (const e of toResolve) {
+                // The chain resolve carries empty outcomes; the VERDICT — who
+                // prevailed, derived purely from on-chain plays — is what the
+                // narrative layer anchors win/loss to.
+                const verdict = r.ok ? deriveVerdict(e, nameById) : null;
+                if (verdict) {
+                    recordSceneLine(e.sceneId, verdict.winnerId, verdict.text, 'act');
+                }
                 resolves.push({
                     eventId: e.eventId,
                     ok: r.ok,
                     digest: r.digest,
                     error: r.ok ? undefined : r.error,
+                    verdict: verdict?.text,
+                    winnerId: verdict?.winnerId,
+                    participants: e.participants,
                 });
             }
         }

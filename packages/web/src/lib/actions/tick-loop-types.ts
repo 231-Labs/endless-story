@@ -103,6 +103,10 @@ export interface TickResolveResult {
     ok: boolean;
     digest?: string;
     error?: string;
+    /** Deterministic win/loss line derived from on-chain plays (narrative anchor). */
+    verdict?: string;
+    winnerId?: string;
+    participants?: string[];
 }
 
 export interface TickMoveResult {
