@@ -89,3 +89,12 @@ export function appendChatTurns(turns: ChatTurn[]): DirectorMemory {
   persist(mem);
   return mem;
 }
+
+/** Overwrite the arc plan (used by the update_arc_plan tool — chat 大方向). */
+export function saveArcPlan(arcPlan: string): DirectorMemory {
+  const mem = readDirectorMemory();
+  mem.arcPlan = arcPlan.trim();
+  mem.arcPlanUpdatedAt = new Date().toISOString();
+  persist(mem);
+  return mem;
+}

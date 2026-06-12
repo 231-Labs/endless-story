@@ -30,6 +30,8 @@ import {
   type EvolvePortraitInput,
 } from '@/lib/actions/evolve-portrait';
 import { runWorldAudit } from './audit';
+import { fetchRecentGazetteTexts } from './observe';
+import { saveArcPlan } from './memory-store';
 
 export type ToolTier = 'read' | 'narrative' | 'config';
 
@@ -96,6 +98,16 @@ const TOOLS: DirectorToolDef[] = [
     argsSpec: '{}',
     execute: () => runWorldAudit(),
   },
+  {
+    name: 'read_recent_gazettes',
+    tier: 'read',
+    description: '讀最近幾期公報內文（舊→新）——回答「最近劇情如何」先看這個。',
+    argsSpec: '{"limit": 3}',
+    execute: (args) =>
+      fetchRecentGazetteTexts(ENDLESS_STORY_DEPLOYMENT.sagaId ?? '', {
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+      }),
+  },
   // —— narrative ———————————————————————————————————
   {
     name: 'reconcile_character',
@@ -135,6 +147,17 @@ const TOOLS: DirectorToolDef[] = [
         day: typeof args.day === 'number' ? args.day : undefined,
         dryRun: args.dryRun === true,
       }),
+  },
+  {
+    name: 'update_arc_plan',
+    tier: 'narrative',
+    description:
+      '覆寫弧線計畫（Showrunner 的跨心跳記憶）。admin 給大方向時用這個記錄——寫**完整自含**的新版本（保留仍有效的舊內容、整合新指示），下次心跳會據此執行。',
+    argsSpec: '{"arcPlan": "完整弧線計畫 markdown"}',
+    execute: async (args) => {
+      const mem = saveArcPlan(str(args, 'arcPlan'));
+      return { ok: true, arcPlanUpdatedAt: mem.arcPlanUpdatedAt };
+    },
   },
   {
     name: 'evolve_portrait',

@@ -15,8 +15,8 @@
 import { createTextClient } from '@endless-story/llm/text';
 import type { ChatMessage } from '@endless-story/llm/text';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { fetchGazettesForSaga } from '@/lib/chain/gazette-read';
 import { fetchTensionHeadline } from '@/lib/chain/drama';
+import { fetchRecentGazetteTexts } from './observe';
 import { runWorldAudit, type WorldAuditReport } from './audit';
 import { runAutoRepair, type AutoRepairResult } from './repair';
 import {
@@ -51,10 +51,9 @@ export interface ShowrunnerResult {
 }
 
 const GAZETTE_COUNT = 3;
-const GAZETTE_CHAR_CAP = 1500;
 
 /** Tolerant first-JSON-object extractor (models love code fences). */
-function extractJson(text: string): Record<string, unknown> | null {
+export function extractJson(text: string): Record<string, unknown> | null {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
@@ -62,27 +61,6 @@ function extractJson(text: string): Record<string, unknown> | null {
     return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
-  }
-}
-
-async function fetchRecentGazetteTexts(sagaId: string): Promise<string> {
-  try {
-    const entries = await fetchGazettesForSaga(sagaId, { limit: GAZETTE_COUNT });
-    if (entries.length === 0) return '（尚無公報）';
-    const texts: string[] = [];
-    // oldest-first so the LLM reads the story in order
-    for (const entry of [...entries].reverse()) {
-      try {
-        const res = await fetch(entry.blobUrl);
-        const text = (await res.text()).slice(0, GAZETTE_CHAR_CAP);
-        texts.push(text);
-      } catch {
-        texts.push('（本期內文讀取失敗）');
-      }
-    }
-    return texts.join('\n\n---\n\n');
-  } catch {
-    return '（公報讀取失敗）';
   }
 }
 
@@ -132,7 +110,7 @@ export async function runShowrunner(opts: ShowrunnerOptions = {}): Promise<Showr
     repair = await runAutoRepair(audit, { maxRepairs: opts.maxRepairs ?? 2 });
   }
   const [gazettes, tension] = await Promise.all([
-    fetchRecentGazetteTexts(sagaId),
+    fetchRecentGazetteTexts(sagaId, { limit: GAZETTE_COUNT }),
     fetchTensionHeadline(sagaId).catch(() => null),
   ]);
 
