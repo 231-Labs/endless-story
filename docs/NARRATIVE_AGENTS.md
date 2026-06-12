@@ -365,10 +365,27 @@ fallback)+ capability dispatch 雛形,所需只是有上限的 tool-use while �
 
 | Phase | 內容 | 狀態 |
 |---|---|---|
-| 0 | §12.0 角色生成 validator-repair + prompt 修正 | ⬜ |
-| 1 | §12.1 工具註冊表 + §12.2 AUDIT 確定性巡檢 + 自動補漏 | ⬜ |
-| 2 | §12.2 完整心跳 + §12.3 director memory + 導演日誌 | ⬜ |
-| 3 | §12.4 對話框 | ⬜ |
+| 0 | §12.0 角色生成 validator-repair + prompt 修正 | ✅ 2026-06-12 |
+| 1 | §12.1 工具註冊表 + §12.2 AUDIT 確定性巡檢 + 自動補漏 | ✅ 2026-06-12 |
+| 2 | §12.2 完整心跳 + §12.3 director memory + 導演日誌 | ✅ 2026-06-12 |
+| 3 | §12.4 對話框 | ✅ 2026-06-12 |
+
+### 12.8 檔案落點（已實作）
+
+- 角色生成驗證:`packages/llm/src/prompts/character-validate.ts`(確定性檢查+修復訊息)
+  + `preview-character.ts`(generate→verify→repair 迴圈,1+2 輪) + prompt 逐軸擲值指令(`character.ts`)
+- 工具註冊表:`packages/web/src/lib/director/tools.ts`(read/narrative/config 分級;JSON-action 協定,
+  provider-agnostic)。現有工具:get_world_time / get_saga_live / list_recruitments / run_world_audit /
+  read_recent_gazettes(讀)+ reconcile_character / reconcile_saga / direct_capabilities /
+  compile_gazette / update_arc_plan / evolve_portrait(敘事寫)
+- 巡檢:`lib/director/audit.ts`(角色缺漏鏡像 reconcile 檢查、事件卡住/進行中、空場景、徵召)
+  + `repair.ts`(機械補漏,有上限)+ action `world-audit.ts`
+- 心跳:`lib/director/showrunner.ts` + action `showrunner.ts` + `POST /api/showrunner`
+  (TICK_LOOP_SECRET 鑑權,序列化)。world-loop `--showrunner-every=N` / env `SHOWRUNNER_EVERY_TICKS`
+- director memory:`lib/director/memory-store.ts` → `web/data/director-memory.json`
+  (弧線計畫+導演日誌+對話;之後可換 MemWal `saga_<id>`,介面已收斂)
+- 對話:`lib/director/chat.ts` + action `director-chat.ts` + `/admin/showrunner` 頁
+  (DirectorChatPanel + ShowrunnerPanel,AdminTabs 已掛)
 
 ---
 
