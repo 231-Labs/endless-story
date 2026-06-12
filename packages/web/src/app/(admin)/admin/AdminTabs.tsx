@@ -9,6 +9,7 @@ const TABS = [
   { key: '/admin/deploy', label: '部署' },
   { key: '/admin/recruitments', label: '徵召' },
   { key: '/admin/director', label: '導演' },
+  { key: '/admin/showrunner', label: 'Showrunner' },
   { key: '/admin/prompt-lab', label: 'Prompt Lab' },
   { key: '/admin/assets', label: '資產' },
 ];

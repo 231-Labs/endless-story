@@ -28,6 +28,14 @@ export {
 } from './character.js';
 
 export {
+  validateCharacterCandidate,
+  buildCharacterRepairMessage,
+  inferGenderFromPlayerPrompt,
+  type CandidateViolation,
+  type ValidateCandidateOptions,
+} from './character-validate.js';
+
+export {
   buildPortraitCurationPrompt,
   parsePortraitPrompt,
   UNIVERSAL_PORTRAIT_TONE,
