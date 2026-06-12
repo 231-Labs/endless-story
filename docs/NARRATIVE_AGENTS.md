@@ -223,6 +223,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 | ~~N4~~ ✅ | tick loop 自治 | **已做**:tick-loop.ts `runTickLoopAction` 一鍵跑完整輪:ADVANCE→ACT(開著事件中每個未出牌的參與者自動 decide+submit,讀 resolution.submitted_actions 去重)→PRODUCE(POV)→REFLECT(sleep)→NARRATE(公報)。SchedulerPanel「自治推進一個 tick」。**剩**:獨立 CLI setInterval(可後置)+ judge 自動收尾(N5)。 | §6 |
 | **N5** | 導演自動化 | **judge 自動收尾 ✅**(tick loop ACT 後,全員出牌即 resolve_event 收尾)。**剩 N5b**:ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,未做)。 | §3 |
 | ~~N6~~ ✅ | 規劃 Plan | **已做**:character-agent/plan.ts updatePlan(承接舊計畫,不重來)→ MemWal kind=plan(i=8)→ recallCurrentPlanText 在 decide+POV 前撈回注入。tick-loop PLAN phase 最先跑。ReflectionPanel「立志」+ SchedulerPanel「含更新規劃」。**至此 §2 迴圈 PERCEIVE→PLAN→DECIDE/ACT→PRODUCE→REFLECT 全通。** | §2 |
+| **N7** | Showrunner 自主經營 | 導演從「被動接 intent」升級成「主動巡店」:確定性巡檢補漏 + 劇情健康度評估 + 弧線計畫(director memory)+ admin 對話框。**完整設計見 §12**。 | §12 |
 | 後 | 影片(Seedance)/ 新聞 adapter / 多 saga | 原 proposal R6/R7/R8 | defer |
 
 **順序心法**:N1(角色能動性)→ N2/N3(讓決策有記憶+關係依據)→ N4(串成迴圈)→ N5/N6(導演自動化+規劃)→ 即達 C。
@@ -288,6 +289,86 @@ NFT 的藝術不是靜態 mint 圖,而是**隨故事生長的肖像變體**,每�
   **剩**:owner 付費觸發(`update_image_by_owner`,owner 簽)、PortraitRequested 事件 + 獨立 Image
   Compiler service(導演自動觸發,需動 director.move)、CharacterImageUpdated 時間軸 gallery、
   真 img2img anchor(目前靠 physical_facts 文字維持一致)。
+
+---
+
+## 12. N7 Showrunner — 導演自主經營 saga（定案 2026-06-12）
+
+**動機**:角色側已自治(N1-N6),但導演仍是「admin 給 intent → 單發選 capability」的反應器。
+N7 把導演升級成主動經營者:**漏了就補、不好玩就開新張力線、可對話**。
+同一個 agentic loop 思想,套在 Director 身上,工具 = 既有 admin server actions。
+
+### 12.0 配套地基:角色生成 validator-repair(Phase 0,最優先)
+
+candidate 生成(`packages/llm/src/prompts/character.ts` + `preview-character.ts`)從單發改成
+**生成 → 驗證 → 修復**(最多重試 2 次),根治「性別寫錯 / 筋骨不低卻扶牆喘 / secret 全是狗血」:
+
+1. **確定性檢查(零成本,先跑)**:`body` 枚舉 ↔ 筋骨值對位(≥65 禁「孱弱」、≤35 禁「粗壯」);
+   筋骨 ≥55 時 description/secret 禁弱體詞(扶牆/易喘/身子骨弱…);人稱「他/她」↔ physicalFacts.gender
+   一致;玩家沒寫的前提下禁暗黑詞(殺/仇家/血債/滅口/被賣…)。
+2. **修復**:違規清單附回原 prompt 重生成(「上一版違反了:…,修正並保留其餘」);兩次失敗 → 接受 + log。
+3. **prompt 修正**:四軸「數值→敘事」範例改成**高低對稱對**(只有筋骨低範例 = 模型被弱體詞錨定的根因);
+   無 requiredGender 時「先從玩家原文推斷性別並鎖定,全篇人稱一致」;secret 加 2-3 個正面少樣本。
+
+### 12.1 工具註冊表(tool registry)
+
+`packages/runner/src/services/saga-director/tools.ts`:名稱 + zod schema + 級別 + 對應 server action。
+同一份餵 LLM tools 參數 + 執行器。admin 面 ~52 capability 中約 30 個是乾淨 server action,分四級:
+
+| 級別 | 範例 | 政策 |
+|---|---|---|
+| 讀 | getSagaLive / getSceneDetail / 世界時間 / 經濟快照 / listRecruitments | 無限制 |
+| 敘事寫 | reconcileCharacter / runPov / capability catalog(open_storylet…)/ compileGazette / evolvePortrait / rememberDream | 自主執行;鏈上寫先 dryRun 再實發;全部進 audit log |
+| 配置寫 | faucet/dream 價格、custody 收放、recruitment 增刪 | 需 admin 在對話框確認才執行 |
+| 危險 | runCliScriptAction(deploy/reset) | **不給 agent** |
+
+`withAdminLock()` 序列化鎖與 Showrunner 工具呼叫天然相容(串行)。
+
+### 12.2 心跳迴圈(每敘事日一次,world-loop 觸發)
+
+```
+OBSERVE   saga 快照:世界時間/開放事件/最近公報/經濟/名冊
+AUDIT     確定性巡檢(純程式,不用 LLM):缺肖像/views/persona/記憶的角色(reconcile 檢查現成)、
+          卡住 N tick 的事件、沒活動的場景、未滿徵召、快到期 Walrus blob → issues list
+EVALUATE  貴模型讀最近 K 期 gazette + drama beats,對照弧線計畫評分:張力夠嗎?停滯?該收哪條線、開什麼新張力線?
+PLAN/ACT  tool-use 迴圈(上限 M 次):補漏(reconcile…)/ 開新弧線(既有 capability)/ 更新弧線計畫
+REPORT    導演日誌(admin 可見):看到什麼、做了什麼、下一步
+```
+
+**關鍵分工:「發現」交給程式(AUDIT),LLM 只決定「要不要做、先做誰」(EVALUATE/ACT)** — 便宜、可靠、可測試。
+
+### 12.3 Director memory = 弧線計畫持久化
+
+namespace `saga_<id>`(即 §5 已規劃的 Director synthetic memory,N5 殘留項):當前主題、進行中張力線、
+已埋伏筆、做過什麼。每次心跳讀→更新→寫回;沒有它 agent 每次醒來都失憶、反覆開同樣的線。
+**鐵律不變:絕不寫進任何角色的 MemWal namespace。**
+
+### 12.4 對話框(admin DirectorChatPanel)
+
+`/admin` 對話面板 → 同一 agent、同一工具表、同一 director memory:
+- **問**(「現在劇情是什麼?」)→ 讀級工具 + 最近公報 + 弧線計畫,便宜模型回答。
+- **令**(「我要一條復仇線」)→ INTAKE intent:小事即時 tool-use 執行;大事寫入弧線計畫由下次心跳消化。
+- 對話歷史存 director memory → 隔天問「上次叫你做的怎樣了」答得出來。
+
+### 12.5 護欄(必要,非可選)
+
+每次心跳:工具呼叫 ≤ M 次、LLM 花費封頂,超限寫日誌收工。鏈上寫一律先 dryRun。
+既有 RUNNER_CONTROL_URL 暫停面對 Showrunner 同樣生效。每個工具呼叫進 audit log,導演日誌可追溯。
+
+### 12.6 技術選型
+
+**自建迴圈於 packages/runner**(不引入 Claude Agent SDK):已有多供應商 LLM client(Z.AI/Poe/Anthropic
+fallback)+ capability dispatch 雛形,所需只是有上限的 tool-use while 迴圈(~200 行)。導演 = 貴模型低頻,
+成本可控。若日後對話框要做深(session 管理)再評估 Agent SDK。
+
+### 12.7 實作順序
+
+| Phase | 內容 | 狀態 |
+|---|---|---|
+| 0 | §12.0 角色生成 validator-repair + prompt 修正 | ⬜ |
+| 1 | §12.1 工具註冊表 + §12.2 AUDIT 確定性巡檢 + 自動補漏 | ⬜ |
+| 2 | §12.2 完整心跳 + §12.3 director memory + 導演日誌 | ⬜ |
+| 3 | §12.4 對話框 | ⬜ |
 
 ---
 
