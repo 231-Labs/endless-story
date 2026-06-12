@@ -218,10 +218,15 @@ export interface SceneEditProps {
   /** 自由布局: items become clickable and a transform gizmo attaches. */
   editable?: boolean;
   selectedIndex?: number | null;
-  transformMode?: 'translate' | 'rotate';
+  transformMode?: 'translate' | 'rotate' | 'scale';
   onSelect?: (index: number | null) => void;
-  /** fired on gizmo release with the element's new pos / yaw. */
-  onCommit?: (index: number, pos: [number, number, number], yawDeg: number) => void;
+  /** fired on gizmo release with the element's new pos / yaw / uniform scale. */
+  onCommit?: (
+    index: number,
+    pos: [number, number, number],
+    yawDeg: number,
+    scale: number,
+  ) => void;
 }
 
 export function SceneRenderer({
@@ -285,18 +290,22 @@ export function SceneRenderer({
         <TransformControls
           object={selectedObject}
           mode={transformMode}
-          showX={transformMode === 'translate'}
-          showZ={transformMode === 'translate'}
-          showY={transformMode === 'rotate'}
+          showX={transformMode !== 'rotate'}
+          showZ={transformMode !== 'rotate'}
+          showY={transformMode !== 'translate'}
           size={0.8}
           onMouseUp={() => {
             if (selectedIndex == null) return;
             const o = refs.current.get(selectedIndex);
             if (!o || !onCommit) return;
+            // keep scale uniform: average the gizmo's per-axis result
+            const s = (o.scale.x + o.scale.y + o.scale.z) / 3;
+            o.scale.set(s, s, s);
             onCommit(
               selectedIndex,
               [o.position.x, o.position.y, o.position.z],
               (o.rotation.y * 180) / Math.PI,
+              s,
             );
           }}
         />

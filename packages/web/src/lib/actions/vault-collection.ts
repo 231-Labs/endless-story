@@ -68,8 +68,13 @@ export async function getVaultData(characterId: string, force = false): Promise<
     console.warn('[vault] collection read failed:', err);
   }
 
-  // 劇照: the subject's own moments first, then co-stars' — real Walrus images.
-  const stills: VaultStillItem[] = [];
+  // 劇照: AI-painted 柳×蘇 moments first (local seeds until minted as Stills),
+  // then the casts' real Walrus event moments.
+  const stills: VaultStillItem[] = [
+    { url: '/chamber/demo-stills/duishi.png', title: '柳蘇·含情對視', subtitle: '後台一瞬 · 第 1 版' },
+    { url: '/chamber/demo-stills/youhu.png', title: '白蛇傳·遊湖借傘', subtitle: '劇照 · 第 1 版' },
+    { url: '/chamber/demo-stills/duanqiao.png', title: '白蛇傳·斷橋', subtitle: '劇照 · 第 1 版' },
+  ];
   const pushMoments = (c: Character) => {
     for (const m of c.gallery?.eventMoments ?? []) {
       if (!m.imageUrl) continue;
@@ -103,15 +108,14 @@ export async function getVaultData(characterId: string, force = false): Promise<
     { assetUrl: '/chamber/kit/vase_static.glb', fitHeight: 0.34, tag: 'vase', title: '素盞', subtitle: '珍玩 · 示意' },
   ];
 
-  const collectorName = subject?.name ?? '無名';
+  // user-centric: the vault belongs to the collector (wallet), not a character.
+  const collectorName = '我';
   const layout: ChamberLayout = {
     characterId,
-    sceneId: subject?.currentSceneId ?? null,
-    avatars: subject
-      ? [{ id: subject.id, isSelf: true, name: collectorName, portraitUrl: portraitOf(subject) }]
-      : [],
+    sceneId: null,
+    avatars: [],
     params: null,
-    design: buildVaultDesign(stills, curios, subject ? 1 : 0),
+    design: buildVaultDesign(stills, curios),
   };
 
   const items: VaultItemRow[] = [

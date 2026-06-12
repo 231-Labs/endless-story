@@ -11,6 +11,8 @@ import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/ch
 interface LayoutOverride {
   pos: [number, number, number];
   yawDeg: number;
+  /** uniform scale (1 = original). */
+  scale?: number;
 }
 type Overrides = Record<string, LayoutOverride>;
 
@@ -36,7 +38,7 @@ function applyOverrides(layout: ChamberLayout, overrides: Overrides): ChamberLay
       ...layout.design,
       elements: layout.design.elements.map((el, i) => {
         const o = overrides[`${el.kind}:${i}`];
-        return o ? { ...el, pos: o.pos, yaw: o.yawDeg } : el;
+        return o ? { ...el, pos: o.pos, yaw: o.yawDeg, scale: o.scale ?? el.scale } : el;
       }),
     },
   };
@@ -93,7 +95,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
   // 自由布局
   const [arrange, setArrange] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
-  const [tMode, setTMode] = useState<'translate' | 'rotate'>('translate');
+  const [tMode, setTMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
   const [overrides, setOverrides] = useState<Overrides>({});
   const aliveRef = useRef(true);
 
@@ -160,11 +162,11 @@ export function ChamberView({ characterId }: { characterId: string }) {
   );
 
   const commitTransform = useCallback(
-    (index: number, pos: [number, number, number], yawDeg: number) => {
+    (index: number, pos: [number, number, number], yawDeg: number, scale: number) => {
       const el = layout?.design?.elements[index];
       if (!el) return;
       setOverrides((prev) => {
-        const next = { ...prev, [`${el.kind}:${index}`]: { pos, yawDeg } };
+        const next = { ...prev, [`${el.kind}:${index}`]: { pos, yawDeg, scale } };
         try {
           localStorage.setItem(overridesKey(characterId), JSON.stringify(next));
         } catch {
@@ -268,6 +270,16 @@ export function ChamberView({ characterId }: { characterId: string }) {
             >
               旋轉
             </button>
+            <button
+              type="button"
+              onClick={() => setTMode('scale')}
+              className={[
+                'rounded-full px-3 py-1 text-xs transition-colors',
+                tMode === 'scale' ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
+              ].join(' ')}
+            >
+              縮放
+            </button>
             <span className="h-5 w-px bg-white/20" />
             <button type="button" onClick={resetLayout} className="rounded-full px-3 py-1 text-xs text-white/75 hover:bg-white/15">
               還原
@@ -283,7 +295,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
           style={{ writingMode: 'vertical-rl' }}
           className="font-serif text-2xl leading-snug tracking-[0.4em] text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
         >
-          {(vault?.collectorName ?? '無名') + '之藏閣'}
+          我的藏閣
         </h1>
         <span className="grid h-9 w-9 rotate-2 place-items-center rounded-[3px] bg-[#a03226] font-serif text-lg leading-none text-[#f3e7d3] shadow-lg">
           藏

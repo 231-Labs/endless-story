@@ -32,7 +32,6 @@ function faceCentreYaw(x: number, z: number): number {
 export function buildVaultDesign(
   stills: VaultStillItem[],
   curios: VaultCurioItem[],
-  avatarCount: number,
 ): SceneDesign {
   const elements: SceneElement[] = [];
 
@@ -72,12 +71,9 @@ export function buildVaultDesign(
     });
   }
 
-  // the collector at the heart
-  if (avatarCount > 0) {
-    elements.push({ kind: 'character', pos: [0, 0, 0.2], characterIndex: 0 });
-  }
-  // a breath of incense beside them
-  elements.push({ kind: 'incense', pos: [1.1, 0, -0.6], scale: 0.85 });
+  // user-centric: no character at the heart — only a breath of incense.
+  // (The room belongs to the collector's wallet, not to any one character.)
+  elements.push({ kind: 'incense', pos: [0, 0, 0], scale: 0.9 });
 
   return {
     backdrop: { style: '藏閣' },

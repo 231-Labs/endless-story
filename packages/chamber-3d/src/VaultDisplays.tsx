@@ -2,8 +2,8 @@
 
 import { Suspense, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useTexture } from '@react-three/drei';
-import { AdditiveBlending, CanvasTexture, DoubleSide, SRGBColorSpace } from 'three';
+import { SpotLight, useTexture } from '@react-three/drei';
+import { AdditiveBlending, CanvasTexture, DoubleSide, Object3D, SRGBColorSpace } from 'three';
 import type { Group } from 'three';
 import { GlbProp } from './GlbProp.js';
 import { PropPrimitive } from './PropPrimitive.js';
@@ -54,28 +54,44 @@ export function CaptionPlate({
   );
 }
 
-// ── light shaft + floor glow ─────────────────────────────────────────
+// ── light shaft: a REAL volumetric spotlight, gallery-style ──────────
 
-function LightShaft({ height = 3.6, radius = 0.85 }: { height?: number; radius?: number }) {
+function LightShaft({
+  height = 3.8,
+  color = '#f3e9d6',
+  intensity = 18,
+  targetY = 1.1,
+}: {
+  height?: number;
+  color?: string;
+  intensity?: number;
+  targetY?: number;
+}) {
+  // aim the fixture at the piece (target follows this group's transform)
+  const target = useMemo(() => new Object3D(), []);
   return (
     <group>
-      <mesh position={[0, height / 2, 0]}>
-        <coneGeometry args={[radius, height, 24, 1, true]} />
-        <meshBasicMaterial
-          color="#cfd8de"
-          transparent
-          opacity={0.055}
-          blending={AdditiveBlending}
-          depthWrite={false}
-          side={DoubleSide}
-        />
-      </mesh>
+      <primitive object={target} position={[0, targetY, 0]} />
+      <SpotLight
+        position={[0, height, 0.35]}
+        target={target}
+        color={color}
+        intensity={intensity}
+        distance={height + 2}
+        angle={0.42}
+        penumbra={0.55}
+        decay={1.6}
+        attenuation={height}
+        anglePower={5}
+        opacity={0.22}
+      />
+      {/* faint pool on the lacquer */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-        <circleGeometry args={[radius * 1.08, 28]} />
+        <circleGeometry args={[0.92, 28]} />
         <meshBasicMaterial
-          color="#9fb2c0"
+          color="#cdbb96"
           transparent
-          opacity={0.13}
+          opacity={0.08}
           blending={AdditiveBlending}
           depthWrite={false}
         />
@@ -172,7 +188,7 @@ export function DisplayCurio({
   const isGlb = assetUrl && /\.(glb|gltf)(\?|#|$)/i.test(assetUrl);
   return (
     <group>
-      <LightShaft height={3.0} radius={0.7} />
+      <LightShaft height={3.1} intensity={14} targetY={1.05} />
       {/* plinth */}
       <mesh position={[0, 0.45, 0]} castShadow>
         <cylinderGeometry args={[0.34, 0.38, 0.9, 20]} />
@@ -194,7 +210,6 @@ export function DisplayCurio({
           <PropPrimitive tag={tag} />
         )}
       </group>
-      <pointLight position={[0, 1.7, 0]} color="#ffe2b0" intensity={1.4} distance={2.8} decay={2} />
       <group position={[0, 0.55, 0.42]}>
         <CaptionPlate title={title} subtitle={subtitle} width={0.95} />
       </group>
