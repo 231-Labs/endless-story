@@ -4,9 +4,9 @@
  * Server action — the 廂房 room-generation agent.
  *
  * Two paths, both → a `ChamberLayout` the renderer consumes:
- *  - text   (`generateChamberLayout`): GLM (glm-5.1-fw) reads scene/chapters →
- *    Scene Spec → critic loop. The default.
- *  - vision (`generateChamberFromReference`): a multimodal model (glm-4.6v)
+ *  - text   (`generateChamberLayout`): primary model reads scene/chapters →
+ *    Scene Spec → cheap-model critic loop. The default.
+ *  - vision (`generateChamberFromReference`): primary multimodal model
  *    *looks at a reference image* and lays out the chamber in its 意境.
  *
  * Both share context loading + Scene-Spec → placements mapping, a process cache,
@@ -19,7 +19,7 @@ import type { Character } from '@endless-story/shared';
 import type { ChamberAvatar, ChamberLayout, ChamberParams } from '@endless-story/chamber-3d';
 import { deriveEnvironment } from '@endless-story/chamber-3d';
 import type { SceneSpec } from '@endless-story/llm/prompts';
-import { text as llmText, prompts as llmPrompts } from '@endless-story/llm';
+import { text as llmText, prompts as llmPrompts, loadLLMConfig, resolveTextProvider } from '@endless-story/llm';
 import { charactersApi, chaptersApi } from '@/lib/api/index';
 import { fetchOnChainScene } from '@/lib/chain/scene-read';
 import { catalogForPrompt } from '@/lib/chamber/prop-catalog';
@@ -51,13 +51,28 @@ const TABLE_ITEM_LABEL: Record<string, string> = {
 
 const MAX_ITERS = 2;
 const STILL_LABELS = ['同台舊照', '章回 key-art', '人物誌設定圖'];
-/** Creative Scene Spec model (override via CHAMBER_MODEL). */
-const CHAMBER_MODEL = process.env.CHAMBER_MODEL || 'glm-5.1-fw';
-/** Faster critique model (glm-5.1-fw is slow ~55s/call). */
-const CHAMBER_CRITIC_MODEL = process.env.CHAMBER_CRITIC_MODEL || 'GLM-4.7-FlashX';
-/** Vision model that reads the reference image. */
-const CHAMBER_VISION_MODEL = process.env.CHAMBER_VISION_MODEL || 'glm-4.6v';
 const REF_IMAGE = 'public/chamber/ref/green.jpg';
+
+function hasTextLlmProvider(): boolean {
+  return resolveTextProvider(loadLLMConfig()) !== null;
+}
+
+/** Scene spec / vision use primary; critic uses cheap — same tiering as tick loop. */
+function resolveChamberModels(): {
+  sceneModel: string;
+  criticModel: string;
+  visionModel: string;
+  provider: 'zai' | 'poe' | 'anthropic';
+} {
+  const primary = llmText.createTextClient({ kind: 'primary' });
+  const cheap = llmText.createTextClient({ kind: 'cheap' });
+  return {
+    sceneModel: process.env.CHAMBER_MODEL || primary.defaultModel,
+    criticModel: process.env.CHAMBER_CRITIC_MODEL || cheap.defaultModel,
+    visionModel: process.env.CHAMBER_VISION_MODEL || primary.defaultModel,
+    provider: primary.provider,
+  };
+}
 
 interface CacheEntry {
   value: ChamberGeneration;
@@ -244,9 +259,10 @@ export async function generateChamberCode(
   let usedModel: string | undefined;
 
   try {
-    if (!process.env.POE_API_KEY) {
-      log.push({ phase: 'fallback', note: '未設定 POE_API_KEY，退回 spec 場景' });
+    if (!hasTextLlmProvider()) {
+      log.push({ phase: 'fallback', note: '未設定 LLM API key，退回 spec 場景' });
     } else {
+      const { visionModel } = resolveChamberModels();
       const buf = await readFile(path.join(process.cwd(), REF_IMAGE));
       const imageDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
       const llm = llmText.createTextClient({ kind: 'primary' });
@@ -256,7 +272,7 @@ export async function generateChamberCode(
         imageDataUrl,
       });
       const res = await llm.chat({
-        model: CHAMBER_VISION_MODEL,
+        model: visionModel,
         system: prompt.system,
         messages: prompt.messages,
         maxTokens: prompt.maxTokens,
@@ -268,11 +284,11 @@ export async function generateChamberCode(
         note: parsed
           ? `GLM 寫出場景碼（${parsed.length} 字）`
           : '產出不可用/不安全，退回 spec 場景',
-        model: res.model,
+        model: `${res.provider}:${res.model}`,
       });
       if (parsed) {
         code = parsed;
-        usedModel = CHAMBER_VISION_MODEL;
+        usedModel = `${res.provider}:${res.model}`;
       }
     }
   } catch (err) {
@@ -303,11 +319,12 @@ async function runVisionAgent(ctx: {
   role: string;
 }): Promise<{ spec: SceneSpec; log: GenStep[]; usedModel?: string }> {
   const log: GenStep[] = [];
-  if (!process.env.POE_API_KEY) {
-    log.push({ phase: 'fallback', note: '未設定 POE_API_KEY，使用 deterministic 佈局' });
+  if (!hasTextLlmProvider()) {
+    log.push({ phase: 'fallback', note: '未設定 LLM API key，使用 deterministic 佈局' });
     return { spec: deterministicSpec(), log };
   }
   try {
+    const { visionModel } = resolveChamberModels();
     const buf = await readFile(path.join(process.cwd(), REF_IMAGE));
     const imageDataUrl = `data:image/jpeg;base64,${buf.toString('base64')}`;
     const llm = llmText.createTextClient({ kind: 'primary' });
@@ -318,7 +335,7 @@ async function runVisionAgent(ctx: {
       imageDataUrl,
     });
     const res = await llm.chat({
-      model: CHAMBER_VISION_MODEL,
+      model: visionModel,
       system: prompt.system,
       messages: prompt.messages,
       maxTokens: prompt.maxTokens,
@@ -328,13 +345,13 @@ async function runVisionAgent(ctx: {
     log.push({
       phase: 'vision',
       note: parsed ? `看參考圖生成 ${parsed.objects.length} 件物件` : '解析失敗',
-      model: res.model,
+      model: `${res.provider}:${res.model}`,
     });
     if (!parsed) {
       log.push({ phase: 'fallback', note: 'vision 輸出不可用，改用 deterministic 佈局' });
       return { spec: deterministicSpec(), log };
     }
-    return { spec: parsed, log, usedModel: CHAMBER_VISION_MODEL };
+    return { spec: parsed, log, usedModel: `${res.provider}:${res.model}` };
   } catch (err) {
     log.push({
       phase: 'error',
@@ -353,16 +370,19 @@ async function runAgent(ctx: {
   chapters: string[];
 }): Promise<{ spec: SceneSpec; log: GenStep[]; usedModel?: string }> {
   const log: GenStep[] = [];
-  if (!process.env.POE_API_KEY && !process.env.ANTHROPIC_API_KEY) {
-    log.push({ phase: 'fallback', note: '未設定 LLM API key（POE_API_KEY），使用 deterministic 佈局' });
+  if (!hasTextLlmProvider()) {
+    log.push({ phase: 'fallback', note: '未設定 LLM API key，使用 deterministic 佈局' });
     return { spec: deterministicSpec(), log };
   }
 
   try {
-    const llm = llmText.createTextClient({ kind: 'primary' });
+    const { sceneModel, criticModel } = resolveChamberModels();
+    const llmPrimary = llmText.createTextClient({ kind: 'primary' });
+    const llmCheap = llmText.createTextClient({ kind: 'cheap' });
     const catalog = catalogForPrompt();
     let spec: SceneSpec | null = null;
     let issues: string[] | undefined;
+    let usedModel: string | undefined;
 
     for (let i = 0; i < MAX_ITERS; i++) {
       const prompt = llmPrompts.buildSceneSpecPrompt({
@@ -374,8 +394,8 @@ async function runAgent(ctx: {
         stills: STILL_LABELS,
         issues,
       });
-      const res = await llm.chat({
-        model: CHAMBER_MODEL,
+      const res = await llmPrimary.chat({
+        model: sceneModel,
         system: prompt.system,
         messages: prompt.messages,
         maxTokens: prompt.maxTokens,
@@ -385,14 +405,15 @@ async function runAgent(ctx: {
       log.push({
         phase: i === 0 ? 'sceneSpec' : 'revise',
         note: parsed ? `生成 ${parsed.objects.length} 件物件` : '解析失敗',
-        model: res.model,
+        model: `${res.provider}:${res.model}`,
       });
       if (!parsed) break;
       spec = parsed;
+      usedModel = `${res.provider}:${res.model}`;
 
       const cp = llmPrompts.buildCritiquePrompt({ spec, chapters: ctx.chapters, catalog });
-      const cres = await llm.chat({
-        model: CHAMBER_CRITIC_MODEL,
+      const cres = await llmCheap.chat({
+        model: criticModel,
         system: cp.system,
         messages: cp.messages,
         maxTokens: cp.maxTokens,
@@ -402,16 +423,17 @@ async function runAgent(ctx: {
       log.push({
         phase: 'critique',
         note: crit ? (crit.ok ? '自檢通過' : `需修正：${crit.issues.join('；')}`) : '解析失敗',
+        model: `${cres.provider}:${cres.model}`,
       });
       if (!crit || crit.ok) break;
       issues = crit.issues;
     }
 
     if (!spec) {
-      log.push({ phase: 'fallback', note: 'GLM 輸出不可用，改用 deterministic 佈局' });
+      log.push({ phase: 'fallback', note: 'LLM 輸出不可用，改用 deterministic 佈局' });
       return { spec: deterministicSpec(), log };
     }
-    return { spec, log, usedModel: CHAMBER_MODEL };
+    return { spec, log, usedModel };
   } catch (err) {
     log.push({
       phase: 'error',

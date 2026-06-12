@@ -3,12 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 import type { ChamberLayout, SceneDesign, SceneElement } from '@endless-story/chamber-3d';
 import type { CurateProp } from '@endless-story/llm/prompts';
+import { isDeployed, read, tx as endlessTx } from '@endless-story/sdk';
+
+interface VaultTicketRef {
+  ticketId: string;
+  vaultId: string;
+  kioskId: string;
+}
 import { getVaultInventory, type VaultInventory } from '@/lib/actions/vault-collection';
 import { curateVault } from '@/lib/actions/curate-vault';
+import { uploadVaultLayout } from '@/lib/actions/save-vault-layout';
 import { buildVaultDesign } from '@/lib/chamber/vault-design-build';
 import { acquiredVaultItems, loadAcquired } from '@/lib/chamber/shop-catalog';
+import { fetchVaultLayout, serializeVaultLayout } from '@/lib/chamber/vault-layout';
 import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/chamber/sound';
 
 const ChamberCanvas = dynamic(
@@ -137,9 +148,18 @@ const UI = {
  * lights every piece), then fine-tune by hand.
  */
 export function ChamberView({ characterId }: { characterId: string }) {
+  const account = useCurrentAccount();
+  const suiClient = useSuiClient();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const chainReady = isDeployed() && characterId.startsWith('0x');
   const isDark = useIsDark();
   const [inventory, setInventory] = useState<VaultInventory | null>(null);
   const [loading, setLoading] = useState(true);
+  const [vaultRef, setVaultRef] = useState<VaultTicketRef | null>(null);
+  const [vaultLoading, setVaultLoading] = useState(false);
+  const [chainSaving, setChainSaving] = useState(false);
+  const [chainError, setChainError] = useState<string | null>(null);
+  const [chainLayoutVersion, setChainLayoutVersion] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [poemIdx, setPoemIdx] = useState(0);
   const [inkOverlay, setInkOverlay] = useState(true);
@@ -157,6 +177,98 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const [invFilter, setInvFilter] = useState<'all' | 'still' | 'curio'>('all');
   const [invSearch, setInvSearch] = useState('');
   const aliveRef = useRef(true);
+
+  // Discover PersonalVault + VaultTicket for this collector wallet.
+  useEffect(() => {
+    if (!chainReady) return;
+    let cancelled = false;
+    setVaultLoading(true);
+    read.chamber
+      .findVaultTicket(suiClient, characterId)
+      .then(async (ticket) => {
+        if (cancelled) return;
+        setVaultRef(ticket);
+        if (!ticket) return;
+        const vault = await read.chamber.getPersonalVault(suiClient, ticket.vaultId);
+        if (cancelled || !vault) return;
+        setChainLayoutVersion(vault.layoutVersion);
+        // Hydrate layout from Walrus when local rooms haven't been saved yet.
+        if (vault.layoutBlobId && !loadRooms(characterId)) {
+          const blob = await fetchVaultLayout(vault.layoutBlobId);
+          if (cancelled || !blob) return;
+          const state: ArrangementsState = { activeId: blob.activeId, rooms: blob.rooms as Arrangement[] };
+          setRoomsState(state);
+          saveRooms(characterId, state);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setVaultRef(null);
+      })
+      .finally(() => {
+        if (!cancelled) setVaultLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chainReady, characterId, suiClient]);
+
+  const createVault = useCallback(async () => {
+    if (!account) {
+      setChainError('請先連結錢包');
+      return;
+    }
+    setChainError(null);
+    setVaultLoading(true);
+    try {
+      const tx = new Transaction();
+      const [cap, ticket] = tx.add(endlessTx.chamber.createPersonalVault());
+      tx.transferObjects([cap, ticket], account.address);
+      const res = await signAndExecute({ transaction: tx });
+      const full = await suiClient.waitForTransaction({
+        digest: res.digest,
+        options: { showEffects: true },
+      });
+      if (full.effects?.status?.status !== 'success') {
+        throw new Error(full.effects?.status?.error ?? '建立藏閣失敗');
+      }
+      const found = await read.chamber.findVaultTicket(suiClient, account.address);
+      setVaultRef(found);
+      setChainLayoutVersion(0);
+    } catch (err) {
+      setChainError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setVaultLoading(false);
+    }
+  }, [account, signAndExecute, suiClient]);
+
+  const saveToChain = useCallback(async () => {
+    if (!roomsState || !vaultRef) return;
+    setChainError(null);
+    setChainSaving(true);
+    try {
+      const blob = serializeVaultLayout(roomsState);
+      const uploaded = await uploadVaultLayout(blob);
+      if (!uploaded.ok || !uploaded.blobId) {
+        throw new Error(uploaded.error ?? '佈局上傳 Walrus 失敗');
+      }
+      const tx = new Transaction();
+      tx.add(endlessTx.chamber.saveLayout({ vault: vaultRef.vaultId, blobId: uploaded.blobId }));
+      const res = await signAndExecute({ transaction: tx });
+      const full = await suiClient.waitForTransaction({
+        digest: res.digest,
+        options: { showEffects: true },
+      });
+      if (full.effects?.status?.status !== 'success') {
+        throw new Error(full.effects?.status?.error ?? '鏈上保存失敗');
+      }
+      const vault = await read.chamber.getPersonalVault(suiClient, vaultRef.vaultId);
+      setChainLayoutVersion(vault?.layoutVersion ?? chainLayoutVersion);
+    } catch (err) {
+      setChainError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setChainSaving(false);
+    }
+  }, [roomsState, vaultRef, signAndExecute, suiClient, chainLayoutVersion]);
 
   // load inventory (server pieces + locally acquired 戲坊 wares) + 佈置
   useEffect(() => {
@@ -427,6 +539,16 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </Link>
       </div>
       <div className="absolute right-5 top-4 z-20 flex items-center gap-2">
+        {chainReady && !vaultRef && !vaultLoading ? (
+          <button type="button" onClick={createVault} className={UI.pill}>
+            建立鏈上藏閣
+          </button>
+        ) : null}
+        {chainReady && vaultRef ? (
+          <span className={['rounded-full px-3 py-1 text-[10px] backdrop-blur-md', UI.chip].join(' ')}>
+            鏈上 v{chainLayoutVersion ?? 0}
+          </span>
+        ) : null}
         <span className={['rounded-full px-3 py-1 text-xs backdrop-blur-md', UI.chip].join(' ')}>
           {room?.name ?? '佈置'} · 展出 {exhibitedCount} 件
         </span>
@@ -503,8 +625,29 @@ export function ChamberView({ characterId }: { characterId: string }) {
             >
               還原
             </button>
-            <span className={['px-1 text-[10px]', UI.mute].join(' ')}>本地保存 · 鏈上保存待部署</span>
+            {chainReady && vaultRef ? (
+              <button
+                type="button"
+                onClick={saveToChain}
+                disabled={chainSaving || !roomsState}
+                className={['rounded-full px-3 py-1 text-xs transition-colors disabled:opacity-40', UI.aiBtn].join(' ')}
+              >
+                {chainSaving ? '上鏈中…' : '鏈上保存'}
+              </button>
+            ) : (
+              <span className={['px-1 text-[10px]', UI.mute].join(' ')}>
+                {chainReady ? '本地保存 · 尚未建立鏈上藏閣' : '本地保存'}
+              </span>
+            )}
           </div>
+        </div>
+      ) : null}
+
+      {chainError ? (
+        <div className="absolute inset-x-0 top-16 z-30 flex justify-center px-6">
+          <p className="max-w-md rounded-lg border border-cinnabar/40 bg-surface/95 px-4 py-2 text-center text-xs text-cinnabar shadow-lg backdrop-blur-md">
+            {chainError}
+          </p>
         </div>
       ) : null}
 

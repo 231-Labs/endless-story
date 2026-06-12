@@ -12,6 +12,7 @@
  */
 
 import type { Character } from '@endless-story/shared';
+import { makeSuiClient, read, isDeployed } from '@endless-story/sdk';
 import { charactersApi } from '@/lib/api/index';
 import type { VaultCurioItem, VaultStillItem } from '@/lib/chamber/vault-design-build';
 
@@ -30,6 +31,23 @@ const TTL = 10 * 60 * 1000;
 function portraitOf(c: Character | null | undefined): string | undefined {
   const url = c?.gallery?.anchor?.imageUrl;
   return url && url.length > 0 ? url : undefined;
+}
+
+async function chainStillsForOwner(owner: string): Promise<VaultStillItem[]> {
+  if (!owner.startsWith('0x') || !isDeployed()) return [];
+  try {
+    const client = makeSuiClient();
+    const owned = await read.still.listStillsForOwner(client, owner);
+    return owned.map((s) => ({
+      key: `chain:${s.stillId}`,
+      url: s.imageUrl,
+      title: s.title,
+      subtitle: `劇照 · 第 ${s.edition} 版`,
+    }));
+  } catch (err) {
+    console.warn('[vault] chain stills read failed:', err);
+    return [];
+  }
 }
 
 export async function getVaultInventory(
@@ -97,6 +115,17 @@ export async function getVaultInventory(
     { key: 'curio:chest', assetUrl: '/chamber/kit/wooden_chest.glb', fitHeight: 0.42, tag: 'chest', title: '檀木匣', subtitle: '珍玩 · 示意' },
     { key: 'curio:vase', assetUrl: '/chamber/kit/vase_static.glb', fitHeight: 0.34, tag: 'vase', title: '素盞', subtitle: '珍玩 · 示意' },
   ];
+
+  // Merge on-chain Stills owned by the collector wallet (when id = address).
+  if (characterId.startsWith('0x')) {
+    const chainStills = await chainStillsForOwner(characterId);
+    const seen = new Set(stills.map((s) => s.key));
+    for (const s of chainStills) {
+      if (seen.has(s.key)) continue;
+      stills.unshift(s);
+      seen.add(s.key);
+    }
+  }
 
   const value: VaultInventory = { stills, curios };
   cache.set(key, { value, expires: now + TTL });

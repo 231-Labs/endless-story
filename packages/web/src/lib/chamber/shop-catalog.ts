@@ -22,6 +22,10 @@ export interface ShopWare {
   priceSui: number;
   /** still preview / texture */
   url?: string;
+  /** Walrus moment key for still.move mint (same as url blob when available). */
+  walrusBlobId?: string;
+  /** Aggregator URL written into Still.image_url on mint. */
+  imageUrl?: string;
   /** curio 3D source */
   assetUrl?: string;
   tag?: string;
@@ -95,6 +99,8 @@ export function shopWaresFor(character: Character): ShopWare[] {
       limit: null,
       priceSui: 0.5,
       url: m.imageUrl!,
+      walrusBlobId: m.walrusBlobId,
+      imageUrl: m.imageUrl,
       blurb: '一場戲只此一瞬——收進藏閣，它就不散場。',
     });
   });
