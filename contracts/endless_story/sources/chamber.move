@@ -23,8 +23,10 @@
 ///     actual_mm = stored - ORIGIN_MM  → range about ±100 m around origin.
 module endless_story::chamber;
 
+use std::string::String;
 use sui::dynamic_field as df;
 use sui::event;
+use sui::kiosk::{Self, KioskOwnerCap};
 
 use endless_story::saga::{Self, Saga, StorytellerCap};
 use endless_story::scene::{Self, Scene};
@@ -37,6 +39,7 @@ const EChamberNotEnabled: u64 = 2;
 const ENotChamberOwner: u64 = 3;
 const EChamberAlreadyEnabled: u64 = 4;
 const ETooManyObjects: u64 = 5;
+const ENotVaultOwner: u64 = 6;
 
 /// Offset so positions can be negative. actual_mm = stored_mm - ORIGIN_MM.
 const ORIGIN_MM: u32 = 100_000;
@@ -88,6 +91,94 @@ public struct ChamberDecorated has copy, drop {
     object_count: u64,
     layout_version: u64,
 }
+
+// ─── PersonalVault — self-created collector room + Kiosk ─────────────
+//
+// Any wallet creates one in a single PTB (no StorytellerCap needed).
+// Lifecycle:
+//   1. User calls `create_personal_vault` → returns (KioskOwnerCap, VaultTicket)
+//   2. PTB transfers both to ctx.sender()
+//   3. User later calls `save_layout` to anchor the Walrus layout blob on-chain
+//   4. Stills placed in the Kiosk are tradeable via standard Sui Kiosk protocol
+
+/// Proof-of-ownership token in the user's wallet.
+/// Lets the client discover (vault_id, kiosk_id) without a shared registry.
+public struct VaultTicket has key {
+    id: UID,
+    vault_id: ID,
+    kiosk_id: ID,
+}
+
+/// Shared object — on-chain anchor for the vault layout + kiosk reference.
+/// Owner-gated writes; publicly readable.
+public struct PersonalVault has key {
+    id: UID,
+    owner: address,
+    kiosk_id: ID,
+    /// Walrus blob id of the full layout JSON (positions, lights, AI props).
+    /// `none` until the first `save_layout` call.
+    layout_blob_id: Option<String>,
+    layout_version: u64,
+}
+
+public struct PersonalVaultCreated has copy, drop {
+    vault_id: ID,
+    kiosk_id: ID,
+    owner: address,
+}
+
+/// Any wallet calls this once. Creates a Kiosk + PersonalVault atomically.
+/// Returns (KioskOwnerCap, VaultTicket) — caller's PTB must
+/// `transferObjects([cap, ticket], ctx.sender())`.
+/// Pass `option::some(blob_id)` in `initial_layout_blob_id` to save an
+/// initial layout in the same transaction; `option::none()` otherwise.
+public fun create_personal_vault(
+    initial_layout_blob_id: Option<String>,
+    ctx: &mut TxContext,
+): (KioskOwnerCap, VaultTicket) {
+    let (kiosk_obj, kiosk_cap) = kiosk::new(ctx);
+    let kiosk_id = object::id(&kiosk_obj);
+    transfer::public_share_object(kiosk_obj);
+
+    let layout_version = if (option::is_some(&initial_layout_blob_id)) { 1 } else { 0 };
+    let vault = PersonalVault {
+        id: object::new(ctx),
+        owner: ctx.sender(),
+        kiosk_id,
+        layout_blob_id: initial_layout_blob_id,
+        layout_version,
+    };
+    let vault_id = object::id(&vault);
+    event::emit(PersonalVaultCreated { vault_id, kiosk_id, owner: ctx.sender() });
+    transfer::share_object(vault);
+
+    let ticket = VaultTicket { id: object::new(ctx), vault_id, kiosk_id };
+    (kiosk_cap, ticket)
+}
+
+/// Anchor a new Walrus layout blob for the vault.
+/// Only the wallet that created the vault (vault.owner) may call this.
+public fun save_layout(
+    vault: &mut PersonalVault,
+    blob_id: String,
+    ctx: &TxContext,
+) {
+    assert!(ctx.sender() == vault.owner, ENotVaultOwner);
+    vault.layout_blob_id = option::some(blob_id);
+    vault.layout_version = vault.layout_version + 1;
+}
+
+// ─── PersonalVault views ─────────────────────────────────────────────
+
+public fun vault_owner(v: &PersonalVault): address { v.owner }
+public fun vault_kiosk_id(v: &PersonalVault): ID { v.kiosk_id }
+public fun vault_layout_blob_id(v: &PersonalVault): Option<String> { v.layout_blob_id }
+public fun vault_layout_version(v: &PersonalVault): u64 { v.layout_version }
+
+// ─── VaultTicket views ───────────────────────────────────────────────
+
+public fun ticket_vault_id(t: &VaultTicket): ID { t.vault_id }
+public fun ticket_kiosk_id(t: &VaultTicket): ID { t.kiosk_id }
 
 // ─── constructor for PTB / frontend ──────────────────────────────────
 

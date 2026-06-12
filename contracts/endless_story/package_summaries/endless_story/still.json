@@ -43,6 +43,10 @@
     },
     {
       "address": "sui",
+      "name": "transfer_policy"
+    },
+    {
+      "address": "sui",
       "name": "tx_context"
     }
   ],

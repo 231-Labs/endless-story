@@ -29,6 +29,7 @@ use sui::display;
 use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
+use sui::transfer_policy;
 use endless_story::saga::{Self, Saga, StorytellerCap};
 
 // ─── errors ──────────────────────────────────────────────────────────
@@ -48,6 +49,11 @@ fun init(otw: STILL, ctx: &mut TxContext) {
     d.add(b"image_url".to_string(), b"{image_url}".to_string());
     d.add(b"description".to_string(), b"無盡敘界・劇照 — a moment from the living narrative".to_string());
     d.update_version();
+    // Shared TransferPolicy with no rules in v1 — royalty-free Kiosk trading.
+    // The PolicyCap goes to the deployer; royalty rules can be added later via the cap.
+    let (policy, policy_cap) = transfer_policy::new<Still>(&publisher, ctx);
+    transfer::public_share_object(policy);
+    transfer::public_transfer(policy_cap, ctx.sender());
     transfer::public_transfer(publisher, ctx.sender());
     transfer::public_transfer(d, ctx.sender());
 }
