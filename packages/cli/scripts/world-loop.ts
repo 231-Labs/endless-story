@@ -30,10 +30,26 @@
  *   --rival-gravity        draw contenders toward their contest so events form
  *   --max-concurrent-events=<n>  cap for --parallel-events (default 2)
  *      (all default off; see docs/EVENT_LIFECYCLE.md §5–§7 for what to watch)
+ *   --showrunner-every=<n> run a Showrunner heartbeat (POST /api/showrunner)
+ *                          after every n ticks (default 0 = off; see
+ *                          docs/NARRATIVE_AGENTS.md §12.2)
  *
- * Env (from ../web/.env.local):
+ * Env (from ../web/.env.local locally, or the service's own EnvironmentFile
+ * when deployed standalone). Every flag above has an env fallback
+ * (flag > env > default), so a service deployment is tuned entirely via env:
  *   WORLD_LOOP_URL    web base url or full /api/tick url (default http://localhost:3000)
  *   TICK_LOOP_SECRET  bearer token, if the /api/tick route is secured
+ *   WORLD_LOOP_INTERVAL       fallback for --interval (seconds)
+ *   WORLD_LOOP_MAX_TICKS      fallback for --max
+ *   WORLD_LOOP_MAX_CHARACTERS fallback for --max-characters
+ *   SHOWRUNNER_EVERY_TICKS    fallback for --showrunner-every
+ *   TICK_EVENT_SPINE / TICK_LLM_FRAMING / TICK_DIRECTOR_RESOURCES /
+ *   TICK_PARALLEL_EVENTS / TICK_ATTENTION_BUDGET / TICK_RIVAL_GRAVITY /
+ *   TICK_MAX_CONCURRENT_EVENTS
+ *                     experimental gates — same names as the web-side env
+ *                     resolution, so one .env works on either service (set
+ *                     here they're forwarded in the POST body; truthy =
+ *                     1/true/yes/on; body only ever forces ON)
  *   RUNNER_CONTROL_URL optional relayer /control URL; {paused:true} skips the tick
  *   MEMWAL_SERVER_URL fallback base URL for control when RUNNER_CONTROL_URL is unset
  *   RUNNER_CONTROL_SECRET optional bearer token for RUNNER_CONTROL_URL
@@ -47,6 +63,14 @@ interface LoopOpts {
     maxTicks: number;
     input: Record<string, boolean | number | string[]>;
     jsonOut?: string;
+    /** Run a Showrunner heartbeat after every n ticks (0 = off). */
+    showrunnerEvery: number;
+}
+
+/** '1' / 'true' / 'yes' / 'on' — same semantics as the web-side TICK_* gates. */
+function envFlag(name: string): boolean {
+    const v = (process.env[name] ?? '').trim().toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
 function parseArgs(argv: string[]): LoopOpts {
@@ -56,10 +80,13 @@ function parseArgs(argv: string[]): LoopOpts {
     };
     const has = (name: string): boolean => argv.includes(`--${name}`);
 
-    const interval = Number(get('interval') ?? 60);
-    const max = Number(get('max') ?? 0);
+    // Every knob resolves flag > env > default, so a standalone service
+    // deployment (systemd/pm2 with an EnvironmentFile) can be tuned without
+    // editing the unit's ExecStart line.
+    const interval = Number(get('interval') ?? process.env.WORLD_LOOP_INTERVAL ?? 60);
+    const max = Number(get('max') ?? process.env.WORLD_LOOP_MAX_TICKS ?? 0);
     const jsonOut = get('json-out');
-    const maxCharacters = Number(get('max-characters'));
+    const maxCharacters = Number(get('max-characters') ?? process.env.WORLD_LOOP_MAX_CHARACTERS);
     const characterIds = (get('character-ids') ?? '')
         .split(',')
         .map((id) => id.trim())
@@ -77,21 +104,69 @@ function parseArgs(argv: string[]): LoopOpts {
     if (has('no-sleep')) input.sleep = false;
     if (has('no-gazette')) input.gazette = false;
     // EVENT_LIFECYCLE experiments (default off; opt-in for observation runs).
-    if (has('event-spine')) input.eventSpine = true; // Phase 2: multi-tick BudgetEvent spine
-    if (has('llm-framing')) input.llmFraming = true; // Phase 3-A: LLM names each incident
-    if (has('director-resources')) input.directorResources = true; // Phase 3-B: LLM adds scarcity
-    if (has('parallel-events')) input.parallelEvents = true; // Stage 1: many events at once
-    if (has('attention-budget')) input.attentionBudget = true; // Stage 2: cross-event attention pull
-    if (has('rival-gravity')) input.rivalGravity = true; // draw contenders together so events form
-    const maxConcurrent = Number(get('max-concurrent-events'));
+    // Env names match the web-side gates (TICK_*), so the same .env works on
+    // either service: set here → forwarded in the POST body; set on the web
+    // service → resolved there. Body only ever forces ON (never sends false),
+    // so the two layers compose instead of fighting.
+    if (has('event-spine') || envFlag('TICK_EVENT_SPINE')) input.eventSpine = true; // Phase 2: multi-tick BudgetEvent spine
+    if (has('llm-framing') || envFlag('TICK_LLM_FRAMING')) input.llmFraming = true; // Phase 3-A: LLM names each incident
+    if (has('director-resources') || envFlag('TICK_DIRECTOR_RESOURCES')) input.directorResources = true; // Phase 3-B: LLM adds scarcity
+    if (has('parallel-events') || envFlag('TICK_PARALLEL_EVENTS')) input.parallelEvents = true; // Stage 1: many events at once
+    if (has('attention-budget') || envFlag('TICK_ATTENTION_BUDGET')) input.attentionBudget = true; // Stage 2: cross-event attention pull
+    if (has('rival-gravity') || envFlag('TICK_RIVAL_GRAVITY')) input.rivalGravity = true; // draw contenders together so events form
+    const maxConcurrent = Number(get('max-concurrent-events') ?? process.env.TICK_MAX_CONCURRENT_EVENTS);
     if (Number.isFinite(maxConcurrent) && maxConcurrent > 0) input.maxConcurrentEvents = Math.floor(maxConcurrent);
+    const showrunnerEvery = Number(get('showrunner-every') ?? process.env.SHOWRUNNER_EVERY_TICKS ?? 0);
 
     return {
         intervalMs: Math.max(5, Number.isFinite(interval) ? interval : 60) * 1000,
         maxTicks: Number.isFinite(max) && max > 0 ? max : 0,
         input,
         jsonOut,
+        showrunnerEvery: Number.isFinite(showrunnerEvery) && showrunnerEvery > 0 ? Math.floor(showrunnerEvery) : 0,
     };
+}
+
+interface ShowrunnerBeatResult {
+    ok?: boolean;
+    report?: string;
+    toolCalls?: Array<{ tool?: string; ok?: boolean }>;
+    error?: string;
+}
+
+/** POST one Showrunner heartbeat; logs a one-line summary. Never throws. */
+async function runShowrunnerBeat(url: string, secret?: string): Promise<void> {
+    const t0 = Date.now();
+    console.log(`[showrunner] ▶ 心跳開始（巡檢 → 補漏 → 評估 → 干預 → 日誌）`);
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                ...(secret ? { authorization: `Bearer ${secret}` } : {}),
+            },
+            body: '{}',
+        });
+        const secs = ((Date.now() - t0) / 1000).toFixed(1);
+        let json: ShowrunnerBeatResult | null = null;
+        try {
+            json = (await res.json()) as ShowrunnerBeatResult;
+        } catch {
+            /* non-JSON handled below */
+        }
+        if (!res.ok || !json || json.ok === false) {
+            console.warn(
+                `[showrunner] ✗ HTTP ${res.status}${json?.error ? ` — ${json.error}` : ''} (${secs}s)`,
+            );
+            return;
+        }
+        const calls = json.toolCalls ?? [];
+        const okCalls = calls.filter((c) => c.ok).length;
+        const reportLine = (json.report ?? '').replace(/\s+/g, ' ').slice(0, 120);
+        console.log(`[showrunner] ✓ 工具 ${okCalls}/${calls.length} (${secs}s)${reportLine ? ` — ${reportLine}` : ''}`);
+    } catch (err) {
+        console.warn(`[showrunner] ✗ ${err instanceof Error ? err.message : String(err)}`);
+    }
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -225,13 +300,16 @@ async function readRunnerPaused(controlUrl: string, secret?: string): Promise<{
 }
 
 async function main() {
-    const { intervalMs, maxTicks, input, jsonOut } = parseArgs(process.argv.slice(2));
+    const { intervalMs, maxTicks, input, jsonOut, showrunnerEvery } = parseArgs(process.argv.slice(2));
     const base = process.env.WORLD_LOOP_URL ?? 'http://localhost:3000';
     const secret = process.env.TICK_LOOP_SECRET;
     const controlUrl = resolveControlUrl();
     const controlSecret = process.env.RUNNER_CONTROL_SECRET ?? process.env.RELAYER_SECRET;
     const cleanBase = base.replace(/\/$/, '');
     const url = cleanBase.endsWith('/api/tick') ? cleanBase : `${cleanBase}/api/tick`;
+    const showrunnerUrl = cleanBase.endsWith('/api/tick')
+        ? cleanBase.replace(/\/api\/tick$/, '/api/showrunner')
+        : `${cleanBase}/api/showrunner`;
     const startedAt = new Date().toISOString();
 
     console.log(
@@ -240,6 +318,9 @@ async function main() {
     );
     if (Object.keys(input).length) console.log(`[world-loop] phase overrides:`, input);
     if (controlUrl) console.log(`[world-loop] control ${controlUrl}`);
+    if (showrunnerEvery > 0) {
+        console.log(`[world-loop] showrunner heartbeat every ${showrunnerEvery} ticks → ${showrunnerUrl}`);
+    }
 
     let n = 0;
     let failures = 0;
@@ -346,6 +427,12 @@ async function main() {
                 error: message,
             });
             console.warn(`[tick ${n}] request failed:`, message);
+        }
+
+        // Showrunner heartbeat — sequential after the tick (shares the admin
+        // keypair via the web app; never overlaps the tick body).
+        if (showrunnerEvery > 0 && n % showrunnerEvery === 0 && !stopping) {
+            await runShowrunnerBeat(showrunnerUrl, secret);
         }
 
         if (stopping || (maxTicks && n >= maxTicks)) break;

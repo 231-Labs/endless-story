@@ -55,6 +55,12 @@ export async function callZAI(apiKey: string, baseUrl: string, req: ChatRequest)
     messages,
     max_tokens: Math.max(req.maxTokens, ZAI_MIN_MAX_TOKENS),
     stream: false,
+    // GLM-4.5+/5.x default extended thinking ON server-side. Reasoning counts
+    // against max_tokens, so short-budget calls get their answer truncated
+    // mid-JSON, and every call pays 1-2k reasoning tokens + 3-4× latency
+    // (measured: 52s → 15s on character gen). No call site relies on it —
+    // disabled unless explicitly requested via req.thinking.
+    thinking: { type: req.thinking ? 'enabled' : 'disabled' },
   };
   if (typeof req.temperature === 'number') body.temperature = req.temperature;
 

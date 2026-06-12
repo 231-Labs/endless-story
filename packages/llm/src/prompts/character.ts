@@ -75,6 +75,70 @@ export interface BuildCharacterGenPromptOptions {
   requiredGender?: '男' | '女';
 }
 
+type AxisBand = 'high' | 'mid' | 'low';
+
+function axisBand(value: number, min: number, max: number): AxisBand {
+  const span = max - min || 1;
+  const t = (value - min) / span;
+  if (t >= 0.65) return 'high';
+  if (t < 0.35) return 'low';
+  return 'mid';
+}
+
+/**
+ * Per-axis, per-band prose guidance. The old prompt showed a single static
+ * example pair (「機敏高 / 筋骨低」) — models anchored on the only somatic
+ * vocabulary present (扶牆、易喘) and wrote every character frail regardless
+ * of the actual roll. Guidance is now derived from the rolled value itself.
+ */
+const AXIS_GUIDANCE: Record<string, Record<AxisBand, string>> = {
+  constitution: {
+    high: '筋骨結實耐勞——扛重不喘、台步穩、腕上有力。**嚴禁**出現扶牆喘息、身子骨弱、體弱易病這類弱體描寫',
+    mid: '尋常體格，不渲染強弱——既不寫病弱也不寫神力',
+    low: '勞作易喘、肩窄、久站後會扶一扶桌沿',
+  },
+  appearance: {
+    high: '容貌出眾，旁人會多看兩眼、記得住',
+    mid: '相貌尋常，不必著墨美醜',
+    low: '相貌平平或帶一處不討喜的痕跡（疤、痘、塌鼻……擇一即可）',
+  },
+  acuity: {
+    high: '反應快、看人準，能從兩句寒暄裡聽出對方真正要價',
+    mid: '不遲鈍也不出奇，尋常心思',
+    low: '慢半拍、聽不出弦外之音，常要旁人點破',
+  },
+  disposition: {
+    high: '有主見、壓得住事，認定的事不輕易動搖',
+    mid: '尋常心性，會猶豫也會拿主意',
+    low: '沒主見、易動搖，怕事或耳根軟',
+  },
+};
+
+function buildAxisGuidanceLines(
+  rolled: RolledAttribute[],
+  schema: AttributeKey[],
+): string {
+  const bandLabel: Record<AxisBand, string> = {
+    high: '偏高',
+    mid: '中段',
+    low: '偏低',
+  };
+  return rolled
+    .map((attr) => {
+      const def = schema.find((s) => s.key === attr.key);
+      const band = axisBand(attr.value, def?.min ?? 0, def?.max ?? 100);
+      const guide =
+        AXIS_GUIDANCE[attr.key]?.[band] ??
+        (band === 'high'
+          ? `把「${attr.label}」寫成明顯偏強`
+          : band === 'low'
+            ? `把「${attr.label}」寫成明顯偏弱`
+            : `「${attr.label}」尋常即可，不渲染強弱`);
+      return `- ${attr.label}=${attr.value}（${bandLabel[band]}）：${guide}`;
+    })
+    .join('\n');
+}
+
 export function buildCharacterGenPrompt(
   opts: BuildCharacterGenPromptOptions,
 ): BuildPromptResult {
@@ -93,7 +157,7 @@ export function buildCharacterGenPrompt(
     .join('，');
   const genderRule = opts.requiredGender
     ? `\n\n【性別 · 硬性要求,不可違反】此徵召只收「${opts.requiredGender}」。physicalFacts.gender **必須**為「${opts.requiredGender}」—— 這是鏈上會驗的硬條件,違反則整張角色作廢。description 與 secret 也必須全篇符合此性別,不可把角色寫成另一性別。`
-    : '';
+    : `\n\n【性別 · 從玩家原文鎖定】先讀玩家原文判斷性別:若原文出現「她」、姑娘、女子、坤生、女小生等線索,gender 必須為「女」;出現「他」、少年、漢子、兒郎等線索則為「男」。**原文完全未透露才可自行選擇。**選定後 description、secret 全篇人稱與 physicalFacts.gender 一致,不可中途改稱。`;
   const rangeLine = opts.schemaKeys
     .map((s) => `${s.label} ${s.min}-${s.max}`)
     .join(' · ');
@@ -126,10 +190,9 @@ ${rolledLine}
 
 值域：${rangeLine}。值高代表該軸強、值低代表弱。
 **這些分數只供你判斷角色強弱，不得出現在候選 JSON 的任何文字欄位。**
-**敘事必須讓讀者從具體行為、身體痕跡、語氣和社交反應裡讀得出高低分佈**：
-- 機敏高：寫角色反應快、看人準、能從兩句寒暄裡聽出對方真正要價
-- 筋骨低：寫角色勞作易喘、肩窄、久站後會扶一扶桌沿
-- 絕不可把高值寫成弱、低值寫成強
+**敘事必須讓讀者從具體行為、身體痕跡、語氣和社交反應裡讀得出高低分佈。本次擲值的逐軸要求**：
+${buildAxisGuidanceLines(opts.rolledValues, opts.schemaKeys)}
+- 絕不可把高值寫成弱、低值寫成強；中段就寫尋常，不渲染強弱
 - 絕不可在 description 直接寫出「外貌88」「筋骨 39」「機敏=99」「心性34」這類屬性名、阿拉伯數字、括號評分或分數評語
 
 請設計：
@@ -139,7 +202,7 @@ ${rolledLine}
    · 若玩家描述裡寫了「沒人知道 / 其實 / 心底 / 不曾對人說」之類的隱情，**務必收進 secret，並從 description 抹去**；description 只留公開版本。
    · 玩家若沒寫隱情，你可依人設**合理補一段**不外顯的心事（不得與 description 矛盾），但調性應是正常人會藏著的心事，不是狗血慘案。
    · 80-200 字，要具體（有對象、有事件、有那一刻），它日後會化成此角色的私密記憶。沒有可寫就給空字串 ""。
-4. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——體型應與「筋骨」軸對位（若有此 key）${opts.requiredGender ? `；**gender 必須為「${opts.requiredGender}」(徵召硬性要求,不可改)**` : ''}
+4. physicalFacts：{ gender ("男" / "女" / "中性"), age (年齡，整數), body ("瘦削" / "豐潤" / "粗壯" / "孱弱" / "勻稱" 擇一) }——body **必須與「筋骨」擲值對位**：筋骨偏高 → 瘦削/勻稱/粗壯（**禁「孱弱」**）；筋骨偏低 → 瘦削/孱弱/豐潤（禁「粗壯」）；中段 → 除「孱弱」「粗壯」外皆可${opts.requiredGender ? `；**gender 必須為「${opts.requiredGender}」(徵召硬性要求,不可改)**` : ''}
 
 【性別 / 行當一致性 · 很重要】
 - 「女小生 / 坤生 / 女武生」= **女性演員扮小生或武生**,角色性別仍是女,文本用「她」的生命經驗;不可寫成男性,不可讓她被當作男角本人。
@@ -152,13 +215,17 @@ ${rolledLine}
 - **不要自動生成**仇家追殺、黑幫追殺、殺人滅口、重傷垂死、被賣、強迫賣身、血債、性暴力、虐待、滅門、綁架、復仇等重口橋段;除非玩家明確寫了這些。
 - 若涉及「粉戲 / 煙花地 / 風月場」等語境,把它寫成民初梨園邊緣生計、名聲與合約壓力,不要加羞辱、獵奇、暴力或道德審判。
 - 角色可以精明、有刺、有自保,但不要每個秘密都變成犯罪片或苦情戲。
+- 調性正確的例子(供把握分寸,不要照抄):
+  · 「臨行前夜師姐塞給她的那支銀簪,她至今不敢戴——怕一戴上,就承認自己再也回不去了。」
+  · 「班主以為他識字,其實戲本全靠耳朵硬背;他夜裡對著油燈描字,最怕哪天被叫去念一齣新戲。」
+  · 「她每月把一半工錢寄回鄉下,信裡卻寫自己在城裡過得風光,連口脂都是法國貨。」
 
 **不要在 JSON 裡寫 attributes、innateTraits 或任何分數文字**：數值已鎖死，server 會直接 attach。
 
 要求：
 - 忠於玩家描述的核心意象
 - 不寫成全能主角；該有可被故事咬住的弱點或執念
-- 繁體中文
+- 語言與玩家輸入一致：**全部繁體中文（台灣用字）**，不得混入任何簡體字
 
 只輸出 JSON 物件，不要任何前綴或解釋：
 {"name": "...", "description": "...", "secret": "...", "physicalFacts": {"gender":"...","age":..,"body":"..."}}`;

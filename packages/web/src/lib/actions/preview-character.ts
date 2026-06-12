@@ -18,9 +18,13 @@
  */
 
 import { createTextClient } from '@endless-story/llm/text';
+import type { ChatMessage } from '@endless-story/llm/text';
 import {
     buildCharacterGenPrompt,
+    buildCharacterRepairMessage,
     parseCharacterCandidate,
+    validateCharacterCandidate,
+    type CandidateViolation,
     type CharacterCandidate,
     type RolledAttribute,
 } from '@endless-story/llm/prompts';
@@ -90,7 +94,7 @@ export async function previewCharacter(input: PreviewCharacterInput): Promise<Pr
         return { ok: false, error: err instanceof Error ? err.message : '預覽模組未設定' };
     }
 
-    const { messages, maxTokens } = buildCharacterGenPrompt({
+    const built = buildCharacterGenPrompt({
         userPrompt: input.userPrompt,
         recruitmentIntent: input.recruitmentIntent,
         castNames: input.castNames,
@@ -100,17 +104,71 @@ export async function previewCharacter(input: PreviewCharacterInput): Promise<Pr
         requiredGender: input.requiredGender,
     });
 
-    let text: string;
-    try {
-        const res = await client.chat({ messages, maxTokens, temperature: 0.7 });
-        text = res.text;
-    } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    // Generate → verify → repair (NARRATIVE_AGENTS.md §12.0). The gen prompt's
+    // rules are soft; deterministic checks catch gender drift / frailty tropes /
+    // unprompted dark secrets, and a follow-up message asks the model to fix
+    // exactly what's flagged. 1 initial + up to 2 repair rounds.
+    const MAX_ATTEMPTS = 3;
+    let messages: ChatMessage[] = [...built.messages];
+    let candidate: CharacterCandidate | null = null;
+    let violations: CandidateViolation[] = [];
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        let text: string;
+        try {
+            const res = await client.chat({
+                messages,
+                maxTokens: built.maxTokens,
+                // Repair rounds run cooler — we want obedient edits, not re-rolls.
+                temperature: attempt === 0 ? 0.7 : 0.4,
+            });
+            text = res.text;
+        } catch (err) {
+            if (candidate) break; // keep the best parsed candidate we already have
+            return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        }
+
+        const parsed = parseCharacterCandidate(text, rolledValues, input.requiredGender);
+        if (!parsed) {
+            if (attempt === MAX_ATTEMPTS - 1) break;
+            messages = [
+                ...messages,
+                { role: 'assistant', content: text },
+                {
+                    role: 'user',
+                    content:
+                        '上一版不是合法 JSON。請重新輸出符合格式的 JSON 物件，不要任何前綴、說明或 markdown 代碼框。',
+                },
+            ];
+            continue;
+        }
+
+        candidate = parsed;
+        violations = validateCharacterCandidate(parsed, {
+            userPrompt: input.userPrompt,
+            requiredGender: input.requiredGender,
+            schemaKeys: DEFAULT_ATTRIBUTE_SCHEMA,
+        });
+        if (violations.length === 0) break;
+        if (attempt < MAX_ATTEMPTS - 1) {
+            messages = [
+                ...messages,
+                { role: 'assistant', content: text },
+                { role: 'user', content: buildCharacterRepairMessage(violations) },
+            ];
+        }
     }
 
-    const candidate = parseCharacterCandidate(text, rolledValues, input.requiredGender);
     if (!candidate) {
         return { ok: false, error: 'LLM 回應無法解析為角色，請重試。' };
+    }
+    if (violations.length > 0) {
+        // Out of repair budget — accept rather than block the player, but leave
+        // a trace so prompt regressions surface in logs.
+        console.warn(
+            '[preview-character] accepted candidate with unresolved violations:',
+            violations.map((v) => v.code).join(', '),
+        );
     }
 
     return { ok: true, candidate, rolledValues };
