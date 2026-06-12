@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import type { ChamberLayout, SceneDesign, SceneElement } from '@endless-story/chamber-3d';
+import type { CurateProp } from '@endless-story/llm/prompts';
 import { getVaultInventory, type VaultInventory } from '@/lib/actions/vault-collection';
 import { curateVault } from '@/lib/actions/curate-vault';
 import { buildVaultDesign } from '@/lib/chamber/vault-design-build';
@@ -39,6 +40,8 @@ interface Arrangement {
   overrides: Record<string, LayoutOverride>;
   lights: Record<string, { color: string; intensity: number }>;
   note?: string;
+  /** AI-chosen scene props (moon_gate, bamboo, etc.) to dress the gallery. */
+  props?: CurateProp[];
 }
 
 interface ArrangementsState {
@@ -240,7 +243,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
     [characterId],
   );
 
-  // checked items → design → overrides + lights
+  // checked items → design → overrides + lights + AI scene props
   const layout: ChamberLayout | null = useMemo(() => {
     if (!inventory || !room) return null;
     const stills = inventory.stills.filter((s) => room.keys.includes(s.key));
@@ -255,7 +258,14 @@ export function ChamberView({ characterId }: { characterId: string }) {
       if (light) out = { ...out, params: { ...out.params, light } };
       return out;
     });
-    return { characterId, avatars: [], params: null, design: { ...base, elements } };
+    // Inject AI-chosen scene props (moon_gate, bamboo, etc.) after the exhibit ring.
+    const propElements: SceneElement[] = (room.props ?? []).map((p) => ({
+      kind: p.kind as SceneElement['kind'],
+      pos: p.pos,
+      yaw: p.yaw ?? 0,
+      scale: p.scale ?? 1,
+    }));
+    return { characterId, avatars: [], params: null, design: { ...base, elements: [...elements, ...propElements] } };
   }, [inventory, room, characterId, isDark]);
 
   const commitTransform = useCallback(
@@ -270,7 +280,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
 
   const resetLayout = useCallback(() => {
     setSelected(null);
-    updateRoom((r) => ({ ...r, overrides: {}, lights: {}, note: undefined }));
+    updateRoom((r) => ({ ...r, overrides: {}, lights: {}, props: undefined, note: undefined }));
   }, [updateRoom]);
 
   const toggleItem = useCallback(
@@ -295,6 +305,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
         keys: [...(active?.keys ?? [])],
         overrides: { ...(active?.overrides ?? {}) },
         lights: { ...(active?.lights ?? {}) },
+        props: active?.props ? [...active.props] : undefined,
         note: active?.note,
       };
       const next = { activeId: dup.id, rooms: [...prev.rooms, dup] };
@@ -357,11 +368,14 @@ export function ChamberView({ characterId }: { characterId: string }) {
     const finalKeys = res.result.selectedKeys
       ? [...new Set([...res.result.selectedKeys, ...arrangementKeys])]
       : undefined;
+    console.log('[runCurate] applying — keys:', finalKeys ?? '(unchanged)', 'props:', res.result.props?.map(p => p.kind));
     updateRoom((r) => ({
       ...r,
       keys: finalKeys ?? r.keys,
       overrides: { ...r.overrides, ...overrides },
       lights: { ...r.lights, ...lights },
+      // Replace props with AI choice; keep existing if AI didn't specify any.
+      ...(res.result!.props?.length ? { props: res.result!.props } : {}),
       note: res.result!.note,
     }));
     // Clear gizmo selection: the element list may have changed, stale index → invalid ref.

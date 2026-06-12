@@ -72,6 +72,7 @@ export {
   type CurateItem,
   type CurateCurrent,
   type CuratePlacement,
+  type CurateProp,
   type CurateResult,
   type BuildCuratePromptOptions,
   type BuildCodeScenePromptOptions,

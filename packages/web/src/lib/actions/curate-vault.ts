@@ -44,8 +44,13 @@ export async function curateVault(input: CurateVaultInput): Promise<CurateVaultR
       maxTokens: prompt.maxTokens,
       temperature: 0.6,
     });
+    console.log('[curate] raw AI response:', res.text.slice(0, 800));
     const parsed = llmPrompts.parseCurateResponse(res.text);
-    if (!parsed) return { ok: false, error: '策展輸出無法解析，請再試一次。', model: res.model };
+    if (!parsed) {
+      console.warn('[curate] parse failed — raw:', res.text);
+      return { ok: false, error: '策展輸出無法解析，請再試一次。', model: res.model };
+    }
+    console.log('[curate] parsed:', JSON.stringify({ note: parsed.note, selectedKeys: parsed.selectedKeys, propCount: parsed.props?.length ?? 0, arrangementKeys: parsed.arrangement.map(a => a.key) }));
     return { ok: true, result: parsed, model: res.model };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
