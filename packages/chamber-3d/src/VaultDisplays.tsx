@@ -90,7 +90,8 @@ function LightShaft({
         decay={1.6}
         attenuation={bright ? height * 0.5 : height}
         anglePower={5}
-        opacity={bright ? 0.07 : 0.22}
+        opacity={bright ? 0.07 : 0.18}
+        radiusTop={0.16}
         castShadow={false}
       />
       {/* faint pool on the lacquer */}

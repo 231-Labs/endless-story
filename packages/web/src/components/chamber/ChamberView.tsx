@@ -17,8 +17,8 @@ const ChamberCanvas = dynamic(
 
 const POEMS = ['啟匣焚香', '塵掩珠光，拂之即明', '一瞬既藏，歲月不散'];
 
-const PILL =
-  'rounded-full border border-white/20 bg-black/25 px-4 py-1.5 text-sm text-white/85 backdrop-blur-md transition-colors hover:bg-black/40 disabled:opacity-40 disabled:hover:bg-black/25';
+/** 珍玩縮圖字 — glyph tile when a curio has no image to preview. */
+const CURIO_GLYPH: Record<string, string> = { fan: '扇', huqin: '琴', vase: '盞', chest: '匣' };
 
 // ── 佈置 (saved arrangements) — local persistence until on-chain decorate ──
 // One vault, many ways to dress it: a 佈置 is a saved curation (what's out,
@@ -79,9 +79,12 @@ function elKey(el: SceneElement, i: number): string {
   return (el.params?.key as string | undefined) ?? `${el.kind}:${i}`;
 }
 
-/** follows the site theme (html.dark) so the vault has a day and a night face. */
+/** follows the site theme (html.dark) so the vault has a day and a night face.
+ *  Lazy initial read = no dark flash on the opening overlay in day mode. */
 function useIsDark(): boolean {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() =>
+    typeof document === 'undefined' ? true : document.documentElement.classList.contains('dark'),
+  );
   useEffect(() => {
     const html = document.documentElement;
     const update = () => setIsDark(html.classList.contains('dark'));
@@ -92,6 +95,38 @@ function useIsDark(): boolean {
   }, []);
   return isDark;
 }
+
+/**
+ * Chrome palette — light classes first, `dark:` variants after. CSS variants
+ * (not JS state) so the SSR HTML is already correctly themed: the layout's
+ * boot script sets `html.dark` before first paint, while a JS `isDark` would
+ * default wrong until hydration and flash the night chrome over day mode.
+ */
+const UI = {
+  pill: 'rounded-full border px-4 py-1.5 text-sm backdrop-blur-md transition-colors disabled:opacity-40 border-[#3a332a]/25 bg-[#fbf7ec]/65 text-[#3a332a]/90 hover:bg-[#fbf7ec]/90 dark:border-white/20 dark:bg-black/25 dark:text-white/85 dark:hover:bg-black/40',
+  pillActive: 'border-[#a03226]/60 text-[#a03226] dark:border-[#caa64a]/70 dark:text-[#e8cd84]',
+  chip: 'bg-[#fbf7ec]/65 text-[#6b5f4e]/90 dark:bg-black/25 dark:text-white/55',
+  panel:
+    'border-[#3a332a]/15 bg-[#f8f3e6]/75 text-[#3a332a] dark:border-white/12 dark:bg-[#0b0d12]/55 dark:text-white',
+  hairline: 'border-[#3a332a]/10 dark:border-white/10',
+  mute: 'text-[#6b5f4e]/80 dark:text-white/45',
+  soft: 'text-[#4a4136]/85 dark:text-white/65',
+  strong: 'text-[#2e2922]/95 dark:text-white/90',
+  accent: 'text-[#a03226] dark:text-[#e8cd84]',
+  row: 'border-[#3a332a]/10 bg-white/45 hover:bg-white/70 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10',
+  rowSelected: 'border-[#a03226]/55 bg-[#a03226]/10 dark:border-[#caa64a]/70 dark:bg-[#caa64a]/10',
+  tabOn: 'bg-[#3a332a]/90 text-[#f6f1e4] dark:bg-white/90 dark:text-stone-900',
+  tabOff:
+    'bg-[#3a332a]/10 text-[#4a4136]/85 hover:bg-[#3a332a]/20 dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20',
+  divider: 'bg-[#3a332a]/20 dark:bg-white/20',
+  input:
+    'border-[#3a332a]/20 bg-white/60 text-[#3a332a]/90 placeholder:text-[#6b5f4e]/50 focus:ring-[#a03226]/50 dark:border-white/15 dark:bg-white/5 dark:text-white/85 dark:placeholder:text-white/30 dark:focus:ring-[#caa64a]/60',
+  aiBtn:
+    'border-[#a03226]/45 bg-[#a03226]/10 text-[#a03226] hover:bg-[#a03226]/20 dark:border-[#caa64a]/50 dark:bg-[#caa64a]/15 dark:text-[#e8cd84] dark:hover:bg-[#caa64a]/25',
+  glyphTile:
+    'bg-gradient-to-b from-[#efe7d4] to-[#e2d7bf] text-[#a03226]/85 dark:from-[#17151a] dark:to-[#0c0b10] dark:text-[#caa64a]/90',
+  checkbox: 'accent-[#a03226] dark:accent-[#caa64a]',
+};
 
 /**
  * 藏閣 — the collector's vault. The inventory panel curates: pick a 佈置,
@@ -326,10 +361,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
 
   return (
     <div
-      className={[
-        'relative h-full w-full overflow-hidden',
-        isDark ? 'bg-[#07080c]' : 'bg-[#e9e2d2]',
-      ].join(' ')}
+      className="relative h-full w-full overflow-hidden bg-[#e9e2d2] dark:bg-[#07080c]"
       onPointerDownCapture={handleFirstPointer}
     >
       <div className="absolute inset-0">
@@ -345,27 +377,17 @@ export function ChamberView({ characterId }: { characterId: string }) {
         />
       </div>
 
-      <div
-        className={[
-          'pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent',
-          isDark ? 'from-black/40' : 'from-[#efe8d8]/70',
-        ].join(' ')}
-      />
-      <div
-        className={[
-          'pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t to-transparent',
-          isDark ? 'from-black/45' : 'from-[#d8cdb6]/60',
-        ].join(' ')}
-      />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#efe8d8]/70 to-transparent dark:from-black/40" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#d8cdb6]/60 to-transparent dark:from-black/45" />
 
       {/* top bar */}
       <div className="absolute left-5 top-4 z-20">
-        <Link href="/chamber" className={PILL}>
+        <Link href="/chamber" className={UI.pill}>
           ← 名冊
         </Link>
       </div>
       <div className="absolute right-5 top-4 z-20 flex items-center gap-2">
-        <span className="rounded-full bg-black/25 px-3 py-1 text-xs text-white/55 backdrop-blur-md">
+        <span className={['rounded-full px-3 py-1 text-xs backdrop-blur-md', UI.chip].join(' ')}>
           {room?.name ?? '佈置'} · 展出 {exhibitedCount} 件
         </span>
         <button
@@ -377,11 +399,15 @@ export function ChamberView({ characterId }: { characterId: string }) {
             });
           }}
           disabled={!layout}
-          className={[PILL, arrange ? 'border-[#caa64a]/70 text-[#e8cd84]' : ''].join(' ')}
+          className={[UI.pill, arrange ? UI.pillActive : ''].join(' ')}
         >
           {arrange ? '完成布局' : '布局'}
         </button>
-        <button type="button" onClick={() => setPanelOpen((v) => !v)} className={PILL}>
+        <button
+          type="button"
+          onClick={() => setPanelOpen((v) => !v)}
+          className={[UI.pill, panelOpen ? UI.pillActive : ''].join(' ')}
+        >
           展品庫
         </button>
       </div>
@@ -390,12 +416,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
       <div className="pointer-events-none absolute bottom-24 left-7 z-20 flex items-start gap-3">
         <h1
           style={{ writingMode: 'vertical-rl' }}
-          className={[
-            'font-serif text-2xl leading-snug tracking-[0.4em]',
-            isDark
-              ? 'text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]'
-              : 'text-[#3a332a]/95 drop-shadow-[0_1px_6px_rgba(255,250,238,0.6)]',
-          ].join(' ')}
+          className="font-serif text-2xl leading-snug tracking-[0.4em] text-[#3a332a]/95 drop-shadow-[0_1px_6px_rgba(255,250,238,0.6)] dark:text-white/95 dark:drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
         >
           我的藏閣
         </h1>
@@ -407,12 +428,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
       {/* 策展語 — gallery wall text, centred clear of the 畫題 and the panel */}
       {room?.note && !arrange ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex justify-center px-32">
-          <p
-            className={[
-              'max-w-xl text-center text-xs leading-relaxed tracking-widest',
-              isDark ? 'text-white/65 drop-shadow' : 'text-[#4a4136]/85',
-            ].join(' ')}
-          >
+          <p className="max-w-xl text-center text-xs leading-relaxed tracking-widest text-[#4a4136]/85 dark:text-white/65 dark:drop-shadow">
             策展語：{room.note}
           </p>
         </div>
@@ -421,11 +437,11 @@ export function ChamberView({ characterId }: { characterId: string }) {
       {/* 自由布局 toolbar */}
       {arrange ? (
         <div className="absolute inset-x-0 bottom-5 z-20 flex justify-center">
-          <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-md">
-            <span className="px-1 text-xs tracking-wider text-white/55">
+          <div className="flex items-center gap-2 rounded-full border border-[#3a332a]/20 bg-[#fbf7ec]/75 px-3 py-2 backdrop-blur-md dark:border-white/15 dark:bg-black/35">
+            <span className={['px-1 text-xs tracking-wider', UI.soft].join(' ')}>
               點選藏品{selected != null ? ` · 已選 #${selected + 1}` : ''}
             </span>
-            <span className="h-5 w-px bg-white/20" />
+            <span className="h-5 w-px bg-[#3a332a]/20 dark:bg-white/20" />
             {(['translate', 'rotate', 'scale'] as const).map((m) => (
               <button
                 key={m}
@@ -433,58 +449,73 @@ export function ChamberView({ characterId }: { characterId: string }) {
                 onClick={() => setTMode(m)}
                 className={[
                   'rounded-full px-3 py-1 text-xs transition-colors',
-                  tMode === m ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
+                  tMode === m ? UI.tabOn : UI.tabOff,
                 ].join(' ')}
               >
                 {m === 'translate' ? '移動' : m === 'rotate' ? '旋轉' : '縮放'}
               </button>
             ))}
-            <span className="h-5 w-px bg-white/20" />
-            <button type="button" onClick={resetLayout} className="rounded-full px-3 py-1 text-xs text-white/75 hover:bg-white/15">
+            <span className="h-5 w-px bg-[#3a332a]/20 dark:bg-white/20" />
+            <button
+              type="button"
+              onClick={resetLayout}
+              className={['rounded-full px-3 py-1 text-xs transition-colors', UI.tabOff].join(' ')}
+            >
               還原
             </button>
-            <span className="px-1 text-[10px] text-white/35">本地保存 · 鏈上保存待部署</span>
+            <span className={['px-1 text-[10px]', UI.mute].join(' ')}>本地保存 · 鏈上保存待部署</span>
           </div>
         </div>
       ) : null}
 
       {/* 展品庫 — 佈置方案 + inventory + AI curator */}
       {panelOpen ? (
-        <aside className="absolute bottom-20 right-5 top-16 z-20 flex w-80 flex-col rounded-lg border border-white/15 bg-black/35 backdrop-blur-md">
-          {/* 佈置方案 — saved curations of the one vault */}
-          <div className="flex items-center gap-1.5 overflow-x-auto border-b border-white/10 p-3">
-            {(roomsState?.rooms ?? []).map((r) => (
+        <aside
+          className={[
+            'absolute bottom-20 right-5 top-16 z-20 flex w-[23rem] flex-col overflow-hidden rounded-xl border shadow-2xl backdrop-blur-xl',
+            UI.panel,
+          ].join(' ')}
+        >
+          {/* 卷首 — title + 佈置方案 */}
+          <div className={['border-b px-4 pb-3 pt-4', UI.hairline].join(' ')}>
+            <div className="flex items-baseline justify-between">
+              <h2 className={['font-serif text-base tracking-[0.3em]', UI.strong].join(' ')}>展品庫</h2>
+              <span className={['text-[10px] tracking-widest', UI.mute].join(' ')}>
+                {exhibitedCount} 件展出
+              </span>
+            </div>
+            <div className="mt-3 flex items-center gap-1.5 overflow-x-auto">
+              {(roomsState?.rooms ?? []).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => switchRoom(r.id)}
+                  className={[
+                    'shrink-0 rounded-full px-3 py-1 text-xs transition-colors',
+                    r.id === roomsState?.activeId ? UI.tabOn : UI.tabOff,
+                  ].join(' ')}
+                >
+                  {r.name}
+                </button>
+              ))}
               <button
-                key={r.id}
                 type="button"
-                onClick={() => switchRoom(r.id)}
-                className={[
-                  'shrink-0 rounded-full px-3 py-1 text-xs transition-colors',
-                  r.id === roomsState?.activeId
-                    ? 'bg-white/90 text-stone-900'
-                    : 'bg-white/10 text-white/70 hover:bg-white/20',
-                ].join(' ')}
+                onClick={addRoom}
+                className={['shrink-0 rounded-full px-2.5 py-1 text-xs transition-colors', UI.tabOff].join(' ')}
+                title="另存新佈置（複製目前佈置再改）"
               >
-                {r.name}
+                ＋
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={addRoom}
-              className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/70 hover:bg-white/20"
-              title="另存新佈置（複製目前佈置再改）"
-            >
-              ＋
-            </button>
+            </div>
           </div>
 
-          {/* inventory with checkboxes */}
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            <p className="mb-2 text-[10px] tracking-widest text-white/40">
-              我的展品 · 勾選展出{arrange ? ' · 點列可選取' : ''}
+          {/* inventory — thumbnail rows, check to exhibit */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            <p className={['mb-2 px-1 text-[10px] tracking-widest', UI.mute].join(' ')}>
+              勾選展出{arrange ? ' · 點列可選取調整' : ''}
             </p>
             {loading ? (
-              <p className="text-sm text-white/60">啟封中…</p>
+              <p className={['px-1 text-sm', UI.soft].join(' ')}>啟封中…</p>
             ) : inventory ? (
               <ol className="flex flex-col gap-1.5">
                 {[...inventory.stills, ...inventory.curios].map((it) => {
@@ -492,15 +523,16 @@ export function ChamberView({ characterId }: { characterId: string }) {
                   const idx = layout?.design?.elements.findIndex(
                     (el, i) => elKey(el, i) === it.key,
                   );
+                  const isSel = arrange && selected != null && idx === selected;
+                  const isStill = 'url' in it;
                   return (
                     <li
                       key={it.key}
                       className={[
-                        'flex items-start gap-2 rounded-md border p-2 text-xs',
+                        'flex items-center gap-2.5 rounded-lg border p-2 text-xs transition-colors',
                         arrange && checked ? 'cursor-pointer' : '',
-                        arrange && selected != null && idx === selected
-                          ? 'border-[#caa64a]/70 bg-[#caa64a]/10'
-                          : 'border-white/10 bg-white/5',
+                        isSel ? UI.rowSelected : UI.row,
+                        !checked ? 'opacity-55' : '',
                       ].join(' ')}
                       onClick={
                         arrange && checked && idx != null && idx >= 0
@@ -513,44 +545,71 @@ export function ChamberView({ characterId }: { characterId: string }) {
                         checked={checked}
                         onChange={() => toggleItem(it.key)}
                         onClick={(e) => e.stopPropagation()}
-                        className="mt-0.5 accent-[#caa64a]"
+                        className={UI.checkbox}
                       />
+                      {/* 縮圖 — the piece at a glance */}
+                      {isStill ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={(it as { url: string }).url}
+                          alt={it.title}
+                          loading="lazy"
+                          className="h-12 w-12 shrink-0 rounded-md border border-black/20 object-cover"
+                        />
+                      ) : (
+                        <span
+                          className={[
+                            'grid h-12 w-12 shrink-0 place-items-center rounded-md font-serif text-xl',
+                            UI.glyphTile,
+                          ].join(' ')}
+                        >
+                          {CURIO_GLYPH[(it as { tag?: string }).tag ?? ''] ?? '玩'}
+                        </span>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate font-medium text-white/85">{it.title}</span>
-                          <span className="shrink-0 text-[10px] text-[#caa64a]">
-                            {'url' in it ? '劇照' : '珍玩'}
+                          <span className={['truncate font-serif text-[13px]', UI.strong].join(' ')}>
+                            {it.title}
+                          </span>
+                          <span className={['shrink-0 text-[10px]', UI.accent].join(' ')}>
+                            {isStill ? '劇照' : '珍玩'}
                           </span>
                         </div>
-                        <p className="mt-0.5 text-white/55">{it.subtitle}</p>
+                        <p className={['mt-0.5 truncate', UI.mute].join(' ')}>{it.subtitle}</p>
                       </div>
                     </li>
                   );
                 })}
               </ol>
             ) : (
-              <p className="text-sm text-white/50">展品庫載入失敗。</p>
+              <p className={['px-1 text-sm', UI.mute].join(' ')}>展品庫載入失敗。</p>
             )}
           </div>
 
           {/* AI curator */}
-          <div className="border-t border-white/10 p-3">
+          <div className={['border-t px-4 py-3', UI.hairline].join(' ')}>
             <textarea
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
               placeholder="給策展人的指示，例：白蛇傳三張排成一排居中，整體燈光冷一點…"
               rows={2}
-              className="w-full resize-none rounded-md border border-white/15 bg-white/5 p-2 text-xs text-white/85 placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#caa64a]/60"
+              className={[
+                'w-full resize-none rounded-md border p-2 text-xs focus:outline-none focus:ring-1',
+                UI.input,
+              ].join(' ')}
             />
             <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-[10px] text-white/40">
+              <span className={['min-w-0 truncate text-[10px]', UI.mute].join(' ')}>
                 {curating ? '策展人佈展中…' : curateError ? curateError : 'AI 擺位＋逐件配燈'}
               </span>
               <button
                 type="button"
                 onClick={runCurate}
                 disabled={curating || loading || exhibitedCount === 0}
-                className="shrink-0 rounded-full border border-[#caa64a]/50 bg-[#caa64a]/15 px-4 py-1.5 text-xs text-[#e8cd84] transition-colors hover:bg-[#caa64a]/25 disabled:opacity-40"
+                className={[
+                  'shrink-0 rounded-full border px-4 py-1.5 text-xs transition-colors disabled:opacity-40',
+                  UI.aiBtn,
+                ].join(' ')}
               >
                 ✨ AI 佈置
               </button>
@@ -559,34 +618,16 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </aside>
       ) : null}
 
-      {/* 墨暈 opening overlay */}
+      {/* 墨暈 opening overlay — CSS dark: variants so even the SSR frame is
+          correctly day/night before hydration */}
       {loading && inkOverlay ? (
-        <div
-          className={[
-            'absolute inset-0 z-40 grid place-items-center bg-gradient-to-b transition-opacity duration-700',
-            isDark ? 'from-[#0b0d12]/92 to-[#06070b]/96' : 'from-[#efe9db]/94 to-[#e0d6c2]/96',
-          ].join(' ')}
-        >
+        <div className="absolute inset-0 z-40 grid place-items-center bg-gradient-to-b from-[#efe9db]/94 to-[#e0d6c2]/96 transition-opacity duration-700 dark:from-[#0b0d12]/92 dark:to-[#06070b]/96">
           <div className="flex flex-col items-center gap-6">
-            <div
-              className={[
-                'h-16 w-16 animate-pulse rounded-full',
-                isDark
-                  ? 'bg-[radial-gradient(circle,rgba(222,228,236,0.85),rgba(86,100,118,0.3)_55%,transparent_72%)]'
-                  : 'bg-[radial-gradient(circle,rgba(94,84,66,0.55),rgba(140,126,100,0.2)_55%,transparent_72%)]',
-              ].join(' ')}
-            />
-            <p
-              className={[
-                'font-serif text-base tracking-[0.4em]',
-                isDark ? 'text-white/80' : 'text-[#4a4136]/90',
-              ].join(' ')}
-            >
+            <div className="h-16 w-16 animate-pulse rounded-full bg-[radial-gradient(circle,rgba(94,84,66,0.55),rgba(140,126,100,0.2)_55%,transparent_72%)] dark:bg-[radial-gradient(circle,rgba(222,228,236,0.85),rgba(86,100,118,0.3)_55%,transparent_72%)]" />
+            <p className="font-serif text-base tracking-[0.4em] text-[#4a4136]/90 dark:text-white/80">
               {POEMS[poemIdx]}
             </p>
-            <p className={['text-xs tracking-wider', isDark ? 'text-white/40' : 'text-[#6b5f4e]/70'].join(' ')}>
-              啟封藏閣…
-            </p>
+            <p className="text-xs tracking-wider text-[#6b5f4e]/70 dark:text-white/40">啟封藏閣…</p>
           </div>
         </div>
       ) : null}

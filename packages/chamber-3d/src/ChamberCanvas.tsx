@@ -84,8 +84,13 @@ export function ChamberCanvas({
     [layout?.code],
   );
 
-  const fogNear = dims.depth * 1.4;
-  const fogFar = dims.depth * 5 + 14;
+  const isVault = design.backdrop.style === '藏閣';
+  const bright = env.timeOfDay === 'day' || env.timeOfDay === 'dawn';
+  // 明閣: pull the fog back and tint it paper, or every still reads washed-out
+  const fogScale = isVault && bright ? 1.9 : 1;
+  const fogColor = isVault && bright ? '#e7dfcd' : palette.bg;
+  const fogNear = dims.depth * 1.4 * fogScale;
+  const fogFar = (dims.depth * 5 + 14) * fogScale;
   const camPos: [number, number, number] = [dims.width * 0.5, dims.height * 0.55, dims.depth * 0.95 + 3.4];
 
   return (
@@ -97,7 +102,7 @@ export function ChamberCanvas({
       camera={{ fov: 50, near: 0.1, far: 300, position: camPos }}
       onPointerMissed={editable ? () => onSelect?.(null) : undefined}
     >
-      <fog attach="fog" args={[palette.bg, fogNear, fogFar]} />
+      <fog attach="fog" args={[fogColor, fogNear, fogFar]} />
       {cinematic ? <MistReveal near={fogNear} far={fogFar} /> : null}
 
       {generated ? (
@@ -135,7 +140,7 @@ export function ChamberCanvas({
         </ErrorBoundary>
       )}
 
-      <ChamberEffects />
+      <ChamberEffects bright={bright} />
 
       <OrbitControls
         makeDefault

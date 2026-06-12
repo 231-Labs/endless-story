@@ -49,6 +49,17 @@ const LACQUER: Record<string, string> = {
   night: '#1a1512',
 };
 
+/** darken a hex colour for the slab's side faces. */
+function darkenHex(hex: string, f: number): string {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(v, 16);
+  const c = (x: number) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0');
+  return `#${c(((n >> 16) & 255) * f)}${c(((n >> 8) & 255) * f)}${c((n & 255) * f)}`;
+}
+
+const SLAB_H = 0.22;
+
 function Floor({
   type,
   color,
@@ -65,32 +76,47 @@ function Floor({
   if (type === 'void') return null;
   const w = dims.width * 2.6;
   const d = dims.depth * 1.8;
+  const zOff = -dims.depth * 0.1;
   if (type === 'water' || type === 'lacquer') {
     const base = type === 'lacquer' ? LACQUER : WATER;
+    const top = color ?? base[timeOfDay] ?? base.day;
     return (
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, -dims.depth * 0.1]}>
-        <planeGeometry args={[w, d]} />
-        <MeshReflectorMaterial
-          resolution={512}
-          blur={type === 'lacquer' ? [340, 120] : [420, 180]}
-          mixBlur={type === 'lacquer' ? 0.85 : 1.1}
-          mixStrength={type === 'lacquer' ? 1.9 : 2.4}
-          roughness={type === 'lacquer' ? 0.55 : 0.75}
-          depthScale={1.1}
-          minDepthThreshold={0.4}
-          maxDepthThreshold={1.3}
-          color={color ?? base[timeOfDay] ?? base.day}
-          metalness={type === 'lacquer' ? 0.25 : 0.55}
-        />
-      </mesh>
+      <group>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, zOff]}>
+          <planeGeometry args={[w, d]} />
+          <MeshReflectorMaterial
+            resolution={512}
+            blur={type === 'lacquer' ? [340, 120] : [420, 180]}
+            mixBlur={type === 'lacquer' ? 0.85 : 1.1}
+            mixStrength={type === 'lacquer' ? 1.9 : 2.4}
+            roughness={type === 'lacquer' ? 0.55 : 0.75}
+            depthScale={1.1}
+            minDepthThreshold={0.4}
+            maxDepthThreshold={1.3}
+            color={top}
+            metalness={type === 'lacquer' ? 0.25 : 0.55}
+          />
+        </mesh>
+        {/* the floor is a slab, not a film — visible side faces give it mass */}
+        <mesh position={[0, y - SLAB_H / 2 - 0.001, zOff]}>
+          <boxGeometry args={[w, SLAB_H, d]} />
+          <meshStandardMaterial color={darkenHex(top, 0.55)} roughness={0.85} metalness={0.05} />
+        </mesh>
+      </group>
     );
   }
   const flat = type === 'wood' ? (color ?? '#6e5238') : (color ?? '#9a9386');
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, -dims.depth * 0.1]} receiveShadow>
-      <planeGeometry args={[w, d]} />
-      <meshStandardMaterial color={flat} roughness={type === 'wood' ? 0.82 : 0.9} metalness={0.04} />
-    </mesh>
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, zOff]} receiveShadow>
+        <planeGeometry args={[w, d]} />
+        <meshStandardMaterial color={flat} roughness={type === 'wood' ? 0.82 : 0.9} metalness={0.04} />
+      </mesh>
+      <mesh position={[0, y - SLAB_H / 2 - 0.001, zOff]}>
+        <boxGeometry args={[w, SLAB_H, d]} />
+        <meshStandardMaterial color={darkenHex(flat, 0.55)} roughness={0.9} metalness={0.04} />
+      </mesh>
+    </group>
   );
 }
 
@@ -282,11 +308,13 @@ export function SceneRenderer({
         timeOfDay={env.timeOfDay}
       />
       <Weather weather={env.weather} dims={dims} />
-      {/* 雲氣 — the 虛無 layer: mist hugging the water plane */}
+      {/* 雲氣 — the 虛無 layer: mist hugging the water plane (thinner by day,
+          so the exhibits stay crisp under paper light) */}
       <group position={[0, design.floor.y ?? 0, 0]}>
         <DriftingMist
           dims={dims}
-          tone={env.timeOfDay === 'dusk' || env.timeOfDay === 'night' ? '#aab6c6' : '#f2f5f1'}
+          tone={bright ? '#f2f5f1' : '#aab6c6'}
+          opacity={bright ? 0.06 : 0.16}
         />
       </group>
       {design.elements.map((el, i) => (
