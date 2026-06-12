@@ -27,7 +27,16 @@ interface EventActState {
     participants: string[];
     acted: Set<string>;
     pending: string[]; // participant ids that still need to act (have a hand)
+    handCounts: number[]; // hand size per participant (0 = can never act)
+    createdAtMs: number; // 0 when the chain object lacks the field
 }
+
+/** All-acted events may linger this long in spine mode before the janitor closes them. */
+const EVENT_GRACE_MS =
+    Math.max(1, Number(process.env.TICK_EVENT_GRACE_MINUTES) || 10) * 60_000;
+/** No event survives past this age, acted or not — the world must never deadlock. */
+const EVENT_MAX_AGE_MS =
+    Math.max(5, Number(process.env.TICK_EVENT_MAX_AGE_MINUTES) || 60) * 60_000;
 
 export async function runActPhase(
     admin: AdminContext,
@@ -53,7 +62,7 @@ export async function runActPhase(
         try {
             const res = await read.event.getBudgetEvent(client, s.eventId);
             parsed = res.json as unknown as {
-                meta?: { status?: number | string; scene_id?: string };
+                meta?: { status?: number | string; scene_id?: string; created_at_ms?: number | string };
                 deck?: { participants?: string[]; hands?: Array<Array<number | string>> };
                 resolution?: { submitted_actions?: Array<{ character_id?: string }> };
             };
@@ -78,6 +87,8 @@ export async function runActPhase(
             participants,
             acted,
             pending,
+            handCounts: participants.map((_, i) => hands[i]?.length ?? 0),
+            createdAtMs: Number(parsed.meta?.created_at_ms ?? 0) || 0,
         });
     }
 
@@ -178,12 +189,34 @@ export async function runActPhase(
         }
     }
 
-    // PTB-2: resolve every now-fully-acted event, one signature.
+    // PTB-2: resolve finished events, one signature.
+    //
+    // Three close conditions (the world must NEVER deadlock on an open event):
+    //   1. autoResolve (non-spine judge): everyone who CAN act has acted →
+    //      close now. "Can act" = has a non-empty hand; a participant dealt
+    //      no cards must not hold the event open forever.
+    //   2. Spine-mode fallback: spine owns the linger/resolve cadence, but its
+    //      registry is process-local — a redeploy orphans its open events. An
+    //      all-acted event older than EVENT_GRACE_MS gets closed here anyway.
+    //   3. Hard cap: ANY event older than EVENT_MAX_AGE_MS closes, acted or
+    //      not (e.g. a participant whose decide keeps failing). Janitor closes
+    //      use emptyOutcomes — "settle nothing" is spine-core's own precedent
+    //      for contested resources nobody claimed.
     const resolves: TickResolveResult[] = [];
-    if (autoResolve) {
-        const toResolve = events.filter(
-            (e) => e.sceneId && e.participants.every((p) => p && e.acted.has(p)),
-        );
+    {
+        const now = Date.now();
+        const toResolve = events.filter((e) => {
+            if (!e.sceneId) return false;
+            const doneActing =
+                e.acted.size > 0 &&
+                e.participants.every(
+                    (p, i) => !p || e.acted.has(p) || e.handCounts[i] === 0,
+                );
+            const age = e.createdAtMs > 0 ? now - e.createdAtMs : 0;
+            if (autoResolve && doneActing) return true;
+            if (doneActing && age >= EVENT_GRACE_MS) return true;
+            return age >= EVENT_MAX_AGE_MS;
+        });
         if (toResolve.length > 0) {
             const r = await trySend(admin, (txb) => {
                 for (const e of toResolve) {
