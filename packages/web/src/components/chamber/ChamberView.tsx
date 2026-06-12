@@ -7,6 +7,7 @@ import type { ChamberLayout, SceneDesign, SceneElement } from '@endless-story/ch
 import { getVaultInventory, type VaultInventory } from '@/lib/actions/vault-collection';
 import { curateVault } from '@/lib/actions/curate-vault';
 import { buildVaultDesign } from '@/lib/chamber/vault-design-build';
+import { acquiredVaultItems, loadAcquired } from '@/lib/chamber/shop-catalog';
 import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/chamber/sound';
 
 const ChamberCanvas = dynamic(
@@ -19,7 +20,10 @@ const POEMS = ['啟匣焚香', '塵掩珠光，拂之即明', '一瞬既藏，�
 const PILL =
   'rounded-full border border-white/20 bg-black/25 px-4 py-1.5 text-sm text-white/85 backdrop-blur-md transition-colors hover:bg-black/40 disabled:opacity-40 disabled:hover:bg-black/25';
 
-// ── 展間 (rooms) — local persistence until on-chain rooms land ────────
+// ── 佈置 (saved arrangements) — local persistence until on-chain decorate ──
+// One vault, many ways to dress it: a 佈置 is a saved curation (what's out,
+// where it stands, how it's lit). Exhibits are singular — the same piece in
+// two 佈置 is the same object re-arranged, never a duplicate.
 
 interface LayoutOverride {
   pos: [number, number, number];
@@ -27,7 +31,7 @@ interface LayoutOverride {
   scale?: number;
 }
 
-interface Room {
+interface Arrangement {
   id: string;
   name: string;
   /** exhibited item keys (checked in the inventory). */
@@ -37,26 +41,32 @@ interface Room {
   note?: string;
 }
 
-interface RoomsState {
+interface ArrangementsState {
   activeId: string;
-  rooms: Room[];
+  rooms: Arrangement[];
 }
+
+const CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
 function roomsKey(characterId: string): string {
   return `vault-rooms:v1:${characterId || 'demo'}`;
 }
 
-function loadRooms(characterId: string): RoomsState | null {
+function loadRooms(characterId: string): ArrangementsState | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(roomsKey(characterId));
-    return raw ? (JSON.parse(raw) as RoomsState) : null;
+    if (!raw) return null;
+    const state = JSON.parse(raw) as ArrangementsState;
+    // migrate the room-era naming (第X展間 → 佈置X)
+    for (const r of state.rooms) r.name = r.name.replace(/^第(.)展間$/, '佈置$1');
+    return state;
   } catch {
     return null;
   }
 }
 
-function saveRooms(characterId: string, state: RoomsState): void {
+function saveRooms(characterId: string, state: ArrangementsState): void {
   try {
     localStorage.setItem(roomsKey(characterId), JSON.stringify(state));
   } catch {
@@ -69,19 +79,34 @@ function elKey(el: SceneElement, i: number): string {
   return (el.params?.key as string | undefined) ?? `${el.kind}:${i}`;
 }
 
+/** follows the site theme (html.dark) so the vault has a day and a night face. */
+function useIsDark(): boolean {
+  const [isDark, setIsDark] = useState(true);
+  useEffect(() => {
+    const html = document.documentElement;
+    const update = () => setIsDark(html.classList.contains('dark'));
+    update();
+    const obs = new MutationObserver(update);
+    obs.observe(html, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return isDark;
+}
+
 /**
- * 藏閣 — the collector's vault. The inventory panel curates: pick the rooms,
+ * 藏閣 — the collector's vault. The inventory panel curates: pick a 佈置,
  * check what to exhibit, give the AI curator an instruction (it arranges AND
  * lights every piece), then fine-tune by hand.
  */
 export function ChamberView({ characterId }: { characterId: string }) {
+  const isDark = useIsDark();
   const [inventory, setInventory] = useState<VaultInventory | null>(null);
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
   const [poemIdx, setPoemIdx] = useState(0);
   const [inkOverlay, setInkOverlay] = useState(true);
-  // 展間
-  const [roomsState, setRoomsState] = useState<RoomsState | null>(null);
+  // 佈置方案
+  const [roomsState, setRoomsState] = useState<ArrangementsState | null>(null);
   // 自由布局
   const [arrange, setArrange] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
@@ -92,21 +117,26 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const [curateError, setCurateError] = useState<string | null>(null);
   const aliveRef = useRef(true);
 
-  // load inventory + rooms
+  // load inventory (server pieces + locally acquired 戲坊 wares) + 佈置
   useEffect(() => {
     aliveRef.current = true;
     setLoading(true);
     getVaultInventory(characterId)
-      .then((inv) => {
+      .then((server) => {
         if (!aliveRef.current) return;
+        const bought = acquiredVaultItems(loadAcquired());
+        const inv: VaultInventory = {
+          stills: [...server.stills, ...bought.stills],
+          curios: [...server.curios, ...bought.curios],
+        };
         setInventory(inv);
         const saved = loadRooms(characterId);
         if (saved && saved.rooms.length > 0) {
           setRoomsState(saved);
         } else {
-          const first: Room = {
+          const first: Arrangement = {
             id: `room-${Math.random().toString(36).slice(2, 8)}`,
-            name: '第一展間',
+            name: '佈置一',
             keys: [...inv.stills.map((s) => s.key), ...inv.curios.map((c) => c.key)],
             overrides: {},
             lights: {},
@@ -158,7 +188,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
   const room = roomsState?.rooms.find((r) => r.id === roomsState.activeId) ?? null;
 
   const updateRoom = useCallback(
-    (mutate: (r: Room) => Room) => {
+    (mutate: (r: Arrangement) => Arrangement) => {
       setRoomsState((prev) => {
         if (!prev) return prev;
         const next = {
@@ -177,7 +207,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
     if (!inventory || !room) return null;
     const stills = inventory.stills.filter((s) => room.keys.includes(s.key));
     const curios = inventory.curios.filter((c) => room.keys.includes(c.key));
-    const base: SceneDesign = buildVaultDesign(stills, curios);
+    const base: SceneDesign = buildVaultDesign(stills, curios, { bright: !isDark });
     const elements = base.elements.map((el, i) => {
       const k = elKey(el, i);
       const o = room.overrides[k];
@@ -188,7 +218,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
       return out;
     });
     return { characterId, avatars: [], params: null, design: { ...base, elements } };
-  }, [inventory, room, characterId]);
+  }, [inventory, room, characterId, isDark]);
 
   const commitTransform = useCallback(
     (index: number, pos: [number, number, number], yawDeg: number, scale: number) => {
@@ -216,17 +246,20 @@ export function ChamberView({ characterId }: { characterId: string }) {
     [updateRoom],
   );
 
+  // 另存新佈置 — duplicates the active arrangement (same pieces, ready to re-dress)
   const addRoom = useCallback(() => {
     setRoomsState((prev) => {
       if (!prev) return prev;
-      const room: Room = {
+      const active = prev.rooms.find((r) => r.id === prev.activeId);
+      const dup: Arrangement = {
         id: `room-${Math.random().toString(36).slice(2, 8)}`,
-        name: `第${['一', '二', '三', '四', '五', '六', '七', '八', '九'][prev.rooms.length] ?? prev.rooms.length + 1}展間`,
-        keys: [],
-        overrides: {},
-        lights: {},
+        name: `佈置${CN_NUM[prev.rooms.length] ?? prev.rooms.length + 1}`,
+        keys: [...(active?.keys ?? [])],
+        overrides: { ...(active?.overrides ?? {}) },
+        lights: { ...(active?.lights ?? {}) },
+        note: active?.note,
       };
-      const next = { activeId: room.id, rooms: [...prev.rooms, room] };
+      const next = { activeId: dup.id, rooms: [...prev.rooms, dup] };
       saveRooms(characterId, next);
       return next;
     });
@@ -293,7 +326,10 @@ export function ChamberView({ characterId }: { characterId: string }) {
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden bg-[#07080c]"
+      className={[
+        'relative h-full w-full overflow-hidden',
+        isDark ? 'bg-[#07080c]' : 'bg-[#e9e2d2]',
+      ].join(' ')}
       onPointerDownCapture={handleFirstPointer}
     >
       <div className="absolute inset-0">
@@ -309,8 +345,18 @@ export function ChamberView({ characterId }: { characterId: string }) {
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/45 to-transparent" />
+      <div
+        className={[
+          'pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b to-transparent',
+          isDark ? 'from-black/40' : 'from-[#efe8d8]/70',
+        ].join(' ')}
+      />
+      <div
+        className={[
+          'pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t to-transparent',
+          isDark ? 'from-black/45' : 'from-[#d8cdb6]/60',
+        ].join(' ')}
+      />
 
       {/* top bar */}
       <div className="absolute left-5 top-4 z-20">
@@ -320,7 +366,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
       </div>
       <div className="absolute right-5 top-4 z-20 flex items-center gap-2">
         <span className="rounded-full bg-black/25 px-3 py-1 text-xs text-white/55 backdrop-blur-md">
-          {room?.name ?? '藏閣'} · 展出 {exhibitedCount} 件
+          {room?.name ?? '佈置'} · 展出 {exhibitedCount} 件
         </span>
         <button
           type="button"
@@ -344,7 +390,12 @@ export function ChamberView({ characterId }: { characterId: string }) {
       <div className="pointer-events-none absolute bottom-24 left-7 z-20 flex items-start gap-3">
         <h1
           style={{ writingMode: 'vertical-rl' }}
-          className="font-serif text-2xl leading-snug tracking-[0.4em] text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
+          className={[
+            'font-serif text-2xl leading-snug tracking-[0.4em]',
+            isDark
+              ? 'text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]'
+              : 'text-[#3a332a]/95 drop-shadow-[0_1px_6px_rgba(255,250,238,0.6)]',
+          ].join(' ')}
         >
           我的藏閣
         </h1>
@@ -352,9 +403,20 @@ export function ChamberView({ characterId }: { characterId: string }) {
           藏
         </span>
       </div>
-      <div className="pointer-events-none absolute bottom-16 left-7 z-20 max-w-xs text-xs tracking-widest text-white/65 drop-shadow">
-        {room?.note ? `策展語：${room.note}` : ''}
-      </div>
+
+      {/* 策展語 — gallery wall text, centred clear of the 畫題 and the panel */}
+      {room?.note && !arrange ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex justify-center px-32">
+          <p
+            className={[
+              'max-w-xl text-center text-xs leading-relaxed tracking-widest',
+              isDark ? 'text-white/65 drop-shadow' : 'text-[#4a4136]/85',
+            ].join(' ')}
+          >
+            策展語：{room.note}
+          </p>
+        </div>
+      ) : null}
 
       {/* 自由布局 toolbar */}
       {arrange ? (
@@ -386,10 +448,10 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </div>
       ) : null}
 
-      {/* 展品庫 — rooms + inventory + AI curator */}
+      {/* 展品庫 — 佈置方案 + inventory + AI curator */}
       {panelOpen ? (
         <aside className="absolute bottom-20 right-5 top-16 z-20 flex w-80 flex-col rounded-lg border border-white/15 bg-black/35 backdrop-blur-md">
-          {/* rooms */}
+          {/* 佈置方案 — saved curations of the one vault */}
           <div className="flex items-center gap-1.5 overflow-x-auto border-b border-white/10 p-3">
             {(roomsState?.rooms ?? []).map((r) => (
               <button
@@ -410,7 +472,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
               type="button"
               onClick={addRoom}
               className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/70 hover:bg-white/20"
-              title="新增展間"
+              title="另存新佈置（複製目前佈置再改）"
             >
               ＋
             </button>
@@ -499,11 +561,32 @@ export function ChamberView({ characterId }: { characterId: string }) {
 
       {/* 墨暈 opening overlay */}
       {loading && inkOverlay ? (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-gradient-to-b from-[#0b0d12]/92 to-[#06070b]/96 transition-opacity duration-700">
+        <div
+          className={[
+            'absolute inset-0 z-40 grid place-items-center bg-gradient-to-b transition-opacity duration-700',
+            isDark ? 'from-[#0b0d12]/92 to-[#06070b]/96' : 'from-[#efe9db]/94 to-[#e0d6c2]/96',
+          ].join(' ')}
+        >
           <div className="flex flex-col items-center gap-6">
-            <div className="h-16 w-16 animate-pulse rounded-full bg-[radial-gradient(circle,rgba(222,228,236,0.85),rgba(86,100,118,0.3)_55%,transparent_72%)]" />
-            <p className="font-serif text-base tracking-[0.4em] text-white/80">{POEMS[poemIdx]}</p>
-            <p className="text-xs tracking-wider text-white/40">啟封藏閣…</p>
+            <div
+              className={[
+                'h-16 w-16 animate-pulse rounded-full',
+                isDark
+                  ? 'bg-[radial-gradient(circle,rgba(222,228,236,0.85),rgba(86,100,118,0.3)_55%,transparent_72%)]'
+                  : 'bg-[radial-gradient(circle,rgba(94,84,66,0.55),rgba(140,126,100,0.2)_55%,transparent_72%)]',
+              ].join(' ')}
+            />
+            <p
+              className={[
+                'font-serif text-base tracking-[0.4em]',
+                isDark ? 'text-white/80' : 'text-[#4a4136]/90',
+              ].join(' ')}
+            >
+              {POEMS[poemIdx]}
+            </p>
+            <p className={['text-xs tracking-wider', isDark ? 'text-white/40' : 'text-[#6b5f4e]/70'].join(' ')}>
+              啟封藏閣…
+            </p>
           </div>
         </div>
       ) : null}

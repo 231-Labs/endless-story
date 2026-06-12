@@ -35,7 +35,9 @@ function faceCentreYaw(x: number, z: number): number {
 export function buildVaultDesign(
   stills: VaultStillItem[],
   curios: VaultCurioItem[],
+  opts?: { bright?: boolean },
 ): SceneDesign {
+  const bright = opts?.bright ?? false;
   const elements: SceneElement[] = [];
 
   // outer ring: 劇照 light shafts, evenly spread, front gap for the camera
@@ -80,8 +82,15 @@ export function buildVaultDesign(
 
   return {
     backdrop: { style: '藏閣' },
-    floor: { type: 'lacquer' },
-    mood: { timeOfDay: 'night', season: 'spring', weather: 'clear', atmosphere: 0.45 },
+    // 明閣 (site day theme): pale waxed stone instead of black lacquer —
+    // the reflector material reads it as honed marble under paper light.
+    floor: { type: 'lacquer', color: bright ? '#b9b0a0' : undefined },
+    mood: {
+      timeOfDay: bright ? 'day' : 'night',
+      season: 'spring',
+      weather: 'clear',
+      atmosphere: bright ? 0.25 : 0.45,
+    },
     elements,
   };
 }

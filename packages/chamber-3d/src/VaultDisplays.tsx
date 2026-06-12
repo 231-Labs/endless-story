@@ -18,17 +18,17 @@ import { ErrorBoundary } from './ErrorBoundary.js';
 
 // ── 題籤 — canvas-rendered caption plate ─────────────────────────────
 
-function captionTexture(title: string, subtitle: string): CanvasTexture {
+function captionTexture(title: string, subtitle: string, bright: boolean): CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = 128;
   const g = c.getContext('2d')!;
   g.clearRect(0, 0, c.width, c.height);
   g.textAlign = 'center';
-  g.fillStyle = 'rgba(238,233,220,0.92)';
+  g.fillStyle = bright ? 'rgba(52,46,38,0.92)' : 'rgba(238,233,220,0.92)';
   g.font = '500 38px "Songti SC", "Noto Serif CJK TC", serif';
   g.fillText(title.slice(0, 14), c.width / 2, 56);
-  g.fillStyle = 'rgba(202,166,74,0.85)';
+  g.fillStyle = bright ? 'rgba(138,107,34,0.9)' : 'rgba(202,166,74,0.85)';
   g.font = '400 26px "Songti SC", "Noto Serif CJK TC", serif';
   g.fillText(subtitle.slice(0, 20), c.width / 2, 100);
   const tex = new CanvasTexture(c);
@@ -40,12 +40,14 @@ export function CaptionPlate({
   title,
   subtitle,
   width = 1.1,
+  bright = false,
 }: {
   title: string;
   subtitle: string;
   width?: number;
+  bright?: boolean;
 }) {
-  const tex = useMemo(() => captionTexture(title, subtitle), [title, subtitle]);
+  const tex = useMemo(() => captionTexture(title, subtitle, bright), [title, subtitle, bright]);
   return (
     <mesh>
       <planeGeometry args={[width, width * 0.25]} />
@@ -61,11 +63,14 @@ function LightShaft({
   color = '#f3e9d6',
   intensity = 18,
   targetY = 1.1,
+  bright = false,
 }: {
   height?: number;
   color?: string;
   intensity?: number;
   targetY?: number;
+  /** day theme: ambient paper light carries the room — soften cone + pool. */
+  bright?: boolean;
 }) {
   // aim the fixture at the piece (target follows this group's transform)
   const target = useMemo(() => new Object3D(), []);
@@ -83,9 +88,9 @@ function LightShaft({
         angle={0.42}
         penumbra={0.55}
         decay={1.6}
-        attenuation={height}
+        attenuation={bright ? height * 0.5 : height}
         anglePower={5}
-        opacity={0.22}
+        opacity={bright ? 0.07 : 0.22}
         castShadow={false}
       />
       {/* faint pool on the lacquer */}
@@ -94,7 +99,7 @@ function LightShaft({
         <meshBasicMaterial
           color="#cdbb96"
           transparent
-          opacity={0.08}
+          opacity={bright ? 0.04 : 0.08}
           blending={AdditiveBlending}
           depthWrite={false}
         />
@@ -137,6 +142,7 @@ export function DisplayStill({
   phase = 0,
   lightColor,
   lightIntensity,
+  bright = false,
 }: {
   url?: string;
   title: string;
@@ -146,6 +152,7 @@ export function DisplayStill({
   /** AI-curated fixture (colour temperature + strength). */
   lightColor?: string;
   lightIntensity?: number;
+  bright?: boolean;
 }) {
   const ref = useRef<Group>(null);
   useFrame(({ clock }) => {
@@ -155,7 +162,7 @@ export function DisplayStill({
   });
   return (
     <group>
-      <LightShaft color={lightColor} intensity={lightIntensity} />
+      <LightShaft color={lightColor} intensity={lightIntensity} bright={bright} />
       <group ref={ref} position={[0, 1.78, 0]}>
         {url ? (
           <Suspense fallback={null}>
@@ -166,7 +173,7 @@ export function DisplayStill({
         ) : null}
       </group>
       <group position={[0, 0.62, 0]}>
-        <CaptionPlate title={title} subtitle={subtitle} />
+        <CaptionPlate title={title} subtitle={subtitle} bright={bright} />
       </group>
     </group>
   );
@@ -183,6 +190,7 @@ export function DisplayCurio({
   phase = 0,
   lightColor,
   lightIntensity,
+  bright = false,
 }: {
   assetUrl?: string;
   fitHeight?: number;
@@ -192,6 +200,7 @@ export function DisplayCurio({
   phase?: number;
   lightColor?: string;
   lightIntensity?: number;
+  bright?: boolean;
 }) {
   const ref = useRef<Group>(null);
   useFrame(({ clock }) => {
@@ -200,7 +209,13 @@ export function DisplayCurio({
   const isGlb = assetUrl && /\.(glb|gltf)(\?|#|$)/i.test(assetUrl);
   return (
     <group>
-      <LightShaft height={3.1} intensity={lightIntensity ?? 14} color={lightColor} targetY={1.05} />
+      <LightShaft
+        height={3.1}
+        intensity={lightIntensity ?? 14}
+        color={lightColor}
+        targetY={1.05}
+        bright={bright}
+      />
       {/* plinth */}
       <mesh position={[0, 0.45, 0]} castShadow>
         <cylinderGeometry args={[0.34, 0.38, 0.9, 20]} />
@@ -223,7 +238,7 @@ export function DisplayCurio({
         )}
       </group>
       <group position={[0, 0.55, 0.42]}>
-        <CaptionPlate title={title} subtitle={subtitle} width={0.95} />
+        <CaptionPlate title={title} subtitle={subtitle} width={0.95} bright={bright} />
       </group>
     </group>
   );

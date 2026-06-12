@@ -101,6 +101,7 @@ function Element({
   el,
   avatars,
   index,
+  bright,
   editable,
   onSelect,
   setRef,
@@ -108,6 +109,8 @@ function Element({
   el: SceneElement;
   avatars: ChamberAvatar[];
   index: number;
+  /** 明閣 (day theme): captions switch to ink, light pools soften. */
+  bright?: boolean;
   editable?: boolean;
   onSelect?: (index: number) => void;
   setRef?: (index: number, group: Group | null) => void;
@@ -147,6 +150,7 @@ function Element({
           phase={(el.params?.phase as number) ?? 0}
           lightColor={light?.color}
           lightIntensity={light?.intensity}
+          bright={bright}
         />,
       );
     case 'display_curio':
@@ -160,6 +164,7 @@ function Element({
           phase={(el.params?.phase as number) ?? 0}
           lightColor={light?.color}
           lightIntensity={light?.intensity}
+          bright={bright}
         />,
       );
     case 'stage':
@@ -252,6 +257,7 @@ export function SceneRenderer({
   dims: RoomDims;
 } & SceneEditProps) {
   const palette = paletteForEnv(env);
+  const bright = env.timeOfDay === 'day' || env.timeOfDay === 'dawn';
   const refs = useRef(new Map<number, Group>());
   const setRef = (index: number, group: Group | null) => {
     if (group) refs.current.set(index, group);
@@ -262,7 +268,11 @@ export function SceneRenderer({
 
   return (
     <group>
-      {design.backdrop.style === '藏閣' ? <VaultBackdrop /> : <SkyBackdrop env={env} />}
+      {design.backdrop.style === '藏閣' ? (
+        <VaultBackdrop tone={bright ? 'day' : 'night'} />
+      ) : (
+        <SkyBackdrop env={env} />
+      )}
       <ChamberLights palette={palette} />
       <Floor
         type={design.floor.type}
@@ -285,6 +295,7 @@ export function SceneRenderer({
           el={el}
           avatars={avatars}
           index={i}
+          bright={bright}
           editable={editable}
           onSelect={onSelect}
           setRef={setRef}

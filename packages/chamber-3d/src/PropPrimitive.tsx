@@ -66,6 +66,64 @@ export function PropPrimitive({ tag }: { tag?: string }) {
           <meshStandardMaterial color="#473b30" roughness={0.85} />
         </mesh>
       );
+    case 'fan': {
+      // 摺扇 — open folding fan: paper blades spread from a pivot, dark guards
+      const blades = 11;
+      return (
+        <group position={[0, 0.1, 0]} rotation={[0, 0, 0]}>
+          {Array.from({ length: blades }, (_, i) => {
+            const a = (-55 + (110 / (blades - 1)) * i) * (Math.PI / 180);
+            const guard = i === 0 || i === blades - 1;
+            return (
+              <group key={i} rotation={[0, 0, a]}>
+                <mesh castShadow position={[0, 0.19, 0]}>
+                  <boxGeometry args={[guard ? 0.022 : 0.052, 0.36, guard ? 0.012 : 0.004]} />
+                  <meshStandardMaterial
+                    color={guard ? '#3b2f26' : '#ece2cc'}
+                    roughness={guard ? 0.6 : 0.9}
+                  />
+                </mesh>
+              </group>
+            );
+          })}
+          {/* pivot rivet */}
+          <mesh castShadow>
+            <cylinderGeometry args={[0.02, 0.02, 0.03, 12]} />
+            <meshStandardMaterial color="#8a6b22" metalness={0.6} roughness={0.4} />
+          </mesh>
+        </group>
+      );
+    }
+    case 'huqin':
+      // 胡琴 — small drum soundbox, long neck, two pegs, taut string
+      return (
+        <group position={[0, 0.06, 0]}>
+          <mesh castShadow position={[0, 0.07, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.085, 0.085, 0.11, 6]} />
+            <meshStandardMaterial color="#5c4030" roughness={0.7} />
+          </mesh>
+          {/* python-skin face */}
+          <mesh position={[0, 0.07, 0.056]}>
+            <circleGeometry args={[0.075, 6]} />
+            <meshStandardMaterial color="#c9a87a" roughness={0.85} />
+          </mesh>
+          <mesh castShadow position={[0, 0.42, -0.02]}>
+            <cylinderGeometry args={[0.014, 0.018, 0.78, 10]} />
+            <meshStandardMaterial color="#3b2c22" roughness={0.6} />
+          </mesh>
+          {[0.66, 0.74].map((y) => (
+            <mesh key={y} castShadow position={[0, y, -0.02]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.012, 0.016, 0.14, 8]} />
+              <meshStandardMaterial color="#6b4e36" roughness={0.6} />
+            </mesh>
+          ))}
+          {/* string */}
+          <mesh position={[0, 0.39, 0.045]}>
+            <boxGeometry args={[0.004, 0.62, 0.004]} />
+            <meshStandardMaterial color="#d8d2c2" roughness={0.4} />
+          </mesh>
+        </group>
+      );
     default:
       return (
         <mesh castShadow receiveShadow position={[0, 0.2, 0]}>
