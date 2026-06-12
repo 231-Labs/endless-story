@@ -153,6 +153,9 @@ export function MockWalletMenu() {
   const dossierHref = isConnected
     ? `/dossier?filter=mine&as=${account.address}`
     : '/dossier';
+  const chamberHref = isConnected
+    ? `/chamber?id=${account.address}`
+    : '/chamber';
   const subscriptionsHref = isConnected
     ? `/subscriptions?as=${account.address}`
     : '/subscriptions';
@@ -219,6 +222,13 @@ export function MockWalletMenu() {
               >
                 <span>我的角色</span>
                 <span className="font-mono text-xs text-mute">{chainOwnedCount ?? '—'}</span>
+              </Link>
+              <Link
+                href={chamberHref}
+                className="flex items-center justify-between rounded-md px-3 py-2 text-ink/75 transition-colors hover:bg-canvas/70 hover:text-ink"
+              >
+                <span>我的藏閣</span>
+                <span className="font-serif text-xs text-mute">藏</span>
               </Link>
               <Link
                 href={subscriptionsHref}

@@ -422,8 +422,8 @@ export function ChamberView({ characterId }: { characterId: string }) {
 
       {/* top bar */}
       <div className="absolute left-5 top-4 z-20">
-        <Link href="/chamber" className={UI.pill}>
-          ← 名冊
+        <Link href="/" className={UI.pill}>
+          ← 返回
         </Link>
       </div>
       <div className="absolute right-5 top-4 z-20 flex items-center gap-2">

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import type { Character } from '@endless-story/shared';
 import { BlobImage } from '@/components/common/BlobImage';
 import {
@@ -22,6 +23,8 @@ import {
 const GLYPH: Record<string, string> = { fan: '扇', huqin: '琴', vase: '盞' };
 
 export function ShopTab({ character }: { character: Character }) {
+  const account = useCurrentAccount();
+  const chamberHref = account ? `/chamber?id=${account.address}` : null;
   const wares = useMemo(() => shopWaresFor(character), [character]);
   const [acquired, setAcquired] = useState<AcquiredMap>({});
   const [justBought, setJustBought] = useState<string | null>(null);
@@ -165,9 +168,9 @@ function WareCard({
             </button>
           )}
         </div>
-        {justBought ? (
+        {justBought && chamberHref ? (
           <Link
-            href={`/chamber?id=${characterId}`}
+            href={chamberHref}
             className="text-2xs tracking-widest text-cinnabar hover:underline"
           >
             已入藏 → 去藏閣佈置
