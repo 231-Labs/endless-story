@@ -23,7 +23,8 @@ export interface CandidateViolation {
     | 'mighty_prose_low_constitution'
     | 'pronoun_gender_mismatch'
     | 'player_gender_mismatch'
-    | 'unprompted_dark_secret';
+    | 'unprompted_dark_secret'
+    | 'simplified_chinese';
   /** zh-TW, written to be pasted straight into the repair prompt. */
   message: string;
 }
@@ -90,6 +91,23 @@ const DARK_OPTIN_RE = /殺|仇|血債|黑幫|賣身|被賣|綁|滅門|復仇|報
 
 /** Compounds where 他 is not a male pronoun. */
 const HE_COMPOUND_RE = /他人|其他|他鄉|他日|他處|他山|他方|維他|吉他/gu;
+
+/**
+ * High-frequency simplified-only characters — distinct codepoints that never
+ * appear in Traditional Chinese prose (ambiguous ones like 台/后/里/着 are
+ * deliberately excluded to avoid false positives). One hit = the model
+ * drifted scripts; the repair round rewrites the whole text in 繁體.
+ */
+const SIMPLIFIED_ONLY_CHARS =
+  '这来说时们个为发经给还让见写听风头边样师戏声谁话语当对学觉梦旧银钱红纸练爱怜怀态势货质购买卖账债务绝继续断惊议论证词诗读请谢误别门间问闻阳阴灯烛点热长鸟马鱼电体没紧应杂双难欢离满汉兴关实宁装妆';
+
+function findSimplifiedChars(text: string): string[] {
+  const hits = new Set<string>();
+  for (const ch of text) {
+    if (SIMPLIFIED_ONLY_CHARS.includes(ch)) hits.add(ch);
+  }
+  return [...hits];
+}
 
 function countChar(text: string, ch: string): number {
   let n = 0;
@@ -212,6 +230,15 @@ export function validateCharacterCandidate(
         message: `玩家原文寫的是${inferred}性角色，候選 gender 卻是「${gender}」——gender 改回「${inferred}」，description 與 secret 全篇人稱一併修正。`,
       });
     }
+  }
+
+  // —— 語言：輸出必須與輸入同為繁體 ——————————————————————
+  const simplifiedHits = findSimplifiedChars(`${candidate.name}${prose}`);
+  if (simplifiedHits.length > 0) {
+    violations.push({
+      code: 'simplified_chinese',
+      message: `輸出語言必須與玩家輸入一致——全部繁體中文（台灣用字）。文中出現簡體字（${simplifiedHits.join('、')}），請把 name、description、secret 整段改寫為繁體，不可繁簡混用。`,
+    });
   }
 
   // —— 暗黑橋段（玩家沒寫就不准出現） ————————————————————

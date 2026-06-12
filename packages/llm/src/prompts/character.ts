@@ -225,7 +225,7 @@ ${buildAxisGuidanceLines(opts.rolledValues, opts.schemaKeys)}
 要求：
 - 忠於玩家描述的核心意象
 - 不寫成全能主角；該有可被故事咬住的弱點或執念
-- 繁體中文
+- 語言與玩家輸入一致：**全部繁體中文（台灣用字）**，不得混入任何簡體字
 
 只輸出 JSON 物件，不要任何前綴或解釋：
 {"name": "...", "description": "...", "secret": "...", "physicalFacts": {"gender":"...","age":..,"body":"..."}}`;

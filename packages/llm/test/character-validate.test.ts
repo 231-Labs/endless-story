@@ -169,6 +169,39 @@ test('正常心事 secret → 不違規', () => {
   assert.equal(v.length, 0, JSON.stringify(v));
 });
 
+// —— 語言（繁體） ————————————————————————————————————
+
+test('輸出含簡體字 → simplified_chinese', () => {
+  const v = validateCharacterCandidate(
+    candidate({
+      description: '她从外地来，戏台上的头牌，谁也说不过她。',
+    }),
+    { userPrompt: CLEAN_PROMPT, schemaKeys: SCHEMA },
+  );
+  assert.ok(v.some((x) => x.code === 'simplified_chinese'), JSON.stringify(v));
+  const msg = v.find((x) => x.code === 'simplified_chinese')!.message;
+  assert.match(msg, /繁體/);
+});
+
+test('secret 裡的簡體字也會被抓', () => {
+  const v = validateCharacterCandidate(
+    candidate({ secret: '她每月把一半工钱寄回乡下，信里却写自己过得风光。' }),
+    { userPrompt: CLEAN_PROMPT, schemaKeys: SCHEMA },
+  );
+  assert.ok(v.some((x) => x.code === 'simplified_chinese'), JSON.stringify(v));
+});
+
+test('純繁體輸出不誤報 simplified_chinese', () => {
+  const v = validateCharacterCandidate(
+    candidate({
+      description: '她自他鄉而來，台上英氣逼人，台下沉默寡言，總把一枚舊銅錢縫在袖口。',
+      secret: '那枚銅錢是師父臨終前塞給她的，她不敢花，也不敢看。',
+    }),
+    { userPrompt: CLEAN_PROMPT, schemaKeys: SCHEMA },
+  );
+  assert.ok(!v.some((x) => x.code === 'simplified_chinese'), JSON.stringify(v));
+});
+
 // —— 乾淨候選 / 修復訊息 ————————————————————————————————
 
 test('乾淨候選 → 零違規', () => {
