@@ -10,7 +10,7 @@
 import { text as llmText, prompts as llmPrompts } from '@endless-story/llm';
 import type { CurateCurrent, CurateItem, CurateResult } from '@endless-story/llm/prompts';
 
-const CURATE_MODEL = process.env.CHAMBER_CURATE_MODEL || 'glm-4.7-flash';
+const CURATE_MODEL = process.env.CHAMBER_CURATE_MODEL || 'GLM-4.7-FlashX';
 
 export interface CurateVaultInput {
   items: CurateItem[];
