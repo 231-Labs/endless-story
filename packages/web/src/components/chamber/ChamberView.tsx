@@ -3,122 +3,124 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import type { ChamberLayout } from '@endless-story/chamber-3d';
-import { getVaultData, type VaultData } from '@/lib/actions/vault-collection';
+import type { ChamberLayout, SceneDesign, SceneElement } from '@endless-story/chamber-3d';
+import { getVaultInventory, type VaultInventory } from '@/lib/actions/vault-collection';
+import { curateVault } from '@/lib/actions/curate-vault';
+import { buildVaultDesign } from '@/lib/chamber/vault-design-build';
 import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/chamber/sound';
-
-/** 自由布局 local persistence (on-chain `decorate` lands with the redeploy). */
-interface LayoutOverride {
-  pos: [number, number, number];
-  yawDeg: number;
-  /** uniform scale (1 = original). */
-  scale?: number;
-}
-type Overrides = Record<string, LayoutOverride>;
-
-function overridesKey(characterId: string): string {
-  return `vault-layout:${characterId || 'demo'}`;
-}
-
-function loadOverrides(characterId: string): Overrides {
-  if (typeof window === 'undefined') return {};
-  try {
-    return JSON.parse(localStorage.getItem(overridesKey(characterId)) ?? '{}') as Overrides;
-  } catch {
-    return {};
-  }
-}
-
-/** apply saved overrides onto the auto-curated layout. */
-function applyOverrides(layout: ChamberLayout, overrides: Overrides): ChamberLayout {
-  if (!layout.design || Object.keys(overrides).length === 0) return layout;
-  return {
-    ...layout,
-    design: {
-      ...layout.design,
-      elements: layout.design.elements.map((el, i) => {
-        const o = overrides[`${el.kind}:${i}`];
-        return o ? { ...el, pos: o.pos, yaw: o.yawDeg, scale: o.scale ?? el.scale } : el;
-      }),
-    },
-  };
-}
 
 const ChamberCanvas = dynamic(
   () => import('@endless-story/chamber-3d').then((m) => m.ChamberCanvas),
   { ssr: false, loading: () => null },
 );
 
-/** Loading verses — cycled while the vault opens. */
 const POEMS = ['啟匣焚香', '塵掩珠光，拂之即明', '一瞬既藏，歲月不散'];
 
 const PILL =
   'rounded-full border border-white/20 bg-black/25 px-4 py-1.5 text-sm text-white/85 backdrop-blur-md transition-colors hover:bg-black/40 disabled:opacity-40 disabled:hover:bg-black/25';
 
-/** Preload the vault imagery so the reveal has no pop-in. */
-function preloadImages(v: VaultData, timeoutMs = 4000): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  const urls = [
-    ...(v.layout.avatars ?? []).map((a) => a.portraitUrl),
-    ...(v.layout.design?.elements ?? [])
-      .filter((e) => e.kind === 'display_still')
-      .map((e) => e.assetUrl),
-  ].filter((u): u is string => !!u);
-  if (urls.length === 0) return Promise.resolve();
-  return new Promise((resolve) => {
-    let left = urls.length;
-    const done = () => {
-      left -= 1;
-      if (left <= 0) resolve();
-    };
-    setTimeout(resolve, timeoutMs);
-    for (const u of urls) {
-      const img = new Image();
-      img.onload = done;
-      img.onerror = done;
-      img.src = u;
-    }
-  });
+// ── 展間 (rooms) — local persistence until on-chain rooms land ────────
+
+interface LayoutOverride {
+  pos: [number, number, number];
+  yawDeg: number;
+  scale?: number;
+}
+
+interface Room {
+  id: string;
+  name: string;
+  /** exhibited item keys (checked in the inventory). */
+  keys: string[];
+  overrides: Record<string, LayoutOverride>;
+  lights: Record<string, { color: string; intensity: number }>;
+  note?: string;
+}
+
+interface RoomsState {
+  activeId: string;
+  rooms: Room[];
+}
+
+function roomsKey(characterId: string): string {
+  return `vault-rooms:v1:${characterId || 'demo'}`;
+}
+
+function loadRooms(characterId: string): RoomsState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(roomsKey(characterId));
+    return raw ? (JSON.parse(raw) as RoomsState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveRooms(characterId: string, state: RoomsState): void {
+  try {
+    localStorage.setItem(roomsKey(characterId), JSON.stringify(state));
+  } catch {
+    // storage blocked — in-memory only
+  }
+}
+
+/** stable element identity: item key, else structural fallback. */
+function elKey(el: SceneElement, i: number): string {
+  return (el.params?.key as string | undefined) ?? `${el.kind}:${i}`;
 }
 
 /**
- * 藏閣 — the collector's vault: a room made of darkness and light. Collected
- * 劇照 float in their own light shafts on the orbit ring; 珍玩 turn on lit
- * plinths; the collector stands at the heart. Provenance is the luxury.
+ * 藏閣 — the collector's vault. The inventory panel curates: pick the rooms,
+ * check what to exhibit, give the AI curator an instruction (it arranges AND
+ * lights every piece), then fine-tune by hand.
  */
 export function ChamberView({ characterId }: { characterId: string }) {
-  const [vault, setVault] = useState<VaultData | null>(null);
+  const [inventory, setInventory] = useState<VaultInventory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [catalogueOpen, setCatalogueOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [poemIdx, setPoemIdx] = useState(0);
   const [inkOverlay, setInkOverlay] = useState(true);
+  // 展間
+  const [roomsState, setRoomsState] = useState<RoomsState | null>(null);
   // 自由布局
   const [arrange, setArrange] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [tMode, setTMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
-  const [overrides, setOverrides] = useState<Overrides>({});
+  // AI 策展
+  const [instruction, setInstruction] = useState('');
+  const [curating, setCurating] = useState(false);
+  const [curateError, setCurateError] = useState<string | null>(null);
   const aliveRef = useRef(true);
 
-  useEffect(() => {
-    setOverrides(loadOverrides(characterId));
-  }, [characterId]);
-
+  // load inventory + rooms
   useEffect(() => {
     aliveRef.current = true;
     setLoading(true);
-    getVaultData(characterId)
-      .then(async (v) => {
-        await preloadImages(v);
+    getVaultInventory(characterId)
+      .then((inv) => {
         if (!aliveRef.current) return;
-        setVault(v);
+        setInventory(inv);
+        const saved = loadRooms(characterId);
+        if (saved && saved.rooms.length > 0) {
+          setRoomsState(saved);
+        } else {
+          const first: Room = {
+            id: `room-${Math.random().toString(36).slice(2, 8)}`,
+            name: '第一展間',
+            keys: [...inv.stills.map((s) => s.key), ...inv.curios.map((c) => c.key)],
+            overrides: {},
+            lights: {},
+          };
+          const init = { activeId: first.id, rooms: [first] };
+          setRoomsState(init);
+          saveRooms(characterId, init);
+        }
         if (audioUnlocked()) playRevealMotif();
-        // nudge the compositor: a large in-place scene swap can leave the
-        // WebGL canvas stale until a layout recalc (seen in headless Chrome).
         requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
         setTimeout(() => window.dispatchEvent(new Event('resize')), 600);
       })
       .catch(() => {
-        if (aliveRef.current) setVault(null);
+        if (aliveRef.current) setInventory(null);
       })
       .finally(() => {
         if (aliveRef.current) setLoading(false);
@@ -153,40 +155,141 @@ export function ChamberView({ characterId }: { characterId: string }) {
     }
   }, []);
 
-  const items = vault?.items ?? [];
-  const stillCount = items.filter((i) => i.type === 'still').length;
-  const curioCount = items.length - stillCount;
-  const layout = useMemo(
-    () => (vault ? applyOverrides(vault.layout, overrides) : null),
-    [vault, overrides],
+  const room = roomsState?.rooms.find((r) => r.id === roomsState.activeId) ?? null;
+
+  const updateRoom = useCallback(
+    (mutate: (r: Room) => Room) => {
+      setRoomsState((prev) => {
+        if (!prev) return prev;
+        const next = {
+          ...prev,
+          rooms: prev.rooms.map((r) => (r.id === prev.activeId ? mutate(r) : r)),
+        };
+        saveRooms(characterId, next);
+        return next;
+      });
+    },
+    [characterId],
   );
+
+  // checked items → design → overrides + lights
+  const layout: ChamberLayout | null = useMemo(() => {
+    if (!inventory || !room) return null;
+    const stills = inventory.stills.filter((s) => room.keys.includes(s.key));
+    const curios = inventory.curios.filter((c) => room.keys.includes(c.key));
+    const base: SceneDesign = buildVaultDesign(stills, curios);
+    const elements = base.elements.map((el, i) => {
+      const k = elKey(el, i);
+      const o = room.overrides[k];
+      const light = room.lights[k];
+      let out = el;
+      if (o) out = { ...out, pos: o.pos, yaw: o.yawDeg, scale: o.scale ?? out.scale };
+      if (light) out = { ...out, params: { ...out.params, light } };
+      return out;
+    });
+    return { characterId, avatars: [], params: null, design: { ...base, elements } };
+  }, [inventory, room, characterId]);
 
   const commitTransform = useCallback(
     (index: number, pos: [number, number, number], yawDeg: number, scale: number) => {
       const el = layout?.design?.elements[index];
       if (!el) return;
-      setOverrides((prev) => {
-        const next = { ...prev, [`${el.kind}:${index}`]: { pos, yawDeg, scale } };
-        try {
-          localStorage.setItem(overridesKey(characterId), JSON.stringify(next));
-        } catch {
-          // storage full/blocked — keep in-memory only
-        }
-        return next;
-      });
+      const k = elKey(el, index);
+      updateRoom((r) => ({ ...r, overrides: { ...r.overrides, [k]: { pos, yawDeg, scale } } }));
     },
-    [layout, characterId],
+    [layout, updateRoom],
   );
 
   const resetLayout = useCallback(() => {
-    setOverrides({});
     setSelected(null);
-    try {
-      localStorage.removeItem(overridesKey(characterId));
-    } catch {
-      // ignore
-    }
+    updateRoom((r) => ({ ...r, overrides: {}, lights: {}, note: undefined }));
+  }, [updateRoom]);
+
+  const toggleItem = useCallback(
+    (key: string) => {
+      setSelected(null);
+      updateRoom((r) => ({
+        ...r,
+        keys: r.keys.includes(key) ? r.keys.filter((k) => k !== key) : [...r.keys, key],
+      }));
+    },
+    [updateRoom],
+  );
+
+  const addRoom = useCallback(() => {
+    setRoomsState((prev) => {
+      if (!prev) return prev;
+      const room: Room = {
+        id: `room-${Math.random().toString(36).slice(2, 8)}`,
+        name: `第${['一', '二', '三', '四', '五', '六', '七', '八', '九'][prev.rooms.length] ?? prev.rooms.length + 1}展間`,
+        keys: [],
+        overrides: {},
+        lights: {},
+      };
+      const next = { activeId: room.id, rooms: [...prev.rooms, room] };
+      saveRooms(characterId, next);
+      return next;
+    });
+    setSelected(null);
   }, [characterId]);
+
+  const switchRoom = useCallback(
+    (id: string) => {
+      setRoomsState((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, activeId: id };
+        saveRooms(characterId, next);
+        return next;
+      });
+      setSelected(null);
+    },
+    [characterId],
+  );
+
+  // AI 策展
+  const runCurate = useCallback(async () => {
+    if (!inventory || !room || !layout?.design) return;
+    setCurating(true);
+    setCurateError(null);
+    const itemsByKey = new Map<string, { title: string; type: 'still' | 'curio' }>();
+    for (const s of inventory.stills) itemsByKey.set(s.key, { title: s.title, type: 'still' });
+    for (const c of inventory.curios) itemsByKey.set(c.key, { title: c.title, type: 'curio' });
+    const items = room.keys
+      .filter((k) => itemsByKey.has(k))
+      .map((k) => ({ key: k, ...itemsByKey.get(k)! }));
+    const current = layout.design.elements
+      .map((el, i) => ({ el, k: elKey(el, i) }))
+      .filter(({ el, k }) => itemsByKey.has(k) && (el.kind === 'display_still' || el.kind === 'display_curio'))
+      .map(({ el, k }) => ({
+        key: k,
+        pos: el.pos,
+        yaw: el.yaw ?? 0,
+        scale: el.scale ?? 1,
+      }));
+    const res = await curateVault({ items, instruction, current });
+    if (!aliveRef.current) return;
+    if (!res.ok || !res.result) {
+      setCurateError(res.error ?? '策展失敗');
+      setCurating(false);
+      return;
+    }
+    const overrides: Record<string, LayoutOverride> = {};
+    const lights: Record<string, { color: string; intensity: number }> = {};
+    for (const a of res.result.arrangement) {
+      overrides[a.key] = { pos: a.pos, yawDeg: a.yaw, scale: a.scale };
+      lights[a.key] = a.light;
+    }
+    updateRoom((r) => ({
+      ...r,
+      overrides: { ...r.overrides, ...overrides },
+      lights: { ...r.lights, ...lights },
+      note: res.result!.note,
+    }));
+    if (audioUnlocked()) playRevealMotif();
+    setCurating(false);
+  }, [inventory, room, layout, instruction, updateRoom]);
+
+  const exhibitedCount = room?.keys.length ?? 0;
 
   return (
     <div
@@ -206,7 +309,6 @@ export function ChamberView({ characterId }: { characterId: string }) {
         />
       </div>
 
-      {/* legibility scrims */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/45 to-transparent" />
 
@@ -218,7 +320,7 @@ export function ChamberView({ characterId }: { characterId: string }) {
       </div>
       <div className="absolute right-5 top-4 z-20 flex items-center gap-2">
         <span className="rounded-full bg-black/25 px-3 py-1 text-xs text-white/55 backdrop-blur-md">
-          藏閣 · {items.length} 件藏品
+          {room?.name ?? '藏閣'} · 展出 {exhibitedCount} 件
         </span>
         <button
           type="button"
@@ -228,66 +330,15 @@ export function ChamberView({ characterId }: { characterId: string }) {
               return !v;
             });
           }}
-          disabled={!vault}
-          className={[
-            PILL,
-            arrange ? 'border-[#caa64a]/70 text-[#e8cd84]' : '',
-          ].join(' ')}
-          title="自由布局：點選藏品拖移／旋轉"
+          disabled={!layout}
+          className={[PILL, arrange ? 'border-[#caa64a]/70 text-[#e8cd84]' : ''].join(' ')}
         >
           {arrange ? '完成布局' : '布局'}
         </button>
-        <button type="button" onClick={() => setCatalogueOpen((v) => !v)} className={PILL}>
-          藏品冊
+        <button type="button" onClick={() => setPanelOpen((v) => !v)} className={PILL}>
+          展品庫
         </button>
       </div>
-
-      {/* 自由布局 toolbar */}
-      {arrange ? (
-        <div className="absolute inset-x-0 bottom-5 z-20 flex justify-center">
-          <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-md">
-            <span className="px-1 text-xs tracking-wider text-white/55">
-              點選藏品{selected != null ? ` · 已選 #${selected + 1}` : ''}
-            </span>
-            <span className="h-5 w-px bg-white/20" />
-            <button
-              type="button"
-              onClick={() => setTMode('translate')}
-              className={[
-                'rounded-full px-3 py-1 text-xs transition-colors',
-                tMode === 'translate' ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
-              ].join(' ')}
-            >
-              移動
-            </button>
-            <button
-              type="button"
-              onClick={() => setTMode('rotate')}
-              className={[
-                'rounded-full px-3 py-1 text-xs transition-colors',
-                tMode === 'rotate' ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
-              ].join(' ')}
-            >
-              旋轉
-            </button>
-            <button
-              type="button"
-              onClick={() => setTMode('scale')}
-              className={[
-                'rounded-full px-3 py-1 text-xs transition-colors',
-                tMode === 'scale' ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
-              ].join(' ')}
-            >
-              縮放
-            </button>
-            <span className="h-5 w-px bg-white/20" />
-            <button type="button" onClick={resetLayout} className="rounded-full px-3 py-1 text-xs text-white/75 hover:bg-white/15">
-              還原
-            </button>
-            <span className="px-1 text-[10px] text-white/35">本地保存 · 鏈上保存待部署</span>
-          </div>
-        </div>
-      ) : null}
 
       {/* 畫題 + 印章 */}
       <div className="pointer-events-none absolute bottom-24 left-7 z-20 flex items-start gap-3">
@@ -301,50 +352,148 @@ export function ChamberView({ characterId }: { characterId: string }) {
           藏
         </span>
       </div>
-      <div className="pointer-events-none absolute bottom-16 left-7 z-20 text-xs tracking-widest text-white/65 drop-shadow">
-        {vault ? `劇照 ${stillCount} · 珍玩 ${curioCount}` : ''}
+      <div className="pointer-events-none absolute bottom-16 left-7 z-20 max-w-xs text-xs tracking-widest text-white/65 drop-shadow">
+        {room?.note ? `策展語：${room.note}` : ''}
       </div>
 
-      {/* 藏品冊 — the catalogue */}
-      {catalogueOpen ? (
-        <aside className="absolute bottom-20 right-5 top-16 z-20 w-72 overflow-y-auto rounded-lg border border-white/15 bg-black/35 p-4 backdrop-blur-md">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="font-serif text-sm tracking-[0.3em] text-white/90">藏品冊</h2>
-            <span className="text-[10px] text-white/40">provenance</span>
+      {/* 自由布局 toolbar */}
+      {arrange ? (
+        <div className="absolute inset-x-0 bottom-5 z-20 flex justify-center">
+          <div className="flex items-center gap-2 rounded-full border border-white/15 bg-black/35 px-3 py-2 backdrop-blur-md">
+            <span className="px-1 text-xs tracking-wider text-white/55">
+              點選藏品{selected != null ? ` · 已選 #${selected + 1}` : ''}
+            </span>
+            <span className="h-5 w-px bg-white/20" />
+            {(['translate', 'rotate', 'scale'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setTMode(m)}
+                className={[
+                  'rounded-full px-3 py-1 text-xs transition-colors',
+                  tMode === m ? 'bg-white/90 text-stone-900' : 'text-white/75 hover:bg-white/15',
+                ].join(' ')}
+              >
+                {m === 'translate' ? '移動' : m === 'rotate' ? '旋轉' : '縮放'}
+              </button>
+            ))}
+            <span className="h-5 w-px bg-white/20" />
+            <button type="button" onClick={resetLayout} className="rounded-full px-3 py-1 text-xs text-white/75 hover:bg-white/15">
+              還原
+            </button>
+            <span className="px-1 text-[10px] text-white/35">本地保存 · 鏈上保存待部署</span>
           </div>
-          {loading ? (
-            <p className="text-sm text-white/60">啟封中…</p>
-          ) : items.length > 0 ? (
-            <ol className="flex flex-col gap-2">
-              {items.map((it, i) => (
-                <li
-                  key={i}
-                  onClick={arrange ? () => setSelected(i) : undefined}
-                  className={[
-                    'animate-fade-in-up rounded-md border p-2 text-xs',
-                    arrange ? 'cursor-pointer' : '',
-                    arrange && selected === i
-                      ? 'border-[#caa64a]/70 bg-[#caa64a]/10'
-                      : 'border-white/10 bg-white/5',
-                  ].join(' ')}
-                  style={{ animationDelay: `${i * 90}ms`, animationFillMode: 'backwards' }}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate font-medium text-white/85">{it.title}</span>
-                    <span className="shrink-0 text-[10px] text-[#caa64a]">
-                      {it.type === 'still' ? '劇照' : '珍玩'}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-white/55">{it.subtitle}</p>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="text-sm text-white/50">尚無藏品 — 收藏角色的劇照後在此陳列。</p>
-          )}
-          <p className="mt-4 border-t border-white/10 pt-3 text-[10px] leading-relaxed text-white/35">
-            出讓與購藏（Kiosk）將在下一片接通：掛紅絹籤者可購，收益回班社。
-          </p>
+        </div>
+      ) : null}
+
+      {/* 展品庫 — rooms + inventory + AI curator */}
+      {panelOpen ? (
+        <aside className="absolute bottom-20 right-5 top-16 z-20 flex w-80 flex-col rounded-lg border border-white/15 bg-black/35 backdrop-blur-md">
+          {/* rooms */}
+          <div className="flex items-center gap-1.5 overflow-x-auto border-b border-white/10 p-3">
+            {(roomsState?.rooms ?? []).map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => switchRoom(r.id)}
+                className={[
+                  'shrink-0 rounded-full px-3 py-1 text-xs transition-colors',
+                  r.id === roomsState?.activeId
+                    ? 'bg-white/90 text-stone-900'
+                    : 'bg-white/10 text-white/70 hover:bg-white/20',
+                ].join(' ')}
+              >
+                {r.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={addRoom}
+              className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/70 hover:bg-white/20"
+              title="新增展間"
+            >
+              ＋
+            </button>
+          </div>
+
+          {/* inventory with checkboxes */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <p className="mb-2 text-[10px] tracking-widest text-white/40">
+              我的展品 · 勾選展出{arrange ? ' · 點列可選取' : ''}
+            </p>
+            {loading ? (
+              <p className="text-sm text-white/60">啟封中…</p>
+            ) : inventory ? (
+              <ol className="flex flex-col gap-1.5">
+                {[...inventory.stills, ...inventory.curios].map((it) => {
+                  const checked = room?.keys.includes(it.key) ?? false;
+                  const idx = layout?.design?.elements.findIndex(
+                    (el, i) => elKey(el, i) === it.key,
+                  );
+                  return (
+                    <li
+                      key={it.key}
+                      className={[
+                        'flex items-start gap-2 rounded-md border p-2 text-xs',
+                        arrange && checked ? 'cursor-pointer' : '',
+                        arrange && selected != null && idx === selected
+                          ? 'border-[#caa64a]/70 bg-[#caa64a]/10'
+                          : 'border-white/10 bg-white/5',
+                      ].join(' ')}
+                      onClick={
+                        arrange && checked && idx != null && idx >= 0
+                          ? () => setSelected(idx)
+                          : undefined
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleItem(it.key)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-0.5 accent-[#caa64a]"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate font-medium text-white/85">{it.title}</span>
+                          <span className="shrink-0 text-[10px] text-[#caa64a]">
+                            {'url' in it ? '劇照' : '珍玩'}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-white/55">{it.subtitle}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="text-sm text-white/50">展品庫載入失敗。</p>
+            )}
+          </div>
+
+          {/* AI curator */}
+          <div className="border-t border-white/10 p-3">
+            <textarea
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder="給策展人的指示，例：白蛇傳三張排成一排居中，整體燈光冷一點…"
+              rows={2}
+              className="w-full resize-none rounded-md border border-white/15 bg-white/5 p-2 text-xs text-white/85 placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-[#caa64a]/60"
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-[10px] text-white/40">
+                {curating ? '策展人佈展中…' : curateError ? curateError : 'AI 擺位＋逐件配燈'}
+              </span>
+              <button
+                type="button"
+                onClick={runCurate}
+                disabled={curating || loading || exhibitedCount === 0}
+                className="shrink-0 rounded-full border border-[#caa64a]/50 bg-[#caa64a]/15 px-4 py-1.5 text-xs text-[#e8cd84] transition-colors hover:bg-[#caa64a]/25 disabled:opacity-40"
+              >
+                ✨ AI 佈置
+              </button>
+            </div>
+          </div>
         </aside>
       ) : null}
 

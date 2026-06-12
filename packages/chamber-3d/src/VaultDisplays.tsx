@@ -72,6 +72,8 @@ function LightShaft({
   return (
     <group>
       <primitive object={target} position={[0, targetY, 0]} />
+      {/* castShadow off — drei defaults it ON, and 12 shadow-casting spots
+          would blow the 16-texture-unit cap in every standard material */}
       <SpotLight
         position={[0, height, 0.35]}
         target={target}
@@ -84,6 +86,7 @@ function LightShaft({
         attenuation={height}
         anglePower={5}
         opacity={0.22}
+        castShadow={false}
       />
       {/* faint pool on the lacquer */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
@@ -132,12 +135,17 @@ export function DisplayStill({
   title,
   subtitle,
   phase = 0,
+  lightColor,
+  lightIntensity,
 }: {
   url?: string;
   title: string;
   subtitle: string;
   /** desync the float animation between pieces. */
   phase?: number;
+  /** AI-curated fixture (colour temperature + strength). */
+  lightColor?: string;
+  lightIntensity?: number;
 }) {
   const ref = useRef<Group>(null);
   useFrame(({ clock }) => {
@@ -147,7 +155,7 @@ export function DisplayStill({
   });
   return (
     <group>
-      <LightShaft />
+      <LightShaft color={lightColor} intensity={lightIntensity} />
       <group ref={ref} position={[0, 1.78, 0]}>
         {url ? (
           <Suspense fallback={null}>
@@ -173,6 +181,8 @@ export function DisplayCurio({
   title,
   subtitle,
   phase = 0,
+  lightColor,
+  lightIntensity,
 }: {
   assetUrl?: string;
   fitHeight?: number;
@@ -180,6 +190,8 @@ export function DisplayCurio({
   title: string;
   subtitle: string;
   phase?: number;
+  lightColor?: string;
+  lightIntensity?: number;
 }) {
   const ref = useRef<Group>(null);
   useFrame(({ clock }) => {
@@ -188,7 +200,7 @@ export function DisplayCurio({
   const isGlb = assetUrl && /\.(glb|gltf)(\?|#|$)/i.test(assetUrl);
   return (
     <group>
-      <LightShaft height={3.1} intensity={14} targetY={1.05} />
+      <LightShaft height={3.1} intensity={lightIntensity ?? 14} color={lightColor} targetY={1.05} />
       {/* plinth */}
       <mesh position={[0, 0.45, 0]} castShadow>
         <cylinderGeometry args={[0.34, 0.38, 0.9, 20]} />

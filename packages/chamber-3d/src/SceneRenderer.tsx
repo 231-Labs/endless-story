@@ -135,6 +135,8 @@ function Element({
     </group>
   );
 
+  const light = el.params?.light as { color?: string; intensity?: number } | undefined;
+
   switch (el.kind) {
     case 'display_still':
       return wrap(
@@ -143,6 +145,8 @@ function Element({
           title={el.label ?? '劇照'}
           subtitle={String(el.params?.subtitle ?? '')}
           phase={(el.params?.phase as number) ?? 0}
+          lightColor={light?.color}
+          lightIntensity={light?.intensity}
         />,
       );
     case 'display_curio':
@@ -154,6 +158,8 @@ function Element({
           title={el.label ?? '珍玩'}
           subtitle={String(el.params?.subtitle ?? '')}
           phase={(el.params?.phase as number) ?? 0}
+          lightColor={light?.color}
+          lightIntensity={light?.intensity}
         />,
       );
     case 'stage':

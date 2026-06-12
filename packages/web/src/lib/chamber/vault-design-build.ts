@@ -8,12 +8,15 @@ import type { SceneDesign, SceneElement } from '@endless-story/chamber-3d';
  */
 
 export interface VaultStillItem {
+  /** stable identity (url for now; Still object id post-deploy). */
+  key: string;
   url: string;
   title: string;
   subtitle: string;
 }
 
 export interface VaultCurioItem {
+  key: string;
   assetUrl?: string;
   fitHeight?: number;
   tag?: string;
@@ -49,7 +52,7 @@ export function buildVaultDesign(
       yaw: faceCentreYaw(x, z),
       assetUrl: stills[i].url,
       label: stills[i].title,
-      params: { subtitle: stills[i].subtitle, phase: i * 0.9 },
+      params: { key: stills[i].key, subtitle: stills[i].subtitle, phase: i * 0.9 },
     });
   }
 
@@ -67,7 +70,7 @@ export function buildVaultDesign(
       fitHeight: curios[i].fitHeight,
       tag: curios[i].tag,
       label: curios[i].title,
-      params: { subtitle: curios[i].subtitle, phase: i * 1.7 },
+      params: { key: curios[i].key, subtitle: curios[i].subtitle, phase: i * 1.7 },
     });
   }
 
