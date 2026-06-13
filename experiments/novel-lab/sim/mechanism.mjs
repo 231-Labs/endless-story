@@ -68,11 +68,11 @@ export function resourceDisplay(label) {
 }
 
 /** Rank resources by contention = # present desirers who don't already hold it.
- *  Skips locked resources (班主 已裁定保下) and excludes the rester (本輪輪空者)。 */
+ *  Skips locked + 剛結算冷卻中的標的；平手時偏好「最久沒結算」的軸（破鬼打牆）。 */
 export function rankContention(world) {
     const rester = world.restNextTick ?? null;
     return world.resources
-        .filter((r) => !r.locked)
+        .filter((r) => !r.locked && (r.cooldownUntil ?? 0) <= world.tick)
         .map((r) => {
             const desirers = world.cast.filter(
                 (c) => c.desires.includes(r.label) && r.holder !== c.id && c.id !== rester,
@@ -80,7 +80,12 @@ export function rankContention(world) {
             return { resource: r, desirers, score: desirers.length };
         })
         .filter((x) => x.score >= 1)
-        .sort((a, b) => b.score - a.score || a.resource.label.localeCompare(b.resource.label));
+        .sort(
+            (a, b) =>
+                b.score - a.score ||
+                (a.resource.lastResolved ?? -99) - (b.resource.lastResolved ?? -99) ||
+                a.resource.label.localeCompare(b.resource.label),
+        );
 }
 
 /** 一人同時握有 ≥2 個標的 = 樹大招風，回傳其 id 供班主介入。 */
@@ -123,7 +128,7 @@ export function openEvent(world) {
 
 function framingFor(kind, r) {
     if (kind === 'recording') return '誰的腔灌進春雪社第一張唱片';
-    if (kind === 'partnership') return '誰是柳生春台上對戲的固定搭檔';
+    if (kind === 'partnership') return '誰當蘇映雪台上對戲的固定小生搭檔';
     if (kind === 'spotlight') return '上海這季把誰捧成春雪社的頭牌';
     return r.label;
 }
@@ -138,15 +143,17 @@ export function resolveEvent(world) {
         const play = ev.cards[id] ?? { card: '守', why: '' };
         return { id, name: c.name, role: c.role, card: play.card, why: play.why, score: cardScore(play.card, c) };
     });
-    const sorted = [...plays].sort((a, b) => {
-        if (a.score !== b.score) return b.score - a.score; // 高分勝
-        if (r.holder === a.id) return -1; // 平手 → 持有者守成
-        if (r.holder === b.id) return 1;
-        return 0;
-    });
+    // 持有者黏性：守成者 +18，避免 capacity-1 標的每 tick 翻盤（一張碟不該 6 天換 4 主）。
+    const HOLDER_BONUS = 18;
+    const eff = (p) => p.score + (r.holder === p.id ? HOLDER_BONUS : 0);
+    const sorted = [...plays].sort(
+        (a, b) => eff(b) - eff(a) || (r.holder === a.id ? -1 : r.holder === b.id ? 1 : 0),
+    );
     const winner = sorted[0];
     const prevHolder = r.holder;
     r.holder = winner.id;
+    r.lastResolved = world.tick;
+    r.cooldownUntil = world.tick + 2; // 剛爭過的標的冷卻 2 tick，逼世界轉去別的軸
 
     const others = plays.filter((p) => p.id !== winner.id);
     const display = resourceDisplay(ev.resourceLabel);
@@ -240,13 +247,15 @@ export function auditProse(text, c) {
     }
     // 本班無「師兄/師哥」：蘇映雪為師姐(女)、柳生春為師妹。出現即稱謂/性別錯亂。
     if (/師哥|師兄/.test(text)) v.push('稱謂錯誤：本班無師兄；蘇映雪是師姐(女)、柳生春是師妹，勿用師哥/師兄');
-    // 女角誤用「他」：POV 角色為女且正文以其名搭「他」。
-    if (c && c.gender === '女' && new RegExp(`${c.name}[\\s\\S]{0,16}?他(?!們)`).test(text)) {
-        v.push(`性別代詞錯誤：${c.name}是女性，第三人稱應用「她」`);
+    // 性別代詞：只查「明確女性」(蘇映雪/沈雪笙/連翹/唐桂蘭)。
+    // 柳生春是坤生、活在男裝裡，別人(尤其江聞鶴)以「柳爺/他」稱她是合理的，不查。
+    // 規則排除中間出現「柳」字的情況，避免「蘇映雪…柳生春…他(=柳)」的誤報。
+    const FEMALE_NAMES = ['蘇映雪', '沈雪笙', '連翹', '唐桂蘭'];
+    for (const name of FEMALE_NAMES) {
+        if (new RegExp(`${name}(?:(?!柳|。|？|！)[\\s\\S]){0,8}他(?!們)`).test(text)) {
+            v.push(`性別代詞錯誤：${name}是女性，第三人稱應用「她」`);
+        }
     }
-    // 合本等 c 非蘇映雪本人時，仍要抓到蘇映雪被誤寫成「他」（單篇 POV 已由上一條涵蓋）。
-    if ((!c || c.id !== 'su') && /蘇映雪[\s\S]{0,16}?他(?!們)/.test(text))
-        v.push('性別代詞錯誤：蘇映雪是女性花旦，應用「她」');
     return [...new Set(v)];
 }
 
