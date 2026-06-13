@@ -5,18 +5,59 @@
  * arcContext/chapter numbering). NO LLM here — pure decisions + framing.
  */
 
-export const CARD_RANK = { 斬: 0, 攻: 1, 誘: 2, 守: 3, 觀: 4, 讓: 5 };
-export const VALID_CARDS = Object.keys(CARD_RANK);
+/* ── 牌組（忠實對齊代碼：catalog + 發手牌 + intent 強弱 + card_weight 屬性加權）──
+ * 不是石頭剪刀布式克制；而是「越決絕(intent 越小)底牌越強，再按角色屬性加成」。
+ * 每張牌綁一個角色屬性，讓不同行當在不同牌上各擅勝場（破壟斷的關鍵之一）。 */
+export const CARD_CATALOG = [
+    { card: '斬', intent: 0, attr: null, gesture: '把話說死、半分餘地不留，寧撕破臉也要爭到底' },
+    { card: '攻', intent: 1, attr: 'constitution', gesture: '正面進逼，要把這事爭到手' },
+    { card: '守', intent: 2, attr: 'constitution', gesture: '穩住不退，也不出手去搶' },
+    { card: '誘', intent: 4, attr: 'disposition', gesture: '不來硬的，用軟語與身段把人往自己這邊拉' },
+    { card: '亮', intent: 5, attr: 'appearance', gesture: '亮相奪目，用一身風采壓住全場' },
+    { card: '觀', intent: 6, attr: 'acuity', gesture: '按兵不動，冷眼看準破綻' },
+    { card: '讓', intent: 9, attr: null, gesture: '退開一步，主動把位置讓出去' },
+];
+export const CARD_BY_NAME = Object.fromEntries(CARD_CATALOG.map((c) => [c.card, c]));
+export const CARD_GESTURE = Object.fromEntries(CARD_CATALOG.map((c) => [c.card, c.gesture]));
+export const VALID_CARDS = CARD_CATALOG.map((c) => c.card);
 
-// ── 翻譯層：機制 token → 敘事表面（絕不讓卡名/原始 label 進寫作 prompt）──
-export const CARD_GESTURE = {
-    斬: '把話說死、半分餘地不留，寧撕破臉也要爭到底',
-    攻: '正面進逼，要把這事爭到手',
-    誘: '不來硬的，用軟語與身段把人往自己這邊拉',
-    守: '穩住不退，也不出手去搶',
-    觀: '按兵不動，冷眼看著局勢',
-    讓: '退開一步，主動把位置讓出去',
-};
+/** 一張牌對某角色的有效強度 = 決絕底分 + 屬性加成。讓=主動退讓，最低。 */
+export function cardScore(cardName, character) {
+    const c = CARD_BY_NAME[cardName];
+    if (!c) return 0;
+    const base = (10 - c.intent) * 10;
+    const bonus = c.attr ? (character[c.attr] ?? 0) * 0.5 : 0;
+    return Math.round(base + bonus);
+}
+
+// 確定性 RNG（可由 --seed 重現）：發牌用，讓「不見得抽到強牌」可重跑。
+function hashStr(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i += 1) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+}
+function makeRng(seed) {
+    let s = seed >>> 0;
+    return () => {
+        s = (s + 0x6d2b79f5) | 0;
+        let t = Math.imul(s ^ (s >>> 15), 1 | s);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+/** 發 n 張不重複手牌（catalog 洗牌取前 n）。角色不見得拿到強牌。 */
+export function dealHand(character, n, seedStr) {
+    const rng = makeRng(hashStr(seedStr));
+    const pool = CARD_CATALOG.map((c) => c.card);
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(rng() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, Math.min(n, pool.length));
+}
 const RESOURCE_DISPLAY = {
     'recording:首張唱片灌錄權': '春雪社第一張唱片的灌錄權',
     'partnership:柳生春': '柳生春台上對戲的固定搭檔位',
@@ -26,19 +67,28 @@ export function resourceDisplay(label) {
     return RESOURCE_DISPLAY[label] ?? (String(label).split(':')[1] ?? label);
 }
 
-/** Rank resources by contention = # present desirers who don't already hold it. */
+/** Rank resources by contention = # present desirers who don't already hold it.
+ *  Skips locked resources (班主 已裁定保下) and excludes the rester (本輪輪空者)。 */
 export function rankContention(world) {
-    const byId = new Map(world.cast.map((c) => [c.id, c]));
+    const rester = world.restNextTick ?? null;
     return world.resources
+        .filter((r) => !r.locked)
         .map((r) => {
             const desirers = world.cast.filter(
-                (c) => c.desires.includes(r.label) && r.holder !== c.id,
+                (c) => c.desires.includes(r.label) && r.holder !== c.id && c.id !== rester,
             );
             return { resource: r, desirers, score: desirers.length };
         })
         .filter((x) => x.score >= 1)
         .sort((a, b) => b.score - a.score || a.resource.label.localeCompare(b.resource.label));
-    void byId;
+}
+
+/** 一人同時握有 ≥2 個標的 = 樹大招風，回傳其 id 供班主介入。 */
+export function detectMonopoly(world) {
+    const counts = {};
+    for (const r of world.resources) if (r.holder) counts[r.holder] = (counts[r.holder] ?? 0) + 1;
+    for (const [id, n] of Object.entries(counts)) if (n >= 2) return id;
+    return null;
 }
 
 /** Open an event on the top-contended resource. Participants converge to one scene. */
@@ -47,9 +97,10 @@ export function openEvent(world) {
     if (ranked.length === 0) return null;
     const top = ranked[0];
     const r = top.resource;
+    const rester = world.restNextTick ?? null;
     const participants = [...top.desirers];
     const holder = r.holder ? world.cast.find((c) => c.id === r.holder) : null;
-    if (holder && !participants.includes(holder)) participants.push(holder);
+    if (holder && holder.id !== rester && !participants.includes(holder)) participants.push(holder);
     if (participants.length < 2) return null; // need a real contest
 
     const sceneId = 'sc_yunjin';
@@ -85,11 +136,11 @@ export function resolveEvent(world) {
     const plays = ev.participantIds.map((id) => {
         const c = world.cast.find((x) => x.id === id);
         const play = ev.cards[id] ?? { card: '守', why: '' };
-        return { id, name: c.name, role: c.role, card: play.card, why: play.why, rank: CARD_RANK[play.card] ?? 3 };
+        return { id, name: c.name, role: c.role, card: play.card, why: play.why, score: cardScore(play.card, c) };
     });
     const sorted = [...plays].sort((a, b) => {
-        if (a.rank !== b.rank) return a.rank - b.rank;
-        if (r.holder === a.id) return -1; // tie → current holder keeps it
+        if (a.score !== b.score) return b.score - a.score; // 高分勝
+        if (r.holder === a.id) return -1; // 平手 → 持有者守成
         if (r.holder === b.id) return 1;
         return 0;
     });

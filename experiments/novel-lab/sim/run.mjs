@@ -35,6 +35,9 @@ const DRY = Boolean(flag('dry', false));
 const COMPARE = Boolean(flag('compare', false));
 const NO_SEQUEL = Boolean(flag('no-sequel', false));
 const SHOWRUNNER_EVERY = Number(flag('showrunner-every', 1));
+const HAND_SIZE = Number(flag('hand', 3));
+const SEED = Number(flag('seed', 7));
+const TENDER = Boolean(flag('tender', false));
 const BOOK_TITLE = '白蛇傳·上海卷';
 
 // ── logger ──────────────────────────────────────────────────────────────────
@@ -77,6 +80,8 @@ const world = {
     scenes,
     resourceMeans,
     openEvent: null,
+    restNextTick: null, // 班主裁奪：某人下一輪輪空
+    shenLast: -99, // 班主上次介入的 tick
     history: [],
     arc: {
         throughline: '春雪社這班人，能不能在上海把「戲比天大」唱成真的，還是終究被名利拆散。',
@@ -118,7 +123,7 @@ async function genAudited(label, askOpts, character, { regen = true } = {}) {
 
 // ── header ───────────────────────────────────────────────────────────────────
 section('無盡故事 · 解耦 tick 模擬器');
-log(`書：《${BOOK_TITLE}》　ticks=${TICKS}　compare=${COMPARE}　sequel=${!NO_SEQUEL}　showrunner-every=${SHOWRUNNER_EVERY}`);
+log(`書：《${BOOK_TITLE}》　ticks=${TICKS}　compare=${COMPARE}　sequel=${!NO_SEQUEL}　showrunner-every=${SHOWRUNNER_EVERY}　hand=${HAND_SIZE}　seed=${SEED}${TENDER ? '　[感情戲模式]' : ''}`);
 if (COMPARE) log('COMPARE 模式：每個角色同一份事件下，先出【A 現況 prompt+thin 材料】、再出【B 重設計】供盲評。');
 if (DRY) {
     log('模式：DRY（不呼叫 LLM；卡牌用啟發式，POV/合本只印 prompt）');
@@ -134,12 +139,18 @@ if (DRY) {
 }
 log(`log 檔：${LOG_PATH}`);
 
-// ── dry heuristic card ───────────────────────────────────────────────────────
-function dryCard(c, ev) {
-    const holder = world.resources.find((r) => r.label === ev.resourceLabel)?.holder;
-    if (holder === c.id) return { card: '守', why: '守成' };
-    if (c.disposition <= 62) return { card: '攻', why: '心性烈' };
-    return { card: '誘', why: '用手腕' };
+// ── dry heuristic: 從手牌挑分數最高的（無 LLM 時用）──
+function dryPick(c, hand, why = '(啟發式：手牌最強)') {
+    let best = hand[0];
+    let bs = -1;
+    for (const cd of hand) {
+        const s = M.cardScore(cd, c);
+        if (s > bs) {
+            bs = s;
+            best = cd;
+        }
+    }
+    return { card: best, why };
 }
 
 // ── thin trigger (現況 tick-loop 的 triggerNarrative 格式，給 compare 的 A 用) ──
@@ -189,6 +200,9 @@ async function runTick() {
 
     // PHASE: SPINE open
     const ev = M.openEvent(world);
+    const restedName = world.restNextTick ? world.cast.find((c) => c.id === world.restNextTick)?.name : null;
+    world.restNextTick = null; // 本輪已消耗輪空
+    if (restedName) log(`（班主裁奪：${restedName} 本輪輪空，未入局）`);
     if (!ev) {
         log('\n【SPINE】本 tick 無足夠對手成局（<2 人）。');
         return;
@@ -196,24 +210,28 @@ async function runTick() {
     log(`\n【SPINE】開事件 ${ev.id}：「${ev.label}」 @ ${ev.sceneName}`);
     log(`  · 標的：${ev.resourceLabel}　在場：${ev.participantIds.map((id) => world.cast.find((c) => c.id === id).name).join('、')}`);
 
-    // PHASE: ACT (cards) — autonomous, drives the verdict
-    log('\n【ACT】各自出牌（決定走向，非我選）');
+    // PHASE: ACT — 發手牌 → 各自從手牌選一張（屬性加權計分；不見得有強牌）
+    log('\n【ACT】發手牌 → 各自選一張（決定走向，非我選）');
     const stakes = `${ev.label}。賭注：${world.resourceMeans[ev.resourceLabel]}`;
     for (const id of ev.participantIds) {
         const c = world.cast.find((x) => x.id === id);
+        const hand = M.dealHand(c, HAND_SIZE, `${SEED}:${world.tick}:${id}`);
         let play;
-        if (DRY) play = dryCard(c, ev);
+        if (DRY) play = dryPick(c, hand);
         else {
             try {
-                const r = await ask({ tier: 'cheap', system: P.cardSystem(), user: P.cardUser(c, ev.label, stakes), maxTokens: 200, temperature: 0.9 });
+                const r = await ask({ tier: 'cheap', system: P.cardSystem(), user: P.cardUser(c, ev.label, stakes, hand), maxTokens: 200, temperature: 0.9 });
                 const j = extractJson(r.text);
-                play = j && M.VALID_CARDS.includes(j.card) ? { card: j.card, why: String(j.why ?? '') } : { card: '守', why: '(解析失敗預設守)' };
+                play = j && hand.includes(j.card)
+                    ? { card: j.card, why: String(j.why ?? '') }
+                    : dryPick(c, hand, '(未選手牌內，取手牌最順者)');
             } catch (e) {
-                play = { card: '守', why: `(出牌失敗 ${e.message})` };
+                play = dryPick(c, hand, `(出牌失敗 ${e.message})`);
             }
         }
+        play.hand = hand;
         ev.cards[id] = play;
-        log(`  · ${c.name}　〔${play.card}〕rank=${M.CARD_RANK[play.card]}　— ${play.why}`);
+        log(`  · ${c.name}　手牌[${hand.join('/')}] → 〔${play.card}〕分=${M.cardScore(play.card, c)}　— ${play.why}`);
     }
 
     // PHASE: RESOLVE (deterministic verdict)
@@ -352,6 +370,35 @@ async function runTick() {
         }
     }
 
+    // PHASE: 班主介入 — 一人攬下 ≥2 標的 → 沈雪笙出手護搭檔 + 令其輪空（破壟斷）
+    const monoId = M.detectMonopoly(world);
+    if (monoId && world.tick - world.shenLast >= 2) {
+        const shen = world.cast.find((c) => c.id === 'shen');
+        const monoName = world.cast.find((c) => c.id === monoId).name;
+        const held = world.resources.filter((r) => r.holder === monoId).map((r) => M.resourceDisplay(r.label)).join('、');
+        section(`【班主介入】沈雪笙裁奪（${monoName} 已攬下 ${held}）`);
+        const situation = `${monoName}如今同時攥著${held}，全班的機會與情分都往他一人身上傾；柳生春與蘇映雪這對自幼相得的搭檔，眼看要被這場名利的爭奪硬拆開。`;
+        const ledger = M.targetedRecall(world, 'shen');
+        if (DRY) {
+            log('[SYSTEM]\n' + P.shenSystem());
+            log('\n[USER]\n' + P.shenUser(shen, situation, ledger));
+        } else {
+            try {
+                const t = await genAudited('班主介入', { tier: 'primary', system: P.shenSystem(), user: P.shenUser(shen, situation, ledger), maxTokens: 1400, temperature: 0.9 }, shen, { regen: true });
+                log(t);
+            } catch (e) { log(`(班主介入失敗 ${e.message})`); }
+        }
+        const part = world.resources.find((r) => r.label === 'partnership:柳生春');
+        if (part && !part.locked) {
+            part.locked = true;
+            part.holder = 'liu';
+            log('  ▶ 裁奪：保下「柳生春台上對戲的固定搭檔位」歸柳蘇，從此不再被爭（鎖定）');
+        }
+        world.restNextTick = monoId;
+        world.shenLast = world.tick;
+        log(`  ▶ 裁奪：${monoName} 下一輪先歇（輪空一場），把機會勻給旁人`);
+    }
+
     world.openEvent = null; // resolved this tick
 }
 
@@ -384,8 +431,45 @@ async function showrunner() {
     }
 }
 
+// ── 感情戲測試：柳生春 × 蘇映雪 · 同一刻兩個視角，測 LLM 抓不抓得到「愛而不得」──
+async function runTender() {
+    const liu = world.cast.find((c) => c.id === 'liu');
+    const su = world.cast.find((c) => c.id === 'su');
+    const occasion =
+        '散戲後，雲錦台只剩一盞燈。衣箱唐桂蘭回了鄉下，今夜沒人收拾。柳生春替蘇映雪卸下頭面，又蹲身替她重繫一條鬆了的水袖。';
+    const undercurrent =
+        '兩人都隱隱覺出，彼此之間那份情，早已遠超台上的生旦、也遠超師姐妹該守的分寸；可誰也不敢先說破——都怕一旦點破，連這樣安安靜靜守在一處，都再守不成了。';
+    section('【感情戲測試】柳生春 × 蘇映雪 · 愛而不得（同一刻，兩個視角）');
+    log(`場合：${occasion}`);
+    log(`暗流：${undercurrent}`);
+    for (const [c, other] of [[liu, su], [su, liu]]) {
+        log('');
+        hr('·');
+        log(`感情戲 POV — ${c.name}（${c.role}）　[私帳]「${M.targetedRecall(world, c.id)}」`);
+        hr('·');
+        const ctx = { character: c, other, occasion, undercurrent, privateLedger: M.targetedRecall(world, c.id) };
+        if (DRY) {
+            log('[SYSTEM]\n' + P.tenderSystem());
+            log('\n[USER]\n' + P.tenderUser(ctx));
+            continue;
+        }
+        try {
+            const t = await genAudited(`感情戲·${c.name}`, { tier: 'primary', system: P.tenderSystem(), user: P.tenderUser(ctx), maxTokens: 1800, temperature: 0.95 }, c, { regen: true });
+            log(t);
+        } catch (e) { log(`(感情戲失敗 ${e.message})`); }
+    }
+}
+
 // ── main ─────────────────────────────────────────────────────────────────────
 (async () => {
+    if (TENDER) {
+        await runTender();
+        section('完成');
+        log(`LLM 呼叫：${llmCalls}`);
+        log(`\n👉 log 已存到：${LOG_PATH}`);
+        log('   把整份貼回來，我看 LLM 有沒有抓到柳蘇「愛而不得」、是否兩個視角都成立。');
+        return;
+    }
     for (let t = 0; t < TICKS; t++) {
         await runTick();
         if (SHOWRUNNER_EVERY > 0 && (t + 1) % SHOWRUNNER_EVERY === 0) await showrunner();
