@@ -8,6 +8,27 @@
  * No-fabrication guardrails are ported from the real character-worker prompt.
  */
 
+// ── 行當本色卡（預防層）：把性別/行當/道具規矩餵進 prompt，從源頭防硬傷 ──
+const CRAFT_SHEETS = {
+    坤生: '你是坤生（女小生）：女子扮演少年男子（書生、公子、年少將領）。你是女兒身，第三人稱敘述一律用「她」；台上扮男、戲文裡才是男角。常工許仙、書生、周瑜一類俊扮無鬚小生。【硬規矩】小生是俊扮，絕不掛髯口（鬍鬚）；不演老生戲（定軍山/烏盆記/捉放曹等）；不勾花臉。',
+    乾生: '你是乾生（男小生）：男子演少年男子，俊扮。第三人稱用「他」。【硬規矩】小生俊扮，不掛髯口；不演老生戲；不勾花臉。',
+    花旦: '你是花旦（女）：演年輕女子（小姐、丫鬟、白素貞一類）。第三人稱一律用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
+    青衣: '你是青衣（女）：演端莊女子。第三人稱用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
+    班主: '你是班主沈雪笙（女，前坤生名角），多在二樓不常登台。第三人稱用「她」。',
+};
+export function craftSheet(c) {
+    return CRAFT_SHEETS[c.role] ?? `你的行當是「${c.role}」。敘述、道具、戲碼、第三人稱代詞都必須與此行當與你的性別（${c.gender}）相符。`;
+}
+// ── 改寫指令（修正層）：自檢抓到硬傷時，把違反項回灌，要求改寫 ──
+export function correctionNote(violations) {
+    return [
+        '',
+        '# ⚠️ 上一稿有以下硬傷，請在保留情節與好句的前提下改寫修正（只動錯處）：',
+        ...violations.map((v) => `- ${v}`),
+        '改寫後直接輸出修正版正文，不要解釋。',
+    ].join('\n');
+}
+
 // ── POV chapter (single character, limited 3rd/1st person) ────────────────
 export function povSystem() {
     return [
@@ -38,6 +59,9 @@ export function povUser(ctx) {
         `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
         `- 外形：${c.physical}`,
         `- 屬性：外貌 ${c.appearance} · 筋骨 ${c.constitution} · 機敏 ${c.acuity} · 心性 ${c.disposition}`,
+        '',
+        '# 行當本色（硬規矩，違反即出戲）',
+        craftSheet(c),
         '',
         '# 弧線座標（承上啟下用 — 來自 showrunner 的弧線計畫）',
         `- 本書：《${ctx.bookTitle}》（你的角色版連載）　你個人連載：第 ${ctx.chapterNo} 章`,
@@ -119,6 +143,7 @@ export function sequelSystem() {
         '',
         '私帳：材料的【私帳】這一回揭一角。承上啟下同 POV 規則。',
         '不捏造：客觀台詞只引材料給的；不發明重大新事實。',
+        '視角：貼著主角寫（第一人稱「我」，或第三人稱但代詞須與主角性別相符）。遵守材料的【行當本色】。',
         '質地：民初梨園舊白話，情緒克制。600–900 字，純散文直接進正文。',
     ].join('\n');
 }
@@ -127,8 +152,11 @@ export function sequelUser(ctx) {
     const c = ctx.character;
     return [
         '# 你的身份',
-        `- 姓名：${c.name}　行當：${c.role}　年齡：${c.age}`,
+        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
         `- 外形：${c.physical}`,
+        '',
+        '# 行當本色（硬規矩，違反即出戲）',
+        craftSheet(c),
         '',
         '# 弧線座標',
         `- 本書：《${ctx.bookTitle}》（你的角色版連載）　你個人連載：第 ${ctx.chapterNo} 章`,

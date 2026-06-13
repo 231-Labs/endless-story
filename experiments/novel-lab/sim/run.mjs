@@ -98,6 +98,24 @@ async function ask(opts) {
     return r;
 }
 
+// Generate → 自檢 → (B 路徑) 抓到硬傷就指出、改寫一次。A 路徑只標記不改寫（呈現現況基準會出錯）。
+async function genAudited(label, askOpts, character, { regen = true } = {}) {
+    const r1 = await ask(askOpts);
+    let text = (r1.text ?? '').trim();
+    let v = M.auditProse(text, character);
+    log(`\n【自檢】${label}：${v.length === 0 ? '✓ 通過' : `✗ ${v.length} 項硬傷`}`);
+    for (const x of v) log(`    - ${x}`);
+    if (v.length > 0 && regen && !DRY) {
+        const r2 = await ask({ ...askOpts, user: askOpts.user + '\n' + P.correctionNote(v) });
+        const t2 = (r2.text ?? '').trim();
+        const v2 = M.auditProse(t2, character);
+        log(`【自檢·改寫後】${label}：${v2.length === 0 ? '✓ 通過' : `✗ 仍有 ${v2.length} 項`}`);
+        for (const x of v2) log(`    - ${x}`);
+        if (v2.length <= v.length) text = t2;
+    }
+    return text;
+}
+
 // ── header ───────────────────────────────────────────────────────────────────
 section('無盡故事 · 解耦 tick 模擬器');
 log(`書：《${BOOK_TITLE}》　ticks=${TICKS}　compare=${COMPARE}　sequel=${!NO_SEQUEL}　showrunner-every=${SHOWRUNNER_EVERY}`);
@@ -131,8 +149,8 @@ function buildThinTrigger(c, ev, res) {
         .map((id) => world.cast.find((x) => x.id === id).name);
     const parts = [`在${ev.sceneName}，${ev.label}` + (others.length ? `（同場還有${others.join('、')}）` : '')];
     const my = ev.cards[c.id];
-    if (my) parts.push(`你打出了〔${my.card}〕`);
-    parts.push(`這一局已見分曉：${res.verdict}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`);
+    if (my) parts.push(`你${M.CARD_GESTURE[my.card]}`);
+    parts.push(`這一局已見分曉：${res.verdictNarrative}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`);
     return `第${world.day}日 — 今日，${parts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`;
 }
 
@@ -226,8 +244,8 @@ async function runTick() {
             arc,
             privateLedger: M.targetedRecall(world, id),
             stakes: `這樁事爭的是：${world.resourceMeans[ev.resourceLabel]}`,
-            turn: `${ev.label}。各人出了牌：${ev.participantIds.map((pid) => `${world.cast.find((x) => x.id === pid).name}〔${ev.cards[pid].card}〕`).join('、')}。`,
-            outcome: res.verdict,
+            turn: `${ev.label}。各人的姿態——${ev.participantIds.map((pid) => `${world.cast.find((x) => x.id === pid).name}：${M.CARD_GESTURE[ev.cards[pid].card]}`).join('；')}。`,
+            outcome: res.verdictNarrative,
             cost: M.structuredCost(world, id, res),
             relationshipHints: M.relationshipHints(world, id),
             sceneBeats: M.buildSceneBeats(world, c.sceneId, id),
@@ -236,7 +254,7 @@ async function runTick() {
         const ctxA = {
             character: c,
             triggerNarrative: buildThinTrigger(c, ev, res),
-            dramaHint: `你此刻最渴望的是「爭得${ev.resourceLabel}」`,
+            dramaHint: `你此刻最渴望的是爭得${M.resourceDisplay(ev.resourceLabel)}`,
             recentMemorySnippets: world.history.slice(0, -1).slice(-2).map((h) => h.text),
             relationshipHints: M.relationshipHints(world, id),
             sceneBeats: M.buildSceneBeats(world, c.sceneId, id),
@@ -260,16 +278,17 @@ async function runTick() {
         }
         if (COMPARE) {
             try {
-                const ra = await ask({ tier: 'primary', system: P.povSystemA(), user: P.povUserA(ctxA), maxTokens: 2200, temperature: 0.92 });
                 log('\n──────── 【A · 現況 prompt + 現況 thin 材料】 ────────');
-                log(ra.text.trim());
+                // A = 現況基準：只跑自檢標記、不改寫，呈現現行 production 會出的硬傷。
+                const ta = await genAudited(`A·${c.name}`, { tier: 'primary', system: P.povSystemA(), user: P.povUserA(ctxA), maxTokens: 2200, temperature: 0.92 }, c, { regen: false });
+                log(ta);
             } catch (e) { log(`(A POV 失敗 ${e.message})`); }
         }
         try {
-            const rb = await ask({ tier: 'primary', system: P.povSystem(), user: P.povUser(ctxB), maxTokens: 2200, temperature: 0.92 });
             if (COMPARE) log('\n──────── 【B · 重設計 prompt + 增補材料】 ────────');
-            log(rb.text.trim());
-            povs.push({ id, name: c.name, role: c.role, body: rb.text.trim() });
+            const tb = await genAudited(`B·${c.name}`, { tier: 'primary', system: P.povSystem(), user: P.povUser(ctxB), maxTokens: 2200, temperature: 0.92 }, c, { regen: true });
+            log(tb);
+            povs.push({ id, name: c.name, role: c.role, body: tb });
         } catch (e) {
             log(`(POV 失敗 ${e.message})`);
         }
@@ -293,8 +312,9 @@ async function runTick() {
             log('\n[USER]\n' + P.cutUser(cutCtx));
         } else {
             try {
-                const r = await ask({ tier: 'primary', system: P.cutSystem(), user: P.cutUser(cutCtx), maxTokens: 2400, temperature: 0.9 });
-                log(r.text.trim());
+                // 合本含多角：用無鬚行當+男性的合成角色跑自檢（觸發髯口/老生戲/token/稱謂，避開單一性別代詞誤報）。
+                const t = await genAudited('合本', { tier: 'primary', system: P.cutSystem(), user: P.cutUser(cutCtx), maxTokens: 2400, temperature: 0.9 }, { name: '__合本__', role: '坤生', gender: '男' }, { regen: true });
+                log(t);
             } catch (e) {
                 log(`(合本失敗 ${e.message})`);
             }
@@ -324,8 +344,8 @@ async function runTick() {
             log('\n[USER]\n' + P.sequelUser(sctx));
         } else {
             try {
-                const r = await ask({ tier: 'primary', system: P.sequelSystem(), user: P.sequelUser(sctx), maxTokens: 1800, temperature: 0.92 });
-                log(r.text.trim());
+                const t = await genAudited(`餘波·${loser.name}`, { tier: 'primary', system: P.sequelSystem(), user: P.sequelUser(sctx), maxTokens: 1800, temperature: 0.92 }, loser, { regen: true });
+                log(t);
             } catch (e) {
                 log(`(餘波失敗 ${e.message})`);
             }
