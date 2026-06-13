@@ -152,16 +152,19 @@ export function createClient(cfg = loadConfig()) {
             temperature,
         };
         let lastErr;
-        for (let attempt = 0; attempt < 4; attempt++) {
+        for (let attempt = 0; attempt < 5; attempt++) {
             try {
                 if (provider === 'zai') return await callZAI(apiKey, cfg.zaiBaseUrl, req);
                 if (provider === 'poe') return await callPoe(apiKey, req);
                 return await callAnthropic(apiKey, req);
             } catch (err) {
                 lastErr = err;
-                const retryable = [429, 503, 529].includes(err?.status);
-                if (!retryable || attempt === 3) throw err;
-                await sleep(1000 * 2 ** attempt + Math.random() * 500);
+                const status = err?.status;
+                // 無狀態碼 = fetch 在拿到 HTTP 回應前就拋（網路斷/逾時/連線重置）→ 可重試
+                const networkErr = status === undefined;
+                const retryable = networkErr || [429, 503, 529].includes(status);
+                if (!retryable || attempt === 4) throw err;
+                await sleep(1000 * 2 ** attempt + Math.random() * 750);
             }
         }
         throw lastErr;

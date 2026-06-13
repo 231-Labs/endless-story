@@ -92,10 +92,13 @@ export function rankContention(world) {
         );
 }
 
-/** 一人同時握有 ≥2 個標的 = 樹大招風，回傳其 id 供班主介入。 */
+/** 一人同時握有 ≥2 個標的 = 樹大招風，回傳其 id 供班主介入。
+ *  已退場/已鎖定（班主裁過）的標的不算——否則持有退場資源會被誤判成永久壟斷、被反覆罰輪空。 */
 export function detectMonopoly(world) {
     const counts = {};
-    for (const r of world.resources) if (r.holder) counts[r.holder] = (counts[r.holder] ?? 0) + 1;
+    for (const r of world.resources) {
+        if (r.holder && !r.retired && !r.locked) counts[r.holder] = (counts[r.holder] ?? 0) + 1;
+    }
     for (const [id, n] of Object.entries(counts)) if (n >= 2) return id;
     return null;
 }
@@ -301,6 +304,14 @@ export function validateResourceOps(world, ops) {
             const r = world.resources.find((x) => x.label === op.label && !x.retired);
             if (!r) {
                 rejected.push({ op, reason: '找不到可退場的標的' });
+                continue;
+            }
+            // 仍有 ≥2 人想爭（持有者除外）= 活軸，不可退場，免得殺掉熱戲讓世界變薄。
+            const stillWanted = world.cast.filter(
+                (c) => c.desires.includes(r.label) && r.holder !== c.id,
+            ).length;
+            if (stillWanted >= 2) {
+                rejected.push({ op, reason: '此標的仍有≥2人想爭、未死，不可退場' });
                 continue;
             }
             accepted.push({ op: 'retire', label: r.label, why: op.why });
