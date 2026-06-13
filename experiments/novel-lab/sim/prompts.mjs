@@ -63,6 +63,49 @@ export function povUser(ctx) {
     return lines.join('\n');
 }
 
+// ── POV chapter · 現況版 (prompt-A，忠實移植 character-worker 現行 prompt) ──
+// 用於 --compare：同材料下，現況 prompt（為防捏造而壓制劇情）vs 重設計 prompt 的對照。
+export function povSystemA() {
+    return [
+        '你是一位連載小說家，正在為「無盡故事」寫一小節角色 POV 章回。',
+        'POV 的意思是：鏡頭、感官、誤解與判斷都綁在這個角色身上；它不是反思、不是日記、不是情緒摘要。',
+        '',
+        '**敘事鐵則**：',
+        '1. 第一人稱限定視角。讀者只能知道此人看見、聽見、猜到、誤會到的事。',
+        '2. 寫一個可拍的場面，不寫一份心情報告。每章至少要有：一個具體空間、一件可觸摸的小物、一個正在發生的外部動作。',
+        '3. 公報已交代過大事 — 不要 recap。只取其中最能刺到此人的一瞬。',
+        '4. 情緒要有節制。強烈情緒只能透過停頓、閃避、手上小動作露出來；避免大詞（崩潰/撕裂/瘋狂/燃燒/命運）。',
+        '5. 不要濫用回憶。記憶片段只挑一條化成比喻或動作；不要寫成回憶錄。',
+        '6. 對白只能引用客觀台詞，不可自創。',
+        '7. 不得發明重大新事實：不可突然死亡、成親、揭露血緣、改寫事件結果。',
+        '8. 身份不得漂移。9. 舞台中心不是管理權力。10. 身體缺陷與秘密物件要有來源。11. 同場客觀事實不可改寫。',
+        '',
+        '**聲音與質地**：民初梨園舊白話；角色扁平時寧可低調寫觀察、身段、職業習慣與眼前利害；',
+        '結尾留一個未解的小鉤子或轉身，不要總結人生道理、不要「於是我明白了」。',
+        '450–900 字，3–6 段。純散文，直接進正文。',
+    ].join('\n');
+}
+
+export function povUserA(ctx) {
+    const c = ctx.character;
+    const lines = [
+        '# 你的身份',
+        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
+        `- 外形：${c.physical}`,
+        `- 屬性：外貌 ${c.appearance} · 筋骨 ${c.constitution} · 機敏 ${c.acuity} · 心性 ${c.disposition}`,
+    ];
+    if (ctx.recentMemorySnippets?.length)
+        lines.push('', '## 可用記憶材料（只可取一兩個細節，化入場面）', ...ctx.recentMemorySnippets.map((m, i) => `${i + 1}. ${m}`));
+    if (ctx.relationshipHints?.length)
+        lines.push('', '## 同場名冊', ...ctx.relationshipHints.map((s) => `- ${s}`));
+    lines.push('', '## 當下目標（讓場面有方向，不要直接宣告）', c.plan);
+    if (ctx.dramaHint) lines.push('', '## 稀缺張力（讓它變成行動或視線）', ctx.dramaHint);
+    if (ctx.sceneBeats?.length)
+        lines.push('', '## 本場此刻（客觀事實，只可詮釋不可改寫）', ...ctx.sceneBeats.map((s) => `- ${s}`));
+    lines.push('', '## 事件材料（這是背景，不是正文摘要）', ctx.triggerNarrative, '', '請把上述材料寫成一小節角色限定視角小說。不要寫反思；不要解釋你如何寫作；直接輸出正文。');
+    return lines.join('\n');
+}
+
 // ── Sequel / aftermath chapter (quiet, non-competition) ───────────────────
 export function sequelSystem() {
     return [

@@ -32,6 +32,7 @@ const flag = (name, def) => {
 };
 const TICKS = Number(flag('ticks', 3));
 const DRY = Boolean(flag('dry', false));
+const COMPARE = Boolean(flag('compare', false));
 const NO_SEQUEL = Boolean(flag('no-sequel', false));
 const SHOWRUNNER_EVERY = Number(flag('showrunner-every', 1));
 const BOOK_TITLE = '白蛇傳·上海卷';
@@ -99,7 +100,8 @@ async function ask(opts) {
 
 // ── header ───────────────────────────────────────────────────────────────────
 section('無盡故事 · 解耦 tick 模擬器');
-log(`書：《${BOOK_TITLE}》　ticks=${TICKS}　sequel=${!NO_SEQUEL}　showrunner-every=${SHOWRUNNER_EVERY}`);
+log(`書：《${BOOK_TITLE}》　ticks=${TICKS}　compare=${COMPARE}　sequel=${!NO_SEQUEL}　showrunner-every=${SHOWRUNNER_EVERY}`);
+if (COMPARE) log('COMPARE 模式：每個角色同一份事件下，先出【A 現況 prompt+thin 材料】、再出【B 重設計】供盲評。');
 if (DRY) {
     log('模式：DRY（不呼叫 LLM；卡牌用啟發式，POV/合本只印 prompt）');
 } else {
@@ -120,6 +122,18 @@ function dryCard(c, ev) {
     if (holder === c.id) return { card: '守', why: '守成' };
     if (c.disposition <= 62) return { card: '攻', why: '心性烈' };
     return { card: '誘', why: '用手腕' };
+}
+
+// ── thin trigger (現況 tick-loop 的 triggerNarrative 格式，給 compare 的 A 用) ──
+function buildThinTrigger(c, ev, res) {
+    const others = ev.participantIds
+        .filter((id) => id !== c.id)
+        .map((id) => world.cast.find((x) => x.id === id).name);
+    const parts = [`在${ev.sceneName}，${ev.label}` + (others.length ? `（同場還有${others.join('、')}）` : '')];
+    const my = ev.cards[c.id];
+    if (my) parts.push(`你打出了〔${my.card}〕`);
+    parts.push(`這一局已見分曉：${res.verdict}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`);
+    return `第${world.day}日 — 今日，${parts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`;
 }
 
 // ── one tick ─────────────────────────────────────────────────────────────────
@@ -199,12 +213,13 @@ async function runTick() {
     log(`  · 本回要推進：${arc.thisPush}`);
 
     // PHASE: POV (primary LLM) per participant
-    log('\n【POV】各角色章回（primary 模型）');
+    log(`\n【POV】各角色章回（primary 模型）${COMPARE ? '· COMPARE：A 現況 vs B 重設計（同材料盲評）' : ''}`);
     const povs = [];
     for (const id of ev.participantIds) {
         const c = world.cast.find((x) => x.id === id);
         world.perChar[id] = (world.perChar[id] ?? 0) + 1;
-        const ctx = {
+        // B context (redesigned method + 3 fixes)
+        const ctxB = {
             character: c,
             bookTitle: BOOK_TITLE,
             chapterNo: world.perChar[id],
@@ -217,20 +232,44 @@ async function runTick() {
             relationshipHints: M.relationshipHints(world, id),
             sceneBeats: M.buildSceneBeats(world, c.sceneId, id),
         };
+        // A context (faithful to current production: thin trigger + generic recall, NO arc/cost/secret)
+        const ctxA = {
+            character: c,
+            triggerNarrative: buildThinTrigger(c, ev, res),
+            dramaHint: `你此刻最渴望的是「爭得${ev.resourceLabel}」`,
+            recentMemorySnippets: world.history.slice(0, -1).slice(-2).map((h) => h.text),
+            relationshipHints: M.relationshipHints(world, id),
+            sceneBeats: M.buildSceneBeats(world, c.sceneId, id),
+        };
         log('');
         hr('·');
-        log(`POV — ${c.name}（${c.role}）· 其個人書第 ${ctx.chapterNo} 章　[召回私帳]「${ctx.privateLedger}」`);
+        log(`POV — ${c.name}（${c.role}）· 其個人書第 ${ctxB.chapterNo} 章　[召回私帳]「${ctxB.privateLedger}」`);
         hr('·');
         if (DRY) {
-            log('[SYSTEM]\n' + P.povSystem());
-            log('\n[USER]\n' + P.povUser(ctx));
+            if (COMPARE) {
+                log('— [A·現況] SYSTEM —\n' + P.povSystemA());
+                log('\n— [A·現況] USER —\n' + P.povUserA(ctxA));
+                log('\n— [B·重設計] SYSTEM —\n' + P.povSystem());
+                log('\n— [B·重設計] USER —\n' + P.povUser(ctxB));
+            } else {
+                log('[SYSTEM]\n' + P.povSystem());
+                log('\n[USER]\n' + P.povUser(ctxB));
+            }
             povs.push({ id, name: c.name, role: c.role, body: '(dry)' });
             continue;
         }
+        if (COMPARE) {
+            try {
+                const ra = await ask({ tier: 'primary', system: P.povSystemA(), user: P.povUserA(ctxA), maxTokens: 2200, temperature: 0.92 });
+                log('\n──────── 【A · 現況 prompt + 現況 thin 材料】 ────────');
+                log(ra.text.trim());
+            } catch (e) { log(`(A POV 失敗 ${e.message})`); }
+        }
         try {
-            const r = await ask({ tier: 'primary', system: P.povSystem(), user: P.povUser(ctx), maxTokens: 2200, temperature: 0.92 });
-            log(r.text.trim());
-            povs.push({ id, name: c.name, role: c.role, body: r.text.trim() });
+            const rb = await ask({ tier: 'primary', system: P.povSystem(), user: P.povUser(ctxB), maxTokens: 2200, temperature: 0.92 });
+            if (COMPARE) log('\n──────── 【B · 重設計 prompt + 增補材料】 ────────');
+            log(rb.text.trim());
+            povs.push({ id, name: c.name, role: c.role, body: rb.text.trim() });
         } catch (e) {
             log(`(POV 失敗 ${e.message})`);
         }
