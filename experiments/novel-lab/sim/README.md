@@ -20,6 +20,17 @@ AI_PROVIDER=anthropic ANTHROPIC_API_KEY=... node experiments/novel-lab/sim/run.m
 node experiments/novel-lab/sim/run.mjs --ticks 2 --dry
 ```
 
+### 一鍵完整跑（無人值守，跑完一次貼回來）
+
+```bash
+AI_PROVIDER=poe POE_API_KEY=你的key \
+  node experiments/novel-lab/sim/run.mjs --ticks 6 --with-tender --book all --seed 7
+```
+
+一條指令涵蓋：6 tick 競爭（POV＋合本＋餘波＋班主介入＋showrunner 弧線）→ 柳蘇感情戲 →
+最後把每個角色的「角色版連載」整本順印 + 梨園版合本。約 70–90 次 LLM 呼叫，可去做別的事。
+（嫌久或省 token：降 `--ticks 4` 或加 `--no-sequel`。）
+
 想換模型（例如用 Claude 寫章回看品質上限）：
 
 ```bash
@@ -34,6 +45,8 @@ AI_PROVIDER=poe POE_API_KEY=... POE_MODEL_PRIMARY=Claude-Sonnet-4.6 \
 | `--ticks N` | 3 | 跑幾個 tick |
 | `--compare` | off | 每角色同材料出 A 現況 / B 重設計兩篇盲評 |
 | `--tender` | off | **感情戲模式**：只跑柳生春×蘇映雪同一刻兩視角，測 LLM 抓不抓得到「愛而不得」 |
+| `--with-tender` | off | 跑完競爭迴圈後，**附加**一場柳蘇感情戲（一條指令把全部跑完） |
+| `--book [名\|all]` | off | 跑完把每個角色的章回**按時間順序整本輸出**（角色版縱切），外加梨園版合本（橫切）。`--book all` 全印 |
 | `--hand N` | 3 | 每人發幾張手牌（從 catalog 抽，不見得有強牌） |
 | `--seed N` | 7 | 發牌亂數種子（同 seed 可重現整局） |
 | `--dry` | off | 不呼叫 LLM；卡牌取手牌最強，POV/合本只印組好的 prompt（驗接線用） |

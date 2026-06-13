@@ -60,7 +60,7 @@ export function dealHand(character, n, seedStr) {
 }
 const RESOURCE_DISPLAY = {
     'recording:首張唱片灌錄權': '春雪社第一張唱片的灌錄權',
-    'partnership:柳生春': '柳生春台上對戲的固定搭檔位',
+    'partnership:蘇映雪': '蘇映雪台上對戲的固定小生搭檔位',
     'spotlight:春雪社頭牌名額': '春雪社頭牌的名分',
 };
 export function resourceDisplay(label) {

@@ -14,7 +14,8 @@ export const scenes = [
 // capacity-1 scarce slots (drama resources). holder = who currently owns it.
 export const resources = [
     { label: 'recording:首張唱片灌錄權', capacity: 1, holder: null, means: '誰的腔被刻進春雪社第一張碟、活得比戲台久' },
-    { label: 'partnership:柳生春', capacity: 1, holder: null, means: '誰是柳生春台上對戲的固定搭檔' },
+    // 被爭的是「蘇映雪的小生搭檔位」：柳生春現居此位，江聞鶴(乾生)來搶。蘇映雪是locus非競爭者。
+    { label: 'partnership:蘇映雪', capacity: 1, holder: 'liu', means: '誰當蘇映雪台上對戲的固定小生搭檔（柳生春現居此位、江聞鶴來搶）' },
     { label: 'spotlight:春雪社頭牌名額', capacity: 1, holder: null, means: '上海這季把哪個名字捧成春雪社的頭牌' },
 ];
 
@@ -29,8 +30,8 @@ export const cast = [
             '台上她做白娘子，我做許仙；只有在戲裡，我才能光明正大地牽她的手、望進她眼裡，把那句不能說的話，都唱進腔裡。',
             '我怕的不是她嫌我，是怕哪天這層情分被人說破了，連這樣安安靜靜守著她，都守不成了。',
         ],
-        desires: ['partnership:柳生春', 'recording:首張唱片灌錄權'],
-        plan: '[長期] 一輩子跟師姐相伴在台上 [眼下] 守住與師姐對戲的位置 [未竟] 那句說不出口的話，藏好，別讓人看破',
+        desires: ['recording:首張唱片灌錄權', 'partnership:蘇映雪'],
+        plan: '[長期] 一輩子跟師姐相伴在台上 [眼下] 守住師姐搭檔位、別讓江聞鶴插進來 [未竟] 那句說不出口的話，藏好，別讓人看破',
     },
     {
         id: 'su', name: '蘇映雪', role: '花旦', gender: '女', age: 28, sceneId: 'sc_yunjin',
@@ -42,7 +43,7 @@ export const cast = [
             '她替我繫水袖、正鬢髮，指尖總是涼的；我每回都想多留她半息，話到嘴邊又咽了——有些情分，一說破就再回不去了。',
             '我不在意誰當頭牌。我只怕哪天她要走，或哪天這層心思藏不住，連這樣安安靜靜唱在一處，都成了奢望。',
         ],
-        desires: ['recording:首張唱片灌錄權', 'partnership:柳生春'],
+        desires: ['recording:首張唱片灌錄權'],
         plan: '[長期] 跟生春一直唱在一處 [眼下] 把第一張碟對付過去，最好是跟生春一起灌 [未竟] 那份說不出口的情，守住分寸，別連這點相伴都丟了',
     },
     {
@@ -54,8 +55,8 @@ export const cast = [
             '舊班把我換下那天，新角在台上唱，我在台下站著。我發誓再不站到台下去。',
             '夜裡我摸著喉嚨，那條一向響堂的嗓，近來起高腔時會發緊。我不敢告訴任何人。',
         ],
-        desires: ['recording:首張唱片灌錄權', 'spotlight:春雪社頭牌名額'],
-        plan: '[長期] 證明這位子是我掙的不是撿的 [眼下] 把要灌的〈遊湖〉對到能進錄音間 [未竟] 別讓人看出我嗓子的破綻',
+        desires: ['recording:首張唱片灌錄權', 'partnership:蘇映雪', 'spotlight:春雪社頭牌名額'],
+        plan: '[長期] 證明這位子是我掙的不是撿的 [眼下] 搶下蘇映雪的搭檔位、把〈遊湖〉對到能進錄音間 [未竟] 別讓人看出我嗓子的破綻',
     },
     {
         id: 'shen', name: '沈雪笙', role: '班主', gender: '女', age: 42, sceneId: 'sc_balcony',

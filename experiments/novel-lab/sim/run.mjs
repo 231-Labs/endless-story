@@ -38,6 +38,9 @@ const SHOWRUNNER_EVERY = Number(flag('showrunner-every', 1));
 const HAND_SIZE = Number(flag('hand', 3));
 const SEED = Number(flag('seed', 7));
 const TENDER = Boolean(flag('tender', false));
+const WITH_TENDER = Boolean(flag('with-tender', false)); // 跑完競爭迴圈後，附一場柳蘇感情戲
+const BOOK_RAW = flag('book', null); // --book all | --book 柳生春 | --book liu
+const BOOK = BOOK_RAW === true ? 'all' : BOOK_RAW;
 const BOOK_TITLE = '白蛇傳·上海卷';
 
 // ── logger ──────────────────────────────────────────────────────────────────
@@ -82,6 +85,8 @@ const world = {
     openEvent: null,
     restNextTick: null, // 班主裁奪：某人下一輪輪空
     shenLast: -99, // 班主上次介入的 tick
+    books: {}, // charId -> [{label,text}]  角色版連載累積（--book 用）
+    sagaBook: [], // [{chapterNo,text}]  梨園版合本累積
     history: [],
     arc: {
         throughline: '春雪社這班人，能不能在上海把「戲比天大」唱成真的，還是終究被名利拆散。',
@@ -151,6 +156,40 @@ function dryPick(c, hand, why = '(啟發式：手牌最強)') {
         }
     }
     return { card: best, why };
+}
+
+// ── 角色版連載累積 + 結尾整本輸出（--book）──
+function pushBook(charId, label, text) {
+    (world.books[charId] ??= []).push({ label, text });
+}
+function printBooks() {
+    const ids =
+        BOOK === 'all'
+            ? Object.keys(world.books)
+            : (() => {
+                  const c = world.cast.find((x) => x.id === BOOK || x.name === BOOK);
+                  return c ? [c.id] : [];
+              })();
+    section('📖 角色版連載（縱切 · 第一人稱 · 每人一本）');
+    for (const id of ids) {
+        const c = world.cast.find((x) => x.id === id);
+        const chs = world.books[id] ?? [];
+        log('');
+        log('━'.repeat(72));
+        log(`《${c.name}》的連載（${c.role}）— 共 ${chs.length} 篇（按時間順序，可連讀）`);
+        log('━'.repeat(72));
+        chs.forEach((ch, i) => {
+            log(`\n【第 ${i + 1} 篇 · ${ch.label}】`);
+            log(ch.text);
+        });
+    }
+    if (world.sagaBook.length) {
+        section('📖 梨園版（橫切 · 合本多視角 · 公開漏斗）');
+        world.sagaBook.forEach((c) => {
+            log('');
+            log(c.text);
+        });
+    }
 }
 
 // ── thin trigger (現況 tick-loop 的 triggerNarrative 格式，給 compare 的 A 用) ──
@@ -307,6 +346,7 @@ async function runTick() {
             const tb = await genAudited(`B·${c.name}`, { tier: 'primary', system: P.povSystem(), user: P.povUser(ctxB), maxTokens: 2200, temperature: 0.92 }, c, { regen: true });
             log(tb);
             povs.push({ id, name: c.name, role: c.role, body: tb });
+            pushBook(id, `第 ${ctxB.chapterNo} 章 · ${ev.label}`, tb);
         } catch (e) {
             log(`(POV 失敗 ${e.message})`);
         }
@@ -333,6 +373,7 @@ async function runTick() {
                 // 合本含多角：用無鬚行當+男性的合成角色跑自檢（觸發髯口/老生戲/token/稱謂，避開單一性別代詞誤報）。
                 const t = await genAudited('合本', { tier: 'primary', system: P.cutSystem(), user: P.cutUser(cutCtx), maxTokens: 2400, temperature: 0.9 }, { name: '__合本__', role: '坤生', gender: '男' }, { regen: true });
                 log(t);
+                world.sagaBook.push({ chapterNo: world.chapterNo, text: t });
             } catch (e) {
                 log(`(合本失敗 ${e.message})`);
             }
@@ -364,6 +405,7 @@ async function runTick() {
             try {
                 const t = await genAudited(`餘波·${loser.name}`, { tier: 'primary', system: P.sequelSystem(), user: P.sequelUser(sctx), maxTokens: 1800, temperature: 0.92 }, loser, { regen: true });
                 log(t);
+                pushBook(loser.id, `第 ${world.perChar[loser.id]} 章 · 餘波（${ev.label}之後）`, t);
             } catch (e) {
                 log(`(餘波失敗 ${e.message})`);
             }
@@ -386,13 +428,14 @@ async function runTick() {
             try {
                 const t = await genAudited('班主介入', { tier: 'primary', system: P.shenSystem(), user: P.shenUser(shen, situation, ledger), maxTokens: 1400, temperature: 0.9 }, shen, { regen: true });
                 log(t);
+                pushBook('shen', `班主裁奪 · 第 ${world.day} 日`, t);
             } catch (e) { log(`(班主介入失敗 ${e.message})`); }
         }
-        const part = world.resources.find((r) => r.label === 'partnership:柳生春');
+        const part = world.resources.find((r) => r.label === 'partnership:蘇映雪');
         if (part && !part.locked) {
             part.locked = true;
             part.holder = 'liu';
-            log('  ▶ 裁奪：保下「柳生春台上對戲的固定搭檔位」歸柳蘇，從此不再被爭（鎖定）');
+            log('  ▶ 裁奪：保下「蘇映雪的小生搭檔位」歸柳生春，從此不再被爭（鎖定）');
         }
         world.restNextTick = monoId;
         world.shenLast = world.tick;
@@ -456,6 +499,7 @@ async function runTender() {
         try {
             const t = await genAudited(`感情戲·${c.name}`, { tier: 'primary', system: P.tenderSystem(), user: P.tenderUser(ctx), maxTokens: 1800, temperature: 0.95 }, c, { regen: true });
             log(t);
+            pushBook(c.id, `感情戲 · 與${other.name}（愛而不得）`, t);
         } catch (e) { log(`(感情戲失敗 ${e.message})`); }
     }
 }
@@ -474,11 +518,13 @@ async function runTender() {
         await runTick();
         if (SHOWRUNNER_EVERY > 0 && (t + 1) % SHOWRUNNER_EVERY === 0) await showrunner();
     }
+    if (WITH_TENDER) await runTender();
     section('完成');
     log(`總 tick：${world.tick}　LLM 呼叫：${llmCalls}　合本回數：${world.chapterNo}`);
     log('各角色個人書章數：' + Object.entries(world.perChar).map(([id, n]) => `${world.cast.find((c) => c.id === id).name}=${n}`).join('、'));
     log(`\n資源最終持有：`);
-    for (const r of world.resources) log(`  · ${r.label} → ${r.holder ? world.cast.find((c) => c.id === r.holder).name : '（無人）'}`);
+    for (const r of world.resources) log(`  · ${r.label} → ${r.holder ? world.cast.find((c) => c.id === r.holder).name : '（無人）'}${r.locked ? '（班主鎖定）' : ''}`);
+    if (BOOK) printBooks();
     log(`\n👉 log 已存到：${LOG_PATH}`);
     log('   把整份 log 貼回來，我比對「機制決策 + 私帳召回 + 弧線承接 + 實際文風」是否與推估一致。');
 })();
