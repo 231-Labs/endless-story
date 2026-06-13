@@ -41,7 +41,7 @@
 | D2 | **anti-repeat 冷卻 + 最久沒結算優先**（破鬼打牆） | **真實 `lib/chain/event-planner.ts` 已有 anti-repeat（Phase 1）** ✅；冷卻/LRU 可併入 | ✅（真實已部分有） |
 | D3 | **持有者黏性**（capacity-1 標的不每 tick 翻盤） | `event-spine` resolve 計分加 holder bonus（待加） | 🟡 |
 | D4 | **班主介入**：偵測一人壟斷 → 護搭檔 + 令其輪空 | 真實＝Showrunner 用 `run_world_audit` 偵測失衡 + `direct_capabilities`；或新增一條 audit rule + capability | 🟡（沙盒已驗概念） |
-| **D5** | **Showrunner 看世界 → 開新標的/退場舊標的**（讓世界長出新衝突軸） | 真實＝`propose-resources.ts`（instantiate，**flag 預設關、未在真鏈驗、且沒接進 showrunner 工具箱**）＋ `retire_resource`（**未做**）。需把兩者包成 `director/tools.ts` 的 narrative 工具 | ⬜ **下一個要在沙盒做的** |
+| **D5** | **Showrunner 看世界 → 開新標的/退場舊標的**（讓世界長出新衝突軸）。沙盒已做：showrunner 心跳吃現場資源+卡司，輸出 `resourceOps`（instantiate/retire），過守恆護欄（kind slug/不撞內建/seekers≥2/上限3/冷卻3tick），新標的下一 tick 自動被渴望、被 spine 結算 | 真實＝把 `propose-resources.ts`(instantiate) ＋新增 `retire_resource` 包成 `director/tools.ts` 的 narrative 工具，讓 Showrunner 心跳能呼叫；照 EVENT_LIFECYCLE §6 開 `directorResources` flag 驗鏈 | 🟡 沙盒已做·待真模型跑驗 |
 
 ## E. 卡司 / 資源 / 數據
 

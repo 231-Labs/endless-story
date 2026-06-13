@@ -85,6 +85,7 @@ const world = {
     openEvent: null,
     restNextTick: null, // 班主裁奪：某人下一輪輪空
     shenLast: -99, // 班主上次介入的 tick
+    lastInstantiateTick: -99, // showrunner 上次開新標的的 tick（冷卻用）
     books: {}, // charId -> [{label,text}]  角色版連載累積（--book 用）
     sagaBook: [], // [{chapterNo,text}]  梨園版合本累積
     history: [],
@@ -453,12 +454,17 @@ async function showrunner() {
         log(JSON.stringify(world.arc, null, 2));
         return;
     }
+    const resourceSnapshot = world.resources
+        .filter((r) => !r.retired)
+        .map((r) => `- ${r.label} · ${r.display ?? r.label} · ${r.holder ? world.cast.find((c) => c.id === r.holder).name : '（無人）'}${r.locked ? ' · 已鎖定' : ''}${r.director ? ' · 導演開的' : ''}`)
+        .join('\n');
+    const castSnapshot = world.cast.map((c) => `- ${c.name}（${c.role}）`).join('\n');
     try {
         const r = await ask({
             tier: 'cheap',
             system: P.showrunnerSystem(),
-            user: P.showrunnerUser(JSON.stringify(world.arc), M.recentDigest(world, 6)),
-            maxTokens: 900,
+            user: P.showrunnerUser(JSON.stringify(world.arc), M.recentDigest(world, 6), resourceSnapshot, castSnapshot),
+            maxTokens: 1300,
             temperature: 0.5,
         });
         const j = extractJson(r.text);
@@ -468,6 +474,26 @@ async function showrunner() {
             log(JSON.stringify(world.arc, null, 2));
         } else {
             log('(showrunner 輸出無法解析，沿用舊弧線)');
+        }
+        // D5：開新標的 / 退場舊標的
+        if (j && Array.isArray(j.resourceOps) && j.resourceOps.length > 0) {
+            const { accepted, rejected } = M.validateResourceOps(world, j.resourceOps);
+            // instantiate 冷卻：每 3 tick 才准開一次新標的（retire 不受限）
+            const gated = accepted.filter((op) => {
+                if (op.op !== 'instantiate') return true;
+                if (world.tick - world.lastInstantiateTick < 3) {
+                    rejected.push({ op, reason: '開標的冷卻中（每3tick一次）' });
+                    return false;
+                }
+                world.lastInstantiateTick = world.tick;
+                return true;
+            });
+            const applied = M.applyResourceOps(world, gated);
+            if (applied.length > 0) {
+                log('\n【世界推進】Showrunner 動了標的：');
+                for (const line of applied) log(`  ▶ ${line}`);
+            }
+            for (const rj of rejected) log(`  · （駁回 ${rj.op?.op ?? '?'}：${rj.reason}）`);
         }
     } catch (e) {
         log(`(showrunner 失敗 ${e.message})`);

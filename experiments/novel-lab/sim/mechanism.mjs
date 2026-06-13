@@ -66,13 +66,17 @@ const RESOURCE_DISPLAY = {
 export function resourceDisplay(label) {
     return RESOURCE_DISPLAY[label] ?? (String(label).split(':')[1] ?? label);
 }
+/** Display that also covers director-created resources (their own `.display`). */
+export function displayOf(world, label) {
+    return world.resources.find((r) => r.label === label)?.display ?? resourceDisplay(label);
+}
 
 /** Rank resources by contention = # present desirers who don't already hold it.
  *  Skips locked + 剛結算冷卻中的標的；平手時偏好「最久沒結算」的軸（破鬼打牆）。 */
 export function rankContention(world) {
     const rester = world.restNextTick ?? null;
     return world.resources
-        .filter((r) => !r.locked && (r.cooldownUntil ?? 0) <= world.tick)
+        .filter((r) => !r.locked && !r.retired && (r.cooldownUntil ?? 0) <= world.tick)
         .map((r) => {
             const desirers = world.cast.filter(
                 (c) => c.desires.includes(r.label) && r.holder !== c.id && c.id !== rester,
@@ -113,7 +117,7 @@ export function openEvent(world) {
     for (const p of participants) p.sceneId = sceneId; // MOVE: converge
 
     const kind = r.label.split(':')[0];
-    const label = framingFor(kind, r);
+    const label = r.framing ?? framingFor(kind, r);
     world.openEvent = {
         id: `ev_${world.tick}`,
         resourceLabel: r.label,
@@ -156,7 +160,7 @@ export function resolveEvent(world) {
     r.cooldownUntil = world.tick + 2; // 剛爭過的標的冷卻 2 tick，逼世界轉去別的軸
 
     const others = plays.filter((p) => p.id !== winner.id);
-    const display = resourceDisplay(ev.resourceLabel);
+    const display = displayOf(world, ev.resourceLabel);
     const fromName = prevHolder ? world.cast.find((c) => c.id === prevHolder)?.name : null;
     // verdict (DEBUG, with card tokens) — for the mechanism log ONLY, never fed to prose.
     const verdict =
@@ -231,7 +235,8 @@ const NO_BEARD_ROLES = ['坤生', '乾生', '小生', '花旦', '旦', '青衣',
 const BEARD_RE = /髯口|三髯|黲髯|白滿|黑三|掛髯|鬍鬚|鬚口/;
 const LAOSHENG_PLAY_RE = /定軍山|烏盆記|捉放曹|碰碑|搜孤救孤|空城計|轅門斬子|文昭關|斬經堂/;
 const TOKEN_RE = /〔[斬攻誘守觀讓]〕/;
-const RAWLABEL_RE = /recording:|partnership:|spotlight:/;
+// 任何 <ascii-kind>:<中文> 形狀都算機制 label 洩漏（含 director 新標的）。
+const RAWLABEL_RE = /[a-z][a-z0-9_]{2,}:[一-鿿]/;
 
 export function auditProse(text, c) {
     const v = [];
@@ -269,6 +274,108 @@ export function relationshipHints(world, charId) {
 
 export function sceneNameOf(world, sceneId) {
     return world.scenes.find((s) => s.id === sceneId)?.name ?? sceneId;
+}
+
+/* ── D5：Showrunner 開新標的 / 退場舊標的（對齊 propose-resources.ts 的護欄）──
+ * LLM 掌「意義」（要不要新開一條衝突軸），但永不繞過守恆：kind 須 ascii slug、
+ * 不可撞內建軸、不可重複、渴望者須 ≥2 且在卡司內、導演標的有總量上限。 */
+export const MAX_DIRECTOR_RESOURCES = 3;
+const BUILTIN_KINDS = ['recording', 'partnership', 'spotlight'];
+
+function resolveCastId(world, s) {
+    const c = world.cast.find((x) => x.id === s || x.name === s);
+    return c ? c.id : null;
+}
+
+export function validateResourceOps(world, ops) {
+    const accepted = [];
+    const rejected = [];
+    let added = 0;
+    const liveDirector = world.resources.filter((r) => r.director && !r.retired).length;
+    for (const op of ops ?? []) {
+        if (!op || typeof op !== 'object') {
+            rejected.push({ op, reason: '格式錯誤' });
+            continue;
+        }
+        if (op.op === 'retire') {
+            const r = world.resources.find((x) => x.label === op.label && !x.retired);
+            if (!r) {
+                rejected.push({ op, reason: '找不到可退場的標的' });
+                continue;
+            }
+            accepted.push({ op: 'retire', label: r.label, why: op.why });
+            continue;
+        }
+        if (op.op === 'instantiate') {
+            const label = String(op.label ?? '');
+            const kind = label.split(':')[0];
+            const display = String(op.display ?? '').trim();
+            const framing = String(op.framing ?? display).trim();
+            const seekers = (Array.isArray(op.seekers) ? op.seekers : [])
+                .map((s) => resolveCastId(world, s))
+                .filter((x, i, a) => x && a.indexOf(x) === i);
+            if (!/^[a-z][a-z0-9_]*$/.test(kind)) {
+                rejected.push({ op, reason: 'kind 須 ascii slug' });
+                continue;
+            }
+            if (BUILTIN_KINDS.includes(kind)) {
+                rejected.push({ op, reason: '不可撞內建軸' });
+                continue;
+            }
+            if (world.resources.some((r) => r.label === label && !r.retired)) {
+                rejected.push({ op, reason: '標的已存在' });
+                continue;
+            }
+            if (!display) {
+                rejected.push({ op, reason: 'display 空' });
+                continue;
+            }
+            if (seekers.length < 2) {
+                rejected.push({ op, reason: '渴望者 <2，不成爭' });
+                continue;
+            }
+            if (liveDirector + added >= MAX_DIRECTOR_RESOURCES) {
+                rejected.push({ op, reason: '導演標的已達上限' });
+                continue;
+            }
+            accepted.push({ op: 'instantiate', label, kind, display, framing, seekers, why: op.why });
+            added += 1;
+            continue;
+        }
+        rejected.push({ op, reason: '未知 op' });
+    }
+    return { accepted, rejected };
+}
+
+export function applyResourceOps(world, accepted) {
+    const log = [];
+    for (const op of accepted) {
+        if (op.op === 'retire') {
+            const r = world.resources.find((x) => x.label === op.label && !x.retired);
+            if (!r) continue;
+            r.retired = true;
+            for (const c of world.cast) c.desires = c.desires.filter((d) => d !== r.label);
+            log.push(`退場舊標的：「${r.display ?? r.label}」${op.why ? `（${op.why}）` : ''}`);
+        } else if (op.op === 'instantiate') {
+            world.resources.push({
+                label: op.label,
+                capacity: 1,
+                holder: null,
+                director: true,
+                display: op.display,
+                framing: op.framing,
+                means: op.display,
+            });
+            world.resourceMeans[op.label] = op.display;
+            for (const id of op.seekers) {
+                const c = world.cast.find((x) => x.id === id);
+                if (c && !c.desires.includes(op.label)) c.desires.push(op.label);
+            }
+            const names = op.seekers.map((id) => world.cast.find((c) => c.id === id).name).join('、');
+            log.push(`新開標的：「${op.display}」（爭：${names}）${op.why ? `　— ${op.why}` : ''}`);
+        }
+    }
+    return log;
 }
 
 /** Recent-events digest for showrunner / plan prompts. */

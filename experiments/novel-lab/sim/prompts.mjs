@@ -335,21 +335,43 @@ export function planUser(c, recent) {
 
 export function showrunnerSystem() {
     return [
-        '你是自治敘事世界的 Showrunner。你不替角色決定怎麼演，只維護「弧線計畫」：',
-        '當前主題、進行中的張力線（各自進展）、已埋的伏筆、給寫手的「下一回該推進什麼」。',
-        '讀最近發生的事，更新弧線。輸出 JSON：',
-        '{"throughline":"全書主問一句","lines":[{"name":"張力線名","state":"目前進展","nextPush":"下一回該推進什麼"}],"foreshadow":["已埋伏筆…"]}',
+        '你是自治敘事世界的 Showrunner。你不替角色決定怎麼演，只經營兩件事：',
+        '（一）維護弧線計畫：當前主題、進行中的張力線、已埋的伏筆、給寫手的「下一回該推進什麼」。',
+        '（二）**開新爭奪標的 / 退場舊標的**——讓世界長出新衝突軸，別老在同幾樁事上打轉。',
+        '',
+        '**何時開新標的**：當你埋的伏筆或現場狀態，已經把一條「新的、具體的、值得全班爭」的稀缺位推到檯面上',
+        '（例：某乾生嗓子要垮 → 出缺「誰頂替乾生戲份」；記者要寫醜聞 → 爭「上海輿論風向」）。沒到火候就**不要開**。',
+        '**何時退場**：某標的已塵埃落定、再爭也無戲（如碟已灌定、頭牌已坐穩），retire 掉它，把舞台讓給新衝突。',
+        '',
+        '**開標的的硬規矩**（違反會被系統駁回）：',
+        '- label 格式 `<kind>:<中文短名>`，kind 是 ascii 小寫 slug（如 `vacancy`/`scandal`/`patron`），不可用內建的 recording/partnership/spotlight。',
+        '- display＝給讀者看的人話（如「誰頂替江聞鶴的乾生戲份」）；framing＝事件標題式問句（「誰…」）。',
+        '- seekers＝會來爭的角色名，**至少 2 人**，且必須是現有卡司。導演新標的全世界最多 3 個。',
+        '- 寧缺勿濫：多數心跳**不該**開新標的（resourceOps 給空陣列）。',
+        '',
+        '輸出 JSON：',
+        '{"throughline":"全書主問一句",',
+        ' "lines":[{"name":"張力線名","state":"目前進展","nextPush":"下一回該推進什麼"}],',
+        ' "foreshadow":["已埋伏筆…"],',
+        ' "resourceOps":[{"op":"instantiate","label":"vacancy:乾生頂替","display":"誰頂替江聞鶴的乾生戲份","framing":"誰來頂替出缺的乾生","seekers":["連翹","柳生春"],"why":"江聞鶴嗓子要垮"},{"op":"retire","label":"recording:首張唱片灌錄權","why":"碟已灌定，此爭已了"}]}',
+        '不開不退時 resourceOps 給 []。',
     ].join('\n');
 }
 
-export function showrunnerUser(arcPlanJson, recentDigest) {
+export function showrunnerUser(arcPlanJson, recentDigest, resourceSnapshot, castSnapshot) {
     return [
         '# 你上次留下的弧線計畫',
         arcPlanJson || '（尚無，請建立第一版）',
         '',
+        '# 現有爭奪標的（label · 顯示名 · 現持有 · 狀態）',
+        resourceSnapshot,
+        '',
+        '# 卡司（開新標的選 seekers 用，須用這些名字）',
+        castSnapshot,
+        '',
         '# 最近發生的事（舊→新）',
         recentDigest,
         '',
-        '請輸出更新後的完整弧線計畫 JSON。',
+        '請輸出更新後的完整 JSON（含 resourceOps；無事則 resourceOps:[]）。',
     ].join('\n');
 }
