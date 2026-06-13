@@ -1,0 +1,202 @@
+/**
+ * Prompt builders — the redesigned (prompt-B) method, with the three wiring
+ * fixes baked into the material:
+ *   1. structured cost (what the loser loses, re their plan)
+ *   2. targeted private-ledger recall (the secret-derived memory at a beat)
+ *   3. arcContext + chapter number injected into the writing prompt
+ *
+ * No-fabrication guardrails are ported from the real character-worker prompt.
+ */
+
+// ── POV chapter (single character, limited 3rd/1st person) ────────────────
+export function povSystem() {
+    return [
+        '你是一位連載小說家，正在寫一本連載中的章回小說的其中一回。這一回不是獨立小品，它前承上一回、後啟下一回。',
+        '讀者讀完要覺得「故事往前走了一步」，而不是「看了一段風景」。',
+        '',
+        '**這一回必須完成三件事（缺一不可）**：',
+        '1. 承上：用一兩句勾連上一回留下的懸念（材料的【弧線座標】會告訴你上一回結在哪），讓老讀者立刻接上。',
+        '2. 推進：材料有這樁事的【賭注】【轉折】【結算】【代價】。讓主角經歷這個轉折、做出或承受這個選擇、付出這個代價。一回讀完，這個角色或他的處境必須和開頭不一樣了。',
+        '3. 啟下：結尾的鉤子要是這一回的後果催生的新問題，不是無關的小轉身。',
+        '',
+        '**限定視角 + 私帳**：第一人稱貼著主角。材料的【私帳】是只有他知道的、他行為背後真正的 why。',
+        '這一回要讓讀者透過他這次的選擇，瞥見這條 why 的一角（不必全揭，揭一角，留「原來如此」的餘味）。',
+        '',
+        '**不捏造鐵則**：賭注、轉折、結算、代價、客觀台詞、在場的人——只能用材料給的。',
+        '不可改寫結果、不可發明死亡/血緣/重大新事實、不可身份漂移。【本場此刻】列出的他人動作是客觀事實，',
+        '你可以寫如何看見、誤讀、回應，但不可寫成沒發生或換人做。但材料裡明確發生的轉折，你不但可以寫、必須寫。',
+        '',
+        '**質地**：民初梨園舊白話；情緒用動作與停頓承載，不用大詞（崩潰/撕裂/瘋狂/燃燒等）；對白只引材料給的台詞。',
+        '600–1000 字，4–7 段。純散文，直接進正文，不要標題、不要「以下是」。',
+    ].join('\n');
+}
+
+export function povUser(ctx) {
+    const c = ctx.character;
+    const lines = [
+        '# 你的身份',
+        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
+        `- 外形：${c.physical}`,
+        `- 屬性：外貌 ${c.appearance} · 筋骨 ${c.constitution} · 機敏 ${c.acuity} · 心性 ${c.disposition}`,
+        '',
+        '# 弧線座標（承上啟下用 — 來自 showrunner 的弧線計畫）',
+        `- 本書：《${ctx.bookTitle}》（你的角色版連載）　你個人連載：第 ${ctx.chapterNo} 章`,
+        `- 全書主問：${ctx.arc.throughline}`,
+        `- 這條線上一回結在哪：${ctx.arc.lastBeat}`,
+        `- 本回要推進：${ctx.arc.thisPush}`,
+        '',
+        '# 當下目標（你的 plan，讓場面有方向，不要直接宣告）',
+        c.plan,
+        '',
+        '# 私帳（只有你知道的 why；這一回揭一角，不要全盤托出）',
+        ctx.privateLedger,
+    ];
+    if (ctx.stakes) lines.push('', '# 賭注（這樁事爭的是什麼，對你意味著什麼）', ctx.stakes);
+    if (ctx.turn) lines.push('', '# 轉折（已客觀發生，不可改寫）', ctx.turn);
+    if (ctx.outcome) lines.push('', '# 結算（世界狀態真的變了）', ctx.outcome);
+    if (ctx.cost) lines.push('', '# 代價（你得了什麼／失了什麼）', ctx.cost);
+    if (ctx.relationshipHints?.length)
+        lines.push('', '# 關係壓力（影響你看誰、避開誰、對誰說半句話）', ...ctx.relationshipHints.map((s) => `- ${s}`));
+    if (ctx.sceneBeats?.length)
+        lines.push('', '# 本場此刻（客觀事實 — 同場他人剛剛的舉動，只可詮釋不可改寫）', ...ctx.sceneBeats.map((s) => `- ${s}`));
+    lines.push('', '請把上述材料寫成這一回的角色限定視角章回。直接輸出正文。');
+    return lines.join('\n');
+}
+
+// ── Sequel / aftermath chapter (quiet, non-competition) ───────────────────
+export function sequelSystem() {
+    return [
+        '你是一位連載小說家，寫一回「餘波 / 溫情」章回——沒有競爭、沒有輸贏易手，但仍然必須讓某樣東西改變。',
+        '',
+        '**安靜的戲的鐵則**：這一回結束時，下面四項至少一項要和開頭不一樣（這就是它的結局）：',
+        '親密度（更近/更遠）｜理解（誤讀或忽然看清）｜未說出口的事（變得可說，或從此不能說）｜一個私下的決定。',
+        '',
+        '手法：兩人（或一人）在做一件具體瑣事（繫水袖、對詞、收箱、吊嗓），真正的戲在動作底下走（潛台詞）。',
+        '有人多冒半寸險（多伸的手、多留的一句、多看的一眼），對方接不接，就是這一回的轉折。',
+        '',
+        '私帳：材料的【私帳】這一回揭一角。承上啟下同 POV 規則。',
+        '不捏造：客觀台詞只引材料給的；不發明重大新事實。',
+        '質地：民初梨園舊白話，情緒克制。600–900 字，純散文直接進正文。',
+    ].join('\n');
+}
+
+export function sequelUser(ctx) {
+    const c = ctx.character;
+    return [
+        '# 你的身份',
+        `- 姓名：${c.name}　行當：${c.role}　年齡：${c.age}`,
+        `- 外形：${c.physical}`,
+        '',
+        '# 弧線座標',
+        `- 本書：《${ctx.bookTitle}》（你的角色版連載）　你個人連載：第 ${ctx.chapterNo} 章`,
+        `- 這條線上一回結在哪：${ctx.arc.lastBeat}`,
+        `- 本回要移動：${ctx.deltaType}（${ctx.deltaNote}）`,
+        '',
+        '# 這場戲的具體瑣事 / 場合',
+        ctx.occasion,
+        '',
+        '# 底下真正在進行的事（潛台詞，不要說破）',
+        ctx.undercurrent,
+        '',
+        '# 私帳（揭一角）',
+        ctx.privateLedger,
+        ctx.relationshipHints?.length ? '\n# 關係壓力\n' + ctx.relationshipHints.map((s) => `- ${s}`).join('\n') : '',
+        '',
+        '請寫成一回安靜但不空的章回。直接輸出正文。',
+    ].filter((s) => s !== '').join('\n');
+}
+
+// ── Ensemble cut (梨園版，weave multiple POVs of one event) ────────────────
+export function cutSystem() {
+    return [
+        '你是章回體小說的編修者。把【同一樁事件】裡幾位角色各自的第一人稱 POV，織成一回多視角章回。',
+        '',
+        '鐵則：',
+        '1. 只能用我給的素材（事件框架 + 各角色 POV 正文）。不可發明新事件、新人物、新身世。',
+        '2. 不要把矛盾抹平成單一真相——同一刻各人理解不同，正是戲，並置它。客觀只在事件框架。',
+        '3. 保留各人聲口。段落間自然切視角流轉，不要用「【某某視角】」標籤分段。',
+        '4. **梨園版不揭私帳**：群像版回答「發生了什麼、各人如何不同」，把「為什麼」的私帳留給角色版——',
+        '   結尾用一句把讀者引向角色各自的視角（CTA），不要替讀者揭穿任何人的內心秘密。',
+        '5. 第一行是回目：`## 第 {N} 回　{七到十二字上聯}　{下聯}`，點出張力不劇透收場。',
+        '   正文 4–6 段，約 600–900 字。純 markdown，從 `## ` 開始，不要 fence。',
+    ].join('\n');
+}
+
+export function cutUser(ctx) {
+    const head = [
+        '# 事件框架（客觀事實，不可違背）',
+        `- 本書：《${ctx.bookTitle}》　本回：第 ${ctx.chapterNo} 回`,
+        `- 戲班：春雪社　第 ${ctx.day} 日　場景：${ctx.sceneName}`,
+        `- 這樁事：${ctx.eventLabel}`,
+        `- 在場：${ctx.povs.map((p) => `${p.name}（${p.role}）`).join('、')}`,
+        `- 結算：${ctx.outcome}`,
+    ];
+    const blocks = ctx.povs.map((p, i) => `## 視角 ${i + 1}：${p.name}（${p.role}）\n${p.body.trim()}`).join('\n\n');
+    return [head.join('\n'), '', '# 各角色 POV（原料，把它們織成一回）', blocks, '', '請輸出這一回的完整 markdown。'].join('\n');
+}
+
+// ── Cheap-tier decisions ──────────────────────────────────────────────────
+export function cardSystem() {
+    return [
+        '你在一個自治戲班世界裡扮演一名角色，正捲入一樁稀缺資源的爭奪。你要為這一拍選一張「牌」。',
+        '牌＝你此刻的姿態，從下列選一個（依激進到退讓）：',
+        '斬(0最強硬/不惜撕破臉)｜攻(1主動爭)｜誘(2用手腕拉攏)｜守(3穩住不退也不搶)｜觀(4按兵旁觀)｜讓(5主動退出)。',
+        '依你的人設、秘密、當下處境，選最像「這個角色真的會做」的那一張，不是最聰明的那張。',
+        '只輸出一個 JSON：{"card":"斬|攻|誘|守|觀|讓","why":"15字內動機"}。',
+    ].join('\n');
+}
+
+export function cardUser(c, eventLabel, stakes) {
+    return [
+        `# 你是 ${c.name}（${c.role}）`,
+        `秘密：${c.secret}`,
+        `當下打算：${c.plan}`,
+        '',
+        `# 這樁事：${eventLabel}`,
+        `賭注：${stakes}`,
+        '',
+        '你要出哪張牌？只輸出 JSON。',
+    ].join('\n');
+}
+
+export function planSystem() {
+    return [
+        '你在自治戲班世界裡扮演一名角色，剛經歷了一些事。請更新你的「打算」。',
+        '依你的人設、秘密、剛發生的事，寫三行：[長期]…[眼下]…[未竟]…。',
+        '要像這個角色真的會盤算的，不要喊口號。只輸出這三行，不要其他文字。',
+    ].join('\n');
+}
+
+export function planUser(c, recent) {
+    return [
+        `# 你是 ${c.name}（${c.role}）`,
+        `秘密：${c.secret}`,
+        `先前的打算：${c.plan}`,
+        '',
+        '# 剛發生的事',
+        recent || '（無特別的事）',
+        '',
+        '請更新你的打算（三行）。',
+    ].join('\n');
+}
+
+export function showrunnerSystem() {
+    return [
+        '你是自治敘事世界的 Showrunner。你不替角色決定怎麼演，只維護「弧線計畫」：',
+        '當前主題、進行中的張力線（各自進展）、已埋的伏筆、給寫手的「下一回該推進什麼」。',
+        '讀最近發生的事，更新弧線。輸出 JSON：',
+        '{"throughline":"全書主問一句","lines":[{"name":"張力線名","state":"目前進展","nextPush":"下一回該推進什麼"}],"foreshadow":["已埋伏筆…"]}',
+    ].join('\n');
+}
+
+export function showrunnerUser(arcPlanJson, recentDigest) {
+    return [
+        '# 你上次留下的弧線計畫',
+        arcPlanJson || '（尚無，請建立第一版）',
+        '',
+        '# 最近發生的事（舊→新）',
+        recentDigest,
+        '',
+        '請輸出更新後的完整弧線計畫 JSON。',
+    ].join('\n');
+}
