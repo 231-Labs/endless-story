@@ -8,33 +8,25 @@
  * No-fabrication guardrails are ported from the real character-worker prompt.
  */
 
-// ── 行當本色卡（預防層）：行當規矩從 craft.mjs 那張表來，與自檢共用同一份資料。
-// 換行當只改 craft.mjs；這裡只負責把表轉成餵 prompt 的人話。乾(男)/坤(女)＝演員性別，非行當。
+// ── 行當本色卡：規矩從 craft.mjs 來，與自檢共用。**行當卡是給模型的守門規矩，不是角色台詞**——
+// 行當就寫「小生」（乾/坤只是演員性別，不重複標）；禁限框成「讀者看不到、別寫進正文」，免得角色一直自報俊扮。
 import { craftDef } from './craft.mjs';
-function lineNote(line) {
+function lineHint(line) {
     if (!line) return '';
-    if (line.includes('武')) return '你偏武小生（翎子生/雉尾生一路，重靠把、開打、身段），但「俊扮無鬚」的小生硬規矩不變。';
-    return '你偏文小生（巾生/扇子生·書生，重唱念做表，許仙、書生一路），俊扮無鬚。';
+    return line.includes('武') ? '做派偏武小生（重靠把、開打、身段）。' : '做派偏文小生（重唱念做表）。';
 }
-// 顯示用行當標籤：有 craft 就顯示「行當（演員性別標籤·文武）」，例 小生（坤生·文小生）。
+// 顯示用行當標籤：就顯示行當本身（小生），不再掛坤生/乾生·文武——演員性別看「性別」欄即可。
 export function roleLabel(c) {
-    if (!c.craft || c.craft === c.role) return c.role;
-    return `${c.craft}（${c.role}${c.line ? '·' + c.line : ''}）`;
+    return c.craft ?? c.role;
 }
 export function craftSheet(c) {
     const def = craftDef(c);
     const craft = c.craft ?? c.role;
-    const pron = c.gender === '女' ? '第三人稱用「她」' : '第三人稱用「他」';
-    if (craft === '小生') {
-        const who = c.gender === '女'
-            ? '你是**坤生**（女演員的小生·女兒身反串少年男子）；台上扮男、戲文裡才是男角；第三人稱敘述一律用「她」。'
-              + (c.crossDress ? '台下你也慣著男裝、把那身男兒相當成真正的自己（這是你的人設，不是行當規矩）。' : '')
-            : '你是**乾生**（男演員的小生）；第三人稱用「他」。';
-        const base = `你的行當是【小生】（年輕男性角色）。乾生＝男演員、坤生＝女演員，**同屬小生一個行當，差別只在演員性別**。${def.desc ?? ''}`;
-        return [base, who, lineNote(c.line)].filter(Boolean).join(' ');
-    }
-    if (def.desc) return `你的行當是【${craft}】：${def.desc} ${pron}`;
-    return `你的行當是「${craft}」。敘述、道具、戲碼、第三人稱代詞都必須與此行當與你的性別（${c.gender}）相符。`;
+    const pron = c.gender === '女' ? '敘述此角第三人稱用「她」' : '敘述此角第三人稱用「他」';
+    const parts = [`【行當：${craft}】${def.is ?? ''}。${pron}。`];
+    if (def.rules) parts.push(`寫作禁限（這是給你的守門規矩、讀者看不到、角色也不會把行當掛在嘴上，別寫進正文）：${def.rules}。`);
+    if (craft === '小生' && c.line) parts.push(lineHint(c.line));
+    return parts.join('');
 }
 // ── 改寫指令（修正層）：自檢抓到硬傷時，把違反項回灌，要求改寫 ──
 export function correctionNote(violations) {

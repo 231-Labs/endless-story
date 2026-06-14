@@ -10,22 +10,23 @@
  *   gender      行當綁定性別（'女'＝旦行只能女；省略＝不綁，看演員性別/反串）
  *   forbidKinds 不應工的戲碼類別（對照 PLAY_KINDS）
  *   line        是否有文/武細分（小生＝文小生/武小生）
- *   desc        餵進 prompt 的行當本色說明（硬規矩）
+ *   is          這個行當「是什麼」（一句，可入 prompt）
+ *   rules       寫作禁限（給模型的守門規矩，**讀者看不到、角色不會把它掛嘴上**）
  */
 export const CRAFTS = {
-    小生: { performer: true, beard: false, forbidKinds: ['老生', '花臉'], line: true, desc: '年輕男性角色；俊扮無鬚，絕不掛髯口/鬍鬚，不演老生戲、不勾花臉。' },
-    花旦: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], desc: '年輕女子（小姐/丫鬟/白素貞一類）；旦行不掛髯口、不勾花臉、不演男角。' },
-    青衣: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], desc: '端莊女子；旦行不掛髯口、不勾花臉、不演男角。' },
-    刀馬旦: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], desc: '旦行武戲，穿靠使槍、翻身亮相，重靠把開打；不掛髯口、不勾花臉、不演男角。' },
-    武旦: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], desc: '旦行武打，重出手翻撲；不掛髯口、不勾花臉。' },
-    老旦: { performer: true, beard: false, gender: '女', desc: '老年女性，本色蒼勁；旦行不掛髯口、不勾花臉。' },
-    老生: { performer: true, beard: true, desc: '中老年男性，掛髯口（鬚）為本色。' },
-    武生: { performer: true, beard: false, desc: '年輕武將/俠士，重靠把開打；俊扮無鬚。' },
-    淨: { performer: true, beard: true, facePaint: true, desc: '花臉，勾臉譜、多掛滿髯，重工架與炸音。' },
-    丑: { performer: true, beard: false, desc: '插科打諢，俊扮抹豆腐塊小花臉，不掛滿髯。' },
-    班主: { performer: false, desc: '戲班班主（經營層），多在後場/二樓，不常登台。' },
-    記者: { performer: false, desc: '報館寫手/掮客，非戲班演員。' },
-    衣箱: { performer: false, desc: '管行頭、水袖、靠旗、頭面——也管秘密；非登台演員。' },
+    小生: { performer: true, beard: false, forbidKinds: ['老生', '花臉'], line: true, is: '年輕男性角色（書生、公子、少年將）', rules: '俊扮無鬚、不掛髯口；不演老生戲；不勾花臉' },
+    花旦: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], is: '年輕女子（小姐、丫鬟、白素貞一類）', rules: '旦行不掛髯口、不勾花臉、不演男角' },
+    青衣: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], is: '端莊女子', rules: '旦行不掛髯口、不勾花臉、不演男角' },
+    刀馬旦: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], is: '旦行武戲，穿靠使槍、翻身亮相', rules: '不掛髯口、不勾花臉、不演男角' },
+    武旦: { performer: true, beard: false, gender: '女', forbidKinds: ['老生', '花臉', '男角'], is: '旦行武打，重出手翻撲', rules: '不掛髯口、不勾花臉' },
+    老旦: { performer: true, beard: false, gender: '女', is: '老年女性，本色蒼勁', rules: '旦行不掛髯口、不勾花臉' },
+    老生: { performer: true, beard: true, is: '中老年男性，掛髯口（鬚）為本色' },
+    武生: { performer: true, beard: false, is: '年輕武將/俠士，重靠把開打', rules: '俊扮無鬚' },
+    淨: { performer: true, beard: true, facePaint: true, is: '花臉，勾臉譜、多掛滿髯，重工架炸音' },
+    丑: { performer: true, beard: false, is: '插科打諢，抹豆腐塊小花臉', rules: '不掛滿髯' },
+    班主: { performer: false, is: '戲班班主（經營層），多在後場/二樓，不常登台' },
+    記者: { performer: false, is: '報館寫手/掮客，非戲班演員' },
+    衣箱: { performer: false, is: '管行頭、水袖、靠旗、頭面——也管秘密；非登台演員' },
 };
 // 別名：坤生＝女演員的小生、乾生＝男演員的小生，同屬「小生」這一行當。
 CRAFTS['坤生'] = CRAFTS['乾生'] = CRAFTS['小生'];
