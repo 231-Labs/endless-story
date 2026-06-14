@@ -42,6 +42,8 @@ export interface PovCoreOptions {
     dramaHint?: string;
     /** Public saga roster context: name / role / scene. */
     rosterContext?: string[];
+    /** Saga peers with gender, for the narrative self-check's pronoun/kinship rules. */
+    rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
     /** Precomputed relationship hints from the tick memory context. */
     relationshipHints?: string[];
     /** Precomputed current plan from the tick memory context. */
@@ -269,6 +271,7 @@ export async function runPovForCharacter(
             relationshipHints:
                 relationshipHints.length > 0 ? relationshipHints : undefined,
             rosterContext: opts.rosterContext,
+            rosterPeople: opts.rosterPeople,
             planHint: planHint ?? undefined,
             dramaHint: opts.dramaHint,
             sceneBeats: opts.sceneBeats,

@@ -62,6 +62,10 @@ export interface RunCharacterWorkerInput {
     relationshipHints?: string[];
     /** Optional: public saga roster lines: name / role / scene. */
     rosterContext?: string[];
+    /** Optional: saga peers WITH gender, for the self-check's pronoun/kinship rules.
+     *  `rosterContext` is plain strings (no gender); pass this to activate those checks.
+     *  Empty/omitted ⇒ only craft + mechanism-token rules run. No names are hardcoded. */
+    rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
     /** Optional: current plan text (N6). */
     planHint?: string;
     /** Optional: drama-engine tension hint (DR-6) — dominant unmet desire. */
@@ -218,19 +222,21 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
     }
 
     // Normalise to Traditional, then run the deterministic narrative self-check
-    // (craft + mechanism-token + pronoun rules). The roster genders are not
-    // available structurally in this scope — `rosterContext` is plain strings —
-    // so we pass an empty roster (craft + token checks still run; we never
-    // fabricate genders). The subject's own gender/role comes from the snapshot.
+    // (craft + mechanism-token + pronoun/kinship rules). Pronoun/kinship rules need
+    // peer genders, supplied via `rosterPeople` when the caller has them (the loop
+    // does); when omitted, only craft + token checks run. Never fabricate genders.
     chapter = toTraditional(chapter);
     const subject = {
         name: publicSnapshot.name,
         role: publicSnapshot.role,
         gender: publicSnapshot.gender,
     };
-    const roster: { name: string; gender: string; role?: string }[] = [];
+    const roster = input.rosterPeople ?? [];
     let violations = auditProse(chapter, subject, roster);
-    if (violations.length > 0 && !input.dryRun) {
+    // Corrective regen runs on ANY violation — it's a pure LLM rewrite (no signer/chain),
+    // and the tick loop generates with dryRun=true then anchors separately, so gating on
+    // !dryRun would skip the fix in the real flow.
+    if (violations.length > 0) {
         console.warn('[character-worker] narrative self-check violations:', violations);
         try {
             const correction = await llm.chat({
@@ -252,8 +258,6 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         } catch (err) {
             console.warn('[character-worker] corrective regeneration failed:', err);
         }
-    } else if (violations.length > 0) {
-        console.warn('[character-worker] narrative self-check violations (dry run, no regen):', violations);
     }
 
     if (input.dryRun || !input.signer) {

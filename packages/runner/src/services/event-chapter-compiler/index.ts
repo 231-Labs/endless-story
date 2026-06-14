@@ -76,6 +76,9 @@ export interface CompileEventChapterInput {
     povs?: EventCutPov[];
     /** Cast to fetch POVs for, when `povs` is omitted. */
     castCharacterIds?: string[];
+    /** Saga peers WITH gender, for the self-check's pronoun/kinship rules (the woven cut is
+     *  where female-他 errors surface). Omitted ⇒ only token-leak runs. No names hardcoded. */
+    rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
     /** Per-saga tonal DNA; derived from chain when omitted. */
     sagaSoul?: SagaSoul;
     /** Signer (StorytellerCap holder) for the chain anchor step. */
@@ -181,9 +184,11 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
     // POVs carry no gender (see EventCutPov), and we won't fabricate one, so the roster
     // is empty ⇒ effectively only the token-leak check runs.
     const subject = { name: '__cut__', role: '', gender: '' };
-    const roster: { name: string; gender: string; role?: string }[] = [];
+    const roster = input.rosterPeople ?? [];
     let violations = auditProse(chapter, subject, roster);
-    if (violations.length && !input.dryRun && input.signer) {
+    // Regen on ANY violation — pure LLM rewrite (no signer/chain). Sits before the dry-run
+    // early-return so both preview and anchor get the corrected, normalised text.
+    if (violations.length) {
         errors.push(`audit: ${violations.length} 處硬傷，重織一次：${violations.join('；')}`);
         const retry = await llm.chat({
             model: modelId,

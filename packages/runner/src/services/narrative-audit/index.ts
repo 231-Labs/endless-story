@@ -68,7 +68,7 @@ export function auditProse(text: string, subject: AuditSubject, roster: AuditPee
         v.push(`行當錯誤：${subject.name}（${subject.role}）俊扮無鬚，正文不該出現鬍鬚/髯口（髯口屬老生/淨）`);
     }
     for (const kind of rules.forbiddenPlayKinds) {
-        const hit = (PLAY_KINDS[kind] ?? []).find((p) => text.includes(p));
+        const hit = (PLAY_KINDS[kind] ?? []).find((p: string) => text.includes(p));
         if (hit) v.push(`戲碼錯誤：「${hit}」是${kind}戲，非${subject.role}應工`);
     }
 

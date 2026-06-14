@@ -916,6 +916,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     dramaHint: dramaHints[c.id],
                     sceneBeats: sceneBeats.length > 0 ? sceneBeats : undefined,
                     rosterContext: rosterContextById.get(c.id),
+                    rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
                     recentMemorySnippets: await memoryContext.recent(
                         c.id,
                         trigger,
@@ -1031,6 +1032,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 eventLabel: st.label,
                                 day: worldTime?.day,
                                 povs: cutPovs,
+                                rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
                             });
                             console.log(
                                 `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
