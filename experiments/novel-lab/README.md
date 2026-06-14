@@ -18,3 +18,13 @@
 
 一句話結論：**材料層（事件無結算/無戲劇結構/無私帳）+ prompt 層（為防捏造而禁掉劇情）
 + 連續性層（無書級結構/回數沒接線）三者同時缺，且互相掩蓋。只改一個都不夠。**
+
+## 旁支解耦實驗（各自獨立，reuse sim/llm + sim/cast）
+
+- `free-action/` — **實驗1**：拿掉發牌，純讓 LLM 自由決定角色行動、由 LLM 導演裁決，
+  看沒有機制守恆時敘事推不推得動（log 每拍標 `推進?✓/✗`）。
+  `node experiments/novel-lab/free-action/run.mjs --ticks 4`
+- `memory-depth/` — **實驗2**：同角色同場景，餵入前 N 條開場記憶（0/3/6/10/15），
+  各生一篇 POV + 評審打「厚度/複雜度」分，找「幾條開始明顯提升」。
+  `node experiments/novel-lab/memory-depth/run.mjs`
+  （兩者都吃同一套 LLM env；先 `--dry` 驗 prompt，再真跑。）
