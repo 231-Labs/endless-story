@@ -86,6 +86,7 @@ const world = {
     restNextTick: null, // 班主裁奪：某人下一輪輪空
     shenLast: -99, // 班主上次介入的 tick
     lastInstantiateTick: -99, // showrunner 上次開新標的的 tick（冷卻用）
+    lossCount: {}, // `${charId}:${label}` -> 連敗次數（渴望衰減用）
     books: {}, // charId -> [{label,text}]  角色版連載累積（--book 用）
     sagaBook: [], // [{chapterNo,text}]  梨園版合本累積
     history: [],
@@ -200,7 +201,7 @@ function buildThinTrigger(c, ev, res) {
         .map((id) => world.cast.find((x) => x.id === id).name);
     const parts = [`在${ev.sceneName}，${ev.label}` + (others.length ? `（同場還有${others.join('、')}）` : '')];
     const my = ev.cards[c.id];
-    if (my) parts.push(`你${M.CARD_GESTURE[my.card]}`);
+    if (my) parts.push(`你${M.gestureOf(my.card, `${ev.id}:${c.id}`)}`);
     parts.push(`這一局已見分曉：${res.verdictNarrative}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`);
     return `第${world.day}日 — 今日，${parts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`;
 }
@@ -279,6 +280,7 @@ async function runTick() {
     log('\n【RESOLVE】決定性判決');
     log(`  ▶ ${res.verdict}`);
     world.history.push({ day: world.day, text: res.verdict });
+    for (const line of M.applyDesireDecay(world, res)) log(`  · ${line}`);
 
     // chapter numbering (ensemble book)
     world.chapterNo++;
@@ -302,7 +304,7 @@ async function runTick() {
             arc,
             privateLedger: M.targetedRecall(world, id),
             stakes: `這樁事爭的是：${world.resourceMeans[ev.resourceLabel]}`,
-            turn: `${ev.label}。各人的姿態——${ev.participantIds.map((pid) => `${world.cast.find((x) => x.id === pid).name}：${M.CARD_GESTURE[ev.cards[pid].card]}`).join('；')}。`,
+            turn: `${ev.label}。各人的姿態——${ev.participantIds.map((pid) => `${world.cast.find((x) => x.id === pid).name}：${M.gestureOf(ev.cards[pid].card, `${ev.id}:${pid}`)}`).join('；')}。`,
             outcome: res.verdictNarrative,
             cost: M.structuredCost(world, id, res),
             relationshipHints: M.relationshipHints(world, id),

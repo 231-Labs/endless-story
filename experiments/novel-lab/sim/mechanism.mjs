@@ -9,17 +9,22 @@
  * 不是石頭剪刀布式克制；而是「越決絕(intent 越小)底牌越強，再按角色屬性加成」。
  * 每張牌綁一個角色屬性，讓不同行當在不同牌上各擅勝場（破壟斷的關鍵之一）。 */
 export const CARD_CATALOG = [
-    { card: '斬', intent: 0, attr: null, gesture: '把話說死、半分餘地不留，寧撕破臉也要爭到底' },
-    { card: '攻', intent: 1, attr: 'constitution', gesture: '正面進逼，要把這事爭到手' },
-    { card: '守', intent: 2, attr: 'constitution', gesture: '穩住不退，也不出手去搶' },
-    { card: '誘', intent: 4, attr: 'disposition', gesture: '不來硬的，用軟語與身段把人往自己這邊拉' },
-    { card: '亮', intent: 5, attr: 'appearance', gesture: '亮相奪目，用一身風采壓住全場' },
-    { card: '觀', intent: 6, attr: 'acuity', gesture: '按兵不動，冷眼看準破綻' },
-    { card: '讓', intent: 9, attr: null, gesture: '退開一步，主動把位置讓出去' },
+    { card: '斬', intent: 0, attr: null, gestures: ['把話說死、半分餘地不留', '當場撕破臉、寸土不讓', '一句頂死、絕了轉圜'] },
+    { card: '攻', intent: 1, attr: 'constitution', gestures: ['正面進逼、步步搶上', '當仁不讓地爭、氣勢逼人', '直取要害、毫不遮掩'] },
+    { card: '守', intent: 2, attr: 'constitution', gestures: ['穩住不退、也不出手搶', '按住陣腳、以靜待變', '立定如釘、任風浪不動'] },
+    { card: '誘', intent: 4, attr: 'disposition', gestures: ['不來硬的、以軟語身段拉攏', '遞個人情、把人往自己這邊引', '用三分情面暗暗使力'] },
+    { card: '亮', intent: 5, attr: 'appearance', gestures: ['亮相奪目、用風采壓場', '把一身光彩抖出來、奪盡眼目', '當場顯真本事、要人記住'] },
+    { card: '觀', intent: 6, attr: 'acuity', gestures: ['按兵不動、冷眼等破綻', '袖手旁觀、看誰先露馬腳', '不動聲色、坐看局勢'] },
+    { card: '讓', intent: 9, attr: null, gestures: ['退開一步、主動讓位', '把位置空出來、不爭', '收手退後、成全旁人'] },
 ];
 export const CARD_BY_NAME = Object.fromEntries(CARD_CATALOG.map((c) => [c.card, c]));
-export const CARD_GESTURE = Object.fromEntries(CARD_CATALOG.map((c) => [c.card, c.gesture]));
 export const VALID_CARDS = CARD_CATALOG.map((c) => c.card);
+/** 依 seed 取一個 gesture 變體（同局同人穩定，但跨章跨人會變，破套語）。 */
+export function gestureOf(card, seedStr = '') {
+    const c = CARD_BY_NAME[card];
+    if (!c) return '';
+    return c.gestures[hashStr(String(seedStr)) % c.gestures.length];
+}
 
 /** 一張牌對某角色的有效強度 = 決絕底分 + 屬性加成。讓=主動退讓，最低。 */
 export function cardScore(cardName, character) {
@@ -173,8 +178,8 @@ export function resolveEvent(world) {
         (prevHolder && prevHolder !== winner.id ? `（從${fromName ?? '前手'}手中易手）` : '');
     // verdictNarrative (CLEAN) — translated gestures + human resource name; this is what POV/cut see.
     const verdictNarrative =
-        `${winner.name}${CARD_GESTURE[winner.card]}，` +
-        (others.length ? `壓過了${others.map((o) => `${o.name}（${CARD_GESTURE[o.card]}）`).join('、')}，` : '') +
+        `${winner.name}${gestureOf(winner.card, `${ev.id}:${winner.id}`)}，` +
+        (others.length ? `壓過了${others.map((o) => `${o.name}（${gestureOf(o.card, `${ev.id}:${o.id}`)}）`).join('、')}，` : '') +
         `奪下了${display}` +
         (prevHolder && prevHolder !== winner.id ? `（從${fromName ?? '前手'}手中易手）` : '');
 
@@ -226,7 +231,7 @@ export function buildSceneBeats(world, sceneId, selfId) {
             if (id === selfId) continue;
             const c = world.cast.find((x) => x.id === id);
             const play = ev.cards[id];
-            if (play) beats.push(`${c.name}的姿態：${CARD_GESTURE[play.card]}`);
+            if (play) beats.push(`${c.name}的姿態：${gestureOf(play.card, `${ev.id}:${id}`)}`);
         }
     }
     return beats;
@@ -387,6 +392,24 @@ export function applyResourceOps(world, accepted) {
         }
     }
     return log;
+}
+
+/** 渴望衰減：對同一標的連敗 ≥2 回，就死心退出爭奪——讓熱軸自然收掉、人物移向新欲望。 */
+export function applyDesireDecay(world, res) {
+    world.lossCount = world.lossCount ?? {};
+    const out = [];
+    for (const loser of res.losers) {
+        const key = `${loser.id}:${res.resource.label}`;
+        world.lossCount[key] = (world.lossCount[key] ?? 0) + 1;
+        if (world.lossCount[key] >= 2) {
+            const c = world.cast.find((x) => x.id === loser.id);
+            if (c && c.desires.includes(res.resource.label)) {
+                c.desires = c.desires.filter((d) => d !== res.resource.label);
+                out.push(`${c.name} 連敗兩回，對「${res.display}」死了心，不再爭`);
+            }
+        }
+    }
+    return out;
 }
 
 /** Recent-events digest for showrunner / plan prompts. */
