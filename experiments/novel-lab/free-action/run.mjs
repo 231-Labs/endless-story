@@ -36,10 +36,24 @@ const NO_POV = Boolean(flag('no-pov', false));
 mkdirSync(join(__dir, 'logs'), { recursive: true });
 const LOG = flag('out', join(__dir, 'logs', `free-${new Date().toISOString().replace(/[:.]/g, '-')}.log`));
 writeFileSync(LOG, '');
+const _buf = [];
 const log = (s = '') => {
     process.stdout.write(s + '\n');
-    appendFileSync(LOG, s + '\n');
+    _buf.push(s);
+    try {
+        appendFileSync(LOG, s + '\n');
+    } catch {
+        /* ignore live-append hiccup; exit handler rewrites the full file */
+    }
 };
+// 結束時整份重寫一次，保證檔案＝完整輸出。
+process.on('exit', () => {
+    try {
+        writeFileSync(LOG, _buf.join('\n') + '\n');
+    } catch {
+        /* nothing more we can do at exit */
+    }
+});
 const section = (t) => {
     log('\n' + '═'.repeat(72));
     log('▌ ' + t);
