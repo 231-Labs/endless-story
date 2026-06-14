@@ -91,7 +91,7 @@ const world = {
     books: {}, // charId -> [{label,text}]  角色版連載累積（--book 用）
     sagaBook: [], // [{chapterNo,text}]  梨園版合本累積
     history: [],
-    roster: structuredClone(seedCast).map((c) => `${c.name}·${c.role}`).join('；'),
+    roster: structuredClone(seedCast).map((c) => `${c.name}（${c.role}·${c.gender}）`).join('、'),
     arc: {
         throughline: '春雪社這班人，能不能在上海把「戲比天大」唱成真的，還是終究被名利拆散。',
         lines: [

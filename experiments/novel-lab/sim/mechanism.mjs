@@ -590,7 +590,7 @@ export function buildSceneBeats(world, sceneId, selfId) {
 /* ── 自檢步驟 (NARRATIVE_AGENTS 缺口)：行當/性別/道具/機制 token 一致性 lint ──
  * 純規則、零成本、低誤報；違反項回給 run.mjs 觸發「指出硬傷→改寫一次」。 */
 const NO_BEARD_ROLES = ['坤生', '乾生', '小生', '花旦', '旦', '青衣', '刀馬旦', '武旦'];
-const BEARD_RE = /髯口|三髯|黲髯|白滿|黑三|掛髯|鬍鬚|鬚口/g;
+const BEARD_RE = /髯口|三髯|黲髯|白滿|黑三|掛髯|鬍鬚|鬍子|鬍髭|絡腮鬍|髭|鬚口/g;
 // 只在「非否定」的鬍鬚提及才算違規：「不掛髯口／沒戴鬍鬚／絕不掛髯」是正確描寫，放行。
 function beardViolation(text) {
     BEARD_RE.lastIndex = 0;
@@ -601,7 +601,7 @@ function beardViolation(text) {
     }
     return false;
 }
-const LAOSHENG_PLAY_RE = /定軍山|烏盆記|捉放曹|碰碑|搜孤救孤|空城計|轅門斬子|文昭關|斬經堂/;
+const LAOSHENG_PLAY_RE = /定軍山|烏盆記|捉放曹|碰碑|搜孤救孤|空城計|轅門斬子|文昭關|斬經堂|四郎探母|武家坡|大登殿|二進宮|洪羊洞|失街亭|戰太平|李陵碑/;
 const TOKEN_RE = /〔[斬攻誘守觀讓]〕/;
 // 任何 <ascii-kind>:<中文> 形狀都算機制 label 洩漏（含 director 新標的）。
 const RAWLABEL_RE = /[a-z][a-z0-9_]{2,}:[一-鿿]/;
