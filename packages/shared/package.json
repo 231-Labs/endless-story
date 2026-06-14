@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./types": "./src/types/index.ts",
     "./contract-ids": "./src/contract-ids.ts",
-    "./role-rules": "./src/role-rules.ts"
+    "./role-rules": "./src/role-rules.ts",
+    "./to-traditional": "./src/to-traditional.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

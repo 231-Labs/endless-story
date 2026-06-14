@@ -24,6 +24,8 @@ import {
     type SuiClient,
 } from '@endless-story/sdk';
 import { text as llmText } from '@endless-story/llm';
+import { toTraditional } from '@endless-story/shared';
+import { auditProse, correctionNote } from '../narrative-audit/index.js';
 import { resolveNetwork } from '../../infra/network.js';
 import { signAndAnchor } from '../../infra/sign-and-anchor.js';
 import {
@@ -213,6 +215,45 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         if (remainingMotifs.length < heavyMotifs.length) {
             chapter = softened;
         }
+    }
+
+    // Normalise to Traditional, then run the deterministic narrative self-check
+    // (craft + mechanism-token + pronoun rules). The roster genders are not
+    // available structurally in this scope — `rosterContext` is plain strings —
+    // so we pass an empty roster (craft + token checks still run; we never
+    // fabricate genders). The subject's own gender/role comes from the snapshot.
+    chapter = toTraditional(chapter);
+    const subject = {
+        name: publicSnapshot.name,
+        role: publicSnapshot.role,
+        gender: publicSnapshot.gender,
+    };
+    const roster: { name: string; gender: string; role?: string }[] = [];
+    let violations = auditProse(chapter, subject, roster);
+    if (violations.length > 0 && !input.dryRun) {
+        console.warn('[character-worker] narrative self-check violations:', violations);
+        try {
+            const correction = await llm.chat({
+                model: modelId,
+                system,
+                messages: [{ role: 'user', content: user + '\n' + correctionNote(violations) }],
+                maxTokens: 1800,
+                temperature: 0.4,
+            });
+            const candidate = toTraditional(correction.text.trim());
+            if (candidate) {
+                const remaining = auditProse(candidate, subject, roster);
+                // Keep the rewrite only if it is no worse than the original.
+                if (remaining.length <= violations.length) {
+                    chapter = candidate;
+                    violations = remaining;
+                }
+            }
+        } catch (err) {
+            console.warn('[character-worker] corrective regeneration failed:', err);
+        }
+    } else if (violations.length > 0) {
+        console.warn('[character-worker] narrative self-check violations (dry run, no regen):', violations);
     }
 
     if (input.dryRun || !input.signer) {

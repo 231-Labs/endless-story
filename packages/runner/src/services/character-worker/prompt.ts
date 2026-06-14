@@ -12,7 +12,7 @@
  * into one concrete moment, without recapping it like a report.
  */
 
-import { roleHint } from '@endless-story/shared';
+import { craftGuardrail, roleHint } from '@endless-story/shared';
 import { type SagaSoul, buildSagaSoulBlock } from './saga-soul.js';
 
 export type { SagaSoul } from './saga-soul.js';
@@ -83,6 +83,11 @@ export function buildSystemPrompt(soul?: SagaSoul): string {
         '10. **身體缺陷與秘密物件要有來源**。不得憑空寫跛腿、棺材、屍首、血跡、重病、私藏玉鐲、巨額債務等強設定；除非事件材料、記憶、外形欄明確提供。',
         '11. **同場客觀事實不可改寫**。若「本場此刻」列出了同場其他人剛剛的動作或話語，那是已發生的事實：你可以寫你如何看見、誤讀、回應、忽視它，但不可寫成「沒發生」、「相反地發生」、或「換成別人做」。你的視角是對同一現實的不同詮釋，不是另一個現實。同場另一個人之後也會寫到這一刻，你們必須對得上。',
         '',
+        '**連載推進（每回必做）**：這是連載章回，不是孤立場景；一回讀完，必須有東西動了。',
+        '- **承上**：開頭用一兩句勾連上一回留下的懸念或餘味，讓老讀者立刻接上，不要從零起手。',
+        '- **推進**：讓主角經歷事件材料裡的轉折、做出或承受一個選擇、付出代價——這個角色或他的處境，結尾必須和開頭不一樣。',
+        '- **啟下**：結尾的鉤子要是這一回的後果催生出的新問題，而不是無關的小轉身或人生感悟。',
+        '',
         '**聲音與質地**：',
         '- 風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。',
         '- 角色扁平時，寧可低調寫觀察、身段、職業習慣與眼前利害，不要硬灌劇烈人格創傷。',
@@ -145,6 +150,10 @@ export function buildUserPrompt(input: PovPromptInput): string {
         attrLine(character.attributes),
         `- 所屬：${character.sagaName}${character.sceneName ? ` · 在 ${character.sceneName}` : ''}`,
         `- 行當聲口：${roleHint(character.role)}`,
+        (() => {
+            const guard = craftGuardrail(character.role);
+            return guard ? `- 行當守門（讀者看不到、別寫進正文）：${guard}` : '';
+        })(),
         craftBlock,
         memBlock,
         rosterBlock,
