@@ -81,7 +81,8 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 - web/runner 端設 `MEMWAL_SERVER_URL = https://<你的 relayer 網域>`。
 
 ### 3.3 world-loop runner → Zeabur（Contabo VPS）
-- 跑 `packages/cli/scripts/world-loop.ts`（`packages/cli` 也有 `pnpm start` → `world-loop`；支援 `--interval` / `--max` / `--dry-run` / `--max-characters` / `--no-pov`,序列等每 tick 完成、永不重疊）。
+- 跑 `packages/cli/scripts/world-loop.ts`（`packages/cli` 也有 `pnpm start` → `world-loop`；支援 `--interval` / `--max` / `--dry-run` / `--max-characters` / `--no-pov` / `--showrunner-every` 等,序列等每 tick 完成、永不重疊）。
+- **每個 flag 都有 env fallback（`flag > env > default`）**,所以 standalone service 部署可以完全只靠 env 調參,不必傳 CLI flag：`WORLD_LOOP_INTERVAL` / `WORLD_LOOP_MAX_TICKS` / `WORLD_LOOP_MAX_CHARACTERS` / `SHOWRUNNER_EVERY_TICKS`,以及實驗閘 `TICK_*`(與 web 端同名,一份 `.env` 兩個 service 通用;runner 把它們塞進 POST body,body 只會 force ON)。完整清單見 `world-loop.ts` 檔頭。
 - 它**很薄**：只是定時 HTTP 打 `WORLD_LOOP_URL`(= Vercel 的 `/api/tick`),帶 `Authorization: Bearer <TICK_LOOP_SECRET>`。重活（LLM/Sui/MemWal）都在 `/api/tick` 內(Vercel)執行。
 - 所以這個 service **最低只需要 `WORLD_LOOP_URL` + `TICK_LOOP_SECRET` 兩個 env**；若要遠端暫停，加 `RUNNER_CONTROL_URL=https://<relayer>/control`，或填 `MEMWAL_SERVER_URL=https://<relayer>` 讓它自動用 `/control`。
 - **進階（世界變大時）**：讓 world-loop 直接 in-process 跑 tick 邏輯(不經 Vercel),此時它才需要全套 keys（LLM/Sui/MemWal）。MVP 不用。
@@ -130,6 +131,9 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 | `RUNNER_CONTROL_URL` | = relayer 的 `https://<relayer>/control`；回 `{paused:true}` 時跳過 tick | |
 | `MEMWAL_SERVER_URL` | 若沒填 `RUNNER_CONTROL_URL`，world-loop 會用 `<MEMWAL_SERVER_URL>/control` | |
 | `RUNNER_CONTROL_SECRET` / `RELAYER_SECRET` | 若控制端 GET 也加 bearer，填同值；目前自架 relayer 的 GET `/control` 預設開放讀 | |
+| `WORLD_LOOP_INTERVAL` / `WORLD_LOOP_MAX_TICKS` / `WORLD_LOOP_MAX_CHARACTERS` | standalone 調參（= `--interval` / `--max` / `--max-characters` 的 env fallback；沒傳 flag 時生效） | |
+| `SHOWRUNNER_EVERY_TICKS` | 每 N tick 跑一次 Showrunner heartbeat（= `--showrunner-every`） | |
+| `TICK_EVENT_SPINE` / `TICK_PARALLEL_EVENTS` / `TICK_ATTENTION_BUDGET` / `TICK_RIVAL_GRAVITY` / `TICK_LLM_FRAMING` / `TICK_DIRECTOR_RESOURCES` / `TICK_MAX_CONCURRENT_EVENTS` | 實驗閘,與 web 端同名（一份 `.env` 兩 service 共用）；`=1` 開。見 `docs/EVENT_LIFECYCLE.md` | |
 | （進階 in-process 模式才要全套 LLM/Sui/MemWal keys） | | ★ |
 
 **Zeabur — relayer**
@@ -184,7 +188,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 7. [ ] 若用 drama demo cast：跑 `pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing` 補舊 cast 的 `role:*` tags；若剛重新 mint，`seed-cast` 會自動寫 tag。
 8. [ ] Zeabur 建 service B（root=`packages/cli`）跑 `pnpm start`,填 `WORLD_LOOP_URL=https://<web>` + `TICK_LOOP_SECRET`；若 relayer 已上線，再填 `RUNNER_CONTROL_URL=https://<relayer>/control` 或 `MEMWAL_SERVER_URL=https://<relayer>`。
 9. [ ] 安全 smoke（不上鏈）：`pnpm --filter @endless-story/cli run world-loop -- --max=1 --dry-run --max-characters=1 --no-sleep --no-gazette --json-out=/private/tmp/endless-story-smoke.json`，看到 `規劃1 · 張力… · 章回1`。有限輪數 smoke 若遇到 HTTP 500 / 非 JSON / `ok:false` 會 exit 1。
-10. [ ] 快速 drama/social inspection（不上鏈、不跑章回）：同上加 `--no-pov --character-ids=<孟>,<顧>,<柳> --max-characters=3`，幾十秒內檢查 `drama.top` / `social` 明細，不用等三篇 POV。也可在 `/admin/director` 關「含 POV 章回」並按「孟/顧/柳」快捷填入後跑 dry-run。注意 dry-run 不寫 memory、scene-lines 或鏈上 anchor；第二輪 POV 召回要等真跑或測試專用記憶層驗。
+10. [ ] 快速 drama/social inspection（不上鏈、不跑章回）：同上加 `--no-pov --character-ids=<孟>,<顧>,<柳> --max-characters=3`，幾十秒內檢查 `drama.top` / `social` 明細，不用等三篇 POV。也可在 `/admin/stage`（戲台；舊 `/admin/director` 已 redirect 到此）關「含 POV 章回」並按「孟/顧/柳」快捷填入後跑 dry-run。注意 dry-run 不寫 memory、scene-lines 或鏈上 anchor；第二輪 POV 召回要等真跑或測試專用記憶層驗。
 11. [ ] Demo cast smoke（不上鏈）：去掉 `--no-pov`，加 `--character-ids=<孟>,<顧>,<柳> --max-characters=3 --json-out=/private/tmp/endless-story-gu-liu-meng-dryrun.json` 精準驗三人並保存完整結果，不靠角色列表排序。
 12. [ ] 真 tick smoke：admin 手動「自治推進一個 tick」或 world-loop 不加 `--dry-run` 跑一次 → 看 POV/公報生成 → 確認 world-loop 自動跑起來。
 13. [ ] 放首頁影片素材：把剪好的 clips 寫成 `packages/web/public/demo-clips.json`（格式見 `demo-clips.example.json`），或部署時填 `DEMO_CLIPS_URL` / `DEMO_CLIPS_FILE`。

@@ -23,6 +23,7 @@
  */
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
+import { normalizeWalrusBlobId } from '@endless-story/shared';
 import { resolveNetwork } from './network.js';
 import { fetchChapterText } from './pov-read.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
@@ -103,7 +104,7 @@ async function fetchGazettesForSagaUncached(
         summaries.map(async (s): Promise<GazetteEntry | null> => {
             try {
                 const json = await getCommitmentCached(client, s.commitmentId);
-                const blobId = decodeByteString(json.blob_id);
+                const blobId = normalizeWalrusBlobId(json.blob_id);
                 if (!blobId) return null;
                 // Skip DR-6 drama beats (saga-subject, but JSON not prose).
                 if (await isNonGazetteBlob(blobId)) return null;
@@ -154,13 +155,6 @@ function getCommitmentCached(
             return res.json as unknown as CommitmentJson;
         },
     );
-}
-
-function decodeByteString(raw: number[] | string | undefined): string {
-    if (!raw) return '';
-    if (typeof raw === 'string') return raw;
-    if (Array.isArray(raw)) return new TextDecoder().decode(new Uint8Array(raw));
-    return '';
 }
 
 function decodeBytesHex(raw: number[] | string | undefined): string {

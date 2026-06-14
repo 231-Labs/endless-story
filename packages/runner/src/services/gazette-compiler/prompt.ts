@@ -73,7 +73,7 @@ export function buildSystemPrompt(soul?: SagaSoul): string {
         '     （頭條那樁不要在這裡重複。）',
         '   - `## 連載預告` 區塊：先寫一句引導語（如「台前幕後各自怎麼想，這幾回正連載——」），',
         '     再每篇 POV 一條，格式：',
-        '       `- **{character}**〈視角〉 {一句鈎子，≤18 字，用我給的摘要濃縮、不要照抄} —— [讀這一回 →](/api/blob/{blobId})`',
+        '       `- **{character}**〈視角〉 {一句鈎子，≤18 字，用我給的摘要濃縮、不要照抄} —— [讀這一回 →](/feed/chapter/{commitmentId})`',
         '     每條之間不空行（緊湊如報紙索引）。鈎子要勾人但不劇透結局。',
         '   - 最後一行 CTA：`> 完整章回連載見 [梨園章回 →](/feed?mode=chapter)`',
         '   - `## 班內動態` 區塊：照我給的 stat 數值直接列出，不要包裝',
@@ -108,7 +108,7 @@ export function buildUserPrompt(s: GazetteSnapshot): string {
             ? s.chapters
                   .map(
                       (c) =>
-                          `- 角色: ${c.characterName} | blobId: ${c.blobId} | 摘要: ${c.excerpt}`,
+                          `- 角色: ${c.characterName} | commitmentId: ${c.commitmentId} | 摘要: ${c.excerpt}`,
                   )
                   .join('\n')
             : '（今日無 POV 章回 committed）';

@@ -98,3 +98,15 @@ export function saveArcPlan(arcPlan: string): DirectorMemory {
   persist(mem);
   return mem;
 }
+
+/** Wipe arc plan, heartbeat log, and chat — e.g. after redeploy when old saga context is stale. */
+export function clearDirectorMemory(): { ok: true; cleared: { log: number; chat: number; hadArcPlan: boolean } } {
+  const mem = readDirectorMemory();
+  const cleared = {
+    log: mem.log.length,
+    chat: mem.chat.length,
+    hadArcPlan: mem.arcPlan.trim().length > 0,
+  };
+  persist({ ...EMPTY });
+  return { ok: true, cleared };
+}

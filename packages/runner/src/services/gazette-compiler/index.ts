@@ -26,6 +26,7 @@ import {
     read,
     type SuiClient,
 } from '@endless-story/sdk';
+import { normalizeWalrusBlobId } from '@endless-story/shared';
 import { text as llmText } from '@endless-story/llm';
 import { resolveNetwork } from '../../infra/network.js';
 import { signAndAnchor } from '../../infra/sign-and-anchor.js';
@@ -84,19 +85,31 @@ export interface CompileGazetteResult {
 }
 
 /**
- * Rewrite the gazette's POV "read full text" links from the raw Walrus blob
- * (`/api/blob/<blobId>`) to the rendered chapter page
- * (`/feed/chapter/<commitmentId>`). Deterministic (not LLM-trusted).
+ * Rewrite POV links to `/feed/chapter/{commitmentId}`. Deterministic (not LLM-trusted).
+ * Fixes compile-time blob placeholders (`/api/blob/0`) by character name when needed.
  */
 function rewriteChapterLinks(
     markdown: string,
-    chapters: ReadonlyArray<{ commitmentId: string; blobId: string }>,
+    chapters: ReadonlyArray<{ commitmentId: string; blobId: string; characterName: string }>,
 ): string {
     let out = markdown;
     for (const c of chapters) {
-        if (!c.blobId || !c.commitmentId) continue;
+        if (!c.commitmentId) continue;
         const chapterUrl = `/feed/chapter/${c.commitmentId}`;
-        out = out.split(`/api/blob/${c.blobId}`).join(chapterUrl);
+        const blobId = normalizeWalrusBlobId(c.blobId);
+        if (blobId) {
+            out = out.split(`/api/blob/${blobId}`).join(chapterUrl);
+        }
+        if (c.characterName) {
+            const escaped = c.characterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            out = out.replace(
+                new RegExp(
+                    `(\\*\\*${escaped}\\*\\*〈視角〉[^\\]]*\\]\\()(\\/api\\/blob\\/[^)]+)(\\))`,
+                    'g',
+                ),
+                `$1${chapterUrl}$3`,
+            );
+        }
     }
     return out;
 }
@@ -326,15 +339,11 @@ async function fetchGazetteSnapshot(
                     excerpt,
                     committedAtMs: c.committedAtMs,
                 });
-                // Pull blob_id from the Commitment object for the link.
+                // Pull blob_id from the Commitment object (for compile-time blob rewrite).
                 try {
                     const res = await read.commitment.getCommitment(client, c.commitmentId);
-                    const json = res.json as unknown as { blob_id?: number[] };
-                    if (Array.isArray(json.blob_id)) {
-                        chapters[chapters.length - 1].blobId = new TextDecoder().decode(
-                            new Uint8Array(json.blob_id),
-                        );
-                    }
+                    const json = res.json as unknown as { blob_id?: unknown };
+                    chapters[chapters.length - 1].blobId = normalizeWalrusBlobId(json.blob_id);
                 } catch {
                     // skip
                 }
@@ -386,9 +395,9 @@ async function fetchExcerpt(commitmentId: string, client: SuiClient): Promise<st
     // fetch first 80 chars. Bounded so it's cheap.
     try {
         const res = await read.commitment.getCommitment(client, commitmentId);
-        const json = res.json as unknown as { blob_id?: number[] };
-        if (!Array.isArray(json.blob_id)) return '';
-        const blobId = new TextDecoder().decode(new Uint8Array(json.blob_id));
+        const json = res.json as unknown as { blob_id?: unknown };
+        const blobId = normalizeWalrusBlobId(json.blob_id);
+        if (!blobId) return '';
         const r = await fetch(`https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`, {
             cache: 'no-store',
         });

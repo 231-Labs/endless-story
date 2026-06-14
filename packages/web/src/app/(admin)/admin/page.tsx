@@ -3,8 +3,7 @@ import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
 import { getDirectorMemoryAction } from '@/lib/actions/showrunner';
 import { AdminPanel } from './AdminPanel';
-import { ShowrunnerPanel } from './ShowrunnerPanel';
-import { DirectorChatPanel } from './DirectorChatPanel';
+import { CockpitMemoryPanels } from './CockpitMemoryPanels';
 
 export const metadata = {
   title: '駕駛艙 | 班主後台',
@@ -43,27 +42,7 @@ export default async function AdminPage() {
               </div>
             </section>
 
-            <section className="mt-12 border-t border-hairline pt-10">
-              <h2 className="font-serif text-xl tracking-wide text-ink">對話</h2>
-              <p className="mt-2 text-sm leading-relaxed text-mute">
-                問劇情（「現在故事走到哪了？」）、下小指令（補某角色、開一條張力線）、
-                給大方向（寫進弧線計畫，下次心跳執行）。
-              </p>
-              <div className="mt-4">
-                <DirectorChatPanel initialChat={memory.chat} />
-              </div>
-            </section>
-
-            <section className="mt-12 border-t border-hairline pt-10">
-              <h2 className="font-serif text-xl tracking-wide text-ink">心跳與日誌</h2>
-              <p className="mt-2 text-sm leading-relaxed text-mute">
-                巡檢 → 補漏 → 評估劇情 → 干預 → 導演日誌。VPS 上由 world-loop 的
-                <code className="font-mono text-2xs"> --showrunner-every=N </code>自動驅動；這裡可手動跑一次。
-              </p>
-              <div className="mt-4">
-                <ShowrunnerPanel initialArcPlan={memory.arcPlan} initialLog={memory.log} />
-              </div>
-            </section>
+            <CockpitMemoryPanels initialMemory={memory} />
           </SagaAdminGuard>
         </div>
       </main>

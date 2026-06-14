@@ -6,8 +6,9 @@
  * and the headless /api/showrunner route.
  */
 
+import { revalidatePath } from 'next/cache';
 import { runShowrunner, type ShowrunnerOptions, type ShowrunnerResult } from '@/lib/director/showrunner';
-import { readDirectorMemory, type DirectorMemory } from '@/lib/director/memory-store';
+import { clearDirectorMemory, readDirectorMemory, type DirectorMemory } from '@/lib/director/memory-store';
 
 export async function runShowrunnerAction(
   input: ShowrunnerOptions = {},
@@ -17,4 +18,13 @@ export async function runShowrunnerAction(
 
 export async function getDirectorMemoryAction(): Promise<DirectorMemory> {
   return readDirectorMemory();
+}
+
+export async function clearDirectorMemoryAction(): Promise<{
+  ok: true;
+  cleared: { log: number; chat: number; hadArcPlan: boolean };
+}> {
+  const result = clearDirectorMemory();
+  revalidatePath('/admin');
+  return result;
 }

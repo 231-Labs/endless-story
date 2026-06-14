@@ -124,6 +124,13 @@ const recentTopicsBySaga = new Map<string, string[]>();
 
 /** Read a TICK_* feature flag from the environment (deploy-wide default for an
  *  auto-running runner). Truthy = '1' | 'true' | 'yes' | 'on' (case-insensitive). */
+/**
+ * Last narrated event per character (process-local). Stops the duplicate-POV
+ * bug: while an event stays open across ticks, a character with no new beat
+ * (no talk / play / verdict) must not re-write the same scene every tick.
+ */
+const lastPovEventByChar = new Map<string, string>();
+
 function envFlag(name: string): boolean {
     const v = (process.env[name] ?? '').trim().toLowerCase();
     return v === '1' || v === 'true' || v === 'yes' || v === 'on';
@@ -184,7 +191,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const spineMode = eventSpine || parallelEvents;
     drainMemoryWarnings(); // discard stale warnings from previous local dev requests
     const memoryContext = new TickMemoryContext();
-    const cap = input.maxCharacters ?? 6;
+    const cap = input.maxCharacters ?? (Number(process.env.TICK_MAX_CHARACTERS) || 6);
     const requestedIds = normalizeCharacterIds(input.characterIds);
     const t0 = Date.now();
     const since = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
@@ -225,13 +232,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // The economy shadow can mark a character dead (vitality → 0); drop them from the acting set
     // so death actually retires them from the stage (they keep their persisted state for settle).
     const alive = characters.filter((c) => !isShadowDead(d.sagaId, c.id));
+    // When the cast exceeds the cap, rotate the acting window by world tick so
+    // everyone cycles onto the stage — a fixed slice(0, cap) would star the
+    // same N characters forever and the rest would never act.
+    const rotated = (() => {
+        if (alive.length <= cap) return alive;
+        const start = ((worldTime?.currentTick ?? 0) * cap) % alive.length;
+        return [...alive.slice(start), ...alive.slice(0, start)];
+    })();
     const slice =
         requestedIds.length > 0
             ? requestedIds
                   .map((id) => alive.find((c) => c.id === id))
                   .filter((c): c is Character => Boolean(c))
                   .slice(0, cap)
-            : alive.slice(0, cap);
+            : rotated.slice(0, cap);
     const scenes = await fetchOnChainScenesForSaga(d.sagaId).catch(() => []);
     const roster = await buildSagaRoster(d.sagaId, { characters, scenes }).catch(
         () => [] as SagaRosterEntry[],
@@ -795,6 +810,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         const narratable = new Set<string>();
         for (const st of storylets) for (const id of st.characterIds) narratable.add(id);
         for (const a of acts) if (a.ok) narratable.add(a.characterId);
+        // Resolve verdicts: every participant of a just-closed event narrates
+        // the outcome — this is where on-chain win/loss enters the story.
+        const verdictByChar = new Map<string, string>();
+        for (const rr of resolves) {
+            if (rr.ok && rr.verdict) {
+                for (const p of rr.participants ?? []) {
+                    verdictByChar.set(p, rr.verdict);
+                    narratable.add(p);
+                }
+            }
+        }
         const povSlice = (input.povAll ?? false)
             ? slice
             : slice.filter((c) => narratable.has(c.id));
@@ -852,6 +878,33 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         triggerParts.push(`你打出了〔${a.cardLabel}〕${a.intent ? `（${a.intent}）` : ''}`);
                     }
                 }
+                const myVerdict = verdictByChar.get(c.id);
+                if (myVerdict) {
+                    triggerParts.push(
+                        `這一局已見分曉：${myVerdict}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`,
+                    );
+                }
+                // Same open event + nothing new this tick → don't re-narrate
+                // the same moment (the duplicate-chapter bug: stuck events made
+                // every tick re-write an identical wardrobe-room scene).
+                const eventKey = myEvent ? `${sceneId ?? ''}:${myEvent.label}` : null;
+                const freshBeat =
+                    Boolean(myTalk) ||
+                    Boolean(myVerdict) ||
+                    acts.some((a) => a.characterId === c.id && a.ok);
+                if (eventKey && !freshBeat && lastPovEventByChar.get(c.id) === eventKey) {
+                    tlog(`   · POV ${c.name} 略過（同事件無新拍子）`);
+                    return {
+                        c,
+                        r: {
+                            ok: true,
+                            chapter: '',
+                            anchored: false,
+                            recalledCount: 0,
+                            skipReason: 'same_event_no_new_beat',
+                        } satisfies Awaited<ReturnType<typeof runPovForCharacter>>,
+                    };
+                }
                 const trigger =
                     triggerParts.length > 0
                         ? `${dayLabel} — 今日，${triggerParts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`
@@ -874,6 +927,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     skipMemoryRecall: true,
                 });
                 tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
+                if (eventKey && r.ok && r.chapter?.trim()) lastPovEventByChar.set(c.id, eventKey);
                 return { c, r };
             } catch (err) {
                 tlog(`   · POV ${c.name} ✗`);
@@ -1064,8 +1118,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     // 6. NARRATE — compile the objective gazette for the day.
+    //    一天一份: only the day's FINAL tick compiles (it then covers the whole
+    //    day). Compiling every tick produced N near-identical 第N日 gazettes.
     let gazette: TickGazetteResult | undefined;
-    if ((input.gazette ?? true) && !dryRun) {
+    const isDayEnd = !worldTime || worldTime.tickOfDay >= worldTime.ticksPerDay - 1;
+    if ((input.gazette ?? true) && !dryRun && !isDayEnd) {
+        tlog(
+            `⑥ 公報略過（一天一份；今日第 ${(worldTime?.tickOfDay ?? 0) + 1}/${worldTime?.ticksPerDay} tick，日末才編）`,
+        );
+    }
+    if ((input.gazette ?? true) && !dryRun && isDayEnd) {
         tlog(`⑥ 編公報…`);
         const g = await compileGazetteAction({ day: worldTime?.day });
         gazette = {

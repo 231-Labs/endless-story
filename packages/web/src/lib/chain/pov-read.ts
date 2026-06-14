@@ -9,6 +9,7 @@
  */
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
+import { normalizeWalrusBlobId } from '@endless-story/shared';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
@@ -81,7 +82,7 @@ export async function fetchPovChaptersForCharacter(
                 blob_id?: number[] | string;
                 content_hash?: number[] | string;
             };
-            const blobId = decodeByteString(json.blob_id);
+            const blobId = normalizeWalrusBlobId(json.blob_id);
             const contentHashHex = decodeBytesHex(json.content_hash);
             if (!blobId) continue;
             out.push({
@@ -135,7 +136,7 @@ export async function fetchPovChaptersForSaga(
                 blob_id?: number[] | string;
                 content_hash?: number[] | string;
             };
-            const blobId = decodeByteString(json.blob_id);
+            const blobId = normalizeWalrusBlobId(json.blob_id);
             if (!blobId) continue;
             out.push({
                 commitmentId: s.commitmentId,
@@ -181,7 +182,7 @@ async function fetchPovChapterByCommitmentUncached(
             blob_id?: number[] | string;
             content_hash?: number[] | string;
         };
-        const blobId = decodeByteString(json.blob_id);
+        const blobId = normalizeWalrusBlobId(json.blob_id);
         if (!blobId) return null;
         return {
             commitmentId,
@@ -213,15 +214,6 @@ export async function fetchChapterText(blobUrl: string): Promise<string> {
 }
 
 /* ── internals ──────────────────────────────────────────────────── */
-
-function decodeByteString(raw: number[] | string | undefined): string {
-    if (!raw) return '';
-    if (typeof raw === 'string') return raw;
-    if (Array.isArray(raw)) {
-        return new TextDecoder().decode(new Uint8Array(raw));
-    }
-    return '';
-}
 
 function decodeBytesHex(raw: number[] | string | undefined): string {
     if (!raw) return '';

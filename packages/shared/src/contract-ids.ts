@@ -41,7 +41,7 @@ export interface EndlessStoryDeployment {
   dreamConfigId: string;
   dreamAdminCapId: string;
   stillRegistryId: string;
-  /** Shared TransferPolicy<Still> created at deploy time (no rules v1). Required for Kiosk purchase. */
+  /** shared TransferPolicy<Still>, created at deploy time via still::init. */
   stillTransferPolicyId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
