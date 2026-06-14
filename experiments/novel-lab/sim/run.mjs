@@ -113,13 +113,14 @@ async function ask(opts) {
 // Generate → 自檢 → (B 路徑) 抓到硬傷就指出、改寫一次。A 路徑只標記不改寫（呈現現況基準會出錯）。
 async function genAudited(label, askOpts, character, { regen = true } = {}) {
     const r1 = await ask(askOpts);
-    let text = (r1.text ?? '').trim();
+    // 確定性簡→繁：先轉再自檢，連審帶出庫都是繁體（修 log 第3回吐簡體）。
+    let text = M.toTraditional((r1.text ?? '').trim());
     let v = M.auditProse(text, character);
     log(`\n【自檢】${label}：${v.length === 0 ? '✓ 通過' : `✗ ${v.length} 項硬傷`}`);
     for (const x of v) log(`    - ${x}`);
     if (v.length > 0 && regen && !DRY) {
         const r2 = await ask({ ...askOpts, user: askOpts.user + '\n' + P.correctionNote(v) });
-        const t2 = (r2.text ?? '').trim();
+        const t2 = M.toTraditional((r2.text ?? '').trim());
         const v2 = M.auditProse(t2, character);
         log(`【自檢·改寫後】${label}：${v2.length === 0 ? '✓ 通過' : `✗ 仍有 ${v2.length} 項`}`);
         for (const x of v2) log(`    - ${x}`);
@@ -283,9 +284,13 @@ async function runTick() {
     // PHASE: RESOLVE (deterministic verdict)
     const res = M.resolveEvent(world);
     log('\n【RESOLVE】決定性判決');
-    log(`  ▶ ${res.verdict}`);
-    world.history.push({ day: world.day, text: res.verdict });
+    log(`  ▶ ${res.verdict}`); // 機制 log 可帶 token（debug）
+    // history 存乾淨敘事：它餵 recentDigest → PLAN/showrunner，再經 c.plan 進 POV。
+    // 存 token 版會讓〔守/攻〕從打算漏進正文（log 第4回江的打算就漏了〔守〕）。
+    world.history.push({ day: world.day, text: res.verdictNarrative });
     for (const line of M.applyDesireDecay(world, res)) log(`  · ${line}`);
+    // 行使即退場＋長出後繼標的（碟灌定→退場，長出銷路/風評之爭）
+    for (const line of M.exerciseRetire(world, res.resource)) log(`  ▶ ${line}`);
 
     // chapter numbering (ensemble book)
     world.chapterNo++;
@@ -301,13 +306,15 @@ async function runTick() {
     for (const id of ev.participantIds) {
         const c = world.cast.find((x) => x.id === id);
         world.perChar[id] = (world.perChar[id] ?? 0) + 1;
+        const recall = M.targetedRecall(world, id);
         // B context (redesigned method + 3 fixes)
         const ctxB = {
             character: c,
             bookTitle: BOOK_TITLE,
             chapterNo: world.perChar[id],
             arc,
-            privateLedger: M.targetedRecall(world, id),
+            privateLedger: recall.ledger,
+            privateLedgerRevealed: recall.alreadyRevealed,
             stakes: `這樁事爭的是：${world.resourceMeans[ev.resourceLabel]}`,
             turn: `${ev.label}。各人的姿態——${ev.participantIds.map((pid) => `${world.cast.find((x) => x.id === pid).name}：${M.gestureOf(ev.cards[pid].card, `${ev.id}:${pid}`)}`).join('；')}。`,
             outcome: res.verdictNarrative,
@@ -326,7 +333,7 @@ async function runTick() {
         };
         log('');
         hr('·');
-        log(`POV — ${c.name}（${c.role}）· 其個人書第 ${ctxB.chapterNo} 章　[召回私帳]「${ctxB.privateLedger}」`);
+        log(`POV — ${c.name}（${c.role}）· 其個人書第 ${ctxB.chapterNo} 章　[召回私帳${recall.alreadyRevealed ? '·回響' : ''}]「${ctxB.privateLedger}」`);
         hr('·');
         if (DRY) {
             if (COMPARE) {
@@ -370,7 +377,7 @@ async function runTick() {
             day: world.day,
             sceneName: ev.sceneName,
             eventLabel: ev.label,
-            outcome: res.verdict,
+            outcome: res.verdictNarrative, // 乾淨敘事，不帶卡牌 token
             povs,
         };
         if (DRY) {
@@ -394,6 +401,7 @@ async function runTick() {
         world.perChar[loser.id] = (world.perChar[loser.id] ?? 0) + 1;
         log('');
         section(`【餘波回】${loser.name} · 其個人書第 ${world.perChar[loser.id]} 章`);
+        const lrecall = M.targetedRecall(world, loser.id);
         const sctx = {
             character: loser,
             bookTitle: BOOK_TITLE,
@@ -402,8 +410,10 @@ async function runTick() {
             deltaType: '一個私下的決定',
             deltaNote: '輸了之後，他獨自消化，悄悄定下一件之後會結果的事',
             occasion: `散場後${loser.sceneId === 'sc_yunjin' ? '雲錦台只剩一盞燈' : '一個人留下'}，${loser.name}獨自待著（${loser.role}的習慣：${loser.role === '乾生' || loser.role === '坤生' ? '吊嗓 / 收拾行頭' : '收箱 / 算帳'}）`,
-            undercurrent: `今日「${ev.label}」的結果——${res.verdict}——還壓在心上；他嘴上不提，手上的活卻洩了底。`,
-            privateLedger: M.targetedRecall(world, loser.id),
+            // 餵乾淨的敘事結算（verdictNarrative），不是帶〔斬/攻〕token 的 debug verdict（修餘波每拍漏 token）。
+            undercurrent: `今日「${ev.label}」的結果——${res.verdictNarrative}——還壓在心上；他嘴上不提，手上的活卻洩了底。`,
+            privateLedger: lrecall.ledger,
+            privateLedgerRevealed: lrecall.alreadyRevealed,
             relationshipHints: M.relationshipHints(world, loser.id),
         };
         if (DRY) {
@@ -428,7 +438,7 @@ async function runTick() {
         const held = world.resources.filter((r) => r.holder === monoId).map((r) => M.resourceDisplay(r.label)).join('、');
         section(`【班主介入】沈雪笙裁奪（${monoName} 已攬下 ${held}）`);
         const situation = `${monoName}如今同時攥著${held}，全班的機會與情分都往他一人身上傾；柳生春與蘇映雪這對自幼相得的搭檔，眼看要被這場名利的爭奪硬拆開。`;
-        const ledger = M.targetedRecall(world, 'shen');
+        const ledger = M.targetedRecall(world, 'shen').ledger;
         if (DRY) {
             log('[SYSTEM]\n' + P.shenSystem());
             log('\n[USER]\n' + P.shenUser(shen, situation, ledger));
@@ -521,9 +531,10 @@ async function runTender() {
     for (const [c, other] of [[liu, su], [su, liu]]) {
         log('');
         hr('·');
-        log(`感情戲 POV — ${c.name}（${c.role}）　[私帳]「${M.targetedRecall(world, c.id)}」`);
+        const trecall = M.targetedRecall(world, c.id);
+        log(`感情戲 POV — ${c.name}（${c.role}）　[私帳${trecall.alreadyRevealed ? '·回響' : ''}]「${trecall.ledger}」`);
         hr('·');
-        const ctx = { character: c, other, occasion, undercurrent, privateLedger: M.targetedRecall(world, c.id) };
+        const ctx = { character: c, other, occasion, undercurrent, privateLedger: trecall.ledger, privateLedgerRevealed: trecall.alreadyRevealed };
         if (DRY) {
             log('[SYSTEM]\n' + P.tenderSystem());
             log('\n[USER]\n' + P.tenderUser(ctx));
@@ -556,7 +567,7 @@ async function runTender() {
     log(`總 tick：${world.tick}　LLM 呼叫：${llmCalls}　合本回數：${world.chapterNo}`);
     log('各角色個人書章數：' + Object.entries(world.perChar).map(([id, n]) => `${world.cast.find((c) => c.id === id).name}=${n}`).join('、'));
     log(`\n資源最終持有：`);
-    for (const r of world.resources) log(`  · ${r.label} → ${r.holder ? world.cast.find((c) => c.id === r.holder).name : '（無人）'}${r.locked ? '（班主鎖定）' : ''}`);
+    for (const r of world.resources) log(`  · ${r.label} → ${r.holder ? world.cast.find((c) => c.id === r.holder).name : '（無人）'}${r.locked ? '（班主鎖定）' : ''}${r.retired ? '（已退場）' : ''}`);
     if (BOOK) printBooks();
     log(`\n👉 log 已存到：${LOG_PATH}`);
     log('   把整份 log 貼回來，我比對「機制決策 + 私帳召回 + 弧線承接 + 實際文風」是否與推估一致。');

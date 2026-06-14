@@ -13,7 +13,21 @@ export const scenes = [
 
 // capacity-1 scarce slots (drama resources). holder = who currently owns it.
 export const resources = [
-    { label: 'recording:首張唱片灌錄權', capacity: 1, holder: null, display: '春雪社第一張唱片的灌錄權', framing: '誰的腔灌進春雪社第一張唱片', means: '誰的腔被刻進春雪社第一張碟、活得比戲台久' },
+    {
+        label: 'recording:首張唱片灌錄權', capacity: 1, holder: null,
+        display: '春雪社第一張唱片的灌錄權', framing: '誰的腔灌進春雪社第一張唱片',
+        means: '誰的腔被刻進春雪社第一張碟、活得比戲台久',
+        // 行使即退場：灌錄權被結算 2 次（授權→真正進棚灌定）後，碟已刻死，此爭結束；
+        // 不讓同一場錄音被反覆重爭重寫（log 第3回≈第6回的根因），改長出下游的銷路/風評之爭。
+        exercisable: true, retireAfterResolves: 2, exerciseNote: '碟已灌定，第一張唱片就此刻死',
+        successor: {
+            label: 'reputation:首張唱片的銷路風評',
+            display: '春雪社第一張唱片的銷路與風評',
+            framing: '春雪社頭一張碟，是紅遍上海還是砸在手裡',
+            means: '這張已灌定的碟，被捧成名片還是寫成笑話——誰說了算',
+            seekers: ['fang'], includeHolder: true, // 記者掌風評 + 腔在碟上的贏家
+        },
+    },
     // 被爭的是「蘇映雪的小生搭檔位」：柳生春現居此位，江聞鶴(乾生)來搶。蘇映雪是locus非競爭者。
     { label: 'partnership:蘇映雪', capacity: 1, holder: 'liu', display: '蘇映雪台上對戲的固定小生搭檔位', framing: '誰當蘇映雪台上對戲的固定小生搭檔', means: '誰當蘇映雪台上對戲的固定小生搭檔（柳生春現居此位、江聞鶴來搶）' },
     { label: 'spotlight:春雪社頭牌名額', capacity: 1, holder: null, display: '春雪社頭牌的名分', framing: '上海這季把誰捧成春雪社的頭牌', means: '上海這季把哪個名字捧成春雪社的頭牌' },

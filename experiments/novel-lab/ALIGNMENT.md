@@ -55,6 +55,20 @@
 
 ---
 
+## F. 第二輪 6-tick log 後的修正（sim 已驗，待對齊）
+
+> 第二份 full log 暴露的問題＋已在 sim 修好的解。對齊時併入對應的真實落點。
+
+| # | 問題（log 實證） | sim 的修法 | 真實代碼落點 | 狀態 |
+|---|---|---|---|---|
+| F1 | **唱片跑步機**：碟已灌定，灌錄權卻被反覆重爭，第3回≈第6回重寫同一場錄音 | **行使即退場＋長出後繼標的**：`exercisable`資源結算達`retireAfterResolves`次→retire＋依`successor`規格自動生下游標的（唱片→銷路風評），動態 seekers＝記者＋腔在碟上的贏家 | `event-spine`/資源生命週期（EVENT_LIFECYCLE §6）：scarce resource 加 `exercisable`+`successor`，結算 hook 觸發 retire＋instantiate（走 propose-resources 既有路徑） | ✅ 沙盒已驗 |
+| F2 | **簡繁混用**：第3回整段吐成簡體，auditProse 抓不到 | **確定性簡→繁轉換層**（`toTraditional`，無 LLM，~600 字表），生成後出庫前正規化 | `runner/services/narrative-audit.ts` 加一個純函式 normalize（或共用 opencc-data 子集）；在 POV/合本/餘波出庫前跑 | ✅ 沙盒已驗 |
+| F3 | **自檢髯口誤殺**：「不掛髯口」被判行當錯誤，regenerate 改不動、壞稿出庫 | beard 檢查改為**只抓非否定的提及**（前 4 字含 不/沒/未/無/莫/勿/別 即放行） | 併入 B1 `narrative-audit.ts` 的 beard rule | ✅ 沙盒已驗 |
+| F4 | **token 漏進正文**：餘波/合本餵 debug `verdict`（帶〔斬/攻〕）；且 `verdict` 進 history→PLAN→`c.plan`→POV，江的打算漏了〔守〕 | 餘波/合本改餵 `verdictNarrative`；history 改存 `verdictNarrative`（乾淨敘事餵 PLAN/showrunner） | `tick-loop.ts`：所有餵給寫作/plan/showrunner 的結算字串走翻譯層(A3)，debug token 串只留機制 log | ✅ 沙盒已驗 |
+| F5 | **弧線座標餵錯線**：T4 scandal 事件被餵唱片線座標（配不到就退回 lines[0]） | arcContext 改：內建 kind 關鍵字→標的 display 與各線 2-gram 重疊度→都配不到就用事件本身合成中性座標，**絕不借用無關的線** | 併入 A6：`tick-loop.ts` 取 arcPlan line 時用此匹配 | ✅ 沙盒已驗 |
+| F6 | **死線續命**：partnership 已被班主鎖定，showrunner 仍一路問「會不會排擠誰爭搭檔」 | showrunner prompt：現有標的標「已鎖定/已退場」者，對應線 state 收成「已定，不再爭」、nextPush 留空 | A6 的 showrunner（`director/tools.ts`）prompt + 餵入 locked/retired 狀態 | ✅ 沙盒已驗 |
+| F7 | **跨章複讀**：「連本帶利」「掌心冷了一層」「刻進黑膠」反覆；私帳「等得起」原句覆述 3 次 | ① 整本共用 anti-repeat **banlist** 餵各 system；② 私帳 **reveal-once 跨章**：`targetedRecall` 記已揭 index，全揭過則回響＋prompt 禁復述原句 | A7 延伸：banlist 進 prompt；reveal 狀態 per-char 存（先 process-local，後 relayer KV，同 A6 回數計數） | ✅ 沙盒已驗 |
+
 ## 對齊時的施工順序（最後一次性做）
 
 1. **純函式先搬**（零鏈、可單測）：A1/A2/A3/B1 → 直接成 `narrative-audit.ts` + prompt 改寫 + gesture/display map。
