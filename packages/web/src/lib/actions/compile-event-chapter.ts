@@ -28,6 +28,8 @@ export interface CompileEventChapterActionInput {
     povs?: EventCutPov[];
     /** Cast to fetch POVs for (standalone path). */
     castCharacterIds?: string[];
+    /** Saga peers with gender, for the self-check's pronoun rules on the woven cut. */
+    rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
     dryRun?: boolean;
 }
 
@@ -77,6 +79,7 @@ export async function compileEventChapterAction(
             day: input.day,
             povs: input.povs,
             castCharacterIds: input.castCharacterIds,
+            rosterPeople: input.rosterPeople,
             dryRun: input.dryRun,
             signer: input.dryRun
                 ? undefined

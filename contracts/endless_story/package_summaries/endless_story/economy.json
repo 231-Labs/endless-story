@@ -585,7 +585,25 @@
       "source_index": 15,
       "index": 15,
       "doc": " Storyteller creates the SagaPayrollConfig (one per saga, at bootstrap).",
-      "attributes": [],
+      "attributes": [
+        {
+          "Parameterized": [
+            "allow",
+            [
+              {
+                "Parameterized": [
+                  "lint",
+                  [
+                    {
+                      "Name": "self_transfer"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
+      ],
       "visibility": "Public",
       "entry": false,
       "type_parameters": [],

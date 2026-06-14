@@ -126,6 +126,7 @@ public struct DreamInjected has copy, drop {
 
 /// Storyteller creates the DreamConfig (one per saga, at bootstrap).
 /// Default price = 50 ENDLESS. Admin cap transferred to caller.
+#[allow(lint(self_transfer))]
 public fun create_config(
     cap: &StorytellerCap,
     saga: &Saga,
@@ -274,6 +275,8 @@ public fun dream_injected_at_ms(d: &Dream): u64 { d.injected_at_ms }
 // ─── tests ───────────────────────────────────────────────────────────
 
 #[test_only]
+use std::unit_test::destroy;
+#[test_only]
 use endless_story::world::{Self, World, AdminCap};
 #[test_only]
 use endless_story::currency;
@@ -310,7 +313,7 @@ fun setup(
     let (character, owner_cap) = character::mint_character_for_testing(ctx);
     let mut treasury = currency::new_treasury_for_testing(ctx);
     let coin = coin::mint(&mut treasury, 100_000_000, ctx);
-    sui::test_utils::destroy(treasury);
+    destroy(treasury);
     (world, admin_cap, saga, cap, character, owner_cap, coin)
 }
 
@@ -370,7 +373,7 @@ fun submit_dream_happy_path() {
 #[expected_failure(abort_code = EInsufficientPayment)]
 fun submit_dream_insufficient_payment_aborts() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, mut saga, cap, character, owner_cap, coin) = setup(&mut ctx, &clock);
     // Set price higher than the test coin (100M < 200M)
     let config = DreamConfig {
@@ -401,7 +404,7 @@ fun submit_dream_insufficient_payment_aborts() {
 #[expected_failure(abort_code = EDreamsPaused)]
 fun submit_dream_paused_aborts() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, mut saga, cap, character, owner_cap, coin) = setup(&mut ctx, &clock);
     let config = DreamConfig {
         id: object::new(&mut ctx),

@@ -56,7 +56,25 @@
       "source_index": 0,
       "index": 0,
       "doc": null,
-      "attributes": [],
+      "attributes": [
+        {
+          "Parameterized": [
+            "allow",
+            [
+              {
+                "Parameterized": [
+                  "lint",
+                  [
+                    {
+                      "Name": "share_owned"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
+      ],
       "visibility": "Private",
       "entry": false,
       "type_parameters": [],

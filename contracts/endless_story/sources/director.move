@@ -287,7 +287,7 @@ fun open_storylet_emits_event() {
 #[expected_failure(abort_code = EEmptyTemplateId)]
 fun open_storylet_rejects_empty_template() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, saga, cap) = setup_saga(&mut ctx, &clock);
 
     open_storylet(
@@ -307,7 +307,7 @@ fun open_storylet_rejects_empty_template() {
 #[test]
 fun attribute_pressure_applies() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, saga, cap) = setup_saga(&mut ctx, &clock);
 
     attribute_pressure(
@@ -329,7 +329,7 @@ fun attribute_pressure_applies() {
 #[expected_failure(abort_code = EDeltaOutOfRange)]
 fun attribute_pressure_rejects_out_of_range() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, saga, cap) = setup_saga(&mut ctx, &clock);
 
     attribute_pressure(
@@ -351,7 +351,7 @@ fun attribute_pressure_rejects_out_of_range() {
 #[expected_failure(abort_code = EBadAxis)]
 fun attribute_pressure_rejects_bad_axis() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, saga, cap) = setup_saga(&mut ctx, &clock);
 
     attribute_pressure(

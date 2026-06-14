@@ -311,6 +311,7 @@ public struct PayrollConfigUpdated has copy, drop {
 }
 
 /// Storyteller creates the SagaPayrollConfig (one per saga, at bootstrap).
+#[allow(lint(self_transfer))]
 public fun create_payroll_config(
     cap: &StorytellerCap,
     saga: &Saga,

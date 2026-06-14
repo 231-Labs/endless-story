@@ -28,6 +28,8 @@ import {
 } from '@endless-story/sdk';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { text as llmText } from '@endless-story/llm';
+import { toTraditional } from '@endless-story/shared';
+import { auditProse, correctionNote } from '../narrative-audit/index.js';
 import { resolveNetwork } from '../../infra/network.js';
 import { signAndAnchor } from '../../infra/sign-and-anchor.js';
 import {
@@ -74,6 +76,9 @@ export interface CompileEventChapterInput {
     povs?: EventCutPov[];
     /** Cast to fetch POVs for, when `povs` is omitted. */
     castCharacterIds?: string[];
+    /** Saga peers WITH gender, for the self-check's pronoun/kinship rules (the woven cut is
+     *  where female-他 errors surface). Omitted ⇒ only token-leak runs. No names hardcoded. */
+    rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
     /** Per-saga tonal DNA; derived from chain when omitted. */
     sagaSoul?: SagaSoul;
     /** Signer (StorytellerCap holder) for the chain anchor step. */
@@ -169,8 +174,37 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         maxTokens: 2200,
         temperature: 0.7,
     });
-    const chapter = response.text.trim();
+    const userPrompt = buildUserPrompt(context);
+    let chapter = toTraditional(response.text.trim());
     const povCount = countDistinctVoices(povs);
+
+    // Deterministic self-check (see narrative-audit). An ensemble cut has no single
+    // subject, so use a permissive subject (empty role ⇒ the craft layer — beard/play
+    // — stays quiet) and let only the mechanism-token + female-他 pronoun rules fire.
+    // POVs carry no gender (see EventCutPov), and we won't fabricate one, so the roster
+    // is empty ⇒ effectively only the token-leak check runs.
+    const subject = { name: '__cut__', role: '', gender: '' };
+    const roster = input.rosterPeople ?? [];
+    let violations = auditProse(chapter, subject, roster);
+    // Regen on ANY violation — pure LLM rewrite (no signer/chain). Sits before the dry-run
+    // early-return so both preview and anchor get the corrected, normalised text.
+    if (violations.length) {
+        errors.push(`audit: ${violations.length} 處硬傷，重織一次：${violations.join('；')}`);
+        const retry = await llm.chat({
+            model: modelId,
+            system: buildSystemPrompt(soul),
+            messages: [{ role: 'user', content: `${userPrompt}\n${correctionNote(violations)}` }],
+            maxTokens: 2200,
+            temperature: 0.7,
+        });
+        const rewritten = toTraditional(retry.text.trim());
+        const reViolations = auditProse(rewritten, subject, roster);
+        if (reViolations.length <= violations.length) {
+            chapter = rewritten;
+            violations = reViolations;
+        }
+        if (violations.length) errors.push(`audit: 重織後仍餘 ${violations.length} 處：${violations.join('；')}`);
+    }
 
     if (input.dryRun || !input.signer) {
         return {

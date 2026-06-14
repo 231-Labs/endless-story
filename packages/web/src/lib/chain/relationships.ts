@@ -83,6 +83,24 @@ async function aggregatePairs(characterId: string): Promise<PairAgg[]> {
 }
 
 /**
+ * Public wrapper over the private `aggregatePairs`: one entry per "other"
+ * character touching `characterId`, with the newest seeded tone and a repeat
+ * count (more seeds = stronger tie). Used by the tick loop to detect bonded
+ * co-present pairs for autonomous 溫情/關係戲 encounters. Returns [] on failure
+ * (relationships are additive context, never load-bearing).
+ */
+export async function fetchRelationshipPairs(
+    characterId: string,
+): Promise<{ otherId: string; tone: RelationshipTone; count: number }[]> {
+    return aggregatePairs(characterId).catch(() => []);
+}
+
+/** Chinese display label for a relationship tone (wraps the module TONE_ZH). */
+export function toneLabel(tone: RelationshipTone): string {
+    return TONE_ZH[tone] ?? TONE_ZH.neutral;
+}
+
+/**
  * Outgoing relationship edges for the dossier ProfileTab. Returns [] when
  * the character has no seeded ties (UI shows the empty state).
  */

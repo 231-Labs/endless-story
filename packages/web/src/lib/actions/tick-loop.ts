@@ -28,7 +28,9 @@ import { Transaction } from '@mysten/sui/transactions';
 import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
-import { runPovForCharacter, anchorPovChaptersBatch } from '@/lib/chain/pov-core';
+import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
+import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
+import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
@@ -130,6 +132,14 @@ const recentTopicsBySaga = new Map<string, string[]>();
  * (no talk / play / verdict) must not re-write the same scene every tick.
  */
 const lastPovEventByChar = new Map<string, string>();
+
+/**
+ * Last 溫情/關係戲 encounter pair (process-local), keyed by an order-independent
+ * pair key. Cooldown for the autonomous encounter sub-phase: we don't fire the
+ * SAME pair on consecutive ticks (the encounter would re-narrate the same quiet
+ * beat). Mirrors `lastPovEventByChar` above.
+ */
+let lastEncounterPair: string | undefined;
 
 function envFlag(name: string): boolean {
     const v = (process.env[name] ?? '').trim().toLowerCase();
@@ -723,6 +733,26 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.96 養關係 — MECHANICAL bond strengthening (no LLM, no director decision):
+    //   an ACCEPTED gift this tick deepens that pair's PUBLIC tie via one extra
+    //   relationship_seed, so the relationship graph grows from what characters
+    //   actually DO and encounters start favouring pairs who keep helping each
+    //   other. Owned-cap tx → pushed into the serial `cutJobs` (drained after the
+    //   POV batch / cuts / moments) so it can't race the StorytellerCap.
+    if (!dryRun) {
+        const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId);
+        if (bondPairs.length > 0) {
+            tlog(`②⁺ 養關係：${bondPairs.length} 對因接濟加深公開羈絆`);
+            cutJobs.push(async () => {
+                const r = await seedBondTies(bondPairs);
+                console.log(
+                    `[tick-loop] bond strengthen: seeded=${r.seeded}` +
+                        (r.error ? ` error=${r.error}` : ''),
+                );
+            });
+        }
+    }
+
     // 2.95 SETTLE — advance the off-chain economy to today (treasury-funded wages → cost →
     // vitality → death) and apply this tick's ACCEPTED gifts as real transfers. This is the rail
     // the GIVE phase's deferred gifts were waiting for; the shadow persists (process-local).
@@ -916,12 +946,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     dramaHint: dramaHints[c.id],
                     sceneBeats: sceneBeats.length > 0 ? sceneBeats : undefined,
                     rosterContext: rosterContextById.get(c.id),
-                    recentMemorySnippets: await memoryContext.recent(
-                        c.id,
-                        trigger,
-                        4,
-                        'pov',
-                    ),
+                    rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
+                    // Two recalls give the chapter both CONTINUITY and THICKNESS:
+                    //   · 'pov' (trigger query) — recent chapters/event memories so
+                    //     the serial picks up where it left off;
+                    //   · 'life' (LIFE_QUERY) — genesis-seeded non-work memories
+                    //     (childhood, family, old loves, the private ache) so even a
+                    //     work scene reads like a person with a life behind them.
+                    // We pass skipMemoryRecall so pov-core doesn't re-decrypt; the
+                    // tick owns recall (RECALL_CONCURRENCY-throttled SEAL budget).
+                    recentMemorySnippets: [
+                        ...new Set([
+                            ...(await memoryContext.recent(c.id, trigger, 4, 'pov')),
+                            ...(await memoryContext.recent(c.id, LIFE_QUERY, 2, 'life')),
+                        ]),
+                    ],
                     relationshipHints: await memoryContext.relationshipHints(c.id, 5),
                     planHint: await memoryContext.plan(c.id),
                     skipMemoryRecall: true,
@@ -1031,6 +1070,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 eventLabel: st.label,
                                 day: worldTime?.day,
                                 povs: cutPovs,
+                                rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
                             });
                             console.log(
                                 `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
@@ -1063,6 +1103,66 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     } else {
         tlog(`④ POV 略過（pov=false）`);
+    }
+
+    // 4.7 ENCOUNTER — ONE autonomous 溫情/關係戲 chapter per tick. Data-driven:
+    //   among the acting slice, find the strongest CO-PRESENT pair bonded by a
+    //   director-seeded relationship tone (relationships.ts). Cooldown skips the
+    //   same pair on consecutive ticks. We GENERATE dry here (like the POV phase),
+    //   then PUSH the anchor into the serial `cutJobs` background — never inline —
+    //   so the encounter's commitment::commit can't race the POV / cut / moment
+    //   owned-cap txs (single StorytellerCap, one version at a time). Pushed
+    //   BEFORE the after() block below so it joins the same serial drain.
+    if ((input.pov ?? true) && slice.length >= 2) {
+        try {
+            const pair = await pickEncounterPair(
+                slice,
+                (id) => rosterById.get(id)?.currentSceneId,
+                (id) => rosterById.get(id)?.name ?? nameById.get(id),
+            );
+            if (!pair) {
+                // no qualifying co-present bonded pair this tick — quiet skip.
+            } else if (lastEncounterPair === pair.pairKey) {
+                tlog(`④· 關係戲略過（冷卻：${pair.otherName}・${pair.toneZh} 同對連 tick）`);
+            } else {
+                const holder = slice.find((c) => c.id === pair.holderId);
+                const holderName = holder?.name ?? rosterById.get(pair.holderId)?.name ?? '某人';
+                const trigger = buildEncounterTrigger(pair, dayLabel);
+                const enc = await runPovForCharacter(admin, pair.holderId, {
+                    triggerNarrative: trigger,
+                    mode: 'encounter',
+                    forceRun: true,
+                    dryRun: true,
+                    rosterContext: rosterContextById.get(pair.holderId),
+                    rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
+                    relationshipHints: await memoryContext.relationshipHints(pair.holderId, 5),
+                });
+                if (enc.ok && enc.chapter?.trim()) {
+                    lastEncounterPair = pair.pairKey;
+                    tlog(
+                        `④· 關係戲：${holderName} ⇄ ${pair.otherName}（${pair.toneZh}・牽連 ${pair.count}）` +
+                            ` ✓ (${enc.chapter.length} 字)${dryRun ? '（預演，不上鏈）' : ''}`,
+                    );
+                    // Anchor in the BACKGROUND, serial with the other owned-cap jobs.
+                    if (!dryRun) {
+                        const chapter = enc.chapter;
+                        const holderId = pair.holderId;
+                        cutJobs.push(async () => {
+                            const a = await anchorPovChapter(admin, holderId, d.sagaId, chapter);
+                            console.log(
+                                `[tick-loop] encounter (${pair.toneZh}): anchored=${a.anchored}` +
+                                    (a.commitmentId ? ` commitment=${a.commitmentId}` : '') +
+                                    (a.error ? ` error=${a.error}` : ''),
+                            );
+                        });
+                    }
+                } else {
+                    tlog(`④· 關係戲略過（生成失敗${enc.error ? `：${enc.error}` : ''}）`);
+                }
+            }
+        } catch (err) {
+            console.warn('[tick-loop] encounter phase failed:', err);
+        }
     }
 
     // Run the captured background StorytellerCap jobs SERIALLY (moment → cut) in

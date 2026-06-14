@@ -17,6 +17,7 @@ const STEP_LABEL: Record<ReconcileStepName, string> = {
     appearance: '形貌',
     memory: '記憶',
     relationship: '關係',
+    prologue: '創世序章',
 };
 
 const STATUS_DOT: Record<ReconcileStatus, string> = {
