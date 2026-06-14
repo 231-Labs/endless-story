@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/types/index.ts",
-    "./contract-ids": "./src/contract-ids.ts"
+    "./contract-ids": "./src/contract-ids.ts",
+    "./role-rules": "./src/role-rules.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"
