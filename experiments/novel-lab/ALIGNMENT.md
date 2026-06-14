@@ -69,6 +69,29 @@
 | F6 | **死線續命**：partnership 已被班主鎖定，showrunner 仍一路問「會不會排擠誰爭搭檔」 | showrunner prompt：現有標的標「已鎖定/已退場」者，對應線 state 收成「已定，不再爭」、nextPush 留空 | A6 的 showrunner（`director/tools.ts`）prompt + 餵入 locked/retired 狀態 | ✅ 沙盒已驗 |
 | F7 | **跨章複讀**：「連本帶利」「掌心冷了一層」「刻進黑膠」反覆；私帳「等得起」原句覆述 3 次 | ① 整本共用 anti-repeat **banlist** 餵各 system；② 私帳 **reveal-once 跨章**：`targetedRecall` 記已揭 index，全揭過則回響＋prompt 禁復述原句 | A7 延伸：banlist 進 prompt；reveal 狀態 per-char 存（先 process-local，後 relayer KV，同 A6 回數計數） | ✅ 沙盒已驗 |
 
+## G. 產品化對齊：真實檔案落點（掃描已定位 2026-06-14）
+
+> 真實 pipeline＝`web/src/lib/actions/tick-loop.ts` 的九階段（ADVANCE→PLAN→MOVE→DRAMA→SOCIAL→ASK→GIVE→ACT→PRODUCE(POV)→REFLECT→NARRATE）。
+> 沙盒驗過的東西，照下表搬到對應服務。
+
+| 沙盒產物 | 真實服務／檔案 | subject · kind | 對齊動作 |
+|---|---|---|---|
+| **角色回 POV** | `runner/services/character-worker/{index,prompt}.ts`；anchor＝`web/lib/chain/pov-core.ts` | characterId · `pov` | B-prompt 取向(承上/推進/啟下·第一人稱·私帳揭一角) + banlist + reveal-once + craftSheet 併入 `prompt.ts`；自檢(`narrative-audit.ts`)+簡→繁 包在 `index.ts` 出庫前 |
+| **梨園回 event_cut** | `runner/services/event-chapter-compiler/{index,prompt,weave}.ts`；`web/lib/actions/compile-event-chapter.ts` | sceneId · `event_cut` | cutSystem 取向(不揭私帳·結尾 CTA·回目) + 簡繁/banlist/性別代詞 audit；`MIN_POVS_FOR_CUT=2` 已＝沙盒 |
+| **公報 gazette** | `runner/services/gazette-compiler/{index,prompt}.ts` | sagaId | 維持客觀日報；連結已改寫 `/feed/chapter/{commitmentId}`。沙盒沒做公報，這層照舊 |
+| **餘波回（新）** | 尚無——`character-worker` 加 `mode:'sequel'` 或新 `services/sequel-*` | characterId · `pov`(或新 `sequel`) | 觸發＝事件結算後的 loser、next tick；用沙盒 `sequelSystem` 模板（四選一 delta） |
+| **判決** | `web/lib/actions/tick-phases/act.ts` `deriveVerdict` | — | ⚠️**待確認落差**：真實似乎只「intent 升序＋最早提交」勝；沙盒加了**屬性加權＋持有者黏性+18＋冷卻2tick＋LRU**（這些正是破跑步機/破鬼打牆的關鍵）。要決定哪些移上鏈 |
+| **行使即退場＋後繼標的** | `propose-resources.ts`＋新增 `retire`；event-spine resolve hook | — | recording 類資源加 `exercisable/successor`；結算 hook 觸發 retire＋instantiate（走既有 propose 路徑、過守恆護欄） |
+| **私帳/反思** | `genesis-memory`(selfMemories)＋`reflection-trigger` | MemWal `reflection`/`memory` | 見下「反思編織」 |
+
+### 反思編織（回答「reflection 怎麼織進角色章回」）
+
+- **現況**：`reflection-trigger` 產的自述已寫回 MemWal（`kind='reflection'`，subject=characterId）；而 `character-worker` 本來就吃 `recentMemorySnippets`（MemWal recall）。兩端其實已經接得上。
+- **收斂洞見**：沙盒的 `privateLedger` + reveal-once **就是** prod reflection 的靜態版；reflection 是它的**動態升級**（會隨劇情長新內心、owner 還能注入問題）。
+- **方案 A（最小改動·推薦）**：寫某角 POV 前，`character-worker` 召回時**定向多撈該角最新 reflection**，當 `reflectionContext` 餵進 prompt 的「私帳/why」槽；沿用 reveal-once（已揭過只回響不複述）。→ 深度直接進正文、不改章回結構。owner 用 `ask_reflection` 主動問 → 下一回 POV 就帶著那層新內心。
+- **方案 B（加分）**：把 passive reflection 本身當一種「**自述回**」章回型別，與餘波回並列，gated 訂閱者讀。
+- **守私帳**：reflection 是 gated 內容，**只進角色版/自述回，絕不進梨園回/公報**（公開漏斗不揭 why）。
+
 ## 對齊時的施工順序（最後一次性做）
 
 1. **純函式先搬**（零鏈、可單測）：A1/A2/A3/B1 → 直接成 `narrative-audit.ts` + prompt 改寫 + gesture/display map。
