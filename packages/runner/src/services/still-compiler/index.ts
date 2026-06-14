@@ -7,53 +7,81 @@
  *   `maxPerEvent`; `alwaysClimax` guarantees at least the resolution beat.
  *
  * **Consistency rule (no face swap)** — composited img2img, never from scratch:
- *     Still = f( scene anchor (SceneGallery.anchor),
- *                [ each involved character's anchor portrait (chain image_url)
- *                  + physical_facts ],
- *                beat text (tick intent / scene-lines),
- *                heatProfile (cinnabar/jade/mute → palette · intensity) )
+ *   each still conditions on EVERY involved character's clean anchor portrait
+ *   (via `renderAnchoredImage`, the recipe shared with event-moment / curio),
+ *   so faces/builds don't drift. Heat tints palette + mood.
  *
- * **Output per still**: full-res (gated) + low-res/watermarked teaser (public,
- *   gazette headline + social). Stored in SceneGallery.moments as a BlobRef
- *   (kind='event_moment'); anchored via commitment::commit(subject=eventId,
- *   hint="still:beat<i>"). Becomes the keyframe for image-to-video (§4).
+ * **Output per still**: full-res blob, anchored on the content road
+ *   (`commitment::commit` subject=eventId, one PTB for the whole batch via
+ *   `signAndAnchorBatch`). Stored as an `EventStill` (→ SceneGallery.moments).
+ *   Teaser/watermark is a follow-up (teaserBlobId optional). Becomes the
+ *   keyframe for image-to-video (§4).
  *
- * R0: type-shell only (lands per CONTENT_PIPELINE §9).
+ * This file is the I/O wiring only: it provides the real OpenAI render + on-chain
+ * anchor defaults and delegates to the PURE `compileStills` in ./select.ts
+ * (where all the logic lives + is unit-tested).
  */
 
-import type { EventStill, SceneHeatProfile } from '@endless-story/shared';
+import type { Keypair } from '@mysten/sui/cryptography';
+import { signAndAnchorBatch } from '../../infra/sign-and-anchor.js';
+import { renderAnchoredImage } from '../content/render-anchored-image.js';
+import {
+    compileStills,
+    type CaptureStillsInput,
+    type CaptureStillsResult,
+    type StillRenderFn,
+    type StillAnchorFn,
+} from './select.js';
 
-export interface CaptureStillsInput {
-    sagaId: string;
-    /** Resolved event to capture stills for. */
-    eventId: string;
-    /** tx digest of the on-chain event — stamped into each still's provenance. */
-    eventTx?: string;
-    sceneId?: string;
-    /** Per-beat heat, ordered by beat index — drives the capture gate. */
-    beatHeat?: SceneHeatProfile[];
-    /** cinnabar threshold a beat must cross to be captured. */
-    tensionThreshold?: number;
-    /** Hard cap on stills per event (cost ceiling). */
-    maxPerEvent?: number;
-    /** Always capture the resolution beat even if no beat crosses threshold. */
-    alwaysClimax?: boolean;
-    /** Override image model. */
-    model?: string;
-    /** Dry-run: pick beats + build prompts but don't generate/anchor. */
-    dryRun?: boolean;
+export {
+    selectStillBeats,
+    buildStillPrompt,
+    heatPaletteHint,
+    compileStills,
+} from './select.js';
+export type {
+    CaptureStillsInput,
+    CaptureStillsResult,
+    StillRenderResult,
+    StillRenderFn,
+    StillAnchorFn,
+    CompileStillsDeps,
+} from './select.js';
+
+export interface RunOnceDeps {
+    /** Override the render step (default = chain anchors + OpenAI edit). */
+    render?: StillRenderFn;
+    /** Override the upload+anchor step (default = signAndAnchorBatch). */
+    anchor?: StillAnchorFn;
+    /** Signer for the default anchor (holds StorytellerCap). Required unless
+     *  `anchor` is provided or `dryRun` is set. */
+    signer?: Keypair;
+    now?: () => string;
 }
 
-export interface CaptureStillsResult {
-    /** Stills produced (full + teaser blobs, provenance-stamped). */
-    stills: EventStill[];
-    /** Beat indices selected for capture. */
-    capturedBeats: number[];
-    anchored: boolean;
-    skipReason?: 'no_event' | 'no_qualifying_beats';
-    errors?: string[];
-}
+/** I/O entry: wire the real render + anchor, then run the pure compiler. */
+export async function runOnce(
+    input: CaptureStillsInput,
+    deps: RunOnceDeps = {},
+): Promise<CaptureStillsResult> {
+    const render: StillRenderFn =
+        deps.render ??
+        ((args) =>
+            renderAnchoredImage({
+                characterIds: args.characterIds,
+                prompt: args.prompt,
+                model: input.model,
+            }));
 
-export async function runOnce(_input: CaptureStillsInput): Promise<CaptureStillsResult> {
-    throw new Error('still-compiler.runOnce: not yet implemented (see CONTENT_PIPELINE §9)');
+    const signer = deps.signer;
+    const anchor: StillAnchorFn | null =
+        deps.anchor ??
+        (signer
+            ? (items) =>
+                  signAndAnchorBatch(items, { signer }).then((rs) =>
+                      rs.map((r) => ({ blobId: r.blobId, commitmentId: r.commitmentId })),
+                  )
+            : null);
+
+    return compileStills(input, { render, anchor, now: deps.now });
 }

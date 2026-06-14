@@ -23,6 +23,15 @@ export * as characterAgent from './services/character-agent/index.js';
 export * as dream from './services/dream-pipeline/index.js';
 export { moderateDream } from './services/dream-pipeline/moderator.js';
 export * as video from './services/video-compiler/index.js';
+export * as stillCompiler from './services/still-compiler/index.js';
+
+// Shared content recipe (condition on character anchors → one image), reusable
+// by the still-compiler now and the curio generator later.
+export {
+    renderAnchoredImage,
+    type RenderAnchoredImageInput,
+    type RenderAnchoredImageResult,
+} from './services/content/render-anchored-image.js';
 
 export * from './types/index.js';
 

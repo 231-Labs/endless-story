@@ -121,7 +121,6 @@ export function ShopTab({ character }: { character: Character }) {
   );
 
   const curios = wares.filter((w) => w.kind === 'curio');
-  const stills = wares.filter((w) => w.kind === 'still');
   const stillChainReady = chainStatus?.chainReady ?? false;
 
   return (
@@ -158,39 +157,13 @@ export function ShopTab({ character }: { character: Character }) {
         </ul>
       </section>
 
-      {stills.length > 0 ? (
-        <section>
-          <div className="flex items-center gap-4">
-            <div className="h-px w-8 bg-cinnabar/40" />
-            <h2 className="font-serif text-2xl tracking-wide text-ink">戲坊 · 劇照</h2>
-          </div>
-          <ul className="mt-8 grid grid-cols-1 gap-6 pl-0 sm:grid-cols-2 sm:pl-12 lg:grid-cols-3">
-            {stills.map((w) => (
-              <WareCard
-                key={w.key}
-                ware={w}
-                owned={acquired[w.key]?.count ?? 0}
-                justBought={justBought === w.key}
-                chamberHref={chamberHref}
-                buying={buyingKey === w.key}
-                chainListing={stillChainReady}
-                onBuy={() => buy(w)}
-              />
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <p className="pl-0 text-2xs leading-relaxed tracking-widest text-mute/60 sm:pl-12">
+        劇照不在此重列 — 每一瞬都在「設定集 · 事件瞬間」就地收進藏閣。
         {stillChainReady ? (
-          <>
-            劇照走 Kiosk 鏈上交易（SUI 結帳）· 珍玩暫本地入藏。
-            {!account ? ' 購買劇照請先連結錢包。' : null}
-          </>
+          <> 上架後即走 Kiosk 鏈上交易（SUI 結帳）。{!account ? ' 購買請先連結錢包。' : null}</>
         ) : (
           <>
-            劇照版次帳本已接好 — redeploy 並設定 SHOP_KIOSK_ID / SHOP_KIOSK_CAP_ID 後，劇照改走
-            Kiosk；目前以本地入藏示範。
+            {' '}劇照版次帳本已接好 — redeploy 並設定 SHOP_KIOSK_ID / SHOP_KIOSK_CAP_ID 後改走 Kiosk。
             {chainStatus?.blockers.length ? (
               <span className="mt-1 block text-mute/50">待辦：{chainStatus.blockers.join(' · ')}</span>
             ) : null}

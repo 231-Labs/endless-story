@@ -1118,6 +1118,15 @@ public fun control_cap_saga_id(cap: &ControlCap): Option<ID> { cap.saga_id }
 
 public fun character_id(character: &Character): ID { object::id(character) }
 
+// ── economy.move support: package-visible UID accessors ──────────────
+// Let the sibling `economy` module attach/read a per-character wallet
+// (`Balance<CURRENCY>` dynamic field) on the Character's UID without touching
+// the Character struct or its constructors. Mirrors scene::uid / scene::uid_mut
+// (consumed by chamber.move the same way). Package-visible only — no external
+// module can reach the raw UID.
+public(package) fun uid(character: &Character): &UID { &character.id }
+public(package) fun uid_mut(character: &mut Character): &mut UID { &mut character.id }
+
 public fun control_epoch(character: &Character): u64 { character.control_epoch }
 
 public fun world_id(character: &Character): ID { character.state.world_id }
@@ -1446,6 +1455,14 @@ public fun mint_character_for_testing(ctx: &mut TxContext): (Character, OwnerCap
         cumulative_revenue: 0,
     };
     (character, owner_cap)
+}
+
+/// Bind a test character to a saga (sets `state.saga_id`). Lets cross-module
+/// tests (e.g. economy_test) exercise saga-bound paths without the full
+/// recruit/redeem ceremony.
+#[test_only]
+public fun bind_saga_for_testing(character: &mut Character, saga_id: ID) {
+    character.state.saga_id = option::some(saga_id);
 }
 
 #[test_only]

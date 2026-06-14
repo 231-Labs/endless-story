@@ -12,4 +12,5 @@ export * as recruitmentsApi from './recruitments';
 export * as soulSongsApi from './soulSongs';
 export * as memoriesApi from './memories';
 export * as personasApi from './personas';
+export * as appearanceApi from './appearance';
 export * as liveStateApi from './liveState';

@@ -14,6 +14,7 @@ const STEP_LABEL: Record<ReconcileStepName, string> = {
     views: '設定集',
     tags: '標籤',
     persona: '本色',
+    appearance: '形貌',
     memory: '記憶',
     relationship: '關係',
 };

@@ -8,6 +8,7 @@ import type { BlobRef, Character } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, read, tx as endlessTx } from '@endless-story/sdk';
 import { txUrl } from '@/lib/explorer';
 import {
+  appearanceSummary,
   blobKey,
   buildSettingImages,
   defaultBlobLabel,
@@ -16,13 +17,24 @@ import {
   type LightboxItem,
 } from './gallery/helpers';
 import { DerivativeCard, EventMomentCard, Lightbox } from './gallery/components';
+import {
+  acquireWare,
+  loadAcquired,
+  stillWareFromMoment,
+  type AcquiredMap,
+} from '@/lib/chamber/shop-catalog';
 
 export function GalleryTab({
   character,
   isOwner,
+  appearanceDesc = null,
 }: {
   character: Character;
   isOwner: boolean;
+  /** Distilled 形貌 prose from the content road (generated at mint). When present
+   *  it's the rich appearance paragraph; null → fall back to the structured facts
+   *  / a mock's hand-written physicalFacts. */
+  appearanceDesc?: string | null;
 }) {
   const router = useRouter();
   const account = useCurrentAccount();
@@ -46,6 +58,24 @@ export function GalleryTab({
   );
   const eventMoments = character.gallery.eventMoments ?? [];
   const canSetCover = isOwner || account?.address === character.nftOwner;
+  const appearance = useMemo(() => appearanceSummary(character), [character]);
+  // chain 形貌 (rich, evolves with the portrait) wins; else a mock's hand-written
+  // physicalFacts prose; else nothing (just the structured facts line).
+  const appearanceProse = appearanceDesc ?? appearance.prose;
+
+  // 收藏到藏閣 (demo-local) — a moment is collected as a 劇照 here, where it
+  // lives, instead of being re-listed in 戲坊. Mirrors ShopTab's acquire flow
+  // so the 藏閣 inventory dedups by the same ware key.
+  const [acquired, setAcquired] = useState<AcquiredMap>({});
+  useEffect(() => {
+    setAcquired(loadAcquired());
+  }, []);
+  const collectMoment = useCallback(
+    (moment: BlobRef, index: number) => {
+      setAcquired(acquireWare(stillWareFromMoment(character, moment, index)));
+    },
+    [character],
+  );
 
   // One flat list spanning both sections — the lightbox pages through all of them.
   const lightboxItems = useMemo<LightboxItem[]>(() => {
@@ -131,10 +161,18 @@ export function GalleryTab({
   return (
     <div className="space-y-20">
       <section>
-        <div className="flex items-center gap-4">
-          <div className="h-px w-8 bg-cinnabar/40" />
-          <h2 className="font-serif text-2xl tracking-wide text-ink">角色設定集</h2>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+          <div className="flex items-center gap-4">
+            <div className="h-px w-8 bg-cinnabar/40" />
+            <h2 className="whitespace-nowrap font-serif text-2xl tracking-wide text-ink">形貌</h2>
+          </div>
+          <p className="pl-12 text-xs tracking-widest text-mute/70 sm:pl-0">{appearance.facts}</p>
         </div>
+        {appearanceProse ? (
+          <p className="mt-6 pl-0 text-base leading-loose text-ink/80 sm:pl-12 sm:text-lg sm:leading-loose">
+            {appearanceProse}
+          </p>
+        ) : null}
         <div className="mt-8 pl-0 sm:pl-12">
           {/* Wrapping grid (not a horizontal carousel) so EVERY setting image is
               visible at once — the old overflow-x scroller hid items 5+ off-screen
@@ -194,6 +232,7 @@ export function GalleryTab({
               {eventMoments.map((blob, i) => {
                 const key = blobKey(blob);
                 const isCover = !!blob.imageUrl && blob.imageUrl === coverUrl;
+                const wareKey = stillWareFromMoment(character, blob, i).key;
                 return (
                   <li key={key}>
                     <EventMomentCard
@@ -203,7 +242,10 @@ export function GalleryTab({
                       isCover={isCover}
                       isOwner={canSetCover}
                       pending={pendingCoverKey === key}
+                      canCollect={!!blob.imageUrl}
+                      collected={(acquired[wareKey]?.count ?? 0) > 0}
                       onSetCover={() => setCover(blob)}
+                      onCollect={() => collectMoment(blob, i)}
                       onOpen={() => openLightbox(blob)}
                     />
                   </li>

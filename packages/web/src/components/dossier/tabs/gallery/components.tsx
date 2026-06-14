@@ -52,7 +52,10 @@ export function EventMomentCard({
   isCover,
   isOwner,
   pending,
+  collected,
+  canCollect,
   onSetCover,
+  onCollect,
   onOpen,
 }: {
   character: Character;
@@ -61,7 +64,12 @@ export function EventMomentCard({
   isCover: boolean;
   isOwner: boolean;
   pending: boolean;
+  /** already in the viewer's 藏閣 (demo-local). */
+  collected: boolean;
+  /** this moment has an image to collect as a 劇照. */
+  canCollect: boolean;
   onSetCover: () => void;
+  onCollect: () => void;
   onOpen: () => void;
 }) {
   return (
@@ -89,6 +97,19 @@ export function EventMomentCard({
         ) : (
           <span />
         )}
+        {canCollect ? (
+          collected ? (
+            <span className="text-2xs tracking-widest text-cinnabar">已入藏閣 ✦</span>
+          ) : (
+            <button
+              type="button"
+              onClick={onCollect}
+              className="rounded-full border border-cinnabar/50 bg-cinnabar/10 px-3 py-1 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/20"
+            >
+              收進藏閣 · 劇照
+            </button>
+          )
+        ) : null}
       </div>
     </article>
   );

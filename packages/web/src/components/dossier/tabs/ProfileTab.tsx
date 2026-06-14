@@ -79,16 +79,36 @@ export function ProfileTab({
         </section>
 
         <SoulSection persona={persona} regenChapter={personaRegenChapter} />
+        {/* 外貌設定 moved into 設定集·形貌 (where the appearance images live);
+            the standalone text block here was the bare body word + redundant
+            with 敘描 and the 外貌 trait. */}
 
+        {/* 關係 promoted out of the cramped sidebar into a roomy descriptive
+            section — fills the left column (which 外貌設定 used to occupy) and
+            gives each bond's narrative summary space to read. */}
         <section>
           <div className="flex items-center gap-4">
             <div className="h-px w-8 bg-cinnabar/40" />
-            <h2 className="font-serif text-2xl tracking-wide text-ink">外貌設定</h2>
+            <h2 className="font-serif text-2xl tracking-wide text-ink">關係</h2>
           </div>
           <div className="mt-8 pl-0 sm:pl-12">
-            <p className="text-base leading-loose text-ink/85 sm:text-lg sm:leading-loose">
-              {character.physicalFacts}
-            </p>
+            {bondRows.length === 0 ? (
+              <p className="text-base leading-loose text-mute">
+                尚未對誰留下顯著的記憶 — 戲還沒搭起來。
+              </p>
+            ) : (
+              <ul className="grid gap-5 sm:grid-cols-2">
+                {bondRows.map((row) => (
+                  <RelationshipRow
+                    key={row.key}
+                    out={row.out}
+                    inc={row.inc}
+                    target={charactersById.get(row.partnerId) ?? null}
+                    fallbackName={row.partnerId}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
         </section>
       </div>
@@ -189,27 +209,6 @@ export function ProfileTab({
             </div>
           </section>
         </div>
-
-        <div className="es-card p-6 sm:p-8">
-          <section>
-            <h3 className="font-serif text-lg tracking-widest text-ink text-center">關係</h3>
-            {bondRows.length === 0 ? (
-              <p className="mt-8 text-sm leading-relaxed text-mute text-center">尚未對誰留下顯著的記憶。</p>
-            ) : (
-              <ul className="mt-8 space-y-6">
-                {bondRows.map((row) => (
-                  <RelationshipRow
-                    key={row.key}
-                    out={row.out}
-                    inc={row.inc}
-                    target={charactersById.get(row.partnerId) ?? null}
-                    fallbackName={row.partnerId}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
       </aside>
     </div>
   );
@@ -286,7 +285,7 @@ function RelationshipRow({
   const mutual = !!(out?.tone && inc?.tone && out.tone === inc.tone);
 
   return (
-    <li>
+    <li className="rounded-2xl border border-hairline/70 bg-surface/40 p-5 dark:bg-elevated/30">
       {/* 第一行：名字（連結到 dossier）+ 此人所感（→）；互相同感標 ⇄ */}
       <div className="flex items-baseline justify-between gap-2">
         {target ? (

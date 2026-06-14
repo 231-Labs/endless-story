@@ -9,6 +9,7 @@ export * from './recruitment';
 export * from './soulSong';
 export * from './memory';
 export * from './persona';
+export * from './appearance';
 export * from './liveState';
 export * from './magnetism';
 export * from './story';

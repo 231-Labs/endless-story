@@ -117,6 +117,17 @@ pnpm -r type-check                            # 全 repo 綠燈確認
     - **AI 模型升級**：`CURATE_MODEL` 預設從 `glm-4.7-flash` → `GLM-4.7-FlashX`（修 HTTP 429 過載）。
   - **⬜ Slice 3 (next)**：展品 Kiosk 交易（在場景內列出 / 購入 / 撤架，接 `still.move` 版次帳本，紅絹價籤 UI）。
   - **⬜ Slice 4**：鏈上佈局保存（`chamber::decorate` server action，工具列「鏈上保存」按鈕 — 待 redeploy 後接通）。
+- **`economy.move` D1 預驗完成（2026-06-14）— money module，已 `sui move test` 綠，可安心 ride 一次性 redeploy**：把已驗證的純函式經濟核心（`packages/economy/src`）移植上鏈。**Layer 1（守恆核心）**：每個 Character 掛 lazy-init 的 `Balance<CURRENCY>` 錢包（dynamic field `CharacterWalletKey`）＋ `owner_fund_character`（挹注，OwnerCap-gated）＋ `transfer_between_characters`（接濟，ControlCap `is_valid` gated，7 道守衛照 `transfer.ts` 原序、net-0 守恆）。**Layer 2（發薪/結算）**：`credit_salary`（金庫→錢包，StorytellerCap＋saga↔角色綁定）、`collect_daily_cost`（錢包→`ProtocolSink` 真 Balance，回傳 insolvent）、`SagaPayrollConfig`（被動設定 + `PayrollAdminCap`）。**審計 must-fix 全落地**：`accrue_owner_revenue` 砍掉（OwnerCap 玩家持有，StorytellerCap settle 拿不到 `&mut OwnerCap`，owner 入金歸 D2 estate sweep）、`credit_salary`/`collect_daily_cost` 都加 saga↔角色 assert、ProtocolSink 持真 Balance、`#[test_only] drain_wallet_for_testing`（拆 DF 才能 `object::delete`）。**`contracts` 120/120 綠**（既有 98 + economy 22）。**已知限制**：死亡角色錢包資金在 D2 estate sweep 前不可達（`transfer` 擋 `is_dead(from)`）—— 已文件化＋測試（`stranded_funds_on_dead_wallet`）。剩：web give/settle 把 deferred 影子翻成真鏈上扣加（D5 adapter，redeploy 後接）。
+- **still-compiler 解 stub（2026-06-14）— `runOnce` 不再 throw**：`select.ts`（純自包含、全單測）= `selectStillBeats`（熱度 gate：cinnabar 過閾值、`maxPerEvent` 上限、`alwaysClimax` 釘住結局 beat）＋ `buildStillPrompt`/`heatPaletteHint` ＋ `compileStills`（編排，render/anchor 注入）；`index.ts`（I/O 薄殼）注入真 OpenAI render + `signAndAnchorBatch` 上鏈。共用 recipe `renderAnchoredImage`（從 event-moment 抽出「以角色 anchor 立繪 condition 出一張圖」）—— 珍玩生成（v2）會複用。**runner 64/64 綠**。坑：node 23.7 native strip-types 不解析 runtime `.js`→`.ts`，故被測模組須自包含（只 `import type`）—— 編排放純 `select.ts`、I/O 留 `index.ts`。
+- **角色形貌（appearance）off-chain pipeline 落地（2026-06-14）**：鏈上 `physical_facts` 只存 `{gender, age, body 列舉}`，dossier 舊「外貌設定」只顯示 body 單字（孱弱/勻稱）＝太薄。改：mint 時 `generateAppearanceAction`（鏡像 `generatePersonaAction`）蒸餾一段形貌散文 → 存 Walrus + `commitment::commit`（subject `sha256(id+":appearance")`，零合約改動）；`設定集·形貌` chain-first 讀，退回結構化事實行。**刻意 off-chain + versioned**：外貌會隨年齡/戲妝變，不該進精簡的鏈上身份錨（version++ 重錨＝自然形貌時間線）。redeem/reconcile after() 都接了。
+- **dossier IA 整合（2026-06-14）**：外貌設定→併入「設定集·形貌」當引文（圖文互補）；戲坊去重（事件瞬間＝戲坊劇照同一批圖 → 移除戲坊重列，收藏動作搬到瞬間卡）；履歷「關係」從窄側欄搬到主欄詳述卡（修外貌設定移除後的左右不對稱）。
+- **redeploy 快照 clobber 修復（部分）**：`stillTransferPolicyId` 介面欄位 main 已修；**但 `bootstrap.ts` 仍把它 clobber 成 `''`**（bootstrap 重寫整份 snapshot 卻沒傳這欄）—— 本分支的 `bootstrap.ts` 補上 `stillTransferPolicyId: deployment.stillTransferPolicyId`，否則 deploy 抓到的 policy id 會被 bootstrap 洗掉、Kiosk 劇照交易永遠上不了鏈。
+
+> **⚠️ 一次性 redeploy「必帶清單」（原子單位，缺一就要等下一次部署）**：
+> 1. `economy.move`（新模組）＋ `character.move` 的 `public(package) uid/uid_mut`（掛錢包 DF 必需）＋ `saga.move` 的 `public(package) split_treasury_for_payroll`（金庫發薪必需）—— **這三檔綁死**，economy.move 不能單獨上。
+> 2. 先前已寫待部署：`still.move` 的 `TransferPolicy<Still>`、`chamber.move` PersonalVault（`create_personal_vault`/`save_layout`）、`recruit` 兩段式 `RedeemIntent`、當前 `event.move`（`new_card_template` 等）。
+> 3. `bootstrap.ts` 的 `stillTransferPolicyId` clobber 修復（上一條）要先進，redeploy 後 snapshot 才正確。
+> deploy 後跑 codegen 生 economy/chamber/curio? SDK 綁定 → web give/settle 才能翻成真鏈上 Balance 進出。redeploy 前用 `sui move test`（120/120）＋ move-auditor gate；money module 不能裸上。
 
 ### 已驗證 / 已知限制
 
@@ -246,7 +257,7 @@ packages/
 |---|---|---|---|
 | **S** | **Runner demo acceptance** | 已做 cache/backoff/default=1/UI 顯示；剩顧/柳/孟 2 tick 真跑驗證、確認第二輪 POV 召回第一輪 SOCIAL memory、檢查 SOCIAL memory 不寫未授權重設定 | 0.5–1d |
 | **D** | **部署策略落地** | web 已上自架 VPS；剩 relayer + world-loop 服務化、設定 `MEMWAL_SERVER_URL`、tick secret、pause control；按 `docs/DEPLOYMENT.md` 跑 smoke | 1–2d |
-| **E** | **角色經濟產品化 Part D** | GIVE/ASK/SETTLE phase 已進 tick-loop；剩 D1 `economy.move` 鏈上轉帳 + relayer KV 持久化 + accept/refuse 升 LLM；若 demo 時間不夠可先保留 shadow | 1–2d |
+| **E** | **角色經濟產品化 Part D** | GIVE/ASK/SETTLE phase 已進 tick-loop；**D1 `economy.move` 已寫＋`sui move test` 綠（待 redeploy ride 上鏈）**；剩 redeploy 後把 give/settle 影子翻成真 Balance 進出（D5 adapter）+ relayer KV 持久化 + accept/refuse 升 LLM | redeploy + 0.5–1d |
 | **C3** | **藏閣 Slice 3：展品 Kiosk 交易** | 在場景內建紅絹價籤（`KioskCard`）、接 `still.move` 版次帳本 `listing / purchaseAndResolve / withdraw`；demo-local 先 mock，接通後才鏈上 | 2–3d |
 | **C4** | **藏閣 Slice 4：鏈上佈局保存** | `chamber::decorate` server action + 工具列「鏈上保存」按鈕（現在顯示「待部署」）；需先 redeploy 合約 | 1d post-redeploy |
 | **I** | **Web i18n** | `next-intl` framework + 抽既有文案 + LocaleToggle + `romanize-name`（中文 → 拼音） | 2–3d |

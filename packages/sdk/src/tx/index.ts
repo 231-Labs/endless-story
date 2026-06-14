@@ -34,3 +34,4 @@ export * as event from './event.js';
 export * as resource from './resource.js';
 export * as still from './still.js';
 export * as chamber from './chamber.js';
+export * as economy from './economy.js';

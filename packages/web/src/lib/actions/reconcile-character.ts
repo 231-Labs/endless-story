@@ -22,9 +22,11 @@ import { generatePortrait } from './generate-portrait.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 import { generatePersonaAction } from './generate-persona.js';
+import { generateAppearanceAction } from './generate-appearance.js';
 import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
 import { assessAndApplyRelationshipsAction } from './assess-relationships.js';
 import { fetchOnChainPersona } from '../chain/persona-read.js';
+import { fetchOnChainAppearance } from '../chain/appearance-read.js';
 import { resolveRole } from '../chain/pov-core.js';
 import { getMemoryCount } from '../chain/memory-counter.js';
 import { getAdminContext } from '../chain/admin-signer.js';
@@ -40,7 +42,7 @@ const ATTR_LABEL: Record<string, string> = {
 /** kind=6 setting_sheet marks "additional gallery views were generated". */
 const SETTING_SHEET_KIND = 6;
 
-export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'memory' | 'relationship';
+export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'appearance' | 'memory' | 'relationship';
 export type ReconcileStatus = 'ok' | 'skip' | 'fail';
 
 export interface ReconcileStep {
@@ -220,6 +222,19 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
         const r = await generatePersonaAction(characterId);
         steps.push({
             step: 'persona',
+            status: r.ok ? 'ok' : 'fail',
+            detail: r.ok ? `v${r.version}` : r.error ?? r.skipped,
+        });
+    }
+
+    // ── 4.5) 形貌 appearance (sibling of persona; own commitment subject) ──
+    const hasAppearance = (await fetchOnChainAppearance(characterId).catch(() => null)) != null;
+    if (hasAppearance) {
+        steps.push({ step: 'appearance', status: 'skip', detail: 'has_appearance' });
+    } else {
+        const r = await generateAppearanceAction(characterId);
+        steps.push({
+            step: 'appearance',
             status: r.ok ? 'ok' : 'fail',
             detail: r.ok ? `v${r.version}` : r.error ?? r.skipped,
         });
