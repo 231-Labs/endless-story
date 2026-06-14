@@ -80,7 +80,7 @@
 | **梨園回 event_cut** | `runner/services/event-chapter-compiler/{index,prompt,weave}.ts`；`web/lib/actions/compile-event-chapter.ts` | sceneId · `event_cut` | cutSystem 取向(不揭私帳·結尾 CTA·回目) + 簡繁/banlist/性別代詞 audit；`MIN_POVS_FOR_CUT=2` 已＝沙盒 |
 | **公報 gazette** | `runner/services/gazette-compiler/{index,prompt}.ts` | sagaId | 維持客觀日報；連結已改寫 `/feed/chapter/{commitmentId}`。沙盒沒做公報，這層照舊 |
 | **餘波回（新）** | 尚無——`character-worker` 加 `mode:'sequel'` 或新 `services/sequel-*` | characterId · `pov`(或新 `sequel`) | 觸發＝事件結算後的 loser、next tick；用沙盒 `sequelSystem` 模板（四選一 delta） |
-| **判決** | `web/lib/actions/tick-phases/act.ts` `deriveVerdict` | — | ⚠️**待確認落差**：真實似乎只「intent 升序＋最早提交」勝；沙盒加了**屬性加權＋持有者黏性+18＋冷卻2tick＋LRU**（這些正是破跑步機/破鬼打牆的關鍵）。要決定哪些移上鏈 |
+| **判決** | `web/lib/actions/tick-phases/act.ts` `deriveVerdict`（已核實：純 intent 升序＋最早提交，**無**屬性加權/持有者黏性/冷卻） | — | **已拍板：移植持有者黏性＋冷卻上鏈**。沙盒已驗：持有者+18 + 冷卻2tick 是破跑步機/鬼打牆的關鍵；對齊時在 resolve 計分加 holder bonus、在 spine/event-planner 加冷卻。屬性加權＝次要，可後議 |
 | **行使即退場＋後繼標的** | `propose-resources.ts`＋新增 `retire`；event-spine resolve hook | — | recording 類資源加 `exercisable/successor`；結算 hook 觸發 retire＋instantiate（走既有 propose 路徑、過守恆護欄） |
 | **私帳/反思** | `genesis-memory`(selfMemories)＋`reflection-trigger` | MemWal `reflection`/`memory` | 見下「反思編織」 |
 

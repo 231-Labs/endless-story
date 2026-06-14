@@ -540,41 +540,57 @@ async function showrunner() {
     }
 }
 
-// ── 感情戲測試：柳生春 × 蘇映雪 · 同一刻兩個視角，測 LLM 抓不抓得到「愛而不得」──
-async function runTender() {
-    const liu = world.cast.find((c) => c.id === 'liu');
-    const su = world.cast.find((c) => c.id === 'su');
-    const occasion =
-        '散戲後，雲錦台只剩一盞燈。衣箱唐桂蘭回了鄉下，今夜沒人收拾。柳生春替蘇映雪卸下頭面，又蹲身替她重繫一條鬆了的水袖。';
-    const undercurrent =
-        '兩人都隱隱覺出，彼此之間那份情，早已遠超台上的生旦、也遠超師姐妹該守的分寸；可誰也不敢先說破——都怕一旦點破，連這樣安安靜靜守在一處，都再守不成了。';
-    section('【感情戲測試】柳生春 × 蘇映雪 · 愛而不得（同一刻，兩個視角）');
-    log(`場合：${occasion}`);
-    log(`暗流：${undercurrent}`);
-    for (const [c, other] of [[liu, su], [su, liu]]) {
-        log('');
-        hr('·');
-        const trecall = M.targetedRecall(world, c.id);
-        log(`感情戲 POV — ${c.name}（${c.role}）　[私帳${trecall.alreadyRevealed ? '·回響' : ''}]「${trecall.ledger}」`);
-        hr('·');
-        const ctx = { character: c, other, occasion, undercurrent, privateLedger: trecall.ledger, privateLedgerRevealed: trecall.alreadyRevealed };
-        if (DRY) {
-            log('[SYSTEM]\n' + P.tenderSystem());
-            log('\n[USER]\n' + P.tenderUser(ctx));
-            continue;
+// ── 關係戲測試：泛用兩人關係戲（同一刻兩個視角）。
+//    柳×蘇＝愛而不得；連×沈＝後輩追慕＋名角蒼涼（讓沈雪笙真正登一次場、收連翹那條線）。
+const BONDS = [
+    {
+        title: '柳生春 × 蘇映雪 · 愛而不得',
+        a: 'liu', b: 'su',
+        relation: '愛而不得——兩人那份情早超過台上生旦、也超過師姐妹該守的分寸，可誰也不敢先說破，怕一點破連這樣安靜相守都沒了。',
+        occasion: '散戲後，雲錦台只剩一盞燈。衣箱唐桂蘭回了鄉下，今夜沒人收拾。柳生春替蘇映雪卸下頭面，又蹲身替她重繫一條鬆了的水袖。',
+        undercurrent: '兩人都隱隱覺出那份情遠超生旦與師姐妹的分寸；可誰也不敢先說破——都怕一旦點破，連這樣安安靜靜守在一處，都再守不成了。',
+    },
+    {
+        title: '連翹 × 沈雪笙 · 追慕與蒼涼',
+        a: 'lian', b: 'shen',
+        relation: '後輩的追慕撞上名角的蒼涼——十幾年前連翹看過沈雪笙在台心唱坤生的那道光，是衝著她投的春雪社；如今沈封了箱、坐二樓不再開嗓。連翹想看清那道光的下落；沈認得這眼神（當年她也這樣望著台心），卻把話按住，不願被這後輩看穿自己當年為何收了聲。',
+        occasion: '夜深，連翹收完靠旗，繞到二樓包廂——頭一回與班主沈雪笙單獨照面。沈手邊擱著那只停了的懷錶。連翹沒話找話，替她把翻倒的茶盅擺正。',
+        undercurrent: '連翹想問當年那道光為何滅了；沈把話按在喉底——有些事一旦說出口，連這點班主的體面、連這後輩眼裡那點光，都保不住了。',
+    },
+];
+async function runEncounters() {
+    for (const bond of BONDS) {
+        const ca = world.cast.find((c) => c.id === bond.a);
+        const cb = world.cast.find((c) => c.id === bond.b);
+        if (!ca || !cb) continue;
+        section(`【關係戲測試】${bond.title}（同一刻，兩個視角）`);
+        log(`場合：${bond.occasion}`);
+        log(`暗流：${bond.undercurrent}`);
+        for (const [c, other] of [[ca, cb], [cb, ca]]) {
+            log('');
+            hr('·');
+            const rec = M.targetedRecall(world, c.id);
+            log(`關係戲 POV — ${c.name}（${c.role}）　[私帳${rec.alreadyRevealed ? '·回響' : ''}]「${rec.ledger}」`);
+            hr('·');
+            const ctx = { character: c, other, relation: bond.relation, occasion: bond.occasion, undercurrent: bond.undercurrent, privateLedger: rec.ledger, privateLedgerRevealed: rec.alreadyRevealed };
+            if (DRY) {
+                log('[SYSTEM]\n' + P.encounterSystem());
+                log('\n[USER]\n' + P.encounterUser(ctx));
+                continue;
+            }
+            try {
+                const t = await genAudited(`關係戲·${c.name}`, { tier: 'primary', system: P.encounterSystem(), user: P.encounterUser(ctx), maxTokens: 2600, temperature: 0.95 }, c, { regen: true });
+                log(t);
+                pushBook(c.id, `關係戲 · 與${other.name}（${bond.title.split('·')[1]?.trim() ?? ''}）`, t);
+            } catch (e) { log(`(關係戲失敗 ${e.message})`); }
         }
-        try {
-            const t = await genAudited(`感情戲·${c.name}`, { tier: 'primary', system: P.tenderSystem(), user: P.tenderUser(ctx), maxTokens: 2600, temperature: 0.95 }, c, { regen: true });
-            log(t);
-            pushBook(c.id, `感情戲 · 與${other.name}（愛而不得）`, t);
-        } catch (e) { log(`(感情戲失敗 ${e.message})`); }
     }
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
 (async () => {
     if (TENDER) {
-        await runTender();
+        await runEncounters();
         section('完成');
         log(`LLM 呼叫：${llmCalls}`);
         printCostSummary();
@@ -586,7 +602,7 @@ async function runTender() {
         await runTick();
         if (SHOWRUNNER_EVERY > 0 && (t + 1) % SHOWRUNNER_EVERY === 0) await showrunner();
     }
-    if (WITH_TENDER) await runTender();
+    if (WITH_TENDER) await runEncounters();
     section('完成');
     log(`總 tick：${world.tick}　LLM 呼叫：${llmCalls}　合本回數：${world.chapterNo}`);
     log('各角色個人書章數：' + Object.entries(world.perChar).map(([id, n]) => `${world.cast.find((c) => c.id === id).name}=${n}`).join('、'));
