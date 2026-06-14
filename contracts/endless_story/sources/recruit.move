@@ -940,7 +940,7 @@ fun sample_attributes(): vector<AttributeValue> {
 #[test]
 fun mint_voucher_deposits_payment_and_emits() {
     let mut ctx = tx_context::dummy();
-    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    let clock = sui::clock::create_for_testing(&mut ctx);
     let (world, admin_cap, mut saga, storyteller_cap, scene) = setup_world_saga_scene(
         &mut ctx,
         &clock,
@@ -975,7 +975,7 @@ fun mint_voucher_deposits_payment_and_emits() {
 #[test]
 fun redeem_voucher_mints_character_and_consumes_voucher() {
     let mut ctx = tx_context::dummy();
-    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    let clock = sui::clock::create_for_testing(&mut ctx);
     let (world, admin_cap, mut saga, storyteller_cap, mut scene) = setup_world_saga_scene(
         &mut ctx,
         &clock,
@@ -1221,7 +1221,7 @@ fun check_requirements_passes_when_all_match() {
 #[test, expected_failure(abort_code = EReqsNotMet)]
 fun redeem_aborts_when_requirements_unmet() {
     let mut ctx = tx_context::dummy();
-    let mut clock = sui::clock::create_for_testing(&mut ctx);
+    let clock = sui::clock::create_for_testing(&mut ctx);
     let (world, admin_cap, mut saga, storyteller_cap, mut scene) = setup_world_saga_scene(
         &mut ctx,
         &clock,

@@ -228,6 +228,15 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 
 **順序心法**:N1(角色能動性)→ N2/N3(讓決策有記憶+關係依據)→ N4(串成迴圈)→ N5/N6(導演自動化+規劃)→ 即達 C。
 
+> **敘事品質 / 世界生長層(沙盒已驗,待一次性對齊真實代碼)**:N1-N7 解決「迴圈會自己跑」,
+> 但**文字夠不夠好看、世界會不會長出新衝突軸**是另一條正交的工作線,已在
+> `experiments/novel-lab/sim`(解耦 tick 模擬器,純 Node 零鏈,用真 LLM 跑)中驗證。已驗機制:
+> 翻譯層(機制 token→人話才進 prompt)、行當本色卡、結構化代價、定向私帳召回、arcContext 接筆、
+> 一致性自檢 lint(`auditProse`)、餘波回 / 溫情戲(非競爭章回)、班主介入(破壟斷)、D5 showrunner
+> 開/退標的(世界長新衝突軸)。**這些尚未進真實代碼**——對齊施工圖(每條沙盒機制→真實落點+狀態)
+> 見 [experiments/novel-lab/ALIGNMENT.md](../experiments/novel-lab/ALIGNMENT.md);策略是
+> 全部先在 sim 驗、最後一次性照表搬。動敘事 craft / 世界推進前先讀那份帳本,別重新摸索。
+
 **剩餘(達 C 後的打磨)**:
 - **N5b** ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,可能動 contract)。
 - ~~獨立 CLI~~ ✅:`web POST /api/tick`(headless 執行一 tick,選擇性 `TICK_LOOP_SECRET` 鑑權)
@@ -306,6 +315,8 @@ recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEA
 - tick loop:`packages/runner/src/`(新 orchestrator)+ web SchedulerPanel(手動驅動)
 - 舊版參照(只讀,挑 idea 不照搬):`/Users/harperdelaviga/Endless-Story/packages/runner/src/`
   {decision,memory,sleep,relationships,event-loop}/
+- 敘事 craft 沙盒(已驗待對齊):`experiments/novel-lab/sim/`(模擬器)+
+  `experiments/novel-lab/ALIGNMENT.md`(沙盒機制 → 真實落點對照帳本,§8 末有摘要)
 
 ---
 

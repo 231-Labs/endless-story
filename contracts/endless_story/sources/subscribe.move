@@ -184,9 +184,9 @@ fun unsubscribe_with_mismatched_character_aborts() {
     // Set up two unrelated characters; subscribe to A then try to
     // unsubscribe with B's reference — should abort.
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (mut char_a, cap_a) = setup_wild(&mut ctx);
-    let (mut char_b, cap_b) = setup_wild(&mut ctx);
+    let (char_b, cap_b) = setup_wild(&mut ctx);
 
     subscribe(&mut char_a, &clock, &mut ctx);
 
