@@ -137,13 +137,13 @@ async function genAudited(label, askOpts, character, { regen = true } = {}) {
     const r1 = await ask(askOpts);
     // 確定性簡→繁：先轉再自檢，連審帶出庫都是繁體（修 log 第3回吐簡體）。
     let text = M.toTraditional((r1.text ?? '').trim());
-    let v = M.auditProse(text, character);
+    let v = M.auditProse(text, character, world);
     log(`\n【自檢】${label}：${v.length === 0 ? '✓ 通過' : `✗ ${v.length} 項硬傷`}`);
     for (const x of v) log(`    - ${x}`);
     if (v.length > 0 && regen && !DRY) {
         const r2 = await ask({ ...askOpts, user: askOpts.user + '\n' + P.correctionNote(v) });
         const t2 = M.toTraditional((r2.text ?? '').trim());
-        const v2 = M.auditProse(t2, character);
+        const v2 = M.auditProse(t2, character, world);
         log(`【自檢·改寫後】${label}：${v2.length === 0 ? '✓ 通過' : `✗ 仍有 ${v2.length} 項`}`);
         for (const x of v2) log(`    - ${x}`);
         if (v2.length <= v.length) text = t2;

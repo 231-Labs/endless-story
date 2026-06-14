@@ -23,7 +23,7 @@
 
 | # | 沙盒機制 | 真實代碼落點 | 狀態 |
 |---|---|---|---|
-| B1 | **一致性 lint**：行當↔性別↔道具↔戲碼↔代詞↔機制token；只查明確女性代詞，坤生「他」放行 | 新 `runner/services/narrative-audit.ts`（純函式，可單測） | ✅ |
+| B1 | **一致性 lint**：行當↔性別↔道具↔戲碼↔代詞↔機制token；只查明確女性代詞，坤生「他」放行。**規則全資料驅動**：行當規矩來自「行當表」`craft.mjs`（CRAFTS/PLAY_KINDS/BEARD_WORDS）、人名/性別規則來自 cast——換行當只改表、加角色只改 cast，零寫死角色名 | 新 `runner/services/narrative-audit.ts`（純函式可單測）＋ `shared` 放 craft 表（與 prompt 行當卡共用）；cast 帶 `craft/line/crossDress/gender` | ✅ |
 | B2 | **生成→自檢→改寫一次**：抓到硬傷把違反項回灌、重生一次 | 包在 POV/合本/餘波生成處（`character-worker` / `event-chapter-compiler` 呼叫端） | ✅ |
 
 ## C. 非競爭章回（日常/溫情/餘波）

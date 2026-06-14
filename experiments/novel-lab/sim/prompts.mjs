@@ -8,37 +8,33 @@
  * No-fabrication guardrails are ported from the real character-worker prompt.
  */
 
-// ── 行當本色卡（預防層）：把行當/性別/道具規矩餵進 prompt，從源頭防硬傷 ──
-// 行當＝craft（小生/花旦/…）；乾(男)/坤(女)只是演員性別，不是兩種行當；小生再細分文/武。
-const XIAOSHENG_BASE =
-    '你的行當是【小生】（年輕男性角色）。乾生＝男演員、坤生＝女演員，**同屬小生一個行當，差別只在演員性別**，戲路與硬規矩完全一樣。【硬規矩】小生俊扮，絕不掛髯口/鬍鬚；不演老生戲（定軍山/烏盆記/捉放曹等）；不勾花臉。';
+// ── 行當本色卡（預防層）：行當規矩從 craft.mjs 那張表來，與自檢共用同一份資料。
+// 換行當只改 craft.mjs；這裡只負責把表轉成餵 prompt 的人話。乾(男)/坤(女)＝演員性別，非行當。
+import { craftDef } from './craft.mjs';
 function lineNote(line) {
     if (!line) return '';
     if (line.includes('武')) return '你偏武小生（翎子生/雉尾生一路，重靠把、開打、身段），但「俊扮無鬚」的小生硬規矩不變。';
     return '你偏文小生（巾生/扇子生·書生，重唱念做表，許仙、書生一路），俊扮無鬚。';
 }
-const CRAFT_SHEETS = {
-    花旦: '你是花旦（女）：演年輕女子（小姐、丫鬟、白素貞一類）。第三人稱一律用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
-    青衣: '你是青衣（女）：演端莊女子。第三人稱用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
-    刀馬旦: '你是刀馬旦（女·旦行武戲）：穿靠、使槍、翻身亮相，重靠把與開打。第三人稱一律用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
-    班主: '你是班主沈雪笙（女，前坤生名角，封箱多年），多在二樓不常登台。第三人稱用「她」。',
-};
 // 顯示用行當標籤：有 craft 就顯示「行當（演員性別標籤·文武）」，例 小生（坤生·文小生）。
 export function roleLabel(c) {
     if (!c.craft || c.craft === c.role) return c.role;
     return `${c.craft}（${c.role}${c.line ? '·' + c.line : ''}）`;
 }
 export function craftSheet(c) {
+    const def = craftDef(c);
     const craft = c.craft ?? c.role;
-    if (craft === '小生' || c.role === '坤生' || c.role === '乾生') {
-        const female = c.gender === '女';
-        const who = female
+    const pron = c.gender === '女' ? '第三人稱用「她」' : '第三人稱用「他」';
+    if (craft === '小生') {
+        const who = c.gender === '女'
             ? '你是**坤生**（女演員的小生·女兒身反串少年男子）；台上扮男、戲文裡才是男角；第三人稱敘述一律用「她」。'
               + (c.crossDress ? '台下你也慣著男裝、把那身男兒相當成真正的自己（這是你的人設，不是行當規矩）。' : '')
             : '你是**乾生**（男演員的小生）；第三人稱用「他」。';
-        return [XIAOSHENG_BASE, who, lineNote(c.line)].filter(Boolean).join(' ');
+        const base = `你的行當是【小生】（年輕男性角色）。乾生＝男演員、坤生＝女演員，**同屬小生一個行當，差別只在演員性別**。${def.desc ?? ''}`;
+        return [base, who, lineNote(c.line)].filter(Boolean).join(' ');
     }
-    return CRAFT_SHEETS[craft] ?? `你的行當是「${craft}」。敘述、道具、戲碼、第三人稱代詞都必須與此行當與你的性別（${c.gender}）相符。`;
+    if (def.desc) return `你的行當是【${craft}】：${def.desc} ${pron}`;
+    return `你的行當是「${craft}」。敘述、道具、戲碼、第三人稱代詞都必須與此行當與你的性別（${c.gender}）相符。`;
 }
 // ── 改寫指令（修正層）：自檢抓到硬傷時，把違反項回灌，要求改寫 ──
 export function correctionNote(violations) {

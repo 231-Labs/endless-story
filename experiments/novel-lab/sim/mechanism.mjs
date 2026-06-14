@@ -4,6 +4,7 @@
  * intents, + the three wiring fixes (structured cost, targeted secret recall,
  * arcContext/chapter numbering). NO LLM here — pure decisions + framing.
  */
+import { craftDef, PLAY_KINDS, BEARD_WORDS } from './craft.mjs';
 
 /* ── 確定性 簡→繁 轉換層（無 LLM）──
  * GLM 偶爾整段吐成簡體（log 第3回）。auditProse 抓不到簡繁，這裡在出庫前統一正規化。
@@ -587,10 +588,11 @@ export function buildSceneBeats(world, sceneId, selfId) {
     return beats;
 }
 
-/* ── 自檢步驟 (NARRATIVE_AGENTS 缺口)：行當/性別/道具/機制 token 一致性 lint ──
- * 純規則、零成本、低誤報；違反項回給 run.mjs 觸發「指出硬傷→改寫一次」。 */
-const NO_BEARD_ROLES = ['坤生', '乾生', '小生', '花旦', '旦', '青衣', '刀馬旦', '武旦'];
-const BEARD_RE = /髯口|三髯|黲髯|白滿|黑三|掛髯|鬍鬚|鬍子|鬍髭|絡腮鬍|髭|鬚口/g;
+/* ── 自檢步驟：行當/性別/道具/機制 token 一致性 lint ──
+ * 純規則、零成本、低誤報。**規則全由資料推導**：行當規矩來自 craft.mjs 的行當表，
+ * 人名/性別規則來自 world.cast——換行當只動 craft.mjs、加角色只動 cast，自檢自動跟上，
+ * 不再寫死任何角色名。違反項回給 run.mjs 觸發「指出硬傷→改寫一次」。 */
+const BEARD_RE = new RegExp(BEARD_WORDS.join('|'), 'g');
 // 只在「非否定」的鬍鬚提及才算違規：「不掛髯口／沒戴鬍鬚／絕不掛髯」是正確描寫，放行。
 function beardViolation(text) {
     BEARD_RE.lastIndex = 0;
@@ -601,36 +603,39 @@ function beardViolation(text) {
     }
     return false;
 }
-const LAOSHENG_PLAY_RE = /定軍山|烏盆記|捉放曹|碰碑|搜孤救孤|空城計|轅門斬子|文昭關|斬經堂|四郎探母|武家坡|大登殿|二進宮|洪羊洞|失街亭|戰太平|李陵碑/;
 const TOKEN_RE = /〔[斬攻誘守觀讓]〕/;
 // 任何 <ascii-kind>:<中文> 形狀都算機制 label 洩漏（含 director 新標的）。
 const RAWLABEL_RE = /[a-z][a-z0-9_]{2,}:[一-鿿]/;
+// 「他」緊接這些被動/介詞/交互動詞/體標記後＝受詞，指別人，不算把女角誤用成「他」。
+const COVERB = '被讓叫使令給跟向和與同替為陪找問看盯瞧望喚求勸罵著了過';
 
-export function auditProse(text, c) {
+export function auditProse(text, c, world) {
     const v = [];
     if (TOKEN_RE.test(text)) v.push('機制 token 洩漏：正文出現卡牌符號〔斬/攻/…〕，應改寫成可觀察的動作');
     if (RAWLABEL_RE.test(text)) v.push('機制 token 洩漏：正文出現資源原始標籤（recording:/partnership:/…），應用人話');
-    if (c && NO_BEARD_ROLES.includes(c.role) && beardViolation(text)) {
-        const kindNote = c.role.includes('生') ? '小生是俊扮' : '旦行';
-        v.push(`行當錯誤：${c.name}是${c.role}（${kindNote}），絕不掛髯口/鬍鬚——髯口屬老生/淨`);
+
+    // 行當規矩：全由行當表（craft.mjs）推導——換行當只需改那張表。
+    const def = craftDef(c);
+    if (c && def.beard === false && beardViolation(text)) {
+        v.push(`行當錯誤：${c.name}（${c.role}）俊扮無鬚，正文不該出現鬍鬚/髯口（髯口屬老生/淨）`);
     }
-    if (c && NO_BEARD_ROLES.includes(c.role)) {
-        const m = text.match(LAOSHENG_PLAY_RE);
-        if (m) v.push(`戲碼錯誤：「${m[0]}」是老生戲，非${c.role}應工`);
+    for (const kind of def.forbidKinds ?? []) {
+        const hit = (PLAY_KINDS[kind] ?? []).find((p) => text.includes(p));
+        if (c && hit) v.push(`戲碼錯誤：「${hit}」是${kind}戲，非${c.role}應工`);
     }
-    // 本班無「師兄/師哥」：蘇映雪為師姐(女)、柳生春為師妹。出現即稱謂/性別錯亂。
-    if (/師哥|師兄/.test(text)) v.push('稱謂錯誤：本班無師兄；蘇映雪是師姐(女)、柳生春是師妹，勿用師哥/師兄');
-    // 性別代詞：只查「明確女性」(蘇映雪/沈雪笙/連翹/唐桂蘭)。
-    // 柳生春是坤生、活在男裝裡，別人以「柳爺/他」稱她合理，不查。
-    // 只在「他」確實被當成該女性的代詞時才報；下列情況是別的男性、放行：
-    //   ① 名與「他」之間出現別的男性指涉（柳/江/方/何）→「他」多半指他們；
-    //   ② 「他」緊接在被動/介詞/交互動詞後（被他/讓他/向他/找他…）→「他」是受詞、指別人。
-    const FEMALE_NAMES = ['蘇映雪', '沈雪笙', '連翹', '唐桂蘭'];
-    const MALE_REF = '柳江方何'; // 在場可被「他」指涉的男性（含著男裝的柳）
-    const COVERB = '被讓叫使令給跟向和與同替為陪找問看盯瞧望喚求勸罵著了過';
-    for (const name of FEMALE_NAMES) {
-        const re = new RegExp(`${name}(?:(?![${MALE_REF}。？！\\n])[\\s\\S]){0,8}?(?<![${COVERB}])他(?!們)`);
-        if (re.test(text)) v.push(`性別代詞錯誤：${name}是女性，第三人稱應用「她」`);
+
+    // 性別代詞 + 稱謂：全由 cast 推導（加新角色自動跟上；著男裝者 crossDress 自動放行）。
+    if (world?.cast?.length) {
+        const females = world.cast.filter((x) => x.gender === '女' && !x.crossDress).map((x) => x.name);
+        // 「他」可能指涉的男性（含著男裝的女角）→ 取其姓，名與「他」之間若出現這些姓就放行
+        const maleRef =
+            [...new Set(world.cast.filter((x) => x.gender === '男' || x.crossDress).map((x) => x.name[0]))].join('') || ' ';
+        for (const name of females) {
+            const re = new RegExp(`${name}(?:(?![${maleRef}。？！\\n])[\\s\\S]){0,8}?(?<![${COVERB}])他(?!們)`);
+            if (re.test(text)) v.push(`性別代詞錯誤：${name}是女性，第三人稱應用「她」`);
+            if (new RegExp(`${name}[\\s\\S]{0,6}師[兄哥]|師[兄哥][\\s\\S]{0,6}${name}`).test(text))
+                v.push(`稱謂錯誤：${name}是女性，應稱師姐/師妹，不可稱師兄/師哥`);
+        }
     }
     return [...new Set(v)];
 }
