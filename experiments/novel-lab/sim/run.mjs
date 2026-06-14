@@ -37,6 +37,7 @@ const NO_SEQUEL = Boolean(flag('no-sequel', false));
 const SHOWRUNNER_EVERY = Number(flag('showrunner-every', 1));
 const HAND_SIZE = Number(flag('hand', 3));
 const SEED = Number(flag('seed', 7));
+const NO_GENESIS = Boolean(flag('no-genesis', false)); // 預設跑創世序章（楔子＋每人自述）；--no-genesis 關掉
 const REFLECT = Boolean(flag('reflect', false)); // 方案A：寫 POV 前先生內心反思當底稿
 const TENDER = Boolean(flag('tender', false));
 const WITH_TENDER = Boolean(flag('with-tender', false)); // 跑完競爭迴圈後，附一場柳蘇感情戲
@@ -602,6 +603,62 @@ async function runEncounters() {
     }
 }
 
+// ── 創世序章（世界誕生時跑一次，非 tick）：preset/劇本層資料 + 楔子 + 每人自述 ──
+// WORLD_PREMISE / INCOMING / STANDING 屬「這個故事」的設定，產品層來自 preset，非引擎。
+const WORLD_PREMISE =
+    '民初的上海灘，十里洋場，留聲機與電燈方興。春雪社是新從外碼頭闖進上海的戲班，在雲錦台掛牌唱《白蛇傳》一路戲。班裡生旦俱全，台柱相得，正盼著在這花花世界站穩腳跟。';
+const INCOMING =
+    '洋人的百代唱片公司盯上了春雪社，要灌這班頭一張唱片——這在梨園是破天荒頭一遭。誰的腔被刻進那張黑碟，誰的聲音就活得比戲台久。灌錄權給誰，風聲剛傳到後台，還沒見分曉。';
+const STANDING = {
+    liu: '春雪社的坤生台柱，與花旦蘇映雪是同科坐科、拆不散的固定搭檔；台上她做許仙，她做白娘子。',
+    su: '春雪社的花旦台柱，工青衣，與坤生柳生春同台多年，水乳交融。',
+    jiang: '新從紹興男班北上的乾生，台步老辣、嗓門硬，是來搶小生戲路與搭檔位的勁敵。',
+    lian: '京班、雜技場轉來的刀馬旦，半路投春雪社，能穿靠使槍、翻身亮相。',
+    shen: '春雪社的班主，前坤生名角，封箱多年，如今坐二樓包廂審報算賬、不再開嗓。',
+    fang: '四馬路小報副刊的寫手兼唱片掮客，筆桿藏刀，這幾日在春雪社周圍打轉。',
+};
+function standingOf(c) {
+    return STANDING[c.id] ?? `${c.name}，春雪社的${P.roleLabel(c)}。`;
+}
+async function runGenesis() {
+    section('創世序章（楔子＋每人自述 · 世界誕生時生成一次）');
+    // 角色版序章：給會有連載的角色（有渴望者，或班主/記者）。各算其個人書第 1 篇。
+    const ids = world.cast.filter((c) => c.desires.length > 0 || ['班主', '記者'].includes(c.role)).map((c) => c.id);
+    for (const id of ids) {
+        const c = world.cast.find((x) => x.id === id);
+        world.perChar[id] = (world.perChar[id] ?? 0) + 1;
+        log('');
+        hr('·');
+        log(`序章·自述 — ${c.name}（${P.roleLabel(c)}）· 其個人書第 ${world.perChar[id]} 篇`);
+        hr('·');
+        const ctx = { character: c, standing: standingOf(c), world: WORLD_PREMISE, incoming: INCOMING };
+        if (DRY) {
+            log('[SYSTEM]\n' + P.genesisSelfSystem());
+            log('\n[USER]\n' + P.genesisSelfUser(ctx));
+            continue;
+        }
+        try {
+            const t = await genAudited(`序章·${c.name}`, { tier: 'primary', system: P.genesisSelfSystem(), user: P.genesisSelfUser(ctx), maxTokens: 2400, temperature: 0.9 }, c, { regen: true });
+            log(t);
+            pushBook(id, '序章 · 入世自述', t);
+        } catch (e) { log(`(序章·自述失敗 ${e.message})`); }
+    }
+    // 梨園版楔子：群像 establishing，排在合本最前。
+    section('序章·梨園版楔子（合本之前的開場戲）');
+    const roster = world.cast.map((c) => `- ${c.name}（${P.roleLabel(c)}）：${standingOf(c)}`).join('\n');
+    const ectx = { world: WORLD_PREMISE, roster, incoming: INCOMING };
+    if (DRY) {
+        log('[SYSTEM]\n' + P.genesisEnsembleSystem());
+        log('\n[USER]\n' + P.genesisEnsembleUser(ectx));
+    } else {
+        try {
+            const t = await genAudited('序章·楔子', { tier: 'primary', system: P.genesisEnsembleSystem(), user: P.genesisEnsembleUser(ectx), maxTokens: 3000, temperature: 0.9 }, { name: '__楔子__', craft: '小生', gender: '男' }, { regen: true });
+            log(t);
+            world.sagaBook.push({ chapterNo: 0, text: t }); // 楔子排梨園版最前（chapterNo 0）
+        } catch (e) { log(`(序章·楔子失敗 ${e.message})`); }
+    }
+}
+
 // ── main ─────────────────────────────────────────────────────────────────────
 (async () => {
     if (TENDER) {
@@ -613,6 +670,7 @@ async function runEncounters() {
         log('   把整份貼回來，我看 LLM 有沒有抓到柳蘇「愛而不得」、是否兩個視角都成立。');
         return;
     }
+    if (!NO_GENESIS) await runGenesis(); // 創世序章：開在第一個事件之前，立常態＋埋引線
     for (let t = 0; t < TICKS; t++) {
         await runTick();
         if (SHOWRUNNER_EVERY > 0 && (t + 1) % SHOWRUNNER_EVERY === 0) await showrunner();
