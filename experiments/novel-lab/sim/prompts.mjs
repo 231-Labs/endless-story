@@ -69,7 +69,7 @@ export function povSystem() {
         '你可以寫如何看見、誤讀、回應，但不可寫成沒發生或換人做。但材料裡明確發生的轉折，你不但可以寫、必須寫。',
         '',
         '**質地**：民初梨園舊白話；情緒用動作與停頓承載，不用大詞（崩潰/撕裂/瘋狂/燃燒等）；對白只引材料給的台詞。',
-        '600–1000 字，4–7 段。純散文，直接進正文，不要標題、不要「以下是」。',
+        '900–1400 字，5–8 段。寧可把一個場面寫透（多一層動作、多一句潛台詞、多一拍停頓），也不要趕。純散文，直接進正文，不要標題、不要「以下是」。',
     ].join('\n');
 }
 
@@ -167,7 +167,7 @@ export function sequelSystem() {
         banlistLine(),
         '不捏造：客觀台詞只引材料給的；不發明重大新事實。',
         '視角：**全程第一人稱「我」**，限定主角（單角色章回一律第一人稱；第三人稱只留給多視角合本）。遵守材料的【行當本色】。',
-        '質地：民初梨園舊白話，情緒克制。600–900 字，純散文直接進正文。',
+        '質地：民初梨園舊白話，情緒克制。800–1200 字，純散文直接進正文。',
     ].join('\n');
 }
 
@@ -215,7 +215,7 @@ export function cutSystem() {
         '**避免套語**：別反覆用「按兵不動／冷眼看準破綻／一身風采壓住全場／穩得像座山」這類詞；同樣的姿態每回換不同的具體動作寫。',
         banlistLine(),
         '5. 第一行是回目：`## 第 {N} 回　{七到十二字上聯}　{下聯}`，點出張力不劇透收場。',
-        '   正文 4–6 段，約 600–900 字。純 markdown，從 `## ` 開始，不要 fence。',
+        '   正文 5–7 段，約 900–1300 字。純 markdown，從 `## ` 開始，不要 fence。',
     ].join('\n');
 }
 
@@ -243,12 +243,13 @@ export function cardSystem() {
     ].join('\n');
 }
 
-export function cardUser(c, eventLabel, stakes, hand) {
+export function cardUser(c, eventLabel, stakes, hand, roster) {
     const handLines = hand.map((cd) => `- ${cd}：${CARD_GESTURE_TEXT[cd] ?? ''}`).join('\n');
     return [
         `# 你是 ${c.name}（${c.role}）`,
         `秘密：${c.secret}`,
         `當下打算：${c.plan}`,
+        roster ? `\n# 同班花名冊（誰是誰，認準了別認錯）\n${roster}` : '',
         '',
         `# 這樁事：${eventLabel}`,
         `賭注：${stakes}`,
@@ -309,7 +310,7 @@ export function tenderSystem() {
         '2. 靠潛台詞、停頓、欲言又止、一個多停的眼神、一次該收回卻沒收回的手——不要直白告白。',
         '3. 這一回結束時，兩人之間「那層沒說破的東西」要有一個極輕微的移動：更近一寸、或更怕了一分、或第一次都意識到了卻又一起繞開。',
         '4. 限定主角視角，**全程第一人稱「我」**（這是讀者訂閱這個角色、要鑽進他心裡才付費的內容；不要寫成第三人稱旁觀）。私帳（材料給的）揭一角。對白只引材料給的，不可直接說「我愛你」這類點破的話。',
-        '5. 行當/性別代詞依材料【行當本色】。舊白話、極克制。600–900字，純散文直接進正文。',
+        '5. 行當/性別代詞依材料【行當本色】。舊白話、極克制。800–1200字，純散文直接進正文。',
         banlistLine(),
     ].join('\n');
 }
@@ -348,17 +349,18 @@ export function planSystem() {
     ].join('\n');
 }
 
-export function planUser(c, recent) {
+export function planUser(c, recent, roster) {
     return [
         `# 你是 ${c.name}（${c.role}）`,
         `秘密：${c.secret}`,
         `先前的打算：${c.plan}`,
+        roster ? `\n# 同班花名冊（誰是誰，認準了別張冠李戴）\n${roster}` : '',
         '',
         '# 剛發生的事',
         recent || '（無特別的事）',
         '',
         '請更新你的打算（三行）。',
-    ].join('\n');
+    ].filter((s) => s !== '').join('\n');
 }
 
 export function showrunnerSystem() {

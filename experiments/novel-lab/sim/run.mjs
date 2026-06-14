@@ -90,6 +90,7 @@ const world = {
     books: {}, // charId -> [{label,text}]  角色版連載累積（--book 用）
     sagaBook: [], // [{chapterNo,text}]  梨園版合本累積
     history: [],
+    roster: structuredClone(seedCast).map((c) => `${c.name}·${c.role}`).join('；'),
     arc: {
         throughline: '春雪社這班人，能不能在上海把「戲比天大」唱成真的，還是終究被名利拆散。',
         lines: [
@@ -103,11 +104,31 @@ const world = {
 
 let client = null;
 let llmCalls = 0;
+// 用量帳：分 primary/cheap 累計呼叫次數與 token，用來客觀比 poe(每對話固定點數) vs z.ai(按 token)。
+const usageStats = { primary: { calls: 0, pt: 0, ct: 0 }, cheap: { calls: 0, pt: 0, ct: 0 } };
 async function ask(opts) {
     if (DRY) return { text: '(dry-run：略過 LLM)' };
     llmCalls++;
     const r = await client.chat(opts);
+    const tier = opts.tier === 'cheap' ? 'cheap' : 'primary';
+    const u = r.usage ?? {};
+    usageStats[tier].calls++;
+    usageStats[tier].pt += u.prompt_tokens ?? u.input_tokens ?? 0;
+    usageStats[tier].ct += u.completion_tokens ?? u.output_tokens ?? 0;
     return r;
+}
+function printCostSummary() {
+    if (DRY) return;
+    const P = usageStats.primary;
+    const C = usageStats.cheap;
+    const tot = (x) => x.pt + x.ct;
+    log('\n── 用量／成本（本次 run）──');
+    log(`provider=${client.provider}　primary=${client.models.primary}　cheap=${client.models.cheap}`);
+    log(`primary：${P.calls} 次　prompt ${P.pt} + completion ${P.ct} = ${tot(P)} tokens`);
+    log(`cheap  ：${C.calls} 次　prompt ${C.pt} + completion ${C.ct} = ${tot(C)} tokens`);
+    log(`合計　：${P.calls + C.calls} 次呼叫　${tot(P) + tot(C)} tokens`);
+    log(`Poe 估點（GLM-5.1-FW＝200點/次・flat）：primary ${P.calls}×200 = ${P.calls * 200} 點；cheap 另按 token 計`);
+    log('z.ai 直連：primary/cheap 全按 token，用上面數字×當前單價換算即可。');
 }
 
 // Generate → 自檢 → (B 路徑) 抓到硬傷就指出、改寫一次。A 路徑只標記不改寫（呈現現況基準會出錯）。
@@ -223,7 +244,7 @@ async function runTick() {
             continue;
         }
         try {
-            const r = await ask({ tier: 'cheap', system: P.planSystem(), user: P.planUser(c, recent), maxTokens: 400, temperature: 0.8 });
+            const r = await ask({ tier: 'cheap', system: P.planSystem(), user: P.planUser(c, recent, world.roster), maxTokens: 400, temperature: 0.8 });
             const np = r.text.trim().replace(/\n+/g, ' ');
             if (np) {
                 log(`  · ${c.name}：${np}`);
@@ -262,7 +283,7 @@ async function runTick() {
         if (DRY) play = dryPick(c, hand);
         else {
             try {
-                const r = await ask({ tier: 'cheap', system: P.cardSystem(), user: P.cardUser(c, ev.label, stakes, hand), maxTokens: 200, temperature: 0.9 });
+                const r = await ask({ tier: 'cheap', system: P.cardSystem(), user: P.cardUser(c, ev.label, stakes, hand, world.roster), maxTokens: 200, temperature: 0.9 });
                 const j = extractJson(r.text);
                 play = j && hand.includes(j.card)
                     ? { card: j.card, why: String(j.why ?? '') }
@@ -352,13 +373,13 @@ async function runTick() {
             try {
                 log('\n──────── 【A · 現況 prompt + 現況 thin 材料】 ────────');
                 // A = 現況基準：只跑自檢標記、不改寫，呈現現行 production 會出的硬傷。
-                const ta = await genAudited(`A·${c.name}`, { tier: 'primary', system: P.povSystemA(), user: P.povUserA(ctxA), maxTokens: 2200, temperature: 0.92 }, c, { regen: false });
+                const ta = await genAudited(`A·${c.name}`, { tier: 'primary', system: P.povSystemA(), user: P.povUserA(ctxA), maxTokens: 3000, temperature: 0.92 }, c, { regen: false });
                 log(ta);
             } catch (e) { log(`(A POV 失敗 ${e.message})`); }
         }
         try {
             if (COMPARE) log('\n──────── 【B · 重設計 prompt + 增補材料】 ────────');
-            const tb = await genAudited(`B·${c.name}`, { tier: 'primary', system: P.povSystem(), user: P.povUser(ctxB), maxTokens: 2200, temperature: 0.92 }, c, { regen: true });
+            const tb = await genAudited(`B·${c.name}`, { tier: 'primary', system: P.povSystem(), user: P.povUser(ctxB), maxTokens: 3000, temperature: 0.92 }, c, { regen: true });
             log(tb);
             povs.push({ id, name: c.name, role: c.role, body: tb });
             pushBook(id, `第 ${ctxB.chapterNo} 章 · ${ev.label}`, tb);
@@ -386,7 +407,7 @@ async function runTick() {
         } else {
             try {
                 // 合本含多角：用無鬚行當+男性的合成角色跑自檢（觸發髯口/老生戲/token/稱謂，避開單一性別代詞誤報）。
-                const t = await genAudited('合本', { tier: 'primary', system: P.cutSystem(), user: P.cutUser(cutCtx), maxTokens: 2400, temperature: 0.9 }, { name: '__合本__', role: '坤生', gender: '男' }, { regen: true });
+                const t = await genAudited('合本', { tier: 'primary', system: P.cutSystem(), user: P.cutUser(cutCtx), maxTokens: 3200, temperature: 0.9 }, { name: '__合本__', role: '坤生', gender: '男' }, { regen: true });
                 log(t);
                 world.sagaBook.push({ chapterNo: world.chapterNo, text: t });
             } catch (e) {
@@ -421,7 +442,7 @@ async function runTick() {
             log('\n[USER]\n' + P.sequelUser(sctx));
         } else {
             try {
-                const t = await genAudited(`餘波·${loser.name}`, { tier: 'primary', system: P.sequelSystem(), user: P.sequelUser(sctx), maxTokens: 1800, temperature: 0.92 }, loser, { regen: true });
+                const t = await genAudited(`餘波·${loser.name}`, { tier: 'primary', system: P.sequelSystem(), user: P.sequelUser(sctx), maxTokens: 2600, temperature: 0.92 }, loser, { regen: true });
                 log(t);
                 pushBook(loser.id, `第 ${world.perChar[loser.id]} 章 · 餘波（${ev.label}之後）`, t);
             } catch (e) {
@@ -458,6 +479,8 @@ async function runTick() {
         world.restNextTick = monoId;
         world.shenLast = world.tick;
         log(`  ▶ 裁奪：${monoName} 下一輪先歇（輪空一場），把機會勻給旁人`);
+        // 寫進世界史：讓 PLAN/showrunner 知道「班主沈雪笙剛出手了」，免得旁人把她當成消失的舊角。
+        world.history.push({ day: world.day, text: `班主沈雪笙親自出面：保下柳生春與蘇映雪的搭檔不許拆，並令${monoName}輪空一輪。` });
     }
 
     world.openEvent = null; // resolved this tick
@@ -541,7 +564,7 @@ async function runTender() {
             continue;
         }
         try {
-            const t = await genAudited(`感情戲·${c.name}`, { tier: 'primary', system: P.tenderSystem(), user: P.tenderUser(ctx), maxTokens: 1800, temperature: 0.95 }, c, { regen: true });
+            const t = await genAudited(`感情戲·${c.name}`, { tier: 'primary', system: P.tenderSystem(), user: P.tenderUser(ctx), maxTokens: 2600, temperature: 0.95 }, c, { regen: true });
             log(t);
             pushBook(c.id, `感情戲 · 與${other.name}（愛而不得）`, t);
         } catch (e) { log(`(感情戲失敗 ${e.message})`); }
@@ -554,6 +577,7 @@ async function runTender() {
         await runTender();
         section('完成');
         log(`LLM 呼叫：${llmCalls}`);
+        printCostSummary();
         log(`\n👉 log 已存到：${LOG_PATH}`);
         log('   把整份貼回來，我看 LLM 有沒有抓到柳蘇「愛而不得」、是否兩個視角都成立。');
         return;
@@ -566,6 +590,7 @@ async function runTender() {
     section('完成');
     log(`總 tick：${world.tick}　LLM 呼叫：${llmCalls}　合本回數：${world.chapterNo}`);
     log('各角色個人書章數：' + Object.entries(world.perChar).map(([id, n]) => `${world.cast.find((c) => c.id === id).name}=${n}`).join('、'));
+    printCostSummary();
     log(`\n資源最終持有：`);
     for (const r of world.resources) log(`  · ${r.label} → ${r.holder ? world.cast.find((c) => c.id === r.holder).name : '（無人）'}${r.locked ? '（班主鎖定）' : ''}${r.retired ? '（已退場）' : ''}`);
     if (BOOK) printBooks();
