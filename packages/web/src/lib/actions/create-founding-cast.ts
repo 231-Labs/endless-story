@@ -34,6 +34,7 @@ import { generateAdditionalViews } from './generate-additional-views.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { applyRelationshipTiesAction, type ProposedTie } from './assess-relationships.js';
+import { deriveSagaSkills, seedCharacterSkills, type WorldAttrs } from '@/lib/chain/saga-skills';
 
 export interface FoundingCharSpec {
     name: string;
@@ -123,11 +124,13 @@ export interface CreateFoundingCastResult {
     tiesSeeded: number;
     /** Setting-gallery views (frontal + art sheet) appended across the cast. */
     viewsSeeded: number;
+    /** Per-saga skill values written across the cast (6 per character). */
+    skillsSeeded: number;
     inductionSkipped?: 'memory_unconfigured';
     error?: string;
 }
 
-const EMPTY = { minted: [] as FoundingMintedEntry[], failures: [] as { name: string; error: string }[], selfSeeded: 0, tiesSeeded: 0, viewsSeeded: 0 };
+const EMPTY = { minted: [] as FoundingMintedEntry[], failures: [] as { name: string; error: string }[], selfSeeded: 0, tiesSeeded: 0, viewsSeeded: 0, skillsSeeded: 0 };
 
 export async function createFoundingCastAction(
     input: CreateFoundingCastInput,
@@ -154,6 +157,9 @@ export async function createFoundingCastAction(
     const members: runnerInduction.FoundingMember[] = [];
     // (characterId, portraitUrl) for the post-mint setting-gallery pass below.
     const viewTargets: { characterId: string; referenceUrl: string }[] = [];
+    // (characterId, role, rolled world attrs) for the post-mint saga-skill pass —
+    // gives each character the 行當 skills the card-weight rules read.
+    const skillTargets: { characterId: string; role: string; world: WorldAttrs }[] = [];
 
     // ── per spec: roll → portrait → mint → tags + persona ──
     for (const spec of specs) {
@@ -265,6 +271,11 @@ export async function createFoundingCastAction(
 
             minted.push({ id: characterId, name: candidate.name, digest: res.digest, portrait: Boolean(portraitUrl) });
             if (portraitUrl) viewTargets.push({ characterId, referenceUrl: portraitUrl });
+            skillTargets.push({
+                characterId,
+                role: spec.role,
+                world: Object.fromEntries(rolled.map((rv) => [rv.key, rv.value])) as WorldAttrs,
+            });
             members.push({
                 id: characterId,
                 name: candidate.name,
@@ -299,7 +310,7 @@ export async function createFoundingCastAction(
     }
 
     if (members.length === 0) {
-        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, viewsSeeded: 0, error: minted.length ? undefined : '全部 mint 失敗' };
+        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, viewsSeeded: 0, skillsSeeded: 0, error: minted.length ? undefined : '全部 mint 失敗' };
     }
 
     // ── §11 setting-gallery views (frontal + art sheet) ──
@@ -319,6 +330,20 @@ export async function createFoundingCastAction(
         }
     }
 
+    // ── per-saga skills (the card-weight rules read these) ──
+    // Derived from 行當 + rolled world attrs and written one PTB per character.
+    // Best-effort + isolated: a failure just leaves that character's card draw at
+    // uniform weight (the reconciler can backfill), never sinks the batch.
+    let skillsSeeded = 0;
+    for (const t of skillTargets) {
+        try {
+            const r = await seedCharacterSkills(admin, t.characterId, deriveSagaSkills(t.role, t.world));
+            if (r.ok) skillsSeeded += r.seeded;
+        } catch {
+            /* best-effort — reconcile can backfill skills */
+        }
+    }
+
     // ── batch founding induction (mode B) ──
     const saga = await sagasApi.getSaga(d.sagaId).catch(() => null);
     let batch: runnerInduction.RunBatchResult;
@@ -333,7 +358,7 @@ export async function createFoundingCastAction(
             },
         });
     } catch (err) {
-        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, viewsSeeded, error: `induction 失敗：${err instanceof Error ? err.message : String(err)}` };
+        return { ok: false, minted, failures, selfSeeded: 0, tiesSeeded: 0, viewsSeeded, skillsSeeded, error: `induction 失敗：${err instanceof Error ? err.message : String(err)}` };
     }
 
     // write self memories into each MemWal
@@ -371,6 +396,7 @@ export async function createFoundingCastAction(
         selfSeeded,
         tiesSeeded,
         viewsSeeded,
+        skillsSeeded,
         inductionSkipped: memoryOn ? undefined : 'memory_unconfigured',
     };
 }

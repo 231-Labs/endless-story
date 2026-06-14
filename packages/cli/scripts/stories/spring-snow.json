@@ -207,6 +207,16 @@
       "intent": 8,
       "attribute_key": "literati",
       "bonus_per_point": 3
+    },
+    {
+      "intent": 1,
+      "attribute_key": "movement",
+      "bonus_per_point": 3
+    },
+    {
+      "intent": 4,
+      "attribute_key": "vocal",
+      "bonus_per_point": 3
     }
   ],
   "drama_resources": [
