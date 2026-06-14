@@ -35,7 +35,7 @@ export const resources = [
 
 export const cast = [
     {
-        id: 'liu', name: '柳生春', role: '坤生', gender: '女', age: 24, sceneId: 'sc_yunjin',
+        id: 'liu', name: '柳生春', role: '坤生', craft: '小生', line: '文小生', crossDress: true, gender: '女', age: 24, sceneId: 'sc_yunjin',
         appearance: 86, constitution: 66, acuity: 80, disposition: 72,
         physical: '風流俊秀，台上濁世佳公子；倒過倉傷過嗓，久站需扶桌沿掩微喘',
         secret: '她待師姐蘇映雪的情，早不只是搭檔、也不只是師姐妹。唯有勒上頭、著男裝、做那個能名正言順護在師姐身邊的人時，她才敢把那份說不出口的愛，藏進一個眼神、一次托手裡。她只盼這樣相伴下去，哪怕一輩子不點破。',
@@ -61,7 +61,7 @@ export const cast = [
         plan: '[長期] 跟生春一直唱在一處 [眼下] 把第一張碟對付過去，最好是跟生春一起灌 [未竟] 那份說不出口的情，守住分寸，別連這點相伴都丟了',
     },
     {
-        id: 'jiang', name: '江聞鶴', role: '乾生', gender: '男', age: 27, sceneId: 'sc_yunjin',
+        id: 'jiang', name: '江聞鶴', role: '乾生', craft: '小生', line: '文武小生', gender: '男', age: 27, sceneId: 'sc_yunjin',
         appearance: 86, constitution: 66, acuity: 80, disposition: 60,
         physical: '紹興男班北上，台步老辣、嗓子穩；傲、惜藝、嘴硬心軟',
         secret: '其實是在舊班被新角擠下、灰頭土臉走的，北上賭一口氣；夜裡偶爾摸著嗓子，怕這條好嗓也撐不了幾年了。',

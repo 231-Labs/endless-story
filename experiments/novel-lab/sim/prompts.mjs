@@ -8,16 +8,37 @@
  * No-fabrication guardrails are ported from the real character-worker prompt.
  */
 
-// ── 行當本色卡（預防層）：把性別/行當/道具規矩餵進 prompt，從源頭防硬傷 ──
+// ── 行當本色卡（預防層）：把行當/性別/道具規矩餵進 prompt，從源頭防硬傷 ──
+// 行當＝craft（小生/花旦/…）；乾(男)/坤(女)只是演員性別，不是兩種行當；小生再細分文/武。
+const XIAOSHENG_BASE =
+    '你的行當是【小生】（年輕男性角色）。乾生＝男演員、坤生＝女演員，**同屬小生一個行當，差別只在演員性別**，戲路與硬規矩完全一樣。【硬規矩】小生俊扮，絕不掛髯口/鬍鬚；不演老生戲（定軍山/烏盆記/捉放曹等）；不勾花臉。';
+function lineNote(line) {
+    if (!line) return '';
+    if (line.includes('武')) return '你偏武小生（翎子生/雉尾生一路，重靠把、開打、身段），但「俊扮無鬚」的小生硬規矩不變。';
+    return '你偏文小生（巾生/扇子生·書生，重唱念做表，許仙、書生一路），俊扮無鬚。';
+}
 const CRAFT_SHEETS = {
-    坤生: '你是坤生（女小生）：女子扮演少年男子（書生、公子、年少將領）。你是女兒身，第三人稱敘述一律用「她」；台上扮男、戲文裡才是男角。常工許仙、書生、周瑜一類俊扮無鬚小生。【硬規矩】小生是俊扮，絕不掛髯口（鬍鬚）；不演老生戲（定軍山/烏盆記/捉放曹等）；不勾花臉。',
-    乾生: '你是乾生（男小生）：男子演少年男子，俊扮。第三人稱用「他」。【硬規矩】小生俊扮，不掛髯口；不演老生戲；不勾花臉。',
     花旦: '你是花旦（女）：演年輕女子（小姐、丫鬟、白素貞一類）。第三人稱一律用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
     青衣: '你是青衣（女）：演端莊女子。第三人稱用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
-    班主: '你是班主沈雪笙（女，前坤生名角），多在二樓不常登台。第三人稱用「她」。',
+    刀馬旦: '你是刀馬旦（女·旦行武戲）：穿靠、使槍、翻身亮相，重靠把與開打。第三人稱一律用「她」。【硬規矩】旦行不掛髯口、不勾花臉、不演男角。',
+    班主: '你是班主沈雪笙（女，前坤生名角，封箱多年），多在二樓不常登台。第三人稱用「她」。',
 };
+// 顯示用行當標籤：有 craft 就顯示「行當（演員性別標籤·文武）」，例 小生（坤生·文小生）。
+export function roleLabel(c) {
+    if (!c.craft || c.craft === c.role) return c.role;
+    return `${c.craft}（${c.role}${c.line ? '·' + c.line : ''}）`;
+}
 export function craftSheet(c) {
-    return CRAFT_SHEETS[c.role] ?? `你的行當是「${c.role}」。敘述、道具、戲碼、第三人稱代詞都必須與此行當與你的性別（${c.gender}）相符。`;
+    const craft = c.craft ?? c.role;
+    if (craft === '小生' || c.role === '坤生' || c.role === '乾生') {
+        const female = c.gender === '女';
+        const who = female
+            ? '你是**坤生**（女演員的小生·女兒身反串少年男子）；台上扮男、戲文裡才是男角；第三人稱敘述一律用「她」。'
+              + (c.crossDress ? '台下你也慣著男裝、把那身男兒相當成真正的自己（這是你的人設，不是行當規矩）。' : '')
+            : '你是**乾生**（男演員的小生）；第三人稱用「他」。';
+        return [XIAOSHENG_BASE, who, lineNote(c.line)].filter(Boolean).join(' ');
+    }
+    return CRAFT_SHEETS[craft] ?? `你的行當是「${craft}」。敘述、道具、戲碼、第三人稱代詞都必須與此行當與你的性別（${c.gender}）相符。`;
 }
 // ── 改寫指令（修正層）：自檢抓到硬傷時，把違反項回灌，要求改寫 ──
 export function correctionNote(violations) {
@@ -82,7 +103,7 @@ export function povUser(ctx) {
     const c = ctx.character;
     const lines = [
         '# 你的身份',
-        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
+        `- 姓名：${c.name}　行當：${roleLabel(c)}　性別：${c.gender}　年齡：${c.age}`,
         `- 外形：${c.physical}`,
         `- 屬性：外貌 ${c.appearance} · 筋骨 ${c.constitution} · 機敏 ${c.acuity} · 心性 ${c.disposition}`,
         '',
@@ -102,6 +123,8 @@ export function povUser(ctx) {
         ctx.privateLedger,
         ledgerNote(ctx.privateLedgerRevealed),
     ];
+    if (ctx.reflectionContext)
+        lines.push('', '# 反思（你卸了妝、獨自一人時真正想的——本回最深的內在依據，化用、別整段照抄）', ctx.reflectionContext);
     if (ctx.stakes) lines.push('', '# 賭注（這樁事爭的是什麼，對你意味著什麼）', ctx.stakes);
     if (ctx.turn) lines.push('', '# 轉折（已客觀發生，不可改寫）', ctx.turn);
     if (ctx.outcome) lines.push('', '# 結算（世界狀態真的變了）', ctx.outcome);
@@ -141,7 +164,7 @@ export function povUserA(ctx) {
     const c = ctx.character;
     const lines = [
         '# 你的身份',
-        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
+        `- 姓名：${c.name}　行當：${roleLabel(c)}　性別：${c.gender}　年齡：${c.age}`,
         `- 外形：${c.physical}`,
         `- 屬性：外貌 ${c.appearance} · 筋骨 ${c.constitution} · 機敏 ${c.acuity} · 心性 ${c.disposition}`,
     ];
@@ -181,7 +204,7 @@ export function sequelUser(ctx) {
     const c = ctx.character;
     return [
         '# 你的身份',
-        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
+        `- 姓名：${c.name}　行當：${roleLabel(c)}　性別：${c.gender}　年齡：${c.age}`,
         `- 外形：${c.physical}`,
         '',
         '# 行當本色（硬規矩，違反即出戲）',
@@ -325,7 +348,7 @@ export function tenderUser(ctx) {
     const c = ctx.character;
     return [
         '# 你的身份',
-        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
+        `- 姓名：${c.name}　行當：${roleLabel(c)}　性別：${c.gender}　年齡：${c.age}`,
         `- 外形：${c.physical}`,
         '',
         '# 行當本色（硬規矩，違反即出戲）',
@@ -369,7 +392,7 @@ export function encounterUser(ctx) {
     const c = ctx.character;
     return [
         '# 你的身份',
-        `- 姓名：${c.name}　行當：${c.role}　性別：${c.gender}　年齡：${c.age}`,
+        `- 姓名：${c.name}　行當：${roleLabel(c)}　性別：${c.gender}　年齡：${c.age}`,
         `- 外形：${c.physical}`,
         '',
         '# 行當本色（硬規矩，違反即出戲）',
@@ -393,6 +416,29 @@ export function encounterUser(ctx) {
         '',
         '請把這一刻寫成一回關係戲。直接輸出正文。',
     ].join('\n');
+}
+
+// ── 反思（方案A）：對齊真實 reflection-trigger 的 passive 模式——只給角色自己聽的內心底稿。
+// 產出當「寫 POV 前的最深 why 材料」餵進 povUser，測試反思編織進章回的品質。
+export function reflectionSystem() {
+    return [
+        '你替自治戲班世界裡的一個角色，寫一段「只給他自己聽」的反思——卸了妝、獨自一人時，他真正在想的那點事。',
+        '這不是章回、不是給讀者看的表演，是內心的底稿。可以跟他公開的言行對不上、可以避而不答、可以自相矛盾——那都是真實的一面。',
+        '貼著他的秘密與此刻最放不下的事；第一人稱「我」；180–320 字；純內心獨白，不要場景、不要對白、不要起承轉合。',
+    ].join('\n');
+}
+export function reflectionUser(ctx) {
+    const c = ctx.character;
+    return [
+        `# 你是 ${c.name}（${c.role}）`,
+        '# 你的秘密（只有你知道）',
+        c.secret,
+        '# 此刻壓在你心上的事',
+        ctx.weighing,
+        ctx.ownerQuestion ? `# 有人問了你一句（你未必正面回答）：${ctx.ownerQuestion}` : '',
+        '',
+        '寫你此刻的內心反思。第一人稱，180–320 字。',
+    ].filter((s) => s !== '').join('\n');
 }
 
 export function planSystem() {

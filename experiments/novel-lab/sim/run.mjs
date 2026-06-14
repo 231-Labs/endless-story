@@ -37,6 +37,7 @@ const NO_SEQUEL = Boolean(flag('no-sequel', false));
 const SHOWRUNNER_EVERY = Number(flag('showrunner-every', 1));
 const HAND_SIZE = Number(flag('hand', 3));
 const SEED = Number(flag('seed', 7));
+const REFLECT = Boolean(flag('reflect', false)); // 方案A：寫 POV 前先生內心反思當底稿
 const TENDER = Boolean(flag('tender', false));
 const WITH_TENDER = Boolean(flag('with-tender', false)); // 跑完競爭迴圈後，附一場柳蘇感情戲
 const BOOK_RAW = flag('book', null); // --book all | --book 柳生春 | --book liu
@@ -328,8 +329,19 @@ async function runTick() {
         const c = world.cast.find((x) => x.id === id);
         world.perChar[id] = (world.perChar[id] ?? 0) + 1;
         const recall = M.targetedRecall(world, id);
+        // 方案A：寫 POV 前先生一段「只給角色自己聽」的反思，當最深的 why 底稿餵進 POV。
+        let reflectionContext = null;
+        if (REFLECT && !DRY) {
+            try {
+                const rr = await ask({ tier: 'primary', system: P.reflectionSystem(), user: P.reflectionUser({ character: c, weighing: `今日「${ev.label}」——${res.verdictNarrative}` }), maxTokens: 1200, temperature: 0.85 });
+                reflectionContext = M.toTraditional((rr.text ?? '').trim());
+                log(`\n【反思·內心底稿（方案A · ${c.name}）】`);
+                log(reflectionContext);
+            } catch (e) { log(`(反思失敗 ${e.message})`); }
+        }
         // B context (redesigned method + 3 fixes)
         const ctxB = {
+            reflectionContext,
             character: c,
             bookTitle: BOOK_TITLE,
             chapterNo: world.perChar[id],
@@ -430,7 +442,10 @@ async function runTick() {
             arc,
             deltaType: '一個私下的決定',
             deltaNote: '輸了之後，他獨自消化，悄悄定下一件之後會結果的事',
-            occasion: `散場後${loser.sceneId === 'sc_yunjin' ? '雲錦台只剩一盞燈' : '一個人留下'}，${loser.name}獨自待著（${loser.role}的習慣：${loser.role === '乾生' || loser.role === '坤生' ? '吊嗓 / 收拾行頭' : '收箱 / 算帳'}）`,
+            occasion: (() => {
+                const performer = ['小生', '坤生', '乾生', '花旦', '青衣', '旦', '刀馬旦', '武旦', '老旦', '老生'].includes(loser.craft ?? loser.role);
+                return `散場後${loser.sceneId === 'sc_yunjin' ? '雲錦台只剩一盞燈' : '一個人留下'}，${loser.name}獨自待著（${loser.role}的習慣：${performer ? '吊嗓 / 收拾行頭' : '收箱 / 算帳'}）`;
+            })(),
             // 餵乾淨的敘事結算（verdictNarrative），不是帶〔斬/攻〕token 的 debug verdict（修餘波每拍漏 token）。
             undercurrent: `今日「${ev.label}」的結果——${res.verdictNarrative}——還壓在心上；他嘴上不提，手上的活卻洩了底。`,
             privateLedger: lrecall.ledger,
