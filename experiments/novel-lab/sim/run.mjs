@@ -272,7 +272,12 @@ async function runTick() {
         }
         play.hand = hand;
         ev.cards[id] = play;
-        log(`  · ${c.name}　手牌[${hand.join('/')}] → 〔${play.card}〕分=${M.cardScore(play.card, c)}　— ${play.why}`);
+        // 決策透明：印每張手牌的分數 + 選的是不是最高分。
+        // 「取最高分」偏向被分數牽著走；「捨高分」＝真的按人設取捨（配合 why 看動機）。
+        const scored = hand.map((cd) => `${cd}${M.cardScore(cd, c)}`).join('/');
+        const best = hand.reduce((a, b) => (M.cardScore(b, c) > M.cardScore(a, c) ? b : a));
+        const tag = play.card === best ? '取最高分' : `捨高分(最高=${best})·按人設`;
+        log(`  · ${c.name}　手牌[${scored}] → 選〔${play.card}〕（${tag}）　— ${play.why}`);
     }
 
     // PHASE: RESOLVE (deterministic verdict)
