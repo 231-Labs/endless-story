@@ -593,13 +593,15 @@ export function buildSceneBeats(world, sceneId, selfId) {
  * 人名/性別規則來自 world.cast——換行當只動 craft.mjs、加角色只動 cast，自檢自動跟上，
  * 不再寫死任何角色名。違反項回給 run.mjs 觸發「指出硬傷→改寫一次」。 */
 const BEARD_RE = new RegExp(BEARD_WORDS.join('|'), 'g');
-// 只在「非否定」的鬍鬚提及才算違規：「不掛髯口／沒戴鬍鬚／絕不掛髯」是正確描寫，放行。
+// 鬍鬚詞前後若有否定（不掛髯口／沒戴鬍鬚／連半根鬍鬚都沒有／鬍鬚的痕跡也無）＝正確描寫，放行。
 function beardViolation(text) {
     BEARD_RE.lastIndex = 0;
     let m;
     while ((m = BEARD_RE.exec(text))) {
-        const pre = text.slice(Math.max(0, m.index - 4), m.index);
-        if (!/[不沒未無莫勿別]/.test(pre)) return true; // 出現一處沒被否定的鬍鬚提及
+        const pre = text.slice(Math.max(0, m.index - 5), m.index);
+        const post = text.slice(m.index + m[0].length, m.index + m[0].length + 8);
+        const negated = /[不沒未無莫勿別]/.test(pre) || /[沒無未]|不見|半根/.test(post);
+        if (!negated) return true; // 出現一處前後都沒被否定的鬍鬚提及
     }
     return false;
 }
