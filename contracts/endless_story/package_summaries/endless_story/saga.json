@@ -619,9 +619,68 @@
         "u64"
       ]
     },
-    "cover_location": {
+    "split_treasury_for_payroll": {
       "source_index": 8,
       "index": 8,
+      "doc": " Drain `amount` from the treasury as a raw `Balance<CURRENCY>` — NOT a\n Coin-to-address like `withdraw_from_treasury`. Lets the sibling `economy`\n module join the payroll straight into a character wallet DF within one PTB\n (a Coin-to-address can't be redirected into a DF mid-PTB). Package-visible:\n the only caller, `economy::credit_salary`, is already StorytellerCap-gated,\n so no cap arg here. Aborts `EInsufficientTreasury` if the pool is short.",
+      "attributes": [],
+      "visibility": "Package",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type_": "u64"
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "balance"
+            },
+            "name": "Balance",
+            "type_arguments": [
+              {
+                "phantom": true,
+                "argument": {
+                  "Datatype": {
+                    "module": {
+                      "address": "endless_story",
+                      "name": "currency"
+                    },
+                    "name": "CURRENCY",
+                    "type_arguments": []
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "cover_location": {
+      "source_index": 9,
+      "index": 9,
       "doc": " Storyteller adds a Location to this saga's coverage list. Aborts on\n duplicate (instead of silent no-op): covering twice usually signals\n composer drift, easier to debug as an abort.",
       "attributes": [],
       "visibility": "Public",
@@ -686,8 +745,8 @@
       "return_": []
     },
     "set_saga_departure_policy": {
-      "source_index": 9,
-      "index": 9,
+      "source_index": 10,
+      "index": 10,
       "doc": " Replace this saga's departure policy text. Move does not enforce the\n policy — it's natural-language guidance for the storyteller LLM.\n Updating mid-saga is allowed (run different policies in different eras).",
       "attributes": [],
       "visibility": "Public",
@@ -747,8 +806,8 @@
       "return_": []
     },
     "departure_policy": {
-      "source_index": 10,
-      "index": 10,
+      "source_index": 11,
+      "index": 11,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -793,8 +852,8 @@
       ]
     },
     "set_saga_soul": {
-      "source_index": 11,
-      "index": 11,
+      "source_index": 12,
+      "index": 12,
       "doc": " Replace this saga's narrative-DNA hints (F — saga soul). Like\n `departure_policy`, these are natural-language guidance for the LLM,\n not enforced by Move. The soul is read as a unit, so both are set\n together — pass the current value to leave one unchanged. Updating\n mid-saga is allowed (run different tonal eras).",
       "attributes": [],
       "visibility": "Public",
@@ -880,52 +939,6 @@
       "return_": []
     },
     "nature_prompt": {
-      "source_index": 12,
-      "index": 12,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "saga",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "saga"
-                  },
-                  "name": "Saga",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Reference": [
-            false,
-            {
-              "Datatype": {
-                "module": {
-                  "address": "std",
-                  "name": "string"
-                },
-                "name": "String",
-                "type_arguments": []
-              }
-            }
-          ]
-        }
-      ]
-    },
-    "rhythm_hints": {
       "source_index": 13,
       "index": 13,
       "doc": null,
@@ -971,7 +984,7 @@
         }
       ]
     },
-    "portrait_tone": {
+    "rhythm_hints": {
       "source_index": 14,
       "index": 14,
       "doc": null,
@@ -1017,9 +1030,55 @@
         }
       ]
     },
-    "covered_location_count": {
+    "portrait_tone": {
       "source_index": 15,
       "index": 15,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Reference": [
+            false,
+            {
+              "Datatype": {
+                "module": {
+                  "address": "std",
+                  "name": "string"
+                },
+                "name": "String",
+                "type_arguments": []
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "covered_location_count": {
+      "source_index": 16,
+      "index": 16,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1050,8 +1109,8 @@
       ]
     },
     "is_location_covered": {
-      "source_index": 16,
-      "index": 16,
+      "source_index": 17,
+      "index": 17,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1095,8 +1154,8 @@
       ]
     },
     "enable_card_weighting": {
-      "source_index": 17,
-      "index": 17,
+      "source_index": 18,
+      "index": 18,
       "doc": " Attach an empty card-weight rule list as a dynamic field on the saga.\n Required before any `set_card_weight_rule` call. Aborts if already\n enabled (composer drift signal — easier to debug than silent no-op).",
       "attributes": [],
       "visibility": "Public",
@@ -1143,8 +1202,8 @@
       "return_": []
     },
     "disable_card_weighting": {
-      "source_index": 18,
-      "index": 18,
+      "source_index": 19,
+      "index": 19,
       "doc": " Detach the card-weight rule list (back to uniform draw). All rules are\n discarded; no record kept. Aborts if not currently enabled.",
       "attributes": [],
       "visibility": "Public",
@@ -1191,8 +1250,8 @@
       "return_": []
     },
     "set_card_weight_rule": {
-      "source_index": 19,
-      "index": 19,
+      "source_index": 20,
+      "index": 20,
       "doc": " Upsert a rule: replaces any existing rule with the same\n (intent, attribute_key) tuple, otherwise appends. Aborts if weighting\n is not enabled.",
       "attributes": [],
       "visibility": "Public",
@@ -1260,8 +1319,8 @@
       "return_": []
     },
     "clear_card_weight_rule": {
-      "source_index": 20,
-      "index": 20,
+      "source_index": 21,
+      "index": 21,
       "doc": " Remove the (intent, attribute_key) rule if present. No-op (no abort)\n if the rule wasn't there — safe to call defensively.",
       "attributes": [],
       "visibility": "Public",
@@ -1325,8 +1384,8 @@
       "return_": []
     },
     "card_weighting_enabled": {
-      "source_index": 21,
-      "index": 21,
+      "source_index": 22,
+      "index": 22,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1357,8 +1416,8 @@
       ]
     },
     "card_weight_rules": {
-      "source_index": 22,
-      "index": 22,
+      "source_index": 23,
+      "index": 23,
       "doc": " Snapshot the saga's current weight rules. Returns empty vector when\n card weighting is disabled — callers (e.g. `event::deal_*`) can treat\n empty == uniform without a separate predicate.",
       "attributes": [],
       "visibility": "Public",
@@ -1400,8 +1459,8 @@
       ]
     },
     "card_weight_intent": {
-      "source_index": 23,
-      "index": 23,
+      "source_index": 24,
+      "index": 24,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1432,8 +1491,8 @@
       ]
     },
     "card_weight_attribute_key": {
-      "source_index": 24,
-      "index": 24,
+      "source_index": 25,
+      "index": 25,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1478,8 +1537,8 @@
       ]
     },
     "card_weight_bonus_per_point": {
-      "source_index": 25,
-      "index": 25,
+      "source_index": 26,
+      "index": 26,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1510,8 +1569,8 @@
       ]
     },
     "define_saga_attribute": {
-      "source_index": 26,
-      "index": 26,
+      "source_index": 27,
+      "index": 27,
       "doc": " Append a new saga-specific attribute definition. The table is\n auto-attached on first call. Aborts if `key` is already defined (for\n the same saga) so storytellers can't accidentally redefine what a skill\n range means mid-game.",
       "attributes": [],
       "visibility": "Public",
@@ -1592,8 +1651,8 @@
       "return_": []
     },
     "clear_saga_attribute": {
-      "source_index": 27,
-      "index": 27,
+      "source_index": 28,
+      "index": 28,
       "doc": " Remove a saga-specific attribute definition by key. No-op if missing.\n Note: this does NOT clear existing character skills keyed under the\n removed name — those become stale data on chain (still readable, just\n no longer enforced or weighted).",
       "attributes": [],
       "visibility": "Public",
@@ -1653,8 +1712,8 @@
       "return_": []
     },
     "saga_attribute_defs": {
-      "source_index": 28,
-      "index": 28,
+      "source_index": 29,
+      "index": 29,
       "doc": " Snapshot of saga's own attribute definitions (empty if none).\n `event::compute_card_weights` and `character::set_character_skill` both\n look here when validating / resolving an attribute key.",
       "attributes": [],
       "visibility": "Public",
@@ -1696,8 +1755,8 @@
       ]
     },
     "register_resource": {
-      "source_index": 29,
-      "index": 29,
+      "source_index": 30,
+      "index": 30,
       "doc": " Register a contested resource under this saga. Package-internal: called by\n `resource::instantiate` (the same way `add_anchor_scene` is called by `scene::create`).\n Idempotent on duplicate id. Auto-attaches the DOF on first call; absent DOF == no\n resources. Append-only — no Saga struct field, no migration.",
       "attributes": [],
       "visibility": "Package",
@@ -1739,8 +1798,8 @@
       "return_": []
     },
     "saga_resource_ids": {
-      "source_index": 30,
-      "index": 30,
+      "source_index": 31,
+      "index": 31,
       "doc": " Snapshot of the saga's registered resource ids (empty if none). Off-chain reads this to\n discover the saga's contested resources without replaying ResourceInstantiated events.",
       "attributes": [],
       "visibility": "Public",
@@ -1782,8 +1841,8 @@
       ]
     },
     "verify_cap": {
-      "source_index": 31,
-      "index": 31,
+      "source_index": 32,
+      "index": 32,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1832,8 +1891,8 @@
       ]
     },
     "assert_cap": {
-      "source_index": 32,
-      "index": 32,
+      "source_index": 33,
+      "index": 33,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1880,47 +1939,6 @@
       "return_": []
     },
     "saga_id": {
-      "source_index": 33,
-      "index": 33,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "saga",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "saga"
-                  },
-                  "name": "Saga",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "sui",
-              "name": "object"
-            },
-            "name": "ID",
-            "type_arguments": []
-          }
-        }
-      ]
-    },
-    "world_id": {
       "source_index": 34,
       "index": 34,
       "doc": null,
@@ -1961,9 +1979,50 @@
         }
       ]
     },
-    "character_count": {
+    "world_id": {
       "source_index": 35,
       "index": 35,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "character_count": {
+      "source_index": 36,
+      "index": 36,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1994,8 +2053,8 @@
       ]
     },
     "saga_kind": {
-      "source_index": 36,
-      "index": 36,
+      "source_index": 37,
+      "index": 37,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2035,8 +2094,8 @@
       ]
     },
     "is_active": {
-      "source_index": 37,
-      "index": 37,
+      "source_index": 38,
+      "index": 38,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -2067,28 +2126,6 @@
       ]
     },
     "kind_standard": {
-      "source_index": 38,
-      "index": 38,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [],
-      "return_": [
-        {
-          "Datatype": {
-            "module": {
-              "address": "endless_story",
-              "name": "saga"
-            },
-            "name": "SagaKind",
-            "type_arguments": []
-          }
-        }
-      ]
-    },
-    "kind_reincarnation": {
       "source_index": 39,
       "index": 39,
       "doc": null,
@@ -2110,9 +2147,31 @@
         }
       ]
     },
-    "new_revenue_config": {
+    "kind_reincarnation": {
       "source_index": 40,
       "index": 40,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "saga"
+            },
+            "name": "SagaKind",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "new_revenue_config": {
+      "source_index": 41,
+      "index": 41,
       "doc": null,
       "attributes": [],
       "visibility": "Public",

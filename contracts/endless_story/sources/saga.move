@@ -408,6 +408,17 @@ public fun withdraw_from_treasury(
 /// Current treasury balance in ENDLESS base units. View, no cap required.
 public fun treasury_balance(saga: &Saga): u64 { balance::value(&saga.treasury) }
 
+/// Drain `amount` from the treasury as a raw `Balance<CURRENCY>` — NOT a
+/// Coin-to-address like `withdraw_from_treasury`. Lets the sibling `economy`
+/// module join the payroll straight into a character wallet DF within one PTB
+/// (a Coin-to-address can't be redirected into a DF mid-PTB). Package-visible:
+/// the only caller, `economy::credit_salary`, is already StorytellerCap-gated,
+/// so no cap arg here. Aborts `EInsufficientTreasury` if the pool is short.
+public(package) fun split_treasury_for_payroll(saga: &mut Saga, amount: u64): Balance<CURRENCY> {
+    assert!(balance::value(&saga.treasury) >= amount, EInsufficientTreasury);
+    balance::split(&mut saga.treasury, amount)
+}
+
 // ─── location coverage ──────────────────────────────────────────────
 
 /// Storyteller adds a Location to this saga's coverage list. Aborts on

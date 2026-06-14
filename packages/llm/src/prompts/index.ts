@@ -53,6 +53,13 @@ export {
 } from './persona.js';
 
 export {
+  buildAppearancePrompt,
+  parseAppearanceResponse,
+  type BuildAppearancePromptOptions,
+  type DistilledAppearance,
+} from './appearance.js';
+
+export {
   buildPublicTagsPrompt,
   parsePublicTags,
   type BuildPublicTagsPromptOptions,

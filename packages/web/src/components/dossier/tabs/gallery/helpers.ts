@@ -1,6 +1,42 @@
-import type { BlobRef, Character } from '@endless-story/shared';
+import type { BlobRef, Character, Gender } from '@endless-story/shared';
 
 export type FeaturedKey = string;
+
+const GENDER_LABEL: Record<Gender, string> = { female: '女', male: '男', other: '中性' };
+
+/**
+ * Compose a meaningful 形貌 line from the structured facts the mint pipeline
+ * actually produces. The on-chain `physical_facts` only carries
+ * gender / age / body(enum) + an appearance 0-100 stat — the old 外貌設定 block
+ * rendered just the bare body word ("勻稱"), dropping gender + age entirely, so
+ * it read as nearly empty. Here we surface ALL of it. Rich hand-written
+ * `physicalFacts` (mock fixtures, or a future generated 形貌 description) passes
+ * through verbatim as `prose`.
+ *
+ * Note: the *rich* appearance prose generated at mint lives inside
+ * `character.description` (shown as 敘描) — there is no separate stored visual
+ * description, and the portrait-curation prompt (≤90 chars) is not persisted.
+ */
+export function appearanceSummary(c: Character): { facts: string; prose: string | null } {
+  const pf = (c.physicalFacts ?? '').trim();
+  const isProse = pf.length > 0 && pf !== '—' && /[，。、；]/.test(pf);
+  // chain gives "species / body" or just "body" — take the last segment as 體態.
+  const bodyWord =
+    pf && !isProse ? (pf.split('/').map((s) => s.trim()).filter(Boolean).pop() ?? '') : '';
+
+  const parts: string[] = [];
+  const g = GENDER_LABEL[c.gender];
+  if (g) parts.push(g);
+  if (c.age > 0) parts.push(`${c.age} 歲`);
+  if (bodyWord && bodyWord !== '—') parts.push(`體態${bodyWord}`);
+
+  // appearance stat → one descriptor, mirroring the portrait-prompt mapping.
+  const look = c.attributes?.appearance ?? 50;
+  if (look >= 80) parts.push('眉眼明亮、有記憶點');
+  else if (look <= 30) parts.push('眉眼清淡');
+
+  return { facts: parts.join(' · ') || '—', prose: isProse ? pf : null };
+}
 
 /** A flattened gallery entry the lightbox can page through. */
 export interface LightboxItem {

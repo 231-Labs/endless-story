@@ -59,53 +59,64 @@ const CURIO_ASSET: Record<string, { assetUrl?: string; fitHeight?: number }> = {
 };
 
 export function shopWaresFor(character: Character): ShopWare[] {
-  const wares: ShopWare[] = [];
   const craft = signatureCraft(character);
   const asset = CURIO_ASSET[craft.tag] ?? {};
 
-  // 首演原件 — one and only (edition limit 1 on-chain)
-  wares.push({
-    key: `ware:${character.id}:${craft.tag}:premiere`,
-    kind: 'curio',
-    title: `${character.name}·首演${craft.name}`,
-    subtitle: '首演原件 · 僅此一件',
-    limit: 1,
-    priceSui: 12,
-    tag: craft.tag,
-    ...asset,
-    blurb: `${craft.blurb} 首演當晚用過的那一件，僅此一件。`,
-  });
-  // 量產版 — open edition
-  wares.push({
-    key: `ware:${character.id}:${craft.tag}:open`,
-    kind: 'curio',
-    title: `${character.name}·${craft.name}`,
-    subtitle: '量產版 · 不限量',
-    limit: null,
-    priceSui: 0.8,
-    tag: craft.tag,
-    ...asset,
-    blurb: craft.blurb,
-  });
-
-  // 劇照 — the character's stage moments, open edition
-  const moments = (character.gallery?.eventMoments ?? []).filter((m) => m.imageUrl).slice(0, 4);
-  moments.forEach((m, i) => {
-    wares.push({
-      key: `ware:${character.id}:still:${m.walrusBlobId || i}`,
-      kind: 'still',
-      title: m.label ?? `${character.name}之一瞬`,
-      subtitle: '劇照 · 不限量',
+  // 戲坊 sells the craft 珍玩 only. 劇照 are NOT re-listed here — they are the
+  // same event-moment images already shown in 設定集·事件瞬間, so the collect
+  // affordance lives on the moment itself (see `stillWareFromMoment`). This
+  // keeps each moment in ONE place and avoids the view-here / buy-there dup.
+  return [
+    // 首演原件 — one and only (edition limit 1 on-chain)
+    {
+      key: `ware:${character.id}:${craft.tag}:premiere`,
+      kind: 'curio',
+      title: `${character.name}·首演${craft.name}`,
+      subtitle: '首演原件 · 僅此一件',
+      limit: 1,
+      priceSui: 12,
+      tag: craft.tag,
+      ...asset,
+      blurb: `${craft.blurb} 首演當晚用過的那一件，僅此一件。`,
+    },
+    // 量產版 — open edition
+    {
+      key: `ware:${character.id}:${craft.tag}:open`,
+      kind: 'curio',
+      title: `${character.name}·${craft.name}`,
+      subtitle: '量產版 · 不限量',
       limit: null,
-      priceSui: 0.5,
-      url: m.imageUrl!,
-      walrusBlobId: m.walrusBlobId,
-      imageUrl: m.imageUrl,
-      blurb: '一場戲只此一瞬——收進藏閣，它就不散場。',
-    });
-  });
+      priceSui: 0.8,
+      tag: craft.tag,
+      ...asset,
+      blurb: craft.blurb,
+    },
+  ];
+}
 
-  return wares;
+/**
+ * A 劇照 collectible built from one of the character's event moments. The
+ * collect affordance lives on the 設定集·事件瞬間 card (where the moment is
+ * shown), so a moment is never duplicated into the 戲坊. Key scheme matches the
+ * old shop still ware so the 藏閣 inventory dedups identically.
+ */
+export function stillWareFromMoment(
+  character: Character,
+  moment: { imageUrl?: string; walrusBlobId?: string; label?: string },
+  index = 0,
+): ShopWare {
+  return {
+    key: `ware:${character.id}:still:${moment.walrusBlobId || index}`,
+    kind: 'still',
+    title: moment.label ?? `${character.name}之一瞬`,
+    subtitle: '劇照 · 不限量',
+    limit: null,
+    priceSui: 0.5,
+    url: moment.imageUrl,
+    walrusBlobId: moment.walrusBlobId,
+    imageUrl: moment.imageUrl,
+    blurb: '一場戲只此一瞬——收進藏閣，它就不散場。',
+  };
 }
 
 // ── 購入紀錄 (demo-local until still.move/curio mint goes live) ────────

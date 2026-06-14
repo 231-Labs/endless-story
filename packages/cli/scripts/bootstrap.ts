@@ -574,6 +574,10 @@ async function main() {
       dreamConfigId,
       dreamAdminCapId,
       stillRegistryId,
+      // Preserve the TransferPolicy<Still> id captured by deploy.ts at publish —
+      // bootstrap rewrites the whole snapshot, so without this it's clobbered to ''
+      // and Kiosk Still purchase can never go chain-ready (there's no second redeploy).
+      stillTransferPolicyId: deployment.stillTransferPolicyId,
       storyId,
     },
     deployedAt,

@@ -22,6 +22,7 @@ import { getAdminContext } from '../chain/admin-signer.js';
 import { inductCharacterAction } from './induct-character.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { generatePersonaAction } from './generate-persona.js';
+import { generateAppearanceAction } from './generate-appearance.js';
 import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 
 export interface RedeemVoucherInput {
@@ -279,6 +280,14 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
             console.log(
                 `[redeem-voucher] persona for ${charId}: ` +
                     (personaRes?.ok ? `v${personaRes.version}` : `failed${personaRes?.skipped ? `(${personaRes.skipped})` : ''}`),
+            );
+
+            // 2.5) 形貌 — distil + anchor the appearance prose (sibling of persona;
+            //      off-chain so it can evolve with the portrait). Feeds 設定集·形貌.
+            const appearanceRes = await withRetry('appearance', () => generateAppearanceAction(charId));
+            console.log(
+                `[redeem-voucher] appearance for ${charId}: ` +
+                    (appearanceRes?.ok ? `v${appearanceRes.version}` : `failed${appearanceRes?.skipped ? `(${appearanceRes.skipped})` : ''}`),
             );
 
             // 3) §11 additional gallery views (frontal + art sheet) via img2img

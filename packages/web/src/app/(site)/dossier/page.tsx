@@ -1,4 +1,5 @@
 import {
+  appearanceApi,
   charactersApi,
   chaptersApi,
   cutsApi,
@@ -256,6 +257,7 @@ async function DossierDetail({
     sagaName,
     chainPovChapters,
     reflections,
+    appearance,
   ] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
@@ -282,6 +284,9 @@ async function DossierDetail({
     // Reflections from reflection.move. Owner sees full body; non-owners
     // see only metadata (mode + timestamp + chain anchor).
     fetchReflectionsForCharacter(character.id, { limit: 8 }),
+    // 形貌 description (content road, own subject) — only needed by 設定集·形貌,
+    // so skip the chain read on other tabs. null → caption falls back to facts.
+    tab === 'gallery' ? appearanceApi.getAppearance(character.id) : Promise.resolve(null),
   ]);
   const charactersById = byId(allCharacters);
   // 關係對象可能是名冊外的江湖角色（不在 listCharacters 裡）——補抓，
@@ -344,7 +349,11 @@ async function DossierDetail({
               />
             ) : null}
             {tab === 'gallery' ? (
-              <GalleryTab character={character} isOwner={viewerWallet === character.nftOwner} />
+              <GalleryTab
+                character={character}
+                isOwner={viewerWallet === character.nftOwner}
+                appearanceDesc={appearance?.description ?? null}
+              />
             ) : null}
             {tab === 'shop' ? <ShopTab character={character} /> : null}
             {tab === 'chapters' ? (
