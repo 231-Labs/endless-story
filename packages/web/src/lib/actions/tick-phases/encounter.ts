@@ -100,9 +100,8 @@ export async function pickEncounterPair(
             const key = encounterPairKey(id, p.otherId);
             if (seen.has(key)) continue; // dedup the symmetric edge
             seen.add(key);
-            // Deterministic holder: the lexicographically-first id of the pair.
-            const [holderId, partnerId] = [id, p.otherId].sort();
-            const otherId = holderId === id ? p.otherId : id;
+            // Deterministic: holder = lexicographically-first id, other = second.
+            const [holderId, otherId] = [id, p.otherId].sort();
             const cand: EncounterPair = {
                 holderId,
                 otherId,
@@ -112,7 +111,6 @@ export async function pickEncounterPair(
                 count: p.count,
                 pairKey: key,
             };
-            void partnerId;
             if (
                 !best ||
                 cand.count > best.count ||

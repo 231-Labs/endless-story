@@ -244,6 +244,48 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 **效能(已做)**:tick loop 全面 PTB 批次化 —— 出牌/收尾/POV commit/移動各包成一個 PTB(一次簽),
 recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEAL 429;sleep 只在夜裡跑。
 
+### 8b. 敘事方法產品化（2026-06-14，分支 `claude/pear-garden-narrative-pov-5uges4`）
+
+把解耦模擬器（`experiments/novel-lab/sim`）驗證過的寫作方法移植進產品層。**核心紀律：產品層更靈活、少寫死**——自檢資料驅動、行當卡只當隱形守門（不讓角色自報坤生/乾生/俊扮）、不帶測試用的寫死卡司/BONDS。
+
+**已落地（全部零合約改動，只用既有 `commitment::commit` + 讀取）：**
+
+- **章回三態 `ChapterMode`**（`character-worker/prompt.ts`）：共用一套敘事鐵則＋聲音，只換框架——
+  `pov`（連載：承上/推進/啟下）、`genesis`（入世序章：前門、無承上、靠人生記憶寫厚）、
+  `encounter`（兩人關係戲/溫情：不競爭、潛台詞、只揭一角）。串過 `pov-core` `PovCoreOptions.mode` → runner。
+- **敘事自檢**（`runner/services/narrative-audit` + `shared/role-rules` + `shared/to-traditional`）：
+  確定性 lint（零成本、可重現、資料驅動）——行當規則由 `roleCraftRules` 對 free-form role 子字串比對
+  （未知行當寬容放行）；性別/代詞由 roster 推導（無寫死姓名）；髯口只抓非否定提及；簡→繁正規化。
+  生成後跑，違規回饋做一次校正重生。可泛化到全新行當/角色零改規則。
+- **厚度召回 `LIFE_QUERY`**（`pov-core`）：除事件召回外多一條「童年/家世/初戀/癖好/心事」人生記憶召回，
+  genesis 吃最多、連載 POV 分一點（tick POV 併入 `'life'` 召回），讓章回像「活過的人」而非職務說明。
+- **創世序章 → 種子流程（自治）**：`seed-genesis-prologue.ts` 生成＋上鏈每個新角色的入世序章；
+  `reconcile-character.ts` 第 7 步，以**鏈上章回清單**冪等（已有章回就跳過，不重鑄）。
+- **溫情/關係戲 → tick 迴圈（自治）**：`tick-phases/encounter.ts` `pickEncounterPair` 彈性偵測——
+  同場 + 導演牽起的關係 tone（`fetchRelationshipPairs`）→ 每 tick 至多一篇最強對子、同對冷卻；
+  經序列 `cutJobs` 背景上鏈，不搶 StorytellerCap。
+- **養關係（機制驅動，非導演決策）**：`tick-phases/bond.ts`。一筆被接受的接濟（GIVE）會替那對
+  補發一次 `relationship_seed` 加深公開羈絆（該 move 只發事件、無鏈上去重，`count` 累加）。關係圖
+  從角色實際行為長出來，`pickEncounterPair` 偏好高 `count` → 常互助的人被關係戲優先選中。
+  **設計取捨**：encounter 門檻設 1（入班那筆種子即可觸發，否則自治世界幾乎不會出現關係戲），
+  靠養關係累加 count 做「深化羈絆」優先序，而非把門檻拉高到觸發不到。
+
+**待議 / 可擴充（按使用者 2026-06-14 拍板：本輪先驗現有方法，不擴充導演 AI 的主動授權）：**
+
+| 機制 | 內容 | 需合約嗎 | 狀態 |
+|---|---|---|---|
+| **D3 持有者黏性 + 冷卻** | verdict 計分加 holder bonus + 2-tick 冷卻（破唱片跑步機/鬼打牆）；落在 `act.ts deriveVerdict` / event-planner / spine | ❌ 純鏈下計分 | 🟡 待加 |
+| **D5/F1 行使即退場 + 後繼標的** | scarce resource 加 `exercisable`/`successor`，結算 hook 觸發 retire＋下游 instantiate | ❌ **`resource.move` retire/instantiate/release_holder 合約已有**，只缺 TS 接 `director/tools.ts`、開 `TICK_DIRECTOR_RESOURCES` 驗鏈 | 🟡 沙盒已驗·待真模型 |
+| **D6 混合制自由文字行動** | verdict 後加一句人設化自由行動文字餵 POV（純文字、不改判決、不上鏈） | ❌ | 🟡 沙盒已驗概念 |
+| **導演 LLM 主動經營關係圖** | 讓導演像 showrunner 一樣 in-loop 主動牽線/深化/冷卻關係（非機制、是 AI 決策） | ❌（用既有 `relationshipSeed`） | ⏸ 本輪**刻意不做**（先驗現有方法） |
+| **角色主觀羈絆 → 公開 tie 的更多橋** | 目前只用 GIVE 機制橋接；可擴充 SOCIAL 反覆對話/共同經歷升級，或把主觀 relationship memory 強度閾值升格為公開 tie | ❌ | 🟡 可擴充 |
+| **養關係冷卻/上限** | count 目前隨互助每 tick 累加（每 tick cap 4 對，但同對跨 tick 仍持續加）；可加 per-pair 冷卻/上限避免膨脹 | ❌ | 🟡 視觀察 |
+| **養關係 tone 細分** | 目前固定 `affection`；可依 GIVE 種類/SOCIAL tone 細分 mentorship/romance | ❌ | 🟡 可擴充 |
+| **ensemble 楔子 / 餘波 / sequel mode** | 多角色開場楔子、事件餘波回、續作章回；目前 mode 只有 pov/genesis/encounter | ❌ | ⬜ defer |
+| **N5b ImportanceDebt → 反思** | 鏈上 debt 訊號觸發反思 | ✅ 動 contract | ⬜ defer |
+
+**驗證清單**：見 [docs/NARRATIVE_QA.md](./NARRATIVE_QA.md)（明天重部署合約後的整套 QA）。
+
 ---
 
 ## 9. 非目標 / 明確不做
