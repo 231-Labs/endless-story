@@ -17,6 +17,7 @@
 | A4 | **結構化代價**：輸家失去的標的 ↔ 他 plan 所求，注入材料 | `tick-loop.ts` verdict trigger（現只問「失了什麼」未結構化）＋ event-spine outcome | ✅ |
 | A5 | **定向私帳召回**：戲劇高點多撈一條該角 secret/genesis 記憶 | `tick-loop.ts` POV phase 的 `memoryContext.recent`（加一條定向 query）；secret 已由 `genesis-memory` 種成私密記憶 | ✅ |
 | A6 | **arcContext 接到筆上 + 回數 N**：showrunner 弧線座標（主問/上回結在哪/本回推進）+ 章回號餵進 POV/合本 prompt | `character-worker/prompt.ts` 加 `arcContext` 欄；`tick-loop.ts` 從 `director/memory-store` 讀 arcPlan 傳入；回數＝per-saga/per-char 計數（先 process-local，後 relayer KV） | ✅ |
+| A7 | **創世記憶四類配方**（wound／relationship／world-stakes／texture 各至少一條）+「只輸出最終一版正文」守門。實驗2：厚度躍升在 N≈3（傷口/情）、複雜度躍升在 N≈10（外部利害），N≈15 飽和；配方齊全的 6–8 條勝過同質 15 條 | `runner/services/genesis-memory/prompt.ts`（種記憶時依四類產製、可單測缺類）；守門併入 A1/B1 的 POV/合本 system | 🟡 沙盒已驗（FINDINGS §實驗2） |
 
 ## B. 自檢（品質守門）
 
@@ -42,6 +43,7 @@
 | D3 | **持有者黏性**（capacity-1 標的不每 tick 翻盤） | `event-spine` resolve 計分加 holder bonus（待加） | 🟡 |
 | D4 | **班主介入**：偵測一人壟斷 → 護搭檔 + 令其輪空 | 真實＝Showrunner 用 `run_world_audit` 偵測失衡 + `direct_capabilities`；或新增一條 audit rule + capability | 🟡（沙盒已驗概念） |
 | **D5** | **Showrunner 看世界 → 開新標的/退場舊標的**（讓世界長出新衝突軸）。沙盒已做：showrunner 心跳吃現場資源+卡司，輸出 `resourceOps`（instantiate/retire），過守恆護欄（kind slug/不撞內建/seekers≥2/上限3/冷卻3tick），新標的下一 tick 自動被渴望、被 spine 結算 | 真實＝把 `propose-resources.ts`(instantiate) ＋新增 `retire_resource` 包成 `director/tools.ts` 的 narrative 工具，讓 Showrunner 心跳能呼叫；照 EVENT_LIFECYCLE §6 開 `directorResources` flag 驗鏈 | 🟡 沙盒已做·待真模型跑驗 |
+| **D6** | **混合制：判決定走向，自由文字定戲味**。實驗1：純自由行動能推（4/4 advanced）且更有戲味，但丟掉收束/守恆/上鏈。結論＝**保留發牌＋決定性判決當骨架**（收束在既定標的、capacity 守恆、持有權可上鏈），在 verdict 之後加一層**自由行動文字**（一句人設化的演繹）餵給 POV 當血肉 | `act.ts` verdict 之後不變；新增可選的 free-text action 欄——由 character-agent 在已知判決結果下產一句行動文字，經翻譯層(A3)後注入 `tick-loop.ts` 的 POV 材料。**純文字、不改判決、不上鏈** | 🟡 沙盒已驗概念（FINDINGS §實驗1） |
 
 ## E. 卡司 / 資源 / 數據
 
