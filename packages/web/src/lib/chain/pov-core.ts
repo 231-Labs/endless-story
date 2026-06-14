@@ -31,10 +31,25 @@ import {
 import { fetchRelationshipHints } from '@/lib/chain/relationships';
 import { resolveNetwork } from '@/lib/chain/network';
 
+/**
+ * Semantic query for the "thickness" recall — pulls a character's non-work
+ * life memories (childhood, family, hometown, first love, habits, the private
+ * ache) from the genesis-seeded long-term store, so chapters read like a person
+ * who has lived, not a job description. Deliberately broad + life-oriented; it
+ * names no character and no saga, so it stays flexible across any roster.
+ */
+export const LIFE_QUERY = '童年 家世 父母 故鄉 初戀 舊情 癖好 心事 牽掛 秘密 此生最重的事';
+
 export interface PovCoreOptions {
     triggerNarrative: string;
     forceRun?: boolean;
     dryRun?: boolean;
+    /**
+     * Chapter framing forwarded to the runner. `pov` (default) = serial
+     * event chapter; `genesis` = the character's 入世序章 (seed bootstrap);
+     * `encounter` = a quiet two-person 關係戲/溫情 (tick loop bond detection).
+     */
+    mode?: runnerCharacterWorker.ChapterMode;
     /** Phase 3: MemWal recall snippets to weave into the prompt. */
     recentMemorySnippets?: string[];
     /** DR-6: drama-engine tension hint (dominant unmet desire over a scarce
@@ -244,10 +259,20 @@ export async function runPovForCharacter(
     // narrative doubles as the semantic query. No-op ([]) when memory
     // isn't configured. Merge with any caller-supplied snippets. Director-
     // seeded relationships (N3) colour how she narrates others in the scene.
-    const [recalled, relationshipHints, planHint] = await Promise.all([
+    //
+    // Second recall (LIFE_QUERY): pull non-work life memories — childhood,
+    // family, old loves, habits, the private ache — so chapters carry the
+    // person's THICKNESS, not just the day's work. Genesis (入世序章) leans
+    // hardest on these; serial POV gets a smaller dose. Both queries hit the
+    // same genesis-seeded long-term store.
+    const lifeLimit = opts.mode === 'genesis' ? 6 : 3;
+    const [recalled, lifeRecalled, relationshipHints, planHint] = await Promise.all([
         opts.skipMemoryRecall
             ? Promise.resolve([] as string[])
             : recallForCharacter(characterId, opts.triggerNarrative, 6),
+        opts.skipMemoryRecall
+            ? Promise.resolve([] as string[])
+            : recallForCharacter(characterId, LIFE_QUERY, lifeLimit).catch(() => [] as string[]),
         opts.relationshipHints
             ? Promise.resolve(opts.relationshipHints)
             : fetchRelationshipHints(characterId, 6).catch(() => [] as string[]),
@@ -255,9 +280,13 @@ export async function runPovForCharacter(
             ? Promise.resolve(opts.planHint)
             : recallCurrentPlanText(characterId).catch(() => null),
     ]);
+    // Dedup while preserving order: caller snippets, then event recall, then life recall.
     const recentMemorySnippets = [
-        ...(opts.recentMemorySnippets ?? []),
-        ...recalled,
+        ...new Set([
+            ...(opts.recentMemorySnippets ?? []),
+            ...recalled,
+            ...lifeRecalled,
+        ]),
     ];
 
     try {
@@ -266,6 +295,7 @@ export async function runPovForCharacter(
             sagaId: d.sagaId,
             triggerNarrative: opts.triggerNarrative,
             role,
+            mode: opts.mode,
             recentMemorySnippets:
                 recentMemorySnippets.length > 0 ? recentMemorySnippets : undefined,
             relationshipHints:

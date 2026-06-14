@@ -32,6 +32,7 @@ import {
     buildSystemPrompt,
     buildUserPrompt,
     findUngroundedHeavyMotifs,
+    type ChapterMode,
     type CharacterSnapshot,
     type SagaSoul,
 } from './prompt.js';
@@ -39,6 +40,7 @@ import {
 export {
     buildSystemPrompt as buildPovSystemPrompt,
     buildUserPrompt as buildPovUserPrompt,
+    type ChapterMode,
     type CharacterSnapshot,
     type PovPromptInput,
     type SagaSoul,
@@ -88,6 +90,14 @@ export interface RunCharacterWorkerInput {
      * fake hardcoded role.
      */
     role?: string;
+    /**
+     * Optional: chapter framing. `pov` (default) = event-anchored serial
+     * chapter (承上/推進/啟下); `genesis` = the character's first 入世序章
+     * (front door, no 承上, leans on life memories for thickness);
+     * `encounter` = a quiet two-person 關係戲/溫情 (no competition). All modes
+     * share the same iron rules + voice — only the framing swaps.
+     */
+    mode?: ChapterMode;
     /** Override LLM model. */
     model?: string;
     /** Bypass subscriber gate (admin manual trigger). */
@@ -164,7 +174,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
     // Per-saga soul: chain-derived (Tier 1) merged under any caller override
     // (Tier 2: nature/rhythm). Caller-provided fields win; chain fills the rest.
     const soul: SagaSoul = { ...chainSoul, ...(input.sagaSoul ?? {}) };
-    const system = buildSystemPrompt(soul);
+    const system = buildSystemPrompt(soul, input.mode ?? 'pov');
     const user = buildUserPrompt({
         character: publicSnapshot,
         triggerNarrative: input.triggerNarrative,

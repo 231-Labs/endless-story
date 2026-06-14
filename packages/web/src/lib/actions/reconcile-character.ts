@@ -24,9 +24,11 @@ import { affirmMintPublicTagsAction } from './affirm-public-tags.js';
 import { generatePersonaAction } from './generate-persona.js';
 import { generateAppearanceAction } from './generate-appearance.js';
 import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
+import { seedGenesisPrologueAction } from './seed-genesis-prologue.js';
 import { assessAndApplyRelationshipsAction } from './assess-relationships.js';
 import { fetchOnChainPersona } from '../chain/persona-read.js';
 import { fetchOnChainAppearance } from '../chain/appearance-read.js';
+import { fetchPovChaptersForCharacter } from '../chain/pov-read.js';
 import { resolveRole } from '../chain/pov-core.js';
 import { getMemoryCount } from '../chain/memory-counter.js';
 import { getAdminContext } from '../chain/admin-signer.js';
@@ -42,7 +44,7 @@ const ATTR_LABEL: Record<string, string> = {
 /** kind=6 setting_sheet marks "additional gallery views were generated". */
 const SETTING_SHEET_KIND = 6;
 
-export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'appearance' | 'memory' | 'relationship';
+export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'appearance' | 'memory' | 'relationship' | 'prologue';
 export type ReconcileStatus = 'ok' | 'skip' | 'fail';
 
 export interface ReconcileStep {
@@ -271,6 +273,32 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
         });
     } catch (err) {
         steps.push({ step: 'relationship', status: 'fail', detail: err instanceof Error ? err.message : String(err) });
+    }
+
+    // ── 7) 入世序章 genesis prologue (the reader's front door; anchored on chain) ─
+    //     Idempotency signal: list this character's on-chain POV chapters
+    //     (CommitmentCreated filtered by subject_id = characterId — exactly where
+    //     pov-core anchors every chapter). A non-empty list ⇒ a chapter already
+    //     exists, so skip. We gate on the CHAIN anchor (not the MemWal kind=chapter
+    //     count) because the chain is the source of truth for "every character has
+    //     a first chapter on chain", and MemWal is an optional enhancement layer
+    //     that returns 0/[] when unconfigured (which would falsely re-trigger).
+    try {
+        const existing = await fetchPovChaptersForCharacter(characterId, { limit: 1 }).catch(
+            () => [],
+        );
+        if (existing.length > 0) {
+            steps.push({ step: 'prologue', status: 'skip', detail: `${existing.length} existing` });
+        } else {
+            const r = await seedGenesisPrologueAction(characterId);
+            steps.push({
+                step: 'prologue',
+                status: r.anchored ? 'ok' : r.skipped ? 'skip' : 'fail',
+                detail: r.skipped ?? r.error ?? `anchored ${r.chapterChars ?? 0} chars`,
+            });
+        }
+    } catch (err) {
+        steps.push({ step: 'prologue', status: 'fail', detail: err instanceof Error ? err.message : String(err) });
     }
 
     return { ok: !steps.some((s) => s.status === 'fail'), characterId, name, steps };
