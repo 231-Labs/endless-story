@@ -30,6 +30,7 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
+import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
@@ -729,6 +730,26 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             tlog(`   接濟 ${gives.filter((g) => g.ok && g.gave).length} 件${dryRun ? '（預演）' : ''}`);
         } catch (err) {
             console.warn('[tick-loop] give phase failed:', err);
+        }
+    }
+
+    // 2.96 養關係 — MECHANICAL bond strengthening (no LLM, no director decision):
+    //   an ACCEPTED gift this tick deepens that pair's PUBLIC tie via one extra
+    //   relationship_seed, so the relationship graph grows from what characters
+    //   actually DO and encounters start favouring pairs who keep helping each
+    //   other. Owned-cap tx → pushed into the serial `cutJobs` (drained after the
+    //   POV batch / cuts / moments) so it can't race the StorytellerCap.
+    if (!dryRun) {
+        const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId);
+        if (bondPairs.length > 0) {
+            tlog(`②⁺ 養關係：${bondPairs.length} 對因接濟加深公開羈絆`);
+            cutJobs.push(async () => {
+                const r = await seedBondTies(bondPairs);
+                console.log(
+                    `[tick-loop] bond strengthen: seeded=${r.seeded}` +
+                        (r.error ? ` error=${r.error}` : ''),
+                );
+            });
         }
     }
 

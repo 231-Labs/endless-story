@@ -32,9 +32,14 @@ const ENCOUNTER_TONES: ReadonlySet<RelationshipTone> = new Set<RelationshipTone>
     'estrangement',
 ]);
 
-/** Minimum seed count for a tie to be "strong enough" for an encounter. One
- *  lone seed is too faint; ≥2 means the director leaned on this pair twice. */
-const ENCOUNTER_STRENGTH = 2;
+/** Minimum seed count for a tie to qualify for an encounter. A director-seeded
+ *  bond tone is itself a deliberate authorial signal, and characters are seeded
+ *  once per pair at induction (count = 1), so the GATE is 1 — otherwise encounters
+ *  would essentially never fire in autonomous operation. Bonds then DEEPEN through
+ *  behaviour: the 養關係 step (bond.ts) emits an extra seed when a pair helps each
+ *  other, bumping count, and `pickEncounterPair` prefers the HIGHER count — so a
+ *  deepened pair is favoured over a merely-introduced one. */
+const ENCOUNTER_STRENGTH = 1;
 
 export interface EncounterPair {
     /** POV holder (we generate from one side; the chapter still names the other). */
