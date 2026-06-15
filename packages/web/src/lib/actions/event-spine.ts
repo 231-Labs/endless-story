@@ -25,9 +25,18 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import type { Keypair } from '@mysten/sui/cryptography';
-import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, type SuiClient } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, read, type SuiClient } from '@endless-story/sdk';
 import { readResourceLedger, settleResolvedTransfers } from '@/lib/chain/drama';
 import { coolResource } from '@/lib/chain/gravity-core';
+
+/** Wall-clock window that defines one spine "tick" for age math. An event lingers
+ *  minTicks–maxTicks of these windows before it resolves. Age is derived from the
+ *  on-chain push timestamp (clockTickOf), NOT a per-process counter, so it survives
+ *  restarts. Tune to your runner cadence via ES_SPINE_TICK_WINDOW_MS. */
+const SPINE_TICK_WINDOW_MS = Math.max(
+    1000,
+    Number(process.env.ES_SPINE_TICK_WINDOW_MS) || 120_000,
+);
 
 /** How long a just-settled resource stops pulling rivals (rival-gravity ticks,
  *  decremented once per loop). Long enough that a ≥3-way contest disperses
@@ -36,10 +45,13 @@ const GRAVITY_COOLDOWN_TICKS = 6;
 import {
     decideSpineStep,
     decideSpineSteps,
-    resourceForContention,
+    pickContestedResource,
+    reconcileOpenEvents,
+    clockTickOf,
     chooseSettlementWinner,
     planResourceTransfer,
     type SpineOpenEvent,
+    type ChainOpenEvent,
     type SpineStep,
     type ContentionPick,
     type SceneOccupant,
@@ -87,13 +99,65 @@ export function spineNextTick(sagaId: string): number {
     return next;
 }
 
+/** Clock-derived spine tick — `clockTickOf(now)`. Restart-proof: any process at
+ *  the same wall-clock computes the same value (unlike the in-memory counter). */
+export function spineClockTick(nowMs = Date.now()): number {
+    return clockTickOf(nowMs, SPINE_TICK_WINDOW_MS);
+}
+
 /**
- * Diagnostic snapshot of the saga's IN-MEMORY spine state. The whole linger →
- * resolve cadence depends on `openBySaga`/`tickBySaga` surviving between ticks
- * (each /api/tick is a separate HTTP request — only safe if the Node process is
- * long-lived). If a tick's snapshot shows `tick #1` with 0 remembered events
- * even though events were opened on chain last tick, the process was recycled
- * between ticks and events will pile up OPEN forever (never aged → never resolved).
+ * Reconcile the saga's in-memory open list against the chain's authoritative open
+ * set (BudgetEvents with meta.status === OPEN). Adopts events orphaned by a process
+ * restart (so they age + resolve via the on-chain push timestamp instead of hanging
+ * open forever) and drops events already resolved on chain. Failure-isolated: any
+ * read error leaves the in-memory list untouched (degrades to the old behavior).
+ * Returns the reconciled open list (also written back into the registry).
+ */
+export async function reconcileOpenFromChain(
+    client: SuiClient,
+    sagaId: string,
+): Promise<SpineOpenEvent[]> {
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg) return openList(sagaId);
+    try {
+        const summaries = await read.event.listBudgetEvents(client, pkg, { sagaId, maxEvents: 25 });
+        const chainOpen: ChainOpenEvent[] = [];
+        for (const s of summaries) {
+            let parsed: {
+                meta?: { status?: number | string; scene_id?: string; title?: string };
+                deck?: { participants?: string[] };
+            };
+            try {
+                const res = await read.event.getBudgetEvent(client, s.eventId);
+                parsed = res.json as typeof parsed;
+            } catch {
+                continue;
+            }
+            if (Number(parsed.meta?.status ?? 0) !== 0) continue; // 0 = OPEN
+            chainOpen.push({
+                eventId: s.eventId,
+                sceneId: parsed.meta?.scene_id ?? s.sceneId,
+                createdAtMs: Number(s.createdAtMs) || Date.now(),
+                participantIds: parsed.deck?.participants ?? [],
+                label: parsed.meta?.title ?? '一場戲',
+            });
+        }
+        const reconciled = reconcileOpenEvents(chainOpen, openList(sagaId), SPINE_TICK_WINDOW_MS);
+        openBySaga.set(sagaId, reconciled);
+        return reconciled;
+    } catch (err) {
+        console.warn('[event-spine] reconcile from chain failed:', err);
+        return openList(sagaId);
+    }
+}
+
+/**
+ * Diagnostic snapshot of the saga's spine open set — call AFTER reconcileOpenFromChain
+ * so it reflects chain truth (warm cache + adopted orphans), with each event's age in
+ * clock-ticks (`clockTickOf(now) − openedAtTick`). Used by the tick log to show what's
+ * in play and how old. With the clock-derived age + chain reconcile, a recycled
+ * process no longer loses the open set — orphans show up here with their real age and
+ * resolve on schedule instead of piling up OPEN.
  */
 export function spineMemorySnapshot(
     sagaId: string,
@@ -346,7 +410,9 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
             capacity: r.capacity,
             allocations: r.allocations,
         }));
-        const resource = resourceForContention(views, ev.templateId);
+        // Warm path matches by templateId; an orphan adopted from chain has no
+        // templateId, so fall back to the resource the cast most wants (by tension).
+        const resource = pickContestedResource(views, ev.templateId, ev.participantIds, ctx.tensions);
         // RIVAL GRAVITY relief #1: the contest is decided — stop drawing rivals to
         // this resource for a while (else a ≥3-way slot thrashes; gravity-sim (C)).
         if (resource) coolResource(resource.resourceId, GRAVITY_COOLDOWN_TICKS);

@@ -49,8 +49,9 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
-    spineNextTick,
+    spineClockTick,
     spineMemorySnapshot,
+    reconcileOpenFromChain,
     spinePlanAndOpen,
     spinePlanAndOpenAll,
     spineAccumulatePovs,
@@ -524,14 +525,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             })),
             attrsById,
         };
-        const nowTick = spineNextTick(d.sagaId);
-        // Diagnostic: spine memory carried in from prior ticks. If this shows
-        // `tick #1` / `記憶 0 個` every tick despite events opening on chain, the
-        // web process is being recycled between ticks → events never age → never
-        // resolve (they pile up OPEN). See spineMemorySnapshot's note.
+        // Rebuild the open set from chain BEFORE deciding — age is derived from the
+        // on-chain push timestamp (spineClockTick), so events opened by a prior
+        // (possibly since-recycled) process still age and resolve here instead of
+        // piling up OPEN forever. Failure-isolated: a read blip keeps the warm cache.
+        await reconcileOpenFromChain(admin.client, d.sagaId);
+        const nowTick = spineClockTick();
         const mem = spineMemorySnapshot(d.sagaId, nowTick);
         tlog(
-            `②‴ spine 記憶：tick #${mem.tick} · 在演 ${mem.open.length} 個${
+            `②‴ spine 記憶：clock-tick ${mem.tick} · 在演 ${mem.open.length} 個${
                 mem.open.length ? `（${mem.open.map((e) => `${e.eventId.slice(0, 10)}…@${e.age}t`).join('、')}）` : ''
             }`,
         );
@@ -567,7 +569,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             })),
             attrsById,
         };
-        const nowTick = spineNextTick(d.sagaId);
+        await reconcileOpenFromChain(admin.client, d.sagaId);
+        const nowTick = spineClockTick();
         const r = await spinePlanAndOpen(admin, spineCtx, nowTick);
         if (r.storylet) storylets = [r.storylet];
         spineSteps = [r.step];
