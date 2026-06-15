@@ -307,7 +307,9 @@ recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEA
 ```
 `resolveContestSpec(kind, override)` 已預留 override 入口；目前自治路徑用「依資源 kind 的預設 spec」。
 
-**待續**：① 意圖目前用 drama 張力(結構性、偏均勻)，要接成真正「從記憶推導、行當化」的慾望（花旦不會真想要武戲）；② 讓 LLM 導演/Showrunner 真的產 `contestSpec` 並持久化（屬 N7）；③ 持有者黏性+冷卻(D3) 提供「但還是有可能」的戲劇變數、破鬼打牆。
+**意圖已行當化（2026-06-15）**：`defaultDesiresForCast` 的慾望 weight 不再均勻——改由 `roleResourceAmbition(role, kind)`（行當→資源 ambition 表，0..1）縮放。weight 線性進 tension（=意圖），所以花旦為頭牌/唱片發燒、幾乎不碰武戲，武旦反之。低 ambition 仍保留為「弱意圖」(想搶但搶不起)，不硬排除，藉 ability 收掉。全鏈路驗證（行當意圖→爭搶名單→能力定勝負）：唱片/頭牌→蘇映雪、搭檔→柳生春、報紙/堂會→何阿喜、武戲→連翹。
+
+**待續**：① 意圖再進一步「從記憶/關係動態推導」（如連翹因心底秘密而特別想要沈雪笙的青眼）——目前是行當靜態 ambition，記憶調變為下一層；② 讓 LLM 導演/Showrunner 真的產 `contestSpec` 並持久化（屬 N7）；③ 持有者黏性+冷卻(D3) 提供額外戲劇變數、破鬼打牆。
 
 ---
 

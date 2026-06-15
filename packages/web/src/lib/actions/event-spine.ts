@@ -284,17 +284,24 @@ export async function spineResolveAndWeave(
  * success. Falls back to the tension-only winner when 先天 attrs aren't available
  * (ctx.attrsById absent) so settlement never hard-depends on the new path.
  */
-function pickContestWinner(ctx: SpineCtx, participantIds: string[], keyword: string): string | null {
-    if (!ctx.attrsById) return chooseSettlementWinner(participantIds, ctx.tensions, keyword);
-    // intent per participant = max tension whose statement carries this resource keyword.
+function pickContestWinner(ctx: SpineCtx, participantIds: string[], resource: AllocationView): string | null {
+    const label = resource.label;
+    const colon = label.indexOf(':');
+    const kind = colon >= 0 ? label.slice(0, colon) : '';
+    const name = colon >= 0 ? label.slice(colon + 1) : label; // 中文 display, always in the statement
+    // A tension belongs to this resource if its statement carries the resource's
+    // 中文 name (robust for natural + label-form statements) or the ascii kind.
+    const matches = (s: string) => (name !== '' && s.includes(name)) || (kind !== '' && s.includes(kind));
+    if (!ctx.attrsById) return chooseSettlementWinner(participantIds, ctx.tensions, name);
+    // intent per participant = max tension toward this resource.
     const intentById = new Map<string, number>();
     for (const t of ctx.tensions) {
         if (!participantIds.includes(t.characterId)) continue;
-        if (keyword && !t.statement.includes(keyword)) continue;
+        if (!matches(t.statement)) continue;
         if (t.tension <= 0) continue;
         intentById.set(t.characterId, Math.max(intentById.get(t.characterId) ?? 0, t.tension));
     }
-    const spec = resolveContestSpec(keyword);
+    const spec = resolveContestSpec(kind);
     const contenders = participantIds
         .map((id) => {
             const attrs = ctx.attrsById!.get(id);
@@ -302,7 +309,7 @@ function pickContestWinner(ctx: SpineCtx, participantIds: string[], keyword: str
             return toContender(id, intentById.get(id) ?? 0, ctx.roleById.get(id) ?? '', attrs, spec);
         })
         .filter((c): c is NonNullable<typeof c> => c !== null);
-    if (contenders.length === 0) return chooseSettlementWinner(participantIds, ctx.tensions, keyword);
+    if (contenders.length === 0) return chooseSettlementWinner(participantIds, ctx.tensions, name);
     return chooseContestWinner(contenders, spec.abilityGate);
 }
 
@@ -325,8 +332,7 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
         // RIVAL GRAVITY relief #1: the contest is decided — stop drawing rivals to
         // this resource for a while (else a ≥3-way slot thrashes; gravity-sim (C)).
         if (resource) coolResource(resource.resourceId, GRAVITY_COOLDOWN_TICKS);
-        const keyword = ev.templateId.split(':')[1] ?? '';
-        const winner = resource ? pickContestWinner(ctx, ev.participantIds, keyword) : null;
+        const winner = resource ? pickContestWinner(ctx, ev.participantIds, resource) : null;
         const plan = resource && winner ? planResourceTransfer(resource, winner) : null;
 
         if (resource && plan) {
