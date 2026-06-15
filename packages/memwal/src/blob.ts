@@ -68,9 +68,75 @@ export interface PutBlobOptions {
      *  (e.g. a tick uploading several blobs) commonly 429s — a short backoff
      *  usually clears it. */
     retries?: number;
+    /**
+     * Self-hosted asset-service renewal bucket (character-image | scene-anchor |
+     * chapter-text | hero-clip). When `ASSET_SERVICE_URL` is set, putBlob uploads
+     * through the asset service (which publishes to Walrus via its funded CLI) —
+     * this picks the category; defaults from `contentType`. */
+    category?: string;
+    /** Label for the asset-service entry; defaults to `<category>-<ts>`. */
+    label?: string;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+const ASSET_CATEGORIES = new Set(['hero-clip', 'character-image', 'scene-anchor', 'chapter-text']);
+
+/** Pick the asset-service renewal bucket: explicit hint wins, else by content-type. */
+function assetCategoryFor(contentType: string | undefined, hint: string | undefined): string {
+    if (hint && ASSET_CATEGORIES.has(hint)) return hint;
+    const ct = (contentType ?? '').toLowerCase();
+    if (ct.startsWith('image/')) return 'character-image';
+    if (ct.startsWith('text/')) return 'chapter-text';
+    return 'scene-anchor';
+}
+
+/**
+ * Upload via the self-hosted asset service (`POST {ASSET_SERVICE_URL}/api/assets`),
+ * which publishes to Walrus through its funded CLI wallet and returns a blobId —
+ * the write path when no Walrus *publisher* daemon is run (the public testnet
+ * publisher is unreliable). Returns null when unconfigured OR on ANY failure, so
+ * `putBlob` cleanly falls back to a direct publisher PUT. Auto-generated blobs are
+ * stored `deletable=true` (they are not human-curated assets).
+ */
+async function uploadViaAssetService(
+    bytes: Uint8Array,
+    network: WalrusNetwork,
+    opts: PutBlobOptions,
+): Promise<PutBlobResult | null> {
+    const base = (process.env.ASSET_SERVICE_URL ?? '').trim().replace(/\/$/, '');
+    if (!base) return null;
+    const secret = process.env.ASSET_SERVICE_SECRET ?? process.env.RELAYER_SECRET;
+    const category = assetCategoryFor(opts.contentType, opts.category);
+    const label = (opts.label ?? `${category}-${Date.now().toString(36)}`).slice(0, 120);
+    const epochs = opts.epochs ?? 5;
+    const qs = new URLSearchParams({ category, label, epochs: String(epochs), deletable: 'true' });
+    try {
+        const res = await fetch(`${base}/api/assets?${qs.toString()}`, {
+            method: 'POST',
+            headers: {
+                'content-type': opts.contentType ?? 'application/octet-stream',
+                ...(secret ? { authorization: `Bearer ${secret}` } : {}),
+            },
+            body: new Blob([bytes as BlobPart]),
+        });
+        if (!res.ok) return null; // fall back to the direct publisher
+        const data = (await res.json()) as {
+            asset?: { blobId?: string; suiObjectId?: string; endEpoch?: number };
+        };
+        const a = data.asset;
+        if (!a?.blobId) return null;
+        return {
+            blobId: a.blobId,
+            suiObjectId: a.suiObjectId,
+            endEpoch: a.endEpoch,
+            alreadyCertified: false,
+            url: getBlobUrl(a.blobId, network),
+        };
+    } catch {
+        return null; // network / shape error → fall back
+    }
+}
 
 export interface PutBlobResult {
     blobId: string;
@@ -111,6 +177,15 @@ export async function putBlob(
 ): Promise<PutBlobResult> {
     const network = opts.network ?? 'testnet';
     const epochs = opts.epochs ?? 5;
+
+    // Prefer the self-hosted asset service (publishes to Walrus via a funded CLI)
+    // unless the caller pinned an explicit publisher. Falls through to a direct
+    // publisher PUT when the asset service is unconfigured or fails.
+    if (!opts.publisherUrl) {
+        const viaAsset = await uploadViaAssetService(bytes, network, opts);
+        if (viaAsset) return viaAsset;
+    }
+
     const base = opts.publisherUrl ?? publisherBase(network);
     const url = `${base.replace(/\/$/, '')}/v1/blobs?epochs=${epochs}`;
     const maxRetries = Math.max(0, opts.retries ?? 4);
