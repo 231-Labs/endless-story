@@ -18,7 +18,7 @@
  * spec (see resolveContestSpec / the director guideline).
  */
 
-import { deriveSagaSkills, type SkillKey, type SkillProfile, type WorldAttrs } from './saga-skills';
+import { deriveSagaSkills, type SkillKey, type SkillProfile, type WorldAttrs } from './saga-skills-core.ts';
 
 export type InnateKey = 'appearance' | 'constitution' | 'acuity' | 'disposition';
 

@@ -746,7 +746,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   other. Owned-cap tx → pushed into the serial `cutJobs` (drained after the
     //   POV batch / cuts / moments) so it can't race the StorytellerCap.
     if (!dryRun) {
-        const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId);
+        const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId, d.sceneIds[0]);
         if (bondPairs.length > 0) {
             tlog(`②⁺ 養關係：${bondPairs.length} 對因接濟加深公開羈絆`);
             cutJobs.push(async () => {

@@ -138,6 +138,35 @@ test('verifyBeat: a committed beat re-runs to the same output (and tampering is 
     assert.equal(verifyBeat(tampered), false, 'tampered output must NOT verify');
 });
 
+function res(label: string): ResourceSnapshot {
+    return { id: '0xr2', archetype: 'capacity-1-slot', label, capacity: 1n, allocations: {} };
+}
+
+test('行當 ambition shapes desire WEIGHT: 花旦 burns for 唱片 more than 武旦', () => {
+    const hua = defaultDesiresForCast([res('recording:首張唱片灌錄權')], 5, { agentTags: ['role:花旦'] });
+    const wu = defaultDesiresForCast([res('recording:首張唱片灌錄權')], 5, { agentTags: ['role:刀馬旦'] });
+    assert.equal(hua.length, 1);
+    assert.equal(wu.length, 1);
+    assert.ok(hua[0].weight > wu[0].weight, `花旦(${hua[0].weight}) should out-want 武旦(${wu[0].weight}) for 唱片`);
+});
+
+test('行當 ambition: 武旦 burns for 武戲 more than 花旦 (the 武 行當 outlet)', () => {
+    const wu = defaultDesiresForCast([res('martial:壓軸武戲台口')], 5, { agentTags: ['role:刀馬旦'] });
+    const hua = defaultDesiresForCast([res('martial:壓軸武戲台口')], 5, { agentTags: ['role:花旦'] });
+    assert.ok(wu[0].weight > hua[0].weight, `武旦(${wu[0].weight}) should out-want 花旦(${hua[0].weight}) for 武戲`);
+});
+
+test('行當 ambition: a 行當 wants its home resource more than an off-行當 one', () => {
+    const huaRecording = defaultDesiresForCast([res('recording:唱片')], 5, { agentTags: ['role:花旦'] })[0];
+    const huaMartial = defaultDesiresForCast([res('martial:武戲')], 5, { agentTags: ['role:花旦'] })[0];
+    assert.ok(huaRecording.weight > huaMartial.weight, '花旦 wants 唱片 ≫ 武戲');
+});
+
+test('backstage role (記者/衣箱) does not compete for a performer resource', () => {
+    assert.equal(defaultDesiresForCast([res('recording:唱片')], 5, { agentTags: ['role:記者'] }).length, 0);
+    assert.equal(defaultDesiresForCast([res('naming:四方小報頭條')], 5, { agentTags: ['role:衣箱'] }).length, 0);
+});
+
 test('hint: dominant unmet desire renders a non-empty Chinese line', () => {
     const { next } = deriveBeat(castWorld(LIU));
     const baiHint = dramaHintForAgent(next, BAI);
