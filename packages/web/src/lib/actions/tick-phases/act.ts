@@ -36,11 +36,31 @@ interface EventActState {
 }
 
 /**
+ * Card label → an evocative STAGE ACTION phrase. The raw card token (斬/攻/敘/觀…)
+ * must never reach a writing prompt — the LLM echoes it as a fake 折子戲 名 (《斬》).
+ * This is the A3 translation layer: anything fed to POV / verdict / scene-lines
+ * uses a human action, not the mechanism token. (Unknown label → a neutral phrase.)
+ */
+const CARD_ACTION: Record<string, string> = {
+    斬: '使出最狠的殺著',
+    攻: '步步進逼、搶著戲路',
+    守: '穩住陣腳、不接招',
+    誘: '下餌引人入彀',
+    觀: '按兵不動、冷眼看著',
+    讓: '退了半步、讓出鋒頭',
+    敘: '以一段唱念把戲鋪開',
+};
+export function cardActionPhrase(label?: string): string {
+    return (label && CARD_ACTION[label]) || '出了一手';
+}
+
+/**
  * Deterministic verdict from on-chain plays — the chain fact the narrative
  * layer can quote for win/loss (resolve itself carries empty outcomes today).
  * Rule: the most aggressive card wins (catalog intent ascending: 斬0 攻1 敘4
  * 觀6); ties break by earliest submission. Pure derivation — reproducible by
- * anyone from the BudgetEvent object.
+ * anyone from the BudgetEvent object. Text uses STAGE-ACTION phrases (not the raw
+ * card token) so it's safe to feed POV / plan / scene-lines.
  */
 function deriveVerdict(
     e: EventActState,
@@ -59,15 +79,15 @@ function deriveVerdict(
     const w = ranked[0];
     const winnerName = nameById.get(w.characterId) ?? '某角';
     if (ranked.length === 1) {
-        return { winnerId: w.characterId, text: `${winnerName}打出〔${w.label}〕，無人接招，這一局由${winnerName}收場` };
+        return { winnerId: w.characterId, text: `${winnerName}${cardActionPhrase(w.label)}，無人接招，這一局由${winnerName}收場` };
     }
     const losers = ranked
         .slice(1)
-        .map((l) => `${nameById.get(l.characterId) ?? '某角'}的〔${l.label}〕`)
+        .map((l) => nameById.get(l.characterId) ?? '某角')
         .join('、');
     return {
         winnerId: w.characterId,
-        text: `${winnerName}的〔${w.label}〕壓過${losers}，這一局${winnerName}佔了上風`,
+        text: `${winnerName}${cardActionPhrase(w.label)}，壓過了${losers}，這一局${winnerName}佔了上風`,
     };
 }
 
