@@ -31,6 +31,7 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
+import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
@@ -971,6 +972,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     skipMemoryRecall: true,
                 });
                 tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
+                dumpChapter(
+                    {
+                        kind: 'pov',
+                        day: worldTime?.day,
+                        name: c.name,
+                        role: roleById.get(c.id),
+                        scene: rosterById.get(c.id)?.currentSceneName,
+                        dryRun,
+                    },
+                    r.chapter,
+                );
                 if (eventKey && r.ok && r.chapter?.trim()) lastPovEventByChar.set(c.id, eventKey);
                 return { c, r };
             } catch (err) {
@@ -1083,6 +1095,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                     (cut.skipReason ? ` skipped=${cut.skipReason}` : '') +
                                     (cut.error ? ` error=${cut.error}` : ''),
                             );
+                            dumpChapter(
+                                { kind: 'cut', day: worldTime?.day, name: st.sceneName, note: st.label, dryRun },
+                                cut.chapter,
+                            );
                         });
                     }
                 }
@@ -1144,6 +1160,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
                 if (enc.ok && enc.chapter?.trim()) {
                     lastEncounterPair = pair.pairKey;
+                    dumpChapter(
+                        {
+                            kind: 'encounter',
+                            day: worldTime?.day,
+                            name: holderName,
+                            role: roleById.get(pair.holderId),
+                            scene: rosterById.get(pair.holderId)?.currentSceneName,
+                            note: `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
+                            dryRun,
+                        },
+                        enc.chapter,
+                    );
                     tlog(
                         `④· 關係戲：${holderName} ⇄ ${pair.otherName}（${pair.toneZh}・牽連 ${pair.count}）` +
                             ` ✓ (${enc.chapter.length} 字)${dryRun ? '（預演，不上鏈）' : ''}`,

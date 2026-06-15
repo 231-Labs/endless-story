@@ -20,6 +20,16 @@
 - [ ] 重新部署合約 → 跑 codegen → 確認 `shared/src/contract-ids.ts` 的 sagaId / storytellerCapId / packageId 已更新
 - [ ] `.env.local` 的 `POE_API_KEY` / `OPENAI_API_KEY` / `SUI_ADMIN_PRIVATE_KEY` / MemWal 憑證齊（無 MemWal 則厚度召回為 no-op）
 
+## 0b. 低成本內容驗證通道（dump → 我審，免手動貼）
+
+> 上鏈鑄角色是不可免的一次性成本；但**章回生成可在 dry-run 下完成（不付 Walrus/commit）**，所以鑄好卡司後可反覆 dry-run 預覽內容、零額外鏈上花費。
+
+- [ ] localhost 跑生成前設 `ES_CHAPTER_DUMP_DIR=./chapters-out`（未設＝無動作，正式環境不受影響）
+- [ ] 每一篇生成的 prose（創世序章 / POV / 關係戲 / 合本）會寫成 `chapters-out/dNNN-<kind>-<name>-NNNN.md`（含行當/場景/日/註的表頭），dry-run 也會寫
+- [ ] **零鏈上花費的內容預覽**：鑄好卡司後跑 `world-loop --dry-run --json-out=report.json`（POV 在 JSON、關係戲/合本在 dump 目錄）反覆預覽
+- [ ] 把 `chapters-out/`（或 report.json）**commit 後 push** 到本分支 → 我 `git fetch` 後逐篇審（**不需手動貼**）
+- [ ] 要看資源爭搶結果：開 `TICK_EVENT_SPINE=1`，結算決策在 console log（`[event-spine]`）
+
 ## 1. 種子 + 創世序章（自治）
 
 - [ ] 鑄一個新角色 → 跑 `reconcileCharacterAction`（或走 redeem after() 流程）
