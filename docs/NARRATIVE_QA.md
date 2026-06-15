@@ -20,13 +20,29 @@
 - [ ] 重新部署合約 → 跑 codegen → 確認 `shared/src/contract-ids.ts` 的 sagaId / storytellerCapId / packageId 已更新
 - [ ] `.env.local` 的 `POE_API_KEY` / `OPENAI_API_KEY` / `SUI_ADMIN_PRIVATE_KEY` / MemWal 憑證齊（無 MemWal 則厚度召回為 no-op）
 
+## 0b. 低成本內容驗證通道（dump → 我審，免手動貼）
+
+> 上鏈鑄角色是不可免的一次性成本；但**章回生成可在 dry-run 下完成（不付 Walrus/commit）**，所以鑄好卡司後可反覆 dry-run 預覽內容、零額外鏈上花費。
+
+- [ ] localhost 跑生成前設 `ES_CHAPTER_DUMP_DIR=./chapters-out`（未設＝無動作，正式環境不受影響）
+- [ ] 每一篇生成的 prose（創世序章 / POV / 關係戲 / 合本）會寫成 `chapters-out/dNNN-<kind>-<name>-NNNN.md`（含行當/場景/日/註的表頭），dry-run 也會寫
+- [ ] **零鏈上花費的內容預覽**：鑄好卡司後跑 `world-loop --dry-run --json-out=report.json`（POV 在 JSON、關係戲/合本在 dump 目錄）反覆預覽
+- [ ] 把 `chapters-out/`（或 report.json）**commit 後 push** 到本分支 → 我 `git fetch` 後逐篇審（**不需手動貼**）
+- [ ] 要看資源爭搶結果：開 `TICK_EVENT_SPINE=1`，結算決策在 console log（`[event-spine]`）
+
 ## 1. 種子 + 創世序章（自治）
 
 - [ ] 鑄一個新角色 → 跑 `reconcileCharacterAction`（或走 redeem after() 流程）
 - [ ] `steps` 依序出現 `memory: ok / seeded N` 後接 `prologue: ok / anchored N chars`
 - [ ] 鏈上該角色 subject 有**第一篇章回**，內容是「入世序章」：具體當下場面、**無承上**、帶童年/家世/初戀等**非工作**厚度、結尾輕帶將至引線（不爭、不輸贏）
 - [ ] 角色**不會**在正文自報「俊扮無鬚 / 坤生 / 乾生」（行當卡是隱形守門，不該被唸出來）
-- [ ] **冪等**：再跑一次 reconcile → `prologue: skip（N existing）`，不重鑄
+- [ ] reconcile `steps` 也出現 `skills: ok / seeded 6`（每角色六項行當技能上鏈）
+- [ ] **冪等**：再跑一次 reconcile → `prologue: skip（N existing）`，不重鑄（skills 是 upsert，會重寫同值，正常）
+
+### 1b. 行當技能 → 出牌加權（唱做）
+
+- [ ] 創世卡司／reconcile 後，鏈上每角色有六項 saga 技能（唱腔/身段/台緣/武場/文墨/交際），值符合行當（連翹武場+身段高、蘇映雪唱腔+台緣高、方競西文墨高、衣箱/記者表演技能低）
+- [ ] 事件發牌時，武行當較常拿到「攻」（武打＝武場+身段加權）、文行當較常拿到「敘」（唱念＝交際+唱腔加權）——台上比拼看得出唱做本工，而非均勻亂發
 
 ## 2. 自檢（換新行當/新角色不該失效）
 
@@ -56,9 +72,18 @@
 
 - [ ] 同一 tick 各用 Poe（GLM-5.1-FW，長章免費 200 點/呼叫）與 z.ai（per-token）跑一次，比品質與點數，定 demo 用哪家
 
+## 5b. 資源爭搶＝意圖×能力（選用，需開 spine 模式）
+
+> 重設計只在 spine 結算時生效（資源結算本就只在那裡），預設關閉，不影響上面 1–4 的敘事 QA。要驗就開 `TICK_EVENT_SPINE=1`（或 `TICK_PARALLEL_EVENTS=1`）。
+
+- [ ] 開 spine 後，唱片/頭牌類資源**由本工強者拿下**（蘇映雪/柳生春），不再是「誰最想要就贏」
+- [ ] 新增的 `martial:壓軸武戲台口` → **連翹（武旦）爭得到**（武行當終於有出路）
+- [ ] 能力不足者即使很想要也搶不到（想搶搶不起）；偶有能者被推上去（臨危受命）
+
 ## 6. 不在本輪 QA 路徑（確認預設關閉、不會誤觸）
 
-- [ ] `TICK_DIRECTOR_RESOURCES` / `TICK_EVENT_SPINE` 維持關閉（持有者黏性 / 退場線屬下一輪工程）
+- [ ] `TICK_DIRECTOR_RESOURCES` 維持關閉（退場線屬下一輪工程）
+- [ ] `TICK_EVENT_SPINE` 預設關閉；敘事 QA 不需要它（開了才會驗到 5b 的資源爭搶）
 - [ ] 導演 in-loop 主動經營關係（LLM 牽線）本輪刻意未做
 
 ---

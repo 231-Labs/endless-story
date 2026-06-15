@@ -115,12 +115,49 @@ export interface DefaultDesireOptions {
  * We treat capacity ≤ cast-size as contested; in practice the partnership slot
  * (capacity 1) always qualifies.
  */
+/**
+ * 行當 → how strongly it WANTS each resource kind (0..1). Ambition, not ability —
+ * a 武旦 can want 唱片 (weakly) and lose on competence; a 花旦 can be pressed into
+ * 武戲 (rarely, via the contest floor). Substring match on role, most specific
+ * first; unknown role/kind → AMBITION_FALLBACK. This is the deterministic backbone
+ * of intent; richer per-character (memory-derived) desire can modulate it later.
+ */
+const ROLE_AMBITION: { match: string[]; a: Record<string, number> }[] = [
+    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.6, partnership: 0.6, naming: 0.5, patronage: 0.4, recording: 0.3 } },
+    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.8, naming: 0.7, partnership: 0.6, patronage: 0.5, martial: 0.2 } },
+    { match: ['坤生', '乾生', '小生'], a: { spotlight: 0.85, recording: 0.8, partnership: 0.7, naming: 0.6, patronage: 0.5, martial: 0.5 } },
+    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, spotlight: 0.7, naming: 0.6, patronage: 0.6, partnership: 0.5, martial: 0.3 } },
+    { match: ['丑'], a: { naming: 0.6, patronage: 0.6, spotlight: 0.5, partnership: 0.4, martial: 0.4, recording: 0.3 } },
+    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.7, spotlight: 0.6, patronage: 0.5, partnership: 0.5, naming: 0.5, recording: 0.4 } },
+    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.5, naming: 0.4, spotlight: 0.3, partnership: 0.2, martial: 0.2, recording: 0.2 } },
+];
+const AMBITION_FALLBACK = 0.5;
+const AMBITION_MIN = 0.15;
+
+function primaryRoleFromTags(tags: string[] | undefined): string {
+    const roleTag = (tags ?? []).find((t) => t.startsWith('role:'));
+    return roleTag ? roleTag.slice('role:'.length) : '';
+}
+
+function roleResourceAmbition(role: string, kind: string): number {
+    const row = ROLE_AMBITION.find((g) => g.match.some((kw) => role.includes(kw)));
+    if (!row) return AMBITION_FALLBACK;
+    return row.a[kind] ?? AMBITION_FALLBACK;
+}
+
+/** Scale the unit weight (SCALE) by ambition 0..1 → the desire's intent magnitude. */
+function scaleByAmbition(ambition: number): bigint {
+    const pct = Math.max(0, Math.min(100, Math.round(ambition * 100)));
+    return (SCALE * BigInt(pct)) / 100n;
+}
+
 export function defaultDesiresForCast(
     resources: ResourceSnapshot[],
     castSize: number,
     opts: DefaultDesireOptions = {},
 ): DesireSpec[] {
     const specs: DesireSpec[] = [];
+    const role = primaryRoleFromTags(opts.agentTags);
     for (const r of resources) {
         // skip resources nobody has to compete for (capacity ≥ cast → everyone fits)
         if (castSize > 0 && r.capacity >= BigInt(castSize)) continue;
@@ -136,10 +173,20 @@ export function defaultDesiresForCast(
         if (isPerformerResource(r) && isBackstageAgent(opts)) continue;
         const want = r.capacity > 0n ? 1n : 0n; // want one unit of the scarce thing
         if (want === 0n) continue;
+        // 行當-shaped intent (the "skin" the comment promised): how much THIS 行當
+        // wants THIS kind of resource (0..1). It scales the desire WEIGHT, which is
+        // linear into tension (= the contest's intent), so a 花旦 burns for 頭牌/唱片
+        // but barely for 武戲, and a 武旦 the reverse. Below AMBITION_MIN ⇒ not a
+        // contender for it (the contest's 臨危受命 floor can still thrust an able
+        // event-participant in). Uniform desire was the old structural floor (bone);
+        // this is the role-shaped skin, kept deterministic + data-driven.
+        const kind = (r.label.split(':')[0] || '').trim();
+        const ambition = roleResourceAmbition(role, kind);
+        if (ambition < AMBITION_MIN) continue;
         specs.push({
             id: `hold:${r.label || r.archetype || r.id}`,
             statement: desireStatementFor(r),
-            weight: SCALE,
+            weight: scaleByAmbition(ambition),
             baseline: 200_000n,
             volatility: SCALE,
             claims: [{ ref: r.id, claim: want }],
@@ -152,10 +199,18 @@ function isPartnership(r: ResourceSnapshot): boolean {
     return r.label.startsWith('partnership:');
 }
 
-/** Resources only on-stage actors compete for: the headliner spotlight
- *  and the recording slot. (partnership is handled by its own young-male-lead gate.) */
+/** Resources only on-stage actors compete for: the headliner spotlight, the
+ *  recording slot, the old-world 堂會 patronage circuit, and the press's naming
+ *  power. (partnership is handled by its own young-male-lead gate.) Backstage
+ *  roles — musicians / wardrobe / business / press — never compete for these. */
 function isPerformerResource(r: ResourceSnapshot): boolean {
-    return r.label.startsWith('spotlight:') || r.label.startsWith('recording:');
+    return (
+        r.label.startsWith('spotlight:') ||
+        r.label.startsWith('recording:') ||
+        r.label.startsWith('patronage:') ||
+        r.label.startsWith('naming:') ||
+        r.label.startsWith('martial:')
+    );
 }
 
 /** True only when a role tag POSITIVELY marks the agent as backstage —
@@ -203,6 +258,12 @@ function compactName(name: string): string {
 }
 
 function desireStatementFor(r: ResourceSnapshot): string {
+    // The statement MUST carry a matchable token so the storylet opener
+    // (framingForStatement → parseDirectorContention) and the settlement matchers
+    // can tie a tension back to its resource: partnership uses 「…搭戲」 (caught by
+    // framingForStatement); every other kind keeps the 「<kind>:<display>」 label so
+    // `parseDirectorContention` recovers the kind. Prose-facing consumers strip the
+    // label via `humanResourceFromStatement`, so the raw token never reaches readers.
     if (r.label.startsWith('partnership:')) return `與${r.label.slice('partnership:'.length)}搭戲`;
     if (r.label) return `爭得「${r.label}」`;
     return `爭得一席（${r.archetype || '稀缺資源'}）`;

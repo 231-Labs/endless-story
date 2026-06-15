@@ -31,6 +31,7 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
+import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
@@ -239,6 +240,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
+    // 先天 world attrs per character, for the skill-weighted resource contest
+    // (spine settlement). CharacterAttributes ⊇ WorldAttrs (the four innate axes).
+    const attrsById = new Map(characters.map((c) => [c.id, c.attributes]));
     // The economy shadow can mark a character dead (vitality → 0); drop them from the acting set
     // so death actually retires them from the stage (they keep their persisted state for settle).
     const alive = characters.filter((c) => !isShadowDead(d.sagaId, c.id));
@@ -517,6 +521,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 statement: t.statement,
                 tension: t.tension,
             })),
+            attrsById,
         };
         const nowTick = spineNextTick(d.sagaId);
         const r = await spinePlanAndOpenAll(admin, spineCtx, nowTick);
@@ -549,6 +554,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 statement: t.statement,
                 tension: t.tension,
             })),
+            attrsById,
         };
         const nowTick = spineNextTick(d.sagaId);
         const r = await spinePlanAndOpen(admin, spineCtx, nowTick);
@@ -740,7 +746,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   other. Owned-cap tx → pushed into the serial `cutJobs` (drained after the
     //   POV batch / cuts / moments) so it can't race the StorytellerCap.
     if (!dryRun) {
-        const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId);
+        const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId, d.sceneIds[0]);
         if (bondPairs.length > 0) {
             tlog(`②⁺ 養關係：${bondPairs.length} 對因接濟加深公開羈絆`);
             cutJobs.push(async () => {
@@ -966,6 +972,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     skipMemoryRecall: true,
                 });
                 tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
+                dumpChapter(
+                    {
+                        kind: 'pov',
+                        day: worldTime?.day,
+                        name: c.name,
+                        role: roleById.get(c.id),
+                        scene: rosterById.get(c.id)?.currentSceneName,
+                        dryRun,
+                    },
+                    r.chapter,
+                );
                 if (eventKey && r.ok && r.chapter?.trim()) lastPovEventByChar.set(c.id, eventKey);
                 return { c, r };
             } catch (err) {
@@ -1078,6 +1095,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                     (cut.skipReason ? ` skipped=${cut.skipReason}` : '') +
                                     (cut.error ? ` error=${cut.error}` : ''),
                             );
+                            dumpChapter(
+                                { kind: 'cut', day: worldTime?.day, name: st.sceneName, note: st.label, dryRun },
+                                cut.chapter,
+                            );
                         });
                     }
                 }
@@ -1139,6 +1160,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
                 if (enc.ok && enc.chapter?.trim()) {
                     lastEncounterPair = pair.pairKey;
+                    dumpChapter(
+                        {
+                            kind: 'encounter',
+                            day: worldTime?.day,
+                            name: holderName,
+                            role: roleById.get(pair.holderId),
+                            scene: rosterById.get(pair.holderId)?.currentSceneName,
+                            note: `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
+                            dryRun,
+                        },
+                        enc.chapter,
+                    );
                     tlog(
                         `④· 關係戲：${holderName} ⇄ ${pair.otherName}（${pair.toneZh}・牽連 ${pair.count}）` +
                             ` ✓ (${enc.chapter.length} 字)${dryRun ? '（預演，不上鏈）' : ''}`,

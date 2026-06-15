@@ -17,6 +17,7 @@ const STEP_LABEL: Record<ReconcileStepName, string> = {
     appearance: '形貌',
     memory: '記憶',
     relationship: '關係',
+    skills: '技藝',
     prologue: '創世序章',
 };
 
@@ -58,7 +59,7 @@ export function ReconcilePanel() {
                 {isPending ? '對帳中…（可能生圖 + 上鏈,需數十秒）' : '對帳全班 · 補齊缺漏'}
             </button>
             <p className="text-2xs leading-relaxed text-mute">
-                掃描全班,逐一補齊缺的<strong className="text-ink">主圖 / 設定集 / 標籤 / 本色 / 記憶 / 關係</strong>。
+                掃描全班,逐一補齊缺的<strong className="text-ink">主圖 / 設定集 / 標籤 / 本色 / 形貌 / 記憶 / 關係 / 技藝 / 序章</strong>。
                 idempotent —— 已有的會「跳過」,可安心重跑。序列執行(單一 keypair),角色多時較慢。
                 這是<strong className="text-ink">唯一的全班批次入口</strong>(含關係補帳)。
             </p>

@@ -28,6 +28,7 @@ import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { runPovForCharacter } from '@/lib/chain/pov-core';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { fetchOnChainSaga } from '@/lib/chain/saga-read';
+import { dumpChapter } from '@/lib/chain/chapter-dump';
 
 export interface SeedGenesisPrologueResult {
     ok: boolean;
@@ -89,6 +90,7 @@ export async function seedGenesisPrologueAction(
         if (!res.ok && res.skipReason) {
             return { ok: false, anchored: false, skipped: res.skipReason };
         }
+        dumpChapter({ kind: 'genesis', name: characterId.slice(0, 8), note: characterId, dryRun: false }, res.chapter);
         return {
             ok: res.ok,
             anchored: res.anchored,

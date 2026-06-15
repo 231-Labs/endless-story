@@ -25,6 +25,7 @@ import { generatePersonaAction } from './generate-persona.js';
 import { generateAppearanceAction } from './generate-appearance.js';
 import { seedGenesisMemoryAction } from './seed-genesis-memory.js';
 import { seedGenesisPrologueAction } from './seed-genesis-prologue.js';
+import { seedCharacterSkillsAction } from './seed-character-skills.js';
 import { assessAndApplyRelationshipsAction } from './assess-relationships.js';
 import { fetchOnChainPersona } from '../chain/persona-read.js';
 import { fetchOnChainAppearance } from '../chain/appearance-read.js';
@@ -44,7 +45,7 @@ const ATTR_LABEL: Record<string, string> = {
 /** kind=6 setting_sheet marks "additional gallery views were generated". */
 const SETTING_SHEET_KIND = 6;
 
-export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'appearance' | 'memory' | 'relationship' | 'prologue';
+export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'appearance' | 'memory' | 'relationship' | 'skills' | 'prologue';
 export type ReconcileStatus = 'ok' | 'skip' | 'fail';
 
 export interface ReconcileStep {
@@ -273,6 +274,20 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
         });
     } catch (err) {
         steps.push({ step: 'relationship', status: 'fail', detail: err instanceof Error ? err.message : String(err) });
+    }
+
+    // ── 6.5) per-saga skills (the card-weight rules read these to bias card draw) ─
+    //     Backfills gacha-minted / older characters that never got skills at
+    //     creation. set_character_skill is an upsert, so this is idempotent.
+    try {
+        const r = await seedCharacterSkillsAction(characterId);
+        steps.push({
+            step: 'skills',
+            status: r.ok ? 'ok' : 'fail',
+            detail: r.ok ? `seeded ${r.seeded}` : (r.error ?? 'failed'),
+        });
+    } catch (err) {
+        steps.push({ step: 'skills', status: 'fail', detail: err instanceof Error ? err.message : String(err) });
     }
 
     // ── 7) 入世序章 genesis prologue (the reader's front door; anchored on chain) ─

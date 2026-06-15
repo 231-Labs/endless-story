@@ -21,3 +21,6 @@ packages/web/data/
 
 # copyrighted dev reference image (vision/code experiment)
 packages/web/public/chamber/ref/
+
+# local chapter-dump validation output (ES_CHAPTER_DUMP_DIR)
+chapters-out/
