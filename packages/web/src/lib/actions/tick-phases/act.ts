@@ -107,6 +107,15 @@ export async function runActPhase(
     dramaHints: Record<string, string> = {},
     rosterContextById: Map<string, string[]> = new Map(),
     memoryContext = new TickMemoryContext(),
+    /** Spine mode owns the linger/resolve cadence AND the settlement (it transfers
+     *  the contested resource to the contest winner + weaves the cut). When true the
+     *  ACT phase ONLY plays cards and never resolves — the janitor below would close
+     *  the event with empty outcomes (settle nothing) and steal the resolve from the
+     *  spine, freezing the contested resource in place ("world spins"). The spine's
+     *  own force-resolve at maxTicks is the deadlock breaker now (it always closes,
+     *  falling back to a plain resolve if settlement fails), and reconcileOpenFromChain
+     *  re-adopts any orphaned event each tick, so no janitor is needed here. */
+    spineOwnsResolve = false,
 ): Promise<{ acts: TickActResult[]; resolves: TickResolveResult[] }> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return { acts: [], resolves: [] };
@@ -313,7 +322,14 @@ export async function runActPhase(
                 );
             const age = e.createdAtMs > 0 ? now - e.createdAtMs : 0;
             if (autoResolve && doneActing) return true;
-            if (doneActing && age >= EVENT_GRACE_MS) return true;
+            // Spine mode owns resolve+settlement (transfer + cut). Skip the eager
+            // GRACE janitor: it would close all-acted events with empty outcomes a
+            // couple minutes after the spine's own force-resolve age, win the race
+            // (ACT runs before the spine's tick-end resolve), and freeze the
+            // contested resource in place ("world spins"). Keep ONLY the long hard
+            // cap below as a backstop for events stranded when drama goes inactive
+            // (then the spine phase is skipped and nothing else would close them).
+            if (!spineOwnsResolve && doneActing && age >= EVENT_GRACE_MS) return true;
             return age >= EVENT_MAX_AGE_MS;
         });
         if (toResolve.length > 0) {

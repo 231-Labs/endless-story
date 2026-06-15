@@ -810,6 +810,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 dramaHints,
                 rosterContextById,
                 memoryContext,
+                spineMode, // spine owns resolve+settlement; ACT only plays cards
             );
             acts.push(...phase.acts);
             resolves.push(...phase.resolves);
