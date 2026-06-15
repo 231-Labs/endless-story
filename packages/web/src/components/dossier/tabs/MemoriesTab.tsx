@@ -127,6 +127,12 @@ function MemoryEntry({
   chapter: Chapter | null;
 }) {
   const summaryWeight = importanceClass(memory.importance);
+  // A memory is ONE text. `summary` is just a truncated prefix of `body`, so for the
+  // common short one-liner it equals the body — showing both duplicated it. Render a
+  // single block: a prominent serif statement for short memories, flowing prose for
+  // the long (event-derived) ones.
+  const text = (memory.body?.trim() || memory.summary?.trim() || '');
+  const isLong = text.length > 90;
 
   return (
     <li className="es-card p-6 sm:p-8 transition-all duration-300 hover:bg-surface hover:shadow-sm">
@@ -157,15 +163,16 @@ function MemoryEntry({
         charactersById={charactersById}
       />
 
-      {/* summary line — weight reflects importance */}
-      <p className={`mt-5 font-serif text-xl leading-snug tracking-wide ${summaryWeight}`}>
-        <Linkified text={memory.summary} characters={sagaCharacters} skipId={selfId} />
-      </p>
-
-      {/* body — italic quote style with cinnabar left border */}
-      <div className="mt-4 border-l-2 border-cinnabar/30 pl-5 text-base leading-loose text-ink/75 dark:border-cinnabar/40">
-        <Linkified text={memory.body} characters={sagaCharacters} skipId={selfId} />
-      </div>
+      {/* the memory itself — a single text block (no synthesized title to duplicate it) */}
+      {isLong ? (
+        <div className="mt-5 border-l-2 border-cinnabar/30 pl-5 font-serif text-base leading-loose text-ink/80 dark:border-cinnabar/40">
+          <Linkified text={text} characters={sagaCharacters} skipId={selfId} />
+        </div>
+      ) : (
+        <p className={`mt-5 font-serif text-xl leading-snug tracking-wide ${summaryWeight}`}>
+          <Linkified text={text} characters={sagaCharacters} skipId={selfId} />
+        </p>
+      )}
     </li>
   );
 }
