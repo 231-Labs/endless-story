@@ -258,3 +258,91 @@ test('decideSpineSteps frees a slot when an event resolves this tick', () => {
     assert.ok(steps.some((s) => s.action === 'resolve'));
     assert.ok(steps.some((s) => s.action === 'open'), 'resolving frees the single slot for a new axis');
 });
+
+/* ── clock-derived age + chain reconciliation (restart-proof spine) ────────── */
+
+import {
+    clockTickOf,
+    reconcileOpenEvents,
+    pickContestedResource,
+    type ChainOpenEvent,
+    type TensionView,
+} from './spine-core.ts';
+
+const W = 120_000; // 2-minute window
+
+test('clockTickOf: age is a function of timestamps, not a process counter', () => {
+    const opened = 1_000_000_000_000;
+    // two windows later == age 2 regardless of which process asks
+    assert.equal(clockTickOf(opened + 2 * W, W) - clockTickOf(opened, W), 2);
+    assert.equal(clockTickOf(opened + 5 * W, W) - clockTickOf(opened, W), 5);
+});
+
+test('reconcile keeps cached events (rich metadata) untouched', () => {
+    const cached: SpineOpenEvent = {
+        eventId: '0xWARM',
+        sceneId: '0xS',
+        templateId: 'contention:recording',
+        label: '唱片首本',
+        participantIds: ['a', 'b'],
+        openedAtTick: clockTickOf(1_000_000_000_000, W),
+    };
+    const chain: ChainOpenEvent[] = [
+        { eventId: '0xWARM', sceneId: '0xS', createdAtMs: 1_000_000_000_000, participantIds: ['a', 'b'], label: 'whatever' },
+    ];
+    const out = reconcileOpenEvents(chain, [cached], W);
+    assert.equal(out.length, 1);
+    assert.equal(out[0], cached, 'same object — templateId + label preserved');
+});
+
+test('reconcile adopts orphan events from chain with a clock-derived age', () => {
+    const created = 1_000_000_000_000;
+    const chain: ChainOpenEvent[] = [
+        { eventId: '0xORPHAN', sceneId: '0xS2', createdAtMs: created, participantIds: ['x', 'y'], label: '堂會包銀' },
+    ];
+    const out = reconcileOpenEvents(chain, [], W); // empty cache == process was recycled
+    assert.equal(out.length, 1);
+    assert.equal(out[0].eventId, '0xORPHAN');
+    assert.equal(out[0].participantIds.join(','), 'x,y');
+    assert.equal(out[0].label, '堂會包銀');
+    assert.equal(out[0].templateId, '', 'orphan has no templateId → settle derives resource from tension');
+    assert.equal(out[0].openedAtTick, clockTickOf(created, W), 'age anchored to on-chain push time');
+});
+
+test('reconcile drops events resolved on chain (not in the open set)', () => {
+    const stale: SpineOpenEvent = {
+        eventId: '0xGONE', sceneId: '0xS', templateId: 'contention:recording',
+        label: 'L', participantIds: ['a'], openedAtTick: 0,
+    };
+    const out = reconcileOpenEvents([], [stale], W); // chain reports nothing open
+    assert.equal(out.length, 0, 'a resolved event is forgotten');
+});
+
+test('pickContestedResource: templateId match wins (warm path)', () => {
+    const resources: AllocationView[] = [
+        { resourceId: '0xR1', label: 'recording:首本唱片', capacity: 1n, allocations: {} },
+        { resourceId: '0xR2', label: 'patronage:堂會包銀', capacity: 1n, allocations: {} },
+    ];
+    const r = pickContestedResource(resources, 'contention:recording', ['a'], []);
+    assert.equal(r?.resourceId, '0xR1');
+});
+
+test('pickContestedResource: orphan (no templateId) falls back to cast tension', () => {
+    const resources: AllocationView[] = [
+        { resourceId: '0xR1', label: 'recording:首本唱片', capacity: 1n, allocations: {} },
+        { resourceId: '0xR2', label: 'patronage:堂會包銀', capacity: 1n, allocations: {} },
+    ];
+    const tensions: TensionView[] = [
+        { characterId: 'a', statement: '爭得「patronage:堂會包銀」', tension: 0.9 },
+        { characterId: 'b', statement: '爭得「recording:首本唱片」', tension: 0.2 },
+    ];
+    const r = pickContestedResource(resources, '', ['a', 'b'], tensions);
+    assert.equal(r?.resourceId, '0xR2', 'the resource the cast most wants');
+});
+
+test('pickContestedResource: nobody pushes → null (settle is a no-op)', () => {
+    const resources: AllocationView[] = [
+        { resourceId: '0xR1', label: 'recording:首本唱片', capacity: 1n, allocations: {} },
+    ];
+    assert.equal(pickContestedResource(resources, '', ['a'], []), null);
+});

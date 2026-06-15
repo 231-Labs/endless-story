@@ -477,11 +477,31 @@ async function main() {
     );
   });
   const changes4 = await runTx(client, signer, tx4, `Tx 5 — ${story.scenes.length} Scenes`);
-  const sceneIds = findCreatedByType(changes4, '::scene::Scene');
-  if (sceneIds.length !== story.scenes.length) {
-    throw new Error(`expected ${story.scenes.length} scenes, got ${sceneIds.length}`);
+  const sceneIdsRaw = findCreatedByType(changes4, '::scene::Scene');
+  if (sceneIdsRaw.length !== story.scenes.length) {
+    throw new Error(`expected ${story.scenes.length} scenes, got ${sceneIdsRaw.length}`);
   }
-  console.log(`   scenes    ${sceneIds.length} created`);
+  // Sui `objectChanges` doesn't preserve PTB creation order, so sceneIdsRaw is
+  // scrambled — and sceneIds[0] is consumed as the default mint/home scene (e.g.
+  // the founding cast). Scenes carry no info.index, but names are unique, so
+  // re-order to the story's scene order by matching info.name. Without this the
+  // cast spawned in a random scene (the 會館), never in the troupe's covered range.
+  const sceneByName = new Map<string, string>();
+  await Promise.all(
+    sceneIdsRaw.map(async (id) => {
+      const name = await read.scene
+        .getScene(client, id)
+        .then((r) => (r.json as { info?: { name?: string } } | undefined)?.info?.name)
+        .catch(() => undefined);
+      if (name) sceneByName.set(name, id);
+    }),
+  );
+  const sceneIds = story.scenes.map((s) => {
+    const id = sceneByName.get(s.name);
+    if (!id) throw new Error(`bootstrap: created Scene for "${s.name}" not found by name — cannot order scenes`);
+    return id;
+  });
+  console.log(`   scenes    ${sceneIds.length} created (ordered by story scene order)`);
 
   // Tx 6: DreamConfig — owner dream-injection mechanism (default 50 ENDLESS, 6 decimals)
   const DREAM_DEFAULT_PRICE_RAW = 50_000_000n; // 50 ENDLESS

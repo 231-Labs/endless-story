@@ -9,42 +9,9 @@
  */
 import * as gen from '../generated/endless_story/commitment.js';
 import type { SuiClient } from '../client.js';
+import { queryEventsWithRetry } from './query-retry.js';
 
 export { gen as raw };
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-/**
- * `queryEvents` with retry on TRANSIENT RPC failures (429 / 5xx / network). The
- * public fullnode rate-limits hard under a tick's read fan-out; without this a
- * single 429 throws → callers (cut/gazette/pov read) swallow it → blank feed.
- * Non-transient errors fail fast. Set SUI_RPC_URL to a private node to avoid the
- * limits entirely.
- */
-async function queryEventsWithRetry(
-    client: SuiClient,
-    params: Parameters<SuiClient['queryEvents']>[0],
-    retries = 4,
-): Promise<Awaited<ReturnType<SuiClient['queryEvents']>>> {
-    let lastErr: unknown;
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-        if (attempt > 0) {
-            const backoff = Math.min(8000, 500 * 2 ** (attempt - 1));
-            await sleep(backoff + Math.floor(Math.random() * backoff * 0.3));
-        }
-        try {
-            return await client.queryEvents(params);
-        } catch (err) {
-            const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-            if (/429|rate|limit|timeout|fetch failed|econn|reset|502|503|504|gateway/.test(msg)) {
-                lastErr = err;
-                continue; // transient → retry
-            }
-            throw err; // real error → fail fast
-        }
-    }
-    throw lastErr;
-}
 
 export const getCommitment = (client: SuiClient, commitmentId: string) =>
     gen.Commitment.get({ client, objectId: commitmentId });

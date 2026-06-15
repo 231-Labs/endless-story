@@ -49,7 +49,9 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
-    spineNextTick,
+    spineClockTick,
+    spineMemorySnapshot,
+    reconcileOpenFromChain,
     spinePlanAndOpen,
     spinePlanAndOpenAll,
     spineAccumulatePovs,
@@ -421,7 +423,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             };
             if (r.active) {
                 tlog(
-                    `②′ 張力推導：${r.resourceCount} 個爭用資源 · ${Object.keys(r.hints).length} 人有張力${r.commitmentId ? ' · 已上鏈承諾' : ''}`,
+                    `②′ 張力推導：${r.resourceCount} 個爭用資源 · ${Object.keys(r.hints).length} 人有張力${r.commitmentId ? ` · 已上鏈承諾 ${r.commitmentId}` : ''}${r.blobUrl ? ` · blob ${r.blobUrl}` : ''}`,
                 );
             }
         } catch (err) {
@@ -523,13 +525,24 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             })),
             attrsById,
         };
-        const nowTick = spineNextTick(d.sagaId);
+        // Rebuild the open set from chain BEFORE deciding — age is derived from the
+        // on-chain push timestamp (spineClockTick), so events opened by a prior
+        // (possibly since-recycled) process still age and resolve here instead of
+        // piling up OPEN forever. Failure-isolated: a read blip keeps the warm cache.
+        await reconcileOpenFromChain(admin.client, d.sagaId);
+        const nowTick = spineClockTick();
+        const mem = spineMemorySnapshot(d.sagaId, nowTick);
+        tlog(
+            `②‴ spine 記憶：clock-tick ${mem.tick} · 在演 ${mem.open.length} 個${
+                mem.open.length ? `（${mem.open.map((e) => `${e.eventId.slice(0, 10)}…@${e.age}t`).join('、')}）` : ''
+            }`,
+        );
         const r = await spinePlanAndOpenAll(admin, spineCtx, nowTick);
         storylets = r.storylets;
         spineSteps = r.steps;
         const opened = spineSteps.filter((s) => s.action === 'open').length;
         const resolving = spineSteps.filter((s) => s.action === 'resolve').length;
-        for (const st of storylets) tlog(`②‴ 在演：${st.sceneName} · ${st.label}（${st.names.join('、')}）`);
+        for (const st of storylets) tlog(`②‴ 在演：${st.sceneName} · ${st.label}（${st.names.join('、')}）· ${st.digest}`);
         tlog(`②‴ 並行事件：${storylets.length} 個在演（本 tick 開 ${opened}、收 ${resolving}）`);
     } else if (eventSpine && drama?.active && slice.length > 0) {
         // SPINE MODE — open/linger/resolve ONE multi-tick BudgetEvent as the 回.
@@ -556,7 +569,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             })),
             attrsById,
         };
-        const nowTick = spineNextTick(d.sagaId);
+        await reconcileOpenFromChain(admin.client, d.sagaId);
+        const nowTick = spineClockTick();
         const r = await spinePlanAndOpen(admin, spineCtx, nowTick);
         if (r.storylet) storylets = [r.storylet];
         spineSteps = [r.step];

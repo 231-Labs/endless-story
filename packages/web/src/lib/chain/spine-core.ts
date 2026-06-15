@@ -27,8 +27,62 @@ export interface SpineOpenEvent {
     templateId: string;
     label: string;
     participantIds: string[];
-    /** monotonic tick at which this event opened. */
+    /** monotonic tick at which this event opened. CLOCK-DERIVED (clockTickOf of
+     *  the on-chain createdAtMs) so age survives process restarts — see clockTickOf. */
     openedAtTick: number;
+}
+
+/** A live open event as read back from chain (BudgetEventPushed + the object's
+ *  meta.status/title/deck.participants). The authoritative open set; the in-memory
+ *  registry is only a warm cache reconciled against this each tick. */
+export interface ChainOpenEvent {
+    eventId: string;
+    sceneId: string;
+    /** on-chain clock::timestamp_ms at push (event.move). */
+    createdAtMs: number;
+    participantIds: string[];
+    /** meta.title — the reader-facing 回 heading. */
+    label: string;
+}
+
+/**
+ * Derive a monotonic "tick" from a wall-clock timestamp (ms). This REPLACES the
+ * per-process in-memory tick counter: age = clockTickOf(now) − clockTickOf(createdAtMs),
+ * so an event's age is a function of the on-chain push timestamp, not of how many
+ * times THIS process has looped. A restarted/replaced process therefore computes
+ * the same age and resolves the event on schedule instead of leaving it open forever.
+ */
+export function clockTickOf(ms: number, windowMs: number): number {
+    return Math.floor(ms / Math.max(1, windowMs));
+}
+
+/**
+ * Reconcile the chain's authoritative open set with the in-memory cache. Events
+ * already cached keep their rich metadata (templateId + label + the POVs this
+ * process has accumulated). Events open on chain but missing from the cache —
+ * orphaned when the process was recycled between ticks — are adopted from chain
+ * truth with a clock-derived `openedAtTick` so they age and resolve like any
+ * other (settlement falls back to a cast-tension-derived resource when the
+ * templateId is unknown). Pure.
+ */
+export function reconcileOpenEvents(
+    chainOpen: ReadonlyArray<ChainOpenEvent>,
+    cached: ReadonlyArray<SpineOpenEvent>,
+    windowMs: number,
+): SpineOpenEvent[] {
+    const cachedById = new Map(cached.map((e) => [e.eventId, e]));
+    return chainOpen.map((c) => {
+        const hit = cachedById.get(c.eventId);
+        if (hit) return hit;
+        return {
+            eventId: c.eventId,
+            sceneId: c.sceneId,
+            templateId: '', // orphan: unknown axis → settle derives the resource from cast tension
+            label: c.label || '一場戲',
+            participantIds: c.participantIds,
+            openedAtTick: clockTickOf(c.createdAtMs, windowMs),
+        };
+    });
 }
 
 export interface SceneOccupant {
@@ -279,6 +333,38 @@ export function resourceForContention(
     return (
         resources.find((r) => r.label.startsWith(keyword) || r.label.includes(keyword)) ?? null
     );
+}
+
+/**
+ * Pick which resource an event was contesting. Prefer the templateId mapping
+ * (the warm path); when that's unknown — an orphan event adopted from chain after
+ * a restart has no templateId — fall back to the resource the event's cast most
+ * wants, summing each participant's tension toward each resource (label keyword in
+ * the tension statement). Returns null only when nobody in the cast pushes for
+ * anything (then settlement is a no-op plain resolve). Pure.
+ */
+export function pickContestedResource(
+    resources: ReadonlyArray<AllocationView>,
+    templateId: string,
+    participantIds: ReadonlyArray<string>,
+    tensions: ReadonlyArray<TensionView>,
+): AllocationView | null {
+    const byTemplate = resourceForContention(resources, templateId);
+    if (byTemplate) return byTemplate;
+    const cast = new Set(participantIds);
+    let best: { resource: AllocationView; pull: number } | null = null;
+    for (const r of resources) {
+        const keyword = r.label.split(':')[1] ?? r.label;
+        let pull = 0;
+        for (const t of tensions) {
+            if (!cast.has(t.characterId)) continue;
+            if (t.tension <= 0) continue;
+            if (!t.statement.includes(keyword) && !t.statement.includes(r.label)) continue;
+            pull += t.tension;
+        }
+        if (pull > 0 && (!best || pull > best.pull)) best = { resource: r, pull };
+    }
+    return best?.resource ?? null;
 }
 
 /**
