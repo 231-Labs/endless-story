@@ -123,14 +123,16 @@ export async function runMovePhase(input: {
     const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
         try {
             const cur = sceneByChar.get(c.id)!;
-            // RIVAL GRAVITY override (verified mechanism): if a contest pulls this
-            // character, go deterministically — to the stage, or HOLD there
-            // (cohesion). Skips the LLM call; converges contenders so events form.
+            // RIVAL GRAVITY: pull a SCATTERED contender toward the contest so events
+            // form — but only when they're NOT already there. We deliberately do NOT
+            // hold someone who's already at the contest scene: that hard hold bypassed
+            // the LLM every tick, and since the densest scene is "the contest" for
+            // everyone already in it, the whole cast froze in one room and never lived
+            // a slice-of-life beat ("從來沒有移動過"). Gravity converges the scattered;
+            // it must not pin the gathered. Actual open-event participants are still
+            // held by the rule above; everyone else gets to DECIDE (stay or leave).
             const pull = input.gravityTargets?.get(c.id);
-            if (pull) {
-                if (pull === cur.id) {
-                    return { c, fromId: cur.id, dcs: { move: false, reason: '守在爭端的風口，不離開' } as characterAgent.MoveDecideResult };
-                }
+            if (pull && pull !== cur.id) {
                 return {
                     c,
                     fromId: cur.id,
