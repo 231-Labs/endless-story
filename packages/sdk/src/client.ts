@@ -25,9 +25,17 @@ export interface MakeClientOptions {
   url?: string;
 }
 
+/** Server-side private RPC override. The public testnet fullnode rate-limits
+ *  (429) hard under a tick's fan-out of reads; set SUI_RPC_URL to a dedicated
+ *  node. Browser bundles never see it (non-NEXT_PUBLIC ⇒ undefined there). */
+function envRpcUrl(): string | undefined {
+  const v = typeof process !== 'undefined' ? process.env?.SUI_RPC_URL : undefined;
+  return v && v.trim() ? v.trim() : undefined;
+}
+
 /** Construct a Sui client pinned to a given network. Node / cli usage. */
 export function makeSuiClient(opts: MakeClientOptions = {}): SuiClient {
   const network = opts.network ?? 'devnet';
-  const url = opts.url ?? getJsonRpcFullnodeUrl(network);
+  const url = opts.url ?? envRpcUrl() ?? getJsonRpcFullnodeUrl(network);
   return new SuiJsonRpcClient({ url, network });
 }
