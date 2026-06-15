@@ -39,6 +39,21 @@ function aggregatorBase(network: WalrusNetwork): string {
     return base.replace(/\/$/, '');
 }
 
+/**
+ * Publisher base — self-hosted override via `WALRUS_PUBLISHER_URL`
+ * (e.g. https://walrus-publisher.231labs.xyz). Drives ALL blob uploads
+ * (portraits, chapter anchors, dreams …). Server-side only (uploads run in
+ * server actions / the runner), so it is NOT a `NEXT_PUBLIC_` var. Unset → the
+ * public per-network publisher, which is shared + rate-limited + often flaky —
+ * set this to your own publisher for any real run. An explicit
+ * `opts.publisherUrl` still wins over the env.
+ */
+function publisherBase(network: WalrusNetwork): string {
+    const env = process.env.WALRUS_PUBLISHER_URL;
+    const base = env && env.trim() ? env.trim() : PUBLISHERS[network];
+    return base.replace(/\/$/, '');
+}
+
 export interface PutBlobOptions {
     /** Default 'testnet'. */
     network?: WalrusNetwork;
@@ -96,7 +111,7 @@ export async function putBlob(
 ): Promise<PutBlobResult> {
     const network = opts.network ?? 'testnet';
     const epochs = opts.epochs ?? 5;
-    const base = opts.publisherUrl ?? PUBLISHERS[network];
+    const base = opts.publisherUrl ?? publisherBase(network);
     const url = `${base.replace(/\/$/, '')}/v1/blobs?epochs=${epochs}`;
     const maxRetries = Math.max(0, opts.retries ?? 4);
 
@@ -254,7 +269,7 @@ export async function putQuilt(
 
     const network = opts.network ?? 'testnet';
     const epochs = opts.epochs ?? 5;
-    const base = opts.publisherUrl ?? PUBLISHERS[network];
+    const base = opts.publisherUrl ?? publisherBase(network);
     const url = `${base.replace(/\/$/, '')}/v1/quilts?epochs=${epochs}`;
     const maxRetries = Math.max(0, opts.retries ?? 4);
 
