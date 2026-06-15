@@ -87,6 +87,24 @@ export function spineNextTick(sagaId: string): number {
     return next;
 }
 
+/**
+ * Diagnostic snapshot of the saga's IN-MEMORY spine state. The whole linger →
+ * resolve cadence depends on `openBySaga`/`tickBySaga` surviving between ticks
+ * (each /api/tick is a separate HTTP request — only safe if the Node process is
+ * long-lived). If a tick's snapshot shows `tick #1` with 0 remembered events
+ * even though events were opened on chain last tick, the process was recycled
+ * between ticks and events will pile up OPEN forever (never aged → never resolved).
+ */
+export function spineMemorySnapshot(
+    sagaId: string,
+    nowTick: number,
+): { tick: number; open: { eventId: string; age: number }[] } {
+    return {
+        tick: nowTick,
+        open: openList(sagaId).map((e) => ({ eventId: e.eventId, age: nowTick - e.openedAtTick })),
+    };
+}
+
 export interface SpineCtx {
     sagaId: string;
     capId: string;
