@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { eventChapter } from '@endless-story/runner';
 import type { EventCutEntry } from '@/lib/api/cuts';
 import { fetchChapterText } from '@/lib/chain/pov-read';
+import { CHAPTER_COPY } from '@/lib/copy/chapters';
 
 /**
  * Event-cut list — the canonical "回" (woven multi-POV chapters), newest first.
@@ -51,11 +52,11 @@ export async function CutList({
                                 </span>
                             ) : null}
                             {c.sceneName ? <span>{c.sceneName}</span> : null}
-                            <span className="text-cinnabar/80">{c.povCharacterIds.length} 視角合本</span>
+                            <span className="text-cinnabar/80">{CHAPTER_COPY.cut.povCount(c.povCharacterIds.length)}</span>
                         </div>
                         {c.eventLabel ? (
                             <p className="mt-3 text-2xs tracking-widest text-cinnabar/70">
-                                本回出自鏈上事件「{c.eventLabel}」
+                                {CHAPTER_COPY.cut.fromEvent(c.eventLabel)}
                             </p>
                         ) : null}
                         <h3 className="mt-3 font-serif text-2xl tracking-wide text-ink transition-colors group-hover:text-cinnabar">
@@ -66,9 +67,9 @@ export async function CutList({
                                 {excerpt}
                             </p>
                         ) : (
-                            <p className="mt-3 text-sm text-mute">— 章回內容暫時無法讀取 —</p>
+                            <p className="mt-3 text-sm text-mute">{CHAPTER_COPY.pov.bodyUnavailable}</p>
                         )}
-                        <p className="mt-4 text-sm tracking-widest text-cinnabar">讀這一回 →</p>
+                        <p className="mt-4 text-sm tracking-widest text-cinnabar">{CHAPTER_COPY.cut.readThisCut}</p>
                     </Link>
                 );
             })}

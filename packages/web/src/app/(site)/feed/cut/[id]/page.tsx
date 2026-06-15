@@ -4,6 +4,7 @@ import { chaptersApi, charactersApi, cutsApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
 import { Markdown } from '@/components/common/Markdown';
 import { txUrl, objectUrl } from '@/lib/explorer';
+import { CHAPTER_COPY } from '@/lib/copy/chapters';
 
 /**
  * 章回（事件合本）閱讀頁 — the canonical "回".
@@ -61,6 +62,9 @@ export default async function CutPage({ params }: { params: Promise<{ id: string
             <span aria-hidden className="text-base">←</span>
           </Link>
 
+          {/* Clean opening: eyebrow + a one-line source note, then the prose
+              (the body's own markdown heading is the title). The verifiable
+              on-chain links sit in the footer below the read. */}
           <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
             {cut.day != null ? (
               <span className="rounded border border-hairline/50 bg-canvas/50 px-2.5 py-1">
@@ -68,46 +72,44 @@ export default async function CutPage({ params }: { params: Promise<{ id: string
               </span>
             ) : null}
             {cut.sceneName ? <span>{cut.sceneName}</span> : null}
-            <span className="text-cinnabar font-medium">{cut.povCharacterIds.length} 視角合本</span>
+            <span className="text-cinnabar font-medium">{CHAPTER_COPY.cut.povCount(cut.povCharacterIds.length)}</span>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-cinnabar/25 bg-cinnabar/[0.04] px-5 py-4">
-            <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/70">
-              章回 · 事件合本 — 已證實發生
-            </div>
-            {cut.eventLabel ? (
-              <p className="mt-2 text-sm leading-relaxed text-ink">
-                本回織自鏈上事件「{cut.eventLabel}」
-                {cut.sceneName ? ` · ${cut.sceneName}` : ''}
-                {cut.day != null ? ` · 第 ${cut.day} 日` : ''}。
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-2xs tracking-widest">
-              {cut.eventTx ? (
-                <a
-                  href={txUrl(cut.eventTx)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-cinnabar hover:underline"
-                >
-                  在區塊鏈瀏覽器查驗此事件 ↗
-                </a>
-              ) : null}
-              <a
-                href={objectUrl(cut.commitmentId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-mute hover:text-ink hover:underline"
-              >
-                此回上鏈承諾 ↗
-              </a>
-            </div>
-          </div>
+          {cut.eventLabel ? (
+            <p className="mt-5 text-sm leading-relaxed text-mute">
+              {CHAPTER_COPY.cut.fromEvent(cut.eventLabel)}
+              {cut.sceneName ? ` · ${cut.sceneName}` : ''}
+              {cut.day != null ? ` · 第 ${cut.day} 日` : ''}。
+            </p>
+          ) : null}
 
           <Markdown
             source={cut.body}
-            className="chapter-prose mt-10 text-lg leading-loose text-ink/85 sm:text-xl sm:leading-[2.2]"
+            className="chapter-prose mt-8 text-lg leading-loose text-ink/85 sm:text-xl sm:leading-[2.2]"
           />
+
+          {/* 鏈上查驗 footer line — moved out of the opening. */}
+          <div className="mt-14 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline/50 pt-6 text-2xs tracking-widest text-mute/70">
+            <span className="text-mute/80">{CHAPTER_COPY.provenance.footerLead}</span>
+            {cut.eventTx ? (
+              <a
+                href={txUrl(cut.eventTx)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-cinnabar"
+              >
+                {CHAPTER_COPY.provenance.verifyEvent}
+              </a>
+            ) : null}
+            <a
+              href={objectUrl(cut.commitmentId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-cinnabar"
+            >
+              {CHAPTER_COPY.provenance.cutCommitment}
+            </a>
+          </div>
 
           {/* 事件 → 各角色視角原料：needs a saga scan, so it streams in. */}
           <Suspense fallback={<PovLinksSkeleton />}>
@@ -144,9 +146,9 @@ async function PovLinks({
   ]);
   const charactersById = new Map(characters.map((c) => [c.id, c]));
   return (
-    <footer className="mt-14 border-t border-hairline/50 pt-8">
+    <footer className="mt-10 border-t border-hairline/50 pt-8">
       <p className="text-2xs uppercase tracking-[0.25em] text-mute">
-        本回視角 · 各角色的第一人稱原料
+        {CHAPTER_COPY.crossLink.povRawMaterials}
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
         {povCharacterIds.map((cid) => {
@@ -167,13 +169,13 @@ async function PovLinks({
               }
               className="rounded-full border border-hairline/60 bg-surface/40 px-4 py-2 text-sm tracking-widest text-ink transition-colors hover:border-cinnabar/40 hover:text-cinnabar"
             >
-              {label} 的視角 →
+              {CHAPTER_COPY.crossLink.followPov(label)}
             </Link>
           );
         })}
       </div>
       <p className="mt-3 text-2xs leading-relaxed tracking-widest text-mute/70">
-        視角原料是角色親筆的單人版本 — 訂閱該角色或持有 NFT 才能讀全文。
+        {CHAPTER_COPY.crossLink.povRawHint}
       </p>
     </footer>
   );

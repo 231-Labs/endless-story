@@ -31,7 +31,10 @@ export interface AuditPeer {
     role?: string;
 }
 
-const TOKEN_RE = /〔[斬攻誘守觀讓]〕/;
+// A leaked card token: a single card char wrapped in 〔〕 / 《》 / 「」. Single-char
+// only, so real multi-char plays (《斬馬謖》) don't trip it. Root fix is to never feed
+// the raw token to the prompt (act.ts cardActionPhrase); this is the backstop.
+const TOKEN_RE = /[〔《「][斬攻敘誘守觀讓][〕》」]/;
 // Any <ascii-kind>:<Chinese> shape is a leaked mechanism label (recording:/partnership:/…).
 const RAWLABEL_RE = /[a-z][a-z0-9_]{2,}:[一-鿿]/;
 const BEARD_RE = new RegExp(BEARD_WORDS.join('|'), 'g');

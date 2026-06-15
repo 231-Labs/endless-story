@@ -4,6 +4,7 @@ import { truncateBlobId } from '@/lib/format';
 import type { PovChapterEntry } from '@/lib/chain/pov-read';
 import type { EventCutEntry } from '@/lib/api/cuts';
 import { ChainPovSection } from './ChainPovSection';
+import { CHAPTER_COPY } from '@/lib/copy/chapters';
 
 export function ChaptersTab({
   chapters,
@@ -36,36 +37,36 @@ export function ChaptersTab({
     );
   }
 
-  // IA: event-centric (see docs/CONTENT_PIPELINE.md §8.2). A dossier slices a
-  // character INTO the events ("回") she appears in; the feed slices an event
-  // OUT into its characters. So here we lead with the woven cuts this
-  // character is in, then her on-chain POV raw feed (per-character material).
+  // IA (docs/CONTENT_PIPELINE.md §8.2), two-book model: a character's own
+  // first-person book (角色回 / ChainPovSection) is her primary text, so it
+  // leads. Below it sit the public multi-POV woven 回 she appears in (梨園回 /
+  // CutSection) — the ensemble cuts where she's one of several angles.
   return (
     <div className="space-y-12">
+      {chainPovChapters.length > 0 ? (
+        <ChainPovSection chapters={chainPovChapters} character={character} />
+      ) : null}
       {participatedCuts.length > 0 ? (
         <CutSection character={character} cuts={participatedCuts} />
       ) : chapters.length > 0 ? (
-        <Section title={`${character.name} 參與的回`} chapters={chapters} highlight />
-      ) : null}
-      {chainPovChapters.length > 0 ? (
-        <ChainPovSection chapters={chainPovChapters} character={character} />
+        <Section title={CHAPTER_COPY.cut.sectionHeader(character.name)} chapters={chapters} />
       ) : null}
     </div>
   );
 }
 
-/** 參與的回 — the woven event cuts this character appears in. */
+/** 梨園回 — the woven event cuts this character appears in (public ensemble). */
 function CutSection({ character, cuts }: { character: Character; cuts: EventCutEntry[] }) {
   return (
     <section>
       <div className="flex items-center gap-4">
-        <div className="h-px w-8 bg-cinnabar" />
-        <h2 className="font-serif text-2xl tracking-wide text-cinnabar">
-          {character.name} 參與的回
+        <div className="h-px w-8 bg-cinnabar/40" />
+        <h2 className="font-serif text-2xl tracking-wide text-ink">
+          {CHAPTER_COPY.cut.sectionHeader(character.name)}
         </h2>
       </div>
-      <p className="mt-2 pl-12 text-2xs tracking-widest text-mute/70">
-        多視角織成的公開章回 — {character.name} 是其中一條視角。
+      <p className="mt-2 pl-12 text-sm leading-relaxed text-mute/80">
+        {CHAPTER_COPY.cut.sectionNote(character.name)}
       </p>
       <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
         {cuts.map((cut) => (
@@ -81,12 +82,12 @@ function CutSection({ character, cuts }: { character: Character; cuts: EventCutE
                   </span>
                 ) : null}
                 {cut.sceneName ? <span>{cut.sceneName}</span> : null}
-                <span className="text-cinnabar/80">{cut.povCharacterIds.length} 視角合本</span>
+                <span className="text-cinnabar/80">{CHAPTER_COPY.cut.povCount(cut.povCharacterIds.length)}</span>
               </div>
               <h3 className="mt-3 font-serif text-xl tracking-wide text-ink transition-colors group-hover:text-cinnabar sm:text-2xl">
                 {cut.eventLabel ? `「${cut.eventLabel}」` : `第 ${cut.day ?? '—'} 日的一回`}
               </h3>
-              <p className="mt-2 text-sm tracking-widest text-cinnabar">讀這一回 →</p>
+              <p className="mt-2 text-sm tracking-widest text-cinnabar">{CHAPTER_COPY.cut.readThisCut}</p>
             </Link>
           </li>
         ))}

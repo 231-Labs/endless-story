@@ -114,7 +114,7 @@ import { runSocialPhase } from './tick-phases/social';
 import { runAskPhase } from './tick-phases/ask';
 import { runGivePhase } from './tick-phases/give';
 import { runSettlePhase } from './tick-phases/settle';
-import { runActPhase } from './tick-phases/act';
+import { runActPhase, cardActionPhrase } from './tick-phases/act';
 
 /** Map the top drama tension to a readable scene-incident framing — now with
  *  anti-repeat so the world rotates contentions instead of locking on one (the
@@ -832,7 +832,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     for (const a of acts) {
         if (!a.ok || !a.cardLabel) continue;
         const sceneId = rosterById.get(a.characterId)?.currentSceneId;
-        pushBeat(sceneId, a.characterId, `${a.name ?? '某人'}打出〔${a.cardLabel}〕${a.intent ? `（${a.intent}）` : ''}`);
+        pushBeat(sceneId, a.characterId, `${a.name ?? '某人'}${cardActionPhrase(a.cardLabel)}${a.intent ? `（${a.intent}）` : ''}`);
     }
 
     const povs: TickPovResult[] = [];
@@ -911,7 +911,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }
                 for (const a of acts) {
                     if (a.characterId === c.id && a.ok && a.cardLabel) {
-                        triggerParts.push(`你打出了〔${a.cardLabel}〕${a.intent ? `（${a.intent}）` : ''}`);
+                        triggerParts.push(`你${cardActionPhrase(a.cardLabel)}${a.intent ? `（${a.intent}）` : ''}`);
                     }
                 }
                 const myVerdict = verdictByChar.get(c.id);
