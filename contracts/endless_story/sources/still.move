@@ -42,6 +42,7 @@ const ELimitBelowMinted: u64 = 3;
 
 public struct STILL has drop {}
 
+#[allow(lint(share_owned))]
 fun init(otw: STILL, ctx: &mut TxContext) {
     let publisher = package::claim(otw, ctx);
     let mut d = display::new<Still>(&publisher, ctx);

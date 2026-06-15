@@ -52,7 +52,25 @@
       "source_index": 0,
       "index": 0,
       "doc": " Storyteller creates the DreamConfig (one per saga, at bootstrap).\n Default price = 50 ENDLESS. Admin cap transferred to caller.",
-      "attributes": [],
+      "attributes": [
+        {
+          "Parameterized": [
+            "allow",
+            [
+              {
+                "Parameterized": [
+                  "lint",
+                  [
+                    {
+                      "Name": "self_transfer"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
+      ],
       "visibility": "Public",
       "entry": false,
       "type_parameters": [],

@@ -219,7 +219,7 @@ fun submit_active_reflection() {
 #[test]
 fun submit_passive_reflection() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, saga, cap) = setup(&mut ctx, &clock);
 
     submit(
@@ -243,7 +243,7 @@ fun submit_passive_reflection() {
 #[expected_failure(abort_code = EBadMode)]
 fun submit_bad_mode_aborts() {
     let mut ctx = tx_context::dummy();
-    let mut clock = clock::create_for_testing(&mut ctx);
+    let clock = clock::create_for_testing(&mut ctx);
     let (world, admin_cap, saga, cap) = setup(&mut ctx, &clock);
 
     submit(

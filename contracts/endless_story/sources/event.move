@@ -212,13 +212,13 @@ module endless_story::event {
                 resolved_at_ms: 0,
             },
             deck: EventDeck {
-                participants: vector::empty<ID>(),
+                participants: vector[],
                 catalog,
                 hand_size,
-                hands: vector::empty<vector<u64>>(),
+                hands: vector[],
             },
             resolution: EventResolution {
-                submitted_actions: vector::empty<SubmittedAction>(),
+                submitted_actions: vector[],
                 outcomes: empty_outcomes(),
             },
         };
@@ -311,7 +311,7 @@ module endless_story::event {
         saga_skills: &vector<character::AttributeValue>,
     ): vector<u64> {
         let n = vector::length(catalog);
-        let mut weights = vector::empty<u64>();
+        let mut weights = vector[];
         let mut i = 0;
         while (i < n) {
             let card = vector::borrow(catalog, i);
@@ -363,7 +363,7 @@ module endless_story::event {
         assert!(hand_size <= n_catalog, EHandSizeExceedsCatalog);
 
         let mut weights = compute_card_weights(catalog, rules, char_attrs, saga_skills);
-        let mut hand = vector::empty<u64>();
+        let mut hand = vector[];
         let mut drawn = 0;
         while (drawn < hand_size) {
             let mut total: u64 = 0;
@@ -621,7 +621,7 @@ module endless_story::event {
         assert!(budget_event.meta.status == STATUS_RESOLVED, EEventNotResolved);
         let rid = object::id(drama_resource);
         let ops = &budget_event.resolution.outcomes.resource_transfers;
-        let mut batch = vector::empty<Transfer>();
+        let mut batch = vector[];
         let mut i = 0;
         let n = vector::length(ops);
         while (i < n) {
@@ -678,12 +678,12 @@ module endless_story::event {
 
     public fun empty_outcomes(): EventOutcomes {
         EventOutcomes {
-            currency_transfers: vector::empty<CurrencyTransfer>(),
-            scene_deltas: vector::empty<SceneParamDelta>(),
-            tag_ops: vector::empty<TagOp>(),
-            commitment_ids: vector::empty<ID>(),
-            deaths: vector::empty<DeathRecord>(),
-            resource_transfers: vector::empty<ResourceTransferOp>(),
+            currency_transfers: vector[],
+            scene_deltas: vector[],
+            tag_ops: vector[],
+            commitment_ids: vector[],
+            deaths: vector[],
+            resource_transfers: vector[],
         }
     }
 
@@ -703,11 +703,11 @@ module endless_story::event {
         resource_transfers: vector<ResourceTransferOp>,
     ): EventOutcomes {
         EventOutcomes {
-            currency_transfers: vector::empty<CurrencyTransfer>(),
-            scene_deltas: vector::empty<SceneParamDelta>(),
-            tag_ops: vector::empty<TagOp>(),
-            commitment_ids: vector::empty<ID>(),
-            deaths: vector::empty<DeathRecord>(),
+            currency_transfers: vector[],
+            scene_deltas: vector[],
+            tag_ops: vector[],
+            commitment_ids: vector[],
+            deaths: vector[],
             resource_transfers,
         }
     }
@@ -724,12 +724,12 @@ module endless_story::event {
     /// `role:小生` or `status:二太太` became externally affirmed.
     public fun outcomes_with_tag_ops(tag_ops: vector<TagOp>): EventOutcomes {
         EventOutcomes {
-            currency_transfers: vector::empty<CurrencyTransfer>(),
-            scene_deltas: vector::empty<SceneParamDelta>(),
+            currency_transfers: vector[],
+            scene_deltas: vector[],
             tag_ops,
-            commitment_ids: vector::empty<ID>(),
-            deaths: vector::empty<DeathRecord>(),
-            resource_transfers: vector::empty<ResourceTransferOp>(),
+            commitment_ids: vector[],
+            deaths: vector[],
+            resource_transfers: vector[],
         }
     }
 
@@ -837,7 +837,7 @@ module endless_story::event {
     ): EventOutcomes {
         EventOutcomes {
             currency_transfers, scene_deltas, tag_ops, commitment_ids, deaths,
-            resource_transfers: vector::empty<ResourceTransferOp>(),
+            resource_transfers: vector[],
         }
     }
 
@@ -866,10 +866,10 @@ module endless_story::event {
         let n_participants = vector::length(&participants);
         let n_catalog = vector::length(&catalog);
         assert!(hand_size <= n_catalog, EHandSizeExceedsCatalog);
-        let mut hands = vector::empty<vector<u64>>();
+        let mut hands = vector[];
         let mut i = 0;
         while (i < n_participants) {
-            let mut hand = vector::empty<u64>();
+            let mut hand = vector[];
             let mut j = 0;
             while (j < hand_size) {
                 vector::push_back(&mut hand, j);
@@ -892,7 +892,7 @@ module endless_story::event {
             },
             deck: EventDeck { participants, catalog, hand_size, hands },
             resolution: EventResolution {
-                submitted_actions: vector::empty<SubmittedAction>(),
+                submitted_actions: vector[],
                 outcomes: empty_outcomes(),
             },
         }
@@ -934,7 +934,7 @@ module endless_story::event {
         assert!(n_catalog > 0, ECatalogEmpty);
         assert!(hand_size > 0, EInvalidHandSize);
         assert!(hand_size <= n_catalog, EHandSizeExceedsCatalog);
-        let mut hand = vector::empty<u64>();
+        let mut hand = vector[];
         let mut j = 0;
         while (j < hand_size) {
             vector::push_back(&mut hand, j);

@@ -6,7 +6,7 @@ module endless_story::economy_test;
 
 use std::unit_test::assert_eq;
 use sui::coin::{Self, TreasuryCap};
-use sui::test_utils::destroy;
+use std::unit_test::destroy;
 use endless_story::currency::{Self, CURRENCY};
 use endless_story::character::{Self, Character, OwnerCap};
 use endless_story::world::{Self, World, AdminCap};
