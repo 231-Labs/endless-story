@@ -7,6 +7,7 @@
  * what the director did.
  */
 import type { SuiClient } from '../client.js';
+import { queryEventsWithRetry } from './query-retry.js';
 
 /** One `RelationshipSeeded` event — a director-declared tie between two
  *  characters in a scene. */
@@ -42,7 +43,7 @@ export async function listRelationshipEvents(
     const cap = opts.maxEvents ?? Infinity;
     let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
     for (;;) {
-        const page = await client.queryEvents({
+        const page = await queryEventsWithRetry(client, {
             query: { MoveEventType: eventType },
             cursor,
             limit: 50,
