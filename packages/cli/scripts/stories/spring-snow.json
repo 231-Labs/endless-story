@@ -560,6 +560,7 @@
     },
     {
       "name": "連翹",
+      "disabled": true,
       "ageYears": 24,
       "gender": "女",
       "role": "刀馬旦",
@@ -569,6 +570,7 @@
     },
     {
       "name": "何阿喜",
+      "disabled": true,
       "ageYears": 30,
       "gender": "男",
       "role": "丑",
@@ -578,6 +580,7 @@
     },
     {
       "name": "唐桂蘭",
+      "disabled": true,
       "ageYears": 44,
       "gender": "女",
       "role": "衣箱",
@@ -587,6 +590,7 @@
     },
     {
       "name": "方競西",
+      "disabled": true,
       "ageYears": 32,
       "gender": "男",
       "role": "記者",

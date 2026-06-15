@@ -153,6 +153,12 @@ export interface StoryFoundingMember {
    * 的角色. Omit to let `roleAttributeFloors(role)` supply sensible defaults.
    */
   minAttributes?: Partial<CharacterAttributes>;
+  /**
+   * Skip this member when seeding the founding cast (a reversible "comment-out"
+   * for small-scale test runs). The loader filters these out; flip back to false
+   * / remove to re-include. JSON has no comments, so this is the toggle.
+   */
+  disabled?: boolean;
 }
 
 export interface StoryPreset {

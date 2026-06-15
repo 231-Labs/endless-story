@@ -421,7 +421,10 @@ export async function loadFoundingPresetAction(): Promise<FoundingCharSpec[]> {
         const id = chosen ?? presets[0]?.id ?? 'spring-snow';
         const preset = await loadStoryPreset(id);
         const cast = preset.founding_cast ?? [];
-        return cast.map((c) => ({
+        // `disabled: true` is a reversible "comment-out" for small-scale test runs.
+        return cast
+            .filter((c) => !c.disabled)
+            .map((c) => ({
             name: c.name,
             ageYears: c.ageYears,
             gender: c.gender,
