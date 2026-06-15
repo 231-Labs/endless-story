@@ -6,6 +6,7 @@ import { SiteNav } from '@/components/home/SiteNav';
 import { LinkifiedProse } from '@/components/common/CharacterLinkifier';
 import { formatDate } from '@/lib/format';
 import { txUrl, objectUrl } from '@/lib/explorer';
+import { CHAPTER_COPY } from '@/lib/copy/chapters';
 
 /**
  * 視角（POV）閱讀頁 — a single character's first-person raw material.
@@ -87,11 +88,13 @@ export default async function ChapterPage({
           </Link>
 
           <article className="min-w-0">
+            {/* Clean opening: a slim eyebrow + title + prose. The technical
+                provenance (tx links / cross-links) lives in the footer. */}
             <div className="flex flex-wrap items-center gap-3 text-xs tracking-widest text-mute/80">
               <span className="bg-canvas/50 px-2.5 py-1 rounded border border-hairline/50">DAY {chapter.day}</span>
               {/* IA: this surface is the per-character raw material, not the woven 回 */}
               <span className="rounded border border-cinnabar/30 bg-cinnabar/[0.06] px-2.5 py-1 text-cinnabar/90">
-                視角原料{pov ? ` · ${pov.name} 的第一人稱` : ''}
+                {pov ? CHAPTER_COPY.pov.eyebrowWithName(pov.name) : CHAPTER_COPY.pov.eyebrow}
               </span>
               {pov ? (
                 <>
@@ -113,48 +116,13 @@ export default async function ChapterPage({
             </h1>
 
             {chapter.provenance?.eventLabel ? (
-              <div className="mt-6 rounded-2xl border border-cinnabar/25 bg-cinnabar/[0.04] px-5 py-4">
-                <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/70">
-                  鏈上事件 · 已證實發生
-                </div>
-                <p className="mt-2 text-sm leading-relaxed text-ink">
-                  本篇是
-                  {pov ? <span className="text-cinnabar"> {pov.name} </span> : ' 角色 '}
-                  對「{chapter.provenance.eventLabel}」的視角
-                  {chapter.provenance.sceneName ? ` · ${chapter.provenance.sceneName}` : ''}
-                  {chapter.provenance.day ? ` · 第 ${chapter.provenance.day} 日` : ''}。
-                </p>
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-2xs tracking-widest">
-                  {chapter.provenance.eventTx ? (
-                    <a
-                      href={txUrl(chapter.provenance.eventTx)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-cinnabar hover:underline"
-                    >
-                      在區塊鏈瀏覽器查驗此事件 ↗
-                    </a>
-                  ) : null}
-                  <a
-                    href={objectUrl(chapter.id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-mute hover:text-ink hover:underline"
-                  >
-                    此章上鏈承諾 ↗
-                  </a>
-                </div>
-                {eventTx ? (
-                  <Suspense fallback={null}>
-                    <EventCrossLinks
-                      sagaId={chapter.sagaId}
-                      currentId={chapter.id}
-                      eventTx={eventTx}
-                      charactersById={charactersById}
-                    />
-                  </Suspense>
-                ) : null}
-              </div>
+              <p className="mt-5 text-sm leading-relaxed text-mute">
+                本篇是
+                {pov ? <span className="text-ink"> {pov.name} </span> : ' 角色 '}
+                對「<span className="text-ink">{chapter.provenance.eventLabel}</span>」的視角
+                {chapter.provenance.sceneName ? ` · ${chapter.provenance.sceneName}` : ''}
+                {chapter.provenance.day ? ` · 第 ${chapter.provenance.day} 日` : ''}。
+              </p>
             ) : null}
 
             {chapter.mediaType === 'video' && chapter.videoUrl ? (
@@ -185,8 +153,42 @@ export default async function ChapterPage({
               />
             </div>
 
-            {/* 章末迴圈：追視角 + 上一章 / 下一章。鏈上佐證在上方 provenance 區，不在此重複。 */}
+            {/* 章末迴圈：鏈上查驗（footer 行）→ 同事件互鏈 → 追視角 → 上一章 / 下一章。 */}
             <footer className="mt-16 space-y-6">
+              {/* Tidy on-chain verification line — moved out of the opening. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline/50 pt-6 text-2xs tracking-widest text-mute/70">
+                <span className="text-mute/80">{CHAPTER_COPY.provenance.footerLead}</span>
+                {chapter.provenance?.eventTx ? (
+                  <a
+                    href={txUrl(chapter.provenance.eventTx)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-cinnabar"
+                  >
+                    {CHAPTER_COPY.provenance.verifyEvent}
+                  </a>
+                ) : null}
+                <a
+                  href={objectUrl(chapter.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-cinnabar"
+                >
+                  {CHAPTER_COPY.provenance.chapterCommitment}
+                </a>
+              </div>
+
+              {eventTx ? (
+                <Suspense fallback={null}>
+                  <EventCrossLinks
+                    sagaId={chapter.sagaId}
+                    currentId={chapter.id}
+                    eventTx={eventTx}
+                    charactersById={charactersById}
+                  />
+                </Suspense>
+              ) : null}
+
               {pov ? (
                 <div className="es-card p-6 text-center sm:p-8">
                   <p className="text-sm leading-relaxed text-mute">
@@ -196,7 +198,7 @@ export default async function ChapterPage({
                     href={{ pathname: '/dossier', query: { id: pov.id } }}
                     className="mt-4 inline-flex items-center gap-2 rounded-full border border-cinnabar/50 px-5 py-2 text-sm tracking-widest text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas"
                   >
-                    追 {pov.name} 的視角 →
+                    {CHAPTER_COPY.crossLink.followPov(pov.name)}
                   </Link>
                 </div>
               ) : null}
@@ -243,18 +245,18 @@ async function EventCrossLinks({
   );
   if (!cut && siblingPovs.length === 0) return null;
   return (
-    <div className="mt-3 border-t border-hairline/50 pt-3 text-2xs tracking-widest">
+    <div className="text-2xs tracking-widest">
       {cut ? (
         <Link
           href={`/feed/cut/${cut.commitmentId}`}
           className="mr-4 inline-block rounded-full border border-cinnabar/40 px-3 py-1 text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas"
         >
-          讀本事件的合本「回」→
+          {CHAPTER_COPY.crossLink.readCut}
         </Link>
       ) : null}
       {siblingPovs.length > 0 ? (
         <>
-          <span className="text-mute">同一事件的其他視角：</span>
+          <span className="text-mute">{CHAPTER_COPY.crossLink.otherPovs}</span>
           {siblingPovs.map((s) => {
             const sp = s.povCharacterId ? charactersById.get(s.povCharacterId) : undefined;
             return (

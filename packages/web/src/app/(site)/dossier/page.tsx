@@ -280,7 +280,10 @@ async function DossierDetail({
     // On-chain POV chapters anchored via commitment.move. Empty array
     // when nothing's been committed yet (no runner POV yet, no
     // admin-triggered chapter yet).
-    fetchPovChaptersForCharacter(character.id, { limit: 5 }),
+    // withTeaser: server-extract a first-paragraph preview per chapter so the
+    // locked card can show an opening taste + fade without ever shipping the
+    // full body to non-subscribers (the gate stays the real wallet gate).
+    fetchPovChaptersForCharacter(character.id, { limit: 5, withTeaser: true }),
     // Reflections from reflection.move. Owner sees full body; non-owners
     // see only metadata (mode + timestamp + chain anchor).
     fetchReflectionsForCharacter(character.id, { limit: 8 }),

@@ -13,6 +13,7 @@ import { normalizeWalrusBlobId } from '@endless-story/shared';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
+import { parseProvenance } from './chapter-provenance.js';
 
 /**
  * Walrus blobs are immutable + content-addressed (the id IS the content hash),
@@ -34,11 +35,25 @@ export interface PovChapterEntry {
     blobUrl: string;
     /** Hex content hash, for verification. */
     contentHashHex: string;
+    /**
+     * First-paragraph plaintext preview (provenance + markdown stripped),
+     * server-extracted so a non-subscriber's HTML carries ONLY this teaser —
+     * never the full chapter body. Absent when not requested or unreadable.
+     * The gate is a UX gate (the blob is plaintext on Walrus anyway), so a
+     * first-paragraph teaser is acceptable; we still avoid shipping full text.
+     */
+    teaser?: string;
 }
 
 export interface FetchPovChaptersOptions {
     /** Max entries returned (newest first). Default 3. */
     limit?: number;
+    /**
+     * Server-extract a first-paragraph `teaser` for each entry (one cached
+     * Walrus read per chapter). Lets a locked dossier card show an opening
+     * preview without shipping the full body to non-subscribers.
+     */
+    withTeaser?: boolean;
 }
 
 export interface FetchSagaPovChaptersOptions extends FetchPovChaptersOptions {
@@ -85,14 +100,18 @@ export async function fetchPovChaptersForCharacter(
             const blobId = normalizeWalrusBlobId(json.blob_id);
             const contentHashHex = decodeBytesHex(json.content_hash);
             if (!blobId) continue;
+            const blobUrl = buildWalrusBlobUrl(blobId);
             out.push({
                 commitmentId: s.commitmentId,
                 sagaId: s.sagaId,
                 subjectId: s.subjectId,
                 committedAtMs: s.committedAtMs,
                 blobId,
-                blobUrl: buildWalrusBlobUrl(blobId),
+                blobUrl,
                 contentHashHex,
+                ...(opts.withTeaser
+                    ? { teaser: await extractTeaser(blobUrl) }
+                    : {}),
             });
         } catch {
             // Drop unreadable commitments silently — chain is source of truth,
@@ -100,6 +119,49 @@ export async function fetchPovChaptersForCharacter(
         }
     }
     return out;
+}
+
+/**
+ * Read a chapter blob server-side and return only its first non-empty
+ * paragraph as plain text (provenance header + light markdown stripped).
+ * Used for the locked-card teaser so the full body never reaches a
+ * non-subscriber. Uses the hard immutable-blob cache, so repeat dossier
+ * visits don't re-fetch. Returns undefined on any read failure.
+ */
+async function extractTeaser(blobUrl: string): Promise<string | undefined> {
+    try {
+        const raw = await fetchChapterText(blobUrl);
+        return firstParagraphPlainText(raw);
+    } catch {
+        return undefined;
+    }
+}
+
+/** First non-empty paragraph → plain text, capped to ~1–2 sentences. */
+export function firstParagraphPlainText(raw: string): string | undefined {
+    const { body } = parseProvenance(raw.trim());
+    const para = body
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        // Skip leading markdown headings / hr so the teaser is real prose.
+        .find((p) => p && !/^#{1,6}\s/.test(p) && !/^-{3,}$/.test(p));
+    if (!para) return undefined;
+    const flat = para
+        .replace(/^#{1,6}\s+/, '')
+        .replace(/[*_`>]/g, '')
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!flat) return undefined;
+    // Keep it to an opening taste: cap at ~120 chars on a sentence boundary.
+    if (flat.length <= 120) return flat;
+    const slice = flat.slice(0, 120);
+    const lastStop = Math.max(
+        slice.lastIndexOf('。'),
+        slice.lastIndexOf('！'),
+        slice.lastIndexOf('？'),
+    );
+    return (lastStop > 40 ? slice.slice(0, lastStop + 1) : slice) + '…';
 }
 
 export async function fetchPovChaptersForSaga(

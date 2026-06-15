@@ -9,19 +9,22 @@ import { objectUrl, txUrl } from '@/lib/explorer';
 import { truncateBlobId } from '@/lib/format';
 import type { PovChapterEntry } from '@/lib/chain/pov-read';
 import { parseProvenance } from '@/lib/chain/chapter-provenance';
+import { CHAPTER_COPY } from '@/lib/copy/chapters';
+import { SubscribeButton } from '@/components/common/SubscribeButton';
 
 /**
- * On-chain POV chapters — owner + subscriber gated.
+ * 角色回 — a character's first-person POV chapters, owner + subscriber gated.
  *
- * Access model: the gazette is public; a character's POV chapters are
- * private to the **owner** and her **subscribers**. We gate client-side
- * (real dapp-kit account, not the URL ?as= param) and fetch the body on
- * the client only when authorized — so a non-reader's HTML never carries
- * the chapter text. Non-readers still see the on-chain anchor (proves the
- * chapter exists + is verifiable) but not the Walrus body link.
+ * Access model: the gazette + woven cuts are public; a character's POV deep
+ * cut is private to the **owner** and her **subscribers**. We gate client-side
+ * (real dapp-kit account, not the URL ?as= param) and only mount the full
+ * body fetch when authorized — so a non-reader's HTML never carries the full
+ * chapter text. Locked readers see a server-extracted first-paragraph teaser
+ * (PovChapterEntry.teaser) that dissolves into the bg, plus a subscribe CTA,
+ * and the on-chain anchor (proves the chapter exists + is verifiable).
  *
- * Same demo-mode caveat as reflections: the blob is plaintext on Walrus,
- * so this is a UX gate, not cryptographic. Real privacy = Seal (backlog).
+ * Same demo-mode caveat as reflections: the blob is plaintext on Walrus, so
+ * this is a UX gate, not cryptographic. Real privacy = Seal (backlog).
  */
 export function ChainPovSection({
     chapters,
@@ -59,61 +62,77 @@ export function ChainPovSection({
     }, [account, isOwner, character.id, suiClient]);
 
     const canRead = isOwner || isSubscriber;
+    const accessState = isOwner ? 'owner' : isSubscriber ? 'subscriber' : 'locked';
 
     return (
         <section>
             <div className="flex items-center gap-4">
                 <div className="h-px w-8 bg-cinnabar" />
                 <h2 className="font-serif text-2xl tracking-wide text-cinnabar">
-                    {character.name} 視角 · 鏈上 POV
+                    {CHAPTER_COPY.pov.sectionHeader(character.name)}
                 </h2>
             </div>
-            <p className="mt-2 pl-12 text-2xs tracking-widest text-mute/70">
-                {canRead
-                    ? isOwner
-                        ? '你是班主，每一回都讀得到。'
-                        : '你已訂閱，每一回都讀得到。'
-                    : '訂閱之後可讀全文；此刻只見鏈上憑證。'}
+            <p className="mt-2 pl-12 text-sm leading-relaxed text-mute/80">
+                {CHAPTER_COPY.pov.sectionNote}
+            </p>
+            <p className="mt-1 pl-12 text-2xs tracking-widest text-mute/60">
+                {CHAPTER_COPY.pov.accessNote(accessState)}
             </p>
             <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
                 {chapters.map((c) => (
                     <li key={c.commitmentId}>
-                        <div className="block es-card p-6 sm:p-8">
-                            <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute/80">
-                                <span className="rounded border border-hairline/50 bg-canvas/50 px-2 py-1 font-mono">
-                                    walrus · {truncateBlobId(c.blobId)}
-                                </span>
-                                <a
-                                    href={objectUrl(c.commitmentId)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="hover:text-cinnabar"
-                                    title="在區塊鏈瀏覽器查看 commitment"
-                                >
-                                    on-chain anchor ↗
-                                </a>
-                                {canRead ? (
-                                    <a
-                                        href={c.blobUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="hover:text-cinnabar"
-                                        title="在 Walrus 直接讀原文"
-                                    >
-                                        walrus blob ↗
-                                    </a>
-                                ) : null}
-                            </div>
+                        <article className="es-card p-6 sm:p-8">
+                            {/* Reading opens with prose; provenance sits in the footer. */}
                             {canRead ? (
                                 <ClientPovBody blobId={c.blobId} />
                             ) : (
-                                <LockedNotice />
+                                <LockedTeaser teaser={c.teaser} character={character} />
                             )}
-                        </div>
+                            <ProvenanceFooter chapter={c} canRead={canRead} />
+                        </article>
                     </li>
                 ))}
             </ul>
         </section>
+    );
+}
+
+/**
+ * Locked state: a first-paragraph taste that dissolves into the page bg,
+ * then a clear subscribe CTA. The teaser is server-extracted (plain text),
+ * so the full body is never shipped to a non-subscriber.
+ */
+function LockedTeaser({
+    teaser,
+    character,
+}: {
+    teaser?: string;
+    character: Character;
+}) {
+    return (
+        <div>
+            <div className="relative max-h-40 overflow-hidden">
+                <p className="text-lg leading-loose text-ink/80 sm:text-xl sm:leading-[2.1]">
+                    {teaser ?? CHAPTER_COPY.pov.lockHint}
+                </p>
+                {/* Gradient mask — the text dissolves into the card/page bg.
+                    `to-surface` keeps it dark-mode safe (semantic token). */}
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-surface"
+                />
+            </div>
+            <div className="mt-5 flex flex-col items-start gap-3">
+                <p className="font-serif text-base text-ink/90">
+                    {CHAPTER_COPY.pov.lockCtaLabel(character.name)}
+                </p>
+                <SubscribeButton
+                    characterId={character.id}
+                    currentCount={character.subscriberCount ?? 0}
+                />
+                <p className="text-2xs tracking-widest text-mute/60">{CHAPTER_COPY.pov.lockHint}</p>
+            </div>
+        </div>
     );
 }
 
@@ -138,10 +157,10 @@ function ClientPovBody({ blobId }: { blobId: string }) {
     }, [blobId]);
 
     if (failed) {
-        return <p className="mt-4 text-sm text-mute">— 章回內容暫時讀不到 —</p>;
+        return <p className="text-sm text-mute">{CHAPTER_COPY.pov.bodyUnavailable}</p>;
     }
     if (raw == null) {
-        return <p className="mt-4 text-sm text-mute">讀取中…</p>;
+        return <p className="text-sm text-mute">{CHAPTER_COPY.pov.bodyLoading}</p>;
     }
     // Strip the embedded on-chain-event provenance header before rendering;
     // surface it as a verifiable source line instead of leaking the raw comment.
@@ -149,8 +168,8 @@ function ClientPovBody({ blobId }: { blobId: string }) {
     return (
         <>
             {provenance?.eventLabel ? (
-                <p className="mt-3 text-2xs tracking-widest text-cinnabar/70">
-                    本回出自鏈上事件「{provenance.eventLabel}」
+                <p className="mb-3 text-2xs tracking-widest text-cinnabar/70">
+                    {CHAPTER_COPY.pov.fromEvent(provenance.eventLabel)}
                     {provenance.eventTx ? (
                         <a
                             href={txUrl(provenance.eventTx)}
@@ -158,23 +177,42 @@ function ClientPovBody({ blobId }: { blobId: string }) {
                             rel="noopener noreferrer"
                             className="ml-2 hover:underline"
                         >
-                            查驗 ↗
+                            {CHAPTER_COPY.provenance.verifyShort}
                         </a>
                     ) : null}
                 </p>
             ) : null}
-            <Markdown source={body} className="mt-4" />
+            <Markdown source={body} className="chapter-prose" />
         </>
     );
 }
 
-function LockedNotice() {
+/** Tidy on-chain verification footer — kept out of the reading opening. */
+function ProvenanceFooter({ chapter, canRead }: { chapter: PovChapterEntry; canRead: boolean }) {
     return (
-        <div className="mt-4 rounded-2xl border border-dashed border-hairline/60 bg-canvas/30 p-6 text-center">
-            <p className="text-sm text-mute">這一回只給班主與訂閱者。</p>
-            <p className="mt-1 text-2xs tracking-widest text-mute/60">
-                訂閱後，台前幕後的每一個念頭都讀得到。
-            </p>
-        </div>
+        <footer className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline/50 pt-4 text-2xs tracking-widest text-mute/70">
+            <span className="text-mute/80">{CHAPTER_COPY.provenance.footerLead}</span>
+            <span className="font-mono text-mute/60">walrus · {truncateBlobId(chapter.blobId)}</span>
+            <a
+                href={objectUrl(chapter.commitmentId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-cinnabar"
+                title="在區塊鏈瀏覽器查看 commitment"
+            >
+                {CHAPTER_COPY.provenance.onChainAnchor}
+            </a>
+            {canRead ? (
+                <a
+                    href={chapter.blobUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-cinnabar"
+                    title="在 Walrus 直接讀原文"
+                >
+                    {CHAPTER_COPY.provenance.walrusBlob}
+                </a>
+            ) : null}
+        </footer>
     );
 }
