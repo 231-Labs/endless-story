@@ -52,14 +52,14 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
-## 目前進度（2026-06-12）
+## 目前進度（2026-06-15）
 
-**一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder；目前進入「demo 穩定化 + 部署 + 影片素材」階段。藏閣 Slice 1–2.6 全部落地，AI 策展（選品 + 場景道具）可用；下一個大步是 Slice 3 實體交易入場。
+**一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder。藏閣 Slice 1–2.6、經濟迴圈（ASK/GIVE/BOND/SETTLE 進 tick-loop）、`economy.move` D1（`sui move test` 綠待上鏈）、敘事方法產品化（章回三態 + 資料驅動自檢 + 自治關係戲）都已落地。**目前關鍵路徑＝一次性 redeploy**（見下方「必帶清單」）：economy.move/chamber/recruit RedeemIntent/still TransferPolicy 綁死一起上，redeploy 後 give/settle 影子才翻成真鏈上 Balance、藏閣 Slice 3 實體交易與 Slice 4 鏈上佈局才能接通。並行可推：demo 穩定化 + 影片素材。
 
 ### 已經落地
 
 - **合約 1.6 / 1.7 已有**：`event.move`、`commitment.move` 在 repo 內，runner 章回 / 公報 / drama beat 都走 Walrus + `commitment::commit` anchor。
-- **Runner 自治 tick v1 已接通**：`runTickLoopAction` 順序為 `PLAN → MOVE → DRAMA → SOCIAL → ACT → POV → SLEEP → GAZETTE`。
+- **Runner 自治 tick 已接通**：`runTickLoopAction` 完整順序為 `PLAN → MOVE → DRAMA → SOCIAL → ASK → GIVE → 養關係(BOND) → SETTLE → ACT → POV(+關係戲 encounter) → SLEEP → GAZETTE`（v1 只有 `PLAN → MOVE → DRAMA → SOCIAL → ACT → POV → SLEEP → GAZETTE`；經濟迴圈 ASK/GIVE/BOND/SETTLE 與自治關係戲 encounter 為後續加入，見下方 2026-06-11 / 2026-06-14 各條）。
 - **角色認知 v1 已接通**：
   - mint 後 `redeemVoucher → seedGenesisMemoryAction` 會 seed self genesis、主觀 relationship memories、最多 3 位既有角色的 reciprocal observation。
   - 每輪 tick 建 saga roster snapshot：`id/name/role/gender/age/brief/currentScene`。

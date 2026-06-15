@@ -45,7 +45,7 @@ const ATTR_LABEL: Record<string, string> = {
 /** kind=6 setting_sheet marks "additional gallery views were generated". */
 const SETTING_SHEET_KIND = 6;
 
-export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'appearance' | 'memory' | 'relationship' | 'prologue';
+export type ReconcileStepName = 'portrait' | 'views' | 'tags' | 'persona' | 'appearance' | 'memory' | 'relationship' | 'skills' | 'prologue';
 export type ReconcileStatus = 'ok' | 'skip' | 'fail';
 
 export interface ReconcileStep {
