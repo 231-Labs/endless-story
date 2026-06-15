@@ -3,6 +3,7 @@
  */
 import * as gen from '../generated/endless_story/dream.js';
 import type { SuiClient } from '../client.js';
+import { queryEventsWithRetry } from './query-retry.js';
 
 export { gen as raw };
 
@@ -44,7 +45,7 @@ export async function listDreamInjectedEvents(
     const cap = opts.maxEvents ?? Infinity;
     let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
     for (;;) {
-        const page = await client.queryEvents({
+        const page = await queryEventsWithRetry(client, {
             query: { MoveEventType: eventType },
             cursor,
             limit: 50,

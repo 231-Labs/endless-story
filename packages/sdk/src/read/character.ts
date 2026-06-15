@@ -3,6 +3,7 @@
  */
 import * as gen from '../generated/endless_story/character.js';
 import type { SuiClient } from '../client.js';
+import { queryEventsWithRetry } from './query-retry.js';
 
 export { gen as raw };
 
@@ -199,7 +200,7 @@ export async function listMintedCharacterSummaries(
     const cap = opts.maxEvents ?? Infinity;
 
     for (;;) {
-        const page = await client.queryEvents({
+        const page = await queryEventsWithRetry(client, {
             query: { MoveEventType: eventType },
             cursor,
             limit: 50,
