@@ -161,7 +161,8 @@ function isPerformerResource(r: ResourceSnapshot): boolean {
         r.label.startsWith('spotlight:') ||
         r.label.startsWith('recording:') ||
         r.label.startsWith('patronage:') ||
-        r.label.startsWith('naming:')
+        r.label.startsWith('naming:') ||
+        r.label.startsWith('martial:')
     );
 }
 
@@ -217,6 +218,7 @@ function desireStatementFor(r: ResourceSnapshot): string {
     if (r.label.startsWith('recording:')) return `搶${r.label.slice('recording:'.length)}、把嗓子灌進唱片`;
     if (r.label.startsWith('patronage:')) return `接下${r.label.slice('patronage:'.length)}、博恩主賞識`;
     if (r.label.startsWith('naming:')) return `搏一個${r.label.slice('naming:'.length)}、讓報紙替自己揚名`;
+    if (r.label.startsWith('martial:')) return `爭${r.label.slice('martial:'.length)}、亮一身真功夫`;
     if (r.label) return `爭得「${r.label}」`;
     return `爭得一席（${r.archetype || '稀缺資源'}）`;
 }

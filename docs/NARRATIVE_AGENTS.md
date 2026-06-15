@@ -286,6 +286,29 @@ recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEA
 
 **驗證清單**：見 [docs/NARRATIVE_QA.md](./NARRATIVE_QA.md)（明天重部署合約後的整套 QA）。
 
+### 8c. 資源爭搶重設計：意圖×能力（2026-06-15，已接進產品）
+
+**問題**：原本 `chooseSettlementWinner` 把資源判給「張力(慾望)最高」的人——**技能與先天屬性完全不參與**（最會唱的不見得拿到唱片）。先前一度把技能接到「抽牌加權」是**錯的層**（只改手牌、不改輸贏）。
+
+**重設計（已用解耦 sim 驗證，`experiments/novel-lab/contest-sim/`）**：
+- **意圖(記憶推導的慾望) 閘參與，能力(先天+後天) 閘成敗**：`勝率 ∝ (意圖 + FLOOR) × 能力^γ`。
+  - 想搶但搶不起：能力低 → `能力^γ≈0` → 輸；能力夠但不想搶：FLOOR 讓能者偶爾被推上去（臨危受命）。
+- **每個資源「靠什麼本事贏」由 ContestSpec 決定**（`lib/chain/contest.ts`）：`{ innate:{先天→權重}, skill:{後天→權重}, abilityGate:γ }`，依資源語意而定（唱片→唱腔、頭牌→台緣、武戲→武場+身段、某人的青眼→外表+心性 但 γ 低＝意圖主導）。
+- **確定性、可重現**（無 RNG，對齊鏈上結算）；戲劇變數由意圖隨 tick 變化＋持有者黏性/冷卻產生，不靠亂數。
+- 落點：`lib/chain/contest.ts`（純模型）；`event-spine.ts settleEvent` 用 `pickContestWinner`（先天屬性缺失時優雅退回張力版）；`SpineCtx.attrsById` 由 tick-loop 帶入；技能由 role+attrs **重推**（與上鏈種的一致），結算端免讀 skill DOF。**只在 spine 模式結算時生效**（資源結算本就只在那裡），預設敘事 QA 不受影響。
+- 新增 `martial:壓軸武戲台口` 資源 → 武行當（連翹）終於有得爭、爭得贏（sim+product 驗證：連翹勝出）。
+
+**LLM 導演動態生成事件時要填的 `contestSpec` 指引**：
+```
+{ resource:"自由命名",
+  innate:{ 先天屬性(appearance/constitution/acuity/disposition)→權重0..1, 只填相關 },
+  skill: { 後天技能(vocal/movement/stage_presence/martial/literati/networking)→權重0..1, 只填相關 },
+  abilityGate: 1.0–2.5 }  // 硬功型給高(~2)、關係/意圖型給低(~1.2)；意圖不由導演填，從角色記憶算
+```
+`resolveContestSpec(kind, override)` 已預留 override 入口；目前自治路徑用「依資源 kind 的預設 spec」。
+
+**待續**：① 意圖目前用 drama 張力(結構性、偏均勻)，要接成真正「從記憶推導、行當化」的慾望（花旦不會真想要武戲）；② 讓 LLM 導演/Showrunner 真的產 `contestSpec` 並持久化（屬 N7）；③ 持有者黏性+冷卻(D3) 提供「但還是有可能」的戲劇變數、破鬼打牆。
+
 ---
 
 ## 9. 非目標 / 明確不做

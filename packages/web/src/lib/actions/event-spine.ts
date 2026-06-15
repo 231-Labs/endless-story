@@ -47,6 +47,8 @@ import {
     type AllocationView,
     type AxisCandidate,
 } from '@/lib/chain/spine-core';
+import { chooseContestWinner, resolveContestSpec, toContender } from '@/lib/chain/contest';
+import type { WorldAttrs } from '@/lib/chain/saga-skills';
 import { createBudgetEventAction, dealHandAction } from './budget-event';
 import { compileEventChapterAction } from './compile-event-chapter';
 import type { TickStoryletResult } from './tick-loop-types';
@@ -99,6 +101,10 @@ export interface SpineCtx {
     nameById: Map<string, string>;
     roleById: Map<string, string>;
     tensions: TensionView[];
+    /** Per-character 先天 world attrs (appearance/constitution/acuity/disposition),
+     *  for the skill-weighted resource contest (chooseContestWinner). Optional —
+     *  when absent, settlement falls back to the tension-only winner. */
+    attrsById?: Map<string, WorldAttrs>;
     minTicks?: number;
     maxTicks?: number;
     minCast?: number;
@@ -272,6 +278,35 @@ export async function spineResolveAndWeave(
 }
 
 /**
+ * Decide who seizes the contested resource using the skill-weighted contest:
+ * intent (this resource's tension per participant) gates participation, ability
+ * (先天 attrs + role-derived skills, weighted by the resource's ContestSpec) gates
+ * success. Falls back to the tension-only winner when 先天 attrs aren't available
+ * (ctx.attrsById absent) so settlement never hard-depends on the new path.
+ */
+function pickContestWinner(ctx: SpineCtx, participantIds: string[], keyword: string): string | null {
+    if (!ctx.attrsById) return chooseSettlementWinner(participantIds, ctx.tensions, keyword);
+    // intent per participant = max tension whose statement carries this resource keyword.
+    const intentById = new Map<string, number>();
+    for (const t of ctx.tensions) {
+        if (!participantIds.includes(t.characterId)) continue;
+        if (keyword && !t.statement.includes(keyword)) continue;
+        if (t.tension <= 0) continue;
+        intentById.set(t.characterId, Math.max(intentById.get(t.characterId) ?? 0, t.tension));
+    }
+    const spec = resolveContestSpec(keyword);
+    const contenders = participantIds
+        .map((id) => {
+            const attrs = ctx.attrsById!.get(id);
+            if (!attrs) return null;
+            return toContender(id, intentById.get(id) ?? 0, ctx.roleById.get(id) ?? '', attrs, spec);
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null);
+    if (contenders.length === 0) return chooseSettlementWinner(participantIds, ctx.tensions, keyword);
+    return chooseContestWinner(contenders, spec.abilityGate);
+}
+
+/**
  * Resolve the event, proposing a resource transfer to the winner. Falls back to
  * a plain `empty_outcomes` resolve on ANY problem so the event always closes.
  * Returns whether a real settlement (transfer) was applied.
@@ -291,9 +326,7 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
         // this resource for a while (else a ≥3-way slot thrashes; gravity-sim (C)).
         if (resource) coolResource(resource.resourceId, GRAVITY_COOLDOWN_TICKS);
         const keyword = ev.templateId.split(':')[1] ?? '';
-        const winner = resource
-            ? chooseSettlementWinner(ev.participantIds, ctx.tensions, keyword)
-            : null;
+        const winner = resource ? pickContestWinner(ctx, ev.participantIds, keyword) : null;
         const plan = resource && winner ? planResourceTransfer(resource, winner) : null;
 
         if (resource && plan) {

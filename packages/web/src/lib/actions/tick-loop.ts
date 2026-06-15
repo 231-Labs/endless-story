@@ -239,6 +239,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
+    // 先天 world attrs per character, for the skill-weighted resource contest
+    // (spine settlement). CharacterAttributes ⊇ WorldAttrs (the four innate axes).
+    const attrsById = new Map(characters.map((c) => [c.id, c.attributes]));
     // The economy shadow can mark a character dead (vitality → 0); drop them from the acting set
     // so death actually retires them from the stage (they keep their persisted state for settle).
     const alive = characters.filter((c) => !isShadowDead(d.sagaId, c.id));
@@ -517,6 +520,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 statement: t.statement,
                 tension: t.tension,
             })),
+            attrsById,
         };
         const nowTick = spineNextTick(d.sagaId);
         const r = await spinePlanAndOpenAll(admin, spineCtx, nowTick);
@@ -549,6 +553,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 statement: t.statement,
                 tension: t.tension,
             })),
+            attrsById,
         };
         const nowTick = spineNextTick(d.sagaId);
         const r = await spinePlanAndOpen(admin, spineCtx, nowTick);
