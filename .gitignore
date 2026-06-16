@@ -24,3 +24,6 @@ packages/web/public/chamber/ref/
 
 # local chapter-dump validation output (ES_CHAPTER_DUMP_DIR)
 chapters-out/
+
+# dev-only 水墨 lab showcase (preview/scratch, not shipped)
+packages/web/src/app/ink-lab/
