@@ -6,6 +6,8 @@ import { TimePanel } from '../director/TimePanel';
 import { SchedulerPanel } from '../director/SchedulerPanel';
 import { PerceptionAbPanel } from '../director/PerceptionAbPanel';
 import { DirectorBeatPanel } from '../director/DirectorBeatPanel';
+import { LiveWorldTickPanel } from '../director/LiveWorldTickPanel';
+import { ResourceLedgerPanel } from '../director/ResourceLedgerPanel';
 import { GazettePanel } from '../director/GazettePanel';
 import { EventCutPanel } from '../director/EventCutPanel';
 import { ReflectionPanel } from '../director/ReflectionPanel';
@@ -95,6 +97,22 @@ export default async function AdminStagePage() {
                                     一鍵跑自治 tick（PLAN→MOVE→…→公報）或「戲班過一日」。VPS 不在時的手動驅動。
                                 </p>
                                 <div className="mt-5"><SchedulerPanel /></div>
+                            </div>
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">活世界 · 真結算 tick（spine + 資源轉手 + 感知）</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    一鍵跑「打開全部新機制」的 tick —— 事件走 spine 結算（真的判勝負、資源轉手）、角色感知當下處境。
+                                    機制寫在 tick body,不靠 env、不用重部署。配下面「資源帳本」看持有者有沒有易手。
+                                </p>
+                                <div className="mt-5"><LiveWorldTickPanel /></div>
+                            </div>
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">資源帳本 · 誰持有什麼（除錯）</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    每個爭奪資源現在歸誰。若一直「全部懸而未決」,代表事件都 empty_outcome 收掉、資源從沒易手（經濟凍結）。
+                                    跑完「活世界 tick」後重整,看持有者有沒有變動。
+                                </p>
+                                <div className="mt-5"><ResourceLedgerPanel /></div>
                             </div>
                         </div>
                     </section>
