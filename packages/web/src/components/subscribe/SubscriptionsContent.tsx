@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import type { Character, Subscription, SubscriptionChannel } from '@endless-story/shared';
@@ -78,29 +78,31 @@ export function SubscriptionsContent() {
 
   return (
     <section className="mx-auto max-w-4xl px-5 py-12 sm:px-10 sm:py-16">
-      <header className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <p className="text-2xs tracking-widest text-mute">我的訂閱</p>
-          <h1 className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
-            {following.length + owned.length} 筆
-          </h1>
+      <header className="border-b border-hairline/50 pb-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <p className="font-serif text-2xs tracking-[0.28em] text-mute">我的訂閱</p>
+            <h1 className="mt-3 font-serif text-4xl tracking-wide text-ink sm:text-5xl">
+              {following.length + owned.length} 筆
+            </h1>
+          </div>
+          <p className="text-2xs tracking-widest text-mute">
+            <span className="font-mono">{truncateAddress(wallet)}</span>
+          </p>
         </div>
-        <p className="text-2xs tracking-widest text-mute">
-          <span className="font-mono">{truncateAddress(wallet)}</span>
-        </p>
-      </header>
 
-      {USE_MOCK ? (
-        <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-hairline/70 bg-surface/60 px-3.5 py-1.5 text-2xs tracking-widest text-mute">
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-jade/70" />
-          示範資料 — 連接鏈上錢包後讀取真實訂閱
-        </p>
-      ) : null}
+        {USE_MOCK ? (
+          <p className="mt-5 inline-flex items-center gap-2 rounded-full border border-hairline/70 bg-surface/50 px-3.5 py-1.5 text-2xs tracking-widest text-mute/90 backdrop-blur-sm">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-jade/70" />
+            示範資料 — 連接鏈上錢包後讀取真實訂閱
+          </p>
+        ) : null}
+      </header>
 
       {following.length > 0 ? (
         <section className="mt-12">
-          <h2 className="text-2xs tracking-widest text-mute">追訂中</h2>
-          <ul className="mt-5 space-y-4">
+          <SectionLabel>追訂中</SectionLabel>
+          <ul className="mt-6 space-y-4">
             {following.map((sub) => {
               const character = charactersById.get(sub.characterId);
               if (!character) return null;
@@ -120,8 +122,8 @@ export function SubscriptionsContent() {
         </section>
       ) : (
         <section className="mt-12">
-          <h2 className="text-2xs tracking-widest text-mute">追訂中</h2>
-          <p className="mt-5 text-sm text-mute">
+          <SectionLabel>追訂中</SectionLabel>
+          <p className="mt-6 text-sm leading-relaxed text-mute">
             你還沒追任何角色。去
             <Link
               href="/dossier"
@@ -136,8 +138,8 @@ export function SubscriptionsContent() {
 
       {owned.length === 0 ? (
         <section className="mt-16">
-          <h2 className="text-2xs tracking-widest text-mute">持有（自動訂閱）</h2>
-          <p className="mt-5 text-sm leading-relaxed text-mute">
+          <SectionLabel>持有（自動訂閱）</SectionLabel>
+          <p className="mt-6 text-sm leading-relaxed text-mute">
             還沒持有任何角色。持有角色 NFT 即擁有這條 IP，並自動訂閱其視角章回 — 留意首頁的
             <Link
               href="/#recruitment-section"
@@ -150,8 +152,8 @@ export function SubscriptionsContent() {
         </section>
       ) : (
         <section className="mt-16">
-          <h2 className="text-2xs tracking-widest text-mute">持有（自動訂閱）</h2>
-          <ul className="mt-5 space-y-4">
+          <SectionLabel>持有（自動訂閱）</SectionLabel>
+          <ul className="mt-6 space-y-4">
             {owned.map((sub) => {
               const character = charactersById.get(sub.characterId);
               if (!character) return null;
@@ -190,10 +192,10 @@ function SubscriptionRow({
   const cancellable = !subscription.isOwner;
 
   return (
-    <article className="es-soft-panel flex items-center gap-4 p-3 sm:gap-5 sm:p-4">
+    <article className="group es-card flex items-center gap-4 p-4 transition-all duration-300 hover:border-cinnabar/30 hover:bg-surface hover:shadow-sm sm:gap-5 sm:p-5">
       <Link
         href={{ pathname: '/dossier', query: { id: character.id } }}
-        className="block w-16 shrink-0 transition-opacity hover:opacity-80 sm:w-20"
+        className="block w-16 shrink-0 overflow-hidden rounded-2xl transition-opacity hover:opacity-85 sm:w-20"
         aria-label={`查看 ${character.name}`}
       >
         <CharacterPortrait character={character} aspect="1/1" sizes="80px" />
@@ -203,21 +205,18 @@ function SubscriptionRow({
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <Link
             href={{ pathname: '/dossier', query: { id: character.id } }}
-            className="font-serif text-lg text-ink transition-colors hover:text-cinnabar sm:text-xl"
+            className="font-serif text-lg tracking-wide text-ink transition-colors hover:text-cinnabar sm:text-xl"
           >
             {character.name}
           </Link>
           <span className="text-2xs tracking-widest text-mute">{character.role}</span>
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs tracking-widest text-mute">
+        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-2xs tracking-widest text-mute/85">
           <span>自 {formatDate(subscription.createdAt)}</span>
-          <span className="text-hairline">·</span>
+          <span aria-hidden className="text-hairline">·</span>
           <span>{CHANNEL_LABEL[subscription.channel]}</span>
           {subscription.isOwner ? (
-            <>
-              <span className="text-hairline">·</span>
-              <span className="text-jade">持有</span>
-            </>
+            <span className="rounded-full border border-jade/40 px-2 py-0.5 text-jade">持有</span>
           ) : null}
         </div>
       </div>
@@ -269,6 +268,16 @@ function MockUnsubscribeForm({
     >
       {isPending ? '取消中…' : '取消訂閱'}
     </button>
+  );
+}
+
+/** Section heading — a short cinnabar rule + serif label, matching the dossier IA. */
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span aria-hidden className="h-px w-6 bg-cinnabar/40" />
+      <h2 className="font-serif text-base tracking-[0.18em] text-ink/90">{children}</h2>
+    </div>
   );
 }
 

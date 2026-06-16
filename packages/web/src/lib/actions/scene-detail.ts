@@ -93,19 +93,19 @@ export async function getSceneDetail(sceneId: string): Promise<SceneDetailSnapsh
             plays,
         });
 
-        // Ghost quotes from the newest event's plays (card labels).
-        if (ghostQuotes.length === 0) {
-            for (const p of plays) ghostQuotes.push({ characterId: p.characterId, text: p.label });
-        }
+        // NOTE: a card play only stores a card *index* on chain (斬/攻/敘/觀 — a
+        // game-mechanism token, not prose). It must never be floated as a ghost
+        // quote: a lone「攻」reads as broken mock text where a first-person
+        // thought is expected. Real first-person lines live only in the
+        // scene-line cache (see below); the events list keeps `plays` for the
+        // 過往 section, which renders them as tokens on purpose.
     }
 
-    // Prefer the cached first-person line (richer than a card label) up top.
+    // The only believable ghost quote is the cached first-person line the
+    // acting agent generated. No cache → leave ghostQuotes empty so the UI
+    // falls back to the saga's curated static quotes (or「還未積累成文」).
     const cached = getLatestSceneLine(sceneId);
-    if (cached) {
-        const rest = ghostQuotes.filter((q) => q.text !== cached.text);
-        ghostQuotes.length = 0;
-        ghostQuotes.push(cached, ...rest);
-    }
+    if (cached) ghostQuotes.push(cached);
 
     return { events, ghostQuotes };
 }

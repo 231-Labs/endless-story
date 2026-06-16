@@ -36,8 +36,8 @@ export function FloatingQuote({
         top: `${topPct}%`,
         // Top-aligned: topPct sits below the title; the column only grows downward, never over the title.
         transform: 'translate(-50%, 0)',
-        // Max height + clip: keep very long quotes from spilling off the bottom (already truncated to 12 chars, rarely hits).
-        maxHeight: '44dvh',
+        // Max height + clip: keep very long quotes from spilling off the bottom (already truncated to 20 chars, rarely hits).
+        maxHeight: '52dvh',
         overflow: 'hidden',
       }}
     >

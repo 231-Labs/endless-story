@@ -20,12 +20,9 @@ export async function CutList({
 }) {
     if (cuts.length === 0) {
         return (
-            <div className="rounded-3xl border border-hairline/50 bg-surface/40 p-12 text-center backdrop-blur-sm">
-                <p className="font-serif text-base text-ink">{sagaName} 還沒有織成的章回</p>
-                <p className="mt-3 text-sm leading-relaxed text-mute">
-                    當一樁事件有兩位以上角色各寫了 POV，自治推進收尾後便會把它們織成一回多視角章回；
-                    也可由班主在後台「章回 · 事件合本」手動補織。
-                </p>
+            <div className="es-card px-8 py-20 text-center">
+                <p className="font-serif text-lg tracking-wide text-ink/80">{sagaName} 尚無章回</p>
+                <p className="mt-2 text-sm tracking-wide text-mute/70">待角色們各自落筆，便會織成多視角章回。</p>
             </div>
         );
     }
