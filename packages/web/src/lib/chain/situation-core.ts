@@ -179,3 +179,63 @@ export function renderSituationBriefing(s: Situation): string {
     if (s.news.directorBeat) lines.push(`〔山雨欲來〕${s.news.directorBeat.text}`);
     return lines.join('\n');
 }
+
+/* ── omniscience guard (PERCEPTION_PLAN §1: 客觀 ≠ 全域) ─────────────────────────
+ *
+ * `assembleSituation` trusts its caller to pass only perceivable parts. That trust
+ * is the single biggest risk to the product's selling point「事件客觀、敘事主觀」: an
+ * event being objectively true does NOT mean every character objectively KNOWS it.
+ * If the fetcher accidentally hands a character an off-scene secret (who holds a
+ * deed, an event in another room, a private resolution), the Situation leaks
+ * omniscience and asymmetric information — the engine of梨園 drama — collapses.
+ *
+ * `assertPerceivable` is the structural backstop the fetcher MUST call after
+ * assembly. It fails closed: a holder/event the character could not have perceived
+ * throws rather than silently leaking. `heldBy` is checked against the Situation's
+ * OWN co-present set (self-validating — needs no external data), so the most
+ * dangerous leak (knowing who secretly holds something off-scene) is caught even
+ * with an empty scope. Per the user's 2026-06-16 ruling, holdings are PRIVATE by
+ * default and only revealed when (a) the holder is co-present or (b) the resource
+ * id is listed in `publicResourceIds` (public titles like 頭牌/壓軸).
+ */
+export interface PerceptionScope {
+    /** events this character is cast in (open or resolved-with-them) — witnessed first-hand. */
+    castEventIds?: ReadonlySet<string>;
+    /** events staged in this character's current scene — perceivable even if not cast. */
+    sceneEventIds?: ReadonlySet<string>;
+    /** resolutions that became public (hit the gazette) — perceivable without being cast. */
+    publicResolvedIds?: ReadonlySet<string>;
+    /** resources whose holdings are public knowledge (頭牌/壓軸…); others reveal holders only if co-present. */
+    publicResourceIds?: ReadonlySet<string>;
+}
+
+export function assertPerceivable(s: Situation, scope: PerceptionScope = {}): void {
+    const coPresent = new Set(s.place.coPresent.map((c) => c.id));
+    const publicRes = scope.publicResourceIds ?? EMPTY_SET;
+    for (const c of s.stakes.contested) {
+        if (publicRes.has(c.resourceId)) continue; // public holding — visible saga-wide
+        for (const h of c.heldBy) {
+            if (!coPresent.has(h)) {
+                throw new Error(
+                    `[situation] 全知洩漏：資源 ${c.resourceId} 的持有者 ${h} 不在場且非公開 —— 角色不該知道`,
+                );
+            }
+        }
+    }
+    const cast = scope.castEventIds ?? EMPTY_SET;
+    const sceneEv = scope.sceneEventIds ?? EMPTY_SET;
+    if (s.stakes.openEvent) {
+        const id = s.stakes.openEvent.eventId;
+        if (!cast.has(id) && !sceneEv.has(id)) {
+            throw new Error(`[situation] 全知洩漏：openEvent ${id} 既非角色參演也不在其場景`);
+        }
+    }
+    const publicResolved = scope.publicResolvedIds ?? EMPTY_SET;
+    for (const r of s.news.resolvedSinceLastSeen) {
+        if (!cast.has(r.eventId) && !publicResolved.has(r.eventId)) {
+            throw new Error(`[situation] 全知洩漏：已結算事件 ${r.eventId} 角色未參演且未上公報`);
+        }
+    }
+}
+
+const EMPTY_SET: ReadonlySet<string> = new Set();

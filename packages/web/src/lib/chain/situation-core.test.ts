@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     assembleSituation,
+    assertPerceivable,
     renderSituationBriefing,
     type SituationParts,
     type CoPresent,
@@ -101,4 +102,47 @@ test('alone in a scene reads cleanly', () => {
     );
     assert.equal(s.place.coPresent.length, 0);
     assert.match(renderSituationBriefing(s), /只有你一人/);
+});
+
+// ── omniscience guard (客觀 ≠ 全域) ──────────────────────────────────────────────
+
+test('assertPerceivable: a co-present holder is fine', () => {
+    // jiang is in occupants → co-present → knowing he holds the slot is legitimate.
+    const s = assembleSituation(
+        base({ contested: [{ resourceId: '0xR2', label: 'patronage:堂會包銀', heldBy: ['0xJIANG'], myAche: 0.9 }] }),
+    );
+    assert.doesNotThrow(() => assertPerceivable(s));
+});
+
+test('assertPerceivable: an OFF-SCENE secret holder throws (the 暗持把柄 leak)', () => {
+    // 0xSU (蘇映雪) is NOT in this scene; the character must not know she holds it.
+    const s = assembleSituation(
+        base({ contested: [{ resourceId: '0xR2', label: 'deed:地契', heldBy: ['0xSU'], myAche: 0.9 }] }),
+    );
+    assert.throws(() => assertPerceivable(s), /全知洩漏.*0xSU/);
+});
+
+test('assertPerceivable: an off-scene holder of a PUBLIC resource is allowed', () => {
+    const s = assembleSituation(
+        base({ contested: [{ resourceId: '0xR9', label: 'spotlight:壓軸名分', heldBy: ['0xSU'], myAche: 0 }] }),
+    );
+    assert.doesNotThrow(() => assertPerceivable(s, { publicResourceIds: new Set(['0xR9']) }));
+});
+
+test('assertPerceivable: an openEvent the character is neither cast in nor in-scene throws', () => {
+    const s = assembleSituation(
+        base({ openEvent: { eventId: '0xELSE', label: '別場的戲', cast: ['0xLIU'] } }),
+    );
+    assert.throws(() => assertPerceivable(s, { castEventIds: new Set(), sceneEventIds: new Set() }), /openEvent 0xELSE/);
+    // …but allowed once it's staged in the character's scene
+    assert.doesNotThrow(() => assertPerceivable(s, { sceneEventIds: new Set(['0xELSE']) }));
+});
+
+test('assertPerceivable: a resolved event neither witnessed nor public throws', () => {
+    const s = assembleSituation(
+        base({ resolvedSinceLastSeen: [{ eventId: '0xSECRET', label: '別場密戰', winner: '蘇映雪', stake: 'deed' }] }),
+    );
+    assert.throws(() => assertPerceivable(s), /已結算事件 0xSECRET/);
+    assert.doesNotThrow(() => assertPerceivable(s, { publicResolvedIds: new Set(['0xSECRET']) }));
+    assert.doesNotThrow(() => assertPerceivable(s, { castEventIds: new Set(['0xSECRET']) }));
 });
