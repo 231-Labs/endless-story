@@ -5,7 +5,7 @@
 // a measured pill that CSS-transitions to the active tab's box (capsule bars,
 // where framer's layout projection collapses an inset-0 child to 0×0).
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
 const INK_TWEEN = { type: 'tween' as const, ease: [0.22, 1, 0.36, 1] as const, duration: 0.3 };
@@ -30,28 +30,27 @@ export interface IndicatorBox {
 }
 
 // Tracks the active tab's box. Tag tabs with data-flow-key, ref the (relative)
-// container, feed box to <FlowIndicator>.
+// container, feed box to <FlowIndicator>. A callback ref re-runs the measure
+// when the container mounts late (AdminTabs renders nothing until the admin
+// check resolves) or its tab set changes (DossierTabs reveals owner-only tabs).
 export function useFlowingIndicator<T extends HTMLElement = HTMLDivElement>(activeKey: string) {
-  const containerRef = useRef<T>(null);
+  const [container, setContainer] = useState<T | null>(null);
+  const containerRef = useCallback((node: T | null) => setContainer(node), []);
   const [box, setBox] = useState<IndicatorBox | null>(null);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      setBox(null);
+      return;
+    }
     const measure = () => {
       const el = container.querySelector<HTMLElement>(`[data-flow-key="${CSS.escape(activeKey)}"]`);
-      if (!el) {
-        setBox(null);
-        return;
-      }
-      setBox({ left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight });
+      setBox(el ? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight } : null);
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(container);
     for (const child of Array.from(container.children)) ro.observe(child);
-    // Re-measure when tabs are added/removed without activeKey changing (e.g.
-    // DossierTabs reveals owner-only tabs once the wallet connects).
     const mo = new MutationObserver(() => {
       for (const child of Array.from(container.children)) ro.observe(child);
       measure();
@@ -61,7 +60,7 @@ export function useFlowingIndicator<T extends HTMLElement = HTMLDivElement>(acti
       ro.disconnect();
       mo.disconnect();
     };
-  }, [activeKey]);
+  }, [container, activeKey]);
 
   return { containerRef, box };
 }
