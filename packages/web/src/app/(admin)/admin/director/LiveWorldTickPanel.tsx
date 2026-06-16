@@ -13,7 +13,8 @@ import { TickLoopResultView } from './scheduler/result-views';
  */
 const LIVE_INPUT = {
     eventSpine: true, //        spine owns resolve+settlement → outcomes_with_resource_transfers
-    parallelEvents: true, //    one event per contention axis (implies spine mode)
+    parallelEvents: false, //   SINGLE spine event (not one-per-axis): far fewer ACT card
+    //                          decisions → faster settle-probe. spineMode still on via eventSpine.
     directorResources: true, // director may instantiate + settle scarce resources on chain
     situationPerceive: true, // characters perceive the objective 當下處境
     // LEAN diagnostic: each per-character LLM+recall is 20-65s (serial), so a full
