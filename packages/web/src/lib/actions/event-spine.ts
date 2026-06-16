@@ -417,7 +417,7 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
         // this resource for a while (else a ≥3-way slot thrashes; gravity-sim (C)).
         if (resource) coolResource(resource.resourceId, GRAVITY_COOLDOWN_TICKS);
         const winner = resource ? pickContestWinner(ctx, ev.participantIds, resource) : null;
-        const plan = resource && winner ? planResourceTransfer(resource, winner) : null;
+        const plan = resource && winner ? planResourceTransfer(resource, winner, ev.participantIds) : null;
 
         if (resource && plan) {
             const tx = new Transaction();

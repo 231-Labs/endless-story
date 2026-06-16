@@ -414,18 +414,26 @@ export interface ResourceTransferPlan {
 export function planResourceTransfer(
     resource: AllocationView,
     winnerId: string,
+    participantIds: ReadonlyArray<string>,
 ): ResourceTransferPlan | null {
     const held = Object.values(resource.allocations).reduce((s, v) => s + v, 0n);
     const free = resource.capacity - held;
     if (free > 0n) {
         return { resourceId: resource.resourceId, from: null, to: winnerId, amount: 1n };
     }
-    // Fully allocated: take from the largest holder who isn't the winner.
+    // Fully allocated: reallocate a unit from the largest holder who is BOTH a
+    // PARTICIPANT of this event and not the winner. `resolve_event` rejects a transfer
+    // whose `from` is not a participant (abort 24 EResourceTransferFromNotParticipant):
+    // an event may only redistribute a resource AMONG ITS OWN CAST, never seize it from
+    // an outsider who holds it (e.g. a winner of a prior event/tick). If the slot is
+    // held only by non-participants, this event can't move it → return null (settle
+    // nothing; the event still closes via plainResolve).
+    const cast = new Set(participantIds);
     let donor: { id: string; size: bigint } | null = null;
     for (const [id, size] of Object.entries(resource.allocations)) {
-        if (id === winnerId || size <= 0n) continue;
+        if (id === winnerId || size <= 0n || !cast.has(id)) continue;
         if (!donor || size > donor.size) donor = { id, size };
     }
-    if (!donor) return null; // nobody to take from (winner already holds it all)
+    if (!donor) return null; // held only by the winner / non-participants → nothing this event may move
     return { resourceId: resource.resourceId, from: donor.id, to: winnerId, amount: 1n };
 }

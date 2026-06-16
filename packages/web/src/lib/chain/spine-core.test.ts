@@ -131,19 +131,28 @@ test('no winner when nobody pushes for it', () => {
 
 test('transfer draws from free capacity when the resource is not full', () => {
     const r: AllocationView = { ...recording, capacity: 2n, allocations: { b: 1n } };
-    const plan = planResourceTransfer(r, 'a');
+    const plan = planResourceTransfer(r, 'a', ['a', 'b']);
     assert.deepEqual(plan, { resourceId: '0xR', from: null, to: 'a', amount: 1n });
 });
 
-test('transfer reallocates from the largest other holder when full', () => {
+test('transfer reallocates from the largest other holder when full AND a participant', () => {
     const r: AllocationView = { ...recording, capacity: 1n, allocations: { b: 1n } };
-    const plan = planResourceTransfer(r, 'a');
+    const plan = planResourceTransfer(r, 'a', ['a', 'b']);
     assert.deepEqual(plan, { resourceId: '0xR', from: 'b', to: 'a', amount: 1n });
 });
 
 test('no transfer when the winner already holds a full resource alone', () => {
     const r: AllocationView = { ...recording, capacity: 1n, allocations: { a: 1n } };
-    assert.equal(planResourceTransfer(r, 'a'), null);
+    assert.equal(planResourceTransfer(r, 'a', ['a']), null);
+});
+
+test('NO transfer when the full resource is held by a NON-participant (resolve_event abort 24)', () => {
+    // 'c' holds the slot but is not in this event's cast → an event may not seize a
+    // resource from an outsider; planResourceTransfer must return null (settle nothing)
+    // instead of proposing a from='c' transfer that aborts on chain (EResourceTransfer-
+    // FromNotParticipant). Regression for the live MoveAbort code 24.
+    const r: AllocationView = { ...recording, capacity: 1n, allocations: { c: 1n } };
+    assert.equal(planResourceTransfer(r, 'a', ['a', 'b']), null);
 });
 
 /* ── Stage 1: parallel events ────────────────────────────────────────────── */
