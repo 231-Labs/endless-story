@@ -32,6 +32,12 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 > 兩個自治 agent（Director 導演 / Character 角色）、目標 C 級全自治、chain-first +
 > MemWal-native 重建（不抄舊實作）。所有敘事開發參照它;§8 有缺口 + 建置順序(N1-N6)。
 >
+> **[docs/PERCEPTION_PLAN.md](./docs/PERCEPTION_PLAN.md)** = 補上缺失的 **perceive 步驟**的實作計畫
+> （NARRATIVE_AGENTS perceive→plan→act→reflect 迴圈裡 perceive 的展開；衝突以北極星檔為準）。
+> 拍板鐵律：**事件客觀、敘事主觀**——鏈上事件是客觀事實，每個角色用自己的記憶＋人格主觀詮釋。
+> 補一個權威 **Situation（處境）** 感知層餵給所有決策 phase；對抗式 review 已收進兩條硬 guardrail
+> （Situation 須**逐角色 scene-scoped** 限縮防全知、永不寫進 MemWal 防記憶趨同）。**狀態：plan，待動工。**
+>
 > **[docs/CHARACTER_ECONOMY.md](./docs/CHARACTER_ECONOMY.md)** = 角色經濟 life cycle 設計
 > （NARRATIVE_AGENTS §7 經濟層的展開）。dailyCost / saga 混合發薪 / 真實持幣+角色間轉帳 /
 > 雙軌死亡(經濟+隱藏年齡 hazard) / 世代交替。機制已用純模擬 `packages/economy` 學術驗證通過
@@ -58,7 +64,7 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 
 ---
 
-## 目前進度（2026-06-15）
+## 目前進度（2026-06-16）
 
 **一句話狀態**：合約 / runner / web 已經不是 Phase 2 placeholder。藏閣 Slice 1–2.6、經濟迴圈（ASK/GIVE/BOND/SETTLE 進 tick-loop）、`economy.move` D1（`sui move test` 綠待上鏈）、敘事方法產品化（章回三態 + 資料驅動自檢 + 自治關係戲）都已落地。**目前關鍵路徑＝一次性 redeploy**（見下方「必帶清單」）：economy.move/chamber/recruit RedeemIntent/still TransferPolicy 綁死一起上，redeploy 後 give/settle 影子才翻成真鏈上 Balance、藏閣 Slice 3 實體交易與 Slice 4 鏈上佈局才能接通。並行可推：demo 穩定化 + 影片素材。
 
@@ -129,6 +135,10 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 - **dossier IA 整合（2026-06-14）**：外貌設定→併入「設定集·形貌」當引文（圖文互補）；戲坊去重（事件瞬間＝戲坊劇照同一批圖 → 移除戲坊重列，收藏動作搬到瞬間卡）；履歷「關係」從窄側欄搬到主欄詳述卡（修外貌設定移除後的左右不對稱）。
 - **redeploy 快照 clobber 修復（部分）**：`stillTransferPolicyId` 介面欄位 main 已修；**但 `bootstrap.ts` 仍把它 clobber 成 `''`**（bootstrap 重寫整份 snapshot 卻沒傳這欄）—— 本分支的 `bootstrap.ts` 補上 `stillTransferPolicyId: deployment.stillTransferPolicyId`，否則 deploy 抓到的 policy id 會被 bootstrap 洗掉、Kiosk 劇照交易永遠上不了鏈。
 - **敘事方法產品化落地（2026-06-14，分支 `claude/pear-garden-narrative-pov-5uges4`）**：把解耦模擬器驗過的寫作方法移植進產品層，**全部零合約改動**（只用既有 `commitment::commit`＋讀取＋既有 `director::relationship_seed`）。① **章回三態 `ChapterMode`**（pov/genesis/encounter，共用鐵則＋聲音、只換框架）；② **資料驅動自檢**（`runner/services/narrative-audit`＋`shared/role-rules`＋`shared/to-traditional`：行當子字串比對、未知行當寬容、性別代詞由 roster 推、髯口只抓非否定、簡→繁；可泛化到新行當/角色零改規則）；③ **厚度召回 `LIFE_QUERY`**（多撈非工作人生記憶寫厚）；④ **創世序章自治**（`seed-genesis-prologue.ts`＋`reconcile-character.ts` 第 7 步，鏈上章回清單冪等）；⑤ **關係戲自治**（`tick-phases/encounter.ts` `pickEncounterPair`，同場＋導演關係 tone，每 tick 至多一篇、同對冷卻、序列 cutJobs 上鏈不搶 cap）；⑥ **養關係**（`tick-phases/bond.ts`：被接受的接濟→補發 `relationship_seed` 加深公開羈絆，`count` 累加；encounter 門檻設 1，靠 count 做深化優先序）。**紀律**：產品層更靈活少寫死——行當卡只當隱形守門（不自報坤生/乾生/俊扮）、不帶測試寫死卡司。設計＋待議/可擴充表見 **[docs/NARRATIVE_AGENTS.md §8b](./docs/NARRATIVE_AGENTS.md)**；明天 redeploy 後的整套驗證見 **[docs/NARRATIVE_QA.md](./docs/NARRATIVE_QA.md)**。⚠️ 本開發容器無 `node_modules`，未跑 `pnpm -r build`/type-check——部署前**必補**（QA §0）。
+- **章回閱讀 IA 重設計（兩本書模型）落地（2026-06-15，PR #23 / commit `efaf03b`）**：閱讀面收斂成 **梨園回**（event_cut 多 POV 織入＝**公開**展示漏斗）· **角色回**（per-char POV 第一人稱＝**訂閱限定**）· **公報**（gazette 公開）。**訂閱牆**（`ChainPovSection`）：未訂閱者只見 server 端萃取的首段 teaser（`pov-read` `withTeaser`→`firstParagraphPlainText`，全文永不送達非訂閱者）＋漸層遮罩＋真錢包 gated `SubscribeButton`；解鎖＝乾淨全文。dossier 章回頁：**角色回領銜**（第一人稱本傳）→ 梨園回其下。章回文案集中 `lib/copy/chapters.ts`（`CHAPTER_COPY`）。閱讀頁 provenance/walrus/verify chips 移到 footer，排版打磨。**canonical 已對齊 [docs/CONTENT_PIPELINE.md §8/§9](./docs/CONTENT_PIPELINE.md)**。
+- **RPC / Walrus / 讀取韌性一輪（2026-06-15，PR #23）**：`listCommitments` 遇 429 retry（修 feed/dossier 變空）、voucher-event 掃描加 cache＋`SUI_RPC_URL`（壓 tick 429）、resource-ledger event 讀加 transient RPC retry（`44b0ce8`）；記憶去重（一筆記憶一個 text block）；卡牌 token→stage action 翻譯（killer `《斬》` leak）；背景 reconcile API route（tab-independent backfill，`20d0f4f`）；MemWal blob 上傳改走自架 asset service＋`WALRUS_PUBLISHER_URL` override。
+- **bootstrap 場景順序修正（2026-06-15，`7cd5c46`）**：`sceneIds` 改按 story scene order 排，修「卡司生在錯場景」。
+- **認知重構計畫已定（2026-06-16，plan）**：補上缺失的 **perceive 步驟**設計＝ **[docs/PERCEPTION_PLAN.md](./docs/PERCEPTION_PLAN.md)**（權威 Situation 感知層、事件客觀/敘事主觀、scene-scoped 防全知 + 永不寫 MemWal 防趨同）。**待動工**。
 
 > **⚠️ 一次性 redeploy「必帶清單」（原子單位，缺一就要等下一次部署）**：
 > 1. `economy.move`（新模組）＋ `character.move` 的 `public(package) uid/uid_mut`（掛錢包 DF 必需）＋ `saga.move` 的 `public(package) split_treasury_for_payroll`（金庫發薪必需）—— **這三檔綁死**，economy.move 不能單獨上。

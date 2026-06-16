@@ -48,8 +48,8 @@ condition on 上一層的 anchor —— 所以「真的發生過」「同一個�
 |---|---|---|---|---|---|---|
 | **公報 Gazette** | 客觀 | 公開 | 日 | 導演 | `saga_id` | ✅ `gazette-compiler` |
 | **事件 Event** | 客觀 | 公開錨／詳情 gated | 事件 | 鏈 | event object | ✅ `event.move` |
-| **POV（原料）** | 主觀 | owner+訂閱 | 事件×角色 | 角色 | `character_id` | ✅ `character-worker` |
-| **事件合本「回」** | 多主觀織入 | gated（premium） | 事件 | 敘述者／編 | **`event_id`** | ❌ 新建 `event-chapter-compiler` |
+| **POV（原料／＝角色回）** | 主觀 | owner+訂閱（**訂閱牆**：非訂閱者只見首段 teaser） | 事件×角色 | 角色 | `character_id` | ✅ `character-worker` |
+| **事件合本「回」**（＝梨園回） | 多主觀織入 | **公開**（展示漏斗，2026-06-15 拍板） | 事件 | 敘述者／編 | **`event_id`** | ✅ `event-chapter-compiler` |
 | **反思 Reflection** | 主觀 | owner | 弧 | 角色 | `character_id` | ✅ |
 | **劇照 Still** | 客觀定格 | 低清公開／全清 gated | 瞬間 beat | 圖 | **`event_id`+beat** | ❌ 新建 `still-compiler`（slot 已在 `SceneGallery.moments`） |
 | **視頻 Clip** | 混合 | 分級 | 事件／日 | 影 | `event_id`/`saga_id` | 🟡 `video-compiler` stub |
@@ -212,6 +212,11 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 ## 8. IA 重排（章回頁 + 人物詳情章回頁）
 
 > 現況是 **single-POV-centric**；拍板後翻成 **event-centric**。
+>
+> **兩本書模型（2026-06-15 redesign 落地，commit `efaf03b`）**：閱讀面收斂成三種「回」——
+> **梨園回**（event_cut，多 POV 織入、**公開**）· **角色回**（per-char POV 第一人稱、**訂閱限定**，
+> 非訂閱者只見 server 端萃取的首段 teaser + 漸層遮罩 + `SubscribeButton`，全文永不送出）· **公報**（gazette，公開）。
+> 「餘波」併入角色回。所有章回文案集中在 `lib/copy/chapters.ts`（`CHAPTER_COPY`）。
 
 ### 8.1 章回頁 `/feed`（現 `app/(site)/feed/page.tsx`）
 
@@ -234,14 +239,15 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 
 現有三段：`ChainPovSection（鏈上 POV）` / `{角色}視角（mock）` / `同場群像`。
 
-**新 IA（角色視角切進事件）：**
+**落地 IA（`efaf03b`，角色第一人稱書為主）：**
 
-| 段 | 內容 | 對應 |
+| 段（順序） | 內容 | 對應 |
 |---|---|---|
-| **{角色}參與的回** | 該角色出場的**事件合本**，highlight 他那條線 | 連到合本 / 事件頁 |
-| **{角色}視角 · 鏈上 POV** | 該角色的 POV 原料（個人 feed；未來 PV 素材） | 保留 `ChainPovSection`，gated 不變 |
+| **1. 角色回 · 鏈上 POV**（領銜） | 該角色的第一人稱本傳＝其主文，故置頂；訂閱牆 gated 不變 | `ChainPovSection` |
+| **2. 梨園回**（其下） | 該角色出場的**公開事件合本**（多 POV 織入的群像回） | `Section` → 連到合本／cut 頁 |
 
-- 「同場群像」併入「參與的回」（同場 = 同事件，本來就是合本）。
+- 角色回（第一人稱深讀）**領銜**，下接其出場的公開梨園回；「同場群像」併入梨園回（同場 = 同事件 = 合本）。
+- 文案走 `CHAPTER_COPY.pov.*` / `CHAPTER_COPY.cut.*`（集中於 `lib/copy/chapters.ts`）。
 - dossier 變成「角色 → 切進事件」，feed 變成「事件 → 展開角色」，兩邊互補。
 
 ---
@@ -257,7 +263,9 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | **合本 server action + admin 面板（手動補織/預覽）** | `web/.../compile-event-chapter.ts` · `EventCutPanel` | 低 | ✅ |
 | **合本鏈上讀 + facade + `/feed` 章回 mode** | `cut-read.ts` · `api/cuts.ts` · `CutList` · feed | 中（前端） | ✅ |
 | `/feed` IA 四 mode（全部/公報/章回/影像） | `app/(site)/feed/page.tsx` | 中（前端） | ✅ |
-| dossier 章回 IA（參與的回 / 視角原料） | `components/dossier/tabs/ChaptersTab.tsx` | 低（前端） | ✅ |
+| dossier 章回 IA（角色回領銜 → 梨園回） | `components/dossier/tabs/ChaptersTab.tsx` | 低（前端） | ✅ |
+| **訂閱牆**（角色回 POV：非訂閱者只見首段 teaser + 漸層 + CTA，全文不送出） | `ChainPovSection.tsx` · `chain/pov-read.ts`（`withTeaser`/`firstParagraphPlainText`） | 中（前端） | ✅（`efaf03b`） |
+| **章回文案集中化**（`CHAPTER_COPY`） | `lib/copy/chapters.ts` | 低 | ✅（`efaf03b`） |
 | 全鏈路蓋 POV provenance（eventTx/involvedIds） | tick-loop（`anchorPovChaptersBatch`+`embedProvenance`） | — | ✅（既有） |
 | 事件級劇照（多角色 anchor 條件化、kind=4、eventTx metadata） | `web/.../generate-event-moment.ts`（tick after()） | — | ✅（既有） |
 | `still-compiler` 型殼（beat 級 + teaser/full 分級的演進） | `runner/services/still-compiler/` | 低 | ✅（型殼） |
@@ -268,9 +276,9 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | 影片改 image-to-video（劇照當 first frame） | `video-compiler`（R6 stub） | 高 | TODO |
 | 角色 PV mode | `video-compiler` `character_pv` | — | defer |
 
-**合本可見性（MVP 取捨）**：§1 表標「gated（premium）」是目標態；合本橫跨多角色，
-「跨角色付費 gate」的規則未定，故 **MVP 先公開**（合本＝展示漏斗的主秀，公開可分享）。
-premium 全文 gate 待 subscribe 跨角色規則定義後再收。
+**合本可見性（2026-06-15 拍板，已落地）**：跨角色付費 gate 規則未定，故**梨園回（event_cut）＝公開**
+（展示漏斗主秀、可分享），付費牆改架在**角色回（per-char POV）**——非訂閱者只見 server 端萃取的首段
+teaser，全文永不送達。原「premium 全文 gate 待跨角色規則」改為：跨角色合本維持公開，營收 gate 走角色回訂閱。
 
 **已完成的順序**：型別接縫 → 合本 compiler（+測試）→ tick 接線 → server action/admin →
 鏈上讀/facade/feed → dossier IA。**剩**：beat 級劇照 compiler → 公報漏斗化 → 影片 → 角色 PV。

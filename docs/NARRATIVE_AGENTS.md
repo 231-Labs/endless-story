@@ -44,6 +44,11 @@
 每個 tick,對「在 active scene / event 內、或被事件牽涉」的角色跑這個迴圈。
 **全部 MemWal-native + chain-first,不抄舊本地 store。**
 
+> **⚠️ PERCEIVE 步驟的實作缺口**：程式裡目前沒有真正的 perceive 步驟（plan 排最前、只吃語意 recall，
+> 對本 tick 張力/事件/危機失明）。補完計畫＝**[PERCEPTION_PLAN.md](./PERCEPTION_PLAN.md)**（權威 Situation
+> 感知層、事件客觀/敘事主觀分離、**逐角色 scene-scoped** 防全知、Situation 永不寫 MemWal 防趨同）。
+> 計畫與本檔衝突時以本檔為準。
+
 ```
 PERCEIVE  讀鏈:我在哪個 scene、同場有誰(scene.current_character_ids)、
           我牽涉的 active event/storylet、被注入的夢、最近相關鏈事件
