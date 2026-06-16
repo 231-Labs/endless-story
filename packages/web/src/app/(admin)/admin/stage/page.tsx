@@ -4,6 +4,7 @@ import { FoundingCastPanel } from '../director/FoundingCastPanel';
 import { DirectorPanel } from '../director/DirectorPanel';
 import { TimePanel } from '../director/TimePanel';
 import { SchedulerPanel } from '../director/SchedulerPanel';
+import { PerceptionAbPanel } from '../director/PerceptionAbPanel';
 import { GazettePanel } from '../director/GazettePanel';
 import { EventCutPanel } from '../director/EventCutPanel';
 import { ReflectionPanel } from '../director/ReflectionPanel';
@@ -120,6 +121,14 @@ export default async function AdminStagePage() {
                                     手動開事件 → 發牌 → 結算,逐步檢查鏈上事件機制。日常出牌已由 tick ACT phase 自動決策。
                                 </p>
                                 <div className="mt-5"><EventPanel scenes={scenes} characters={characters} /></div>
+                            </div>
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">感知對照 · A/B（不動世界）</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    同一個當前狀態,每個角色各跑一次 PLAN:感知關 vs 感知開（dry-run,不推進、不上鏈、不寫記憶）。
+                                    每個角色當自己的對照,唯一差別＝有沒有注入「當下處境」。輸出可一鍵複製貼出判讀。
+                                </p>
+                                <div className="mt-5"><PerceptionAbPanel /></div>
                             </div>
                         </div>
                     </section>
