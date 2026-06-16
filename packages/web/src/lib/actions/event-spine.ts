@@ -421,19 +421,25 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
 
         if (resource && plan) {
             const tx = new Transaction();
-            const transfer =
-                plan.from === null
-                    ? tx.add(endlessTx.resource.acquire({ to: plan.to, amount: plan.amount }))
-                    : tx.add(
-                          endlessTx.resource.reallocate({
-                              from: plan.from,
-                              to: plan.to,
-                              amount: plan.amount,
-                          }),
-                      );
+            // `outcomes_with_resource_transfers` takes `vector<event::ResourceTransferOp>`
+            // (each op carries its OWN resource_id). The earlier code built a
+            // `resource::Transfer` from resource.acquire/reallocate and fed it in — a
+            // DIFFERENT struct; Move has no structural subtyping, so the resolve tx
+            // aborted at type-check and settleEvent fell back to plainResolve (empty
+            // outcomes) → NO transfer EVER landed. That is the 收尾0 / 懸而未決 root cause,
+            // proven by settlement-harness. `from: null` → Option::none = acquire from
+            // free capacity; a holder id → reallocate from them.
+            const op = tx.add(
+                endlessTx.event.newResourceTransferOp({
+                    resourceId: resource.resourceId,
+                    from: plan.from,
+                    to: plan.to,
+                    amount: plan.amount,
+                }),
+            );
             const transfersVec = tx.makeMoveVec({
-                type: `${d.packageId}::resource::ResourceTransfer`,
-                elements: [transfer],
+                type: `${d.packageId}::event::ResourceTransferOp`,
+                elements: [op],
             });
             const outcomes = tx.add(
                 endlessTx.event.outcomesWithResourceTransfers({ resourceTransfers: transfersVec }),
