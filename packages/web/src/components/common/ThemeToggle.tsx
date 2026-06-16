@@ -14,9 +14,21 @@ export function ThemeToggle() {
 
   const toggle = () => {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.classList.toggle('dark', next === 'dark');
-    localStorage.setItem('endless-theme', next);
-    setTheme(next);
+    const apply = () => {
+      document.documentElement.classList.toggle('dark', next === 'dark');
+      localStorage.setItem('endless-theme', next);
+      setTheme(next);
+    };
+    // 墨韻：以 View Transitions 讓整頁日↔夜交融，而非硬切。不支援或使用者偏好
+    // 減弱動效時，直接套用（CSS 端的 ::view-transition 規則亦已做 reduce 守門）。
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    const reduce =
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof doc.startViewTransition === 'function' && !reduce) {
+      doc.startViewTransition(apply);
+    } else {
+      apply();
+    }
   };
 
   if (theme == null) {

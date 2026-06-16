@@ -27,6 +27,8 @@
   --color-cinnabar: 176 74 60;
   --color-jade: 108 138 111;
   --color-seal: 163 57 42;
+  /** 全站動效曲線 — 墨韻（緩入、柔出，如墨落水）。JS 動畫亦複用此 bezier。 */
+  --ease-ink: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (min-width: 640px) {
@@ -139,18 +141,18 @@ body {
     @apply rounded-3xl border border-hairline/50 bg-surface/40 backdrop-blur-sm;
   }
 
-  /** 主要動作 — 朱砂膠囊 */
+  /** 主要動作 — 朱砂膠囊（按下時輕沉一下，給觸覺回饋） */
   .es-button-primary {
-    @apply rounded-full bg-cinnabar px-6 py-2.5 text-sm tracking-widest text-canvas transition-colors hover:bg-seal;
+    @apply rounded-full bg-cinnabar px-6 py-2.5 text-sm tracking-widest text-canvas transition duration-200 hover:bg-seal active:scale-[0.97];
   }
 
   /** 次要動作 — 髮絲線膠囊 */
   .es-button-ghost {
-    @apply rounded-full border border-hairline bg-surface px-6 py-2.5 text-sm tracking-widest text-mute transition-colors hover:border-cinnabar/50 hover:text-cinnabar;
+    @apply rounded-full border border-hairline bg-surface px-6 py-2.5 text-sm tracking-widest text-mute transition duration-200 hover:border-cinnabar/50 hover:text-cinnabar active:scale-[0.97];
   }
 
   .es-icon-button {
-    @apply inline-flex items-center justify-center rounded-full text-mute transition-colors hover:bg-ink/5 hover:text-ink dark:hover:bg-elevated;
+    @apply inline-flex items-center justify-center rounded-full text-mute transition duration-200 hover:bg-ink/5 hover:text-ink active:scale-90 dark:hover:bg-elevated;
   }
 
   .es-soft-panel {
@@ -158,15 +160,15 @@ body {
   }
 
   .es-field {
-    @apply w-full rounded border border-hairline bg-canvas px-3 py-2 text-base leading-relaxed text-ink placeholder:text-mute focus:border-cinnabar focus:outline-none dark:bg-canvas/40;
+    @apply w-full rounded border border-hairline bg-canvas px-3 py-2 text-base leading-relaxed text-ink transition-colors duration-200 placeholder:text-mute focus:border-cinnabar focus:outline-none dark:bg-canvas/40;
   }
 
   .es-choice-card {
-    @apply p-5 rounded-md border border-hairline bg-elevated/65 text-left transition-all hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5 dark:bg-elevated/45;
+    @apply p-5 rounded-md border border-hairline bg-elevated/65 text-left transition-all duration-200 hover:border-cinnabar hover:shadow-md hover:shadow-cinnabar/5 active:scale-[0.99] dark:bg-elevated/45;
   }
 
   .es-outline-button {
-    @apply rounded border border-hairline bg-surface px-4 py-2 text-mute transition-colors hover:border-cinnabar hover:text-cinnabar dark:bg-elevated/30;
+    @apply rounded border border-hairline bg-surface px-4 py-2 text-mute transition duration-200 hover:border-cinnabar hover:text-cinnabar active:scale-[0.97] dark:bg-elevated/30;
   }
 
   /** 梨園／章回／名冊等「功能頁」主標 — 統一字階、字距，與 SiteNav 對齊 */
@@ -241,6 +243,73 @@ body {
 }
 .animate-fade-in-up {
   animation: endless-fade-in-up 320ms ease-out;
+}
+
+/* ─────────── 墨韻 · 內容滲入 ───────────
+ * es-ink-in：切換頁籤 / 篩選時，新內容如墨滲紙般淡入（位移 + 微散焦 → 聚焦）。
+ * 配合會變動的 React key 使用：key 變 → 重掛載 → 動畫重播。
+ * prefers-reduced-motion 時由全域規則收斂為瞬時。 */
+@keyframes es-ink-in {
+  0%   { opacity: 0; transform: translateY(8px); filter: blur(6px); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.animate-ink-in {
+  animation: es-ink-in 400ms var(--ease-ink) both;
+}
+
+/* ─────────── 墨韻 · 墨底（圖未載入時的水墨底） ───────────
+ * 角色卡肖像載入前，用層疊的徑向墨暈當底，再讓一層墨暈緩緩漂移呼吸，
+ * 取代死板的色塊。配合卡片裡的字形（墨色）= 一張未乾的水墨海報。 */
+.es-ink-wash {
+  /* positioned by the consumer (absolute inset-0); the drift ::after anchors to it.
+   * isolate makes this a stacking context so the ::after can sit at z-index:-1 —
+   * below the in-flow watermark glyph (字形留在最底層) but the whole wash still
+   * sits behind the portrait, which is a later absolute sibling. */
+  isolation: isolate;
+  background-color: rgb(var(--color-elevated));
+  background-image:
+    radial-gradient(70% 52% at 28% 22%, rgb(var(--color-ink) / 0.18), transparent 60%),
+    radial-gradient(62% 60% at 78% 74%, rgb(var(--color-cinnabar) / 0.13), transparent 64%),
+    radial-gradient(95% 85% at 58% 48%, rgb(var(--color-ink) / 0.07), transparent 72%);
+}
+.es-ink-wash::after {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  z-index: -1; /* drift sits under the glyph, over the base wash */
+  pointer-events: none;
+  background:
+    radial-gradient(40% 36% at 36% 40%, rgb(var(--color-ink) / 0.22), transparent 62%),
+    radial-gradient(34% 30% at 70% 62%, rgb(var(--color-cinnabar) / 0.14), transparent 66%);
+  animation: es-ink-drift 11s var(--ease-ink) infinite alternate;
+}
+@keyframes es-ink-drift {
+  0%   { transform: translate(-3%, 2%) scale(1.05); opacity: 0.8; }
+  100% { transform: translate(4%, -3%) scale(1.18); opacity: 1; }
+}
+
+/* 一滴墨在水中慢慢化開又散去 — 克制的等待動畫（徵召等 LLM 回應時用）。 */
+@keyframes es-ink-bloom {
+  0%   { transform: scale(0.45); opacity: 0; }
+  25%  { opacity: 0.85; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+/* ─────────── 墨韻 · 日↔夜交融 ───────────
+ * 主題切換時以 View Transitions 做一次整頁交叉淡化（如清水化開墨色），
+ * 取代硬切。ThemeToggle 以 startViewTransition 包住 class 翻轉；
+ * 不支援的瀏覽器自動退回瞬時切換。 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 520ms;
+  animation-timing-function: var(--ease-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
 }
 
 @keyframes endless-roll {

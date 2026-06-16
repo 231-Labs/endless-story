@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { MockWalletMenu } from '@/components/common/MockWalletMenu';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { SiteNavLinks } from '@/components/home/SiteNavLinks';
 
 export function SiteNav() {
   return (
@@ -26,30 +27,7 @@ export function SiteNav() {
           無盡敘界
         </a>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2 text-xs font-medium text-ink/75 sm:gap-6 sm:text-sm md:gap-8">
-          <a href="/" className="shrink-0 whitespace-nowrap transition-colors hover:text-ink">
-            首頁
-          </a>
-          <a
-            href="/saga/spring-snow"
-            className="shrink-0 whitespace-nowrap transition-colors hover:text-ink"
-            title="梨園手卷 — 春雪社沉浸式展卷"
-          >
-            手卷
-          </a>
-          <a
-            href="/dossier"
-            className="shrink-0 whitespace-nowrap transition-colors hover:text-ink"
-            title="班底名冊 — 人物、徵召與訂閱"
-          >
-            名冊
-          </a>
-          <a
-            href="/feed"
-            className="shrink-0 whitespace-nowrap transition-colors hover:text-ink"
-            title="梨園章回 — 公開章回連載"
-          >
-            章回
-          </a>
+          <SiteNavLinks />
           <Suspense fallback={<div className="h-8 w-24 rounded-full bg-canvas/60 ring-1 ring-hairline" />}>
             <MockWalletMenu />
           </Suspense>
