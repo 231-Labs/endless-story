@@ -235,6 +235,9 @@ importers:
       '@endless-story/shared':
         specifier: workspace:*
         version: link:../shared
+      '@endless-story/troupe':
+        specifier: workspace:*
+        version: link:../troupe
       '@mysten/dapp-kit':
         specifier: ^1.0.6
         version: 1.0.6(@mysten/sui@2.17.0(typescript@5.9.3))(@tanstack/react-query@5.100.14(react@19.2.6))(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@5.9.3)(use-sync-external-store@1.6.0(react@19.2.6))

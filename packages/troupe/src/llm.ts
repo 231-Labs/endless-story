@@ -158,21 +158,31 @@ async function callProvider(cfg: ProviderCfg, req: AskRequest): Promise<string> 
   throw lastErr;
 }
 
+function attachAsk(
+  fn: (req: AskRequest) => Promise<string>,
+  meta: { mock: boolean; provider: string },
+): Ask {
+  const ask = Object.assign(fn, {
+    mock: meta.mock,
+    provider: meta.provider,
+    calls: 0,
+    failures: 0,
+    ms: 0,
+  });
+  return ask as Ask;
+}
+
 export function makeAsk(opts: { mock?: boolean } = {}): Ask {
   const forceMock = opts.mock || process.env.TROUPE_MOCK === '1';
   const cfg = forceMock ? null : resolveProvider();
 
   if (!cfg) {
-    const ask = (async () => {
+    return attachAsk(async (_req) => {
       throw new Error('ask() called in mock mode — use askOr()/askJson() so a local template runs');
-    }) as Ask;
-    ask.mock = true;
-    ask.provider = 'mock';
-    ask.calls = ask.failures = ask.ms = 0;
-    return ask;
+    }, { mock: true, provider: 'mock' });
   }
 
-  const ask = (async (req: AskRequest) => {
+  const ask = attachAsk(async (req) => {
     const t0 = Date.now();
     ask.calls++;
     try {
@@ -184,10 +194,7 @@ export function makeAsk(opts: { mock?: boolean } = {}): Ask {
     } finally {
       ask.ms += Date.now() - t0;
     }
-  }) as Ask;
-  ask.mock = false;
-  ask.provider = cfg.provider;
-  ask.calls = ask.failures = ask.ms = 0;
+  }, { mock: false, provider: cfg.provider });
   return ask;
 }
 

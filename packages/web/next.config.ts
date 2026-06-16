@@ -29,6 +29,8 @@ const nextConfig: NextConfig = {
     '@endless-story/memwal',
     '@endless-story/drama',
     '@endless-story/economy',
+    '@endless-story/runner',
+    '@endless-story/troupe',
   ],
   webpack: (config) => {
     // ESM TS imports use `.js` suffix per moduleResolution: 'Bundler'.

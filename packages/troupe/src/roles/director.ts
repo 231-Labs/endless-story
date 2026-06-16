@@ -11,7 +11,7 @@ import { REPERTOIRE, resolvePlay } from '../repertoire.ts';
  */
 export async function chooseProduction(troupe: TroupeMember[], ask: Ask): Promise<string> {
   const hd = new Set(troupe.map((m) => m.hangdang));
-  const canGrand = ['生', '旦', '淨', '丑'].every((h) => hd.has(h));
+  const canGrand = (['生', '旦', '淨', '丑'] as const).every((h) => hd.has(h));
   const fallback = () => (canGrand ? 'baishe_full' : 'baishe');
   if (ask.mock) return fallback();
 

@@ -4,7 +4,7 @@
  * **Writer:** `@endless-story/cli` (deploy.ts, bootstrap.ts, reset.ts).
  * **Readers:** sdk, runner, web (admin UI). Never edit by hand.
  *
- * Last written: 2026-06-15T07:35:22.387Z
+ * Last written: 2026-06-16T12:27:30.672Z
  *
  * See AGENTS.md → 「鏈上架構」 for the contract.
  */
@@ -50,43 +50,43 @@ export interface EndlessStoryDeployment {
 
 export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "network": "testnet",
-  "packageId": "0xfcdcdc1fd8fd21afef21ddc52f5097efecdf204edcee6cf72d81679416488bf0",
-  "latestPackageId": "0xfcdcdc1fd8fd21afef21ddc52f5097efecdf204edcee6cf72d81679416488bf0",
-  "adminCapId": "0xcf54d2577fe0d1532612c23796a67340b0b00d862880d03a7296c0bee6211a74",
-  "worldId": "0xebbd61e53b0c3a4a0156c33a9229d9da821ece69e0aff8df3f1bfa80268a8817",
+  "packageId": "0xf0516b97224de8f9c1f3d38eca5f1fa4e1575bba0e2cd8bb1f3eb39b062ef7dc",
+  "latestPackageId": "0xf0516b97224de8f9c1f3d38eca5f1fa4e1575bba0e2cd8bb1f3eb39b062ef7dc",
+  "adminCapId": "0x93264b732c2bfc9848ad3c8e2f6243144271d9c4a0f46dcdc8255173269de2cc",
+  "worldId": "0x4339ff60f664985b4edac34d337dfe59416bd7a6f28223d6621df85e06a6f057",
   "locationIds": [
-    "0x075f3bfcb88ebb24420178b2bdf9957d601e63fa7fe22ab27d8b1833dcd5775b",
-    "0xbf215bed5fac4c1218d3f802f2c37bd03b3e3872147ef8bc171d76f3e00ff0f4",
-    "0x4ca4b2c0751f45ef65e36c3968fd1ef69a82f8b57b194d579d2a1ed8a1dc7deb",
-    "0x529548bfdf316123200fbe447c866545c9b8c2bce31057cd9ba062a6800dacf7",
-    "0x269d1cade4ac3285e39e9eb62934a6f852bf1ec7246ba5b64b921d69bd1ff360",
-    "0x19eb5223e847167615ceccf570dbf3c63695716e04a209b93ac93b727ff6a4be",
-    "0x66ff1f5b6e18e74b4b62fcbd4378f2934b941246c1f92e0ccee059e0041d00d7"
+    "0x4c162d20c335850e927afce441c1d5bbdba9f1b9c1b25d0856d1a0a4a264de25",
+    "0xea2c9cbc9c387d043b72cc7434b3e2c7c4e2e5cd5b233477d6c53ba56ce3e4b0",
+    "0x264c4d23f9afae12c99430318560e71c8a16e8495d13c1fdf119fabea3fc105b",
+    "0xb8f5c29f15aca1ec140938ed2c43ee9027cef0c67e2491a563b52e730950eda7",
+    "0x0798bd1677d4467e29cf83ed5dd2302c06bbcc0d823f6e1381cb8444f4d8c66d",
+    "0x8fbe9010b707eff78b302b05192fffb26376e8e3ab9bb6a4bc0106fa6292a8b5",
+    "0xd0c262faaf97e27ab9721520d89def42a38403e401b64d02533447b1f27fe9f0"
   ],
-  "sagaId": "0xa78b883ad7342751fb4642d6621d36dd7700346ceb2d8546cd4d6050c15783f4",
-  "storytellerCapId": "0xa0dc4348a391a26e46c2b2fa37406399ea60bdc4178f5af9ccc927060966bef1",
+  "sagaId": "0x29f68f266e060dd2f10953e956dd1e6da5070c094e43372148df521d125dbf12",
+  "storytellerCapId": "0x45aa9040327f06528891967974f5978b6e4dd797289ca6bf4cacaf86064129f9",
   "sceneIds": [
-    "0x0abc194ac6cbe8dbc9b7f29d3f64e8014a96ff738a71355fc8718ce322d1ce19",
-    "0x2b041608181ac89d2390a1507254e80b91ada92ebc2f5b666810079dcbda7f84",
-    "0x32a61686fe48c5d21fdb7d837853a4b5bf698820027fbc561aa13b84adae83d7",
-    "0x704a6395a60cdeb71e1a5a732d607f5d3abf3145ec2884ec66c5370f53e7b24f",
-    "0x80f7cdab0ed760581480541b9300883d86de2e54c96966f37a06fe81152af13a",
-    "0x834e39ada7c5606eabfaeb97935cb424bc2843e18f1bfe309f3098c724ea09c9",
-    "0x895e56a156eb119d1b48f79c81d8460b9159da155e7a6a4c10cd261957a46746",
-    "0xb02125732f40bf9b112f6742cf9a8cc37a2495aec2b17ba5091503ac9d643b26",
-    "0xb89dff8643f92ead1c5d42d8a1d9feb49d61db800d0d9ccc200a496e1ac302fb",
-    "0xdb674744285b0e396e92c97d368246ec84bfb785195da986b833700dcd0190ac",
-    "0xe9bdccd6e8e7eefab51ff8064f543a302ce92697767ea735c550dd9dadcc4679"
+    "0x668afdf8e6582f12b13e1cff2f604034b8240b9b638bdf9492468757de64011c",
+    "0x4eaba8640ed2769e5739cc9b4937c520208775785709f4c6df18ec43354110bb",
+    "0xb22ad2e25c27aed6bae1a0516dc6e7cfd23a77c38df178de71bc0834cf9c6a12",
+    "0x0077224a85510253f59bcb6a23f609e6120fbb258dbf0853cc1619fd445a137d",
+    "0x0de8f4deb0be8cd53f7563001d0b682cb2ae4fc3c173c2a2f6d4f7a0134063de",
+    "0x08b1d1b930dd452f58451bbe58898eaa28228b57ec2b53f2df67902de0f191e6",
+    "0xb14d51e0ab30235cb9e19ccb3e0c5f9b5ba4a1e6664915a8fe646453e3de2bbb",
+    "0xf71133f12bc31ec49cc19e3f360abff81dc8ecd7b5756514e103b18010898749",
+    "0x8739e3e7e1adc9ebe69f23d06af34c15253ccecf94ebb6aeb244d9ea762dc905",
+    "0x481ff88ae376054aa4e9bce6beb4a2cdf030b14cb6d145fb28f847b021e00a08",
+    "0x04fe7f07a1a36546f6f95b3482bb3b56007805c3f97fa8f913c2a3726221cad5"
   ],
-  "faucetId": "0x5301c718036a2feeb89d4daaec7be7638bdc48e270790120a42b85900075d846",
-  "faucetAdminCapId": "0x86cd349b967a9eefe663129690bcbab634e722a7d19a4a1a7d2f170e34535488",
-  "dreamConfigId": "0xca11c6209b3e725e8301afc18c06c7a63566a99406fa79258d5d74ab0dd21db9",
-  "dreamAdminCapId": "0x744074e80fed83e21e96c7f0a1e63bd59149815e669728f07c2659d21b7ac275",
-  "stillRegistryId": "0x18a2c39af1005770a377b93888a420e10a92e867ae928b1202b4434004b3d6b3",
-  "stillTransferPolicyId": "0xd46d2690562db4e91299ffe3cfb5a539f19c95af1bce5352506a11e9742a80aa",
+  "faucetId": "0x1f2a9275b06e8bd1df1ec239ed933a18dc2ace8acc0acb2f2b7075177042aa99",
+  "faucetAdminCapId": "0x0a46048765243aa43f3faf7bdc166bf91792589c92a0a831d2a3598758beb0cd",
+  "dreamConfigId": "0x35995be1f8e91fd5b18cdc942c15745d1f067aa76a49399c62d617dd230d4066",
+  "dreamAdminCapId": "0x304596a38cfbb6ca5c7cdc10f4e43ad620c6c7acca7f2a582a9b8ecf8ba42c71",
+  "stillRegistryId": "0xee162de15f761b32192d677cc2adb35e950ba8bcf3c92dccfce7359fe5f86842",
+  "stillTransferPolicyId": "0x5c109ca43581d209f1b889edfade67c42668b4f8eb83acb334b14d9923aea0d9",
   "demoCharacters": [],
   "storyId": "spring-snow",
-  "deployedAt": "2026-06-15T07:35:22.387Z"
+  "deployedAt": "2026-06-16T12:27:30.672Z"
 };
 
 export function isDeployed(d: EndlessStoryDeployment = ENDLESS_STORY_DEPLOYMENT): boolean {
