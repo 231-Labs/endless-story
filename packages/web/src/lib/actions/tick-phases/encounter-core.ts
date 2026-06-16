@@ -22,6 +22,15 @@ export const ENCOUNTER_TONES: ReadonlySet<RelationshipTone> = new Set<Relationsh
     'estrangement',
 ]);
 
+/** The WARM register (溫情) — preferred over the charged register at equal strength so
+ *  tenderness actually surfaces instead of every encounter being a rivalry/tension beat.
+ *  The story was「充滿爭搶、沒溫情」partly because charged ties won the selector's tiebreak. */
+export const WARM_TONES: ReadonlySet<RelationshipTone> = new Set<RelationshipTone>([
+    'affection',
+    'romance',
+    'mentorship',
+]);
+
 /** Min seed count to qualify. 1 = a single induction seed is enough (else encounters
  *  never fire autonomously); 養關係 deepens count and the selector prefers higher. */
 export const ENCOUNTER_STRENGTH = 1;
@@ -85,9 +94,16 @@ export function selectEncounterPair(
                 count: p.count,
                 pairKey: key,
             };
-            if (!best || cand.count > best.count || (cand.count === best.count && cand.pairKey < best.pairKey)) {
-                best = cand;
-            }
+            // Prefer: stronger bond → then the WARM register (so 溫情 surfaces, not just
+            // charged rivalry/tension) → then a stable key. With seeded ties all at
+            // count=1, this makes a warm pair win over a charged one in the same scene.
+            const warmth = (c: EncounterPair) => (WARM_TONES.has(c.tone) ? 1 : 0);
+            const better =
+                !best ||
+                cand.count > best.count ||
+                (cand.count === best.count && warmth(cand) > warmth(best)) ||
+                (cand.count === best.count && warmth(cand) === warmth(best) && cand.pairKey < best.pairKey);
+            if (better) best = cand;
         }
     }
     return best;

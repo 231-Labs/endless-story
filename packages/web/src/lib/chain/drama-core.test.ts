@@ -16,10 +16,26 @@ import {
     deriveBeat,
     dramaHintForAgent,
     extractSatisfaction,
+    roleResourceAmbition,
     verifyBeat,
     type AgentSpec,
     type ResourceSnapshot,
 } from './drama-core.ts';
+
+test('ROLE_AMBITION niches: each 行當 burns for its lane, NON-contender elsewhere (the rebalance)', () => {
+    const HOT = 0.6;
+    const COLD = 0.15; // AMBITION_MIN — below = pruned out of the desire set
+    // 花旦 → 頭牌 + 唱片; cold on 武戲 / 堂會
+    assert.ok(roleResourceAmbition('花旦', 'spotlight') >= 0.8 && roleResourceAmbition('花旦', 'recording') >= 0.8);
+    assert.ok(roleResourceAmbition('花旦', 'martial') < COLD && roleResourceAmbition('花旦', 'patronage') < COLD);
+    // 班主 → 堂會包銀（生意）; does NOT contest the leads' 頭牌 / 唱片 → frees co-presence for warmth
+    assert.ok(roleResourceAmbition('班主', 'patronage') >= HOT);
+    assert.ok(roleResourceAmbition('班主', 'spotlight') < COLD && roleResourceAmbition('班主', 'recording') < COLD);
+    // 刀馬旦 → 武戲; cold on 唱片
+    assert.ok(roleResourceAmbition('刀馬旦', 'martial') >= 0.9 && roleResourceAmbition('刀馬旦', 'recording') < COLD);
+    // unknown 行當 still participates (moderate fallback)
+    assert.ok(roleResourceAmbition('某新行當', 'spotlight') >= 0.3);
+});
 
 const LIU = '0xliu';
 const BAI = '0xbai';
@@ -81,9 +97,11 @@ test('default desires: a named partnership target does NOT desire their own slot
     );
 });
 
-test('default desires: tagged partnership eligibility is 小生-side only', () => {
+test('default desires: 搭檔 desired by 小生-side young leads; NOT 花旦/二太太/武小生(武戲 niche)', () => {
     assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:小生'] }).length, 1);
-    assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:武小生'] }).length, 1);
+    assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:乾生'] }).length, 1);
+    // 武小生 is eligible by role but its lane is 武戲 (specialized) → not a 搭檔 contender now.
+    assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:武小生'] }).length, 0);
     assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['role:花旦'] }).length, 0);
     assert.equal(defaultDesiresForCast([slot({})], 5, { agentTags: ['status:二太太'] }).length, 0);
 });
@@ -142,24 +160,25 @@ function res(label: string): ResourceSnapshot {
     return { id: '0xr2', archetype: 'capacity-1-slot', label, capacity: 1n, allocations: {} };
 }
 
-test('行當 ambition shapes desire WEIGHT: 花旦 burns for 唱片 more than 武旦', () => {
+test('行當 niche: 花旦 desires 唱片; 武旦 is a NON-contender for it (specialized 2026-06-16)', () => {
     const hua = defaultDesiresForCast([res('recording:首張唱片灌錄權')], 5, { agentTags: ['role:花旦'] });
     const wu = defaultDesiresForCast([res('recording:首張唱片灌錄權')], 5, { agentTags: ['role:刀馬旦'] });
-    assert.equal(hua.length, 1);
-    assert.equal(wu.length, 1);
-    assert.ok(hua[0].weight > wu[0].weight, `花旦(${hua[0].weight}) should out-want 武旦(${wu[0].weight}) for 唱片`);
+    assert.equal(hua.length, 1, '花旦 burns for 唱片');
+    assert.equal(wu.length, 0, '武旦 does not contest 唱片 — its lane is 武戲');
 });
 
-test('行當 ambition: 武旦 burns for 武戲 more than 花旦 (the 武 行當 outlet)', () => {
+test('行當 niche: 武旦 desires 武戲; 花旦 is a NON-contender for it', () => {
     const wu = defaultDesiresForCast([res('martial:壓軸武戲台口')], 5, { agentTags: ['role:刀馬旦'] });
     const hua = defaultDesiresForCast([res('martial:壓軸武戲台口')], 5, { agentTags: ['role:花旦'] });
-    assert.ok(wu[0].weight > hua[0].weight, `武旦(${wu[0].weight}) should out-want 花旦(${hua[0].weight}) for 武戲`);
+    assert.equal(wu.length, 1, '武旦 burns for 武戲');
+    assert.equal(hua.length, 0, '花旦 does not contest 武戲');
 });
 
-test('行當 ambition: a 行當 wants its home resource more than an off-行當 one', () => {
-    const huaRecording = defaultDesiresForCast([res('recording:唱片')], 5, { agentTags: ['role:花旦'] })[0];
-    const huaMartial = defaultDesiresForCast([res('martial:武戲')], 5, { agentTags: ['role:花旦'] })[0];
-    assert.ok(huaRecording.weight > huaMartial.weight, '花旦 wants 唱片 ≫ 武戲');
+test('行當 niche: a 行當 desires its home resource but NOT an off-行當 one', () => {
+    const huaRecording = defaultDesiresForCast([res('recording:唱片')], 5, { agentTags: ['role:花旦'] });
+    const huaMartial = defaultDesiresForCast([res('martial:武戲')], 5, { agentTags: ['role:花旦'] });
+    assert.equal(huaRecording.length, 1, '花旦 wants 唱片 (home lane)');
+    assert.equal(huaMartial.length, 0, '花旦 is a non-contender for 武戲 (off lane)');
 });
 
 test('backstage role (記者/衣箱) does not compete for a performer resource', () => {

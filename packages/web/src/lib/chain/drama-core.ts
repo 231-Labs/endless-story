@@ -122,16 +122,30 @@ export interface DefaultDesireOptions {
  * first; unknown role/kind → AMBITION_FALLBACK. This is the deterministic backbone
  * of intent; richer per-character (memory-derived) desire can modulate it later.
  */
+// SPECIALIZED NICHES (2026-06-16 rebalance): each 行當 burns for 1-2 kinds and is a
+// NON-CONTENDER (omitted → AMBITION_FALLBACK, below AMBITION_MIN) for the rest. This
+// carves non-competing niches so not every co-present pair is fighting over the same
+// slot — the cause of「劇情充滿爭搶、沒溫情」. Strategic OVERLAP is kept only on the
+// marquee prize (spotlight 頭牌) + the 搭檔 contest, where a shared fight IS the drama;
+// elsewhere roles own their lane (班主→堂會包銀, 丑→小報, 武→武戲) so they can be
+// co-present without a contest → warmth can breathe. The contest FLOOR still lets an
+// able non-desirer get thrust on stage 臨危受命; this governs DESIRE, not ability.
 const ROLE_AMBITION: { match: string[]; a: Record<string, number> }[] = [
-    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.6, partnership: 0.6, naming: 0.5, patronage: 0.4, recording: 0.3 } },
-    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.8, naming: 0.7, partnership: 0.6, patronage: 0.5, martial: 0.2 } },
-    { match: ['坤生', '乾生', '小生'], a: { spotlight: 0.85, recording: 0.8, partnership: 0.7, naming: 0.6, patronage: 0.5, martial: 0.5 } },
-    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, spotlight: 0.7, naming: 0.6, patronage: 0.6, partnership: 0.5, martial: 0.3 } },
-    { match: ['丑'], a: { naming: 0.6, patronage: 0.6, spotlight: 0.5, partnership: 0.4, martial: 0.4, recording: 0.3 } },
-    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.7, spotlight: 0.6, patronage: 0.5, partnership: 0.5, naming: 0.5, recording: 0.4 } },
-    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.5, naming: 0.4, spotlight: 0.3, partnership: 0.2, martial: 0.2, recording: 0.2 } },
+    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.3 } }, // 武戲台口
+    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.85 } }, // 頭牌 + 唱片
+    { match: ['坤生', '乾生', '小生'], a: { partnership: 0.9, spotlight: 0.6 } }, // 搭檔，兼爭頭牌
+    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, patronage: 0.5 } }, // 唱片 + 堂會
+    { match: ['丑'], a: { naming: 0.75, patronage: 0.4 } }, // 小報頭條（丑角搏版面）
+    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.65, spotlight: 0.35 } }, // 武 + 偶爭台
+    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.75, naming: 0.4 } }, // 堂會包銀（生意），不與台上角兒爭頭牌
 ];
+// An UNKNOWN 行當 (no row matched) still participates at a moderate level so a未知角色
+// isn't a non-entity in the economy.
 const AMBITION_FALLBACK = 0.5;
+// A MATCHED role's NON-niche kind (omitted from its `a` map) → below AMBITION_MIN, so the
+// role is a NON-CONTENDER for that slot (a faint「想搶卻搶不起」floor pruned by AMBITION_MIN).
+// This is what carves the niches: specify only the kinds a role burns for; the rest fall here.
+const OMITTED_KIND_AMBITION = 0.08;
 const AMBITION_MIN = 0.15;
 
 function primaryRoleFromTags(tags: string[] | undefined): string {
@@ -144,8 +158,8 @@ function primaryRoleFromTags(tags: string[] | undefined): string {
  *  a character's Situation leads with what their 行當 most wants. Exported for reuse. */
 export function roleResourceAmbition(role: string, kind: string): number {
     const row = ROLE_AMBITION.find((g) => g.match.some((kw) => role.includes(kw)));
-    if (!row) return AMBITION_FALLBACK;
-    return row.a[kind] ?? AMBITION_FALLBACK;
+    if (!row) return AMBITION_FALLBACK; // unknown 行當 → moderate (still contests)
+    return row.a[kind] ?? OMITTED_KIND_AMBITION; // matched role, non-niche kind → non-contender
 }
 
 /** Scale the unit weight (SCALE) by ambition 0..1 → the desire's intent magnitude. */
@@ -248,7 +262,9 @@ function isEligiblePartnershipAgent(opts: DefaultDesireOptions): boolean {
 }
 
 function isXiaoshengRole(role: string): boolean {
-    return ['小生', '文小生', '武小生', '武生', '坤生', '女小生'].some((r) => role.includes(r));
+    // 乾生 (a young-male-lead variant) was missing → the 乾生 lead couldn't desire a
+    // 搭檔 slot, leaving partnership resources 懸而未決 (nobody eligible could want them).
+    return ['小生', '文小生', '武小生', '武生', '坤生', '乾生', '女小生'].some((r) => role.includes(r));
 }
 
 function isSelfPartnership(r: ResourceSnapshot, agentName: string): boolean {

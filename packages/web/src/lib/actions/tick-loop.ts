@@ -192,11 +192,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // EXPERIMENTAL flags resolve as: explicit POST body  >  env default  >  off.
     // The env defaults let an auto-running deploy (web runner / scheduler) turn
     // features on with NO flag-passing — just set TICK_* in the environment.
-    const eventSpine = (input.eventSpine ?? envFlag('TICK_EVENT_SPINE')) && !dryRun;
+    // The core engine now DEFAULTS ON (no more flag dance — "有什麼機制就跑什麼"):
+    // spine settlement + director-grown scarcity + perception. The settlement bugs are
+    // fixed, so a plain real tick runs the full engine; dry-run still bypasses spine.
+    // Pass the flag false explicitly to opt a tick out. parallelEvents (many events at
+    // once) stays opt-in — the default is ONE spine event per tick.
+    const eventSpine = (input.eventSpine ?? !envFlag('TICK_EVENT_SPINE_OFF')) && !dryRun;
     const parallelEvents = (input.parallelEvents ?? envFlag('TICK_PARALLEL_EVENTS')) && !dryRun;
     const attentionBudget = input.attentionBudget ?? envFlag('TICK_ATTENTION_BUDGET');
     const llmFraming = input.llmFraming ?? envFlag('TICK_LLM_FRAMING');
-    const directorResources = input.directorResources ?? envFlag('TICK_DIRECTOR_RESOURCES');
+    const directorResources = input.directorResources ?? !envFlag('TICK_DIRECTOR_RESOURCES_OFF');
     const rivalGravity = input.rivalGravity ?? envFlag('TICK_RIVAL_GRAVITY');
     const maxConcurrentEvents = Math.max(
         1,
@@ -280,7 +285,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //     just resolved) so PLAN below is no longer blind to this tick. Perception-
     //     scoped + omniscience-guarded (perceive-core). Default off → no behaviour
     //     change; never blocks the tick on failure.
-    const situationPerceive = (input.situationPerceive ?? false) || process.env.ES_SITUATION_PERCEIVE === '1';
+    // Perception defaults ON too (opt out with input.situationPerceive=false or env ES_SITUATION_PERCEIVE=0).
+    const situationPerceive = input.situationPerceive ?? process.env.ES_SITUATION_PERCEIVE !== '0';
     let situationByChar = new Map<string, string>();
     if (situationPerceive) {
         try {

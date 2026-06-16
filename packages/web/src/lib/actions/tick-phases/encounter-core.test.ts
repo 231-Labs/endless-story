@@ -36,6 +36,30 @@ test('selectEncounterPair: NOT co-present → undefined', () => {
     assert.equal(selectEncounterPair(perChar, scene({ su: 's1', liu: 's2' }), name, zh), undefined);
 });
 
+test('selectEncounterPair: WARM tone wins over a charged tone at EQUAL count (溫情 surfaces)', () => {
+    // su↔liu affection (warm) vs su↔jiang rivalry (charged), all co-present, all count 1.
+    const perChar = [
+        { id: 'jiang', pairs: [pair('su', 'rivalry', 1)] },
+        { id: 'su', pairs: [pair('liu', 'affection', 1), pair('jiang', 'rivalry', 1)] },
+        { id: 'liu', pairs: [pair('su', 'affection', 1)] },
+    ];
+    const got = selectEncounterPair(perChar, scene({ su: 's1', liu: 's1', jiang: 's1' }), name, zh);
+    assert.ok(got);
+    assert.equal(got!.tone, 'affection'); // warm preferred over rivalry at equal count
+    assert.equal(got!.pairKey, encounterPairKey('su', 'liu'));
+});
+
+test('selectEncounterPair: a DEEPER charged bond still wins over a faint warm one (conflict not erased)', () => {
+    // rivalry count 3 beats affection count 1 — warmth bias only breaks TIES, not strength.
+    const perChar = [
+        { id: 'jiang', pairs: [pair('su', 'rivalry', 3)] },
+        { id: 'su', pairs: [pair('liu', 'affection', 1), pair('jiang', 'rivalry', 3)] },
+        { id: 'liu', pairs: [pair('su', 'affection', 1)] },
+    ];
+    const got = selectEncounterPair(perChar, scene({ su: 's1', liu: 's1', jiang: 's1' }), name, zh);
+    assert.equal(got!.tone, 'rivalry');
+});
+
 test('selectEncounterPair: thin tone (neutral) → undefined', () => {
     const perChar = [
         { id: 'su', pairs: [pair('liu', 'neutral', 5)] },

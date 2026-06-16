@@ -96,17 +96,31 @@ export async function runBatchFounding(input: RunBatchInput): Promise<RunBatchRe
 
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
+    const system = buildBatchSystemPrompt();
+    const user = buildBatchUserPrompt(members, input.saga);
+    const maxTokens = Math.min(16000, 1800 + members.length * 1400);
 
-    const response = await llm.chat({
-        model: modelId,
-        system: buildBatchSystemPrompt(),
-        messages: [{ role: 'user', content: buildBatchUserPrompt(members, input.saga) }],
-        // whole cast's self memories + full pairwise web in one shot → generous cap.
-        maxTokens: Math.min(16000, 1800 + members.length * 1400),
-        temperature: 0.95,
-    });
-
-    return parseBatch(response.text, members);
+    // A parse miss here used to SILENTLY drop EVERY character's genesis/self memories
+    // (the founding "succeeds" with no 此生記憶, so LIFE_QUERY recall is empty and POV
+    // reads thin). That was the live symptom on a flaky provider (truncated/invalid JSON).
+    // Retry once on an empty parse, and LOG it so a real failure is visible, not silent.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        const response = await llm.chat({ model: modelId, system, messages: [{ role: 'user', content: user }], maxTokens, temperature: 0.95 });
+        const parsed = parseBatch(response.text, members);
+        const gotMemories = parsed.self.some((s) => s.selfMemories.length > 0);
+        if (gotMemories || attempt === 2) {
+            if (!gotMemories) {
+                console.warn(
+                    `[induction] runBatchFounding produced NO self-memories after ${attempt} attempt(s) ` +
+                        `(${members.length} members, model=${modelId}) — genesis memories will be empty. ` +
+                        `First 200 chars of last response: ${response.text.slice(0, 200)}`,
+                );
+            }
+            return parsed;
+        }
+        console.warn(`[induction] runBatchFounding attempt ${attempt} parsed 0 self-memories — retrying once…`);
+    }
+    return { self: [], ties: [] };
 }
 
 export function buildBatchSystemPrompt(): string {

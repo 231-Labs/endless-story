@@ -237,17 +237,7 @@
     },
     {
       "archetype": "capacity-1-slot",
-      "label": "naming:四方小報頭條",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
       "label": "patronage:鳴玉坊堂會包銀",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
-      "label": "martial:壓軸武戲台口",
       "capacity": 1
     }
   ],
