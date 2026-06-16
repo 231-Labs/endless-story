@@ -16,13 +16,15 @@ const LIVE_INPUT = {
     parallelEvents: true, //    one event per contention axis (implies spine mode)
     directorResources: true, // director may instantiate + settle scarce resources on chain
     situationPerceive: true, // characters perceive the objective 當下處境
-    // LEAN diagnostic: skip the SLOW narration phases (POV/sleep/gazette) and cap the
-    // cast, so the tick finishes inside the request window. We're testing whether
-    // RESOURCES MOVE, not generating prose — a full tick timed out ("failed to fetch").
+    // LEAN diagnostic: each per-character LLM+recall is 20-65s (serial), so a full
+    // tick takes 6-8 min. To test ONLY whether resources settle/transfer, cut every
+    // slow phase that isn't on that path: POV/sleep/gazette AND move (79s in the log),
+    // and cap the cast to the minimum that still forms a contest.
     pov: false,
     sleep: false,
     gazette: false,
-    maxCharacters: 4,
+    move: false,
+    maxCharacters: 3,
 } as const;
 
 export function LiveWorldTickPanel() {
