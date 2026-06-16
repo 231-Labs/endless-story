@@ -4,6 +4,23 @@
 > **北極星檔**：[NARRATIVE_AGENTS.md](./NARRATIVE_AGENTS.md)（敘事架構唯一真相）。本檔是其
 > `perceive→plan→act→reflect` 迴圈裡 **perceive** 步驟的具體補完計畫；與北極星檔衝突時以北極星檔為準。
 
+> **進度（2026-06-16，分支 `claude/perception-step1`，off committed Step 0）**
+> - ✅ **防全知守門**：`situation-core.ts` `assertPerceivable` —— 持有預設私密、僅同場或 public 才揭露；
+>   off-scene 暗持/未參演結算/跨場事件 fail-closed throw。+5 測試。
+> - ✅ **Step 1（PLAN 感知）**：`tick-phases/perceive-core.ts`（純組裝+scope，+8 測試）+ `perceive.ts`
+>   （鏈上抓取+跨 tick cursor：resolved-Δ、co-present-Δ）+ tick-loop 在 PLAN 前組 Situation 注入
+>   + tick 尾 stash resolved。runner/web `plan.ts` 加 `situation` 段（置記憶前，框「只可詮釋不可改寫」）。
+>   **旗標 `ES_SITUATION_PERCEIVE`（env=1 或 `/api/tick` body `situationPerceive:true`），預設 OFF=零行為改動。**
+>   runner+web type-check 乾淨；20/20 純測試綠。
+> - ⬜ **未做**：MOVE 直接注入（v1 靠 planHint 間接傳遞）、Step 2（directorBeat 寫入路徑）、Step 3（tick 重排）、
+>   Step 4（記憶轉詮釋+importance 調校）、LLM liveness harness。
+>
+> **驗收實驗（同一 saga A/B，需在正式環境跑）**：
+> 1. 基線：`POST /api/tick {"situationPerceive": false}` 連跑 K tick（K≥5），記錄每人 `plans[].longTermGoal/dailyPlanHint`。
+> 2. 處理：`POST /api/tick {"situationPerceive": true}` 連跑 K tick，記錄同欄位。
+> 3. 指標：處理組的**計畫變更率**應顯著高於基線（不再 ×8 重複停滯）；且計畫應**引用剛結算的事件/同場者**
+>    （抽查 PLAN 是否回應 `news.resolvedSinceLastSeen`）。看 SchedulerPanel / `/api/tick` 回傳的 `plans`。
+
 ---
 
 ## 0. 一句話
