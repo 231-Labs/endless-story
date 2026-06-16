@@ -43,6 +43,7 @@ import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { isShadowDead } from '@/lib/economy/saga-economy';
 import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
+import { buildTickSituations, stashTickResolved } from './tick-phases/perceive';
 import { selectContention, pushRecentTemplate, framingForStatement } from '@/lib/chain/event-planner';
 import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
@@ -274,6 +275,29 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     let rosterContextById = buildRosterContextById(slice, activeRoster);
     tlog(`登場 ${slice.length} 角色：${slice.map((c) => c.name).join('、')}`);
 
+    // 1.5 PERCEIVE (Step 1, flag-gated) — assemble each acting character's OBJECTIVE
+    //     當下處境 (who's co-present, what's contested + how badly THEY want it, what
+    //     just resolved) so PLAN below is no longer blind to this tick. Perception-
+    //     scoped + omniscience-guarded (perceive-core). Default off → no behaviour
+    //     change; never blocks the tick on failure.
+    const situationPerceive = (input.situationPerceive ?? false) || process.env.ES_SITUATION_PERCEIVE === '1';
+    let situationByChar = new Map<string, string>();
+    if (situationPerceive) {
+        try {
+            situationByChar = await buildTickSituations({
+                client: admin.client,
+                packageId: d.packageId,
+                sagaId: d.sagaId,
+                slice,
+                roster: activeRoster,
+                roleById,
+            });
+            tlog(`◦ 感知：${situationByChar.size} 人取得當下處境`);
+        } catch (err) {
+            console.warn('[tick-loop] perceive failed:', err);
+        }
+    }
+
     // 2. PLAN — each character updates its standing goal first (N6), so the
     //    fresh plan is recalled by the decide/POV steps below. PLAN does NO
     //    Sui signing (MemWal reads + writes only). Run with BOUNDED
@@ -287,6 +311,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 const p = await runPlanAction(c.id, {
                     dryRun,
                     rosterContext: rosterContextById.get(c.id),
+                    situation: situationByChar.get(c.id),
                 });
                 tlog(`   · 規劃 ${c.name} ✓`);
                 return { c, p };
@@ -1288,6 +1313,23 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             digest: g.digest,
             error: g.error,
         };
+    }
+
+    // Carry this tick's resolutions forward so next tick's PERCEIVE feeds them as
+    // news — the Δ that lets a plan RESPOND to「某事件收場/誰贏」instead of looping.
+    if (situationPerceive) {
+        const resolvedLite = resolves
+            .filter((r) => r.ok)
+            .map((r) => ({
+                eventId: r.eventId,
+                label:
+                    storylets.find((s) => (r.participants ?? []).some((p) => s.characterIds.includes(p)))?.label ??
+                    '一場爭奪',
+                winner: r.winnerId ? (nameById.get(r.winnerId) ?? null) : null,
+                stake: '',
+                participants: r.participants ?? [],
+            }));
+        stashTickResolved(d.sagaId, resolvedLite);
     }
 
     const anyOk =

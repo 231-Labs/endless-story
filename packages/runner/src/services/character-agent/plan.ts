@@ -30,6 +30,14 @@ export interface PlanInput {
     currentPlan?: string;
     /** Optional: a short line on what just happened (recent events). */
     recentSituation?: string;
+    /**
+     * The OBJECTIVE「當下處境」block — what this character can perceive RIGHT NOW
+     * (same-scene presence, contested stakes, what just resolved). Pre-rendered +
+     * perception-scoped on the web side (chain/situation-core + tick-phases/perceive).
+     * Objective fact to be INTERPRETED through memory + persona, never restated — the
+     * PERCEIVE step the loop was missing (docs/PERCEPTION_PLAN.md Step 1).
+     */
+    situation?: string;
     /** Public saga roster lines: name / role / scene. Not private memory. */
     rosterContext?: string[];
 }
@@ -61,6 +69,13 @@ export function buildSystemPrompt(): string {
 }
 
 export function buildUserPrompt(input: PlanInput): string {
+    // The objective situation goes FIRST: the character perceives the world, THEN
+    // reads it through memory + persona. Framed「只可詮釋、不可改寫」so the plan reacts
+    // to what's真實 happening this tick instead of self-replicating an old goal.
+    const situationBlock = input.situation
+        ? '\n## 當下處境（客觀事實 — 你此刻能感知到的人事；只可用你的記憶與性格去詮釋、不可改寫或當沒看見）\n' +
+          input.situation
+        : '';
     const memBlock =
         input.recalledMemories.length > 0
             ? '\n## 你心底翻起的記憶\n' +
@@ -82,6 +97,7 @@ export function buildUserPrompt(input: PlanInput): string {
         `- 行當聲口:${roleHint(input.role)}`,
         `- 所屬:${input.sagaName}`,
         `- 此刻:${input.dayLabel}`,
+        situationBlock,
         memBlock,
         planBlock,
         sitBlock,

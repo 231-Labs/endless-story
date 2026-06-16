@@ -1,6 +1,7 @@
 # Endless Story — 部署指南 (DEPLOYMENT)
 
-> 一句話心法：**Vercel 放網站、VPS(Zeabur/Contabo) 放 relayer + world-loop、合約發一次到 Sui、其餘都是 API key。** 就這四件。
+> 一句話心法：**Zeabur 自架 VPS 放網站 + relayer + world-loop、合約發一次到 Sui、其餘都是 API key。** 就這幾件。
+> （早期文件曾寫「web 放 Vercel」——已不採用；web 與其餘常駐服務一律走 **Zeabur 自架 VPS**。**合到 `main` 即自動部署。**）
 >
 > 你「自架」的只有兩個常駐服務：**MemWal relayer** 與 **world-loop runner**。Walrus、SEAL、LLM、embedding 全部用外部/託管,只填 env,不部署。
 
@@ -11,12 +12,12 @@
 ```
                          瀏覽器(人類使用者)
                               │
-        ┌─────────────── Vercel ───────────────┐
-        │  packages/web  (Next.js)             │
-        │  · UI / dossier / admin 後台          │
-        │  · 讀鏈                                │
-        │  · POST /api/tick (maxDuration 300s)  │ ← 一個 tick 在這裡執行
-        └───────────────────────────────────────┘
+        ┌──────────── Zeabur 自架 VPS（web）────────┐
+        │  packages/web  (Next.js)                 │
+        │  · UI / dossier / admin 後台              │
+        │  · 讀鏈                                    │
+        │  · POST /api/tick                         │ ← 一個 tick 在這裡執行
+        └───────────────────────────────────────────┘
                               ▲ HTTP (Bearer TICK_LOOP_SECRET)
                               │
    ┌──────────── Contabo VPS (經 Zeabur) ────────────┐
@@ -29,7 +30,7 @@
    Sui(合約) · Poe(LLM) · OpenAI(embed+image) · Walrus(publisher/aggregator) · SEAL(key servers)
 ```
 
-**control plane vs data plane**：web = 控制面(UI、按鈕、讀取);VPS = 資料面/引擎(長跑、重 LLM、排程)。重而慢的東西別放 Vercel serverless。
+**control plane vs data plane**：web = 控制面(UI、按鈕、讀取);world-loop/relayer = 資料面/引擎(長跑、重 LLM、排程)。全部在 Zeabur 自架 VPS,沒有 serverless 執行時限。
 
 ---
 
@@ -37,7 +38,7 @@
 
 | # | 組件 | 是什麼 | 部署到 | 你要做 |
 |---|---|---|---|---|
-| 1 | `packages/web` | Next.js 前端 + server actions + `/api/tick` | **Vercel** | 跟以前一樣 push（設 root = `packages/web`） |
+| 1 | `packages/web` | Next.js 前端 + server actions + `/api/tick` | **Zeabur → VPS**（root = `packages/web`） | 合到 `main` 即自動部署 |
 | 2 | `packages/relayer`（新增） | MemWal 自架 relayer：召回 + Walrus 上傳中繼 | **Zeabur → VPS** | 新建一個 service |
 | 3 | world-loop runner | `packages/cli/scripts/world-loop.ts`：每 N 分打 `/api/tick` | **Zeabur → VPS** | 新建一個 service（常駐 / cron） |
 | 4 | `contracts/endless_story` | Sui Move 合約 | **Sui 鏈**（發一次） | `publish`，把 ids 寫進 `packages/shared/.../contract-ids.ts` |
@@ -54,7 +55,7 @@
 endless-story-new/                 ← 參賽公開這一個 repo
 ├── contracts/endless_story/       → publish 到 Sui
 ├── packages/
-│   ├── web/        → Vercel        (root dir = packages/web)
+│   ├── web/        → Zeabur svc    (root dir = packages/web；合 main 自動部署)
 │   ├── relayer/    → Zeabur svc A  (root dir = packages/relayer)   ← 新增
 │   ├── cli/        → Zeabur svc B  (跑 scripts/world-loop.ts)
 │   ├── runner/     → 共用 agent 程式（被 web 引用）
@@ -63,7 +64,7 @@ endless-story-new/                 ← 參賽公開這一個 repo
 └── docs/DEPLOYMENT.md              ← 本檔
 ```
 
-Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄。所以 **web 在 Vercel、relayer + world-loop 在 Zeabur,全來自這一個 repo。**
+Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄。所以 **web、relayer、world-loop 全在 Zeabur 自架 VPS,全來自這一個 repo。**
 
 ---
 
