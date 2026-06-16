@@ -46,13 +46,15 @@ function hashStr(s: string): number {
 }
 
 // Quote position (top-aligned). Vertical columns are tall, so the top edge stays
-// below the title (≥30%) and maxHeight caps the bottom; a stable per-scene hash
-// staggers each top (30-50%) so they aren't all level. left clamped to [5,95]%
+// below the title (≥28%) and maxHeight caps the bottom; a stable per-scene hash
+// staggers each top (28-58%) so they aren't all level. left clamped to [5,95]%
 // so edge-of-segment quotes aren't pushed past the viewport's left/right.
+// RIGHT_BIAS nudges the whole column rightward so it clears its scene's figures.
 function quotePosition(anchor: VignetteAnchor, sceneId: string): { left: number; top: number } {
-  const left = clamp(anchor.x + (anchor.zone === 'theater' ? 4 : -4), 5, 95);
-  const spread = hashStr(sceneId) % 17; // 0-16, stable per scene
-  const top = clamp(30 + spread + (anchor.y - 56) * 0.3, 30, 50);
+  const RIGHT_BIAS = 5;
+  const left = clamp(anchor.x + RIGHT_BIAS + (anchor.zone === 'theater' ? 4 : -4), 5, 95);
+  const spread = hashStr(sceneId) % 27; // 0-26, stable per scene — wider, more 錯落
+  const top = clamp(28 + spread + (anchor.y - 56) * 0.4, 28, 58);
   return { left, top };
 }
 
@@ -278,7 +280,7 @@ export function SagaHandscroll(props: Props) {
               const speaker = charactersById.get(primary.characterId) ?? null;
               const { left, top } = quotePosition(placementAnchor(placement), scene.id);
               const text = primary.text;
-              const truncated = text.length > 12 ? `${text.slice(0, 12)}…` : text;
+              const truncated = text.length > 20 ? `${text.slice(0, 20)}…` : text;
               return (
                 <FloatingQuote
                   key={`quote-${scene.id}`}

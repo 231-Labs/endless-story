@@ -289,6 +289,88 @@ body {
   100% { transform: scale(1.55); opacity: 0; }
 }
 
+/* ── Recruitment portrait "being painted" — fills the whole frame ──────────
+   A wet-paper base, a few staggered ink blooms in different hues (ink /
+   cinnabar / jade), and a brush sweep drifting down. All hues are low-opacity
+   over the theme's own ink colour, so it reads on both light & dark cards.
+   Tokens flip per theme, so plain alpha blending (no mix-blend) works in both. */
+.es-paint {
+  isolation: isolate;
+}
+.es-paint-paper {
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgb(var(--color-ink) / 0.12), transparent 70%),
+    rgb(var(--color-canvas));
+  animation: es-paint-breathe 6.5s var(--ease-ink) infinite alternate;
+}
+/* a faint central mass — where the figure will eventually condense */
+.es-paint-figure {
+  background: radial-gradient(52% 60% at 50% 54%, rgb(var(--color-ink) / 0.18), transparent 72%);
+  animation: es-paint-breathe 5s var(--ease-ink) infinite alternate;
+}
+.es-paint-bloom {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(16px);
+  opacity: 0;
+  animation: es-paint-bloom 5.5s var(--ease-ink) infinite;
+}
+.es-paint-bloom-1 {
+  left: 16%; top: 22%; width: 56%; height: 44%;
+  background: radial-gradient(circle, rgb(var(--color-ink) / 0.55), transparent 68%);
+  animation-delay: 0s;
+}
+.es-paint-bloom-2 {
+  left: 38%; top: 44%; width: 62%; height: 52%;
+  background: radial-gradient(circle, rgb(var(--color-cinnabar) / 0.42), transparent 66%);
+  animation-delay: 1.5s;
+}
+.es-paint-bloom-3 {
+  left: 6%; top: 54%; width: 50%; height: 42%;
+  background: radial-gradient(circle, rgb(var(--color-jade) / 0.36), transparent 66%);
+  animation-delay: 2.8s;
+}
+.es-paint-bloom-4 {
+  left: 46%; top: 8%; width: 44%; height: 38%;
+  background: radial-gradient(circle, rgb(var(--color-ink) / 0.40), transparent 66%);
+  animation-delay: 3.8s;
+}
+.es-paint-sweep {
+  top: 0; bottom: 0;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgb(var(--color-ink) / 0.10) 46%,
+    rgb(var(--color-cinnabar) / 0.13) 52%,
+    transparent
+  );
+  animation: es-paint-sweep 4.8s var(--ease-ink) infinite;
+}
+@keyframes es-paint-bloom {
+  0%   { transform: scale(0.5); opacity: 0; }
+  35%  { opacity: 0.9; }
+  70%  { opacity: 0.5; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+@keyframes es-paint-sweep {
+  0%   { transform: translateY(-110%); }
+  100% { transform: translateY(110%); }
+}
+@keyframes es-paint-breathe {
+  0%   { transform: scale(1); opacity: 0.85; }
+  100% { transform: scale(1.06); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .es-paint-paper,
+  .es-paint-figure,
+  .es-paint-bloom,
+  .es-paint-sweep {
+    animation: none;
+  }
+  .es-paint-bloom { opacity: 0.45; }
+  .es-paint-sweep { display: none; }
+}
+
 /* day↔night cross-dissolve via View Transitions (ThemeToggle wraps the flip) */
 ::view-transition-old(root),
 ::view-transition-new(root) {

@@ -310,15 +310,24 @@ export function InkDots() {
   );
 }
 
+/**
+ * Portrait-in-progress state — fills the whole frame with an ink-wash that
+ * blooms and drifts as if a portrait were being brushed onto wet paper.
+ * Multiple low-opacity hues (ink / cinnabar / jade) layer without clashing;
+ * a soft brush sweep passes top-to-bottom for the "being painted" feel.
+ * Animations live in globals.css (`.es-paint*`) and freeze under
+ * prefers-reduced-motion. Name kept for existing call sites.
+ */
 export function BrushSpinner() {
   return (
-    <div className="relative flex h-24 w-24 items-center justify-center">
-      <div className="absolute inset-0 rounded-full border border-hairline" />
-      <div className="absolute inset-0 animate-[spin_2.5s_ease-in-out_infinite] rounded-full border-t-2 border-ink/80 border-r-2 border-r-transparent" />
-      <div className="absolute inset-2 animate-[spin_4s_ease-in-out_infinite_reverse] rounded-full border-b-2 border-mute/50 border-l-2 border-l-transparent" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-ink/20 to-transparent animate-pulse blur-sm" />
-      </div>
+    <div className="es-paint relative h-full w-full overflow-hidden" role="img" aria-label="畫像凝形中">
+      <div className="es-paint-paper absolute inset-0" />
+      <div className="es-paint-figure absolute inset-0" />
+      <span className="es-paint-bloom es-paint-bloom-1" aria-hidden />
+      <span className="es-paint-bloom es-paint-bloom-2" aria-hidden />
+      <span className="es-paint-bloom es-paint-bloom-3" aria-hidden />
+      <span className="es-paint-bloom es-paint-bloom-4" aria-hidden />
+      <div className="es-paint-sweep absolute inset-x-0" aria-hidden />
     </div>
   );
 }

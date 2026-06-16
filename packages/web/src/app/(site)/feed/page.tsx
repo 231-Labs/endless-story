@@ -125,12 +125,12 @@ async function FeedContent({
               </div>
               <CutList cuts={cuts.slice(0, 3)} sagaName={saga.name} />
               {/* 單 POV 不在 /feed 頂層（IA §8.1）— 指路到名冊各角色的視角連載 */}
-              <p className="mt-6 text-sm leading-relaxed tracking-wide text-mute">
-                想追單一角色的第一人稱連載？到
+              <p className="mt-6 text-sm tracking-wide text-mute/70">
+                想追單一角色的視角連載，請至
                 <Link href="/dossier" className="mx-1 text-cinnabar hover:underline">
                   班底名冊
                 </Link>
-                選角色、訂閱 TA 的視角原料。
+                。
               </p>
             </div>
           ) : null}
