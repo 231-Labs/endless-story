@@ -1142,28 +1142,35 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         });
                     }
                 }
-                // SPINE MODE — each RESOLVE step settles its resource + weaves the
-                // whole multi-tick 回 from accumulated POVs, in the background.
-                if (spineMode && spineCtx) {
-                    const ctx = spineCtx;
-                    for (const step of spineSteps) {
-                        if (step.action !== 'resolve') continue;
-                        const s = step;
-                        cutJobs.push(async () => {
-                            const r = await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
-                            if (r.resolved) {
-                                console.log(
-                                    `[tick-loop] spine resolve (${s.eventId.slice(0, 10)}…): settled=${r.settled}` +
-                                        ` cutPovs=${r.cutPovCount}`,
-                                );
-                            }
-                        });
-                    }
-                }
+                // (spine RESOLVE+SETTLE moved OUT of the POV/eventChapter gate — see below)
             }
         }
     } else {
         tlog(`④ POV 略過（pov=false）`);
+    }
+
+    // SPINE RESOLVE + SETTLE — runs REGARDLESS of POV/eventChapter. Resource settlement
+    // is a chain-state operation and must NOT be gated on narration: when pov=false (or
+    // no narratable cast), an aged event must still RESOLVE and TRANSFER its resource.
+    // It previously sat inside the `if (input.pov)` → `if (input.eventChapter)` block, so
+    // a pov:false tick never resolved anything (the 收尾0, alongside the struct bug). POVs
+    // for the weave are accumulated upstream (spineAccumulatePovs); if none, the weave is
+    // simply empty while the settle still lands.
+    if (spineMode && spineCtx) {
+        const ctx = spineCtx;
+        for (const step of spineSteps) {
+            if (step.action !== 'resolve') continue;
+            const s = step;
+            cutJobs.push(async () => {
+                const r = await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
+                if (r.resolved) {
+                    console.log(
+                        `[tick-loop] spine resolve (${s.eventId.slice(0, 10)}…): settled=${r.settled}` +
+                            ` cutPovs=${r.cutPovCount}`,
+                    );
+                }
+            });
+        }
     }
 
     // 4.7 ENCOUNTER — ONE autonomous 溫情/關係戲 chapter per tick. Data-driven:
