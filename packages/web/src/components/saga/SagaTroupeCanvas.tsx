@@ -120,10 +120,6 @@ export function SagaTroupeCanvas({
 
             {/* Status Cards */}
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
-                <div className="min-w-0 rounded-2xl border border-hairline/50 bg-surface/75 px-3 py-2 text-2xs leading-relaxed tracking-widest text-mute shadow-sm backdrop-blur-md dark:bg-elevated/55 sm:max-w-md">
-                  ◇ 此處在接通後由 AI 即時生成
-                  {povId ? '（此視角專屬版本）' : ''}
-                </div>
                 {focusedScene.performance ? (
                   <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-full border border-cinnabar/45 bg-surface/80 px-3 py-2 text-2xs leading-relaxed tracking-widest text-cinnabar shadow-md shadow-cinnabar/15 backdrop-blur-md dark:bg-elevated/70">
                     <span aria-hidden className="relative flex h-2 w-2 shrink-0">
