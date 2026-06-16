@@ -837,12 +837,10 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </aside>
       ) : null}
 
-      {/* 啟封藏閣 — opening overlay IS the full 水墨流體 (the /ink-lab effect,
-          here as the real loading screen). The fluid paints the day/night washi;
-          the rotating 啟匣 poem floats over its calm centre. */}
+      {/* opening overlay = the full water-ink fluid; the poem floats over its centre */}
       {loading && inkOverlay ? (
         <div className="absolute inset-0 z-40 overflow-hidden transition-opacity duration-700">
-          <InkFluid variant="bloom" className="absolute inset-0" />
+          <InkFluid className="absolute inset-0" />
           {/* the poem sits in a small calm pocket; the ink stays the subject */}
           <div className="absolute inset-0 grid place-items-center">
             <div

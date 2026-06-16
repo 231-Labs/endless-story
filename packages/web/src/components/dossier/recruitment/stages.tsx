@@ -266,15 +266,11 @@ export function PromptStage({ prompt, onPromptChange, rolledValues }: { prompt: 
   );
 }
 
-/**
- * 鑄印等待動畫 — 取代先前的通用旋轉圈圈。
- * 中央一方硃砂印緩緩呼吸（印未落定）、外圈篆刻虛線環慢轉（刻字中）、
- * 墨暈漣漪錯拍外擴（餘韻）。glyph 隨階段換字：命／審／書。
- */
+// recruitment wait — soft ink blooms + a breathing cinnabar heart
 export function SealWait() {
   return (
     <div aria-hidden className="relative grid h-24 w-24 place-items-center">
-      {/* 墨暈 — soft ink blooms opening + dissolving in water, staggered (慢慢暈開) */}
+      {/* ink blooms opening + dissolving, staggered */}
       {[0, 1, 2].map((i) => (
         <span
           key={i}
@@ -286,7 +282,7 @@ export function SealWait() {
           }}
         />
       ))}
-      {/* 朱砂心 — a soft breathing seal-drop at the heart (no glyph, pure ink) */}
+      {/* cinnabar heart */}
       <span
         className="absolute h-9 w-9 rounded-full"
         style={{

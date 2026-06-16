@@ -61,9 +61,7 @@ export default async function FeedPage({
 
       <section className="px-5 pb-8 pt-4 sm:px-10 sm:pb-14 sm:pt-5">
         <div className="mx-auto max-w-6xl">
-          {/* keyed by mode so switching tabs swaps to the skeleton instead of
-              holding the previous tab's content while the next one loads; the
-              outer key=mode replays the 墨韻 ink-in as each tab settles. */}
+          {/* key=mode swaps to the skeleton + replays the ink-in on tab switch */}
           <div key={mode} className="animate-ink-in">
             <Suspense key={mode} fallback={<FeedContentSkeleton />}>
               <FeedContent mode={mode} saga={saga} />

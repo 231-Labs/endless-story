@@ -1,26 +1,15 @@
 'use client';
 
-/**
- * 墨韻 — shared motion primitives for "which thing is active".
- *
- * Two flavours, both flow to their new home instead of snapping:
- *   • InkUnderline — a cinnabar underline for text tab rows (framer-motion
- *     `layoutId`; works because it has an explicit height).
- *   • FlowIndicator + useFlowingIndicator — a single measured pill that CSS-
- *     transitions transform/width/height to the active tab's box. Used for
- *     capsule bars, where framer's layout projection collapses an inset-0
- *     child to 0×0.
- *
- * Both honour prefers-reduced-motion (indicator jumps instantly via CSS).
- */
+// 墨韻 — shared "which is active" indicators that flow to their new home.
+// InkUnderline: framer-motion layoutId underline (text tab rows). FlowIndicator:
+// a measured pill that CSS-transitions to the active tab's box (capsule bars,
+// where framer's layout projection collapses an inset-0 child to 0×0).
 
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 
-/** The house ink curve, as a framer-motion tween (mirrors --ease-ink in CSS). */
 const INK_TWEEN = { type: 'tween' as const, ease: [0.22, 1, 0.36, 1] as const, duration: 0.3 };
 
-/** Flowing cinnabar underline — for text tab rows (feed / dossier / nav). */
 export function InkUnderline({ groupId }: { groupId: string }) {
   const reduce = useReducedMotion();
   return (
@@ -33,8 +22,6 @@ export function InkUnderline({ groupId }: { groupId: string }) {
   );
 }
 
-// ── capsule pill: a measured single indicator ───────────────────────────────
-
 export interface IndicatorBox {
   left: number;
   top: number;
@@ -42,11 +29,8 @@ export interface IndicatorBox {
   height: number;
 }
 
-/**
- * Tracks the active tab's box within a container. Tag each tab with
- * `data-flow-key={key}`, put the returned ref on the (relative) container,
- * and feed `box` to <FlowIndicator>. Re-measures on active change + resize.
- */
+// Tracks the active tab's box. Tag tabs with data-flow-key, ref the (relative)
+// container, feed box to <FlowIndicator>.
 export function useFlowingIndicator<T extends HTMLElement = HTMLDivElement>(activeKey: string) {
   const containerRef = useRef<T>(null);
   const [box, setBox] = useState<IndicatorBox | null>(null);
@@ -66,10 +50,8 @@ export function useFlowingIndicator<T extends HTMLElement = HTMLDivElement>(acti
     const ro = new ResizeObserver(measure);
     ro.observe(container);
     for (const child of Array.from(container.children)) ro.observe(child);
-    // Re-measure when tabs are added/removed without activeKey changing — e.g.
-    // DossierTabs reveals 記憶/託夢 once the wallet connects. ResizeObserver
-    // alone won't catch new siblings, so watch childList too (and observe the
-    // freshly-added children).
+    // Re-measure when tabs are added/removed without activeKey changing (e.g.
+    // DossierTabs reveals owner-only tabs once the wallet connects).
     const mo = new MutationObserver(() => {
       for (const child of Array.from(container.children)) ro.observe(child);
       measure();
@@ -84,8 +66,7 @@ export function useFlowingIndicator<T extends HTMLElement = HTMLDivElement>(acti
   return { containerRef, box };
 }
 
-/** The flowing ink fill itself. Render as the first child of the (relative)
- *  tab container; put each tab label above it with `relative z-10`. */
+// Render as the first child of the (relative) tab container; labels go above with z-10.
 export function FlowIndicator({ box, className = '' }: { box: IndicatorBox | null; className?: string }) {
   if (!box) return null;
   return (

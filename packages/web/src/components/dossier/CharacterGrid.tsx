@@ -122,8 +122,7 @@ export function CharacterGrid({
         </div>
       </section>
 
-      {/* Pages — key=filter replays the 墨韻 ink-in when the roster filter flips
-          (search keystrokes filter in place, so they don't re-trigger it). */}
+      {/* key=filter replays the ink-in on filter switch (not on search) */}
       <div key={filter} className="flex-1 animate-ink-in">
         {visible.length === 0 ? (
           <section className="flex min-h-[calc(100dvh-265px)] md:min-h-[calc(100dvh-245px)] snap-start snap-always items-center justify-center scroll-mt-[calc(var(--es-site-nav-h)+16rem)] md:scroll-mt-[calc(var(--es-site-nav-h)+13.5rem)]">

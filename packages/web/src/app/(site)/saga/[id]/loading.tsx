@@ -1,6 +1,6 @@
 import { InkFluidLoader } from '@/components/common/InkFluidLoader';
 
-/** Route loading for /saga/[id] — 墨綻紙上，展卷中。 */
+// /saga route loading
 export default function SagaLoading() {
-  return <InkFluidLoader variant="bloom" label="展卷中" />;
+  return <InkFluidLoader label="展卷中" />;
 }

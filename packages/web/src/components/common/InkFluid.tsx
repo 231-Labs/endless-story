@@ -1,50 +1,18 @@
 'use client';
 
-/**
- * <InkFluid /> — a GPU 水墨流體 canvas.
- *
- * Wraps {@link InkFluidSim} (WebGL2 Navier–Stokes) and drives it with one of the
- * variant emitters. Fills its parent; the parent owns the size. Day/night aware
- * (re-seeds on theme flip so subtractive↔additive ink never blends), pauses when
- * the tab is hidden, and degrades to a static washi gradient when WebGL2 / reduced
- * motion is unavailable.
- */
+// <InkFluid /> — drives InkFluidSim with the 墨綻 emitter. Fills its parent,
+// day/night aware (re-seeds on theme flip), pauses when hidden/off-screen, and
+// degrades to a static wash when WebGL2 / reduced motion is unavailable.
 
 import { useEffect, useRef, useState } from 'react';
 import { InkFluidSim } from '@/lib/ink/fluidSim';
-import { createEmitter, makePalette, tuningFor, type InkVariant, type RGB } from '@/lib/ink/palette';
+import { createInkEmitter, makePalette, INK_TUNING } from '@/lib/ink/palette';
 
-interface InkFluidProps {
-  variant?: InkVariant;
-  /** Pointer drag writes ink + flow. Off for loaders (canvas stays click-through). */
-  interactive?: boolean;
-  className?: string;
-}
-
-/** Mirror html.dark — same MutationObserver pattern as ChamberView. */
-function useIsDark(): boolean {
-  const [isDark, setIsDark] = useState(() =>
-    typeof document === 'undefined' ? false : document.documentElement.classList.contains('dark'),
-  );
-  useEffect(() => {
-    const html = document.documentElement;
-    const update = () => setIsDark(html.classList.contains('dark'));
-    update();
-    const obs = new MutationObserver(update);
-    obs.observe(html, { attributes: true, attributeFilter: ['class'] });
-    return () => obs.disconnect();
-  }, []);
-  return isDark;
-}
-
-const dim = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
-
-export function InkFluid({ variant = 'bloom', interactive = false, className }: InkFluidProps) {
+export function InkFluid({ className }: { className?: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDark = useIsDark();
   const [fallback, setFallback] = useState(false);
-  // theme handler installed by the sim effect; the theme effect calls it
   const applyThemeRef = useRef<((dark: boolean) => void) | null>(null);
 
   useEffect(() => {
@@ -69,11 +37,9 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
     const running = () => visible && onScreen;
     const cleanups: Array<() => void> = [];
 
-    // Size the canvas to the host. The host may be 0×0 when this first runs (a
-    // route loading.tsx mounts mid-transition), so fit() is also called every
-    // frame below — the sim self-corrects via resize() once layout lands. We do
-    // NOT wait for a non-zero size before constructing: a fast/transient mount
-    // (chamber overlay) would unmount before ever rendering.
+    // The host may be 0×0 at mount (a route loading.tsx mounts mid-transition), so
+    // fit() runs every frame and the sim self-corrects. We construct immediately
+    // rather than wait for layout, or a transient mount unmounts before painting.
     const fit = () => {
       const w = Math.max(1, Math.round(host.clientWidth * dpr));
       const h = Math.max(1, Math.round(host.clientHeight * dpr));
@@ -84,22 +50,21 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
       }
     };
 
-    // Construct immediately so the first frame paints right away.
     canvas.width = Math.max(1, Math.round(host.clientWidth * dpr));
     canvas.height = Math.max(1, Math.round(host.clientHeight * dpr));
     let sim: InkFluidSim;
     try {
-      sim = new InkFluidSim(canvas, tuningFor(variant), palette);
+      sim = new InkFluidSim(canvas, INK_TUNING, palette);
     } catch {
       setFallback(true);
       return;
     }
     setFallback(false);
 
-    let emitter = createEmitter(variant);
+    let emitter = createInkEmitter();
     const reseed = () => {
       sim.clear();
-      emitter = createEmitter(variant);
+      emitter = createInkEmitter();
       elapsed = 0;
       emitter.seed(sim, palette);
     };
@@ -115,7 +80,6 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
 
     reseed();
 
-    // Theme flips re-seed instead of tearing the sim down.
     applyThemeRef.current = (dark: boolean) => {
       palette = makePalette(dark);
       sim.setPalette(palette);
@@ -123,10 +87,8 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
       if (reduced) warmup(56);
     };
 
-    // The non-reduced loop re-fits every frame; the reduced path has no loop, so
-    // the observer must also redevelop the still image when a late layout lands
-    // (a route loading.tsx that hydrates after first paint) — otherwise a
-    // reduced-motion user can be left on a blank, never-recovering loader.
+    // Reduced motion has no loop, so the observer redevelops the still image if a
+    // late layout lands; otherwise it just re-fits (the loop handles that case).
     const onResize = () => {
       const before = canvas.width;
       fit();
@@ -140,14 +102,12 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
     cleanups.push(() => ro.disconnect());
 
     if (reduced) {
-      // Reduced motion: develop a settled image once, then hold. Late layout is
-      // recovered by onResize above (reseed + redevelop), not a bounded poll.
       warmup(72);
     } else {
       let last = 0;
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
-        fit(); // every frame, before the pause guard, so late layout is caught
+        fit();
         if (!running()) {
           last = now;
           return;
@@ -155,7 +115,7 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
         if (!last) last = now;
         let dt = (now - last) / 1000;
         last = now;
-        if (dt > 1 / 30) dt = 1 / 30; // clamp after a stall so it doesn't lurch
+        if (dt > 1 / 30) dt = 1 / 30;
         elapsed += dt;
         emitter.update(sim, palette, dt, elapsed);
         sim.step(dt);
@@ -169,7 +129,6 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
       document.addEventListener('visibilitychange', onVis);
       cleanups.push(() => document.removeEventListener('visibilitychange', onVis));
 
-      // Pause when scrolled out of view (the showcase mounts several at once).
       const io = new IntersectionObserver(
         (entries) => {
           onScreen = entries[0]?.isIntersecting ?? true;
@@ -178,42 +137,6 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
       );
       io.observe(host);
       cleanups.push(() => io.disconnect());
-
-      if (interactive) {
-        const toSim = (e: PointerEvent) => {
-          const r = host.getBoundingClientRect();
-          return { x: (e.clientX - r.left) / r.width, y: 1 - (e.clientY - r.top) / r.height };
-        };
-        const pointer = { down: false, x: 0, y: 0 };
-        const onDown = (e: PointerEvent) => {
-          const p = toSim(e);
-          pointer.down = true;
-          pointer.x = p.x;
-          pointer.y = p.y;
-        };
-        const onMove = (e: PointerEvent) => {
-          if (!pointer.down) return;
-          const p = toSim(e);
-          const dvx = (p.x - pointer.x) * 7000;
-          const dvy = (p.y - pointer.y) * 7000;
-          const roll = Math.random();
-          const base = roll < 0.08 ? palette.cinnabar : roll < 0.14 ? palette.jade : palette.ink;
-          sim.splat(p.x, p.y, dvx, dvy, dim(base, 0.6), 0.011);
-          pointer.x = p.x;
-          pointer.y = p.y;
-        };
-        const onUp = () => {
-          pointer.down = false;
-        };
-        host.addEventListener('pointerdown', onDown);
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onUp);
-        cleanups.push(() => {
-          host.removeEventListener('pointerdown', onDown);
-          window.removeEventListener('pointermove', onMove);
-          window.removeEventListener('pointerup', onUp);
-        });
-      }
     }
 
     return () => {
@@ -222,13 +145,9 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
       for (const c of cleanups) c();
       sim.dispose();
     };
-    // variant / interactive changes rebuild the sim; theme is handled separately.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant, interactive]);
+  }, []);
 
-  // Apply theme only on an actual day↔night flip. The sim effect already seeds
-  // with the current theme on mount, so firing this on the initial commit would
-  // clear + re-seed (and warm 56 frames under reduced motion) for nothing.
+  // Only on an actual flip — the sim effect already seeds with the current theme.
   const themeDidMount = useRef(false);
   useEffect(() => {
     if (!themeDidMount.current) {
@@ -240,17 +159,27 @@ export function InkFluid({ variant = 'bloom', interactive = false, className }: 
 
   return (
     <div ref={hostRef} className={className} aria-hidden>
-      <canvas
-        ref={canvasRef}
-        className="block h-full w-full"
-        style={{ pointerEvents: interactive ? 'auto' : 'none', touchAction: interactive ? 'none' : 'auto' }}
-      />
+      <canvas ref={canvasRef} className="block h-full w-full" style={{ pointerEvents: 'none' }} />
       {fallback ? <InkFallback /> : null}
     </div>
   );
 }
 
-/** No-WebGL / reduced-motion still gets a quiet washi-and-ink wash. */
+function useIsDark(): boolean {
+  const [isDark, setIsDark] = useState(() =>
+    typeof document === 'undefined' ? false : document.documentElement.classList.contains('dark'),
+  );
+  useEffect(() => {
+    const html = document.documentElement;
+    const update = () => setIsDark(html.classList.contains('dark'));
+    update();
+    const obs = new MutationObserver(update);
+    obs.observe(html, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
+  return isDark;
+}
+
 function InkFallback() {
   return (
     <div

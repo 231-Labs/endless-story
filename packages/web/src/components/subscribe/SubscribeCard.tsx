@@ -104,8 +104,7 @@ export function SubscribeCard({
       {/* Background — on-chain portrait (Walrus URL) if minted, else typographic
           poster fallback. The image is large-area so the gradient overlay below
           still preserves text legibility at the bottom. */}
-      {/* 水墨海報恆常墊底；肖像載入前/失敗（BlobImage → null）時就是這張未乾的墨底。
-          字形是浮水印，必須留在最底層 — 肖像（後面的 absolute 兄弟）會整片蓋掉它。 */}
+      {/* ink wash + watermark glyph; the portrait (a later sibling) covers it once loaded */}
       <div className="es-ink-wash absolute inset-0 flex items-center justify-center overflow-hidden">
         <span
           className="font-serif leading-none text-ink/[0.16]"

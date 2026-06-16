@@ -1,19 +1,8 @@
-/**
- * 水墨流體 — GLSL ES 3.00 shader sources (WebGL2).
- *
- * A GPU Navier–Stokes solver in the lineage of Jos Stam's "Stable Fluids"
- * and Pavel Dobryakov's WebGL fluid sim, retuned for ink-on-paper:
- *
- *   每一格 (tick) ：
- *     curl → vorticity (補渦流) → divergence → pressure (Jacobi ×N)
- *     → gradientSubtract (投影成無散度場) → advect velocity → advect dye
- *
- * `dye` 緩衝累積墨量（逐通道 RGB 相加 = 不同墨色自然融合）。最後 display
- * shader 以 Beer–Lambert 把墨「滲」進和紙：日間吸光、夜間發光。
- */
+// 水墨 fluid — GLSL ES 3.00 (WebGL2). GPU Navier-Stokes (Stam / Dobryakov),
+// retuned for ink-on-paper. Per tick: curl → vorticity → divergence → pressure
+// (Jacobi) → gradient-subtract → advect velocity → advect dye → display.
 
-/** Fullscreen-quad vertex shader. Precomputes the 4 neighbour texel UVs so the
- *  divergence / curl / pressure kernels are a plain texture fetch, no math. */
+// Fullscreen quad; precomputes the 4 neighbour texel UVs for the kernels.
 export const VERT = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 aPosition;
@@ -33,7 +22,6 @@ void main () {
 }
 `;
 
-/** Decay a field in place (used to bleed pressure between frames). */
 export const CLEAR_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -45,7 +33,7 @@ void main () {
 }
 `;
 
-/** Add a soft Gaussian dab of "stuff" (velocity force, or ink) to a target. */
+// Soft Gaussian dab of velocity force / ink.
 export const SPLAT_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -64,8 +52,7 @@ void main () {
 }
 `;
 
-/** Semi-Lagrangian advection with exponential dissipation (the "diffusion"
- *  read of ink fading + spreading is carried by dissipation + soft splats). */
+// Semi-Lagrangian advection; dissipation stands in for diffusion.
 export const ADVECTION_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -83,7 +70,6 @@ void main () {
 }
 `;
 
-/** Velocity divergence (∇·u) — the residual the pressure solve cancels. */
 export const DIVERGENCE_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -108,7 +94,6 @@ void main () {
 }
 `;
 
-/** Curl ω = ∂v/∂x − ∂u/∂y (vorticity magnitude per cell). */
 export const CURL_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -128,8 +113,7 @@ void main () {
 }
 `;
 
-/** Vorticity confinement — feeds the small swirls back in so the ink keeps
- *  curling (the 渦流) instead of damping flat. */
+// Vorticity confinement — feeds the swirls back so the ink keeps curling.
 export const VORTICITY_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -159,7 +143,6 @@ void main () {
 }
 `;
 
-/** One Jacobi iteration of the pressure Poisson equation ∇²p = ∇·u. */
 export const PRESSURE_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -181,7 +164,6 @@ void main () {
 }
 `;
 
-/** Subtract the pressure gradient → divergence-free (incompressible) velocity. */
 export const GRADIENT_SUBTRACT_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -203,14 +185,9 @@ void main () {
 }
 `;
 
-/**
- * Final render — ink seeps into 米色和紙.
- *
- *  • dye 緩衝存「墨量」(逐通道)。日間 (uDark=0) 用 Beer–Lambert 透光率
- *    paper·exp(−dye·k)：墨吸光、疊加自然變濃、不同墨色相減混合。
- *  • 夜間 (uDark=1) 改為加光 paper+dye·k：墨像在暗紙上微微發光。
- *  • 再疊 紙張纖維 fbm、顆粒 grain、四角暗角 vignette。
- */
+// Render: ink over washi. Day = Beer-Lambert absorption (flat page colour);
+// night = additive glow over fibre + vignette + grain. Thin edges fracture
+// along the paper tooth (飛白) + a tide-line rim; kept dilute overall.
 export const DISPLAY_FRAG = /* glsl */ `#version 300 es
 precision highp float;
 in vec2 vUv;
@@ -256,45 +233,36 @@ float fbm (vec2 p) {
 void main () {
   vec2 uv = vUv;
   float ar = uResolution.x / max(uResolution.y, 1.0);
-  vec2 sp = vec2(uv.x * ar, uv.y);            // square-pixel space for isotropic noise
+  vec2 sp = vec2(uv.x * ar, uv.y);
 
   vec3 dyeRaw = max(texture(uDye, uv).rgb, 0.0) * uInkGain;
   float density = max(max(dyeRaw.r, dyeRaw.g), dyeRaw.b);
 
-  // ── paper: long 纖維 (anisotropic fbm) + fine speckle — NIGHT ONLY ───────
-  //    Day uses the flat canvas colour (uDark=0) so the loader blends seamlessly
-  //    into the page background; night keeps the washi fibre.
-  float fibers = fbm(sp * vec2(8.0, 150.0));   // streaks running down the sheet
-  float weave  = fbm(sp * vec2(150.0, 8.0));   // cross weave
+  // paper fibre — night only; day stays flat page colour
+  float fibers = fbm(sp * vec2(8.0, 150.0));
+  float weave  = fbm(sp * vec2(150.0, 8.0));
   float speck  = fbm(sp * 320.0);
   vec3 paper = uPaper;
   paper *= 1.0 + uDark * uFiber * ((fibers + weave) * 0.5 - 0.5) * 0.16;
   paper += uDark * uFiber * (speck - 0.5) * 0.012;
 
-  // ── 飛白 / 滲：thin ink edges fracture along the paper tooth (墨沿纖維滲開)
-  //    instead of a smooth gaussian falloff — this is what reads as 墨, not a glow.
-  float tooth = fbm(sp * vec2(46.0, 120.0));                 // fibre-directional grain
-  float edgeMask = 1.0 - smoothstep(0.05, 0.55, density);    // 1 at the thin rim → 0 in the core
+  // thin edges fracture along the paper tooth (飛白) + tide-line rim
+  float tooth = fbm(sp * vec2(46.0, 120.0));
+  float edgeMask = 1.0 - smoothstep(0.05, 0.55, density);
   float breakup = clamp(1.0 - edgeMask * (1.0 - tooth) * 1.15, 0.0, 1.0);
   vec3 dye = dyeRaw * breakup;
   float d = density * breakup;
-
-  // ── 墨边 tide-line：pigment piles where the wash dries → a rim around the stroke
   float tide = smoothstep(0.05, 0.2, d) * (1.0 - smoothstep(0.2, 0.5, d));
 
-  // ── ink: subtractive (day) vs additive glow (night), with 墨分五色 tonal depth.
-  //    Kept dilute (淡墨) overall — lighter wash in day, fainter glow at night.
-  vec3 dayInk   = paper * exp(-dye * (0.82 + 0.4 * tide));   // lighter grey wash
-  vec3 nightInk = paper + dye * (0.66 + 0.18 * fbm(sp * 6.0)); // fainter glow
-  nightInk += tide * 0.08 * (vec3(1.0) - paper);            // faint brighter rim
+  vec3 dayInk   = paper * exp(-dye * (0.82 + 0.4 * tide));
+  vec3 nightInk = paper + dye * (0.66 + 0.18 * fbm(sp * 6.0));
+  nightInk += tide * 0.08 * (vec3(1.0) - paper);
   vec3 col = mix(dayInk, nightInk, uDark);
 
-  // ── vignette (四角輕掩) — NIGHT ONLY so day stays flat page-colour ───
+  // vignette + grain, night only
   vec2 q = uv - 0.5;
   float vig = smoothstep(1.05, 0.35, length(q) * 1.35);
   col *= mix(1.0, vig, uVignette * uDark);
-
-  // ── film grain (米紙顆粒) — NIGHT ONLY ──────────────────────────────
   float g = hash(uv * uResolution + fract(uTime) * 57.0) - 0.5;
   col += g * uGrain * uDark;
 

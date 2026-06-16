@@ -27,7 +27,7 @@
   --color-cinnabar: 176 74 60;
   --color-jade: 108 138 111;
   --color-seal: 163 57 42;
-  /** 全站動效曲線 — 墨韻（緩入、柔出，如墨落水）。JS 動畫亦複用此 bezier。 */
+  /* house motion curve (also mirrored in ink-motion.tsx) */
   --ease-ink: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -245,10 +245,7 @@ body {
   animation: endless-fade-in-up 320ms ease-out;
 }
 
-/* ─────────── 墨韻 · 內容滲入 ───────────
- * es-ink-in：切換頁籤 / 篩選時，新內容如墨滲紙般淡入（位移 + 微散焦 → 聚焦）。
- * 配合會變動的 React key 使用：key 變 → 重掛載 → 動畫重播。
- * prefers-reduced-motion 時由全域規則收斂為瞬時。 */
+/* content bleed-in on tab/filter switch (drive with a changing React key) */
 @keyframes es-ink-in {
   0%   { opacity: 0; transform: translateY(8px); filter: blur(6px); }
   60%  { opacity: 1; }
@@ -258,14 +255,10 @@ body {
   animation: es-ink-in 400ms var(--ease-ink) both;
 }
 
-/* ─────────── 墨韻 · 墨底（圖未載入時的水墨底） ───────────
- * 角色卡肖像載入前，用層疊的徑向墨暈當底，再讓一層墨暈緩緩漂移呼吸，
- * 取代死板的色塊。配合卡片裡的字形（墨色）= 一張未乾的水墨海報。 */
+/* ink wash behind a card portrait while it loads (positioned by the consumer).
+   isolate + ::after z-index:-1 keeps the drift under the glyph, the whole wash
+   under the portrait (a later absolute sibling). */
 .es-ink-wash {
-  /* positioned by the consumer (absolute inset-0); the drift ::after anchors to it.
-   * isolate makes this a stacking context so the ::after can sit at z-index:-1 —
-   * below the in-flow watermark glyph (字形留在最底層) but the whole wash still
-   * sits behind the portrait, which is a later absolute sibling. */
   isolation: isolate;
   background-color: rgb(var(--color-elevated));
   background-image:
@@ -289,17 +282,14 @@ body {
   100% { transform: translate(4%, -3%) scale(1.18); opacity: 1; }
 }
 
-/* 一滴墨在水中慢慢化開又散去 — 克制的等待動畫（徵召等 LLM 回應時用）。 */
+/* an ink drop slowly opening + dissolving (recruitment LLM-wait) */
 @keyframes es-ink-bloom {
   0%   { transform: scale(0.45); opacity: 0; }
   25%  { opacity: 0.85; }
   100% { transform: scale(1.55); opacity: 0; }
 }
 
-/* ─────────── 墨韻 · 日↔夜交融 ───────────
- * 主題切換時以 View Transitions 做一次整頁交叉淡化（如清水化開墨色），
- * 取代硬切。ThemeToggle 以 startViewTransition 包住 class 翻轉；
- * 不支援的瀏覽器自動退回瞬時切換。 */
+/* day↔night cross-dissolve via View Transitions (ThemeToggle wraps the flip) */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: 520ms;
@@ -362,14 +352,6 @@ body {
   0%   { transform: scale(0.55); opacity: 0.5; }
   70%  { opacity: 0.16; }
   100% { transform: scale(1.5); opacity: 0; }
-}
-
-@keyframes es-gong-strike {
-  0%, 100% { transform: scale(1); }
-  8%       { transform: scale(1.05); }
-  18%      { transform: scale(0.99); }
-  28%      { transform: scale(1.012); }
-  38%      { transform: scale(1); }
 }
 
 @keyframes es-seal-breathe {

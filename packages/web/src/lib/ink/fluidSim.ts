@@ -1,19 +1,6 @@
-/**
- * InkFluidSim — a GPU Navier–Stokes solver (WebGL2) tuned for 水墨.
- *
- * Two textures hold state and ping-pong each frame:
- *   • velocity  (RG16F)  — the flow field; mouse drag / emitters write force here
- *   • dye       (RGBA16F)— the墨量; emitters write ink colour here
- * plus scratch fields: divergence (R16F), curl (R16F), pressure (R16F ×2).
- *
- * step(dt) runs: curl → vorticity confinement → divergence → pressure (Jacobi)
- * → gradient subtract (project to divergence-free) → advect velocity → advect
- * dye. render() then composites dye over washi paper via the display shader.
- *
- * Self-contained (no three.js) so it boots fast enough for a loading screen.
- * Half-float buffers need EXT_color_buffer_float; if absent, isSupported() is
- * false and the caller should fall back to a static gradient.
- */
+// InkFluidSim — GPU Navier-Stokes solver (WebGL2), no three.js. velocity (RG16F)
+// + dye (RGBA16F) ping-pong each frame; scratch: divergence/curl/pressure (R16F).
+// Half-float needs EXT_color_buffer_float; isSupported() gates a static fallback.
 
 import {
   ADVECTION_FRAG,
@@ -69,8 +56,7 @@ class GLProgram {
     gl.bindAttribLocation(program, 0, 'aPosition');
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      const log = gl.getProgramInfoLog(program);
-      throw new Error(`link failed: ${log ?? ''}`);
+      throw new Error(`link failed: ${gl.getProgramInfoLog(program) ?? ''}`);
     }
     gl.deleteShader(v);
     gl.deleteShader(f);
@@ -102,21 +88,19 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
   return shader;
 }
 
-/** Cached once per page — WebGL2 + float support never changes within a session,
- *  and probing repeatedly leaked a throwaway context per mount (counts against the
- *  browser's ~16-context cap). */
+// Cached per page (support never changes) so we don't leak a probe context per mount.
 let supportCache: boolean | undefined;
 
 export class InkFluidSim implements InkSplatTarget {
   static isSupported(): boolean {
     if (supportCache !== undefined) return supportCache;
-    if (typeof document === 'undefined') return false; // don't cache SSR
+    if (typeof document === 'undefined') return false;
     try {
       const c = document.createElement('canvas');
       const gl = c.getContext('webgl2');
       if (!gl) return (supportCache = false);
       const ok = gl.getExtension('EXT_color_buffer_float') != null;
-      gl.getExtension('WEBGL_lose_context')?.loseContext(); // free the probe context now
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
       return (supportCache = ok);
     } catch {
       return (supportCache = false);
@@ -144,7 +128,7 @@ export class InkFluidSim implements InkSplatTarget {
   private divergence!: FBO;
   private curlFbo!: FBO;
 
-  private tuning: InkTuning;
+  private readonly tuning: InkTuning;
   private palette: InkColorSet;
   private disposed = false;
 
@@ -167,7 +151,7 @@ export class InkFluidSim implements InkSplatTarget {
     gl.disable(gl.BLEND);
     gl.disable(gl.DEPTH_TEST);
 
-    // fullscreen quad (two triangles) shared by every pass via attrib location 0
+    // fullscreen quad shared by every pass via attrib location 0
     const vao = gl.createVertexArray();
     if (!vao) throw new Error('createVertexArray failed');
     this.vao = vao;
@@ -199,8 +183,6 @@ export class InkFluidSim implements InkSplatTarget {
     this.initFramebuffers();
   }
 
-  // ── framebuffer lifecycle ──────────────────────────────────────────────
-
   private resolution(longSide: number): { width: number; height: number } {
     const gl = this.gl;
     let aspect = gl.drawingBufferWidth / Math.max(gl.drawingBufferHeight, 1);
@@ -214,7 +196,6 @@ export class InkFluidSim implements InkSplatTarget {
 
   private initFramebuffers(): void {
     const gl = this.gl;
-    // free any previous set (resize/aspect change)
     for (const f of this.fbos.splice(0)) {
       gl.deleteTexture(f.texture);
       gl.deleteFramebuffer(f.fbo);
@@ -223,15 +204,11 @@ export class InkFluidSim implements InkSplatTarget {
     const simRes = this.resolution(this.tuning.simResolution);
     const dyeRes = this.resolution(Math.round(this.tuning.simResolution * 1.8));
 
-    const rg = { internal: gl.RG16F, format: gl.RG };
-    const rgba = { internal: gl.RGBA16F, format: gl.RGBA };
-    const r = { internal: gl.R16F, format: gl.RED };
-
-    this.velocity = this.doubleFbo(simRes.width, simRes.height, rg.internal, rg.format, gl.LINEAR);
-    this.dye = this.doubleFbo(dyeRes.width, dyeRes.height, rgba.internal, rgba.format, gl.LINEAR);
-    this.pressure = this.doubleFbo(simRes.width, simRes.height, r.internal, r.format, gl.NEAREST);
-    this.divergence = this.fbo(simRes.width, simRes.height, r.internal, r.format, gl.NEAREST);
-    this.curlFbo = this.fbo(simRes.width, simRes.height, r.internal, r.format, gl.NEAREST);
+    this.velocity = this.doubleFbo(simRes.width, simRes.height, gl.RG16F, gl.RG, gl.LINEAR);
+    this.dye = this.doubleFbo(dyeRes.width, dyeRes.height, gl.RGBA16F, gl.RGBA, gl.LINEAR);
+    this.pressure = this.doubleFbo(simRes.width, simRes.height, gl.R16F, gl.RED, gl.NEAREST);
+    this.divergence = this.fbo(simRes.width, simRes.height, gl.R16F, gl.RED, gl.NEAREST);
+    this.curlFbo = this.fbo(simRes.width, simRes.height, gl.R16F, gl.RED, gl.NEAREST);
   }
 
   private fbo(w: number, h: number, internalFormat: number, format: number, filter: number): FBO {
@@ -302,19 +279,11 @@ export class InkFluidSim implements InkSplatTarget {
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
   }
 
-  // ── public API ─────────────────────────────────────────────────────────
-
   setPalette(palette: InkColorSet): void {
     this.palette = palette;
   }
 
-  setTuning(tuning: InkTuning): void {
-    const resChanged = tuning.simResolution !== this.tuning.simResolution;
-    this.tuning = tuning;
-    if (resChanged && !this.disposed) this.initFramebuffers();
-  }
-
-  /** Reset the flow + ink (used on theme flip / restart so day↔night don't blend). */
+  // Zero flow + ink (theme flip / restart) so day↔night don't blend.
   clear(): void {
     const gl = this.gl;
     for (const d of [this.velocity, this.dye, this.pressure]) {
@@ -326,20 +295,16 @@ export class InkFluidSim implements InkSplatTarget {
     }
   }
 
+  // Rebuild when the grid the current aspect wants differs from the live grid
+  // (a width-only resize changes the continuous aspect, not just orientation).
   resize(): void {
     if (this.disposed) return;
-    // Rebuild whenever the sim grid the current aspect wants differs from the
-    // live grid — not only on a portrait↔landscape flip. resolution() scales the
-    // long side by the *continuous* aspect, so a width-only resize (sidebar, the
-    // /ink-lab hero growing) would otherwise leave the grid at a stale aspect and
-    // skew the flow direction.
     const r = this.resolution(this.tuning.simResolution);
     if (r.width !== this.velocity.width || r.height !== this.velocity.height) {
       this.initFramebuffers();
     }
   }
 
-  /** InkSplatTarget — add a force dab to velocity and an ink dab to dye. */
   splat(x: number, y: number, dvx: number, dvy: number, color: RGB, radius: number): void {
     if (this.disposed) return;
     const gl = this.gl;
@@ -368,13 +333,11 @@ export class InkFluidSim implements InkSplatTarget {
     const texelX = vel.texelSizeX;
     const texelY = vel.texelSizeY;
 
-    // curl
     this.curlProg.bind();
     gl.uniform2f(this.curlProg.uniforms.texelSize ?? null, texelX, texelY);
     gl.uniform1i(this.curlProg.uniforms.uVelocity ?? null, vel.read.attach(0));
     this.blit(this.curlFbo);
 
-    // vorticity confinement
     this.vorticityProg.bind();
     gl.uniform2f(this.vorticityProg.uniforms.texelSize ?? null, texelX, texelY);
     gl.uniform1i(this.vorticityProg.uniforms.uVelocity ?? null, vel.read.attach(0));
@@ -384,13 +347,11 @@ export class InkFluidSim implements InkSplatTarget {
     this.blit(vel.write);
     vel.swap();
 
-    // divergence
     this.divergenceProg.bind();
     gl.uniform2f(this.divergenceProg.uniforms.texelSize ?? null, texelX, texelY);
     gl.uniform1i(this.divergenceProg.uniforms.uVelocity ?? null, vel.read.attach(0));
     this.blit(this.divergence);
 
-    // decay + Jacobi pressure solve
     this.clearProg.bind();
     gl.uniform1i(this.clearProg.uniforms.uTexture ?? null, this.pressure.read.attach(0));
     gl.uniform1f(this.clearProg.uniforms.value ?? null, PRESSURE_DECAY);
@@ -406,7 +367,6 @@ export class InkFluidSim implements InkSplatTarget {
       this.pressure.swap();
     }
 
-    // project velocity to divergence-free
     this.gradientProg.bind();
     gl.uniform2f(this.gradientProg.uniforms.texelSize ?? null, texelX, texelY);
     gl.uniform1i(this.gradientProg.uniforms.uPressure ?? null, this.pressure.read.attach(0));
@@ -414,7 +374,6 @@ export class InkFluidSim implements InkSplatTarget {
     this.blit(vel.write);
     vel.swap();
 
-    // advect velocity, then dye, both backtracing along velocity
     this.advectionProg.bind();
     gl.uniform2f(this.advectionProg.uniforms.texelSize ?? null, texelX, texelY);
     gl.uniform1f(this.advectionProg.uniforms.dt ?? null, dt);
@@ -448,6 +407,8 @@ export class InkFluidSim implements InkSplatTarget {
     this.blit(null);
   }
 
+  // No loseContext(): React's dev double-mount re-runs the effect on the same
+  // canvas, and a lost context makes the remount's getContext fail.
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -459,9 +420,5 @@ export class InkFluidSim implements InkSplatTarget {
     for (const p of this.programs.splice(0)) gl.deleteProgram(p.program);
     gl.bindVertexArray(null);
     gl.deleteVertexArray(this.vao);
-    // NB: deliberately NOT calling WEBGL_lose_context.loseContext() — React's
-    // dev double-mount re-runs the effect on the *same* canvas, and a lost
-    // context makes the remount's getContext fail (→ blank fallback). Deleting
-    // the resources above frees the GPU memory; the context dies with the canvas.
   }
 }

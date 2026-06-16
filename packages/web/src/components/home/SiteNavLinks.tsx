@@ -18,8 +18,7 @@ const LINKS: NavLink[] = [
   { href: '/feed', label: '章回', title: '梨園章回 — 公開章回連載', match: (p) => p.startsWith('/feed') },
 ];
 
-/** Nav links with the shared 墨韻 "you are here" underline. Soft Link navigation
- *  (was full-reload <a>) so route changes feel continuous. */
+// nav links with the flowing "you are here" underline (soft Link navigation)
 export function SiteNavLinks() {
   const pathname = usePathname();
   return (

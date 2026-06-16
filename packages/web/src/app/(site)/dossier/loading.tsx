@@ -1,6 +1,6 @@
 import { InkFluidLoader } from '@/components/common/InkFluidLoader';
 
-/** Route loading for /dossier — 班底如墨綻紙上。 */
+// /dossier route loading
 export default function DossierLoading() {
-  return <InkFluidLoader variant="bloom" label="點班底中" />;
+  return <InkFluidLoader label="點班底中" />;
 }
