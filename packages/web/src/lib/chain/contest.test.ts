@@ -18,11 +18,12 @@ import {
     type Contender,
 } from './contest.ts';
 
-const ATTRS = {
+type Attrs = { appearance: number; constitution: number; acuity: number; disposition: number };
+const ATTRS: Record<string, Attrs> = {
     蘇映雪: { appearance: 88, constitution: 62, acuity: 74, disposition: 80 },
     連翹: { appearance: 82, constitution: 86, acuity: 74, disposition: 76 },
     方競西: { appearance: 62, constitution: 56, acuity: 86, disposition: 72 },
-} as const;
+};
 const ROLE = { 蘇映雪: '花旦', 連翹: '刀馬旦', 方競西: '記者' } as const;
 
 test('deriveSagaSkills: 行當 drives the 本工 (武旦 martial, 花旦 vocal/presence)', () => {
