@@ -122,6 +122,28 @@ test('ache is 行當-shaped: 花旦 burns for 唱片, a 武旦 would not', () =>
     assert.equal(wu.situation.stakes.contested.length, 0, '武旦 does not contest a 搭檔 she has no ache for');
 });
 
+test('directorBeat: a saga-public crisis reaches EVERY character briefing (Step 2 broadcast)', () => {
+    const built = buildSituations(
+        baseInput({
+            targets: [
+                { id: '映雪', name: '蘇映雪', role: '花旦', standingGoal: '保住頭牌' },
+                { id: '連翹', name: '連翹', role: '刀馬旦', standingGoal: '搶武戲' }, // backstage — still hears it
+            ],
+            directorBeat: { text: '百代逼宮，限三日交母盤', phase: 'act_2' },
+        }),
+    );
+    for (const r of built) {
+        assert.equal(r.situation.news.directorBeat?.text, '百代逼宮，限三日交母盤');
+        assert.match(r.briefing, /山雨欲來.*百代逼宮/s);
+    }
+});
+
+test('no directorBeat → no 山雨欲來 line', () => {
+    const [r] = buildSituations(baseInput());
+    assert.equal(r.situation.news.directorBeat, undefined);
+    assert.doesNotMatch(r.briefing, /山雨欲來/);
+});
+
 test('arrivals/departures Δ from prevCoPresent', () => {
     const [r] = buildSituations(
         baseInput({

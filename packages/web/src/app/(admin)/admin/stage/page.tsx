@@ -5,6 +5,7 @@ import { DirectorPanel } from '../director/DirectorPanel';
 import { TimePanel } from '../director/TimePanel';
 import { SchedulerPanel } from '../director/SchedulerPanel';
 import { PerceptionAbPanel } from '../director/PerceptionAbPanel';
+import { DirectorBeatPanel } from '../director/DirectorBeatPanel';
 import { GazettePanel } from '../director/GazettePanel';
 import { EventCutPanel } from '../director/EventCutPanel';
 import { ReflectionPanel } from '../director/ReflectionPanel';
@@ -72,6 +73,14 @@ export default async function AdminStagePage() {
                                     （Showrunner 對話的「開張力線」走的就是這條;此處為直接入口。）
                                 </p>
                                 <div className="mt-5"><DirectorPanel /></div>
+                            </div>
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">導演危機 · 公開廣播（感知）</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    宣告「此刻山雨欲來」（百代逼宮…）。下個 tick 起,全 saga 角色的「當下處境」都會感知到它,
+                                    PLAN/POV 會回應。只壓單一角色請用 inject_dream。需開啟感知（ES_SITUATION_PERCEIVE）。
+                                </p>
+                                <div className="mt-5"><DirectorBeatPanel /></div>
                             </div>
                             <div>
                                 <h3 className="font-serif text-lg tracking-wide text-ink">世界時間 · 推進敘事日</h3>

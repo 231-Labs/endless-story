@@ -17,6 +17,32 @@ import { buildSituations, type ResolvedLite, type RosterLite } from './perceive-
 const lastResolvedBySaga = new Map<string, ResolvedLite[]>();
 const lastCoPresentBySaga = new Map<string, Record<string, CoPresent[]>>();
 
+// The director's current SAGA-PUBLIC beat/crisis (Step 2). Process-local: the web
+// service is a long-running process (Zeabur VPS, not serverless), so this persists
+// until the director clears it or the process restarts. Character-targeted pressure
+// uses inject_dream instead — only public crises live here and reach every Situation.
+const directorBeatBySaga = new Map<string, { text: string; phase?: string }>();
+
+/** Director broadcasts a public crisis every character will perceive next tick. */
+export function setDirectorBeat(sagaId: string, text: string, phase?: string): void {
+    const t = text.trim();
+    if (!t) {
+        directorBeatBySaga.delete(sagaId);
+        return;
+    }
+    directorBeatBySaga.set(sagaId, phase ? { text: t, phase } : { text: t });
+}
+
+/** Clear the public beat (the crisis has passed). */
+export function clearDirectorBeat(sagaId: string): void {
+    directorBeatBySaga.delete(sagaId);
+}
+
+/** Read the current public beat, if any. */
+export function getDirectorBeat(sagaId: string): { text: string; phase?: string } | undefined {
+    return directorBeatBySaga.get(sagaId);
+}
+
 export interface BuildTickSituationsArgs {
     client: SuiClient;
     packageId: string;
@@ -65,6 +91,7 @@ export async function buildTickSituations(args: BuildTickSituationsArgs): Promis
         resolvedLastTick: lastResolvedBySaga.get(args.sagaId) ?? [],
         prevCoPresentByChar: lastCoPresentBySaga.get(args.sagaId),
         ambitionFor: roleResourceAmbition,
+        directorBeat: directorBeatBySaga.get(args.sagaId),
     });
 
     // Advance the co-present cursor (this tick's view becomes next tick's "prev").

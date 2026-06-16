@@ -65,6 +65,9 @@ export interface PerceiveInput {
     ambitionFor: (role: string, kind: string) => number;
     /** resource KINDS whose holdings are public knowledge (頭牌/壓軸…); others stay private. */
     publicResourceKinds?: ReadonlySet<string>;
+    /** the director's current SAGA-PUBLIC beat/crisis — broadcast to every character's
+     *  Situation (Step 2). Character-targeted pressure goes through inject_dream, not here. */
+    directorBeat?: { text: string; phase?: string };
 }
 
 export interface PerceivedSituation {
@@ -143,6 +146,8 @@ export function buildSituations(input: PerceiveInput): PerceivedSituation[] {
                 winner: e.winner,
                 stake: e.stake,
             })),
+            // saga-public crisis broadcast to everyone (Step 2)
+            directorBeat: input.directorBeat,
         });
 
         // Structural backstop — fails closed if any un-perceivable fact slipped in.
