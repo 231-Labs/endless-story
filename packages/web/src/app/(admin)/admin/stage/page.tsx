@@ -8,6 +8,7 @@ import { PerceptionAbPanel } from '../director/PerceptionAbPanel';
 import { DirectorBeatPanel } from '../director/DirectorBeatPanel';
 import { LiveWorldTickPanel } from '../director/LiveWorldTickPanel';
 import { ResourceLedgerPanel } from '../director/ResourceLedgerPanel';
+import { TreasuryFundPanel } from '../director/TreasuryFundPanel';
 import { GazettePanel } from '../director/GazettePanel';
 import { EventCutPanel } from '../director/EventCutPanel';
 import { ReflectionPanel } from '../director/ReflectionPanel';
@@ -113,6 +114,14 @@ export default async function AdminStagePage() {
                                     跑完「活世界 tick」後重整,看持有者有沒有變動。
                                 </p>
                                 <div className="mt-5"><ResourceLedgerPanel /></div>
+                            </div>
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">戲班金庫 · 灌注 ENDLESS（班中俸來源）</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    班中俸從戲班金庫發放（平日由鑄造/招募 + 夢境費灌入）。金庫空了又沒訂閱者時,結算發不出薪 → 班中俸顯示 0。
+                                    這裡直接鑄入 ENDLESS 補滿金庫;灌注後跑一次上面的「活世界 tick」推進敘事日,班中俸才會重算顯示。
+                                </p>
+                                <div className="mt-5"><TreasuryFundPanel /></div>
                             </div>
                         </div>
                     </section>

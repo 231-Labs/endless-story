@@ -223,6 +223,44 @@ export function adminMint(options: AdminMintOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface AdminFundSagaTreasuryArguments {
+    admin: RawTransactionArgument<string>;
+    faucet: RawTransactionArgument<string>;
+    saga: RawTransactionArgument<string>;
+    amount: RawTransactionArgument<number | bigint>;
+}
+export interface AdminFundSagaTreasuryOptions {
+    package?: string;
+    arguments: AdminFundSagaTreasuryArguments | [
+        admin: RawTransactionArgument<string>,
+        faucet: RawTransactionArgument<string>,
+        saga: RawTransactionArgument<string>,
+        amount: RawTransactionArgument<number | bigint>
+    ];
+}
+/**
+ * Mint `amount` base units of fresh ENDLESS straight into `saga`'s treasury — the
+ * on-chain payroll pool the off-chain settle draws role base-floor wages from (so
+ * 班中俸 > 0 even with zero subscribers). Like `admin_mint` it bypasses cooldown
+ * but still respects `total_supply_cap`.
+ */
+export function adminFundSagaTreasury(options: AdminFundSagaTreasuryOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        null,
+        'u64',
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["admin", "faucet", "saga", "amount"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'faucet',
+        function: 'admin_fund_saga_treasury',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface SetConfigArguments {
     admin: RawTransactionArgument<string>;
     faucet: RawTransactionArgument<string>;

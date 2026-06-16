@@ -24,6 +24,7 @@
 module endless_story::faucet;
 
 use endless_story::currency::CURRENCY;
+use endless_story::saga::{Self, Saga};
 use sui::clock;
 use sui::coin::{Self, TreasuryCap};
 use sui::event;
@@ -86,6 +87,15 @@ public struct AdminMinted has copy, drop {
     amount: u64,
     total_minted: u64,
     minted_at_ms: u64,
+}
+
+/// Admin minted fresh ENDLESS straight into a saga's treasury (payroll pool).
+public struct SagaTreasuryFunded has copy, drop {
+    faucet_id: ID,
+    saga_id: ID,
+    amount: u64,
+    total_minted: u64,
+    funded_at_ms: u64,
 }
 
 public struct ConfigUpdated has copy, drop {
@@ -253,6 +263,44 @@ public fun admin_mint(
     });
 }
 
+// ─── admin: fund a saga treasury (payroll pool top-up) ───────────────
+
+/// Mint `amount` base units of fresh ENDLESS straight into `saga`'s treasury —
+/// the on-chain payroll pool the off-chain settle draws role base-floor wages
+/// from (so 班中俸 > 0 even with zero subscribers). Like `admin_mint` it
+/// bypasses cooldown but still respects `total_supply_cap`. Reuses the
+/// package-visible `saga::deposit_to_treasury` (which emits `TreasuryDeposited`
+/// with the new balance), so this is the admin/diagnosis sibling of the
+/// recruit/dream fee inflow.
+public fun admin_fund_saga_treasury(
+    admin: &FaucetAdminCap,
+    faucet: &mut Faucet,
+    saga: &mut Saga,
+    amount: u64,
+    clock: &clock::Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(admin.faucet_id == object::id(faucet), ENotAdmin);
+    assert!(amount > 0, EInvalidConfig);
+
+    let new_total = faucet.total_minted + amount;
+    if (faucet.total_supply_cap > 0) {
+        assert!(new_total <= faucet.total_supply_cap, ESupplyExhausted);
+    };
+
+    let coin = coin::mint(&mut faucet.treasury_cap, amount, ctx);
+    faucet.total_minted = new_total;
+    saga::deposit_to_treasury(saga, coin);
+
+    event::emit(SagaTreasuryFunded {
+        faucet_id: object::id(faucet),
+        saga_id: object::id(saga),
+        amount,
+        total_minted: faucet.total_minted,
+        funded_at_ms: clock::timestamp_ms(clock),
+    });
+}
+
 // ─── admin config ────────────────────────────────────────────────────
 
 /// Update any subset of knobs in a single call. `total_supply_cap` of 0
@@ -339,6 +387,8 @@ public fun next_drip_at_ms(faucet: &Faucet, who: address): u64 {
 
 #[test_only]
 use endless_story::currency;
+#[test_only]
+use endless_story::world;
 #[test_only]
 use std::unit_test::{assert_eq, destroy};
 
@@ -462,6 +512,87 @@ fun admin_mint_bypasses_cooldown_and_respects_cap() {
     assert_eq!(total_minted(&faucet), 3_000);
     assert_eq!(remaining_supply(&faucet), 2_000);
 
+    destroy(faucet);
+    destroy(admin_cap);
+    clock.destroy_for_testing();
+}
+
+#[test]
+fun admin_fund_saga_treasury_mints_into_pool() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut faucet, admin_cap) = mint_faucet_for_testing(100, 1_000_000, 0, &mut ctx);
+
+    // Build a World + Saga (treasury starts at zero).
+    let (mut world, world_admin) = world::new_world_for_testing(
+        world::new_world_info(b"W".to_string(), b"w".to_string()),
+        world::new_currency_display(b"E".to_string(), b"E".to_string()),
+        world::new_world_rules(vector[b"human".to_string()], vector[]),
+        1_000,
+        &mut ctx,
+    );
+    let (mut saga, saga_cap) = saga::new_saga_for_testing(
+        &mut world,
+        saga::kind_standard(),
+        b"S".to_string(),
+        b"s".to_string(),
+        b"u".to_string(),
+        4_000,
+        5_000,
+        1_000,
+        vector[],
+        @0xA,
+        1_001,
+        &clock,
+        &mut ctx,
+    );
+    assert_eq!(saga::treasury_balance(&saga), 0);
+
+    // Two admin top-ups land directly in the treasury and bump total_minted.
+    admin_fund_saga_treasury(&admin_cap, &mut faucet, &mut saga, 30_000, &clock, &mut ctx);
+    admin_fund_saga_treasury(&admin_cap, &mut faucet, &mut saga, 20_000, &clock, &mut ctx);
+    assert_eq!(saga::treasury_balance(&saga), 50_000);
+    assert_eq!(total_minted(&faucet), 50_000);
+
+    saga::destroy_saga_for_testing(saga, saga_cap);
+    world::destroy_world_for_testing(world, world_admin);
+    destroy(faucet);
+    destroy(admin_cap);
+    clock.destroy_for_testing();
+}
+
+#[test, expected_failure(abort_code = ESupplyExhausted)]
+fun admin_fund_saga_treasury_respects_supply_cap() {
+    let mut ctx = tx_context::dummy();
+    let clock = sui::clock::create_for_testing(&mut ctx);
+    let (mut faucet, admin_cap) = mint_faucet_for_testing(100, 1_000_000, 1_000, &mut ctx);
+    let (mut world, world_admin) = world::new_world_for_testing(
+        world::new_world_info(b"W".to_string(), b"w".to_string()),
+        world::new_currency_display(b"E".to_string(), b"E".to_string()),
+        world::new_world_rules(vector[b"human".to_string()], vector[]),
+        1_000,
+        &mut ctx,
+    );
+    let (mut saga, saga_cap) = saga::new_saga_for_testing(
+        &mut world,
+        saga::kind_standard(),
+        b"S".to_string(),
+        b"s".to_string(),
+        b"u".to_string(),
+        4_000,
+        5_000,
+        1_000,
+        vector[],
+        @0xA,
+        1_001,
+        &clock,
+        &mut ctx,
+    );
+
+    admin_fund_saga_treasury(&admin_cap, &mut faucet, &mut saga, 1_001, &clock, &mut ctx); // ← abort
+
+    saga::destroy_saga_for_testing(saga, saga_cap);
+    world::destroy_world_for_testing(world, world_admin);
     destroy(faucet);
     destroy(admin_cap);
     clock.destroy_for_testing();

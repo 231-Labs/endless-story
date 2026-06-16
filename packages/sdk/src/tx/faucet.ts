@@ -23,6 +23,11 @@ export const drip = (args: gen.DripArguments) =>
 export const adminMint = (args: gen.AdminMintArguments) =>
   gen.adminMint({ package: pkg(), arguments: args });
 
+// Admin: mint fresh ENDLESS straight into a saga treasury (payroll pool top-up
+// → makes 班中俸 > 0 even with zero subscribers).
+export const adminFundSagaTreasury = (args: gen.AdminFundSagaTreasuryArguments) =>
+  gen.adminFundSagaTreasury({ package: pkg(), arguments: args });
+
 export const setConfig = (args: gen.SetConfigArguments) =>
   gen.setConfig({ package: pkg(), arguments: args });
 
