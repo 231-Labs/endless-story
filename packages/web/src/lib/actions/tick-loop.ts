@@ -387,6 +387,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     memoryContext,
                     dryRun,
                     gravityTargets,
+                    // Spine events span many ticks — don't lock their cast in the
+                    // scene; let them live and act on the contest from anywhere.
+                    pinBusy: !spineMode,
                 })),
             );
             tlog(`   移動 ${moves.filter((m) => m.ok && m.toSceneId).length} 人${dryRun ? '（預演）' : ''}`);

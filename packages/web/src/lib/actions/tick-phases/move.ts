@@ -73,6 +73,17 @@ export async function runMovePhase(input: {
      *  it overrides the LLM move: pull them to the contest (or hold them there).
      *  See gravity-core / rival-gravity; flag-gated upstream. */
     gravityTargets?: Map<string, string>;
+    /**
+     * Pin open-event participants in place (default true). A single-tick event
+     * is a scene being performed NOW, so its cast shouldn't teleport mid-beat.
+     * But a SPINE event simmers across many ticks — an ongoing contest, not a
+     * physical lock — so pinning its cast freezes their lives for the event's
+     * whole duration. Acting on an event is event-scoped (act.ts keys off the
+     * event's participants, never their current scene), so a participant can
+     * still make their move on the contest from wherever they wander. The
+     * tick-loop passes `false` in spine mode: let them move/live; the contest
+     * follows them. */
+    pinBusy?: boolean;
 }): Promise<TickMoveResult[]> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return [];
@@ -98,8 +109,12 @@ export async function runMovePhase(input: {
             })
             .filter((p): p is { id: string; name: string; role: string } => p != null);
 
-    // Characters on stage in an open event stay put.
-    const busy = await fetchBusyCharacterIds(input.sagaId);
+    // Characters on stage in an open event stay put — but only for single-tick
+    // events (default). In spine mode the caller passes pinBusy:false so a
+    // multi-tick contest doesn't freeze its cast; they live their lives and act
+    // on the contest remotely. Skipping the fetch also avoids ~20 chain reads.
+    const busy =
+        input.pinBusy === false ? new Set<string>() : await fetchBusyCharacterIds(input.sagaId);
 
     const out: TickMoveResult[] = [];
     for (const c of input.slice) {
