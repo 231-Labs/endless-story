@@ -16,6 +16,13 @@ const LIVE_INPUT = {
     parallelEvents: true, //    one event per contention axis (implies spine mode)
     directorResources: true, // director may instantiate + settle scarce resources on chain
     situationPerceive: true, // characters perceive the objective 當下處境
+    // LEAN diagnostic: skip the SLOW narration phases (POV/sleep/gazette) and cap the
+    // cast, so the tick finishes inside the request window. We're testing whether
+    // RESOURCES MOVE, not generating prose — a full tick timed out ("failed to fetch").
+    pov: false,
+    sleep: false,
+    gazette: false,
+    maxCharacters: 4,
 } as const;
 
 export function LiveWorldTickPanel() {
