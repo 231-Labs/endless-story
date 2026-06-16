@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SubscribeCard } from '@/components/subscribe/SubscribeCard';
+import { InkUnderline } from '@/components/common/ink-motion';
 
 export type RosterFilter = 'all' | 'internal' | 'external' | 'mine';
 
@@ -93,9 +94,7 @@ export function CharacterGrid({
                       }`}
                     >
                       {f.label}
-                      {isActive ? (
-                        <span className="absolute inset-x-0 -bottom-px h-0.5 bg-cinnabar" />
-                      ) : null}
+                      {isActive ? <InkUnderline groupId="dossier-filters" /> : null}
                     </Link>
                   );
                 })}
@@ -123,8 +122,8 @@ export function CharacterGrid({
         </div>
       </section>
 
-      {/* Pages */}
-      <div className="flex-1">
+      {/* key=filter replays the ink-in on filter switch (not on search) */}
+      <div key={filter} className="flex-1 animate-ink-in">
         {visible.length === 0 ? (
           <section className="flex min-h-[calc(100dvh-265px)] md:min-h-[calc(100dvh-245px)] snap-start snap-always items-center justify-center scroll-mt-[calc(var(--es-site-nav-h)+16rem)] md:scroll-mt-[calc(var(--es-site-nav-h)+13.5rem)]">
             <p className="text-center text-sm text-mute">這個範圍裡還沒有角色。</p>

@@ -14,9 +14,20 @@ export function ThemeToggle() {
 
   const toggle = () => {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.classList.toggle('dark', next === 'dark');
-    localStorage.setItem('endless-theme', next);
-    setTheme(next);
+    const apply = () => {
+      document.documentElement.classList.toggle('dark', next === 'dark');
+      localStorage.setItem('endless-theme', next);
+      setTheme(next);
+    };
+    // day↔night via View Transitions (CSS rules guard reduced motion)
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    const reduce =
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof doc.startViewTransition === 'function' && !reduce) {
+      doc.startViewTransition(apply);
+    } else {
+      apply();
+    }
   };
 
   if (theme == null) {
