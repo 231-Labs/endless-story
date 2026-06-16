@@ -7,7 +7,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { tx as endlessTx } from '@endless-story/sdk';
 import { useToast } from '@/components/common/Toaster';
 import { BlobImage } from '@/components/common/BlobImage';
-import type { Character, CharacterRole } from '@endless-story/shared';
+import type { Character } from '@endless-story/shared';
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 
@@ -21,20 +21,6 @@ interface TensionView {
   targetName: string;
   label: string;
 }
-
-const TONE_BY_ROLE: Record<CharacterRole, { bg: string; text: string }> = {
-  班主: { bg: 'bg-stone-100 dark:bg-stone-800', text: 'text-stone-300 dark:text-stone-600' },
-  青衣: { bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-200 dark:text-rose-800' },
-  花旦: { bg: 'bg-pink-50 dark:bg-pink-950/40', text: 'text-pink-200 dark:text-pink-800' },
-  小生: { bg: 'bg-indigo-50 dark:bg-indigo-950/40', text: 'text-indigo-200 dark:text-indigo-800' },
-  武旦: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-300 dark:text-amber-700' },
-  老旦: { bg: 'bg-stone-100 dark:bg-stone-800', text: 'text-stone-300 dark:text-stone-600' },
-  丑: { bg: 'bg-neutral-100 dark:bg-neutral-800', text: 'text-neutral-300 dark:text-neutral-600' },
-  樂師: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-200 dark:text-emerald-800' },
-  箱管: { bg: 'bg-sky-50 dark:bg-sky-950/40', text: 'text-sky-200 dark:text-sky-800' },
-  學徒: { bg: 'bg-yellow-50 dark:bg-yellow-950/40', text: 'text-yellow-300 dark:text-yellow-700' },
-  看客: { bg: 'bg-zinc-100 dark:bg-zinc-800', text: 'text-zinc-300 dark:text-zinc-600' },
-};
 
 export function SubscribeCard({
   character,
@@ -60,7 +46,6 @@ export function SubscribeCard({
   const suiClient = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const toast = useToast();
-  const tone = TONE_BY_ROLE[character.role] ?? TONE_BY_ROLE['班主'];
 
   useEffect(() => {
     setSubscribed(initialSubscribed);
@@ -119,10 +104,10 @@ export function SubscribeCard({
       {/* Background — on-chain portrait (Walrus URL) if minted, else typographic
           poster fallback. The image is large-area so the gradient overlay below
           still preserves text legibility at the bottom. */}
-      {/* 字形海報恆常墊底；肖像載入失敗（BlobImage → null）時自動露出 */}
-      <div className={`absolute inset-0 flex items-center justify-center ${tone.bg}`}>
+      {/* ink wash + watermark glyph; the portrait (a later sibling) covers it once loaded */}
+      <div className="es-ink-wash absolute inset-0 flex items-center justify-center overflow-hidden">
         <span
-          className={`font-serif leading-none ${tone.text}`}
+          className="font-serif leading-none text-ink/[0.16]"
           style={{ fontSize: '11rem', transform: 'translateY(-8%)' }}
         >
           {character.name[0]}

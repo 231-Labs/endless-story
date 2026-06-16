@@ -6,6 +6,7 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import type { Character } from '@endless-story/shared';
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 import { BlobImage } from '@/components/common/BlobImage';
+import { FlowIndicator, useFlowingIndicator } from '@/components/common/ink-motion';
 
 export type DossierTab = 'profile' | 'gallery' | 'chapters' | 'shop' | 'memories' | 'entrusts';
 
@@ -34,6 +35,7 @@ export function DossierTabs({
   const account = useCurrentAccount();
   const isOwner = !!account && account.address === character.nftOwner;
   const visibleTabs = TABS.filter((tab) => isOwner || !OWNER_ONLY_TABS.has(tab.key));
+  const { containerRef, box } = useFlowingIndicator<HTMLDivElement>(active);
 
   useEffect(() => {
     const target = document.getElementById('dossier-header');
@@ -57,7 +59,8 @@ export function DossierTabs({
           <MiniAvatar character={character} visible={true} />
         </div>
         <div className="hidden sm:block h-6 w-px bg-hairline/50 mx-1" />
-        <div className="no-scrollbar flex items-center gap-1 overflow-x-auto px-1">
+        <div ref={containerRef} className="no-scrollbar relative flex items-center gap-1 overflow-x-auto px-1">
+          <FlowIndicator box={box} />
           {visibleTabs.map((tab) => {
             const isActive = tab.key === active;
             return (
@@ -65,13 +68,13 @@ export function DossierTabs({
                 key={tab.key}
                 href={{ pathname: '/dossier', query: { id: character.id, tab: tab.key } }}
                 scroll={false}
-                className={`relative flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium tracking-wide transition-colors ${
-                  isActive 
-                    ? 'bg-ink text-canvas dark:bg-ink dark:text-canvas' 
-                    : 'text-ink/65 hover:text-ink hover:bg-surface'
+                data-flow-key={tab.key}
+                aria-current={isActive ? 'page' : undefined}
+                className={`relative z-10 flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium tracking-wide transition-colors ${
+                  isActive ? 'text-canvas' : 'text-ink/65 hover:text-ink'
                 }`}
               >
-                <span>{tab.label}</span>
+                {tab.label}
               </Link>
             );
           })}

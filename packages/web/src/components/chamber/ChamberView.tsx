@@ -21,6 +21,7 @@ import { buildVaultDesign } from '@/lib/chamber/vault-design-build';
 import { acquiredVaultItems, loadAcquired } from '@/lib/chamber/shop-catalog';
 import { fetchVaultLayout, serializeVaultLayout } from '@/lib/chamber/vault-layout';
 import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/chamber/sound';
+import { InkFluid } from '@/components/common/InkFluid';
 
 const ChamberCanvas = dynamic(
   () => import('@endless-story/chamber-3d').then((m) => m.ChamberCanvas),
@@ -836,16 +837,32 @@ export function ChamberView({ characterId }: { characterId: string }) {
         </aside>
       ) : null}
 
-      {/* 墨暈 opening overlay — CSS dark: variants so even the SSR frame is
-          correctly day/night before hydration */}
+      {/* opening overlay = the full water-ink fluid; the poem floats over its centre */}
       {loading && inkOverlay ? (
-        <div className="absolute inset-0 z-40 grid place-items-center bg-gradient-to-b from-[#efe9db]/94 to-[#e0d6c2]/96 transition-opacity duration-700 dark:from-[#0b0d12]/92 dark:to-[#06070b]/96">
-          <div className="flex flex-col items-center gap-6">
-            <div className="h-16 w-16 animate-pulse rounded-full bg-[radial-gradient(circle,rgba(94,84,66,0.55),rgba(140,126,100,0.2)_55%,transparent_72%)] dark:bg-[radial-gradient(circle,rgba(222,228,236,0.85),rgba(86,100,118,0.3)_55%,transparent_72%)]" />
-            <p className="font-serif text-base tracking-[0.4em] text-[#4a4136]/90 dark:text-white/80">
-              {POEMS[poemIdx]}
-            </p>
-            <p className="text-xs tracking-wider text-[#6b5f4e]/70 dark:text-white/40">啟封藏閣…</p>
+        <div className="absolute inset-0 z-40 overflow-hidden transition-opacity duration-700">
+          <InkFluid className="absolute inset-0" />
+          {/* the poem sits in a small calm pocket; the ink stays the subject */}
+          <div className="absolute inset-0 grid place-items-center">
+            <div
+              className="flex flex-col items-center gap-4 rounded-full px-10 py-6"
+              style={{
+                background:
+                  'radial-gradient(60% 60% at 50% 50%, rgb(var(--color-canvas) / 0.42), transparent 78%)',
+              }}
+            >
+              <p
+                className="font-serif text-base tracking-[0.4em] text-ink"
+                style={{ textShadow: '0 1px 12px rgb(var(--color-canvas) / 0.7)' }}
+              >
+                {POEMS[poemIdx]}
+              </p>
+              <p
+                className="text-xs tracking-wider text-mute"
+                style={{ textShadow: '0 1px 10px rgb(var(--color-canvas) / 0.7)' }}
+              >
+                啟封藏閣…
+              </p>
+            </div>
           </div>
         </div>
       ) : null}

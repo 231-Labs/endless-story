@@ -7,6 +7,7 @@ import { BlobImage } from '@/components/common/BlobImage';
 import { GazetteList } from '@/components/feed/GazetteList';
 import { GazetteTeaser } from '@/components/feed/GazetteTeaser';
 import { CutList } from '@/components/feed/CutList';
+import { FeedTabs, type FeedMode } from '@/components/feed/FeedTabs';
 
 export const metadata = {
   title: '梨園章回',
@@ -15,15 +16,7 @@ export const metadata = {
 
 // IA (docs/CONTENT_PIPELINE.md §8.1): the canonical chapter is the event CUT
 // (woven multi-POV); single POVs are demoted to per-character feeds on the
-// dossier. Modes: 全部 landing · 公報 free funnel · 章回 the woven cuts · 影像.
-type FeedMode = 'all' | 'gazette' | 'chapter' | 'visual';
-
-const MODES: { key: FeedMode; label: string; shortLabel: string }[] = [
-  { key: 'all', label: '全部', shortLabel: '全部' },
-  { key: 'gazette', label: '公報', shortLabel: '公報' },
-  { key: 'chapter', label: '章回 · 合本', shortLabel: '章回' },
-  { key: 'visual', label: '影像與畫冊', shortLabel: '影像' },
-];
+// dossier. Modes 全部 / 公報 / 章回 / 影像 + their tab row live in FeedTabs.
 
 function parseMode(raw: string | string[] | undefined): FeedMode {
   if (typeof raw === 'string' && (['all', 'gazette', 'chapter', 'visual'] as const).includes(raw as FeedMode)) {
@@ -61,40 +54,19 @@ export default async function FeedPage({
               }
             />
 
-            <div className="-mx-5 mt-6 flex gap-4 overflow-x-auto border-b border-hairline px-5 pb-px sm:mx-0 sm:mt-8 sm:flex-wrap sm:gap-8 sm:overflow-visible sm:px-0">
-              {MODES.map((m) => {
-                const isActive = m.key === mode;
-                return (
-                  <Link
-                    key={m.key}
-                    href={{
-                      pathname: '/feed',
-                      query: m.key === 'all' ? {} : { mode: m.key },
-                    }}
-                    className={`relative shrink-0 whitespace-nowrap pb-3 text-sm tracking-wide transition-colors ${
-                      isActive ? 'text-ink' : 'text-mute hover:text-ink'
-                    }`}
-                  >
-                    <span className="sm:hidden">{m.shortLabel}</span>
-                    <span className="hidden sm:inline">{m.label}</span>
-                    {isActive ? (
-                      <span className="absolute inset-x-0 -bottom-px h-0.5 bg-cinnabar" />
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </div>
+            <FeedTabs mode={mode} />
           </div>
         </div>
       </header>
 
       <section className="px-5 pb-8 pt-4 sm:px-10 sm:pb-14 sm:pt-5">
         <div className="mx-auto max-w-6xl">
-          {/* keyed by mode so switching tabs swaps to the skeleton instead of
-              holding the previous tab's content while the next one loads */}
-          <Suspense key={mode} fallback={<FeedContentSkeleton />}>
-            <FeedContent mode={mode} saga={saga} />
-          </Suspense>
+          {/* key=mode swaps to the skeleton + replays the ink-in on tab switch */}
+          <div key={mode} className="animate-ink-in">
+            <Suspense key={mode} fallback={<FeedContentSkeleton />}>
+              <FeedContent mode={mode} saga={saga} />
+            </Suspense>
+          </div>
         </div>
       </section>
     </main>

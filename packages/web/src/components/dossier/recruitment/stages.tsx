@@ -266,39 +266,31 @@ export function PromptStage({ prompt, onPromptChange, rolledValues }: { prompt: 
   );
 }
 
-/**
- * 鑄印等待動畫 — 取代先前的通用旋轉圈圈。
- * 中央一方硃砂印緩緩呼吸（印未落定）、外圈篆刻虛線環慢轉（刻字中）、
- * 墨暈漣漪錯拍外擴（餘韻）。glyph 隨階段換字：命／審／書。
- */
-export function SealWait({ glyph }: { glyph: string }) {
+// recruitment wait — soft ink blooms + a breathing cinnabar heart
+export function SealWait() {
   return (
-    <div aria-hidden className="relative flex h-28 w-28 items-center justify-center">
-      {/* 墨暈漣漪 ×2 */}
+    <div aria-hidden className="relative grid h-24 w-24 place-items-center">
+      {/* ink blooms opening + dissolving, staggered */}
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="absolute inset-0 rounded-full"
+          style={{
+            background:
+              'radial-gradient(circle, rgb(var(--color-ink) / 0.18), rgb(var(--color-ink) / 0.05) 42%, transparent 66%)',
+            animation: `es-ink-bloom 4.2s ${i * 1.4}s var(--ease-ink) infinite`,
+          }}
+        />
+      ))}
+      {/* cinnabar heart */}
       <span
-        className="absolute inset-1 rounded-full border border-cinnabar/35"
-        style={{ animation: 'es-ripple 2.6s ease-out infinite' }}
+        className="absolute h-9 w-9 rounded-full"
+        style={{
+          background:
+            'radial-gradient(circle, rgb(var(--color-cinnabar) / 0.5), rgb(var(--color-cinnabar) / 0.12) 55%, transparent 74%)',
+          animation: 'es-seal-breathe 4.2s ease-in-out infinite',
+        }}
       />
-      <span
-        className="absolute inset-1 rounded-full border border-ink/20"
-        style={{ animation: 'es-ripple 2.6s ease-out 1.3s infinite' }}
-      />
-      {/* 篆刻環 — 緩轉的虛線圓 */}
-      <span
-        className="absolute inset-3 rounded-full border border-dashed border-cinnabar/35"
-        style={{ animation: 'spin 16s linear infinite' }}
-      />
-      <span
-        className="absolute inset-[1.1rem] rounded-full border border-hairline/60"
-        style={{ animation: 'spin 24s linear infinite reverse' }}
-      />
-      {/* 方印 */}
-      <span
-        className="relative flex h-12 w-12 items-center justify-center rounded-md bg-cinnabar shadow-lg shadow-cinnabar/25 ring-1 ring-seal/40"
-        style={{ animation: 'es-seal-breathe 2.6s ease-in-out infinite' }}
-      >
-        <span className="select-none font-serif text-2xl leading-none text-canvas">{glyph}</span>
-      </span>
     </div>
   );
 }
@@ -332,18 +324,18 @@ export function BrushSpinner() {
 }
 
 export function RollingStage({ status }: { status: 'minting' | 'moderating' | 'generating' | null }) {
-  const { glyph, text } =
+  const text =
     status === 'minting'
-      ? { glyph: '命', text: '鑄造天命' }
+      ? '鑄造天命'
       : status === 'moderating'
-        ? { glyph: '審', text: '審核意圖' }
+        ? '審核意圖'
         : status === 'generating'
-          ? { glyph: '書', text: '說書人擬人中' }
-          : { glyph: '候', text: '請稍候' };
+          ? '說書人擬人中'
+          : '請稍候';
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 py-12">
-      <SealWait glyph={glyph} />
+      <SealWait />
       <div className="text-center" role="status">
         <p className="font-serif text-xl tracking-[0.15em] text-ink">
           {text}
