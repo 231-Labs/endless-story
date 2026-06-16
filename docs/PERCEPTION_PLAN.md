@@ -4,22 +4,17 @@
 > **北極星檔**：[NARRATIVE_AGENTS.md](./NARRATIVE_AGENTS.md)（敘事架構唯一真相）。本檔是其
 > `perceive→plan→act→reflect` 迴圈裡 **perceive** 步驟的具體補完計畫；與北極星檔衝突時以北極星檔為準。
 
-> **進度（2026-06-16，分支 `claude/perception-step1`，off committed Step 0）**
-> - ✅ **防全知守門**：`situation-core.ts` `assertPerceivable` —— 持有預設私密、僅同場或 public 才揭露；
->   off-scene 暗持/未參演結算/跨場事件 fail-closed throw。+5 測試。
-> - ✅ **Step 1（PLAN 感知）**：`tick-phases/perceive-core.ts`（純組裝+scope，+8 測試）+ `perceive.ts`
->   （鏈上抓取+跨 tick cursor：resolved-Δ、co-present-Δ）+ tick-loop 在 PLAN 前組 Situation 注入
->   + tick 尾 stash resolved。runner/web `plan.ts` 加 `situation` 段（置記憶前，框「只可詮釋不可改寫」）。
->   **旗標 `ES_SITUATION_PERCEIVE`（env=1 或 `/api/tick` body `situationPerceive:true`），預設 OFF=零行為改動。**
->   runner+web type-check 乾淨；20/20 純測試綠。
-> - ⬜ **未做**：MOVE 直接注入（v1 靠 planHint 間接傳遞）、Step 2（directorBeat 寫入路徑）、Step 3（tick 重排）、
->   Step 4（記憶轉詮釋+importance 調校）、LLM liveness harness。
+> **進度（2026-06-16，分支 `claude/perception-step1` → 已 merge main 自動部署，旗標 `ES_SITUATION_PERCEIVE` 預設 OFF）**
+> - ✅ **防全知守門**：`situation-core.ts` `assertPerceivable` —— 持有預設私密、僅同場或 public 才揭露；off-scene 暗持/未參演結算/跨場事件 fail-closed throw。
+> - ✅ **Step 1（PLAN 感知）**：`tick-phases/perceive-core.ts`（純組裝+scope，ache 用 §8c `roleResourceAmbition`）+ `perceive.ts`（鏈上抓取+跨 tick cursor）+ tick-loop 在 **PLAN 前**（phase 1.5）組 Situation 注入 + tick 尾 stash resolved。runner/web `plan.ts` 加 `situation` 段（置記憶前、框「只可詮釋不可改寫」）。
+> - ✅ **Step 2（導演危機 directorBeat）**：`director-beat.ts` action + `DirectorBeatPanel`（後台廣播/解除）→ `perceive.ts` process-local beat store → 每角色 Situation `news.directorBeat`（saga-public）。私密壓力仍走 inject_dream。
+> - ✅ **Step 3（重排）= 由 Step 1 設計滿足**：PERCEIVE 已在 PLAN 之前；ache 用靜態行當 ambition 算，不需先跑 DRAMA → PLAN 已拿到本 tick 處境。完整動態 tension 仍於 ACT/POV 後續餵（§8c「下一層」）。
+> - ✅ **驗收工具**：後台「感知對照 · A/B」面板（`perception-ab.ts` + `PerceptionAbPanel`）—— dry-run 配對對照（同狀態、每角色當自己 control、感知關 vs 開、不動世界）+ 一鍵複製輸出。**這是即時因果實驗**（序列跑 tick 不能 A/B，每 tick 會改鏈/MemWal 狀態）。
+> - ✅ 測試：`situation-core` 12、`perceive-core` 10、`contest` 9 = 31/31 綠；web+runner type-check 乾淨。
+> - ⬜ **剩**：MOVE/ACT/SOCIAL 直接注入（目前僅 PLAN；MOVE 已有場景在場者+planHint）、Step 4（記憶轉詮釋+importance 調校，**風險調參，建議先看 A/B 再動**）、LLM 多 tick liveness（證「不再停滯」，需 devnet 重播或離線 sim）、directorBeat 上鏈持久化（目前 process-local，重啟清掉）。
 >
-> **驗收實驗（同一 saga A/B，需在正式環境跑）**：
-> 1. 基線：`POST /api/tick {"situationPerceive": false}` 連跑 K tick（K≥5），記錄每人 `plans[].longTermGoal/dailyPlanHint`。
-> 2. 處理：`POST /api/tick {"situationPerceive": true}` 連跑 K tick，記錄同欄位。
-> 3. 指標：處理組的**計畫變更率**應顯著高於基線（不再 ×8 重複停滯）；且計畫應**引用剛結算的事件/同場者**
->    （抽查 PLAN 是否回應 `news.resolvedSinceLastSeen`）。看 SchedulerPanel / `/api/tick` 回傳的 `plans`。
+> **即時因果驗收（已上線，後台直接按）**：後台 → stage → 三 → 「感知對照 · A/B」→ 跑 → 複製 → 判讀「感知開的計畫是否引用感知關拿不到的事實」。
+> **多 tick 不停滯驗收（待補）**：devnet 同種子重播 K tick off vs on，比計畫變更率/資源易手/場景多樣性。
 
 ---
 
