@@ -45,7 +45,7 @@ export function DossierHeader({
             id="dossier-portrait"
             className="w-28 shrink-0 sm:w-44 md:w-56 lg:w-[320px]"
           >
-            <CharacterPortrait character={character} aspect="3/4" />
+            <CharacterPortrait character={character} aspect="3/4" bare />
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center py-2 lg:py-8">
