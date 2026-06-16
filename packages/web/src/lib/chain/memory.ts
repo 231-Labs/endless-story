@@ -445,7 +445,7 @@ export async function recallForConsolidation(
  * a new plan (rememberForCharacter kind=plan) invalidates it so the fresh
  * plan still flows through the rest of the tick.
  */
-const PLAN_CACHE = new Map<string, { text: string | null; ts: number }>();
+const PLAN_CACHE = new Map<string, { text: string | null; ts: number; source: 'write' | 'recall' }>();
 const PLAN_CACHE_TTL_MS = 90_000;
 
 function invalidatePlanCache(characterId: string): void {
@@ -456,14 +456,25 @@ function invalidatePlanCache(characterId: string): void {
  * Recall the character's CURRENT plan (N6) — the latest kind=plan memory.
  *
  * Plans are the character's standing goal + day intent + open subgoals,
- * rewritten each tick. Recall is recency-driven (newest plan wins) rather
- * than relevance-driven, so we over-fetch with a plan-flavoured query and
- * pick the newest kind=plan candidate. Returns null when none / unconfigured.
- * Cached per character (TTL above) to cut redundant SEAL decrypts.
+ * rewritten each tick. The authoritative "current plan" is the one we last WROTE
+ * (rememberForCharacter kind=plan sets a WRITE-set cache entry); that runs in the
+ * same web-service process that serves /api/tick AND the dossier, so it's always
+ * the freshest. A write-set entry therefore stays valid until the next write — it
+ * does NOT expire. Only the cold-start RECALL fallback carries the short TTL.
+ *
+ * Why: the recall fallback below picks by DAY granularity (`> m.day`), so within a
+ * single narrative day (many ticks) it can't tell same-day plans apart and keeps an
+ * OLDER one. Ticks are minutes apart (> TTL), so a TTL'd cache used to expire between
+ * ticks → fall to that day-granular recall → the dossier/PLAN got STUCK on an old
+ * same-day plan. Trusting the write-set cache keeps the freshest plan flowing.
  */
 export async function recallCurrentPlanText(characterId: string): Promise<string | null> {
     const cached = PLAN_CACHE.get(characterId);
-    if (cached && Date.now() - cached.ts < PLAN_CACHE_TTL_MS) return cached.text;
+    // Write-set = authoritative (the plan we just stored) → never stale. Recall-set =
+    // cold-start best-effort → honour the TTL so it re-recalls.
+    if (cached && (cached.source === 'write' || Date.now() - cached.ts < PLAN_CACHE_TTL_MS)) {
+        return cached.text;
+    }
 
     const client = await clientFor(characterId);
     if (!client) return null;
@@ -487,7 +498,7 @@ export async function recallCurrentPlanText(characterId: string): Promise<string
             }
         }
         const text = best?.text ?? null;
-        PLAN_CACHE.set(characterId, { text, ts: Date.now() });
+        PLAN_CACHE.set(characterId, { text, ts: Date.now(), source: 'recall' });
         return text;
     } catch (err) {
         console.warn('[memory] recallCurrentPlanText failed:', err);
@@ -543,9 +554,10 @@ export async function rememberForCharacter(
                 await new Promise((r) => setTimeout(r, 600 * attempt));
             }
         }
-        // A new plan supersedes the cached one — keep it hot so MOVE/SOCIAL/POV
-        // in the same tick don't immediately decrypt it again.
-        if (kind === 'plan') PLAN_CACHE.set(characterId, { text, ts: Date.now() });
+        // A new plan supersedes the cached one — keep it hot (WRITE-set: authoritative,
+        // never expires) so MOVE/SOCIAL/POV + the dossier read the freshest plan, not a
+        // day-granular recall of an older same-day plan.
+        if (kind === 'plan') PLAN_CACHE.set(characterId, { text, ts: Date.now(), source: 'write' });
         console.log(
             `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}${
                 opts?.anchored ? ' anchored' : ''
