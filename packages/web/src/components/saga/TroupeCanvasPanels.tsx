@@ -240,7 +240,7 @@ export function FocusedSceneDetails({
   const hasLive = openEvents.length > 0;
 
   return (
-    <div className="animate-fade-in-up mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-3">
+    <div className="animate-fade-in-up mx-auto grid w-full max-w-4xl grid-cols-1 items-start gap-6 sm:grid-cols-2 sm:gap-8">
       {/* 氣 — scene base tone, heats up while a 戲 is open */}
       <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
         <PanelHeader title="氣" />
@@ -274,28 +274,6 @@ export function FocusedSceneDetails({
         pastEvents={scene.pastEvents ?? []}
         chaptersById={chaptersById}
       />
-
-      {/* 派生 IP — real footprint, not a dead placeholder */}
-      <section className="rounded-3xl border border-hairline/50 bg-surface/80 p-6 shadow-sm backdrop-blur-md dark:bg-elevated/80 sm:p-8">
-        <PanelHeader title="派生 IP" />
-        <p className="mt-3 text-xs text-mute">此處長出的內容資產。</p>
-        {scene.derivativeCounts ? (
-          <ul className="mt-6 space-y-4 text-sm">
-            <DerivativeRow label="公開章回" count={scene.derivativeCounts.chapters} suffix="章" />
-            <DerivativeRow label="角色記憶" count={scene.derivativeCounts.memories} suffix="條" />
-            <DerivativeRow label="心曲創作" count={scene.derivativeCounts.soulSongs} suffix="曲" />
-          </ul>
-        ) : events.length > 0 ? (
-          <div className="mt-6 space-y-4">
-            <DerivativeRow label="上演過的戲" count={events.length} suffix="場" />
-            <p className="text-2xs leading-relaxed tracking-widest text-mute/80">
-              每場戲都會譜成章回、沉澱為角色記憶 —— 派生資產正在累積。
-            </p>
-          </div>
-        ) : (
-          <p className="mt-6 text-sm italic text-mute">尚未派生。</p>
-        )}
-      </section>
     </div>
   );
 }
@@ -313,8 +291,12 @@ function ScenePastPanel({
   chaptersById: Map<string, Chapter>;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [showAllOpen, setShowAllOpen] = useState(false);
   const COLLAPSED = 2;
+  const OPEN_COLLAPSED = 3;
   const hasChainEvents = openEvents.length > 0 || resolvedEvents.length > 0;
+  const visibleOpen = showAllOpen ? openEvents : openEvents.slice(0, OPEN_COLLAPSED);
+  const hiddenOpen = openEvents.length - visibleOpen.length;
   const visibleResolved = showAll ? resolvedEvents : resolvedEvents.slice(0, COLLAPSED);
   const hidden = resolvedEvents.length - visibleResolved.length;
 
@@ -328,10 +310,19 @@ function ScenePastPanel({
             <div className="space-y-3">
               <p className="text-2xs tracking-[0.3em] text-cinnabar/80">進行中</p>
               <ol className="space-y-4">
-                {openEvents.map((ev) => (
+                {visibleOpen.map((ev) => (
                   <SceneEventRow key={ev.eventId} event={ev} />
                 ))}
               </ol>
+              {openEvents.length > OPEN_COLLAPSED ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllOpen((v) => !v)}
+                  className="text-2xs tracking-widest text-cinnabar/80 transition-colors hover:text-cinnabar"
+                >
+                  {showAllOpen ? '收合' : `展開另 ${hiddenOpen} 場進行中 ▾`}
+                </button>
+              ) : null}
             </div>
           ) : null}
           {resolvedEvents.length > 0 ? (
@@ -454,22 +445,3 @@ function PastEventRow({
   );
 }
 
-function DerivativeRow({
-  label,
-  count,
-  suffix,
-}: {
-  label: string;
-  count: number;
-  suffix: string;
-}) {
-  return (
-    <li className="flex items-baseline justify-between gap-3 border-b border-hairline pb-3">
-      <span className="text-ink/85">{label}</span>
-      <span className="flex items-baseline gap-1">
-        <span className="font-mono text-xl text-ink">{count}</span>
-        <span className="text-2xs tracking-widest text-mute">{suffix}</span>
-      </span>
-    </li>
-  );
-}
