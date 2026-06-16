@@ -1,0 +1,163 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import {
+    launchProductionAction,
+    type LaunchProductionActionResult,
+} from '@/lib/actions/launch-production';
+import { txUrl, objectUrl } from '@/lib/explorer';
+
+/**
+ * Admin panel: manually trigger `launch_production` (the Director tool) —排一齣
+ * 新戲 from the live cast, end-to-end (選角→寫本→作曲→填詞→戲中戲→戲折上鏈).
+ * Same Dry-Run / Anchor split as the gazette trigger. Lets you smoke-test the
+ * whole production chain without going through the heartbeat / chat loop.
+ */
+const PLAYS: { key: string; label: string }[] = [
+    { key: '', label: '班主自選' },
+    { key: 'baishe', label: '白蛇 · 斷橋' },
+    { key: 'honglou', label: '紅樓 · 改良' },
+    { key: '大戲', label: '白蛇傳 · 全本（大戲）' },
+];
+
+export function LaunchProductionPanel() {
+    const [classicKey, setClassicKey] = useState('');
+    const [skipScore, setSkipScore] = useState(true);
+    const [result, setResult] = useState<LaunchProductionActionResult | null>(null);
+    const [isPending, startTransition] = useTransition();
+
+    const handleRun = (dryRun: boolean) => {
+        setResult(null);
+        startTransition(async () => {
+            const r = await launchProductionAction({
+                classicKey: classicKey || undefined,
+                skipScore,
+                dryRun,
+            });
+            setResult(r);
+        });
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+                    戲碼
+                    <select
+                        value={classicKey}
+                        onChange={(e) => setClassicKey(e.target.value)}
+                        disabled={isPending}
+                        className="rounded border border-hairline bg-surface px-2 py-1 text-sm text-ink disabled:opacity-50"
+                    >
+                        {PLAYS.map((p) => (
+                            <option key={p.key || 'auto'} value={p.key}>
+                                {p.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+                    <input
+                        type="checkbox"
+                        checked={skipScore}
+                        onChange={(e) => setSkipScore(e.target.checked)}
+                        disabled={isPending}
+                    />
+                    純排戲（跳過作曲）
+                </label>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+                <button
+                    type="button"
+                    onClick={() => handleRun(true)}
+                    disabled={isPending}
+                    className="rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-ink hover:bg-elevated disabled:opacity-50"
+                >
+                    {isPending ? '排戲中…' : 'Dry-Run（只排不上鏈）'}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => handleRun(false)}
+                    disabled={isPending}
+                    className="rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal disabled:opacity-50"
+                >
+                    {isPending ? '上鏈中…' : '排一齣並上鏈'}
+                </button>
+            </div>
+            <p className="text-2xs tracking-widest text-mute">
+                讀真班底 → 班主選戲 → 編劇寫本 → 行當選角（乾旦/坤生）→ 琴師作曲 → 角色有感而發填詞 → 全體演戲中戲 →
+                鑄成「戲折」commitment::commit (subject_id=saga)。多次 LLM＋上鏈，請耐心等。
+            </p>
+
+            {result ? <ResultView result={result} /> : null}
+        </div>
+    );
+}
+
+function ResultView({ result }: { result: LaunchProductionActionResult }) {
+    return (
+        <div className="space-y-3 rounded border border-hairline bg-canvas/40 p-4">
+            <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest">
+                <span className={`inline-block h-2 w-2 rounded-full ${result.ok ? 'bg-jade' : 'bg-cinnabar'}`} />
+                <span className="text-mute">{result.anchored ? '已上鏈' : 'Dry-Run'}</span>
+                {result.title ? (
+                    <span className="text-ink">
+                        《{result.title}》{result.scenes ? ` · ${result.scenes} 場` : ''}
+                    </span>
+                ) : null}
+                {result.llm ? (
+                    <span className="text-mute">
+                        LLM {result.llm.calls} 呼叫{result.llm.failures ? `（失敗 ${result.llm.failures}）` : ''} ·{' '}
+                        {(result.llm.ms / 1000).toFixed(1)}s
+                    </span>
+                ) : null}
+                {result.digest ? (
+                    <a href={txUrl(result.digest)} target="_blank" rel="noopener noreferrer" className="text-cinnabar hover:underline">
+                        tx
+                    </a>
+                ) : null}
+                {result.commitmentId ? (
+                    <a href={objectUrl(result.commitmentId)} target="_blank" rel="noopener noreferrer" className="text-cinnabar hover:underline">
+                        commitment
+                    </a>
+                ) : null}
+                {result.blobId ? (
+                    <a href={`/api/blob/${result.blobId}`} target="_blank" rel="noopener noreferrer" className="text-cinnabar hover:underline">
+                        walrus
+                    </a>
+                ) : null}
+            </div>
+
+            {result.error ? <div className="text-sm text-cinnabar">錯誤：{result.error}</div> : null}
+
+            {result.cast && result.cast.length ? (
+                <div className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">選角</div>
+                    <ul className="text-sm text-ink">
+                        {result.cast.map((c, i) => (
+                            <li key={i}>
+                                {c.part} — {c.actor}
+                                {c.crossCast ? <span className="ml-1 text-cinnabar">〔{c.crossCast}〕</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+
+            {result.emergent && result.emergent.length ? (
+                <div className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">有感而發</div>
+                    <ul className="text-sm text-ink">
+                        {result.emergent.map((e, i) => (
+                            <li key={i}>
+                                {e.author}
+                                {e.why ? <span className="text-mute"> — {e.why}</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+        </div>
+    );
+}

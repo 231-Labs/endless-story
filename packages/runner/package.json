@@ -20,6 +20,7 @@
     "@endless-story/memwal": "workspace:*",
     "@endless-story/sdk": "workspace:*",
     "@endless-story/shared": "workspace:*",
+    "@endless-story/troupe": "workspace:*",
     "@mysten/sui": "^2.16.0"
   },
   "devDependencies": {

@@ -10,6 +10,7 @@ import { LiveWorldTickPanel } from '../director/LiveWorldTickPanel';
 import { ResourceLedgerPanel } from '../director/ResourceLedgerPanel';
 import { TreasuryFundPanel } from '../director/TreasuryFundPanel';
 import { GazettePanel } from '../director/GazettePanel';
+import { LaunchProductionPanel } from '../director/LaunchProductionPanel';
 import { EventCutPanel } from '../director/EventCutPanel';
 import { ReflectionPanel } from '../director/ReflectionPanel';
 import { EventPanel } from '../director/EventPanel';
@@ -130,6 +131,13 @@ export default async function AdminStagePage() {
                         <div className="text-2xs uppercase tracking-[0.25em] text-cinnabar/60">三 · 出版與除錯</div>
                         <h2 className="mt-1 font-serif text-2xl tracking-wide text-ink">手動補產 / 逐項測試</h2>
                         <div className="mt-8 space-y-12">
+                            <div>
+                                <h3 className="font-serif text-lg tracking-wide text-ink">新戲 · 排一齣（導演工具）</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-mute">
+                                    手動觸發 launch_production:讀真班底 → 班主選戲 → 編劇/選角/作曲/填詞/演戲中戲 → 戲折上鏈。Dry-Run 先驗,再上鏈。
+                                </p>
+                                <div className="mt-5"><LaunchProductionPanel /></div>
+                            </div>
                             <div>
                                 <h3 className="font-serif text-lg tracking-wide text-ink">公報 · 編輯出版</h3>
                                 <p className="mt-2 text-sm leading-relaxed text-mute">

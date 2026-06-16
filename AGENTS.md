@@ -49,6 +49,12 @@ pnpm -r type-check                            # 全 repo 綠燈確認
 > 後台統一管 hero 影片/角色圖/章回等長存資產的上傳·上下架·到期追蹤·續租。決策鎖定:通用面板
 > ＋ Hybrid 續費。自架 publisher+aggregator+relayer 上 Contabo(Tier A/B 可現在先上,前端定案只動
 > 一個 env＋一行 CORS)。relayer 加 asset service(零依賴,Walrus 寫入 shell out `walrus` CLI)。**待動工。**
+>
+> **[docs/PRODUCTION_ENGINE.md](./docs/PRODUCTION_ENGINE.md)** = 劇目製作引擎（戲班自治排「舊戲新唱」：編劇/選角/作曲/填詞/演戲中戲→共有 IP）。
+> 含**觸發模型**（Director/Showrunner gated 決定 + `launch_production` 工具）、技能對接（craft 軸 vs main 的 event 軸、同一 `SagaSkillsKey` DOF）、可收藏戲折。
+> 離線驗證 harness = `packages/troupe`（鏈解耦、mock 零依賴可跑）。**⚠️ 現況大量靠寫死/手設 fixture 驅動**（戲碼目錄、板式庫、關係資料）—— 見該檔
+> §7「靠寫死 vs 自治」盤點：LLM 目前只生**文字**（劇本/詞/POV），**決策**（排哪齣、誰有感而發）多為規則 over 手設資料；真自治＝把手設輸入換成
+> 真來源（行當→derive 技能 ✅slice、MemWal→關係記憶、Director 心跳→排戲）。
 
 ---
 

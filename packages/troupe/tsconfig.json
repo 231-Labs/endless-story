@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // Standalone harness run via `tsx` (and type-checked by tsc with noEmit).
+    // Relative imports carry explicit `.ts` extensions so tsx/node resolve them
+    // directly; allowImportingTsExtensions lets tsc accept them. Mirrors
+    // packages/economy + packages/drama.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*", "driver/**/*"]
+}
