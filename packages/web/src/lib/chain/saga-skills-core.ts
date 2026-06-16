@@ -78,3 +78,60 @@ export function deriveSagaSkills(role: string, world: WorldAttrs = {}): SkillPro
         networking: clamp(base.networking + wit * 0.5 + heart * 0.5),
     };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Craft skills — a SECOND axis on the SAME skill DOF, for the production engine.
+//
+// These gate "who can author a 劇目" + grade "how good", and are deliberately
+// NOT in the saga's card_weight_rules (authoring competence must not bias event
+// card-draw). The 6 perf skills above drive events (event.move); these 3 drive
+// production authoring (packages/troupe). Wiring: declare these 3 in the saga's
+// `saga_attributes` too, and `seedCharacterSkills` writes them in the same PTB.
+// See docs/PRODUCTION_ENGINE.md §3.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CraftSkillKey = 'playwriting' | 'composing' | 'lyricism';
+export type CraftProfile = Record<CraftSkillKey, number>;
+
+export const CRAFT_SKILL_KEYS: CraftSkillKey[] = ['playwriting', 'composing', 'lyricism'];
+
+/** 行當 → craft emphasis (本工). Substring match, most specific first; first hit wins. */
+const CRAFT_PROFILES: { match: string[]; profile: CraftProfile }[] = [
+    { match: ['記者', '報', '筆', '文人', '掮客'], profile: { playwriting: 86, lyricism: 78, composing: 40 } },
+    { match: ['班主', '掌事', '當家', '東家'], profile: { playwriting: 78, lyricism: 64, composing: 48 } },
+    { match: ['琴師', '樂師', '鼓', '場面', '文武場', '司鼓'], profile: { composing: 86, lyricism: 58, playwriting: 46 } },
+    { match: ['老生', '鬚生', '老旦'], profile: { playwriting: 74, lyricism: 72, composing: 50 } },
+    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], profile: { lyricism: 76, playwriting: 52, composing: 48 } },
+    { match: ['坤生', '乾生', '小生'], profile: { lyricism: 64, playwriting: 54, composing: 50 } },
+    { match: ['丑'], profile: { playwriting: 62, lyricism: 58, composing: 46 } },
+    { match: ['淨', '大面', '花臉', '銅錘'], profile: { composing: 52, playwriting: 48, lyricism: 46 } },
+];
+const CRAFT_BALANCED: CraftProfile = { playwriting: 50, composing: 50, lyricism: 50 };
+
+/**
+ * Derive a character's 3 craft skills from 行當 (dominant) + the 6 perf skills
+ * (literati feeds 編劇/填詞, vocal feeds 作曲/填詞) + a small world-attr nudge.
+ * Pure + deterministic — mirrors `deriveSagaSkills`. Pass `perf` (the output of
+ * deriveSagaSkills) to let craft build on the same character's performance axis;
+ * omit it to derive from 行當 alone.
+ */
+export function deriveCraftSkills(role: string, world: WorldAttrs = {}, perf?: SkillProfile): CraftProfile {
+    const r = role || '';
+    const base = CRAFT_PROFILES.find((g) => g.match.some((kw) => r.includes(kw)))?.profile ?? CRAFT_BALANCED;
+    const lit = perf?.literati ?? 60;
+    const voc = perf?.vocal ?? 60;
+    const nudge = (v: number | undefined) => (typeof v === 'number' ? (v - 70) / 5 : 0);
+    const wit = nudge(world.acuity);
+    const heart = nudge(world.disposition);
+    return {
+        playwriting: clamp(base.playwriting + (lit - 60) / 4 + wit),
+        composing: clamp(base.composing + (voc - 60) / 4),
+        lyricism: clamp(base.lyricism + (lit - 60) / 6 + (voc - 60) / 6 + heart * 0.5),
+    };
+}
+
+/** Full per-saga profile: 6 perf (events) + 3 craft (authoring), derived together. */
+export function deriveAllSkills(role: string, world: WorldAttrs = {}): SkillProfile & CraftProfile {
+    const perf = deriveSagaSkills(role, world);
+    return { ...perf, ...deriveCraftSkills(role, world, perf) };
+}

@@ -29,6 +29,7 @@ import {
   evolvePortraitAction,
   type EvolvePortraitInput,
 } from '@/lib/actions/evolve-portrait';
+import { launchProductionAction } from '@/lib/actions/launch-production';
 import {
   getRunnerControlStateAction,
   setRunnerPausedAction,
@@ -226,6 +227,19 @@ const TOOLS: DirectorToolDef[] = [
         characterId: str(args, 'characterId'),
         kind: str(args, 'kind') as EvolvePortraitInput['kind'],
         occasion: typeof args.occasion === 'string' ? args.occasion : undefined,
+      }),
+  },
+  {
+    name: 'launch_production',
+    tier: 'narrative',
+    description:
+      '排一齣新戲（舊戲新唱）：以全班為班底，班主自選戲碼（或指定 classicKey）→ 編劇寫本 → 行當選角（含乾旦/坤生）→ 琴師作曲 → 角色有感而發填詞 → 全體演戲中戲 → 鑄成「戲折」錨定上鏈。**極昂貴**（多次 LLM＋上鏈），且你要**自己判斷時機**：班底齊整（生旦淨丑有人）、金庫撐得起、敘事上真該排大戲時才用——這是導演級的決定。dryRun=true 只跑不上鏈。',
+    argsSpec: '{"classicKey": "baishe｜honglou｜大戲（省略=班主自選）", "skipScore": false, "dryRun": false}',
+    execute: (args) =>
+      launchProductionAction({
+        classicKey: typeof args.classicKey === 'string' ? args.classicKey : undefined,
+        skipScore: args.skipScore === true,
+        dryRun: args.dryRun === true,
       }),
   },
 ];
