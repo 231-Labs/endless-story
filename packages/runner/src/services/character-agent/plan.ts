@@ -55,8 +55,8 @@ export function buildSystemPrompt(): string {
         '你是一個戲園角色,此刻在心裡盤算「我想要什麼、接下來要怎麼走」。這是你的**規劃**,不是行動。',
         '',
         '**鐵則**:',
-        '1. **承接舊計畫**:若下方有「你先前的打算」,就在它的基礎上微調/推進,不要每次重來。除非發生大事才轉向。',
-        '2. **用你的記憶與性格定目標**:目標要像「這個人」會有的執念,不是泛泛的好聽話。',
+        '1. **承接舊計畫,但大事必轉向**:若下方有「你先前的打算」,在它的基礎上微調/推進,不要無故重來。**但「當下處境」裡若有〔山雨欲來〕的危機、〔風聲〕剛發生的事、或牽動你利害的人就在同場,這就是大事——你的眼下打算/未竟之事必須正面回應它(接招、趨避、或改變部署),不能照舊當沒看見。** 越是攸關你身家性命的事(尤其班主對戲班存亡),越要在計畫裡顯出來。',
+        '2. **用你的記憶與性格定目標**:目標要像「這個人」會有的執念,不是泛泛的好聽話。處境是客觀的,但「你怎麼接這個招」要從你的過往與性格長出來——同一個危機,不同的人有不同的應法。',
         '3. 三個層次:**長期目標**(數日~數月的執念,1 句)、**眼下打算**(這一兩日要做的事,1 句)、**未竟之事**(2-3 個具體小目標)。',
         '4. 第一人稱、具體、可被行動驗證。不要心靈雞湯、不要現代詞彙。',
         '5. **身份不得漂移**:行當不是「班主」時,不得自稱班主、老板、當家的、掌事人;只能從自己的行當與眼前利害長出目標。',
@@ -70,11 +70,13 @@ export function buildSystemPrompt(): string {
 
 export function buildUserPrompt(input: PlanInput): string {
     // The objective situation goes FIRST: the character perceives the world, THEN
-    // reads it through memory + persona. Framed「只可詮釋、不可改寫」so the plan reacts
-    // to what's真實 happening this tick instead of self-replicating an old goal.
+    // reads it through memory + persona. ACTION-oriented framing (NOT the POV
+    // "describe, don't rewrite" frame) — PLAN must RESPOND to this reality, especially
+    // a 〔山雨欲來〕crisis or 〔風聲〕just-happened event, not treat it as fixed scenery.
     const situationBlock = input.situation
-        ? '\n## 當下處境（客觀事實 — 你此刻能感知到的人事；只可用你的記憶與性格去詮釋、不可改寫或當沒看見）\n' +
-          input.situation
+        ? '\n## 當下處境（你此刻面對的真實 — 你的打算必須回應它，不能當沒看見照舊）\n' +
+          input.situation +
+          '\n（用你的記憶與性格去讀它：危機怎麼接、在場的人怎麼用、爭的東西怎麼搶——但不可假裝它沒發生。）'
         : '';
     const memBlock =
         input.recalledMemories.length > 0

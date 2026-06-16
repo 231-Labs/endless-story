@@ -41,6 +41,7 @@ export function PerceptionAbPanel() {
     };
 
     const changed = res?.rows.filter((r) => r.changed).length ?? 0;
+    const echoed = res?.rows.filter((r) => r.crisisEcho).length ?? 0;
 
     return (
         <div>
@@ -56,8 +57,16 @@ export function PerceptionAbPanel() {
 
             {res?.ok && (
                 <div className="mt-5 space-y-5">
-                    <div className="text-sm text-mute">
-                        {res.sagaName} · {res.dayLabel} · 計畫有變 <span className="text-ink">{changed}/{res.rows.length}</span> 人
+                    <div className="space-y-1 text-sm text-mute">
+                        <div>
+                            {res.sagaName} · {res.dayLabel} · 計畫有變（含溫度雜訊）
+                            <span className="text-ink"> {changed}/{res.rows.length}</span> 人
+                        </div>
+                        <div className="text-cinnabar/80">
+                            客觀訊號 · 回應廣播危機（感知開引用、感知關沒有）：
+                            <span className="text-cinnabar"> {echoed}/{res.rows.length}</span> 人
+                            <span className="text-mute"> — 想看這條，先在「導演危機」廣播一句再按</span>
+                        </div>
                     </div>
 
                     <div>
@@ -84,9 +93,13 @@ export function PerceptionAbPanel() {
                         <div key={r.characterId} className="rounded border border-hairline p-4">
                             <div className="font-serif text-base tracking-wide text-ink">
                                 {r.name}（{r.role}）
-                                <span className={`ml-2 text-2xs ${r.changed ? 'text-cinnabar' : 'text-mute'}`}>
-                                    {r.changed ? '· 計畫有變' : '· 計畫未變'}
-                                </span>
+                                {r.crisisEcho ? (
+                                    <span className="ml-2 text-2xs text-cinnabar">· ✅ 回應危機（引用「{r.crisisEcho}」）</span>
+                                ) : (
+                                    <span className={`ml-2 text-2xs ${r.changed ? 'text-ink/60' : 'text-mute'}`}>
+                                        {r.changed ? '· 計畫有變' : '· 計畫未變'}
+                                    </span>
+                                )}
                             </div>
                             {r.briefing.trim() && (
                                 <pre className="mt-2 whitespace-pre-wrap font-mono text-2xs leading-relaxed text-mute">

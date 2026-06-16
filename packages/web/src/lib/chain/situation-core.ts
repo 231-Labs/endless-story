@@ -148,19 +148,30 @@ export function assembleSituation(p: SituationParts): Situation {
  */
 export function renderSituationBriefing(s: Situation): string {
     const lines: string[] = [];
+    // Lead with WHERE + WHO.
     lines.push(`〔此刻〕你在${s.place.sceneName}。`);
     if (s.place.coPresent.length > 0) {
         lines.push(`同場：${s.place.coPresent.map((c) => `${c.name}（${c.role}）`).join('、')}。`);
     } else {
         lines.push('此處只有你一人。');
     }
-    if (s.self.standingGoal) lines.push(`〔你的盤算〕${s.self.standingGoal}`);
+    // Then the NEW / dynamic facts FIRST — a crisis or a just-happened event is what
+    // should move a plan, so it must not be buried at the end where it gets skimmed.
+    if (s.news.directorBeat) lines.push(`〔山雨欲來〕${s.news.directorBeat.text}`);
+    const news: string[] = [];
+    for (const r of s.news.resolvedSinceLastSeen) {
+        news.push(r.winner ? `${r.label}已有分曉，${r.winner}拔得頭籌` : `${r.label}不了了之`);
+    }
+    if (s.news.arrivals.length > 0) news.push(`${s.news.arrivals.join('、')}來了`);
+    if (s.news.departures.length > 0) news.push(`${s.news.departures.join('、')}走了`);
+    if (news.length > 0) lines.push(`〔風聲〕${news.join('；')}。`);
+    // Then the standing stakes, scaled by how badly THIS character aches (not binary).
     if (s.stakes.contested.length > 0) {
         const top = s.stakes.contested
             .slice(0, 3)
             .map((c) => {
                 const held = c.heldBy.length > 0 ? `（在 ${c.heldBy.length} 人手裡）` : '（懸而未決）';
-                const ache = c.myAche > 0 ? `你尤其在意` : '你並不上心';
+                const ache = c.myAche >= 0.66 ? '你極想要' : c.myAche >= 0.33 ? '你想要' : c.myAche > 0 ? '你略動心' : '你並不上心';
                 return `${c.label}${held}—${ache}`;
             })
             .join('；');
@@ -169,14 +180,8 @@ export function renderSituationBriefing(s: Situation): string {
     if (s.stakes.openEvent) {
         lines.push(`〔正在上演〕${s.stakes.openEvent.label}。`);
     }
-    const news: string[] = [];
-    for (const r of s.news.resolvedSinceLastSeen) {
-        news.push(r.winner ? `${r.label}已有分曉，${r.winner}拔得頭籌` : `${r.label}不了了之`);
-    }
-    if (s.news.arrivals.length > 0) news.push(`${s.news.arrivals.join('、')}來了`);
-    if (s.news.departures.length > 0) news.push(`${s.news.departures.join('、')}走了`);
-    if (news.length > 0) lines.push(`〔風聲〕${news.join('；')}。`);
-    if (s.news.directorBeat) lines.push(`〔山雨欲來〕${s.news.directorBeat.text}`);
+    // The prior plan last — it's the thing being evolved, not a new fact.
+    if (s.self.standingGoal) lines.push(`〔你的盤算〕${s.self.standingGoal}`);
     return lines.join('\n');
 }
 
