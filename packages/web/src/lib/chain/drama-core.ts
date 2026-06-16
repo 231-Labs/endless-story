@@ -139,7 +139,10 @@ function primaryRoleFromTags(tags: string[] | undefined): string {
     return roleTag ? roleTag.slice('role:'.length) : '';
 }
 
-function roleResourceAmbition(role: string, kind: string): number {
+/** How much a 行當 (role) intrinsically aches for a KIND of resource (0..1). The
+ *  deterministic「意圖已行當化」signal (§8c) — also the PERCEIVE step's ache source so
+ *  a character's Situation leads with what their 行當 most wants. Exported for reuse. */
+export function roleResourceAmbition(role: string, kind: string): number {
     const row = ROLE_AMBITION.find((g) => g.match.some((kw) => role.includes(kw)));
     if (!row) return AMBITION_FALLBACK;
     return row.a[kind] ?? AMBITION_FALLBACK;

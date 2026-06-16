@@ -41,7 +41,7 @@ export interface RunPlanResult {
 
 export async function runPlanAction(
     characterId: string,
-    opts?: { dryRun?: boolean; rosterContext?: string[] },
+    opts?: { dryRun?: boolean; rosterContext?: string[]; situation?: string },
 ): Promise<RunPlanResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId) return { ok: false, error: 'saga 尚未種子化' };
@@ -88,6 +88,7 @@ export async function runPlanAction(
             dayLabel,
             recalledMemories: recalled,
             currentPlan: currentPlan ?? undefined,
+            situation: opts?.situation,
             rosterContext: opts?.rosterContext,
         });
     } catch (err) {

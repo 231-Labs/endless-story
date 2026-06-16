@@ -60,6 +60,12 @@ export interface TickLoopInput {
      *  resource mid-story (propose-resources.ts), validated + rate-limited. The
      *  new slot is desired + settled next tick. See EVENT_LIFECYCLE Phase 3. */
     directorResources?: boolean;
+    /** EXPERIMENTAL (default false; also enabled by env ES_SITUATION_PERCEIVE=1):
+     *  the missing PERCEIVE step — feed PLAN each character's objective「當下處境」
+     *  (same-scene presence, contested stakes, what just resolved) so planning is no
+     *  longer blind to this tick. Perception-scoped + omniscience-guarded. Step 1 of
+     *  docs/PERCEPTION_PLAN.md. */
+    situationPerceive?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;
 }
