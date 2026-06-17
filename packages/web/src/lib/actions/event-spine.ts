@@ -333,7 +333,18 @@ export async function spineResolveAndWeave(
     const ev = openList(ctx.sagaId).find((e) => e.eventId === step.eventId);
     if (!ev) return { resolved: false, settled: false, cutPovCount: 0 };
 
-    const settled = await settleEvent(admin, ctx, ev);
+    const { resolved, settled } = await settleEvent(admin, ctx, ev);
+    if (!resolved) {
+        // The resolve tx didn't land. DON'T removeOpen — leave the event OPEN (in
+        // memory + on chain) so next tick retries with its cached metadata + the
+        // accumulated POVs. Dropping it from memory here was the orphan-loop bug:
+        // open on chain, forgotten in memory → re-adopted as an orphan → re-failing
+        // forever (the persistent "2/2 卡住" the director kept janitoring).
+        console.warn(
+            `[event-spine] resolve FAILED for ${ev.eventId.slice(0, 10)}… — left OPEN to retry next tick`,
+        );
+        return { resolved: false, settled: false, cutPovCount: 0 };
+    }
 
     // Weave the cut from everything accumulated across the event's ticks.
     const cutPovs = povsByEvent.get(ev.eventId) ?? [];
@@ -400,7 +411,11 @@ function pickContestWinner(ctx: SpineCtx, participantIds: string[], resource: Al
  * a plain `empty_outcomes` resolve on ANY problem so the event always closes.
  * Returns whether a real settlement (transfer) was applied.
  */
-async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Promise<boolean> {
+async function settleEvent(
+    admin: Admin,
+    ctx: SpineCtx,
+    ev: SpineOpenEvent,
+): Promise<{ resolved: boolean; settled: boolean }> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     try {
         const resources = await readResourceLedger(admin.client, d.packageId, ctx.sagaId);
@@ -469,9 +484,9 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
                     signer: admin.signer,
                     client: admin.client,
                 });
-                if (applied.ok) return true;
+                if (applied.ok) return { resolved: true, settled: true };
                 console.warn('[event-spine] apply_resource_transfers failed:', applied.error);
-                return false; // resolved, but settlement didn't land
+                return { resolved: true, settled: false }; // resolved, but settlement didn't land
             }
             console.warn('[event-spine] settling resolve aborted, falling back:', res.effects?.status?.error);
         }
@@ -479,15 +494,19 @@ async function settleEvent(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pro
         console.warn('[event-spine] settlement errored, falling back to plain resolve:', err);
     }
 
-    // Fallback: plain resolve so the event closes no matter what.
-    await plainResolve(admin, ctx, ev).catch((err) =>
-        console.warn('[event-spine] plain resolve failed:', err),
-    );
-    return false;
+    // Fallback: plain resolve so the event closes. Report whether it ACTUALLY landed
+    // — the caller leaves the event OPEN to retry if not (vs orphaning it).
+    const resolved = await plainResolve(admin, ctx, ev).catch((err) => {
+        console.warn('[event-spine] plain resolve threw:', err);
+        return false;
+    });
+    return { resolved, settled: false };
 }
 
-/** `empty_outcomes` resolve — the safety net that guarantees the event closes. */
-async function plainResolve(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Promise<void> {
+/** `empty_outcomes` resolve — the safety net that closes the event. Returns whether
+ *  the resolve tx actually SUCCEEDED on chain (an aborted tx must NOT be treated as
+ *  resolved — that orphaned the event). */
+async function plainResolve(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Promise<boolean> {
     const tx = new Transaction();
     const outcomes = tx.add(endlessTx.event.emptyOutcomes());
     tx.add(
@@ -499,9 +518,15 @@ async function plainResolve(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pr
             outcomes,
         }),
     );
-    await admin.client.signAndExecuteTransaction({
+    const res = await admin.client.signAndExecuteTransaction({
         transaction: tx,
         signer: admin.signer,
         options: { showEffects: true },
     });
+    if (res.effects?.status?.status !== 'success') {
+        console.warn('[event-spine] plain resolve aborted:', res.effects?.status?.error);
+        return false;
+    }
+    await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+    return true;
 }

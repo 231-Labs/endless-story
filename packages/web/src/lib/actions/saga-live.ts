@@ -38,6 +38,9 @@ export interface OpenEventStatus {
     participantIds: string[];
     /** How many have acted vs total — e.g. "2/3 have played their card". */
     actedCount: number;
+    /** On-chain push time (ms). Lets the audit tell a normal spine linger (recently
+     *  opened, the spine will resolve it) from a genuinely-hung event. */
+    openedAtMs?: number;
 }
 
 export interface SagaLiveSnapshot {
@@ -107,6 +110,7 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
                 sceneId,
                 participantIds: parsed.deck?.participants ?? [],
                 actedCount: (parsed.resolution?.submitted_actions ?? []).length,
+                openedAtMs: Number(ev.createdAtMs) || undefined,
             });
         }
 
