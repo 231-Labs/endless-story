@@ -150,27 +150,40 @@ export async function proposeResourceAction(
     const proposal = check.proposal;
 
     if (input.dryRun) return { ok: true, created: proposal };
+    return instantiateProposal(proposal, {
+        sagaId: input.sagaId,
+        capId: input.capId,
+        signer: input.signer,
+        client: input.client,
+    });
+}
 
-    // Instantiate cap-signed — the contract re-checks capacity > 0 on chain.
+/** Cap-signed on-chain instantiate of a validated proposal. Shared by the
+ *  auto-cadence path (proposeResourceAction) and the deliberate director-tool
+ *  path (registerResourceDirect). The contract re-checks capacity > 0 on chain. */
+async function instantiateProposal(
+    proposal: ValidProposal,
+    ctx: { sagaId: string; capId: string; signer: Keypair; client: SuiClient },
+): Promise<ProposeResourceResult> {
     try {
         const txb = new Transaction();
         txb.add(
             endlessTx.resource.instantiate({
-                cap: input.capId,
-                saga: input.sagaId,
+                cap: ctx.capId,
+                saga: ctx.sagaId,
                 archetype: proposal.archetype,
                 label: proposal.label,
                 capacity: BigInt(proposal.capacity),
             }),
         );
-        const res = await input.client.signAndExecuteTransaction({
+        const res = await ctx.client.signAndExecuteTransaction({
             transaction: txb,
-            signer: input.signer,
+            signer: ctx.signer,
             options: { showEffects: true, showObjectChanges: true },
         });
         if (res.effects?.status?.status !== 'success')
             return { ok: false, created: proposal, error: res.effects?.status?.error ?? 'instantiate failed' };
-        await input.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+        await ctx.client.waitForTransaction({ digest: res.digest }).catch(() => {});
         const created = res.objectChanges?.find(
             (c) => c.type === 'created' && 'objectType' in c && c.objectType.includes('::resource::DramaResource'),
         );
@@ -179,4 +192,55 @@ export async function proposeResourceAction(
     } catch (err) {
         return { ok: false, created: proposal, error: err instanceof Error ? err.message : String(err) };
     }
+}
+
+/**
+ * DELIBERATE director-authored resource. The Showrunner agent (heartbeat / admin
+ * chat) decides kind+display+capacity itself, so this SKIPS the auto path's
+ * cooldown + cheap-LLM-decide and just enforces the same rails (director cap +
+ * validation) and instantiates. Same conservation guarantees. Wrapped by the
+ * 'use server' registerResourceAction → the register_resource director tool.
+ */
+export async function registerResourceDirect(input: {
+    sagaId: string;
+    capId: string;
+    signer: Keypair;
+    client: SuiClient;
+    kind: string;
+    display: string;
+    capacity?: number;
+    /** number of characters who could contend (clamps capacity to stay scarce). */
+    castSize: number;
+    dryRun?: boolean;
+}): Promise<ProposeResourceResult> {
+    const d = ENDLESS_STORY_DEPLOYMENT;
+    if (!d.packageId) return { ok: false, reason: 'unconfigured' };
+
+    let existingLabels: string[];
+    try {
+        const live = await readResourceLedger(input.client, d.packageId, input.sagaId);
+        existingLabels = live.map((r) => r.label).filter(Boolean);
+    } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    if (countDirectorResources(existingLabels) >= MAX_DIRECTOR_RESOURCES)
+        return {
+            ok: false,
+            reason: `已有 ${MAX_DIRECTOR_RESOURCES} 個導演自造的標的，先讓一個落定（或退場）再開新的`,
+        };
+
+    const check = validateResourceProposal(
+        { kind: input.kind, display: input.display, capacity: input.capacity ?? 1 },
+        existingLabels,
+        input.castSize,
+    );
+    if (!check.ok) return { ok: false, reason: `rejected: ${check.reason}` };
+
+    if (input.dryRun) return { ok: true, created: check.proposal };
+    return instantiateProposal(check.proposal, {
+        sagaId: input.sagaId,
+        capId: input.capId,
+        signer: input.signer,
+        client: input.client,
+    });
 }

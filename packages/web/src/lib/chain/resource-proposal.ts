@@ -26,8 +26,27 @@
  * Pure + unit-tested (`resource-proposal.test.ts`).
  */
 
-/** Kinds owned by the bootstrap preset — the director may not shadow them. */
-export const RESERVED_KINDS = ['spotlight', 'recording', 'partnership'] as const;
+// Built-in resource-kind VOCABULARY — a SUPERSET of any single seed: the kinds the
+// current seed uses (spotlight/partnership/mentorship/belonging/solace/keepsake) PLUS
+// the other hand-tuned ROLE_AMBITION kinds an earlier seed used (recording/patronage/
+// naming/martial). Two effects: (a) none of these count toward the director-created
+// cap (countDirectorResources), so a seeded saga starts the director at 0/MAX; and
+// (b) the director may NOT mint one of these (validateResourceProposal rejects), so
+// dynamic creation invents GENUINELY new kinds (feud/patron/scandal/venue…) rather
+// than shadowing a tuned built-in concept. When a NEW kind is added to the seed JSON,
+// add it here too or it will wrongly count against the director cap.
+export const RESERVED_KINDS = [
+    'spotlight',
+    'recording',
+    'partnership',
+    'patronage',
+    'naming',
+    'martial',
+    'mentorship',
+    'belonging',
+    'solace',
+    'keepsake',
+] as const;
 
 /** A `kind` is the structural slug: ascii, the label prefix AND templateId key. */
 const KIND_RE = /^[a-z][a-z0-9-]{1,20}$/;
