@@ -27,6 +27,22 @@ export interface EventCutContext {
     eventLabel?: string;
     /** The POVs to weave (already gated to ≥2 by the caller). */
     povs: EventCutPov[];
+
+    // ── storyteller-chapter enrichment (all optional, append-only) ────────────
+    /**
+     * 'overview' = 綜觀版: a wider recap of an arc that has NOT cleanly resolved
+     * (the anti-stuck path); 'progressed' = a focused next chapter on a real turn.
+     * Shapes the closing instruction. Absent ⇒ the legacy single-event weave.
+     */
+    mode?: 'progressed' | 'overview';
+    /** Daily observations the cast made (who was present, the stakes, the news). */
+    observations?: string[];
+    /** Inner lines behind card plays — what a character thought/said as they acted. */
+    intents?: Array<{ name: string; line: string }>;
+    /** Recalled past memories that deepen motivation / continuity. */
+    recalled?: Array<{ name: string; text: string }>;
+    /** The previous chapter's summary — the "已說過，勿重述" guard. */
+    prevSummary?: string;
 }
 
 /** Minimum POVs for a cut. 1 POV stays a per-character feed item (no weave). */
@@ -59,14 +75,51 @@ export function buildUserPrompt(ctx: EventCutContext): string {
         )
         .join('\n\n');
 
-    return [
-        head.join('\n'),
-        '',
-        '# 各角色 POV（原料，把它們織成一回）',
-        povBlocks,
-        '',
-        '請輸出這一回的完整 markdown。',
-    ].join('\n');
+    const sections: string[] = [head.join('\n'), ''];
+
+    // The "已說過" guard goes near the top so the model treats it as a hard
+    // constraint: build FORWARD from here, don't re-narrate what's settled.
+    if (ctx.prevSummary?.trim()) {
+        sections.push(
+            '# 前情（已寫過，切勿重述，只接著往下推進）',
+            ctx.prevSummary.trim(),
+            '',
+        );
+    }
+
+    sections.push('# 各角色 POV（原料，把它們織成一回）', povBlocks, '');
+
+    // Enrichment: everything the cast also knows. Append-only so the legacy
+    // single-event weave (no enrichment) renders byte-for-byte as before.
+    if (ctx.observations?.length) {
+        sections.push(
+            '# 旁觀與日常（補充客觀事實，可化作場景與過場，不必逐條照搬）',
+            ctx.observations.map((o) => `- ${o.trim()}`).join('\n'),
+            '',
+        );
+    }
+    if (ctx.intents?.length) {
+        sections.push(
+            '# 出牌時的心跡（角色為何這麼做——可化作一兩句內心或台詞）',
+            ctx.intents.map((it) => `- ${it.name}：${it.line.trim()}`).join('\n'),
+            '',
+        );
+    }
+    if (ctx.recalled?.length) {
+        sections.push(
+            '# 舊事（人物心裡記得的，拿來深化動機，別當新事件寫）',
+            ctx.recalled.map((r) => `- ${r.name}：${r.text.trim()}`).join('\n'),
+            '',
+        );
+    }
+
+    sections.push(
+        ctx.mode === 'overview'
+            ? '請把以上素材織成一回「綜觀版」章回：用一個說書人的眼睛，把這條線這幾日累積的動作與心思收束成一篇有來龍去脈的完整 markdown（不是流水帳，挑出真正要緊的轉折來寫）。'
+            : '請輸出這一回的完整 markdown。',
+    );
+
+    return sections.join('\n');
 }
 
 /* ── cut provenance header ──────────────────────────────────────────────

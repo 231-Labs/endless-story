@@ -148,5 +148,27 @@ POV、出牌（含內心話）、結算、資源易手。
 
 ## 7. 進度
 
-- 設計稿建立 2026-06-18。**尚未動工**，等 scope/分期定案。
-- 前置 ⑨ 已 commit `9e88be3`（待部署 + VPS world-loop 跑新碼驗收）。
+**Phase A 引擎 + 解耦驗證 — DONE（2026-06-18，未接線進 tick-loop）**
+程式碼在 `packages/runner/src/services/storyteller-chapter/`：
+- `material.ts` — 統一 `StoryMaterial` 模型（pov/observation/card_intent/event_open/event_resolve/memory）+ `arcKeyOf`（按 contention 軸聚合，scene 為 fallback）+ `groupIntoArcs` + watermark（`ArcWatermark`/`advanceWatermark`）。純、自包含。
+- `gate.ts` — `decideChapterReadiness`：**resolve-independent**（resolve 只是正向觸發、缺席不阻擋）+ **反飢餓**（沉默 ≥ `maxSilentDays` 或素材 ≥ `overviewMaterialCount` 就出綜觀版）+ **anti-repeat**（只算 NEW 素材、要新聲口/進展拍，純重述→wait）。閾值全可調（`ReadinessThresholds`）。
+- `compose.ts` — `toChapterCompilerPayload`（slice→compiler 增益欄位，挑最新 scene 當 anchor、mode→minVoices）+ `briefSummary`（下一回的「勿重述」guard）。
+- 複用 `event-chapter-compiler`：擴 `EventCutContext`/`runOnce` 接 `observations/intents/recalled/prevSummary/mode/minVoices`，**append-only 向後相容**（既有單事件 weave 不變），單一 anchor 路徑。
+- 測試 `packages/runner/test/storyteller-chapter.test.ts`（13 例，node --test 23.7）：anti-stuck/anti-repeat/反飢餓/watermark 去重/payload 映射全綠；runner 全套 89 綠、web typecheck 乾淨。
+
+**解耦 harness 驗證（真鏈資料，`pnpm --filter @endless-story/runner harness:chapter`，需 node ≥ 23）**
+讀春雪社 91 則真 POV、跑**生產同一份 gate**：
+- 第 1–27 日共產出 **25 回**（對照產線 cut 停在第 17 日）；**全程不餵任何 resolve 素材仍續產**＝解耦證實。
+- 素材連續的 arc 內最大章回間隔受 floor 約束；稀疏 arc 的大間隔＝那幾日真的沒素材（正確等待）。
+- Phase 2 用**真 compiler**（dryRun + 真 LLM）為「產線從沒寫過的第 18–27 日」織出 682 字 2 視角綜觀章——有來龍去脈、有內心戲、prevSummary guard 生效、briefSummary 產出。
+
+**尚未做（staged）**
+- **接線進 tick-loop / event-spine**：production 目前仍走舊的 resolve-only 路徑。引擎做成「生產會呼叫的同一份模組」且已用真 compiler 驗過，但**最後的 cutover 沒做**——它動到脆弱的 live tick 路徑、且本機無法跑 live tick 驗證。建議**加 flag（預設 OFF）做成 resolve-independent 的次要觸發**、在 VPS world-loop 開 flag 驗證後再設預設（同 eventSpine 的 flag-gated 移植法）。
+- **Phase B**：compose 時用工具**生成** recall/askCharacter 素材（目前 compose 只是「接收」這些欄位）。
+- **Phase C**：rubric judge + revise 多輪迴圈；出牌內心話 emit+上鏈。
+- **Phase D**：說書人心跳決定累積窗。
+- **觀察素材持久化**：日常觀察（Situation）目前只在記憶體、不上鏈 → harness 無法回補；要當持久素材需上鏈或在 tick 內傳入。
+
+**調參筆記**：`DEFAULT_THRESHOLDS` = `{minNewVoices:2, minProgressBeats:2, maxSilentDays:3, overviewMaterialCount:6, minOverviewVoices:1}`。想要「久一點才出、更高品質」就調大 `maxSilentDays`/`overviewMaterialCount`。
+
+**前置**：⑨（章回顯示窗 + spine 鏈上 POV 回補）已 commit `9e88be3`（待部署 + VPS 驗收）。

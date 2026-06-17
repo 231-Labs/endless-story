@@ -35,7 +35,6 @@ import { signAndAnchor } from '../../infra/sign-and-anchor.js';
 import {
     buildSystemPrompt,
     buildUserPrompt,
-    shouldWeave,
     countDistinctVoices,
     embedCutHeader,
     MIN_POVS_FOR_CUT,
@@ -76,6 +75,24 @@ export interface CompileEventChapterInput {
     povs?: EventCutPov[];
     /** Cast to fetch POVs for, when `povs` is omitted. */
     castCharacterIds?: string[];
+    /**
+     * Min distinct voices to weave. Defaults to MIN_POVS_FOR_CUT (2) for the
+     * legacy single-event cut. The storyteller-chapter path passes 1 for an
+     * 'overview' (綜觀版): when an arc has accumulated other material
+     * (observations/intents) a single anchored POV is enough to write from, so
+     * a never-resolving event still yields a chapter.
+     */
+    minVoices?: number;
+    /** Storyteller mode — shapes the closing instruction ('overview' = 綜觀版). */
+    mode?: 'progressed' | 'overview';
+    /** Daily observations the cast made (enrichment material). */
+    observations?: string[];
+    /** Inner lines behind card plays (what a character thought/said acting). */
+    intents?: Array<{ name: string; line: string }>;
+    /** Recalled past memories (deepen motivation/continuity). */
+    recalled?: Array<{ name: string; text: string }>;
+    /** Previous chapter summary — the "已說過，勿重述" guard. */
+    prevChapterSummary?: string;
     /** Saga peers WITH gender, for the self-check's pronoun/kinship rules (the woven cut is
      *  where female-他 errors surface). Omitted ⇒ only token-leak runs. No names hardcoded. */
     rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
@@ -146,10 +163,17 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         }
     }
 
-    if (!shouldWeave(povs)) {
+    // Gate: legacy cut needs ≥2 voices; an 'overview' (minVoices 1) weaves from a
+    // single anchored POV when other material (observations/intents) is present.
+    const minVoices = input.minVoices ?? MIN_POVS_FOR_CUT;
+    const hasEnrichment =
+        (input.observations?.length ?? 0) > 0 || (input.intents?.length ?? 0) > 0;
+    const voices = countDistinctVoices(povs);
+    const weavable = voices >= minVoices || (minVoices <= 1 && (voices >= 1 || hasEnrichment));
+    if (!weavable) {
         return {
             chapter: '',
-            povCount: countDistinctVoices(povs),
+            povCount: voices,
             anchored: false,
             skipReason: 'insufficient_povs',
             errors: errors.length ? errors : undefined,
@@ -163,6 +187,11 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         sceneName: input.sceneName,
         eventLabel: input.eventLabel,
         povs,
+        mode: input.mode,
+        observations: input.observations,
+        intents: input.intents,
+        recalled: input.recalled,
+        prevSummary: input.prevChapterSummary,
     };
 
     const llm = llmText.createTextClient({ kind: 'primary' });
