@@ -10,7 +10,10 @@
 import { text as llmText, prompts as llmPrompts } from '@endless-story/llm';
 import type { CurateCurrent, CurateItem, CurateResult } from '@endless-story/llm/prompts';
 
-const CURATE_MODEL = process.env.CHAMBER_CURATE_MODEL || 'GLM-4.7-FlashX';
+// Optional hard override. Leave UNSET so the text client picks the active
+// provider's own cheap model (Poe → GLM-4.7-N, Z.AI → GLM-4.7-FlashX, …) plus
+// its fallback chain — passing a fixed name leaked a Z.AI model to Poe and 404'd.
+const CURATE_MODEL = process.env.CHAMBER_CURATE_MODEL;
 
 export interface CurateVaultInput {
   items: CurateItem[];
@@ -38,7 +41,7 @@ export async function curateVault(input: CurateVaultInput): Promise<CurateVaultR
       current: input.current,
     });
     const res = await llm.chat({
-      model: CURATE_MODEL,
+      ...(CURATE_MODEL ? { model: CURATE_MODEL } : {}),
       system: prompt.system,
       messages: prompt.messages,
       maxTokens: prompt.maxTokens,
