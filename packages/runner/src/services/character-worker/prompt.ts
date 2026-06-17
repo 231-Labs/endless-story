@@ -145,6 +145,7 @@ export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): s
             '- **承上**：開頭用一兩句勾連上一回留下的懸念或餘味，讓老讀者立刻接上，不要從零起手。',
             '- **推進**：讓主角經歷事件材料裡的轉折、做出或承受一個選擇、付出代價——這個角色或他的處境，結尾必須和開頭不一樣。**寫出來龍去脈，不要只擷取一個瞬間就收手**：讓讀者看見這一拍是怎麼被前一拍逼出來的、又把人推到哪裡去。',
             '- **啟下**：結尾的鉤子要是這一回的後果催生出的新問題，而不是無關的小轉身或人生感悟。',
+            '- **看得懂（每回必做）**：你可以只寫你眼中的片段、可以跳接，但要讓讀者在你的感官順序裡跟上「先發生什麼、後發生什麼、結果怎樣」。讀完這一回，讀者要能說出這回到底發生了什麼事、誰對誰做了什麼。不要把場面寫成一團只有情緒、認不出事件的霧。',
             '- **若本回是收束（材料標明「本回收束」）**：不要只給一個畫面，要把這樁爭執或關係**怎麼走到這一步、又怎麼落定**交代完整——起因、轉折、你做了什麼或承受了什麼、塵埃落定後你站在哪裡。這一回要讓人看完一個完整的事件弧。',
             '',
             ...VOICE,
@@ -162,6 +163,9 @@ export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): s
 export function buildUserPrompt(input: PovPromptInput): string {
     const { character, triggerNarrative, recentMemorySnippets, dreamFragment } = input;
     const craftBlock = buildCraftDirective(character);
+    const voiceBlock =
+        '\n## 你的聲口胎記（這是「你」獨有的說話與敘述習慣，讓你的文字跟同行別人不一樣——別寫進正文當設定）\n' +
+        buildVoiceSignature(character);
     const safeMemorySnippets = filterPovMemorySnippets(recentMemorySnippets, character);
     const memBlock =
         safeMemorySnippets.length > 0
@@ -211,6 +215,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
             const guard = craftGuardrail(character.role);
             return guard ? `- 行當守門（讀者看不到、別寫進正文）：${guard}` : '';
         })(),
+        voiceBlock,
         craftBlock,
         memBlock,
         rosterBlock,
@@ -221,10 +226,10 @@ export function buildUserPrompt(input: PovPromptInput): string {
         sceneBeatsBlock,
         closingBlock,
         '',
-        '## 事件材料（這是背景，不是正文摘要）',
+        '## 事件材料（這是你要寫的這一刻的實情——化進場面，不要逐句照抄成摘要，但也別讓它消失）',
         triggerNarrative,
         '',
-        '請把上述材料寫成一小節角色限定視角小說。不要寫反思；不要解釋你如何寫作；直接輸出正文。',
+        '請把上述材料寫成一小節角色限定視角小說。不要寫反思、不要解釋你如何寫作。**可以主觀、可以跳接，但讀者讀完要能說出「這一回到底發生了什麼、誰對誰做了什麼、結果如何」——主觀是濾鏡，不是煙霧。** 直接輸出正文。',
     ]
         .filter((s) => s !== '')
         .join('\n');
@@ -280,6 +285,8 @@ export function buildReflectionCodaUserPrompt(input: {
         `- 姓名：${input.character.name}`,
         `- 行當：${input.character.role}`,
         `- 行當聲口：${roleHint(input.character.role)}`,
+        '\n## 你的聲口胎記（你獨有的說話與思考習慣，連獨白也是這個調子）',
+        buildVoiceSignature(input.character),
         relBlock,
         '',
         '## 你方才那節公開章回（你寫給人看的版本）',
@@ -294,16 +301,54 @@ export function buildReflectionCodaUserPrompt(input: {
         .join('\n');
 }
 
+/**
+ * Per-CHARACTER voice DNA. `roleHint` only differentiates by 行當 (every 花旦
+ * reads alike); this composes an individual「聲口胎記」from a stable hash of the
+ * character's id+name across three axes — speech tempo, how much they let show,
+ * and language texture. Deterministic, so a character sounds the same chapter to
+ * chapter, but two characters of the same role diverge. Layered on top of
+ * roleHint + attributes — this is what breaks the "every character writes the
+ * same" homogeneity.
+ */
+function buildVoiceSignature(character: CharacterSnapshot): string {
+    const seed = hashString(`voice:${character.id}:${character.name}`);
+    const tempo = [
+        '句子砍得利落、短促，不愛鋪墊，話到即止。',
+        '句子綿長纏繞，一句裡藏好幾個轉折，捨不得收。',
+        '冷硬簡省，能省則省，留白比說出口的多。',
+        '溫吞迂迴，繞著說、不肯直給，要緊的事最後才漏一角。',
+    ][seed % 4];
+    const reveal = [
+        '心事藏得極深，話只說半句，重點往往在沒說出口的地方。',
+        '藏不住，情緒會從用字與語氣裡漏出來，自己未必察覺。',
+        '慣用反話與自嘲遮掩真心，越在意越要說得不在意。',
+        '端著、要面子，再難堪也維持得體的措辭，不肯失態。',
+    ][Math.floor(seed / 4) % 4];
+    const texture = [
+        '文白夾雜，愛用舊典、成語與梨園行話。',
+        '一口大白話、市井土話，少修飾，貼地。',
+        '凡事都要找個物事來打比方，意象先於道理。',
+        '話裡帶刺、藏機鋒，常一語雙關、綿裡有針。',
+    ][Math.floor(seed / 16) % 4];
+    return [tempo, reveal, texture].map((s) => `- ${s}`).join('\n');
+}
+
 function buildCraftDirective(character: CharacterSnapshot): string {
     const seed = hashString(`${character.id}:${character.name}:${character.role}`);
-    const openingLens = [
-        '以一件可觸摸的小物開場：袖口、茶盞、簪釵、票紙、戲箱、槍桿、琴弦都可以；讓手先說話。',
-        '以聲音開場：隔壁一句唱腔、木板響、雨聲、鑼鼓餘音、有人壓低的咳嗽；先聽見，再看見。',
-        '以光與空間開場：燈影、台口、後台窄廊、鏡面、窗格；讓角色的位置透露其處境。',
-        '以身體微感開場：粉黏在頸側、衣料勒住、肩背發緊、喉頭發乾；不要誇張，只寫一處。',
-        '以別人的一個小動作開場：避開目光、放慢步子、收住半句話；讓角色先誤讀它。',
-        '以移動開場：從台口退回、穿過後廊、繞過桌角、跨過箱籠；讓章回有一個方向。',
-    ][seed % 6];
+    // Mixed anchors — NOT all scene-setting. Half pivot inward (memory, a
+    // half-said line, a snap judgement) or drop the reader mid-action, so
+    // chapters stop all opening on "a precisely-observed small thing".
+    const openingLensPool = [
+        '以一件可觸摸的小物起手：袖口、茶盞、簪釵、票紙、戲箱、槍桿、琴弦——讓手先說話。',
+        '以一個聲音起手：隔壁一句唱腔、木板響、鑼鼓餘音、有人壓低的咳嗽；先聽見，再看見。',
+        '直接從一個動作或半句話的中途切入，不先交代場景；讓讀者邊讀邊拼出此刻在發生什麼。',
+        '以一個突然閃過的記憶、一張臉、或一句舊話起手，再被眼前的人聲拉回來。',
+        '以你對在場某人此刻的一個直覺或成見起手（不點破），讓它染上你接下來看見的一切。',
+        '以一句你含在嘴裡沒說出口、或剛吞回去的話起手。',
+        '以一個動作的方向起手：退回台口、穿過後廊、繞過桌角；讓這一回從一開始就有去向。',
+        '以光與位置起手：燈影、台口、鏡面、窗格——讓你站的地方先洩漏你的處境。',
+    ];
+    const openingLens = openingLensPool[seed % openingLensPool.length];
     const narrativeMove = [
         '中段安排一個小阻礙，讓角色不得不做選擇：沉默、伸手、退半步、說一句不完整的話。',
         '中段讓角色看見一個人，卻真正寫的是自己不願承認的欲望。',
