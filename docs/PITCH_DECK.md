@@ -1,7 +1,8 @@
 # Endless Story — Pitch Deck（v0 草稿大綱）
 
 > **用途**：Sui Overflow 2026 · Walrus 賽道 pitch（deadline 6/21）。每張投影片給：標題、一句話 takeaway、版面要點、講稿提示。
-> **鐵律（來自 `PRODUCT_POSITIONING.md §0.5`）**：講機制一律標 **✅ 已實現** / **🛣️ roadmap**，不混講。
+> **鐵律（來自 `PRODUCT_POSITIONING.md §0.5`）**：講機制一律標 **✅ 已實現** / **🟡 已部署待驗證** / **🛣️ roadmap**，不混講。
+> **2026-06-17 狀態**：一次性 redeploy **已執行**，但端到端**尚未驗證能正確跑** → economy.move 真鏈上 Balance、藏閣 Kiosk 交易/鏈上佈局、兩段式鑄角 為 🟡，**驗證通過前不可當 ✅ 講**。
 > **配套**：定位敘事＝`PRODUCT_POSITIONING.md`；demo 腳本＝`DEMO_VIDEO.md`；深層機制＝`WHITEPAPER.md` + docs/。
 > 建議張數 **12**（hackathon 評審注意力有限，寧少勿多）。標 `⟨開放⟩` 處待你填真實數字／畫面。
 
@@ -68,7 +69,8 @@
 
 - **takeaway**：開戲班 → 招角兒 → 演戲 → 訂閱／售劇照變現 → 分潤給角色主。
 - 金流圖（`CHARACTER_ECONOMY.md §1`）：訂閱者 → Saga 金庫 →（RevenueConfig 拆）owner / 班主 / 發薪池 → 養角色 → 扣 dailyCost 付真實基建。
-- 標：經濟迴圈 ✅ off-chain 影子已跑（發薪→求助→接濟→死亡）；真鏈上 Balance + 分潤 claim 🛣️ redeploy 後 / gate-after。
+- 標：經濟迴圈 ✅ off-chain 影子已跑（發薪→求助→接濟→死亡，學術驗證 H1–H6）；**`economy.move` 真鏈上 Balance 🟡 合約已 redeploy 上鏈、待端到端驗證**（驗過即翻 ✅）；訂閱分潤 claim 🛣️ gate-after。
+- 講稿安全版：「經濟生命週期已經在跑；它的鏈上結算合約剛部署上線，我們正在收尾驗證。」（**不要說「鏈上轉帳已上線」直到驗證通過**。）
 
 ## 10 — 為什麼是 Sui + Walrus（技術護城河）
 
@@ -78,10 +80,11 @@
 
 ## 11 — 進度 vs 路線圖（誠實分界）
 
-- **takeaway**：左欄今天就能跑，右欄是清楚標示的願景。
-- 直接放 `PRODUCT_POSITIONING.md §0.5` 的兩張表（✅ 已實現 / 🛣️ roadmap）。
+- **takeaway**：✅ 今天就能跑 · 🟡 剛部署正在收尾驗證 · 🛣️ 清楚標示的願景。
+- 直接放 `PRODUCT_POSITIONING.md §0.5` 的三張表（✅ 已實現 / 🟡 已部署待驗證 / 🛣️ roadmap）。
+- **🟡 那層其實是加分項**：合約已上鏈代表「不是 PPT，是真的部署了」，誠實標待驗證反而更可信——比假裝已完成更得分。
 - Phase 3 收在**影視化**：把最好的 emergent 故事輸出成長片素材。
-- 講稿：「我們不誇大。已實現的是一個會自轉的世界；roadmap 是讓它自轉得更久、更會生錢。」
+- 講稿：「我們不誇大。✅ 是一個已經在自轉的世界；🟡 是剛上鏈、正在收尾的鏈上結算；🛣️ 是讓它自轉得更久、更會生錢的方向。」
 
 ## 12 — 願景 / Ask / 收尾
 

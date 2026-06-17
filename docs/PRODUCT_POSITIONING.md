@@ -33,12 +33,21 @@
 | 3D 藏閣（展品佈局、AI 策展、劇照生成、紀念品店） | `packages/chamber-3d` Slice 1–2.6 |
 | 戲班自治劇目製作引擎 | `packages/troupe` 離線驗證 harness |
 
+**🟡 已部署・待驗證（合約已 redeploy 上鏈，但端到端尚未驗證能正確執行 — 不可在 demo 當 ✅ 講）：**
+
+| 項目 | 狀態 | 翻 ✅ 的條件 |
+|---|---|---|
+| `economy.move`（真鏈上 Balance：發薪 / 接濟 / 結算 / 挹注） | 合約已上鏈（`sui move test` 120/120） | codegen 生 SDK 綁定 + D5 adapter 把 off-chain 影子接成真 Balance 進出，並真跑一輪驗證 |
+| 藏閣 Kiosk 交易（`still.move` TransferPolicy） | 合約已上鏈 | Slice 3 TS 接線 + 真實上架/購入/撤架跑通 |
+| 藏閣鏈上佈局保存（`chamber` PersonalVault） | 合約已上鏈 | Slice 4 `chamber::decorate` server action + 「鏈上保存」按鈕接通 |
+| 兩段式鑄角（`recruit` RedeemIntent） | 合約已上鏈 | 走真錢包 redeem 一次，確認不再 `Transaction not signed by correct sender` |
+
+> ⚠️ **redeploy ≠ 自動可用**：合約上鏈後，web 端仍需 codegen + adapter 接線才會真的用到新鏈上能力。**驗證通過前，這些一律當 🟡 講，不要當 ✅。**
+
 **🛣️ Roadmap（已設計或部分接線，但今天不會在 demo 裡跑）：**
 
 | 項目 | 現況 | 缺什麼 |
 |---|---|---|
-| 經濟影子翻**真鏈上 Balance** | `economy.move` D1 已寫、`sui move test` 綠 | 等一次性 redeploy + D5 adapter |
-| **藏閣 Kiosk 交易 / 鏈上佈局保存** | 合約已有 | Slice 3/4 接線，redeploy 後 |
 | **導演退場 → 說書人**（4.2） | 概念＋零散條目 | 退場訊號量化、分級實作 |
 | **角色封存＝傳奇**（5.1） | NFT＋記憶死後本就留存；owner 挹注／Walrus 續費已設計 | 「死後續費保存記憶」接線（須改 WALRUS 決策⑥） |
 | **Saga 易主**（5.2） | **全新、無任何文件** | 從設計專檔開始 |
@@ -46,7 +55,7 @@
 | perceive 感知步驟 | `PERCEPTION_PLAN.md` 已 plan | 待動工 |
 | **影視化**（Phase 3） | 願景 | 內容漏斗收尾後 |
 
-> 用法：pitch deck 的機制頁用 ✅／🛣️ 標籤；demo video **只拍 ✅ 那欄**；🛣️ 那欄全部寫進白皮書與本檔 §4–§6。
+> 用法：pitch deck 的機制頁用 ✅／🟡／🛣️ 標籤；demo video **只拍 ✅ 那欄**（🟡 驗證通過後才可加拍）；🛣️ 那欄全部寫進白皮書與本檔 §4–§6。
 
 ---
 
