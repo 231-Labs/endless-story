@@ -964,6 +964,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     }
                 }
                 const myVerdict = verdictByChar.get(c.id);
+                // A verdict landed this tick → this character's event is settling.
+                // Used twice: it counts as a fresh beat (so the chapter isn't
+                // skipped) AND flags the POV as a 收束 chapter (full 前因後果 +
+                // deeper coda). Named once so the double-use is explicit.
+                const hasClosingVerdict = Boolean(myVerdict);
                 if (myVerdict) {
                     triggerParts.push(
                         `這一局已見分曉：${myVerdict}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`,
@@ -975,7 +980,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 const eventKey = myEvent ? `${sceneId ?? ''}:${myEvent.label}` : null;
                 const freshBeat =
                     Boolean(myTalk) ||
-                    Boolean(myVerdict) ||
+                    hasClosingVerdict ||
                     acts.some((a) => a.characterId === c.id && a.ok);
                 if (eventKey && !freshBeat && lastPovEventByChar.get(c.id) === eventKey) {
                     tlog(`   · POV ${c.name} 略過（同事件無新拍子）`);
@@ -998,6 +1003,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     triggerNarrative: trigger,
                     forceRun: true,
                     dryRun: true,
+                    closing: hasClosingVerdict,
                     dramaHint: dramaHints[c.id],
                     sceneBeats: sceneBeats.length > 0 ? sceneBeats : undefined,
                     rosterContext: rosterContextById.get(c.id),

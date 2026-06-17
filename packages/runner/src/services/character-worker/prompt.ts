@@ -63,6 +63,10 @@ export interface PovPromptInput {
      *  complement (interpret the same facts) rather than contradict (invent
      *  who-did-what). Private observations are deliberately excluded. */
     sceneBeats?: string[];
+    /** Optional: this character's contested event RESOLVED this tick (a verdict
+     *  landed). Switches the chapter from "one concrete moment" to "show the
+     *  whole arc settle" — 起因→轉折→落定 (前因後果收束) — and earns more length. */
+    closing?: boolean;
 }
 
 /** Chapter mode — swaps only the framing; the no-fabrication / identity / pronoun
@@ -139,13 +143,14 @@ export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): s
             '',
             '**連載推進（每回必做）**：這是連載章回，不是孤立場景；一回讀完，必須有東西動了。',
             '- **承上**：開頭用一兩句勾連上一回留下的懸念或餘味，讓老讀者立刻接上，不要從零起手。',
-            '- **推進**：讓主角經歷事件材料裡的轉折、做出或承受一個選擇、付出代價——這個角色或他的處境，結尾必須和開頭不一樣。',
+            '- **推進**：讓主角經歷事件材料裡的轉折、做出或承受一個選擇、付出代價——這個角色或他的處境，結尾必須和開頭不一樣。**寫出來龍去脈，不要只擷取一個瞬間就收手**：讓讀者看見這一拍是怎麼被前一拍逼出來的、又把人推到哪裡去。',
             '- **啟下**：結尾的鉤子要是這一回的後果催生出的新問題，而不是無關的小轉身或人生感悟。',
+            '- **若本回是收束（材料標明「本回收束」）**：不要只給一個畫面，要把這樁爭執或關係**怎麼走到這一步、又怎麼落定**交代完整——起因、轉折、你做了什麼或承受了什麼、塵埃落定後你站在哪裡。這一回要讓人看完一個完整的事件弧。',
             '',
             ...VOICE,
             '',
             '**篇幅與格式**：',
-            '- 450–900 個中文字，3–6 個自然段。短句與長句交錯，讓它像小說頁面，不像 prompt 產物。',
+            '- 700–1100 個中文字，4–7 個自然段；**若本回收束，可放長到 1200–1500 字**，把前因後果交代足。短句與長句交錯，讓它像小說頁面，不像 prompt 產物。',
             '- 純散文。不要 markdown 標題、不要分段標號、不要前言「以下是」。直接進入正文。',
         ];
     }
@@ -190,6 +195,9 @@ export function buildUserPrompt(input: PovPromptInput): string {
             ? '\n## 本場此刻（客觀事實 — 同場其他人剛剛的舉動，你必須認帳，只可詮釋、不可改寫）\n' +
               input.sceneBeats.slice(0, 8).map((b) => `- ${b}`).join('\n')
             : '';
+    const closingBlock = input.closing
+        ? '\n## 本回收束（這樁事在你身上有了結果）\n這一回不要只截一個瞬間：要讓讀者看見它怎麼走到這一步、又怎麼落定——起因、轉折、你做了什麼或承受了什麼、此刻塵埃落定後你站在哪裡。給它一個完整的來龍去脈與收束，篇幅可放長。'
+        : '';
     return [
         `# 你的身份`,
         `- 姓名：${character.name}`,
@@ -211,11 +219,76 @@ export function buildUserPrompt(input: PovPromptInput): string {
         dramaBlock,
         dreamBlock,
         sceneBeatsBlock,
+        closingBlock,
         '',
         '## 事件材料（這是背景，不是正文摘要）',
         triggerNarrative,
         '',
         '請把上述材料寫成一小節角色限定視角小說。不要寫反思；不要解釋你如何寫作；直接輸出正文。',
+    ]
+        .filter((s) => s !== '')
+        .join('\n');
+}
+
+/** Divider between the public scene and the private「燈下」interior coda. A
+ *  markdown thematic break: renders as an <hr> in the dossier, plain `---` as
+ *  text — a visible tonal shift either way, and a stable split point so the coda
+ *  can be walled off from public-scene recall (see filterPovMemorySnippets). */
+export const CODA_DIVIDER = '\n\n---\n\n';
+
+/**
+ * The private interior coda appended after a pov chapter — the「燈下」layer:
+ * the character's honest read on what just happened, on the people in it, and
+ * on themselves. It deliberately borrows the reflection-trigger voice (off-stage,
+ * mask removed, may CONTRADICT the public chapter) so it stays a DIFFERENT
+ * register from the scene prose — adding interior depth without loosening the
+ * scene's anti-cliché IRON_RULES. Kept short (60–180 字) so it reads as a turn,
+ * not a sermon. pov mode only; encounter (溫情) keeps its own subtext, genesis
+ * leans on life memory.
+ */
+export function buildReflectionCodaSystemPrompt(soul?: SagaSoul): string {
+    const base = [
+        '你剛為一個角色寫完一節公開章回（場上的戲）。現在補一段**極短的內心獨白**，接在那節戲之後——這是同一個人**卸了妝、燈也滅了**之後，獨自對自己說的話。',
+        '',
+        '**鐵則**：',
+        '1. **第一人稱、私密**。不為戲班、不為觀眾，只給自己。即使行當是「—」也用「我」。',
+        '2. **可以、甚至應該跟剛才那節公開章回有出入**：場上的從容，私下可能是慌；場上的剛硬，私下可能是悔——這正是看點。',
+        '3. **三個落點，挑你最痛的一兩個寫，別三個都寫**：對這樁事你真正怎麼看；對其中某個人（師姐／對手／班主…）你壓著沒說的那句；對你自己這回的作為你服不服。',
+        '4. **不要重述場景、不要交代你剛剛做了什麼**——章回已經寫過了，直接進心境。',
+        '5. **不要講道理、不要「於是我明白了」、不要心靈雞湯**。一個念頭、一個畫面、一句沒說出口的話就夠；可以是矛盾的、不體面的、連自己都騙的。',
+        '6. 字數 60–180 字，短而密。舊白話、可帶文言意象，避免現代詞彙。',
+        '',
+        '**輸出**：純散文，第一個字就是「我」或一個內心動詞。不要標題、不要前言。',
+    ];
+    const soulBlock = buildSagaSoulBlock(soul);
+    return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
+}
+
+export function buildReflectionCodaUserPrompt(input: {
+    character: CharacterSnapshot;
+    chapter: string;
+    triggerNarrative: string;
+    relationshipHints?: string[];
+}): string {
+    const relBlock =
+        input.relationshipHints && input.relationshipHints.length > 0
+            ? '\n## 牽動你的人（挑一個，把你對他壓著沒說的那句寫出來）\n' +
+              input.relationshipHints.map((r) => `- ${r}`).join('\n')
+            : '';
+    return [
+        `# 你是誰`,
+        `- 姓名：${input.character.name}`,
+        `- 行當：${input.character.role}`,
+        `- 行當聲口：${roleHint(input.character.role)}`,
+        relBlock,
+        '',
+        '## 你方才那節公開章回（你寫給人看的版本）',
+        input.chapter.slice(0, 1400),
+        '',
+        '## 這樁事的由來（背景，不要複述）',
+        input.triggerNarrative,
+        '',
+        '現在寫那段卸了妝後、只給自己的內心獨白。',
     ]
         .filter((s) => s !== '')
         .join('\n');
@@ -249,7 +322,17 @@ function buildCraftDirective(character: CharacterSnapshot): string {
 }
 
 function filterPovMemorySnippets(snippets: string[], character: CharacterSnapshot): string[] {
-    return snippets.filter((snippet) => findUngroundedHeavyMotifs(snippet, character).length === 0);
+    return (
+        snippets
+            // Strip any private「燈下」coda before a recalled chapter re-enters a
+            // PUBLIC scene prompt: the interior voice is meant to stay off-stage,
+            // so a later public POV must not pick it up as continuity material
+            // (would leak 私語 into the public register, breaking 事件客觀/敘事主觀).
+            // The coda still lives in memory for reflection recall — just walled
+            // off here.
+            .map((snippet) => snippet.split(CODA_DIVIDER)[0])
+            .filter((snippet) => findUngroundedHeavyMotifs(snippet, character).length === 0)
+    );
 }
 
 export function findUngroundedHeavyMotifs(text: string, character: CharacterSnapshot): string[] {

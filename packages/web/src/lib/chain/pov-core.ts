@@ -68,6 +68,12 @@ export interface PovCoreOptions {
     sceneBeats?: string[];
     /** Use only caller-provided memory snippets; avoids duplicate decrypts in tick loop. */
     skipMemoryRecall?: boolean;
+    /** This character's contested event RESOLVED this tick — narrate the full
+     *  arc settling (前因後果收束) + a deeper interior coda. Forwarded to runner. */
+    closing?: boolean;
+    /** Append the private「燈下」interior coda. Default on for pov mode (set in
+     *  the runner); pass false to skip. */
+    reflect?: boolean;
 }
 
 export interface PovCoreResult {
@@ -305,6 +311,8 @@ export async function runPovForCharacter(
             planHint: planHint ?? undefined,
             dramaHint: opts.dramaHint,
             sceneBeats: opts.sceneBeats,
+            closing: opts.closing,
+            reflect: opts.reflect,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun
