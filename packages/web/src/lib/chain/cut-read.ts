@@ -69,11 +69,15 @@ async function fetchEventCutsForSagaUncached(
 
     let summaries: Awaited<ReturnType<typeof read.commitment.listCommitments>>;
     try {
-        // All saga commitments; over-fetch because POV/gazette/drama share the
-        // feed and get filtered out below by the header peek.
+        // Scan the FULL saga commitment log — cuts are a tiny, scattered
+        // minority. The log is dominated by DR-6 drama beats (subject=world)
+        // and gazettes (subject=saga), both of which grow every tick; a fixed
+        // over-fetch window buries the (rarer, older) cuts and the feed reads
+        // empty even when chapters exist. queryEvents has no subject-type
+        // predicate, so we page to the end and filter in memory. Bounded by the
+        // 30s + stale-window cache above.
         summaries = await read.commitment.listCommitments(client, ENDLESS_STORY_DEPLOYMENT.packageId, {
             sagaId,
-            maxEvents: limit + 40,
         });
     } catch (err) {
         console.warn('[cut-read] listCommitments failed:', err);
@@ -81,10 +85,18 @@ async function fetchEventCutsForSagaUncached(
     }
     if (summaries.length === 0) return [];
 
+    // A cut's subject is always one of the saga's anchored scenes (gazettes
+    // sit on the saga, POVs on a character, drama beats on the world). Keep
+    // only scene-subject commitments BEFORE the per-candidate blob peek, so the
+    // peek count tracks the number of cuts — not the unbounded drama/POV flood.
+    const sceneSubjects = new Set(ENDLESS_STORY_DEPLOYMENT.sceneIds);
+    const candidates = summaries.filter((s) => sceneSubjects.has(s.subjectId));
+    if (candidates.length === 0) return [];
+
     // Resolve all candidates in parallel (commitment JSON + header peek are
     // cached); keep newest-first order and trim to limit after the filter.
     const resolved = await Promise.all(
-        summaries.map(async (s): Promise<EventCutEntry | null> => {
+        candidates.map(async (s): Promise<EventCutEntry | null> => {
             try {
                 const res = await getCommitmentCached(client, s.commitmentId);
                 const blobId = decodeByteString(res.blob_id);

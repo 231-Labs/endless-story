@@ -346,23 +346,34 @@ export async function spineResolveAndWeave(
         return { resolved: false, settled: false, cutPovCount: 0 };
     }
 
-    // Weave the cut from everything accumulated across the event's ticks.
+    // Weave the cut from the event's POVs. Prefer the in-memory accumulation —
+    // it's the freshly-anchored prose with no index lag. But these registries
+    // are per-process: a serverless tick that resolves an event it didn't open
+    // (the norm once tick spacing exceeds the spine window — the event is adopted
+    // via reconcileOpenFromChain and aged out immediately) sees an EMPTY POV map,
+    // so the cut never weaves even though ≥2 POVs are anchored on chain. When the
+    // in-memory POVs are short, recover them from chain by matching each cast
+    // member's es:prov header to this eventTx — the same chain-truth fallback
+    // reconcileOpenFromChain gives the open set.
     const cutPovs = povsByEvent.get(ev.eventId) ?? [];
+    const memoryVoices = new Set(cutPovs.map((p) => p.characterId)).size;
+    const base = {
+        sceneId: ev.sceneId,
+        sceneName: ctx.sceneNameById.get(ev.sceneId) ?? '戲班',
+        eventTx: ev.eventId,
+        eventLabel: ev.label,
+        day,
+    };
     let cutPovCount = 0;
-    if (cutPovs.length >= 2) {
-        try {
-            const cut = await compileEventChapterAction({
-                sceneId: ev.sceneId,
-                sceneName: ctx.sceneNameById.get(ev.sceneId) ?? '戲班',
-                eventTx: ev.eventId,
-                eventLabel: ev.label,
-                day,
-                povs: cutPovs,
-            });
-            cutPovCount = cut.povCount;
-        } catch (err) {
-            console.warn('[event-spine] cut weave failed:', err);
-        }
+    try {
+        const cut = await compileEventChapterAction(
+            memoryVoices >= 2
+                ? { ...base, povs: cutPovs }
+                : { ...base, castCharacterIds: ev.participantIds },
+        );
+        cutPovCount = cut.povCount;
+    } catch (err) {
+        console.warn('[event-spine] cut weave failed:', err);
     }
 
     removeOpen(ctx.sagaId, ev.eventId);
