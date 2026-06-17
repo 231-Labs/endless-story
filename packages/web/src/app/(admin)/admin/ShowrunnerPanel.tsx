@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { runShowrunnerAction } from '@/lib/actions/showrunner';
 import type { ShowrunnerResult } from '@/lib/director/showrunner';
 import type { ShowrunnerLogEntry } from '@/lib/director/memory-store';
+import { Markdown } from '@/components/common/Markdown';
 
 /**
  * Admin panel: run one Showrunner heartbeat (dry-run = read-only evaluation,
@@ -73,9 +74,13 @@ export function ShowrunnerPanel({
 
             <div className="rounded border border-hairline bg-canvas/40 p-4">
                 <h3 className="text-xs tracking-widest text-mute">弧線計畫（跨心跳記憶）</h3>
-                <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink">
-                    {arcPlan || '（尚無 —— 第一次心跳會建立第一版）'}
-                </pre>
+                {arcPlan ? (
+                    <Markdown source={arcPlan} compact className="mt-2" />
+                ) : (
+                    <p className="mt-2 text-sm leading-relaxed text-mute">
+                        （尚無 —— 第一次心跳會建立第一版）
+                    </p>
+                )}
             </div>
 
             {log.length > 0 ? (
@@ -88,9 +93,7 @@ export function ShowrunnerPanel({
                                 {entry.day != null ? <span>第{entry.day}日</span> : null}
                                 <span>工具 {entry.toolCalls.filter((c) => c.ok).length}/{entry.toolCalls.length}</span>
                             </div>
-                            <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink">
-                                {entry.report}
-                            </pre>
+                            <Markdown source={entry.report} compact className="mt-2" />
                         </div>
                     ))}
                 </div>
@@ -124,9 +127,7 @@ function HeartbeatResult({ result }: { result: ShowrunnerResult }) {
                     ))}
                 </ul>
             ) : null}
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink">
-                {result.report}
-            </pre>
+            <Markdown source={result.report} compact />
         </div>
     );
 }
