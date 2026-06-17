@@ -102,6 +102,15 @@ export interface DefaultDesireOptions {
     agentName?: string;
     /** Public chain tags such as `role:<role-type>`. */
     agentTags?: string[];
+    /**
+     * Per-resource WANT override, keyed by on-chain label. For a director-created
+     * resource of a fresh kind (no ROLE_AMBITION row → flat 0.5 for everyone), the
+     * Showrunner can name the 行當 the stake is FOR; those roles ache for it, others
+     * stand down — so a bespoke stake is character-shaped, not a flat scramble. Built-in
+     * kinds keep their tuned ROLE_AMBITION ambitions (an intent only overrides if present
+     * for that label). Read off-chain from resource-intents; passed in to stay pure.
+     */
+    resourceIntents?: Record<string, { wantedBy: string[] }>;
 }
 
 /**
@@ -154,6 +163,21 @@ const AMBITION_FALLBACK = 0.5;
 // This is what carves the niches: specify only the kinds a role burns for; the rest fall here.
 const OMITTED_KIND_AMBITION = 0.08;
 const AMBITION_MIN = 0.15;
+// A FRESH director-invented kind that NO 行當 is tuned for (not in ROLE_AMBITION):
+// fall back to a broad MODERATE want so the new stake actually draws a scramble.
+// Without this a director-created resource is inert for a cast of known roles (every
+// matched role hits the 0.08 off-niche floor → nobody contends → no drama). A
+// `wantedBy` intent sharpens this broad want into specific 行當.
+const DIRECTOR_KIND_FALLBACK = 0.4;
+// A director-authored stake WITH a `wantedBy` intent: the named 行當 burn for it
+// (high, contended), everyone else is a non-contender (below AMBITION_MIN). This is
+// what makes a bespoke stake character-shaped instead of a broad scramble.
+const INTENT_WANT = 0.8;
+const INTENT_OFF = 0.05;
+/** Every kind any 行當 is tuned for — lets roleResourceAmbition tell an OFF-niche
+ *  built-in kind (non-contender, 0.08) from a FRESH director kind (broad want).
+ *  Derived from the table so it can never drift out of sync. */
+const TUNED_KINDS = new Set<string>(ROLE_AMBITION.flatMap((r) => Object.keys(r.a)));
 
 function primaryRoleFromTags(tags: string[] | undefined): string {
     const roleTag = (tags ?? []).find((t) => t.startsWith('role:'));
@@ -166,7 +190,11 @@ function primaryRoleFromTags(tags: string[] | undefined): string {
 export function roleResourceAmbition(role: string, kind: string): number {
     const row = ROLE_AMBITION.find((g) => g.match.some((kw) => role.includes(kw)));
     if (!row) return AMBITION_FALLBACK; // unknown 行當 → moderate (still contests)
-    return row.a[kind] ?? OMITTED_KIND_AMBITION; // matched role, non-niche kind → non-contender
+    const a = row.a[kind];
+    if (a != null) return a; // this 行當's tuned want for this kind
+    // off-niche: a TUNED kind this role doesn't burn for → non-contender; a FRESH
+    // (director-invented) kind nobody's tuned for → broad moderate want (else inert).
+    return TUNED_KINDS.has(kind) ? OMITTED_KIND_AMBITION : DIRECTOR_KIND_FALLBACK;
 }
 
 /** Scale the unit weight (SCALE) by ambition 0..1 → the desire's intent magnitude. */
@@ -205,7 +233,15 @@ export function defaultDesiresForCast(
         // event-participant in). Uniform desire was the old structural floor (bone);
         // this is the role-shaped skin, kept deterministic + data-driven.
         const kind = (r.label.split(':')[0] || '').trim();
-        const ambition = roleResourceAmbition(role, kind);
+        // A director-authored stake may name WHO it's for (resourceIntents): the
+        // listed 行當 burn for it, everyone else stands down — overriding the flat
+        // fallback a fresh kind would otherwise get. No intent → tuned ROLE_AMBITION.
+        const intent = opts.resourceIntents?.[r.label];
+        const ambition = intent
+            ? intent.wantedBy.some((kw) => kw && role.includes(kw))
+                ? INTENT_WANT
+                : INTENT_OFF
+            : roleResourceAmbition(role, kind);
         if (ambition < AMBITION_MIN) continue;
         specs.push({
             id: `hold:${r.label || r.archetype || r.id}`,

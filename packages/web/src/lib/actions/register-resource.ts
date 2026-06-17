@@ -15,6 +15,7 @@ import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { fetchSagaRosterSnapshot } from '@/lib/director/character-inspect';
+import { saveResourceIntent } from '@/lib/chain/resource-intents';
 import { registerResourceDirect, type ProposeResourceResult } from './propose-resources';
 
 export interface RegisterResourceActionInput {
@@ -24,6 +25,12 @@ export interface RegisterResourceActionInput {
     display: string;
     /** scarce capacity, default 1 (clamped to castSize-1 so it stays contested). */
     capacity?: number;
+    /**
+     * Optional 行當 this stake is FOR — those roles ache for it, others stand down.
+     * Without it a fresh kind gets a flat 0.5 want from everyone (a broad scramble);
+     * with it the stake is character-shaped. Matched like ROLE_AMBITION (substring).
+     */
+    wantedBy?: string[];
     /** Validate only, don't instantiate on chain. */
     dryRun?: boolean;
 }
@@ -49,7 +56,7 @@ export async function registerResourceAction(
     const roster = await fetchSagaRosterSnapshot().catch(() => null);
     const castSize = roster?.members.length ?? 0;
 
-    return registerResourceDirect({
+    const result = await registerResourceDirect({
         sagaId: d.sagaId,
         capId: d.storytellerCapId,
         signer: admin.signer,
@@ -60,4 +67,13 @@ export async function registerResourceAction(
         castSize,
         dryRun: input.dryRun,
     });
+
+    // Persist who the stake is FOR — only on a real (non-dry) success, keyed by the
+    // on-chain label the validator built. The drama derivation reads this so the
+    // named 行當 ache for it and others stand down (vs a flat 0.5 scramble).
+    if (result.ok && !input.dryRun && result.created?.label && Array.isArray(input.wantedBy)) {
+        saveResourceIntent(result.created.label, input.wantedBy);
+    }
+
+    return result;
 }

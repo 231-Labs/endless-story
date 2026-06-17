@@ -29,7 +29,8 @@ import { createTextClient } from '@endless-story/llm/text';
 import { readResourceLedger } from '@/lib/chain/drama';
 import {
     validateResourceProposal,
-    countDirectorResources,
+    countActiveDirectorResources,
+    isResolvedDirectorResource,
     type RawProposal,
     type ValidProposal,
 } from '@/lib/chain/resource-proposal';
@@ -94,15 +95,20 @@ export async function proposeResourceAction(
     callCountBySaga.set(input.sagaId, n);
     if (n % COOLDOWN_CALLS !== 1) return { ok: false, reason: 'cooldown' };
 
-    // Existing labels: dedupe + the director-resource ceiling.
+    // RESOLVED director stakes auto-retire: exclude them from BOTH the dedup rails
+    // (so a kind can be re-used once its old contest settled — else `feud` is locked
+    // forever after one feud resolves) AND the cap (so the slot frees up).
     let existingLabels: string[];
+    let activeDirectorCount: number;
     try {
         const live = await readResourceLedger(input.client, d.packageId, input.sagaId);
-        existingLabels = live.map((r) => r.label).filter(Boolean);
+        const active = live.filter((r) => !isResolvedDirectorResource(r));
+        existingLabels = active.map((r) => r.label).filter(Boolean);
+        activeDirectorCount = countActiveDirectorResources(active);
     } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-    if (countDirectorResources(existingLabels) >= MAX_DIRECTOR_RESOURCES)
+    if (activeDirectorCount >= MAX_DIRECTOR_RESOURCES)
         return { ok: false, reason: 'director-resource cap reached' };
 
     // Ask the director whether a NEW slot is warranted.
@@ -217,16 +223,20 @@ export async function registerResourceDirect(input: {
     if (!d.packageId) return { ok: false, reason: 'unconfigured' };
 
     let existingLabels: string[];
+    let activeDirectorCount: number;
     try {
         const live = await readResourceLedger(input.client, d.packageId, input.sagaId);
-        existingLabels = live.map((r) => r.label).filter(Boolean);
+        // Exclude RESOLVED director stakes from dedup + cap (see proposeResourceAction).
+        const active = live.filter((r) => !isResolvedDirectorResource(r));
+        existingLabels = active.map((r) => r.label).filter(Boolean);
+        activeDirectorCount = countActiveDirectorResources(active);
     } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-    if (countDirectorResources(existingLabels) >= MAX_DIRECTOR_RESOURCES)
+    if (activeDirectorCount >= MAX_DIRECTOR_RESOURCES)
         return {
             ok: false,
-            reason: `已有 ${MAX_DIRECTOR_RESOURCES} 個導演自造的標的，先讓一個落定（或退場）再開新的`,
+            reason: `已有 ${MAX_DIRECTOR_RESOURCES} 個未結的導演標的，先讓一個落定（結算後會自動退場騰位）再開新的`,
         };
 
     const check = validateResourceProposal(

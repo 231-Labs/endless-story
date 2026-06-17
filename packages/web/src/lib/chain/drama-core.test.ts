@@ -194,3 +194,16 @@ test('hint: dominant unmet desire renders a non-empty Chinese line', () => {
     assert.equal(dramaHintForAgent(next, '0xnobody'), null);
     assert.equal(dramaHintForAgent(next, WEN), null);
 });
+
+test('resourceIntents targets a director stake to named 行當 (FU1)', () => {
+    const feud = res('feud:碼頭的賬'); // fresh kind → no ROLE_AMBITION row (flat 0.5 by default)
+    // wantedBy matches role by substring (like ROLE_AMBITION) — '刀馬' hits 刀馬旦, not 花旦.
+    const intents = { 'feud:碼頭的賬': { wantedBy: ['刀馬', '老生'] } };
+    const wu = defaultDesiresForCast([feud], 5, { agentTags: ['role:刀馬旦'], resourceIntents: intents });
+    const hua = defaultDesiresForCast([feud], 5, { agentTags: ['role:花旦'], resourceIntents: intents });
+    assert.equal(wu.length, 1, 'a named 行當 (刀馬) burns for the bespoke stake');
+    assert.equal(hua.length, 0, 'an unnamed 行當 stands down — not a flat 0.5 scramble');
+    // without the intent, the fresh kind falls back to the flat default → 花旦 contends too
+    const huaNoIntent = defaultDesiresForCast([feud], 5, { agentTags: ['role:花旦'] });
+    assert.equal(huaNoIntent.length, 1, 'no intent → fresh kind is a flat scramble (everyone moderately wants it)');
+});

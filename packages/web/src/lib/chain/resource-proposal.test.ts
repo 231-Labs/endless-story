@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import {
     validateResourceProposal,
     countDirectorResources,
+    countActiveDirectorResources,
+    isResolvedDirectorResource,
     RESERVED_KINDS,
 } from './resource-proposal.ts';
 
@@ -83,4 +85,39 @@ test('countDirectorResources ignores built-in kinds', () => {
         countDirectorResources(['spotlight:壓軸', 'partnership:某', 'recording:某', 'feud:甲', 'patron:乙']),
         2,
     );
+});
+
+test('director resource retires when fully allocated; seed never retires (FU2)', () => {
+    const r = (label: string, cap: bigint, alloc: Record<string, bigint>) => ({
+        label,
+        capacity: cap,
+        allocations: alloc,
+    });
+    assert.equal(isResolvedDirectorResource(r('feud:甲', 1n, { '0xA': 1n })), true, 'director + fully allocated = resolved');
+    assert.equal(isResolvedDirectorResource(r('feud:乙', 2n, { '0xA': 1n })), false, 'partially allocated = still active');
+    assert.equal(isResolvedDirectorResource(r('spotlight:頭牌', 1n, { '0xA': 1n })), false, 'seed kind never retires');
+    assert.equal(
+        countActiveDirectorResources([
+            r('feud:甲', 1n, { '0xA': 1n }), // resolved → retired
+            r('feud:乙', 1n, {}), // active
+            r('spotlight:頭牌', 1n, {}), // seed → not counted
+        ]),
+        1,
+        'only the unresolved director stake counts toward the cap',
+    );
+});
+
+test('a resolved director kind frees its axis for re-use (FU2 dedup)', () => {
+    const r = (label: string, cap: bigint, alloc: Record<string, bigint>) => ({
+        label,
+        capacity: cap,
+        allocations: alloc,
+    });
+    const live = [r('feud:舊賬', 1n, { '0xA': 1n }), r('spotlight:頭牌', 1n, {})]; // feud resolved
+    const activeLabels = live.filter((x) => !isResolvedDirectorResource(x)).map((x) => x.label);
+    const allLabels = live.map((x) => x.label);
+    // excluding the resolved feud, a NEW feud (different display) validates…
+    assert.equal(validateResourceProposal({ kind: 'feud', display: '新賬', capacity: 1 }, activeLabels, 4).ok, true);
+    // …whereas counting the resolved label would (wrongly) lock the axis forever.
+    assert.equal(validateResourceProposal({ kind: 'feud', display: '新賬', capacity: 1 }, allLabels, 4).ok, false);
 });
