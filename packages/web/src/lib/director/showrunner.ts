@@ -76,7 +76,20 @@ const SYSTEM_PROMPT = `你是「無盡故事」這個自治敘事世界的 Showr
 - 要呼叫工具：{"thought": "為什麼", "tool": "工具名", "args": {...}}
 - 結束本次心跳：{"done": true, "report": "導演日誌（你看到什麼、做了什麼、下一步）", "arcPlan": "更新後的完整弧線計畫"}
 
-arcPlan 是你跨心跳的唯一記憶，必須完整自含：當前主題、進行中的張力線（各自進展）、已埋的伏筆、近期做過的干預。每次都輸出完整版本，不要只寫增量。`;
+arcPlan 是你的**當前狀態快照**，不是歷史卷軸。固定四個 ## 區塊、總長控制在 600 字內、每次輸出完整版本（但只含「現在」）：
+## 當前主題（2-4 句：此刻在演什麼、你要往哪推）
+## 下步關注（3-5 條：接下來幾拍要盯的事）
+## 進行中的張力線（只列**還活著**的線，各一兩句進展；已收束的線不要逐條留著，最多在主題裡一句帶過）
+## 伏筆（還沒付清的短列；付清或已用掉的剪掉）
+**鐵則：arcPlan 裡絕不寫「干預史／做過什麼／第幾日做了X」**——那是 report（導演日誌）的職責、已另外逐期保存。也不要逐日累積、不要保留已結束的線。看見上一版 arcPlan 很長，就是你的責任把它收乾淨。`;
+
+/** First non-empty line of a markdown report, stripped + clipped — a one-line digest
+ *  of a 導演日誌 entry for the Showrunner's recent-action context. */
+function firstLine(md: string): string {
+  const line = (md || '').split('\n').map((s) => s.trim()).find((s) => s.length > 0) ?? '';
+  const cut = line.replace(/^#+\s*/, '').replace(/\*\*/g, '').replace(/^[-·•]\s*/, '');
+  return cut.length > 90 ? `${cut.slice(0, 90)}…` : cut;
+}
 
 export async function runShowrunner(opts: ShowrunnerOptions = {}): Promise<ShowrunnerResult> {
   const maxToolCalls = opts.maxToolCalls ?? 6;
@@ -133,6 +146,17 @@ export async function runShowrunner(opts: ShowrunnerOptions = {}): Promise<Showr
     ? `（本輪已先機械補漏 ${repair.attempted} 名角色${repair.deferred.length > 0 ? `；${repair.deferred.length} 名留待下輪` : ''}）`
     : '';
 
+  // Recent intervention history lives in the LOG, not the arc plan — feed the last
+  // few report headlines so the Showrunner keeps recent-action memory without the
+  // arc plan having to accumulate a 干預史 卷軸.
+  const recentLog =
+    memory.log.length > 0
+      ? memory.log
+          .slice(-4)
+          .map((e) => `· ${e.day != null ? `第${e.day}日` : e.at.slice(5, 10)}：${firstLine(e.report)}`)
+          .join('\n')
+      : '（尚無）';
+
   const contextPrompt = `${audit.summary}
 ${repairLine}
 
@@ -142,7 +166,10 @@ ${tension ?? '（無資料）'}
 【最近 ${GAZETTE_COUNT} 期公報（舊→新）】
 ${gazettes}
 
-【弧線計畫（你上次心跳留下的）】
+【你最近幾次心跳做過的事（這就是干預史 — 不要再寫進 arcPlan）】
+${recentLog}
+
+【弧線計畫（你上次心跳留下的「當前狀態」；若它已變長/含歷史，這次收乾淨）】
 ${memory.arcPlan || '（尚無 —— 這是你第一次心跳，請從公報與現場狀態建立第一版弧線計畫）'}
 
 【可用工具】
