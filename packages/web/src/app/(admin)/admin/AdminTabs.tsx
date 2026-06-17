@@ -6,7 +6,7 @@ import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 import { FlowIndicator, useFlowingIndicator } from '@/components/common/ink-motion';
 
 const TABS = [
-  { key: '/admin', label: '駕駛艙' },
+  { key: '/admin', label: '後臺' },
   { key: '/admin/troupe', label: '劇團' },
   { key: '/admin/stage', label: '戲台' },
   { key: '/admin/recruitments', label: '徵召' },
