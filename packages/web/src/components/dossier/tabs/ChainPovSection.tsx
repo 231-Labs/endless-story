@@ -65,20 +65,23 @@ export function ChainPovSection({
     const accessState = isOwner ? 'owner' : isSubscriber ? 'subscriber' : 'locked';
 
     return (
-        <section>
+        // 本傳 is a READING view — a centered, comfortable-width column (not the wide
+        // left-indented grid layout the other tabs use), so the prose sits balanced on
+        // the page instead of hugging the left with a big right gutter.
+        <section className="mx-auto max-w-3xl">
             <div className="flex items-center gap-4">
                 <div className="h-px w-8 bg-cinnabar" />
                 <h2 className="font-serif text-2xl tracking-wide text-cinnabar">
                     {CHAPTER_COPY.pov.sectionHeader(character.name)}
                 </h2>
             </div>
-            <p className="mt-2 pl-12 text-sm leading-relaxed text-mute/80">
+            <p className="mt-2 text-sm leading-relaxed text-mute/80">
                 {CHAPTER_COPY.pov.sectionNote}
             </p>
-            <p className="mt-1 pl-12 text-2xs tracking-widest text-mute/60">
+            <p className="mt-1 text-2xs tracking-widest text-mute/60">
                 {CHAPTER_COPY.pov.accessNote(accessState)}
             </p>
-            <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
+            <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6">
                 {chapters.map((c) => (
                     <li key={c.commitmentId}>
                         <article className="es-card p-6 sm:p-8">
