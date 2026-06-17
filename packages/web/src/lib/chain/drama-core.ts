@@ -130,14 +130,21 @@ export interface DefaultDesireOptions {
 // elsewhere roles own their lane (班主→堂會包銀, 丑→小報, 武→武戲) so they can be
 // co-present without a contest → warmth can breathe. The contest FLOOR still lets an
 // able non-desirer get thrust on stage 臨危受命; this governs DESIRE, not ability.
+// WARM kinds (mentorship/belonging/solace/keepsake) are seeded alongside the status
+// kinds (2026-06-17) to grow 師徒/接納/疼惜 drama, not 頭牌 wars. They sit at MODERATE
+// ambition (0.3–0.6, vs the 0.9 status niches) so the contests over them are soft —
+// warmth from the theme, not from being low-stakes. Note ORDER: elders/master rows
+// come FIRST so a multi-行當 veteran (老旦, or a 班主 who's also a 前代名角) matches there,
+// not the greedy young-行當 rows below — they GIVE the teaching / already belong, so they
+// carry keepsake/solace but NEVER mentorship/partnership (they don't crave being taught).
 const ROLE_AMBITION: { match: string[]; a: Record<string, number> }[] = [
-    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.3 } }, // 武戲台口
-    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.85 } }, // 頭牌 + 唱片
-    { match: ['坤生', '乾生', '小生'], a: { partnership: 0.9, spotlight: 0.6 } }, // 搭檔，兼爭頭牌
-    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, patronage: 0.5 } }, // 唱片 + 堂會
-    { match: ['丑'], a: { naming: 0.75, patronage: 0.4 } }, // 小報頭條（丑角搏版面）
-    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.65, spotlight: 0.35 } }, // 武 + 偶爭台
-    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.75, naming: 0.4 } }, // 堂會包銀（生意），不與台上角兒爭頭牌
+    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.75, naming: 0.4, keepsake: 0.5, solace: 0.4 } }, // 堂會包銀（生意）；給戲不爭戲、念舊惜身
+    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, patronage: 0.5, keepsake: 0.55, solace: 0.45 } }, // 唱片 + 堂會；認命惜身、念故人
+    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.3, belonging: 0.55, mentorship: 0.5, solace: 0.4 } }, // 武戲台口 + 想被收作自己人、求真傳
+    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.85, mentorship: 0.6, keepsake: 0.4, solace: 0.3 } }, // 頭牌 + 渴師父真傳
+    { match: ['坤生', '乾生', '小生'], a: { partnership: 0.9, spotlight: 0.6, belonging: 0.55, mentorship: 0.55 } }, // 搭檔；外來者求接納與真傳
+    { match: ['丑'], a: { naming: 0.75, patronage: 0.4, belonging: 0.5, mentorship: 0.4 } }, // 小報頭條（搏版面）+ 邊緣人求名分
+    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.65, spotlight: 0.35, belonging: 0.4, solace: 0.35 } }, // 武 + 偶爭台、求一席
 ];
 // An UNKNOWN 行當 (no row matched) still participates at a moderate level so a未知角色
 // isn't a non-entity in the economy.
