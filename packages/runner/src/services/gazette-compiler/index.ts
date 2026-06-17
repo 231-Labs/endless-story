@@ -64,6 +64,12 @@ export interface CompileGazetteInput {
     model?: string;
     /** Dry-run: produce markdown but don't anchor on chain. */
     dryRun?: boolean;
+    /**
+     * The Showrunner's plot analysis (弧線計畫 + latest 導演日誌), read from director
+     * memory by the web action and passed in. Lets the gazette report plot with
+     * the director's clear understanding instead of re-deriving meaning from raw
+     * events. Optional — gazette degrades to the old event-only behaviour without it. */
+    directorAnalysis?: { arcPlan?: string; latestReport?: string };
 }
 
 export interface CompileGazetteResult {
@@ -129,18 +135,24 @@ export async function runOnce(input: CompileGazetteInput): Promise<CompileGazett
         };
     }
 
-    const llm = llmText.createTextClient({ kind: 'cheap' });
+    const hasAnalysis = Boolean(
+        snapshot.directorAnalysis?.arcPlan?.trim() || snapshot.directorAnalysis?.latestReport?.trim(),
+    );
+    // With the Showrunner's analysis in hand the gazette is doing real synthesis
+    // (reading meaning + an 局勢 section), not just template-smoothing — so use the
+    // primary model + more room. Without it, the cheap template path is enough.
+    const llm = llmText.createTextClient({ kind: hasAnalysis ? 'primary' : 'cheap' });
     const modelId = input.model ?? llm.defaultModel;
 
-    const system = buildSystemPrompt(snapshot.soul);
+    const system = buildSystemPrompt(snapshot.soul, hasAnalysis);
     const user = buildUserPrompt(snapshot);
 
     const response = await llm.chat({
         model: modelId,
         system,
         messages: [{ role: 'user', content: user }],
-        maxTokens: 1500,
-        temperature: 0.5,
+        maxTokens: hasAnalysis ? 2200 : 1500,
+        temperature: 0.55,
     });
     const markdown = rewriteChapterLinks(response.text.trim(), snapshot.chapters);
 
@@ -213,23 +225,21 @@ async function fetchGazetteSnapshot(
     const maxEvents = input.maxEventsPerKind ?? 20;
     const events: GazetteEvent[] = [];
 
-    // New members — CharacterMinted into this saga is news ("X joins the troupe").
-    // We list the most recent few so a freshly-seeded saga (no director
-    // events / POV yet) still produces a non-empty gazette. Once real
-    // activity exists, these become a small tail. Mints are wall-clock
-    // (not tick-based), so we can't cleanly scope to "today" — bounded
-    // to the latest 5 to limit cross-gazette repetition.
-    const recentJoins = [...charactersRes.summaries]
+    // New members ("X joins the troupe"). Mints are wall-clock (not tick-based)
+    // and a founding seeds the whole cast at once, so listing "the latest 5
+    // mints" on EVERY gazette reads as "everyone joins again today" even on day
+    // 19. Compute them here but only fall back to them when the day produced no
+    // real activity (see end of function) — a fresh saga still gets a non-empty
+    // gazette, an active one never re-announces veterans as newcomers.
+    const recentJoins: GazetteEvent[] = [...charactersRes.summaries]
         .sort((a, b) => Number(b.mintedAtMs ?? 0) - Number(a.mintedAtMs ?? 0))
-        .slice(0, 5);
-    for (const c of recentJoins) {
-        events.push({
+        .slice(0, 5)
+        .map((c) => ({
             kind: 'CharacterJoined',
             summary: `「${c.name}」入班 ${sagaJson.name ?? '春雪社'}`,
             characterNames: [c.name],
             timestampMs: c.mintedAtMs ?? '0',
-        });
-    }
+        }));
 
     // Director events — opened storylets, character calls, attribute pressures.
     if (pkg) {
@@ -365,6 +375,14 @@ async function fetchGazetteSnapshot(
         }
     }
 
+    // Fallback only: if the day produced no director/budget events AND no
+    // chapters, announce the troupe roster so a freshly-seeded saga still has a
+    // gazette. An active saga never reaches here, so veterans stop being
+    // re-announced as "入班" every day.
+    if (events.length === 0 && chapters.length === 0) {
+        events.push(...recentJoins);
+    }
+
     return {
         sagaName: sagaJson.name ?? '無名戲班',
         soul,
@@ -374,6 +392,7 @@ async function fetchGazetteSnapshot(
         treasuryEndless: treasuryToEndless(sagaJson.treasury),
         characterCount:
             sagaJson.character_count != null ? Number(sagaJson.character_count) : undefined,
+        directorAnalysis: input.directorAnalysis,
     };
 }
 
