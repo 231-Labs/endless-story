@@ -48,14 +48,16 @@ export async function fetchEventCutsForSaga(
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return [];
     const limit = opts.limit ?? 20;
-    // List assembly = commitment scan + a blob header peek per candidate. Short
-    // TTL keeps the feed fresh while making warm navigations near-instant; the
-    // blob texts themselves cache hard (immutable) in fetchChapterText. The
-    // stale window means a TTL rollover serves the old list instantly and
-    // refreshes in the background instead of blocking the page.
+    // List assembly = a FULL saga commitment scan (§⑨: cuts are old + scattered,
+    // so we page the whole log) + a blob header peek per candidate. That scan is
+    // the single most RPC-heavy public read, and new cuts are rare — so the fresh
+    // TTL is generous (2 min) and the stale window long: a feed poll almost never
+    // triggers the scan, and a TTL rollover serves the old list instantly while
+    // ONE background refresh runs. Blob texts cache hard (immutable). This keeps
+    // the feed from amplifying RPC load into the public-fullnode 429 ceiling.
     return cachedPublicRead(
         `cuts:saga:${sagaId}:${limit}`,
-        publicChainReadTtl(30_000),
+        publicChainReadTtl(120_000),
         () => fetchEventCutsForSagaUncached(sagaId, limit),
         { staleTtlMs: 10 * 60 * 1000 },
     );
