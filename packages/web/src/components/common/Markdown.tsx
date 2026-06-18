@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 
 /**
@@ -29,7 +30,9 @@ export function Markdown({
         : 'es-markdown max-w-prose font-serif text-base leading-loose text-ink/90 sm:text-lg';
     return (
         <div className={`${base} ${className}`}>
-            <ReactMarkdown components={compact ? COMPACT_COMPONENTS : COMPONENTS}>{source}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={compact ? COMPACT_COMPONENTS : COMPONENTS}>
+                {source}
+            </ReactMarkdown>
         </div>
     );
 }
@@ -83,6 +86,17 @@ const COMPONENTS: Components = {
         />
     ),
     hr: () => <hr className="my-8 border-hairline" />,
+    table: (props) => (
+        <div className="my-4 overflow-x-auto">
+            <table {...props} className="w-full border-collapse text-sm" />
+        </div>
+    ),
+    th: (props) => (
+        <th {...props} className="border-b border-hairline px-3 py-2 text-left font-medium text-ink" />
+    ),
+    td: (props) => (
+        <td {...props} className="border-b border-hairline/50 px-3 py-2 align-top text-ink/85" />
+    ),
 };
 
 // Tighter scale for the 後臺 panels — same theme (serif, cinnabar markers, ink),
@@ -118,4 +132,15 @@ const COMPACT_COMPONENTS: Components = {
     ),
     hr: () => <hr className="my-4 border-hairline" />,
     strong: (props) => <strong {...props} className="font-medium text-ink" />,
+    table: (props) => (
+        <div className="my-2 overflow-x-auto">
+            <table {...props} className="w-full border-collapse text-xs" />
+        </div>
+    ),
+    th: (props) => (
+        <th {...props} className="border-b border-hairline px-2 py-1 text-left font-medium text-ink" />
+    ),
+    td: (props) => (
+        <td {...props} className="border-b border-hairline/50 px-2 py-1 align-top text-ink/85" />
+    ),
 };
