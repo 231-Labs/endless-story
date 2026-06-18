@@ -333,6 +333,8 @@ export async function spineResolveAndWeave(
     const ev = openList(ctx.sagaId).find((e) => e.eventId === step.eventId);
     if (!ev) return { resolved: false, settled: false, cutPovCount: 0 };
 
+    const ev8 = ev.eventId.slice(0, 10);
+    const age = spineClockTick() - ev.openedAtTick;
     const { resolved, settled } = await settleEvent(admin, ctx, ev);
     if (!resolved) {
         // The resolve tx didn't land. DON'T removeOpen — leave the event OPEN (in
@@ -340,8 +342,11 @@ export async function spineResolveAndWeave(
         // accumulated POVs. Dropping it from memory here was the orphan-loop bug:
         // open on chain, forgotten in memory → re-adopted as an orphan → re-failing
         // forever (the persistent "2/2 卡住" the director kept janitoring).
+        // [ch-diag] resolve_failed → the event is wedged on chain; grep this to see
+        // whether a stuck resolve (not a weave gap) is starving the chapter stream.
         console.warn(
-            `[event-spine] resolve FAILED for ${ev.eventId.slice(0, 10)}… — left OPEN to retry next tick`,
+            `[ch-diag] resolve event=${ev8} day=${day ?? '?'} age=${age} resolved=false ` +
+                `wove=false reason=resolve_tx_failed — left OPEN to retry`,
         );
         return { resolved: false, settled: false, cutPovCount: 0 };
     }
@@ -357,6 +362,7 @@ export async function spineResolveAndWeave(
     // reconcileOpenFromChain gives the open set.
     const cutPovs = povsByEvent.get(ev.eventId) ?? [];
     const memoryVoices = new Set(cutPovs.map((p) => p.characterId)).size;
+    const path = memoryVoices >= 2 ? 'memory' : 'chain';
     const base = {
         sceneId: ev.sceneId,
         sceneName: ctx.sceneNameById.get(ev.sceneId) ?? '戲班',
@@ -365,16 +371,35 @@ export async function spineResolveAndWeave(
         day,
     };
     let cutPovCount = 0;
+    let wove = false;
+    let skip = '';
+    let errMsg = '';
     try {
         const cut = await compileEventChapterAction(
-            memoryVoices >= 2
+            path === 'memory'
                 ? { ...base, povs: cutPovs }
                 : { ...base, castCharacterIds: ev.participantIds },
         );
         cutPovCount = cut.povCount;
+        wove = cut.anchored;
+        skip = cut.skipReason ?? '';
+        errMsg = cut.error ?? '';
     } catch (err) {
-        console.warn('[event-spine] cut weave failed:', err);
+        errMsg = err instanceof Error ? err.message : String(err);
     }
+
+    // [ch-diag] the single line that explains every resolved event's chapter
+    // outcome. memVoices vs path=chain/chainPovs tells me whether the in-memory
+    // loss is being recovered from chain (⑨); wove=false + skip/err tells me WHY
+    // a resolved event produced no chapter. Grep `[ch-diag] resolve`.
+    console.log(
+        `[ch-diag] resolve event=${ev8} day=${day ?? '?'} age=${age} cast=${ev.participantIds.length} ` +
+            `resolved=true settled=${settled} memVoices=${memoryVoices} path=${path} ` +
+            `wove=${wove} povCount=${cutPovCount}` +
+            (skip ? ` skip=${skip}` : '') +
+            (errMsg ? ` err="${errMsg.slice(0, 120)}"` : '') +
+            ` scene="${base.sceneName}" label="${(ev.label ?? '').slice(0, 24)}"`,
+    );
 
     removeOpen(ctx.sagaId, ev.eventId);
     povsByEvent.delete(ev.eventId);

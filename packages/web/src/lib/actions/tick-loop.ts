@@ -1131,6 +1131,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 for (const st of storylets) {
                     if (!st.opened) continue;
                     const cutPovs = povsFor(st);
+                    // [ch-diag] what material each LIVE event gathered THIS tick.
+                    // Grep `[ch-diag] accumulate`: povThisTick=0 across ticks means
+                    // the cast isn't narrating (POVs never land) → no weave material;
+                    // voices<2 every tick on a spine event means the cut only ever
+                    // forms at resolve (via memory or the chain-recovery fallback).
+                    console.log(
+                        `[ch-diag] accumulate event=${(st.digest ?? 'none').slice(0, 10)} day=${worldTime?.day ?? '?'} ` +
+                            `mode=${spineMode ? 'spine' : 'immediate'} tmpl=${st.templateId} cast=${st.characterIds.length} ` +
+                            `povThisTick=${cutPovs.length} voicesThisTick=${new Set(cutPovs.map((p) => p.characterId)).size} ` +
+                            `scene="${st.sceneName}"`,
+                    );
                     if (spineMode && spineCtx && st.digest) {
                         spineAccumulatePovs(st.digest, cutPovs);
                     } else if (cutPovs.length >= 2) {
@@ -1173,19 +1184,28 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // simply empty while the settle still lands.
     if (spineMode && spineCtx) {
         const ctx = spineCtx;
+        // [ch-diag] one-line per-tick spine census. Grep `[ch-diag] tick`:
+        //   resolve=0 across many ticks while open>0 = events linger and never
+        //   resolve (the "卡住" you worry about — pair with `[ch-diag] resolve`
+        //   resolved=false to confirm a wedged resolve vs just young events).
+        const count = (a: SpineStep['action']) => spineSteps.filter((s) => s.action === a).length;
+        console.log(
+            `[ch-diag] tick day=${worldTime?.day ?? '?'} mode=spine live=${storylets.length} ` +
+                `open=${count('open')} continue=${count('continue')} resolve=${count('resolve')} idle=${count('idle')}`,
+        );
         for (const step of spineSteps) {
             if (step.action !== 'resolve') continue;
             const s = step;
             cutJobs.push(async () => {
-                const r = await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
-                if (r.resolved) {
-                    console.log(
-                        `[tick-loop] spine resolve (${s.eventId.slice(0, 10)}…): settled=${r.settled}` +
-                            ` cutPovs=${r.cutPovCount}`,
-                    );
-                }
+                // The rich per-event outcome is logged inside spineResolveAndWeave
+                // as `[ch-diag] resolve …` (memVoices / path / wove / skip / err).
+                await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
             });
         }
+    } else if (!spineMode) {
+        console.log(
+            `[ch-diag] tick day=${worldTime?.day ?? '?'} mode=immediate live=${storylets.length}`,
+        );
     }
 
     // 4.7 ENCOUNTER — ONE autonomous 溫情/關係戲 chapter per tick. Data-driven:

@@ -122,7 +122,17 @@ async function fetchEventCutsForSagaUncached(
             }
         }),
     );
-    return resolved.filter((c): c is EventCutEntry => c != null).slice(0, limit);
+    const cuts = resolved.filter((c): c is EventCutEntry => c != null).slice(0, limit);
+    // [ch-diag] read-side census: scanned = whole saga commitment log; candidates
+    // = scene-subject (the §⑨ pre-filter); cuts = those whose blob is an es:cut.
+    // Grep `[ch-diag] cut-read`: candidates>0 but cuts=0 means scene commitments
+    // exist whose blobs aren't event_cut (mis-subject?) — distinct from the feed
+    // reading empty because none were ever woven (candidates=0).
+    console.log(
+        `[ch-diag] cut-read saga=${sagaId.slice(0, 10)} scanned=${summaries.length} ` +
+            `candidates=${candidates.length} cuts=${cuts.length}`,
+    );
+    return cuts;
 }
 
 /** A cut with its full prose body — the /feed/cut/[id] detail page payload. */
