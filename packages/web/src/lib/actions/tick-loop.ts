@@ -525,6 +525,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             return sid ? [{ characterId: c.id, sceneId: sid }] : [];
         });
         let candidates = buildAxisCandidates(drama?.top ?? [], occupancy, framingForStatement);
+        // [ch-diag] WHY events do / don't open. An event needs ≥2 cast co-present
+        // in one scene AND tensioned on one axis (minCast=2). Grep `[ch-diag] spine-plan`:
+        //   occupancy=0           → scene reads failed (429 on resolveCurrentOwner) →
+        //                           cast is "nowhere" → no axis can quorum (read bug).
+        //   occupancy>0 cand=0    → co-located but no shared desire (dispersion).
+        //   cand=[..:1..] all <2  → desirers split across scenes/singletons (no quorum).
+        //   cand=[..:2+..] but open 0 → a planner bug to chase.
+        console.log(
+            `[ch-diag] spine-plan day=${worldTime?.day ?? '?'} acting=${slice.length} ` +
+                `occupancy=${occupancy.length} tensionRows=${(drama?.top ?? []).length} ` +
+                `candidates=${candidates.length} minCast=2 cand=[${candidates
+                    .slice(0, 6)
+                    .map((c) => `${c.templateId.replace('contention:', '')}:${c.participantIds.length}@${c.sceneId.slice(0, 6)}`)
+                    .join(',')}]`,
+        );
         // LLM-frame only the axes that could open this tick (bounded LLM spend).
         if (llmFraming && candidates.length > 0) {
             candidates = await Promise.all(
