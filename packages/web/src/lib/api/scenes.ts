@@ -45,6 +45,22 @@ export async function listAllClips(sagaId: string): Promise<SceneClip[]> {
   return httpGet<SceneClip[]>('/scene-clips', { query: { sagaId } });
 }
 
+/**
+ * Every PUBLISHED clip for the homepage showcase — no day window, no count cap.
+ * The override manifest (`/api/manifest/hero-clips`) is already filtered to
+ * status='live' upstream, so whatever the admin has 上架 shows up here, newest
+ * (highest day) first. The horizontal-scroll carousel handles any length.
+ * Deliberately NOT sagaId-filtered (like `listTodayClips`): the manifest is the
+ * source of truth for what's live, and its sagaId may not match the on-chain id.
+ */
+export async function listShowcaseClips(): Promise<SceneClip[]> {
+  const byDayDesc = (a: SceneClip, b: SceneClip) => b.day - a.day;
+  const override = await loadDemoClipOverride();
+  if (override.length > 0) return [...override].sort(byDayDesc);
+  if (USE_MOCK) return [...sceneClips].sort(byDayDesc);
+  return httpGet<SceneClip[]>('/scene-clips', {});
+}
+
 async function loadDemoClipOverride(): Promise<SceneClip[]> {
   const url = process.env.DEMO_CLIPS_URL?.trim();
   if (url) {

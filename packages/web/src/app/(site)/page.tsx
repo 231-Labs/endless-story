@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function HomePage() {
   const saga = await sagasApi.getCurrentSaga();
   const [clips, openRecruitments, sagaCharacters] = await Promise.all([
-    scenesApi.listTodayClips(saga.currentDay, 4),
+    scenesApi.listShowcaseClips(),
     recruitmentsApi.listOpenRecruitments(),
     // saga.castIds isn't populated by the on-chain saga read (characters
     // reference the saga, not vice versa) — count the saga's characters for
