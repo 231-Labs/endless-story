@@ -10,3 +10,4 @@
 export * from './material.js';
 export * from './gate.js';
 export * from './compose.js';
+export * from './story-bible.js';

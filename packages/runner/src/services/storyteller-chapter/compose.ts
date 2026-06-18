@@ -14,6 +14,7 @@
 
 import type { MaterialItem, ArcWatermark } from './material.ts';
 import type { ChapterMode, ReadinessDecision } from './gate.ts';
+import type { ContinuityContext } from './story-bible.ts';
 
 /** The subset of the compiler input this layer fills. Spread into the existing
  *  `CompileEventChapterInput` (runner) / `compileEventChapterAction` (web). */
@@ -23,7 +24,8 @@ export interface ChapterCompilerPayload {
     eventTx?: string;
     eventLabel?: string;
     day?: number;
-    mode: ChapterMode;
+    /** Never 'wait' — a wait decision yields no payload. */
+    mode: Exclude<ChapterMode, 'wait'>;
     /** Voice floor: 'overview' allows a single anchored POV (anti-stuck). */
     minVoices: number;
     povs: Array<{ characterId: string; characterName: string; role?: string; body: string }>;
@@ -31,6 +33,8 @@ export interface ChapterCompilerPayload {
     intents: Array<{ name: string; line: string }>;
     recalled: Array<{ name: string; text: string }>;
     prevChapterSummary?: string;
+    /** Story-bible continuity (承先啟後), selected for this chapter's cast. */
+    continuity?: ContinuityContext;
 }
 
 /** Pick the atom that should anchor the cut: latest substantive, else latest. */
@@ -48,7 +52,7 @@ function anchorAtom(slice: ReadonlyArray<MaterialItem>): MaterialItem | undefine
 export function toChapterCompilerPayload(
     decision: ReadinessDecision,
     watermark: ArcWatermark,
-    meta: { recalled?: Array<{ name: string; text: string }> } = {},
+    meta: { recalled?: Array<{ name: string; text: string }>; continuity?: ContinuityContext } = {},
 ): ChapterCompilerPayload | null {
     if (decision.mode === 'wait') return null;
     const anchor = anchorAtom(decision.slice);
@@ -77,13 +81,14 @@ export function toChapterCompilerPayload(
         eventTx: anchor.eventId,
         eventLabel: anchor.label,
         day: anchor.day,
-        mode: decision.mode,
+        mode: decision.mode === 'overview' ? 'overview' : 'progressed',
         minVoices: decision.mode === 'overview' ? 1 : 2,
         povs,
         observations,
         intents,
         recalled: meta.recalled ?? [],
         prevChapterSummary: watermark.lastSummary,
+        continuity: meta.continuity,
     };
 }
 

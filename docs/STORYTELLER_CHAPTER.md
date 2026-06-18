@@ -1,6 +1,7 @@
 # Endless Story · 說書人 Agent 化章回（Storyteller-Gated Chapter Compiler）
 
-> **狀態**：design draft · 2026-06-18 起 · 章回（event_cut）產製的下一代設計。
+> **狀態**：Phase A 引擎已實裝 + 解耦 harness 驗過、**尚未接線進 production**（2026-06-18）·
+> 章回（event_cut）產製的下一代設計。設計（§1–§6）仍為提案形態，落地進度見 §7。
 > 屬 [`CONTENT_PIPELINE.md`](./CONTENT_PIPELINE.md) §2「回」這一層的重寫提案；
 > 與內容鏈路其餘層（POV/公報/劇照）的形態約定仍以 CONTENT_PIPELINE 為準。
 > agent 權責邊界以 [`NARRATIVE_AGENTS.md`](./NARRATIVE_AGENTS.md) 為準。
@@ -172,3 +173,64 @@ POV、出牌（含內心話）、結算、資源易手。
 **調參筆記**：`DEFAULT_THRESHOLDS` = `{minNewVoices:2, minProgressBeats:2, maxSilentDays:3, overviewMaterialCount:6, minOverviewVoices:1}`。想要「久一點才出、更高品質」就調大 `maxSilentDays`/`overviewMaterialCount`。
 
 **前置**：⑨（章回顯示窗 + spine 鏈上 POV 回補）已 commit `9e88be3`（待部署 + VPS 驗收）。
+
+**診斷標籤（commit `be57e46`）**：在 production 的 cut 產製路徑（`packages/web`）植入 `[ch-diag]` 四組標籤，方便 VPS 上對照「為何沒出章」：
+- `[ch-diag] tick`（`tick-loop.ts`）— spine 每 tick census（open/continue/resolve/idle count）。
+- `[ch-diag] accumulate`（`tick-loop.ts`）— 各 event 每 tick 累積的 POV／voices 數。
+- `[ch-diag] resolve`（`event-spine.ts`）— resolved event 的成敗細節（memVoices/path/wove/povCount/skip/err）。
+- `[ch-diag] cut-read`（`cut-read.ts`）— read-side 掃描（scanned commitments/candidates/final cuts）。
+- `[ch-diag] spine-plan`（`tick-loop.ts`，commit `7d3a851`）— 為何開/不開事件：occupancy / candidates / 各軸 quorum。
+
+---
+
+## 8. 方向定案（2026-06-18）：三聲部 + 故事總綱
+
+VPS 實跑後使用者的兩個更深的判斷，重設了方向：
+
+1. **「敘事完全沒了日常，整個圍繞在事件上——搶歸搶難道沒有人性？」** 公開敘事面 100% 是
+   contention event_cut；日常觀察 / 輕量互動 / 關係記憶**每 tick 都在產，卻死在記憶體**，
+   或被降級到訂閱限定的「角色回」。engine 把「故事」等同於「資源爭奪」。
+2. **「最希望透過 AI 讓章回讀起來像小說一樣承先啟後、彼此關聯。」**
+
+### 8.1 三個聲部、三種門檻
+
+| 面 | 是什麼 | 門檻 | 餵什麼 |
+|---|---|---|---|
+| **手卷**（`/saga` handscroll） | 世界的**活脈搏**／現況（即時感） | 低、即時、可消逝 | 出牌台詞、溫情片刻、日常觀察、輕量互動、誰在哪 |
+| **章回** | **小說**（承先啟後、彼此關聯） | 高、精選、永久 | AI 織成連續敘事 |
+| （日常回） | 中間態 | 中 | 可選；多數日常放手卷即可，不必硬成回 |
+
+三者互相成全：手卷吸收即時性 → 不再空屏、真的「活著」；章回得以守高門檻、專心做文學性。
+**手卷現況空的根因**：`getSagaLiveSnapshot` 只吃**開著的事件**（`OpenEventStatus` + 每場景最新
+出牌 ghost quote）→ 0 事件就整片空。重生 = 改吃**所有 live tick 素材**（出牌 intent 已上鏈；
+觀察/互動在記憶體，需開 live 端點）。
+
+### 8.2 故事總綱（Story Bible）——AI 讓章回承先啟後的關鍵
+
+給說書人一份**持久的敘事狀態**，每寫一回前讀它、寫完更新它：
+
+- **總綱內容**：running synopsis（故事到目前為止）、未了的 threads（主/支線＋現況＋status）、
+  各角色此刻的弧線（state）、上一回的摘要、留給下一回的 hooks（鉤子）。
+- **寫一回 = 承先啟後**：讀總綱 →（承先）接上一回的尾、callback 前文細節 → 推進 ≥1 條 thread →
+  （啟後）結尾留一個 hook → 寫完**更新總綱**（thread 進展/收束、synopsis 追加、刷新 hooks）。
+- 這就是「每回獨立 recap 一個事件」（舊）↔「一部連續的小說」（目標）的差別。
+  已建的 `prevSummary`「勿重述」guard 是種子（只回看 1 回、防守型）；總綱把它升級成
+  **累積、thread-aware、主動連貫**。
+
+**落地**（純核心可解耦測試，與 material/gate 同模式）：
+- `story-bible.ts`（純）：`StoryBible` 型別 + `emptyBible` + `selectContinuityContext(bible, castIds)`
+  （挑與在場卡司相關的 threads/arcs/hooks → 餵 compiler 的「承先」context）+
+  `applyChapter(bible, update)`（寫完把 thread 進展/新 hook/synopsis 折回 → 新總綱）。storage-agnostic。
+- `event-chapter-compiler` 擴 `EventCutContext.continuity`（synopsis/openThreads/hooks/castArcs）+
+  buildUserPrompt 渲染「# 故事總綱（承先）」段 + 結尾「（啟後）推進一條線、留一個鉤子」指示。
+- 持久化（I/O，staged）：總綱存哪（director memory / 專屬 commitment subject=saga）+ 寫完更新的
+  LLM「折回」步驟。純核心先行、可測；persistence + live 折回在 VPS 驗。
+
+### 8.3 順序（依使用者優先級）
+
+1. **章回小說化**（本次動工）：`story-bible.ts` 純核心 + compiler `continuity` + 承先啟後 prompt + 測試。
+2. **手卷重生**：`getSagaLiveSnapshot` 從「只吃事件」→「吃 live 脈搏」（出牌+溫情+日常+互動），修空屏。
+3. 日常回：可選，多併進手卷。
+
+> 並行前提：事件要能開（spine 保底 floor + 資源重新點火），否則脊椎本身沒戲。那是「有沒有戲」，
+> 本節三聲部是「戲怎麼被讀到」，兩條獨立。

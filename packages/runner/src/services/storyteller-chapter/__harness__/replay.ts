@@ -28,6 +28,7 @@ import {
     type ReadinessDecision,
 } from '../index.js';
 import { toChapterCompilerPayload, briefSummary } from '../compose.js';
+import { emptyBible, applyChapter, selectContinuityContext } from '../story-bible.js';
 import { runOnce } from '../../event-chapter-compiler/index.js';
 
 const PROV_RE = /^<!--es:prov\s+(\{[\s\S]*?\})\s*-->\s*/;
@@ -168,15 +169,43 @@ async function main() {
           lastSummary: '前情：後台為「誰壓軸」僵持，柳生春與蘇映雪各有盤算。' },
         tailDay,
     );
-    console.log(`## Phase 2 — 用真 compiler 織第 18–${tailDay} 日這段「產線從沒寫過」的章回`);
-    console.log(`gate 判定：[${tailDecision.mode}] ${tailDecision.reason}\n`);
-    const payload = toChapterCompilerPayload(tailDecision, {
-        toldIds: [], lastSummary: '前情：後台為「誰壓軸」僵持，柳生春與蘇映雪各有盤算。',
+    console.log(`## Phase 2 — 用真 compiler 織第 18–${tailDay} 日，帶「故事總綱」承先啟後`);
+    console.log(`gate 判定：[${tailDecision.mode}] ${tailDecision.reason}`);
+
+    // Build a story bible representing what days 1–17 already established, then
+    // hand the cast-relevant slice to the compiler as the 承先 context. This is
+    // the production read-path: bible → selectContinuityContext → compiler.
+    const castIds = [...new Set(tailDecision.slice.map((m) => m.characterId).filter(Boolean))] as string[];
+    let bible = applyChapter(emptyBible(D.sagaId), {
+        day: 17,
+        summary: '蘇映雪暫得頭牌名分，柳生春隱忍未發。',
+        synopsisAppend:
+            '春雪社為「誰當頭牌」相爭多日。蘇映雪以正旦身段步步進逼，暫占上風；外來坤生柳生春按住爭心，老生江聞鶴另謀唱片。',
+        newThreads: [
+            { title: '誰當頭牌', state: '蘇映雪暫得名分，柳生春不甘卻隱忍。', castIds },
+            { title: '柳生春的去留', state: '外來坤生，未被當自己人，動了走念。', castIds },
+        ],
+        arcUpdates: castIds.slice(0, 3).map((id, i) => ({
+            characterId: id,
+            name: ['蘇映雪', '柳生春', '江聞鶴'][i] ?? '某人',
+            state: ['占了上風卻不安穩', '隱忍、藏鋒', '另起爐灶謀唱片'][i] ?? '各有盤算',
+        })),
+        hooks: ['柳生春會不會就此求去', '蘇映雪的名分守不守得住'],
     });
+
+    const continuity = selectContinuityContext(bible, castIds);
+    const payload = toChapterCompilerPayload(
+        tailDecision,
+        { toldIds: bible.threads.map((t) => t.id), lastSummary: bible.lastChapterSummary },
+    );
     if (!payload) {
         console.log('（gate 判定 wait — 無樣章）');
         return;
     }
+    console.log('餵給 compiler 的故事總綱（承先）：');
+    console.log(`  synopsis: ${continuity.synopsis?.slice(0, 60)}…`);
+    console.log(`  開放線: ${(continuity.openThreads ?? []).join(' / ')}`);
+    console.log(`  鉤子: ${(continuity.hooks ?? []).join(' / ')}\n`);
     try {
         const res = await runOnce({
             sagaId: D.sagaId,
@@ -192,12 +221,22 @@ async function main() {
             intents: payload.intents,
             recalled: payload.recalled,
             prevChapterSummary: payload.prevChapterSummary,
+            continuity,
             dryRun: true,
         });
         if (res.chapter) {
             console.log(`織出 ${res.chapter.length} 字、${res.povCount} 視角：\n`);
             console.log(res.chapter);
-            console.log(`\n→ briefSummary（下一回的「勿重述」guard）：${briefSummary(res.chapter)}`);
+            // Fold the woven chapter back into the bible (production does this via an
+            // LLM step; here a light deterministic fold to show the loop closes).
+            bible = applyChapter(bible, {
+                day: tailDay,
+                summary: briefSummary(res.chapter),
+                synopsisAppend: briefSummary(res.chapter, 80),
+                advancedThreads: [{ title: '誰當頭牌', state: briefSummary(res.chapter, 60), castIds }],
+                hooks: ['下一回：這口悶氣誰先吐'],
+            });
+            console.log(`\n→ 寫完更新總綱（啟後）：第 ${bible.chapterCount} 回 · 線「誰當頭牌」狀態已推進 · 新鉤子=${bible.hooks.join('、')}`);
         } else {
             console.log(`compiler skip：${res.skipReason}（${pct(res.povCount)} 視角）`);
         }

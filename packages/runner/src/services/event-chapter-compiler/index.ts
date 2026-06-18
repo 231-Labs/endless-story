@@ -93,6 +93,8 @@ export interface CompileEventChapterInput {
     recalled?: Array<{ name: string; text: string }>;
     /** Previous chapter summary — the "已說過，勿重述" guard. */
     prevChapterSummary?: string;
+    /** Story-bible continuity (承先啟後) — see story-bible.ContinuityContext. */
+    continuity?: EventCutContext['continuity'];
     /** Saga peers WITH gender, for the self-check's pronoun/kinship rules (the woven cut is
      *  where female-他 errors surface). Omitted ⇒ only token-leak runs. No names hardcoded. */
     rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
@@ -192,6 +194,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         intents: input.intents,
         recalled: input.recalled,
         prevSummary: input.prevChapterSummary,
+        continuity: input.continuity,
     };
 
     const llm = llmText.createTextClient({ kind: 'primary' });
