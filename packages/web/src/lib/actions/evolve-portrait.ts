@@ -79,12 +79,19 @@ const INK_GUARD = '淡彩水墨工筆畫風，純白背景，無任何文字、�
 const INK_TONE =
     '淡彩水墨工筆畫風：淡墨細線勾勒，清透水彩薄塗，設色清淡通透，大面積留白，宣紙暈染質感；統一純白背景。';
 
-/** Role-aware opera行當 for the makeup variants. */
-function stageRoleHint(role: string | undefined, gender: string): string {
-    if (role && /(小生|老生|旦|花旦|青衣|武生|老旦|丑|淨)/.test(role)) return role;
-    if (gender === '男') return '小生或老生';
-    if (gender === '女') return '旦角（花旦或青衣）';
-    return '依氣質選定行當';
+/**
+ * The opera行當 for the makeup variants follows the character's actual `role`,
+ * NOT their gender — 反串 (cross-gender casting: 坤生 a woman playing 生行,
+ * 乾旦 a man playing 旦行) is core to this troupe, so a gender guess would put
+ * the wrong makeup on the face. Resolve 反串 to the PERFORMING line; otherwise
+ * pass the role through. Only fall back to a generic hint when role is unknown.
+ */
+function stageRoleHint(role: string | undefined): string {
+    const r = role?.trim();
+    if (!r) return '依此角色的行當';
+    if (/坤生|乾生/.test(r)) return '小生（生行俊扮）';
+    if (/乾旦|坤旦/.test(r)) return '旦角（旦行扮相）';
+    return r; // already a 行當 like 小生 / 老生 / 花旦 / 青衣 / 武生 / 淨 / 丑
 }
 
 /** realistic — real-person photo of the same face. */
@@ -123,7 +130,7 @@ function buildAnchorPrompt(
     const person = `${role ?? '梨園中人'}，${gender}，${Number(pf.age_years ?? 0)} 歲`;
     const extra = occasion?.trim() ? `（${occasion.trim()}）` : '';
     if (kind === 'realistic') return realisticPrompt(person, extra);
-    const stageRole = stageRoleHint(role, gender);
+    const stageRole = stageRoleHint(role);
     if (kind === 'stage-real') return stagePhotoPrompt(person, stageRole, extra);
     return stageInkPrompt(person, stageRole, extra); // 'stage'
 }
