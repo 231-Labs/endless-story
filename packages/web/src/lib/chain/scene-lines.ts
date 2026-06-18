@@ -30,14 +30,20 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
-export type SceneLineKind = 'act' | 'move' | 'social';
+/** What KIND of beat the line is — lets the handscroll tint each ghost quote so
+ *  the world reads alive in more than one register: 爭(act) · 走(move) · 周旋(social)
+ *  · 盤算(plan) · 暖(warmth). */
+export type SceneLineKind = 'act' | 'move' | 'social' | 'plan' | 'warmth';
 
-interface SceneLine {
+export interface SceneLine {
     characterId: string;
     text: string;
     kind: SceneLineKind;
     ts: number;
 }
+
+/** Recent lines kept per scene (the living stream, newest last). */
+const RING = 5;
 
 // Fixed, TMPDIR-independent path so every process agrees (writer + reader may
 // run under different TMPDIR values — e.g. a headless tick script vs the dev
@@ -45,17 +51,25 @@ interface SceneLine {
 // SCENE_LINES_FILE on non-POSIX hosts.
 const STORE_FILE = process.env.SCENE_LINES_FILE ?? '/tmp/endless-story-scene-lines.json';
 
-function readStore(): Record<string, SceneLine> {
+/** sceneId → recent lines (newest last). Tolerates the legacy single-object
+ *  shape (one line per scene) by wrapping it in a one-element ring. */
+function readStore(): Record<string, SceneLine[]> {
     try {
         const raw = readFileSync(STORE_FILE, 'utf8');
-        const parsed = JSON.parse(raw) as Record<string, SceneLine>;
-        return parsed && typeof parsed === 'object' ? parsed : {};
+        const parsed = JSON.parse(raw) as Record<string, SceneLine | SceneLine[]>;
+        if (!parsed || typeof parsed !== 'object') return {};
+        const out: Record<string, SceneLine[]> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+            if (Array.isArray(v)) out[k] = v;
+            else if (v && typeof v === 'object') out[k] = [v as SceneLine]; // legacy
+        }
+        return out;
     } catch {
         return {}; // missing / unreadable / corrupt → empty
     }
 }
 
-function writeStore(store: Record<string, SceneLine>): void {
+function writeStore(store: Record<string, SceneLine[]>): void {
     try {
         writeFileSync(STORE_FILE, JSON.stringify(store));
     } catch {
@@ -63,7 +77,8 @@ function writeStore(store: Record<string, SceneLine>): void {
     }
 }
 
-/** Record the latest line for a scene (newest wins). No-op on empty input. */
+/** Append a line to a scene's living stream (ring-trimmed to RING). De-dupes an
+ *  immediate exact repeat (same character + text) so a re-run doesn't stutter. */
 export function recordSceneLine(
     sceneId: string | undefined,
     characterId: string,
@@ -72,16 +87,36 @@ export function recordSceneLine(
 ): void {
     if (!sceneId || !characterId || !text?.trim()) return;
     const store = readStore();
-    store[sceneId] = { characterId, text: text.trim(), kind, ts: Date.now() };
+    const ring = store[sceneId] ?? [];
+    const last = ring[ring.length - 1];
+    const clean = text.trim();
+    if (last && last.characterId === characterId && last.text === clean) return;
+    ring.push({ characterId, text: clean, kind, ts: Date.now() });
+    store[sceneId] = ring.slice(-RING);
     writeStore(store);
 }
 
-/** Latest recorded line for a scene, or null. Persists until a newer line wins. */
+/** Latest recorded line for a scene, or null (back-compat). */
 export function getLatestSceneLine(
     sceneId: string,
-): { characterId: string; text: string } | null {
+): { characterId: string; text: string; kind: SceneLineKind } | null {
+    const ring = readStore()[sceneId];
+    const l = ring?.[ring.length - 1];
+    return l ? { characterId: l.characterId, text: l.text, kind: l.kind } : null;
+}
+
+/** Recent lines for a scene, newest first, up to `n`. */
+export function getRecentSceneLines(sceneId: string, n = RING): SceneLine[] {
+    const ring = readStore()[sceneId] ?? [];
+    return ring.slice(-n).reverse();
+}
+
+/** A saga-wide pulse: the newest lines across all scenes, newest first. */
+export function getRecentSceneLinesAcross(n = 8): Array<SceneLine & { sceneId: string }> {
     const store = readStore();
-    const l = store[sceneId];
-    if (!l) return null;
-    return { characterId: l.characterId, text: l.text };
+    const all: Array<SceneLine & { sceneId: string }> = [];
+    for (const [sceneId, ring] of Object.entries(store)) {
+        for (const l of ring) all.push({ ...l, sceneId });
+    }
+    return all.sort((a, b) => b.ts - a.ts).slice(0, n);
 }

@@ -33,6 +33,7 @@ import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounte
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
+import { recordSceneLine } from '@/lib/chain/scene-lines';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings } from '@/lib/chain/memory';
@@ -393,6 +394,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 })),
             );
             tlog(`   移動 ${moves.filter((m) => m.ok && m.toSceneId).length} 人${dryRun ? '（預演）' : ''}`);
+            // Feed the handscroll's living stream from MOVEMENT — happens every tick
+            // regardless of events, so the world never reads empty between dramas.
+            // The reason ("循著爭端走了過去") arrives at the destination scene.
+            if (!dryRun) {
+                for (const m of moves) {
+                    if (m.ok && m.toSceneId && m.reason) {
+                        recordSceneLine(m.toSceneId, m.characterId, m.reason, 'move');
+                    }
+                }
+            }
             if (moves.some((m) => m.ok && m.toSceneId)) {
                 activeScenes = applyMoveResultsToScenes(activeScenes, moves);
                 activeRoster = applyMoveResultsToRoster(activeRoster, activeScenes, moves);
@@ -1257,6 +1268,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
                 if (enc.ok && enc.chapter?.trim()) {
                     lastEncounterPair = pair.pairKey;
+                    // warmth beat → the handscroll's living stream (the human register,
+                    // not 爭). A short opening clause of the relationship chapter.
+                    if (!dryRun) {
+                        const warm = enc.chapter
+                            .replace(/^#{1,6}\s.*$/m, '')
+                            .trim()
+                            .split(/[。！？\n]/)[0]
+                            ?.replace(/\s+/g, '')
+                            .slice(0, 22);
+                        recordSceneLine(rosterById.get(pair.holderId)?.currentSceneId, pair.holderId, warm, 'warmth');
+                    }
                     dumpChapter(
                         {
                             kind: 'encounter',

@@ -85,6 +85,11 @@ export function SagaHandscroll(props: Props) {
   // snapshot returns [] when nothing's anchored on chain).
   const [liveScenes, setLiveScenes] = useState<Scene[]>(scenes);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  // Latest ghost line per scene WITH its register (act/move/warmth/…), kept
+  // alongside the Scene merge because Scene.ghostQuotes can't carry the kind.
+  const [liveLineByScene, setLiveLineByScene] = useState<
+    Record<string, { characterId: string; text: string; kind: string }>
+  >({});
   useEffect(() => {
     if (!saga.id) return;
     let cancelled = false;
@@ -112,7 +117,14 @@ export function SagaHandscroll(props: Props) {
               }),
             );
           }
-          if (!cancelled) setLiveEvents(snap.openEvents ?? []);
+          if (!cancelled) {
+            setLiveEvents(snap.openEvents ?? []);
+            setLiveLineByScene(
+              Object.fromEntries(
+                snap.scenes.filter((s) => s.latestLine).map((s) => [s.sceneId, s.latestLine!]),
+              ),
+            );
+          }
         } catch {
           /* transient RPC failure — keep last good state */
         }
@@ -275,7 +287,10 @@ export function SagaHandscroll(props: Props) {
             {liveScenes.map((scene) => {
               const placement = placementById.get(scene.id);
               if (!placement) return null;
-              const primary = scene.ghostQuotes?.[0];
+              // Prefer the live line (carries its register/kind); fall back to the
+              // scene's seeded ghost quote on first paint.
+              const live = liveLineByScene[scene.id];
+              const primary = live ?? scene.ghostQuotes?.[0];
               if (!primary) return null;
               const speaker = charactersById.get(primary.characterId) ?? null;
               const { left, top } = quotePosition(placementAnchor(placement), scene.id);
@@ -288,6 +303,7 @@ export function SagaHandscroll(props: Props) {
                   leftPct={left}
                   topPct={top}
                   delaySeconds={0.35}
+                  kind={live?.kind}
                 >
                   「{truncated}」
                 </FloatingQuote>
