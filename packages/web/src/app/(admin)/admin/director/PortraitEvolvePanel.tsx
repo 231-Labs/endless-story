@@ -7,6 +7,7 @@ import {
     type PortraitOccasionKind,
 } from '@/lib/actions/evolve-portrait';
 import { txUrl } from '@/lib/explorer';
+import type { StageSlots } from '@/lib/stage-prompt';
 import type { Character } from '@endless-story/shared';
 
 /**
@@ -49,19 +50,44 @@ const KIND_HINT: Record<PortraitOccasionKind, string> = {
 /** Kinds rendered as real-person photo (vs ink-wash painting). */
 const PHOTO_KINDS: PortraitOccasionKind[] = ['realistic', 'stage-real'];
 
+/** Kinds whose 戲妝 prompt is slot-built and accepts a JSON slot override. */
+const STAGE_KINDS: PortraitOccasionKind[] = ['stage', 'stage-real'];
+
+/** Slot keys the override textarea documents (matches StageSlots). */
+const SLOT_OVERRIDE_PLACEHOLDER =
+    '可選 · 覆寫戲妝 slot（JSON），留空＝LLM 自動。例：\n{\n  "operaType": "京劇",\n  "playTitle": "紅樓夢",\n  "roleName": "賈寶玉",\n  "makeupDesc": "俊扮油彩濃重、吊眉描眼、紅唇",\n  "sceneDesc": "大觀園亭台花影、綢緞帷幔",\n  "poseAction": "執扇回眸",\n  "emotionDesc": "風流灑脫"\n}';
+
 export function PortraitEvolvePanel({ characters }: { characters: Character[] }) {
     const [characterId, setCharacterId] = useState<string>(characters[0]?.id ?? '');
     const [kind, setKind] = useState<PortraitOccasionKind>('stage');
     const [occasion, setOccasion] = useState('');
+    const [overrideText, setOverrideText] = useState('');
     const [result, setResult] = useState<EvolvePortraitResult | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const run = (dryRun: boolean) => {
         if (!characterId) return;
         if (kind === 'custom' && !occasion.trim()) return;
+
+        // Parse the optional slot override (stage kinds only). Bad JSON → surface
+        // an error instead of silently dropping the override.
+        let slotsOverride: Partial<StageSlots> | undefined;
+        if (STAGE_KINDS.includes(kind) && overrideText.trim()) {
+            try {
+                const parsed = JSON.parse(overrideText);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    throw new Error('需為 JSON 物件');
+                }
+                slotsOverride = parsed as Partial<StageSlots>;
+            } catch (e) {
+                setResult({ ok: false, error: `slot override JSON 解析失敗：${e instanceof Error ? e.message : String(e)}` });
+                return;
+            }
+        }
+
         setResult(null);
         startTransition(async () => {
-            const r = await evolvePortraitAction({ characterId, kind, occasion, dryRun });
+            const r = await evolvePortraitAction({ characterId, kind, occasion, slotsOverride, dryRun });
             setResult(r);
         });
     };
@@ -126,6 +152,22 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
                     className="w-full rounded border border-hairline bg-surface px-3 py-2 text-sm text-ink focus:border-cinnabar focus:outline-none"
                 />
             </label>
+
+            {STAGE_KINDS.includes(kind) ? (
+                <label className="block space-y-1.5">
+                    <div className="text-2xs tracking-widest text-mute">
+                        戲妝 slot 覆寫（進階 · JSON · 留空＝LLM 自動）
+                    </div>
+                    <textarea
+                        value={overrideText}
+                        onChange={(e) => setOverrideText(e.target.value)}
+                        placeholder={SLOT_OVERRIDE_PLACEHOLDER}
+                        disabled={isPending}
+                        rows={6}
+                        className="w-full rounded border border-hairline bg-surface px-3 py-2 font-mono text-2xs text-ink focus:border-cinnabar focus:outline-none"
+                    />
+                </label>
+            ) : null}
 
             <div className="flex flex-wrap gap-3">
                 <button

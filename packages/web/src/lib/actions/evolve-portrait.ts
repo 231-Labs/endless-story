@@ -28,7 +28,9 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { evolveVariantPrompt, evolveVariantTone } from '@/lib/image-prompts';
+import { buildStagePrompt, type StageSlots } from '@/lib/stage-prompt';
 import { generatePortrait } from './generate-portrait';
+import { curateStageSlots } from './stage-curator';
 
 export type PortraitOccasionKind =
     | 'reference'
@@ -74,10 +76,6 @@ const OCCASION_BY_KIND: Record<
 // ── img2img anchor prompts (face preserved off the base portrait) ──
 /** Photo variants: only forbid stray text (realism is the whole point). */
 const PHOTO_GUARD = '畫面中不得出現任何文字、浮水印、邊框或排版框線。';
-/** Ink-wash variant guard: keep pale-ink style + clean frame. */
-const INK_GUARD = '淡彩水墨工筆畫風，純白背景，無任何文字、浮水印、邊框、數字、字母或排版框線。';
-const INK_TONE =
-    '淡彩水墨工筆畫風：淡墨細線勾勒，清透水彩薄塗，設色清淡通透，大面積留白，宣紙暈染質感；統一純白背景。';
 
 /**
  * The opera行當 for the makeup variants follows the character's actual `role`,
@@ -102,37 +100,60 @@ function realisticPrompt(person: string, extra: string): string {
     );
 }
 
-/** stage-real — real-person photo with painted opera makeup on the base face. */
-function stagePhotoPrompt(person: string, stageRole: string, extra: string): string {
-    return (
-        `寫實真人舞台劇照：與參考圖同一個人、同一張臉（骨相、五官、神態保持一致），${person}${extra}。` +
-        `臉上勾畫上彩的越劇戲妝：油彩濃妝、勾眉描眼、暈染腮紅，依角色行當作${stageRole}扮相，戴頭面、穿戲服，舞台燈光；` +
-        `半身正面，照片寫真感、真實膚質與油彩質感。${PHOTO_GUARD}`
-    );
-}
-
-/** stage — ink-wash portrait with painted opera makeup on the base face. */
-function stageInkPrompt(person: string, stageRole: string, extra: string): string {
-    return (
-        `${INK_TONE}\n與參考圖同一個人、同一張臉，${person}${extra}。\n` +
-        `登台演出：臉上勾畫上彩的越劇戲妝（油彩、勾眉描眼，依角色行當作${stageRole}扮相），戴頭面、穿戲服，舞台燈光，半身或七分身。${INK_GUARD}`
-    );
+/**
+ * stage / stage-real — painted opera makeup on the base face, via the structured
+ * 戲妝 builder (Hybrid): LLM-curated dramaturgical slots (play / scene / pose…) +
+ * role-default makeup/headpiece/costume, with an optional caller override merged
+ * on top. Only `styleMode` separates the two kinds (ink-wash vs real-photo).
+ */
+async function buildStageImgPrompt(
+    kind: 'stage' | 'stage-real',
+    pf: { gender?: string; age_years?: number | string },
+    role: string | undefined,
+    occasion: string | undefined,
+    override?: Partial<StageSlots>,
+): Promise<string> {
+    const gender = mapGender(pf.gender ?? '');
+    const roleType = stageRoleHint(role);
+    const curated = await curateStageSlots({
+        roleType,
+        occasion,
+        gender,
+        ageYears: Number(pf.age_years ?? 0) || undefined,
+    });
+    const styleMode = kind === 'stage-real' ? '寫實真人舞台劇照' : '淡彩水墨工筆畫風';
+    // Sanitize the override: keep only non-empty string slots (the JSON comes from
+    // an admin textarea, so a stray number must not reach buildStagePrompt's .trim()).
+    const cleanOverride: Record<string, string> = {};
+    if (override) {
+        for (const [k, val] of Object.entries(override)) {
+            if (typeof val === 'string' && val.trim()) cleanOverride[k] = val.trim();
+        }
+    }
+    const slots: StageSlots = {
+        styleMode,
+        roleType,
+        ...curated,
+        ...cleanOverride,
+    };
+    return buildStagePrompt(slots);
 }
 
 /** Build the img2img prompt for a face-preserving kind. */
-function buildAnchorPrompt(
+async function buildAnchorPrompt(
     kind: Img2ImgKind,
     pf: { gender?: string; age_years?: number | string },
     role: string | undefined,
     occasion?: string,
-): string {
-    const gender = mapGender(pf.gender ?? '');
-    const person = `${role ?? '梨園中人'}，${gender}，${Number(pf.age_years ?? 0)} 歲`;
-    const extra = occasion?.trim() ? `（${occasion.trim()}）` : '';
-    if (kind === 'realistic') return realisticPrompt(person, extra);
-    const stageRole = stageRoleHint(role);
-    if (kind === 'stage-real') return stagePhotoPrompt(person, stageRole, extra);
-    return stageInkPrompt(person, stageRole, extra); // 'stage'
+    override?: Partial<StageSlots>,
+): Promise<string> {
+    if (kind === 'realistic') {
+        const gender = mapGender(pf.gender ?? '');
+        const person = `${role ?? '梨園中人'}，${gender}，${Number(pf.age_years ?? 0)} 歲`;
+        const extra = occasion?.trim() ? `（${occasion.trim()}）` : '';
+        return realisticPrompt(person, extra);
+    }
+    return buildStageImgPrompt(kind, pf, role, occasion, override);
 }
 
 export interface EvolvePortraitInput {
@@ -140,6 +161,9 @@ export interface EvolvePortraitInput {
     kind: PortraitOccasionKind;
     /** Free-text occasion (used when kind='custom', or appended otherwise). */
     occasion?: string;
+    /** Advanced (stage / stage-real only): override any LLM-curated 戲妝 slot —
+     *  merged on top of the curated + role-default slots before rendering. */
+    slotsOverride?: Partial<StageSlots>;
     /** Preview only — render but don't anchor on chain. */
     dryRun?: boolean;
 }
@@ -197,7 +221,13 @@ export async function evolvePortraitAction(
     // physical_facts, a look-alike). The makeup kinds paint opera油彩 onto the base face.
     let gen: { ok: boolean; url?: string; base64?: string; blobId?: string; promptUsed?: string; error?: string };
     if (isImg2ImgKind(input.kind)) {
-        const prompt = buildAnchorPrompt(input.kind, pf, role ?? undefined, input.occasion);
+        const prompt = await buildAnchorPrompt(
+            input.kind,
+            pf,
+            role ?? undefined,
+            input.occasion,
+            input.slotsOverride,
+        );
         gen = await renderFromAnchor(cj, prompt);
     } else {
         const framing =
