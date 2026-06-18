@@ -113,7 +113,6 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
   const [label, setLabel] = useState('');
   const [epochs, setEpochs] = useState('30');
   const [day, setDay] = useState('1');
-  const [duration, setDuration] = useState('12');
   const [aspect, setAspect] = useState('16/9');
   const [sagaId, setSagaId] = useState('spring-snow');
   const [chapterId, setChapterId] = useState('');
@@ -135,7 +134,6 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
         ? {
             sagaId: sagaId.trim() || undefined,
             day: Number(day) || 1,
-            durationSeconds: Number(duration) || undefined,
             aspect,
             chapterId: chapterId.trim() || undefined,
             caption: caption.trim() || undefined,
@@ -191,7 +189,6 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
         {isHero && (
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="第幾日"><input value={day} onChange={(e) => setDay(e.target.value)} className={inputCls} inputMode="numeric" /></Field>
-            <Field label="秒數"><input value={duration} onChange={(e) => setDuration(e.target.value)} className={inputCls} inputMode="numeric" /></Field>
             <Field label="比例">
               <select value={aspect} onChange={(e) => setAspect(e.target.value)} className={inputCls}>
                 {['16/9', '9/16', '1/1', '4/3', '3/4'].map((a) => <option key={a} value={a}>{a}</option>)}
