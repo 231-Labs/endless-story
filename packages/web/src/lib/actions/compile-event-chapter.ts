@@ -13,8 +13,9 @@
  */
 
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { eventChapter as runnerEventChapter } from '@endless-story/runner';
+import { eventChapter as runnerEventChapter, storyteller } from '@endless-story/runner';
 import { getAdminContext } from '@/lib/chain/admin-signer';
+import { loadBible, saveBible } from '@/lib/chain/story-bible-store';
 
 type EventCutPov = runnerEventChapter.EventCutPov;
 
@@ -69,6 +70,21 @@ export async function compileEventChapterAction(
         };
     }
 
+    // 承先 — load the saga's running novel state and hand the cast-relevant slice
+    // to the compiler so this 回 continues the story (承先啟後) instead of being an
+    // isolated recap. Best-effort: any failure just falls back to a standalone weave.
+    const castIds = (input.povs?.map((p) => p.characterId) ?? input.castCharacterIds ?? []).filter(
+        Boolean,
+    );
+    let bible: storyteller.StoryBible | null = null;
+    let continuity: storyteller.ContinuityContext | undefined;
+    try {
+        bible = loadBible(d.sagaId);
+        continuity = storyteller.selectContinuityContext(bible, castIds);
+    } catch {
+        /* no bible → standalone weave, no continuity */
+    }
+
     try {
         const res = await runnerEventChapter.runOnce({
             sagaId: d.sagaId,
@@ -80,11 +96,34 @@ export async function compileEventChapterAction(
             povs: input.povs,
             castCharacterIds: input.castCharacterIds,
             rosterPeople: input.rosterPeople,
+            continuity,
+            prevChapterSummary: bible?.lastChapterSummary,
             dryRun: input.dryRun,
             signer: input.dryRun
                 ? undefined
                 : { keypair: admin.signer, storytellerCapId: d.storytellerCapId },
         });
+
+        // 啟後 — fold the woven 回 back into the bible so the NEXT chapter picks it
+        // up. Live path only (a dryRun preview must not advance the novel). Fully
+        // defensive: a fold failure just means the bible doesn't advance this 回.
+        if (!input.dryRun && res.anchored && res.chapter && bible) {
+            try {
+                const nameToId = new Map(
+                    (input.povs ?? []).map((p) => [p.characterName, p.characterId]),
+                );
+                const update = await storyteller.deriveChapterUpdate({
+                    chapter: res.chapter,
+                    day: input.day ?? bible.throughDay + 1,
+                    bible,
+                    nameToId,
+                });
+                saveBible(storyteller.applyChapter(bible, update));
+            } catch {
+                /* fold failed → bible just doesn't advance this 回 */
+            }
+        }
+
         return {
             ok: res.anchored || (input.dryRun === true && res.chapter.length > 0),
             chapter: res.chapter,
