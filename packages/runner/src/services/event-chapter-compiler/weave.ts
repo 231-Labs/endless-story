@@ -157,8 +157,9 @@ export function buildUserPrompt(ctx: EventCutContext): string {
     if (cont && (cont.synopsis || cont.openThreads?.length || cont.hooks?.length)) {
         sections.push(
             '寫作要求：接續前文語氣與未了的線（承先），呼應前面提過的人事細節（callback）；' +
-                '推進其中至少一條線，並在結尾留下一個讓人想追下一回的鉤子（啟後）。' +
-                '它要像長篇小說的一個章節，不是獨立的事件報導。',
+                '推進其中至少一條線，並讓某條線在結尾仍懸而未決（啟後）—— 把那份未決藏進一個動作、' +
+                '一句沒說完的話或一個眼神裡，**不要寫成「且看下回」式的收場白**。' +
+                '它要像長篇小說的一個章節，自然停住，不是獨立的事件報導。',
         );
     }
 

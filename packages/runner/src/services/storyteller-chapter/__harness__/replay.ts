@@ -29,6 +29,7 @@ import {
 } from '../index.js';
 import { toChapterCompilerPayload, briefSummary } from '../compose.js';
 import { emptyBible, applyChapter, selectContinuityContext } from '../story-bible.js';
+import { deriveChapterUpdate } from '../fold.js';
 import { runOnce } from '../../event-chapter-compiler/index.js';
 
 const PROV_RE = /^<!--es:prov\s+(\{[\s\S]*?\})\s*-->\s*/;
@@ -227,16 +228,17 @@ async function main() {
         if (res.chapter) {
             console.log(`織出 ${res.chapter.length} 字、${res.povCount} 視角：\n`);
             console.log(res.chapter);
-            // Fold the woven chapter back into the bible (production does this via an
-            // LLM step; here a light deterministic fold to show the loop closes).
-            bible = applyChapter(bible, {
-                day: tailDay,
-                summary: briefSummary(res.chapter),
-                synopsisAppend: briefSummary(res.chapter, 80),
-                advancedThreads: [{ title: '誰當頭牌', state: briefSummary(res.chapter, 60), castIds }],
-                hooks: ['下一回：這口悶氣誰先吐'],
-            });
-            console.log(`\n→ 寫完更新總綱（啟後）：第 ${bible.chapterCount} 回 · 線「誰當頭牌」狀態已推進 · 新鉤子=${bible.hooks.join('、')}`);
+            // Fold the woven chapter back into the bible via the REAL LLM fold step
+            // (the production path) — derives thread/arc/hook updates from the prose.
+            const nameToId = new Map(payload.povs.map((p) => [p.characterName, p.characterId]));
+            const update = await deriveChapterUpdate({ chapter: res.chapter, day: tailDay, bible, nameToId });
+            bible = applyChapter(bible, update);
+            console.log('\n→ 寫完用 LLM 折回總綱（啟後）：');
+            console.log(`  第 ${bible.chapterCount} 回 · 摘要：${update.summary}`);
+            console.log(`  推進的線：${(update.advancedThreads ?? []).map((t) => `${t.title}→${t.state}`).join(' / ') || '（無）'}`);
+            console.log(`  新開的線：${(update.newThreads ?? []).map((t) => t.title).join('、') || '（無）'}`);
+            console.log(`  收束的線：${(update.resolvedThreadIds ?? []).length} 條`);
+            console.log(`  新鉤子：${(update.hooks ?? []).join('、') || '（無）'}`);
         } else {
             console.log(`compiler skip：${res.skipReason}（${pct(res.povCount)} 視角）`);
         }
