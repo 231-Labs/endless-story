@@ -221,8 +221,8 @@ const TOOLS: DirectorToolDef[] = [
     name: 'evolve_portrait',
     tier: 'narrative',
     description:
-      '為角色出一張情境變體肖像（戲妝/老年/日常/自訂），上鏈留下形象演化軌跡。**出圖昂貴**：只在敘事上真的值得的時刻用。',
-    argsSpec: '{"characterId": "0x...", "kind": "stage|old|casual|custom", "occasion": "情境描述（kind=custom 必填）"}',
+      '為角色出一張情境變體肖像（戲妝/老年/日常/真人版/自訂），上鏈留下形象演化軌跡。戲妝會把油彩妝畫在角色的基底臉上（img2img）；stage=水墨戲妝、stage-real=真人寫真戲妝、realistic=真人寫真版。**出圖昂貴**：只在敘事上真的值得的時刻用。',
+    argsSpec: '{"characterId": "0x...", "kind": "reference|stage|stage-real|finery|daily|youth|aged|illness|snow|realistic|custom", "occasion": "情境描述（kind=custom 必填）"}',
     execute: (args) =>
       evolvePortraitAction({
         characterId: str(args, 'characterId'),

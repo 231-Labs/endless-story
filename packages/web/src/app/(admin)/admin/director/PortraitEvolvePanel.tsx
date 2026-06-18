@@ -18,7 +18,8 @@ import type { Character } from '@endless-story/shared';
  */
 const KINDS: { value: PortraitOccasionKind; label: string }[] = [
     { value: 'reference', label: '設定形象' },
-    { value: 'stage', label: '戲妝登台' },
+    { value: 'stage', label: '戲妝登台（水墨）' },
+    { value: 'stage-real', label: '真人戲妝（寫真）' },
     { value: 'finery', label: '盛裝華服' },
     { value: 'daily', label: '日常卸妝' },
     { value: 'youth', label: '少年青澀' },
@@ -33,16 +34,20 @@ const KINDS: { value: PortraitOccasionKind; label: string }[] = [
  *  Dry-Run shows the real prompt sent). */
 const KIND_HINT: Record<PortraitOccasionKind, string> = {
     reference: '端正設定形象、純色底、神情沉靜',
-    stage: '越劇戲妝、依行當出小生/旦角/配角扮相、淡彩薄塗',
+    stage: '臉上油彩越劇戲妝、戴頭面戲服、img2img 吃 base 臉、水墨畫風',
+    'stage-real': '臉上油彩越劇戲妝、戴頭面戲服、img2img 吃 base 臉、真人寫真照',
     finery: '上等綢緞華服、雍容貴氣',
     daily: '後台卸妝、素常服、生活感',
     youth: '更年輕幾歲、眉眼青澀',
     aged: '多年以後、白髮皺紋、氣度蒼勁',
     illness: '久病清減、面色蒼白、形容憔悴',
     snow: '風雪夜、披斗篷、肩頭落雪',
-    realistic: '以基底肖像為參考、img2img 出真人感淡彩版（同一張臉）',
+    realistic: '以基底肖像為參考、img2img 出真人寫真照（同一張臉）',
     custom: '用下方文字逐字驅動扮相',
 };
+
+/** Kinds rendered as real-person photo (vs ink-wash painting). */
+const PHOTO_KINDS: PortraitOccasionKind[] = ['realistic', 'stage-real'];
 
 export function PortraitEvolvePanel({ characters }: { characters: Character[] }) {
     const [characterId, setCharacterId] = useState<string>(characters[0]?.id ?? '');
@@ -100,7 +105,7 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
             {kind !== 'custom' ? (
                 <p className="text-2xs leading-relaxed text-mute">
                     此選項出：<span className="text-ink/80">{KIND_HINT[kind]}</span>
-                    （同一人、保持體態氣質；{kind === 'realistic' ? '真人感淡彩' : '水墨工筆畫風'}）
+                    （同一人、保持體態氣質；{PHOTO_KINDS.includes(kind) ? '真人寫真' : '水墨工筆畫風'}）
                 </p>
             ) : null}
 
