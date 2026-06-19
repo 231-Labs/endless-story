@@ -112,7 +112,7 @@ export async function runSocialPhase(input: {
                     }).catch(() => false);
                 }
                 if (raw.relationshipMemory) {
-                    await rememberForCharacter(c.id, raw.relationshipMemory, {
+                    await rememberForCharacter(c.id, bindObservedName(raw.relationshipMemory, target?.name), {
                         kind: 'relationship',
                         importance: 8,
                     }).catch(() => false);
@@ -163,12 +163,22 @@ function buildSpeakerObservation(input: {
     observation?: string;
     reason?: string;
 }): string | null {
-    if (input.observation) return input.observation;
+    if (input.observation) return bindObservedName(input.observation, input.targetName);
     if (input.kind === 'talk' && input.targetName && input.line) {
         return `我在「${input.sceneName}」向「${input.targetName}」搭了一句：「${input.line}」`;
     }
     if (input.kind === 'observe' && input.reason) {
-        return `我在「${input.sceneName}」留意到一點：${input.reason}`;
+        return `我在「${input.sceneName}」留意到一點：${bindObservedName(input.reason, input.targetName)}`;
     }
     return null;
+}
+
+/** Fallback for the "她是指誰" bug: if the model named a target but the prose still
+ *  opens on a bare pronoun (她/他/那人) without the name anywhere, prefix who it's
+ *  about so a recalled memory isn't ambiguous. No-op when the name is already in. */
+function bindObservedName(text: string, targetName?: string): string {
+    const t = text.trim();
+    if (!targetName || t.includes(targetName)) return t;
+    if (/^(她|他|那人|那位)/.test(t)) return `（看著${targetName}）${t}`;
+    return t;
 }

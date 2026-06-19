@@ -125,17 +125,28 @@ export async function runGivePhase(input: {
                         recordSceneLine(scene.id, g.recipientId, `回絕了「${c.name}」的施捨`, 'social');
                         continue;
                     }
-                    await rememberForCharacter(
+                    const rName = g.recipientName ?? '';
+                    // Narrativise: the 名頭 said aloud + the real motive, not a ledger row.
+                    const giveMem = g.line
+                        ? `在「${scene.name}」，我${label}了「${rName}」${g.amount}兩。遞過去時我說：「${g.line}」——心裡其實是：${g.reason ?? ''}`.trim()
+                        : `我在「${scene.name}」${label}了「${rName}」${g.amount} 兩：${g.reason ?? ''}`.trim();
+                    await rememberForCharacter(c.id, giveMem, {
+                        kind: 'relationship',
+                        importance: 8,
+                    }).catch(() => false);
+                    const gotMem = g.line
+                        ? `[受贈：${c.name}] 在「${scene.name}」${label}我${g.amount}兩，說是：「${g.line}」`
+                        : `[受贈：${c.name}] 在「${scene.name}」${label}我 ${g.amount} 兩`;
+                    await rememberForCharacter(g.recipientId, gotMem, {
+                        kind: 'observation',
+                        importance: 6,
+                    }).catch(() => false);
+                    recordSceneLine(
+                        scene.id,
                         c.id,
-                        `我在「${scene.name}」${label}了「${g.recipientName ?? ''}」${g.amount} 兩：${g.reason ?? ''}`.trim(),
-                        { kind: 'relationship', importance: 8 },
-                    ).catch(() => false);
-                    await rememberForCharacter(
-                        g.recipientId,
-                        `[受贈：${c.name}] 在「${scene.name}」${label}我 ${g.amount} 兩`,
-                        { kind: 'observation', importance: 6 },
-                    ).catch(() => false);
-                    recordSceneLine(scene.id, c.id, `${label}「${g.recipientName ?? ''}」${g.amount} 兩`, 'social');
+                        g.line ?? `${label}「${rName}」${g.amount} 兩`,
+                        'social',
+                    );
                 }
             }
 

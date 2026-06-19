@@ -89,17 +89,28 @@ export async function runAskPhase(input: {
             const amount = result.amount ?? 0;
             const kindLabel = KIND_LABEL[result.kind ?? 'plea'] ?? '求助';
             if (!input.dryRun) {
-                await rememberForCharacter(
+                const tName = target?.name ?? '';
+                // Narrativise: the SPOKEN line (the face-saving 名頭) + the inner
+                // truth, not a bare transaction log.
+                const askMem = result.line
+                    ? `在「${scene.name}」，我向「${tName}」${kindLabel}${amount}兩。我說：「${result.line}」——心裡其實是：${result.reason ?? ''}`.trim()
+                    : `我在「${scene.name}」向「${tName}」${kindLabel} ${amount} 兩：${result.reason ?? ''}`.trim();
+                await rememberForCharacter(c.id, askMem, { kind: 'relationship', importance: 7 }).catch(
+                    () => false,
+                );
+                const heardMem = result.line
+                    ? `[求助：${c.name}] 在「${scene.name}」${kindLabel}我${amount}兩，當面說：「${result.line}」`
+                    : `[求助：${c.name}] 在「${scene.name}」向我${kindLabel} ${amount} 兩`;
+                await rememberForCharacter(result.targetId, heardMem, {
+                    kind: 'observation',
+                    importance: 6,
+                }).catch(() => false);
+                recordSceneLine(
+                    scene.id,
                     c.id,
-                    `我在「${scene.name}」向「${target?.name ?? ''}」${kindLabel} ${amount} 兩：${result.reason ?? ''}`.trim(),
-                    { kind: 'relationship', importance: 7 },
-                ).catch(() => false);
-                await rememberForCharacter(
-                    result.targetId,
-                    `[求助：${c.name}] 在「${scene.name}」向我${kindLabel} ${amount} 兩`,
-                    { kind: 'observation', importance: 6 },
-                ).catch(() => false);
-                recordSceneLine(scene.id, c.id, `向「${target?.name ?? ''}」${kindLabel} ${amount} 兩`, 'social');
+                    result.line ?? `向「${tName}」${kindLabel} ${amount} 兩`,
+                    'social',
+                );
             }
             const list = asksByGiver.get(result.targetId) ?? [];
             list.push({ askerId: c.id, amount, kind: result.kind ?? 'plea' });

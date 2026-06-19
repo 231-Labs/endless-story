@@ -83,6 +83,9 @@ export interface AidGift {
     amount: number;
     memo: AidMemo;
     manner?: AidManner;
+    /** What you SAY as you hand it over — the 名頭 that saves their face, in
+     *  character, ≤28字 (e.g. 「這是預支你的戲份錢」). The reason is your real motive. */
+    line?: string;
     reason?: string;
 }
 
@@ -112,10 +115,12 @@ export function buildSystemPrompt(): string {
         '4. 名目 memo：gift 餽贈／patronage 長期接濟／loan 借貸／repay 還情／bribe 打點賄賂／tribute 報恩進貢。',
         '5. 方式 manner：direct 當面直給／disguised 託詞掩飾（顧對方顏面）／via-proxy 託人代轉／as-loan 當作借／as-repay 當作還情。',
         '6. 每筆金額以 ENDLESS 計；所有給出去的總和必須 ≤ 你現有的銀錢。',
+        '7. 每一筆都要有 `line`：你遞錢時當著對方的面說的那一句場面話（找個體面的名頭，',
+        '   別直說「我可憐你」「我接濟你」）。`line` 是說出口的，`reason` 才是你心裡的真話。',
         '',
         '**輸出**：嚴格只輸出 JSON。例如',
-        '`{"gifts":[{"recipientId":"0x…","amount":18,"memo":"tribute","manner":"via-proxy","reason":"恩師清高，託人代付藥錢保他體面。"},{"recipientId":"0x…","amount":12,"memo":"gift","manner":"disguised","reason":"她要強，只說是順手抓的藥。"}],"reason":"先救命懸與恩情，賄賂與閒財一概不給，留底自保。"}`',
-        '或 `{"gifts":[],"reason":"眾人氣色都還穩，此刻散財無謂。"}`。reason ≤60 字。不要 markdown、不要多餘文字。',
+        '`{"gifts":[{"recipientId":"0x…","amount":18,"memo":"tribute","manner":"via-proxy","line":"先生這齣的彩頭，我替戲園先墊上。","reason":"恩師清高，託人代付藥錢保他體面。"},{"recipientId":"0x…","amount":12,"memo":"gift","manner":"disguised","line":"順道抓的藥，多的一份給你。","reason":"她要強，只說是順手抓的。"}],"reason":"先救命懸與恩情，賄賂與閒財一概不給，留底自保。"}`',
+        '或 `{"gifts":[],"reason":"眾人氣色都還穩，此刻散財無謂。"}`。line ≤28 字（每筆必給）；reason ≤60 字。不要 markdown、不要多餘文字。',
     ].join('\n');
 }
 
@@ -173,6 +178,7 @@ export interface RawGift {
     amount?: number;
     memo: AidMemo;
     manner?: AidManner;
+    line?: string;
     reason?: string;
 }
 
@@ -200,7 +206,7 @@ export function finalizeAid(
         if (amount <= 0) continue;
         seen.add(g.recipientId);
         remaining -= amount;
-        gifts.push({ recipientId: peer.id, recipientName: peer.name, amount, memo: g.memo, manner: g.manner, reason: g.reason });
+        gifts.push({ recipientId: peer.id, recipientName: peer.name, amount, memo: g.memo, manner: g.manner, line: g.line, reason: g.reason });
     }
     return { gifts, reason: parsed.reason };
 }

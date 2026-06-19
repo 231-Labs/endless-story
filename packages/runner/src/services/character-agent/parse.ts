@@ -124,6 +124,7 @@ export interface ParsedAidGift {
     amount?: number;
     memo: AidMemo;
     manner?: AidManner;
+    line?: string;
     reason?: string;
 }
 
@@ -135,6 +136,7 @@ function parseOneGift(o: Record<string, unknown>): ParsedAidGift {
         amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : undefined,
         memo: AID_MEMOS.has(memoRaw) ? memoRaw : 'gift',
         manner: mannerRaw && AID_MANNERS.has(mannerRaw) ? mannerRaw : undefined,
+        line: clamp(typeof o.line === 'string' ? o.line : undefined, 28),
         reason: clamp(typeof o.reason === 'string' ? o.reason : undefined, 60),
     };
 }
@@ -173,7 +175,14 @@ const ASK_KINDS = new Set(['loan', 'plea', 'patronage']);
  *  types and defaults an unknown kind to 'plea'. Target validity is enforced by finalizeAsk. */
 export function parseAsk(
     raw: string,
-): { doAsk: boolean; targetId?: string; amount?: number; kind?: 'loan' | 'plea' | 'patronage'; reason?: string } | null {
+): {
+    doAsk: boolean;
+    targetId?: string;
+    amount?: number;
+    kind?: 'loan' | 'plea' | 'patronage';
+    line?: string;
+    reason?: string;
+} | null {
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return null;
     try {
@@ -184,6 +193,7 @@ export function parseAsk(
             targetId: typeof o.targetId === 'string' ? o.targetId : undefined,
             amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : undefined,
             kind: (ASK_KINDS.has(kindRaw) ? kindRaw : 'plea') as 'loan' | 'plea' | 'patronage',
+            line: clamp(typeof o.line === 'string' ? o.line : undefined, 28),
             reason: clamp(typeof o.reason === 'string' ? o.reason : undefined, 60),
         };
     } catch {
