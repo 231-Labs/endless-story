@@ -5,6 +5,7 @@ import { getScene } from './scenes';
 import { USE_MOCK } from './config';
 import { httpGet } from './http';
 import { isMemoryConfigured, recallCurrentPlanText } from '@/lib/chain/memory';
+import { parsePlanFields, readPlanIntent } from '@/lib/chain/plan-intent-store';
 
 /**
  * Live State API (character's current state)
@@ -24,19 +25,6 @@ import { isMemoryConfigured, recallCurrentPlanText } from '@/lib/chain/memory';
  * the one-line outward intent. Owner-gate here if you'd rather keep goals
  * hidden from non-owners.
  */
-
-/** Pull immediate-intent + long-term-goal out of the stored plan text (formatPlanText). */
-function parsePlanFields(planText: string): {
-  longTermGoal?: string;
-  dailyPlanHint?: string;
-} {
-  const lt = planText.match(/\[長期目標\]\s*(.+)/);
-  const dp = planText.match(/\[眼下打算\]\s*(.+)/);
-  return {
-    longTermGoal: lt?.[1]?.trim() || undefined,
-    dailyPlanHint: dp?.[1]?.trim() || undefined,
-  };
-}
 
 /**
  * @param opts.withPlan  Recall the character's plan from MemWal to fill
@@ -62,15 +50,26 @@ export async function getLiveState(
   }
 
   // N6: intent + nextPlan from the character's CURRENT plan (real MemWal).
-  // Opt-in only — this is a SEAL decrypt (see opts.withPlan above).
+  // Opt-in only — see opts.withPlan above.
   let planIntent: string | undefined;
   let planNext: string | undefined;
-  if (opts?.withPlan && isMemoryConfigured()) {
-    const planText = await recallCurrentPlanText(characterId).catch(() => null);
-    if (planText) {
-      const f = parsePlanFields(planText);
-      planIntent = f.dailyPlanHint; // current mood = immediate intent
-      planNext = f.longTermGoal; //   where bound = long-term goal
+  if (opts?.withPlan) {
+    // Durable plaintext store FIRST — written at plan-time, cheap file read,
+    // no decrypt, stable across reloads/restarts. This is what kills the
+    // "時好時壞" flicker: the common path never touches SEAL.
+    const durable = readPlanIntent(characterId);
+    if (durable) {
+      planIntent = durable.intent; // current mood = immediate intent
+      planNext = durable.nextPlan; //  where bound = long-term goal
+    } else if (isMemoryConfigured()) {
+      // Backfill only for characters whose plan predates the store — one SEAL
+      // decrypt, then the next plan write populates the durable store for good.
+      const planText = await recallCurrentPlanText(characterId).catch(() => null);
+      if (planText) {
+        const f = parsePlanFields(planText);
+        planIntent = f.dailyPlanHint;
+        planNext = f.longTermGoal;
+      }
     }
   }
 
