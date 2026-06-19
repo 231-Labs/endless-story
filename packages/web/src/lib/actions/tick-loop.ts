@@ -63,7 +63,6 @@ import {
 import { compileGazetteAction } from './compile-gazette';
 import { compileEventChapterAction } from './compile-event-chapter';
 import { generateEventMomentAction } from './generate-event-moment';
-import { after } from 'next/server';
 import type {
     TickLoopInput,
     TickActResult,
@@ -149,6 +148,43 @@ let lastEncounterPair: string | undefined;
 function envFlag(name: string): boolean {
     const v = (process.env[name] ?? '').trim().toLowerCase();
     return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
+// Owned-cap background jobs (event moment / resolve+cut / bond / encounter) run
+// INLINE in the tick body, not in a fire-and-forget after(): on the self-hosted
+// VPS the tick body executes inside the /api/tick mutex's detached promise chain,
+// where Next's after() never fires — so resolve / cut / still were silently
+// dropped every tick (event moment / [ch-diag] resolve / event cut logs never
+// appeared). Running inline means a hung image/LLM/RPC call would now wedge the
+// whole tick (and, via the mutex, every tick after it), so each job races a
+// timeout; on expiry the job is abandoned and the tick proceeds.
+const MOMENT_JOB_TIMEOUT_MS = Math.max(10_000, Number(process.env.ES_MOMENT_JOB_TIMEOUT_MS) || 90_000);
+const CUT_JOB_TIMEOUT_MS = Math.max(10_000, Number(process.env.ES_CUT_JOB_TIMEOUT_MS) || 180_000);
+
+/** Run a job to completion or abandon it after `ms`. Both the job's own failure
+ *  and a timeout are reported via `onError` and neither throws to the caller, so
+ *  the inline job loop is never interrupted. An abandoned job's underlying async
+ *  work may still settle later with no awaiter — acceptable here (jobs are
+ *  failure-isolated; a wedged one must not stall the tick loop). */
+async function runJobWithTimeout(
+    job: () => Promise<void>,
+    ms: number,
+    label: string,
+    onError: (err: unknown) => void,
+): Promise<void> {
+    const guarded = job().catch(onError);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+            onError(new Error(`${label} timed out after ${ms}ms`));
+            resolve();
+        }, ms);
+    });
+    try {
+        await Promise.race([guarded, timeout]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
 }
 
 // Minimal TTY-gated ANSI (off when piped/redirected or NO_COLOR set).
@@ -706,10 +742,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.76 EVENT MOMENT + 4.5 EVENT CUT are both BACKGROUND StorytellerCap txs.
-    //   We capture them as jobs here / below and run them SERIALLY in one after()
-    //   after the POV phase — never concurrently, or the two owned-cap txs race on
-    //   the cap's object version (the same reason the sync phases sign serially).
+    // 2.76 EVENT MOMENT + 4.5 EVENT CUT are both StorytellerCap txs. We capture
+    //   them as jobs here / below and run them SERIALLY (inline, after the POV
+    //   phase) — never concurrently, or the two owned-cap txs race on the cap's
+    //   object version (the same reason the sync phases sign serially).
     const momentJobs: Array<() => Promise<void>> = [];
     const cutJobs: Array<() => Promise<void>> = [];
     // The event covering a character this tick: the (parallel) event whose cast
@@ -1145,9 +1181,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             }
 
             // 4.5 EVENT CUT — weave this event's POVs into the canonical 「回」
-            //   (event_cut) in the BACKGROUND. Only when the storylet opened and
-            //   ≥2 of its cast actually wrote a POV this tick. Failure-isolated
-            //   (after()) so a weave error never blocks the tick. The cut is the
+            //   (event_cut). Only when the storylet opened and ≥2 of its cast
+            //   actually wrote a POV this tick. Failure-isolated (inline, timeout-
+            //   bounded) so a weave error never blocks the tick. The cut is the
             //   commercial unit; POVs stay the per-character raw feed.
             //   See docs/CONTENT_PIPELINE.md §2.
             if (input.eventChapter ?? true) {
@@ -1251,10 +1287,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   among the acting slice, find the strongest CO-PRESENT pair bonded by a
     //   director-seeded relationship tone (relationships.ts). Cooldown skips the
     //   same pair on consecutive ticks. We GENERATE dry here (like the POV phase),
-    //   then PUSH the anchor into the serial `cutJobs` background — never inline —
-    //   so the encounter's commitment::commit can't race the POV / cut / moment
-    //   owned-cap txs (single StorytellerCap, one version at a time). Pushed
-    //   BEFORE the after() block below so it joins the same serial drain.
+    //   then PUSH the anchor into the serial `cutJobs` queue — so the encounter's
+    //   commitment::commit can't race the POV / cut / moment owned-cap txs (single
+    //   StorytellerCap, one version at a time). Pushed BEFORE the inline job drain
+    //   below so it joins the same serial run.
     if ((input.pov ?? true) && slice.length >= 2) {
         try {
             const pair = await pickEncounterPair(
@@ -1330,27 +1366,26 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // Run the captured background StorytellerCap jobs SERIALLY (moment → cut) in
-    // one after(): two owned-cap txs must not overlap or they conflict on the
-    // cap's object version. Each is independently failure-isolated.
+    // Run the captured StorytellerCap jobs SERIALLY (moment → cut), INLINE in the
+    // tick body. They were previously in an after() background, but on the self-
+    // hosted VPS the tick runs inside the /api/tick mutex's detached promise chain
+    // where after() never fires (proven: event moment / [ch-diag] resolve / event
+    // cut logs never appeared), so every event silently failed to resolve & weave.
+    // Serial order preserves the single-StorytellerCap object-version invariant;
+    // each job is failure-isolated and timeout-bounded (runJobWithTimeout) so a
+    // hung image/LLM/RPC can't wedge the tick (and, via the mutex, the whole loop).
     if (!dryRun && (momentJobs.length > 0 || cutJobs.length > 0)) {
-        after(async () => {
-            // moments first, then cuts — all serial (owned-cap txs must not overlap).
-            for (const job of momentJobs) {
-                try {
-                    await job();
-                } catch (err) {
-                    console.warn('[tick-loop] event moment failed:', err);
-                }
-            }
-            for (const job of cutJobs) {
-                try {
-                    await job();
-                } catch (err) {
-                    console.warn('[tick-loop] event cut failed:', err);
-                }
-            }
-        });
+        tlog(`⑤′ inline background jobs: ${momentJobs.length} moment + ${cutJobs.length} cut/anchor…`);
+        for (const job of momentJobs) {
+            await runJobWithTimeout(job, MOMENT_JOB_TIMEOUT_MS, 'event moment', (err) =>
+                console.warn('[tick-loop] event moment failed:', err),
+            );
+        }
+        for (const job of cutJobs) {
+            await runJobWithTimeout(job, CUT_JOB_TIMEOUT_MS, 'event cut', (err) =>
+                console.warn('[tick-loop] event cut failed:', err),
+            );
+        }
     }
 
     // 5. REFLECT — periodic sleep / consolidation. Characters sleep at NIGHT,
