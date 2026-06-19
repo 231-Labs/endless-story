@@ -16,7 +16,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
-import { parsePlan, sanitizePlanForRole } from './parse.js';
+import { driftsForRole, parsePlan, sanitizePlanForRole } from './parse.js';
 
 export interface PlanInput {
     name: string;
@@ -129,16 +129,46 @@ export function formatPlanText(p: {
     ].join('\n');
 }
 
+/** Build a structured plan from a parsed reply, defaulting empty fields. */
+function toCandidate(parsed: {
+    longTermGoal?: string;
+    dailyPlanHint?: string;
+    openSubgoals?: string[];
+}): { longTermGoal: string; dailyPlanHint: string; openSubgoals: string[] } {
+    return {
+        longTermGoal: parsed.longTermGoal?.trim() || '活下去,在這戲班站穩腳跟',
+        dailyPlanHint: parsed.dailyPlanHint?.trim() || '把眼前這場戲演好',
+        openSubgoals: (parsed.openSubgoals ?? [])
+            .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+            .map((s) => s.trim())
+            .slice(0, 3),
+    };
+}
+
+/** Corrective turn for a drifted plan — name the over-reach, keep the ambition,
+ *  redirect it to what the role can actually contest, ask for a same-format rewrite. */
+export function buildRepairPrompt(role: string): string {
+    return [
+        `你剛才的規劃越了界:你的行當是「${role}」,不是班主、老板、當家的,`,
+        '卻把目標放在掌管全班、決定誰紅誰涼、敲打或管束他人這類「只有班主才有的權」上。',
+        '請**保留你原本的企圖心與執念**,但改用你這個行當真正能爭的東西來表達——',
+        '名角能爭壓軸、戲份、搭檔、台下的目光與名聲,能在自己的戲路上勝過同儕;',
+        '但不能去管整個戲班、不能定別人的死活、不能號令新角兒。',
+        '重寫這份規劃:第一人稱、具體、可被行動驗證,維持同樣的 JSON 格式,不要 markdown、不要多餘文字。',
+    ].join('\n');
+}
+
 export async function updatePlan(
     input: PlanInput,
     opts?: { model?: string },
 ): Promise<PlanResult> {
     const llm = llmText.createTextClient({ kind: 'cheap' });
     const model = opts?.model ?? llm.defaultModel;
+    const userPrompt = buildUserPrompt(input);
     const res = await llm.chat({
         model,
         system: buildSystemPrompt(),
-        messages: [{ role: 'user', content: buildUserPrompt(input) }],
+        messages: [{ role: 'user', content: userPrompt }],
         maxTokens: 400,
         temperature: 0.8,
     });
@@ -160,13 +190,42 @@ export async function updatePlan(
                 }),
         };
     }
-    const plan = sanitizePlanForRole(input, {
-        longTermGoal: parsed.longTermGoal?.trim() || '活下去,在這戲班站穩腳跟',
-        dailyPlanHint: parsed.dailyPlanHint?.trim() || '把眼前這場戲演好',
-        openSubgoals: (parsed.openSubgoals ?? [])
-            .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-            .map((s) => s.trim())
-            .slice(0, 3),
-    });
+
+    let candidate = toCandidate(parsed);
+
+    // Intent over-reach is a SELF-CHECK FAILURE, not a dead end: hand the model
+    // its own drifted plan back with a correction and let it rewrite IN ROLE,
+    // keeping its real ambition — rather than dropping straight into a monotone
+    // template. The template (sanitizePlanForRole below) is only the last resort
+    // if the repaired plan STILL over-reaches. One extra cheap call, only on
+    // drift (now rare after the hasAuthorityDrift tightening).
+    if (driftsForRole(input.role, candidate)) {
+        try {
+            const repair = await llm.chat({
+                model,
+                system: buildSystemPrompt(),
+                messages: [
+                    { role: 'user', content: userPrompt },
+                    { role: 'assistant', content: res.text },
+                    { role: 'user', content: buildRepairPrompt(input.role) },
+                ],
+                maxTokens: 400,
+                temperature: 0.7,
+            });
+            const reparsed = parsePlan(repair.text);
+            if (reparsed) {
+                const repaired = toCandidate(reparsed);
+                // Accept the rewrite only if it actually cleared the drift;
+                // otherwise let the template catch it.
+                if (!driftsForRole(input.role, repaired)) candidate = repaired;
+            }
+        } catch (err) {
+            console.warn('[plan] authority-drift repair failed, falling back to template:', err);
+        }
+    }
+
+    // Last resort: only rewrites to a role template if the (possibly repaired)
+    // plan still drifts; a clean plan passes through untouched.
+    const plan = sanitizePlanForRole(input, candidate);
     return { ...plan, planText: formatPlanText(plan) };
 }
