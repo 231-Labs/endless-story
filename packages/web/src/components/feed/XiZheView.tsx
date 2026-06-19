@@ -99,6 +99,37 @@ export function XiZheView({ body, className }: { body: string; className?: strin
                 </section>
             ) : null}
 
+            {doc.povs.length ? (
+                <section className="mt-12">
+                    <SectionLabel>
+                        各角視角
+                        <span className="ml-2 text-mute/60">羅生門 · {doc.povs.length} 視角</span>
+                    </SectionLabel>
+                    <div className="mt-5 space-y-4">
+                        {doc.povs.map((p, i) => (
+                            <div
+                                key={`${p.actorName}-${i}`}
+                                className="rounded-md border border-hairline/40 bg-canvas/20 p-4 sm:p-5"
+                            >
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                    <span className="font-serif text-base text-ink">{p.actorName}</span>
+                                    <span className="text-2xs text-mute/60">飾</span>
+                                    <span className="font-serif text-base text-cinnabar/90">{p.partName}</span>
+                                    {p.cross ? (
+                                        <span className="rounded-full bg-cinnabar/10 px-2 py-0.5 text-2xs tracking-widest text-cinnabar">
+                                            {p.cross}
+                                        </span>
+                                    ) : null}
+                                </div>
+                                <p className="mt-2.5 whitespace-pre-line font-serif text-base leading-loose text-ink/80">
+                                    {p.text}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            ) : null}
+
             {doc.song && doc.song.lines.length ? (
                 <section className="mt-14">
                     <SectionLabel>

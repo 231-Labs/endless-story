@@ -30,6 +30,18 @@ export interface XiZheScene {
     mood?: string;
 }
 
+/** One actor's first-person take on the 戲中戲 climax — the attributed 視角. */
+export interface XiZhePov {
+    /** 角兒 (the performer), e.g. 連翹. */
+    actorName: string;
+    /** 角色 (the role played), e.g. 白素貞. */
+    partName: string;
+    /** 反串 label 坤生/乾旦, when the actor's gender ≠ the role's. */
+    cross?: string;
+    /** the first-person account. */
+    text: string;
+}
+
 export interface XiZheDoc {
     /** inner title without 《》, e.g. 白蛇傳·全本. */
     title: string | null;
@@ -47,6 +59,8 @@ export interface XiZheDoc {
     climaxTitle: string | null;
     /** the 戲中戲 narrative prose (markdown/plain). */
     prose: string;
+    /** per-actor attributed 視角 of the climax (the source POVs of the woven prose). */
+    povs: XiZhePov[];
     /** 角兒私詞 (有感而發), when present. */
     song: { title: string | null; lines: string[] } | null;
 }
@@ -82,6 +96,7 @@ const reCast = /^[-*]\s*\*\*(.+?)\*\*\s*[—–-]\s*(.+?)\s*(?:（(.*?)）)?\s*(
 const reScene = /^(\d+)\.\s*〈(.+?)〉\s*(?:（(.+?)）)?\s*$/;
 const reClimax = /折子\s*·\s*戲中戲\s*〈(.+?)〉/;
 const reSong = /角兒私詞\s*·\s*《(.+?)》/;
+const reTakeHead = /^###\s+(.+?)\s*飾\s*(.+?)\s*(?:〔(.+?)〕)?\s*$/;
 
 export function parseXiZhe(bodyRaw: string): XiZheDoc {
     const lines = bodyRaw.replace(/\r\n/g, '\n').split('\n');
@@ -95,13 +110,15 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
         scenes: [],
         climaxTitle: null,
         prose: '',
+        povs: [],
         song: null,
     };
 
-    type Section = 'head' | 'cast' | 'scenes' | 'prose' | 'song';
+    type Section = 'head' | 'cast' | 'scenes' | 'prose' | 'povs' | 'song';
     let section: Section = 'head';
     const proseLines: string[] = [];
     const songLines: string[] = [];
+    let currentPov: XiZhePov | null = null;
 
     for (const raw of lines) {
         const line = raw.replace(/\s+$/, '');
@@ -125,6 +142,10 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
             if (reClimax.test(h)) {
                 section = 'prose';
                 doc.climaxTitle = h.match(reClimax)?.[1] ?? null;
+                continue;
+            }
+            if (h.startsWith('各角視角') || h.startsWith('視角')) {
+                section = 'povs';
                 continue;
             }
             if (reSong.test(h)) {
@@ -179,6 +200,17 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
         if (section === 'scenes') {
             const s = t.match(reScene);
             if (s) doc.scenes.push({ n: Number(s[1]), title: s[2].trim(), mood: s[3]?.trim() || undefined });
+            continue;
+        }
+
+        if (section === 'povs') {
+            const th = t.match(reTakeHead);
+            if (th) {
+                currentPov = { actorName: th[1].trim(), partName: th[2].trim(), cross: th[3]?.trim() || undefined, text: '' };
+                doc.povs.push(currentPov);
+            } else if (t && currentPov) {
+                currentPov.text = currentPov.text ? `${currentPov.text}\n${t}` : t;
+            }
             continue;
         }
 
