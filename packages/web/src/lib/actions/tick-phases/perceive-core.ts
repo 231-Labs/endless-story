@@ -2,7 +2,7 @@
 // from already-gathered tick data. No chain / I-O (the thin gather lives in
 // perceive.ts), so this runs under `node --test --experimental-strip-types`.
 //
-// This is Step 1 of docs/PERCEPTION_PLAN.md: give PLAN / MOVE the objective stage
+// This is Step 1 of the perceive-step design: give PLAN / MOVE the objective stage
 // they were blind to. Scoping is enforced PER CHARACTER here and double-checked by
 // assertPerceivable — holdings are private unless the holder is co-present or the
 // resource kind is public (the user's 2026-06-16 ruling). The subjective layer

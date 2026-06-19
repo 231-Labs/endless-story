@@ -3,7 +3,7 @@
 > **用途**：Sui Overflow 2026 · Walrus 賽道 pitch（deadline 6/21）。每張投影片給：標題、一句話 takeaway、版面要點、講稿提示。
 > **鐵律（來自 `PRODUCT_POSITIONING.md §0.5`）**：講機制一律標 **✅ 已實現** / **🟡 已部署待驗證** / **🛣️ roadmap**，不混講。
 > **2026-06-17 狀態**：一次性 redeploy **已執行**，但端到端**尚未驗證能正確跑** → economy.move 真鏈上 Balance、藏閣 Kiosk 交易/鏈上佈局、兩段式鑄角 為 🟡，**驗證通過前不可當 ✅ 講**。
-> **配套**：定位敘事＝`PRODUCT_POSITIONING.md`；demo 腳本＝`DEMO_VIDEO.md`；深層機制＝`WHITEPAPER.md` + docs/。
+> **配套**：定位敘事＝`PRODUCT_POSITIONING.md`；深層機制＝`WHITEPAPER.md` + docs/。
 > 建議張數 **12**（hackathon 評審注意力有限，寧少勿多）。標 `⟨開放⟩` 處待你填真實數字／畫面。
 
 ---
@@ -41,7 +41,7 @@
 ## 5 — DEMO（live 或 90 秒剪輯）
 
 - **takeaway**：看它真的在跑——這不是 mockup。
-- 嵌 `DEMO_VIDEO.md` 的精華（抽卡鑄角 → 自治 tick 產章回 → 手卷／公報）。
+- 嵌 demo 精華（抽卡鑄角 → 自治 tick 產章回 → 手卷／公報）。
 - 角標常駐：**✅ 全部鏈上＋runner 實跑**。
 - 這是全場最重要的一頁，留足時間。
 
@@ -98,5 +98,5 @@
 
 - **每張只講一個 takeaway**；機制細節留給白皮書，pitch 不堆公式。
 - **✅/🛣️ 標籤是信任貨幣**——評審看到你誠實標示，會更相信 ✅ 那欄。
-- Demo（第 5 頁）若 live 有風險，**備一支 90 秒剪輯**（見 `DEMO_VIDEO.md`）。
+- Demo（第 5 頁）若 live 有風險，**備一支 90 秒剪輯**。
 - 春雪社／梨園的東方戲曲美學是記憶點，視覺上吃滿，別用 stock 科技風。

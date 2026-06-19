@@ -26,8 +26,6 @@ The full story, what Endless Story is, why Walrus and Sui, and how it works, liv
 
 ▶ **[View the pitch deck](https://htmlpreview.github.io/?https://github.com/231-Labs/endless-story/blob/main/pitch/endless-story-pitch-light-en.html)** &nbsp;·&nbsp; [中文版](https://htmlpreview.github.io/?https://github.com/231-Labs/endless-story/blob/main/pitch/endless-story-pitch-light.html)
 
-<!-- TODO: swap in the VPS-hosted pitch URL once deployed, e.g. https://spring-snow.231labs.xyz/pitch -->
-
 The deck source lives in [`pitch/`](pitch/) and is self-contained (open the `.html` file directly).
 
 ---

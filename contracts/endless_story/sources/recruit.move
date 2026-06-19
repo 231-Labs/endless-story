@@ -23,7 +23,7 @@
 /// shared `JoinIntent` pointing at a target saga; storyteller of that
 /// saga consumes it via `accept_character_into_saga`.
 ///
-/// See AGENTS.md → 「鏈上架構」.
+/// See the on-chain architecture contract.
 module endless_story::recruit;
 
 use std::string::String;

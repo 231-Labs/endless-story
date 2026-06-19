@@ -1,6 +1,6 @@
 /**
  * Resource-contest model — who WINS a contested drama resource. Validated in the
- * decoupled sim (experiments/novel-lab/contest-sim). Replaces the skill-blind
+ * decoupled offline sim. Replaces the skill-blind
  * "highest tension wins" with the design-review model:
  *
  *   intent (memory-derived desire) gates whether you actively contend;

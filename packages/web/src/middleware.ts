@@ -6,7 +6,7 @@
  * group separation is structural, auth comes when admin grows real
  * operations (deploy / runner controls).
  *
- * See AGENTS.md "on-chain architecture" principles 5 + 6.
+ * See the on-chain architecture contract, principles 5 + 6.
  */
 import { NextResponse, type NextRequest } from 'next/server';
 

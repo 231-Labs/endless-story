@@ -35,7 +35,7 @@ export interface PlanInput {
      * (same-scene presence, contested stakes, what just resolved). Pre-rendered +
      * perception-scoped on the web side (chain/situation-core + tick-phases/perceive).
      * Objective fact to be INTERPRETED through memory + persona, never restated — the
-     * PERCEIVE step the loop was missing (docs/PERCEPTION_PLAN.md Step 1).
+     * PERCEIVE step the loop was missing (the perceive step, Step 1).
      */
     situation?: string;
     /** Public saga roster lines: name / role / scene. Not private memory. */

@@ -130,9 +130,9 @@ LLM、上限 `MAX_DIRECTOR_RESOURCES`=3 個導演標的。全程 failure-isolate
 
 - genesis preset 仍種開場標的；建議重種得更貼春雪社（現 3 個泛用 slot）。
 - `retire_resource`（收標的）真實代碼尚未接——目前只增不減；標的清場列為後續。
-  **沙盒已驗概念**：`experiments/novel-lab/sim` 的 D5（showrunner 心跳吃現場資源+卡司，
-  輸出 `instantiate`/`retire`，過守恆護欄）已用真模型跑過；對齊落點見
-  [ALIGNMENT.md](../experiments/novel-lab/ALIGNMENT.md) D5（把 `propose-resources.ts` ＋
+  **沙盒已驗概念**：離線沙盒（純 Node 模擬器）的 D5（showrunner 心跳吃現場資源+卡司，
+  輸出 `instantiate`/`retire`，過守恆護欄）已用真模型跑過；對齊落點另有帳本記錄
+  D5（把 `propose-resources.ts` ＋
   新增 `retire_resource` 包成 `director/tools.ts` 工具，照本節 flag 驗鏈）。
 
 ---
@@ -269,8 +269,7 @@ hint，餵進該角色的 decide/POV——拉扯從世界級選題落到人物�
 
 通過 1–11 → 才考慮把任一 flag 預設開、或在 UI 露出切換。任何一步卡住且非小修 → 回報，
 別硬推 demo 分支。`retire_resource`（標的清場）真實代碼尚未接，目前只增不減（見 §3 Phase 3 末）；
-沙盒（`experiments/novel-lab/sim` D5）已驗 instantiate+retire 概念，對齊計畫見
-[ALIGNMENT.md](../experiments/novel-lab/ALIGNMENT.md) D5。
+離線沙盒（純 Node 模擬器）D5 已驗 instantiate+retire 概念，對齊計畫另有帳本記錄 D5。
 
 ## 7. Phase 2.5（並行事件 / 注意力耦合）驗證清單
 

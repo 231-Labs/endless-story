@@ -3,7 +3,7 @@
  * ask the LLM to write 1 character whose narrative MATCHES the rolled values.
  *
  * **Phase 2 gacha model: always 1 candidate per voucher.** No "pick from 3" —
- * one roll, one result. See the design decisions in AGENTS.md.
+ * one roll, one result.
  *
  * Values are LOCKED — rolled deterministically from voucher.attribute_seed
  * (see `seed/roll.ts`) before this is called. The LLM only writes the

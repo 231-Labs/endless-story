@@ -46,7 +46,7 @@ interface ChainWorldJson {
  *   - World tick      → narrative years for aging / death mechanics
  *   - Saga partOfDay  → storyteller-pushed lighting state (separate
  *                       chain field on Saga or runner-emitted blob)
- * See the saga page handscroll comments and AGENTS.md.
+ * See the saga page handscroll comments.
  */
 export async function fetchOnChainWorldTime(worldId: string): Promise<SagaWorldTime | null> {
     if (!isSuiObjectId(worldId)) return null;

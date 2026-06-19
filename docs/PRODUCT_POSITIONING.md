@@ -71,7 +71,7 @@
 | **角色封存＝傳奇**（5.1） | NFT＋記憶死後本就留存；owner 挹注／Walrus 續費已設計 | 「死後續費保存記憶」接線（須改 WALRUS 決策⑥） |
 | **Saga 易主**（5.2） | **全新、無任何文件** | 從設計專檔開始 |
 | 付費訂閱**分潤** primitive | `RevenueConfig` 欄位就位 | gate-after，待 owner 認可另起 |
-| perceive 感知步驟 | `PERCEPTION_PLAN.md` 已 plan | 待動工 |
+| perceive 感知步驟 | 已 plan | 待動工 |
 | **影視化**（Phase 3） | 願景 | 內容漏斗收尾後 |
 
 > 用法：pitch deck 的機制頁用 ✅／🟡／🛣️ 標籤；demo video **只拍 ✅ 那欄**（🟡 驗證通過後才可加拍）；🛣️ 那欄全部寫進白皮書與本檔 §4–§6。
@@ -199,12 +199,12 @@
 ## 6. 路線圖（凍結線 / Phase 2 / Phase 3）
 
 **原則**：第 4–5 節的願景全屬**功能凍結之後**。不要讓它們滲進 6/21 前的收尾。
-凍結前的優先序仍以 `AGENTS.md`「下一步」表為準（S Runner 穩定化 → D 部署 → C3 藏閣交易 → V Demo 素材）。
+凍結前的優先序仍以內部「下一步」表為準（S Runner 穩定化 → D 部署 → C3 藏閣交易 → V Demo 素材）。
 
 | 階段 | 內容 | 來源 / 狀態 |
 |---|---|---|
-| **凍結線（6/21）** | S / D / C3 / V；經濟 GIVE/ASK/SETTLE 已進 tick-loop，`economy.move` D1 已寫待 redeploy | `AGENTS.md` 下一步表 |
-| **Phase 2 — 讓世界真的自轉** | ① redeploy 後經濟影子翻真鏈上 Balance（Part D adapter）② **導演退場分級**（4.2，量化退場訊號）③ **死亡動能產品化**（把 4.1 的世代交替做成可被看見的世界事件 / 公報）④ **角色封存＝傳奇**（5.1：死後續費保存記憶的接線，須改 WALRUS 決策⑥）⑤ perceive 步驟（`PERCEPTION_PLAN.md`） | 多數有設計、待收尾 |
+| **凍結線（6/21）** | S / D / C3 / V；經濟 GIVE/ASK/SETTLE 已進 tick-loop，`economy.move` D1 已寫待 redeploy | 內部下一步表 |
+| **Phase 2 — 讓世界真的自轉** | ① redeploy 後經濟影子翻真鏈上 Balance（Part D adapter）② **導演退場分級**（4.2，量化退場訊號）③ **死亡動能產品化**（把 4.1 的世代交替做成可被看見的世界事件 / 公報）④ **角色封存＝傳奇**（5.1：死後續費保存記憶的接線，須改 WALRUS 決策⑥）⑤ perceive 步驟 | 多數有設計、待收尾 |
 | **Phase 2.5 — 真正的新支柱** | ⑥ **Saga 易主**（5.2，全新無文件，先寫設計專檔再實作）⑦ **加入現有世界**的跨 saga 邊界（3.1 開放題） | **全新，需先寫專檔** |
 | **Phase 3 — IP 兌現 / 影視化** | ⑧ 內容漏斗收尾（公報漏斗化、beat 級劇照、影片、角色 PV，`CONTENT_PIPELINE.md` 剩項）⑨ 把最好的 emergent 故事**影視化**——選正典線、輸出長片素材、對接製作 | 短期目標的終點 |
 
@@ -223,4 +223,4 @@
 ---
 
 > **下一步建議**：5.2（saga 易主）是唯一全新、無文件的支柱，若要進 Phase 2.5 需要一份像 `CHARACTER_ECONOMY.md` 那樣「先純模擬驗證 → 再移植產品」的專檔。5.1（傳奇）多為現有機制收尾、不需另起大檔。本檔只負責定位敘事與排序。
-> **對外產出物**：pitch deck 見 `PITCH_DECK.md`；5 分鐘 demo 腳本見 `DEMO_VIDEO.md`；深層機制全進白皮書（`WHITEPAPER.md` + docs/ 各專檔）。
+> **對外產出物**：pitch deck 見 `PITCH_DECK.md`；深層機制全進白皮書（`WHITEPAPER.md` + docs/ 各專檔）。

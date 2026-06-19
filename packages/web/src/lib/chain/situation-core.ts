@@ -9,7 +9,7 @@
  * happened, the director's active beat) — assembled from chain + this-tick state,
  * NOT from memory recall.
  *
- * SEPARATION OF CONCERNS (the load-bearing rule — see PERCEPTION_PLAN.md §1):
+ * SEPARATION OF CONCERNS (the load-bearing rule — see the perceive-step design):
  *   - Situation = the objective STAGE. No recall, no interpretation.
  *   - The character's MEMORY + personality = the subjective SOUL: how THIS person
  *     reads the stage and what they choose. That stays in the recall/decide path

@@ -7,8 +7,6 @@
  *   - All outputs go through sign-and-anchor (Walrus + commitment::commit)
  *   - Services usable as `runOnce(input)` for web admin actions; tail
  *     mode for long-running event subscribers comes later
- *
- * See AGENTS.md → "Runner v2 design".
  */
 
 export * as director from './services/saga-director/index.js';
