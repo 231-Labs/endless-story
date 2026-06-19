@@ -22,12 +22,28 @@
 
 > **這是 pitch / demo / 白皮書都要遵守的鐵律：講機制時一律標明「已實現」還是「roadmap」。** 評審與觀眾最在意「哪些是真的會跑、哪些是願景」。把兩者混講＝失分；分清楚＝可信。
 
+**現有系統盤點（用戶旅程視角，owner 口述校訂）：**
+
+- **智能合約一套**：create world / saga / scene / character / event 等協調劇情歷史所需組件——定義**物理層參數**＋**客觀歷史層**。
+- **敘事層 Demo（春雪社）一套**：
+  - **世界推動引擎 runner**：自治 tick 迴圈推進整個世界。
+  - **admin 經營後台**＝經營工具：**導演 agent**（協助管理敘事單位、推進劇情）＋資產管理工具＋測試工具＋招募職缺設定。
+  - **用戶前台**：
+    - 用戶**抽卡加入一個 saga story**，把角色的**故事運行權託管給該 saga 的導演**。
+    - 新角色背景參考**用戶輸入**生成；之後角色擁有**獨立記憶＋先天參數值＋錨定的基本長相**；用戶可用**夢境**注入自己的話，**影響但不直接操控**角色。
+    - 角色靠產出 **IP** 吸引訂閱來支付自己的運行費（實際分潤依 saga 決定）：
+      - ✅ 現有：**文字章回** IP · 訂閱牆 · off-chain 經濟（訂閱養運行費）· 紀念品店 UI。
+      - 🛣️ roadmap：**影片 · 實體周邊 · 真實分潤**（分潤 primitive 為 gate-after、`subscribe.move` 尚未收費；影片為內容漏斗剩項）。
+
+> 用詞：後台 agent 現階段一律稱「**導演**」（主動推事件／調環境）；「**說書人**」保留給它隨生態成熟退場後的端態（§4.2）。
+
 **✅ 已實現／可 demo（鏈上＋runner＋web 已落地，非 placeholder）：**
 
 | 能力 | 證據 |
 |---|---|
 | 合約全套部署（currency/world/saga/scene/character/recruit/event/commitment） | `sui move test` 120/120，testnet 已 deploy |
-| 抽卡鑄角全流程（voucher→preview→portrait→redeem→鏈上 Character＋caps） | 首頁 wizard，HKDF 確定性骰、Walrus 存圖 |
+| 抽卡鑄角全流程（voucher→preview→portrait→redeem→鏈上 Character＋caps；運行權託管給 saga 導演） | 首頁 wizard，HKDF 確定性骰、Walrus 存圖 |
+| **admin 經營後台**（導演 agent chat、資產管理、測試工具、招募職缺設定） | `(admin)` route group，`DirectorChatPanel` 等 |
 | **自治 tick 迴圈**（PLAN→MOVE→DRAMA→SOCIAL→ASK→GIVE→BOND→SETTLE→ACT→POV→SLEEP→GAZETTE） | runner v1，world-loop 跑通 |
 | **不可操控**：角色決策由角色 agent 自決，導演只推事件／調環境 | `NARRATIVE_AGENTS.md` 事件客觀/敘事主觀 |
 | MemWal 記憶（remember/recall、SEAL 加密、cap-enforced 解密、三因子召回） | `packages/memwal`，自架 relayer |
