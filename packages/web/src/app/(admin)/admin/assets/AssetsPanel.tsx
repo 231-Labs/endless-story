@@ -359,6 +359,8 @@ function AssetRow({
 }) {
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | undefined>();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(asset.label);
   const live = asset.status === 'live';
   const expiry =
     asset.epochsRemaining == null
@@ -372,6 +374,32 @@ function AssetRow({
       if (!r.ok) setErr(r.error);
       else onChanged();
     });
+
+  const startEdit = () => {
+    setErr(undefined);
+    setDraft(asset.label);
+    setEditing(true);
+  };
+  const cancelEdit = () => {
+    setEditing(false);
+    setErr(undefined);
+  };
+  const saveLabel = () => {
+    const next = draft.trim();
+    if (!next || next === asset.label) {
+      cancelEdit();
+      return;
+    }
+    startTransition(async () => {
+      setErr(undefined);
+      const r = await patchAssetAction(asset.id, { label: next });
+      if (!r.ok) setErr(r.error);
+      else {
+        setEditing(false);
+        onChanged();
+      }
+    });
+  };
 
   const actionBtn =
     'rounded-full border border-hairline px-3 py-1 text-xs text-ink transition-colors hover:border-cinnabar disabled:opacity-50';
@@ -388,14 +416,54 @@ function AssetRow({
       <AssetThumb asset={asset} className="h-9 w-9 flex-none overflow-hidden rounded" />
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium text-ink">{asset.label}</span>
-          <StatusBadge live={live} />
-          {asset.expiringSoon && <ExpiryBadge epochs={asset.epochsRemaining} />}
-          {asset.autoRenew && (
-            <span className="rounded bg-jade/10 px-1.5 py-0.5 text-2xs text-jade">自動續租</span>
-          )}
-        </div>
+        {editing ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              value={draft}
+              autoFocus
+              disabled={pending}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveLabel();
+                else if (e.key === 'Escape') cancelEdit();
+              }}
+              className="h-7 min-w-0 flex-1 rounded border border-cinnabar bg-surface px-2 text-sm text-ink outline-none"
+              aria-label="編輯標題"
+            />
+            <button
+              className="flex-none rounded-full border border-cinnabar px-2.5 py-1 text-xs text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas disabled:opacity-50"
+              disabled={pending}
+              onClick={saveLabel}
+            >
+              儲存
+            </button>
+            <button
+              className="flex-none text-xs text-mute transition-colors hover:text-ink disabled:opacity-50"
+              disabled={pending}
+              onClick={cancelEdit}
+            >
+              取消
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate font-medium text-ink">{asset.label}</span>
+            <button
+              className="flex-none text-mute transition-colors hover:text-cinnabar disabled:opacity-50"
+              disabled={pending}
+              onClick={startEdit}
+              aria-label="編輯標題"
+              title="編輯標題"
+            >
+              <EditIcon />
+            </button>
+            <StatusBadge live={live} />
+            {asset.expiringSoon && <ExpiryBadge epochs={asset.epochsRemaining} />}
+            {asset.autoRenew && (
+              <span className="rounded bg-jade/10 px-1.5 py-0.5 text-2xs text-jade">自動續租</span>
+            )}
+          </div>
+        )}
         <div className="mt-0.5 truncate font-mono text-2xs text-mute">
           {CATEGORY_LABEL[asset.category]} · {(asset.sizeBytes / 1024).toFixed(0)}KB · {asset.blobId.slice(0, 16)}… · {expiry}
         </div>
@@ -716,6 +784,14 @@ function ChevronDownIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+function EditIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
     </svg>
   );
 }
