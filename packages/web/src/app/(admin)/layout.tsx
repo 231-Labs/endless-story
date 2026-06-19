@@ -11,7 +11,7 @@ import { AdminTabs } from './admin/AdminTabs';
  *   - Connection state to active devnet/testnet
  *   - Wallet gate (only allow specific addresses via middleware)
  *
- * See AGENTS.md → "on-chain architecture" principle 6 (strict route-group isolation).
+ * See the on-chain architecture contract, principle 6 (strict route-group isolation).
  */
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -2,7 +2,7 @@
  * Storyteller chapter — the MATERIAL layer (pure, self-contained).
  *
  * The old cut compiler wove ONE event's POVs the moment it resolved. Two
- * problems that surfaced on the live saga (see docs/STORYTELLER_CHAPTER.md):
+ * problems that surfaced on the live saga (see the storyteller-chapter design):
  *   1. it could only write when an event RESOLVED → a wedged/never-resolving
  *      event meant the chapter stream went silent;
  *   2. material was just "this tick's POVs" → chapters re-narrated the same

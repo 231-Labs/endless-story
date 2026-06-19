@@ -81,4 +81,4 @@ $$\text{bulkPrice} = \text{round}_{10}(220 \times 27.2 \times 0.85) \approx 5090
 
 ## §3 張力引擎 (待整理)
 
-> 稀缺資源滿足度 / tension 的定點數公式在 **`packages/drama`**(`DRAMA_ENGINE_BRIEF.md`)。之後摘要到這裡。
+> 稀缺資源滿足度 / tension 的定點數公式在 **`packages/drama`**(見其 package WRITEUP)。之後摘要到這裡。

@@ -3,7 +3,7 @@
  *
  * Given an arc's accumulated material + what's already been told, decide whether
  * to write a chapter now, and which atoms to weave. Two guarantees that answer
- * the live-saga failures (docs/STORYTELLER_CHAPTER.md §1):
+ * the live-saga failures (the storyteller-chapter design):
  *
  *   • RESOLVE-INDEPENDENT — an `event_resolve` atom is only ONE optional progress
  *     signal; its absence never blocks a chapter. A never-resolving event can't

@@ -1,8 +1,7 @@
 # 角色經濟 Life Cycle — 設計與驗證
 
 > **狀態**：機制設計已用純模擬 harness（`packages/economy`）**學術驗證通過**（12/12 測試綠、6 假說全成立、收支守恆逐日成立、tsc clean）。**產品化（Part D）為 gate-after：須 owner 認可後另起。**
-> **分支**：`feat/character-economy`。
-> **關係**：這是 `docs/NARRATIVE_AGENTS.md` §7「經濟層」的展開。沿用 `docs/DRAMA_ENGINE_BRIEF.md` 的鐵律：**先純 TS simulator 驗證 → 同一 transition 模組移植進產品，不重寫**。
+> **關係**：這是 `docs/NARRATIVE_AGENTS.md` §7「經濟層」的展開。沿用既定鐵律：**先純 TS simulator 驗證 → 同一 transition 模組移植進產品，不重寫**。
 
 ---
 

@@ -45,9 +45,8 @@
 **全部 MemWal-native + chain-first,不抄舊本地 store。**
 
 > **⚠️ PERCEIVE 步驟的實作缺口**：程式裡目前沒有真正的 perceive 步驟（plan 排最前、只吃語意 recall，
-> 對本 tick 張力/事件/危機失明）。補完計畫＝**[PERCEPTION_PLAN.md](./PERCEPTION_PLAN.md)**（權威 Situation
-> 感知層、事件客觀/敘事主觀分離、**逐角色 scene-scoped** 防全知、Situation 永不寫 MemWal 防趨同）。
-> 計畫與本檔衝突時以本檔為準。
+> 對本 tick 張力/事件/危機失明）。補完計畫＝權威 Situation
+> 感知層、事件客觀/敘事主觀分離、**逐角色 scene-scoped** 防全知、Situation 永不寫 MemWal 防趨同。
 
 ```
 PERCEIVE  讀鏈:我在哪個 scene、同場有誰(scene.current_character_ids)、
@@ -204,7 +203,7 @@ NARRATE  gazette compiler(每 narrative day,有事才出)→ 客觀公報
 ## 7. 經濟 / 存取層(已大致到位)
 
 - **訂閱 gate POV**:subscriber_count > 0 才自動生 POV(沒人讀不浪費)。✅
-- **公開 vs 私密**:公報公開;POV/反思/夢 owner+訂閱者。✅(見 AGENTS.md 存取模型)
+- **公開 vs 私密**:公報公開;POV/反思/夢 owner+訂閱者。✅
 - **分潤**:Saga.revenue_config ownerBps/storytellerBps/treasuryBps。
 - **SEAL 託管**:撤銷 ControlCap → 斷記憶存取;差異化證明。✅
 
@@ -235,11 +234,11 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 
 > **敘事品質 / 世界生長層(沙盒已驗,待一次性對齊真實代碼)**:N1-N7 解決「迴圈會自己跑」,
 > 但**文字夠不夠好看、世界會不會長出新衝突軸**是另一條正交的工作線,已在
-> `experiments/novel-lab/sim`(解耦 tick 模擬器,純 Node 零鏈,用真 LLM 跑)中驗證。已驗機制:
+> **離線沙盒（純 Node 模擬器）**(解耦 tick 模擬器,純 Node 零鏈,用真 LLM 跑)中驗證。已驗機制:
 > 翻譯層(機制 token→人話才進 prompt)、行當本色卡、結構化代價、定向私帳召回、arcContext 接筆、
 > 一致性自檢 lint(`auditProse`)、餘波回 / 溫情戲(非競爭章回)、班主介入(破壟斷)、D5 showrunner
 > 開/退標的(世界長新衝突軸)。**這些尚未進真實代碼**——對齊施工圖(每條沙盒機制→真實落點+狀態)
-> 見 [experiments/novel-lab/ALIGNMENT.md](../experiments/novel-lab/ALIGNMENT.md);策略是
+> 已另行整理;策略是
 > 全部先在 sim 驗、最後一次性照表搬。動敘事 craft / 世界推進前先讀那份帳本,別重新摸索。
 
 **剩餘(達 C 後的打磨)**:
@@ -258,9 +257,9 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 **效能(已做)**:tick loop 全面 PTB 批次化 —— 出牌/收尾/POV commit/移動各包成一個 PTB(一次簽),
 recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEAL 429;sleep 只在夜裡跑。
 
-### 8b. 敘事方法產品化（2026-06-14，分支 `claude/pear-garden-narrative-pov-5uges4`）
+### 8b. 敘事方法產品化（2026-06-14）
 
-把解耦模擬器（`experiments/novel-lab/sim`）驗證過的寫作方法移植進產品層。**核心紀律：產品層更靈活、少寫死**——自檢資料驅動、行當卡只當隱形守門（不讓角色自報坤生/乾生/俊扮）、不帶測試用的寫死卡司/BONDS。
+把解耦模擬器（離線沙盒，純 Node 模擬器）驗證過的寫作方法移植進產品層。**核心紀律：產品層更靈活、少寫死**——自檢資料驅動、行當卡只當隱形守門（不讓角色自報坤生/乾生/俊扮）、不帶測試用的寫死卡司/BONDS。
 
 **已落地（全部零合約改動，只用既有 `commitment::commit` + 讀取）：**
 
@@ -298,13 +297,13 @@ recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEA
 | **ensemble 楔子 / 餘波 / sequel mode** | 多角色開場楔子、事件餘波回、續作章回；目前 mode 只有 pov/genesis/encounter | ❌ | ⬜ defer |
 | **N5b ImportanceDebt → 反思** | 鏈上 debt 訊號觸發反思 | ✅ 動 contract | ⬜ defer |
 
-**驗證清單**：見 [docs/NARRATIVE_QA.md](./NARRATIVE_QA.md)（明天重部署合約後的整套 QA）。
+**驗證清單**：重部署合約後另有整套 QA runbook。
 
 ### 8c. 資源爭搶重設計：意圖×能力（2026-06-15，已接進產品）
 
 **問題**：原本 `chooseSettlementWinner` 把資源判給「張力(慾望)最高」的人——**技能與先天屬性完全不參與**（最會唱的不見得拿到唱片）。先前一度把技能接到「抽牌加權」是**錯的層**（只改手牌、不改輸贏）。
 
-**重設計（已用解耦 sim 驗證，`experiments/novel-lab/contest-sim/`）**：
+**重設計（已用解耦 sim 驗證，離線沙盒純 Node 模擬器）**：
 - **意圖(記憶推導的慾望) 閘參與，能力(先天+後天) 閘成敗**：`勝率 ∝ (意圖 + FLOOR) × 能力^γ`。
   - 想搶但搶不起：能力低 → `能力^γ≈0` → 輸；能力夠但不想搶：FLOOR 讓能者偶爾被推上去（臨危受命）。
 - **每個資源「靠什麼本事贏」由 ContestSpec 決定**（`lib/chain/contest.ts`）：`{ innate:{先天→權重}, skill:{後天→權重}, abilityGate:γ }`，依資源語意而定（唱片→唱腔、頭牌→台緣、武戲→武場+身段、某人的青眼→外表+心性 但 γ 低＝意圖主導）。
@@ -343,10 +342,8 @@ recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEA
 - 認知:`packages/web/src/lib/chain/memory.ts`(加權✅)+ relationships reader(新)
 - 動作 SDK:`event::submit_action` / `scene::move_character`(tx wrapper 已有)
 - tick loop:`packages/runner/src/`(新 orchestrator)+ web SchedulerPanel(手動驅動)
-- 舊版參照(只讀,挑 idea 不照搬):`/Users/harperdelaviga/Endless-Story/packages/runner/src/`
-  {decision,memory,sleep,relationships,event-loop}/
-- 敘事 craft 沙盒(已驗待對齊):`experiments/novel-lab/sim/`(模擬器)+
-  `experiments/novel-lab/ALIGNMENT.md`(沙盒機制 → 真實落點對照帳本,§8 末有摘要)
+- 舊版原型只讀參照(挑 idea 不照搬):{decision,memory,sleep,relationships,event-loop}/
+- 敘事 craft 沙盒(已驗待對齊):離線沙盒(純 Node 模擬器)+ 沙盒機制 → 真實落點對照帳本(§8 末有摘要)
 
 ---
 

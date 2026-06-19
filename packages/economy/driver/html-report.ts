@@ -285,7 +285,7 @@ const html = `<!doctype html>
 <body><div class="wrap">
 
 <h1>角色經濟機制 · 學術驗證報告</h1>
-<p class="sub">Endless Story — character economy life cycle · 純模擬驗證 <code>packages/economy</code> · 分支 <code>feat/character-economy</code></p>
+<p class="sub">Endless Story — character economy life cycle · 純模擬驗證 <code>packages/economy</code></p>
 <div class="verdict ${allPass ? "ok" : "no"}">${allPass ? "✓ 機制驗證通過 — 4 不變式 + 6 假說全成立（gate 開，可進產品化）" : "✗ 尚有未過項"}</div>
 
 <div class="lead">

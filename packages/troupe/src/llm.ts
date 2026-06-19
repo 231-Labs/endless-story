@@ -4,8 +4,8 @@
  * with ZERO cross-package imports, so the harness runs under plain `node`
  * (native TS) with no install and no tsx, for BOTH mock and real keys.
  *
- * (App code — web/runner/cli — must still go through @endless-story/llm per
- *  AGENTS.md. This is a standalone verification harness, like packages/economy,
+ * (App code — web/runner/cli — must still go through @endless-story/llm.
+ *  This is a standalone verification harness, like packages/economy,
  *  so a small built-in client is the right call.)
  *
  * Key via env (drop packages/troupe/.env.local or pass inline):

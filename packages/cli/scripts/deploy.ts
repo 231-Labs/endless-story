@@ -15,7 +15,7 @@
  *   --gas-budget 2000000000                 (default)
  *   --dry-run                               (validate flags, do not publish)
  *
- * See AGENTS.md → on-chain-architecture + skill `/devnet-bootstrap`.
+ * See the on-chain architecture contract + skill `/devnet-bootstrap`.
  */
 import * as path from 'node:path';
 import * as url from 'node:url';
@@ -126,7 +126,7 @@ async function main() {
   console.log(`   stillTransferPolicy ${stillTransferPolicyId || '(not found)'}`);
   console.log(`   digest             ${result.digest}`);
   console.log(`   deployedAt         ${deployedAt}`);
-  console.log('\nNext: run bootstrap (② in /admin/deploy). See AGENTS.md → 「下一步」.');
+  console.log('\nNext: run bootstrap (② in /admin/deploy).');
 }
 
 main().catch((e) => {

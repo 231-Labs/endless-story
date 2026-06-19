@@ -19,7 +19,7 @@
 ///   - `ControlCap` = operational delegation (epoch-bound; auto-invalidated
 ///     by `revoke_all_control` / `reassign_saga`)
 ///
-/// See AGENTS.md → 「鏈上架構」 for module dependency rules.
+/// Module dependency rules follow the on-chain architecture contract.
 module endless_story::character;
 
 use std::string::String;

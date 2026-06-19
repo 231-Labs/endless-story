@@ -24,8 +24,6 @@
  *   --env devnet|testnet|mainnet|localnet  (required)
  *   --dry-run                              (print plan, don't submit)
  *   --story-id spring-snow                 (default 'spring-snow')
- *
- * See AGENTS.md → handoff Phase 2 step 2.3.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';

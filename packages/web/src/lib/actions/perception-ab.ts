@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * Perception A/B — the controlled, NON-DESTRUCTIVE comparison for docs/PERCEPTION_PLAN.md.
+ * Perception A/B — the controlled, NON-DESTRUCTIVE comparison for the perceive step.
  *
  * Why this and not "run 5 ticks off then 5 ticks on": every real tick MUTATES shared
  * state (advance time, write plans to MemWal, move, resolve, anchor) — so sequential

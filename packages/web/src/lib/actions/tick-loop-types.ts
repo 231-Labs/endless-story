@@ -64,7 +64,7 @@ export interface TickLoopInput {
      *  the missing PERCEIVE step — feed PLAN each character's objective「當下處境」
      *  (same-scene presence, contested stakes, what just resolved) so planning is no
      *  longer blind to this tick. Perception-scoped + omniscience-guarded. Step 1 of
-     *  docs/PERCEPTION_PLAN.md. */
+     *  the perceive-step design. */
     situationPerceive?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;

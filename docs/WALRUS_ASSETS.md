@@ -4,7 +4,7 @@
 > **上傳 / 上下架 / 到期追蹤 / 續租**。
 > **鎖定決策**:① 一次到位的**通用面板**(不只影片);② **Hybrid 續費**(儀表板警示＋手動按鈕＋可選 per-category 自動續租)。
 > 狀態:**規劃完成,待動工**。Walrus 賽道,deadline 2026-06-21。
-> 相關:[AGENTS.md](../AGENTS.md) · [DEPLOYMENT.md](./DEPLOYMENT.md) · [NARRATIVE_AGENTS.md](./NARRATIVE_AGENTS.md)
+> 相關:[DEPLOYMENT.md](./DEPLOYMENT.md) · [NARRATIVE_AGENTS.md](./NARRATIVE_AGENTS.md)
 
 ---
 
@@ -229,7 +229,7 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 | **4** | backfill 既有角色圖(重 register pass) | 我寫腳本 + 你跑一次 | 需 VPS publisher 就緒 |
 | **5** | Hybrid 自動續租 cron ＋ 錢包警示 | 我 | 需 VPS |
 
-開發/驗證指令(沿用 AGENTS.md):
+開發/驗證指令:
 ```bash
 nvm use
 node packages/relayer/src/server.ts          # relayer 本機起(dev-local Walrus)

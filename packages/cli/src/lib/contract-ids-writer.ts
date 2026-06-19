@@ -2,7 +2,7 @@
  * Writes packages/shared/src/contract-ids.ts after a successful deploy.
  *
  * **Single source of truth contract**: this is the only function in the repo
- * that mutates contract-ids.ts. See AGENTS.md on-chain-architecture principle 4.
+ * that mutates contract-ids.ts, per on-chain-architecture principle 4.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -68,7 +68,7 @@ export function renderContractIdsFile(snap: DeploymentSnapshot, deployedAt: stri
  *
  * Last written: ${deployedAt}
  *
- * See AGENTS.md → 「鏈上架構」 for the contract.
+ * See the on-chain architecture contract.
  */
 
 export type SuiNetwork = 'localnet' | 'devnet' | 'testnet' | 'mainnet';

@@ -2,7 +2,7 @@
  * @endless-story/llm — the **only** entry point for external AI services.
  *
  * Mirrors `@endless-story/memwal`: web / runner / cli MUST go through here.
- * Never call Poe / Anthropic / OpenAI directly from app code — see AGENTS.md
+ * Never call Poe / Anthropic / OpenAI directly from app code, per
  * on-chain-architecture principle 4.
  *
  * Subpath exports:

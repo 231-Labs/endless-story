@@ -26,8 +26,6 @@
 
 ▶ **[開啟簡報](https://htmlpreview.github.io/?https://github.com/231-Labs/endless-story/blob/main/pitch/endless-story-pitch-light.html)** &nbsp;·&nbsp; [English deck](https://htmlpreview.github.io/?https://github.com/231-Labs/endless-story/blob/main/pitch/endless-story-pitch-light-en.html)
 
-<!-- TODO: 部署到 VPS 後換成自架網址，例如 https://spring-snow.231labs.xyz/pitch -->
-
 簡報原始檔在 [`pitch/`](pitch/)，自包含（直接開 `.html` 檔即可）。
 
 ---

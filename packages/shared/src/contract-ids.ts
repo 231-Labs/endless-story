@@ -6,7 +6,7 @@
  *
  * Last written: 2026-06-16T12:27:30.672Z
  *
- * See AGENTS.md → 「鏈上架構」 for the contract.
+ * See the on-chain architecture contract.
  */
 
 export type SuiNetwork = 'localnet' | 'devnet' | 'testnet' | 'mainnet';
