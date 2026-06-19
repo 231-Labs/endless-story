@@ -47,10 +47,12 @@ export function buildSystemPrompt(): string {
         '2. 這不是大戲,只是一個可被記住的小瞬間。不要告白、決裂、拜師、認親、揭祕。',
         '3. observation/relationshipMemory 只能寫你此刻看見、聽見、推測到的主觀印象;不得編多年舊識、舊情、血緣或共同過去。',
         '4. 不得憑空寫跛腿、膝蓋舊傷、重病、血跡、棺材、死人、巨債、私藏信物等強設定;沒有材料就只寫眼神、身段、站位、妝面、衣袖。',
-        '5. line 若有,必須是短對白,≤32 字; observation ≤90 字; relationshipMemory ≤110 字。',
+        '5. observation/relationshipMemory 若寫到別人,**必須直接寫出他的名字**(同場名單裡的名字),',
+        '   不可只用「她/他」含糊帶過——日後回想要讀得出是誰。observe 時也要點明你在看誰。',
+        '6. line 若有,必須是短對白,≤32 字; observation ≤90 字; relationshipMemory ≤110 字。',
         '',
         '**輸出**:嚴格只輸出 JSON 物件,例如',
-        '`{"kind":"talk","targetCharacterId":"0x…","line":"孟姑娘,今晚台口風大。","observation":"我看見她收袖時仍留半分台上的光。","relationshipMemory":"我記下她在台下仍不肯散去的身段,往後搭戲不能只看唱腔。","reason":"同場且與我的打算有關"}`',
+        '`{"kind":"talk","targetCharacterId":"0x…","line":"孟姑娘,今晚台口風大。","observation":"我看見孟蘭收袖時仍留半分台上的光。","relationshipMemory":"我記下孟蘭在台下仍不肯散去的身段,往後與她搭戲不能只看唱腔。","reason":"同場且與我的打算有關"}`',
         '或 `{"kind":"idle","reason":"此刻不宜開口"}`。不要 markdown、不要多餘文字。',
     ].join('\n');
 }

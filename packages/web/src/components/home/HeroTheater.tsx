@@ -63,8 +63,19 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
       setPlaying(true);
       setTime(0);
       setDuration(0);
+      // Resume playback. New clips autoplay on mount; reopening the SAME clip
+      // reuses the persisted (paused-on-close) <video>, so restart it from 0 here
+      // (keeps the element's currentTime in sync with the reset setTime(0)).
+      const v = videoRef.current;
+      if (v) {
+        v.currentTime = 0;
+        void v.play().catch(() => {});
+      }
     } else {
       setIsFullscreen(false);
+      // Theater closed, but the <video> stays mounted (displayClip = lastActiveClip)
+      // for the fade-out — pause it so the audio doesn't keep playing underneath.
+      videoRef.current?.pause();
     }
   }, [activeClip]);
 
@@ -193,7 +204,6 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
               ) : (
                 <div className="flex flex-col items-center text-white/40 transition-colors group-hover:text-white/80 cursor-pointer pointer-events-none">
                   <PlayIcon size={64} />
-                  <span className="mt-4 font-mono text-sm tracking-widest">{displayClip.durationSeconds}s</span>
                 </div>
               )}
 
@@ -390,9 +400,6 @@ export function HeroTheater({ saga, clips, recruitmentsCount, castCount = 0 }: {
                         }`}>
                           <span className="translate-x-px"><PlayIcon size={20} /></span>
                         </span>
-                      </div>
-                      <div className="absolute right-2 top-2 rounded bg-elevated/90 px-2 py-0.5 font-mono text-2xs tracking-wider text-ink shadow-sm backdrop-blur">
-                        {clip.durationSeconds}s
                       </div>
                       {/* Text overlay — always visible on touch (no hover), hover-reveal on desktop */}
                       <div className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-canvas via-canvas/90 to-transparent p-3 pt-10 text-left transition-opacity duration-300 ${

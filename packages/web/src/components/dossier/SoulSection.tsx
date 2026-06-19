@@ -1,17 +1,14 @@
-import Link from 'next/link';
-import type { Chapter, CharacterPersona, PersonaRegenTrigger } from '@endless-story/shared';
-import { shortChapterTitle } from '@/lib/format';
+import type { Chapter, CharacterPersona } from '@endless-story/shared';
 
 /**
  * Soul — the character's structural self once out of character.
  * Three columns (axis / voice / bounds), each 2-4 short phrases.
- * The top-right meta line signals the persona evolves over time.
  */
 export function SoulSection({
   persona,
-  regenChapter,
 }: {
   persona: CharacterPersona | null;
+  /** Retained for the caller; the regen meta caption was removed. */
   regenChapter?: Chapter | null;
 }) {
   if (!persona) return null;
@@ -24,65 +21,18 @@ export function SoulSection({
 
   return (
     <section>
-      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="flex items-center gap-4">
-          <div className="h-px w-8 bg-cinnabar/40" />
-          <h2 className="font-serif text-2xl tracking-wide text-ink">本色</h2>
-        </div>
-        <RegenMeta persona={persona} regenChapter={regenChapter ?? null} />
+      <header className="flex items-center gap-4">
+        <div className="h-px w-8 bg-cinnabar/40" />
+        <h2 className="font-serif text-2xl tracking-wide text-ink">本色</h2>
       </header>
       <div className="mt-8 pl-0 sm:pl-12">
-        <p className="text-sm text-mute/80 tracking-wide">卸了妝、出了戲以後 — 不會丟掉的那些。</p>
-
-        <div className="mt-8 grid grid-cols-1 gap-10 sm:grid-cols-3 sm:gap-8">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-3 sm:gap-8">
           <PersonaColumn glyph="軸" lines={persona.axes} />
           <PersonaColumn glyph="腔" lines={persona.mannerisms} />
           <PersonaColumn glyph="界" lines={persona.boundaries} />
         </div>
       </div>
     </section>
-  );
-}
-
-const TRIGGER_LABEL: Record<PersonaRegenTrigger, string> = {
-  first_run: '首次成卷',
-  saga_arc: '落幕後重蒸',
-  manual: '手動沉澱',
-};
-
-function RegenMeta({
-  persona,
-  regenChapter,
-}: {
-  persona: CharacterPersona;
-  regenChapter: Chapter | null;
-}) {
-  const triggerText = persona.lastRegenTrigger
-    ? TRIGGER_LABEL[persona.lastRegenTrigger]
-    : null;
-
-  return (
-    <p className="flex flex-wrap items-baseline gap-x-2 text-2xs tracking-widest text-mute">
-      <span>半永久</span>
-      <span className="text-hairline">·</span>
-      <span>v{persona.version}</span>
-      {triggerText && regenChapter ? (
-        <>
-          <span className="text-hairline">·</span>
-          <Link
-            href={`/feed/chapter/${regenChapter.id}`}
-            className="border-b border-dotted border-cinnabar/40 text-cinnabar/90 transition-colors hover:border-cinnabar hover:text-cinnabar"
-          >
-            {shortChapterTitle(regenChapter.title)}{triggerText}
-          </Link>
-        </>
-      ) : triggerText ? (
-        <>
-          <span className="text-hairline">·</span>
-          <span>{triggerText}</span>
-        </>
-      ) : null}
-    </p>
   );
 }
 

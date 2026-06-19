@@ -71,11 +71,18 @@ export function CharacterPortrait({
   character,
   aspect = '3/4',
   sizes = '(min-width: 1024px) 320px, 50vw',
+  bare = false,
 }: {
   character: Character;
   aspect?: '1/1' | '3/4' | '4/5' | '16/9';
   /** next/image responsive hint — 按實際渲染寬度傳（如訂閱列的 "80px"）。 */
   sizes?: string;
+  /**
+   * Clean single frame (rounded-lg + ring-hairline only), matching the 名冊
+   * grid cards. Drops the inner matted border + white inset highlight so large
+   * portraits (e.g. the dossier hero) read like every other portrait frame.
+   */
+  bare?: boolean;
 }) {
   const tone = characterPortraitTone(character.role);
   const initial = character.name[0];
@@ -85,21 +92,35 @@ export function CharacterPortrait({
     aspect === '4/5' ? 'aspect-[4/5]' : 'aspect-video';
   const imageUrl = character.gallery.anchor?.imageUrl;
 
+  const fill = (
+    <>
+      <div className="absolute inset-0 bg-gradient-to-b from-elevated/15 via-transparent to-canvas/20" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className={`font-serif text-5xl ${tone.text}`}>{initial}</span>
+      </div>
+      {imageUrl ? (
+        <BlobImage
+          src={imageUrl}
+          alt={`${character.name} portrait`}
+          sizes={sizes}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
+    </>
+  );
+
+  if (bare) {
+    return (
+      <div className={`relative overflow-hidden rounded-lg ring-1 ring-hairline shadow-sm shadow-ink/5 ${tone.bg} ${aspectClass}`}>
+        {fill}
+      </div>
+    );
+  }
+
   return (
     <div className={`relative overflow-hidden rounded-lg bg-surface ring-1 ring-hairline shadow-sm shadow-ink/5 ${aspectClass}`}>
       <div className={`absolute inset-1 overflow-hidden rounded-md ring-1 ${tone.bg} ${tone.ring}`}>
-        <div className="absolute inset-0 bg-gradient-to-b from-elevated/15 via-transparent to-canvas/20" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`font-serif text-5xl ${tone.text}`}>{initial}</span>
-        </div>
-        {imageUrl ? (
-          <BlobImage
-            src={imageUrl}
-            alt={`${character.name} portrait`}
-            sizes={sizes}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : null}
+        {fill}
       </div>
       <span
         aria-hidden

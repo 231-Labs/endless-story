@@ -222,22 +222,32 @@
   "drama_resources": [
     {
       "archetype": "capacity-1-slot",
-      "label": "partnership:柳生春",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
       "label": "spotlight:春雪社頭牌名額",
       "capacity": 1
     },
     {
       "archetype": "capacity-1-slot",
-      "label": "recording:首張唱片灌錄權",
+      "label": "partnership:柳生春",
       "capacity": 1
     },
     {
       "archetype": "capacity-1-slot",
-      "label": "patronage:鳴玉坊堂會包銀",
+      "label": "mentorship:沈雪笙的真傳",
+      "capacity": 1
+    },
+    {
+      "archetype": "capacity-1-slot",
+      "label": "belonging:師門自己人的名分",
+      "capacity": 1
+    },
+    {
+      "archetype": "capacity-1-slot",
+      "label": "solace:後台暖爐邊的位子",
+      "capacity": 1
+    },
+    {
+      "archetype": "capacity-1-slot",
+      "label": "keepsake:故人遺下的那身行頭",
       "capacity": 1
     }
   ],

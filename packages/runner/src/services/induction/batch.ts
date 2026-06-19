@@ -113,7 +113,8 @@ export async function runBatchFounding(input: RunBatchInput): Promise<RunBatchRe
                 console.warn(
                     `[induction] runBatchFounding produced NO self-memories after ${attempt} attempt(s) ` +
                         `(${members.length} members, model=${modelId}) — genesis memories will be empty. ` +
-                        `First 200 chars of last response: ${response.text.slice(0, 200)}`,
+                        `Response length=${response.text.length}; last char=${JSON.stringify(response.text.slice(-1))} ` +
+                        `(if not "}" the JSON was truncated). First 600 chars: ${response.text.slice(0, 600)}`,
                 );
             }
             return parsed;

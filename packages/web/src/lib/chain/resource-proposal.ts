@@ -26,8 +26,27 @@
  * Pure + unit-tested (`resource-proposal.test.ts`).
  */
 
-/** Kinds owned by the bootstrap preset — the director may not shadow them. */
-export const RESERVED_KINDS = ['spotlight', 'recording', 'partnership'] as const;
+// Built-in resource-kind VOCABULARY — a SUPERSET of any single seed: the kinds the
+// current seed uses (spotlight/partnership/mentorship/belonging/solace/keepsake) PLUS
+// the other hand-tuned ROLE_AMBITION kinds an earlier seed used (recording/patronage/
+// naming/martial). Two effects: (a) none of these count toward the director-created
+// cap (countDirectorResources), so a seeded saga starts the director at 0/MAX; and
+// (b) the director may NOT mint one of these (validateResourceProposal rejects), so
+// dynamic creation invents GENUINELY new kinds (feud/patron/scandal/venue…) rather
+// than shadowing a tuned built-in concept. When a NEW kind is added to the seed JSON,
+// add it here too or it will wrongly count against the director cap.
+export const RESERVED_KINDS = [
+    'spotlight',
+    'recording',
+    'partnership',
+    'patronage',
+    'naming',
+    'martial',
+    'mentorship',
+    'belonging',
+    'solace',
+    'keepsake',
+] as const;
 
 /** A `kind` is the structural slug: ascii, the label prefix AND templateId key. */
 const KIND_RE = /^[a-z][a-z0-9-]{1,20}$/;
@@ -116,4 +135,35 @@ export function validateResourceProposal(
 export function countDirectorResources(existingLabels: ReadonlyArray<string>): number {
     const reserved = new Set<string>(RESERVED_KINDS);
     return existingLabels.filter((l) => !reserved.has(l.split(':')[0] ?? '')).length;
+}
+
+/** True if a label's kind is director-created (a fresh kind, not a built-in). */
+export function isDirectorKind(label: string): boolean {
+    return !(RESERVED_KINDS as readonly string[]).includes(label.split(':')[0] ?? '');
+}
+
+/** A director-created resource whose scarce capacity is fully claimed — the
+ *  contest is RESOLVED. Such a resource auto-retires: it stops generating new
+ *  desires and stops counting toward the director cap, so the mechanism can run
+ *  long-term (settled stakes make room for fresh ones) without a contract change.
+ *  Built-in (seed) resources never retire — a 頭牌 can change hands again. */
+export function isResolvedDirectorResource(r: {
+    label: string;
+    capacity: bigint;
+    allocations: Record<string, bigint>;
+}): boolean {
+    if (!isDirectorKind(r.label)) return false;
+    if (r.capacity <= 0n) return false;
+    let held = 0n;
+    for (const v of Object.values(r.allocations)) held += v;
+    return held >= r.capacity;
+}
+
+/** Director-created resources that are still LIVE contests (not yet resolved) —
+ *  the count that the director cap (MAX_DIRECTOR_RESOURCES) bounds. Resolved ones
+ *  are retired and free their slot. */
+export function countActiveDirectorResources(
+    resources: ReadonlyArray<{ label: string; capacity: bigint; allocations: Record<string, bigint> }>,
+): number {
+    return resources.filter((r) => isDirectorKind(r.label) && !isResolvedDirectorResource(r)).length;
 }

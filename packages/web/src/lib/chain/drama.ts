@@ -49,6 +49,8 @@ import {
     type DramaTensionRow,
     type ResourceSnapshot,
 } from './drama-core.js';
+import { isResolvedDirectorResource } from './resource-proposal.js';
+import { readResourceIntents } from './resource-intents.js';
 
 /* ── process-level satisfaction carry-over (see header) ───────────────── */
 const lastSatBySaga = new Map<string, Map<string, bigint>>();
@@ -216,8 +218,18 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     const packageId = ENDLESS_STORY_DEPLOYMENT.packageId;
     const client = opts.client ?? makeSuiClient({ network: resolveNetwork() });
 
-    const resources = await readResourceLedger(client, packageId, opts.sagaId);
+    const ledger = await readResourceLedger(client, packageId, opts.sagaId);
+    // Auto-retire RESOLVED director stakes: a director-created resource whose scarce
+    // capacity is fully claimed is a settled contest — drop it so it stops generating
+    // desires (and below, stops counting toward the director cap). This is what lets
+    // the mechanism run long-term: settled stakes make room for fresh ones. Built-in
+    // (seed) resources never retire.
+    const resources = ledger.filter((r) => !isResolvedDirectorResource(r));
     if (resources.length === 0) return { ...empty, skipped: 'no-resources' };
+
+    // Per-stake WANT overrides (who a director-authored resource is FOR) — off-chain
+    // DEMAND, read once and threaded into the pure desire function.
+    const resourceIntents = readResourceIntents();
 
     // 1. assemble agent specs (authored desires, else default contention desires).
     // Defaults can depend on the agent name: a star named in a label like
@@ -231,6 +243,7 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
             defaultDesiresForCast(resources, opts.cast.length, {
                 agentName: c.name,
                 agentTags: c.tags,
+                resourceIntents,
             }),
     }));
 

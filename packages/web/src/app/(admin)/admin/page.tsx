@@ -6,7 +6,7 @@ import { AdminPanel } from './AdminPanel';
 import { CockpitMemoryPanels } from './CockpitMemoryPanels';
 
 export const metadata = {
-  title: '駕駛艙 | 班主後台',
+  title: '後臺 | 班主後台',
 };
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +25,8 @@ export default async function AdminPage() {
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-10 sm:py-16 pb-[max(7rem,calc(env(safe-area-inset-bottom,0px)+5.75rem))]">
         <PageLeadTitleBlock
           eyebrow="SHOWRUNNER"
-          eyebrowMobile="COCKPIT"
-          title="駕駛艙"
+          eyebrowMobile="BACKSTAGE"
+          title="後臺"
           meta="跟 Showrunner 對話 · 心跳與導演日誌 · 世界總開關"
         />
 

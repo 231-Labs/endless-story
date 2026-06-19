@@ -33,6 +33,7 @@ import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounte
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
+import { recordSceneLine } from '@/lib/chain/scene-lines';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings } from '@/lib/chain/memory';
@@ -393,6 +394,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 })),
             );
             tlog(`   移動 ${moves.filter((m) => m.ok && m.toSceneId).length} 人${dryRun ? '（預演）' : ''}`);
+            // Feed the handscroll's living stream from MOVEMENT — happens every tick
+            // regardless of events, so the world never reads empty between dramas.
+            // The reason ("循著爭端走了過去") arrives at the destination scene.
+            if (!dryRun) {
+                for (const m of moves) {
+                    if (m.ok && m.toSceneId && m.reason) {
+                        recordSceneLine(m.toSceneId, m.characterId, m.reason, 'move');
+                    }
+                }
+            }
             if (moves.some((m) => m.ok && m.toSceneId)) {
                 activeScenes = applyMoveResultsToScenes(activeScenes, moves);
                 activeRoster = applyMoveResultsToRoster(activeRoster, activeScenes, moves);
@@ -525,6 +536,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             return sid ? [{ characterId: c.id, sceneId: sid }] : [];
         });
         let candidates = buildAxisCandidates(drama?.top ?? [], occupancy, framingForStatement);
+        // [ch-diag] WHY events do / don't open. An event needs ≥2 cast co-present
+        // in one scene AND tensioned on one axis (minCast=2). Grep `[ch-diag] spine-plan`:
+        //   occupancy=0           → scene reads failed (429 on resolveCurrentOwner) →
+        //                           cast is "nowhere" → no axis can quorum (read bug).
+        //   occupancy>0 cand=0    → co-located but no shared desire (dispersion).
+        //   cand=[..:1..] all <2  → desirers split across scenes/singletons (no quorum).
+        //   cand=[..:2+..] but open 0 → a planner bug to chase.
+        console.log(
+            `[ch-diag] spine-plan day=${worldTime?.day ?? '?'} acting=${slice.length} ` +
+                `occupancy=${occupancy.length} tensionRows=${(drama?.top ?? []).length} ` +
+                `candidates=${candidates.length} minCast=2 cand=[${candidates
+                    .slice(0, 6)
+                    .map((c) => `${c.templateId.replace('contention:', '')}:${c.participantIds.length}@${c.sceneId.slice(0, 6)}`)
+                    .join(',')}]`,
+        );
         // LLM-frame only the axes that could open this tick (bounded LLM spend).
         if (llmFraming && candidates.length > 0) {
             candidates = await Promise.all(
@@ -881,7 +907,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     for (const a of acts) {
         if (!a.ok || !a.cardLabel) continue;
         const sceneId = rosterById.get(a.characterId)?.currentSceneId;
-        pushBeat(sceneId, a.characterId, `${a.name ?? '某人'}${cardActionPhrase(a.cardLabel)}${a.intent ? `（${a.intent}）` : ''}`);
+        // Surface the SPOKEN line (台詞) the chapter can quote, then the inner why.
+        pushBeat(
+            sceneId,
+            a.characterId,
+            `${a.name ?? '某人'}${cardActionPhrase(a.cardLabel)}${a.line ? `：「${a.line}」` : ''}${a.intent ? `（${a.intent}）` : ''}`,
+        );
     }
 
     const povs: TickPovResult[] = [];
@@ -960,10 +991,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }
                 for (const a of acts) {
                     if (a.characterId === c.id && a.ok && a.cardLabel) {
-                        triggerParts.push(`你${cardActionPhrase(a.cardLabel)}${a.intent ? `（${a.intent}）` : ''}`);
+                        triggerParts.push(
+                            `你${cardActionPhrase(a.cardLabel)}${a.line ? `，${a.line}` : ''}${a.intent ? `（${a.intent}）` : ''}`,
+                        );
                     }
                 }
                 const myVerdict = verdictByChar.get(c.id);
+                // A verdict landed this tick → this character's event is settling.
+                // Used twice: it counts as a fresh beat (so the chapter isn't
+                // skipped) AND flags the POV as a 收束 chapter (full 前因後果 +
+                // deeper coda). Named once so the double-use is explicit.
+                const hasClosingVerdict = Boolean(myVerdict);
                 if (myVerdict) {
                     triggerParts.push(
                         `這一局已見分曉：${myVerdict}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`,
@@ -975,7 +1013,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 const eventKey = myEvent ? `${sceneId ?? ''}:${myEvent.label}` : null;
                 const freshBeat =
                     Boolean(myTalk) ||
-                    Boolean(myVerdict) ||
+                    hasClosingVerdict ||
                     acts.some((a) => a.characterId === c.id && a.ok);
                 if (eventKey && !freshBeat && lastPovEventByChar.get(c.id) === eventKey) {
                     tlog(`   · POV ${c.name} 略過（同事件無新拍子）`);
@@ -998,6 +1036,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     triggerNarrative: trigger,
                     forceRun: true,
                     dryRun: true,
+                    closing: hasClosingVerdict,
                     dramaHint: dramaHints[c.id],
                     sceneBeats: sceneBeats.length > 0 ? sceneBeats : undefined,
                     rosterContext: rosterContextById.get(c.id),
@@ -1125,6 +1164,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 for (const st of storylets) {
                     if (!st.opened) continue;
                     const cutPovs = povsFor(st);
+                    // [ch-diag] what material each LIVE event gathered THIS tick.
+                    // Grep `[ch-diag] accumulate`: povThisTick=0 across ticks means
+                    // the cast isn't narrating (POVs never land) → no weave material;
+                    // voices<2 every tick on a spine event means the cut only ever
+                    // forms at resolve (via memory or the chain-recovery fallback).
+                    console.log(
+                        `[ch-diag] accumulate event=${(st.digest ?? 'none').slice(0, 10)} day=${worldTime?.day ?? '?'} ` +
+                            `mode=${spineMode ? 'spine' : 'immediate'} tmpl=${st.templateId} cast=${st.characterIds.length} ` +
+                            `povThisTick=${cutPovs.length} voicesThisTick=${new Set(cutPovs.map((p) => p.characterId)).size} ` +
+                            `scene="${st.sceneName}"`,
+                    );
                     if (spineMode && spineCtx && st.digest) {
                         spineAccumulatePovs(st.digest, cutPovs);
                     } else if (cutPovs.length >= 2) {
@@ -1167,19 +1217,28 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // simply empty while the settle still lands.
     if (spineMode && spineCtx) {
         const ctx = spineCtx;
+        // [ch-diag] one-line per-tick spine census. Grep `[ch-diag] tick`:
+        //   resolve=0 across many ticks while open>0 = events linger and never
+        //   resolve (the "卡住" you worry about — pair with `[ch-diag] resolve`
+        //   resolved=false to confirm a wedged resolve vs just young events).
+        const count = (a: SpineStep['action']) => spineSteps.filter((s) => s.action === a).length;
+        console.log(
+            `[ch-diag] tick day=${worldTime?.day ?? '?'} mode=spine live=${storylets.length} ` +
+                `open=${count('open')} continue=${count('continue')} resolve=${count('resolve')} idle=${count('idle')}`,
+        );
         for (const step of spineSteps) {
             if (step.action !== 'resolve') continue;
             const s = step;
             cutJobs.push(async () => {
-                const r = await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
-                if (r.resolved) {
-                    console.log(
-                        `[tick-loop] spine resolve (${s.eventId.slice(0, 10)}…): settled=${r.settled}` +
-                            ` cutPovs=${r.cutPovCount}`,
-                    );
-                }
+                // The rich per-event outcome is logged inside spineResolveAndWeave
+                // as `[ch-diag] resolve …` (memVoices / path / wove / skip / err).
+                await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
             });
         }
+    } else if (!spineMode) {
+        console.log(
+            `[ch-diag] tick day=${worldTime?.day ?? '?'} mode=immediate live=${storylets.length}`,
+        );
     }
 
     // 4.7 ENCOUNTER — ONE autonomous 溫情/關係戲 chapter per tick. Data-driven:
@@ -1216,6 +1275,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
                 if (enc.ok && enc.chapter?.trim()) {
                     lastEncounterPair = pair.pairKey;
+                    // warmth beat → the handscroll's living stream (the human register,
+                    // not 爭). A short opening clause of the relationship chapter.
+                    if (!dryRun) {
+                        const warm = enc.chapter
+                            .replace(/^#{1,6}\s.*$/m, '')
+                            .trim()
+                            .split(/[。！？\n]/)[0]
+                            ?.replace(/\s+/g, '')
+                            .slice(0, 22);
+                        recordSceneLine(rosterById.get(pair.holderId)?.currentSceneId, pair.holderId, warm, 'warmth');
+                    }
                     dumpChapter(
                         {
                             kind: 'encounter',

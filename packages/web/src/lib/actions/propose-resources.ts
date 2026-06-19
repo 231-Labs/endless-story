@@ -29,7 +29,8 @@ import { createTextClient } from '@endless-story/llm/text';
 import { readResourceLedger } from '@/lib/chain/drama';
 import {
     validateResourceProposal,
-    countDirectorResources,
+    countActiveDirectorResources,
+    isResolvedDirectorResource,
     type RawProposal,
     type ValidProposal,
 } from '@/lib/chain/resource-proposal';
@@ -94,15 +95,20 @@ export async function proposeResourceAction(
     callCountBySaga.set(input.sagaId, n);
     if (n % COOLDOWN_CALLS !== 1) return { ok: false, reason: 'cooldown' };
 
-    // Existing labels: dedupe + the director-resource ceiling.
+    // RESOLVED director stakes auto-retire: exclude them from BOTH the dedup rails
+    // (so a kind can be re-used once its old contest settled — else `feud` is locked
+    // forever after one feud resolves) AND the cap (so the slot frees up).
     let existingLabels: string[];
+    let activeDirectorCount: number;
     try {
         const live = await readResourceLedger(input.client, d.packageId, input.sagaId);
-        existingLabels = live.map((r) => r.label).filter(Boolean);
+        const active = live.filter((r) => !isResolvedDirectorResource(r));
+        existingLabels = active.map((r) => r.label).filter(Boolean);
+        activeDirectorCount = countActiveDirectorResources(active);
     } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-    if (countDirectorResources(existingLabels) >= MAX_DIRECTOR_RESOURCES)
+    if (activeDirectorCount >= MAX_DIRECTOR_RESOURCES)
         return { ok: false, reason: 'director-resource cap reached' };
 
     // Ask the director whether a NEW slot is warranted.
@@ -150,27 +156,40 @@ export async function proposeResourceAction(
     const proposal = check.proposal;
 
     if (input.dryRun) return { ok: true, created: proposal };
+    return instantiateProposal(proposal, {
+        sagaId: input.sagaId,
+        capId: input.capId,
+        signer: input.signer,
+        client: input.client,
+    });
+}
 
-    // Instantiate cap-signed — the contract re-checks capacity > 0 on chain.
+/** Cap-signed on-chain instantiate of a validated proposal. Shared by the
+ *  auto-cadence path (proposeResourceAction) and the deliberate director-tool
+ *  path (registerResourceDirect). The contract re-checks capacity > 0 on chain. */
+async function instantiateProposal(
+    proposal: ValidProposal,
+    ctx: { sagaId: string; capId: string; signer: Keypair; client: SuiClient },
+): Promise<ProposeResourceResult> {
     try {
         const txb = new Transaction();
         txb.add(
             endlessTx.resource.instantiate({
-                cap: input.capId,
-                saga: input.sagaId,
+                cap: ctx.capId,
+                saga: ctx.sagaId,
                 archetype: proposal.archetype,
                 label: proposal.label,
                 capacity: BigInt(proposal.capacity),
             }),
         );
-        const res = await input.client.signAndExecuteTransaction({
+        const res = await ctx.client.signAndExecuteTransaction({
             transaction: txb,
-            signer: input.signer,
+            signer: ctx.signer,
             options: { showEffects: true, showObjectChanges: true },
         });
         if (res.effects?.status?.status !== 'success')
             return { ok: false, created: proposal, error: res.effects?.status?.error ?? 'instantiate failed' };
-        await input.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+        await ctx.client.waitForTransaction({ digest: res.digest }).catch(() => {});
         const created = res.objectChanges?.find(
             (c) => c.type === 'created' && 'objectType' in c && c.objectType.includes('::resource::DramaResource'),
         );
@@ -179,4 +198,59 @@ export async function proposeResourceAction(
     } catch (err) {
         return { ok: false, created: proposal, error: err instanceof Error ? err.message : String(err) };
     }
+}
+
+/**
+ * DELIBERATE director-authored resource. The Showrunner agent (heartbeat / admin
+ * chat) decides kind+display+capacity itself, so this SKIPS the auto path's
+ * cooldown + cheap-LLM-decide and just enforces the same rails (director cap +
+ * validation) and instantiates. Same conservation guarantees. Wrapped by the
+ * 'use server' registerResourceAction → the register_resource director tool.
+ */
+export async function registerResourceDirect(input: {
+    sagaId: string;
+    capId: string;
+    signer: Keypair;
+    client: SuiClient;
+    kind: string;
+    display: string;
+    capacity?: number;
+    /** number of characters who could contend (clamps capacity to stay scarce). */
+    castSize: number;
+    dryRun?: boolean;
+}): Promise<ProposeResourceResult> {
+    const d = ENDLESS_STORY_DEPLOYMENT;
+    if (!d.packageId) return { ok: false, reason: 'unconfigured' };
+
+    let existingLabels: string[];
+    let activeDirectorCount: number;
+    try {
+        const live = await readResourceLedger(input.client, d.packageId, input.sagaId);
+        // Exclude RESOLVED director stakes from dedup + cap (see proposeResourceAction).
+        const active = live.filter((r) => !isResolvedDirectorResource(r));
+        existingLabels = active.map((r) => r.label).filter(Boolean);
+        activeDirectorCount = countActiveDirectorResources(active);
+    } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    if (activeDirectorCount >= MAX_DIRECTOR_RESOURCES)
+        return {
+            ok: false,
+            reason: `已有 ${MAX_DIRECTOR_RESOURCES} 個未結的導演標的，先讓一個落定（結算後會自動退場騰位）再開新的`,
+        };
+
+    const check = validateResourceProposal(
+        { kind: input.kind, display: input.display, capacity: input.capacity ?? 1 },
+        existingLabels,
+        input.castSize,
+    );
+    if (!check.ok) return { ok: false, reason: `rejected: ${check.reason}` };
+
+    if (input.dryRun) return { ok: true, created: check.proposal };
+    return instantiateProposal(check.proposal, {
+        sagaId: input.sagaId,
+        capId: input.capId,
+        signer: input.signer,
+        client: input.client,
+    });
 }

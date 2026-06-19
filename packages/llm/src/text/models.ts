@@ -73,7 +73,7 @@ export const THINKING_MODELS = new Set<string>([
 export function getFallbackModels(provider: 'poe' | 'anthropic', cheap: boolean): string[] {
   if (provider === 'poe') {
     return cheap
-      ? ['GLM-4.7-FlashX', 'Claude-Haiku-4.5', 'Gemini-2.5-Flash']
+      ? ['GLM-4.6', 'Claude-Haiku-4.5', 'Gemini-2.5-Flash']
       : ['Claude-Sonnet-4.6', 'GPT-5', 'GLM-4.6'];
   }
   return cheap

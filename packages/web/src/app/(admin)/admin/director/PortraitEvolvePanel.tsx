@@ -7,6 +7,7 @@ import {
     type PortraitOccasionKind,
 } from '@/lib/actions/evolve-portrait';
 import { txUrl } from '@/lib/explorer';
+import type { StageSlots } from '@/lib/stage-prompt';
 import type { Character } from '@endless-story/shared';
 
 /**
@@ -18,7 +19,8 @@ import type { Character } from '@endless-story/shared';
  */
 const KINDS: { value: PortraitOccasionKind; label: string }[] = [
     { value: 'reference', label: '設定形象' },
-    { value: 'stage', label: '戲妝登台' },
+    { value: 'stage', label: '戲妝登台（水墨）' },
+    { value: 'stage-real', label: '真人戲妝（寫真）' },
     { value: 'finery', label: '盛裝華服' },
     { value: 'daily', label: '日常卸妝' },
     { value: 'youth', label: '少年青澀' },
@@ -33,30 +35,59 @@ const KINDS: { value: PortraitOccasionKind; label: string }[] = [
  *  Dry-Run shows the real prompt sent). */
 const KIND_HINT: Record<PortraitOccasionKind, string> = {
     reference: '端正設定形象、純色底、神情沉靜',
-    stage: '越劇戲妝、依行當出小生/旦角/配角扮相、淡彩薄塗',
+    stage: '臉上油彩越劇戲妝、戴頭面戲服、img2img 吃 base 臉、水墨畫風',
+    'stage-real': '臉上油彩越劇戲妝、戴頭面戲服、img2img 吃 base 臉、真人寫真照',
     finery: '上等綢緞華服、雍容貴氣',
     daily: '後台卸妝、素常服、生活感',
     youth: '更年輕幾歲、眉眼青澀',
     aged: '多年以後、白髮皺紋、氣度蒼勁',
     illness: '久病清減、面色蒼白、形容憔悴',
     snow: '風雪夜、披斗篷、肩頭落雪',
-    realistic: '以基底肖像為參考、img2img 出真人感淡彩版（同一張臉）',
+    realistic: '以基底肖像為參考、img2img 出真人寫真照（同一張臉）',
     custom: '用下方文字逐字驅動扮相',
 };
+
+/** Kinds rendered as real-person photo (vs ink-wash painting). */
+const PHOTO_KINDS: PortraitOccasionKind[] = ['realistic', 'stage-real'];
+
+/** Kinds whose 戲妝 prompt is slot-built and accepts a JSON slot override. */
+const STAGE_KINDS: PortraitOccasionKind[] = ['stage', 'stage-real'];
+
+/** Slot keys the override textarea documents (matches StageSlots). */
+const SLOT_OVERRIDE_PLACEHOLDER =
+    '可選 · 覆寫戲妝 slot（JSON），留空＝LLM 自動。例：\n{\n  "operaType": "京劇",\n  "playTitle": "紅樓夢",\n  "roleName": "賈寶玉",\n  "makeupDesc": "俊扮油彩濃重、吊眉描眼、紅唇",\n  "sceneDesc": "大觀園亭台花影、綢緞帷幔",\n  "poseAction": "執扇回眸",\n  "emotionDesc": "風流灑脫"\n}';
 
 export function PortraitEvolvePanel({ characters }: { characters: Character[] }) {
     const [characterId, setCharacterId] = useState<string>(characters[0]?.id ?? '');
     const [kind, setKind] = useState<PortraitOccasionKind>('stage');
     const [occasion, setOccasion] = useState('');
+    const [overrideText, setOverrideText] = useState('');
     const [result, setResult] = useState<EvolvePortraitResult | null>(null);
     const [isPending, startTransition] = useTransition();
 
     const run = (dryRun: boolean) => {
         if (!characterId) return;
         if (kind === 'custom' && !occasion.trim()) return;
+
+        // Parse the optional slot override (stage kinds only). Bad JSON → surface
+        // an error instead of silently dropping the override.
+        let slotsOverride: Partial<StageSlots> | undefined;
+        if (STAGE_KINDS.includes(kind) && overrideText.trim()) {
+            try {
+                const parsed = JSON.parse(overrideText);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    throw new Error('需為 JSON 物件');
+                }
+                slotsOverride = parsed as Partial<StageSlots>;
+            } catch (e) {
+                setResult({ ok: false, error: `slot override JSON 解析失敗：${e instanceof Error ? e.message : String(e)}` });
+                return;
+            }
+        }
+
         setResult(null);
         startTransition(async () => {
-            const r = await evolvePortraitAction({ characterId, kind, occasion, dryRun });
+            const r = await evolvePortraitAction({ characterId, kind, occasion, slotsOverride, dryRun });
             setResult(r);
         });
     };
@@ -100,7 +131,7 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
             {kind !== 'custom' ? (
                 <p className="text-2xs leading-relaxed text-mute">
                     此選項出：<span className="text-ink/80">{KIND_HINT[kind]}</span>
-                    （同一人、保持體態氣質；{kind === 'realistic' ? '真人感淡彩' : '水墨工筆畫風'}）
+                    （同一人、保持體態氣質；{PHOTO_KINDS.includes(kind) ? '真人寫真' : '水墨工筆畫風'}）
                 </p>
             ) : null}
 
@@ -121,6 +152,22 @@ export function PortraitEvolvePanel({ characters }: { characters: Character[] })
                     className="w-full rounded border border-hairline bg-surface px-3 py-2 text-sm text-ink focus:border-cinnabar focus:outline-none"
                 />
             </label>
+
+            {STAGE_KINDS.includes(kind) ? (
+                <label className="block space-y-1.5">
+                    <div className="text-2xs tracking-widest text-mute">
+                        戲妝 slot 覆寫（進階 · JSON · 留空＝LLM 自動）
+                    </div>
+                    <textarea
+                        value={overrideText}
+                        onChange={(e) => setOverrideText(e.target.value)}
+                        placeholder={SLOT_OVERRIDE_PLACEHOLDER}
+                        disabled={isPending}
+                        rows={6}
+                        className="w-full rounded border border-hairline bg-surface px-3 py-2 font-mono text-2xs text-ink focus:border-cinnabar focus:outline-none"
+                    />
+                </label>
+            ) : null}
 
             <div className="flex flex-wrap gap-3">
                 <button

@@ -31,7 +31,10 @@ import { signAndAnchor } from '../../infra/sign-and-anchor.js';
 import {
     buildSystemPrompt,
     buildUserPrompt,
+    buildReflectionCodaSystemPrompt,
+    buildReflectionCodaUserPrompt,
     findUngroundedHeavyMotifs,
+    CODA_DIVIDER,
     type ChapterMode,
     type CharacterSnapshot,
     type SagaSoul,
@@ -98,6 +101,19 @@ export interface RunCharacterWorkerInput {
      * share the same iron rules + voice — only the framing swaps.
      */
     mode?: ChapterMode;
+    /**
+     * Optional: this character's contested event RESOLVED this tick. Makes the
+     * scene narrate the full arc settling (前因後果收束) instead of one moment,
+     * and earns extra length. Threaded from the tick loop's verdict map.
+     */
+    closing?: boolean;
+    /**
+     * Optional: append a private interior「燈下」coda after the scene (the
+     * character's honest read on the event / the people / themselves). Default
+     * ON for `pov` mode; pass `false` to skip (e.g. a fast dry preview). No-op
+     * for genesis/encounter, which have their own framing.
+     */
+    reflect?: boolean;
     /** Override LLM model. */
     model?: string;
     /** Bypass subscriber gate (admin manual trigger). */
@@ -185,15 +201,21 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         planHint: input.planHint,
         dramaHint: input.dramaHint,
         sceneBeats: input.sceneBeats,
+        closing: input.closing,
     });
+
+    // Scene length: the prompt now asks for 700–1100 字 (1200–1500 when an event
+    // is settling), so give the cap headroom. A closing chapter must show a full
+    // 前因後果, so it gets more room than an ambient beat.
+    const sceneMaxTokens = input.closing ? 3000 : 2400;
 
     const response = await llm.chat({
         model: modelId,
         system,
         messages: [{ role: 'user', content: user }],
         // POV is literary, but should read like controlled fiction rather
-        // than an emotional free-write. Keep enough room for 3-6 paragraphs.
-        maxTokens: 1800,
+        // than an emotional free-write.
+        maxTokens: sceneMaxTokens,
         temperature: 0.72,
     });
 
@@ -204,7 +226,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
             model: modelId,
             system: buildRevisionSystemPrompt(),
             messages: [{ role: 'user', content: buildRevisionUserPrompt(chapter, heavyMotifs) }],
-            maxTokens: 1800,
+            maxTokens: sceneMaxTokens,
             temperature: 0.25,
         });
         const candidate = revision.text.trim();
@@ -253,7 +275,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
                 model: modelId,
                 system,
                 messages: [{ role: 'user', content: user + '\n' + correctionNote(violations) }],
-                maxTokens: 1800,
+                maxTokens: sceneMaxTokens,
                 temperature: 0.4,
             });
             const candidate = toTraditional(correction.text.trim());
@@ -267,6 +289,50 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
             }
         } catch (err) {
             console.warn('[character-worker] corrective regeneration failed:', err);
+        }
+    }
+
+    // Private「燈下」coda — append a short off-stage interior monologue so the
+    // reader sees this character's honest read on the event, the people in it,
+    // and themselves (the 內心戲 / 自省 the public scene deliberately withholds).
+    // A DIFFERENT register from the scene (reflection voice, may contradict it),
+    // so depth is added without loosening the scene's anti-cliché rules. Runs in
+    // dry-run too (the tick loop generates dry, then anchors separately). pov
+    // mode only; opt out with reflect:false.
+    if (input.reflect !== false && (input.mode ?? 'pov') === 'pov' && chapter.trim()) {
+        try {
+            const coda = await llm.chat({
+                model: modelId,
+                system: buildReflectionCodaSystemPrompt(soul),
+                messages: [
+                    {
+                        role: 'user',
+                        content: buildReflectionCodaUserPrompt({
+                            character: publicSnapshot,
+                            chapter,
+                            triggerNarrative: input.triggerNarrative,
+                            relationshipHints: input.relationshipHints,
+                        }),
+                    },
+                ],
+                maxTokens: 360,
+                temperature: 0.8,
+            });
+            let codaText = toTraditional(coda.text.trim());
+            if (codaText) {
+                // Ground the coda the same way as the scene — soften any
+                // ungrounded heavy motif (跛/棺/血…) the interior voice might
+                // have invented. We deliberately DON'T run the full scene audit
+                // on it (that would false-flag a pure monologue for lacking
+                // scene craft and drop every coda); the heavy-motif check is the
+                // safety-relevant, mode-agnostic part.
+                if (findUngroundedHeavyMotifs(codaText, publicSnapshot).length > 0) {
+                    codaText = softenUnsupportedMotifs(codaText);
+                }
+                chapter = `${chapter}${CODA_DIVIDER}${codaText}`;
+            }
+        } catch (err) {
+            console.warn('[character-worker] reflection coda failed:', err);
         }
     }
 

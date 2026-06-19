@@ -28,11 +28,14 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { evolveVariantPrompt, evolveVariantTone } from '@/lib/image-prompts';
+import { buildStagePrompt, type StageSlots } from '@/lib/stage-prompt';
 import { generatePortrait } from './generate-portrait';
+import { curateStageSlots } from './stage-curator';
 
 export type PortraitOccasionKind =
     | 'reference'
     | 'stage'
+    | 'stage-real'
     | 'finery'
     | 'daily'
     | 'youth'
@@ -42,13 +45,26 @@ export type PortraitOccasionKind =
     | 'realistic'
     | 'custom';
 
+/** Kinds that need the ACTUAL face preserved → rendered img2img off the base
+ *  anchor portrait (edit endpoint), NOT the text-anchored look-alike path:
+ *   - realistic   : real-person photo of the same face
+ *   - stage-real  : real-person photo with painted opera makeup on that face
+ *   - stage       : ink-wash portrait with painted opera makeup on that face
+ *  All three build their own prompt and feed it through `renderFromAnchor`. */
+type Img2ImgKind = 'realistic' | 'stage-real' | 'stage';
+function isImg2ImgKind(kind: PortraitOccasionKind): kind is Img2ImgKind {
+    return kind === 'realistic' || kind === 'stage-real' || kind === 'stage';
+}
+
 /** Per-kind situational framing — short, evocative, visually distinct (for
- *  demo). Drives makeup / costume / age / scene. The anchor curator strips
- *  these (it's bare-face-only), so the variant builds its OWN prompt and renders
- *  it directly via promptOverride. */
-const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realistic'>, string> = {
+ *  demo). Drives costume / age / scene. The anchor curator strips these (it's
+ *  bare-face-only), so the variant builds its OWN prompt and renders it directly
+ *  via promptOverride. (makeup/realistic kinds go through isImg2ImgKind instead.) */
+const OCCASION_BY_KIND: Record<
+    Exclude<PortraitOccasionKind, 'custom' | 'realistic' | 'stage' | 'stage-real'>,
+    string
+> = {
     reference: '正式設定形象：端正面向觀者、神情沉靜，純色底、自然光、半身。',
-    stage: '登台演出：越劇戲妝，依角色行當選擇小生、旦角或配角扮相；妝面、頭飾與戲服都用淡彩薄塗，半身或七分身，純白背景。',
     finery: '一身上等綢緞華服、配飾講究，雍容貴氣，半身。',
     daily: '後台卸了妝的尋常一刻：素常服、神情鬆弛、帶生活感。',
     youth: '更年輕幾歲：眉眼青澀、未脫稚氣，衣著樸素，半身。',
@@ -57,14 +73,97 @@ const OCCASION_BY_KIND: Record<Exclude<PortraitOccasionKind, 'custom' | 'realist
     snow: '風雪夜中：披斗篷、肩頭落雪、呵氣成霜，神情堅毅。',
 };
 
-/** Human-reference variant keeps real-actor bone structure while staying pale-ink. */
-const HUMAN_REFERENCE_GUARD = '淡彩水墨工筆畫風，純白背景，無任何文字、浮水印、邊框、數字、字母或排版框線。';
+// ── img2img anchor prompts (face preserved off the base portrait) ──
+/** Photo variants: only forbid stray text (realism is the whole point). */
+const PHOTO_GUARD = '畫面中不得出現任何文字、浮水印、邊框或排版框線。';
+
+/**
+ * The opera行當 for the makeup variants follows the character's actual `role`,
+ * NOT their gender — 反串 (cross-gender casting: 坤生 a woman playing 生行,
+ * 乾旦 a man playing 旦行) is core to this troupe, so a gender guess would put
+ * the wrong makeup on the face. Resolve 反串 to the PERFORMING line; otherwise
+ * pass the role through. Only fall back to a generic hint when role is unknown.
+ */
+function stageRoleHint(role: string | undefined): string {
+    const r = role?.trim();
+    if (!r) return '依此角色的行當';
+    if (/坤生|乾生/.test(r)) return '小生（生行俊扮）';
+    if (/乾旦|坤旦/.test(r)) return '旦角（旦行扮相）';
+    return r; // already a 行當 like 小生 / 老生 / 花旦 / 青衣 / 武生 / 淨 / 丑
+}
+
+/** realistic — real-person photo of the same face. */
+function realisticPrompt(person: string, extra: string): string {
+    return (
+        `寫實真人肖像攝影：與參考圖同一個人、同一張臉（五官、髮型、神態保持一致），${person}${extra}。` +
+        `自然光、真實膚質與衣料質感、淺景深、半身正面肖像，照片寫真感。${PHOTO_GUARD}`
+    );
+}
+
+/**
+ * stage / stage-real — painted opera makeup on the base face, via the structured
+ * 戲妝 builder (Hybrid): LLM-curated dramaturgical slots (play / scene / pose…) +
+ * role-default makeup/headpiece/costume, with an optional caller override merged
+ * on top. Only `styleMode` separates the two kinds (ink-wash vs real-photo).
+ */
+async function buildStageImgPrompt(
+    kind: 'stage' | 'stage-real',
+    pf: { gender?: string; age_years?: number | string },
+    role: string | undefined,
+    occasion: string | undefined,
+    override?: Partial<StageSlots>,
+): Promise<string> {
+    const gender = mapGender(pf.gender ?? '');
+    const roleType = stageRoleHint(role);
+    const curated = await curateStageSlots({
+        roleType,
+        occasion,
+        gender,
+        ageYears: Number(pf.age_years ?? 0) || undefined,
+    });
+    const styleMode = kind === 'stage-real' ? '寫實真人舞台劇照' : '淡彩水墨工筆畫風';
+    // Sanitize the override: keep only non-empty string slots (the JSON comes from
+    // an admin textarea, so a stray number must not reach buildStagePrompt's .trim()).
+    const cleanOverride: Record<string, string> = {};
+    if (override) {
+        for (const [k, val] of Object.entries(override)) {
+            if (typeof val === 'string' && val.trim()) cleanOverride[k] = val.trim();
+        }
+    }
+    const slots: StageSlots = {
+        styleMode,
+        roleType,
+        ...curated,
+        ...cleanOverride,
+    };
+    return buildStagePrompt(slots);
+}
+
+/** Build the img2img prompt for a face-preserving kind. */
+async function buildAnchorPrompt(
+    kind: Img2ImgKind,
+    pf: { gender?: string; age_years?: number | string },
+    role: string | undefined,
+    occasion?: string,
+    override?: Partial<StageSlots>,
+): Promise<string> {
+    if (kind === 'realistic') {
+        const gender = mapGender(pf.gender ?? '');
+        const person = `${role ?? '梨園中人'}，${gender}，${Number(pf.age_years ?? 0)} 歲`;
+        const extra = occasion?.trim() ? `（${occasion.trim()}）` : '';
+        return realisticPrompt(person, extra);
+    }
+    return buildStageImgPrompt(kind, pf, role, occasion, override);
+}
 
 export interface EvolvePortraitInput {
     characterId: string;
     kind: PortraitOccasionKind;
     /** Free-text occasion (used when kind='custom', or appended otherwise). */
     occasion?: string;
+    /** Advanced (stage / stage-real only): override any LLM-curated 戲妝 slot —
+     *  merged on top of the curated + role-default slots before rendering. */
+    slotsOverride?: Partial<StageSlots>;
     /** Preview only — render but don't anchor on chain. */
     dryRun?: boolean;
 }
@@ -116,13 +215,20 @@ export async function evolvePortraitAction(
     const pf = cj.profile?.physical_facts ?? {};
     const physicalFacts = [pf.species, pf.body].filter(Boolean).join(' / ') || '—';
 
-    // Human-reference variant: unlike the text-anchored variants, this needs the actual
-    // FACE preserved, so it's img2img off the character's anchor portrait (the
-    // edit endpoint) with a pale-ink real-actor prompt — NOT the text-anchored path
-    // (which only reproduces physical_facts, a look-alike).
+    // Face-preserving kinds (真人版 / 真人戲妝 / 水墨戲妝): these need the ACTUAL
+    // face, so they're img2img off the character's anchor portrait (edit endpoint)
+    // with a per-kind prompt — NOT the text-anchored path (which only reproduces
+    // physical_facts, a look-alike). The makeup kinds paint opera油彩 onto the base face.
     let gen: { ok: boolean; url?: string; base64?: string; blobId?: string; promptUsed?: string; error?: string };
-    if (input.kind === 'realistic') {
-        gen = await renderRealisticFromAnchor(cj, role ?? undefined, input.occasion);
+    if (isImg2ImgKind(input.kind)) {
+        const prompt = await buildAnchorPrompt(
+            input.kind,
+            pf,
+            role ?? undefined,
+            input.occasion,
+            input.slotsOverride,
+        );
+        gen = await renderFromAnchor(cj, prompt);
     } else {
         const framing =
             input.kind === 'custom'
@@ -235,27 +341,19 @@ function mapGender(raw: string): string {
 }
 
 /**
- * Human-reference variant — render a real-actor-feeling pale-ink portrait of the SAME person by feeding the
- * character's anchor base portrait into the image-edit (img2img) endpoint as a
- * reference, so the actual face/features survive. Returns the same shape as
- * `generatePortrait` so the caller's anchor-on-chain path is unchanged.
+ * Render a face-preserving variant by feeding the character's anchor BASE
+ * portrait into the image-edit (img2img) endpoint as a reference, so the actual
+ * face/features survive while the caller-supplied `prompt` drives style and
+ * makeup (real-person photo, painted opera makeup, etc.). Returns the same shape
+ * as `generatePortrait` so the caller's anchor-on-chain path is unchanged.
  */
-async function renderRealisticFromAnchor(
+async function renderFromAnchor(
     cj: {
         image_url?: string;
         media_assets?: Array<{ uri?: string }>;
-        profile?: { physical_facts?: { gender?: string; age_years?: number | string } };
     },
-    role: string | undefined,
-    occasion?: string,
+    prompt: string,
 ): Promise<{ ok: boolean; url?: string; base64?: string; blobId?: string; promptUsed?: string; error?: string }> {
-    const pf = cj.profile?.physical_facts ?? {};
-    const person = `${role ?? '梨園中人'}，${mapGender(pf.gender ?? '')}，${Number(pf.age_years ?? 0)} 歲`;
-    const extra = occasion?.trim() ? `（${occasion.trim()}）` : '';
-    const prompt =
-        `真人感淡彩肖像：與參考圖同一個人、同一張臉，五官、髮型、神態與年齡感保持一致，${person}${extra}。` +
-        `骨相、膚色、生活痕跡與日常神態更接近真實演員，畫法仍保持淡彩水墨工筆；半身正面，自然光。${HUMAN_REFERENCE_GUARD}`;
-
     // ALWAYS use the BASE anchor = media_assets[0] (the mint-time portrait), NOT
     // image_url (the owner-set cover, which may point at any later variant).
     const anchorUrl = cj.media_assets?.[0]?.uri || cj.image_url || '';
@@ -309,7 +407,7 @@ async function renderRealisticFromAnchor(
 
 function mediaKindForOccasion(kind: PortraitOccasionKind): number {
     if (kind === 'reference') return 6; // setting sheet / stable reference
-    if (kind === 'stage') return 3; // makeup
+    if (kind === 'stage' || kind === 'stage-real') return 3; // makeup
     if (kind === 'finery') return 2; // costume
     return 0; // portrait variant
 }

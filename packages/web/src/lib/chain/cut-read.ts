@@ -48,14 +48,16 @@ export async function fetchEventCutsForSaga(
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return [];
     const limit = opts.limit ?? 20;
-    // List assembly = commitment scan + a blob header peek per candidate. Short
-    // TTL keeps the feed fresh while making warm navigations near-instant; the
-    // blob texts themselves cache hard (immutable) in fetchChapterText. The
-    // stale window means a TTL rollover serves the old list instantly and
-    // refreshes in the background instead of blocking the page.
+    // List assembly = a FULL saga commitment scan (§⑨: cuts are old + scattered,
+    // so we page the whole log) + a blob header peek per candidate. That scan is
+    // the single most RPC-heavy public read, and new cuts are rare — so the fresh
+    // TTL is generous (2 min) and the stale window long: a feed poll almost never
+    // triggers the scan, and a TTL rollover serves the old list instantly while
+    // ONE background refresh runs. Blob texts cache hard (immutable). This keeps
+    // the feed from amplifying RPC load into the public-fullnode 429 ceiling.
     return cachedPublicRead(
         `cuts:saga:${sagaId}:${limit}`,
-        publicChainReadTtl(30_000),
+        publicChainReadTtl(120_000),
         () => fetchEventCutsForSagaUncached(sagaId, limit),
         { staleTtlMs: 10 * 60 * 1000 },
     );
@@ -69,11 +71,15 @@ async function fetchEventCutsForSagaUncached(
 
     let summaries: Awaited<ReturnType<typeof read.commitment.listCommitments>>;
     try {
-        // All saga commitments; over-fetch because POV/gazette/drama share the
-        // feed and get filtered out below by the header peek.
+        // Scan the FULL saga commitment log — cuts are a tiny, scattered
+        // minority. The log is dominated by DR-6 drama beats (subject=world)
+        // and gazettes (subject=saga), both of which grow every tick; a fixed
+        // over-fetch window buries the (rarer, older) cuts and the feed reads
+        // empty even when chapters exist. queryEvents has no subject-type
+        // predicate, so we page to the end and filter in memory. Bounded by the
+        // 30s + stale-window cache above.
         summaries = await read.commitment.listCommitments(client, ENDLESS_STORY_DEPLOYMENT.packageId, {
             sagaId,
-            maxEvents: limit + 40,
         });
     } catch (err) {
         console.warn('[cut-read] listCommitments failed:', err);
@@ -81,10 +87,18 @@ async function fetchEventCutsForSagaUncached(
     }
     if (summaries.length === 0) return [];
 
+    // A cut's subject is always one of the saga's anchored scenes (gazettes
+    // sit on the saga, POVs on a character, drama beats on the world). Keep
+    // only scene-subject commitments BEFORE the per-candidate blob peek, so the
+    // peek count tracks the number of cuts — not the unbounded drama/POV flood.
+    const sceneSubjects = new Set(ENDLESS_STORY_DEPLOYMENT.sceneIds);
+    const candidates = summaries.filter((s) => sceneSubjects.has(s.subjectId));
+    if (candidates.length === 0) return [];
+
     // Resolve all candidates in parallel (commitment JSON + header peek are
     // cached); keep newest-first order and trim to limit after the filter.
     const resolved = await Promise.all(
-        summaries.map(async (s): Promise<EventCutEntry | null> => {
+        candidates.map(async (s): Promise<EventCutEntry | null> => {
             try {
                 const res = await getCommitmentCached(client, s.commitmentId);
                 const blobId = decodeByteString(res.blob_id);
@@ -110,7 +124,17 @@ async function fetchEventCutsForSagaUncached(
             }
         }),
     );
-    return resolved.filter((c): c is EventCutEntry => c != null).slice(0, limit);
+    const cuts = resolved.filter((c): c is EventCutEntry => c != null).slice(0, limit);
+    // [ch-diag] read-side census: scanned = whole saga commitment log; candidates
+    // = scene-subject (the §⑨ pre-filter); cuts = those whose blob is an es:cut.
+    // Grep `[ch-diag] cut-read`: candidates>0 but cuts=0 means scene commitments
+    // exist whose blobs aren't event_cut (mis-subject?) — distinct from the feed
+    // reading empty because none were ever woven (candidates=0).
+    console.log(
+        `[ch-diag] cut-read saga=${sagaId.slice(0, 10)} scanned=${summaries.length} ` +
+            `candidates=${candidates.length} cuts=${cuts.length}`,
+    );
+    return cuts;
 }
 
 /** A cut with its full prose body — the /feed/cut/[id] detail page payload. */

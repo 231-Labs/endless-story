@@ -104,11 +104,7 @@ export function HomeContent({
           </div>
           
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs tracking-wider text-mute sm:gap-6">
-            <a href="https://github.com/231-Labs/endless-story" target="_blank" rel="noreferrer" className="hover:text-cinnabar transition-colors">GitHub</a>
-            <span className="text-hairline hidden sm:inline">|</span>
             <span className="cursor-default border border-hairline px-2 py-0.5 rounded text-2xs font-mono">SUI OVERFLOW 2026</span>
-            <span className="text-hairline hidden sm:inline">|</span>
-            <a href="/dossier" className="hover:text-cinnabar transition-colors">班底名冊</a>
           </div>
         </div>
       </footer>

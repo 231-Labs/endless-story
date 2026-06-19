@@ -15,6 +15,7 @@ import {
     sanitizeSocialMemory,
     sanitizePlanForRole,
     hasAuthorityDrift,
+    driftsForRole,
 } from '../src/services/character-agent/parse.ts';
 
 /* ── MOVE ───────────────────────────────────────────────────────────── */
@@ -125,4 +126,39 @@ test('sanitizePlanForRole: clean plan passes through untouched', () => {
     };
     const r = sanitizePlanForRole({ name: '柳生春', role: '小生' }, plan);
     assert.deepEqual(r, plan);
+});
+
+test('hasAuthorityDrift: usurping the troupe master is drift', () => {
+    // Claiming / seizing / displacing authority — must clamp.
+    assert.ok(hasAuthorityDrift('我要做這戲班的老板 敲打新來的角兒讓他們安分'));
+    assert.ok(hasAuthorityDrift('我要掌控全班 讓誰紅誰就紅'));
+    assert.ok(hasAuthorityDrift('總有一天取代班主 讓誰涼誰就涼'));
+    assert.ok(hasAuthorityDrift('我要坐上當家的位子 整治不聽話的後輩'));
+});
+
+test('hasAuthorityDrift: merely naming the boss is NOT drift', () => {
+    // A minor role planning AROUND the troupe master is in-character — the old
+    // bare-noun guard wrongly clamped all of these (the "常常 fallback" cause).
+    assert.ok(!hasAuthorityDrift('我想得到班主的賞識 把今天的戲演好'));
+    assert.ok(!hasAuthorityDrift('盼著班主給我一個正戲的機會 先把身段練熟'));
+    assert.ok(!hasAuthorityDrift('別惹當家的不快 守住自己的本分'));
+    assert.ok(!hasAuthorityDrift('等東家發了月錢就贖回當掉的行頭 省著點花'));
+    assert.ok(!hasAuthorityDrift('在班主面前證明我接得住戲 別出錯'));
+});
+
+test('hasAuthorityDrift: wildcards stay within a clause (no cross-field match)', () => {
+    // `joined` glues fields with spaces; 敲打/新來 must not reach across them.
+    assert.ok(!hasAuthorityDrift('把功夫磨好不再被人敲打 接住主角留的那句戲'));
+    assert.ok(!hasAuthorityDrift('照顧新來的師弟 讓自己安分守己別惹事'));
+});
+
+test('driftsForRole: gate matches sanitize — 班主 bypass, drift detected, clean passes', () => {
+    const usurp = { longTermGoal: '我要當這戲班的當家', dailyPlanHint: '整治新來的後輩', openSubgoals: [] };
+    const clean = { longTermGoal: '我想得到班主的賞識', dailyPlanHint: '把今天的戲演好', openSubgoals: [] };
+    // 班主 never drifts (so the repair loop never fires for the boss).
+    assert.equal(driftsForRole('班主', usurp), false);
+    // A non-班主 over-reaching → drift → triggers repair, not a direct template.
+    assert.equal(driftsForRole('花旦', usurp), true);
+    // Merely naming the boss is clean → no repair, plan passes through.
+    assert.equal(driftsForRole('花旦', clean), false);
 });

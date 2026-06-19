@@ -102,6 +102,15 @@ export interface DefaultDesireOptions {
     agentName?: string;
     /** Public chain tags such as `role:<role-type>`. */
     agentTags?: string[];
+    /**
+     * Per-resource WANT override, keyed by on-chain label. For a director-created
+     * resource of a fresh kind (no ROLE_AMBITION row → flat 0.5 for everyone), the
+     * Showrunner can name the 行當 the stake is FOR; those roles ache for it, others
+     * stand down — so a bespoke stake is character-shaped, not a flat scramble. Built-in
+     * kinds keep their tuned ROLE_AMBITION ambitions (an intent only overrides if present
+     * for that label). Read off-chain from resource-intents; passed in to stay pure.
+     */
+    resourceIntents?: Record<string, { wantedBy: string[] }>;
 }
 
 /**
@@ -130,14 +139,21 @@ export interface DefaultDesireOptions {
 // elsewhere roles own their lane (班主→堂會包銀, 丑→小報, 武→武戲) so they can be
 // co-present without a contest → warmth can breathe. The contest FLOOR still lets an
 // able non-desirer get thrust on stage 臨危受命; this governs DESIRE, not ability.
+// WARM kinds (mentorship/belonging/solace/keepsake) are seeded alongside the status
+// kinds (2026-06-17) to grow 師徒/接納/疼惜 drama, not 頭牌 wars. They sit at MODERATE
+// ambition (0.3–0.6, vs the 0.9 status niches) so the contests over them are soft —
+// warmth from the theme, not from being low-stakes. Note ORDER: elders/master rows
+// come FIRST so a multi-行當 veteran (老旦, or a 班主 who's also a 前代名角) matches there,
+// not the greedy young-行當 rows below — they GIVE the teaching / already belong, so they
+// carry keepsake/solace but NEVER mentorship/partnership (they don't crave being taught).
 const ROLE_AMBITION: { match: string[]; a: Record<string, number> }[] = [
-    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.3 } }, // 武戲台口
-    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.85 } }, // 頭牌 + 唱片
-    { match: ['坤生', '乾生', '小生'], a: { partnership: 0.9, spotlight: 0.6 } }, // 搭檔，兼爭頭牌
-    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, patronage: 0.5 } }, // 唱片 + 堂會
-    { match: ['丑'], a: { naming: 0.75, patronage: 0.4 } }, // 小報頭條（丑角搏版面）
-    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.65, spotlight: 0.35 } }, // 武 + 偶爭台
-    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.75, naming: 0.4 } }, // 堂會包銀（生意），不與台上角兒爭頭牌
+    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.75, naming: 0.4, keepsake: 0.5, solace: 0.4 } }, // 堂會包銀（生意）；給戲不爭戲、念舊惜身
+    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, patronage: 0.5, keepsake: 0.55, solace: 0.45 } }, // 唱片 + 堂會；認命惜身、念故人
+    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.3, belonging: 0.55, mentorship: 0.5, solace: 0.4 } }, // 武戲台口 + 想被收作自己人、求真傳
+    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.85, mentorship: 0.6, keepsake: 0.4, solace: 0.3 } }, // 頭牌 + 渴師父真傳
+    { match: ['坤生', '乾生', '小生'], a: { partnership: 0.9, spotlight: 0.6, belonging: 0.55, mentorship: 0.55 } }, // 搭檔；外來者求接納與真傳
+    { match: ['丑'], a: { naming: 0.75, patronage: 0.4, belonging: 0.5, mentorship: 0.4 } }, // 小報頭條（搏版面）+ 邊緣人求名分
+    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.65, spotlight: 0.35, belonging: 0.4, solace: 0.35 } }, // 武 + 偶爭台、求一席
 ];
 // An UNKNOWN 行當 (no row matched) still participates at a moderate level so a未知角色
 // isn't a non-entity in the economy.
@@ -147,6 +163,21 @@ const AMBITION_FALLBACK = 0.5;
 // This is what carves the niches: specify only the kinds a role burns for; the rest fall here.
 const OMITTED_KIND_AMBITION = 0.08;
 const AMBITION_MIN = 0.15;
+// A FRESH director-invented kind that NO 行當 is tuned for (not in ROLE_AMBITION):
+// fall back to a broad MODERATE want so the new stake actually draws a scramble.
+// Without this a director-created resource is inert for a cast of known roles (every
+// matched role hits the 0.08 off-niche floor → nobody contends → no drama). A
+// `wantedBy` intent sharpens this broad want into specific 行當.
+const DIRECTOR_KIND_FALLBACK = 0.4;
+// A director-authored stake WITH a `wantedBy` intent: the named 行當 burn for it
+// (high, contended), everyone else is a non-contender (below AMBITION_MIN). This is
+// what makes a bespoke stake character-shaped instead of a broad scramble.
+const INTENT_WANT = 0.8;
+const INTENT_OFF = 0.05;
+/** Every kind any 行當 is tuned for — lets roleResourceAmbition tell an OFF-niche
+ *  built-in kind (non-contender, 0.08) from a FRESH director kind (broad want).
+ *  Derived from the table so it can never drift out of sync. */
+const TUNED_KINDS = new Set<string>(ROLE_AMBITION.flatMap((r) => Object.keys(r.a)));
 
 function primaryRoleFromTags(tags: string[] | undefined): string {
     const roleTag = (tags ?? []).find((t) => t.startsWith('role:'));
@@ -159,7 +190,11 @@ function primaryRoleFromTags(tags: string[] | undefined): string {
 export function roleResourceAmbition(role: string, kind: string): number {
     const row = ROLE_AMBITION.find((g) => g.match.some((kw) => role.includes(kw)));
     if (!row) return AMBITION_FALLBACK; // unknown 行當 → moderate (still contests)
-    return row.a[kind] ?? OMITTED_KIND_AMBITION; // matched role, non-niche kind → non-contender
+    const a = row.a[kind];
+    if (a != null) return a; // this 行當's tuned want for this kind
+    // off-niche: a TUNED kind this role doesn't burn for → non-contender; a FRESH
+    // (director-invented) kind nobody's tuned for → broad moderate want (else inert).
+    return TUNED_KINDS.has(kind) ? OMITTED_KIND_AMBITION : DIRECTOR_KIND_FALLBACK;
 }
 
 /** Scale the unit weight (SCALE) by ambition 0..1 → the desire's intent magnitude. */
@@ -198,7 +233,15 @@ export function defaultDesiresForCast(
         // event-participant in). Uniform desire was the old structural floor (bone);
         // this is the role-shaped skin, kept deterministic + data-driven.
         const kind = (r.label.split(':')[0] || '').trim();
-        const ambition = roleResourceAmbition(role, kind);
+        // A director-authored stake may name WHO it's for (resourceIntents): the
+        // listed 行當 burn for it, everyone else stands down — overriding the flat
+        // fallback a fresh kind would otherwise get. No intent → tuned ROLE_AMBITION.
+        const intent = opts.resourceIntents?.[r.label];
+        const ambition = intent
+            ? intent.wantedBy.some((kw) => kw && role.includes(kw))
+                ? INTENT_WANT
+                : INTENT_OFF
+            : roleResourceAmbition(role, kind);
         if (ambition < AMBITION_MIN) continue;
         specs.push({
             id: `hold:${r.label || r.archetype || r.id}`,

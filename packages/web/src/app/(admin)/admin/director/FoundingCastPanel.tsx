@@ -234,6 +234,11 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
                     {result.failures.map((f, i) => (
                         <div key={i} className="text-cinnabar">✕ {f.name}：{f.error}</div>
                     ))}
+                    {result.genesisWarning ? (
+                        <div className="rounded border border-cinnabar/40 bg-cinnabar/5 p-2 text-cinnabar">
+                            ⚠ 此生記憶：{result.genesisWarning}
+                        </div>
+                    ) : null}
                     {result.error ? <div className="text-cinnabar">錯誤：{result.error}</div> : null}
                 </div>
             ) : null}

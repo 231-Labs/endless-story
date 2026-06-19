@@ -19,7 +19,7 @@ export function CockpitMemoryPanels({ initialMemory }: { initialMemory: Director
   const handleClear = () => {
     if (
       !window.confirm(
-        '清空駕駛艙記憶（弧線計畫、導演日誌、對話紀錄）？\n\n重新部署後舊 saga 上下文會過時，建議清空再開始。',
+        '清空後臺記憶（弧線計畫、導演日誌、對話紀錄）？\n\n重新部署後舊 saga 上下文會過時，建議清空再開始。',
       )
     ) {
       return;
@@ -33,7 +33,7 @@ export function CockpitMemoryPanels({ initialMemory }: { initialMemory: Director
       if (result.cleared.chat > 0) parts.push(`${result.cleared.chat} 則對話`);
       setMemory({ arcPlan: '', log: [], chat: [] });
       setResetKey((k) => k + 1);
-      setNotice(parts.length > 0 ? `已清空：${parts.join('、')}。` : '駕駛艙已是空白。');
+      setNotice(parts.length > 0 ? `已清空：${parts.join('、')}。` : '後臺已是空白。');
     });
   };
 
@@ -54,7 +54,7 @@ export function CockpitMemoryPanels({ initialMemory }: { initialMemory: Director
             disabled={isPending}
             className="shrink-0 rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-mute hover:bg-elevated hover:text-ink disabled:opacity-50"
           >
-            {isPending ? '清空中…' : '清空駕駛艙'}
+            {isPending ? '清空中…' : '清空後臺'}
           </button>
         </div>
         {notice ? <p className="mt-3 text-sm text-jade">{notice}</p> : null}

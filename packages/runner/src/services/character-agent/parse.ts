@@ -34,18 +34,24 @@ export function parseMove(
 
 export function parseDecision(
     raw: string,
-): { catalogIndex: number; intent?: string; reason?: string } | null {
+): { catalogIndex: number; intent?: string; line?: string; reason?: string } | null {
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return null;
     try {
         const o = JSON.parse(m[0]) as {
             catalogIndex?: number | string;
             intent?: string;
+            line?: string;
             reason?: string;
         };
         const ci = Number(o.catalogIndex);
         if (!Number.isFinite(ci)) return null;
-        return { catalogIndex: ci, intent: o.intent, reason: o.reason };
+        return {
+            catalogIndex: ci,
+            intent: o.intent,
+            line: clamp(typeof o.line === 'string' ? o.line : undefined, 24),
+            reason: o.reason,
+        };
     } catch {
         return null;
     }
@@ -124,6 +130,7 @@ export interface ParsedAidGift {
     amount?: number;
     memo: AidMemo;
     manner?: AidManner;
+    line?: string;
     reason?: string;
 }
 
@@ -135,6 +142,7 @@ function parseOneGift(o: Record<string, unknown>): ParsedAidGift {
         amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : undefined,
         memo: AID_MEMOS.has(memoRaw) ? memoRaw : 'gift',
         manner: mannerRaw && AID_MANNERS.has(mannerRaw) ? mannerRaw : undefined,
+        line: clamp(typeof o.line === 'string' ? o.line : undefined, 28),
         reason: clamp(typeof o.reason === 'string' ? o.reason : undefined, 60),
     };
 }
@@ -173,7 +181,14 @@ const ASK_KINDS = new Set(['loan', 'plea', 'patronage']);
  *  types and defaults an unknown kind to 'plea'. Target validity is enforced by finalizeAsk. */
 export function parseAsk(
     raw: string,
-): { doAsk: boolean; targetId?: string; amount?: number; kind?: 'loan' | 'plea' | 'patronage'; reason?: string } | null {
+): {
+    doAsk: boolean;
+    targetId?: string;
+    amount?: number;
+    kind?: 'loan' | 'plea' | 'patronage';
+    line?: string;
+    reason?: string;
+} | null {
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return null;
     try {
@@ -184,6 +199,7 @@ export function parseAsk(
             targetId: typeof o.targetId === 'string' ? o.targetId : undefined,
             amount: o.amount != null && Number.isFinite(Number(o.amount)) ? Number(o.amount) : undefined,
             kind: (ASK_KINDS.has(kindRaw) ? kindRaw : 'plea') as 'loan' | 'plea' | 'patronage',
+            line: clamp(typeof o.line === 'string' ? o.line : undefined, 28),
             reason: clamp(typeof o.reason === 'string' ? o.reason : undefined, 60),
         };
     } catch {
@@ -213,8 +229,30 @@ export function parsePlan(
     }
 }
 
+// Detect USURPATION (claiming/seizing the troupe master's authority), NOT mere
+// mention of one. A minor role naturally plans AROUND the boss — 求賞識、怕當家、
+// 等東家發月錢 — and that is in-character, not drift. The old guard matched the
+// bare nouns (班主/老闆/當家/東家…), so any plan that so much as named the boss got
+// its whole plan replaced by a role template (the "常常 fallback 成這種" you saw).
+// Now we anchor authority nouns to a seize/replace verb, and bound the wildcards
+// to a single clause ([^ ], since `joined` glues fields with spaces) so they
+// can't span two unrelated clauses (e.g. 「被人敲打 … 接住主角」).
 export function hasAuthorityDrift(text: string): boolean {
-    return /班主|老闆|老板|當家|掌事|東家|掌控全班|管住全班|捏在手心|讓誰紅誰就紅|讓誰涼誰就涼|敲打.*角|新來.*安分/.test(text);
+    return /掌控全班|管住全班|捏在手心|讓誰紅誰就紅|讓誰涼誰就涼|自立門戶|自己當家|當家作主|(?:當上|坐上|做上|頂替|取代|扳倒|架空|自封|自任)[^ ]{0,6}(?:班主|老闆|老板|當家|東家|掌事)|(?:做|當)[^ ]{0,5}的(?:班主|老闆|老板|當家|東家)|(?:班主|老闆|老板|當家|東家|掌事)[^ ]{0,2}(?:位子|位置|寶座)|敲打[^ ]{0,6}(?:角|新人|新來|後輩|師弟)|整治[^ ]{0,6}(?:新人|新來|後輩)|新來[^ ]{0,5}安分/.test(
+        text,
+    );
+}
+
+/** Would this plan over-reach into authority its role doesn't have? Mirrors the
+ *  gate inside sanitizePlanForRole (班主 is never drift) so the PLAN repair loop
+ *  and the last-resort template agree on what counts as drift. Pure — kept here
+ *  with the regex so callers don't pull in the LLM client just to ask. */
+export function driftsForRole(
+    role: string,
+    cand: { longTermGoal: string; dailyPlanHint: string; openSubgoals: string[] },
+): boolean {
+    if (role.includes('班主')) return false;
+    return hasAuthorityDrift([cand.longTermGoal, cand.dailyPlanHint, ...cand.openSubgoals].join(' '));
 }
 
 /** Non-班主 roles must not plan like the troupe master. On drift, replace the

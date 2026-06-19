@@ -127,6 +127,14 @@ export interface CreateFoundingCastResult {
     /** Per-saga skill values written across the cast (6 per character). */
     skillsSeeded: number;
     inductionSkipped?: 'memory_unconfigured';
+    /**
+     * Non-fatal genesis-seeding warning. Set when memory IS configured but the
+     * cast ended up with no / fewer 此生記憶 than generated — i.e. the founding
+     * "succeeded" (mints are fine) but genesis silently under-seeded (LLM parse
+     * miss, or some writes failed). Surfaces the failure that used to be invisible
+     * (ok stays true because the mints succeeded); backfill via the 劇團
+     * GenesisMemoryPanel without re-founding. */
+    genesisWarning?: string;
     error?: string;
 }
 
@@ -363,6 +371,7 @@ export async function createFoundingCastAction(
 
     // write self memories into each MemWal
     const memoryOn = isMemoryConfigured();
+    const genesisExpected = batch.self.reduce((n, s) => n + s.selfMemories.length, 0);
     let selfSeeded = 0;
     if (memoryOn) {
         for (const s of batch.self) {
@@ -370,6 +379,19 @@ export async function createFoundingCastAction(
                 if (await rememberForCharacter(s.id, mem, { kind: 'genesis', importance: 7 })) selfSeeded += 1;
             }
         }
+    }
+    // Genesis used to fail SILENTLY: founding returns ok=true (mints are fine)
+    // even when zero 此生記憶 got written — so the cast had no life-thickness and
+    // nobody noticed. Surface it loudly. memoryOn but nothing generated = the LLM
+    // parse miss (see batch.ts); generated-but-under-written = some MemWal writes
+    // failed (relayer/SEAL). Either way: backfill via 劇團 GenesisMemoryPanel.
+    let genesisWarning: string | undefined;
+    if (memoryOn && minted.length > 0 && selfSeeded < genesisExpected) {
+        genesisWarning =
+            genesisExpected === 0
+                ? `立班生成器沒吐出任何此生記憶（${minted.length} 人已立，但 genesis 為空）—— 多半是 LLM 回傳格式壞掉。請到「劇團」分頁用 GenesisMemoryPanel 為每個角色補種，或重跑一次立班。`
+                : `此生記憶只種了 ${selfSeeded}/${genesisExpected} 條（部分 MemWal 寫入失敗）。缺的可到「劇團」分頁用 GenesisMemoryPanel 補種。`;
+        console.warn(`[founding] ${genesisWarning}`);
     }
 
     // seed symmetric director ties + dual memories (reuse assess apply; idempotent)
@@ -398,6 +420,7 @@ export async function createFoundingCastAction(
         viewsSeeded,
         skillsSeeded,
         inductionSkipped: memoryOn ? undefined : 'memory_unconfigured',
+        genesisWarning,
     };
 }
 

@@ -160,16 +160,24 @@ export async function runWorldAudit(): Promise<WorldAuditReport> {
   }
 
   // —— 事件狀態 ————————————————————————————————————
+  // A fully-acted event is NOT "stuck" — in spine mode it lingers on purpose (so
+  // reactions land) and the spine resolves it a couple ticks later. Only flag it as
+  // unresolved (worth pushing) once it's been open PAST the spine's max linger (~8min);
+  // before that it's a normal linger the director should leave alone, not janitor.
+  const STUCK_EVENT_MS = 10 * 60 * 1000;
+  const nowMs = Date.now();
   const openEvents = live?.openEvents ?? [];
   for (const ev of openEvents) {
     const total = ev.participantIds.length;
-    if (total > 0 && ev.actedCount >= total) {
+    const allActed = total > 0 && ev.actedCount >= total;
+    const ageMs = ev.openedAtMs ? nowMs - ev.openedAtMs : 0;
+    if (allActed && ageMs >= STUCK_EVENT_MS) {
       issues.push({
         code: 'event_unresolved',
         severity: 'warn',
         eventId: ev.eventId,
         sceneId: ev.sceneId,
-        message: `事件「${ev.title}」全員已出牌（${ev.actedCount}/${total}）卻仍未收尾 —— judge 自動收尾可能漏掉，可由 tick ACT phase 補收。`,
+        message: `事件「${ev.title}」全員已出牌（${ev.actedCount}/${total}）且已開 ${Math.round(ageMs / 60000)} 分鐘仍未收尾 —— spine 收尾疑似卡住，可推進收尾。`,
       });
     } else {
       issues.push({
@@ -177,7 +185,9 @@ export async function runWorldAudit(): Promise<WorldAuditReport> {
         severity: 'info',
         eventId: ev.eventId,
         sceneId: ev.sceneId,
-        message: `事件「${ev.title}」進行中（${ev.actedCount}/${total} 已出牌）。`,
+        message: allActed
+          ? `事件「${ev.title}」全員已出牌（${ev.actedCount}/${total}），spine 收尾中（正常 linger，先別動）。`
+          : `事件「${ev.title}」進行中（${ev.actedCount}/${total} 已出牌）。`,
       });
     }
   }

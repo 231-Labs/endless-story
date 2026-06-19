@@ -30,6 +30,7 @@ import {
   type EvolvePortraitInput,
 } from '@/lib/actions/evolve-portrait';
 import { launchProductionAction } from '@/lib/actions/launch-production';
+import { registerResourceAction } from '@/lib/actions/register-resource';
 import {
   getRunnerControlStateAction,
   setRunnerPausedAction,
@@ -220,13 +221,30 @@ const TOOLS: DirectorToolDef[] = [
     name: 'evolve_portrait',
     tier: 'narrative',
     description:
-      '為角色出一張情境變體肖像（戲妝/老年/日常/自訂），上鏈留下形象演化軌跡。**出圖昂貴**：只在敘事上真的值得的時刻用。',
-    argsSpec: '{"characterId": "0x...", "kind": "stage|old|casual|custom", "occasion": "情境描述（kind=custom 必填）"}',
+      '為角色出一張情境變體肖像（戲妝/老年/日常/真人版/自訂），上鏈留下形象演化軌跡。戲妝會把油彩妝畫在角色的基底臉上（img2img）；stage=水墨戲妝、stage-real=真人寫真戲妝、realistic=真人寫真版。**出圖昂貴**：只在敘事上真的值得的時刻用。',
+    argsSpec: '{"characterId": "0x...", "kind": "reference|stage|stage-real|finery|daily|youth|aged|illness|snow|realistic|custom", "occasion": "情境描述（kind=custom 必填）"}',
     execute: (args) =>
       evolvePortraitAction({
         characterId: str(args, 'characterId'),
         kind: str(args, 'kind') as EvolvePortraitInput['kind'],
         occasion: typeof args.occasion === 'string' ? args.occasion : undefined,
+      }),
+  },
+  {
+    name: 'register_resource',
+    tier: 'narrative',
+    description:
+      '為這條故事弧「立題」——在鏈上開一個全新的、眾人會爭的稀缺標的，給既有張力一個新出口（例：報館要捧的新人名額、碼頭一筆來路不明的贊助、失傳戲的總講、某人攥在手裡的把柄）。**用於你判斷劇情繞著舊那幾種資源打轉、需要新題材時。** kind 要全新（英文小寫slug；不可是任何既有內建類，如 spotlight/partnership/mentorship/belonging/solace/keepsake），同一 kind 只能有一個；導演自造的標的上限 3（已結算的會自動退場騰位）。capacity 通常 1（越稀缺越有戲）。**wantedBy（建議填）**：列出真正會爭這標的行當（如 ["武旦","老生"]），只有他們會發燒、其餘人不爭——不填則全班一律中等地想要（較扁平）。新標的下一個 tick 會自動長出慾望並照常結算。dryRun=true 只驗不上鏈。',
+    argsSpec: '{"kind": "ascii小寫slug(如 feud/patron/scandal)", "display": "中文標的名(≤24字)", "wantedBy": ["武旦","老生"], "capacity": 1, "dryRun": false}',
+    execute: (args) =>
+      registerResourceAction({
+        kind: str(args, 'kind'),
+        display: str(args, 'display'),
+        wantedBy: Array.isArray(args.wantedBy)
+          ? args.wantedBy.filter((s): s is string => typeof s === 'string')
+          : undefined,
+        capacity: typeof args.capacity === 'number' ? args.capacity : undefined,
+        dryRun: args.dryRun === true,
       }),
   },
   {

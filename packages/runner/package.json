@@ -13,7 +13,8 @@
   "scripts": {
     "type-check": "tsc --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
-    "eval:aid": "tsx --env-file-if-exists=../web/.env.local src/services/character-agent/__eval__/aid-eval.ts"
+    "eval:aid": "tsx --env-file-if-exists=../web/.env.local src/services/character-agent/__eval__/aid-eval.ts",
+    "harness:chapter": "tsx --env-file-if-exists=../web/.env.local src/services/storyteller-chapter/__harness__/replay.ts"
   },
   "dependencies": {
     "@endless-story/llm": "workspace:*",

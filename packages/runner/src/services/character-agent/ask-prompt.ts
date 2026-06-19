@@ -56,6 +56,9 @@ export interface AskActionResult {
     targetName?: string;
     amount?: number;
     kind?: AskKind;
+    /** What you actually SAY when you open your mouth — the face-saving line you
+     *  reach for, in character, ≤28字. Not the bare request; the pretext (名頭). */
+    line?: string;
     reason?: string;
 }
 
@@ -75,11 +78,13 @@ export function buildSystemPrompt(): string {
         '2. 不向仇家伸手。',
         '3. 只求你真正需要的數，別獅子大開口。',
         '4. 你可以選擇誰都不求、自己扛——尤其當你拉不下這個臉。',
+        '5. 開口時你會找個體面的名頭，不會直說「我可憐」「我快餓死」。`line` 就是你',
+        '   當著對方面說出口的那一句（戲裡人的口吻、有名頭），`reason` 才是你心裡的真話。',
         '',
         '**輸出**：嚴格只輸出 JSON。例如',
-        '`{"doAsk":true,"targetId":"0x…","amount":15,"kind":"loan","reason":"藥錢實在湊不齊，向有交情的師兄借一點，日後必還。"}`',
+        '`{"doAsk":true,"targetId":"0x…","amount":15,"kind":"loan","line":"師兄，這月戲份還沒結，先週轉我十五兩，散戲就還。","reason":"藥錢湊不齊，挑有交情的師兄借，名頭體面些。"}`',
         '或 `{"doAsk":false,"reason":"還能再撐兩日，這個臉拉不下來。"}`。',
-        'kind ∈ loan｜plea｜patronage。reason ≤60 字。不要 markdown。',
+        'kind ∈ loan｜plea｜patronage。line ≤28 字（doAsk 時必給）；reason ≤60 字。不要 markdown。',
     ].join('\n');
 }
 
@@ -121,6 +126,7 @@ export interface RawAsk {
     targetId?: string;
     amount?: number;
     kind?: AskKind;
+    line?: string;
     reason?: string;
 }
 
@@ -131,7 +137,15 @@ export function finalizeAsk(parsed: RawAsk | null, input: AskActionInput): AskAc
     if (!target) return { doAsk: false, reason: '想求的人不在眼前' };
     const amount = Number.isFinite(Number(parsed.amount)) ? Math.max(0, Math.floor(Number(parsed.amount))) : 0;
     if (amount <= 0) return { doAsk: false, reason: '張不出具體的數' };
-    return { doAsk: true, targetId: target.id, targetName: target.name, amount, kind: parsed.kind ?? 'plea', reason: parsed.reason };
+    return {
+        doAsk: true,
+        targetId: target.id,
+        targetName: target.name,
+        amount,
+        kind: parsed.kind ?? 'plea',
+        line: parsed.line,
+        reason: parsed.reason,
+    };
 }
 
 export function askKindLabel(kind: AskKind): string {

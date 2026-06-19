@@ -58,17 +58,17 @@ export function ChaptersTab({
 /** 梨園回 — the woven event cuts this character appears in (public ensemble). */
 function CutSection({ character, cuts }: { character: Character; cuts: EventCutEntry[] }) {
   return (
-    <section>
+    <section className="mx-auto max-w-3xl">
       <div className="flex items-center gap-4">
         <div className="h-px w-8 bg-cinnabar/40" />
         <h2 className="font-serif text-2xl tracking-wide text-ink">
           {CHAPTER_COPY.cut.sectionHeader(character.name)}
         </h2>
       </div>
-      <p className="mt-2 pl-12 text-sm leading-relaxed text-mute/80">
+      <p className="mt-2 text-sm leading-relaxed text-mute/80">
         {CHAPTER_COPY.cut.sectionNote(character.name)}
       </p>
-      <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
+      <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6">
         {cuts.map((cut) => (
           <li key={cut.commitmentId}>
             <Link
@@ -106,14 +106,14 @@ function Section({
   highlight?: boolean;
 }) {
   return (
-    <section>
+    <section className="mx-auto max-w-3xl">
       <div className="flex items-center gap-4">
         <div className={`h-px w-8 ${highlight ? 'bg-cinnabar' : 'bg-cinnabar/40'}`} />
         <h2 className={`font-serif text-2xl tracking-wide ${highlight ? 'text-cinnabar' : 'text-ink'}`}>
           {title}
         </h2>
       </div>
-      <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6 pl-0 sm:pl-12">
+      <ul className="mt-8 grid grid-cols-1 gap-4 sm:gap-6">
         {chapters.map((chapter) => (
           <li key={chapter.id}>
             <Link

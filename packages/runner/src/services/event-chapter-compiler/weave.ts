@@ -27,6 +27,36 @@ export interface EventCutContext {
     eventLabel?: string;
     /** The POVs to weave (already gated to ≥2 by the caller). */
     povs: EventCutPov[];
+
+    // ── storyteller-chapter enrichment (all optional, append-only) ────────────
+    /**
+     * 'overview' = 綜觀版: a wider recap of an arc that has NOT cleanly resolved
+     * (the anti-stuck path); 'progressed' = a focused next chapter on a real turn.
+     * Shapes the closing instruction. Absent ⇒ the legacy single-event weave.
+     */
+    mode?: 'progressed' | 'overview';
+    /** Daily observations the cast made (who was present, the stakes, the news). */
+    observations?: string[];
+    /** Inner lines behind card plays — what a character thought/said as they acted. */
+    intents?: Array<{ name: string; line: string }>;
+    /** Recalled past memories that deepen motivation / continuity. */
+    recalled?: Array<{ name: string; text: string }>;
+    /** The previous chapter's summary — the "已說過，勿重述" guard. */
+    prevSummary?: string;
+    /**
+     * Story-bible continuity (承先啟後) — makes this read as the next movement of
+     * one novel, not an isolated recap. Shape mirrors story-bible.ContinuityContext.
+     */
+    continuity?: {
+        /** Story so far. */
+        synopsis?: string;
+        /** Unresolved threads relevant to this cast, "title：state". */
+        openThreads?: string[];
+        /** Hooks the previous chapter left dangling — pay ≥1 off. */
+        hooks?: string[];
+        /** This cast's current arcs. */
+        castArcs?: Array<{ name: string; state: string }>;
+    };
 }
 
 /** Minimum POVs for a cut. 1 POV stays a per-character feed item (no weave). */
@@ -59,14 +89,81 @@ export function buildUserPrompt(ctx: EventCutContext): string {
         )
         .join('\n\n');
 
-    return [
-        head.join('\n'),
-        '',
-        '# 各角色 POV（原料，把它們織成一回）',
-        povBlocks,
-        '',
-        '請輸出這一回的完整 markdown。',
-    ].join('\n');
+    const sections: string[] = [head.join('\n'), ''];
+
+    // 承先 — the story bible comes FIRST so the writer treats it as the spine: this
+    // chapter is the next movement of an ongoing novel, not a standalone recap.
+    const cont = ctx.continuity;
+    if (cont && (cont.synopsis || cont.openThreads?.length || cont.hooks?.length || cont.castArcs?.length)) {
+        sections.push('# 故事總綱（承先：這是連載小說的下一回，接著往下寫，別從頭講起）');
+        if (cont.synopsis) sections.push(`故事至此：${cont.synopsis}`);
+        if (cont.castArcs?.length) {
+            sections.push('在場角色此刻：');
+            sections.push(cont.castArcs.map((a) => `- ${a.name}：${a.state}`).join('\n'));
+        }
+        if (cont.openThreads?.length) {
+            sections.push('未了的線（挑一條推進）：');
+            sections.push(cont.openThreads.map((t) => `- ${t}`).join('\n'));
+        }
+        if (cont.hooks?.length) {
+            sections.push('上一回留下的鉤子（至少接一個）：');
+            sections.push(cont.hooks.map((h) => `- ${h}`).join('\n'));
+        }
+        sections.push('');
+    }
+
+    // The "已說過" guard goes near the top so the model treats it as a hard
+    // constraint: build FORWARD from here, don't re-narrate what's settled.
+    if (ctx.prevSummary?.trim()) {
+        sections.push(
+            '# 前情（已寫過，切勿重述，只接著往下推進）',
+            ctx.prevSummary.trim(),
+            '',
+        );
+    }
+
+    sections.push('# 各角色 POV（原料，把它們織成一回）', povBlocks, '');
+
+    // Enrichment: everything the cast also knows. Append-only so the legacy
+    // single-event weave (no enrichment) renders byte-for-byte as before.
+    if (ctx.observations?.length) {
+        sections.push(
+            '# 旁觀與日常（補充客觀事實，可化作場景與過場，不必逐條照搬）',
+            ctx.observations.map((o) => `- ${o.trim()}`).join('\n'),
+            '',
+        );
+    }
+    if (ctx.intents?.length) {
+        sections.push(
+            '# 出牌時的心跡（角色為何這麼做——可化作一兩句內心或台詞）',
+            ctx.intents.map((it) => `- ${it.name}：${it.line.trim()}`).join('\n'),
+            '',
+        );
+    }
+    if (ctx.recalled?.length) {
+        sections.push(
+            '# 舊事（人物心裡記得的，拿來深化動機，別當新事件寫）',
+            ctx.recalled.map((r) => `- ${r.name}：${r.text.trim()}`).join('\n'),
+            '',
+        );
+    }
+
+    sections.push(
+        ctx.mode === 'overview'
+            ? '請把以上素材織成一回「綜觀版」章回：用一個說書人的眼睛，把這條線這幾日累積的動作與心思收束成一篇有來龍去脈的完整 markdown（不是流水帳，挑出真正要緊的轉折來寫）。'
+            : '請輸出這一回的完整 markdown。',
+    );
+    // 啟後 — only when we're writing inside an ongoing novel (continuity present).
+    if (cont && (cont.synopsis || cont.openThreads?.length || cont.hooks?.length)) {
+        sections.push(
+            '寫作要求：接續前文語氣與未了的線（承先），呼應前面提過的人事細節（callback）；' +
+                '推進其中至少一條線，並讓某條線在結尾仍懸而未決（啟後）—— 把那份未決藏進一個動作、' +
+                '一句沒說完的話或一個眼神裡，**不要寫成「且看下回」式的收場白**。' +
+                '它要像長篇小說的一個章節，自然停住，不是獨立的事件報導。',
+        );
+    }
+
+    return sections.join('\n');
 }
 
 /* ── cut provenance header ──────────────────────────────────────────────

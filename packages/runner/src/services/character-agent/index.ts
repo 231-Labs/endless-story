@@ -81,8 +81,12 @@ export interface DecideResult {
     /** Chosen catalog index (what submit_action takes). Always one of the
      *  hand's catalogIndex values (clamped if the LLM strays). */
     catalogIndex: number;
-    /** First-person why, surfaced as the action's intent. */
+    /** First-person why, surfaced as the action's intent (the INNER thought). */
     intent: string;
+    /** What the character SAYS / DOES on stage as they play — the in-scene line
+     *  (台詞 or 身段帶白), ≤24字. The visible, showable evidence they're alive;
+     *  distinct from `intent` (the private why). */
+    line?: string;
     reason?: string;
 }
 
@@ -113,6 +117,7 @@ export async function decideCardPlay(
     return {
         catalogIndex,
         intent: parsed?.intent?.trim() || pickLabel(input.hand, catalogIndex),
+        line: parsed?.line?.trim() || undefined,
         reason: parsed?.reason,
     };
 }

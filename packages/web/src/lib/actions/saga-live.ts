@@ -17,7 +17,19 @@
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from '@/lib/chain/network';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
-import { getLatestSceneLine } from '@/lib/chain/scene-lines';
+import {
+    getLatestSceneLine,
+    getRecentSceneLines,
+    getRecentSceneLinesAcross,
+    type SceneLineKind,
+} from '@/lib/chain/scene-lines';
+
+/** A ghost-quote line for the handscroll: who, what, in which register. */
+export interface SceneLine {
+    characterId: string;
+    text: string;
+    kind: SceneLineKind;
+}
 
 export interface SceneLiveStatus {
     sceneId: string;
@@ -26,8 +38,10 @@ export interface SceneLiveStatus {
     /** True when an unresolved BudgetEvent is open in this scene. */
     hasOpenEvent: boolean;
     eventTitle?: string;
-    /** Latest action line for a ghost quote: who played which card. */
-    latestLine?: { characterId: string; text: string };
+    /** Latest line for a ghost quote (act / move / warmth / …). */
+    latestLine?: SceneLine;
+    /** Recent living stream for this scene, newest first (act/move/warmth/…). */
+    recentLines: SceneLine[];
 }
 
 export interface OpenEventStatus {
@@ -38,12 +52,18 @@ export interface OpenEventStatus {
     participantIds: string[];
     /** How many have acted vs total — e.g. "2/3 have played their card". */
     actedCount: number;
+    /** On-chain push time (ms). Lets the audit tell a normal spine linger (recently
+     *  opened, the spine will resolve it) from a genuinely-hung event. */
+    openedAtMs?: number;
 }
 
 export interface SagaLiveSnapshot {
     scenes: SceneLiveStatus[];
     /** Currently-open events in the saga (the live drama). Newest-first. */
     openEvents: OpenEventStatus[];
+    /** Saga-wide pulse: newest lines across all scenes, newest first — the
+     *  "world is moving NOW" ticker, alive even when no event is open. */
+    pulse: Array<SceneLine & { sceneId: string }>;
     day?: number;
     partOfDay?: string;
 }
@@ -53,7 +73,7 @@ const EVENT_SCAN = 10;
 
 export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnapshot> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
-    if (!pkg || !sagaId) return { scenes: [], openEvents: [] };
+    if (!pkg || !sagaId) return { scenes: [], openEvents: [], pulse: [] };
     const client = makeSuiClient({ network: resolveNetwork() });
     const openEvents: OpenEventStatus[] = [];
 
@@ -70,6 +90,7 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
             presentCharacterIds: s.currentCharacterIds ?? [],
             hasOpenEvent: false,
             latestLine: cached ?? undefined,
+            recentLines: getRecentSceneLines(s.id, 4),
         });
     }
 
@@ -107,6 +128,7 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
                 sceneId,
                 participantIds: parsed.deck?.participants ?? [],
                 actedCount: (parsed.resolution?.submitted_actions ?? []).length,
+                openedAtMs: Number(ev.createdAtMs) || undefined,
             });
         }
 
@@ -130,7 +152,7 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
                 );
                 const label = catalog[Number(last.card_index ?? -1)]?.label;
                 if (label && last.character_id) {
-                    st.latestLine = { characterId: last.character_id, text: label };
+                    st.latestLine = { characterId: last.character_id, text: label, kind: 'act' };
                 }
             }
         }
@@ -155,5 +177,11 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
         }
     }
 
-    return { scenes: [...byScene.values()], openEvents, day, partOfDay };
+    return {
+        scenes: [...byScene.values()],
+        openEvents,
+        pulse: getRecentSceneLinesAcross(8),
+        day,
+        partOfDay,
+    };
 }
