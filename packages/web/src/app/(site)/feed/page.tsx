@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { chaptersApi, gazettesApi, cutsApi, sagasApi, charactersApi } from '@/lib/api/index';
+import { gazettesApi, cutsApi, sagasApi, productionsApi } from '@/lib/api/index';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SiteNav } from '@/components/home/SiteNav';
-import { BlobImage } from '@/components/common/BlobImage';
 import { GazetteList } from '@/components/feed/GazetteList';
 import { GazetteTeaser } from '@/components/feed/GazetteTeaser';
 import { CutList } from '@/components/feed/CutList';
+import { ProductionList } from '@/components/feed/ProductionList';
 import { FeedTabs, type FeedMode } from '@/components/feed/FeedTabs';
 
 export const metadata = {
@@ -85,9 +85,9 @@ async function FeedContent({
   mode: FeedMode;
   saga: Awaited<ReturnType<typeof sagasApi.getCurrentSaga>>;
 }) {
-  const [chapters, allCharacters, gazettes, latestGazette, cuts] = await Promise.all([
-    mode === 'visual' ? chaptersApi.listChapters(saga.id) : Promise.resolve([]),
-    mode === 'visual' ? charactersApi.listSagaCharacters(saga.id) : Promise.resolve([]),
+  const [productions, gazettes, latestGazette, cuts] = await Promise.all([
+    // 排戲 tab (key still 'visual'): the troupe's self-staged 劇目/戲折.
+    mode === 'visual' ? productionsApi.listProductions(saga.id) : Promise.resolve([]),
     // For mode=gazette: full list. For mode=all: also need the latest
     // one as a teaser. Reads run in parallel.
     mode === 'gazette' ? gazettesApi.listGazettes(saga.id) : Promise.resolve([]),
@@ -96,12 +96,6 @@ async function FeedContent({
     // 全部 landing (where a few lead the page under the gazette teaser).
     mode === 'chapter' || mode === 'all' ? cutsApi.listEventCuts(saga.id) : Promise.resolve([]),
   ]);
-  const charactersById = new Map(allCharacters.map((c) => [c.id, c]));
-
-  const publicChapters = chapters.filter((c) => c.visibility === 'public_chapter');
-  const visible = publicChapters.filter(
-    (c) => c.mediaType === 'video' || c.mediaType === 'gallery',
-  );
 
   return (
     <>
@@ -139,54 +133,7 @@ async function FeedContent({
           ) : mode === 'chapter' ? (
             <CutList cuts={cuts} sagaName={saga.name} />
           ) : mode === 'visual' ? (
-            visible.length === 0 ? (
-              <div className="es-card p-12 text-center">
-                <p className="text-sm tracking-wide text-mute">這個範圍裡還沒有影像。</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {visible.map((chapter) => (
-                  <div key={chapter.id}>
-                    <Link
-                      href={`/feed/chapter/${chapter.id}`}
-                      className="group flex flex-col gap-3 es-card p-4 transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm"
-                    >
-                      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-surface ring-1 ring-inset ring-hairline/50 dark:bg-elevated/45 transition-transform duration-500 group-hover:shadow-md">
-                        {chapter.coverUrl ? (
-                          <BlobImage
-                            src={chapter.coverUrl}
-                            alt={chapter.title}
-                            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                            className="absolute inset-0 h-full w-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-[1.02] group-hover:opacity-100"
-                          />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="font-serif text-3xl text-mute/30">影像</span>
-                          </div>
-                        )}
-                        <div className="absolute right-3 top-3 rounded-full bg-elevated/90 px-3 py-1 text-[10px] tracking-widest text-ink shadow-sm backdrop-blur-md">
-                          {chapter.mediaType === 'video' ? '▶ 影片' : '✦ 畫冊'}
-                        </div>
-
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-canvas/95 via-canvas/70 to-transparent p-4 pt-16 transition-opacity duration-500">
-                          <div className="flex items-center gap-2 text-[10px] tracking-widest text-mute uppercase">
-                            <span className="bg-canvas/50 px-2 py-0.5 rounded border border-hairline/50">DAY {chapter.day}</span>
-                            {chapter.povCharacterId && charactersById.get(chapter.povCharacterId) ? (
-                              <span className="text-cinnabar">
-                                {charactersById.get(chapter.povCharacterId)!.name} 視角
-                              </span>
-                            ) : null}
-                          </div>
-                          <h2 className="mt-2 font-serif text-lg leading-snug text-ink transition-colors group-hover:text-cinnabar">
-                            {chapter.title}
-                          </h2>
-                        </div>
-                      </div>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            )
+            <ProductionList productions={productions} sagaName={saga.name} />
           ) : null}
     </>
   );
