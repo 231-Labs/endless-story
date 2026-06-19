@@ -1,50 +1,50 @@
 # Roadmap
 
-A hard rule across our pitch, demo, and whitepaper: **every capability is labelled ✅ shipped, 🟡 deployed-but-unverified, or 🛣️ planned.** Judges and players care most about which parts genuinely run today versus which are vision. Mixing the two loses trust; separating them earns it.
+Across the pitch, demo, and whitepaper, every capability is labelled ✅ shipped, 🟡 deployed but not yet verified, or 🛣️ planned. The aim is to stay clear about what runs today and what is still vision.
 
-## ✅ Shipped — live and demoable
+## ✅ Shipped
 
-On-chain + runner + web, not placeholders.
+These run today across the contracts, the runner, and the web app.
 
 | Capability | Evidence |
 |---|---|
-| Full contract suite (currency / world / saga / scene / character / recruit / event / commitment) | `sui move test` 122/122, deployed to testnet |
-| Gacha minting flow (voucher → preview → portrait → redeem → on-chain Character + caps) | Home wizard; HKDF deterministic dice; portrait stored on Walrus |
+| Full contract suite (currency, world, saga, scene, character, recruit, event, commitment) | `sui move test` 122/122, deployed to testnet |
+| Gacha minting flow (voucher → preview → portrait → redeem → on-chain Character with caps) | Home wizard; HKDF deterministic dice; portrait stored on Walrus |
 | Admin operator cockpit (Director-agent chat, asset management, test tools, role postings) | `(admin)` route group |
-| Autonomous tick loop (PLAN→MOVE→DRAMA→SOCIAL→ASK→GIVE→BOND→SETTLE→ACT→POV→SLEEP→GAZETTE) | runner v1, world-loop running |
-| Non-control: characters decide for themselves; the director only pushes events / tunes environment | event-objective / narrative-subjective split |
-| MemWal memory (remember / recall, SEAL encryption, cap-enforced decryption, three-factor recall) | `packages/memwal`, self-hosted relayer |
-| Character economy loop (salary → memory rent → aid → aging / starvation death; off-chain shadow) | GIVE / ASK / SETTLE in tick loop; H1–H6 validated |
-| Content pipeline (event → POV → chapter → gazette → subscription wall; on-chain chapter compiler) | `/feed` + dossier |
+| Autonomous tick loop (PLAN → MOVE → DRAMA → SOCIAL → ASK → GIVE → BOND → SETTLE → ACT → POV → SLEEP → GAZETTE) | runner v1, world loop running |
+| Non-control: characters decide for themselves, and the director only pushes events and tunes the environment | event-objective and narrative-subjective split |
+| MemWal memory (remember and recall, SEAL encryption, cap-enforced decryption, three-factor recall) | `packages/memwal`, self-hosted relayer |
+| Character economy loop (salary → memory rent → aid → aging or starvation death, off-chain shadow) | GIVE, ASK, SETTLE in the tick loop; H1 to H6 validated |
+| Content pipeline (event → POV → chapter → gazette → subscription wall, with an on-chain chapter compiler) | `/feed` and dossier |
 | 3D treasury (exhibit layout, AI curation, still generation, gift shop) | `packages/chamber-3d` |
 | Troupe production engine | `packages/troupe` offline harness |
 
-## 🟡 Deployed but not yet verified end-to-end
+## 🟡 Deployed but not yet verified
 
-Contracts are on-chain, but the web layer still needs wiring + a real run before these count as shipped. **We do not present these as ✅.**
+The contracts are on-chain, but the web layer still needs wiring and a real run before these count as shipped. They are not marked ✅ yet.
 
-| Item | Status | Condition to reach ✅ |
+| Item | Status | What it needs to reach ✅ |
 |---|---|---|
-| `economy.move` — real on-chain Balance (salary / aid / settlement / injection) | Contract on-chain (`sui move test` 122/122) | codegen SDK bindings + adapter wiring the off-chain shadow to real Balance, verified for one round |
-| Treasury Kiosk trading (`still.move` TransferPolicy) | Contract on-chain | TS wiring + a real list / buy / delist run |
-| On-chain treasury layout (`chamber` PersonalVault) | Contract on-chain | `chamber::decorate` server action + "save on-chain" button wired |
-| Two-step minting (`recruit` RedeemIntent) | Contract on-chain | one real-wallet redeem confirming the sender check |
+| `economy.move`: real on-chain Balance (salary, aid, settlement, injection) | Contract on-chain (`sui move test` 122/122) | codegen SDK bindings, plus an adapter that wires the off-chain shadow to a real Balance, verified for one round |
+| Treasury Kiosk trading (`still.move` TransferPolicy) | Contract on-chain | TS wiring, and a real list, buy, and delist run |
+| On-chain treasury layout (`chamber` PersonalVault) | Contract on-chain | a `chamber::decorate` server action and a "save on-chain" button wired up |
+| Two-step minting (`recruit` RedeemIntent) | Contract on-chain | one real-wallet redeem that confirms the sender check |
 
-> **Redeploy ≠ ready.** After contracts go on-chain, the web layer still needs codegen + adapter wiring before the new capability is actually used.
+> Putting a contract on-chain is not the same as the feature being usable. The web layer still needs codegen and adapter wiring before the new capability is actually used.
 
 ## 🛣️ Planned
 
-Designed or partly wired; not running in today's demo.
+These are designed or partly wired, but they do not run in today's demo.
 
-| Item | Where it stands | What's missing |
+| Item | Where it stands | What is missing |
 |---|---|---|
-| Director retirement → Storyteller | concept + scattered notes | quantified retirement signals, tiered implementation |
-| Character archival = legend | NFT + memory already persist after death; owner injection / Walrus renewal designed | "pay-to-preserve memory after death" wiring |
-| Saga succession (change of owner) | new | start from a design spec |
-| Paid-subscription revenue split | `RevenueConfig` fields in place | gated for after-MVP |
-| Perceive step (authoritative situation layer) | designed | implementation pending |
-| Film adaptation (Phase 3) | vision | after the content funnel is finished |
+| Director retirement into a Storyteller | concept and scattered notes | quantified retirement signals, and a tiered implementation |
+| Character archival as legend | the NFT and memory already persist after death; owner injection and Walrus renewal are designed | wiring for paying to preserve memory after death |
+| Saga succession (change of owner) | new | a design spec to start from |
+| Paid-subscription revenue split | `RevenueConfig` fields are in place | gated for after the MVP |
+| Perceive step (an authoritative situation layer) | designed | implementation |
+| Film adaptation (Phase 3) | vision | finishing the content funnel first |
 
 ---
 
-<sub>The full mechanism truth lives in the design docs — see **[Whitepaper](#/whitepaper)**, **[Character economy](#/character-economy)**, and **[Narrative agents](#/narrative-agents)**.</sub>
+<sub>The detailed mechanics live in the design docs: [Whitepaper](#/whitepaper), [Character economy](#/character-economy), and [Narrative agents](#/narrative-agents).</sub>
