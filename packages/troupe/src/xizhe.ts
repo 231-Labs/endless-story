@@ -31,6 +31,18 @@ export function assembleXiZhe(prod: Production): string {
     `## 折子 · 戲中戲〈${climaxTitle}〉`,
     ``,
     prod.chapter ?? '',
+    // The woven chapter is a Rashomon — POVs interlace without labels. Carry the
+    // raw per-actor takes too, so the reader can see WHOSE 視角 each one is.
+    ...(prod.takes?.length
+      ? [
+          ``,
+          `## 各角視角`,
+          ...prod.takes.flatMap((t) => {
+            const cross = prod.cast?.find((c) => c.partId === t.partId)?.crossCastLabel;
+            return [``, `### ${t.actorName} 飾 ${t.partName}${cross ? `〔${cross}〕` : ''}`, ``, t.pov];
+          }),
+        ]
+      : []),
     ...(emergentSong
       ? [``, `## 角兒私詞 ·《${emergentSong.title}》〔有感而發〕`, ...emergentSong.lines.map((l) => `　${l}`)]
       : []),
