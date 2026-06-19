@@ -6,8 +6,8 @@
  * and it's offline-testable against assembleXiZhe's output.
  *
  * Tolerant by design: it parses the CURRENT format but degrades gracefully on
- * older/odd blobs (missing sections just come back empty) and strips the legacy
- * "可收藏" promo line so it never renders.
+ * older blobs — flat `1. 〈場〉` 分場 (no 劇本 lines) and the old single
+ * `## 角兒私詞` both still parse — and strips the legacy "可收藏" promo line.
  */
 
 export interface XiZheCastRow {
@@ -23,11 +23,19 @@ export interface XiZheCastRow {
     cross?: string;
 }
 
+/** One 劇本 line of a scene — 科介 (stage), 念白 (say), or 唱 (sing). */
+export type XiZheLine =
+    | { type: 'stage'; text: string }
+    | { type: 'say'; who: string; text: string }
+    | { type: 'sing'; who: string; text: string };
+
 export interface XiZheScene {
     n: number;
     title: string;
     /** mood key (joy/serene/…); render via moodLabel() for a Chinese tag. */
     mood?: string;
+    /** 劇本 lines (科介 / 念白 / 唱). Empty for older blobs that carried only titles. */
+    lines: XiZheLine[];
 }
 
 /** One actor's first-person take on the 戲中戲 climax — the attributed 視角. */
@@ -40,6 +48,16 @@ export interface XiZhePov {
     cross?: string;
     /** the first-person account. */
     text: string;
+}
+
+/** A 詞 — either 應場 (commissioned for a scene) or 有感而發 (emergent). */
+export interface XiZheCi {
+    title: string;
+    author: string | null;
+    source: 'commissioned' | 'emergent';
+    /** for emergent 詞: where the feeling came from. */
+    why?: string;
+    lines: string[];
 }
 
 export interface XiZheDoc {
@@ -61,8 +79,8 @@ export interface XiZheDoc {
     prose: string;
     /** per-actor attributed 視角 of the climax (the source POVs of the woven prose). */
     povs: XiZhePov[];
-    /** 角兒私詞 (有感而發), when present. */
-    song: { title: string | null; lines: string[] } | null;
+    /** 唱詞 — 應場 + 有感而發, all of them. */
+    ci: XiZheCi[];
 }
 
 const MOOD_ZH: Record<string, string> = {
@@ -93,10 +111,19 @@ function isNoise(line: string): boolean {
 
 const reTitle = /《(.+?)》/;
 const reCast = /^[-*]\s*\*\*(.+?)\*\*\s*[—–-]\s*(.+?)\s*(?:（(.*?)）)?\s*(?:〔(.+?)〕)?\s*$/;
-const reScene = /^(\d+)\.\s*〈(.+?)〉\s*(?:（(.+?)）)?\s*$/;
+const reSceneFlat = /^(\d+)\.\s*〈(.+?)〉\s*(?:（(.+?)）)?\s*$/; // old flat: 1. 〈場〉（mood）
+const reSceneHead = /^###\s+(\d+)\s*〈(.+?)〉\s*(?:（(.+?)）)?\s*$/; // new: ### 1 〈場〉（mood）
+const reSpoken = /^(.+?)（(白|唱)）[：:](.*)$/; // who（白|唱）：text
+const reStage = /^（科介）(.*)$/;
 const reClimax = /折子\s*·\s*戲中戲\s*〈(.+?)〉/;
-const reSong = /角兒私詞\s*·\s*《(.+?)》/;
 const reTakeHead = /^###\s+(.+?)\s*飾\s*(.+?)\s*(?:〔(.+?)〕)?\s*$/;
+const reCiHead = /^###\s+(.+?)\s+·\s+(.+?)〔(.+?)〕\s*$/; // ### title · author〔…〕 — split on the spaced ` · ` (a 詞 title may itself contain ·)
+const reSongOld = /角兒私詞\s*·\s*《(.+?)》/; // old single emergent ## header
+const reProvenance = /^\*出處[：:]\s*(.+?)\*$/;
+
+function ciSource(tag: string): 'commissioned' | 'emergent' {
+    return /有感|emergent/.test(tag) ? 'emergent' : 'commissioned';
+}
 
 export function parseXiZhe(bodyRaw: string): XiZheDoc {
     const lines = bodyRaw.replace(/\r\n/g, '\n').split('\n');
@@ -111,14 +138,15 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
         climaxTitle: null,
         prose: '',
         povs: [],
-        song: null,
+        ci: [],
     };
 
-    type Section = 'head' | 'cast' | 'scenes' | 'prose' | 'povs' | 'song';
+    type Section = 'head' | 'cast' | 'scenes' | 'prose' | 'povs' | 'ci';
     let section: Section = 'head';
     const proseLines: string[] = [];
-    const songLines: string[] = [];
+    let currentScene: XiZheScene | null = null;
     let currentPov: XiZhePov | null = null;
+    let currentCi: XiZheCi | null = null;
 
     for (const raw of lines) {
         const line = raw.replace(/\s+$/, '');
@@ -148,12 +176,18 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
                 section = 'povs';
                 continue;
             }
-            if (reSong.test(h)) {
-                section = 'song';
-                doc.song = { title: h.match(reSong)?.[1] ?? null, lines: [] };
+            if (h.startsWith('唱詞')) {
+                section = 'ci';
                 continue;
             }
-            // unknown ## → fall through (kept as prose/song content)
+            if (reSongOld.test(h)) {
+                // legacy: a single emergent 詞 whose title lives in the ## header.
+                section = 'ci';
+                currentCi = { title: h.match(reSongOld)?.[1] ?? '私詞', author: null, source: 'emergent', lines: [] };
+                doc.ci.push(currentCi);
+                continue;
+            }
+            // unknown ## → fall through (kept as prose content)
         }
 
         // Title + meta blockquotes live ONLY in the head region — inside the 折子
@@ -198,8 +232,21 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
         }
 
         if (section === 'scenes') {
-            const s = t.match(reScene);
-            if (s) doc.scenes.push({ n: Number(s[1]), title: s[2].trim(), mood: s[3]?.trim() || undefined });
+            const head = t.match(reSceneHead) ?? t.match(reSceneFlat);
+            if (head) {
+                currentScene = { n: Number(head[1]), title: head[2].trim(), mood: head[3]?.trim() || undefined, lines: [] };
+                doc.scenes.push(currentScene);
+            } else if (currentScene) {
+                const stage = t.match(reStage);
+                const spoken = t.match(reSpoken);
+                if (stage) currentScene.lines.push({ type: 'stage', text: stage[1].trim() });
+                else if (spoken)
+                    currentScene.lines.push({
+                        type: spoken[2] === '唱' ? 'sing' : 'say',
+                        who: spoken[1].trim(),
+                        text: spoken[3].trim(),
+                    });
+            }
             continue;
         }
 
@@ -214,13 +261,22 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
             continue;
         }
 
-        if (section === 'prose') {
-            proseLines.push(line.replace(/^#{1,6}\s+/, '')); // demote a stray heading → plain prose
+        if (section === 'ci') {
+            const ch = t.match(reCiHead);
+            const prov = t.match(reProvenance);
+            if (ch) {
+                currentCi = { title: ch[1].trim(), author: ch[2].trim() || null, source: ciSource(ch[3]), lines: [] };
+                doc.ci.push(currentCi);
+            } else if (prov && currentCi) {
+                currentCi.why = prov[1].trim();
+            } else if (t && currentCi) {
+                currentCi.lines.push(t);
+            }
             continue;
         }
 
-        if (section === 'song') {
-            if (t) songLines.push(t);
+        if (section === 'prose') {
+            proseLines.push(line.replace(/^#{1,6}\s+/, '')); // demote a stray heading → plain prose
             continue;
         }
 
@@ -229,7 +285,6 @@ export function parseXiZhe(bodyRaw: string): XiZheDoc {
     }
 
     doc.prose = proseLines.join('\n').trim();
-    if (doc.song) doc.song.lines = songLines;
     return doc;
 }
 

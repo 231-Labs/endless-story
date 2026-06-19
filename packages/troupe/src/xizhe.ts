@@ -1,13 +1,12 @@
 /**
- * 戲折 assembly — one production folded into a single collectible markdown (the
- * "可收藏物件" shape: 班底 + 分場 + 折子章回 + 角兒私詞). Pure; reused by the CLI
+ * 戲折 assembly — one production folded into a single collectible markdown
+ * (班底 + 分場·劇本 + 折子戲中戲 + 各角視角 + 唱詞). Pure; reused by the CLI
  * driver and the runner production service (anchored on-chain there).
  */
 
 import type { Production } from './types.ts';
 
 export function assembleXiZhe(prod: Production): string {
-  const emergentSong = prod.ci?.find((c) => c.source === 'emergent');
   const climaxTitle =
     prod.script?.scenes.find((s) => s.mood === 'sorrow')?.title ??
     prod.script?.scenes.at(-1)?.title ??
@@ -25,8 +24,16 @@ export function assembleXiZhe(prod: Production): string {
         `- **${c.partName}** — ${c.assignedName ?? '（缺角）'}（${c.hangdang}/${c.yinggong}）${c.crossCastLabel ? `〔${c.crossCastLabel}〕` : ''}`,
     ),
     ``,
+    // 分場 carries each scene's 劇本 (科介 / 念白 / 唱) so the reader can open a
+    // 折 and read the actual play — the 唱 lines are the 唱段.
     `## 分場`,
-    ...(prod.script?.scenes ?? []).map((s, i) => `${i + 1}. 〈${s.title}〉（${s.mood}）`),
+    ...(prod.script?.scenes ?? []).flatMap((s, i) => [
+      ``,
+      `### ${i + 1} 〈${s.title}〉（${s.mood}）`,
+      ...s.lines.map((l) =>
+        l.type === 'stage' ? `（科介）${l.text}` : `${l.who}（${l.mode === '唱' ? '唱' : '白'}）：${l.text}`,
+      ),
+    ]),
     ``,
     `## 折子 · 戲中戲〈${climaxTitle}〉`,
     ``,
@@ -43,8 +50,19 @@ export function assembleXiZhe(prod: Production): string {
           }),
         ]
       : []),
-    ...(emergentSong
-      ? [``, `## 角兒私詞 ·《${emergentSong.title}》〔有感而發〕`, ...emergentSong.lines.map((l) => `　${l}`)]
+    // 唱詞 — ALL of them: the 應場 aria the 填詞 wrote for the climax + every
+    // 有感而發 private 詞 (was dropped before — only the first emergent showed).
+    ...(prod.ci?.length
+      ? [
+          ``,
+          `## 唱詞`,
+          ...prod.ci.flatMap((c) => [
+            ``,
+            `### ${c.title} · ${c.authorName}〔${c.source === 'emergent' ? '有感而發' : '應場'}〕`,
+            ...(c.provenance ? [`*出處：${c.provenance.why}*`] : []),
+            ...c.lines.map((l) => `　${l}`),
+          ]),
+        ]
       : []),
   ].join('\n');
 }

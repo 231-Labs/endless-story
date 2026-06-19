@@ -260,9 +260,10 @@ AI_PROVIDER=poe POE_API_KEY=... \
 - `lib/api/productions.ts`（`listProductions`/`getProduction`）+ `api/index.ts` 導出 `productionsApi`。
 - `components/feed/ProductionList.tsx`（卡片→詳情）+ `app/(site)/feed/production/[id]/page.tsx`（戲單渲染 + 鏈上 commitment + cast 共有 chips）。
 
-**戲單結構化渲染（不再 dump markdown）**：戲折 body 不直接丟 `<Markdown>`（會擠成「副標＋1.2.3…＋折子長文」一坨），改由純解析器 `lib/feed/xizhe-format.ts` `parseXiZhe(body)` 拆成 `{title,subtitle,premise,director,qizhi,cast[],scenes[],climaxTitle,prose,song}`，詳情頁＋卡片**共用同一格式真相**：
-- `components/feed/XiZheView.tsx` 排成「戲單」——題目／立意框（班主·氣質）／**班底**（角色—角兒＋行當 chip＋坤生/乾旦標記）／**分場**（折子膠囊＋中文情緒 喜驚悲）／**折子·戲中戲**（羅生門織版長文）／**各角視角**（每角兒一張卡：「角兒 飾 角色〔坤生〕」＋第一人稱 POV，讓讀者看得出折子是誰的視角）／**角兒私詞**。卡片摘要＝乾淨「立意」＋班底名＋N 折（取代壓平 excerpt）。
-- 視角來源：`assembleXiZhe` 除了織好的 `chapter`（POV 交錯、不標記），另寫 `## 各角視角` 段帶 `prod.takes`（`### 角兒 飾 角色`＋逐角 pov），parseXiZhe 解析成 `doc.povs[]`。**僅新排的戲折有**；既有上鏈 blob 只有織版（POV 隱含），優雅退化成不顯示視角卡。admin「排一齣」面板的 Dry-Run 全文預覽（`buildPreview`）也同格式帶各角視角，**不上鏈即可先看效果**。
+**戲單結構化渲染（不再 dump markdown）**：戲折 body 不直接丟 `<Markdown>`（會擠成「副標＋1.2.3…＋折子長文」一坨），改由純解析器 `lib/feed/xizhe-format.ts` `parseXiZhe(body)` 拆成 `{title,subtitle,premise,director,qizhi,cast[],scenes[]（含劇本行 lines）,climaxTitle,prose,povs[],ci[]}`，詳情頁＋卡片**共用同一格式真相**：
+- `components/feed/XiZheView.tsx` 排成「戲單」——題目／立意框（班主·氣質）／**班底**（角色—角兒＋行當 chip＋坤生/乾旦標記）／**分場·劇本**（`SceneList` client island，點折展開該場劇本：科介／念白／**唱段硃砂高亮**）／**折子·戲中戲**（羅生門織版長文）／**各角視角**（每角兒一張卡：「角兒 飾 角色〔坤生〕」＋第一人稱 POV，讓讀者看得出折子是誰的視角）／**唱詞**（應場＋有感全列）。卡片摘要＝乾淨「立意」＋班底名＋N 折。
+- 劇本＋唱詞來源：`assembleXiZhe` 的 `## 分場` 改成逐場 `### n 〈場〉（mood）`＋劇本行（科介/念白/唱），`## 唱詞` 帶**全部** `prod.ci`（`### 詞名 · 作者〔應場|有感而發〕`）。**修了舊洞**：原本戲折只塞第 1 首 emergent 私詞，應場唱詞＋第 2 首 emergent 全被丟；現在全收。唱段（劇本 `唱` 行）原本完全沒納入，現在點分場可讀。
+- 視角來源：`assembleXiZhe` 除了織好的 `chapter`（POV 交錯、不標記），另寫 `## 各角視角` 段帶 `prod.takes`（`### 角兒 飾 角色`＋逐角 pov），parseXiZhe 解析成 `doc.povs[]`。**僅新排的戲折有**；既有上鏈 blob 只有織版（POV 隱含）＋無劇本/唱詞段，優雅退化（分場不可點、不顯示視角/唱詞卡）。admin「排一齣」面板的 Dry-Run 全文預覽（`buildPreview`）含完整劇本＋詞＋各角視角，**不上鏈即可先看**。
 - 解析器**容忍**：舊/空 blob、無題《》→null、班底空括號/缺角、折子 prose 內殘留 `##`/`>` 不被當區塊截斷（meta handler 限 head 區、未知 `##` demote 成正文）。並 `isNoise()` 剝除既有上鏈 blob 的「可收藏」促銷句（assembleXiZhe 已停發）。
 - 驗證：parseXiZhe 對 assembleXiZhe 真實輸出（baishe/honglou/大戲 × scored/skip）+ ~15 對抗輸入（8/8 回歸綠）；4-lens 對抗式 review（促銷殘留/設計 token/渲染正確/退化）。
 
