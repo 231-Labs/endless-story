@@ -25,6 +25,7 @@ import { SagaMemoryClient } from '@endless-story/memwal';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 import { getAdminAddress } from './admin-signer.js';
+import { writePlanIntentFromText } from './plan-intent-store.js';
 import {
     DEFAULT_IMPORTANCE,
     parseMemory,
@@ -557,7 +558,12 @@ export async function rememberForCharacter(
         // A new plan supersedes the cached one — keep it hot (WRITE-set: authoritative,
         // never expires) so MOVE/SOCIAL/POV + the dossier read the freshest plan, not a
         // day-granular recall of an older same-day plan.
-        if (kind === 'plan') PLAN_CACHE.set(characterId, { text, ts: Date.now(), source: 'write' });
+        if (kind === 'plan') {
+            PLAN_CACHE.set(characterId, { text, ts: Date.now(), source: 'write' });
+            // Persist the outward one-liners (此刻心境 / 將往何方) as durable plaintext so
+            // the public dossier bar reads them without a flaky SEAL decrypt. Best-effort.
+            writePlanIntentFromText(characterId, text, day);
+        }
         console.log(
             `[memory] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}${
                 opts?.anchored ? ' anchored' : ''
