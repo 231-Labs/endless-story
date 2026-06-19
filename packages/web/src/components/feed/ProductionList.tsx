@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { production } from '@endless-story/runner';
 import type { ProductionEntry } from '@/lib/api/productions';
 import { fetchChapterText } from '@/lib/chain/pov-read';
+import { parseXiZhe, xiZheExcerpt } from '@/lib/feed/xizhe-format';
 
 /**
  * Production list — the 戲折 (whole staged 劇目), newest first. Card = metadata +
@@ -35,7 +36,10 @@ export async function ProductionList({
         <div className="space-y-6">
             {productions.map((p, i) => {
                 const { body } = production.parseProductionHeader((raws[i] ?? '').trim());
-                const { title, excerpt } = splitBody(body);
+                const doc = parseXiZhe(body);
+                const title = doc.title ?? p.title ?? '一齣新戲';
+                const excerpt = xiZheExcerpt(doc, 96);
+                const castNames = doc.cast.map((c) => c.actor).filter((n): n is string => !!n);
                 return (
                     <Link
                         key={p.commitmentId}
@@ -49,14 +53,22 @@ export async function ProductionList({
                                 </span>
                             ) : null}
                             {p.classicSource ? <span>{p.classicSource} · 舊戲新唱</span> : null}
-                            <span className="text-cinnabar/80">戲班自編自演 · {p.castIds.length} 角</span>
+                            <span className="text-cinnabar/80">
+                                戲班自編自演 · {p.castIds.length} 角{doc.scenes.length ? ` · ${doc.scenes.length} 折` : ''}
+                            </span>
                         </div>
                         <h3 className="mt-3 font-serif text-2xl tracking-wide text-ink transition-colors group-hover:text-cinnabar">
-                            {title ?? p.title ?? '一齣新戲'}
+                            《{title}》
                         </h3>
                         {excerpt ? (
-                            <p className="mt-3 line-clamp-3 text-base leading-loose text-ink/75 transition-colors group-hover:text-ink/90">
+                            <p className="mt-3 line-clamp-2 font-serif text-base leading-relaxed text-ink/80 transition-colors group-hover:text-ink/95">
                                 {excerpt}
+                            </p>
+                        ) : null}
+                        {castNames.length ? (
+                            <p className="mt-3 text-2xs tracking-[0.18em] text-mute/70">
+                                班底 · {castNames.slice(0, 5).join(' · ')}
+                                {castNames.length > 5 ? ' …' : ''}
                             </p>
                         ) : null}
                         <p className="mt-4 text-sm tracking-widest text-cinnabar">讀這齣戲折 →</p>
@@ -65,25 +77,4 @@ export async function ProductionList({
             })}
         </div>
     );
-}
-
-/** First markdown heading → title; rest flattened to a plain-text excerpt. */
-function splitBody(body: string): { title: string | null; excerpt: string } {
-    const lines = body.split(/\n+/).map((l) => l.trim()).filter(Boolean);
-    let title: string | null = null;
-    const rest: string[] = [];
-    for (const line of lines) {
-        if (title == null && /^#{1,3}\s+/.test(line)) {
-            title = line.replace(/^#+\s*/, '').replace(/^春雪社\s*·\s*戲折\s*·\s*/, '').trim();
-            continue;
-        }
-        if (/^[-*>|]/.test(line) || /^#{1,6}\s/.test(line)) continue; // skip headings / table / quotes for the excerpt
-        rest.push(line.replace(/^#+\s*/, ''));
-    }
-    const flat = rest
-        .join(' ')
-        .replace(/[*_`>]|\[([^\]]*)\]\([^)]*\)/g, '$1')
-        .replace(/\s+/g, ' ')
-        .trim();
-    return { title, excerpt: flat.slice(0, 160) };
 }

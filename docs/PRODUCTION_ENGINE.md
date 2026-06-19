@@ -258,7 +258,12 @@ AI_PROVIDER=poe POE_API_KEY=... \
 **讀回 facade（clone `cut-read`/`gazette-read` 那套）**：
 - `lib/chain/production-read.ts` — 掃 saga-subject commitments → peek `es:production` header（用 `production.parseProductionHeader` from `@endless-story/runner`）→ `ProductionEntry`/`ProductionDetail`。short-TTL + stale-while-revalidate 快取。
 - `lib/api/productions.ts`（`listProductions`/`getProduction`）+ `api/index.ts` 導出 `productionsApi`。
-- `components/feed/ProductionList.tsx`（卡片→詳情）+ `app/(site)/feed/production/[id]/page.tsx`（Markdown 戲折 + 鏈上 commitment + cast 共有 chips）。
+- `components/feed/ProductionList.tsx`（卡片→詳情）+ `app/(site)/feed/production/[id]/page.tsx`（戲單渲染 + 鏈上 commitment + cast 共有 chips）。
+
+**戲單結構化渲染（不再 dump markdown）**：戲折 body 不直接丟 `<Markdown>`（會擠成「副標＋1.2.3…＋折子長文」一坨），改由純解析器 `lib/feed/xizhe-format.ts` `parseXiZhe(body)` 拆成 `{title,subtitle,premise,director,qizhi,cast[],scenes[],climaxTitle,prose,song}`，詳情頁＋卡片**共用同一格式真相**：
+- `components/feed/XiZheView.tsx` 排成「戲單」——題目／立意框（班主·氣質）／**班底**（角色—角兒＋行當 chip＋坤生/乾旦標記）／**分場**（折子膠囊＋中文情緒 喜驚悲）／**折子·戲中戲**（唯一走 prose 長文）／**角兒私詞**。卡片摘要＝乾淨「立意」＋班底名＋N 折（取代壓平 excerpt）。
+- 解析器**容忍**：舊/空 blob、無題《》→null、班底空括號/缺角、折子 prose 內殘留 `##`/`>` 不被當區塊截斷（meta handler 限 head 區、未知 `##` demote 成正文）。並 `isNoise()` 剝除既有上鏈 blob 的「可收藏」促銷句（assembleXiZhe 已停發）。
+- 驗證：parseXiZhe 對 assembleXiZhe 真實輸出（baishe/honglou/大戲 × scored/skip）+ ~15 對抗輸入（8/8 回歸綠）；4-lens 對抗式 review（促銷殘留/設計 token/渲染正確/退化）。
 
 **feed tab 改接**：`FeedTabs` 把「影像與畫冊」改名「**排戲 · 劇目**」（保留 key=`visual` 零 URL churn）；`feed/page.tsx` visual 分支從 `chaptersApi`(空) 改讀 `productionsApi.listProductions`。**必做止漏**：`gazette-read.isNonGazetteBlob` 加排除 `es:production`（同 subject）。
 

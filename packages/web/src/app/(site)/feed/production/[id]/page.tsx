@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { charactersApi, productionsApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
-import { Markdown } from '@/components/common/Markdown';
+import { XiZheView } from '@/components/feed/XiZheView';
+import { parseXiZhe, xiZheExcerpt } from '@/lib/feed/xizhe-format';
 import { objectUrl } from '@/lib/explorer';
 
 /**
@@ -16,10 +17,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const { id } = await params;
     const prod = await productionsApi.getProduction(id).catch(() => null);
     if (!prod) return { title: '找不到戲折' };
-    const title = firstHeading(prod.body) ?? prod.title ?? `${prod.classicSource ?? ''} · 新戲`;
+    const doc = parseXiZhe(prod.body);
+    const inner = doc.title ?? prod.title;
     return {
-        title,
-        description: prod.body.replace(/^#.*$/m, '').replace(/[#*>|-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120),
+        title: inner ? `《${inner}》` : `${prod.classicSource ?? ''} · 新戲`,
+        description: doc.premise ?? xiZheExcerpt(doc, 120),
     };
 }
 
@@ -64,10 +66,7 @@ export default async function ProductionPage({ params }: { params: Promise<{ id:
                         <span className="text-cinnabar font-medium">戲班自編自演 · {prod.castIds.length} 角</span>
                     </div>
 
-                    <Markdown
-                        source={prod.body}
-                        className="chapter-prose mt-8 text-lg leading-loose text-ink/85 sm:text-xl sm:leading-[2.2]"
-                    />
+                    <XiZheView body={prod.body} className="mt-8" />
 
                     {/* 鏈上查驗 + 共有 IP（cast）footer */}
                     <div className="mt-14 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline/50 pt-6 text-2xs tracking-widest text-mute/70">
@@ -101,9 +100,4 @@ export default async function ProductionPage({ params }: { params: Promise<{ id:
             </div>
         </main>
     );
-}
-
-function firstHeading(body: string): string | null {
-    const m = body.match(/^#{1,3}\s+(.+)$/m);
-    return m ? m[1].replace(/^春雪社\s*·\s*戲折\s*·\s*/, '').trim() : null;
 }

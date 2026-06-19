@@ -34,8 +34,5 @@ export function assembleXiZhe(prod: Production): string {
     ...(emergentSong
       ? [``, `## 角兒私詞 ·《${emergentSong.title}》〔有感而發〕`, ...emergentSong.lines.map((l) => `　${l}`)]
       : []),
-    ``,
-    `---`,
-    `*春雪社 出品 · 此折可收藏 —— 上鏈為數位藏品，內含劇本／選角／戲中戲章回${prod.skipScore ? '' : '／簡譜＋MIDI'}。*`,
   ].join('\n');
 }
