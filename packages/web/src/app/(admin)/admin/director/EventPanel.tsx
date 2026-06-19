@@ -59,7 +59,14 @@ export function EventPanel({
 
             <div className="space-y-3">
                 <div className="flex items-baseline justify-between">
-                    <h3 className="font-serif text-base text-ink">近期事件</h3>
+                    <h3 className="font-serif text-base text-ink">
+                        近期事件
+                        {events.length > 0 ? (
+                            <span className="ml-2 text-2xs font-normal tracking-widest text-mute">
+                                最近 {events.length} 筆
+                            </span>
+                        ) : null}
+                    </h3>
                     <button
                         type="button"
                         onClick={() => setRefreshNonce((n) => n + 1)}
@@ -79,7 +86,7 @@ export function EventPanel({
                         鏈上還沒事件。用上方表單開第一個。
                     </p>
                 ) : (
-                    <ul className="space-y-3">
+                    <ul className="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
                         {events.map((ev) => (
                             <EventRow
                                 key={ev.eventId}

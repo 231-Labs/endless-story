@@ -36,9 +36,12 @@ export function ResourceLedgerPanel() {
             <button
                 onClick={refresh}
                 disabled={pending}
-                className="rounded-full border border-hairline px-5 py-2 text-sm text-mute transition hover:text-ink disabled:opacity-50"
+                aria-label="重新整理資源帳本"
+                title="重新整理資源帳本"
+                className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1.5 text-2xs tracking-widest text-mute transition hover:text-ink disabled:opacity-50"
             >
-                {pending ? '讀取中…' : '重新整理資源帳本'}
+                <RefreshIcon className={`h-3.5 w-3.5 ${pending ? 'animate-spin' : ''}`} />
+                {pending ? '讀取中' : '重整'}
             </button>
 
             {err && <p className="mt-3 text-sm text-cinnabar">{err}</p>}
@@ -83,5 +86,16 @@ export function ResourceLedgerPanel() {
                 </div>
             )}
         </div>
+    );
+}
+
+function RefreshIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            <path d="M3 21v-5h5" />
+        </svg>
     );
 }

@@ -50,12 +50,17 @@ export function DirectorChatPanel({ initialChat }: { initialChat: ChatTurn[] }) 
         });
     };
 
+    const scrollToBottom = () => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    };
+
     return (
         <div className="space-y-3">
-            <div
-                ref={scrollRef}
-                className="max-h-96 space-y-3 overflow-y-auto rounded border border-hairline bg-canvas/40 p-4"
-            >
+            <div className="relative">
+                <div
+                    ref={scrollRef}
+                    className="h-[26rem] space-y-3 overflow-y-auto rounded border border-hairline bg-canvas/40 p-4 sm:h-[32rem]"
+                >
                 {turns.length === 0 ? (
                     <p className="text-sm text-mute">
                         問說書人「現在劇情走到哪了？」，或下令「我要一條關於師承心結的張力線」。
@@ -93,6 +98,16 @@ export function DirectorChatPanel({ initialChat }: { initialChat: ChatTurn[] }) 
                     )
                 )}
                 {isPending ? <p className="text-2xs tracking-widest text-mute">說書人查證中…</p> : null}
+                </div>
+                <button
+                    type="button"
+                    onClick={scrollToBottom}
+                    aria-label="捲到最新對話"
+                    title="捲到最新"
+                    className="absolute bottom-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-hairline bg-elevated/90 text-mute shadow-md backdrop-blur transition hover:text-cinnabar"
+                >
+                    <ChevronDownIcon className="h-4 w-4" />
+                </button>
             </div>
             {lastToolLine ? (
                 <p className="text-2xs tracking-widest text-mute">工具：{lastToolLine}</p>
@@ -129,11 +144,30 @@ export function DirectorChatPanel({ initialChat }: { initialChat: ChatTurn[] }) 
                     type="button"
                     onClick={send}
                     disabled={isPending || !draft.trim()}
-                    className="rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal disabled:opacity-50"
+                    aria-label="送出"
+                    title="送出（Enter）"
+                    className="inline-flex shrink-0 items-center justify-center rounded bg-cinnabar px-3 text-canvas hover:bg-seal disabled:opacity-50"
                 >
-                    送出
+                    <SendIcon className="h-5 w-5" />
                 </button>
             </div>
         </div>
+    );
+}
+
+function ChevronDownIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="m6 9 6 6 6-6" />
+        </svg>
+    );
+}
+
+function SendIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M22 2 11 13" />
+            <path d="M22 2 15 22l-4-9-9-4Z" />
+        </svg>
     );
 }

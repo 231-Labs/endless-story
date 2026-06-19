@@ -81,18 +81,23 @@ export function RecruitmentsPanel({ initial }: { initial: AdminRecruitment[] }) 
                         type="button"
                         onClick={handleAutoPrice}
                         disabled={isPending}
-                        className="es-outline-button text-sm"
-                        title="依各職缺四維門檻批次設必應：base × 平均達標抽數 × 0.85"
+                        className="es-outline-button inline-flex items-center gap-1.5 text-sm"
+                        aria-label="批次定必應"
+                        title="批次定必應：base × 平均達標抽數 × 0.85"
                     >
-                        批次定必應
+                        <TagIcon className="h-4 w-4" />
+                        批次定價
                     </button>
                     <button
                         type="button"
                         onClick={handleNew}
                         disabled={isPending}
-                        className="es-outline-button text-sm"
+                        className="es-outline-button inline-flex items-center gap-1.5 text-sm"
+                        aria-label="新增職缺"
+                        title="新增職缺"
                     >
-                        + 新增職缺
+                        <PlusIcon className="h-4 w-4" />
+                        新增
                     </button>
                 </div>
             </div>
@@ -182,23 +187,33 @@ function RowView({
                     )}
                 </div>
             </div>
-            <div className="flex gap-2 self-start">
+            <div className="flex gap-1.5 self-start">
                 <button
                     type="button"
                     onClick={() => onToggle(!r.active)}
-                    className="es-outline-button text-xs"
+                    className="es-icon-button h-8 w-8 border border-hairline"
+                    aria-label={r.active ? '下架' : '上架'}
+                    title={r.active ? '下架' : '上架'}
                 >
-                    {r.active ? '下架' : '上架'}
+                    {r.active ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                 </button>
-                <button type="button" onClick={onEdit} className="es-outline-button text-xs">
-                    編輯
+                <button
+                    type="button"
+                    onClick={onEdit}
+                    className="es-icon-button h-8 w-8 border border-hairline"
+                    aria-label="編輯"
+                    title="編輯"
+                >
+                    <PencilIcon className="h-4 w-4" />
                 </button>
                 <button
                     type="button"
                     onClick={onDelete}
-                    className="es-outline-button text-xs text-cinnabar hover:border-cinnabar hover:bg-cinnabar/5"
+                    className="es-icon-button h-8 w-8 border border-hairline text-cinnabar hover:border-cinnabar hover:bg-cinnabar/5"
+                    aria-label="刪除"
+                    title="刪除"
                 >
-                    刪除
+                    <TrashIcon className="h-4 w-4" />
                 </button>
             </div>
         </div>
@@ -232,6 +247,60 @@ function CalendarIcon(props: React.SVGProps<SVGSVGElement>) {
             <line x1="16" x2="16" y1="2" y2="6" />
             <line x1="8" x2="8" y1="2" y2="6" />
             <line x1="3" x2="21" y1="10" y2="10" />
+        </svg>
+    );
+}
+
+function EyeIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+        </svg>
+    );
+}
+
+function EyeOffIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M9.9 4.2A9.7 9.7 0 0 1 12 4c6.5 0 10 7 10 7a13 13 0 0 1-2.3 3.1" />
+            <path d="M6.6 6.6A13 13 0 0 0 2 11s3.5 7 10 7a9.7 9.7 0 0 0 4.2-1" />
+            <path d="m2 2 20 20" />
+        </svg>
+    );
+}
+
+function PencilIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+    );
+}
+
+function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6" />
+            <path d="M10 11v6M14 11v6" />
+        </svg>
+    );
+}
+
+function PlusIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M12 5v14M5 12h14" />
+        </svg>
+    );
+}
+
+function TagIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.8 8.8a2 2 0 0 0 2.8 0l6.4-6.4a2 2 0 0 0 0-2.8Z" />
+            <circle cx="7.5" cy="7.5" r="1.5" />
         </svg>
     );
 }
@@ -419,7 +488,7 @@ function EditForm({
                     取消
                 </button>
                 <button type="submit" className="rounded border border-transparent bg-cinnabar px-6 py-2 text-sm text-white transition-colors hover:bg-seal">
-                    儲存職缺
+                    儲存
                 </button>
             </div>
         </form>

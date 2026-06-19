@@ -94,9 +94,11 @@ export function FaucetConfigPanel({ initial }: Props) {
                     type="button"
                     onClick={handleRefresh}
                     disabled={isPending}
-                    className="text-2xs tracking-widest text-mute hover:text-ink"
+                    aria-label="重讀"
+                    title="重讀"
+                    className="es-icon-button h-8 w-8 text-mute hover:text-ink disabled:opacity-50"
                 >
-                    重讀
+                    <RefreshIcon className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
                 </button>
             </div>
 
@@ -163,9 +165,11 @@ export function FaucetConfigPanel({ initial }: Props) {
                             type="button"
                             onClick={handleApply}
                             disabled={isPending}
-                            className="es-outline-button text-sm"
+                            className="es-outline-button inline-flex items-center gap-1.5 text-sm"
+                            title="套用設定（set_config）"
                         >
-                            套用（set_config）
+                            <CheckIcon className="h-4 w-4" />
+                            套用
                         </button>
                         {msg && (
                             <span
@@ -197,5 +201,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
             <span className="block text-xs text-mute mb-1">{label}</span>
             {children}
         </label>
+    );
+}
+
+function RefreshIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            <path d="M3 21v-5h5" />
+        </svg>
+    );
+}
+
+function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M20 6 9 17l-5-5" />
+        </svg>
     );
 }

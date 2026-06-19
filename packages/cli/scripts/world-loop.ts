@@ -58,6 +58,21 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+// Minimal ANSI palette, TTY-gated (off when piped/redirected or NO_COLOR set).
+const COLOR = Boolean(process.stdout.isTTY) && process.env.NO_COLOR == null;
+const ansi =
+    (code: string) =>
+    (s: string | number): string =>
+        COLOR ? `\x1b[${code}m${s}\x1b[0m` : String(s);
+const clr = {
+    dim: ansi('2'),
+    bold: ansi('1'),
+    cyan: ansi('36'),
+    green: ansi('32'),
+    red: ansi('31'),
+    yellow: ansi('33'),
+};
+
 interface LoopOpts {
     intervalMs: number;
     maxTicks: number;
@@ -137,7 +152,7 @@ interface ShowrunnerBeatResult {
 /** POST one Showrunner heartbeat; logs a one-line summary. Never throws. */
 async function runShowrunnerBeat(url: string, secret?: string): Promise<void> {
     const t0 = Date.now();
-    console.log(`[showrunner] ▶ 心跳開始（巡檢 → 補漏 → 評估 → 干預 → 日誌）`);
+    console.log(clr.dim(`[showrunner] ▶ heartbeat — audit → repair → assess → intervene → log`));
     try {
         const res = await fetch(url, {
             method: 'POST',
@@ -156,16 +171,16 @@ async function runShowrunnerBeat(url: string, secret?: string): Promise<void> {
         }
         if (!res.ok || !json || json.ok === false) {
             console.warn(
-                `[showrunner] ✗ HTTP ${res.status}${json?.error ? ` — ${json.error}` : ''} (${secs}s)`,
+                `${clr.red('[showrunner] ✗')} HTTP ${res.status}${json?.error ? ` — ${json.error}` : ''} ${clr.dim(`(${secs}s)`)}`,
             );
             return;
         }
         const calls = json.toolCalls ?? [];
         const okCalls = calls.filter((c) => c.ok).length;
         const reportLine = (json.report ?? '').replace(/\s+/g, ' ').slice(0, 120);
-        console.log(`[showrunner] ✓ 工具 ${okCalls}/${calls.length} (${secs}s)${reportLine ? ` — ${reportLine}` : ''}`);
+        console.log(`${clr.green('[showrunner] ✓')} tools ${okCalls}/${calls.length} ${clr.dim(`(${secs}s)`)}${reportLine ? ` — ${reportLine}` : ''}`);
     } catch (err) {
-        console.warn(`[showrunner] ✗ ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(`${clr.red('[showrunner] ✗')} ${err instanceof Error ? err.message : String(err)}`);
     }
 }
 
@@ -223,25 +238,25 @@ function summarize(r: TickResult): string {
         (arr ?? []).filter((x) => x.anchored).length;
     const chapters = (arr?: { ok?: boolean; anchored?: boolean }[]) =>
         (arr ?? []).filter((x) => x.ok || x.anchored).length;
-    const day = r.worldTime?.day != null ? `第${r.worldTime.day}日·${r.worldTime.partOfDay}` : '—';
+    const day = r.worldTime?.day != null ? `Day ${r.worldTime.day} · ${r.worldTime.partOfDay}` : '—';
     const drama = r.drama?.active
-        ? `張力${r.drama.resourceCount ?? 0}${r.drama.commitmentId ? '⛓' : ''}`
+        ? `tension ${r.drama.resourceCount ?? 0}${r.drama.commitmentId ? '⛓' : ''}`
         : null;
     const socialCount = (r.socials ?? []).filter((x) => x.ok && x.kind !== 'idle').length;
-    const memory = r.memoryDegraded ? `記憶降級${r.memoryWarnings?.length ?? 0}` : null;
+    const memory = r.memoryDegraded ? `memory-degraded ${r.memoryWarnings?.length ?? 0}` : null;
     return [
-        day,
-        `規劃${(r.plans ?? []).length}`,
-        `移動${moved(r.moves)}`,
+        clr.bold(day),
+        `plan ${(r.plans ?? []).length}`,
+        `move ${moved(r.moves)}`,
         ...(drama ? [drama] : []),
-        `互動${socialCount}`,
-        `出牌${ok(r.acts)}`,
-        `收尾${ok(r.resolves)}`,
-        `章回${chapters(r.povs)}${anchored(r.povs) ? `(${anchored(r.povs)}⛓)` : ''}`,
-        `睡${anchored(r.sleeps)}`,
-        `公報${r.gazette?.anchored ? '✓' : '—'}`,
-        ...(memory ? [memory] : []),
-    ].join(' · ');
+        `talk ${socialCount}`,
+        `act ${ok(r.acts)}`,
+        `resolve ${ok(r.resolves)}`,
+        `chapter ${chapters(r.povs)}${anchored(r.povs) ? `(${anchored(r.povs)}⛓)` : ''}`,
+        `sleep ${anchored(r.sleeps)}`,
+        `gazette ${r.gazette?.anchored ? clr.green('✓') : '—'}`,
+        ...(memory ? [clr.yellow(memory)] : []),
+    ].join(clr.dim(' · '));
 }
 
 function snippet(text: string, max = 220): string {
@@ -312,9 +327,13 @@ async function main() {
         : `${cleanBase}/api/showrunner`;
     const startedAt = new Date().toISOString();
 
+    console.log(clr.dim('──────────────────────────────────────────────────────'));
+    console.log(`   ${clr.bold(clr.cyan('ENDLESS STORY'))} ${clr.dim('· world-loop')}`);
+    console.log(clr.dim('   autonomous narrative engine — the saga lives, one tick at a time'));
+    console.log(clr.dim('──────────────────────────────────────────────────────'));
     console.log(
-        `[world-loop] driving ${url} every ${intervalMs / 1000}s` +
-            (maxTicks ? ` (max ${maxTicks} ticks)` : ' (forever — Ctrl-C to stop)'),
+        `${clr.dim('[world-loop]')} driving ${url} every ${clr.bold(`${intervalMs / 1000}s`)}` +
+            (maxTicks ? ` ${clr.dim(`(max ${maxTicks} ticks)`)}` : clr.dim(' (forever — Ctrl-C to stop)')),
     );
     if (Object.keys(input).length) console.log(`[world-loop] phase overrides:`, input);
     if (controlUrl) console.log(`[world-loop] control ${controlUrl}`);
@@ -342,17 +361,17 @@ async function main() {
             if (control.paused) {
                 const seconds = Number(((Date.now() - t0) / 1000).toFixed(1));
                 records.push({ tick: n, seconds, ok: true, skipped: true });
-                console.log(`\n[tick ${n}] ⏸ paused by runner control (${seconds}s)`);
+                console.log(`\n${clr.cyan(`[tick ${n}]`)} ${clr.yellow('⏸ paused by runner control')} ${clr.dim(`(${seconds}s)`)}`);
                 if (stopping || (maxTicks && n >= maxTicks)) break;
                 await sleep(intervalMs);
                 continue;
             }
         }
-        console.log(`\n[tick ${n}] ▶ 開始（一輪約數十秒~數分鐘；伺服器終端有逐步進度）`);
+        console.log(`\n${clr.cyan(`[tick ${n}]`)} ▶ ${clr.dim('start — ~tens of seconds to minutes; step-by-step detail in the server terminal')}`);
         // Heartbeat so this terminal isn't silent during the long tick. The
         // step-by-step detail prints in the `next dev` terminal (server side).
         const heartbeat = setInterval(() => {
-            process.stdout.write(`   …執行中 ${((Date.now() - t0) / 1000).toFixed(0)}s\r`);
+            process.stdout.write(`${clr.dim(`   …running ${((Date.now() - t0) / 1000).toFixed(0)}s`)}\r`);
         }, 3000);
         try {
             const res = await fetch(url, {
@@ -413,7 +432,7 @@ async function main() {
                     result: json,
                     error: json.ok === false ? json.error ?? 'tick returned ok:false' : undefined,
                 });
-                console.log(`[tick ${n}] ${json.ok === false ? '✗' : '✓'} ${summarize(json)} (${secs}s)`);
+                console.log(`${clr.cyan(`[tick ${n}]`)} ${json.ok === false ? clr.red('✗') : clr.green('✓')} ${summarize(json)} ${clr.dim(`(${secs}s)`)}`);
                 for (const line of detailLines(json)) console.log(line);
             }
         } catch (err) {
@@ -461,7 +480,7 @@ async function main() {
         );
         console.log(`[world-loop] wrote ${outPath}`);
     }
-    console.log(`[world-loop] done — ${n} ticks${failures ? `, ${failures} failed` : ''}.`);
+    console.log(`${clr.dim('[world-loop]')} done — ${clr.bold(`${n} ticks`)}${failures ? clr.red(`, ${failures} failed`) : ''}.`);
     // Finite runs are usually deployment smoke tests; make failures machine-visible.
     if (maxTicks && failures > 0) process.exitCode = 1;
 }

@@ -113,21 +113,25 @@ export function DreamConfigPanel({ initial }: { initial: DreamConfigSnapshot | n
                     type="button"
                     onClick={handleApplyPrice}
                     disabled={isPending}
-                    className="rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal disabled:opacity-50"
+                    title="套用注夢價格"
+                    className="inline-flex items-center gap-1.5 rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal disabled:opacity-50"
                 >
-                    {isPending ? '套用中…' : '套用價格'}
+                    <CheckIcon className="h-4 w-4" />
+                    {isPending ? '套用中' : '套用'}
                 </button>
                 <button
                     type="button"
                     onClick={handleTogglePaused}
                     disabled={isPending}
-                    className={`rounded border px-4 py-2 text-sm tracking-widest disabled:opacity-50 ${
+                    title={paused ? '恢復注夢' : '暫停注夢'}
+                    className={`inline-flex items-center gap-1.5 rounded border px-4 py-2 text-sm tracking-widest disabled:opacity-50 ${
                         paused
                             ? 'border-jade/60 text-jade hover:bg-jade hover:text-canvas'
                             : 'border-hairline text-ink hover:bg-elevated'
                     }`}
                 >
-                    {paused ? '恢復注夢' : '暫停注夢'}
+                    <PowerIcon className="h-4 w-4" />
+                    {paused ? '恢復' : '暫停'}
                 </button>
             </div>
 
@@ -151,5 +155,22 @@ export function DreamConfigPanel({ initial }: { initial: DreamConfigSnapshot | n
                 </div>
             ) : null}
         </div>
+    );
+}
+
+function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M20 6 9 17l-5-5" />
+        </svg>
+    );
+}
+
+function PowerIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M12 2v10" />
+            <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+        </svg>
     );
 }

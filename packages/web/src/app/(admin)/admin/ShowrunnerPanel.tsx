@@ -47,28 +47,29 @@ export function ShowrunnerPanel({
 
     return (
         <div className="space-y-5">
-            <div className="flex flex-wrap gap-3">
+            <div className="flex items-center gap-2">
                 <button
                     type="button"
                     onClick={() => handleRun(true)}
                     disabled={isPending}
-                    className="rounded border border-hairline bg-surface px-4 py-2 text-sm tracking-widest text-ink hover:bg-elevated disabled:opacity-50"
+                    aria-label="Dry-Run（只巡檢評估，不動手）"
+                    title="Dry-Run · 只巡檢評估，不動手"
+                    className="es-icon-button h-9 w-9 border border-hairline text-ink disabled:opacity-50"
                 >
-                    {isPending ? '心跳中…' : 'Dry-Run（只巡檢評估，不動手）'}
+                    {isPending ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <EyeIcon className="h-4 w-4" />}
                 </button>
                 <button
                     type="button"
                     onClick={() => handleRun(false)}
                     disabled={isPending}
-                    className="rounded bg-cinnabar px-4 py-2 text-sm tracking-widest text-canvas hover:bg-seal disabled:opacity-50"
+                    aria-label="跑一次心跳（巡檢 → 補漏 → 干預）"
+                    title="跑一次心跳 · 巡檢 → 補漏 → 干預"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-cinnabar text-canvas transition hover:bg-seal disabled:opacity-50"
                 >
-                    {isPending ? '心跳中…' : '跑一次心跳（巡檢→補漏→干預）'}
+                    {isPending ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <PulseIcon className="h-4 w-4" />}
                 </button>
+                {isPending ? <span className="text-2xs tracking-widest text-mute">心跳中…</span> : null}
             </div>
-            <p className="text-2xs tracking-widest text-mute">
-                headless 排程：world-loop 加 <code>--showrunner-every=N</code>（或 env
-                SHOWRUNNER_EVERY_TICKS），每 N tick POST /api/showrunner。
-            </p>
 
             {result ? <HeartbeatResult result={result} /> : null}
 
@@ -208,7 +209,7 @@ function DirectorLog({ log }: { log: ShowrunnerLogEntry[] }) {
                     <summary className="cursor-pointer list-none py-1 text-xs tracking-widest text-mute">
                         <span className="text-cinnabar">▸</span> 展開更早（{older.length} 則）
                     </summary>
-                    <div className="mt-3 space-y-3">
+                    <div className="mt-3 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {older.map((entry, i) => (
                             <LogEntry key={`${entry.at}-${i}`} entry={entry} />
                         ))}
@@ -246,5 +247,30 @@ function HeartbeatResult({ result }: { result: ShowrunnerResult }) {
             ) : null}
             <Markdown source={result.report} compact />
         </div>
+    );
+}
+
+function EyeIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+        </svg>
+    );
+}
+
+function PulseIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...props}>
+            <path d="M3 12h4l2-6 4 14 2-8h6" />
+        </svg>
+    );
+}
+
+function SpinnerIcon(props: React.SVGProps<SVGSVGElement>) {
+    return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" {...props}>
+            <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+        </svg>
     );
 }
