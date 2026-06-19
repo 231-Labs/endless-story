@@ -38,7 +38,7 @@
       groups: { start: 'Start', design: 'Design', infra: 'Build & infra', links: 'Links' },
       footTrack: 'Sui Overflow 2026 · Walrus track',
       footBy: 'Built by 231 Labs',
-      pageFoot: 'Walrus + Seal · MemWal SDK · Sui — built by 231 Labs.',
+      pageFoot: 'Walrus + Seal · MemWal SDK · Sui. Built by 231 Labs.',
       toggle: '中文',
       docNote: function (lang) {
         return lang === 'zh'
@@ -52,7 +52,7 @@
       groups: { start: '開始', design: '設計', infra: '建置與基建', links: '連結' },
       footTrack: 'Sui Overflow 2026 · Walrus 賽道',
       footBy: '由 231 Labs 打造',
-      pageFoot: 'Walrus + Seal · MemWal SDK · Sui — 由 231 Labs 打造。',
+      pageFoot: 'Walrus + Seal · MemWal SDK · Sui。由 231 Labs 打造。',
       toggle: 'EN',
       docNote: function (lang) {
         return lang === 'zh'
