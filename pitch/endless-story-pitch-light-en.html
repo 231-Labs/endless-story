@@ -365,6 +365,161 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   </div>
 </section>
 
+<!-- ===================== 5a · ★ DRAMA — THE PROBLEM ===================== -->
+<section class="slide" id="s5a">
+  <div class="glow" style="width:440px;height:440px;background:var(--seal);top:-16%;left:-8%;opacity:.16"></div>
+  <div class="eyebrow r">★ Foundational Insight 01 &nbsp;·&nbsp; <span class="zh">The invisible problem</span></div>
+  <h2 class="r" style="--i:1">Characters "move," but the drama <b class="c">collapses</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:1.6rem">Even with memory and an autonomous loop, a character's motivation is still an LLM <b class="c">free-form string goal</b> — no scarcity, no zero-sum, no mechanical tension. So everyone "achieves their goal," and <b class="c">the story flatlines</b>.</p>
+  <div class="r appear" style="--i:3;display:grid;grid-template-columns:1.25fr 1fr;gap:1.4rem;align-items:center">
+    <div class="diagram" style="height:34vh;min-height:230px">
+      <span class="cap">tension over time · free-form LLM goals → no contention</span>
+      <svg viewBox="0 0 600 260" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+        <line x1="56" y1="30" x2="56" y2="220" stroke="var(--hair)"/>
+        <line x1="56" y1="220" x2="572" y2="220" stroke="var(--hair)"/>
+        <text x="20" y="36" fill="var(--mute)" font-size="12" font-family="var(--mono)">Tension</text>
+        <text x="528" y="240" fill="var(--mute)" font-size="12" font-family="var(--mono)">Time →</text>
+        <!-- flatline -->
+        <polyline points="56,120 160,124 260,118 360,122 460,119 572,121" fill="none" stroke="var(--seal)" stroke-width="2.6"/>
+        <text x="300" y="104" text-anchor="middle" fill="var(--seal)" font-size="13" font-family="var(--mono)">Flatline · no drama</text>
+        <!-- ghost of what good looks like -->
+        <polyline points="56,180 120,70 184,180 248,70 312,180 376,70 440,180 504,70 568,150" fill="none" stroke="var(--jade)" stroke-width="1.6" stroke-dasharray="4 5" opacity=".55"/>
+        <text x="420" y="58" text-anchor="middle" fill="var(--jade)" font-size="11.5" font-family="var(--mono)" opacity=".8">Ideal: rising &amp; falling tension</text>
+      </svg>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.8rem">
+      <div class="card" style="border-left:3px solid var(--seal)"><h3 style="font-size:1.1rem;color:var(--seal)">Flatline</h3><p>Everyone is satisfied, nothing left undone → no drama.</p></div>
+      <div class="card" style="border-left:3px solid var(--cinnabar)"><h3 style="font-size:1.1rem;color:var(--cinnabar)">Spinning in place</h3><p>Motivations flip back and forth, circling, unable to progress.</p></div>
+      <div class="card" style="border-left:3px solid var(--gold)"><h3 style="font-size:1.1rem;color:var(--gold)">Each self-satisfied</h3><p>No zero-sum, no one has to lose → no conflict.</p></div>
+    </div>
+  </div>
+  <p class="sub r" style="--i:4;margin-top:1.1rem;font-size:1.05rem">Differentiation comes not from more features but from <b class="j">depth at the narrative core</b>: <b class="c">drama comes not from desire itself, but from the edge where desire is projected onto limited resources that can't all be satisfied at once.</b></p>
+</section>
+
+<!-- ===================== 5b · ★ DRAMA — THE MECHANISM ===================== -->
+<section class="slide" id="s5b">
+  <div class="eyebrow r">★ Foundational Insight 02 &nbsp;·&nbsp; <span class="zh">Drama engine · propose / adjudicate</span></div>
+  <h2 class="r" style="--i:1">Drama comes from <b class="c">"can't all get it"</b> — the LLM proposes, a deterministic layer adjudicates</h2>
+  <p class="sub r" style="--i:2;margin-bottom:1.2rem">Project desire onto <b class="j">limited, conserved resources</b> (e.g. one role-slot can be held by only one person at a time). The LLM <b class="c">proposes an action</b> from memory and persona; the pure function <span class="mono">applyTick</span> <b class="j">adjudicates the outcome</b> and computes new tension. <b class="c">The LLM cannot directly change satisfaction values</b> — it can only propose, not change the rules.</p>
+  <div class="diagram r appear" style="--i:3;margin-top:.5rem;height:34vh;min-height:220px">
+    <span class="cap">LLM proposes (Action) → deterministic resource layer disposes (applyTick) → tension feeds back</span>
+    <svg viewBox="0 0 1200 250" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs><marker id="dpm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cinnabar)"/></marker>
+        <marker id="dpj" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--jade)"/></marker></defs>
+      <g font-family="var(--mono)">
+        <rect x="40" y="78" width="220" height="96" rx="8" fill="rgba(217,118,80,.12)" stroke="var(--cinnabar)" stroke-width="1.8"/>
+        <text x="150" y="112" text-anchor="middle" fill="var(--cinnabar)" font-size="14" font-weight="700">LLM · memory + persona</text>
+        <text x="150" y="136" text-anchor="middle" fill="var(--mute)" font-size="11">"I want the partner slot"</text>
+        <text x="150" y="154" text-anchor="middle" fill="var(--mute)" font-size="11">→ proposes Action</text>
+
+        <rect x="470" y="66" width="260" height="120" rx="8" fill="rgba(111,162,135,.12)" stroke="var(--jade)" stroke-width="2"/>
+        <text x="600" y="100" text-anchor="middle" fill="var(--jade)" font-size="14" font-weight="700">applyTick · deterministic ruling</text>
+        <text x="600" y="123" text-anchor="middle" fill="var(--ink)" font-size="11">verify conservation · settle resources</text>
+        <text x="600" y="142" text-anchor="middle" fill="var(--ink)" font-size="11">fixed-point integers · no floats</text>
+        <text x="600" y="166" text-anchor="middle" fill="var(--seal)" font-size="11">on-chain re-runnable &amp; verifiable</text>
+
+        <rect x="940" y="78" width="220" height="96" rx="8" fill="rgba(201,168,92,.12)" stroke="var(--gold)" stroke-width="1.8"/>
+        <text x="1050" y="116" text-anchor="middle" fill="var(--gold)" font-size="15" font-weight="700">tension</text>
+        <text x="1050" y="138" text-anchor="middle" fill="var(--mute)" font-size="11">whoever misses out → tension rises</text>
+        <text x="1050" y="156" text-anchor="middle" fill="var(--mute)" font-size="11">(derived, not stored)</text>
+      </g>
+      <path class="draw" style="--i:0" pathLength="1" d="M260,126 L466,126" stroke="var(--cinnabar)" stroke-width="2.4" marker-end="url(#dpm)"/>
+      <text x="363" y="116" text-anchor="middle" fill="var(--cinnabar)" font-size="12" font-family="var(--mono)">propose</text>
+      <path class="draw" style="--i:1" pathLength="1" d="M730,126 L936,126" stroke="var(--jade)" stroke-width="2.4" marker-end="url(#dpj)"/>
+      <text x="833" y="116" text-anchor="middle" fill="var(--jade)" font-size="12" font-family="var(--mono)">adjudicate</text>
+      <!-- feedback loop tension -> LLM context -->
+      <path class="draw" style="--i:2" pathLength="1" d="M1050,174 C1050,224 150,224 150,178" fill="none" stroke="var(--gold)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#dpm)"/>
+      <text x="600" y="238" text-anchor="middle" fill="#7c6a45" font-size="11" font-family="var(--mono)">tension feeds back into the LLM's context (the engine informs decisions, doesn't replace them)</text>
+    </svg>
+  </div>
+  <div class="r" style="--i:4;display:grid;grid-template-columns:repeat(4,1fr);gap:.9rem;margin-top:1rem">
+    <div class="card"><h3 style="font-size:1.05rem;color:var(--cinnabar)">Conservation</h3><p>One slot only — one carrot per hole (zero-sum).</p></div>
+    <div class="card"><h3 style="font-size:1.05rem;color:var(--seal)">Loss aversion</h3><p>Falls faster than it rises → downward spirals = good drama.</p></div>
+    <div class="card"><h3 style="font-size:1.05rem;color:var(--gold)">Habituation</h3><p>Even pleasure palls → prevents post-success flatlining.</p></div>
+    <div class="card"><h3 style="font-size:1.05rem;color:var(--jade)">Determinism</h3><p>Same input → same output, byte-for-byte verifiable.</p></div>
+  </div>
+</section>
+
+<!-- ===================== 5c · ★ DRAMA — THE EXPERIMENT ===================== -->
+<section class="slide" id="s5c">
+  <div class="glow" style="width:460px;height:460px;background:var(--jade);top:-16%;right:-8%;opacity:.16"></div>
+  <div class="eyebrow r">★ Observation &amp; validation &nbsp;·&nbsp; <span class="zh">Experiment results</span></div>
+  <h2 class="r" style="--i:1">A pure offline simulator: making "is there drama?" <b class="j">measurable</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:1.6rem;font-size:1.05rem">One narrative day in the product loop takes ~200 seconds; the simulator runs vast numbers of narrative days in milliseconds, calibrating fast and checking failure modes. Both charts below are <b class="c">actual engine output</b> (not mockups).</p>
+  <div class="r appear" style="--i:3;display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;align-items:start">
+    <figure style="margin:0">
+      <img src="assets/fig1_contested.png" alt="An evenly-matched tug-of-war: tension time series" style="width:100%;max-height:42vh;object-fit:contain;border:1px solid var(--hair);border-radius:10px;background:#fff;box-shadow:0 1px 4px rgba(40,30,15,.06)">
+      <figcaption class="mono" style="font-size:.78rem;color:#7c6a45;margin-top:.6rem;text-align:center;line-height:1.4">① Evenly matched → <b style="color:var(--cinnabar)">a readable tug-of-war</b>: the loser surges to a tension peak before fighting back (▼), changing hands about every 7 beats.</figcaption>
+    </figure>
+    <figure style="margin:0">
+      <img src="assets/fig3_tradeoff.png" alt="A character's dilemma under a limited budget: two desires compete" style="width:100%;max-height:42vh;object-fit:contain;border:1px solid var(--hair);border-radius:10px;background:#fff;box-shadow:0 1px 4px rgba(40,30,15,.06)">
+      <figcaption class="mono" style="font-size:.78rem;color:#7c6a45;margin-top:.6rem;text-align:center;line-height:1.4">② <b style="color:var(--gold)">A dilemma under a limited budget</b>: two desires fight over one resource, one gained at the other's cost — <b style="color:var(--jade)">emergent from the rules, not hand-coded</b>.</figcaption>
+    </figure>
+  </div>
+  <div class="r" style="--i:4;margin-top:1.5rem;display:flex;gap:.6rem;flex-wrap:wrap">
+    <span class="tag" style="color:var(--mute)">✓ Character dilemmas emerge naturally (single-variable test: caused by the budget constraint, 120→2, 0→66)</span>
+    <span class="tag" style="color:var(--mute)">✓ Failure modes — flatlining, collapse, looping — did not appear</span>
+    <span class="tag" style="color:var(--mute)">✓ Byte-for-byte reproducible, across multiple scenarios</span>
+  </div>
+</section>
+
+<!-- ===================== 5d · ★ DRAMA — SAGA GENESIS PIPELINE ===================== -->
+<section class="slide" id="s5d">
+  <div class="eyebrow r">★ Foundational Insight 04 &nbsp;·&nbsp; <span class="zh">Scaling · scarcity per Saga</span></div>
+  <h2 class="r" style="--i:1">Each Saga defines its own scarcity — but must first pass <b class="j">simulator acceptance</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:1.2rem;font-size:1.05rem">A troupe has <b class="c">role-slots</b>, a market has <b class="c">stalls</b>, a gang has <b class="c">turf</b>. The LLM does the <b class="c">reskinning</b> (naming, theming); <b class="j">humans define the structural archetype</b> (which kinds of scarcity), and <b class="g">the simulator acts as "genesis acceptance"</b> — Sagas that would flatline are blocked. Generation happens at genesis, is validated, then <b class="c">frozen on-chain</b>.</p>
+  <div class="diagram r appear" style="--i:3;margin-top:.5rem;height:40vh;min-height:260px">
+    <span class="cap">saga genesis · LLM proposes schema → structural check → simulator dry-run → freeze + commit → play</span>
+    <svg viewBox="0 0 1200 300" style="width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+      <defs><marker id="gm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--ink)"/></marker>
+        <marker id="grej" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--seal)"/></marker></defs>
+      <g font-family="var(--mono)">
+        <!-- 1 -->
+        <rect x="18" y="78" width="190" height="96" rx="7" fill="rgba(217,118,80,.12)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+        <text x="113" y="108" text-anchor="middle" fill="var(--cinnabar)" font-size="12.5" font-weight="700">① LLM proposes board</text>
+        <text x="113" y="130" text-anchor="middle" fill="var(--mute)" font-size="10.5">reads saga premise</text>
+        <text x="113" y="148" text-anchor="middle" fill="var(--mute)" font-size="10.5">→ resource schema</text>
+        <text x="113" y="164" text-anchor="middle" fill="var(--mute)" font-size="10">role-slot cap=1 · run dates</text>
+        <!-- 2 -->
+        <rect x="258" y="78" width="190" height="96" rx="7" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/>
+        <text x="353" y="108" text-anchor="middle" fill="var(--ink)" font-size="13" font-weight="700">② Structural check</text>
+        <text x="353" y="130" text-anchor="middle" fill="var(--mute)" font-size="10.5">truly zero-sum? conserved?</text>
+        <text x="353" y="148" text-anchor="middle" fill="var(--mute)" font-size="10.5">≥2 desires on one resource?</text>
+        <text x="353" y="164" text-anchor="middle" fill="#7c6a45" font-size="10">(deterministic, no LLM)</text>
+        <!-- 3 -->
+        <rect x="498" y="72" width="206" height="108" rx="7" fill="rgba(111,162,135,.14)" stroke="var(--jade)" stroke-width="2"/>
+        <text x="601" y="102" text-anchor="middle" fill="var(--jade)" font-size="13" font-weight="700">③ Simulator dry-run</text>
+        <text x="601" y="124" text-anchor="middle" fill="var(--ink)" font-size="10.5">runs hundreds of ticks</text>
+        <text x="601" y="142" text-anchor="middle" fill="var(--ink)" font-size="10.5">readable tension? → pass</text>
+        <text x="601" y="162" text-anchor="middle" fill="var(--seal)" font-size="10.5">flatline / collapse → reject</text>
+        <!-- 4 -->
+        <rect x="754" y="78" width="190" height="96" rx="7" fill="rgba(201,168,92,.12)" stroke="var(--gold)" stroke-width="1.6"/>
+        <text x="849" y="108" text-anchor="middle" fill="var(--gold)" font-size="13" font-weight="700">④ Freeze · on-chain</text>
+        <text x="849" y="130" text-anchor="middle" fill="var(--mute)" font-size="10.5">genesis commit</text>
+        <text x="849" y="148" text-anchor="middle" fill="var(--mute)" font-size="10.5">board frozen</text>
+        <text x="849" y="164" text-anchor="middle" fill="#7c6a45" font-size="10">immutable after opening</text>
+        <!-- 5 -->
+        <rect x="994" y="78" width="188" height="96" rx="7" fill="rgba(217,118,80,.1)" stroke="var(--cinnabar)" stroke-width="1.6"/>
+        <text x="1088" y="108" text-anchor="middle" fill="var(--cinnabar)" font-size="13" font-weight="700">⑤ Opening</text>
+        <text x="1088" y="130" text-anchor="middle" fill="var(--mute)" font-size="10">characters on frozen board</text>
+        <text x="1088" y="148" text-anchor="middle" fill="var(--mute)" font-size="10">can only "propose Action"</text>
+        <text x="1088" y="164" text-anchor="middle" fill="var(--jade)" font-size="10">↺ drama engine takes over</text>
+      </g>
+      <!-- forward arrows -->
+      <g stroke="var(--ink)" stroke-width="2" fill="none">
+        <path class="draw" style="--i:0" pathLength="1" d="M208,126 L254,126" marker-end="url(#gm)"/>
+        <path class="draw" style="--i:1" pathLength="1" d="M448,126 L494,126" marker-end="url(#gm)"/>
+        <path class="draw" style="--i:2" pathLength="1" d="M704,126 L750,126" marker-end="url(#gm)"/>
+        <path class="draw" style="--i:3" pathLength="1" d="M944,126 L990,126" marker-end="url(#gm)"/>
+      </g>
+      <!-- reject feedback loop: dry-run → back to propose -->
+      <path class="draw" style="--i:4" pathLength="1" d="M558,180 C520,250 220,250 150,178" fill="none" stroke="var(--seal)" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#grej)"/>
+      <text x="360" y="262" text-anchor="middle" fill="var(--seal)" font-size="11" font-family="var(--mono)">tension flatlines / runs away → reject &amp; recompute</text>
+    </svg>
+  </div>
+  <p class="sub r" style="--i:4;margin-top:1.2rem;font-size:1.04rem"><b class="c">The LLM defines the board's "skin," humans define its "bones," the simulator blocks Sagas with no drama, then it's frozen on-chain.</b> One codebase, <b class="g">four uses</b>: calibration · product · research · genesis acceptance.</p>
+</section>
+
 <!-- ===================== 6 · ★ MEMORY MOAT ===================== -->
 <section class="slide" id="s6">
   <div class="eyebrow r">The Moat &nbsp;·&nbsp; <span class="zh">Persistent, ownable memory</span></div>
@@ -527,6 +682,75 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   </p>
 </section>
 
+<!-- ===================== 6c · ★ LIFECYCLE ===================== -->
+<section class="slide" id="s6c">
+  <div class="glow" style="width:440px;height:440px;background:var(--cinnabar);top:-16%;right:-8%;opacity:.14"></div>
+  <div class="eyebrow r">★ State machines &nbsp;·&nbsp; <span class="zh">Lifecycles of five entities</span></div>
+  <h2 class="r" style="--i:1">Every character, every scene, has its own <b class="c">birth and death</b></h2>
+  <p class="sub r" style="--i:2;margin-bottom:1rem;font-size:1.06rem">One set of primitives, each with a clear state machine. <b class="j">Green</b> = born · <b class="g">yellow</b> = active · <span style="color:var(--seal);font-weight:700">red</span> = terminated. Key: <b class="c">Character is the only NFT, and the only one with a true state machine</b> — it flows between "in a show / wild / collected."</p>
+  <div class="r appear" style="--i:3;background:var(--surface);border:1px solid var(--hair);border-radius:14px;padding:1.2rem 1.5rem;box-shadow:0 1px 4px rgba(40,30,15,.06)">
+    <!-- World -->
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:1rem;align-items:center;padding:.55rem 0;border-bottom:1px dashed var(--hair)">
+      <div style="font-family:var(--serif);font-weight:700;font-size:1.18rem;color:var(--cinnabar)">World<div style="font-family:var(--mono);font-size:.7rem;color:var(--mute);font-weight:400">immortal root object</div></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.82rem">
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--jade);color:var(--jade);background:rgba(92,125,96,.08);font-weight:500">create_world</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--gold);color:var(--gold);background:rgba(156,122,36,.08);font-weight:500">active · current_tick++ ∞</span>
+        <span style="color:#7c6a45;font-size:.74rem">(never terminates)</span>
+      </div>
+    </div>
+    <!-- Saga -->
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:1rem;align-items:center;padding:.55rem 0;border-bottom:1px dashed var(--hair)">
+      <div style="font-family:var(--serif);font-weight:700;font-size:1.18rem;color:var(--cinnabar)">Saga<div style="font-family:var(--mono);font-size:.7rem;color:var(--mute);font-weight:400">a narrative arc</div></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.82rem">
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--jade);color:var(--jade);background:rgba(92,125,96,.08);font-weight:500">create_saga</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--gold);color:var(--gold);background:rgba(156,122,36,.08);font-weight:500">is_active = true</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--seal);color:var(--seal);background:rgba(154,58,41,.07);font-weight:500">mark_inactive</span>
+      </div>
+    </div>
+    <!-- Scene -->
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:1rem;align-items:center;padding:.55rem 0;border-bottom:1px dashed var(--hair)">
+      <div style="font-family:var(--serif);font-weight:700;font-size:1.18rem;color:var(--jade)">Scene<div style="font-family:var(--mono);font-size:.7rem;color:var(--mute);font-weight:400">a concrete place · anchor</div></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.82rem">
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--jade);color:var(--jade);background:rgba(92,125,96,.08);font-weight:500">create_scene</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--gold);color:var(--gold);background:rgba(156,122,36,.08);font-weight:500">active · characters come &amp; go / params drift</span>
+        <span style="color:#7c6a45;font-size:.74rem">(no "end" state)</span>
+      </div>
+    </div>
+    <!-- Character -->
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:1rem;align-items:center;padding:.55rem 0;border-bottom:1px dashed var(--hair)">
+      <div style="font-family:var(--serif);font-weight:700;font-size:1.18rem;color:var(--jade)">Character<div style="font-family:var(--mono);font-size:.7rem;color:var(--cinnabar);font-weight:700">★ the only NFT</div></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.82rem">
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--jade);color:var(--jade);background:rgba(92,125,96,.08);font-weight:500">mint</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--gold);color:var(--gold);background:rgba(156,122,36,.08);font-weight:500">in a show</span>
+        <span style="color:var(--mute)">⇄</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--gold);color:var(--gold);background:rgba(156,122,36,.08);font-weight:500">wild</span>
+        <span style="color:var(--mute)">⇄</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--gold);color:var(--gold);background:rgba(156,122,36,.08);font-weight:500">collected</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--seal);color:var(--seal);background:rgba(154,58,41,.07);font-weight:500">DEAD (object remains)</span>
+      </div>
+    </div>
+    <!-- Event -->
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:1rem;align-items:center;padding:.55rem 0">
+      <div style="font-family:var(--serif);font-weight:700;font-size:1.18rem;color:var(--seal)">Event<div style="font-family:var(--mono);font-size:.7rem;color:var(--mute);font-weight:400">the atom of drama</div></div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.82rem">
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--jade);color:var(--jade);background:rgba(92,125,96,.08);font-weight:500">push_event</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--gold);color:var(--gold);background:rgba(156,122,36,.08);font-weight:500">OPEN · deal / play cards</span>
+        <span style="color:var(--mute)">→</span>
+        <span style="display:inline-block;padding:.26em .7em;border-radius:7px;border:1px solid var(--seal);color:var(--seal);background:rgba(154,58,41,.07);font-weight:500">RESOLVED</span>
+        <span style="color:#7c6a45;font-size:.74rem">(precondition: a character present in the scene)</span>
+      </div>
+    </div>
+  </div>
+  <p class="sub r" style="--i:4;margin-top:.9rem;font-size:1.02rem">Almost nothing truly "disappears" — most are shared objects that <b class="c">exist forever, only flipping a status flag</b>. Death writes an irreversible record, but the character NFT remains and can be owned.</p>
+</section>
+
 <!-- ===================== 7 · PARTICIPANTS ===================== -->
 <section class="slide" id="s7">
   <div class="eyebrow r">Participants &nbsp;·&nbsp; <span class="zh">Three roles, one protocol</span></div>
@@ -628,6 +852,38 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   <p class="sub r" style="--i:4;margin-top:.65rem;font-size:1.02rem">
     Participants do not need to understand every chain detail: <b class="g">owning a character automatically makes you part of settlement</b>, and every distribution is visible on-chain.
   </p>
+</section>
+
+<!-- ===================== 6d · ★ ROADMAP ===================== -->
+<section class="slide" id="s6d">
+  <div class="glow" style="width:460px;height:460px;background:var(--jade);top:-16%;left:-8%;opacity:.16"></div>
+  <div class="eyebrow r">★ Progress &amp; roadmap &nbsp;·&nbsp; <span class="zh">Where we are · what's next</span></div>
+  <h2 class="r" style="--i:1">Characters already <b class="j">move, remember, write stories</b> — next, make choices <b class="c">truly have consequences</b></h2>
+  <div class="r" style="--i:2;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1rem;align-items:start">
+    <div>
+      <div class="mono" style="font-size:.82rem;color:var(--jade);font-weight:700;letter-spacing:.1em;margin-bottom:.7rem">✓ VERIFIED</div>
+      <div style="display:flex;flex-direction:column;gap:.7rem">
+        <div class="card" style="border-left:3px solid var(--jade)"><h3 style="font-size:1.05rem;color:var(--jade)">Contracts on-chain</h3><p>World · Saga · Scene · Character(NFT) · Event · economy — full primitives, 120 contract tests passing.</p></div>
+        <div class="card" style="border-left:3px solid var(--jade)"><h3 style="font-size:1.05rem;color:var(--jade)">Memory · relationships · dreams</h3><p>Three-factor memory rerank, on-chain relationships, auditable dream injection — all working.</p></div>
+        <div class="card" style="border-left:3px solid var(--jade)"><h3 style="font-size:1.05rem;color:var(--jade)">Drama engine (offline-validated)</h3><p>Dilemmas emerge naturally; the three failure modes don't appear; results are byte-for-byte reproducible — validated by single-variable experiments.</p></div>
+      </div>
+    </div>
+    <div>
+      <div class="mono" style="font-size:.82rem;color:var(--cinnabar);font-weight:700;letter-spacing:.1em;margin-bottom:.7rem">◌ NEXT MILESTONES</div>
+      <div style="display:flex;flex-direction:column;gap:.7rem">
+        <div class="card" style="border-left:3px solid var(--cinnabar)"><h3 style="font-size:1.05rem;color:var(--cinnabar)">Wire the drama engine on-chain ★</h3><p>Event resolution is currently a stub (<span class="mono">emptyOutcomes</span>); replace it with the real resource consequences and tension computed by <span class="mono">applyTick</span>.</p></div>
+        <div class="card" style="border-left:3px solid var(--gold)"><h3 style="font-size:1.05rem;color:var(--gold)">Automated Saga genesis acceptance</h3><p>LLM generates the board → simulator dry-run blocks flatlining sagas → freeze on-chain.</p></div>
+        <div class="card" style="border-left:3px solid var(--gold)"><h3 style="font-size:1.05rem;color:var(--gold)">Upgrade commitments to "recomputable causality"</h3><p>Evolve commitment from "anchoring a memory blob" to "anchoring a re-runnable causal chain."</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="r" style="--i:3;margin-top:1.1rem;display:flex;gap:.55rem;flex-wrap:wrap;align-items:center">
+    <span class="mono" style="font-size:.82rem;color:var(--gold);font-weight:700;letter-spacing:.08em">🟡 JUST DEPLOYED · VERIFYING</span>
+    <span class="tag" style="color:var(--mute)">economy.move real on-chain Balance (payroll / aid / settlement) redeployed on-chain</span>
+    <span class="tag" style="color:var(--mute)">Chamber Kiosk trading · on-chain layout — contracts on-chain</span>
+    <span class="tag" style="color:var(--mute)">end-to-end verification in progress; flips to ✓ once verified</span>
+  </div>
+  <p class="sub r" style="--i:4;margin-top:1.1rem;font-size:1.04rem">This upgrades verifiability from <b class="g">anchoring memory</b> to <b class="c">anchoring causality</b> — anyone who re-runs gets the same arc of tension. <b class="j">From here, a character's choices are committable and verifiable.</b></p>
 </section>
 
 <!-- ===================== 9 · CLOSE ===================== -->

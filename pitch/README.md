@@ -9,7 +9,7 @@
 | 檔案 | 角色 | 狀態 |
 |---|---|---|
 | `endless-story-pitch-light.html` | **正本 · 主簡報（中文，18 頁）** | ✅ 維護這份 |
-| `endless-story-pitch-light-en.html` | 英文版（正本的翻譯） | ⚠️ 目前 12 頁、落後正本（缺戲劇引擎護城河 4 頁＋生命週期）——待同步 |
+| `endless-story-pitch-light-en.html` | 英文版（正本的翻譯） | ✅ 已與正本同步（18 頁，2026-06-19）；改正本後記得回來同步 |
 | `endless-story-architecture-map.html` | 架構圖（補充） | 獨立小圖，非簡報 |
 | `assets/` | 圖（logo + 兩張引擎實驗圖） | — |
 
