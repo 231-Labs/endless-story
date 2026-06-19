@@ -158,6 +158,15 @@ function ResultView({ result }: { result: LaunchProductionActionResult }) {
                     </ul>
                 </div>
             ) : null}
+
+            {result.content ? (
+                <div className="space-y-1">
+                    <div className="text-2xs tracking-widest text-mute">產出全文（劇本 · 詞 · 戲中戲章回）</div>
+                    <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap rounded border border-hairline/60 bg-surface p-3 font-serif text-sm leading-loose text-ink">
+                        {result.content}
+                    </pre>
+                </div>
+            ) : null}
         </div>
     );
 }

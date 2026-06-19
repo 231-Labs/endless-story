@@ -13,7 +13,13 @@
 
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { production as runnerProduction } from '@endless-story/runner';
-import { castingFromRole, type Gender, type MemorySource, type TroupeMember } from '@endless-story/troupe';
+import {
+    castingFromRole,
+    type Gender,
+    type MemorySource,
+    type Production,
+    type TroupeMember,
+} from '@endless-story/troupe';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
 import { recallStructuredForCharacter } from '@/lib/chain/memory';
@@ -40,6 +46,42 @@ function rosterToTroupe(entries: SagaRosterEntry[]): TroupeMember[] {
   });
 }
 
+/** Assemble the full produced text (劇本 + 詞 + 戲中戲章回) for preview / Dry-Run. */
+function buildPreview(prod: Production): string {
+    const out: string[] = [];
+    if (prod.brief) {
+        out.push(`# 《${prod.brief.title}》（${prod.brief.classicSource}·舊戲新唱）`);
+        out.push(`> ${prod.brief.premise.split('\n')[0]}`, '');
+    }
+    if (prod.script) {
+        out.push(`## 劇本　編劇：${prod.script.authorName}`);
+        for (const sc of prod.script.scenes) {
+            out.push('', `### 第${sc.sceneId.slice(1)}場 〈${sc.title}〉（${sc.mood}）`);
+            for (const l of sc.lines) {
+                out.push(
+                    l.type === 'stage'
+                        ? `（科介）${l.text}`
+                        : `${l.who}${l.mode === '唱' ? '（唱）' : '（白）'}：${l.text}`,
+                );
+            }
+        }
+        out.push('');
+    }
+    if (prod.ci && prod.ci.length) {
+        out.push('## 詞');
+        for (const c of prod.ci) {
+            out.push('', `### ${c.title}　〔${c.source === 'emergent' ? '有感而發' : '應場填詞'}〕${c.authorName}`);
+            if (c.provenance) out.push(`*出處：${c.provenance.why}*`);
+            out.push(...c.lines.map((l) => `　${l}`));
+        }
+        out.push('');
+    }
+    if (prod.chapter) {
+        out.push('## 戲中戲章回', '', prod.chapter);
+    }
+    return out.join('\n');
+}
+
 export interface LaunchProductionActionInput {
   /** repertoire key/別名; omit → 班主自選. */
   classicKey?: string;
@@ -58,6 +100,8 @@ export interface LaunchProductionActionResult {
   commitmentId?: string;
   blobId?: string;
   digest?: string;
+  /** full produced text — 劇本 + 詞 + 戲中戲章回（preview / Dry-Run）. */
+  content?: string;
   llm?: { calls: number; failures: number; ms: number };
   error?: string;
 }
@@ -132,6 +176,7 @@ export async function launchProductionAction(
       commitmentId: res.commitmentId,
       blobId: res.blobId,
       digest: res.digest,
+      content: buildPreview(prod),
       llm: res.llm ? { calls: res.llm.calls, failures: res.llm.failures, ms: res.llm.ms } : undefined,
     };
   } catch (err) {
