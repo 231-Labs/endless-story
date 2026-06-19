@@ -236,7 +236,7 @@ AI_PROVIDER=poe POE_API_KEY=... \
 
 **手動觸發按鈕（已落地）**：`/admin/stage` 的「手動補產 / 逐項測試」區加了「新戲 · 排一齣」面板（`LaunchProductionPanel.tsx`，mirror `GazettePanel`）：戲碼下拉（班主自選/白蛇/紅樓/大戲）+ 純排戲勾選 + Dry-Run/上鏈雙鈕，直接呼叫 `launchProductionAction`，顯示選角（含坤生）/分場/有感而發/LLM 統計/tx·commitment·walrus 連結。**不經心跳/對話，手動點最快**。
 
-**還沒接的（next）**：① 上鏈那半（craft 技能 attr 進 `saga_attributes` + `seedCharacterSkills` 多寫 3 筆，讓選角/品質讀真鏈上技能）；② 心跳裡讓導演真的「自發」決定排戲（gating 邏輯目前靠工具 description 讓 LLM 自律，可加確定性 readiness 檢查）。
+**自治觸發現況**：`launch_production` 是 `narrative` tier，只有 Showrunner 心跳（`showrunner.ts`，非 dryRun 開 `['read','narrative']`）和導演對話框會碰到。心跳本身要 world-loop 帶 `--showrunner-every=N`（預設 0=關）或手動才跑。**何時自發排戲**＝純 LLM 自由心證，無確定性閘。已在心跳系統提示加準則 3「排大戲」明示時機（班底齊行當＋金庫夠＋距上次排戲隔一段＋敘事真需要大場面）讓導演會考慮它。**還沒接**：① 上鏈那半（craft 技能 attr 進 `saga_attributes` + `seedCharacterSkills` 多寫 3 筆）；② 確定性 readiness 檢查（把「班底湊得齊行當＋金庫門檻＋距上次排戲天數」算進 `audit`，達標才把「可排戲」訊號餵給 LLM，否則連提都不提）。
 
 ### 10.2 指定選角（欽點）（已落地）
 
