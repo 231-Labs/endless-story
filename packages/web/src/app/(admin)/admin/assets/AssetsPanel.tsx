@@ -299,7 +299,7 @@ function SelectionBar({
   };
 
   const batchBtn =
-    'rounded-full border border-hairline px-3 py-1 text-xs text-ink transition-colors hover:border-cinnabar disabled:opacity-50';
+    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-hairline text-ink transition-colors hover:border-cinnabar disabled:opacity-50';
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline bg-surface/50 px-4 py-2.5">
@@ -317,24 +317,26 @@ function SelectionBar({
 
       {count > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <button className={batchBtn} disabled={pending} onClick={() => runBatch('批量續租', (id) => extendAssetAction(id, 30))}>
-            續租 +30
+          <button className={batchBtn} disabled={pending} onClick={() => runBatch('批量續租', (id) => extendAssetAction(id, 30))} aria-label="批量續租 +30 天" title="批量續租 +30 天">
+            <CalendarPlusIcon />
           </button>
-          <button className={batchBtn} disabled={pending} onClick={() => runBatch('批量上架', (id) => patchAssetAction(id, { status: 'live' }))}>
-            上架
+          <button className={batchBtn} disabled={pending} onClick={() => runBatch('批量上架', (id) => patchAssetAction(id, { status: 'live' }))} aria-label="批量上架" title="批量上架">
+            <EyeIcon />
           </button>
-          <button className={batchBtn} disabled={pending} onClick={() => runBatch('批量下架', (id) => patchAssetAction(id, { status: 'unpublished' }))}>
-            下架
+          <button className={batchBtn} disabled={pending} onClick={() => runBatch('批量下架', (id) => patchAssetAction(id, { status: 'unpublished' }))} aria-label="批量下架" title="批量下架">
+            <EyeOffIcon />
           </button>
           <button
             className={`${batchBtn} border-cinnabar/40 text-cinnabar hover:bg-cinnabar hover:text-canvas`}
             disabled={pending}
             onClick={() => runBatch('批量刪除', (id) => deleteAssetAction(id), `刪除並回收選取的 ${count} 項?此操作不可復原。`)}
+            aria-label="批量刪除"
+            title="批量刪除並回收"
           >
-            刪除
+            <TrashIcon />
           </button>
-          <button className="text-xs text-mute hover:text-ink" disabled={pending} onClick={onClear}>
-            清除
+          <button className="es-icon-button h-8 w-8 text-mute hover:text-ink" disabled={pending} onClick={onClear} aria-label="清除選取" title="清除選取">
+            <XIcon />
           </button>
         </div>
       )}
@@ -402,7 +404,7 @@ function AssetRow({
   };
 
   const actionBtn =
-    'rounded-full border border-hairline px-3 py-1 text-xs text-ink transition-colors hover:border-cinnabar disabled:opacity-50';
+    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-hairline text-ink transition-colors hover:border-cinnabar disabled:opacity-50';
 
   return (
     <li className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm ${checked ? 'bg-cinnabar/5' : ''}`}>
@@ -431,18 +433,22 @@ function AssetRow({
               aria-label="編輯標題"
             />
             <button
-              className="flex-none rounded-full border border-cinnabar px-2.5 py-1 text-xs text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas disabled:opacity-50"
+              className="flex-none inline-flex h-7 w-7 items-center justify-center rounded-full border border-cinnabar text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas disabled:opacity-50"
               disabled={pending}
               onClick={saveLabel}
+              aria-label="儲存"
+              title="儲存"
             >
-              儲存
+              <CheckIcon />
             </button>
             <button
-              className="flex-none text-xs text-mute transition-colors hover:text-ink disabled:opacity-50"
+              className="flex-none inline-flex h-7 w-7 items-center justify-center rounded-full text-mute transition-colors hover:text-ink disabled:opacity-50"
               disabled={pending}
               onClick={cancelEdit}
+              aria-label="取消"
+              title="取消"
             >
-              取消
+              <XIcon />
             </button>
           </div>
         ) : (
@@ -470,35 +476,41 @@ function AssetRow({
         {err && <div className="mt-1 text-2xs text-cinnabar">{err}</div>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <button className={actionBtn} disabled={pending} onClick={() => run(() => extendAssetAction(asset.id, 30))}>
-          續租 +30
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button className={actionBtn} disabled={pending} onClick={() => run(() => extendAssetAction(asset.id, 30))} aria-label="續租 +30 天" title="續租 +30 天">
+          <CalendarPlusIcon />
         </button>
         <button
           className={actionBtn}
           disabled={pending}
           onClick={() => run(() => patchAssetAction(asset.id, { status: live ? 'unpublished' : 'live' }))}
+          aria-label={live ? '下架' : '上架'}
+          title={live ? '下架' : '上架'}
         >
-          {live ? '下架' : '上架'}
+          {live ? <EyeOffIcon /> : <EyeIcon />}
         </button>
         <button
-          className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition-colors disabled:opacity-50 ${
             asset.autoRenew ? 'border-jade text-jade' : 'border-hairline text-mute hover:border-cinnabar'
           }`}
           disabled={pending}
           onClick={() => run(() => patchAssetAction(asset.id, { autoRenew: !asset.autoRenew }))}
+          aria-label={`自動續租：${asset.autoRenew ? '開' : '關'}`}
+          title={`自動續租：${asset.autoRenew ? '開' : '關'}`}
         >
-          自動續租{asset.autoRenew ? '：開' : '：關'}
+          <RecycleIcon />
         </button>
         {asset.deletable && (
           <button
-            className="rounded-full border border-cinnabar/40 px-3 py-1 text-xs text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas disabled:opacity-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-cinnabar/40 text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas disabled:opacity-50"
             disabled={pending}
             onClick={() => {
               if (confirm(`刪除並回收「${asset.label}」?此操作不可復原。`)) run(() => deleteAssetAction(asset.id));
             }}
+            aria-label="刪除"
+            title="刪除並回收"
           >
-            刪除
+            <TrashIcon />
           </button>
         )}
       </div>
@@ -573,14 +585,14 @@ function Pagination({
         顯示 {from}–{to} / {total}
       </span>
       <div className="flex items-center gap-2">
-        <button className={btn} disabled={page === 0} onClick={() => onPage(page - 1)}>
-          上一頁
+        <button className={btn} disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="上一頁" title="上一頁">
+          <ChevronLeftIcon />
         </button>
         <span className="tabular-nums">
           {page + 1} / {pageCount}
         </span>
-        <button className={btn} disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)}>
-          下一頁
+        <button className={btn} disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)} aria-label="下一頁" title="下一頁">
+          <ChevronRightIcon />
         </button>
       </div>
     </div>
@@ -714,9 +726,11 @@ function UploadCard({ onUploaded }: { onUploaded: () => void }) {
             <button
               onClick={submit}
               disabled={busy}
+              title="上傳到 Walrus"
               className="inline-flex items-center gap-2 rounded-full bg-cinnabar px-5 py-2 text-sm tracking-wide text-canvas transition-colors hover:bg-seal disabled:opacity-50"
             >
-              {busy ? '上傳中…' : '上傳到 Walrus'}
+              <UploadIcon />
+              {busy ? '上傳中' : '上傳'}
             </button>
             {msg && <span className="text-sm text-mute">{msg}</span>}
           </div>
@@ -792,6 +806,85 @@ function EditIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+function CheckIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+function XIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9.9 4.2A9.7 9.7 0 0 1 12 4c6.5 0 10 7 10 7a13 13 0 0 1-2.3 3.1" />
+      <path d="M6.6 6.6A13 13 0 0 0 2 11s3.5 7 10 7a9.7 9.7 0 0 0 4.2-1" />
+      <path d="m2 2 20 20" />
+    </svg>
+  );
+}
+function CalendarPlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect width="18" height="18" x="3" y="4" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4" />
+    </svg>
+  );
+}
+function RecycleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  );
+}
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+function ChevronLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+function ChevronRightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+function UploadIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M17 8l-5-5-5 5M12 3v12" />
     </svg>
   );
 }

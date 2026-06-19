@@ -5,10 +5,9 @@ import { usePathname } from 'next/navigation';
 import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 import { FlowIndicator, useFlowingIndicator } from '@/components/common/ink-motion';
 
+// Operator-only bottom nav; dev/maintenance tools live behind the workshop launcher.
 const TABS = [
   { key: '/admin', label: '後臺' },
-  { key: '/admin/troupe', label: '劇團' },
-  { key: '/admin/stage', label: '戲台' },
   { key: '/admin/recruitments', label: '徵召' },
   { key: '/admin/deploy', label: '系統' },
   { key: '/admin/assets', label: '資產' },

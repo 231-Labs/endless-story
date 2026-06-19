@@ -1,8 +1,11 @@
 import { SiteNav } from '@/components/home/SiteNav';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SagaAdminGuard } from '@/components/common/SagaAdminGuard';
+import { InfoHint } from '@/components/common/InfoHint';
 import { getDirectorMemoryAction } from '@/lib/actions/showrunner';
+import { getWorldTimeSnapshot } from '@/lib/actions/world-time';
 import { AdminPanel } from './AdminPanel';
+import { TimePanel } from './director/TimePanel';
 import { CockpitMemoryPanels } from './CockpitMemoryPanels';
 
 export const metadata = {
@@ -11,14 +14,13 @@ export const metadata = {
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Admin landing = the cockpit (NARRATIVE_AGENTS.md §12). The world runs
- * itself (world-loop ticks + showrunner heartbeats on the VPS); the admin's
- * daily job is supervision: talk to the Showrunner, read the 導演日誌, and
- * hold the master switch. Manual overrides live in 劇團 / 戲台.
- */
+/** Admin landing = the cockpit: world clock, master switch, ledger, and the
+ *  Showrunner chat + heartbeat log. Dev/maintenance lives in the workshop. */
 export default async function AdminPage() {
-  const memory = await getDirectorMemoryAction();
+  const [memory, worldTime] = await Promise.all([
+    getDirectorMemoryAction(),
+    getWorldTimeSnapshot(),
+  ]);
   return (
     <>
       <SiteNav />
@@ -27,18 +29,30 @@ export default async function AdminPage() {
           eyebrow="SHOWRUNNER"
           eyebrowMobile="BACKSTAGE"
           title="後臺"
-          meta="跟 Showrunner 對話 · 心跳與導演日誌 · 世界總開關"
+          meta="世界時鐘 · 帳本 · 跟 Showrunner 對話 · 心跳日誌"
         />
 
         <div className="mt-12">
           <SagaAdminGuard>
             <section>
-              <h2 className="font-serif text-xl tracking-wide text-ink">世界總開關</h2>
-              <p className="mt-2 text-sm leading-relaxed text-mute">
-                VPS 上的 world-loop（tick 與心跳的驅動器）。Showrunner 也能經對話開關它。
-              </p>
-              <div className="mt-4">
-                <AdminPanel />
+              <div className="es-page-lead-eyebrow">營運一覽 · OPERATIONS</div>
+              <div className="mt-3 grid items-stretch gap-4 lg:grid-cols-5">
+                <div className="es-soft-panel flex h-full flex-col p-5 lg:col-span-3">
+                  <h2 className="flex items-center gap-1.5 font-serif text-lg tracking-wide text-ink">
+                    世界時間 · 推進敘事日
+                    <InfoHint>
+                      鏈上 <code className="font-mono text-2xs">WorldState.current_tick</code>{' '}
+                      是敘事時鐘。VPS 的 world-loop 每隔一段時間推進一個 tick、夜裡編公報、跨日——
+                      這格在跳，就是世界正在自行運轉的證明。
+                    </InfoHint>
+                  </h2>
+                  <div className="mt-4 flex-1">
+                    <TimePanel initial={worldTime} />
+                  </div>
+                </div>
+                <div className="lg:col-span-2">
+                  <AdminPanel />
+                </div>
               </div>
             </section>
 

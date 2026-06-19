@@ -151,6 +151,12 @@ function envFlag(name: string): boolean {
     return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
+// Minimal TTY-gated ANSI (off when piped/redirected or NO_COLOR set).
+const TLOG_COLOR = Boolean(process.stdout.isTTY) && process.env.NO_COLOR == null;
+const clr = {
+    dim: (s: string | number): string => (TLOG_COLOR ? `\x1b[2m${s}\x1b[0m` : String(s)),
+};
+
 export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
@@ -215,8 +221,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const requestedIds = normalizeCharacterIds(input.characterIds);
     const t0 = Date.now();
     const since = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
-    const tlog = (m: string) => console.log(`[tick ${since()}] ${m}`);
-    tlog(`◆ 開始一輪${dryRun ? '（dry-run）' : ''}`);
+    const tlog = (m: string) => console.log(`${clr.dim(`[tick ${since()}]`)} ${m}`);
+    tlog(`◆ tick begins${dryRun ? ' (dry-run)' : ''}`);
 
     // 1. ADVANCE (chain mutation — skipped on dry-run).
     let advanced = false;
@@ -226,7 +232,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
     const worldTime = (await getWorldTimeSnapshot()) ?? undefined;
     const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
-    tlog(`⏱  ${advanced ? '已推進 → ' : ''}${dayLabel}`);
+    tlog(`⏱  ${advanced ? 'advanced → ' : ''}Day ${worldTime?.day ?? '?'} · ${worldTime?.partOfDay ?? '—'}`);
 
     // Character roster (saga-scoped, with fallback).
     let characters: Character[] = await charactersApi.listSagaCharacters(d.sagaId).catch(() => []);
@@ -279,7 +285,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     let rosterById = new Map(activeRoster.map((r) => [r.id, r]));
     let roleById = new Map(activeRoster.map((r) => [r.id, r.role || '—']));
     let rosterContextById = buildRosterContextById(slice, activeRoster);
-    tlog(`登場 ${slice.length} 角色：${slice.map((c) => c.name).join('、')}`);
+    tlog(`cast on stage: ${slice.length} — ${slice.map((c) => c.name).join(', ')}`);
 
     // 1.5 PERCEIVE (Step 1, flag-gated) — assemble each acting character's OBJECTIVE
     //     當下處境 (who's co-present, what's contested + how badly THEY want it, what
@@ -299,7 +305,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 roster: activeRoster,
                 roleById,
             });
-            tlog(`◦ 感知：${situationByChar.size} 人取得當下處境`);
+            tlog(`◦ perceive: ${situationByChar.size} sensed the moment`);
         } catch (err) {
             console.warn('[tick-loop] perceive failed:', err);
         }
@@ -312,7 +318,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    key server / Walrus aggregator 429s under an all-at-once burst.
     const plans: TickPlanResult[] = [];
     if (input.plan ?? true) {
-        tlog(`① 規劃 ${slice.length} 角色…`);
+        tlog(`① plan — ${slice.length} characters…`);
         const settled = await mapPool(slice, RECALL_CONCURRENCY, async (c) => {
             try {
                 const p = await runPlanAction(c.id, {
@@ -320,10 +326,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     rosterContext: rosterContextById.get(c.id),
                     situation: situationByChar.get(c.id),
                 });
-                tlog(`   · 規劃 ${c.name} ✓`);
+                tlog(`   · plan ${c.name} ✓`);
                 return { c, p };
             } catch (err) {
-                tlog(`   · 規劃 ${c.name} ✗`);
+                tlog(`   · plan ${c.name} ✗`);
                 return {
                     c,
                     p: { ok: false, error: err instanceof Error ? err.message : String(err) },
@@ -348,7 +354,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    movement completes the N1 action space). Batched into one PTB.
     const moves: TickMoveResult[] = [];
     if (input.move ?? true) {
-        tlog(`② 自主移動…`);
+        tlog(`② autonomous moves…`);
         try {
             // RIVAL GRAVITY (flag-gated): draw contenders toward their contest so
             // events reliably FORM. Verified in gravity-{core,sim}.test.ts; the
@@ -369,7 +375,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 sceneId: rosterById.get(c.id)?.currentSceneId,
                             })),
                         );
-                        if (gravityTargets.size > 0) tlog(`②◦ 相吸：${gravityTargets.size} 人被爭端牽引`);
+                        if (gravityTargets.size > 0) tlog(`②◦ gravity: ${gravityTargets.size} pulled toward the contest`);
                     }
                 } catch (err) {
                     console.warn('[tick-loop] rival gravity failed:', err);
@@ -393,7 +399,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     pinBusy: !spineMode,
                 })),
             );
-            tlog(`   移動 ${moves.filter((m) => m.ok && m.toSceneId).length} 人${dryRun ? '（預演）' : ''}`);
+            tlog(`   moved ${moves.filter((m) => m.ok && m.toSceneId).length}${dryRun ? ' (preview)' : ''}`);
             // Feed the handscroll's living stream from MOVEMENT — happens every tick
             // regardless of events, so the world never reads empty between dramas.
             // The reason ("循著爭端走了過去") arrives at the destination scene.
@@ -468,7 +474,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             };
             if (r.active) {
                 tlog(
-                    `②′ 張力推導：${r.resourceCount} 個爭用資源 · ${Object.keys(r.hints).length} 人有張力${r.commitmentId ? ` · 已上鏈承諾 ${r.commitmentId}` : ''}${r.blobUrl ? ` · blob ${r.blobUrl}` : ''}`,
+                    `②′ tension derived: ${r.resourceCount} contested resources · ${Object.keys(r.hints).length} feel tension${r.commitmentId ? ` · committed on-chain ${r.commitmentId}` : ''}${r.blobUrl ? ` · blob ${r.blobUrl}` : ''}`,
                 );
             }
         } catch (err) {
@@ -492,9 +498,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 client: admin.client,
             });
             if (r.ok && r.created) {
-                tlog(`②² 導演立題：新增爭奪「${r.created.label}」（容量 ${r.created.capacity}）${r.resourceId ? ' ✓上鏈' : ''}`);
+                tlog(`②² director adds stakes: new contest "${r.created.label}" (capacity ${r.created.capacity})${r.resourceId ? ' ✓on-chain' : ''}`);
             } else if (r.reason && r.reason !== 'cooldown') {
-                tlog(`②² 導演按下不表（${r.reason}）`);
+                tlog(`②² director holds back (${r.reason})`);
             }
         } catch (err) {
             console.warn('[tick-loop] director resource phase failed:', err);
@@ -515,7 +521,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     let spineSteps: SpineStep[] = [];
     let spineCtx: SpineCtx | undefined;
     const verbFor = (action: SpineStep['action']) =>
-        action === 'open' ? '開回' : action === 'resolve' ? '收回' : action === 'continue' ? '續回' : '—';
+        action === 'open' ? 'open' : action === 'resolve' ? 'resolve' : action === 'continue' ? 'continue' : '—';
     // FRAMING (flag-gated, default off) — the LLM director NAMES the chosen
     //   incident; the deterministic label is the fallback (event-framing.ts).
     //   Selection (which contention) stays deterministic — only the prose moves.
@@ -593,8 +599,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         const nowTick = spineClockTick();
         const mem = spineMemorySnapshot(d.sagaId, nowTick);
         tlog(
-            `②‴ spine 記憶：clock-tick ${mem.tick} · 在演 ${mem.open.length} 個${
-                mem.open.length ? `（${mem.open.map((e) => `${e.eventId.slice(0, 10)}…@${e.age}t`).join('、')}）` : ''
+            `②‴ spine memory: clock-tick ${mem.tick} · ${mem.open.length} live${
+                mem.open.length ? ` (${mem.open.map((e) => `${e.eventId.slice(0, 10)}…@${e.age}t`).join(', ')})` : ''
             }`,
         );
         const r = await spinePlanAndOpenAll(admin, spineCtx, nowTick);
@@ -602,8 +608,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         spineSteps = r.steps;
         const opened = spineSteps.filter((s) => s.action === 'open').length;
         const resolving = spineSteps.filter((s) => s.action === 'resolve').length;
-        for (const st of storylets) tlog(`②‴ 在演：${st.sceneName} · ${st.label}（${st.names.join('、')}）· ${st.digest}`);
-        tlog(`②‴ 並行事件：${storylets.length} 個在演（本 tick 開 ${opened}、收 ${resolving}）`);
+        for (const st of storylets) tlog(`②‴ live: ${st.sceneName} · ${st.label} (${st.names.join(', ')}) · ${st.digest}`);
+        tlog(`②‴ parallel events: ${storylets.length} live (this tick: ${opened} opened, ${resolving} resolving)`);
     } else if (eventSpine && drama?.active && slice.length > 0) {
         // SPINE MODE — open/linger/resolve ONE multi-tick BudgetEvent as the 回.
         const occupancy = slice.flatMap((c) => {
@@ -635,7 +641,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         if (r.storylet) storylets = [r.storylet];
         spineSteps = [r.step];
         if (r.storylet) {
-            tlog(`②‴ ${verbFor(r.step.action)}：${r.storylet.sceneName} · ${r.storylet.label}（${r.storylet.names.join('、')}）`);
+            tlog(`②‴ ${verbFor(r.step.action)}: ${r.storylet.sceneName} · ${r.storylet.label} (${r.storylet.names.join(', ')})`);
         }
     } else if ((input.storylet ?? true) && drama?.active && slice.length > 0) {
         const byScene = new Map<string, Character[]>();
@@ -694,8 +700,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             }
             storylets = [st];
             tlog(
-                `②‴ 開戲：${sceneName} · ${framing.label}（${st.names.join('、')}）` +
-                    `${dryRun ? '（預演）' : st.opened ? ' ✓上鏈' : ' ✗'}`,
+                `②‴ open: ${sceneName} · ${framing.label} (${st.names.join(', ')})` +
+                    `${dryRun ? ' (preview)' : st.opened ? ' ✓on-chain' : ' ✗'}`,
             );
         }
     }
@@ -739,7 +745,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // private feelings.
     const socials: TickSocialResult[] = [];
     if (slice.length > 0) {
-        tlog(`②″ 輕量互動…`);
+        tlog(`②″ light interactions…`);
         try {
             socials.push(
                 ...(await runSocialPhase({
@@ -753,7 +759,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     dryRun,
                 })),
             );
-            tlog(`   互動 ${socials.filter((s) => s.ok && s.kind !== 'idle').length} 件${dryRun ? '（預演）' : ''}`);
+            tlog(`   talk ${socials.filter((s) => s.ok && s.kind !== 'idle').length}${dryRun ? ' (preview)' : ''}`);
         } catch (err) {
             console.warn('[tick-loop] social phase failed:', err);
         }
@@ -770,7 +776,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const asks: TickAskResult[] = [];
     let asksByGiver = new Map<string, import('./tick-phases/give').IncomingAsk[]>();
     if (slice.length > 0) {
-        tlog(`②⁗ 求助…`);
+        tlog(`②⁗ asks for help…`);
         try {
             const askPhase = await runAskPhase({
                 sagaId: d.sagaId,
@@ -784,7 +790,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             });
             asks.push(...askPhase.results);
             asksByGiver = askPhase.asksByGiver;
-            tlog(`   求助 ${asks.filter((a) => a.ok && a.asked).length} 件${dryRun ? '（預演）' : ''}`);
+            tlog(`   asks ${asks.filter((a) => a.ok && a.asked).length}${dryRun ? ' (preview)' : ''}`);
         } catch (err) {
             console.warn('[tick-loop] ask phase failed:', err);
         }
@@ -792,7 +798,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     const gives: TickGiveResult[] = [];
     if (slice.length > 0) {
-        tlog(`②‴ 接濟…`);
+        tlog(`②‴ giving aid…`);
         try {
             gives.push(
                 ...(await runGivePhase({
@@ -807,7 +813,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     dryRun,
                 })),
             );
-            tlog(`   接濟 ${gives.filter((g) => g.ok && g.gave).length} 件${dryRun ? '（預演）' : ''}`);
+            tlog(`   aid ${gives.filter((g) => g.ok && g.gave).length}${dryRun ? ' (preview)' : ''}`);
         } catch (err) {
             console.warn('[tick-loop] give phase failed:', err);
         }
@@ -822,7 +828,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     if (!dryRun) {
         const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId, d.sceneIds[0]);
         if (bondPairs.length > 0) {
-            tlog(`②⁺ 養關係：${bondPairs.length} 對因接濟加深公開羈絆`);
+            tlog(`②⁺ bonds: ${bondPairs.length} pair(s) deepened by accepted aid`);
             cutJobs.push(async () => {
                 const r = await seedBondTies(bondPairs);
                 console.log(
@@ -838,7 +844,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // the GIVE phase's deferred gifts were waiting for; the shadow persists (process-local).
     let settle: TickSettleResult | undefined;
     if (!dryRun && slice.length > 0) {
-        tlog(`②⁗ 結算…`);
+        tlog(`②⁗ settle…`);
         try {
             settle = await runSettlePhase({
                 sagaId: d.sagaId,
@@ -847,7 +853,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 today: worldTime?.day ?? 1,
                 dryRun,
             });
-            tlog(`   結算 ${settle.settledCount} 人 · 發薪 ${settle.wagesPaid} · 轉帳 ${settle.transfersApplied}${settle.dead.length ? ` · 殞 ${settle.dead.length}` : ''}`);
+            tlog(`   settled ${settle.settledCount} · wages ${settle.wagesPaid} · transfers ${settle.transfersApplied}${settle.dead.length ? ` · died ${settle.dead.length}` : ''}`);
         } catch (err) {
             console.warn('[tick-loop] settle phase failed:', err);
         }
@@ -859,7 +865,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const acts: TickActResult[] = [];
     const resolves: TickResolveResult[] = [];
     if (!dryRun) {
-        tlog(`③ 出牌決策 + 收尾…`);
+        tlog(`③ play cards + resolve…`);
         try {
             const phase = await runActPhase(
                 admin,
@@ -874,7 +880,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             );
             acts.push(...phase.acts);
             resolves.push(...phase.resolves);
-            tlog(`   出牌 ${acts.filter((a) => a.ok).length} · 收尾 ${resolves.filter((r) => r.ok).length}`);
+            tlog(`   plays ${acts.filter((a) => a.ok).length} · resolves ${resolves.filter((r) => r.ok).length}`);
         } catch (err) {
             // Non-fatal: a failed ACT phase shouldn't block POV/narrate.
             console.warn('[tick-loop] act phase failed:', err);
@@ -959,8 +965,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         // reject the whole batch and kill the tick.
         tlog(
             povSlice.length === 0
-                ? '④ POV 略過（本 tick 無事件牽動角色；要每人都出章用 povAll）'
-                : `④ POV 生成 ${povSlice.length} 篇（事件相關角色；慢，每篇一段 LLM）…`,
+                ? '④ POV skipped (no event drew characters this tick; use povAll to force one each)'
+                : `④ POV — generating ${povSlice.length} (event-relevant characters; slow, one LLM call each)…`,
         );
         const generated = await mapPool(povSlice, RECALL_CONCURRENCY, async (c) => {
             try {
@@ -1016,7 +1022,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     hasClosingVerdict ||
                     acts.some((a) => a.characterId === c.id && a.ok);
                 if (eventKey && !freshBeat && lastPovEventByChar.get(c.id) === eventKey) {
-                    tlog(`   · POV ${c.name} 略過（同事件無新拍子）`);
+                    tlog(`   · POV ${c.name} skipped (same event, no new beat)`);
                     return {
                         c,
                         r: {
@@ -1059,7 +1065,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     planHint: await memoryContext.plan(c.id),
                     skipMemoryRecall: true,
                 });
-                tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} 字)`);
+                tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} chars)`);
                 dumpChapter(
                     {
                         kind: 'pov',
@@ -1094,7 +1100,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             for (const { c, r } of generated) {
                 if (!r.chapter.trim()) povs.push(mapPov(c, r)); // generation failed
             }
-            if (toAnchor.length > 0) tlog(`   章回上鏈（${toAnchor.length} 篇，一個 PTB）…`);
+            if (toAnchor.length > 0) tlog(`   anchoring chapters (${toAnchor.length}, one PTB)…`);
             const batch = await anchorPovChaptersBatch(
                 admin,
                 d.sagaId,
@@ -1205,7 +1211,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             }
         }
     } else {
-        tlog(`④ POV 略過（pov=false）`);
+        tlog(`④ POV skipped (pov=false)`);
     }
 
     // SPINE RESOLVE + SETTLE — runs REGARDLESS of POV/eventChapter. Resource settlement
@@ -1259,7 +1265,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             if (!pair) {
                 // no qualifying co-present bonded pair this tick — quiet skip.
             } else if (lastEncounterPair === pair.pairKey) {
-                tlog(`④· 關係戲略過（冷卻：${pair.otherName}・${pair.toneZh} 同對連 tick）`);
+                tlog(`④· encounter skipped (cooldown: ${pair.otherName}・${pair.toneZh} same pair back-to-back)`);
             } else {
                 const holder = slice.find((c) => c.id === pair.holderId);
                 const holderName = holder?.name ?? rosterById.get(pair.holderId)?.name ?? '某人';
@@ -1299,8 +1305,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         enc.chapter,
                     );
                     tlog(
-                        `④· 關係戲：${holderName} ⇄ ${pair.otherName}（${pair.toneZh}・牽連 ${pair.count}）` +
-                            ` ✓ (${enc.chapter.length} 字)${dryRun ? '（預演，不上鏈）' : ''}`,
+                        `④· encounter: ${holderName} ⇄ ${pair.otherName} (${pair.toneZh}・ties ${pair.count})` +
+                            ` ✓ (${enc.chapter.length} chars)${dryRun ? ' (preview, not anchored)' : ''}`,
                     );
                     // Anchor in the BACKGROUND, serial with the other owned-cap jobs.
                     if (!dryRun) {
@@ -1316,7 +1322,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         });
                     }
                 } else {
-                    tlog(`④· 關係戲略過（生成失敗${enc.error ? `：${enc.error}` : ''}）`);
+                    tlog(`④· encounter skipped (generation failed${enc.error ? `: ${enc.error}` : ''})`);
                 }
             }
         } catch (err) {
@@ -1356,10 +1362,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     let sleepNote: string | undefined;
     if ((input.sleep ?? true) && !dryRun) {
         if (isNight) {
-            tlog(`⑤ 睡眠整理（夜）…`);
+            tlog(`⑤ sleep consolidation (night)…`);
             for (const c of slice) {
                 const r = await runSleepAction(c.id);
-                if (r.anchored) tlog(`   · ${c.name} 沉澱 ${r.reflections?.length ?? 0} 條`);
+                if (r.anchored) tlog(`   · ${c.name} settled ${r.reflections?.length ?? 0} reflection(s)`);
                 sleeps.push({
                     characterId: c.id,
                     name: c.name,
@@ -1372,7 +1378,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             }
         } else {
             sleepNote = `非夜晚（現為 ${worldTime?.partOfDay ?? '未知'}），角色不整理記憶 — 推進到夜裡再睡`;
-            tlog(`⑤ 睡眠跳過（非夜晚）`);
+            tlog(`⑤ sleep skipped (not night)`);
         }
     }
 
@@ -1383,11 +1389,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const isDayEnd = !worldTime || worldTime.tickOfDay >= worldTime.ticksPerDay - 1;
     if ((input.gazette ?? true) && !dryRun && !isDayEnd) {
         tlog(
-            `⑥ 公報略過（一天一份；今日第 ${(worldTime?.tickOfDay ?? 0) + 1}/${worldTime?.ticksPerDay} tick，日末才編）`,
+            `⑥ gazette skipped (one per day; tick ${(worldTime?.tickOfDay ?? 0) + 1}/${worldTime?.ticksPerDay} today, compiled at day's end)`,
         );
     }
     if ((input.gazette ?? true) && !dryRun && isDayEnd) {
-        tlog(`⑥ 編公報…`);
+        tlog(`⑥ compile gazette…`);
         const g = await compileGazetteAction({ day: worldTime?.day });
         gazette = {
             ok: g.ok,
@@ -1428,7 +1434,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         sleeps.some((s) => s.ok && !s.skipReason) ||
         gazette?.ok === true;
     tlog(
-        `◇ 本輪完成 — 規劃${plans.length}·移動${moves.filter((m) => m.ok && m.toSceneId).length}·互動${socials.filter((s) => s.ok && s.kind !== 'idle').length}·出牌${acts.filter((a) => a.ok).length}·章回${povs.filter((p) => p.anchored).length}·公報${gazette?.anchored ? '✓' : '—'}`,
+        `◇ tick complete — plan ${plans.length} · move ${moves.filter((m) => m.ok && m.toSceneId).length} · talk ${socials.filter((s) => s.ok && s.kind !== 'idle').length} · act ${acts.filter((a) => a.ok).length} · chapter ${povs.filter((p) => p.anchored).length} · gazette ${gazette?.anchored ? '✓' : '—'}`,
     );
     const memoryWarnings = drainMemoryWarnings();
     return {
