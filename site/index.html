@@ -12,19 +12,22 @@
   <button id="menu-toggle" aria-label="Toggle navigation">☰ Docs</button>
   <div class="layout">
     <aside class="sidebar" id="sidebar">
-      <a class="brand" href="#/overview">
-        <img class="brand-logo" src="./assets/logo.png" alt="">
-        <span class="brand-text"><strong>Endless Story</strong><small>Design docs</small></span>
-      </a>
+      <div class="sidebar-head">
+        <a class="brand" href="#/overview">
+          <img class="brand-logo" src="./assets/logo.png" alt="">
+          <span class="brand-text"><strong>Endless Story</strong><small id="brand-sub">Design docs</small></span>
+        </a>
+        <button id="lang-toggle" class="lang-toggle" aria-label="Switch language">中文</button>
+      </div>
       <nav id="nav"></nav>
       <div class="sidebar-foot">
-        <span>Sui Overflow 2026 · Walrus track</span>
-        <span>Built by 231 Labs</span>
+        <span id="foot-track">Sui Overflow 2026 · Walrus track</span>
+        <span id="foot-by">Built by 231 Labs</span>
       </div>
     </aside>
     <main class="content">
       <article id="content" class="markdown">Loading…</article>
-      <footer class="page-foot">Walrus + Seal · MemWal SDK · Sui — built by 231 Labs.</footer>
+      <footer class="page-foot" id="page-foot">Walrus + Seal · MemWal SDK · Sui — built by 231 Labs.</footer>
     </main>
   </div>
   <script src="./vendor/marked.min.js"></script>

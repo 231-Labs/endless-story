@@ -76,7 +76,7 @@
 
 - **takeaway**：這個產品**只有**在永久儲存 + 物件模型上才成立。
 - 要點：① 角色＝Sui owned object（持有即 IP，死後不滅）。② 記憶＝Walrus append-only + SEAL 加密（cap-enforced 解密，owner 才解得開全記憶）。③ 記憶租金是 Walrus epoch 租期 → 經濟的「熵」有真實成本基礎 → 死亡與傳奇都不是假的。④ MemWal SDK 整合（賽道要求）。
-- 標 ✅ 全部已落地（合約 120/120 test、testnet deploy、自架 relayer+aggregator）。
+- 標 ✅ 全部已落地（合約 122/122 test、testnet deploy、自架 relayer+aggregator）。
 
 ## 11 — 進度 vs 路線圖（誠實分界）
 

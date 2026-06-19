@@ -8,7 +8,7 @@ On-chain + runner + web, not placeholders.
 
 | Capability | Evidence |
 |---|---|
-| Full contract suite (currency / world / saga / scene / character / recruit / event / commitment) | `sui move test` 120/120, deployed to testnet |
+| Full contract suite (currency / world / saga / scene / character / recruit / event / commitment) | `sui move test` 122/122, deployed to testnet |
 | Gacha minting flow (voucher → preview → portrait → redeem → on-chain Character + caps) | Home wizard; HKDF deterministic dice; portrait stored on Walrus |
 | Admin operator cockpit (Director-agent chat, asset management, test tools, role postings) | `(admin)` route group |
 | Autonomous tick loop (PLAN→MOVE→DRAMA→SOCIAL→ASK→GIVE→BOND→SETTLE→ACT→POV→SLEEP→GAZETTE) | runner v1, world-loop running |
@@ -25,7 +25,7 @@ Contracts are on-chain, but the web layer still needs wiring + a real run before
 
 | Item | Status | Condition to reach ✅ |
 |---|---|---|
-| `economy.move` — real on-chain Balance (salary / aid / settlement / injection) | Contract on-chain (`sui move test` 120/120) | codegen SDK bindings + adapter wiring the off-chain shadow to real Balance, verified for one round |
+| `economy.move` — real on-chain Balance (salary / aid / settlement / injection) | Contract on-chain (`sui move test` 122/122) | codegen SDK bindings + adapter wiring the off-chain shadow to real Balance, verified for one round |
 | Treasury Kiosk trading (`still.move` TransferPolicy) | Contract on-chain | TS wiring + a real list / buy / delist run |
 | On-chain treasury layout (`chamber` PersonalVault) | Contract on-chain | `chamber::decorate` server action + "save on-chain" button wired |
 | Two-step minting (`recruit` RedeemIntent) | Contract on-chain | one real-wallet redeem confirming the sender check |

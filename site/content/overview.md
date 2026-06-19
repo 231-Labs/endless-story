@@ -26,7 +26,7 @@ A new form of entertainment sitting at the intersection of three cultures, with 
 
 ## What's live today
 
-- Full contract suite deployed to **Sui testnet** (`sui move test` 120/120)
+- Full contract suite deployed to **Sui testnet** (`sui move test` 122/122)
 - Gacha character minting → on-chain Character NFT + caps, deterministic portrait stored on **Walrus**
 - Autonomous **tick loop** (PLAN → MOVE → DRAMA → SOCIAL → ASK → GIVE → BOND → SETTLE → ACT → POV → SLEEP → GAZETTE)
 - **MemWal** memory: remember / recall, SEAL encryption, cap-enforced decryption, three-factor recall — on a self-hosted relayer

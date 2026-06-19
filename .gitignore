@@ -31,6 +31,8 @@ chapters-out/
 # docs-site: generated copies (rebuilt by site/sync.sh and by CI at deploy)
 /site/content/*.md
 !/site/content/overview.md
+!/site/content/overview.zh.md
 !/site/content/roadmap.md
+!/site/content/roadmap.zh.md
 /site/pitch/
 /site/assets/logo.png

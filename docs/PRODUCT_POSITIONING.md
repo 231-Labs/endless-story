@@ -41,7 +41,7 @@
 
 | 能力 | 證據 |
 |---|---|
-| 合約全套部署（currency/world/saga/scene/character/recruit/event/commitment） | `sui move test` 120/120，testnet 已 deploy |
+| 合約全套部署（currency/world/saga/scene/character/recruit/event/commitment） | `sui move test` 122/122，testnet 已 deploy |
 | 抽卡鑄角全流程（voucher→preview→portrait→redeem→鏈上 Character＋caps；運行權託管給 saga 導演） | 首頁 wizard，HKDF 確定性骰、Walrus 存圖 |
 | **admin 經營後台**（導演 agent chat、資產管理、測試工具、招募職缺設定） | `(admin)` route group，`DirectorChatPanel` 等 |
 | **自治 tick 迴圈**（PLAN→MOVE→DRAMA→SOCIAL→ASK→GIVE→BOND→SETTLE→ACT→POV→SLEEP→GAZETTE） | runner v1，world-loop 跑通 |
@@ -56,7 +56,7 @@
 
 | 項目 | 狀態 | 翻 ✅ 的條件 |
 |---|---|---|
-| `economy.move`（真鏈上 Balance：發薪 / 接濟 / 結算 / 挹注） | 合約已上鏈（`sui move test` 120/120） | codegen 生 SDK 綁定 + D5 adapter 把 off-chain 影子接成真 Balance 進出，並真跑一輪驗證 |
+| `economy.move`（真鏈上 Balance：發薪 / 接濟 / 結算 / 挹注） | 合約已上鏈（`sui move test` 122/122） | codegen 生 SDK 綁定 + D5 adapter 把 off-chain 影子接成真 Balance 進出，並真跑一輪驗證 |
 | 藏閣 Kiosk 交易（`still.move` TransferPolicy） | 合約已上鏈 | Slice 3 TS 接線 + 真實上架/購入/撤架跑通 |
 | 藏閣鏈上佈局保存（`chamber` PersonalVault） | 合約已上鏈 | Slice 4 `chamber::decorate` server action + 「鏈上保存」按鈕接通 |
 | 兩段式鑄角（`recruit` RedeemIntent） | 合約已上鏈 | 走真錢包 redeem 一次，確認不再 `Transaction not signed by correct sender` |
