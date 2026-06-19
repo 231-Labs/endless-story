@@ -1,3 +1,31 @@
 # Endless Story
 
-接班備忘（含**完整遷移計劃** Round 1–4、不遷移清單、Phase 2）在 **[AGENTS.md](./AGENTS.md)** — 請只維護該檔。
+An engine for persistent, on-chain story worlds, built on **Walrus + Sui** with the **MemWal SDK**. Characters are living memory assets that grow over time, owned through Sui NFTs. See [README.md](./README.md) for the project overview and [`docs/`](./docs/) for design documentation.
+
+## Monorepo layout
+
+- `packages/web` — Next.js app: admin cockpit + reader site
+- `packages/runner` — autonomous tick / world loop (Director + Character agents)
+- `packages/sdk`, `packages/shared` — Sui contract bindings + shared types
+- `packages/memwal` — MemWal SDK integration (character memory on Walrus / Seal)
+- `packages/relayer` — self-hosted MemWal relayer
+- `packages/llm` — prompt registry + LLM client
+- `packages/drama`, `packages/economy`, `packages/troupe` — engine validators (deterministic core, economy life cycle, troupe production)
+- `packages/chamber-3d` — R3F 3D diorama renderer
+- `packages/cli` — deploy / bootstrap / world-loop scripts
+- `contracts/endless_story` — Move smart contracts
+
+## Develop
+
+```bash
+nvm use                                   # Node 23.7.0 (pinned in .nvmrc)
+pnpm install
+pnpm --filter @endless-story/web dev      # http://localhost:3000
+pnpm -r type-check                         # whole-repo green check
+```
+
+Needs Sui testnet access plus Poe, OpenAI, and MemWal credentials — see [`packages/web/.env.example`](./packages/web/.env.example). Then open `http://localhost:3000/admin/deploy` to deploy contracts and bootstrap a story preset.
+
+## Documentation
+
+Design docs live in [`docs/`](./docs/) — whitepaper, product positioning, narrative agent architecture, content pipeline, economy, deployment, and the Walrus asset model. The pitch deck is in [`pitch/`](./pitch/).
