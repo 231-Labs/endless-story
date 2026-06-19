@@ -167,6 +167,44 @@ function ResultView({ result }: { result: LaunchProductionActionResult }) {
                     </pre>
                 </div>
             ) : null}
+
+            {result.seedancePrompts && result.seedancePrompts.length ? (
+                <div className="space-y-2">
+                    <div className="text-2xs tracking-widest text-mute">
+                        Seedance 2.0 提示詞 · 每場一段（手動貼去生 15s 短片）
+                        <span className="ml-1 text-mute/60">· text-to-video，不繼承角色臉，僅供試效果</span>
+                    </div>
+                    {result.seedancePrompts.map((s, i) => (
+                        <SeedanceBlock key={i} sceneTitle={s.sceneTitle} prompt={s.prompt} />
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function SeedanceBlock({ sceneTitle, prompt }: { sceneTitle: string; prompt: string }) {
+    const [copied, setCopied] = useState(false);
+    const copy = () => {
+        navigator.clipboard?.writeText(prompt).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        });
+    };
+    return (
+        <div className="rounded border border-hairline/60 bg-surface p-3">
+            <div className="mb-1 flex items-center justify-between">
+                <span className="text-2xs tracking-widest text-ink">〈{sceneTitle}〉</span>
+                <button type="button" onClick={copy} className="text-2xs tracking-widest text-cinnabar hover:underline">
+                    {copied ? '已複製' : '複製'}
+                </button>
+            </div>
+            <textarea
+                readOnly
+                value={prompt}
+                rows={5}
+                className="w-full resize-y rounded border border-hairline/40 bg-canvas/40 p-2 font-mono text-xs leading-relaxed text-ink"
+            />
         </div>
     );
 }

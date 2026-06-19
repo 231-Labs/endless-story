@@ -238,3 +238,21 @@ AI_PROVIDER=poe POE_API_KEY=... \
 
 **還沒接的（next）**：① 上鏈那半（craft 技能 attr 進 `saga_attributes` + `seedCharacterSkills` 多寫 3 筆，讓選角/品質讀真鏈上技能）；② 心跳裡讓導演真的「自發」決定排戲（gating 邏輯目前靠工具 description 讓 LLM 自律，可加確定性 readiness 檢查）。
 
+---
+
+## 11. 前台 surface：feed「排戲」tab + Seedance prompt（已落地）
+
+排戲產出（戲折）原本**沒有任何讀回路徑** —— `launchProductionAction` 把 `es:production` blob 寫上鏈（subject=sagaId）但沒人讀，所以排戲看不到，**且會漏進公報 tab**（gazette-read 沒排除）。本節補上：
+
+**讀回 facade（clone `cut-read`/`gazette-read` 那套）**：
+- `lib/chain/production-read.ts` — 掃 saga-subject commitments → peek `es:production` header（用 `production.parseProductionHeader` from `@endless-story/runner`）→ `ProductionEntry`/`ProductionDetail`。short-TTL + stale-while-revalidate 快取。
+- `lib/api/productions.ts`（`listProductions`/`getProduction`）+ `api/index.ts` 導出 `productionsApi`。
+- `components/feed/ProductionList.tsx`（卡片→詳情）+ `app/(site)/feed/production/[id]/page.tsx`（Markdown 戲折 + 鏈上 commitment + cast 共有 chips）。
+
+**feed tab 改接**：`FeedTabs` 把「影像與畫冊」改名「**排戲 · 劇目**」（保留 key=`visual` 零 URL churn）；`feed/page.tsx` visual 分支從 `chaptersApi`(空) 改讀 `productionsApi.listProductions`。**必做止漏**：`gazette-read.isNonGazetteBlob` 加排除 `es:production`（同 subject）。
+
+**Seedance 2.0 prompt（admin，零 gate）**：`launch-production.ts` `buildSeedancePrompts(prod)` 純函式 —— 每場 mood→運鏡光色、行當→身段（水袖/台步/亮相）、戲妝、15s，回傳 `seedancePrompts`；`LaunchProductionPanel` 每場一個 textarea + 複製鈕。⚠️ **text-to-video、不繼承角色臉**（CONTENT_PIPELINE §4 教條是 image-to-video／劇照當首幀），僅供手動試效果。
+
+**TASK 2（gate-after，大工程 ~1–2w）排戲=限期大事件**：把排戲做成導演排程的 **spine event**（複用 event-spine + ACT/SOCIAL/POV→`rememberForCharacter`，排戲互動自然落記憶**不用新管線**）。需：導演 `schedule_production` verb（`capabilities.ts`+`dispatch.ts`）、`openProductionEvent`+**合作型（非爭搶）resolve**（`event-spine.ts`）、per-event 期限（`spine-core.ts`）、SOCIAL busy 放行（`social.ts`）、premiere 呼叫 `launchProductionAction` + per-scene 劇照（複用 `generate-event-moment` img2img）。需鏈上驗證 + MemWal 憑證。
+**TASK 3 PART B（gate-after，需 `OPENAI_API_KEY`）排戲生劇照**：每場 loop `generate-event-moment` 的 img2img（refs=cast `media_assets[0]` anchor，鎖臉）+ `productionStillPrompt`（演員臉 + 角色戲妝），回 still URLs 顯示在 panel。
+

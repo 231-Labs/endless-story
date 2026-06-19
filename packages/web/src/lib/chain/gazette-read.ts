@@ -41,7 +41,13 @@ const LIST_STALE_MS = 10 * 60 * 1000;
 async function isNonGazetteBlob(blobId: string): Promise<boolean> {
     try {
         const head = (await fetchChapterText(`/api/blob/${blobId}`)).slice(0, 240);
-        return head.includes('"kind":"drama-beat"') || /^\s*\{\s*"v"\s*:\s*\d/.test(head);
+        // saga-subject blobs that AREN'T gazettes: DR-6 drama beats (JSON) and
+        // 排戲 戲折 (es:production header) — both share subject=saga, neither is prose.
+        return (
+            head.includes('"kind":"drama-beat"') ||
+            head.includes('es:production') ||
+            /^\s*\{\s*"v"\s*:\s*\d/.test(head)
+        );
     } catch {
         return false;
     }
