@@ -30,7 +30,7 @@ const NEXT: Record<Lifecycle, Lifecycle> = {
 export function newProduction(
   sagaId: string,
   classicKey = 'baishe',
-  opts: { skipScore?: boolean; auto?: boolean } = {},
+  opts: { skipScore?: boolean; auto?: boolean; castOverrides?: Record<string, string> } = {},
 ): Production {
   const play = resolvePlay(classicKey);
   return {
@@ -39,6 +39,7 @@ export function newProduction(
     classicKey: play.key,
     skipScore: opts.skipScore,
     auto: opts.auto,
+    castOverrides: opts.castOverrides,
     state: 'PROPOSED',
     log: [],
   };
@@ -58,7 +59,7 @@ export async function advance(prod: Production, troupe: TroupeMember[], ask: Ask
       prod.log.push(`SCRIPTED → 編劇${prod.script.authorName}成稿，共 ${prod.script.scenes.length} 場`);
       break;
     case 'CAST':
-      if (!prod.cast) prod.cast = cast(prod.script!, troupe, resolvePlay(prod.brief!.classicKey).couple);
+      if (!prod.cast) prod.cast = cast(prod.script!, troupe, resolvePlay(prod.brief!.classicKey).couple, prod.castOverrides);
       prod.log.push(
         `CAST → 選角完成：` +
           prod.cast.map((c) => `${c.assignedName ?? '（缺）'}飾${c.partName}${c.crossCastLabel ? `[${c.crossCastLabel}]` : ''}`).join('、'),

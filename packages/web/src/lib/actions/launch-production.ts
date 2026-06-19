@@ -15,6 +15,7 @@ import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { production as runnerProduction } from '@endless-story/runner';
 import {
     castingFromRole,
+    resolvePlay,
     type Gender,
     type MemorySource,
     type Production,
@@ -136,6 +137,8 @@ export interface LaunchProductionActionInput {
   classicKey?: string;
   skipScore?: boolean;
   dryRun?: boolean;
+  /** 指定選角：角色名(partName) → 角色 id(characterId)。需同時給 classicKey 才生效；未指定的角色自動選。 */
+  cast?: Record<string, string>;
 }
 
 export interface LaunchProductionActionResult {
@@ -179,6 +182,20 @@ export async function launchProductionAction(
   const roster = rosterToTroupe(entries);
   const byChain = new Map(roster.filter((m) => m.chainId).map((m) => [m.chainId!, m.id]));
 
+  // 指定選角：partName → characterId（UI/工具給）→ partId → member.id(=chainId)。
+  // 需要 classicKey（戲碼確定才知道有哪些角色）；只認 roster 內的角色 id。
+  let castOverrides: Record<string, string> | undefined;
+  if (input.cast && input.classicKey) {
+    const nameToPartId = new Map(resolvePlay(input.classicKey).parts.map((p) => [p.partName, p.partId]));
+    const validIds = new Set(roster.map((m) => m.id));
+    const map: Record<string, string> = {};
+    for (const [partName, charId] of Object.entries(input.cast)) {
+      const pid = nameToPartId.get(partName);
+      if (pid && charId && validIds.has(charId)) map[pid] = charId;
+    }
+    if (Object.keys(map).length) castOverrides = map;
+  }
+
   // REAL memory source: a character's accumulated MemWal memories + on-chain
   // relationship edges. Graceful — empty ⇒ induct falls back to LLM generation.
   const source: MemorySource = async (member) => {
@@ -205,6 +222,7 @@ export async function launchProductionAction(
       classicKey: input.classicKey,
       skipScore: input.skipScore,
       auto: true, // induct (skills + social web) + 班主自選 + 角色自判有感而發
+      castOverrides, // 指定選角（欽點）優先，其餘自動
       source,
       signer: input.dryRun ? undefined : { keypair: admin.signer, storytellerCapId: d.storytellerCapId },
       dryRun: input.dryRun,
