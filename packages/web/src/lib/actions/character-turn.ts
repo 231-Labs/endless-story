@@ -46,6 +46,8 @@ export interface CharacterTurnResult {
     /** Chosen card label + the character's first-person intent. */
     cardLabel?: string;
     intent?: string;
+    /** The in-scene spoken/acted line (台詞), shown as live evidence. */
+    line?: string;
     reason?: string;
     /** Chosen catalog index (what submit_action takes). Set even in
      *  decideOnly mode so a caller can batch the submit itself. */
@@ -173,6 +175,7 @@ export async function runCharacterTurnAction(
             ok: true,
             cardLabel: chosenLabel,
             intent: decision.intent,
+            line: decision.line,
             reason: decision.reason,
             cardIndex: decision.catalogIndex,
             recalledCount: recalled.length,
@@ -210,6 +213,7 @@ export async function runCharacterTurnAction(
             ok: true,
             cardLabel: hand.find((c) => c.catalogIndex === decision.catalogIndex)?.label,
             intent: decision.intent,
+            line: decision.line,
             reason: decision.reason,
             recalledCount: recalled.length,
             relationshipCount: relationshipHints.length,

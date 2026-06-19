@@ -907,7 +907,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     for (const a of acts) {
         if (!a.ok || !a.cardLabel) continue;
         const sceneId = rosterById.get(a.characterId)?.currentSceneId;
-        pushBeat(sceneId, a.characterId, `${a.name ?? '某人'}${cardActionPhrase(a.cardLabel)}${a.intent ? `（${a.intent}）` : ''}`);
+        // Surface the SPOKEN line (台詞) the chapter can quote, then the inner why.
+        pushBeat(
+            sceneId,
+            a.characterId,
+            `${a.name ?? '某人'}${cardActionPhrase(a.cardLabel)}${a.line ? `：「${a.line}」` : ''}${a.intent ? `（${a.intent}）` : ''}`,
+        );
     }
 
     const povs: TickPovResult[] = [];
@@ -986,7 +991,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }
                 for (const a of acts) {
                     if (a.characterId === c.id && a.ok && a.cardLabel) {
-                        triggerParts.push(`你${cardActionPhrase(a.cardLabel)}${a.intent ? `（${a.intent}）` : ''}`);
+                        triggerParts.push(
+                            `你${cardActionPhrase(a.cardLabel)}${a.line ? `，${a.line}` : ''}${a.intent ? `（${a.intent}）` : ''}`,
+                        );
                     }
                 }
                 const myVerdict = verdictByChar.get(c.id);

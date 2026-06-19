@@ -34,18 +34,24 @@ export function parseMove(
 
 export function parseDecision(
     raw: string,
-): { catalogIndex: number; intent?: string; reason?: string } | null {
+): { catalogIndex: number; intent?: string; line?: string; reason?: string } | null {
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return null;
     try {
         const o = JSON.parse(m[0]) as {
             catalogIndex?: number | string;
             intent?: string;
+            line?: string;
             reason?: string;
         };
         const ci = Number(o.catalogIndex);
         if (!Number.isFinite(ci)) return null;
-        return { catalogIndex: ci, intent: o.intent, reason: o.reason };
+        return {
+            catalogIndex: ci,
+            intent: o.intent,
+            line: clamp(typeof o.line === 'string' ? o.line : undefined, 24),
+            reason: o.reason,
+        };
     } catch {
         return null;
     }

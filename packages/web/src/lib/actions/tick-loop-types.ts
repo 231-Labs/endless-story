@@ -77,6 +77,8 @@ export interface TickActResult {
     ok: boolean;
     cardLabel?: string;
     intent?: string;
+    /** The in-scene spoken/acted line (台詞) — shown as live evidence. */
+    line?: string;
     skipped?: boolean;
     error?: string;
 }

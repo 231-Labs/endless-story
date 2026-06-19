@@ -16,6 +16,7 @@ import {
 import type { AdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { recordSceneLine } from '@/lib/chain/scene-lines';
+import { rememberForCharacter } from '@/lib/chain/memory';
 import { runCharacterTurnAction } from '../character-turn';
 import type { TickActResult, TickResolveResult } from '../tick-loop-types';
 import { RECALL_CONCURRENCY, mapPool, TickMemoryContext } from './support';
@@ -89,6 +90,26 @@ function deriveVerdict(
         winnerId: w.characterId,
         text: `${winnerName}${cardActionPhrase(w.label)}，壓過了${losers}，這一局${winnerName}佔了上風`,
     };
+}
+
+/**
+ * A card play's showable texture: float the in-scene LINE on the handscroll (the
+ * live "they're alive" evidence) and remember the move so the character's 記憶
+ * carries what they did + said + why. `line` is what they say/do on stage; `intent`
+ * is the private why. Falls back to intent when the model gave no line.
+ */
+async function commitActTexture(
+    sceneId: string | undefined,
+    charId: string,
+    r: { line?: string; intent?: string; cardLabel?: string },
+): Promise<void> {
+    if (!sceneId) return;
+    recordSceneLine(sceneId, charId, r.line ?? r.intent, 'act');
+    const card = r.cardLabel ?? '一手';
+    const mem = r.line
+        ? `這一場我${r.line}（使的是「${card}」）。心裡：${r.intent ?? ''}`.trim()
+        : `這一場我使出「${card}」：${r.intent ?? ''}`.trim();
+    await rememberForCharacter(charId, mem, { kind: 'observation', importance: 6 }).catch(() => false);
 }
 
 /** All-acted events may linger this long in spine mode before the janitor closes them. */
@@ -265,11 +286,12 @@ export async function runActPhase(
                     ok: true,
                     cardLabel: d.r.cardLabel,
                     intent: d.r.intent,
+                    line: d.r.line,
                 });
                 d.e.acted.add(d.charId);
                 d.e.plays.push({ characterId: d.charId, cardIndex: d.r.cardIndex as number, atMs: Date.now() });
-                // Handscroll Step 3: surface the first-person intent as a ghost quote.
-                recordSceneLine(d.e.sceneId, d.charId, d.r.intent, 'act');
+                // Float the SPOKEN line on the handscroll + remember the move.
+                await commitActTexture(d.e.sceneId, d.charId, d.r);
             }
         } else {
             // Fallback: isolate each submit (serial — only on the rare abort).
@@ -286,12 +308,13 @@ export async function runActPhase(
                     ok: one.ok,
                     cardLabel: d.r.cardLabel,
                     intent: d.r.intent,
+                    line: d.r.line,
                     error: one.ok ? undefined : one.error,
                 });
                 if (one.ok) {
                     d.e.acted.add(d.charId);
                     d.e.plays.push({ characterId: d.charId, cardIndex: d.r.cardIndex as number, atMs: Date.now() });
-                    recordSceneLine(d.e.sceneId, d.charId, d.r.intent, 'act');
+                    await commitActTexture(d.e.sceneId, d.charId, d.r);
                 }
             }
         }
