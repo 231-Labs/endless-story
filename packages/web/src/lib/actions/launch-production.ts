@@ -80,6 +80,13 @@ function buildPreview(prod: Production): string {
     if (prod.chapter) {
         out.push('## 戲中戲章回', '', prod.chapter);
     }
+    if (prod.takes && prod.takes.length) {
+        out.push('', '## 各角視角');
+        for (const t of prod.takes) {
+            const cross = prod.cast?.find((c) => c.partId === t.partId)?.crossCastLabel;
+            out.push('', `### ${t.actorName} 飾 ${t.partName}${cross ? `〔${cross}〕` : ''}`, '', t.pov);
+        }
+    }
     return out.join('\n');
 }
 
