@@ -159,3 +159,31 @@ nav { display: flex; flex-direction: column; gap: 1.1rem; }
   .sidebar.open { transform: translateX(0); }
   .content { padding-top: 3.6rem; }
 }
+
+/* ---------- bilingual toggle + language badges ---------- */
+.sidebar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+.sidebar-head .brand { flex: 1 1 auto; min-width: 0; }
+.lang-toggle {
+  flex: none; margin-top: .2rem;
+  background: var(--surface); color: var(--brand);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: .18rem .62rem; font: inherit; font-size: .74rem; font-weight: 700;
+  cursor: pointer; line-height: 1.4; white-space: nowrap;
+}
+.lang-toggle:hover { background: var(--brand-soft); border-color: var(--brand); }
+
+.nav-link .nav-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-badge {
+  flex: none; margin-left: .45rem; font-size: .6rem; font-weight: 700;
+  letter-spacing: .03em; padding: .04rem .32rem; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--muted); background: var(--surface);
+}
+.nav-badge.zh { color: #875018; background: #fbf1e3; border-color: #efdcc1; }
+.nav-badge.en { color: #1c5e79; background: #e7f1f6; border-color: #cfe3ec; }
+.nav-link.active .nav-badge { border-color: transparent; }
+
+.doc-lang-note {
+  display: inline-block; font-size: .78rem; color: var(--muted);
+  background: var(--code-bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: .25rem .65rem; margin-bottom: 1.2rem;
+}
