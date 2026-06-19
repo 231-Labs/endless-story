@@ -211,6 +211,8 @@ export interface Production {
   skipScore?: boolean;
   /** autonomy mode (--auto): characters self-judge 有感而發 instead of a threshold. */
   auto?: boolean;
+  /** partId → member.id pins (owner/班主 欽點)；unpinned parts auto-cast. */
+  castOverrides?: Record<string, string>;
   state: Lifecycle;
   brief?: ProductionBrief;
   script?: Script;

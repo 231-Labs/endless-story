@@ -252,12 +252,17 @@ const TOOLS: DirectorToolDef[] = [
     tier: 'narrative',
     description:
       '排一齣新戲（舊戲新唱）：以全班為班底，班主自選戲碼（或指定 classicKey）→ 編劇寫本 → 行當選角（含乾旦/坤生）→ 琴師作曲 → 角色有感而發填詞 → 全體演戲中戲 → 鑄成「戲折」錨定上鏈。**極昂貴**（多次 LLM＋上鏈），且你要**自己判斷時機**：班底齊整（生旦淨丑有人）、金庫撐得起、敘事上真該排大戲時才用——這是導演級的決定。dryRun=true 只跑不上鏈。',
-    argsSpec: '{"classicKey": "baishe｜honglou｜大戲（省略=班主自選）", "skipScore": false, "dryRun": false}',
+    argsSpec:
+      '{"classicKey": "baishe｜honglou｜大戲（省略=班主自選；要指定選角時必填）", "cast": {"許仙": "0x角色id", "白素貞": "0x角色id"}（可省，欽點誰演某角色名→角色 id；未指定者自動選；角色名須是該戲碼的角色）, "skipScore": false, "dryRun": false}',
     execute: (args) =>
       launchProductionAction({
         classicKey: typeof args.classicKey === 'string' ? args.classicKey : undefined,
         skipScore: args.skipScore === true,
         dryRun: args.dryRun === true,
+        cast:
+          args.cast && typeof args.cast === 'object' && !Array.isArray(args.cast)
+            ? (args.cast as Record<string, string>)
+            : undefined,
       }),
   },
 ];

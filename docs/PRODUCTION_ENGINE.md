@@ -238,6 +238,17 @@ AI_PROVIDER=poe POE_API_KEY=... \
 
 **還沒接的（next）**：① 上鏈那半（craft 技能 attr 進 `saga_attributes` + `seedCharacterSkills` 多寫 3 筆，讓選角/品質讀真鏈上技能）；② 心跳裡讓導演真的「自發」決定排戲（gating 邏輯目前靠工具 description 讓 LLM 自律，可加確定性 readiness 檢查）。
 
+### 10.2 指定選角（欽點）（已落地）
+
+導演照常**觸發**排戲，但 owner/導演可**欽點誰演某角色**（其餘自動配）。一條 override 路徑貫穿引擎→工具→面板：
+
+- **引擎**（`caster.ts`）`cast(script, troupe, couple, overrides)`：`overrides` = `partId → member.id`。**兩階段**——先把所有欽點演員**預留**（標 taken），再跑自動 fit/情緒選角，**故自動那輪搶不走被欽點的人**（曾踩過：白素貞的情緒選角先把蘇映雪搶走，許仙的 override 落空 → 兩階段修掉）。被欽點者標 note「指定選角（欽點）」，跨性別照樣算乾旦/坤生看點。`Production.castOverrides` 帶著它，CAST step 傳入。
+- **runner**（`production/index.ts`）`RunProductionInput.castOverrides` → `newProduction`。
+- **web action**（`launch-production.ts`）`input.cast` = **角色名(partName) → 角色 id**（UI/工具給的好寫格式）；用 `resolvePlay(classicKey).parts` 解析成 `partId → characterId`（=member.id=chainId），只認 roster 內的 id。**需同時給 `classicKey`**（戲碼定了才知道有哪些角色；班主自選時無法指定）。
+- **工具**（`tools.ts`）`launch_production` args 加 `cast`（`{"許仙":"0x角色id"}`），讓導演 agent 也能欽點。
+- **面板**（`LaunchProductionPanel.tsx` + server action `production-casting.ts` `getProductionCastingOptions`）：選定戲碼後拉出**該戲角色清單 + 班底**，每個角色一個下拉（預設「自動」），收成 `cast` 傳給 action。班主自選（無戲碼）→ 不顯示矩陣。
+- **驗證**：`troupe/test/casting.test.ts` 3 綠；override 煙測（欽點蘇映雪演許仙 → `許仙→蘇映雪[坤生]✦欽點`，其餘自動填補）＋無 override 回歸原樣。web typecheck 0 錯。
+
 ---
 
 ## 11. 前台 surface：feed「排戲」tab + Seedance prompt（已落地）

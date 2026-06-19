@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
     launchProductionAction,
     type LaunchProductionActionResult,
 } from '@/lib/actions/launch-production';
+import {
+    getProductionCastingOptions,
+    type ProductionCastingOptions,
+} from '@/lib/actions/production-casting';
 import { txUrl, objectUrl } from '@/lib/explorer';
 
 /**
@@ -23,16 +27,36 @@ const PLAYS: { key: string; label: string }[] = [
 export function LaunchProductionPanel() {
     const [classicKey, setClassicKey] = useState('');
     const [skipScore, setSkipScore] = useState(true);
+    const [options, setOptions] = useState<ProductionCastingOptions | null>(null);
+    const [picks, setPicks] = useState<Record<string, string>>({});
     const [result, setResult] = useState<LaunchProductionActionResult | null>(null);
     const [isPending, startTransition] = useTransition();
 
+    // Load the chosen play's parts + roster so you can pin 指定選角. 自選 → no matrix.
+    useEffect(() => {
+        let alive = true;
+        setPicks({});
+        setOptions(null);
+        if (!classicKey) return;
+        getProductionCastingOptions(classicKey)
+            .then((o) => {
+                if (alive) setOptions(o);
+            })
+            .catch(() => {});
+        return () => {
+            alive = false;
+        };
+    }, [classicKey]);
+
     const handleRun = (dryRun: boolean) => {
         setResult(null);
+        const cast = Object.keys(picks).length ? picks : undefined;
         startTransition(async () => {
             const r = await launchProductionAction({
                 classicKey: classicKey || undefined,
                 skipScore,
                 dryRun,
+                cast,
             });
             setResult(r);
         });
@@ -66,6 +90,47 @@ export function LaunchProductionPanel() {
                     純排戲（跳過作曲）
                 </label>
             </div>
+
+            {options && options.parts.length ? (
+                <div className="space-y-2 rounded border border-hairline/60 bg-canvas/30 p-3">
+                    <div className="text-2xs tracking-widest text-mute">
+                        指定選角（欽點）· 留「自動」則由行當/緣分自動配
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {options.parts.map((part) => (
+                            <label key={part.partId} className="flex items-center gap-2 text-sm text-ink">
+                                <span className="w-28 shrink-0 text-mute">
+                                    {part.partName}
+                                    <span className="ml-1 text-2xs text-mute/60">
+                                        {part.hangdang}/{part.yinggong}
+                                    </span>
+                                </span>
+                                <select
+                                    value={picks[part.partName] ?? ''}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        setPicks((prev) => {
+                                            const next = { ...prev };
+                                            if (v) next[part.partName] = v;
+                                            else delete next[part.partName];
+                                            return next;
+                                        });
+                                    }}
+                                    disabled={isPending}
+                                    className="flex-1 rounded border border-hairline bg-surface px-2 py-1 text-sm text-ink disabled:opacity-50"
+                                >
+                                    <option value="">自動</option>
+                                    {options.roster.map((c) => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.name}（{c.role}）
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-3">
                 <button

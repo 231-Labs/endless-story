@@ -41,6 +41,8 @@ export interface RunProductionInput {
   skipScore?: boolean;
   /** autonomy: induct a social web + 班主 picks + characters self-judge 有感而發. */
   auto?: boolean;
+  /** partId → character id pins (owner/班主 欽點 "X plays 許仙"); unpinned parts auto-cast. */
+  castOverrides?: Record<string, string>;
   /** REAL accumulated memories/relationships; the web caller builds this from memory.ts. */
   source?: MemorySource;
   premiseHint?: string;
@@ -76,7 +78,11 @@ export async function runOnce(input: RunProductionInput): Promise<RunProductionR
 
   // 班主 auto-picks the play when not told (the Director-triggered path), else honor classicKey.
   const classicKey = input.classicKey ?? (input.auto ? await chooseProduction(troupe, ask) : undefined);
-  const prod = newProduction(input.sagaId, classicKey, { skipScore: input.skipScore, auto: input.auto });
+  const prod = newProduction(input.sagaId, classicKey, {
+    skipScore: input.skipScore,
+    auto: input.auto,
+    castOverrides: input.castOverrides,
+  });
   await runToPremiere(prod, troupe, ask);
 
   const xizhe = assembleXiZhe(prod);
