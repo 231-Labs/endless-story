@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import { Markdown } from '@/components/common/Markdown';
-import { parseXiZhe, moodLabel } from '@/lib/feed/xizhe-format';
+import { SceneList } from '@/components/feed/SceneList';
+import { parseXiZhe } from '@/lib/feed/xizhe-format';
 
 /**
  * 戲折 playbill — lays out an assembled 戲折 as a structured 戲單 (題目 · 立意 ·
- * 班底 · 分場 · 折子戲中戲 · 角兒私詞) instead of dumping raw markdown, so the
- * cast/scenes read as a programme and only the 折子 climax flows as prose.
- * Parses the on-chain body via parseXiZhe (tolerant of older blobs).
+ * 班底 · 分場·劇本 · 折子戲中戲 · 各角視角 · 唱詞) instead of dumping raw markdown,
+ * so the cast reads as a programme, each 折 opens to its 劇本, and only the 折子
+ * climax flows as prose. Parses the on-chain body via parseXiZhe (tolerant of older blobs).
  */
 export function XiZheView({ body, className }: { body: string; className?: string }) {
     const doc = parseXiZhe(body);
@@ -68,21 +69,13 @@ export function XiZheView({ body, className }: { body: string; className?: strin
 
             {doc.scenes.length ? (
                 <section className="mt-12">
-                    <SectionLabel>分場 · {doc.scenes.length} 折</SectionLabel>
-                    <ol className="mt-5 flex flex-wrap gap-2.5">
-                        {doc.scenes.map((s, i) => (
-                            <li
-                                key={`${s.n}-${i}`}
-                                className="flex items-center gap-2 rounded-full border border-hairline/50 bg-surface/30 px-3.5 py-1.5"
-                            >
-                                <span className="text-2xs text-mute/50">{String(s.n).padStart(2, '0')}</span>
-                                <span className="font-serif text-sm tracking-wide text-ink/90">〈{s.title}〉</span>
-                                {moodLabel(s.mood) ? (
-                                    <span className="text-2xs text-cinnabar/70">{moodLabel(s.mood)}</span>
-                                ) : null}
-                            </li>
-                        ))}
-                    </ol>
+                    <SectionLabel>
+                        分場 · {doc.scenes.length} 折
+                        {doc.scenes.some((s) => s.lines.length) ? (
+                            <span className="ml-2 text-mute/50">點折展開戲文</span>
+                        ) : null}
+                    </SectionLabel>
+                    <SceneList scenes={doc.scenes} />
                 </section>
             ) : null}
 
@@ -130,18 +123,37 @@ export function XiZheView({ body, className }: { body: string; className?: strin
                 </section>
             ) : null}
 
-            {doc.song && doc.song.lines.length ? (
+            {doc.ci.length ? (
                 <section className="mt-14">
-                    <SectionLabel>
-                        角兒私詞
-                        {doc.song.title ? <span className="ml-2 text-mute/60">《{doc.song.title}》</span> : null}
-                        <span className="ml-2 text-cinnabar/70">有感而發</span>
-                    </SectionLabel>
-                    <div className="mt-5 border-l-2 border-hairline/40 pl-6">
-                        {doc.song.lines.map((l, i) => (
-                            <p key={i} className="font-serif text-lg italic leading-loose text-ink/80">
-                                {l}
-                            </p>
+                    <SectionLabel>唱詞 · {doc.ci.length} 首</SectionLabel>
+                    <div className="mt-5 space-y-4">
+                        {doc.ci.map((c, i) => (
+                            <div
+                                key={`${c.title}-${i}`}
+                                className="rounded-md border border-hairline/40 bg-canvas/20 p-4 sm:p-5"
+                            >
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                    <span className="font-serif text-base text-ink">{c.title}</span>
+                                    {c.author ? <span className="text-2xs text-mute/60">· {c.author}</span> : null}
+                                    <span
+                                        className={
+                                            c.source === 'emergent'
+                                                ? 'rounded-full bg-cinnabar/10 px-2 py-0.5 text-2xs tracking-widest text-cinnabar'
+                                                : 'rounded-full border border-hairline/50 px-2 py-0.5 text-2xs tracking-widest text-mute'
+                                        }
+                                    >
+                                        {c.source === 'emergent' ? '有感而發' : '應場'}
+                                    </span>
+                                </div>
+                                {c.why ? <p className="mt-1.5 text-2xs italic text-mute/70">出處 · {c.why}</p> : null}
+                                <div className="mt-3 space-y-1">
+                                    {c.lines.map((l, j) => (
+                                        <p key={j} className="font-serif text-base leading-loose text-ink/85">
+                                            {l}
+                                        </p>
+                                    ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
                 </section>
