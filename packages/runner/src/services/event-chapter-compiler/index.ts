@@ -134,7 +134,17 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
     const client = makeSuiClient({ network: resolveNetwork() });
     const errors: string[] = [];
 
+    // Per-stage timing so a slow/hung cut job can be pinpointed. Each stage prints
+    // on ENTER, so a stage that hangs on an un-timed walrus/LLM call shows up as the
+    // LAST line before the outer 180s kill; the running `t=` diffs elapsed seconds
+    // between stages. Grep `[ch-timing]`.
+    const ctag = (input.eventTx ?? input.sceneId).slice(0, 10);
+    const ct0 = Date.now();
+    const cmark = (m: string) =>
+        console.log(`[ch-timing] cut=${ctag} t=${((Date.now() - ct0) / 1000).toFixed(1)}s ${m}`);
+
     // Saga name + soul (chain-derived unless caller overrides).
+    cmark('saga read');
     const sagaRes = await read.saga.getSaga(client, input.sagaId).catch(() => null);
     const sagaJson = sagaRes?.json as unknown as
         | { name?: string; description?: string; departure_policy?: string; nature_prompt?: string; rhythm_hints?: string }
@@ -153,6 +163,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
     let povs = (input.povs ?? []).filter((p) => p.body.trim());
     const sourcePovBlobIds: string[] = [];
     if (povs.length === 0 && (input.castCharacterIds?.length ?? 0) > 0 && input.eventTx) {
+        cmark(`fetchPovs start — chain path, ${input.castCharacterIds!.length} cast, 1 walrus blob each, NO timeout`);
         const fetched = await fetchEventPovs(client, input.castCharacterIds!, input.eventTx).catch(
             (err) => {
                 errors.push(`fetchEventPovs: ${err instanceof Error ? err.message : String(err)}`);
@@ -165,6 +176,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         }
     }
 
+    cmark(`povs gathered (${povs.length})`);
     // Gate: legacy cut needs ≥2 voices; an 'overview' (minVoices 1) weaves from a
     // single anchored POV when other material (observations/intents) is present.
     const minVoices = input.minVoices ?? MIN_POVS_FOR_CUT;
@@ -199,6 +211,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
 
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
+    cmark('llm weave start — primary model, NO timeout');
     const response = await llm.chat({
         model: modelId,
         system: buildSystemPrompt(soul),
@@ -206,6 +219,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         maxTokens: 2200,
         temperature: 0.7,
     });
+    cmark('llm weave done');
     const userPrompt = buildUserPrompt(context);
     let chapter = toTraditional(response.text.trim());
     const povCount = countDistinctVoices(povs);
@@ -262,6 +276,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         povCharacterIds: [...new Set(povs.map((p) => p.characterId))],
         sourcePovBlobIds: sourcePovBlobIds.length ? sourcePovBlobIds : undefined,
     };
+    cmark('anchor start — walrus put (NO timeout) + commit tx');
     const anchor = await signAndAnchor({
         sagaId: input.sagaId,
         subjectId: input.sceneId,
@@ -270,6 +285,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         signer: input.signer.keypair,
     });
 
+    cmark('anchor done');
     return {
         chapter,
         povCount,

@@ -335,7 +335,10 @@ export async function spineResolveAndWeave(
 
     const ev8 = ev.eventId.slice(0, 10);
     const age = spineClockTick() - ev.openedAtTick;
+    const tSettle = Date.now();
+    console.log(`[ch-timing] resolve=${ev8} enter settle — resolve tx + apply tx + 2× waitForTx`);
     const { resolved, settled } = await settleEvent(admin, ctx, ev);
+    console.log(`[ch-timing] resolve=${ev8} settle=${((Date.now() - tSettle) / 1000).toFixed(1)}s resolved=${resolved}`);
     if (!resolved) {
         // The resolve tx didn't land. DON'T removeOpen — leave the event OPEN (in
         // memory + on chain) so next tick retries with its cached metadata + the
@@ -374,12 +377,15 @@ export async function spineResolveAndWeave(
     let wove = false;
     let skip = '';
     let errMsg = '';
+    const tWeave = Date.now();
+    console.log(`[ch-timing] resolve=${ev8} enter weave path=${path}`);
     try {
         const cut = await compileEventChapterAction(
             path === 'memory'
                 ? { ...base, povs: cutPovs }
                 : { ...base, castCharacterIds: ev.participantIds },
         );
+        console.log(`[ch-timing] resolve=${ev8} weave=${((Date.now() - tWeave) / 1000).toFixed(1)}s anchored=${cut.anchored} skip=${cut.skipReason ?? ''}`);
         cutPovCount = cut.povCount;
         wove = cut.anchored;
         skip = cut.skipReason ?? '';
