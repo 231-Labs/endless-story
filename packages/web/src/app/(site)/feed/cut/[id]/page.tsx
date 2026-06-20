@@ -154,13 +154,7 @@ async function PovLinks({
   );
   return (
     <footer className="mt-10 border-t border-hairline/50 pt-8">
-      <p className="text-2xs uppercase tracking-[0.25em] text-mute">
-        {CHAPTER_COPY.crossLink.sameEventHeader(povCharacterIds.length)}
-      </p>
-      <p className="mt-2 text-sm leading-relaxed text-mute/90">
-        {CHAPTER_COPY.crossLink.sameEventHint}
-      </p>
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
         {povCharacterIds.map((cid) => {
           const character = charactersById.get(cid);
           const povChapter = chapterByChar.get(cid);
