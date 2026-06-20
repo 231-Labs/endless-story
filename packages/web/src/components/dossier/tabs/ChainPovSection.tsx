@@ -5,7 +5,7 @@ import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
 import { ENDLESS_STORY_DEPLOYMENT, read } from '@endless-story/sdk';
 import type { Character } from '@endless-story/shared';
 import { Markdown } from '@/components/common/Markdown';
-import { objectUrl, txUrl } from '@/lib/explorer';
+import { objectUrl, eventUrl } from '@/lib/explorer';
 import { truncateBlobId } from '@/lib/format';
 import type { PovChapterEntry } from '@/lib/chain/pov-read';
 import { parseProvenance } from '@/lib/chain/chapter-provenance';
@@ -175,7 +175,7 @@ function ClientPovBody({ blobId }: { blobId: string }) {
                     {CHAPTER_COPY.pov.fromEvent(provenance.eventLabel)}
                     {provenance.eventTx ? (
                         <a
-                            href={txUrl(provenance.eventTx)}
+                            href={eventUrl(provenance.eventTx)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="ml-2 hover:underline"
