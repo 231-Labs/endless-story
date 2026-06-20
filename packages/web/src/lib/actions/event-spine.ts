@@ -459,8 +459,12 @@ async function settleEvent(
     ev: SpineOpenEvent,
 ): Promise<{ resolved: boolean; settled: boolean }> {
     const d = ENDLESS_STORY_DEPLOYMENT;
+    const ev8 = ev.eventId.slice(0, 10);
     try {
+        const tLedger = Date.now();
+        console.log(`[ch-timing] settle=${ev8} → readResourceLedger`);
         const resources = await readResourceLedger(admin.client, d.packageId, ctx.sagaId);
+        console.log(`[ch-timing] settle=${ev8} readResourceLedger=${((Date.now() - tLedger) / 1000).toFixed(1)}s (${resources.length} res)`);
         const views: AllocationView[] = resources.map((r) => ({
             resourceId: r.id,
             label: r.label,
@@ -510,6 +514,7 @@ async function settleEvent(
                     outcomes,
                 }),
             );
+            console.log(`[ch-timing] settle=${ev8} → resolve tx (transfer path, entering admin lock)`);
             const res = await admin.client.signAndExecuteTransaction({
                 transaction: tx,
                 signer: admin.signer,
@@ -538,6 +543,7 @@ async function settleEvent(
 
     // Fallback: plain resolve so the event closes. Report whether it ACTUALLY landed
     // — the caller leaves the event OPEN to retry if not (vs orphaning it).
+    console.log(`[ch-timing] settle=${ev8} → plainResolve (fallback, entering admin lock)`);
     const resolved = await plainResolve(admin, ctx, ev).catch((err) => {
         console.warn('[event-spine] plain resolve threw:', err);
         return false;

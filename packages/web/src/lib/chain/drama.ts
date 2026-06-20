@@ -86,25 +86,32 @@ export async function readResourceLedger(
     packageId: string,
     sagaId: string,
 ): Promise<ResourceSnapshot[]> {
+    const rt0 = Date.now();
+    const rmark = (m: string) => console.log(`[ch-timing] ledger t=${((Date.now() - rt0) / 1000).toFixed(1)}s ${m}`);
     let live: { resourceId: string }[];
     try {
+        rmark('→ list instantiations + retirements (paged queryEvents)');
         const [instantiated, retired] = await Promise.all([
             read.resource.listResourceInstantiations(client, packageId, { sagaId }),
             read.resource.listResourceRetirements(client, packageId, { sagaId }),
         ]);
         const dead = new Set(retired.map((r) => r.resourceId));
         live = instantiated.filter((r) => !dead.has(r.resourceId));
+        rmark(`list done (${instantiated.length} inst, ${retired.length} retired, ${live.length} live)`);
     } catch {
+        rmark('list threw → [] (drama dormant)');
         return []; // package predates resource.move, or RPC hiccup → drama dormant
     }
     if (live.length === 0) return [];
 
+    rmark(`→ getManyResources (${live.length})`);
     const objects = await read.resource
         .getManyResources(
             client,
             live.map((r) => r.resourceId),
         )
         .catch(() => [] as Awaited<ReturnType<typeof read.resource.getManyResources>>);
+    rmark(`getMany done (${objects.length} objs) → readAllocations per object`);
 
     const snapshots: ResourceSnapshot[] = [];
     for (const obj of objects) {
@@ -122,6 +129,7 @@ export async function readResourceLedger(
             allocations,
         });
     }
+    rmark(`done (${snapshots.length} snapshots)`);
     return snapshots;
 }
 
