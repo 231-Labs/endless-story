@@ -65,8 +65,22 @@ function serializeAdminTxs(client: SuiClient): SuiClient {
     type Args = Parameters<typeof raw>[0];
     client.signAndExecuteTransaction = ((args: Args) =>
         withAdminLock(async () => {
+            // [ch-timing] split submit vs finality-wait INSIDE the global admin lock.
+            // A tx that hangs here holds the whole adminTxChain, so every later admin
+            // tx (incl. the inline cut jobs) stalls behind it. If `submitted` never
+            // prints → stuck in signAndExecute (RPC submit); if `submitted` prints but
+            // `settled` doesn't → stuck in waitForTransaction (finality).
+            // Grep `[ch-timing] admin-tx`.
+            const at0 = Date.now();
             const res = await raw(args);
+            console.log(
+                `[ch-timing] admin-tx submitted=${((Date.now() - at0) / 1000).toFixed(1)}s digest=${(res?.digest ?? '?').slice(0, 8)} — waiting finality`,
+            );
+            const at1 = Date.now();
             if (res?.digest) await client.waitForTransaction({ digest: res.digest }).catch(() => {});
+            console.log(
+                `[ch-timing] admin-tx settled wait=${((Date.now() - at1) / 1000).toFixed(1)}s digest=${(res?.digest ?? '?').slice(0, 8)}`,
+            );
             return res;
         })) as typeof client.signAndExecuteTransaction;
     return client;
