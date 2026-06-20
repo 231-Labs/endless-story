@@ -2,30 +2,32 @@
  * Chain explorer URL helpers.
  *
  * Single place to switch explorers / wire deep links. Today we use
- * Sui Scan (the legacy choice already in use by RecruitmentTicket).
- * Network suffix derived from `ENDLESS_STORY_DEPLOYMENT.network` so
- * devnet / testnet / mainnet links Just Work.
+ * SuiVision. The network is encoded as a subdomain (mainnet has none),
+ * derived from `ENDLESS_STORY_DEPLOYMENT.network` so devnet / testnet /
+ * mainnet links Just Work.
  *
- * If we ever want to switch explorers (Sui Vision, the official sui.io
- * one, etc.), this is the only file to edit.
+ * If we ever want to switch explorers (Sui Scan, the official sui.io
+ * one, etc.), this is the only file to edit. Note that explorers differ
+ * in both host shape and path verbs (SuiVision uses `/txblock/`, Sui
+ * Scan used a `/{network}/tx/` path), so swap with care.
  */
 
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 
-const BASE = 'https://suiscan.xyz';
-
-function networkSegment(): string {
-    return ENDLESS_STORY_DEPLOYMENT.network;
+function baseUrl(): string {
+    const network = ENDLESS_STORY_DEPLOYMENT.network;
+    const subdomain = network === 'mainnet' ? '' : `${network}.`;
+    return `https://${subdomain}suivision.xyz`;
 }
 
 export function txUrl(digest: string): string {
-    return `${BASE}/${networkSegment()}/tx/${digest}`;
+    return `${baseUrl()}/txblock/${digest}`;
 }
 
 export function objectUrl(objectId: string): string {
-    return `${BASE}/${networkSegment()}/object/${objectId}`;
+    return `${baseUrl()}/object/${objectId}`;
 }
 
 export function accountUrl(address: string): string {
-    return `${BASE}/${networkSegment()}/account/${address}`;
+    return `${baseUrl()}/account/${address}`;
 }
