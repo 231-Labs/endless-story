@@ -74,8 +74,13 @@ async function fetchProductionsForSagaUncached(
         summaries = await read.commitment.listCommitments(client, ENDLESS_STORY_DEPLOYMENT.packageId, {
             sagaId,
             subjectId: sagaId, // productions anchor on the saga (like gazettes); es:production filter below
-            // gazettes + drama beats share this subject and get filtered out, so over-fetch.
-            maxEvents: limit + 24,
+            // NO maxEvents cap — page the WHOLE saga-subject log. A 戲折 is a rare,
+            // director-level event, but gazettes share this SAME saga subject and
+            // accrue daily, so a fixed over-fetch window (the old `limit + 24`) buries
+            // an older production under newer gazettes and the 排戲 tab reads empty even
+            // though it's still on chain. Filter es:production in memory and slice to
+            // `limit`. Same fix cut-read made; the list + each blob peek are cached
+            // (2min fresh / 10min stale + immutable blob cache), so the full scan is rare.
         });
     } catch (err) {
         console.warn('[production-read] listCommitments failed:', err);
@@ -110,7 +115,15 @@ async function fetchProductionsForSagaUncached(
             }
         }),
     );
-    return resolved.filter((p): p is ProductionEntry => p != null).slice(0, limit);
+    const productions = resolved.filter((p): p is ProductionEntry => p != null).slice(0, limit);
+    // [ch-diag] productions share the saga subject with daily gazettes, so they
+    // scatter through a large log. scanned = whole saga-subject log; productions =
+    // those carrying an es:production header. productions=0 with scanned>0 means the
+    // 排戲 tab is empty because none are woven — NOT because they fell out of a window.
+    console.log(
+        `[ch-diag] production-read saga=${sagaId.slice(0, 10)} scanned=${summaries.length} productions=${productions.length}`,
+    );
+    return productions;
 }
 
 /** One production with its full 戲折 prose — the /feed/production/[id] detail page. */
