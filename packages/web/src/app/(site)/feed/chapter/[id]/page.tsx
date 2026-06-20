@@ -5,7 +5,7 @@ import { chaptersApi, charactersApi, cutsApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
 import { LinkifiedProse } from '@/components/common/CharacterLinkifier';
 import { formatDate } from '@/lib/format';
-import { txUrl, objectUrl } from '@/lib/explorer';
+import { eventUrl, objectUrl } from '@/lib/explorer';
 import { CHAPTER_COPY } from '@/lib/copy/chapters';
 
 /**
@@ -160,7 +160,7 @@ export default async function ChapterPage({
                 <span className="text-mute/80">{CHAPTER_COPY.provenance.footerLead}</span>
                 {chapter.provenance?.eventTx ? (
                   <a
-                    href={txUrl(chapter.provenance.eventTx)}
+                    href={eventUrl(chapter.provenance.eventTx)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-cinnabar"
@@ -184,6 +184,8 @@ export default async function ChapterPage({
                     sagaId={chapter.sagaId}
                     currentId={chapter.id}
                     eventTx={eventTx}
+                    eventLabel={chapter.provenance?.eventLabel}
+                    involvedIds={chapter.provenance?.involvedIds}
                     charactersById={charactersById}
                   />
                 </Suspense>
@@ -223,54 +225,72 @@ async function loadTocChapters(sagaId: string): Promise<Chapter[]> {
     .sort((a, b) => a.day - b.day || a.createdAt.localeCompare(b.createdAt));
 }
 
-/** 同事件互鏈：合本(向上) + 其他角色視角(平行)。 */
+/**
+ * 同事件互鏈卡片:合本(向上) + 其他角色視角(平行)。
+ *
+ * The angles are resolved per character against this event's cast
+ * (`provenance.involvedIds`) via `listEventPovChapters`, so a sibling POV stays
+ * reachable however old the event is — the saga-wide latest-N scan used to drop
+ * older events' angles. The cut up-link is best-effort over recent cuts.
+ */
 async function EventCrossLinks({
   sagaId,
   currentId,
   eventTx,
+  eventLabel,
+  involvedIds,
   charactersById,
 }: {
   sagaId: string;
   currentId: string;
   eventTx: string;
+  eventLabel?: string;
+  involvedIds?: string[];
   charactersById: Map<string, Character>;
 }) {
-  const [sagaChapters, cuts] = await Promise.all([
-    chaptersApi.listChapters(sagaId).catch(() => [] as Chapter[]),
+  const castIds = involvedIds ?? [];
+  const [eventChapters, cuts] = await Promise.all([
+    castIds.length
+      ? chaptersApi.listEventPovChapters(sagaId, eventTx, castIds).catch(() => [] as Chapter[])
+      : Promise.resolve([] as Chapter[]),
     cutsApi.listEventCuts(sagaId).catch(() => []),
   ]);
   const cut = cuts.find((c) => c.eventTx === eventTx);
-  const siblingPovs = sagaChapters.filter(
-    (c) => c.id !== currentId && c.provenance?.eventTx === eventTx,
-  );
+  const siblingPovs = eventChapters.filter((c) => c.id !== currentId);
   if (!cut && siblingPovs.length === 0) return null;
   return (
-    <div className="text-2xs tracking-widest">
-      {cut ? (
-        <Link
-          href={`/feed/cut/${cut.commitmentId}`}
-          className="mr-4 inline-block rounded-full border border-cinnabar/40 px-3 py-1 text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas"
-        >
-          {CHAPTER_COPY.crossLink.readCut}
-        </Link>
-      ) : null}
-      {siblingPovs.length > 0 ? (
-        <>
-          <span className="text-mute">{CHAPTER_COPY.crossLink.otherPovs}</span>
-          {siblingPovs.map((s) => {
-            const sp = s.povCharacterId ? charactersById.get(s.povCharacterId) : undefined;
-            return (
-              <Link
-                key={s.id}
-                href={`/feed/chapter/${s.id}`}
-                className="ml-2 text-cinnabar hover:underline"
-              >
-                {sp?.name ?? '另一視角'}
-              </Link>
-            );
-          })}
-        </>
-      ) : null}
+    <div className="es-card p-5 sm:p-6">
+      <p className="text-2xs uppercase tracking-[0.25em] text-mute">
+        {CHAPTER_COPY.crossLink.siblingCardHeader}
+        {eventLabel ? (
+          <span className="ml-2 normal-case tracking-normal text-mute/70">「{eventLabel}」</span>
+        ) : null}
+      </p>
+      <p className="mt-1.5 text-sm leading-relaxed text-mute/90">
+        {CHAPTER_COPY.crossLink.siblingCardHint}
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {cut ? (
+          <Link
+            href={`/feed/cut/${cut.commitmentId}`}
+            className="inline-flex items-center rounded-full border border-cinnabar/50 bg-cinnabar/[0.04] px-4 py-2 text-sm tracking-widest text-cinnabar transition-colors hover:bg-cinnabar hover:text-canvas"
+          >
+            {CHAPTER_COPY.crossLink.readCut}
+          </Link>
+        ) : null}
+        {siblingPovs.map((s) => {
+          const sp = s.povCharacterId ? charactersById.get(s.povCharacterId) : undefined;
+          return (
+            <Link
+              key={s.id}
+              href={`/feed/chapter/${s.id}`}
+              className="inline-flex items-center rounded-full border border-hairline/60 bg-surface/40 px-4 py-2 text-sm tracking-widest text-ink transition-colors hover:border-cinnabar/40 hover:text-cinnabar"
+            >
+              {CHAPTER_COPY.crossLink.followPov(sp?.name ?? '另一視角')}
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { chaptersApi, charactersApi, cutsApi } from '@/lib/api/index';
 import { SiteNav } from '@/components/home/SiteNav';
 import { Markdown } from '@/components/common/Markdown';
-import { txUrl, objectUrl } from '@/lib/explorer';
+import { eventUrl, objectUrl } from '@/lib/explorer';
 import { CHAPTER_COPY } from '@/lib/copy/chapters';
 
 /**
@@ -93,7 +93,7 @@ export default async function CutPage({ params }: { params: Promise<{ id: string
             <span className="text-mute/80">{CHAPTER_COPY.provenance.footerLead}</span>
             {cut.eventTx ? (
               <a
-                href={txUrl(cut.eventTx)}
+                href={eventUrl(cut.eventTx)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-cinnabar"
@@ -126,9 +126,11 @@ export default async function CutPage({ params }: { params: Promise<{ id: string
 }
 
 /**
- * The cut's raw materials: each woven character, linking to their POV chapter
- * for THIS event when one is committed (matched by eventTx provenance), else
- * to their dossier chapter tab.
+ * The same event, angle by angle: each character woven into this cut, deep-linked
+ * to THEIR POV chapter for THIS event (matched by `provenance.eventTx`, scanned
+ * per character so an old cut's angles stay reachable). A character whose POV
+ * isn't reachable yet shows as a muted, non-link chip — never a jump into their
+ * whole catalogue, which read as "which one is this?" noise.
  */
 async function PovLinks({
   sagaId,
@@ -140,43 +142,54 @@ async function PovLinks({
   povCharacterIds: string[];
 }) {
   if (povCharacterIds.length === 0) return null;
-  const [characters, sagaChapters] = await Promise.all([
+  const [characters, eventChapters] = await Promise.all([
     charactersApi.listSagaCharacters(sagaId).catch(() => []),
-    eventTx ? chaptersApi.listChapters(sagaId).catch(() => []) : Promise.resolve([]),
+    eventTx
+      ? chaptersApi.listEventPovChapters(sagaId, eventTx, povCharacterIds).catch(() => [])
+      : Promise.resolve([]),
   ]);
   const charactersById = new Map(characters.map((c) => [c.id, c]));
+  const chapterByChar = new Map(
+    eventChapters.flatMap((c) => (c.povCharacterId ? [[c.povCharacterId, c] as const] : [])),
+  );
   return (
     <footer className="mt-10 border-t border-hairline/50 pt-8">
       <p className="text-2xs uppercase tracking-[0.25em] text-mute">
-        {CHAPTER_COPY.crossLink.povRawMaterials}
+        {CHAPTER_COPY.crossLink.sameEventHeader(povCharacterIds.length)}
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-mute/90">
+        {CHAPTER_COPY.crossLink.sameEventHint}
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
         {povCharacterIds.map((cid) => {
           const character = charactersById.get(cid);
-          const povChapter = eventTx
-            ? sagaChapters.find(
-                (c) => c.povCharacterId === cid && c.provenance?.eventTx === eventTx,
-              )
-            : undefined;
+          const povChapter = chapterByChar.get(cid);
           const label = character?.name ?? `${cid.slice(0, 8)}…`;
+          if (povChapter) {
+            return (
+              <Link
+                key={cid}
+                href={`/feed/chapter/${povChapter.id}`}
+                className="rounded-full border border-hairline/60 bg-surface/40 px-4 py-2 text-sm tracking-widest text-ink transition-colors hover:border-cinnabar/40 hover:text-cinnabar"
+              >
+                {CHAPTER_COPY.crossLink.followPov(label)}
+              </Link>
+            );
+          }
           return (
-            <Link
+            <span
               key={cid}
-              href={
-                povChapter
-                  ? `/feed/chapter/${povChapter.id}`
-                  : { pathname: '/dossier', query: { id: cid, tab: 'chapters' } }
-              }
-              className="rounded-full border border-hairline/60 bg-surface/40 px-4 py-2 text-sm tracking-widest text-ink transition-colors hover:border-cinnabar/40 hover:text-cinnabar"
+              title={CHAPTER_COPY.crossLink.povUnlinkedHint}
+              className="inline-flex items-center gap-2 rounded-full border border-dashed border-hairline/50 px-4 py-2 text-sm tracking-widest text-mute/60"
             >
-              {CHAPTER_COPY.crossLink.followPov(label)}
-            </Link>
+              {label}
+              <span className="text-2xs tracking-wider text-mute/50">
+                {CHAPTER_COPY.crossLink.povUnlinked}
+              </span>
+            </span>
           );
         })}
       </div>
-      <p className="mt-3 text-2xs leading-relaxed tracking-widest text-mute/70">
-        {CHAPTER_COPY.crossLink.povRawHint}
-      </p>
     </footer>
   );
 }

@@ -73,6 +73,63 @@ export async function listChapters(sagaId: string): Promise<Chapter[]> {
   return httpGet<Chapter[]>('/chapters', { query: { sagaId } });
 }
 
+/**
+ * How deep to scan ONE character's commitments when resolving their POV for a
+ * specific event. The cut → POV deep-link matches on `provenance.eventTx`, and a
+ * cut can be many narrative days old, so its POVs sit well behind the newest few.
+ * Scanning per character (not saga-wide) keeps an old event's angles reachable;
+ * this bound caps the cost at N_cast × this many cached reads.
+ */
+const EVENT_POV_SCAN_LIMIT = 60;
+
+/**
+ * Resolve each cast member's POV chapter for ONE on-chain event, matched by
+ * `provenance.eventTx`. Returns the chapters that were found (one per character
+ * that has one), each carrying `povCharacterId` so the caller can key by it.
+ *
+ * Why this exists: the cut reading page lists a cut's woven POV authors and wants
+ * to deep-link each to THAT character's angle on THIS event. The saga-wide
+ * `listChapters()` scan only covers the latest commitments, so an older cut's
+ * POVs fall out of the window and every link dead-ends. Scanning per character
+ * keeps the right POV reachable however old the cut is.
+ */
+export async function listEventPovChapters(
+  sagaId: string,
+  eventTx: string,
+  characterIds: string[]
+): Promise<Chapter[]> {
+  if (!eventTx || characterIds.length === 0) return [];
+  if (!(isDeployed() && isSuiObjectId(sagaId))) {
+    // Mock / HTTP backend: filter the saga list we already have.
+    const all = await listChapters(sagaId).catch(() => [] as Chapter[]);
+    const wanted = new Set(characterIds);
+    return all.filter(
+      (c) => c.povCharacterId && wanted.has(c.povCharacterId) && c.provenance?.eventTx === eventTx
+    );
+  }
+  return cachedPublicRead(
+    `event-povs:${sagaId}:${eventTx}`,
+    publicChainReadTtl(SAGA_CHAPTERS_TTL_MS),
+    async () => {
+      const found = await Promise.all(
+        characterIds.map(async (cid) => {
+          const character = await fetchOnChainCharacter(cid).catch(() => null);
+          const entries = await fetchPovChaptersForCharacter(cid, {
+            limit: EVENT_POV_SCAN_LIMIT,
+          }).catch(() => [] as PovChapterEntry[]);
+          const chapters = await entriesToChapters(
+            entries,
+            new Map(character ? [[character.id, character]] : [])
+          );
+          return chapters.find((c) => c.provenance?.eventTx === eventTx) ?? null;
+        })
+      );
+      return found.filter((c): c is Chapter => c != null);
+    },
+    { staleTtlMs: 10 * 60 * 1000 }
+  );
+}
+
 export async function listPublicChaptersForSubscription(
   characterId: string
 ): Promise<Chapter[]> {

@@ -31,3 +31,19 @@ export function objectUrl(objectId: string): string {
 export function accountUrl(address: string): string {
     return `${baseUrl()}/account/${address}`;
 }
+
+/**
+ * Link for a narrative event reference (`eventTx`). Despite the name, the spine
+ * pipeline stamps `eventTx` with the BudgetEvent's STABLE object id (the default
+ * path), while legacy immediate-mode storylets stamped it with the opener's tx
+ * digest. They live at different explorer routes, so route by shape: a 0x + 64-hex
+ * value is an object id (/object/); anything else (a base58 digest) is a
+ * transaction (/txblock/). Passing an object id to /txblock/ resolves to nothing.
+ */
+export function eventUrl(eventRef: string): string {
+    return isObjectId(eventRef) ? objectUrl(eventRef) : txUrl(eventRef);
+}
+
+function isObjectId(ref: string): boolean {
+    return /^0x[0-9a-fA-F]{64}$/.test(ref);
+}

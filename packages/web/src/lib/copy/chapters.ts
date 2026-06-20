@@ -71,5 +71,14 @@ export const CHAPTER_COPY = {
     povRawMaterials: '本回視角 · 各角色的第一人稱原料',
     povRawHint: '視角原料是角色親筆的單人版本 — 訂閱該角色或持有 NFT 才能讀全文。',
     followPov: (name: string) => `追 ${name} 的視角 →`,
+    /** Cut page — header + note for the per-character angle list (this 回 = N 視角). */
+    sameEventHeader: (n: number) => `這一回 · ${n} 個視角`,
+    sameEventHint: '同一場、同一件事，下面是每個角色各自眼中的版本。點名字，讀他這一回的視角。',
+    /** Muted chip when a cast member's POV for this event isn't reachable yet. */
+    povUnlinked: '視角待收錄',
+    povUnlinkedHint: '這個角色在這一場有視角，但章回尚未收錄到這裡。',
+    /** Chapter page — the prominent「同一事件」cross-link card. */
+    siblingCardHeader: '同一事件',
+    siblingCardHint: '這一場由多個角色各自落筆。讀織成的合本，或換一個角度看同一件事。',
   },
 } as const;
