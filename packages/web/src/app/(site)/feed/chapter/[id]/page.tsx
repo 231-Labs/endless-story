@@ -266,9 +266,6 @@ async function EventCrossLinks({
           <span className="ml-2 normal-case tracking-normal text-mute/70">「{eventLabel}」</span>
         ) : null}
       </p>
-      <p className="mt-1.5 text-sm leading-relaxed text-mute/90">
-        {CHAPTER_COPY.crossLink.siblingCardHint}
-      </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         {cut ? (
           <Link
