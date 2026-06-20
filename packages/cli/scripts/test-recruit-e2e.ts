@@ -287,7 +287,7 @@ async function main() {
     throw new Error('Character object not found in redeem result');
   }
   console.log('\nOK e2e flow succeeded. Inspect:');
-  console.log(`   https://suiscan.xyz/${env}/object/${characterId}`);
+  console.log(`   https://${env === 'mainnet' ? '' : `${env}.`}suivision.xyz/object/${characterId}`);
 }
 
 main().catch((e) => {
