@@ -1,4 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // @endless-story/troupe ships pure TS that runs standalone (its driver runs under
+    // node/tsx), so its source uses explicit `.ts` import specifiers. Let our type-check
+    // follow them into troupe's source (valid: the base sets noEmit, so tsc only
+    // type-checks, never emits). Mirrors packages/web's consumption of drama/economy/troupe.
+    "allowImportingTsExtensions": true
+  },
   "include": ["src/**/*"]
 }
