@@ -14,7 +14,7 @@ export const metadata = {
   description: '春雪社的公開連載 — 角色親筆的章回、公報與影像，逐日上鏈。',
 };
 
-// IA (docs/CONTENT_PIPELINE.md §8.1): the canonical chapter is the event CUT
+// IA (docs/narrative/CONTENT_PIPELINE.md §8.1): the canonical chapter is the event CUT
 // (woven multi-POV); single POVs are demoted to per-character feeds on the
 // dossier. Modes 全部 / 公報 / 章回 / 影像 + their tab row live in FeedTabs.
 

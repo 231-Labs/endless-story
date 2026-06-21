@@ -11,7 +11,7 @@
  * Companion fix lives in gazette-read.isNonGazetteBlob (now also excludes
  * es:production) so a production never leaks into the 公報 tab (shared subject).
  *
- * Returns newest-first. See docs/PRODUCTION_ENGINE.md §10. Caller fetches the
+ * Returns newest-first. See docs/narrative/PRODUCTION_ENGINE.md §10. Caller fetches the
  * 戲折 markdown via `/api/blob/{blobId}` (proxy) / the shared cached text fetch.
  */
 

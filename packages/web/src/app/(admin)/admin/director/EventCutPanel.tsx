@@ -11,7 +11,7 @@ import { txUrl, objectUrl } from '@/lib/explorer';
  * Admin panel: weave one event's POVs into the canonical "回" (event_cut).
  * Standalone path — give the scene + event tx + cast, the compiler fetches each
  * character's matching POV from chain and braids them. Same Dry-Run / Anchor
- * split as the gazette. See docs/CONTENT_PIPELINE.md §2.
+ * split as the gazette. See docs/narrative/CONTENT_PIPELINE.md §2.
  */
 export function EventCutPanel() {
     const [sceneId, setSceneId] = useState('');

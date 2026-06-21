@@ -11,7 +11,7 @@ import {
  *
  * Chain-first only (like gazettes): pre-pipeline deployments simply have no
  * cuts and the facade returns empty arrays the UI renders as an empty state.
- * See docs/CONTENT_PIPELINE.md §2/§8.1.
+ * See docs/narrative/CONTENT_PIPELINE.md §2/§8.1.
  */
 
 function isDeployed(): boolean {

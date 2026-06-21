@@ -8,7 +8,7 @@
  *
  * Mirrors compile-gazette.ts (admin keypair + runner.runOnce). The Showrunner
  * invokes this through the `launch_production` tool (gated; see tools.ts +
- * docs/PRODUCTION_ENGINE.md §2).
+ * docs/narrative/PRODUCTION_ENGINE.md §2).
  */
 
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';

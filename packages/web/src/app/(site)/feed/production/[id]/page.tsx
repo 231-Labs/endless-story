@@ -10,7 +10,7 @@ import { objectUrl } from '@/lib/explorer';
  *
  * The body is the assembled 戲折 (班底·分場·折子戲中戲章回·角兒私詞), anchored as
  * an es:production commitment (subject=saga). The footer carries the on-chain
- * commitment + the cast (co-owners). See docs/PRODUCTION_ENGINE.md §10.
+ * commitment + the cast (co-owners). See docs/narrative/PRODUCTION_ENGINE.md §10.
  */
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {

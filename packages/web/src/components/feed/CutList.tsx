@@ -9,7 +9,7 @@ import { CHAPTER_COPY } from '@/lib/copy/chapters';
  * Card = metadata + a short excerpt; the full prose lives on /feed/cut/[id].
  * Bodies come through the immutable-blob cache (fetchChapterText), so the list
  * stops re-reading every cut from the aggregator on each visit.
- * See docs/CONTENT_PIPELINE.md §2/§8.1.
+ * See docs/narrative/CONTENT_PIPELINE.md §2/§8.1.
  */
 export async function CutList({
     cuts,

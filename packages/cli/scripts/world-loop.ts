@@ -29,10 +29,10 @@
  *   --attention-budget     Stage 2: concurrent events pull on shared characters
  *   --rival-gravity        draw contenders toward their contest so events form
  *   --max-concurrent-events=<n>  cap for --parallel-events (default 2)
- *      (all default off; see docs/EVENT_LIFECYCLE.md §5–§7 for what to watch)
+ *      (all default off; see docs/narrative/EVENT_LIFECYCLE.md §5–§7 for what to watch)
  *   --showrunner-every=<n> run a Showrunner heartbeat (POST /api/showrunner)
  *                          after every n ticks (default 0 = off; see
- *                          docs/NARRATIVE_AGENTS.md §12.2)
+ *                          docs/narrative/NARRATIVE_AGENTS.md §12.2)
  *
  * Env (from ../web/.env.local locally, or the service's own EnvironmentFile
  * when deployed standalone). Every flag above has an env fallback

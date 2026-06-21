@@ -2,7 +2,7 @@
 
 Pure, zero-dependency **character-economy core** + offline validation harness.
 
-Design + decisions: **[docs/CHARACTER_ECONOMY.md](../../docs/CHARACTER_ECONOMY.md)**.
+Design + decisions: **[docs/narrative/CHARACTER_ECONOMY.md](../../docs/narrative/CHARACTER_ECONOMY.md)**.
 
 This package is Part C of that plan: it **academically validates** the life-cycle mechanism
 (does it actually work?) BEFORE any productization. Same discipline as `packages/drama` — the

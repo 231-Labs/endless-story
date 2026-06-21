@@ -173,9 +173,9 @@
 - **死亡＝預設淡出**：vitality≤0 → `mark_dead`，停發薪、不再活躍。沒人續費 → 記憶儲存（Walrus epoch 租期制，會過期）終將到期消逝，鏈上只剩**死亡錨當墓碑**。
 - **傳奇＝刻意保存**：saga 主或 owner **持續付儲存費** → 該角色完整記憶與 NFT 永久可查、可被引用。傳奇不是平台頒的徽章，是**有人願意為它持續投資**的證明 → 天然稀缺、天然真實。
 
-**現況（已是事實）**：① 角色 NFT 是 Sui owned object，死後不被刪。② 記憶 MemWal append-only、永不刪（只受 Walrus 儲存租期約束）。③ owner 挹注（`owner_fund_character`，`CHARACTER_ECONOMY.md §5.1`）與 Walrus 續費（`WALRUS_ASSETS.md`，Hybrid 續租）機制**都已設計**。
+**現況（已是事實）**：① 角色 NFT 是 Sui owned object，死後不被刪。② 記憶 MemWal append-only、永不刪（只受 Walrus 儲存租期約束）。③ owner 挹注（`owner_fund_character`，`CHARACTER_ECONOMY.md §5.1`）與 Walrus 續費（`ASSET_MANAGEMENT.md`，Hybrid 續租）機制**都已設計**。
 **`⟨roadmap 收尾⟩`**：把上面三塊接成一條「**死後續費路徑**」——
-- ⚠️ `WALRUS_ASSETS.md` 決策⑥ 現在**把記憶 blob 排除在續費面板外**（交給 MemWal 生命週期自管）。要做「死後續費保存記憶」必須**改這條**：讓 owner/saga 能對已故角色的記憶儲存主動續租。
+- ⚠️ `ASSET_MANAGEMENT.md` 決策⑥ 現在**把記憶 blob 排除在續費面板外**（交給 MemWal 生命週期自管）。要做「死後續費保存記憶」必須**改這條**：讓 owner/saga 能對已故角色的記憶儲存主動續租。
 - 「傳奇」狀態的**正典化後效**（`⟨開放⟩`）：死後完整記憶被後輩角色引用、成為 `藏閣` 常設展、化為別人會競爭的具名典故。這層是錦上添花，不是傳奇成立的必要條件。
 
 ### 5.2 Saga 易主（Saga 主理人退場交接）

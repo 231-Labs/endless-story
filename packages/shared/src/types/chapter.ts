@@ -28,7 +28,7 @@ export interface ChapterProvenance {
 }
 
 /**
- * Two-tier chapter model (see docs/CONTENT_PIPELINE.md §2).
+ * Two-tier chapter model (see docs/narrative/CONTENT_PIPELINE.md §2).
  *   - `pov`: raw material — one character's first-person angle on one event.
  *     The "follow my character" feed + future character-PV source. NOT the
  *     canonical chapter surfaced as a "回".
