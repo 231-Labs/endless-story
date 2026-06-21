@@ -33,8 +33,23 @@ function envRpcUrl(): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
+/** Harness seam (test-only): when set, EVERY `makeSuiClient` call returns this
+ *  factory's client instead of a real JSON-RPC one. Installed by the full-tick
+ *  harness (`__setHarnessClientFactory`) so the decoupled, zero-network fake
+ *  intercepts both web and runner clients (all of them import this one factory).
+ *  Null in production ⇒ zero behavioural change. */
+let _harnessFactory: ((opts: MakeClientOptions) => SuiClient) | null = null;
+
+/** Install (or clear, with `null`) the harness client factory. Test-only. */
+export function __setHarnessClientFactory(
+  fn: ((opts: MakeClientOptions) => SuiClient) | null,
+): void {
+  _harnessFactory = fn;
+}
+
 /** Construct a Sui client pinned to a given network. Node / cli usage. */
 export function makeSuiClient(opts: MakeClientOptions = {}): SuiClient {
+  if (_harnessFactory) return _harnessFactory(opts);
   const network = opts.network ?? 'devnet';
   const url = opts.url ?? envRpcUrl() ?? getJsonRpcFullnodeUrl(network);
   return new SuiJsonRpcClient({ url, network });
