@@ -37,3 +37,33 @@ export async function queryEventsWithRetry(
     }
     throw lastErr;
 }
+
+/** A single event from a `queryEvents` page (carries `parsedJson` + the envelope `id`). */
+type ScannedEvent = Awaited<ReturnType<SuiClient['queryEvents']>>['data'][number];
+
+/**
+ * Page through every `MoveEventType: eventType` event, newest-first (descending,
+ * 50 per page), retrying transient RPC failures per page. Calls `onEvent` for
+ * each event; return `false` to stop early (e.g. once a cap is hit). Centralises
+ * the cursor-paging loop the read modules used to copy-paste verbatim.
+ */
+export async function scanEvents(
+    client: SuiClient,
+    eventType: string,
+    onEvent: (ev: ScannedEvent) => boolean | void,
+): Promise<void> {
+    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
+    for (;;) {
+        const page = await queryEventsWithRetry(client, {
+            query: { MoveEventType: eventType },
+            cursor,
+            limit: 50,
+            order: 'descending',
+        });
+        for (const ev of page.data) {
+            if (onEvent(ev) === false) return;
+        }
+        if (!page.hasNextPage || !page.nextCursor) break;
+        cursor = page.nextCursor;
+    }
+}

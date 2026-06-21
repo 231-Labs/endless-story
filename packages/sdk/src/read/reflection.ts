@@ -3,7 +3,7 @@
  */
 import * as gen from '../generated/endless_story/reflection.js';
 import type { SuiClient } from '../client.js';
-import { queryEventsWithRetry } from './query-retry.js';
+import { scanEvents } from './query-retry.js';
 
 export { gen as raw };
 
@@ -40,46 +40,35 @@ export async function listReflectionEvents(
     const eventType = `${packageId}::reflection::ReflectionCommitted`;
     const out: ReflectionSummary[] = [];
     const cap = opts.maxEvents ?? Infinity;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{
+            reflection_id: string;
+            saga_id: string;
+            character_id: string;
+            mode: string;
+            question: string;
+            importance: number;
+            committed_at_ms: string | number;
+        }>;
+        if (!parsed.reflection_id) return;
+        const charId = parsed.character_id ?? '';
+        const sagaId = parsed.saga_id ?? '';
+        const mode = (parsed.mode === 'active' || parsed.mode === 'passive')
+            ? parsed.mode
+            : 'passive';
+        if (opts.characterId && charId !== opts.characterId) return;
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (opts.mode && mode !== opts.mode) return;
+        out.push({
+            reflectionId: parsed.reflection_id,
+            sagaId,
+            characterId: charId,
+            mode,
+            question: parsed.question ?? '',
+            importance: Number(parsed.importance ?? 0),
+            committedAtMs: String(parsed.committed_at_ms ?? '0'),
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                reflection_id: string;
-                saga_id: string;
-                character_id: string;
-                mode: string;
-                question: string;
-                importance: number;
-                committed_at_ms: string | number;
-            }>;
-            if (!parsed.reflection_id) continue;
-            const charId = parsed.character_id ?? '';
-            const sagaId = parsed.saga_id ?? '';
-            const mode = (parsed.mode === 'active' || parsed.mode === 'passive')
-                ? parsed.mode
-                : 'passive';
-            if (opts.characterId && charId !== opts.characterId) continue;
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (opts.mode && mode !== opts.mode) continue;
-            out.push({
-                reflectionId: parsed.reflection_id,
-                sagaId,
-                characterId: charId,
-                mode,
-                question: parsed.question ?? '',
-                importance: Number(parsed.importance ?? 0),
-                committedAtMs: String(parsed.committed_at_ms ?? '0'),
-            });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= cap) return false;
+    });
     return out;
 }
