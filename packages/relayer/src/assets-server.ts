@@ -2,7 +2,7 @@
 // (server.ts). Zero npm deps, node:http, plain TS: `node src/assets-server.ts`.
 // Default PORT 8788 (relayer = 8787).
 //
-// Endpoints (spec in docs/WALRUS_ASSETS.md §4):
+// Endpoints (spec in docs/narrative/ASSET_MANAGEMENT.md §4):
 //   GET    /health                       → { ok, walrus, assets, network }
 //   GET    /api/manifest/hero-clips       → { clips:[...] }   (public; frontend DEMO_CLIPS_URL hits this)
 //   GET    /api/assets[?category=]        → { assets:[view], currentEpoch }   (authed)

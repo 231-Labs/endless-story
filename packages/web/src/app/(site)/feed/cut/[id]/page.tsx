@@ -9,7 +9,7 @@ import { CHAPTER_COPY } from '@/lib/copy/chapters';
 /**
  * 章回（事件合本）閱讀頁 — the canonical "回".
  *
- * IA (docs/CONTENT_PIPELINE.md §2/§8.1): the event is the spine. This page IS
+ * IA (docs/narrative/CONTENT_PIPELINE.md §2/§8.1): the event is the spine. This page IS
  * the event's reading surface: the woven multi-POV prose + the verifiable
  * on-chain event + links DOWN to each character's POV raw material. Single
  * POVs link back UP here ("讀本事件的合本").

@@ -36,7 +36,7 @@ export interface TickLoopInput {
      *  lingers OPEN across ticks and resolves WITH a resource transfer (the world
      *  steps), instead of a per-tick storylet. When on, the spine owns event
      *  resolution (autoResolve is forced off) and the cut weaves only at resolve.
-     *  See docs/EVENT_LIFECYCLE.md. Not chain-verified — flag on in a chain session. */
+     *  See docs/narrative/EVENT_LIFECYCLE.md. Not chain-verified — flag on in a chain session. */
     eventSpine?: boolean;
     /** EXPERIMENTAL (default false): run MANY events at once — one per contention
      *  axis (爭灌錄權 ∥ 爭某人的愛). Implies spine mode; live-only. See Stage 1. */

@@ -5,7 +5,7 @@
  * dense reflections, store them back as anchored memories, and anchor one
  * on chain.
  *
- * This is the REFLECT step of the character loop (docs/NARRATIVE_AGENTS.md
+ * This is the REFLECT step of the character loop (docs/narrative/NARRATIVE_AGENTS.md
  * §2). Without it, recall slowly degrades into a pile of low-density
  * observations + chapter fragments; with it, the character keeps
  * conclusions ("I finally see I stayed not for the play") instead of raw logs, and those

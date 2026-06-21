@@ -1,6 +1,6 @@
 // Walrus asset service — types.
 //
-// This service is independent of the MemWAL relayer (see docs/WALRUS_ASSETS.md
+// This service is independent of the MemWAL relayer (see docs/narrative/ASSET_MANAGEMENT.md
 // decision ⑦). It manages human-curated, long-lived Walrus blobs — hero video /
 // portraits / scene anchors / chapters — covering upload, publish state, expiry
 // tracking, and renewal. MemWAL "memory blobs" are not in scope (runner/MemWal owns those).
@@ -32,7 +32,7 @@ export interface WalrusAsset {
   autoRenew: boolean;
   // Epoch the lease currently runs to (updated after store / extend).
   endEpoch: number;
-  // Per-category shape in docs/WALRUS_ASSETS.md §3; hero-clip = one demo-clips.json entry.
+  // Per-category shape in docs/narrative/ASSET_MANAGEMENT.md §3; hero-clip = one demo-clips.json entry.
   meta: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;

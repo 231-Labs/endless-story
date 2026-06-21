@@ -210,7 +210,7 @@ export async function seedDefaultRecruitments(storyId: string): Promise<SeedDefa
 
 /**
  * Batch re-price every recruitment's bulk-buy from its requirement difficulty
- * (basePrice × E[draws] × margin — see docs/WHITEPAPER.md §1). Idempotent;
+ * (basePrice × E[draws] × margin — see docs/research/WHITEPAPER.md §1). Idempotent;
  * returns how many rows changed.
  */
 export async function autoPriceAllRecruitments(

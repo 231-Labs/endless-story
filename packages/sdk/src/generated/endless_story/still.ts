@@ -10,7 +10,7 @@
  * mints such a moment as an ownable, Kiosk-tradeable NFT — the demand side of the
  * character economy: a fan collects the 劇照 of a scene they love; proceeds can
  * flow back to the saga treasury / the character (royalty wiring is a follow-up —
- * see docs/CHARACTER_ECONOMY.md).
+ * see docs/narrative/CHARACTER_ECONOMY.md).
  * 
  * Edition model (戲單/沖印): ONE moment (= one Walrus image) can be collected by
  * MANY fans. The shared `StillRegistry` tracks, per moment key (the blob id), how

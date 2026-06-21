@@ -399,7 +399,7 @@ ${card(
 <tr><td>INV 守恆/有界/確定/golden</td><td>恆成立</td><td>7 情境逐日守恆</td><td>${badge(inv)}</td></tr>
 </table>
 
-<p class="foot">由 <code>packages/economy/driver/html-report.ts</code> 生成 · 設計全文見 <code>docs/CHARACTER_ECONOMY.md</code> · 產品化 Part D 為 gate-after，待認可後另起。</p>
+<p class="foot">由 <code>packages/economy/driver/html-report.ts</code> 生成 · 設計全文見 <code>docs/narrative/CHARACTER_ECONOMY.md</code> · 產品化 Part D 為 gate-after，待認可後另起。</p>
 
 </div></body></html>`;
 
