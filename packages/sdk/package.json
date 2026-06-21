@@ -15,7 +15,8 @@
   },
   "scripts": {
     "codegen": "sui-ts-codegen generate",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@endless-story/shared": "workspace:*",
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@mysten/codegen": "^0.10.4",
     "@types/node": "^25.9.1",
+    "tsx": "^4.19.0",
     "typescript": "^5.5.0"
   }
 }
