@@ -33,5 +33,6 @@
 
 ## 資產來源（如需更新）
 
-- `assets/logo.png` ← `packages/web/public/logo.png`
+- `assets/logo.png` ← `packages/web/public/logo.png`（網站 nav 的 mask 原檔）
+- `assets/logo-light.png` / `assets/logo-dark.png` ← 由 `logo.png` 著色，對應 README 與網站 `--color-cinnabar`（日 `#B04A3C` / 夜 `#CCA45C`）
 - `assets/fig1_contested.png`, `assets/fig3_tradeoff.png`：舊長版的引擎實驗圖，精簡版已不引用，保留備查。
