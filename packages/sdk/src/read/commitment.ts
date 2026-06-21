@@ -9,7 +9,7 @@
  */
 import * as gen from '../generated/endless_story/commitment.js';
 import type { SuiClient } from '../client.js';
-import { queryEventsWithRetry } from './query-retry.js';
+import { scanEvents } from './query-retry.js';
 
 export { gen as raw };
 
@@ -60,44 +60,33 @@ export async function listCommitments(
     const eventType = `${packageId}::commitment::CommitmentCreated`;
     const out: CommitmentSummary[] = [];
     const cap = opts.maxEvents ?? Infinity;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
 
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (raw, ev) => {
+        const parsed = raw as Partial<{
+            commitment_id: string;
+            saga_id: string;
+            subject_id: string;
+            committer: string;
+            committed_at_ms: string | number;
+        }>;
+        if (!parsed.commitment_id) return;
+        const sagaId = parsed.saga_id ?? '';
+        const subjectId = parsed.subject_id ?? '';
+        const committer = parsed.committer ?? '';
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (opts.subjectId && subjectId !== opts.subjectId) return;
+        if (opts.committer && committer !== opts.committer) return;
+        out.push({
+            commitmentId: parsed.commitment_id,
+            sagaId,
+            subjectId,
+            committer,
+            committedAtMs: String(parsed.committed_at_ms ?? '0'),
+            txDigest: ev.id.txDigest,
+            eventSeq: ev.id.eventSeq,
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                commitment_id: string;
-                saga_id: string;
-                subject_id: string;
-                committer: string;
-                committed_at_ms: string | number;
-            }>;
-            if (!parsed.commitment_id) continue;
-            const sagaId = parsed.saga_id ?? '';
-            const subjectId = parsed.subject_id ?? '';
-            const committer = parsed.committer ?? '';
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (opts.subjectId && subjectId !== opts.subjectId) continue;
-            if (opts.committer && committer !== opts.committer) continue;
-            out.push({
-                commitmentId: parsed.commitment_id,
-                sagaId,
-                subjectId,
-                committer,
-                committedAtMs: String(parsed.committed_at_ms ?? '0'),
-                txDigest: ev.id.txDigest,
-                eventSeq: ev.id.eventSeq,
-            });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= cap) return false;
+    });
     return out;
 }
 

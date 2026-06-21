@@ -1,4 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*"]
+  "compilerOptions": {
+    // The characterization tests run standalone under `node --test` and import
+    // the source with explicit `.ts` extensions; allowImportingTsExtensions
+    // lets tsc accept them (valid because the base sets noEmit).
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*", "test/**/*"]
 }

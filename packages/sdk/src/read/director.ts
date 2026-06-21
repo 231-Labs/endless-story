@@ -7,7 +7,7 @@
  * what the director did.
  */
 import type { SuiClient } from '../client.js';
-import { queryEventsWithRetry } from './query-retry.js';
+import { scanEvents } from './query-retry.js';
 
 /** One `RelationshipSeeded` event — a director-declared tie between two
  *  characters in a scene. */
@@ -41,45 +41,34 @@ export async function listRelationshipEvents(
     const eventType = `${packageId}::director::RelationshipSeeded`;
     const out: RelationshipSummary[] = [];
     const cap = opts.maxEvents ?? Infinity;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
-        });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                saga_id: string;
-                scene_id: string;
-                character_a: string;
-                character_b: string;
-                tone: string;
-                seeded_at_ms: string | number;
-            }>;
-            if (!parsed.character_a || !parsed.character_b) continue;
-            const sagaId = parsed.saga_id ?? '';
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (
-                opts.characterId &&
-                parsed.character_a !== opts.characterId &&
-                parsed.character_b !== opts.characterId
-            ) {
-                continue;
-            }
-            out.push({
-                sagaId,
-                sceneId: parsed.scene_id ?? '',
-                characterA: parsed.character_a,
-                characterB: parsed.character_b,
-                tone: parsed.tone ?? 'neutral',
-                seededAtMs: String(parsed.seeded_at_ms ?? '0'),
-            });
-            if (out.length >= cap) return out;
+    await scanEvents(client, eventType, (raw) => {
+        const parsed = raw as Partial<{
+            saga_id: string;
+            scene_id: string;
+            character_a: string;
+            character_b: string;
+            tone: string;
+            seeded_at_ms: string | number;
+        }>;
+        if (!parsed.character_a || !parsed.character_b) return;
+        const sagaId = parsed.saga_id ?? '';
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (
+            opts.characterId &&
+            parsed.character_a !== opts.characterId &&
+            parsed.character_b !== opts.characterId
+        ) {
+            return;
         }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        out.push({
+            sagaId,
+            sceneId: parsed.scene_id ?? '',
+            characterA: parsed.character_a,
+            characterB: parsed.character_b,
+            tone: parsed.tone ?? 'neutral',
+            seededAtMs: String(parsed.seeded_at_ms ?? '0'),
+        });
+        if (out.length >= cap) return false;
+    });
     return out;
 }
