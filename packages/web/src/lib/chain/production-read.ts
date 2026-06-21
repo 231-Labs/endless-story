@@ -20,6 +20,7 @@ import { production } from '@endless-story/runner';
 import { resolveNetwork } from './network.js';
 import { fetchChapterText } from './pov-read.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
+import { decodeByteString } from './decode.js';
 
 const LIST_STALE_MS = 10 * 60 * 1000;
 
@@ -180,14 +181,3 @@ function getCommitmentCached(
     );
 }
 
-function decodeByteString(raw: number[] | string | undefined): string {
-    if (typeof raw === 'string') return raw;
-    if (Array.isArray(raw)) {
-        try {
-            return new TextDecoder().decode(new Uint8Array(raw));
-        } catch {
-            return '';
-        }
-    }
-    return '';
-}

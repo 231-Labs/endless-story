@@ -17,12 +17,7 @@ import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sd
 import { resolveNetwork } from './network.js';
 import { fetchOnChainWorldTime } from './world-read.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
-
-const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
-
-function isSuiObjectId(id: string | null | undefined): id is string {
-    return typeof id === 'string' && SUI_ID_RE.test(id);
-}
+import { isSuiObjectId } from './ids.js';
 
 /** Saga decoded JSON shape — `name` is flat (no SagaInfo wrapper). */
 interface ChainSagaJson {

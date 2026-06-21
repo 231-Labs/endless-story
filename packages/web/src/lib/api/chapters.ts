@@ -5,7 +5,7 @@ import {
   listChaptersBySaga,
   listPublicChaptersForCharacter,
 } from '@/mocks/chapters';
-import { USE_MOCK } from './config';
+import { USE_MOCK, isDeployed } from './config';
 import { httpGet } from './http';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import {
@@ -47,10 +47,6 @@ const SAGA_CHAPTERS_TTL_MS = 30_000;
  *   - Chapter.body is pulled from a Walrus blob; the blob id is stored on the chapter
  *   - visibility = saga_internal is visible only to owner / storyteller
  */
-
-function isDeployed(): boolean {
-  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 export async function listChapters(sagaId: string): Promise<Chapter[]> {
   if (isDeployed() && isSuiObjectId(sagaId)) {

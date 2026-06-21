@@ -1,7 +1,7 @@
 import type { Saga } from '@endless-story/shared';
 import { getDemoSaga, sagas } from '@/mocks/sagas';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { USE_MOCK } from './config';
+import { USE_MOCK, isDeployed } from './config';
 import { httpGet } from './http';
 import { fetchOnChainSaga } from '@/lib/chain/saga-read';
 
@@ -24,10 +24,6 @@ import { fetchOnChainSaga } from '@/lib/chain/saga-read';
  * Backend HTTP endpoints (legacy, USE_MOCK=false path):
  *   GET  /sagas / /sagas/{id} / /sagas/current
  */
-
-function isDeployed(): boolean {
-  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 export async function listSagas(): Promise<Saga[]> {
   if (USE_MOCK) return sagas;

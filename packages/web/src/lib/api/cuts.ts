@@ -1,4 +1,5 @@
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+import { isDeployed } from './config';
 import {
     fetchEventCut,
     fetchEventCutsForSaga,
@@ -13,10 +14,6 @@ import {
  * cuts and the facade returns empty arrays the UI renders as an empty state.
  * See docs/CONTENT_PIPELINE.md §2/§8.1.
  */
-
-function isDeployed(): boolean {
-    return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 export async function listEventCuts(sagaId: string): Promise<EventCutEntry[]> {
     if (!isDeployed()) return [];

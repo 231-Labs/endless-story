@@ -8,7 +8,7 @@ import {
   sceneClips,
 } from '@/mocks/scenes';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { USE_MOCK } from './config';
+import { USE_MOCK, isDeployed } from './config';
 import { httpGet } from './http';
 import { fetchOnChainScene, fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 
@@ -24,10 +24,6 @@ import { fetchOnChainScene, fetchOnChainScenesForSaga } from '@/lib/chain/scene-
  *   GET  /scenes/{id}
  *   GET  /scene-clips?sagaId={id}[&latest={n}&day={current}]
  */
-
-function isDeployed(): boolean {
-  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 // ── Scene derived video clips ──
 

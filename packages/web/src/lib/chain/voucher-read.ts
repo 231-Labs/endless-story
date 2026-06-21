@@ -20,8 +20,7 @@
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
-
-const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
+import { SUI_ID_RE } from './ids.js';
 
 export async function fetchRecruitmentIdForCharacter(
     characterId: string,

@@ -12,12 +12,7 @@
 import type { SagaLocation } from '@endless-story/shared';
 import { makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
-
-const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
-
-function isSuiObjectId(id: string | null | undefined): id is string {
-    return typeof id === 'string' && SUI_ID_RE.test(id);
-}
+import { isSuiObjectId } from './ids.js';
 
 interface ChainLocationJson {
     info?: { index?: number | string; name?: string; description?: string; terrain?: string };
