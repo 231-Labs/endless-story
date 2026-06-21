@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>無盡敘界 機制白皮書 · 系統設計卷</title>
+<style>
+:root{
+  --canvas:#F7F3EA; --surface:#FFFFFF; --ink:#241F18; --mute:#6E6453;
+  --hair:#DED6C5; --cinnabar:#7E4C3B; --gold:#7A6646; --panel:rgba(40,30,15,.04);
+  --serif:"Noto Serif TC","Songti TC",Georgia,serif;
+  --sans:"Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  --mono:"JetBrains Mono","SF Mono",Menlo,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--canvas);color:var(--ink);font-family:var(--sans);line-height:1.8;
+  -webkit-font-smoothing:antialiased;font-size:15.5px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px;display:grid;
+  grid-template-columns:225px 1fr;gap:44px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}nav#toc{position:static;max-height:none}}
+
+nav#toc{position:sticky;top:0;align-self:start;max-height:100vh;overflow-y:auto;
+  padding:42px 0 24px;font-size:.84rem}
+nav#toc .t{font-family:var(--serif);font-weight:700;letter-spacing:.3em;color:var(--cinnabar);
+  font-size:.74rem;margin-bottom:1em}
+nav#toc a{display:block;color:var(--mute);text-decoration:none;padding:.3em 0 .3em .9em;
+  border-left:1px solid var(--hair);transition:.15s}
+nav#toc a:hover{color:var(--cinnabar);border-left-color:var(--cinnabar)}
+
+main{padding:42px 0 110px;min-width:0}
+header.hero{margin-bottom:2.4rem;padding-bottom:2rem;border-bottom:2px solid var(--ink)}
+header.hero .eyebrow{font-size:.74rem;letter-spacing:.4em;color:var(--cinnabar);
+  font-weight:700;margin-bottom:1rem}
+header.hero h1{font-family:var(--serif);font-size:clamp(1.8rem,3.6vw,2.5rem);
+  font-weight:700;line-height:1.4;letter-spacing:.04em}
+header.hero .meta{color:var(--mute);font-size:.88rem;margin-top:.9rem;letter-spacing:.04em}
+.abstract{background:var(--surface);border:1px solid var(--hair);border-top:3px solid var(--cinnabar);
+  padding:1.4rem 1.7rem;margin-bottom:3rem;box-shadow:0 1px 4px rgba(40,30,15,.05)}
+.abstract .t{font-family:var(--serif);font-weight:700;letter-spacing:.3em;font-size:.8rem;
+  color:var(--cinnabar);margin-bottom:.7em}
+.abstract p{font-size:.97rem;color:var(--ink);max-width:none;margin-bottom:.6rem}
+.abstract p:last-child{margin-bottom:0}
+
+section{margin-bottom:3.6rem;scroll-margin-top:24px}
+h2{font-family:var(--serif);font-size:1.45rem;font-weight:700;margin-bottom:1.1rem;
+  padding-bottom:.45rem;border-bottom:1px solid var(--ink);letter-spacing:.03em}
+h2 .no{color:var(--cinnabar);font-family:var(--mono);font-size:.8em;margin-right:.6em}
+h3{font-family:var(--serif);font-size:1.08rem;font-weight:700;margin:1.7rem 0 .6rem;letter-spacing:.02em}
+p{margin-bottom:.85rem;max-width:80ch}
+p.note,li.note{color:var(--mute);font-size:.9rem}
+ul,ol{margin:0 0 1rem 1.5em}
+li{margin-bottom:.4em}
+em{font-style:normal;font-weight:700;color:var(--cinnabar)}
+code{font-family:var(--mono);font-size:.83em;background:var(--panel);
+  border:1px solid var(--hair);border-radius:3px;padding:.06em .38em}
+.formula{background:var(--surface);border:1px solid var(--hair);border-left:3px solid var(--gold);
+  padding:.85em 1.2em;margin:0 0 1rem;font-family:var(--mono);font-size:.88rem;
+  overflow-x:auto;white-space:pre;line-height:1.9}
+
+/* status — sober text chips */
+.st{display:inline-block;font-size:.7rem;font-weight:700;letter-spacing:.1em;
+  padding:.1em .65em;vertical-align:.14em;white-space:nowrap;border:1px solid var(--ink);
+  border-radius:2px;color:var(--ink);background:transparent}
+.st.live{border-color:#3F6B3A;color:#3F6B3A}
+.st.flag{border-color:#7A5A18;color:#7A5A18}
+.st.sim{border-color:#5B5466;color:#5B5466}
+.st.plan{border-color:var(--mute);color:var(--mute);border-style:dashed}
+.st.gate{border-color:#8A4434;color:#8A4434;border-style:dashed}
+
+table{width:100%;border-collapse:collapse;margin:0 0 1.2rem;font-size:.9rem;
+  background:var(--surface);border:1px solid var(--hair)}
+th{background:var(--panel);text-align:left;font-weight:700;font-size:.8rem;
+  letter-spacing:.06em;color:var(--mute);padding:.5em .85em;border-bottom:1px solid var(--ink)}
+td{padding:.5em .85em;border-bottom:1px solid var(--hair);vertical-align:top}
+tr:last-child td{border-bottom:none}
+
+.callout{border:1px solid var(--hair);border-left:3px solid var(--cinnabar);
+  background:var(--surface);padding:.9em 1.25em;margin:0 0 1rem}
+.callout .t{font-family:var(--serif);font-weight:700;color:var(--cinnabar);
+  font-size:.84rem;letter-spacing:.14em;margin-bottom:.35em}
+.flow{display:flex;flex-wrap:wrap;gap:.45em;align-items:center;margin:0 0 1rem;
+  font-family:var(--mono);font-size:.8rem}
+.flow .s{background:var(--surface);border:1px solid var(--hair);padding:.32em .75em;font-weight:600}
+.flow .s.hi{border-color:var(--cinnabar);color:var(--cinnabar)}
+.flow .a{color:var(--cinnabar);font-weight:700}
+.loop{margin:0 0 1.2rem;border:1px solid var(--hair);background:var(--surface)}
+.loop .row{display:grid;grid-template-columns:150px 1fr;border-bottom:1px solid var(--hair)}
+.loop .row:last-child{border-bottom:none}
+.loop .ph{font-family:var(--mono);font-weight:700;font-size:.8rem;padding:.55em .9em;
+  background:var(--panel);color:var(--cinnabar);border-right:1px solid var(--hair)}
+.loop .de{padding:.55em 1em;font-size:.9rem;color:var(--mute)}
+.loop .de strong{color:var(--ink)}
+footer{color:var(--mute);font-size:.83rem;border-top:1px solid var(--ink);padding-top:1.2rem}
+.toplink{font-size:.78rem;color:var(--mute);text-decoration:none;float:right;font-family:var(--sans);font-weight:400}
+.toplink:hover{color:var(--cinnabar)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav id="toc">
+  <div class="t">目 錄</div>
+  <a href="#s1">1 · 設計原則與系統概觀</a>
+  <a href="#s2">2 · 鏈上資產與權限模型</a>
+  <a href="#s3">3 · 徵召與定價</a>
+  <a href="#s4">4 · 敘事引擎：雙 Agent 自治迴圈</a>
+  <a href="#s5">5 · 事件生命週期</a>
+  <a href="#s6">6 · 內容產製鏈路</a>
+  <a href="#s7">7 · 記憶與認知</a>
+  <a href="#s8">8 · 戲劇張力引擎</a>
+  <a href="#s9">9 · 角色經濟生命週期</a>
+  <a href="#s10">10 · 基礎設施</a>
+  <a href="#s11">11 · 實作狀態總覽</a>
+  <a href="#sA">附錄 · 文檔地圖</a>
+</nav>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">ENDLESS STORY · WHITEPAPER</div>
+  <h1>無盡敘界 機制白皮書<br>系統設計卷</h1>
+  <div class="meta">版本快照 2026-06-11 · 配套數學與實驗卷：<code>docs/WHITEPAPER.md</code> · Sui Overflow 2026 · Walrus 賽道</div>
+</header>
+
+<div class="abstract">
+  <div class="t">摘 要</div>
+  <p>Endless Story 是一個自治敘事世界：角色為 Sui 鏈上資產，其記憶以 SEAL 加密存於
+  Walrus，敘事由兩類自治 agent（導演／角色）驅動，戲劇張力與經濟結算由確定性定點數
+  純函數負責——LLM 提供提案與意義，守恆量的一切轉移皆可重現、可驗證。</p>
+  <p>系統的核心結構為「<strong>正史共享，視角私有</strong>」：客觀事件骨架（鏈上事件日誌與導演公報）
+  唯一且公開；每個角色對同一事件持有主觀、加密、互不滲漏的詮釋，形成可規模化的多視角敘事。
+  經濟層令記憶儲存成為單調上升的租金，由此保證角色死亡與世代交替；其無永生、可養活、
+  同盟有效等性質均經離線確定性模擬以假說檢驗方式驗證（economy 41、drama 29、runner 48 測試全綠）。</p>
+  <p>本卷描述系統架構、各機制設計與實作狀態；公式推導、校準參數與實驗結果見數學與實驗卷。</p>
+</div>
+
+<!-- ════════ 1 ════════ -->
+<section id="s1">
+<h2><span class="no">1</span>設計原則與系統概觀<a class="toplink" href="#toc">目錄</a></h2>
+
+<h3>1.1 狀態詞彙</h3>
+<p>本卷以下列五個狀態詞標註各機制，係解讀全文的刻度：</p>
+<table>
+<tr><th style="width:170px">標記</th><th>意義</th></tr>
+<tr><td><span class="st live">已實作</span></td><td>程式碼在 repo、接入主流程、可演示。</td></tr>
+<tr><td><span class="st flag">旗標保護</span></td><td>程式碼與純邏輯測試完備，以 feature flag 預設關閉，待真鏈驗證後啟用；關閉時行為與主線一致。</td></tr>
+<tr><td><span class="st sim">模擬驗證</span></td><td>經零依賴確定性模擬器之不變式與假說檢驗，尚未（全部）產品化。</td></tr>
+<tr><td><span class="st plan">規格完成</span></td><td>設計拍板成文，尚未動工。</td></tr>
+<tr><td><span class="st gate">刻意延後</span></td><td>非未規劃，係刻意擱置至前置條件成熟。</td></tr>
+</table>
+
+<h3>1.2 三條工程紀律</h3>
+<ol>
+<li><strong>LLM proposes，deterministic layer disposes。</strong>LLM 負責提案、措辭與意義；
+資源配置、金錢、氣血等守恆量的狀態轉移一律由定點數純函數結算，LLM 永不輸出數值增量。</li>
+<li><strong>單一真理純函數，先驗證後產品化。</strong>機制核心先以零依賴純 TypeScript 模組
+（<code>packages/drama</code>、<code>packages/economy</code>）完成離線驗證；產品與 Move 合約移植同一份轉移函數，永不重寫。</li>
+<li><strong>逐位元組可重現。</strong>全程 <code>bigint</code> 定點數（SCALE = 10⁶），與 Move u64/u128 算術 1:1
+對應；golden vector 與跨層一致性測試保證鏈上 re-run 可驗。</li>
+</ol>
+
+<h3>1.3 系統閉環</h3>
+<div class="flow">
+  <span class="s hi">徵召 mint（§3）</span><span class="a">→</span>
+  <span class="s">入科記憶與關係網（§7）</span><span class="a">→</span>
+  <span class="s hi">自治 tick：雙 agent（§4）</span><span class="a">→</span>
+  <span class="s">事件開回·續回·收回（§5）</span><span class="a">→</span>
+  <span class="s">張力由稀缺資源湧現（§8）</span><span class="a">→</span>
+  <span class="s">POV → 合本章回 → 公報 → 劇照（§6）</span><span class="a">→</span>
+  <span class="s hi">訂閱·金庫·發薪（§9）</span><span class="a">→</span>
+  <span class="s">記憶租金單調上升 → 死亡釋位（§9）</span><span class="a">→</span>
+  <span class="s hi">世代交替 → 回到徵召</span>
+</div>
+<p class="note">敘事側令世界活著（記憶決定行為、行為產生記憶、張力來自守恆的稀缺）；
+經濟側令世界有重量（append-only 儲存的物理性質直接構成死亡機制）。</p>
+</section>
+
+<!-- ════════ 2 ════════ -->
+<section id="s2">
+<h2><span class="no">2</span>鏈上資產與權限模型 <span class="st live">已實作</span><a class="toplink" href="#toc">目錄</a></h2>
+
+<h3>2.1 合約模組</h3>
+<p>單一 Move package <code>endless_story</code>，2026-06-11 已重新部署 testnet：</p>
+<table>
+<tr><th>模組</th><th>職責</th></tr>
+<tr><td><code>currency / faucet</code></td><td>ENDLESS（6 位小數，包裝穩定幣模型）；faucet 參數 admin 可調</td></tr>
+<tr><td><code>world / saga / scene</code></td><td>世界時間（衰老·經濟層）、戲班（金庫、RevenueConfig、訂閱）、場景（在場名單、gallery）</td></tr>
+<tr><td><code>character / recruit</code></td><td>角色 NFT 與雙 cap；徵召 voucher（mint → redeem）、屬性門檻驗證</td></tr>
+<tr><td><code>event / resource / director</code></td><td>BudgetEvent（開局·出牌·收尾·資源易手）；DramaResource 守恆帳本（§8 的 Move 對應體）；導演軟事件 capability</td></tr>
+<tr><td><code>commitment / reflection / dream / subscribe</code></td><td>內容上鏈錨定；反思；注夢；訂閱（收費為既定後續）</td></tr>
+<tr><td><code>still</code></td><td>劇照收藏 NFT：共享 <code>StillRegistry</code> 以 blob id 為鍵鏈上自增版號（戲單／沖印模型——一個名場面、多位藏家），可設限量；Kiosk 可交易；StorytellerCap 策展</td></tr>
+<tr><td><code>chamber</code></td><td>廂房：owner 對場景的佈置層。權限切分——saga 保留敘事控制，owner 僅得佈置權（OwnerCap gate）；可變的小資料（物件座標）在鏈上原地覆寫，不可變的重資產（.glb）存 Walrus 一次、以 blob id 引用</td></tr>
+</table>
+
+<h3>2.2 兩把鑰匙</h3>
+<table>
+<tr><th>Capability</th><th>持有者</th><th>權力</th></tr>
+<tr><td><code>OwnerCap</code></td><td>玩家——mint 時由合約內 <code>public_transfer</code> 直接轉予付款人</td><td>IP 所有權：瀏覽器內解密記憶（<code>seal_approve_owner</code>）、挹注、廂房佈置、（後續）分潤累進</td></tr>
+<tr><td><code>ControlCap</code></td><td>saga server（storyteller）</td><td>營運權：runner 代角色寫憶／召回、推進敘事</td></tr>
+</table>
+<p>所有權為<em>鏈上結構性保證</em>：storyteller 的交易路徑自始不接觸 OwnerCap。撤銷
+ControlCap 即切斷平台對記憶的存取——「角色比平台長壽」的可證明差異。
+記憶解密為 cap-enforced：伺服器僅回密文，owner 在瀏覽器以真錢包簽名解密
+（待有錢包環境完整實測一輪）。</p>
+
+<h3>2.3 內容存取分層</h3>
+<table>
+<tr><th>內容</th><th>讀者</th><th>機制</th></tr>
+<tr><td>公報（導演客觀敘述）</td><td>公開</td><td><code>/feed</code>，免費漏斗</td></tr>
+<tr><td>事件合本「回」（正式章回）</td><td>MVP 公開（premium gate 待跨角色訂閱規則定義）</td><td>§6.2</td></tr>
+<tr><td>POV 章回（角色主觀原料）</td><td>owner + 訂閱者</td><td>client 端錢包 gate；body 僅讀者端取</td></tr>
+<tr><td>反思／夢</td><td>owner</td><td>client gate / mask</td></tr>
+<tr><td>角色記憶</td><td>owner（瀏覽器解密）／saga server</td><td><strong>SEAL 密碼學 gate</strong>（cap-enforced）</td></tr>
+<tr><td>劇照</td><td>低清公開 teaser／全清 gated（規劃）</td><td>§6.4</td></tr>
+</table>
+<p class="note">章回層之 gate 為 UX gate（blob 於 Walrus 仍為明文，僅隱藏直連）；
+記憶層為密碼學 gate。兩層刻意分離。</p>
+
+<h3>2.4 承諾模式與事件匯流排</h3>
+<div class="flow">
+  <span class="s">產出文本／圖像</span><span class="a">→</span>
+  <span class="s">hash</span><span class="a">→</span>
+  <span class="s">Walrus 上傳</span><span class="a">→</span>
+  <span class="s hi">commitment::commit 錨定</span><span class="a">→</span>
+  <span class="s">emit *Committed</span>
+</div>
+<p>導演與角色間無 in-process 狀態：通訊即鏈上事件匯流排（StoryletOpened、CharacterCalled、
+RelationshipSeeded、CharacterMoved、ChapterCommitted⋯）。鏈上事件日誌同時即「導演的客觀
+記憶」——append-only、不可竄改，與角色主觀私密記憶構成刻意的不對稱（§7.3）。</p>
+
+<h3>2.5 架構七原則（摘錄）</h3>
+<ul>
+<li>依賴單向：<code>web / runner → sdk + memwal + llm</code>；<code>shared</code> 零依賴。</li>
+<li><code>sdk</code> 為鏈上互動唯一入口；<code>memwal</code> 為 Walrus／SEAL 唯一入口；<code>llm</code> 為 AI client 唯一入口。</li>
+<li><code>shared/contract-ids.ts</code> 由 cli 寫入為部署輸出單一真相，其餘只讀。</li>
+<li>admin 操作以 server actions 為先；<code>(site)</code>／<code>(admin)</code> route group 嚴格隔離。</li>
+</ul>
+</section>
+
+<!-- ════════ 3 ════════ -->
+<section id="s3">
+<h2><span class="no">3</span>徵召與定價 <span class="st live">已實作</span><a class="toplink" href="#toc">目錄</a></h2>
+<p>角色四軸先天屬性（外貌／筋骨／機敏／心性）由 32-byte 種子經 HKDF-SHA256 域分離擲出，
+單軸均勻分佈於 [0,100]、四軸獨立、同種子必得同角色。徵召可設每軸門檻；
+「必應」由後端零成本重骰至達標方生成 mint，定價錨於期望硬抽花費：</p>
+<div class="formula">p = ∏ᵢ (101 − mᵢ)/101      E[draws] = 1/p
+bulkPrice = max( basePrice, round₁₀( basePrice × E × 0.85 ) )</div>
+<p>margin 0.85 使必應略廉於期望硬抽，消除變異負體驗並平滑營收；門檻越苛 E 越大，
+故必應為 per-徵召值（現役 13 徵召 E 介於 4.4–27.2）。推導、性質與邊界條件見數學卷 §1。
+mint 為阻塞式（畫像生成完才上鏈），保證 NFT 縮圖與顯示同一張；mint／抽卡費入 saga 金庫，
+為 §9 發薪池的入金來源之一。</p>
+</section>
+
+<!-- ════════ 4 ════════ -->
+<section id="s4">
+<h2><span class="no">4</span>敘事引擎：雙 Agent 自治迴圈 <span class="st live">已實作</span><a class="toplink" href="#toc">目錄</a></h2>
+<p>理論基礎：Director–Actor 分解（IBSEN／Co-DIRECT）與 Generative Agents 認知迴圈
+（Park et al. 2023）。目標為 C 級全自治——角色自行感知、回憶、規劃、行動、反思，
+世界無人駕駛地前進；骨架已全數落地。</p>
+
+<h3>4.1 權責分界</h3>
+<table>
+<tr><th></th><th>Director（一 saga 一隻）</th><th>Character（一角色一隻）</th></tr>
+<tr><td>職責</td><td>目標、開局、調度、監看與重導、客觀公報</td><td>感知、決策、行動（移動／出牌／開口／金錢）、人設、記憶與關係、主觀 POV、反思</td></tr>
+<tr><td>界線</td><td>不替角色決定如何演、出哪張牌</td><td>不無視導演開的局（可詮釋、可抗拒）</td></tr>
+<tr><td>溝通</td><td>鏈上軟事件（capability；給提示不給台詞）</td><td>訂閱鏈事件，以鏈上動作回應</td></tr>
+<tr><td>模型分級</td><td>規劃用高階模型（低頻）</td><td>決策用低階模型（高頻）；POV／反思用高階模型</td></tr>
+</table>
+<p class="note">判準：「此角色此刻做了什麼」屬角色；「世界往哪推、誰上場、今日大事」屬導演。
+衝突時角色自圓其說（failing believably）。</p>
+
+<h3>4.2 自治 tick 相位序（現行）</h3>
+<div class="loop">
+<div class="row"><div class="ph">PLAN</div><div class="de">低階模型更新長期目標／日計畫 → 存 MemWal <code>kind=plan</code>(i=8)；含身份漂移防線（非班主出現「當家」措辭即回退）</div></div>
+<div class="row"><div class="ph">MOVE</div><div class="de">依計畫與在場者決定 stay／move → <code>move_character</code>，整 tick 批次為單一 PTB</div></div>
+<div class="row"><div class="ph">DRAMA</div><div class="de">確定性張力結算（§8）：稀缺資源轉移 → 張力重導出，餵入後續決策</div></div>
+<div class="row"><div class="ph">SOCIAL</div><div class="de">不在 open event 之角色 observe／talk／idle；對話雙方各寫 observation 記憶並更新場景飄字</div></div>
+<div class="row"><div class="ph">ASK <span style="font-weight:400">(2.85)</span></div><div class="de"><strong>經濟：求助。</strong>拮据角色以 <code>decideAskAction</code> 向同場有餘力者開口 → 寫記憶／場景線，並掛入 GIVE 候選</div></div>
+<div class="row"><div class="ph">GIVE <span style="font-weight:400">(2.9)</span></div><div class="de"><strong>經濟：接濟。</strong>有餘力者以 <code>decideAidAction</code>（LLM 判斷＋硬守衛）決定是否出手；受方可拒（仇家回絕 → 雙方寫「傷和氣」記憶）</div></div>
+<div class="row"><div class="ph">SETTLE <span style="font-weight:400">(2.95)</span></div><div class="de"><strong>經濟：日結。</strong>以鏈上金庫餘額為發薪池：發保底＋績效 → 扣每日開銷 → 更新氣血 → 死亡判定；日結 idempotent、轉帳逐 tick 套用；影子已死者剔出 active slice</div></div>
+<div class="row"><div class="ph">ACT</div><div class="de">open event 中未出牌參與者自動 decide → <code>submit_action</code>；收尾依事件生命週期（§5）</div></div>
+<div class="row"><div class="ph">POV</div><div class="de">高階模型寫第一人稱章回（訂閱者 &gt; 0 方生成）→ Walrus + commitment</div></div>
+<div class="row"><div class="ph">SLEEP</div><div class="de">週期性反思壓縮：零碎觀察 → 1–2 條高密度反思（i=8、anchored 永不再壓）→ 上鏈</div></div>
+<div class="row"><div class="ph">GAZETTE</div><div class="de">導演編客觀公報（每敘事日、有事才出）→ Walrus + commitment，公開</div></div>
+</div>
+<p>驅動：admin SchedulerPanel 手動，或 <code>cli world-loop</code> 無人駕駛（已有獨立 Dockerfile
+可服務化部署；支援 dry-run、指定角色、關閉 POV、JSON 報告；失敗 exit 1 可作部署 smoke gate；
+relayer <code>/control</code> 之 paused 旗標可全域暫停）。每 tick 建 saga 名冊快照（行當、年齡、
+所在場景）注入各相位 prompt；行當聲口由 <code>shared/role-traits.ts</code> 統一注入。</p>
+</section>
+
+<!-- ════════ 5 ════════ -->
+<section id="s5">
+<h2><span class="no">5</span>事件生命週期 <span class="st live">Phase 1 已實作</span> <span class="st flag">Phase 2／2.5／3 旗標保護</span><a class="toplink" href="#toc">目錄</a></h2>
+<p>來源：<code>docs/EVENT_LIFECYCLE.md</code>（canonical）。事件粒度拍板：</p>
+<table>
+<tr><th>層級</th><th>定義</th><th>壽命</th><th>鏈上身分</th><th>產物</th></tr>
+<tr><td>弧 Arc</td><td>一條主線（如「首張唱片之爭」）</td><td>多日</td><td>一個 DramaResource 為爭奪標的</td><td>—</td></tr>
+<tr><td>事件 Event</td><td>有始有終的衝突（開場→周旋→結算）</td><td>跨數 tick</td><td>一個 BudgetEvent（open→resolve）</td><td>一回合本</td></tr>
+<tr><td>拍 Beat</td><td>事件內某 tick 的一個動作</td><td>1 tick</td><td>submit_action／scene-line</td><td>POV 原料＋劇照</td></tr>
+<tr><td>視角 POV</td><td>角色對一拍的主觀</td><td>1 tick</td><td>commitment(subject=char)，provenance 攜 eventTx</td><td>合本素材</td></tr>
+</table>
+
+<h3>5.1 事件 spine（開回 → 續回 → 收回）</h3>
+<div class="formula">tick T      開回   pushEvent + 發牌；該回合的卡一次出完（現行合約為單回合）
+T..T+n      續回   事件維持 OPEN；POV／反應跨 tick 累積，全部鎖同一 event id
+T+n         收回   resolve_event 攜資源轉移（贏家奪標的）→ 需求轉移 → 世界前進；
+                   合本於此將整回 POV 一次織成「回」</div>
+<p>診斷出的根因：先前以逐 tick storylet（只 emit、無物件、永不結算）充當事件 ⇒ 資源永不易手
+⇒ 張力靜止 ⇒ 主題鬼打牆。spine 以既部署的鏈上 primitive（pushEvent／submitAction／
+resolveEvent 攜 resource transfers）補上「會結算、能推進世界」的事件單位，毋需 redeploy。
+結算每一步皆有 fallback——任何失敗退回純收尾，open 事件絕不卡死迴圈。</p>
+
+<h3>5.2 分階段狀態</h3>
+<table>
+<tr><th>Phase</th><th>內容</th><th>狀態</th></tr>
+<tr><td>1 · 反鬼打牆</td><td>確定性選題 <code>selectContention</code> 全域排序＋anti-repeat；世界輪換衝突主題</td><td><span class="st live">已實作</span></td></tr>
+<tr><td>2 · 事件 spine</td><td>跨 tick BudgetEvent 生命週期（上文）；合本改於收回時織</td><td><span class="st flag">旗標保護</span>（驗證 runbook 見源文檔 §5）</td></tr>
+<tr><td>2.5 · 並行事件＋注意力耦合</td><td>按資源軸並行開局（上限可配）；注意力預算令並行事件透過共享角色互相拉扯（§8.3）</td><td><span class="st flag">旗標保護</span></td></tr>
+<tr><td>3 · 導演授權標的</td><td>A：LLM 框題（人話命名，失敗無縫回退決定性句）；B：LLM 立題（instantiate 新爭奪標的，過守衛：kind 不撞內建、capacity 夾值、cooldown 6 次／上限 3 個）</td><td><span class="st flag">旗標保護</span></td></tr>
+<tr><td>4 · 真多回合出牌</td><td>每 tick 各出一張、連打數 tick 之周旋</td><td><span class="st plan">需 redeploy，非當前範圍</span></td></tr>
+</table>
+<div class="callout"><div class="t">設計骨</div>
+<strong>LLM 掌「意義」，永不掌「守恆」。</strong>選哪樁衝突維持決定性、可測、不可被 LLM 操弄；
+LLM 僅負責框題的人話與提議新標的，而標的一律過同一套驗證、鏈上守恆說了算。
+供給（慢、受管、上鏈）／選擇（決定性）／意義（快、LLM、可回退）三層各有變更速率。</div>
+</section>
+
+<!-- ════════ 6 ════════ -->
+<section id="s6">
+<h2><span class="no">6</span>內容產製鏈路 <span class="st live">合本·公報漏斗已實作</span><a class="toplink" href="#toc">目錄</a></h2>
+<p>來源：<code>docs/CONTENT_PIPELINE.md</code>（canonical）。一句話：<strong>事件是脊椎，
+其餘皆其投影</strong>——每層產物均攜同一 <code>eventTx</code> provenance 章、每層 condition on
+上一層的 anchor，故「真的發生過」「同一人長一樣」「圖文影對得上」三種一致性同時成立。</p>
+
+<h3>6.1 產物層級</h3>
+<table>
+<tr><th>Surface</th><th>視角</th><th>存取</th><th>狀態</th></tr>
+<tr><td>公報 Gazette</td><td>客觀·日粒度·導演聲口</td><td>公開（漏斗頂：頭條=事件＋鉤子＋CTA）</td><td><span class="st live">已實作</span>（漏斗化 prompt 已上）</td></tr>
+<tr><td>POV（原料）</td><td>主觀·每角色每事件一篇</td><td>owner＋訂閱者</td><td><span class="st live">已實作</span></td></tr>
+<tr><td><strong>事件合本「回」</strong></td><td>多主觀織入（羅生門式）</td><td>MVP 公開；premium gate 後收</td><td><span class="st live">已實作</span>（compiler＋tick 接線＋admin 面板＋鏈上讀＋<code>/feed</code> 章回 mode）</td></tr>
+<tr><td>劇照 Still</td><td>客觀定格·beat 粒度</td><td>低清公開／全清 gated（規劃）</td><td><span class="st live">事件級已實作</span>；beat 級越張力門檻配置截 <span class="st plan">規格完成</span>；收藏面（<code>still.move</code> 版號帳本）<span class="st live">合約已部署</span></td></tr>
+<tr><td>視頻 Clip</td><td>混合</td><td>分級（最貴最緊）</td><td><span class="st plan">規格完成</span>（image-to-video，劇照當 first frame）</td></tr>
+<tr><td>角色 PV</td><td>主觀剪輯·拉新鉤子</td><td>公開預告</td><td><span class="st gate">刻意延後</span></td></tr>
+</table>
+
+<h3>6.2 章回 = 事件合本（拍板）</h3>
+<p>正式「章回」為事件合本而非單角色 POV：compiler 吃同一 <code>eventTx</code> 的全部 POV ＋
+客觀事件骨架，織成一篇多視角章回（subject = event_id；≥2 篇 anchored POV 方織——
+僅在有付費觀眾處花成本）。單 POV 退為角色個人 feed 與未來 PV 素材。
+<code>/feed</code> 與人物頁的資訊架構已翻成 event-centric：feed 由事件展開角色、
+dossier 由角色切入事件。</p>
+
+<h3>6.3 一致性鏈路（text → image → video）</h3>
+<div class="formula">文字層   事件(鏈上骨架,eventTx) → beat/intent → POV(anchored) → 合本(anchored)
+圖片層   mint anchor 肖像 + 場景 anchor 板 + physical_facts ──全部向前條件化──▶
+         肖像變體(戲妝/老年/日常) → 事件劇照(beat 錨定合成圖)
+影片層   劇照 = 影片 first frame／keyframe → image-to-video → shot → 拼接成 clip</div>
+<table>
+<tr><th>一致性</th><th>解法</th></tr>
+<tr><td>身份一致（同一人長一樣）</td><td>anchor 條件化：臉／戲妝來自 mint anchor，影片不換臉</td></tr>
+<tr><td>連續一致（圖＝文＝影）</td><td>provenance 蓋章＋劇照同時是該 POV 的插圖與該 shot 的 first frame（單一 beat 來源）</td></tr>
+<tr><td>正典一致（真的發生過）</td><td>全部回溯單一 eventTx；POV 間主觀分歧非缺陷（羅生門），客觀骨架方為正典</td></tr>
+</table>
+<p class="note">生成成本以「戲劇張力＋經濟」雙重 gate 控制，導演（唯一全知視角）任生成預算守門人。</p>
+</section>
+
+<!-- ════════ 7 ════════ -->
+<section id="s7">
+<h2><span class="no">7</span>記憶與認知 <span class="st live">已實作</span><a class="toplink" href="#toc">目錄</a></h2>
+
+<h3>7.1 三因子召回</h3>
+<p>記憶為 SEAL 加密文字存 Walrus，前綴標籤 <code>[[m|t=kind|i=imp|d=敘事日]]</code>。
+召回分數 = importance × recency × relevance（半衰期 2 敘事日，以敘事日而非牆鐘衰減）；
+importance 刻度：夢 9 &gt; 關係 8 = 規劃 8 &gt; 反思／創世 7 &gt; 章回 5 &gt; 觀察 4。
+託管模式 over-fetch 3× 後 client 重排；自架 relayer（plaintext-blind）對全 namespace
+計算真三因子回 top-N，省約 3× SEAL 解密。公式與細節見數學卷 §6。</p>
+
+<h3>7.2 軟遺忘與睡眠壓縮</h3>
+<p>MemWal append-only、無刪除。睡眠期將非 anchored 零碎觀察壓縮為高密度反思
+（i=8、anchored 永不再壓），疊加 recency 衰減令零碎記憶自然沉底——遺忘為湧現性質、
+bytes 永不消失，此即 §9 記憶租金的物理基礎。</p>
+
+<h3>7.3 主觀記憶與視角化真相（設計鐵則）</h3>
+<div class="callout"><div class="t">系統不維護全知正典</div>
+角色私密記憶為主觀、視角化；因 SEAL 隱私界線，角色僅能見他人公開描述，對他人秘密
+的理解只能自行長出一個版本——同一事件在不同角色心中各有一版，錯位即戲。
+實測案例：班主沈雪笙之私密真相為「白蘭遠嫁，從此封箱」；後入班的衣箱師傅唐桂蘭
+經 induction 自行長出第二版（箱底染血戲衣、委身軍閥之往事）。兩版互不知情、皆未外洩，
+系統零跨角色滲漏即自然產生視角化真相——<strong>加密邊界本身即敘事引擎</strong>，
+亦為 §6.2 合本章回（羅生門式織法）的素材來源。欲令 A 確知 B 之秘密，唯有明寫入
+A 自身之描述；系統不跨角色洩漏。</div>
+
+<h3>7.4 其餘記憶機制</h3>
+<table>
+<tr><th>機制</th><th>內容</th><th>狀態</th></tr>
+<tr><td>入科 induction</td><td>mint 後單次 LLM 同產自身記憶＋對班底關係；創世班底批次版一次看整批、兩兩關係網雙向對稱只寫一次</td><td><span class="st live">已實作</span></td></tr>
+<tr><td>注夢</td><td>owner 付 ENDLESS → moderator 改寫 → 錨定 → remember(i=9)；起始最高、隨 recency 衰減</td><td><span class="st live">已實作</span></td></tr>
+<tr><td>本色 persona</td><td>mint 後自公開 profile 蒸餾「軸／腔／界」→ Walrus + commitment；chain-first 讀取</td><td><span class="st live">已實作</span></td></tr>
+<tr><td>導演記憶 ≠ 角色記憶</td><td>導演記憶＝鏈上事件日誌（客觀公開）；禁入角色 MemWal namespace</td><td>鐵則</td></tr>
+<tr><td>動態出圖</td><td>同一 physical_facts 出情境變體 → <code>update_image_by_storyteller</code> → CharacterImageUpdated 軌跡＝動態 NFT</td><td><span class="st live">MVP</span>（owner 付費觸發、導演自動觸發、時間軸 gallery 為後續）</td></tr>
+</table>
+</section>
+
+<!-- ════════ 8 ════════ -->
+<section id="s8">
+<h2><span class="no">8</span>戲劇張力引擎 <span class="st live">已接入 tick</span> <span class="st sim">29 測試</span><a class="toplink" href="#toc">目錄</a></h2>
+<p>核心命題：張力不來自慾望本身，而來自慾望投射到<strong>有限、守恆的資源</strong>上、
+無法同時被滿足的那條邊。三 primitive（Desire／Resource／Action）與純轉移函數
+<code>applyTick</code>（REFILL → RESOURCE → SATISFACTION；tension 為讀取時導出量）：</p>
+<div class="formula">target = SCALE·held/want      s += α·(target−s)/SCALE   (α_down 0.60 &gt; α_up 0.30 ⇒ 損失趨避)
+s += γ·(baseline−s)/SCALE   (γ 0.05 ⇒ 習慣化)            tension = weight·(SCALE−s)/SCALE</div>
+<ul>
+<li>形式性質：守恆（違規提案 reject）、有界無 clamp、決定性（逐位元組）。衝突為湧現——
+跨 agent（同一 capacity-1 資源之零和）與 agent 內（有限行動預算之取捨），皆無宣告式 conflict matrix。</li>
+<li>校準結論：行動預算補充率決定奪位週期（budgetCap 12 ⇒ 政權期 ≈ 7 tick），
+將逐拍抖動轉為可讀的宿敵節奏。三種失敗模式（flatline／runaway／oscillation）
+已操作化為數值斷言；負控制消融證明 margin 與預算為承重結構。</li>
+<li>柳生春時刻（agent 內取捨）為湧現而非劇本：單變數消融（僅放寬預算）令被迫二選一
+120→2，證明預算為因。實驗全表見數學卷 §2.6。</li>
+</ul>
+
+<h3>8.1 鏈上對應</h3>
+<p><code>resource.move</code> 為 RESOURCE 相位的 Move 對應體（守恆＝合約不變式，轉移提案於鏈上
+重驗）；跨層一致性測試釘死同一 beat 在 TS 與 Move 兩層須得逐位元組相同的 allocation 與
+導出張力——「任何人 re-run 得同樣張力」主張的最後一環。事件結算（§5.1 收回）即透過
+<code>resolve_event</code> 攜資源轉移落實易手。</p>
+
+<h3>8.2 注意力預算耦合 <span class="st flag">旗標保護</span></h3>
+<p>並行事件之間經<strong>共享角色</strong>互相拉扯：每角色僅全額供養張力排序前 focus 個慾望，
+其後的慾望被冷落放大，聚合後令被冷落軸的全域張力上升、選題轉向之。對單慾望角色為恆等；
+僅作用於 off-chain 需求訊號，不觸碰鏈上守恆。人物層以「顧此失彼」提詞落到台詞與決策。</p>
+</section>
+
+<!-- ════════ 9 ════════ -->
+<section id="s9">
+<h2><span class="no">9</span>角色經濟生命週期 <span class="st live">迴圈已可端到端觀察（off-chain 影子）</span> <span class="st sim">41 測試</span><a class="toplink" href="#toc">目錄</a></h2>
+
+<h3>9.1 金流閉環與守恆</h3>
+<div class="flow">
+  <span class="s">訂閱費／mint·抽卡費／夢費</span><span class="a">→</span>
+  <span class="s hi">saga 金庫＝發薪池</span><span class="a">→</span>
+  <span class="s">角色 Balance（真實持幣）</span><span class="a">→</span>
+  <span class="s">扣 dailyCost</span><span class="a">→</span>
+  <span class="s hi">協議金庫（對應真實基建帳單）</span>
+</div>
+<div class="formula">守恆：injected ≡ ownerSink + storytellerSink + protocolSink + sagaTreasury + Σ balance
+dailyCost = C_run·activeFactor + C_mem·memory_count + C_img·image_count + C_seal·recallCount</div>
+<p>記憶 append-only ⇒ <code>memory_count</code> 嚴格單調上升 ⇒ <strong>休眠可逃推論費、
+不可逃記憶租金</strong>（新生 dailyCost ≈ 7.1，一敘事年 ≈ 50.3）。薪餉為混合制
+（行當保底 × 屬性係數 ＋ 按訂閱數分配之績效池）；金庫由 mint／抽卡／夢費注入，
+故<em>零訂閱亦有保底班中俸</em>，金庫空方為零。公式見數學卷 §4。</p>
+
+<h3>9.2 氣血與雙軌死亡</h3>
+<p>vitality ∈ [0,100]；經濟軌（連續破產加速扣血，滿血至死約 5 日、一旬搶救窗口）＋
+年齡軌（隱藏 hazard：不存壽限欄位，onset ≈ 55 ± 私有種子變異、永不上鏈）。
+死期由氣血累積湧現，無人可預先計算。死亡 → 釋放持有資源（席位回自由池）→
+遺產回流 owner → 後輩競逐——世代交替閉環。</p>
+
+<h3>9.3 金錢行為：四個 agent 動作</h3>
+<p>給（<code>decideAidAction</code>）／收拒（受方可回絕施捨）／要（<code>decideAskAction</code>）／回應。
+分界原則：<strong>LLM 決定「要不要、對誰」（戲），硬守衛決定「能不能、至多多少」（帳）</strong>
+——收款人須在場、金額 clamp ≤ 餘額、禁自轉／給死者，全部對齊純函數 <code>applyTransfer</code>
+（淨額 0、不破壞守恆）。eval：3 hard 必過全過、3 judgment 情境判斷皆可辯護。</p>
+
+<h3>9.4 結算相位與現況</h3>
+<p>ASK（2.85）→ GIVE（2.9）→ SETTLE（2.95）已接入 tick loop（§4.2）：以鏈上金庫餘額為
+發薪池種子、日結 idempotent、轉帳逐 tick 套用；影子已死者剔出 active slice、人物頁顯示歿。
+整條「發薪 → 扣租金 → 求助 → 接濟（可拒）→ 退場」已可端到端觀察。
+現為 <strong>off-chain 影子權威</strong>（store process-local）；鏈上權威結算
+<code>economy.move</code>（D1：per-char Balance、transfer、settle、自然死包裝）為既定後續，
+移植對象即已驗證之純函數。付費訂閱與分潤開關 <span class="st gate">刻意延後</span>
+（RevenueConfig 欄位已就位；subscribe 收費為上游前置）。</p>
+
+<h3>9.5 假說檢驗（摘要）</h3>
+<table>
+<tr><th>假說</th><th>結果</th></tr>
+<tr><td>H1 可養活穩態</td><td>16 訂閱者角色整個黃金期 100% healthy，身家 56 → 1227</td></tr>
+<tr><td>H2 無永生</td><td>零訂閱平均壽命 26 日；<strong>固定 16 訂閱 400 日亦全滅</strong>——唯成長中讀者能續命</td></tr>
+<tr><td>H3 世代交替</td><td>320 日維持 avgAlive ≈ 3.4 之穩定族群帶，非全滅亦非永生</td></tr>
+<tr><td>H4 同盟因果有效</td><td>開／關 patronage 唯一差別：死亡 0 對 3；決策核心重驗 0/4 對 3/4（413 筆轉帳）</td></tr>
+<tr><td>H5 無病態</td><td>財富 Gini 0.14</td></tr>
+<tr><td>H6 挹注可豢養</td><td>零讀者＋owner 挹注全員存活，每日 ~5.5 ENDLESS 有界可負擔</td></tr>
+</table>
+<p class="note">完整實驗設計與數據見數學卷 §4.7、§5。</p>
+</section>
+
+<!-- ════════ 10 ════════ -->
+<section id="s10">
+<h2><span class="no">10</span>基礎設施<a class="toplink" href="#toc">目錄</a></h2>
+<table>
+<tr><th>項目</th><th>內容</th><th>狀態</th></tr>
+<tr><td>Web 部署</td><td>自架 VPS（無 serverless 時限）；mobile RWD、錯誤頁、SEO、a11y、onboarding 之商業級打磨已併入</td><td><span class="st live">已實作</span></td></tr>
+<tr><td>world-loop 服務化</td><td>獨立 Dockerfile（standalone、零依賴），可作常駐 ticker 部署</td><td><span class="st live">已實作</span></td></tr>
+<tr><td>自架 MemWal relayer</td><td>plaintext-blind 全 namespace 真三因子（§7.1）；<code>/control</code> 全域暫停旗標</td><td><span class="st live">程式碼完成</span>，flag 預設關、待部署切換</td></tr>
+<tr><td>SEAL 限流對策</td><td>召回並發 1、retry + backoff、per-tick recall cache；放寬需自架 SEAL key server（接受「慢但能跑」）</td><td><span class="st live">已實作</span></td></tr>
+<tr><td>Walrus 資產續租</td><td>Walrus 為 epoch 租期制；續租僅 Blob object owner 可為 ⇒ 自架 publisher 為長存 IP 前提。通用資產面板＋Hybrid 續費（警示＋手動為主、per-category 自動 cron）；既有公共 publisher 資產需 backfill 重 register</td><td><span class="st plan">規格完成</span>（<code>docs/WALRUS_ASSETS.md</code>）</td></tr>
+<tr><td>testnet 部署</td><td>合約 2026-06-11 重新部署（含鏈上強制 OwnerCap 歸 owner、still／chamber／dream 模組）；<code>contract-ids.ts</code> 已同步</td><td><span class="st live">已實作</span></td></tr>
+</table>
+</section>
+
+<!-- ════════ 11 ════════ -->
+<section id="s11">
+<h2><span class="no">11</span>實作狀態總覽（2026-06-11）<a class="toplink" href="#toc">目錄</a></h2>
+<table>
+<tr><th>機制</th><th>狀態</th><th>殘留項</th></tr>
+<tr><td>合約全套（16 模組，含 still／chamber／dream）</td><td><span class="st live">已實作·已部署</span></td><td>—</td></tr>
+<tr><td>徵召 wizard＋HKDF 定價＋必應</td><td><span class="st live">已實作</span></td><td>—</td></tr>
+<tr><td>鏈上強制所有權（OwnerCap 歸付款人）</td><td><span class="st live">已實作·已部署</span></td><td>—</td></tr>
+<tr><td>cap-enforced 記憶解密</td><td><span class="st live">已實作</span></td><td>待錢包環境完整實測</td></tr>
+<tr><td>自治 tick loop（11 相位）＋world-loop 服務化</td><td><span class="st live">已實作</span></td><td>多角色多 tick 真跑 acceptance</td></tr>
+<tr><td>事件生命週期 Phase 1</td><td><span class="st live">已實作</span></td><td>—</td></tr>
+<tr><td>事件 spine／並行＋注意力／導演授權標的</td><td><span class="st flag">旗標保護</span></td><td>依源文檔 runbook 真鏈驗證後啟用</td></tr>
+<tr><td>事件合本章回＋feed/dossier event-centric IA</td><td><span class="st live">已實作</span></td><td>premium gate 待訂閱規則</td></tr>
+<tr><td>公報漏斗化</td><td><span class="st live">已實作</span>（prompt 層）</td><td>頭條嵌劇照縮圖</td></tr>
+<tr><td>劇照：事件級生成＋still.move 版號帳本</td><td><span class="st live">已實作</span></td><td>beat 級門檻截圖、teaser/全清分級、royalty 回流</td></tr>
+<tr><td>影片（image-to-video）／角色 PV</td><td><span class="st plan">規格完成</span>／<span class="st gate">刻意延後</span></td><td>—</td></tr>
+<tr><td>MemWal 三因子＋睡眠壓縮＋注夢＋induction</td><td><span class="st live">已實作</span></td><td>—</td></tr>
+<tr><td>張力引擎核心＋鏈上 resource 帳本＋跨層一致性</td><td><span class="st live">已實作</span> <span class="st sim">29 測試</span></td><td>—</td></tr>
+<tr><td>經濟迴圈（ASK／GIVE／SETTLE，off-chain 影子）</td><td><span class="st live">已實作</span> <span class="st sim">41 測試</span></td><td>relayer KV 持久化；economy.move 鏈上權威（D1）</td></tr>
+<tr><td>付費訂閱＋分潤</td><td><span class="st gate">刻意延後</span></td><td>subscribe 收費為上游前置；欄位已就位</td></tr>
+<tr><td>Walrus 資產續租面板</td><td><span class="st plan">規格完成</span></td><td>—</td></tr>
+<tr><td>廂房 Chamber（3D 佈置層）</td><td><span class="st live">已實作</span>（合約＋web 立軸呈現＋GLM 場景代理）</td><td>—</td></tr>
+</table>
+</section>
+
+<!-- ════════ A ════════ -->
+<section id="sA">
+<h2><span class="no">附</span>文檔地圖<a class="toplink" href="#toc">目錄</a></h2>
+<table>
+<tr><th>文檔</th><th>權威範圍</th><th>性質</th></tr>
+<tr><td><code>docs/mechanism-report.html</code>（本卷）</td><td>系統設計與實作狀態快照</td><td>canonical · 快照</td></tr>
+<tr><td><code>docs/WHITEPAPER.md</code>（數學與實驗卷）</td><td>公式、推導、校準、假說檢驗、可重現性</td><td>canonical</td></tr>
+<tr><td><code>AGENTS.md</code></td><td>接班備忘、進度、架構鐵律、下一步</td><td>canonical · 唯一維護檔</td></tr>
+<tr><td><code>docs/NARRATIVE_AGENTS.md</code></td><td>敘事 agent 權責與認知層設計</td><td>canonical</td></tr>
+<tr><td><code>docs/EVENT_LIFECYCLE.md</code></td><td>事件粒度與 spine；旗標驗證 runbook</td><td>canonical</td></tr>
+<tr><td><code>docs/CONTENT_PIPELINE.md</code></td><td>內容產製鏈路（事件→POV→合本→公報→劇照→影片）</td><td>canonical</td></tr>
+<tr><td><code>docs/CHARACTER_ECONOMY.md</code></td><td>經濟 life cycle 設計與 Part D 路線</td><td>canonical</td></tr>
+<tr><td><code>docs/WALRUS_ASSETS.md</code></td><td>Walrus 資產管理與續租規格</td><td>canonical · 待動工</td></tr>
+<tr><td><code>packages/drama/WRITEUP.md</code></td><td>張力引擎校準記錄（論文種子）</td><td>canonical</td></tr>
+<tr><td><code>docs/DRAMA_ENGINE_BRIEF.md</code></td><td>當初的隔離開發任務簡報</td><td>歷史文件（任務已完成）</td></tr>
+<tr><td><code>docs/API_CONTRACT.md</code>／<code>docs/DEPLOYMENT.md</code></td><td>mock 時代契約／部署手冊</td><td>部分歷史（以 server actions／自架 VPS 為準）</td></tr>
+</table>
+
+<footer>
+無盡敘界機制白皮書 · 系統設計卷 · 2026-06-11 快照。<br>
+機制更新時以各 canonical 源文檔為準；數值與實驗以數學與實驗卷（<code>docs/WHITEPAPER.md</code>）為準，全部可重現。
+</footer>
+</section>
+
+</main>
+</div>
+</body>
+</html>

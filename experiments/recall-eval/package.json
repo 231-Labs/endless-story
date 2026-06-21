@@ -1,0 +1,7 @@
+{
+  "name": "recall-eval",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline three-factor recall eval bench (paper material; gitignored internal/)"
+}

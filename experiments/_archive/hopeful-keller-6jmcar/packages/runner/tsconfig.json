@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // We consume @endless-story/troupe source (workspace dep), whose relative
+    // imports carry explicit `.ts` extensions so it runs standalone under tsx.
+    // Let our type-check follow them (valid: the base sets noEmit, so tsc only
+    // type-checks, never emits). Mirrors packages/web, which consumes the same
+    // `.ts`-extension packages.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*"]
+}
