@@ -1,4 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // @endless-story/troupe (and drama) ship pure TS consumed as source, so their
+    // imports use explicit `.ts` specifiers. Let our type-check follow them
+    // (valid: base sets noEmit, so tsc only type-checks, never emits).
+    "allowImportingTsExtensions": true
+  },
   "include": ["src/**/*"]
 }

@@ -7,7 +7,7 @@ module endless_story::event {
 
     use endless_story::saga::{Self, Saga, StorytellerCap};
     use endless_story::scene::{Self, Scene};
-    use endless_story::character::{Self, Character, DeathRecord};
+    use endless_story::character::{Self, Character, ControlCap, DeathRecord};
     use endless_story::resource::{Self, DramaResource, Transfer};
 
     const STATUS_OPEN: u8 = 0;
@@ -48,6 +48,8 @@ module endless_story::event {
     const ECardNotInHand: u64 = 23;
     const EResourceTransferFromNotParticipant: u64 = 24;
     const EResourceTransferToNotParticipant: u64 = 25;
+    const EControlCapInvalid: u64 = 26;
+    const EActionDeprecated: u64 = 27;
 
     public struct CardTemplate has copy, drop, store {
         id: u16,
@@ -401,15 +403,49 @@ module endless_story::event {
         budget_event.deck.participants.contains(&character_id)
     }
 
+    /// DEPRECATED (event.move 1.7). Card play moved to the character's OWN
+    /// ControlCap — the StorytellerCap (director god-cap) must not author a
+    /// character's action, or the actor/director agent boundary collapses.
+    /// Kept as an aborting stub so the Sui package UPGRADE stays signature-
+    /// compatible; every caller must switch to `submit_action_as_character`.
     public fun submit_action(
-        cap: &StorytellerCap,
-        saga: &Saga,
+        _cap: &StorytellerCap,
+        _saga: &Saga,
+        _budget_event: &mut BudgetEvent,
+        _character_id: ID,
+        _card_index: u64,
+        _clock: &clock::Clock,
+    ) {
+        abort EActionDeprecated
+    }
+
+    /// A character plays one card from their dealt hand, authorized by their
+    /// OWN ControlCap (owner-issued, epoch-bound, revocable) instead of the
+    /// saga's StorytellerCap. This is what returns card-play agency to the
+    /// character agent: the runner holds the character's ControlCap and signs
+    /// the play on its behalf. `character` is the shared Character object —
+    /// its id IS the participant id, and `is_valid` binds the cap to it + the
+    /// current control_epoch, so a revoked/reassigned cap can no longer act.
+    public fun submit_action_as_character(
+        control_cap: &ControlCap,
+        budget_event: &mut BudgetEvent,
+        character: &Character,
+        card_index: u64,
+        clock: &clock::Clock,
+    ) {
+        assert!(character::is_valid(control_cap, character), EControlCapInvalid);
+        record_action(budget_event, object::id(character), card_index, clock);
+    }
+
+    /// Shared core: validate the play against the OPEN event (participant,
+    /// card-in-hand) and record it. Authorization is the CALLER's job — the
+    /// public entry above proves the actor's ControlCap before calling in.
+    fun record_action(
         budget_event: &mut BudgetEvent,
         character_id: ID,
         card_index: u64,
         clock: &clock::Clock,
     ) {
-        saga::assert_cap(cap, saga);
         assert!(budget_event.meta.status == STATUS_OPEN, EEventNotOpen);
         let pos_opt = budget_event.deck.participants.find_index!(|id| *id == character_id);
         assert!(pos_opt.is_some(), ENotParticipant);
@@ -431,6 +467,19 @@ module endless_story::event {
             card_index,
             submitted_at_ms,
         });
+    }
+
+    #[test_only]
+    /// Test-only: record a play without the ControlCap check. Unit tests use
+    /// fake participant ids (not real Character objects + minted caps), so they
+    /// exercise the resolution path through this bypass.
+    public fun submit_action_for_testing(
+        budget_event: &mut BudgetEvent,
+        character_id: ID,
+        card_index: u64,
+        clock: &clock::Clock,
+    ) {
+        record_action(budget_event, character_id, card_index, clock);
     }
 
     public fun resolve_event(

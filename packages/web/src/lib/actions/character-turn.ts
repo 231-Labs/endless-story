@@ -8,9 +8,11 @@
  * action is submitted on chain. This is where "past shapes choice"
  * becomes visible — a character with a trauma memory plays differently.
  *
- * Admin keypair signs submit_action (holds StorytellerCap) — in the demo
- * the saga executes the character's decision. (Later: the character's own
- * delegated signer.)
+ * Authority is the character's OWN ControlCap (owner-issued, epoch-bound,
+ * revocable) via submit_action_as_character — NOT the StorytellerCap. The
+ * admin keypair owns the cap object and signs the tx, but the on-chain
+ * authorization is now the character's delegation, so card play belongs to the
+ * actor, not the director. (Later: a per-character delegated signer.)
  */
 
 import { Transaction } from '@mysten/sui/transactions';
@@ -27,6 +29,7 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { recallForCharacter, recallCurrentPlanText } from '@/lib/chain/memory';
+import { resolveControlCapId } from '@/lib/chain/control-caps';
 import { fetchRelationshipHints } from '@/lib/chain/relationships';
 
 const INTENT_NAME: Record<number, string> = {
@@ -183,15 +186,26 @@ export async function runCharacterTurnAction(
         };
     }
 
-    // 4. ACT — submit the chosen card on chain.
+    // 4. ACT — submit the chosen card on chain, authorized by the character's
+    //    OWN ControlCap (not the StorytellerCap). The admin keypair owns the cap
+    //    object and signs, but the authority is the character's owner-revocable
+    //    delegation: card play belongs to the actor.
+    const controlCapId = await resolveControlCapId(characterId);
+    if (!controlCapId) {
+        return {
+            ok: false,
+            error: '找不到此角色的 ControlCap(出牌授權,可能尚未鑄造或已撤銷)',
+            cardLabel: chosenLabel,
+            intent: decision.intent,
+        };
+    }
     try {
         const txb = new Transaction();
         txb.add(
-            endlessTx.event.submitAction({
-                cap: d.storytellerCapId,
-                saga: d.sagaId,
+            endlessTx.event.submitActionAsCharacter({
+                controlCap: controlCapId,
                 budgetEvent: eventId,
-                characterId,
+                character: characterId,
                 cardIndex: BigInt(decision.catalogIndex),
             }),
         );
