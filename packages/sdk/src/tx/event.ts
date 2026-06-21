@@ -28,8 +28,15 @@ export const pushEvent = (args: gen.PushEventArguments) =>
 export const dealParticipantHand = (args: gen.DealParticipantHandArguments) =>
     gen.dealParticipantHand({ package: pkg(), arguments: args });
 
+/** @deprecated card play is now ControlCap-gated — use `submitActionAsCharacter`.
+ *  The on-chain `submit_action` aborts (EActionDeprecated) post-upgrade. */
 export const submitAction = (args: gen.SubmitActionArguments) =>
     gen.submitAction({ package: pkg(), arguments: args });
+
+/** A character plays a card authorized by their OWN ControlCap (not the
+ *  StorytellerCap). The signer must own the `controlCap` object. */
+export const submitActionAsCharacter = (args: gen.SubmitActionAsCharacterArguments) =>
+    gen.submitActionAsCharacter({ package: pkg(), arguments: args });
 
 export const resolveEvent = (args: gen.ResolveEventArguments) =>
     gen.resolveEvent({ package: pkg(), arguments: args });
