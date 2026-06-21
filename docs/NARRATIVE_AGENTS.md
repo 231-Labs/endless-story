@@ -248,6 +248,9 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 - ~~手卷 Step 3~~ ✅ 第一人稱飄字:tick-loop 把 decide intent / move reason 寫進 per-scene
   ephemeral cache(`scene-lines.ts`,15-min TTL,記憶體),getSagaLiveSnapshot 優先用它當飄字
   (退回牌名)。飄字從「防守」升級成「我退後半步,手按舊傷」。(持久層仍是 anchored POV/公報。)
+  **手卷活脈搏(2026-06-19,`bbf13e7`)**:`getSagaLiveSnapshot` 從「只吃開著的事件」→ 吃 live 脈搏
+  (出牌台詞 + 溫情片刻 + 移動 + 誰在哪),`FloatingQuote`/`SagaHandscroll` 按 register(行當/語域)tint,
+  修 0 事件時整片空屏。詳見 [`STORYTELLER_CHAPTER.md`](../internal/docs/STORYTELLER_CHAPTER.md) §8.3 #2。
 - ~~§11 動態出圖~~ ✅ MVP:evolve-portrait(storyteller 觸發,鏈上 image_url 演化 + CharacterImageUpdated
   軌跡)。剩 owner 付費觸發 + 導演自動觸發(動 director.move)+ gallery 時間軸。
 
@@ -366,9 +369,13 @@ NFT 的藝術不是靜態 mint 圖,而是**隨故事生長的肖像變體**,每�
 - **現況**:**MVP 已做** ✅ —— `evolve-portrait.ts`:依同一 physical_facts(同一人)+ 情境
   (戲妝/老年/日常/自訂)出變體 → Walrus → **`update_image_by_storyteller`**(storyteller 觸發,
   **無需動 contract**)→ emit `CharacterImageUpdated` = 動態 NFT 軌跡。admin「動態形象」面板。
+  - **img2img off base 已落地(2026-06-17,`af56e18`)**:real-photo + opera-makeup 變體改 img2img
+    off anchor base(不再純靠 physical_facts 文字維持一致)。
+  - **結構化戲妝 prompt builder(2026-06-17,`fec74e1`)**:`stage-prompt.ts` + `stage-curator.ts`
+    Hybrid(LLM slots + 行當 role defaults + 手動 override),戲妝**跟行當不跟性別**(反串-aware,
+    `66ded19`)。
   **剩**:owner 付費觸發(`update_image_by_owner`,owner 簽)、PortraitRequested 事件 + 獨立 Image
-  Compiler service(導演自動觸發,需動 director.move)、CharacterImageUpdated 時間軸 gallery、
-  真 img2img anchor(目前靠 physical_facts 文字維持一致)。
+  Compiler service(導演自動觸發,需動 director.move)、CharacterImageUpdated 時間軸 gallery。
 
 ---
 

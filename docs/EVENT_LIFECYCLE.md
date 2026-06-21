@@ -94,8 +94,28 @@ ACT phase（`tick-phases/act.ts`）已會處理 OPEN budget event：decide→sub
 - `tick-loop.ts`：`eventSpine` on 時，storylet 開場改走 spine、ACT 的 autoResolve 強制關、合本
   改成**只在收回時**用累積 POV 織（不再逐 tick 快照）。off 時行為與原本逐字相同。
 
+> **POV 雙路徑（commit `9e88be3`）**：POV 累積是 process 級記憶體 registry。serverless `/api/tick`
+> 若收回的是它自己沒開、靠 `reconcileOpenFromChain` 接手的事件，記憶體 POV map 可能為空 →
+> 織不出合本。修正後 `spineResolveAndWeave` 先數記憶體聲口：`memoryVoices ≥ 2` 走 `memory`
+> 路徑（直接用累積 POV）；否則走 `chain` 路徑（傳 `castCharacterIds`，由 compiler 用
+> `fetchEventPovs` 從鏈上回補）。確保 process 重啟 / serverless 跨 tick 不掉章。
+
 **安全設計**：結算每一步都包了 fallback——任何失敗（提案無效、resource.move 沒套上、RPC）都
-退回 `empty_outcomes` 純收尾，**事件必定關閉**，open 事件絕不會卡住 loop。世界只是該回沒結算。
+退回 `plainResolve` 純收尾（`empty_outcomes`）。世界只是該回沒結算。
+
+> **失敗時不強關（commit `e2c35d2`）**：`settleEvent` 回傳由 `boolean` 改為
+> `{ resolved, settled }`，且 `spineResolveAndWeave` 會檢查 `resolved`。**resolve tx 沒成功落鏈時，
+> 事件保持 OPEN（記憶體 + 鏈上都不 `removeOpen`）、下一 tick 重試**，不再「記憶體忘掉但鏈上仍 OPEN
+> → 下 tick 重新領養 → 永遠失敗」的孤兒迴圈。亦即「事件必定關閉」只在 resolve tx 真的落鏈後成立；
+> 最終保底由 `plainResolve` 的裸 `empty_outcomes` resolve 確認 `effects.status === 'success'` 後達成。
+
+> **收回 / 劇照 / 合本改 inline 跑，不走 `after()`（commit `f0e209f`，PR #45）**：自架 VPS 上 tick body
+> 跑在 `/api/tick` mutex 的 detached promise chain 裡，Next 的 `after()` **永遠不觸發** → event resolve +
+> cut 織合本 + event still + bond/encounter anchor 這些背景 StorytellerCap 工作每 tick 被靜默丟掉（事件
+> 不收、章回不織、劇照不出，`[ch-diag] resolve` / event moment / event cut 三 log 永遠搜不到）。修正後
+> `momentJobs` + `cutJobs` 從 `after()` 搬進 tick body **inline 序列跑**（保留單一 StorytellerCap 物件版本
+> 不變式），每個工作用 `runJobWithTimeout` 包 timeout，避免 hung 的 image/LLM/RPC 卡死整個 tick（連帶
+> 經 mutex 卡死整圈）。
 
 **收 flag 前必須在鏈上驗的點**：①結算提案是否被 `resolve_event` 接受（conservation 重驗）；
 ②`readResourceLedger` 的 `snapshot.id` 是否等於 `apply_resource_transfers` 要的 DramaResource
@@ -214,7 +234,7 @@ hint，餵進該角色的 decide/POV——拉扯從世界級選題落到人物�
    `live[].resourceId`（物件 id）取代 `json.id`，或在 spine 結算用物件 id。
 4. **驗點③ 節奏**：覺得太快/太慢，調 `spineResolveAndWeave` 上游的 `minTicks`/`maxTicks`（現 2/4，
    走 `SpineCtx`）。
-5. **驗點④ 競態**：背景 `after()` 收回 vs 下一 tick 讀 registry。連跑數回，若 log 出現對已收回事件
+5. **驗點④ 競態**：收回（現 inline 序列跑，已非背景 `after()`，見上）vs 下一 tick 讀 registry。連跑數回，若 log 出現對已收回事件
    重複 resolve 的 abort（無害、failure-isolated），可把 `openBySaga.delete` 提前到 `spinePlanAndOpen`
    偵測到 resolve step 時即刪。
 6. **驗世界前進**：連跑 2–3 回，確認 `selectContention` 的 top 張力**有換標的**（allocation 真的變了），

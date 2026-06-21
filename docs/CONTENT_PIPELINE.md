@@ -63,8 +63,11 @@ condition on 上一層的 anchor —— 所以「真的發生過」「同一個�
 
 > **決策（2026-06-10）：正式「章回」= 事件合本，不是單角色 POV。**
 >
-> **下一代設計（2026-06-18，design draft）：本層的「每 resolve 一次性重織」會被改成
-> 說書人 agent 化的累積 + 進展閘 + 多輪寫作。**
+> **下一代設計 — 見 [`internal/docs/STORYTELLER_CHAPTER.md`](../internal/docs/STORYTELLER_CHAPTER.md)。** 本層的「每 resolve 一次性
+> 重織」要被改成說書人 agent 化的累積 + 進展閘 + 多輪寫作。**已落地進 production（2026-06-19）的部分**：
+> 每次織合本時讀 per-saga **故事總綱**（承先）→ 織 → cheap-LLM **折回**更新總綱（啟後），讓相鄰的回
+> 承先啟後、像連續小說（`6f6d4fd`/`ac7a4bd`/`1bcfe18`），並移除「且看下回」收場套語。**仍未接線**＝決定
+> 「何時」織的 **Phase A 進展閘**（章回目前仍在事件 resolve 時才織）。
 
 - **POV（原料層）**：每角色每事件一篇第一人稱。**不再對外當「章回」**，它是
   - 「追我的角色」訂閱者的個人 feed（粉絲經濟單元）；
@@ -262,7 +265,7 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | 本檔（canonical） | `docs/CONTENT_PIPELINE.md` | — | ✅ |
 | shared 型別接縫：`ChapterKind`/`EventCutChapter`/`EventStill` | `shared/types/` | 低（additive） | ✅ |
 | **合本 compiler（runOnce + 純 weave + 單元測試）** | `runner/services/event-chapter-compiler/` | 低 | ✅ |
-| **合本接進 tick loop**（POV anchored ≥2 → after() 織回） | `web/lib/actions/tick-loop.ts` | 中 | ✅ |
+| **合本接進 tick loop**（POV anchored ≥2 → tick body inline 序列織回） | `web/lib/actions/tick-loop.ts` | 中 | ✅ |
 | **合本 server action + admin 面板（手動補織/預覽）** | `web/.../compile-event-chapter.ts` · `EventCutPanel` | 低 | ✅ |
 | **合本鏈上讀 + facade + `/feed` 章回 mode** | `cut-read.ts` · `api/cuts.ts` · `CutList` · feed | 中（前端） | ✅ |
 | `/feed` IA 四 mode（全部/公報/章回/影像） | `app/(site)/feed/page.tsx` | 中（前端） | ✅ |
@@ -270,12 +273,12 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | **訂閱牆**（角色回 POV：非訂閱者只見首段 teaser + 漸層 + CTA，全文不送出） | `ChainPovSection.tsx` · `chain/pov-read.ts`（`withTeaser`/`firstParagraphPlainText`） | 中（前端） | ✅（`efaf03b`） |
 | **章回文案集中化**（`CHAPTER_COPY`） | `lib/copy/chapters.ts` | 低 | ✅（`efaf03b`） |
 | 全鏈路蓋 POV provenance（eventTx/involvedIds） | tick-loop（`anchorPovChaptersBatch`+`embedProvenance`） | — | ✅（既有） |
-| 事件級劇照（多角色 anchor 條件化、kind=4、eventTx metadata） | `web/.../generate-event-moment.ts`（tick after()） | — | ✅（既有） |
+| 事件級劇照（多角色 anchor 條件化、kind=4、eventTx metadata） | `web/.../generate-event-moment.ts`（tick body inline，timeout-bounded） | — | ✅（既有） |
 | `still-compiler` 型殼（beat 級 + teaser/full 分級的演進） | `runner/services/still-compiler/` | 低 | ✅（型殼） |
 | beat 級劇照（越張力門檻可配置截 + 分級） | `still-compiler` runOnce | 中 | TODO |
 | 公報漏斗化（本日頭條 hook + 連載預告 CTA → `/feed?mode=chapter`） | `gazette-compiler/prompt.ts` | 低（純 prompt） | ✅ |
 | 公報頭條嵌劇照縮圖（threading 事件 still URL） | `gazette-compiler` snapshot | 中 | TODO |
-| tick 背景簽名序列化（moment→cut 同一 after()，避免 owned cap 撞版本） | `tick-loop.ts` | — | ✅ |
+| tick inline 簽名序列化（moment→cut 同一序列、`runJobWithTimeout` 包 timeout，避免 owned cap 撞版本；改 inline 因自架 VPS 上 `after()` 不觸發，`f0e209f`/PR #45） | `tick-loop.ts` | — | ✅ |
 | 影片改 image-to-video（劇照當 first frame） | `video-compiler`（R6 stub） | 高 | TODO |
 | 角色 PV mode | `video-compiler` `character_pv` | — | defer |
 
