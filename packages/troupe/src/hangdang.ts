@@ -10,14 +10,6 @@
 
 import type { CastAssignment, Gender, Hangdang, Part, TroupeMember, Yinggong } from './types.ts';
 
-export const HANGDANG_LABEL: Record<Hangdang, string> = {
-  生: '生',
-  旦: '旦',
-  淨: '淨（花臉）',
-  丑: '丑',
-  樂: '文武場',
-};
-
 /** Which 行當 each 應工 belongs to. */
 export const YINGGONG_HANGDANG: Record<Yinggong, Hangdang> = {
   文小生: '生', 武小生: '生', 老生: '生', 武生: '生', 紅生: '生', 娃娃生: '生',

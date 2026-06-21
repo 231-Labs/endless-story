@@ -20,5 +20,4 @@ export type {
 } from "./types.ts";
 export { applyTick, applyTickVerbose } from "./applyTick.ts";
 export type { TickOutcome } from "./applyTick.ts";
-export { tension, maxTension, tensionSnapshot } from "./tension.ts";
-export type { TensionPoint } from "./tension.ts";
+export { tension, maxTension } from "./tension.ts";

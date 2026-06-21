@@ -105,15 +105,3 @@ export async function httpDelete<T>(endpoint: string, opts: HttpOptions = {}): P
   });
   return parseOrThrow<T>(res, endpoint);
 }
-
-/**
- * Phase 1 (now) stub — for not-yet-implemented endpoints; throws a clear error.
- * Once the backend is ready, delete this helper and have facades call httpGet/Post directly.
- */
-export function notImplemented(endpoint: string): never {
-  throw new ApiError(
-    501,
-    endpoint,
-    'Backend endpoint not implemented yet — switch NEXT_PUBLIC_DATA_SOURCE=mock or implement this endpoint.'
-  );
-}

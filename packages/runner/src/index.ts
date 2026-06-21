@@ -35,7 +35,6 @@ export {
 
 export * from './types/index.js';
 
-export { fetchEventsSince } from './infra/event-bus.js';
 export { signAndAnchor, signAndAnchorBatch } from './infra/sign-and-anchor.js';
 export type { AnchorItem, BatchAnchorOptions } from './infra/sign-and-anchor.js';
 export { resolveNetwork } from './infra/network.js';

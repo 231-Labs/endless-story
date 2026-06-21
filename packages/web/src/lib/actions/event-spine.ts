@@ -78,7 +78,6 @@ interface CutPov {
  * Stage 1: a saga may hold MANY open events at once (one per contention axis).
  * Single-mode (`spinePlanAndOpen`) just keeps the array at length ≤ 1. */
 const openBySaga = new Map<string, SpineOpenEvent[]>();
-const tickBySaga = new Map<string, number>();
 const povsByEvent = new Map<string, CutPov[]>();
 
 const openList = (sagaId: string): SpineOpenEvent[] => openBySaga.get(sagaId) ?? [];
@@ -90,13 +89,6 @@ function addOpen(sagaId: string, ev: SpineOpenEvent): void {
 function removeOpen(sagaId: string, eventId: string): void {
     const arr = openBySaga.get(sagaId);
     if (arr) openBySaga.set(sagaId, arr.filter((e) => e.eventId !== eventId));
-}
-
-/** Advance the saga's monotonic spine tick (call once per loop run). */
-export function spineNextTick(sagaId: string): number {
-    const next = (tickBySaga.get(sagaId) ?? 0) + 1;
-    tickBySaga.set(sagaId, next);
-    return next;
 }
 
 /** Clock-derived spine tick — `clockTickOf(now)`. Restart-proof: any process at

@@ -6,7 +6,6 @@
  */
 
 import { runDirectorChat, type DirectorChatResult } from '@/lib/director/chat';
-import { readDirectorMemory, type ChatTurn } from '@/lib/director/memory-store';
 
 export async function sendDirectorChatAction(input: {
   message: string;
@@ -16,8 +15,4 @@ export async function sendDirectorChatAction(input: {
     return { ok: false, reply: '', toolCalls: [], error: '訊息不可為空' };
   }
   return runDirectorChat(message);
-}
-
-export async function getDirectorChatHistoryAction(): Promise<ChatTurn[]> {
-  return readDirectorMemory().chat;
 }
