@@ -7,7 +7,7 @@
 > `-32603` → `fetchOnChainCharacters` throw → facade 靜默退 **mock**（假班底＋假圖）。兩者都是
 > 「web ↔ 公共 RPC 直連 + 即時 event scan」的結構性後果。詳見 memory `rpc-archival-events-gotcha`。
 >
-> canonical 進度仍在 **[AGENTS.md](../internal/AGENTS.md)**；本檔只管「production 化」這一條線。
+> 本檔只管「production 化」這一條線。
 
 ---
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Asset 服務啟動腳本(docs/WALRUS_ASSETS.md Service ③)。
+# Asset 服務啟動腳本(docs/narrative/ASSET_MANAGEMENT.md Service ③)。
 #
 # 為什麼有這支:base image cmdoss/walrus 的原 ENTRYPOINT 會依 MODE 分派服務、不跑我們的 app,
 # 我們已覆寫它 —— 但連帶跳過了它的 walrus/sui config 自動生成。這支腳本在起 node 前,自己用

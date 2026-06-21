@@ -22,7 +22,7 @@ export function ChaptersTab({
   chainPovChapters?: PovChapterEntry[];
   /**
    * Event cuts this character was woven into — the canonical public "回"
-   * (docs/CONTENT_PIPELINE.md §8.2). Metadata-only cards; the prose lives
+   * (docs/narrative/CONTENT_PIPELINE.md §8.2). Metadata-only cards; the prose lives
    * on /feed/cut/[id].
    */
   participatedCuts?: EventCutEntry[];
@@ -37,7 +37,7 @@ export function ChaptersTab({
     );
   }
 
-  // IA (docs/CONTENT_PIPELINE.md §8.2), two-book model: a character's own
+  // IA (docs/narrative/CONTENT_PIPELINE.md §8.2), two-book model: a character's own
   // first-person book (角色回 / ChainPovSection) is her primary text, so it
   // leads. Below it sit the public multi-POV woven 回 she appears in (梨園回 /
   // CutSection) — the ensemble cuts where she's one of several angles.

@@ -1,9 +1,10 @@
-# Endless Story · Walrus 資產管理 + 續費（設計與規格 — 唯一真相）
+# Asset management · Walrus 資產管理 + 續費
 
 > 後台統一管理「住在 Walrus 上、要長存」的資產(hero 影片、角色圖、場景錨點、章回文字)的
 > **上傳 / 上下架 / 到期追蹤 / 續租**。
 > **鎖定決策**:① 一次到位的**通用面板**(不只影片);② **Hybrid 續費**(儀表板警示＋手動按鈕＋可選 per-category 自動續租)。
 > 狀態:**規劃完成,待動工**。Walrus 賽道,deadline 2026-06-21。
+> 這份是**資產營運**面（上傳 / 續租 / 上下架）。儲存模型本身見 [Walrus 儲存模型](../protocol/WALRUS_STORAGE.md)。
 > 相關:[DEPLOYMENT.md](./DEPLOYMENT.md) · [NARRATIVE_AGENTS.md](./NARRATIVE_AGENTS.md)
 
 ---

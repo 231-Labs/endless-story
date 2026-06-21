@@ -11,7 +11,7 @@ import { CHAPTER_COPY } from '@/lib/copy/chapters';
 /**
  * 視角（POV）閱讀頁 — a single character's first-person raw material.
  *
- * IA (docs/CONTENT_PIPELINE.md §2): the canonical public "回" is the woven
+ * IA (docs/narrative/CONTENT_PIPELINE.md §2): the canonical public "回" is the woven
  * event cut (/feed/cut/[id]); this page is one character's angle on it, so it
  * declares itself as 視角原料 and links UP to the cut when one exists.
  *

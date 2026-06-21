@@ -34,5 +34,7 @@ chapters-out/
 !/site/content/overview.zh.md
 !/site/content/roadmap.md
 !/site/content/roadmap.zh.md
+!/site/content/architecture.md
+!/site/content/architecture.zh.md
 /site/pitch/
 /site/assets/logo.png

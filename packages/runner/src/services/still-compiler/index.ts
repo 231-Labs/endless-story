@@ -1,5 +1,5 @@
 /**
- * Still Compiler — renders verifiable event 劇照 (see docs/CONTENT_PIPELINE.md §5).
+ * Still Compiler — renders verifiable event 劇照 (see docs/narrative/CONTENT_PIPELINE.md §5).
  * Sibling of the §11 Image Compiler; a stateless service, not an autonomous agent.
  *
  * **Trigger**: event resolution (judge auto-close). Captures EVERY beat whose

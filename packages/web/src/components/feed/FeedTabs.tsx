@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { InkUnderline } from '@/components/common/ink-motion';
 
-// IA (docs/CONTENT_PIPELINE.md §8.1): 全部 landing · 公報 free funnel ·
+// IA (docs/narrative/CONTENT_PIPELINE.md §8.1): 全部 landing · 公報 free funnel ·
 // 章回 the woven cuts · 排戲 (productions — the troupe's self-staged 劇目/戲折).
 // `visual` key kept for URL stability; it now surfaces 排戲 not mock images.
 export type FeedMode = 'all' | 'gazette' | 'chapter' | 'visual';

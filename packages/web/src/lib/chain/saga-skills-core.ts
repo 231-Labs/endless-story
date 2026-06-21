@@ -87,7 +87,7 @@ export function deriveSagaSkills(role: string, world: WorldAttrs = {}): SkillPro
 // card-draw). The 6 perf skills above drive events (event.move); these 3 drive
 // production authoring (packages/troupe). Wiring: declare these 3 in the saga's
 // `saga_attributes` too, and `seedCharacterSkills` writes them in the same PTB.
-// See docs/PRODUCTION_ENGINE.md §3.
+// See docs/narrative/PRODUCTION_ENGINE.md §3.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type CraftSkillKey = 'playwriting' | 'composing' | 'lyricism';

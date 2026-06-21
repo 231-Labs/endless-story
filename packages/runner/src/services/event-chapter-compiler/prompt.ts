@@ -2,7 +2,7 @@
  * Event-Chapter Compiler — system prompt + re-exports of the pure weave logic.
  *
  * The compiler weaves every POV of ONE on-chain event into a single
- * multi-perspective "回" (see docs/CONTENT_PIPELINE.md §2). Unlike the gazette
+ * multi-perspective "回" (see docs/narrative/CONTENT_PIPELINE.md §2). Unlike the gazette
  * (objective, template-strict), the cut is the literary product: it braids the
  * characters' subjective angles WITHOUT collapsing their divergence into one
  * truth — the divergence is the drama (NARRATIVE_AGENTS §5).

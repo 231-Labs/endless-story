@@ -9,7 +9,7 @@
  * plus the cast + scene + day for the card.
  *
  * Public surface: a cut is the public, woven product (gazette-tier visibility) —
- * see docs/CONTENT_PIPELINE.md §2/§8.1. Returns newest-first.
+ * see docs/narrative/CONTENT_PIPELINE.md §2/§8.1. Returns newest-first.
  */
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
