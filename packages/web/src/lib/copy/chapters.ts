@@ -1,7 +1,7 @@
 /**
  * Centralized chapter / 章回 copy.
  *
- * The two-book content model (docs/CONTENT_PIPELINE.md §2/§8):
+ * The two-book content model (docs/narrative/CONTENT_PIPELINE.md §2/§8):
  *   - 梨園回 (event_cut)  — the canonical public "回", multi-POV woven prose.
  *   - 角色回 (per-char POV) — a character's first-person deep cut, subscriber-gated.
  *   - 公報 (gazette)       — public broadside.

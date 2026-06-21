@@ -7,7 +7,7 @@
  * decision; the caller (web action) does the chain read (hand/catalog) +
  * recall + the submit_action tx.
  *
- * See docs/NARRATIVE_AGENTS.md §2 (character loop) + N1.
+ * See docs/narrative/NARRATIVE_AGENTS.md §2 (character loop) + N1.
  */
 
 import { text as llmText } from '@endless-story/llm';

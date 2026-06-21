@@ -11,7 +11,7 @@
  * This file is the pure-LLM compressor only. The web action does the
  * MemWal recall (scattered material) + remember (anchored output) + the
  * on-chain reflection::submit, mirroring how character-agent splits decide
- * (LLM here) from read/act (web). See docs/NARRATIVE_AGENTS.md §2 REFLECT.
+ * (LLM here) from read/act (web). See docs/narrative/NARRATIVE_AGENTS.md §2 REFLECT.
  */
 
 import { text as llmText } from '@endless-story/llm';

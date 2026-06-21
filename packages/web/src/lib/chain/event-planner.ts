@@ -5,7 +5,7 @@
  * drama tension. Because the soft storylet never *resolves*, the contested
  * resource never changes hands, so the top tension is static and every tick
  * re-opens the SAME contention (the "always the recording slot" bug — see
- * docs/EVENT_LIFECYCLE.md §1). This module breaks that loop two ways:
+ * docs/narrative/EVENT_LIFECYCLE.md §1). This module breaks that loop two ways:
  *
  *   1. `selectContention` sorts ALL tension rows globally and picks the highest
  *      whose framing template was NOT used in the last few ticks — so the world

@@ -8,7 +8,7 @@ import { parseXiZhe, xiZheExcerpt } from '@/lib/feed/xizhe-format';
  * Production list — the 戲折 (whole staged 劇目), newest first. Card = metadata +
  * a short excerpt; the full 戲折 prose (班底·分場·折子戲中戲章回·角兒私詞) lives
  * on /feed/production/[id]. Bodies come through the immutable-blob cache.
- * See docs/PRODUCTION_ENGINE.md §10.
+ * See docs/narrative/PRODUCTION_ENGINE.md §10.
  */
 export async function ProductionList({
     productions,

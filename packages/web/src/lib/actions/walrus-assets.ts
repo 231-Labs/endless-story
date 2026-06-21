@@ -2,7 +2,7 @@
 
 /**
  * Admin server actions — proxy to the self-hosted Walrus asset service
- * (docs/WALRUS_ASSETS.md; Zeabur, assets.zeabur.app). Secret stays server-side.
+ * (docs/narrative/ASSET_MANAGEMENT.md; Zeabur, assets.zeabur.app). Secret stays server-side.
  *
  * Uploads (large files) go through the route handler `app/api/admin/assets/upload`,
  * NOT a server action (Next.js server action body defaults to 1MB; video must use the

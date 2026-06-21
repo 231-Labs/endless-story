@@ -6,7 +6,7 @@
  * rail. Mirrors event-chapter-compiler's runOnce shape.
  *
  * Trigger: the Showrunner decides to mount a production (a new `launch_production`
- * capability) and calls this. See docs/PRODUCTION_ENGINE.md §2 (trigger) + §6.
+ * capability) and calls this. See docs/narrative/PRODUCTION_ENGINE.md §2 (trigger) + §6.
  *
  * **Anchor**: `commitment::commit(subject_id = sagaId)` with an embedded
  * `es:production` header (productionId + cast ids). A production aggregates
