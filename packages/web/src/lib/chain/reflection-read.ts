@@ -9,6 +9,7 @@
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
+import { decodeByteString } from './decode.js';
 
 export interface ReflectionEntry {
     reflectionId: string;
@@ -77,9 +78,3 @@ export async function fetchReflectionsForCharacter(
     return out;
 }
 
-function decodeByteString(raw: number[] | string | undefined): string {
-    if (!raw) return '';
-    if (typeof raw === 'string') return raw;
-    if (Array.isArray(raw)) return new TextDecoder().decode(new Uint8Array(raw));
-    return '';
-}

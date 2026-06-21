@@ -12,21 +12,12 @@ import type { CharacterPersona } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
+import { decodeByteString } from './decode.js';
 export { personaSubject } from './persona-subject.js';
 import { personaSubject } from './persona-subject.js';
 
 function walrusNetwork(): 'testnet' | 'mainnet' {
   return resolveNetwork() === 'mainnet' ? 'mainnet' : 'testnet';
-}
-
-function decodeByteString(raw: number[] | string | undefined): string {
-  if (raw == null) return '';
-  if (typeof raw === 'string') return raw;
-  try {
-    return new TextDecoder().decode(Uint8Array.from(raw));
-  } catch {
-    return '';
-  }
 }
 
 /** Fetch a character's current persona from chain, or null if none anchored yet. Never throws. */

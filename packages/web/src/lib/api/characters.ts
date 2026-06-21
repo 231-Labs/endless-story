@@ -3,7 +3,7 @@ import { inferRoleFromText } from '@endless-story/shared';
 import { characters, getCharacterById, listCharactersBySaga } from '@/mocks/characters';
 import { magnetismByCharacterId } from '@/mocks/magnetism';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { USE_MOCK } from './config';
+import { USE_MOCK, isDeployed } from './config';
 import { httpGet } from './http';
 import {
   fetchOnChainCharacter,
@@ -34,10 +34,6 @@ import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
  *   GET  /characters[?sagaId=|ownedBy=]
  *   GET  /characters/{id}[/magnetism]
  */
-
-function isDeployed(): boolean {
-  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 export async function listCharacters(): Promise<Character[]> {
   if (isDeployed()) {

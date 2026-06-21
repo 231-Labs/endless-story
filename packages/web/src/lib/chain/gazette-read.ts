@@ -27,6 +27,7 @@ import { normalizeWalrusBlobId } from '@endless-story/shared';
 import { resolveNetwork } from './network.js';
 import { fetchChapterText } from './pov-read.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
+import { decodeBytesHex } from './decode.js';
 
 /** Stale window for list assemblies — serve seconds-old feeds instantly. */
 const LIST_STALE_MS = 10 * 60 * 1000;
@@ -163,11 +164,3 @@ function getCommitmentCached(
     );
 }
 
-function decodeBytesHex(raw: number[] | string | undefined): string {
-    if (!raw) return '';
-    if (typeof raw === 'string') return raw;
-    if (Array.isArray(raw)) {
-        return raw.map((b) => b.toString(16).padStart(2, '0')).join('');
-    }
-    return '';
-}

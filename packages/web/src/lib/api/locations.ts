@@ -1,7 +1,7 @@
 import type { SagaLocation } from '@endless-story/shared';
 import { locations } from '@/mocks/sagas';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { USE_MOCK } from './config';
+import { USE_MOCK, isDeployed } from './config';
 import { httpGet } from './http';
 import { fetchOnChainLocation } from '@/lib/chain/location-read';
 
@@ -20,10 +20,6 @@ import { fetchOnChainLocation } from '@/lib/chain/location-read';
  * Backend HTTP endpoints (legacy, USE_MOCK=false path):
  *   GET  /locations / /locations/{id}
  */
-
-function isDeployed(): boolean {
-  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
 function isSuiObjectId(id: string): boolean {

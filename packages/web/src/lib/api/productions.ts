@@ -1,4 +1,5 @@
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+import { isDeployed } from './config';
 import {
     fetchProduction,
     fetchProductionsForSaga,
@@ -13,10 +14,6 @@ import {
  * productions and the facade returns empty arrays the UI renders as an empty
  * state. See docs/PRODUCTION_ENGINE.md §10.
  */
-
-function isDeployed(): boolean {
-    return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 export async function listProductions(sagaId: string): Promise<ProductionEntry[]> {
     if (!isDeployed()) return [];

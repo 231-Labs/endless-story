@@ -1,4 +1,5 @@
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+import { isDeployed } from './config';
 import {
     fetchGazettesForSaga,
     fetchLatestGazetteForSaga,
@@ -13,10 +14,6 @@ import {
  * gazettes, and the facade returns empty arrays which the UI renders
  * as an empty state.
  */
-
-function isDeployed(): boolean {
-    return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 export async function listGazettes(sagaId: string): Promise<GazetteEntry[]> {
     if (!isDeployed()) return [];

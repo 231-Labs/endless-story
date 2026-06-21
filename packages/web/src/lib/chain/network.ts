@@ -20,7 +20,3 @@ export function resolveNetwork(): SuiNetwork {
     }
     return 'devnet';
 }
-
-export function isDeployed(): boolean {
-    return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}

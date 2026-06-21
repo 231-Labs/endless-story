@@ -17,6 +17,7 @@ import { eventChapter } from '@endless-story/runner';
 import { resolveNetwork } from './network.js';
 import { fetchChapterText } from './pov-read.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
+import { decodeByteString } from './decode.js';
 
 export interface EventCutEntry {
     commitmentId: string;
@@ -199,14 +200,3 @@ function getCommitmentCached(
     );
 }
 
-function decodeByteString(raw: number[] | string | undefined): string {
-    if (typeof raw === 'string') return raw;
-    if (Array.isArray(raw)) {
-        try {
-            return new TextDecoder().decode(new Uint8Array(raw));
-        } catch {
-            return '';
-        }
-    }
-    return '';
-}

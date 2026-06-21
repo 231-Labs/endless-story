@@ -14,6 +14,7 @@ import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
 import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
 import { parseProvenance } from './chapter-provenance.js';
+import { decodeBytesHex } from './decode.js';
 
 /**
  * Walrus blobs are immutable + content-addressed (the id IS the content hash),
@@ -276,15 +277,6 @@ export async function fetchChapterText(blobUrl: string): Promise<string> {
 }
 
 /* ── internals ──────────────────────────────────────────────────── */
-
-function decodeBytesHex(raw: number[] | string | undefined): string {
-    if (!raw) return '';
-    if (typeof raw === 'string') return raw;
-    if (Array.isArray(raw)) {
-        return raw.map((b) => b.toString(16).padStart(2, '0')).join('');
-    }
-    return '';
-}
 
 function buildWalrusBlobUrl(blobId: string): string {
     // Web proxy route — re-emits the Walrus aggregator response with a

@@ -15,12 +15,9 @@ import { lazySettle } from '@endless-story/economy';
 import { resolveNetwork } from './network.js';
 import { getMemoryCount } from './memory-counter.js';
 import { settleSagaCohort, snapshotToSurvival } from '../economy/saga-economy.js';
+import { isSuiObjectId } from './ids.js';
 
-const SUI_ID_RE = /^0x[0-9a-fA-F]{64}$/;
-
-export function isSuiObjectId(id: string): boolean {
-    return SUI_ID_RE.test(id);
-}
+export { isSuiObjectId };
 
 /**
  * Map a decoded chain Character struct into the UI Character interface.

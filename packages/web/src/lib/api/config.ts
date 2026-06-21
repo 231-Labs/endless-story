@@ -13,6 +13,8 @@
  *   if (USE_MOCK) return mockImpl(...);
  *   return httpGet(...);
  */
+import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+
 export type DataSource = 'mock' | 'api';
 
 export function getDataSource(): DataSource {
@@ -24,4 +26,9 @@ export const USE_MOCK = getDataSource() === 'mock';
 
 export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8787';
+}
+
+/** True once a contract package id is set (i.e. a world has been deployed). */
+export function isDeployed(): boolean {
+  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
 }

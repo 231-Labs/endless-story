@@ -17,5 +17,5 @@ export { derivedSkills } from './derive-skills.ts';
 export { assembleXiZhe } from './xizhe.ts';
 export { compose, scoreToMidi } from './music.ts';
 export { CRAFT, skill, canCraft, bestFor, qualityBand, movedToCreate } from './skills.ts';
-export { crossCastLabel, fitScore, castingFromRole, HANGDANG_LABEL } from './hangdang.ts';
+export { crossCastLabel, fitScore, castingFromRole } from './hangdang.ts';
 export { chooseProduction } from './roles/director.ts';

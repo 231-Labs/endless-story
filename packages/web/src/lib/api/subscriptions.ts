@@ -7,12 +7,8 @@ import {
 } from '@/mocks/subscriptions';
 import { fetchMySubscriptionsFromChain } from '@/lib/chain/subscription-read';
 import { isSuiObjectId } from '@/lib/chain/character-read';
-import { USE_MOCK } from './config';
+import { USE_MOCK, isDeployed } from './config';
 import { httpDelete, httpGet, httpPost } from './http';
-
-function isDeployed(): boolean {
-  return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
-}
 
 /**
  * Subscriptions API
