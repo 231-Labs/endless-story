@@ -15,6 +15,7 @@ import { loadLLMConfig, resolveTextProvider, type LLMConfig } from '../config.js
 import { getFallbackModels } from './models.js';
 import { callAnthropic, callPoe, callZAI } from './providers.js';
 import { chatWithFallback } from './fallback.js';
+import { makeHarnessTextClient } from './harness-fake.js';
 import type { ChatRequest, ChatResponse, TextClient } from './types.js';
 
 export interface CreateTextClientOptions {
@@ -29,6 +30,13 @@ export interface CreateTextClientOptions {
 }
 
 export function createTextClient(opts: CreateTextClientOptions = {}): TextClient {
+  // DECOUPLED HARNESS seam (test-only): bypass loadLLMConfig (which throws when no
+  // provider key is set) and return a zero-network fake whose `.chat()` produces
+  // plausible markdown sized to the prompt (plan line / POV chapter / multi-POV cut
+  // / gazette). Gated on ES_HARNESS=1 ⇒ production unaffected.
+  if (process.env.ES_HARNESS === '1') {
+    return makeHarnessTextClient(opts.kind === 'cheap' ? 'cheap' : 'primary');
+  }
   const cfg = loadLLMConfig(opts.config);
   const provider = resolveTextProvider(cfg);
   if (!provider) {

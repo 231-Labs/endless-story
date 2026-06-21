@@ -178,6 +178,19 @@ export async function putBlob(
     const network = opts.network ?? 'testnet';
     const epochs = opts.epochs ?? 5;
 
+    // DECOUPLED HARNESS seam (test-only, ES_HARNESS=1): never touch Walrus. Return
+    // a deterministic fake blob id derived from a content hash so anchoring proceeds
+    // with no network. Gated ⇒ production unaffected.
+    if (process.env.ES_HARNESS === '1') {
+        let h = 2166136261 >>> 0;
+        for (let i = 0; i < bytes.length; i++) {
+            h ^= bytes[i];
+            h = Math.imul(h, 16777619) >>> 0;
+        }
+        const blobId = `harness-blob-${h.toString(16).padStart(8, '0')}-${bytes.length}`;
+        return { blobId, alreadyCertified: false, url: `fake://${blobId}` };
+    }
+
     // Prefer the self-hosted asset service (publishes to Walrus via a funded CLI)
     // unless the caller pinned an explicit publisher. Falls through to a direct
     // publisher PUT when the asset service is unconfigured or fails.
