@@ -17,6 +17,7 @@ import type { AdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { recordSceneLine } from '@/lib/chain/scene-lines';
 import { rememberForCharacter } from '@/lib/chain/memory';
+import { resolveControlCapMap } from '@/lib/chain/control-caps';
 import { runCharacterTurnAction } from '../character-turn';
 import type { TickActResult, TickResolveResult } from '../tick-loop-types';
 import { RECALL_CONCURRENCY, mapPool, TickMemoryContext } from './support';
@@ -266,19 +267,37 @@ export async function runActPhase(
         }
     }
 
-    // PTB-1: all submit_action calls in ONE signature. If the batch aborts
-    // (one bad card reverts the whole PTB), fall back to per-item submits so
-    // a single failure doesn't block the rest. Happy path = one tx.
-    if (submittable.length > 0) {
+    // Resolve each actor's OWN ControlCap — card play is authorized by the
+    // character's delegation now, not the StorytellerCap. One owned-objects scan
+    // for the whole roster. A character with no current cap (revoked / not
+    // minted) can't act: surface it and skip its submit.
+    const capMap = await resolveControlCapMap(submittable.map((d) => d.charId));
+    const playable = submittable.filter((d) => capMap.has(d.charId));
+    for (const d of submittable) {
+        if (!capMap.has(d.charId)) {
+            acts.push({
+                eventId: d.e.eventId,
+                characterId: d.charId,
+                name: nameById.get(d.charId),
+                ok: false,
+                error: '找不到 ControlCap(出牌授權)',
+            });
+        }
+    }
+
+    // PTB-1: all submit_action_as_character calls in ONE signature. If the batch
+    // aborts (one bad card reverts the whole PTB), fall back to per-item submits
+    // so a single failure doesn't block the rest. Happy path = one tx.
+    if (playable.length > 0) {
         const batch = await trySend(admin, (txb) => {
-            for (const d of submittable) {
+            for (const d of playable) {
                 txb.add(
-                    buildSubmitCall(capId, sagaId, d.e.eventId, d.charId, d.r.cardIndex as number),
+                    buildSubmitCall(capMap.get(d.charId)!, d.e.eventId, d.charId, d.r.cardIndex as number),
                 );
             }
         });
         if (batch.ok) {
-            for (const d of submittable) {
+            for (const d of playable) {
                 acts.push({
                     eventId: d.e.eventId,
                     characterId: d.charId,
@@ -295,10 +314,10 @@ export async function runActPhase(
             }
         } else {
             // Fallback: isolate each submit (serial — only on the rare abort).
-            for (const d of submittable) {
+            for (const d of playable) {
                 const one = await trySend(admin, (txb) =>
                     txb.add(
-                        buildSubmitCall(capId, sagaId, d.e.eventId, d.charId, d.r.cardIndex as number),
+                        buildSubmitCall(capMap.get(d.charId)!, d.e.eventId, d.charId, d.r.cardIndex as number),
                     ),
                 );
                 acts.push({
@@ -394,19 +413,19 @@ export async function runActPhase(
     return { acts, resolves };
 }
 
-/** Build one submit_action move-call for the batch PTB. */
+/** Build one submit_action_as_character move-call for the batch PTB. Card play
+ *  is authorized by the character's OWN ControlCap (not the StorytellerCap);
+ *  `characterId` is also the shared Character object id passed as `character`. */
 function buildSubmitCall(
-    capId: string,
-    sagaId: string,
+    controlCapId: string,
     eventId: string,
     characterId: string,
     cardIndex: number,
 ) {
-    return endlessTx.event.submitAction({
-        cap: capId,
-        saga: sagaId,
+    return endlessTx.event.submitActionAsCharacter({
+        controlCap: controlCapId,
         budgetEvent: eventId,
-        characterId,
+        character: characterId,
         cardIndex: BigInt(cardIndex),
     });
 }

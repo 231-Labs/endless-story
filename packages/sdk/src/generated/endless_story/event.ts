@@ -290,6 +290,38 @@ export function submitAction(options: SubmitActionOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface SubmitActionAsCharacterArguments {
+    controlCap: RawTransactionArgument<string>;
+    budgetEvent: RawTransactionArgument<string>;
+    character: RawTransactionArgument<string>;
+    cardIndex: RawTransactionArgument<number | bigint>;
+}
+export interface SubmitActionAsCharacterOptions {
+    package?: string;
+    arguments: SubmitActionAsCharacterArguments | [
+        controlCap: RawTransactionArgument<string>,
+        budgetEvent: RawTransactionArgument<string>,
+        character: RawTransactionArgument<string>,
+        cardIndex: RawTransactionArgument<number | bigint>
+    ];
+}
+export function submitActionAsCharacter(options: SubmitActionAsCharacterOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        null,
+        null,
+        null,
+        'u64',
+        '0x2::clock::Clock'
+    ] satisfies (string | null)[];
+    const parameterNames = ["controlCap", "budgetEvent", "character", "cardIndex"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'event',
+        function: 'submit_action_as_character',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface ResolveEventArguments {
     cap: RawTransactionArgument<string>;
     saga: RawTransactionArgument<string>;
