@@ -24,7 +24,7 @@ Repo 內的 deployment snapshot 指向 Sui testnet，最後寫入時間是 2026 
 
 | 能力 | 已經有什麼 | 為什麼還不能無條件宣稱完成 |
 |---|---|---|
-| 鏈上角色經濟 | Move module 與 generated SDK bindings 已包含 balance、owner 挹注、角色轉帳與結算。 | 產品 UI 仍讀 process-local settlement shadow；GIVE transfer 也只標 pending，還不是持久鏈上餘額。 |
+| 鏈上角色經濟 | Move module 與 generated SDK bindings 已包含 balance、owner 挹注、角色轉帳與結算。 | 產品 UI 仍讀程序內結算影子；GIVE 的接濟會在同 tick 的 SETTLE 寫入 shadow，但鏈上 `transfer_between_characters` 尚未執行。 |
 | Kiosk 劇照交易 | 已有 mint、上架、購入、撤架、領款 helper，以及 buyer 與 admin UI path。 | 需要 active package、TransferPolicy、StillRegistry、Kiosk ids、錢包資金，並完成一次 live transaction 驗證。 |
 | 個人藏閣 | PersonalVault 建立與查找已接通。 | 佈置仍存在 local state，UI 尚未接上 `decorate` 鏈上寫入。 |
 | Walrus 自動續租 | Asset 已有 `autoRenew` metadata，也能透過 asset service 延長租期。 | 目前沒有 scheduler 消費這個 flag，續租仍靠人工操作。 |

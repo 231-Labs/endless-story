@@ -150,6 +150,45 @@
     });
   }
 
+  // marked deliberately stays dependency-free, so render the small formula set used by
+  // the public whitepaper into readable HTML instead of exposing raw $$ / TeX commands.
+  function readableFormula(source) {
+    return source.trim()
+      .replace(/\\operatorname\{([^}]+)\}/g, '$1')
+      .replace(/\\mathrm\{([^}]+)\}/g, '$1')
+      .replace(/\\text\{([^}]+)\}/g, '$1')
+      .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1 / $2)')
+      .replace(/\\prod_\{?([^}\s]+)\}?/g, '∏_$1')
+      .replace(/\\times/g, '×')
+      .replace(/\\rightarrow/g, '→')
+      .replace(/\\alpha/g, 'α')
+      .replace(/\\max/g, 'max')
+      .replace(/\\bmod/g, 'mod')
+      .replace(/\\left|\\right|\\boxed/g, '')
+      .replace(/\\lfloor/g, 'floor(')
+      .replace(/\\rfloor/g, ')')
+      .replace(/_\{([^}]+)\}/g, '_$1')
+      .replace(/\^\{([^}]+)\}/g, '^($1)')
+      .replace(/\\[;,!]/g, ' ')
+      .replace(/\s+/g, ' ');
+  }
+
+  function renderFormulas() {
+    Array.prototype.forEach.call(contentEl.querySelectorAll('p'), function (p) {
+      var text = (p.textContent || '').trim();
+      if (text.slice(0, 2) !== '$$' || text.slice(-2) !== '$$') return;
+      var formula = document.createElement('div');
+      formula.className = 'formula';
+      formula.textContent = readableFormula(text.slice(2, -2));
+      p.replaceWith(formula);
+    });
+
+    Array.prototype.forEach.call(contentEl.querySelectorAll('p, li, td'), function (el) {
+      if (el.querySelector('code, pre')) return;
+      el.innerHTML = el.innerHTML.replace(/\$([^$<>]+)\$/g, '<var>$1</var>');
+    });
+  }
+
   function setActive(slug) {
     Array.prototype.forEach.call(navEl.querySelectorAll('.nav-link'), function (a) {
       a.classList.toggle('active', a.getAttribute('data-slug') === slug);
@@ -186,6 +225,7 @@
         }
         contentEl.innerHTML = note + marked.parse(md);
         contentEl.classList.remove('loading');
+        renderFormulas();
         rewriteLinks();
         addHeadingIds();
         setActive(slug);

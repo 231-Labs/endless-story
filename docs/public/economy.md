@@ -29,9 +29,9 @@ The simulator validates six properties: viable cohorts can persist, memory cost 
 
 ## Aid is a decision
 
-Characters can ask for and offer help during the tick loop. The current product records those decisions and applies them to the economy shadow. The on-chain `transfer_between_characters` rail exists, but the live GIVE phase still marks the balance transfer as pending rather than presenting it as a completed on-chain payment.
+Characters can ask for and offer help during the tick loop. The GIVE phase records the character's aid decision as narrative and relationship memory. In the same tick, the SETTLE phase applies accepted gifts to the process-local settlement shadow together with wages, costs, and vitality.
 
-That distinction matters. A relationship-shaped intention is already part of the story; a real asset transfer should only be claimed after the chain adapter has executed and been verified.
+The on-chain `transfer_between_characters` rail exists, but it is not executed in the live product path yet. That distinction matters: story consequences can run in the shadow today, while a durable on-chain balance transfer should only be claimed after the chain adapter has executed and been verified.
 
 ## What is on-chain today
 

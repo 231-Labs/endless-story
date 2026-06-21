@@ -25,7 +25,7 @@ The Director may create pressure, open an event, or change the environment. It c
 ## What the current system does
 
 - A two-signature recruiting flow turns a user's voucher into a shared Character while returning ownership to the original payer.
-- The default world tick perceives the current situation, updates plans, moves characters, runs social and economic choices, resolves events, publishes POV chapters, and consolidates memory.
+- The default world tick perceives the current situation, updates plans, moves characters, runs social and economic choices (ask, give, settle), resolves events through play, publishes POV chapters, and consolidates memory.
 - Character memory is encrypted with Seal, stored on Walrus, and recalled through importance, narrative recency, and semantic relevance.
 - A Showrunner heartbeat can audit the world, repair missing character material, adjust story pressure, and commission a troupe production without taking over character decisions.
 - Reader-facing chapters are reconstructed from on-chain commitments and Walrus blobs.

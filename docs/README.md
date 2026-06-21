@@ -1,24 +1,42 @@
 # Endless Story · design docs
 
-These docs are organised by the three layers of the architecture. The same model is on the pitch deck and the [docs site](https://231-labs.github.io/endless-story/).
+> **Public design spec** (what the [docs site](https://231-labs.github.io/endless-story/) publishes): [`public/`](./public/) plus the entry pages authored in [`site/content/`](../site/content/) (`overview`, `architecture`, `roadmap`). Edit those when you want the external spec to change.
+>
+> **Internal engineering notes** (below): working journals for implementation. They may mix languages, carry TODOs, or lag the product. They are **not** copied to the docs site verbatim.
+>
+> **Research / academic material**: start from [`public/whitepaper.md`](./public/whitepaper.md) and [`research/WHITEPAPER.md`](./research/WHITEPAPER.md), then the deterministic harnesses in `packages/{drama,economy,troupe}`. A dedicated academic curation pass is planned: **English paper-style exports for citation**, with paired **Chinese working notes** for internal reading.
 
-## The three layers
+## Public map (curated)
 
-1. **Protocol** (協議) — the on-chain foundation. World, Saga, Scene, Character, Event, and the Walrus storage substrate. Objective, shared history.
-2. **Narrative** (敘事) — the engine and ops tools. The runner, the Director and Character agents, memory, the content pipeline, and the backstage.
-3. **Participation** (用戶參與) — the user-facing side. Claiming a character, audience and subscription, and the IP revenue that pays characters' running costs.
+| Page | Source of truth |
+|---|---|
+| Overview · Architecture · Roadmap | [`site/content/`](../site/content/) |
+| Protocol · Memory · Narrative · Economy · Whitepaper | [`public/`](./public/) (synced into the site at deploy) |
 
-Plus a **Research** (研究) section for the validation harnesses and formula sheets.
+English and Chinese live in paired files (`*.md` / `*.zh.md`).
 
-## Map
+## Internal map (engineering)
+
+Organised by the three architecture layers. Useful for implementation detail; not the submission-facing spec.
 
 ```text
 docs/
-  protocol/       PRIMITIVES · WALRUS_STORAGE
-  narrative/      NARRATIVE_AGENTS · EVENT_LIFECYCLE · CONTENT_PIPELINE · PRODUCTION_ENGINE
-                  PROMPTS · CHARACTER_ECONOMY · ASSET_MANAGEMENT · DEPLOYMENT
-  participation/  PRODUCT_POSITIONING · PRODUCTION_PLAN · PITCH_DECK · API_CONTRACT
-  research/       WHITEPAPER  (plus the packages/{drama,economy,troupe} validators)
+  public/           ← curated public spec (see above)
+  protocol/         PRIMITIVES · WALRUS_STORAGE
+  narrative/        NARRATIVE_AGENTS · EVENT_LIFECYCLE · CONTENT_PIPELINE · PRODUCTION_ENGINE
+                      PROMPTS · CHARACTER_ECONOMY · ASSET_MANAGEMENT · DEPLOYMENT
+  participation/    PRODUCT_POSITIONING · PRODUCTION_PLAN · PITCH_DECK · API_CONTRACT
+  research/         WHITEPAPER (long-form research notes)
 ```
 
-Start with [protocol/PRIMITIVES.md](./protocol/PRIMITIVES.md) for the object model, then [narrative/NARRATIVE_AGENTS.md](./narrative/NARRATIVE_AGENTS.md) for the engine, and [participation/PRODUCT_POSITIONING.md](./participation/PRODUCT_POSITIONING.md) for the product.
+Suggested reading order for engineers: [protocol/PRIMITIVES.md](./protocol/PRIMITIVES.md) → [narrative/NARRATIVE_AGENTS.md](./narrative/NARRATIVE_AGENTS.md) → [participation/PRODUCT_POSITIONING.md](./participation/PRODUCT_POSITIONING.md).
+
+## Research starting points
+
+| Topic | Where to look |
+|---|---|
+| Formulas + evidence table | [`public/whitepaper.md`](./public/whitepaper.md) |
+| Long-form mechanism notes | [`research/WHITEPAPER.md`](./research/WHITEPAPER.md) |
+| Tension / rivalry dynamics | `packages/drama` + [`narrative/EVENT_LIFECYCLE.md`](./narrative/EVENT_LIFECYCLE.md) |
+| Character economy hypotheses | `packages/economy` + [`narrative/CHARACTER_ECONOMY.md`](./narrative/CHARACTER_ECONOMY.md) |
+| Troupe production pipeline | `packages/troupe` + [`narrative/PRODUCTION_ENGINE.md`](./narrative/PRODUCTION_ENGINE.md) |

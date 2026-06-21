@@ -24,7 +24,7 @@ These rows describe code paths, not a guarantee that every external service is h
 
 | Capability | What is already present | What still prevents an unconditional claim |
 |---|---|---|
-| On-chain character economy | Move modules and generated SDK bindings for balances, owner funding, transfers, and settlement. | The product UI still reads a process-local settlement shadow; GIVE transfers are marked pending rather than executed as durable chain balances. |
+| On-chain character economy | Move modules and generated SDK bindings for balances, owner funding, transfers, and settlement. | The product UI still reads a process-local settlement shadow; accepted gifts are applied in SETTLE within the same tick, but on-chain `transfer_between_characters` is not executed yet. |
 | Kiosk still trading | Mint, list, purchase, delist, and proceeds helpers plus buyer and admin UI paths. | Requires the active package, TransferPolicy, StillRegistry, Kiosk ids, wallet funding, and a verified live transaction. |
 | Personal chamber | PersonalVault creation and discovery are wired. | Saved arrangements remain local until the `decorate` write path is connected in the UI. |
 | Automatic Walrus renewal | Assets carry `autoRenew` metadata and can be extended through the asset service. | No renewal scheduler currently consumes that flag; renewal is manual. |

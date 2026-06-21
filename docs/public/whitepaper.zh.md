@@ -77,7 +77,7 @@ $$runway = \left\lfloor\frac{balance}{-netFlow}\right\rfloor$$
 
 $$vitality_{t+1}=\operatorname{clamp}(vitality_t+recovery-econDamage-ageHazard,0,100)$$
 
-純 economy harness 已驗證守恆與六項行為假說。目前產品把這個 transition 用在 off-chain shadow；Move balance rail 已存在，但端到端產品 adapter 還不是畫面所顯示餘額的真實來源。
+純 economy harness 已驗證守恆與六項行為假說。目前產品把這個 transition 用在程序內結算影子；Move balance rail 已存在，但端到端產品 adapter 還不是畫面所顯示餘額的真實來源。
 
 ## 驗證邊界
 
@@ -86,7 +86,7 @@ $$vitality_{t+1}=\operatorname{clamp}(vitality_t+recovery-econDamage-ageHazard,0
 | 角色骰值與必應定價 | 已進 recruitment flow，並有 code-level tests。 |
 | 三因子召回 | 已進 MemWal client 與自架 relayer。 |
 | 張力動力學 | `packages/drama` 具備確定性 simulator、golden vectors、負對照與 ablation。 |
-| 角色經濟 | `packages/economy` 具備確定性 simulator 與假說測試；live UI 仍使用 settlement shadow。 |
+| 角色經濟 | `packages/economy` 具備確定性 simulator 與假說測試；live UI 仍使用程序內結算影子。 |
 | 資源結算 | Move rail 與 web event-spine adapter 已存在；真實結果仍取決於目前 deployment 與 RPC 執行。 |
 
 專案不把「已實作」「已部署」與「已在真實運行中驗證」當成同義詞。產品層的狀態界線整理在[路線圖](#/roadmap)。

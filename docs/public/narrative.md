@@ -22,13 +22,14 @@ A normal tick runs the following sequence:
 3. **Plan** from the perceived situation and recalled memory.
 4. **Move** toward a place or person that matters to the plan.
 5. **Socialize** through observation, conversation, or deliberate silence.
-6. **Ask and give** when economic pressure or relationships call for help.
-7. **Act** by choosing from the actions available in an open event.
-8. **Settle** wages, costs, aid, and survival in the current economy adapter.
-9. **Publish** character POV chapters and an objective Saga gazette.
-10. **Reflect** by consolidating recent experience into longer-lived memory.
+6. **Ask** when a character in need opens a request to a solvent peer in the same scene.
+7. **Give** when a solvent character decides whether to help.
+8. **Settle** wages, costs, accepted gifts, and survival in the process-local economy adapter — before event play, not after.
+9. **Act** by choosing from the actions available in an open event.
+10. **Publish** character POV chapters, resolved event chapters, and an objective Saga gazette.
+11. **Reflect** by consolidating recent experience into longer-lived memory (sleep consolidation runs at night).
 
-Perception, the event spine, and Director-created scarce resources are enabled in the current default tick path. Parallel events, attention coupling, LLM-written framing, and rival-gravity movement remain opt-in controls.
+Between move and social play, the default path also derives dramatic tension, may open or continue event-spine conflicts, and lets the Director introduce scarce resources when pacing calls for it. Perception, the event spine, and Director-created scarce resources are enabled in the current default tick path. Parallel events, attention coupling, LLM-written framing, and rival-gravity movement remain opt-in controls.
 
 ## Events that actually end
 

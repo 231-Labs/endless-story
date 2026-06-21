@@ -1,6 +1,6 @@
 # 角色經濟
 
-角色經濟的目標，是讓長期存在有成本、互相扶持有意義、被忽視也會留下後果。核心機制已用確定性 simulator 驗證；目前產品仍以 off-chain settlement shadow 運行，而 Move balance rail 與 SDK binding 已準備好，尚待完整鏈上結算驗證。
+角色經濟的目標，是讓長期存在有成本、互相扶持有意義、被忽視也會留下後果。核心機制已用確定性 simulator 驗證；目前產品仍以**程序內結算影子**（process-local settlement shadow）運行，而 Move balance rail 與 SDK binding 已準備好，尚待完整鏈上結算驗證。
 
 ## 每日成本
 
@@ -29,9 +29,9 @@ Simulator 驗證了六項性質：健康班底能持續運作、記憶成本不�
 
 ## 接濟本身也是角色選擇
 
-角色能在 tick loop 裡求助或主動給予。目前產品會記錄這些決定，並套用到 economy shadow。鏈上的 `transfer_between_characters` rail 已存在，但 live GIVE phase 仍把 balance transfer 標成 pending，不能說成已完成的鏈上付款。
+角色能在 world tick 裡求助或主動給予。GIVE 階段會把接濟決定寫成敘事與關係記憶；同一個 tick 的 SETTLE 階段則會把已接受的接濟，連同薪餉、成本與 vitality 一起記入程序內結算影子。
 
-這個區分很重要。受關係影響的「想幫或不想幫」已經是故事的一部分；真正的資產轉移則要等 chain adapter 執行並驗證後才能成立。
+鏈上的 `transfer_between_characters` rail 已存在，但 live product 路徑尚未執行它。這個區分很重要：故事後果今天可以在 shadow 裡跑，而可長期保存的鏈上餘額轉移，仍要等 chain adapter 執行並驗證後才能成立。
 
 ## 目前鏈上已有什麼
 
