@@ -3,7 +3,7 @@
 // Metadata (title / kind / fixture) is client-safe and lives in web's prompt-lab/catalog.ts.
 // build/parse are kept separate because they import runner/llm builders (server-only) — the
 // prompt-lab admin panel is a client component and must not pull those into its bundle.
-// The lab dispatch combines catalog metadata + this behavior; see docs/PROMPTS.md.
+// The lab dispatch combines catalog metadata + this behavior; see docs/narrative/PROMPTS.md.
 
 import type { BuildPromptResult } from './moderation.js';
 

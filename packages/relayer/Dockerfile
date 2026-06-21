@@ -1,4 +1,4 @@
-# Asset 服務(docs/WALRUS_ASSETS.md Service ③)的 image:walrus CLI + Node + relayer 原始碼。
+# Asset 服務(docs/narrative/ASSET_MANAGEMENT.md Service ③)的 image:walrus CLI + Node + relayer 原始碼。
 # 與 MemWAL relayer 共用 package,但 entrypoint 是 assets-server.ts(獨立進程/service)。
 #
 # base = cmdoss/walrus:它已含 walrus + sui binaries,並依 NETWORK / SUI_KEYSTORE env 設好

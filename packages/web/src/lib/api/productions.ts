@@ -12,7 +12,7 @@ import {
  *
  * Chain-first only (like gazettes/cuts): pre-pipeline deployments simply have no
  * productions and the facade returns empty arrays the UI renders as an empty
- * state. See docs/PRODUCTION_ENGINE.md §10.
+ * state. See docs/narrative/PRODUCTION_ENGINE.md §10.
  */
 
 export async function listProductions(sagaId: string): Promise<ProductionEntry[]> {

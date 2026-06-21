@@ -1,33 +1,40 @@
 (function () {
   'use strict';
 
-  // Each item: slug + bilingual labels. Deep docs carry `lang` (their written language).
-  // Entry pages carry `bilingual:true` (a .zh variant exists alongside the .md).
+  // slug + bilingual labels. Deep docs carry `lang` (written language) and `type`
+  // (product / tech / research). Entry pages carry `bilingual:true` (a .zh variant exists).
   var GROUPS = [
     { key: 'start', items: [
       { slug: 'overview', en: 'Overview', zh: '總覽', bilingual: true },
+      { slug: 'architecture', en: 'Architecture', zh: '架構', bilingual: true },
       { slug: 'roadmap', en: 'Roadmap', zh: '路線圖', bilingual: true }
     ] },
-    { key: 'design', items: [
-      { slug: 'product-positioning', en: 'Product positioning', zh: '產品定位', lang: 'zh' },
-      { slug: 'whitepaper', en: 'Whitepaper', zh: '白皮書', lang: 'zh' },
-      { slug: 'narrative-agents', en: 'Narrative agents', zh: '敘事 Agent 架構', lang: 'zh' },
-      { slug: 'content-pipeline', en: 'Content pipeline', zh: '內容鏈路', lang: 'zh' },
-      { slug: 'character-economy', en: 'Character economy', zh: '角色經濟', lang: 'zh' },
-      { slug: 'production-engine', en: 'Production engine', zh: '劇目製作引擎', lang: 'zh' },
-      { slug: 'event-lifecycle', en: 'Event lifecycle', zh: '事件生命週期', lang: 'zh' },
-      { slug: 'pitch-deck', en: 'Pitch outline', zh: '簡報大綱', lang: 'zh' }
+    { key: 'protocol', items: [
+      { slug: 'primitives', en: 'Protocol primitives', zh: '協議物件模型', lang: 'en', type: 'tech' },
+      { slug: 'walrus-storage', en: 'Walrus storage', zh: 'Walrus 儲存模型', lang: 'en', type: 'tech' }
     ] },
-    { key: 'infra', items: [
-      { slug: 'walrus-assets', en: 'Walrus assets', zh: 'Walrus 資產', lang: 'zh' },
-      { slug: 'api-contract', en: 'API contract', zh: 'API 合約', lang: 'en' },
-      { slug: 'prompts', en: 'Prompts', zh: 'Prompts', lang: 'en' },
-      { slug: 'deployment', en: 'Deployment', zh: '部署', lang: 'zh' }
+    { key: 'narrative', items: [
+      { slug: 'narrative-agents', en: 'Narrative agents', zh: '敘事 Agent 架構', lang: 'zh', type: 'tech' },
+      { slug: 'event-lifecycle', en: 'Event lifecycle', zh: '事件生命週期', lang: 'zh', type: 'tech' },
+      { slug: 'content-pipeline', en: 'Content pipeline', zh: '內容鏈路', lang: 'zh', type: 'tech' },
+      { slug: 'production-engine', en: 'Production engine', zh: '劇目製作引擎', lang: 'zh', type: 'tech' },
+      { slug: 'prompts', en: 'Prompts', zh: 'Prompts', lang: 'en', type: 'tech' },
+      { slug: 'character-economy', en: 'Character economy', zh: '角色經濟', lang: 'zh', type: 'tech' },
+      { slug: 'asset-management', en: 'Asset management', zh: '資產管理', lang: 'zh', type: 'tech' },
+      { slug: 'deployment', en: 'Deployment', zh: '部署', lang: 'zh', type: 'tech' }
+    ] },
+    { key: 'participation', items: [
+      { slug: 'product-positioning', en: 'Product positioning', zh: '產品定位', lang: 'zh', type: 'product' },
+      { slug: 'production-plan', en: 'Roadmap and plan', zh: '路線圖與計畫', lang: 'zh', type: 'product' },
+      { slug: 'pitch-deck', en: 'Pitch outline', zh: '簡報大綱', lang: 'zh', type: 'product' },
+      { slug: 'api-contract', en: 'API contract', zh: 'API 合約', lang: 'en', type: 'tech' }
+    ] },
+    { key: 'research', items: [
+      { slug: 'whitepaper', en: 'Whitepaper', zh: '白皮書', lang: 'zh', type: 'research' }
     ] },
     { key: 'links', items: [
       { url: './pitch/endless-story-pitch-light-en.html', en: 'Pitch deck (EN)', zh: '簡報（English）' },
       { url: './pitch/endless-story-pitch-light.html', en: 'Pitch deck (中文)', zh: '簡報（中文）' },
-      { url: './pitch/endless-story-architecture-map.html', en: 'Architecture map', zh: '架構圖' },
       { url: 'https://spring-snow.231labs.xyz', en: 'Live demo', zh: '線上 Demo' }
     ] }
   ];
@@ -35,29 +42,27 @@
   var STRINGS = {
     en: {
       brandSub: 'Design docs',
-      groups: { start: 'Start', design: 'Design', infra: 'Build & infra', links: 'Links' },
+      groups: { start: 'Start', protocol: 'Protocol', narrative: 'Narrative', participation: 'Participation', research: 'Research', links: 'Links' },
       footTrack: 'Sui Overflow 2026 · Walrus track',
       footBy: 'Built by 231 Labs',
       pageFoot: 'Walrus + Seal · MemWal SDK · Sui. Built by 231 Labs.',
       toggle: '中文',
+      typeName: { product: 'Product', tech: 'Technical', research: 'Research' },
       docNote: function (lang) {
-        return lang === 'zh'
-          ? 'This design doc is written in Chinese (中文).'
-          : 'This design doc is written in English.';
+        return lang === 'zh' ? 'This design doc is written in Chinese (中文).' : 'This design doc is written in English.';
       },
       notFound: 'Not found'
     },
     zh: {
       brandSub: '設計文檔',
-      groups: { start: '開始', design: '設計', infra: '建置與基建', links: '連結' },
+      groups: { start: '開始', protocol: '協議', narrative: '敘事', participation: '用戶參與', research: '研究', links: '連結' },
       footTrack: 'Sui Overflow 2026 · Walrus 賽道',
       footBy: '由 231 Labs 打造',
       pageFoot: 'Walrus + Seal · MemWal SDK · Sui。由 231 Labs 打造。',
       toggle: 'EN',
+      typeName: { product: '產品', tech: '技術', research: '研究' },
       docNote: function (lang) {
-        return lang === 'zh'
-          ? '本設計文件以中文撰寫。'
-          : '本設計文件以英文（English）撰寫。';
+        return lang === 'zh' ? '本設計文件以中文撰寫。' : '本設計文件以英文（English）撰寫。';
       },
       notFound: '找不到頁面'
     }
@@ -93,8 +98,16 @@
 
   function S() { return STRINGS[lang]; }
 
-  function langBadge(itemLang) {
-    return '<span class="nav-badge ' + itemLang + '">' + (itemLang === 'zh' ? '中' : 'EN') + '</span>';
+  function badges(it) {
+    var html = '';
+    if (it.type) {
+      html += '<span class="type-badge ' + it.type + '" title="' + S().typeName[it.type] + '">' +
+        (it.type === 'product' ? 'P' : it.type === 'research' ? 'R' : 'T') + '</span>';
+    }
+    if (it.lang) {
+      html += '<span class="nav-badge ' + it.lang + '">' + (it.lang === 'zh' ? '中' : 'EN') + '</span>';
+    }
+    return html;
   }
 
   function buildNav() {
@@ -107,9 +120,8 @@
           html += '<a class="nav-link ext" href="' + it.url + '" target="_blank" rel="noopener">' +
             label + '<span class="arr">↗</span></a>';
         } else {
-          var badge = it.lang ? langBadge(it.lang) : '';
           html += '<a class="nav-link" data-slug="' + it.slug + '" href="#/' + it.slug + '">' +
-            '<span class="nav-text">' + label + '</span>' + badge + '</a>';
+            '<span class="nav-text">' + label + '</span><span class="nav-tags">' + badges(it) + '</span></a>';
         }
       });
       html += '</div>';
@@ -161,7 +173,6 @@
     return meta[h] ? h : 'overview';
   }
 
-  // Which markdown file to fetch for a slug, given current language.
   function fileFor(slug) {
     var it = meta[slug];
     if (it && it.bilingual && lang === 'zh') return slug + '.zh';
@@ -175,7 +186,6 @@
     fetch('./content/' + fileFor(slug) + '.md', { cache: 'no-cache' })
       .then(function (r) {
         if (!r.ok) {
-          // Fall back to the base file if a .zh variant is missing.
           if (fileFor(slug) !== slug) return fetch('./content/' + slug + '.md').then(function (r2) { return r2.text(); });
           throw new Error('HTTP ' + r.status);
         }

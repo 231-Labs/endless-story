@@ -1,6 +1,6 @@
 /**
  * Event-Chapter Compiler — weaves all POVs of one event into the canonical
- * "回" (see docs/CONTENT_PIPELINE.md §2). Sibling of gazette-compiler.
+ * "回" (see docs/narrative/CONTENT_PIPELINE.md §2). Sibling of gazette-compiler.
  *
  * **Why this exists**: a single character's POV is raw material; readers pay
  * for the *event* told richly from every angle (Rashomon weave). This is the

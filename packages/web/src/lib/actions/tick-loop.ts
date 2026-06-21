@@ -3,7 +3,7 @@
 /**
  * N4 — autonomous tick loop. One press = the saga lives one tick on its own.
  *
- * This is the integrative step (docs/NARRATIVE_AGENTS.md §6): it chains the
+ * This is the integrative step (docs/narrative/NARRATIVE_AGENTS.md §6): it chains the
  * pieces N1–N3 + R-era services into a single self-driving pass, in order:
  *
  *   1. ADVANCE   World tick moves (narrative time) — unless dry-run.
@@ -125,7 +125,7 @@ import { runActPhase, cardActionPhrase } from './tick-phases/act';
  *  recent-topic history is process-level (one server process drives the loop).
  *  NOTE: this is the deterministic-relief layer; the real fix (resolve the event
  *  → settle the resource → demand moves) is the multi-tick spine in
- *  docs/EVENT_LIFECYCLE.md. */
+ *  docs/narrative/EVENT_LIFECYCLE.md. */
 const recentTopicsBySaga = new Map<string, string[]>();
 
 /** Read a TICK_* feature flag from the environment (deploy-wide default for an
@@ -1185,7 +1185,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             //   actually wrote a POV this tick. Failure-isolated (inline, timeout-
             //   bounded) so a weave error never blocks the tick. The cut is the
             //   commercial unit; POVs stay the per-character raw feed.
-            //   See docs/CONTENT_PIPELINE.md §2.
+            //   See docs/narrative/CONTENT_PIPELINE.md §2.
             if (input.eventChapter ?? true) {
                 const povsFor = (st: TickStoryletResult) => {
                     const castSet = new Set(st.characterIds);

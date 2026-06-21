@@ -63,7 +63,7 @@ condition on 上一層的 anchor —— 所以「真的發生過」「同一個�
 
 > **決策（2026-06-10）：正式「章回」= 事件合本，不是單角色 POV。**
 >
-> **下一代設計 — 見 [`internal/docs/STORYTELLER_CHAPTER.md`](../internal/docs/STORYTELLER_CHAPTER.md)。** 本層的「每 resolve 一次性
+> **下一代設計（說書人 agent 化）。** 本層的「每 resolve 一次性
 > 重織」要被改成說書人 agent 化的累積 + 進展閘 + 多輪寫作。**已落地進 production（2026-06-19）的部分**：
 > 每次織合本時讀 per-saga **故事總綱**（承先）→ 織 → cheap-LLM **折回**更新總綱（啟後），讓相鄰的回
 > 承先啟後、像連續小說（`6f6d4fd`/`ac7a4bd`/`1bcfe18`），並移除「且看下回」收場套語。**仍未接線**＝決定

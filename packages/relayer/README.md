@@ -5,7 +5,7 @@ Self-hosted **MemWal relayer** — replaces the managed `relayer.memwal.ai` so r
 re-rank. Plaintext-blind (stores only vector + scalar metadata + Walrus blob id; never sees
 content). Zero npm deps — runs under Node ≥ 23.6 native TS type-stripping.
 
-See `docs/CHARACTER_ECONOMY.md` is unrelated; the design rationale is in `docs/DEPLOYMENT.md`
+See `docs/narrative/CHARACTER_ECONOMY.md` is unrelated; the design rationale is in `docs/narrative/DEPLOYMENT.md`
 (§ relayer) and the MemWal discussion.
 
 ## Run
@@ -49,4 +49,4 @@ interface with sqlite-vec / pgvector when you outgrow it; nothing else changes.
 ## Deploy (Zeabur → Contabo VPS)
 Root dir `packages/relayer`, start command `node src/server.ts`, persistent volume on
 `DATA_DIR`, set `WALRUS_PUBLISHER_URL` + `RELAYER_SECRET` + `RELAYER_CORS_ORIGIN`. Point the web
-app's `MEMWAL_SERVER_URL` at this service. See `docs/DEPLOYMENT.md`.
+app's `MEMWAL_SERVER_URL` at this service. See `docs/narrative/DEPLOYMENT.md`.

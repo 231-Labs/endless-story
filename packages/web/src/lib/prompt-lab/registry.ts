@@ -2,7 +2,7 @@
 // Replaces the old buildPrompt switch in prompt-lab.ts (which now just looks up here).
 // Metadata + fixtures are client-safe and live in ./catalog.ts; this file imports
 // runner/llm builders, so it must never be pulled into the client bundle (only the
-// 'use server' prompt-lab.ts imports it). See docs/PROMPTS.md.
+// 'use server' prompt-lab.ts imports it). See docs/narrative/PROMPTS.md.
 
 import type { PromptBehavior } from '@endless-story/llm/prompts';
 import type { PromptLabCallId } from './catalog';

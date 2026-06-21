@@ -1,6 +1,6 @@
 /**
  * Gacha pricing — pure math, shared by the admin form (auto-suggest)
- * and the batch re-pricing action. See docs/WHITEPAPER.md §1 for the derivation.
+ * and the batch re-pricing action. See docs/research/WHITEPAPER.md §1 for the derivation.
  *
  * Each of the 4 attribute axes is rolled UNIFORMLY on [0, ATTRIBUTE_MAX] and the
  * axes are independent (HKDF domain separation — see packages/llm/src/seed/roll.ts).

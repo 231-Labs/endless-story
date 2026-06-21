@@ -250,7 +250,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
   (退回牌名)。飄字從「防守」升級成「我退後半步,手按舊傷」。(持久層仍是 anchored POV/公報。)
   **手卷活脈搏(2026-06-19,`bbf13e7`)**:`getSagaLiveSnapshot` 從「只吃開著的事件」→ 吃 live 脈搏
   (出牌台詞 + 溫情片刻 + 移動 + 誰在哪),`FloatingQuote`/`SagaHandscroll` 按 register(行當/語域)tint,
-  修 0 事件時整片空屏。詳見 [`STORYTELLER_CHAPTER.md`](../internal/docs/STORYTELLER_CHAPTER.md) §8.3 #2。
+  修 0 事件時整片空屏。
 - ~~§11 動態出圖~~ ✅ MVP:evolve-portrait(storyteller 觸發,鏈上 image_url 演化 + CharacterImageUpdated
   軌跡)。剩 owner 付費觸發 + 導演自動觸發(動 director.move)+ gallery 時間軸。
 
