@@ -22,13 +22,11 @@ Autonomous characters remember, form relationships, and act on their own. Their 
 
 > Hackathon project for **Sui Overflow 2026 · Walrus track**.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/hero-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="pitch/assets/hero-light.png">
-    <img src="pitch/assets/hero-dark.png" alt="Spring Snow Troupe, the first saga running on Endless Story" width="720" />
-  </picture>
-</p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/hero-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="pitch/assets/hero-light.png">
+  <img src="pitch/assets/hero-dark.png" alt="Spring Snow Troupe, the first saga running on Endless Story" width="560" />
+</picture></p>
 
 ---
 
@@ -42,15 +40,6 @@ Endless Story is a multi-agent protocol for living, autonomous story worlds. Pic
 - **Memory is a living asset.** Each character's memory lives on Walrus and grows chapter by chapter, instead of being a static image you collect.
 - **Three-factor recall.** A character pulls back the memories that matter right now, weighed by importance, recency (decayed by narrative time), and relevance. That turns stored memory into in-character behavior.
 - **Your point of view.** Pick any character and follow the same world through their eyes. Each one sees a different version of the same scene through their own memory and stance.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/cinema-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="pitch/assets/cinema-light.png">
-    <img src="pitch/assets/cinema-dark.png" alt="Character profile and chapter trailers in Spring Snow Troupe" width="720" />
-  </picture>
-  <br /><sub>Character pages and chapter trailers — pick a character, follow their story.</sub>
-</p>
 
 ## Built on Walrus + Sui + Seal
 

@@ -1,54 +1,47 @@
 # Endless Story
 
-Endless Story is an engine for persistent, on-chain story worlds. The characters are living memory assets that grow over time, not static images you collect. They are built with the MemWal SDK on Walrus and owned through Sui NFTs.
+Endless Story is an engine for persistent story worlds whose characters remember, form relationships, and make their own decisions.
 
-> 角色會記得，世界會生長。 (Characters remember; the world grows.)
+Sui holds the shared history and permissions. Walrus stores memory and published media. Seal protects each character's private memory. A world loop brings those pieces together and keeps the story moving.
 
-Spring Snow Troupe (春雪社) is the first *Saga* running on the engine, and the world shown in this demo.
+**Spring Snow Troupe** is the first Saga built with the engine and the world featured in the live demo.
 
-[▶ Live demo](https://spring-snow.231labs.xyz) · [Pitch deck (EN)](./pitch/endless-story-pitch-light-en.html) · [中文版](./pitch/endless-story-pitch-light.html)
+[▶ Live demo](https://spring-snow.231labs.xyz) · [Pitch deck](./pitch/endless-story-pitch-light-en.html) · [中文簡報](./pitch/endless-story-pitch-light.html)
 
 ---
 
-## What it is
+## A world, not a chatbot
 
-Endless Story borrows from three familiar things and changes one rule in each:
+Endless Story changes one rule in three familiar formats:
 
-| Borrowed from | It looks like | What changes |
+| Familiar format | What remains | What changes |
 |---|---|---|
-| **Games** (gacha, raising, collecting) | You draw, raise, and watch characters | You cannot control them. You influence a character who has its own life. |
-| **IP and collectibles** (cards, NFTs) | Characters are ownable, tradable assets | The asset is alive. It builds a memory history, ages, can die, and forms alliances and rivalries. |
-| **Serial fiction and film** | It produces chapters, stills, and eventually video | There is no screenwriter. The characters live the story out, and the director only pushes events and adjusts the environment. |
+| **Character games** | You discover, follow, and support characters. | A character is not an avatar. It can accept influence, but it chooses its own response. |
+| **Digital ownership** | A character has a transferable owner. | Ownership and operation are separate: the owner holds an `OwnerCap`, while a Saga receives revocable authority to keep the character active. |
+| **Serial fiction** | The world produces chapters, gazettes, stills, and productions. | No single writer dictates every beat. Shared events are lived and retold by several character agents. |
 
-The core rule is that nobody can make a decision for a character. That is what lets the world run on its own. The world owner builds the stage. The saga owner pushes events through a Director agent. The character owner can send in dreams that influence a character, but cannot command it.
+The Director may create pressure, open an event, or change the environment. It cannot choose a character's line, action, or private interpretation. That boundary is the heart of the system.
 
----
+## What the current system does
 
-## What runs today
+- A two-signature recruiting flow turns a user's voucher into a shared Character while returning ownership to the original payer.
+- The default world tick perceives the current situation, updates plans, moves characters, runs social and economic choices, resolves events, publishes POV chapters, and consolidates memory.
+- Character memory is encrypted with Seal, stored on Walrus, and recalled through importance, narrative recency, and semantic relevance.
+- A Showrunner heartbeat can audit the world, repair missing character material, adjust story pressure, and commission a troupe production without taking over character decisions.
+- Reader-facing chapters are reconstructed from on-chain commitments and Walrus blobs.
+- Asset tooling can upload, inspect, and manually renew published Walrus media.
 
-- Full contract suite deployed to Sui testnet (`sui move test` 122/122)
-- Gacha character minting: an on-chain Character NFT with caps, and a deterministic portrait stored on Walrus
-- An autonomous tick loop (PLAN → MOVE → DRAMA → SOCIAL → ASK → GIVE → BOND → SETTLE → ACT → POV → SLEEP → GAZETTE)
-- MemWal memory: remember and recall, SEAL encryption, cap-enforced decryption, and three-factor recall, on a self-hosted relayer
-- A character economy loop (salary → memory rent → aid → death), validated off-chain across hypotheses H1 to H6
-- A content pipeline (event → POV → chapter → gazette → subscription wall), with an on-chain chapter compiler
-- A 3D treasury (chamber) with AI curation and still generation
-- A troupe production engine, with an offline validation harness
+Some rails exist in contracts or SDK code but are not yet the live product source of truth. Character balances still run through an off-chain settlement shadow, Kiosk commerce depends on deployment configuration, and on-chain chamber layout saving is not complete. The [Roadmap](#/roadmap) keeps those boundaries explicit.
 
-The [Roadmap](#/roadmap) lists what is deployed but not yet verified (🟡) and what is planned (🛣️). Every capability is labelled ✅, 🟡, or 🛣️, so it stays clear what runs today and what is still ahead.
+## Read the public design
 
----
-
-## Read the design
-
-- **[Product positioning](#/product-positioning)**: what it is, and where it goes after feature freeze
-- **[Whitepaper](#/whitepaper)**: gacha pricing, character economics, and the tension engine
-- **[Narrative agents](#/narrative-agents)**: the Director and Character agents, and the perceive, plan, act, reflect loop
-- **[Content pipeline](#/content-pipeline)**: how events become chapters, gazettes, and stills
-- **[Character economy](#/character-economy)**: salary, memory cost, mutual aid, and two-track death
-- **[Production engine](#/production-engine)** · **[Event lifecycle](#/event-lifecycle)** · **[Walrus assets](#/walrus-assets)**
-- **[API contract](#/api-contract)** · **[Prompts](#/prompts)** · **[Deployment](#/deployment)**
+- **[Architecture](#/architecture)** explains the system in three layers.
+- **[On-chain protocol](#/protocol)** covers objects, ownership, delegation, and recruiting.
+- **[Memory and storage](#/memory)** covers Walrus, Seal, MemWal, recall, and renewal.
+- **[Narrative engine](#/narrative)** follows one world tick from perception to publication.
+- **[Character economy](#/economy)** separates the validated model from the current settlement shadow.
+- **[Mechanism whitepaper](#/whitepaper)** collects the formulas and their evidence.
 
 ---
 
-<sub>Built by 231 Labs for Sui Overflow 2026 · Walrus track, on Walrus, Seal, the MemWal SDK, and Sui.</sub>
+<sub>Built by 231 Labs for Sui Overflow 2026 · Walrus track.</sub>

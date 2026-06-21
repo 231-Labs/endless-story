@@ -39,8 +39,8 @@
 
 | 檔案 | 內容 |
 |---|---|
-| `hero-light.png` / `hero-dark.png` | 春雪社首頁 |
-| `cinema-light.png` / `cinema-dark.png` | 角色頁 + 章回預告列 |
+| `hero-light.png` / `hero-dark.png` | 春雪社首頁（README hero） |
+| `cinema-light.png` / `cinema-dark.png` | 章回預告列（README 未引用） |
 | `logo-light.png` / `logo-dark.png` | 由 `logo.png` 著色，對應網站 `--color-cinnabar`（日 `#B04A3C` / 夜 `#CCA45C`） |
 
 **備用（README 未引用）**

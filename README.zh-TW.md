@@ -22,13 +22,11 @@
 
 > Sui Overflow 2026 · Walrus 賽道 hackathon 專案。
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/hero-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="pitch/assets/hero-light.png">
-    <img src="pitch/assets/hero-dark.png" alt="春雪社，跑在無盡敘界上的第一個 Saga" width="720" />
-  </picture>
-</p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/hero-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="pitch/assets/hero-light.png">
+  <img src="pitch/assets/hero-dark.png" alt="春雪社，跑在無盡敘界上的第一個 Saga" width="560" />
+</picture></p>
 
 ---
 
@@ -42,15 +40,6 @@
 - **記憶是會長大的資產。** 每個角色的記憶存在 Walrus 上，一回一回累積，而不是一張你收藏的靜態圖。
 - **三因子召回。** 角色會把此刻真正重要的記憶撈回來，依重要性、近時性（隨敘事時間衰減）、相關性加權，讓存下來的記憶變成符合人設的行為。
 - **選你的視角。** 挑任一角色，從他眼裡跟著同一個世界。每個人用自己的記憶與立場，看到同一場景的不同版本。
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/cinema-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="pitch/assets/cinema-light.png">
-    <img src="pitch/assets/cinema-dark.png" alt="春雪社角色頁與章回預告" width="720" />
-  </picture>
-  <br /><sub>角色頁與章回預告 — 挑一個角色，跟著他的故事走。</sub>
-</p>
 
 ## 建構於 Walrus + Sui + Seal
 

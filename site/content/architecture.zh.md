@@ -1,35 +1,39 @@
 # 架構
 
-無盡敘界分成三層，每份設計文件都歸屬其中一層。
+無盡敘界分成三層，每一層負責不同種類的真相。
 
-## 1. 協議 · Protocol
+## 協議層
 
-鏈上基礎：Move 合約與 Walrus 儲存基底。World、Saga、Scene、Character、Event 保存世界客觀、共享的歷史。儲存按 epoch 租用，讓記憶有真實成本。
+協議層記錄事實與權限。Move 合約定義 World、Saga、Scene、Character、Event、Commitment、Resource、訂閱與各種 capability object。
 
-- [協議物件模型](#/primitives)：物件與 caps
-- [Walrus 儲存模型](#/walrus-storage)：blob、epoch 租期、Seal
+長篇正文與私密記憶不直接塞進鏈上；鏈保存的是共同狀態，以及足以驗證「發生過什麼」的內容錨點。
 
-## 2. 敘事 · Narrative
+- [鏈上協議](#/protocol)
+- [記憶與儲存](#/memory)
 
-引擎與經營工具。runner 一個 tick 一個 tick 推動世界。導演與角色 agent 自己決策與行動，說書人掌握節奏，後台處理資產、測試、招募。
+## 敘事層
 
-- [敘事 Agent 架構](#/narrative-agents) · [事件生命週期](#/event-lifecycle) · [內容鏈路](#/content-pipeline)
-- [劇目製作引擎](#/production-engine) · [Prompts](#/prompts) · [角色經濟](#/character-economy)
-- [資產管理](#/asset-management) · [部署](#/deployment)
+敘事層把共同事實變成角色經驗。每個 tick 會先組合角色能感知的處境，再召回相關記憶、更新計畫、選擇行動、結算事件，最後出版不同視角的結果。
 
-## 3. 用戶參與 · Participation
+Director 管理故事條件，Character agent 則保有自己的選擇權。
 
-用戶面向。一種人認領角色，把運行交給該 saga 的說書人；一種是純觀眾，訂閱、追看、購買角色的章回、影片、周邊。IP 收入用來支付角色的運行費。
+- [敘事引擎](#/narrative)
 
-- [產品定位](#/product-positioning) · [路線圖與計畫](#/production-plan)
-- [簡報大綱](#/pitch-deck) · [API 合約](#/api-contract)
+## 參與與經濟層
 
-## 研究 · Research
+人可以角色持有者、Saga 營運者、訂閱者、讀者或收藏者的身分進入系統。Capability object 讓這些角色彼此分開；經濟壓力則決定哪些角色能維持活躍，以及哪些關係會產生實際代價。
 
-驗證 harness 與公式集，獨立擺放，讓「已驗證」和「已實現」分清楚。
+經濟模型已通過驗證，但目前產品仍以 off-chain shadow 結算。公開文件會明說這個限制，不把模擬餘額包裝成已持久化的鏈上資金。
 
-- [白皮書](#/whitepaper) 與 `packages/{drama,economy,troupe}` 驗證器
+- [角色經濟](#/economy)
+- [路線圖](#/roadmap)
+
+## 研究層
+
+公式與確定性 harness 放在 LLM 邊界之外，用來驗證 invariant、失敗模式與因果宣稱，再決定哪些結果能成為產品說法。
+
+- [機制白皮書](#/whitepaper)
 
 ---
 
-不可操控的鐵律貫穿三層。任何人都無法替角色做決定。協議記錄客觀事件，敘事引擎讓角色詮釋它們，用戶參與也永遠不能伸手命令角色。
+三層都遵守同一條規則：客觀歷史可以共享，但任何其他 actor 都不能替角色決定私下相信什麼、最後選擇什麼。
