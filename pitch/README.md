@@ -33,6 +33,24 @@
 
 ## 資產來源（如需更新）
 
-- `assets/logo.png` ← `packages/web/public/logo.png`（網站 nav 的 mask 原檔）
-- `assets/logo-light.png` / `assets/logo-dark.png` ← 由 `logo.png` 著色，對應 README 與網站 `--color-cinnabar`（日 `#B04A3C` / 夜 `#CCA45C`）
-- `assets/fig1_contested.png`, `assets/fig3_tradeoff.png`：舊長版的引擎實驗圖，精簡版已不引用，保留備查。
+命名規則：`{用途}-{light|dark}.png`，跟 logo 一致用 kebab-case。
+
+**README 用（深淺色切換）**
+
+| 檔案 | 內容 |
+|---|---|
+| `hero-light.png` / `hero-dark.png` | 春雪社首頁 |
+| `cinema-light.png` / `cinema-dark.png` | 角色頁 + 章回預告列 |
+| `logo-light.png` / `logo-dark.png` | 由 `logo.png` 著色，對應網站 `--color-cinnabar`（日 `#B04A3C` / 夜 `#CCA45C`） |
+
+**備用（README 未引用）**
+
+| 檔案 | 內容 |
+|---|---|
+| `mockup-hero-light.png` / `mockup-hero-dark.png` | 首頁筆電 mockup |
+| `mockup-cinema-light.png` / `mockup-cinema-dark.png` | 角色頁筆電 mockup |
+
+**其他**
+
+- `logo.png` ← `packages/web/public/logo.png`（網站 nav 的 mask 原檔）
+- `fig1_contested.png`, `fig3_tradeoff.png`：舊長版引擎實驗圖，精簡版已不引用，保留備查。
