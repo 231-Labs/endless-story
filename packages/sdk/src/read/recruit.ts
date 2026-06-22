@@ -5,7 +5,7 @@
  */
 import * as gen from '../generated/endless_story/recruit.js';
 import type { SuiClient } from '../client.js';
-import { queryEventsWithRetry } from './query-retry.js';
+import { scanEvents } from './query-retry.js';
 
 export { gen as raw };
 
@@ -63,43 +63,32 @@ export async function listVoucherRedeemedEvents(
     const eventType = `${packageId}::recruit::GenesisVoucherRedeemed`;
     const out: VoucherRedeemedSummary[] = [];
     const cap = opts.maxEvents ?? Infinity;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
 
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{
+            voucher_id: string;
+            saga_id: string;
+            character_id: string;
+            redeemed_at_ms: string | number;
+            hint: unknown;
+            intent_hint: unknown;
+        }>;
+        if (!parsed.voucher_id) return;
+        const sagaId = parsed.saga_id ?? '';
+        const hint = unwrapOptionString(parsed.hint);
+        const intentHint = unwrapOptionString(parsed.intent_hint);
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (opts.hint !== undefined && hint !== opts.hint) return;
+        out.push({
+            voucherId: parsed.voucher_id,
+            sagaId,
+            characterId: parsed.character_id ?? '',
+            redeemedAtMs: String(parsed.redeemed_at_ms ?? '0'),
+            hint,
+            intentHint,
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                voucher_id: string;
-                saga_id: string;
-                character_id: string;
-                redeemed_at_ms: string | number;
-                hint: unknown;
-                intent_hint: unknown;
-            }>;
-            if (!parsed.voucher_id) continue;
-            const sagaId = parsed.saga_id ?? '';
-            const hint = unwrapOptionString(parsed.hint);
-            const intentHint = unwrapOptionString(parsed.intent_hint);
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (opts.hint !== undefined && hint !== opts.hint) continue;
-            out.push({
-                voucherId: parsed.voucher_id,
-                sagaId,
-                characterId: parsed.character_id ?? '',
-                redeemedAtMs: String(parsed.redeemed_at_ms ?? '0'),
-                hint,
-                intentHint,
-            });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= cap) return false;
+    });
     return out;
 }
 

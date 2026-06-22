@@ -3,7 +3,7 @@
  */
 import * as gen from '../generated/endless_story/character.js';
 import type { SuiClient } from '../client.js';
-import { queryEventsWithRetry } from './query-retry.js';
+import { scanEvents } from './query-retry.js';
 
 export { gen as raw };
 
@@ -196,60 +196,49 @@ export async function listMintedCharacterSummaries(
     const eventType = `${packageId}::character::CharacterMinted`;
     const out: CharacterMintedSummary[] = [];
     const seen = new Set<string>();
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
     const cap = opts.maxEvents ?? Infinity;
 
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{
+            character_id: string;
+            world_id: string;
+            saga_id: string | { Some: string } | null;
+            scene_id: string | { Some: string } | null;
+            owner_cap_id: string;
+            control_cap_id: string;
+            name: string;
+            owner: string;
+            minted_at_ms: string | number;
+        }>;
+        const characterId = parsed.character_id;
+        if (!characterId || seen.has(characterId)) return;
+
+        // Move Option<ID> serializes as string | null in event JSON
+        // (Sui's parsedJson collapses Some/None). Defensive parse below.
+        const sagaIdRaw = parsed.saga_id;
+        const sagaId =
+            sagaIdRaw == null ? null : typeof sagaIdRaw === 'string' ? sagaIdRaw : sagaIdRaw.Some ?? null;
+        const sceneIdRaw = parsed.scene_id;
+        const sceneId =
+            sceneIdRaw == null ? null : typeof sceneIdRaw === 'string' ? sceneIdRaw : sceneIdRaw.Some ?? null;
+
+        // saga filter
+        if (opts.sagaId !== undefined && opts.sagaId !== sagaId) return;
+
+        seen.add(characterId);
+        out.push({
+            characterId,
+            worldId: parsed.world_id ?? '',
+            sagaId,
+            sceneId,
+            ownerCapId: parsed.owner_cap_id ?? '',
+            controlCapId: parsed.control_cap_id ?? '',
+            name: parsed.name ?? '',
+            owner: parsed.owner ?? '',
+            mintedAtMs: String(parsed.minted_at_ms ?? '0'),
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                character_id: string;
-                world_id: string;
-                saga_id: string | { Some: string } | null;
-                scene_id: string | { Some: string } | null;
-                owner_cap_id: string;
-                control_cap_id: string;
-                name: string;
-                owner: string;
-                minted_at_ms: string | number;
-            }>;
-            const characterId = parsed.character_id;
-            if (!characterId || seen.has(characterId)) continue;
-
-            // Move Option<ID> serializes as string | null in event JSON
-            // (Sui's parsedJson collapses Some/None). Defensive parse below.
-            const sagaIdRaw = parsed.saga_id;
-            const sagaId =
-                sagaIdRaw == null ? null : typeof sagaIdRaw === 'string' ? sagaIdRaw : sagaIdRaw.Some ?? null;
-            const sceneIdRaw = parsed.scene_id;
-            const sceneId =
-                sceneIdRaw == null ? null : typeof sceneIdRaw === 'string' ? sceneIdRaw : sceneIdRaw.Some ?? null;
-
-            // saga filter
-            if (opts.sagaId !== undefined && opts.sagaId !== sagaId) continue;
-
-            seen.add(characterId);
-            out.push({
-                characterId,
-                worldId: parsed.world_id ?? '',
-                sagaId,
-                sceneId,
-                ownerCapId: parsed.owner_cap_id ?? '',
-                controlCapId: parsed.control_cap_id ?? '',
-                name: parsed.name ?? '',
-                owner: parsed.owner ?? '',
-                mintedAtMs: String(parsed.minted_at_ms ?? '0'),
-            });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= cap) return false;
+    });
     return out;
 }
 

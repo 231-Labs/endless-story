@@ -21,7 +21,7 @@
  */
 import * as gen from '../generated/endless_story/resource.js';
 import type { SuiClient } from '../client.js';
-import { queryEventsWithRetry } from './query-retry.js';
+import { scanEvents } from './query-retry.js';
 
 export { gen as raw };
 
@@ -80,42 +80,31 @@ export async function listResourceInstantiations(
     const eventType = `${packageId}::resource::ResourceInstantiated`;
     const out: ResourceInstantiatedSummary[] = [];
     const cap = opts.maxEvents ?? Infinity;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{
+            resource_id: string;
+            saga_id: string;
+            archetype: string;
+            label: string;
+            capacity: string | number;
+            created_at_ms: string | number;
+        }>;
+        if (!parsed.resource_id) return;
+        const sagaId = parsed.saga_id ?? '';
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (opts.resourceId && parsed.resource_id !== opts.resourceId) return;
+        out.push({
+            resourceId: parsed.resource_id,
+            sagaId,
+            archetype: parsed.archetype ?? '',
+            label: parsed.label ?? '',
+            capacity: String(parsed.capacity ?? '0'),
+            createdAtMs: String(parsed.created_at_ms ?? '0'),
+            txDigest: ev.id.txDigest,
+            eventSeq: ev.id.eventSeq,
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                resource_id: string;
-                saga_id: string;
-                archetype: string;
-                label: string;
-                capacity: string | number;
-                created_at_ms: string | number;
-            }>;
-            if (!parsed.resource_id) continue;
-            const sagaId = parsed.saga_id ?? '';
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (opts.resourceId && parsed.resource_id !== opts.resourceId) continue;
-            out.push({
-                resourceId: parsed.resource_id,
-                sagaId,
-                archetype: parsed.archetype ?? '',
-                label: parsed.label ?? '',
-                capacity: String(parsed.capacity ?? '0'),
-                createdAtMs: String(parsed.created_at_ms ?? '0'),
-                txDigest: ev.id.txDigest,
-                eventSeq: ev.id.eventSeq,
-            });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= cap) return false;
+    });
     return out;
 }
 
@@ -128,26 +117,15 @@ export async function listResourceRetirements(
     const eventType = `${packageId}::resource::ResourceRetired`;
     const out: { resourceId: string; sagaId: string }[] = [];
     const cap = opts.maxEvents ?? Infinity;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
-        });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{ resource_id: string; saga_id: string }>;
-            if (!parsed.resource_id) continue;
-            const sagaId = parsed.saga_id ?? '';
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (opts.resourceId && parsed.resource_id !== opts.resourceId) continue;
-            out.push({ resourceId: parsed.resource_id, sagaId });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{ resource_id: string; saga_id: string }>;
+        if (!parsed.resource_id) return;
+        const sagaId = parsed.saga_id ?? '';
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (opts.resourceId && parsed.resource_id !== opts.resourceId) return;
+        out.push({ resourceId: parsed.resource_id, sagaId });
+        if (out.length >= cap) return false;
+    });
     return out;
 }
 
@@ -164,39 +142,28 @@ export async function listAllocationChanges(
     const eventType = `${packageId}::resource::AllocationChanged`;
     const out: AllocationChangedSummary[] = [];
     const cap = opts.maxEvents ?? Infinity;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{
+            resource_id: string;
+            saga_id: string;
+            transfer_count: string | number;
+            total_allocated: string | number;
+            changed_at_ms: string | number;
+        }>;
+        if (!parsed.resource_id) return;
+        const sagaId = parsed.saga_id ?? '';
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (opts.resourceId && parsed.resource_id !== opts.resourceId) return;
+        out.push({
+            resourceId: parsed.resource_id,
+            sagaId,
+            transferCount: String(parsed.transfer_count ?? '0'),
+            totalAllocated: String(parsed.total_allocated ?? '0'),
+            changedAtMs: String(parsed.changed_at_ms ?? '0'),
+            txDigest: ev.id.txDigest,
+            eventSeq: ev.id.eventSeq,
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                resource_id: string;
-                saga_id: string;
-                transfer_count: string | number;
-                total_allocated: string | number;
-                changed_at_ms: string | number;
-            }>;
-            if (!parsed.resource_id) continue;
-            const sagaId = parsed.saga_id ?? '';
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (opts.resourceId && parsed.resource_id !== opts.resourceId) continue;
-            out.push({
-                resourceId: parsed.resource_id,
-                sagaId,
-                transferCount: String(parsed.transfer_count ?? '0'),
-                totalAllocated: String(parsed.total_allocated ?? '0'),
-                changedAtMs: String(parsed.changed_at_ms ?? '0'),
-                txDigest: ev.id.txDigest,
-                eventSeq: ev.id.eventSeq,
-            });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= cap) return false;
+    });
     return out;
 }

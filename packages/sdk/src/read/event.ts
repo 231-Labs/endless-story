@@ -14,7 +14,7 @@
  */
 import * as gen from '../generated/endless_story/event.js';
 import type { SuiClient } from '../client.js';
-import { queryEventsWithRetry } from './query-retry.js';
+import { scanEvents } from './query-retry.js';
 
 export { gen as raw };
 
@@ -50,41 +50,30 @@ export async function listBudgetEvents(
     const eventType = `${packageId}::event::BudgetEventPushed`;
     const out: BudgetEventSummary[] = [];
     const cap = opts.maxEvents ?? 50;
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{
+            event_id: string;
+            saga_id: string;
+            scene_id: string;
+            participant_count: number | string;
+            card_count: number | string;
+            created_at_ms: number | string;
+        }>;
+        if (!parsed.event_id) return;
+        const sagaId = parsed.saga_id ?? '';
+        const sceneId = parsed.scene_id ?? '';
+        if (opts.sagaId && sagaId !== opts.sagaId) return;
+        if (opts.sceneId && sceneId !== opts.sceneId) return;
+        out.push({
+            eventId: parsed.event_id,
+            sagaId,
+            sceneId,
+            participantCount: Number(parsed.participant_count ?? 0),
+            cardCount: Number(parsed.card_count ?? 0),
+            createdAtMs: String(parsed.created_at_ms ?? '0'),
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                event_id: string;
-                saga_id: string;
-                scene_id: string;
-                participant_count: number | string;
-                card_count: number | string;
-                created_at_ms: number | string;
-            }>;
-            if (!parsed.event_id) continue;
-            const sagaId = parsed.saga_id ?? '';
-            const sceneId = parsed.scene_id ?? '';
-            if (opts.sagaId && sagaId !== opts.sagaId) continue;
-            if (opts.sceneId && sceneId !== opts.sceneId) continue;
-            out.push({
-                eventId: parsed.event_id,
-                sagaId,
-                sceneId,
-                participantCount: Number(parsed.participant_count ?? 0),
-                cardCount: Number(parsed.card_count ?? 0),
-                createdAtMs: String(parsed.created_at_ms ?? '0'),
-            });
-            if (out.length >= cap) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= cap) return false;
+    });
     return out;
 }
 
@@ -105,26 +94,15 @@ export async function tallyJoins(
 ): Promise<Map<string, number>> {
     const eventType = `${packageId}::event::CharacterJoinedEvent`;
     const out = new Map<string, number>();
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
     let scanned = 0;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
-        });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{ event_id: string }>;
-            if (parsed.event_id) {
-                out.set(parsed.event_id, (out.get(parsed.event_id) ?? 0) + 1);
-            }
-            scanned += 1;
-            if (scanned >= maxEvents) return out;
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{ event_id: string }>;
+        if (parsed.event_id) {
+            out.set(parsed.event_id, (out.get(parsed.event_id) ?? 0) + 1);
         }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        scanned += 1;
+        if (scanned >= maxEvents) return false;
+    });
     return out;
 }
 
@@ -145,28 +123,17 @@ export async function listResolvedBudgetEvents(
 ): Promise<BudgetEventResolvedSummary[]> {
     const eventType = `${packageId}::event::BudgetEventResolved`;
     const out: BudgetEventResolvedSummary[] = [];
-    let cursor: { txDigest: string; eventSeq: string } | null | undefined = null;
-    for (;;) {
-        const page = await queryEventsWithRetry(client, {
-            query: { MoveEventType: eventType },
-            cursor,
-            limit: 50,
-            order: 'descending',
+    await scanEvents(client, eventType, (ev) => {
+        const parsed = ev.parsedJson as Partial<{
+            event_id: string;
+            resolved_at_ms: number | string;
+        }>;
+        if (!parsed.event_id) return;
+        out.push({
+            eventId: parsed.event_id,
+            resolvedAtMs: String(parsed.resolved_at_ms ?? '0'),
         });
-        for (const ev of page.data) {
-            const parsed = ev.parsedJson as Partial<{
-                event_id: string;
-                resolved_at_ms: number | string;
-            }>;
-            if (!parsed.event_id) continue;
-            out.push({
-                eventId: parsed.event_id,
-                resolvedAtMs: String(parsed.resolved_at_ms ?? '0'),
-            });
-            if (out.length >= maxEvents) return out;
-        }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
-    }
+        if (out.length >= maxEvents) return false;
+    });
     return out;
 }
