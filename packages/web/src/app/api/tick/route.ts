@@ -20,6 +20,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { runTickLoopAction, type TickLoopInput } from '@/lib/actions/tick-loop';
 import type { TickLoopResult } from '@/lib/actions/tick-loop-types';
+import { ensureEventStoreRegistered } from '@/lib/server/event-store';
 
 // A tick fans out several LLM calls + chain writes — give it room. A tick can run
 // well past 300s (6 plans + social + POV, each LLM-bound); if the response is cut
@@ -55,6 +56,9 @@ export async function POST(req: NextRequest) {
     if (!authorized(req)) {
         return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
     }
+    // Register the durable event store on first tick (nodejs runtime, gated on
+    // DATABASE_URL). After this, settlement + feed reads come from Postgres.
+    await ensureEventStoreRegistered();
     let input: TickLoopInput = {};
     try {
         const body = (await req.json()) as TickLoopInput | null;
