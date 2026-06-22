@@ -13,10 +13,12 @@
     "seed-cast": "tsx --env-file-if-exists=../web/.env.local scripts/seed-cast.ts",
     "clip-thumbs": "tsx --env-file-if-exists=../web/.env.local scripts/clip-thumbs.ts",
     "world-loop": "tsx --env-file-if-exists=../web/.env.local scripts/world-loop.ts",
+    "indexer-poll": "tsx --env-file-if-exists=../web/.env.local scripts/indexer-poll.ts",
     "start": "pnpm run world-loop",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@endless-story/indexer": "workspace:*",
     "@endless-story/llm": "workspace:*",
     "@endless-story/memwal": "workspace:*",
     "@endless-story/sdk": "workspace:*",

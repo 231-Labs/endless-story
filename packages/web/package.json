@@ -15,6 +15,7 @@
         "@endless-story/chamber-3d": "workspace:*",
         "@endless-story/drama": "workspace:*",
         "@endless-story/economy": "workspace:*",
+        "@endless-story/indexer": "workspace:*",
         "@endless-story/llm": "workspace:*",
         "@endless-story/memwal": "workspace:*",
         "@endless-story/runner": "workspace:*",
