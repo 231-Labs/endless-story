@@ -25,10 +25,18 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import {
     seedWorld,
+    harnessChain,
     hasTextProviderKey,
     hasEmbeddingKey,
 } from './narrative-setup';
 import { CHAPTER_DUMP_DIR } from './narrative-env';
+import {
+    evolveRelationshipsFromScene,
+    directedOutgoingEdges,
+    toneZh,
+    type ScenePovInput,
+    type EvolveRelationshipsResult,
+} from './relationship-evolve';
 import { runTickLoopAction } from '@/lib/actions/tick-loop';
 import { __drainNarrativeRecallHits, __resetNarrativeMemory } from '@/lib/chain/memory';
 
@@ -156,6 +164,15 @@ async function main(): Promise<void> {
             console.log(`\n  ══ 公報（gazette）${g.body.length} chars ══`);
             console.log(indent(g.body));
         }
+
+        // ── EMERGENT RELATIONSHIPS ───────────────────────────────────────────
+        // Read what just happened on stage (each participant's POV of this tick's
+        // event) and let the LLM evolve the directed relationship tones from it,
+        // writing them back to the on-chain graph. Then print the graph so the
+        // operator can watch 感情 grow from the play instead of being fought over.
+        if (r) {
+            await evolveAndPrint(r);
+        }
     }
 
     console.log(rule('SUMMARY'));
@@ -165,6 +182,85 @@ async function main(): Promise<void> {
             `  relationships shift) or LOOP (same standoff re-described)? recallHits>0 each tick\n` +
             `  confirms the iteration engine (remember→recall) is feeding past into present.`,
     );
+}
+
+/** id→name over the seeded fake cast (target-name resolution for the graph). */
+function castNameOf(id: string): string {
+    return harnessChain.characters.get(id)?.name ?? `${id.slice(0, 8)}…`;
+}
+
+/**
+ * After a tick: for each event that opened this tick, evolve the directed
+ * relationship tones from the participants' POVs and seed them; then print the
+ * whole cast's outgoing relationship graph so the operator can read the
+ * tick-over-tick evolution (孟→文 戀慕 weight 1→2→3, 姚→孟 競爭 appearing, …).
+ */
+async function evolveAndPrint(r: Awaited<ReturnType<typeof runTickLoopAction>>): Promise<void> {
+    // POV text by character id (what each character said/felt this tick).
+    const povById = new Map<string, string>();
+    for (const p of r.povs ?? []) {
+        if (p.chapter && p.chapter.trim()) povById.set(p.characterId, p.chapter.trim());
+    }
+
+    // Every event live this tick (≤1 in single mode; storylets[] in parallel mode).
+    const events = (r.storylets && r.storylets.length ? r.storylets : r.storylet ? [r.storylet] : [])
+        .filter((s) => s && s.characterIds && s.characterIds.length >= 2);
+
+    let evolvedAny = false;
+    for (const ev of events) {
+        // Include every CO-PRESENT cast member in the scene, not just the event's
+        // desirers. The beloved (self-excluded from an affection contest, e.g. 文) has
+        // NO POV but MUST be a valid edge target — otherwise 孟→文 戀慕 is dropped as a
+        // hallucinated name. POV-less members just give the LLM a name it may point at.
+        const sceneCast = harnessChain.scenes.get(ev.sceneId)?.characterIds ?? [];
+        const allIds = Array.from(new Set([...ev.characterIds, ...sceneCast]));
+        const participants: ScenePovInput[] = allIds.map((id) => ({
+            characterId: id,
+            name: castNameOf(id),
+            pov: povById.get(id) ?? '',
+        }));
+        // Need ≥2 with actual POV prose for the inference to have evidence.
+        if (participants.filter((p) => p.pov).length < 2) continue;
+        const res = await evolveRelationshipsFromScene({
+            participants,
+            sceneId: ev.sceneId,
+            eventLabel: ev.label,
+        }).catch(
+            (e): EvolveRelationshipsResult => ({
+                seeded: 0,
+                proposed: 0,
+                error: e instanceof Error ? e.message : String(e),
+            }),
+        );
+        evolvedAny = true;
+        const tag =
+            res.error != null
+                ? `error: ${res.error}`
+                : res.skipReason
+                  ? `skip: ${res.skipReason}`
+                  : `seeded ${res.seeded}/${res.proposed} directed edge(s)`;
+        console.log(`\n  ⤳ 關係演化 ← 〔${ev.label}〕[${ev.names.join('、')}] — ${tag}`);
+    }
+    if (!evolvedAny) {
+        console.log(`\n  ⤳ 關係演化 — (this tick opened no multi-POV event to evolve from)`);
+    }
+
+    // Snapshot the directed relationship graph for the WHOLE cast (not just this
+    // tick's event) so accumulation across ticks is visible at a glance.
+    console.log(`\n  ── 關係圖快照（有向；weight = 累計種子次數）──`);
+    let printedEdge = false;
+    for (const c of harnessChain.characters.values()) {
+        const edges = await directedOutgoingEdges(c.id, castNameOf).catch(() => []);
+        if (!edges.length) continue;
+        printedEdge = true;
+        const line = edges
+            .map((e) => `${e.toName}=${toneZh(e.tone)}(${e.tone})×${e.weight}`)
+            .join('  ·  ');
+        console.log(`    ${c.name} →  ${line}`);
+    }
+    if (!printedEdge) {
+        console.log(`    (還沒有任何有向關係被種下 — 真 LLM 下這裡會逐 tick 長出來)`);
+    }
 }
 
 function indent(s: string): string {

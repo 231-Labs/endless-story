@@ -65,6 +65,24 @@ export function framingForStatement(statement?: string): ContentionFraming {
         return { templateId: 'contention:recording', label: '首張唱片該由誰來灌，成了繞不開的話題' };
     if (s.includes('搭戲') || s.includes('partnership'))
         return { templateId: 'contention:partnership', label: '誰與誰搭戲的盤算，在這一場裡較上了勁' };
+    // 感情爭奪：「傾心於X」是 desireStatementFor(affection:X) 的語義 token。在這裡認回
+    // contention:affection（templateId keyword=affection，settlement 才對得上 affection:X
+    // 資源），並給一句清楚的中文 framing——這正是 llmFraming 關掉時 POV 直接讀到的衝突描述，
+    // 必須讓 LLM 一眼看出這是「爭某人的情意」而非英文 slug 或被 strip 的人名。「傾」涵蓋
+    // 傾心/傾慕等措辭，'affection' 保險認 ascii 形式。
+    if (s.includes('傾心') || s.includes('傾慕') || s.includes('affection')) {
+        const m = /傾[心慕]於\s*([^\s，。、]+)/.exec(s);
+        const who = m?.[1]?.trim();
+        return {
+            templateId: 'contention:affection',
+            // 傾心、藏情、暗戀 — NOT 「贏得/角力」(those made the LLM play it as a contest →
+            // evolve only ever read rivalry/tension). This framing puts gazes ON the
+            // beloved with feelings kept under the surface, so 戀慕 has room to surface.
+            label: who
+                ? `誰也沒說破，可這一場裡，好幾道目光都繞著${who}打轉，各自藏著沒出口的心事`
+                : '誰也沒說破，可這一場裡，好幾道目光都繞著那個人打轉，各自藏著沒出口的心事',
+        };
+    }
     const director = parseDirectorContention(s);
     if (director) return director;
     return { templateId: 'storylet:tension', label: '一樁懸而未決的較量，在這一場裡發酵' };

@@ -213,9 +213,9 @@ export function defaultDesiresForCast(
     for (const r of resources) {
         // skip resources nobody has to compete for (capacity ≥ cast → everyone fits)
         if (castSize > 0 && r.capacity >= BigInt(castSize)) continue;
-        // A named partnership slot is something other performers desire; the
-        // named star should not want a partnership with themself.
-        if (opts.agentName && isSelfPartnership(r, opts.agentName)) continue;
+        // A named partnership slot / affection prize is something OTHER people desire;
+        // the named target should not want to partner with — or be smitten by — themself.
+        if (opts.agentName && isSelfNamedTarget(r, opts.agentName)) continue;
         if (isPartnership(r) && !isEligiblePartnershipAgent(opts)) continue;
         // Stage-performer resources (headliner spotlight / recording) are contested
         // only among on-stage actors. A confirmed backstage role (musician / wardrobe /
@@ -310,9 +310,14 @@ function isXiaoshengRole(role: string): boolean {
     return ['小生', '文小生', '武小生', '武生', '坤生', '乾生', '女小生'].some((r) => role.includes(r));
 }
 
-function isSelfPartnership(r: ResourceSnapshot, agentName: string): boolean {
-    if (!r.label.startsWith('partnership:')) return false;
-    return compactName(r.label.slice('partnership:'.length)) === compactName(agentName);
+/** A `<kind>:<personName>` slot whose display IS this agent — the named target of
+ *  a partnership (搭戲) or affection (情意) stake. They never desire their OWN slot /
+ *  heart; everyone else may. Other kinds (spotlight/recording/…) name a thing, not a
+ *  person, so they never self-exclude. */
+function isSelfNamedTarget(r: ResourceSnapshot, agentName: string): boolean {
+    const prefix = ['partnership:', 'affection:'].find((p) => r.label.startsWith(p));
+    if (!prefix) return false;
+    return compactName(r.label.slice(prefix.length)) === compactName(agentName);
 }
 
 function compactName(name: string): string {
@@ -322,11 +327,20 @@ function compactName(name: string): string {
 function desireStatementFor(r: ResourceSnapshot): string {
     // The statement MUST carry a matchable token so the storylet opener
     // (framingForStatement → parseDirectorContention) and the settlement matchers
-    // can tie a tension back to its resource: partnership uses 「…搭戲」 (caught by
-    // framingForStatement); every other kind keeps the 「<kind>:<display>」 label so
-    // `parseDirectorContention` recovers the kind. Prose-facing consumers strip the
-    // label via `humanResourceFromStatement`, so the raw token never reaches readers.
+    // can tie a tension back to its resource. Two kinds carry a SEMANTIC natural-
+    // language token (so the framing/POV reads as the real stake, not a stripped
+    // display name): partnership uses 「與…搭戲」 and affection uses 「傾心於…」 — both
+    // caught by `framingForStatement` before the generic path. Every other kind keeps
+    // the 「<kind>:<display>」 label so `parseDirectorContention` recovers the kind.
+    // The 中文 display name is present in ALL three forms, so the settlement matcher
+    // (pickContestWinner, by label display) ties a tension back to its resource
+    // regardless of form. Prose-facing consumers strip the label via
+    // `humanResourceFromStatement`, so the raw `<kind>:` token never reaches readers;
+    // the natural-language forms have no `<kind>:` prefix, so they read whole.
     if (r.label.startsWith('partnership:')) return `與${r.label.slice('partnership:'.length)}搭戲`;
+    // 感情爭奪：N 人爭一個人的情意，capacity 1（情意獨佔）。「傾心於X」帶語義 →
+    // framingForStatement 認回 contention:affection，POV 讀到的是「傾心於文」而非英文 slug。
+    if (r.label.startsWith('affection:')) return `傾心於${r.label.slice('affection:'.length)}`;
     if (r.label) return `爭得「${r.label}」`;
     return `爭得一席（${r.archetype || '稀缺資源'}）`;
 }
