@@ -34,7 +34,13 @@ export function createTextClient(opts: CreateTextClientOptions = {}): TextClient
   // provider key is set) and return a zero-network fake whose `.chat()` produces
   // plausible markdown sized to the prompt (plan line / POV chapter / multi-POV cut
   // / gazette). Gated on ES_HARNESS=1 ⇒ production unaffected.
-  if (process.env.ES_HARNESS === '1') {
+  //
+  // ESCAPE HATCH (narrative observatory): the full-tick *mechanism* harness wants
+  // the fake (fast, deterministic, studies the chain seam). The *narrative*
+  // observatory wants REAL prose to see whether chapters iterate or loop — it sets
+  // ES_NARRATIVE_REAL_LLM=1 to fall through to the real provider client below (which
+  // needs a provider key). Image generation stays faked either way.
+  if (process.env.ES_HARNESS === '1' && process.env.ES_NARRATIVE_REAL_LLM !== '1') {
     return makeHarnessTextClient(opts.kind === 'cheap' ? 'cheap' : 'primary');
   }
   const cfg = loadLLMConfig(opts.config);
