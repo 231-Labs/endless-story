@@ -12,6 +12,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    // The repo runs TypeScript source directly (every package's `main` is
+    // `./src/index.ts`; no build step except `next build`), so importing a
+    // package whose internal imports use `.ts` extensions (needed for
+    // `node --test`) is legitimate. Valid here because every tsconfig is noEmit.
+    "allowImportingTsExtensions": true,
     "incremental": true
   }
 }
