@@ -39,6 +39,7 @@ export const RESERVED_KINDS = [
     'spotlight',
     'recording',
     'partnership',
+    'affection', // 感情爭奪 (一個人的情意，capacity 1) — a seed/built-in stake, not director-minted.
     'patronage',
     'naming',
     'martial',
