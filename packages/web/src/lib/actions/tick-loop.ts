@@ -28,6 +28,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
+import { ensureEventStoreRegistered } from '@/lib/server/event-store';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
@@ -194,6 +195,10 @@ const clr = {
 };
 
 export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
+    // Register the durable event store on the first tick (gated on DATABASE_URL;
+    // no-op without it). Both tick paths run through here: the admin
+    // SchedulerPanel server action and the headless /api/tick route.
+    await ensureEventStoreRegistered();
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
         return {
