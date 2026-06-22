@@ -93,6 +93,12 @@ export interface FakeCharacter {
     attrs: { appearance: number; constitution: number; acuity: number; disposition: number };
     gender: string;
     species: string;
+    /** 小傳 — public bio. Encoded into `profile.description` so the roster brief +
+     *  role-inference fallback have something to anchor the persona to. Default ''. */
+    description?: string;
+    /** 行當 — emitted as a public `role:<role>` tag the POV/roster role resolver reads.
+     *  Default: no tag (legacy anonymous shell). */
+    role?: string;
 }
 
 export interface FakeResource {
@@ -772,12 +778,18 @@ function encodeScene(sc: FakeScene): Uint8Array {
 
 function encodeCharacter(c: FakeCharacter): Uint8Array {
     const attr = (key: string, value: number) => ({ key, value: BigInt(value), seed: [] as number[] });
+    // A founding spec's 行當 → a public `role:<role>` tag (same shape the web mint
+    // affirms). The roster/POV role resolvers read tags first, falling back to
+    // inferRoleFromText(description) — so a tagged role is the authoritative anchor.
+    const tags = c.role
+        ? [{ label: `role:${c.role}`, source_event_id: null, affirmed_at_ms: 0n }]
+        : [];
     return CharacterStruct.serialize({
         id: c.id,
         control_epoch: 0n,
         profile: {
             name: c.name,
-            description: '',
+            description: c.description ?? '',
             physical_facts: { species: c.species, gender: c.gender, body: '', age_years: 30 },
         },
         attributes: [
@@ -794,7 +806,7 @@ function encodeCharacter(c: FakeCharacter): Uint8Array {
             current_location_id: null,
             birth_ms: 0n,
         },
-        tags: [],
+        tags,
         image_url: '',
         death: null,
         subscriber_count: 1n,

@@ -105,6 +105,35 @@ export interface SeedOptions {
         targetIndex: number;
         capacity?: number;
     };
+    /**
+     * Optional concrete story. When `story.cast` is given, each `StorySpec` seeds one
+     * fake character WITH a 行當 (→ public `role:` tag) + 小傳 (→ `profile.description`),
+     * so the POV has an anchored persona instead of the anonymous CAST_NAMES shells.
+     * `story.saga` / `story.scenes` override the default saga premise / scene names.
+     * When omitted, the legacy anonymous cast is seeded — default behaviour unchanged.
+     */
+    story?: {
+        saga?: { name: string; description: string };
+        scenes?: { name: string }[];
+        cast?: StorySpec[];
+    };
+}
+
+/**
+ * The subset of the web 創世班底 `FoundingCharSpec` the harness consumes (name / 行當 /
+ * 小傳 / gender / optional attribute floors). Declared locally so the seeder needn't
+ * import the 'use server' create-founding-cast module's chain/runner deps.
+ */
+export interface StorySpec {
+    name: string;
+    /** '男' | '女' | '中性' | … */
+    gender: string;
+    /** 行當 — becomes the public `role:<role>` tag. */
+    role: string;
+    /** 小傳 — becomes the chain `profile.description` (roster brief + role fallback). */
+    description: string;
+    /** Per-axis attribute floors; absent axes fall back to the default deterministic roll. */
+    minAttributes?: Partial<Record<'appearance' | 'constitution' | 'acuity' | 'disposition', number>>;
 }
 
 const CAST_NAMES = ['文', '孟', '姚', '柳', '蕭', '霍', '秦', '雲'];
@@ -117,8 +146,8 @@ export function seedWorld(opts: SeedOptions = {}): void {
     harnessChain.saga = {
         id: SAGA,
         worldId: WORLD,
-        name: '春雪戲班',
-        description: '一個關於戲班的故事。',
+        name: opts.story?.saga?.name ?? '春雪戲班',
+        description: opts.story?.saga?.description ?? '一個關於戲班的故事。',
         characterCount: 0,
         anchorSceneIds: [SCENE_A, SCENE_B],
         operator: fakeId('h-operator'),
@@ -133,29 +162,49 @@ export function seedWorld(opts: SeedOptions = {}): void {
         { id: fakeId('h-gas-2'), version: 1 },
     ];
 
-    const castN = Math.max(2, opts.cast ?? 6);
+    // When a concrete story cast is given, it drives BOTH the count and each member's
+    // persona; otherwise fall back to the anonymous `opts.cast` count of CAST_NAMES shells.
+    const storyCast = opts.story?.cast;
+    const castN = storyCast?.length
+        ? Math.max(2, storyCast.length)
+        : Math.max(2, opts.cast ?? 6);
     const cast: FakeCharacter[] = [];
     for (let i = 0; i < castN; i++) {
         const id = fakeId('h-char-' + i);
+        const spec = storyCast?.[i];
         // Spread the cast across the two scenes but cluster ≥2 in SCENE_A so a
         // storylet can quorum (event needs ≥2 co-present desirers on one axis).
         const sceneId = i < Math.ceil(castN / 2) ? SCENE_A : SCENE_B;
+        // Default deterministic roll (legacy shells + any axis a spec leaves un-floored).
+        const rolled = {
+            appearance: 60 + ((i * 7) % 35),
+            constitution: 60 + ((i * 11) % 35),
+            acuity: 60 + ((i * 13) % 35),
+            disposition: 55 + ((i * 5) % 35),
+        };
+        const floors = spec?.minAttributes;
+        const attrs = floors
+            ? {
+                  appearance: Math.max(rolled.appearance, floors.appearance ?? 0),
+                  constitution: Math.max(rolled.constitution, floors.constitution ?? 0),
+                  acuity: Math.max(rolled.acuity, floors.acuity ?? 0),
+                  disposition: Math.max(rolled.disposition, floors.disposition ?? 0),
+              }
+            : rolled;
         cast.push({
             id,
-            name: CAST_NAMES[i % CAST_NAMES.length] + (i >= CAST_NAMES.length ? String(i) : ''),
+            name: spec?.name ?? CAST_NAMES[i % CAST_NAMES.length] + (i >= CAST_NAMES.length ? String(i) : ''),
             sagaId: SAGA,
             sceneId,
             ownerCapId: fakeId('h-ownercap-' + i),
             controlCapId: fakeId('h-controlcap-' + i),
             owner: fakeId('h-owner-' + i),
-            attrs: {
-                appearance: 60 + ((i * 7) % 35),
-                constitution: 60 + ((i * 11) % 35),
-                acuity: 60 + ((i * 13) % 35),
-                disposition: 55 + ((i * 5) % 35),
-            },
-            gender: i % 2 === 0 ? '女' : '男',
+            attrs,
+            gender: spec?.gender ?? (i % 2 === 0 ? '女' : '男'),
             species: '人',
+            // Persona anchors (empty for legacy shells → POV improvises as before).
+            description: spec?.description ?? '',
+            role: spec?.role,
         });
     }
     harnessChain.characters.clear();
@@ -168,7 +217,7 @@ export function seedWorld(opts: SeedOptions = {}): void {
         worldId: WORLD,
         sagaId: SAGA,
         locationId: fakeId('h-loc-0'),
-        name: '排練廳',
+        name: opts.story?.scenes?.[0]?.name ?? '排練廳',
         characterIds: cast.filter((c) => c.sceneId === SCENE_A).map((c) => c.id),
     };
     const sceneB: FakeScene = {
@@ -176,7 +225,7 @@ export function seedWorld(opts: SeedOptions = {}): void {
         worldId: WORLD,
         sagaId: SAGA,
         locationId: fakeId('h-loc-1'),
-        name: '後台',
+        name: opts.story?.scenes?.[1]?.name ?? '後台',
         characterIds: cast.filter((c) => c.sceneId === SCENE_B).map((c) => c.id),
     };
     harnessChain.scenes.set(sceneA.id, sceneA);

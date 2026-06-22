@@ -1,25 +1,34 @@
 /**
  * PRESET — 搭戲土壤 (partnership soil).
  *
- * Same cast, same evolve step — but the stake is PARTNERSHIP (`partnership:<target>`):
- * the framing reads as「誰與誰搭戲的盤算，在這一場裡較上了勁」, so the POVs are about
- * FIGHTING FOR A SPOT beside the target rather than yearning toward them. Under a real
- * LLM this soil grows 競爭(rivalry)/緊張(tension) BETWEEN the contenders — the same
- * machinery, a different relationship network, purely because the dramatic soil changed.
+ * SAME 春雪戲班 cast (`troupe-spring-snow.ts`), SAME evolve step. But the stake is
+ * PARTNERSHIP (`partnership:<target>`): the framing reads as「誰與誰搭戲的盤算，在這一場裡
+ * 較上了勁」, so the POVs are about FIGHTING FOR A SPOT beside the target (文蘅) rather than
+ * yearning toward them. Under a real LLM this soil grows 競爭(rivalry)/緊張(tension) BETWEEN
+ * the contenders (姚青 who has long been stuck at 二路, 蕭破 the 刀馬旦 who clashes with her…)
+ * — the same machinery, a different relationship network, purely because the dramatic soil
+ * changed.
  *
- * Run both presets and open the two HTML reports side by side: 傾心 → 戀慕 pointing at
- * the target; 搭戲 → 競爭 between the rivals. That contrast is the whole point of the lab.
+ * Run both presets and open the two HTML reports side by side: 傾心 → 戀慕 pointing at the
+ * target; 搭戲 → 競爭 between the rivals. Same blooded people, different soil — that contrast
+ * is the whole point of the lab.
  */
 import type { ExperimentConfig } from '../types';
+import { SPRING_SNOW_CAST, SPRING_SNOW_STORY } from './troupe-spring-snow';
 
 export const partnershipRivalry: ExperimentConfig = {
     name: 'partnership-rivalry',
-    description: '搭戲土壤：眾人爭著與同一人搭戲，看有向關係長出競爭/緊張（同機制、不同土壤）。',
+    description: '搭戲土壤：春雪戲班眾人爭著與同一人（當家花旦文蘅）搭戲，看有向關係長出競爭/緊張（同一群人、不同土壤）。',
     ticks: 6,
-    cast: { count: 6 },
+    cast: { count: SPRING_SNOW_CAST.length },
+    story: {
+        saga: SPRING_SNOW_STORY.saga,
+        scenes: [...SPRING_SNOW_STORY.scenes],
+        cast: SPRING_SNOW_CAST,
+    },
     stake: {
         kind: 'partnership',
-        // cast[0] is the sought-after stage partner everyone angles to pair with.
+        // cast[0] (文蘅) is the sought-after stage partner everyone angles to pair with.
         targetIndex: 0,
         capacity: 1,
     },

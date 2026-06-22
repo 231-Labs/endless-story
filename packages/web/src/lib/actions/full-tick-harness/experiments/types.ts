@@ -41,6 +41,52 @@ export interface ExperimentStake {
     capacity?: number;
 }
 
+/**
+ * A founding-cast member spec — the SAME shape the web 創世班底 path uses
+ * (`FoundingCharSpec` in `lib/actions/create-founding-cast.ts`). Re-declared here
+ * (structurally identical) so the experiment config can carry hand-authored people
+ * without importing that 'use server' module's chain/runner dependency chain.
+ *
+ * What the harness reads off each spec (the rest is web-only mint metadata):
+ *   · `name`        → the fake character's name.
+ *   · `gender`      → physical_facts.gender (POV pronoun/kinship rules).
+ *   · `role`        → 行當. Becomes the public `role:<role>` tag the POV path reads
+ *                     (`pov-core.roleFromCharacterJson` / roster `resolveRosterRoles`),
+ *                     and `drama-core.roleResourceAmbition`'s desire shaping.
+ *   · `description` → 小傳. Becomes the chain `profile.description`, surfaced as each
+ *                     peer's roster `brief` so castmates see who they're with.
+ *   · `minAttributes` (optional) → per-axis attribute floors; absent axes fall back to
+ *                     the 行當 floors / the default roll.
+ */
+export interface FoundingCharSpec {
+    name: string;
+    /** '男' | '女' | '中性' | … */
+    gender: string;
+    /** 行當 / specialty — also the public role tag. */
+    role: string;
+    /** 小傳 — public bio. Feeds the roster brief + role inference fallback. */
+    description: string;
+    ageYears?: number;
+    /** Per-axis attribute floors (行當下限). Omit → role floors / default roll. */
+    minAttributes?: Partial<Record<'appearance' | 'constitution' | 'acuity' | 'disposition', number>>;
+}
+
+/**
+ * Optional concrete STORY to seed instead of the anonymous `cast.count` shells.
+ * When `cast` is given, each `FoundingCharSpec` seeds one fake character WITH a 行當 +
+ * 小傳, so the POV has an anchored persona (character no longer drifts each run). When
+ * absent, the harness keeps its legacy behaviour (anonymous `cast.count` + CAST_NAMES,
+ * empty description/role) — default behaviour is unchanged.
+ */
+export interface ExperimentStory {
+    /** Override the seeded saga name + premise. */
+    saga?: { name: string; description: string };
+    /** Override the seeded scene names (positional; extras ignored, missing keep defaults). */
+    scenes?: { name: string }[];
+    /** Concrete founding cast (with persona). When set, replaces the anonymous shells. */
+    cast?: FoundingCharSpec[];
+}
+
 export interface ExperimentConfig {
     /** Stable slug — used for the report filename and the preset's argv name. */
     name: string;
@@ -55,6 +101,12 @@ export interface ExperimentConfig {
         /** reserved — number of scenes (default 2, the harness's rehearsal + greenroom). */
         scenes?: number;
     };
+    /**
+     * Optional concrete story (saga / scenes / cast-with-persona). When `story.cast` is
+     * set the anonymous `cast.count` shells are replaced by hand-authored people; the
+     * `stake.targetIndex` still indexes into this cast. Omit → legacy anonymous cast.
+     */
+    story?: ExperimentStory;
     /** The dramatic stake the cast is seeded around. */
     stake: ExperimentStake;
     /**

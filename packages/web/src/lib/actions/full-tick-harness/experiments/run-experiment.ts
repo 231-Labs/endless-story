@@ -189,7 +189,9 @@ export async function runExperiment(
 ): Promise<ExperimentResult> {
     const onTick = options.onTick ?? (() => {});
 
-    // Fresh memory + a world seeded around the config's stake/cast.
+    // Fresh memory + a world seeded around the config's stake/cast. When the config
+    // carries a concrete `story.cast`, those hand-authored people (with 行當 + 小傳)
+    // replace the anonymous shells, so the POV has an anchored persona.
     __resetNarrativeMemory();
     seedWorld({
         cast: config.cast.count,
@@ -199,6 +201,7 @@ export async function runExperiment(
             targetIndex: config.stake.targetIndex,
             capacity: config.stake.capacity,
         },
+        story: config.story,
     });
 
     // Install the framing override (if any), interpolating {target} with the focus name.
