@@ -92,6 +92,19 @@ export interface SeedOptions {
     cast?: number;
     /** seed one contested resource so the drama/spine path has something to settle. */
     withResource?: boolean;
+    /**
+     * Override the single seeded stake. The label becomes `<kind>:<targetName>`, which
+     * drives `desireStatementFor` → `framingForStatement` (so kind=partnership reads as
+     * 「與<target>搭戲」, kind=affection as 「傾心於<target>」). Used by the experiment
+     * framework to switch the dramatic SOIL without forking this seeder. When omitted,
+     * the default `affection:<cast[0]>` capacity-1 stake is seeded (legacy behaviour).
+     */
+    stake?: {
+        kind: string;
+        /** index into the cast naming the focus of the stake (被傾心/被搭/被爭). */
+        targetIndex: number;
+        capacity?: number;
+    };
 }
 
 const CAST_NAMES = ['文', '孟', '姚', '柳', '蕭', '霍', '秦', '雲'];
@@ -190,14 +203,24 @@ export function seedWorld(opts: SeedOptions = {}): void {
         //
         // LLM-facing chain: desireStatementFor(affection:文) → 「傾心於文」 → framingForStatement
         // → contention:affection, label「誰能贏得文的情意，成了眾人心照不宣的暗中角力」.
-        const resId = fakeId('h-res-affection');
-        const tableId = fakeId('h-res-affection-table');
+        //
+        // The experiment framework patches `opts.stake` to swap this SOIL (kind +
+        // target + capacity); when absent we seed the legacy affection:<cast[0]> stake.
+        const stakeKind = opts.stake?.kind ?? 'affection';
+        const targetIdx = Math.min(
+            Math.max(0, opts.stake?.targetIndex ?? 0),
+            cast.length - 1,
+        );
+        const targetName = cast[targetIdx].name;
+        const capacity = BigInt(Math.max(1, opts.stake?.capacity ?? 1));
+        const resId = fakeId('h-res-stake');
+        const tableId = fakeId('h-res-stake-table');
         const res: FakeResource = {
             id: resId,
             sagaId: SAGA,
-            archetype: 'capacity-1-slot',
-            label: 'affection:' + cast[0].name,
-            capacity: 1n,
+            archetype: capacity === 1n ? 'capacity-1-slot' : `capacity-${capacity}-slot`,
+            label: `${stakeKind}:${targetName}`,
+            capacity,
             tableId,
             allocations: new Map(),
         };
