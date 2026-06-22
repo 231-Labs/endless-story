@@ -1,0 +1,32 @@
+# event-poller — self-hosted event indexer poller (cli/scripts/indexer-poll.ts).
+#
+# Unlike world-loop (a zero-dep standalone script in packages/cli/Dockerfile),
+# the poller imports workspace packages (@endless-story/sdk + @endless-story/
+# indexer + pg), so it needs a full monorepo install — same shape as the web
+# Dockerfile. Build context = repo root (to resolve sibling packages + pnpm-lock).
+#
+# Zeabur: this file is named Dockerfile.event-poller so the service named
+# "event-poller" auto-detects it. Set that service's Root Directory = repo root
+# (留空 / `/`). It's a WORKER (outbound HTTP + Postgres only) — no port / domain.
+#
+# Runtime env (Zeabur Variables):
+#   DATABASE_URL      = reference the postgresql service   (required)
+#   SUI_RPC_URL       = (optional; default = official testnet fullnode)
+#   POLL_INTERVAL_MS  = (optional; default 30000)
+
+FROM node:23-slim
+
+# corepack → pnpm@10.5.2 (from the root package.json packageManager field)
+RUN corepack enable
+
+WORKDIR /repo
+COPY . .
+
+# Full workspace install so pnpm resolves the cli's workspace deps (sdk, indexer,
+# shared, ...). devDeps are included so the cli's tsx is present at runtime.
+RUN pnpm install --frozen-lockfile
+
+# Long-running worker: poll the package's events into Postgres on an interval,
+# creating the schema on first boot. ensureSchema makes this idempotent, so no
+# manual psql step is needed.
+CMD ["pnpm", "--filter", "@endless-story/cli", "indexer-poll"]
