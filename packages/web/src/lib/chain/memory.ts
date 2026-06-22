@@ -216,6 +216,172 @@ async function withMemoryRetry<T>(
     throw lastErr;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * NARRATIVE OBSERVATORY — in-memory, recall-capable fake memory (ES_NARRATIVE=1).
+ *
+ * The full-tick *mechanism* harness fakes the chain AND turns memory off (no
+ * MemWal creds → isMemoryConfigured() false → recall returns []). That isolates the
+ * chain seam but kills the iteration engine: with no recall, every POV starts from
+ * a blank slate and the story can only loop. The narrative observatory flips memory
+ * back ON without the relayer/SEAL/Walrus/chain round-trips — a module-level store
+ * keyed by characterId, with REAL embedding-based cosine recall when an OpenAI key
+ * is present (deterministic fake vectors otherwise, for a no-key smoke).
+ *
+ * This is the iteration engine: each tick a character remember()s its plan /
+ * observations / relationships / chapter; at POV time it recall()s the relevant
+ * past so the new chapter CONTINUES from it. Watching the printed chapters tick over
+ * ticks tells us whether the narrative advances or circles the same standoff.
+ *
+ * It deliberately mirrors the real path's *return shapes* (recall → string[] of
+ * tag-stripped text; plan → latest kind=plan text) so callers (pov-core, plan)
+ * behave identically — only the storage + transport differ.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+interface InMemMemory {
+    content: string;
+    embedding: number[];
+    kind: MemoryKind;
+    day: number;
+    importance: number;
+    /** insertion order — tiebreaker so newest wins on equal score. */
+    seq: number;
+}
+
+/** True when the narrative observatory's in-memory memory path is active. */
+function narrativeMemoryOn(): boolean {
+    return process.env.ES_NARRATIVE === '1';
+}
+
+const NARRATIVE_STORE = new Map<string, InMemMemory[]>();
+let _narrativeSeq = 0;
+
+/** Wipe the in-memory store (between observatory runs). */
+export function __resetNarrativeMemory(): void {
+    NARRATIVE_STORE.clear();
+    _narrativeSeq = 0;
+}
+
+/** Cumulative recall hit count this process — the observatory reports it per tick. */
+let _narrativeRecallHits = 0;
+export function __drainNarrativeRecallHits(): number {
+    const n = _narrativeRecallHits;
+    _narrativeRecallHits = 0;
+    return n;
+}
+
+const EMBED_DIM = 256;
+
+/**
+ * Embed text for the in-memory store.
+ *   · with OPENAI_API_KEY → real text-embedding-3-small (same call shape as
+ *     MemWalManual.embed), so relevance is genuine and the iteration is real.
+ *   · without a key → a deterministic token-hash bag-of-words vector. The mechanism
+ *     (remember → cosine → recall) runs and hits, but relevance is crude — only for
+ *     the no-key smoke that proves the wiring, not for reading real iteration.
+ */
+async function narrativeEmbed(text: string): Promise<number[]> {
+    const key = process.env.OPENAI_API_KEY;
+    if (key) {
+        const apiBase = (process.env.OPENAI_API_BASE ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+        const model = process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small';
+        const resp = await fetch(`${apiBase}/embeddings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${key}`,
+            },
+            body: JSON.stringify({ model, input: text.slice(0, 8000) }),
+        });
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(`[narrative] embedding API error (${resp.status}): ${errText}`);
+        }
+        const data = (await resp.json()) as { data?: { embedding: number[] }[] };
+        const vec = data.data?.[0]?.embedding;
+        if (!vec) throw new Error('[narrative] embedding API returned no data');
+        return vec;
+    }
+    // Deterministic fallback: hash tokens into a fixed-dim bag (mechanism-only).
+    const vec = new Array<number>(EMBED_DIM).fill(0);
+    const tokens = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+    for (const tok of tokens) {
+        let h = 2166136261;
+        for (let i = 0; i < tok.length; i++) {
+            h ^= tok.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        vec[Math.abs(h) % EMBED_DIM] += 1;
+    }
+    return vec;
+}
+
+function cosine(a: number[], b: number[]): number {
+    const n = Math.min(a.length, b.length);
+    let dot = 0;
+    let na = 0;
+    let nb = 0;
+    for (let i = 0; i < n; i++) {
+        dot += a[i] * b[i];
+        na += a[i] * a[i];
+        nb += b[i] * b[i];
+    }
+    if (na === 0 || nb === 0) return 0;
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+/** In-memory remember: embed + push. Returns true (always stored). */
+async function narrativeRemember(
+    characterId: string,
+    text: string,
+    kind: MemoryKind,
+    importance: number,
+    day: number,
+): Promise<boolean> {
+    const embedding = await narrativeEmbed(text);
+    const list = NARRATIVE_STORE.get(characterId) ?? [];
+    list.push({ content: text, embedding, kind, day, importance, seq: _narrativeSeq++ });
+    NARRATIVE_STORE.set(characterId, list);
+    console.log(
+        `[narrative-mem] remember ${characterId.slice(0, 10)}… ✓ [${kind} i=${importance}] ` +
+            `(${text.length} chars, store=${list.length})`,
+    );
+    return true;
+}
+
+/**
+ * In-memory recall: embed query → cosine vs this character's store → top-`limit`.
+ * Scored like the real managed-relayer path (importance × recency × relevance) so
+ * the ordering matches production, then returns tag-free `content` strings.
+ */
+async function narrativeRecall(
+    characterId: string,
+    query: string,
+    limit: number,
+    today: number,
+): Promise<RecalledMemory[]> {
+    const list = NARRATIVE_STORE.get(characterId);
+    if (!list || list.length === 0) return [];
+    const q = await narrativeEmbed(query);
+    const scored = list.map((m) => {
+        const relevance = relevanceWeight(1 - cosine(q, m.embedding)); // distance = 1 - cos
+        const score = (m.importance / 10) * recencyWeight(m.day, today) * relevance;
+        return { m, score };
+    });
+    scored.sort((a, b) => b.score - a.score || b.m.seq - a.m.seq);
+    const out = scored.slice(0, limit).map(({ m }) => ({
+        text: m.content,
+        kind: m.kind,
+        importance: m.importance,
+        day: m.day,
+        anchored: false,
+    }));
+    _narrativeRecallHits += out.length;
+    console.log(
+        `[narrative-mem] recall ${characterId.slice(0, 10)}… → ${out.length}/${list.length} (in-memory cosine)`,
+    );
+    return out;
+}
+
 /**
  * Recall a character's memories, importance-re-ranked. Returns decrypted
  * text (tags stripped), highest-importance first, [] when unconfigured.
@@ -227,6 +393,11 @@ export async function recallForCharacter(
     query: string,
     limit = 6,
 ): Promise<string[]> {
+    if (narrativeMemoryOn()) {
+        const today = await currentNarrativeDay();
+        const mems = await narrativeRecall(characterId, query, limit, today);
+        return mems.map((m) => m.text);
+    }
     const structured = await recallStructuredForCharacter(characterId, query, limit);
     return structured.map((m) => m.text);
 }
@@ -432,6 +603,18 @@ function invalidatePlanCache(characterId: string): void {
  * same-day plan. Trusting the write-set cache keeps the freshest plan flowing.
  */
 export async function recallCurrentPlanText(characterId: string): Promise<string | null> {
+    if (narrativeMemoryOn()) {
+        // Latest kind=plan content for this character (no cache needed — the store is
+        // process-local and authoritative; newest plan = highest seq).
+        const list = NARRATIVE_STORE.get(characterId);
+        if (!list) return null;
+        let best: InMemMemory | null = null;
+        for (const m of list) {
+            if (m.kind !== 'plan') continue;
+            if (!best || m.seq > best.seq) best = m;
+        }
+        return best?.content ?? null;
+    }
     const cached = PLAN_CACHE.get(characterId);
     // Write-set = authoritative (the plan we just stored) → never stale. Recall-set =
     // cold-start best-effort → honour the TTL so it re-recalls.
@@ -485,11 +668,17 @@ export async function rememberForCharacter(
     opts?: { kind?: MemoryKind; importance?: number; anchored?: boolean },
 ): Promise<boolean> {
     if (!text.trim()) return false;
-    const client = await clientFor(characterId);
-    if (!client) return false;
     const kind = opts?.kind ?? 'observation';
     const importance = opts?.importance ?? DEFAULT_IMPORTANCE[kind] ?? 5;
     const day = await currentNarrativeDay();
+    if (narrativeMemoryOn()) {
+        // In-memory store: embed + push, no relayer/SEAL/Walrus. Stores the RAW text
+        // (no `[[m|...]]` tag) since recall returns content directly and the tag would
+        // only pollute the embedding.
+        return narrativeRemember(characterId, text, kind, importance, day);
+    }
+    const client = await clientFor(characterId);
+    if (!client) return false;
     try {
         const tagged = tagMemory(text, kind, importance, day, opts?.anchored ?? false);
         const ns = namespaceFor(characterId);
