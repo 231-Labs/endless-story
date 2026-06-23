@@ -213,7 +213,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 4. [ ] Zeabur：部署 `packages/web`,填上表 env（含 `TICK_LOOP_SECRET`、`MEMWAL_SERVER_URL`、`DATABASE_URL` 暫留空/本機）。
 5. [ ] 把 `packages/relayer` 加進 monorepo;Zeabur 建 service A（root=`packages/relayer`）+ 向量 store + Walrus URL → 拿到 relayer 網域。
 6. [ ] 回填 web 的 `MEMWAL_SERVER_URL = https://<relayer>` 重新部署。
-7. [ ] 若用 drama demo cast：跑 `pnpm --filter @endless-story/cli run seed-cast -- --env testnet --tag-existing` 補舊 cast 的 `role:*` tags；若剛重新 mint，`seed-cast` 會自動寫 tag。
+7. [ ] 創始卡司由 step 3 的 `bootstrap --story-id spring-snow`（預設）種,`cli/scripts/stories/spring-snow.json` 是唯一來源（含 `role:*` 角色）；舊的獨立 `seed-cast` 腳本已移除,不需另跑。
 8. [ ] Zeabur 建 service B（root=`packages/cli`）跑 `pnpm start`,填 `WORLD_LOOP_URL=https://<web>` + `TICK_LOOP_SECRET`；若 relayer 已上線，再填 `RUNNER_CONTROL_URL=https://<relayer>/control` 或 `MEMWAL_SERVER_URL=https://<relayer>`。
 9. [ ] 安全 smoke（不上鏈）：`pnpm --filter @endless-story/cli run world-loop -- --max=1 --dry-run --max-characters=1 --no-sleep --no-gazette --json-out=/private/tmp/endless-story-smoke.json`，看到 `規劃1 · 張力… · 章回1`。有限輪數 smoke 若遇到 HTTP 500 / 非 JSON / `ok:false` 會 exit 1。
 10. [ ] 快速 drama/social inspection（不上鏈、不跑章回）：同上加 `--no-pov --character-ids=<孟>,<顧>,<柳> --max-characters=3`，幾十秒內檢查 `drama.top` / `social` 明細，不用等三篇 POV。也可在 `/admin/stage`（戲台；舊 `/admin/director` 已 redirect 到此）關「含 POV 章回」並按「孟/顧/柳」快捷填入後跑 dry-run。注意 dry-run 不寫 memory、scene-lines 或鏈上 anchor；第二輪 POV 召回要等真跑或測試專用記憶層驗。
@@ -223,7 +223,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 14. [ ] 開 `/admin/deploy` 看 Runtime 連線：relayer `/health`、runner `/control`、demo clips、chain-read cache 都應該顯示 OK / fallback 原因。
 15. [ ] 開 `/admin` 確認 Runner 開關能讀到 relayer `/control`，切到 paused 後 world-loop 下一輪顯示 skipped。
 
-> 注意：2026-06-01 那版 testnet deployment 與最新 `event.move` / generated SDK 不完全一致，`--tag-existing` 會遇到 `FunctionNotFound`。重新 deploy/bootstrap 後再跑。
+> 注意：generated SDK / `event.move` 若領先鏈上（舊 deployment），呼叫會遇到 `FunctionNotFound`。重新 deploy + bootstrap 後再跑。
 
 ---
 
