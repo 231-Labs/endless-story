@@ -1,4 +1,5 @@
 import { AdminTabs } from './admin/AdminTabs';
+import { ensureEventStoreRegistered } from '@/lib/server/event-store';
 
 /**
  * (admin) route group layout.
@@ -13,7 +14,10 @@ import { AdminTabs } from './admin/AdminTabs';
  *
  * See the on-chain architecture contract, principle 6 (strict route-group isolation).
  */
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  // Register the durable event store on the worker serving this admin page, so
+  // storyteller / roster reads come from Postgres instead of live RPC.
+  await ensureEventStoreRegistered();
   return (
     <div data-route-group="admin">
       {/* TODO: AdminNav once first real admin page (deploy) ships. */}

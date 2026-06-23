@@ -19,9 +19,13 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: walrusRemotePatterns,
   },
+  // The Postgres driver (used server-side by the event store via
+  // @endless-story/indexer/pg in instrumentation) must not be bundled.
+  serverExternalPackages: ['pg'],
   // Workspace packages that ship TS source (no build step) — Next must
   // transpile them via SWC instead of treating them as pre-built modules.
   transpilePackages: [
+    '@endless-story/indexer',
     '@endless-story/shared',
     '@endless-story/sdk',
     '@endless-story/chamber-3d',
