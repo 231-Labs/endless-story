@@ -77,6 +77,13 @@ export const AdminMinted = new MoveStruct({ name: `${$moduleName}::AdminMinted`,
         total_minted: bcs.u64(),
         minted_at_ms: bcs.u64()
     } });
+export const SagaTreasuryFunded = new MoveStruct({ name: `${$moduleName}::SagaTreasuryFunded`, fields: {
+        faucet_id: bcs.Address,
+        saga_id: bcs.Address,
+        amount: bcs.u64(),
+        total_minted: bcs.u64(),
+        funded_at_ms: bcs.u64()
+    } });
 export const ConfigUpdated = new MoveStruct({ name: `${$moduleName}::ConfigUpdated`, fields: {
         faucet_id: bcs.Address,
         drip_amount: bcs.u64(),
@@ -240,9 +247,12 @@ export interface AdminFundSagaTreasuryOptions {
 }
 /**
  * Mint `amount` base units of fresh ENDLESS straight into `saga`'s treasury — the
- * on-chain payroll pool the off-chain settle draws role base-floor wages from (so
- * 班中俸 > 0 even with zero subscribers). Like `admin_mint` it bypasses cooldown
- * but still respects `total_supply_cap`.
+ * on-chain payroll pool the off-chain settle draws role base-floor wages from
+ * (so 班中俸 > 0 even with zero subscribers). Like `admin_mint` it bypasses
+ * cooldown but still respects `total_supply_cap`. Reuses the package-visible
+ * `saga::deposit_to_treasury` (which emits `TreasuryDeposited` with the new
+ * balance), so this is the admin/diagnosis sibling of the recruit/dream fee
+ * inflow.
  */
 export function adminFundSagaTreasury(options: AdminFundSagaTreasuryOptions) {
     const packageAddress = options.package ?? '@local-pkg/endless-story';

@@ -112,6 +112,37 @@ export function createPersonalVault(options: CreatePersonalVaultOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface CreateVaultArguments {
+    initialLayoutBlobId: RawTransactionArgument<string | null>;
+}
+export interface CreateVaultOptions {
+    package?: string;
+    arguments: CreateVaultArguments | [
+        initialLayoutBlobId: RawTransactionArgument<string | null>
+    ];
+}
+/**
+ * Self-service vault creation as a single wallet call: creates the Kiosk +
+ * PersonalVault and routes the KioskOwnerCap + VaultTicket to the caller.
+ *
+ * Prefer this over calling `create_personal_vault` directly from a PTB: that
+ * returns the `VaultTicket`, which is `key`-only and therefore cannot be moved by
+ * a PTB `TransferObjects` command. Here the defining module transfers it, so a
+ * plain wallet transaction works.
+ */
+export function createVault(options: CreateVaultOptions) {
+    const packageAddress = options.package ?? '@local-pkg/endless-story';
+    const argumentsTypes = [
+        '0x1::option::Option<0x1::string::String>'
+    ] satisfies (string | null)[];
+    const parameterNames = ["initialLayoutBlobId"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'chamber',
+        function: 'create_vault',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface SaveLayoutArguments {
     vault: RawTransactionArgument<string>;
     blobId: RawTransactionArgument<string>;

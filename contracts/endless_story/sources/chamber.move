@@ -156,6 +156,23 @@ public fun create_personal_vault(
     (kiosk_cap, ticket)
 }
 
+/// Self-service vault creation as a single wallet call: creates the Kiosk +
+/// PersonalVault and routes the KioskOwnerCap + VaultTicket to the caller.
+///
+/// Prefer this over calling `create_personal_vault` directly from a PTB: that
+/// returns the `VaultTicket`, which is `key`-only and therefore cannot be moved
+/// by a PTB `TransferObjects` command. Here the defining module transfers it,
+/// so a plain wallet transaction works.
+#[allow(lint(self_transfer))]
+public fun create_vault(
+    initial_layout_blob_id: Option<String>,
+    ctx: &mut TxContext,
+) {
+    let (kiosk_cap, ticket) = create_personal_vault(initial_layout_blob_id, ctx);
+    transfer::public_transfer(kiosk_cap, ctx.sender());
+    transfer::transfer(ticket, ctx.sender());
+}
+
 /// Anchor a new Walrus layout blob for the vault.
 /// Only the wallet that created the vault (vault.owner) may call this.
 public fun save_layout(

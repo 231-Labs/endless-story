@@ -29,7 +29,7 @@
  * wild→saga `JoinIntent` flow: owner of a wild character mints a shared
  * `JoinIntent` pointing at a target saga; storyteller of that saga consumes it via
  * `accept_character_into_saga`.
- *
+ * 
  * See the on-chain architecture contract.
  */
 

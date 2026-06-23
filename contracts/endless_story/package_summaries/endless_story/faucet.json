@@ -10,6 +10,10 @@
       "name": "currency"
     },
     {
+      "address": "endless_story",
+      "name": "saga"
+    },
+    {
       "address": "sui",
       "name": "clock"
     },
@@ -400,9 +404,115 @@
       ],
       "return_": []
     },
-    "set_config": {
+    "admin_fund_saga_treasury": {
       "source_index": 4,
       "index": 4,
+      "doc": " Mint `amount` base units of fresh ENDLESS straight into `saga`'s treasury —\n the on-chain payroll pool the off-chain settle draws role base-floor wages\n from (so 班中俸 > 0 even with zero subscribers). Like `admin_mint` it\n bypasses cooldown but still respects `total_supply_cap`. Reuses the\n package-visible `saga::deposit_to_treasury` (which emits `TreasuryDeposited`\n with the new balance), so this is the admin/diagnosis sibling of the\n recruit/dream fee inflow.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "admin",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "faucet"
+                  },
+                  "name": "FaucetAdminCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "faucet",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "faucet"
+                  },
+                  "name": "Faucet",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "amount",
+          "type_": "u64"
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "set_config": {
+      "source_index": 5,
+      "index": 5,
       "doc": " Update any subset of knobs in a single call. `total_supply_cap` of 0\n means \"unlimited\"; setting it below `total_minted` is invalid.",
       "attributes": [],
       "visibility": "Public",
@@ -483,8 +593,8 @@
       "return_": []
     },
     "set_paused": {
-      "source_index": 5,
-      "index": 5,
+      "source_index": 6,
+      "index": 6,
       "doc": " Emergency pause/unpause — minimal cap for hot-fixes.",
       "attributes": [],
       "visibility": "Public",
@@ -553,8 +663,8 @@
       "return_": []
     },
     "faucet_id": {
-      "source_index": 6,
-      "index": 6,
+      "source_index": 7,
+      "index": 7,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -594,8 +704,8 @@
       ]
     },
     "admin_faucet_id": {
-      "source_index": 7,
-      "index": 7,
+      "source_index": 8,
+      "index": 8,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -635,38 +745,6 @@
       ]
     },
     "drip_amount": {
-      "source_index": 8,
-      "index": 8,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "faucet",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "faucet"
-                  },
-                  "name": "Faucet",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "cooldown_ms": {
       "source_index": 9,
       "index": 9,
       "doc": null,
@@ -698,7 +776,7 @@
         "u64"
       ]
     },
-    "total_supply_cap": {
+    "cooldown_ms": {
       "source_index": 10,
       "index": 10,
       "doc": null,
@@ -730,7 +808,7 @@
         "u64"
       ]
     },
-    "total_minted": {
+    "total_supply_cap": {
       "source_index": 11,
       "index": 11,
       "doc": null,
@@ -762,9 +840,41 @@
         "u64"
       ]
     },
-    "is_paused": {
+    "total_minted": {
       "source_index": 12,
       "index": 12,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "faucet",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "faucet"
+                  },
+                  "name": "Faucet",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "is_paused": {
+      "source_index": 13,
+      "index": 13,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -795,8 +905,8 @@
       ]
     },
     "remaining_supply": {
-      "source_index": 13,
-      "index": 13,
+      "source_index": 14,
+      "index": 14,
       "doc": " 0 = unlimited (no cap set).",
       "attributes": [],
       "visibility": "Public",
@@ -827,8 +937,8 @@
       ]
     },
     "next_drip_at_ms": {
-      "source_index": 14,
-      "index": 14,
+      "source_index": 15,
+      "index": 15,
       "doc": " Returns the wall-clock ms at which `who` may next call `drip`.\n 0 if never dripped (i.e. eligible immediately).",
       "attributes": [],
       "visibility": "Public",
@@ -1177,8 +1287,66 @@
         }
       }
     },
-    "ConfigUpdated": {
+    "SagaTreasuryFunded": {
       "index": 5,
+      "doc": " Admin minted fresh ENDLESS straight into a saga's treasury (payroll pool).",
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "faucet_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "amount": {
+            "index": 2,
+            "doc": null,
+            "type_": "u64"
+          },
+          "total_minted": {
+            "index": 3,
+            "doc": null,
+            "type_": "u64"
+          },
+          "funded_at_ms": {
+            "index": 4,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "ConfigUpdated": {
+      "index": 6,
       "doc": null,
       "attributes": [],
       "abilities": [

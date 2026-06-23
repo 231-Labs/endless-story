@@ -10,7 +10,23 @@ import { pkg } from './_package.js';
 
 export { gen as raw };
 
-/** Self-service vault: Kiosk + PersonalVault. Returns (KioskOwnerCap, VaultTicket). */
+/**
+ * Self-service vault, single wallet call: creates the Kiosk + PersonalVault and
+ * keeps the KioskOwnerCap + VaultTicket in the caller's wallet. Prefer this from
+ * a wallet PTB — `createPersonalVault` RETURNS the VaultTicket, which is
+ * `key`-only and cannot be moved by a PTB `TransferObjects` command.
+ */
+export const createVault = (args?: { initialLayoutBlobId?: string | null }) =>
+  gen.createVault({
+    package: pkg(),
+    arguments: { initialLayoutBlobId: args?.initialLayoutBlobId ?? null },
+  });
+
+/**
+ * Low-level: returns (KioskOwnerCap, VaultTicket) for composition inside a Move
+ * caller. NOT usable directly from a wallet PTB (the VaultTicket can't be
+ * transferred there) — use `createVault` instead.
+ */
 export const createPersonalVault = (args?: { initialLayoutBlobId?: string | null }) =>
   gen.createPersonalVault({
     package: pkg(),
