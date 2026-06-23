@@ -101,8 +101,8 @@ fun e2e_event_resolve_settles_resource_ledger() {
     );
 
     // both submit a card
-    event::submit_action(&cap, &saga, &mut budget_event, liu, 0, &clock);
-    event::submit_action(&cap, &saga, &mut budget_event, bai, 1, &clock);
+    event::submit_action_for_testing(&mut budget_event, liu, 0, &clock);
+    event::submit_action_for_testing(&mut budget_event, bai, 1, &clock);
     assert_eq!(event::submitted_action_count(&budget_event), 2);
 
     // ── resolve with the supply-side outcome: 白 SEIZES the slot from 柳 (zero-sum) ────────
@@ -167,7 +167,7 @@ fun e2e_resolve_rejects_nonparticipant_holder() {
         &cap, &saga, scene_id, b"e".to_string(), b"".to_string(), 1,
         vector[liu], catalog, 1, 8004, &mut ctx,
     );
-    event::submit_action(&cap, &saga, &mut be, liu, 0, &clock);
+    event::submit_action_for_testing(&mut be, liu, 0, &clock);
     // transfer TO an outsider who is not a participant → must abort at resolve
     let bad = event::new_resource_transfer_op(slot_id, option::none(), outsider, 1);
     let outcomes = event::outcomes_with_resource_transfers(vector[bad]);

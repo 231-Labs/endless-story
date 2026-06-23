@@ -268,6 +268,10 @@ async function main() {
       faucetAdminCapId: ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId,
       dreamConfigId: ENDLESS_STORY_DEPLOYMENT.dreamConfigId,
       dreamAdminCapId: ENDLESS_STORY_DEPLOYMENT.dreamAdminCapId,
+      // Preserve still ledger ids — these survive an upgrade (same original
+      // package anchors the Still type) and dropping them breaks 劇照 mint/shop.
+      stillRegistryId: ENDLESS_STORY_DEPLOYMENT.stillRegistryId,
+      stillTransferPolicyId: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
       demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
       storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
     },

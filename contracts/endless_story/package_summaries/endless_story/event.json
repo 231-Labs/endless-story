@@ -649,14 +649,14 @@
     "submit_action": {
       "source_index": 6,
       "index": 6,
-      "doc": null,
+      "doc": " DEPRECATED (event.move 1.7). Card play moved to the character's OWN\n ControlCap — the StorytellerCap (director god-cap) must not author a\n character's action, or the actor/director agent boundary collapses.\n Kept as an aborting stub so the Sui package UPGRADE stays signature-\n compatible; every caller must switch to `submit_action_as_character`.",
       "attributes": [],
       "visibility": "Public",
       "entry": false,
       "type_parameters": [],
       "parameters": [
         {
-          "name": "cap",
+          "name": "_cap",
           "type_": {
             "Reference": [
               false,
@@ -674,7 +674,7 @@
           }
         },
         {
-          "name": "saga",
+          "name": "_saga",
           "type_": {
             "Reference": [
               false,
@@ -691,6 +691,159 @@
             ]
           }
         },
+        {
+          "name": "_budget_event",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "_character_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "_card_index",
+          "type_": "u64"
+        },
+        {
+          "name": "_clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "submit_action_as_character": {
+      "source_index": 7,
+      "index": 7,
+      "doc": " A character plays one card from their dealt hand, authorized by their\n OWN ControlCap (owner-issued, epoch-bound, revocable) instead of the\n saga's StorytellerCap. This is what returns card-play agency to the\n character agent: the runner holds the character's ControlCap and signs\n the play on its behalf. `character` is the shared Character object —\n its id IS the participant id, and `is_valid` binds the cap to it + the\n current control_epoch, so a revoked/reassigned cap can no longer act.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "control_cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "ControlCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "character",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "character"
+                  },
+                  "name": "Character",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "card_index",
+          "type_": "u64"
+        },
+        {
+          "name": "clock",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "clock"
+                  },
+                  "name": "Clock",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "record_action": {
+      "source_index": 8,
+      "index": 8,
+      "doc": " Shared core: validate the play against the OPEN event (participant,\n card-in-hand) and record it. Authorization is the CALLER's job — the\n public entry above proves the actor's ControlCap before calling in.",
+      "attributes": [],
+      "visibility": "Private",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
         {
           "name": "budget_event",
           "type_": {
@@ -748,8 +901,8 @@
       "return_": []
     },
     "resolve_event": {
-      "source_index": 7,
-      "index": 7,
+      "source_index": 9,
+      "index": 9,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -863,8 +1016,8 @@
       "return_": []
     },
     "attributed_played_kill": {
-      "source_index": 8,
-      "index": 8,
+      "source_index": 10,
+      "index": 10,
       "doc": null,
       "attributes": [],
       "visibility": "Private",
@@ -930,8 +1083,8 @@
       ]
     },
     "apply_death": {
-      "source_index": 9,
-      "index": 9,
+      "source_index": 11,
+      "index": 11,
       "doc": " Apply one DeathRecord to the targeted Character. Storyteller calls\n this once per (event, death_index) triple after `resolve_event` has\n flipped the event to RESOLVED. Idempotent: re-applying to an\n already-dead character is a no-op (handled by `character::mark_dead`).",
       "attributes": [],
       "visibility": "Public",
@@ -1018,8 +1171,8 @@
       "return_": []
     },
     "apply_resource_transfers": {
-      "source_index": 10,
-      "index": 10,
+      "source_index": 12,
+      "index": 12,
       "doc": " Apply this resolved event's resource transfers FOR ONE DramaResource. Storyteller calls\n it once per (event, resource) after `resolve_event`. We gather every op naming this\n resource — in recorded (canonical) order — into a batch and hand it to\n `resource::apply_transfers`, which re-validates conservation and applies atomically\n (any violation aborts the whole tx → no partial state, the TS RESOURCE-PHASE mirror).\n\n Multi-resource events: call once per resource; each call is its own atomic batch. The\n `resource_id` on each op guards against passing the wrong DramaResource object.",
       "attributes": [],
       "visibility": "Public",
@@ -1120,8 +1273,8 @@
       "return_": []
     },
     "apply_tag_op": {
-      "source_index": 11,
-      "index": 11,
+      "source_index": 13,
+      "index": 13,
       "doc": " Apply one TagOp recorded in a resolved BudgetEvent to the targeted Character.\n Storyteller calls this once per (event, op_index, character) triple; per L1 v0.3\n §6.6 Move does not enforce semantic uniqueness, but apply_tag is idempotent\n on duplicate label and revoke_tag is idempotent on missing label.",
       "attributes": [],
       "visibility": "Public",
@@ -1226,8 +1379,8 @@
       "return_": []
     },
     "empty_outcomes": {
-      "source_index": 12,
-      "index": 12,
+      "source_index": 14,
+      "index": 14,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1248,8 +1401,8 @@
       ]
     },
     "new_resource_transfer_op": {
-      "source_index": 13,
-      "index": 13,
+      "source_index": 15,
+      "index": 15,
       "doc": " Production constructor for a resource-transfer op (the SDK builds these for resolve).",
       "attributes": [],
       "visibility": "Public",
@@ -1328,8 +1481,8 @@
       ]
     },
     "outcomes_with_resource_transfers": {
-      "source_index": 14,
-      "index": 14,
+      "source_index": 16,
+      "index": 16,
       "doc": " Build outcomes that carry ONLY resource transfers (the common drama path); other\n dimensions empty. Keeps the SDK/test call sites terse.",
       "attributes": [],
       "visibility": "Public",
@@ -1366,8 +1519,8 @@
       ]
     },
     "new_tag_op": {
-      "source_index": 15,
-      "index": 15,
+      "source_index": 17,
+      "index": 17,
       "doc": " Production constructor for one public identity/status tag operation.\n The operation is recorded in `BudgetEvent.resolution.outcomes`, then\n applied to the target `Character` via `apply_tag_op` after resolution.",
       "attributes": [],
       "visibility": "Public",
@@ -1419,8 +1572,8 @@
       ]
     },
     "outcomes_with_tag_ops": {
-      "source_index": 16,
-      "index": 16,
+      "source_index": 18,
+      "index": 18,
       "doc": " Build outcomes that carry ONLY tag operations. This is the public\n identity path: the event log says when a social label such as\n `role:小生` or `status:二太太` became externally affirmed.",
       "attributes": [],
       "visibility": "Public",
@@ -1457,8 +1610,8 @@
       ]
     },
     "resource_transfer_count": {
-      "source_index": 17,
-      "index": 17,
+      "source_index": 19,
+      "index": 19,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1489,8 +1642,8 @@
       ]
     },
     "death_count": {
-      "source_index": 18,
-      "index": 18,
+      "source_index": 20,
+      "index": 20,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1521,8 +1674,8 @@
       ]
     },
     "event_id": {
-      "source_index": 19,
-      "index": 19,
+      "source_index": 21,
+      "index": 21,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1562,8 +1715,8 @@
       ]
     },
     "status": {
-      "source_index": 20,
-      "index": 20,
+      "source_index": 22,
+      "index": 22,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1594,70 +1747,6 @@
       ]
     },
     "submitted_action_count": {
-      "source_index": 21,
-      "index": 21,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "scene_delta_count": {
-      "source_index": 22,
-      "index": 22,
-      "doc": null,
-      "attributes": [],
-      "visibility": "Public",
-      "entry": false,
-      "type_parameters": [],
-      "parameters": [
-        {
-          "name": "budget_event",
-          "type_": {
-            "Reference": [
-              false,
-              {
-                "Datatype": {
-                  "module": {
-                    "address": "endless_story",
-                    "name": "event"
-                  },
-                  "name": "BudgetEvent",
-                  "type_arguments": []
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "return_": [
-        "u64"
-      ]
-    },
-    "tag_op_count": {
       "source_index": 23,
       "index": 23,
       "doc": null,
@@ -1689,7 +1778,7 @@
         "u64"
       ]
     },
-    "commitment_id_count": {
+    "scene_delta_count": {
       "source_index": 24,
       "index": 24,
       "doc": null,
@@ -1721,7 +1810,7 @@
         "u64"
       ]
     },
-    "currency_transfer_count": {
+    "tag_op_count": {
       "source_index": 25,
       "index": 25,
       "doc": null,
@@ -1753,9 +1842,73 @@
         "u64"
       ]
     },
-    "tag_op_kind_add": {
+    "commitment_id_count": {
       "source_index": 26,
       "index": 26,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "currency_transfer_count": {
+      "source_index": 27,
+      "index": 27,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "budget_event",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "event"
+                  },
+                  "name": "BudgetEvent",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "tag_op_kind_add": {
+      "source_index": 28,
+      "index": 28,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1767,8 +1920,8 @@
       ]
     },
     "tag_op_kind_remove": {
-      "source_index": 27,
-      "index": 27,
+      "source_index": 29,
+      "index": 29,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -1780,8 +1933,8 @@
       ]
     },
     "new_card_template": {
-      "source_index": 28,
-      "index": 28,
+      "source_index": 30,
+      "index": 30,
       "doc": " Production constructor for `CardTemplate`. Needed because off-chain\n storytellers (Skill API / runner orchestrator) build the catalog\n for `push_event` and Move's pure-arg rules forbid passing a\n struct vector directly via BCS-encoded bytes (`vector<CardTemplate>`\n is not a pure type). With this constructor, callers do\n `tx.makeMoveVec({ type: …::CardTemplate, elements: cards.map(c =>\n tx.moveCall(new_card_template(...))) })`.",
       "attributes": [],
       "visibility": "Public",
