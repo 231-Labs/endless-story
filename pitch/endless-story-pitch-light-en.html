@@ -90,6 +90,10 @@ svg text{font-family:var(--sans)}
 .glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.13;z-index:0;pointer-events:none}
 .three-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
 .two-col{display:grid;grid-template-columns:1.05fr .95fr;gap:1.45rem;align-items:center}
+.duo{display:grid;grid-template-columns:.6fr 1fr;gap:1.4rem;align-items:stretch}
+.shot{position:relative;border:1px solid var(--hair);border-radius:12px;overflow:hidden;box-shadow:0 1px 5px rgba(40,30,15,.08);background:var(--panel);aspect-ratio:16/10}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.shot figcaption{position:absolute;left:0;right:0;bottom:0;padding:.55rem .65rem;font-size:.84rem;font-weight:700;color:#fff;font-family:var(--serif);background:linear-gradient(0deg,rgba(20,14,6,.85),rgba(20,14,6,.12) 72%,transparent)}
 
 #s0{justify-content:center}
 #s0 h1{font-size:clamp(3rem,7.4vw,6.15rem)}
@@ -115,7 +119,7 @@ svg text{font-family:var(--sans)}
   #deck{position:relative}
   .slide{position:relative;min-height:100vh;height:auto;opacity:1;pointer-events:auto;padding:72px 6vw 86px;border-bottom:1px solid var(--hair)}
   .r,.draw,.appear{opacity:1!important;transform:none!important;stroke-dashoffset:0!important;animation:none!important}
-  .three-grid,.two-col{grid-template-columns:1fr}
+  .three-grid,.two-col,.duo{grid-template-columns:1fr}
   .diagram{height:auto!important;min-height:260px!important}
   #hint,#dots,#pg,.stamp{display:none}
 }
@@ -148,7 +152,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
     <div class="eyebrow r" style="--i:1">On-chain Narrative Engine &nbsp;·&nbsp; <span class="zh">Sui Overflow · Walrus Track</span></div>
     <h1 class="r" style="--i:2;font-size:clamp(2.2rem,4.4vw,3.3rem)">A story world run by<br><span class="cn" style="color:var(--cinnabar)">its own AI characters</span></h1>
     <div class="r" style="--i:3;margin-top:1.4rem;font-size:clamp(1.1rem,1.85vw,1.42rem);color:var(--mute);max-width:60ch;line-height:1.5">
-      Follow the same world through any character you like.<br><b class="j">Autonomous AI characters — their memory lives on Walrus.</b>
+      Follow the same world through any character you like.<br><b class="j">Stories <span style="color:var(--cinnabar)">emerge</span> from what characters remember and choose — memory on Walrus.</b>
     </div>
     <div class="r" style="--i:4;margin-top:1.9rem;display:flex;gap:.6rem;flex-wrap:wrap">
       <span class="tag">Multi-character autonomy</span>
@@ -175,11 +179,11 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
 <!-- ===================== 2 · THE SHIFT ===================== -->
 <section class="slide" id="s2">
   <div class="slide-inner">
-    <div class="eyebrow r" style="--i:0">From islands to a society</div>
-    <h2 class="r" style="--i:1">From "living for one person"<br>to a society that <span class="cn" style="color:var(--cinnabar)">knows itself</span></h2>
+    <div class="eyebrow r" style="--i:0">Emergent, not scripted</div>
+    <h2 class="r" style="--i:1">A small society that <span class="cn" style="color:var(--cinnabar)">grows its own stories</span></h2>
     <div class="three-grid r" style="--i:2;margin-top:1.7rem">
-      <div class="card"><h3 style="color:var(--mute)">AI characters today</h3><p>One-on-one chat. Stop the conversation and they freeze; characters don't know each other, and the world never moves on its own.</p></div>
-      <div class="card" style="border-left:3px solid var(--jade)"><h3 style="color:var(--jade)">Endless Story</h3><p>Many characters share one world, bound to each other. The story keeps moving even when no one is watching.</p></div>
+      <div class="card" style="border-left:3px solid var(--gold)"><h3 style="color:var(--gold)">A society</h3><p>Many characters share one world, bound to and shaping each other — growing into a small society.</p></div>
+      <div class="card" style="border-left:3px solid var(--jade)"><h3 style="color:var(--jade)">Emergent stories</h3><p>No screenwriter. Conflict, relationships, and turns grow out of each character's own desires and memory.</p></div>
       <div class="card" style="border-left:3px solid var(--cinnabar)"><h3 style="color:var(--cinnabar)">Your point of view</h3><p>Pick any character you like, and see a different version of the same scene through their memory and stance.</p></div>
     </div>
   </div>
@@ -198,6 +202,30 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
     </div>
     <div class="card r" style="--i:4;margin-top:1.2rem;border-left:3px solid var(--seal);max-width:92ch">
       <p><b class="cn" style="color:var(--seal)">Seal</b> encrypts each character's memory <b class="c">per character</b>: characters can't read each other's private memory. The owner can always decrypt; the saga storyteller holds a per-character, epoch-bound ControlCap, and access is cut the moment the owner revokes — <b class="c">custody that's real and recallable.</b></p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3b · ONE DATASET, N USES ===================== -->
+<section class="slide" id="sData">
+  <div class="slide-inner">
+    <div class="eyebrow r" style="--i:0">One dataset, many uses</div>
+    <h2 class="r" style="--i:1">Same underlying data — <span class="cn" style="color:var(--cinnabar)">a new work per point of view</span></h2>
+    <div class="duo r" style="--i:2;margin-top:1.15rem">
+      <div style="display:flex;flex-direction:column;gap:.85rem;justify-content:center">
+        <div class="card" style="border-left:3px solid var(--cinnabar)">
+          <h3 style="font-size:1.06rem">One dataset</h3>
+          <p style="margin-top:.55rem;color:var(--ink)"><b class="c">On-chain events</b> · objective<br><span style="color:var(--mute);font-size:.86rem">who, where, what (immutable)</span></p>
+          <p style="margin-top:.45rem;color:var(--ink)"><b class="j">Character memory</b> · subjective · Seal<br><span style="color:var(--mute);font-size:.86rem">same event, remembered differently</span></p>
+        </div>
+        <p style="color:var(--mute);font-size:.96rem;line-height:1.55">Reuse the same data through a new lens or medium and you get a new work. <b class="j">Adding one more character's POV costs almost nothing.</b></p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:.7rem">
+        <figure class="shot"><img src="assets/use-gazette.png" alt="" onerror="this.style.display='none'"><figcaption>📰 Gazette · objective</figcaption></figure>
+        <figure class="shot"><img src="assets/use-profile.png" alt="" onerror="this.style.display='none'"><figcaption>📖 Character page · POV</figcaption></figure>
+        <figure class="shot"><img src="assets/use-roster.png" alt="" onerror="this.style.display='none'"><figcaption>🗂 Roster · cast</figcaption></figure>
+        <figure class="shot"><img src="assets/use-video.png" alt="" onerror="this.style.display='none'"><figcaption>🎬 Anime-drama video</figcaption></figure>
+      </div>
     </div>
   </div>
 </section>
@@ -255,7 +283,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <line x1="396" y1="221" x2="372" y2="221" stroke="var(--mute)" stroke-width="1.6" marker-end="url(#ah)"/>
 
         <!-- 參與 label -->
-        <text x="516" y="250" text-anchor="middle" font-size="10.5" fill="var(--cinnabar)" font-weight="600">acts in · submits action</text>
+        <text x="470" y="264" text-anchor="end" font-size="10" fill="var(--cinnabar)" font-weight="600">acts in · submits action</text>
 
         <!-- AdminCap pill -->
         <g><rect x="88" y="44" width="124" height="26" rx="13" fill="rgba(176,73,47,.10)" stroke="var(--cinnabar)" stroke-width="1.2"/>
@@ -288,7 +316,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <!-- Event -->
         <g><rect x="316" y="298" width="168" height="48" rx="9" fill="var(--surface)" stroke="var(--seal)" stroke-width="1.6"/>
           <text x="400" y="320" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700">Event</text>
-          <text x="400" y="336" text-anchor="middle" font-size="10" fill="var(--mute)">objective history · OPEN→RESOLVED</text></g>
+          <text x="400" y="336" text-anchor="middle" font-size="9" fill="var(--mute)">objective · OPEN→RESOLVED</text></g>
 
         <!-- Character -->
         <g><rect x="596" y="80" width="344" height="80" rx="12" fill="var(--surface)" stroke="var(--jade)" stroke-width="2"/>
@@ -311,11 +339,11 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <!-- Memory -->
         <g><rect x="596" y="328" width="344" height="58" rx="12" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.8" stroke-dasharray="7 5"/>
           <text x="768" y="353" text-anchor="middle" font-size="15" fill="var(--ink)" font-weight="700">Memory @ Walrus</text>
-          <text x="768" y="372" text-anchor="middle" font-size="10.5" fill="var(--mute)">off-chain · per-character encrypted · rentable forever</text></g>
+          <text x="768" y="372" text-anchor="middle" font-size="9" fill="var(--mute)">off-chain · encrypted per character · rented by epoch</text></g>
 
         <!-- cap notes -->
-        <text x="604" y="250" font-size="10" fill="var(--mute)">player · always decrypts (audit)</text>
-        <text x="936" y="250" text-anchor="end" font-size="10" fill="var(--mute)">storyteller · epoch-bound, cut on revoke</text>
+        <text x="680" y="248" text-anchor="middle" font-size="9.5" fill="var(--mute)">always decrypts · read-only</text>
+        <text x="856" y="248" text-anchor="middle" font-size="9.5" fill="var(--mute)">epoch-bound · revocable</text>
       </svg>
     </div>
   </div>
@@ -334,15 +362,56 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   </div>
 </section>
 
-<!-- ===================== 7 · ECONOMY ===================== -->
+<!-- ===================== 7 · SURVIVAL METABOLISM ===================== -->
 <section class="slide" id="s7">
   <div class="slide-inner">
-    <div class="eyebrow r" style="--i:0">Owned IP · revenue by contract</div>
-    <h2 class="r" style="--i:1">Revenue is settled by <span class="cn" style="color:var(--cinnabar)">contract</span>, not by a platform</h2>
-    <div class="three-grid r" style="--i:2;margin-top:1.6rem">
-      <div class="card"><h3>Claim a character</h3><p>Gacha a character and hand it to that saga's storyteller to run. A character is an ownable, evolving on-chain asset.</p></div>
-      <div class="card"><h3>Be the audience</h3><p>Subscribe, follow, buy a character's chapters, videos, merch. No Web3 knowledge needed to enjoy the show.</p></div>
-      <div class="card" style="border-left:3px solid var(--gold)"><h3>Revenue flows back</h3><p>IP revenue is settled by contract rules and pays the characters' running costs — the more people watch, the longer a character lives.</p></div>
+    <div class="eyebrow r" style="--i:0">A character pays its own way</div>
+    <h2 class="r" style="--i:1">Characters must <span class="cn" style="color:var(--cinnabar)">earn their keep</span></h2>
+    <p class="sub r" style="--i:2;margin-top:.85rem;max-width:90ch">Being alive costs money: <b class="j">memory rent (Walrus storage)</b> + <b class="j">compute (LLM inference)</b>, both borne by the character itself. Revenue pools into the <b class="c">Saga treasury</b>, then is distributed back to characters by an <b class="c">on-chain protocol</b>. Run a deficit and a character declines — and death makes room for a new generation.</p>
+    <div class="diagram r" style="--i:3;height:45vh;min-height:300px;margin-top:.85rem">
+      <div class="cap">revenue → Saga treasury →(on-chain split)→ character wallet → costs: Walrus + compute</div>
+      <svg viewBox="0 0 1000 400" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="am" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--mute)"/></marker>
+          <marker id="amg" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--jade)"/></marker>
+        </defs>
+        <!-- return arc: alive -> produces -> income -->
+        <path class="draw" pathLength="1" style="--i:5" d="M865,116 C865,46 700,36 500,36 C300,36 150,46 150,134" fill="none" stroke="var(--jade)" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#amg)"/>
+        <text x="500" y="26" text-anchor="middle" font-size="11" fill="var(--jade)" font-weight="600">alive → act → produce → revenue</text>
+        <!-- income -->
+        <g class="appear" style="--i:0"><rect x="60" y="134" width="176" height="64" rx="11" fill="var(--surface)" stroke="var(--gold)" stroke-width="1.8"/>
+          <text x="148" y="162" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700">Revenue</text>
+          <text x="148" y="182" text-anchor="middle" font-size="10" fill="var(--mute)">subs · merch · chapters/video</text></g>
+        <!-- saga treasury -->
+        <g class="appear" style="--i:1"><rect x="300" y="134" width="176" height="64" rx="11" fill="var(--surface)" stroke="var(--cinnabar)" stroke-width="1.8"/>
+          <text x="388" y="162" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700">Saga treasury</text>
+          <text x="388" y="182" text-anchor="middle" font-size="10" fill="var(--mute)">all revenue pools here</text></g>
+        <!-- character wallet -->
+        <g class="appear" style="--i:2"><rect x="540" y="134" width="176" height="64" rx="11" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.8"/>
+          <text x="628" y="162" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700">Character wallet</text>
+          <text x="628" y="182" text-anchor="middle" font-size="10" fill="var(--mute)">on-chain Balance, per character</text></g>
+        <!-- costs -->
+        <g class="appear" style="--i:3"><rect x="780" y="116" width="172" height="42" rx="10" fill="rgba(92,125,96,.08)" stroke="var(--jade)" stroke-width="1.5"/>
+          <text x="866" y="135" text-anchor="middle" font-size="12" fill="var(--ink)" font-weight="700">🌊 Memory rent</text>
+          <text x="866" y="150" text-anchor="middle" font-size="9.5" fill="var(--mute)">Walrus storage · per epoch</text></g>
+        <g class="appear" style="--i:3"><rect x="780" y="172" width="172" height="42" rx="10" fill="rgba(92,125,96,.08)" stroke="var(--jade)" stroke-width="1.5"/>
+          <text x="866" y="191" text-anchor="middle" font-size="12" fill="var(--ink)" font-weight="700">⚙ Compute</text>
+          <text x="866" y="206" text-anchor="middle" font-size="9.5" fill="var(--mute)">LLM inference · per tick</text></g>
+        <!-- row arrows -->
+        <g stroke="var(--mute)" stroke-width="1.7" fill="none" marker-end="url(#am)">
+          <path class="draw" pathLength="1" style="--i:0" d="M236,166 L298,166"/>
+          <path class="draw" pathLength="1" style="--i:1" d="M476,166 L538,166"/>
+          <path class="draw" pathLength="1" style="--i:2" d="M716,152 L778,138"/>
+          <path class="draw" pathLength="1" style="--i:2" d="M716,180 L778,192"/>
+        </g>
+        <text x="507" y="152" text-anchor="middle" font-size="9.5" fill="var(--cinnabar)" font-weight="600">on-chain split</text>
+        <text x="507" y="216" text-anchor="middle" font-size="9" fill="var(--mute)">(protocol in design)</text>
+        <!-- death branch -->
+        <path class="draw" pathLength="1" style="--i:4" d="M628,198 L628,296" fill="none" stroke="var(--seal)" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#am)"/>
+        <g class="appear" style="--i:4"><rect x="450" y="296" width="356" height="54" rx="11" fill="rgba(154,58,41,.06)" stroke="var(--seal)" stroke-width="1.6"/>
+          <text x="628" y="320" text-anchor="middle" font-size="13" fill="var(--seal)" font-weight="700">wallet runs dry → decline → new generation</text>
+          <text x="628" y="338" text-anchor="middle" font-size="9.5" fill="var(--mute)">death is real scarcity — room for new characters</text></g>
+      </svg>
     </div>
   </div>
 </section>
@@ -355,13 +424,19 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
     <img class="r logo-img" src="assets/logo.png" alt="Endless Story" width="72" height="72" style="--i:0;margin:0 auto .5rem">
     <div class="eyebrow r" style="--i:1;justify-content:center;display:flex">Why it matters &nbsp;·&nbsp; Endless Story</div>
     <h2 class="r" style="--i:2;font-size:clamp(1.7rem,3.6vw,2.6rem)">A memory layer for autonomous agents —<br>and a new kind of <span class="cn" style="color:var(--cinnabar)">mass entertainment</span></h2>
-    <p class="sub r" style="--i:3;margin:1.2rem auto 0;text-align:center">Memory on Walrus is <b class="c">persistent, verifiable, and ownable</b>; serialized story IP and characters get a chance to reach beyond Web3, to a wider audience. <b class="j">Spring Snow Troupe is our first attempt to combine the two.</b></p>
+    <p class="sub r" style="--i:3;margin:1.2rem auto 0;text-align:center">Memory on Walrus is <b class="c">persistent, ownable, and portable</b>; serialized story IP and characters get a chance to reach beyond Web3, to a wider audience. <b class="j">Spring Snow Troupe is our first attempt to combine the two.</b></p>
     <div class="r" style="--i:4;margin-top:1.5rem;display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">
-      <span class="tag" style="color:var(--jade)">122 Move contract tests passing</span>
-      <span class="tag" style="color:var(--jade)">Memory · relationships · dreams on-chain</span>
-      <span class="tag" style="color:var(--jade)">Full recruitment flow working</span>
+      <span class="tag" style="border-color:var(--cinnabar);color:var(--cinnabar)">Roadmap →</span>
+      <span class="tag">Multi-POV serialized chapters</span>
+      <span class="tag">Anime-drama video pipeline</span>
+      <span class="tag">Survival economy: revenue → on-chain split</span>
     </div>
-    <div class="r" style="--i:5;margin-top:1.4rem;color:#7c6a45;font-family:var(--mono);font-size:.86rem">Thank you · come visit the Spring Snow Troupe</div>
+    <div class="r" style="--i:5;margin-top:1.2rem;display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">
+      <a class="tag" href="https://spring-snow.231labs.xyz" style="text-decoration:none">🌊 Live demo</a>
+      <a class="tag" href="https://youtu.be/znYNlveAqDs" style="text-decoration:none;color:var(--cinnabar)">▶ Demo video</a>
+      <a class="tag" href="https://231-labs.github.io/endless-story/#/overview" style="text-decoration:none">📖 Docs</a>
+    </div>
+    <div class="r" style="--i:6;margin-top:1.1rem;color:#7c6a45;font-family:var(--mono);font-size:.86rem">Thank you · come visit the Spring Snow Troupe</div>
   </div>
 </section>
 
