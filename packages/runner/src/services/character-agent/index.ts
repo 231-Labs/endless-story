@@ -80,6 +80,8 @@ export type {
     GovernanceResult,
     ManagerBond,
 } from './governance.js';
+export { decideProposalAction } from './proposal.js';
+export type { DecideProposalInput, ProposalResult, ProposalScope } from './proposal.js';
 export {
     buildAskSystemPrompt,
     buildAskUserPrompt,
