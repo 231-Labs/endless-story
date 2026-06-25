@@ -42,7 +42,9 @@ export function DeployPanel({ initialStatus, presets }: Props) {
                       ? ['--gas-budget', '1000000000', '--force-republish']
                       : script === 'upgrade'
                         ? ['--gas-budget', '2000000000']
-                        : ['--story-id', storyId];
+                        : script === 'create-mint-config'
+                          ? []
+                          : ['--story-id', storyId];
             const res = await runCliScript({ script, env, extraArgs });
             const combined = `--- stdout ---\n${res.stdout}\n--- stderr ---\n${res.stderr}\n--- exit ${res.code} in ${res.durationMs}ms`;
             setLog(combined);
@@ -270,6 +272,12 @@ export function DeployPanel({ initialStatus, presets }: Props) {
                         sub="package upgrade（保留世界）+ 寫 runtime manifest，線上免重 build"
                         onClick={() => handleRun('upgrade')}
                         disabled={isPending || !status.isDeployed}
+                    />
+                    <ActionButton
+                        label="鑄造 config"
+                        sub="在現有 saga 建 StillMintConfig（劇照自助鑄造費）+ 寫 manifest；種世界已自動含此步"
+                        onClick={() => handleRun('create-mint-config')}
+                        disabled={isPending || !status.isBootstrapped}
                     />
                     <ActionButton
                         label="③ seed 職缺"
