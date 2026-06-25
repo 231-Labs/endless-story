@@ -209,7 +209,7 @@ export async function anchorReflectionText(
     try {
         put = await memwalBlob.putBlob(new TextEncoder().encode(text), {
             network: 'testnet',
-            epochs: 5,
+            epochs: 30,
             contentType: 'text/markdown',
         });
     } catch {

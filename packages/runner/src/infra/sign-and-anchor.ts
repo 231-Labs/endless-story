@@ -72,7 +72,7 @@ export async function signAndAnchor(input: SignAndAnchorInput): Promise<SignAndA
     // 2. Upload to Walrus.
     const put = await memwalBlob.putBlob(input.content, {
         network: input.walrusNetwork ?? 'testnet',
-        epochs: input.walrusEpochs ?? 5,
+        epochs: input.walrusEpochs ?? 30,
         contentType: input.contentType,
     });
 
@@ -151,7 +151,7 @@ export async function signAndAnchorBatch(
             const hashBytes = sha256(it.content);
             const put = await memwalBlob.putBlob(it.content, {
                 network: opts.walrusNetwork ?? 'testnet',
-                epochs: opts.walrusEpochs ?? 5,
+                epochs: opts.walrusEpochs ?? 30,
                 contentType: it.contentType,
             });
             return {

@@ -27,7 +27,7 @@ These rows describe code paths, not a guarantee that every external service is h
 | On-chain character economy | Move modules and generated SDK bindings for balances, owner funding, transfers, and settlement. | The product UI still reads a process-local settlement shadow; accepted gifts are applied in SETTLE within the same tick, but on-chain `transfer_between_characters` is not executed yet. |
 | Kiosk still trading | Mint, list, purchase, delist, and proceeds helpers plus buyer and admin UI paths. | Requires the active package, TransferPolicy, StillRegistry, Kiosk ids, wallet funding, and a verified live transaction. |
 | Personal chamber | PersonalVault creation and discovery are wired. | Saved arrangements remain local until the `decorate` write path is connected in the UI. |
-| Automatic Walrus renewal | Assets carry `autoRenew` metadata and can be extended through the asset service. | No renewal scheduler currently consumes that flag; renewal is manual. |
+| Automatic Walrus renewal | The asset service runs a renewal sweep that extends near-expiry `autoRenew` assets, driven by an in-process interval and a `POST /api/assets/renew-due` endpoint, with a wallet-balance floor and unit tests. | Not yet exercised against a funded publisher wallet on the VPS; the in-process sweeper is gated by `RENEW_SWEEP_INTERVAL_MS`. |
 | Parallel event simulation | Parallel events, attention coupling, and rival gravity exist behind controls with pure tests. | They are not the default tick path and still need sustained live-world validation. |
 | LLM event framing | Sanitized LLM framing with deterministic fallback. | Remains opt-in because it changes language quality, cost, and latency rather than protocol correctness. |
 
@@ -35,7 +35,7 @@ These rows describe code paths, not a guarantee that every external service is h
 
 1. Make on-chain economy balances the product read source after one complete wage, cost, owner-funding, and aid cycle is executed and verified.
 2. Complete PersonalVault layout writes and verify the Kiosk flow with connected wallets.
-3. Add a real renewal scheduler for assets marked `autoRenew`.
+3. Validate the renewal sweep against a funded publisher wallet on the VPS and add low-balance alerting beyond the dashboard.
 4. Run longer live-world trials for parallel events, attention coupling, rival gravity, and pacing.
 5. Turn the strongest chapters and troupe productions into a repeatable video pipeline.
 6. Design Saga succession and long-term archival without confusing ownership of a character with ownership of its Walrus Blob objects.
