@@ -37,11 +37,13 @@ import {
     type ScenePovInput,
     type EvolveRelationshipsResult,
 } from '../relationship-evolve';
-// 3) The framing-override seam on the event planner.
+// 3) The framing-override + saga-soul seams installed before the ticks run.
 import { setFramingOverride } from '@/lib/chain/event-planner';
+import { setSagaSoulOverride } from '@/lib/chain/saga-soul-override';
 // 4) The tick loop + memory test hooks.
 import { runTickLoopAction } from '@/lib/actions/tick-loop';
 import { __drainNarrativeRecallHits, __resetNarrativeMemory } from '@/lib/chain/memory';
+import { seedGenesisMemories } from './seed-genesis-memories';
 import { readdirSync, readFileSync } from 'node:fs';
 import type { RelationshipTone } from '@endless-story/shared';
 import type {
@@ -58,6 +60,18 @@ import type {
  * Identical channel to narrative.harness.ts: the cut + gazette run in background-style
  * steps and dump to files; read the new ones each tick. */
 const seenDumps = new Set<string>();
+
+/** Wall-clock gap (ms) inserted BETWEEN ticks so the spine event ages past the
+ *  floored 1000ms window and resolves → weaves a 回. Default 1200ms (> the 1000ms
+ *  window) so age advances ≥1 per tick and reaches minTicks within a few ticks.
+ *  Override via ES_LAB_TICK_GAP_MS (set 0 to disable, e.g. when the LLM already
+ *  paces ticks seconds apart). See the gap site in runExperiment for the full why. */
+const TICK_GAP_MS = (() => {
+    const raw = process.env.ES_LAB_TICK_GAP_MS;
+    if (raw == null || raw === '') return 1200;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 1200;
+})();
 
 function readNewDumps(): CapturedChapter[] {
     if (!CHAPTER_DUMP_DIR) return [];
@@ -216,9 +230,40 @@ export async function runExperiment(
     } else {
         setFramingOverride(null);
     }
+    // Install this run's prose colour + closeness (null keeps the genre default).
+    setSagaSoulOverride(config.story?.soul ?? null);
 
     const usedRealLLM = hasTextProviderKey();
     const perTick: TickRecord[] = [];
+
+    // GENESIS MEMORIES — give the cast a past BEFORE tick 1. Without this each
+    // character begins with an empty recall store (the lab resets it above), so a POV
+    // can't recall「入班前的舊情」— 柳生春/蘇映雪's 暗戀 had no 來歷. Seeds SELF「我是誰」
+    // (always) + CROSS old-flame (real-LLM only) into the SAME store the tick recalls
+    // from. Gated to the narrative-memory path (`ES_NARRATIVE=1`) + an evolving settle
+    // ('none' = control: chapters only, no relationship overlay → leave it blank-slate).
+    if (process.env.ES_NARRATIVE === '1' && config.settle !== 'none') {
+        const seedCast = [...harnessChain.characters.values()].map((c) => ({
+            id: c.id,
+            name: c.name,
+            role: c.role,
+            description: c.description,
+        }));
+        const g = await seedGenesisMemories(seedCast).catch((e) => {
+            onTick(0, config.ticks, `genesis seed threw: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+        });
+        if (g) {
+            onTick(
+                0,
+                config.ticks,
+                `genesis seeded: self=${g.selfSeeded} cross=${g.crossSeeded}` +
+                    (g.crossProposed ? `/${g.crossProposed}` : '') +
+                    (g.crossSkipReason ? ` (cross ${g.crossSkipReason})` : '') +
+                    (g.error ? ` err=${g.error.slice(0, 80)}` : ''),
+            );
+        }
+    }
 
     try {
         for (let i = 0; i < config.ticks; i++) {
@@ -263,10 +308,28 @@ export async function runExperiment(
                 `chapters=${chapters.length} edges=${metrics.edgeCount} ` +
                     `seeded=${seededThisTick} recall=${recallHits}`,
             );
+
+            // Real wall-clock gap between ticks so the spine event AGES and RESOLVES
+            // → weaves a 回 (合本). The spine derives an event's age from wall-clock,
+            // not a per-process counter: age = clockTickOf(now) − clockTickOf(openedAt)
+            // with a window of SPINE_TICK_WINDOW_MS, and event-spine.ts FLOORS that
+            // window at 1000ms (Math.max(1000, …)) — so the harness's ES_SPINE_TICK_
+            // WINDOW_MS=1 is clamped to 1000ms and the event needs minTicks≈2 *real
+            // seconds* to resolve. The fake smoke runs a whole tick in <1ms, so without
+            // a gap every event stays OPEN forever (resolve=0) and no 回 ever weaves —
+            // the "0 篇合本" gap. A ~1.2s gap lets age reach minTicks within a few ticks.
+            // Under a real LLM each tick already takes many seconds, so this is a no-op
+            // there in practice; set ES_LAB_TICK_GAP_MS=0 to disable. Skip after the
+            // last tick (nothing left to age).
+            if (i < config.ticks - 1) {
+                const gapMs = TICK_GAP_MS;
+                if (gapMs > 0) await new Promise((r) => setTimeout(r, gapMs));
+            }
         }
     } finally {
-        // Always clear the override so a later run in the same process starts clean.
+        // Always clear the overrides so a later run in the same process starts clean.
         setFramingOverride(null);
+        setSagaSoulOverride(null);
     }
 
     const finalGraph = perTick.length ? perTick[perTick.length - 1].graph : { nodes: [], edges: [] };

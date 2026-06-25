@@ -63,6 +63,7 @@ import { chooseContestWinner, resolveContestSpec, toContender } from '@/lib/chai
 import type { WorldAttrs } from '@/lib/chain/saga-skills';
 import { createBudgetEventAction, dealHandAction } from './budget-event';
 import { compileEventChapterAction } from './compile-event-chapter';
+import { dumpChapter } from '@/lib/chain/chapter-dump';
 import type { TickStoryletResult } from './tick-loop-types';
 
 type Admin = { client: SuiClient; signer: Keypair };
@@ -390,6 +391,14 @@ export async function spineResolveAndWeave(
         wove = cut.anchored;
         skip = cut.skipReason ?? '';
         errMsg = cut.error ?? '';
+        // Mirror the immediate-mode cut (tick-loop ④) onto the chapter-dump channel —
+        // the spine path was the ONE woven 回 that never dumped, so a localhost /
+        // observatory run reading ES_CHAPTER_DUMP_DIR captured POVs but never the cut.
+        // Inert in production (no-op unless ES_CHAPTER_DUMP_DIR is set).
+        dumpChapter(
+            { kind: 'cut', day, name: base.sceneName, note: ev.label },
+            cut.chapter,
+        );
     } catch (err) {
         errMsg = err instanceof Error ? err.message : String(err);
     }

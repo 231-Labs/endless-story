@@ -6,10 +6,12 @@
 import type { ExperimentConfig } from '../types';
 import { affectionYearning } from './affection-yearning';
 import { partnershipRivalry } from './partnership-rivalry';
+import { warmSmall } from './warm-small';
 
 export const PRESETS: Record<string, ExperimentConfig> = {
     [affectionYearning.name]: affectionYearning,
     [partnershipRivalry.name]: partnershipRivalry,
+    [warmSmall.name]: warmSmall,
 };
 
 /** Look up a preset by name (returns null if unknown). */

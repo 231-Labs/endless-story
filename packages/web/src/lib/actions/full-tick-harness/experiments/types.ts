@@ -85,6 +85,10 @@ export interface ExperimentStory {
     scenes?: { name: string }[];
     /** Concrete founding cast (with persona). When set, replaces the anonymous shells. */
     cast?: FoundingCharSpec[];
+    /** Optional saga soul — prose colour (`toneRegister`) + closeness (`emotionalStance`).
+     *  Installed via the soul-override seam for the run's POVs; omit to keep the genre
+     *  default (restrained / faintly-cold). Lets a preset set its own narrative warmth. */
+    soul?: SagaSoul;
 }
 
 export interface ExperimentConfig {
@@ -128,6 +132,7 @@ export interface ExperimentConfig {
 /* ── result shape (produced by run-experiment, consumed by render-report) ──────── */
 
 import type { RelationshipTone } from '@endless-story/shared';
+import type { SagaSoul } from '@endless-story/runner';
 
 /** One node in a relationship-graph snapshot. */
 export interface GraphNode {
