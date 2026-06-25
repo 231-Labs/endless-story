@@ -15,12 +15,12 @@
  */
 import * as path from 'node:path';
 import * as url from 'node:url';
+import * as fs from 'node:fs';
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, type SuiNetwork } from '@endless-story/shared/contract-ids';
 import { makeSuiClient, tx as endlessTx } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
-import { assertActiveEnv } from '../src/lib/sui-publish';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
 
 /** 1 ENDLESS — currency has 6 decimals (mirrors still::DEFAULT_MINT_FEE). */
@@ -44,7 +44,10 @@ async function main() {
     );
   }
 
-  assertActiveEnv(env);
+  // No assertActiveEnv: this is a purely programmatic tx (admin key + RPC by
+  // --env), so the local `sui client` active-env is irrelevant. The
+  // contract-ids.network === env check above already guards a wrong network,
+  // and skipping it lets this run in-container (admin button) with no sui CLI.
   const signer = loadKeypair();
   const client = makeSuiClient({ network: env });
 
@@ -82,34 +85,50 @@ async function main() {
   const here = path.dirname(url.fileURLToPath(import.meta.url));
   const repoRoot = path.resolve(here, '..', '..', '..');
   const sharedSrcDir = path.join(repoRoot, 'packages', 'shared', 'src');
+  const deployedAt = new Date().toISOString();
+  const snapshot = {
+    network: d.network,
+    packageId: d.packageId,
+    latestPackageId: d.latestPackageId,
+    adminCapId: d.adminCapId,
+    worldId: d.worldId,
+    locationIds: d.locationIds,
+    sagaId: d.sagaId,
+    storytellerCapId: d.storytellerCapId,
+    sceneIds: d.sceneIds,
+    faucetId: d.faucetId,
+    faucetAdminCapId: d.faucetAdminCapId,
+    dreamConfigId: d.dreamConfigId,
+    dreamAdminCapId: d.dreamAdminCapId,
+    stillRegistryId: d.stillRegistryId,
+    stillTransferPolicyId: d.stillTransferPolicyId,
+    stillMintConfigId,
+    demoCharacters: d.demoCharacters,
+    storyId: d.storyId,
+  };
   console.log('\n[contract-ids] writing snapshot…');
-  writeContractIds(
-    sharedSrcDir,
-    {
-      network: d.network,
-      packageId: d.packageId,
-      latestPackageId: d.latestPackageId,
-      adminCapId: d.adminCapId,
-      worldId: d.worldId,
-      locationIds: d.locationIds,
-      sagaId: d.sagaId,
-      storytellerCapId: d.storytellerCapId,
-      sceneIds: d.sceneIds,
-      faucetId: d.faucetId,
-      faucetAdminCapId: d.faucetAdminCapId,
-      dreamConfigId: d.dreamConfigId,
-      dreamAdminCapId: d.dreamAdminCapId,
-      stillRegistryId: d.stillRegistryId,
-      stillTransferPolicyId: d.stillTransferPolicyId,
-      stillMintConfigId,
-      demoCharacters: d.demoCharacters,
-      storyId: d.storyId,
-    },
-    new Date().toISOString(),
-  );
+  writeContractIds(sharedSrcDir, snapshot, deployedAt);
 
-  console.log('\n[done] StillMintConfig live + contract-ids updated.');
-  console.log('   Rebuild + redeploy web so the new id ships; then fans can self-mint.');
+  // Runtime manifest: lets a running web container read the new config id
+  // WITHOUT a rebuild (DEPLOYMENT_MANIFEST_PATH on a mounted volume). This is
+  // what makes the admin-panel button take effect on the live site.
+  const manifestPath = process.env.DEPLOYMENT_MANIFEST_PATH?.trim();
+  if (manifestPath) {
+    try {
+      fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+      fs.writeFileSync(manifestPath, JSON.stringify({ ...snapshot, deployedAt }, null, 2), 'utf-8');
+      console.log(`[manifest] wrote runtime deployment manifest: ${manifestPath}`);
+    } catch (e) {
+      console.warn(`[manifest] failed to write ${manifestPath}: ${(e as Error).message}`);
+    }
+  }
+
+  console.log('\n[done] StillMintConfig live.');
+  console.log(
+    manifestPath
+      ? '   Runtime manifest written — the live site adopts the new id on next page load.'
+      : '   Rebuild + redeploy web so the new id ships; then fans can self-mint.',
+  );
 }
 
 main().catch((e) => {
