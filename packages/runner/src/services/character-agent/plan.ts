@@ -38,6 +38,15 @@ export interface PlanInput {
      * PERCEIVE step the loop was missing (the perceive step, Step 1).
      */
     situation?: string;
+    /**
+     * This character's standing FEELINGS toward co-present others — directed
+     * relationship edges rendered as 「對蘇映雪:戀慕很深…」. Until now plan perceived
+     * the world (situation) but never its own heart, so it could only ever scheme over
+     * stakes, never over people. We state the BOND, not the deed: whether to act on it
+     * (把話說開 / 疏遠 / 邀同住 …) and how is deliberately left to the LLM — the point is
+     * to watch whether an open plan grows a relational move on its own, unprompted.
+     */
+    relationshipPressure?: string[];
     /** Public saga roster lines: name / role / scene. Not private memory. */
     rosterContext?: string[];
 }
@@ -57,6 +66,7 @@ export function buildSystemPrompt(): string {
         '**鐵則**:',
         '1. **承接舊計畫,但大事必轉向**:若下方有「你先前的打算」,在它的基礎上微調/推進,不要無故重來。**但「當下處境」裡若有〔山雨欲來〕的危機、〔風聲〕剛發生的事、或牽動你利害的人就在同場,這就是大事——你的眼下打算/未竟之事必須正面回應它(接招、趨避、或改變部署),不能照舊當沒看見。** 越是攸關你身家性命的事(尤其班主對戲班存亡),越要在計畫裡顯出來。',
         '2. **用你的記憶與性格定目標**:目標要像「這個人」會有的執念,不是泛泛的好聽話。處境是客觀的,但「你怎麼接這個招」要從你的過往與性格長出來——同一個危機,不同的人有不同的應法。',
+        '2b. **關係也是你能投入的方向,不只是達成別的事的手段**:若下方有你的「牽掛」,你大可為了某個人去調整、甚至放下手上的盤算——為她而不爭、想多與她相處、想弄清她待你的心意、想把話跟她說開,把某個人放在物事(頭牌、戲份、輸贏)之前,都是合法的目標,不是軟弱。要不要這樣、放多重,照你自己的心去權衡,別把情分一律當成搶別的東西的工具。',
         '3. 三個層次:**長期目標**(數日~數月的執念,1 句)、**眼下打算**(這一兩日要做的事,1 句)、**未竟之事**(2-3 個具體小目標)。',
         '4. 第一人稱、具體、可被行動驗證。不要心靈雞湯、不要現代詞彙。',
         '5. **身份不得漂移**:行當不是「班主」時,不得自稱班主、老板、當家的、掌事人;只能從自己的行當與眼前利害長出目標。',
@@ -87,6 +97,11 @@ export function buildUserPrompt(input: PlanInput): string {
         ? `\n## 你先前的打算(在此基礎上推進)\n${input.currentPlan}`
         : '';
     const sitBlock = input.recentSituation ? `\n## 近來發生\n${input.recentSituation}` : '';
+    const relBlock =
+        input.relationshipPressure && input.relationshipPressure.length > 0
+            ? '\n## 你心裡的牽掛（你對在場這些人的情分；它會牽動你想怎麼走，但要不要動、怎麼動，是你自己的事）\n' +
+              input.relationshipPressure.map((r) => `- ${r}`).join('\n')
+            : '';
     const rosterBlock =
         input.rosterContext && input.rosterContext.length > 0
             ? '\n## 同 saga 公開名冊（只作公開身份與位置，不代表你私下熟識）\n' +
@@ -100,6 +115,7 @@ export function buildUserPrompt(input: PlanInput): string {
         `- 所屬:${input.sagaName}`,
         `- 此刻:${input.dayLabel}`,
         situationBlock,
+        relBlock,
         memBlock,
         planBlock,
         sitBlock,
