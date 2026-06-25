@@ -47,6 +47,7 @@ export {
     type CharacterSnapshot,
     type PovPromptInput,
     type SagaSoul,
+    type EmotionalStance,
 } from './prompt.js';
 
 export interface RunCharacterWorkerInput {
@@ -292,14 +293,13 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         }
     }
 
-    // Private「燈下」coda — append a short off-stage interior monologue so the
-    // reader sees this character's honest read on the event, the people in it,
-    // and themselves (the 內心戲 / 自省 the public scene deliberately withholds).
-    // A DIFFERENT register from the scene (reflection voice, may contradict it),
-    // so depth is added without loosening the scene's anti-cliché rules. Runs in
-    // dry-run too (the tick loop generates dry, then anchors separately). pov
-    // mode only; opt out with reflect:false.
-    if (input.reflect !== false && (input.mode ?? 'pov') === 'pov' && chapter.trim()) {
+    // Optional「燈下」coda — a short off-stage interior monologue appended after the
+    // scene behind a「---」divider. OFF by default now: the interior life is meant to
+    // live woven INTO the pov prose (see the 內心戲 directive in VOICE), not walled off
+    // in a separate段 that read as tacked-on and, under its「專挑最痛/最不體面」prompt,
+    // often darker than the scene it followed. Kept as an explicit opt-in (reflect:true)
+    // for callers that still want the split「事件客觀 / 燈下主觀」register. pov mode only.
+    if (input.reflect === true && (input.mode ?? 'pov') === 'pov' && chapter.trim()) {
         try {
             const coda = await llm.chat({
                 model: modelId,

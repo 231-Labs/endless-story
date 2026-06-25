@@ -11,6 +11,7 @@
 
 export * as director from './services/saga-director/index.js';
 export * as characterWorker from './services/character-worker/index.js';
+export type { SagaSoul, EmotionalStance } from './services/character-worker/index.js';
 export * as gazette from './services/gazette-compiler/index.js';
 export * as eventChapter from './services/event-chapter-compiler/index.js';
 export * as storyteller from './services/storyteller-chapter/index.js';
