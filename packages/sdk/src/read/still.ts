@@ -13,6 +13,38 @@ export const getStill = (client: SuiClient, stillId: string) =>
 export const getStillRegistry = (client: SuiClient, registryId: string) =>
     gen.StillRegistry.get({ client, objectId: registryId });
 
+export const getMintConfig = (client: SuiClient, configId: string) =>
+    gen.StillMintConfig.get({ client, objectId: configId });
+
+export interface MintConfigRef {
+    configId: string;
+    /** self-serve fee in ENDLESS base units (currency = 6 decimals) */
+    fee: bigint;
+    paused: boolean;
+    sagaId: string;
+}
+
+/**
+ * Read the self-serve mint config (fee + pause state). Returns null if the
+ * object is missing — e.g. the upgrade ran but `create_mint_config` hasn't,
+ * so callers can fall back to the free admin path / hide the paid affordance.
+ */
+export async function getMintConfigRef(
+    client: SuiClient,
+    configId: string,
+): Promise<MintConfigRef | null> {
+    const res = await client.getObject({ id: configId, options: { showContent: true } });
+    const content = res.data?.content;
+    if (content?.dataType !== 'moveObject') return null;
+    const f = (content as { fields: Record<string, unknown> }).fields;
+    return {
+        configId,
+        fee: BigInt(f.fee as string | number),
+        paused: Boolean(f.paused),
+        sagaId: f.saga_id as string,
+    };
+}
+
 export interface StillRef {
     stillId: string;
     title: string;

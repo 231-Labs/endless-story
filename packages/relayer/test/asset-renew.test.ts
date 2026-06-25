@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renewDue, type RenewConfig, type RenewStore, type RenewWalrus } from "../src/asset-renew.ts";
+import { renewDue, planExtend, type RenewConfig, type RenewStore, type RenewWalrus } from "../src/asset-renew.ts";
 import type { WalrusAsset } from "../src/asset-types.ts";
 
 const CONFIG: RenewConfig = { thresholdEpochs: 5, extendEpochs: 30, walletMinWal: 0, walletMinSui: 0 };
@@ -261,4 +261,49 @@ test("aborts the sweep after 5 consecutive non-expired failures", async () => {
   assert.equal(r.ok, false);
   assert.equal(r.failed.length, 5, "stops after 5 consecutive failures");
   assert.equal(extendCalls.length, 5, "no further extend attempts once the backstop trips");
+});
+
+// ── planExtend: shared cap used by the sweep + the manual /extend endpoint ──
+
+test("planExtend: normal case extends by the full requested amount", () => {
+  // endEpoch current+3 (remaining 3), max 53 → headroom 50, request 30 → 30
+  const p = planExtend(13, 10, 30, 53);
+  assert.equal(p.action, "extend");
+  assert.equal(p.epochs, 30);
+});
+
+test("planExtend: expired (remaining ≤ 0) → skip-expired, no extend", () => {
+  assert.deepEqual(planExtend(10, 10, 30, 53), { action: "skip-expired", epochs: 0 }); // remaining 0
+  assert.deepEqual(planExtend(8, 10, 30, 53), { action: "skip-expired", epochs: 0 }); // remaining -2
+});
+
+test("planExtend: high-remaining caps so the new end lands at max (no EInvalidEpochsAhead)", () => {
+  // endEpoch current+33, max 53 → headroom 20; +30 would overshoot → cap to 20 (new end = max)
+  const p = planExtend(43, 10, 30, 53);
+  assert.equal(p.action, "extend");
+  assert.equal(p.epochs, 20, "capped to the remaining headroom");
+});
+
+test("planExtend: already at/over max → skip-at-max, no extend", () => {
+  assert.deepEqual(planExtend(63, 10, 30, 53), { action: "skip-at-max", epochs: 0 }); // remaining 53 == max
+  assert.deepEqual(planExtend(70, 10, 30, 53), { action: "skip-at-max", epochs: 0 }); // beyond max
+});
+
+test("an extend that aborts with EInvalidEpochsAhead is treated as at-max (skipped, not failed)", async () => {
+  const { store } = fakeStore([asset({ id: "a", suiObjectId: "0xa", endEpoch: 12 })]);
+  const { walrus } = fakeWalrus({
+    epoch: 10,
+    extend: async () => {
+      throw new Error("walrus extend exited 1: extend_blob ... EInvalidEpochsAhead");
+    },
+  });
+
+  const r = await renewDue(store, walrus, CONFIG);
+
+  assert.equal(r.ok, true, "at-max is not a hard failure");
+  assert.equal(r.failed.length, 0);
+  assert.deepEqual(
+    r.skipped.map((x) => x.id),
+    ["a"],
+  );
 });

@@ -152,8 +152,8 @@ export async function renewDue(
       // A blob that lapsed since the epoch read aborts in assert_certified_not_expired
       // (EResourceBounds). It's dead, not a retryable failure → bucket as skipped so the
       // next sweep doesn't re-hammer it (that was the failure spam).
-      if (/EResourceBounds|assert_certified_not_expired|expired/i.test(error)) {
-        skipped.push({ id: a.id, label: a.label, reason: "expired mid-sweep — cannot extend" });
+      if (/EResourceBounds|assert_certified_not_expired|EInvalidEpochsAhead|expired/i.test(error)) {
+        skipped.push({ id: a.id, label: a.label, reason: "expired or at max lifetime — cannot extend" });
         console.warn(`${TAG} "${a.label}" (${a.id}) expired — skipping`);
         continue;
       }
@@ -179,4 +179,29 @@ export async function renewDue(
 
 function fmt(v: number | null): string {
   return v == null ? "?" : String(v);
+}
+
+export interface ExtendPlan {
+  action: "extend" | "skip-expired" | "skip-at-max";
+  /** Epochs to extend by (capped); only meaningful for action === "extend". */
+  epochs: number;
+}
+
+/**
+ * Decide how far to extend a blob without tripping the Walrus contract. Two ways `extend`
+ * aborts: an expired blob (`assert_certified_not_expired` / `EResourceBounds`) and pushing
+ * the lease past the max epochs ahead (`extend_blob` / `EInvalidEpochsAhead`). This caps the
+ * extend so the new end lands at most `currentEpoch + maxEpochs`. Shared by the sweep and the
+ * manual /extend endpoint so a click never produces a raw contract abort.
+ */
+export function planExtend(
+  endEpoch: number,
+  currentEpoch: number,
+  requestedEpochs: number,
+  maxEpochs: number,
+): ExtendPlan {
+  if (endEpoch - currentEpoch <= 0) return { action: "skip-expired", epochs: 0 };
+  const headroom = currentEpoch + maxEpochs - endEpoch; // epochs we can still add before max
+  if (headroom <= 0) return { action: "skip-at-max", epochs: 0 };
+  return { action: "extend", epochs: Math.min(requestedEpochs, headroom) };
 }

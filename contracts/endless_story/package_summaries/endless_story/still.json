@@ -7,6 +7,10 @@
   "immediate_dependencies": [
     {
       "address": "endless_story",
+      "name": "currency"
+    },
+    {
+      "address": "endless_story",
       "name": "saga"
     },
     {
@@ -16,6 +20,10 @@
     {
       "address": "std",
       "name": "string"
+    },
+    {
+      "address": "sui",
+      "name": "coin"
     },
     {
       "address": "sui",
@@ -409,9 +417,504 @@
         }
       ]
     },
-    "still_id": {
+    "mint_still_internal": {
       "source_index": 4,
       "index": 4,
+      "doc": " Shared mint body: edition bookkeeping + Still creation + event. Private,\n so every authority path (`mint_still` cap-gated / `mint_still_paid`\n fee-gated) funnels through here and editioning is identical no matter who\n pays. The registry is the single source of the saga link + edition count.",
+      "attributes": [],
+      "visibility": "Private",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "registry",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillRegistry",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "character_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "walrus_blob_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "image_url",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "title",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "still"
+            },
+            "name": "Still",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "create_mint_config": {
+      "source_index": 5,
+      "index": 5,
+      "doc": " Create + share the self-serve mint config (bootstrap, once per saga).\n Pass `default_mint_fee()` for the 1 ENDLESS default.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee",
+          "type_": "u64"
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": []
+    },
+    "set_mint_fee": {
+      "source_index": 6,
+      "index": 6,
+      "doc": " Update the self-serve fee (base units). Storyteller-gated.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillMintConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "new_fee",
+          "type_": "u64"
+        }
+      ],
+      "return_": []
+    },
+    "set_mint_paused": {
+      "source_index": 7,
+      "index": 7,
+      "doc": " Pause / resume the self-serve path (admin path unaffected). Storyteller-gated.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "cap",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "StorytellerCap",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillMintConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "paused",
+          "type_": "bool"
+        }
+      ],
+      "return_": []
+    },
+    "mint_still_paid": {
+      "source_index": 8,
+      "index": 8,
+      "doc": " Mint the next edition yourself by paying `config.fee` ENDLESS. The fee\n (not authority) gates it, so no cap is needed. Overpayment flows to the\n saga treasury — split an exact-fee coin client-side to avoid it. Returns\n the Still so the PTB transfers it to the buyer.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillMintConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "saga",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "saga"
+                  },
+                  "name": "Saga",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "registry",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillRegistry",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "payment",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "coin"
+              },
+              "name": "Coin",
+              "type_arguments": [
+                {
+                  "phantom": true,
+                  "argument": {
+                    "Datatype": {
+                      "module": {
+                        "address": "endless_story",
+                        "name": "currency"
+                      },
+                      "name": "CURRENCY",
+                      "type_arguments": []
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "character_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "sui",
+                "name": "object"
+              },
+              "name": "ID",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "walrus_blob_id",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "image_url",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "title",
+          "type_": {
+            "Datatype": {
+              "module": {
+                "address": "std",
+                "name": "string"
+              },
+              "name": "String",
+              "type_arguments": []
+            }
+          }
+        },
+        {
+          "name": "ctx",
+          "type_": {
+            "Reference": [
+              true,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "sui",
+                    "name": "tx_context"
+                  },
+                  "name": "TxContext",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "endless_story",
+              "name": "still"
+            },
+            "name": "Still",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "still_id": {
+      "source_index": 9,
+      "index": 9,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -451,8 +954,8 @@
       ]
     },
     "saga_id": {
-      "source_index": 5,
-      "index": 5,
+      "source_index": 10,
+      "index": 10,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -492,8 +995,8 @@
       ]
     },
     "character_id": {
-      "source_index": 6,
-      "index": 6,
+      "source_index": 11,
+      "index": 11,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -533,8 +1036,8 @@
       ]
     },
     "walrus_blob_id": {
-      "source_index": 7,
-      "index": 7,
+      "source_index": 12,
+      "index": 12,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -574,8 +1077,8 @@
       ]
     },
     "image_url": {
-      "source_index": 8,
-      "index": 8,
+      "source_index": 13,
+      "index": 13,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -615,8 +1118,8 @@
       ]
     },
     "title": {
-      "source_index": 9,
-      "index": 9,
+      "source_index": 14,
+      "index": 14,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -656,8 +1159,8 @@
       ]
     },
     "edition": {
-      "source_index": 10,
-      "index": 10,
+      "source_index": 15,
+      "index": 15,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -688,8 +1191,8 @@
       ]
     },
     "minted_count": {
-      "source_index": 11,
-      "index": 11,
+      "source_index": 16,
+      "index": 16,
       "doc": " Editions minted so far for a moment (0 if never minted).",
       "attributes": [],
       "visibility": "Public",
@@ -733,8 +1236,8 @@
       ]
     },
     "edition_limit": {
-      "source_index": 12,
-      "index": 12,
+      "source_index": 17,
+      "index": 17,
       "doc": " Edition cap for a moment; `none` = open edition.",
       "attributes": [],
       "visibility": "Public",
@@ -792,8 +1295,8 @@
       ]
     },
     "registry_saga_id": {
-      "source_index": 13,
-      "index": 13,
+      "source_index": 18,
+      "index": 18,
       "doc": null,
       "attributes": [],
       "visibility": "Public",
@@ -830,6 +1333,124 @@
             "type_arguments": []
           }
         }
+      ]
+    },
+    "mint_fee": {
+      "source_index": 19,
+      "index": 19,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillMintConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "u64"
+      ]
+    },
+    "mint_paused": {
+      "source_index": 20,
+      "index": 20,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillMintConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        "bool"
+      ]
+    },
+    "mint_config_saga_id": {
+      "source_index": 21,
+      "index": 21,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [
+        {
+          "name": "config",
+          "type_": {
+            "Reference": [
+              false,
+              {
+                "Datatype": {
+                  "module": {
+                    "address": "endless_story",
+                    "name": "still"
+                  },
+                  "name": "StillMintConfig",
+                  "type_arguments": []
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "return_": [
+        {
+          "Datatype": {
+            "module": {
+              "address": "sui",
+              "name": "object"
+            },
+            "name": "ID",
+            "type_arguments": []
+          }
+        }
+      ]
+    },
+    "default_mint_fee": {
+      "source_index": 22,
+      "index": 22,
+      "doc": " The 1 ENDLESS default for `create_mint_config`.",
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": [
+        "u64"
       ]
     }
   },
@@ -1175,6 +1796,145 @@
           },
           "edition": {
             "index": 4,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "StillMintConfig": {
+      "index": 5,
+      "doc": " Self-serve mint config. Shared, one per saga. Lets fans mint editions\n themselves by paying `fee` ENDLESS into the saga treasury, WITHOUT the\n StorytellerCap. The admin path (`mint_still`) stays free for automation\n and gifting. `paused` is a kill switch for the self-serve path only.",
+      "attributes": [],
+      "abilities": [
+        "Key"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "UID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "fee": {
+            "index": 2,
+            "doc": " self-serve fee in ENDLESS base units (currency = 6 decimals)",
+            "type_": "u64"
+          },
+          "paused": {
+            "index": 3,
+            "doc": null,
+            "type_": "bool"
+          }
+        }
+      }
+    },
+    "StillMintConfigCreated": {
+      "index": 6,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "config_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "saga_id": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "fee": {
+            "index": 2,
+            "doc": null,
+            "type_": "u64"
+          }
+        }
+      }
+    },
+    "StillMintFeeUpdated": {
+      "index": 7,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Copy",
+        "Drop"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "config_id": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "sui",
+                  "name": "object"
+                },
+                "name": "ID",
+                "type_arguments": []
+              }
+            }
+          },
+          "old_fee": {
+            "index": 1,
+            "doc": null,
+            "type_": "u64"
+          },
+          "new_fee": {
+            "index": 2,
             "doc": null,
             "type_": "u64"
           }

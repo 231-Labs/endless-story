@@ -262,6 +262,7 @@ async function main() {
     // package anchors the Still type) and dropping them breaks 劇照 mint/shop.
     stillRegistryId: ENDLESS_STORY_DEPLOYMENT.stillRegistryId,
     stillTransferPolicyId: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
+    stillMintConfigId: ENDLESS_STORY_DEPLOYMENT.stillMintConfigId,
     demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
     storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
   };

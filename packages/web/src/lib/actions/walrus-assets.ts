@@ -187,7 +187,14 @@ async function mutate(path: string, method: string, body?: unknown): Promise<Act
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { ok: false, error: `${res.status} ${text.slice(0, 200)}` };
+      let msg = text.slice(0, 200);
+      try {
+        const j = JSON.parse(text) as { error?: string };
+        if (j?.error) msg = j.error; // surface the service's friendly message, not raw JSON
+      } catch {
+        /* not JSON — keep the raw text */
+      }
+      return { ok: false, error: msg };
     }
     return { ok: true };
   } catch (err) {
