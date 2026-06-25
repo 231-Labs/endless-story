@@ -31,6 +31,61 @@ export interface PublishResult {
   createdObjects: Array<{ id: string; type: string }>;
 }
 
+export interface BytecodeDump {
+  modules: string[];
+  dependencies: string[];
+  digest?: number[];
+}
+
+/**
+ * Resolve the package bytecode for a programmatic publish / upgrade.
+ *
+ * Prefers a pre-built dump at `DEPLOY_BYTECODE_DUMP_PATH` (produced at image
+ * build by `sui move build --dump-bytecode-as-base64`), so a runtime container
+ * needs NO sui toolchain. Set-but-unreadable is a hard error (no source-build
+ * fallback in a container); unset compiles from source (local dev). Used by
+ * both `deploy` (tx.publish) and `upgrade` (tx.upgrade), so a fresh world reset
+ * and a contract upgrade are equally CLI-free from the admin panel.
+ */
+export function loadBytecodeDump(contractsDir: string): BytecodeDump {
+  const dumpPath = process.env.DEPLOY_BYTECODE_DUMP_PATH?.trim();
+  if (dumpPath) {
+    try {
+      const raw = fs.readFileSync(dumpPath, 'utf-8');
+      const dump = JSON.parse(raw.slice(raw.indexOf('{'))) as BytecodeDump;
+      if (!dump.modules?.length || !dump.dependencies?.length) {
+        throw new Error('missing modules/dependencies');
+      }
+      console.log(`[build] using pre-built bytecode dump: ${dumpPath}`);
+      return dump;
+    } catch (e) {
+      throw new Error(
+        `DEPLOY_BYTECODE_DUMP_PATH=${dumpPath} unreadable/invalid: ` +
+          (e instanceof Error ? e.message : String(e)),
+      );
+    }
+  }
+  let out: string;
+  try {
+    out = execSync('sui move build --dump-bytecode-as-base64', {
+      cwd: contractsDir,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: 1024 * 1024 * 200,
+    });
+  } catch (e) {
+    const err = e as { stderr?: Buffer | string; stdout?: Buffer | string; message: string };
+    if (err.stdout?.toString().trim()) console.error('--- stdout ---\n' + err.stdout.toString());
+    if (err.stderr?.toString().trim()) console.error('--- stderr ---\n' + err.stderr.toString());
+    throw new Error('move build failed');
+  }
+  const dump = JSON.parse(out.slice(out.indexOf('{'))) as BytecodeDump;
+  if (!dump.modules?.length || !dump.dependencies?.length) {
+    throw new Error('move build output missing modules/dependencies');
+  }
+  return dump;
+}
+
 export async function suiPublish(opts: PublishOptions): Promise<PublishResult> {
   const { contractsDir, network } = opts;
   const gasBudget = opts.gasBudget ?? '2000000000';
@@ -136,22 +191,8 @@ async function publishWithConfiguredKey(opts: {
 
   console.log(`\n[publish] programmatic publish (network=${network}, signer=${sender})…`);
 
-  // 1. compile → base64 bytecode + dependency ids
-  let dump: { modules: string[]; dependencies: string[]; digest?: number[] };
-  try {
-    const out = execSync(
-      `sui move build --dump-bytecode-as-base64`,
-      { cwd: contractsDir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 1024 * 1024 * 200 },
-    );
-    // build may print warnings to stdout before the JSON; take the last JSON object.
-    const jsonStart = out.indexOf('{');
-    dump = JSON.parse(out.slice(jsonStart));
-  } catch (e) {
-    const err = e as { stderr?: Buffer | string; stdout?: Buffer | string; message: string };
-    if (err.stdout?.toString().trim()) console.error('--- stdout ---\n' + err.stdout.toString());
-    if (err.stderr?.toString().trim()) console.error('--- stderr ---\n' + err.stderr.toString());
-    throw new Error(`move build failed (network=${network})`);
-  }
+  // 1. resolve bytecode (pre-built dump in-container, else compile from source)
+  const dump = loadBytecodeDump(contractsDir);
 
   // 2. publish PTB
   const tx = new Transaction();

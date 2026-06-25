@@ -6,7 +6,6 @@
  * - upgrade.ts uses the existing UpgradeCap and keeps packageId as the
  *   original type anchor while writing latestPackageId for Move calls.
  */
-import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as url from 'node:url';
 import * as fs from 'node:fs';
@@ -15,7 +14,7 @@ import { ENDLESS_STORY_DEPLOYMENT, type SuiNetwork } from '@endless-story/shared
 import { makeSuiClient } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
-import { assertActiveEnv } from '../src/lib/sui-publish';
+import { assertActiveEnv, loadBytecodeDump } from '../src/lib/sui-publish';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
 
 const VALID_NETWORKS: ReadonlySet<SuiNetwork> = new Set(['devnet', 'testnet', 'mainnet', 'localnet']);
@@ -44,46 +43,12 @@ function repoPaths() {
 }
 
 function buildPackage(contractsDir: string): BuildDump {
-  // CLI-free path: if a pre-built bytecode dump is provided (produced at image
-  // build by `sui move build --dump-bytecode-as-base64`), use it so the runtime
-  // container needs no sui toolchain. Set but unreadable is a hard error (in a
-  // container there is no source-build fallback); unset falls back to building.
-  const dumpPath = process.env.DEPLOY_BYTECODE_DUMP_PATH?.trim();
-  if (dumpPath) {
-    try {
-      const raw = fs.readFileSync(dumpPath, 'utf-8');
-      const dump = JSON.parse(raw.slice(raw.indexOf('{'))) as BuildDump;
-      if (!dump.modules?.length || !dump.dependencies?.length || !dump.digest?.length) {
-        throw new Error('missing modules/dependencies/digest');
-      }
-      console.log(`[build] using pre-built bytecode dump: ${dumpPath}`);
-      return dump;
-    } catch (e) {
-      throw new Error(
-        `DEPLOY_BYTECODE_DUMP_PATH=${dumpPath} unreadable/invalid: ` +
-          (e instanceof Error ? e.message : String(e)),
-      );
-    }
-  }
-
-  let out: string;
-  try {
-    out = execSync('sui move build --dump-bytecode-as-base64', {
-      cwd: contractsDir,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 1024 * 1024 * 200,
-    });
-  } catch (e) {
-    const err = e as { stderr?: Buffer | string; stdout?: Buffer | string; message: string };
-    if (err.stdout?.toString().trim()) console.error('--- stdout ---\n' + err.stdout.toString());
-    if (err.stderr?.toString().trim()) console.error('--- stderr ---\n' + err.stderr.toString());
-    throw new Error('move build failed');
-  }
-  const jsonStart = out.indexOf('{');
-  const dump = JSON.parse(out.slice(jsonStart)) as BuildDump;
-  if (!dump.modules?.length || !dump.dependencies?.length || !dump.digest?.length) {
-    throw new Error('move build output missing modules/dependencies/digest');
+  // Shared resolver: pre-built dump in-container (DEPLOY_BYTECODE_DUMP_PATH),
+  // else `sui move build` from source (local dev).
+  const dump = loadBytecodeDump(contractsDir) as BuildDump;
+  // An upgrade ticket needs the package digest for the compatibility check.
+  if (!dump.digest?.length) {
+    throw new Error('bytecode dump missing digest (required for upgrade compatibility)');
   }
   return dump;
 }
