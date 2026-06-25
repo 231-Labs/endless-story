@@ -15,7 +15,7 @@
  */
 
 import { text as llmText } from '@endless-story/llm';
-import { roleHint } from '@endless-story/shared';
+import { roleHint, type RelationshipTone } from '@endless-story/shared';
 
 export interface GovernanceProposal {
     /** Who is pushing this. */
@@ -139,4 +139,64 @@ export async function decideGovernanceAction(
     } catch {
         return { direction: '先守成，撐過這陣子再說', adopted: '自主', reasoning: '' };
     }
+}
+
+/* ── standing from the relationship graph ───────────────────────────────────────
+ * The proposal's `standing` was hand-written. This derives it from the SOCIAL GRAPH:
+ * 行當 decides 份量 (a 台柱's word carries; a 丑's is light), the 班主's directed bond
+ * (tone + cooled weight from directedOutgoingEdges) decides 交情. This is where the
+ * relationship system becomes the troupe's social capital — move the 班主→proposer edge
+ * (e.g. affection → tension) and the standing, and thus the governance call, moves with it.
+ */
+
+/** The 班主's directed feeling toward a proposer — tone + cooled strength from the graph. */
+export interface ManagerBond {
+    tone: RelationshipTone;
+    /** cooled weight (directedOutgoingEdges); higher = more salient. */
+    weight: number;
+}
+
+const ROLE_WEIGHT: Record<string, string> = {
+    花旦: '班裡挑大梁的台柱，份量最重',
+    青衣: '班裡挑大梁的台柱，份量最重',
+    小生: '當紅的角兒，台下目光多，份量重',
+    老生: '當紅的角兒，台下目光多，份量重',
+    武生: '當紅的角兒，台下目光多，份量重',
+    刀馬旦: '能挑場面的角兒，份量不輕',
+    老旦: '資歷深的角兒，說話有份量',
+    丑: '插科打諢的角兒，份量輕',
+    樂師: '伴奏的，份量輕',
+};
+
+function roleWeightPhrase(role: string): string {
+    return ROLE_WEIGHT[role] ?? '班裡尋常一員，份量平平';
+}
+
+function rapportPhrase(bond?: ManagerBond): string {
+    if (!bond || bond.weight < 0.35) return ''; // cooled too far → no rapport to speak of
+    const strong = bond.weight >= 1.2;
+    switch (bond.tone) {
+        case 'romance':
+        case 'affection':
+            return strong ? '與你最貼心，你聽得進他的話' : '與你有幾分情份';
+        case 'mentorship':
+            return '你看重的，師徒情份還在';
+        case 'rivalry':
+            return '與你暗暗較著勁，他的話你掂量著聽';
+        case 'tension':
+            return strong ? '近來與你起了不小的摩擦，話打了折' : '與你有些不對付';
+        case 'wary':
+            return '你對他存著戒心，話聽著留三分';
+        case 'estrangement':
+            return '與你生分了，他的話你未必聽得進';
+        default:
+            return ''; // acquaintance / neutral — nothing to colour the standing
+    }
+}
+
+/** Build a proposer's `standing` from 行當 (份量) + the 班主's directed bond (交情). */
+export function buildStanding(proposerRole: string, managerBond?: ManagerBond): string {
+    const weight = roleWeightPhrase(proposerRole);
+    const rapport = rapportPhrase(managerBond);
+    return rapport ? `${weight}；${rapport}` : weight;
 }
