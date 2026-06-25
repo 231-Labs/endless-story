@@ -17,6 +17,7 @@
  */
 
 export * from './client';
+export * from './resilient-fetch';
 export * as tx from './tx';
 export * as read from './read';
 

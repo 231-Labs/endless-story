@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import type { BlobRef, Character } from '@endless-story/shared';
 import { BlobImage } from '@/components/common/BlobImage';
 import { truncateBlobId } from '@/lib/format';
+import { txUrl } from '@/lib/explorer';
 import { isWideBlob, type LightboxItem } from './helpers';
 
 export function DerivativeCard({
@@ -15,7 +16,12 @@ export function DerivativeCard({
   isCover,
   isOwner,
   pending,
+  collected,
+  canCollect,
+  minting,
+  txDigest,
   onSetCover,
+  onCollect,
   onOpen,
 }: {
   label: string;
@@ -24,7 +30,16 @@ export function DerivativeCard({
   isCover: boolean;
   isOwner: boolean;
   pending: boolean;
+  /** already in the viewer's 藏閣 (on-chain Still or demo-local mirror). */
+  collected: boolean;
+  /** this image can be collected as a Still NFT. */
+  canCollect: boolean;
+  /** a real on-chain mint is in flight for this image. */
+  minting: boolean;
+  /** tx digest of the on-chain mint, when minted as a Still NFT. */
+  txDigest?: string | null;
   onSetCover: () => void;
+  onCollect: () => void;
   onOpen: () => void;
 }) {
   return (
@@ -41,6 +56,16 @@ export function DerivativeCard({
           ) : null
         }
       />
+      {canCollect ? (
+        <div className="flex items-center justify-end">
+          <CollectControl
+            collected={collected}
+            minting={minting}
+            txDigest={txDigest}
+            onCollect={onCollect}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -54,6 +79,8 @@ export function EventMomentCard({
   pending,
   collected,
   canCollect,
+  minting,
+  txDigest,
   onSetCover,
   onCollect,
   onOpen,
@@ -64,10 +91,14 @@ export function EventMomentCard({
   isCover: boolean;
   isOwner: boolean;
   pending: boolean;
-  /** already in the viewer's 藏閣 (demo-local). */
+  /** already in the viewer's 藏閣 (on-chain Still or demo-local mirror). */
   collected: boolean;
   /** this moment has an image to collect as a 劇照. */
   canCollect: boolean;
+  /** a real on-chain mint is in flight for this moment. */
+  minting: boolean;
+  /** tx digest of the on-chain mint, when this 劇照 was minted as a Still NFT. */
+  txDigest?: string | null;
   onSetCover: () => void;
   onCollect: () => void;
   onOpen: () => void;
@@ -98,20 +129,57 @@ export function EventMomentCard({
           <span />
         )}
         {canCollect ? (
-          collected ? (
-            <span className="text-2xs tracking-widest text-cinnabar">已入藏閣 ✦</span>
-          ) : (
-            <button
-              type="button"
-              onClick={onCollect}
-              className="rounded-full border border-cinnabar/50 bg-cinnabar/10 px-3 py-1 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/20"
-            >
-              收進藏閣 · 劇照
-            </button>
-          )
+          <CollectControl
+            collected={collected}
+            minting={minting}
+            txDigest={txDigest}
+            onCollect={onCollect}
+          />
         ) : null}
       </div>
     </article>
+  );
+}
+
+/**
+ * Collect-as-Still affordance shared by every gallery card. Idle → 「收進藏閣」
+ * button (mints a real Still NFT when chain-eligible). In flight → 「鑄造中…」.
+ * Done → 「已入藏閣 ✦」, linking the mint tx when one was produced.
+ */
+function CollectControl({
+  collected,
+  minting,
+  txDigest,
+  onCollect,
+}: {
+  collected: boolean;
+  minting: boolean;
+  txDigest?: string | null;
+  onCollect: () => void;
+}) {
+  if (collected) {
+    return txDigest ? (
+      <a
+        href={txUrl(txDigest)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-2xs tracking-widest text-cinnabar hover:underline"
+      >
+        已入藏閣 ✦ · 鏈上 tx
+      </a>
+    ) : (
+      <span className="text-2xs tracking-widest text-cinnabar">已入藏閣 ✦</span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onCollect}
+      disabled={minting}
+      className="rounded-full border border-cinnabar/50 bg-cinnabar/10 px-3 py-1 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/20 disabled:cursor-wait disabled:opacity-60"
+    >
+      {minting ? '鑄造中…' : '收進藏閣'}
+    </button>
   );
 }
 

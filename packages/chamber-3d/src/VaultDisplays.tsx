@@ -1,10 +1,10 @@
 'use client';
 
-import { Suspense, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { SpotLight, useTexture } from '@react-three/drei';
-import { AdditiveBlending, CanvasTexture, DoubleSide, Object3D, SRGBColorSpace } from 'three';
-import type { Group } from 'three';
+import { SpotLight } from '@react-three/drei';
+import { AdditiveBlending, CanvasTexture, DoubleSide, Object3D, SRGBColorSpace, TextureLoader } from 'three';
+import type { Group, Texture } from 'three';
 import { GlbProp } from './GlbProp.js';
 import { PropPrimitive } from './PropPrimitive.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
@@ -112,21 +112,61 @@ function LightShaft({
 // ── 劇照 glass plate ─────────────────────────────────────────────────
 
 function StillPlate({ url, height = 1.45 }: { url: string; height?: number }) {
-  const texture = useTexture(url);
-  const img = texture.image as { width?: number; height?: number } | undefined;
+  // Imperative load (not drei's useTexture): a Walrus blob that fails to load
+  // (expired / aggregator can't serve it) must NOT throw. useTexture suspends +
+  // throws on error, which surfaces as a dev Runtime Error even inside an
+  // ErrorBoundary. Here a failed load just renders an empty glass slot.
+  const [texture, setTexture] = useState<Texture | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let loaded: Texture | null = null;
+    setTexture(null);
+    setFailed(false);
+    new TextureLoader().load(
+      url,
+      (tex) => {
+        if (cancelled) {
+          tex.dispose();
+          return;
+        }
+        tex.colorSpace = SRGBColorSpace;
+        loaded = tex;
+        setTexture(tex);
+      },
+      undefined,
+      () => {
+        if (!cancelled) setFailed(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+      loaded?.dispose();
+    };
+  }, [url]);
+
+  const img = texture?.image as { width?: number; height?: number } | undefined;
   const aspect = img && img.width && img.height ? img.width / img.height : 0.7;
   const w = height * aspect;
   return (
     <group>
-      {/* dark glass backing */}
+      {/* dark glass backing — always present so the slot reads as an exhibit */}
       <mesh position={[0, 0, -0.012]}>
         <planeGeometry args={[w + 0.1, height + 0.1]} />
         <meshBasicMaterial color="#0c0f13" transparent opacity={0.55} side={DoubleSide} depthWrite={false} />
       </mesh>
-      <mesh>
-        <planeGeometry args={[w, height]} />
-        <meshBasicMaterial map={texture} toneMapped={false} side={DoubleSide} />
-      </mesh>
+      {texture ? (
+        <mesh>
+          <planeGeometry args={[w, height]} />
+          <meshBasicMaterial map={texture} toneMapped={false} side={DoubleSide} />
+        </mesh>
+      ) : failed ? (
+        // load failed (Walrus blob gone / aggregator down) — faint empty plate
+        <mesh>
+          <planeGeometry args={[w, height]} />
+          <meshBasicMaterial color="#15181d" transparent opacity={0.5} side={DoubleSide} />
+        </mesh>
+      ) : null}
       {/* gold base line */}
       <mesh position={[0, -height / 2 - 0.07, 0]}>
         <planeGeometry args={[w * 0.7, 0.018]} />

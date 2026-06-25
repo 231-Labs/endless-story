@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import type { BlobRef, Character } from '@endless-story/shared';
-import { ENDLESS_STORY_DEPLOYMENT, read, tx as endlessTx } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, isDeployed, read, tx as endlessTx } from '@endless-story/sdk';
 import { txUrl } from '@/lib/explorer';
+import { mintStillAction } from '@/lib/actions/mint-still';
 import {
   appearanceSummary,
   blobKey,
@@ -20,7 +21,7 @@ import { DerivativeCard, EventMomentCard, Lightbox } from './gallery/components'
 import {
   acquireWare,
   loadAcquired,
-  stillWareFromMoment,
+  stillWareFromBlob,
   type AcquiredMap,
 } from '@/lib/chamber/shop-catalog';
 
@@ -63,18 +64,63 @@ export function GalleryTab({
   // physicalFacts prose; else nothing (just the structured facts line).
   const appearanceProse = appearanceDesc ?? appearance.prose;
 
-  // 收藏到藏閣 (demo-local) — a moment is collected as a 劇照 here, where it
-  // lives, instead of being re-listed in 戲坊. Mirrors ShopTab's acquire flow
-  // so the 藏閣 inventory dedups by the same ware key.
+  // 收進藏閣 — collect ANY gallery image (event moment OR 設定集 sheet) as a
+  // 劇照. When the viewer's wallet is connected and the image has a real Walrus
+  // anchor on an on-chain character, this mints a REAL Still NFT to that wallet
+  // (admin/StorytellerCap signs server-side, per still.move). Otherwise it falls
+  // back to a demo-local acquire so browsing without a wallet still fills the
+  // 藏閣. Either way the ware key matches `stillWareFromBlob`, so the 藏閣
+  // inventory dedups.
   const [acquired, setAcquired] = useState<AcquiredMap>({});
+  const [mintingKey, setMintingKey] = useState<string | null>(null);
+  const [mintError, setMintError] = useState<string | null>(null);
+  const [mintedTx, setMintedTx] = useState<Record<string, string>>({});
   useEffect(() => {
     setAcquired(loadAcquired());
   }, []);
-  const collectMoment = useCallback(
-    (moment: BlobRef, index: number) => {
-      setAcquired(acquireWare(stillWareFromMoment(character, moment, index)));
+  const collectImage = useCallback(
+    async (blob: BlobRef, index: number) => {
+      const ware = stillWareFromBlob(character, blob, index);
+      setMintError(null);
+
+      const chainEligible =
+        isDeployed() &&
+        character.id.startsWith('0x') &&
+        !!blob.walrusBlobId &&
+        !!blob.imageUrl;
+
+      // no wallet / mock character / no Walrus anchor → demo-local 入藏.
+      // (`!account` also narrows the type for the mint call below.)
+      if (!chainEligible || !account) {
+        setAcquired(acquireWare(ware));
+        return;
+      }
+
+      setMintingKey(ware.key);
+      try {
+        const res = await mintStillAction({
+          characterId: character.id,
+          walrusBlobId: blob.walrusBlobId,
+          imageUrl: blob.imageUrl,
+          title: ware.title,
+          recipient: account.address,
+        });
+        if (!res.ok) {
+          setMintError(res.error ?? '鑄造劇照失敗');
+          return;
+        }
+        // Mirror into the local 藏閣 so it shows instantly (the on-chain read is
+        // cached + lags); the vault dedups the mirror vs the real Still by image
+        // url, so this never double-counts once the chain read catches up.
+        setAcquired(acquireWare(ware));
+        if (res.digest) setMintedTx((m) => ({ ...m, [ware.key]: res.digest as string }));
+      } catch (err) {
+        setMintError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setMintingKey(null);
+      }
     },
-    [character],
+    [character, account],
   );
 
   // One flat list spanning both sections — the lightbox pages through all of them.
@@ -181,6 +227,7 @@ export function GalleryTab({
             {settingImages.map((blob, i) => {
               const key = blobKey(blob);
               const isCover = !!blob.imageUrl && blob.imageUrl === coverUrl;
+              const wareKey = stillWareFromBlob(character, blob, i).key;
               return (
                 <li key={key} className={isWideBlob(blob) ? 'col-span-2' : undefined}>
                   <DerivativeCard
@@ -190,7 +237,12 @@ export function GalleryTab({
                     isCover={isCover}
                     isOwner={canSetCover}
                     pending={pendingCoverKey === key}
+                    canCollect={!!blob.imageUrl}
+                    collected={(acquired[wareKey]?.count ?? 0) > 0}
+                    minting={mintingKey === wareKey}
+                    txDigest={mintedTx[wareKey] ?? null}
                     onSetCover={() => setCover(blob)}
+                    onCollect={() => collectImage(blob, i)}
                     onOpen={() => openLightbox(blob)}
                   />
                 </li>
@@ -232,7 +284,7 @@ export function GalleryTab({
               {eventMoments.map((blob, i) => {
                 const key = blobKey(blob);
                 const isCover = !!blob.imageUrl && blob.imageUrl === coverUrl;
-                const wareKey = stillWareFromMoment(character, blob, i).key;
+                const wareKey = stillWareFromBlob(character, blob, i).key;
                 return (
                   <li key={key}>
                     <EventMomentCard
@@ -244,8 +296,10 @@ export function GalleryTab({
                       pending={pendingCoverKey === key}
                       canCollect={!!blob.imageUrl}
                       collected={(acquired[wareKey]?.count ?? 0) > 0}
+                      minting={mintingKey === wareKey}
+                      txDigest={mintedTx[wareKey] ?? null}
                       onSetCover={() => setCover(blob)}
-                      onCollect={() => collectMoment(blob, i)}
+                      onCollect={() => collectImage(blob, i)}
                       onOpen={() => openLightbox(blob)}
                     />
                   </li>
@@ -253,6 +307,13 @@ export function GalleryTab({
               })}
             </ul>
           )}
+          {mintError ? (
+            <p className="mt-3 text-xs tracking-widest text-cinnabar">鑄造劇照失敗：{mintError}</p>
+          ) : isDeployed() && character.id.startsWith('0x') && !account && eventMoments.length > 0 ? (
+            <p className="mt-3 text-2xs tracking-widest text-mute/60">
+              連結錢包，即可把劇照鑄成鏈上 NFT 收進藏閣（未連結則僅本地預覽入藏）。
+            </p>
+          ) : null}
         </div>
       </section>
 

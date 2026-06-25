@@ -13,8 +13,9 @@
  * via the optional `client` arg on builders, rather than calling
  * `makeSuiClient` directly.
  */
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
+import { SuiJsonRpcClient, getJsonRpcFullnodeUrl, JsonRpcHTTPTransport } from '@mysten/sui/jsonRpc';
 import type { SuiNetwork } from '@endless-story/shared/contract-ids';
+import { resilientFetch } from './resilient-fetch.js';
 
 export type SuiClient = SuiJsonRpcClient;
 

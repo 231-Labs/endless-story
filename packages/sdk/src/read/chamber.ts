@@ -23,8 +23,8 @@ export interface PersonalVaultRef {
 }
 
 /**
- * Find the VaultTicket owned by `owner`.
- * Returns null if the user hasn't created a vault yet.
+ * Find the VaultTicket owned by `owner` (one PersonalVault per wallet).
+ * Returns null if the user hasn't created a vault yet; stops at the first hit.
  */
 export async function findVaultTicket(
     client: SuiClient,
@@ -45,11 +45,37 @@ export async function findVaultTicket(
             const content = item.data?.content;
             if (content?.dataType !== 'moveObject') continue;
             const f = (content as { fields: Record<string, string> }).fields;
-            return {
-                ticketId: item.data!.objectId,
-                vaultId: f.vault_id,
-                kioskId: f.kiosk_id,
-            };
+            return { ticketId: item.data!.objectId, vaultId: f.vault_id, kioskId: f.kiosk_id };
+        }
+        if (!page.hasNextPage || !page.nextCursor) break;
+        cursor = page.nextCursor;
+    }
+    return null;
+}
+
+/**
+ * Find the `0x2::kiosk::KioskOwnerCap` held by `owner` for a specific kiosk
+ * (matched on its `for` field). Needed to place / list / delist Stills in that
+ * vault's kiosk. Returns null if the wallet doesn't hold the cap.
+ */
+export async function findKioskOwnerCap(
+    client: SuiClient,
+    owner: string,
+    kioskId: string,
+): Promise<string | null> {
+    let cursor: string | null | undefined = null;
+    for (;;) {
+        const page = await client.getOwnedObjects({
+            owner,
+            filter: { StructType: '0x2::kiosk::KioskOwnerCap' },
+            options: { showContent: true },
+            cursor,
+        });
+        for (const item of page.data) {
+            const content = item.data?.content;
+            if (content?.dataType !== 'moveObject') continue;
+            const f = (content as { fields: Record<string, string> }).fields;
+            if (f.for === kioskId) return item.data!.objectId;
         }
         if (!page.hasNextPage || !page.nextCursor) break;
         cursor = page.nextCursor;
