@@ -82,6 +82,8 @@ export type {
 } from './governance.js';
 export { decideProposalAction } from './proposal.js';
 export type { DecideProposalInput, ProposalResult, ProposalScope } from './proposal.js';
+export { materializeMention } from './materialize.js';
+export type { MaterializeInput, DormantEntity, DormantKind } from './materialize.js';
 export {
     buildAskSystemPrompt,
     buildAskUserPrompt,
