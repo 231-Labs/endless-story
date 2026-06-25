@@ -22,7 +22,7 @@ import { join } from "node:path";
 import { authed, cors, readBytes, readJson, send } from "./http-util.ts";
 import { AssetStore } from "./asset-store.ts";
 import { AssetWalrus } from "./asset-walrus.ts";
-import { renewDue, type RenewConfig, type RenewSummary } from "./asset-renew.ts";
+import { renewDue, planExtend, type RenewConfig, type RenewSummary } from "./asset-renew.ts";
 import {
   ASSET_CATEGORIES,
   CATEGORY_DEFAULTS,
@@ -55,6 +55,10 @@ const WALLET_MIN_SUI = Number(process.env.WALLET_MIN_SUI ?? 0);
 // In-process sweeper cadence (ms). 0 disables it — e.g. when an external cron / systemd
 // timer hits POST /api/assets/renew-due instead. Default 6h.
 const RENEW_SWEEP_INTERVAL_MS = Number(process.env.RENEW_SWEEP_INTERVAL_MS ?? 6 * 3_600_000);
+// Max storage period Walrus allows ahead of the current epoch. `extend` can't push a blob
+// past it (EInvalidEpochsAhead), so manual renews are capped to land here. testnet ≈ 53+;
+// a conservative default is safe (just renews a touch more often). Confirm via `walrus info`.
+const RENEW_MAX_EPOCHS = Number(process.env.WALRUS_MAX_EPOCHS ?? 53);
 const renewConfig: RenewConfig = {
   thresholdEpochs: RENEW_THRESHOLD_EPOCHS,
   extendEpochs: RENEW_EXTEND_EPOCHS,
@@ -231,12 +235,35 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const asset = store.get(id);
       if (!asset) return send(res, 404, { error: "not found" });
       const b = await readJson<{ epochs?: number }>(req).catch(() => null);
-      const epochs = Number(b?.epochs ?? 0);
-      if (!Number.isFinite(epochs) || epochs <= 0) return send(res, 400, { error: "epochs (positive number) required" });
-      const newEnd = await walrus.extend(asset.suiObjectId, epochs);
-      const updated = store.patch(id, { endEpoch: newEnd > 0 ? newEnd : asset.endEpoch + epochs });
-      store.flush();
-      return send(res, 200, { asset: updated });
+      const requested = Number(b?.epochs ?? 0);
+      if (!Number.isFinite(requested) || requested <= 0) return send(res, 400, { error: "epochs (positive number) required" });
+
+      // Guard the two ways `walrus extend` aborts so a click gets a friendly message, not a
+      // raw 500: an expired blob (EResourceBounds) and pushing past the max storage period
+      // (EInvalidEpochsAhead). When we know the epoch, cap the extend to land at the max.
+      const currentEpoch = await walrus.currentEpoch();
+      let epochs = requested;
+      if (currentEpoch != null) {
+        const plan = planExtend(asset.endEpoch, currentEpoch, requested, RENEW_MAX_EPOCHS);
+        if (plan.action === "skip-expired")
+          return send(res, 409, { error: "資產已過期,無法續租(請改用刪除)", expired: true });
+        if (plan.action === "skip-at-max")
+          return send(res, 409, { error: `已達儲存上限(約 ${RENEW_MAX_EPOCHS} epochs),無需續租`, atMax: true });
+        epochs = plan.epochs;
+      }
+      try {
+        const newEnd = await walrus.extend(asset.suiObjectId, epochs);
+        const updated = store.patch(id, { endEpoch: newEnd > 0 ? newEnd : asset.endEpoch + epochs });
+        store.flush();
+        return send(res, 200, { asset: updated });
+      } catch (err) {
+        const msg = String(err);
+        if (/EResourceBounds|assert_certified_not_expired/i.test(msg))
+          return send(res, 409, { error: "資產已過期,無法續租(請改用刪除)", expired: true });
+        if (/EInvalidEpochsAhead/i.test(msg))
+          return send(res, 409, { error: "已達儲存上限,無法再延長", atMax: true });
+        return send(res, 502, { error: `walrus extend failed: ${msg.slice(0, 300)}` });
+      }
     }
 
     // PATCH / DELETE /api/assets/:id

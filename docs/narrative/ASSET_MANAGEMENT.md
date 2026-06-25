@@ -221,8 +221,12 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
   警示、**不續**,避免以為自動就高枕無憂)。餘額讀不到(null)＝不擋,照續但記警示。單筆 `extend` 失敗被隔離
   (catch + 計入 `failed`),不影響其他筆;失敗訊息含 `EResourceBounds`/`expired`(掃描後才過期)歸入 skipped 而非 failed;
   連續 5 筆非過期失敗則中止本輪(別空轟錢包)。錯誤訊息含 stdout(walrus 把交易執行錯誤印在 stdout 不是 stderr)。
+- **手動續租端點 `POST /api/assets/:id/extend`**(後台每列那顆按鈕 + 批量)同樣用 `planExtend()` 守門:已過期 → `409`
+  「已過期,請刪除」;剩餘太多 → 把 `+N` 封頂到 `currentEpoch + WALRUS_MAX_EPOCHS`(避免 `EInvalidEpochsAhead`),
+  已達上限 → `409`「已達儲存上限」。所以點任何資產都不會再丟 500。自動 sweep 因為只碰 `剩 ≤ 5`,封頂永遠不觸發。
 - 門檻 env:`RENEW_THRESHOLD_EPOCHS`(預設 5)、`RENEW_EXTEND_EPOCHS`(預設 30)、`WALLET_MIN_WAL`(預設 0)、
-  `WALLET_MIN_SUI`(預設 0)、`RENEW_SWEEP_INTERVAL_MS`(預設 6h)。
+  `WALLET_MIN_SUI`(預設 0)、`RENEW_SWEEP_INTERVAL_MS`(預設 6h)、`WALRUS_MAX_EPOCHS`(預設 53;blob 最遠能存到的 epochs ahead,`walrus info` 可確認)。
+  注意 `RENEW_THRESHOLD_EPOCHS + RENEW_EXTEND_EPOCHS` 要 ≤ `WALRUS_MAX_EPOCHS`(預設 5+30=35 ≤ 53,安全)。
 - **實機驗證(2026-06-25)**:funded 錢包對「活著的」blob extend 成功;早期用 5 epochs 種、sweeper 上線前就過期的 blob
   無法續(`EResourceBounds`,預期),已改為 skip,不再洗版。過期死列可在後台批量刪除清掉(DELETE 容許 `walrus delete`
   失敗仍移除 registry 列)。
