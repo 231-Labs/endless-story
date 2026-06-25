@@ -18,7 +18,7 @@
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
-export type CliScript = 'deploy-preflight' | 'deploy' | 'bootstrap' | 'test-e2e';
+export type CliScript = 'deploy-preflight' | 'deploy' | 'bootstrap' | 'upgrade' | 'test-e2e';
 
 export interface RunCliScriptInput {
     script: CliScript;

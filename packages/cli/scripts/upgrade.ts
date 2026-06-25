@@ -44,6 +44,28 @@ function repoPaths() {
 }
 
 function buildPackage(contractsDir: string): BuildDump {
+  // CLI-free path: if a pre-built bytecode dump is provided (produced at image
+  // build by `sui move build --dump-bytecode-as-base64`), use it so the runtime
+  // container needs no sui toolchain. Set but unreadable is a hard error (in a
+  // container there is no source-build fallback); unset falls back to building.
+  const dumpPath = process.env.DEPLOY_BYTECODE_DUMP_PATH?.trim();
+  if (dumpPath) {
+    try {
+      const raw = fs.readFileSync(dumpPath, 'utf-8');
+      const dump = JSON.parse(raw.slice(raw.indexOf('{'))) as BuildDump;
+      if (!dump.modules?.length || !dump.dependencies?.length || !dump.digest?.length) {
+        throw new Error('missing modules/dependencies/digest');
+      }
+      console.log(`[build] using pre-built bytecode dump: ${dumpPath}`);
+      return dump;
+    } catch (e) {
+      throw new Error(
+        `DEPLOY_BYTECODE_DUMP_PATH=${dumpPath} unreadable/invalid: ` +
+          (e instanceof Error ? e.message : String(e)),
+      );
+    }
+  }
+
   let out: string;
   try {
     out = execSync('sui move build --dump-bytecode-as-base64', {
@@ -194,7 +216,13 @@ async function main() {
   console.log(`   gasBudget       ${gasBudget}`);
   console.log(`   dryRun          ${dryRun}`);
 
-  assertActiveEnv(env);
+  // assertActiveEnv guards LOCAL `sui client` usage (wrong active-env footgun).
+  // In CLI-free / container mode (pre-built bytecode dump + programmatic signing
+  // via SUI_ADMIN_PRIVATE_KEY) there is no sui client config to check and the
+  // network is taken from --env, so skip it.
+  if (!process.env.DEPLOY_BYTECODE_DUMP_PATH?.trim()) {
+    assertActiveEnv(env);
+  }
 
   const signer = loadKeypair();
   const sender = signer.toSuiAddress();
@@ -251,32 +279,44 @@ async function main() {
   }
 
   const deployedAt = new Date().toISOString();
+  const snapshot = {
+    network: env,
+    packageId: ENDLESS_STORY_DEPLOYMENT.packageId,
+    latestPackageId: published.packageId,
+    adminCapId: ENDLESS_STORY_DEPLOYMENT.adminCapId,
+    worldId: ENDLESS_STORY_DEPLOYMENT.worldId,
+    locationIds: ENDLESS_STORY_DEPLOYMENT.locationIds,
+    sagaId: ENDLESS_STORY_DEPLOYMENT.sagaId,
+    storytellerCapId: ENDLESS_STORY_DEPLOYMENT.storytellerCapId,
+    sceneIds: ENDLESS_STORY_DEPLOYMENT.sceneIds,
+    faucetId: ENDLESS_STORY_DEPLOYMENT.faucetId,
+    faucetAdminCapId: ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId,
+    dreamConfigId: ENDLESS_STORY_DEPLOYMENT.dreamConfigId,
+    dreamAdminCapId: ENDLESS_STORY_DEPLOYMENT.dreamAdminCapId,
+    // Preserve still ledger ids — these survive an upgrade (same original
+    // package anchors the Still type) and dropping them breaks 劇照 mint/shop.
+    stillRegistryId: ENDLESS_STORY_DEPLOYMENT.stillRegistryId,
+    stillTransferPolicyId: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
+    demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
+    storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
+  };
   console.log('\n[contract-ids] writing upgraded snapshot…');
-  writeContractIds(
-    sharedSrcDir,
-    {
-      network: env,
-      packageId: ENDLESS_STORY_DEPLOYMENT.packageId,
-      latestPackageId: published.packageId,
-      adminCapId: ENDLESS_STORY_DEPLOYMENT.adminCapId,
-      worldId: ENDLESS_STORY_DEPLOYMENT.worldId,
-      locationIds: ENDLESS_STORY_DEPLOYMENT.locationIds,
-      sagaId: ENDLESS_STORY_DEPLOYMENT.sagaId,
-      storytellerCapId: ENDLESS_STORY_DEPLOYMENT.storytellerCapId,
-      sceneIds: ENDLESS_STORY_DEPLOYMENT.sceneIds,
-      faucetId: ENDLESS_STORY_DEPLOYMENT.faucetId,
-      faucetAdminCapId: ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId,
-      dreamConfigId: ENDLESS_STORY_DEPLOYMENT.dreamConfigId,
-      dreamAdminCapId: ENDLESS_STORY_DEPLOYMENT.dreamAdminCapId,
-      // Preserve still ledger ids — these survive an upgrade (same original
-      // package anchors the Still type) and dropping them breaks 劇照 mint/shop.
-      stillRegistryId: ENDLESS_STORY_DEPLOYMENT.stillRegistryId,
-      stillTransferPolicyId: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
-      demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
-      storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
-    },
-    deployedAt,
-  );
+  writeContractIds(sharedSrcDir, snapshot, deployedAt);
+
+  // Runtime manifest: lets a running web container adopt the upgraded ids
+  // WITHOUT a rebuild (read on boot via DEPLOYMENT_MANIFEST_PATH). The source
+  // contract-ids.ts above is the committed seed; this volume file is what a
+  // remote, in-container upgrade actually relies on. Best-effort.
+  const manifestPath = process.env.DEPLOYMENT_MANIFEST_PATH?.trim();
+  if (manifestPath) {
+    try {
+      fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+      fs.writeFileSync(manifestPath, JSON.stringify({ ...snapshot, deployedAt }, null, 2), 'utf-8');
+      console.log(`[manifest] wrote runtime deployment manifest: ${manifestPath}`);
+    } catch (e) {
+      console.warn(`[manifest] failed to write ${manifestPath}: ${(e as Error).message}`);
+    }
+  }
 
   console.log('\n[done] Package upgrade complete.');
   console.log(`   originalPackage ${ENDLESS_STORY_DEPLOYMENT.packageId}`);
