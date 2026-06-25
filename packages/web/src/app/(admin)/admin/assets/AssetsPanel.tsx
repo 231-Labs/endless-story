@@ -626,8 +626,18 @@ function RenewNowButton({ onDone }: { onDone?: () => void }) {
       const r = await renewDueAction();
       if (!r.ok) setMsg(r.error ? `失敗：${r.error}` : '失敗');
       else if (r.walletBlocked) setMsg(`錢包餘額不足，已跳過 ${r.skippedCount ?? 0} 筆`);
-      else if ((r.dueCount ?? 0) === 0) setMsg('目前無到期資產');
-      else setMsg(`已續租 ${r.renewedCount ?? 0}${r.failedCount ? `，失敗 ${r.failedCount}` : ''}`);
+      else {
+        const renewed = r.renewedCount ?? 0;
+        const skipped = r.skippedCount ?? 0;
+        const failed = r.failedCount ?? 0;
+        if (renewed === 0 && skipped === 0 && failed === 0) setMsg('目前無到期資產');
+        else
+          setMsg(
+            `已續租 ${renewed}` +
+              (skipped ? `，跳過 ${skipped}（多為已過期）` : '') +
+              (failed ? `，失敗 ${failed}` : ''),
+          );
+      }
       onDone?.();
     });
   return (

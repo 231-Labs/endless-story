@@ -257,15 +257,21 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
 
     if (method === "DELETE") {
+      let blobReclaimed = false;
+      let walrusError: string | undefined;
       if (asset.deletable) {
         try {
           await walrus.delete(asset.blobId);
+          blobReclaimed = true;
         } catch (err) {
-          return send(res, 502, { error: `walrus delete failed: ${String(err)}` });
+          // An already-expired / gone blob can't be deleted on-chain — don't let that pin a
+          // dead registry row forever. Drop the row anyway and report the reclaim miss.
+          walrusError = String(err);
+          console.warn(`[asset] walrus delete failed for ${asset.blobId}; removing registry row anyway: ${walrusError}`);
         }
       }
       store.remove(id);
-      return send(res, 200, { deleted: true, blobReclaimed: asset.deletable });
+      return send(res, 200, { deleted: true, blobReclaimed, ...(walrusError ? { walrusError } : {}) });
     }
   }
 

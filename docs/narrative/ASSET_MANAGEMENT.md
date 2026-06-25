@@ -203,24 +203,30 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 
 掃描核心在 [`packages/relayer/src/asset-renew.ts`](../../packages/relayer/src/asset-renew.ts)
 (`renewDue()`,純函式、注入 store + walrus + config,單元測試
-[`test/asset-renew.test.ts`](../../packages/relayer/test/asset-renew.test.ts) 8 案綠)。兩種觸發共用同一核心:
+[`test/asset-renew.test.ts`](../../packages/relayer/test/asset-renew.test.ts) 11 案綠)。兩種觸發共用同一核心:
 
 - **in-process 定時 sweeper**(`assets-server.ts`):`RENEW_SWEEP_INTERVAL_MS > 0`(預設 6h)就開,
   開機後約 15s 先掃一次,之後按間隔重複。設 `RENEW_SWEEP_INTERVAL_MS=0` 關掉,改用外部 cron。
 - **`POST /api/assets/renew-due`**(authed):給外部 systemd timer / cron 打,或後台「立即檢查續租」
   按鈕觸發。兩者共用一個 in-flight 鎖避免重入重複 extend(重入時回 `409`)。
 
-掃描規則:`autoRenew === true` 且 `endEpoch − currentEpoch ≤ RENEW_THRESHOLD_EPOCHS` →
-`walrus extend +RENEW_EXTEND_EPOCHS`(與 UI「即將到期」高亮同一門檻,故紅列＝會被續的列)。`status` 不影響
-(下架但 autoRenew 仍續,見模組註解)。`currentEpoch` 讀不到 → 整輪放棄(無法判到期)。
+掃描規則:`autoRenew === true` 且 `0 < endEpoch − currentEpoch ≤ RENEW_THRESHOLD_EPOCHS` →
+`walrus extend +RENEW_EXTEND_EPOCHS`(與 UI「即將到期」高亮同一門檻,故紅列＝會被續的列)。**已過期(remaining ≤ 0)
+的 blob 不 extend**:合約會在 `walrus::blob::assert_certified_not_expired` abort(`EResourceBounds`),過期 blob 救不回,
+直接 skip 回報、不再每輪硬打(否則就是無限失敗洗版)。`status` 不影響(下架但 autoRenew 仍續,見模組註解)。
+`currentEpoch` 讀不到 → 整輪放棄(無法判到期)。
 
 - **per-category 預設 ＋ per-asset 覆寫**(schema 的 `autoRenew`)。
 - 續租前查錢包餘額:`WALLET_MIN_WAL` / `WALLET_MIN_SUI`(預設 0 ＝不設地板;>0 時餘額低於地板 → 整輪跳過 + log
   警示、**不續**,避免以為自動就高枕無憂)。餘額讀不到(null)＝不擋,照續但記警示。單筆 `extend` 失敗被隔離
-  (catch + 計入 `failed`),不影響其他筆。
+  (catch + 計入 `failed`),不影響其他筆;失敗訊息含 `EResourceBounds`/`expired`(掃描後才過期)歸入 skipped 而非 failed;
+  連續 5 筆非過期失敗則中止本輪(別空轟錢包)。錯誤訊息含 stdout(walrus 把交易執行錯誤印在 stdout 不是 stderr)。
 - 門檻 env:`RENEW_THRESHOLD_EPOCHS`(預設 5)、`RENEW_EXTEND_EPOCHS`(預設 30)、`WALLET_MIN_WAL`(預設 0)、
   `WALLET_MIN_SUI`(預設 0)、`RENEW_SWEEP_INTERVAL_MS`(預設 6h)。
-- **待辦**:對 funded 錢包實機驗證;餘額不足目前只 log + 後台餘額條顯示,主動通知(webhook/email)未接。
+- **實機驗證(2026-06-25)**:funded 錢包對「活著的」blob extend 成功;早期用 5 epochs 種、sweeper 上線前就過期的 blob
+  無法續(`EResourceBounds`,預期),已改為 skip,不再洗版。過期死列可在後台批量刪除清掉(DELETE 容許 `walrus delete`
+  失敗仍移除 registry 列)。
+- **待辦**:餘額不足/續租失敗目前只 log + 後台顯示,主動通知(webhook/email)未接。
 
 ---
 

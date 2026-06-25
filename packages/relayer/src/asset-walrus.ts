@@ -142,8 +142,12 @@ export class AssetWalrus {
       });
       child.on("error", reject);
       child.on("close", (code) => {
-        if (code === 0) resolve(stdout);
-        else reject(new Error(`walrus ${args[0]} exited ${code}: ${stderr.slice(0, 400)}`));
+        if (code === 0) return resolve(stdout);
+        // walrus prints transaction-execution errors (e.g. EResourceBounds on an expired
+        // blob) to STDOUT while stderr only carries the "build older than 30 days" banner —
+        // include both streams or the real failure reason is invisible.
+        const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join(" | ").slice(0, 500);
+        reject(new Error(`walrus ${args[0]} exited ${code}: ${detail}`));
       });
     });
   }
