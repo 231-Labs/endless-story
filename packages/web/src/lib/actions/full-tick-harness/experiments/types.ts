@@ -113,6 +113,9 @@ export interface ExperimentConfig {
     story?: ExperimentStory;
     /** The dramatic stake the cast is seeded around. */
     stake: ExperimentStake;
+    /** Extra contested resources beyond `stake`. With more than one stake, selectContention
+     *  rotates the incident across themes tick to tick, so the POVs stop repeating one event. */
+    extraStakes?: ExperimentStake[];
     /**
      * Optional override of the incident framing the stake produces. When set, it
      * REPLACES the framing `label` fed into each desirer's POV — the single lever for

@@ -106,6 +106,13 @@ export interface SeedOptions {
         capacity?: number;
     };
     /**
+     * Extra contested resources beyond the main `stake`. Each seeds another
+     * `<kind>:<targetName>` slot; `selectContention` then ROTATES across them tick to
+     * tick (it already avoids re-picking a recent template), so the incident — and thus
+     * the POVs — stop repeating a single theme. Empty/omitted = legacy single-stake.
+     */
+    extraStakes?: Array<{ kind: string; targetIndex: number; capacity?: number }>;
+    /**
      * Optional concrete story. When `story.cast` is given, each `StorySpec` seeds one
      * fake character WITH a 行當 (→ public `role:` tag) + 小傳 (→ `profile.description`),
      * so the POV has an anchored persona instead of the anonymous CAST_NAMES shells.
@@ -255,25 +262,32 @@ export function seedWorld(opts: SeedOptions = {}): void {
         //
         // The experiment framework patches `opts.stake` to swap this SOIL (kind +
         // target + capacity); when absent we seed the legacy affection:<cast[0]> stake.
-        const stakeKind = opts.stake?.kind ?? 'affection';
-        const targetIdx = Math.min(
-            Math.max(0, opts.stake?.targetIndex ?? 0),
-            cast.length - 1,
-        );
-        const targetName = cast[targetIdx].name;
-        const capacity = BigInt(Math.max(1, opts.stake?.capacity ?? 1));
-        const resId = fakeId('h-res-stake');
-        const tableId = fakeId('h-res-stake-table');
-        const res: FakeResource = {
-            id: resId,
-            sagaId: SAGA,
-            archetype: capacity === 1n ? 'capacity-1-slot' : `capacity-${capacity}-slot`,
-            label: `${stakeKind}:${targetName}`,
-            capacity,
-            tableId,
-            allocations: new Map(),
-        };
-        harnessChain.resources.set(resId, res);
+        // Main stake (default affection:<cast[0]>) + any extra stakes, all seeded as
+        // contested resources. With more than one, selectContention rotates across them
+        // tick to tick, so the incident stops repeating a single theme.
+        const allStakes = [
+            {
+                kind: opts.stake?.kind ?? 'affection',
+                targetIndex: opts.stake?.targetIndex ?? 0,
+                capacity: opts.stake?.capacity ?? 1,
+            },
+            ...(opts.extraStakes ?? []),
+        ];
+        allStakes.forEach((s, i) => {
+            const tIdx = Math.min(Math.max(0, s.targetIndex), cast.length - 1);
+            const capacity = BigInt(Math.max(1, s.capacity ?? 1));
+            const suffix = i === 0 ? 'stake' : `stake-x${i}`;
+            const resId = fakeId(`h-res-${suffix}`);
+            harnessChain.resources.set(resId, {
+                id: resId,
+                sagaId: SAGA,
+                archetype: capacity === 1n ? 'capacity-1-slot' : `capacity-${capacity}-slot`,
+                label: `${s.kind}:${cast[tIdx].name}`,
+                capacity,
+                tableId: fakeId(`h-res-${suffix}-table`),
+                allocations: new Map(),
+            });
+        });
     }
 
     harnessChain.events.clear();

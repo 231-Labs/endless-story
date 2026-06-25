@@ -45,8 +45,20 @@ test('selectContention skips a recently-used template — breaks the monotony', 
         row('爭得「recording:首張唱片灌錄權」', 0.9), // highest, but used last tick
         row('爭得「spotlight:春雪社頭牌名額」', 0.6),
     ];
-    const picked = selectContention(rows, ['contention:recording']);
+    const picked = selectContention(rows, ['爭得「recording:首張唱片灌錄權」']);
     assert.equal(picked.templateId, 'contention:spotlight'); // rotated off recording
+});
+
+test('selectContention rotates SAME-kind stakes by target (傾心柳 vs 傾心蘇)', () => {
+    const rows = [
+        row('傾心於柳生春', 0.9), // highest, but just used last tick
+        row('傾心於蘇映雪', 0.6),
+    ];
+    // Both map to templateId contention:affection — the old templateId key would collide
+    // and never rotate. The statement key distinguishes the target.
+    const picked = selectContention(rows, ['傾心於柳生春']);
+    assert.equal(picked.statement, '傾心於蘇映雪'); // rotated to the other target
+    assert.equal(picked.templateId, 'contention:affection'); // templateId stays kind-level
 });
 
 test('selectContention falls back to global top when every template is recent', () => {
@@ -54,7 +66,7 @@ test('selectContention falls back to global top when every template is recent', 
         row('爭得「recording:首張唱片灌錄權」', 0.9),
         row('爭得「spotlight:春雪社頭牌名額」', 0.6),
     ];
-    const picked = selectContention(rows, ['contention:recording', 'contention:spotlight']);
+    const picked = selectContention(rows, ['爭得「recording:首張唱片灌錄權」', '爭得「spotlight:春雪社頭牌名額」']);
     assert.equal(picked.templateId, 'contention:recording'); // nothing fresh → take the top
 });
 

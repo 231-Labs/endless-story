@@ -659,7 +659,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         });
         const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
         const picked = selectContention(drama?.top ?? [], recentTopics);
-        recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+        recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
         const spineLabel = await frameLabel(picked);
         spineCtx = {
             sagaId: d.sagaId,
@@ -705,7 +705,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
             const picked = selectContention(drama?.top ?? [], recentTopics);
             const framing = { templateId: picked.templateId, label: await frameLabel(picked) };
-            recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+            recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
             const st: TickStoryletResult = {
                 sceneId: sid,
                 sceneName,
@@ -1320,20 +1320,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     pair.count >= CONFESS_MIN_TIES &&
                     !confessedPairs.has(pair.pairKey)
                 ) {
-                    const holderScene = rosterById.get(pair.holderId)?.currentSceneId;
-                    const coPresent = slice.filter(
-                        (c) => rosterById.get(c.id)?.currentSceneId === holderScene,
-                    );
+                    // The encounter is by definition a two-person 獨處 beat, so confession
+                    // judges depth + 此刻想不想說, not who else is in the scene.
                     const decision = await characterAgent.decideConfessAction({
                         name: holderName,
                         role: roleById.get(pair.holderId) ?? '—',
                         toName: pair.otherName,
                         toRole: roleById.get(pair.otherId) ?? '—',
                         relationship: `戀慕很深（牽連 ${pair.count}），這份心思你揣了很久。`,
-                        situation:
-                            coPresent.length <= 2
-                                ? `散場後，這處只剩你與${pair.otherName}兩個，外人都走了。`
-                                : `這處還有旁人在，不只你與${pair.otherName}。`,
+                        situation: `散場後安靜的時分，此刻你與${pair.otherName}恰好獨處一隅，沒有外人。`,
                     });
                     if (decision.confess) {
                         trigger = buildConfessTrigger(pair, dayLabel, decision.opening ?? '', decision.motive);

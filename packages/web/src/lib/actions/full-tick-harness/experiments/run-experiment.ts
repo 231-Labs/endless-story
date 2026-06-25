@@ -215,6 +215,7 @@ export async function runExperiment(
             targetIndex: config.stake.targetIndex,
             capacity: config.stake.capacity,
         },
+        extraStakes: config.extraStakes,
         story: config.story,
     });
 

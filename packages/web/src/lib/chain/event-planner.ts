@@ -133,15 +133,19 @@ function framingTemplateOnly(s: string): string {
  */
 export function selectContention(
     rows: ReadonlyArray<TensionRow>,
-    recentTemplateIds: ReadonlyArray<string> = [],
+    recentKeys: ReadonlyArray<string> = [],
 ): SelectedContention {
     if (rows.length === 0) return { ...framingForStatement(undefined) };
     const sorted = [...rows].sort((a, b) => b.tension - a.tension);
-    const recent = new Set(recentTemplateIds);
+    const recent = new Set(recentKeys);
 
     for (const row of sorted) {
         const framing = framingForStatement(row.statement);
-        if (!recent.has(framing.templateId)) {
+        // Variety key = the STATEMENT (carries the target), NOT the kind-level templateId —
+        // otherwise 傾心柳 and 傾心蘇 share `contention:affection` and never rotate. templateId
+        // stays kind-level so the spine's settlement matcher still ties tension to its resource.
+        const varietyKey = row.statement || framing.templateId;
+        if (!recent.has(varietyKey)) {
             return { ...framing, statement: row.statement };
         }
     }

@@ -84,13 +84,18 @@ export const warmSmall: ExperimentConfig = {
         },
     },
     stake: {
-        // 師姐妹傾心土壤，但暖：把柳生春放 index 0，眾人的暖意繞著她，而不是搶一個名額。
+        // 師姐妹傾心土壤，但暖：把柳生春放 index 0，眾人的暖意繞著她。
         kind: 'affection',
         targetIndex: 0,
         capacity: 1,
     },
-    framingOverride:
-        '後台燈下，眾人的心思都繞著{target}打轉，暖意藏在替她理鬢、留茶、逗笑的尋常照應裡',
+    // 多個 stake → selectContention 每 tick 輪不同主題的事件，POV 不再每 tick 重寫同一件事。
+    extraStakes: [
+        { kind: 'affection', targetIndex: 1, capacity: 1 }, // 也有人暗暗傾心蘇映雪
+        { kind: 'partnership', targetIndex: 0, capacity: 1 }, // 爭與柳生春搭一齣戲
+    ],
+    // framingOverride 拿掉：寫死一句會讓每 tick 的事件 framing 一字不差 → POV 重複。
+    // 不給 override，讓每個 contention 各自生成 framing（不同 stake = 不同主題）。
     settle: 'relationship-evolve',
 };
 
