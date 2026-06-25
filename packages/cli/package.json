@@ -8,6 +8,7 @@
     "deploy-preflight": "tsx --env-file-if-exists=../web/.env.local scripts/deploy-preflight.ts",
     "upgrade": "tsx --env-file-if-exists=../web/.env.local scripts/upgrade.ts",
     "bootstrap": "tsx --env-file-if-exists=../web/.env.local scripts/bootstrap.ts",
+    "create-mint-config": "tsx --env-file-if-exists=../web/.env.local scripts/create-mint-config.ts",
     "reset": "tsx --env-file-if-exists=../web/.env.local scripts/reset.ts",
     "test-e2e": "tsx --env-file-if-exists=../web/.env.local scripts/test-recruit-e2e.ts",
     "clip-thumbs": "tsx --env-file-if-exists=../web/.env.local scripts/clip-thumbs.ts",

@@ -534,6 +534,21 @@ async function main() {
   );
   console.log(`   stillReg   ${stillRegistryId}`);
 
+  // Tx 6.6: StillMintConfig — self-serve mint fee. Fans mint editions
+  // themselves by paying ENDLESS into the saga treasury; the admin path
+  // (still::mint_still) stays free for automation / gifting. Default fee =
+  // 1 ENDLESS (currency has 6 decimals → 1_000_000 base units).
+  const txMintCfg = new Transaction();
+  txMintCfg.add(
+    endlessTx.still.createMintConfig({ cap: storytellerCapId, saga: sagaId, fee: 1_000_000n }),
+  );
+  const changesMintCfg = await runTx(client, signer, txMintCfg, 'Tx 6.6 — StillMintConfig');
+  const stillMintConfigId = firstOrThrow(
+    findCreatedByType(changesMintCfg, '::still::StillMintConfig'),
+    'StillMintConfig',
+  );
+  console.log(`   mintCfg    ${stillMintConfigId}`);
+
   // ═══════════════════════════════════════════════════════════════════
   // Tx 7: Drama resources — contested scarce slots for the drama engine
   //
@@ -596,6 +611,7 @@ async function main() {
       // bootstrap rewrites the whole snapshot, so without this it's clobbered to ''
       // and Kiosk Still purchase can never go chain-ready (there's no second redeploy).
       stillTransferPolicyId: deployment.stillTransferPolicyId,
+      stillMintConfigId,
       storyId,
     },
     deployedAt,

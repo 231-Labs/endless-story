@@ -25,11 +25,13 @@
 module endless_story::still;
 
 use std::string::String;
+use sui::coin::{Self, Coin};
 use sui::display;
 use sui::event;
 use sui::package;
 use sui::table::{Self, Table};
 use sui::transfer_policy;
+use endless_story::currency::CURRENCY;
 use endless_story::saga::{Self, Saga, StorytellerCap};
 
 // ─── errors ──────────────────────────────────────────────────────────
@@ -37,6 +39,13 @@ use endless_story::saga::{Self, Saga, StorytellerCap};
 const ERegistrySagaMismatch: u64 = 1;
 const EEditionSoldOut: u64 = 2;
 const ELimitBelowMinted: u64 = 3;
+const EInsufficientPayment: u64 = 4;
+const EMintPaused: u64 = 5;
+
+// ─── constants ───────────────────────────────────────────────────────
+
+/// Default self-serve mint fee: 1 ENDLESS (`currency` has 6 decimals).
+const DEFAULT_MINT_FEE: u64 = 1_000_000;
 
 // ─── one-time witness + Display ──────────────────────────────────────
 
@@ -153,6 +162,22 @@ public fun mint_still(
 ): Still {
     saga::assert_cap(cap, saga);
     assert!(registry.saga_id == saga::saga_id(saga), ERegistrySagaMismatch);
+    mint_still_internal(registry, character_id, walrus_blob_id, image_url, title, ctx)
+}
+
+/// Shared mint body: edition bookkeeping + Still creation + event. Private,
+/// so every authority path (`mint_still` cap-gated / `mint_still_paid`
+/// fee-gated) funnels through here and editioning is identical no matter who
+/// pays. The registry is the single source of the saga link + edition count.
+fun mint_still_internal(
+    registry: &mut StillRegistry,
+    character_id: ID,
+    walrus_blob_id: String,
+    image_url: String,
+    title: String,
+    ctx: &mut TxContext,
+): Still {
+    let saga_id = registry.saga_id;
 
     let edition = minted_count(registry, walrus_blob_id) + 1;
     if (registry.limits.contains(walrus_blob_id)) {
@@ -166,7 +191,7 @@ public fun mint_still(
 
     let still = Still {
         id: object::new(ctx),
-        saga_id: saga::saga_id(saga),
+        saga_id,
         character_id,
         walrus_blob_id,
         image_url,
@@ -175,12 +200,114 @@ public fun mint_still(
     };
     event::emit(StillMinted {
         still_id: object::id(&still),
-        saga_id: saga::saga_id(saga),
+        saga_id,
         character_id,
         moment_key: walrus_blob_id,
         edition,
     });
     still
+}
+
+// ─── self-serve mint (fee-gated, permissionless) ─────────────────────
+
+/// Self-serve mint config. Shared, one per saga. Lets fans mint editions
+/// themselves by paying `fee` ENDLESS into the saga treasury, WITHOUT the
+/// StorytellerCap. The admin path (`mint_still`) stays free for automation
+/// and gifting. `paused` is a kill switch for the self-serve path only.
+public struct StillMintConfig has key {
+    id: UID,
+    saga_id: ID,
+    /// self-serve fee in ENDLESS base units (currency = 6 decimals)
+    fee: u64,
+    paused: bool,
+}
+
+public struct StillMintConfigCreated has copy, drop {
+    config_id: ID,
+    saga_id: ID,
+    fee: u64,
+}
+
+public struct StillMintFeeUpdated has copy, drop {
+    config_id: ID,
+    old_fee: u64,
+    new_fee: u64,
+}
+
+/// Create + share the self-serve mint config (bootstrap, once per saga).
+/// Pass `default_mint_fee()` for the 1 ENDLESS default.
+public fun create_mint_config(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    fee: u64,
+    ctx: &mut TxContext,
+) {
+    saga::assert_cap(cap, saga);
+    let config = StillMintConfig {
+        id: object::new(ctx),
+        saga_id: saga::saga_id(saga),
+        fee,
+        paused: false,
+    };
+    event::emit(StillMintConfigCreated {
+        config_id: object::id(&config),
+        saga_id: saga::saga_id(saga),
+        fee,
+    });
+    transfer::share_object(config);
+}
+
+/// Update the self-serve fee (base units). Storyteller-gated.
+public fun set_mint_fee(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    config: &mut StillMintConfig,
+    new_fee: u64,
+) {
+    saga::assert_cap(cap, saga);
+    assert!(config.saga_id == saga::saga_id(saga), ERegistrySagaMismatch);
+    let old_fee = config.fee;
+    config.fee = new_fee;
+    event::emit(StillMintFeeUpdated {
+        config_id: object::id(config),
+        old_fee,
+        new_fee,
+    });
+}
+
+/// Pause / resume the self-serve path (admin path unaffected). Storyteller-gated.
+public fun set_mint_paused(
+    cap: &StorytellerCap,
+    saga: &Saga,
+    config: &mut StillMintConfig,
+    paused: bool,
+) {
+    saga::assert_cap(cap, saga);
+    assert!(config.saga_id == saga::saga_id(saga), ERegistrySagaMismatch);
+    config.paused = paused;
+}
+
+/// Mint the next edition yourself by paying `config.fee` ENDLESS. The fee
+/// (not authority) gates it, so no cap is needed. Overpayment flows to the
+/// saga treasury — split an exact-fee coin client-side to avoid it. Returns
+/// the Still so the PTB transfers it to the buyer.
+public fun mint_still_paid(
+    config: &StillMintConfig,
+    saga: &mut Saga,
+    registry: &mut StillRegistry,
+    payment: Coin<CURRENCY>,
+    character_id: ID,
+    walrus_blob_id: String,
+    image_url: String,
+    title: String,
+    ctx: &mut TxContext,
+): Still {
+    assert!(!config.paused, EMintPaused);
+    assert!(config.saga_id == saga::saga_id(saga), ERegistrySagaMismatch);
+    assert!(registry.saga_id == saga::saga_id(saga), ERegistrySagaMismatch);
+    assert!(coin::value(&payment) >= config.fee, EInsufficientPayment);
+    saga::deposit_to_treasury(saga, payment);
+    mint_still_internal(registry, character_id, walrus_blob_id, image_url, title, ctx)
 }
 
 // ─── views ───────────────────────────────────────────────────────────
@@ -209,6 +336,13 @@ public fun edition_limit(registry: &StillRegistry, moment_key: String): Option<u
 
 public fun registry_saga_id(registry: &StillRegistry): ID { registry.saga_id }
 
+public fun mint_fee(config: &StillMintConfig): u64 { config.fee }
+public fun mint_paused(config: &StillMintConfig): bool { config.paused }
+public fun mint_config_saga_id(config: &StillMintConfig): ID { config.saga_id }
+
+/// The 1 ENDLESS default for `create_mint_config`.
+public fun default_mint_fee(): u64 { DEFAULT_MINT_FEE }
+
 // ─── test support ────────────────────────────────────────────────────
 
 #[test_only]
@@ -232,5 +366,21 @@ public fun destroy_registry_for_testing(r: StillRegistry) {
 #[test_only]
 public fun destroy_still_for_testing(s: Still) {
     let Still { id, .. } = s;
+    object::delete(id);
+}
+
+#[test_only]
+public fun new_mint_config_for_testing(saga: &Saga, fee: u64, ctx: &mut TxContext): StillMintConfig {
+    StillMintConfig {
+        id: object::new(ctx),
+        saga_id: saga::saga_id(saga),
+        fee,
+        paused: false,
+    }
+}
+
+#[test_only]
+public fun destroy_mint_config_for_testing(c: StillMintConfig) {
+    let StillMintConfig { id, saga_id: _, fee: _, paused: _ } = c;
     object::delete(id);
 }

@@ -43,6 +43,8 @@ export interface EndlessStoryDeployment {
   stillRegistryId: string;
   /** shared TransferPolicy<Still>, created at deploy time via still::init. */
   stillTransferPolicyId: string;
+  /** shared StillMintConfig (self-serve fee). Empty until `create_mint_config` bootstrap runs. */
+  stillMintConfigId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;
@@ -84,6 +86,7 @@ export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "dreamAdminCapId": "0x304596a38cfbb6ca5c7cdc10f4e43ad620c6c7acca7f2a582a9b8ecf8ba42c71",
   "stillRegistryId": "0xee162de15f761b32192d677cc2adb35e950ba8bcf3c92dccfce7359fe5f86842",
   "stillTransferPolicyId": "0x5c109ca43581d209f1b889edfade67c42668b4f8eb83acb334b14d9923aea0d9",
+  "stillMintConfigId": "",
   "demoCharacters": [],
   "storyId": "spring-snow",
   "deployedAt": "2026-06-23T10:11:20.743Z"

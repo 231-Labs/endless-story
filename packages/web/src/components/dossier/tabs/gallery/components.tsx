@@ -20,6 +20,7 @@ export function DerivativeCard({
   canCollect,
   minting,
   txDigest,
+  priceLabel,
   onSetCover,
   onCollect,
   onOpen,
@@ -38,6 +39,8 @@ export function DerivativeCard({
   minting: boolean;
   /** tx digest of the on-chain mint, when minted as a Still NFT. */
   txDigest?: string | null;
+  /** self-serve fee shown on the collect button when a paid mint is available. */
+  priceLabel?: string;
   onSetCover: () => void;
   onCollect: () => void;
   onOpen: () => void;
@@ -62,6 +65,7 @@ export function DerivativeCard({
             collected={collected}
             minting={minting}
             txDigest={txDigest}
+            priceLabel={priceLabel}
             onCollect={onCollect}
           />
         </div>
@@ -81,6 +85,7 @@ export function EventMomentCard({
   canCollect,
   minting,
   txDigest,
+  priceLabel,
   onSetCover,
   onCollect,
   onOpen,
@@ -99,6 +104,8 @@ export function EventMomentCard({
   minting: boolean;
   /** tx digest of the on-chain mint, when this 劇照 was minted as a Still NFT. */
   txDigest?: string | null;
+  /** self-serve fee shown on the collect button when a paid mint is available. */
+  priceLabel?: string;
   onSetCover: () => void;
   onCollect: () => void;
   onOpen: () => void;
@@ -133,6 +140,7 @@ export function EventMomentCard({
             collected={collected}
             minting={minting}
             txDigest={txDigest}
+            priceLabel={priceLabel}
             onCollect={onCollect}
           />
         ) : null}
@@ -150,11 +158,14 @@ function CollectControl({
   collected,
   minting,
   txDigest,
+  priceLabel,
   onCollect,
 }: {
   collected: boolean;
   minting: boolean;
   txDigest?: string | null;
+  /** self-serve fee (e.g. "1 ENDLESS"); shown on the button when a paid mint is live. */
+  priceLabel?: string;
   onCollect: () => void;
 }) {
   if (collected) {
@@ -178,7 +189,7 @@ function CollectControl({
       disabled={minting}
       className="rounded-full border border-cinnabar/50 bg-cinnabar/10 px-3 py-1 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/20 disabled:cursor-wait disabled:opacity-60"
     >
-      {minting ? '鑄造中…' : '收進藏閣'}
+      {minting ? '鑄造中…' : priceLabel ? `收進藏閣 · ${priceLabel}` : '收進藏閣'}
     </button>
   );
 }
