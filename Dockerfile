@@ -17,6 +17,12 @@
 # bytecode 就把它 pin 成固定 digest;要換編譯器版本改這行即可。
 # ──────────────────────────────────────────────────────────────────────────
 FROM cmdoss/walrus:latest AS move-builder
+# `sui move build` fetches the Sui framework dep via git → ensure git + CA certs.
+# (cmdoss/walrus is Debian-based, per the relayer Dockerfile.) If the base
+# already has them this is a fast no-op.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /contracts
 COPY contracts/endless_story ./endless_story
 # `--dump-bytecode-as-base64` 輸出 { modules, dependencies, digest } JSON;
