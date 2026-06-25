@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Noto_Serif_TC } from 'next/font/google';
 import './globals.css';
 import { WalletProviders } from '@/lib/providers/WalletProviders';
+import { RuntimeDeploymentSync } from '@/lib/providers/RuntimeDeploymentSync';
 import { ToastProvider } from '@/components/common/Toaster';
 
 // 全站書卷感的根基：真的把宋體網頁字體載進來（next/font 會在 build 時
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <WalletProviders>
+          <RuntimeDeploymentSync />
           <ToastProvider>{children}</ToastProvider>
         </WalletProviders>
       </body>

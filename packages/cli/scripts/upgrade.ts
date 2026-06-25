@@ -6,7 +6,6 @@
  * - upgrade.ts uses the existing UpgradeCap and keeps packageId as the
  *   original type anchor while writing latestPackageId for Move calls.
  */
-import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as url from 'node:url';
 import * as fs from 'node:fs';
@@ -15,7 +14,7 @@ import { ENDLESS_STORY_DEPLOYMENT, type SuiNetwork } from '@endless-story/shared
 import { makeSuiClient } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
-import { assertActiveEnv } from '../src/lib/sui-publish';
+import { assertActiveEnv, loadBytecodeDump } from '../src/lib/sui-publish';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
 
 const VALID_NETWORKS: ReadonlySet<SuiNetwork> = new Set(['devnet', 'testnet', 'mainnet', 'localnet']);
@@ -44,24 +43,12 @@ function repoPaths() {
 }
 
 function buildPackage(contractsDir: string): BuildDump {
-  let out: string;
-  try {
-    out = execSync('sui move build --dump-bytecode-as-base64', {
-      cwd: contractsDir,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 1024 * 1024 * 200,
-    });
-  } catch (e) {
-    const err = e as { stderr?: Buffer | string; stdout?: Buffer | string; message: string };
-    if (err.stdout?.toString().trim()) console.error('--- stdout ---\n' + err.stdout.toString());
-    if (err.stderr?.toString().trim()) console.error('--- stderr ---\n' + err.stderr.toString());
-    throw new Error('move build failed');
-  }
-  const jsonStart = out.indexOf('{');
-  const dump = JSON.parse(out.slice(jsonStart)) as BuildDump;
-  if (!dump.modules?.length || !dump.dependencies?.length || !dump.digest?.length) {
-    throw new Error('move build output missing modules/dependencies/digest');
+  // Shared resolver: pre-built dump in-container (DEPLOY_BYTECODE_DUMP_PATH),
+  // else `sui move build` from source (local dev).
+  const dump = loadBytecodeDump(contractsDir) as BuildDump;
+  // An upgrade ticket needs the package digest for the compatibility check.
+  if (!dump.digest?.length) {
+    throw new Error('bytecode dump missing digest (required for upgrade compatibility)');
   }
   return dump;
 }
@@ -194,7 +181,13 @@ async function main() {
   console.log(`   gasBudget       ${gasBudget}`);
   console.log(`   dryRun          ${dryRun}`);
 
-  assertActiveEnv(env);
+  // assertActiveEnv guards LOCAL `sui client` usage (wrong active-env footgun).
+  // In CLI-free / container mode (pre-built bytecode dump + programmatic signing
+  // via SUI_ADMIN_PRIVATE_KEY) there is no sui client config to check and the
+  // network is taken from --env, so skip it.
+  if (!process.env.DEPLOY_BYTECODE_DUMP_PATH?.trim()) {
+    assertActiveEnv(env);
+  }
 
   const signer = loadKeypair();
   const sender = signer.toSuiAddress();
@@ -251,33 +244,45 @@ async function main() {
   }
 
   const deployedAt = new Date().toISOString();
+  const snapshot = {
+    network: env,
+    packageId: ENDLESS_STORY_DEPLOYMENT.packageId,
+    latestPackageId: published.packageId,
+    adminCapId: ENDLESS_STORY_DEPLOYMENT.adminCapId,
+    worldId: ENDLESS_STORY_DEPLOYMENT.worldId,
+    locationIds: ENDLESS_STORY_DEPLOYMENT.locationIds,
+    sagaId: ENDLESS_STORY_DEPLOYMENT.sagaId,
+    storytellerCapId: ENDLESS_STORY_DEPLOYMENT.storytellerCapId,
+    sceneIds: ENDLESS_STORY_DEPLOYMENT.sceneIds,
+    faucetId: ENDLESS_STORY_DEPLOYMENT.faucetId,
+    faucetAdminCapId: ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId,
+    dreamConfigId: ENDLESS_STORY_DEPLOYMENT.dreamConfigId,
+    dreamAdminCapId: ENDLESS_STORY_DEPLOYMENT.dreamAdminCapId,
+    // Preserve still ledger ids — these survive an upgrade (same original
+    // package anchors the Still type) and dropping them breaks 劇照 mint/shop.
+    stillRegistryId: ENDLESS_STORY_DEPLOYMENT.stillRegistryId,
+    stillTransferPolicyId: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
+    stillMintConfigId: ENDLESS_STORY_DEPLOYMENT.stillMintConfigId,
+    demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
+    storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
+  };
   console.log('\n[contract-ids] writing upgraded snapshot…');
-  writeContractIds(
-    sharedSrcDir,
-    {
-      network: env,
-      packageId: ENDLESS_STORY_DEPLOYMENT.packageId,
-      latestPackageId: published.packageId,
-      adminCapId: ENDLESS_STORY_DEPLOYMENT.adminCapId,
-      worldId: ENDLESS_STORY_DEPLOYMENT.worldId,
-      locationIds: ENDLESS_STORY_DEPLOYMENT.locationIds,
-      sagaId: ENDLESS_STORY_DEPLOYMENT.sagaId,
-      storytellerCapId: ENDLESS_STORY_DEPLOYMENT.storytellerCapId,
-      sceneIds: ENDLESS_STORY_DEPLOYMENT.sceneIds,
-      faucetId: ENDLESS_STORY_DEPLOYMENT.faucetId,
-      faucetAdminCapId: ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId,
-      dreamConfigId: ENDLESS_STORY_DEPLOYMENT.dreamConfigId,
-      dreamAdminCapId: ENDLESS_STORY_DEPLOYMENT.dreamAdminCapId,
-      // Preserve still ledger ids — these survive an upgrade (same original
-      // package anchors the Still type) and dropping them breaks 劇照 mint/shop.
-      stillRegistryId: ENDLESS_STORY_DEPLOYMENT.stillRegistryId,
-      stillTransferPolicyId: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
-      stillMintConfigId: ENDLESS_STORY_DEPLOYMENT.stillMintConfigId,
-      demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
-      storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
-    },
-    deployedAt,
-  );
+  writeContractIds(sharedSrcDir, snapshot, deployedAt);
+
+  // Runtime manifest: lets a running web container adopt the upgraded ids
+  // WITHOUT a rebuild (read on boot via DEPLOYMENT_MANIFEST_PATH). The source
+  // contract-ids.ts above is the committed seed; this volume file is what a
+  // remote, in-container upgrade actually relies on. Best-effort.
+  const manifestPath = process.env.DEPLOYMENT_MANIFEST_PATH?.trim();
+  if (manifestPath) {
+    try {
+      fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+      fs.writeFileSync(manifestPath, JSON.stringify({ ...snapshot, deployedAt }, null, 2), 'utf-8');
+      console.log(`[manifest] wrote runtime deployment manifest: ${manifestPath}`);
+    } catch (e) {
+      console.warn(`[manifest] failed to write ${manifestPath}: ${(e as Error).message}`);
+    }
+  }
 
   console.log('\n[done] Package upgrade complete.');
   console.log(`   originalPackage ${ENDLESS_STORY_DEPLOYMENT.packageId}`);
