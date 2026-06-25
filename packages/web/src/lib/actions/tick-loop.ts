@@ -29,7 +29,8 @@ import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
-import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
+import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
+import { characterAgent } from '@endless-story/runner';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
@@ -144,6 +145,10 @@ const lastPovEventByChar = new Map<string, string>();
  * beat). Mirrors `lastPovEventByChar` above.
  */
 let lastEncounterPair: string | undefined;
+/** Pairs that have already crossed the confess milestone — don't re-confess every tick. */
+const confessedPairs = new Set<string>();
+/** A romance tie must have held/accrued past a single seed before a confession can fire. */
+const CONFESS_MIN_TIES = 2;
 
 function envFlag(name: string): boolean {
     const v = (process.env[name] ?? '').trim().toLowerCase();
@@ -1305,7 +1310,42 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             } else {
                 const holder = slice.find((c) => c.id === pair.holderId);
                 const holderName = holder?.name ?? rosterById.get(pair.holderId)?.name ?? '某人';
-                const trigger = buildEncounterTrigger(pair, dayLabel);
+                // CONFESS branch — a strong, not-yet-confessed romance pair: the holder may
+                // DECIDE (decideConfessAction, self-judged) to say it NOW. confess → 攤牌
+                // trigger + milestone cooldown; otherwise the usual 曖昧 encounter.
+                let trigger = buildEncounterTrigger(pair, dayLabel);
+                let isConfession = false;
+                if (
+                    pair.tone === 'romance' &&
+                    pair.count >= CONFESS_MIN_TIES &&
+                    !confessedPairs.has(pair.pairKey)
+                ) {
+                    const holderScene = rosterById.get(pair.holderId)?.currentSceneId;
+                    const coPresent = slice.filter(
+                        (c) => rosterById.get(c.id)?.currentSceneId === holderScene,
+                    );
+                    const decision = await characterAgent.decideConfessAction({
+                        name: holderName,
+                        role: roleById.get(pair.holderId) ?? '—',
+                        toName: pair.otherName,
+                        toRole: roleById.get(pair.otherId) ?? '—',
+                        relationship: `戀慕很深（牽連 ${pair.count}），這份心思你揣了很久。`,
+                        situation:
+                            coPresent.length <= 2
+                                ? `散場後，這處只剩你與${pair.otherName}兩個，外人都走了。`
+                                : `這處還有旁人在，不只你與${pair.otherName}。`,
+                    });
+                    if (decision.confess) {
+                        trigger = buildConfessTrigger(pair, dayLabel, decision.opening ?? '', decision.motive);
+                        isConfession = true;
+                        confessedPairs.add(pair.pairKey);
+                        tlog(
+                            `④· confess: ${holderName} → ${pair.otherName} ✓「${(decision.opening || decision.motive).slice(0, 28)}」`,
+                        );
+                    } else {
+                        tlog(`④· confess held: ${holderName} → ${pair.otherName}（${decision.motive.slice(0, 22)}）`);
+                    }
+                }
                 const enc = await runPovForCharacter(admin, pair.holderId, {
                     triggerNarrative: trigger,
                     mode: 'encounter',
@@ -1335,13 +1375,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             name: holderName,
                             role: roleById.get(pair.holderId),
                             scene: rosterById.get(pair.holderId)?.currentSceneName,
-                            note: `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
+                            note: isConfession
+                                ? `向 ${pair.otherName} 表明心意 · ${pair.toneZh}（牽連 ${pair.count}）`
+                                : `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
                             dryRun,
                         },
                         enc.chapter,
                     );
                     tlog(
-                        `④· encounter: ${holderName} ⇄ ${pair.otherName} (${pair.toneZh}・ties ${pair.count})` +
+                        `④· ${isConfession ? '攤牌' : 'encounter'}: ${holderName} ⇄ ${pair.otherName} (${pair.toneZh}・ties ${pair.count})` +
                             ` ✓ (${enc.chapter.length} chars)${dryRun ? ' (preview, not anchored)' : ''}`,
                     );
                     // Anchor in the BACKGROUND, serial with the other owned-cap jobs.

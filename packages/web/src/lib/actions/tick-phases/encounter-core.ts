@@ -121,3 +121,25 @@ export function buildEncounterTrigger(pair: EncounterPair, dayLabel: string): st
         `寫這一刻你們共做一件具體的瑣事，讓那層沒說破的東西在動作底下走；不要競爭、不要輸贏，只露一角，結尾讓它極輕地動一寸。`
     );
 }
+
+/**
+ * Trigger for the CONFESS branch — the holder has DECIDED (decideConfessAction) to say
+ * the unsaid thing now. The exact opposite of buildEncounterTrigger's「誰也不先點破」:
+ * this scene IS the confession, it must point-break. `opening`/`motive` come from the
+ * decision so the prose lands on the words the character actually chose.
+ */
+export function buildConfessTrigger(
+    pair: EncounterPair,
+    dayLabel: string,
+    opening: string,
+    motive: string,
+): string {
+    const said = opening ? `你開口的第一句是:「${opening}」。` : '';
+    const why = motive ? `（你心裡:${motive}）` : '';
+    return (
+        `${dayLabel} — 此刻你與${pair.otherName}恰好獨處一隅。你們之間那段「${pair.toneZh}」的牽連，` +
+        `揣了很久、誰也沒先點破;今夜你決定不再藏，把心意說開了。${said}${why}` +
+        `寫這一刻你終於攤牌的場景:你怎麼開口、${pair.otherName}怎麼接(或怎麼怔住、躲閃、回應)，那層窗紙怎麼被你捅破。` +
+        `這一回**要**點破，不再只露一角;結尾停在話既出口、你們之間從此不同的那一刻。`
+    );
+}

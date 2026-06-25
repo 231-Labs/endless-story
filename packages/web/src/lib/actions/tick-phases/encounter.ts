@@ -11,7 +11,7 @@
 import { fetchRelationshipPairs, toneLabel } from '@/lib/chain/relationships';
 import { selectEncounterPair, type EncounterPair } from './encounter-core.ts';
 
-export { encounterPairKey, buildEncounterTrigger, type EncounterPair } from './encounter-core.ts';
+export { encounterPairKey, buildEncounterTrigger, buildConfessTrigger, type EncounterPair } from './encounter-core.ts';
 
 /**
  * Fetch each candidate's seeded relationship pairs, then pick the strongest
