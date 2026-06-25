@@ -6,10 +6,12 @@ import { InfoHint } from '@/components/common/InfoHint';
 import { getDeploymentStatus } from '@/lib/actions/deployment-status';
 import { getFaucetSnapshot } from '@/lib/actions/faucet-config';
 import { getDreamConfigSnapshot } from '@/lib/actions/dream-config';
+import { getMintConfigSnapshot } from '@/lib/actions/mint-config';
 import { listStoryPresets } from '@/lib/stories/loader';
 import { DeployPanel } from './DeployPanel';
 import { FaucetConfigPanel } from './FaucetConfigPanel';
 import { DreamConfigPanel } from '../director/DreamConfigPanel';
+import { MintConfigPanel } from './MintConfigPanel';
 
 export const metadata = {
     title: '系統 | 班主後台',
@@ -19,11 +21,12 @@ export const dynamic = 'force-dynamic';
 
 /** Admin → 系統 — deployment, economy config, and links to side tools. */
 export default async function DeployPage() {
-    const [status, presets, faucetSnapshot, dreamConfig] = await Promise.all([
+    const [status, presets, faucetSnapshot, dreamConfig, mintConfig] = await Promise.all([
         getDeploymentStatus(),
         listStoryPresets(),
         getFaucetSnapshot(),
         getDreamConfigSnapshot(),
+        getMintConfigSnapshot(),
     ]);
     return (
         <>
@@ -33,7 +36,7 @@ export default async function DeployPage() {
                     eyebrow="SYSTEM"
                     eyebrowMobile="SYSTEM"
                     title="系統"
-                    meta="部署 / 種子化 / 經濟參數（Faucet · 注夢）/ 工具入口"
+                    meta="部署 / 種子化 / 經濟參數（Faucet · 注夢 · 劇照）/ 工具入口"
                 />
                 <div className="mt-12 space-y-6">
                     <DeployAdminGuard
@@ -48,6 +51,13 @@ export default async function DeployPage() {
                                 <InfoHint>character owner 注入夢境的價格（ENDLESS）與是否暫停，即時上鏈。</InfoHint>
                             </h3>
                             <div className="mt-4"><DreamConfigPanel initial={dreamConfig} /></div>
+                        </div>
+                        <div className="rounded border border-hairline bg-canvas/40 p-4">
+                            <h3 className="flex items-center gap-1.5 font-serif text-lg tracking-wide text-ink">
+                                劇照 · 收藏鑄造費
+                                <InfoHint>粉絲自助把設定集/劇照鑄成 Still 的單張費用（ENDLESS）與暫停開關，即時上鏈。種世界時自動建立（預設 1 ENDLESS）；admin 免費贈送路徑不受影響。</InfoHint>
+                            </h3>
+                            <div className="mt-4"><MintConfigPanel initial={mintConfig} /></div>
                         </div>
                         <div className="rounded border border-hairline bg-canvas/40 p-4">
                             <h3 className="flex items-center gap-1.5 font-serif text-lg tracking-wide text-ink">

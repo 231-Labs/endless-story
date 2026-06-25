@@ -32,6 +32,8 @@ export interface DeploymentSnapshot {
   stillRegistryId?: string;
   /** shared TransferPolicy<Still>, created at deploy time via still::init. */
   stillTransferPolicyId?: string;
+  /** shared StillMintConfig (self-serve fee), created at bootstrap. */
+  stillMintConfigId?: string;
   demoCharacters?: DemoCharacterRef[];
   storyId?: string;
 }
@@ -54,6 +56,7 @@ export function renderContractIdsFile(snap: DeploymentSnapshot, deployedAt: stri
     dreamAdminCapId: snap.dreamAdminCapId ?? '',
     stillRegistryId: snap.stillRegistryId ?? '',
     stillTransferPolicyId: snap.stillTransferPolicyId ?? '',
+    stillMintConfigId: snap.stillMintConfigId ?? '',
     demoCharacters: snap.demoCharacters ?? [],
     storyId: snap.storyId ?? '',
     deployedAt,
@@ -105,6 +108,8 @@ export interface EndlessStoryDeployment {
   stillRegistryId: string;
   /** shared TransferPolicy<Still>, created at deploy time via still::init. */
   stillTransferPolicyId: string;
+  /** shared StillMintConfig (self-serve fee). Empty until \`create_mint_config\` bootstrap runs. */
+  stillMintConfigId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;

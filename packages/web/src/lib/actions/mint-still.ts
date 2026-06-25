@@ -9,9 +9,14 @@
  * referencing it via `source_object` (no chamber.move change).
  *
  * Live: `still.move` + the bootstrapped `StillRegistry` (Tx 6.5) are both on
- * the current testnet deployment, so this mints for real. `recipient` (the
- * collector's wallet) receives the Still and can trade it via Kiosk or hang it
- * in their 藏閣 — the collect affordance on a 設定集·事件瞬間 calls this.
+ * the current testnet deployment, so this mints for real. `recipient` (any
+ * wallet) receives the Still and can trade it via Kiosk or hang it in a 藏閣.
+ *
+ * This is the FREE admin path: the troupe minting 劇照 for automation or as a
+ * gift, with the admin covering gas and no charge to the recipient. The public
+ * 設定集 collect button does NOT call this — fans self-mint and pay a fee via
+ * `still::mint_still_paid` (see GalleryTab). Keep this for admin / automation /
+ * gifting use; it has no UI affordance yet.
  */
 
 import { Transaction } from '@mysten/sui/transactions';

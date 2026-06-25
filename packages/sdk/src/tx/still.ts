@@ -29,6 +29,32 @@ export const setEditionLimit = (args: gen.SetEditionLimitArguments) =>
 export const mintStill = (args: gen.MintStillArguments) =>
     gen.mintStill({ package: pkg(), arguments: args });
 
+// ─── self-serve (fee-gated) mint ──────────────────────────────────────
+//
+// `mint_still` above is StorytellerCap-gated and free (admin automation /
+// gifting). The pair below lets fans mint editions themselves by paying
+// `StillMintConfig.fee` ENDLESS into the saga treasury — no cap required.
+
+/** Create + share the saga's self-serve StillMintConfig (bootstrap, once). */
+export const createMintConfig = (args: gen.CreateMintConfigArguments) =>
+    gen.createMintConfig({ package: pkg(), arguments: args });
+
+/** Update the self-serve fee (ENDLESS base units, 6 decimals). Storyteller-gated. */
+export const setMintFee = (args: gen.SetMintFeeArguments) =>
+    gen.setMintFee({ package: pkg(), arguments: args });
+
+/** Pause / resume the self-serve path (admin mint unaffected). Storyteller-gated. */
+export const setMintPaused = (args: gen.SetMintPausedArguments) =>
+    gen.setMintPaused({ package: pkg(), arguments: args });
+
+/**
+ * Self-serve mint: pay `config.fee` ENDLESS and get the next edition. `payment`
+ * is a `Coin<CURRENCY>` arg (split it exact-fee client-side). Returns the Still
+ * so the PTB transfers it to the buyer.
+ */
+export const mintStillPaid = (args: gen.MintStillPaidArguments) =>
+    gen.mintStillPaid({ package: pkg(), arguments: args });
+
 // ─── Kiosk trading helpers ────────────────────────────────────────────
 //
 // Standard Sui Kiosk flow for Still:

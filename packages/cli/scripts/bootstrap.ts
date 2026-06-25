@@ -534,6 +534,21 @@ async function main() {
   );
   console.log(`   stillReg   ${stillRegistryId}`);
 
+  // Tx 6.6: StillMintConfig — self-serve mint fee. Fans mint editions
+  // themselves by paying ENDLESS into the saga treasury; the admin path
+  // (still::mint_still) stays free for automation / gifting. Default fee =
+  // 1 ENDLESS (currency has 6 decimals → 1_000_000 base units).
+  const txMintCfg = new Transaction();
+  txMintCfg.add(
+    endlessTx.still.createMintConfig({ cap: storytellerCapId, saga: sagaId, fee: 1_000_000n }),
+  );
+  const changesMintCfg = await runTx(client, signer, txMintCfg, 'Tx 6.6 — StillMintConfig');
+  const stillMintConfigId = firstOrThrow(
+    findCreatedByType(changesMintCfg, '::still::StillMintConfig'),
+    'StillMintConfig',
+  );
+  console.log(`   mintCfg    ${stillMintConfigId}`);
+
   // ═══════════════════════════════════════════════════════════════════
   // Tx 7: Drama resources — contested scarce slots for the drama engine
   //
@@ -575,31 +590,44 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════
   console.log('\n[contract-ids] writing snapshot…');
   const deployedAt = new Date().toISOString();
-  writeContractIds(
-    sharedSrcDir,
-    {
-      network: env,
-      packageId: deployment.packageId,
-      latestPackageId: deployment.latestPackageId,
-      adminCapId,
-      worldId,
-      locationIds,
-      sagaId,
-      storytellerCapId,
-      sceneIds,
-      faucetId,
-      faucetAdminCapId,
-      dreamConfigId,
-      dreamAdminCapId,
-      stillRegistryId,
-      // Preserve the TransferPolicy<Still> id captured by deploy.ts at publish —
-      // bootstrap rewrites the whole snapshot, so without this it's clobbered to ''
-      // and Kiosk Still purchase can never go chain-ready (there's no second redeploy).
-      stillTransferPolicyId: deployment.stillTransferPolicyId,
-      storyId,
-    },
-    deployedAt,
-  );
+  const snapshot = {
+    network: env,
+    packageId: deployment.packageId,
+    latestPackageId: deployment.latestPackageId,
+    adminCapId,
+    worldId,
+    locationIds,
+    sagaId,
+    storytellerCapId,
+    sceneIds,
+    faucetId,
+    faucetAdminCapId,
+    dreamConfigId,
+    dreamAdminCapId,
+    stillRegistryId,
+    // Preserve the TransferPolicy<Still> id captured by deploy.ts at publish —
+    // bootstrap rewrites the whole snapshot, so without this it's clobbered to ''
+    // and Kiosk Still purchase can never go chain-ready (there's no second redeploy).
+    stillTransferPolicyId: deployment.stillTransferPolicyId,
+    stillMintConfigId,
+    storyId,
+  };
+  writeContractIds(sharedSrcDir, snapshot, deployedAt);
+
+  // Runtime manifest: lets a running web container adopt the freshly-seeded
+  // world (new saga / world / scene ids) WITHOUT a rebuild — this is what makes
+  // re-creating a world purely button-driven from the admin panel. Best-effort;
+  // no-op without DEPLOYMENT_MANIFEST_PATH (local dev).
+  const manifestPath = process.env.DEPLOYMENT_MANIFEST_PATH?.trim();
+  if (manifestPath) {
+    try {
+      fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+      fs.writeFileSync(manifestPath, JSON.stringify({ ...snapshot, deployedAt }, null, 2), 'utf-8');
+      console.log(`[manifest] wrote runtime deployment manifest: ${manifestPath}`);
+    } catch (e) {
+      console.warn(`[manifest] failed to write ${manifestPath}: ${(e as Error).message}`);
+    }
+  }
 
   console.log('\n[done] Bootstrap complete.');
   console.log(`   network    ${env}`);
