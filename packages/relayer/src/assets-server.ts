@@ -48,6 +48,47 @@ const EPOCH_MS = Number(process.env.WALRUS_EPOCH_MS ?? (NETWORK === "mainnet" ? 
 const store = new AssetStore(join(DATA_DIR, "walrus-assets.json"));
 const walrus = new AssetWalrus(DATA_DIR);
 
+// ── auto-renew daemon ────────────────────────────────────────────────
+// The ONLY other renewal path is the manual POST /api/assets/:id/extend.
+// Without this loop `autoRenew` is a label with no effect: tracked assets drift
+// past their endEpoch (negative epochsRemaining) and the blob eventually dies.
+// This periodically extends every live, autoRenew asset within RENEW_THRESHOLD
+// epochs of expiry. Needs an up-to-date `walrus` CLI on the host — extend
+// failures (e.g. an outdated CLI) are logged, not fatal.
+const RENEW_INTERVAL_MS = Number(process.env.RENEW_INTERVAL_MS ?? 6 * 60 * 60 * 1000);
+let renewing = false;
+
+async function renewSweep(): Promise<void> {
+  if (renewing) return;
+  renewing = true;
+  try {
+    const currentEpoch = await walrus.currentEpoch();
+    if (currentEpoch == null) return;
+    const due = store
+      .list()
+      .filter(
+        (a) => a.autoRenew && a.status === "live" && a.endEpoch - currentEpoch <= RENEW_THRESHOLD_EPOCHS,
+      );
+    if (due.length === 0) return;
+    console.log(`[asset] auto-renew: ${due.length} asset(s) within ${RENEW_THRESHOLD_EPOCHS} epochs of expiry`);
+    for (const a of due) {
+      try {
+        const by = CATEGORY_DEFAULTS[a.category]?.epochs ?? 53;
+        const newEnd = await walrus.extend(a.suiObjectId, by);
+        store.patch(a.id, { endEpoch: newEnd > 0 ? newEnd : a.endEpoch + by });
+        console.log(`[asset] auto-renewed ${a.id} (+${by} → endEpoch ${newEnd || a.endEpoch + by})`);
+      } catch (err) {
+        console.warn(`[asset] auto-renew failed for ${a.id}:`, err instanceof Error ? err.message : err);
+      }
+    }
+    store.flush();
+  } catch (err) {
+    console.warn("[asset] auto-renew sweep failed:", err instanceof Error ? err.message : err);
+  } finally {
+    renewing = false;
+  }
+}
+
 function aggregatorUrl(blobId: string): string {
   return `${PUBLIC_AGGREGATOR_BASE}/v1/blobs/${blobId}`;
 }
@@ -243,4 +284,8 @@ createServer((req, res) => {
   console.log(
     `[asset] listening on :${PORT}  walrus=${walrus.local ? "dev-local" : "cli"}  network=${NETWORK}  auth=${process.env.RELAYER_SECRET ? "on" : "off"}`,
   );
+  // kick off auto-renew: once on boot, then every RENEW_INTERVAL_MS.
+  void renewSweep();
+  setInterval(() => void renewSweep(), RENEW_INTERVAL_MS).unref();
+  console.log(`[asset] auto-renew daemon on (every ${Math.round(RENEW_INTERVAL_MS / 3_600_000)}h, threshold ${RENEW_THRESHOLD_EPOCHS} epochs)`);
 });
