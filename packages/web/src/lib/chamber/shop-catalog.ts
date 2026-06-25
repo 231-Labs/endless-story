@@ -64,7 +64,7 @@ export function shopWaresFor(character: Character): ShopWare[] {
 
   // 戲坊 sells the craft 珍玩 only. 劇照 are NOT re-listed here — they are the
   // same event-moment images already shown in 設定集·事件瞬間, so the collect
-  // affordance lives on the moment itself (see `stillWareFromMoment`). This
+  // affordance lives on the moment itself (see `stillWareFromBlob`). This
   // keeps each moment in ONE place and avoids the view-here / buy-there dup.
   return [
     // 首演原件 — one and only (edition limit 1 on-chain)
@@ -94,28 +94,48 @@ export function shopWaresFor(character: Character): ShopWare[] {
   ];
 }
 
+/** 圖種 → 中文標籤(劇照 / 設定圖 / 造型 …)used in titles + subtitles. */
+const BLOB_KIND_TAG: Record<string, string> = {
+  event_moment: '劇照',
+  setting_sheet: '設定圖',
+  portrait_variant: '人物誌',
+  costume: '造型',
+  makeup: '妝容',
+  anchor: '定妝',
+  scene_clip: '片段',
+};
+
+export function blobKindTag(kind?: string): string {
+  return (kind && BLOB_KIND_TAG[kind]) || '劇照';
+}
+
 /**
- * A 劇照 collectible built from one of the character's event moments. The
- * collect affordance lives on the 設定集·事件瞬間 card (where the moment is
- * shown), so a moment is never duplicated into the 戲坊. Key scheme matches the
- * old shop still ware so the 藏閣 inventory dedups identically.
+ * A collectible Still built from ANY gallery image of a character — an event
+ * moment OR a 設定集 sheet (形貌/造型/妝容…). The collect affordance lives on
+ * the image card itself, so an image is never duplicated into the 戲坊. Key is
+ * scoped by walrus blob so the 藏閣 inventory dedups identically; subtitle/title
+ * reflect the image kind.
  */
-export function stillWareFromMoment(
+export function stillWareFromBlob(
   character: Character,
-  moment: { imageUrl?: string; walrusBlobId?: string; label?: string },
+  blob: { kind?: string; imageUrl?: string; walrusBlobId?: string; label?: string },
   index = 0,
 ): ShopWare {
+  const tag = blobKindTag(blob.kind);
   return {
-    key: `ware:${character.id}:still:${moment.walrusBlobId || index}`,
+    key: `ware:${character.id}:still:${blob.walrusBlobId || index}`,
     kind: 'still',
-    title: moment.label ?? `${character.name}之一瞬`,
-    subtitle: '劇照 · 不限量',
+    title: blob.label ?? `${character.name}·${tag}`,
+    subtitle: `${tag} · 不限量`,
     limit: null,
     priceSui: 0.5,
-    url: moment.imageUrl,
-    walrusBlobId: moment.walrusBlobId,
-    imageUrl: moment.imageUrl,
-    blurb: '一場戲只此一瞬——收進藏閣，它就不散場。',
+    url: blob.imageUrl,
+    walrusBlobId: blob.walrusBlobId,
+    imageUrl: blob.imageUrl,
+    blurb:
+      blob.kind === 'event_moment'
+        ? '一場戲只此一瞬——收進藏閣，它就不散場。'
+        : '設定集裡的一幀——收進藏閣，留作私藏。',
   };
 }
 

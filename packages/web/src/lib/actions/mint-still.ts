@@ -8,9 +8,10 @@
  * owns a Kiosk-tradeable Still; hanging it in a chamber is just a placement
  * referencing it via `source_object` (no chamber.move change).
  *
- * NOTE: requires a deployment that includes `still.move` — on the current
- * testnet deployment (pre-still) this returns a FunctionNotFound error until
- * the next redeploy.
+ * Live: `still.move` + the bootstrapped `StillRegistry` (Tx 6.5) are both on
+ * the current testnet deployment, so this mints for real. `recipient` (the
+ * collector's wallet) receives the Still and can trade it via Kiosk or hang it
+ * in their 藏閣 — the collect affordance on a 設定集·事件瞬間 calls this.
  */
 
 import { Transaction } from '@mysten/sui/transactions';
