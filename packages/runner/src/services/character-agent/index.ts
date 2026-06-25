@@ -71,6 +71,8 @@ export type {
     AskRelation,
     AskVitality,
 } from './ask.js';
+export { decideConfessAction } from './confess.js';
+export type { DecideConfessInput, ConfessResult } from './confess.js';
 export {
     buildAskSystemPrompt,
     buildAskUserPrompt,
