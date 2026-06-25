@@ -73,6 +73,8 @@ export type {
 } from './ask.js';
 export { decideConfessAction } from './confess.js';
 export type { DecideConfessInput, ConfessResult } from './confess.js';
+export { decideGovernanceAction } from './governance.js';
+export type { DecideGovernanceInput, GovernanceProposal, GovernanceResult } from './governance.js';
 export {
     buildAskSystemPrompt,
     buildAskUserPrompt,
