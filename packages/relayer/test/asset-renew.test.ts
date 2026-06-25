@@ -196,3 +196,69 @@ test("no due assets → ok, no flush, empty result", async () => {
   assert.equal(state.flushCount, 0);
   assert.match(r.note, /nothing due/);
 });
+
+test("already-expired assets (remaining ≤ 0) are skipped, never extended", async () => {
+  const expired = asset({ id: "exp", suiObjectId: "0xexp", endEpoch: 8 }); // epoch 10 → remaining -2
+  const live = asset({ id: "live", suiObjectId: "0xlive", endEpoch: 12 }); // remaining 2 → due
+  const { store, map } = fakeStore([expired, live]);
+  const { walrus, extendCalls } = fakeWalrus({ epoch: 10 });
+
+  const r = await renewDue(store, walrus, CONFIG);
+
+  assert.equal(r.ok, true, "expired is not a failure");
+  assert.equal(r.dueCount, 1, "only the live one is attempted");
+  assert.deepEqual(
+    r.renewed.map((x) => x.id),
+    ["live"],
+  );
+  assert.deepEqual(
+    r.skipped.map((x) => x.id),
+    ["exp"],
+  );
+  assert.match(r.skipped[0]!.reason, /expired/i);
+  assert.deepEqual(
+    extendCalls.map((c) => c.id),
+    ["0xlive"],
+    "extend is never called on the expired blob",
+  );
+  assert.equal(map.get("exp")!.endEpoch, 8, "expired one untouched");
+});
+
+test("an extend that aborts with EResourceBounds is treated as expired (skipped, not failed)", async () => {
+  const { store } = fakeStore([asset({ id: "a", suiObjectId: "0xa", endEpoch: 12 })]); // due, but lapses mid-sweep
+  const { walrus } = fakeWalrus({
+    epoch: 10,
+    extend: async () => {
+      throw new Error("walrus extend exited 1: assert_certified_not_expired ... EResourceBounds");
+    },
+  });
+
+  const r = await renewDue(store, walrus, CONFIG);
+
+  assert.equal(r.ok, true, "expired-mid-sweep is not a hard failure");
+  assert.equal(r.failed.length, 0);
+  assert.deepEqual(
+    r.skipped.map((x) => x.id),
+    ["a"],
+  );
+  assert.match(r.skipped[0]!.reason, /expired/i);
+});
+
+test("aborts the sweep after 5 consecutive non-expired failures", async () => {
+  const rows = Array.from({ length: 8 }, (_, i) =>
+    asset({ id: `a${i}`, suiObjectId: `0x${i}`, endEpoch: 12 }),
+  );
+  const { store } = fakeStore(rows);
+  const { walrus, extendCalls } = fakeWalrus({
+    epoch: 10,
+    extend: async () => {
+      throw new Error("walrus extend exited 1: node unreachable");
+    },
+  });
+
+  const r = await renewDue(store, walrus, CONFIG);
+
+  assert.equal(r.ok, false);
+  assert.equal(r.failed.length, 5, "stops after 5 consecutive failures");
+  assert.equal(extendCalls.length, 5, "no further extend attempts once the backstop trips");
+});

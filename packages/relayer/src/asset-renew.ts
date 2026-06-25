@@ -88,10 +88,32 @@ export async function renewDue(
     return summarize(false, note);
   }
 
-  const due = store.list().filter((a) => a.autoRenew && a.endEpoch - currentEpoch <= thresholdEpochs);
+  // Split autoRenew assets by lease state. Already-expired blobs (remaining ≤ 0) CANNOT be
+  // extended — the Walrus contract aborts in assert_certified_not_expired (EResourceBounds) —
+  // so never call extend on them (doing so was the failure spam): report + skip instead.
+  const renewable: WalrusAsset[] = [];
+  for (const a of store.list()) {
+    if (!a.autoRenew) continue;
+    const remaining = a.endEpoch - currentEpoch;
+    if (remaining <= 0) {
+      skipped.push({
+        id: a.id,
+        label: a.label,
+        reason: `already expired (end ${a.endEpoch} ≤ epoch ${currentEpoch}) — cannot extend`,
+      });
+    } else if (remaining <= thresholdEpochs) {
+      renewable.push(a);
+    }
+  }
+  if (skipped.length > 0) {
+    console.warn(`${TAG} ${skipped.length} already-expired asset(s) skipped — cannot be renewed`);
+  }
 
-  if (due.length === 0) {
-    const note = `nothing due at epoch ${currentEpoch} (threshold ${thresholdEpochs})`;
+  if (renewable.length === 0) {
+    const note =
+      skipped.length > 0
+        ? `nothing renewable at epoch ${currentEpoch} (${skipped.length} already expired, skipped)`
+        : `nothing due at epoch ${currentEpoch} (threshold ${thresholdEpochs})`;
     console.log(`${TAG} ${note}`);
     return summarize(true, note);
   }
@@ -101,20 +123,21 @@ export async function renewDue(
   const walBlocked = walletMinWal > 0 && wallet.wal != null && wallet.wal < walletMinWal;
   const suiBlocked = walletMinSui > 0 && wallet.sui != null && wallet.sui < walletMinSui;
   if (walBlocked || suiBlocked) {
-    for (const a of due) skipped.push({ id: a.id, label: a.label, reason: "wallet below floor" });
+    for (const a of renewable) skipped.push({ id: a.id, label: a.label, reason: "wallet below floor" });
     const note =
       `wallet below floor (WAL ${fmt(wallet.wal)}/min ${walletMinWal}, SUI ${fmt(wallet.sui)}/min ${walletMinSui})` +
-      ` — ${due.length} due NOT renewed`;
+      ` — ${renewable.length} due NOT renewed`;
     console.warn(`${TAG} ${note}`);
-    return summarize(false, note, true, due.length);
+    return summarize(false, note, true, renewable.length);
   }
 
   if (wallet.wal == null || wallet.sui == null) {
     console.warn(`${TAG} wallet balance unreadable — proceeding without floor check`);
   }
 
-  console.log(`${TAG} ${due.length} due at epoch ${currentEpoch} → extending +${extendEpochs} each`);
-  for (const a of due) {
+  console.log(`${TAG} ${renewable.length} due at epoch ${currentEpoch} → extending +${extendEpochs} each`);
+  let consecutiveFailures = 0;
+  for (const a of renewable) {
     try {
       const newEnd = await walrus.extend(a.suiObjectId, extendEpochs);
       // extend returns 0 when its output isn't parseable (and in dev-local) → additive fallback,
@@ -122,20 +145,36 @@ export async function renewDue(
       const to = newEnd > 0 ? newEnd : a.endEpoch + extendEpochs;
       store.patch(a.id, { endEpoch: to });
       renewed.push({ id: a.id, label: a.label, from: a.endEpoch, to });
+      consecutiveFailures = 0;
       console.log(`${TAG} renewed "${a.label}" (${a.id}) ${a.endEpoch} → ${to}`);
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      // A blob that lapsed since the epoch read aborts in assert_certified_not_expired
+      // (EResourceBounds). It's dead, not a retryable failure → bucket as skipped so the
+      // next sweep doesn't re-hammer it (that was the failure spam).
+      if (/EResourceBounds|assert_certified_not_expired|expired/i.test(error)) {
+        skipped.push({ id: a.id, label: a.label, reason: "expired mid-sweep — cannot extend" });
+        console.warn(`${TAG} "${a.label}" (${a.id}) expired — skipping`);
+        continue;
+      }
       failed.push({ id: a.id, label: a.label, error });
       console.error(`${TAG} FAILED "${a.label}" (${a.id}): ${error}`);
+      // Backstop: if extends keep failing for a non-expired reason (gas exhausted, node
+      // down…), stop rather than churn the whole backlog.
+      if ((consecutiveFailures += 1) >= 5) {
+        console.error(`${TAG} aborting sweep after ${consecutiveFailures} consecutive failures`);
+        break;
+      }
     }
   }
   if (renewed.length > 0) store.flush();
 
-  const note =
-    `epoch ${currentEpoch}: renewed ${renewed.length}/${due.length}` +
-    (failed.length ? `, failed ${failed.length}` : "");
+  const parts = [`renewed ${renewed.length}/${renewable.length}`];
+  if (skipped.length) parts.push(`skipped ${skipped.length} (expired)`);
+  if (failed.length) parts.push(`failed ${failed.length}`);
+  const note = `epoch ${currentEpoch}: ${parts.join(", ")}`;
   console.log(`${TAG} ${note}`);
-  return summarize(failed.length === 0, note, false, due.length);
+  return summarize(failed.length === 0, note, false, renewable.length);
 }
 
 function fmt(v: number | null): string {
