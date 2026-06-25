@@ -372,6 +372,61 @@ export interface DirectedEdge {
  *
  * `nameOf` resolves target ids to names (the harness passes its fake roster).
  */
+/* ── cooling engine ─────────────────────────────────────────────────────────────
+ * A tie's weight is no longer a raw repeat count (append-only ⇒ only ever grows ⇒
+ * every relationship trends to romance and the graph saturates). Instead each seeding
+ * contributes a TIME-DECAYED boost: a tie reaffirmed THIS tick counts full; one last
+ * touched N ticks ago counts 0.5^(N/halfLife). Sum over a directed pair's seedings =
+ * its current strength. Stop reaffirming a tie and it cools; let it fall below
+ * `minStrength` and it FADES OUT of the graph entirely (drops off the read). This is
+ * the down-force the model was missing — relationships now ebb, not just accrue.
+ *
+ * `provenance` (per-trigger accrual rates) layers on top of this later; the decay is
+ * the foundation. Pure + exported so it can be unit-tested without an LLM or a chain. */
+export interface RelEventLite {
+    characterA: string;
+    characterB: string;
+    tone: string;
+    /** Tick the tie was seeded on (harness encodes this in the event's seededAtMs). */
+    tick: number;
+}
+
+/** Ticks for an un-reaffirmed tie to halve in strength. */
+export const DECAY_HALF_LIFE = 2;
+/** Strength below which a directed tie has cooled off the graph (faded out). */
+export const DECAY_MIN_STRENGTH = 0.35;
+
+export function aggregateDecayedOutgoing(
+    events: RelEventLite[], // newest-first
+    sourceId: string,
+    nowTick: number,
+    opts?: { halfLife?: number; minStrength?: number },
+): DirectedEdge[] {
+    const halfLife = opts?.halfLife ?? DECAY_HALF_LIFE;
+    const minStrength = opts?.minStrength ?? DECAY_MIN_STRENGTH;
+    // newest-first ⇒ the first seeding seen for a pair sets its (latest) tone.
+    const byTarget = new Map<string, { toId: string; tone: RelationshipTone; strength: number }>();
+    for (const ev of events) {
+        if (ev.characterA !== sourceId) continue; // outgoing only
+        const toId = ev.characterB;
+        if (!toId || toId === sourceId) continue;
+        const age = Math.max(0, nowTick - ev.tick);
+        const boost = Math.pow(0.5, age / halfLife);
+        const existing = byTarget.get(toId);
+        if (existing) {
+            existing.strength += boost;
+        } else {
+            byTarget.set(toId, { toId, tone: coerceTone(ev.tone), strength: boost });
+        }
+    }
+    const out: DirectedEdge[] = [];
+    for (const e of byTarget.values()) {
+        if (e.strength < minStrength) continue; // cooled off the graph
+        out.push({ toId: e.toId, toName: '', tone: e.tone, weight: e.strength });
+    }
+    return out.sort((a, b) => b.weight - a.weight);
+}
+
 export async function directedOutgoingEdges(
     characterId: string,
     nameOf: (id: string) => string,
@@ -379,26 +434,20 @@ export async function directedOutgoingEdges(
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return [];
     const client = makeSuiClient({ network: resolveNetwork() });
-    const events = await read.director
+    const summaries = await read.director
         .listRelationshipEvents(client, pkg, { maxEvents: 1000 })
         .catch(() => []);
-    // events are newest-first; first time we see a directed pair sets its tone.
-    const byTarget = new Map<string, DirectedEdge>();
-    for (const ev of events) {
-        if (ev.characterA !== characterId) continue; // outgoing only
-        const toId = ev.characterB;
-        if (!toId || toId === characterId) continue;
-        const existing = byTarget.get(toId);
-        if (existing) {
-            existing.weight += 1;
-        } else {
-            byTarget.set(toId, {
-                toId,
-                toName: nameOf(toId),
-                tone: coerceTone(ev.tone),
-                weight: 1,
-            });
-        }
-    }
-    return [...byTarget.values()].sort((a, b) => b.weight - a.weight);
+    // In the harness, seededAtMs carries the seed TICK (see full-tick-fake-chain).
+    const events: RelEventLite[] = summaries.map((s) => ({
+        characterA: s.characterA,
+        characterB: s.characterB,
+        tone: s.tone,
+        tick: Number(s.seededAtMs) || 0,
+    }));
+    // "Now" = the most recent tick any tie was seeded on; ages are measured back from it.
+    const nowTick = events.reduce((m, e) => Math.max(m, e.tick), 0);
+    return aggregateDecayedOutgoing(events, characterId, nowTick).map((e) => ({
+        ...e,
+        toName: nameOf(e.toId),
+    }));
 }

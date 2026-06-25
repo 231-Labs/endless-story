@@ -399,7 +399,13 @@ export class FullFakeChain {
                             characterA,
                             characterB,
                             tone: tone || 'neutral',
-                            seededAtMs: Date.now(),
+                            // In the harness this field carries the TICK the tie was
+                            // seeded on (not wall-clock ms), so the observatory's
+                            // directed read can decay a tie by how many ticks it has
+                            // gone un-reaffirmed (the cooling engine). On real chain
+                            // it stays a true ms timestamp; directedOutgoingEdges is
+                            // observatory-only so the overload is contained here.
+                            seededAtMs: this.world.currentTick,
                         });
                         regs.push({ moveType: 'unit', value: null });
                     } else if (mc.module === 'commitment' && mc.function === 'commit') {
