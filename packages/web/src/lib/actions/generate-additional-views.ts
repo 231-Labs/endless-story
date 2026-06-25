@@ -192,7 +192,7 @@ export async function generateAdditionalViews(
                 contentType: 'image/png',
                 tags: { kind: String(r.view.kind), view: r.view.label },
             })),
-            { network: 'testnet', epochs: 5 },
+            { network: 'testnet', epochs: 30 },
         );
         for (const p of quilt.patches) {
             stored.set(p.identifier as ViewSpec['label'], { url: p.url, chainId: p.quiltPatchId });
@@ -201,7 +201,7 @@ export async function generateAdditionalViews(
         console.warn('[additional-views] quilt upload failed, falling back to per-blob:', err instanceof Error ? err.message : err);
         for (const r of rendered) {
             try {
-                const put = await blob.putBlob(r.bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+                const put = await blob.putBlob(r.bytes, { network: 'testnet', contentType: 'image/png', epochs: 30 });
                 stored.set(r.view.label, { url: put.url, chainId: put.blobId });
             } catch (e) {
                 console.warn(`[additional-views] ${r.view.label} upload failed:`, e instanceof Error ? e.message : e);

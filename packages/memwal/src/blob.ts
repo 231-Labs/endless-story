@@ -57,7 +57,7 @@ function publisherBase(network: WalrusNetwork): string {
 export interface PutBlobOptions {
     /** Default 'testnet'. */
     network?: WalrusNetwork;
-    /** Storage epochs (1 epoch ≈ 14 days on testnet). Default: 5. */
+    /** Storage epochs (1 epoch ≈ 14 days on testnet). Default: 30. */
     epochs?: number;
     /** Override publisher URL (e.g. custom self-hosted). */
     publisherUrl?: string;
@@ -109,7 +109,7 @@ async function uploadViaAssetService(
     const secret = process.env.ASSET_SERVICE_SECRET ?? process.env.RELAYER_SECRET;
     const category = assetCategoryFor(opts.contentType, opts.category);
     const label = (opts.label ?? `${category}-${Date.now().toString(36)}`).slice(0, 120);
-    const epochs = opts.epochs ?? 5;
+    const epochs = opts.epochs ?? 30;
     const qs = new URLSearchParams({ category, label, epochs: String(epochs), deletable: 'true' });
     try {
         const res = await fetch(`${base}/api/assets?${qs.toString()}`, {
@@ -176,7 +176,7 @@ export async function putBlob(
     opts: PutBlobOptions = {},
 ): Promise<PutBlobResult> {
     const network = opts.network ?? 'testnet';
-    const epochs = opts.epochs ?? 5;
+    const epochs = opts.epochs ?? 30;
 
     // Prefer the self-hosted asset service (publishes to Walrus via a funded CLI)
     // unless the caller pinned an explicit publisher. Falls through to a direct
@@ -343,7 +343,7 @@ export async function putQuilt(
     }
 
     const network = opts.network ?? 'testnet';
-    const epochs = opts.epochs ?? 5;
+    const epochs = opts.epochs ?? 30;
     const base = opts.publisherUrl ?? publisherBase(network);
     const url = `${base.replace(/\/$/, '')}/v1/quilts?epochs=${epochs}`;
     const maxRetries = Math.max(0, opts.retries ?? 4);

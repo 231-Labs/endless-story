@@ -393,7 +393,7 @@ async function renderFromAnchor(
         if (!bytes || bytes.length === 0) return { ok: false, promptUsed: prompt, error: '出圖為空' };
         const base64 = img?.base64 ?? Buffer.from(bytes).toString('base64');
         try {
-            const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+            const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 30 });
             return { ok: true, url: put.url, base64, blobId: put.blobId, promptUsed: prompt };
         } catch {
             // Rendered but Walrus upload was rate-limited — still return the

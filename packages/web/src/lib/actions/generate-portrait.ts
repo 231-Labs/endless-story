@@ -163,7 +163,7 @@ export async function generatePortrait(input: GeneratePortraitInput): Promise<Ge
     }
     if (bytes && bytes.length > 0) {
         try {
-            const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+            const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 30 });
             url = put.url;
             blobId = put.blobId;
         } catch (err) {

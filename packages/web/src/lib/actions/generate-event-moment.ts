@@ -126,7 +126,7 @@ export async function generateEventMomentAction(input: EventMomentInput): Promis
     let url: string;
     let blobId: string;
     try {
-        const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+        const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 30 });
         url = put.url;
         blobId = put.blobId;
     } catch (err) {

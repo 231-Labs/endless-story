@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { authed, cors, readBytes, readJson, send } from "./http-util.ts";
 import { AssetStore } from "./asset-store.ts";
 import { AssetWalrus } from "./asset-walrus.ts";
+import { renewDue, type RenewConfig, type RenewSummary } from "./asset-renew.ts";
 import {
   ASSET_CATEGORIES,
   CATEGORY_DEFAULTS,
@@ -45,8 +46,37 @@ const RENEW_THRESHOLD_EPOCHS = Number(process.env.RENEW_THRESHOLD_EPOCHS ?? 5);
 // override with WALRUS_EPOCH_MS.
 const EPOCH_MS = Number(process.env.WALRUS_EPOCH_MS ?? (NETWORK === "mainnet" ? 14 : 1) * 86_400_000);
 
+// Auto-renewal (docs/narrative/ASSET_MANAGEMENT.md §8): renew autoRenew assets within
+// RENEW_THRESHOLD_EPOCHS of expiry, extending each by RENEW_EXTEND_EPOCHS. WALLET_MIN_*
+// gate the sweep (0 = no floor; per-asset extend failures still surface in logs either way).
+const RENEW_EXTEND_EPOCHS = Number(process.env.RENEW_EXTEND_EPOCHS ?? 30);
+const WALLET_MIN_WAL = Number(process.env.WALLET_MIN_WAL ?? 0);
+const WALLET_MIN_SUI = Number(process.env.WALLET_MIN_SUI ?? 0);
+// In-process sweeper cadence (ms). 0 disables it — e.g. when an external cron / systemd
+// timer hits POST /api/assets/renew-due instead. Default 6h.
+const RENEW_SWEEP_INTERVAL_MS = Number(process.env.RENEW_SWEEP_INTERVAL_MS ?? 6 * 3_600_000);
+const renewConfig: RenewConfig = {
+  thresholdEpochs: RENEW_THRESHOLD_EPOCHS,
+  extendEpochs: RENEW_EXTEND_EPOCHS,
+  walletMinWal: WALLET_MIN_WAL,
+  walletMinSui: WALLET_MIN_SUI,
+};
+
 const store = new AssetStore(join(DATA_DIR, "walrus-assets.json"));
 const walrus = new AssetWalrus(DATA_DIR);
+
+// One sweep at a time: the interval driver and the manual endpoint share this guard so a
+// click can't race the timer into double-extending the same blob. null = already running.
+let sweepInFlight = false;
+async function runSweep(): Promise<RenewSummary | null> {
+  if (sweepInFlight) return null;
+  sweepInFlight = true;
+  try {
+    return await renewDue(store, walrus, renewConfig);
+  } finally {
+    sweepInFlight = false;
+  }
+}
 
 function aggregatorUrl(blobId: string): string {
   return `${PUBLIC_AGGREGATOR_BASE}/v1/blobs/${blobId}`;
@@ -122,6 +152,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (method === "GET" && path === "/api/assets/wallet") {
     return send(res, 200, await walrus.wallet());
+  }
+
+  // Auto-renewal sweep — scan autoRenew assets near expiry and `walrus extend` them.
+  // Exact-path, so it must sit before the `/api/assets/:id` parsing below.
+  if (method === "POST" && path === "/api/assets/renew-due") {
+    const r = await runSweep();
+    if (!r) return send(res, 409, { error: "a renewal sweep is already running" });
+    return send(res, 200, r);
   }
 
   if (path === "/api/assets" && method === "GET") {
@@ -244,3 +282,19 @@ createServer((req, res) => {
     `[asset] listening on :${PORT}  walrus=${walrus.local ? "dev-local" : "cli"}  network=${NETWORK}  auth=${process.env.RELAYER_SECRET ? "on" : "off"}`,
   );
 });
+
+// Hybrid auto-renewal driver (docs/narrative/ASSET_MANAGEMENT.md §8). Opt out with
+// RENEW_SWEEP_INTERVAL_MS=0 and drive POST /api/assets/renew-due from an external cron instead.
+if (RENEW_SWEEP_INTERVAL_MS > 0) {
+  const sweep = () => void runSweep().catch((err) => console.error("[asset-renew] sweep crashed:", err));
+  setInterval(sweep, RENEW_SWEEP_INTERVAL_MS).unref();
+  // First pass shortly after boot so a fresh deploy doesn't wait a whole interval.
+  setTimeout(sweep, 15_000).unref();
+  console.log(
+    `[asset-renew] sweeper on — every ${Math.round(RENEW_SWEEP_INTERVAL_MS / 60_000)}min,` +
+      ` threshold ${RENEW_THRESHOLD_EPOCHS} epochs, extend +${RENEW_EXTEND_EPOCHS}` +
+      `${WALLET_MIN_WAL || WALLET_MIN_SUI ? `, floor WAL ${WALLET_MIN_WAL}/SUI ${WALLET_MIN_SUI}` : ""}`,
+  );
+} else {
+  console.log("[asset-renew] in-process sweeper off (RENEW_SWEEP_INTERVAL_MS=0) — drive POST /api/assets/renew-due externally");
+}
