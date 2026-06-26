@@ -37,17 +37,20 @@ import {
     CODA_DIVIDER,
     type ChapterMode,
     type CharacterSnapshot,
+    type CharacterState,
     type SagaSoul,
 } from './prompt.js';
 
 export {
     buildSystemPrompt as buildPovSystemPrompt,
     buildUserPrompt as buildPovUserPrompt,
+    buildStateBlock,
     type ChapterMode,
     type CharacterSnapshot,
     type PovPromptInput,
     type SagaSoul,
     type EmotionalStance,
+    type CharacterState,
 } from './prompt.js';
 
 export interface RunCharacterWorkerInput {
@@ -108,6 +111,12 @@ export interface RunCharacterWorkerInput {
      * and earns extra length. Threaded from the tick loop's verdict map.
      */
     closing?: boolean;
+    /**
+     * Optional: 日常層 — this character's current 餓/累/心情 state, tinting the chapter's
+     * texture without changing who they are. Omit ⇒ no injection (regression-safe).
+     * The tick loop will drift/evolve this per character per tick (see state.ts).
+     */
+    state?: CharacterState;
     /**
      * Optional: append a private interior「燈下」coda after the scene (the
      * character's honest read on the event / the people / themselves). Default
@@ -203,6 +212,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         dramaHint: input.dramaHint,
         sceneBeats: input.sceneBeats,
         closing: input.closing,
+        state: input.state,
     });
 
     // Scene length: the prompt now asks for 700–1100 字 (1200–1500 when an event

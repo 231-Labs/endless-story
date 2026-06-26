@@ -14,8 +14,11 @@
 
 import { craftGuardrail, roleHint } from '@endless-story/shared';
 import { type SagaSoul, type EmotionalStance, buildSagaSoulBlock } from './saga-soul.js';
+import { type CharacterState, buildStateBlock } from './state.js';
 
 export type { SagaSoul, EmotionalStance } from './saga-soul.js';
+export type { CharacterState } from './state.js';
+export { buildStateBlock } from './state.js';
 
 export interface CharacterSnapshot {
     id: string;
@@ -67,6 +70,10 @@ export interface PovPromptInput {
      *  landed). Switches the chapter from "one concrete moment" to "show the
      *  whole arc settle" — 起因→轉折→落定 (前因後果收束) — and earns more length. */
     closing?: boolean;
+    /** Optional: 日常層 — this character's current 餓/累/心情 undertone. Tints attention,
+     *  語氣 and small gestures WITHOUT changing who they are (a 黏師姐 person stays 黏師姐
+     *  whether hungry or sulky; only HOW it shows swings). Omit ⇒ no injection. */
+    state?: CharacterState;
 }
 
 /** Chapter mode — swaps only the framing; the no-fabrication / identity / pronoun
@@ -211,6 +218,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
     const dramaBlock = input.dramaHint
         ? `\n## 稀缺張力（讓它變成行動或視線，不要變成喊口號）\n${input.dramaHint}`
         : '';
+    const stateBlock = buildStateBlock(input.state);
     const dreamBlock = dreamFragment
         ? `\n## 夢境片段（必須取其中一個意象，變成場面裡的感官錨點）\n${dreamFragment}`
         : '';
@@ -242,6 +250,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         relBlock,
         planBlock,
         dramaBlock,
+        stateBlock,
         dreamBlock,
         sceneBeatsBlock,
         closingBlock,
