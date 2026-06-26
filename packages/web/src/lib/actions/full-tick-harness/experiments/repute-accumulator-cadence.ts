@@ -18,6 +18,8 @@
  *     src/lib/actions/full-tick-harness/experiments/repute-accumulator-cadence.ts
  */
 
+export {}; // make this a module so top-level decls don't collide with sibling sim scripts in the same tsconfig
+
 interface Params {
     GAIN: number; // repute added per unit of daily lean (0..1)
     DECAY: number; // habituation: pull toward BASELINE each day (→ equilibrium = BASELINE + gain/DECAY)

@@ -13,6 +13,8 @@
  *     src/lib/actions/full-tick-harness/experiments/repute-wordofmouth-cadence.ts
  */
 
+export {}; // make this a module so top-level decls don't collide with sibling sim scripts in the same tsconfig
+
 const GAIN = 3; // self-lean → repute (per §2.22)
 const DECAY = 0.05;
 const BASELINE = 20;
