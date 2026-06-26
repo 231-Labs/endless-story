@@ -19,6 +19,10 @@ import { getAdminContext } from '@/lib/chain/admin-signer';
 
 const BP_DENOM = 10_000;
 const PARTS_OF_DAY = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
+/** The night buckets — when characters sleep / consolidate (REFLECT step). Kept beside
+ *  PARTS_OF_DAY so the night test stays anchored to the actual labels and can't drift
+ *  against an external literal. */
+const NIGHT_PARTS: ReadonlySet<string> = new Set(['入夜', '深宵']);
 
 export interface WorldTimeSnapshot {
     currentTick: number;
@@ -26,6 +30,11 @@ export interface WorldTimeSnapshot {
     ticksPerDay: number;
     day: number;
     partOfDay: string;
+    /** True when partOfDay is a night bucket (入夜 / 深宵) — the sleep/REFLECT window.
+     *  Derived here rather than compared by callers: the previous caller test
+     *  `partOfDay === 'night'` never matched the Chinese labels, silently disabling
+     *  the whole nightly consolidation step. */
+    isNight: boolean;
     tickOfDay: number;
 }
 
@@ -48,12 +57,14 @@ function deriveSnapshot(currentTick: number, daysPerTickBp: number): WorldTimeSn
         Math.floor((tickOfDay / perDay) * PARTS_OF_DAY.length),
         PARTS_OF_DAY.length - 1,
     );
+    const partOfDay = PARTS_OF_DAY[idx];
     return {
         currentTick,
         daysPerTickBp,
         ticksPerDay: perDay,
         day: Math.floor((currentTick * daysPerTickBp) / BP_DENOM) + 1,
-        partOfDay: PARTS_OF_DAY[idx],
+        partOfDay,
+        isNight: NIGHT_PARTS.has(partOfDay),
         tickOfDay,
     };
 }

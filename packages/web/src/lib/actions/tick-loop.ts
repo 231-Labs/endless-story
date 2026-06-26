@@ -1397,7 +1397,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    not every tick (Generative-Agents reflection is periodic, not per-
     //    tick — answering "should they all sleep every tick?": no). Sleep
     //    anchors via reflection::submit (Sui signing) → serial.
-    const isNight = worldTime?.partOfDay === 'night';
+    const isNight = worldTime?.isNight ?? false;
     const sleeps: TickSleepResult[] = [];
     let sleepNote: string | undefined;
     if ((input.sleep ?? true) && !dryRun) {
