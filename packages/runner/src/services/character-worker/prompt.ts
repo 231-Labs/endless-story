@@ -17,8 +17,21 @@ import { type SagaSoul, type EmotionalStance, buildSagaSoulBlock } from './saga-
 import { type CharacterState, buildStateBlock } from './state.js';
 
 export type { SagaSoul, EmotionalStance } from './saga-soul.js';
-export type { CharacterState } from './state.js';
-export { buildStateBlock } from './state.js';
+export type { CharacterState, SleepDecisionInput } from './state.js';
+export {
+    buildStateBlock,
+    shouldSleep,
+    evolveState,
+    driftState,
+    clampState,
+    NEUTRAL_STATE,
+    WORK_FATIGUE,
+    SLEEP_RECOVERY,
+    NIGHT_SLEEP_FATIGUE,
+    DAY_SLEEP_FATIGUE,
+    MIN_SCATTERED_TO_SLEEP,
+    MEMORY_PRESSURE_CAP,
+} from './state.js';
 
 export interface CharacterSnapshot {
     id: string;

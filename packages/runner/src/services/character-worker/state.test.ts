@@ -12,6 +12,7 @@ import {
     evolveState,
     driftState,
     buildStateBlock,
+    shouldSleep,
 } from './state.js';
 
 test('buildStateBlock: absent / neutral state injects nothing (regression-safe)', () => {
@@ -59,10 +60,10 @@ test('evolveState: note replaces when given, persists when omitted', () => {
     assert.equal(evolveState(base, { note: '' }).note, undefined); // '' ⇒ cleared
 });
 
-test('driftState: hunger/fatigue creep up, mood eases toward calm', () => {
-    const after = driftState({ hunger: 0.2, fatigue: 0.2, mood: 0.8, note: '餘味' });
+test('driftState: hunger creeps up, fatigue eases down (a quiet tick is rest), mood eases to calm', () => {
+    const after = driftState({ hunger: 0.2, fatigue: 0.6, mood: 0.8, note: '餘味' });
     assert.ok(after.hunger > 0.2, 'hunger rises');
-    assert.ok(after.fatigue > 0.2, 'fatigue rises');
+    assert.ok(after.fatigue < 0.6, 'fatigue recovers — work tires, rest restores');
     assert.ok(Math.abs(after.mood) < 0.8, 'mood decays toward 0');
     assert.equal(after.note, '餘味', 'note carried through drift');
 });
@@ -73,4 +74,18 @@ test('clampState: out-of-range values pulled back into bounds', () => {
     assert.equal(c.fatigue, 0);
     assert.equal(c.mood, -1);
     assert.equal(c.note, 'x'); // trimmed
+});
+
+test('shouldSleep: fatigue gates, night lowers the bar, memory floor blocks', () => {
+    // memory floor: nothing to consolidate ⇒ never sleep, even exhausted at night
+    assert.equal(shouldSleep({ fatigue: 1, isNight: true, scatteredCount: 1 }), false);
+    // night bar (0.5): tired enough at night sleeps; the SAME fatigue by day does not
+    assert.equal(shouldSleep({ fatigue: 0.6, isNight: true, scatteredCount: 3 }), true);
+    assert.equal(shouldSleep({ fatigue: 0.6, isNight: false, scatteredCount: 3 }), false);
+    // day bar (0.85): only real exhaustion forces a daytime nap
+    assert.equal(shouldSleep({ fatigue: 0.9, isNight: false, scatteredCount: 3 }), true);
+    // not tired ⇒ no sleep even at night with a modest backlog
+    assert.equal(shouldSleep({ fatigue: 0.3, isNight: true, scatteredCount: 5 }), false);
+    // memory-pressure override: a big backlog forces consolidation even un-tired by day
+    assert.equal(shouldSleep({ fatigue: 0.1, isNight: false, scatteredCount: 6 }), true);
 });

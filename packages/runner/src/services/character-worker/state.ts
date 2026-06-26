@@ -64,15 +64,62 @@ export function evolveState(prev: CharacterState, delta: StateDelta): CharacterS
     });
 }
 
-/** Passive per-tick drift: hunger creeps up, fatigue a little, mood eases back toward
- *  calm. The body keeps living between events, so a character is never frozen. */
+/** Passive per-tick drift: hunger creeps up, mood eases back toward calm, and fatigue
+ *  eases DOWN a little — a quiet tick is rest. WORK (evolveState +WORK_FATIGUE) is what
+ *  tires; sleep is the deep recovery. (A passive fatigue *gain* here made every working
+ *  character collapse mid-afternoon in the cadence sim — work + drift outran the day bar.)
+ *  The body keeps living between events, so a character is never frozen. */
 export function driftState(prev: CharacterState): CharacterState {
     return clampState({
         hunger: prev.hunger + 0.15,
-        fatigue: prev.fatigue + 0.08,
+        fatigue: prev.fatigue * 0.92,
         mood: prev.mood * 0.7,
         note: prev.note,
     });
+}
+
+/* ── fatigue → sleep ──────────────────────────────────────────────────
+ * The sleep/REFLECT step (memory consolidation) was gated purely on a world-clock
+ * string (`partOfDay === 'night'`), which silently broke (fixed on main, PR #75). The
+ * durable model is to drive sleep off the character's own fatigue: a tired character
+ * sleeps, and NIGHT only lowers the bar (a soft bias), so an exhausted performer can nap
+ * by day while the rhythm still clusters at night. Decoupling sleep from a brittle clock
+ * literal is the whole point — and it gives `fatigue` its first real consumer.
+ */
+
+/** Fatigue a single working beat (perform / POV / social) adds, before drift. */
+export const WORK_FATIGUE = 0.18;
+/** How much a full sleep recovers (subtracted from fatigue). */
+export const SLEEP_RECOVERY = 0.7;
+/** Fatigue bar to fall asleep at night vs in daytime — night lowers it (soft bias). */
+export const NIGHT_SLEEP_FATIGUE = 0.5;
+export const DAY_SLEEP_FATIGUE = 0.85;
+/** Below this many un-consolidated memories, sleeping is pointless (nothing to digest). */
+export const MIN_SCATTERED_TO_SLEEP = 2;
+/** A backlog this big forces consolidation even if not tired — preserves the original
+ *  memory-pressure trigger so a low-activity character still eventually digests. */
+export const MEMORY_PRESSURE_CAP = 6;
+
+export interface SleepDecisionInput {
+    /** Current fatigue, 0..1. */
+    fatigue: number;
+    /** Is it a night bucket (入夜 / 深宵)? Lowers the fatigue bar, not a hard gate. */
+    isNight: boolean;
+    /** Un-consolidated memories available to digest. Sleep is pointless below the floor. */
+    scatteredCount: number;
+}
+
+/**
+ * Fatigue-driven sleep trigger, replacing the brittle `partOfDay === 'night'` gate.
+ * Sleep when there's something to digest AND either: the backlog is big (memory pressure,
+ * the original trigger) OR the character is tired enough — with night lowering the fatigue
+ * bar (soft bias) rather than hard-gating. Pure function: the loop supplies the three inputs.
+ */
+export function shouldSleep(input: SleepDecisionInput): boolean {
+    if (input.scatteredCount < MIN_SCATTERED_TO_SLEEP) return false;
+    if (input.scatteredCount >= MEMORY_PRESSURE_CAP) return true;
+    const bar = input.isNight ? NIGHT_SLEEP_FATIGUE : DAY_SLEEP_FATIGUE;
+    return input.fatigue >= bar;
 }
 
 /**
