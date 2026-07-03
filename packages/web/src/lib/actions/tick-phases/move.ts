@@ -73,6 +73,11 @@ export async function runMovePhase(input: {
      *  it overrides the LLM move: pull them to the contest (or hold them there).
      *  See gravity-core / rival-gravity; flag-gated upstream. */
     gravityTargets?: Map<string, string>;
+    /** characterId → residence/pursuit sceneId from the SPATIAL ROUTER (§2.50). When set
+     *  for a character (night only), it is AUTHORITATIVE: they move there, or hold if
+     *  already there — the router owns night placement so people disperse to homes and
+     *  privacy emerges. By day the map is empty and the LLM `decideMove` keeps agency. */
+    routeTargets?: Map<string, string>;
     /**
      * Pin open-event participants in place (default true). A single-tick event
      * is a scene being performed NOW, so its cast shouldn't teleport mid-beat.
@@ -138,6 +143,19 @@ export async function runMovePhase(input: {
     const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
         try {
             const cur = sceneByChar.get(c.id)!;
+            // SPATIAL ROUTER (§2.50): at night the router owns placement — go to your
+            // residence (or a home you're welcomed into), or hold if already there. It
+            // is silent by day (empty map), so daytime moves stay LLM-decided below.
+            if (input.routeTargets?.has(c.id)) {
+                const route = input.routeTargets.get(c.id)!;
+                return {
+                    c,
+                    fromId: cur.id,
+                    dcs: (route === cur.id
+                        ? { move: false, reason: '夜深，安於其所' }
+                        : { move: true, targetSceneId: route, reason: '夜深了，各自歸處' }) as characterAgent.MoveDecideResult,
+                };
+            }
             // RIVAL GRAVITY: pull a SCATTERED contender toward the contest so events
             // form — but only when they're NOT already there. We deliberately do NOT
             // hold someone who's already at the contest scene: that hard hold bypassed

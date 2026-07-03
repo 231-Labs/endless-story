@@ -30,6 +30,7 @@ import {
 } from '@/lib/chain/memory';
 import { fetchRelationshipHints } from '@/lib/chain/relationships';
 import { resolveNetwork } from '@/lib/chain/network';
+import { getSagaSoulOverride } from '@/lib/chain/saga-soul-override';
 
 /**
  * Semantic query for the "thickness" recall — pulls a character's non-work
@@ -74,6 +75,9 @@ export interface PovCoreOptions {
     /** Append the private「燈下」interior coda. Default on for pov mode (set in
      *  the runner); pass false to skip. */
     reflect?: boolean;
+    /** 日常層 state (餓/累/心情) tinting this chapter's texture without changing who
+     *  they are (§2.19). Omit ⇒ no injection (regression-safe). Forwarded to runner. */
+    state?: runnerCharacterWorker.CharacterState;
 }
 
 export interface PovCoreResult {
@@ -299,6 +303,8 @@ export async function runPovForCharacter(
         const res = await runnerCharacterWorker.runOnce({
             characterId,
             sagaId: d.sagaId,
+            // Observatory soul override (colour + stance); null in production.
+            sagaSoul: getSagaSoulOverride() ?? undefined,
             triggerNarrative: opts.triggerNarrative,
             role,
             mode: opts.mode,
@@ -313,6 +319,7 @@ export async function runPovForCharacter(
             sceneBeats: opts.sceneBeats,
             closing: opts.closing,
             reflect: opts.reflect,
+            state: opts.state,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun

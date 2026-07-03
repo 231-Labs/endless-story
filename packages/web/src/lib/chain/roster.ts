@@ -14,6 +14,7 @@ import { getStoreRecruitment } from '@/lib/actions/recruitments-store';
 import { fetchRecruitmentIdMapForCharacters } from './voucher-read';
 import { fetchOnChainScenesForSaga } from './scene-read';
 import { fetchOnChainEdgesFrom } from './relationships';
+import { getHomeScene } from './spatial-routing';
 
 export interface SagaRosterEntry {
     id: string;
@@ -24,6 +25,8 @@ export interface SagaRosterEntry {
     brief: string;
     currentSceneName?: string;
     currentSceneId?: string;
+    /** Off-chain residence for the spatial router (§2.50); undefined = not yet assigned. */
+    homeSceneId?: string;
 }
 
 export async function buildSagaRoster(
@@ -51,6 +54,7 @@ export async function buildSagaRoster(
             brief: (c.description || c.physicalFacts || '').slice(0, 160),
             currentSceneName: sceneByChar.name.get(c.id),
             currentSceneId: c.currentSceneId ?? sceneByChar.id.get(c.id),
+            homeSceneId: getHomeScene(c.id),
         }));
 }
 

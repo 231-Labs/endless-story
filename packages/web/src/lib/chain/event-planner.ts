@@ -54,10 +54,31 @@ export function parseDirectorContention(statement?: string): ContentionFraming |
     };
 }
 
+/**
+ * Experiment-only framing override (drama-effect lab). When set, it REPLACES the
+ * `label` of every framing this module returns (the templateId — which the spine's
+ * settlement matchers key on — is left intact). The drama-effect experiment runner
+ * (`experiments/run-experiment.ts`) installs it from `ExperimentConfig.framingOverride`
+ * so an owner can re-color the same stake's incident prose; production never sets it.
+ * Module-level (not env) so it can carry interpolated `{target}` text per run.
+ */
+let _framingOverride: string | null = null;
+
+/** Install (or clear with `null`) the experiment framing override. */
+export function setFramingOverride(label: string | null): void {
+    _framingOverride = label && label.trim() ? label.trim() : null;
+}
+
 /** Map a drama desire statement to a discrete incident framing. Built-in slots
  *  win first (hand-authored framing); a director-created slot is then recovered
  *  structurally so its templateId stays coherent; everything else is generic. */
 export function framingForStatement(statement?: string): ContentionFraming {
+    if (_framingOverride) {
+        // Keep a coherent templateId so settlement still ties the tension back to its
+        // resource; only the human-facing label is overridden.
+        const base = framingTemplateOnly(statement ?? '');
+        return { templateId: base, label: _framingOverride };
+    }
     const s = statement ?? '';
     if (s.includes('頭牌') || s.includes('spotlight'))
         return { templateId: 'contention:spotlight', label: '今晚誰壓軸、誰站台心的暗潮浮上了檯面' };
@@ -88,6 +109,19 @@ export function framingForStatement(statement?: string): ContentionFraming {
     return { templateId: 'storylet:tension', label: '一樁懸而未決的較量，在這一場裡發酵' };
 }
 
+/** The templateId `framingForStatement` would pick, WITHOUT the override — used by the
+ *  override path so settlement keys (`contention:<kind>`) stay coherent even when the
+ *  human label is replaced. Mirrors the keyword order in `framingForStatement`. */
+function framingTemplateOnly(s: string): string {
+    if (s.includes('頭牌') || s.includes('spotlight')) return 'contention:spotlight';
+    if (s.includes('唱片') || s.includes('recording') || s.includes('灌錄')) return 'contention:recording';
+    if (s.includes('搭戲') || s.includes('partnership')) return 'contention:partnership';
+    if (s.includes('傾心') || s.includes('傾慕') || s.includes('affection')) return 'contention:affection';
+    const director = parseDirectorContention(s);
+    if (director) return director.templateId;
+    return 'storylet:tension';
+}
+
 /**
  * Choose which contention to stage this tick. Sorts every tension row globally
  * (highest unmet first) and returns the framing of the highest whose template
@@ -99,15 +133,19 @@ export function framingForStatement(statement?: string): ContentionFraming {
  */
 export function selectContention(
     rows: ReadonlyArray<TensionRow>,
-    recentTemplateIds: ReadonlyArray<string> = [],
+    recentKeys: ReadonlyArray<string> = [],
 ): SelectedContention {
     if (rows.length === 0) return { ...framingForStatement(undefined) };
     const sorted = [...rows].sort((a, b) => b.tension - a.tension);
-    const recent = new Set(recentTemplateIds);
+    const recent = new Set(recentKeys);
 
     for (const row of sorted) {
         const framing = framingForStatement(row.statement);
-        if (!recent.has(framing.templateId)) {
+        // Variety key = the STATEMENT (carries the target), NOT the kind-level templateId —
+        // otherwise 傾心柳 and 傾心蘇 share `contention:affection` and never rotate. templateId
+        // stays kind-level so the spine's settlement matcher still ties tension to its resource.
+        const varietyKey = row.statement || framing.templateId;
+        if (!recent.has(varietyKey)) {
             return { ...framing, statement: row.statement };
         }
     }

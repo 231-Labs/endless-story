@@ -29,12 +29,16 @@ import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
-import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
+import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
+import { characterAgent, sceneRecord } from '@endless-story/runner';
+import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
 import { recordSceneLine } from '@/lib/chain/scene-lines';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
+import { computeSpatialRouting } from '@/lib/chain/spatial-routing';
+import { fetchWarmGraph } from '@/lib/chain/relationship-evolve';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
@@ -46,9 +50,13 @@ import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { buildTickSituations, stashTickResolved } from './tick-phases/perceive';
 import { selectContention, pushRecentTemplate, framingForStatement } from '@/lib/chain/event-planner';
+import { selectContentionByCentrality } from '@/lib/chain/centrality-select';
+import { openArcIfNeeded, stepArc, currentArc } from '@/lib/chain/arc-lifecycle';
+import { forcingLevel, pressureAwareness } from '@/lib/chain/arc-pressure';
 import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
+import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -128,6 +136,11 @@ import { runActPhase, cardActionPhrase } from './tick-phases/act';
  *  docs/narrative/EVENT_LIFECYCLE.md. */
 const recentTopicsBySaga = new Map<string, string[]>();
 
+/** §2.51 actor-fatigue ledgers, per saga (process-level, like the topic history above).
+ *  Characters who carried a live event tire; tired rows are suppressed at SELECTION
+ *  so the spotlight rotates — the monopoly that swallowed injected dreams breaks. */
+const actorFatigueBySaga = new Map<string, FatigueLedger>();
+
 /** Read a TICK_* feature flag from the environment (deploy-wide default for an
  *  auto-running runner). Truthy = '1' | 'true' | 'yes' | 'on' (case-insensitive). */
 /**
@@ -144,6 +157,10 @@ const lastPovEventByChar = new Map<string, string>();
  * beat). Mirrors `lastPovEventByChar` above.
  */
 let lastEncounterPair: string | undefined;
+/** Pairs that have already crossed the confess milestone — don't re-confess every tick. */
+const confessedPairs = new Set<string>();
+/** A romance tie must have held/accrued past a single seed before a confession can fire. */
+const CONFESS_MIN_TIES = 2;
 
 function envFlag(name: string): boolean {
     const v = (process.env[name] ?? '').trim().toLowerCase();
@@ -246,6 +263,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const llmFraming = input.llmFraming ?? envFlag('TICK_LLM_FRAMING');
     const directorResources = input.directorResources ?? !envFlag('TICK_DIRECTOR_RESOURCES_OFF');
     const rivalGravity = input.rivalGravity ?? envFlag('TICK_RIVAL_GRAVITY');
+    // §4d.1: pick the staged contention by CENTRALITY (story's heart), not urgency. Flag-gated,
+    // domain-blind, falls back to the deterministic tension-sort on failure. Default off.
+    const centrality = envFlag('TICK_CENTRALITY');
+    // §2.51: spotlight rotation — acting costs fatigue, fatigue suppresses effective
+    // tension at SELECTION only (settlement reads the raw rows). Default off.
+    const actorFatigue = envFlag('TICK_ACTOR_FATIGUE');
+    // §4d.2: run the arc convergence state machine (central question + accumulated forcing +
+    // irreversibility judge + retire/aftermath). Flag-gated, off-chain arc state. Default off.
+    const arcConvergence = envFlag('TICK_ARC_CONVERGENCE');
     const maxConcurrentEvents = Math.max(
         1,
         input.maxConcurrentEvents ?? (Number(process.env.TICK_MAX_CONCURRENT_EVENTS) || 2),
@@ -269,6 +295,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const worldTime = (await getWorldTimeSnapshot()) ?? undefined;
     const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
     tlog(`⏱  ${advanced ? 'advanced → ' : ''}Day ${worldTime?.day ?? '?'} · ${worldTime?.partOfDay ?? '—'}`);
+    // isNight: recognise the 中文 dusk/night parts (入夜/深宵/夜半…) and an English 'night'.
+    // The old `partOfDay === 'night'` never matched the real 中文 labels, so sleep AND the
+    // spatial router silently never fired (a mock-chain tick caught it). Derive once, reuse.
+    const isNight = !!worldTime && (worldTime.partOfDay === 'night' || /夜|宵/.test(worldTime.partOfDay ?? ''));
 
     // Character roster (saga-scoped, with fallback).
     let characters: Character[] = await charactersApi.listSagaCharacters(d.sagaId).catch(() => []);
@@ -361,8 +391,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     dryRun,
                     rosterContext: rosterContextById.get(c.id),
                     situation: situationByChar.get(c.id),
+                    // §2.6: feed current relationships into planning so goals EVOLVE from
+                    // them (a rivalry breeds a goal to outdo, a romance one to be near).
+                    // Reads the graph as of last tick's relationship evolution.
+                    relationshipPressure: await memoryContext.relationshipHints(c.id, 5),
                 });
-                tlog(`   · plan ${c.name} ✓`);
+                tlog(`   · plan ${c.name} ✓${p.ok && p.longTermGoal ? `「${p.longTermGoal.slice(0, 36)}」` : ''}`);
                 return { c, p };
             } catch (err) {
                 tlog(`   · plan ${c.name} ✗`);
@@ -417,6 +451,33 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     console.warn('[tick-loop] rival gravity failed:', err);
                 }
             }
+            // SPATIAL ROUTING (§2.50): at night, place characters by residence so they
+            // disperse off public scenes to their homes — and, since pursuit + welcome
+            // come from the relationship graph, a warmly-bonded pair converges alone in
+            // one private room (privacy EMERGES; nobody is barred, the unwelcome just go
+            // home). Characters with no assigned homeSceneId fall back to their current
+            // scene (harmless no-op). By day the router is silent and the LLM keeps agency.
+            let routeTargets: Map<string, string> | undefined;
+            if (!dryRun && isNight) {
+                const present = activeRoster.filter((r) => r.currentSceneId);
+                const warm = await fetchWarmGraph(present.map((r) => r.id));
+                const actors = present.map((r) => ({
+                    id: r.id,
+                    sceneId: r.currentSceneId as string,
+                    homeSceneId: r.homeSceneId ?? (r.currentSceneId as string),
+                    pursue: warm.pursueByChar.get(r.id),
+                }));
+                routeTargets = computeSpatialRouting(
+                    actors,
+                    activeScenes.map((s) => ({ id: s.id, privacyLevel: s.privacyLevel })),
+                    true,
+                    warm.welcome,
+                );
+                const relocating = [...routeTargets.entries()].filter(
+                    ([id, sc]) => rosterById.get(id)?.currentSceneId !== sc,
+                ).length;
+                if (relocating > 0) tlog(`②◦ 夜路由: ${relocating} 人各歸其所（追隨/避讓依關係圖）`);
+            }
             moves.push(
                 ...(await runMovePhase({
                     admin,
@@ -430,6 +491,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     memoryContext,
                     dryRun,
                     gravityTargets,
+                    routeTargets,
                     // Spine events span many ticks — don't lock their cast in the
                     // scene; let them live and act on the contest from anywhere.
                     pinBusy: !spineMode,
@@ -571,13 +633,22 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
               })
             : picked.label;
     const sceneNameById = new Map(activeScenes.map((s) => [s.id, s.name]));
+    // §2.51 spotlight rotation: rest everyone one notch, then build the SELECTION
+    // view of the tension rows (fatigued owners suppressed). Settlement + hints keep
+    // reading the raw `drama.top` — fatigue steers who gets staged, never who wins.
+    let fatigueLedger: FatigueLedger = {};
+    if (actorFatigue) {
+        fatigueLedger = decayActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? {});
+        actorFatigueBySaga.set(d.sagaId, fatigueLedger);
+    }
+    const selectionRows = actorFatigue ? applyActorFatigue(drama?.top ?? [], fatigueLedger) : (drama?.top ?? []);
     if (parallelEvents && drama?.active && slice.length > 0) {
         // PARALLEL SPINE — open/linger/resolve MANY axis events at once.
         const occupancy = slice.flatMap((c) => {
             const sid = rosterById.get(c.id)?.currentSceneId;
             return sid ? [{ characterId: c.id, sceneId: sid }] : [];
         });
-        let candidates = buildAxisCandidates(drama?.top ?? [], occupancy, framingForStatement);
+        let candidates = buildAxisCandidates(selectionRows, occupancy, framingForStatement);
         // [ch-diag] WHY events do / don't open. An event needs ≥2 cast co-present
         // in one scene AND tensioned on one axis (minCast=2). Grep `[ch-diag] spine-plan`:
         //   occupancy=0           → scene reads failed (429 on resolveCurrentOwner) →
@@ -653,8 +724,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             return sid ? [{ characterId: c.id, sceneId: sid }] : [];
         });
         const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
-        const picked = selectContention(drama?.top ?? [], recentTopics);
-        recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+        const picked = centrality
+            ? await selectContentionByCentrality(selectionRows, recentTopics)
+            : selectContention(selectionRows, recentTopics);
+        recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
         const spineLabel = await frameLabel(picked);
         spineCtx = {
             sagaId: d.sagaId,
@@ -698,9 +771,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 activeScenes.find((s) => s.id === sid)?.name ??
                 '戲班';
             const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
-            const picked = selectContention(drama?.top ?? [], recentTopics);
+            const picked = centrality
+            ? await selectContentionByCentrality(selectionRows, recentTopics)
+            : selectContention(selectionRows, recentTopics);
             const framing = { templateId: picked.templateId, label: await frameLabel(picked) };
-            recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+            recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
             const st: TickStoryletResult = {
                 sceneId: sid,
                 sceneName,
@@ -740,6 +815,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     `${dryRun ? ' (preview)' : st.opened ? ' ✓on-chain' : ' ✗'}`,
             );
         }
+    }
+
+    // §2.51: everyone who carried a live event this tick tires — next tick their
+    // rows are suppressed at selection, so the spotlight rotates by itself.
+    if (actorFatigue && storylets.length > 0) {
+        const featured = [...new Set(storylets.flatMap((s) => s.characterIds))];
+        const bumped = bumpActorFatigue(fatigueLedger, featured);
+        actorFatigueBySaga.set(d.sagaId, bumped);
+        const ledgerLine = Object.entries(bumped)
+            .map(([id, v]) => `${nameById.get(id) ?? id.slice(0, 6)}:${v.toFixed(2)}`)
+            .join(' ');
+        tlog(`②⁵ actor fatigue: ${featured.length} featured tire, rows suppressed next tick (${ledgerLine})`);
     }
 
     // 2.76 EVENT MOMENT + 4.5 EVENT CUT are both StorytellerCap txs. We capture
@@ -1004,14 +1091,61 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 ? '④ POV skipped (no event drew characters this tick; use povAll to force one each)'
                 : `④ POV — generating ${povSlice.length} (event-relevant characters; slow, one LLM call each)…`,
         );
+        // §2.14 OBJECTIVE SPINE — before each character writes a SUBJECTIVE POV, the
+        // world writes ONE objective 場記 per scene (who is present per the AUTHORITATIVE
+        // roster + what observably happened) and feeds it as the shared sceneBeats. POVs
+        // then INTERPRET the same physical facts instead of each confabulating its own —
+        // killing frame divergence (e.g. a character narrating itself into two rooms) while
+        // preserving the subjective register difference (端莊者藏 / 老司機寫). Falls back to
+        // the raw per-actor beats when a record can't be composed (non-breaking).
+        const povSceneIds = new Set(
+            povSlice
+                .map((c) => rosterById.get(c.id)?.currentSceneId)
+                .filter((s): s is string => Boolean(s)),
+        );
+        const sceneRecordByScene = new Map<string, string>();
+        await mapPool([...povSceneIds], RECALL_CONCURRENCY, async (sceneId) => {
+            const presentNames = activeRoster
+                .filter((rp) => rp.currentSceneId === sceneId)
+                .map((rp) => rp.name);
+            if (presentNames.length === 0) return;
+            const record = await sceneRecord.composeSceneRecord({
+                sceneName: sceneNameById.get(sceneId) ?? '戲班',
+                presentNames,
+                eventLabel: storylets.find((st) => st.sceneId === sceneId)?.label,
+                beats: (beatsByScene.get(sceneId) ?? []).map((b) => b.text),
+            });
+            if (record) sceneRecordByScene.set(sceneId, record);
+        });
+
+        // 日常層 state (§2.19): a derived daily fatigue curve (fresh at dawn → tired by
+        // night), recomputed each tick — no storage (path iii). Per character we add a
+        // nudge for whoever performed this tick; hunger/mood stay neutral until they have
+        // real signals (owner-injectable later). Tints the chapter's texture, never who
+        // they are; omit ⇒ byte-identical prompt (regression-safe).
+        const dayFatigue = worldTime
+            ? 0.15 + (worldTime.ticksPerDay > 1 ? worldTime.tickOfDay / (worldTime.ticksPerDay - 1) : 0.5) * 0.7
+            : 0.3;
+        // §4d.2: the CONTESTERS around the central character feel the accumulated pressure — NEVER
+        // the central character instructed to resolve (that scripts the turn's occurrence; see
+        // emergent-turn §4d.2). Their own autonomous beats then change the world (an option collapses,
+        // a claim is made), so the central character resolves by RESPONDING, never told to. Computed once.
+        const liveArc = arcConvergence ? currentArc(d.sagaId) : undefined;
+        const arcCentralId = liveArc?.centralCharId;
+        const arcCentralName = arcCentralId ? rosterById.get(arcCentralId)?.name ?? '' : '';
+        const arcCentralScene = arcCentralId ? rosterById.get(arcCentralId)?.currentSceneId : undefined;
+        const arcAwareness = liveArc ? pressureAwareness(forcingLevel(liveArc), arcCentralName) : '';
         const generated = await mapPool(povSlice, RECALL_CONCURRENCY, async (c) => {
             try {
                 const sceneId = rosterById.get(c.id)?.currentSceneId;
-                const sceneBeats = sceneId
-                    ? (beatsByScene.get(sceneId) ?? [])
-                          .filter((b) => b.actorId !== c.id)
-                          .map((b) => b.text)
-                    : [];
+                const objectiveRecord = sceneId ? sceneRecordByScene.get(sceneId) : undefined;
+                const sceneBeats = objectiveRecord
+                    ? [objectiveRecord]
+                    : sceneId
+                      ? (beatsByScene.get(sceneId) ?? [])
+                            .filter((b) => b.actorId !== c.id)
+                            .map((b) => b.text)
+                      : [];
                 // EVENT-anchored trigger: today's storylet in this character's
                 // scene + their own event plays. Falls back to the ambient line.
                 const triggerParts: string[] = [];
@@ -1070,10 +1204,23 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         } satisfies Awaited<ReturnType<typeof runPovForCharacter>>,
                     };
                 }
-                const trigger =
+                const baseTrigger =
                     triggerParts.length > 0
                         ? `${dayLabel} — 今日，${triggerParts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`
                         : `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
+                // §4d.2: a CONTESTER co-present with the central character feels the mounting
+                // pressure (the central char is NEVER instructed to resolve). Their own choice then
+                // moves the world; the central char resolves only by responding to what they do.
+                const feelsArc =
+                    Boolean(arcAwareness) &&
+                    c.id !== arcCentralId &&
+                    rosterById.get(c.id)?.currentSceneId === arcCentralScene;
+                const trigger = feelsArc ? `${baseTrigger}\n（${arcAwareness}）` : baseTrigger;
+                const povState = {
+                    hunger: 0.2,
+                    fatigue: Math.min(1, dayFatigue + (freshBeat ? 0.1 : 0)),
+                    mood: 0,
+                };
                 const r = await runPovForCharacter(admin, c.id, {
                     triggerNarrative: trigger,
                     forceRun: true,
@@ -1100,6 +1247,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     relationshipHints: await memoryContext.relationshipHints(c.id, 5),
                     planHint: await memoryContext.plan(c.id),
                     skipMemoryRecall: true,
+                    state: povState,
                 });
                 tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} chars)`);
                 dumpChapter(
@@ -1178,6 +1326,86 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     digest: b?.digest,
                     error: b?.anchored ? undefined : b?.error,
                 });
+            }
+
+            // 4.4 RELATIONSHIP EVOLVE (§2.1) — grow the DIRECTED tone graph from this
+            //   tick's POVs (the EMOTIONAL play), not only from gifts/bonds. An LLM reads
+            //   each event's POVs → infers directed feelings (柳→蘇 戀慕, 金→柳 緊張…) →
+            //   seeds them on chain; cooling (time-decay) fades ties that stop being
+            //   reaffirmed. This ran only in the observatory harness before; now it is in
+            //   the live loop so production's relationships emerge from the drama. Pushed
+            //   to cutJobs (owned-cap relationship_seed tx, serial). Every co-present cast
+            //   member (incl. a POV-less beloved) is a valid edge target; needs ≥2 with
+            //   actual POV prose for evidence.
+            if (process.env.ES_RELATIONSHIP_EVOLVE !== '0') {
+                const povByChar = new Map(
+                    toAnchor.filter(({ r }) => r.chapter.trim()).map(({ c, r }) => [c.id, r.chapter.trim()]),
+                );
+                for (const st of storylets) {
+                    if (!st.characterIds || st.characterIds.length < 2) continue;
+                    // co-present cast = everyone the roster places in this scene (incl. a
+                    // POV-less beloved who is a valid edge target), beyond the event's desirers.
+                    const sceneCast = activeRoster
+                        .filter((rp) => rp.currentSceneId === st.sceneId)
+                        .map((rp) => rp.id);
+                    const allIds = Array.from(new Set([...st.characterIds, ...sceneCast]));
+                    const participants = allIds.map((id) => ({
+                        characterId: id,
+                        name: rosterById.get(id)?.name ?? id,
+                        pov: povByChar.get(id) ?? '',
+                    }));
+                    if (participants.filter((p) => p.pov).length < 2) continue;
+                    cutJobs.push(async () => {
+                        const res = await evolveRelationshipsFromScene({
+                            participants,
+                            sceneId: st.sceneId,
+                            eventLabel: st.label,
+                        });
+                        tlog(
+                            `   ⤳ 關係演化 ← 〔${st.label}〕 seeded ${res.seeded}/${res.proposed}` +
+                                (res.error ? ` err=${res.error}` : '') +
+                                (res.skipReason ? ` skip=${res.skipReason}` : ''),
+                        );
+                    });
+                }
+            }
+
+            // 4.6 ARC CONVERGENCE (§4d.2) — open a central-question arc from the staged framing,
+            //   accumulate REAL pressing (co-present contesters) into forcing, judge each central
+            //   beat, retire + spawn the aftermath on an irreversible answer. Flag-gated + failure-
+            //   isolated; off-chain arc state; pressingCount is contester-count, never a tick index.
+            if (arcConvergence) {
+                try {
+                    const framing =
+                        storylets.find((s) => s.characterIds && s.characterIds.length >= 2)?.label ??
+                        storylets[0]?.label ??
+                        '';
+                    const arc = await openArcIfNeeded(
+                        d.sagaId,
+                        framing,
+                        activeRoster.map((r) => r.name),
+                        (n) => activeRoster.find((r) => r.name === n)?.id,
+                    );
+                    if (arc) {
+                        const centralSceneId = rosterById.get(arc.centralCharId)?.currentSceneId;
+                        const pressingCount = centralSceneId
+                            ? activeRoster.filter((r) => r.currentSceneId === centralSceneId && r.id !== arc.centralCharId).length
+                            : 0;
+                        const centralBeat = toAnchor.find(({ c }) => c.id === arc.centralCharId)?.r.chapter?.trim() ?? '';
+                        const step = await stepArc(d.sagaId, pressingCount, centralBeat);
+                        if (step) {
+                            tlog(
+                                `   ⟐ arc〔${step.question.slice(0, 22)}〕壓力${step.pressure.toFixed(1)}·逼${step.forcing}` +
+                                    (step.retired
+                                        ? ` → 答「${step.retired.answer}」退役` +
+                                          (step.retired.aftermath ? `，牽出「${step.retired.aftermath.question.slice(0, 22)}」` : '')
+                                        : ''),
+                            );
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[tick-loop] arc convergence failed:', err);
+                }
             }
 
             // 4.5 EVENT CUT — weave this event's POVs into the canonical 「回」
@@ -1305,7 +1533,37 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             } else {
                 const holder = slice.find((c) => c.id === pair.holderId);
                 const holderName = holder?.name ?? rosterById.get(pair.holderId)?.name ?? '某人';
-                const trigger = buildEncounterTrigger(pair, dayLabel);
+                // CONFESS branch — a strong, not-yet-confessed romance pair: the holder may
+                // DECIDE (decideConfessAction, self-judged) to say it NOW. confess → 攤牌
+                // trigger + milestone cooldown; otherwise the usual 曖昧 encounter.
+                let trigger = buildEncounterTrigger(pair, dayLabel);
+                let isConfession = false;
+                if (
+                    pair.tone === 'romance' &&
+                    pair.count >= CONFESS_MIN_TIES &&
+                    !confessedPairs.has(pair.pairKey)
+                ) {
+                    // The encounter is by definition a two-person 獨處 beat, so confession
+                    // judges depth + 此刻想不想說, not who else is in the scene.
+                    const decision = await characterAgent.decideConfessAction({
+                        name: holderName,
+                        role: roleById.get(pair.holderId) ?? '—',
+                        toName: pair.otherName,
+                        toRole: roleById.get(pair.otherId) ?? '—',
+                        relationship: `戀慕很深（牽連 ${pair.count}），這份心思你揣了很久。`,
+                        situation: `散場後安靜的時分，此刻你與${pair.otherName}恰好獨處一隅，沒有外人。`,
+                    });
+                    if (decision.confess) {
+                        trigger = buildConfessTrigger(pair, dayLabel, decision.opening ?? '', decision.motive);
+                        isConfession = true;
+                        confessedPairs.add(pair.pairKey);
+                        tlog(
+                            `④· confess: ${holderName} → ${pair.otherName} ✓「${(decision.opening || decision.motive).slice(0, 28)}」`,
+                        );
+                    } else {
+                        tlog(`④· confess held: ${holderName} → ${pair.otherName}（${decision.motive.slice(0, 22)}）`);
+                    }
+                }
                 const enc = await runPovForCharacter(admin, pair.holderId, {
                     triggerNarrative: trigger,
                     mode: 'encounter',
@@ -1335,13 +1593,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             name: holderName,
                             role: roleById.get(pair.holderId),
                             scene: rosterById.get(pair.holderId)?.currentSceneName,
-                            note: `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
+                            note: isConfession
+                                ? `向 ${pair.otherName} 表明心意 · ${pair.toneZh}（牽連 ${pair.count}）`
+                                : `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
                             dryRun,
                         },
                         enc.chapter,
                     );
                     tlog(
-                        `④· encounter: ${holderName} ⇄ ${pair.otherName} (${pair.toneZh}・ties ${pair.count})` +
+                        `④· ${isConfession ? '攤牌' : 'encounter'}: ${holderName} ⇄ ${pair.otherName} (${pair.toneZh}・ties ${pair.count})` +
                             ` ✓ (${enc.chapter.length} chars)${dryRun ? ' (preview, not anchored)' : ''}`,
                     );
                     // Anchor in the BACKGROUND, serial with the other owned-cap jobs.
@@ -1392,7 +1652,6 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    not every tick (Generative-Agents reflection is periodic, not per-
     //    tick — answering "should they all sleep every tick?": no). Sleep
     //    anchors via reflection::submit (Sui signing) → serial.
-    const isNight = worldTime?.partOfDay === 'night';
     const sleeps: TickSleepResult[] = [];
     let sleepNote: string | undefined;
     if ((input.sleep ?? true) && !dryRun) {
