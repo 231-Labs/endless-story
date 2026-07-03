@@ -75,6 +75,9 @@ export interface PovCoreOptions {
     /** Append the private「燈下」interior coda. Default on for pov mode (set in
      *  the runner); pass false to skip. */
     reflect?: boolean;
+    /** 日常層 state (餓/累/心情) tinting this chapter's texture without changing who
+     *  they are (§2.19). Omit ⇒ no injection (regression-safe). Forwarded to runner. */
+    state?: runnerCharacterWorker.CharacterState;
 }
 
 export interface PovCoreResult {
@@ -316,6 +319,7 @@ export async function runPovForCharacter(
             sceneBeats: opts.sceneBeats,
             closing: opts.closing,
             reflect: opts.reflect,
+            state: opts.state,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun

@@ -26,8 +26,14 @@
  *
  * `restrained` (or undefined) = the genre default, byte-identical to before — so the
  * delivery line's prose is untouched unless a saga/scene opts in.
+ *
+ * `consummate` = the highest rung: relaxes restraint ALL the way and, WHEN the prose
+ * itself confirms the pair are 已互許 + 只你二人在私處, permits an explicit 古典艷情
+ * (紅樓/金瓶 literary-erotic) register — 寬衣/肌膚/雲雨, 綺麗婉轉、濃而不淫. The gate is
+ * baked into the block's wording (private + confessed only), so it self-限 to earned,
+ * private consummation and stays at 親暱 elsewhere. Adult literary content; opt-in only.
  */
-export type EmotionalStance = 'restrained' | 'tender';
+export type EmotionalStance = 'restrained' | 'tender' | 'consummate';
 
 export interface SagaSoul {
     /** Saga display name. Carried for other consumers (gazette /

@@ -15,6 +15,7 @@ export type { SagaSoul, EmotionalStance } from './services/character-worker/inde
 export * as gazette from './services/gazette-compiler/index.js';
 export * as eventChapter from './services/event-chapter-compiler/index.js';
 export * as storyteller from './services/storyteller-chapter/index.js';
+export * as sceneRecord from './services/scene-record/index.js';
 export * as reflection from './services/reflection-trigger/index.js';
 export * as genesisMemory from './services/genesis-memory/index.js';
 export * as relationshipAssess from './services/relationship-assess/index.js';
