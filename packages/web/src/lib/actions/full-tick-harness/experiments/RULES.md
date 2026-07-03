@@ -14,7 +14,7 @@
   （其餘 `packages/**` 都算生產檔，包括 tick-loop、chain/、runner services）。
 - **R2 · 要動生產代碼 → 開 `feat/*` 分支對 dev 發 PR**。解耦驗證完的機制要接回
   runner 時也一樣：從 research cherry-pick 到 feat/*，不要直接落在 research 上。
-  （2026-07 前有一批 port 直接落在 research 上，正在分簇補 PR 清償；別再增加。）
+  （2026-07 前直接落在 research 上的那批 port 已由 [PR #76](https://github.com/231-Labs/endless-story/pull/76) 分四簇清償對 dev；別再增加新的。）
 - **R3 · 常駐分支只有三條**：main（凍結交付）/ dev（重構專線）/ research（研究）。
   `claude/*` session 分支用完即丟。
 
