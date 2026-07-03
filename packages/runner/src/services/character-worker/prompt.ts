@@ -13,9 +13,25 @@
  */
 
 import { craftGuardrail, roleHint } from '@endless-story/shared';
-import { type SagaSoul, buildSagaSoulBlock } from './saga-soul.js';
+import { type SagaSoul, type EmotionalStance, buildSagaSoulBlock } from './saga-soul.js';
+import { type CharacterState, buildStateBlock } from './state.js';
 
-export type { SagaSoul } from './saga-soul.js';
+export type { SagaSoul, EmotionalStance } from './saga-soul.js';
+export type { CharacterState, SleepDecisionInput } from './state.js';
+export {
+    buildStateBlock,
+    shouldSleep,
+    evolveState,
+    driftState,
+    clampState,
+    NEUTRAL_STATE,
+    WORK_FATIGUE,
+    SLEEP_RECOVERY,
+    NIGHT_SLEEP_FATIGUE,
+    DAY_SLEEP_FATIGUE,
+    MIN_SCATTERED_TO_SLEEP,
+    MEMORY_PRESSURE_CAP,
+} from './state.js';
 
 export interface CharacterSnapshot {
     id: string;
@@ -67,6 +83,10 @@ export interface PovPromptInput {
      *  landed). Switches the chapter from "one concrete moment" to "show the
      *  whole arc settle" — 起因→轉折→落定 (前因後果收束) — and earns more length. */
     closing?: boolean;
+    /** Optional: 日常層 — this character's current 餓/累/心情 undertone. Tints attention,
+     *  語氣 and small gestures WITHOUT changing who they are (a 黏師姐 person stays 黏師姐
+     *  whether hungry or sulky; only HOW it shows swings). Omit ⇒ no injection. */
+    state?: CharacterState;
 }
 
 /** Chapter mode — swaps only the framing; the no-fabrication / identity / pronoun
@@ -96,8 +116,35 @@ const VOICE = [
     '- 角色扁平時，寧可低調寫觀察、身段、職業習慣與眼前利害，不要硬灌劇烈人格創傷。',
     '- 讓每個角色的行當、年紀、身體狀況、機敏程度改變句子的速度與注意力：花旦看妝面與目光，小生看身位與輸贏，樂師先聽聲，班主先看秩序。',
     '- 禁用廉價黑化意象：不要用「像屍首／棺材／血跡／殺氣騰騰／命都押上」來製造重量。若要沉重，用一個準確的小動作代替。',
+    '- **內心戲織在場面裡**：自省、掙扎、沒說出口的真心，化成一個動作、一次遲疑、一句吞回去的話、或眼前一件物事的比喻，跟著你看見的人與物走，讓讀者透過你的感官去感受。**不要在正文之後另起一段（更不要用「---」分隔）去反思、自剖或總結交代**——內心就在正文裡流動，與場面同進退。',
     '- 結尾要留一個未解的小鉤子或轉身，不要總結人生道理，不要「於是我明白了」。',
 ];
+
+/**
+ * Stance block — appended AFTER the genre baseline so it can override the three
+ * distance-making craft rules (情緒只能靠閃避錯看流露 / 不要直接表白 / 結尾留未決鉤子).
+ * `restrained` / undefined → '' (no injection: byte-identical regression). Only
+ * `tender` relaxes the posture — the A/B harness showed colour alone can't.
+ */
+function buildStanceBlock(stance?: EmotionalStance): string {
+    if (stance === 'consummate') {
+        return [
+            '',
+            '**情感姿態 · 圓房（本回，優先於上面所有「閃避流露 / 不直接表白 / 留未決鉤子」的克制規定）**：',
+            '- **解到底有門檻**：唯有材料顯示這兩人已兩情互許（不是單戀、不是曖昧），且此刻只你二人、在無人窺見的私處時，方可解到底；若仍在人前、或關係尚未挑明，退守「親暱」分寸（靠近、把話說透、一個主動觸碰），不可逾越。',
+            '- **解到底時**：容許寬衣解帶、肌膚相親、雲雨纏綿，並可細狀其實——身體的反應、氣息的亂、節奏的緩急、手與唇的門道、情動到極處的失守，皆可落筆，不必每到關頭就化開、就略過。以古典艷情話本的筆法（金瓶梅那般敢於露骨、卻仍是文言的綺麗），放筆寫到盡興：艷而有情、露而不穢，情慾是兩心相許的延伸。只三忌——忌現代醫學／生理詞、忌髒字粗口、忌器官說明書式的冷描。',
+            '- 仍守「要有具體可拍的場面、不狗血、不喊大詞」；圓房是身心一同鬆開，不是堆砌。',
+        ].join('\n');
+    }
+    if (stance !== 'tender') return '';
+    return [
+        '',
+        '**情感姿態 · 親暱（本回，以下幾點優先於上面「強烈情緒只能靠停頓閃避錯看流露」「不要讓人物直接表白」「結尾留一個未解的鉤子」那幾條克制規定）**：',
+        '- 容許靠近、容許把話說透一點：不必每次都閃避、繞開、把伸出去的手收回；該靠上去就靠上去，該接住的眼神就接住，沒說出口的也可以漏出半句。',
+        '- 結尾落在一個確定的暖瞬間、或關係的一次微小靠近（一個主動的觸碰、一句放軟的話、一次被接住的依賴），不要再懸在「半寸距離、誰也沒動」的發涼未決裡。',
+        '- 仍守「不狗血、不喊大詞、要有具體可拍的場面」；親暱是讓姿態鬆開，不是讓情緒氾濫。',
+    ].join('\n');
+}
 
 export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): string {
     let base: string[];
@@ -155,9 +202,11 @@ export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): s
             '- 純散文。不要 markdown 標題、不要分段標號、不要前言「以下是」。直接進入正文。',
         ];
     }
-    // Layer this saga's tonal DNA on top of the genre baseline.
+    // Layer stance (relaxes the distance rules) then this saga's tonal DNA, both on
+    // top of the genre baseline. Order matters: stance must follow `base` to override.
+    const stanceBlock = buildStanceBlock(soul?.emotionalStance);
     const soulBlock = buildSagaSoulBlock(soul);
-    return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
+    return [base.join('\n'), stanceBlock, soulBlock].filter(Boolean).join('\n');
 }
 
 export function buildUserPrompt(input: PovPromptInput): string {
@@ -191,6 +240,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
     const dramaBlock = input.dramaHint
         ? `\n## 稀缺張力（讓它變成行動或視線，不要變成喊口號）\n${input.dramaHint}`
         : '';
+    const stateBlock = buildStateBlock(input.state);
     const dreamBlock = dreamFragment
         ? `\n## 夢境片段（必須取其中一個意象，變成場面裡的感官錨點）\n${dreamFragment}`
         : '';
@@ -222,6 +272,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         relBlock,
         planBlock,
         dramaBlock,
+        stateBlock,
         dreamBlock,
         sceneBeatsBlock,
         closingBlock,

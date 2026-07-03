@@ -37,16 +37,32 @@ import {
     CODA_DIVIDER,
     type ChapterMode,
     type CharacterSnapshot,
+    type CharacterState,
     type SagaSoul,
 } from './prompt.js';
 
 export {
     buildSystemPrompt as buildPovSystemPrompt,
     buildUserPrompt as buildPovUserPrompt,
+    buildStateBlock,
+    shouldSleep,
+    evolveState,
+    driftState,
+    clampState,
+    NEUTRAL_STATE,
+    WORK_FATIGUE,
+    SLEEP_RECOVERY,
+    NIGHT_SLEEP_FATIGUE,
+    DAY_SLEEP_FATIGUE,
+    MIN_SCATTERED_TO_SLEEP,
+    MEMORY_PRESSURE_CAP,
     type ChapterMode,
     type CharacterSnapshot,
     type PovPromptInput,
     type SagaSoul,
+    type EmotionalStance,
+    type CharacterState,
+    type SleepDecisionInput,
 } from './prompt.js';
 
 export interface RunCharacterWorkerInput {
@@ -107,6 +123,12 @@ export interface RunCharacterWorkerInput {
      * and earns extra length. Threaded from the tick loop's verdict map.
      */
     closing?: boolean;
+    /**
+     * Optional: 日常層 — this character's current 餓/累/心情 state, tinting the chapter's
+     * texture without changing who they are. Omit ⇒ no injection (regression-safe).
+     * The tick loop will drift/evolve this per character per tick (see state.ts).
+     */
+    state?: CharacterState;
     /**
      * Optional: append a private interior「燈下」coda after the scene (the
      * character's honest read on the event / the people / themselves). Default
@@ -202,6 +224,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         dramaHint: input.dramaHint,
         sceneBeats: input.sceneBeats,
         closing: input.closing,
+        state: input.state,
     });
 
     // Scene length: the prompt now asks for 700–1100 字 (1200–1500 when an event
@@ -292,14 +315,13 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         }
     }
 
-    // Private「燈下」coda — append a short off-stage interior monologue so the
-    // reader sees this character's honest read on the event, the people in it,
-    // and themselves (the 內心戲 / 自省 the public scene deliberately withholds).
-    // A DIFFERENT register from the scene (reflection voice, may contradict it),
-    // so depth is added without loosening the scene's anti-cliché rules. Runs in
-    // dry-run too (the tick loop generates dry, then anchors separately). pov
-    // mode only; opt out with reflect:false.
-    if (input.reflect !== false && (input.mode ?? 'pov') === 'pov' && chapter.trim()) {
+    // Optional「燈下」coda — a short off-stage interior monologue appended after the
+    // scene behind a「---」divider. OFF by default now: the interior life is meant to
+    // live woven INTO the pov prose (see the 內心戲 directive in VOICE), not walled off
+    // in a separate段 that read as tacked-on and, under its「專挑最痛/最不體面」prompt,
+    // often darker than the scene it followed. Kept as an explicit opt-in (reflect:true)
+    // for callers that still want the split「事件客觀 / 燈下主觀」register. pov mode only.
+    if (input.reflect === true && (input.mode ?? 'pov') === 'pov' && chapter.trim()) {
         try {
             const coda = await llm.chat({
                 model: modelId,

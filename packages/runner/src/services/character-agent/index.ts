@@ -71,6 +71,21 @@ export type {
     AskRelation,
     AskVitality,
 } from './ask.js';
+export { decideConfessAction } from './confess.js';
+export type { DecideConfessInput, ConfessResult } from './confess.js';
+export { decideGovernanceAction, buildStanding } from './governance.js';
+export type {
+    DecideGovernanceInput,
+    GovernanceProposal,
+    GovernanceResult,
+    ManagerBond,
+} from './governance.js';
+export { decideProposalAction } from './proposal.js';
+export type { DecideProposalInput, ProposalResult, ProposalScope } from './proposal.js';
+export { materializeMention } from './materialize.js';
+export type { MaterializeInput, DormantEntity, DormantKind } from './materialize.js';
+export { activateDormant } from './activate.js';
+export type { ActivateInput, ActivatedCharacter } from './activate.js';
 export {
     buildAskSystemPrompt,
     buildAskUserPrompt,
