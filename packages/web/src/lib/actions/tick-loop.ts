@@ -56,6 +56,7 @@ import { forcingLevel, pressureAwareness } from '@/lib/chain/arc-pressure';
 import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
+import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -134,6 +135,11 @@ import { runActPhase, cardActionPhrase } from './tick-phases/act';
  *  → settle the resource → demand moves) is the multi-tick spine in
  *  docs/EVENT_LIFECYCLE.md. */
 const recentTopicsBySaga = new Map<string, string[]>();
+
+/** §2.51 actor-fatigue ledgers, per saga (process-level, like the topic history above).
+ *  Characters who carried a live event tire; tired rows are suppressed at SELECTION
+ *  so the spotlight rotates — the monopoly that swallowed injected dreams breaks. */
+const actorFatigueBySaga = new Map<string, FatigueLedger>();
 
 /** Read a TICK_* feature flag from the environment (deploy-wide default for an
  *  auto-running runner). Truthy = '1' | 'true' | 'yes' | 'on' (case-insensitive). */
@@ -260,6 +266,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // §4d.1: pick the staged contention by CENTRALITY (story's heart), not urgency. Flag-gated,
     // domain-blind, falls back to the deterministic tension-sort on failure. Default off.
     const centrality = envFlag('TICK_CENTRALITY');
+    // §2.51: spotlight rotation — acting costs fatigue, fatigue suppresses effective
+    // tension at SELECTION only (settlement reads the raw rows). Default off.
+    const actorFatigue = envFlag('TICK_ACTOR_FATIGUE');
     // §4d.2: run the arc convergence state machine (central question + accumulated forcing +
     // irreversibility judge + retire/aftermath). Flag-gated, off-chain arc state. Default off.
     const arcConvergence = envFlag('TICK_ARC_CONVERGENCE');
@@ -624,13 +633,22 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
               })
             : picked.label;
     const sceneNameById = new Map(activeScenes.map((s) => [s.id, s.name]));
+    // §2.51 spotlight rotation: rest everyone one notch, then build the SELECTION
+    // view of the tension rows (fatigued owners suppressed). Settlement + hints keep
+    // reading the raw `drama.top` — fatigue steers who gets staged, never who wins.
+    let fatigueLedger: FatigueLedger = {};
+    if (actorFatigue) {
+        fatigueLedger = decayActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? {});
+        actorFatigueBySaga.set(d.sagaId, fatigueLedger);
+    }
+    const selectionRows = actorFatigue ? applyActorFatigue(drama?.top ?? [], fatigueLedger) : (drama?.top ?? []);
     if (parallelEvents && drama?.active && slice.length > 0) {
         // PARALLEL SPINE — open/linger/resolve MANY axis events at once.
         const occupancy = slice.flatMap((c) => {
             const sid = rosterById.get(c.id)?.currentSceneId;
             return sid ? [{ characterId: c.id, sceneId: sid }] : [];
         });
-        let candidates = buildAxisCandidates(drama?.top ?? [], occupancy, framingForStatement);
+        let candidates = buildAxisCandidates(selectionRows, occupancy, framingForStatement);
         // [ch-diag] WHY events do / don't open. An event needs ≥2 cast co-present
         // in one scene AND tensioned on one axis (minCast=2). Grep `[ch-diag] spine-plan`:
         //   occupancy=0           → scene reads failed (429 on resolveCurrentOwner) →
@@ -707,8 +725,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         });
         const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
         const picked = centrality
-            ? await selectContentionByCentrality(drama?.top ?? [], recentTopics)
-            : selectContention(drama?.top ?? [], recentTopics);
+            ? await selectContentionByCentrality(selectionRows, recentTopics)
+            : selectContention(selectionRows, recentTopics);
         recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
         const spineLabel = await frameLabel(picked);
         spineCtx = {
@@ -754,8 +772,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 '戲班';
             const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
             const picked = centrality
-            ? await selectContentionByCentrality(drama?.top ?? [], recentTopics)
-            : selectContention(drama?.top ?? [], recentTopics);
+            ? await selectContentionByCentrality(selectionRows, recentTopics)
+            : selectContention(selectionRows, recentTopics);
             const framing = { templateId: picked.templateId, label: await frameLabel(picked) };
             recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
             const st: TickStoryletResult = {
@@ -797,6 +815,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     `${dryRun ? ' (preview)' : st.opened ? ' ✓on-chain' : ' ✗'}`,
             );
         }
+    }
+
+    // §2.51: everyone who carried a live event this tick tires — next tick their
+    // rows are suppressed at selection, so the spotlight rotates by itself.
+    if (actorFatigue && storylets.length > 0) {
+        const featured = [...new Set(storylets.flatMap((s) => s.characterIds))];
+        const bumped = bumpActorFatigue(fatigueLedger, featured);
+        actorFatigueBySaga.set(d.sagaId, bumped);
+        const ledgerLine = Object.entries(bumped)
+            .map(([id, v]) => `${nameById.get(id) ?? id.slice(0, 6)}:${v.toFixed(2)}`)
+            .join(' ');
+        tlog(`②⁵ actor fatigue: ${featured.length} featured tire, rows suppressed next tick (${ledgerLine})`);
     }
 
     // 2.76 EVENT MOMENT + 4.5 EVENT CUT are both StorytellerCap txs. We capture

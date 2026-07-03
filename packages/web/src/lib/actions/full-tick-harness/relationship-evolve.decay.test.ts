@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import {
     aggregateDecayedOutgoing,
     type RelEventLite,
-} from './relationship-evolve';
+} from '../../chain/relationship-core.ts';
 
 test('cooling: maintained tie stays, abandoned tie fades out', () => {
     const events: RelEventLite[] = [

@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newArc, accumulate, forcingLevel, FORCING_PRESS_BAR, FORCING_EDGE_BAR } from './arc-pressure';
+import { newArc, accumulate, forcingLevel, FORCING_PRESS_BAR, FORCING_EDGE_BAR } from './arc-pressure.ts';
 
 test('① 壓力只在有事發生時漲 — pressing raises pressure', () => {
     let arc = newArc('a', 'q', 'liu');

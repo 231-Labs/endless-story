@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWarmGraph, type RelEventLite } from './relationship-evolve';
+import { buildWarmGraph, type RelEventLite } from './relationship-core.ts';
 
 const events: RelEventLite[] = [
     { characterA: 'su', characterB: 'liu', tone: 'romance', tick: 0 },

@@ -12,7 +12,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeSpatialRouting, type RoutingActor, type RoutingSceneInfo } from './spatial-routing';
+import { computeSpatialRouting, type RoutingActor, type RoutingSceneInfo } from './spatial-routing.ts';
 
 const SCENES: RoutingSceneInfo[] = [
     { id: 'backstage', privacyLevel: 0 },
