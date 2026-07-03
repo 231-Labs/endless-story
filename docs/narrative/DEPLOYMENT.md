@@ -97,6 +97,10 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 - 把回傳的 package id / object ids 寫進 `packages/shared/src/contract-ids.ts`（**這份 commit 進 repo,不是 secret**）。
 - 換網路 = 重發 + 更新 ids。
 
+**後台一鍵 deploy / 升級（線上免重 build）**：`/admin/deploy` 的按鈕經 [`run-cli-script.ts`](../../packages/web/src/lib/actions/run-cli-script.ts) server action 跑 `deploy` / `bootstrap` / `upgrade`，全程用 web 同一顆 `SUI_ADMIN_PRIVATE_KEY` 簽。合約 bytecode 走 image build 時預先 dump 的 `DEPLOY_BYTECODE_DUMP_PATH`（`sui move build --dump-bytecode-as-base64`，見 [`sui-publish.ts`](../../packages/cli/src/lib/sui-publish.ts)），runtime 容器不必現場 build。
+
+**runtime deployment manifest（新 ids 不必重 build）**：deploy/upgrade 完成後把新 package / object ids 寫進持久 volume 的 `DEPLOYMENT_MANIFEST_PATH`。web server（[`deployment-manifest.ts`](../../packages/web/src/lib/server/deployment-manifest.ts)）與 client（`/api/deployment`）都呼 [`setRuntimeDeployment`](../../packages/sdk/src/runtime-deployment.ts)，**原地改寫** `ENDLESS_STORY_DEPLOYMENT` 物件（~300 處 inline 讀取全吃新值）→ 換 ids 線上立刻生效,免重 build / redeploy。未設 `DEPLOYMENT_MANIFEST_PATH` 時整條惰性,等同走 `contract-ids.ts` 的編譯期快照（dev / 任何沒掛 volume 的 host 無副作用）。⚠️ runner 不讀 manifest,reseed/升級後要重啟 runner。
+
 ### 3.5 向量 store（relayer 用）
 | 選項 | 適合 | 註 |
 |---|---|---|

@@ -178,17 +178,17 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 
 ## 6. 首頁 hero-clip 閉環
 
-前端**零改動**:現有 `loadDemoClipOverride()`([packages/web/src/lib/api/scenes.ts](../packages/web/src/lib/api/scenes.ts))已支援
+前端**零改動**:現有 `loadDemoClipOverride()`([packages/web/src/lib/api/scenes.ts](../../packages/web/src/lib/api/scenes.ts))已支援
 `DEMO_CLIPS_URL`(`cache:'no-store'`)。設 `DEMO_CLIPS_URL = https://relayer.<domain>/api/manifest/hero-clips`。
 `HeroTheater` 直接 render `clip.videoUrl` 字串 ⇒ 上傳一支 hero-clip → registry → manifest → 首頁換片,不碰 repo、不 redeploy。
 
-> manifest 的 `videoUrl` 用 `https://walrus.<domain>/v1/blobs/:blobId`(直打 VPS aggregator,**不經** [api/blob proxy](../packages/web/src/app/api/blob/[blobId]/route.ts);那支留給文字 blob 修 Content-Type)。
+> manifest 的 `videoUrl` 用 `https://walrus.<domain>/v1/blobs/:blobId`(直打 VPS aggregator,**不經** [api/blob proxy](../../packages/web/src/app/api/blob/[blobId]/route.ts);那支留給文字 blob 修 Content-Type)。
 
 ---
 
 ## 7. backfill 既有資產（ownership 坑）
 
-⚠️ 既有角色圖([packages/web/src/mocks/characters.ts](../packages/web/src/mocks/characters.ts) 的 `BLOB.*` 常數)多半是
+⚠️ 既有角色圖([packages/web/src/mocks/characters.ts](../../packages/web/src/mocks/characters.ts) 的 `BLOB.*` 常數)多半是
 **公共 publisher 種的 ⇒ 你不擁有那些 Blob object ⇒ 續不了租**。納管要：
 
 1. 從 aggregator 抓 bytes(`walrus.<domain>/v1/blobs/:blobId`)。

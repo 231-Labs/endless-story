@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | **弧 Arc** | 一條主線（如「首張唱片之爭」） | 多日 | 一個 DramaResource 當爭奪標的 | — |
 | **事件 Event** | 一樁有始有終的衝突（開場→周旋→**結算**） | **跨數 tick** | **一個 BudgetEvent 物件**（open→resolve） | **= 一回合本** |
-| **拍 Beat** | 事件裡某 tick 的一個動作（出牌/開口/移動） | 1 tick | submit_action / scene-line | POV 原料 + 劇照 |
+| **拍 Beat** | 事件裡某 tick 的一個動作（出牌/開口/移動） | 1 tick | submit_action_as_character / scene-line | POV 原料 + 劇照 |
 | **視角 POV** | 角色對一拍的主觀 | 1 tick | commitment(subject=char)，provenance.eventTx=**事件**id | 合本的素材 |
 
 **稀缺標的（資源）誰安排**：genesis 用 preset 種開場標的；之後由 **Director（LLM）** 隨弧
@@ -59,7 +59,7 @@ T+n        收回   resolve_event 帶 resource transfer（贏家奪下稀缺標�
 
 全部已部署、TS 可直接編排：
 - `event.pushEvent`（開 OPEN 事件，帶 card catalog + hand size）
-- `event.submitAction`（角色出一張牌）
+- `event.submitActionAsCharacter`（角色用**自己的 ControlCap** 出一張牌；PR #67 / `26bd9fd` 後改此路）。舊 `event.submitAction`（StorytellerCap gate）已 `@deprecated`，鏈上 `submit_action` 直接 abort（`EActionDeprecated`）。
 - `event.resolveEvent` + `event.emptyOutcomes` / **`event.outcomesWithResourceTransfers`**（收尾，可帶資源易手）
 - `event.applyResourceTransfers`（對 DramaResource 落實易手）
 - `resource.instantiate` / `resource.retire` / `reallocate` / `acquire`（Director 開/收標的）
@@ -99,8 +99,8 @@ ACT phase（`tick-phases/act.ts`）已會處理 OPEN budget event：decide→sub
 
 **收 flag 前必須在鏈上驗的點**：①結算提案是否被 `resolve_event` 接受（conservation 重驗）；
 ②`readResourceLedger` 的 `snapshot.id` 是否等於 `apply_resource_transfers` 要的 DramaResource
-**物件 id**（疑點，見 drama.ts:115）；③節奏（minTicks/maxTicks）手感；④背景 after() 收回與下
-一 tick 讀 registry 的競態（已 failure-isolated，但值得看一眼）。
+**物件 id**（疑點，見 drama.ts:115）；③節奏（minTicks/maxTicks）手感；④收回與下
+一 tick 讀 registry 的競態（已 failure-isolated，但值得看一眼；收回原掛 `after()` 背景，2026-06-20 `f0e209f` 後改在 tick body 裡 inline 跑，收回會在本 tick 返回前完成）。
 
 ### Phase 3 — Director（LLM）授權標的 🟡 已建 / flag-gate / 待鏈上驗（2026-06-11）
 > **狀態**：A（LLM 框題）+ B（LLM 立題）程式碼已落、各自 flag-gate（`llmFraming` /
@@ -214,7 +214,7 @@ hint，餵進該角色的 decide/POV——拉扯從世界級選題落到人物�
    `live[].resourceId`（物件 id）取代 `json.id`，或在 spine 結算用物件 id。
 4. **驗點③ 節奏**：覺得太快/太慢，調 `spineResolveAndWeave` 上游的 `minTicks`/`maxTicks`（現 2/4，
    走 `SpineCtx`）。
-5. **驗點④ 競態**：背景 `after()` 收回 vs 下一 tick 讀 registry。連跑數回，若 log 出現對已收回事件
+5. **驗點④ 競態**：inline 收回 vs 下一 tick 讀 registry（收回原掛背景 `after()`，`f0e209f` 後改 inline 跑在 tick body 內）。連跑數回，若 log 出現對已收回事件
    重複 resolve 的 abort（無害、failure-isolated），可把 `openBySaga.delete` 提前到 `spinePlanAndOpen`
    偵測到 resolve step 時即刪。
 6. **驗世界前進**：連跑 2–3 回，確認 `selectContention` 的 top 張力**有換標的**（allocation 真的變了），

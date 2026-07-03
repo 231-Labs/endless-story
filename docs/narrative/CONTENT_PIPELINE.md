@@ -262,7 +262,7 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | 本檔（canonical） | `docs/CONTENT_PIPELINE.md` | — | ✅ |
 | shared 型別接縫：`ChapterKind`/`EventCutChapter`/`EventStill` | `shared/types/` | 低（additive） | ✅ |
 | **合本 compiler（runOnce + 純 weave + 單元測試）** | `runner/services/event-chapter-compiler/` | 低 | ✅ |
-| **合本接進 tick loop**（POV anchored ≥2 → after() 織回） | `web/lib/actions/tick-loop.ts` | 中 | ✅ |
+| **合本接進 tick loop**（POV anchored ≥2 → tick body inline 織回） | `web/lib/actions/tick-loop.ts` | 中 | ✅ |
 | **合本 server action + admin 面板（手動補織/預覽）** | `web/.../compile-event-chapter.ts` · `EventCutPanel` | 低 | ✅ |
 | **合本鏈上讀 + facade + `/feed` 章回 mode** | `cut-read.ts` · `api/cuts.ts` · `CutList` · feed | 中（前端） | ✅ |
 | `/feed` IA 四 mode（全部/公報/章回/影像） | `app/(site)/feed/page.tsx` | 中（前端） | ✅ |
@@ -270,14 +270,16 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 | **訂閱牆**（角色回 POV：非訂閱者只見首段 teaser + 漸層 + CTA，全文不送出） | `ChainPovSection.tsx` · `chain/pov-read.ts`（`withTeaser`/`firstParagraphPlainText`） | 中（前端） | ✅（`efaf03b`） |
 | **章回文案集中化**（`CHAPTER_COPY`） | `lib/copy/chapters.ts` | 低 | ✅（`efaf03b`） |
 | 全鏈路蓋 POV provenance（eventTx/involvedIds） | tick-loop（`anchorPovChaptersBatch`+`embedProvenance`） | — | ✅（既有） |
-| 事件級劇照（多角色 anchor 條件化、kind=4、eventTx metadata） | `web/.../generate-event-moment.ts`（tick after()） | — | ✅（既有） |
+| 事件級劇照（多角色 anchor 條件化、kind=4、eventTx metadata） | `web/.../generate-event-moment.ts`（tick body inline） | — | ✅（既有） |
 | `still-compiler` 型殼（beat 級 + teaser/full 分級的演進） | `runner/services/still-compiler/` | 低 | ✅（型殼） |
 | beat 級劇照（越張力門檻可配置截 + 分級） | `still-compiler` runOnce | 中 | TODO |
 | 公報漏斗化（本日頭條 hook + 連載預告 CTA → `/feed?mode=chapter`） | `gazette-compiler/prompt.ts` | 低（純 prompt） | ✅ |
 | 公報頭條嵌劇照縮圖（threading 事件 still URL） | `gazette-compiler` snapshot | 中 | TODO |
-| tick 背景簽名序列化（moment→cut 同一 after()，避免 owned cap 撞版本） | `tick-loop.ts` | — | ✅ |
+| tick inline 簽名序列化（moment→cut 同一 inline serial job loop，避免 owned cap 撞版本） | `tick-loop.ts` | — | ✅ |
 | 影片改 image-to-video（劇照當 first frame） | `video-compiler`（R6 stub） | 高 | TODO |
 | 角色 PV mode | `video-compiler` `character_pv` | — | defer |
+
+**tick 背景工作改 inline（2026-06-20，`f0e209f`）**：moment／resolve＋cut／still 原本掛在 Next 的 `after()` 背景跑，但在自架 VPS 上，tick body 跑在 `/api/tick` mutex 的 detached promise chain 裡，`after()` 從不觸發，這些工作每 tick 被靜默丟掉（event moment／resolve／event cut 的 log 永遠搜不到）。現在改成在 tick body 裡 inline 串行跑（帶 timeout），下表凡標 inline 者皆指此。
 
 **合本可見性（2026-06-15 拍板，已落地）**：跨角色付費 gate 規則未定，故**梨園回（event_cut）＝公開**
 （展示漏斗主秀、可分享），付費牆改架在**角色回（per-char POV）**——非訂閱者只見 server 端萃取的首段

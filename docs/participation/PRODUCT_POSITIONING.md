@@ -57,8 +57,8 @@
 | 項目 | 狀態 | 翻 ✅ 的條件 |
 |---|---|---|
 | `economy.move`（真鏈上 Balance：發薪 / 接濟 / 結算 / 挹注） | 合約已上鏈（`sui move test` 122/122） | codegen 生 SDK 綁定 + D5 adapter 把 off-chain 影子接成真 Balance 進出，並真跑一輪驗證 |
-| 藏閣 Kiosk 交易（`still.move` TransferPolicy） | 合約已上鏈 | Slice 3 TS 接線 + 真實上架/購入/撤架跑通 |
-| 藏閣鏈上佈局保存（`chamber` PersonalVault） | 合約已上鏈 | Slice 4 `chamber::decorate` server action + 「鏈上保存」按鈕接通 |
+| 藏閣 Kiosk 交易（`still.move` TransferPolicy） | TS 接線已落地（PR #70 上架/購入/撤架 + #72 付費自助鑄 Still、ENDLESS 規費 + admin 費率面板），已併 main | 真錢包 + gas + admin key 實機跑通 mint/list/purchase |
+| 藏閣鏈上佈局保存（`chamber` PersonalVault） | TS 接線已落地（PR #70 單錢包 PersonalVault + 多佈置 remote layout blob v3 + 「鏈上保存」），已併 main | 真錢包實機驗 create/decorate 一輪 |
 | 兩段式鑄角（`recruit` RedeemIntent） | 合約已上鏈 | 走真錢包 redeem 一次，確認不再 `Transaction not signed by correct sender` |
 
 > ⚠️ **redeploy ≠ 自動可用**：合約上鏈後，web 端仍需 codegen + adapter 接線才會真的用到新鏈上能力。**驗證通過前，這些一律當 🟡 講，不要當 ✅。**
