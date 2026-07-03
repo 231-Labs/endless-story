@@ -36,6 +36,7 @@ import { signAndAnchor } from '@endless-story/runner';
 import { resolveNetwork } from './network.js';
 import { withAdminLock } from './admin-signer.js';
 import {
+    applyDreamStirs,
     buildBeat,
     buildWorld,
     defaultDesiresForCast,
@@ -55,6 +56,25 @@ import { readResourceIntents } from './resource-intents.js';
 /* ── process-level satisfaction carry-over (see header) ───────────────── */
 const lastSatBySaga = new Map<string, Map<string, bigint>>();
 const lastBeatCommitmentBySaga = new Map<string, string>();
+
+/* ── §2.51 dream stir — an injected dream must ALSO stir appraisal ─────── */
+// Lab-proven (dream-butterfly dosimetry): a dream written only into memory is
+// INERT — the dreamer never wins salience, so the memory is never recalled into
+// action. The minimal effective dose is the dream text PLUS one tighten on the
+// dreamer's hottest desire (one ripple unit, 0.18 of SCALE). Queued by
+// remember-dream at injection time; consumed ONCE by the next drama beat, so it
+// is a single appraisal jolt, not a standing buff. Off-chain DEMAND only —
+// supply, settlement and the beat's verifiability are untouched (the beat
+// commits the stirred input world, so replay still reproduces the output).
+const pendingDreamStirs = new Map<string, Map<string, number>>();
+
+/** Queue a one-shot appraisal stir for a character (0..1 fraction of SCALE). */
+export function queueDreamStir(sagaId: string, characterId: string, fraction = 0.18): void {
+    if (!sagaId || !characterId || !(fraction > 0)) return;
+    const bySaga = pendingDreamStirs.get(sagaId) ?? new Map<string, number>();
+    bySaga.set(characterId, Math.max(bySaga.get(characterId) ?? 0, Math.min(1, fraction)));
+    pendingDreamStirs.set(sagaId, bySaga);
+}
 
 /** True once a package that includes resource.move is deployed. We can't know
  *  statically, so callers rely on `readResourceLedger` returning [] instead. */
@@ -259,6 +279,18 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     const prior = lastSatBySaga.get(opts.sagaId) ?? new Map<string, bigint>();
     const tickGuess = BigInt(prior.size); // monotone-ish; exact value isn't load-bearing off chain
     const world = buildWorld(resources, agents, prior, tickGuess);
+
+    // 2.5 §2.51: consume queued dream stirs — one tighten on the dreamer's hottest
+    // desire, applied to the INPUT world (so the committed beat stays replayable).
+    const stirs = pendingDreamStirs.get(opts.sagaId);
+    if (stirs?.size) {
+        for (const s of applyDreamStirs(world, stirs)) {
+            console.log(
+                `[drama] dream stir: ${s.agentId.slice(0, 8)}… 「${s.statement}」 satisfaction −${s.fraction} (夢攪動了她)`,
+            );
+        }
+        pendingDreamStirs.delete(opts.sagaId);
+    }
 
     // 3. relax + derive tension (pure)
     const derived = deriveBeat(world);

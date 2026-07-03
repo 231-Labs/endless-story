@@ -626,3 +626,37 @@ export function verifyBeat(beat: SerializedBeat): boolean {
 }
 
 export type { WorldState };
+
+/* ── §2.51 dream stir (pure) ──────────────────────────────────────────────── */
+
+/** What one consumed stir did (for the tick log). */
+export interface DreamStirApplied {
+    agentId: string;
+    statement: string;
+    fraction: number;
+}
+
+/**
+ * Consume queued dream stirs against a freshly-built INPUT world: tighten each
+ * stirred agent's HOTTEST desire by `fraction` of SCALE (one ripple unit —
+ * §2.51 dosimetry: a dream that only sits in memory is inert; memory + one
+ * appraisal jolt is the minimal effective dose). Mutates `world` in place
+ * (it is the beat's input, so the committed blob stays replayable) and returns
+ * what was applied. Agents without desires are skipped.
+ */
+export function applyDreamStirs(
+    world: WorldState,
+    stirs: ReadonlyMap<string, number>,
+): DreamStirApplied[] {
+    const applied: DreamStirApplied[] = [];
+    if (stirs.size === 0) return applied;
+    for (const agent of world.agents) {
+        const stir = stirs.get(agent.id);
+        if (!stir || !(stir > 0) || agent.desires.length === 0) continue;
+        const hottest = agent.desires.reduce((b, c) => (tension(c) > tension(b) ? c : b));
+        const drop = (SCALE * BigInt(Math.round(Math.min(1, stir) * 100))) / 100n;
+        hottest.satisfaction = hottest.satisfaction > drop ? hottest.satisfaction - drop : 0n;
+        applied.push({ agentId: agent.id, statement: hottest.statement, fraction: Math.min(1, stir) });
+    }
+    return applied;
+}
