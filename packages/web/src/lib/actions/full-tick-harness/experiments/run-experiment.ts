@@ -191,6 +191,9 @@ async function evolveFromTick(
 export interface RunExperimentOptions {
     /** progress callback (per-tick), so the CLI can show life without owning the loop. */
     onTick?: (tick: number, totalTicks: number, note: string) => void;
+    /** runs BEFORE tick N executes — the injection point for mid-run perturbations
+     *  (e.g. dream-lab 注夢 at tick k via the production rememberDreamAction). */
+    onBeforeTick?: (tick: number, totalTicks: number) => Promise<void> | void;
 }
 
 /**
@@ -269,6 +272,7 @@ export async function runExperiment(
     try {
         for (let i = 0; i < config.ticks; i++) {
             const tick = i + 1;
+            if (options.onBeforeTick) await options.onBeforeTick(tick, config.ticks);
             let r: Awaited<ReturnType<typeof runTickLoopAction>> | null = null;
             try {
                 r = await runTickLoopAction({ povAll: true });

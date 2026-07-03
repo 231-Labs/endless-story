@@ -13,7 +13,7 @@
  */
 
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { isMemoryConfigured, rememberForCharacter } from '@/lib/chain/memory';
+import { rememberForCharacter } from '@/lib/chain/memory';
 import { queueDreamStir } from '@/lib/chain/drama';
 
 export interface RememberDreamResult {
@@ -31,8 +31,10 @@ export async function rememberDreamAction(
     // dose is memory + ONE appraisal stir (a ripple-tighten on her hottest
     // desire, consumed by the next drama beat). Queue it even when MemWal is
     // unconfigured: the dream itself is already anchored on chain by now.
+    // (No cred pre-check: rememberForCharacter routes to the observatory's
+    // in-memory store under ES_NARRATIVE, and gracefully returns false on the
+    // real path when MemWal creds are absent.)
     queueDreamStir(ENDLESS_STORY_DEPLOYMENT.sagaId, characterId);
-    if (!isMemoryConfigured()) return { ok: true, remembered: false };
     try {
         const remembered = await rememberForCharacter(characterId, dreamText, {
             kind: 'dream',
