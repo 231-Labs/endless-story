@@ -75,15 +75,47 @@ export function auditProse(text: string, subject: AuditSubject, roster: AuditPee
         if (hit) v.push(`戲碼錯誤：「${hit}」是${kind}戲，非${subject.role}應工`);
     }
 
-    // Pronoun + kinship: derived from the roster (no hardcoded names).
+    // Pronoun (他): only non-stage-male females (a 坤生 is legitimately 他 ON STAGE).
     const females = roster.filter((p) => p.gender === '女' && !presentsMale(p)).map((p) => p.name);
     const maleRef =
         [...new Set(roster.filter((p) => p.gender === '男' || presentsMale(p)).map((p) => p.name[0]))].join('') || ' ';
     for (const name of females) {
         const he = new RegExp(`${name}(?:(?![${maleRef}。？！\\n])[\\s\\S]){0,8}?(?<![${COVERB}])他(?!們)`);
         if (he.test(text)) v.push(`性別代詞錯誤：${name}是女性，第三人稱應用「她」`);
-        if (new RegExp(`${name}[\\s\\S]{0,6}師[兄哥]|師[兄哥][\\s\\S]{0,6}${name}`).test(text)) {
-            v.push(`稱謂錯誤：${name}是女性，應稱師姐/師妹，不可稱師兄/師哥`);
+    }
+
+    // Male kinship (師兄/師哥/師弟): a gender error for EVERY female INCLUDING a 坤生 — her
+    // stage 行當 is male, but as a disciple she is 師姐/師妹 (柳生春自稱「師弟」即此). Caught by
+    // name-adjacency; and, in a female subject's first-person POV (我…做…師弟) where the cast
+    // has no male to own the term, by a bare 師兄/哥/弟 anywhere in the prose. 師姐/師妹 (姐/妹)
+    // never match, so neutral correct usage is untouched.
+    const hasMale = roster.some((p) => p.gender === '男');
+    for (const p of roster.filter((q) => q.gender === '女')) {
+        if (new RegExp(`${p.name[0]}[\\s\\S]{0,6}師[兄哥弟]|師[兄哥弟][\\s\\S]{0,6}${p.name[0]}`).test(text)) {
+            v.push(
+                `稱謂錯誤：${p.name}是女子，應稱師姐／師妹，不可稱師兄／師哥／師弟` +
+                    (presentsMale(p) ? '（她台上扮小生，但做為人仍是女子）' : ''),
+            );
+        }
+    }
+    if (subject.gender === '女' && !hasMale && /師[兄哥弟]/.test(text)) {
+        v.push(`稱謂錯誤：${subject.name}本人是女子、全班無男性，正文不該出現「師兄／師哥／師弟」，應為師姐／師妹`);
+    }
+
+    // Male HONORIFIC / personal address (老爺・老爺子・少爺・公子…) on ANY female's SURNAME is a
+    // gender error EVEN for a 坤生: on stage she plays male (so 他 above stays permissive), but
+    // addressing the PERSON by a male honorific treats the actress herself as a man — 柳生春
+    // 被叫「柳老爺子」即此。「老闆／老板」is the gender-NEUTRAL lead-actor title (a 角兒 of either
+    // sex) and is intentionally NOT flagged.
+    const MALE_HONORIFIC = '老爺子|老太爺|老爺|少爺|大爺|公子|相公|爺們';
+    for (const p of roster.filter((q) => q.gender === '女')) {
+        if (new RegExp(`${p.name[0]}(?:${MALE_HONORIFIC})`).test(text)) {
+            v.push(
+                `稱謂錯誤：${p.name}是女子，不可冠以「老爺／老爺子／少爺／公子」等男性稱謂；` +
+                    (presentsMale(p)
+                        ? '她台上扮小生，但台下、做為人仍是女子，可稱她「老闆／角兒」，不可當男人稱呼'
+                        : '應以女子的稱謂相稱'),
+            );
         }
     }
     return [...new Set(v)];

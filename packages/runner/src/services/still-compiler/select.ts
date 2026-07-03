@@ -126,7 +126,7 @@ export interface CaptureStillsInput {
     sceneName?: string;
     /** Characters in the event — their anchors condition every still. */
     involvedCharacterIds: string[];
-    /** Pre-formatted cast label for the prompt, e.g. "孟雲屏（青衣）、柳生春（小生）". */
+    /** Pre-formatted cast label for the prompt, e.g. "某花旦（青衣）、某小生（小生）". */
     cast?: string;
     /** Per-beat text (tick intent / scene-line), indexed by beat. */
     beatTexts?: string[];
