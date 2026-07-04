@@ -1016,6 +1016,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     for (const b of loop.beats) {
                         pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
                         recordSceneLine(sceneId, b.characterId, b.text, 'act');
+                        tlog(`③⁹ [${sceneName}] ${b.name}：${b.text}`);
                     }
                     beatCount += loop.beats.length;
                     wantActed.push(...loop.actedCharacterIds.filter((id) => !wantActed.includes(id)));
