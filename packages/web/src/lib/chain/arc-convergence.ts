@@ -1,32 +1,7 @@
 /**
- * §4d.2 arc convergence — central question + irreversibility judge + context-fed aftermath.
- * The engine that turns a centrality-held thread from a STANDOFF into a TURNING POINT that
- * changes the characters and RETIRES, spawning a fresh arc so the world keeps living.
- *
- * Validated in `arc-question-retire-selfdrive.ts` (§2.31): with an explicit central question
- * + escalating forcing + an adversarial irreversibility judge, a vacillating thread (柳生春
- * packs/unpacks the 布包 forever) converges to a character-grounded, irreversible answer,
- * retires, and its aftermath spawns a NEW arc with its own question. Control (no forcing) =
- * the §2.30 vacillation.
- *
- * This module holds the two UNAMBIGUOUSLY emergent pieces — the judge and the aftermath.
- * The FORCING (deadline) is deliberately NOT here: it must be derived from real converging
- * world-pressure by the caller (see 寫死自檢 below), never a tick counter.
- *
- * ── 寫死自檢 (why this is emergent, not a secret shortcut) ──────────────────────────
- *   ✗ hardcode the answer (「柳會留」)          → the judge NEVER prefers an outcome; it only
- *                                                 asks "is it irreversibly answered?" (走 OR 留
- *                                                 both count), default FALSE.
- *   ✗ a director timer ("tick 5 = decide")     → NOT in this module. The forcing deadline must
- *                                                 emerge from converging pressure (白 actually
- *                                                 leaving, 田's real contract deadline, 金鳳's
- *                                                 real intrusion) — wired by the caller from
- *                                                 world-state, never a counter. 🔴 highest risk.
- *   ✗ count "心裡決定但沒做" as answered         → the judge is adversarial: 收拾布包／先讓我唱完／
- *                                                 明天再說／心裡決定但沒做 ALL count as NOT answered;
- *                                                 only a walk-no-return ACTION does.
- *   ✗ template the aftermath ("在一起→吃醋")     → the aftermath is fed the REAL answer + beat and
- *                                                 grows a new question from that context.
+ * §4d.2 arc convergence (validated §2.31): central-question derivation, adversarial
+ * irreversibility judge, and context-fed aftermath. The forcing deadline is deliberately
+ * NOT here — callers must derive it from real converging world-pressure, never a timer.
  */
 
 import { text as llmText } from '@endless-story/llm';
@@ -46,18 +21,16 @@ function parseObj(raw: string): Record<string, unknown> | null {
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 export interface DerivedArc {
-    /** The central go/stay-type question this arc turns on (emergent, not authored). */
+    /** Emergent go/stay-type central question. */
     question: string;
-    /** Whose irreversible decision it hangs on — a name from the cast. */
+    /** Cast name whose irreversible decision it hangs on. */
     centralCharName: string;
 }
 
 /**
- * Derive the arc's central question + central character from the staged contention framing (what
- * centrality judged to be the story's heart) and the cast. Emergent: the model INTERPRETS the live
- * situation into a binary "會不會 / 走還是留 / 認還是不認" question and whose one irreversible decision
- * it hangs on. It does NOT decide the answer, write the scene, or use any authored priority.
- * Returns null on failure (caller just skips opening an arc this tick).
+ * Derive the arc's central question + character from the staged framing + cast.
+ * Judges only — never decides the answer or writes the scene. Null on failure
+ * (caller skips opening an arc this tick).
  */
 export async function deriveArc(
     framingLabel: string,
@@ -90,19 +63,17 @@ export async function deriveArc(
 }
 
 export interface ArcVerdict {
-    /** Was the central question answered IRREVERSIBLY this beat? Default false. */
+    /** Answered IRREVERSIBLY this beat? Default false. */
     answered: boolean;
-    /** The answer if any (free-form, e.g. 走/留/在一起/散了); '' when not answered. */
+    /** Free-form answer; '' when not answered. */
     answer: string;
-    /** One-line reason. */
     why: string;
 }
 
 /**
- * Adversarial irreversibility judge (§2.31). Domain-blind: it does NOT prefer an outcome,
- * it only decides whether `beat` gave the central `question` a walk-no-return answer.
- * Default FALSE — a stall (收拾布包／先讓我唱完／明天再說／只是心裡決定) is NOT an answer.
- * Returns `{ answered:false }` on any LLM failure (safe: the arc just stays open).
+ * Adversarial irreversibility judge (§2.31): domain-blind, never prefers an outcome,
+ * default FALSE — stalls don't count, only a walk-no-return action. Returns
+ * `{ answered:false }` on any LLM failure (the arc just stays open).
  */
 export async function judgeArcAnswered(
     question: string,
@@ -137,19 +108,17 @@ export async function judgeArcAnswered(
 }
 
 export interface ArcAftermath {
-    /** The new arc's central question (a fresh go/stay-type tension, NOT the old one). */
+    /** The new arc's central question (fresh, not the old one). */
     question: string;
-    /** One-line opening situation for the new arc. */
+    /** One-line opening situation. */
     seed: string;
     /** Characters involved (free-form). */
     chars: string;
 }
 
 /**
- * Spawn the aftermath arc (§2.31) from the REAL resolution — the answer + the beat that
- * settled it. Context-fed (never a template): the new central question grows out of what
- * actually happened, so the world keeps living with a fresh, grounded tension. Returns null
- * on failure (safe: the arc simply retires with no follow-up this tick).
+ * Spawn the aftermath arc (§2.31) from the REAL answer + settling beat — context-fed,
+ * never a template. Null on failure (the arc simply retires with no follow-up).
  */
 export async function spawnArcAftermath(
     question: string,

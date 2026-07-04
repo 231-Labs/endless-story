@@ -1,14 +1,7 @@
 /**
- * Shared per-character POV generation core.
- *
- * Server-only (imports runner + admin keypair). NOT a 'use server'
- * module — it's a plain helper that server actions (run-pov-worker,
- * daily-batch) call. Never import from a client component.
- *
- * Encapsulates the bits both the single-character admin trigger and the
- * daily batch need: role resolution (voucher → off-chain specialty),
- * the runner character-worker call, and result mapping. Phase 3 will
- * also thread MemWal recall snippets through here.
+ * Shared per-character POV generation core. Server-only (imports runner + admin
+ * keypair); a plain helper called by server actions — never import from a client
+ * component.
  */
 
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
@@ -34,11 +27,8 @@ import { getSagaSoulOverride } from '@/lib/chain/saga-soul-override';
 import { loadNarrativeProfile } from '@/lib/chain/narrative-profile';
 
 /**
- * Semantic query for the "thickness" recall — pulls a character's non-work
- * life memories (childhood, family, hometown, first love, habits, the private
- * ache) from the genesis-seeded long-term store, so chapters read like a person
- * who has lived, not a job description. Deliberately broad + life-oriented; it
- * names no character and no saga, so it stays flexible across any roster.
+ * Semantic query for the "thickness" recall — non-work life memories so chapters read
+ * like a lived person. Names no character or saga, so it stays portable across rosters.
  */
 export const LIFE_QUERY = '童年 家世 父母 故鄉 初戀 舊情 癖好 心事 牽掛 秘密 此生最重的事';
 
@@ -46,38 +36,30 @@ export interface PovCoreOptions {
     triggerNarrative: string;
     forceRun?: boolean;
     dryRun?: boolean;
-    /**
-     * Chapter framing forwarded to the runner. `pov` (default) = serial
-     * event chapter; `genesis` = the character's 入世序章 (seed bootstrap);
-     * `encounter` = a quiet two-person 關係戲/溫情 (tick loop bond detection).
-     */
+    /** `pov` (default) serial chapter; `genesis` 入世序章; `encounter` quiet two-person 關係戲. */
     mode?: runnerCharacterWorker.ChapterMode;
-    /** Phase 3: MemWal recall snippets to weave into the prompt. */
+    /** MemWal recall snippets to weave into the prompt. */
     recentMemorySnippets?: string[];
-    /** DR-6: drama-engine tension hint (dominant unmet desire over a scarce
-     *  on-chain resource). Derived once per tick by the loop's DRAMA phase. */
+    /** Drama-engine tension hint, derived once per tick. */
     dramaHint?: string;
     /** Public saga roster context: name / role / scene. */
     rosterContext?: string[];
-    /** Saga peers with gender, for the narrative self-check's pronoun/kinship rules. */
+    /** Saga peers with gender, for the pronoun/kinship self-check. */
     rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
-    /** Precomputed relationship hints from the tick memory context. */
+    /** Precomputed by the tick memory context. */
     relationshipHints?: string[];
-    /** Precomputed current plan from the tick memory context. */
+    /** Precomputed by the tick memory context. */
     planHint?: string | null;
-    /** Objective same-scene beats this tick (other characters' visible acts) —
-     *  shared across same-scene POVs so they complement, not contradict. */
+    /** Objective same-scene beats, shared across same-scene POVs so they complement,
+     *  not contradict. */
     sceneBeats?: string[];
-    /** Use only caller-provided memory snippets; avoids duplicate decrypts in tick loop. */
+    /** Use only caller-provided snippets; avoids duplicate decrypts in the tick loop. */
     skipMemoryRecall?: boolean;
-    /** This character's contested event RESOLVED this tick — narrate the full
-     *  arc settling (前因後果收束) + a deeper interior coda. Forwarded to runner. */
+    /** This character's contested event resolved this tick — narrate the settling. */
     closing?: boolean;
-    /** Append the private「燈下」interior coda. Default on for pov mode (set in
-     *  the runner); pass false to skip. */
+    /** Opt-in: append the private 燈下 interior coda (default off, §2.3). */
     reflect?: boolean;
-    /** 日常層 state (餓/累/心情) tinting this chapter's texture without changing who
-     *  they are (§2.19). Omit ⇒ no injection (regression-safe). Forwarded to runner. */
+    /** Daily-life state (§2.19) tinting texture; omit ⇒ no injection. */
     state?: runnerCharacterWorker.CharacterState;
 }
 
@@ -92,17 +74,15 @@ export interface PovCoreResult {
     digest?: string;
     dreamFragmentUsed?: string;
     error?: string;
-    /** How many memory snippets were threaded into the prompt (0 when
-     *  memory not configured or no snippets matched). */
+    /** Memory snippets threaded into the prompt. */
     recalledCount?: number;
-    /** Whether the new chapter was written back to MemWal. */
+    /** Chapter written back to MemWal. */
     remembered?: boolean;
 }
 
 /**
- * Resolve a character's role from voucher hint → off-chain
- * Recruitment.specialty. Chain Character has no role field; this is what
- * makes the LLM address a role like "wealthy merchant" instead of a placeholder.
+ * Resolve a character's role (tag → recruitment specialty → description inference);
+ * the chain Character has no role field.
  */
 export async function resolveRole(characterId: string): Promise<string | undefined> {
     try {
@@ -128,11 +108,9 @@ function roleFromCharacterJson(tags: Array<{ label?: string }> | undefined): str
 }
 
 /**
- * Anchor a PRE-GENERATED POV chapter on chain (Walrus + commitment::commit)
- * and write it back to MemWal. Pairs with `runPovForCharacter(dryRun:true)`
- * to enable generate-parallel / anchor-serial in batch loops: generate every
- * chapter concurrently (no signing), then anchor them one at a time (single
- * StorytellerCap). Mirrors reflection's `anchorReflectionText` (N2c).
+ * Anchor a pre-generated chapter on chain and write it back to MemWal. Pairs with
+ * `runPovForCharacter(dryRun:true)` for generate-parallel / anchor-serial batches
+ * (single StorytellerCap).
  */
 export async function anchorPovChapter(
     admin: AdminContext,
@@ -160,7 +138,6 @@ export async function anchorPovChapter(
                 signer: admin.signer,
             }),
         );
-        // Write the new chapter into the character's memory (best-effort).
         const remembered = await rememberForCharacter(characterId, text, {
             kind: 'chapter',
         }).catch(() => false);
@@ -188,15 +165,9 @@ export interface BatchAnchorPovResult {
 }
 
 /**
- * Anchor MANY pre-generated chapters in ONE PTB (one signature, one gas
- * coin, one round-trip) instead of N serial transactions. Uploads every
- * blob to Walrus in parallel, commits them all in a single
- * `commitment::commit` ×N programmable transaction, then writes each
- * chapter back to MemWal. This is the proper fix for the anchor-serial
- * bottleneck — the whole PRODUCE phase now costs one tx.
- *
- * All-or-nothing: if the PTB aborts, every item is reported anchored:false
- * with the same error (callers can fall back to per-item anchoring).
+ * Anchor many chapters in ONE PTB (one signature, one gas coin, one round-trip).
+ * All-or-nothing: if the PTB aborts, every item reports anchored:false with the same
+ * error (callers can fall back to per-item anchoring).
  */
 export async function anchorPovChaptersBatch(
     admin: AdminContext,
@@ -213,8 +184,8 @@ export async function anchorPovChaptersBatch(
                 valid.map((i) => ({
                     sagaId,
                     subjectId: i.characterId,
-                    // Embed provenance INTO the anchored blob so the chapter↔event link
-                    // is itself immutable + chain-verifiable. MemWal keeps clean prose.
+                    // Provenance goes INTO the anchored blob so the chapter↔event link is
+                    // chain-verifiable; MemWal keeps clean prose.
                     content: new TextEncoder().encode(
                         i.provenance
                             ? embedProvenance(i.chapter.trim(), i.provenance)
@@ -230,7 +201,6 @@ export async function anchorPovChaptersBatch(
         return valid.map((i) => ({ characterId: i.characterId, anchored: false, error }));
     }
 
-    // Write each chapter back to MemWal (off-chain, parallel).
     const remembered = await Promise.all(
         valid.map((i) =>
             rememberForCharacter(i.characterId, i.chapter.trim(), { kind: 'chapter' }).catch(
@@ -249,11 +219,7 @@ export async function anchorPovChaptersBatch(
     }));
 }
 
-/**
- * Generate (and optionally anchor) one character's POV chapter.
- * `admin` is the loaded keypair context; caller loads it once and reuses
- * across a batch.
- */
+/** Generate (and optionally anchor) one character's POV chapter. */
 export async function runPovForCharacter(
     admin: AdminContext,
     characterId: string,
@@ -266,16 +232,9 @@ export async function runPovForCharacter(
 
     const role = await resolveRole(characterId);
 
-    // Recall long-term memory (MemWal) for prompt context. The trigger
-    // narrative doubles as the semantic query. No-op ([]) when memory
-    // isn't configured. Merge with any caller-supplied snippets. Director-
-    // seeded relationships (N3) colour how she narrates others in the scene.
-    //
-    // Second recall (LIFE_QUERY): pull non-work life memories — childhood,
-    // family, old loves, habits, the private ache — so chapters carry the
-    // person's THICKNESS, not just the day's work. Genesis (入世序章) leans
-    // hardest on these; serial POV gets a smaller dose. Both queries hit the
-    // same genesis-seeded long-term store.
+    // The trigger narrative doubles as the semantic recall query; a second LIFE_QUERY
+    // recall adds personal thickness (genesis gets a bigger dose). No-op when memory
+    // isn't configured.
     const lifeLimit = opts.mode === 'genesis' ? 6 : 3;
     const [recalled, lifeRecalled, relationshipHints, planHint] = await Promise.all([
         opts.skipMemoryRecall
@@ -291,7 +250,7 @@ export async function runPovForCharacter(
             ? Promise.resolve(opts.planHint)
             : recallCurrentPlanText(characterId).catch(() => null),
     ]);
-    // Dedup while preserving order: caller snippets, then event recall, then life recall.
+    // Dedup, preserving order: caller snippets → event recall → life recall.
     const recentMemorySnippets = [
         ...new Set([
             ...(opts.recentMemorySnippets ?? []),
@@ -304,8 +263,7 @@ export async function runPovForCharacter(
         const res = await runnerCharacterWorker.runOnce({
             characterId,
             sagaId: d.sagaId,
-            // Observatory soul override wins; production reads the story preset's
-            // narrative profile (world genre base + saga voice knobs).
+            // Observatory soul override wins over the story preset's narrative profile.
             sagaSoul: getSagaSoulOverride() ?? (await loadNarrativeProfile()).soul,
             triggerNarrative: opts.triggerNarrative,
             role,
@@ -329,9 +287,8 @@ export async function runPovForCharacter(
                 : { keypair: admin.signer, storytellerCapId: d.storytellerCapId },
         });
 
-        // Write the new chapter back into the character's memory — but
-        // only once it's actually anchored on chain (don't pollute memory
-        // on dry-runs or failed anchors).
+        // Write back to memory only once anchored — don't pollute on dry-runs or
+        // failed anchors.
         let remembered = false;
         if (res.anchored && res.chapter.trim()) {
             remembered = await rememberForCharacter(characterId, res.chapter, {

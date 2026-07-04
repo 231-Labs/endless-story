@@ -1,15 +1,8 @@
 /**
- * Narrative profile — the content/config side of the prompt split (server-only).
- *
- * Engine mechanics (craft rules, JSON schemas, forcing language) live in code;
- * CONTENT lives in the story preset and is loaded here per process:
- *   world.narrative  → genre base (shared by every saga in the world)
- *   saga.narrative   → voice knobs, contention framings, feature capabilities
- *
- * Selection: `NARRATIVE_STORY_PRESET` env (default `spring-snow`). Failure-
- * isolated — any read problem falls back to engine defaults, so a missing or
- * malformed preset never blocks the loop. The observatory's soul override
- * always wins over this profile.
+ * Narrative profile — content/config side of the prompt split (server-only).
+ * world.narrative = genre base; saga.narrative = voice knobs, framings, features.
+ * Preset from NARRATIVE_STORY_PRESET (default `spring-snow`); any read failure
+ * falls back to engine defaults. The observatory soul override wins over this.
  */
 
 import type { SagaSoul } from '@endless-story/runner';

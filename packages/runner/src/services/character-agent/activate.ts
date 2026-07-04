@@ -1,45 +1,30 @@
 /**
- * ACTIVATE — wake a dormant character into a full one, mint-style.
- *
- * materialize seeds a dormant entity from a mention (a 代稱 + inferred身份 + the creator's
- * seed memories, e.g. 春雪社 wrote「李老闆 偷偷傾慕班主田巧雲」). When it's sold and the buyer
- * picks a home saga (say 碼頭商會), this activates it: gives a proper 有名有姓 real name,
- * fleshes it into a living person OF that saga (身份/性子/模樣 + a life of memories), and
- * crucially **keeps and continues the creator's seed memories** — those are the character's
- * root. So 李老闆 becomes 碼頭商會 的米糧商 yet still碰著那點對田巧雲的念想 — and that念想 is
- * a CROSS-SAGA relationship edge (李@碼頭商會 → 田@春雪社). Memory is the root; it doesn't
- * break across sagas.
- *
- * Pure LLM. The dormant stub + seed memories + home saga come from the caller (later: the
- * sale/escrow flow). Returns the activated character; the 鏈上 mint writes the real name.
+ * ACTIVATE — wake a dormant entity into a full character of its buyer-chosen home saga.
+ * Invariant: the creator's seed memories must survive and continue; they are the root
+ * and carry cross-saga relationship edges. Pure LLM; the on-chain mint writes the name.
  */
 
 import { text as llmText } from '@endless-story/llm';
 import type { DormantEntity } from './materialize.js';
 
 export interface ActivateInput {
-    /** The dormant stub from materialize (代稱 + inferred身份). */
     dormant: DormantEntity;
-    /** Memories the creator wrote in (春雪社視角:愛看戲、傾慕班主…) — the root, must survive. */
+    /** Creator-written memories: the root, must survive activation. */
     seedMemories: string[];
-    /** The home saga the buyer assigns it to. */
     homeSaga: {
         name: string;
-        /** what kind of world this saga is — so the character grows INTO it. */
+        /** What kind of world this saga is. */
         nature: string;
     };
 }
 
 export interface ActivatedCharacter {
-    /** Proper 有名有姓 name (the 代稱 is replaced; 鏈上 mint records this). */
+    /** Proper name replacing the placeholder; recorded by the on-chain mint. */
     realName: string;
-    /** Role within the home saga. */
     role: string;
-    /** Distilled本色/性子. */
     persona: string;
-    /** Plain physical description. */
     physicalFacts: string;
-    /** A life of memories — childhood / 家世 / 營生 / 癖好 — that INCLUDES and continues the seeds. */
+    /** Must include and continue the seed memories. */
     memories: string[];
 }
 
@@ -110,8 +95,7 @@ function parseActivated(raw: string, fallbackName: string): ActivatedCharacter |
     return null;
 }
 
-/** Wake a dormant character into a full one. No-throw: on miss, returns a thin activation
- *  carrying the seed memories forward so the root is never lost. */
+/** No-throw: on miss, returns a thin activation carrying the seed memories forward. */
 export async function activateDormant(
     input: ActivateInput,
     opts?: { model?: string },

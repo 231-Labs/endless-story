@@ -1,17 +1,8 @@
 /**
- * Character Agent — PLAN step (N6).
- *
- * Between ticks the character updates a standing plan: a long-term goal, a
- * near-term intent ("what I mean to do next"), and a few open subgoals. The
- * plan is conditioned on persona + recalled memories + the current situation
- * + the PREVIOUS plan, so goals carry across ticks and evolve instead of
- * resetting. Stored back to MemWal (kind=plan, i=8) and recalled before the
- * next decide/POV — this is what makes behaviour goal-directed and coherent
- * over time rather than purely reactive.
- *
- * Pure LLM (cheap tier — runs per character per tick). The web action does
- * the recall (memories + prior plan) + remember. See NARRATIVE_AGENTS.md §2
- * PLAN.
+ * Character Agent — PLAN step (N6): evolve a standing plan (long-term goal, near-term
+ * intent, open subgoals) across ticks instead of resetting. Stored to MemWal
+ * (kind=plan, i=8) and recalled before the next decide/POV. Pure LLM (cheap tier);
+ * the web action does recall + remember. See NARRATIVE_AGENTS.md §2 PLAN.
  */
 
 import { text as llmText } from '@endless-story/llm';
@@ -24,27 +15,19 @@ export interface PlanInput {
     sagaName: string;
     /** "day N · time-of-day" for time-grounding. */
     dayLabel: string;
-    /** MemWal-recalled memories (three-factor) — what's on her mind. */
     recalledMemories: string[];
-    /** The previous plan text (recalled), if any — the thing we evolve. */
+    /** Previous plan text (recalled): the thing we evolve. */
     currentPlan?: string;
-    /** Optional: a short line on what just happened (recent events). */
     recentSituation?: string;
     /**
-     * The OBJECTIVE「當下處境」block — what this character can perceive RIGHT NOW
-     * (same-scene presence, contested stakes, what just resolved). Pre-rendered +
-     * perception-scoped on the web side (chain/situation-core + tick-phases/perceive).
-     * Objective fact to be INTERPRETED through memory + persona, never restated — the
-     * PERCEIVE step the loop was missing (the perceive step, Step 1).
+     * Objective perceive-step block, pre-rendered and perception-scoped on the web side:
+     * what the character can perceive right now, to be interpreted through memory +
+     * persona, never restated.
      */
     situation?: string;
     /**
-     * This character's standing FEELINGS toward co-present others — directed
-     * relationship edges rendered as 「對蘇映雪:戀慕很深…」. Until now plan perceived
-     * the world (situation) but never its own heart, so it could only ever scheme over
-     * stakes, never over people. We state the BOND, not the deed: whether to act on it
-     * (把話說開 / 疏遠 / 邀同住 …) and how is deliberately left to the LLM — the point is
-     * to watch whether an open plan grows a relational move on its own, unprompted.
+     * Directed relationship edges toward co-present others. States the bond only;
+     * whether and how to act on it is deliberately left to the LLM.
      */
     relationshipPressure?: string[];
     /** Public saga roster lines: name / role / scene. Not private memory. */
@@ -80,10 +63,8 @@ export function buildSystemPrompt(): string {
 }
 
 export function buildUserPrompt(input: PlanInput): string {
-    // The objective situation goes FIRST: the character perceives the world, THEN
-    // reads it through memory + persona. ACTION-oriented framing (NOT the POV
-    // "describe, don't rewrite" frame) — PLAN must RESPOND to this reality, especially
-    // a 〔山雨欲來〕crisis or 〔風聲〕just-happened event, not treat it as fixed scenery.
+    // Objective situation first: perceive, then interpret through memory + persona.
+    // Action-oriented framing: PLAN must respond to it, not treat it as fixed scenery.
     const situationBlock = input.situation
         ? '\n## 當下處境（你此刻面對的真實 — 你的打算必須回應它，不能當沒看見照舊）\n' +
           input.situation +
@@ -128,7 +109,6 @@ export function buildUserPrompt(input: PlanInput): string {
         .join('\n');
 }
 
-/** Render the structured plan into the text we store + inject into prompts. */
 export function formatPlanText(p: {
     longTermGoal: string;
     dailyPlanHint: string;
@@ -146,7 +126,6 @@ export function formatPlanText(p: {
     ].join('\n');
 }
 
-/** Build a structured plan from a parsed reply, defaulting empty fields. */
 function toCandidate(parsed: {
     longTermGoal?: string;
     dailyPlanHint?: string;
@@ -162,8 +141,7 @@ function toCandidate(parsed: {
     };
 }
 
-/** Corrective turn for a drifted plan — name the over-reach, keep the ambition,
- *  redirect it to what the role can actually contest, ask for a same-format rewrite. */
+/** Corrective turn for a drifted plan: keep the ambition, redirect it to what the role can contest. */
 export function buildRepairPrompt(role: string): string {
     return [
         `你剛才的規劃越了界:你的行當是「${role}」,不是班主、老板、當家的,`,
@@ -191,8 +169,7 @@ export async function updatePlan(
     });
 
     const parsed = parsePlan(res.text);
-    // Fall back to the prior plan (or a neutral one) when the model returns
-    // nothing usable — never wipe a standing goal on a parse miss.
+    // Never wipe a standing goal on a parse miss: fall back to the prior plan.
     if (!parsed) {
         return {
             longTermGoal: '',
@@ -210,12 +187,8 @@ export async function updatePlan(
 
     let candidate = toCandidate(parsed);
 
-    // Intent over-reach is a SELF-CHECK FAILURE, not a dead end: hand the model
-    // its own drifted plan back with a correction and let it rewrite IN ROLE,
-    // keeping its real ambition — rather than dropping straight into a monotone
-    // template. The template (sanitizePlanForRole below) is only the last resort
-    // if the repaired plan STILL over-reaches. One extra cheap call, only on
-    // drift (now rare after the hasAuthorityDrift tightening).
+    // Authority drift is repairable: hand the model its own plan back to rewrite in
+    // role; sanitizePlanForRole is the last resort. One extra cheap call, only on drift.
     if (driftsForRole(input.role, candidate)) {
         try {
             const repair = await llm.chat({
@@ -232,8 +205,7 @@ export async function updatePlan(
             const reparsed = parsePlan(repair.text);
             if (reparsed) {
                 const repaired = toCandidate(reparsed);
-                // Accept the rewrite only if it actually cleared the drift;
-                // otherwise let the template catch it.
+                // Accept the rewrite only if it actually cleared the drift.
                 if (!driftsForRole(input.role, repaired)) candidate = repaired;
             }
         } catch (err) {
@@ -241,8 +213,7 @@ export async function updatePlan(
         }
     }
 
-    // Last resort: only rewrites to a role template if the (possibly repaired)
-    // plan still drifts; a clean plan passes through untouched.
+    // Rewrites to a role template only if the plan still drifts; a clean plan passes untouched.
     const plan = sanitizePlanForRole(input, candidate);
     return { ...plan, planText: formatPlanText(plan) };
 }

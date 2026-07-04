@@ -1,19 +1,7 @@
 /**
- * Character POV Worker — produces per-character chapters.
- *
- * R2 scope:
- *   - Read character + scene state from chain
- *   - Build POV prompt with character snapshot + a runner-supplied
- *     "what just happened" line (no memory tail / dream pulls yet —
- *     R3 + R5 add those)
- *   - Call LLM → chapter prose
- *   - Sign-and-anchor: Walrus upload + commitment::commit
- *   - Subscriber gate: skip unless `subscriber_count > 0` OR `forceRun`
- *
- * Triggered by:
- *   - Admin button on dossier (manual, demo trigger)
- *   - Eventually: chain event subscriber that fires this on
- *     StoryletOpened / CharacterCalled / SceneEventResolved
+ * Character POV worker: reads character + scene state from chain, builds the
+ * POV prompt, calls the LLM, then anchors via Walrus + commitment::commit.
+ * Skips unless `subscriber_count > 0` or `forceRun`.
  */
 
 import type { Keypair } from '@mysten/sui/cryptography';
@@ -70,71 +58,44 @@ export interface RunCharacterWorkerInput {
     characterId: string;
     /** Saga the character is in (used for commitment + signer cap). */
     sagaId: string;
-    /** Runner-supplied "what just happened" line — typically from a chain
-     *  event (e.g. "saga director opened a storylet in the backstage dressing room ..."). */
+    /** Runner-supplied "what just happened" line, typically from a chain event. */
     triggerNarrative: string;
     /** Signer + the StorytellerCap id it controls. Required unless dryRun. */
     signer?: { keypair: Keypair; storytellerCapId: string };
-    /** Optional: recent memory snippets to include in prompt (R3+). */
+    /** Recent memory snippets to include in prompt. */
     recentMemorySnippets?: string[];
-    /** Optional: owner-injected dream fragment to weave in (R5). */
+    /** Owner-injected dream fragment to weave in. */
     dreamFragment?: string;
-    /** Optional: subjective relationship memories + public director ties. */
+    /** Subjective relationship memories + public director ties. */
     relationshipHints?: string[];
-    /** Optional: public saga roster lines: name / role / scene. */
+    /** Public saga roster lines: name / role / scene. */
     rosterContext?: string[];
-    /** Optional: saga peers WITH gender, for the self-check's pronoun/kinship rules.
-     *  `rosterContext` is plain strings (no gender); pass this to activate those checks.
-     *  Empty/omitted ⇒ only craft + mechanism-token rules run. No names are hardcoded. */
+    /** Saga peers WITH gender — activates the self-check's pronoun/kinship rules
+     *  (`rosterContext` carries no gender). Empty/omitted = only craft +
+     *  mechanism-token rules run. */
     rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
-    /** Optional: current plan text (N6). */
+    /** Current plan text (N6). */
     planHint?: string;
-    /** Optional: drama-engine tension hint (DR-6) — dominant unmet desire. */
+    /** Drama-engine tension hint (DR-6): dominant unmet desire. */
     dramaHint?: string;
-    /** Optional: objective same-scene beats this tick (other characters' visible
-     *  acts) — keeps same-scene POVs consistent. See PovPromptInput.sceneBeats. */
+    /** Objective same-scene beats this tick; keeps same-scene POVs consistent.
+     *  See PovPromptInput.sceneBeats. */
     sceneBeats?: string[];
-    /**
-     * Optional: per-saga tonal DNA layered onto the genre baseline (F).
-     * When omitted, `runOnce` derives a Tier-1 soul (premise + departure
-     * policy) from the saga it already reads. Pass this to enrich with
-     * Tier-2 fields (naturePrompt / rhythmHints); provided fields win.
-     */
+    /** Per-saga tonal DNA. Omitted = `runOnce` derives a Tier-1 soul from the
+     *  saga it already reads; provided fields win. */
     sagaSoul?: SagaSoul;
-    /**
-     * Optional: role / specialty override (e.g. "wealthy merchant" from off-chain
-     * Recruitment.specialty). Chain `Character` has no role field, so
-     * caller is expected to look this up and pass in. If omitted,
-     * snapshot defaults to '—' so the LLM doesn't get misled by a
-     * fake hardcoded role.
-     */
+    /** Role/specialty override. Chain `Character` has no role field; omitted =
+     *  snapshot renders '—' so the LLM isn't misled by a fake role. */
     role?: string;
-    /**
-     * Optional: chapter framing. `pov` (default) = event-anchored serial
-     * chapter (承上/推進/啟下); `genesis` = the character's first 入世序章
-     * (front door, no 承上, leans on life memories for thickness);
-     * `encounter` = a quiet two-person 關係戲/溫情 (no competition). All modes
-     * share the same iron rules + voice — only the framing swaps.
-     */
+    /** Chapter framing; see ChapterMode. Default 'pov'. */
     mode?: ChapterMode;
-    /**
-     * Optional: this character's contested event RESOLVED this tick. Makes the
-     * scene narrate the full arc settling (前因後果收束) instead of one moment,
-     * and earns extra length. Threaded from the tick loop's verdict map.
-     */
+    /** Contested event resolved this tick: narrate the full arc settling, with
+     *  extra length. Threaded from the tick loop's verdict map. */
     closing?: boolean;
-    /**
-     * Optional: 日常層 — this character's current 餓/累/心情 state, tinting the chapter's
-     * texture without changing who they are. Omit ⇒ no injection (regression-safe).
-     * The tick loop will drift/evolve this per character per tick (see state.ts).
-     */
+    /** Current daily-life state tinting the chapter's texture. Omit = no
+     *  injection (regression-safe). */
     state?: CharacterState;
-    /**
-     * Optional: append a private interior「燈下」coda after the scene (the
-     * character's honest read on the event / the people / themselves). Default
-     * ON for `pov` mode; pass `false` to skip (e.g. a fast dry preview). No-op
-     * for genesis/encounter, which have their own framing.
-     */
+    /** Opt-in: append a private interior coda after the scene. pov mode only. */
     reflect?: boolean;
     /** Override LLM model. */
     model?: string;
@@ -163,9 +124,8 @@ export interface RunCharacterWorkerResult {
     digest?: string;
     /** Snapshot used for prompt — debug aid. */
     snapshot?: CharacterSnapshot;
-    /** When the prompt wove a dream in (caller-supplied OR auto-pulled
-     *  from latest DreamInjected event), this is the resolved fragment.
-     *  UI surfaces it as a "chapter influenced by dream" chip. */
+    /** Resolved dream fragment when one was woven in (caller-supplied or
+     *  auto-pulled from the latest DreamInjected event). */
     dreamFragmentUsed?: string;
     /** Errors that didn't abort. */
     errors?: string[];
@@ -190,7 +150,6 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
     const { snapshot, soul: chainSoul } = fetched;
     const publicSnapshot = stripInternal(snapshot);
 
-    // Subscriber gate: skip if 0 and not forced.
     const subCount = snapshot.subscriberCount ?? 0;
     if (!input.forceRun && subCount === 0) {
         return {
@@ -201,16 +160,13 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         };
     }
 
-    // Pull latest owner-injected dream (if any) so the prompt can
-    // weave it in. Caller may also pass dreamFragment explicitly to
-    // override (e.g. dry-run test); explicit wins.
+    // Explicit dreamFragment wins over the latest on-chain dream.
     const resolvedDream = input.dreamFragment ?? (await fetchLatestDreamFragment(client, input.characterId));
 
     const llm = llmText.createTextClient({ kind: 'primary' });
     const modelId = input.model ?? llm.defaultModel;
 
-    // Per-saga soul: chain-derived (Tier 1) merged under any caller override
-    // (Tier 2: nature/rhythm). Caller-provided fields win; chain fills the rest.
+    // Caller-provided soul fields win; chain fills the rest.
     const soul: SagaSoul = { ...chainSoul, ...(input.sagaSoul ?? {}) };
     const system = buildSystemPrompt(soul, input.mode ?? 'pov');
     const user = buildUserPrompt({
@@ -227,17 +183,13 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         state: input.state,
     });
 
-    // Scene length: the prompt now asks for 700–1100 字 (1200–1500 when an event
-    // is settling), so give the cap headroom. A closing chapter must show a full
-    // 前因後果, so it gets more room than an ambient beat.
+    // A closing chapter must show a full arc, so it gets more headroom.
     const sceneMaxTokens = input.closing ? 3000 : 2400;
 
     const response = await llm.chat({
         model: modelId,
         system,
         messages: [{ role: 'user', content: user }],
-        // POV is literary, but should read like controlled fiction rather
-        // than an emotional free-write.
         maxTokens: sceneMaxTokens,
         temperature: 0.72,
     });
@@ -276,10 +228,8 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         }
     }
 
-    // Normalise to Traditional, then run the deterministic narrative self-check
-    // (craft + mechanism-token + pronoun/kinship rules). Pronoun/kinship rules need
-    // peer genders, supplied via `rosterPeople` when the caller has them (the loop
-    // does); when omitted, only craft + token checks run. Never fabricate genders.
+    // Pronoun/kinship rules need peer genders (rosterPeople); without them only
+    // craft + token checks run. Never fabricate genders.
     chapter = toTraditional(chapter);
     const subject = {
         name: publicSnapshot.name,
@@ -288,9 +238,9 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
     };
     const roster = input.rosterPeople ?? [];
     let violations = auditProse(chapter, subject, roster);
-    // Corrective regen runs on ANY violation — it's a pure LLM rewrite (no signer/chain),
-    // and the tick loop generates with dryRun=true then anchors separately, so gating on
-    // !dryRun would skip the fix in the real flow.
+    // Corrective regen runs on ANY violation: the tick loop generates with
+    // dryRun=true then anchors separately, so gating on !dryRun would skip the
+    // fix in the real flow.
     if (violations.length > 0) {
         console.warn('[character-worker] narrative self-check violations:', violations);
         try {
@@ -315,12 +265,8 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         }
     }
 
-    // Optional「燈下」coda — a short off-stage interior monologue appended after the
-    // scene behind a「---」divider. OFF by default now: the interior life is meant to
-    // live woven INTO the pov prose (see the 內心戲 directive in VOICE), not walled off
-    // in a separate段 that read as tacked-on and, under its「專挑最痛/最不體面」prompt,
-    // often darker than the scene it followed. Kept as an explicit opt-in (reflect:true)
-    // for callers that still want the split「事件客觀 / 燈下主觀」register. pov mode only.
+    // Interior coda is opt-in (reflect:true): the interior life is meant to be
+    // woven INTO the pov prose, not walled off in a separate register.
     if (input.reflect === true && (input.mode ?? 'pov') === 'pov' && chapter.trim()) {
         try {
             const coda = await llm.chat({
@@ -342,12 +288,8 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
             });
             let codaText = toTraditional(coda.text.trim());
             if (codaText) {
-                // Ground the coda the same way as the scene — soften any
-                // ungrounded heavy motif (跛/棺/血…) the interior voice might
-                // have invented. We deliberately DON'T run the full scene audit
-                // on it (that would false-flag a pure monologue for lacking
-                // scene craft and drop every coda); the heavy-motif check is the
-                // safety-relevant, mode-agnostic part.
+                // Soften ungrounded heavy motifs, but skip the full scene audit:
+                // it would false-flag a pure monologue for lacking scene craft.
                 if (findUngroundedHeavyMotifs(codaText, publicSnapshot).length > 0) {
                     codaText = softenUnsupportedMotifs(codaText);
                 }
@@ -367,7 +309,6 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         };
     }
 
-    // Anchor: Walrus + commitment::commit.
     const anchor = await signAndAnchor({
         sagaId: input.sagaId,
         subjectId: input.characterId,
@@ -445,8 +386,6 @@ const SOFTEN_MOTIF_REPLACEMENTS: Array<[string, string]> = [
     ['紙紮', '紙扇'],
 ];
 
-/* ── snapshot ────────────────────────────────────────────────────── */
-
 /** Internal snapshot — includes subscriber_count for gating. */
 interface CharacterSnapshotInternal extends CharacterSnapshot {
     subscriberCount: number;
@@ -492,7 +431,6 @@ async function fetchCharacterSnapshot(
           }
         | undefined;
 
-    // Resolve scene name (optional — null if character not in any scene).
     const sceneIdRaw = unwrapOption(charJson.state?.current_scene_id);
     const sceneName = sceneIdRaw
         ? await read.scene
@@ -512,10 +450,8 @@ async function fetchCharacterSnapshot(
     const snapshot: CharacterSnapshotInternal = {
         id: characterId,
         name: charJson.profile?.name ?? '無名',
-        // Role is not on chain — caller supplies via roleOverride
-        // (typically resolved from off-chain Recruitment.specialty
-        // via voucher hint). Without override, render as '—' so the
-        // LLM doesn't get misled into impersonating a wrong role.
+        // Role is not on chain; without an override render '—' so the LLM
+        // doesn't impersonate a wrong role.
         role: roleOverride ?? '—',
         gender: mapGender(physical?.gender ?? ''),
         ageYears: Number(physical?.age_years ?? 0),
@@ -532,9 +468,7 @@ async function fetchCharacterSnapshot(
         subscriberCount: charJson.subscriber_count != null ? Number(charJson.subscriber_count) : 0,
     };
 
-    // Saga soul from the saga object we already fetched above. All fields are
-    // on chain (F Tier 2), so the full soul — premise + departure policy +
-    // nature/rhythm — is derived here with no extra fetch. Callers may still
+    // All soul fields are on chain, so no extra fetch; callers may still
     // override via input.sagaSoul (merged in runOnce).
     const soul: SagaSoul = {
         sagaName: sagaJson?.name ?? '無名戲班',
@@ -566,15 +500,9 @@ function mapGender(raw: string): string {
 }
 
 /**
- * Find the latest DreamInjected event for this character, fetch the
- * Dream object → get blob_id → fetch text from Walrus.
- *
- * Returns undefined if no dream exists, or any step fails — the POV
- * worker degrades gracefully (no dream weaving, normal prompt).
- *
- * Smallville convention: only the most recent dream is surfaced per
- * chapter, since dream is meant to be a fresh emotional anchor. Older
- * dreams persist on chain but get demoted to memory-tail (R-next).
+ * Latest DreamInjected event → Dream object → Walrus text. Returns undefined
+ * on any failure so the worker degrades gracefully. Only the most recent
+ * dream is surfaced per chapter.
  */
 async function fetchLatestDreamFragment(
     client: SuiClient,

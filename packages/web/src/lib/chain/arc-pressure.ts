@@ -1,26 +1,17 @@
 /**
- * §4d.2 arc pressure — the FORCING as an ACCUMULATOR (per the scene-param design: pressure
- * builds from what HAPPENS in the scene, echoing on-chain `SceneParams` + `apply_params_delta`),
- * NOT a tick counter. Each contesting action/event bearing on an arc's central question adds
- * pressure; an unpressed tick relaxes a little (mirrors the §2.4 relationship cooling). The
- * accumulated value drives the forcing that the arc's central character feels — so the deadline
- * is something the drama genuinely built up, never something a timer imposed.
- *
- * ── 寫死自檢 (structurally impossible to be a timer) ────────────────────────────────
- *   `accumulate` takes `pressingCount` = HOW MANY contesting things happened this tick, and
- *   NEVER a tick index. Pressure moves ONLY when something presses (pressingCount > 0). A quiet
- *   world (nothing presses) never raises forcing — it eases. So forcing rises because the world
- *   TIGHTENS, not because time passes. The forcing note is generic ("this central question"),
- *   domain-blind — no scripted "白南下/簽約" events, no hardcoded outcome.
+ * §4d.2 arc pressure — forcing as an ACCUMULATOR, structurally not a timer:
+ * `accumulate` takes pressingCount (contesting events this tick), never a tick index,
+ * and quiet ticks ease pressure (mirrors §2.4 cooling), so forcing rises only because
+ * the world tightens. Domain-blind: no scripted events, no hardcoded outcome.
  */
 
 export interface ArcState {
     id: string;
-    /** The central question (emergent — derived from the staged contention + central character). */
+    /** Emergent central question. */
     question: string;
     /** Whose irreversible decision the question hangs on. */
     centralCharId: string;
-    /** Accumulated pressure. Moves ONLY on pressing events; eases on quiet ticks. Never tick-fed. */
+    /** Moves ONLY on pressing events; eases on quiet ticks. Never tick-fed. */
     pressure: number;
     answered: boolean;
     answer?: string;
@@ -28,11 +19,11 @@ export interface ArcState {
 
 export type ForcingLevel = 0 | 1 | 2 | 3;
 
-/** Accumulated pressure at which the world visibly starts forcing the question. */
+/** Pressure at which the world visibly starts forcing the question. */
 export const FORCING_PRESS_BAR = 3;
-/** Accumulated pressure at which it is 退無可退 (must give an irreversible answer). */
+/** Pressure at which an irreversible answer can no longer be dodged. */
 export const FORCING_EDGE_BAR = 6;
-/** How much an UNPRESSED tick relaxes pressure (drama tension fades if not maintained). */
+/** Relaxation per unpressed tick. */
 export const PRESSURE_DECAY = 0.5;
 
 export function newArc(id: string, question: string, centralCharId: string): ArcState {
@@ -40,10 +31,9 @@ export function newArc(id: string, question: string, centralCharId: string): Arc
 }
 
 /**
- * Fold this tick's pressing into the arc's accumulated pressure. `pressingCount` = the number
- * of contesting actions/events that bore on the central character's question this tick (co-present
- * pressers, ultimatums, intrusions — computed by the caller from real tick activity, NEVER a tick
- * index). Pressed ⇒ add; unpressed ⇒ ease. Pure.
+ * Fold this tick's pressing into accumulated pressure. `pressingCount` = contesting
+ * events bearing on the central character's question this tick, computed by the caller
+ * from real activity — NEVER a tick index. Pure.
  */
 export function accumulate(arc: ArcState, pressingCount: number, opts: { decay?: number } = {}): ArcState {
     const decay = opts.decay ?? PRESSURE_DECAY;
@@ -52,7 +42,7 @@ export function accumulate(arc: ArcState, pressingCount: number, opts: { decay?:
     return { ...arc, pressure };
 }
 
-/** Forcing level = a function of ACCUMULATED PRESSURE (not ticks). */
+/** A function of accumulated pressure, not ticks. */
 export function forcingLevel(arc: ArcState): ForcingLevel {
     if (arc.pressure >= FORCING_EDGE_BAR) return 3;
     if (arc.pressure >= FORCING_PRESS_BAR) return 2;
@@ -61,13 +51,9 @@ export function forcingLevel(arc: ArcState): ForcingLevel {
 }
 
 /**
- * The pressure AWARENESS fed to the CONTESTERS around the central character — never to the central
- * character as an instruction to resolve (that was a soft hardcode: it scripts the turn's OCCURRENCE;
- * see emergent-turn-selfdrive §4d.2). Instead the OTHERS feel the mounting「拖不下去」, and — like 白韻秋
- * autonomously choosing to let go and leave — their own decision changes the world (an option collapses,
- * a claim is made), so the central character resolves NATURALLY by responding, never told to. The note
- * explicitly hands the action back to the contester ("你怎麼做是你自己的事"). Domain-blind; no scripted
- * event, no preferred answer.
+ * Pressure awareness fed to the CONTESTERS around the central character — never to the
+ * central character as an instruction to resolve (that would script the turn, §4d.2).
+ * The contesters' own decisions change the world, so the centre resolves naturally.
  */
 export function pressureAwareness(level: ForcingLevel, centralName: string): string {
     switch (level) {

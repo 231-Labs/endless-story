@@ -1,25 +1,8 @@
 /**
- * §4d.1 centrality thread-selector (治漂移) — the EMERGENT guard against the urgency drift.
- *
- * The runner's default `selectContention` sorts open contentions by tension and stages the
- * HIGHEST (most urgent/frustrated). Validated failure mode (§2.30 / riche-arc-resolve): the
- * most concrete/urgent thread (帳→入股→分紅…) hijacks the story and starves the emotional core
- * (柳生春 go-or-stay). Fix: pick by CENTRALITY ("which thread is the heart of this story")
- * instead of urgency. Decouple A/B/C proved it — urgency starved the romance 5/5, centrality /
- * blend held it 5/5.
- *
- * ── 寫死自檢 (why this is emergent, not a secret shortcut) ──────────────────────────
- *   Tempting shortcuts I did NOT take:
- *     ✗ boost the 情/affection row's score in the sort (hardcode 情 > 錢)
- *     ✗ give each row an author-assigned "centrality weight"
- *     ✗ order by root/label (romance/money/bond) — a domain-specific priority
- *   The emergent rule instead:
- *     · the selector judges "the story's heart" from each row's HUMAN INCIDENT FRAMING ALONE
- *       (`framingForStatement(...).label`, the very text POV reads) — NO tension number, NO
- *       root/priority tag leaks in, so it is domain-blind and portable to any story.
- *     · it ONLY picks; it never writes the scene or decides the outcome.
- *     · it falls back to the deterministic tension-sort on any failure, and is flag-gated —
- *       so it is safe, reversible, and adds nothing hardcoded to the world's priorities.
+ * §4d.1 centrality thread-selector — stages the contention that is the story's HEART,
+ * not the most urgent (§2.30: urgency starves the emotional core). Judges from human
+ * incident framings alone (no tension/root leaks in, so domain-blind), only picks, and
+ * falls back to the deterministic tension-sort on any failure.
  */
 
 import { text as llmText } from '@endless-story/llm';
@@ -27,8 +10,7 @@ import { framingForStatement, selectContention, type TensionRow } from './event-
 
 type Selected = ReturnType<typeof selectContention>;
 
-// Validated §2.30 prompts. The selector is told plainly: only PICK, don't write, don't decide
-// the ending — and judge the HEART, not the urgency.
+// Validated §2.30 prompts: only PICK, judge the heart, never write or decide the ending.
 const PROMPT: Record<'centrality' | 'blend', string> = {
     centrality:
         '你是世界的敘事調度（你只**挑**線、不寫戲、不決定結局）。下面是當前所有未了的線。挑出**對這個故事最要緊、最是情感核心、推進它最能成就一段好看的連續人戲**的一條，當下一場戲的焦點。**不是看哪條最急、最可操作，是看哪條是這故事真正的心。**',
@@ -50,9 +32,8 @@ function parseObj(raw: string): Record<string, unknown> | null {
 }
 
 /**
- * Pick which contention to stage this tick BY CENTRALITY (the story's heart), not urgency.
- * Domain-blind (judges from incident framings only), variety-preserving, and safe: returns
- * the deterministic `selectContention` result on 0/1 candidates or any LLM failure.
+ * Pick the staged contention by centrality, not urgency. Falls back to the
+ * deterministic `selectContention` on 0/1 candidates or any LLM failure.
  */
 export async function selectContentionByCentrality(
     rows: ReadonlyArray<TensionRow>,
@@ -62,8 +43,7 @@ export async function selectContentionByCentrality(
     const fallback = (): Selected => selectContention(rows, recentKeys);
     if (rows.length <= 1) return fallback();
 
-    // Variety first (mirror selectContention): prefer rows whose template wasn't just used,
-    // so the focus rotates rather than re-staging the same incident every tick.
+    // Variety first (mirrors selectContention): skip recently-used rows so focus rotates.
     const recent = new Set(recentKeys);
     const fresh = rows.filter((r) => !recent.has(r.statement || framingForStatement(r.statement).templateId));
     const pool = fresh.length > 0 ? fresh : [...rows];
@@ -72,7 +52,7 @@ export async function selectContentionByCentrality(
         return { ...framingForStatement(only.statement), statement: only.statement };
     }
 
-    // Domain-blind candidate list: human incident framing ONLY (no tension, no root label).
+    // Candidates carry the human framing only — no tension, no root label.
     const cands = pool.map((r, i) => ({ id: String(i), row: r, label: framingForStatement(r.statement).label }));
     const list = cands.map((c) => `[${c.id}] ${c.label}`).join('\n');
 

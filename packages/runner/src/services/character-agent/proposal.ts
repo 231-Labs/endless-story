@@ -1,53 +1,35 @@
 /**
- * Character Agent — PROPOSE step (自發提議).
- *
- * The last hand-fed input to governance was the proposals themselves. This lets a
- * character自發 voice ONE thing they want to make happen — and crucially it is NOT typed:
- * the proposal is free text (排齣戲 / 約她出城看燈 / 想同住 / 跟班主賠不是 / 歇兩天…), so the
- * system never has to enumerate kinds. What it DOES tag is the SCOPE — who has to say yes:
- *
- *   self   — they can just do it (rest, practise)         → no approval needed
- *   pair   — it touches ONE person (an outing, moving in) → that person answers (confess-shaped)
- *   troupe — it's the whole troupe's call (staging a show)→ the 班主 decides (governance-shaped)
- *
- * So 出遊 / 同住 aren't new machinery — they're `pair`/`troupe`-scoped proposals on the same
- * 提議 → approve-by-scope → 生成戲 + 里程碑 path confess and governance already implement.
- * A character may also have nothing to propose (hasProposal=false) — silence is fine.
- *
+ * Character Agent — PROPOSE step: a character voices one free-text thing they want to
+ * make happen. Only the SCOPE is typed (self / pair / troupe = who must approve), routing
+ * to the existing confess-shaped or governance-shaped approval paths. Silence is valid.
  * Pure LLM (cheap tier).
  */
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint } from '@endless-story/shared';
 
-/** Who has to say yes — the only thing the system needs to know to route a proposal. */
+/** Who has to say yes: all the system needs to route a proposal. */
 export type ProposalScope = 'self' | 'pair' | 'troupe';
 
 export interface DecideProposalInput {
     name: string;
     role: string;
     sagaName: string;
-    /** Current plan (what they're reaching for). */
     planHint?: string;
-    /** Their standing feelings toward co-present others. */
+    /** Standing feelings toward co-present others. */
     relationshipPressure?: string[];
-    /** Troupe state (金庫 / 名聲 / 時節) — context for a troupe-scoped wish. */
     troupeState?: string;
-    /** Right-now situation. */
     situation?: string;
     recentMemories?: string[];
 }
 
 export interface ProposalResult {
-    /** Whether the character has anything they want to put forward this beat. */
     hasProposal: boolean;
-    /** Free text — what they want to make happen. Not typed. */
+    /** Free text, deliberately untyped. */
     proposal?: string;
-    /** Who has to say yes. */
     scope?: ProposalScope;
     /** People the proposal touches (for pair/troupe). */
     targets?: string[];
-    /** First-person why. */
     motive?: string;
 }
 
@@ -133,8 +115,7 @@ function parseProposal(raw: string): ProposalResult | null {
     return null;
 }
 
-/** Decide what (if anything) the character wants to put forward. No-throw: a miss reads
- *  as "nothing to propose" rather than inventing one. */
+/** No-throw: a miss reads as "nothing to propose" rather than inventing one. */
 export async function decideProposalAction(
     input: DecideProposalInput,
     opts?: { model?: string },

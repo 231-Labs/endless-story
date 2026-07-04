@@ -1,31 +1,15 @@
 /**
- * Actor fatigue — spotlight rotation across the CAST (pure; no chain, no I/O).
- *
- * §2.51 (dream-butterfly dosimetry) proved the failure mode: one very-high-weight,
- * never-resolving standing desire forms a tension FLOOR (≈0.72 in the lab) that wins
- * the selection every tick. That monopoly is not just a breadth/aesthetic problem —
- * it structurally swallows every outside perturbation (an injected dream, a newborn
- * character) because the perturbed character never wins salience, so their memory is
- * never "recalled into action". The same lab showed the fix that works: acting costs
- * fatigue, fatigue suppresses EFFECTIVE tension, and the spotlight rotates (the
- * dreamer surfaced her dream publicly only in the fatigue arm).
- *
- * This is the daily-life state layer consumed INTO selection — a mechanism, not a
- * knob: people who just carried a scene are spent; spent people don't dominate the
- * next beat. It scales only the SELECTION overlay (which contention gets staged);
- * the raw tension rows that feed spine SETTLEMENT (contest.ts economics, §2.35
- * deterministic winner) are never touched, and neither is the committed drama beat.
- *
- * Sits beside `attention-core.ts` (intra-character desire coupling); this is the
- * inter-character counterpart. Flag-gated (`TICK_ACTOR_FATIGUE`); identity when off.
- * Pure + unit-tested (`actor-fatigue.test.ts`).
+ * Actor fatigue — spotlight rotation across the cast (pure; no chain, no I/O).
+ * §2.51: acting costs fatigue; fatigue suppresses EFFECTIVE tension at SELECTION
+ * only, breaking the monopoly where one standing desire wins every tick. Raw
+ * tension rows feeding spine settlement and the committed drama beat are never
+ * touched. Flag-gated (`TICK_ACTOR_FATIGUE`); identity when off.
  */
 
-/** Per-character spotlight fatigue, 0..cap (module keeps it per saga, in-memory). */
+/** Per-character spotlight fatigue, 0..cap. */
 export type FatigueLedger = Readonly<Record<string, number>>;
 
-/** Lab-validated constants (§2.51 D arm): cost per featured beat, per-tick recovery,
- *  effective-tension penalty per fatigue unit, and the suppression ceiling. */
+/** Lab-validated constants (§2.51 D arm). */
 export const ACTOR_FATIGUE = {
     /** fatigue gained by each participant of a live (open/continuing) event. */
     cost: 1,
@@ -37,7 +21,7 @@ export const ACTOR_FATIGUE = {
     cap: 2.5,
 } as const;
 
-/** One tick of rest for everyone. Entries that reach 0 are dropped. */
+/** One tick of rest for everyone; entries that reach 0 are dropped. */
 export function decayActorFatigue(ledger: FatigueLedger): FatigueLedger {
     const next: Record<string, number> = {};
     for (const [id, v] of Object.entries(ledger)) {
@@ -57,13 +41,8 @@ export function bumpActorFatigue(ledger: FatigueLedger, characterIds: ReadonlyAr
     return next;
 }
 
-/**
- * Scale each row's tension by its OWNER's rest. Fresh characters pass through
- * unchanged; a character who just carried a scene has their rows suppressed, so
- * the next selection naturally swings to whoever has been offstage. Preserves
- * row identity + extra fields; returns a new array (input untouched). With an
- * empty ledger it's the identity.
- */
+/** Scale each row's tension by its owner's rest. Returns a new array (input
+ *  untouched); an empty ledger is the identity. */
 export function applyActorFatigue<T extends { characterId: string; tension: number }>(
     rows: ReadonlyArray<T>,
     ledger: FatigueLedger,

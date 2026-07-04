@@ -1,34 +1,19 @@
 /**
- * Scene record — the 屬地客觀章回 (objective scene chapter).
- *
- * The §2.14 / §2.24 承重牆: before each character writes a SUBJECTIVE POV of a tick,
- * the world writes ONE OBJECTIVE record of what physically happened in that scene —
- * who was present (authoritative, from the chain roster), what observable actions and
- * spoken lines occurred. NO interiority, NO motive, NO memory: those belong to each POV.
- *
- * This record is then fed as the shared `sceneBeats` to every co-present character's POV
- * worker (whose rule 11 already enforces 「同場客觀事實不可改寫」). The effect: every POV
- * INTERPRETS the same physical facts instead of each confabulating its own — so the cast
- * can no longer disagree on who-was-where (e.g. 田巧雲 narrating herself into two rooms at
- * once). The SUBJECTIVE register difference (端莊者藏 / 老司機寫) is preserved — only the
- * objective frame converges.
- *
- * Pure LLM (cheap tier — it's a factual record, not creative writing). Deterministic
- * `presentNames` is the load-bearing fact; the prose only narrates it.
+ * Scene record — the objective scene chapter (§2.14 / §2.24): one authoritative record of
+ * who was present and what observably happened, fed as shared sceneBeats to every
+ * co-present POV so all POVs interpret the same physical facts. No interiority.
+ * Deterministic presentNames is the load-bearing fact; the prose only narrates it.
  */
 
 import { text as llmText } from '@endless-story/llm';
 
 export interface SceneRecordInput {
-    /** Scene display name. */
     sceneName: string;
-    /** Authoritative present cast (chain roster) — the load-bearing fact; the record
-     *  may name ONLY these and must not add/drop anyone. */
+    /** Authoritative present cast (chain roster); the record may name ONLY these. */
     presentNames: string[];
-    /** The director's event/beat label for this scene this tick, if any. */
+    /** Director's event/beat label for this scene this tick, if any. */
     eventLabel?: string;
-    /** Observable action beats already resolved this tick (moves / spoken lines /
-     *  card plays). May be empty — then the record is just the standing tableau. */
+    /** Observable beats resolved this tick; empty = standing tableau. */
     beats: string[];
 }
 
@@ -64,10 +49,7 @@ function buildUserPrompt(input: SceneRecordInput): string {
         .join('\n\n');
 }
 
-/**
- * Compose the objective scene record. Returns the record text, or '' on failure
- * (caller falls back to the raw per-actor beats — non-fatal).
- */
+/** Returns the record text, or '' on failure (caller falls back to raw beats, non-fatal). */
 export async function composeSceneRecord(
     input: SceneRecordInput,
     opts?: { model?: string },

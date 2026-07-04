@@ -1,17 +1,8 @@
 /**
- * Story preset — a single JSON file that drives the entire bootstrap
- * (world + saga + locations + scenes + recruitments) for one saga.
- *
- * Files live at `packages/cli/scripts/stories/<id>.json`. Both cli's
- * bootstrap.ts and web's seed-recruitments action load them.
- *
- * Shape rules:
- *  - Numbers are inclusive bounds; cli converts to bigint at PTB time.
- *  - `attributes` keys MUST match `web/lib/chain/schema.ts`
- *    DEFAULT_ATTRIBUTE_SCHEMA — server-side roll relies on it.
- *  - scene.location_index is the position in the locations[] array.
- *  - recruitments expire `ttl_days` from the moment the seed action
- *    runs (so a static JSON doesn't go stale).
+ * Story preset: one JSON file (`packages/cli/scripts/stories/<id>.json`) that
+ * drives the entire bootstrap (world + saga + locations + scenes + recruitments).
+ * `attributes` keys MUST match `web/lib/chain/schema.ts` DEFAULT_ATTRIBUTE_SCHEMA;
+ * numeric bounds are inclusive (cli converts to bigint at PTB time).
  */
 
 import type { CharacterAttributes } from './character';
@@ -21,17 +12,15 @@ export interface StoryWorld {
   name: string;
   description: string;
   currency: { name: string; symbol: string };
-  /** Optional override for world.move WorldTimeConfig. Omit to use contract defaults. */
+  /** Override for world.move WorldTimeConfig; omit for contract defaults. */
   time_config?: {
-    /** basis points: 1670 ~= 1/6 day per tick. */
+    /** Basis points: 1670 ~= 1/6 day per tick. */
     days_per_tick_bp: number;
     tick_interval_ms: number;
   };
-  /** World-tier narrative profile: content shared by every saga in this world.
-   *  Engine craft rules stay in code; only content lives here. */
+  /** World-tier narrative content shared by every saga; engine craft rules stay in code. */
   narrative?: {
-    /** Genre/style line for POV voice rules (e.g. 民初梨園小說 vs 武俠).
-     *  Unset = engine default. */
+    /** Genre/style line for POV voice rules. Unset = engine default. */
     genre_base?: string;
   };
 }
@@ -54,7 +43,7 @@ export interface StoryLocation {
   terrain: string;
   x: number;
   y: number;
-  /** Optional graph edges by location index. Omit for no explicit adjacency. */
+  /** Graph edges by location index. Omit for no explicit adjacency. */
   adjacent_indices?: number[];
 }
 
@@ -65,21 +54,17 @@ export interface StorySaga {
   owner_bps: number;
   storyteller_bps: number;
   treasury_bps: number;
-  // Locations this saga claims (has narrative rights over), as indices into
-  // `locations[]` — on-chain `Saga.covered_location_ids`, and what the handscroll
-  // draws. A claimed location needs no scene yet (drawn as an empty courtyard).
-  // Omit = cover every location in the world (back-compat single-saga behavior).
+  // Locations this saga claims, as indices into `locations[]` (on-chain
+  // `Saga.covered_location_ids`). Omit = cover every location (back-compat).
   covered_location_indices?: number[];
   departure_policy: string;
-  // Per-saga narrative DNA, layered onto the genre baseline so each troupe reads in
-  // a distinct voice. '' when unset.
+  // Per-saga narrative DNA layered onto the genre baseline. '' when unset.
   nature_prompt?: string;
-  // Natural rhythm: dawn warm-up / dusk curtain cues. '' when unset.
+  // Natural rhythm cues. '' when unset.
   rhythm_hints?: string;
   // Per-saga portrait art direction. '' when unset.
   portrait_tone?: string;
-  /** Saga-tier narrative profile: this saga's voice + capabilities. Owner-editable
-   *  content/config; never engine mechanics. */
+  /** Saga-tier voice + capabilities; owner-editable content, never engine mechanics. */
   narrative?: {
     /** Prose tonal register (colour only; stance is a separate knob). */
     tone_register?: string;
@@ -113,18 +98,9 @@ export interface StoryScene {
   danger: number;
   prosperity: number;
   /**
-   * UI map coordinates (% of the handscroll canvas, 0–100).
-   * Written to chain as `Scene.placement.pos_x` / `pos_y`.
-   *
-   * Convention for the spring-snow scroll layout:
-   *   - x: 0–33  → theater zone
-   *   - x: 33–50 → moon-gate gap (transitional)
-   *   - x: 50–95 → compound zone
-   *   - y: 30–80 → vertical band that reads natural on 100vh canvas
-   *
-   * Other story presets may use a different visual layout; the chain
-   * doesn't care — these are just UI render hints persisted on chain so
-   * the layout survives republish.
+   * UI map coordinates (% of the handscroll canvas, 0–100), written to chain
+   * as `Scene.placement.pos_x` / `pos_y`. Render hints only — persisted so the
+   * layout survives republish.
    */
   pos_x: number;
   pos_y: number;
@@ -157,33 +133,31 @@ export interface StoryRecruitmentSeed
 }
 
 /**
- * A founding-cast member — the saga's initial, pre-acquainted troupe. Created
- * directly (no voucher) via the admin 創世入口 panel, then woven together by a
- * batch founding induction. NOT a gacha slot: roles uniquely filled here should
- * be dropped from `recruitments` so users can't mint a duplicate (e.g. a 2nd 班主).
+ * A founding-cast member: the saga's initial pre-acquainted troupe, minted
+ * directly (no voucher) then woven together by a batch founding induction.
+ * Roles uniquely filled here should be dropped from `recruitments` so users
+ * can't mint a duplicate.
  */
 export interface StoryFoundingMember {
   name: string;
   ageYears: number;
   /** '男' | '女' | '中性'. */
   gender: string;
-  /** 行當 / specialty (also the public role tag). */
+  /** Role (行當) / specialty; also the public role tag. */
   role: string;
   /** Public description (on-chain / displayed; must not reveal `secret`). */
   description: string;
   /** Private secret — only seeds this member's private memories. */
   secret?: string;
   /**
-   * Per-axis attribute floors for this 行當 (台柱班底應遠高於抽卡下限). The genesis
-   * roll is clamped UP to these so a 花旦 always rolls 明豔、a 小生 always俊秀 —
-   * the rolled stats drive the portrait + persona, so a low roll = a 醜 / 不對行當
-   * 的角色. Omit to let `roleAttributeFloors(role)` supply sensible defaults.
+   * Per-axis attribute floors. The genesis roll is clamped UP to these because
+   * rolled stats drive the portrait + persona, so a low roll reads off-type.
+   * Omit to let `roleAttributeFloors(role)` supply defaults.
    */
   minAttributes?: Partial<CharacterAttributes>;
   /**
-   * Skip this member when seeding the founding cast (a reversible "comment-out"
-   * for small-scale test runs). The loader filters these out; flip back to false
-   * / remove to re-include. JSON has no comments, so this is the toggle.
+   * Skip this member when seeding — a reversible "comment-out" for test runs
+   * (JSON has no comments, so this is the toggle).
    */
   disabled?: boolean;
 }
@@ -199,12 +173,12 @@ export interface StoryPreset {
   saga: StorySaga;
   /** Per-saga skill definitions stored on saga.move dynamic fields. */
   saga_attributes?: StorySagaAttribute[];
-  /** Optional card draw bias rules. Requires saga_attributes/world attributes keyed by attribute_key. */
+  /** Card draw bias rules; requires attributes keyed by attribute_key. */
   card_weight_rules?: StoryCardWeightRule[];
   /** Contested resources that activate the drama engine. */
   drama_resources?: StoryDramaResource[];
   scenes: StoryScene[];
   recruitments: StoryRecruitmentSeed[];
-  /** Optional initial cast for the 創世入口 (admin direct-mint + batch induction). */
+  /** Initial cast for admin direct-mint + batch induction. */
   founding_cast?: StoryFoundingMember[];
 }

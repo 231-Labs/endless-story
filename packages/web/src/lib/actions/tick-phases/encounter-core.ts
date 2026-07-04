@@ -1,18 +1,12 @@
 /**
- * Encounter selection — pure core (no chain, no I/O). Split from `encounter.ts`
- * so the selection logic is unit-testable under `node --test` with a node-clean
- * import graph. `encounter.ts` fetches the on-chain relationship pairs, then calls
- * `selectEncounterPair` here.
+ * Encounter selection — pure core (no chain, no I/O), split from `encounter.ts`
+ * so it is unit-testable under `node --test` with a node-clean import graph.
  */
 
 import type { RelationshipTone } from '@endless-story/shared';
 
-/**
- * Bond tones worth a 溫情/關係戲 encounter — both the warm (親近/戀慕/師徒) and the
- * charged (競爭/緊張/隔閡 = 蒼涼／未了) registers the runner's encounter branch is
- * written for. Excludes wary/acquaintance/neutral (too thin). Data-driven: this
- * set is the only place tones are gated.
- */
+/** Bond tones worth an encounter (warm + charged registers). Excludes
+ *  wary/acquaintance/neutral; this set is the only place tones are gated. */
 export const ENCOUNTER_TONES: ReadonlySet<RelationshipTone> = new Set<RelationshipTone>([
     'affection',
     'romance',
@@ -22,17 +16,16 @@ export const ENCOUNTER_TONES: ReadonlySet<RelationshipTone> = new Set<Relationsh
     'estrangement',
 ]);
 
-/** The WARM register (溫情) — preferred over the charged register at equal strength so
- *  tenderness actually surfaces instead of every encounter being a rivalry/tension beat.
- *  The story was「充滿爭搶、沒溫情」partly because charged ties won the selector's tiebreak. */
+/** The warm register — preferred over the charged one at equal strength, so
+ *  tenderness surfaces instead of every encounter being a rivalry/tension beat. */
 export const WARM_TONES: ReadonlySet<RelationshipTone> = new Set<RelationshipTone>([
     'affection',
     'romance',
     'mentorship',
 ]);
 
-/** Min seed count to qualify. 1 = a single induction seed is enough (else encounters
- *  never fire autonomously); 養關係 deepens count and the selector prefers higher. */
+/** Min seed count to qualify; 1 so a single induction seed is enough, else
+ *  encounters never fire autonomously. Bond deepening raises count. */
 export const ENCOUNTER_STRENGTH = 1;
 
 export interface RelationshipPair {
@@ -56,13 +49,8 @@ export function encounterPairKey(a: string, b: string): string {
     return [a, b].sort().join('::');
 }
 
-/**
- * Find the SINGLE strongest co-present bonded pair, given each candidate's
- * already-fetched relationship pairs. Pure + deterministic: keeps edges where both
- * sides are candidates, co-present (same scene), bonded by an encounter tone with
- * count ≥ threshold; picks the strongest (count, then a stable key tiebreak);
- * holder = lexicographically-first id. Returns undefined when none qualify.
- */
+/** Find the single strongest co-present bonded pair. Pure + deterministic;
+ *  holder = lexicographically-first id; undefined when none qualify. */
 export function selectEncounterPair(
     perChar: ReadonlyArray<{ id: string; pairs: ReadonlyArray<RelationshipPair> }>,
     sceneIdOf: (id: string) => string | undefined,
@@ -94,9 +82,7 @@ export function selectEncounterPair(
                 count: p.count,
                 pairKey: key,
             };
-            // Prefer: stronger bond → then the WARM register (so 溫情 surfaces, not just
-            // charged rivalry/tension) → then a stable key. With seeded ties all at
-            // count=1, this makes a warm pair win over a charged one in the same scene.
+            // Prefer stronger bond → warm register → stable key tiebreak.
             const warmth = (c: EncounterPair) => (WARM_TONES.has(c.tone) ? 1 : 0);
             const better =
                 !best ||
@@ -109,11 +95,7 @@ export function selectEncounterPair(
     return best;
 }
 
-/**
- * Generic, no-hardcoded-copy trigger narrative for the encounter chapter. Names
- * the counterpart + conveys the relationship NATURE via the tone label; the runner
- * supplies the craft framing (one shared chore, subtext, no winner).
- */
+/** Generic trigger narrative for the encounter chapter (no hardcoded copy). */
 export function buildEncounterTrigger(pair: EncounterPair, dayLabel: string): string {
     return (
         `${dayLabel} — 此刻你與${pair.otherName}恰好獨處一隅。` +
@@ -122,12 +104,8 @@ export function buildEncounterTrigger(pair: EncounterPair, dayLabel: string): st
     );
 }
 
-/**
- * Trigger for the CONFESS branch — the holder has DECIDED (decideConfessAction) to say
- * the unsaid thing now. The exact opposite of buildEncounterTrigger's「誰也不先點破」:
- * this scene IS the confession, it must point-break. `opening`/`motive` come from the
- * decision so the prose lands on the words the character actually chose.
- */
+/** Trigger for the CONFESS branch — unlike buildEncounterTrigger, this scene IS
+ *  the confession; `opening`/`motive` come from the character's own decision. */
 export function buildConfessTrigger(
     pair: EncounterPair,
     dayLabel: string,

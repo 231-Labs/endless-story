@@ -1,9 +1,6 @@
 /**
- * Saga roster cognition.
- *
- * Public identity lives in the roster: who is in this saga, what role/tag
- * others can see, and where they currently are. Subjective relationships stay
- * in each character's own MemWal memories.
+ * Saga roster — public identity only (who is here, visible role, location).
+ * Subjective relationships stay in each character's own MemWal memories.
  */
 
 import type { Character, Scene } from '@endless-story/shared';
@@ -73,18 +70,12 @@ export interface TroupeSnapshot {
         worldTimeLabel?: string;
     };
     members: SagaRosterEntry[];
-    /** Current public tie tones between members (deduped, undirected). Lets induction fit a newcomer into the existing web. */
+    /** Public tie tones between members (deduped, undirected). */
     ties: TroupeTie[];
 }
 
-/**
- * Public snapshot of the troupe's current state — for mint induction.
- *
- * Public only: saga flavour + existing members (public description/role/gender/
- * age/current scene) + existing tie tones between members. Never contains
- * anyone's private memories (those are owner-only / SEAL); induction uses this to
- * fit a newcomer's memories and ties into the existing troupe, not from thin air.
- */
+/** Public snapshot of the troupe for mint induction. Must never contain
+ *  anyone's private memories (owner-only / SEAL). */
 export async function buildTroupeSnapshot(
     sagaId: string,
     opts: { characters?: Character[]; scenes?: Scene[] } = {},
@@ -107,7 +98,7 @@ export async function buildTroupeSnapshot(
     };
 }
 
-/** Collect existing public tie tones between members (deduped, undirected). Best-effort: skip any read that fails. */
+/** Best-effort: skips any read that fails. */
 async function collectMemberTies(members: SagaRosterEntry[]): Promise<TroupeTie[]> {
     const memberIds = new Set(members.map((m) => m.id));
     const perMember = await Promise.all(
@@ -165,9 +156,8 @@ export async function resolveRosterRoles(
             out.set(c.id, publicProfileRole);
             continue;
         }
-        // In mock mode, c.role is authored fixture data. On chain, an untagged
-        // character mapper uses the "onlooker" UI fallback, so do not promote it
-        // into public cognition unless it came from a tag or recruitment.
+        // Mock-mode c.role is authored fixture data; on chain it's the "onlooker"
+        // UI fallback and must not be promoted into public cognition.
         if (!ENDLESS_STORY_DEPLOYMENT.packageId && c.role) out.set(c.id, c.role);
         else out.set(c.id, '—');
     }

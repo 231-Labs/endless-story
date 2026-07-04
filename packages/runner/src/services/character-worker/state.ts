@@ -1,36 +1,22 @@
 /**
- * 日常層 · Character state — the per-character daily-life undertone (餓 / 累 / 心情)
- * that tints how a character perceives and narrates a beat, WITHOUT changing who
- * they are. Orthogonal to two existing layers:
- *   - chain `attributes` (appearance/constitution/acuity/disposition) = STABLE traits.
- *   - `SagaSoul` (toneRegister/stance) = per-SAGA prose DNA.
- * This is the fast-moving, per-CHARACTER, per-tick layer.
- *
- * Why it exists (research §2.15-2.18): an open situation with no inner conflict
- * collapses the LLM to its「最像角色」reflex (趨同). A varying state injects the
- * conflict (餓 vs 顧身形, 累 vs 應酬) that spreads behaviour into a real distribution,
- * and decouples POSTURE from DESTINATION — the same person, a different moment.
- * state-baozi proved this on a single decision; this module carries it into the POV
- * path so it can tint a whole chapter.
- *
- * Same shape as `buildStanceBlock` / `buildSagaSoulBlock`: a pure, dependency-free
- * block builder that returns '' when nothing is notable, so a state-less character
- * yields a byte-identical prompt (regression-safe).
+ * Per-character daily-life state (hunger / fatigue / mood) that tints how a
+ * character narrates a beat without changing who they are (research §2.15-2.18).
+ * Pure, dependency-free block builder returning '' when nothing is notable, so
+ * a state-less character yields a byte-identical prompt (regression-safe).
  */
 
 export interface CharacterState {
-    /** 0 = 飽足, 1 = 餓得發慌. */
+    /** 0 = full, 1 = starving. */
     hunger: number;
-    /** 0 = 精神, 1 = 累垮. */
+    /** 0 = rested, 1 = exhausted. */
     fatigue: number;
-    /** -1 = 堵/沮喪, 0 = 平, +1 = 舒暢/開心. */
+    /** -1 = low, 0 = flat, +1 = bright. */
     mood: number;
-    /** Optional concrete cause of the current state (e.g.「今晚斷橋演砸了，班主冷臉」).
-     *  Grounds the abstract scalars in a specific recent why; rendered as 緣由. */
+    /** Concrete cause of the current state; grounds the scalars in a recent why. */
     note?: string;
 }
 
-/** A calm, fed, rested baseline — what a character drifts toward with nothing going on. */
+/** Calm, fed, rested baseline the state drifts toward. */
 export const NEUTRAL_STATE: CharacterState = { hunger: 0.2, fatigue: 0.2, mood: 0 };
 
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
@@ -49,12 +35,11 @@ export interface StateDelta {
     hunger?: number;
     fatigue?: number;
     mood?: number;
-    /** When provided, REPLACES the note (use '' to clear). Omit to keep the prior note. */
+    /** When provided, REPLACES the note ('' clears). Omit to keep the prior note. */
     note?: string;
 }
 
-/** Event-driven jump: apply additive deltas (eat → hunger down, perform → fatigue up,
- *  a verdict → mood up/down), clamp, optionally replace the 緣由 note. */
+/** Event-driven jump: apply additive deltas and clamp. */
 export function evolveState(prev: CharacterState, delta: StateDelta): CharacterState {
     return clampState({
         hunger: prev.hunger + (delta.hunger ?? 0),
@@ -64,11 +49,9 @@ export function evolveState(prev: CharacterState, delta: StateDelta): CharacterS
     });
 }
 
-/** Passive per-tick drift: hunger creeps up, mood eases back toward calm, and fatigue
- *  eases DOWN a little — a quiet tick is rest. WORK (evolveState +WORK_FATIGUE) is what
- *  tires; sleep is the deep recovery. (A passive fatigue *gain* here made every working
- *  character collapse mid-afternoon in the cadence sim — work + drift outran the day bar.)
- *  The body keeps living between events, so a character is never frozen. */
+/** Passive per-tick drift: hunger creeps up, mood eases to calm, fatigue eases
+ *  DOWN — a quiet tick is rest. (A passive fatigue gain here made every working
+ *  character collapse mid-afternoon in the cadence sim.) */
 export function driftState(prev: CharacterState): CharacterState {
     return clampState({
         hunger: prev.hunger + 0.15,
@@ -78,42 +61,34 @@ export function driftState(prev: CharacterState): CharacterState {
     });
 }
 
-/* ── fatigue → sleep ──────────────────────────────────────────────────
- * The sleep/REFLECT step (memory consolidation) was gated purely on a world-clock
- * string (`partOfDay === 'night'`), which silently broke (fixed on main, PR #75). The
- * durable model is to drive sleep off the character's own fatigue: a tired character
- * sleeps, and NIGHT only lowers the bar (a soft bias), so an exhausted performer can nap
- * by day while the rhythm still clusters at night. Decoupling sleep from a brittle clock
- * literal is the whole point — and it gives `fatigue` its first real consumer.
- */
+/* Fatigue-driven sleep replaces the brittle `partOfDay === 'night'` clock gate
+ * (silently broke; fixed on main, PR #75): a tired character sleeps, and night
+ * only lowers the bar so an exhausted performer can still nap by day. */
 
 /** Fatigue a single working beat (perform / POV / social) adds, before drift. */
 export const WORK_FATIGUE = 0.18;
-/** How much a full sleep recovers (subtracted from fatigue). */
+/** Fatigue recovered by a full sleep. */
 export const SLEEP_RECOVERY = 0.7;
 /** Fatigue bar to fall asleep at night vs in daytime — night lowers it (soft bias). */
 export const NIGHT_SLEEP_FATIGUE = 0.5;
 export const DAY_SLEEP_FATIGUE = 0.85;
-/** Below this many un-consolidated memories, sleeping is pointless (nothing to digest). */
+/** Below this many un-consolidated memories, sleeping is pointless. */
 export const MIN_SCATTERED_TO_SLEEP = 2;
-/** A backlog this big forces consolidation even if not tired — preserves the original
- *  memory-pressure trigger so a low-activity character still eventually digests. */
+/** A backlog this big forces consolidation even if not tired. */
 export const MEMORY_PRESSURE_CAP = 6;
 
 export interface SleepDecisionInput {
     /** Current fatigue, 0..1. */
     fatigue: number;
-    /** Is it a night bucket (入夜 / 深宵)? Lowers the fatigue bar, not a hard gate. */
+    /** Night lowers the fatigue bar; not a hard gate. */
     isNight: boolean;
-    /** Un-consolidated memories available to digest. Sleep is pointless below the floor. */
+    /** Un-consolidated memories available to digest. */
     scatteredCount: number;
 }
 
 /**
- * Fatigue-driven sleep trigger, replacing the brittle `partOfDay === 'night'` gate.
- * Sleep when there's something to digest AND either: the backlog is big (memory pressure,
- * the original trigger) OR the character is tired enough — with night lowering the fatigue
- * bar (soft bias) rather than hard-gating. Pure function: the loop supplies the three inputs.
+ * Sleep when there's something to digest AND either the backlog forces it
+ * (memory pressure) or fatigue crosses the bar (night lowers the bar).
  */
 export function shouldSleep(input: SleepDecisionInput): boolean {
     if (input.scatteredCount < MIN_SCATTERED_TO_SLEEP) return false;
@@ -123,10 +98,9 @@ export function shouldSleep(input: SleepDecisionInput): boolean {
 }
 
 /**
- * Build the「此刻身心」block appended to the POV USER prompt. Only emits the
- * NOTABLE bands (so a near-neutral state injects nothing), and frames the state as
- * BACKGROUND COLOUR — it must tint attention/語氣/小動作, never become the event the
- * chapter narrates. Returns '' when nothing is notable (regression-safe).
+ * State block for the POV user prompt. Emits only notable bands and frames the
+ * state as background colour, never the event the chapter narrates; returns ''
+ * when nothing is notable (regression-safe).
  */
 export function buildStateBlock(state?: CharacterState): string {
     if (!state) return '';

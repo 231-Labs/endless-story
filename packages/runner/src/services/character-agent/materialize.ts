@@ -1,14 +1,7 @@
 /**
- * MATERIALIZE — grow the world from what gets mentioned.
- *
- * proposal / governance / POV keep naming people and places that don't exist yet
- * (張老爺, 城東李府, 李員外). The wrong fix is to抹掉 them or坍縮 the proposal to self;
- * the right one — toward a world with no NPCs — is to let每個被提及 half-exist. This infers
- * a plausible DORMANT entity (a person or a place) from the mention + its context, tags it
- * dormant + which kind of saga it should belong to, and leaves it asleep until someone
- * actually goes to it, at which point it's activated into a full autonomous character.
- *
- * So a mention is never a hole in the world — it's a seed. Pure LLM (cheap tier).
+ * MATERIALIZE — grow the world from mentions: infer a plausible DORMANT entity (person or
+ * place) from a not-yet-existing name plus its context, asleep until someone reaches it
+ * and it activates. A mention is a seed, never a hole. Pure LLM (cheap tier).
  */
 
 import { text as llmText } from '@endless-story/llm';
@@ -16,11 +9,10 @@ import { text as llmText } from '@endless-story/llm';
 export type DormantKind = 'character' | 'scene';
 
 export interface MaterializeInput {
-    /** The not-yet-existing name that was mentioned. */
     mention: string;
-    /** Who said it, in what situation (so the inference stays grounded). */
+    /** Who said it, in what situation (grounds the inference). */
     context: string;
-    /** Optional nudge; the model also decides on its own. */
+    /** Optional nudge; the model still decides on its own. */
     kindHint?: DormantKind;
 }
 
@@ -28,15 +20,15 @@ export interface DormantEntity {
     name: string;
     kind: DormantKind;
     dormant: true;
-    /** character: 身份/行當; scene: 留空. */
+    /** character only. */
     role?: string;
-    /** One-line小傳/描述, grounded in the mention context. */
+    /** One-line brief, grounded in the mention context. */
     brief?: string;
-    /** character: relation to the mention's situation (老主顧 / 舊交情…). */
+    /** character only: relation to the mention's situation. */
     relation?: string;
-    /** Which kind of saga should own it once活了 (江湖人物 / 霞飛路某店 / 某府…). */
+    /** Which kind of saga should own it once activated. */
     homeSagaHint?: string;
-    /** scene: 地點類型 (宅邸 / 店鋪 / 茶樓…). */
+    /** scene only. */
     sceneType?: string;
 }
 
@@ -102,10 +94,7 @@ function parseEntity(raw: string, fallbackName: string): DormantEntity | null {
     return null;
 }
 
-/**
- * Infer a dormant entity from a mention. No-throw: on miss, returns a bare dormant stub
- * (the name still half-exists) rather than dropping the mention into a hole.
- */
+/** No-throw: on miss, returns a bare dormant stub so the name still half-exists. */
 export async function materializeMention(
     input: MaterializeInput,
     opts?: { model?: string },

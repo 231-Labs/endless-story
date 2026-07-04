@@ -1,10 +1,6 @@
 /**
- * actor-fatigue unit test — proves the rotation is a MECHANISM (acting → tired →
- * suppressed → recovered), the §2.51 monopoly breaks, and settlement inputs are
- * untouched (we only ever scale copies).
- *
- *   TSX_TSCONFIG_PATH=$PWD/tsconfig.json <node23> <tsx/cli.mjs> \
- *     src/lib/chain/actor-fatigue.test.ts
+ * actor-fatigue unit tests (§2.51 spotlight rotation).
+ * Run: TSX_TSCONFIG_PATH=$PWD/tsconfig.json <node23> <tsx/cli.mjs> src/lib/chain/actor-fatigue.test.ts
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

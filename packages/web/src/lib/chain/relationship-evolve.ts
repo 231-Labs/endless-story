@@ -1,29 +1,8 @@
 /**
- * EMERGENT RELATIONSHIPS — evolve a scene's directed relationship tones FROM the
- * POV prose this tick produced, and write them back to the on-chain graph.
- *
- * This is the OBSERVATORY-ONLY counterpart to genesis relationship assessment
- * (runner `relationship-assess` + `assessRelationshipsAction`). Those judge ties
- * from the cast's PUBLIC DESCRIPTIONS at mint time and never read play. This one
- * does the opposite: it reads ONLY what just happened on stage (each participant's
- * POV of THIS event), and asks the LLM how each directed tie A→B should now read.
- *
- * Why it lives in the harness layer (not the production tick loop): it is an
- * EXPERIMENT to show that「感情」is an emergent relationship property, not a
- * contested resource. The narrative observatory runner calls it after each tick;
- * the production tick-loop is untouched.
- *
- * ── DIRECTIONAL by design ──────────────────────────────────────────────────────
- * On chain a `RelationshipSeeded` event is UNDIRECTED (a pair-level {A,B,tone}),
- * and `aggregatePairs`/`fetchOnChainEdgesFrom` read it symmetrically. To let one
- * side's feeling diverge from the other's (孟→文 romance while 文→孟 tension) we:
- *   1. seed each evolved tie ORDERED — characterA = the FEELER, characterB = the
- *      target — directly (NOT via applyRelationshipTiesAction, which idempotent-
- *      skips any pair that already has an edge, so tones could never move);
- *   2. read the evolution back DIRECTION-AWARE (`directedOutgoingEdges`), counting
- *      only events whose characterA is the source. Repeats deepen weight; the
- *      newest seed for a directed pair wins the tone — so a tie can climb
- *      (romance ×1 → ×2 → ×3) or flip (acquaintance → tension) tick over tick.
+ * Evolve a scene's DIRECTED relationship tones from this tick's POV prose and seed
+ * them on chain (observatory-only; the production tick loop is untouched). Seeds are
+ * ordered (characterA = feeler) with no idempotency skip and read back direction-aware,
+ * so A→B can diverge from B→A and a tie can deepen or flip tick over tick.
  */
 
 import { Transaction } from '@mysten/sui/transactions';
@@ -42,8 +21,7 @@ import {
 } from '@/lib/chain/memory';
 import { resolveNetwork } from '@/lib/chain/network';
 
-// Pure half (tones / cooling decay / warm graph) lives in relationship-core.ts so it
-// can run under plain `node --test`; re-exported here so callers keep one import site.
+// Pure half lives in relationship-core.ts (plain `node --test`); re-exported here.
 import {
     TONES,
     TONE_ZH,
@@ -68,35 +46,31 @@ export {
     type WarmGraph,
 } from './relationship-core.js';
 
-/** One participant of the event this tick + the POV prose they wrote about it. */
 export interface ScenePovInput {
     characterId: string;
     name: string;
-    /** This character's POV chapter for THIS event (what they said / felt / did). */
+    /** This character's POV chapter for THIS event. */
     pov: string;
 }
 
 export interface EvolveRelationshipsInput {
-    /** Participants of one event this tick (≥2) and their POV prose. */
+    /** ≥2 participants of one event and their POV prose. */
     participants: ScenePovInput[];
-    /** Scene the event happened in (the seeded tie is anchored here). */
+    /** Scene the seeded tie is anchored to. */
     sceneId: string;
-    /** Optional incident framing/label so the LLM knows what the scene was about. */
+    /** Incident framing so the LLM knows what the scene was about. */
     eventLabel?: string;
-    /** Override LLM model. */
     model?: string;
 }
 
 export interface EvolveRelationshipsResult {
     /** Directed ties seeded this tick (characterA = feeler). */
     seeded: number;
-    /** How many ties the LLM proposed before id/text validation. */
+    /** Ties the LLM proposed before validation. */
     proposed: number;
     skipReason?: 'too_few_participants' | 'no_pov' | 'no_ties';
     error?: string;
 }
-
-/* ── prompt ────────────────────────────────────────────────────────────────── */
 
 function buildSystemPrompt(): string {
     const toneList = TONES.map((t) => `${TONE_ZH[t]}(${t})`).join('、');
@@ -159,8 +133,6 @@ function buildUserPrompt(input: EvolveRelationshipsInput): string {
     ].join('\n');
 }
 
-/* ── inference ─────────────────────────────────────────────────────────────── */
-
 interface EvolvedEdge {
     fromId: string;
     toId: string;
@@ -175,8 +147,7 @@ function parseEdges(
     raw: string,
     byName: Map<string, ScenePovInput>,
 ): EvolvedEdge[] {
-    // Take the LAST balanced {...} block: a leaked <think> block can carry its own
-    // braces, so the real JSON object is the final one.
+    // Take the LAST balanced {...}: a leaked <think> block can carry its own braces.
     const blocks = raw.match(/\{[\s\S]*?\}(?=[^}]*$)/g) ?? raw.match(/\{[\s\S]*\}/g);
     if (!blocks || blocks.length === 0) return [];
     let parsed: { edges?: unknown } | null = null;
@@ -195,8 +166,8 @@ function parseEdges(
     for (const item of parsed.edges) {
         if (!item || typeof item !== 'object') continue;
         const obj = item as Record<string, unknown>;
-        // The LLM emits NAMES, not the long zero-padded fake ids — a `0x09…000000`
-        // id makes GLM stop mid-token (finish=stop at 81ch). Map names back to ids.
+        // The LLM emits NAMES (long zero-padded fake ids make GLM stop mid-token);
+        // map names back to ids.
         const fromName = typeof obj.from === 'string' ? obj.from.trim() : '';
         const toName = typeof obj.to === 'string' ? obj.to.trim() : '';
         if (!fromName || !toName || fromName === toName) continue;
@@ -230,10 +201,8 @@ function clampImportance(n: number): number {
 }
 
 /**
- * Read one event's POVs → LLM → directed tone edges → seed them on chain
- * (ordered: characterA = feeler) + write the feeler's private memory.
- *
- * Returns a no-throw result; relationships are additive, never load-bearing.
+ * One event's POVs → LLM → directed tone edges → seed on chain (characterA = feeler)
+ * + write the feeler's private memory. No-throw; relationships are never load-bearing.
  */
 export async function evolveRelationshipsFromScene(
     input: EvolveRelationshipsInput,
@@ -251,8 +220,7 @@ export async function evolveRelationshipsFromScene(
         return { seeded: 0, proposed: 0, error: 'saga 尚未種子化' };
     }
 
-    // Key by NAME: the LLM references co-present characters by name (it can't copy
-    // the long zero-padded fake ids), and observatory cast names are unique.
+    // Key by NAME — the LLM can't copy long fake ids, and observatory names are unique.
     const byName = new Map(participants.map((p) => [p.name, p]));
 
     let edges: EvolvedEdge[];
@@ -285,8 +253,7 @@ export async function evolveRelationshipsFromScene(
         return { seeded: 0, proposed: 0, skipReason: 'no_ties' };
     }
 
-    // Seed every directed edge — NO idempotency skip (the whole point is that a
-    // tie can repeat to accumulate weight + flip tone over ticks). characterA is
+    // No idempotency skip: repeats accumulate weight and flip tones. characterA is
     // the FEELER so direction-aware reads can tell A→B from B→A.
     const sceneId = input.sceneId || d.sceneIds[0];
     if (!sceneId) {
@@ -320,9 +287,8 @@ export async function evolveRelationshipsFromScene(
         return { seeded: 0, proposed: edges.length, error: err instanceof Error ? err.message : String(err) };
     }
 
-    // Private one-sided memory: only the FEELER remembers their own read of the
-    // scene. (Genesis writes symmetric memories; here each side's feeling is its
-    // own, so the memory is directional too.) Best-effort; absence is not an error.
+    // Only the FEELER remembers their own read of the scene — the memory is
+    // directional too. Best-effort.
     if (isMemoryConfigured()) {
         for (const e of edges) {
             const text = `對「${e.toName}」：${e.memory}`;
@@ -336,28 +302,12 @@ export async function evolveRelationshipsFromScene(
     return { seeded: edges.length, proposed: edges.length };
 }
 
-/* ── direction-aware read-back (for the evolution-graph printout) ───────────── */
-
 /**
- * Outgoing edges FROM a character, DIRECTION-AWARE: only `RelationshipSeeded`
- * events whose character_a is this character count as its outgoing feeling.
- * Newest seed wins the tone, repeats add weight. Unlike `fetchOnChainEdgesFrom`
- * (which is undirected/symmetric), this lets 孟→文 diverge from 文→孟 so the
- * observatory can print true asymmetric evolution.
- *
- * `nameOf` resolves target ids to names (the harness passes its fake roster).
+ * Direction-aware outgoing edges (only events whose character_a is this character),
+ * with the §2.4 cooling decay applied (pure core in relationship-core.ts). Newest seed
+ * wins the tone, repeats add decayed weight — unlike the undirected/symmetric
+ * `fetchOnChainEdgesFrom`. `nameOf` resolves target ids to names.
  */
-/* ── cooling engine ─────────────────────────────────────────────────────────────
- * A tie's weight is no longer a raw repeat count (append-only ⇒ only ever grows ⇒
- * every relationship trends to romance and the graph saturates). Instead each seeding
- * contributes a TIME-DECAYED boost: a tie reaffirmed THIS tick counts full; one last
- * touched N ticks ago counts 0.5^(N/halfLife). Sum over a directed pair's seedings =
- * its current strength. Stop reaffirming a tie and it cools; let it fall below
- * `minStrength` and it FADES OUT of the graph entirely (drops off the read). This is
- * the down-force the model was missing — relationships now ebb, not just accrue.
- *
- * `provenance` (per-trigger accrual rates) layers on top of this later; the decay is
- * the foundation. Pure core in relationship-core.ts (re-exported above). */
 export async function directedOutgoingEdges(
     characterId: string,
     nameOf: (id: string) => string,
@@ -368,14 +318,14 @@ export async function directedOutgoingEdges(
     const summaries = await read.director
         .listRelationshipEvents(client, pkg, { maxEvents: 1000 })
         .catch(() => []);
-    // In the harness, seededAtMs carries the seed TICK (see full-tick-fake-chain).
+    // In the harness, seededAtMs carries the seed TICK.
     const events: RelEventLite[] = summaries.map((s) => ({
         characterA: s.characterA,
         characterB: s.characterB,
         tone: s.tone,
         tick: Number(s.seededAtMs) || 0,
     }));
-    // "Now" = the most recent tick any tie was seeded on; ages are measured back from it.
+    // "Now" = the most recent seed tick; ages are measured back from it.
     const nowTick = events.reduce((m, e) => Math.max(m, e.tick), 0);
     return aggregateDecayedOutgoing(events, characterId, nowTick).map((e) => ({
         ...e,
@@ -383,8 +333,7 @@ export async function directedOutgoingEdges(
     }));
 }
 
-// ─── warm graph (feeds the spatial router §2.50; pure core in relationship-core.ts) ──
-/** Fetch relationship events ONCE and derive the warm graph for a roster (one chain read). */
+/** Fetch relationship events once and derive the roster's warm graph (§2.50). */
 export async function fetchWarmGraph(charIds: readonly string[]): Promise<WarmGraph> {
     const empty: WarmGraph = { pursueByChar: new Map(), welcome: () => 0 };
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;

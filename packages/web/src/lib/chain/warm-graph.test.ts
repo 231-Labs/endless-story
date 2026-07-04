@@ -1,7 +1,6 @@
 /**
- * buildWarmGraph unit test — the relationship-graph → spatial-router bridge (§2.50 Phase B).
- * Proves pursue + welcome are derived from directed WARM tone edges (romance/affection/
- * mentorship = warm; rivalry/wary/tension/estrangement = cold), restricted to the roster.
+ * buildWarmGraph unit test (§2.50 Phase B): pursue + welcome derive from directed
+ * WARM tone edges only, restricted to the roster.
  *
  *   TSX_TSCONFIG_PATH=$PWD/tsconfig.json <node23> <tsx/cli.mjs> \
  *     src/lib/chain/warm-graph.test.ts
@@ -13,7 +12,7 @@ import { buildWarmGraph, type RelEventLite } from './relationship-core.ts';
 const events: RelEventLite[] = [
     { characterA: 'su', characterB: 'liu', tone: 'romance', tick: 0 },
     { characterA: 'liu', characterB: 'su', tone: 'romance', tick: 0 },
-    { characterA: 'liu', characterB: 'jin', tone: 'estrangement', tick: 0 }, // 柳→金鳳 冷了
+    { characterA: 'liu', characterB: 'jin', tone: 'estrangement', tick: 0 },
     { characterA: 'jin', characterB: 'liu', tone: 'romance', tick: 0 },
     { characterA: 'bai', characterB: 'liu', tone: 'romance', tick: 0 },
     { characterA: 'tian', characterB: 'liu', tone: 'affection', tick: 0 },
@@ -34,7 +33,7 @@ test('pursue = strongest warm outgoing edge to a roster peer', () => {
     assert.equal(g.pursueByChar.get('liu')?.id, 'su', '柳 追 蘇');
     assert.equal(g.pursueByChar.get('jin')?.id, 'liu', '金鳳 追 柳');
     assert.equal(g.pursueByChar.get('bai')?.id, 'liu', '白 追 柳');
-    // 柳 has an estrangement edge to 金鳳, but cold ⇒ never a pursue target
+    // A cold edge is never a pursue target.
     assert.notEqual(g.pursueByChar.get('liu')?.id, 'jin');
 });
 

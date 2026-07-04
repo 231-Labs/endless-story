@@ -1,21 +1,14 @@
 /**
- * §4d.2 arc lifecycle — the orchestrator that runs the convergence state machine per saga:
- *   open (emergent central question) → feel the accumulated forcing → judge each beat →
- *   on an irreversible answer, retire + spawn the aftermath arc.
- *
- * Keeps the tick-loop wiring tiny (a few calls) and the pieces testable in isolation:
- *   - pressure ACCUMULATOR + forcing        → arc-pressure.ts (pure, unit-tested)
- *   - central-question derive / judge / aftermath → arc-convergence.ts (LLM, adversarial judge)
- * The only per-saga STATE lives here (off-chain map, persists across ticks — same pattern as the
- * tick-loop's recentTopicsBySaga). Nothing is authored: the question is derived, the forcing is
- * accumulated from real pressing, the judge is domain-blind, the aftermath is context-fed.
+ * §4d.2 arc lifecycle — per-saga convergence state machine: open (derived question) →
+ * accumulate forcing → judge each beat → retire + spawn the aftermath arc. Pure pieces
+ * live in arc-pressure.ts, LLM pieces in arc-convergence.ts; only per-saga state is here.
  */
 
 import { type ArcState, newArc, accumulate, forcingLevel } from './arc-pressure';
 import { deriveArc, judgeArcAnswered, spawnArcAftermath, type ArcAftermath } from './arc-convergence';
 
 const activeArcBySaga = new Map<string, ArcState>();
-/** Aftermath question carried forward → seeds the NEXT arc's central question (world keeps living). */
+/** Aftermath question carried forward to seed the NEXT arc. */
 const pendingQuestionBySaga = new Map<string, string>();
 
 /** Reset (harness isolation). */
@@ -24,17 +17,14 @@ export function clearArcs(): void {
     pendingQuestionBySaga.clear();
 }
 
-/** The live (unanswered) arc for a saga, if any. */
 export function currentArc(sagaId: string): ArcState | undefined {
     const a = activeArcBySaga.get(sagaId);
     return a && !a.answered ? a : undefined;
 }
 
 /**
- * Open an arc for this saga if none is live. The central question + character are DERIVED from the
- * staged contention framing + cast (emergent). If an aftermath question is pending from a retired
- * arc, that seeds the derivation (continuity). Returns the live arc (new or existing), or null if
- * derivation failed (caller just proceeds without an arc this tick).
+ * Open an arc if none is live; a pending aftermath question seeds the derivation.
+ * Returns the live arc, or null when derivation failed (caller proceeds without one).
  */
 export async function openArcIfNeeded(
     sagaId: string,
@@ -64,13 +54,10 @@ export interface ArcStepResult {
 }
 
 /**
- * Advance the arc after this tick's beats. `pressingCount` = the number of REAL contesting
- * events that bore on the central character this tick (co-present pressers / acts / high-tension
- * edges) — computed by the caller, NEVER a tick index. `centralBeat` = what the central character
- * actually did this tick (their POV/action). Accumulates pressure, and once the world is genuinely
- * forcing (level ≥ 2) judges whether the beat irreversibly answered the question; on an answer,
- * retires the arc + spawns the aftermath (whose question seeds the next arc). Returns null if no
- * live arc.
+ * Advance the arc after this tick's beats. `pressingCount` = real contesting events on
+ * the central character (caller-computed, never a tick index); `centralBeat` = what they
+ * did this tick. Once forcing ≥ 2, judges the beat; on an irreversible answer retires
+ * the arc + spawns the aftermath. Null if no live arc.
  */
 export async function stepArc(
     sagaId: string,
@@ -84,8 +71,8 @@ export async function stepArc(
     const forcing = forcingLevel(arc);
     const base: ArcStepResult = { question: arc.question, pressure: arc.pressure, forcing };
 
-    // Only spend an LLM judge call once the world is genuinely forcing AND there's a beat to judge —
-    // a quiet/low-pressure tick can never resolve (and must not burn a call).
+    // Judge only when genuinely forcing and there's a beat — a quiet tick never resolves
+    // and must not burn an LLM call.
     if (forcing >= 2 && centralBeat.trim()) {
         const verdict = await judgeArcAnswered(arc.question, centralBeat);
         if (verdict.answered) {

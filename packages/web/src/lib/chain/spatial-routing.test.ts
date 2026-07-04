@@ -1,11 +1,6 @@
 /**
- * spatial-routing unit test — the runner-side port of the §2.50 spatial sim.
- * Same three claims as the decouple sims, now over the pure `computeSpatialRouting`
- * helper with the real scene/roster shapes:
- *   1. 夜深公共場淨空 (dispersal)
- *   2. 柳蘇在私宅獨處湧現 (emergent privacy via welcomed pursuit)
- *   3. 白/金鳳追柳卻自己回家 (self-restraint — not welcomed, so they don't intrude)
- * Plus: by day the router is silent (defers to the LLM).
+ * Runner-side port of the §2.50 spatial sim: public scenes empty at night, welcomed
+ * pursuit yields emergent privacy, unwelcomed pursuers go home, day is silent.
  *
  *   TSX_TSCONFIG_PATH=$PWD/tsconfig.json <node23> <tsx/cli.mjs> \
  *     src/lib/chain/spatial-routing.test.ts
@@ -23,7 +18,7 @@ const SCENES: RoutingSceneInfo[] = [
     { id: 'tian_office', privacyLevel: 4 },
 ];
 
-// welcome = directed warm edge (蘇 迎柳、柳 迎蘇；其餘不迎追柳的人) — stands in for the real graph.
+// Stand-in for the real graph: su and liu welcome each other; nobody else is welcomed.
 const welcome = (hostId: string, visitorId: string): number =>
     (hostId === 'su' && visitorId === 'liu') || (hostId === 'liu' && visitorId === 'su') ? 1 : 0;
 
@@ -37,7 +32,7 @@ function freshWorld(): RoutingActor[] {
     ];
 }
 
-/** Advance N night ticks, applying the router's targets each tick (simultaneous update). */
+/** Advance N night ticks (simultaneous update). */
 function runNights(ticks: number): RoutingActor[] {
     let actors = freshWorld();
     for (let i = 0; i < ticks; i++) {
@@ -65,7 +60,6 @@ test('③ 自律不打擾 — 金鳳/白 pursue 柳 but end up in their OWN home
     const after = runNights(4);
     assert.equal(sceneOf(after, 'jin'), 'jin_hall', '金鳳不被迎入私宅、自己回家');
     assert.equal(sceneOf(after, 'bai'), 'bai_house', '白韻秋不被迎入私宅、自己回家');
-    // and neither ever slipped into 蘇/柳 的私宅
     assert.ok(!occ(after, 'su_room').includes('jin'), '金鳳不在蘇廂房');
     assert.ok(!occ(after, 'su_room').includes('bai'), '白韻秋不在蘇廂房');
 });
@@ -76,10 +70,10 @@ test('④ 白天路由沉默 — by day the router defers to the LLM (empty map)
 });
 
 test('⑤ 無主/不被迎的私宅 propriety = 0 — a stranger never routes into it', () => {
-    // liu pursues su, but su is in a private room su does NOT own and whose owner (jin) doesn't welcome liu
+    // liu pursues su, but su sits in a room owned by jin, who doesn't welcome liu.
     const actors: RoutingActor[] = [
         { id: 'liu', sceneId: 'backstage', homeSceneId: 'liu_room', fatigue: 0.6, pursue: { id: 'su', w: 0.95 } },
-        { id: 'su', sceneId: 'jin_hall', homeSceneId: 'su_room', fatigue: 0.6 }, // su sitting in 金鳳's hall
+        { id: 'su', sceneId: 'jin_hall', homeSceneId: 'su_room', fatigue: 0.6 },
         { id: 'jin', sceneId: 'jin_hall', homeSceneId: 'jin_hall', fatigue: 0.6 },
     ];
     const targets = computeSpatialRouting(actors, SCENES, true, welcome);

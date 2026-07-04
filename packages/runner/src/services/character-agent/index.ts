@@ -1,12 +1,6 @@
 /**
- * Character Agent (N1) — the character decides its own action in an event.
- *
- * This is the missing "Act/Decide" half of the actor: instead of admin
- * manually dealing/playing cards, the character agent perceives its hand
- * + the scene + its recalled memories, and CHOOSES a card. Pure LLM
- * decision; the caller (web action) does the chain read (hand/catalog) +
- * recall + the submit_action tx.
- *
+ * Character Agent (N1) — the character chooses its own card for an event. Pure LLM;
+ * the caller (web action) does the chain reads + recall + the submit_action tx.
  * See docs/narrative/NARRATIVE_AGENTS.md §2 (character loop) + N1.
  */
 
@@ -93,14 +87,11 @@ export {
 } from './ask.js';
 
 export interface DecideResult {
-    /** Chosen catalog index (what submit_action takes). Always one of the
-     *  hand's catalogIndex values (clamped if the LLM strays). */
+    /** Always one of the hand's catalogIndex values (clamped if the LLM strays). */
     catalogIndex: number;
-    /** First-person why, surfaced as the action's intent (the INNER thought). */
+    /** First-person why (the private thought). */
     intent: string;
-    /** What the character SAYS / DOES on stage as they play — the in-scene line
-     *  (台詞 or 身段帶白), ≤24字. The visible, showable evidence they're alive;
-     *  distinct from `intent` (the private why). */
+    /** In-scene spoken/acted line, max 24 chars; distinct from the private intent. */
     line?: string;
     reason?: string;
 }

@@ -1,11 +1,7 @@
 /**
- * Still-compiler pure core — beat selection (the heat gate) + prompt building +
- * the `compileStills` orchestration.
- *
- * No I/O, no chain, no image model: render + anchor are passed in as functions,
- * so this whole module is self-contained (only `import type`) and fully
- * unit-testable under `node --test` (which can't resolve runtime `.js`→`.ts`).
- * The I/O wiring (real OpenAI render + on-chain anchor) lives in ./index.ts.
+ * Still-compiler pure core: beat selection (heat gate) + prompt building + compileStills
+ * orchestration. No I/O; render + anchor are injected so it unit-tests under node --test.
+ * The I/O wiring lives in ./index.ts.
  */
 
 import type { EventStill, SceneHeatProfile } from '@endless-story/shared';
@@ -15,16 +11,13 @@ export interface SelectBeatsOptions {
     tensionThreshold?: number;
     /** Hard cap on stills per event (cost ceiling). Default 3. */
     maxPerEvent?: number;
-    /** Always capture the resolution (last) beat, even if below threshold. Default true. */
+    /** Always capture the last beat, even below threshold. Default true. */
     alwaysClimax?: boolean;
 }
 
 /**
- * Pick the beat indices to capture. A beat qualifies when its `cinnabar` (inner
- * conflict / desire) reaches `tensionThreshold`. If `alwaysClimax`, the final
- * beat is guaranteed in. When more beats qualify than `maxPerEvent`, the
- * highest-cinnabar ones win — but the climax beat is pinned so it always
- * survives the cap. Returned indices are chronological (ascending).
+ * Pick beat indices to capture: cinnabar >= threshold qualifies; over the cap the
+ * highest-cinnabar beats win, with the climax pinned. Returned ascending.
  */
 export function selectStillBeats(
     beatHeat: readonly SceneHeatProfile[] | undefined,
@@ -37,7 +30,7 @@ export function selectStillBeats(
     const alwaysClimax = opts.alwaysClimax ?? true;
     const climaxIdx = beats.length - 1;
 
-    // A climax-only event still produces 1 still; otherwise honour maxPerEvent.
+    // A climax-only event still produces 1 still even if maxPerEvent is 0.
     const cap = Math.max(opts.maxPerEvent ?? 3, alwaysClimax ? 1 : 0);
     if (cap === 0) return [];
 
@@ -51,8 +44,7 @@ export function selectStillBeats(
         return [...selected].sort((a, b) => a - b);
     }
 
-    // Over the cap: keep the highest-cinnabar beats, but pin the climax beat
-    // (it must survive even if its cinnabar is low).
+    // Over the cap: keep the highest-cinnabar beats, but pin the climax beat.
     const pinned = alwaysClimax ? climaxIdx : -1;
     const ranked = [...selected]
         .filter((i) => i !== pinned)
@@ -74,7 +66,7 @@ const TONE =
 const NO_TEXT =
     '全圖純畫面，無任何文字、標籤、題字、印章、邊框、數字、字母、浮水印或排版框線。';
 
-/** Heat → a one-clause palette/mood hint, mirroring SceneHeatProfile axes. */
+/** One-clause palette/mood hint mirroring SceneHeatProfile axes. */
 export function heatPaletteHint(heat?: SceneHeatProfile): string {
     if (!heat) return '';
     const { cinnabar, jade, mute } = heat;
@@ -86,9 +78,8 @@ export function heatPaletteHint(heat?: SceneHeatProfile): string {
 }
 
 export interface StillPromptInput {
-    /** Cast in the frame, "名（行當）、名（行當）". */
+    /** Cast in the frame, formatted "名（行當）、名（行當）". */
     cast: string;
-    /** Scene name. */
     sceneName?: string;
     /** This beat's text (tick intent / scene-line). */
     beatText?: string;
@@ -96,10 +87,9 @@ export interface StillPromptInput {
 }
 
 /**
- * Build the img2img prompt for one beat's still — scene-framed (a moment of an
- * incident), conditioned on the cast's anchor portraits, tinted by heat. Mirrors
- * web's `eventMomentPrompt` register; the still-compiler can't import that (it's
- * web-side), so the template is colocated here per the prompt-colocation rule.
+ * img2img prompt for one beat's still, conditioned on the cast's anchor portraits and
+ * tinted by heat. Mirrors web's eventMomentPrompt register; colocated here because the
+ * still-compiler cannot import web-side code.
  */
 export function buildStillPrompt(input: StillPromptInput): string {
     const where = input.sceneName ? `${input.sceneName}，` : '';
@@ -117,43 +107,39 @@ export function buildStillPrompt(input: StillPromptInput): string {
 
 export interface CaptureStillsInput {
     sagaId: string;
-    /** Resolved event to capture stills for (commitment subject_id). */
+    /** Resolved event (commitment subject_id). */
     eventId: string;
-    /** tx digest of the on-chain event — stamped into each still's provenance. */
+    /** tx digest of the on-chain event, stamped into each still's provenance. */
     eventTx?: string;
     sceneId?: string;
-    /** Scene name (for the prompt). */
     sceneName?: string;
-    /** Characters in the event — their anchors condition every still. */
+    /** Their anchors condition every still. */
     involvedCharacterIds: string[];
-    /** Pre-formatted cast label for the prompt, e.g. "某花旦（青衣）、某小生（小生）". */
+    /** Pre-formatted cast label for the prompt. */
     cast?: string;
-    /** Per-beat text (tick intent / scene-line), indexed by beat. */
+    /** Per-beat text, indexed by beat. */
     beatTexts?: string[];
-    /** Per-beat heat, ordered by beat index — drives the capture gate + palette. */
+    /** Per-beat heat, ordered by beat index; drives the capture gate + palette. */
     beatHeat?: SceneHeatProfile[];
     tensionThreshold?: number;
     maxPerEvent?: number;
     alwaysClimax?: boolean;
-    /** Override image model. */
     model?: string;
-    /** Dry-run: pick beats + build prompts but don't render/anchor. */
+    /** Pick beats + build prompts but don't render/anchor. */
     dryRun?: boolean;
 }
 
 export interface CaptureStillsResult {
-    /** Stills produced (provenance-stamped). On dryRun `fullBlobId` is ''. */
+    /** On dryRun `fullBlobId` is ''. */
     stills: EventStill[];
-    /** Beat indices selected for capture. */
     capturedBeats: number[];
-    /** Built prompts, parallel to capturedBeats. */
+    /** Parallel to capturedBeats. */
     prompts: string[];
     anchored: boolean;
     skipReason?: 'no_event' | 'no_cast' | 'no_qualifying_beats' | 'no_signer' | 'render_failed';
     errors?: string[];
 }
 
-/** Render one beat's image bytes from the cast's anchors. */
 export interface StillRenderResult {
     ok: boolean;
     bytes?: Uint8Array;
@@ -167,22 +153,19 @@ export type StillRenderFn = (args: {
     beatIndex: number;
 }) => Promise<StillRenderResult>;
 
-/** Upload + anchor a batch of stills (one PTB). Items in input order. */
+/** Upload + anchor a batch of stills in one PTB. Results in input order. */
 export type StillAnchorFn = (
     items: Array<{ sagaId: string; subjectId: string; content: Uint8Array; contentType?: string }>,
 ) => Promise<Array<{ blobId: string; commitmentId?: string }>>;
 
 export interface CompileStillsDeps {
     render: StillRenderFn;
-    /** null → cannot persist (returns `no_signer`). */
+    /** null = cannot persist (returns `no_signer`). */
     anchor: StillAnchorFn | null;
     now?: () => string;
 }
 
-/**
- * Orchestrate: select beats → build prompts → render each → batch-anchor →
- * EventStill[]. Pure given its injected `render` / `anchor`.
- */
+/** Select beats → build prompts → render → batch-anchor → EventStill[]. */
 export async function compileStills(
     input: CaptureStillsInput,
     deps: CompileStillsDeps,

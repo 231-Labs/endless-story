@@ -1,10 +1,7 @@
 /**
- * dream-stir unit test — proves the §2.51 dose semantics: ONE tighten, on the
- * HOTTEST desire, of the STIRRED character only; bounded at 0; input world is
- * mutated (it's the beat input) and the application is reported.
- *
- *   TSX_TSCONFIG_PATH=$PWD/tsconfig.json <node23> <tsx/cli.mjs> \
- *     src/lib/chain/dream-stir.test.ts
+ * dream-stir unit tests (§2.51 dose semantics: one tighten, hottest desire,
+ * stirred character only, bounded at 0; the input world is mutated by design).
+ * Run: TSX_TSCONFIG_PATH=$PWD/tsconfig.json <node23> <tsx/cli.mjs> src/lib/chain/dream-stir.test.ts
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,8 +25,8 @@ const world = (): WorldState => ({
         {
             id: 'zheng',
             desires: [
-                desire('頭牌', SCALE, SCALE / 2n), // tension = 0.5·SCALE ← hottest
-                desire('戲份', SCALE / 2n, SCALE / 2n), // tension = 0.25·SCALE
+                desire('頭牌', SCALE, SCALE / 2n), // tension 0.5·SCALE (hottest)
+                desire('戲份', SCALE / 2n, SCALE / 2n), // tension 0.25·SCALE
             ],
         },
         { id: 'bai', desires: [desire('留在身邊', SCALE, SCALE / 5n)] },

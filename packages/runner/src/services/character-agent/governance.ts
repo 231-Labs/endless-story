@@ -1,49 +1,33 @@
 /**
- * Character Agent — GOVERNANCE step (班主經營決策).
- *
- * The ARC was the one place the director still「編劇」: it kept an external arc plan and
- * decided which big show to stage, despite its own brief saying「你佈局,角色顯形」. This
- * moves that decision INTO the world: the 班主 (a character) reads the troupe's state +
- * what each member is pushing for + their standing/交情, and decides — on their OWN —
- * which way the troupe goes (排大戲搏名 / 接活賺錢 / 守成過冬). Social capital weights the
- * proposals (a 台柱's word carries; someone close to the 班主 gets a few more degrees of
- * trust) but the 班主 has the final call. ARC then emerges from this社會 decision, not a
- * director push.
- *
- * Pure LLM. The proposals + standing are supplied by the caller (later: characters
- * propose autonomously, standing comes from the relationship graph).
+ * Character Agent — GOVERNANCE step: the troupe manager (班主) reads troupe state +
+ * member proposals weighted by standing, and sets the troupe direction itself, so the
+ * arc emerges from a social decision instead of a director push. Pure LLM.
  */
 
 import { text as llmText } from '@endless-story/llm';
 import { roleHint, type RelationshipTone } from '@endless-story/shared';
 
 export interface GovernanceProposal {
-    /** Who is pushing this. */
     proposer: string;
     proposerRole: string;
-    /** What they want the troupe to do. */
     text: string;
-    /** Their weight in the room — 行當份量 + 跟班主的交情 (from the relationship graph). */
+    /** Weight in the room: role stature + rapport with the manager (relationship graph). */
     standing: string;
 }
 
 export interface DecideGovernanceInput {
-    /** The 班主 making the call. */
     manager: string;
     managerRole: string;
     sagaName: string;
-    /** Troupe state: 金庫 / 名聲 / 班底 / 時節 — the material reality the call must fit. */
+    /** Material troupe state (treasury / reputation / roster / season). */
     troupeState: string;
-    /** What the members are pushing for, each with their standing. */
     proposals: GovernanceProposal[];
 }
 
 export interface GovernanceResult {
-    /** The direction the 班主 sets (one line). */
     direction: string;
-    /** Whose proposal was adopted, a blend, or 「自主」 (the 班主's own read). */
+    /** Whose proposal was adopted, a blend, or 「自主」 (the manager's own read). */
     adopted: string;
-    /** How they weighed the people + the troupe (first-person, short). */
     reasoning: string;
 }
 
@@ -111,11 +95,7 @@ function parseGovernance(raw: string): GovernanceResult | null {
     return null;
 }
 
-/**
- * Decide the troupe's direction. No-throw: a parse miss / model error reads as 守成
- * (hold steady) rather than forcing a risky move — inaction is the safe default for a
- * 班主 who can't make up their mind.
- */
+/** No-throw: a parse miss / model error reads as hold-steady (守成), the safe default. */
 export async function decideGovernanceAction(
     input: DecideGovernanceInput,
     opts?: { model?: string },
@@ -141,18 +121,13 @@ export async function decideGovernanceAction(
     }
 }
 
-/* ── standing from the relationship graph ───────────────────────────────────────
- * The proposal's `standing` was hand-written. This derives it from the SOCIAL GRAPH:
- * 行當 decides 份量 (a 台柱's word carries; a 丑's is light), the 班主's directed bond
- * (tone + cooled weight from directedOutgoingEdges) decides 交情. This is where the
- * relationship system becomes the troupe's social capital — move the 班主→proposer edge
- * (e.g. affection → tension) and the standing, and thus the governance call, moves with it.
- */
+/* Standing derived from the social graph: role decides stature, the manager's directed
+ * bond (tone + cooled weight from directedOutgoingEdges) decides rapport. */
 
-/** The 班主's directed feeling toward a proposer — tone + cooled strength from the graph. */
+/** Manager's directed bond toward a proposer. */
 export interface ManagerBond {
     tone: RelationshipTone;
-    /** cooled weight (directedOutgoingEdges); higher = more salient. */
+    /** Cooled weight; higher = more salient. */
     weight: number;
 }
 
@@ -173,7 +148,7 @@ function roleWeightPhrase(role: string): string {
 }
 
 function rapportPhrase(bond?: ManagerBond): string {
-    if (!bond || bond.weight < 0.35) return ''; // cooled too far → no rapport to speak of
+    if (!bond || bond.weight < 0.35) return ''; // cooled too far: no rapport to speak of
     const strong = bond.weight >= 1.2;
     switch (bond.tone) {
         case 'romance':
@@ -190,11 +165,11 @@ function rapportPhrase(bond?: ManagerBond): string {
         case 'estrangement':
             return '與你生分了，他的話你未必聽得進';
         default:
-            return ''; // acquaintance / neutral — nothing to colour the standing
+            return '';
     }
 }
 
-/** Build a proposer's `standing` from 行當 (份量) + the 班主's directed bond (交情). */
+/** Standing = role stature + the manager's directed bond. */
 export function buildStanding(proposerRole: string, managerBond?: ManagerBond): string {
     const weight = roleWeightPhrase(proposerRole);
     const rapport = rapportPhrase(managerBond);

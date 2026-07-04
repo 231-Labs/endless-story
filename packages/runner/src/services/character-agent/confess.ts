@@ -1,16 +1,8 @@
 /**
- * Character Agent — CONFESS step.
- *
- * The missing verb. plan-selfdrive showed an unblocked plan grows the WISH to confirm
- * a feeling ("探她今夜心裡可有我", "把話說半開") but has no action to execute it, so it
- * stalls at lingering. This is that action: given a character alone (or nearly) with the
- * person they ache for, it decides — on its OWN — whether to actually say the unsaid
- * thing NOW, or hold it for another time. The point is that it can choose to WAIT: a
- * strong romance edge is necessary but not sufficient; timing, the other's mood, whether
- * an outsider is present all matter, and judging that is the LLM's, not a threshold's.
- *
- * confess=true is the discrete MILESTONE that turns 曖昧 into 表明 — the step encounter
- * mode (written to never point-break) structurally cannot take. Pure LLM (cheap tier).
+ * Character Agent — CONFESS step: alone with the person they ache for, the character
+ * decides on its own whether to say the unsaid thing NOW or wait; timing is judged by
+ * the LLM, not a threshold. confess=true is the discrete milestone (曖昧 to 表明) that
+ * the never-point-breaking step encounter mode cannot take. Pure LLM (cheap tier).
  */
 
 import { text as llmText } from '@endless-story/llm';
@@ -21,22 +13,18 @@ export interface DecideConfessInput {
     role: string;
     toName: string;
     toRole: string;
-    /** One line on the feeling toward toName — tone + strength + a little history. */
+    /** One line on the feeling toward toName: tone + strength + a little history. */
     relationship: string;
-    /** The character's current plan hint (may already carry a relational intent). */
     planHint?: string;
-    /** Right-now situation: are they alone, is an outsider present, what just happened. */
     situation?: string;
-    /** A memory or two (old-flame, last scene) for texture. */
     recentMemories?: string[];
 }
 
 export interface ConfessResult {
     confess: boolean;
     toName: string;
-    /** First-person interior: why say it now, or why hold it. */
     motive: string;
-    /** If confessing, one line of how they open their mouth — their own phrasing. */
+    /** If confessing, their own opening line. */
     opening?: string;
 }
 
@@ -111,10 +99,7 @@ function parseConfess(raw: string, toName: string): ConfessResult | null {
     return null;
 }
 
-/**
- * Decide whether to confess NOW. No-throw: a parse miss / model error reads as "not yet"
- * (confess=false) rather than forcing a confession — silence is the safe default.
- */
+/** No-throw: a parse miss / model error reads as "not yet" (confess=false), the safe default. */
 export async function decideConfessAction(
     input: DecideConfessInput,
     opts?: { model?: string },

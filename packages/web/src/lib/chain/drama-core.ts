@@ -1,23 +1,8 @@
 /**
- * Drama engine — off-chain DEMAND core (pure; no chain, no I/O).
- *
- * This is the deterministic half of the Desire/Resource drama engine, sitting
- * on the product side. It imports ONLY `@endless-story/drama` (the pure
- * transition + types) — never the SDK, memwal, or any chain code — so every
- * function here is unit-testable and byte-reproducible.
- *
- * Division of labour (the load-bearing design):
- *   - SUPPLY  (scarcity)        = on-chain `resource.move` ledger. Authoritative.
- *   - DEMAND  (felt satisfaction) = THIS layer. A deterministic function of the
- *     allocation history + tuning. NOT stored on chain; recomputable by anyone.
- *
- * Each tick we read the *current* on-chain allocation, relax every desire's
- * satisfaction one step toward the target that allocation implies (`applyTick`
- * with NO actions — the transfers already happened on chain via
- * `event::resolve_event`), and derive tension. The off-chain engine never
- * moves supply; it only feels it. That keeps the two sides independent and the
- * whole thing verifiable: re-run `applyTick(beat.input, [], TUNING)` and you
- * reproduce `beat.output` byte-for-byte.
+ * Drama engine off-chain DEMAND core (pure; imports only `@endless-story/drama`).
+ * SUPPLY = the authoritative on-chain resource ledger; DEMAND (felt satisfaction) is
+ * derived here from allocation history + tuning, so every beat is byte-replayable:
+ * `applyTick(beat.input, [], TUNING)` reproduces `beat.output`.
  */
 import {
     applyTickVerbose,
@@ -31,25 +16,20 @@ import {
     type WorldState,
 } from '@endless-story/drama';
 
-/** One desire's derived tension, narrative-labelled + display-ready. Distinct
- *  from the engine's bare `TensionPoint` (we carry the statement + sort). */
 export interface DramaTensionRow {
     agentId: string;
     desireId: string;
     statement: string;
-    /** scaled [0..SCALE]; use `tensionFraction` for a 0..1 display value. */
+    /** Scaled [0..SCALE]; see `tensionFraction`. */
     value: bigint;
 }
 
-/** Schema version stamped into every committed beat blob. */
 export const DRAMA_BEAT_VERSION = 1 as const;
 export const DRAMA_BEAT_KIND = 'drama-beat' as const;
 
 /**
- * The tuning the product COMMITS to. Pinned to the conformance test
- * (`packages/drama/test/onchain-conformance.test.ts`) + the simulator
- * writeup so the live beats reproduce the calibrated curve. Loss aversion:
- * alphaDown (fall) > alphaUp (rise). Habituation: gamma > 0.
+ * Committed tuning, pinned to the conformance test so live beats reproduce the
+ * calibrated curve. Loss aversion: alphaDown > alphaUp. Habituation: gamma > 0.
  */
 export const DRAMA_TUNING: TuningConfig = {
     alphaUp: 300_000n,
@@ -57,25 +37,19 @@ export const DRAMA_TUNING: TuningConfig = {
     gamma: 50_000n,
 };
 
-/* ── plain-data snapshots (what the chain layer hands us) ──────────────── */
-
-/** A DramaResource as read off chain — supply truth for one beat. */
 export interface ResourceSnapshot {
-    /** on-chain object id of the DramaResource. */
     id: string;
-    /** structural "bone" kind (e.g. "capacity-1-slot"). */
     archetype: string;
-    /** human label (e.g. "partnership:Meng"). */
+    /** `<kind>:<display>` label (e.g. "partnership:Meng"). */
     label: string;
     capacity: bigint;
-    /** holder (Character id) -> units held, straight from the on-chain Table. */
+    /** holder character id -> units held. */
     allocations: Record<string, bigint>;
 }
 
 /**
- * A character's declared desire. `ref` in each claim names a resource by
- * (id | label | archetype) — resolved to a live resource id at world-build
- * time, so desires stay stable while the underlying on-chain object id varies.
+ * `ref` in each claim names a resource by (id | label | archetype), resolved at
+ * world-build time so desires stay stable while the on-chain object id varies.
  */
 export interface DesireSpec {
     id: string;
@@ -88,95 +62,55 @@ export interface DesireSpec {
 
 export interface AgentSpec {
     id: string;
-    /** display name (narrative-facing; used for prompt hints). */
     name?: string;
     /** Public chain tags such as `role:<role-type>`. */
     tags?: string[];
     desires: DesireSpec[];
 }
 
-/* ── default desires (deterministic, zero-config contention) ───────────── */
-
 export interface DefaultDesireOptions {
-    /** Current agent display name. Used to avoid giving a named target a self-partnership desire. */
+    /** Used to avoid giving a named target a self-partnership desire. */
     agentName?: string;
     /** Public chain tags such as `role:<role-type>`. */
     agentTags?: string[];
     /**
-     * Per-resource WANT override, keyed by on-chain label. For a director-created
-     * resource of a fresh kind (no ROLE_AMBITION row → flat 0.5 for everyone), the
-     * Showrunner can name the 行當 the stake is FOR; those roles ache for it, others
-     * stand down — so a bespoke stake is character-shaped, not a flat scramble. Built-in
-     * kinds keep their tuned ROLE_AMBITION ambitions (an intent only overrides if present
-     * for that label). Read off-chain from resource-intents; passed in to stay pure.
+     * Per-resource WANT override keyed by on-chain label: the named 行當 ache for a
+     * director-created stake, everyone else stands down. Only overrides when present
+     * for that label; built-in kinds keep their tuned ROLE_AMBITION.
      */
     resourceIntents?: Record<string, { wantedBy: string[] }>;
 }
 
 /**
- * With no authored desires, every cast member is given ONE desire per contested
- * resource: "I want to hold this scarce thing." That is the purest contention —
- * N performers, a capacity-1 partnership slot, whoever lacks it is tenser. The
- * LLM director can later author richer per-character desires (the `skin`); this
- * is the structural floor (the `bone`).
- *
- * A "contested" resource = capacity small enough that not everyone can hold it.
- * We treat capacity ≤ cast-size as contested; in practice the partnership slot
- * (capacity 1) always qualifies.
+ * 行當 → ambition (0..1) per resource kind. Ambition, not ability — the contest floor
+ * can still thrust an able non-desirer on stage. Substring match on role, first row
+ * wins. Niches are deliberately non-overlapping (shared fights only on the marquee
+ * prizes) so co-present roles aren't all contesting the same slot and warmth can
+ * breathe. ORDER MATTERS: elder/master rows come first so a multi-行當 veteran matches
+ * there — they give teaching and never crave mentorship/partnership.
  */
-/**
- * 行當 → how strongly it WANTS each resource kind (0..1). Ambition, not ability —
- * a 武旦 can want 唱片 (weakly) and lose on competence; a 花旦 can be pressed into
- * 武戲 (rarely, via the contest floor). Substring match on role, most specific
- * first; unknown role/kind → AMBITION_FALLBACK. This is the deterministic backbone
- * of intent; richer per-character (memory-derived) desire can modulate it later.
- */
-// SPECIALIZED NICHES (2026-06-16 rebalance): each 行當 burns for 1-2 kinds and is a
-// NON-CONTENDER (omitted → AMBITION_FALLBACK, below AMBITION_MIN) for the rest. This
-// carves non-competing niches so not every co-present pair is fighting over the same
-// slot — the cause of「劇情充滿爭搶、沒溫情」. Strategic OVERLAP is kept only on the
-// marquee prize (spotlight 頭牌) + the 搭檔 contest, where a shared fight IS the drama;
-// elsewhere roles own their lane (班主→堂會包銀, 丑→小報, 武→武戲) so they can be
-// co-present without a contest → warmth can breathe. The contest FLOOR still lets an
-// able non-desirer get thrust on stage 臨危受命; this governs DESIRE, not ability.
-// WARM kinds (mentorship/belonging/solace/keepsake) are seeded alongside the status
-// kinds (2026-06-17) to grow 師徒/接納/疼惜 drama, not 頭牌 wars. They sit at MODERATE
-// ambition (0.3–0.6, vs the 0.9 status niches) so the contests over them are soft —
-// warmth from the theme, not from being low-stakes. Note ORDER: elders/master rows
-// come FIRST so a multi-行當 veteran (老旦, or a 班主 who's also a 前代名角) matches there,
-// not the greedy young-行當 rows below — they GIVE the teaching / already belong, so they
-// carry keepsake/solace but NEVER mentorship/partnership (they don't crave being taught).
 const ROLE_AMBITION: { match: string[]; a: Record<string, number> }[] = [
-    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.75, naming: 0.4, keepsake: 0.5, solace: 0.4 } }, // 堂會包銀（生意）；給戲不爭戲、念舊惜身
-    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, patronage: 0.5, keepsake: 0.55, solace: 0.45 } }, // 唱片 + 堂會；認命惜身、念故人
-    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.3, belonging: 0.55, mentorship: 0.5, solace: 0.4 } }, // 武戲台口 + 想被收作自己人、求真傳
-    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.85, mentorship: 0.6, keepsake: 0.4, solace: 0.3 } }, // 頭牌 + 渴師父真傳
-    { match: ['坤生', '乾生', '小生'], a: { partnership: 0.9, spotlight: 0.6, belonging: 0.55, mentorship: 0.55 } }, // 搭檔；外來者求接納與真傳
-    { match: ['丑'], a: { naming: 0.75, patronage: 0.4, belonging: 0.5, mentorship: 0.4 } }, // 小報頭條（搏版面）+ 邊緣人求名分
-    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.65, spotlight: 0.35, belonging: 0.4, solace: 0.35 } }, // 武 + 偶爭台、求一席
+    { match: ['班主', '掌事', '當家', '東家'], a: { patronage: 0.75, naming: 0.4, keepsake: 0.5, solace: 0.4 } },
+    { match: ['老生', '鬚生', '老旦'], a: { recording: 0.7, patronage: 0.5, keepsake: 0.55, solace: 0.45 } },
+    { match: ['刀馬旦', '武旦', '武生', '武小生'], a: { martial: 0.95, spotlight: 0.3, belonging: 0.55, mentorship: 0.5, solace: 0.4 } },
+    { match: ['花旦', '青衣', '正旦', '坤伶', '旦'], a: { spotlight: 0.9, recording: 0.85, mentorship: 0.6, keepsake: 0.4, solace: 0.3 } },
+    { match: ['坤生', '乾生', '小生'], a: { partnership: 0.9, spotlight: 0.6, belonging: 0.55, mentorship: 0.55 } },
+    { match: ['丑'], a: { naming: 0.75, patronage: 0.4, belonging: 0.5, mentorship: 0.4 } },
+    { match: ['淨', '大面', '花臉', '銅錘'], a: { martial: 0.65, spotlight: 0.35, belonging: 0.4, solace: 0.35 } },
 ];
-// An UNKNOWN 行當 (no row matched) still participates at a moderate level so a未知角色
-// isn't a non-entity in the economy.
+// Unmatched 行當 still contests at a moderate level.
 const AMBITION_FALLBACK = 0.5;
-// A MATCHED role's NON-niche kind (omitted from its `a` map) → below AMBITION_MIN, so the
-// role is a NON-CONTENDER for that slot (a faint「想搶卻搶不起」floor pruned by AMBITION_MIN).
-// This is what carves the niches: specify only the kinds a role burns for; the rest fall here.
+// Off-niche kind for a matched role: below AMBITION_MIN, so a non-contender.
 const OMITTED_KIND_AMBITION = 0.08;
 const AMBITION_MIN = 0.15;
-// A FRESH director-invented kind that NO 行當 is tuned for (not in ROLE_AMBITION):
-// fall back to a broad MODERATE want so the new stake actually draws a scramble.
-// Without this a director-created resource is inert for a cast of known roles (every
-// matched role hits the 0.08 off-niche floor → nobody contends → no drama). A
-// `wantedBy` intent sharpens this broad want into specific 行當.
+// Fresh director-invented kind no 行當 is tuned for: broad moderate want, otherwise
+// the new stake is inert (every matched role would hit the off-niche floor).
 const DIRECTOR_KIND_FALLBACK = 0.4;
-// A director-authored stake WITH a `wantedBy` intent: the named 行當 burn for it
-// (high, contended), everyone else is a non-contender (below AMBITION_MIN). This is
-// what makes a bespoke stake character-shaped instead of a broad scramble.
+// `wantedBy` intent: the named 行當 burn for it, everyone else stands down.
 const INTENT_WANT = 0.8;
 const INTENT_OFF = 0.05;
-/** Every kind any 行當 is tuned for — lets roleResourceAmbition tell an OFF-niche
- *  built-in kind (non-contender, 0.08) from a FRESH director kind (broad want).
- *  Derived from the table so it can never drift out of sync. */
+/** Kinds any 行當 is tuned for — tells an off-niche built-in kind from a fresh
+ *  director kind. Derived from the table so it can never drift. */
 const TUNED_KINDS = new Set<string>(ROLE_AMBITION.flatMap((r) => Object.keys(r.a)));
 
 function primaryRoleFromTags(tags: string[] | undefined): string {
@@ -184,20 +118,16 @@ function primaryRoleFromTags(tags: string[] | undefined): string {
     return roleTag ? roleTag.slice('role:'.length) : '';
 }
 
-/** How much a 行當 (role) intrinsically aches for a KIND of resource (0..1). The
- *  deterministic「意圖已行當化」signal (§8c) — also the PERCEIVE step's ache source so
- *  a character's Situation leads with what their 行當 most wants. Exported for reuse. */
+/** How much a 行當 aches for a resource kind (0..1) — the deterministic intent signal
+ *  (§8c); also the PERCEIVE step's ache source. */
 export function roleResourceAmbition(role: string, kind: string): number {
     const row = ROLE_AMBITION.find((g) => g.match.some((kw) => role.includes(kw)));
-    if (!row) return AMBITION_FALLBACK; // unknown 行當 → moderate (still contests)
+    if (!row) return AMBITION_FALLBACK;
     const a = row.a[kind];
-    if (a != null) return a; // this 行當's tuned want for this kind
-    // off-niche: a TUNED kind this role doesn't burn for → non-contender; a FRESH
-    // (director-invented) kind nobody's tuned for → broad moderate want (else inert).
+    if (a != null) return a;
     return TUNED_KINDS.has(kind) ? OMITTED_KIND_AMBITION : DIRECTOR_KIND_FALLBACK;
 }
 
-/** Scale the unit weight (SCALE) by ambition 0..1 → the desire's intent magnitude. */
 function scaleByAmbition(ambition: number): bigint {
     const pct = Math.max(0, Math.min(100, Math.round(ambition * 100)));
     return (SCALE * BigInt(pct)) / 100n;
@@ -211,31 +141,18 @@ export function defaultDesiresForCast(
     const specs: DesireSpec[] = [];
     const role = primaryRoleFromTags(opts.agentTags);
     for (const r of resources) {
-        // skip resources nobody has to compete for (capacity ≥ cast → everyone fits)
+        // capacity >= cast ⇒ uncontested
         if (castSize > 0 && r.capacity >= BigInt(castSize)) continue;
-        // A named partnership slot / affection prize is something OTHER people desire;
-        // the named target should not want to partner with — or be smitten by — themself.
+        // A named target never desires their own partnership/affection slot.
         if (opts.agentName && isSelfNamedTarget(r, opts.agentName)) continue;
         if (isPartnership(r) && !isEligiblePartnershipAgent(opts)) continue;
-        // Stage-performer resources (headliner spotlight / recording) are contested
-        // only among on-stage actors. A confirmed backstage role (musician / wardrobe /
-        // business / press) never competes for them — a lead-fiddle desiring the
-        // headliner spotlight was the role-resource mismatch bug (partnership is already
-        // gated to the young-male-lead side above).
+        // Performer-only resources are never contested by confirmed backstage roles.
         if (isPerformerResource(r) && isBackstageAgent(opts)) continue;
-        const want = r.capacity > 0n ? 1n : 0n; // want one unit of the scarce thing
+        const want = r.capacity > 0n ? 1n : 0n;
         if (want === 0n) continue;
-        // 行當-shaped intent (the "skin" the comment promised): how much THIS 行當
-        // wants THIS kind of resource (0..1). It scales the desire WEIGHT, which is
-        // linear into tension (= the contest's intent), so a 花旦 burns for 頭牌/唱片
-        // but barely for 武戲, and a 武旦 the reverse. Below AMBITION_MIN ⇒ not a
-        // contender for it (the contest's 臨危受命 floor can still thrust an able
-        // event-participant in). Uniform desire was the old structural floor (bone);
-        // this is the role-shaped skin, kept deterministic + data-driven.
+        // Ambition scales the desire WEIGHT (linear into tension); below AMBITION_MIN
+        // the role is not a contender (the contest floor can still draft them).
         const kind = (r.label.split(':')[0] || '').trim();
-        // A director-authored stake may name WHO it's for (resourceIntents): the
-        // listed 行當 burn for it, everyone else stands down — overriding the flat
-        // fallback a fresh kind would otherwise get. No intent → tuned ROLE_AMBITION.
         const intent = opts.resourceIntents?.[r.label];
         const ambition = intent
             ? intent.wantedBy.some((kw) => kw && role.includes(kw))
@@ -259,10 +176,7 @@ function isPartnership(r: ResourceSnapshot): boolean {
     return r.label.startsWith('partnership:');
 }
 
-/** Resources only on-stage actors compete for: the headliner spotlight, the
- *  recording slot, the old-world 堂會 patronage circuit, and the press's naming
- *  power. (partnership is handled by its own young-male-lead gate.) Backstage
- *  roles — musicians / wardrobe / business / press — never compete for these. */
+/** Resources only on-stage actors compete for (partnership has its own gate). */
 function isPerformerResource(r: ResourceSnapshot): boolean {
     return (
         r.label.startsWith('spotlight:') ||
@@ -273,9 +187,8 @@ function isPerformerResource(r: ResourceSnapshot): boolean {
     );
 }
 
-/** True only when a role tag POSITIVELY marks the agent as backstage —
- *  musicians, wardrobe, or business/press (see isBackstageRole regex). We never
- *  infer backstage from absence of a tag, so real performers are never excluded. */
+/** Backstage only when a role tag POSITIVELY marks it — never inferred from absence,
+ *  so real performers are never excluded. */
 function isBackstageAgent(opts: DefaultDesireOptions): boolean {
     return (opts.agentTags ?? [])
         .filter((tag) => tag.startsWith('role:'))
@@ -293,27 +206,20 @@ function isEligiblePartnershipAgent(opts: DefaultDesireOptions): boolean {
     const roleTags = (opts.agentTags ?? [])
         .filter((tag) => tag.startsWith('role:'))
         .map((tag) => tag.slice('role:'.length));
-    // New tagged characters are strict: only young-male-lead-side roles can desire a
-    // partnership slot with a female-lead target.
+    // With role tags: only young-male-lead-side roles qualify.
     if (roleTags.length > 0) return roleTags.some(isXiaoshengRole);
-    // If tags are present but none says role, do not infer eligibility from
-    // unrelated public status labels.
+    // Tags present but no role tag: don't infer from unrelated status labels.
     if ((opts.agentTags ?? []).length > 0) return false;
-    // Legacy fallback for older untagged demo characters. Keeps old mints from
-    // going fully inert until their public tags are migrated.
+    // Legacy fallback for untagged demo characters.
     return opts.agentName ? /生|柳/.test(opts.agentName) : true;
 }
 
 function isXiaoshengRole(role: string): boolean {
-    // 乾生 (a young-male-lead variant) was missing → the 乾生 lead couldn't desire a
-    // 搭檔 slot, leaving partnership resources 懸而未決 (nobody eligible could want them).
     return ['小生', '文小生', '武小生', '武生', '坤生', '乾生', '女小生'].some((r) => role.includes(r));
 }
 
-/** A `<kind>:<personName>` slot whose display IS this agent — the named target of
- *  a partnership (搭戲) or affection (情意) stake. They never desire their OWN slot /
- *  heart; everyone else may. Other kinds (spotlight/recording/…) name a thing, not a
- *  person, so they never self-exclude. */
+/** True when a partnership/affection slot's display name IS this agent — the named
+ *  target never desires their own slot. Other kinds name a thing, never self-exclude. */
 function isSelfNamedTarget(r: ResourceSnapshot, agentName: string): boolean {
     const prefix = ['partnership:', 'affection:'].find((p) => r.label.startsWith(p));
     if (!prefix) return false;
@@ -325,27 +231,16 @@ function compactName(name: string): string {
 }
 
 function desireStatementFor(r: ResourceSnapshot): string {
-    // The statement MUST carry a matchable token so the storylet opener
-    // (framingForStatement → parseDirectorContention) and the settlement matchers
-    // can tie a tension back to its resource. Two kinds carry a SEMANTIC natural-
-    // language token (so the framing/POV reads as the real stake, not a stripped
-    // display name): partnership uses 「與…搭戲」 and affection uses 「傾心於…」 — both
-    // caught by `framingForStatement` before the generic path. Every other kind keeps
-    // the 「<kind>:<display>」 label so `parseDirectorContention` recovers the kind.
-    // The 中文 display name is present in ALL three forms, so the settlement matcher
-    // (pickContestWinner, by label display) ties a tension back to its resource
-    // regardless of form. Prose-facing consumers strip the label via
-    // `humanResourceFromStatement`, so the raw `<kind>:` token never reaches readers;
-    // the natural-language forms have no `<kind>:` prefix, so they read whole.
+    // The statement must carry a matchable token: partnership/affection use semantic
+    // natural-language forms (「與…搭戲」/「傾心於…」, caught by framingForStatement);
+    // every other kind keeps the 「<kind>:<display>」 label for parseDirectorContention.
+    // The display name is present in all forms so settlement matchers can tie a
+    // tension back to its resource.
     if (r.label.startsWith('partnership:')) return `與${r.label.slice('partnership:'.length)}搭戲`;
-    // 感情爭奪：N 人爭一個人的情意，capacity 1（情意獨佔）。「傾心於X」帶語義 →
-    // framingForStatement 認回 contention:affection，POV 讀到的是「傾心於文」而非英文 slug。
     if (r.label.startsWith('affection:')) return `傾心於${r.label.slice('affection:'.length)}`;
     if (r.label) return `爭得「${r.label}」`;
     return `爭得一席（${r.archetype || '稀缺資源'}）`;
 }
-
-/* ── resolve specs → engine world ─────────────────────────────────────── */
 
 function resolveRef(ref: string, byId: Map<string, ResourceSnapshot>): string | null {
     if (byId.has(ref)) return ref;
@@ -360,7 +255,6 @@ export function satKey(agentId: string, desireId: string): string {
     return `${agentId} ${desireId}`;
 }
 
-/** Pull every desire's satisfaction out of a world into a flat carry-over map. */
 export function extractSatisfaction(world: WorldState): Map<string, bigint> {
     const m = new Map<string, bigint>();
     for (const a of world.agents) for (const d of a.desires) m.set(satKey(a.id, d.id), d.satisfaction);
@@ -368,11 +262,8 @@ export function extractSatisfaction(world: WorldState): Map<string, bigint> {
 }
 
 /**
- * Build the engine `WorldState` from supply snapshots + declared desires,
- * seeding each desire's satisfaction from the carry-over map (prior beat) or
- * its baseline on first sight. Desires whose claims resolve to no live
- * resource are dropped (graceful: the character simply has no structural
- * tension on that axis yet).
+ * Build the engine `WorldState`; satisfaction seeds from the carry-over map or the
+ * baseline on first sight. Desires whose claims resolve to no live resource are dropped.
  */
 export function buildWorld(
     resources: ResourceSnapshot[],
@@ -394,7 +285,7 @@ export function buildWorld(
             const draws_from = spec.claims
                 .map((c) => ({ resource_id: resolveRef(c.ref, byId), claim: c.claim }))
                 .filter((c): c is { resource_id: string; claim: bigint } => c.resource_id !== null);
-            if (draws_from.length === 0) continue; // nothing on chain feeds this desire
+            if (draws_from.length === 0) continue;
             const prior = priorSatisfaction.get(satKey(a.id, spec.id));
             desires.push({
                 id: spec.id,
@@ -412,20 +303,16 @@ export function buildWorld(
     return { agents: engineAgents, resources: engineResources, tick };
 }
 
-/* ── derive one beat ──────────────────────────────────────────────────── */
-
 export interface DerivedBeat {
-    /** the world AFTER relaxation (next satisfaction). */
+    /** World after relaxation. */
     next: WorldState;
-    /** derived tension per (agent, desire), highest first within each agent. */
+    /** Per (agent, desire), highest first within each agent. */
     tensions: DramaTensionRow[];
 }
 
 /**
- * Advance the DEMAND side by one beat: relax satisfaction toward the target the
- * current allocation implies. `actions` defaults to NONE — supply moved on
- * chain already; here we only feel it. (Off-chain-only budget resources with a
- * `refill` could pass actions, but the on-chain ledger never does.)
+ * Advance the DEMAND side one beat. `actions` defaults to none — supply already
+ * moved on chain; this layer only feels it.
  */
 export function deriveBeat(world: WorldState, actions: Action[] = []): DerivedBeat {
     const { world: next } = applyTickVerbose(world, actions, DRAMA_TUNING);
@@ -439,9 +326,7 @@ export function deriveBeat(world: WorldState, actions: Action[] = []): DerivedBe
     return { next, tensions };
 }
 
-/* ── prompt hint ──────────────────────────────────────────────────────── */
-
-/** tension bigint ([0..SCALE]) → 0..1 fraction for display. */
+/** [0..SCALE] → 0..1 display fraction. */
 export function tensionFraction(t: bigint): number {
     return Number((t * 10_000n) / SCALE) / 10_000;
 }
@@ -454,9 +339,8 @@ function tensionBand(frac: number): string {
 }
 
 /**
- * A short Chinese line describing the agent's dominant unmet desire, for
- * injection into decide/POV prompts. Returns null when the agent has no
- * structural tension (no resolved desires) — callers omit the hint entirely.
+ * Chinese one-liner of the agent's dominant unmet desire for decide/POV prompt
+ * injection; null when the agent has no structural tension (callers omit the hint).
  */
 export function dramaHintForAgent(world: WorldState, agentId: string): string | null {
     const agent = world.agents.find((a) => a.id === agentId);
@@ -474,8 +358,6 @@ export function dramaHintForAgent(world: WorldState, agentId: string): string | 
     const frac = tensionFraction(topT);
     return `【內在張力】你對「${top.statement}」的渴望此刻${tensionBand(frac)}（張力 ${frac.toFixed(2)}）。`;
 }
-
-/* ── serialize / parse / verify a committed beat ──────────────────────── */
 
 interface SerializedResource {
     id: string;
@@ -504,13 +386,13 @@ export interface SerializedBeat {
     sagaId: string;
     tick: string;
     tuning: { alphaUp: string; alphaDown: string; gamma: string };
-    /** the world BEFORE relaxation (prior satisfaction + the on-chain allocation). */
+    /** World before relaxation. */
     input: SerializedWorld;
-    /** always empty for on-chain-settled supply; recorded for completeness. */
+    /** Always empty — supply settles on chain. */
     actions: never[];
-    /** the world AFTER relaxation + the derived tensions. */
+    /** World after relaxation + derived tensions. */
     output: { world: SerializedWorld; tensions: { agentId: string; desireId: string; value: string }[] };
-    /** commitment id of the prior beat (chains the history); null at genesis. */
+    /** Prior beat's commitment id (chains the history); null at genesis. */
     prevCommitmentId: string | null;
 }
 
@@ -574,7 +456,6 @@ function parseWorld(s: SerializedWorld): WorldState {
     };
 }
 
-/** Build the self-verifying beat record from an input world + its derivation. */
 export function buildBeat(
     sagaId: string,
     input: WorldState,
@@ -609,11 +490,7 @@ export function encodeBeat(beat: SerializedBeat): Uint8Array {
     return new TextEncoder().encode(JSON.stringify(beat));
 }
 
-/**
- * Re-run the committed transition and confirm the output matches byte-for-byte.
- * This is the "anyone can re-run and get the same tension" guarantee, applied
- * to a live beat: parse `input`, `applyTick([], tuning)`, compare to `output`.
- */
+/** Re-run the committed transition; the output must match byte-for-byte. */
 export function verifyBeat(beat: SerializedBeat): boolean {
     const tuning: TuningConfig = {
         alphaUp: BigInt(beat.tuning.alphaUp),
@@ -627,9 +504,6 @@ export function verifyBeat(beat: SerializedBeat): boolean {
 
 export type { WorldState };
 
-/* ── §2.51 dream stir (pure) ──────────────────────────────────────────────── */
-
-/** What one consumed stir did (for the tick log). */
 export interface DreamStirApplied {
     agentId: string;
     statement: string;
@@ -637,12 +511,9 @@ export interface DreamStirApplied {
 }
 
 /**
- * Consume queued dream stirs against a freshly-built INPUT world: tighten each
- * stirred agent's HOTTEST desire by `fraction` of SCALE (one ripple unit —
- * §2.51 dosimetry: a dream that only sits in memory is inert; memory + one
- * appraisal jolt is the minimal effective dose). Mutates `world` in place
- * (it is the beat's input, so the committed blob stays replayable) and returns
- * what was applied. Agents without desires are skipped.
+ * Consume queued dream stirs (§2.51): tighten each stirred agent's hottest desire by
+ * `fraction` of SCALE. Mutates the beat's INPUT world in place so the committed blob
+ * stays replayable. Agents without desires are skipped.
  */
 export function applyDreamStirs(
     world: WorldState,
