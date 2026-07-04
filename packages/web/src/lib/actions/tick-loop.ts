@@ -11,10 +11,10 @@
 import { Transaction } from '@mysten/sui/transactions';
 import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, withAdminLock } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
-import { characterAgent, sceneRecord, characterWorker as runnerWorker } from '@endless-story/runner';
+import { characterAgent, sceneRecord, characterWorker as runnerWorker, eventChapter as runnerEventChapter, signAndAnchor } from '@endless-story/runner';
 import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
@@ -122,6 +122,10 @@ const recentTopicsBySaga = new Map<string, string[]>();
 /** §2.51 actor-fatigue ledgers per saga: tired rows are suppressed at SELECTION
  *  so the spotlight rotates. */
 const actorFatigueBySaga = new Map<string, FatigueLedger>();
+
+/** Day accumulator for the episode weaver: clock markers + beat lines + actors
+ *  (process-level; a restart drops part of one day's material, acceptable). */
+const episodeDayBySaga = new Map<string, { lines: string[]; actorIds: Set<string>; sceneIds: string[] }>();
 
 /** Last narrated event per character (process-local). While an event stays open,
  *  a character with no new beat must not re-write the same scene every tick. */
@@ -1030,11 +1034,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         wants,
                         tick: nowTick,
                     });
+                    const acc = episodeDayBySaga.get(d.sagaId) ?? { lines: [], actorIds: new Set<string>(), sceneIds: [] };
+                    if (loop.beats.length > 0 && acc.lines[acc.lines.length - 1] !== `【${clock}】`) acc.lines.push(`【${clock}】`);
                     for (const b of loop.beats) {
                         pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
                         recordSceneLine(sceneId, b.characterId, b.text, 'act');
                         tlog(`③⁹ [${sceneName}] ${b.name}：${b.text}`);
+                        acc.lines.push(`[${sceneName}] ${b.name}：${b.text}`);
+                        acc.actorIds.add(b.characterId);
+                        if (!acc.sceneIds.includes(sceneId)) acc.sceneIds.push(sceneId);
                     }
+                    episodeDayBySaga.set(d.sagaId, acc);
                     beatCount += loop.beats.length;
                     wantActed.push(...loop.actedCharacterIds.filter((id) => !wantActed.includes(id)));
                     for (const rv of loop.resolved) {
@@ -1707,6 +1717,60 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             `⑥ gazette skipped (one per day; tick ${(worldTime?.tickOfDay ?? 0) + 1}/${worldTime?.ticksPerDay} today, compiled at day's end)`,
         );
     }
+    // 5.5 EPISODE — at day's end the storyteller compresses the day's beats into
+    //   ONE follow-along 回 with a 回目 title and an in-plot hook (presentation
+    //   layer: it may compress and spotlight, never decide). Anchored through the
+    //   es:cut channel as kind:'episode' (full-scan read → no read-window loss).
+    if (wantEngine && !dryRun && isDayEnd) {
+        try {
+            const acc = episodeDayBySaga.get(d.sagaId);
+            if (acc && acc.lines.length >= 3) {
+                const wantsNow = loadWants(d.sagaId);
+                const tensionLines = wantsNow
+                    .filter((w) => !w.retired)
+                    .sort((a, b) => b.weight * (1 - b.sat) - a.weight * (1 - a.sat))
+                    .slice(0, 6)
+                    .map((w) => `${nameById.get(w.characterId) ?? '某人'}：${w.desc}`);
+                const prose = await runnerEventChapter.composeEpisode({
+                    day: worldTime?.day ?? 0,
+                    materialLines: acc.lines,
+                    tensionLines,
+                    soul: narrativeProfile?.soul,
+                });
+                if (prose) {
+                    const withHeader = runnerEventChapter.embedCutHeader(prose, {
+                        v: 1,
+                        kind: 'episode',
+                        day: worldTime?.day,
+                        sceneId: acc.sceneIds[0],
+                        sceneName: acc.sceneIds[0] ? sceneNameById.get(acc.sceneIds[0]) : undefined,
+                        povCharacterIds: [...acc.actorIds],
+                    });
+                    try {
+                        const anchor = await withAdminLock(() =>
+                            signAndAnchor({
+                                sagaId: d.sagaId,
+                                subjectId: acc.sceneIds[0] ?? d.sagaId,
+                                content: new TextEncoder().encode(withHeader),
+                                contentType: 'text/markdown',
+                                signer: admin.signer,
+                            }),
+                        );
+                        tlog(`⑤⁵ episode anchored: ${prose.split('\n')[0]} (${prose.length} chars, ${anchor.commitmentId?.slice(0, 10)}…)`);
+                    } catch (err) {
+                        tlog(`⑤⁵ episode anchor failed (kept as dump): ${err instanceof Error ? err.message : err}`);
+                    }
+                    dumpChapter({ kind: 'cut', day: worldTime?.day, name: 'episode' }, prose);
+                    episodeDayBySaga.delete(d.sagaId);
+                }
+            } else {
+                tlog(`⑤⁵ episode skipped (day material ${acc?.lines.length ?? 0} lines)`);
+            }
+        } catch (err) {
+            console.warn('[tick-loop] episode failed:', err);
+        }
+    }
+
     if ((input.gazette ?? true) && !dryRun && isDayEnd) {
         tlog(`⑥ compile gazette…`);
         const g = await compileGazetteAction({ day: worldTime?.day });
