@@ -1,27 +1,10 @@
 /**
- * Drama engine — chain I/O + per-beat commit (the orchestration layer).
- *
- * Server-only. Glues the pure DEMAND core (`drama-core`) to the on-chain SUPPLY
- * ledger (`resource.move`, read via the SDK) and the verifiable-commit pattern
- * (`signAndAnchor`). One call per tick:
- *
- *   1. read the saga's live DramaResources + their allocations off chain
- *   2. build the engine world (carry prior satisfaction; seed from baseline)
- *   3. relax satisfaction one step → derive tension  (pure, `deriveBeat`)
- *   4. commit the self-verifying beat blob to Walrus + chain  (signAndAnchor)
- *   5. hand back per-character tension hints for decide/POV prompts
- *
- * **Graceful no-op** (mirrors memory.ts): if the package predates resource.move
- * or the saga has no contested resources yet, `readResourceLedger` returns [] and
- * the whole thing skips — the narrative loop is unaffected. The drama layer only
- * lights up once resources are instantiated on a redeployed package.
- *
- * **Continuity**: prior satisfaction is carried in a process-level cache (the
- * demo runs the world-loop against one server process). On cold start, desires
- * re-seed from baseline and re-converge within a few beats. The committed blob
- * is self-contained (input world + tuning + output) so an external verifier can
- * reproduce each beat regardless of the cache — the cache is a convenience, not
- * a trust anchor.
+ * Drama engine orchestration (server-only): glues the pure demand core
+ * (`drama-core`) to the on-chain supply ledger (`resource.move`) and the
+ * verifiable commit (`signAndAnchor`). Graceful no-op when the package has no
+ * resource module or the saga has no resources. Prior satisfaction is carried
+ * in a process-level cache; the committed blob is self-contained, so the cache
+ * is a convenience, not a trust anchor.
  */
 import { Transaction } from '@mysten/sui/transactions';
 import type { Keypair } from '@mysten/sui/cryptography';
@@ -36,6 +19,7 @@ import { signAndAnchor } from '@endless-story/runner';
 import { resolveNetwork } from './network.js';
 import { withAdminLock } from './admin-signer.js';
 import {
+    applyDreamStirs,
     buildBeat,
     buildWorld,
     defaultDesiresForCast,
@@ -52,19 +36,30 @@ import {
 import { isResolvedDirectorResource } from './resource-proposal.js';
 import { readResourceIntents } from './resource-intents.js';
 
-/* ── process-level satisfaction carry-over (see header) ───────────────── */
 const lastSatBySaga = new Map<string, Map<string, bigint>>();
 const lastBeatCommitmentBySaga = new Map<string, string>();
 
-/** True once a package that includes resource.move is deployed. We can't know
- *  statically, so callers rely on `readResourceLedger` returning [] instead. */
+// §2.51 dream stir: a dream written only into memory is inert; the effective dose
+// adds one tighten on the dreamer's hottest desire, consumed ONCE by the next
+// beat (a jolt, not a standing buff). Off-chain demand only — the beat commits
+// the stirred input world, so replay still reproduces the output.
+const pendingDreamStirs = new Map<string, Map<string, number>>();
+
+/** Queue a one-shot appraisal stir for a character (0..1 fraction of SCALE). */
+export function queueDreamStir(sagaId: string, characterId: string, fraction = 0.18): void {
+    if (!sagaId || !characterId || !(fraction > 0)) return;
+    const bySaga = pendingDreamStirs.get(sagaId) ?? new Map<string, number>();
+    bySaga.set(characterId, Math.max(bySaga.get(characterId) ?? 0, Math.min(1, fraction)));
+    pendingDreamStirs.set(sagaId, bySaga);
+}
+
+/** Can't know statically whether the package includes resource.move; callers
+ *  rely on `readResourceLedger` returning [] instead. */
 export function dramaConfigured(): boolean {
     return ENDLESS_STORY_DEPLOYMENT.packageId.length > 0;
 }
 
-/* ── read the on-chain supply ledger ──────────────────────────────────── */
-
-/** Decoded `DramaResource` struct JSON (the shape `getManyResources` returns under `.json`). */
+/** Decoded `DramaResource` struct JSON (as returned under `.json`). */
 interface DramaResourceJson {
     id: string;
     saga_id: string;
@@ -76,11 +71,8 @@ interface DramaResourceJson {
     created_at_ms: string;
 }
 
-/**
- * Read every live DramaResource for a saga + its per-holder allocations.
- * Returns [] (graceful) when the package has no resource module, the saga has
- * no resources, or any query fails — the caller treats [] as "drama dormant".
- */
+/** Read every live DramaResource + per-holder allocations. Returns [] on any
+ *  failure — the caller treats [] as "drama dormant". */
 export async function readResourceLedger(
     client: SuiClient,
     packageId: string,
@@ -100,7 +92,7 @@ export async function readResourceLedger(
         rmark(`list done (${instantiated.length} inst, ${retired.length} retired, ${live.length} live)`);
     } catch {
         rmark('list threw → [] (drama dormant)');
-        return []; // package predates resource.move, or RPC hiccup → drama dormant
+        return []; // package predates resource.move, or RPC hiccup
     }
     if (live.length === 0) return [];
 
@@ -115,7 +107,6 @@ export async function readResourceLedger(
 
     const snapshots: ResourceSnapshot[] = [];
     for (const obj of objects) {
-        // Decoded struct fields live under `.json` (see character-read.ts);
         // `allocations` is a Table handle { id, size }.
         const json = (obj as { json?: DramaResourceJson } | null | undefined)?.json;
         if (!json) continue;
@@ -133,11 +124,8 @@ export async function readResourceLedger(
     return snapshots;
 }
 
-/**
- * Enumerate a `Table<ID, u64>`'s entries: holder Character id → units held.
- * The Table stores each entry as a dynamic field; we page the field ids then
- * multi-get the wrappers to read `name` (holder) + `value` (units).
- */
+/** Enumerate a `Table<ID, u64>`: holder Character id → units held (page the
+ *  dynamic-field ids, then multi-get the wrappers). */
 async function readAllocations(client: SuiClient, tableId: string): Promise<Record<string, bigint>> {
     const out: Record<string, bigint> = {};
     const fieldIds: string[] = [];
@@ -162,7 +150,7 @@ async function readAllocations(client: SuiClient, tableId: string): Promise<Reco
             }
         }
     } catch {
-        return out; // partial read → return what we have (caller degrades gracefully)
+        return out; // partial read → return what we have
     }
     return out;
 }
@@ -176,8 +164,6 @@ function normalizeId(name: unknown): string | null {
     }
     return null;
 }
-
-/* ── derive + commit one beat ─────────────────────────────────────────── */
 
 export interface DramaCharacter {
     id: string;
@@ -194,31 +180,23 @@ export interface DramaBeatResult {
     hints: Record<string, string>;
     /** flat tension rows (all agents), highest-first within each agent. */
     tensions: DramaTensionRow[];
-    /** number of contested resources read this beat. */
     resourceCount: number;
-    /** commitment id of the anchored beat (when committed). */
     commitmentId?: string;
-    /** blob url of the anchored beat. */
     blobUrl?: string;
 }
 
 export interface DeriveDramaOptions {
     sagaId: string;
-    /** the saga's cast — agents that hold desires. */
     cast: DramaCharacter[];
     /** authored desires per character; falls back to default contention desires. */
     desiresByCharacter?: Record<string, AgentSpec['desires']>;
     /** signer for the commit (StorytellerCap holder). Omit → derive only, no commit. */
     signer?: Keypair;
-    /** pre-built client (reuse the tick loop's). */
     client?: SuiClient;
 }
 
-/**
- * The DR-5 entrypoint. Reads supply, relaxes demand, commits the beat, returns
- * tension hints. Pure-fails closed: any error → `active:false` with a reason,
- * never throws into the tick loop.
- */
+/** DR-5 entrypoint: read supply, relax demand, commit the beat, return tension
+ *  hints. Fails closed — any error yields `active:false`, never throws into the tick loop. */
 export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promise<DramaBeatResult> {
     const empty: DramaBeatResult = { active: false, hints: {}, tensions: [], resourceCount: 0 };
     if (!dramaConfigured()) return { ...empty, skipped: 'package-not-deployed' };
@@ -227,21 +205,16 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     const client = opts.client ?? makeSuiClient({ network: resolveNetwork() });
 
     const ledger = await readResourceLedger(client, packageId, opts.sagaId);
-    // Auto-retire RESOLVED director stakes: a director-created resource whose scarce
-    // capacity is fully claimed is a settled contest — drop it so it stops generating
-    // desires (and below, stops counting toward the director cap). This is what lets
-    // the mechanism run long-term: settled stakes make room for fresh ones. Built-in
-    // (seed) resources never retire.
+    // Auto-retire resolved director stakes (fully-claimed capacity = settled
+    // contest) so settled stakes make room for fresh ones. Seed resources never retire.
     const resources = ledger.filter((r) => !isResolvedDirectorResource(r));
     if (resources.length === 0) return { ...empty, skipped: 'no-resources' };
 
-    // Per-stake WANT overrides (who a director-authored resource is FOR) — off-chain
-    // DEMAND, read once and threaded into the pure desire function.
+    // Per-stake want overrides (who a director-authored resource is for).
     const resourceIntents = readResourceIntents();
 
-    // 1. assemble agent specs (authored desires, else default contention desires).
-    // Defaults can depend on the agent name: a star named in a label like
-    // `partnership:Wen` should not receive "I want to partner with Wen".
+    // Assemble agent specs. Defaults depend on the agent name: a star named in a
+    // label like `partnership:Wen` must not receive "I want to partner with Wen".
     const agents: AgentSpec[] = opts.cast.map((c) => ({
         id: c.id,
         name: c.name,
@@ -255,18 +228,27 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
             }),
     }));
 
-    // 2. build world from chain + prior satisfaction
     const prior = lastSatBySaga.get(opts.sagaId) ?? new Map<string, bigint>();
     const tickGuess = BigInt(prior.size); // monotone-ish; exact value isn't load-bearing off chain
     const world = buildWorld(resources, agents, prior, tickGuess);
 
-    // 3. relax + derive tension (pure)
+    // §2.51: consume queued dream stirs, applied to the INPUT world so the
+    // committed beat stays replayable.
+    const stirs = pendingDreamStirs.get(opts.sagaId);
+    if (stirs?.size) {
+        for (const s of applyDreamStirs(world, stirs)) {
+            console.log(
+                `[drama] dream stir: ${s.agentId.slice(0, 8)}… 「${s.statement}」 satisfaction −${s.fraction} (夢攪動了她)`,
+            );
+        }
+        pendingDreamStirs.delete(opts.sagaId);
+    }
+
     const derived = deriveBeat(world);
 
-    // 4. carry satisfaction forward for the next beat
     lastSatBySaga.set(opts.sagaId, extractSatisfaction(derived.next));
 
-    // 5. commit the self-verifying beat (best-effort; tension hints stand regardless)
+    // Commit the self-verifying beat (best-effort; tension hints stand regardless).
     let commitmentId: string | undefined;
     let blobUrl: string | undefined;
     if (opts.signer) {
@@ -281,12 +263,8 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
             const res = await withAdminLock(() =>
                 signAndAnchor({
                     sagaId: opts.sagaId,
-                    // World-level affect snapshot. Subject = worldId (NOT sagaId) so these
-                    // machine-readable JSON beats never collide with the saga's prose gazette
-                    // commitments (subject = sagaId) and never surface in the gazette feed.
-                    // The saga is still recorded via the commitment's saga_id field + the beat
-                    // JSON. Fall back to sagaId only if worldId is unset (gazette-read also
-                    // content-filters drama beats as a safety net for older saga-subject ones).
+                    // Subject = worldId (NOT sagaId) so these JSON beats never collide
+                    // with the saga's prose gazette commitments or surface in its feed.
                     subjectId: ENDLESS_STORY_DEPLOYMENT.worldId || opts.sagaId,
                     content: encodeBeat(beat),
                     signer,
@@ -297,12 +275,11 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
             blobUrl = res.blobUrl;
             lastBeatCommitmentBySaga.set(opts.sagaId, res.commitmentId);
         } catch (err) {
-            // commit failure must not break the tick — log + carry on with hints.
+            // Commit failure must not break the tick — log + carry on with hints.
             console.warn('[drama] beat commit failed:', err instanceof Error ? err.message : err);
         }
     }
 
-    // 6. hints for prompts
     const hints: Record<string, string> = {};
     for (const c of opts.cast) {
         const h = dramaHintForAgent(derived.next, c.id);
@@ -319,29 +296,15 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     };
 }
 
-/* ── supply-side settlement: resolve → apply transfers on chain ───────── */
-
 /**
- * Settle a resolved event's resource transfers ON CHAIN — the "dispose" half.
- *
- * After `event::resolve_event` validated the resolution's `resource_transfers`
- * (every holder must be a participant), the director calls this once to apply
- * them: one `apply_resource_transfers` move-call per touched DramaResource, all
- * in ONE PTB. The Move side re-checks conservation and applies each batch
- * atomically — it never trusts the off-chain proposal, it re-validates it.
- *
- * This is the ready settlement primitive for DR-6. It fires only when a
- * resolution actually carried transfers (a director/LLM PROPOSED them by
- * resolving with `outcomes_with_resource_transfers` instead of `empty_outcomes`)
- * AND the package is redeployed with resource.move. The PROPOSAL policy (which
- * card play maps to which seize) is the LLM-director step layered on top; this
- * function is the deterministic disposal it drives.
+ * Apply a resolved event's resource transfers on chain — one
+ * `apply_resource_transfers` call per touched DramaResource, all in one PTB.
+ * The Move side re-validates the off-chain proposal; it never trusts it.
  */
 export async function settleResolvedTransfers(opts: {
     sagaId: string;
     capId: string;
     eventId: string;
-    /** DramaResource object ids touched by this resolution (one call each). */
     resourceIds: string[];
     signer: Keypair;
     client?: SuiClient;
@@ -372,7 +335,7 @@ export async function settleResolvedTransfers(opts: {
     }
 }
 
-/** Convenience for callers that have only the saga id: fetch the cast, derive. */
+/** Convenience: fetch the cast from the saga id, then derive. */
 export async function deriveDramaForSaga(
     sagaId: string,
     signer?: Keypair,
@@ -391,12 +354,8 @@ export async function deriveDramaForSaga(
     return deriveAndCommitDramaBeat({ sagaId, cast, signer, client: c });
 }
 
-/**
- * A short, public, LLM-free "where the tension is right now" headline for the gazette teaser —
- * the top contested resources right now (deterministic, read-only: no signer →
- * derive without committing). Returns null when drama is dormant / on any error
- * so the teaser falls back to the plain gazette excerpt.
- */
+/** LLM-free tension headline for the gazette teaser. Null when drama is dormant
+ *  or on any error, so the teaser falls back to the plain gazette excerpt. */
 export async function fetchTensionHeadline(sagaId: string, max = 2): Promise<string | null> {
     try {
         const r = await deriveDramaForSaga(sagaId); // no signer = read-only derive

@@ -1,10 +1,6 @@
-/* ── MOVE phase (autonomous movement, batched into one PTB) ────────────
- * Idle characters (not bound to an open event) decide — from their plan +
- * who's where — whether to walk to another scene. All moves go in ONE PTB
- * (move_character takes cap/saga/scenes/character by ref). Per-item fallback
- * if the batch aborts (a stale current_scene_id reverts the whole PTB).
- * The live handscroll reflects the new positions on its next poll.
- * Plain module (not 'use server'). */
+/* MOVE phase — idle characters decide whether to walk to another scene.
+ * All moves go in one PTB, with a per-item fallback if the batch aborts
+ * (a stale current_scene_id reverts the whole PTB). Plain module (not 'use server'). */
 import type { Character, Scene } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { characterAgent } from '@endless-story/runner';
@@ -15,8 +11,8 @@ import type { TickMoveResult } from '../tick-loop-types';
 import { RECALL_CONCURRENCY, mapPool, type TickMemoryContext } from './support';
 import { trySend, fetchBusyCharacterIds } from './chain';
 
-/** Project this tick's successful moves onto the in-memory scene snapshot so
- *  later phases (SOCIAL / POV) see post-move positions, not stale ones. */
+/** Project this tick's moves onto the in-memory scene snapshot so later phases
+ *  see post-move positions. */
 export function applyMoveResultsToScenes(scenes: Scene[], moves: TickMoveResult[]): Scene[] {
     const applied = moves.filter((m) => m.ok && m.fromSceneId && m.toSceneId);
     if (applied.length === 0) return scenes;
@@ -69,27 +65,20 @@ export async function runMovePhase(input: {
     roleById: Map<string, string>;
     memoryContext: TickMemoryContext;
     dryRun: boolean;
-    /** characterId → attractor sceneId (rival gravity). When set for a character,
-     *  it overrides the LLM move: pull them to the contest (or hold them there).
-     *  See gravity-core / rival-gravity; flag-gated upstream. */
+    /** characterId → attractor sceneId (rival gravity); overrides the LLM move. */
     gravityTargets?: Map<string, string>;
-    /**
-     * Pin open-event participants in place (default true). A single-tick event
-     * is a scene being performed NOW, so its cast shouldn't teleport mid-beat.
-     * But a SPINE event simmers across many ticks — an ongoing contest, not a
-     * physical lock — so pinning its cast freezes their lives for the event's
-     * whole duration. Acting on an event is event-scoped (act.ts keys off the
-     * event's participants, never their current scene), so a participant can
-     * still make their move on the contest from wherever they wander. The
-     * tick-loop passes `false` in spine mode: let them move/live; the contest
-     * follows them. */
+    /** characterId → residence/pursuit sceneId from the spatial router (§2.50).
+     *  Night-only and authoritative; by day the map is empty and the LLM keeps agency. */
+    routeTargets?: Map<string, string>;
+    /** Pin open-event participants in place (default true). Spine mode passes
+     *  false: a multi-tick contest must not freeze its cast, and acting is
+     *  event-scoped so participants can act from anywhere. */
     pinBusy?: boolean;
 }): Promise<TickMoveResult[]> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg) return [];
-    if (input.scenes.length < 2) return []; // nowhere to go
+    if (input.scenes.length < 2) return [];
 
-    // character → current scene (from each scene's current_character_ids).
     const sceneByChar = new Map<string, Scene>();
     for (const s of input.scenes) {
         for (const cid of s.currentCharacterIds ?? []) sceneByChar.set(cid, s);
@@ -109,10 +98,8 @@ export async function runMovePhase(input: {
             })
             .filter((p): p is { id: string; name: string; role: string } => p != null);
 
-    // Characters on stage in an open event stay put — but only for single-tick
-    // events (default). In spine mode the caller passes pinBusy:false so a
-    // multi-tick contest doesn't freeze its cast; they live their lives and act
-    // on the contest remotely. Skipping the fetch also avoids ~20 chain reads.
+    // Open-event participants stay put unless pinBusy=false (spine mode);
+    // skipping the fetch also avoids ~20 chain reads.
     const busy =
         input.pinBusy === false ? new Set<string>() : await fetchBusyCharacterIds(input.sagaId);
 
@@ -134,18 +121,24 @@ export async function runMovePhase(input: {
     const candidates = input.slice.filter((c) => sceneByChar.has(c.id) && !busy.has(c.id));
     if (candidates.length === 0) return out;
 
-    // DECIDE moves (bounded concurrency — recalls plan → SEAL).
+    // Decide moves with bounded concurrency (each recall SEAL-decrypts).
     const decided = await mapPool(candidates, RECALL_CONCURRENCY, async (c) => {
         try {
             const cur = sceneByChar.get(c.id)!;
-            // RIVAL GRAVITY: pull a SCATTERED contender toward the contest so events
-            // form — but only when they're NOT already there. We deliberately do NOT
-            // hold someone who's already at the contest scene: that hard hold bypassed
-            // the LLM every tick, and since the densest scene is "the contest" for
-            // everyone already in it, the whole cast froze in one room and never lived
-            // a slice-of-life beat ("從來沒有移動過"). Gravity converges the scattered;
-            // it must not pin the gathered. Actual open-event participants are still
-            // held by the rule above; everyone else gets to DECIDE (stay or leave).
+            // Spatial router (§2.50): at night it owns placement; silent by day.
+            if (input.routeTargets?.has(c.id)) {
+                const route = input.routeTargets.get(c.id)!;
+                return {
+                    c,
+                    fromId: cur.id,
+                    dcs: (route === cur.id
+                        ? { move: false, reason: '夜深，安於其所' }
+                        : { move: true, targetSceneId: route, reason: '夜深了，各自歸處' }) as characterAgent.MoveDecideResult,
+                };
+            }
+            // Rival gravity pulls a scattered contender toward the contest, but must
+            // NOT hold someone already there — that hard hold froze the whole cast in
+            // one room. Gravity converges the scattered; it never pins the gathered.
             const pull = input.gravityTargets?.get(c.id);
             if (pull && pull !== cur.id) {
                 return {
@@ -238,7 +231,6 @@ export async function runMovePhase(input: {
                 toSceneName: sceneNameById.get(m.dcs.targetSceneId as string),
                 reason: m.dcs.reason,
             });
-            // Handscroll Step 3: the character arrives at the target voicing why.
             recordSceneLine(m.dcs.targetSceneId, m.c.id, m.dcs.reason, 'move');
         }
     } else {

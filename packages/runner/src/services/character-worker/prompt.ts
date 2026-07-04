@@ -1,21 +1,29 @@
 /**
- * Character POV chapter — prompt builder.
- *
- * POV here means "a short literary scene told through this character's
- * limited perception", not a mirror-facing reflection. Reflection prompts live
- * in `reflection-trigger`; chapter prose should have scene, pressure, gesture,
- * and subtext.
- *
- * `triggerNarrative` is the runner-supplied "what just happened" line
- * (e.g. "saga director opened storylet confession_after_show in the backstage
- * dressing room, involving you and Lin"). The character LLM treats this as ground truth and turns it
- * into one concrete moment, without recapping it like a report.
+ * Character POV chapter prompt builder. POV = a short literary scene told
+ * through the character's limited perception; `triggerNarrative` is the
+ * runner-supplied "what just happened" line the LLM treats as ground truth.
  */
 
 import { craftGuardrail, roleHint } from '@endless-story/shared';
-import { type SagaSoul, buildSagaSoulBlock } from './saga-soul.js';
+import { type SagaSoul, type EmotionalStance, buildSagaSoulBlock } from './saga-soul.js';
+import { type CharacterState, buildStateBlock } from './state.js';
 
-export type { SagaSoul } from './saga-soul.js';
+export type { SagaSoul, EmotionalStance } from './saga-soul.js';
+export type { CharacterState, SleepDecisionInput } from './state.js';
+export {
+    buildStateBlock,
+    shouldSleep,
+    evolveState,
+    driftState,
+    clampState,
+    NEUTRAL_STATE,
+    WORK_FATIGUE,
+    SLEEP_RECOVERY,
+    NIGHT_SLEEP_FATIGUE,
+    DAY_SLEEP_FATIGUE,
+    MIN_SCATTERED_TO_SLEEP,
+    MEMORY_PRESSURE_CAP,
+} from './state.js';
 
 export interface CharacterSnapshot {
     id: string;
@@ -40,42 +48,35 @@ export interface PovPromptInput {
     character: CharacterSnapshot;
     /** Storyteller-supplied "what just happened" line. */
     triggerNarrative: string;
-    /** Optional: 1-3 short memory snippets (last reflections / past POV
-     *  chapter excerpts) for continuity. Pass empty for first chapter. */
+    /** 1-3 short memory snippets for continuity; empty for first chapter. */
     recentMemorySnippets: string[];
-    /** Optional: owner-injected dream text (R5). One per chapter max.
-     *  When set, prompt explicitly asks LLM to weave it in. */
+    /** Owner-injected dream text (R5), max one per chapter. */
     dreamFragment?: string;
-    /** Optional: subjective relationship memories + public director ties.
-     *  Colours how she narrates others in the scene. */
+    /** Subjective relationship memories + public director ties. */
     relationshipHints?: string[];
-    /** Optional: public saga roster lines. Not private feeling. */
+    /** Public saga roster lines; not private feeling. */
     rosterContext?: string[];
-    /** Optional: current plan (N6) — her goal + intent. Gives the monologue
-     *  forward tension (what she's reaching for), not just present sensation. */
+    /** Current plan (N6): goal + intent, gives the monologue forward tension. */
     planHint?: string;
-    /** Optional: drama-engine tension (DR-6) — her dominant unmet desire over a
-     *  scarce on-chain resource. Lets the monologue ache for what she lacks. */
+    /** Drama-engine tension (DR-6): dominant unmet desire. */
     dramaHint?: string;
-    /** Optional: OBJECTIVE same-scene beats this tick — the observable acts of
-     *  OTHER characters in this character's scene (talk lines, arrivals/exits,
-     *  card plays). Every same-scene POV gets the SAME list, so their angles
-     *  complement (interpret the same facts) rather than contradict (invent
-     *  who-did-what). Private observations are deliberately excluded. */
+    /** Objective same-scene beats this tick. Every same-scene POV gets the SAME
+     *  list so angles complement rather than contradict; private observations
+     *  are deliberately excluded. */
     sceneBeats?: string[];
-    /** Optional: this character's contested event RESOLVED this tick (a verdict
-     *  landed). Switches the chapter from "one concrete moment" to "show the
-     *  whole arc settle" — 起因→轉折→落定 (前因後果收束) — and earns more length. */
+    /** Contested event resolved this tick: chapter shows the whole arc settle
+     *  and earns more length. */
     closing?: boolean;
+    /** Daily-life undertone (hunger/fatigue/mood): tints attention and gesture
+     *  without changing who they are. Omit = no injection. */
+    state?: CharacterState;
 }
 
-/** Chapter mode — swaps only the framing; the no-fabrication / identity / pronoun
- *  iron rules + voice apply to all. `pov` = event-anchored serial chapter;
- *  `genesis` = the character's first "入世序章" (front door, no 承上, leans on life
- *  memories for thickness); `encounter` = quiet two-person 關係戲/溫情 (no competition). */
+/** Swaps only the framing; iron rules + voice apply to all. `pov` = serial
+ *  chapter; `genesis` = the character's opening chapter (no recap, leans on
+ *  life memories); `encounter` = quiet two-person relationship scene. */
 export type ChapterMode = 'pov' | 'genesis' | 'encounter';
 
-// Shared across all modes: the guardrails that keep prose grounded + in-character.
 const IRON_RULES = [
     '**敘事鐵則**：',
     '1. **第一人稱限定視角**。可以寫「我」，但不要每段都用「我心裡／我感到／我忽然」開頭。讀者只能知道此人看見、聽見、猜到、誤會到的事。',
@@ -90,14 +91,48 @@ const IRON_RULES = [
     '10. **身體缺陷與秘密物件要有來源**。不得憑空寫跛腿、棺材、屍首、血跡、重病、私藏玉鐲、巨額債務等強設定；除非材料、記憶、外形欄明確提供。',
     '11. **同場客觀事實不可改寫**。若「本場此刻」列出了同場其他人剛剛的動作或話語，那是已發生的事實：你可以寫你如何看見、誤讀、回應，但不可寫成「沒發生」、「相反地發生」、或「換成別人做」。',
 ];
+const GENRE_BASE_DEFAULT =
+    '風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。';
 const VOICE = [
     '**聲音與質地**：',
-    '- 風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。',
+    `- ${GENRE_BASE_DEFAULT}`,
     '- 角色扁平時，寧可低調寫觀察、身段、職業習慣與眼前利害，不要硬灌劇烈人格創傷。',
     '- 讓每個角色的行當、年紀、身體狀況、機敏程度改變句子的速度與注意力：花旦看妝面與目光，小生看身位與輸贏，樂師先聽聲，班主先看秩序。',
     '- 禁用廉價黑化意象：不要用「像屍首／棺材／血跡／殺氣騰騰／命都押上」來製造重量。若要沉重，用一個準確的小動作代替。',
+    '- **內心戲織在場面裡**：自省、掙扎、沒說出口的真心，化成一個動作、一次遲疑、一句吞回去的話、或眼前一件物事的比喻，跟著你看見的人與物走，讓讀者透過你的感官去感受。**不要在正文之後另起一段（更不要用「---」分隔）去反思、自剖或總結交代**——內心就在正文裡流動，與場面同進退。',
     '- 結尾要留一個未解的小鉤子或轉身，不要總結人生道理，不要「於是我明白了」。',
 ];
+
+/** VOICE rules with the world-tier genre line swapped in when the saga's soul carries one. */
+function voiceLines(soul?: SagaSoul): string[] {
+    if (!soul?.genreBase?.trim()) return VOICE;
+    return VOICE.map((l) => (l === `- ${GENRE_BASE_DEFAULT}` ? `- ${soul.genreBase!.trim()}` : l));
+}
+
+/**
+ * Stance block, appended AFTER the genre baseline so it can override the
+ * distance-making craft rules. `restrained`/undefined => '' (byte-identical
+ * regression); the A/B harness showed colour alone can't relax the posture.
+ */
+function buildStanceBlock(stance?: EmotionalStance): string {
+    if (stance === 'consummate') {
+        return [
+            '',
+            '**情感姿態 · 圓房（本回，優先於上面所有「閃避流露 / 不直接表白 / 留未決鉤子」的克制規定）**：',
+            '- **解到底有門檻**：唯有材料顯示這兩人已兩情互許（不是單戀、不是曖昧），且此刻只你二人、在無人窺見的私處時，方可解到底；若仍在人前、或關係尚未挑明，退守「親暱」分寸（靠近、把話說透、一個主動觸碰），不可逾越。',
+            '- **解到底時**：容許寬衣解帶、肌膚相親、雲雨纏綿，並可細狀其實——身體的反應、氣息的亂、節奏的緩急、手與唇的門道、情動到極處的失守，皆可落筆，不必每到關頭就化開、就略過。以古典艷情話本的筆法（金瓶梅那般敢於露骨、卻仍是文言的綺麗），放筆寫到盡興：艷而有情、露而不穢，情慾是兩心相許的延伸。只三忌——忌現代醫學／生理詞、忌髒字粗口、忌器官說明書式的冷描。',
+            '- 仍守「要有具體可拍的場面、不狗血、不喊大詞」；圓房是身心一同鬆開，不是堆砌。',
+        ].join('\n');
+    }
+    if (stance !== 'tender') return '';
+    return [
+        '',
+        '**情感姿態 · 親暱（本回，以下幾點優先於上面「強烈情緒只能靠停頓閃避錯看流露」「不要讓人物直接表白」「結尾留一個未解的鉤子」那幾條克制規定）**：',
+        '- 容許靠近、容許把話說透一點：不必每次都閃避、繞開、把伸出去的手收回；該靠上去就靠上去，該接住的眼神就接住，沒說出口的也可以漏出半句。',
+        '- 結尾落在一個確定的暖瞬間、或關係的一次微小靠近（一個主動的觸碰、一句放軟的話、一次被接住的依賴），不要再懸在「半寸距離、誰也沒動」的發涼未決裡。',
+        '- 仍守「不狗血、不喊大詞、要有具體可拍的場面」；親暱是讓姿態鬆開，不是讓情緒氾濫。',
+    ].join('\n');
+}
 
 export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): string {
     let base: string[];
@@ -113,7 +148,7 @@ export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): s
             '- **動用你的長期記憶把人寫厚**：材料會給你這個人此生的記憶（童年、家世、癖好、舊情、不只工作）。化用其中一兩條當血肉，讓讀者覺得這是一個活過的人，不是一份職務說明。',
             '- 結尾把那個將至的風聲（材料給的【將至的引線】，若有）輕輕帶到心上——此刻還沒爭、沒輸贏，只是平衡將破的前一刻。',
             '',
-            ...VOICE,
+            ...voiceLines(soul),
             '',
             '**篇幅與格式**：600–1000 中文字，4–6 段。純散文，直接進正文，不要標題、不要「以下是」。',
         ];
@@ -130,7 +165,7 @@ export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): s
             '- 這一回結束時，兩人之間「那層沒說破的東西」要有一個極輕微的移動：近一寸、或更怕一分、或第一次都意識到卻又一起繞開。',
             '- 私帳（材料給的）揭一角；對白只引材料給的，不可把那層關係直接說破。',
             '',
-            ...VOICE,
+            ...voiceLines(soul),
             '',
             '**篇幅與格式**：700–1100 中文字，純散文，直接進正文，不要標題。',
         ];
@@ -148,16 +183,17 @@ export function buildSystemPrompt(soul?: SagaSoul, mode: ChapterMode = 'pov'): s
             '- **看得懂（每回必做）**：你可以只寫你眼中的片段、可以跳接，但要讓讀者在你的感官順序裡跟上「先發生什麼、後發生什麼、結果怎樣」。讀完這一回，讀者要能說出這回到底發生了什麼事、誰對誰做了什麼。不要把場面寫成一團只有情緒、認不出事件的霧。',
             '- **若本回是收束（材料標明「本回收束」）**：不要只給一個畫面，要把這樁爭執或關係**怎麼走到這一步、又怎麼落定**交代完整——起因、轉折、你做了什麼或承受了什麼、塵埃落定後你站在哪裡。這一回要讓人看完一個完整的事件弧。',
             '',
-            ...VOICE,
+            ...voiceLines(soul),
             '',
             '**篇幅與格式**：',
             '- 700–1100 個中文字，4–7 個自然段；**若本回收束，可放長到 1200–1500 字**，把前因後果交代足。短句與長句交錯，讓它像小說頁面，不像 prompt 產物。',
             '- 純散文。不要 markdown 標題、不要分段標號、不要前言「以下是」。直接進入正文。',
         ];
     }
-    // Layer this saga's tonal DNA on top of the genre baseline.
+    // Order matters: stance must follow `base` to override the craft rules.
+    const stanceBlock = buildStanceBlock(soul?.emotionalStance);
     const soulBlock = buildSagaSoulBlock(soul);
-    return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
+    return [base.join('\n'), stanceBlock, soulBlock].filter(Boolean).join('\n');
 }
 
 export function buildUserPrompt(input: PovPromptInput): string {
@@ -191,6 +227,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
     const dramaBlock = input.dramaHint
         ? `\n## 稀缺張力（讓它變成行動或視線，不要變成喊口號）\n${input.dramaHint}`
         : '';
+    const stateBlock = buildStateBlock(input.state);
     const dreamBlock = dreamFragment
         ? `\n## 夢境片段（必須取其中一個意象，變成場面裡的感官錨點）\n${dreamFragment}`
         : '';
@@ -222,6 +259,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         relBlock,
         planBlock,
         dramaBlock,
+        stateBlock,
         dreamBlock,
         sceneBeatsBlock,
         closingBlock,
@@ -235,21 +273,15 @@ export function buildUserPrompt(input: PovPromptInput): string {
         .join('\n');
 }
 
-/** Divider between the public scene and the private「燈下」interior coda. A
- *  markdown thematic break: renders as an <hr> in the dossier, plain `---` as
- *  text — a visible tonal shift either way, and a stable split point so the coda
- *  can be walled off from public-scene recall (see filterPovMemorySnippets). */
+/** Divider between the public scene and the private interior coda — a stable
+ *  split point so the coda can be walled off from public-scene recall
+ *  (see filterPovMemorySnippets). */
 export const CODA_DIVIDER = '\n\n---\n\n';
 
 /**
- * The private interior coda appended after a pov chapter — the「燈下」layer:
- * the character's honest read on what just happened, on the people in it, and
- * on themselves. It deliberately borrows the reflection-trigger voice (off-stage,
- * mask removed, may CONTRADICT the public chapter) so it stays a DIFFERENT
- * register from the scene prose — adding interior depth without loosening the
- * scene's anti-cliché IRON_RULES. Kept short (60–180 字) so it reads as a turn,
- * not a sermon. pov mode only; encounter (溫情) keeps its own subtext, genesis
- * leans on life memory.
+ * Private interior coda appended after a pov chapter: an off-stage register
+ * that may contradict the public chapter, kept short so it reads as a turn.
+ * pov mode only.
  */
 export function buildReflectionCodaSystemPrompt(soul?: SagaSoul): string {
     const base = [
@@ -302,13 +334,9 @@ export function buildReflectionCodaUserPrompt(input: {
 }
 
 /**
- * Per-CHARACTER voice DNA. `roleHint` only differentiates by 行當 (every 花旦
- * reads alike); this composes an individual「聲口胎記」from a stable hash of the
- * character's id+name across three axes — speech tempo, how much they let show,
- * and language texture. Deterministic, so a character sounds the same chapter to
- * chapter, but two characters of the same role diverge. Layered on top of
- * roleHint + attributes — this is what breaks the "every character writes the
- * same" homogeneity.
+ * Per-character voice DNA: a deterministic hash of id+name picks tempo /
+ * reveal / texture axes, so same-role characters diverge while each stays
+ * consistent chapter to chapter.
  */
 function buildVoiceSignature(character: CharacterSnapshot): string {
     const seed = hashString(`voice:${character.id}:${character.name}`);
@@ -335,9 +363,8 @@ function buildVoiceSignature(character: CharacterSnapshot): string {
 
 function buildCraftDirective(character: CharacterSnapshot): string {
     const seed = hashString(`${character.id}:${character.name}:${character.role}`);
-    // Mixed anchors — NOT all scene-setting. Half pivot inward (memory, a
-    // half-said line, a snap judgement) or drop the reader mid-action, so
-    // chapters stop all opening on "a precisely-observed small thing".
+    // Mixed anchors, not all scene-setting: half pivot inward or mid-action so
+    // chapters don't all open the same way.
     const openingLensPool = [
         '以一件可觸摸的小物起手：袖口、茶盞、簪釵、票紙、戲箱、槍桿、琴弦——讓手先說話。',
         '以一個聲音起手：隔壁一句唱腔、木板響、鑼鼓餘音、有人壓低的咳嗽；先聽見，再看見。',
@@ -369,12 +396,9 @@ function buildCraftDirective(character: CharacterSnapshot): string {
 function filterPovMemorySnippets(snippets: string[], character: CharacterSnapshot): string[] {
     return (
         snippets
-            // Strip any private「燈下」coda before a recalled chapter re-enters a
-            // PUBLIC scene prompt: the interior voice is meant to stay off-stage,
-            // so a later public POV must not pick it up as continuity material
-            // (would leak 私語 into the public register, breaking 事件客觀/敘事主觀).
-            // The coda still lives in memory for reflection recall — just walled
-            // off here.
+            // Strip the private coda before a recalled chapter re-enters a
+            // public scene prompt: the interior voice must not leak into the
+            // public register. The coda stays in memory for reflection recall.
             .map((snippet) => snippet.split(CODA_DIVIDER)[0])
             .filter((snippet) => findUngroundedHeavyMotifs(snippet, character).length === 0)
     );

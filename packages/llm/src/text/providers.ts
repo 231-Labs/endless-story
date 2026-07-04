@@ -112,8 +112,13 @@ export async function callPoe(apiKey: string, req: ChatRequest): Promise<ChatRes
   };
   if (needsThinking) {
     body.thinking = { type: 'enabled', budget_tokens: req.thinking?.budgetTokens ?? Math.max(2048, req.maxTokens) };
-  } else if (typeof req.temperature === 'number') {
-    body.temperature = req.temperature;
+  } else {
+    // GLM models default thinking ON at the Poe/Z.AI backend; without an explicit
+    // `disabled` flag every call pays a ~3x reasoning tax (and can truncate output).
+    // callZAI always sends the flag; this Poe path never did. Scope to GLM so the
+    // non-GLM Poe models (GPT / Gemini / Claude) that may reject the field are left alone.
+    if (/glm/i.test(req.model)) body.thinking = { type: 'disabled' };
+    if (typeof req.temperature === 'number') body.temperature = req.temperature;
   }
 
   const res = await fetch(POE_ENDPOINT, {

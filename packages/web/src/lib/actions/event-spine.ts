@@ -1,26 +1,10 @@
 /**
- * Event spine (flag-gated) — drive a 回 as a multi-tick BudgetEvent.
- *
- * OFF by default (`eventSpine` tick input). When ON, this REPLACES the per-tick
- * storylet opener: one BudgetEvent is opened for a contention, lingers OPEN
- * across several ticks while POVs accumulate (all keyed to its stable object id),
- * then resolves WITH a resource transfer so the contested slot changes hands —
- * the lever that finally moves the world (EVENT_LIFECYCLE.md §3 Phase 2).
- *
- * Pure decisions live in `spine-core.ts` (unit-tested). This file is the chain
- * glue: it reuses the existing, working tx helpers (createBudgetEventAction /
- * dealHandAction / settleResolvedTransfers / compileEventChapterAction) and adds
- * exactly ONE new tx shape — resolve_event WITH `outcomes_with_resource_transfers`.
- *
- * SAFETY: every settlement step is wrapped so that ANY failure (bad proposal,
- * resource.move not applying, RPC blip) falls back to a plain `empty_outcomes`
- * resolve. The event therefore ALWAYS closes — a wedged-open event can never
- * stall the loop. The world just doesn't settle that round.
- *
- * ⚠️ Type-checked, not chain-verified here (no live tick in this container). The
- * settlement path — proposal validity, `snapshot.id` vs object id for apply,
- * cadence — must be exercised in a chain-capable session before flipping the flag
- * on for a demo.
+ * Event spine — drive an episode as a multi-tick BudgetEvent: open for a
+ * contention, linger while POVs accumulate under its stable object id, then
+ * resolve WITH a resource transfer (EVENT_LIFECYCLE.md §3 Phase 2). Pure
+ * decisions live in `spine-core.ts`; this file is the chain glue. Every
+ * settlement failure falls back to a plain `empty_outcomes` resolve so a wedged
+ * settlement never stalls the loop.
  */
 
 import { Transaction } from '@mysten/sui/transactions';
@@ -29,18 +13,16 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, read, type SuiClient } from 
 import { readResourceLedger, settleResolvedTransfers } from '@/lib/chain/drama';
 import { coolResource } from '@/lib/chain/gravity-core';
 
-/** Wall-clock window that defines one spine "tick" for age math. An event lingers
- *  minTicks–maxTicks of these windows before it resolves. Age is derived from the
- *  on-chain push timestamp (clockTickOf), NOT a per-process counter, so it survives
- *  restarts. Tune to your runner cadence via ES_SPINE_TICK_WINDOW_MS. */
+/** Wall-clock window defining one spine "tick" for age math. Age derives from
+ *  the on-chain push timestamp, not a per-process counter, so it survives
+ *  restarts. Tune via ES_SPINE_TICK_WINDOW_MS. */
 const SPINE_TICK_WINDOW_MS = Math.max(
     1000,
     Number(process.env.ES_SPINE_TICK_WINDOW_MS) || 120_000,
 );
 
-/** How long a just-settled resource stops pulling rivals (rival-gravity ticks,
- *  decremented once per loop). Long enough that a ≥3-way contest disperses
- *  between rounds — see gravity-sim.test.ts (C). */
+/** How long a just-settled resource stops pulling rivals — long enough that a
+ *  ≥3-way contest disperses between rounds (gravity-sim.test.ts C). */
 const GRAVITY_COOLDOWN_TICKS = 6;
 import {
     decideSpineStep,
@@ -63,6 +45,7 @@ import { chooseContestWinner, resolveContestSpec, toContender } from '@/lib/chai
 import type { WorldAttrs } from '@/lib/chain/saga-skills';
 import { createBudgetEventAction, dealHandAction } from './budget-event';
 import { compileEventChapterAction } from './compile-event-chapter';
+import { dumpChapter } from '@/lib/chain/chapter-dump';
 import type { TickStoryletResult } from './tick-loop-types';
 
 type Admin = { client: SuiClient; signer: Keypair };
@@ -74,9 +57,8 @@ interface CutPov {
     body: string;
 }
 
-/* ── per-process registries (same lifetime model as recentTopicsBySaga) ─────
- * Stage 1: a saga may hold MANY open events at once (one per contention axis).
- * Single-mode (`spinePlanAndOpen`) just keeps the array at length ≤ 1. */
+/* Per-process registries. A saga may hold many open events (one per contention
+ * axis); single-mode keeps the array at length ≤ 1. */
 const openBySaga = new Map<string, SpineOpenEvent[]>();
 const povsByEvent = new Map<string, CutPov[]>();
 
@@ -91,19 +73,17 @@ function removeOpen(sagaId: string, eventId: string): void {
     if (arr) openBySaga.set(sagaId, arr.filter((e) => e.eventId !== eventId));
 }
 
-/** Clock-derived spine tick — `clockTickOf(now)`. Restart-proof: any process at
- *  the same wall-clock computes the same value (unlike the in-memory counter). */
+/** Clock-derived spine tick — restart-proof: any process at the same wall-clock
+ *  computes the same value (unlike an in-memory counter). */
 export function spineClockTick(nowMs = Date.now()): number {
     return clockTickOf(nowMs, SPINE_TICK_WINDOW_MS);
 }
 
 /**
- * Reconcile the saga's in-memory open list against the chain's authoritative open
- * set (BudgetEvents with meta.status === OPEN). Adopts events orphaned by a process
- * restart (so they age + resolve via the on-chain push timestamp instead of hanging
- * open forever) and drops events already resolved on chain. Failure-isolated: any
- * read error leaves the in-memory list untouched (degrades to the old behavior).
- * Returns the reconciled open list (also written back into the registry).
+ * Reconcile the in-memory open list against the chain's authoritative open set:
+ * adopt events orphaned by a process restart (so they age + resolve instead of
+ * hanging open) and drop events already resolved on chain. Any read error
+ * leaves the in-memory list untouched.
  */
 export async function reconcileOpenFromChain(
     client: SuiClient,
@@ -143,14 +123,8 @@ export async function reconcileOpenFromChain(
     }
 }
 
-/**
- * Diagnostic snapshot of the saga's spine open set — call AFTER reconcileOpenFromChain
- * so it reflects chain truth (warm cache + adopted orphans), with each event's age in
- * clock-ticks (`clockTickOf(now) − openedAtTick`). Used by the tick log to show what's
- * in play and how old. With the clock-derived age + chain reconcile, a recycled
- * process no longer loses the open set — orphans show up here with their real age and
- * resolve on schedule instead of piling up OPEN.
- */
+/** Diagnostic snapshot of the spine open set with per-event age in clock-ticks.
+ *  Call AFTER reconcileOpenFromChain so it reflects chain truth. */
 export function spineMemorySnapshot(
     sagaId: string,
     nowTick: number,
@@ -166,7 +140,7 @@ export interface SpineCtx {
     capId: string;
     /** single-mode contention (spinePlanAndOpen). */
     contention: ContentionPick | null;
-    /** parallel-mode axis candidates (spinePlanAndOpenAll), highest priority first. */
+    /** parallel-mode axis candidates, highest priority first. */
     candidates?: AxisCandidate[];
     /** parallel-mode concurrency cap (default 2). */
     maxConcurrent?: number;
@@ -175,17 +149,16 @@ export interface SpineCtx {
     nameById: Map<string, string>;
     roleById: Map<string, string>;
     tensions: TensionView[];
-    /** Per-character 先天 world attrs (appearance/constitution/acuity/disposition),
-     *  for the skill-weighted resource contest (chooseContestWinner). Optional —
-     *  when absent, settlement falls back to the tension-only winner. */
+    /** Innate world attrs per character, for the skill-weighted contest. When
+     *  absent, settlement falls back to the tension-only winner. */
     attrsById?: Map<string, WorldAttrs>;
     minTicks?: number;
     maxTicks?: number;
     minCast?: number;
 }
 
-/** TickStoryletResult shaped so all downstream POV/provenance/cut code is reused
- *  verbatim — `digest` carries the STABLE BudgetEvent id (eventTx across ticks). */
+/** Shaped so downstream POV/provenance/cut code is reused verbatim — `digest`
+ *  carries the STABLE BudgetEvent id (eventTx across ticks). */
 function descriptorFor(ev: SpineOpenEvent, ctx: SpineCtx): TickStoryletResult {
     return {
         sceneId: ev.sceneId,
@@ -199,11 +172,8 @@ function descriptorFor(ev: SpineOpenEvent, ctx: SpineCtx): TickStoryletResult {
     };
 }
 
-/**
- * Plan this tick's spine step and, when it says OPEN, push a BudgetEvent +
- * deal hands. Returns the storylet-shaped descriptor to drive POV/cut, plus the
- * step (so the caller knows whether a resolve+weave is due this tick).
- */
+/** Plan this tick's spine step; on OPEN, push a BudgetEvent + deal hands.
+ *  Returns the storylet descriptor plus the step (resolve+weave due or not). */
 export async function spinePlanAndOpen(
     admin: Admin,
     ctx: SpineCtx,
@@ -230,8 +200,7 @@ export async function spinePlanAndOpen(
     return { step };
 }
 
-/** Push a BudgetEvent + deal hands for one OPEN step; registers + returns it, or
- *  null on chain failure. Shared by single- and parallel-mode planning. */
+/** Push a BudgetEvent + deal hands for one OPEN step; null on chain failure. */
 async function openOneEvent(
     ctx: SpineCtx,
     step: Extract<SpineStep, { action: 'open' }>,
@@ -247,7 +216,6 @@ async function openOneEvent(
         console.warn('[event-spine] open failed:', created.error);
         return null;
     }
-    // Deal each participant their hand so the ACT phase sees pending hands.
     for (const id of step.participantIds) {
         const dealt = await dealHandAction({ eventId: created.eventId, characterId: id });
         if (!dealt.ok) console.warn(`[event-spine] deal ${id} failed:`, dealt.error);
@@ -265,12 +233,10 @@ async function openOneEvent(
 }
 
 /**
- * PARALLEL mode (Stage 1): plan EVERY axis this tick. Lingers/​resolves each
- * open event by age and opens the highest-priority quorum axes up to the
- * concurrency cap. Returns one storylet descriptor per event that is OPEN this
- * tick (newly opened OR continuing — NOT the resolving ones, whose cut weaves
- * from already-accumulated POVs) and the full step list (so the caller runs a
- * resolve+weave per resolve step). Chain opens run serially (one keypair).
+ * Parallel mode: plan every axis this tick — linger/resolve open events by age,
+ * open the highest-priority quorum axes up to the cap. Returns a descriptor per
+ * LIVE event (not the resolving ones) plus the full step list. Chain opens run
+ * serially (one keypair).
  */
 export async function spinePlanAndOpenAll(
     admin: Admin,
@@ -302,7 +268,7 @@ export async function spinePlanAndOpenAll(
     return { storylets, steps };
 }
 
-/** Accumulate a tick's cast POVs under the event so the cut covers the whole 回. */
+/** Accumulate a tick's cast POVs under the event so the cut covers the whole episode. */
 export function spineAccumulatePovs(eventId: string, povs: CutPov[]): void {
     if (povs.length === 0) return;
     const list = povsByEvent.get(eventId);
@@ -310,11 +276,8 @@ export function spineAccumulatePovs(eventId: string, povs: CutPov[]): void {
     else povsByEvent.set(eventId, [...povs]);
 }
 
-/**
- * When the step is RESOLVE: settle the contested resource to the winner (with a
- * plain-resolve fallback), then weave the event's accumulated POVs into one 回.
- * Clears the registries for this event. No-op for non-resolve steps.
- */
+/** On a RESOLVE step: settle the contested resource to the winner (plain-resolve
+ *  fallback), then weave the accumulated POVs into one chapter. No-op otherwise. */
 export async function spineResolveAndWeave(
     admin: Admin,
     ctx: SpineCtx,
@@ -332,13 +295,9 @@ export async function spineResolveAndWeave(
     const { resolved, settled } = await settleEvent(admin, ctx, ev);
     console.log(`[ch-timing] resolve=${ev8} settle=${((Date.now() - tSettle) / 1000).toFixed(1)}s resolved=${resolved}`);
     if (!resolved) {
-        // The resolve tx didn't land. DON'T removeOpen — leave the event OPEN (in
-        // memory + on chain) so next tick retries with its cached metadata + the
-        // accumulated POVs. Dropping it from memory here was the orphan-loop bug:
-        // open on chain, forgotten in memory → re-adopted as an orphan → re-failing
-        // forever (the persistent "2/2 卡住" the director kept janitoring).
-        // [ch-diag] resolve_failed → the event is wedged on chain; grep this to see
-        // whether a stuck resolve (not a weave gap) is starving the chapter stream.
+        // Resolve tx didn't land: do NOT removeOpen — leave the event OPEN so the
+        // next tick retries. Dropping it from memory was the orphan-loop bug
+        // (open on chain, forgotten locally, re-adopted, re-failing forever).
         console.warn(
             `[ch-diag] resolve event=${ev8} day=${day ?? '?'} age=${age} resolved=false ` +
                 `wove=false reason=resolve_tx_failed — left OPEN to retry`,
@@ -346,15 +305,10 @@ export async function spineResolveAndWeave(
         return { resolved: false, settled: false, cutPovCount: 0 };
     }
 
-    // Weave the cut from the event's POVs. Prefer the in-memory accumulation —
-    // it's the freshly-anchored prose with no index lag. But these registries
-    // are per-process: a serverless tick that resolves an event it didn't open
-    // (the norm once tick spacing exceeds the spine window — the event is adopted
-    // via reconcileOpenFromChain and aged out immediately) sees an EMPTY POV map,
-    // so the cut never weaves even though ≥2 POVs are anchored on chain. When the
-    // in-memory POVs are short, recover them from chain by matching each cast
-    // member's es:prov header to this eventTx — the same chain-truth fallback
-    // reconcileOpenFromChain gives the open set.
+    // Weave the cut. Prefer the in-memory POV accumulation, but the registries
+    // are per-process: a tick resolving an event it didn't open sees an empty
+    // POV map, so with <2 in-memory voices recover the POVs from chain by
+    // matching each cast member's es:prov header to this eventTx.
     const cutPovs = povsByEvent.get(ev.eventId) ?? [];
     const memoryVoices = new Set(cutPovs.map((p) => p.characterId)).size;
     const path = memoryVoices >= 2 ? 'memory' : 'chain';
@@ -382,14 +336,17 @@ export async function spineResolveAndWeave(
         wove = cut.anchored;
         skip = cut.skipReason ?? '';
         errMsg = cut.error ?? '';
+        // Mirror the immediate-mode cut onto the chapter-dump channel; no-op
+        // unless ES_CHAPTER_DUMP_DIR is set.
+        dumpChapter(
+            { kind: 'cut', day, name: base.sceneName, note: ev.label },
+            cut.chapter,
+        );
     } catch (err) {
         errMsg = err instanceof Error ? err.message : String(err);
     }
 
-    // [ch-diag] the single line that explains every resolved event's chapter
-    // outcome. memVoices vs path=chain/chainPovs tells me whether the in-memory
-    // loss is being recovered from chain (⑨); wove=false + skip/err tells me WHY
-    // a resolved event produced no chapter. Grep `[ch-diag] resolve`.
+    // [ch-diag] resolve: one line per resolved event explaining its chapter outcome.
     console.log(
         `[ch-diag] resolve event=${ev8} day=${day ?? '?'} age=${age} cast=${ev.participantIds.length} ` +
             `resolved=true settled=${settled} memVoices=${memoryVoices} path=${path} ` +
@@ -404,23 +361,18 @@ export async function spineResolveAndWeave(
     return { resolved: true, settled, cutPovCount };
 }
 
-/**
- * Decide who seizes the contested resource using the skill-weighted contest:
- * intent (this resource's tension per participant) gates participation, ability
- * (先天 attrs + role-derived skills, weighted by the resource's ContestSpec) gates
- * success. Falls back to the tension-only winner when 先天 attrs aren't available
- * (ctx.attrsById absent) so settlement never hard-depends on the new path.
- */
+/** Skill-weighted contest: intent (tension) gates participation, ability gates
+ *  success. Falls back to the tension-only winner when innate attrs are absent. */
 function pickContestWinner(ctx: SpineCtx, participantIds: string[], resource: AllocationView): string | null {
     const label = resource.label;
     const colon = label.indexOf(':');
     const kind = colon >= 0 ? label.slice(0, colon) : '';
-    const name = colon >= 0 ? label.slice(colon + 1) : label; // 中文 display, always in the statement
-    // A tension belongs to this resource if its statement carries the resource's
-    // 中文 name (robust for natural + label-form statements) or the ascii kind.
+    const name = colon >= 0 ? label.slice(colon + 1) : label; // display name, always in the statement
+    // A tension belongs to this resource if its statement carries the display
+    // name or the ascii kind.
     const matches = (s: string) => (name !== '' && s.includes(name)) || (kind !== '' && s.includes(kind));
     if (!ctx.attrsById) return chooseSettlementWinner(participantIds, ctx.tensions, name);
-    // intent per participant = max tension toward this resource.
+    // Intent per participant = max tension toward this resource.
     const intentById = new Map<string, number>();
     for (const t of ctx.tensions) {
         if (!participantIds.includes(t.characterId)) continue;
@@ -440,11 +392,8 @@ function pickContestWinner(ctx: SpineCtx, participantIds: string[], resource: Al
     return chooseContestWinner(contenders, spec.abilityGate);
 }
 
-/**
- * Resolve the event, proposing a resource transfer to the winner. Falls back to
- * a plain `empty_outcomes` resolve on ANY problem so the event always closes.
- * Returns whether a real settlement (transfer) was applied.
- */
+/** Resolve the event with a resource transfer to the winner; on any problem
+ *  fall back to a plain `empty_outcomes` resolve so the event still closes. */
 async function settleEvent(
     admin: Admin,
     ctx: SpineCtx,
@@ -463,11 +412,10 @@ async function settleEvent(
             capacity: r.capacity,
             allocations: r.allocations,
         }));
-        // Warm path matches by templateId; an orphan adopted from chain has no
-        // templateId, so fall back to the resource the cast most wants (by tension).
+        // Warm path matches by templateId; an adopted orphan has none, so fall
+        // back to the resource the cast most wants (by tension).
         const resource = pickContestedResource(views, ev.templateId, ev.participantIds, ctx.tensions);
-        // RIVAL GRAVITY relief #1: the contest is decided — stop drawing rivals to
-        // this resource for a while (else a ≥3-way slot thrashes; gravity-sim (C)).
+        // Contest decided — stop drawing rivals here for a while (else a ≥3-way slot thrashes).
         if (resource) coolResource(resource.resourceId, GRAVITY_COOLDOWN_TICKS);
         const winner = resource ? pickContestWinner(ctx, ev.participantIds, resource) : null;
         const plan = resource && winner ? planResourceTransfer(resource, winner, ev.participantIds) : null;
@@ -475,13 +423,8 @@ async function settleEvent(
         if (resource && plan) {
             const tx = new Transaction();
             // `outcomes_with_resource_transfers` takes `vector<event::ResourceTransferOp>`
-            // (each op carries its OWN resource_id). The earlier code built a
-            // `resource::Transfer` from resource.acquire/reallocate and fed it in — a
-            // DIFFERENT struct; Move has no structural subtyping, so the resolve tx
-            // aborted at type-check and settleEvent fell back to plainResolve (empty
-            // outcomes) → NO transfer EVER landed. That is the 收尾0 / 懸而未決 root cause,
-            // proven by settlement-harness. `from: null` → Option::none = acquire from
-            // free capacity; a holder id → reallocate from them.
+            // (NOT `resource::Transfer` — Move has no structural subtyping).
+            // `from: null` = acquire from free capacity; a holder id = reallocate.
             const op = tx.add(
                 endlessTx.event.newResourceTransferOp({
                     resourceId: resource.resourceId,
@@ -514,7 +457,7 @@ async function settleEvent(
             });
             if (res.effects?.status?.status === 'success') {
                 await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
-                // Disposal half: apply the validated transfers to the resource.
+                // Apply the validated transfers to the resource.
                 const applied = await settleResolvedTransfers({
                     sagaId: ctx.sagaId,
                     capId: ctx.capId,
@@ -525,7 +468,7 @@ async function settleEvent(
                 });
                 if (applied.ok) return { resolved: true, settled: true };
                 console.warn('[event-spine] apply_resource_transfers failed:', applied.error);
-                return { resolved: true, settled: false }; // resolved, but settlement didn't land
+                return { resolved: true, settled: false };
             }
             console.warn('[event-spine] settling resolve aborted, falling back:', res.effects?.status?.error);
         }
@@ -533,8 +476,8 @@ async function settleEvent(
         console.warn('[event-spine] settlement errored, falling back to plain resolve:', err);
     }
 
-    // Fallback: plain resolve so the event closes. Report whether it ACTUALLY landed
-    // — the caller leaves the event OPEN to retry if not (vs orphaning it).
+    // Fallback: plain resolve so the event closes. Report whether it actually
+    // landed — the caller leaves the event OPEN to retry if not.
     console.log(`[ch-timing] settle=${ev8} → plainResolve (fallback, entering admin lock)`);
     const resolved = await plainResolve(admin, ctx, ev).catch((err) => {
         console.warn('[event-spine] plain resolve threw:', err);
@@ -543,9 +486,8 @@ async function settleEvent(
     return { resolved, settled: false };
 }
 
-/** `empty_outcomes` resolve — the safety net that closes the event. Returns whether
- *  the resolve tx actually SUCCEEDED on chain (an aborted tx must NOT be treated as
- *  resolved — that orphaned the event). */
+/** `empty_outcomes` resolve — the safety net that closes the event. An aborted
+ *  tx must NOT be reported as resolved (that orphaned the event). */
 async function plainResolve(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Promise<boolean> {
     const tx = new Transaction();
     const outcomes = tx.add(endlessTx.event.emptyOutcomes());

@@ -124,6 +124,18 @@ export interface FakeEvent {
     resourceTransfers: FakeOutcomeOp[];
 }
 
+/** One emitted `RelationshipSeeded` soft event (director-declared tie). Stored
+ *  so `read.director.listRelationshipEvents` → `fetchOnChainEdgesFrom` can read
+ *  the graph back — the harness writes the tie here on `relationship_seed`. */
+export interface FakeRelationshipSeed {
+    sagaId: string;
+    sceneId: string;
+    characterA: string;
+    characterB: string;
+    tone: string;
+    seededAtMs: number;
+}
+
 /** Owned object whose version the admin-tx lock protects (gas coin, StorytellerCap). */
 interface OwnedObject {
     id: string;
@@ -150,6 +162,9 @@ export class FullFakeChain {
     readonly characters = new Map<string, FakeCharacter>();
     readonly resources = new Map<string, FakeResource>();
     readonly events = new Map<string, FakeEvent>();
+    /** RelationshipSeeded soft-event log (append order = oldest→newest). The
+     *  query surface returns it newest-first, matching the real descending scan. */
+    readonly relationships: FakeRelationshipSeed[] = [];
 
     /** owned objects whose versions move on every admin tx (the lock's purpose). */
     readonly owned = new Map<string, OwnedObject>();
@@ -365,6 +380,21 @@ export class FullFakeChain {
                         // produces a live event the POV/cut code can anchor to.
                         regs.push({ moveType: 'unit', value: null });
                     } else if (mc.module === 'director' && mc.function === 'relationship_seed') {
+                        // relationship_seed(cap, saga, sceneId, characterA, characterB, tone, clock)
+                        // sceneId/characterA/characterB are 0x2::object::ID args (Pure bytes,
+                        // same encoding as push_event's sceneId); tone is a Pure string.
+                        const sceneId = decodePure(a[2].Input!, 'id') as string;
+                        const characterA = decodePure(a[3].Input!, 'id') as string;
+                        const characterB = decodePure(a[4].Input!, 'id') as string;
+                        const tone = decodeString(a[5].Input!);
+                        this.relationships.push({
+                            sagaId: this.saga.id,
+                            sceneId,
+                            characterA,
+                            characterB,
+                            tone: tone || 'neutral',
+                            seededAtMs: Date.now(),
+                        });
                         regs.push({ moveType: 'unit', value: null });
                     } else if (mc.module === 'commitment' && mc.function === 'commit') {
                         // commit(cap, saga, subjectId, contentHash, blobId, clock) → Commitment
@@ -573,8 +603,29 @@ export function makeFullFakeSuiClient(chain: FullFakeChain): unknown {
                     nextCursor: null,
                 };
             }
-            // ResourceRetired / RelationshipSeeded / StoryletOpened / CharacterJoined /
-            // AllocationChanged / reflection / gazette scans → empty (never throw).
+            if (t.endsWith('::director::RelationshipSeeded')) {
+                // Newest-first to match the real descending scan + aggregatePairs's
+                // "first seen pair wins tone, repeats add weight" expectation.
+                return {
+                    data: [...chain.relationships]
+                        .reverse()
+                        .map((rel, i) => ({
+                            id: { txDigest: `rel-${i}`, eventSeq: '0' },
+                            parsedJson: {
+                                saga_id: rel.sagaId,
+                                scene_id: rel.sceneId,
+                                character_a: rel.characterA,
+                                character_b: rel.characterB,
+                                tone: rel.tone,
+                                seeded_at_ms: String(rel.seededAtMs),
+                            },
+                        })),
+                    hasNextPage: false,
+                    nextCursor: null,
+                };
+            }
+            // ResourceRetired / StoryletOpened / CharacterJoined / AllocationChanged /
+            // reflection / gazette scans → empty (never throw).
             return empty;
         },
 

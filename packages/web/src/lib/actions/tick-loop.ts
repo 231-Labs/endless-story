@@ -1,27 +1,11 @@
 'use server';
 
 /**
- * N4 — autonomous tick loop. One press = the saga lives one tick on its own.
- *
- * This is the integrative step (docs/narrative/NARRATIVE_AGENTS.md §6): it chains the
- * pieces N1–N3 + R-era services into a single self-driving pass, in order:
- *
- *   1. ADVANCE   World tick moves (narrative time) — unless dry-run.
- *   2. PLAN      Each character updates a standing goal (MemWal plan).
- *   3. MOVE      Idle characters walk toward goals / relevant cast.
- *   4. DRAMA     Derive scarce-resource tension (deterministic).
- *   5. SOCIAL    Same-scene observe / talk / idle; writes subjective memory.
- *   6. ACT       Characters in open events play their own hand.
- *   7. PRODUCE   Each character writes a day-aware POV chapter.
- *   8. REFLECT   Periodic sleep (N2): consolidate scattered memories.
- *   9. NARRATE   Compile the objective gazette for the day.
- *
+ * N4 — autonomous tick loop (docs/narrative/NARRATIVE_AGENTS.md §6): one call runs
+ * ADVANCE → PLAN → MOVE → DRAMA → SOCIAL → ACT → PRODUCE → REFLECT → NARRATE.
  * Sequential throughout — one admin keypair can't sign in parallel without
- * object-version conflicts on the shared StorytellerCap. Demo driver is the
- * SchedulerPanel button; a standalone CLI can call this on an interval.
- *
- * Dry-run produces POV prose only (steps that mutate chain are skipped),
- * matching the existing daily-batch "preview" semantics.
+ * object-version conflicts on the shared StorytellerCap. Dry-run produces POV
+ * prose only; chain-mutating steps are skipped.
  */
 
 import { Transaction } from '@mysten/sui/transactions';
@@ -29,12 +13,16 @@ import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
-import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
+import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
+import { characterAgent, sceneRecord } from '@endless-story/runner';
+import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
 import { recordSceneLine } from '@/lib/chain/scene-lines';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
+import { computeSpatialRouting } from '@/lib/chain/spatial-routing';
+import { fetchWarmGraph } from '@/lib/chain/relationship-evolve';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
@@ -46,9 +34,14 @@ import { runSleepAction } from './sleep';
 import { runPlanAction } from './plan';
 import { buildTickSituations, stashTickResolved } from './tick-phases/perceive';
 import { selectContention, pushRecentTemplate, framingForStatement } from '@/lib/chain/event-planner';
+import { selectContentionByCentrality } from '@/lib/chain/centrality-select';
+import { openArcIfNeeded, stepArc, currentArc } from '@/lib/chain/arc-lifecycle';
+import { forcingLevel, pressureAwareness } from '@/lib/chain/arc-pressure';
 import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
+import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
+import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -81,7 +74,7 @@ import type {
     TickLoopResult,
 } from './tick-loop-types';
 
-// Re-exported so existing consumers (api/tick/route.ts, SchedulerPanel) keep importing from here.
+// Re-exported so existing consumers keep importing from here.
 export type {
     TickLoopInput,
     TickActResult,
@@ -119,53 +112,40 @@ import { runGivePhase } from './tick-phases/give';
 import { runSettlePhase } from './tick-phases/settle';
 import { runActPhase, cardActionPhrase } from './tick-phases/act';
 
-/** Map the top drama tension to a readable scene-incident framing — now with
- *  anti-repeat so the world rotates contentions instead of locking on one (the
- *  "always the recording slot" bug). Pure selection lives in event-planner; the
- *  recent-topic history is process-level (one server process drives the loop).
- *  NOTE: this is the deterministic-relief layer; the real fix (resolve the event
- *  → settle the resource → demand moves) is the multi-tick spine in
- *  docs/narrative/EVENT_LIFECYCLE.md. */
+/** Recent-topic history per saga (process-level): anti-repeat so the world
+ *  rotates contentions instead of locking on one. */
 const recentTopicsBySaga = new Map<string, string[]>();
 
-/** Read a TICK_* feature flag from the environment (deploy-wide default for an
- *  auto-running runner). Truthy = '1' | 'true' | 'yes' | 'on' (case-insensitive). */
-/**
- * Last narrated event per character (process-local). Stops the duplicate-POV
- * bug: while an event stays open across ticks, a character with no new beat
- * (no talk / play / verdict) must not re-write the same scene every tick.
- */
+/** §2.51 actor-fatigue ledgers per saga: tired rows are suppressed at SELECTION
+ *  so the spotlight rotates. */
+const actorFatigueBySaga = new Map<string, FatigueLedger>();
+
+/** Last narrated event per character (process-local). While an event stays open,
+ *  a character with no new beat must not re-write the same scene every tick. */
 const lastPovEventByChar = new Map<string, string>();
 
-/**
- * Last 溫情/關係戲 encounter pair (process-local), keyed by an order-independent
- * pair key. Cooldown for the autonomous encounter sub-phase: we don't fire the
- * SAME pair on consecutive ticks (the encounter would re-narrate the same quiet
- * beat). Mirrors `lastPovEventByChar` above.
- */
+/** Encounter cooldown (process-local): never fire the SAME pair on consecutive ticks. */
 let lastEncounterPair: string | undefined;
+/** Pairs past the confess milestone — don't re-confess every tick. */
+const confessedPairs = new Set<string>();
+/** A romance tie must accrue past a single seed before a confession can fire. */
+const CONFESS_MIN_TIES = 2;
 
 function envFlag(name: string): boolean {
     const v = (process.env[name] ?? '').trim().toLowerCase();
     return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
-// Owned-cap background jobs (event moment / resolve+cut / bond / encounter) run
-// INLINE in the tick body, not in a fire-and-forget after(): on the self-hosted
-// VPS the tick body executes inside the /api/tick mutex's detached promise chain,
-// where Next's after() never fires — so resolve / cut / still were silently
-// dropped every tick (event moment / [ch-diag] resolve / event cut logs never
-// appeared). Running inline means a hung image/LLM/RPC call would now wedge the
-// whole tick (and, via the mutex, every tick after it), so each job races a
-// timeout; on expiry the job is abandoned and the tick proceeds.
+// Owned-cap background jobs run INLINE, not in after(): inside the /api/tick
+// mutex's detached promise chain Next's after() never fires (resolve/cut/still
+// were silently dropped). Each inline job races a timeout so a hung call can't
+// wedge the tick and, via the mutex, the whole loop.
 const MOMENT_JOB_TIMEOUT_MS = Math.max(10_000, Number(process.env.ES_MOMENT_JOB_TIMEOUT_MS) || 90_000);
 const CUT_JOB_TIMEOUT_MS = Math.max(10_000, Number(process.env.ES_CUT_JOB_TIMEOUT_MS) || 180_000);
 
-/** Run a job to completion or abandon it after `ms`. Both the job's own failure
- *  and a timeout are reported via `onError` and neither throws to the caller, so
- *  the inline job loop is never interrupted. An abandoned job's underlying async
- *  work may still settle later with no awaiter — acceptable here (jobs are
- *  failure-isolated; a wedged one must not stall the tick loop). */
+/** Run a job to completion or abandon it after `ms`. Failures and timeouts go to
+ *  `onError` and never throw to the caller; an abandoned job may still settle
+ *  later with no awaiter (acceptable — a wedged job must not stall the loop). */
 async function runJobWithTimeout(
     job: () => Promise<void>,
     ms: number,
@@ -232,26 +212,28 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     const dryRun = input.dryRun ?? false;
-    // EXPERIMENTAL flags resolve as: explicit POST body  >  env default  >  off.
-    // The env defaults let an auto-running deploy (web runner / scheduler) turn
-    // features on with NO flag-passing — just set TICK_* in the environment.
-    // The core engine now DEFAULTS ON (no more flag dance — "有什麼機制就跑什麼"):
-    // spine settlement + director-grown scarcity + perception. The settlement bugs are
-    // fixed, so a plain real tick runs the full engine; dry-run still bypasses spine.
-    // Pass the flag false explicitly to opt a tick out. parallelEvents (many events at
-    // once) stays opt-in — the default is ONE spine event per tick.
+    // Flags resolve as: explicit input > TICK_* env default > built-in default.
+    // Core engine (spine + director scarcity + perception) defaults ON; dry-run
+    // still bypasses spine. parallelEvents stays opt-in (default = one spine event).
     const eventSpine = (input.eventSpine ?? !envFlag('TICK_EVENT_SPINE_OFF')) && !dryRun;
     const parallelEvents = (input.parallelEvents ?? envFlag('TICK_PARALLEL_EVENTS')) && !dryRun;
     const attentionBudget = input.attentionBudget ?? envFlag('TICK_ATTENTION_BUDGET');
     const llmFraming = input.llmFraming ?? envFlag('TICK_LLM_FRAMING');
     const directorResources = input.directorResources ?? !envFlag('TICK_DIRECTOR_RESOURCES_OFF');
     const rivalGravity = input.rivalGravity ?? envFlag('TICK_RIVAL_GRAVITY');
+    // §4d.1: pick the staged contention by centrality, not urgency; falls back to
+    // the deterministic tension-sort on failure. Default off.
+    const centrality = envFlag('TICK_CENTRALITY');
+    // §2.51: spotlight rotation, selection-only (settlement reads raw rows). Default off.
+    const actorFatigue = envFlag('TICK_ACTOR_FATIGUE');
+    // §4d.2: arc convergence state machine (off-chain arc state). Default off.
+    const arcConvergence = envFlag('TICK_ARC_CONVERGENCE');
     const maxConcurrentEvents = Math.max(
         1,
         input.maxConcurrentEvents ?? (Number(process.env.TICK_MAX_CONCURRENT_EVENTS) || 2),
     );
     const spineMode = eventSpine || parallelEvents;
-    drainMemoryWarnings(); // discard stale warnings from previous local dev requests
+    drainMemoryWarnings(); // discard stale warnings from previous requests
     const memoryContext = new TickMemoryContext();
     const cap = input.maxCharacters ?? (Number(process.env.TICK_MAX_CHARACTERS) || 6);
     const requestedIds = normalizeCharacterIds(input.characterIds);
@@ -259,6 +241,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const since = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
     const tlog = (m: string) => console.log(`${clr.dim(`[tick ${since()}]`)} ${m}`);
     tlog(`◆ tick begins${dryRun ? ' (dry-run)' : ''}`);
+
+    // 0. NARRATIVE PROFILE — install preset content into the engine seams.
+    const narrativeProfile = await installNarrativeProfile().catch(() => null);
 
     // 1. ADVANCE (chain mutation — skipped on dry-run).
     let advanced = false;
@@ -269,8 +254,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const worldTime = (await getWorldTimeSnapshot()) ?? undefined;
     const dayLabel = worldTime ? `第 ${worldTime.day} 日 · ${worldTime.partOfDay}` : '某日';
     tlog(`⏱  ${advanced ? 'advanced → ' : ''}Day ${worldTime?.day ?? '?'} · ${worldTime?.partOfDay ?? '—'}`);
+    // isNight must match the Chinese dusk/night labels too — a plain
+    // `partOfDay === 'night'` check silently disabled sleep and the spatial router.
+    const isNight = !!worldTime && (worldTime.partOfDay === 'night' || /夜|宵/.test(worldTime.partOfDay ?? ''));
 
-    // Character roster (saga-scoped, with fallback).
     let characters: Character[] = await charactersApi.listSagaCharacters(d.sagaId).catch(() => []);
     if (characters.length === 0) {
         characters = await charactersApi.listCharacters().catch(() => []);
@@ -291,15 +278,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
     const nameById = new Map(characters.map((c) => [c.id, c.name]));
-    // 先天 world attrs per character, for the skill-weighted resource contest
-    // (spine settlement). CharacterAttributes ⊇ WorldAttrs (the four innate axes).
+    // Innate world attrs for the skill-weighted resource contest (spine settlement).
     const attrsById = new Map(characters.map((c) => [c.id, c.attributes]));
-    // The economy shadow can mark a character dead (vitality → 0); drop them from the acting set
-    // so death actually retires them from the stage (they keep their persisted state for settle).
+    // Economy-shadow deaths retire characters from the acting set (persisted state kept for settle).
     const alive = characters.filter((c) => !isShadowDead(d.sagaId, c.id));
-    // When the cast exceeds the cap, rotate the acting window by world tick so
-    // everyone cycles onto the stage — a fixed slice(0, cap) would star the
-    // same N characters forever and the rest would never act.
+    // Rotate the acting window by world tick — a fixed slice(0, cap) would star
+    // the same N characters forever.
     const rotated = (() => {
         if (alive.length <= cap) return alive;
         const start = ((worldTime?.currentTick ?? 0) * cap) % alive.length;
@@ -323,12 +307,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     let rosterContextById = buildRosterContextById(slice, activeRoster);
     tlog(`cast on stage: ${slice.length} — ${slice.map((c) => c.name).join(', ')}`);
 
-    // 1.5 PERCEIVE (Step 1, flag-gated) — assemble each acting character's OBJECTIVE
-    //     當下處境 (who's co-present, what's contested + how badly THEY want it, what
-    //     just resolved) so PLAN below is no longer blind to this tick. Perception-
-    //     scoped + omniscience-guarded (perceive-core). Default off → no behaviour
-    //     change; never blocks the tick on failure.
-    // Perception defaults ON too (opt out with input.situationPerceive=false or env ES_SITUATION_PERCEIVE=0).
+    // 1.5 PERCEIVE — each acting character's objective situation (co-presence,
+    //     contested stakes, fresh resolutions) so PLAN isn't blind to this tick.
+    //     Scoped + omniscience-guarded (perceive-core); never blocks on failure.
     const situationPerceive = input.situationPerceive ?? process.env.ES_SITUATION_PERCEIVE !== '0';
     let situationByChar = new Map<string, string>();
     if (situationPerceive) {
@@ -347,11 +328,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2. PLAN — each character updates its standing goal first (N6), so the
-    //    fresh plan is recalled by the decide/POV steps below. PLAN does NO
-    //    Sui signing (MemWal reads + writes only). Run with BOUNDED
-    //    concurrency: each plan SEAL-decrypts a recall, and the shared SEAL
-    //    key server / Walrus aggregator 429s under an all-at-once burst.
+    // 2. PLAN (N6) — update standing goals so decide/POV recall them. No Sui
+    //    signing; bounded concurrency because an all-at-once SEAL burst 429s.
     const plans: TickPlanResult[] = [];
     if (input.plan ?? true) {
         tlog(`① plan — ${slice.length} characters…`);
@@ -361,8 +339,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     dryRun,
                     rosterContext: rosterContextById.get(c.id),
                     situation: situationByChar.get(c.id),
+                    // §2.6: feed current relationships into planning so goals evolve from them.
+                    relationshipPressure: await memoryContext.relationshipHints(c.id, 5),
                 });
-                tlog(`   · plan ${c.name} ✓`);
+                tlog(`   · plan ${c.name} ✓${p.ok && p.longTermGoal ? `「${p.longTermGoal.slice(0, 36)}」` : ''}`);
                 return { c, p };
             } catch (err) {
                 tlog(`   · plan ${c.name} ✗`);
@@ -386,16 +366,13 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.5 MOVE — idle characters walk toward their goals (autonomous
-    //    movement completes the N1 action space). Batched into one PTB.
+    // 2.5 MOVE — idle characters walk toward their goals, batched into one PTB.
     const moves: TickMoveResult[] = [];
     if (input.move ?? true) {
         tlog(`② autonomous moves…`);
         try {
-            // RIVAL GRAVITY (flag-gated): draw contenders toward their contest so
-            // events reliably FORM. Verified in gravity-{core,sim}.test.ts; the
-            // relief terms (settled-resource cooldown + holder exclusion) keep it
-            // from gluing. Decay cooldowns once, then compute this tick's pulls.
+            // Rival gravity (flag-gated): draw contenders toward their contest so
+            // events reliably form; cooldown + holder exclusion keep it from gluing.
             let gravityTargets: Map<string, string> | undefined;
             if (rivalGravity && !dryRun) {
                 try {
@@ -417,6 +394,30 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     console.warn('[tick-loop] rival gravity failed:', err);
                 }
             }
+            // Spatial routing (§2.50): at night, place characters by residence;
+            // pursuit + welcome come from the relationship graph so privacy emerges.
+            // By day the router is silent and the LLM keeps agency.
+            let routeTargets: Map<string, string> | undefined;
+            if (!dryRun && isNight) {
+                const present = activeRoster.filter((r) => r.currentSceneId);
+                const warm = await fetchWarmGraph(present.map((r) => r.id));
+                const actors = present.map((r) => ({
+                    id: r.id,
+                    sceneId: r.currentSceneId as string,
+                    homeSceneId: r.homeSceneId ?? (r.currentSceneId as string),
+                    pursue: warm.pursueByChar.get(r.id),
+                }));
+                routeTargets = computeSpatialRouting(
+                    actors,
+                    activeScenes.map((s) => ({ id: s.id, privacyLevel: s.privacyLevel })),
+                    true,
+                    warm.welcome,
+                );
+                const relocating = [...routeTargets.entries()].filter(
+                    ([id, sc]) => rosterById.get(id)?.currentSceneId !== sc,
+                ).length;
+                if (relocating > 0) tlog(`②◦ 夜路由: ${relocating} 人各歸其所（追隨/避讓依關係圖）`);
+            }
             moves.push(
                 ...(await runMovePhase({
                     admin,
@@ -430,15 +431,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     memoryContext,
                     dryRun,
                     gravityTargets,
-                    // Spine events span many ticks — don't lock their cast in the
-                    // scene; let them live and act on the contest from anywhere.
+                    routeTargets,
+                    // Spine events span many ticks — don't lock their cast in the scene.
                     pinBusy: !spineMode,
                 })),
             );
             tlog(`   moved ${moves.filter((m) => m.ok && m.toSceneId).length}${dryRun ? ' (preview)' : ''}`);
-            // Feed the handscroll's living stream from MOVEMENT — happens every tick
-            // regardless of events, so the world never reads empty between dramas.
-            // The reason ("循著爭端走了過去") arrives at the destination scene.
+            // Feed the handscroll's living stream from movement, so the world
+            // never reads empty between dramas.
             if (!dryRun) {
                 for (const m of moves) {
                     if (m.ok && m.toSceneId && m.reason) {
@@ -458,13 +458,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.7 DRAMA — derive each character's tension over scarce, CONTESTED
-    //    on-chain resources (DR-6), and commit a self-verifying beat. The
-    //    SUPPLY (who holds the slot) is on chain; the DEMAND (how badly each
-    //    character aches for it) is recomputed deterministically here. The
-    //    returned hints steer decide + POV toward what each character LACKS,
-    //    not just what the scene offers. Dormant no-op until resource.move is
-    //    deployed + resources instantiated — never blocks the tick.
+    // 2.7 DRAMA (DR-6) — derive tension over contested on-chain resources and
+    //    commit a self-verifying beat; hints steer decide/POV toward what each
+    //    character lacks. Dormant no-op until resources exist; never blocks the tick.
     let dramaHints: Record<string, string> = {};
     let drama: TickDramaResult | undefined;
     if (slice.length > 0) {
@@ -479,10 +475,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 signer: dryRun ? undefined : admin.signer, // dry-run = derive, don't anchor
             });
             dramaHints = r.hints;
-            // Map ALL tension rows to fractions first; (Stage 2) couple each
-            // character's parallel desires through a finite attention budget so
-            // neglected axes ache more, then re-sort + take the top. Off-chain
-            // steering overlay only — the committed beat is untouched.
+            // Attention budget couples each character's parallel desires so
+            // neglected axes ache more — steering overlay only, the committed
+            // beat is untouched.
             const allTop = r.tensions.map((t) => ({
                 characterId: t.agentId,
                 name: nameById.get(t.agentId),
@@ -490,10 +485,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 tension: tensionFraction(t.value),
             }));
             const steered = attentionBudget ? coupleAttention(allTop) : allTop;
-            // Character layer: when the coupling FLIPPED someone's dominant ache
-            // (their funded pursuit got outranked by a neglected one), replace
-            // their decide/POV hint with the torn line — the trade-off reaches
-            // behavior, not just world-level selection.
+            // When coupling flipped someone's dominant ache, replace their hint
+            // with the torn line so the trade-off reaches behavior.
             if (attentionBudget) {
                 for (const id of new Set(allTop.map((t) => t.characterId))) {
                     const torn = neglectHintFor(allTop, steered, id);
@@ -518,11 +511,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.72 DIRECTOR SCARCITY (flag-gated, default off) — let the LLM director
-    //   立題: ADD a contested resource mid-story when the cast's tensions call for
-    //   one. Validated + rate-limited (propose-resources.ts); the new slot is
-    //   desired (defaultDesiresForCast) + settled (spine) on a LATER tick — we
-    //   don't read it back this tick. Failure-isolated; never blocks the loop.
+    // 2.72 DIRECTOR SCARCITY — LLM director may add a contested resource
+    //   mid-story (validated + rate-limited); it is desired and settled on a
+    //   LATER tick, never read back this tick.
     if (directorResources && !dryRun && drama?.active && slice.length >= 2) {
         try {
             const r = await proposeResourceAction({
@@ -543,24 +534,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.75 STORYLET — give the day a dramatic SPINE. When drama tension is live
-    //   and a scene holds ≥2 of the cast, the director opens ONE storylet there
-    //   (open_storylet → StoryletOpened), framing the top contested resource as a
-    //   scene incident. This is the discrete EVENT the POV phase then anchors to,
-    //   so chapters narrate "X happened today" from each angle instead of an ambient
-    //   slice. Deterministic (no LLM); admin-signed so it stays serial.
-    // Stage 1: a saga may run MANY events at once (one per axis). `storylets`
-    //   holds every event LIVE this tick (open/continuing); `spineSteps` carries
-    //   the per-event plan (so each resolve weaves its own 回). Single-mode paths
-    //   just fill length-1 arrays so the downstream POV/cut code is one path.
+    // 2.75 STORYLET — open the discrete event(s) the POV phase anchors to.
+    //   `storylets` holds every event LIVE this tick; `spineSteps` the per-event
+    //   plan. Single-mode paths fill length-1 arrays so downstream code is one path.
     let storylets: TickStoryletResult[] = [];
     let spineSteps: SpineStep[] = [];
     let spineCtx: SpineCtx | undefined;
     const verbFor = (action: SpineStep['action']) =>
         action === 'open' ? 'open' : action === 'resolve' ? 'resolve' : action === 'continue' ? 'continue' : '—';
-    // FRAMING (flag-gated, default off) — the LLM director NAMES the chosen
-    //   incident; the deterministic label is the fallback (event-framing.ts).
-    //   Selection (which contention) stays deterministic — only the prose moves.
+    // LLM framing names the chosen incident; selection stays deterministic.
     const frameLabel = async (picked: { label: string; statement?: string }, cast?: string[], sceneName?: string): Promise<string> =>
         llmFraming && !dryRun
             ? await frameIncident({
@@ -571,20 +553,23 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
               })
             : picked.label;
     const sceneNameById = new Map(activeScenes.map((s) => [s.id, s.name]));
+    // §2.51: rest everyone one notch, then build the SELECTION view. Settlement +
+    // hints keep reading raw `drama.top` — fatigue steers staging, never who wins.
+    let fatigueLedger: FatigueLedger = {};
+    if (actorFatigue) {
+        fatigueLedger = decayActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? {});
+        actorFatigueBySaga.set(d.sagaId, fatigueLedger);
+    }
+    const selectionRows = actorFatigue ? applyActorFatigue(drama?.top ?? [], fatigueLedger) : (drama?.top ?? []);
     if (parallelEvents && drama?.active && slice.length > 0) {
-        // PARALLEL SPINE — open/linger/resolve MANY axis events at once.
+        // PARALLEL SPINE — open/linger/resolve many axis events at once.
         const occupancy = slice.flatMap((c) => {
             const sid = rosterById.get(c.id)?.currentSceneId;
             return sid ? [{ characterId: c.id, sceneId: sid }] : [];
         });
-        let candidates = buildAxisCandidates(drama?.top ?? [], occupancy, framingForStatement);
-        // [ch-diag] WHY events do / don't open. An event needs ≥2 cast co-present
-        // in one scene AND tensioned on one axis (minCast=2). Grep `[ch-diag] spine-plan`:
-        //   occupancy=0           → scene reads failed (429 on resolveCurrentOwner) →
-        //                           cast is "nowhere" → no axis can quorum (read bug).
-        //   occupancy>0 cand=0    → co-located but no shared desire (dispersion).
-        //   cand=[..:1..] all <2  → desirers split across scenes/singletons (no quorum).
-        //   cand=[..:2+..] but open 0 → a planner bug to chase.
+        let candidates = buildAxisCandidates(selectionRows, occupancy, framingForStatement);
+        // [ch-diag] spine-plan: why events do/don't open (occupancy=0 → scene
+        // reads failed; cand counts <2 → no quorum on any axis).
         console.log(
             `[ch-diag] spine-plan day=${worldTime?.day ?? '?'} acting=${slice.length} ` +
                 `occupancy=${occupancy.length} tensionRows=${(drama?.top ?? []).length} ` +
@@ -593,7 +578,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     .map((c) => `${c.templateId.replace('contention:', '')}:${c.participantIds.length}@${c.sceneId.slice(0, 6)}`)
                     .join(',')}]`,
         );
-        // LLM-frame only the axes that could open this tick (bounded LLM spend).
+        // LLM-frame only the axes that could open this tick (bounds LLM spend).
         if (llmFraming && candidates.length > 0) {
             candidates = await Promise.all(
                 candidates.map(async (c, i) =>
@@ -627,10 +612,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             })),
             attrsById,
         };
-        // Rebuild the open set from chain BEFORE deciding — age is derived from the
-        // on-chain push timestamp (spineClockTick), so events opened by a prior
-        // (possibly since-recycled) process still age and resolve here instead of
-        // piling up OPEN forever. Failure-isolated: a read blip keeps the warm cache.
+        // Rebuild the open set from chain BEFORE deciding, so events opened by a
+        // recycled process still age and resolve instead of piling up OPEN.
         await reconcileOpenFromChain(admin.client, d.sagaId);
         const nowTick = spineClockTick();
         const mem = spineMemorySnapshot(d.sagaId, nowTick);
@@ -647,14 +630,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         for (const st of storylets) tlog(`②‴ live: ${st.sceneName} · ${st.label} (${st.names.join(', ')}) · ${st.digest}`);
         tlog(`②‴ parallel events: ${storylets.length} live (this tick: ${opened} opened, ${resolving} resolving)`);
     } else if (eventSpine && drama?.active && slice.length > 0) {
-        // SPINE MODE — open/linger/resolve ONE multi-tick BudgetEvent as the 回.
+        // SPINE MODE — open/linger/resolve ONE multi-tick BudgetEvent.
         const occupancy = slice.flatMap((c) => {
             const sid = rosterById.get(c.id)?.currentSceneId;
             return sid ? [{ characterId: c.id, sceneId: sid }] : [];
         });
         const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
-        const picked = selectContention(drama?.top ?? [], recentTopics);
-        recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+        const picked = centrality
+            ? await selectContentionByCentrality(selectionRows, recentTopics)
+            : selectContention(selectionRows, recentTopics);
+        recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
         const spineLabel = await frameLabel(picked);
         spineCtx = {
             sagaId: d.sagaId,
@@ -698,9 +683,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 activeScenes.find((s) => s.id === sid)?.name ??
                 '戲班';
             const recentTopics = recentTopicsBySaga.get(d.sagaId) ?? [];
-            const picked = selectContention(drama?.top ?? [], recentTopics);
+            const picked = centrality
+            ? await selectContentionByCentrality(selectionRows, recentTopics)
+            : selectContention(selectionRows, recentTopics);
             const framing = { templateId: picked.templateId, label: await frameLabel(picked) };
-            recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.templateId));
+            recentTopicsBySaga.set(d.sagaId, pushRecentTemplate(recentTopics, picked.statement ?? picked.templateId));
             const st: TickStoryletResult = {
                 sceneId: sid,
                 sceneName,
@@ -742,24 +729,31 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.76 EVENT MOMENT + 4.5 EVENT CUT are both StorytellerCap txs. We capture
-    //   them as jobs here / below and run them SERIALLY (inline, after the POV
-    //   phase) — never concurrently, or the two owned-cap txs race on the cap's
-    //   object version (the same reason the sync phases sign serially).
+    // §2.51: everyone who carried a live event this tick tires, so the spotlight rotates.
+    if (actorFatigue && storylets.length > 0) {
+        const featured = [...new Set(storylets.flatMap((s) => s.characterIds))];
+        const bumped = bumpActorFatigue(fatigueLedger, featured);
+        actorFatigueBySaga.set(d.sagaId, bumped);
+        const ledgerLine = Object.entries(bumped)
+            .map(([id, v]) => `${nameById.get(id) ?? id.slice(0, 6)}:${v.toFixed(2)}`)
+            .join(' ');
+        tlog(`②⁵ actor fatigue: ${featured.length} featured tire, rows suppressed next tick (${ledgerLine})`);
+    }
+
+    // EVENT MOMENT + EVENT CUT are both StorytellerCap txs: captured as jobs and
+    //   run SERIALLY after the POV phase, or they race on the cap's object version.
     const momentJobs: Array<() => Promise<void>> = [];
     const cutJobs: Array<() => Promise<void>> = [];
-    // The event covering a character this tick: the (parallel) event whose cast
-    // includes them, else the one staged in their scene. Single-event modes have
-    // ≤1 storylet so this is exactly the old `storylet.sceneId === sceneId` check.
+    // The event covering a character this tick: the event whose cast includes
+    // them, else the one staged in their scene.
     const eventForChar = (charId: string, sceneId?: string): TickStoryletResult | undefined =>
         storylets.find((s) => s.characterIds.includes(charId)) ??
         (sceneId ? storylets.find((s) => s.sceneId === sceneId) : undefined);
 
-    // 2.76 EVENT MOMENT — each opened event's multi-character moment scene image
-    //   (img2img off each participant's anchor → faces don't drift), appended as
-    //   kind=4 to every participant + tagged with the source event tx.
+    // 2.76 EVENT MOMENT — multi-character scene image per opened event (img2img
+    //   off each participant's anchor so faces don't drift), appended as kind=4.
     for (const st of storylets) {
-        if (!((input.eventImage ?? true) && !dryRun && st.opened && st.characterIds.length >= 2)) continue;
+        if (!((input.eventImage ?? narrativeProfile?.features.eventImage ?? true) && !dryRun && st.opened && st.characterIds.length >= 2)) continue;
         momentJobs.push(async () => {
             const r = await generateEventMomentAction({
                 characterIds: st.characterIds,
@@ -775,10 +769,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         });
     }
 
-    // 2.8 SOCIAL — idle, same-scene lightweight observation / talk. This
-    // writes subjective observations/relationship memories (unless dry-run),
-    // which the next POV can recall without turning Director facts into
-    // private feelings.
+    // 2.8 SOCIAL — same-scene observation/talk; writes subjective memories the
+    // next POV can recall.
     const socials: TickSocialResult[] = [];
     if (slice.length > 0) {
         tlog(`②″ light interactions…`);
@@ -801,13 +793,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.9 GIVE — a solvent character may aid a same-scene peer in need
-    // (decideAidAction; the give/no-give judgment is the LLM's). The balance
-    // MOVE is deferred to the on-chain economy (D1) / settle shadow (D5); for
-    // now this records the gift as relationship-tone memory + a scene line.
-    // 2.85 ASK — needy characters open their mouth to ask a solvent same-scene character for
-    // help (the "pull" side). The asks are handed to GIVE so the chosen giver sees an explicit
-    // request; the grant is GIVE's decideAid.
+    // 2.85 ASK — needy characters ask a solvent same-scene peer for help; asks
+    // are handed to GIVE so the chosen giver sees an explicit request.
     const charactersById = new Map(characters.map((c) => [c.id, c]));
     const asks: TickAskResult[] = [];
     let asksByGiver = new Map<string, import('./tick-phases/give').IncomingAsk[]>();
@@ -832,6 +819,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
+    // 2.9 GIVE — a solvent character may aid a same-scene peer; the balance move
+    // is deferred to the settle shadow, recorded here as memory + scene line.
     const gives: TickGiveResult[] = [];
     if (slice.length > 0) {
         tlog(`②‴ giving aid…`);
@@ -855,12 +844,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.96 養關係 — MECHANICAL bond strengthening (no LLM, no director decision):
-    //   an ACCEPTED gift this tick deepens that pair's PUBLIC tie via one extra
-    //   relationship_seed, so the relationship graph grows from what characters
-    //   actually DO and encounters start favouring pairs who keep helping each
-    //   other. Owned-cap tx → pushed into the serial `cutJobs` (drained after the
-    //   POV batch / cuts / moments) so it can't race the StorytellerCap.
+    // 2.96 BOND — mechanical strengthening: an accepted gift deepens the pair's
+    //   public tie via one relationship_seed, so the graph grows from what
+    //   characters DO. Owned-cap tx → serial cutJobs (can't race the StorytellerCap).
     if (!dryRun) {
         const bondPairs = collectBondPairs(gives, (id) => rosterById.get(id)?.currentSceneId, d.sceneIds[0]);
         if (bondPairs.length > 0) {
@@ -875,9 +861,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 2.95 SETTLE — advance the off-chain economy to today (treasury-funded wages → cost →
-    // vitality → death) and apply this tick's ACCEPTED gifts as real transfers. This is the rail
-    // the GIVE phase's deferred gifts were waiting for; the shadow persists (process-local).
+    // 2.95 SETTLE — advance the off-chain economy to today (wages → cost →
+    // vitality → death) and apply accepted gifts as real transfers.
     let settle: TickSettleResult | undefined;
     if (!dryRun && slice.length > 0) {
         tlog(`②⁗ settle…`);
@@ -895,9 +880,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 3. ACT — characters play their own hands in open events; events that
-    //    everyone has acted in auto-resolve (judge). Chain mutation → serial
-    //    (single StorytellerCap, no parallel signing).
+    // 3. ACT — characters play their hands in open events; fully-acted events
+    //    auto-resolve (non-spine). Chain mutation → serial.
     const acts: TickActResult[] = [];
     const resolves: TickResolveResult[] = [];
     if (!dryRun) {
@@ -918,17 +902,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             resolves.push(...phase.resolves);
             tlog(`   plays ${acts.filter((a) => a.ok).length} · resolves ${resolves.filter((r) => r.ok).length}`);
         } catch (err) {
-            // Non-fatal: a failed ACT phase shouldn't block POV/narrate.
             console.warn('[tick-loop] act phase failed:', err);
         }
     }
 
-    // ── OBJECTIVE per-scene beat ledger (POV consistency) ──────────────
-    // Project this tick's observable acts (talk lines, arrivals/exits, card
-    // plays) onto the scene they happened in. Every same-scene character's POV
-    // then receives the SAME facts, so their chapters interpret one shared
-    // reality instead of independently inventing contradictory ones. Private
-    // observations are excluded — those stay subjective in each MemWal.
+    // Objective per-scene beat ledger: same-scene POVs receive the SAME facts so
+    // chapters interpret one shared reality. Private observations are excluded.
     const beatsByScene = new Map<string, Array<{ actorId: string; text: string }>>();
     const pushBeat = (sceneId: string | undefined, actorId: string, text: string) => {
         if (!sceneId) return;
@@ -949,7 +928,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     for (const a of acts) {
         if (!a.ok || !a.cardLabel) continue;
         const sceneId = rosterById.get(a.characterId)?.currentSceneId;
-        // Surface the SPOKEN line (台詞) the chapter can quote, then the inner why.
+        // Spoken line first (quotable), then the inner why.
         pushBeat(
             sceneId,
             a.characterId,
@@ -959,17 +938,13 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     const povs: TickPovResult[] = [];
     if (input.pov ?? true) {
-        // 4. PRODUCE — POV chapter per character WITH A NARRATABLE BEAT this tick.
-        //    Event-driven cadence: only characters in this tick's storylet or
-        //    event get a chapter, so an "episode" = one event's multi-POV coverage
-        //    (followable, not per-tick filler). `povAll` forces every character.
-        //    Dry-run does NO chain writes → generate concurrently; a real run
-        //    anchors via commitment::commit (Sui signing) → serial.
+        // 4. PRODUCE — POV chapter per character with a narratable beat this tick
+        //    (event-driven cadence, not per-tick filler); `povAll` forces everyone.
         const narratable = new Set<string>();
         for (const st of storylets) for (const id of st.characterIds) narratable.add(id);
         for (const a of acts) if (a.ok) narratable.add(a.characterId);
-        // Resolve verdicts: every participant of a just-closed event narrates
-        // the outcome — this is where on-chain win/loss enters the story.
+        // Every participant of a just-closed event narrates the outcome — this is
+        // where on-chain win/loss enters the story.
         const verdictByChar = new Map<string, string>();
         for (const rr of resolves) {
             if (rr.ok && rr.verdict) {
@@ -993,27 +968,63 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             digest: r.digest,
             error: r.error,
         });
-        // Generate chapters with BOUNDED concurrency (each recalls memory →
-        // SEAL decrypt; an unbounded burst 429s the key server), then — for a
-        // real run — anchor them ALL IN ONE PTB (one signature). Generation is
-        // the slow part (primary LLM); the anchor is now a single transaction.
-        // Per-item try/catch so one bad recall (e.g. aggregator DNS blip) can't
-        // reject the whole batch and kill the tick.
+        // Generate with bounded concurrency (unbounded SEAL bursts 429), then
+        // anchor all chapters in ONE PTB. Per-item try/catch so one bad recall
+        // can't kill the tick.
         tlog(
             povSlice.length === 0
                 ? '④ POV skipped (no event drew characters this tick; use povAll to force one each)'
                 : `④ POV — generating ${povSlice.length} (event-relevant characters; slow, one LLM call each)…`,
         );
+        // §2.14: one objective scene record per scene feeds all its POVs as
+        // shared sceneBeats, so they interpret the same physical facts instead
+        // of confabulating. Falls back to raw per-actor beats when uncomposable.
+        const povSceneIds = new Set(
+            povSlice
+                .map((c) => rosterById.get(c.id)?.currentSceneId)
+                .filter((s): s is string => Boolean(s)),
+        );
+        const sceneRecordByScene = new Map<string, string>();
+        await mapPool([...povSceneIds], RECALL_CONCURRENCY, async (sceneId) => {
+            const presentNames = activeRoster
+                .filter((rp) => rp.currentSceneId === sceneId)
+                .map((rp) => rp.name);
+            if (presentNames.length === 0) return;
+            const record = await sceneRecord.composeSceneRecord({
+                sceneName: sceneNameById.get(sceneId) ?? '戲班',
+                presentNames,
+                eventLabel: storylets.find((st) => st.sceneId === sceneId)?.label,
+                beats: (beatsByScene.get(sceneId) ?? []).map((b) => b.text),
+            });
+            if (record) sceneRecordByScene.set(sceneId, record);
+        });
+
+        // §2.19 daily-life state: derived fatigue curve (fresh at dawn → tired by
+        // night), recomputed each tick with no storage. Tints the chapter's
+        // texture, never who they are; omitting it keeps the prompt byte-identical.
+        const dayFatigue = worldTime
+            ? 0.15 + (worldTime.ticksPerDay > 1 ? worldTime.tickOfDay / (worldTime.ticksPerDay - 1) : 0.5) * 0.7
+            : 0.3;
+        // §4d.2: contesters around the central character feel the pressure — the
+        // central character is NEVER instructed to resolve (that would script the
+        // turn); they resolve only by responding.
+        const liveArc = arcConvergence ? currentArc(d.sagaId) : undefined;
+        const arcCentralId = liveArc?.centralCharId;
+        const arcCentralName = arcCentralId ? rosterById.get(arcCentralId)?.name ?? '' : '';
+        const arcCentralScene = arcCentralId ? rosterById.get(arcCentralId)?.currentSceneId : undefined;
+        const arcAwareness = liveArc ? pressureAwareness(forcingLevel(liveArc), arcCentralName) : '';
         const generated = await mapPool(povSlice, RECALL_CONCURRENCY, async (c) => {
             try {
                 const sceneId = rosterById.get(c.id)?.currentSceneId;
-                const sceneBeats = sceneId
-                    ? (beatsByScene.get(sceneId) ?? [])
-                          .filter((b) => b.actorId !== c.id)
-                          .map((b) => b.text)
-                    : [];
-                // EVENT-anchored trigger: today's storylet in this character's
-                // scene + their own event plays. Falls back to the ambient line.
+                const objectiveRecord = sceneId ? sceneRecordByScene.get(sceneId) : undefined;
+                const sceneBeats = objectiveRecord
+                    ? [objectiveRecord]
+                    : sceneId
+                      ? (beatsByScene.get(sceneId) ?? [])
+                            .filter((b) => b.actorId !== c.id)
+                            .map((b) => b.text)
+                      : [];
+                // Event-anchored trigger; falls back to the ambient line.
                 const triggerParts: string[] = [];
                 const myEvent = eventForChar(c.id, sceneId);
                 if (myEvent) {
@@ -1039,19 +1050,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     }
                 }
                 const myVerdict = verdictByChar.get(c.id);
-                // A verdict landed this tick → this character's event is settling.
-                // Used twice: it counts as a fresh beat (so the chapter isn't
-                // skipped) AND flags the POV as a 收束 chapter (full 前因後果 +
-                // deeper coda). Named once so the double-use is explicit.
+                // A landed verdict counts as a fresh beat AND flags the POV as a
+                // closing chapter; named once so the double use is explicit.
                 const hasClosingVerdict = Boolean(myVerdict);
                 if (myVerdict) {
                     triggerParts.push(
                         `這一局已見分曉：${myVerdict}。寫你對這個結果的真實反應——服氣或不服、得了什麼或失了什麼、下一步的打算`,
                     );
                 }
-                // Same open event + nothing new this tick → don't re-narrate
-                // the same moment (the duplicate-chapter bug: stuck events made
-                // every tick re-write an identical wardrobe-room scene).
+                // Same open event + nothing new → don't re-narrate the same
+                // moment (the duplicate-chapter bug).
                 const eventKey = myEvent ? `${sceneId ?? ''}:${myEvent.label}` : null;
                 const freshBeat =
                     Boolean(myTalk) ||
@@ -1070,10 +1078,21 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         } satisfies Awaited<ReturnType<typeof runPovForCharacter>>,
                     };
                 }
-                const trigger =
+                const baseTrigger =
                     triggerParts.length > 0
                         ? `${dayLabel} — 今日，${triggerParts.join('；')}。請從你的視角，寫此刻你身在其中的一個具體場面：你看見誰、做了什麼、最在意什麼。不要複述事件，只寫你眼中的這一刻。`
                         : `${dayLabel} — 戲班又過了一段光景。請截取這個角色在此刻的一個具體場面：身在何處、看見誰或避開誰、手上正在做什麼、眼下有什麼利害。`;
+                // §4d.2: only co-present contesters feel the mounting arc pressure.
+                const feelsArc =
+                    Boolean(arcAwareness) &&
+                    c.id !== arcCentralId &&
+                    rosterById.get(c.id)?.currentSceneId === arcCentralScene;
+                const trigger = feelsArc ? `${baseTrigger}\n（${arcAwareness}）` : baseTrigger;
+                const povState = {
+                    hunger: 0.2,
+                    fatigue: Math.min(1, dayFatigue + (freshBeat ? 0.1 : 0)),
+                    mood: 0,
+                };
                 const r = await runPovForCharacter(admin, c.id, {
                     triggerNarrative: trigger,
                     forceRun: true,
@@ -1083,14 +1102,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     sceneBeats: sceneBeats.length > 0 ? sceneBeats : undefined,
                     rosterContext: rosterContextById.get(c.id),
                     rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
-                    // Two recalls give the chapter both CONTINUITY and THICKNESS:
-                    //   · 'pov' (trigger query) — recent chapters/event memories so
-                    //     the serial picks up where it left off;
-                    //   · 'life' (LIFE_QUERY) — genesis-seeded non-work memories
-                    //     (childhood, family, old loves, the private ache) so even a
-                    //     work scene reads like a person with a life behind them.
-                    // We pass skipMemoryRecall so pov-core doesn't re-decrypt; the
-                    // tick owns recall (RECALL_CONCURRENCY-throttled SEAL budget).
+                    // Two recalls: 'pov' for serial continuity, 'life' for
+                    // genesis-seeded non-work thickness. skipMemoryRecall because
+                    // the tick owns recall (throttled SEAL budget).
                     recentMemorySnippets: [
                         ...new Set([
                             ...(await memoryContext.recent(c.id, trigger, 4, 'pov')),
@@ -1100,6 +1114,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     relationshipHints: await memoryContext.relationshipHints(c.id, 5),
                     planHint: await memoryContext.plan(c.id),
                     skipMemoryRecall: true,
+                    state: povState,
                 });
                 tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} chars)`);
                 dumpChapter(
@@ -1142,8 +1157,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 d.sagaId,
                 toAnchor.map(({ c, r }) => {
                     const cSceneId = rosterById.get(c.id)?.currentSceneId;
-                    // The on-chain event this chapter narrates (the parallel event
-                    // covering this character) — its tx digest is the proof.
+                    // The on-chain event this chapter narrates; its id is the proof.
                     const ev = eventForChar(c.id, cSceneId);
                     const provenance: ChapterProvenance = {
                         v: 1,
@@ -1180,12 +1194,82 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
             }
 
-            // 4.5 EVENT CUT — weave this event's POVs into the canonical 「回」
-            //   (event_cut). Only when the storylet opened and ≥2 of its cast
-            //   actually wrote a POV this tick. Failure-isolated (inline, timeout-
-            //   bounded) so a weave error never blocks the tick. The cut is the
-            //   commercial unit; POVs stay the per-character raw feed.
-            //   See docs/narrative/CONTENT_PIPELINE.md §2.
+            // 4.4 RELATIONSHIP EVOLVE (§2.1) — an LLM reads each event's POVs,
+            //   infers directed feelings and seeds them on chain; cooling fades
+            //   unreaffirmed ties. Owned-cap tx → serial cutJobs. Any co-present
+            //   cast member is a valid edge target; needs ≥2 with POV prose.
+            if (process.env.ES_RELATIONSHIP_EVOLVE !== '0') {
+                const povByChar = new Map(
+                    toAnchor.filter(({ r }) => r.chapter.trim()).map(({ c, r }) => [c.id, r.chapter.trim()]),
+                );
+                for (const st of storylets) {
+                    if (!st.characterIds || st.characterIds.length < 2) continue;
+                    // Include everyone the roster places in this scene, beyond the event's desirers.
+                    const sceneCast = activeRoster
+                        .filter((rp) => rp.currentSceneId === st.sceneId)
+                        .map((rp) => rp.id);
+                    const allIds = Array.from(new Set([...st.characterIds, ...sceneCast]));
+                    const participants = allIds.map((id) => ({
+                        characterId: id,
+                        name: rosterById.get(id)?.name ?? id,
+                        pov: povByChar.get(id) ?? '',
+                    }));
+                    if (participants.filter((p) => p.pov).length < 2) continue;
+                    cutJobs.push(async () => {
+                        const res = await evolveRelationshipsFromScene({
+                            participants,
+                            sceneId: st.sceneId,
+                            eventLabel: st.label,
+                        });
+                        tlog(
+                            `   ⤳ 關係演化 ← 〔${st.label}〕 seeded ${res.seeded}/${res.proposed}` +
+                                (res.error ? ` err=${res.error}` : '') +
+                                (res.skipReason ? ` skip=${res.skipReason}` : ''),
+                        );
+                    });
+                }
+            }
+
+            // 4.6 ARC CONVERGENCE (§4d.2) — accumulate real pressing into forcing,
+            //   judge each central beat, retire + spawn the aftermath on an
+            //   irreversible answer. pressingCount is contester-count, never a tick index.
+            if (arcConvergence) {
+                try {
+                    const framing =
+                        storylets.find((s) => s.characterIds && s.characterIds.length >= 2)?.label ??
+                        storylets[0]?.label ??
+                        '';
+                    const arc = await openArcIfNeeded(
+                        d.sagaId,
+                        framing,
+                        activeRoster.map((r) => r.name),
+                        (n) => activeRoster.find((r) => r.name === n)?.id,
+                    );
+                    if (arc) {
+                        const centralSceneId = rosterById.get(arc.centralCharId)?.currentSceneId;
+                        const pressingCount = centralSceneId
+                            ? activeRoster.filter((r) => r.currentSceneId === centralSceneId && r.id !== arc.centralCharId).length
+                            : 0;
+                        const centralBeat = toAnchor.find(({ c }) => c.id === arc.centralCharId)?.r.chapter?.trim() ?? '';
+                        const step = await stepArc(d.sagaId, pressingCount, centralBeat);
+                        if (step) {
+                            tlog(
+                                `   ⟐ arc〔${step.question.slice(0, 22)}〕壓力${step.pressure.toFixed(1)}·逼${step.forcing}` +
+                                    (step.retired
+                                        ? ` → 答「${step.retired.answer}」退役` +
+                                          (step.retired.aftermath ? `，牽出「${step.retired.aftermath.question.slice(0, 22)}」` : '')
+                                        : ''),
+                            );
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[tick-loop] arc convergence failed:', err);
+                }
+            }
+
+            // 4.5 EVENT CUT — weave the event's POVs into the canonical chapter
+            //   (docs/narrative/CONTENT_PIPELINE.md §2). The cut is the commercial unit;
+            //   POVs stay the per-character raw feed.
             if (input.eventChapter ?? true) {
                 const povsFor = (st: TickStoryletResult) => {
                     const castSet = new Set(st.characterIds);
@@ -1201,16 +1285,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             };
                         });
                 };
-                // Each LIVE event accumulates this tick's cast POVs under its
-                // stable id (spine mode); a non-spine storylet weaves immediately.
+                // Spine mode accumulates POVs under the event's stable id; a
+                // non-spine storylet weaves immediately.
                 for (const st of storylets) {
                     if (!st.opened) continue;
                     const cutPovs = povsFor(st);
-                    // [ch-diag] what material each LIVE event gathered THIS tick.
-                    // Grep `[ch-diag] accumulate`: povThisTick=0 across ticks means
-                    // the cast isn't narrating (POVs never land) → no weave material;
-                    // voices<2 every tick on a spine event means the cut only ever
-                    // forms at resolve (via memory or the chain-recovery fallback).
+                    // [ch-diag] accumulate: what material each live event gathered this tick.
                     console.log(
                         `[ch-diag] accumulate event=${(st.digest ?? 'none').slice(0, 10)} day=${worldTime?.day ?? '?'} ` +
                             `mode=${spineMode ? 'spine' : 'immediate'} tmpl=${st.templateId} cast=${st.characterIds.length} ` +
@@ -1243,26 +1323,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         });
                     }
                 }
-                // (spine RESOLVE+SETTLE moved OUT of the POV/eventChapter gate — see below)
             }
         }
     } else {
         tlog(`④ POV skipped (pov=false)`);
     }
 
-    // SPINE RESOLVE + SETTLE — runs REGARDLESS of POV/eventChapter. Resource settlement
-    // is a chain-state operation and must NOT be gated on narration: when pov=false (or
-    // no narratable cast), an aged event must still RESOLVE and TRANSFER its resource.
-    // It previously sat inside the `if (input.pov)` → `if (input.eventChapter)` block, so
-    // a pov:false tick never resolved anything (the 收尾0, alongside the struct bug). POVs
-    // for the weave are accumulated upstream (spineAccumulatePovs); if none, the weave is
+    // SPINE RESOLVE + SETTLE — runs regardless of POV/eventChapter: settlement is
+    // a chain-state operation and must never be gated on narration (a pov=false
+    // tick must still resolve and transfer). If no POVs accumulated, the weave is
     // simply empty while the settle still lands.
     if (spineMode && spineCtx) {
         const ctx = spineCtx;
-        // [ch-diag] one-line per-tick spine census. Grep `[ch-diag] tick`:
-        //   resolve=0 across many ticks while open>0 = events linger and never
-        //   resolve (the "卡住" you worry about — pair with `[ch-diag] resolve`
-        //   resolved=false to confirm a wedged resolve vs just young events).
+        // [ch-diag] tick: one-line per-tick spine census.
         const count = (a: SpineStep['action']) => spineSteps.filter((s) => s.action === a).length;
         console.log(
             `[ch-diag] tick day=${worldTime?.day ?? '?'} mode=spine live=${storylets.length} ` +
@@ -1272,8 +1345,6 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             if (step.action !== 'resolve') continue;
             const s = step;
             cutJobs.push(async () => {
-                // The rich per-event outcome is logged inside spineResolveAndWeave
-                // as `[ch-diag] resolve …` (memVoices / path / wove / skip / err).
                 await spineResolveAndWeave(admin, ctx, s, worldTime?.day);
             });
         }
@@ -1283,14 +1354,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         );
     }
 
-    // 4.7 ENCOUNTER — ONE autonomous 溫情/關係戲 chapter per tick. Data-driven:
-    //   among the acting slice, find the strongest CO-PRESENT pair bonded by a
-    //   director-seeded relationship tone (relationships.ts). Cooldown skips the
-    //   same pair on consecutive ticks. We GENERATE dry here (like the POV phase),
-    //   then PUSH the anchor into the serial `cutJobs` queue — so the encounter's
-    //   commitment::commit can't race the POV / cut / moment owned-cap txs (single
-    //   StorytellerCap, one version at a time). Pushed BEFORE the inline job drain
-    //   below so it joins the same serial run.
+    // 4.7 ENCOUNTER — one autonomous relationship chapter per tick for the
+    //   strongest co-present bonded pair. Generated dry here; the anchor is
+    //   pushed into serial `cutJobs` so it can't race the other owned-cap txs.
     if ((input.pov ?? true) && slice.length >= 2) {
         try {
             const pair = await pickEncounterPair(
@@ -1299,13 +1365,42 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 (id) => rosterById.get(id)?.name ?? nameById.get(id),
             );
             if (!pair) {
-                // no qualifying co-present bonded pair this tick — quiet skip.
+                // No qualifying co-present bonded pair this tick — quiet skip.
             } else if (lastEncounterPair === pair.pairKey) {
                 tlog(`④· encounter skipped (cooldown: ${pair.otherName}・${pair.toneZh} same pair back-to-back)`);
             } else {
                 const holder = slice.find((c) => c.id === pair.holderId);
                 const holderName = holder?.name ?? rosterById.get(pair.holderId)?.name ?? '某人';
-                const trigger = buildEncounterTrigger(pair, dayLabel);
+                // CONFESS branch — a strong, not-yet-confessed romance pair: the
+                // holder may self-decide to say it now; otherwise the usual encounter.
+                let trigger = buildEncounterTrigger(pair, dayLabel);
+                let isConfession = false;
+                if (
+                    pair.tone === 'romance' &&
+                    pair.count >= CONFESS_MIN_TIES &&
+                    !confessedPairs.has(pair.pairKey)
+                ) {
+                    // The encounter is by definition a two-person private beat, so
+                    // confession judges depth + willingness, not who else is around.
+                    const decision = await characterAgent.decideConfessAction({
+                        name: holderName,
+                        role: roleById.get(pair.holderId) ?? '—',
+                        toName: pair.otherName,
+                        toRole: roleById.get(pair.otherId) ?? '—',
+                        relationship: `戀慕很深（牽連 ${pair.count}），這份心思你揣了很久。`,
+                        situation: `散場後安靜的時分，此刻你與${pair.otherName}恰好獨處一隅，沒有外人。`,
+                    });
+                    if (decision.confess) {
+                        trigger = buildConfessTrigger(pair, dayLabel, decision.opening ?? '', decision.motive);
+                        isConfession = true;
+                        confessedPairs.add(pair.pairKey);
+                        tlog(
+                            `④· confess: ${holderName} → ${pair.otherName} ✓「${(decision.opening || decision.motive).slice(0, 28)}」`,
+                        );
+                    } else {
+                        tlog(`④· confess held: ${holderName} → ${pair.otherName}（${decision.motive.slice(0, 22)}）`);
+                    }
+                }
                 const enc = await runPovForCharacter(admin, pair.holderId, {
                     triggerNarrative: trigger,
                     mode: 'encounter',
@@ -1317,8 +1412,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
                 if (enc.ok && enc.chapter?.trim()) {
                     lastEncounterPair = pair.pairKey;
-                    // warmth beat → the handscroll's living stream (the human register,
-                    // not 爭). A short opening clause of the relationship chapter.
+                    // Warmth beat → the handscroll's living stream: a short
+                    // opening clause of the relationship chapter.
                     if (!dryRun) {
                         const warm = enc.chapter
                             .replace(/^#{1,6}\s.*$/m, '')
@@ -1335,16 +1430,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             name: holderName,
                             role: roleById.get(pair.holderId),
                             scene: rosterById.get(pair.holderId)?.currentSceneName,
-                            note: `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
+                            note: isConfession
+                                ? `向 ${pair.otherName} 表明心意 · ${pair.toneZh}（牽連 ${pair.count}）`
+                                : `與 ${pair.otherName} · ${pair.toneZh}（牽連 ${pair.count}）`,
                             dryRun,
                         },
                         enc.chapter,
                     );
                     tlog(
-                        `④· encounter: ${holderName} ⇄ ${pair.otherName} (${pair.toneZh}・ties ${pair.count})` +
+                        `④· ${isConfession ? '攤牌' : 'encounter'}: ${holderName} ⇄ ${pair.otherName} (${pair.toneZh}・ties ${pair.count})` +
                             ` ✓ (${enc.chapter.length} chars)${dryRun ? ' (preview, not anchored)' : ''}`,
                     );
-                    // Anchor in the BACKGROUND, serial with the other owned-cap jobs.
+                    // Anchor in the background, serial with the other owned-cap jobs.
                     if (!dryRun) {
                         const chapter = enc.chapter;
                         const holderId = pair.holderId;
@@ -1366,14 +1463,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // Run the captured StorytellerCap jobs SERIALLY (moment → cut), INLINE in the
-    // tick body. They were previously in an after() background, but on the self-
-    // hosted VPS the tick runs inside the /api/tick mutex's detached promise chain
-    // where after() never fires (proven: event moment / [ch-diag] resolve / event
-    // cut logs never appeared), so every event silently failed to resolve & weave.
-    // Serial order preserves the single-StorytellerCap object-version invariant;
-    // each job is failure-isolated and timeout-bounded (runJobWithTimeout) so a
-    // hung image/LLM/RPC can't wedge the tick (and, via the mutex, the whole loop).
+    // Drain the captured StorytellerCap jobs SERIALLY (moment → cut), inline —
+    // after() never fires inside the /api/tick mutex's detached promise chain.
+    // Serial order preserves the single-cap object-version invariant; each job
+    // is failure-isolated and timeout-bounded.
     if (!dryRun && (momentJobs.length > 0 || cutJobs.length > 0)) {
         tlog(`⑤′ inline background jobs: ${momentJobs.length} moment + ${cutJobs.length} cut/anchor…`);
         for (const job of momentJobs) {
@@ -1388,11 +1481,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 5. REFLECT — periodic sleep / consolidation. Characters sleep at NIGHT,
-    //    not every tick (Generative-Agents reflection is periodic, not per-
-    //    tick — answering "should they all sleep every tick?": no). Sleep
-    //    anchors via reflection::submit (Sui signing) → serial.
-    const isNight = worldTime?.partOfDay === 'night';
+    // 5. REFLECT — periodic sleep/consolidation at night, not every tick.
+    //    Anchors via reflection::submit (Sui signing) → serial.
     const sleeps: TickSleepResult[] = [];
     let sleepNote: string | undefined;
     if ((input.sleep ?? true) && !dryRun) {
@@ -1417,9 +1507,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 6. NARRATE — compile the objective gazette for the day.
-    //    一天一份: only the day's FINAL tick compiles (it then covers the whole
-    //    day). Compiling every tick produced N near-identical 第N日 gazettes.
+    // 6. NARRATE — compile the objective gazette, once per day: only the day's
+    //    final tick compiles (compiling every tick produced near-identical gazettes).
     let gazette: TickGazetteResult | undefined;
     const isDayEnd = !worldTime || worldTime.tickOfDay >= worldTime.ticksPerDay - 1;
     if ((input.gazette ?? true) && !dryRun && !isDayEnd) {
@@ -1442,8 +1531,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         };
     }
 
-    // Carry this tick's resolutions forward so next tick's PERCEIVE feeds them as
-    // news — the Δ that lets a plan RESPOND to「某事件收場/誰贏」instead of looping.
+    // Carry this tick's resolutions forward so next tick's PERCEIVE feeds them
+    // as news — the delta that lets a plan respond instead of looping.
     if (situationPerceive) {
         const resolvedLite = resolves
             .filter((r) => r.ok)

@@ -171,24 +171,41 @@ export function seedWorld(opts: SeedOptions = {}): void {
 
     harnessChain.resources.clear();
     if (opts.withResource ?? true) {
-        // One capacity-1 "partnership" slot the cast contests — the lever a resolved
-        // event transfers. Start it held by the first character so a reallocate is
-        // possible (more interesting than acquire-from-free).
-        const resId = fakeId('h-res-partnership');
-        const tableId = fakeId('h-res-partnership-table');
+        // EMERGENT-RELATIONSHIPS EXPERIMENT (v2 — 感情土壤). The seeded event is an
+        // AFFECTION triangle (多人暗自傾心 文), used PURELY as a POV-soil generator — NOT
+        // as a winner-takes-all settlement.
+        //
+        // The earlier mistakes, and what this fixes:
+        //   · affection-as-contested-resource → settled one "winner" who 獨佔 文's heart.
+        //     Wrong: feeling is a relationship, never a thing someone seizes.
+        //   · partnership(搭戲) driver → POVs were about FIGHTING FOR A SPOT, so evolve
+        //     only ever inferred rivalry, and 文 wasn't even a POV participant → no
+        //     romance had any source.
+        //
+        // affection framing puts everyone's gaze ON 文 (傾心/吃醋/試探) with 文 ON STAGE,
+        // so romance/rivalry/tension all have a source. The ACTUAL settlement is
+        // relationship-evolve.ts reading those charged POVs and writing back DIRECTED
+        // tones (孟→文 戀慕, 姚→孟 競爭, 文→孟 緊張…). The contested-winner settle still
+        // runs but is IGNORED — we read the evolve graph, not who 'won' 文.
+        //
+        // LLM-facing chain: desireStatementFor(affection:文) → 「傾心於文」 → framingForStatement
+        // → contention:affection, label「誰能贏得文的情意，成了眾人心照不宣的暗中角力」.
+        const resId = fakeId('h-res-affection');
+        const tableId = fakeId('h-res-affection-table');
         const res: FakeResource = {
             id: resId,
             sagaId: SAGA,
             archetype: 'capacity-1-slot',
-            label: 'partnership:' + cast[0].name,
+            label: 'affection:' + cast[0].name,
             capacity: 1n,
             tableId,
-            allocations: new Map([[cast[0].id, 1n]]),
+            allocations: new Map(),
         };
         harnessChain.resources.set(resId, res);
     }
 
     harnessChain.events.clear();
+    harnessChain.relationships.length = 0;
 }
 
 export function setHarnessMode(mode: FakeMode, extra: Partial<FakeModeConfig> = {}): void {

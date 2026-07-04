@@ -10,7 +10,8 @@
         "type-check": "tsc --noEmit",
         "test": "node --test \"src/**/*.test.ts\"",
         "test:settlement": "tsx --test src/lib/actions/settlement-harness/settlement.harness.ts",
-        "harness:full-tick": "tsx src/lib/actions/full-tick-harness/full-tick.harness.ts"
+        "harness:full-tick": "tsx src/lib/actions/full-tick-harness/full-tick.harness.ts",
+        "harness:narrative": "tsx src/lib/actions/full-tick-harness/narrative.harness.ts"
     },
     "dependencies": {
         "@endless-story/chamber-3d": "workspace:*",
