@@ -42,6 +42,9 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
+import { applyRipples, decayWants, newWant } from '@/lib/chain/want-core';
+import { loadWants, saveWants } from '@/lib/chain/want-store';
+import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -226,6 +229,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const centrality = envFlag('TICK_CENTRALITY');
     // §2.51: spotlight rotation, selection-only (settlement reads raw rows). Default off.
     const actorFatigue = envFlag('TICK_ACTOR_FATIGUE');
+    // Want-driven per-scene interaction loops as the narrative driver (§2.36–2.48);
+    // contested resources keep only the economic settlement lane. Default off.
+    const wantEngine = envFlag('TICK_WANT_ENGINE');
     // §4d.2: arc convergence state machine (off-chain arc state). Default off.
     const arcConvergence = envFlag('TICK_ARC_CONVERGENCE');
     const maxConcurrentEvents = Math.max(
@@ -936,6 +942,119 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         );
     }
 
+    // 3.9 WANT SCENES (flag TICK_WANT_ENGINE) — per-scene interaction loops
+    //   driven by each character's hottest want (§2.48). Beats join the shared
+    //   objective ledger (scene records + POV sceneBeats + 手卷) exactly like
+    //   move/social/act beats. Night ticks fast-forward (sleep consolidates).
+    //   Failure-isolated; never blocks the tick.
+    const wantActed: string[] = [];
+    if (wantEngine && slice.length > 0 && !dryRun) {
+        if (isNight) {
+            tlog('③⁹ want scenes: night — 快轉, sleep consolidates');
+        } else {
+            try {
+                const nowTick = spineClockTick();
+                const wants = loadWants(d.sagaId);
+                for (const c of slice) {
+                    if (wants.some((w) => w.characterId === c.id)) continue;
+                    const derived = await characterAgent.deriveGenesisWants({
+                        name: c.name,
+                        role: roleById.get(c.id) ?? '—',
+                        gender: c.gender,
+                        ageYears: c.age,
+                        description: c.description,
+                        castNames: slice.map((x) => x.name),
+                    });
+                    for (const g of derived) {
+                        wants.push(
+                            newWant({
+                                characterId: c.id,
+                                layer: g.layer,
+                                desc: g.desc,
+                                target: g.target,
+                                weight: g.weight,
+                                sat: g.sat,
+                                resistance: g.resistance,
+                                kind: 'narrative',
+                                source: 'genesis',
+                                bornTick: nowTick,
+                            }),
+                        );
+                    }
+                    if (derived.length > 0) tlog(`③⁹ genesis wants: ${c.name} ×${derived.length}`);
+                }
+                decayWants(wants);
+
+                const clock = worldTime?.partOfDay ?? '白日';
+                const byScene = new Map<string, Character[]>();
+                for (const c of slice) {
+                    const sid = rosterById.get(c.id)?.currentSceneId;
+                    if (!sid) continue;
+                    const arr = byScene.get(sid);
+                    if (arr) arr.push(c);
+                    else byScene.set(sid, [c]);
+                }
+                let beatCount = 0;
+                for (const [sceneId, cs] of byScene) {
+                    const info = activeScenes.find((sc) => sc.id === sceneId);
+                    const isPrivate = (info?.privacyLevel ?? 0) >= 3;
+                    const sceneName = sceneNameById.get(sceneId) ?? '戲班';
+                    const loop = await runSceneLoop({
+                        sceneId,
+                        sceneName,
+                        isPrivate,
+                        clock,
+                        tone: narrativeProfile?.soul?.toneRegister,
+                        cast: cs.map((c) => ({
+                            characterId: c.id,
+                            name: c.name,
+                            persona: c.description,
+                        })),
+                        wants,
+                        tick: nowTick,
+                    });
+                    for (const b of loop.beats) {
+                        pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
+                        recordSceneLine(sceneId, b.characterId, b.text, 'act');
+                    }
+                    beatCount += loop.beats.length;
+                    wantActed.push(...loop.actedCharacterIds.filter((id) => !wantActed.includes(id)));
+                    for (const rv of loop.resolved) {
+                        tlog(
+                            `③⁹ resolved: ${nameById.get(rv.want.characterId) ?? '?'}「${rv.want.desc}」${rv.note ? ` — ${rv.note}` : ''}`,
+                        );
+                    }
+                    if (loop.beats.length > 0) {
+                        const deltas = await characterAgent.judgeRipples({
+                            sceneName,
+                            beats: loop.beats.map((b) => `${b.name}：${b.text}`),
+                            roster: slice.map((c) => ({
+                                characterId: c.id,
+                                name: c.name,
+                                wants: wants
+                                    .filter((w) => !w.retired && w.characterId === c.id)
+                                    .map((w) => w.desc),
+                            })),
+                        });
+                        const spawned = applyRipples(wants, deltas, nowTick);
+                        for (const sp of spawned) {
+                            tlog(`③⁹ new thread: ${nameById.get(sp.characterId) ?? '?'}「${sp.desc}」`);
+                        }
+                    }
+                }
+                saveWants(d.sagaId, wants);
+                if (actorFatigue && wantActed.length > 0) {
+                    const bumped = bumpActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? fatigueLedger, wantActed);
+                    actorFatigueBySaga.set(d.sagaId, bumped);
+                }
+                const live = wants.filter((w) => !w.retired).length;
+                tlog(`③⁹ want scenes: ${byScene.size} scene(s) · ${beatCount} beat(s) · ${live} live want(s)`);
+            } catch (err) {
+                console.warn('[tick-loop] want engine failed:', err);
+            }
+        }
+    }
+
     const povs: TickPovResult[] = [];
     if (input.pov ?? true) {
         // 4. PRODUCE — POV chapter per character with a narratable beat this tick
@@ -943,6 +1062,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         const narratable = new Set<string>();
         for (const st of storylets) for (const id of st.characterIds) narratable.add(id);
         for (const a of acts) if (a.ok) narratable.add(a.characterId);
+        for (const id of wantActed) narratable.add(id);
         // Every participant of a just-closed event narrates the outcome — this is
         // where on-chain win/loss enters the story.
         const verdictByChar = new Map<string, string>();
