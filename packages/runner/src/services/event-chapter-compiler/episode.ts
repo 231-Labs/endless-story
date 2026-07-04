@@ -15,6 +15,10 @@ export interface ComposeEpisodeInput {
     materialLines: string[];
     /** Live unresolved tensions (owner + want one-liners) the hook may draw from. */
     tensionLines?: string[];
+    /** The day's first-person POV chapters (the subscriber product): the weaver
+     *  paraphrases interiority freely but quotes at most two lines per character —
+     *  the episode is the trailer, the POV serial is the paid full text. */
+    povTexts?: Array<{ name: string; text: string }>;
     soul?: SagaSoul;
 }
 
@@ -29,10 +33,13 @@ export function buildEpisodeSystemPrompt(soul?: SagaSoul): string {
         '   一天壓成一集，不是流水帳。',
         '3. **併發用「與此同時／那廂」轉場**；時辰推移要讓讀者感覺到日影在走。',
         '4. **回目**：第一行 `## {七到十二字上聯}　{七到十二字下聯}`，點出今日最要緊的張力，不劇透結局。',
-        '5. **收尾要有鉤子**：從【懸著的事】裡挑一縷今日確實被撩動的，收在一個未決的動作、',
+        '5. **內心戲**：各人的【心聲】素材可自由化用 —— 用你自己的話把心緒織進場面（誰的眼',
+        '   在躲、哪句話嚥了回去），讓讀者貼著人心走；但**逐字引用心聲原句每人至多兩句** ——',
+        '   完整的第一人稱心聲是各角色自己的連載，你只給引子。',
+        '6. **收尾要有鉤子**：從【懸著的事】裡挑一縷今日確實被撩動的，收在一個未決的動作、',
         '   一句沒出口的話、或一個誰也沒接的眼神上。**嚴禁**「且看下回分解」「欲知後事如何」',
         '   之類說書套語 —— 鉤子藏在情節與人物裡，不是收場白。',
-        '6. 篇幅 600–1000 字，寧緊勿水。純 markdown，從 `## ` 開始，不要 ```fence```。',
+        '7. 篇幅 1200–1800 字，密度優先：厚在心緒與張力，不是流水帳。純 markdown，從 `## ` 開始，不要 ```fence```。',
     ];
     const soulBlock = buildSagaSoulBlock(soul);
     return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
@@ -45,16 +52,21 @@ export async function composeEpisode(input: ComposeEpisodeInput): Promise<string
         const tension = input.tensionLines?.length
             ? `\n\n【懸著的事（鉤子只能從這裡挑）】\n${input.tensionLines.join('\n')}`
             : '';
+        const povs = input.povTexts?.length
+            ? `\n\n【各人心聲（化用為主，逐字引用每人至多兩句）】\n${input.povTexts
+                  .map((p) => `— ${p.name} —\n${p.text}`)
+                  .join('\n\n')}`
+            : '';
         const res = await client.chat({
             model: client.defaultModel,
             system: buildEpisodeSystemPrompt(input.soul),
             messages: [
                 {
                     role: 'user',
-                    content: `【第 ${input.day} 日的素材】\n${input.materialLines.join('\n')}${tension}`,
+                    content: `【第 ${input.day} 日的素材】\n${input.materialLines.join('\n')}${povs}${tension}`,
                 },
             ],
-            maxTokens: 1400,
+            maxTokens: 2600,
             temperature: 0.85,
         });
         const text = res.text?.trim();

@@ -125,7 +125,7 @@ const actorFatigueBySaga = new Map<string, FatigueLedger>();
 
 /** Day accumulator for the episode weaver: clock markers + beat lines + actors
  *  (process-level; a restart drops part of one day's material, acceptable). */
-const episodeDayBySaga = new Map<string, { lines: string[]; actorIds: Set<string>; sceneIds: string[] }>();
+const episodeDayBySaga = new Map<string, { lines: string[]; actorIds: Set<string>; sceneIds: string[]; povByName: Map<string, string> }>();
 
 /** Last narrated event per character (process-local). While an event stays open,
  *  a character with no new beat must not re-write the same scene every tick. */
@@ -1034,7 +1034,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         wants,
                         tick: nowTick,
                     });
-                    const acc = episodeDayBySaga.get(d.sagaId) ?? { lines: [], actorIds: new Set<string>(), sceneIds: [] };
+                    const acc = episodeDayBySaga.get(d.sagaId) ?? { lines: [], actorIds: new Set<string>(), sceneIds: [], povByName: new Map<string, string>() };
                     if (loop.beats.length > 0 && acc.lines[acc.lines.length - 1] !== `【${clock}】`) acc.lines.push(`【${clock}】`);
                     for (const b of loop.beats) {
                         pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
@@ -1369,6 +1369,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }),
             );
             const byChar = new Map(batch.map((b) => [b.characterId, b]));
+            if (wantEngine) {
+                const acc =
+                    episodeDayBySaga.get(d.sagaId) ??
+                    { lines: [], actorIds: new Set<string>(), sceneIds: [], povByName: new Map<string, string>() };
+                for (const { c, r } of toAnchor) {
+                    if (r.chapter.trim()) acc.povByName.set(c.name, r.chapter.trim().slice(0, 1100));
+                }
+                episodeDayBySaga.set(d.sagaId, acc);
+            }
             for (const { c, r } of toAnchor) {
                 const b = byChar.get(c.id);
                 povs.push({
@@ -1735,6 +1744,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     day: worldTime?.day ?? 0,
                     materialLines: acc.lines,
                     tensionLines,
+                    povTexts: [...acc.povByName.entries()].map(([name, text]) => ({ name, text })),
                     soul: narrativeProfile?.soul,
                 });
                 if (prose) {
