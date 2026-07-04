@@ -31,6 +31,7 @@ import {
 import { fetchRelationshipHints } from '@/lib/chain/relationships';
 import { resolveNetwork } from '@/lib/chain/network';
 import { getSagaSoulOverride } from '@/lib/chain/saga-soul-override';
+import { loadNarrativeProfile } from '@/lib/chain/narrative-profile';
 
 /**
  * Semantic query for the "thickness" recall — pulls a character's non-work
@@ -303,8 +304,9 @@ export async function runPovForCharacter(
         const res = await runnerCharacterWorker.runOnce({
             characterId,
             sagaId: d.sagaId,
-            // Observatory soul override (colour + stance); null in production.
-            sagaSoul: getSagaSoulOverride() ?? undefined,
+            // Observatory soul override wins; production reads the story preset's
+            // narrative profile (world genre base + saga voice knobs).
+            sagaSoul: getSagaSoulOverride() ?? (await loadNarrativeProfile()).soul,
             triggerNarrative: opts.triggerNarrative,
             role,
             mode: opts.mode,

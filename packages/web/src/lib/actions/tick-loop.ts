@@ -57,6 +57,7 @@ import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
+import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -285,6 +286,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const since = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
     const tlog = (m: string) => console.log(`${clr.dim(`[tick ${since()}]`)} ${m}`);
     tlog(`◆ tick begins${dryRun ? ' (dry-run)' : ''}`);
+
+    // 0. NARRATIVE PROFILE — install this world/saga's content (framing labels,
+    //    feature capabilities) into the engine seams. Failure-isolated defaults.
+    const narrativeProfile = await installNarrativeProfile().catch(() => null);
 
     // 1. ADVANCE (chain mutation — skipped on dry-run).
     let advanced = false;
@@ -846,7 +851,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   (img2img off each participant's anchor → faces don't drift), appended as
     //   kind=4 to every participant + tagged with the source event tx.
     for (const st of storylets) {
-        if (!((input.eventImage ?? true) && !dryRun && st.opened && st.characterIds.length >= 2)) continue;
+        if (!((input.eventImage ?? narrativeProfile?.features.eventImage ?? true) && !dryRun && st.opened && st.characterIds.length >= 2)) continue;
         momentJobs.push(async () => {
             const r = await generateEventMomentAction({
                 characterIds: st.characterIds,

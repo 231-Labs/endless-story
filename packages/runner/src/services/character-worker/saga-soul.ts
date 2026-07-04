@@ -40,6 +40,10 @@ export interface SagaSoul {
      *  portrait); intentionally NOT rendered into the POV block — the user
      *  prompt already states the affiliation. */
     sagaName?: string;
+    /** WORLD-tier genre/style line (story preset `world.narrative.genre_base`).
+     *  Replaces the hardcoded genre line in the POV voice rules; unset = engine
+     *  default (byte-identical prose). */
+    genreBase?: string;
     /** Premise — on-chain `Saga.description`: what this troupe is staging. */
     premise?: string;
     /** Event temperament — off-stage drama, conflict type, narrative pace (richer, off-baseline; Tier 2). */

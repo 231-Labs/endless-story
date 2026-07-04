@@ -27,6 +27,13 @@ export interface StoryWorld {
     days_per_tick_bp: number;
     tick_interval_ms: number;
   };
+  /** World-tier narrative profile: content shared by every saga in this world.
+   *  Engine craft rules stay in code; only content lives here. */
+  narrative?: {
+    /** Genre/style line for POV voice rules (e.g. 民初梨園小說 vs 武俠).
+     *  Unset = engine default. */
+    genre_base?: string;
+  };
 }
 
 export interface StoryAttributeDef {
@@ -71,6 +78,26 @@ export interface StorySaga {
   rhythm_hints?: string;
   // Per-saga portrait art direction. '' when unset.
   portrait_tone?: string;
+  /** Saga-tier narrative profile: this saga's voice + capabilities. Owner-editable
+   *  content/config; never engine mechanics. */
+  narrative?: {
+    /** Prose tonal register (colour only; stance is a separate knob). */
+    tone_register?: string;
+    /** Emotional stance ceiling: restrained | tender | consummate. */
+    emotional_stance?: string;
+    /** Contention framing labels by kind (spotlight/recording/partnership/
+     *  affection/generic); `{who}` interpolates the affection target. */
+    framings?: Record<string, string>;
+    /** Content-pipeline capabilities for this saga. */
+    features?: {
+      /** Multi-character event moment images. Default true. */
+      event_image?: boolean;
+      /** Beat stills. Default true. */
+      stills?: boolean;
+      /** Video derivatives. Default false. */
+      video?: boolean;
+    };
+  };
 }
 
 export interface StoryScene {
