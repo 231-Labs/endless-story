@@ -37,6 +37,14 @@
 
 ## 生產接線紀律（feat/* PR 裡遵守）
 
+- **P0 · 註解一律英文、越少越好**。只寫代碼表達不了的東西：不變量/約束、台帳 §-ref、
+  一句話的 why。中文只准出現在字串常值（prompt 內容、log 文案）與獨立文檔裡。
+- **P0b · prompt 與 code 分離**。引擎機制（鐵則、JSON schema、forcing 語言）住代碼；
+  敘事內容（文體 genre_base、framing 措辭、tone、features 開關）住 story preset 的
+  `world.narrative` / `saga.narrative`，經 `chain/narrative-profile.ts` 載入。
+  新增 prompt 時先問：這行換一個世界（鬼物種/武俠）要不要跟著換？要＝內容進 profile，
+  不要＝機制留代碼。見 `docs/narrative/NARRATIVE_PROFILE.md`。
+
 - **P1 · 新機制＝純函數模組＋單測**。純核心不 import sdk、不用 `@/` alias、
   相對 import 要帶 `.ts` 副檔名，否則 `pnpm test`（node --test）載不動
   （前例：relationship-core.ts 的抽取）。
