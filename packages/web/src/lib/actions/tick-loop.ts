@@ -1030,6 +1030,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         isPrivate,
                         clock,
                         tone: narrativeProfile?.soul?.toneRegister,
+                        etiquette: narrativeProfile?.etiquette,
                         cast: castWithMem,
                         wants,
                         tick: nowTick,
@@ -1745,6 +1746,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     materialLines: acc.lines,
                     tensionLines,
                     povTexts: [...acc.povByName.entries()].map(([name, text]) => ({ name, text })),
+                    etiquette: narrativeProfile?.etiquette,
                     soul: narrativeProfile?.soul,
                 });
                 if (prose) {

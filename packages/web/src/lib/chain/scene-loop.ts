@@ -32,6 +32,8 @@ export interface SceneLoopInput {
     stake?: string;
     /** Saga tone line (profile/soul). */
     tone?: string;
+    /** Canon honorifics facts (identity guardrail). */
+    etiquette?: string;
     cast: SceneLoopCastMember[];
     /** The saga's full want array (live + retired; mutated in place). */
     wants: Want[];
@@ -136,6 +138,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             privateAlone,
             sceneLog: log.slice(-5).join('\n'),
             stateLine: actor.stateLine,
+            etiquette: input.etiquette,
         });
 
         log.push(`${actor.name}：${r.beat}`);

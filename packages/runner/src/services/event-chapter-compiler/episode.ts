@@ -19,10 +19,12 @@ export interface ComposeEpisodeInput {
      *  paraphrases interiority freely but quotes at most two lines per character —
      *  the episode is the trailer, the POV serial is the paid full text. */
     povTexts?: Array<{ name: string; text: string }>;
+    /** Canon honorifics facts; the weaver must not invert or invent kinship. */
+    etiquette?: string;
     soul?: SagaSoul;
 }
 
-export function buildEpisodeSystemPrompt(soul?: SagaSoul): string {
+export function buildEpisodeSystemPrompt(soul?: SagaSoul, etiquette?: string): string {
     const base = [
         '你是說書人，寫今日的「一集」章回 —— 讀者每天回來追的就是這一篇。素材是一整天裡',
         '幾個場景各自發生的來回（依時辰排好）。',
@@ -40,9 +42,11 @@ export function buildEpisodeSystemPrompt(soul?: SagaSoul): string {
         '   一句沒出口的話、或一個誰也沒接的眼神上。**嚴禁**「且看下回分解」「欲知後事如何」',
         '   之類說書套語 —— 鉤子藏在情節與人物裡，不是收場白。',
         '7. 篇幅 1200–1800 字，密度優先：厚在心緒與張力，不是流水帳。純 markdown，從 `## ` 開始，不要 ```fence```。',
+        etiquette ? `8. 【稱謂鐵則】${etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
     ];
+    const lines = base.filter(Boolean);
     const soulBlock = buildSagaSoulBlock(soul);
-    return soulBlock ? `${base.join('\n')}\n${soulBlock}` : base.join('\n');
+    return soulBlock ? `${lines.join('\n')}\n${soulBlock}` : lines.join('\n');
 }
 
 export async function composeEpisode(input: ComposeEpisodeInput): Promise<string | null> {
@@ -59,7 +63,7 @@ export async function composeEpisode(input: ComposeEpisodeInput): Promise<string
             : '';
         const res = await client.chat({
             model: client.defaultModel,
-            system: buildEpisodeSystemPrompt(input.soul),
+            system: buildEpisodeSystemPrompt(input.soul, input.etiquette),
             messages: [
                 {
                     role: 'user',

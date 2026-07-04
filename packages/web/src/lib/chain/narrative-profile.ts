@@ -19,6 +19,10 @@ export interface NarrativeProfile {
     soul?: SagaSoul;
     framings?: FramingCatalog;
     features: NarrativeFeatures;
+    /** Image-pipeline style prefix for this saga's generated art. */
+    artStyle?: string;
+    /** Canon honorifics facts for beat/episode prompts. */
+    etiquette?: string;
 }
 
 const DEFAULT_FEATURES: NarrativeFeatures = { eventImage: true, stills: true, video: false };
@@ -41,6 +45,8 @@ export async function loadNarrativeProfile(): Promise<NarrativeProfile> {
         cached = {
             soul: Object.keys(soul).length > 0 ? soul : undefined,
             framings: s?.framings as FramingCatalog | undefined,
+            artStyle: s?.art_style?.trim() || undefined,
+            etiquette: s?.etiquette?.trim() || undefined,
             features: {
                 eventImage: s?.features?.event_image ?? DEFAULT_FEATURES.eventImage,
                 stills: s?.features?.stills ?? DEFAULT_FEATURES.stills,

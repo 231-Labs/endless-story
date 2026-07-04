@@ -34,6 +34,8 @@ export interface ActBeatInput {
     sceneLog: string;
     /** Daily-life undertone line (state block), optional. */
     stateLine?: string;
+    /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
+    etiquette?: string;
 }
 
 export interface BeatResult {
@@ -74,6 +76,7 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         `你就是${input.name}。${input.persona}${mem}`,
         input.tone ?? '',
         `【此刻】${input.clock}。${where}${input.stake ? `\n【風聲】${input.stake}` : ''}${state}`,
+        input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
         forceNote(input.forcing, input.privateAlone),
         '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事(開放一句)。' +
