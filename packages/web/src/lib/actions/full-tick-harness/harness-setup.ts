@@ -87,7 +87,17 @@ function patchDeployment(): void {
 
 /* ── seed ──────────────────────────────────────────────────────────────────── */
 
+export interface CanonCastMember {
+    name: string;
+    gender: string;
+    description: string;
+    role?: string;
+    ageYears?: number;
+}
+
 export interface SeedOptions {
+    /** Named cast with personas (e.g. 柳蘇 canon); overrides the anonymous shells. */
+    canonCast?: CanonCastMember[];
     /** number of fake characters (default 6). */
     cast?: number;
     /** seed one contested resource so the drama/spine path has something to settle. */
@@ -120,16 +130,20 @@ export function seedWorld(opts: SeedOptions = {}): void {
         { id: fakeId('h-gas-2'), version: 1 },
     ];
 
-    const castN = Math.max(2, opts.cast ?? 6);
+    const castN = Math.max(2, opts.canonCast?.length ?? opts.cast ?? 6);
     const cast: FakeCharacter[] = [];
     for (let i = 0; i < castN; i++) {
         const id = fakeId('h-char-' + i);
         // Spread the cast across the two scenes but cluster ≥2 in SCENE_A so a
         // storylet can quorum (event needs ≥2 co-present desirers on one axis).
         const sceneId = i < Math.ceil(castN / 2) ? SCENE_A : SCENE_B;
+        const canon = opts.canonCast?.[i];
         cast.push({
             id,
-            name: CAST_NAMES[i % CAST_NAMES.length] + (i >= CAST_NAMES.length ? String(i) : ''),
+            description: canon?.description,
+            role: canon?.role,
+            ageYears: canon?.ageYears,
+            name: canon?.name ?? CAST_NAMES[i % CAST_NAMES.length] + (i >= CAST_NAMES.length ? String(i) : ''),
             sagaId: SAGA,
             sceneId,
             ownerCapId: fakeId('h-ownercap-' + i),
@@ -141,7 +155,7 @@ export function seedWorld(opts: SeedOptions = {}): void {
                 acuity: 60 + ((i * 13) % 35),
                 disposition: 55 + ((i * 5) % 35),
             },
-            gender: i % 2 === 0 ? '女' : '男',
+            gender: canon?.gender ?? (i % 2 === 0 ? '女' : '男'),
             species: '人',
         });
     }

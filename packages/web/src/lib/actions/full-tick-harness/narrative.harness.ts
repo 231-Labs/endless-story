@@ -105,7 +105,50 @@ async function main(): Promise<void> {
     }
 
     __resetNarrativeMemory();
-    seedWorld({ cast: 6, withResource: true });
+    // 柳蘇 canon (§7 ledger): the warm-small four — 師姐妹雙向暗戀 + 慈班主 + 活寶丑。
+    // Secrets folded as (心底：…) so want-genesis can grow wants from them.
+    seedWorld({
+        withResource: true,
+        canonCast: [
+            {
+                name: '柳生春',
+                gender: '女',
+                role: '小生',
+                ageYears: 24,
+                description:
+                    '春雪社當紅小生（坤生，女兒身扮小生），台上一柄摺扇便能撩動滿堂春水的風流少年郎；' +
+                    '台下卻是個愛撒嬌、最黏師姐蘇映雪的暖姑娘。戲痴，七歲坐科，師父臨終留一句「戲比天大」與一把摺扇。' +
+                    '（心底：她與師姐是雙向暗戀，誰也不敢說破——飯碗、生旦本分、那年代；唯有台上演柳夢梅對杜麗娘時，那點愛才被許可呼吸。她怕老，怕被後浪蓋過，更怕有一天師姐也只看得見台上的她。）',
+            },
+            {
+                name: '蘇映雪',
+                gender: '女',
+                role: '花旦',
+                ageYears: 28,
+                description:
+                    '春雪社台柱花旦，台上端莊，台下極懂分寸、總替全班圓場。和柳生春搭了七八年生旦，演過千百回杜麗娘與柳夢梅。' +
+                    '（心底：她對師妹也是真的動了心，卻更不敢說破——她是師姐，該穩；那點心思只在替師妹理鬢角、留最好的點心、把茶先溫好裡露一線。她怕的不是師妹不紅，是師妹太紅，紅到誰都能借她一柄扇、同她唱一場情。）',
+            },
+            {
+                name: '田巧雲',
+                gender: '女',
+                role: '老旦',
+                ageYears: 55,
+                description:
+                    '春雪社班主，唱了一輩子老旦，如今管著一班人的吃穿冷暖。嘴上規矩嚴，心裡把戲班當一家子。' +
+                    '（心底：年輕時她也有一個沒能說出口的人，遠嫁去了南洋；看著柳蘇兩個孩子，她有時心軟，有時心驚。）',
+            },
+            {
+                name: '賴金喜',
+                gender: '男',
+                role: '丑',
+                ageYears: 30,
+                description:
+                    '春雪社的丑角，台上插科打諢，台下是個閒不住的活寶：揣著炒栗子滿後台轉，誰繃著臉他偏要逗出個笑來。' +
+                    '（心底：全班的私事他看得最清，包括那對師姐妹檯面下的事；他嘴碎，卻替她們把門看得死緊。）',
+            },
+        ],
+    });
 
     let totalRecall = 0;
     for (let i = 0; i < TICKS; i++) {
