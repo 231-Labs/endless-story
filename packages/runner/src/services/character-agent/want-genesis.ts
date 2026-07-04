@@ -131,3 +131,47 @@ export async function deriveGenesisWants(input: DeriveWantsInput): Promise<Genes
         return [];
     }
 }
+
+export interface AftermathInput {
+    name: string;
+    persona: string;
+    /** The want that just resolved, and how. */
+    resolvedDesc: string;
+    resolvedNote?: string;
+    /** The scene beats that resolved it. */
+    beats: string[];
+}
+
+/** §2.31/§2.32: a resolution opens a NEW central question grown from the answer —
+ *  fed with the character + what actually happened, so aftermath never drifts into
+ *  stock plots. Returns null when nothing genuine grows. */
+export async function deriveAftermathWant(input: AftermathInput): Promise<GenesisWant | null> {
+    try {
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system:
+                '一件懸了很久的心事剛被當事人自己了結了。判斷這個「答案」會不會在 TA 心裡長出' +
+                '**一件新的心事**（answered 不是 ended：了結會重塑生活，新的問題從答案裡長出來）。\n' +
+                '鐵則：①新心事必須從「這個人＋剛發生的事」長出來，禁止嫁接套路（密函、舊帳、黑市、尋仇）；' +
+                '②用 TA 的口吻寫（≤30字）；③若這個答案就是乾淨的收束、沒長出新東西，回 {"wants":[]}。\n' +
+                '輸出 JSON：{"wants":[{"layer":"…","desc":"…","weight":0.7,"sat":0.2,"resistance":5,"why":"…"}]}（至多一條）。不要 markdown。',
+            messages: [
+                {
+                    role: 'user',
+                    content:
+                        `# 這個人\n${input.name}：${input.persona}\n\n# 剛了結的心事\n「${input.resolvedDesc}」` +
+                        (input.resolvedNote ? `\n了結方式：${input.resolvedNote}` : '') +
+                        `\n\n# 那場戲\n${input.beats.join('\n')}`,
+                },
+            ],
+            maxTokens: 300,
+            temperature: 0.8,
+        });
+        const wants = parseGenesisWants(res.text);
+        return wants[0] ?? null;
+    } catch (err) {
+        console.warn('[want-genesis] aftermath failed:', err instanceof Error ? err.message : err);
+        return null;
+    }
+}

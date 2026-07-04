@@ -70,3 +70,5 @@ export async function composeSceneRecord(
         return '';
     }
 }
+
+export { weaveTickChapter, type WeaveTickInput } from './weave-tick.js';

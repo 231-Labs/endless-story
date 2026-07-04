@@ -14,7 +14,7 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
-import { characterAgent, sceneRecord } from '@endless-story/runner';
+import { characterAgent, sceneRecord, characterWorker as runnerWorker } from '@endless-story/runner';
 import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
@@ -24,7 +24,7 @@ import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { computeSpatialRouting } from '@/lib/chain/spatial-routing';
 import { fetchWarmGraph } from '@/lib/chain/relationship-evolve';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
-import { drainMemoryWarnings } from '@/lib/chain/memory';
+import { drainMemoryWarnings, recallForCharacter } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
 import { charactersApi } from '@/lib/api/index';
@@ -42,8 +42,8 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
-import { applyRipples, decayWants, newWant } from '@/lib/chain/want-core';
-import { loadWants, saveWants } from '@/lib/chain/want-store';
+import { applyRipples, applyDreamStirToWants, decayWants, newWant } from '@/lib/chain/want-core';
+import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
@@ -983,6 +983,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     }
                     if (derived.length > 0) tlog(`③⁹ genesis wants: ${c.name} ×${derived.length}`);
                 }
+                for (const cid of drainWantDreamStirs(d.sagaId)) {
+                    const hit = applyDreamStirToWants(wants, cid);
+                    if (hit) tlog(`③⁹ dream stir → ${nameById.get(cid) ?? cid.slice(0, 8)}「${hit.desc}」`);
+                }
                 decayWants(wants);
 
                 const clock = worldTime?.partOfDay ?? '白日';
@@ -999,17 +1003,30 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     const info = activeScenes.find((sc) => sc.id === sceneId);
                     const isPrivate = (info?.privacyLevel ?? 0) >= 3;
                     const sceneName = sceneNameById.get(sceneId) ?? '戲班';
+                    // Memory channel (§2.45 暗號 echoes): each member recalls
+                    // against their hottest want, capped small; failure-safe.
+                    const castWithMem = await Promise.all(
+                        cs.map(async (c) => {
+                            const mine = wants.filter((w) => !w.retired && w.characterId === c.id);
+                            const hot = mine.sort((x, y) => y.weight * (1 - y.sat) - x.weight * (1 - x.sat))[0];
+                            const memories = hot
+                                ? await recallForCharacter(c.id, hot.desc, 3).catch(() => [])
+                                : [];
+                            return {
+                                characterId: c.id,
+                                name: c.name,
+                                persona: c.description,
+                                memories: memories.length > 0 ? memories : undefined,
+                            };
+                        }),
+                    );
                     const loop = await runSceneLoop({
                         sceneId,
                         sceneName,
                         isPrivate,
                         clock,
                         tone: narrativeProfile?.soul?.toneRegister,
-                        cast: cs.map((c) => ({
-                            characterId: c.id,
-                            name: c.name,
-                            persona: c.description,
-                        })),
+                        cast: castWithMem,
                         wants,
                         tick: nowTick,
                     });
@@ -1024,6 +1041,32 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         tlog(
                             `③⁹ resolved: ${nameById.get(rv.want.characterId) ?? '?'}「${rv.want.desc}」${rv.note ? ` — ${rv.note}` : ''}`,
                         );
+                        const owner = cs.find((c) => c.id === rv.want.characterId);
+                        if (!owner) continue;
+                        const after = await characterAgent.deriveAftermathWant({
+                            name: owner.name,
+                            persona: owner.description,
+                            resolvedDesc: rv.want.desc,
+                            resolvedNote: rv.note,
+                            beats: loop.beats.map((b) => `${b.name}：${b.text}`),
+                        });
+                        if (after) {
+                            wants.push(
+                                newWant({
+                                    characterId: owner.id,
+                                    layer: after.layer,
+                                    desc: after.desc,
+                                    target: after.target,
+                                    weight: after.weight,
+                                    sat: after.sat,
+                                    resistance: after.resistance,
+                                    kind: 'narrative',
+                                    source: 'aftermath',
+                                    bornTick: nowTick,
+                                }),
+                            );
+                            tlog(`③⁹ aftermath: ${owner.name}「${after.desc}」`);
+                        }
                     }
                     if (loop.beats.length > 0) {
                         const deltas = await characterAgent.judgeRipples({
@@ -1044,6 +1087,22 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     }
                 }
                 saveWants(d.sagaId, wants);
+                const allBeatLines: string[] = [];
+                for (const [sid, arr] of beatsByScene) {
+                    const sn = sceneNameById.get(sid) ?? '戲班';
+                    for (const b of arr) allBeatLines.push(`[${sn}] ${b.text}`);
+                }
+                if (allBeatLines.length >= 3) {
+                    const woven = await sceneRecord.weaveTickChapter({
+                        clock,
+                        lines: allBeatLines,
+                        tone: narrativeProfile?.soul?.toneRegister,
+                    });
+                    if (woven) {
+                        dumpChapter({ kind: 'cut', day: worldTime?.day, name: 'want-回' }, woven);
+                        tlog(`③⁹ 織回: ${woven.length} chars (dumped; anchor wiring in Wave 1.5)`);
+                    }
+                }
                 if (actorFatigue && wantActed.length > 0) {
                     const bumped = bumpActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? fatigueLedger, wantActed);
                     actorFatigueBySaga.set(d.sagaId, bumped);
@@ -1606,8 +1665,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    Anchors via reflection::submit (Sui signing) → serial.
     const sleeps: TickSleepResult[] = [];
     let sleepNote: string | undefined;
+    // Want engine: fatigue-driven gate (§2.19) — night lowers the bar, high day
+    // fatigue can nap; memory floor stays inside runSleepAction. Derived fatigue
+    // (approach iii): fresh at dawn, tired by day's end.
+    const sleepFatigue = worldTime
+        ? 0.15 + (worldTime.ticksPerDay > 1 ? worldTime.tickOfDay / (worldTime.ticksPerDay - 1) : 0.5) * 0.7
+        : 0.3;
+    const sleepGate = wantEngine
+        ? sleepFatigue >= (isNight ? runnerWorker.NIGHT_SLEEP_FATIGUE : runnerWorker.DAY_SLEEP_FATIGUE)
+        : isNight;
     if ((input.sleep ?? true) && !dryRun) {
-        if (isNight) {
+        if (sleepGate) {
             tlog(`⑤ sleep consolidation (night)…`);
             for (const c of slice) {
                 const r = await runSleepAction(c.id);
@@ -1623,8 +1691,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
             }
         } else {
-            sleepNote = `非夜晚（現為 ${worldTime?.partOfDay ?? '未知'}），角色不整理記憶 — 推進到夜裡再睡`;
-            tlog(`⑤ sleep skipped (not night)`);
+            sleepNote = wantEngine
+                ? `疲勞未到（${sleepFatigue.toFixed(2)}，現為 ${worldTime?.partOfDay ?? '未知'}）— 還撐得住`
+                : `非夜晚（現為 ${worldTime?.partOfDay ?? '未知'}），角色不整理記憶 — 推進到夜裡再睡`;
+            tlog(wantEngine ? `⑤ sleep skipped (fatigue ${sleepFatigue.toFixed(2)} below bar)` : `⑤ sleep skipped (not night)`);
         }
     }
 

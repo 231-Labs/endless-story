@@ -49,7 +49,7 @@ export async function judgeRipples(input: RippleJudgeInput): Promise<RippleJudge
             model: client.defaultModel,
             system:
                 `【${input.sceneName}】剛剛這場來回，判斷牽動了誰：讓誰的心事更緊(tighten)/更鬆(loosen)，` +
-                '或替誰牽出**一件全新、簡短**的心事(newThread，≤18字，且不是把舊心事換句話說)。' +
+                '或替誰牽出**一件全新、簡短**的心事(newThread，≤18字，且不是把舊心事換句話說)。心事是掛在心上的念想，不是動作描述。' +
                 '只報真被牽動的(0~3 人)，沒有就回空陣列。\n各人現有心事：\n' +
                 rosterLines +
                 '\n輸出 JSON：{"ripples":[{"name":"誰","shift":"tighten/loosen/none","newThread":"≤18字或省略","layer":"層","target":"若指向某人"}]}。不要 markdown。',

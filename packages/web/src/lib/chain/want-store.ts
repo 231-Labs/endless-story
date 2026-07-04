@@ -53,6 +53,25 @@ export function hasWants(sagaId: string, characterId: string): boolean {
     return loadWants(sagaId).some((w) => w.characterId === characterId);
 }
 
+/* §2.51 dream dose, want lane: queued at injection, consumed by the next
+ * want-engine tick (one tighten on the dreamer's hottest want). In-memory —
+ * a restart drops at most one pending stir. */
+const pendingWantStirs = new Map<string, Set<string>>();
+
+export function queueWantDreamStir(sagaId: string, characterId: string): void {
+    if (!sagaId || !characterId) return;
+    const set = pendingWantStirs.get(sagaId) ?? new Set<string>();
+    set.add(characterId);
+    pendingWantStirs.set(sagaId, set);
+}
+
+export function drainWantDreamStirs(sagaId: string): string[] {
+    const set = pendingWantStirs.get(sagaId);
+    if (!set || set.size === 0) return [];
+    pendingWantStirs.delete(sagaId);
+    return [...set];
+}
+
 /** Test hook. */
 export function __resetWantStore(): void {
     cache = null;
