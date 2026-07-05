@@ -61,6 +61,19 @@ export const TONE_LABEL: Record<RelationshipTone, string> = {
   neutral: '平淡',
 };
 
+/** True on phone-width viewports, so the plan can switch to a portrait layout. */
+export function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return mobile;
+}
+
 export function useIsDark() {
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {
@@ -92,7 +105,11 @@ export function nodeCollisionRadius(kind: PositionedCharacter['kind']): number {
  * Pure geometry, deterministic (no randomness); initial placement carries the
  * "who's where" semantics, this only resolves overlap.
  */
-export function relaxOverlaps(nodes: PositionedCharacter[]): void {
+export function relaxOverlaps(
+  nodes: PositionedCharacter[],
+  w: number = VIEWBOX_W,
+  h: number = VIEWBOX_H,
+): void {
   const n = nodes.length;
   if (n < 2) return;
   const PAD = 10;
@@ -135,8 +152,8 @@ export function relaxOverlaps(nodes: PositionedCharacter[]): void {
       }
     }
     for (const p of nodes) {
-      p.x = clamp(p.x, 60, VIEWBOX_W - 60);
-      p.y = clamp(p.y, 60, VIEWBOX_H - 60);
+      p.x = clamp(p.x, 60, w - 60);
+      p.y = clamp(p.y, 60, h - 60);
     }
     if (!moved) break;
   }
@@ -152,16 +169,18 @@ export function relaxOverlaps(nodes: PositionedCharacter[]): void {
 export function relationshipLayout(
   nodes: PositionedCharacter[],
   edges: ReadonlyArray<{ fromId: string; toId: string; weight?: number }>,
+  w: number = VIEWBOX_W,
+  h: number = VIEWBOX_H,
 ): void {
   const n = nodes.length;
   if (n === 0) return;
-  const cx = VIEWBOX_W / 2;
-  const cy = VIEWBOX_H / 2;
+  const cx = w / 2;
+  const cy = h / 2;
   const idx = new Map(nodes.map((p, i) => [p.char.id, i]));
 
   // seed on an ellipse, evenly spread by index (deterministic)
-  const rx = VIEWBOX_W * 0.34;
-  const ry = VIEWBOX_H * 0.34;
+  const rx = w * 0.34;
+  const ry = h * 0.34;
   nodes.forEach((p, i) => {
     const a = (i / n) * Math.PI * 2;
     p.x = cx + Math.cos(a) * rx;
@@ -207,8 +226,8 @@ export function relationshipLayout(
       fy[i] += (cy - nodes[i].y) * pull;
     }
     for (let i = 0; i < n; i++) {
-      nodes[i].x = clamp(nodes[i].x + clamp(fx[i] * 0.85, -42, 42), 96, VIEWBOX_W - 96);
-      nodes[i].y = clamp(nodes[i].y + clamp(fy[i] * 0.85, -42, 42), 96, VIEWBOX_H - 96);
+      nodes[i].x = clamp(nodes[i].x + clamp(fx[i] * 0.85, -42, 42), 96, w - 96);
+      nodes[i].y = clamp(nodes[i].y + clamp(fy[i] * 0.85, -42, 42), 96, h - 96);
     }
   }
 }

@@ -65,6 +65,7 @@ export function ConstellationBackdrop({ ink }: { ink: (a: number) => string }) {
 
 export function ConstellationNode({
   positioned, isDimmed, onMouseEnter, onMouseLeave, onFocus, onPointerDown, onClick,
+  vw = VIEWBOX_W, vh = VIEWBOX_H,
 }: {
   positioned: PositionedCharacter;
   isDimmed: boolean;
@@ -73,6 +74,9 @@ export function ConstellationNode({
   onFocus?: () => void;
   onPointerDown?: () => void;
   onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
+  /** Active viewBox dims (portrait on mobile), so node % positions match the SVG. */
+  vw?: number;
+  vh?: number;
 }) {
   const { char, x, y, kind, scene } = positioned;
   const tone = characterPortraitTone(char.role);
@@ -109,7 +113,7 @@ export function ConstellationNode({
       className={`group absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 outline-none ring-offset-2 ring-offset-transparent transition-all duration-500 hover:scale-110 focus-visible:ring-2 focus-visible:ring-cinnabar active:scale-100 ${
         isDimmed ? 'opacity-25 grayscale-[0.5]' : 'opacity-100'
       }`}
-      style={{ left: `${(x / VIEWBOX_W) * 100}%`, top: `${(y / VIEWBOX_H) * 100}%` }}
+      style={{ left: `${(x / vw) * 100}%`, top: `${(y / vh) * 100}%` }}
     >
       <span
         className={`relative overflow-hidden rounded-full shadow-md transition-transform duration-300 group-hover:scale-105 ${ringClass} ${

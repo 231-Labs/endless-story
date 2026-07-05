@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type {
   Character,
   CharacterLiveState,
@@ -24,11 +24,11 @@ import {
   relaxOverlaps,
   relationshipLayout,
   useIsDark,
+  useIsMobile,
   type PositionedCharacter,
   type Zone,
 } from './constellationLayout';
 import { ConstellationBackdrop, ConstellationNode } from './ConstellationNode';
-import { getCharacterLiveIntent } from '@/lib/actions/live-state';
 
 /**
  * Cast-positions map (top-down floor plan) — same on-chain world as the handscroll,
@@ -63,56 +63,21 @@ export function CastConstellation({
   centerId?: string;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [hoveredIntent, setHoveredIntent] = useState<string | null>(null);
-  const [intentLoading, setIntentLoading] = useState(false);
-  const intentCacheRef = useRef<Record<string, string>>({});
   // 觸控的 tap 會在 click 前觸發合成 mouseenter（把 hoveredId 設好），
   // 所以「第一次點先聚焦」要用 pointerdown 當下的聚焦狀態來判斷。
   const hoveredAtPointerDownRef = useRef<string | null>(null);
-  // 手機上平面圖是可橫向平移的寬畫布（節點是固定 px、縮成整幅會疊成一團）；
-  // 初始把捲動定在畫布中央（戲班院落）。
-  const planScrollRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = planScrollRef.current;
-    if (el && el.scrollWidth > el.clientWidth) {
-      el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
-    }
-  }, []);
-
-  // 懸浮時才拉 MemWal plan（[眼下打算]），避免 saga 頁 N 次 SEAL 解密。
-  useEffect(() => {
-    if (!hoveredId) {
-      setHoveredIntent(null);
-      setIntentLoading(false);
-      return;
-    }
-
-    const cached = intentCacheRef.current[hoveredId];
-    if (cached) {
-      setHoveredIntent(cached);
-      setIntentLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setHoveredIntent(null);
-    setIntentLoading(true);
-    getCharacterLiveIntent(hoveredId)
-      .then((intent) => {
-        if (cancelled) return;
-        if (intent) intentCacheRef.current[hoveredId] = intent;
-        setHoveredIntent(intent);
-      })
-      .finally(() => {
-        if (!cancelled) setIntentLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [hoveredId]);
   const isDark = useIsDark();
+  const isMobile = useIsMobile();
   const ink = (a: number) => (isDark ? `rgba(220, 206, 176, ${a})` : `rgba(40, 38, 44, ${a})`);
+
+  // Portrait viewBox on phones so the relationship web fills the tall screen
+  // instead of squashing into a short landscape strip. Desktop unchanged.
+  const VW = isMobile ? 760 : VIEWBOX_W;
+  const VH = isMobile ? 1180 : VIEWBOX_H;
+  const saga = isMobile ? { x: 70, y: 100, w: 620, h: 980 } : SAGA;
+  const wallY = saga.y + saga.h / 2;
+  const moonR = 40;
+  const moon = { x1: saga.x + saga.w / 2 - moonR, x2: saga.x + saga.w / 2 + moonR, r: moonR };
 
   // ── Defensive dedupe ──
   const uniqCast = useMemo(() => dedupeById(cast), [cast]);
@@ -323,8 +288,8 @@ export function CastConstellation({
   // one opening room and broke on mobile. relationshipLayout re-lays them as a
   // web that fills the space (bonded near, everyone spread); relaxOverlaps then
   // guarantees no avatar sits on another.
-  relationshipLayout(positioned, uniqEdges);
-  relaxOverlaps(positioned);
+  relationshipLayout(positioned, uniqEdges, VW, VH);
+  relaxOverlaps(positioned, VW, VH);
 
   const posById = new Map(positioned.map((p) => [p.char.id, p]));
   const validEdges = uniqEdges.filter((e) => posById.has(e.fromId) && posById.has(e.toId));
@@ -424,10 +389,11 @@ export function CastConstellation({
                       <span className="shrink-0 text-sm text-ink/90">{target?.name}</span>
                       {mutual ? (
                         <span
-                          className="text-2xs tracking-[0.25em]"
+                          className="inline-flex items-center text-2xs tracking-[0.25em]"
                           style={{ color: TONE_COLOR[out!.tone!] }}
                         >
                           ⇄ {TONE_LABEL[out!.tone!]}
+                          <IntensityDots weight={Math.max(out!.weight ?? 0, inc!.weight ?? 0)} color={TONE_COLOR[out!.tone!]} />
                         </span>
                       ) : (
                         <span className="flex items-center gap-2 text-2xs tracking-[0.2em]">
@@ -475,15 +441,6 @@ export function CastConstellation({
               </div>
             ) : null}
 
-            {intentLoading ? (
-              <p className="mt-3 border-t border-hairline/35 pt-3 text-2xs italic tracking-widest text-mute/50">
-                讀取心境…
-              </p>
-            ) : hoveredIntent ? (
-              <p className="mt-3 border-t border-hairline/35 pt-3 text-2xs italic leading-relaxed text-mute/90">
-                「{hoveredIntent}」
-              </p>
-            ) : null}
           </div>
         ) : (
           <span className="sr-only">懸浮或聚焦人物節點以檢視牽絆與所在</span>
@@ -492,7 +449,6 @@ export function CastConstellation({
 
       {/* 平面圖 — 手機：橫向可平移的寬畫布；sm+：整幅置中 */}
       <div
-        ref={planScrollRef}
         className="no-scrollbar relative z-10 mx-auto w-full max-w-[calc(100vw-1.5rem)] px-2 sm:max-w-[calc(100vw-4rem)] sm:px-0 lg:max-w-[calc(85vh*1.5)]"
       >
         {/* Nodes are laid out relationally now, so the whole web fits the
@@ -500,39 +456,39 @@ export function CastConstellation({
             container-type lets the nodes size in cqw so they scale WITH the box
             (fixed-px nodes were huge on a small mobile box → the overlap). */}
         <div
-          className="relative w-full [container-type:inline-size]"
-          style={{ aspectRatio: `${VIEWBOX_W}/${VIEWBOX_H}` }}
+          className="relative mx-auto w-full [container-type:inline-size]"
+          style={{ aspectRatio: `${VW}/${VH}`, maxHeight: isMobile ? '72dvh' : undefined, maxWidth: isMobile ? `calc(72dvh * ${VW / VH})` : undefined }}
         >
           <svg
-            viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
+            viewBox={`0 0 ${VW} ${VH}`}
             className="pointer-events-none absolute inset-0 h-full w-full"
             aria-hidden
           >
             {/* saga 外牆 */}
             <rect
-              x={SAGA.x} y={SAGA.y} width={SAGA.w} height={SAGA.h}
+              x={saga.x} y={saga.y} width={saga.w} height={saga.h}
               rx="6"
               fill="rgba(var(--color-cinnabar) / 0.025)"
               stroke={ink(0.35)} strokeWidth="1.4"
             />
 
             {/* 內牆（戲樓 / 院落 分隔），月洞門斷開 */}
-            <line x1={SAGA.x} y1={WALL_Y} x2={MOON_DOOR.x1} y2={WALL_Y}
+            <line x1={saga.x} y1={wallY} x2={moon.x1} y2={wallY}
               stroke={ink(0.28)} strokeWidth="1.2" strokeDasharray="0" />
-            <line x1={MOON_DOOR.x2} y1={WALL_Y} x2={SAGA.x + SAGA.w} y2={WALL_Y}
+            <line x1={moon.x2} y1={wallY} x2={saga.x + saga.w} y2={wallY}
               stroke={ink(0.28)} strokeWidth="1.2" />
             {/* 月洞門拱 */}
             <path
-              d={`M ${MOON_DOOR.x1} ${WALL_Y} A ${MOON_DOOR.r} ${MOON_DOOR.r} 0 0 1 ${MOON_DOOR.x2} ${WALL_Y}`}
+              d={`M ${moon.x1} ${wallY} A ${moon.r} ${moon.r} 0 0 1 ${moon.x2} ${wallY}`}
               stroke={ink(0.4)} strokeWidth="1.4" fill="none"
             />
             <path
-              d={`M ${MOON_DOOR.x1 + 6} ${WALL_Y} A ${MOON_DOOR.r - 6} ${MOON_DOOR.r - 6} 0 0 1 ${MOON_DOOR.x2 - 6} ${WALL_Y}`}
+              d={`M ${moon.x1 + 6} ${wallY} A ${moon.r - 6} ${moon.r - 6} 0 0 1 ${moon.x2 - 6} ${wallY}`}
               stroke="rgb(var(--color-cinnabar))" strokeOpacity="0.32" strokeWidth="1" fill="none"
             />
 
-            {/* scene 占位（淡圈，不額外標字） */}
-            {scenes.map((s) => {
+            {/* scene 占位（淡圈，不額外標字）—— 用場景平面座標，portrait 下省略 */}
+            {!isMobile && scenes.map((s) => {
               const p = scenePlanXY(s);
               if (!p) return null;
               const isHovered = hoveredId && hoveredPos?.scene?.id === s.id;
@@ -617,7 +573,7 @@ export function CastConstellation({
             return (
               <ConstellationNode
                 key={`${p.char.id}::${p.kind}::${idx}`}
-                positioned={p} isDimmed={isDimmed}
+                positioned={p} isDimmed={isDimmed} vw={VW} vh={VH}
                 onMouseEnter={() => setHoveredId(p.char.id)}
                 onMouseLeave={() => {
                   // 觸控裝置：tap 後瀏覽器會發合成 mouseleave，會把剛聚焦的人物清掉；
@@ -654,8 +610,8 @@ export function CastConstellation({
                 aria-hidden
                 className="pointer-events-none absolute z-[5] -translate-x-1/2 whitespace-nowrap rounded border border-hairline/40 bg-surface/70 px-1.5 py-0.5 font-serif text-[10px] tracking-widest text-mute/85 backdrop-blur-sm dark:bg-elevated/60"
                 style={{
-                  left: `${(p.x / VIEWBOX_W) * 100}%`,
-                  top: `calc(${(p.y / VIEWBOX_H) * 100}% + 42px)`,
+                  left: `${(p.x / VW) * 100}%`,
+                  top: `calc(${(p.y / VH) * 100}% + 3cqw)`,
                 }}
               >
                 {p.externalLabel}
@@ -668,6 +624,24 @@ export function CastConstellation({
 }
 
 /** 牽絆面板的方向 tone 標籤：→ 此人所感 / ← 對方所感；缺向＝無感。 */
+/** Bond depth (accumulated tie weight) as three dots — so the panel shows not
+ *  just the KIND of feeling but how DEEP it runs, and the asymmetry reads. */
+function IntensityDots({ weight, color }: { weight?: number; color: string }) {
+  const w = weight ?? 0;
+  const filled = w >= 4 ? 3 : w >= 2 ? 2 : 1;
+  return (
+    <span className="ml-1 inline-flex items-center gap-[2px] align-middle" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="inline-block h-[3px] w-[3px] rounded-full"
+          style={{ backgroundColor: color, opacity: i < filled ? 0.9 : 0.2 }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function BondToneTag({ edge, dir }: { edge?: RelationshipEdge; dir: '→' | '←' }) {
   if (!edge?.tone || edge.tone === 'neutral') {
     return (
@@ -677,8 +651,9 @@ function BondToneTag({ edge, dir }: { edge?: RelationshipEdge; dir: '→' | '←
     );
   }
   return (
-    <span style={{ color: TONE_COLOR[edge.tone] }}>
+    <span className="inline-flex items-center" style={{ color: TONE_COLOR[edge.tone] }}>
       {dir} {TONE_LABEL[edge.tone]}
+      <IntensityDots weight={edge.weight} color={TONE_COLOR[edge.tone]} />
     </span>
   );
 }
