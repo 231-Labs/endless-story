@@ -2,6 +2,16 @@ import type { Saga } from '@endless-story/shared';
 
 export type EmotionalStance = 'restrained' | 'tender' | 'consummate';
 
+export interface RelationshipClimate {
+  label: string;
+  count: number;
+}
+export interface HeartLedger {
+  open: number;
+  resolved: number;
+  byLayer: { layer: string; count: number }[];
+}
+
 const STANCE_STOPS: { key: EmotionalStance; label: string; note: string }[] = [
   { key: 'restrained', label: '克制', note: '情止乎禮，戲在弦外。' },
   { key: 'tender', label: '溫存', note: '筆調轉暖，親近可明寫。' },
@@ -17,9 +27,13 @@ const STANCE_STOPS: { key: EmotionalStance; label: string; note: string }[] = [
 export function SagaCharterPanel({
   saga,
   stance = 'restrained',
+  climate = [],
+  heart,
 }: {
   saga: Saga;
   stance?: EmotionalStance;
+  climate?: RelationshipClimate[];
+  heart?: HeartLedger;
 }) {
   const { metrics } = saga;
 
@@ -38,9 +52,58 @@ export function SagaCharterPanel({
 
         <StanceSpectrum stance={stance} />
 
+        {heart && (heart.open > 0 || heart.resolved > 0) ? <HeartLedgerRow heart={heart} /> : null}
+
+        {climate.length > 0 ? <ClimateRow climate={climate} /> : null}
+
         {metrics ? <MetricsStrip metrics={metrics} /> : null}
       </div>
     </section>
+  );
+}
+
+/** 心事帳 — the troupe's emotional P&L (anonymous counts; details stay gated). */
+function HeartLedgerRow({ heart }: { heart: HeartLedger }) {
+  return (
+    <div className="mt-7 border-t border-hairline/50 pt-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-2xs tracking-[0.2em] text-mute">心事帳 · HEART</span>
+        <span className="font-mono text-sm tabular-nums text-ink">
+          未了 <span className="text-cinnabar">{heart.open}</span> 樁
+          <span className="mx-2 text-hairline">·</span>
+          已了 <span className="text-jade">{heart.resolved}</span> 樁
+        </span>
+      </div>
+      {heart.byLayer.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {heart.byLayer.map((l) => (
+            <span
+              key={l.layer}
+              className="rounded-full border border-hairline/60 px-2.5 py-0.5 text-2xs tracking-wide text-ink/75"
+            >
+              {l.layer} <span className="font-mono text-mute">{l.count}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** 關係氣象 — the shape of the emotional graph, aggregated from tone edges. */
+function ClimateRow({ climate }: { climate: RelationshipClimate[] }) {
+  return (
+    <div className="mt-6 border-t border-hairline/50 pt-6">
+      <span className="text-2xs tracking-[0.2em] text-mute">關係氣象 · TIES</span>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+        {climate.map((c) => (
+          <span key={c.label} className="font-serif text-sm text-ink/85">
+            {c.label}
+            <span className="ml-1 font-mono text-2xs text-cinnabar">×{c.count}</span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

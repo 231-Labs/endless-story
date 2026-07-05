@@ -273,3 +273,30 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
         partOfDay,
     };
 }
+
+export interface SagaHeartLedger {
+    /** 未了：live wants still driving characters. */
+    open: number;
+    /** 已了：wants that reached a resolve (not merely dropped). */
+    resolved: number;
+    /** Layer distribution among the open wants (愛/志向/戲班/…), top few. */
+    byLayer: { layer: string; count: number }[];
+}
+
+/**
+ * Anonymous heart ledger for the 規章 page — the troupe's emotional P&L. Counts
+ * and layer mix only, never a specific character's want text (that stays
+ * subscriber-gated in the scene 內頁). Reads the same want-store the engine drives.
+ */
+export async function getSagaHeartLedger(sagaId: string): Promise<SagaHeartLedger> {
+    const wants = loadWants(sagaId);
+    const open = wants.filter((w) => !w.retired);
+    const resolved = wants.filter((w) => w.resolvedTick != null).length;
+    const layerCount = new Map<string, number>();
+    for (const w of open) layerCount.set(w.layer, (layerCount.get(w.layer) ?? 0) + 1);
+    const byLayer = [...layerCount.entries()]
+        .map(([layer, count]) => ({ layer, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 4);
+    return { open: open.length, resolved, byLayer };
+}
