@@ -103,6 +103,11 @@ export function SagaScrollBackdrop({
   const isDark = useIsDark();
   const n = Math.max(1, segments.length);
   const W = n * SEG;
+  // Which segments carry a painted terrain — the generative building layer is
+  // suppressed there so the illustration stands alone (unpainted locations keep
+  // the ink motif so the scroll is never blank).
+  const artByIndex = segments.map((seg) => Boolean(terrainArtFor(seg.location.name)));
+  const allArt = artByIndex.every(Boolean);
 
   const baseOpacity = DAY_PART_INK_OPACITY[partOfDay];
   const inkOpacity = isDark ? Math.min(0.95, baseOpacity + 0.25) : baseOpacity;
@@ -161,11 +166,12 @@ export function SagaScrollBackdrop({
         {/* snow ground highlight */}
         <rect x="0" y={GROUND_Y + 20} width={W} height={VH - GROUND_Y - 20} fill="url(#snowGround)" />
 
-        {/* inter-segment low wall + moon-gate (continuity + adjacency hint) */}
-        <DividerWalls count={n} inkColor={inkColor} inkSoft={inkSoft} />
+        {/* inter-segment low wall + moon-gate — only when a bare segment needs it */}
+        {!allArt ? <DividerWalls count={n} inkColor={inkColor} inkSoft={inkSoft} /> : null}
 
         {/* one courtyard per location */}
         {segments.map((seg, i) => {
+          if (artByIndex[i]) return null; // the painting IS the building
           const motif = pickMotif(seg.location.terrain, seg.location.name);
           return (
             <Courtyard
@@ -182,6 +188,7 @@ export function SagaScrollBackdrop({
         {/* bare branches — one or two per segment, staggered */}
         <g stroke={inkColor} strokeWidth="1.2" fill="none" strokeLinecap="round">
           {Array.from({ length: n }).map((_, i) => {
+            if (artByIndex[i]) return null;
             const bx = i * SEG + (i % 2 === 0 ? 120 : SEG - 150);
             const h = 150 + (i % 3) * 28;
             return <BareTree key={i} x={bx} groundY={GROUND_Y} h={h} />;
@@ -190,7 +197,7 @@ export function SagaScrollBackdrop({
 
         {/* lanterns — two per segment, glowing at dusk/night */}
         {Array.from({ length: n }).map((_, i) =>
-          [0.32, 0.68].map((f, k) => {
+          artByIndex[i] ? [] : [0.32, 0.68].map((f, k) => {
             const lx = i * SEG + SEG * f;
             return (
               <g key={`${i}-${k}`} transform={`translate(${lx}, 540)`}>

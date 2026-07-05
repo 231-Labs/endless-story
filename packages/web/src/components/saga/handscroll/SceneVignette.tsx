@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
 import type { Character, Scene } from '@endless-story/shared';
-import { WanderingFigure } from './WanderingFigure';
 
 export interface VignetteAnchor {
   // Percent, relative to the handscroll container (300vw x 100vh)
@@ -82,41 +81,52 @@ export function SceneVignette({
         aria-label={`細看 ${scene.name}`}
         className="group absolute inset-0 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-cinnabar"
       >
-        {/* 場景小匾 */}
+        {/* 團扇 — the scene marker IS a round silk fan bearing the scene name;
+            it lifts and warms on hover. (Replaces the old text plaque + dot.) */}
         <motion.span
-          initial={{ opacity: 0, y: 6 }}
-          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded border border-hairline/50 bg-surface/85 px-3 py-1.5 font-serif text-xs tracking-[0.35em] text-ink/85 shadow-sm backdrop-blur-md dark:bg-elevated/80"
+          className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center transition-transform duration-300 ease-out group-hover:-translate-y-[calc(50%+7px)] group-hover:scale-[1.14]"
         >
-          {scene.name}
+          <span className="relative block h-[64px] w-[56px]">
+            {isPerforming ? (
+              <span
+                aria-hidden
+                className="absolute inset-x-1 top-0 h-[54px] animate-pulse rounded-full bg-cinnabar/30 blur-md"
+              />
+            ) : null}
+            {/* A silk fan reads the same in any theme: warm cream face, dark ink
+                name, so it pops on the painted terrain rather than sinking in. */}
+            <svg
+              viewBox="0 0 100 118"
+              className="relative h-full w-full drop-shadow-[0_4px_9px_rgba(20,12,8,0.55)]"
+            >
+              <rect x="47" y="86" width="6" height="30" rx="3" fill="#7a5a3c" opacity="0.9" />
+              <circle cx="50" cy="50" r="46" fill="#ece3ce" fillOpacity="0.96" />
+              <g stroke="#8a6844" strokeWidth="0.8" opacity="0.28">
+                {Array.from({ length: 9 }).map((_, k) => {
+                  const a = ((-80 + k * 20) * Math.PI) / 180;
+                  return (
+                    <line key={k} x1="50" y1="50" x2={50 + 46 * Math.cos(a)} y2={50 + 46 * Math.sin(a)} />
+                  );
+                })}
+              </g>
+              <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="none"
+                strokeWidth="2.6"
+                stroke={isPerforming ? 'rgb(var(--color-cinnabar))' : '#a8824c'}
+                opacity={isPerforming ? 0.9 : 0.75}
+              />
+            </svg>
+            <span className="pointer-events-none absolute inset-x-0 top-0 flex h-[80%] items-center justify-center font-serif text-[10px] font-medium leading-[1.12] tracking-[0.06em] text-[#3a2c22] [writing-mode:vertical-rl]">
+              {scene.name}
+            </span>
+          </span>
         </motion.span>
-
-        {/* 中心錨點 */}
-        <span
-          aria-hidden
-          className="absolute left-1/2 top-1/2 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center"
-        >
-          <span
-            className={`absolute h-8 w-8 rounded-full blur-md transition-opacity duration-500 ${
-              isPerforming ? 'bg-cinnabar/45 opacity-100' : 'bg-cinnabar/25 opacity-70'
-            }`}
-          />
-          {isPerforming ? (
-            <span
-              aria-hidden
-              className="absolute h-6 w-6 rounded-full bg-cinnabar/55 opacity-50 animate-ping"
-              style={{ animationDuration: '2.2s' }}
-            />
-          ) : null}
-          <span
-            className={`relative block h-2.5 w-2.5 rounded-full ring-2 ring-white/70 transition-transform duration-300 group-hover:scale-125 dark:ring-white/30 ${
-              isPerforming
-                ? 'bg-cinnabar shadow-[0_0_12px_rgba(176,74,60,0.6)]'
-                : 'bg-cinnabar/85 dark:bg-jade'
-            }`}
-          />
-        </span>
 
         {/* 落影 — 讓場景錨像落在手卷卷面上，而非飄在半空 */}
         <span
@@ -159,27 +169,6 @@ export function SceneVignette({
         ) : null}
       </button>
 
-      {/* 在場人物剪影 — 圍繞錨點微擺 */}
-      {present.slice(0, 4).map((c, i) => {
-        const angle = (i / Math.max(present.length, 1)) * Math.PI * 2;
-        const radius = 30;
-        const dx = Math.cos(angle) * radius;
-        const dy = Math.sin(angle) * radius * 0.6 + 28;
-        return (
-          <div
-            key={c.id}
-            className="absolute left-1/2 top-1/2"
-            style={{ transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))` }}
-          >
-            <WanderingFigure
-              character={c}
-              offsetX={0}
-              offsetY={0}
-              delaySeconds={i * 0.6}
-            />
-          </div>
-        );
-      })}
     </div>
   );
 }
