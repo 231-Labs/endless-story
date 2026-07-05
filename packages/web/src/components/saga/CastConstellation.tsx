@@ -22,6 +22,7 @@ import {
   dedupeById,
   dedupeEdges,
   relaxOverlaps,
+  relationshipLayout,
   useIsDark,
   type PositionedCharacter,
   type Zone,
@@ -316,13 +317,13 @@ export function CastConstellation({
     else placeExternal(ch, wildPrimaryCast.get(ch.id), 'wild');
   }
 
-  // ── De-overlap ──
-  // At opening the whole cast often lands in one scene (a single opening storylet).
-  // placeInScene's small-radius jitter leaves 60-76px avatars piled up, with bond
-  // curves shrunk to stubs hidden under them. Run a few rounds of collision
-  // relaxation: any two too-close nodes push apart until they're visible and curves
-  // have length. Semantics (who's in which room) still come from the initial
-  // placement; this only spreads out the pile.
+  // ── Relationship layout ──
+  // Position by WHO-IS-TIED-TO-WHOM, not by physical scene: the scene-based
+  // placement above (kept for the hover panel's 現在在) piled the whole cast into
+  // one opening room and broke on mobile. relationshipLayout re-lays them as a
+  // web that fills the space (bonded near, everyone spread); relaxOverlaps then
+  // guarantees no avatar sits on another.
+  relationshipLayout(positioned, uniqEdges);
   relaxOverlaps(positioned);
 
   const posById = new Map(positioned.map((p) => [p.char.id, p]));
@@ -492,10 +493,12 @@ export function CastConstellation({
       {/* 平面圖 — 手機：橫向可平移的寬畫布；sm+：整幅置中 */}
       <div
         ref={planScrollRef}
-        className="no-scrollbar relative z-10 w-full overflow-x-auto overflow-y-hidden px-3 sm:mx-auto sm:w-full sm:max-w-[calc(100vw-4rem)] sm:overflow-visible sm:px-0 lg:max-w-[calc(85vh*1.5)]"
+        className="no-scrollbar relative z-10 mx-auto w-full max-w-[calc(100vw-1.5rem)] px-2 sm:max-w-[calc(100vw-4rem)] sm:px-0 lg:max-w-[calc(85vh*1.5)]"
       >
+        {/* Nodes are laid out relationally now, so the whole web fits the
+            viewport — no 185vw horizontal scroll (that caused the mobile pile-up). */}
         <div
-          className="relative w-[185vw] min-w-[600px] sm:w-full sm:min-w-0"
+          className="relative w-full"
           style={{ aspectRatio: `${VIEWBOX_W}/${VIEWBOX_H}` }}
         >
           <svg
