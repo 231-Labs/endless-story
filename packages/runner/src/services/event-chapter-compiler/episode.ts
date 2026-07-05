@@ -45,7 +45,7 @@ export function buildEpisodeSystemPrompt(soul?: SagaSoul, etiquette?: string): s
         '   （誰掩了門、燈到幾更——至多一句），**不可描寫窗內發生了什麼**；【各人心聲】若',
         '   提及私處情事，同樣只可化成一絲餘味，不可鋪陳。窗內的全文是訂閱者專屬，',
         '   你只負責讓路過的人知道那扇窗亮著。',
-        '8. 篇幅 1200–1800 字，密度優先：厚在心緒與張力，不是流水帳。純 markdown，從 `## ` 開始，不要 ```fence```。',
+        '8. 篇幅 1400–2400 字，密度優先：厚在心緒與張力，不是流水帳。大班底多線並行時往上限寫，把每條線都餵飽。純 markdown，從 `## ` 開始，不要 ```fence```。',
         etiquette ? `9. 【稱謂鐵則】${etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
     ];
     const lines = base.filter(Boolean);
@@ -74,7 +74,7 @@ export async function composeEpisode(input: ComposeEpisodeInput): Promise<string
                     content: `【第 ${input.day} 日的素材】\n${input.materialLines.join('\n')}${povs}${tension}`,
                 },
             ],
-            maxTokens: 2600,
+            maxTokens: 3600,
             temperature: 0.85,
         });
         const text = res.text?.trim();
