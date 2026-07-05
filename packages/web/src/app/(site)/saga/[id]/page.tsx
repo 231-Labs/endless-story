@@ -15,6 +15,7 @@ import { SagaCharterPanel } from '@/components/saga/SagaCharterPanel';
 import { SagaDetailsTabs } from '@/components/saga/SagaDetailsTabs';
 import { OffTurfBoard } from '@/components/saga/OffTurfBoard';
 import { SagaTabsProvider } from '@/components/saga/SagaTabsContext';
+import { getSagaStanceSnapshot } from '@/lib/actions/saga-stance';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -53,13 +54,15 @@ export default async function SagaPage({
     );
   }
 
-  const [cast, scenes, locations] = await Promise.all([
+  const [cast, scenes, locations, stanceSnap] = await Promise.all([
     charactersApi.listSagaCharacters(saga.id),
     scenesApi.listScenes(saga.id),
     Promise.all(
       (saga.coveredLocationIds ?? []).map((lid) => locationsApi.getLocation(lid))
     ).then((arr) => arr.filter((l): l is NonNullable<typeof l> => Boolean(l))),
+    getSagaStanceSnapshot(),
   ]);
+  const stance = stanceSnap.stance;
   const charactersById = byId(cast);
 
   // All outgoing edges: cast↔cast + cast→wild
@@ -201,7 +204,7 @@ export default async function SagaPage({
         }
         offTurfContent={<OffTurfBoard entries={offTurfEntries} />}
         charterContent={
-          <SagaCharterPanel saga={saga} />
+          <SagaCharterPanel saga={saga} stance={stance} />
         }
       />
     </main>

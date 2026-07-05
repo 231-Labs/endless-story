@@ -1,11 +1,26 @@
 import type { Saga } from '@endless-story/shared';
 
+export type EmotionalStance = 'restrained' | 'tender' | 'consummate';
+
+const STANCE_STOPS: { key: EmotionalStance; label: string; en: string; note: string }[] = [
+  { key: 'restrained', label: '克制', en: 'Restrained', note: '含蓄留白，情止乎禮，戲在弦外。' },
+  { key: 'tender', label: '溫存', en: 'Tender', note: '筆調轉暖，親近與眷戀可以明寫。' },
+  { key: 'consummate', label: '盡致', en: 'Consummate', note: '許幽微情事在窗內演成，公開層仍隱去。' },
+];
+
 /**
  * Charter + operations — the saga's two-sided contract.
  * Visual metaphor: a troupe charter with a counting-house seal.
  * Merges Saga Prompts and Metrics into a single scroll/plaque (no revenue split).
+ * `stance` is the live troupe temperament (read-only here; the knob lives backstage).
  */
-export function SagaCharterPanel({ saga }: { saga: Saga }) {
+export function SagaCharterPanel({
+  saga,
+  stance = 'restrained',
+}: {
+  saga: Saga;
+  stance?: EmotionalStance;
+}) {
   const { sagaPrompts, metrics } = saga;
 
   if (!sagaPrompts && !metrics) return null;
@@ -36,7 +51,9 @@ export function SagaCharterPanel({ saga }: { saga: Saga }) {
                 </div>
               </header>
 
-              <dl className="grid gap-x-8 gap-y-10 sm:grid-cols-2">
+              <StanceSpectrum stance={stance} />
+
+              <dl className="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2">
                 {sagaPrompts.rhythmHints ? (
                   <PromptItem glyph="律" label="自然節律" text={sagaPrompts.rhythmHints} />
                 ) : null}
@@ -84,6 +101,83 @@ export function SagaCharterPanel({ saga }: { saga: Saga }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * 氣質光譜 — read-only gauge of where this troupe's temperament sits on the
+ * 克制 ↔ 溫存 ↔ 盡致 axis. This is the real prose knob (emotional_stance); the
+ * adjustment sits backstage, so here it only reports the live position.
+ */
+function StanceSpectrum({ stance }: { stance: EmotionalStance }) {
+  const activeIndex = Math.max(
+    0,
+    STANCE_STOPS.findIndex((s) => s.key === stance),
+  );
+  const active = STANCE_STOPS[activeIndex];
+  // Even stops → marker at 0% / 50% / 100% of the track.
+  const markerPct = (activeIndex / (STANCE_STOPS.length - 1)) * 100;
+
+  return (
+    <div className="rounded-2xl border border-hairline/50 bg-canvas/50 p-6 dark:bg-canvas/20">
+      <div className="mb-6 flex items-baseline justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs tracking-[0.2em] text-ink/80">氣質光譜</span>
+          <span className="text-2xs tracking-[0.16em] text-mute uppercase">Temperament</span>
+        </div>
+        <span className="inline-flex items-center gap-1 text-2xs tracking-widest text-mute">
+          <LockGlyph />
+          唯讀・後台可調
+        </span>
+      </div>
+
+      {/* Track */}
+      <div className="relative mx-1 mb-8 h-px bg-hairline/70">
+        <div
+          className="absolute top-0 h-px bg-cinnabar/50"
+          style={{ left: 0, width: `${markerPct}%` }}
+        />
+        {STANCE_STOPS.map((s, i) => {
+          const pct = (i / (STANCE_STOPS.length - 1)) * 100;
+          const isActive = i === activeIndex;
+          return (
+            <div
+              key={s.key}
+              className="absolute -translate-x-1/2 -translate-y-1/2"
+              style={{ left: `${pct}%`, top: '50%' }}
+            >
+              <span
+                className={
+                  isActive
+                    ? 'block h-3 w-3 rounded-full bg-cinnabar shadow-[0_0_0_4px_rgb(var(--color-cinnabar)/0.18)]'
+                    : 'block h-2 w-2 rounded-full border border-hairline bg-surface dark:bg-elevated'
+                }
+              />
+              <span
+                className={`absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap font-serif text-sm tracking-widest ${
+                  isActive ? 'text-cinnabar' : 'text-mute'
+                }`}
+              >
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="font-serif text-sm italic leading-relaxed text-ink/85">
+        現於「{active.label}」。{active.note}
+      </p>
+    </div>
+  );
+}
+
+function LockGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden className="text-mute">
+      <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
   );
 }
 
