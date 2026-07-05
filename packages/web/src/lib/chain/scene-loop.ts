@@ -59,6 +59,9 @@ export interface SceneLoopResult {
     resolved: Array<{ want: Want; note?: string }>;
     /** Everyone who acted (feeds the actor-fatigue ledger). */
     actedCharacterIds: string[];
+    /** True when some beat ran privateAlone on a love-layer want — the ex-ante
+     *  intimacy gate. Content rating (ex post) is the caller's judge call. */
+    intimacyGateOpened: boolean;
 }
 
 /** §2.45: privacy drops the wall — alone with the want's target in a private
@@ -95,7 +98,7 @@ const hottestOf = (wants: ReadonlyArray<Want>, characterId: string): Want | null
 };
 
 export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResult> {
-    const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [] };
+    const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false };
     const present = [...input.cast];
     if (present.length === 0) return result;
 
@@ -122,6 +125,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             present.length === 2 &&
             !!w.target &&
             others.some((o) => o.name === w.target || o.characterId === w.target);
+        if (privateAlone && /愛|情/.test(w.layer)) result.intimacyGateOpened = true;
 
         const r = await characterAgent.actBeat({
             name: actor.name,

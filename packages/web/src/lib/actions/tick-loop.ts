@@ -44,6 +44,7 @@ import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLed
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
 import { applyRipples, applyDreamStirToWants, decayWants, newWant } from '@/lib/chain/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
+import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
@@ -1041,9 +1042,32 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
                         recordSceneLine(sceneId, b.characterId, b.text, 'act');
                         tlog(`③⁹ [${sceneName}] ${b.name}：${b.text}`);
-                        acc.lines.push(`[${sceneName}] ${b.name}：${b.text}`);
+                        // Private beats never reach the public episode weaver —
+                        // they live in POV serials and the subscriber scene view.
+                        if (!isPrivate) acc.lines.push(`[${sceneName}] ${b.name}：${b.text}`);
                         acc.actorIds.add(b.characterId);
                         if (!acc.sceneIds.includes(sceneId)) acc.sceneIds.push(sceneId);
+                    }
+                    if (isPrivate && loop.beats.length > 0) {
+                        const who = cs.map((c) => c.name).join('、');
+                        acc.lines.push(`[${sceneName}] ${who}掩門入內，燭影搖了半宿——窗內的來回，不入公開的日回。`);
+                        // Ex-ante gate grants permission; the judge reports what
+                        // actually happened (a gated pair may just talk all night).
+                        const rating: SceneRating = loop.intimacyGateOpened
+                            ? await characterAgent.judgeSceneIntimacy({
+                                  beats: loop.beats.map((b) => `${b.name}：${b.text}`),
+                              })
+                            : 'talk';
+                        recordSceneRating(d.sagaId, {
+                            sceneId,
+                            sceneName,
+                            tick: nowTick,
+                            rating,
+                            gateOpened: loop.intimacyGateOpened,
+                            beatCount: loop.beats.length,
+                            atMs: Date.now(),
+                        });
+                        tlog(`③⁹ [${sceneName}] 私處：${loop.beats.length} 拍不入公開日回；分級=${rating}${loop.intimacyGateOpened ? '（閘門開）' : ''}`);
                     }
                     episodeDayBySaga.set(d.sagaId, acc);
                     beatCount += loop.beats.length;

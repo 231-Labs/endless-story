@@ -139,6 +139,41 @@ export interface ResolveVerdict {
     note?: string;
 }
 
+/** What actually happened in a private scene, for content rating. The intimacy
+ *  GATE (privateAlone + love-layer drive) grants permission ex ante; this judge
+ *  reports the ex-post fact — a gated pair may still just talk all night. */
+export type SceneIntimacyRating = 'talk' | 'tender' | 'consummate';
+
+export interface JudgeIntimacyInput {
+    /** The scene beats, `名：一拍` lines, in order. */
+    beats: string[];
+}
+
+export async function judgeSceneIntimacy(input: JudgeIntimacyInput): Promise<SceneIntimacyRating> {
+    try {
+        const client = llmText.createTextClient({ kind: 'cheap' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system:
+                '你是內容分級裁判。讀一場戲的來回，判斷**實際發生**的親密程度（不是語氣、不是暗示的過去）：' +
+                '"talk"=對話/事務/密談，無親暱身體接觸；' +
+                '"tender"=有親暱（依偎/執手/相擁/吻），未及肌膚之親；' +
+                '"consummate"=肌膚之親或雲雨。' +
+                '輸出 JSON：{"rating":"talk|tender|consummate"}。不要 markdown。',
+            messages: [{ role: 'user', content: input.beats.join('\n') }],
+            maxTokens: 60,
+            temperature: 0.1,
+        });
+        const o = extractJson(res.text) ?? {};
+        const r = s(o.rating);
+        if (r === 'talk' || r === 'tender' || r === 'consummate') return r;
+        return 'consummate';
+    } catch {
+        // Fail closed: an unratable gated scene stays behind the 18+ door.
+        return 'consummate';
+    }
+}
+
 /** Strict §2.31 judge: stalling moves (收拾布包/先讓我唱完/明天再說) never count;
  *  only the protagonist's OWN act that cannot be taken back does. */
 export async function judgeWantResolved(input: JudgeResolveInput): Promise<ResolveVerdict> {
