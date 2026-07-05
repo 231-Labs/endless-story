@@ -73,7 +73,7 @@ export function SagaDetailsTabs({
 
         {/* 規章 */}
         <TabPanel active={panel === 'charter'} scroll>
-          <div className="flex min-h-[calc(100dvh-env(safe-area-inset-bottom,0px)-6rem)] flex-col justify-center border-t border-hairline/50 px-[max(env(safe-area-inset-left,0px),1rem)] py-16 sm:py-20 sm:pl-[max(env(safe-area-inset-left,0px),1.25rem)] sm:pr-[max(env(safe-area-inset-right,0px),1.25rem)]">
+          <div className="flex min-h-[calc(100dvh-env(safe-area-inset-bottom,0px)-6rem)] flex-col justify-center px-[max(env(safe-area-inset-left,0px),1rem)] py-8 sm:pl-[max(env(safe-area-inset-left,0px),1.25rem)] sm:pr-[max(env(safe-area-inset-right,0px),1.25rem)]">
             {charterContent}
           </div>
         </TabPanel>
