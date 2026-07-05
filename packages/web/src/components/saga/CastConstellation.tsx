@@ -543,8 +543,11 @@ export function CastConstellation({
               );
             })}
 
-            {/* edges */}
-            {validEdges.map((edge, idx) => {
+            {/* edges — 雙弧：每個方向一條、各自彎向自己那側。誰更愛誰（粗細、
+                亮度）站著就看得見，不用 hover；單向的邊自然只有一條弧。 */}
+            {[...directedBest.values()]
+              .filter((e) => posById.has(e.fromId) && posById.has(e.toId))
+              .map((edge, idx) => {
               const from = posById.get(edge.fromId)!;
               const to = posById.get(edge.toId)!;
               const isCross = (from.scene === null) !== (to.scene === null);
@@ -565,12 +568,11 @@ export function CastConstellation({
               const len = Math.sqrt(dx * dx + dy * dy) || 1;
               const nx = -dy / len;
               const ny = dx / len;
-              const offset = len * 0.12;
+              const sign = edge.fromId < edge.toId ? 1 : -1;
+              const offset = len * 0.12 * sign;
               const cx = midX + nx * offset;
               const cy = midY + ny * offset;
 
-              // 方向箭羽：聚焦時，單向（或雙向不同感）的邊畫一枚小箭羽指向受方；
-              // 「互相同感」已被摺成一條無向線，不標方向。
               const reverse = directedBest.get(`${edge.toId}::${edge.fromId}`);
               const mutualSameTone = !!(reverse && (reverse.tone ?? 'neutral') === (edge.tone ?? 'neutral'));
               const t = 0.62;
@@ -590,15 +592,15 @@ export function CastConstellation({
                     strokeLinecap="round" fill="none" opacity={opacity}
                     className="transition-all duration-500"
                   />
-                  {isHovered && !mutualSameTone ? (
-                    <path
-                      d="M -6 -4.5 L 2 0 L -6 4.5"
-                      transform={`translate(${chevX} ${chevY}) rotate(${chevAngle})`}
-                      stroke={stroke} strokeWidth={Math.max(1.6, strokeWidth)}
-                      strokeLinecap="round" strokeLinejoin="round" fill="none"
-                      opacity={opacity}
-                    />
-                  ) : null}
+                  {/* 每條弧都有向 — 箭羽常駐（隨線的明暗呼吸），不必 hover 才知道誰指向誰。 */}
+                  <path
+                    d="M -5 -3.8 L 1.6 0 L -5 3.8"
+                    transform={`translate(${chevX} ${chevY}) rotate(${chevAngle})`}
+                    stroke={stroke} strokeWidth={Math.max(1.3, strokeWidth * 0.8)}
+                    strokeLinecap="round" strokeLinejoin="round" fill="none"
+                    opacity={mutualSameTone ? opacity * 0.7 : opacity}
+                    className="transition-all duration-500"
+                  />
                 </g>
               );
             })}

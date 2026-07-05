@@ -23,12 +23,16 @@ import {
     getRecentSceneLinesAcross,
     type SceneLineKind,
 } from '@/lib/chain/scene-lines';
+import { latestSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 
 /** A ghost-quote line for the handscroll: who, what, in which register. */
 export interface SceneLine {
     characterId: string;
     text: string;
     kind: SceneLineKind;
+    /** Ring timestamp (ms) — stream identity for the 題字流; absent on lines
+     *  synthesized from chain events. */
+    ts?: number;
 }
 
 export interface SceneLiveStatus {
@@ -70,6 +74,36 @@ export interface SagaLiveSnapshot {
 
 /** How many recent events to scan for per-scene open/latest-line status. */
 const EVENT_SCAN = 10;
+
+/**
+ * 窗內門 — what the scene-focus view may show for a private scene. The rating
+ * comes from the tick loop's ex-post judge (scene-rating ledger); the UI never
+ * sniffs prose to decide the 18+ door.
+ */
+export async function getSceneDoor(
+    sagaId: string,
+    sceneId: string,
+): Promise<{ rating: SceneRating; gateOpened: boolean } | null> {
+    const e = latestSceneRating(sagaId, sceneId);
+    return e ? { rating: e.rating, gateOpened: e.gateOpened } : null;
+}
+
+/**
+ * Lines-only pulse — the cheap read behind the floating-quote stream. Pure
+ * local ring file, zero RPC, so the client can poll it every few seconds
+ * without touching a public node (the full snapshot with chain presence /
+ * open events runs on a much slower cadence).
+ */
+export async function getSceneLinesPulse(
+    sceneIds: string[],
+): Promise<{ linesByScene: Record<string, SceneLine[]>; pulse: Array<SceneLine & { sceneId: string }> }> {
+    const linesByScene: Record<string, SceneLine[]> = {};
+    for (const id of sceneIds.slice(0, 40)) {
+        const lines = getRecentSceneLines(id, 4);
+        if (lines.length > 0) linesByScene[id] = lines;
+    }
+    return { linesByScene, pulse: getRecentSceneLinesAcross(8) };
+}
 
 export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnapshot> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;

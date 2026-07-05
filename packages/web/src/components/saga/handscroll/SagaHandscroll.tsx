@@ -4,11 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chapter, Character, Saga, SagaLocation, Scene } from '@endless-story/shared';
 import { SagaScrollBackdrop } from './SagaScrollBackdrop';
 import { SceneVignette, type VignetteAnchor } from './SceneVignette';
-import { FloatingQuote } from './FloatingQuote';
+import { FloatingQuote, FloatingStream, type StreamLine } from './FloatingQuote';
 import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
 import { computeHandscrollLayout, type ScenePlacement } from './handscrollLayout';
 import { SagaTabBar } from '../SagaTabBar';
-import { getSagaLiveSnapshot, type OpenEventStatus } from '@/lib/actions/saga-live';
+import { getSagaLiveSnapshot, getSceneLinesPulse, type OpenEventStatus } from '@/lib/actions/saga-live';
 
 type LiveEvent = OpenEventStatus;
 
@@ -90,6 +90,47 @@ export function SagaHandscroll(props: Props) {
   const [liveLineByScene, setLiveLineByScene] = useState<
     Record<string, { characterId: string; text: string; kind: string }>
   >({});
+  // 題字流：per-scene recent beats from the local ring — polled OFTEN because
+  // it costs zero RPC (a file read server-side), unlike the chain snapshot.
+  const [streamByScene, setStreamByScene] = useState<Record<string, StreamLine[]>>({});
+  useEffect(() => {
+    if (!saga.id) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Private rooms never float their lines onto the public scroll — 窗內事.
+    const sceneIds = scenes.filter((s) => (s.privacyLevel ?? 0) < 3).map((s) => s.id);
+    const tick = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        try {
+          const { linesByScene } = await getSceneLinesPulse(sceneIds);
+          if (!cancelled) {
+            setStreamByScene((prev) => {
+              const next: Record<string, StreamLine[]> = { ...prev };
+              for (const [sid, lines] of Object.entries(linesByScene)) {
+                next[sid] = lines.map((l) => ({
+                  key: `${l.ts}-${l.characterId}`,
+                  text: l.text,
+                  speakerName: charactersById.get(l.characterId)?.name,
+                  kind: l.kind,
+                }));
+              }
+              return next;
+            });
+          }
+        } catch {
+          /* keep last stream */
+        }
+      }
+      if (!cancelled) timer = setTimeout(tick, 6000);
+    };
+    timer = setTimeout(tick, 300);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+    // charactersById is a stable Map prop per render of the page shell.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saga.id, scenes]);
   useEffect(() => {
     if (!saga.id) return;
     let cancelled = false;
@@ -129,10 +170,13 @@ export function SagaHandscroll(props: Props) {
           /* transient RPC failure — keep last good state */
         }
       }
-      if (!cancelled) timer = setTimeout(tick, 6000);
+      // Chain snapshot demoted to a slow cadence: presence and open events only
+      // change on admin ticks, and public-node polling at 6s was the 429 diet.
+      // The 題字流 above carries the "alive right now" feel at zero RPC.
+      if (!cancelled) timer = setTimeout(tick, 30000);
     };
-    // Fetch live data once on mount (quotes / presence / open events) so it
-    // appears before the first 6s tick; then poll every 6s. 300ms lets hydration settle.
+    // Fetch live data once on mount (presence / open events) so it appears
+    // early; then poll every 30s. 300ms lets hydration settle.
     timer = setTimeout(tick, 300);
     return () => {
       cancelled = true;
@@ -283,17 +327,30 @@ export function SagaHandscroll(props: Props) {
               );
             })}
 
-            {/* 飄字題款 */}
+            {/* 飄字題款 — a scene with a living stream floats its recent beats
+                (題字流); otherwise the seeded ghost quote holds the spot. */}
             {liveScenes.map((scene) => {
               const placement = placementById.get(scene.id);
               if (!placement) return null;
-              // Prefer the live line (carries its register/kind); fall back to the
-              // scene's seeded ghost quote on first paint.
+              const { left, top } = quotePosition(placementAnchor(placement), scene.id);
+              if ((scene.privacyLevel ?? 0) >= 3 && (scene.currentCharacterIds?.length ?? 0) > 0) {
+                // A lit private room floats only its seal — the beats stay behind the wall.
+                return (
+                  <FloatingQuote key={`priv-${scene.id}`} leftPct={left} topPct={top} kind="priv">
+                    窗內事
+                  </FloatingQuote>
+                );
+              }
+              const stream = streamByScene[scene.id];
+              if (stream && stream.length > 0) {
+                return (
+                  <FloatingStream key={`stream-${scene.id}`} lines={stream} leftPct={left} topPct={top} />
+                );
+              }
               const live = liveLineByScene[scene.id];
               const primary = live ?? scene.ghostQuotes?.[0];
               if (!primary) return null;
               const speaker = charactersById.get(primary.characterId) ?? null;
-              const { left, top } = quotePosition(placementAnchor(placement), scene.id);
               const text = primary.text;
               const truncated = text.length > 20 ? `${text.slice(0, 20)}…` : text;
               return (
