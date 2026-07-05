@@ -318,66 +318,40 @@ export function SagaHandscroll(props: Props) {
           </div>
         </header>
 
-        {/* 畫卷帶 + 團扇列（一同橫向捲動） */}
+        {/* 畫卷 —— 每個 location 一個直欄：完整比例的油畫（880×586≈3:2），
+            下方置中的團扇。欄與欄硬接（回到較優雅的版本），一同橫向捲動。 */}
         <div
           ref={scrollRef}
           className="mt-3 flex-1 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth no-scrollbar overscroll-x-contain touch-pan-x"
         >
-          <div
-            className="flex h-full flex-col"
-            style={{ width: `max(${scrollVw}vw, 1200px)`, minWidth: `max(${scrollVw}vw, 1200px)` }}
-          >
-            {/* 油畫帶（有界高，非滿版；PC 高一點、手機收斂，並留給團扇列空間） */}
-            <div className="relative flex h-[clamp(240px,48vh,560px)] shrink-0">
-              {scenesByLocation.map(({ seg, scenes: locScenes }, i) => {
-                const art = terrainArtFor(seg.location.name);
-                const streamScene = locScenes.find((sc) => streamByScene[sc.id]?.length);
-                // Feather the shared edges so neighbouring locations bleed into
-                // one continuous scroll instead of butting on a hard seam.
-                const feather = `linear-gradient(90deg, ${i > 0 ? 'transparent, black 9%' : 'black'}, black ${
-                  i < segmentCount - 1 ? '91%, transparent' : '100%'
-                })`;
-                return (
-                  <div
-                    key={seg.location.id}
-                    className="relative h-full shrink-0 snap-center snap-always overflow-hidden"
-                    style={{ width: `${100 / segmentCount}%`, marginLeft: i > 0 ? '-3%' : 0 }}
-                  >
+          <div className="flex h-full w-max items-stretch">
+            {scenesByLocation.map(({ seg, scenes: locScenes }) => {
+              const art = terrainArtFor(seg.location.name);
+              const streamScene = locScenes.find((sc) => streamByScene[sc.id]?.length);
+              return (
+                <div
+                  key={seg.location.id}
+                  className="flex h-full shrink-0 snap-center snap-always flex-col border-r border-hairline/12 last:border-r-0"
+                >
+                  {/* 油畫 —— 高度定、寬度依 3:2 自算，完整展示不裁切 */}
+                  <div className="relative h-[clamp(220px,46vh,520px)] w-[clamp(330px,69vh,780px)] shrink-0 overflow-hidden">
                     {art ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={art}
-                        alt={seg.location.name}
-                        className="h-full w-full object-cover"
-                        style={{ maskImage: feather, WebkitMaskImage: feather }}
-                        draggable={false}
-                      />
+                      <img src={art} alt={seg.location.name} className="h-full w-full object-cover" draggable={false} />
                     ) : (
                       <div className="h-full w-full bg-gradient-to-b from-surface to-canvas dark:from-elevated/50 dark:to-canvas" />
                     )}
                     <div className="pointer-events-none absolute inset-0 mix-blend-soft-light" style={{ background: wash.color, opacity: wash.opacity }} />
-                    {/* 地名 */}
                     <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap font-serif text-sm tracking-[0.4em] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
                       {seg.location.name}
                     </span>
-                    {/* 題字流 —— 該地當前一場的飄字（直排輪播） */}
                     {streamScene ? (
                       <FloatingStream lines={streamByScene[streamScene.id]} leftPct={50} topPct={16} />
                     ) : null}
                   </div>
-                );
-              })}
-            </div>
 
-            {/* 團扇列 —— 每個 location 下方，一排該地的場景 */}
-            <div className="flex flex-1 items-start bg-canvas/40">
-              {scenesByLocation.map(({ seg, scenes: locScenes }) => (
-                <div
-                  key={seg.location.id}
-                  className="flex shrink-0 flex-col items-center gap-2.5 px-2 pt-5"
-                  style={{ width: `${100 / segmentCount}%` }}
-                >
-                  <div className="flex flex-wrap items-start justify-center gap-x-4 gap-y-3">
+                  {/* 團扇 —— 置中，往兩邊平均展開 */}
+                  <div className="flex w-full flex-1 flex-wrap content-start justify-center gap-x-4 gap-y-3 bg-canvas/30 px-3 pt-5">
                     {locScenes.length ? (
                       locScenes.map((sc) => (
                         <SceneFan
@@ -392,21 +366,26 @@ export function SagaHandscroll(props: Props) {
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
 
         <SagaTabBar />
       </div>
 
-      {/* 內頁 —— 團扇點開的場景 sheet（mockup 設計） */}
+      {/* 內頁 —— 團扇點開，像走進 location 更深的一層（非彈窗遮罩） */}
       {focusedScene ? (
         <SceneSheet
           scene={focusedScene}
           sagaId={saga.id}
           charactersById={charactersById}
           clock={saga.worldTime?.partOfDay ? dayPartLabel(saga.worldTime.partOfDay) : undefined}
+          locationArt={
+            terrainArtFor(
+              layout.segments.find((s) => s.scenes.some((sp) => sp.scene.id === focusedScene.id))?.location.name,
+            ) ?? undefined
+          }
           onClose={() => setFocusedSceneId(null)}
         />
       ) : null}

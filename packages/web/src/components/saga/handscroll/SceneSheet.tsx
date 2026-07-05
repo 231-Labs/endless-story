@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import type { Character, Scene } from '@endless-story/shared';
 import { getSceneBoard, type SceneBoard } from '@/lib/actions/saga-live';
 
@@ -25,12 +26,16 @@ export function SceneSheet({
   sagaId,
   charactersById,
   clock,
+  locationArt,
   onClose,
 }: {
   scene: Scene;
   sagaId: string;
   charactersById: Map<string, Character>;
   clock?: string;
+  /** The location's painting — becomes the deep backdrop so opening a scene
+   *  feels like stepping further into that place, not a modal over black. */
+  locationArt?: string;
   onClose: () => void;
 }) {
   const [board, setBoard] = useState<SceneBoard | null>(null);
@@ -60,12 +65,34 @@ export function SceneSheet({
   const is18 = board?.rating === 'consummate';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <button aria-label="關閉" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <section
+    <div className="fixed inset-0 z-[60] flex items-stretch justify-center">
+      {/* 深處 —— the location's painting, pushed back and dimmed, so this reads
+          as walking INTO the place. Click it to step back out. */}
+      <motion.button
+        aria-label="退回手卷"
+        onClick={onClose}
+        className="absolute inset-0 cursor-zoom-out overflow-hidden"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4 }}
+      >
+        {locationArt ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={locationArt} alt="" className="h-full w-full scale-110 object-cover blur-xl brightness-[0.35]" />
+        ) : (
+          <div className="h-full w-full bg-canvas" />
+        )}
+        <div className="absolute inset-0 bg-canvas/55 dark:bg-black/50" />
+      </motion.button>
+
+      {/* 內室 —— rises up from the fan and settles, like a door opening inward. */}
+      <motion.section
         role="dialog"
         aria-label={scene.name}
-        className="relative z-10 flex max-h-[90dvh] w-[min(1040px,92vw)] flex-col overflow-hidden rounded-2xl border border-hairline/60 bg-surface shadow-2xl dark:bg-elevated"
+        initial={{ opacity: 0, scale: 0.92, y: 40 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="relative z-10 my-auto flex max-h-[88dvh] w-[min(1040px,92vw)] flex-col overflow-hidden rounded-2xl border border-hairline/50 bg-surface/95 shadow-2xl backdrop-blur-xl dark:bg-elevated/95"
       >
         {/* head */}
         <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline/60 px-6 py-3.5">
@@ -154,7 +181,7 @@ export function SceneSheet({
             </aside>
           </div>
         )}
-      </section>
+      </motion.section>
     </div>
   );
 }
