@@ -55,36 +55,34 @@ export function FloatingStream({
           const style = (l.kind && KIND_STYLE[l.kind]) || { glyph: '', tint: 'text-cinnabar/80' };
           const text = l.text.length > 20 ? `${l.text.slice(0, 20)}…` : l.text;
           return (
-            <motion.div
-              key={l.key}
-              initial={{ opacity: 0, y: 26, x: 0 }}
-              animate={{
-                opacity: [1, 0.5, 0.24][idx] ?? 0.2,
-                y: -idx * 46,
-                x: idx * 12 * (idx % 2 === 0 ? 1 : -1),
-              }}
-              exit={{ opacity: 0, y: -150, transition: { duration: 2.4, ease: 'easeOut' } }}
-              transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute flex flex-col items-center rounded-md bg-surface/55 px-2 py-3 shadow-sm ring-1 ring-hairline/40 backdrop-blur-sm dark:bg-elevated/45"
-              style={{ writingMode: 'vertical-rl' as const, transform: 'translateX(-50%)' }}
-            >
-              {style.glyph ? (
-                <span
-                  className={`mb-2 font-serif text-[10px] tracking-[0.2em] ${style.tint} opacity-70`}
-                  aria-hidden
-                >
-                  {style.glyph}
+            // Static wrapper owns centering so framer's transform can't clobber
+            // it; the column drifts STRAIGHT up — 飄要直，像香煙不像柳絮。
+            <div key={l.key} className="absolute left-0 top-0 -translate-x-1/2">
+              <motion.div
+                initial={{ opacity: 0, y: 26 }}
+                animate={{ opacity: [1, 0.5, 0.24][idx] ?? 0.2, y: -idx * 52 }}
+                exit={{ opacity: 0, y: -160, transition: { duration: 2.4, ease: 'easeOut' } }}
+                transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+                className="flex flex-col items-center rounded-md bg-surface/55 px-2 py-3 shadow-sm ring-1 ring-hairline/40 backdrop-blur-sm [writing-mode:vertical-rl] dark:bg-elevated/45"
+              >
+                {style.glyph ? (
+                  <span
+                    className={`mb-2 font-serif text-[10px] tracking-[0.2em] ${style.tint} opacity-70`}
+                    aria-hidden
+                  >
+                    {style.glyph}
+                  </span>
+                ) : null}
+                <span className="font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm">
+                  「{text}」
                 </span>
-              ) : null}
-              <span className="font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm">
-                「{text}」
-              </span>
-              {l.speakerName && idx === 0 ? (
-                <span className={`mt-3 font-serif text-xs tracking-[0.3em] ${style.tint}`}>
-                  — {l.speakerName}
-                </span>
-              ) : null}
-            </motion.div>
+                {l.speakerName && idx === 0 ? (
+                  <span className={`mt-3 font-serif text-xs tracking-[0.3em] ${style.tint}`}>
+                    — {l.speakerName}
+                  </span>
+                ) : null}
+              </motion.div>
+            </div>
           );
         })}
       </AnimatePresence>

@@ -24,6 +24,25 @@ const GROUND_Y = 700; // ground line buildings sit on
 const WALL_Y = 712;
 const MOON_R = 64; // moon-gate radius
 
+/** Generated terrain art (郎世寧 half-西洋 set), one painting per location.
+ *  Name-matched so any saga covering these places gets the painted scroll;
+ *  unmatched locations keep the generative ink motif underneath. */
+const TERRAIN_ART: Array<{ match: RegExp; src: string }> = [
+  { match: /霞飛路/, src: '/handscroll/o-xiafeilu.jpg' },
+  { match: /雲錦台|戲園|戲院/, src: '/handscroll/o-yunjintai.jpg' },
+  { match: /四馬路|報館/, src: '/handscroll/o-simalu.jpg' },
+  { match: /碼頭|蘇州河/, src: '/handscroll/o-matou.jpg' },
+  { match: /會樂里/, src: '/handscroll/o-huileli.jpg' },
+  { match: /會館|紹興/, src: '/handscroll/o-huiguan.jpg' },
+  { match: /大世界|遊樂/, src: '/handscroll/o-dashijie.jpg' },
+];
+
+function terrainArtFor(name: string | undefined): string | null {
+  if (!name) return null;
+  for (const a of TERRAIN_ART) if (a.match.test(name)) return a.src;
+  return null;
+}
+
 const DAY_PART_PAPER: Record<DayPart, string> = {
   morning: 'rgba(255, 248, 232, 0.10)',
   noon: 'rgba(255, 253, 240, 0.05)',
@@ -192,6 +211,44 @@ export function SagaScrollBackdrop({
           }),
         )}
       </svg>
+
+      {/* 生成地卷 — painted strip per matched location, edges feathered into the
+          paper so adjacent segments read as one continuous scroll. Day/night
+          tint rides on top so the painting lives in the same hour as the ink. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        {segments.map((seg) => {
+          const src = terrainArtFor(seg.location.name);
+          if (!src) return null;
+          const widthPct = seg.endPct - seg.startPct;
+          const fade =
+            'linear-gradient(90deg, transparent, black 7%, black 93%, transparent)';
+          return (
+            <div
+              key={`art-${seg.location.id}`}
+              className="absolute inset-y-0"
+              style={{ left: `${seg.startPct}%`, width: `${widthPct}%` }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={src}
+                alt=""
+                className="h-full w-full object-cover"
+                style={{ maskImage: fade, WebkitMaskImage: fade }}
+                draggable={false}
+              />
+              <div
+                className="absolute inset-0 mix-blend-multiply"
+                style={{
+                  background: DAY_PART_PAPER[partOfDay],
+                  opacity: partOfDay === 'night' ? 1 : partOfDay === 'dusk' ? 0.8 : 0.35,
+                  maskImage: fade,
+                  WebkitMaskImage: fade,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
