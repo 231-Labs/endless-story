@@ -163,6 +163,13 @@ export interface StoryFoundingMember {
    */
   minAttributes?: Partial<CharacterAttributes>;
   /**
+   * Authored canon memories (此生記憶), second-person voice, seeded verbatim
+   * into MemWal at founding ON TOP of the LLM-generated batch. Use for facts
+   * the story cannot afford to drift: shared histories, old flames, where a
+   * character used to sleep. Order = importance order.
+   */
+  memories?: string[];
+  /**
    * Skip this member when seeding — a reversible "comment-out" for test runs
    * (JSON has no comments, so this is the toggle).
    */

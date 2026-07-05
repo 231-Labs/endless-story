@@ -50,6 +50,8 @@ export interface FoundingCharSpec {
     body?: string;
     /** Per-axis attribute floors (行當下限). Omit → `roleAttributeFloors(role)`. */
     minAttributes?: Partial<CharacterAttributes>;
+    /** Authored canon memories (你-form), seeded verbatim after mint. */
+    memories?: string[];
 }
 
 type AttrFloors = Partial<CharacterAttributes>;
@@ -161,6 +163,8 @@ export async function createFoundingCastAction(
     }
 
     const minted: FoundingMintedEntry[] = [];
+
+    const authoredMemories: { id: string; memories: string[] }[] = [];
     const failures: { name: string; error: string }[] = [];
     const members: runnerInduction.FoundingMember[] = [];
     // (characterId, portraitUrl) for the post-mint setting-gallery pass below.
@@ -278,6 +282,7 @@ export async function createFoundingCastAction(
             }
 
             minted.push({ id: characterId, name: candidate.name, digest: res.digest, portrait: Boolean(portraitUrl) });
+            if (spec.memories?.length) authoredMemories.push({ id: characterId, memories: spec.memories });
             if (portraitUrl) viewTargets.push({ characterId, referenceUrl: portraitUrl });
             skillTargets.push({
                 characterId,
@@ -371,8 +376,18 @@ export async function createFoundingCastAction(
 
     // write self memories into each MemWal
     const memoryOn = isMemoryConfigured();
-    const genesisExpected = batch.self.reduce((n, s) => n + s.selfMemories.length, 0);
+    const authoredExpected = authoredMemories.reduce((n, a) => n + a.memories.length, 0);
+    const genesisExpected = authoredExpected + batch.self.reduce((n, s) => n + s.selfMemories.length, 0);
     let selfSeeded = 0;
+    if (memoryOn) {
+        // Authored canon first, above the generated batch (i=8 > 7): facts the
+        // story cannot afford to drift must win recall ties.
+        for (const a of authoredMemories) {
+            for (const mem of a.memories) {
+                if (await rememberForCharacter(a.id, mem, { kind: 'genesis', importance: 8 })) selfSeeded += 1;
+            }
+        }
+    }
     if (memoryOn) {
         for (const s of batch.self) {
             for (const mem of s.selfMemories) {
@@ -455,6 +470,7 @@ export async function loadFoundingPresetAction(): Promise<FoundingCharSpec[]> {
             description: c.description,
             secret: c.secret,
             minAttributes: c.minAttributes,
+            memories: c.memories,
         }));
     } catch {
         return [];
