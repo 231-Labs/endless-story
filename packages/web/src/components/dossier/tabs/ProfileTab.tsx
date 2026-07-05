@@ -6,6 +6,7 @@ import type {
   RelationshipEdge,
   RelationshipTone,
 } from '@endless-story/shared';
+import type { CharacterWant } from '@/lib/actions/saga-live';
 import { SoulSection } from '@/components/dossier/SoulSection';
 
 const ATTR_LABEL: Record<keyof Character['attributes'], string> = {
@@ -29,6 +30,7 @@ export function ProfileTab({
   outgoingEdges,
   incomingEdges = [],
   charactersById,
+  wants = [],
 }: {
   character: Character;
   persona: CharacterPersona | null;
@@ -36,6 +38,7 @@ export function ProfileTab({
   outgoingEdges: RelationshipEdge[];
   incomingEdges?: RelationshipEdge[];
   charactersById: Map<string, Character>;
+  wants?: CharacterWant[];
 }) {
   // 配對視角：同一位對象的「此人所感」與「對方所感」併成一列，
   // 才能呈現雙向不對稱（A 戀慕 B、B 卻無感／另有所感）。
@@ -82,6 +85,22 @@ export function ProfileTab({
         {/* 外貌設定 moved into 設定集·形貌 (where the appearance images live);
             the standalone text block here was the bare body word + redundant
             with 敘描 and the 外貌 trait. */}
+
+        {/* 當下心事 — the live wants driving this character now (want-engine),
+            the structured drives behind the 此刻心境 line up top. */}
+        {wants.length > 0 ? (
+          <section>
+            <div className="flex items-center gap-4">
+              <div className="h-px w-8 bg-cinnabar/40" />
+              <h2 className="font-serif text-2xl tracking-wide text-ink">當下心事</h2>
+            </div>
+            <ul className="mt-8 space-y-6 pl-0 sm:pl-12">
+              {wants.map((w, i) => (
+                <WantRow key={i} want={w} target={w.target ? charactersById.get(w.target) ?? null : null} />
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {/* 關係 promoted out of the cramped sidebar into a roomy descriptive
             section — fills the left column (which 外貌設定 used to occupy) and
@@ -211,6 +230,48 @@ export function ProfileTab({
         </div>
       </aside>
     </div>
+  );
+}
+
+// ─────────────── Want row (當下心事) ───────────────
+//
+// layer tag + the want in the character's words + a tension bar (how hard it
+// drives them now) + a resistance hint (懸念深 = long-burning, 將了 = near resolve).
+
+function WantRow({ want, target }: { want: CharacterWant; target: Character | null }) {
+  const pct = Math.round(Math.max(0, Math.min(1, want.tension)) * 100);
+  // resistance is the forcing-gate height (1..10): high = a standing 懸念 that
+  // won't settle easily, low = close to a resolve.
+  const resist = want.resistance >= 6 ? '難了' : want.resistance >= 3 ? '糾結' : '將了';
+  return (
+    <li>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-2.5">
+          <span className="shrink-0 rounded-full border border-hairline/70 px-2 py-0.5 text-2xs tracking-widest text-cinnabar/90">
+            {want.layer}
+          </span>
+          <p className="text-base leading-relaxed text-ink/85 sm:text-lg">
+            {want.desc}
+            {target ? (
+              <Link
+                href={{ pathname: '/dossier', query: { id: target.id } }}
+                className="text-mute transition-colors hover:text-cinnabar"
+              >
+                {' → '}
+                {target.name}
+              </Link>
+            ) : null}
+          </p>
+        </div>
+        <span className="shrink-0 text-2xs tracking-widest text-mute">{resist}</span>
+      </div>
+      <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-hairline/60">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-gold to-cinnabar"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </li>
   );
 }
 

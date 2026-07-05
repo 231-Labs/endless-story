@@ -26,6 +26,7 @@ import { DossierHeader } from '@/components/dossier/DossierHeader';
 import { DossierSkeleton } from '@/components/dossier/DossierSkeleton';
 import { RosterSkeletonInner } from '@/components/dossier/RosterSkeleton';
 import { LiveStateBar, LiveStateBarSkeleton } from '@/components/dossier/LiveStateBar';
+import { getCharacterWants } from '@/lib/actions/saga-live';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
@@ -309,6 +310,11 @@ async function DossierDetail({
   const personaRegenChapter = persona?.lastRegenChapterId
     ? (await chaptersApi.getChapter(persona.lastRegenChapterId)) ?? null
     : null;
+  // 當下心事 — the character's live wants (drives behind their current intent).
+  const currentWants =
+    tab === 'profile' && character.sagaId
+      ? await getCharacterWants(character.sagaId, character.id).catch(() => [])
+      : [];
 
   return (
     <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
@@ -349,6 +355,7 @@ async function DossierDetail({
                 outgoingEdges={edges}
                 incomingEdges={incomingEdges}
                 charactersById={charactersById}
+                wants={currentWants}
               />
             ) : null}
             {tab === 'gallery' ? (

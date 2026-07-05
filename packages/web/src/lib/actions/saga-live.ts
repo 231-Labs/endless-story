@@ -288,6 +288,42 @@ export interface SagaHeartLedger {
  * and layer mix only, never a specific character's want text (that stays
  * subscriber-gated in the scene 內頁). Reads the same want-store the engine drives.
  */
+export interface CharacterWant {
+    /** Free-text layer tag (愛/志向/戲班/身體/…). */
+    layer: string;
+    /** The want in the character's own words. */
+    desc: string;
+    /** 0..1 tension = weight × (1 − sat) — how hard it drives them right now. */
+    tension: number;
+    /** 1..10 forcing gate — high ≈ a standing 懸念, low ≈ near a resolve. */
+    resistance: number;
+    /** Optional target character id/name this want is aimed at. */
+    target?: string;
+}
+
+/**
+ * A character's live wants (當下心事) for their dossier — the drives behind their
+ * current intent. Same want-store the engine runs on; shown openly on the dossier
+ * (like 此刻心境 / relationships already are). Top by tension.
+ */
+export async function getCharacterWants(
+    sagaId: string,
+    characterId: string,
+    limit = 3,
+): Promise<CharacterWant[]> {
+    return loadWants(sagaId)
+        .filter((w) => !w.retired && w.characterId === characterId)
+        .map((w) => ({
+            layer: w.layer,
+            desc: w.desc,
+            tension: w.weight * (1 - w.sat),
+            resistance: w.resistance,
+            target: w.target,
+        }))
+        .sort((a, b) => b.tension - a.tension)
+        .slice(0, limit);
+}
+
 export async function getSagaHeartLedger(sagaId: string): Promise<SagaHeartLedger> {
     const wants = loadWants(sagaId);
     const open = wants.filter((w) => !w.retired);
