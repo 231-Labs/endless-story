@@ -24,6 +24,7 @@ import {
     type SceneLineKind,
 } from '@/lib/chain/scene-lines';
 import { latestSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
+import { loadWants } from '@/lib/chain/want-store';
 
 /** A ghost-quote line for the handscroll: who, what, in which register. */
 export interface SceneLine {
@@ -86,6 +87,59 @@ export async function getSceneDoor(
 ): Promise<{ rating: SceneRating; gateOpened: boolean } | null> {
     const e = latestSceneRating(sagaId, sceneId);
     return e ? { rating: e.rating, gateOpened: e.gateOpened } : null;
+}
+
+/** One beat line for the scene sheet (who said/did what, in which register). */
+export interface SceneBoardBeat {
+    characterId: string;
+    text: string;
+    kind: SceneLineKind;
+}
+
+/** A live inner-want the sheet shows as 心事 (subscription content). */
+export interface SceneBoardWant {
+    characterId: string;
+    desc: string;
+    /** 0..1 tension = weight × (1 − sat). */
+    tension: number;
+}
+
+/** Everything the scene sheet (內頁) needs, in one server round-trip. */
+export interface SceneBoard {
+    sceneId: string;
+    beats: SceneBoardBeat[];
+    /** 心事 of the characters present here, hottest first. */
+    wants: SceneBoardWant[];
+    /** Content rating for a private scene, else null. */
+    rating: SceneRating | null;
+    gateOpened: boolean;
+}
+
+/**
+ * Scene sheet board — the read behind the 內頁 (mockup rehearsal/chamber view).
+ * Local ring + want ledger + rating ledger, zero RPC. `presentCharacterIds`
+ * comes from the caller's already-loaded roster so this stays a cheap read.
+ */
+export async function getSceneBoard(
+    sagaId: string,
+    sceneId: string,
+    presentCharacterIds: string[],
+): Promise<SceneBoard> {
+    const beats = getRecentSceneLines(sceneId, 6).reverse(); // oldest→newest for reading
+    const present = new Set(presentCharacterIds);
+    const wants = loadWants(sagaId)
+        .filter((w) => !w.retired && present.has(w.characterId))
+        .map((w) => ({ characterId: w.characterId, desc: w.desc, tension: w.weight * (1 - w.sat) }))
+        .sort((a, b) => b.tension - a.tension)
+        .slice(0, 4);
+    const r = latestSceneRating(sagaId, sceneId);
+    return {
+        sceneId,
+        beats: beats.map((b) => ({ characterId: b.characterId, text: b.text, kind: b.kind })),
+        wants,
+        rating: r?.rating ?? null,
+        gateOpened: r?.gateOpened ?? false,
+    };
 }
 
 /**
