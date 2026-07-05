@@ -33,7 +33,12 @@ export function SagaTabBar() {
               aria-pressed={isActive}
               onClick={() => {
                 setView(tab.key);
-                const id = tab.key === 'handscroll' ? 'saga-handscroll' : 'saga-details';
+                const id =
+                  tab.key === 'handscroll'
+                    ? 'saga-handscroll'
+                    : tab.key === 'charter'
+                      ? 'saga-charter'
+                      : 'saga-constellation';
                 document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
               }}
               className={`relative z-10 flex min-h-[44px] flex-1 items-center justify-center rounded-full px-3 py-2.5 text-sm font-medium tracking-wide transition-colors active:opacity-95 sm:flex-none sm:px-6 sm:py-2 ${
