@@ -42,7 +42,7 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
-import { applyRipples, applyDreamStirToWants, decayWants, newWant } from '@/lib/chain/want-core';
+import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWant } from '@/lib/chain/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
@@ -993,6 +993,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     if (hit) tlog(`③⁹ dream stir → ${nameById.get(cid) ?? cid.slice(0, 8)}「${hit.desc}」`);
                 }
                 decayWants(wants);
+                for (const f of fadeStaleWants(wants, nowTick)) {
+                    tlog(`③⁹ 淡了: ${nameById.get(f.characterId) ?? '?'}「${f.desc}」`);
+                }
 
                 const clock = worldTime?.partOfDay ?? '白日';
                 const byScene = new Map<string, Character[]>();
@@ -1004,9 +1007,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     else byScene.set(sid, [c]);
                 }
                 let beatCount = 0;
+                const privateSceneIds = new Set<string>();
                 for (const [sceneId, cs] of byScene) {
                     const info = activeScenes.find((sc) => sc.id === sceneId);
                     const isPrivate = (info?.privacyLevel ?? 0) >= 3;
+                    if (isPrivate) privateSceneIds.add(sceneId);
                     const sceneName = sceneNameById.get(sceneId) ?? '戲班';
                     // Memory channel (§2.45 暗號 echoes): each member recalls
                     // against their hottest want, capped small; failure-safe.
@@ -1032,6 +1037,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         clock,
                         tone: narrativeProfile?.soul?.toneRegister,
                         etiquette: narrativeProfile?.etiquette,
+                        emotionalStance: narrativeProfile?.soul?.emotionalStance,
                         cast: castWithMem,
                         wants,
                         tick: nowTick,
@@ -1124,6 +1130,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 saveWants(d.sagaId, wants);
                 const allBeatLines: string[] = [];
                 for (const [sid, arr] of beatsByScene) {
+                    if (privateSceneIds.has(sid)) continue; // 窗內事 stays off the public weave
                     const sn = sceneNameById.get(sid) ?? '戲班';
                     for (const b of arr) allBeatLines.push(`[${sn}] ${b.text}`);
                 }
@@ -1322,7 +1329,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     // the tick owns recall (throttled SEAL budget).
                     recentMemorySnippets: [
                         ...new Set([
-                            ...(await memoryContext.recent(c.id, trigger, 4, 'pov')),
+                            // Prior-chapter recalls skip their opening third: the
+                            // prompt layer truncates snippets from the front, so a
+                            // head slice hands the model last chapter's opening
+                            // verbatim — the 承上-copy bug. A mid-window keeps the
+                            // continuity detail without the copyable incipit.
+                            ...(await memoryContext.recent(c.id, trigger, 4, 'pov')).map((m) =>
+                                m.length > 280 ? m.slice(Math.floor(m.length * 0.3)) : m,
+                            ),
                             ...(await memoryContext.recent(c.id, LIFE_QUERY, 2, 'life')),
                         ]),
                     ],

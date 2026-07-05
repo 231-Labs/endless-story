@@ -36,7 +36,20 @@ export interface ActBeatInput {
     stateLine?: string;
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
+    /** §2.47/§2.53: saga stance is consummate AND this beat is privateAlone on
+     *  a love-layer want — unlocks the classical literary-erotic register and
+     *  a longer beat. Anywhere else the beat is byte-identical to before. */
+    consummate?: boolean;
 }
+
+/** §2.53-validated L3 register (the quality/stability sweet spot; L5-style
+ *  "maximally explicit" wording regresses output and is deliberately absent). */
+const CONSUMMATE_BEAT_NOTE = [
+    '【此刻分寸（僅此私處、兩情相悅時）】容許寬衣解帶、肌膚相親、雲雨纏綿，並可細狀其實——',
+    '身體的反應、氣息的亂、節奏的緩急、手與唇的門道、情動到極處的失守，皆可落筆，',
+    '不必每到關頭就化開。以古典艷情話本筆法（敢於露骨、卻仍是綺麗）：艷而有情、露而不穢。',
+    '忌現代醫學詞、忌髒字、忌器官說明書式冷描。',
+].join('');
 
 export interface BeatResult {
     /** Objective act/say, one line. */
@@ -77,10 +90,14 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.tone ?? '',
         `【此刻】${input.clock}。${where}${input.stake ? `\n【風聲】${input.stake}` : ''}${state}`,
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
+        input.consummate ? CONSUMMATE_BEAT_NOTE : '',
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
         forceNote(input.forcing, input.privateAlone),
-        '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事(開放一句)。' +
-            '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無"}。不要 markdown。',
+        input.consummate
+            ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或床笫間的一下進退(一到三句，容許上述分寸的露骨)。' +
+              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無"}。不要 markdown。'
+            : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事(開放一句)。' +
+              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無"}。不要 markdown。',
     ]
         .filter(Boolean)
         .join('\n');
@@ -112,7 +129,7 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
                 content: `【這場戲剛剛的來回】\n${input.sceneLog || '（戲方起。）'}\n\n輪到你（${input.name}）。`,
             },
         ],
-        maxTokens: 240,
+        maxTokens: input.consummate ? 700 : 240,
         temperature: 0.95,
     });
     const o = extractJson(res.text) ?? {};

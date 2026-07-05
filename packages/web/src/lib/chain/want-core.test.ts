@@ -15,6 +15,7 @@ import {
     applyDreamStirToWants,
     applyRipples,
     decayWants,
+    fadeStaleWants,
     forcingLevel,
     newWant,
     pickSalient,
@@ -102,6 +103,28 @@ test('dream stir = one tighten on the dreamer hottest want (§2.51 dose)', () =>
     assert.equal(hit!.desc, '保住戲班');
     assert.ok(Math.abs(hit!.sat - (0.3 - WANT.tighten)) < 1e-9);
     assert.equal(applyDreamStirToWants(wants, 'nobody'), null);
+});
+
+test('spawn brake: a full heart takes no new thread (§2.55)', () => {
+    const wants = Array.from({ length: WANT.maxLivePerCharacter }, (_, i) => mk('su', `心事${i}`, 0.7, 0.3));
+    const spawned = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '全新的一縷' }], 3);
+    assert.equal(spawned.length, 0);
+    wants[0].retired = true; // one resolves → room again
+    const again = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '全新的一縷' }], 4);
+    assert.equal(again.length, 1);
+});
+
+test('fade lane: old cold picked-up threads retire; genesis and warm ones never (§2.55)', () => {
+    const genesis = mk('liu', '要她要的是我', 0.9, 0.95); // cold but genesis → stays
+    const picked = newWant({ characterId: 'liu', layer: '疑心', desc: '那籠包子誰送的', weight: 0.6, sat: 0.8, resistance: 3, kind: 'narrative', source: 'ripple', bornTick: 0 });
+    const young = newWant({ characterId: 'liu', layer: '疑心', desc: '新冒出來的', weight: 0.6, sat: 0.8, resistance: 3, kind: 'narrative', source: 'ripple', bornTick: 9 });
+    const hot = newWant({ characterId: 'liu', layer: '愛', desc: '還燙著的', weight: 0.9, sat: 0.1, resistance: 6, kind: 'narrative', source: 'aftermath', bornTick: 0 });
+    assert.ok(tension(picked) < WANT.fadeTensionBelow);
+    const faded = fadeStaleWants([genesis, picked, young, hot], 10);
+    assert.deepEqual(faded.map((w) => w.desc), ['那籠包子誰送的']);
+    assert.equal(picked.retired, true);
+    assert.equal(picked.resolvedNote, '（日子久了，淡了）');
+    assert.ok(!genesis.retired && !young.retired && !hot.retired);
 });
 
 test('economic wants never force (settlement lane owns them)', () => {

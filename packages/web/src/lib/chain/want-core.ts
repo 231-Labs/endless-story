@@ -63,6 +63,11 @@ export const WANT = {
     rippleResistance: 3,
     /** Forcing escalation bands, as fractions of resistance. */
     pressingAt: 0.6,
+    /** Spawn/retire balance (§2.55 tuning, 64-live/1-retired fix): a heart
+     *  holds only so many live threads; old ones that stopped pulling fade. */
+    maxLivePerCharacter: 4,
+    fadeTensionBelow: 0.18,
+    fadeMinAgeTicks: 6,
 } as const;
 
 export const tension = (w: Want): number => w.weight * (1 - w.sat);
@@ -114,6 +119,24 @@ export function decayWants(wants: Want[]): void {
         w.sat = clamp01(w.sat0 + (w.sat - w.sat0) * WANT.decay);
         w.recent = Math.max(0, w.recent - 0.5);
     }
+}
+
+/** §2.55 retire lane #2 — fading. A thread that is old, cold (below the
+ *  tension floor) and not being acted on quietly stops being carried. Genesis
+ *  wants are exempt: who a character IS doesn't fade, only picked-up threads.
+ *  Returns the faded wants (for logging). */
+export function fadeStaleWants(wants: Want[], tick: number): Want[] {
+    const faded: Want[] = [];
+    for (const w of wants) {
+        if (w.retired || w.kind === 'economic' || w.source === 'genesis') continue;
+        if (tick - w.bornTick < WANT.fadeMinAgeTicks) continue;
+        if (tension(w) >= WANT.fadeTensionBelow || w.recent > 0) continue;
+        w.retired = true;
+        w.resolvedTick = tick;
+        w.resolvedNote = '（日子久了，淡了）';
+        faded.push(w);
+    }
+    return faded;
 }
 
 export interface SalientPick {
@@ -194,6 +217,8 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
         if (
             nt &&
             nt.length <= 22 &&
+            // A full heart takes no new thread — the cheapest spawn brake.
+            mine.length < WANT.maxLivePerCharacter &&
             !wants.some(
                 (w) =>
                     w.characterId === d.characterId &&

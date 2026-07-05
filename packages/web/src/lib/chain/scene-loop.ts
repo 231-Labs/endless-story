@@ -7,6 +7,7 @@
  */
 
 import { characterAgent } from '@endless-story/runner';
+import { pickNextActor } from './scene-routing.ts';
 import {
     WANT,
     applyBeat,
@@ -34,6 +35,9 @@ export interface SceneLoopInput {
     tone?: string;
     /** Canon honorifics facts (identity guardrail). */
     etiquette?: string;
+    /** Saga emotional stance; 'consummate' unlocks the adult beat register
+     *  when (and only when) the intimacy gate opens for a beat. */
+    emotionalStance?: string;
     cast: SceneLoopCastMember[];
     /** The saga's full want array (live + retired; mutated in place). */
     wants: Want[];
@@ -106,6 +110,8 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     const maxTurns = input.maxTurns ?? (solo ? 1 : input.isPrivate ? 5 : 4);
     const log: string[] = [];
     const actedWants = new Map<string, Want>();
+    /** In-scene beat counts — feeds turn routing so a duel can't monopolize. */
+    const beatsBy = new Map<string, number>();
 
     let actor: SceneLoopCastMember | undefined = present.reduce((b, c) => {
         const wb = hottestOf(input.wants, b.characterId);
@@ -125,7 +131,8 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             present.length === 2 &&
             !!w.target &&
             others.some((o) => o.name === w.target || o.characterId === w.target);
-        if (privateAlone && /愛|情/.test(w.layer)) result.intimacyGateOpened = true;
+        const gateBeat = privateAlone && /愛|情/.test(w.layer);
+        if (gateBeat) result.intimacyGateOpened = true;
 
         const r = await characterAgent.actBeat({
             name: actor.name,
@@ -143,6 +150,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             sceneLog: log.slice(-5).join('\n'),
             stateLine: actor.stateLine,
             etiquette: input.etiquette,
+            consummate: gateBeat && input.emotionalStance === 'consummate',
         });
 
         log.push(`${actor.name}：${r.beat}`);
@@ -156,6 +164,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         });
         if (!result.actedCharacterIds.includes(actor.characterId)) result.actedCharacterIds.push(actor.characterId);
         actedWants.set(w.id, w);
+        beatsBy.set(actor.characterId, (beatsBy.get(actor.characterId) ?? 0) + 1);
 
         w.recent += 1;
         w.sat = Math.min(1, w.sat + satGainFor(w, input.isPrivate));
@@ -176,13 +185,18 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         const addressed = r.addressed
             ? candidates.find((c) => c.name === r.addressed || r.addressed!.includes(c.name))
             : undefined;
-        actor =
-            addressed ??
-            candidates.sort((a, b) => {
-                const wa = hottestOf(input.wants, a.characterId);
-                const wb = hottestOf(input.wants, b.characterId);
-                return (wb ? tension(wb) : -1) - (wa ? tension(wa) : -1);
-            })[0];
+        const nextId = pickNextActor(
+            candidates.map((c) => {
+                const hot = hottestOf(input.wants, c.characterId);
+                return {
+                    characterId: c.characterId,
+                    tension: hot ? tension(hot) : -1,
+                    beatsTaken: beatsBy.get(c.characterId) ?? 0,
+                    isAddressed: c.characterId === addressed?.characterId,
+                };
+            }),
+        );
+        actor = candidates.find((c) => c.characterId === nextId);
     }
 
     // Strict resolve pass: only edge-level acted wants are even judged (§2.31).
