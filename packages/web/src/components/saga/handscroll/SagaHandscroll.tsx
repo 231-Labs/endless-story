@@ -331,7 +331,7 @@ export function SagaHandscroll(props: Props) {
               return (
                 <div
                   key={seg.location.id}
-                  className="flex h-full shrink-0 snap-center snap-always flex-col border-r border-black/12 last:border-r-0 dark:border-white/12"
+                  className="flex h-full shrink-0 snap-center snap-always flex-col border-r border-black/[0.08] last:border-r-0 dark:border-white/[0.05]"
                 >
                   {/* 油畫 —— 高度定、寬度依 3:2 自算，完整展示不裁切 */}
                   <div className="relative h-[clamp(220px,46vh,520px)] w-[clamp(330px,69vh,780px)] shrink-0 overflow-hidden">

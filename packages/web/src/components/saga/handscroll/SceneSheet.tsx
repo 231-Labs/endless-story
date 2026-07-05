@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Character, Scene } from '@endless-story/shared';
 import { getSceneBoard, type SceneBoard } from '@/lib/actions/saga-live';
+import { sceneArtFor } from './terrainArt';
 
 /** Register glyph + tint for a beat line (mirrors the 題字流 language). */
 const KIND: Record<string, { glyph: string; tint: string }> = {
@@ -42,6 +43,9 @@ export function SceneSheet({
   const present = scene.currentCharacterIds ?? [];
   const isPrivate = (scene.privacyLevel ?? 0) >= 3;
   const moment = scene.imageUrl || scene.gallery?.anchor?.imageUrl || null;
+  // You walked into THIS scene — its own art is the space behind you; the
+  // location painting is only the last-resort backdrop.
+  const backdrop = sceneArtFor(scene.name) || moment || locationArt || null;
   const nameOf = (id: string) => charactersById.get(id)?.name ?? '某人';
 
   useEffect(() => {
@@ -80,15 +84,15 @@ export function SceneSheet({
         animate={{ scale: 1.06 }}
         transition={{ duration: 6, ease: 'easeOut' }}
       >
-        {locationArt ? (
+        {backdrop ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={locationArt} alt="" className="h-full w-full object-cover" />
+          <img src={backdrop} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full bg-canvas" />
         )}
-        {/* scrims: keep the art readable behind text without hiding the place */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
-        <div className="absolute inset-0 bg-canvas/20 dark:bg-black/25" />
+        {/* scrims — theme-aware: canvas-tinted by day, black by night, so the
+            text panels read in either mode without hiding the place. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-canvas/92 via-canvas/60 to-canvas/35 dark:from-black/85 dark:via-black/45 dark:to-black/25" />
       </motion.div>
 
       {/* click bare painting → step back out */}
@@ -107,12 +111,12 @@ export function SceneSheet({
         <div className="pointer-events-auto flex flex-wrap items-center gap-2.5 px-[max(1rem,env(safe-area-inset-left))] pt-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+0.75rem)] sm:px-10">
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.25em] text-white/80 hover:text-white"
+            className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.25em] text-ink/80 hover:text-ink"
           >
             <span aria-hidden>←</span> 退回手卷
           </button>
-          <span className="mx-1 h-3 w-px bg-white/25" />
-          <h2 className="font-serif text-lg tracking-[0.28em] text-white drop-shadow">{scene.name}</h2>
+          <span className="mx-1 h-3 w-px bg-hairline" />
+          <h2 className="font-serif text-lg tracking-[0.28em] text-ink">{scene.name}</h2>
           {isPrivate ? <Pill tone="gold">私宅</Pill> : null}
           {clock ? <Pill>{clock}</Pill> : null}
           {scene.performance ? <Pill tone="cinnabar">● 戲正熱</Pill> : null}
@@ -128,12 +132,12 @@ export function SceneSheet({
             <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-[1.35fr_1fr]">
               {/* stage: 當前一幕 + beats */}
               <div className="space-y-4">
-                <div className="relative overflow-hidden rounded-xl ring-1 ring-white/15">
+                <div className="relative overflow-hidden rounded-xl ring-1 ring-hairline/50 dark:ring-white/15">
                   {moment ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={moment} alt={`當前一幕：${scene.name}`} className="aspect-[16/9] w-full object-cover" />
                   ) : (
-                    <div className="flex aspect-[16/9] w-full items-center justify-center bg-black/40 text-2xs tracking-[0.2em] text-white/60 backdrop-blur-sm">
+                    <div className="flex aspect-[16/9] w-full items-center justify-center bg-surface/70 text-2xs tracking-[0.2em] text-mute backdrop-blur-sm dark:bg-black/40 dark:text-white/60">
                       當前一幕 · 戲到峰值時由現場對白生成
                     </div>
                   )}
@@ -141,50 +145,50 @@ export function SceneSheet({
                     當前一幕
                   </span>
                 </div>
-                <div className="space-y-3.5 rounded-xl bg-black/35 p-5 backdrop-blur-md ring-1 ring-white/10">
+                <div className="space-y-3.5 rounded-xl bg-surface/85 p-5 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
                   {board?.beats.length ? (
                     board.beats.map((b, i) => (
                       <div key={i}>
                         <div className={`mb-1 font-serif text-2xs tracking-[0.3em] ${KIND[b.kind]?.tint ?? 'text-cinnabar'}`}>
                           {nameOf(b.characterId)}
                         </div>
-                        <div className="text-sm leading-relaxed text-white/90">{b.text}</div>
+                        <div className="text-sm leading-relaxed text-ink">{b.text}</div>
                         <div className="mt-1.5 flex items-center gap-2">
-                          <span className="h-2.5 w-40 rounded-full bg-white/15 blur-[1.5px]" />
+                          <span className="h-2.5 w-40 rounded-full bg-hairline/70 blur-[1.5px]" />
                           <span className="whitespace-nowrap font-serif text-2xs tracking-[0.16em] text-gold">心聲 · 訂閱解鎖</span>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <p className="py-4 text-center text-2xs tracking-[0.2em] text-white/60">這一刻還沒有動靜，戲正醞釀。</p>
+                    <p className="py-4 text-center text-2xs tracking-[0.2em] text-mute">這一刻還沒有動靜，戲正醞釀。</p>
                   )}
                 </div>
               </div>
 
               {/* side: 心事 + CTA */}
               <aside className="space-y-4">
-                <div className="rounded-xl bg-black/35 p-5 backdrop-blur-md ring-1 ring-white/10">
-                  <h3 className="mb-3 font-serif text-2xs tracking-[0.3em] text-white/60">此刻在場的心事</h3>
+                <div className="rounded-xl bg-surface/85 p-5 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
+                  <h3 className="mb-3 font-serif text-2xs tracking-[0.3em] text-mute">此刻在場的心事</h3>
                   {board?.wants.length ? (
                     board.wants.map((w, i) => (
                       <div key={i} className="mb-3">
-                        <p className="text-sm leading-snug text-white/90">
+                        <p className="text-sm leading-snug text-ink">
                           <span className="text-gold">{nameOf(w.characterId)}</span> · {w.desc}
                         </p>
-                        <div className="mt-1.5 h-1 rounded bg-white/15">
+                        <div className="mt-1.5 h-1 rounded bg-hairline/60">
                           <div className="h-full rounded bg-gradient-to-r from-gold to-cinnabar" style={{ width: `${Math.round(w.tension * 100)}%` }} />
                         </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-2xs leading-relaxed text-white/60">心事帳訂閱後可見。</p>
+                    <p className="text-2xs leading-relaxed text-mute">心事帳訂閱後可見。</p>
                   )}
                 </div>
-                <div className="rounded-xl bg-black/35 p-5 backdrop-blur-md ring-1 ring-white/10">
-                  <button className="w-full rounded-lg bg-white/90 py-3 font-serif text-sm tracking-[0.25em] text-black">
+                <div className="rounded-xl bg-surface/85 p-5 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
+                  <button className="w-full rounded-lg bg-ink py-3 font-serif text-sm tracking-[0.25em] text-canvas">
                     訂閱在場角色
                   </button>
-                  <p className="mt-2 text-center text-2xs tracking-[0.12em] text-white/60">完整心聲連載 · 心事帳 · 每月注夢 · 劇照優先鑄</p>
+                  <p className="mt-2 text-center text-2xs tracking-[0.12em] text-mute">完整心聲連載 · 心事帳 · 每月注夢 · 劇照優先鑄</p>
                 </div>
               </aside>
             </div>
