@@ -57,6 +57,15 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Agent } from 'undici';
+
+/** A full tick (plans + beats + POVs + anchoring) can legitimately run past
+ *  undici's 300s default headers timeout; give it real headroom. */
+const TICK_FETCH_TIMEOUT_MS = 20 * 60 * 1000;
+const tickDispatcher = new Agent({
+    headersTimeout: TICK_FETCH_TIMEOUT_MS,
+    bodyTimeout: TICK_FETCH_TIMEOUT_MS,
+});
 
 // Minimal ANSI palette, TTY-gated (off when piped/redirected or NO_COLOR set).
 const COLOR = Boolean(process.stdout.isTTY) && process.env.NO_COLOR == null;
@@ -381,7 +390,12 @@ async function main() {
                     ...(secret ? { authorization: `Bearer ${secret}` } : {}),
                 },
                 body: JSON.stringify(input),
-            });
+                signal: AbortSignal.timeout(TICK_FETCH_TIMEOUT_MS),
+                // undici's default headersTimeout (300s) fires independently of
+                // the signal; the devnet stress run showed a 301s tick marked
+                // "failed" here while the server finished it fine.
+                dispatcher: tickDispatcher,
+            } as RequestInit);
             const raw = await res.text();
             let json: TickResult | null = null;
             if (raw.trim()) {
