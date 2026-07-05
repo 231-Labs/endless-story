@@ -105,12 +105,20 @@ test('dream stir = one tighten on the dreamer hottest want (§2.51 dose)', () =>
     assert.equal(applyDreamStirToWants(wants, 'nobody'), null);
 });
 
-test('spawn brake: a full heart takes no new thread (§2.55)', () => {
-    const wants = Array.from({ length: WANT.maxLivePerCharacter }, (_, i) => mk('su', `心事${i}`, 0.7, 0.3));
-    const spawned = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '全新的一縷' }], 3);
-    assert.equal(spawned.length, 0);
-    wants[0].retired = true; // one resolves → room again
-    const again = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '全新的一縷' }], 4);
+test('spawn brake caps picked-up threads only — genesis never fills the heart (§2.55)', () => {
+    // 5 genesis wants (a full induction) must NOT block the first ripple thread —
+    // the acceptance run proved a total cap starves spawns to zero.
+    const wants = Array.from({ length: 5 }, (_, i) => mk('su', `本心${i}`, 0.7, 0.3));
+    const first = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '撿來的一縷' }], 3);
+    assert.equal(first.length, 1);
+    const second = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '又一縷心事' }], 4);
+    assert.equal(second.length, 1);
+    // Now at maxPickedThreads — the third is braked...
+    const third = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '第三縷新念頭' }], 5);
+    assert.equal(third.length, 0);
+    // ...until one picked thread fades/resolves, freeing the slot.
+    first[0].retired = true;
+    const again = applyRipples(wants, [{ characterId: 'su', shift: 'none', newThread: '第三縷新念頭' }], 6);
     assert.equal(again.length, 1);
 });
 

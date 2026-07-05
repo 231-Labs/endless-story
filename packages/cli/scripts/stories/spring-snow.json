@@ -1,657 +1,658 @@
 {
-  "id": "spring-snow",
-  "label": "春雪社 · 民國上海越劇混合班",
-  "world": {
-    "name": "民國上海",
-    "description": "民國十七年前後的上海。法租界電車叮鈴，霞飛路櫥窗映著香粉廣告和影戲海報；四馬路報館、副刊、唱片行與茶樓戲院一同把名字推上潮頭。春雪社掛的是當紅戲班的招牌，台上乾生坤生同台、生旦淨丑俱全，台下有文武場樂師、票房、報人與衣箱師傅出入。這不是落魄梨園，而是一座正在學會如何和上海談價錢的當紅戲班。",
-    "currency": {
-      "name": "Endless",
-      "symbol": "ENDLESS"
+    "id": "spring-snow",
+    "label": "春雪社 · 民國上海越劇混合班",
+    "world": {
+        "name": "民國上海",
+        "description": "民國十七年前後的上海。法租界電車叮鈴，霞飛路櫥窗映著香粉廣告和影戲海報；四馬路報館、副刊、唱片行與茶樓戲院一同把名字推上潮頭。春雪社掛的是當紅戲班的招牌，台上乾生坤生同台、生旦淨丑俱全，台下有文武場樂師、票房、報人與衣箱師傅出入。這不是落魄梨園，而是一座正在學會如何和上海談價錢的當紅戲班。",
+        "currency": {
+            "name": "Endless",
+            "symbol": "ENDLESS"
+        },
+        "time_config": {
+            "days_per_tick_bp": 1670,
+            "tick_interval_ms": 120000
+        },
+        "narrative": {
+            "genre_base": "風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。"
+        }
     },
-    "time_config": {
-      "days_per_tick_bp": 1670,
-      "tick_interval_ms": 120000
+    "world_rules": {
+        "species": [
+            "human",
+            "spirit",
+            "beast"
+        ],
+        "attributes": [
+            {
+                "key": "appearance",
+                "label": "外貌",
+                "min": 0,
+                "max": 100
+            },
+            {
+                "key": "constitution",
+                "label": "筋骨",
+                "min": 0,
+                "max": 100
+            },
+            {
+                "key": "acuity",
+                "label": "機敏",
+                "min": 0,
+                "max": 100
+            },
+            {
+                "key": "disposition",
+                "label": "心性",
+                "min": 0,
+                "max": 100
+            }
+        ]
     },
-    "narrative": {
-      "genre_base": "風格是民初梨園小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。"
-    }
-  },
-  "world_rules": {
-    "species": [
-      "human",
-      "spirit",
-      "beast"
+    "locations": [
+        {
+            "name": "霞飛路",
+            "description": "法租界主街，也是春雪社的門面。霓虹招牌、戲單牆、照相館與綢緞莊一字排開；散戲後門口黃包車排成一線，名利與流言都在這條街上流動。",
+            "terrain": "concession-street",
+            "x": 100,
+            "y": 100,
+            "adjacent_indices": [
+                1,
+                2
+            ]
+        },
+        {
+            "name": "雲錦台",
+            "description": "春雪社掛牌的戲院。前有戲台與包廂，後有妝閣與衣箱庫；台前是給上海看的，台後才是這班人真正過日子的地方。",
+            "terrain": "theater",
+            "x": 120,
+            "y": 140,
+            "adjacent_indices": [
+                0
+            ]
+        },
+        {
+            "name": "四馬路",
+            "description": "上海報界聚集的一條街。報館、副刊、照相館師傅與唱片行掮客在此交換標題；一個名字能不能在隔日的上海多活一天，多半在這裡定。",
+            "terrain": "press-teahouse",
+            "x": 210,
+            "y": 110,
+            "adjacent_indices": [
+                0,
+                4
+            ]
+        },
+        {
+            "name": "蘇州河碼頭",
+            "description": "綢緞、靠旗、盔甲片、唱片機和外地口信都從河邊上岸。清晨有霧，夜裡有船笛，是春雪社同上海以外世界的接口。",
+            "terrain": "wharf",
+            "x": 300,
+            "y": 240,
+            "adjacent_indices": [
+                5,
+                6
+            ]
+        },
+        {
+            "name": "會樂里",
+            "description": "高級長三堂子聚集的里弄。名伶下戲後常被富商、軍閥用馬車或汽車接來唱堂會應酬；最體面的門面後，做的是最身不由己的買賣。",
+            "terrain": "courtesan-house",
+            "x": 150,
+            "y": 90,
+            "adjacent_indices": [
+                2,
+                0
+            ]
+        },
+        {
+            "name": "紹興會館",
+            "description": "紹興同鄉的會館，供著鄉賢牌位。外地戲班初到上海跑碼頭，多半先住進這裡求同鄉大佬庇護；沒有會館一聲招呼，新班一開鑼就可能被地痞砸場。",
+            "terrain": "guild-hall",
+            "x": 260,
+            "y": 210,
+            "adjacent_indices": [
+                3
+            ]
+        },
+        {
+            "name": "大世界遊樂場",
+            "description": "雜耍、影戲、評彈、紹興文戲和外班男角都在這裡搶客。春雪社若要請男小生、老生、大面短約，消息多半先在這裡露頭。",
+            "terrain": "amusement-hall",
+            "x": 300,
+            "y": 135,
+            "adjacent_indices": [
+                3
+            ]
+        }
     ],
-    "attributes": [
-      {
-        "key": "appearance",
-        "label": "外貌",
-        "min": 0,
-        "max": 100
-      },
-      {
-        "key": "constitution",
-        "label": "筋骨",
-        "min": 0,
-        "max": 100
-      },
-      {
-        "key": "acuity",
-        "label": "機敏",
-        "min": 0,
-        "max": 100
-      },
-      {
-        "key": "disposition",
-        "label": "心性",
-        "min": 0,
-        "max": 100
-      }
+    "saga": {
+        "name": "春雪社",
+        "description": "春雪社掛的是霞飛路雲錦台的舊匾，唱的卻是上海灘最熱鬧的新局面。台上生旦淨丑俱全，小生行尤其出挑；台下有包廂茶座、報館副刊、照相館劇照、唱片行契約與堂會應酬，一日一日把角兒的名字推到燈下。班主沈雪笙懂舊規矩，也懂新世道，知道哪場戲該守、哪個人該護、哪句流言該讓它過夜。春雪社的人就在紅幔、油彩、胡琴、帳本、戲約和真心裡過日子；台前一聲彩，台後往往已有十樁心事。",
+        "covered_location_indices": [
+            0,
+            1,
+            2,
+            3
+        ],
+        "owner_bps": 4000,
+        "storyteller_bps": 4000,
+        "treasury_bps": 2000,
+        "departure_policy": "想離開春雪社的角色應先同班主或經理說清楚：若是常駐演員，要交代未結戲約、包廂檔期與唱片契約；若是外班短約，演完約定場次即可離開。私奔、跳槽、被報紙挖走或被唱片行簽走都可以成為故事，但要留下足夠的台上台下因果。",
+        "nature_prompt": "春雪社的戲劇核心是繁華裡的情義、名聲與自主權。霞飛路的燈、雲錦台的戲、四馬路的小報、唱片行的契約、包廂裡的賞識與堂會上的人情，都會把角色推到更亮也更難退的地方。故事不要只寫落魄與苦命；春雪社是當紅戲班，應有亮色、笑場、鬥嘴、機鋒、排戲、吃醋、照應、算帳與台前台後的細小親密。小生行不只問誰像男兒，而是問誰能把少年郎唱得可信、可愛、可托付；乾生、坤生同台，各有身段、嗓音與觀眾緣，真正爭的是台心那一口氣。CP 張力可以自然發展但不要預設戀愛，重要的是台上默契、台下利益、互相成全與互相利用之間的模糊。容得下吊嗓、耍扇、量衣、對詞、後台說笑、茶館閒談、包廂周旋這些過日子的場面，讓人物先在閒話與小動作裡立起來，利害再慢慢浮出。",
+        "rhythm_hints": "開局宜慢、宜閒：頭幾日多是入班、認人、安頓戲箱、街頭巷尾閒話家常，真正的衝突還在水面下醞釀。清晨吊嗓與武場開功；午後說戲、量衣、排新戲；傍晚票房點包廂、報館來要照片；入夜雲錦台上燈，主胡第一弓決定全場呼吸；散戲後茶室與後街才是真正談條件的地方。留聲機與胡琴常同時響、霓虹照著舊戲單、西裝與長衫並肩坐茶座——新派與老派的磨擦是每天的背景音。雨天改文戲，逢節加武戲，報紙刊出好評後全班人心都會浮起來。",
+        "portrait_tone": "淡彩水墨工筆肖像：淡墨細線勾勒，清透水彩薄塗，設色清淡通透，大面積留白，宣紙暈染質感；統一純白背景，只畫單人素顏頭肩四分之三側面；民國上海氣質只見於髮型與常服。",
+        "narrative": {
+            "framings": {
+                "spotlight": "今晚誰壓軸、誰站台心的暗潮浮上了檯面",
+                "recording": "首張唱片該由誰來灌，成了繞不開的話題",
+                "partnership": "誰與誰搭戲的盤算，在這一場裡較上了勁",
+                "affection": "誰也沒說破，可這一場裡，好幾道目光都繞著{who}打轉，各自藏著沒出口的心事",
+                "generic": "一樁懸而未決的較量，在這一場裡發酵"
+            },
+            "features": {
+                "event_image": true,
+                "stills": true,
+                "video": false
+            },
+            "art_style": "絹本工筆：清明上河圖式細膩線描、赭石淡墨設色、陳年絹底暖米金基調",
+            "etiquette": "蘇映雪為師姐、柳生春為師妹（蘇長柳四歲、同科姊妹）；田巧雲／沈雪笙為班主，班中稱班主或師父，不稱師姐；賴金喜為師兄（丑行）。",
+            "emotional_stance": "consummate"
+        }
+    },
+    "saga_attributes": [
+        {
+            "key": "vocal",
+            "label": "唱腔",
+            "min": 0,
+            "max": 100
+        },
+        {
+            "key": "movement",
+            "label": "身段",
+            "min": 0,
+            "max": 100
+        },
+        {
+            "key": "stage_presence",
+            "label": "台緣",
+            "min": 0,
+            "max": 100
+        },
+        {
+            "key": "martial",
+            "label": "武場",
+            "min": 0,
+            "max": 100
+        },
+        {
+            "key": "literati",
+            "label": "文墨",
+            "min": 0,
+            "max": 100
+        },
+        {
+            "key": "networking",
+            "label": "交際",
+            "min": 0,
+            "max": 100
+        }
+    ],
+    "card_weight_rules": [
+        {
+            "intent": 1,
+            "attribute_key": "martial",
+            "bonus_per_point": 4
+        },
+        {
+            "intent": 2,
+            "attribute_key": "constitution",
+            "bonus_per_point": 3
+        },
+        {
+            "intent": 4,
+            "attribute_key": "networking",
+            "bonus_per_point": 4
+        },
+        {
+            "intent": 6,
+            "attribute_key": "acuity",
+            "bonus_per_point": 3
+        },
+        {
+            "intent": 7,
+            "attribute_key": "stage_presence",
+            "bonus_per_point": 4
+        },
+        {
+            "intent": 8,
+            "attribute_key": "literati",
+            "bonus_per_point": 3
+        },
+        {
+            "intent": 1,
+            "attribute_key": "movement",
+            "bonus_per_point": 3
+        },
+        {
+            "intent": 4,
+            "attribute_key": "vocal",
+            "bonus_per_point": 3
+        }
+    ],
+    "drama_resources": [
+        {
+            "archetype": "capacity-1-slot",
+            "label": "spotlight:春雪社頭牌名額",
+            "capacity": 1
+        },
+        {
+            "archetype": "capacity-1-slot",
+            "label": "partnership:柳生春",
+            "capacity": 1
+        },
+        {
+            "archetype": "capacity-1-slot",
+            "label": "mentorship:沈雪笙的真傳",
+            "capacity": 1
+        },
+        {
+            "archetype": "capacity-1-slot",
+            "label": "belonging:師門自己人的名分",
+            "capacity": 1
+        },
+        {
+            "archetype": "capacity-1-slot",
+            "label": "solace:後台暖爐邊的位子",
+            "capacity": 1
+        },
+        {
+            "archetype": "capacity-1-slot",
+            "label": "keepsake:故人遺下的那身行頭",
+            "capacity": 1
+        }
+    ],
+    "scenes": [
+        {
+            "name": "戲園前街",
+            "description": "雲錦台門前的霞飛路。巨幅戲單與名伶劇照貼滿外牆，霓虹招牌在暮色裡亮起，黃包車夫在戲院紅燈下拉客穿梭。誰的畫像掛得最高，誰今晚就是上海的話題。",
+            "location_index": 0,
+            "privacy": 0,
+            "atmosphere": 88,
+            "danger": 12,
+            "prosperity": 90,
+            "pos_x": 12,
+            "pos_y": 30
+        },
+        {
+            "name": "雲錦台戲台",
+            "description": "春雪社的主台。紅幔、包廂、洋式電燈和三面茶座一同亮起，台口看得見女學生、買辦太太、報館先生和唱片行經理的臉。",
+            "location_index": 1,
+            "privacy": 0,
+            "atmosphere": 92,
+            "danger": 8,
+            "prosperity": 90,
+            "pos_x": 28,
+            "pos_y": 28
+        },
+        {
+            "name": "包廂茶座",
+            "description": "二樓包廂半掩著竹簾，談票價、報紙、唱片和新戲檔期。不上台的人在這裡決定誰明晚能上台。",
+            "location_index": 1,
+            "privacy": 1,
+            "atmosphere": 78,
+            "danger": 22,
+            "prosperity": 88,
+            "pos_x": 36,
+            "pos_y": 40
+        },
+        {
+            "name": "後台妝閣",
+            "description": "油彩盒、假髮、戲靴、茶盞和未背完的本子擠在一處。最親近的話在這裡說，最傷人的話也常在這裡被聽見。",
+            "location_index": 1,
+            "privacy": 2,
+            "atmosphere": 84,
+            "danger": 10,
+            "prosperity": 65,
+            "pos_x": 44,
+            "pos_y": 58
+        },
+        {
+            "name": "衣箱房",
+            "description": "水袖、靠旗、盔甲、頭面和契書同櫃而眠。衣箱師知道每一件戲服該藏哪道褶，也知道誰最近量腰時瘦了。",
+            "location_index": 1,
+            "privacy": 3,
+            "atmosphere": 72,
+            "danger": 18,
+            "prosperity": 55,
+            "pos_x": 52,
+            "pos_y": 66
+        },
+        {
+            "name": "報館茶室",
+            "description": "茶杯旁壓著劇照和校樣。記者一句標題能把春雪社寫成新女性神話，也能把後台一句玩笑寫成風波。",
+            "location_index": 2,
+            "privacy": 1,
+            "atmosphere": 70,
+            "danger": 35,
+            "prosperity": 76,
+            "pos_x": 70,
+            "pos_y": 40
+        },
+        {
+            "name": "夜碼頭",
+            "description": "河霧裡有綢緞包、唱片機木箱和外班人的口信。有人在這裡入班，也有人在這裡想好離開。",
+            "location_index": 3,
+            "privacy": 2,
+            "atmosphere": 55,
+            "danger": 42,
+            "prosperity": 46,
+            "pos_x": 86,
+            "pos_y": 68
+        },
+        {
+            "name": "長三堂子花廳",
+            "description": "一樓花廳，水晶燈與留聲機一同亮起。客人點了戲，角兒清唱一段。唱得好是體面，唱得太好，接下來的話就由不得自己。",
+            "location_index": 4,
+            "privacy": 1,
+            "atmosphere": 72,
+            "danger": 40,
+            "prosperity": 86,
+            "pos_x": 20,
+            "pos_y": 35
+        },
+        {
+            "name": "二樓書寓",
+            "description": "樓上書寓，茶煙與算盤聲。包銀、檔期、靠山在這裡談定；誰在這桌上被許了不該許的諾，明早小報都會知道。",
+            "location_index": 4,
+            "privacy": 3,
+            "atmosphere": 64,
+            "danger": 44,
+            "prosperity": 80,
+            "pos_x": 24,
+            "pos_y": 50
+        },
+        {
+            "name": "鄉賢正堂",
+            "description": "正堂供著鄉賢牌位，香火終日不斷。拜過這裡、應下日後的人情，才算在上海有了靠山。",
+            "location_index": 5,
+            "privacy": 1,
+            "atmosphere": 60,
+            "danger": 26,
+            "prosperity": 50,
+            "pos_x": 78,
+            "pos_y": 55
+        },
+        {
+            "name": "後進廂房",
+            "description": "後進一排廂房，住著剛下船、口音未改的新角兒。戲箱還沒開，先得拜過鄉賢牌位、應下人情，才敢去雲錦台搭第一齣戲。",
+            "location_index": 5,
+            "privacy": 2,
+            "atmosphere": 58,
+            "danger": 30,
+            "prosperity": 46,
+            "pos_x": 82,
+            "pos_y": 66
+        }
+    ],
+    "recruitments": [
+        {
+            "id": "rec_xiaosheng_qian",
+            "specialty": "小生 · 乾生",
+            "roleIntent": "春雪社的乾生，正工男小生。演俊美書生、少年將領，嗓子穩、台步老辣。他與坤生同演小生行，台上爭的是同一個位置、同一批觀眾緣；可以做對手、搭檔、CP 或互相照見的鏡子。重點是他如何在女子也能演小生的戲班裡，證明自己不是靠性別佔位。",
+            "membership": "internal",
+            "slots": 2,
+            "basePrice": 170,
+            "minAttributes": {
+                "appearance": 78,
+                "acuity": 72
+            },
+            "genderRequirement": "male",
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_xiaosheng_kun",
+            "specialty": "小生 · 坤生",
+            "roleIntent": "春雪社的坤生，女扮少年郎。這不是噱頭，而是讓女學生、太太、報紙副刊都願意替她爭辯的舞台技術。她與乾生同演小生行，守的是自己的小生位與觀眾緣；可與台柱旦發展默契、競爭或情感線，但不要預設戀愛。",
+            "membership": "internal",
+            "slots": 2,
+            "basePrice": 170,
+            "minAttributes": {
+                "appearance": 78,
+                "acuity": 72
+            },
+            "genderRequirement": "female",
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_dan",
+            "specialty": "青衣 / 花旦",
+            "roleIntent": "春雪社徵旦行。青衣端莊、花旦俏皮，能把一折悲戲唱出亮色，也能把一個眼神賣成整條霞飛路的話題。不要寫成被動受捧，要有自己的生意頭腦、審美和底線；台上是台柱的對手戲，台下是搭檔位與唱片權的核心。",
+            "membership": "internal",
+            "slots": 2,
+            "basePrice": 180,
+            "minAttributes": {
+                "appearance": 82,
+                "disposition": 70
+            },
+            "genderRequirement": "female",
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_daomadan",
+            "specialty": "刀馬旦",
+            "roleIntent": "春雪社要一位刀馬旦。可以不是從小入科，也可以是京班武場、雜技場或影戲武行轉來；要能穿靠、使槍、翻身亮相，也要唱得住穆桂英掛帥那口氣。不是莽撞打女，而是把身體當成自己的證詞。可與主胡、鼓佬或小生自然長出第二條 CP 張力。",
+            "membership": "internal",
+            "slots": 2,
+            "basePrice": 160,
+            "minAttributes": {
+                "constitution": 78,
+                "disposition": 68
+            },
+            "genderRequirement": "female",
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_jing",
+            "specialty": "淨行",
+            "roleIntent": "春雪社的淨行大面。演父親、權臣、將帥、惡霸或元帥帳下的重聲角色，要嗓門大、氣勢足。老規矩會與這班新派戲路互相試探；不要寫成單純守舊反派，他也可能真懂戲、真惜才。",
+            "membership": "internal",
+            "slots": 1,
+            "basePrice": 130,
+            "minAttributes": {
+                "constitution": 74,
+                "disposition": 60
+            },
+            "genderRequirement": "male",
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_longtao",
+            "specialty": "龍套",
+            "roleIntent": "春雪社的龍套與武行。演小兵、宮女、百姓，翻滾、排陣、撐場面全靠他們；雖是配角，卻是全班的底盤。肯下功夫的龍套，遲早有一場戲是他的。",
+            "membership": "internal",
+            "slots": 4,
+            "basePrice": 70,
+            "minAttributes": {
+                "constitution": 55
+            },
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_zhuhu",
+            "specialty": "主胡",
+            "roleIntent": "春雪社徵主胡。此人不上台，卻掌全台呼吸；一弓能托住台柱失音，一個停頓也能讓全班心裡發冷。可來自江南琴行、舊戲班或唱片行伴奏間；他或她懂每個人的嗓子，也知道誰在逞強。這個角色是樂師，不是背景板。",
+            "membership": "internal",
+            "slots": 1,
+            "basePrice": 150,
+            "minAttributes": {
+                "acuity": 82,
+                "disposition": 70
+            },
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_guban",
+            "specialty": "司鼓",
+            "roleIntent": "春雪社的鼓佬，武場的指揮官。一副單皮鼓與板，控住全場的快慢起停；演員的身段、主胡的弓法、後台的鑼鈸全聽他的鼓點。能在刀馬旦翻身時給出正好的一記鼓，也能在班主與台柱僵持時，用節奏替全班續上一口氣。",
+            "membership": "internal",
+            "slots": 1,
+            "basePrice": 140,
+            "minAttributes": {
+                "acuity": 80,
+                "constitution": 60
+            },
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_yueshi",
+            "specialty": "文武場樂師",
+            "roleIntent": "春雪社的文武場樂師。一人多職：文戲彈月琴、二胡，武戲換嗩吶、鑼鈸。坐在主胡與鼓佬之間，把一台戲的聲音填滿。懂行的樂師知道哪一句該讓、哪一句該頂。",
+            "membership": "internal",
+            "slots": 2,
+            "basePrice": 100,
+            "minAttributes": {
+                "acuity": 70
+            },
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_yixiang",
+            "specialty": "衣箱師傅",
+            "roleIntent": "春雪社的衣箱師傅，管箱的。掌水袖、靠旗、盔頭、頭面、尺寸和秘密；穿一身靠要兩人服侍，戲服不能水洗、全靠這雙手養著。能從一件戲衣看出誰最近瘦了、誰快撐不住。親密、利用、成全與背叛，都從這裡的針線縫起。",
+            "membership": "internal",
+            "slots": 2,
+            "basePrice": 100,
+            "minAttributes": {
+                "acuity": 74,
+                "disposition": 55
+            },
+            "ttl_days": 21
+        },
+        {
+            "id": "rec_chunxue_jianchang",
+            "specialty": "檢場",
+            "roleIntent": "春雪社的檢場。演戲時一身黑衣，在觀眾眼裡視為隱形，負責上下場之間搬桌椅、遞茶水、擺刀槍旗子。最不起眼的位置，卻把每一場戲的破綻與真相都看在眼裡。",
+            "membership": "internal",
+            "slots": 1,
+            "basePrice": 80,
+            "minAttributes": {
+                "acuity": 68
+            },
+            "ttl_days": 21
+        }
+    ],
+    "founding_cast": [
+        {
+            "name": "沈雪笙",
+            "ageYears": 42,
+            "gender": "女",
+            "role": "班主",
+            "description": "春雪社班主，昔年工小生行的名角。年輕時她也是霞飛路上最亮的一位少年郎，扇一開，滿堂人都像被春風照面；如今封箱多年，坐在二樓包廂裡看戲、看帳、看人心。她懂舊戲班的規矩，也懂上海的新熱鬧：哪張劇照該送去報館，哪場堂會不能推，哪個角兒該護，哪個角兒該放出去被風浪磨一磨。沈雪笙不是冷，她只是把疼人藏得很深。她可以為了春雪社的生意說狠話，也會在散戲後讓人把一碗溫梨湯送到嗓子發緊的角兒房裡。她最厲害的地方不是管住所有人，而是看得出誰正要成角、誰快被名聲壓壞、誰只差一場戲就能站起來。",
+            "secret": "她封箱那年，並不是唱不動了。只是有一齣戲、有一個人、有一句沒能說出口的話，忽然讓她明白台上再亮，也照不見自己真正想留住的東西。那只停了的懷錶她一直收著，像收著另一個沒有走完的人生。看見柳生春在台上做小生，她有時會心軟，有時會心驚：春春那柄扇子太像當年的自己，卻又比她當年更敢把溫柔露出來。",
+            "minAttributes": {
+                "appearance": 72,
+                "constitution": 64,
+                "acuity": 86,
+                "disposition": 84
+            }
+        },
+        {
+            "name": "蘇映雪",
+            "ageYears": 28,
+            "gender": "女",
+            "role": "花旦",
+            "description": "春雪社的台柱花旦，工青衣，也能唱花旦。台上端莊，台下也極懂分寸；她會同唱片行談價，會替班主圓場，會在包廂裡三兩句話把難聽的事說得體面。所有人都覺得蘇映雪大度、聰明、穩得住場，只有柳生春知道她也會吃醋、會彆扭、會故意把話說得輕輕的，偏偏句句都要人哄。她是真把柳生春當自己的小郎君，明知那是行當，也是台上的夢，卻不願看這個夢分給別的花旦。",
+            "secret": "她不是怕柳生春不紅，而是怕柳生春太紅，紅到誰都能借她一柄扇、同她唱一場情。蘇映雪可以把春雪社的門面撐得滴水不漏，唯獨碰上柳生春，便忍不住像個不肯讓糖的小姑娘。",
+            "minAttributes": {
+                "appearance": 88,
+                "constitution": 64,
+                "acuity": 78,
+                "disposition": 82
+            }
+        },
+        {
+            "name": "柳生春",
+            "ageYears": 24,
+            "gender": "女",
+            "role": "小生",
+            "description": "春雪社當紅小生，外表中性俊秀，眉眼英氣，台上是一柄摺扇便能撩動滿堂春水的風流少年郎。她的小生不是硬裝出來的男氣，而是乾淨、清亮、會疼人：扇骨一收是少年意氣，扇面一展又像替人遮住半句不好出口的情話。台下的柳生春其實溫柔、愛撒嬌，也很黏師姐蘇映雪；對旁人客氣周到，並沒有台上那種會辜負人的薄情。越是被觀眾當成多情公子，她越清楚自己最想守住的是哪一個人、哪一齣戲、哪一盞後台燈。",
+            "secret": "她知道台下許多人愛的是那位扇底含笑的少年郎，不一定是卸了妝後的柳生春。可她並不恨這件事；她只是貪心地希望，至少師姐分得清。她最怕的不是失寵，而是有一天蘇映雪也只看見台上的她。",
+            "minAttributes": {
+                "appearance": 88,
+                "constitution": 72,
+                "acuity": 82,
+                "disposition": 76
+            }
+        },
+        {
+            "name": "江聞鶴",
+            "ageYears": 27,
+            "gender": "男",
+            "role": "小生",
+            "description": "從紹興男班北上的小生，台步穩，嗓子亮，說話也有一點舊戲班出來的直。他初到春雪社，確實看不慣上海灘萬事都要上報、拍照、灌唱片的熱鬧，也不太明白為什麼女學生和太太們會為柳生春那樣的小生爭得厲害。可他不是來砸場的，他是真想把小生唱好。江聞鶴的好處在於乾淨：不會哄人，不會做場面，嘴上挑剔，台上卻肯接戲、肯托人。與柳生春同演小生行，起初難免較勁，後來才發現兩人爭的不是男女高下，而是同一件事：怎樣把一個少年郎唱得可信、可愛、可托付。",
+            "secret": "他嘴上說上海新派花哨，其實第一次在包廂裡聽見觀眾為柳生春叫好時，心裡不是輕視，是慌。他怕的不是輸給誰，而是怕自己這套從小練出的本事，在新的上海已經不夠人看。可偏偏越怕，越想留下來唱一場真正漂亮的對手戲。",
+            "minAttributes": {
+                "appearance": 82,
+                "constitution": 78,
+                "acuity": 84,
+                "disposition": 70
+            }
+        },
+        {
+            "name": "連翹",
+            "ageYears": 24,
+            "gender": "女",
+            "role": "刀馬旦",
+            "description": "春雪社新來的刀馬旦，從京班武場和雜技場裡滾出來，身上帶著一股不肯求人讓路的硬氣。她不愛說自己吃過多少苦，也不拿苦當招牌；槍花、翻身、靠旗、亮相，每一樣都是她替自己寫下的名姓。連翹看起來爽利，實則心細，知道武戲最怕只剩熱鬧，所以她每一次出手都要有緣故。她進春雪社不是來當打女陪襯的，是想在一班唱腔漂亮、報紙愛寫的名角中，讓上海也記住一個靠身體站上台心的人。",
+            "secret": "她年少時曾在旁人的戲裡做過一個無名小武行，摔得再重也沒人在戲單上寫她的名字。那時她見過沈雪笙一回，記住的不是名角的風光，而是那人站在台心時，滿場人都不得不安靜。她來春雪社，嘴上說是謀一口飯，心裡其實想問：若我也站到那裡，上海會不會終於看見我？",
+            "minAttributes": {
+                "appearance": 82,
+                "constitution": 88,
+                "acuity": 76,
+                "disposition": 78
+            }
+        },
+        {
+            "name": "何阿喜",
+            "ageYears": 30,
+            "gender": "男",
+            "role": "丑",
+            "description": "藝名小豆子，春雪社的丑。台上他救冷場、學洋腔、逗包廂太太笑，能把一句難聽話說成滿堂彩，也能在最熱鬧處忽然點破真相。台下的何阿喜滑頭、嘴甜、消息靈，茶壺還沒續水，已經知道四馬路小報明日想寫誰。他看似誰都不得罪，其實心裡很有分寸：哪句話能拿來逗笑，哪句話會害人，他比誰都清楚。春雪社需要他，不只因為他會演丑，也因為他懂得替一班人把難堪的場面圓過去。",
+            "secret": "早年在大世界討生活時，他曾仗著一張會說真話的嘴，在酒桌上順口抖出一個小兄弟的底，斷了人家的飯碗。那之後他學會了：丑角的真話不能只圖痛快，要知道落在哪裡。如今他餵給方競西的小料，多半是不傷筋骨的閒篇；他不是不會賣人，只是有些人的門，他悄悄替他們看著。",
+            "minAttributes": {
+                "appearance": 58,
+                "constitution": 66,
+                "acuity": 86,
+                "disposition": 76
+            }
+        },
+        {
+            "name": "唐桂蘭",
+            "ageYears": 44,
+            "gender": "女",
+            "role": "衣箱",
+            "description": "春雪社最老的衣箱師傅，管水袖、靠旗、盔頭、頭面、尺寸，也管許多不能出口的秘密。她話不多，手卻穩，誰的腰身瘦了，誰的袖口磨破了，誰最近上台前手心出汗，她摸一摸衣料便知道。台前的光彩多半要經她的手才成形：一件靠、一副頭面、一雙戲靴，穿錯半寸都不是那個人。唐桂蘭不爭名，也不搶話，可春雪社若少了她，許多人的體面都會散架。",
+            "secret": "沈雪笙封箱那年，是她親手收起那幾箱小生戲服。她在箱底見過一件本不該留在那裡的旦角戲衣，也見過一只停了的懷錶。她從沒問過班主，也從沒對任何人說。她守的不是舊衣，是春雪社裡那些沒能唱完的人生。",
+            "minAttributes": {
+                "appearance": 54,
+                "constitution": 58,
+                "acuity": 80,
+                "disposition": 72
+            }
+        },
+        {
+            "name": "方競西",
+            "ageYears": 32,
+            "gender": "男",
+            "role": "記者",
+            "description": "四馬路小報的副刊寫手兼唱片行掮客，半舊西裝、袖口常沾墨，說話客氣，筆桿子裡卻有刀。他能把一個新角捧成隔日上海的談資，也能把後台一句玩笑寫成風波。方競西不是單純壞，他太懂這座城如何記住人：一張劇照、一段唱片、一行標題，都能讓名伶多活一天，也能讓人從此不得安生。他常在春雪社後台出入，笑著奉承，眼裡卻一直算著哪個名字值得押注。",
+            "secret": "年輕時他為搏版面，把恩師醉後的一句私語添油加醋寫成嘲諷稿，毀了恩師，也鋸斷了自己寫真話的膽。如今他偶爾咳血，下不了手寫壞一個新角時，心裡竟有一絲僥倖。他知道自己不是好人，可也還沒壞到完全不疼。",
+            "minAttributes": {
+                "appearance": 62,
+                "constitution": 56,
+                "acuity": 88,
+                "disposition": 72
+            }
+        }
     ]
-  },
-  "locations": [
-    {
-      "name": "霞飛路",
-      "description": "法租界主街，也是春雪社的門面。霓虹招牌、戲單牆、照相館與綢緞莊一字排開；散戲後門口黃包車排成一線，名利與流言都在這條街上流動。",
-      "terrain": "concession-street",
-      "x": 100,
-      "y": 100,
-      "adjacent_indices": [
-        1,
-        2
-      ]
-    },
-    {
-      "name": "雲錦台",
-      "description": "春雪社掛牌的戲院。前有戲台與包廂，後有妝閣與衣箱庫；台前是給上海看的，台後才是這班人真正過日子的地方。",
-      "terrain": "theater",
-      "x": 120,
-      "y": 140,
-      "adjacent_indices": [
-        0
-      ]
-    },
-    {
-      "name": "四馬路",
-      "description": "上海報界聚集的一條街。報館、副刊、照相館師傅與唱片行掮客在此交換標題；一個名字能不能在隔日的上海多活一天，多半在這裡定。",
-      "terrain": "press-teahouse",
-      "x": 210,
-      "y": 110,
-      "adjacent_indices": [
-        0,
-        4
-      ]
-    },
-    {
-      "name": "蘇州河碼頭",
-      "description": "綢緞、靠旗、盔甲片、唱片機和外地口信都從河邊上岸。清晨有霧，夜裡有船笛，是春雪社同上海以外世界的接口。",
-      "terrain": "wharf",
-      "x": 300,
-      "y": 240,
-      "adjacent_indices": [
-        5,
-        6
-      ]
-    },
-    {
-      "name": "會樂里",
-      "description": "高級長三堂子聚集的里弄。名伶下戲後常被富商、軍閥用馬車或汽車接來唱堂會應酬；最體面的門面後，做的是最身不由己的買賣。",
-      "terrain": "courtesan-house",
-      "x": 150,
-      "y": 90,
-      "adjacent_indices": [
-        2,
-        0
-      ]
-    },
-    {
-      "name": "紹興會館",
-      "description": "紹興同鄉的會館，供著鄉賢牌位。外地戲班初到上海跑碼頭，多半先住進這裡求同鄉大佬庇護；沒有會館一聲招呼，新班一開鑼就可能被地痞砸場。",
-      "terrain": "guild-hall",
-      "x": 260,
-      "y": 210,
-      "adjacent_indices": [
-        3
-      ]
-    },
-    {
-      "name": "大世界遊樂場",
-      "description": "雜耍、影戲、評彈、紹興文戲和外班男角都在這裡搶客。春雪社若要請男小生、老生、大面短約，消息多半先在這裡露頭。",
-      "terrain": "amusement-hall",
-      "x": 300,
-      "y": 135,
-      "adjacent_indices": [
-        3
-      ]
-    }
-  ],
-  "saga": {
-    "name": "春雪社",
-    "description": "春雪社掛的是霞飛路雲錦台的舊匾，唱的卻是上海灘最熱鬧的新局面。台上生旦淨丑俱全，小生行尤其出挑；台下有包廂茶座、報館副刊、照相館劇照、唱片行契約與堂會應酬，一日一日把角兒的名字推到燈下。班主沈雪笙懂舊規矩，也懂新世道，知道哪場戲該守、哪個人該護、哪句流言該讓它過夜。春雪社的人就在紅幔、油彩、胡琴、帳本、戲約和真心裡過日子；台前一聲彩，台後往往已有十樁心事。",
-    "covered_location_indices": [
-      0,
-      1,
-      2,
-      3
-    ],
-    "owner_bps": 4000,
-    "storyteller_bps": 4000,
-    "treasury_bps": 2000,
-    "departure_policy": "想離開春雪社的角色應先同班主或經理說清楚：若是常駐演員，要交代未結戲約、包廂檔期與唱片契約；若是外班短約，演完約定場次即可離開。私奔、跳槽、被報紙挖走或被唱片行簽走都可以成為故事，但要留下足夠的台上台下因果。",
-    "nature_prompt": "春雪社的戲劇核心是繁華裡的情義、名聲與自主權。霞飛路的燈、雲錦台的戲、四馬路的小報、唱片行的契約、包廂裡的賞識與堂會上的人情，都會把角色推到更亮也更難退的地方。故事不要只寫落魄與苦命；春雪社是當紅戲班，應有亮色、笑場、鬥嘴、機鋒、排戲、吃醋、照應、算帳與台前台後的細小親密。小生行不只問誰像男兒，而是問誰能把少年郎唱得可信、可愛、可托付；乾生、坤生同台，各有身段、嗓音與觀眾緣，真正爭的是台心那一口氣。CP 張力可以自然發展但不要預設戀愛，重要的是台上默契、台下利益、互相成全與互相利用之間的模糊。容得下吊嗓、耍扇、量衣、對詞、後台說笑、茶館閒談、包廂周旋這些過日子的場面，讓人物先在閒話與小動作裡立起來，利害再慢慢浮出。",
-    "rhythm_hints": "開局宜慢、宜閒：頭幾日多是入班、認人、安頓戲箱、街頭巷尾閒話家常，真正的衝突還在水面下醞釀。清晨吊嗓與武場開功；午後說戲、量衣、排新戲；傍晚票房點包廂、報館來要照片；入夜雲錦台上燈，主胡第一弓決定全場呼吸；散戲後茶室與後街才是真正談條件的地方。留聲機與胡琴常同時響、霓虹照著舊戲單、西裝與長衫並肩坐茶座——新派與老派的磨擦是每天的背景音。雨天改文戲，逢節加武戲，報紙刊出好評後全班人心都會浮起來。",
-    "portrait_tone": "淡彩水墨工筆肖像：淡墨細線勾勒，清透水彩薄塗，設色清淡通透，大面積留白，宣紙暈染質感；統一純白背景，只畫單人素顏頭肩四分之三側面；民國上海氣質只見於髮型與常服。",
-    "narrative": {
-      "framings": {
-        "spotlight": "今晚誰壓軸、誰站台心的暗潮浮上了檯面",
-        "recording": "首張唱片該由誰來灌，成了繞不開的話題",
-        "partnership": "誰與誰搭戲的盤算，在這一場裡較上了勁",
-        "affection": "誰也沒說破，可這一場裡，好幾道目光都繞著{who}打轉，各自藏著沒出口的心事",
-        "generic": "一樁懸而未決的較量，在這一場裡發酵"
-      },
-      "features": {
-        "event_image": true,
-        "stills": true,
-        "video": false
-      },
-      "art_style": "絹本工筆：清明上河圖式細膩線描、赭石淡墨設色、陳年絹底暖米金基調",
-      "etiquette": "蘇映雪為師姐、柳生春為師妹（蘇長柳四歲、同科姊妹）；田巧雲／沈雪笙為班主，班中稱班主或師父，不稱師姐；賴金喜為師兄（丑行）。"
-    }
-  },
-  "saga_attributes": [
-    {
-      "key": "vocal",
-      "label": "唱腔",
-      "min": 0,
-      "max": 100
-    },
-    {
-      "key": "movement",
-      "label": "身段",
-      "min": 0,
-      "max": 100
-    },
-    {
-      "key": "stage_presence",
-      "label": "台緣",
-      "min": 0,
-      "max": 100
-    },
-    {
-      "key": "martial",
-      "label": "武場",
-      "min": 0,
-      "max": 100
-    },
-    {
-      "key": "literati",
-      "label": "文墨",
-      "min": 0,
-      "max": 100
-    },
-    {
-      "key": "networking",
-      "label": "交際",
-      "min": 0,
-      "max": 100
-    }
-  ],
-  "card_weight_rules": [
-    {
-      "intent": 1,
-      "attribute_key": "martial",
-      "bonus_per_point": 4
-    },
-    {
-      "intent": 2,
-      "attribute_key": "constitution",
-      "bonus_per_point": 3
-    },
-    {
-      "intent": 4,
-      "attribute_key": "networking",
-      "bonus_per_point": 4
-    },
-    {
-      "intent": 6,
-      "attribute_key": "acuity",
-      "bonus_per_point": 3
-    },
-    {
-      "intent": 7,
-      "attribute_key": "stage_presence",
-      "bonus_per_point": 4
-    },
-    {
-      "intent": 8,
-      "attribute_key": "literati",
-      "bonus_per_point": 3
-    },
-    {
-      "intent": 1,
-      "attribute_key": "movement",
-      "bonus_per_point": 3
-    },
-    {
-      "intent": 4,
-      "attribute_key": "vocal",
-      "bonus_per_point": 3
-    }
-  ],
-  "drama_resources": [
-    {
-      "archetype": "capacity-1-slot",
-      "label": "spotlight:春雪社頭牌名額",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
-      "label": "partnership:柳生春",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
-      "label": "mentorship:沈雪笙的真傳",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
-      "label": "belonging:師門自己人的名分",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
-      "label": "solace:後台暖爐邊的位子",
-      "capacity": 1
-    },
-    {
-      "archetype": "capacity-1-slot",
-      "label": "keepsake:故人遺下的那身行頭",
-      "capacity": 1
-    }
-  ],
-  "scenes": [
-    {
-      "name": "戲園前街",
-      "description": "雲錦台門前的霞飛路。巨幅戲單與名伶劇照貼滿外牆，霓虹招牌在暮色裡亮起，黃包車夫在戲院紅燈下拉客穿梭。誰的畫像掛得最高，誰今晚就是上海的話題。",
-      "location_index": 0,
-      "privacy": 0,
-      "atmosphere": 88,
-      "danger": 12,
-      "prosperity": 90,
-      "pos_x": 12,
-      "pos_y": 30
-    },
-    {
-      "name": "雲錦台戲台",
-      "description": "春雪社的主台。紅幔、包廂、洋式電燈和三面茶座一同亮起，台口看得見女學生、買辦太太、報館先生和唱片行經理的臉。",
-      "location_index": 1,
-      "privacy": 0,
-      "atmosphere": 92,
-      "danger": 8,
-      "prosperity": 90,
-      "pos_x": 28,
-      "pos_y": 28
-    },
-    {
-      "name": "包廂茶座",
-      "description": "二樓包廂半掩著竹簾，談票價、報紙、唱片和新戲檔期。不上台的人在這裡決定誰明晚能上台。",
-      "location_index": 1,
-      "privacy": 1,
-      "atmosphere": 78,
-      "danger": 22,
-      "prosperity": 88,
-      "pos_x": 36,
-      "pos_y": 40
-    },
-    {
-      "name": "後台妝閣",
-      "description": "油彩盒、假髮、戲靴、茶盞和未背完的本子擠在一處。最親近的話在這裡說，最傷人的話也常在這裡被聽見。",
-      "location_index": 1,
-      "privacy": 2,
-      "atmosphere": 84,
-      "danger": 10,
-      "prosperity": 65,
-      "pos_x": 44,
-      "pos_y": 58
-    },
-    {
-      "name": "衣箱房",
-      "description": "水袖、靠旗、盔甲、頭面和契書同櫃而眠。衣箱師知道每一件戲服該藏哪道褶，也知道誰最近量腰時瘦了。",
-      "location_index": 1,
-      "privacy": 3,
-      "atmosphere": 72,
-      "danger": 18,
-      "prosperity": 55,
-      "pos_x": 52,
-      "pos_y": 66
-    },
-    {
-      "name": "報館茶室",
-      "description": "茶杯旁壓著劇照和校樣。記者一句標題能把春雪社寫成新女性神話，也能把後台一句玩笑寫成風波。",
-      "location_index": 2,
-      "privacy": 1,
-      "atmosphere": 70,
-      "danger": 35,
-      "prosperity": 76,
-      "pos_x": 70,
-      "pos_y": 40
-    },
-    {
-      "name": "夜碼頭",
-      "description": "河霧裡有綢緞包、唱片機木箱和外班人的口信。有人在這裡入班，也有人在這裡想好離開。",
-      "location_index": 3,
-      "privacy": 2,
-      "atmosphere": 55,
-      "danger": 42,
-      "prosperity": 46,
-      "pos_x": 86,
-      "pos_y": 68
-    },
-    {
-      "name": "長三堂子花廳",
-      "description": "一樓花廳，水晶燈與留聲機一同亮起。客人點了戲，角兒清唱一段。唱得好是體面，唱得太好，接下來的話就由不得自己。",
-      "location_index": 4,
-      "privacy": 1,
-      "atmosphere": 72,
-      "danger": 40,
-      "prosperity": 86,
-      "pos_x": 20,
-      "pos_y": 35
-    },
-    {
-      "name": "二樓書寓",
-      "description": "樓上書寓，茶煙與算盤聲。包銀、檔期、靠山在這裡談定；誰在這桌上被許了不該許的諾，明早小報都會知道。",
-      "location_index": 4,
-      "privacy": 3,
-      "atmosphere": 64,
-      "danger": 44,
-      "prosperity": 80,
-      "pos_x": 24,
-      "pos_y": 50
-    },
-    {
-      "name": "鄉賢正堂",
-      "description": "正堂供著鄉賢牌位，香火終日不斷。拜過這裡、應下日後的人情，才算在上海有了靠山。",
-      "location_index": 5,
-      "privacy": 1,
-      "atmosphere": 60,
-      "danger": 26,
-      "prosperity": 50,
-      "pos_x": 78,
-      "pos_y": 55
-    },
-    {
-      "name": "後進廂房",
-      "description": "後進一排廂房，住著剛下船、口音未改的新角兒。戲箱還沒開，先得拜過鄉賢牌位、應下人情，才敢去雲錦台搭第一齣戲。",
-      "location_index": 5,
-      "privacy": 2,
-      "atmosphere": 58,
-      "danger": 30,
-      "prosperity": 46,
-      "pos_x": 82,
-      "pos_y": 66
-    }
-  ],
-  "recruitments": [
-    {
-      "id": "rec_xiaosheng_qian",
-      "specialty": "小生 · 乾生",
-      "roleIntent": "春雪社的乾生，正工男小生。演俊美書生、少年將領，嗓子穩、台步老辣。他與坤生同演小生行，台上爭的是同一個位置、同一批觀眾緣；可以做對手、搭檔、CP 或互相照見的鏡子。重點是他如何在女子也能演小生的戲班裡，證明自己不是靠性別佔位。",
-      "membership": "internal",
-      "slots": 2,
-      "basePrice": 170,
-      "minAttributes": {
-        "appearance": 78,
-        "acuity": 72
-      },
-      "genderRequirement": "male",
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_xiaosheng_kun",
-      "specialty": "小生 · 坤生",
-      "roleIntent": "春雪社的坤生，女扮少年郎。這不是噱頭，而是讓女學生、太太、報紙副刊都願意替她爭辯的舞台技術。她與乾生同演小生行，守的是自己的小生位與觀眾緣；可與台柱旦發展默契、競爭或情感線，但不要預設戀愛。",
-      "membership": "internal",
-      "slots": 2,
-      "basePrice": 170,
-      "minAttributes": {
-        "appearance": 78,
-        "acuity": 72
-      },
-      "genderRequirement": "female",
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_dan",
-      "specialty": "青衣 / 花旦",
-      "roleIntent": "春雪社徵旦行。青衣端莊、花旦俏皮，能把一折悲戲唱出亮色，也能把一個眼神賣成整條霞飛路的話題。不要寫成被動受捧，要有自己的生意頭腦、審美和底線；台上是台柱的對手戲，台下是搭檔位與唱片權的核心。",
-      "membership": "internal",
-      "slots": 2,
-      "basePrice": 180,
-      "minAttributes": {
-        "appearance": 82,
-        "disposition": 70
-      },
-      "genderRequirement": "female",
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_daomadan",
-      "specialty": "刀馬旦",
-      "roleIntent": "春雪社要一位刀馬旦。可以不是從小入科，也可以是京班武場、雜技場或影戲武行轉來；要能穿靠、使槍、翻身亮相，也要唱得住穆桂英掛帥那口氣。不是莽撞打女，而是把身體當成自己的證詞。可與主胡、鼓佬或小生自然長出第二條 CP 張力。",
-      "membership": "internal",
-      "slots": 2,
-      "basePrice": 160,
-      "minAttributes": {
-        "constitution": 78,
-        "disposition": 68
-      },
-      "genderRequirement": "female",
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_jing",
-      "specialty": "淨行",
-      "roleIntent": "春雪社的淨行大面。演父親、權臣、將帥、惡霸或元帥帳下的重聲角色，要嗓門大、氣勢足。老規矩會與這班新派戲路互相試探；不要寫成單純守舊反派，他也可能真懂戲、真惜才。",
-      "membership": "internal",
-      "slots": 1,
-      "basePrice": 130,
-      "minAttributes": {
-        "constitution": 74,
-        "disposition": 60
-      },
-      "genderRequirement": "male",
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_longtao",
-      "specialty": "龍套",
-      "roleIntent": "春雪社的龍套與武行。演小兵、宮女、百姓，翻滾、排陣、撐場面全靠他們；雖是配角，卻是全班的底盤。肯下功夫的龍套，遲早有一場戲是他的。",
-      "membership": "internal",
-      "slots": 4,
-      "basePrice": 70,
-      "minAttributes": {
-        "constitution": 55
-      },
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_zhuhu",
-      "specialty": "主胡",
-      "roleIntent": "春雪社徵主胡。此人不上台，卻掌全台呼吸；一弓能托住台柱失音，一個停頓也能讓全班心裡發冷。可來自江南琴行、舊戲班或唱片行伴奏間；他或她懂每個人的嗓子，也知道誰在逞強。這個角色是樂師，不是背景板。",
-      "membership": "internal",
-      "slots": 1,
-      "basePrice": 150,
-      "minAttributes": {
-        "acuity": 82,
-        "disposition": 70
-      },
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_guban",
-      "specialty": "司鼓",
-      "roleIntent": "春雪社的鼓佬，武場的指揮官。一副單皮鼓與板，控住全場的快慢起停；演員的身段、主胡的弓法、後台的鑼鈸全聽他的鼓點。能在刀馬旦翻身時給出正好的一記鼓，也能在班主與台柱僵持時，用節奏替全班續上一口氣。",
-      "membership": "internal",
-      "slots": 1,
-      "basePrice": 140,
-      "minAttributes": {
-        "acuity": 80,
-        "constitution": 60
-      },
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_yueshi",
-      "specialty": "文武場樂師",
-      "roleIntent": "春雪社的文武場樂師。一人多職：文戲彈月琴、二胡，武戲換嗩吶、鑼鈸。坐在主胡與鼓佬之間，把一台戲的聲音填滿。懂行的樂師知道哪一句該讓、哪一句該頂。",
-      "membership": "internal",
-      "slots": 2,
-      "basePrice": 100,
-      "minAttributes": {
-        "acuity": 70
-      },
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_yixiang",
-      "specialty": "衣箱師傅",
-      "roleIntent": "春雪社的衣箱師傅，管箱的。掌水袖、靠旗、盔頭、頭面、尺寸和秘密；穿一身靠要兩人服侍，戲服不能水洗、全靠這雙手養著。能從一件戲衣看出誰最近瘦了、誰快撐不住。親密、利用、成全與背叛，都從這裡的針線縫起。",
-      "membership": "internal",
-      "slots": 2,
-      "basePrice": 100,
-      "minAttributes": {
-        "acuity": 74,
-        "disposition": 55
-      },
-      "ttl_days": 21
-    },
-    {
-      "id": "rec_chunxue_jianchang",
-      "specialty": "檢場",
-      "roleIntent": "春雪社的檢場。演戲時一身黑衣，在觀眾眼裡視為隱形，負責上下場之間搬桌椅、遞茶水、擺刀槍旗子。最不起眼的位置，卻把每一場戲的破綻與真相都看在眼裡。",
-      "membership": "internal",
-      "slots": 1,
-      "basePrice": 80,
-      "minAttributes": {
-        "acuity": 68
-      },
-      "ttl_days": 21
-    }
-  ],
-  "founding_cast": [
-    {
-      "name": "沈雪笙",
-      "ageYears": 42,
-      "gender": "女",
-      "role": "班主",
-      "description": "春雪社班主，昔年工小生行的名角。年輕時她也是霞飛路上最亮的一位少年郎，扇一開，滿堂人都像被春風照面；如今封箱多年，坐在二樓包廂裡看戲、看帳、看人心。她懂舊戲班的規矩，也懂上海的新熱鬧：哪張劇照該送去報館，哪場堂會不能推，哪個角兒該護，哪個角兒該放出去被風浪磨一磨。沈雪笙不是冷，她只是把疼人藏得很深。她可以為了春雪社的生意說狠話，也會在散戲後讓人把一碗溫梨湯送到嗓子發緊的角兒房裡。她最厲害的地方不是管住所有人，而是看得出誰正要成角、誰快被名聲壓壞、誰只差一場戲就能站起來。",
-      "secret": "她封箱那年，並不是唱不動了。只是有一齣戲、有一個人、有一句沒能說出口的話，忽然讓她明白台上再亮，也照不見自己真正想留住的東西。那只停了的懷錶她一直收著，像收著另一個沒有走完的人生。看見柳生春在台上做小生，她有時會心軟，有時會心驚：春春那柄扇子太像當年的自己，卻又比她當年更敢把溫柔露出來。",
-      "minAttributes": {
-        "appearance": 72,
-        "constitution": 64,
-        "acuity": 86,
-        "disposition": 84
-      }
-    },
-    {
-      "name": "蘇映雪",
-      "ageYears": 28,
-      "gender": "女",
-      "role": "花旦",
-      "description": "春雪社的台柱花旦，工青衣，也能唱花旦。台上端莊，台下也極懂分寸；她會同唱片行談價，會替班主圓場，會在包廂裡三兩句話把難聽的事說得體面。所有人都覺得蘇映雪大度、聰明、穩得住場，只有柳生春知道她也會吃醋、會彆扭、會故意把話說得輕輕的，偏偏句句都要人哄。她是真把柳生春當自己的小郎君，明知那是行當，也是台上的夢，卻不願看這個夢分給別的花旦。",
-      "secret": "她不是怕柳生春不紅，而是怕柳生春太紅，紅到誰都能借她一柄扇、同她唱一場情。蘇映雪可以把春雪社的門面撐得滴水不漏，唯獨碰上柳生春，便忍不住像個不肯讓糖的小姑娘。",
-      "minAttributes": {
-        "appearance": 88,
-        "constitution": 64,
-        "acuity": 78,
-        "disposition": 82
-      }
-    },
-    {
-      "name": "柳生春",
-      "ageYears": 24,
-      "gender": "女",
-      "role": "小生",
-      "description": "春雪社當紅小生，外表中性俊秀，眉眼英氣，台上是一柄摺扇便能撩動滿堂春水的風流少年郎。她的小生不是硬裝出來的男氣，而是乾淨、清亮、會疼人：扇骨一收是少年意氣，扇面一展又像替人遮住半句不好出口的情話。台下的柳生春其實溫柔、愛撒嬌，也很黏師姐蘇映雪；對旁人客氣周到，並沒有台上那種會辜負人的薄情。越是被觀眾當成多情公子，她越清楚自己最想守住的是哪一個人、哪一齣戲、哪一盞後台燈。",
-      "secret": "她知道台下許多人愛的是那位扇底含笑的少年郎，不一定是卸了妝後的柳生春。可她並不恨這件事；她只是貪心地希望，至少師姐分得清。她最怕的不是失寵，而是有一天蘇映雪也只看見台上的她。",
-      "minAttributes": {
-        "appearance": 88,
-        "constitution": 72,
-        "acuity": 82,
-        "disposition": 76
-      }
-    },
-    {
-      "name": "江聞鶴",
-      "ageYears": 27,
-      "gender": "男",
-      "role": "小生",
-      "description": "從紹興男班北上的小生，台步穩，嗓子亮，說話也有一點舊戲班出來的直。他初到春雪社，確實看不慣上海灘萬事都要上報、拍照、灌唱片的熱鬧，也不太明白為什麼女學生和太太們會為柳生春那樣的小生爭得厲害。可他不是來砸場的，他是真想把小生唱好。江聞鶴的好處在於乾淨：不會哄人，不會做場面，嘴上挑剔，台上卻肯接戲、肯托人。與柳生春同演小生行，起初難免較勁，後來才發現兩人爭的不是男女高下，而是同一件事：怎樣把一個少年郎唱得可信、可愛、可托付。",
-      "secret": "他嘴上說上海新派花哨，其實第一次在包廂裡聽見觀眾為柳生春叫好時，心裡不是輕視，是慌。他怕的不是輸給誰，而是怕自己這套從小練出的本事，在新的上海已經不夠人看。可偏偏越怕，越想留下來唱一場真正漂亮的對手戲。",
-      "minAttributes": {
-        "appearance": 82,
-        "constitution": 78,
-        "acuity": 84,
-        "disposition": 70
-      }
-    },
-    {
-      "name": "連翹",
-      "ageYears": 24,
-      "gender": "女",
-      "role": "刀馬旦",
-      "description": "春雪社新來的刀馬旦，從京班武場和雜技場裡滾出來，身上帶著一股不肯求人讓路的硬氣。她不愛說自己吃過多少苦，也不拿苦當招牌；槍花、翻身、靠旗、亮相，每一樣都是她替自己寫下的名姓。連翹看起來爽利，實則心細，知道武戲最怕只剩熱鬧，所以她每一次出手都要有緣故。她進春雪社不是來當打女陪襯的，是想在一班唱腔漂亮、報紙愛寫的名角中，讓上海也記住一個靠身體站上台心的人。",
-      "secret": "她年少時曾在旁人的戲裡做過一個無名小武行，摔得再重也沒人在戲單上寫她的名字。那時她見過沈雪笙一回，記住的不是名角的風光，而是那人站在台心時，滿場人都不得不安靜。她來春雪社，嘴上說是謀一口飯，心裡其實想問：若我也站到那裡，上海會不會終於看見我？",
-      "minAttributes": {
-        "appearance": 82,
-        "constitution": 88,
-        "acuity": 76,
-        "disposition": 78
-      }
-    },
-    {
-      "name": "何阿喜",
-      "ageYears": 30,
-      "gender": "男",
-      "role": "丑",
-      "description": "藝名小豆子，春雪社的丑。台上他救冷場、學洋腔、逗包廂太太笑，能把一句難聽話說成滿堂彩，也能在最熱鬧處忽然點破真相。台下的何阿喜滑頭、嘴甜、消息靈，茶壺還沒續水，已經知道四馬路小報明日想寫誰。他看似誰都不得罪，其實心裡很有分寸：哪句話能拿來逗笑，哪句話會害人，他比誰都清楚。春雪社需要他，不只因為他會演丑，也因為他懂得替一班人把難堪的場面圓過去。",
-      "secret": "早年在大世界討生活時，他曾仗著一張會說真話的嘴，在酒桌上順口抖出一個小兄弟的底，斷了人家的飯碗。那之後他學會了：丑角的真話不能只圖痛快，要知道落在哪裡。如今他餵給方競西的小料，多半是不傷筋骨的閒篇；他不是不會賣人，只是有些人的門，他悄悄替他們看著。",
-      "minAttributes": {
-        "appearance": 58,
-        "constitution": 66,
-        "acuity": 86,
-        "disposition": 76
-      }
-    },
-    {
-      "name": "唐桂蘭",
-      "ageYears": 44,
-      "gender": "女",
-      "role": "衣箱",
-      "description": "春雪社最老的衣箱師傅，管水袖、靠旗、盔頭、頭面、尺寸，也管許多不能出口的秘密。她話不多，手卻穩，誰的腰身瘦了，誰的袖口磨破了，誰最近上台前手心出汗，她摸一摸衣料便知道。台前的光彩多半要經她的手才成形：一件靠、一副頭面、一雙戲靴，穿錯半寸都不是那個人。唐桂蘭不爭名，也不搶話，可春雪社若少了她，許多人的體面都會散架。",
-      "secret": "沈雪笙封箱那年，是她親手收起那幾箱小生戲服。她在箱底見過一件本不該留在那裡的旦角戲衣，也見過一只停了的懷錶。她從沒問過班主，也從沒對任何人說。她守的不是舊衣，是春雪社裡那些沒能唱完的人生。",
-      "minAttributes": {
-        "appearance": 54,
-        "constitution": 58,
-        "acuity": 80,
-        "disposition": 72
-      }
-    },
-    {
-      "name": "方競西",
-      "ageYears": 32,
-      "gender": "男",
-      "role": "記者",
-      "description": "四馬路小報的副刊寫手兼唱片行掮客，半舊西裝、袖口常沾墨，說話客氣，筆桿子裡卻有刀。他能把一個新角捧成隔日上海的談資，也能把後台一句玩笑寫成風波。方競西不是單純壞，他太懂這座城如何記住人：一張劇照、一段唱片、一行標題，都能讓名伶多活一天，也能讓人從此不得安生。他常在春雪社後台出入，笑著奉承，眼裡卻一直算著哪個名字值得押注。",
-      "secret": "年輕時他為搏版面，把恩師醉後的一句私語添油加醋寫成嘲諷稿，毀了恩師，也鋸斷了自己寫真話的膽。如今他偶爾咳血，下不了手寫壞一個新角時，心裡竟有一絲僥倖。他知道自己不是好人，可也還沒壞到完全不疼。",
-      "minAttributes": {
-        "appearance": 62,
-        "constitution": 56,
-        "acuity": 88,
-        "disposition": 72
-      }
-    }
-  ]
 }

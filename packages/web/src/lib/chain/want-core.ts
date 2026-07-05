@@ -63,9 +63,12 @@ export const WANT = {
     rippleResistance: 3,
     /** Forcing escalation bands, as fractions of resistance. */
     pressingAt: 0.6,
-    /** Spawn/retire balance (§2.55 tuning, 64-live/1-retired fix): a heart
-     *  holds only so many live threads; old ones that stopped pulling fade. */
-    maxLivePerCharacter: 4,
+    /** Spawn/retire balance (§2.55 tuning, 64-live/1-retired fix): on top of
+     *  genesis wants (identity, parser-capped at 5) a heart carries at most
+     *  this many PICKED-UP threads; old cold ones fade. Genesis never counts
+     *  toward the cap — an acceptance run showed a total cap starves ripples
+     *  to zero the moment genesis fills it. */
+    maxPickedThreads: 2,
     fadeTensionBelow: 0.18,
     fadeMinAgeTicks: 6,
 } as const;
@@ -214,11 +217,12 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
             );
         }
         const nt = d.newThread?.trim();
+        const picked = mine.filter((w) => w.source !== 'genesis').length;
         if (
             nt &&
             nt.length <= 22 &&
-            // A full heart takes no new thread — the cheapest spawn brake.
-            mine.length < WANT.maxLivePerCharacter &&
+            // A full heart takes no new picked-up thread — the spawn brake.
+            picked < WANT.maxPickedThreads &&
             !wants.some(
                 (w) =>
                     w.characterId === d.characterId &&
