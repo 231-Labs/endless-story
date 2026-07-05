@@ -320,7 +320,7 @@
             "name": "衣箱房",
             "description": "水袖、靠旗、盔甲、頭面和契書同櫃而眠。衣箱師知道每一件戲服該藏哪道褶，也知道誰最近量腰時瘦了。",
             "location_index": 1,
-            "privacy": 3,
+            "privacy": 2,
             "atmosphere": 72,
             "danger": 18,
             "prosperity": 55,

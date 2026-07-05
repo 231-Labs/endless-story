@@ -20,7 +20,8 @@ export type SagaDetailPanel = 'constellation' | 'offturf' | 'charter';
 export const SAGA_TABS: { key: SagaView; label: string }[] = [
   { key: 'handscroll', label: '場景' },
   { key: 'constellation', label: '人物' },
-  { key: 'offturf', label: '在外' },
+  // 在外（江湖）—— hidden until there are other sagas to be "外" of.
+  // { key: 'offturf', label: '在外' },
   { key: 'charter', label: '規章' },
 ];
 
