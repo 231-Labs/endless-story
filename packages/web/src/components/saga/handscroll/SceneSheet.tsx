@@ -65,142 +65,151 @@ export function SceneSheet({
   const is18 = board?.rating === 'consummate';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-stretch justify-center">
-      {/* 深處 —— the location's painting, pushed back and dimmed, so this reads
-          as walking INTO the place. Click it to step back out. */}
-      <motion.button
-        aria-label="退回手卷"
-        onClick={onClose}
-        className="absolute inset-0 cursor-zoom-out overflow-hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.4 }}
+    // In-place, full-frame — no popup: this layer replaces the (faded) handscroll
+    // within the same page shell. You've walked INTO the location.
+    <motion.div
+      className="absolute inset-0 z-50 overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+    >
+      {/* the location painting fills the frame and pushes forward — 走進去 */}
+      <motion.div
+        className="absolute inset-0"
+        initial={{ scale: 1.0 }}
+        animate={{ scale: 1.06 }}
+        transition={{ duration: 6, ease: 'easeOut' }}
       >
         {locationArt ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={locationArt} alt="" className="h-full w-full scale-110 object-cover blur-xl brightness-[0.35]" />
+          <img src={locationArt} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full bg-canvas" />
         )}
-        <div className="absolute inset-0 bg-canvas/55 dark:bg-black/50" />
-      </motion.button>
+        {/* scrims: keep the art readable behind text without hiding the place */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
+        <div className="absolute inset-0 bg-canvas/20 dark:bg-black/25" />
+      </motion.div>
 
-      {/* 內室 —— rises up from the fan and settles, like a door opening inward. */}
-      <motion.section
+      {/* click bare painting → step back out */}
+      <button aria-label="退回手卷" onClick={onClose} className="absolute inset-0 cursor-zoom-out" />
+
+      {/* content, laid over the space (rises up as you enter) */}
+      <motion.div
         role="dialog"
         aria-label={scene.name}
-        initial={{ opacity: 0, scale: 0.92, y: 40 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="relative z-10 my-auto flex max-h-[88dvh] w-[min(1040px,92vw)] flex-col overflow-hidden rounded-2xl border border-hairline/50 bg-surface/95 shadow-2xl backdrop-blur-xl dark:bg-elevated/95"
+        initial={{ opacity: 0, y: 42 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        className="pointer-events-none relative z-10 flex h-full flex-col"
       >
-        {/* head */}
-        <div className="flex flex-wrap items-center gap-2.5 border-b border-hairline/60 px-6 py-3.5">
-          <h2 className="font-serif text-lg tracking-[0.28em] text-ink">{scene.name}</h2>
+        {/* top bar */}
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2.5 px-[max(1rem,env(safe-area-inset-left))] pt-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+0.75rem)] sm:px-10">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.25em] text-white/80 hover:text-white"
+          >
+            <span aria-hidden>←</span> 退回手卷
+          </button>
+          <span className="mx-1 h-3 w-px bg-white/25" />
+          <h2 className="font-serif text-lg tracking-[0.28em] text-white drop-shadow">{scene.name}</h2>
           {isPrivate ? <Pill tone="gold">私宅</Pill> : null}
           {clock ? <Pill>{clock}</Pill> : null}
           {scene.performance ? <Pill tone="cinnabar">● 戲正熱</Pill> : null}
           {is18 ? <Pill tone="cinnabar">成人 18+</Pill> : null}
           {presentNames.length > 0 ? <Pill>{presentNames.join(' · ')}</Pill> : null}
-          <button
-            onClick={onClose}
-            className="ml-auto rounded-md border border-hairline/60 px-3.5 py-1.5 font-serif text-2xs tracking-[0.2em] text-mute hover:text-ink"
-          >
-            關閉
-          </button>
         </div>
 
         {/* body */}
         {isPrivate ? (
           <LockedBody is18={is18} />
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-            {/* stage column */}
-            <div className="flex min-w-0 flex-[1.25] flex-col border-b border-hairline/60 md:border-b-0 md:border-r">
-              <div className="relative shrink-0">
-                {moment ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={moment} alt={`當前一幕：${scene.name}`} className="aspect-[16/9] w-full object-cover" />
-                ) : (
-                  <div className="flex aspect-[16/9] w-full items-center justify-center bg-gradient-to-br from-canvas to-elevated/60 text-2xs tracking-[0.2em] text-mute">
-                    當前一幕 · 戲到峰值時由現場對白生成
-                  </div>
-                )}
-                <div className="absolute bottom-3 left-3 flex gap-2">
-                  <span className="rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-white/90">
+          <div className="pointer-events-auto min-h-0 flex-1 overflow-y-auto px-[max(1rem,env(safe-area-inset-left))] pb-[calc(env(safe-area-inset-bottom,0px)+5rem)] pt-5 sm:px-10">
+            <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-[1.35fr_1fr]">
+              {/* stage: 當前一幕 + beats */}
+              <div className="space-y-4">
+                <div className="relative overflow-hidden rounded-xl ring-1 ring-white/15">
+                  {moment ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={moment} alt={`當前一幕：${scene.name}`} className="aspect-[16/9] w-full object-cover" />
+                  ) : (
+                    <div className="flex aspect-[16/9] w-full items-center justify-center bg-black/40 text-2xs tracking-[0.2em] text-white/60 backdrop-blur-sm">
+                      當前一幕 · 戲到峰值時由現場對白生成
+                    </div>
+                  )}
+                  <span className="absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-white/90">
                     當前一幕
                   </span>
                 </div>
-              </div>
-              <div className="flex-1 space-y-3.5 overflow-y-auto px-6 py-5">
-                {board?.beats.length ? (
-                  board.beats.map((b, i) => {
-                    const k = KIND[b.kind] ?? KIND.act;
-                    return (
+                <div className="space-y-3.5 rounded-xl bg-black/35 p-5 backdrop-blur-md ring-1 ring-white/10">
+                  {board?.beats.length ? (
+                    board.beats.map((b, i) => (
                       <div key={i}>
-                        <div className={`mb-1 font-serif text-2xs tracking-[0.3em] ${k.tint}`}>{nameOf(b.characterId)}</div>
-                        <div className="text-sm leading-relaxed text-ink">{b.text}</div>
+                        <div className={`mb-1 font-serif text-2xs tracking-[0.3em] ${KIND[b.kind]?.tint ?? 'text-cinnabar'}`}>
+                          {nameOf(b.characterId)}
+                        </div>
+                        <div className="text-sm leading-relaxed text-white/90">{b.text}</div>
                         <div className="mt-1.5 flex items-center gap-2">
-                          <span className="h-2.5 w-40 rounded-full bg-gradient-to-r from-mute/40 via-hairline to-mute/40 blur-[1.5px]" />
+                          <span className="h-2.5 w-40 rounded-full bg-white/15 blur-[1.5px]" />
                           <span className="whitespace-nowrap font-serif text-2xs tracking-[0.16em] text-gold">心聲 · 訂閱解鎖</span>
                         </div>
                       </div>
-                    );
-                  })
-                ) : (
-                  <p className="pt-6 text-center text-2xs tracking-[0.2em] text-mute">這一刻還沒有動靜，戲正醞釀。</p>
-                )}
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-2xs tracking-[0.2em] text-white/60">這一刻還沒有動靜，戲正醞釀。</p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* side column */}
-            <aside className="flex w-full min-w-0 flex-col md:max-w-[340px]">
-              <div className="border-b border-hairline/60 px-5 py-4">
-                <h3 className="mb-3 font-serif text-2xs tracking-[0.3em] text-mute">此刻在場的心事</h3>
-                {board?.wants.length ? (
-                  board.wants.map((w, i) => (
-                    <div key={i} className="mb-3">
-                      <p className="text-sm leading-snug text-ink">
-                        <span className="text-gold">{nameOf(w.characterId)}</span> · {w.desc}
-                      </p>
-                      <div className="mt-1.5 h-1 rounded bg-hairline/60">
-                        <div className="h-full rounded bg-gradient-to-r from-gold to-cinnabar" style={{ width: `${Math.round(w.tension * 100)}%` }} />
+              {/* side: 心事 + CTA */}
+              <aside className="space-y-4">
+                <div className="rounded-xl bg-black/35 p-5 backdrop-blur-md ring-1 ring-white/10">
+                  <h3 className="mb-3 font-serif text-2xs tracking-[0.3em] text-white/60">此刻在場的心事</h3>
+                  {board?.wants.length ? (
+                    board.wants.map((w, i) => (
+                      <div key={i} className="mb-3">
+                        <p className="text-sm leading-snug text-white/90">
+                          <span className="text-gold">{nameOf(w.characterId)}</span> · {w.desc}
+                        </p>
+                        <div className="mt-1.5 h-1 rounded bg-white/15">
+                          <div className="h-full rounded bg-gradient-to-r from-gold to-cinnabar" style={{ width: `${Math.round(w.tension * 100)}%` }} />
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-2xs leading-relaxed text-mute">心事帳訂閱後可見。</p>
-                )}
-              </div>
-              <div className="mt-auto space-y-2 px-5 py-5">
-                <button className="w-full rounded-lg bg-ink py-3 font-serif text-sm tracking-[0.25em] text-canvas">
-                  訂閱在場角色
-                </button>
-                <p className="text-center text-2xs tracking-[0.12em] text-mute">完整心聲連載 · 心事帳 · 每月注夢 · 劇照優先鑄</p>
-              </div>
-            </aside>
+                    ))
+                  ) : (
+                    <p className="text-2xs leading-relaxed text-white/60">心事帳訂閱後可見。</p>
+                  )}
+                </div>
+                <div className="rounded-xl bg-black/35 p-5 backdrop-blur-md ring-1 ring-white/10">
+                  <button className="w-full rounded-lg bg-white/90 py-3 font-serif text-sm tracking-[0.25em] text-black">
+                    訂閱在場角色
+                  </button>
+                  <p className="mt-2 text-center text-2xs tracking-[0.12em] text-white/60">完整心聲連載 · 心事帳 · 每月注夢 · 劇照優先鑄</p>
+                </div>
+              </aside>
+            </div>
           </div>
         )}
-      </motion.section>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
 function LockedBody({ is18 }: { is18: boolean }) {
   return (
-    <div className="flex flex-1 items-center justify-center p-10">
-      <div className="max-w-md rounded-2xl border border-hairline/60 bg-canvas/60 px-8 py-9 text-center backdrop-blur-sm">
-        <h4 className="font-serif text-lg tracking-[0.3em] text-ink">窗內事</h4>
-        <p className="mt-3 text-2xs leading-relaxed tracking-[0.15em] text-mute">
+    <div className="pointer-events-auto flex flex-1 items-center justify-center p-10">
+      <div className="max-w-md rounded-2xl bg-black/40 px-8 py-9 text-center backdrop-blur-md ring-1 ring-white/10">
+        <h4 className="font-serif text-lg tracking-[0.3em] text-white">窗內事</h4>
+        <p className="mt-3 text-2xs leading-relaxed tracking-[0.15em] text-white/70">
           門閂落了。窗內的來回不入公開手卷,訂閱在場角色,方能聽見。
         </p>
         {is18 ? (
-          <span className="mt-5 inline-block rounded-full border border-cinnabar/50 px-3 py-1 text-2xs tracking-[0.25em] text-cinnabar">
+          <span className="mt-5 inline-block rounded-full border border-cinnabar/60 px-3 py-1 text-2xs tracking-[0.25em] text-cinnabar">
             成人 18+ · consummate
           </span>
         ) : null}
         <div className="mt-6">
-          <button className="rounded-lg bg-ink px-6 py-3 font-serif text-sm tracking-[0.25em] text-canvas">訂閱以入內</button>
+          <button className="rounded-lg bg-white/90 px-6 py-3 font-serif text-sm tracking-[0.25em] text-black">訂閱以入內</button>
         </div>
       </div>
     </div>
@@ -208,11 +217,12 @@ function LockedBody({ is18 }: { is18: boolean }) {
 }
 
 function Pill({ children, tone }: { children: React.ReactNode; tone?: 'cinnabar' | 'gold' }) {
+  // Sits over the dimmed painting, so the neutral variant is light, not mute.
   const c =
     tone === 'cinnabar'
-      ? 'text-cinnabar border-cinnabar/45'
+      ? 'text-cinnabar border-cinnabar/55'
       : tone === 'gold'
-        ? 'text-gold border-gold/45'
-        : 'text-mute border-hairline/60';
+        ? 'text-gold border-gold/55'
+        : 'text-white/75 border-white/25';
   return <span className={`rounded-full border px-2.5 py-1 font-serif text-2xs tracking-[0.18em] ${c}`}>{children}</span>;
 }
