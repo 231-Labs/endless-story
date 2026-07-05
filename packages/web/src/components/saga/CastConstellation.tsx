@@ -496,9 +496,11 @@ export function CastConstellation({
         className="no-scrollbar relative z-10 mx-auto w-full max-w-[calc(100vw-1.5rem)] px-2 sm:max-w-[calc(100vw-4rem)] sm:px-0 lg:max-w-[calc(85vh*1.5)]"
       >
         {/* Nodes are laid out relationally now, so the whole web fits the
-            viewport — no 185vw horizontal scroll (that caused the mobile pile-up). */}
+            viewport — no 185vw horizontal scroll (that caused the mobile pile-up).
+            container-type lets the nodes size in cqw so they scale WITH the box
+            (fixed-px nodes were huge on a small mobile box → the overlap). */}
         <div
-          className="relative w-full"
+          className="relative w-full [container-type:inline-size]"
           style={{ aspectRatio: `${VIEWBOX_W}/${VIEWBOX_H}` }}
         >
           <svg
