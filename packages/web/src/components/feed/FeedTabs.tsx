@@ -6,9 +6,10 @@ import { InkUnderline } from '@/components/common/ink-motion';
 // IA (docs/narrative/CONTENT_PIPELINE.md §8.1): 全部 landing · 公報 free funnel ·
 // 章回 the woven cuts · 排戲 (productions — the troupe's self-staged 劇目/戲折).
 // `visual` key kept for URL stability; it now surfaces 排戲 not mock images.
-export type FeedMode = 'all' | 'gazette' | 'chapter' | 'visual';
+export type FeedMode = 'episode' | 'all' | 'gazette' | 'chapter' | 'visual';
 
 const MODES: { key: FeedMode; label: string; shortLabel: string }[] = [
+  { key: 'episode', label: '追更 · 說書', shortLabel: '追更' },
   { key: 'all', label: '全部', shortLabel: '全部' },
   { key: 'gazette', label: '公報', shortLabel: '公報' },
   { key: 'chapter', label: '章回 · 合本', shortLabel: '章回' },

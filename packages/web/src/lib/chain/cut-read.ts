@@ -20,6 +20,8 @@ import { cachedPublicRead, publicChainReadTtl } from './read-cache.js';
 import { decodeByteString } from './decode.js';
 
 export interface EventCutEntry {
+    /** 'event_cut' = per-event 合本; 'episode' = the day's follow-along 回. */
+    kind: 'event_cut' | 'episode';
     commitmentId: string;
     sagaId: string;
     /** Scene the event happened in (commitment subject). */
@@ -106,11 +108,12 @@ async function fetchEventCutsForSagaUncached(
                 if (!blobId) return null;
                 const raw = (await fetchChapterText(`/api/blob/${blobId}`)).trim();
                 const { header } = eventChapter.parseCutHeader(raw);
-                if (!header || header.kind !== 'event_cut') return null; // not a cut
+                if (!header || (header.kind !== 'event_cut' && header.kind !== 'episode')) return null;
                 return {
                     commitmentId: s.commitmentId,
                     sagaId: s.sagaId,
                     sceneId: s.subjectId,
+                    kind: header.kind ?? 'event_cut',
                     sceneName: header.sceneName,
                     eventLabel: header.eventLabel,
                     eventTx: header.eventTx,
@@ -158,8 +161,9 @@ export async function fetchEventCut(commitmentId: string): Promise<EventCutDetai
         if (!blobId) return null;
         const raw = (await fetchChapterText(`/api/blob/${blobId}`)).trim();
         const { header, body } = eventChapter.parseCutHeader(raw);
-        if (!header || header.kind !== 'event_cut') return null;
+        if (!header || (header.kind !== 'event_cut' && header.kind !== 'episode')) return null;
         return {
+            kind: header.kind ?? 'event_cut',
             commitmentId,
             sagaId: json.saga_id ?? ENDLESS_STORY_DEPLOYMENT.sagaId,
             sceneId: json.subject_id ?? '',

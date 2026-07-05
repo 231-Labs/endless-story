@@ -80,6 +80,13 @@ export { materializeMention } from './materialize.js';
 export type { MaterializeInput, DormantEntity, DormantKind } from './materialize.js';
 export { activateDormant } from './activate.js';
 export type { ActivateInput, ActivatedCharacter } from './activate.js';
+export { deriveGenesisWants, deriveAftermathWant } from './want-genesis.js';
+export type { DeriveWantsInput, GenesisWant, AftermathInput } from './want-genesis.js';
+export { actBeat, judgeWantResolved, judgeSceneIntimacy } from './beat.js';
+export type { SceneIntimacyRating } from './beat.js';
+export type { ActBeatInput, BeatResult, BeatForcing, JudgeResolveInput, ResolveVerdict } from './beat.js';
+export { judgeRipples } from './want-ripple.js';
+export type { RippleJudgeInput, RippleJudgeDelta } from './want-ripple.js';
 export {
     buildAskSystemPrompt,
     buildAskUserPrompt,

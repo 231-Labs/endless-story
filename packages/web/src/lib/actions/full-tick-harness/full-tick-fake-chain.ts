@@ -93,6 +93,11 @@ export interface FakeCharacter {
     attrs: { appearance: number; constitution: number; acuity: number; disposition: number };
     gender: string;
     species: string;
+    /** Public persona (canon cast); '' for anonymous shells. */
+    description?: string;
+    /** 行當; emitted as a `role:*` tag. */
+    role?: string;
+    ageYears?: number;
 }
 
 export interface FakeResource {
@@ -777,8 +782,8 @@ function encodeCharacter(c: FakeCharacter): Uint8Array {
         control_epoch: 0n,
         profile: {
             name: c.name,
-            description: '',
-            physical_facts: { species: c.species, gender: c.gender, body: '', age_years: 30 },
+            description: c.description ?? '',
+            physical_facts: { species: c.species, gender: c.gender, body: '', age_years: c.ageYears ?? 30 },
         },
         attributes: [
             attr('appearance', c.attrs.appearance),
@@ -794,7 +799,7 @@ function encodeCharacter(c: FakeCharacter): Uint8Array {
             current_location_id: null,
             birth_ms: 0n,
         },
-        tags: [],
+        tags: c.role ? [{ label: 'role:' + c.role, source_event_id: null, affirmed_at_ms: 0n }] : [],
         image_url: '',
         death: null,
         subscriber_count: 1n,

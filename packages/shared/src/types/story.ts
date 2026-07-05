@@ -66,6 +66,13 @@ export interface StorySaga {
   portrait_tone?: string;
   /** Saga-tier voice + capabilities; owner-editable content, never engine mechanics. */
   narrative?: {
+    /** Visual art direction for this saga's generated assets (e.g. 絹本工筆 vs
+     *  郎世寧中西合璧). Consumed by the image pipeline's style prefix. */
+    art_style?: string;
+    /** Canon honorifics/kinship facts (e.g. 蘇映雪為師姐、柳生春為師妹), injected
+     *  as identity facts into beat/episode prompts — a fact guardrail, never a
+     *  decision guardrail. */
+    etiquette?: string;
     /** Prose tonal register (colour only; stance is a separate knob). */
     tone_register?: string;
     /** Emotional stance ceiling: restrained | tender | consummate. */
@@ -155,6 +162,13 @@ export interface StoryFoundingMember {
    * Omit to let `roleAttributeFloors(role)` supply defaults.
    */
   minAttributes?: Partial<CharacterAttributes>;
+  /**
+   * Authored canon memories (此生記憶), second-person voice, seeded verbatim
+   * into MemWal at founding ON TOP of the LLM-generated batch. Use for facts
+   * the story cannot afford to drift: shared histories, old flames, where a
+   * character used to sleep. Order = importance order.
+   */
+  memories?: string[];
   /**
    * Skip this member when seeding — a reversible "comment-out" for test runs
    * (JSON has no comments, so this is the toggle).

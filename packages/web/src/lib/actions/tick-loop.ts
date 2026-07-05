@@ -11,10 +11,10 @@
 import { Transaction } from '@mysten/sui/transactions';
 import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, withAdminLock } from '@/lib/chain/admin-signer';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
-import { characterAgent, sceneRecord } from '@endless-story/runner';
+import { characterAgent, sceneRecord, characterWorker as runnerWorker, eventChapter as runnerEventChapter, signAndAnchor } from '@endless-story/runner';
 import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
@@ -24,7 +24,7 @@ import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { computeSpatialRouting } from '@/lib/chain/spatial-routing';
 import { fetchWarmGraph } from '@/lib/chain/relationship-evolve';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
-import { drainMemoryWarnings } from '@/lib/chain/memory';
+import { drainMemoryWarnings, recallForCharacter } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
 import { charactersApi } from '@/lib/api/index';
@@ -42,6 +42,10 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
+import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWant } from '@/lib/chain/want-core';
+import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
+import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
+import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -119,6 +123,10 @@ const recentTopicsBySaga = new Map<string, string[]>();
 /** §2.51 actor-fatigue ledgers per saga: tired rows are suppressed at SELECTION
  *  so the spotlight rotates. */
 const actorFatigueBySaga = new Map<string, FatigueLedger>();
+
+/** Day accumulator for the episode weaver: clock markers + beat lines + actors
+ *  (process-level; a restart drops part of one day's material, acceptable). */
+const episodeDayBySaga = new Map<string, { lines: string[]; actorIds: Set<string>; sceneIds: string[]; povByName: Map<string, string> }>();
 
 /** Last narrated event per character (process-local). While an event stays open,
  *  a character with no new beat must not re-write the same scene every tick. */
@@ -226,6 +234,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const centrality = envFlag('TICK_CENTRALITY');
     // §2.51: spotlight rotation, selection-only (settlement reads raw rows). Default off.
     const actorFatigue = envFlag('TICK_ACTOR_FATIGUE');
+    // Want-driven per-scene interaction loops as the narrative driver (§2.36–2.48);
+    // contested resources keep only the economic settlement lane. Default off.
+    const wantEngine = envFlag('TICK_WANT_ENGINE');
     // §4d.2: arc convergence state machine (off-chain arc state). Default off.
     const arcConvergence = envFlag('TICK_ARC_CONVERGENCE');
     const maxConcurrentEvents = Math.max(
@@ -936,6 +947,216 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         );
     }
 
+    // 3.9 WANT SCENES (flag TICK_WANT_ENGINE) — per-scene interaction loops
+    //   driven by each character's hottest want (§2.48). Beats join the shared
+    //   objective ledger (scene records + POV sceneBeats + 手卷) exactly like
+    //   move/social/act beats. Night ticks fast-forward (sleep consolidates).
+    //   Failure-isolated; never blocks the tick.
+    const wantActed: string[] = [];
+    if (wantEngine && slice.length > 0 && !dryRun) {
+        if (isNight) {
+            tlog('③⁹ want scenes: night — 快轉, sleep consolidates');
+        } else {
+            try {
+                const nowTick = spineClockTick();
+                const wants = loadWants(d.sagaId);
+                for (const c of slice) {
+                    if (wants.some((w) => w.characterId === c.id)) continue;
+                    const derived = await characterAgent.deriveGenesisWants({
+                        name: c.name,
+                        role: roleById.get(c.id) ?? '—',
+                        gender: c.gender,
+                        ageYears: c.age,
+                        description: c.description,
+                        castNames: slice.map((x) => x.name),
+                    });
+                    for (const g of derived) {
+                        wants.push(
+                            newWant({
+                                characterId: c.id,
+                                layer: g.layer,
+                                desc: g.desc,
+                                target: g.target,
+                                weight: g.weight,
+                                sat: g.sat,
+                                resistance: g.resistance,
+                                kind: 'narrative',
+                                source: 'genesis',
+                                bornTick: nowTick,
+                            }),
+                        );
+                    }
+                    if (derived.length > 0) tlog(`③⁹ genesis wants: ${c.name} ×${derived.length}`);
+                }
+                for (const cid of drainWantDreamStirs(d.sagaId)) {
+                    const hit = applyDreamStirToWants(wants, cid);
+                    if (hit) tlog(`③⁹ dream stir → ${nameById.get(cid) ?? cid.slice(0, 8)}「${hit.desc}」`);
+                }
+                decayWants(wants);
+                for (const f of fadeStaleWants(wants, nowTick)) {
+                    tlog(`③⁹ 淡了: ${nameById.get(f.characterId) ?? '?'}「${f.desc}」`);
+                }
+
+                const clock = worldTime?.partOfDay ?? '白日';
+                const byScene = new Map<string, Character[]>();
+                for (const c of slice) {
+                    const sid = rosterById.get(c.id)?.currentSceneId;
+                    if (!sid) continue;
+                    const arr = byScene.get(sid);
+                    if (arr) arr.push(c);
+                    else byScene.set(sid, [c]);
+                }
+                let beatCount = 0;
+                const privateSceneIds = new Set<string>();
+                for (const [sceneId, cs] of byScene) {
+                    const info = activeScenes.find((sc) => sc.id === sceneId);
+                    const isPrivate = (info?.privacyLevel ?? 0) >= 3;
+                    if (isPrivate) privateSceneIds.add(sceneId);
+                    const sceneName = sceneNameById.get(sceneId) ?? '戲班';
+                    // Memory channel (§2.45 暗號 echoes): each member recalls
+                    // against their hottest want, capped small; failure-safe.
+                    const castWithMem = await Promise.all(
+                        cs.map(async (c) => {
+                            const mine = wants.filter((w) => !w.retired && w.characterId === c.id);
+                            const hot = mine.sort((x, y) => y.weight * (1 - y.sat) - x.weight * (1 - x.sat))[0];
+                            const memories = hot
+                                ? await recallForCharacter(c.id, hot.desc, 3).catch(() => [])
+                                : [];
+                            return {
+                                characterId: c.id,
+                                name: c.name,
+                                persona: c.description,
+                                memories: memories.length > 0 ? memories : undefined,
+                            };
+                        }),
+                    );
+                    const loop = await runSceneLoop({
+                        sceneId,
+                        sceneName,
+                        isPrivate,
+                        clock,
+                        tone: narrativeProfile?.soul?.toneRegister,
+                        etiquette: narrativeProfile?.etiquette,
+                        emotionalStance: narrativeProfile?.soul?.emotionalStance,
+                        cast: castWithMem,
+                        wants,
+                        tick: nowTick,
+                    });
+                    const acc = episodeDayBySaga.get(d.sagaId) ?? { lines: [], actorIds: new Set<string>(), sceneIds: [], povByName: new Map<string, string>() };
+                    if (loop.beats.length > 0 && acc.lines[acc.lines.length - 1] !== `【${clock}】`) acc.lines.push(`【${clock}】`);
+                    for (const b of loop.beats) {
+                        pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
+                        recordSceneLine(sceneId, b.characterId, b.text, 'act');
+                        tlog(`③⁹ [${sceneName}] ${b.name}：${b.text}`);
+                        // Private beats never reach the public episode weaver —
+                        // they live in POV serials and the subscriber scene view.
+                        if (!isPrivate) acc.lines.push(`[${sceneName}] ${b.name}：${b.text}`);
+                        acc.actorIds.add(b.characterId);
+                        if (!acc.sceneIds.includes(sceneId)) acc.sceneIds.push(sceneId);
+                    }
+                    if (isPrivate && loop.beats.length > 0) {
+                        const who = cs.map((c) => c.name).join('、');
+                        acc.lines.push(`[${sceneName}] ${who}掩門入內，燭影搖了半宿——窗內的來回，不入公開的日回。`);
+                        // Ex-ante gate grants permission; the judge reports what
+                        // actually happened (a gated pair may just talk all night).
+                        const rating: SceneRating = loop.intimacyGateOpened
+                            ? await characterAgent.judgeSceneIntimacy({
+                                  beats: loop.beats.map((b) => `${b.name}：${b.text}`),
+                              })
+                            : 'talk';
+                        recordSceneRating(d.sagaId, {
+                            sceneId,
+                            sceneName,
+                            tick: nowTick,
+                            rating,
+                            gateOpened: loop.intimacyGateOpened,
+                            beatCount: loop.beats.length,
+                            atMs: Date.now(),
+                        });
+                        tlog(`③⁹ [${sceneName}] 私處：${loop.beats.length} 拍不入公開日回；分級=${rating}${loop.intimacyGateOpened ? '（閘門開）' : ''}`);
+                    }
+                    episodeDayBySaga.set(d.sagaId, acc);
+                    beatCount += loop.beats.length;
+                    wantActed.push(...loop.actedCharacterIds.filter((id) => !wantActed.includes(id)));
+                    for (const rv of loop.resolved) {
+                        tlog(
+                            `③⁹ resolved: ${nameById.get(rv.want.characterId) ?? '?'}「${rv.want.desc}」${rv.note ? ` — ${rv.note}` : ''}`,
+                        );
+                        const owner = cs.find((c) => c.id === rv.want.characterId);
+                        if (!owner) continue;
+                        const after = await characterAgent.deriveAftermathWant({
+                            name: owner.name,
+                            persona: owner.description,
+                            resolvedDesc: rv.want.desc,
+                            resolvedNote: rv.note,
+                            beats: loop.beats.map((b) => `${b.name}：${b.text}`),
+                        });
+                        if (after) {
+                            wants.push(
+                                newWant({
+                                    characterId: owner.id,
+                                    layer: after.layer,
+                                    desc: after.desc,
+                                    target: after.target,
+                                    weight: after.weight,
+                                    sat: after.sat,
+                                    resistance: after.resistance,
+                                    kind: 'narrative',
+                                    source: 'aftermath',
+                                    bornTick: nowTick,
+                                }),
+                            );
+                            tlog(`③⁹ aftermath: ${owner.name}「${after.desc}」`);
+                        }
+                    }
+                    if (loop.beats.length > 0) {
+                        const deltas = await characterAgent.judgeRipples({
+                            sceneName,
+                            beats: loop.beats.map((b) => `${b.name}：${b.text}`),
+                            roster: slice.map((c) => ({
+                                characterId: c.id,
+                                name: c.name,
+                                wants: wants
+                                    .filter((w) => !w.retired && w.characterId === c.id)
+                                    .map((w) => w.desc),
+                            })),
+                        });
+                        const spawned = applyRipples(wants, deltas, nowTick);
+                        for (const sp of spawned) {
+                            tlog(`③⁹ new thread: ${nameById.get(sp.characterId) ?? '?'}「${sp.desc}」`);
+                        }
+                    }
+                }
+                saveWants(d.sagaId, wants);
+                const allBeatLines: string[] = [];
+                for (const [sid, arr] of beatsByScene) {
+                    if (privateSceneIds.has(sid)) continue; // 窗內事 stays off the public weave
+                    const sn = sceneNameById.get(sid) ?? '戲班';
+                    for (const b of arr) allBeatLines.push(`[${sn}] ${b.text}`);
+                }
+                if (allBeatLines.length >= 3) {
+                    const woven = await sceneRecord.weaveTickChapter({
+                        clock,
+                        lines: allBeatLines,
+                        tone: narrativeProfile?.soul?.toneRegister,
+                    });
+                    if (woven) {
+                        dumpChapter({ kind: 'cut', day: worldTime?.day, name: 'want-回' }, woven);
+                        tlog(`③⁹ 織回: ${woven.length} chars (dumped; anchor wiring in Wave 1.5)`);
+                    }
+                }
+                if (actorFatigue && wantActed.length > 0) {
+                    const bumped = bumpActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? fatigueLedger, wantActed);
+                    actorFatigueBySaga.set(d.sagaId, bumped);
+                }
+                const live = wants.filter((w) => !w.retired).length;
+                tlog(`③⁹ want scenes: ${byScene.size} scene(s) · ${beatCount} beat(s) · ${live} live want(s)`);
+            } catch (err) {
+                console.warn('[tick-loop] want engine failed:', err);
+            }
+        }
+    }
+
     const povs: TickPovResult[] = [];
     if (input.pov ?? true) {
         // 4. PRODUCE — POV chapter per character with a narratable beat this tick
@@ -943,6 +1164,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         const narratable = new Set<string>();
         for (const st of storylets) for (const id of st.characterIds) narratable.add(id);
         for (const a of acts) if (a.ok) narratable.add(a.characterId);
+        for (const id of wantActed) narratable.add(id);
         // Every participant of a just-closed event narrates the outcome — this is
         // where on-chain win/loss enters the story.
         const verdictByChar = new Map<string, string>();
@@ -1107,7 +1329,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     // the tick owns recall (throttled SEAL budget).
                     recentMemorySnippets: [
                         ...new Set([
-                            ...(await memoryContext.recent(c.id, trigger, 4, 'pov')),
+                            // Prior-chapter recalls skip their opening third: the
+                            // prompt layer truncates snippets from the front, so a
+                            // head slice hands the model last chapter's opening
+                            // verbatim — the 承上-copy bug. A mid-window keeps the
+                            // continuity detail without the copyable incipit.
+                            ...(await memoryContext.recent(c.id, trigger, 4, 'pov')).map((m) =>
+                                m.length > 280 ? m.slice(Math.floor(m.length * 0.3)) : m,
+                            ),
                             ...(await memoryContext.recent(c.id, LIFE_QUERY, 2, 'life')),
                         ]),
                     ],
@@ -1179,6 +1408,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }),
             );
             const byChar = new Map(batch.map((b) => [b.characterId, b]));
+            if (wantEngine) {
+                const acc =
+                    episodeDayBySaga.get(d.sagaId) ??
+                    { lines: [], actorIds: new Set<string>(), sceneIds: [], povByName: new Map<string, string>() };
+                for (const { c, r } of toAnchor) {
+                    if (r.chapter.trim()) acc.povByName.set(c.name, r.chapter.trim().slice(0, 1100));
+                }
+                episodeDayBySaga.set(d.sagaId, acc);
+            }
             for (const { c, r } of toAnchor) {
                 const b = byChar.get(c.id);
                 povs.push({
@@ -1485,8 +1723,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //    Anchors via reflection::submit (Sui signing) → serial.
     const sleeps: TickSleepResult[] = [];
     let sleepNote: string | undefined;
+    // Want engine: fatigue-driven gate (§2.19) — night lowers the bar, high day
+    // fatigue can nap; memory floor stays inside runSleepAction. Derived fatigue
+    // (approach iii): fresh at dawn, tired by day's end.
+    const sleepFatigue = worldTime
+        ? 0.15 + (worldTime.ticksPerDay > 1 ? worldTime.tickOfDay / (worldTime.ticksPerDay - 1) : 0.5) * 0.7
+        : 0.3;
+    const sleepGate = wantEngine
+        ? sleepFatigue >= (isNight ? runnerWorker.NIGHT_SLEEP_FATIGUE : runnerWorker.DAY_SLEEP_FATIGUE)
+        : isNight;
     if ((input.sleep ?? true) && !dryRun) {
-        if (isNight) {
+        if (sleepGate) {
             tlog(`⑤ sleep consolidation (night)…`);
             for (const c of slice) {
                 const r = await runSleepAction(c.id);
@@ -1502,8 +1749,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 });
             }
         } else {
-            sleepNote = `非夜晚（現為 ${worldTime?.partOfDay ?? '未知'}），角色不整理記憶 — 推進到夜裡再睡`;
-            tlog(`⑤ sleep skipped (not night)`);
+            sleepNote = wantEngine
+                ? `疲勞未到（${sleepFatigue.toFixed(2)}，現為 ${worldTime?.partOfDay ?? '未知'}）— 還撐得住`
+                : `非夜晚（現為 ${worldTime?.partOfDay ?? '未知'}），角色不整理記憶 — 推進到夜裡再睡`;
+            tlog(wantEngine ? `⑤ sleep skipped (fatigue ${sleepFatigue.toFixed(2)} below bar)` : `⑤ sleep skipped (not night)`);
         }
     }
 
@@ -1516,6 +1765,62 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             `⑥ gazette skipped (one per day; tick ${(worldTime?.tickOfDay ?? 0) + 1}/${worldTime?.ticksPerDay} today, compiled at day's end)`,
         );
     }
+    // 5.5 EPISODE — at day's end the storyteller compresses the day's beats into
+    //   ONE follow-along 回 with a 回目 title and an in-plot hook (presentation
+    //   layer: it may compress and spotlight, never decide). Anchored through the
+    //   es:cut channel as kind:'episode' (full-scan read → no read-window loss).
+    if (wantEngine && !dryRun && isDayEnd) {
+        try {
+            const acc = episodeDayBySaga.get(d.sagaId);
+            if (acc && acc.lines.length >= 3) {
+                const wantsNow = loadWants(d.sagaId);
+                const tensionLines = wantsNow
+                    .filter((w) => !w.retired)
+                    .sort((a, b) => b.weight * (1 - b.sat) - a.weight * (1 - a.sat))
+                    .slice(0, 6)
+                    .map((w) => `${nameById.get(w.characterId) ?? '某人'}：${w.desc}`);
+                const prose = await runnerEventChapter.composeEpisode({
+                    day: worldTime?.day ?? 0,
+                    materialLines: acc.lines,
+                    tensionLines,
+                    povTexts: [...acc.povByName.entries()].map(([name, text]) => ({ name, text })),
+                    etiquette: narrativeProfile?.etiquette,
+                    soul: narrativeProfile?.soul,
+                });
+                if (prose) {
+                    const withHeader = runnerEventChapter.embedCutHeader(prose, {
+                        v: 1,
+                        kind: 'episode',
+                        day: worldTime?.day,
+                        sceneId: acc.sceneIds[0],
+                        sceneName: acc.sceneIds[0] ? sceneNameById.get(acc.sceneIds[0]) : undefined,
+                        povCharacterIds: [...acc.actorIds],
+                    });
+                    try {
+                        const anchor = await withAdminLock(() =>
+                            signAndAnchor({
+                                sagaId: d.sagaId,
+                                subjectId: acc.sceneIds[0] ?? d.sagaId,
+                                content: new TextEncoder().encode(withHeader),
+                                contentType: 'text/markdown',
+                                signer: admin.signer,
+                            }),
+                        );
+                        tlog(`⑤⁵ episode anchored: ${prose.split('\n')[0]} (${prose.length} chars, ${anchor.commitmentId?.slice(0, 10)}…)`);
+                    } catch (err) {
+                        tlog(`⑤⁵ episode anchor failed (kept as dump): ${err instanceof Error ? err.message : err}`);
+                    }
+                    dumpChapter({ kind: 'cut', day: worldTime?.day, name: 'episode' }, prose);
+                    episodeDayBySaga.delete(d.sagaId);
+                }
+            } else {
+                tlog(`⑤⁵ episode skipped (day material ${acc?.lines.length ?? 0} lines)`);
+            }
+        } catch (err) {
+            console.warn('[tick-loop] episode failed:', err);
+        }
+    }
+
     if ((input.gazette ?? true) && !dryRun && isDayEnd) {
         tlog(`⑥ compile gazette…`);
         const g = await compileGazetteAction({ day: worldTime?.day });

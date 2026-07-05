@@ -373,3 +373,5 @@ function decodeByteString(v: number[] | string | undefined): string {
     }
     return '';
 }
+
+export { composeEpisode, type ComposeEpisodeInput } from './episode.js';

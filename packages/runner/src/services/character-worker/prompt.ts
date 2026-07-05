@@ -205,7 +205,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
     const safeMemorySnippets = filterPovMemorySnippets(recentMemorySnippets, character);
     const memBlock =
         safeMemorySnippets.length > 0
-            ? '\n## 可用記憶材料（只可取一兩個細節，化入場面；不可逐條複述）\n' +
+            ? '\n## 可用記憶材料（只可取一兩個細節，化入場面；不可逐條複述。**嚴禁把材料裡的句子原樣抄進正文** —— 承上只許用你自己的話帶一兩句餘味，寫過的場面不許重演）\n' +
               safeMemorySnippets
                   .slice(0, 5)
                   .map((m, i) => `${i + 1}. ${m.slice(0, 220)}${m.length > 220 ? '…' : ''}`)

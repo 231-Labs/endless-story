@@ -19,10 +19,14 @@ export const metadata = {
 // dossier. Modes 全部 / 公報 / 章回 / 影像 + their tab row live in FeedTabs.
 
 function parseMode(raw: string | string[] | undefined): FeedMode {
-  if (typeof raw === 'string' && (['all', 'gazette', 'chapter', 'visual'] as const).includes(raw as FeedMode)) {
+  if (
+    typeof raw === 'string' &&
+    (['episode', 'all', 'gazette', 'chapter', 'visual'] as const).includes(raw as FeedMode)
+  ) {
     return raw as FeedMode;
   }
-  return 'all';
+  // 追更 is the landing: the storyteller's daily 回 is the follow-along unit.
+  return 'episode';
 }
 
 export default async function FeedPage({
@@ -94,7 +98,7 @@ async function FeedContent({
     mode === 'all' ? gazettesApi.getLatestGazette(saga.id) : Promise.resolve(null),
     // The canonical chapter = event cut. Fetched for the 章回 mode and the
     // 全部 landing (where a few lead the page under the gazette teaser).
-    mode === 'chapter' || mode === 'all' ? cutsApi.listEventCuts(saga.id) : Promise.resolve([]),
+    mode === 'chapter' || mode === 'all' || mode === 'episode' ? cutsApi.listEventCuts(saga.id) : Promise.resolve([]),
   ]);
 
   return (
@@ -128,10 +132,28 @@ async function FeedContent({
               </p>
             </div>
           ) : null}
-          {mode === 'gazette' ? (
+          {mode === 'episode' ? (
+            (() => {
+              const episodes = cuts.filter((c) => c.kind === 'episode');
+              return episodes.length > 0 ? (
+                <CutList cuts={episodes} sagaName={saga.name} />
+              ) : (
+                <div className="es-card p-8 text-center">
+                  <p className="font-serif text-lg text-ink">說書人尚未開講</p>
+                  <p className="mt-2 text-sm tracking-wide text-mute">
+                    今日的回目在戲台落幕後編成；先到
+                    <Link href={{ pathname: '/feed', query: { mode: 'chapter' } }} className="mx-1 text-cinnabar hover:underline">
+                      章回
+                    </Link>
+                    看事件合本。
+                  </p>
+                </div>
+              );
+            })()
+          ) : mode === 'gazette' ? (
             <GazetteList gazettes={gazettes} sagaName={saga.name} sagaId={saga.id} />
           ) : mode === 'chapter' ? (
-            <CutList cuts={cuts} sagaName={saga.name} />
+            <CutList cuts={cuts.filter((c) => c.kind !== 'episode')} sagaName={saga.name} />
           ) : mode === 'visual' ? (
             <ProductionList productions={productions} sagaName={saga.name} />
           ) : null}

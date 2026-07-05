@@ -174,7 +174,7 @@ export function buildUserPrompt(ctx: EventCutContext): string {
 
 export interface EventCutHeader {
     v: 1;
-    kind: 'event_cut';
+    kind: 'event_cut' | 'episode';
     /** tx digest of the on-chain event this cut narrates — the proof. */
     eventTx?: string;
     eventLabel?: string;
