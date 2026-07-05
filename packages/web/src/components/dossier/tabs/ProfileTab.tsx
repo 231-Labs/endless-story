@@ -87,18 +87,32 @@ export function ProfileTab({
             with 敘描 and the 外貌 trait. */}
 
         {/* 當下心事 — the live wants driving this character now (want-engine),
-            the structured drives behind the 此刻心境 line up top. */}
-        {wants.length > 0 ? (
+            the structured drives behind the 此刻心境 line up top. Always shown for
+            chain characters so it's discoverable; empty until the engine seeds
+            wants for this one. */}
+        {character.sagaId ? (
           <section>
             <div className="flex items-center gap-4">
               <div className="h-px w-8 bg-cinnabar/40" />
               <h2 className="font-serif text-2xl tracking-wide text-ink">當下心事</h2>
             </div>
-            <ul className="mt-8 space-y-6 pl-0 sm:pl-12">
-              {wants.map((w, i) => (
-                <WantRow key={i} want={w} target={w.target ? charactersById.get(w.target) ?? null : null} />
-              ))}
-            </ul>
+            <div className="mt-8 pl-0 sm:pl-12">
+              {wants.length > 0 ? (
+                <ul className="space-y-6">
+                  {wants.map((w, i) => (
+                    <WantRow
+                      key={i}
+                      want={w}
+                      target={w.target ? charactersById.get(w.target) ?? null : null}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-base leading-loose text-mute">
+                  心事未起 — 戲還沒搭起來，尚無縈懷之事。
+                </p>
+              )}
+            </div>
           </section>
         ) : null}
 
