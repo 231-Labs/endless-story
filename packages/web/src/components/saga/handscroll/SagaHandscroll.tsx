@@ -12,11 +12,13 @@ import { getSagaLiveSnapshot, getSceneLinesPulse, type OpenEventStatus } from '@
 
 /** A light day/night wash laid over each painted panel so the art lives in the
  *  same hour as the clock (multiply so it darkens toward night). */
+/** A gentle hour tint over the painting (soft-light, not multiply) so the art
+ *  keeps its own warmth — just cooler by night, warmer by dusk, never dimmed. */
 const DAY_WASH: Record<string, { color: string; opacity: number }> = {
-  morning: { color: 'rgba(255,248,232,0.10)', opacity: 0.35 },
-  noon: { color: 'rgba(255,253,240,0.05)', opacity: 0.25 },
-  dusk: { color: 'rgba(150,70,45,0.28)', opacity: 0.7 },
-  night: { color: 'rgba(18,16,34,0.5)', opacity: 1 },
+  morning: { color: 'rgba(255,245,225,0.35)', opacity: 0.5 },
+  noon: { color: 'rgba(255,250,235,0.25)', opacity: 0.4 },
+  dusk: { color: 'rgba(200,110,70,0.5)', opacity: 0.55 },
+  night: { color: 'rgba(70,80,130,0.6)', opacity: 0.55 },
 };
 
 type LiveEvent = OpenEventStatus;
@@ -325,24 +327,35 @@ export function SagaHandscroll(props: Props) {
             className="flex h-full flex-col"
             style={{ width: `max(${scrollVw}vw, 1200px)`, minWidth: `max(${scrollVw}vw, 1200px)` }}
           >
-            {/* 油畫帶（有界高，非滿版） */}
-            <div className="relative flex h-[clamp(240px,42vh,440px)] shrink-0">
-              {scenesByLocation.map(({ seg, scenes: locScenes }) => {
+            {/* 油畫帶（有界高，非滿版；PC 高一點、手機收斂，並留給團扇列空間） */}
+            <div className="relative flex h-[clamp(240px,48vh,560px)] shrink-0">
+              {scenesByLocation.map(({ seg, scenes: locScenes }, i) => {
                 const art = terrainArtFor(seg.location.name);
                 const streamScene = locScenes.find((sc) => streamByScene[sc.id]?.length);
+                // Feather the shared edges so neighbouring locations bleed into
+                // one continuous scroll instead of butting on a hard seam.
+                const feather = `linear-gradient(90deg, ${i > 0 ? 'transparent, black 9%' : 'black'}, black ${
+                  i < segmentCount - 1 ? '91%, transparent' : '100%'
+                })`;
                 return (
                   <div
                     key={seg.location.id}
-                    className="relative h-full shrink-0 snap-center snap-always overflow-hidden border-r border-hairline/15 last:border-r-0"
-                    style={{ width: `${100 / segmentCount}%` }}
+                    className="relative h-full shrink-0 snap-center snap-always overflow-hidden"
+                    style={{ width: `${100 / segmentCount}%`, marginLeft: i > 0 ? '-3%' : 0 }}
                   >
                     {art ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={art} alt={seg.location.name} className="h-full w-full object-cover" draggable={false} />
+                      <img
+                        src={art}
+                        alt={seg.location.name}
+                        className="h-full w-full object-cover"
+                        style={{ maskImage: feather, WebkitMaskImage: feather }}
+                        draggable={false}
+                      />
                     ) : (
                       <div className="h-full w-full bg-gradient-to-b from-surface to-canvas dark:from-elevated/50 dark:to-canvas" />
                     )}
-                    <div className="pointer-events-none absolute inset-0 mix-blend-multiply" style={{ background: wash.color, opacity: wash.opacity }} />
+                    <div className="pointer-events-none absolute inset-0 mix-blend-soft-light" style={{ background: wash.color, opacity: wash.opacity }} />
                     {/* 地名 */}
                     <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap font-serif text-sm tracking-[0.4em] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
                       {seg.location.name}

@@ -19,3 +19,23 @@ export function terrainArtFor(name: string | undefined): string | null {
   for (const a of TERRAIN_ART) if (a.match.test(name)) return a.src;
   return null;
 }
+
+/**
+ * Generated scene 團扇 art (same oil style), matched by scene name. Used as the
+ * fan face until a real still exists on the scene (scene.imageUrl overrides).
+ */
+const SCENE_ART: Array<{ match: RegExp; src: string }> = [
+  { match: /戲園前街|霞飛路/, src: '/handscroll/s-xiafeilu-jie.jpg' },
+  { match: /戲台|雲錦台/, src: '/handscroll/s-yunjintai-tai.jpg' },
+  { match: /包廂|茶座/, src: '/handscroll/s-baoxiang.jpg' },
+  { match: /妝閣/, src: '/handscroll/s-zhuangge.jpg' },
+  { match: /衣箱/, src: '/handscroll/s-yixiang.jpg' },
+  { match: /報館/, src: '/handscroll/s-baoguan.jpg' },
+  { match: /碼頭/, src: '/handscroll/s-matou.jpg' },
+];
+
+export function sceneArtFor(name: string | undefined): string | null {
+  if (!name) return null;
+  for (const a of SCENE_ART) if (a.match.test(name)) return a.src;
+  return null;
+}
