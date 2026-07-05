@@ -11,9 +11,8 @@ const STANCE_STOPS: { key: EmotionalStance; label: string; note: string }[] = [
 /**
  * Charter — one-screen troupe plaque. Only the two live signals matter: the
  * temperament gauge (emotional_stance, read-only here; knob is backstage) and
- * the current metrics. The departure policy is the one genuine on-chain rule,
- * kept compact. The preset's nature/rhythm prompts are storyteller directives,
- * not reader-facing, so they're not shown.
+ * the current metrics. The preset's nature/rhythm/departure prompts are
+ * storyteller directives / not-yet-enabled mechanisms, so they're not shown.
  */
 export function SagaCharterPanel({
   saga,
@@ -22,10 +21,7 @@ export function SagaCharterPanel({
   saga: Saga;
   stance?: EmotionalStance;
 }) {
-  const { sagaPrompts, metrics } = saga;
-  const departure = sagaPrompts?.departurePolicy?.trim();
-
-  if (!metrics && !departure && !stance) return null;
+  const { metrics } = saga;
 
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col">
@@ -43,13 +39,6 @@ export function SagaCharterPanel({
         <StanceSpectrum stance={stance} />
 
         {metrics ? <MetricsStrip metrics={metrics} /> : null}
-
-        {departure ? (
-          <div className="mt-7 border-t border-hairline/50 pt-5">
-            <div className="text-2xs tracking-[0.2em] text-mute">離職政策 · DEPARTURE</div>
-            <p className="mt-2 font-serif text-sm leading-relaxed text-ink/80">{departure}</p>
-          </div>
-        ) : null}
       </div>
     </section>
   );
@@ -66,14 +55,10 @@ function StanceSpectrum({ stance }: { stance: EmotionalStance }) {
 
   return (
     <div className="rounded-2xl border border-hairline/50 bg-canvas/50 px-5 py-5 dark:bg-canvas/20">
-      <div className="mb-6 flex items-baseline justify-between gap-3">
+      <div className="mb-6">
         <span className="text-xs tracking-[0.2em] text-ink/80">
           氣質光譜
           <span className="ml-2 text-2xs tracking-[0.16em] text-mute uppercase">Temperament</span>
-        </span>
-        <span className="inline-flex items-center gap-1 text-2xs tracking-widest text-mute">
-          <LockGlyph />
-          唯讀・後台可調
         </span>
       </div>
 
@@ -139,15 +124,6 @@ function MetricsStrip({ metrics }: { metrics: NonNullable<Saga['metrics']> }) {
         </div>
       ))}
     </dl>
-  );
-}
-
-function LockGlyph() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden className="text-mute">
-      <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
   );
 }
 
