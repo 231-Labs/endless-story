@@ -86,13 +86,15 @@ export function SceneSheet({
       >
         {backdrop ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={backdrop} alt="" className="h-full w-full object-cover" />
+          <img src={backdrop} alt="" className="h-full w-full object-cover brightness-[0.82] dark:brightness-100" />
         ) : (
           <div className="h-full w-full bg-canvas" />
         )}
         {/* scrims — theme-aware: canvas-tinted by day, black by night, so the
             text panels read in either mode without hiding the place. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-canvas/92 via-canvas/60 to-canvas/35 dark:from-black/85 dark:via-black/45 dark:to-black/25" />
+        <div className="absolute inset-0 bg-gradient-to-t from-canvas/92 via-canvas/68 to-canvas/50 dark:from-black/85 dark:via-black/45 dark:to-black/28" />
+        {/* dedicated header scrim so the top-bar text always reads over the art */}
+        <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-canvas/85 to-transparent dark:from-black/70" />
       </motion.div>
 
       {/* click bare painting → step back out */}
