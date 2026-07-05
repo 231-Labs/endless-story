@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, useInView } from 'framer-motion';
 import type { Character } from '@endless-story/shared';
 
@@ -30,61 +30,72 @@ export interface StreamLine {
 }
 
 /**
- * 題字流 — a scene's recent beats as drifting inscriptions. The newest line
- * stands at the anchor; older ones rise, drift a hair sideways and thin out
- * like incense smoke, then leave. Same brush language as FloatingQuote.
+ * 題字流 — a scene's recent beats as a single drifting inscription that cycles
+ * (輪播): one column stands at the anchor, holds a beat, then rises and thins
+ * like incense smoke as the next takes its place. One at a time, never stacked.
  */
 export function FloatingStream({
   lines,
   leftPct,
   topPct,
 }: {
-  /** Newest first; at most 3 are shown. */
+  /** Newest first. */
   lines: StreamLine[];
   leftPct: number;
   topPct: number;
 }) {
-  const shown = lines.slice(0, 3);
+  const items = lines.slice(0, 5);
+  const [idx, setIdx] = useState(0);
+  // Signature of the current set — reset to the newest line whenever it changes.
+  const sig = items.map((l) => l.key).join('|');
+  useEffect(() => {
+    setIdx(0);
+  }, [sig]);
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const t = setInterval(() => setIdx((i) => (i + 1) % items.length), 4200);
+    return () => clearInterval(t);
+  }, [items.length, sig]);
+
+  const cur = items[idx];
+  if (!cur) return null;
+  const style = (cur.kind && KIND_STYLE[cur.kind]) || { glyph: '', tint: 'text-cinnabar/80' };
+  const text = cur.text.length > 20 ? `${cur.text.slice(0, 20)}…` : cur.text;
+
   return (
     <div
       className="pointer-events-none absolute z-30"
       style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: 'translate(-50%, 0)' }}
     >
-      <AnimatePresence>
-        {shown.map((l, idx) => {
-          const style = (l.kind && KIND_STYLE[l.kind]) || { glyph: '', tint: 'text-cinnabar/80' };
-          const text = l.text.length > 20 ? `${l.text.slice(0, 20)}…` : l.text;
-          return (
-            // Static wrapper owns centering so framer's transform can't clobber
-            // it; the column drifts STRAIGHT up — 飄要直，像香煙不像柳絮。
-            <div key={l.key} className="absolute left-0 top-0 -translate-x-1/2">
-              <motion.div
-                initial={{ opacity: 0, y: 26 }}
-                animate={{ opacity: [1, 0.5, 0.24][idx] ?? 0.2, y: -idx * 52 }}
-                exit={{ opacity: 0, y: -160, transition: { duration: 2.4, ease: 'easeOut' } }}
-                transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
-                className="flex flex-col items-center rounded-md bg-surface/55 px-2 py-3 shadow-sm ring-1 ring-hairline/40 backdrop-blur-sm [writing-mode:vertical-rl] dark:bg-elevated/45"
-              >
-                {style.glyph ? (
-                  <span
-                    className={`mb-2 font-serif text-[10px] tracking-[0.2em] ${style.tint} opacity-70`}
-                    aria-hidden
-                  >
-                    {style.glyph}
-                  </span>
-                ) : null}
-                <span className="font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm">
-                  「{text}」
-                </span>
-                {l.speakerName && idx === 0 ? (
-                  <span className={`mt-3 font-serif text-xs tracking-[0.3em] ${style.tint}`}>
-                    — {l.speakerName}
-                  </span>
-                ) : null}
-              </motion.div>
-            </div>
-          );
-        })}
+      {/* mode="wait": the old column drifts fully out before the next rises —
+          strictly one at a time, so columns never overlap. */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={cur.key}
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -44, transition: { duration: 1.1, ease: 'easeOut' } }}
+          transition={{ duration: 1.3, ease: [0.22, 1, 0.36, 1] }}
+          className="flex flex-col items-center rounded-md bg-surface/55 px-2 py-3 shadow-sm ring-1 ring-hairline/40 backdrop-blur-sm [writing-mode:vertical-rl] dark:bg-elevated/45"
+          style={{ transform: 'translateX(-50%)' }}
+        >
+          {style.glyph ? (
+            <span
+              className={`mb-2 font-serif text-[10px] tracking-[0.2em] ${style.tint} opacity-70`}
+              aria-hidden
+            >
+              {style.glyph}
+            </span>
+          ) : null}
+          <span className="font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm">
+            「{text}」
+          </span>
+          {cur.speakerName ? (
+            <span className={`mt-3 font-serif text-xs tracking-[0.3em] ${style.tint}`}>
+              — {cur.speakerName}
+            </span>
+          ) : null}
+        </motion.div>
       </AnimatePresence>
     </div>
   );

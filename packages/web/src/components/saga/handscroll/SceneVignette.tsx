@@ -41,12 +41,15 @@ export function SceneVignette({
     .filter((c): c is Character => Boolean(c));
   const isPerforming = !!scene.performance;
 
+  // Kept light: this glow now sits ON TOP of the painted terrain, so a heavy
+  // multiply blob reads as a dark smudge over the art. Warm accents stay (they
+  // tint), the grey (mute) is nearly dropped (it only darkened).
   const bleedStyle = heat
     ? {
         background: `
-          radial-gradient(circle at 30% 35%, rgba(var(--color-cinnabar) / ${heat.cinnabar * 0.32}), transparent 60%),
-          radial-gradient(circle at 70% 65%, rgba(var(--color-jade) / ${heat.jade * 0.28}), transparent 60%),
-          radial-gradient(circle at 50% 80%, rgba(var(--color-mute) / ${heat.mute * 0.22}), transparent 60%)
+          radial-gradient(circle at 30% 35%, rgba(var(--color-cinnabar) / ${heat.cinnabar * 0.16}), transparent 62%),
+          radial-gradient(circle at 70% 65%, rgba(var(--color-jade) / ${heat.jade * 0.13}), transparent 62%),
+          radial-gradient(circle at 50% 80%, rgba(var(--color-mute) / ${heat.mute * 0.06}), transparent 62%)
         `,
       }
     : undefined;
@@ -66,7 +69,7 @@ export function SceneVignette({
       {/* heat bleed 暈染（紙面散開） */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-[-50%] mix-blend-multiply dark:mix-blend-screen"
+        className="pointer-events-none absolute inset-[-30%] mix-blend-soft-light dark:mix-blend-screen"
         style={bleedStyle}
       />
 
