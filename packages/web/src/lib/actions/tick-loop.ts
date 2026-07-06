@@ -19,7 +19,7 @@ import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
-import { recordSceneLine } from '@/lib/chain/scene-lines';
+import { recordSceneLine, getRecentSceneLines } from '@/lib/chain/scene-lines';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { computeSpatialRouting } from '@/lib/chain/spatial-routing';
 import { fetchWarmGraph } from '@/lib/chain/relationship-evolve';
@@ -1447,11 +1447,24 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         .filter((rp) => rp.currentSceneId === st.sceneId)
                         .map((rp) => rp.id);
                     const allIds = Array.from(new Set([...st.characterIds, ...sceneCast]));
-                    const participants = allIds.map((id) => ({
-                        characterId: id,
-                        name: rosterById.get(id)?.name ?? id,
-                        pov: povByChar.get(id) ?? '',
-                    }));
+                    // The contest-framed POV chapter buries the intimacy the scene
+                    // actually enacted (a warm/act beat), so affection ties starve.
+                    // Append each character's own enacted beats in THIS scene so the
+                    // judge reads what played out, not just how the contest was framed.
+                    const sceneBeats = getRecentSceneLines(st.sceneId, 40);
+                    const participants = allIds.map((id) => {
+                        const chapter = povByChar.get(id) ?? '';
+                        const acted = sceneBeats
+                            .filter(
+                                (l) =>
+                                    l.characterId === id &&
+                                    (l.kind === 'act' || l.kind === 'warmth' || l.kind === 'social'),
+                            )
+                            .slice(0, 4)
+                            .map((l) => l.text);
+                        const pov = acted.length ? `${chapter}\n\n〔這場的實際舉止〕${acted.join('；')}` : chapter;
+                        return { characterId: id, name: rosterById.get(id)?.name ?? id, pov };
+                    });
                     if (participants.filter((p) => p.pov).length < 2) continue;
                     cutJobs.push(async () => {
                         const res = await evolveRelationshipsFromScene({
