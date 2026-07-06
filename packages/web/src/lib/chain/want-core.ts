@@ -90,6 +90,20 @@ export function forcingLevel(w: Want): ForcingLevel {
 }
 
 let _seq = 0;
+/**
+ * Layers are intentionally free-text (愛/志向/身體/…), but the ripple judge LLM
+ * occasionally emits a formatting artifact instead of a tag: a bare list index
+ * ("1"), the field-name echoed ("層"/"layer"), or an over-long fragment. Map those
+ * to a neutral '其他' so they never surface as a want "type" in the UI.
+ */
+export function normalizeLayer(raw: string | undefined): string {
+    const s = (raw ?? '').trim();
+    if (!s || /^[0-9]+$/.test(s) || s === '層' || s.toLowerCase() === 'layer' || s.length > 6) {
+        return '其他';
+    }
+    return s;
+}
+
 export function newWant(
     init: Pick<Want, 'characterId' | 'layer' | 'desc' | 'weight' | 'sat' | 'resistance' | 'kind' | 'source' | 'bornTick'> &
         Partial<Pick<Want, 'target' | 'id'>>,
@@ -233,7 +247,7 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
             spawned.push(
                 newWant({
                     characterId: d.characterId,
-                    layer: d.layer?.trim() || '其他',
+                    layer: normalizeLayer(d.layer),
                     desc: nt,
                     target: d.target,
                     weight: WANT.rippleWeight,

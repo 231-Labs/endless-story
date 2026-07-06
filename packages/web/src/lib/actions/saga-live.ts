@@ -25,6 +25,7 @@ import {
 } from '@/lib/chain/scene-lines';
 import { latestSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { loadWants } from '@/lib/chain/want-store';
+import { normalizeLayer } from '@/lib/chain/want-core';
 
 /** A ghost-quote line for the handscroll: who, what, in which register. */
 export interface SceneLine {
@@ -326,7 +327,7 @@ export async function getCharacterWants(
     return loadWants(sagaId)
         .filter((w) => !w.retired && w.characterId === characterId)
         .map((w) => ({
-            layer: w.layer,
+            layer: normalizeLayer(w.layer),
             desc: w.desc,
             tension: w.weight * (1 - w.sat),
             resistance: w.resistance,
@@ -341,7 +342,10 @@ export async function getSagaHeartLedger(sagaId: string): Promise<SagaHeartLedge
     const open = wants.filter((w) => !w.retired);
     const resolved = wants.filter((w) => w.resolvedTick != null).length;
     const layerCount = new Map<string, number>();
-    for (const w of open) layerCount.set(w.layer, (layerCount.get(w.layer) ?? 0) + 1);
+    for (const w of open) {
+        const layer = normalizeLayer(w.layer);
+        layerCount.set(layer, (layerCount.get(layer) ?? 0) + 1);
+    }
     const byLayer = [...layerCount.entries()]
         .map(([layer, count]) => ({ layer, count }))
         .sort((a, b) => b.count - a.count)
