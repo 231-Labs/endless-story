@@ -24,8 +24,9 @@ export interface SceneLoopCastMember {
     stateLine?: string;
     /** 行當 — shown to co-present speakers so address forms have footing. */
     role?: string;
-    /** Canon tie line toward each co-present member, keyed by their characterId
-     *  (e.g. 你對TA：師承・TA對你：敬慕). From the lived+felt graph, not guessed. */
+    /** This member's OWN canon feeling toward each co-present member, keyed by
+     *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
+     *  the reverse edge — no omniscience about others' feelings. */
     ties?: Record<string, string>;
 }
 

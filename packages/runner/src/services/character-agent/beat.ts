@@ -22,9 +22,10 @@ export interface ActBeatInput {
     clock: string;
     sceneName: string;
     isPrivate: boolean;
-    /** Co-present characters (empty = alone). `role` = 行當; `tie` = the canon
-     *  relationship line both ways (e.g. 你對TA：師承・TA對你：敬慕) so address
-     *  forms come from the graph, not the LLM's guesswork. */
+    /** Co-present characters (empty = alone). `role` = 行當; `tie` = the actor's
+     *  OWN canon feeling toward them (e.g. 你對TA：師承) so address forms come
+     *  from the graph, not guesswork. Never carries the reverse edge — the
+     *  other's inner state reaches an actor only through enacted behavior. */
     others: Array<{ name: string; role?: string; tie?: string }>;
     /** External pressure line (風聲), first beat only. */
     stake?: string;

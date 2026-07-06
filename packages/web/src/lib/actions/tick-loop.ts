@@ -1055,13 +1055,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 const castTies = await fetchCastTies(slice.map((c) => ({ id: c.id, name: c.name }))).catch(
                     () => new Map<string, string>(),
                 );
+                // Perception rule: an actor knows only their OWN feeling toward a
+                // co-present person — never the reverse edge (that is the other's
+                // inner state; it reaches them only through enacted behavior).
                 const tieLine = (selfId: string, otherId: string): string | undefined => {
                     const out = castTies.get(`${selfId}::${otherId}`);
-                    const inc = castTies.get(`${otherId}::${selfId}`);
-                    if (!out && !inc) return undefined;
-                    return [out ? `你對TA：${out}` : null, inc ? `TA對你：${inc}` : null]
-                        .filter(Boolean)
-                        .join('・');
+                    return out ? `你對TA：${out}` : undefined;
                 };
                 const byScene = new Map<string, Character[]>();
                 for (const c of slice) {
