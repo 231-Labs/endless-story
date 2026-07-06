@@ -411,9 +411,12 @@ export async function fetchCastTies(
         for (const e of felt) {
             if (!e.tone || !idSet.has(e.fromId) || !idSet.has(e.toId)) continue;
             const key = `${e.fromId}::${e.toId}`;
-            const zh = TONE_ZH[e.tone];
+            // The felt edge carries the FEELER's own distilled line (the want in
+            // their words) — keep it, a bare tone word wastes the distillation.
+            const note = e.summary ? `（${e.summary.slice(0, 20)}${e.summary.length > 20 ? '…' : ''}）` : '';
+            const zh = `${TONE_ZH[e.tone]}${note}`;
             const prev = ties.get(key);
-            ties.set(key, prev && prev !== zh ? `${prev}/${zh}` : zh);
+            ties.set(key, prev && !prev.startsWith(TONE_ZH[e.tone]) ? `${prev}/${zh}` : zh);
         }
     }
     return ties;

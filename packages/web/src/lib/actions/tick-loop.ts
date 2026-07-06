@@ -1077,15 +1077,25 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     const isPrivate = (info?.privacyLevel ?? 0) >= 3;
                     if (isPrivate) privateSceneIds.add(sceneId);
                     const sceneName = sceneNameById.get(sceneId) ?? '戲班';
-                    // Memory channel (§2.45 暗號 echoes): each member recalls
-                    // against their hottest want, capped small; failure-safe.
+                    // Memory channel: each member recalls against their hottest
+                    // want (§2.45 暗號 echoes) AND about the co-present people
+                    // they have ties to — facing someone surfaces your history
+                    // with them, not just your current obsession. Capped small
+                    // (2 others × 2 snippets); failure-safe.
                     const castWithMem = await Promise.all(
                         cs.map(async (c) => {
                             const mine = wants.filter((w) => !w.retired && w.characterId === c.id);
                             const hot = mine.sort((x, y) => y.weight * (1 - y.sat) - x.weight * (1 - x.sat))[0];
-                            const memories = hot
-                                ? await recallForCharacter(c.id, hot.desc, 3).catch(() => [])
-                                : [];
+                            const tiedOthers = cs
+                                .filter((o) => o.id !== c.id && castTies.has(`${c.id}::${o.id}`))
+                                .slice(0, 2);
+                            const [hotMem, ...aboutOthers] = await Promise.all([
+                                hot ? recallForCharacter(c.id, hot.desc, 3).catch(() => []) : Promise.resolve([]),
+                                ...tiedOthers.map((o) =>
+                                    recallForCharacter(c.id, o.name, 2).catch(() => [] as string[]),
+                                ),
+                            ]);
+                            const memories = [...new Set([...hotMem, ...aboutOthers.flat()])].slice(0, 6);
                             return {
                                 characterId: c.id,
                                 name: c.name,
