@@ -45,6 +45,7 @@ import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
 import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWant } from '@/lib/chain/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
+import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
@@ -765,8 +766,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     // 2.76 EVENT MOMENT — multi-character scene image per opened event (img2img
     //   off each participant's anchor so faces don't drift), appended as kind=4.
+    //   One image per (scene, axis) per narrative day: the same contest re-opens
+    //   tick after tick and repainting the same cast in the same room filled
+    //   galleries with near-identical moments.
+    const momentDay = worldTime?.day ?? 0;
     for (const st of storylets) {
         if (!((input.eventImage ?? narrativeProfile?.features.eventImage ?? true) && !dryRun && st.opened && st.characterIds.length >= 2)) continue;
+        const mKey = momentKey(st.sceneId, st.templateId);
+        if (hasMomentToday(d.sagaId, mKey, momentDay)) {
+            console.log(`[tick-loop] event moment (${st.templateId}): skipped=already_rendered_today`);
+            continue;
+        }
         momentJobs.push(async () => {
             const r = await generateEventMomentAction({
                 characterIds: st.characterIds,
@@ -774,6 +784,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 label: st.label,
                 eventTx: st.digest,
             });
+            if (r.appended > 0) recordMoment(d.sagaId, mKey, momentDay);
             console.log(
                 `[tick-loop] event moment (${st.templateId}): appended=${r.appended}` +
                     (r.skipped ? ` skipped=${r.skipped}` : '') +
