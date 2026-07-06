@@ -304,7 +304,7 @@ function WantRow({ want, target }: { want: CharacterWant; target: Character | nu
       </div>
       <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-hairline/60">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-gold to-cinnabar"
+          className="h-full rounded-full bg-gradient-to-r from-cinnabar/35 to-cinnabar"
           style={{ width: `${pct}%` }}
         />
       </div>

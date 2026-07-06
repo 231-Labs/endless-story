@@ -127,7 +127,7 @@ export function SceneSheet({
           </button>
           <span className="mx-1 h-3 w-px bg-hairline" />
           <h2 className="font-serif text-lg tracking-[0.28em] text-ink">{scene.name}</h2>
-          {isPrivate ? <Pill tone="gold">私宅</Pill> : null}
+          {isPrivate ? <Pill tone="jade">私宅</Pill> : null}
           {clock ? <Pill>{clock}</Pill> : null}
           {scene.performance ? <Pill tone="cinnabar">● 戲正熱</Pill> : null}
           {is18 ? <Pill tone="cinnabar">成人 18+</Pill> : null}
@@ -158,7 +158,7 @@ export function SceneSheet({
                     {present[0] ? (
                       <a
                         href={`/dossier?id=${present[0]}&tab=gallery`}
-                        className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-gold/90 hover:text-gold"
+                        className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-white/85 transition-colors hover:text-cinnabar"
                       >
                         設定集收藏 →
                       </a>
@@ -196,10 +196,10 @@ export function SceneSheet({
                     board.wants.map((w, i) => (
                       <div key={i} className="mb-3">
                         <p className="text-sm leading-snug text-ink">
-                          <span className="text-gold">{nameOf(w.characterId)}</span> · {w.desc}
+                          <span className="text-cinnabar">{nameOf(w.characterId)}</span> · {w.desc}
                         </p>
                         <div className="mt-1.5 h-1 rounded bg-hairline/60">
-                          <div className="h-full rounded bg-gradient-to-r from-gold to-cinnabar" style={{ width: `${Math.round(w.tension * 100)}%` }} />
+                          <div className="h-full rounded bg-gradient-to-r from-cinnabar/35 to-cinnabar" style={{ width: `${Math.round(w.tension * 100)}%` }} />
                         </div>
                       </div>
                     ))
@@ -243,13 +243,13 @@ function LockedBody({ is18 }: { is18: boolean }) {
   );
 }
 
-function Pill({ children, tone }: { children: React.ReactNode; tone?: 'cinnabar' | 'gold' }) {
+function Pill({ children, tone }: { children: React.ReactNode; tone?: 'cinnabar' | 'jade' }) {
   // Sits over the dimmed painting, so the neutral variant is light, not mute.
   const c =
     tone === 'cinnabar'
       ? 'text-cinnabar border-cinnabar/55'
-      : tone === 'gold'
-        ? 'text-gold border-gold/55'
+      : tone === 'jade'
+        ? 'text-jade border-jade/55'
         : 'text-white/75 border-white/25';
   return <span className={`rounded-full border px-2.5 py-1 font-serif text-2xs tracking-[0.18em] ${c}`}>{children}</span>;
 }

@@ -66,7 +66,7 @@ export function SceneFan({
       </span>
       <span className="flex items-center gap-1.5 whitespace-nowrap font-serif text-2xs tracking-[0.18em] text-ink/85">
         {isPerforming ? <span className="h-1.5 w-1.5 rounded-full bg-cinnabar shadow-[0_0_6px_rgba(201,85,63,0.7)]" /> : null}
-        {isPrivate ? <span className="h-1.5 w-1.5 rounded-full bg-gold/70" /> : null}
+        {isPrivate ? <span className="h-1.5 w-1.5 rounded-full bg-jade/70" /> : null}
         {img ? scene.name : ''}
         {present > 0 ? <span className="text-mute">· {present}</span> : null}
       </span>
