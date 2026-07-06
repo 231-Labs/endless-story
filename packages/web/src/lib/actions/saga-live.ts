@@ -125,7 +125,19 @@ export async function getSceneBoard(
     sceneId: string,
     presentCharacterIds: string[],
 ): Promise<SceneBoard> {
-    const beats = getRecentSceneLines(sceneId, 6).reverse(); // oldest→newest for reading
+    // The 內頁「當前一幕」is live scene dialogue/action, not travel/plan intents.
+    // 'move'/'plan' lines are the character's reason for going somewhere ("去後台
+    // 找師父…") and read as repeated intents; keep only in-scene beats
+    // ('act'/'social'/'warmth') and drop consecutive duplicates.
+    const INTENT_KINDS = new Set<SceneLine['kind']>(['move', 'plan']);
+    const recent = getRecentSceneLines(sceneId, 40).filter((l) => !INTENT_KINDS.has(l.kind));
+    const deduped: typeof recent = [];
+    for (const l of recent) {
+        const prev = deduped[deduped.length - 1];
+        if (prev && prev.characterId === l.characterId && prev.text === l.text) continue;
+        deduped.push(l);
+    }
+    const beats = deduped.slice(0, 6).reverse(); // newest-first → keep 6 → oldest→newest for reading
     const present = new Set(presentCharacterIds);
     const wants = loadWants(sagaId)
         .filter((w) => !w.retired && present.has(w.characterId))
