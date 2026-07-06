@@ -42,7 +42,15 @@ export function SceneSheet({
   const [board, setBoard] = useState<SceneBoard | null>(null);
   const present = scene.currentCharacterIds ?? [];
   const isPrivate = (scene.privacyLevel ?? 0) >= 3;
-  const moment = scene.imageUrl || scene.gallery?.anchor?.imageUrl || null;
+  // 當前一幕 = the newest event-moment image among the present cast. Moment
+  // renders append a shared kind=4 media asset to every participant, so the
+  // scene's latest moment is simply the cast's newest gallery moment (the
+  // scene object itself never carries an imageUrl).
+  const momentUrls = present
+    .flatMap((id) => charactersById.get(id)?.gallery?.eventMoments ?? [])
+    .map((m) => m.imageUrl)
+    .filter(Boolean);
+  const moment = momentUrls.length > 0 ? momentUrls[momentUrls.length - 1] : scene.imageUrl || null;
   // You walked into THIS scene — its own art is the space behind you; the
   // location painting is only the last-resort backdrop.
   const backdrop = sceneArtFor(scene.name) || moment || locationArt || null;
@@ -130,45 +138,58 @@ export function SceneSheet({
         {isPrivate ? (
           <LockedBody is18={is18} />
         ) : (
-          <div className="pointer-events-auto min-h-0 flex-1 overflow-y-auto px-[max(1rem,env(safe-area-inset-left))] pb-[calc(env(safe-area-inset-bottom,0px)+5rem)] pt-5 sm:px-10">
-            <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-[1.35fr_1fr]">
-              {/* stage: 當前一幕 + beats */}
-              <div className="space-y-4">
-                <div className="relative overflow-hidden rounded-xl ring-1 ring-hairline/50 dark:ring-white/15">
-                  {moment ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={moment} alt={`當前一幕：${scene.name}`} className="aspect-[16/9] w-full object-cover" />
-                  ) : (
-                    <div className="flex aspect-[16/9] w-full items-center justify-center bg-surface/70 text-2xs tracking-[0.2em] text-mute backdrop-blur-sm dark:bg-black/40 dark:text-white/60">
-                      當前一幕 · 戲到峰值時由現場對白生成
-                    </div>
-                  )}
-                  <span className="absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-white/90">
-                    當前一幕
-                  </span>
-                </div>
-                <div className="space-y-3.5 rounded-xl bg-surface/85 p-5 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
+          <div className="pointer-events-auto min-h-0 flex-1 overflow-y-auto px-[max(1rem,env(safe-area-inset-left))] pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] pt-5 sm:px-10 md:overflow-hidden">
+            <div className="mx-auto grid max-w-5xl gap-5 md:h-full md:min-h-0 md:grid-cols-[1.35fr_1fr]">
+              {/* stage: 當前一幕（有圖才現身）+ beats（面板內自捲，整頁保持一屏） */}
+              <div className="flex min-h-0 flex-col gap-4">
+                {moment ? (
+                  <div className="relative shrink-0 overflow-hidden rounded-xl ring-1 ring-hairline/50 dark:ring-white/15">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={moment}
+                      alt={`當前一幕：${scene.name}`}
+                      className="max-h-[34dvh] w-full object-cover"
+                    />
+                    <span className="absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-white/90">
+                      當前一幕
+                    </span>
+                    {/* the same moment lives in every participant's 設定集 — the
+                        existing still-mint path collects it from there. */}
+                    {present[0] ? (
+                      <a
+                        href={`/dossier?id=${present[0]}&tab=gallery`}
+                        className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-gold/90 hover:text-gold"
+                      >
+                        設定集收藏 →
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-surface/85 p-5 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
+                  <div className="space-y-3.5">
+                    {board?.beats.length ? (
+                      board.beats.map((b, i) => (
+                        <div key={i}>
+                          <div className={`mb-1 font-serif text-2xs tracking-[0.3em] ${KIND[b.kind]?.tint ?? 'text-cinnabar'}`}>
+                            {nameOf(b.characterId)}
+                          </div>
+                          <div className="text-sm leading-relaxed text-ink">{b.text}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="py-4 text-center text-2xs tracking-[0.2em] text-mute">這一刻還沒有動靜，戲正醞釀。</p>
+                    )}
+                  </div>
                   {board?.beats.length ? (
-                    board.beats.map((b, i) => (
-                      <div key={i}>
-                        <div className={`mb-1 font-serif text-2xs tracking-[0.3em] ${KIND[b.kind]?.tint ?? 'text-cinnabar'}`}>
-                          {nameOf(b.characterId)}
-                        </div>
-                        <div className="text-sm leading-relaxed text-ink">{b.text}</div>
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <span className="h-2.5 w-40 rounded-full bg-hairline/70 blur-[1.5px]" />
-                          <span className="whitespace-nowrap font-serif text-2xs tracking-[0.16em] text-gold">心聲 · 訂閱解鎖</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="py-4 text-center text-2xs tracking-[0.2em] text-mute">這一刻還沒有動靜，戲正醞釀。</p>
-                  )}
+                    <p className="mt-4 border-t border-hairline/40 pt-3 text-center font-serif text-2xs tracking-[0.2em] text-mute">
+                      列位心聲，隨訂閱可聞
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
               {/* side: 心事 + CTA */}
-              <aside className="space-y-4">
+              <aside className="flex min-h-0 flex-col gap-4 md:overflow-y-auto">
                 <div className="rounded-xl bg-surface/85 p-5 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
                   <h3 className="mb-3 font-serif text-2xs tracking-[0.3em] text-mute">此刻在場的心事</h3>
                   {board?.wants.length ? (
@@ -183,14 +204,14 @@ export function SceneSheet({
                       </div>
                     ))
                   ) : (
-                    <p className="text-2xs leading-relaxed text-mute">心事帳訂閱後可見。</p>
+                    <p className="text-2xs leading-relaxed text-mute">心事未起，戲正醞釀。</p>
                   )}
                 </div>
-                <div className="rounded-xl bg-surface/85 p-5 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
-                  <button className="w-full rounded-lg bg-ink py-3 font-serif text-sm tracking-[0.25em] text-canvas">
+                <div className="rounded-xl bg-surface/85 p-4 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
+                  <button className="w-full rounded-lg border border-ink/25 bg-transparent py-2.5 font-serif text-sm tracking-[0.25em] text-ink transition-colors hover:border-cinnabar/60 hover:text-cinnabar dark:border-white/25 dark:text-white/85 dark:hover:border-cinnabar/70">
                     訂閱在場角色
                   </button>
-                  <p className="mt-2 text-center text-2xs tracking-[0.12em] text-mute">完整心聲連載 · 心事帳 · 每月注夢 · 劇照優先鑄</p>
+                  <p className="mt-2 text-center text-2xs tracking-[0.12em] text-mute">完整心聲 · 心事帳 · 注夢 · 劇照優先鑄</p>
                 </div>
               </aside>
             </div>
