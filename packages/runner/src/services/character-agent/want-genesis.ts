@@ -119,8 +119,11 @@ export function parseGenesisWants(
     const out: GenesisWant[] = [];
     for (const item of arr.slice(0, 5)) {
         const e = item as Record<string, unknown>;
-        const desc = s(e.desc);
-        if (!desc || desc.length > 40) continue;
+        const descRaw = s(e.desc);
+        if (!descRaw) continue;
+        // Overlong descs get truncated, never dropped — the deepest wants run
+        // long, and silently discarding them left 蘇映雪-class canon uncharted.
+        const desc = descRaw.length > 48 ? `${descRaw.slice(0, 47)}…` : descRaw;
         const target = s(e.target);
         // Exact-label match only — substring guessing wrongly ties e.g. a 歌廳頭牌
         // want to the troupe's 頭牌名額 stake.

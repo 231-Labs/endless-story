@@ -1008,7 +1008,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     return stakeCache;
                 };
                 for (const c of slice) {
-                    if (wants.some((w) => w.characterId === c.id)) continue;
+                    // Ripple/aftermath wants filling a vacuum do NOT count as an
+                    // inner life — retry until genesis itself has run (a silent
+                    // genesis failure once left the deepest persona uncharted
+                    // while ambient ripples squatted in the void).
+                    if (wants.some((w) => w.characterId === c.id && w.source === 'genesis')) continue;
                     const stakes = await contestedStakes();
                     const derived = await characterAgent.deriveGenesisWants({
                         name: c.name,
