@@ -60,7 +60,8 @@ export function buildSystemPrompt(): string {
         '5. `target` 只在 want 指向具體某人時填,且必須是名冊裡的名字。',
         '6. **不要替 TA 決定結局**:want 是渴望不是計畫,別寫成「將要如何如何」。',
         '7. 若題目附「檯面上的爭奪」清單:當某條 want 就是在爭那個東西時,加 `resource` 填**清單原文**。',
-        '   只有這個人按人設**真會下場爭**的才標(圈外人、看客、志不在此者一律不標);多數 want 沒有 resource。',
+        '   **爭=想把它本人拿到手**。只是關心它、報導它、看熱鬧、或自家別處的同名事物',
+        '   (歌廳的頭牌≠戲班的頭牌名額)都**不算**;圈外人、志不在此者一律不標。多數 want 沒有 resource。',
         '',
         '**輸出**:嚴格只輸出 JSON:',
         '`{"wants":[{"layer":"愛","desc":"…","target":"某某","weight":0.9,"sat":0.3,"resistance":8,"why":"…"}]}`',
@@ -184,7 +185,8 @@ export async function assessResourceAffinity(input: AffinityInput): Promise<Map<
             model: client.defaultModel,
             system:
                 '判斷一個角色心裡掛著的事,哪些**就是**在爭檯面上的某個東西。\n' +
-                '鐵則:①只有這個人按人設真會下場爭的才算(圈外人、看客、志不在此者一律不算);\n' +
+                '鐵則:①**爭=想把它本人拿到手**。只是關心它、報導它、看熱鬧、或自家別處的同名事物\n' +
+                '(歌廳的頭牌≠戲班的頭牌名額)都不算;圈外人、志不在此者一律不算;\n' +
                 '②resource 必須抄清單**原文**;③多數心事跟爭奪無關,空結果完全合法。\n' +
                 '輸出 JSON:{"ties":[{"want":1,"resource":"…"}]}(want=心事編號)。不要 markdown。',
             messages: [

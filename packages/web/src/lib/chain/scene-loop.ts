@@ -6,8 +6,19 @@
  * math lives here; all LLM calls live in runner (beat.ts). Server-only.
  */
 
-import { characterAgent } from '@endless-story/runner';
+import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 import { pickNextActor } from './scene-routing.ts';
+
+/** The two agent calls a scene needs — injectable so composition tests can run
+ *  the REAL loop with a scripted agent (no LLM, no runner resolution). */
+export type SceneAgent = Pick<typeof CharacterAgentNs, 'actBeat' | 'judgeWantResolved'>;
+
+/** Production default: resolved lazily so importing this module stays
+ *  node-clean (the runner package uses `.js` specifiers node --test can't load). */
+async function defaultAgent(): Promise<SceneAgent> {
+    const mod = await import('@endless-story/runner');
+    return mod.characterAgent;
+}
 import {
     WANT,
     applyBeat,
@@ -50,6 +61,8 @@ export interface SceneLoopInput {
     tick: number;
     /** Turn caps; defaults match §2.48 (private scenes run longer). */
     maxTurns?: number;
+    /** Injectable agent (composition tests script it); omit → runner LLM agent. */
+    agent?: SceneAgent;
 }
 
 export interface SceneBeat {
@@ -111,6 +124,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false };
     const present = [...input.cast];
     if (present.length === 0) return result;
+    const agent = input.agent ?? (await defaultAgent());
 
     const solo = present.length === 1;
     const maxTurns = input.maxTurns ?? (solo ? 1 : input.isPrivate ? 5 : 4);
@@ -140,7 +154,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         const gateBeat = privateAlone && /愛|情/.test(w.layer);
         if (gateBeat) result.intimacyGateOpened = true;
 
-        const r = await characterAgent.actBeat({
+        const r = await agent.actBeat({
             name: actor.name,
             persona: actor.persona,
             memories: actor.memories,
@@ -216,7 +230,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         if (forcingPressure(w) < effR) continue;
         const owner = input.cast.find((c) => c.characterId === w.characterId);
         if (!owner) continue;
-        const verdict = await characterAgent.judgeWantResolved({
+        const verdict = await agent.judgeWantResolved({
             name: owner.name,
             wantDesc: w.desc,
             beats: log,

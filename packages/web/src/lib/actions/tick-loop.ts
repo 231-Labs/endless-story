@@ -42,7 +42,7 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
-import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWant } from '@/lib/chain/want-core';
+import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWant, qualifiesAsTryst } from '@/lib/chain/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
@@ -1094,20 +1094,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 if (isNight) {
                     for (const [sceneId, cs] of [...byScene]) {
                         const info = activeScenes.find((sc) => sc.id === sceneId);
-                        const tryst =
-                            cs.length === 2 &&
-                            (info?.privacyLevel ?? 0) >= 3 &&
-                            cs.some((a) => {
-                                const other = cs.find((o) => o.id !== a.id)!;
-                                return wants.some(
-                                    (w) =>
-                                        !w.retired &&
-                                        w.characterId === a.id &&
-                                        /愛|情/.test(w.layer) &&
-                                        (w.target === other.name || w.target === other.id),
-                                );
-                            });
-                        if (!tryst) byScene.delete(sceneId);
+                        if (!qualifiesAsTryst(cs, info?.privacyLevel ?? 0, wants)) byScene.delete(sceneId);
                     }
                     tlog(
                         byScene.size > 0

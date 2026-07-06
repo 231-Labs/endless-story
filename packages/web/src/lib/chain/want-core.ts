@@ -94,6 +94,30 @@ export function forcingLevel(w: Want): ForcingLevel {
     return 'idle';
 }
 
+/**
+ * 幽會 qualification (G8): at night a scene still plays only when it is private,
+ * holds exactly two people, and one of them carries a live love-layer want
+ * aimed at the other. Pure — the tick's night gate and the composition tests
+ * share this exact predicate.
+ */
+export function qualifiesAsTryst(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    privacyLevel: number,
+    wants: ReadonlyArray<Want>,
+): boolean {
+    if (cs.length !== 2 || privacyLevel < 3) return false;
+    return cs.some((a) => {
+        const other = cs.find((o) => o.id !== a.id)!;
+        return wants.some(
+            (w) =>
+                !w.retired &&
+                w.characterId === a.id &&
+                /愛|情/.test(w.layer) &&
+                (w.target === other.name || w.target === other.id),
+        );
+    });
+}
+
 let _seq = 0;
 /**
  * Layers are intentionally free-text (愛/志向/身體/…), but the ripple judge LLM
