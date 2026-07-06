@@ -971,12 +971,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   Failure-isolated; never blocks the tick.
     const wantActed: string[] = [];
     if (wantEngine && slice.length > 0 && !dryRun) {
-        if (isNight) {
-            tlog('③⁹ want scenes: night — 快轉, sleep consolidates');
-        } else {
+        // Night is no longer a wholesale fast-forward: the night router is the
+        // only thing that pulls a pair into a private room, so a 幽會-qualified
+        // scene still plays (§2.45's private-pair machinery is unreachable
+        // otherwise). Ledger upkeep (genesis/backfill/stirs/decay) stays
+        // daytime-only; everyone outside a tryst sleeps.
+        {
             try {
                 const nowTick = spineClockTick();
                 const wants = loadWants(d.sagaId);
+                if (!isNight) {
                 // 檯面上的爭奪 (lazy, once per tick) — genesis tags wants with the
                 // stake they pursue, so demand stays single-sourced (G1).
                 let stakeCache: Array<{ label: string }> | null = null;
@@ -1048,8 +1052,22 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 for (const f of fadeStaleWants(wants, nowTick)) {
                     tlog(`③⁹ 淡了: ${nameById.get(f.characterId) ?? '?'}「${f.desc}」`);
                 }
+                } // end daytime ledger upkeep
 
                 const clock = worldTime?.partOfDay ?? '白日';
+                // Daily-life tint (§2.15-2.18; approach iii — derived, no store):
+                // fatigue follows the day's arc, hunger the distance from the last
+                // meal slot (早/午/晚飯). Undertone only — the state block itself
+                // tells the beat not to narrate it as an event.
+                const ticksPerDay = worldTime?.ticksPerDay ?? 6;
+                const tickOfDay = worldTime?.tickOfDay ?? 0;
+                const sinceMeal = Math.min(...[0, 1, 4].map((m) => (tickOfDay - m + ticksPerDay) % ticksPerDay));
+                const stateLine =
+                    runnerWorker.buildStateBlock({
+                        hunger: Math.min(1, 0.1 + sinceMeal * 0.28),
+                        fatigue: Math.min(1, 0.15 + (ticksPerDay > 1 ? tickOfDay / (ticksPerDay - 1) : 0.5) * 0.7),
+                        mood: 0,
+                    }) || undefined;
                 // G3: one relations read per tick — beats get each co-present
                 // person's 行當 + canon tie so address forms stop drifting.
                 const castTies = await fetchCastTies(slice.map((c) => ({ id: c.id, name: c.name }))).catch(
@@ -1069,6 +1087,33 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     const arr = byScene.get(sid);
                     if (arr) arr.push(c);
                     else byScene.set(sid, [c]);
+                }
+                // 幽會 (G8): at night only a private scene holding exactly the
+                // pair the router pulled together — with a live love-want between
+                // them — plays out. Everyone else sleeps, as before.
+                if (isNight) {
+                    for (const [sceneId, cs] of [...byScene]) {
+                        const info = activeScenes.find((sc) => sc.id === sceneId);
+                        const tryst =
+                            cs.length === 2 &&
+                            (info?.privacyLevel ?? 0) >= 3 &&
+                            cs.some((a) => {
+                                const other = cs.find((o) => o.id !== a.id)!;
+                                return wants.some(
+                                    (w) =>
+                                        !w.retired &&
+                                        w.characterId === a.id &&
+                                        /愛|情/.test(w.layer) &&
+                                        (w.target === other.name || w.target === other.id),
+                                );
+                            });
+                        if (!tryst) byScene.delete(sceneId);
+                    }
+                    tlog(
+                        byScene.size > 0
+                            ? `③⁹ 幽會: ${byScene.size} 處私宅掩了門`
+                            : '③⁹ want scenes: night — 快轉, sleep consolidates',
+                    );
                 }
                 let beatCount = 0;
                 const privateSceneIds = new Set<string>();
@@ -1101,6 +1146,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 name: c.name,
                                 persona: c.description,
                                 memories: memories.length > 0 ? memories : undefined,
+                                stateLine,
                                 role: roleById.get(c.id),
                                 ties: Object.fromEntries(
                                     cs
