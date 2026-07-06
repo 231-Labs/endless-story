@@ -46,6 +46,8 @@ import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWan
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
+import { recordSceneTruth } from '@/lib/chain/scene-truth';
+import { loadBible } from '@/lib/chain/story-bible-store';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
@@ -1161,6 +1163,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     for (const b of loop.beats) {
                         pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
                         recordSceneLine(sceneId, b.characterId, b.text, 'act');
+                        // Enacted truth → the cut weaver's observations/intents
+                        // (public scenes only; 窗內事 never reaches a public cut).
+                        if (!isPrivate) {
+                            recordSceneTruth(d.sagaId, sceneId, {
+                                day: worldTime?.day,
+                                name: b.name,
+                                text: b.text,
+                                inner: b.inner,
+                            });
+                        }
                         tlog(`③⁹ [${sceneName}] ${b.name}：${b.text}`);
                         // Private beats never reach the public episode weaver —
                         // they live in POV serials and the subscriber scene view.
@@ -1272,6 +1284,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     const povs: TickPovResult[] = [];
+    // POV enrichment (narrative-chain fix 2): each narrator knows their hottest
+    // want (what this chapter's gaze circles) and their bible arc (承上) — read
+    // once, applied per character below.
+    const povWantsBySaga = wantEngine ? loadWants(d.sagaId) : [];
+    const povArcByCharId = new Map<string, string>();
+    try {
+        for (const arc of loadBible(d.sagaId)?.arcs ?? []) {
+            if (arc.characterId && arc.state) povArcByCharId.set(arc.characterId, arc.state);
+        }
+    } catch {
+        /* no bible yet — POVs simply run without 承上 */
+    }
     if (input.pov ?? true) {
         // 4. PRODUCE — POV chapter per character with a narratable beat this tick
         //    (event-driven cadence, not per-tick filler); `povAll` forces everyone.
@@ -1456,6 +1480,13 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     ],
                     relationshipHints: await memoryContext.relationshipHints(c.id, 5),
                     planHint: await memoryContext.plan(c.id),
+                    want: (() => {
+                        const hot = povWantsBySaga
+                            .filter((w) => !w.retired && w.characterId === c.id)
+                            .sort((x, y) => y.weight * (1 - y.sat) - x.weight * (1 - x.sat))[0];
+                        return hot ? { desc: hot.desc, target: hot.target } : undefined;
+                    })(),
+                    arcLine: povArcByCharId.get(c.id),
                     skipMemoryRecall: true,
                     state: povState,
                 });
