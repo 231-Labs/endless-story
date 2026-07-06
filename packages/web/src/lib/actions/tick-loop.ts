@@ -22,7 +22,7 @@ import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@
 import { recordSceneLine, getRecentSceneLines } from '@/lib/chain/scene-lines';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { computeSpatialRouting } from '@/lib/chain/spatial-routing';
-import { fetchWarmGraph } from '@/lib/chain/relationship-evolve';
+import { fetchWarmGraph, fetchCastTies } from '@/lib/chain/relationship-evolve';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings, recallForCharacter } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
@@ -486,6 +486,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     name: c.name,
                     tags: publicTagsWithRole(c, roleById.get(c.id)),
                 })),
+                // G1 single demand source: with the want engine on, a character
+                // with wants contests exactly what their wants ache for (the
+                // legacy role-ambition table covers only want-less characters).
+                wantLedger: wantEngine ? loadWants(d.sagaId) : undefined,
                 signer: dryRun ? undefined : admin.signer, // dry-run = derive, don't anchor
             });
             dramaHints = r.hints;
@@ -973,8 +977,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             try {
                 const nowTick = spineClockTick();
                 const wants = loadWants(d.sagaId);
+                // 檯面上的爭奪 (lazy, once per tick) — genesis tags wants with the
+                // stake they pursue, so demand stays single-sourced (G1).
+                let stakeCache: Array<{ label: string }> | null = null;
+                const contestedStakes = async () => {
+                    if (stakeCache) return stakeCache;
+                    stakeCache = await readResourceLedger(admin.client, d.packageId, d.sagaId)
+                        .then((ledger) => ledger.map((r) => ({ label: r.label })))
+                        .catch(() => []);
+                    return stakeCache;
+                };
                 for (const c of slice) {
                     if (wants.some((w) => w.characterId === c.id)) continue;
+                    const stakes = await contestedStakes();
                     const derived = await characterAgent.deriveGenesisWants({
                         name: c.name,
                         role: roleById.get(c.id) ?? '—',
@@ -982,6 +997,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         ageYears: c.age,
                         description: c.description,
                         castNames: slice.map((x) => x.name),
+                        contestedResources: stakes,
                     });
                     for (const g of derived) {
                         wants.push(
@@ -990,6 +1006,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 layer: g.layer,
                                 desc: g.desc,
                                 target: g.target,
+                                // null = assessed against the stake list, tied to none.
+                                resource: stakes.length > 0 ? (g.resource ?? null) : undefined,
                                 weight: g.weight,
                                 sat: g.sat,
                                 resistance: g.resistance,
@@ -1001,6 +1019,27 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     }
                     if (derived.length > 0) tlog(`③⁹ genesis wants: ${c.name} ×${derived.length}`);
                 }
+                // G1 backfill: wants that pre-date the stake list get a one-time
+                // affinity pass — tied wants take the exact label, the rest turn
+                // null (= assessed) so this never re-runs for the character.
+                for (const c of slice) {
+                    const mine = wants.filter((w) => !w.retired && w.characterId === c.id);
+                    if (mine.length === 0 || mine.some((w) => w.resource !== undefined)) continue;
+                    const stakes = await contestedStakes();
+                    if (stakes.length === 0) break;
+                    const ties = await characterAgent.assessResourceAffinity({
+                        name: c.name,
+                        role: roleById.get(c.id) ?? '—',
+                        description: c.description,
+                        wants: mine.map((w) => ({ layer: w.layer, desc: w.desc })),
+                        contestedResources: stakes,
+                    });
+                    mine.forEach((w, i) => {
+                        w.resource = ties.get(i) ?? null;
+                    });
+                    const tied = [...ties.values()];
+                    tlog(`③⁹ 執念補判: ${c.name} ${tied.length > 0 ? '→ ' + tied.join('、') : '不爭檯面'}`);
+                }
                 for (const cid of drainWantDreamStirs(d.sagaId)) {
                     const hit = applyDreamStirToWants(wants, cid);
                     if (hit) tlog(`③⁹ dream stir → ${nameById.get(cid) ?? cid.slice(0, 8)}「${hit.desc}」`);
@@ -1011,6 +1050,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }
 
                 const clock = worldTime?.partOfDay ?? '白日';
+                // G3: one relations read per tick — beats get each co-present
+                // person's 行當 + canon tie so address forms stop drifting.
+                const castTies = await fetchCastTies(slice.map((c) => ({ id: c.id, name: c.name }))).catch(
+                    () => new Map<string, string>(),
+                );
+                const tieLine = (selfId: string, otherId: string): string | undefined => {
+                    const out = castTies.get(`${selfId}::${otherId}`);
+                    const inc = castTies.get(`${otherId}::${selfId}`);
+                    if (!out && !inc) return undefined;
+                    return [out ? `你對TA：${out}` : null, inc ? `TA對你：${inc}` : null]
+                        .filter(Boolean)
+                        .join('・');
+                };
                 const byScene = new Map<string, Character[]>();
                 for (const c of slice) {
                     const sid = rosterById.get(c.id)?.currentSceneId;
@@ -1040,6 +1092,13 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 name: c.name,
                                 persona: c.description,
                                 memories: memories.length > 0 ? memories : undefined,
+                                role: roleById.get(c.id),
+                                ties: Object.fromEntries(
+                                    cs
+                                        .filter((o) => o.id !== c.id)
+                                        .map((o) => [o.id, tieLine(c.id, o.id)] as const)
+                                        .filter((pair): pair is [string, string] => Boolean(pair[1])),
+                                ),
                             };
                         }),
                     );

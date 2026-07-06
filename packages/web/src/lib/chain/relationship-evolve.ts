@@ -373,3 +373,48 @@ export async function fetchWarmGraph(
     }
     return buildWarmGraph(events, charIds);
 }
+
+/**
+ * One read → the cast's directed tone map (`fromId::toId` → 調性 in Chinese),
+ * lived seeds felt-merged (ES_FELT_EDGES). Feeds the beat prompt's 同場 identity
+ * lines (G3) so a speaker knows who each co-present person is to them — the
+ * canon lives in ties/wants, not in the LLM's guesswork about address forms.
+ */
+export async function fetchCastTies(
+    cast: ReadonlyArray<{ id: string; name: string }>,
+): Promise<Map<string, string>> {
+    const ties = new Map<string, string>();
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg || cast.length < 2) return ties;
+    const client = makeSuiClient({ network: resolveNetwork() });
+    const summaries = await read.director
+        .listRelationshipEvents(client, pkg, { maxEvents: 1000 })
+        .catch(() => []);
+    const events: RelEventLite[] = summaries.map((s) => ({
+        characterA: s.characterA,
+        characterB: s.characterB,
+        tone: s.tone,
+        tick: Number(s.seededAtMs) || 0,
+    }));
+    const nowTick = events.reduce((m, e) => Math.max(m, e.tick), 0);
+    const idSet = new Set(cast.map((c) => c.id));
+    for (const c of cast) {
+        for (const e of aggregateDecayedOutgoing(events, c.id, nowTick)) {
+            if (idSet.has(e.toId)) ties.set(`${c.id}::${e.toId}`, TONE_ZH[e.tone]);
+        }
+    }
+    if (process.env.ES_FELT_EDGES === '1') {
+        const idByName = new Map(cast.map((c) => [c.name, c.id]));
+        const felt = projectWantEdges(loadWants(ENDLESS_STORY_DEPLOYMENT.sagaId), {
+            resolveTargetId: (t) => (idSet.has(t) ? t : idByName.get(t)),
+        });
+        for (const e of felt) {
+            if (!e.tone || !idSet.has(e.fromId) || !idSet.has(e.toId)) continue;
+            const key = `${e.fromId}::${e.toId}`;
+            const zh = TONE_ZH[e.tone];
+            const prev = ties.get(key);
+            ties.set(key, prev && prev !== zh ? `${prev}/${zh}` : zh);
+        }
+    }
+    return ties;
+}

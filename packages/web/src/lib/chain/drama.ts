@@ -23,6 +23,8 @@ import {
     buildBeat,
     buildWorld,
     defaultDesiresForCast,
+    desiresFromWants,
+    type WantDemand,
     deriveBeat,
     dramaHintForAgent,
     encodeBeat,
@@ -190,6 +192,10 @@ export interface DeriveDramaOptions {
     cast: DramaCharacter[];
     /** authored desires per character; falls back to default contention desires. */
     desiresByCharacter?: Record<string, AgentSpec['desires']>;
+    /** The saga's want ledger (single demand source, G1). When provided, a
+     *  character WITH wants contests only stakes their wants carry — the
+     *  role-ambition table applies only to characters with no wants yet. */
+    wantLedger?: ReadonlyArray<WantDemand & { characterId: string }>;
     /** signer for the commit (StorytellerCap holder). Omit → derive only, no commit. */
     signer?: Keypair;
     client?: SuiClient;
@@ -213,20 +219,33 @@ export async function deriveAndCommitDramaBeat(opts: DeriveDramaOptions): Promis
     // Per-stake want overrides (who a director-authored resource is for).
     const resourceIntents = readResourceIntents();
 
-    // Assemble agent specs. Defaults depend on the agent name: a star named in a
-    // label like `partnership:Wen` must not receive "I want to partner with Wen".
-    const agents: AgentSpec[] = opts.cast.map((c) => ({
-        id: c.id,
-        name: c.name,
-        tags: c.tags,
-        desires:
-            opts.desiresByCharacter?.[c.id] ??
-            defaultDesiresForCast(resources, opts.cast.length, {
-                agentName: c.name,
-                agentTags: c.tags,
-                resourceIntents,
-            }),
-    }));
+    // Assemble agent specs. Demand precedence: authored overrides → the want
+    // ledger (a character with wants contests exactly what their wants ache
+    // for, G1) → the legacy role-ambition defaults (only for characters the
+    // want engine hasn't reached yet, so a fresh world still moves).
+    const wantsByChar = new Map<string, WantDemand[]>();
+    for (const w of opts.wantLedger ?? []) {
+        const list = wantsByChar.get(w.characterId) ?? [];
+        if (list.length === 0) wantsByChar.set(w.characterId, list);
+        list.push(w);
+    }
+    const agents: AgentSpec[] = opts.cast.map((c) => {
+        const mine = wantsByChar.get(c.id);
+        return {
+            id: c.id,
+            name: c.name,
+            tags: c.tags,
+            desires:
+                opts.desiresByCharacter?.[c.id] ??
+                (mine && mine.length > 0
+                    ? desiresFromWants(resources, mine)
+                    : defaultDesiresForCast(resources, opts.cast.length, {
+                          agentName: c.name,
+                          agentTags: c.tags,
+                          resourceIntents,
+                      })),
+        };
+    });
 
     const prior = lastSatBySaga.get(opts.sagaId) ?? new Map<string, bigint>();
     const tickGuess = BigInt(prior.size); // monotone-ish; exact value isn't load-bearing off chain

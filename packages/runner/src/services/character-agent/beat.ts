@@ -22,8 +22,10 @@ export interface ActBeatInput {
     clock: string;
     sceneName: string;
     isPrivate: boolean;
-    /** Co-present character names (empty = alone). */
-    others: string[];
+    /** Co-present characters (empty = alone). `role` = 行當; `tie` = the canon
+     *  relationship line both ways (e.g. 你對TA：師承・TA對你：敬慕) so address
+     *  forms come from the graph, not the LLM's guesswork. */
+    others: Array<{ name: string; role?: string; tie?: string }>;
     /** External pressure line (風聲), first beat only. */
     stake?: string;
     want: { desc: string; target?: string };
@@ -82,7 +84,14 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         ? `\n你心底偶爾翻起的舊事(對景就讓它浮上來、不對景別硬提)：\n- ${input.memories.join('\n- ')}`
         : '';
     const where = `你在【${input.sceneName}】${input.isPrivate ? '(私房)' : ''}，同場：${
-        input.others.length ? input.others.join('、') : '只你一人'
+        input.others.length
+            ? input.others
+                  .map((o) => {
+                      const facts = [o.role, o.tie].filter(Boolean).join('｜');
+                      return facts ? `${o.name}（${facts}）` : o.name;
+                  })
+                  .join('、')
+            : '只你一人'
     }。`;
     const state = input.stateLine ? `\n${input.stateLine}` : '';
     return [

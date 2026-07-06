@@ -41,6 +41,11 @@ export interface Want {
     source: WantSource;
     bornTick: number;
     resolvedTick?: number;
+    /** Contested-resource label this want aches for (exact on-chain label).
+     *  The SINGLE demand source: a character contests a stake only through a
+     *  want that carries its label. null = assessed and tied to none;
+     *  undefined = not yet assessed against the stake list. */
+    resource?: string | null;
 }
 
 /** Lab-validated constants (§2.36–2.38 longrun, §2.51 ripple units). */
@@ -106,7 +111,7 @@ export function normalizeLayer(raw: string | undefined): string {
 
 export function newWant(
     init: Pick<Want, 'characterId' | 'layer' | 'desc' | 'weight' | 'sat' | 'resistance' | 'kind' | 'source' | 'bornTick'> &
-        Partial<Pick<Want, 'target' | 'id'>>,
+        Partial<Pick<Want, 'target' | 'id' | 'resource'>>,
 ): Want {
     return {
         id: init.id ?? `w${Date.now().toString(36)}-${++_seq}`,
@@ -114,6 +119,7 @@ export function newWant(
         layer: init.layer,
         desc: init.desc,
         target: init.target,
+        resource: init.resource,
         weight: clamp01(init.weight),
         sat: clamp01(init.sat),
         sat0: clamp01(init.sat),

@@ -176,6 +176,45 @@ function isPartnership(r: ResourceSnapshot): boolean {
     return r.label.startsWith('partnership:');
 }
 
+/** Structural slice of a want that carries demand (keeps this core dependency-free). */
+export interface WantDemand {
+    /** Exact contested-resource label the want aches for; null/undefined = none. */
+    resource?: string | null;
+    retired?: boolean;
+    weight: number;
+    sat: number;
+}
+
+/**
+ * Single demand source (G1): a character contests a stake only because one of
+ * their live wants carries its exact label. Mechanical — no role tables, no
+ * eligibility regex; who aches for what was judged once at want-genesis from
+ * the persona. Desire strength tracks the want's live tension, so a satisfied
+ * want stops contesting on its own.
+ */
+export function desiresFromWants(
+    resources: ResourceSnapshot[],
+    wants: ReadonlyArray<WantDemand>,
+): DesireSpec[] {
+    const specs: DesireSpec[] = [];
+    for (const r of resources) {
+        if (r.capacity <= 0n) continue;
+        const mine = wants.filter((w) => !w.retired && w.resource === r.label);
+        if (mine.length === 0) continue;
+        const drive = Math.max(...mine.map((w) => w.weight * (1 - w.sat)));
+        if (drive < 0.05) continue;
+        specs.push({
+            id: `hold:${r.label || r.archetype || r.id}`,
+            statement: desireStatementFor(r),
+            weight: scaleByAmbition(drive),
+            baseline: 200_000n,
+            volatility: SCALE,
+            claims: [{ ref: r.id, claim: 1n }],
+        });
+    }
+    return specs;
+}
+
 /** Resources only on-stage actors compete for (partnership has its own gate). */
 function isPerformerResource(r: ResourceSnapshot): boolean {
     return (

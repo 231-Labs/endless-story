@@ -22,6 +22,11 @@ export interface SceneLoopCastMember {
     persona: string;
     memories?: string[];
     stateLine?: string;
+    /** 行當 — shown to co-present speakers so address forms have footing. */
+    role?: string;
+    /** Canon tie line toward each co-present member, keyed by their characterId
+     *  (e.g. 你對TA：師承・TA對你：敬慕). From the lived+felt graph, not guessed. */
+    ties?: Record<string, string>;
 }
 
 export interface SceneLoopInput {
@@ -142,7 +147,11 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             clock: input.clock,
             sceneName: input.sceneName,
             isPrivate: input.isPrivate,
-            others: others.map((o) => o.name),
+            others: others.map((o) => ({
+                name: o.name,
+                role: o.role,
+                tie: actor!.ties?.[o.characterId],
+            })),
             stake: turn === 0 ? input.stake : undefined,
             want: { desc: w.desc, target: w.target },
             forcing: levelAt(w, effR),
