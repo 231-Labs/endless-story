@@ -42,29 +42,51 @@ export function ProfileTab({
 }) {
   // 配對視角：同一位對象的「此人所感」與「對方所感」併成一列，
   // 才能呈現雙向不對稱（A 戀慕 B、B 卻無感／另有所感）。
-  const incomingByFromId = new Map<string, RelationshipEdge>();
-  for (const e of incomingEdges) {
-    const prev = incomingByFromId.get(e.fromId);
-    if (!prev || (e.weight ?? 0) > (prev.weight ?? 0)) incomingByFromId.set(e.fromId, e);
+  // 感情可以並存（felt 戀慕＋lived 戒備）：同對象多條 tone 邊分組成
+  // 主調（最重）＋副調 chips，而不是同一人佔多列。
+  const byWeight = (a: RelationshipEdge, b: RelationshipEdge) => (b.weight ?? 0) - (a.weight ?? 0);
+  const outByPartner = new Map<string, RelationshipEdge[]>();
+  for (const e of outgoingEdges) {
+    const list = outByPartner.get(e.toId) ?? [];
+    if (list.length === 0) outByPartner.set(e.toId, list);
+    list.push(e);
   }
-  const outgoingPartnerIds = new Set(outgoingEdges.map((e) => e.toId));
-  const incomingOnly = incomingEdges
-    .filter((e) => !outgoingPartnerIds.has(e.fromId) && e.tone && e.tone !== 'neutral')
-    .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+  const incByPartner = new Map<string, RelationshipEdge[]>();
+  for (const e of incomingEdges) {
+    const list = incByPartner.get(e.fromId) ?? [];
+    if (list.length === 0) incByPartner.set(e.fromId, list);
+    list.push(e);
+  }
+  const incomingOnlyIds = [...incByPartner.keys()].filter(
+    (pid) =>
+      !outByPartner.has(pid) &&
+      incByPartner.get(pid)!.some((e) => e.tone && e.tone !== 'neutral'),
+  );
   const bondRows = [
-    ...outgoingEdges.map((edge) => ({
-      key: `${edge.fromId}-${edge.toId}`,
-      partnerId: edge.toId,
-      out: edge as RelationshipEdge | null,
-      inc: incomingByFromId.get(edge.toId) ?? null,
-    })),
-    ...incomingOnly.map((edge) => ({
-      key: `${edge.fromId}-${edge.toId}-in`,
-      partnerId: edge.fromId,
-      out: null,
-      inc: edge,
-    })),
-  ].slice(0, 6);
+    ...[...outByPartner.entries()].map(([pid, list]) => {
+      const sorted = [...list].sort(byWeight);
+      const incSorted = [...(incByPartner.get(pid) ?? [])].sort(byWeight);
+      return {
+        key: pid,
+        partnerId: pid,
+        out: sorted[0] as RelationshipEdge | null,
+        extraOut: sorted.slice(1).filter((e) => e.tone && e.tone !== sorted[0].tone),
+        inc: incSorted[0] ?? null,
+      };
+    }),
+    ...incomingOnlyIds.map((pid) => {
+      const incSorted = [...incByPartner.get(pid)!].sort(byWeight);
+      return {
+        key: `${pid}-in`,
+        partnerId: pid,
+        out: null,
+        extraOut: [] as RelationshipEdge[],
+        inc: incSorted[0],
+      };
+    }),
+  ]
+    .sort((a, b) => ((b.out ?? b.inc)?.weight ?? 0) - ((a.out ?? a.inc)?.weight ?? 0))
+    .slice(0, 6);
   return (
     <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_320px] lg:gap-20">
       {/* Main Column */}
@@ -135,6 +157,7 @@ export function ProfileTab({
                   <RelationshipRow
                     key={row.key}
                     out={row.out}
+                    extraOut={row.extraOut}
                     inc={row.inc}
                     target={charactersById.get(row.partnerId) ?? null}
                     fallbackName={row.partnerId}
@@ -337,12 +360,15 @@ const TONE_CSS: Record<ToneColor, { bg: string; ring: string }> = {
 
 function RelationshipRow({
   out,
+  extraOut = [],
   inc,
   target,
   fallbackName,
 }: {
   /** 此人對對方的感受；null = 此人未對其留下記憶（只有對方有感） */
   out: RelationshipEdge | null;
+  /** 此人對同一位對象並存的其他心緒（felt 戀慕＋lived 戒備可同在）。 */
+  extraOut?: RelationshipEdge[];
   /** 對方對此人的感受；null = 對方未有所感 */
   inc: RelationshipEdge | null;
   target: Character | null;
@@ -361,7 +387,8 @@ function RelationshipRow({
 
   return (
     <li className="rounded-2xl border border-hairline/70 bg-surface/40 p-5 dark:bg-elevated/30">
-      {/* 第一行：名字（連結到 dossier）+ 此人所感（→）；互相同感標 ⇄ */}
+      {/* 第一行：名字（連結到 dossier）+ 此人所感（→）；互相同感標 ⇄；
+          並存的其他心緒接在主調後（「戀慕・亦 戒備」）。 */}
       <div className="flex items-baseline justify-between gap-2">
         {target ? (
           <Link
@@ -380,6 +407,15 @@ function RelationshipRow({
               {mutual ? '⇄ ' : ''}
               {TONE_LABEL[out.tone]}
             </span>
+            {extraOut.map((e) =>
+              e.tone ? (
+                <span key={e.tone} className="flex items-center gap-1 text-mute/70">
+                  <span className="text-mute/40">·</span>
+                  <ToneDot tone={e.tone} />
+                  {TONE_LABEL[e.tone]}
+                </span>
+              ) : null,
+            )}
           </span>
         ) : inc?.tone ? (
           <span className="flex items-center gap-2 text-2xs tracking-widest text-mute/70">
@@ -389,9 +425,15 @@ function RelationshipRow({
         ) : null}
       </div>
 
-      {/* 主敘述：僅在有真 summary 時顯示，否則整行省略 */}
+      {/* 主敘述：僅在有真 summary 時顯示，否則整行省略。felt 邊的 summary 是
+          心事原文（心底話），標個小字出處。 */}
       {quote ? (
-        <p className="mt-2 text-sm italic leading-relaxed text-ink/75">「{quote}」</p>
+        <p className="mt-2 text-sm italic leading-relaxed text-ink/75">
+          {out?.origin === 'felt' ? (
+            <span className="mr-1 not-italic text-2xs tracking-widest text-cinnabar/70">心底</span>
+          ) : null}
+          「{quote}」
+        </p>
       ) : null}
 
       {/* 雙向不對稱：對方所感與此人不同（或一方無感）時，標出彼端心緒 */}

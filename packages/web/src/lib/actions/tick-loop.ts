@@ -411,7 +411,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             let routeTargets: Map<string, string> | undefined;
             if (!dryRun && isNight) {
                 const present = activeRoster.filter((r) => r.currentSceneId);
-                const warm = await fetchWarmGraph(present.map((r) => r.id));
+                const warm = await fetchWarmGraph(present.map((r) => r.id), {
+                    feltNameToId: new Map(present.map((r) => [r.name, r.id])),
+                });
                 const actors = present.map((r) => ({
                     id: r.id,
                     sceneId: r.currentSceneId as string,

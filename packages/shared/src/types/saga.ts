@@ -73,4 +73,7 @@ export interface RelationshipEdge {
   firstSeenDay?: number;
   confidence?: number; // 0-1
   summary?: string; // falls back to label when empty
+  /** 'felt' = projected from the character's own wants (inner ground truth);
+   *  'lived' / undefined = judged from enacted scenes (chain seeds). */
+  origin?: 'felt' | 'lived';
 }

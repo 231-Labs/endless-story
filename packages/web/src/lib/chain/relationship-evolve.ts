@@ -20,6 +20,8 @@ import {
     rememberForCharacter,
 } from '@/lib/chain/memory';
 import { resolveNetwork } from '@/lib/chain/network';
+import { loadWants } from './want-store.ts';
+import { projectWantEdges } from './relationship-felt.ts';
 
 // Pure half lives in relationship-core.ts (plain `node --test`); re-exported here.
 import {
@@ -334,7 +336,15 @@ export async function directedOutgoingEdges(
 }
 
 /** Fetch relationship events once and derive the roster's warm graph (§2.50). */
-export async function fetchWarmGraph(charIds: readonly string[]): Promise<WarmGraph> {
+export async function fetchWarmGraph(
+    charIds: readonly string[],
+    opts?: {
+        /** Roster name→id map. With ES_FELT_EDGES=1 the cast's wants also feed the
+         *  warm graph (felt layer), so a declared 愛 can pull at night even before
+         *  any scene-judged seed exists. */
+        feltNameToId?: ReadonlyMap<string, string>;
+    },
+): Promise<WarmGraph> {
     const empty: WarmGraph = { pursueByChar: new Map(), welcome: () => 0 };
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg || charIds.length === 0) return empty;
@@ -348,5 +358,18 @@ export async function fetchWarmGraph(charIds: readonly string[]): Promise<WarmGr
         tone: s.tone,
         tick: Number(s.seededAtMs) || 0,
     }));
+    if (process.env.ES_FELT_EDGES === '1' && opts?.feltNameToId) {
+        const known = new Set(charIds);
+        const felt = projectWantEdges(loadWants(ENDLESS_STORY_DEPLOYMENT.sagaId), {
+            resolveTargetId: (t) => (known.has(t) ? t : opts.feltNameToId!.get(t)),
+        });
+        // Felt edges are the CURRENT inner truth — inject as fresh pseudo-events
+        // so the decay aggregation treats them as newest.
+        const nowMs = Date.now();
+        for (const e of felt) {
+            if (!e.tone || !known.has(e.fromId)) continue;
+            events.unshift({ characterA: e.fromId, characterB: e.toId, tone: e.tone, tick: nowMs });
+        }
+    }
     return buildWarmGraph(events, charIds);
 }

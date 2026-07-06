@@ -27,6 +27,8 @@ import { DossierSkeleton } from '@/components/dossier/DossierSkeleton';
 import { RosterSkeletonInner } from '@/components/dossier/RosterSkeleton';
 import { LiveStateBar, LiveStateBarSkeleton } from '@/components/dossier/LiveStateBar';
 import { getCharacterWants } from '@/lib/actions/saga-live';
+import { loadWants } from '@/lib/chain/want-store';
+import { mergeFeltEdges, projectWantEdges } from '@/lib/chain/relationship-felt';
 import { DossierTabs, type DossierTab } from '@/components/dossier/DossierTabs';
 import { ProfileTab } from '@/components/dossier/tabs/ProfileTab';
 import { GalleryTab } from '@/components/dossier/tabs/GalleryTab';
@@ -293,11 +295,24 @@ async function DossierDetail({
     tab === 'gallery' ? appearanceApi.getAppearance(character.id) : Promise.resolve(null),
   ]);
   const charactersById = byId(allCharacters);
+  // felt layer: wants project directed feelings (愛→戀慕) over the lived seeds,
+  // both directions — this character's own, and others' feelings toward them.
+  let mergedOutgoing = edges;
+  let mergedIncoming = incomingEdges;
+  if (character.sagaId) {
+    const knownIds = new Set(allCharacters.map((c) => c.id));
+    const idByName = new Map(allCharacters.map((c) => [c.name, c.id]));
+    const felt = projectWantEdges(loadWants(character.sagaId), {
+      resolveTargetId: (t) => (knownIds.has(t) ? t : idByName.get(t)),
+    });
+    mergedOutgoing = mergeFeltEdges(edges, felt.filter((e) => e.fromId === character.id));
+    mergedIncoming = mergeFeltEdges(incomingEdges, felt.filter((e) => e.toId === character.id));
+  }
   // 關係對象可能是名冊外的江湖角色（不在 listCharacters 裡）——補抓，
   // 否則關係欄會顯示原始 id 而不是名字。
   const partnerIds = new Set([
-    ...edges.map((e) => e.toId),
-    ...incomingEdges.map((e) => e.fromId),
+    ...mergedOutgoing.map((e) => e.toId),
+    ...mergedIncoming.map((e) => e.fromId),
   ]);
   const missingPartners = await Promise.all(
     [...partnerIds]
@@ -352,8 +367,8 @@ async function DossierDetail({
                 character={character}
                 persona={persona}
                 personaRegenChapter={personaRegenChapter}
-                outgoingEdges={edges}
-                incomingEdges={incomingEdges}
+                outgoingEdges={mergedOutgoing}
+                incomingEdges={mergedIncoming}
                 charactersById={charactersById}
                 wants={currentWants}
               />
