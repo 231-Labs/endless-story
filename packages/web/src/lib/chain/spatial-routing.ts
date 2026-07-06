@@ -30,8 +30,9 @@ export interface RoutingActor {
     fatigue?: number;
     /** Already settled this night — leave in place. */
     asleep?: boolean;
-    /** Drawn toward whom, and how strongly (0..1). */
-    pursue?: { id: string; w: number };
+    /** Drawn toward whom, and how strongly (0..1). `intrude` = jealousy-driven:
+     *  follows the target into an unwelcoming home uninvited (撞破 material). */
+    pursue?: { id: string; w: number; intrude?: boolean };
 }
 
 export interface RoutingSceneInfo {
@@ -94,7 +95,8 @@ export function computeSpatialRouting(
                 if (tScene === a.homeSceneId) propriety = 1;
                 else if (isPrivate(tScene)) {
                     const owner = ownerOfHome.get(tScene);
-                    propriety = owner ? welcome(owner, a.id) : 0;
+                    // Jealous intrusion asks nobody's leave — that is the point.
+                    propriety = a.pursue.intrude ? 1 : owner ? welcome(owner, a.id) : 0;
                 }
                 cands.push({ scene: tScene, w: a.pursue.w * bondW * propriety });
             }

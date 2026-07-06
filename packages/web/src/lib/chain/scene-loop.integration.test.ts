@@ -10,13 +10,20 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newWant, qualifiesAsTryst, type Want } from './want-core.ts';
+import {
+    jealousNightPursuit,
+    newWant,
+    nightSceneKind,
+    qualifiesAsTryst,
+    type Want,
+} from './want-core.ts';
 import {
     effectiveResistance,
     runSceneLoop,
     type SceneAgent,
     type SceneLoopCastMember,
 } from './scene-loop.ts';
+import { computeSpatialRouting } from './spatial-routing.ts';
 
 const BAI = { id: '0xbai', name: '白韻秋' };
 const LIU = { id: '0xliu', name: '柳生春' };
@@ -150,4 +157,79 @@ test('G8 tryst qualification: exactly the pair, private, live love want at the o
     assert.equal(qualifiesAsTryst([BAI, WEN], 3, wants), false); // want aims elsewhere
     assert.equal(qualifiesAsTryst([BAI, LIU], 3, [loveWant({ retired: true })]), false);
     assert.equal(qualifiesAsTryst([BAI, LIU], 3, [loveWant({ layer: '志' })]), false);
+});
+
+const JIN = { id: '0xjin', name: '金鳳' };
+
+function grudgeWant(over: Partial<Want> = {}): Want {
+    const w = newWant({
+        characterId: JIN.id,
+        layer: '怨',
+        desc: '柳生春欠我一句親口交代',
+        target: LIU.name,
+        weight: 0.85,
+        sat: 0.2,
+        resistance: 8,
+        kind: 'narrative',
+        source: 'genesis',
+        bornTick: 1,
+    });
+    Object.assign(w, over);
+    return w;
+}
+
+test('G8b 撞破: tryst pair + one jealous third = confrontation; no jealousy = sleep', () => {
+    const love = loveWant();
+    // Third with a burning grudge at one of the pair → 撞破.
+    assert.equal(nightSceneKind([BAI, LIU, JIN], 3, [love, grudgeWant()]), 'confrontation');
+    // Pair alone stays a tryst; grudge-less third kills the night scene.
+    assert.equal(nightSceneKind([BAI, LIU], 3, [love]), 'tryst');
+    assert.equal(nightSceneKind([BAI, LIU, WEN], 3, [love]), null);
+    // Jealousy aimed at neither of the pair does not qualify.
+    assert.equal(nightSceneKind([BAI, LIU, JIN], 3, [love, grudgeWant({ target: WEN.name })]), null);
+    // Public room: nothing plays at night regardless.
+    assert.equal(nightSceneKind([BAI, LIU, JIN], 2, [love, grudgeWant()]), null);
+});
+
+test('G8b 妒火夜隨: a pressing grudge stalks its target, idle ones stay home', () => {
+    const resolve = (t: string) => (t === LIU.name ? LIU.id : undefined);
+    // heat 5 / resist 8 → pressing (≥ 0.6×8) → stalks, uninvited.
+    const hot = jealousNightPursuit([grudgeWant({ heat: 5 })], JIN.id, resolve);
+    assert.ok(hot);
+    assert.equal(hot!.id, LIU.id);
+    assert.equal(hot!.intrude, true);
+    // Cold grudge (idle forcing) does not stalk; love-layer never stalks.
+    assert.equal(jealousNightPursuit([grudgeWant({ heat: 1 })], JIN.id, resolve), null);
+    assert.equal(jealousNightPursuit([loveWant({ characterId: JIN.id, heat: 9 })], JIN.id, resolve), null);
+});
+
+test('G8b routing: intrude bypasses the welcome gate into a private home', () => {
+    // 蘇 welcomes 柳 into her home (the tryst forms); 金鳳 pursues 柳. She is
+    // welcomed by nobody — polite pursuit bounces home, jealous intrusion walks in.
+    const scenes = [
+        { id: 'suHome', privacyLevel: 4 },
+        { id: 'liuHome', privacyLevel: 4 },
+        { id: 'jinHome', privacyLevel: 4 },
+    ];
+    const welcome = (host: string, visitor: string) => (host === '0xsu' && visitor === LIU.id ? 1 : 0);
+    const actors = [
+        { id: '0xsu', sceneId: 'suHome', homeSceneId: 'suHome' },
+        { id: LIU.id, sceneId: 'liuHome', homeSceneId: 'liuHome', fatigue: 0.2, pursue: { id: '0xsu', w: 0.9 } },
+        {
+            id: JIN.id,
+            sceneId: 'jinHome',
+            homeSceneId: 'jinHome',
+            fatigue: 0.2,
+            pursue: { id: LIU.id, w: 0.9, intrude: true },
+        },
+    ];
+    const targets = computeSpatialRouting(actors, scenes, true, welcome);
+    assert.equal(targets.get(LIU.id), 'suHome'); // the tryst forms first
+    assert.equal(targets.get(JIN.id), 'suHome'); // …and the jealousy follows in
+    // Same pursuit WITHOUT intrude bounces home (nobody welcomes 金鳳).
+    const politeActors = actors.map((a) =>
+        a.id === JIN.id ? { ...a, pursue: { id: LIU.id, w: 0.9 } } : a,
+    );
+    const politeTargets = computeSpatialRouting(politeActors, scenes, true, welcome);
+    assert.equal(politeTargets.get(JIN.id), 'jinHome');
 });

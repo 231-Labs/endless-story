@@ -42,7 +42,7 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
-import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWant, qualifiesAsTryst } from '@/lib/chain/want-core';
+import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, jealousNightPursuit, newWant, nightSceneKind } from '@/lib/chain/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
@@ -417,12 +417,26 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 const warm = await fetchWarmGraph(present.map((r) => r.id), {
                     feltNameToId: new Map(present.map((r) => [r.name, r.id])),
                 });
-                const actors = present.map((r) => ({
-                    id: r.id,
-                    sceneId: r.currentSceneId as string,
-                    homeSceneId: r.homeSceneId ?? (r.currentSceneId as string),
-                    pursue: warm.pursueByChar.get(r.id),
-                }));
+                // 妒火夜隨 (G8b): a burning jealousy/grudge follows its target
+                // into the night uninvited — obsession outranks warmth when both
+                // pull. The router's intrude flag skips the welcome gate; what it
+                // walks into (撞破) is decided by nightSceneKind downstream.
+                const nightWants = wantEngine ? loadWants(d.sagaId) : [];
+                const idByNightName = new Map(present.map((r) => [r.name, r.id]));
+                const presentIds = new Set(present.map((r) => r.id));
+                const actors = present.map((r) => {
+                    const jealous = wantEngine
+                        ? jealousNightPursuit(nightWants, r.id, (t) =>
+                              presentIds.has(t) ? t : idByNightName.get(t),
+                          )
+                        : null;
+                    return {
+                        id: r.id,
+                        sceneId: r.currentSceneId as string,
+                        homeSceneId: r.homeSceneId ?? (r.currentSceneId as string),
+                        pursue: jealous ?? warm.pursueByChar.get(r.id),
+                    };
+                });
                 routeTargets = computeSpatialRouting(
                     actors,
                     activeScenes.map((s) => ({ id: s.id, privacyLevel: s.privacyLevel })),
@@ -1094,13 +1108,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 // pair the router pulled together — with a live love-want between
                 // them — plays out. Everyone else sleeps, as before.
                 if (isNight) {
+                    let trysts = 0;
+                    let confrontations = 0;
                     for (const [sceneId, cs] of [...byScene]) {
                         const info = activeScenes.find((sc) => sc.id === sceneId);
-                        if (!qualifiesAsTryst(cs, info?.privacyLevel ?? 0, wants)) byScene.delete(sceneId);
+                        const kind = nightSceneKind(cs, info?.privacyLevel ?? 0, wants);
+                        if (!kind) byScene.delete(sceneId);
+                        else if (kind === 'tryst') trysts++;
+                        else confrontations++;
                     }
                     tlog(
                         byScene.size > 0
-                            ? `③⁹ 幽會: ${byScene.size} 處私宅掩了門`
+                            ? `③⁹ 夜場: ${trysts} 幽會${confrontations > 0 ? ` · ${confrontations} 撞破` : ''}`
                             : '③⁹ want scenes: night — 快轉, sleep consolidates',
                     );
                 }

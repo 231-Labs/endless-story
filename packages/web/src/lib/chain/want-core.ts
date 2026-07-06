@@ -118,6 +118,52 @@ export function qualifiesAsTryst(
     });
 }
 
+/** 妒火夜隨 (G8b): the hottest jealousy/grudge want at pressing+ follows its
+ *  target into the night, uninvited. Returns the pursuit or null. Pure. */
+export function jealousNightPursuit(
+    wants: ReadonlyArray<Want>,
+    characterId: string,
+    resolveTargetId: (target: string) => string | undefined,
+): { id: string; w: number; intrude: true } | null {
+    let best: Want | null = null;
+    for (const w of wants) {
+        if (w.retired || w.characterId !== characterId || !w.target) continue;
+        if (!/妒|怨/.test(w.layer)) continue;
+        if (forcingLevel(w) === 'idle') continue; // only a burning grudge stalks
+        if (!best || tension(w) > tension(best)) best = w;
+    }
+    if (!best) return null;
+    const id = resolveTargetId(best.target!);
+    return id && id !== characterId ? { id, w: Math.min(1, tension(best)), intrude: true } : null;
+}
+
+/** Night-scene qualification (G8/G8b): a private scene plays at night as a
+ *  幽會 (exactly the pair, live love want between them) or a 撞破 (that pair
+ *  plus ONE jealous third aimed at one of them). Anything else sleeps. */
+export function nightSceneKind(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    privacyLevel: number,
+    wants: ReadonlyArray<Want>,
+): 'tryst' | 'confrontation' | null {
+    if (privacyLevel < 3) return null;
+    if (cs.length === 2) return qualifiesAsTryst(cs, privacyLevel, wants) ? 'tryst' : null;
+    if (cs.length !== 3) return null;
+    for (let i = 0; i < 3; i++) {
+        const third = cs[i];
+        const pair = cs.filter((_, j) => j !== i);
+        if (!qualifiesAsTryst(pair, privacyLevel, wants)) continue;
+        const jealous = wants.some(
+            (w) =>
+                !w.retired &&
+                w.characterId === third.id &&
+                /妒|怨/.test(w.layer) &&
+                pair.some((p) => w.target === p.name || w.target === p.id),
+        );
+        if (jealous) return 'confrontation';
+    }
+    return null;
+}
+
 let _seq = 0;
 /**
  * Layers are intentionally free-text (愛/志向/身體/…), but the ripple judge LLM
