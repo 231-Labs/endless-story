@@ -90,6 +90,10 @@ svg text{font-family:var(--sans)}
 .glow{position:absolute;border-radius:50%;filter:blur(80px);opacity:.13;z-index:0;pointer-events:none}
 .three-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
 .two-col{display:grid;grid-template-columns:1.05fr .95fr;gap:1.45rem;align-items:center}
+.duo{display:grid;grid-template-columns:.6fr 1fr;gap:1.4rem;align-items:stretch}
+.shot{position:relative;border:1px solid var(--hair);border-radius:12px;overflow:hidden;box-shadow:0 1px 5px rgba(40,30,15,.08);background:var(--panel);aspect-ratio:16/10}
+.shot img{width:100%;height:100%;object-fit:cover;display:block}
+.shot figcaption{position:absolute;left:0;right:0;bottom:0;padding:.55rem .65rem;font-size:.84rem;font-weight:700;color:#fff;font-family:var(--serif);background:linear-gradient(0deg,rgba(20,14,6,.85),rgba(20,14,6,.12) 72%,transparent)}
 
 #s0{justify-content:center}
 #s0 h1{font-size:clamp(3rem,7.4vw,6.15rem)}
@@ -115,7 +119,7 @@ svg text{font-family:var(--sans)}
   #deck{position:relative}
   .slide{position:relative;min-height:100vh;height:auto;opacity:1;pointer-events:auto;padding:72px 6vw 86px;border-bottom:1px solid var(--hair)}
   .r,.draw,.appear{opacity:1!important;transform:none!important;stroke-dashoffset:0!important;animation:none!important}
-  .three-grid,.two-col{grid-template-columns:1fr}
+  .three-grid,.two-col,.duo{grid-template-columns:1fr}
   .diagram{height:auto!important;min-height:260px!important}
   #hint,#dots,#pg,.stamp{display:none}
 }
@@ -148,7 +152,7 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
     <div class="eyebrow r" style="--i:1">鏈上敘事引擎 &nbsp;·&nbsp; <span class="zh">Sui Overflow · Walrus 賽道</span></div>
     <h1 class="r" style="--i:2;font-size:clamp(2.7rem,6.2vw,5rem)">AI 角色<span class="cn" style="color:var(--cinnabar)">自己運轉</span>的<br>故事世界</h1>
     <div class="r" style="--i:3;margin-top:1.4rem;font-size:clamp(1.12rem,1.9vw,1.46rem);color:var(--mute);max-width:54ch;line-height:1.55">
-      透過任意一個你喜歡的角色,看同一個世界。<br><b class="j">自治 AI 角色,記憶住在 Walrus 上。</b>
+      透過任意一個你喜歡的角色,看同一個世界。<br><b class="j">故事從角色的記憶與選擇裡<span style="color:var(--cinnabar)">湧現</span> —— 記憶住在 Walrus 上。</b>
     </div>
     <div class="r" style="--i:4;margin-top:1.9rem;display:flex;gap:.6rem;flex-wrap:wrap">
       <span class="tag">🜂 多角色自治</span>
@@ -175,11 +179,11 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
 <!-- ===================== 2 · THE SHIFT ===================== -->
 <section class="slide" id="s2">
   <div class="slide-inner">
-    <div class="eyebrow r" style="--i:0">關鍵差異 &nbsp;·&nbsp; <span class="zh">From islands to a society</span></div>
-    <h2 class="r" style="--i:1">從「只為一個人而活」,<br>到一座<span class="cn" style="color:var(--cinnabar)">彼此相識</span>的社會</h2>
+    <div class="eyebrow r" style="--i:0">湧現 &nbsp;·&nbsp; <span class="zh">Emergent, not scripted</span></div>
+    <h2 class="r" style="--i:1">一座會自己<span class="cn" style="color:var(--cinnabar)">長出故事</span>的小社會</h2>
     <div class="three-grid r" style="--i:2;margin-top:1.7rem">
-      <div class="card"><h3 style="color:var(--mute)">今天的 AI 角色</h3><p>一對一陪聊。關掉對話就停住;角色之間互不相識,世界不會自己往前。</p></div>
-      <div class="card" style="border-left:3px solid var(--jade)"><h3 style="color:var(--jade)">Endless Story</h3><p>多個角色共處一個世界、彼此牽絆。沒人在看的時候,故事也自己推進。</p></div>
+      <div class="card" style="border-left:3px solid var(--gold)"><h3 style="color:var(--gold)">一座社會</h3><p>多個角色共處一個世界、彼此牽絆、互相影響,長成一座小社會。</p></div>
+      <div class="card" style="border-left:3px solid var(--jade)"><h3 style="color:var(--jade)">湧現的故事</h3><p>沒有編劇寫劇本。衝突、關係、轉折,從角色各自的慾望與記憶裡長出來。</p></div>
       <div class="card" style="border-left:3px solid var(--cinnabar)"><h3 style="color:var(--cinnabar)">你的視角</h3><p>挑任意一個喜歡的角色,從他的記憶與立場,看同一場戲的不同版本。</p></div>
     </div>
   </div>
@@ -198,6 +202,30 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
     </div>
     <div class="card r" style="--i:4;margin-top:1.2rem;border-left:3px solid var(--seal);max-width:84ch">
       <p><b class="cn" style="color:var(--seal)">Seal</b> 把每個角色的記憶<b class="c">按角色加密</b>:角色彼此讀不到對方的私密記憶。owner 永遠能解;saga 說書人持有 per-character、綁 epoch 的 ControlCap,owner 一撤銷就切斷存取 —— <b class="c">託管真實且可收回。</b></p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 3b · ONE DATASET, N USES ===================== -->
+<section class="slide" id="sData">
+  <div class="slide-inner">
+    <div class="eyebrow r" style="--i:0">一份資料,N 種用途 &nbsp;·&nbsp; <span class="zh">One dataset, many uses</span></div>
+    <h2 class="r" style="--i:1">同一份底層資料,<span class="cn" style="color:var(--cinnabar)">換個視角就是新作品</span></h2>
+    <div class="duo r" style="--i:2;margin-top:1.15rem">
+      <div style="display:flex;flex-direction:column;gap:.85rem;justify-content:center">
+        <div class="card" style="border-left:3px solid var(--cinnabar)">
+          <h3 style="font-size:1.06rem">一份資料</h3>
+          <p style="margin-top:.55rem;color:var(--ink)"><b class="c">鏈上事件</b> · 客觀歷史<br><span style="color:var(--mute);font-size:.86rem">誰、在哪、做了什麼(不可竄改)</span></p>
+          <p style="margin-top:.45rem;color:var(--ink)"><b class="j">角色記憶</b> · 主觀 · Seal 加密<br><span style="color:var(--mute);font-size:.86rem">同一件事,各角色記得不一樣</span></p>
+        </div>
+        <p style="color:var(--mute);font-size:.96rem;line-height:1.55">復用同一份資料、換個視角或媒介,就是一個新作品。<b class="j">多生一個角色的視角,邊際成本極低。</b></p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:.7rem">
+        <figure class="shot"><img src="assets/use-gazette.png" alt="" onerror="this.style.display='none'"><figcaption>📰 公報 · 客觀敘述</figcaption></figure>
+        <figure class="shot"><img src="assets/use-profile.png" alt="" onerror="this.style.display='none'"><figcaption>📖 角色頁 · 主觀視角</figcaption></figure>
+        <figure class="shot"><img src="assets/use-roster.png" alt="" onerror="this.style.display='none'"><figcaption>🗂 名冊 · 班底</figcaption></figure>
+        <figure class="shot"><img src="assets/use-video.png" alt="" onerror="this.style.display='none'"><figcaption>🎬 漫劇影片</figcaption></figure>
+      </div>
     </div>
   </div>
 </section>
@@ -285,10 +313,10 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <!-- Event -->
         <g><rect x="316" y="298" width="168" height="48" rx="9" fill="var(--surface)" stroke="var(--seal)" stroke-width="1.6"/>
           <text x="400" y="320" text-anchor="middle" font-size="14" fill="var(--ink)" font-weight="700">Event</text>
-          <text x="400" y="336" text-anchor="middle" font-size="10" fill="var(--mute)">客觀歷史 · OPEN→RESOLVED</text></g>
+          <text x="400" y="336" text-anchor="middle" font-size="9" fill="var(--mute)">客觀歷史 · OPEN→RESOLVED</text></g>
 
         <!-- 參與 label -->
-        <text x="516" y="250" text-anchor="middle" font-size="10.5" fill="var(--cinnabar)" font-weight="600">參與 · 提交行動</text>
+        <text x="470" y="264" text-anchor="end" font-size="10" fill="var(--cinnabar)" font-weight="600">參與 · 提交行動</text>
 
         <!-- Character -->
         <g><rect x="596" y="80" width="344" height="80" rx="12" fill="var(--surface)" stroke="var(--jade)" stroke-width="2"/>
@@ -311,11 +339,11 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
         <!-- Memory -->
         <g><rect x="596" y="328" width="344" height="58" rx="12" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.8" stroke-dasharray="7 5"/>
           <text x="768" y="353" text-anchor="middle" font-size="15" fill="var(--ink)" font-weight="700">記憶 @ Walrus</text>
-          <text x="768" y="372" text-anchor="middle" font-size="10.5" fill="var(--mute)">off-chain · 每角加密 · 可續租永存</text></g>
+          <text x="768" y="372" text-anchor="middle" font-size="9" fill="var(--mute)">off-chain · 每角加密 · 按 epoch 續租</text></g>
 
         <!-- cap notes -->
-        <text x="612" y="250" font-size="10" fill="var(--mute)">永遠可解(唯讀審計)</text>
-        <text x="928" y="250" text-anchor="end" font-size="10" fill="var(--mute)">綁 epoch · 撤銷即斷</text>
+        <text x="680" y="248" text-anchor="middle" font-size="9.5" fill="var(--mute)">永遠可解 · 唯讀</text>
+        <text x="856" y="248" text-anchor="middle" font-size="9.5" fill="var(--mute)">綁 epoch · 可撤銷</text>
       </svg>
     </div>
   </div>
@@ -334,15 +362,56 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
   </div>
 </section>
 
-<!-- ===================== 7 · ECONOMY ===================== -->
+<!-- ===================== 7 · SURVIVAL METABOLISM ===================== -->
 <section class="slide" id="s7">
   <div class="slide-inner">
-    <div class="eyebrow r" style="--i:0">經濟循環 &nbsp;·&nbsp; <span class="zh">Owned IP · revenue by contract</span></div>
-    <h2 class="r" style="--i:1">收入結算,由<span class="cn" style="color:var(--cinnabar)">合約</span>定義,而非平台</h2>
-    <div class="three-grid r" style="--i:2;margin-top:1.6rem">
-      <div class="card"><h3>認領角色</h3><p>抽卡得到角色,交給該 saga 的說書人運行。角色是可擁有、可演化的鏈上資產。</p></div>
-      <div class="card"><h3>消費觀眾</h3><p>訂閱、追看、購買角色的章回、影片、周邊。不必懂 Web3,也能看戲。</p></div>
-      <div class="card" style="border-left:3px solid var(--gold)"><h3>分潤回流</h3><p>IP 收入按合約規則結算,用來支付角色的運行費 —— 戲愈有人看,角色活得愈久。</p></div>
+    <div class="eyebrow r" style="--i:0">生存代謝 &nbsp;·&nbsp; <span class="zh">A character pays its own way</span></div>
+    <h2 class="r" style="--i:1">角色得<span class="cn" style="color:var(--cinnabar)">自己養活自己</span></h2>
+    <p class="sub r" style="--i:2;margin-top:.85rem;max-width:84ch">活著要花錢:<b class="j">記憶租金(Walrus 儲存)</b>＋<b class="j">算力(LLM 推論)</b>,都由角色自己承擔。收益統一進 <b class="c">Saga 金庫</b>,再依<b class="c">鏈上協議分配</b>回各角色。入不敷出,角色就衰亡 —— 而死亡讓位給新世代。</p>
+    <div class="diagram r" style="--i:3;height:45vh;min-height:300px;margin-top:.85rem">
+      <div class="cap">收益 → Saga 金庫 →(鏈上分配)→ 角色錢包 → 支出:Walrus + 算力</div>
+      <svg viewBox="0 0 1000 400" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="am" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--mute)"/></marker>
+          <marker id="amg" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6 Z" fill="var(--jade)"/></marker>
+        </defs>
+        <!-- return arc: alive -> produces -> income -->
+        <path class="draw" pathLength="1" style="--i:5" d="M865,116 C865,46 700,36 500,36 C300,36 150,46 150,134" fill="none" stroke="var(--jade)" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#amg)"/>
+        <text x="500" y="26" text-anchor="middle" font-size="11" fill="var(--jade)" font-weight="600">活著 → 行動 → 產出內容 → 帶來收益</text>
+        <!-- income -->
+        <g class="appear" style="--i:0"><rect x="60" y="134" width="176" height="64" rx="11" fill="var(--surface)" stroke="var(--gold)" stroke-width="1.8"/>
+          <text x="148" y="162" text-anchor="middle" font-size="14.5" fill="var(--ink)" font-weight="700">收益</text>
+          <text x="148" y="182" text-anchor="middle" font-size="10.5" fill="var(--mute)">訂閱 · 周邊 · 章回/影片</text></g>
+        <!-- saga treasury -->
+        <g class="appear" style="--i:1"><rect x="300" y="134" width="176" height="64" rx="11" fill="var(--surface)" stroke="var(--cinnabar)" stroke-width="1.8"/>
+          <text x="388" y="162" text-anchor="middle" font-size="14.5" fill="var(--ink)" font-weight="700">Saga 金庫</text>
+          <text x="388" y="182" text-anchor="middle" font-size="10.5" fill="var(--mute)">收益統一入帳</text></g>
+        <!-- character wallet -->
+        <g class="appear" style="--i:2"><rect x="540" y="134" width="176" height="64" rx="11" fill="var(--surface)" stroke="var(--jade)" stroke-width="1.8"/>
+          <text x="628" y="162" text-anchor="middle" font-size="14.5" fill="var(--ink)" font-weight="700">角色錢包</text>
+          <text x="628" y="182" text-anchor="middle" font-size="10.5" fill="var(--mute)">每角色鏈上 Balance</text></g>
+        <!-- costs -->
+        <g class="appear" style="--i:3"><rect x="780" y="116" width="172" height="42" rx="10" fill="rgba(92,125,96,.08)" stroke="var(--jade)" stroke-width="1.5"/>
+          <text x="866" y="135" text-anchor="middle" font-size="12.5" fill="var(--ink)" font-weight="700">🌊 記憶租金</text>
+          <text x="866" y="150" text-anchor="middle" font-size="9.5" fill="var(--mute)">Walrus 儲存 · 按 epoch</text></g>
+        <g class="appear" style="--i:3"><rect x="780" y="172" width="172" height="42" rx="10" fill="rgba(92,125,96,.08)" stroke="var(--jade)" stroke-width="1.5"/>
+          <text x="866" y="191" text-anchor="middle" font-size="12.5" fill="var(--ink)" font-weight="700">⚙ 算力</text>
+          <text x="866" y="206" text-anchor="middle" font-size="9.5" fill="var(--mute)">LLM 推論 · 每 tick</text></g>
+        <!-- row arrows -->
+        <g stroke="var(--mute)" stroke-width="1.7" fill="none" marker-end="url(#am)">
+          <path class="draw" pathLength="1" style="--i:0" d="M236,166 L298,166"/>
+          <path class="draw" pathLength="1" style="--i:1" d="M476,166 L538,166"/>
+          <path class="draw" pathLength="1" style="--i:2" d="M716,152 L778,138"/>
+          <path class="draw" pathLength="1" style="--i:2" d="M716,180 L778,192"/>
+        </g>
+        <text x="507" y="152" text-anchor="middle" font-size="9.5" fill="var(--cinnabar)" font-weight="600">鏈上分配</text>
+        <text x="507" y="216" text-anchor="middle" font-size="9" fill="var(--mute)">(協議設計中)</text>
+        <!-- death branch -->
+        <path class="draw" pathLength="1" style="--i:4" d="M628,198 L628,296" fill="none" stroke="var(--seal)" stroke-width="1.6" stroke-dasharray="5 5" marker-end="url(#am)"/>
+        <g class="appear" style="--i:4"><rect x="466" y="296" width="324" height="54" rx="11" fill="rgba(154,58,41,.06)" stroke="var(--seal)" stroke-width="1.6"/>
+          <text x="628" y="320" text-anchor="middle" font-size="13.5" fill="var(--seal)" font-weight="700">錢包見底 → 衰亡 → 世代更替</text>
+          <text x="628" y="338" text-anchor="middle" font-size="10" fill="var(--mute)">死亡是真的稀缺,讓位給新角色</text></g>
+      </svg>
     </div>
   </div>
 </section>
@@ -355,13 +424,19 @@ body.qa .r,body.qa .draw,body.qa .appear{opacity:1!important;transform:none!impo
     <img class="r logo-img" src="assets/logo.png" alt="無盡敘界" width="72" height="72" style="--i:0;margin:0 auto .5rem">
     <div class="eyebrow r" style="--i:1;justify-content:center;display:flex">為什麼這重要 &nbsp;·&nbsp; Endless Story</div>
     <h2 class="r" style="--i:2;font-size:clamp(1.7rem,3.6vw,2.6rem)">自治 agent 的記憶層,<br>也是一種新的<span class="cn" style="color:var(--cinnabar)">大眾娛樂</span></h2>
-    <p class="sub r" style="--i:3;margin:1.2rem auto 0;text-align:center">記憶在 Walrus 上<b class="c">持久、可驗證、可被擁有</b>;連載故事 IP 與角色,有機會走出 Web3 圈、觸及更廣的觀眾。<b class="j">春雪社,是我們把兩者結合的第一個嘗試。</b></p>
+    <p class="sub r" style="--i:3;margin:1.2rem auto 0;text-align:center">記憶在 Walrus 上<b class="c">持久、可被擁有、可帶走</b>;連載故事 IP 與角色,有機會走出 Web3 圈、觸及更廣的觀眾。<b class="j">春雪社,是我們把兩者結合的第一個嘗試。</b></p>
     <div class="r" style="--i:4;margin-top:1.5rem;display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">
-      <span class="tag" style="color:var(--jade)">✓ 合約 122 tests 綠燈</span>
-      <span class="tag" style="color:var(--jade)">✓ 三因子記憶 · 關係 · 注夢已上鏈</span>
-      <span class="tag" style="color:var(--jade)">✓ 抽卡全流程跑通</span>
+      <span class="tag" style="border-color:var(--cinnabar);color:var(--cinnabar)">Roadmap →</span>
+      <span class="tag">多視角連載章回</span>
+      <span class="tag">漫劇影片產線</span>
+      <span class="tag">生存經濟:收益 → 鏈上分配</span>
     </div>
-    <div class="r" style="--i:5;margin-top:1.4rem;color:#7c6a45;font-family:var(--mono);font-size:.86rem">謝謝聆聽 · 歡迎來春雪社走走</div>
+    <div class="r" style="--i:5;margin-top:1.2rem;display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap">
+      <a class="tag" href="https://spring-snow.231labs.xyz" style="text-decoration:none">🌊 Live demo</a>
+      <a class="tag" href="https://youtu.be/znYNlveAqDs" style="text-decoration:none;color:var(--cinnabar)">▶ Demo 影片</a>
+      <a class="tag" href="https://231-labs.github.io/endless-story/#/overview" style="text-decoration:none">📖 設計文檔</a>
+    </div>
+    <div class="r" style="--i:6;margin-top:1.1rem;color:#7c6a45;font-family:var(--mono);font-size:.86rem">謝謝聆聽 · 歡迎來春雪社走走</div>
   </div>
 </section>
 

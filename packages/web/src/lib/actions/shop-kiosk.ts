@@ -10,8 +10,9 @@ import { Transaction } from '@mysten/sui/transactions';
 import {
   ENDLESS_STORY_DEPLOYMENT,
   tx as endlessTx,
+  findCreatedObjectId,
 } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 import {
   getShopChainStatus,
   shopKioskIds,
@@ -35,11 +36,6 @@ export type PrepareStillPurchaseResult =
 
 export async function getShopChainStatusAction() {
   return getShopChainStatus();
-}
-
-function stillType(): string {
-  const pkg = ENDLESS_STORY_DEPLOYMENT.latestPackageId || ENDLESS_STORY_DEPLOYMENT.packageId;
-  return `${pkg}::still::Still`;
 }
 
 /** Admin PTB: optional edition cap → mint → place + list on 戲坊 Kiosk. */
@@ -69,7 +65,7 @@ export async function prepareStillPurchase(
   }
 
   const kiosk = shopKioskIds()!;
-  const { client, signer } = getAdminContext();
+  const admin = getAdminContext();
   const cap = ENDLESS_STORY_DEPLOYMENT.storytellerCapId;
   const saga = ENDLESS_STORY_DEPLOYMENT.sagaId;
   const registry = ENDLESS_STORY_DEPLOYMENT.stillRegistryId;
@@ -110,36 +106,24 @@ export async function prepareStillPurchase(
       priceMist,
     });
 
-    const res = await client.signAndExecuteTransaction({
-      signer,
-      transaction: tx,
-      options: { showObjectChanges: true, showEffects: true },
-    });
+    const res = await execAdminTx(admin, tx);
 
-    const full = await client.waitForTransaction({
-      digest: res.digest,
-      options: { showObjectChanges: true, showEffects: true },
-    });
-
-    if (full.effects?.status?.status !== 'success') {
-      const err = full.effects?.status?.error ?? '鑄造上架失敗';
+    if (!res.success) {
+      const err = res.error ?? '鑄造上架失敗';
       if (/EEditionSoldOut|edition sold out/i.test(err)) {
         return { ok: false, error: '首演原件已售出', soldOut: true };
       }
       return { ok: false, error: err };
     }
 
-    const type = stillType();
-    const created = (full.objectChanges ?? []).find(
-      (c) => c.type === 'created' && 'objectType' in c && c.objectType === type,
-    );
-    if (!created || !('objectId' in created)) {
+    const stillId = findCreatedObjectId(res, '::still::Still');
+    if (!stillId) {
       return { ok: false, error: '劇照物件未找到（mint 輸出解析失敗）' };
     }
 
     const listing: StillListingRef = {
       kioskId: kiosk.kioskId,
-      stillId: created.objectId,
+      stillId,
       priceMist: priceMist.toString(),
       transferPolicyId,
       title: ware.title,

@@ -9,10 +9,11 @@
  *
  * All `tx/<module>.ts` wrappers call `pkg()` to inject this override.
  */
-import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/shared/contract-ids';
+import { getDeployment } from '../runtime-deployment.js';
 
 export function pkg(override?: string): string {
-  const id = override ?? ENDLESS_STORY_DEPLOYMENT.latestPackageId ?? ENDLESS_STORY_DEPLOYMENT.packageId;
+  const d = getDeployment();
+  const id = override ?? d.latestPackageId ?? d.packageId;
   if (!id) {
     throw new Error(
       '@endless-story/sdk: package not deployed — ' +

@@ -31,3 +31,9 @@ export * as director from './director.js';
 export * as resource from './resource.js';
 export * as still from './still.js';
 export * as chamber from './chamber.js';
+export * as kiosk from './kiosk.js';
+
+// Event reads go through the durable store (or the GraphQL fallback) rather than
+// the client directly — gRPC has no `queryEvents`. Exposed for callers outside
+// the read modules (e.g. the runner event bus).
+export { queryEventsWithRetry } from './query-retry.js';

@@ -2,7 +2,7 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 export interface UpdateCharacterProfileDescriptionInput {
     characterId: string;
@@ -42,17 +42,12 @@ export async function updateCharacterProfileDescriptionAction(
                 newDescription: description,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
             return {
                 ok: false,
                 digest: res.digest,
-                error: res.effects?.status?.error ?? '交易失敗',
+                error: res.error ?? '交易失敗',
             };
         }
         return { ok: true, digest: res.digest };

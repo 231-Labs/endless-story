@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
 import type { Recruitment } from '@endless-story/shared';
-import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
+import {
+  ENDLESS_STORY_DEPLOYMENT,
+  findCreatedObjectId,
+  normalizeTxResult,
+  tx as endlessTx,
+} from '@endless-story/sdk';
 import { generateAttributeSeed, rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
 import { DEFAULT_ATTRIBUTE_SCHEMA } from '@/lib/config/attribute-schema';
@@ -47,8 +52,8 @@ export function RecruitmentTicket({
 }) {
   const router = useRouter();
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dappKit = useDAppKit();
   const packageId = ENDLESS_STORY_DEPLOYMENT.packageId;
   const sagaId = ENDLESS_STORY_DEPLOYMENT.sagaId;
 
@@ -156,8 +161,8 @@ export function RecruitmentTicket({
     for (let attempt = 1; attempt <= MINT_RETRIES; attempt++) {
       try {
         const coinType = `${packageId}::currency::CURRENCY`;
-        const coins = await suiClient.getCoins({ owner: account.address, coinType, limit: 50 });
-        if (!coins.data || coins.data.length === 0) {
+        const coins = await client.core.listCoins({ owner: account.address, coinType, limit: 50 });
+        if (!coins.objects || coins.objects.length === 0) {
           throw new Error('沒有 ENDLESS 幣 — 請先用右上「領 ENDLESS」');
         }
         const unitPrice =
@@ -165,7 +170,7 @@ export function RecruitmentTicket({
         const priceBase = BigInt(unitPrice) * BigInt(10 ** ENDLESS_DECIMALS);
 
         const tx = new Transaction();
-        const coinIds = coins.data.map((c) => c.coinObjectId);
+        const coinIds = coins.objects.map((c) => c.objectId);
         const primary = tx.object(coinIds[0]);
         if (coinIds.length > 1) {
           tx.mergeCoins(primary, coinIds.slice(1).map((id) => tx.object(id)));
@@ -202,22 +207,21 @@ export function RecruitmentTicket({
         );
         tx.transferObjects([voucherObj], account.address);
 
-        const res = await signAndExecute({ transaction: tx });
-        const full = await suiClient.waitForTransaction({
-          digest: res.digest,
-          options: { showObjectChanges: true, showEffects: true },
-        });
-        if (full.effects?.status?.status !== 'success') {
-          throw new Error(full.effects?.status?.error ?? '交易失敗');
+        const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+        if (!res.success) {
+          throw new Error(res.error ?? '交易失敗');
         }
-        const voucherType = `${packageId}::recruit::GenesisVoucher`;
-        const created = (full.objectChanges ?? []).find(
-          (c) => c.type === 'created' && 'objectType' in c && c.objectType === voucherType,
+        const full = normalizeTxResult(
+          await client.waitForTransaction({
+            digest: res.digest,
+            include: { effects: true, objectTypes: true, events: true },
+          }),
         );
-        if (!created || !('objectId' in created)) {
+        const createdId = findCreatedObjectId(full, '::recruit::GenesisVoucher');
+        if (!createdId) {
           throw new Error('voucher 物件未找到');
         }
-        mintedVoucherId = created.objectId;
+        mintedVoucherId = createdId;
         break; // success
       } catch (err) {
         lastMintErr = err;
@@ -362,22 +366,23 @@ export function RecruitmentTicket({
       if (!intentId) {
         const consentTx = new Transaction();
         consentTx.add(endlessTx.recruit.requestRedeemVoucher({ voucher: voucherId }));
-        const consentRes = await signAndExecute({ transaction: consentTx });
-        const consentFull = await suiClient.waitForTransaction({
-          digest: consentRes.digest,
-          options: { showObjectChanges: true, showEffects: true },
-        });
-        if (consentFull.effects?.status?.status !== 'success') {
-          throw new Error(consentFull.effects?.status?.error ?? '建立入班同意失敗');
-        }
-        const intentType = `${packageId}::recruit::RedeemIntent`;
-        const intent = (consentFull.objectChanges ?? []).find(
-          (c) => c.type === 'created' && 'objectType' in c && c.objectType === intentType,
+        const consentRes = normalizeTxResult(
+          await dappKit.signAndExecuteTransaction({ transaction: consentTx }),
         );
-        if (!intent || !('objectId' in intent)) {
+        if (!consentRes.success) {
+          throw new Error(consentRes.error ?? '建立入班同意失敗');
+        }
+        const consentFull = normalizeTxResult(
+          await client.waitForTransaction({
+            digest: consentRes.digest,
+            include: { effects: true, objectTypes: true, events: true },
+          }),
+        );
+        const intentIdCreated = findCreatedObjectId(consentFull, '::recruit::RedeemIntent');
+        if (!intentIdCreated) {
           throw new Error('RedeemIntent 物件未找到');
         }
-        intentId = intent.objectId;
+        intentId = intentIdCreated;
         setRedeemIntentId(intentId);
       }
       const r = await redeemVoucher({

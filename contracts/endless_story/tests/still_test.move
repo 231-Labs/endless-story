@@ -3,9 +3,10 @@
 #[test_only]
 module endless_story::still_test;
 
-use std::unit_test::assert_eq;
+use std::unit_test::{assert_eq, destroy};
 use endless_story::world::{Self, Location};
-use endless_story::saga::{Saga, StorytellerCap, kind_standard, new_saga_for_testing, destroy_saga_for_testing};
+use endless_story::saga::{Self, Saga, StorytellerCap, kind_standard, new_saga_for_testing, destroy_saga_for_testing};
+use endless_story::currency;
 use endless_story::still;
 use endless_story::world::{World, AdminCap};
 
@@ -94,6 +95,61 @@ fun editions_autoincrement_per_moment() {
     still::destroy_still_for_testing(s2);
     still::destroy_still_for_testing(s3);
     still::destroy_registry_for_testing(registry);
+    teardown(world, admin_cap, loc, saga, cap, clock);
+}
+
+#[test]
+fun paid_mint_charges_fee_into_treasury() {
+    let mut ctx = sui::tx_context::dummy();
+    let (world, admin_cap, loc, mut saga, cap, clock) = fixture(&mut ctx);
+    let mut registry = still::new_registry_for_testing(&saga, &mut ctx);
+    let config = still::new_mint_config_for_testing(&saga, 1_000_000, &mut ctx);
+    let character_id = fake_id(&mut ctx);
+
+    let mut tcap = currency::new_treasury_for_testing(&mut ctx);
+    // Overpay (1.5 ENDLESS for a 1 ENDLESS fee) — the full coin flows to treasury.
+    let payment = sui::coin::mint(&mut tcap, 1_500_000, &mut ctx);
+
+    let before = saga::treasury_balance(&saga);
+    let s = still::mint_still_paid(
+        &config, &mut saga, &mut registry, payment, character_id,
+        b"blobA".to_string(), b"https://agg/blobA".to_string(), b"水袖那一夜".to_string(),
+        &mut ctx,
+    );
+    assert_eq!(still::edition(&s), 1);
+    assert_eq!(still::minted_count(&registry, b"blobA".to_string()), 1);
+    assert_eq!(saga::treasury_balance(&saga), before + 1_500_000);
+
+    still::destroy_still_for_testing(s);
+    still::destroy_mint_config_for_testing(config);
+    still::destroy_registry_for_testing(registry);
+    destroy(tcap);
+    teardown(world, admin_cap, loc, saga, cap, clock);
+}
+
+#[test, expected_failure(abort_code = still::EInsufficientPayment)]
+fun paid_mint_rejects_underpayment() {
+    let mut ctx = sui::tx_context::dummy();
+    let (world, admin_cap, loc, mut saga, cap, clock) = fixture(&mut ctx);
+    let mut registry = still::new_registry_for_testing(&saga, &mut ctx);
+    let config = still::new_mint_config_for_testing(&saga, 1_000_000, &mut ctx);
+    let character_id = fake_id(&mut ctx);
+
+    let mut tcap = currency::new_treasury_for_testing(&mut ctx);
+    // One base unit short of the fee → aborts EInsufficientPayment.
+    let payment = sui::coin::mint(&mut tcap, 999_999, &mut ctx);
+
+    let s = still::mint_still_paid(
+        &config, &mut saga, &mut registry, payment, character_id,
+        b"blobA".to_string(), b"https://agg/blobA".to_string(), b"水袖那一夜".to_string(),
+        &mut ctx,
+    );
+
+    // unreachable cleanup (abort above); satisfies the type checker
+    still::destroy_still_for_testing(s);
+    still::destroy_mint_config_for_testing(config);
+    still::destroy_registry_for_testing(registry);
+    destroy(tcap);
     teardown(world, admin_cap, loc, saga, cap, clock);
 }
 

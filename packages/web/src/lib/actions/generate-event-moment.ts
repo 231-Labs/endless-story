@@ -19,7 +19,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read, tx as endlessTx } from '@endless-story/sdk';
 import { createImageClient } from '@endless-story/llm/image';
 import { blob } from '@endless-story/memwal';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { eventMomentPrompt } from '@/lib/image-prompts';
@@ -126,7 +126,7 @@ export async function generateEventMomentAction(input: EventMomentInput): Promis
     let url: string;
     let blobId: string;
     try {
-        const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+        const put = await blob.putBlob(bytes, { network: 'testnet', contentType: 'image/png', epochs: 30 });
         url = put.url;
         blobId = put.blobId;
     } catch (err) {
@@ -165,14 +165,9 @@ export async function generateEventMomentAction(input: EventMomentInput): Promis
                     asset,
                 }),
             );
-            const txr = await admin.client.signAndExecuteTransaction({
-                transaction: txb,
-                signer: admin.signer,
-                options: { showEffects: true },
-            });
-            await admin.client.waitForTransaction({ digest: txr.digest }).catch(() => {});
-            if (txr.effects?.status?.status === 'success') appended += 1;
-            else console.warn(`[event-moment] append failed for ${r.id}:`, txr.effects?.status?.error);
+            const txr = await execAdminTx(admin, txb);
+            if (txr.success) appended += 1;
+            else console.warn(`[event-moment] append failed for ${r.id}:`, txr.error);
         } catch (err) {
             console.warn(`[event-moment] anchor failed for ${r.id}:`, err instanceof Error ? err.message : err);
         }

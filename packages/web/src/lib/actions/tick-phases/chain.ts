@@ -2,7 +2,7 @@
 // Plain module (not 'use server').
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read } from '@endless-story/sdk';
-import type { AdminContext } from '@/lib/chain/admin-signer';
+import { execAdminTx, type AdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 
 /**
@@ -17,14 +17,9 @@ export async function trySend(
     try {
         const txb = new Transaction();
         build(txb);
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: txb,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        const ok = res.effects?.status?.status === 'success';
-        await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
-        return { ok, digest: res.digest, error: ok ? undefined : res.effects?.status?.error };
+        const res = await execAdminTx(admin, txb);
+        const ok = res.success;
+        return { ok, digest: res.digest, error: ok ? undefined : (res.error ?? undefined) };
     } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

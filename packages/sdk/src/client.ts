@@ -7,37 +7,48 @@
  * subpath. That keeps Next.js client bundles from pulling in `node:fs`
  * when they only need a SuiClient.
  *
- * Uses `SuiJsonRpcClient` from `@mysten/sui/jsonRpc` (v2.17+ renamed
- * from the old `SuiClient`). Web code in browser contexts should pass
- * an externally-provided client (e.g. from dapp-kit's `useSuiClient`)
- * via the optional `client` arg on builders, rather than calling
- * `makeSuiClient` directly.
+ * Uses `SuiGrpcClient` from `@mysten/sui/grpc`. The Sui JSON-RPC API is being
+ * decommissioned (testnet the week of 2026-07-06, full deactivation 2026-07-31),
+ * so reads/writes go over gRPC via the transport-agnostic Core API
+ * (`client.core.*`). Object/tx/coin/balance/dynamic-field reads and tx execution
+ * all speak gRPC; the one thing gRPC does not cover — event filtering
+ * (`queryEvents`) — is served by the durable event store (see
+ * `@endless-story/indexer`), whose feeder now polls GraphQL.
+ *
+ * Web code in browser contexts should pass an externally-provided client (e.g.
+ * from dapp-kit's `useSuiClient`) via the optional `client` arg on builders,
+ * rather than calling `makeSuiClient` directly.
  */
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
 import type { SuiNetwork } from '@endless-story/shared/contract-ids';
+import { resilientFetch } from './resilient-fetch.js';
 
-export type SuiClient = SuiJsonRpcClient;
+export type SuiClient = SuiGrpcClient;
 
 export interface MakeClientOptions {
   /** Defaults to 'devnet'. */
   network?: SuiNetwork;
-  /** Override fullnode URL (e.g. for localnet or custom RPC). */
+  /** Override the gRPC base URL (e.g. for localnet or a dedicated node). */
   url?: string;
 }
 
-/** Server-side private RPC override. The public testnet fullnode rate-limits
- *  (429) hard under a tick's fan-out of reads; set SUI_RPC_URL to a dedicated
- *  node. Browser bundles never see it (non-NEXT_PUBLIC ⇒ undefined there). */
-function envRpcUrl(): string | undefined {
-  const v = typeof process !== 'undefined' ? process.env?.SUI_RPC_URL : undefined;
+/** Server-side private endpoint override. The public testnet fullnode
+ *  rate-limits (429) under a tick's fan-out of reads; set SUI_GRPC_URL (or the
+ *  legacy SUI_RPC_URL — both name the same fullnode host, which serves gRPC on
+ *  :443) to a dedicated node. Browser bundles never see it (non-NEXT_PUBLIC ⇒
+ *  undefined there). */
+function envGrpcUrl(): string | undefined {
+  const env = typeof process !== 'undefined' ? process.env : undefined;
+  const v = env?.SUI_GRPC_URL ?? env?.SUI_RPC_URL;
   return v && v.trim() ? v.trim() : undefined;
 }
 
 /** Harness seam (test-only): when set, EVERY `makeSuiClient` call returns this
- *  factory's client instead of a real JSON-RPC one. Installed by the full-tick
- *  harness (`__setHarnessClientFactory`) so the decoupled, zero-network fake
- *  intercepts both web and runner clients (all of them import this one factory).
- *  Null in production ⇒ zero behavioural change. */
+ *  factory's client instead of a real one. Installed by the full-tick harness
+ *  (`__setHarnessClientFactory`) so the decoupled, zero-network fake intercepts
+ *  both web and runner clients (all of them import this one factory). Null in
+ *  production ⇒ zero behavioural change. */
 let _harnessFactory: ((opts: MakeClientOptions) => SuiClient) | null = null;
 
 /** Install (or clear, with `null`) the harness client factory. Test-only. */
@@ -47,10 +58,14 @@ export function __setHarnessClientFactory(
   _harnessFactory = fn;
 }
 
-/** Construct a Sui client pinned to a given network. Node / cli usage. */
+/** Construct a Sui gRPC client pinned to a given network. Node / cli usage.
+ *  The fullnode host is the same one JSON-RPC used, so `getJsonRpcFullnodeUrl`
+ *  still yields the correct base URL (it serves gRPC-web on :443).
+ *  `resilientFetch` wraps the transport for 429/5xx retry; it only special-cases
+ *  JSON-RPC bodies, so for gRPC's binary bodies it is a plain retrying fetch. */
 export function makeSuiClient(opts: MakeClientOptions = {}): SuiClient {
   if (_harnessFactory) return _harnessFactory(opts);
   const network = opts.network ?? 'devnet';
-  const url = opts.url ?? envRpcUrl() ?? getJsonRpcFullnodeUrl(network);
-  return new SuiJsonRpcClient({ url, network });
+  const baseUrl = opts.url ?? envGrpcUrl() ?? getJsonRpcFullnodeUrl(network);
+  return new SuiGrpcClient({ network, baseUrl, fetch: resilientFetch() });
 }

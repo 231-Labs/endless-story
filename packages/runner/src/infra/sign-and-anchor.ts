@@ -25,7 +25,10 @@ import type { Keypair } from '@mysten/sui/cryptography';
 import {
     ENDLESS_STORY_DEPLOYMENT,
     makeSuiClient,
+    signAndExecute,
+    findCreatedObjectId,
     tx as endlessTx,
+    type TxEvent,
 } from '@endless-story/sdk';
 import { blob as memwalBlob } from '@endless-story/memwal';
 import { resolveNetwork } from './network.js';
@@ -72,7 +75,7 @@ export async function signAndAnchor(input: SignAndAnchorInput): Promise<SignAndA
     // 2. Upload to Walrus.
     const put = await memwalBlob.putBlob(input.content, {
         network: input.walrusNetwork ?? 'testnet',
-        epochs: input.walrusEpochs ?? 5,
+        epochs: input.walrusEpochs ?? 30,
         contentType: input.contentType,
     });
 
@@ -89,15 +92,16 @@ export async function signAndAnchor(input: SignAndAnchorInput): Promise<SignAndA
             blobId: Array.from(new TextEncoder().encode(put.blobId)),
         }),
     );
-    const res = await client.signAndExecuteTransaction({
+    const res = await signAndExecute(client, {
         transaction: tx,
         signer: input.signer,
-        options: { showEffects: true, showObjectChanges: true },
+        waitForFinality: false,
     });
+    if (!res.success) {
+        throw new Error(`signAndAnchor: tx failed (${res.error ?? 'unknown'}) digest=${res.digest}`);
+    }
 
-    const commitmentId = findCreatedCommitmentId({
-        objectChanges: res.objectChanges ?? undefined,
-    });
+    const commitmentId = findCreatedObjectId(res, '::commitment::Commitment');
     if (!commitmentId) {
         throw new Error(
             `signAndAnchor: tx succeeded but no Commitment object found in changes (digest=${res.digest})`,
@@ -151,7 +155,7 @@ export async function signAndAnchorBatch(
             const hashBytes = sha256(it.content);
             const put = await memwalBlob.putBlob(it.content, {
                 network: opts.walrusNetwork ?? 'testnet',
-                epochs: opts.walrusEpochs ?? 5,
+                epochs: opts.walrusEpochs ?? 30,
                 contentType: it.contentType,
             });
             return {
@@ -178,11 +182,14 @@ export async function signAndAnchorBatch(
         );
     }
     const client = makeSuiClient({ network: resolveNetwork() });
-    const res = await client.signAndExecuteTransaction({
+    const res = await signAndExecute(client, {
         transaction: tx,
         signer: opts.signer,
-        options: { showEffects: true, showEvents: true },
+        waitForFinality: false,
     });
+    if (!res.success) {
+        throw new Error(`signAndAnchorBatch: tx failed (${res.error ?? 'unknown'}) digest=${res.digest}`);
+    }
 
     // 3. Map CommitmentCreated events (emitted in call order) → items.
     const commitmentIds = extractCommitmentIds(res.events ?? []);
@@ -195,17 +202,12 @@ export async function signAndAnchorBatch(
     }));
 }
 
-interface SuiEventLike {
-    type?: string;
-    parsedJson?: unknown;
-}
-
 /** Commitment ids from CommitmentCreated events, in emission (call) order. */
-function extractCommitmentIds(events: SuiEventLike[]): string[] {
+function extractCommitmentIds(events: TxEvent[]): string[] {
     const out: string[] = [];
     for (const ev of events) {
-        if (typeof ev.type === 'string' && ev.type.endsWith('::commitment::CommitmentCreated')) {
-            const id = (ev.parsedJson as { commitment_id?: string } | undefined)?.commitment_id;
+        if (ev.eventType.endsWith('::commitment::CommitmentCreated')) {
+            const id = (ev.json as { commitment_id?: string } | null)?.commitment_id;
             if (id) out.push(id);
         }
     }
@@ -230,20 +232,4 @@ function storytellerCapIdFromDeployment(): string {
     const cap = ENDLESS_STORY_DEPLOYMENT.storytellerCapId;
     if (!cap) throw new Error('signAndAnchor: storytellerCapId not set in contract-ids');
     return cap;
-}
-
-interface ObjectChangeLike {
-    type?: string;
-    objectType?: string;
-    objectId?: string;
-}
-
-function findCreatedCommitmentId(res: { objectChanges?: unknown[] }): string | null {
-    const changes = (res.objectChanges ?? []) as ObjectChangeLike[];
-    for (const c of changes) {
-        if (c.type === 'created' && typeof c.objectType === 'string' && c.objectType.endsWith('::commitment::Commitment')) {
-            return c.objectId ?? null;
-        }
-    }
-    return null;
 }

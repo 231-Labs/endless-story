@@ -9,8 +9,8 @@
  * therefore asks the operator to connect that same wallet.
  */
 
-import { useState } from 'react';
-import { ConnectModal, useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
+import { WalletConnectButton } from '@/components/common/WalletConnectButton';
 import { truncateAddress } from '@/lib/format';
 
 export function DeployAdminGuard({
@@ -23,7 +23,6 @@ export function DeployAdminGuard({
   children: React.ReactNode;
 }) {
   const account = useCurrentAccount();
-  const [connectOpen, setConnectOpen] = useState(false);
 
   if (!adminSignerAddress) {
     return (
@@ -62,19 +61,10 @@ export function DeployAdminGuard({
             這裡還不是檢查 StorytellerCap；StorytellerCap 會在 bootstrap 後才出現。
           </p>
         )}
-        <button
-          type="button"
-          onClick={() => setConnectOpen(true)}
-          className="mt-6 rounded-full bg-cinnabar/15 px-4 py-1.5 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/25"
-        >
-          {account ? '切換部署錢包' : '連結部署錢包'}
-        </button>
+        <div className="mt-6 flex justify-center">
+          <WalletConnectButton />
+        </div>
       </div>
-      <ConnectModal
-        trigger={<span style={{ display: 'none' }} />}
-        open={connectOpen}
-        onOpenChange={setConnectOpen}
-      />
     </>
   );
 }

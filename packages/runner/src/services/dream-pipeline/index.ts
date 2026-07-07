@@ -81,7 +81,7 @@ export async function prepareDream(input: PrepareDreamInput): Promise<PrepareDre
     try {
         put = await memwalBlob.putBlob(bytes, {
             network: 'testnet',
-            epochs: 5,
+            epochs: 30,
             contentType: 'text/plain; charset=utf-8',
         });
     } catch (err) {

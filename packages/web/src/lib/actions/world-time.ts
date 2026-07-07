@@ -15,10 +15,14 @@ import {
     read,
     tx as endlessTx,
 } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 const BP_DENOM = 10_000;
 const PARTS_OF_DAY = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
+/** The night buckets — when characters sleep / consolidate (REFLECT step). Kept beside
+ *  PARTS_OF_DAY so the night test stays anchored to the actual labels and can't drift
+ *  against an external literal. */
+const NIGHT_PARTS: ReadonlySet<string> = new Set(['入夜', '深宵']);
 
 export interface WorldTimeSnapshot {
     currentTick: number;
@@ -26,6 +30,11 @@ export interface WorldTimeSnapshot {
     ticksPerDay: number;
     day: number;
     partOfDay: string;
+    /** True when partOfDay is a night bucket (入夜 / 深宵) — the sleep/REFLECT window.
+     *  Derived here rather than compared by callers: the previous caller test
+     *  `partOfDay === 'night'` never matched the Chinese labels, silently disabling
+     *  the whole nightly consolidation step. */
+    isNight: boolean;
     tickOfDay: number;
 }
 
@@ -48,12 +57,14 @@ function deriveSnapshot(currentTick: number, daysPerTickBp: number): WorldTimeSn
         Math.floor((tickOfDay / perDay) * PARTS_OF_DAY.length),
         PARTS_OF_DAY.length - 1,
     );
+    const partOfDay = PARTS_OF_DAY[idx];
     return {
         currentTick,
         daysPerTickBp,
         ticksPerDay: perDay,
         day: Math.floor((currentTick * daysPerTickBp) / BP_DENOM) + 1,
-        partOfDay: PARTS_OF_DAY[idx],
+        partOfDay,
+        isNight: NIGHT_PARTS.has(partOfDay),
         tickOfDay,
     };
 }
@@ -102,26 +113,17 @@ export async function advanceTickAction(): Promise<AdvanceTickResult> {
                 world: d.worldId,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '交易失敗',
+                error: res.error ?? '交易失敗',
                 digest: res.digest,
             };
         }
-        // Wait for the fullnode to index the new tick before re-reading —
-        // otherwise read-after-write lag returns the OLD tick and the panel
-        // looks like it didn't advance until a manual reload.
-        try {
-            await admin.client.waitForTransaction({ digest: res.digest });
-        } catch {
-            // best-effort; snapshot read below may still lag, panel reload covers it
-        }
+        // execAdminTx waits for finality inside the admin lock, so the fullnode
+        // has indexed the new tick before we re-read — otherwise read-after-write
+        // lag returns the OLD tick and the panel looks like it didn't advance.
         const snapshot = await getWorldTimeSnapshot();
         return { ok: true, digest: res.digest, snapshot: snapshot ?? undefined };
     } catch (err) {

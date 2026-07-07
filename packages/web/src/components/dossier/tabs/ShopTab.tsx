@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
 import type { Character } from '@endless-story/shared';
-import { tx as endlessTx } from '@endless-story/sdk';
+import { normalizeTxResult, tx as endlessTx } from '@endless-story/sdk';
 import { BlobImage } from '@/components/common/BlobImage';
 import { KioskPriceTag } from '@/components/dossier/shop/KioskPriceTag';
 import {
@@ -34,8 +34,7 @@ const CurioPreview = dynamic(
 
 export function ShopTab({ character }: { character: Character }) {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const dappKit = useDAppKit();
   const chamberHref = account ? `/chamber?id=${account.address}` : null;
   const wares = useMemo(() => shopWaresFor(character), [character]);
   const [acquired, setAcquired] = useState<AcquiredMap>({});
@@ -100,13 +99,9 @@ export function ShopTab({ character }: { character: Character }) {
         });
         tx.transferObjects([still], account.address);
 
-        const res = await signAndExecute({ transaction: tx });
-        const full = await suiClient.waitForTransaction({
-          digest: res.digest,
-          options: { showEffects: true },
-        });
-        if (full.effects?.status?.status !== 'success') {
-          throw new Error(full.effects?.status?.error ?? 'Kiosk 購買失敗');
+        const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+        if (!res.success) {
+          throw new Error(res.error ?? 'Kiosk 購買失敗');
         }
 
         // Mirror into local vault inventory for immediate 藏閣 display.
@@ -117,7 +112,7 @@ export function ShopTab({ character }: { character: Character }) {
         setBuyingKey(null);
       }
     },
-    [account, character.id, buyLocal, signAndExecute, suiClient],
+    [account, character.id, buyLocal, dappKit],
   );
 
   const curios = wares.filter((w) => w.kind === 'curio');

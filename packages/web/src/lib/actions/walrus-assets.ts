@@ -55,6 +55,20 @@ export interface ActionResult {
   error?: string;
 }
 
+// Result of a manual auto-renewal sweep (POST /api/assets/renew-due). Arrays from the
+// service are flattened to counts for the admin toast.
+export interface RenewSweepResult {
+  ok: boolean;
+  configured: boolean;
+  note?: string;
+  walletBlocked?: boolean;
+  dueCount?: number;
+  renewedCount?: number;
+  failedCount?: number;
+  skippedCount?: number;
+  error?: string;
+}
+
 function assetBase(): string {
   return (process.env.ASSET_SERVICE_URL ?? '').trim().replace(/\/$/, '');
 }
@@ -68,6 +82,9 @@ function assetHeaders(json = false): Record<string, string> {
 }
 
 const TIMEOUT = 15_000;
+// A sweep does on-chain `walrus extend` calls; give it more room than a plain read.
+// Big backlogs should rely on the service's own interval sweeper, not this button.
+const RENEW_TIMEOUT = 120_000;
 
 export async function listAssetsAction(category?: AssetCategory): Promise<AssetListState> {
   const base = assetBase();
@@ -108,6 +125,44 @@ export async function extendAssetAction(id: string, epochs: number): Promise<Act
   return mutate(`/api/assets/${encodeURIComponent(id)}/extend`, 'POST', { epochs });
 }
 
+/** Trigger an auto-renewal sweep now (same logic the service runs on its interval). */
+export async function renewDueAction(): Promise<RenewSweepResult> {
+  const base = assetBase();
+  if (!base) return { ok: false, configured: false, error: 'ASSET_SERVICE_URL 未設定' };
+  try {
+    const res = await fetch(`${base}/api/assets/renew-due`, {
+      method: 'POST',
+      headers: assetHeaders(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(RENEW_TIMEOUT),
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      note?: string;
+      walletBlocked?: boolean;
+      dueCount?: number;
+      renewed?: unknown[];
+      failed?: unknown[];
+      skipped?: unknown[];
+    };
+    if (!res.ok) {
+      return { ok: false, configured: true, error: body.error ?? `${res.status} ${res.statusText}` };
+    }
+    return {
+      ok: true,
+      configured: true,
+      note: body.note,
+      walletBlocked: body.walletBlocked,
+      dueCount: body.dueCount ?? 0,
+      renewedCount: body.renewed?.length ?? 0,
+      failedCount: body.failed?.length ?? 0,
+      skippedCount: body.skipped?.length ?? 0,
+    };
+  } catch (err) {
+    return { ok: false, configured: true, error: errMsg(err) };
+  }
+}
+
 export async function patchAssetAction(
   id: string,
   patch: { status?: AssetStatus; autoRenew?: boolean; label?: string },
@@ -132,7 +187,14 @@ async function mutate(path: string, method: string, body?: unknown): Promise<Act
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { ok: false, error: `${res.status} ${text.slice(0, 200)}` };
+      let msg = text.slice(0, 200);
+      try {
+        const j = JSON.parse(text) as { error?: string };
+        if (j?.error) msg = j.error; // surface the service's friendly message, not raw JSON
+      } catch {
+        /* not JSON — keep the raw text */
+      }
+      return { ok: false, error: msg };
     }
     return { ok: true };
   } catch (err) {

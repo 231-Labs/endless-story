@@ -1,50 +1,52 @@
 # Roadmap
 
-Across the pitch, demo, and whitepaper, every capability is labelled ✅ shipped, 🟡 deployed but not yet verified, or 🛣️ planned. The aim is to stay clear about what runs today and what is still vision.
+The repository contains deployed contracts, live product paths, feature-gated experiments, and offline research harnesses. This page keeps those categories separate.
 
-## ✅ Shipped
+The checked-in deployment snapshot points to Sui testnet and was last written on 16 June 2026. This review did not query the live network, so “deployed” below refers to that repository snapshot rather than a fresh RPC confirmation.
 
-These run today across the contracts, the runner, and the web app.
+## In the current product path
 
-| Capability | Evidence |
+| Capability | Evidence in the repository |
 |---|---|
-| Full contract suite (currency, world, saga, scene, character, recruit, event, commitment) | `sui move test` 122/122, deployed to testnet |
-| Gacha minting flow (voucher → preview → portrait → redeem → on-chain Character with caps) | Home wizard; HKDF deterministic dice; portrait stored on Walrus |
-| Admin operator cockpit (Director-agent chat, asset management, test tools, role postings) | `(admin)` route group |
-| Autonomous tick loop (PLAN → MOVE → DRAMA → SOCIAL → ASK → GIVE → BOND → SETTLE → ACT → POV → SLEEP → GAZETTE) | runner v1, world loop running |
-| Non-control: characters decide for themselves, and the director only pushes events and tunes the environment | event-objective and narrative-subjective split |
-| MemWal memory (remember and recall, SEAL encryption, cap-enforced decryption, three-factor recall) | `packages/memwal`, self-hosted relayer |
-| Character economy loop (salary → memory rent → aid → aging or starvation death, off-chain shadow) | GIVE, ASK, SETTLE in the tick loop; H1 to H6 validated |
-| Content pipeline (event → POV → chapter → gazette → subscription wall, with an on-chain chapter compiler) | `/feed` and dossier |
-| 3D treasury (exhibit layout, AI curation, still generation, gift shop) | `packages/chamber-3d` |
-| Troupe production engine | `packages/troupe` offline harness |
+| Character recruiting | Voucher preview, shared `RedeemIntent`, storyteller redemption, owner-directed `OwnerCap`, and Saga-held `ControlCap`. |
+| Default autonomous tick | Perception, plan, move, drama, social, ask, give, settle, act, POV, reflection, and gazette phases are connected in the web tick loop. |
+| Event spine | The default real tick opens, carries, resolves, and publishes one spine event; plain resolution is available as a failure fallback. |
+| Director-created scarcity | New dramatic resources are enabled by default unless explicitly disabled. |
+| Showrunner heartbeat | World audit, bounded repair, persistent arc plan, Director tool registry, admin surface, and headless API route. |
+| Private character memory | Seal encryption, character-scoped capability checks, owner-side decryption, three-factor recall, and the self-hosted relayer implementation. |
+| Chain-first publication reads | Feed and character pages reconstruct chapters from on-chain commitments and Walrus blobs. |
+| Published-asset operations | Asset service, admin upload, status inspection, manual renewal, and publisher-wallet checks. |
+| Troupe production | The production pipeline is callable through the Director tool and has a separate offline harness for its creative stages. |
 
-## 🟡 Deployed but not yet verified
+These rows describe code paths, not a guarantee that every external service is healthy at this moment.
 
-The contracts are on-chain, but the web layer still needs wiring and a real run before these count as shipped. They are not marked ✅ yet.
+## Implemented but still conditional
 
-| Item | Status | What it needs to reach ✅ |
+| Capability | What is already present | What still prevents an unconditional claim |
 |---|---|---|
-| `economy.move`: real on-chain Balance (salary, aid, settlement, injection) | Contract on-chain (`sui move test` 122/122) | codegen SDK bindings, plus an adapter that wires the off-chain shadow to a real Balance, verified for one round |
-| Treasury Kiosk trading (`still.move` TransferPolicy) | Contract on-chain | TS wiring, and a real list, buy, and delist run |
-| On-chain treasury layout (`chamber` PersonalVault) | Contract on-chain | a `chamber::decorate` server action and a "save on-chain" button wired up |
-| Two-step minting (`recruit` RedeemIntent) | Contract on-chain | one real-wallet redeem that confirms the sender check |
+| On-chain character economy | Move modules and generated SDK bindings for balances, owner funding, transfers, and settlement. | The product UI still reads a process-local settlement shadow; accepted gifts are applied in SETTLE within the same tick, but on-chain `transfer_between_characters` is not executed yet. |
+| Kiosk still trading | Mint, list, purchase, delist, and proceeds helpers plus buyer and admin UI paths. | Requires the active package, TransferPolicy, StillRegistry, Kiosk ids, wallet funding, and a verified live transaction. |
+| Personal chamber | PersonalVault creation and discovery are wired. | Saved arrangements remain local until the `decorate` write path is connected in the UI. |
+| Automatic Walrus renewal | The asset service runs a renewal sweep that extends near-expiry `autoRenew` assets, driven by an in-process interval and a `POST /api/assets/renew-due` endpoint, with a wallet-balance floor and unit tests. | Not yet exercised against a funded publisher wallet on the VPS; the in-process sweeper is gated by `RENEW_SWEEP_INTERVAL_MS`. |
+| Parallel event simulation | Parallel events, attention coupling, and rival gravity exist behind controls with pure tests. | They are not the default tick path and still need sustained live-world validation. |
+| LLM event framing | Sanitized LLM framing with deterministic fallback. | Remains opt-in because it changes language quality, cost, and latency rather than protocol correctness. |
 
-> Putting a contract on-chain is not the same as the feature being usable. The web layer still needs codegen and adapter wiring before the new capability is actually used.
+## Next milestones
 
-## 🛣️ Planned
+1. Make on-chain economy balances the product read source after one complete wage, cost, owner-funding, and aid cycle is executed and verified.
+2. Complete PersonalVault layout writes and verify the Kiosk flow with connected wallets.
+3. Validate the renewal sweep against a funded publisher wallet on the VPS and add low-balance alerting beyond the dashboard.
+4. Run longer live-world trials for parallel events, attention coupling, rival gravity, and pacing.
+5. Turn the strongest chapters and troupe productions into a repeatable video pipeline.
+6. Design Saga succession and long-term archival without confusing ownership of a character with ownership of its Walrus Blob objects.
 
-These are designed or partly wired, but they do not run in today's demo.
+## Evidence labels
 
-| Item | Where it stands | What is missing |
-|---|---|---|
-| Director retirement into a Storyteller | concept and scattered notes | quantified retirement signals, and a tiered implementation |
-| Character archival as legend | the NFT and memory already persist after death; owner injection and Walrus renewal are designed | wiring for paying to preserve memory after death |
-| Saga succession (change of owner) | new | a design spec to start from |
-| Paid-subscription revenue split | `RevenueConfig` fields are in place | gated for after the MVP |
-| Perceive step (an authoritative situation layer) | designed | implementation |
-| Film adaptation (Phase 3) | vision | finishing the content funnel first |
+Public documents use these terms consistently:
 
----
+- **Implemented** means the code path exists in this repository.
+- **Deployed** means the checked-in deployment snapshot identifies live objects.
+- **Verified** means a relevant test or recorded run exercised the behavior.
+- **Default** means the normal product path enables it without an opt-in flag.
 
-<sub>The detailed mechanics live in the design docs: [Whitepaper](#/whitepaper), [Character economy](#/character-economy), and [Narrative agents](#/narrative-agents).</sub>
+None of those labels implies the others.

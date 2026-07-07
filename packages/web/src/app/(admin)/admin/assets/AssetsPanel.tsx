@@ -7,6 +7,7 @@ import {
   getAssetWalletAction,
   listAssetsAction,
   patchAssetAction,
+  renewDueAction,
   type ActionResult,
   type AssetCategory,
   type AssetView,
@@ -119,7 +120,7 @@ export function AssetsPanel() {
 
   return (
     <div className="space-y-5">
-      <WalletBar wallet={wallet} />
+      <WalletBar wallet={wallet} onSwept={refresh} />
       <UploadCard onUploaded={refresh} />
 
       {loadError && (
@@ -599,7 +600,7 @@ function Pagination({
   );
 }
 
-function WalletBar({ wallet }: { wallet: WalletState | null }) {
+function WalletBar({ wallet, onSwept }: { wallet: WalletState | null; onSwept?: () => void }) {
   const low = wallet && (numOr(wallet.wal, 1) < 0.05 || numOr(wallet.sui, 1) < 0.05);
   return (
     <div className={`es-soft-panel flex flex-wrap items-center gap-x-6 gap-y-1 px-6 py-3 text-sm ${low ? 'ring-1 ring-cinnabar/40' : ''}`}>
@@ -608,6 +609,49 @@ function WalletBar({ wallet }: { wallet: WalletState | null }) {
       <span className="text-ink">WAL：{fmt(wallet?.wal)}</span>
       {low && <span className="text-cinnabar">餘額偏低,請補幣（walrus get-wal）</span>}
       {wallet?.error && <span className="text-mute">（{wallet.error}）</span>}
+      <RenewNowButton onDone={onSwept} />
+    </div>
+  );
+}
+
+// Manual trigger for the same sweep the service runs on its interval — scans assets with
+// 自動續租 on that are near expiry and extends them. Handy to verify renewal works without
+// waiting for the timer.
+function RenewNowButton({ onDone }: { onDone?: () => void }) {
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | undefined>();
+  const run = () =>
+    startTransition(async () => {
+      setMsg(undefined);
+      const r = await renewDueAction();
+      if (!r.ok) setMsg(r.error ? `失敗：${r.error}` : '失敗');
+      else if (r.walletBlocked) setMsg(`錢包餘額不足，已跳過 ${r.skippedCount ?? 0} 筆`);
+      else {
+        const renewed = r.renewedCount ?? 0;
+        const skipped = r.skippedCount ?? 0;
+        const failed = r.failedCount ?? 0;
+        if (renewed === 0 && skipped === 0 && failed === 0) setMsg('目前無到期資產');
+        else
+          setMsg(
+            `已續租 ${renewed}` +
+              (skipped ? `，跳過 ${skipped}（多為已過期）` : '') +
+              (failed ? `，失敗 ${failed}` : ''),
+          );
+      }
+      onDone?.();
+    });
+  return (
+    <div className="ml-auto flex items-center gap-2">
+      {msg && <span className="text-xs text-mute">{msg}</span>}
+      <button
+        onClick={run}
+        disabled={pending}
+        title="掃描開啟自動續租且即將到期的資產並立即續租"
+        className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 text-xs text-ink transition-colors hover:border-cinnabar disabled:opacity-50"
+      >
+        <RecycleIcon />
+        {pending ? '檢查中…' : '立即檢查續租'}
+      </button>
     </div>
   );
 }

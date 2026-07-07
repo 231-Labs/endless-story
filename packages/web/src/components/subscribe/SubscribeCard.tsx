@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useTransition, type MouseEvent } from 'react';
 import Link from 'next/link';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
-import { tx as endlessTx } from '@endless-story/sdk';
+import { normalizeTxResult, tx as endlessTx } from '@endless-story/sdk';
 import { useToast } from '@/components/common/Toaster';
 import { BlobImage } from '@/components/common/BlobImage';
 import type { Character } from '@endless-story/shared';
@@ -43,8 +43,7 @@ export function SubscribeCard({
   const [count, setCount] = useState(initialSubscriberCount);
   const [isPending, startTransition] = useTransition();
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const dappKit = useDAppKit();
   const toast = useToast();
 
   useEffect(() => {
@@ -79,23 +78,18 @@ export function SubscribeCard({
     }
     const txb = new Transaction();
     txb.add(endlessTx.subscribe.subscribe({ character: character.id }));
-    startTransition(() => {
-      signAndExecute(
-        { transaction: txb },
-        {
-          onSuccess: async (res) => {
-            try {
-              await suiClient.waitForTransaction({ digest: res.digest });
-              setSubscribed(true);
-              setCount((c) => c + 1);
-              toast(`已訂閱 ${character.name} 的視角章回`, 'success');
-            } catch {
-              toast('訂閱已送出，鏈上確認稍慢 — 稍後重整看看', 'info');
-            }
-          },
-          onError: (err) => toast(`訂閱沒成：${err.message}`, 'error'),
-        },
-      );
+    startTransition(async () => {
+      try {
+        const res = normalizeTxResult(
+          await dappKit.signAndExecuteTransaction({ transaction: txb }),
+        );
+        if (!res.success) throw new Error(res.error ?? '訂閱沒成');
+        setSubscribed(true);
+        setCount((c) => c + 1);
+        toast(`已訂閱 ${character.name} 的視角章回`, 'success');
+      } catch (err) {
+        toast(`訂閱沒成：${err instanceof Error ? err.message : String(err)}`, 'error');
+      }
     });
   };
 

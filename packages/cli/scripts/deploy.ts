@@ -54,10 +54,18 @@ async function main() {
   console.log(`   dryRun       ${dryRun}`);
 
   // ─── preflight ─────────────────────────────────────────────────
-  assertActiveEnv(env);
+  // assertActiveEnv guards local `sui client` usage. In CLI-free / container
+  // mode (pre-built bytecode dump + programmatic key signing) there is no sui
+  // client config to check and the network comes from --env, so skip it. The
+  // testnet/mainnet publish is already programmatic (publishWithConfiguredKey),
+  // so the only remaining sui dependency is the build, served by the dump.
+  const containerMode = !!process.env.DEPLOY_BYTECODE_DUMP_PATH?.trim();
+  if (!containerMode) {
+    assertActiveEnv(env);
+  }
 
   if (dryRun) {
-    console.log('\n[dry-run] flags valid, sui active-env matches. Skipping publish.');
+    console.log('\n[dry-run] flags valid. Skipping publish.');
     return;
   }
 

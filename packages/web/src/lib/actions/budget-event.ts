@@ -24,8 +24,8 @@
  */
 
 import { Transaction } from '@mysten/sui/transactions';
-import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, findCreatedObjectId } from '@endless-story/sdk';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 const INTENT_KILL = 0;
 const INTENT_ATTACK = 1;
@@ -144,33 +144,22 @@ export async function createBudgetEventAction(
             }),
         );
 
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true, showObjectChanges: true },
-        });
+        const res = await execAdminTx(admin, tx);
 
-        if (res.effects?.status?.status !== 'success') {
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '交易失敗',
+                error: res.error ?? '交易失敗',
                 digest: res.digest,
             };
         }
 
-        const changes = (res.objectChanges ?? []) as Array<{
-            type?: string;
-            objectType?: string;
-            objectId?: string;
-        }>;
-        const created = changes.find(
-            (c) => c.type === 'created' && c.objectType?.endsWith('::event::BudgetEvent'),
-        );
+        const eventId = findCreatedObjectId(res, '::event::BudgetEvent');
 
         return {
             ok: true,
             digest: res.digest,
-            eventId: created?.objectId,
+            eventId,
         };
     } catch (err) {
         return {
@@ -212,25 +201,17 @@ export async function dealHandAction(input: DealHandInput): Promise<ActionResult
                 character: input.characterId,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '發牌失敗',
+                error: res.error ?? '發牌失敗',
                 digest: res.digest,
             };
         }
         // Settle before the UI re-reads the participant list — else RPC lag
         // shows the dealt character as still-available → re-deal → abort 16.
-        try {
-            await admin.client.waitForTransaction({ digest: res.digest });
-        } catch {
-            /* best-effort */
-        }
+        // (execAdminTx already waits for finality inside the admin lock.)
         return { ok: true, digest: res.digest };
     } catch (err) {
         const raw = err instanceof Error ? err.message : String(err);
@@ -275,22 +256,13 @@ export async function resolveEventAction(
                 outcomes,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '結算失敗',
+                error: res.error ?? '結算失敗',
                 digest: res.digest,
             };
-        }
-        try {
-            await admin.client.waitForTransaction({ digest: res.digest });
-        } catch {
-            /* best-effort */
         }
         return { ok: true, digest: res.digest };
     } catch (err) {

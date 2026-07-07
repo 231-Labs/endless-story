@@ -20,7 +20,7 @@ export async function uploadVaultLayout(layout: VaultLayoutBlob): Promise<SaveVa
     const put = await blob.putBlob(bytes, {
       network: 'testnet',
       contentType: 'application/json',
-      epochs: 5,
+      epochs: 30,
     });
     return { ok: true, blobId: put.blobId };
   } catch (err) {

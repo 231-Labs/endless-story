@@ -256,22 +256,29 @@ export function hasParticipant(options: HasParticipantOptions) {
     });
 }
 export interface SubmitActionArguments {
-    cap: RawTransactionArgument<string>;
-    saga: RawTransactionArgument<string>;
-    budgetEvent: RawTransactionArgument<string>;
-    characterId: RawTransactionArgument<string>;
-    cardIndex: RawTransactionArgument<number | bigint>;
+    Cap: RawTransactionArgument<string>;
+    Saga: RawTransactionArgument<string>;
+    BudgetEvent: RawTransactionArgument<string>;
+    CharacterId: RawTransactionArgument<string>;
+    CardIndex: RawTransactionArgument<number | bigint>;
 }
 export interface SubmitActionOptions {
     package?: string;
     arguments: SubmitActionArguments | [
-        cap: RawTransactionArgument<string>,
-        saga: RawTransactionArgument<string>,
-        budgetEvent: RawTransactionArgument<string>,
-        characterId: RawTransactionArgument<string>,
-        cardIndex: RawTransactionArgument<number | bigint>
+        Cap: RawTransactionArgument<string>,
+        Saga: RawTransactionArgument<string>,
+        BudgetEvent: RawTransactionArgument<string>,
+        CharacterId: RawTransactionArgument<string>,
+        CardIndex: RawTransactionArgument<number | bigint>
     ];
 }
+/**
+ * DEPRECATED (event.move 1.7). Card play moved to the character's OWN ControlCap —
+ * the StorytellerCap (director god-cap) must not author a character's action, or
+ * the actor/director agent boundary collapses. Kept as an aborting stub so the Sui
+ * package UPGRADE stays signature- compatible; every caller must switch to
+ * `submit_action_as_character`.
+ */
 export function submitAction(options: SubmitActionOptions) {
     const packageAddress = options.package ?? '@local-pkg/endless-story';
     const argumentsTypes = [
@@ -282,7 +289,7 @@ export function submitAction(options: SubmitActionOptions) {
         'u64',
         '0x2::clock::Clock'
     ] satisfies (string | null)[];
-    const parameterNames = ["cap", "saga", "budgetEvent", "characterId", "cardIndex"];
+    const parameterNames = ["Cap", "Saga", "BudgetEvent", "CharacterId", "CardIndex"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'event',
@@ -305,6 +312,15 @@ export interface SubmitActionAsCharacterOptions {
         cardIndex: RawTransactionArgument<number | bigint>
     ];
 }
+/**
+ * A character plays one card from their dealt hand, authorized by their OWN
+ * ControlCap (owner-issued, epoch-bound, revocable) instead of the saga's
+ * StorytellerCap. This is what returns card-play agency to the character agent:
+ * the runner holds the character's ControlCap and signs the play on its behalf.
+ * `character` is the shared Character object — its id IS the participant id, and
+ * `is_valid` binds the cap to it + the current control_epoch, so a
+ * revoked/reassigned cap can no longer act.
+ */
 export function submitActionAsCharacter(options: SubmitActionAsCharacterOptions) {
     const packageAddress = options.package ?? '@local-pkg/endless-story';
     const argumentsTypes = [

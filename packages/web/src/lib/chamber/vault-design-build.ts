@@ -27,6 +27,20 @@ export interface VaultCurioItem {
 const STILL_RADIUS = 5.1;
 const CURIO_RADIUS = 2.5;
 
+/**
+ * Route a Walrus still through the same-origin `/api/blob` proxy. The 3D plate
+ * uploads the image into a WebGL texture, which (unlike a plain `<img>`) is
+ * subject to cross-origin rules — a cross-origin aggregator URL fails to load
+ * even when it renders fine in the dossier. The dossier dodges this via
+ * next/image (server-side re-serve); the proxy is the same trick for the canvas.
+ * Local / seed urls (no `/v1/blobs/`) pass through untouched.
+ */
+function proxyStillUrl(url?: string): string | undefined {
+  if (!url) return url;
+  const m = url.match(/\/v1\/blobs\/([^/?#]+)/);
+  return m ? `/api/blob/${m[1]}?ct=image/png` : url;
+}
+
 /** yaw (deg) so the element's local +z faces the centre from position (x,z). */
 function faceCentreYaw(x: number, z: number): number {
   return (Math.atan2(-x, -z) * 180) / Math.PI;
@@ -52,7 +66,7 @@ export function buildVaultDesign(
       kind: 'display_still',
       pos: [x, 0, z],
       yaw: faceCentreYaw(x, z),
-      assetUrl: stills[i].url,
+      assetUrl: proxyStillUrl(stills[i].url),
       label: stills[i].title,
       params: { key: stills[i].key, subtitle: stills[i].subtitle, phase: i * 0.9 },
     });

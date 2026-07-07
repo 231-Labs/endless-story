@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
+import { normalizeTxResult } from '@endless-story/sdk';
 import { Transaction } from '@mysten/sui/transactions';
 import type { BlobRef, Character } from '@endless-story/shared';
-import { ENDLESS_STORY_DEPLOYMENT, read, tx as endlessTx } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, isDeployed, read, tx as endlessTx } from '@endless-story/sdk';
 import { txUrl } from '@/lib/explorer';
 import {
   appearanceSummary,
@@ -20,9 +21,17 @@ import { DerivativeCard, EventMomentCard, Lightbox } from './gallery/components'
 import {
   acquireWare,
   loadAcquired,
-  stillWareFromMoment,
+  stillWareFromBlob,
   type AcquiredMap,
 } from '@/lib/chamber/shop-catalog';
+
+/** Format ENDLESS base units (currency = 6 decimals) for display, trimming trailing zeros. */
+function fmtEndless(base: bigint): string {
+  const whole = base / 1_000_000n;
+  const frac = base % 1_000_000n;
+  if (frac === 0n) return whole.toString();
+  return `${whole}.${frac.toString().padStart(6, '0').replace(/0+$/, '')}`;
+}
 
 export function GalleryTab({
   character,
@@ -38,8 +47,8 @@ export function GalleryTab({
 }) {
   const router = useRouter();
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dappKit = useDAppKit();
   const [coverUrl, setCoverUrl] = useState(character.gallery.anchor.imageUrl);
   const [pendingCoverKey, setPendingCoverKey] = useState<FeaturedKey | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
@@ -63,19 +72,140 @@ export function GalleryTab({
   // physicalFacts prose; else nothing (just the structured facts line).
   const appearanceProse = appearanceDesc ?? appearance.prose;
 
-  // 收藏到藏閣 (demo-local) — a moment is collected as a 劇照 here, where it
-  // lives, instead of being re-listed in 戲坊. Mirrors ShopTab's acquire flow
-  // so the 藏閣 inventory dedups by the same ware key.
+  // 收進藏閣 — collect ANY gallery image (event moment OR 設定集 sheet) as a
+  // 劇照. When the viewer's wallet is connected, the image has a real Walrus
+  // anchor on an on-chain character, AND the saga's self-serve mint config is
+  // live, this is a SELF-SERVE paid mint: the viewer's own wallet signs and
+  // pays `mintFee` ENDLESS (still::mint_still_paid) into the saga treasury, and
+  // the Still lands in their wallet. The free admin path (still::mint_still,
+  // StorytellerCap) is reserved for automation / gifting and is not wired here.
+  // Without a wallet / config / on-chain anchor it falls back to a demo-local
+  // acquire so browsing still fills the 藏閣. The ware key matches
+  // `stillWareFromBlob` either way, so the 藏閣 inventory dedups.
   const [acquired, setAcquired] = useState<AcquiredMap>({});
+  const [mintingKey, setMintingKey] = useState<string | null>(null);
+  const [mintError, setMintError] = useState<string | null>(null);
+  const [mintedTx, setMintedTx] = useState<Record<string, string>>({});
+  // Self-serve mint fee (ENDLESS base units, 6 decimals) + pause state, read
+  // from the on-chain StillMintConfig. null = config not deployed/seeded yet →
+  // paid mint unavailable, collect falls back to demo-local.
+  const [mintFee, setMintFee] = useState<bigint | null>(null);
+  const [mintPaused, setMintPaused] = useState(false);
   useEffect(() => {
     setAcquired(loadAcquired());
   }, []);
-  const collectMoment = useCallback(
-    (moment: BlobRef, index: number) => {
-      setAcquired(acquireWare(stillWareFromMoment(character, moment, index)));
+  useEffect(() => {
+    const id = ENDLESS_STORY_DEPLOYMENT.stillMintConfigId;
+    if (!id || !isDeployed()) {
+      setMintFee(null);
+      return;
+    }
+    let alive = true;
+    read.still
+      .getMintConfigRef(client, id)
+      .then((cfg) => {
+        if (!alive) return;
+        if (cfg) {
+          setMintFee(cfg.fee);
+          setMintPaused(cfg.paused);
+        } else {
+          setMintFee(null);
+        }
+      })
+      .catch(() => {
+        if (alive) setMintFee(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [client]);
+  const collectImage = useCallback(
+    async (blob: BlobRef, index: number) => {
+      const ware = stillWareFromBlob(character, blob, index);
+      setMintError(null);
+
+      const d = ENDLESS_STORY_DEPLOYMENT;
+      const chainEligible =
+        isDeployed() &&
+        character.id.startsWith('0x') &&
+        !!blob.walrusBlobId &&
+        !!blob.imageUrl;
+      const paidReady =
+        chainEligible &&
+        !!account &&
+        !!d.stillMintConfigId &&
+        !!d.sagaId &&
+        !!d.stillRegistryId &&
+        mintFee != null &&
+        !mintPaused;
+
+      // No wallet / mock character / no live mint config → demo-local 入藏.
+      // (`!account` / `mintFee == null` also narrow the types for the paid mint.)
+      if (!paidReady || !account || mintFee == null) {
+        setAcquired(acquireWare(ware));
+        return;
+      }
+
+      setMintingKey(ware.key);
+      try {
+        // Self-serve paid mint — the viewer's own wallet signs and pays the fee.
+        const coinType = `${d.packageId}::currency::CURRENCY`;
+        const coins = await client.core.listCoins({ owner: account.address, coinType, limit: 50 });
+        const total = (coins.objects ?? []).reduce((sum, c) => sum + BigInt(c.balance), 0n);
+        if (!coins.objects?.length || total < mintFee) {
+          setMintError(`鑄造需 ${fmtEndless(mintFee)} ENDLESS,餘額不足。請先用右上「領 ENDLESS」。`);
+          return;
+        }
+
+        const tx = new Transaction();
+        const coinIds = coins.objects.map((c) => c.objectId);
+        const primary = tx.object(coinIds[0]);
+        if (coinIds.length > 1) {
+          tx.mergeCoins(primary, coinIds.slice(1).map((id) => tx.object(id)));
+        }
+        const [payment] = tx.splitCoins(primary, [mintFee]);
+        const still = tx.add(
+          endlessTx.still.mintStillPaid({
+            config: d.stillMintConfigId,
+            saga: d.sagaId,
+            registry: d.stillRegistryId,
+            payment,
+            characterId: character.id,
+            walrusBlobId: blob.walrusBlobId,
+            imageUrl: blob.imageUrl,
+            title: ware.title,
+          }),
+        );
+        tx.transferObjects([still], account.address);
+
+        const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+        if (!res.success) {
+          throw new Error(res.error ?? '鑄造劇照失敗');
+        }
+        // Mirror into the local 藏閣 so it shows instantly (the on-chain read is
+        // cached + lags); the vault dedups the mirror vs the real Still by image
+        // url, so this never double-counts once the chain read catches up.
+        setAcquired(acquireWare(ware));
+        setMintedTx((m) => ({ ...m, [ware.key]: res.digest }));
+      } catch (err) {
+        setMintError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setMintingKey(null);
+      }
     },
-    [character],
+    [character, account, client, dappKit, mintFee, mintPaused],
   );
+
+  // Show the fee on the collect button only when a real paid mint is actually
+  // available for this character (on-chain + config live). Mocks / unconfigured
+  // worlds collect demo-local for free, so no price is shown.
+  const paidMintLive =
+    isDeployed() &&
+    character.id.startsWith('0x') &&
+    !!ENDLESS_STORY_DEPLOYMENT.stillMintConfigId &&
+    mintFee != null &&
+    !mintPaused;
+  const priceLabel = paidMintLive && mintFee != null ? `${fmtEndless(mintFee)} ENDLESS` : undefined;
 
   // One flat list spanning both sections — the lightbox pages through all of them.
   const lightboxItems = useMemo<LightboxItem[]>(() => {
@@ -123,7 +253,7 @@ export function GalleryTab({
     setCoverDigest(null);
     try {
       const caps = await read.character.listOwnerCapsForAddress(
-        suiClient,
+        client,
         account.address,
         d.packageId,
       );
@@ -140,13 +270,9 @@ export function GalleryTab({
           index: BigInt(blob.mediaIndex),
         }),
       );
-      const res = await signAndExecute({ transaction: txb });
-      const full = await suiClient.waitForTransaction({
-        digest: res.digest,
-        options: { showEffects: true },
-      });
-      if (full.effects?.status.status !== 'success') {
-        throw new Error(full.effects?.status.error ?? '設定封面失敗');
+      const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: txb }));
+      if (!res.success) {
+        throw new Error(res.error ?? '設定封面失敗');
       }
       setCoverUrl(blob.imageUrl);
       setCoverDigest(res.digest);
@@ -181,6 +307,7 @@ export function GalleryTab({
             {settingImages.map((blob, i) => {
               const key = blobKey(blob);
               const isCover = !!blob.imageUrl && blob.imageUrl === coverUrl;
+              const wareKey = stillWareFromBlob(character, blob, i).key;
               return (
                 <li key={key} className={isWideBlob(blob) ? 'col-span-2' : undefined}>
                   <DerivativeCard
@@ -190,7 +317,13 @@ export function GalleryTab({
                     isCover={isCover}
                     isOwner={canSetCover}
                     pending={pendingCoverKey === key}
+                    canCollect={!!blob.imageUrl}
+                    collected={(acquired[wareKey]?.count ?? 0) > 0}
+                    minting={mintingKey === wareKey}
+                    txDigest={mintedTx[wareKey] ?? null}
+                    priceLabel={priceLabel}
                     onSetCover={() => setCover(blob)}
+                    onCollect={() => collectImage(blob, i)}
                     onOpen={() => openLightbox(blob)}
                   />
                 </li>
@@ -232,7 +365,7 @@ export function GalleryTab({
               {eventMoments.map((blob, i) => {
                 const key = blobKey(blob);
                 const isCover = !!blob.imageUrl && blob.imageUrl === coverUrl;
-                const wareKey = stillWareFromMoment(character, blob, i).key;
+                const wareKey = stillWareFromBlob(character, blob, i).key;
                 return (
                   <li key={key}>
                     <EventMomentCard
@@ -244,8 +377,11 @@ export function GalleryTab({
                       pending={pendingCoverKey === key}
                       canCollect={!!blob.imageUrl}
                       collected={(acquired[wareKey]?.count ?? 0) > 0}
+                      minting={mintingKey === wareKey}
+                      txDigest={mintedTx[wareKey] ?? null}
+                      priceLabel={priceLabel}
                       onSetCover={() => setCover(blob)}
-                      onCollect={() => collectMoment(blob, i)}
+                      onCollect={() => collectImage(blob, i)}
                       onOpen={() => openLightbox(blob)}
                     />
                   </li>
@@ -253,6 +389,13 @@ export function GalleryTab({
               })}
             </ul>
           )}
+          {mintError ? (
+            <p className="mt-3 text-xs tracking-widest text-cinnabar">鑄造劇照失敗：{mintError}</p>
+          ) : isDeployed() && character.id.startsWith('0x') && !account && eventMoments.length > 0 ? (
+            <p className="mt-3 text-2xs tracking-widest text-mute/60">
+              連結錢包，即可把劇照鑄成鏈上 NFT 收進藏閣（未連結則僅本地預覽入藏）。
+            </p>
+          ) : null}
         </div>
       </section>
 

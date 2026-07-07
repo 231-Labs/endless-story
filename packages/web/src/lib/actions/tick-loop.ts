@@ -11,7 +11,8 @@
 import { Transaction } from '@mysten/sui/transactions';
 import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext, withAdminLock } from '@/lib/chain/admin-signer';
+import { getAdminContext, withAdminLock, execAdminTx } from '@/lib/chain/admin-signer';
+import { ensureEventStoreRegistered } from '@/lib/server/event-store';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
 import { characterAgent, sceneRecord, characterWorker as runnerWorker, eventChapter as runnerEventChapter, signAndAnchor } from '@endless-story/runner';
@@ -182,6 +183,10 @@ const clr = {
 };
 
 export async function runTickLoopAction(input: TickLoopInput = {}): Promise<TickLoopResult> {
+    // Register the durable event store on the first tick (gated on DATABASE_URL;
+    // no-op without it). Both tick paths run through here: the admin
+    // SchedulerPanel server action and the headless /api/tick route.
+    await ensureEventStoreRegistered();
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.sagaId || !d.storytellerCapId) {
         return {
@@ -720,14 +725,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             characterIds: st.characterIds,
                         }),
                     );
-                    const res = await admin.client.signAndExecuteTransaction({
-                        transaction: txb,
-                        signer: admin.signer,
-                        options: { showEffects: true },
-                    });
-                    st.opened = res.effects?.status?.status === 'success';
+                    const res = await execAdminTx(admin, txb);
+                    st.opened = res.success;
                     st.digest = res.digest;
-                    await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
                 } catch (err) {
                     st.error = err instanceof Error ? err.message : String(err);
                 }
@@ -1719,8 +1719,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         }
     }
 
-    // 5. REFLECT — periodic sleep/consolidation at night, not every tick.
-    //    Anchors via reflection::submit (Sui signing) → serial.
+    // 5. REFLECT — periodic sleep / consolidation. Characters sleep at NIGHT,
+    //    not every tick (Generative-Agents reflection is periodic, not per-
+    //    tick — answering "should they all sleep every tick?": no). Sleep
+    //    anchors via reflection::submit (Sui signing) → serial.
+    //    (isNight is already derived above from the day-part labels — dev's
+    //     label-based check is the same #75 fix, so it is not re-derived here.)
     const sleeps: TickSleepResult[] = [];
     let sleepNote: string | undefined;
     // Want engine: fatigue-driven gate (§2.19) — night lowers the bar, high day

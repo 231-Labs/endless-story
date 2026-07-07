@@ -4,15 +4,15 @@
 
 ## Single source of truth
 
-**`endless-story-pitch-light.html` 是唯一正本（主簡報，中文，精簡 9 頁）。** 任何內容改動以它為準，EN 版是它的忠實翻譯（共用同一套 CSS/JS framework）。
+**`endless-story-pitch-light.html` 是唯一正本（主簡報，中文，精簡 10 頁）。** 任何內容改動以它為準，EN 版是它的忠實翻譯（共用同一套 CSS/JS framework）。
 
 | 檔案 | 角色 | 狀態 |
 |---|---|---|
-| `endless-story-pitch-light.html` | **正本 · 主簡報（中文，9 頁）** | ✅ 維護這份 |
-| `endless-story-pitch-light-en.html` | 英文版（正本的翻譯） | ✅ 已與正本同步（9 頁，2026-06-19）；改正本後記得回來同步 |
+| `endless-story-pitch-light.html` | **正本 · 主簡報（中文，10 頁）** | ✅ 維護這份 |
+| `endless-story-pitch-light-en.html` | 英文版（正本的翻譯） | ✅ 已與正本同步（10 頁）；改正本後記得回來同步 |
 | `assets/` | 圖（logo） | — |
 
-九頁結構：封面 / 這是什麼 / 從孤島到社會 / 記憶層（護城河）/ Sui 技術棧 / **合約物件架構圖** / 三層架構 / 經濟循環 / 為什麼重要。
+十頁結構：封面 / 這是什麼 / 湧現的小社會 / 記憶層（護城河）/ **一份資料 N 種用途** / Sui 技術棧 / **合約物件架構圖** / 三層架構 / **生存代謝（Walrus 租金＋算力）** / 為什麼重要＋roadmap。
 
 > 2026-06-19：簡報由 18 頁長版精簡為 9 頁對外版。原長版與較技術的 `endless-story-architecture-map.html`（會暴露未完成的引擎內情）已移入 gitignored `internal/pitch-archive/`，不對外、不部署。需要時從那裡或 git 歷史取回。早期深色版 `endless-story-pitch.html` 亦早已移除。
 
@@ -33,5 +33,24 @@
 
 ## 資產來源（如需更新）
 
-- `assets/logo.png` ← `packages/web/public/logo.png`
-- `assets/fig1_contested.png`, `assets/fig3_tradeoff.png`：舊長版的引擎實驗圖，精簡版已不引用，保留備查。
+命名規則：`{用途}-{light|dark}.png`，跟 logo 一致用 kebab-case。
+
+**README 用（深淺色切換）**
+
+| 檔案 | 內容 |
+|---|---|
+| `hero-light.png` / `hero-dark.png` | 春雪社首頁（README hero） |
+| `cinema-light.png` / `cinema-dark.png` | 章回預告列（README 未引用） |
+| `logo-light.png` / `logo-dark.png` | 由 `logo.png` 著色，對應網站 `--color-cinnabar`（日 `#B04A3C` / 夜 `#CCA45C`） |
+
+**備用（README 未引用）**
+
+| 檔案 | 內容 |
+|---|---|
+| `mockup-hero-light.png` / `mockup-hero-dark.png` | 首頁筆電 mockup |
+| `mockup-cinema-light.png` / `mockup-cinema-dark.png` | 角色頁筆電 mockup |
+
+**其他**
+
+- `logo.png` ← `packages/web/public/logo.png`（網站 nav 的 mask 原檔）
+- `fig1_contested.png`, `fig3_tradeoff.png`：舊長版引擎實驗圖，精簡版已不引用，保留備查。

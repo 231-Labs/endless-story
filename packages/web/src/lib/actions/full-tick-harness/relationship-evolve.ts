@@ -35,7 +35,7 @@ import {
 } from '@endless-story/sdk';
 import type { RelationshipTone } from '@endless-story/shared';
 import { text as llmText } from '@endless-story/llm';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 import {
     isMemoryConfigured,
     rememberForCharacter,
@@ -320,15 +320,10 @@ export async function evolveRelationshipsFromScene(
                 }),
             );
         }
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
-            throw new Error(res.effects?.status?.error ?? 'relationship_seed 交易失敗');
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
+            throw new Error(res.error ?? 'relationship_seed 交易失敗');
         }
-        await admin.client.waitForTransaction({ digest: res.digest });
     } catch (err) {
         return { seeded: 0, proposed: edges.length, error: err instanceof Error ? err.message : String(err) };
     }

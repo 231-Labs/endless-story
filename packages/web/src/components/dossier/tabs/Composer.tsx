@@ -1,14 +1,12 @@
 'use client';
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
-import {
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
 import {
   ENDLESS_STORY_DEPLOYMENT,
+  findCreatedObjectId,
+  normalizeTxResult,
   read,
   tx as endlessTx,
 } from '@endless-story/sdk';
@@ -83,8 +81,8 @@ export function Composer({
   const [chainPending, startChainTransition] = useTransition();
 
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dappKit = useDAppKit();
 
   // Pull live dream price so the UI shows the actual amount that'll
   // be charged + the wallet sign tx pays the right amount.
@@ -93,7 +91,7 @@ export function Composer({
     const d = ENDLESS_STORY_DEPLOYMENT;
     if (!d.dreamConfigId) return;
     read.dream
-      .getDreamConfig(suiClient, d.dreamConfigId)
+      .getDreamConfig(client, d.dreamConfigId)
       .then((res) => {
         const json = res.json as { price?: string | number };
         setDreamPrice(BigInt(json.price ?? '50000000'));
@@ -101,7 +99,7 @@ export function Composer({
       .catch(() => {
         // fall through to default; user can still submit
       });
-  }, [kind, suiClient]);
+  }, [kind, client]);
 
   // reflection 'ask_reflection' path: server-side LLM + admin-signed
   // anchor. Owner just submits text — no wallet sign needed (storyteller
@@ -165,7 +163,7 @@ export function Composer({
       let ownerCapId: string | null = null;
       try {
         const caps = await read.character.listOwnerCapsForAddress(
-          suiClient,
+          client,
           account.address,
           d.packageId,
         );
@@ -202,43 +200,36 @@ export function Composer({
         }),
       );
 
-      signAndExecute(
-        { transaction: tx },
-        {
-          onSuccess: async (res) => {
-            try {
-              const full = await suiClient.waitForTransaction({
-                digest: res.digest,
-                options: { showEffects: true, showObjectChanges: true },
-              });
-              const created = (full.objectChanges ?? []) as Array<{
-                type?: string;
-                objectType?: string;
-                objectId?: string;
-              }>;
-              const dream = created.find(
-                (c) => c.type === 'created' && c.objectType?.endsWith('::dream::Dream'),
-              );
-              setChainResult({ digest: res.digest, dreamId: dream?.objectId });
-              setText('');
-              // Persist the dream into her weighted memory (importance 9)
-              // so it surfaces first in future POV / reflection recalls.
-              if (prepared.optimizedText) {
-                void rememberDreamAction(characterId, prepared.optimizedText).catch(
-                  () => {},
-                );
-              }
-            } catch (err) {
-              setDreamError(
-                err instanceof Error
-                  ? `tx 已發出但等待失敗: ${err.message}`
-                  : 'tx 已發出但等待失敗',
-              );
-            }
-          },
-          onError: (err) => setDreamError(err.message),
-        },
-      );
+      try {
+        const res = normalizeTxResult(
+          await dappKit.signAndExecuteTransaction({ transaction: tx }),
+        );
+        if (!res.success) throw new Error(res.error ?? '注入夢境失敗');
+        // The signAndExecuteTransaction result lacks the objectTypes map, so
+        // re-read to identify the created Dream object.
+        const full = normalizeTxResult(
+          await client.waitForTransaction({
+            digest: res.digest,
+            include: { effects: true, objectTypes: true, events: true },
+          }),
+        );
+        const dreamId = findCreatedObjectId(full, '::dream::Dream');
+        setChainResult({ digest: res.digest, dreamId });
+        setText('');
+        // Persist the dream into her weighted memory (importance 9)
+        // so it surfaces first in future POV / reflection recalls.
+        if (prepared.optimizedText) {
+          void rememberDreamAction(characterId, prepared.optimizedText).catch(
+            () => {},
+          );
+        }
+      } catch (err) {
+        setDreamError(
+          err instanceof Error
+            ? `tx 已發出但等待失敗: ${err.message}`
+            : 'tx 已發出但等待失敗',
+        );
+      }
     });
   };
 

@@ -59,7 +59,7 @@ PLAN      (便宜模型)更新 longTermGoal / dailyPlanHint / openSubgoals
           —— 存成 MemWal kind=plan(i=8),下個 tick recall 回來
    ↓
 DECIDE/ACT(便宜模型)從 perceive+retrieve 決定「此刻一件事」,輸出結構化:
-          • 出牌  → event::submit_action(從手牌選一張 + intent)        [鏈動作]
+          • 出牌  → event::submit_action_as_character(角色自己的 ControlCap，從手牌選一張 + intent)  [鏈動作]
           • 移動  → scene::move_character / walk_in_world(去某 scene)   [鏈動作]
           • 發起  → 一句 intent(對白/動作)→ 寫入該 tick 的 perception
           • 不動  → 延續上輪意圖
@@ -75,7 +75,7 @@ REFLECT   (sleep,週期性非每 tick)recall 近期 → 壓縮成 1-2 條高密�
 **動作空間(角色能對世界做的事)= 鏈上既有 primitives**:
 | 動作 | Move call | 狀態 |
 |---|---|---|
-| 出牌 | `event::submit_action` | 鏈上有 ✅,**角色 decide 未接** ❌ |
+| 出牌 | `event::submit_action_as_character` | **已接 ✅**(decideCardPlay→ 角色自己的 ControlCap 出牌)。PR #67 後改用角色 ControlCap(舊 `submit_action`＝StorytellerCap gate，已 deprecate 並在鏈上 abort)，**出牌不再經導演 god-cap，演員/導演權責邊界補齊**。 |
 | 移動 | `character::move_character` | 鏈上有 ✅,**角色 decideMove 已接 ✅**(tick-loop MOVE,批次 PTB) |
 | 寫 POV | `commitment::commit` | ✅ 已接(被動觸發,需改主動) |
 | 反思 | `reflection::submit` | ✅ 已接(只 trigger,未做壓縮) |
@@ -221,7 +221,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 
 | # | 缺口 | 內容 | 對應 |
 |---|---|---|---|
-| ~~N1~~ ✅ | 角色 DECIDE/ACT | **出牌 ✅**(decideCardPlay→submit_action)+ **移動 ✅**(character-agent decideMove,依 plan+在場者選 stay/move→move_character;tick-loop MOVE phase 批次成一個 PTB)。兩者都由 tick loop 自動驅動。**動作空間補齊。** | §2 補權責破口 |
+| ~~N1~~ ✅ | 角色 DECIDE/ACT | **出牌 ✅**(decideCardPlay→submit_action_as_character，角色自己的 ControlCap；PR #67 後出牌不再經 StorytellerCap)+ **移動 ✅**(character-agent decideMove,依 plan+在場者選 stay/move→move_character;tick-loop MOVE phase 批次成一個 PTB)。兩者都由 tick loop 自動驅動。**動作空間補齊。** | §2 補權責破口 |
 | ~~N2~~ ✅ | 反思壓縮 sleep | **已做**:recallForConsolidation(撈非 anchored 的 observation/chapter)→ consolidateMemories(primary,壓成 1-2 條)→ remember(kind=reflection,i=8,**a=1 anchored 不再被壓**)→ anchorReflectionText 上鏈。admin ReflectionPanel「睡一覺·整理記憶」。 | §5 |
 | ~~N3~~ ✅ | 關係上鏈讀 | **已做**:read.director.listRelationshipEvents → chain/relationships.ts(per-pair tone 聚合,seed 次數→weight)→ facade chain-first(ProfileTab 去 mock)+ fetchRelationshipHints 注入 **decide + POV** prompt。EventPanel 顯示「牽絆 N」。輕量一句 tone,不做加權圖。 | §5 |
 | ~~N4~~ ✅ | tick loop 自治 | **已做**:tick-loop.ts `runTickLoopAction` 一鍵跑完整輪:ADVANCE→ACT(開著事件中每個未出牌的參與者自動 decide+submit,讀 resolution.submitted_actions 去重)→PRODUCE(POV)→REFLECT(sleep)→NARRATE(公報)。SchedulerPanel「自治推進一個 tick」。**剩**:獨立 CLI setInterval(可後置)+ judge 自動收尾(N5)。 | §6 |
@@ -343,7 +343,7 @@ recall-heavy 階段(plan/POV/move 決策)`RECALL_CONCURRENCY=2` 限流避免 SEA
 - 導演:`packages/runner/src/services/saga-director/` ✅
 - 反思壓縮:`packages/runner/src/services/reflection-trigger/`(擴充 sleep)
 - 認知:`packages/web/src/lib/chain/memory.ts`(加權✅)+ relationships reader(新)
-- 動作 SDK:`event::submit_action` / `scene::move_character`(tx wrapper 已有)
+- 動作 SDK:`event::submit_action_as_character`(ControlCap-gated) / `scene::move_character`(tx wrapper 已有)
 - tick loop:`packages/runner/src/`(新 orchestrator)+ web SchedulerPanel(手動驅動)
 - 舊版原型只讀參照(挑 idea 不照搬):{decision,memory,sleep,relationships,event-loop}/
 - 敘事 craft 沙盒(已驗待對齊):離線沙盒(純 Node 模擬器)+ 沙盒機制 → 真實落點對照帳本(§8 末有摘要)

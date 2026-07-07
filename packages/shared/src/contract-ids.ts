@@ -4,7 +4,7 @@
  * **Writer:** `@endless-story/cli` (deploy.ts, bootstrap.ts, reset.ts).
  * **Readers:** sdk, runner, web (admin UI). Never edit by hand.
  *
- * Last written: 2026-06-16T12:27:30.672Z
+ * Last written: 2026-06-23T10:11:20.743Z
  *
  * See the on-chain architecture contract.
  */
@@ -43,6 +43,8 @@ export interface EndlessStoryDeployment {
   stillRegistryId: string;
   /** shared TransferPolicy<Still>, created at deploy time via still::init. */
   stillTransferPolicyId: string;
+  /** shared StillMintConfig (self-serve fee). Empty until `create_mint_config` bootstrap runs. */
+  stillMintConfigId: string;
   demoCharacters: DemoCharacterRef[];
   storyId: string;
   deployedAt: string;
@@ -51,7 +53,7 @@ export interface EndlessStoryDeployment {
 export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "network": "testnet",
   "packageId": "0xf0516b97224de8f9c1f3d38eca5f1fa4e1575bba0e2cd8bb1f3eb39b062ef7dc",
-  "latestPackageId": "0xf0516b97224de8f9c1f3d38eca5f1fa4e1575bba0e2cd8bb1f3eb39b062ef7dc",
+  "latestPackageId": "0x58f07611119958659913fa216ee42964ec96576a375e51a32d63281e75c5ebf6",
   "adminCapId": "0x93264b732c2bfc9848ad3c8e2f6243144271d9c4a0f46dcdc8255173269de2cc",
   "worldId": "0x4339ff60f664985b4edac34d337dfe59416bd7a6f28223d6621df85e06a6f057",
   "locationIds": [
@@ -84,9 +86,10 @@ export const ENDLESS_STORY_DEPLOYMENT: EndlessStoryDeployment = {
   "dreamAdminCapId": "0x304596a38cfbb6ca5c7cdc10f4e43ad620c6c7acca7f2a582a9b8ecf8ba42c71",
   "stillRegistryId": "0xee162de15f761b32192d677cc2adb35e950ba8bcf3c92dccfce7359fe5f86842",
   "stillTransferPolicyId": "0x5c109ca43581d209f1b889edfade67c42668b4f8eb83acb334b14d9923aea0d9",
+  "stillMintConfigId": "",
   "demoCharacters": [],
   "storyId": "spring-snow",
-  "deployedAt": "2026-06-16T12:27:30.672Z"
+  "deployedAt": "2026-06-23T10:11:20.743Z"
 };
 
 export function isDeployed(d: EndlessStoryDeployment = ENDLESS_STORY_DEPLOYMENT): boolean {

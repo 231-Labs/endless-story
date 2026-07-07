@@ -26,7 +26,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read, tx as endlessTx } from '@endless-story/sdk';
 import { createImageClient } from '@endless-story/llm/image';
 import { blob } from '@endless-story/memwal';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { execAdminTx, getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { portraitVariantPrompt, artSheetPrompt, humanReferencePrompt, stageMakeupPrompt } from '@/lib/image-prompts';
@@ -192,7 +192,7 @@ export async function generateAdditionalViews(
                 contentType: 'image/png',
                 tags: { kind: String(r.view.kind), view: r.view.label },
             })),
-            { network: 'testnet', epochs: 5 },
+            { network: 'testnet', epochs: 30 },
         );
         for (const p of quilt.patches) {
             stored.set(p.identifier as ViewSpec['label'], { url: p.url, chainId: p.quiltPatchId });
@@ -201,7 +201,7 @@ export async function generateAdditionalViews(
         console.warn('[additional-views] quilt upload failed, falling back to per-blob:', err instanceof Error ? err.message : err);
         for (const r of rendered) {
             try {
-                const put = await blob.putBlob(r.bytes, { network: 'testnet', contentType: 'image/png', epochs: 5 });
+                const put = await blob.putBlob(r.bytes, { network: 'testnet', contentType: 'image/png', epochs: 30 });
                 stored.set(r.view.label, { url: put.url, chainId: put.blobId });
             } catch (e) {
                 console.warn(`[additional-views] ${r.view.label} upload failed:`, e instanceof Error ? e.message : e);
@@ -234,14 +234,9 @@ export async function generateAdditionalViews(
                     asset,
                 }),
             );
-            const txr = await admin.client.signAndExecuteTransaction({
-                transaction: txb,
-                signer: admin.signer,
-                options: { showEffects: true },
-            });
-            await admin.client.waitForTransaction({ digest: txr.digest }).catch(() => {});
-            if (txr.effects?.status?.status === 'success') appended += 1;
-            else console.warn(`[additional-views] ${view.label} append failed:`, txr.effects?.status?.error);
+            const txr = await execAdminTx(admin, txb);
+            if (txr.success) appended += 1;
+            else console.warn(`[additional-views] ${view.label} append failed:`, txr.error);
         } catch (err) {
             console.warn(`[additional-views] ${view.label} anchor failed:`, err instanceof Error ? err.message : err);
         }

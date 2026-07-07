@@ -8,14 +8,20 @@
  * owns a Kiosk-tradeable Still; hanging it in a chamber is just a placement
  * referencing it via `source_object` (no chamber.move change).
  *
- * NOTE: requires a deployment that includes `still.move` — on the current
- * testnet deployment (pre-still) this returns a FunctionNotFound error until
- * the next redeploy.
+ * Live: `still.move` + the bootstrapped `StillRegistry` (Tx 6.5) are both on
+ * the current testnet deployment, so this mints for real. `recipient` (any
+ * wallet) receives the Still and can trade it via Kiosk or hang it in a 藏閣.
+ *
+ * This is the FREE admin path: the troupe minting 劇照 for automation or as a
+ * gift, with the admin covering gas and no charge to the recipient. The public
+ * 設定集 collect button does NOT call this — fans self-mint and pay a fee via
+ * `still::mint_still_paid` (see GalleryTab). Keep this for admin / automation /
+ * gifting use; it has no UI affordance yet.
  */
 
 import { Transaction } from '@mysten/sui/transactions';
-import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { getAdminContext } from '../chain/admin-signer.js';
+import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT, findCreatedObjectId } from '@endless-story/sdk';
+import { getAdminContext, execAdminTx } from '../chain/admin-signer.js';
 
 export interface MintStillInput {
   /** character the moment belongs to (royalty target, follow-up). */
@@ -74,25 +80,11 @@ export async function mintStillAction(input: MintStillInput): Promise<MintStillR
 
   let result;
   try {
-    result = await admin.client.signAndExecuteTransaction({
-      transaction: tx,
-      signer: admin.signer,
-      options: { showEffects: true, showObjectChanges: true },
-    });
+    result = await execAdminTx(admin, tx);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  let stillId: string | undefined;
-  const changes = (result.objectChanges ?? []) as Array<{
-    type: string;
-    objectType?: string;
-    objectId?: string;
-  }>;
-  for (const c of changes) {
-    if (c.type === 'created' && c.objectType?.endsWith('::still::Still')) {
-      stillId = c.objectId;
-    }
-  }
+  const stillId = findCreatedObjectId(result, '::still::Still');
   return { ok: true, stillId, digest: result.digest };
 }

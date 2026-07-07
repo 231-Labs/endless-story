@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient } from '@mysten/dapp-kit-react';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 
 export interface SagaAdminState {
@@ -26,7 +26,7 @@ export interface SagaAdminState {
 
 export function useSagaAdmin(): SagaAdminState {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
+  const client = useCurrentClient();
   const capId = ENDLESS_STORY_DEPLOYMENT.storytellerCapId;
 
   const [isSagaAdmin, setIsSagaAdmin] = useState(false);
@@ -40,16 +40,12 @@ export function useSagaAdmin(): SagaAdminState {
     }
     let cancelled = false;
     setIsLoading(true);
-    suiClient
-      .getObject({ id: capId, options: { showOwner: true } })
+    client.core
+      .getObject({ objectId: capId })
       .then((res) => {
         if (cancelled) return;
-        const owner = res.data?.owner;
-        if (owner && typeof owner === 'object' && 'AddressOwner' in owner) {
-          setIsSagaAdmin(owner.AddressOwner === account.address);
-        } else {
-          setIsSagaAdmin(false);
-        }
+        const owner = res.object.owner;
+        setIsSagaAdmin(owner?.$kind === 'AddressOwner' && owner.AddressOwner === account.address);
       })
       .catch(() => {
         if (!cancelled) setIsSagaAdmin(false);
@@ -60,7 +56,7 @@ export function useSagaAdmin(): SagaAdminState {
     return () => {
       cancelled = true;
     };
-  }, [account, suiClient, capId]);
+  }, [account, client, capId]);
 
   return { isSagaAdmin, isLoading, account };
 }

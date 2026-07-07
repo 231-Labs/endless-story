@@ -29,7 +29,9 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 # 服務組態(其餘以 Zeabur Variables 覆寫:SUI_KEYSTORE / WALRUS_NETWORK / WALRUS_CLI /
-# RELAYER_SECRET / RELAYER_CORS_ORIGIN / PUBLIC_AGGREGATOR_BASE / 續租門檻 …)
+# RELAYER_SECRET / RELAYER_CORS_ORIGIN / PUBLIC_AGGREGATOR_BASE / 自動續租那組:
+# RENEW_THRESHOLD_EPOCHS / RENEW_EXTEND_EPOCHS / WALLET_MIN_WAL / WALLET_MIN_SUI /
+# RENEW_SWEEP_INTERVAL_MS —— 見 docs/narrative/ASSET_MANAGEMENT.md §8)
 ENV DATA_DIR=/data \
     PORT=8788 \
     WALRUS_CLI=walrus \

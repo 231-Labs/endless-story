@@ -14,7 +14,7 @@ import {
     read,
     tx as endlessTx,
 } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 export interface DreamConfigSnapshot {
     price: string;   // raw u64 string (6 decimals)
@@ -68,15 +68,11 @@ export async function setDreamPriceAction(input: SetDreamPriceInput): Promise<Mu
                 newPrice: BigInt(input.priceRaw),
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '交易失敗',
+                error: res.error ?? '交易失敗',
                 digest: res.digest,
             };
         }
@@ -101,15 +97,11 @@ export async function setDreamPausedAction(input: SetDreamPausedInput): Promise<
                 paused: input.paused,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '交易失敗',
+                error: res.error ?? '交易失敗',
                 digest: res.digest,
             };
         }

@@ -8,19 +8,22 @@
     "deploy-preflight": "tsx --env-file-if-exists=../web/.env.local scripts/deploy-preflight.ts",
     "upgrade": "tsx --env-file-if-exists=../web/.env.local scripts/upgrade.ts",
     "bootstrap": "tsx --env-file-if-exists=../web/.env.local scripts/bootstrap.ts",
+    "create-mint-config": "tsx --env-file-if-exists=../web/.env.local scripts/create-mint-config.ts",
     "reset": "tsx --env-file-if-exists=../web/.env.local scripts/reset.ts",
     "test-e2e": "tsx --env-file-if-exists=../web/.env.local scripts/test-recruit-e2e.ts",
     "clip-thumbs": "tsx --env-file-if-exists=../web/.env.local scripts/clip-thumbs.ts",
     "world-loop": "tsx --env-file-if-exists=../web/.env.local scripts/world-loop.ts",
+    "indexer-poll": "tsx --env-file-if-exists=../web/.env.local scripts/indexer-poll.ts",
     "start": "pnpm run world-loop",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@endless-story/indexer": "workspace:*",
     "@endless-story/llm": "workspace:*",
     "@endless-story/memwal": "workspace:*",
     "@endless-story/sdk": "workspace:*",
     "@endless-story/shared": "workspace:*",
-    "@mysten/sui": "^2.16.0",
+    "@mysten/sui": "^2.20.1",
     "undici": "^8.7.0"
   },
   "devDependencies": {

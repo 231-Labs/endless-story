@@ -37,7 +37,7 @@ POV 章回 / reflection / dream / resource 全走 `suix_queryEvents`。把這個
 - web 改讀**自有 DB**（＝你自己的 event archive）→ 429 與 prune 兩個問題一起消失，讀取恆定快。
 - 寫路徑（mint / tick / tx 提交）仍直連鏈，但那是低頻、單點，好控。
 
-**這個縫早就留好了**：facade 的 `DATA_SOURCE='api'` → `httpGet('/characters')`（[`http.ts:117` notImplemented](../packages/web/src/lib/api/http.ts) 現為 stub），`runner` / `relayer` 兩個 package 本就是這條 backend 路。production ＝把它接上 indexer，而不是繼續走 `mock` / 直連鏈的 facade。
+**這個縫早就留好了**：facade 的 `DATA_SOURCE='api'` → `httpGet('/characters')`（[`http.ts:117` notImplemented](../../packages/web/src/lib/api/http.ts) 現為 stub），`runner` / `relayer` 兩個 package 本就是這條 backend 路。production ＝把它接上 indexer，而不是繼續走 `mock` / 直連鏈的 facade。
 
 ---
 
@@ -45,23 +45,30 @@ POV 章回 / reflection / dream / resource 全走 `suix_queryEvents`。把這個
 
 ### Phase P0 — 止血（今天，留在 testnet，不動架構）
 - `SUI_RPC_URL` → **專屬 archival 節點**（見 §3），先讓 testnet 穩。**不可再用會 prune event 的免費節點。**
-- 開大 server-side 快取：[`read-cache.ts`](../packages/web/src/lib/chain/read-cache.ts) 已有 TTL（`CHAIN_READ_CACHE_TTL_MS`）+ stale-while-revalidate；list 組裝（roster / feed 掃描）套 SWR，砍掉九成重複 RPC → 429 直接緩解。
+- 開大 server-side 快取：[`read-cache.ts`](../../packages/web/src/lib/chain/read-cache.ts) 已有 TTL（`CHAIN_READ_CACHE_TTL_MS`）+ stale-while-revalidate；list 組裝（roster / feed 掃描）套 SWR，砍掉九成重複 RPC → 429 直接緩解。
 - ⚠️ 此 cache 是 **process-local**（serverless 多實例不共享）；跨實例要等 P1 的 DB 或 relayer KV。
 
 ### Phase P1 — indexer 解耦（web 不再直連鏈）
-- 在 `runner` 新增 indexer service（建在既有 [`infra/event-bus.ts`](../packages/runner/src/infra/event-bus.ts) / [`infra/network.ts`](../packages/runner/src/infra/network.ts) 的 cursor-read 之上）：訂閱 `CharacterMinted` / POV / reflection / resource 等事件，cursor 持久化，落 Postgres。
-- 實作 web 的 `api` 端點，取代 [`notImplemented()`](../packages/web/src/lib/api/http.ts)：`GET /characters[?sagaId=|ownedBy=]`、`/characters/{id}`、`/chapters`、`/scenes`… 由 DB 服務。
+- 在 `runner` 新增 indexer service（建在既有 [`infra/event-bus.ts`](../../packages/runner/src/infra/event-bus.ts) / [`infra/network.ts`](../../packages/runner/src/infra/network.ts) 的 cursor-read 之上）：訂閱 `CharacterMinted` / POV / reflection / resource 等事件，cursor 持久化，落 Postgres。
+- 實作 web 的 `api` 端點，取代 [`notImplemented()`](../../packages/web/src/lib/api/http.ts)：`GET /characters[?sagaId=|ownedBy=]`、`/characters/{id}`、`/chapters`、`/scenes`… 由 DB 服務。
 - web 切 `NEXT_PUBLIC_DATA_SOURCE=api`；此後 web 不碰 RPC。
+
+> **進度（2026-06-23，PR [#64](https://github.com/231-Labs/endless-story/pull/64) 已併）**：P1 的讀取層已落地，但形狀與原規劃不同。
+> 結果是**獨立的 [`packages/indexer`](../../packages/indexer/)（不是 `runner` 內的 service）**，採**透明 sdk 縫**而非 `DATA_SOURCE=api` HTTP 端點重寫：
+> - 縫在 [`sdk/src/read/query-retry.ts`](../../packages/sdk/src/read/query-retry.ts)：有註冊 store 時 `queryEventsWithRetry` 改讀 store，回傳同一個 `{ data, hasNextPage, nextCursor }` 信封，**所有 caller 不改一行**；無 store 時退回原本的 live-RPC 重試路。
+> - web 在 `runTickLoopAction` 經 [`lib/server/event-store.ts`](../../packages/web/src/lib/server/event-store.ts) 註冊 `PgEventStore`，**gate 在 `DATABASE_URL`**：沒設＝no-op、讀續走 RPC；註冊失敗（DB 連不上）吞掉、下個 tick 重試，永不弄壞 tick。
+> - capture ＝**自架 poller**（[`poll.ts`](../../packages/indexer/src/poll.ts) 的 `FetchPage`：JSON-RPC adapter 為現在的 stopgap、GraphQL 為 7/31 後的耐久路），落 Postgres；事件身分＝鏈上 `(txDigest, eventSeq)`，故換 source 不變身分。早期的 Surflux Flux 推流 capture（`capture.ts`/`flux.ts`）已被自架輪詢取代（dashboard 不穩），檔案暫留樹中。
+> - 仍待：web 的 `api` HTTP 端點（characters/chapters/scenes…）＋ `NEXT_PUBLIC_DATA_SOURCE=api` 全切（上面兩個 bullet），讓 web runtime **完全零 RPC**；目前縫只把**事件讀**導向 store，非事件讀（object/tx）仍直連。
 
 ### Phase P2 — mainnet 換軌
 | 項目 | testnet 現況 | production |
 |---|---|---|
-| **鏈** | 會 reset；package id 每次 reseed 都變 | **mainnet**：穩定 package、停止 churn（[`contract-ids.ts`](../packages/shared/src/contract-ids.ts) 寫 mainnet 快照）|
-| **Walrus** | **blob 會過期**（真角色圖總有天蒸發）| mainnet Walrus + **付費續租**（relayer 的 [`asset-walrus.ts`](../packages/relayer/src/asset-walrus.ts) 已有 own-Blob 寫入，補續租 cron；見 memory `walrus-assets-backlog`）|
+| **鏈** | 會 reset；package id 每次 reseed 都變 | **mainnet**：穩定 package、停止 churn（[`contract-ids.ts`](../../packages/shared/src/contract-ids.ts) 寫 mainnet 快照）|
+| **Walrus** | **blob 會過期**（真角色圖總有天蒸發）| mainnet Walrus + **付費續租**（relayer 的 [`asset-walrus.ts`](../../packages/relayer/src/asset-walrus.ts) 已有 own-Blob 寫入，補續租 cron；見 memory `walrus-assets-backlog`）|
 | **SEAL/MemWal** | testnet | mainnet 金鑰 / relayer |
 
 ### Phase P3 — fail-loud + 韌性
-- facade 目前「鏈一抖就**靜默退 mock 假資料**」散在多處（[`characters.ts:50`](../packages/web/src/lib/api/characters.ts)、`chapters.ts`、`scenes.ts`、`locations.ts`、`relationships.ts`…）。
+- facade 目前「鏈一抖就**靜默退 mock 假資料**」散在多處（[`characters.ts:50`](../../packages/web/src/lib/api/characters.ts)、`chapters.ts`、`scenes.ts`、`locations.ts`、`relationships.ts`…）。
 - production 把 **demo fallback 與 `USE_MOCK` 拆開**：新增 `ALLOW_DEMO_FALLBACK`（預設 false on prod）。`isDeployed()` 後鏈讀失敗 → **error boundary + retry**，而不是餵假班底。production 餵假資料比報錯更危險。
 
 ---
@@ -96,6 +103,7 @@ suix_queryEvents { MoveEventType: "<packageId>::character::CharacterMinted" }
 
 - [ ] P0：`SUI_RPC_URL` = archival 廠商；`queryEvents(CharacterMinted)` 實測回 6 角色；roster 不再 mock。
 - [ ] P0：roster/feed 套 read-cache SWR；觀測 RPC 呼叫數 / 429 率下降。
-- [ ] P1：indexer 落庫；web `DATA_SOURCE=api` 後**零 RPC**（grep 確認 web runtime 不再 `makeSuiClient`）。
+- [x] P1a：`packages/indexer` 落地（PgEventStore + 自架 poller + 透明 sdk 縫）；設 `DATABASE_URL` 後**事件讀**改走 Postgres。
+- [ ] P1b：web `api` HTTP 端點 + `DATA_SOURCE=api` 全切，web runtime **零 RPC**（grep 確認不再 `makeSuiClient`，含非事件 object/tx 讀）。
 - [ ] P2：mainnet contract-ids 快照；Walrus mainnet + 續租 cron 跑通；真圖 mainnet 200。
 - [ ] P3：`ALLOW_DEMO_FALLBACK=false`，鏈讀失敗 → error boundary（**不** 顯示假班底）。

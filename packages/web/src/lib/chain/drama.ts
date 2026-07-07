@@ -12,6 +12,7 @@ import {
     ENDLESS_STORY_DEPLOYMENT,
     makeSuiClient,
     read,
+    signAndExecute,
     tx as endlessTx,
     type SuiClient,
 } from '@endless-story/sdk';
@@ -129,21 +130,21 @@ export async function readResourceLedger(
 async function readAllocations(client: SuiClient, tableId: string): Promise<Record<string, bigint>> {
     const out: Record<string, bigint> = {};
     const fieldIds: string[] = [];
-    let cursor: string | null | undefined = null;
+    let cursor: string | null = null;
     try {
         for (;;) {
-            const page = await client.getDynamicFields({ parentId: tableId, cursor: cursor ?? null });
-            for (const f of page.data) fieldIds.push(f.objectId);
-            if (!page.hasNextPage || !page.nextCursor) break;
-            cursor = page.nextCursor;
+            const page = await client.core.listDynamicFields({ parentId: tableId, cursor });
+            for (const f of page.dynamicFields) fieldIds.push(f.fieldId);
+            if (!page.hasNextPage || !page.cursor) break;
+            cursor = page.cursor;
         }
         for (let i = 0; i < fieldIds.length; i += 50) {
             const slice = fieldIds.slice(i, i + 50);
-            const objs = await client.multiGetObjects({ ids: slice, options: { showContent: true } });
-            for (const o of objs) {
-                const content = o.data?.content;
-                if (!content || content.dataType !== 'moveObject') continue;
-                const fields = content.fields as { name?: unknown; value?: unknown };
+            const objs = await client.core.getObjects({ objectIds: slice, include: { json: true } });
+            for (const o of objs.objects) {
+                if (o instanceof Error) continue;
+                const fields = o.json as { name?: unknown; value?: unknown } | null;
+                if (!fields) continue;
                 const holder = normalizeId(fields.name);
                 if (!holder) continue;
                 out[holder] = BigInt(String(fields.value ?? '0'));
@@ -323,13 +324,12 @@ export async function settleResolvedTransfers(opts: {
                 }),
             );
         }
-        const res = await client.signAndExecuteTransaction({
+        const res = await signAndExecute(client, {
             transaction: tx,
             signer: opts.signer,
-            options: { showEffects: true },
+            waitForFinality: false,
         });
-        const ok = res.effects?.status?.status === 'success';
-        return { ok, digest: res.digest, error: ok ? undefined : res.effects?.status?.error };
+        return { ok: res.success, digest: res.digest, error: res.success ? undefined : (res.error ?? undefined) };
     } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

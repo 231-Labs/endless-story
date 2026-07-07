@@ -15,7 +15,8 @@
  */
 
 import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { makeSuiClient, type SuiClient } from '@endless-story/sdk';
+import type { Transaction } from '@mysten/sui/transactions';
+import { makeSuiClient, signAndExecute, type SuiClient, type ExecutedTx } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import { resolveNetwork } from './network.js';
 
@@ -60,38 +61,10 @@ export function withAdminLock<T>(fn: () => Promise<T>): Promise<T> {
     return run;
 }
 
-function serializeAdminTxs(client: SuiClient): SuiClient {
-    const raw = client.signAndExecuteTransaction.bind(client);
-    type Args = Parameters<typeof raw>[0];
-    client.signAndExecuteTransaction = ((args: Args) =>
-        withAdminLock(async () => {
-            // [ch-timing] split lock-acquire vs submit vs finality-wait INSIDE the
-            // global admin lock. A tx that hangs holds the whole adminTxChain, so every
-            // later admin tx (incl. the inline cut jobs) stalls behind it. If
-            // `lock-acquired` never prints → stuck WAITING for the lock (a prior tx is
-            // holding it); `lock-acquired` but no `submitted` → stuck in signAndExecute
-            // (RPC submit); `submitted` but no `settled` → stuck in waitForTransaction
-            // (finality). Grep `[ch-timing] admin-tx`.
-            console.log('[ch-timing] admin-tx lock-acquired');
-            const at0 = Date.now();
-            const res = await raw(args);
-            console.log(
-                `[ch-timing] admin-tx submitted=${((Date.now() - at0) / 1000).toFixed(1)}s digest=${(res?.digest ?? '?').slice(0, 8)} — waiting finality`,
-            );
-            const at1 = Date.now();
-            if (res?.digest) await client.waitForTransaction({ digest: res.digest }).catch(() => {});
-            console.log(
-                `[ch-timing] admin-tx settled wait=${((Date.now() - at1) / 1000).toFixed(1)}s digest=${(res?.digest ?? '?').slice(0, 8)}`,
-            );
-            return res;
-        })) as typeof client.signAndExecuteTransaction;
-    return client;
-}
-
-/** Build a Sui client targeting the deployed network. Admin txs through this
- *  client are serialized process-wide (see `serializeAdminTxs`). */
+/** Build a Sui gRPC client targeting the deployed network. Admin txs must go
+ *  through `execAdminTx` (or `withAdminLock`) so they stay serialized. */
 export function getAdminClient(): SuiClient {
-    return serializeAdminTxs(makeSuiClient({ network: resolveNetwork() }));
+    return makeSuiClient({ network: resolveNetwork() });
 }
 
 /** Pair: client + signer, for admin server actions. */
@@ -108,4 +81,32 @@ export function getAdminContext(): AdminContext {
         signer,
         address: signer.toSuiAddress(),
     };
+}
+
+/**
+ * Sign + execute an admin transaction with the process-wide serialization the
+ * shared gas coin / StorytellerCap require. Runs inside `withAdminLock`, requests
+ * effects/events/objectTypes, and waits for finality INSIDE the lock — so each
+ * tx's created objects and owned-object versions settle before the next admin tx
+ * builds. Returns the normalized `ExecutedTx`; read `.success` / `.error` /
+ * `.digest` and pull created ids with `findCreatedObjectId`.
+ */
+export function execAdminTx(admin: AdminContext, transaction: Transaction): Promise<ExecutedTx> {
+    return withAdminLock(async () => {
+        // [ch-timing] A tx that hangs holds the whole adminTxChain, stalling every
+        // later admin tx. `lock-acquired` missing → stuck WAITING for the lock;
+        // `lock-acquired` but no `settled` → stuck in submit/finality. Grep
+        // `[ch-timing] admin-tx`.
+        console.log('[ch-timing] admin-tx lock-acquired');
+        const at0 = Date.now();
+        const res = await signAndExecute(admin.client, {
+            transaction,
+            signer: admin.signer,
+            waitForFinality: true,
+        });
+        console.log(
+            `[ch-timing] admin-tx settled=${((Date.now() - at0) / 1000).toFixed(1)}s digest=${res.digest.slice(0, 8)} ok=${res.success}`,
+        );
+        return res;
+    });
 }

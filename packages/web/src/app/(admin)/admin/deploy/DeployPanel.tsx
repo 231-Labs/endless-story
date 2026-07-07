@@ -33,12 +33,18 @@ export function DeployPanel({ initialStatus, presets }: Props) {
             //  - deploy: explicit 1 SUI gas budget + force-republish
             //    (strip stale Published.toml entry so a re-deploy isn't refused).
             //  - bootstrap: --story-id selects the preset. test-e2e ignores unknown flags.
+            //  - upgrade: package upgrade in place (default gas budget); writes the
+            //    runtime manifest so the running container adopts the new ids.
             const extraArgs =
                 script === 'deploy-preflight'
                     ? ['--json-out=/private/tmp/endless-story-deploy-preflight.json']
                     : script === 'deploy'
                       ? ['--gas-budget', '1000000000', '--force-republish']
-                      : ['--story-id', storyId];
+                      : script === 'upgrade'
+                        ? ['--gas-budget', '2000000000']
+                        : script === 'create-mint-config'
+                          ? []
+                          : ['--story-id', storyId];
             const res = await runCliScript({ script, env, extraArgs });
             const combined = `--- stdout ---\n${res.stdout}\n--- stderr ---\n${res.stderr}\n--- exit ${res.code} in ${res.durationMs}ms`;
             setLog(combined);
@@ -260,6 +266,18 @@ export function DeployPanel({ initialStatus, presets }: Props) {
                         sub="依 story preset 種 World / Saga / Locations / Scenes / Faucet"
                         onClick={() => handleRun('bootstrap')}
                         disabled={isPending || !status.isDeployed}
+                    />
+                    <ActionButton
+                        label="⟳ 升級合約"
+                        sub="package upgrade（保留世界）+ 寫 runtime manifest，線上免重 build"
+                        onClick={() => handleRun('upgrade')}
+                        disabled={isPending || !status.isDeployed}
+                    />
+                    <ActionButton
+                        label="鑄造 config"
+                        sub="在現有 saga 建 StillMintConfig（劇照自助鑄造費）+ 寫 manifest；種世界已自動含此步"
+                        onClick={() => handleRun('create-mint-config')}
+                        disabled={isPending || !status.isBootstrapped}
                     />
                     <ActionButton
                         label="③ seed 職缺"

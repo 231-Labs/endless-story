@@ -1,8 +1,8 @@
 (function () {
   'use strict';
 
-  // slug + bilingual labels. Deep docs carry `lang` (written language) and `type`
-  // (product / tech / research). Entry pages carry `bilingual:true` (a .zh variant exists).
+  // Public docs are deliberately curated. Internal runbooks and design journals stay
+  // under docs/, but are not copied verbatim into the published whitepaper site.
   var GROUPS = [
     { key: 'start', items: [
       { slug: 'overview', en: 'Overview', zh: '總覽', bilingual: true },
@@ -10,27 +10,15 @@
       { slug: 'roadmap', en: 'Roadmap', zh: '路線圖', bilingual: true }
     ] },
     { key: 'protocol', items: [
-      { slug: 'primitives', en: 'Protocol primitives', zh: '協議物件模型', lang: 'en', type: 'tech' },
-      { slug: 'walrus-storage', en: 'Walrus storage', zh: 'Walrus 儲存模型', lang: 'en', type: 'tech' }
+      { slug: 'protocol', en: 'On-chain protocol', zh: '鏈上協議', bilingual: true, type: 'tech' },
+      { slug: 'memory', en: 'Memory and storage', zh: '記憶與儲存', bilingual: true, type: 'tech' }
     ] },
     { key: 'narrative', items: [
-      { slug: 'narrative-agents', en: 'Narrative agents', zh: '敘事 Agent 架構', lang: 'zh', type: 'tech' },
-      { slug: 'event-lifecycle', en: 'Event lifecycle', zh: '事件生命週期', lang: 'zh', type: 'tech' },
-      { slug: 'content-pipeline', en: 'Content pipeline', zh: '內容鏈路', lang: 'zh', type: 'tech' },
-      { slug: 'production-engine', en: 'Production engine', zh: '劇目製作引擎', lang: 'zh', type: 'tech' },
-      { slug: 'prompts', en: 'Prompts', zh: 'Prompts', lang: 'en', type: 'tech' },
-      { slug: 'character-economy', en: 'Character economy', zh: '角色經濟', lang: 'zh', type: 'tech' },
-      { slug: 'asset-management', en: 'Asset management', zh: '資產管理', lang: 'zh', type: 'tech' },
-      { slug: 'deployment', en: 'Deployment', zh: '部署', lang: 'zh', type: 'tech' }
-    ] },
-    { key: 'participation', items: [
-      { slug: 'product-positioning', en: 'Product positioning', zh: '產品定位', lang: 'zh', type: 'product' },
-      { slug: 'production-plan', en: 'Roadmap and plan', zh: '路線圖與計畫', lang: 'zh', type: 'product' },
-      { slug: 'pitch-deck', en: 'Pitch outline', zh: '簡報大綱', lang: 'zh', type: 'product' },
-      { slug: 'api-contract', en: 'API contract', zh: 'API 合約', lang: 'en', type: 'tech' }
+      { slug: 'narrative', en: 'Narrative engine', zh: '敘事引擎', bilingual: true, type: 'tech' },
+      { slug: 'economy', en: 'Character economy', zh: '角色經濟', bilingual: true, type: 'product' }
     ] },
     { key: 'research', items: [
-      { slug: 'whitepaper', en: 'Whitepaper', zh: '白皮書', lang: 'zh', type: 'research' }
+      { slug: 'whitepaper', en: 'Mechanism whitepaper', zh: '機制白皮書', bilingual: true, type: 'research' }
     ] },
     { key: 'links', items: [
       { url: './pitch/endless-story-pitch-light-en.html', en: 'Pitch deck (EN)', zh: '簡報（English）' },
@@ -42,7 +30,7 @@
   var STRINGS = {
     en: {
       brandSub: 'Design docs',
-      groups: { start: 'Start', protocol: 'Protocol', narrative: 'Narrative', participation: 'Participation', research: 'Research', links: 'Links' },
+      groups: { start: 'Start', protocol: 'Protocol', narrative: 'System', participation: 'Participation', research: 'Research', links: 'Links' },
       footTrack: 'Sui Overflow 2026 · Walrus track',
       footBy: 'Built by 231 Labs',
       pageFoot: 'Walrus + Seal · MemWal SDK · Sui. Built by 231 Labs.',
@@ -55,7 +43,7 @@
     },
     zh: {
       brandSub: '設計文檔',
-      groups: { start: '開始', protocol: '協議', narrative: '敘事', participation: '用戶參與', research: '研究', links: '連結' },
+      groups: { start: '開始', protocol: '協議', narrative: '系統', participation: '用戶參與', research: '研究', links: '連結' },
       footTrack: 'Sui Overflow 2026 · Walrus 賽道',
       footBy: '由 231 Labs 打造',
       pageFoot: 'Walrus + Seal · MemWal SDK · Sui。由 231 Labs 打造。',
@@ -162,6 +150,45 @@
     });
   }
 
+  // marked deliberately stays dependency-free, so render the small formula set used by
+  // the public whitepaper into readable HTML instead of exposing raw $$ / TeX commands.
+  function readableFormula(source) {
+    return source.trim()
+      .replace(/\\operatorname\{([^}]+)\}/g, '$1')
+      .replace(/\\mathrm\{([^}]+)\}/g, '$1')
+      .replace(/\\text\{([^}]+)\}/g, '$1')
+      .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1 / $2)')
+      .replace(/\\prod_\{?([^}\s]+)\}?/g, '∏_$1')
+      .replace(/\\times/g, '×')
+      .replace(/\\rightarrow/g, '→')
+      .replace(/\\alpha/g, 'α')
+      .replace(/\\max/g, 'max')
+      .replace(/\\bmod/g, 'mod')
+      .replace(/\\left|\\right|\\boxed/g, '')
+      .replace(/\\lfloor/g, 'floor(')
+      .replace(/\\rfloor/g, ')')
+      .replace(/_\{([^}]+)\}/g, '_$1')
+      .replace(/\^\{([^}]+)\}/g, '^($1)')
+      .replace(/\\[;,!]/g, ' ')
+      .replace(/\s+/g, ' ');
+  }
+
+  function renderFormulas() {
+    Array.prototype.forEach.call(contentEl.querySelectorAll('p'), function (p) {
+      var text = (p.textContent || '').trim();
+      if (text.slice(0, 2) !== '$$' || text.slice(-2) !== '$$') return;
+      var formula = document.createElement('div');
+      formula.className = 'formula';
+      formula.textContent = readableFormula(text.slice(2, -2));
+      p.replaceWith(formula);
+    });
+
+    Array.prototype.forEach.call(contentEl.querySelectorAll('p, li, td'), function (el) {
+      if (el.querySelector('code, pre')) return;
+      el.innerHTML = el.innerHTML.replace(/\$([^$<>]+)\$/g, '<var>$1</var>');
+    });
+  }
+
   function setActive(slug) {
     Array.prototype.forEach.call(navEl.querySelectorAll('.nav-link'), function (a) {
       a.classList.toggle('active', a.getAttribute('data-slug') === slug);
@@ -198,6 +225,7 @@
         }
         contentEl.innerHTML = note + marked.parse(md);
         contentEl.classList.remove('loading');
+        renderFormulas();
         rewriteLinks();
         addHeadingIds();
         setActive(slug);

@@ -1,6 +1,10 @@
 <div align="center">
 
-<img src="pitch/assets/logo.png" alt="Endless Story" width="120" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="pitch/assets/logo-light.png">
+  <img src="pitch/assets/logo-light.png" alt="Endless Story" width="120" />
+</picture>
 
 # Endless Story
 
@@ -12,15 +16,17 @@ Autonomous characters remember, form relationships, and act on their own. Their 
 [![Walrus Track](https://img.shields.io/badge/Track-Walrus-1B6B5B)](https://walrus.xyz)
 [![Live demo](https://img.shields.io/badge/demo-spring--snow.231labs.xyz-B0492F)](https://spring-snow.231labs.xyz)
 
-[**Live demo**](https://spring-snow.231labs.xyz) · [**Pitch deck**](#pitch-deck) · [繁體中文](README.zh-TW.md)
+[**Live demo**](https://spring-snow.231labs.xyz) · [**Design docs**](https://231-labs.github.io/endless-story/) · [**Pitch deck**](#pitch-deck) · [繁體中文](README.zh-TW.md)
 
 </div>
 
 > Hackathon project for **Sui Overflow 2026 · Walrus track**.
 
-<p align="center">
-  <img src="pitch/assets/demo.gif" alt="Endless Story demo" width="100%" />
-</p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/hero-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="pitch/assets/hero-light.png">
+  <img src="pitch/assets/hero-dark.png" alt="Spring Snow Troupe, the first saga running on Endless Story" width="560" />
+</picture></p>
 
 ---
 
@@ -42,6 +48,14 @@ Endless Story is a multi-agent protocol for living, autonomous story worlds. Pic
 - **🔒 Seal** encrypts memory per character, so characters can't read each other's private memory. The owner can always decrypt; the storyteller's access is epoch-bound and revocable.
 
 Contract objects live in [`contracts/endless_story/`](contracts/endless_story/).
+
+## Design docs
+
+The curated public specification — overview, architecture, protocol, memory, narrative engine, economy, roadmap, and mechanism whitepaper — is published separately from internal engineering notes:
+
+▶ **[Read the design docs](https://231-labs.github.io/endless-story/)** &nbsp;·&nbsp; [中文版](https://231-labs.github.io/endless-story/#/overview.zh)
+
+Source: [`docs/public/`](docs/public/) and [`site/content/`](site/content/) (synced at deploy; not the internal journals under `docs/narrative/`).
 
 ---
 

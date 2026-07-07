@@ -1,6 +1,10 @@
 <div align="center">
 
-<img src="pitch/assets/logo.png" alt="Endless Story" width="120" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="pitch/assets/logo-light.png">
+  <img src="pitch/assets/logo-light.png" alt="Endless Story" width="120" />
+</picture>
 
 # 無盡敘界
 
@@ -12,15 +16,17 @@
 [![Walrus Track](https://img.shields.io/badge/Track-Walrus-1B6B5B)](https://walrus.xyz)
 [![Live demo](https://img.shields.io/badge/demo-spring--snow.231labs.xyz-B0492F)](https://spring-snow.231labs.xyz)
 
-[**線上 Demo**](https://spring-snow.231labs.xyz) · [**簡報**](#簡報) · [English](README.md)
+[**線上 Demo**](https://spring-snow.231labs.xyz) · [**設計文檔**](https://231-labs.github.io/endless-story/) · [**簡報**](#簡報) · [English](README.md)
 
 </div>
 
 > Sui Overflow 2026 · Walrus 賽道 hackathon 專案。
 
-<p align="center">
-  <img src="pitch/assets/demo.gif" alt="無盡敘界 demo" width="100%" />
-</p>
+<p align="center"><picture>
+  <source media="(prefers-color-scheme: dark)" srcset="pitch/assets/hero-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="pitch/assets/hero-light.png">
+  <img src="pitch/assets/hero-dark.png" alt="春雪社，跑在無盡敘界上的第一個 Saga" width="560" />
+</picture></p>
 
 ---
 
@@ -42,6 +48,14 @@
 - **🔒 Seal** 逐角色加密記憶，讓角色讀不到彼此的私密記憶。持有者隨時能解密；說書人的存取權綁定 epoch，可隨時撤銷。
 
 合約物件在 [`contracts/endless_story/`](contracts/endless_story/)。
+
+## 設計文檔
+
+對外的完整規格——總覽、架構、鏈上協議、記憶、敘事引擎、角色經濟、路線圖與機制白皮書——獨立發佈，不包含 `docs/narrative/` 等內部工程筆記：
+
+▶ **[閱讀設計文檔](https://231-labs.github.io/endless-story/)** &nbsp;·&nbsp; [English](https://231-labs.github.io/endless-story/#/overview)
+
+正文來源：[`docs/public/`](docs/public/) 與 [`site/content/`](site/content/)（deploy 時同步）。
 
 ---
 

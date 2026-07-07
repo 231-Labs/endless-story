@@ -17,8 +17,15 @@
  */
 
 export * from './client';
+export * from './execute';
+export * from './resilient-fetch';
+export * from './runtime-deployment';
 export * as tx from './tx';
 export * as read from './read';
+
+// Inject a durable event store (server-side) so event reads come from the
+// indexer instead of live RPC. No-op until a store is registered.
+export { setEventStore } from './read/event-store';
 
 // Re-export the deployment snapshot so consumers can stay on one import.
 export {

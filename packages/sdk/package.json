@@ -19,8 +19,9 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@endless-story/indexer": "workspace:*",
     "@endless-story/shared": "workspace:*",
-    "@mysten/sui": "^2.16.0"
+    "@mysten/sui": "^2.20.1"
   },
   "devDependencies": {
     "@mysten/codegen": "^0.10.4",

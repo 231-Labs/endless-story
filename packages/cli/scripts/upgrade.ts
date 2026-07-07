@@ -6,16 +6,16 @@
  * - upgrade.ts uses the existing UpgradeCap and keeps packageId as the
  *   original type anchor while writing latestPackageId for Move calls.
  */
-import { execSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as url from 'node:url';
 import * as fs from 'node:fs';
 import { Transaction } from '@mysten/sui/transactions';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import { ENDLESS_STORY_DEPLOYMENT, type SuiNetwork } from '@endless-story/shared/contract-ids';
-import { makeSuiClient } from '@endless-story/sdk';
+import { makeSuiClient, signAndExecute, findPublishedPackageId } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
-import { assertActiveEnv } from '../src/lib/sui-publish';
+import { assertActiveEnv, loadBytecodeDump } from '../src/lib/sui-publish';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
 
 const VALID_NETWORKS: ReadonlySet<SuiNetwork> = new Set(['devnet', 'testnet', 'mainnet', 'localnet']);
@@ -44,44 +44,25 @@ function repoPaths() {
 }
 
 function buildPackage(contractsDir: string): BuildDump {
-  let out: string;
-  try {
-    out = execSync('sui move build --dump-bytecode-as-base64', {
-      cwd: contractsDir,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: 1024 * 1024 * 200,
-    });
-  } catch (e) {
-    const err = e as { stderr?: Buffer | string; stdout?: Buffer | string; message: string };
-    if (err.stdout?.toString().trim()) console.error('--- stdout ---\n' + err.stdout.toString());
-    if (err.stderr?.toString().trim()) console.error('--- stderr ---\n' + err.stderr.toString());
-    throw new Error('move build failed');
-  }
-  const jsonStart = out.indexOf('{');
-  const dump = JSON.parse(out.slice(jsonStart)) as BuildDump;
-  if (!dump.modules?.length || !dump.dependencies?.length || !dump.digest?.length) {
-    throw new Error('move build output missing modules/dependencies/digest');
+  // Shared resolver: pre-built dump in-container (DEPLOY_BYTECODE_DUMP_PATH),
+  // else `sui move build` from source (local dev).
+  const dump = loadBytecodeDump(contractsDir) as BuildDump;
+  // An upgrade ticket needs the package digest for the compatibility check.
+  if (!dump.digest?.length) {
+    throw new Error('bytecode dump missing digest (required for upgrade compatibility)');
   }
   return dump;
 }
 
-function fieldsFromUpgradeCapObject(obj: unknown): UpgradeCapInfo | null {
-  const data = obj as {
-    data?: {
-      objectId?: string;
-      content?: {
-        dataType?: string;
-        fields?: {
-          package?: string;
-          version?: string;
-          policy?: number | string;
-        };
-      };
-    };
-  };
-  const id = data.data?.objectId;
-  const fields = data.data?.content?.fields;
+/** Parse an UpgradeCap from a gRPC `Object` (with `json: true`). */
+function fieldsFromUpgradeCapObject(
+  obj: SuiClientTypes.Object<{ json: true }> | undefined,
+): UpgradeCapInfo | null {
+  const id = obj?.objectId;
+  const fields = obj?.json as
+    | { package?: string; version?: string; policy?: number | string }
+    | null
+    | undefined;
   if (!id || !fields?.package || fields.policy == null || fields.version == null) return null;
   return {
     id,
@@ -93,19 +74,19 @@ function fieldsFromUpgradeCapObject(obj: unknown): UpgradeCapInfo | null {
 
 async function listUpgradeCaps(client: ReturnType<typeof makeSuiClient>, owner: string): Promise<UpgradeCapInfo[]> {
   const caps: UpgradeCapInfo[] = [];
-  let cursor: string | undefined;
+  let cursor: string | null = null;
   do {
-    const page = await client.getOwnedObjects({
+    const page: SuiClientTypes.ListOwnedObjectsResponse<{ json: true }> = await client.core.listOwnedObjects({
       owner,
       cursor,
-      filter: { StructType: '0x2::package::UpgradeCap' },
-      options: { showContent: true },
+      type: '0x2::package::UpgradeCap',
+      include: { json: true },
     });
-    for (const item of page.data) {
+    for (const item of page.objects) {
       const cap = fieldsFromUpgradeCapObject(item);
       if (cap) caps.push(cap);
     }
-    cursor = page.hasNextPage ? page.nextCursor ?? undefined : undefined;
+    cursor = page.hasNextPage ? page.cursor : null;
   } while (cursor);
   return caps;
 }
@@ -117,8 +98,8 @@ async function getUpgradeCap(
   explicitCapId?: string,
 ): Promise<UpgradeCapInfo> {
   if (explicitCapId) {
-    const obj = await client.getObject({ id: explicitCapId, options: { showContent: true } });
-    const cap = fieldsFromUpgradeCapObject(obj);
+    const res = await client.core.getObject({ objectId: explicitCapId, include: { json: true } });
+    const cap = fieldsFromUpgradeCapObject(res.object);
     if (!cap) throw new Error(`object ${explicitCapId} is not an UpgradeCap`);
     if (cap.packageId !== targetPackageId) {
       throw new Error(`UpgradeCap ${cap.id} points at ${cap.packageId}, expected ${targetPackageId}`);
@@ -194,7 +175,13 @@ async function main() {
   console.log(`   gasBudget       ${gasBudget}`);
   console.log(`   dryRun          ${dryRun}`);
 
-  assertActiveEnv(env);
+  // assertActiveEnv guards LOCAL `sui client` usage (wrong active-env footgun).
+  // In CLI-free / container mode (pre-built bytecode dump + programmatic signing
+  // via SUI_ADMIN_PRIVATE_KEY) there is no sui client config to check and the
+  // network is taken from --env, so skip it.
+  if (!process.env.DEPLOY_BYTECODE_DUMP_PATH?.trim()) {
+    assertActiveEnv(env);
+  }
 
   const signer = loadKeypair();
   const sender = signer.toSuiAddress();
@@ -217,13 +204,14 @@ async function main() {
 
   if (dryRun) {
     console.log('\n[dry-run] submitting dry run…');
-    const bytes = await tx.build({ client });
-    const res = await client.dryRunTransactionBlock({ transactionBlock: bytes });
-    const ok = res.effects.status.status === 'success';
-    console.log(`   status ${res.effects.status.status}`);
-    if (res.effects.status.error) console.log(`   error  ${res.effects.status.error}`);
+    const sim = await client.core.simulateTransaction({ transaction: tx });
+    const simTx = sim.Transaction ?? sim.FailedTransaction;
+    const ok = simTx.status.success;
+    console.log(`   status ${ok ? 'success' : 'failure'}`);
+    const simError = simTx.status.success ? null : simTx.status.error?.message;
+    if (simError) console.log(`   error  ${simError}`);
     if (jsonOut) {
-      fs.writeFileSync(jsonOut, JSON.stringify(res, null, 2), 'utf-8');
+      fs.writeFileSync(jsonOut, JSON.stringify(sim, null, 2), 'utf-8');
       console.log(`   wrote  ${jsonOut}`);
     }
     if (!ok) process.exit(1);
@@ -232,51 +220,61 @@ async function main() {
   }
 
   console.log('\n[upgrade] signing and executing…');
-  const res = await client.signAndExecuteTransaction({
-    transaction: tx,
-    signer,
-    options: { showEffects: true, showObjectChanges: true },
-  });
-  if (res.effects?.status?.status !== 'success') {
-    throw new Error(`upgrade failed: ${res.effects?.status?.error ?? 'unknown'}`);
+  const res = await signAndExecute(client, { transaction: tx, signer, waitForFinality: true });
+  if (!res.success) {
+    throw new Error(`upgrade failed: ${res.error ?? 'unknown'}`);
   }
-  await client.waitForTransaction({ digest: res.digest });
 
-  const published = (res.objectChanges ?? []).find((o: { type: string }) => o.type === 'published') as
-    | { packageId?: string }
-    | undefined;
-  if (!published?.packageId) {
-    console.error(JSON.stringify(res.objectChanges ?? [], null, 2));
-    throw new Error('upgrade succeeded but no upgraded package id was found in objectChanges');
+  const upgradedPackageId = findPublishedPackageId(res);
+  if (!upgradedPackageId) {
+    console.error(JSON.stringify(res.objectTypes ?? {}, null, 2));
+    throw new Error('upgrade succeeded but no upgraded package id was found in effects');
   }
 
   const deployedAt = new Date().toISOString();
+  const snapshot = {
+    network: env,
+    packageId: ENDLESS_STORY_DEPLOYMENT.packageId,
+    latestPackageId: upgradedPackageId,
+    adminCapId: ENDLESS_STORY_DEPLOYMENT.adminCapId,
+    worldId: ENDLESS_STORY_DEPLOYMENT.worldId,
+    locationIds: ENDLESS_STORY_DEPLOYMENT.locationIds,
+    sagaId: ENDLESS_STORY_DEPLOYMENT.sagaId,
+    storytellerCapId: ENDLESS_STORY_DEPLOYMENT.storytellerCapId,
+    sceneIds: ENDLESS_STORY_DEPLOYMENT.sceneIds,
+    faucetId: ENDLESS_STORY_DEPLOYMENT.faucetId,
+    faucetAdminCapId: ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId,
+    dreamConfigId: ENDLESS_STORY_DEPLOYMENT.dreamConfigId,
+    dreamAdminCapId: ENDLESS_STORY_DEPLOYMENT.dreamAdminCapId,
+    // Preserve still ledger ids — these survive an upgrade (same original
+    // package anchors the Still type) and dropping them breaks 劇照 mint/shop.
+    stillRegistryId: ENDLESS_STORY_DEPLOYMENT.stillRegistryId,
+    stillTransferPolicyId: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
+    stillMintConfigId: ENDLESS_STORY_DEPLOYMENT.stillMintConfigId,
+    demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
+    storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
+  };
   console.log('\n[contract-ids] writing upgraded snapshot…');
-  writeContractIds(
-    sharedSrcDir,
-    {
-      network: env,
-      packageId: ENDLESS_STORY_DEPLOYMENT.packageId,
-      latestPackageId: published.packageId,
-      adminCapId: ENDLESS_STORY_DEPLOYMENT.adminCapId,
-      worldId: ENDLESS_STORY_DEPLOYMENT.worldId,
-      locationIds: ENDLESS_STORY_DEPLOYMENT.locationIds,
-      sagaId: ENDLESS_STORY_DEPLOYMENT.sagaId,
-      storytellerCapId: ENDLESS_STORY_DEPLOYMENT.storytellerCapId,
-      sceneIds: ENDLESS_STORY_DEPLOYMENT.sceneIds,
-      faucetId: ENDLESS_STORY_DEPLOYMENT.faucetId,
-      faucetAdminCapId: ENDLESS_STORY_DEPLOYMENT.faucetAdminCapId,
-      dreamConfigId: ENDLESS_STORY_DEPLOYMENT.dreamConfigId,
-      dreamAdminCapId: ENDLESS_STORY_DEPLOYMENT.dreamAdminCapId,
-      demoCharacters: ENDLESS_STORY_DEPLOYMENT.demoCharacters,
-      storyId: ENDLESS_STORY_DEPLOYMENT.storyId,
-    },
-    deployedAt,
-  );
+  writeContractIds(sharedSrcDir, snapshot, deployedAt);
+
+  // Runtime manifest: lets a running web container adopt the upgraded ids
+  // WITHOUT a rebuild (read on boot via DEPLOYMENT_MANIFEST_PATH). The source
+  // contract-ids.ts above is the committed seed; this volume file is what a
+  // remote, in-container upgrade actually relies on. Best-effort.
+  const manifestPath = process.env.DEPLOYMENT_MANIFEST_PATH?.trim();
+  if (manifestPath) {
+    try {
+      fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+      fs.writeFileSync(manifestPath, JSON.stringify({ ...snapshot, deployedAt }, null, 2), 'utf-8');
+      console.log(`[manifest] wrote runtime deployment manifest: ${manifestPath}`);
+    } catch (e) {
+      console.warn(`[manifest] failed to write ${manifestPath}: ${(e as Error).message}`);
+    }
+  }
 
   console.log('\n[done] Package upgrade complete.');
   console.log(`   originalPackage ${ENDLESS_STORY_DEPLOYMENT.packageId}`);
-  console.log(`   latestPackage   ${published.packageId}`);
+  console.log(`   latestPackage   ${upgradedPackageId}`);
   console.log(`   cap             ${upgradeCap.id}`);
   console.log(`   digest          ${res.digest}`);
   console.log(`   deployedAt      ${deployedAt}`);

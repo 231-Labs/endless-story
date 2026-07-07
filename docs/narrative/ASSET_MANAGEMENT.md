@@ -3,7 +3,7 @@
 > 後台統一管理「住在 Walrus 上、要長存」的資產(hero 影片、角色圖、場景錨點、章回文字)的
 > **上傳 / 上下架 / 到期追蹤 / 續租**。
 > **鎖定決策**:① 一次到位的**通用面板**(不只影片);② **Hybrid 續費**(儀表板警示＋手動按鈕＋可選 per-category 自動續租)。
-> 狀態:**規劃完成,待動工**。Walrus 賽道,deadline 2026-06-21。
+> 狀態:**Phase 1–5 已實作**(資產服務 / 後台 / 首頁閉環 / 自動續租掃描＋端點＋定時 sweeper＋單元測試);待實機對 funded 錢包驗證。Walrus 賽道,deadline 2026-06-21。
 > 這份是**資產營運**面（上傳 / 續租 / 上下架）。儲存模型本身見 [Walrus 儲存模型](../protocol/WALRUS_STORAGE.md)。
 > 相關:[DEPLOYMENT.md](./DEPLOYMENT.md) · [NARRATIVE_AGENTS.md](./NARRATIVE_AGENTS.md)
 
@@ -178,17 +178,17 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 
 ## 6. 首頁 hero-clip 閉環
 
-前端**零改動**:現有 `loadDemoClipOverride()`([packages/web/src/lib/api/scenes.ts](../packages/web/src/lib/api/scenes.ts))已支援
+前端**零改動**:現有 `loadDemoClipOverride()`([packages/web/src/lib/api/scenes.ts](../../packages/web/src/lib/api/scenes.ts))已支援
 `DEMO_CLIPS_URL`(`cache:'no-store'`)。設 `DEMO_CLIPS_URL = https://relayer.<domain>/api/manifest/hero-clips`。
 `HeroTheater` 直接 render `clip.videoUrl` 字串 ⇒ 上傳一支 hero-clip → registry → manifest → 首頁換片,不碰 repo、不 redeploy。
 
-> manifest 的 `videoUrl` 用 `https://walrus.<domain>/v1/blobs/:blobId`(直打 VPS aggregator,**不經** [api/blob proxy](../packages/web/src/app/api/blob/[blobId]/route.ts);那支留給文字 blob 修 Content-Type)。
+> manifest 的 `videoUrl` 用 `https://walrus.<domain>/v1/blobs/:blobId`(直打 VPS aggregator,**不經** [api/blob proxy](../../packages/web/src/app/api/blob/[blobId]/route.ts);那支留給文字 blob 修 Content-Type)。
 
 ---
 
 ## 7. backfill 既有資產（ownership 坑）
 
-⚠️ 既有角色圖([packages/web/src/mocks/characters.ts](../packages/web/src/mocks/characters.ts) 的 `BLOB.*` 常數)多半是
+⚠️ 既有角色圖([packages/web/src/mocks/characters.ts](../../packages/web/src/mocks/characters.ts) 的 `BLOB.*` 常數)多半是
 **公共 publisher 種的 ⇒ 你不擁有那些 Blob object ⇒ 續不了租**。納管要：
 
 1. 從 aggregator 抓 bytes(`walrus.<domain>/v1/blobs/:blobId`)。
@@ -199,13 +199,38 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 
 ---
 
-## 8. Hybrid 自動續租（決策 ②）
+## 8. Hybrid 自動續租（決策 ②）— 已實作
 
-- relayer 加一個輕量 cron(`setInterval`,或外部 systemd timer 打 `POST /api/assets/renew-due`):
-  掃 `autoRenew === true` 且 `epochsRemaining < RENEW_THRESHOLD_EPOCHS` → `walrus extend`。
+掃描核心在 [`packages/relayer/src/asset-renew.ts`](../../packages/relayer/src/asset-renew.ts)
+(`renewDue()`,純函式、注入 store + walrus + config,單元測試
+[`test/asset-renew.test.ts`](../../packages/relayer/test/asset-renew.test.ts) 11 案綠)。兩種觸發共用同一核心:
+
+- **in-process 定時 sweeper**(`assets-server.ts`):`RENEW_SWEEP_INTERVAL_MS > 0`(預設 6h)就開,
+  開機後約 15s 先掃一次,之後按間隔重複。設 `RENEW_SWEEP_INTERVAL_MS=0` 關掉,改用外部 cron。
+- **`POST /api/assets/renew-due`**(authed):給外部 systemd timer / cron 打,或後台「立即檢查續租」
+  按鈕觸發。兩者共用一個 in-flight 鎖避免重入重複 extend(重入時回 `409`)。
+
+掃描規則:`autoRenew === true` 且 `0 < endEpoch − currentEpoch ≤ RENEW_THRESHOLD_EPOCHS` →
+`walrus extend +RENEW_EXTEND_EPOCHS`(與 UI「即將到期」高亮同一門檻,故紅列＝會被續的列)。**已過期(remaining ≤ 0)
+的 blob 不 extend**:合約會在 `walrus::blob::assert_certified_not_expired` abort(`EResourceBounds`),過期 blob 救不回,
+直接 skip 回報、不再每輪硬打(否則就是無限失敗洗版)。`status` 不影響(下架但 autoRenew 仍續,見模組註解)。
+`currentEpoch` 讀不到 → 整輪放棄(無法判到期)。
+
 - **per-category 預設 ＋ per-asset 覆寫**(schema 的 `autoRenew`)。
-- 續租前檢查錢包餘額;**不足 → 不續、改發後台/通知警示**(避免以為自動就高枕無憂)。
-- 門檻 env:`RENEW_THRESHOLD_EPOCHS`、`RENEW_EXTEND_EPOCHS`、`WALLET_MIN_WAL`、`WALLET_MIN_SUI`。
+- 續租前查錢包餘額:`WALLET_MIN_WAL` / `WALLET_MIN_SUI`(預設 0 ＝不設地板;>0 時餘額低於地板 → 整輪跳過 + log
+  警示、**不續**,避免以為自動就高枕無憂)。餘額讀不到(null)＝不擋,照續但記警示。單筆 `extend` 失敗被隔離
+  (catch + 計入 `failed`),不影響其他筆;失敗訊息含 `EResourceBounds`/`expired`(掃描後才過期)歸入 skipped 而非 failed;
+  連續 5 筆非過期失敗則中止本輪(別空轟錢包)。錯誤訊息含 stdout(walrus 把交易執行錯誤印在 stdout 不是 stderr)。
+- **手動續租端點 `POST /api/assets/:id/extend`**(後台每列那顆按鈕 + 批量)同樣用 `planExtend()` 守門:已過期 → `409`
+  「已過期,請刪除」;剩餘太多 → 把 `+N` 封頂到 `currentEpoch + WALRUS_MAX_EPOCHS`(避免 `EInvalidEpochsAhead`),
+  已達上限 → `409`「已達儲存上限」。所以點任何資產都不會再丟 500。自動 sweep 因為只碰 `剩 ≤ 5`,封頂永遠不觸發。
+- 門檻 env:`RENEW_THRESHOLD_EPOCHS`(預設 5)、`RENEW_EXTEND_EPOCHS`(預設 30)、`WALLET_MIN_WAL`(預設 0)、
+  `WALLET_MIN_SUI`(預設 0)、`RENEW_SWEEP_INTERVAL_MS`(預設 6h)、`WALRUS_MAX_EPOCHS`(預設 53;blob 最遠能存到的 epochs ahead,`walrus info` 可確認)。
+  注意 `RENEW_THRESHOLD_EPOCHS + RENEW_EXTEND_EPOCHS` 要 ≤ `WALRUS_MAX_EPOCHS`(預設 5+30=35 ≤ 53,安全)。
+- **實機驗證(2026-06-25)**:funded 錢包對「活著的」blob extend 成功;早期用 5 epochs 種、sweeper 上線前就過期的 blob
+  無法續(`EResourceBounds`,預期),已改為 skip,不再洗版。過期死列可在後台批量刪除清掉(DELETE 容許 `walrus delete`
+  失敗仍移除 registry 列)。
+- **待辦**:餘額不足/續租失敗目前只 log + 後台顯示,主動通知(webhook/email)未接。
 
 ---
 
@@ -228,7 +253,7 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 | **2** | Admin「資產」tab:表格/上傳/上下架/續租/錢包條 ＋ Next.js server 代傳 route | 我 | 不阻塞 |
 | **3** | 首頁閉環:`GET /api/manifest/hero-clips` ＋ 設 `DEMO_CLIPS_URL` | 我 | 收尾 |
 | **4** | backfill 既有角色圖(重 register pass) | 我寫腳本 + 你跑一次 | 需 VPS publisher 就緒 |
-| **5** | Hybrid 自動續租 cron ＋ 錢包警示 | 我 | 需 VPS |
+| **5** | Hybrid 自動續租:`renewDue()` 核心 ＋ `POST /api/assets/renew-due` ＋ in-process sweeper ＋ 錢包地板 ＋ 單元測試(§8)。**DONE,待實機驗證** | 我 | 需 VPS |
 
 開發/驗證指令:
 ```bash
@@ -252,7 +277,8 @@ pnpm -r type-check                            # 全 repo 綠燈
 
 | 路徑 | 動作 |
 |---|---|
-| `packages/relayer/src/assets.ts` | 新增:registry persistence ＋ `walrus` CLI wrapper(store/extend/delete/status/wallet)＋ dev-local mock |
+| `packages/relayer/src/assets.ts` | 新增:registry persistence ＋ `walrus` CLI wrapper(store/extend/delete/status/wallet)＋ dev-local mock（實作時拆成 `asset-store.ts` / `asset-walrus.ts` / `asset-types.ts` / `assets-server.ts`） |
+| `packages/relayer/src/asset-renew.ts` | 新增:`renewDue()` 自動續租掃描核心(§8);單元測試 `test/asset-renew.test.ts` |
 | `packages/relayer/Dockerfile` | 新增:base `cmdoss/walrus`(含 walrus+sui binaries)＋ 裝 Node ＋ relayer 原始碼;Zeabur Service ② 用 |
 | `packages/relayer/src/walrus.ts` | **不動**(`upload()` 保持原簽章;asset 路徑用 assets.ts 的 CLI) |
 | `packages/relayer/src/server.ts` | 加:§4 路由(既有路由不動) |
@@ -264,7 +290,7 @@ pnpm -r type-check                            # 全 repo 綠燈
 | `packages/web/src/lib/api/scenes.ts` | 不改(已支援 `DEMO_CLIPS_URL`) |
 
 **env 清單**:
-- relayer service:`SUI_KEYSTORE`(錢包私鑰)、`WALRUS_NETWORK`(testnet/mainnet)、`RELAYER_SECRET`、`RELAYER_CORS_ORIGIN`、`DATA_DIR=/data`、`RENEW_THRESHOLD_EPOCHS`、`RENEW_EXTEND_EPOCHS`、`WALLET_MIN_WAL`、`WALLET_MIN_SUI`;(記憶 blob 路徑仍用 `WALRUS_PUBLISHER_URL`、`WALRUS_EPOCHS`,維持原樣)
+- relayer service:`SUI_KEYSTORE`(錢包私鑰)、`WALRUS_NETWORK`(testnet/mainnet)、`RELAYER_SECRET`、`RELAYER_CORS_ORIGIN`、`DATA_DIR=/data`、`RENEW_THRESHOLD_EPOCHS`、`RENEW_EXTEND_EPOCHS`、`WALLET_MIN_WAL`、`WALLET_MIN_SUI`、`RENEW_SWEEP_INTERVAL_MS`(自動續租 sweeper 間隔,0＝關;見 §8);(記憶 blob 路徑仍用 `WALRUS_PUBLISHER_URL`、`WALRUS_EPOCHS`,維持原樣)
 - aggregator service:`MODE=aggregator`、`NETWORK`
 - 前端(Vercel,Tier C 定案後設):`MEMWAL_SERVER_URL`(=`relayer.<domain>`)、`DEMO_CLIPS_URL`(=`relayer.<domain>/api/manifest/hero-clips`)、`RELAYER_SECRET`
 

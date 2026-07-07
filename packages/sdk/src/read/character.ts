@@ -2,6 +2,7 @@
  * Character view queries — Character / OwnerCap / ControlCap + list helpers.
  */
 import * as gen from '../generated/endless_story/character.js';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import type { SuiClient } from '../client.js';
 import { scanEvents } from './query-retry.js';
 
@@ -58,21 +59,20 @@ export async function listControlCapsForAddress(
 ): Promise<ControlCapRef[]> {
     const structType = `${packageId}::character::ControlCap`;
     const out: ControlCapRef[] = [];
-    let cursor: string | null | undefined = null;
+    let cursor: string | null = null;
     for (;;) {
-        const page = await client.getOwnedObjects({
+        const page: SuiClientTypes.ListOwnedObjectsResponse<{ json: true }> = await client.core.listOwnedObjects({
             owner,
             cursor,
             limit: 50,
-            filter: { StructType: structType },
-            options: { showType: true, showContent: true },
+            type: structType,
+            include: { json: true },
         });
-        for (const obj of page.data) {
-            const content = obj.data?.content;
-            if (!content || content.dataType !== 'moveObject') continue;
-            const fields = content.fields as Record<string, unknown>;
+        for (const obj of page.objects) {
+            const fields = obj.json as Record<string, unknown> | null;
+            if (!fields) continue;
             const characterId = typeof fields.character_id === 'string' ? fields.character_id : '';
-            if (!characterId || !obj.data?.objectId) continue;
+            if (!characterId || !obj.objectId) continue;
             const sagaRaw = fields.saga_id;
             const sagaId =
                 typeof sagaRaw === 'string'
@@ -81,14 +81,14 @@ export async function listControlCapsForAddress(
                       ? null
                       : null;
             out.push({
-                capId: obj.data.objectId,
+                capId: obj.objectId,
                 characterId,
                 epoch: Number(fields.epoch ?? 0),
                 sagaId,
             });
         }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
+        if (!page.hasNextPage || !page.cursor) break;
+        cursor = page.cursor;
     }
     return out;
 }
@@ -100,32 +100,30 @@ export async function listOwnerCapsForAddress(
 ): Promise<OwnerCapRef[]> {
     const structType = `${packageId}::character::OwnerCap`;
     const out: OwnerCapRef[] = [];
-    let cursor: string | null | undefined = null;
+    let cursor: string | null = null;
     for (;;) {
-        const page = await client.getOwnedObjects({
+        const page: SuiClientTypes.ListOwnedObjectsResponse<{ json: true }> = await client.core.listOwnedObjects({
             owner,
             cursor,
             limit: 50,
-            filter: { StructType: structType },
-            options: { showType: true, showContent: true },
+            type: structType,
+            include: { json: true },
         });
-        for (const obj of page.data) {
-            const data = obj.data;
-            const content = data?.content;
-            if (!content || content.dataType !== 'moveObject') continue;
-            const fields = content.fields as Record<string, unknown>;
+        for (const obj of page.objects) {
+            const fields = obj.json as Record<string, unknown> | null;
+            if (!fields) continue;
             const characterId = typeof fields.character_id === 'string' ? fields.character_id : '';
-            if (!characterId || !data.objectId) continue;
+            if (!characterId || !obj.objectId) continue;
             out.push({
-                capId: data.objectId,
+                capId: obj.objectId,
                 characterId,
                 worldId: typeof fields.world_id === 'string' ? fields.world_id : '',
                 mintedAtMs: String(fields.minted_at_ms ?? '0'),
                 cumulativeRevenue: String(fields.cumulative_revenue ?? '0'),
             });
         }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
+        if (!page.hasNextPage || !page.cursor) break;
+        cursor = page.cursor;
     }
     return out;
 }
