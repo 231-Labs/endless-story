@@ -21,6 +21,20 @@ export function clearHomeScenes(): void {
     homeByCharacter.clear();
 }
 
+/** Daytime work anchors (G11) — where a character's 崗位 is. The morning router
+ *  disperses the cast to these, mirroring the night pull toward homes. */
+const workByCharacter = new Map<string, string>();
+
+export function setWorkScenes(entries: Iterable<readonly [string, string]>): void {
+    for (const [c, s] of entries) workByCharacter.set(c, s);
+}
+export function getWorkScene(characterId: string): string | undefined {
+    return workByCharacter.get(characterId);
+}
+export function clearWorkScenes(): void {
+    workByCharacter.clear();
+}
+
 export interface RoutingActor {
     id: string;
     sceneId: string;

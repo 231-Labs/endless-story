@@ -48,7 +48,7 @@ import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-st
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
 import { recordSceneTruth } from '@/lib/chain/scene-truth';
 import { ensureHomesSeeded } from '@/lib/chain/home-seed';
-import { getHomeScene } from '@/lib/chain/spatial-routing';
+import { getHomeScene, getWorkScene } from '@/lib/chain/spatial-routing';
 import { loadBible } from '@/lib/chain/story-bible-store';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
@@ -460,6 +460,24 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     ([id, sc]) => rosterById.get(id)?.currentSceneId !== sc,
                 ).length;
                 if (relocating > 0) tlog(`②◦ 夜路由: ${relocating} 人各歸其所（追隨/避讓依關係圖）`);
+            } else if (!dryRun && worldTime?.tickOfDay === 0) {
+                // G11 morning dispersal: the day starts at one's 崗位 (preset
+                // work_scene) — the mechanical mirror of night homes. Breaks the
+                // one-room magnet every dawn; the LLM keeps agency for the rest
+                // of the day.
+                await ensureHomesSeeded(
+                    d.sagaId,
+                    activeRoster.map((r) => ({ id: r.id, name: r.name })),
+                    activeScenes.map((s) => ({ id: s.id, name: s.name })),
+                ).catch(() => 0);
+                const toWork = activeRoster.flatMap((r) => {
+                    const w = getWorkScene(r.id);
+                    return w && r.currentSceneId !== w ? ([[r.id, w]] as const) : [];
+                });
+                if (toWork.length > 0) {
+                    routeTargets = new Map(toWork);
+                    tlog(`②◦ 晨路由: ${toWork.length} 人各就崗位`);
+                }
             }
             moves.push(
                 ...(await runMovePhase({

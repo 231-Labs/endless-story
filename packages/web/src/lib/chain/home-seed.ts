@@ -12,7 +12,7 @@
  */
 
 import { loadStoryPreset } from '@/lib/stories/loader';
-import { setHomeScenes, getHomeScene } from './spatial-routing';
+import { setHomeScenes, setWorkScenes, getHomeScene } from './spatial-routing';
 
 let seededForSaga: string | null = null;
 
@@ -26,16 +26,27 @@ export async function ensureHomesSeeded(
     let entries: Array<readonly [string, string]> = [];
     try {
         const preset = (await loadStoryPreset(presetId)) as unknown as {
-            founding_cast?: Array<{ name?: string; home_scene?: string }>;
+            founding_cast?: Array<{ name?: string; home_scene?: string; work_scene?: string }>;
         };
         const sceneIdByName = new Map(scenes.map((s) => [s.name, s.id]));
         const idByName = new Map(roster.map((r) => [r.name, r.id]));
-        entries = (preset.founding_cast ?? [])
-            .filter((c) => c.name && c.home_scene)
-            .map((c) => [idByName.get(c.name!), sceneIdByName.get(c.home_scene!)] as const)
-            .filter((pair): pair is readonly [string, string] => Boolean(pair[0] && pair[1]));
+        const resolve = (name?: string, scene?: string): readonly [string, string] | null => {
+            const cid = name ? idByName.get(name) : undefined;
+            const sid = scene ? sceneIdByName.get(scene) : undefined;
+            return cid && sid ? ([cid, sid] as const) : null;
+        };
+        const cast = preset.founding_cast ?? [];
+        entries = cast
+            .map((c) => resolve(c.name, c.home_scene))
+            .filter((x): x is readonly [string, string] => Boolean(x));
+        // Work anchors ride the same seeding pass (G11).
+        setWorkScenes(
+            cast
+                .map((c) => resolve(c.name, c.work_scene))
+                .filter((x): x is readonly [string, string] => Boolean(x)),
+        );
     } catch {
-        return 0; // no preset → no homes; router falls back to stay-put
+        return 0; // no preset → no anchors; routers fall back to stay-put
     }
     setHomeScenes(entries);
     seededForSaga = sagaId;
