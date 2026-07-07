@@ -297,3 +297,38 @@ test('G8b routing: intrude bypasses the welcome gate into a private home', () =>
     const politeTargets = computeSpatialRouting(politeActors, scenes, true, welcome);
     assert.equal(politeTargets.get(JIN.id), 'jinHome');
 });
+
+test('H3b routing: pursuer aims at the pursued HOME (not their daytime scene) + softened home pull', () => {
+    // The live bug: both spend the day in a PUBLIC hall (sceneId ≠ home), and the
+    // pursuer is processed FIRST — old code saw the target still in the public
+    // hall (propriety 0) AND high night fatigue buried pursuit → both slept alone.
+    const scenes = [
+        { id: 'hall', privacyLevel: 0 },
+        { id: 'suHome', privacyLevel: 4 },
+        { id: 'liuHome', privacyLevel: 4 },
+    ];
+    const welcome = (host: string, visitor: string) => (host === '0xsu' && visitor === LIU.id ? 1 : 0);
+    const actors = [
+        { id: LIU.id, sceneId: 'hall', homeSceneId: 'liuHome', fatigue: 0.85, pursue: { id: '0xsu', w: 0.9 } },
+        { id: '0xsu', sceneId: 'hall', homeSceneId: 'suHome', fatigue: 0.85 },
+    ];
+    const targets = computeSpatialRouting(actors, scenes, true, welcome);
+    assert.equal(targets.get('0xsu'), 'suHome'); // 蘇 goes home
+    assert.equal(targets.get(LIU.id), 'suHome'); // 柳 aims at 蘇's HOME → the pair forms
+});
+
+test('H3b routing: a one-sided breaking intrusion forms the pair against a wary target', () => {
+    const scenes = [
+        { id: 'hall', privacyLevel: 0 },
+        { id: 'suHome', privacyLevel: 4 },
+        { id: 'liuHome', privacyLevel: 4 },
+    ];
+    const noWelcome = () => 0; // 蘇 never opens the door to 柳
+    const actors = [
+        { id: LIU.id, sceneId: 'hall', homeSceneId: 'liuHome', fatigue: 0.85, pursue: { id: '0xsu', w: 1, intrude: true } },
+        { id: '0xsu', sceneId: 'hall', homeSceneId: 'suHome', fatigue: 0.85 },
+    ];
+    const targets = computeSpatialRouting(actors, scenes, true, noWelcome);
+    // Intrusion is a compulsion — it overrides tiredness and the shut door.
+    assert.equal(targets.get(LIU.id), 'suHome');
+});

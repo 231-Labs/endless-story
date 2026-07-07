@@ -187,13 +187,19 @@ function nightPursuit(
 
 /** 妒火夜隨 (G8b): the hottest jealousy/grudge want at pressing+ follows its
  *  target into the night, UNINVITED (intrude skips the welcome gate). Pure. */
+/** Night-pursuit pull strength: a breaking want drags at full force, else it
+ *  pulls by tension (how unsatisfied it still is). */
+function pursuitWeight(w: Want): number {
+    return forcingLevel(w) === 'breaking' ? 1 : Math.min(1, tension(w));
+}
+
 export function jealousNightPursuit(
     wants: ReadonlyArray<Want>,
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
 ): { id: string; w: number; intrude: true } | null {
     const p = nightPursuit(wants, characterId, resolveTargetId, JEALOUS_LAYER);
-    return p ? { id: p.id, w: p.w, intrude: true } : null;
+    return p ? { id: p.id, w: pursuitWeight(p.want), intrude: true } : null;
 }
 
 /** 夜赴 (H1/H3): a ripe love or unsettled-debt want seeks its target at night
@@ -210,8 +216,8 @@ export function yearningNightPursuit(
     const p = nightPursuit(wants, characterId, resolveTargetId, new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`));
     if (!p) return null;
     return forcingLevel(p.want) === 'breaking'
-        ? { id: p.id, w: p.w, intrude: true }
-        : { id: p.id, w: p.w };
+        ? { id: p.id, w: pursuitWeight(p.want), intrude: true }
+        : { id: p.id, w: pursuitWeight(p.want) };
 }
 
 /** Night-scene qualification (G8/G8b, H1): a private scene plays at night as a

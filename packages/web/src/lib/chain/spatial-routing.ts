@@ -71,8 +71,11 @@ export interface SpatialRoutingOpts {
  * Two rules stop a mutually-in-love pair from oscillating:
  *   1. At night pursuit only scores into a home you're WELCOMED into (or your own);
  *      public scenes and unwelcoming homes score 0, so home wins and you disperse.
- *   2. Actors resolve sequentially and see earlier commitments, so one anchors home
- *      and the other follows — the pair converges to one private room in a single tick.
+ *      An INTRUDING pursuit (jealousy / a breaking want) is a compulsion — it
+ *      overrides tiredness and always beats the pull home.
+ *   2. Live positions START at each actor's HOME (their night anchor), not their
+ *      daytime scene, so following is order-independent: a pursuer aims where the
+ *      pursued will BE at night, and 撞破 still follows an earlier committed move.
  */
 export function computeSpatialRouting(
     actors: readonly RoutingActor[],
@@ -93,26 +96,32 @@ export function computeSpatialRouting(
     const isPrivate = (sceneId: string): boolean => (privacyById.get(sceneId) ?? 0) >= priv;
     const ownerOfHome = new Map<string, string>();
     for (const a of actors) if (a.homeSceneId) ownerOfHome.set(a.homeSceneId, a.id);
-    // Live positions, updated as each actor commits (rule 2).
-    const posByActor = new Map(actors.map((a) => [a.id, a.sceneId]));
+    // Live positions START at each actor's night anchor (home), not the daytime
+    // scene — so a pursuer sees the pursued where they'll actually be (rule 2).
+    const posByActor = new Map(actors.map((a) => [a.id, a.homeSceneId]));
 
     for (const a of actors) {
         if (a.asleep) continue;
-        const homePull = (a.fatigue ?? 0.4) * homeW + nightHomeBias;
+        // Softened so a strong warm bond can beat the pull home (was fatible of
+        // exceeding the max pursuit weight at high night fatigue → home always won).
+        const homePull = (a.fatigue ?? 0.4) * homeW * 0.6 + nightHomeBias;
         const cands: Array<{ scene: string; w: number }> = [{ scene: a.homeSceneId, w: homePull }];
 
         if (a.pursue) {
             const tScene = posByActor.get(a.pursue.id);
-            if (tScene) {
-                // Rule 1: only a welcomed home (or your own) draws you at night.
+            if (tScene && tScene !== a.homeSceneId) {
+                // Rule 1: only a welcomed private home (or an intrusion) draws you.
                 let propriety = 0;
-                if (tScene === a.homeSceneId) propriety = 1;
-                else if (isPrivate(tScene)) {
+                if (isPrivate(tScene)) {
                     const owner = ownerOfHome.get(tScene);
-                    // Jealous intrusion asks nobody's leave — that is the point.
                     propriety = a.pursue.intrude ? 1 : owner ? welcome(owner, a.id) : 0;
                 }
-                cands.push({ scene: tScene, w: a.pursue.w * bondW * propriety });
+                // An intrusion is a compulsion: it overrides tiredness (homePull),
+                // never merely competes with it — else high night fatigue buries it.
+                const w = a.pursue.intrude
+                    ? homePull + a.pursue.w
+                    : a.pursue.w * bondW * propriety;
+                if (propriety > 0) cands.push({ scene: tScene, w });
             }
         }
 
