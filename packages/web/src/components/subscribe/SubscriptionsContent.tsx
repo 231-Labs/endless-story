@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import type { Character, Subscription, SubscriptionChannel } from '@endless-story/shared';
 import { CharacterPortrait } from '@/components/common/CharacterPortrait';
 import { UnsubscribeButton } from '@/components/subscribe/UnsubscribeButton';

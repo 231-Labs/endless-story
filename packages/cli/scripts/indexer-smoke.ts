@@ -11,7 +11,7 @@
  */
 import { makeSuiClient, ENDLESS_STORY_DEPLOYMENT, setEventStore, read } from '@endless-story/sdk';
 import { PgEventStore, makePool } from '@endless-story/indexer/pg';
-import { pollOnce } from './lib/indexer-poll.ts';
+import { pollOnce, graphqlExecFromUrl, DEFAULT_GRAPHQL_URL } from './lib/indexer-poll.ts';
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -21,11 +21,15 @@ if (!url) {
 
 const pool = makePool(url);
 const store = new PgEventStore(pool);
-const client = makeSuiClient({ network: 'testnet' });
 const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
 
 console.log(`[smoke] package ${pkg}`);
-const ingested = await pollOnce(store, client, pkg, new Map());
+const ingested = await pollOnce(
+  store,
+  graphqlExecFromUrl(process.env.SUI_GRAPHQL_URL ?? DEFAULT_GRAPHQL_URL),
+  pkg,
+  new Map(),
+);
 console.log(`[smoke] poll ingested ${ingested} events`);
 
 for (const suffix of [

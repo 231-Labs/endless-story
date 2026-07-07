@@ -24,7 +24,13 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import type { Keypair } from '@mysten/sui/cryptography';
-import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, type SuiClient } from '@endless-story/sdk';
+import {
+    ENDLESS_STORY_DEPLOYMENT,
+    tx as endlessTx,
+    signAndExecute,
+    findCreatedObjectId,
+    type SuiClient,
+} from '@endless-story/sdk';
 import { createTextClient } from '@endless-story/llm/text';
 import { readResourceLedger } from '@/lib/chain/drama';
 import {
@@ -182,18 +188,14 @@ async function instantiateProposal(
                 capacity: BigInt(proposal.capacity),
             }),
         );
-        const res = await ctx.client.signAndExecuteTransaction({
+        const res = await signAndExecute(ctx.client, {
             transaction: txb,
             signer: ctx.signer,
-            options: { showEffects: true, showObjectChanges: true },
+            waitForFinality: true,
         });
-        if (res.effects?.status?.status !== 'success')
-            return { ok: false, created: proposal, error: res.effects?.status?.error ?? 'instantiate failed' };
-        await ctx.client.waitForTransaction({ digest: res.digest }).catch(() => {});
-        const created = res.objectChanges?.find(
-            (c) => c.type === 'created' && 'objectType' in c && c.objectType.includes('::resource::DramaResource'),
-        );
-        const resourceId = created && 'objectId' in created ? created.objectId : undefined;
+        if (!res.success)
+            return { ok: false, created: proposal, error: res.error ?? 'instantiate failed' };
+        const resourceId = findCreatedObjectId(res, '::resource::DramaResource');
         return { ok: true, created: proposal, resourceId };
     } catch (err) {
         return { ok: false, created: proposal, error: err instanceof Error ? err.message : String(err) };

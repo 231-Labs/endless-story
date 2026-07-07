@@ -7,8 +7,32 @@
  * reads, so the store can serve every MoveEventType the read seam asks for.
  */
 import type { PgEventStore } from '@endless-story/indexer/pg';
-import type { HighWater, QueryEventsClient } from '@endless-story/indexer';
-import { pollAllOnce, jsonRpcFetchPage } from '@endless-story/indexer';
+import type { HighWater, GraphqlExec } from '@endless-story/indexer';
+import { pollAllOnce, graphqlFetchPage } from '@endless-story/indexer';
+
+/** Public Sui testnet GraphQL endpoint (rate-limited; override with SUI_GRAPHQL_URL). */
+export const DEFAULT_GRAPHQL_URL = 'https://graphql.testnet.sui.io/graphql';
+
+/**
+ * A `GraphqlExec` over plain `fetch` against a Sui GraphQL endpoint. Kept
+ * dependency-light (no SDK GraphQL client) — the poller only needs the `events`
+ * query, which this posts directly and unwraps to `data` (throwing on errors).
+ */
+export function graphqlExecFromUrl(url: string): GraphqlExec {
+  return async (query, variables) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+    });
+    if (!res.ok) throw new Error(`[indexer-poll] GraphQL HTTP ${res.status}`);
+    const json = (await res.json()) as { data?: unknown; errors?: unknown };
+    if (json.errors) {
+      throw new Error(`[indexer-poll] GraphQL errors: ${JSON.stringify(json.errors).slice(0, 300)}`);
+    }
+    return json.data;
+  };
+}
 
 /** `module::Struct` suffixes the engine reads (read/*.ts MoveEventType filters). */
 export const EVENT_TYPE_SUFFIXES = [
@@ -53,11 +77,11 @@ async function saveMarks(store: PgEventStore, marks: Map<string, HighWater | nul
 /** One poll pass over every tracked type, persisting the marks afterward. */
 export async function pollOnce(
   store: PgEventStore,
-  client: QueryEventsClient,
+  exec: GraphqlExec,
   packageId: string,
   marks: Map<string, HighWater | null>,
 ): Promise<number> {
-  const fetchPage = jsonRpcFetchPage(client);
+  const fetchPage = graphqlFetchPage(exec);
   const ingested = await pollAllOnce(
     fetchPage,
     (e) => store.upsert(e),

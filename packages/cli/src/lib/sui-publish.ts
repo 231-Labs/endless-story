@@ -10,7 +10,13 @@ import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Transaction } from '@mysten/sui/transactions';
-import { makeSuiClient, type SuiNetwork } from '@endless-story/sdk';
+import {
+  makeSuiClient,
+  signAndExecute,
+  findPublishedPackageId,
+  findCreatedObjectId,
+  type SuiNetwork,
+} from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 
 export interface PublishOptions {
@@ -203,39 +209,31 @@ async function publishWithConfiguredKey(opts: {
   tx.transferObjects([upgradeCap], sender);
 
   // 3. sign + execute with the configured key
-  const res = await client.signAndExecuteTransaction({
-    transaction: tx,
-    signer,
-    options: { showEffects: true, showObjectChanges: true },
-  });
-  if (res.effects?.status?.status !== 'success') {
-    throw new Error(`publish failed: ${res.effects?.status?.error ?? 'unknown'}`);
+  const res = await signAndExecute(client, { transaction: tx, signer, waitForFinality: true });
+  if (!res.success) {
+    throw new Error(`publish failed: ${res.error ?? 'unknown'}`);
   }
 
-  const changes = res.objectChanges ?? [];
-  const published = changes.find((o: { type: string }) => o.type === 'published') as
-    | { packageId?: string }
-    | undefined;
-  if (!published?.packageId) {
-    console.error(JSON.stringify(changes, null, 2));
+  const packageId = findPublishedPackageId(res);
+  if (!packageId) {
+    console.error(JSON.stringify(res.objectTypes ?? {}, null, 2));
     throw new Error('could not find packageId in publish result');
   }
-  const createdObjects: Array<{ id: string; type: string }> = changes
-    .filter((o) => o.type === 'created')
-    .map((o) => {
-      const c = o as { objectId: string; objectType: string };
-      return { id: c.objectId, type: c.objectType };
-    });
-  const adminCap = createdObjects.find((o) => o.type.endsWith('::AdminCap'));
+  // All created objects (id + fully-qualified type) from the objectTypes map.
+  const types = res.objectTypes ?? {};
+  const createdObjects: Array<{ id: string; type: string }> = Object.entries(types).map(
+    ([id, type]) => ({ id, type }),
+  );
+  const adminCapId = findCreatedObjectId(res, '::AdminCap') ?? null;
   const digest = res.digest ?? '';
 
-  console.log(`   packageId  ${published.packageId}`);
-  console.log(`   adminCap   ${adminCap?.id ?? '(none on publish)'}`);
+  console.log(`   packageId  ${packageId}`);
+  console.log(`   adminCap   ${adminCapId ?? '(none on publish)'}`);
   console.log(`   digest     ${digest}`);
 
   return {
-    packageId: published.packageId,
-    adminCapId: adminCap?.id ?? null,
+    packageId,
+    adminCapId,
     digest,
     createdObjects,
   };

@@ -5,12 +5,21 @@
  *
  *   pnpm --filter @endless-story/cli indexer-poll
  *
- * Env: DATABASE_URL (required), SUI_RPC_URL (optional, defaults to the
- * official testnet fullnode), POLL_INTERVAL_MS (optional, default 30000).
+ * Env: DATABASE_URL (required), SUI_GRAPHQL_URL (optional, defaults to the
+ * official testnet GraphQL endpoint), POLL_INTERVAL_MS (optional, default 30000).
+ *
+ * Events are pulled over GraphQL — JSON-RPC (the old source) is being
+ * decommissioned, and gRPC has no `queryEvents` equivalent.
  */
-import { makeSuiClient, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { PgEventStore, makePool, ensureSchema } from '@endless-story/indexer/pg';
-import { eventTypes, loadMarks, pollOnce } from './lib/indexer-poll.ts';
+import {
+  eventTypes,
+  loadMarks,
+  pollOnce,
+  graphqlExecFromUrl,
+  DEFAULT_GRAPHQL_URL,
+} from './lib/indexer-poll.ts';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -22,7 +31,8 @@ const intervalMs = Number(process.env.POLL_INTERVAL_MS ?? 30000);
 const pool = makePool(databaseUrl);
 const store = new PgEventStore(pool);
 await ensureSchema(pool);
-const client = makeSuiClient({ network: 'testnet' });
+const graphqlUrl = process.env.SUI_GRAPHQL_URL ?? DEFAULT_GRAPHQL_URL;
+const exec = graphqlExecFromUrl(graphqlUrl);
 const packageId = ENDLESS_STORY_DEPLOYMENT.packageId;
 const types = eventTypes(packageId);
 const marks = await loadMarks(store, types);
@@ -35,10 +45,12 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   });
 }
 
-console.error(`[indexer-poll] polling ${types.length} event types every ${intervalMs}ms`);
+console.error(
+  `[indexer-poll] polling ${types.length} event types every ${intervalMs}ms via ${graphqlUrl}`,
+);
 while (!stop) {
   try {
-    const n = await pollOnce(store, client, packageId, marks);
+    const n = await pollOnce(store, exec, packageId, marks);
     if (n > 0) console.error(`[indexer-poll] ingested ${n} new events`);
   } catch (err) {
     console.error('[indexer-poll] cycle error', err);

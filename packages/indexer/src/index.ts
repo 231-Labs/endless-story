@@ -25,8 +25,15 @@ export { compareEvents, pageEvents } from './page.ts';
 export { MemoryEventStore } from './memory-store.ts';
 export { SseDecoder, parseFluxMessage, fluxSeqFromId } from './flux.ts';
 export type { SseFrame } from './flux.ts';
-export { pollType, pollAllOnce, jsonRpcFetchPage } from './poll.ts';
-export type { FetchPage, EventPageResult, HighWater, QueryEventsClient } from './poll.ts';
+export { pollType, pollAllOnce, jsonRpcFetchPage, graphqlFetchPage } from './poll.ts';
+export type {
+  FetchPage,
+  EventPageResult,
+  HighWater,
+  QueryEventsClient,
+  GraphqlExec,
+  SourceCursor,
+} from './poll.ts';
 export { rpcParamsToQuery, eventPageToRpc } from './adapt.ts';
 export type { RpcQueryEventsParams, RpcEventsPage } from './adapt.ts';
 

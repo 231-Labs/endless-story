@@ -25,7 +25,7 @@ import {
 import { characterAgent } from '@endless-story/runner';
 
 type HandCard = characterAgent.HandCard;
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { execAdminTx, getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { recallForCharacter, recallCurrentPlanText } from '@/lib/chain/memory';
@@ -209,20 +209,15 @@ export async function runCharacterTurnAction(
                 cardIndex: BigInt(decision.catalogIndex),
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: txb,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, txb);
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '出牌 tx 失敗',
+                error: res.error ?? '出牌 tx 失敗',
                 cardLabel: hand.find((c) => c.catalogIndex === decision.catalogIndex)?.label,
                 intent: decision.intent,
             };
         }
-        await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
         return {
             ok: true,
             cardLabel: hand.find((c) => c.catalogIndex === decision.catalogIndex)?.label,

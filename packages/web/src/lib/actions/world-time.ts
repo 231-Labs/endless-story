@@ -15,7 +15,7 @@ import {
     read,
     tx as endlessTx,
 } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 const BP_DENOM = 10_000;
 const PARTS_OF_DAY = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
@@ -113,26 +113,17 @@ export async function advanceTickAction(): Promise<AdvanceTickResult> {
                 world: d.worldId,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
             return {
                 ok: false,
-                error: res.effects?.status?.error ?? '交易失敗',
+                error: res.error ?? '交易失敗',
                 digest: res.digest,
             };
         }
-        // Wait for the fullnode to index the new tick before re-reading —
-        // otherwise read-after-write lag returns the OLD tick and the panel
-        // looks like it didn't advance until a manual reload.
-        try {
-            await admin.client.waitForTransaction({ digest: res.digest });
-        } catch {
-            // best-effort; snapshot read below may still lag, panel reload covers it
-        }
+        // execAdminTx waits for finality inside the admin lock, so the fullnode
+        // has indexed the new tick before we re-read — otherwise read-after-write
+        // lag returns the OLD tick and the panel looks like it didn't advance.
         const snapshot = await getWorldTimeSnapshot();
         return { ok: true, digest: res.digest, snapshot: snapshot ?? undefined };
     } catch (err) {

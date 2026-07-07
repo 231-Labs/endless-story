@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCurrentAccount, useSignPersonalMessage, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { ENDLESS_STORY_DEPLOYMENT, read } from '@endless-story/sdk';
 import { decryptWithOwnerCap } from '@endless-story/memwal';
 import type { Character, CharacterMemory } from '@endless-story/shared';
@@ -45,8 +45,8 @@ export function MemoriesTabClient({
   suiNetwork: 'testnet' | 'mainnet';
 }) {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const client = useCurrentClient();
+  const dappKit = useDAppKit();
 
   // undefined = lookup in flight; null = connected wallet holds no OwnerCap.
   const [ownerCapId, setOwnerCapId] = useState<string | null | undefined>(undefined);
@@ -68,7 +68,7 @@ export function MemoriesTabClient({
     let cancelled = false;
     setOwnerCapId(undefined);
     read.character
-      .listOwnerCapsForAddress(suiClient, account.address, pkg)
+      .listOwnerCapsForAddress(client, account.address, pkg)
       .then((caps) => {
         if (cancelled) return;
         const mine = caps.find((c) => c.characterId === character.id);
@@ -80,7 +80,7 @@ export function MemoriesTabClient({
     return () => {
       cancelled = true;
     };
-  }, [account, suiClient, character.id, pkg, isChainCharacter]);
+  }, [account, client, character.id, pkg, isChainCharacter]);
 
   if (!account) {
     return (
@@ -140,11 +140,11 @@ export function MemoriesTabClient({
         packageId: pkg,
         characterId: character.id,
         ownerCapId,
-        suiClient,
+        suiClient: client,
         suiNetwork,
         signer: {
           address: account.address,
-          signPersonalMessage: ({ message }) => signPersonalMessage({ message }),
+          signPersonalMessage: ({ message }) => dappKit.signPersonalMessage({ message }),
         },
         blobs: payload.blobs.map((b) => ({
           blob_id: b.blobId,

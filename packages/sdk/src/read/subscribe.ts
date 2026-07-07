@@ -2,6 +2,7 @@
  * Subscribe view queries — Subscription objects + event log scans.
  */
 import * as gen from '../generated/endless_story/subscribe.js';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import type { SuiClient } from '../client.js';
 
 export { gen as raw };
@@ -30,30 +31,27 @@ export async function listSubscriptionsForAddress(
         subscriber: string;
         subscribedAtMs: string;
     }[] = [];
-    let cursor: string | null | undefined = null;
+    let cursor: string | null = null;
     for (;;) {
-        const page = await client.getOwnedObjects({
+        const page: SuiClientTypes.ListOwnedObjectsResponse<{ json: true }> = await client.core.listOwnedObjects({
             owner,
             cursor,
             limit: 50,
-            filter: { StructType: structType },
-            options: { showType: true, showContent: true },
+            type: structType,
+            include: { json: true },
         });
-        for (const obj of page.data) {
-            const data = obj.data;
-            const content = data?.content;
-            if (!content || content.dataType !== 'moveObject') continue;
-            const fields = content.fields as Record<string, unknown>;
-            if (!data.objectId) continue;
+        for (const obj of page.objects) {
+            const fields = obj.json as Record<string, unknown> | null;
+            if (!fields || !obj.objectId) continue;
             out.push({
-                subscriptionId: data.objectId,
+                subscriptionId: obj.objectId,
                 characterId: typeof fields.character_id === 'string' ? fields.character_id : '',
                 subscriber: typeof fields.subscriber === 'string' ? fields.subscriber : '',
                 subscribedAtMs: String(fields.subscribed_at_ms ?? '0'),
             });
         }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
+        if (!page.hasNextPage || !page.cursor) break;
+        cursor = page.cursor;
     }
     return out;
 }

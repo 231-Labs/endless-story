@@ -17,6 +17,7 @@
  */
 
 export * from './client';
+export * from './execute';
 export * from './resilient-fetch';
 export * from './runtime-deployment';
 export * as tx from './tx';

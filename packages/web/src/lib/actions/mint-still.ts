@@ -20,8 +20,8 @@
  */
 
 import { Transaction } from '@mysten/sui/transactions';
-import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
-import { getAdminContext } from '../chain/admin-signer.js';
+import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT, findCreatedObjectId } from '@endless-story/sdk';
+import { getAdminContext, execAdminTx } from '../chain/admin-signer.js';
 
 export interface MintStillInput {
   /** character the moment belongs to (royalty target, follow-up). */
@@ -80,25 +80,11 @@ export async function mintStillAction(input: MintStillInput): Promise<MintStillR
 
   let result;
   try {
-    result = await admin.client.signAndExecuteTransaction({
-      transaction: tx,
-      signer: admin.signer,
-      options: { showEffects: true, showObjectChanges: true },
-    });
+    result = await execAdminTx(admin, tx);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
-  let stillId: string | undefined;
-  const changes = (result.objectChanges ?? []) as Array<{
-    type: string;
-    objectType?: string;
-    objectId?: string;
-  }>;
-  for (const c of changes) {
-    if (c.type === 'created' && c.objectType?.endsWith('::still::Still')) {
-      stillId = c.objectId;
-    }
-  }
+  const stillId = findCreatedObjectId(result, '::still::Still');
   return { ok: true, stillId, digest: result.digest };
 }

@@ -16,17 +16,26 @@
 import type { CapturedEvent, EventCursor, StoredEvent } from './types.ts';
 import { compareEvents } from './page.ts';
 
+/**
+ * Opaque continuation cursor threaded by the poller. Each source interprets its
+ * own: the JSON-RPC adapter uses a real `{txDigest,eventSeq}` `EventCursor`, the
+ * GraphQL adapter uses an opaque base64 connection cursor (a `string`). `pollType`
+ * never inspects it — it only passes `nextCursor` back and checks for null — so a
+ * source swap is invisible to the poll core.
+ */
+export type SourceCursor = EventCursor | string | null;
+
 /** One newest-first page of events for a single event type. */
 export interface EventPageResult {
   events: CapturedEvent[];
-  nextCursor: EventCursor | null;
+  nextCursor: SourceCursor;
   hasNextPage: boolean;
 }
 
 /** Pluggable event source: fetch one descending page after `cursor`. */
 export type FetchPage = (
   eventType: string,
-  cursor: EventCursor | null,
+  cursor: SourceCursor,
 ) => Promise<EventPageResult>;
 
 /** The newest event already ingested for a type (the poll stop line). */
@@ -51,7 +60,7 @@ export async function pollType(
   hwm: HighWater | null,
   maxPages = 1000,
 ): Promise<{ newHwm: HighWater | null; ingested: number }> {
-  let cursor: EventCursor | null = null;
+  let cursor: SourceCursor = null;
   let newHwm: HighWater | null = hwm;
   let ingested = 0;
 
@@ -119,12 +128,16 @@ function pickStr(obj: unknown, key: string): string | undefined {
   return undefined;
 }
 
-/** JSON-RPC source adapter (stopgap; replace with a GraphQL adapter pre-July). */
+/**
+ * JSON-RPC source adapter (stopgap; the public JSON-RPC dies 2026-07-31).
+ * Prefer `graphqlFetchPage` for the durable path. The incoming cursor is always
+ * the `EventCursor` this adapter itself produced, so the narrowing cast is safe.
+ */
 export function jsonRpcFetchPage(client: QueryEventsClient, limit = 50): FetchPage {
   return async (eventType, cursor) => {
     const res = await client.queryEvents({
       query: { MoveEventType: eventType },
-      cursor,
+      cursor: (cursor as EventCursor | null) ?? null,
       limit,
       order: 'descending',
     });
@@ -139,5 +152,87 @@ export function jsonRpcFetchPage(client: QueryEventsClient, limit = 50): FetchPa
       sceneId: pickStr(ev.parsedJson, 'scene_id'),
     }));
     return { events, nextCursor: res.nextCursor ?? null, hasNextPage: res.hasNextPage };
+  };
+}
+
+/**
+ * A GraphQL executor: run `query` with `variables` and resolve the `data` object
+ * (throwing on GraphQL errors). Structural so this package needs no
+ * `@mysten/sui` dependency; the runnable entrypoint wraps a real
+ * `SuiGraphQLClient` into one.
+ */
+export type GraphqlExec = (
+  query: string,
+  variables: Record<string, unknown>,
+) => Promise<unknown>;
+
+/** Newest-first page of one event type over the Sui GraphQL `events` query. */
+const GRAPHQL_EVENTS_QUERY = `query Events($type: String!, $last: Int!, $before: String) {
+  events(last: $last, before: $before, filter: { type: $type }) {
+    pageInfo { hasPreviousPage startCursor }
+    nodes {
+      sequenceNumber
+      timestamp
+      transaction { digest }
+      sender { address }
+      contents { type { repr } json }
+    }
+  }
+}`;
+
+interface GraphqlEventNode {
+  sequenceNumber?: number | string | null;
+  timestamp?: string | null;
+  transaction?: { digest?: string | null } | null;
+  sender?: { address?: string | null } | null;
+  contents?: { type?: { repr?: string | null } | null; json?: unknown } | null;
+}
+interface GraphqlEventsData {
+  events?: {
+    pageInfo?: { hasPreviousPage?: boolean | null; startCursor?: string | null } | null;
+    nodes?: GraphqlEventNode[] | null;
+  } | null;
+}
+
+/**
+ * GraphQL source adapter — the durable replacement for `jsonRpcFetchPage`.
+ * Uses backward pagination (`last`/`before`) so each fetch returns the newest
+ * unseen page; the connection returns nodes oldest→newest, so we reverse to the
+ * newest-first order the poll core expects. The opaque connection `startCursor`
+ * is threaded back as the `before` bound for the next (older) page. Identity is
+ * the real on-chain `(txDigest, eventSeq)`, so it stays consistent with any
+ * events the JSON-RPC adapter captured before the swap.
+ */
+export function graphqlFetchPage(exec: GraphqlExec, limit = 50): FetchPage {
+  return async (eventType, cursor) => {
+    const before = typeof cursor === 'string' ? cursor : null;
+    const data = (await exec(GRAPHQL_EVENTS_QUERY, {
+      type: eventType,
+      last: limit,
+      before,
+    })) as GraphqlEventsData;
+    const conn = data.events ?? {};
+    const nodes = conn.nodes ?? [];
+    const events: CapturedEvent[] = nodes
+      .slice()
+      .reverse()
+      .map((n) => {
+        const parsedJson = n.contents?.json ?? null;
+        return {
+          txDigest: n.transaction?.digest ?? '',
+          eventSeq: String(n.sequenceNumber ?? '0'),
+          type: n.contents?.type?.repr ?? eventType,
+          parsedJson,
+          timestampMs: n.timestamp ? Date.parse(n.timestamp) : 0,
+          sender: n.sender?.address ?? undefined,
+          sagaId: pickStr(parsedJson, 'saga_id'),
+          sceneId: pickStr(parsedJson, 'scene_id'),
+        };
+      });
+    return {
+      events,
+      nextCursor: conn.pageInfo?.startCursor ?? null,
+      hasNextPage: Boolean(conn.pageInfo?.hasPreviousPage),
+    };
   };
 }

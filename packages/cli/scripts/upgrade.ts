@@ -10,8 +10,9 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 import * as fs from 'node:fs';
 import { Transaction } from '@mysten/sui/transactions';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import { ENDLESS_STORY_DEPLOYMENT, type SuiNetwork } from '@endless-story/shared/contract-ids';
-import { makeSuiClient } from '@endless-story/sdk';
+import { makeSuiClient, signAndExecute, findPublishedPackageId } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
 import { assertActiveEnv, loadBytecodeDump } from '../src/lib/sui-publish';
@@ -53,22 +54,15 @@ function buildPackage(contractsDir: string): BuildDump {
   return dump;
 }
 
-function fieldsFromUpgradeCapObject(obj: unknown): UpgradeCapInfo | null {
-  const data = obj as {
-    data?: {
-      objectId?: string;
-      content?: {
-        dataType?: string;
-        fields?: {
-          package?: string;
-          version?: string;
-          policy?: number | string;
-        };
-      };
-    };
-  };
-  const id = data.data?.objectId;
-  const fields = data.data?.content?.fields;
+/** Parse an UpgradeCap from a gRPC `Object` (with `json: true`). */
+function fieldsFromUpgradeCapObject(
+  obj: SuiClientTypes.Object<{ json: true }> | undefined,
+): UpgradeCapInfo | null {
+  const id = obj?.objectId;
+  const fields = obj?.json as
+    | { package?: string; version?: string; policy?: number | string }
+    | null
+    | undefined;
   if (!id || !fields?.package || fields.policy == null || fields.version == null) return null;
   return {
     id,
@@ -80,19 +74,19 @@ function fieldsFromUpgradeCapObject(obj: unknown): UpgradeCapInfo | null {
 
 async function listUpgradeCaps(client: ReturnType<typeof makeSuiClient>, owner: string): Promise<UpgradeCapInfo[]> {
   const caps: UpgradeCapInfo[] = [];
-  let cursor: string | undefined;
+  let cursor: string | null = null;
   do {
-    const page = await client.getOwnedObjects({
+    const page: SuiClientTypes.ListOwnedObjectsResponse<{ json: true }> = await client.core.listOwnedObjects({
       owner,
       cursor,
-      filter: { StructType: '0x2::package::UpgradeCap' },
-      options: { showContent: true },
+      type: '0x2::package::UpgradeCap',
+      include: { json: true },
     });
-    for (const item of page.data) {
+    for (const item of page.objects) {
       const cap = fieldsFromUpgradeCapObject(item);
       if (cap) caps.push(cap);
     }
-    cursor = page.hasNextPage ? page.nextCursor ?? undefined : undefined;
+    cursor = page.hasNextPage ? page.cursor : null;
   } while (cursor);
   return caps;
 }
@@ -104,8 +98,8 @@ async function getUpgradeCap(
   explicitCapId?: string,
 ): Promise<UpgradeCapInfo> {
   if (explicitCapId) {
-    const obj = await client.getObject({ id: explicitCapId, options: { showContent: true } });
-    const cap = fieldsFromUpgradeCapObject(obj);
+    const res = await client.core.getObject({ objectId: explicitCapId, include: { json: true } });
+    const cap = fieldsFromUpgradeCapObject(res.object);
     if (!cap) throw new Error(`object ${explicitCapId} is not an UpgradeCap`);
     if (cap.packageId !== targetPackageId) {
       throw new Error(`UpgradeCap ${cap.id} points at ${cap.packageId}, expected ${targetPackageId}`);
@@ -210,13 +204,14 @@ async function main() {
 
   if (dryRun) {
     console.log('\n[dry-run] submitting dry run…');
-    const bytes = await tx.build({ client });
-    const res = await client.dryRunTransactionBlock({ transactionBlock: bytes });
-    const ok = res.effects.status.status === 'success';
-    console.log(`   status ${res.effects.status.status}`);
-    if (res.effects.status.error) console.log(`   error  ${res.effects.status.error}`);
+    const sim = await client.core.simulateTransaction({ transaction: tx });
+    const simTx = sim.Transaction ?? sim.FailedTransaction;
+    const ok = simTx.status.success;
+    console.log(`   status ${ok ? 'success' : 'failure'}`);
+    const simError = simTx.status.success ? null : simTx.status.error?.message;
+    if (simError) console.log(`   error  ${simError}`);
     if (jsonOut) {
-      fs.writeFileSync(jsonOut, JSON.stringify(res, null, 2), 'utf-8');
+      fs.writeFileSync(jsonOut, JSON.stringify(sim, null, 2), 'utf-8');
       console.log(`   wrote  ${jsonOut}`);
     }
     if (!ok) process.exit(1);
@@ -225,29 +220,22 @@ async function main() {
   }
 
   console.log('\n[upgrade] signing and executing…');
-  const res = await client.signAndExecuteTransaction({
-    transaction: tx,
-    signer,
-    options: { showEffects: true, showObjectChanges: true },
-  });
-  if (res.effects?.status?.status !== 'success') {
-    throw new Error(`upgrade failed: ${res.effects?.status?.error ?? 'unknown'}`);
+  const res = await signAndExecute(client, { transaction: tx, signer, waitForFinality: true });
+  if (!res.success) {
+    throw new Error(`upgrade failed: ${res.error ?? 'unknown'}`);
   }
-  await client.waitForTransaction({ digest: res.digest });
 
-  const published = (res.objectChanges ?? []).find((o: { type: string }) => o.type === 'published') as
-    | { packageId?: string }
-    | undefined;
-  if (!published?.packageId) {
-    console.error(JSON.stringify(res.objectChanges ?? [], null, 2));
-    throw new Error('upgrade succeeded but no upgraded package id was found in objectChanges');
+  const upgradedPackageId = findPublishedPackageId(res);
+  if (!upgradedPackageId) {
+    console.error(JSON.stringify(res.objectTypes ?? {}, null, 2));
+    throw new Error('upgrade succeeded but no upgraded package id was found in effects');
   }
 
   const deployedAt = new Date().toISOString();
   const snapshot = {
     network: env,
     packageId: ENDLESS_STORY_DEPLOYMENT.packageId,
-    latestPackageId: published.packageId,
+    latestPackageId: upgradedPackageId,
     adminCapId: ENDLESS_STORY_DEPLOYMENT.adminCapId,
     worldId: ENDLESS_STORY_DEPLOYMENT.worldId,
     locationIds: ENDLESS_STORY_DEPLOYMENT.locationIds,
@@ -286,7 +274,7 @@ async function main() {
 
   console.log('\n[done] Package upgrade complete.');
   console.log(`   originalPackage ${ENDLESS_STORY_DEPLOYMENT.packageId}`);
-  console.log(`   latestPackage   ${published.packageId}`);
+  console.log(`   latestPackage   ${upgradedPackageId}`);
   console.log(`   cap             ${upgradeCap.id}`);
   console.log(`   digest          ${res.digest}`);
   console.log(`   deployedAt      ${deployedAt}`);

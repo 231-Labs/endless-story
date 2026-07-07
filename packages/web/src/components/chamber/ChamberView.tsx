@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
 import type { ChamberLayout, SceneDesign, SceneElement } from '@endless-story/chamber-3d';
 import type { CurateProp } from '@endless-story/llm/prompts';
-import { isDeployed, read, tx as endlessTx } from '@endless-story/sdk';
+import { isDeployed, normalizeTxResult, read, tx as endlessTx } from '@endless-story/sdk';
 
 import { getVaultInventory, type VaultInventory } from '@/lib/actions/vault-collection';
 import { curateVault } from '@/lib/actions/curate-vault';
@@ -158,8 +158,8 @@ export function ChamberView({
   roomParam?: string;
 }) {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dappKit = useDAppKit();
   const isDark = useIsDark();
   const deployed = isDeployed();
 
@@ -217,11 +217,11 @@ export function ChamberView({
       let owner = addressParam ?? null;
       let v: PersonalVaultRef | null = null;
       if (vaultParam) {
-        v = await read.chamber.getPersonalVault(suiClient, vaultParam);
+        v = await read.chamber.getPersonalVault(client, vaultParam);
         if (v) owner = v.owner;
       } else if (addressParam) {
-        const ticket = await read.chamber.findVaultTicket(suiClient, addressParam);
-        if (ticket) v = await read.chamber.getPersonalVault(suiClient, ticket.vaultId);
+        const ticket = await read.chamber.findVaultTicket(client, addressParam);
+        if (ticket) v = await read.chamber.getPersonalVault(client, ticket.vaultId);
       }
       if (cancelled) return;
       setOwnerAddr(owner);
@@ -236,7 +236,7 @@ export function ChamberView({
     return () => {
       cancelled = true;
     };
-  }, [deployed, account?.address, addressParam, vaultParam, suiClient]);
+  }, [deployed, account?.address, addressParam, vaultParam, client]);
 
   // ── owner inventory (for rendering + editing) ───────────────────────
   useEffect(() => {
@@ -504,16 +504,12 @@ export function ChamberView({
 
         const tx = new Transaction();
         tx.add(endlessTx.chamber.createVault({ initialLayoutBlobId }));
-        const res = await signAndExecute({ transaction: tx });
-        const full = await suiClient.waitForTransaction({
-          digest: res.digest,
-          options: { showEffects: true },
-        });
-        if (full.effects?.status?.status !== 'success') {
-          throw new Error(full.effects?.status?.error ?? '建立藏閣失敗');
+        const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+        if (!res.success) {
+          throw new Error(res.error ?? '建立藏閣失敗');
         }
-        const ticket = await read.chamber.findVaultTicket(suiClient, account.address);
-        const v = ticket ? await read.chamber.getPersonalVault(suiClient, ticket.vaultId) : null;
+        const ticket = await read.chamber.findVaultTicket(client, account.address);
+        const v = ticket ? await read.chamber.getPersonalVault(client, ticket.vaultId) : null;
         if (v) {
           roomsLoadedRef.current = v.vaultId;
           saveRooms(v.vaultId, state);
@@ -530,7 +526,7 @@ export function ChamberView({
         setCreating(false);
       }
     },
-    [account, inventory, signAndExecute, suiClient],
+    [account, inventory, dappKit, client],
   );
 
   const saveToChain = useCallback(async () => {
@@ -546,15 +542,11 @@ export function ChamberView({
       if (!uploaded.ok || !uploaded.blobId) throw new Error(uploaded.error ?? '佈局上傳 Walrus 失敗');
       const tx = new Transaction();
       tx.add(endlessTx.chamber.saveLayout({ vault: vault.vaultId, blobId: uploaded.blobId }));
-      const res = await signAndExecute({ transaction: tx });
-      const full = await suiClient.waitForTransaction({
-        digest: res.digest,
-        options: { showEffects: true },
-      });
-      if (full.effects?.status?.status !== 'success') {
-        throw new Error(full.effects?.status?.error ?? '鏈上保存失敗');
+      const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+      if (!res.success) {
+        throw new Error(res.error ?? '鏈上保存失敗');
       }
-      const v = await read.chamber.getPersonalVault(suiClient, vault.vaultId);
+      const v = await read.chamber.getPersonalVault(client, vault.vaultId);
       if (v) setVault(v);
       setDirty(false);
     } catch (err) {
@@ -562,7 +554,7 @@ export function ChamberView({
     } finally {
       setChainSaving(false);
     }
-  }, [roomsState, vault, signAndExecute, suiClient]);
+  }, [roomsState, vault, dappKit, client]);
 
   const listStill = useCallback(
     async (stillId: string) => {
@@ -575,7 +567,7 @@ export function ChamberView({
       setListError(null);
       setListingId(stillId);
       try {
-        const cap = await read.chamber.findKioskOwnerCap(suiClient, account.address, vault.kioskId);
+        const cap = await read.chamber.findKioskOwnerCap(client, account.address, vault.kioskId);
         if (!cap) throw new Error('找不到此藏閣的 KioskOwnerCap');
         const tx = new Transaction();
         endlessTx.still.placeAndList(tx, {
@@ -584,13 +576,9 @@ export function ChamberView({
           still: stillId,
           priceMist: BigInt(Math.round(priceSui * 1e9)),
         });
-        const res = await signAndExecute({ transaction: tx });
-        const full = await suiClient.waitForTransaction({
-          digest: res.digest,
-          options: { showEffects: true },
-        });
-        if (full.effects?.status?.status !== 'success') {
-          throw new Error(full.effects?.status?.error ?? '上架失敗');
+        const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+        if (!res.success) {
+          throw new Error(res.error ?? '上架失敗');
         }
         setPriceDraft((p) => {
           const n = { ...p };
@@ -604,7 +592,7 @@ export function ChamberView({
         setListingId(null);
       }
     },
-    [account, vault, priceDraft, signAndExecute, suiClient, reloadInventory],
+    [account, vault, priceDraft, dappKit, client, reloadInventory],
   );
 
   // AI 策展

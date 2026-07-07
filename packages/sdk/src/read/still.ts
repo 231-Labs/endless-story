@@ -2,6 +2,7 @@
  * 劇照 Still read helpers — fetch individual Stills + list by owner.
  */
 import * as gen from '../generated/endless_story/still.js';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import type { SuiClient } from '../client.js';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/shared/contract-ids';
 
@@ -33,10 +34,14 @@ export async function getMintConfigRef(
     client: SuiClient,
     configId: string,
 ): Promise<MintConfigRef | null> {
-    const res = await client.getObject({ id: configId, options: { showContent: true } });
-    const content = res.data?.content;
-    if (content?.dataType !== 'moveObject') return null;
-    const f = (content as { fields: Record<string, unknown> }).fields;
+    let f: Record<string, unknown> | null = null;
+    try {
+        const res = await client.core.getObject({ objectId: configId, include: { json: true } });
+        f = res.object.json as Record<string, unknown> | null;
+    } catch {
+        return null; // object missing
+    }
+    if (!f) return null;
     return {
         configId,
         fee: BigInt(f.fee as string | number),
@@ -67,20 +72,19 @@ export async function listStillsForOwner(
     if (!packageId) return [];
     const structType = `${packageId}::still::Still`;
     const out: StillRef[] = [];
-    let cursor: string | null | undefined = null;
+    let cursor: string | null = null;
     for (;;) {
-        const page = await client.getOwnedObjects({
+        const page: SuiClientTypes.ListOwnedObjectsResponse<{ json: true }> = await client.core.listOwnedObjects({
             owner,
-            filter: { StructType: structType },
-            options: { showContent: true },
+            type: structType,
             cursor,
+            include: { json: true },
         });
-        for (const item of page.data) {
-            const content = item.data?.content;
-            if (content?.dataType !== 'moveObject') continue;
-            const f = (content as { fields: Record<string, unknown> }).fields;
+        for (const item of page.objects) {
+            const f = item.json as Record<string, unknown> | null;
+            if (!f) continue;
             out.push({
-                stillId: item.data!.objectId,
+                stillId: item.objectId,
                 title: f.title as string,
                 edition: Number(f.edition),
                 walrusBlobId: f.walrus_blob_id as string,
@@ -89,8 +93,8 @@ export async function listStillsForOwner(
                 sagaId: f.saga_id as string,
             });
         }
-        if (!page.hasNextPage || !page.nextCursor) break;
-        cursor = page.nextCursor;
+        if (!page.hasNextPage || !page.cursor) break;
+        cursor = page.cursor;
     }
     return out;
 }

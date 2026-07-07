@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 
 import { compareEvents } from '../src/page.ts';
 import { MemoryEventStore } from '../src/memory-store.ts';
-import { pollType, pollAllOnce, jsonRpcFetchPage } from '../src/poll.ts';
-import type { FetchPage } from '../src/poll.ts';
+import { pollType, pollAllOnce, jsonRpcFetchPage, graphqlFetchPage } from '../src/poll.ts';
+import type { FetchPage, GraphqlExec } from '../src/poll.ts';
 import type { CapturedEvent } from '../src/types.ts';
 
 const ev = (type: string, ts: number, tx: string, seq = '0'): CapturedEvent => ({
@@ -27,7 +27,7 @@ function fakeSource(all: CapturedEvent[], pageSize = 2): FetchPage {
   return async (type, cursor) => {
     const ofType = sorted.filter((e) => e.type === type);
     let start = 0;
-    if (cursor) {
+    if (cursor && typeof cursor === 'object') {
       const i = ofType.findIndex((e) => e.txDigest === cursor.txDigest && e.eventSeq === cursor.eventSeq);
       start = i >= 0 ? i + 1 : ofType.length;
     }
@@ -112,4 +112,58 @@ test('jsonRpcFetchPage maps SuiEvent rows to CapturedEvents', async () => {
     sagaId: '0xs',
     sceneId: undefined,
   });
+});
+
+test('graphqlFetchPage maps the events connection to newest-first CapturedEvents', async () => {
+  // GraphQL `last` returns nodes oldest→newest; the adapter must reverse them.
+  const nodes = [
+    {
+      sequenceNumber: 0,
+      timestamp: '2026-07-07T00:00:01.000Z',
+      transaction: { digest: 'older' },
+      sender: { address: '0xa' },
+      contents: { type: { repr: 'P::event::Budget' }, json: { saga_id: '0xs', scene_id: '0xc' } },
+    },
+    {
+      sequenceNumber: 2,
+      timestamp: '2026-07-07T00:00:02.000Z',
+      transaction: { digest: 'newer' },
+      sender: { address: '0xb' },
+      contents: { type: { repr: 'P::event::Budget' }, json: { saga_id: '0xs' } },
+    },
+  ];
+  const calls: Array<Record<string, unknown>> = [];
+  const exec: GraphqlExec = async (_q, variables) => {
+    calls.push(variables);
+    return { events: { pageInfo: { hasPreviousPage: true, startCursor: 'CUR' }, nodes } };
+  };
+
+  const page = await graphqlFetchPage(exec, 50)('P::event::Budget', null);
+
+  // newest-first: 'newer' precedes 'older'
+  assert.deepEqual(
+    page.events.map((e) => e.txDigest),
+    ['newer', 'older'],
+  );
+  // real on-chain identity is preserved
+  assert.equal(page.events[0].eventSeq, '2');
+  assert.equal(page.events[0].timestampMs, Date.parse('2026-07-07T00:00:02.000Z'));
+  assert.equal(page.events[0].type, 'P::event::Budget');
+  assert.equal(page.events[0].sagaId, '0xs');
+  // opaque connection cursor threads back as the next (older) bound
+  assert.equal(page.nextCursor, 'CUR');
+  assert.equal(page.hasNextPage, true);
+  // backward pagination args
+  assert.deepEqual(calls[0], { type: 'P::event::Budget', last: 50, before: null });
+});
+
+test('graphqlFetchPage passes a string cursor through as `before`', async () => {
+  const exec: GraphqlExec = async (_q, variables) => {
+    assert.equal((variables as { before: unknown }).before, 'PREV');
+    return { events: { pageInfo: { hasPreviousPage: false, startCursor: null }, nodes: [] } };
+  };
+  const page = await graphqlFetchPage(exec)('T', 'PREV');
+  assert.equal(page.hasNextPage, false);
+  assert.equal(page.nextCursor, null);
+  assert.deepEqual(page.events, []);
 });

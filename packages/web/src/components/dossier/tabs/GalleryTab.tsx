@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
+import { normalizeTxResult } from '@endless-story/sdk';
 import { Transaction } from '@mysten/sui/transactions';
 import type { BlobRef, Character } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, isDeployed, read, tx as endlessTx } from '@endless-story/sdk';
@@ -46,8 +47,8 @@ export function GalleryTab({
 }) {
   const router = useRouter();
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dappKit = useDAppKit();
   const [coverUrl, setCoverUrl] = useState(character.gallery.anchor.imageUrl);
   const [pendingCoverKey, setPendingCoverKey] = useState<FeaturedKey | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
@@ -101,7 +102,7 @@ export function GalleryTab({
     }
     let alive = true;
     read.still
-      .getMintConfigRef(suiClient, id)
+      .getMintConfigRef(client, id)
       .then((cfg) => {
         if (!alive) return;
         if (cfg) {
@@ -117,7 +118,7 @@ export function GalleryTab({
     return () => {
       alive = false;
     };
-  }, [suiClient]);
+  }, [client]);
   const collectImage = useCallback(
     async (blob: BlobRef, index: number) => {
       const ware = stillWareFromBlob(character, blob, index);
@@ -149,15 +150,15 @@ export function GalleryTab({
       try {
         // Self-serve paid mint — the viewer's own wallet signs and pays the fee.
         const coinType = `${d.packageId}::currency::CURRENCY`;
-        const coins = await suiClient.getCoins({ owner: account.address, coinType, limit: 50 });
-        const total = (coins.data ?? []).reduce((sum, c) => sum + BigInt(c.balance), 0n);
-        if (!coins.data?.length || total < mintFee) {
+        const coins = await client.core.listCoins({ owner: account.address, coinType, limit: 50 });
+        const total = (coins.objects ?? []).reduce((sum, c) => sum + BigInt(c.balance), 0n);
+        if (!coins.objects?.length || total < mintFee) {
           setMintError(`鑄造需 ${fmtEndless(mintFee)} ENDLESS,餘額不足。請先用右上「領 ENDLESS」。`);
           return;
         }
 
         const tx = new Transaction();
-        const coinIds = coins.data.map((c) => c.coinObjectId);
+        const coinIds = coins.objects.map((c) => c.objectId);
         const primary = tx.object(coinIds[0]);
         if (coinIds.length > 1) {
           tx.mergeCoins(primary, coinIds.slice(1).map((id) => tx.object(id)));
@@ -177,13 +178,9 @@ export function GalleryTab({
         );
         tx.transferObjects([still], account.address);
 
-        const res = await signAndExecute({ transaction: tx });
-        const full = await suiClient.waitForTransaction({
-          digest: res.digest,
-          options: { showEffects: true },
-        });
-        if (full.effects?.status?.status !== 'success') {
-          throw new Error(full.effects?.status?.error ?? '鑄造劇照失敗');
+        const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+        if (!res.success) {
+          throw new Error(res.error ?? '鑄造劇照失敗');
         }
         // Mirror into the local 藏閣 so it shows instantly (the on-chain read is
         // cached + lags); the vault dedups the mirror vs the real Still by image
@@ -196,7 +193,7 @@ export function GalleryTab({
         setMintingKey(null);
       }
     },
-    [character, account, suiClient, signAndExecute, mintFee, mintPaused],
+    [character, account, client, dappKit, mintFee, mintPaused],
   );
 
   // Show the fee on the collect button only when a real paid mint is actually
@@ -256,7 +253,7 @@ export function GalleryTab({
     setCoverDigest(null);
     try {
       const caps = await read.character.listOwnerCapsForAddress(
-        suiClient,
+        client,
         account.address,
         d.packageId,
       );
@@ -273,13 +270,9 @@ export function GalleryTab({
           index: BigInt(blob.mediaIndex),
         }),
       );
-      const res = await signAndExecute({ transaction: txb });
-      const full = await suiClient.waitForTransaction({
-        digest: res.digest,
-        options: { showEffects: true },
-      });
-      if (full.effects?.status.status !== 'success') {
-        throw new Error(full.effects?.status.error ?? '設定封面失敗');
+      const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: txb }));
+      if (!res.success) {
+        throw new Error(res.error ?? '設定封面失敗');
       }
       setCoverUrl(blob.imageUrl);
       setCoverDigest(res.digest);

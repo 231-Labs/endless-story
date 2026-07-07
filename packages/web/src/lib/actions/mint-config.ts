@@ -14,7 +14,7 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, read, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 export interface MintConfigSnapshot {
     fee: string; // raw u64 string (6 decimals)
@@ -66,13 +66,9 @@ export async function setMintFeeAction(input: SetMintFeeInput): Promise<Mutation
                 newFee: BigInt(input.feeRaw),
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
-            return { ok: false, error: res.effects?.status?.error ?? '交易失敗', digest: res.digest };
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
+            return { ok: false, error: res.error ?? '交易失敗', digest: res.digest };
         }
         return { ok: true, digest: res.digest };
     } catch (err) {
@@ -96,13 +92,9 @@ export async function setMintPausedAction(input: SetMintPausedInput): Promise<Mu
                 paused: input.paused,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
-            return { ok: false, error: res.effects?.status?.error ?? '交易失敗', digest: res.digest };
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
+            return { ok: false, error: res.error ?? '交易失敗', digest: res.digest };
         }
         return { ok: true, digest: res.digest };
     } catch (err) {

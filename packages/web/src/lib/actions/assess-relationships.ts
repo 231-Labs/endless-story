@@ -27,7 +27,7 @@ import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
 import { fetchRecruitmentIdForCharacter } from '@/lib/chain/voucher-read';
 import { isMemoryConfigured, rememberForCharacter } from '@/lib/chain/memory';
 import { fetchOnChainEdgesFrom } from '@/lib/chain/relationships';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { execAdminTx, getAdminContext } from '@/lib/chain/admin-signer';
 import { getStoreRecruitment } from './recruitments-store';
 
 /** A proposed tie — mirrors the runner's RelationshipTie, kept local so the
@@ -208,15 +208,10 @@ export async function applyRelationshipTiesAction(
                 }),
             );
         }
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
-            throw new Error(res.effects?.status?.error ?? 'relationship_seed 交易失敗');
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
+            throw new Error(res.error ?? 'relationship_seed 交易失敗');
         }
-        await admin.client.waitForTransaction({ digest: res.digest });
         digest = res.digest;
     } catch (err) {
         return { ok: false, seeded: 0, skippedExisting, memoriesWritten: 0, error: err instanceof Error ? err.message : String(err) };

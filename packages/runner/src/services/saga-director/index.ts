@@ -19,6 +19,7 @@ import {
     ENDLESS_STORY_DEPLOYMENT,
     makeSuiClient,
     read,
+    signAndExecute,
     type SuiClient,
 } from '@endless-story/sdk';
 import { text as llmText } from '@endless-story/llm';
@@ -108,18 +109,16 @@ export async function runOnce(input: RunDirectorInput): Promise<RunDirectorResul
         sagaId: input.sagaId,
         storytellerCapId: input.signer.storytellerCapId,
     });
-    const res = await client.signAndExecuteTransaction({
+    const res = await signAndExecute(client, {
         transaction: tx,
         signer: input.signer.keypair,
-        options: { showEffects: true },
     });
-    const status = res.effects?.status?.status;
-    if (status !== 'success') {
+    if (!res.success) {
         return {
             capabilities: parsed.capabilities,
             rationale: parsed.rationale,
             dispatched: false,
-            errors: [`tx failed: ${res.effects?.status?.error ?? 'unknown'}`, ...parsed.rawErrors],
+            errors: [`tx failed: ${res.error ?? 'unknown'}`, ...parsed.rawErrors],
             digest: res.digest,
             snapshot,
             llmResponseRaw: response.text,

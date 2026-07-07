@@ -8,13 +8,13 @@ import {
     type CharacterCandidate,
     type RolledAttribute,
 } from '@endless-story/llm/prompts';
-import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, findCreatedObjectId, tx as endlessTx } from '@endless-story/sdk';
 import {
     deriveFallbackPublicTags,
     mergePublicTags,
     socialTagsOnly,
 } from '../public-tags.js';
-import { getAdminContext } from '../chain/admin-signer.js';
+import { getAdminContext, execAdminTx } from '../chain/admin-signer.js';
 
 const INTENT_WITNESS = 6;
 const TAG_OP_KIND_ADD = 0;
@@ -134,24 +134,12 @@ async function pushPublicTagEvent(input: {
         }),
     );
 
-    const res = await admin.client.signAndExecuteTransaction({
-        transaction: tx,
-        signer: admin.signer,
-        options: { showEffects: true, showObjectChanges: true },
-    });
-    if (res.effects?.status?.status !== 'success') {
-        throw new Error(res.effects?.status?.error ?? '身份確認事件建立失敗');
+    const res = await execAdminTx(admin, tx);
+    if (!res.success) {
+        throw new Error(res.error ?? '身份確認事件建立失敗');
     }
-    await admin.client.waitForTransaction({ digest: res.digest });
 
-    const changes = (res.objectChanges ?? []) as Array<{
-        type?: string;
-        objectType?: string;
-        objectId?: string;
-    }>;
-    const eventId = changes.find(
-        (c) => c.type === 'created' && c.objectType?.endsWith('::event::BudgetEvent'),
-    )?.objectId;
+    const eventId = findCreatedObjectId(res, '::event::BudgetEvent');
     if (!eventId) throw new Error('身份確認事件交易成功，但找不到 BudgetEvent object');
     return { eventId, pushDigest: res.digest };
 }
@@ -200,14 +188,9 @@ async function resolveAndApplyPublicTags(input: {
         );
     }
 
-    const res = await admin.client.signAndExecuteTransaction({
-        transaction: tx,
-        signer: admin.signer,
-        options: { showEffects: true },
-    });
-    if (res.effects?.status?.status !== 'success') {
-        throw new Error(res.effects?.status?.error ?? '公開標籤寫入失敗');
+    const res = await execAdminTx(admin, tx);
+    if (!res.success) {
+        throw new Error(res.error ?? '公開標籤寫入失敗');
     }
-    await admin.client.waitForTransaction({ digest: res.digest });
     return res.digest;
 }

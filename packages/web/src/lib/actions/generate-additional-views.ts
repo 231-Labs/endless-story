@@ -26,7 +26,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read, tx as endlessTx } from '@endless-story/sdk';
 import { createImageClient } from '@endless-story/llm/image';
 import { blob } from '@endless-story/memwal';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { execAdminTx, getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { portraitVariantPrompt, artSheetPrompt, humanReferencePrompt, stageMakeupPrompt } from '@/lib/image-prompts';
@@ -234,14 +234,9 @@ export async function generateAdditionalViews(
                     asset,
                 }),
             );
-            const txr = await admin.client.signAndExecuteTransaction({
-                transaction: txb,
-                signer: admin.signer,
-                options: { showEffects: true },
-            });
-            await admin.client.waitForTransaction({ digest: txr.digest }).catch(() => {});
-            if (txr.effects?.status?.status === 'success') appended += 1;
-            else console.warn(`[additional-views] ${view.label} append failed:`, txr.effects?.status?.error);
+            const txr = await execAdminTx(admin, txb);
+            if (txr.success) appended += 1;
+            else console.warn(`[additional-views] ${view.label} append failed:`, txr.error);
         } catch (err) {
             console.warn(`[additional-views] ${view.label} anchor failed:`, err instanceof Error ? err.message : err);
         }

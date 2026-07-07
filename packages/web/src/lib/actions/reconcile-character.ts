@@ -32,7 +32,7 @@ import { fetchOnChainAppearance } from '../chain/appearance-read.js';
 import { fetchPovChaptersForCharacter } from '../chain/pov-read.js';
 import { resolveRole } from '../chain/pov-core.js';
 import { getMemoryCount } from '../chain/memory-counter.js';
-import { getAdminContext } from '../chain/admin-signer.js';
+import { getAdminContext, execAdminTx } from '../chain/admin-signer.js';
 import { resolveNetwork } from '../chain/network.js';
 
 const ATTR_LABEL: Record<string, string> = {
@@ -155,15 +155,10 @@ export async function reconcileCharacterAction(characterId: string): Promise<Rec
                         newImageUrl: gen.url,
                     }),
                 );
-                const txr = await admin.client.signAndExecuteTransaction({
-                    transaction: txb,
-                    signer: admin.signer,
-                    options: { showEffects: true },
-                });
-                await admin.client.waitForTransaction({ digest: txr.digest }).catch(() => {});
-                const okTx = txr.effects?.status?.status === 'success';
+                const txr = await execAdminTx(admin, txb);
+                const okTx = txr.success;
                 if (okTx) coverUrl = gen.url;
-                steps.push({ step: 'portrait', status: okTx ? 'ok' : 'fail', detail: okTx ? gen.url : txr.effects?.status?.error });
+                steps.push({ step: 'portrait', status: okTx ? 'ok' : 'fail', detail: okTx ? gen.url : (txr.error ?? undefined) });
             } else {
                 steps.push({ step: 'portrait', status: 'fail', detail: gen.error ?? 'no_image' });
             }
