@@ -47,6 +47,8 @@ import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-stor
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
 import { recordSceneTruth } from '@/lib/chain/scene-truth';
+import { ensureHomesSeeded } from '@/lib/chain/home-seed';
+import { getHomeScene } from '@/lib/chain/spatial-routing';
 import { loadBible } from '@/lib/chain/story-bible-store';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
@@ -413,6 +415,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             // By day the router is silent and the LLM keeps agency.
             let routeTargets: Map<string, string> | undefined;
             if (!dryRun && isNight) {
+                // G10: homes are authored canon (preset home_scene) — without
+                // this the router's "home" fell back to stay-put and a private
+                // pair could never form.
+                const homed = await ensureHomesSeeded(
+                    d.sagaId,
+                    activeRoster.map((r) => ({ id: r.id, name: r.name })),
+                    activeScenes.map((s) => ({ id: s.id, name: s.name })),
+                ).catch(() => 0);
+                if (homed > 0) tlog(`③′ 夜路由: ${homed} 人有家可歸`);
                 const present = activeRoster.filter((r) => r.currentSceneId);
                 const warm = await fetchWarmGraph(present.map((r) => r.id), {
                     feltNameToId: new Map(present.map((r) => [r.name, r.id])),
@@ -433,7 +444,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     return {
                         id: r.id,
                         sceneId: r.currentSceneId as string,
-                        homeSceneId: r.homeSceneId ?? (r.currentSceneId as string),
+                        // Roster snapshots homes before this tick's seeding ran —
+                        // re-read the live map so homes work the same night.
+                        homeSceneId: r.homeSceneId ?? getHomeScene(r.id) ?? (r.currentSceneId as string),
                         pursue: jealous ?? warm.pursueByChar.get(r.id),
                     };
                 });
