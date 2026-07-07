@@ -9,7 +9,10 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 import { createImageClient } from '@endless-story/llm/image';
 
-const STYLE = '絹本工筆：清明上河圖式細膩線描、赭石淡墨設色、陳年絹底暖米金基調';
+// 郎世寧 half-Western oil — MUST match the location paintings (o-*.jpg) + the
+// already-correct fans (s-yunjintai-tai etc.), not the old 工筆 silk look.
+const STYLE =
+    '郎世寧半西洋油彩畫風：中西合璧的清宮油畫感，細膩寫實的光影立體、溫潤古典的油彩設色、柔和側光塑形，質地厚潤如陳年絹本油畫；1930 年代民國上海的場景';
 const HERE = path.dirname(url.fileURLToPath(import.meta.url));
 const OUT = path.resolve(HERE, '../../web/public/handscroll');
 
@@ -34,7 +37,7 @@ async function main() {
             console.log(`skip ${f.file} (exists)`);
             continue;
         }
-        const prompt = `${STYLE}。空景無人的場景圖：${f.name}——${f.desc}。構圖居中、適合圓形裁切。`;
+        const prompt = `${STYLE}。空景無人的場景：${f.name}——${f.desc}。構圖居中、留出圓形裁切的餘裕；畫面無任何文字、題字、書法、印章、標籤、邊框或浮水印。`;
         try {
             const res = await client.generate({ prompt, aspectRatio: '1:1', n: 1 });
             const b64 = res.images[0]?.base64;
