@@ -25,6 +25,17 @@ export function terrainArtFor(name: string | undefined): string | null {
  * fan face until a real still exists on the scene (scene.imageUrl overrides).
  */
 const SCENE_ART: Array<{ match: RegExp; src: string }> = [
+  // Specific names FIRST — first match wins (報館閣樓 must not fall into 報館).
+  { match: /小廂房/, src: '/handscroll/s-xiaoxiangfang.jpg' },
+  { match: /後進廂房/, src: '/handscroll/s-houjin.jpg' },
+  { match: /大通鋪/, src: '/handscroll/s-datongpu.jpg' },
+  { match: /閣樓/, src: '/handscroll/s-gelou.jpg' },
+  { match: /花廳|長三/, src: '/handscroll/s-changsan.jpg' },
+  { match: /書寓/, src: '/handscroll/s-shuyu.jpg' },
+  { match: /鄉賢|正堂/, src: '/handscroll/s-xiangxian.jpg' },
+  { match: /寓所/, src: '/handscroll/s-jinfeng.jpg' },
+  { match: /沈宅/, src: '/handscroll/s-shenzhai.jpg' },
+  { match: /白公館|繡樓/, src: '/handscroll/s-baigongguan.jpg' },
   { match: /戲園前街|霞飛路/, src: '/handscroll/s-xiafeilu-jie.jpg' },
   { match: /戲台|雲錦台/, src: '/handscroll/s-yunjintai-tai.jpg' },
   { match: /包廂|茶座/, src: '/handscroll/s-baoxiang.jpg' },
