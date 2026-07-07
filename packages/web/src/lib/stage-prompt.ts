@@ -82,6 +82,28 @@ const ROLE_DEFAULTS: Record<string, RoleDefault> = {
     },
 };
 
+/** True when `roleType` is a recognized stage 行當 (i.e. this character performs
+ *  on stage). Non-performers — 記者 / 歌女 / 衣箱 / 班主 / 掌事 / 客 / 商家 … — return
+ *  false and should get a PROFESSION portrait, not opera makeup (B4). */
+export function isStageRole(roleType: string): boolean {
+    return roleKey(roleType) !== undefined;
+}
+
+/** Non-performer portrait: the character in their OWN profession's period attire,
+ *  not stage makeup. Same face-lock + style contract as buildStagePrompt so the
+ *  two are interchangeable at the call site. */
+export function buildProfessionPrompt(role: string, styleMode: string, occasion?: string): string {
+    const occ = occasion?.trim() ? `，${occasion.trim()}` : '';
+    return [
+        '請以基底參考圖中的人物為唯一身份基準，保持同一張臉、同一人物、相同五官比例、臉型、眼型、鼻口比例與神韻，不可換人，不可顯著改變年齡感與核心氣質。',
+        `整體風格為：${styleMode.trim() || '郎世寧半西洋油彩畫風'}。`,
+        `這是一張「職業寫照」，不是戲曲戲妝：依角色身分「${role}」與 1930 年代民國上海的背景，穿上符合其職業與身分的日常裝扮` +
+            `（例：記者的半舊西裝、袖口沾墨；歌女的旗袍；衣箱師傅的素布衫與圍裙；班主掌事的體面長衫；商家千金的華服——依角色實際身分而定）${occ}。`,
+        '素顏或淡日常妝，不上戲曲油彩、不戴頭面、不穿戲服；半身，柔和自然光，神態符合其身分與處境。',
+        '請強化人物辨識度與時代生活感，確保畫面精緻、完整、自然。不要現代元素，不要文字，不要 logo，不要多餘人物。',
+    ].join('\n');
+}
+
 /** Normalize an arbitrary 行當 string to a ROLE_DEFAULTS key (longest match first). */
 function roleKey(roleType: string): keyof typeof ROLE_DEFAULTS | undefined {
     const r = roleType;
