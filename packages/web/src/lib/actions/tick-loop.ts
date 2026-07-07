@@ -42,7 +42,7 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
-import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, jealousNightPursuit, newWant, nightSceneKind } from '@/lib/chain/want-core';
+import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, jealousNightPursuit, yearningNightPursuit, newWant, nightSceneKind } from '@/lib/chain/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
@@ -436,18 +436,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 const idByNightName = new Map(present.map((r) => [r.name, r.id]));
                 const presentIds = new Set(present.map((r) => r.id));
                 const actors = present.map((r) => {
-                    const jealous = wantEngine
-                        ? jealousNightPursuit(nightWants, r.id, (t) =>
-                              presentIds.has(t) ? t : idByNightName.get(t),
-                          )
-                        : null;
+                    const resolveTgt = (t: string) => (presentIds.has(t) ? t : idByNightName.get(t));
+                    const jealous = wantEngine ? jealousNightPursuit(nightWants, r.id, resolveTgt) : null;
+                    // 夜赴 (H1): a ripe love/debt want seeks its target so the
+                    // private pair can form. Welcome-gated (unlike 妒火夜隨's
+                    // intrude), and only when jealousy isn't already stalking.
+                    const yearning = wantEngine ? yearningNightPursuit(nightWants, r.id, resolveTgt) : null;
                     return {
                         id: r.id,
                         sceneId: r.currentSceneId as string,
                         // Roster snapshots homes before this tick's seeding ran —
                         // re-read the live map so homes work the same night.
                         homeSceneId: r.homeSceneId ?? getHomeScene(r.id) ?? (r.currentSceneId as string),
-                        pursue: jealous ?? warm.pursueByChar.get(r.id),
+                        pursue: jealous ?? yearning ?? warm.pursueByChar.get(r.id),
                     };
                 });
                 routeTargets = computeSpatialRouting(
@@ -1144,17 +1145,19 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 // them — plays out. Everyone else sleeps, as before.
                 if (isNight) {
                     let trysts = 0;
+                    let reckonings = 0;
                     let confrontations = 0;
                     for (const [sceneId, cs] of [...byScene]) {
                         const info = activeScenes.find((sc) => sc.id === sceneId);
                         const kind = nightSceneKind(cs, info?.privacyLevel ?? 0, wants);
                         if (!kind) byScene.delete(sceneId);
                         else if (kind === 'tryst') trysts++;
+                        else if (kind === 'reckoning') reckonings++;
                         else confrontations++;
                     }
                     tlog(
                         byScene.size > 0
-                            ? `③⁹ 夜場: ${trysts} 幽會${confrontations > 0 ? ` · ${confrontations} 撞破` : ''}`
+                            ? `③⁹ 夜場: ${trysts} 幽會${reckonings > 0 ? ` · ${reckonings} 了結` : ''}${confrontations > 0 ? ` · ${confrontations} 撞破` : ''}`
                             : '③⁹ want scenes: night — 快轉, sleep consolidates',
                     );
                 }

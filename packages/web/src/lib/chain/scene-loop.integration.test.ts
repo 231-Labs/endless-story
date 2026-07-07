@@ -14,7 +14,9 @@ import {
     jealousNightPursuit,
     newWant,
     nightSceneKind,
+    qualifiesAsReckoning,
     qualifiesAsTryst,
+    yearningNightPursuit,
     type Want,
 } from './want-core.ts';
 import {
@@ -201,6 +203,49 @@ test('G8b 妒火夜隨: a pressing grudge stalks its target, idle ones stay home
     // Cold grudge (idle forcing) does not stalk; love-layer never stalks.
     assert.equal(jealousNightPursuit([grudgeWant({ heat: 1 })], JIN.id, resolve), null);
     assert.equal(jealousNightPursuit([loveWant({ characterId: JIN.id, heat: 9 })], JIN.id, resolve), null);
+});
+
+function debtWant(over: Partial<Want> = {}): Want {
+    const w = newWant({
+        characterId: LIU.id,
+        layer: '虧欠',
+        desc: '想遞水袖時真碰著她的手，把那夜逃的債還清',
+        target: BAI.name,
+        weight: 0.9,
+        sat: 0.2,
+        resistance: 9,
+        kind: 'narrative',
+        source: 'genesis',
+        bornTick: 1,
+    });
+    Object.assign(w, over);
+    return w;
+}
+
+test('H1 了結: a private pair with an unsettled debt want plays as a reckoning', () => {
+    const debt = debtWant();
+    // The gate pathology: 虧欠 climbed to the ceiling but only 愛/情 opened a
+    // private night pair, so it never got its reckoning. Now it qualifies.
+    assert.equal(qualifiesAsReckoning([LIU, BAI], 3, [debt]), true);
+    assert.equal(qualifiesAsTryst([LIU, BAI], 3, [debt]), false); // not a tryst — no intimacy gate
+    assert.equal(nightSceneKind([LIU, BAI], 3, [debt]), 'reckoning');
+    // Still gated: public room, or the debt aimed elsewhere, sleeps.
+    assert.equal(nightSceneKind([LIU, BAI], 2, [debt]), null);
+    assert.equal(qualifiesAsReckoning([LIU, WEN], 3, [debt]), false);
+    // A debt pair witnessed by a jealous third is a 撞破.
+    assert.equal(nightSceneKind([LIU, BAI, JIN], 3, [debt, grudgeWant({ target: LIU.name })]), 'confrontation');
+});
+
+test('H1 夜赴: a ripe love/debt want seeks its target (welcome-gated, no intrude)', () => {
+    const resolve = (t: string) => (t === BAI.name ? BAI.id : t === LIU.name ? LIU.id : undefined);
+    // Debt at edge forcing (heat 9 / resist 9) → seeks target, but politely.
+    const debt = yearningNightPursuit([debtWant({ heat: 9 })], LIU.id, resolve);
+    assert.ok(debt);
+    assert.equal(debt!.id, BAI.id);
+    assert.equal((debt as { intrude?: boolean }).intrude, undefined); // no forced entry
+    // Love does too; an idle (un-ripe) want stays home.
+    assert.ok(yearningNightPursuit([loveWant({ heat: 8 })], BAI.id, resolve));
+    assert.equal(yearningNightPursuit([debtWant({ heat: 0, frust: 0 })], LIU.id, resolve), null);
 });
 
 test('G8b routing: intrude bypasses the welcome gate into a private home', () => {
