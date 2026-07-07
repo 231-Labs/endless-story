@@ -4,7 +4,16 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Character, Scene } from '@endless-story/shared';
 import { getSceneBoard, type SceneBoard } from '@/lib/actions/saga-live';
+import { SubscribeButton } from '@/components/common/SubscribeButton';
 import { sceneArtFor } from './terrainArt';
+
+/** The present cast a subscribe gate acts on — subscription is per-character,
+ *  so a scene's door is "訂閱在場角色", one real Move call per person here. */
+interface CastMember {
+  id: string;
+  name: string;
+  count: number;
+}
 
 /** Register glyph + tint for a beat line (mirrors the 題字流 language). */
 const KIND: Record<string, { glyph: string; tint: string }> = {
@@ -74,6 +83,11 @@ export function SceneSheet({
   }, [onClose]);
 
   const presentNames = present.map(nameOf);
+  const cast: CastMember[] = present.map((id) => ({
+    id,
+    name: nameOf(id),
+    count: charactersById.get(id)?.subscriberCount ?? 0,
+  }));
   const is18 = board?.rating === 'consummate';
 
   return (
@@ -136,7 +150,7 @@ export function SceneSheet({
 
         {/* body */}
         {isPrivate ? (
-          <LockedBody is18={is18} />
+          <LockedBody is18={is18} cast={cast} />
         ) : (
           <div className="pointer-events-auto min-h-0 flex-1 overflow-y-auto px-[max(1rem,env(safe-area-inset-left))] pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] pt-5 sm:px-10 md:overflow-hidden">
             <div className="mx-auto grid max-w-5xl gap-5 md:h-full md:min-h-0 md:grid-cols-[1.35fr_1fr]">
@@ -208,10 +222,9 @@ export function SceneSheet({
                   )}
                 </div>
                 <div className="rounded-xl bg-surface/85 p-4 backdrop-blur-md ring-1 ring-hairline/40 dark:bg-black/40 dark:ring-white/10">
-                  <button className="w-full rounded-lg border border-ink/25 bg-transparent py-2.5 font-serif text-sm tracking-[0.25em] text-ink transition-colors hover:border-cinnabar/60 hover:text-cinnabar dark:border-white/25 dark:text-white/85 dark:hover:border-cinnabar/70">
-                    訂閱在場角色
-                  </button>
-                  <p className="mt-2 text-center text-2xs tracking-[0.12em] text-mute">完整心聲 · 心事帳 · 注夢 · 劇照優先鑄</p>
+                  <h3 className="mb-3 font-serif text-2xs tracking-[0.3em] text-mute">訂閱在場角色</h3>
+                  <SubscribeGate cast={cast} tone="light" />
+                  <p className="mt-3 text-center text-2xs tracking-[0.12em] text-mute">完整心聲 · 心事帳 · 注夢 · 劇照優先鑄</p>
                 </div>
               </aside>
             </div>
@@ -222,7 +235,7 @@ export function SceneSheet({
   );
 }
 
-function LockedBody({ is18 }: { is18: boolean }) {
+function LockedBody({ is18, cast }: { is18: boolean; cast: CastMember[] }) {
   return (
     <div className="pointer-events-auto flex flex-1 items-center justify-center p-10">
       <div className="max-w-md rounded-2xl bg-black/40 px-8 py-9 text-center backdrop-blur-md ring-1 ring-white/10">
@@ -235,10 +248,34 @@ function LockedBody({ is18 }: { is18: boolean }) {
             成人 18+ · consummate
           </span>
         ) : null}
-        <div className="mt-6">
-          <button className="rounded-lg bg-white/90 px-6 py-3 font-serif text-sm tracking-[0.25em] text-black">訂閱以入內</button>
+        <div className="mt-6 flex flex-col items-center gap-2">
+          {cast.length ? (
+            <SubscribeGate cast={cast} tone="dark" />
+          ) : (
+            <p className="text-2xs tracking-[0.2em] text-white/50">此刻窗內無人。</p>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A subscribe door for a scene: subscription is per-character, so a scene with
+ * several people present shows one real subscribe control per person. Each
+ * fires the actual `subscribe::subscribe` Move call via the connected wallet
+ * (no fake button). `tone` only shifts the name label for the dark lock card.
+ */
+function SubscribeGate({ cast, tone }: { cast: CastMember[]; tone: 'light' | 'dark' }) {
+  const nameTint = tone === 'dark' ? 'text-white/85' : 'text-ink/85';
+  return (
+    <div className="flex w-full flex-col gap-2.5">
+      {cast.map((c) => (
+        <div key={c.id} className="flex items-center justify-between gap-3">
+          <span className={`font-serif text-sm tracking-[0.15em] ${nameTint}`}>{c.name}</span>
+          <SubscribeButton characterId={c.id} currentCount={c.count} />
+        </div>
+      ))}
     </div>
   );
 }

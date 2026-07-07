@@ -87,7 +87,12 @@ export function FloatingStream({
               {style.glyph}
             </span>
           ) : null}
-          <span className="font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm">
+          <span
+            className="block font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm"
+            // vertical-rl inline size = height; capping it wraps a long line into
+            // a second column (to the left) instead of spilling past the painting.
+            style={{ maxHeight: 'min(30dvh, 13rem)' }}
+          >
             「{text}」
           </span>
           {cur.speakerName ? (
@@ -155,7 +160,10 @@ export function FloatingQuote({
             {style.glyph}
           </span>
         ) : null}
-        <span className="font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm">
+        <span
+          className="block font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm"
+          style={{ maxHeight: 'min(30dvh, 13rem)' }}
+        >
           {children}
         </span>
         {speaker ? (

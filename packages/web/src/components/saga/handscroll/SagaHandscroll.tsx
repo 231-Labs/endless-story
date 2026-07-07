@@ -331,10 +331,13 @@ export function SagaHandscroll(props: Props) {
               return (
                 <div
                   key={seg.location.id}
-                  className="flex h-full shrink-0 snap-center snap-always flex-col border-r border-black/[0.08] last:border-r-0 dark:border-white/[0.05]"
+                  // Column width is pinned to the painting width. Fans wrap and
+                  // scroll WITHIN this width so a crowded location (many 團扇)
+                  // can never stretch the column and open a gap in the scroll.
+                  className="flex h-full shrink-0 snap-center snap-always flex-col w-[clamp(330px,69vh,780px)] border-r border-black/[0.08] last:border-r-0 dark:border-white/[0.05]"
                 >
                   {/* 油畫 —— 高度定、寬度依 3:2 自算，完整展示不裁切 */}
-                  <div className="relative h-[clamp(220px,46vh,520px)] w-[clamp(330px,69vh,780px)] shrink-0 overflow-hidden">
+                  <div className="relative h-[clamp(220px,46vh,520px)] w-full shrink-0 overflow-hidden">
                     {art ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={art} alt={seg.location.name} className="h-full w-full object-cover" draggable={false} />
@@ -350,8 +353,9 @@ export function SagaHandscroll(props: Props) {
                     ) : null}
                   </div>
 
-                  {/* 團扇 —— 置中，往兩邊平均展開 */}
-                  <div className="flex w-full flex-1 flex-wrap content-start justify-center gap-x-4 gap-y-3 bg-canvas/30 px-3 pt-5">
+                  {/* 團扇 —— 置中，往兩邊平均展開。多了就在畫作寬內折行＋縱捲，
+                      不外撐欄寬（min-h-0 讓 flex 子項可縮、overflow-y-auto 收多餘）。 */}
+                  <div className="flex w-full flex-1 min-h-0 flex-wrap content-start justify-center gap-x-4 gap-y-3 overflow-y-auto no-scrollbar bg-canvas/30 px-3 pt-5">
                     {locScenes.length ? (
                       locScenes.map((sc) => (
                         <SceneFan
