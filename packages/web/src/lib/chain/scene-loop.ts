@@ -225,17 +225,14 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     }
 
     // Strict resolve pass: only edge-level acted wants are even judged (§2.31).
-    // 私密更容易收 (H3c): a heart/debt want settles in a PRIVATE 2-person scene at
-    // the edge bar (effR already drops 3 there), but a PUBLIC resolution needs the
-    // want at BREAKING — a genuine can't-hold-it burst, not an everyday scene. So
-    // most love/debt lands in the private night tryst, yet a public declaration is
-    // still possible when the pressure is overwhelming. Other layers: edge anywhere.
+    // Private is ALREADY easier (effR drops 3 in a private 2-person pair, §2.45),
+    // so a heart/debt want tends to settle privately — without gating public
+    // resolution behind breaking, which starves resolution when the night pair
+    // fails to form (H3c: don't make public harder until the private path lands).
     for (const w of actedWants.values()) {
         if (w.retired) continue;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: input.cast });
-        const isHeartDebt = /愛|情|虧欠|愧|償|怨/.test(w.layer);
-        const bar = input.isPrivate || !isHeartDebt ? effR : effR + WANT.breakingMargin;
-        if (forcingPressure(w) < bar) continue;
+        if (forcingPressure(w) < effR) continue;
         const owner = input.cast.find((c) => c.characterId === w.characterId);
         if (!owner) continue;
         const verdict = await agent.judgeWantResolved({
