@@ -9,7 +9,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 
-export type BeatForcing = 'idle' | 'pressing' | 'edge';
+export type BeatForcing = 'idle' | 'pressing' | 'edge' | 'breaking';
 
 export interface ActBeatInput {
     name: string;
@@ -75,6 +75,12 @@ function forceNote(forcing: BeatForcing, privateAlone: boolean): string {
         return privateAlone
             ? '無人看著，藏了多年的，在這方寸裡有點按不住了。'
             : '心裡翻著，可人前多半還是按下不表。';
+    if (forcing === 'breaking')
+        // H3: past the edge — the want has become unbearable. Cross the line
+        // this beat; the answer is still yours (confess, reckon, break, or bolt).
+        return privateAlone
+            ? '到頭了，一個字也壓不回去——只你二人，這一刻把積在心底最深的那句話、那個動作做出來，放不回頭也認了。'
+            : '到頭了，再壓下去人就要散了——就在這些眼睛底下，做出那件放不回頭的事，由你的心。';
     return privateAlone
         ? '再也按不住了——只你二人、沒有眼睛，這年頭唯一能這樣的地方，這一刻全由你的心。'
         : '再也按不住了——這一刻你得做一件放不回頭的事，由你的心。';

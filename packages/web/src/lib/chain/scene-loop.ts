@@ -97,9 +97,10 @@ export function effectiveResistance(w: Want, input: Pick<SceneLoopInput, 'isPriv
         : w.resistance;
 }
 
-type EffLevel = 'idle' | 'pressing' | 'edge';
+type EffLevel = 'idle' | 'pressing' | 'edge' | 'breaking';
 function levelAt(w: Want, effR: number): EffLevel {
     const p = forcingPressure(w);
+    if (p >= effR + WANT.breakingMargin) return 'breaking';
     if (p >= effR) return 'edge';
     if (p >= effR * WANT.pressingAt) return 'pressing';
     return 'idle';

@@ -11,6 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    forcingLevel,
     jealousNightPursuit,
     newWant,
     nightSceneKind,
@@ -246,6 +247,24 @@ test('H1 夜赴: a ripe love/debt want seeks its target (welcome-gated, no intru
     // Love does too; an idle (un-ripe) want stays home.
     assert.ok(yearningNightPursuit([loveWant({ heat: 8 })], BAI.id, resolve));
     assert.equal(yearningNightPursuit([debtWant({ heat: 0, frust: 0 })], LIU.id, resolve), null);
+});
+
+test('H3 breaking: past resistance+margin barges in uninvited (one-sided debt forms its scene)', () => {
+    // debtWant res 9 → edge at forcing 9, breaking at ≥ 12 (res + margin 3).
+    assert.equal(forcingLevel(debtWant({ heat: 9, frust: 0 })), 'edge');
+    assert.equal(forcingLevel(debtWant({ heat: 12, frust: 0 })), 'breaking');
+    const resolve = (t: string) => (t === BAI.name ? BAI.id : undefined);
+    // Edge debt: seeks the target but stays welcome-gated (no intrude) — a wary
+    // creditor can still keep the door shut, so it circles.
+    assert.equal(yearningNightPursuit([debtWant({ heat: 9 })], LIU.id, resolve)?.intrude, undefined);
+    // Breaking debt: barges in. This is THE H3 unblock — a one-sided reckoning
+    // finally reaches its target even when the other side never welcomes.
+    const forced = yearningNightPursuit([debtWant({ heat: 12 })], LIU.id, resolve);
+    assert.equal(forced?.id, BAI.id);
+    assert.equal(forced?.intrude, true);
+    // Downstream: intrude + a private home = the pair forms (proven by the G8b
+    // routing test below), and [LIU,BAI]+debt plays as a 了結 reckoning.
+    assert.equal(nightSceneKind([LIU, BAI], 4, [debtWant({ heat: 12 })]), 'reckoning');
 });
 
 test('G8b routing: intrude bypasses the welcome gate into a private home', () => {

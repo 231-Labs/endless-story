@@ -48,7 +48,10 @@ export async function ensureHomesSeeded(
     } catch {
         return 0; // no preset → no anchors; routers fall back to stay-put
     }
-    setHomeScenes(entries);
+    // Only overwrite when the preset actually resolved homes — an empty result
+    // (preset home_scene names don't match this world's scenes) must NOT wipe
+    // homes seeded another way (e.g. the harness pre-seeds private homes).
+    if (entries.length) setHomeScenes(entries);
     seededForSaga = sagaId;
     return entries.length;
 }

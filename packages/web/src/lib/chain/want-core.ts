@@ -71,6 +71,11 @@ export const WANT = {
     rippleResistance: 3,
     /** Forcing escalation bands, as fractions of resistance. */
     pressingAt: 0.6,
+    /** H3: forcing past resistance by THIS margin = 'breaking' — the want is
+     *  overwhelming enough to force its own scene (barge in uninvited) and to
+     *  license the threshold act in the beat. heat/frust never decay, so a
+     *  central want always reaches this after sustained pressure. */
+    breakingMargin: 3,
     /** Spawn/retire balance (§2.55 tuning, 64-live/1-retired fix): on top of
      *  genesis wants (identity, parser-capped at 5) a heart carries at most
      *  this many PICKED-UP threads; old cold ones fade. Genesis never counts
@@ -90,13 +95,16 @@ export const tension = (w: Want): number => w.weight * (1 - w.sat);
 
 export const forcingPressure = (w: Want): number => w.heat + w.frust;
 
-export type ForcingLevel = 'idle' | 'pressing' | 'edge';
+export type ForcingLevel = 'idle' | 'pressing' | 'edge' | 'breaking';
 
 /** How hard the world is pressing this want toward an answer. NEVER prescribes
- *  the answer — the prompt layer renders each level as pressure-only language. */
+ *  the answer — the prompt layer renders each level as pressure-only language.
+ *  'breaking' (H3) is past the edge by a margin: overwhelming enough to force
+ *  its own scene and license the threshold act. */
 export function forcingLevel(w: Want): ForcingLevel {
     if (w.retired || w.kind === 'economic') return 'idle';
     const p = forcingPressure(w);
+    if (p >= w.resistance + WANT.breakingMargin) return 'breaking';
     if (p >= w.resistance) return 'edge';
     if (p >= w.resistance * WANT.pressingAt) return 'pressing';
     return 'idle';
@@ -157,13 +165,14 @@ export function qualifiesAsReckoning(
 }
 
 /** Shared night-pursuit core: the hottest live want whose layer matches `re`
- *  and that is at pressing+ points its owner toward its target. Pure. */
+ *  and that is at pressing+ points its owner toward its target. Returns the
+ *  chosen want too, so callers can gate intrusion on its forcing level. Pure. */
 function nightPursuit(
     wants: ReadonlyArray<Want>,
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
     re: RegExp,
-): { id: string; w: number } | null {
+): { id: string; w: number; want: Want } | null {
     let best: Want | null = null;
     for (const w of wants) {
         if (w.retired || w.characterId !== characterId || !w.target) continue;
@@ -173,7 +182,7 @@ function nightPursuit(
     }
     if (!best) return null;
     const id = resolveTargetId(best.target!);
-    return id && id !== characterId ? { id, w: Math.min(1, tension(best)) } : null;
+    return id && id !== characterId ? { id, w: Math.min(1, tension(best)), want: best } : null;
 }
 
 /** 妒火夜隨 (G8b): the hottest jealousy/grudge want at pressing+ follows its
@@ -184,19 +193,25 @@ export function jealousNightPursuit(
     resolveTargetId: (target: string) => string | undefined,
 ): { id: string; w: number; intrude: true } | null {
     const p = nightPursuit(wants, characterId, resolveTargetId, JEALOUS_LAYER);
-    return p ? { ...p, intrude: true } : null;
+    return p ? { id: p.id, w: p.w, intrude: true } : null;
 }
 
-/** 夜赴 (H1): a ripe love or unsettled-debt want seeks its target at night so
- *  the private pair can actually form and the strict resolve pass gets its
- *  shot. WELCOME-gated (no intrude): you go to them, but only if they'll have
- *  you — a reckoning can't be forced, it emerges from the relationship graph. */
+/** 夜赴 (H1/H3): a ripe love or unsettled-debt want seeks its target at night
+ *  so the private pair can form and the strict resolve pass gets its shot.
+ *  WELCOME-gated by default (a reckoning emerges from the relationship graph),
+ *  BUT at 'breaking' the want is overwhelming enough to barge in uninvited —
+ *  the venue finally forms even when the other side is wary (H3: without this,
+ *  one-sided debt/love never reached its target and circled forever). */
 export function yearningNightPursuit(
     wants: ReadonlyArray<Want>,
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
-): { id: string; w: number } | null {
-    return nightPursuit(wants, characterId, resolveTargetId, new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`));
+): { id: string; w: number; intrude?: true } | null {
+    const p = nightPursuit(wants, characterId, resolveTargetId, new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`));
+    if (!p) return null;
+    return forcingLevel(p.want) === 'breaking'
+        ? { id: p.id, w: p.w, intrude: true }
+        : { id: p.id, w: p.w };
 }
 
 /** Night-scene qualification (G8/G8b, H1): a private scene plays at night as a
