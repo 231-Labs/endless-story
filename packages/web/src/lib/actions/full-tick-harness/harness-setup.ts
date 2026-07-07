@@ -195,7 +195,10 @@ export function seedWorld(opts: SeedOptions = {}): void {
     if (opts.privateHomes) {
         const homeEntries: Array<readonly [string, string]> = [];
         for (const c of cast) {
-            const homeId = fakeId('h-home-' + c.id.slice(-8));
+            // Full char id as the seed — a slice of the tail collides because fake
+            // char ids share a zero-padded suffix (all homes became ONE scene, so
+            // the whole cast piled into it at night and no 2-person pair formed).
+            const homeId = fakeId('h-home-' + c.id);
             harnessChain.scenes.set(homeId, {
                 id: homeId,
                 worldId: WORLD,
