@@ -203,11 +203,12 @@ export function jealousNightPursuit(
 }
 
 /** 夜赴 (H1/H3): a ripe love or unsettled-debt want seeks its target at night
- *  so the private pair can form and the strict resolve pass gets its shot.
- *  WELCOME-gated by default (a reckoning emerges from the relationship graph),
- *  BUT at 'breaking' the want is overwhelming enough to barge in uninvited —
- *  the venue finally forms even when the other side is wary (H3: without this,
- *  one-sided debt/love never reached its target and circled forever). */
+ *  so the private pair can form and the resolve pass gets its shot. Below 'edge'
+ *  it is WELCOME-gated (a reckoning emerges from the relationship graph), but at
+ *  EDGE+ the want is ripe enough to seek its object uninvited (intrude) — the
+ *  venue forms even when the other side is wary, and it forms at edge (before the
+ *  want hits breaking + resolves publicly), so love/debt lands in the private
+ *  night scene rather than a daytime crowd (H3c). */
 export function yearningNightPursuit(
     wants: ReadonlyArray<Want>,
     characterId: string,
@@ -215,7 +216,8 @@ export function yearningNightPursuit(
 ): { id: string; w: number; intrude?: true } | null {
     const p = nightPursuit(wants, characterId, resolveTargetId, new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`));
     if (!p) return null;
-    return forcingLevel(p.want) === 'breaking'
+    const fl = forcingLevel(p.want);
+    return fl === 'edge' || fl === 'breaking'
         ? { id: p.id, w: pursuitWeight(p.want), intrude: true }
         : { id: p.id, w: pursuitWeight(p.want) };
 }

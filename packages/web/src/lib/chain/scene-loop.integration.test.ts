@@ -237,28 +237,29 @@ test('H1 了結: a private pair with an unsettled debt want plays as a reckoning
     assert.equal(nightSceneKind([LIU, BAI, JIN], 3, [debt, grudgeWant({ target: LIU.name })]), 'confrontation');
 });
 
-test('H1 夜赴: a ripe love/debt want seeks its target (welcome-gated, no intrude)', () => {
+test('H1/H3c 夜赴: pressing = welcome-gated (no intrude), edge+ = intrude', () => {
     const resolve = (t: string) => (t === BAI.name ? BAI.id : t === LIU.name ? LIU.id : undefined);
-    // Debt at edge forcing (heat 9 / resist 9) → seeks target, but politely.
-    const debt = yearningNightPursuit([debtWant({ heat: 9 })], LIU.id, resolve);
-    assert.ok(debt);
-    assert.equal(debt!.id, BAI.id);
-    assert.equal((debt as { intrude?: boolean }).intrude, undefined); // no forced entry
-    // Love does too; an idle (un-ripe) want stays home.
-    assert.ok(yearningNightPursuit([loveWant({ heat: 8 })], BAI.id, resolve));
+    // Pressing (heat 6 / resist 9 → forcing 6, ≥ 0.6×9): seeks the target, but
+    // politely — a wary creditor can still keep the door shut.
+    const polite = yearningNightPursuit([debtWant({ heat: 6 })], LIU.id, resolve);
+    assert.ok(polite);
+    assert.equal(polite!.id, BAI.id);
+    assert.equal((polite as { intrude?: boolean }).intrude, undefined);
+    // Edge (heat 9 / resist 9): ripe enough to seek uninvited (H3c: intrude at
+    // edge so the private scene forms BEFORE the want breaks + resolves publicly).
+    assert.equal(yearningNightPursuit([debtWant({ heat: 9 })], LIU.id, resolve)?.intrude, true);
+    assert.equal(yearningNightPursuit([loveWant({ heat: 8 })], BAI.id, resolve)?.intrude, true);
+    // Idle (un-ripe) stays home.
     assert.equal(yearningNightPursuit([debtWant({ heat: 0, frust: 0 })], LIU.id, resolve), null);
 });
 
-test('H3 breaking: past resistance+margin barges in uninvited (one-sided debt forms its scene)', () => {
+test('H3 breaking + reckoning: edge/breaking debt barges in; the pair plays as 了結', () => {
     // debtWant res 9 → edge at forcing 9, breaking at ≥ 12 (res + margin 3).
     assert.equal(forcingLevel(debtWant({ heat: 9, frust: 0 })), 'edge');
     assert.equal(forcingLevel(debtWant({ heat: 12, frust: 0 })), 'breaking');
     const resolve = (t: string) => (t === BAI.name ? BAI.id : undefined);
-    // Edge debt: seeks the target but stays welcome-gated (no intrude) — a wary
-    // creditor can still keep the door shut, so it circles.
-    assert.equal(yearningNightPursuit([debtWant({ heat: 9 })], LIU.id, resolve)?.intrude, undefined);
-    // Breaking debt: barges in. This is THE H3 unblock — a one-sided reckoning
-    // finally reaches its target even when the other side never welcomes.
+    // A ripe (edge+) one-sided debt reaches its target uninvited even when the
+    // other side never welcomes — this is THE H3 unblock.
     const forced = yearningNightPursuit([debtWant({ heat: 12 })], LIU.id, resolve);
     assert.equal(forced?.id, BAI.id);
     assert.equal(forced?.intrude, true);
