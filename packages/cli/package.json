@@ -23,7 +23,7 @@
     "@endless-story/memwal": "workspace:*",
     "@endless-story/sdk": "workspace:*",
     "@endless-story/shared": "workspace:*",
-    "@mysten/sui": "^2.16.0"
+    "@mysten/sui": "^2.20.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { Markdown } from '@/components/common/Markdown';
 import { objectUrl } from '@/lib/explorer';
 import { formatDate, truncateAddress } from '@/lib/format';

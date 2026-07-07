@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import type { Character } from '@endless-story/shared';
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 import { BlobImage } from '@/components/common/BlobImage';

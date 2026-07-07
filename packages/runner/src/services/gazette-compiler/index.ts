@@ -252,7 +252,7 @@ async function fetchGazetteSnapshot(
         ];
         for (const { type, label } of directorEventTypes) {
             try {
-                const page = await client.queryEvents({
+                const page = await read.queryEventsWithRetry(client, {
                     query: { MoveEventType: type },
                     limit: maxEvents,
                     order: 'descending',

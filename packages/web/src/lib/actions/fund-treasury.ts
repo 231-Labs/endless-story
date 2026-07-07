@@ -20,7 +20,7 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, read, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 /** ENDLESS has 6 decimals (1 ENDLESS = 1_000_000 base units). */
 const ENDLESS_DECIMALS = 1_000_000;
@@ -74,13 +74,9 @@ export async function fundSagaTreasuryAction(amountEndless: number): Promise<Fun
                 amount: amountMicro,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
-            return { ok: false, error: res.effects?.status?.error ?? '交易失敗', digest: res.digest };
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
+            return { ok: false, error: res.error ?? '交易失敗', digest: res.digest };
         }
         const treasuryEndless = (await getSagaTreasuryEndless()) ?? undefined;
         return {

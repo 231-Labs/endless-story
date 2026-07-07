@@ -23,6 +23,8 @@ import {
     ENDLESS_STORY_DEPLOYMENT,
     makeSuiClient,
     read,
+    signAndExecute,
+    findCreatedObjectId,
     tx as endlessTx,
     type SuiClient,
 } from '@endless-story/sdk';
@@ -229,14 +231,13 @@ export async function anchorReflectionText(
             importance: input.importance,
         }),
     );
-    const res = await client.signAndExecuteTransaction({
+    const res = await signAndExecute(client, {
         transaction: tx,
         signer: input.signer.keypair,
-        options: { showEffects: true, showObjectChanges: true },
     });
     return {
         anchored: true,
-        reflectionId: findCreatedReflectionId(res) ?? undefined,
+        reflectionId: findCreatedObjectId(res, '::reflection::Reflection') ?? undefined,
         blobId: put.blobId,
         blobUrl: put.url,
         contentHashHex,
@@ -406,22 +407,3 @@ function bytesToHex(bytes: Uint8Array): string {
         .join('');
 }
 
-interface ObjectChangeLike {
-    type?: string;
-    objectType?: string;
-    objectId?: string;
-}
-
-function findCreatedReflectionId(res: { objectChanges?: unknown[] | null }): string | null {
-    const changes = (res.objectChanges ?? []) as ObjectChangeLike[];
-    for (const c of changes) {
-        if (
-            c.type === 'created' &&
-            typeof c.objectType === 'string' &&
-            c.objectType.endsWith('::reflection::Reflection')
-        ) {
-            return c.objectId ?? null;
-        }
-    }
-    return null;
-}

@@ -24,8 +24,8 @@
  */
 
 import { Transaction } from '@mysten/sui/transactions';
-import type { Keypair } from '@mysten/sui/cryptography';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, read, type SuiClient } from '@endless-story/sdk';
+import { execAdminTx, type AdminContext } from '@/lib/chain/admin-signer';
 import { readResourceLedger, settleResolvedTransfers } from '@/lib/chain/drama';
 import { coolResource } from '@/lib/chain/gravity-core';
 
@@ -65,7 +65,7 @@ import { createBudgetEventAction, dealHandAction } from './budget-event';
 import { compileEventChapterAction } from './compile-event-chapter';
 import type { TickStoryletResult } from './tick-loop-types';
 
-type Admin = { client: SuiClient; signer: Keypair };
+type Admin = AdminContext;
 
 interface CutPov {
     characterId: string;
@@ -515,13 +515,8 @@ async function settleEvent(
                 }),
             );
             console.log(`[ch-timing] settle=${ev8} → resolve tx (transfer path, entering admin lock)`);
-            const res = await admin.client.signAndExecuteTransaction({
-                transaction: tx,
-                signer: admin.signer,
-                options: { showEffects: true },
-            });
-            if (res.effects?.status?.status === 'success') {
-                await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+            const res = await execAdminTx(admin, tx);
+            if (res.success) {
                 // Disposal half: apply the validated transfers to the resource.
                 const applied = await settleResolvedTransfers({
                     sagaId: ctx.sagaId,
@@ -535,7 +530,7 @@ async function settleEvent(
                 console.warn('[event-spine] apply_resource_transfers failed:', applied.error);
                 return { resolved: true, settled: false }; // resolved, but settlement didn't land
             }
-            console.warn('[event-spine] settling resolve aborted, falling back:', res.effects?.status?.error);
+            console.warn('[event-spine] settling resolve aborted, falling back:', res.error);
         }
     } catch (err) {
         console.warn('[event-spine] settlement errored, falling back to plain resolve:', err);
@@ -566,15 +561,10 @@ async function plainResolve(admin: Admin, ctx: SpineCtx, ev: SpineOpenEvent): Pr
             outcomes,
         }),
     );
-    const res = await admin.client.signAndExecuteTransaction({
-        transaction: tx,
-        signer: admin.signer,
-        options: { showEffects: true },
-    });
-    if (res.effects?.status?.status !== 'success') {
-        console.warn('[event-spine] plain resolve aborted:', res.effects?.status?.error);
+    const res = await execAdminTx(admin, tx);
+    if (!res.success) {
+        console.warn('[event-spine] plain resolve aborted:', res.error);
         return false;
     }
-    await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
     return true;
 }

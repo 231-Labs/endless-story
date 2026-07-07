@@ -29,11 +29,15 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 import { Transaction } from '@mysten/sui/transactions';
+import type { SuiClientTypes } from '@mysten/sui/client';
 import {
   ENDLESS_STORY_DEPLOYMENT,
   makeSuiClient,
   read,
+  signAndExecute,
+  findCreatedObjectIds,
   tx as endlessTx,
+  type ExecutedTx,
   type SuiClient,
   type SuiNetwork,
 } from '@endless-story/sdk';
@@ -71,44 +75,24 @@ function loadStory(storyId: string): StoryPreset {
 
 async function findTreasuryCap(client: SuiClient, owner: string, packageId: string): Promise<string> {
   const want = `0x2::coin::TreasuryCap<${packageId}::currency::CURRENCY>`;
-  let cursor: string | null | undefined = null;
+  let cursor: string | null = null;
   for (;;) {
-    const page = await client.getOwnedObjects({
+    const page: SuiClientTypes.ListOwnedObjectsResponse<{}> = await client.core.listOwnedObjects({
       owner,
       cursor,
       limit: 50,
-      options: { showType: true },
+      type: want,
     });
-    for (const obj of page.data) {
-      const data = obj.data;
-      if (data?.type === want && data.objectId) return data.objectId;
+    for (const obj of page.objects) {
+      if (obj.objectId) return obj.objectId;
     }
-    if (!page.hasNextPage || !page.nextCursor) break;
-    cursor = page.nextCursor;
+    if (!page.hasNextPage || !page.cursor) break;
+    cursor = page.cursor;
   }
   throw new Error(
     `TreasuryCap<CURRENCY> not found for ${owner}. ` +
       `Re-publish via deploy.ts (the publisher always receives the cap).`,
   );
-}
-
-interface ObjectChange {
-  type: string;
-  objectType?: string;
-  objectId?: string;
-  sender?: string;
-  owner?: unknown;
-}
-
-function findCreatedByType(changes: ObjectChange[], typeSuffix: string): string[] {
-  const out: string[] = [];
-  for (const c of changes) {
-    if (c.type !== 'created') continue;
-    if (c.objectType && c.objectType.endsWith(typeSuffix) && c.objectId) {
-      out.push(c.objectId);
-    }
-  }
-  return out;
 }
 
 function firstOrThrow(arr: string[], label: string): string {
@@ -121,27 +105,17 @@ async function runTx(
   signer: Ed25519Keypair,
   tx: Transaction,
   label: string,
-): Promise<ObjectChange[]> {
+): Promise<ExecutedTx> {
   console.log(`\n[tx] ${label}`);
-  const res = await client.signAndExecuteTransaction({
-    transaction: tx,
-    signer,
-    options: { showEffects: true, showObjectChanges: true },
-  });
-  if (res.effects?.status?.status !== 'success') {
-    throw new Error(`tx "${label}" failed: ${res.effects?.status?.error ?? 'unknown'}`);
-  }
-  // Wait for the fullnode to index this tx before the next one builds —
-  // otherwise testnet's RPC lag hands the next tx a stale gas-coin version
-  // ("object ... unavailable for consumption"). Devnet was fast enough to
-  // skip this; testnet is not.
-  try {
-    await client.waitForTransaction({ digest: res.digest });
-  } catch {
-    // Best-effort settle; the next tx's gas selection will retry anyway.
+  // waitForFinality settles the tx before the next one builds — otherwise
+  // testnet's RPC lag hands the next tx a stale gas-coin version ("object ...
+  // unavailable for consumption").
+  const res = await signAndExecute(client, { transaction: tx, signer, waitForFinality: true });
+  if (!res.success) {
+    throw new Error(`tx "${label}" failed: ${res.error ?? 'unknown'}`);
   }
   console.log(`   digest ${res.digest}`);
-  return (res.objectChanges ?? []) as ObjectChange[];
+  return res;
 }
 
 async function main() {
@@ -238,11 +212,11 @@ async function main() {
   tx1.transferObjects([faucetAdminCap], admin);
 
   const changes1 = await runTx(client, signer, tx1, 'Tx 1 — World + Faucet');
-  const worldId = firstOrThrow(findCreatedByType(changes1, '::world::World'), 'World');
-  const adminCapId = firstOrThrow(findCreatedByType(changes1, '::world::AdminCap'), 'AdminCap');
-  const faucetId = firstOrThrow(findCreatedByType(changes1, '::faucet::Faucet'), 'Faucet');
+  const worldId = firstOrThrow(findCreatedObjectIds(changes1, '::world::World'), 'World');
+  const adminCapId = firstOrThrow(findCreatedObjectIds(changes1, '::world::AdminCap'), 'AdminCap');
+  const faucetId = firstOrThrow(findCreatedObjectIds(changes1, '::faucet::Faucet'), 'Faucet');
   const faucetAdminCapId = firstOrThrow(
-    findCreatedByType(changes1, '::faucet::FaucetAdminCap'),
+    findCreatedObjectIds(changes1, '::faucet::FaucetAdminCap'),
     'FaucetAdminCap',
   );
   console.log(`   world     ${worldId}`);
@@ -303,12 +277,12 @@ async function main() {
     );
   });
   const changes2 = await runTx(client, signer, tx2, `Tx 2 — ${story.locations.length} Locations`);
-  const locationIdsRaw = findCreatedByType(changes2, '::world::Location');
+  const locationIdsRaw = findCreatedObjectIds(changes2, '::world::Location');
   if (locationIdsRaw.length !== story.locations.length) {
     throw new Error(`expected ${story.locations.length} locations, got ${locationIdsRaw.length}`);
   }
-  // Sui `objectChanges` doesn't preserve PTB creation order (usually sorts by
-  // objectId), so findCreatedByType's order != story.locations order. Each
+  // Sui effects don't preserve PTB creation order (usually sorted by
+  // objectId), so findCreatedObjectIds' order != story.locations order. Each
   // Location's `info.index` is the authoritative order (written at creation =
   // story index). Re-sort by index, else `locationIds[scene.location_index]`
   // anchors to the wrong location and `coveredLocationIds` is scrambled too.
@@ -371,9 +345,9 @@ async function main() {
   );
   tx3.transferObjects([storytellerCap], admin);
   const changes3 = await runTx(client, signer, tx3, 'Tx 3 — Saga');
-  const sagaId = firstOrThrow(findCreatedByType(changes3, '::saga::Saga'), 'Saga');
+  const sagaId = firstOrThrow(findCreatedObjectIds(changes3, '::saga::Saga'), 'Saga');
   const storytellerCapId = firstOrThrow(
-    findCreatedByType(changes3, '::saga::StorytellerCap'),
+    findCreatedObjectIds(changes3, '::saga::StorytellerCap'),
     'StorytellerCap',
   );
   console.log(`   saga         ${sagaId}`);
@@ -475,11 +449,11 @@ async function main() {
     );
   });
   const changes4 = await runTx(client, signer, tx4, `Tx 5 — ${story.scenes.length} Scenes`);
-  const sceneIdsRaw = findCreatedByType(changes4, '::scene::Scene');
+  const sceneIdsRaw = findCreatedObjectIds(changes4, '::scene::Scene');
   if (sceneIdsRaw.length !== story.scenes.length) {
     throw new Error(`expected ${story.scenes.length} scenes, got ${sceneIdsRaw.length}`);
   }
-  // Sui `objectChanges` doesn't preserve PTB creation order, so sceneIdsRaw is
+  // Sui effects don't preserve PTB creation order, so sceneIdsRaw is
   // scrambled — and sceneIds[0] is consumed as the default mint/home scene (e.g.
   // the founding cast). Scenes carry no info.index, but names are unique, so
   // re-order to the story's scene order by matching info.name. Without this the
@@ -513,11 +487,11 @@ async function main() {
   );
   const changes5 = await runTx(client, signer, tx5, 'Tx 6 — DreamConfig');
   const dreamConfigId = firstOrThrow(
-    findCreatedByType(changes5, '::dream::DreamConfig'),
+    findCreatedObjectIds(changes5, '::dream::DreamConfig'),
     'DreamConfig',
   );
   const dreamAdminCapId = firstOrThrow(
-    findCreatedByType(changes5, '::dream::DreamAdminCap'),
+    findCreatedObjectIds(changes5, '::dream::DreamAdminCap'),
     'DreamAdminCap',
   );
   console.log(`   dreamConf  ${dreamConfigId}`);
@@ -529,7 +503,7 @@ async function main() {
   txStill.add(endlessTx.still.createRegistry({ cap: storytellerCapId, saga: sagaId }));
   const changesStill = await runTx(client, signer, txStill, 'Tx 6.5 — StillRegistry');
   const stillRegistryId = firstOrThrow(
-    findCreatedByType(changesStill, '::still::StillRegistry'),
+    findCreatedObjectIds(changesStill, '::still::StillRegistry'),
     'StillRegistry',
   );
   console.log(`   stillReg   ${stillRegistryId}`);
@@ -544,7 +518,7 @@ async function main() {
   );
   const changesMintCfg = await runTx(client, signer, txMintCfg, 'Tx 6.6 — StillMintConfig');
   const stillMintConfigId = firstOrThrow(
-    findCreatedByType(changesMintCfg, '::still::StillMintConfig'),
+    findCreatedObjectIds(changesMintCfg, '::still::StillMintConfig'),
     'StillMintConfig',
   );
   console.log(`   mintCfg    ${stillMintConfigId}`);
@@ -574,7 +548,7 @@ async function main() {
       );
     }
     const changes6 = await runTx(client, signer, tx6, `Tx 7 — ${dramaResources.length} Drama resources`);
-    const dramaResourceIds = findCreatedByType(changes6, '::resource::DramaResource');
+    const dramaResourceIds = findCreatedObjectIds(changes6, '::resource::DramaResource');
     if (dramaResourceIds.length !== dramaResources.length) {
       throw new Error(`expected ${dramaResources.length} drama resources, got ${dramaResourceIds.length}`);
     }

@@ -1,13 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import {
-    useCurrentAccount,
-    useSignAndExecuteTransaction,
-    useSuiClient,
-} from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
-import { tx as endlessTx } from '@endless-story/sdk';
+import { normalizeTxResult, tx as endlessTx } from '@endless-story/sdk';
 
 /**
  * Subscribe to a character — fires `subscribe::subscribe` Move call.
@@ -27,8 +23,7 @@ export function SubscribeButton({
     onSubscribed?: (newCount: number) => void;
 }) {
     const account = useCurrentAccount();
-    const suiClient = useSuiClient();
-    const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+    const dappKit = useDAppKit();
     const [count, setCount] = useState(currentCount);
     const [error, setError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
@@ -42,27 +37,18 @@ export function SubscribeButton({
         const tx = new Transaction();
         tx.add(endlessTx.subscribe.subscribe({ character: characterId }));
 
-        startTransition(() => {
-            signAndExecute(
-                { transaction: tx },
-                {
-                    onSuccess: async (res) => {
-                        // Wait for finality so chain re-read shows the new count.
-                        try {
-                            await suiClient.waitForTransaction({
-                                digest: res.digest,
-                                options: { showEffects: true },
-                            });
-                            const next = count + 1;
-                            setCount(next);
-                            onSubscribed?.(next);
-                        } catch (err) {
-                            setError(err instanceof Error ? err.message : '訂閱已發出但等待失敗');
-                        }
-                    },
-                    onError: (err) => setError(err.message),
-                },
-            );
+        startTransition(async () => {
+            try {
+                const res = normalizeTxResult(
+                    await dappKit.signAndExecuteTransaction({ transaction: tx }),
+                );
+                if (!res.success) throw new Error(res.error ?? '訂閱失敗');
+                const next = count + 1;
+                setCount(next);
+                onSubscribed?.(next);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : '訂閱已發出但等待失敗');
+            }
         });
     };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient } from '@mysten/dapp-kit-react';
 import { ENDLESS_STORY_DEPLOYMENT, read } from '@endless-story/sdk';
 import type { Character } from '@endless-story/shared';
 import { Markdown } from '@/components/common/Markdown';
@@ -34,7 +34,7 @@ export function ChainPovSection({
     character: Character;
 }) {
     const account = useCurrentAccount();
-    const suiClient = useSuiClient();
+    const client = useCurrentClient();
     const isOwner = !!account && account.address === character.nftOwner;
     const [isSubscriber, setIsSubscriber] = useState(false);
 
@@ -47,7 +47,7 @@ export function ChainPovSection({
         if (!pkg) return;
         let cancelled = false;
         read.subscribe
-            .listSubscriptionsForAddress(suiClient, account.address, pkg)
+            .listSubscriptionsForAddress(client, account.address, pkg)
             .then((subs) => {
                 if (!cancelled) {
                     setIsSubscriber(subs.some((s) => s.characterId === character.id));
@@ -59,7 +59,7 @@ export function ChainPovSection({
         return () => {
             cancelled = true;
         };
-    }, [account, isOwner, character.id, suiClient]);
+    }, [account, isOwner, character.id, client]);
 
     const canRead = isOwner || isSubscriber;
     const accessState = isOwner ? 'owner' : isSubscriber ? 'subscriber' : 'locked';

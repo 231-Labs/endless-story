@@ -20,7 +20,7 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext, withAdminLock } from '@/lib/chain/admin-signer';
+import { execAdminTx, getAdminContext } from '@/lib/chain/admin-signer';
 import { type BondPair } from './bond-core.ts';
 
 export { collectBondPairs, type BondPair, type GiveLike } from './bond-core.ts';
@@ -42,31 +42,23 @@ export async function seedBondTies(pairs: BondPair[]): Promise<SeedBondResult> {
 
     try {
         const admin = getAdminContext();
-        const res = await withAdminLock(async () => {
-            const tx = new Transaction();
-            for (const p of pairs) {
-                tx.add(
-                    endlessTx.director.relationshipSeed({
-                        cap: d.storytellerCapId,
-                        saga: d.sagaId,
-                        sceneId: p.sceneId,
-                        characterA: p.aId,
-                        characterB: p.bId,
-                        tone: p.tone,
-                    }),
-                );
-            }
-            const r = await admin.client.signAndExecuteTransaction({
-                transaction: tx,
-                signer: admin.signer,
-                options: { showEffects: true },
-            });
-            if (r.effects?.status?.status !== 'success') {
-                throw new Error(r.effects?.status?.error ?? 'relationship_seed 交易失敗');
-            }
-            await admin.client.waitForTransaction({ digest: r.digest });
-            return r;
-        });
+        const tx = new Transaction();
+        for (const p of pairs) {
+            tx.add(
+                endlessTx.director.relationshipSeed({
+                    cap: d.storytellerCapId,
+                    saga: d.sagaId,
+                    sceneId: p.sceneId,
+                    characterA: p.aId,
+                    characterB: p.bId,
+                    tone: p.tone,
+                }),
+            );
+        }
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
+            throw new Error(res.error ?? 'relationship_seed 交易失敗');
+        }
         return { ok: true, seeded: pairs.length, digest: res.digest };
     } catch (err) {
         return { ok: false, seeded: 0, error: err instanceof Error ? err.message : String(err) };

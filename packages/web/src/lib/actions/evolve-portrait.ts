@@ -24,7 +24,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, makeSuiClient, read, tx as endlessTx } from '@endless-story/sdk';
 import { createImageClient } from '@endless-story/llm/image';
 import { blob } from '@endless-story/memwal';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { execAdminTx, getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { evolveVariantPrompt, evolveVariantTone } from '@/lib/image-prompts';
@@ -304,13 +304,8 @@ export async function evolvePortraitAction(
                 asset,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: txb,
-            signer: admin.signer,
-            options: { showEffects: true, showEvents: true },
-        });
-        const okChain = res.effects?.status?.status === 'success';
-        await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
+        const res = await execAdminTx(admin, txb);
+        const okChain = res.success;
         const mediaIndex = extractMediaAssetIndex(res.events ?? []);
         return {
             ok: okChain,
@@ -321,7 +316,7 @@ export async function evolvePortraitAction(
             promptUsed: gen.promptUsed,
             anchored: okChain,
             digest: res.digest,
-            error: okChain ? undefined : (res.effects?.status?.error ?? '上鏈失敗'),
+            error: okChain ? undefined : (res.error ?? '上鏈失敗'),
         };
     } catch (err) {
         return {
@@ -420,14 +415,14 @@ function buildVariantMetadataUri(kind: PortraitOccasionKind, occasion?: string):
 }
 
 interface SuiEventLike {
-    type?: string;
-    parsedJson?: unknown;
+    eventType?: string;
+    json?: unknown;
 }
 
 function extractMediaAssetIndex(events: SuiEventLike[]): number | undefined {
     for (const ev of events) {
-        if (!ev.type?.endsWith('::character::MediaAssetAdded')) continue;
-        const parsed = ev.parsedJson as { index?: string | number } | undefined;
+        if (!ev.eventType?.endsWith('::character::MediaAssetAdded')) continue;
+        const parsed = ev.json as { index?: string | number } | undefined;
         const n = Number(parsed?.index);
         return Number.isFinite(n) ? n : undefined;
     }

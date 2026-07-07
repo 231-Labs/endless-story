@@ -1,13 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import {
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from '@mysten/dapp-kit';
+import { useCurrentAccount, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
-import { tx as endlessTx } from '@endless-story/sdk';
+import { normalizeTxResult, tx as endlessTx } from '@endless-story/sdk';
 
 /**
  * Burn an on-chain Subscription object (`subscribe::unsubscribe`).
@@ -26,8 +22,7 @@ export function UnsubscribeButton({
   onComplete?: () => void;
 }) {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const dappKit = useDAppKit();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -52,24 +47,16 @@ export function UnsubscribeButton({
       }),
     );
 
-    startTransition(() => {
-      signAndExecute(
-        { transaction: tx },
-        {
-          onSuccess: async (res) => {
-            try {
-              await suiClient.waitForTransaction({
-                digest: res.digest,
-                options: { showEffects: true },
-              });
-              onComplete?.();
-            } catch (err) {
-              setError(err instanceof Error ? err.message : '取消訂閱已送出，稍後重整看看');
-            }
-          },
-          onError: (err) => setError(err.message),
-        },
-      );
+    startTransition(async () => {
+      try {
+        const res = normalizeTxResult(
+          await dappKit.signAndExecuteTransaction({ transaction: tx }),
+        );
+        if (!res.success) throw new Error(res.error ?? '取消訂閱失敗');
+        onComplete?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '取消訂閱已送出，稍後重整看看');
+      }
     });
   };
 

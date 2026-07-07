@@ -18,7 +18,7 @@ import * as url from 'node:url';
 import * as fs from 'node:fs';
 import { Transaction } from '@mysten/sui/transactions';
 import { ENDLESS_STORY_DEPLOYMENT, type SuiNetwork } from '@endless-story/shared/contract-ids';
-import { makeSuiClient, tx as endlessTx } from '@endless-story/sdk';
+import { makeSuiClient, signAndExecute, findCreatedObjectId, tx as endlessTx } from '@endless-story/sdk';
 import { loadKeypair } from '@endless-story/sdk/node';
 import { flag, hasFlag, requireFlag } from '../src/lib/flags';
 import { writeContractIds } from '../src/lib/contract-ids-writer';
@@ -59,25 +59,13 @@ async function main() {
 
   const tx = new Transaction();
   tx.add(endlessTx.still.createMintConfig({ cap: d.storytellerCapId, saga: d.sagaId, fee }));
-  const res = await client.signAndExecuteTransaction({
-    transaction: tx,
-    signer,
-    options: { showEffects: true, showObjectChanges: true },
-  });
-  if (res.effects?.status?.status !== 'success') {
-    throw new Error(`tx failed: ${res.effects?.status?.error ?? 'unknown'}`);
+  const res = await signAndExecute(client, { transaction: tx, signer, waitForFinality: true });
+  if (!res.success) {
+    throw new Error(`tx failed: ${res.error ?? 'unknown'}`);
   }
 
-  const changes = (res.objectChanges ?? []) as Array<{
-    type: string;
-    objectType?: string;
-    objectId?: string;
-  }>;
-  const created = changes.find(
-    (c) => c.type === 'created' && c.objectType?.endsWith('::still::StillMintConfig'),
-  );
-  if (!created?.objectId) throw new Error('created StillMintConfig not found in objectChanges.');
-  const stillMintConfigId = created.objectId;
+  const stillMintConfigId = findCreatedObjectId(res, '::still::StillMintConfig');
+  if (!stillMintConfigId) throw new Error('created StillMintConfig not found in effects.');
 
   console.log(`   digest  ${res.digest}`);
   console.log(`   config  ${stillMintConfigId}`);

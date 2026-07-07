@@ -15,14 +15,12 @@
  *   - admin                         → children
  */
 
-import { useState } from 'react';
-import { ConnectModal } from '@mysten/dapp-kit';
+import { WalletConnectButton } from '@/components/common/WalletConnectButton';
 import { truncateAddress } from '@/lib/format';
 import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
 
 export function SagaAdminGuard({ children }: { children: React.ReactNode }) {
   const { account, isSagaAdmin, isLoading } = useSagaAdmin();
-  const [connectOpen, setConnectOpen] = useState(false);
 
   if (isSagaAdmin) return <>{children}</>;
 
@@ -42,19 +40,10 @@ export function SagaAdminGuard({ children }: { children: React.ReactNode }) {
           <p className="mt-2 text-sm text-mute">
             此處需以發起本梨園的班主錢包簽入。
           </p>
-          <button
-            type="button"
-            onClick={() => setConnectOpen(true)}
-            className="mt-6 rounded-full bg-cinnabar/15 px-4 py-1.5 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/25"
-          >
-            連結班主錢包
-          </button>
+          <div className="mt-6 flex justify-center">
+            <WalletConnectButton />
+          </div>
         </div>
-        <ConnectModal
-          trigger={<span style={{ display: 'none' }} />}
-          open={connectOpen}
-          onOpenChange={setConnectOpen}
-        />
       </>
     );
   }

@@ -19,12 +19,12 @@
 
 import { randomBytes } from 'node:crypto';
 import { Transaction } from '@mysten/sui/transactions';
-import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx, findCreatedObjectId } from '@endless-story/sdk';
 import { induction as runnerInduction } from '@endless-story/runner';
 import { rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { CharacterCandidate } from '@endless-story/llm/prompts';
 import type { CharacterAttributes } from '@endless-story/shared';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 import { isMemoryConfigured, rememberForCharacter } from '@/lib/chain/memory';
 import { sagasApi } from '@/lib/api/index';
 import { listStoryPresets, loadStoryPreset } from '@/lib/stories/loader';
@@ -260,18 +260,9 @@ export async function createFoundingCastAction(
             );
             tx.transferObjects([controlCap], admin.address);
 
-            const res = await admin.client.signAndExecuteTransaction({
-                transaction: tx,
-                signer: admin.signer,
-                options: { showEffects: true, showObjectChanges: true },
-            });
+            const res = await execAdminTx(admin, tx);
 
-            let characterId: string | undefined;
-            for (const ch of (res.objectChanges ?? []) as Array<{ type: string; objectType?: string; objectId?: string }>) {
-                if (ch.type === 'created' && (ch.objectType ?? '').endsWith('::character::Character')) {
-                    characterId = ch.objectId;
-                }
-            }
+            const characterId = findCreatedObjectId(res, '::character::Character');
             if (!characterId) {
                 failures.push({ name: spec.name, error: 'mint tx 成功但找不到 Character object' });
                 continue;

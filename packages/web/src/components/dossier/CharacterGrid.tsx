@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import type { SVGProps } from 'react';
 import type { Character } from '@endless-story/shared';
 import Link from 'next/link';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { PageLeadTitleBlock } from '@/components/common/PageLeadTitleBlock';
 import { SubscribeCard } from '@/components/subscribe/SubscribeCard';
 import { InkUnderline } from '@/components/common/ink-motion';

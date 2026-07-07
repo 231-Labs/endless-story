@@ -23,6 +23,8 @@ import { bcs } from '@mysten/sui/bcs';
 import {
   ENDLESS_STORY_DEPLOYMENT,
   makeSuiClient,
+  signAndExecute,
+  findCreatedObjectId,
   tx as endlessTx,
   type SuiNetwork,
 } from '@endless-story/sdk';
@@ -44,19 +46,6 @@ const VOUCHER_TTL_MS = 24n * 60n * 60n * 1000n; // 24h
 const ENDLESS_DECIMALS = 6;
 const VOUCHER_PRICE = 100n * 10n ** BigInt(ENDLESS_DECIMALS); // 100 ENDLESS
 const REFILL_AMOUNT = 1_000n * 10n ** BigInt(ENDLESS_DECIMALS); // 1000 ENDLESS
-
-interface ObjectChange {
-  type: string;
-  objectType?: string;
-  objectId?: string;
-}
-
-function findCreated(changes: ObjectChange[], typeSuffix: string): string[] {
-  return changes
-    .filter((c): c is ObjectChange => c.type === 'created' && !!c.objectId && !!c.objectType)
-    .filter((c) => c.objectType!.endsWith(typeSuffix))
-    .map((c) => c.objectId!);
-}
 
 async function main() {
   const env = requireFlag('--env') as SuiNetwork;
@@ -89,8 +78,8 @@ async function main() {
   //  - if short, admin_mint (with tiny salt to dodge Sui tx-digest dedup)
   // ═══════════════════════════════════════════════════════════════════
   const coinType = `${d.packageId}::currency::CURRENCY`;
-  let currentCoins = await client.getCoins({ owner: admin, coinType, limit: 20 });
-  let currentBalance = currentCoins.data.reduce((s, c) => s + BigInt(c.balance), 0n);
+  let currentCoins = await client.core.listCoins({ owner: admin, coinType, limit: 20 });
+  let currentBalance = currentCoins.objects.reduce((s, c) => s + BigInt(c.balance), 0n);
   console.log(`\n[step 1] current ENDLESS balance: ${currentBalance}`);
   if (!skipDrip && currentBalance < VOUCHER_PRICE) {
     // Salt amount with current ms so each run is a distinct tx payload — Sui's
@@ -107,20 +96,16 @@ async function main() {
         recipient: admin,
       }),
     );
-    const res = await client.signAndExecuteTransaction({
-      transaction: tx,
-      signer,
-      options: { showEffects: true },
-    });
-    if (res.effects?.status?.status !== 'success') {
-      throw new Error(`admin_mint failed: ${res.effects?.status?.error}`);
+    const res = await signAndExecute(client, { transaction: tx, signer, waitForFinality: true });
+    if (!res.success) {
+      throw new Error(`admin_mint failed: ${res.error}`);
     }
     console.log(`         digest ${res.digest}`);
     // Poll until indexer catches up.
     for (let i = 0; i < 10; i++) {
       await new Promise((r) => setTimeout(r, 800));
-      currentCoins = await client.getCoins({ owner: admin, coinType, limit: 20 });
-      currentBalance = currentCoins.data.reduce((s, c) => s + BigInt(c.balance), 0n);
+      currentCoins = await client.core.listCoins({ owner: admin, coinType, limit: 20 });
+      currentBalance = currentCoins.objects.reduce((s, c) => s + BigInt(c.balance), 0n);
       if (currentBalance >= VOUCHER_PRICE) break;
     }
     console.log(`         balance after refill: ${currentBalance}`);
@@ -137,7 +122,7 @@ async function main() {
   console.log('\n[step 2] mint GenesisVoucher…');
   // step 1 guaranteed balance ≥ VOUCHER_PRICE; just reuse the snapshot.
   const coinsRes = currentCoins;
-  console.log(`   coins   ${coinsRes.data.length} (total ${currentBalance})`);
+  console.log(`   coins   ${coinsRes.objects.length} (total ${currentBalance})`);
 
   const seed = generateAttributeSeed();
   const seedHex = Array.from(seed)
@@ -149,7 +134,7 @@ async function main() {
   // Merge all coins into the first, then split exactly VOUCHER_PRICE for
   // payment. This matches what the wizard does — leaves change behind so
   // subsequent runs still have a balance.
-  const coinIds = coinsRes.data.map((c) => c.coinObjectId);
+  const coinIds = coinsRes.objects.map((c) => c.objectId);
   const primary = tx2.object(coinIds[0]);
   if (coinIds.length > 1) {
     tx2.mergeCoins(
@@ -173,30 +158,22 @@ async function main() {
     }),
   );
   tx2.transferObjects([voucher], admin);
-  const mintRes = await client.signAndExecuteTransaction({
-    transaction: tx2,
-    signer,
-    options: { showEffects: true, showObjectChanges: true },
-  });
-  if (mintRes.effects?.status?.status !== 'success') {
-    throw new Error(`mint voucher failed: ${mintRes.effects?.status?.error}`);
+  const mintRes = await signAndExecute(client, { transaction: tx2, signer, waitForFinality: true });
+  if (!mintRes.success) {
+    throw new Error(`mint voucher failed: ${mintRes.error}`);
   }
-  // Wait for fullnode indexer so step 4 can read the voucher object back.
+  const voucherId = findCreatedObjectId(mintRes, '::recruit::GenesisVoucher');
+  if (!voucherId) throw new Error('voucher not created');
+  // Wait for the fullnode to serve the voucher object so step 4 can read it back.
   for (let i = 0; i < 15; i++) {
     try {
-      await client.getObject({ id: '0x6', options: { showOwner: false } }); // cheap ping
-      const probe = await client.getObject({
-        id: findCreated((mintRes.objectChanges ?? []) as ObjectChange[], '::recruit::GenesisVoucher')[0] ?? '0x0',
-        options: { showOwner: false },
-      });
-      if (probe.data) break;
+      const probe = await client.core.getObject({ objectId: voucherId });
+      if (probe.object) break;
     } catch {
       // not yet
     }
     await new Promise((r) => setTimeout(r, 600));
   }
-  const voucherId = findCreated((mintRes.objectChanges ?? []) as ObjectChange[], '::recruit::GenesisVoucher')[0];
-  if (!voucherId) throw new Error('voucher not created');
   console.log(`   voucher ${voucherId}`);
   console.log(`   digest  ${mintRes.digest}`);
 
@@ -262,18 +239,14 @@ async function main() {
     }),
   );
   tx3.transferObjects([controlCap], admin);
-  const redeemRes = await client.signAndExecuteTransaction({
-    transaction: tx3,
-    signer,
-    options: { showEffects: true, showObjectChanges: true },
-  });
-  if (redeemRes.effects?.status?.status !== 'success') {
-    throw new Error(`redeem failed: ${redeemRes.effects?.status?.error}`);
+  const redeemRes = await signAndExecute(client, { transaction: tx3, signer, waitForFinality: true });
+  if (!redeemRes.success) {
+    throw new Error(`redeem failed: ${redeemRes.error}`);
   }
 
-  const characterId = findCreated((redeemRes.objectChanges ?? []) as ObjectChange[], '::character::Character')[0];
-  const ownerCapId = findCreated((redeemRes.objectChanges ?? []) as ObjectChange[], '::character::OwnerCap')[0];
-  const controlCapId = findCreated((redeemRes.objectChanges ?? []) as ObjectChange[], '::character::ControlCap')[0];
+  const characterId = findCreatedObjectId(redeemRes, '::character::Character');
+  const ownerCapId = findCreatedObjectId(redeemRes, '::character::OwnerCap');
+  const controlCapId = findCreatedObjectId(redeemRes, '::character::ControlCap');
 
   console.log(`   digest        ${redeemRes.digest}`);
   console.log(`   character     ${characterId ?? '(not found!)'}`);

@@ -27,7 +27,7 @@
 import { Transaction } from '@mysten/sui/transactions';
 import type { Character, ChapterProvenance } from '@endless-story/shared';
 import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 import { ensureEventStoreRegistered } from '@/lib/server/event-store';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
 import { pickEncounterPair, buildEncounterTrigger } from './tick-phases/encounter';
@@ -727,14 +727,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             characterIds: st.characterIds,
                         }),
                     );
-                    const res = await admin.client.signAndExecuteTransaction({
-                        transaction: txb,
-                        signer: admin.signer,
-                        options: { showEffects: true },
-                    });
-                    st.opened = res.effects?.status?.status === 'success';
+                    const res = await execAdminTx(admin, txb);
+                    st.opened = res.success;
                     st.digest = res.digest;
-                    await admin.client.waitForTransaction({ digest: res.digest }).catch(() => {});
                 } catch (err) {
                     st.error = err instanceof Error ? err.message : String(err);
                 }

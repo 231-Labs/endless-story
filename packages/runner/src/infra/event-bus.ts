@@ -13,7 +13,7 @@
  * lets web server actions own short-lived cursors per request.
  */
 
-import { makeSuiClient, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+import { makeSuiClient, ENDLESS_STORY_DEPLOYMENT, read } from '@endless-story/sdk';
 import type { SuiClient } from '@endless-story/sdk';
 import { resolveNetwork } from './network.js';
 
@@ -60,7 +60,7 @@ export async function fetchEventsSince(
     // multiple, do parallel pulls and merge by tx digest + eventSeq.
     const pulls = await Promise.all(
         wantedTypes.map(async (eventType) => {
-            const res = await c.queryEvents({
+            const res = await read.queryEventsWithRetry(c, {
                 query: { MoveEventType: eventType },
                 cursor: opts.fromCursor ?? null,
                 limit: opts.pageLimit ?? 50,

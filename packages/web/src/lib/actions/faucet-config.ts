@@ -14,7 +14,7 @@ import {
     read,
     tx as endlessTx,
 } from '@endless-story/sdk';
-import { getAdminContext } from '@/lib/chain/admin-signer';
+import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
 
 export interface FaucetSnapshot {
     drip_amount: string;
@@ -81,13 +81,9 @@ export async function setFaucetConfig(input: SetFaucetConfigInput): Promise<SetF
                 paused: input.paused,
             }),
         );
-        const res = await admin.client.signAndExecuteTransaction({
-            transaction: tx,
-            signer: admin.signer,
-            options: { showEffects: true },
-        });
-        if (res.effects?.status?.status !== 'success') {
-            return { ok: false, error: res.effects?.status?.error ?? '交易失敗', digest: res.digest };
+        const res = await execAdminTx(admin, tx);
+        if (!res.success) {
+            return { ok: false, error: res.error ?? '交易失敗', digest: res.digest };
         }
         return { ok: true, digest: res.digest };
     } catch (err) {

@@ -141,7 +141,7 @@ const allocs = (m: Map<string, bigint>): Record<string, string> => {
 test('REAL settle path transfers a capacity-1 contested resource to the winner', async () => {
     const chain = buildChain();
     const client = makeFakeSuiClient(chain) as never;
-    const admin = { client, signer: { __fake_signer: true } as never };
+    const admin = { client, signer: { __fake_signer: true } as never, address: '0xfake' };
     const ctx = buildCtx();
 
     const res0 = chain.resources.get(RES)!;

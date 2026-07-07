@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
 import { Transaction } from '@mysten/sui/transactions';
-import { ENDLESS_STORY_DEPLOYMENT, read, tx as endlessTx } from '@endless-story/sdk';
+import { ENDLESS_STORY_DEPLOYMENT, normalizeTxResult, read, tx as endlessTx } from '@endless-story/sdk';
 
 type Listing = Awaited<ReturnType<typeof read.kiosk.listKioskStillListings>>[number];
 
@@ -19,18 +19,18 @@ export function PurchasePanel({
   vaultName?: string;
 }) {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dappKit = useDAppKit();
   const [listings, setListings] = useState<Listing[] | null>(null);
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     read.kiosk
-      .listKioskStillListings(suiClient, kioskId)
+      .listKioskStillListings(client, kioskId)
       .then(setListings)
       .catch(() => setListings([]));
-  }, [suiClient, kioskId]);
+  }, [client, kioskId]);
 
   useEffect(() => {
     setListings(null);
@@ -55,13 +55,9 @@ export function PurchasePanel({
           transferPolicy: ENDLESS_STORY_DEPLOYMENT.stillTransferPolicyId,
         });
         tx.transferObjects([still], account.address);
-        const res = await signAndExecute({ transaction: tx });
-        const full = await suiClient.waitForTransaction({
-          digest: res.digest,
-          options: { showEffects: true },
-        });
-        if (full.effects?.status?.status !== 'success') {
-          throw new Error(full.effects?.status?.error ?? '購買失敗');
+        const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+        if (!res.success) {
+          throw new Error(res.error ?? '購買失敗');
         }
         reload();
       } catch (err) {
@@ -70,7 +66,7 @@ export function PurchasePanel({
         setBuyingId(null);
       }
     },
-    [account, kioskId, signAndExecute, suiClient, reload],
+    [account, kioskId, dappKit, reload],
   );
 
   return (

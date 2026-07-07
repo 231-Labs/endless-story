@@ -173,14 +173,11 @@ async function resolveCurrentOwner(characterId: string): Promise<string | null> 
         const summaries = await read.character.listMintedCharacterSummaries(client, pkg, {});
         const match = summaries.find((s) => s.characterId === characterId);
         if (!match || !match.ownerCapId) return null;
-        // Pull current OwnerCap holder via showOwner.
-        const capObj = await client.getObject({
-            id: match.ownerCapId,
-            options: { showOwner: true },
-        });
-        const ownerField = capObj.data?.owner;
-        if (ownerField && typeof ownerField === 'object' && 'AddressOwner' in ownerField) {
-            return (ownerField as { AddressOwner: string }).AddressOwner;
+        // Pull current OwnerCap holder (owner is always on the core object).
+        const capObj = await client.core.getObject({ objectId: match.ownerCapId });
+        const owner = capObj.object.owner;
+        if (owner?.$kind === 'AddressOwner') {
+            return owner.AddressOwner;
         }
         // Fall back to mint-time owner from event (still useful if
         // the cap is shared/immutable, which it shouldn't be).

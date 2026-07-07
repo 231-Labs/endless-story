@@ -1,6 +1,6 @@
 'use client';
 
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { truncateAddress } from '@/lib/format';
 import { Composer } from './Composer';
 

@@ -16,9 +16,13 @@
 
 import { after } from 'next/server';
 import { Transaction } from '@mysten/sui/transactions';
-import { tx as endlessTx, ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
+import {
+    tx as endlessTx,
+    ENDLESS_STORY_DEPLOYMENT,
+    findCreatedObjectId,
+} from '@endless-story/sdk';
 import type { CharacterCandidate, RolledAttribute } from '@endless-story/llm/prompts';
-import { getAdminContext } from '../chain/admin-signer.js';
+import { getAdminContext, execAdminTx } from '../chain/admin-signer.js';
 import { inductCharacterAction } from './induct-character.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
 import { generatePersonaAction } from './generate-persona.js';
@@ -207,29 +211,14 @@ export async function redeemVoucher(input: RedeemVoucherInput): Promise<RedeemVo
 
     let result;
     try {
-        result = await admin.client.signAndExecuteTransaction({
-            transaction: buildRedeemTx(),
-            signer: admin.signer,
-            options: { showEffects: true, showObjectChanges: true },
-        });
+        result = await execAdminTx(admin, buildRedeemTx());
     } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 
-    // Parse Character + OwnerCap from objectChanges.
-    let characterId: string | undefined;
-    let ownerCapId: string | undefined;
-    const changes = (result.objectChanges ?? []) as Array<{
-        type: string;
-        objectType?: string;
-        objectId?: string;
-    }>;
-    for (const change of changes) {
-        if (change.type !== 'created') continue;
-        const ot = change.objectType ?? '';
-        if (ot.endsWith('::character::Character')) characterId = change.objectId;
-        else if (ot.endsWith('::character::OwnerCap')) ownerCapId = change.objectId;
-    }
+    // Parse Character + OwnerCap from the created objects.
+    const characterId = findCreatedObjectId(result, '::character::Character');
+    const ownerCapId = findCreatedObjectId(result, '::character::OwnerCap');
 
     if (!characterId) {
         return {

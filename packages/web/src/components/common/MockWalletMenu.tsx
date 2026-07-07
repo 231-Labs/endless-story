@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  ConnectModal,
-  useDisconnectWallet,
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from '@mysten/dapp-kit';
+import { useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
+import { WalletConnectButton } from '@/components/common/WalletConnectButton';
 import { Transaction } from '@mysten/sui/transactions';
-import { ENDLESS_STORY_DEPLOYMENT, read as endlessRead, tx as endlessTx } from '@endless-story/sdk';
+import {
+  ENDLESS_STORY_DEPLOYMENT,
+  normalizeTxResult,
+  read as endlessRead,
+  tx as endlessTx,
+} from '@endless-story/sdk';
 import { truncateAddress } from '@/lib/format';
 import { getMySubscriptionsPageData } from '@/lib/actions/subscriptions-page';
 import { useSagaAdmin } from '@/lib/hooks/useSagaAdmin';
@@ -18,10 +19,9 @@ import { useToast } from '@/components/common/Toaster';
 export function MockWalletMenu() {
   // ── Real wallet (dapp-kit) ───────────────────────────────────────
   const { account, isSagaAdmin } = useSagaAdmin();
-  const { mutate: disconnect } = useDisconnectWallet();
-  const { mutate: signAndExecute, isPending: isDripping } = useSignAndExecuteTransaction();
-  const suiClient = useSuiClient();
-  const [connectOpen, setConnectOpen] = useState(false);
+  const dappKit = useDAppKit();
+  const client = useCurrentClient();
+  const [isDripping, setIsDripping] = useState(false);
   const toast = useToast();
   const [balance, setBalance] = useState<string>('—');
   const [balanceTick, setBalanceTick] = useState(0);
@@ -44,16 +44,12 @@ export function MockWalletMenu() {
       return;
     }
     let cancelled = false;
-    suiClient
-      .getObject({ id: faucetAdminCapId, options: { showOwner: true } })
+    client.core
+      .getObject({ objectId: faucetAdminCapId })
       .then((res) => {
         if (cancelled) return;
-        const owner = res.data?.owner;
-        if (owner && typeof owner === 'object' && 'AddressOwner' in owner) {
-          setIsFaucetAdmin(owner.AddressOwner === account.address);
-        } else {
-          setIsFaucetAdmin(false);
-        }
+        const owner = res.object.owner;
+        setIsFaucetAdmin(owner?.$kind === 'AddressOwner' && owner.AddressOwner === account.address);
       })
       .catch(() => {
         if (!cancelled) setIsFaucetAdmin(false);
@@ -61,7 +57,7 @@ export function MockWalletMenu() {
     return () => {
       cancelled = true;
     };
-  }, [account, suiClient, faucetAdminCapId]);
+  }, [account, client, faucetAdminCapId]);
 
   // Count of Character NFTs owned by the connected wallet — via OwnerCap
   // pagination (single round-trip when ≤50 caps). Cleared on disconnect.
@@ -72,7 +68,7 @@ export function MockWalletMenu() {
     }
     let cancelled = false;
     endlessRead.character
-      .listOwnerCapsForAddress(suiClient, account.address, packageId)
+      .listOwnerCapsForAddress(client, account.address, packageId)
       .then((caps) => {
         if (!cancelled) setChainOwnedCount(caps.length);
       })
@@ -82,7 +78,7 @@ export function MockWalletMenu() {
     return () => {
       cancelled = true;
     };
-  }, [account, suiClient, packageId, balanceTick]);
+  }, [account, client, packageId, balanceTick]);
 
   useEffect(() => {
     if (!account) {
@@ -111,11 +107,11 @@ export function MockWalletMenu() {
     }
     let cancelled = false;
     const coinType = `${packageId}::currency::CURRENCY`;
-    suiClient
+    client.core
       .getBalance({ owner: account.address, coinType })
       .then((b) => {
         if (cancelled) return;
-        const whole = Number(BigInt(b.totalBalance) / BigInt(10 ** 6));
+        const whole = Number(BigInt(b.balance.balance) / BigInt(10 ** 6));
         setBalance(`${whole.toLocaleString()} ENDLESS`);
       })
       .catch(() => {
@@ -124,9 +120,9 @@ export function MockWalletMenu() {
     return () => {
       cancelled = true;
     };
-  }, [account, suiClient, packageId, balanceTick]);
+  }, [account, client, packageId, balanceTick]);
 
-  const handleDrip = () => {
+  const handleDrip = async () => {
     if (!faucetId) {
       setDripError('faucet 尚未種子化');
       return;
@@ -152,20 +148,19 @@ export function MockWalletMenu() {
       // Regular user → drip (10 ENDLESS, then 24h cooldown).
       tx.add(endlessTx.faucet.drip({ faucet: faucetId }));
     }
-    signAndExecute(
-      { transaction: tx },
-      {
-        onSuccess: () => {
-          setBalanceTick((n) => n + 1);
-          toast('銀子到帳，餘額更新中', 'success');
-        },
-        onError: (err) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          setDripError(msg);
-          toast(`領銀沒成：${msg.slice(0, 60)}`, 'error');
-        },
-      },
-    );
+    setIsDripping(true);
+    try {
+      const res = normalizeTxResult(await dappKit.signAndExecuteTransaction({ transaction: tx }));
+      if (!res.success) throw new Error(res.error ?? '領銀沒成');
+      setBalanceTick((n) => n + 1);
+      toast('銀子到帳，餘額更新中', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDripError(msg);
+      toast(`領銀沒成：${msg.slice(0, 60)}`, 'error');
+    } finally {
+      setIsDripping(false);
+    }
   };
 
   const isConnected = !!account;
@@ -221,13 +216,9 @@ export function MockWalletMenu() {
                 )}
               </>
             ) : (
-              <button
-                type="button"
-                onClick={() => setConnectOpen(true)}
-                className="mt-1 w-full rounded-md bg-cinnabar/10 px-3 py-2 text-2xs tracking-widest text-cinnabar transition-colors hover:bg-cinnabar/20"
-              >
-                連結錢包
-              </button>
+              <div className="mt-1">
+                <WalletConnectButton />
+              </div>
             )}
           </div>
 
@@ -271,7 +262,7 @@ export function MockWalletMenu() {
               <div className="my-1 h-px bg-hairline" />
               <button
                 type="button"
-                onClick={() => disconnect()}
+                onClick={() => void dappKit.disconnectWallet()}
                 className="flex w-full items-center justify-between rounded-md px-3 py-2 text-mute transition-colors hover:bg-canvas/70 hover:text-cinnabar"
               >
                 <span>斷開錢包</span>
@@ -280,12 +271,6 @@ export function MockWalletMenu() {
           )}
         </div>
       </details>
-
-      <ConnectModal
-        trigger={<span style={{ display: 'none' }} />}
-        open={connectOpen}
-        onOpenChange={setConnectOpen}
-      />
     </>
   );
 }
