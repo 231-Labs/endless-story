@@ -23,7 +23,8 @@
   "dependencies": {
     "@endless-story/llm": "workspace:*",
     "@endless-story/runner": "workspace:*",
-    "@endless-story/shared": "workspace:*"
+    "@endless-story/shared": "workspace:*",
+    "@endless-story/troupe": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",

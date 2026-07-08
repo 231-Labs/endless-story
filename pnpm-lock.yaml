@@ -111,6 +111,9 @@ importers:
       '@endless-story/shared':
         specifier: workspace:*
         version: link:../shared
+      '@endless-story/troupe':
+        specifier: workspace:*
+        version: link:../troupe
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
