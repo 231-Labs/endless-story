@@ -244,6 +244,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const wantEngine = envFlag('TICK_WANT_ENGINE');
     // §4d.2: arc convergence state machine (off-chain arc state). Default off.
     const arcConvergence = envFlag('TICK_ARC_CONVERGENCE');
+    // Contest experiment: the "檯面上的爭奪" overlay (stake list fed to genesis,
+    // 執念補判 affinity backfill, director scarcity proposals) is what frames
+    // every want as slot-positioning and reads as 心機. OFF = characters pursue
+    // only intrinsic wants (情/債/手藝/日常); the economic settlement lane is
+    // untouched. Default ON (overlay lives); set TICK_RESOURCE_CONTEST_OFF to test.
+    const resourceContest = !envFlag('TICK_RESOURCE_CONTEST_OFF');
     const maxConcurrentEvents = Math.max(
         1,
         input.maxConcurrentEvents ?? (Number(process.env.TICK_MAX_CONCURRENT_EVENTS) || 2),
@@ -580,7 +586,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // 2.72 DIRECTOR SCARCITY — LLM director may add a contested resource
     //   mid-story (validated + rate-limited); it is desired and settled on a
     //   LATER tick, never read back this tick.
-    if (directorResources && !dryRun && drama?.active && slice.length >= 2) {
+    if (resourceContest && directorResources && !dryRun && drama?.active && slice.length >= 2) {
         try {
             const r = await proposeResourceAction({
                 sagaId: d.sagaId,
@@ -1033,6 +1039,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 // stake they pursue, so demand stays single-sourced (G1).
                 let stakeCache: Array<{ label: string }> | null = null;
                 const contestedStakes = async () => {
+                    // Contest off: hand genesis an EMPTY stake list so wants stay
+                    // intrinsic and the 執念補判 backfill short-circuits (stakes
+                    // length 0). The on-chain ledger is left untouched.
+                    if (!resourceContest) return [];
                     if (stakeCache) return stakeCache;
                     stakeCache = await readResourceLedger(admin.client, d.packageId, d.sagaId)
                         .then((ledger) => ledger.map((r) => ({ label: r.label })))
