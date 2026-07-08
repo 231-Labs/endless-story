@@ -21,12 +21,18 @@ export interface DeriveWantsInput {
     sagaPremise?: string;
     /** Other cast names, so targets resolve to real people. */
     castNames?: string[];
+    /** 檯面上的爭奪 — the saga's contested stakes. A want that IS the pursuit of
+     *  one carries its exact label; whether this person aches for any is judged
+     *  here from the persona, once (single demand source, G1). */
+    contestedResources?: Array<{ label: string; statement?: string }>;
 }
 
 export interface GenesisWant {
     layer: string;
     desc: string;
     target?: string;
+    /** Exact contested-resource label when this want IS that stake's pursuit. */
+    resource?: string;
     weight: number;
     sat: number;
     resistance: number;
@@ -53,6 +59,9 @@ export function buildSystemPrompt(): string {
         '4. `weight`(0-1)=這件事佔 TA 多少心;`sat`(0-1)=此刻已滿足多少(多數 0.2-0.4)。',
         '5. `target` 只在 want 指向具體某人時填,且必須是名冊裡的名字。',
         '6. **不要替 TA 決定結局**:want 是渴望不是計畫,別寫成「將要如何如何」。',
+        '7. 若題目附「檯面上的爭奪」清單:當某條 want 就是在爭那個東西時,加 `resource` 填**清單原文**。',
+        '   **爭=想把它本人拿到手**。只是關心它、報導它、看熱鬧、或自家別處的同名事物',
+        '   (歌廳的頭牌≠戲班的頭牌名額)都**不算**;圈外人、志不在此者一律不標。多數 want 沒有 resource。',
         '',
         '**輸出**:嚴格只輸出 JSON:',
         '`{"wants":[{"layer":"愛","desc":"…","target":"某某","weight":0.9,"sat":0.3,"resistance":8,"why":"…"}]}`',
@@ -64,6 +73,11 @@ export function buildUserPrompt(input: DeriveWantsInput): string {
     const cast = input.castNames?.length ? `\n## 班中名冊\n${input.castNames.join('、')}` : '';
     const secret = input.secret ? `\n## TA 的私密心事(外人不知)\n${input.secret}` : '';
     const premise = input.sagaPremise ? `\n## 這個班子\n${input.sagaPremise}` : '';
+    const stakes = input.contestedResources?.length
+        ? `\n## 檯面上的爭奪(resource 只能填這些原文)\n${input.contestedResources
+              .map((r) => `- ${r.label}${r.statement ? `（${r.statement}）` : ''}`)
+              .join('\n')}`
+        : '';
     return [
         `# 這個人`,
         `- ${input.name}（${input.role}${input.gender ? '·' + input.gender : ''}${input.ageYears ? '·' + input.ageYears + '歲' : ''}）`,
@@ -72,6 +86,7 @@ export function buildUserPrompt(input: DeriveWantsInput): string {
         secret,
         premise,
         cast,
+        stakes,
         '',
         `寫下 ${input.name} 此刻心裡掛著的 3-5 件事。`,
     ].join('\n');
@@ -94,19 +109,30 @@ const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const n = (v: unknown, lo: number, hi: number, dflt: number): number =>
     typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt;
 
-export function parseGenesisWants(raw: string, castNames?: string[]): GenesisWant[] {
+export function parseGenesisWants(
+    raw: string,
+    castNames?: string[],
+    resourceLabels?: string[],
+): GenesisWant[] {
     const obj = extractJson(raw);
     const arr = Array.isArray(obj?.wants) ? (obj!.wants as unknown[]) : [];
     const out: GenesisWant[] = [];
     for (const item of arr.slice(0, 5)) {
         const e = item as Record<string, unknown>;
-        const desc = s(e.desc);
-        if (!desc || desc.length > 40) continue;
+        const descRaw = s(e.desc);
+        if (!descRaw) continue;
+        // Overlong descs get truncated, never dropped — the deepest wants run
+        // long, and silently discarding them left 蘇映雪-class canon uncharted.
+        const desc = descRaw.length > 48 ? `${descRaw.slice(0, 47)}…` : descRaw;
         const target = s(e.target);
+        // Exact-label match only — substring guessing wrongly ties e.g. a 歌廳頭牌
+        // want to the troupe's 頭牌名額 stake.
+        const resource = s(e.resource);
         out.push({
             layer: s(e.layer) || '其他',
             desc,
             target: target && (!castNames || castNames.includes(target)) ? target : undefined,
+            resource: resource && resourceLabels?.includes(resource) ? resource : undefined,
             weight: n(e.weight, 0.1, 1, 0.6),
             sat: n(e.sat, 0, 0.9, 0.3),
             resistance: n(e.resistance, 1, 10, 4),
@@ -128,10 +154,71 @@ export async function deriveGenesisWants(input: DeriveWantsInput): Promise<Genes
             maxTokens: 700,
             temperature: 0.7,
         });
-        return parseGenesisWants(res.text, input.castNames);
+        return parseGenesisWants(
+            res.text,
+            input.castNames,
+            input.contestedResources?.map((r) => r.label),
+        );
     } catch (err) {
         console.warn('[want-genesis] derive failed:', err instanceof Error ? err.message : err);
         return [];
+    }
+}
+
+export interface AffinityInput {
+    name: string;
+    role: string;
+    description: string;
+    /** The character's live wants, in display order (ties come back by index). */
+    wants: Array<{ layer: string; desc: string }>;
+    contestedResources: Array<{ label: string; statement?: string }>;
+}
+
+/**
+ * One-time affinity pass for a cast whose wants pre-date the stake list: which
+ * of TA's existing wants IS the pursuit of a contested stake? Index-based ties,
+ * exact labels, empty result is a valid answer (a patron aches for none).
+ */
+export async function assessResourceAffinity(input: AffinityInput): Promise<Map<number, string>> {
+    const ties = new Map<number, string>();
+    if (input.wants.length === 0 || input.contestedResources.length === 0) return ties;
+    try {
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system:
+                '判斷一個角色心裡掛著的事,哪些**就是**在爭檯面上的某個東西。\n' +
+                '鐵則:①**爭=想把它本人拿到手**。只是關心它、報導它、看熱鬧、或自家別處的同名事物\n' +
+                '(歌廳的頭牌≠戲班的頭牌名額)都不算;圈外人、志不在此者一律不算;\n' +
+                '②resource 必須抄清單**原文**;③多數心事跟爭奪無關,空結果完全合法。\n' +
+                '輸出 JSON:{"ties":[{"want":1,"resource":"…"}]}(want=心事編號)。不要 markdown。',
+            messages: [
+                {
+                    role: 'user',
+                    content:
+                        `# 這個人\n${input.name}（${input.role}）:${input.description.slice(0, 200)}\n\n` +
+                        `# TA 心裡掛著的事\n${input.wants.map((w, i) => `${i + 1}. [${w.layer}] ${w.desc}`).join('\n')}\n\n` +
+                        `# 檯面上的爭奪\n${input.contestedResources
+                            .map((r) => `- ${r.label}${r.statement ? `（${r.statement}）` : ''}`)
+                            .join('\n')}`,
+                },
+            ],
+            maxTokens: 300,
+            temperature: 0.2,
+        });
+        const obj = extractJson(res.text);
+        const arr = Array.isArray(obj?.ties) ? (obj!.ties as unknown[]) : [];
+        const labels = new Set(input.contestedResources.map((r) => r.label));
+        for (const item of arr) {
+            const e = item as Record<string, unknown>;
+            const idx = typeof e.want === 'number' ? Math.floor(e.want) - 1 : -1;
+            const label = s(e.resource);
+            if (idx >= 0 && idx < input.wants.length && labels.has(label)) ties.set(idx, label);
+        }
+        return ties;
+    } catch (err) {
+        console.warn('[want-genesis] affinity failed:', err instanceof Error ? err.message : err);
+        return ties;
     }
 }
 

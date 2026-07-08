@@ -60,6 +60,12 @@ export interface PovPromptInput {
     planHint?: string;
     /** Drama-engine tension (DR-6): dominant unmet desire. */
     dramaHint?: string;
+    /** The character's hottest want (§2.36 ground truth) — the burning thing
+     *  this chapter's gaze keeps circling back to. */
+    want?: { desc: string; target?: string };
+    /** This character's arc state from the story-bible (承上 — one line on
+     *  where they stand in the ongoing novel). */
+    arcLine?: string;
     /** Objective same-scene beats this tick. Every same-scene POV gets the SAME
      *  list so angles complement rather than contradict; private observations
      *  are deliberately excluded. */
@@ -224,6 +230,12 @@ export function buildUserPrompt(input: PovPromptInput): string {
     const planBlock = input.planHint
         ? `\n## 當下目標（讓場面有方向，不要直接宣告）\n${input.planHint}`
         : '';
+    const wantBlock = input.want
+        ? `\n## 心頭最重（這一章你看什麼、避什麼、想什麼，都繞著它轉 — 但別直說出口）\n「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}`
+        : '';
+    const arcBlock = input.arcLine
+        ? `\n## 承上（你在這部書裡走到哪了 — 用自己的話帶一絲餘味，勿複述）\n${input.arcLine}`
+        : '';
     const dramaBlock = input.dramaHint
         ? `\n## 稀缺張力（讓它變成行動或視線，不要變成喊口號）\n${input.dramaHint}`
         : '';
@@ -257,7 +269,9 @@ export function buildUserPrompt(input: PovPromptInput): string {
         memBlock,
         rosterBlock,
         relBlock,
+        arcBlock,
         planBlock,
+        wantBlock,
         dramaBlock,
         stateBlock,
         dreamBlock,

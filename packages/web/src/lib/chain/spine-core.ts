@@ -97,6 +97,8 @@ export interface ContentionPick {
 }
 
 export interface SpineDecisionInput {
+    /** Scene ids of recently staged events (G12) — demoted in stage choice. */
+    recentSceneIds?: ReadonlyArray<string>;
     /** the spine event currently tracked as OPEN for this saga, or null. */
     open: SpineOpenEvent | null;
     /** monotonic tick counter (advances once per loop run). */
@@ -137,16 +139,19 @@ export function decideSpineStep(input: SpineDecisionInput): SpineStep {
     if (!input.contention) return { action: 'idle', reason: 'no contention' };
 
     // Busiest scene meeting quorum becomes the stage; its occupants are the cast.
+    // G12: recently-staged scenes are demoted (2 occupants-worth per recent
+    // staging) so the drama stops re-opening in the same room tick after tick.
     const byScene = new Map<string, string[]>();
     for (const o of input.occupancy) {
         const arr = byScene.get(o.sceneId);
         if (arr) arr.push(o.characterId);
         else byScene.set(o.sceneId, [o.characterId]);
     }
+    const recency = (sid: string) => (input.recentSceneIds ?? []).filter((r) => r === sid).length;
     const minCast = Math.max(2, input.minCast);
     const busiest = [...byScene.entries()]
         .filter(([, ids]) => ids.length >= minCast)
-        .sort((a, b) => b[1].length - a[1].length)[0];
+        .sort((a, b) => (b[1].length - recency(b[0]) * 2) - (a[1].length - recency(a[0]) * 2))[0];
     if (!busiest) return { action: 'idle', reason: 'no scene with quorum' };
 
     return {
@@ -174,6 +179,8 @@ export interface AxisCandidate {
 }
 
 export interface MultiSpineInput {
+    /** Scene ids of recently staged events (G12). */
+    recentSceneIds?: ReadonlyArray<string>;
     /** every event currently tracked OPEN for this saga (one per axis). */
     openEvents: ReadonlyArray<SpineOpenEvent>;
     nowTick: number;
@@ -196,6 +203,17 @@ export interface MultiSpineInput {
  * reopened the same tick (anti-flap). Pure.
  */
 export function decideSpineSteps(input: MultiSpineInput): SpineStep[] {
+    // G12: candidates staged in a recently-used scene sink toward the tail.
+    if (input.recentSceneIds?.length) {
+        const rec = input.recentSceneIds;
+        const recency = (sid: string) => rec.filter((r) => r === sid).length;
+        input = {
+            ...input,
+            candidates: [...input.candidates].sort(
+                (a, b) => (b.priority * 0.6 ** recency(b.sceneId)) - (a.priority * 0.6 ** recency(a.sceneId)),
+            ),
+        };
+    }
     const { openEvents, nowTick, minTicks, maxTicks } = input;
     const steps: SpineStep[] = [];
     const openAxes = new Set<string>();

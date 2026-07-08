@@ -6,6 +6,7 @@ import { SiteNav } from '@/components/home/SiteNav';
 import { GazetteList } from '@/components/feed/GazetteList';
 import { GazetteTeaser } from '@/components/feed/GazetteTeaser';
 import { CutList } from '@/components/feed/CutList';
+import { GroupedCutList } from '@/components/feed/GroupedCutList';
 import { ProductionList } from '@/components/feed/ProductionList';
 import { FeedTabs, type FeedMode } from '@/components/feed/FeedTabs';
 
@@ -153,7 +154,7 @@ async function FeedContent({
           ) : mode === 'gazette' ? (
             <GazetteList gazettes={gazettes} sagaName={saga.name} sagaId={saga.id} />
           ) : mode === 'chapter' ? (
-            <CutList cuts={cuts.filter((c) => c.kind !== 'episode')} sagaName={saga.name} />
+            <GroupedCutList cuts={cuts.filter((c) => c.kind !== 'episode')} sagaName={saga.name} />
           ) : mode === 'visual' ? (
             <ProductionList productions={productions} sagaName={saga.name} />
           ) : null}

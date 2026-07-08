@@ -8,6 +8,7 @@
 import type { SagaSoul } from '@endless-story/runner';
 import { loadStoryPreset } from '@/lib/stories/loader';
 import { setFramingCatalog, type FramingCatalog } from './event-planner';
+import { getStanceOverride, type EmotionalStance } from './saga-stance-store';
 
 export interface NarrativeFeatures {
     eventImage: boolean;
@@ -42,6 +43,13 @@ export async function loadNarrativeProfile(): Promise<NarrativeProfile> {
         if (s?.emotional_stance === 'tender' || s?.emotional_stance === 'consummate') {
             soul.emotionalStance = s.emotional_stance;
         }
+        // Backstage override wins over the preset baseline (retune without reseeding).
+        const override = getStanceOverride();
+        if (override?.emotionalStance) {
+            soul.emotionalStance =
+                override.emotionalStance === 'restrained' ? undefined : override.emotionalStance;
+        }
+        if (override?.toneRegister?.trim()) soul.toneRegister = override.toneRegister.trim();
         cached = {
             soul: Object.keys(soul).length > 0 ? soul : undefined,
             framings: s?.framings as FramingCatalog | undefined,
@@ -57,6 +65,40 @@ export async function loadNarrativeProfile(): Promise<NarrativeProfile> {
         cached = { features: DEFAULT_FEATURES };
     }
     return cached;
+}
+
+/** Drop the process cache so a preset/override change is re-read next call. */
+export function resetNarrativeProfileCache(): void {
+    cached = null;
+}
+
+/**
+ * Effective troupe stance including `restrained` (which loadNarrativeProfile
+ * folds into `undefined`). Preset baseline, then backstage override. Read by the
+ * 規章 read-only spectrum and the backstage knob so both agree.
+ */
+export async function getEffectiveStance(): Promise<{
+    stance: EmotionalStance;
+    toneRegister?: string;
+    presetStance: EmotionalStance;
+}> {
+    const id = process.env.NARRATIVE_STORY_PRESET?.trim() || 'spring-snow';
+    let presetStance: EmotionalStance = 'restrained';
+    let toneRegister: string | undefined;
+    try {
+        const preset = await loadStoryPreset(id);
+        const s = preset.saga?.narrative;
+        if (s?.emotional_stance === 'tender' || s?.emotional_stance === 'consummate') {
+            presetStance = s.emotional_stance;
+        }
+        if (s?.tone_register?.trim()) toneRegister = s.tone_register.trim();
+    } catch {
+        // fall back to restrained
+    }
+    const override = getStanceOverride();
+    const stance = override?.emotionalStance ?? presetStance;
+    if (override?.toneRegister?.trim()) toneRegister = override.toneRegister.trim();
+    return { stance, toneRegister, presetStance };
 }
 
 /** Load + push the profile into module seams (framing catalog). Call at tick start. */

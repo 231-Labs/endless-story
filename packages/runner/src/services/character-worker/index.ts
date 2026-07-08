@@ -76,6 +76,10 @@ export interface RunCharacterWorkerInput {
     rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
     /** Current plan text (N6). */
     planHint?: string;
+    /** The character's hottest want (§2.36) — the chapter's gravitational pull. */
+    want?: { desc: string; target?: string };
+    /** Arc state from the story-bible (承上, one line). */
+    arcLine?: string;
     /** Drama-engine tension hint (DR-6): dominant unmet desire. */
     dramaHint?: string;
     /** Objective same-scene beats this tick; keeps same-scene POVs consistent.
@@ -178,6 +182,8 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         rosterContext: input.rosterContext,
         planHint: input.planHint,
         dramaHint: input.dramaHint,
+        want: input.want,
+        arcLine: input.arcLine,
         sceneBeats: input.sceneBeats,
         closing: input.closing,
         state: input.state,

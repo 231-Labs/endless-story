@@ -5,11 +5,8 @@ import Link from 'next/link';
 import { characterPortraitTone } from '@/components/common/CharacterPortrait';
 import { BlobImage } from '@/components/common/BlobImage';
 import {
-  CAST_NODE_PX_CENTER,
-  CAST_NODE_PX_OTHER,
   VIEWBOX_H,
   VIEWBOX_W,
-  WILD_NODE_PX,
   type PositionedCharacter,
 } from './constellationLayout';
 
@@ -68,6 +65,7 @@ export function ConstellationBackdrop({ ink }: { ink: (a: number) => string }) {
 
 export function ConstellationNode({
   positioned, isDimmed, onMouseEnter, onMouseLeave, onFocus, onPointerDown, onClick,
+  vw = VIEWBOX_W, vh = VIEWBOX_H,
 }: {
   positioned: PositionedCharacter;
   isDimmed: boolean;
@@ -76,11 +74,22 @@ export function ConstellationNode({
   onFocus?: () => void;
   onPointerDown?: () => void;
   onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
+  /** Active viewBox dims (portrait on mobile), so node % positions match the SVG. */
+  vw?: number;
+  vh?: number;
 }) {
   const { char, x, y, kind, scene } = positioned;
   const tone = characterPortraitTone(char.role);
   const imageUrl = char.gallery?.anchor?.imageUrl;
-  const sizePx = kind === 'center' ? CAST_NODE_PX_CENTER : kind === 'cast' ? CAST_NODE_PX_OTHER : WILD_NODE_PX;
+  // cqw so the node scales WITH the plan box (fixed px overwhelmed the small
+  // mobile canvas); clamped to stay tappable on phones and capped on desktop.
+  // The cqw values track each kind's collision diameter (2·radius / 1200).
+  const nodeSize =
+    kind === 'center' ? 'clamp(30px, 7.6cqw, 84px)' : kind === 'cast' ? 'clamp(26px, 6.3cqw, 66px)' : 'clamp(22px, 5.3cqw, 52px)';
+  const glyphSize =
+    kind === 'center' ? 'clamp(13px, 2.5cqw, 26px)' : kind === 'cast' ? 'clamp(11px, 2.0cqw, 22px)' : 'clamp(9px, 1.6cqw, 15px)';
+  const labelSize =
+    kind === 'center' ? 'clamp(10px, 1.8cqw, 15px)' : kind === 'cast' ? 'clamp(9px, 1.5cqw, 13px)' : 'clamp(8px, 1.3cqw, 11px)';
   const ringClass =
     kind === 'wild'
       ? scene
@@ -104,19 +113,19 @@ export function ConstellationNode({
       className={`group absolute z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 outline-none ring-offset-2 ring-offset-transparent transition-all duration-500 hover:scale-110 focus-visible:ring-2 focus-visible:ring-cinnabar active:scale-100 ${
         isDimmed ? 'opacity-25 grayscale-[0.5]' : 'opacity-100'
       }`}
-      style={{ left: `${(x / VIEWBOX_W) * 100}%`, top: `${(y / VIEWBOX_H) * 100}%` }}
+      style={{ left: `${(x / vw) * 100}%`, top: `${(y / vh) * 100}%` }}
     >
       <span
         className={`relative overflow-hidden rounded-full shadow-md transition-transform duration-300 group-hover:scale-105 ${ringClass} ${
           kind === 'wild' ? 'bg-canvas/80 backdrop-blur-sm' : tone.bg
         }`}
-        style={{ width: sizePx, height: sizePx }}
+        style={{ width: nodeSize, height: nodeSize }}
       >
         <span
           className={`absolute inset-0 flex items-center justify-center font-serif ${
             kind === 'wild' ? 'text-mute' : tone.text
           }`}
-          style={{ fontSize: kind === 'center' ? 24 : kind === 'cast' ? 20 : 14 }}
+          style={{ fontSize: glyphSize }}
         >
           {char.name[0]}
         </span>
@@ -126,12 +135,9 @@ export function ConstellationNode({
       </span>
       <span
         className={`whitespace-nowrap font-serif tracking-[0.18em] drop-shadow-sm transition-colors group-hover:text-ink ${
-          kind === 'wild'
-            ? 'text-2xs italic text-mute/90'
-            : kind === 'center'
-              ? 'text-sm text-ink'
-              : 'text-xs text-ink/85'
+          kind === 'wild' ? 'italic text-mute/90' : kind === 'center' ? 'text-ink' : 'text-ink/85'
         }`}
+        style={{ fontSize: labelSize }}
       >
         {char.name}
       </span>

@@ -14,12 +14,14 @@ import {
     buildWorld,
     defaultDesiresForCast,
     deriveBeat,
+    desiresFromWants,
     dramaHintForAgent,
     extractSatisfaction,
     roleResourceAmbition,
     verifyBeat,
     type AgentSpec,
     type ResourceSnapshot,
+    type WantDemand,
 } from './drama-core.ts';
 
 test('ROLE_AMBITION niches: each 行當 burns for its lane, NON-contender elsewhere (the rebalance)', () => {
@@ -207,3 +209,32 @@ test('resourceIntents targets a director stake to named 行當 (FU1)', () => {
     const huaNoIntent = defaultDesiresForCast([feud], 5, { agentTags: ['role:花旦'] });
     assert.equal(huaNoIntent.length, 1, 'no intent → fresh kind is a flat scramble (everyone moderately wants it)');
 });
+
+// ─── G1 single demand source: wants → desires ───
+
+function wd(over: Partial<WantDemand>): WantDemand {
+    return { resource: 'partnership:溫照棠', weight: 0.9, sat: 0.2, ...over };
+}
+
+test('desiresFromWants: only a want carrying the exact stake label contests it', () => {
+    const specs = desiresFromWants([slot({})], [wd({})]);
+    assert.equal(specs.length, 1);
+    assert.equal(specs[0].claims[0].ref, R1);
+    // A patron with wants but none tied to the stake contests nothing (白韻秋 case).
+    assert.equal(desiresFromWants([slot({})], [wd({ resource: null })]).length, 0);
+    assert.equal(desiresFromWants([slot({})], [wd({ resource: undefined })]).length, 0);
+    // Similar-but-different label never matches (歌廳頭牌 ≠ 春雪社頭牌名額).
+    assert.equal(desiresFromWants([slot({})], [wd({ resource: 'partnership:溫' })]).length, 0);
+});
+
+test('desiresFromWants: retired or satisfied wants stop contesting', () => {
+    assert.equal(desiresFromWants([slot({})], [wd({ retired: true })]).length, 0);
+    assert.equal(desiresFromWants([slot({})], [wd({ sat: 0.97 })]).length, 0);
+});
+
+test('desiresFromWants: desire weight tracks the hottest matching want', () => {
+    const hot = desiresFromWants([slot({})], [wd({ weight: 0.9, sat: 0.1 })])[0];
+    const cool = desiresFromWants([slot({})], [wd({ weight: 0.5, sat: 0.5 })])[0];
+    assert.ok(hot.weight > cool.weight);
+});
+

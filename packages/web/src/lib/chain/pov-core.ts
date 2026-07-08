@@ -42,6 +42,10 @@ export interface PovCoreOptions {
     recentMemorySnippets?: string[];
     /** Drama-engine tension hint, derived once per tick. */
     dramaHint?: string;
+    /** The character's hottest want (§2.36) — passed through to the POV prompt. */
+    want?: { desc: string; target?: string };
+    /** Story-bible arc line for 承上. */
+    arcLine?: string;
     /** Public saga roster context: name / role / scene. */
     rosterContext?: string[];
     /** Saga peers with gender, for the pronoun/kinship self-check. */
@@ -276,6 +280,8 @@ export async function runPovForCharacter(
             rosterPeople: opts.rosterPeople,
             planHint: planHint ?? undefined,
             dramaHint: opts.dramaHint,
+        want: opts.want,
+        arcLine: opts.arcLine,
             sceneBeats: opts.sceneBeats,
             closing: opts.closing,
             reflect: opts.reflect,

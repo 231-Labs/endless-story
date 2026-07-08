@@ -20,6 +20,7 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { __setHarnessClientFactory } from '@endless-story/sdk';
 import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/shared/contract-ids';
 import { fakeId } from '../settlement-harness/fake-chain.js';
+import { setHomeScenes } from '@/lib/chain/spatial-routing';
 import {
     FullFakeChain,
     makeFullFakeSuiClient,
@@ -102,6 +103,11 @@ export interface SeedOptions {
     cast?: number;
     /** seed one contested resource so the drama/spine path has something to settle. */
     withResource?: boolean;
+    /** Give each character a private home scene (privacyLevel 4) + register it as
+     *  their night home, so the night router can pull a pair into a private room
+     *  (H3). Without this the harness has only public scenes and every night
+     *  sleeps — the resolution venue never forms. */
+    privateHomes?: boolean;
 }
 
 const CAST_NAMES = ['文', '孟', '姚', '柳', '蕭', '霍', '秦', '雲'];
@@ -182,6 +188,31 @@ export function seedWorld(opts: SeedOptions = {}): void {
     };
     harnessChain.scenes.set(sceneA.id, sceneA);
     harnessChain.scenes.set(sceneB.id, sceneB);
+
+    // H3: one private home per character + register it as their night home, so
+    // the night router has a private room to pull a ripe pair into. Added to the
+    // saga's anchor list so the tick's scene read (anchor_scene_ids) sees them.
+    if (opts.privateHomes) {
+        const homeEntries: Array<readonly [string, string]> = [];
+        for (const c of cast) {
+            // Full char id as the seed — a slice of the tail collides because fake
+            // char ids share a zero-padded suffix (all homes became ONE scene, so
+            // the whole cast piled into it at night and no 2-person pair formed).
+            const homeId = fakeId('h-home-' + c.id);
+            harnessChain.scenes.set(homeId, {
+                id: homeId,
+                worldId: WORLD,
+                sagaId: SAGA,
+                locationId: fakeId('h-loc-home'),
+                name: `${c.name}的住處`,
+                characterIds: [],
+                privacyLevel: 4,
+            });
+            homeEntries.push([c.id, homeId] as const);
+        }
+        harnessChain.saga.anchorSceneIds = [SCENE_A, SCENE_B, ...homeEntries.map(([, s]) => s)];
+        setHomeScenes(homeEntries);
+    }
 
     harnessChain.resources.clear();
     if (opts.withResource ?? true) {

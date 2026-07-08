@@ -16,6 +16,7 @@ import { ENDLESS_STORY_DEPLOYMENT } from '@endless-story/sdk';
 import { eventChapter as runnerEventChapter, storyteller } from '@endless-story/runner';
 import { getAdminContext } from '@/lib/chain/admin-signer';
 import { loadBible, saveBible } from '@/lib/chain/story-bible-store';
+import { takeSceneTruth } from '@/lib/chain/scene-truth';
 
 type EventCutPov = runnerEventChapter.EventCutPov;
 
@@ -85,6 +86,15 @@ export async function compileEventChapterAction(
         /* no bible → standalone weave, no continuity */
     }
 
+    // Enacted truth from the scene's want-loop beats: the weave's spine becomes
+    // what actually PLAYED (observations) and why (intents), with POVs as the
+    // perspective flesh — instead of a merge of N re-imaginations.
+    const truth = takeSceneTruth(d.sagaId, input.sceneId);
+    const observations = truth.map((t) => `${t.name}：${t.text}`);
+    const intents = truth
+        .filter((t): t is typeof t & { inner: string } => Boolean(t.inner?.trim()))
+        .map((t) => ({ name: t.name, line: t.inner }));
+
     try {
         const res = await runnerEventChapter.runOnce({
             sagaId: d.sagaId,
@@ -96,6 +106,8 @@ export async function compileEventChapterAction(
             povs: input.povs,
             castCharacterIds: input.castCharacterIds,
             rosterPeople: input.rosterPeople,
+            observations: observations.length > 0 ? observations : undefined,
+            intents: intents.length > 0 ? intents : undefined,
             continuity,
             prevChapterSummary: bible?.lastChapterSummary,
             dryRun: input.dryRun,

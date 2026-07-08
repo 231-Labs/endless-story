@@ -20,6 +20,8 @@ import {
     rememberForCharacter,
 } from '@/lib/chain/memory';
 import { resolveNetwork } from '@/lib/chain/network';
+import { loadWants } from './want-store.ts';
+import { projectWantEdges } from './relationship-felt.ts';
 
 // Pure half lives in relationship-core.ts (plain `node --test`); re-exported here.
 import {
@@ -329,7 +331,15 @@ export async function directedOutgoingEdges(
 }
 
 /** Fetch relationship events once and derive the roster's warm graph (§2.50). */
-export async function fetchWarmGraph(charIds: readonly string[]): Promise<WarmGraph> {
+export async function fetchWarmGraph(
+    charIds: readonly string[],
+    opts?: {
+        /** Roster name→id map. With ES_FELT_EDGES=1 the cast's wants also feed the
+         *  warm graph (felt layer), so a declared 愛 can pull at night even before
+         *  any scene-judged seed exists. */
+        feltNameToId?: ReadonlyMap<string, string>;
+    },
+): Promise<WarmGraph> {
     const empty: WarmGraph = { pursueByChar: new Map(), welcome: () => 0 };
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
     if (!pkg || charIds.length === 0) return empty;
@@ -343,5 +353,66 @@ export async function fetchWarmGraph(charIds: readonly string[]): Promise<WarmGr
         tone: s.tone,
         tick: Number(s.seededAtMs) || 0,
     }));
+    if (process.env.ES_FELT_EDGES === '1' && opts?.feltNameToId) {
+        const known = new Set(charIds);
+        const felt = projectWantEdges(loadWants(ENDLESS_STORY_DEPLOYMENT.sagaId), {
+            resolveTargetId: (t) => (known.has(t) ? t : opts.feltNameToId!.get(t)),
+        });
+        // Felt edges are the CURRENT inner truth — inject as fresh pseudo-events
+        // so the decay aggregation treats them as newest.
+        const nowMs = Date.now();
+        for (const e of felt) {
+            if (!e.tone || !known.has(e.fromId)) continue;
+            events.unshift({ characterA: e.fromId, characterB: e.toId, tone: e.tone, tick: nowMs });
+        }
+    }
     return buildWarmGraph(events, charIds);
+}
+
+/**
+ * One read → the cast's directed tone map (`fromId::toId` → 調性 in Chinese),
+ * lived seeds felt-merged (ES_FELT_EDGES). Feeds the beat prompt's 同場 identity
+ * lines (G3) so a speaker knows who each co-present person is to them — the
+ * canon lives in ties/wants, not in the LLM's guesswork about address forms.
+ */
+export async function fetchCastTies(
+    cast: ReadonlyArray<{ id: string; name: string }>,
+): Promise<Map<string, string>> {
+    const ties = new Map<string, string>();
+    const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
+    if (!pkg || cast.length < 2) return ties;
+    const client = makeSuiClient({ network: resolveNetwork() });
+    const summaries = await read.director
+        .listRelationshipEvents(client, pkg, { maxEvents: 1000 })
+        .catch(() => []);
+    const events: RelEventLite[] = summaries.map((s) => ({
+        characterA: s.characterA,
+        characterB: s.characterB,
+        tone: s.tone,
+        tick: Number(s.seededAtMs) || 0,
+    }));
+    const nowTick = events.reduce((m, e) => Math.max(m, e.tick), 0);
+    const idSet = new Set(cast.map((c) => c.id));
+    for (const c of cast) {
+        for (const e of aggregateDecayedOutgoing(events, c.id, nowTick)) {
+            if (idSet.has(e.toId)) ties.set(`${c.id}::${e.toId}`, TONE_ZH[e.tone]);
+        }
+    }
+    if (process.env.ES_FELT_EDGES === '1') {
+        const idByName = new Map(cast.map((c) => [c.name, c.id]));
+        const felt = projectWantEdges(loadWants(ENDLESS_STORY_DEPLOYMENT.sagaId), {
+            resolveTargetId: (t) => (idSet.has(t) ? t : idByName.get(t)),
+        });
+        for (const e of felt) {
+            if (!e.tone || !idSet.has(e.fromId) || !idSet.has(e.toId)) continue;
+            const key = `${e.fromId}::${e.toId}`;
+            // The felt edge carries the FEELER's own distilled line (the want in
+            // their words) — keep it, a bare tone word wastes the distillation.
+            const note = e.summary ? `（${e.summary.slice(0, 20)}${e.summary.length > 20 ? '…' : ''}）` : '';
+            const zh = `${TONE_ZH[e.tone]}${note}`;
+            const prev = ties.get(key);
+            ties.set(key, prev && !prev.startsWith(TONE_ZH[e.tone]) ? `${prev}/${zh}` : zh);
+        }
+    }
+    return ties;
 }
