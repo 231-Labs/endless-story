@@ -174,6 +174,19 @@ export interface StoryFoundingMember {
    * (JSON has no comments, so this is the toggle).
    */
   disabled?: boolean;
+  /**
+   * Residence scene name (must match a `scenes[].name`) — the night router's
+   * home anchor (G10), resolved by home-seed.ts ensureHomesSeeded. Also the
+   * mint-scene fallback when `work_scene` is absent. Omit → no residence
+   * (night routing leaves the character where they stand).
+   */
+  home_scene?: string;
+  /**
+   * 崗位 scene name (must match a `scenes[].name`) — the morning router's work
+   * anchor (G11), resolved by home-seed.ts ensureHomesSeeded. Also where the
+   * founding mint places the character (dispersed minting).
+   */
+  work_scene?: string;
 }
 
 export interface StoryPreset {

@@ -32,6 +32,11 @@ export interface PlanInput {
     relationshipPressure?: string[];
     /** Public saga roster lines: name / role / scene. Not private memory. */
     rosterContext?: string[];
+    /** This character's own private inner-life secret (never on-chain, never
+     *  another character's plan). Colours what they're really guarding while
+     *  they plan; hidden by default, but planning to one day say it out loud is
+     *  a legitimate goal (§2.43: never script it). Omit = no injection. */
+    innerSecret?: string;
 }
 
 export interface PlanResult {
@@ -89,6 +94,10 @@ export function buildUserPrompt(input: PlanInput): string {
             ? '\n## 同 saga 公開名冊（只作公開身份與位置，不代表你私下熟識）\n' +
               input.rosterContext.map((r) => `- ${r}`).join('\n')
             : '';
+    const innerSecretBlock = input.innerSecret
+        ? '\n## 心底藏著、外人不知的事（只有你自己知道；讓它悄悄牽動你的盤算。平日它藏著，但要不要有朝一日把它說開，是你自己可以打的主意）\n' +
+          input.innerSecret
+        : '';
     return [
         `# 你是誰`,
         `- 姓名:${input.name}`,
@@ -102,6 +111,7 @@ export function buildUserPrompt(input: PlanInput): string {
         planBlock,
         sitBlock,
         rosterBlock,
+        innerSecretBlock,
         '',
         '請輸出你此刻的規劃(JSON)。',
     ]

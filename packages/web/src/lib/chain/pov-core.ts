@@ -65,6 +65,9 @@ export interface PovCoreOptions {
     reflect?: boolean;
     /** Daily-life state (§2.19) tinting texture; omit ⇒ no injection. */
     state?: runnerCharacterWorker.CharacterState;
+    /** This character's own private inner-life secret (character-secrets.ts);
+     *  never another character's. Omit ⇒ no injection. */
+    innerSecret?: string;
 }
 
 export interface PovCoreResult {
@@ -286,6 +289,7 @@ export async function runPovForCharacter(
             closing: opts.closing,
             reflect: opts.reflect,
             state: opts.state,
+            innerSecret: opts.innerSecret,
             forceRun: opts.forceRun ?? true,
             dryRun: opts.dryRun,
             signer: opts.dryRun

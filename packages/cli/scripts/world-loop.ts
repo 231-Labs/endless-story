@@ -30,6 +30,12 @@
  *   --rival-gravity        draw contenders toward their contest so events form
  *   --max-concurrent-events=<n>  cap for --parallel-events (default 2)
  *      (all default off; see docs/narrative/EVENT_LIFECYCLE.md §5–§7 for what to watch)
+ *   --want-engine          §2.36–2.48: want-driven per-scene interaction loops
+ *   --centrality           §4d.1: pick the staged contention by relationship centrality
+ *   --actor-fatigue        §2.51: spotlight rotation (selection-only, never settlement)
+ *   --arc-convergence      §4d.2: off-chain arc convergence state machine
+ *   --pov-all              force a POV chapter for every processed character
+ *      (all default off; opt-in only)
  *   --showrunner-every=<n> run a Showrunner heartbeat (POST /api/showrunner)
  *                          after every n ticks (default 0 = off; see
  *                          docs/narrative/NARRATIVE_AGENTS.md §12.2)
@@ -45,11 +51,13 @@
  *   SHOWRUNNER_EVERY_TICKS    fallback for --showrunner-every
  *   TICK_EVENT_SPINE / TICK_LLM_FRAMING / TICK_DIRECTOR_RESOURCES /
  *   TICK_PARALLEL_EVENTS / TICK_ATTENTION_BUDGET / TICK_RIVAL_GRAVITY /
- *   TICK_MAX_CONCURRENT_EVENTS
+ *   TICK_MAX_CONCURRENT_EVENTS / TICK_WANT_ENGINE / TICK_CENTRALITY /
+ *   TICK_ACTOR_FATIGUE / TICK_ARC_CONVERGENCE
  *                     experimental gates — same names as the web-side env
  *                     resolution, so one .env works on either service (set
  *                     here they're forwarded in the POST body; truthy =
  *                     1/true/yes/on; body only ever forces ON)
+ *                     (--pov-all has no env fallback — CLI flag only)
  *   RUNNER_CONTROL_URL optional relayer /control URL; {paused:true} skips the tick
  *   MEMWAL_SERVER_URL fallback base URL for control when RUNNER_CONTROL_URL is unset
  *   RUNNER_CONTROL_SECRET optional bearer token for RUNNER_CONTROL_URL
@@ -140,6 +148,11 @@ function parseArgs(argv: string[]): LoopOpts {
     if (has('rival-gravity') || envFlag('TICK_RIVAL_GRAVITY')) input.rivalGravity = true; // draw contenders together so events form
     const maxConcurrent = Number(get('max-concurrent-events') ?? process.env.TICK_MAX_CONCURRENT_EVENTS);
     if (Number.isFinite(maxConcurrent) && maxConcurrent > 0) input.maxConcurrentEvents = Math.floor(maxConcurrent);
+    if (has('want-engine') || envFlag('TICK_WANT_ENGINE')) input.wantEngine = true; // §2.36–2.48: want-driven per-scene loops
+    if (has('centrality') || envFlag('TICK_CENTRALITY')) input.centrality = true; // §4d.1: contention pick by relationship centrality
+    if (has('actor-fatigue') || envFlag('TICK_ACTOR_FATIGUE')) input.actorFatigue = true; // §2.51: spotlight rotation
+    if (has('arc-convergence') || envFlag('TICK_ARC_CONVERGENCE')) input.arcConvergence = true; // §4d.2: arc convergence state machine
+    if (has('pov-all')) input.povAll = true; // force a chapter for every processed character (no env fallback)
     const showrunnerEvery = Number(get('showrunner-every') ?? process.env.SHOWRUNNER_EVERY_TICKS ?? 0);
 
     return {

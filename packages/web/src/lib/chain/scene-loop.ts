@@ -33,6 +33,8 @@ export interface SceneLoopCastMember {
     persona: string;
     memories?: string[];
     stateLine?: string;
+    /** This character's own private inner-life secret; never another actor's. */
+    innerSecret?: string;
     /** 行當 — shown to co-present speakers so address forms have footing. */
     role?: string;
     /** This member's OWN canon feeling toward each co-present member, keyed by
@@ -174,6 +176,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             privateAlone,
             sceneLog: log.slice(-5).join('\n'),
             stateLine: actor.stateLine,
+            innerSecret: actor.innerSecret,
             etiquette: input.etiquette,
             consummate: gateBeat && input.emotionalStance === 'consummate',
         });

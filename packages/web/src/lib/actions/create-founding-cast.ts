@@ -25,9 +25,11 @@ import { rollAttributesFromSeed } from '@endless-story/llm/seed';
 import type { CharacterCandidate } from '@endless-story/llm/prompts';
 import type { CharacterAttributes } from '@endless-story/shared';
 import { getAdminContext, execAdminTx } from '@/lib/chain/admin-signer';
-import { isMemoryConfigured, rememberForCharacter } from '@/lib/chain/memory';
+import { isMemoryConfigured, missingMemoryEnvVars, rememberForCharacter } from '@/lib/chain/memory';
 import { sagasApi } from '@/lib/api/index';
 import { listStoryPresets, loadStoryPreset } from '@/lib/stories/loader';
+import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
+import { setCharacterSecret } from '@/lib/chain/character-secrets';
 import { DEFAULT_ATTRIBUTE_SCHEMA } from '../config/attribute-schema.js';
 import { generatePortrait } from './generate-portrait.js';
 import { generateAdditionalViews } from './generate-additional-views.js';
@@ -44,7 +46,9 @@ export interface FoundingCharSpec {
     /** 行當 / specialty (also the public role tag). */
     role: string;
     description: string;
-    /** Private secret — feeds only this character's self memories. */
+    /** Private secret — never on-chain. Feeds this character's genesis self
+     *  memories AND the off-chain character-secrets.ts store (read by
+     *  POV/plan/want-scene prompts, own-character-only). */
     secret?: string;
     /** Body free-text; default '勻稱'. */
     body?: string;
@@ -52,6 +56,18 @@ export interface FoundingCharSpec {
     minAttributes?: Partial<CharacterAttributes>;
     /** Authored canon memories (你-form), seeded verbatim after mint. */
     memories?: string[];
+    /**
+     * Residence scene name (preset `home_scene`) — used here only as a mint
+     * fallback when `workScene` is absent. The night router's home map itself
+     * is seeded by home-seed.ts (ensureHomesSeeded), the single seeding path.
+     */
+    homeScene?: string;
+    /**
+     * 崗位 scene name (preset `work_scene`, G11). Dispersed minting: each
+     * character starts at their daytime post instead of everyone piling into
+     * sceneIds[0], so tick-1 scenes have natural quorum.
+     */
+    workScene?: string;
 }
 
 type AttrFloors = Partial<CharacterAttributes>;
@@ -104,8 +120,15 @@ function applyAttributeFloors(
 
 export interface CreateFoundingCastInput {
     specs: FoundingCharSpec[];
-    /** Scene to mint into; default deployment.sceneIds[0]. */
+    /** Scene to mint into when a spec has no `workScene`/`homeScene`; default deployment.sceneIds[0]. */
     sceneId?: string;
+    /**
+     * Escape hatch: proceed even though MemWal isn't configured, so the cast
+     * mints with zero genesis memories (born blank). Without this, founding
+     * fails hard BEFORE minting when memory creds are missing — see
+     * `missingMemoryEnvVars()`. Default false.
+     */
+    allowNoMemory?: boolean;
 }
 
 export interface FoundingMintedEntry {
@@ -155,12 +178,40 @@ export async function createFoundingCastAction(
     const specs = (input.specs ?? []).filter((s) => s.name?.trim() && s.description?.trim());
     if (specs.length === 0) return { ok: false, ...EMPTY, error: '沒有有效的角色設定（需姓名 + 描述）' };
 
+    // Genesis used to fail SILENTLY (ok:true, zero 此生記憶) when memory creds
+    // were missing — the cast minted headless-of-history and nobody noticed
+    // until much later. Fail hard BEFORE spending gas + portrait generation,
+    // unless the caller explicitly opts into a memoryless founding.
+    if (!isMemoryConfigured() && !input.allowNoMemory) {
+        return {
+            ok: false,
+            ...EMPTY,
+            error:
+                `MemWal 未配置，無法為新角色種下此生記憶（缺：${missingMemoryEnvVars().join('、')}）。` +
+                '立班會生出沒有記憶的空白角色。若確定要這樣（例如純鏈上煙測），呼叫時傳 allowNoMemory:true。',
+        };
+    }
+
     let admin;
     try {
         admin = getAdminContext();
     } catch (err) {
         return { ok: false, ...EMPTY, error: err instanceof Error ? err.message : 'admin keypair 載入失敗' };
     }
+
+    // Dispersed minting (per spec, by scene name) — each character starts at
+    // their 崗位 (work_scene), else residence (home_scene), else the batch
+    // default, instead of everyone piling into sceneIds[0]. On-chain scene
+    // names are the story preset's names (bootstrap.ts orders sceneIds to
+    // match). The night router's home map is NOT written here — home-seed.ts
+    // (ensureHomesSeeded) is the single seeding path for homes + work anchors.
+    const sceneIdByName = new Map(
+        (await fetchOnChainScenesForSaga(d.sagaId).catch(() => [])).map((s) => [s.name, s.id] as const),
+    );
+    const resolveMintSceneId = (spec: FoundingCharSpec): string =>
+        (spec.workScene && sceneIdByName.get(spec.workScene)) ||
+        (spec.homeScene && sceneIdByName.get(spec.homeScene)) ||
+        sceneId;
 
     const minted: FoundingMintedEntry[] = [];
 
@@ -176,6 +227,7 @@ export async function createFoundingCastAction(
     // ── per spec: roll → portrait → mint → tags + persona ──
     for (const spec of specs) {
         try {
+            const mintSceneId = resolveMintSceneId(spec);
             const body = spec.body?.trim() || '勻稱';
             const seed = randomBytes(32);
             const seedBytes = Array.from(seed);
@@ -255,7 +307,7 @@ export async function createFoundingCastAction(
                     cap: d.storytellerCapId,
                     saga: d.sagaId,
                     world: d.worldId,
-                    scene: sceneId,
+                    scene: mintSceneId,
                     profile,
                     mediaAssets,
                     attributes,
@@ -275,6 +327,13 @@ export async function createFoundingCastAction(
             minted.push({ id: characterId, name: candidate.name, digest: res.digest, portrait: Boolean(portraitUrl) });
             if (spec.memories?.length) authoredMemories.push({ id: characterId, memories: spec.memories });
             if (portraitUrl) viewTargets.push({ characterId, referenceUrl: portraitUrl });
+            // Home/work maps are deliberately NOT written here: home-seed.ts
+            // (ensureHomesSeeded) resolves them from the preset by name at
+            // routing time — one seeding path, no mint-time twin to drift.
+            // Off-chain inner-life secret store (character-secrets.ts): seeded here
+            // regardless of memory config so POV/plan/scene-loop prompts can always
+            // read it, independent of the MemWal genesis-memory pipeline below.
+            if (candidate.secret) setCharacterSecret(characterId, candidate.secret);
             skillTargets.push({
                 characterId,
                 role: spec.role,
@@ -294,7 +353,7 @@ export async function createFoundingCastAction(
             try {
                 await affirmMintPublicTagsAction({
                     characterId,
-                    sceneId,
+                    sceneId: mintSceneId,
                     characterName: candidate.name,
                     candidate,
                     rolledValues: rolled,
@@ -392,7 +451,12 @@ export async function createFoundingCastAction(
     // parse miss (see batch.ts); generated-but-under-written = some MemWal writes
     // failed (relayer/SEAL). Either way: backfill via 劇團 GenesisMemoryPanel.
     let genesisWarning: string | undefined;
-    if (memoryOn && minted.length > 0 && selfSeeded < genesisExpected) {
+    if (!memoryOn && minted.length > 0) {
+        // Only reachable via the allowNoMemory escape hatch (the hard-fail guard
+        // above already rejected this case otherwise) — keep it loud regardless.
+        genesisWarning = `已用 allowNoMemory 繞過檢查：MemWal 未配置（缺：${missingMemoryEnvVars().join('、')}），${minted.length} 人已立但零此生記憶（空白角色）。之後補上 MemWal 憑證，再到「劇團」分頁用 GenesisMemoryPanel 為每個角色補種。`;
+        console.warn(`[founding] ${genesisWarning}`);
+    } else if (memoryOn && minted.length > 0 && selfSeeded < genesisExpected) {
         genesisWarning =
             genesisExpected === 0
                 ? `立班生成器沒吐出任何此生記憶（${minted.length} 人已立，但 genesis 為空）—— 多半是 LLM 回傳格式壞掉。請到「劇團」分頁用 GenesisMemoryPanel 為每個角色補種，或重跑一次立班。`
@@ -462,6 +526,8 @@ export async function loadFoundingPresetAction(): Promise<FoundingCharSpec[]> {
             secret: c.secret,
             minAttributes: c.minAttributes,
             memories: c.memories,
+            homeScene: c.home_scene,
+            workScene: c.work_scene,
         }));
     } catch {
         return [];
