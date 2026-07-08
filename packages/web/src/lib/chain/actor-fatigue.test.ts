@@ -10,7 +10,7 @@ import {
     bumpActorFatigue,
     decayActorFatigue,
     type FatigueLedger,
-} from './actor-fatigue.ts';
+} from '@endless-story/engine/core/actor-fatigue';
 
 const rows = (...t: Array<[string, number]>) =>
     t.map(([characterId, tension]) => ({ characterId, tension, statement: `s:${characterId}` }));

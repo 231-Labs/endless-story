@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { RelationshipEdge } from '@endless-story/shared';
-import { newWant, type Want } from './want-core.ts';
+import { newWant, type Want } from '@endless-story/engine/core/want-core';
 import { mergeFeltEdges, projectWantEdges, tonesForLayer } from './relationship-felt.ts';
 
 const CAST: Record<string, string> = { 柳生春: '0xliu', 白韻秋: '0xbai', 蘇映雪: '0xsu' };

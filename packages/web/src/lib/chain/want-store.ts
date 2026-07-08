@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Want } from './want-core.ts';
+import type { Want } from '@endless-story/engine/core/want-core';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORE_PATH = path.join(DATA_DIR, 'want-ledger.json');

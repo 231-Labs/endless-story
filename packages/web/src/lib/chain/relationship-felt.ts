@@ -15,7 +15,7 @@
  */
 
 import type { RelationshipEdge, RelationshipTone } from '@endless-story/shared';
-import { normalizeLayer, type Want } from './want-core.ts';
+import { normalizeLayer, type Want } from '@endless-story/engine/core/want-core';
 
 /** Relational feeling tags → tone. Everything absent here projects no edge. */
 const LAYER_TONE: ReadonlyArray<[RegExp, RelationshipTone]> = [

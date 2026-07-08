@@ -19,13 +19,13 @@ import {
     qualifiesAsTryst,
     yearningNightPursuit,
     type Want,
-} from './want-core.ts';
+} from '@endless-story/engine/core/want-core';
 import {
     effectiveResistance,
     runSceneLoop,
     type SceneAgent,
     type SceneLoopCastMember,
-} from './scene-loop.ts';
+} from '@endless-story/engine/core/scene-loop';
 import { computeSpatialRouting } from './spatial-routing.ts';
 
 const BAI = { id: '0xbai', name: '白韻秋' };
