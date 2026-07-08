@@ -71,8 +71,9 @@ export interface PovPromptInput {
      *  without changing who they are. Omit = no injection. */
     state?: CharacterState;
     /** This character's own private inner-life secret (never on-chain, never
-     *  another character's prompt). Colours interiority; must not surface as
-     *  dialogue or a fact other characters could witness. Omit = no injection. */
+     *  another character's prompt). Colours interiority; hidden by default, but
+     *  whether it ever surfaces is the character's own choice under pressure
+     *  (§2.43: never script it). Omit = no injection. */
     innerSecret?: string;
 }
 
@@ -233,7 +234,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         : '';
     const stateBlock = buildStateBlock(input.state);
     const innerSecretBlock = input.innerSecret
-        ? '\n## 心底藏著、外人不知的事（只有你自己知道；讓它悄悄牽動你的選擇、視線與言外之意，但不可變成你說出口的話或別人能看見的事實）\n' +
+        ? '\n## 心底藏著、外人不知的事（只有你自己知道；讓它悄悄牽動你的選擇、視線與言外之意。平日它藏著、只從縫隙裡漏光；藏不藏得住、要不要讓它見光，由你這個人在此刻自己拿主意）\n' +
           input.innerSecret
         : '';
     const dreamBlock = dreamFragment

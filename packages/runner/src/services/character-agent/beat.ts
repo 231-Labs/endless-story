@@ -35,7 +35,8 @@ export interface ActBeatInput {
     /** Daily-life undertone line (state block), optional. */
     stateLine?: string;
     /** This character's own private inner-life secret; never another actor's.
-     *  Colours the beat's subtext, must not surface as a spoken fact. */
+     *  Colours the beat's subtext; hidden by default, but whether it ever
+     *  surfaces is the character's own in-scene choice (§2.43: never script it). */
     innerSecret?: string;
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
@@ -89,7 +90,7 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
     }。`;
     const state = input.stateLine ? `\n${input.stateLine}` : '';
     const innerSecret = input.innerSecret
-        ? `\n【心底藏著、外人不知的事（只有你自己知道，不可說出口或被人看出破綻）】${input.innerSecret}`
+        ? `\n【心底藏著、外人不知的事（只有你自己知道。平日它藏著、只從言外之意漏出來；藏不藏得住、要不要讓它見光，由你在這一拍自己拿主意）】${input.innerSecret}`
         : '';
     return [
         `你就是${input.name}。${input.persona}${mem}`,

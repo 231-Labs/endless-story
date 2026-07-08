@@ -34,8 +34,8 @@ export interface PlanInput {
     rosterContext?: string[];
     /** This character's own private inner-life secret (never on-chain, never
      *  another character's plan). Colours what they're really guarding while
-     *  they plan; must not leak into openSubgoals as a stated fact others could
-     *  witness. Omit = no injection. */
+     *  they plan; hidden by default, but planning to one day say it out loud is
+     *  a legitimate goal (§2.43: never script it). Omit = no injection. */
     innerSecret?: string;
 }
 
@@ -95,7 +95,7 @@ export function buildUserPrompt(input: PlanInput): string {
               input.rosterContext.map((r) => `- ${r}`).join('\n')
             : '';
     const innerSecretBlock = input.innerSecret
-        ? '\n## 心底藏著、外人不知的事（只有你自己知道；讓它悄悄牽動你的選擇，但不可變成你的規劃裡說出口的事實）\n' +
+        ? '\n## 心底藏著、外人不知的事（只有你自己知道；讓它悄悄牽動你的盤算。平日它藏著，但要不要有朝一日把它說開，是你自己可以打的主意）\n' +
           input.innerSecret
         : '';
     return [
