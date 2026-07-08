@@ -1,0 +1,50 @@
+[
+  {
+    "tick": 1,
+    "days": 12,
+    "from": "PROPOSED",
+    "to": "SCRIPTED",
+    "who": "班主 沈雪笙（提案·壓時間線）",
+    "log": "PROPOSED → 班主沈雪笙提案《斷橋·新唱》（白蛇傳·哀而不傷，舊調新魂）"
+  },
+  {
+    "tick": 2,
+    "days": 10,
+    "from": "SCRIPTED",
+    "to": "CAST",
+    "who": "編劇 ?（成稿）",
+    "log": "SCRIPTED → 編劇沈雪笙成稿，共 3 場"
+  },
+  {
+    "tick": 3,
+    "days": 8,
+    "from": "CAST",
+    "to": "SCORED",
+    "who": "導演 沈雪笙（行當選角）",
+    "log": "CAST → 選角完成：蘇映雪飾白素貞、柳生春飾許仙[坤生]、連翹飾小青"
+  },
+  {
+    "tick": 4,
+    "days": 6,
+    "from": "SCORED",
+    "to": "VERSIFIED",
+    "who": "琴師 （略）（作曲出譜）",
+    "log": "SCORED → 琴師沈硯秋譜成 3 段（西皮 原板 / 西皮 流水 / 二黃·反調 慢板（反二黃））"
+  },
+  {
+    "tick": 5,
+    "days": 4,
+    "from": "VERSIFIED",
+    "to": "REHEARSING",
+    "who": "填詞 ?",
+    "log": "VERSIFIED → 詞 3 首（蘇映雪·應場、蘇映雪·有感而發、柳生春·有感而發）"
+  },
+  {
+    "tick": 6,
+    "days": 2,
+    "from": "REHEARSING",
+    "to": "PREMIERED",
+    "who": "全體（排演·織戲中戲）",
+    "log": "PREMIERED → 首演（純驗證：到此產出齊備，上鏈為 gate-after）"
+  }
+]
