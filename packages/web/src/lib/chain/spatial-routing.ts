@@ -2,23 +2,62 @@
  * Spatial routing — night-time placement substrate (§2.50). Tired characters go to
  * their own home; following someone into a private home needs the owner's welcome,
  * so privacy EMERGES. By day the router is silent and the LLM keeps agency.
- * Character→home map is off-chain runner config, seeded at bootstrap or by a harness.
+ * Character→home map is off-chain config seeded at founding; durable via the
+ * `web/data/*.json` file-store pattern (want-store.ts) — an in-memory-only map
+ * silently no-op'd night routing after every server restart.
  */
 
-const homeByCharacter = new Map<string, string>();
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const HOME_STORE_PATH = path.join(DATA_DIR, 'home-scenes.json');
+
+/** characterId → home sceneId. */
+type HomeSceneFile = Record<string, string>;
+
+let homeCache: HomeSceneFile | null = null;
+
+function loadHomes(): HomeSceneFile {
+    if (homeCache) return homeCache;
+    try {
+        homeCache = JSON.parse(fs.readFileSync(HOME_STORE_PATH, 'utf-8')) as HomeSceneFile;
+    } catch {
+        homeCache = {};
+    }
+    return homeCache;
+}
+
+function saveHomes(all: HomeSceneFile): void {
+    try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(HOME_STORE_PATH, JSON.stringify(all, null, 1));
+    } catch (err) {
+        console.warn('[spatial-routing] home save failed:', err instanceof Error ? err.message : err);
+    }
+}
 
 export function setHomeScene(characterId: string, sceneId: string): void {
-    homeByCharacter.set(characterId, sceneId);
+    const all = loadHomes();
+    all[characterId] = sceneId;
+    saveHomes(all);
 }
 export function setHomeScenes(entries: Iterable<readonly [string, string]>): void {
-    for (const [c, s] of entries) homeByCharacter.set(c, s);
+    const all = loadHomes();
+    for (const [c, s] of entries) all[c] = s;
+    saveHomes(all);
 }
 export function getHomeScene(characterId: string): string | undefined {
-    return homeByCharacter.get(characterId);
+    return loadHomes()[characterId];
 }
-/** Reset (tests / harness isolation). */
+/** Reset cache AND file (tests / harness isolation). */
 export function clearHomeScenes(): void {
-    homeByCharacter.clear();
+    homeCache = {};
+    saveHomes(homeCache);
+}
+/** Test-only: drop the process cache so a fresh file state is re-read. */
+export function __resetHomeSceneCache(): void {
+    homeCache = null;
 }
 
 export interface RoutingActor {
