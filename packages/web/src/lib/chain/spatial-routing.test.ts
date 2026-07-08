@@ -81,14 +81,21 @@ test('④ 白天路由沉默 — by day the router defers to the LLM (empty map)
 });
 
 test('⑤ 無主/不被迎的私宅 propriety = 0 — a stranger never routes into it', () => {
-    // liu pursues su, but su sits in a room owned by jin, who doesn't welcome liu.
-    const actors: RoutingActor[] = [
-        { id: 'liu', sceneId: 'backstage', homeSceneId: 'liu_room', fatigue: 0.6, pursue: { id: 'su', w: 0.95 } },
-        { id: 'su', sceneId: 'jin_hall', homeSceneId: 'su_room', fatigue: 0.6 },
-        { id: 'jin', sceneId: 'jin_hall', homeSceneId: 'jin_hall', fatigue: 0.6 },
+    // Post-G8 semantics: pursuit aims at the target's HOME (night anchor).
+    // Unwelcoming owner: liu pursues jin, whose home (jin_hall) doesn't welcome liu.
+    const unwelcoming: RoutingActor[] = [
+        { id: 'liu', sceneId: 'backstage', homeSceneId: 'liu_room', fatigue: 0.6, pursue: { id: 'jin', w: 0.95 } },
+        { id: 'jin', sceneId: 'backstage', homeSceneId: 'jin_hall', fatigue: 0.6 },
     ];
-    const targets = computeSpatialRouting(actors, SCENES, true, welcome);
-    assert.equal(targets.get('liu'), 'liu_room', '金鳳不迎柳 → 柳不闖金鳳歌廳、回自己家');
+    const t1 = computeSpatialRouting(unwelcoming, SCENES, true, welcome);
+    assert.equal(t1.get('liu'), 'liu_room', '金鳳不迎柳 → 柳不闖金鳳歌廳、回自己家');
+    // Absent target: pursuing someone who isn't among tonight's actors yields
+    // no destination at all — the pursuer simply goes home.
+    const absent: RoutingActor[] = [
+        { id: 'bai', sceneId: 'backstage', homeSceneId: 'bai_house', fatigue: 0.6, pursue: { id: 'su', w: 0.95 } },
+    ];
+    const t2 = computeSpatialRouting(absent, SCENES, true, welcome);
+    assert.equal(t2.get('bai'), 'bai_house', '追的人不在夜路由裡 → 白韻秋自己回家');
 });
 
 /* ── home-scene store: durable across restarts (file-store pattern) ── */

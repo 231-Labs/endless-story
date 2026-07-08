@@ -9,7 +9,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 
-export type BeatForcing = 'idle' | 'pressing' | 'edge';
+export type BeatForcing = 'idle' | 'pressing' | 'edge' | 'breaking';
 
 export interface ActBeatInput {
     name: string;
@@ -22,8 +22,11 @@ export interface ActBeatInput {
     clock: string;
     sceneName: string;
     isPrivate: boolean;
-    /** Co-present character names (empty = alone). */
-    others: string[];
+    /** Co-present characters (empty = alone). `role` = 行當; `tie` = the actor's
+     *  OWN canon feeling toward them (e.g. 你對TA：師承) so address forms come
+     *  from the graph, not guesswork. Never carries the reverse edge — the
+     *  other's inner state reaches an actor only through enacted behavior. */
+    others: Array<{ name: string; role?: string; tie?: string }>;
     /** External pressure line (風聲), first beat only. */
     stake?: string;
     want: { desc: string; target?: string };
@@ -76,6 +79,12 @@ function forceNote(forcing: BeatForcing, privateAlone: boolean): string {
         return privateAlone
             ? '無人看著，藏了多年的，在這方寸裡有點按不住了。'
             : '心裡翻著，可人前多半還是按下不表。';
+    if (forcing === 'breaking')
+        // H3: past the edge — the want has become unbearable. Cross the line
+        // this beat; the answer is still yours (confess, reckon, break, or bolt).
+        return privateAlone
+            ? '到頭了，一個字也壓不回去——只你二人，這一刻把積在心底最深的那句話、那個動作做出來，放不回頭也認了。'
+            : '到頭了，再壓下去人就要散了——就在這些眼睛底下，做出那件放不回頭的事，由你的心。';
     return privateAlone
         ? '再也按不住了——只你二人、沒有眼睛，這年頭唯一能這樣的地方，這一刻全由你的心。'
         : '再也按不住了——這一刻你得做一件放不回頭的事，由你的心。';
@@ -86,7 +95,14 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         ? `\n你心底偶爾翻起的舊事(對景就讓它浮上來、不對景別硬提)：\n- ${input.memories.join('\n- ')}`
         : '';
     const where = `你在【${input.sceneName}】${input.isPrivate ? '(私房)' : ''}，同場：${
-        input.others.length ? input.others.join('、') : '只你一人'
+        input.others.length
+            ? input.others
+                  .map((o) => {
+                      const facts = [o.role, o.tie].filter(Boolean).join('｜');
+                      return facts ? `${o.name}（${facts}）` : o.name;
+                  })
+                  .join('、')
+            : '只你一人'
     }。`;
     const state = input.stateLine ? `\n${input.stateLine}` : '';
     const innerSecret = input.innerSecret

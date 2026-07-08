@@ -6,8 +6,19 @@
  * math lives here; all LLM calls live in runner (beat.ts). Server-only.
  */
 
-import { characterAgent } from '@endless-story/runner';
+import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 import { pickNextActor } from './scene-routing.ts';
+
+/** The two agent calls a scene needs — injectable so composition tests can run
+ *  the REAL loop with a scripted agent (no LLM, no runner resolution). */
+export type SceneAgent = Pick<typeof CharacterAgentNs, 'actBeat' | 'judgeWantResolved'>;
+
+/** Production default: resolved lazily so importing this module stays
+ *  node-clean (the runner package uses `.js` specifiers node --test can't load). */
+async function defaultAgent(): Promise<SceneAgent> {
+    const mod = await import('@endless-story/runner');
+    return mod.characterAgent;
+}
 import {
     WANT,
     applyBeat,
@@ -24,6 +35,12 @@ export interface SceneLoopCastMember {
     stateLine?: string;
     /** This character's own private inner-life secret; never another actor's. */
     innerSecret?: string;
+    /** 行當 — shown to co-present speakers so address forms have footing. */
+    role?: string;
+    /** This member's OWN canon feeling toward each co-present member, keyed by
+     *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
+     *  the reverse edge — no omniscience about others' feelings. */
+    ties?: Record<string, string>;
 }
 
 export interface SceneLoopInput {
@@ -46,6 +63,8 @@ export interface SceneLoopInput {
     tick: number;
     /** Turn caps; defaults match §2.48 (private scenes run longer). */
     maxTurns?: number;
+    /** Injectable agent (composition tests script it); omit → runner LLM agent. */
+    agent?: SceneAgent;
 }
 
 export interface SceneBeat {
@@ -80,9 +99,10 @@ export function effectiveResistance(w: Want, input: Pick<SceneLoopInput, 'isPriv
         : w.resistance;
 }
 
-type EffLevel = 'idle' | 'pressing' | 'edge';
+type EffLevel = 'idle' | 'pressing' | 'edge' | 'breaking';
 function levelAt(w: Want, effR: number): EffLevel {
     const p = forcingPressure(w);
+    if (p >= effR + WANT.breakingMargin) return 'breaking';
     if (p >= effR) return 'edge';
     if (p >= effR * WANT.pressingAt) return 'pressing';
     return 'idle';
@@ -107,6 +127,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false };
     const present = [...input.cast];
     if (present.length === 0) return result;
+    const agent = input.agent ?? (await defaultAgent());
 
     const solo = present.length === 1;
     const maxTurns = input.maxTurns ?? (solo ? 1 : input.isPrivate ? 5 : 4);
@@ -136,7 +157,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         const gateBeat = privateAlone && /愛|情/.test(w.layer);
         if (gateBeat) result.intimacyGateOpened = true;
 
-        const r = await characterAgent.actBeat({
+        const r = await agent.actBeat({
             name: actor.name,
             persona: actor.persona,
             memories: actor.memories,
@@ -144,7 +165,11 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             clock: input.clock,
             sceneName: input.sceneName,
             isPrivate: input.isPrivate,
-            others: others.map((o) => o.name),
+            others: others.map((o) => ({
+                name: o.name,
+                role: o.role,
+                tie: actor!.ties?.[o.characterId],
+            })),
             stake: turn === 0 ? input.stake : undefined,
             want: { desc: w.desc, target: w.target },
             forcing: levelAt(w, effR),
@@ -203,13 +228,17 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     }
 
     // Strict resolve pass: only edge-level acted wants are even judged (§2.31).
+    // Private is ALREADY easier (effR drops 3 in a private 2-person pair, §2.45),
+    // so a heart/debt want tends to settle privately — without gating public
+    // resolution behind breaking, which starves resolution when the night pair
+    // fails to form (H3c: don't make public harder until the private path lands).
     for (const w of actedWants.values()) {
         if (w.retired) continue;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: input.cast });
         if (forcingPressure(w) < effR) continue;
         const owner = input.cast.find((c) => c.characterId === w.characterId);
         if (!owner) continue;
-        const verdict = await characterAgent.judgeWantResolved({
+        const verdict = await agent.judgeWantResolved({
             name: owner.name,
             wantDesc: w.desc,
             beats: log,

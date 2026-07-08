@@ -94,6 +94,7 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
             minAttributes: r.minAttributes,
             memories: r.memories,
             homeScene: r.homeScene,
+            workScene: r.workScene,
         }));
         if (specs.length === 0) {
             setNote('沒有完整的角色（每人需姓名、年齡、性別、行當、描述）');

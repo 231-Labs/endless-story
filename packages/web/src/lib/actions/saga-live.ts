@@ -23,12 +23,18 @@ import {
     getRecentSceneLinesAcross,
     type SceneLineKind,
 } from '@/lib/chain/scene-lines';
+import { latestSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
+import { loadWants } from '@/lib/chain/want-store';
+import { normalizeLayer } from '@/lib/chain/want-core';
 
 /** A ghost-quote line for the handscroll: who, what, in which register. */
 export interface SceneLine {
     characterId: string;
     text: string;
     kind: SceneLineKind;
+    /** Ring timestamp (ms) — stream identity for the 題字流; absent on lines
+     *  synthesized from chain events. */
+    ts?: number;
 }
 
 export interface SceneLiveStatus {
@@ -70,6 +76,101 @@ export interface SagaLiveSnapshot {
 
 /** How many recent events to scan for per-scene open/latest-line status. */
 const EVENT_SCAN = 10;
+
+/**
+ * 窗內門 — what the scene-focus view may show for a private scene. The rating
+ * comes from the tick loop's ex-post judge (scene-rating ledger); the UI never
+ * sniffs prose to decide the 18+ door.
+ */
+export async function getSceneDoor(
+    sagaId: string,
+    sceneId: string,
+): Promise<{ rating: SceneRating; gateOpened: boolean } | null> {
+    const e = latestSceneRating(sagaId, sceneId);
+    return e ? { rating: e.rating, gateOpened: e.gateOpened } : null;
+}
+
+/** One beat line for the scene sheet (who said/did what, in which register). */
+export interface SceneBoardBeat {
+    characterId: string;
+    text: string;
+    kind: SceneLineKind;
+}
+
+/** A live inner-want the sheet shows as 心事 (subscription content). */
+export interface SceneBoardWant {
+    characterId: string;
+    desc: string;
+    /** 0..1 tension = weight × (1 − sat). */
+    tension: number;
+}
+
+/** Everything the scene sheet (內頁) needs, in one server round-trip. */
+export interface SceneBoard {
+    sceneId: string;
+    beats: SceneBoardBeat[];
+    /** 心事 of the characters present here, hottest first. */
+    wants: SceneBoardWant[];
+    /** Content rating for a private scene, else null. */
+    rating: SceneRating | null;
+    gateOpened: boolean;
+}
+
+/**
+ * Scene sheet board — the read behind the 內頁 (mockup rehearsal/chamber view).
+ * Local ring + want ledger + rating ledger, zero RPC. `presentCharacterIds`
+ * comes from the caller's already-loaded roster so this stays a cheap read.
+ */
+export async function getSceneBoard(
+    sagaId: string,
+    sceneId: string,
+    presentCharacterIds: string[],
+): Promise<SceneBoard> {
+    // The 內頁「當前一幕」is live scene dialogue/action, not travel/plan intents.
+    // 'move'/'plan' lines are the character's reason for going somewhere ("去後台
+    // 找師父…") and read as repeated intents; keep only in-scene beats
+    // ('act'/'social'/'warmth') and drop consecutive duplicates.
+    const INTENT_KINDS = new Set<SceneLine['kind']>(['move', 'plan']);
+    const recent = getRecentSceneLines(sceneId, 40).filter((l) => !INTENT_KINDS.has(l.kind));
+    const deduped: typeof recent = [];
+    for (const l of recent) {
+        const prev = deduped[deduped.length - 1];
+        if (prev && prev.characterId === l.characterId && prev.text === l.text) continue;
+        deduped.push(l);
+    }
+    const beats = deduped.slice(0, 6).reverse(); // newest-first → keep 6 → oldest→newest for reading
+    const present = new Set(presentCharacterIds);
+    const wants = loadWants(sagaId)
+        .filter((w) => !w.retired && present.has(w.characterId))
+        .map((w) => ({ characterId: w.characterId, desc: w.desc, tension: w.weight * (1 - w.sat) }))
+        .sort((a, b) => b.tension - a.tension)
+        .slice(0, 4);
+    const r = latestSceneRating(sagaId, sceneId);
+    return {
+        sceneId,
+        beats: beats.map((b) => ({ characterId: b.characterId, text: b.text, kind: b.kind })),
+        wants,
+        rating: r?.rating ?? null,
+        gateOpened: r?.gateOpened ?? false,
+    };
+}
+
+/**
+ * Lines-only pulse — the cheap read behind the floating-quote stream. Pure
+ * local ring file, zero RPC, so the client can poll it every few seconds
+ * without touching a public node (the full snapshot with chain presence /
+ * open events runs on a much slower cadence).
+ */
+export async function getSceneLinesPulse(
+    sceneIds: string[],
+): Promise<{ linesByScene: Record<string, SceneLine[]>; pulse: Array<SceneLine & { sceneId: string }> }> {
+    const linesByScene: Record<string, SceneLine[]> = {};
+    for (const id of sceneIds.slice(0, 40)) {
+        const lines = getRecentSceneLines(id, 4);
+        if (lines.length > 0) linesByScene[id] = lines;
+    }
+    return { linesByScene, pulse: getRecentSceneLinesAcross(8) };
+}
 
 export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnapshot> {
     const pkg = ENDLESS_STORY_DEPLOYMENT.packageId;
@@ -184,4 +285,70 @@ export async function getSagaLiveSnapshot(sagaId: string): Promise<SagaLiveSnaps
         day,
         partOfDay,
     };
+}
+
+export interface SagaHeartLedger {
+    /** 未了：live wants still driving characters. */
+    open: number;
+    /** 已了：wants that reached a resolve (not merely dropped). */
+    resolved: number;
+    /** Layer distribution among the open wants (愛/志向/戲班/…), top few. */
+    byLayer: { layer: string; count: number }[];
+}
+
+/**
+ * Anonymous heart ledger for the 規章 page — the troupe's emotional P&L. Counts
+ * and layer mix only, never a specific character's want text (that stays
+ * subscriber-gated in the scene 內頁). Reads the same want-store the engine drives.
+ */
+export interface CharacterWant {
+    /** Free-text layer tag (愛/志向/戲班/身體/…). */
+    layer: string;
+    /** The want in the character's own words. */
+    desc: string;
+    /** 0..1 tension = weight × (1 − sat) — how hard it drives them right now. */
+    tension: number;
+    /** 1..10 forcing gate — high ≈ a standing 懸念, low ≈ near a resolve. */
+    resistance: number;
+    /** Optional target character id/name this want is aimed at. */
+    target?: string;
+}
+
+/**
+ * A character's live wants (當下心事) for their dossier — the drives behind their
+ * current intent. Same want-store the engine runs on; shown openly on the dossier
+ * (like 此刻心境 / relationships already are). Top by tension.
+ */
+export async function getCharacterWants(
+    sagaId: string,
+    characterId: string,
+    limit = 3,
+): Promise<CharacterWant[]> {
+    return loadWants(sagaId)
+        .filter((w) => !w.retired && w.characterId === characterId)
+        .map((w) => ({
+            layer: normalizeLayer(w.layer),
+            desc: w.desc,
+            tension: w.weight * (1 - w.sat),
+            resistance: w.resistance,
+            target: w.target,
+        }))
+        .sort((a, b) => b.tension - a.tension)
+        .slice(0, limit);
+}
+
+export async function getSagaHeartLedger(sagaId: string): Promise<SagaHeartLedger> {
+    const wants = loadWants(sagaId);
+    const open = wants.filter((w) => !w.retired);
+    const resolved = wants.filter((w) => w.resolvedTick != null).length;
+    const layerCount = new Map<string, number>();
+    for (const w of open) {
+        const layer = normalizeLayer(w.layer);
+        layerCount.set(layer, (layerCount.get(layer) ?? 0) + 1);
+    }
+    const byLayer = [...layerCount.entries()]
+        .map(([layer, count]) => ({ layer, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 4);
+    return { open: open.length, resolved, byLayer };
 }

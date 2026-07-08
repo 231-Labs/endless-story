@@ -20,10 +20,10 @@ import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
 import { collectBondPairs, seedBondTies } from './tick-phases/bond';
 import { dumpChapter } from '@/lib/chain/chapter-dump';
 import { deriveAndCommitDramaBeat, tensionFraction, readResourceLedger } from '@/lib/chain/drama';
-import { recordSceneLine } from '@/lib/chain/scene-lines';
+import { recordSceneLine, getRecentSceneLines } from '@/lib/chain/scene-lines';
 import { computeGravityTargets } from '@/lib/chain/rival-gravity';
 import { computeSpatialRouting } from '@/lib/chain/spatial-routing';
-import { fetchWarmGraph } from '@/lib/chain/relationship-evolve';
+import { fetchWarmGraph, fetchCastTies } from '@/lib/chain/relationship-evolve';
 import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings, recallForCharacter } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
@@ -44,9 +44,14 @@ import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
 import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
-import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, newWant } from '@/lib/chain/want-core';
+import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, jealousNightPursuit, yearningNightPursuit, newWant, nightSceneKind } from '@/lib/chain/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
+import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
+import { recordSceneTruth } from '@/lib/chain/scene-truth';
+import { ensureHomesSeeded } from '@/lib/chain/home-seed';
+import { getHomeScene, getWorkScene } from '@/lib/chain/spatial-routing';
+import { loadBible } from '@/lib/chain/story-bible-store';
 import { runSceneLoop } from '@/lib/chain/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
@@ -245,6 +250,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const wantEngine = input.wantEngine ?? envFlag('TICK_WANT_ENGINE');
     // §4d.2: arc convergence state machine (off-chain arc state). Default off.
     const arcConvergence = input.arcConvergence ?? envFlag('TICK_ARC_CONVERGENCE');
+    // Contest experiment: the "檯面上的爭奪" overlay (stake list fed to genesis,
+    // 執念補判 affinity backfill, director scarcity proposals) is what frames
+    // every want as slot-positioning and reads as 心機. OFF = characters pursue
+    // only intrinsic wants (情/債/手藝/日常); the economic settlement lane is
+    // untouched. Default ON (overlay lives); set TICK_RESOURCE_CONTEST_OFF to test.
+    const resourceContest = !envFlag('TICK_RESOURCE_CONTEST_OFF');
     const maxConcurrentEvents = Math.max(
         1,
         input.maxConcurrentEvents ?? (Number(process.env.TICK_MAX_CONCURRENT_EVENTS) || 2),
@@ -424,14 +435,42 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             // By day the router is silent and the LLM keeps agency.
             let routeTargets: Map<string, string> | undefined;
             if (!dryRun && isNight) {
+                // G10: homes are authored canon (preset home_scene) — without
+                // this the router's "home" fell back to stay-put and a private
+                // pair could never form.
+                const homed = await ensureHomesSeeded(
+                    d.sagaId,
+                    activeRoster.map((r) => ({ id: r.id, name: r.name })),
+                    activeScenes.map((s) => ({ id: s.id, name: s.name })),
+                ).catch(() => 0);
+                if (homed > 0) tlog(`③′ 夜路由: ${homed} 人有家可歸`);
                 const present = activeRoster.filter((r) => r.currentSceneId);
-                const warm = await fetchWarmGraph(present.map((r) => r.id));
-                const actors = present.map((r) => ({
-                    id: r.id,
-                    sceneId: r.currentSceneId as string,
-                    homeSceneId: r.homeSceneId ?? (r.currentSceneId as string),
-                    pursue: warm.pursueByChar.get(r.id),
-                }));
+                const warm = await fetchWarmGraph(present.map((r) => r.id), {
+                    feltNameToId: new Map(present.map((r) => [r.name, r.id])),
+                });
+                // 妒火夜隨 (G8b): a burning jealousy/grudge follows its target
+                // into the night uninvited — obsession outranks warmth when both
+                // pull. The router's intrude flag skips the welcome gate; what it
+                // walks into (撞破) is decided by nightSceneKind downstream.
+                const nightWants = wantEngine ? loadWants(d.sagaId) : [];
+                const idByNightName = new Map(present.map((r) => [r.name, r.id]));
+                const presentIds = new Set(present.map((r) => r.id));
+                const actors = present.map((r) => {
+                    const resolveTgt = (t: string) => (presentIds.has(t) ? t : idByNightName.get(t));
+                    const jealous = wantEngine ? jealousNightPursuit(nightWants, r.id, resolveTgt) : null;
+                    // 夜赴 (H1): a ripe love/debt want seeks its target so the
+                    // private pair can form. Welcome-gated (unlike 妒火夜隨's
+                    // intrude), and only when jealousy isn't already stalking.
+                    const yearning = wantEngine ? yearningNightPursuit(nightWants, r.id, resolveTgt) : null;
+                    return {
+                        id: r.id,
+                        sceneId: r.currentSceneId as string,
+                        // Roster snapshots homes before this tick's seeding ran —
+                        // re-read the live map so homes work the same night.
+                        homeSceneId: r.homeSceneId ?? getHomeScene(r.id) ?? (r.currentSceneId as string),
+                        pursue: jealous ?? yearning ?? warm.pursueByChar.get(r.id),
+                    };
+                });
                 routeTargets = computeSpatialRouting(
                     actors,
                     activeScenes.map((s) => ({ id: s.id, privacyLevel: s.privacyLevel })),
@@ -442,6 +481,24 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     ([id, sc]) => rosterById.get(id)?.currentSceneId !== sc,
                 ).length;
                 if (relocating > 0) tlog(`②◦ 夜路由: ${relocating} 人各歸其所（追隨/避讓依關係圖）`);
+            } else if (!dryRun && worldTime?.tickOfDay === 0) {
+                // G11 morning dispersal: the day starts at one's 崗位 (preset
+                // work_scene) — the mechanical mirror of night homes. Breaks the
+                // one-room magnet every dawn; the LLM keeps agency for the rest
+                // of the day.
+                await ensureHomesSeeded(
+                    d.sagaId,
+                    activeRoster.map((r) => ({ id: r.id, name: r.name })),
+                    activeScenes.map((s) => ({ id: s.id, name: s.name })),
+                ).catch(() => 0);
+                const toWork = activeRoster.flatMap((r) => {
+                    const w = getWorkScene(r.id);
+                    return w && r.currentSceneId !== w ? ([[r.id, w]] as const) : [];
+                });
+                if (toWork.length > 0) {
+                    routeTargets = new Map(toWork);
+                    tlog(`②◦ 晨路由: ${toWork.length} 人各就崗位`);
+                }
             }
             moves.push(
                 ...(await runMovePhase({
@@ -497,6 +554,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     name: c.name,
                     tags: publicTagsWithRole(c, roleById.get(c.id)),
                 })),
+                // G1 single demand source: with the want engine on, a character
+                // with wants contests exactly what their wants ache for (the
+                // legacy role-ambition table covers only want-less characters).
+                wantLedger: wantEngine ? loadWants(d.sagaId) : undefined,
                 signer: dryRun ? undefined : admin.signer, // dry-run = derive, don't anchor
             });
             dramaHints = r.hints;
@@ -539,7 +600,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // 2.72 DIRECTOR SCARCITY — LLM director may add a contested resource
     //   mid-story (validated + rate-limited); it is desired and settled on a
     //   LATER tick, never read back this tick.
-    if (directorResources && !dryRun && drama?.active && slice.length >= 2) {
+    if (resourceContest && directorResources && !dryRun && drama?.active && slice.length >= 2) {
         try {
             const r = await proposeResourceAction({
                 sagaId: d.sagaId,
@@ -772,8 +833,17 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     // 2.76 EVENT MOMENT — multi-character scene image per opened event (img2img
     //   off each participant's anchor so faces don't drift), appended as kind=4.
+    //   One image per (scene, axis) per narrative day: the same contest re-opens
+    //   tick after tick and repainting the same cast in the same room filled
+    //   galleries with near-identical moments.
+    const momentDay = worldTime?.day ?? 0;
     for (const st of storylets) {
         if (!((input.eventImage ?? narrativeProfile?.features.eventImage ?? true) && !dryRun && st.opened && st.characterIds.length >= 2)) continue;
+        const mKey = momentKey(st.sceneId, st.templateId);
+        if (hasMomentToday(d.sagaId, mKey, momentDay)) {
+            console.log(`[tick-loop] event moment (${st.templateId}): skipped=already_rendered_today`);
+            continue;
+        }
         momentJobs.push(async () => {
             const r = await generateEventMomentAction({
                 characterIds: st.characterIds,
@@ -781,6 +851,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 label: st.label,
                 eventTx: st.digest,
             });
+            if (r.appended > 0) recordMoment(d.sagaId, mKey, momentDay);
             console.log(
                 `[tick-loop] event moment (${st.templateId}): appended=${r.appended}` +
                     (r.skipped ? ` skipped=${r.skipped}` : '') +
@@ -963,14 +1034,37 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     //   Failure-isolated; never blocks the tick.
     const wantActed: string[] = [];
     if (wantEngine && slice.length > 0 && !dryRun) {
-        if (isNight) {
-            tlog('③⁹ want scenes: night — 快轉, sleep consolidates');
-        } else {
+        // Night is no longer a wholesale fast-forward: the night router is the
+        // only thing that pulls a pair into a private room, so a 幽會-qualified
+        // scene still plays (§2.45's private-pair machinery is unreachable
+        // otherwise). Ledger upkeep (genesis/backfill/stirs/decay) stays
+        // daytime-only; everyone outside a tryst sleeps.
+        {
             try {
                 const nowTick = spineClockTick();
                 const wants = loadWants(d.sagaId);
+                if (!isNight) {
+                // 檯面上的爭奪 (lazy, once per tick) — genesis tags wants with the
+                // stake they pursue, so demand stays single-sourced (G1).
+                let stakeCache: Array<{ label: string }> | null = null;
+                const contestedStakes = async () => {
+                    // Contest off: hand genesis an EMPTY stake list so wants stay
+                    // intrinsic and the 執念補判 backfill short-circuits (stakes
+                    // length 0). The on-chain ledger is left untouched.
+                    if (!resourceContest) return [];
+                    if (stakeCache) return stakeCache;
+                    stakeCache = await readResourceLedger(admin.client, d.packageId, d.sagaId)
+                        .then((ledger) => ledger.map((r) => ({ label: r.label })))
+                        .catch(() => []);
+                    return stakeCache;
+                };
                 for (const c of slice) {
-                    if (wants.some((w) => w.characterId === c.id)) continue;
+                    // Ripple/aftermath wants filling a vacuum do NOT count as an
+                    // inner life — retry until genesis itself has run (a silent
+                    // genesis failure once left the deepest persona uncharted
+                    // while ambient ripples squatted in the void).
+                    if (wants.some((w) => w.characterId === c.id && w.source === 'genesis')) continue;
+                    const stakes = await contestedStakes();
                     const derived = await characterAgent.deriveGenesisWants({
                         name: c.name,
                         role: roleById.get(c.id) ?? '—',
@@ -980,8 +1074,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         castNames: slice.map((x) => x.name),
                         // Own-character-only: never another character's row (character-secrets.ts).
                         secret: getCharacterSecret(c.id),
-                        // TODO: no saga premise is fetched in this scope yet; wire
-                        // sagaPremise once a cheap saga-description read lands here.
+                        contestedResources: stakes,
                     });
                     for (const g of derived) {
                         wants.push(
@@ -990,6 +1083,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 layer: g.layer,
                                 desc: g.desc,
                                 target: g.target,
+                                // null = assessed against the stake list, tied to none.
+                                resource: stakes.length > 0 ? (g.resource ?? null) : undefined,
                                 weight: g.weight,
                                 sat: g.sat,
                                 resistance: g.resistance,
@@ -1001,6 +1096,27 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     }
                     if (derived.length > 0) tlog(`③⁹ genesis wants: ${c.name} ×${derived.length}`);
                 }
+                // G1 backfill: wants that pre-date the stake list get a one-time
+                // affinity pass — tied wants take the exact label, the rest turn
+                // null (= assessed) so this never re-runs for the character.
+                for (const c of slice) {
+                    const mine = wants.filter((w) => !w.retired && w.characterId === c.id);
+                    if (mine.length === 0 || mine.some((w) => w.resource !== undefined)) continue;
+                    const stakes = await contestedStakes();
+                    if (stakes.length === 0) break;
+                    const ties = await characterAgent.assessResourceAffinity({
+                        name: c.name,
+                        role: roleById.get(c.id) ?? '—',
+                        description: c.description,
+                        wants: mine.map((w) => ({ layer: w.layer, desc: w.desc })),
+                        contestedResources: stakes,
+                    });
+                    mine.forEach((w, i) => {
+                        w.resource = ties.get(i) ?? null;
+                    });
+                    const tied = [...ties.values()];
+                    tlog(`③⁹ 執念補判: ${c.name} ${tied.length > 0 ? '→ ' + tied.join('、') : '不爭檯面'}`);
+                }
                 for (const cid of drainWantDreamStirs(d.sagaId)) {
                     const hit = applyDreamStirToWants(wants, cid);
                     if (hit) tlog(`③⁹ dream stir → ${nameById.get(cid) ?? cid.slice(0, 8)}「${hit.desc}」`);
@@ -1009,8 +1125,35 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 for (const f of fadeStaleWants(wants, nowTick)) {
                     tlog(`③⁹ 淡了: ${nameById.get(f.characterId) ?? '?'}「${f.desc}」`);
                 }
+                } // end daytime ledger upkeep
 
                 const clock = worldTime?.partOfDay ?? '白日';
+                // Daily-life tint (§2.15-2.18; approach iii — derived, no store):
+                // fatigue follows the day's arc, hunger the distance from the last
+                // meal slot (早/午/晚飯). Undertone only — the state block itself
+                // tells the beat not to narrate it as an event.
+                const ticksPerDay = worldTime?.ticksPerDay ?? 6;
+                const tickOfDay = worldTime?.tickOfDay ?? 0;
+                const sinceMeal = Math.min(...[0, 1, 4].map((m) => (tickOfDay - m + ticksPerDay) % ticksPerDay));
+                const stateLine =
+                    runnerWorker.buildStateBlock({
+                        hunger: Math.min(1, 0.1 + sinceMeal * 0.28),
+                        // Same day-arc curve the POV state uses (dayFatigue, hoisted above).
+                        fatigue: dayFatigue,
+                        mood: 0,
+                    }) || undefined;
+                // G3: one relations read per tick — beats get each co-present
+                // person's 行當 + canon tie so address forms stop drifting.
+                const castTies = await fetchCastTies(slice.map((c) => ({ id: c.id, name: c.name }))).catch(
+                    () => new Map<string, string>(),
+                );
+                // Perception rule: an actor knows only their OWN feeling toward a
+                // co-present person — never the reverse edge (that is the other's
+                // inner state; it reaches them only through enacted behavior).
+                const tieLine = (selfId: string, otherId: string): string | undefined => {
+                    const out = castTies.get(`${selfId}::${otherId}`);
+                    return out ? `你對TA：${out}` : undefined;
+                };
                 const byScene = new Map<string, Character[]>();
                 for (const c of slice) {
                     const sid = rosterById.get(c.id)?.currentSceneId;
@@ -1019,6 +1162,27 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     if (arr) arr.push(c);
                     else byScene.set(sid, [c]);
                 }
+                // 幽會 (G8): at night only a private scene holding exactly the
+                // pair the router pulled together — with a live love-want between
+                // them — plays out. Everyone else sleeps, as before.
+                if (isNight) {
+                    let trysts = 0;
+                    let reckonings = 0;
+                    let confrontations = 0;
+                    for (const [sceneId, cs] of [...byScene]) {
+                        const info = activeScenes.find((sc) => sc.id === sceneId);
+                        const kind = nightSceneKind(cs, info?.privacyLevel ?? 0, wants);
+                        if (!kind) byScene.delete(sceneId);
+                        else if (kind === 'tryst') trysts++;
+                        else if (kind === 'reckoning') reckonings++;
+                        else confrontations++;
+                    }
+                    tlog(
+                        byScene.size > 0
+                            ? `③⁹ 夜場: ${trysts} 幽會${reckonings > 0 ? ` · ${reckonings} 了結` : ''}${confrontations > 0 ? ` · ${confrontations} 撞破` : ''}`
+                            : '③⁹ want scenes: night — 快轉, sleep consolidates',
+                    );
+                }
                 let beatCount = 0;
                 const privateSceneIds = new Set<string>();
                 for (const [sceneId, cs] of byScene) {
@@ -1026,25 +1190,40 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     const isPrivate = (info?.privacyLevel ?? 0) >= 3;
                     if (isPrivate) privateSceneIds.add(sceneId);
                     const sceneName = sceneNameById.get(sceneId) ?? '戲班';
-                    // Memory channel (§2.45 暗號 echoes): each member recalls
-                    // against their hottest want, capped small; failure-safe.
+                    // Memory channel: each member recalls against their hottest
+                    // want (§2.45 暗號 echoes) AND about the co-present people
+                    // they have ties to — facing someone surfaces your history
+                    // with them, not just your current obsession. Capped small
+                    // (2 others × 2 snippets); failure-safe.
                     const castWithMem = await Promise.all(
                         cs.map(async (c) => {
                             const mine = wants.filter((w) => !w.retired && w.characterId === c.id);
                             const hot = mine.sort((x, y) => y.weight * (1 - y.sat) - x.weight * (1 - x.sat))[0];
-                            const memories = hot
-                                ? await recallForCharacter(c.id, hot.desc, 3).catch(() => [])
-                                : [];
+                            const tiedOthers = cs
+                                .filter((o) => o.id !== c.id && castTies.has(`${c.id}::${o.id}`))
+                                .slice(0, 2);
+                            const [hotMem, ...aboutOthers] = await Promise.all([
+                                hot ? recallForCharacter(c.id, hot.desc, 3).catch(() => []) : Promise.resolve([]),
+                                ...tiedOthers.map((o) =>
+                                    recallForCharacter(c.id, o.name, 2).catch(() => [] as string[]),
+                                ),
+                            ]);
+                            const memories = [...new Set([...hotMem, ...aboutOthers.flat()])].slice(0, 6);
                             return {
                                 characterId: c.id,
                                 name: c.name,
                                 persona: c.description,
                                 memories: memories.length > 0 ? memories : undefined,
-                                // §2.19 daily-life state, same derivation POV uses — want
-                                // scenes were the one acting surface it never reached.
-                                stateLine: runnerWorker.buildStateBlock({ hunger: 0.2, fatigue: dayFatigue, mood: 0 }) || undefined,
+                                stateLine,
                                 // Own-character-only: never another character's row (character-secrets.ts).
                                 innerSecret: getCharacterSecret(c.id),
+                                role: roleById.get(c.id),
+                                ties: Object.fromEntries(
+                                    cs
+                                        .filter((o) => o.id !== c.id)
+                                        .map((o) => [o.id, tieLine(c.id, o.id)] as const)
+                                        .filter((pair): pair is [string, string] => Boolean(pair[1])),
+                                ),
                             };
                         }),
                     );
@@ -1065,6 +1244,16 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     for (const b of loop.beats) {
                         pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
                         recordSceneLine(sceneId, b.characterId, b.text, 'act');
+                        // Enacted truth → the cut weaver's observations/intents
+                        // (public scenes only; 窗內事 never reaches a public cut).
+                        if (!isPrivate) {
+                            recordSceneTruth(d.sagaId, sceneId, {
+                                day: worldTime?.day,
+                                name: b.name,
+                                text: b.text,
+                                inner: b.inner,
+                            });
+                        }
                         tlog(`③⁹ [${sceneName}] ${b.name}：${b.text}`);
                         // Private beats never reach the public episode weaver —
                         // they live in POV serials and the subscriber scene view.
@@ -1176,6 +1365,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     }
 
     const povs: TickPovResult[] = [];
+    // POV enrichment (narrative-chain fix 2): each narrator knows their hottest
+    // want (what this chapter's gaze circles) and their bible arc (承上) — read
+    // once, applied per character below.
+    const povWantsBySaga = wantEngine ? loadWants(d.sagaId) : [];
+    const povArcByCharId = new Map<string, string>();
+    try {
+        for (const arc of loadBible(d.sagaId)?.arcs ?? []) {
+            if (arc.characterId && arc.state) povArcByCharId.set(arc.characterId, arc.state);
+        }
+    } catch {
+        /* no bible yet — POVs simply run without 承上 */
+    }
     if (input.pov ?? true) {
         // 4. PRODUCE — POV chapter per character with a narratable beat this tick
         //    (event-driven cadence, not per-tick filler); `povAll` forces everyone.
@@ -1356,6 +1557,13 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     ],
                     relationshipHints: await memoryContext.relationshipHints(c.id, 5),
                     planHint: await memoryContext.plan(c.id),
+                    want: (() => {
+                        const hot = povWantsBySaga
+                            .filter((w) => !w.retired && w.characterId === c.id)
+                            .sort((x, y) => y.weight * (1 - y.sat) - x.weight * (1 - x.sat))[0];
+                        return hot ? { desc: hot.desc, target: hot.target } : undefined;
+                    })(),
+                    arcLine: povArcByCharId.get(c.id),
                     skipMemoryRecall: true,
                     state: povState,
                     // Own-character-only: never another character's row (character-secrets.ts).
@@ -1463,11 +1671,24 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         .filter((rp) => rp.currentSceneId === st.sceneId)
                         .map((rp) => rp.id);
                     const allIds = Array.from(new Set([...st.characterIds, ...sceneCast]));
-                    const participants = allIds.map((id) => ({
-                        characterId: id,
-                        name: rosterById.get(id)?.name ?? id,
-                        pov: povByChar.get(id) ?? '',
-                    }));
+                    // The contest-framed POV chapter buries the intimacy the scene
+                    // actually enacted (a warm/act beat), so affection ties starve.
+                    // Append each character's own enacted beats in THIS scene so the
+                    // judge reads what played out, not just how the contest was framed.
+                    const sceneBeats = getRecentSceneLines(st.sceneId, 40);
+                    const participants = allIds.map((id) => {
+                        const chapter = povByChar.get(id) ?? '';
+                        const acted = sceneBeats
+                            .filter(
+                                (l) =>
+                                    l.characterId === id &&
+                                    (l.kind === 'act' || l.kind === 'warmth' || l.kind === 'social'),
+                            )
+                            .slice(0, 4)
+                            .map((l) => l.text);
+                        const pov = acted.length ? `${chapter}\n\n〔這場的實際舉止〕${acted.join('；')}` : chapter;
+                        return { characterId: id, name: rosterById.get(id)?.name ?? id, pov };
+                    });
                     if (participants.filter((p) => p.pov).length < 2) continue;
                     cutJobs.push(async () => {
                         const res = await evolveRelationshipsFromScene({

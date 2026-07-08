@@ -10,7 +10,7 @@
 // Keep this aligned with `UNIVERSAL_PORTRAIT_TONE` in @endless-story/llm/prompts,
 // but local here so deterministic image prompts stay tiny and server-action safe.
 const TONE =
-    '淡彩水墨工筆畫風：淡墨細線勾勒，清透水彩薄塗，設色清淡通透，大面積留白，宣紙暈染質感；統一純白背景。';
+    '郎世寧半西洋油彩畫風：中西合璧的清宮油畫感，細膩寫實的光影立體、溫潤古典的油彩設色、柔和側光塑形，質地厚潤；素淨中性背景。';
 
 const FACE_LOCK =
     '與參考圖同一個人、同一張臉，保持五官、髮型、年齡感、體態與氣質一致；五官清秀耐看，保留原本骨相、個性與生活痕跡。';
@@ -42,7 +42,7 @@ export function artSheetPrompt(person: string): string {
 export function humanReferencePrompt(person: string): string {
     return (
         `${TONE}\n${FACE_LOCK}${person}\n` +
-        `真人感淡彩肖像：骨相、膚色、年齡痕跡與日常神態更接近真實演員，畫法仍保持淡彩水墨工筆；` +
+        `真人感肖像：骨相、膚色、年齡痕跡與日常神態更接近真實演員，畫法仍保持郎世寧油彩質感；` +
         `端正正面半身，自然光，民國上海梨園後台素常服。${WHITE_CLEAN}`
     );
 }
@@ -51,8 +51,8 @@ export function humanReferencePrompt(person: string): string {
 export function stageMakeupPrompt(person: string, stageRole: string): string {
     return (
         `${TONE}\n${FACE_LOCK}${person}\n` +
-        `越劇戲妝設定：依此角色行當設計：${stageRole}；妝面、頭飾與戲服都以淡彩薄塗呈現，保持同一張臉；` +
-        `半身或七分身，純白背景，人物清楚可作後續劇照與影片錨定。${WHITE_CLEAN}`
+        `京劇戲妝設定：依此角色行當設計：${stageRole}；油彩妝面、頭面與戲服都以郎世寧油彩質感呈現，保持同一張臉；` +
+        `半身或七分身，素淨背景，人物清楚可作後續劇照與影片錨定。${WHITE_CLEAN}`
     );
 }
 
@@ -72,8 +72,10 @@ export const evolveVariantTone = VARIANT_TONE;
 /** event-moment multi-character scene prompt. */
 export function eventMomentPrompt(input: { cast: string; sceneName: string; label: string }): string {
     return (
-        `${TONE}\n一幅多人物場景圖：${input.sceneName}，${input.label}。` +
-        `畫面同時呈現 ${input.cast}；每個人的五官、髮型、氣質與其對應參考圖保持一致，` +
-        `依各自身份與此刻處境安排站位、神態與互動，構圖完整、自然光。${NO_TEXT}`
+        `${TONE}\n一幅多人物、有戲劇張力的關鍵場景圖：${input.sceneName}，${input.label}。` +
+        `畫面同時呈現 ${input.cast}；每個人的五官、髮型、氣質與其對應參考圖保持一致。` +
+        `這是一個有張力的時刻——依各自身份、此刻的情緒與彼此的利害關係，安排「有戲」的站位、動勢與眼神交鋒：` +
+        `有人進逼、有人退避、有人被夾在當中；用肢體語言與神情把衝突、曖昧或角力演出來，` +
+        `絕不要一排人平站、面無表情、對著鏡頭。電影感構圖、主次分明、光影集中在情緒焦點、情緒飽滿。${NO_TEXT}`
     );
 }

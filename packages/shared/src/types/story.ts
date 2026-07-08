@@ -175,12 +175,18 @@ export interface StoryFoundingMember {
    */
   disabled?: boolean;
   /**
-   * Scene name (must match a `scenes[].name`) this member is minted into AND
-   * registered as their night-routing residence (spatial-routing.ts setHomeScene).
-   * Omit → falls back to the caller's default mint scene, and the character
-   * gets no residence (night routing leaves them be, as before this field existed).
+   * Residence scene name (must match a `scenes[].name`) — the night router's
+   * home anchor (G10), resolved by home-seed.ts ensureHomesSeeded. Also the
+   * mint-scene fallback when `work_scene` is absent. Omit → no residence
+   * (night routing leaves the character where they stand).
    */
   home_scene?: string;
+  /**
+   * 崗位 scene name (must match a `scenes[].name`) — the morning router's work
+   * anchor (G11), resolved by home-seed.ts ensureHomesSeeded. Also where the
+   * founding mint places the character (dispersed minting).
+   */
+  work_scene?: string;
 }
 
 export interface StoryPreset {

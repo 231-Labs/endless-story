@@ -41,6 +41,11 @@ export interface Want {
     source: WantSource;
     bornTick: number;
     resolvedTick?: number;
+    /** Contested-resource label this want aches for (exact on-chain label).
+     *  The SINGLE demand source: a character contests a stake only through a
+     *  want that carries its label. null = assessed and tied to none;
+     *  undefined = not yet assessed against the stake list. */
+    resource?: string | null;
 }
 
 /** Lab-validated constants (§2.36–2.38 longrun, §2.51 ripple units). */
@@ -57,12 +62,20 @@ export const WANT = {
     /** Ripple units (§2.51: one tighten = the dream-stir dose). */
     tighten: 0.18,
     loosen: 0.15,
-    /** Defaults for spawned wants. */
-    rippleWeight: 0.7,
+    /** Defaults for spawned wants. A ripple is a passing curiosity, not an
+     *  identity thread — H2: its weight sits BELOW a climbing genesis want so
+     *  raw-tension driver selection (pickSalient) can't be hijacked by noise
+     *  (a fresh ripple 0.5×0.8=0.40 < a genesis love want at sat .45 = .495). */
+    rippleWeight: 0.5,
     rippleSat: 0.2,
     rippleResistance: 3,
     /** Forcing escalation bands, as fractions of resistance. */
     pressingAt: 0.6,
+    /** H3: forcing past resistance by THIS margin = 'breaking' — the want is
+     *  overwhelming enough to force its own scene (barge in uninvited) and to
+     *  license the threshold act in the beat. heat/frust never decay, so a
+     *  central want always reaches this after sustained pressure. */
+    breakingMargin: 3,
     /** Spawn/retire balance (§2.55 tuning, 64-live/1-retired fix): on top of
      *  genesis wants (identity, parser-capped at 5) a heart carries at most
      *  this many PICKED-UP threads; old cold ones fade. Genesis never counts
@@ -71,28 +84,196 @@ export const WANT = {
     maxPickedThreads: 2,
     fadeTensionBelow: 0.18,
     fadeMinAgeTicks: 6,
+    /** H2 stale-ripple GC: a picked-up curiosity whose sat never moved from its
+     *  birth value was asked once and never pursued. Its standing tension stays
+     *  high (rippleSat 0.2 × weight = ~0.4, above fadeTensionBelow forever), so
+     *  the tension lane can't reap it — this idle lane does, on age alone. */
+    rippleIdleEps: 0.04,
 } as const;
 
 export const tension = (w: Want): number => w.weight * (1 - w.sat);
 
 export const forcingPressure = (w: Want): number => w.heat + w.frust;
 
-export type ForcingLevel = 'idle' | 'pressing' | 'edge';
+export type ForcingLevel = 'idle' | 'pressing' | 'edge' | 'breaking';
 
 /** How hard the world is pressing this want toward an answer. NEVER prescribes
- *  the answer — the prompt layer renders each level as pressure-only language. */
+ *  the answer — the prompt layer renders each level as pressure-only language.
+ *  'breaking' (H3) is past the edge by a margin: overwhelming enough to force
+ *  its own scene and license the threshold act. */
 export function forcingLevel(w: Want): ForcingLevel {
     if (w.retired || w.kind === 'economic') return 'idle';
     const p = forcingPressure(w);
+    if (p >= w.resistance + WANT.breakingMargin) return 'breaking';
     if (p >= w.resistance) return 'edge';
     if (p >= w.resistance * WANT.pressingAt) return 'pressing';
     return 'idle';
 }
 
+/** Layer families that pull two people into a private room at night. Love wants
+ *  a 幽會; an unsettled debt/grudge wants a 了結 (H1: without this lane a guilt
+ *  or reckoning want could never reach the private 2-person scene that drops
+ *  resistance, so it acted forever into crowds and never closed). */
+const LOVE_LAYER = /愛|情/;
+const RECKON_LAYER = /虧欠|愧|償|怨/;
+/** Jealousy that walks in on a pair (撞破). */
+const JEALOUS_LAYER = /妒|怨/;
+
+/** Does the private 2-person scene hold a live `re`-layer want aimed across the
+ *  pair? Shared by 幽會 / 了結 / the 撞破 pair check. Pure. */
+function pairWantBetween(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    privacyLevel: number,
+    wants: ReadonlyArray<Want>,
+    re: RegExp,
+): boolean {
+    if (cs.length !== 2 || privacyLevel < 3) return false;
+    return cs.some((a) => {
+        const other = cs.find((o) => o.id !== a.id)!;
+        return wants.some(
+            (w) =>
+                !w.retired &&
+                w.characterId === a.id &&
+                re.test(w.layer) &&
+                (w.target === other.name || w.target === other.id),
+        );
+    });
+}
+
+/**
+ * 幽會 qualification (G8): at night a scene still plays only when it is private,
+ * holds exactly two people, and one of them carries a live love-layer want
+ * aimed at the other. Pure — the tick's night gate and the composition tests
+ * share this exact predicate.
+ */
+export function qualifiesAsTryst(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    privacyLevel: number,
+    wants: ReadonlyArray<Want>,
+): boolean {
+    return pairWantBetween(cs, privacyLevel, wants, LOVE_LAYER);
+}
+
+/** 了結 qualification (H1): the same private-pair gate for an unsettled
+ *  debt/guilt/grudge want — a reckoning, not a tryst (no intimacy gate). */
+export function qualifiesAsReckoning(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    privacyLevel: number,
+    wants: ReadonlyArray<Want>,
+): boolean {
+    return pairWantBetween(cs, privacyLevel, wants, RECKON_LAYER);
+}
+
+/** Shared night-pursuit core: the hottest live want whose layer matches `re`
+ *  and that is at pressing+ points its owner toward its target. Returns the
+ *  chosen want too, so callers can gate intrusion on its forcing level. Pure. */
+function nightPursuit(
+    wants: ReadonlyArray<Want>,
+    characterId: string,
+    resolveTargetId: (target: string) => string | undefined,
+    re: RegExp,
+): { id: string; w: number; want: Want } | null {
+    let best: Want | null = null;
+    for (const w of wants) {
+        if (w.retired || w.characterId !== characterId || !w.target) continue;
+        if (!re.test(w.layer)) continue;
+        if (forcingLevel(w) === 'idle') continue; // only a ripe want moves feet
+        if (!best || tension(w) > tension(best)) best = w;
+    }
+    if (!best) return null;
+    const id = resolveTargetId(best.target!);
+    return id && id !== characterId ? { id, w: Math.min(1, tension(best)), want: best } : null;
+}
+
+/** 妒火夜隨 (G8b): the hottest jealousy/grudge want at pressing+ follows its
+ *  target into the night, UNINVITED (intrude skips the welcome gate). Pure. */
+/** Night-pursuit pull strength: a breaking want drags at full force, else it
+ *  pulls by tension (how unsatisfied it still is). */
+function pursuitWeight(w: Want): number {
+    return forcingLevel(w) === 'breaking' ? 1 : Math.min(1, tension(w));
+}
+
+export function jealousNightPursuit(
+    wants: ReadonlyArray<Want>,
+    characterId: string,
+    resolveTargetId: (target: string) => string | undefined,
+): { id: string; w: number; intrude: true } | null {
+    const p = nightPursuit(wants, characterId, resolveTargetId, JEALOUS_LAYER);
+    return p ? { id: p.id, w: pursuitWeight(p.want), intrude: true } : null;
+}
+
+/** 夜赴 (H1/H3): a ripe love or unsettled-debt want seeks its target at night
+ *  so the private pair can form and the resolve pass gets its shot. Below 'edge'
+ *  it is WELCOME-gated (a reckoning emerges from the relationship graph), but at
+ *  EDGE+ the want is ripe enough to seek its object uninvited (intrude) — the
+ *  venue forms even when the other side is wary, and it forms at edge (before the
+ *  want hits breaking + resolves publicly), so love/debt lands in the private
+ *  night scene rather than a daytime crowd (H3c). */
+export function yearningNightPursuit(
+    wants: ReadonlyArray<Want>,
+    characterId: string,
+    resolveTargetId: (target: string) => string | undefined,
+): { id: string; w: number; intrude?: true } | null {
+    const p = nightPursuit(wants, characterId, resolveTargetId, new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`));
+    if (!p) return null;
+    const fl = forcingLevel(p.want);
+    return fl === 'edge' || fl === 'breaking'
+        ? { id: p.id, w: pursuitWeight(p.want), intrude: true }
+        : { id: p.id, w: pursuitWeight(p.want) };
+}
+
+/** Night-scene qualification (G8/G8b, H1): a private scene plays at night as a
+ *  幽會 tryst (the pair + a live love want), a 了結 reckoning (the pair + an
+ *  unsettled debt/grudge want), or a 撞破 confrontation (either pair + ONE
+ *  jealous third aimed at one of them). Anything else sleeps. */
+export function nightSceneKind(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    privacyLevel: number,
+    wants: ReadonlyArray<Want>,
+): 'tryst' | 'reckoning' | 'confrontation' | null {
+    if (privacyLevel < 3) return null;
+    if (cs.length === 2) {
+        if (qualifiesAsTryst(cs, privacyLevel, wants)) return 'tryst';
+        if (qualifiesAsReckoning(cs, privacyLevel, wants)) return 'reckoning';
+        return null;
+    }
+    if (cs.length !== 3) return null;
+    for (let i = 0; i < 3; i++) {
+        const third = cs[i];
+        const pair = cs.filter((_, j) => j !== i);
+        const pairPlays =
+            qualifiesAsTryst(pair, privacyLevel, wants) || qualifiesAsReckoning(pair, privacyLevel, wants);
+        if (!pairPlays) continue;
+        const jealous = wants.some(
+            (w) =>
+                !w.retired &&
+                w.characterId === third.id &&
+                JEALOUS_LAYER.test(w.layer) &&
+                pair.some((p) => w.target === p.name || w.target === p.id),
+        );
+        if (jealous) return 'confrontation';
+    }
+    return null;
+}
+
 let _seq = 0;
+/**
+ * Layers are intentionally free-text (愛/志向/身體/…), but the ripple judge LLM
+ * occasionally emits a formatting artifact instead of a tag: a bare list index
+ * ("1"), the field-name echoed ("層"/"layer"), or an over-long fragment. Map those
+ * to a neutral '其他' so they never surface as a want "type" in the UI.
+ */
+export function normalizeLayer(raw: string | undefined): string {
+    const s = (raw ?? '').trim();
+    if (!s || /^[0-9]+$/.test(s) || s === '層' || s.toLowerCase() === 'layer' || s.length > 6) {
+        return '其他';
+    }
+    return s;
+}
+
 export function newWant(
     init: Pick<Want, 'characterId' | 'layer' | 'desc' | 'weight' | 'sat' | 'resistance' | 'kind' | 'source' | 'bornTick'> &
-        Partial<Pick<Want, 'target' | 'id'>>,
+        Partial<Pick<Want, 'target' | 'id' | 'resource'>>,
 ): Want {
     return {
         id: init.id ?? `w${Date.now().toString(36)}-${++_seq}`,
@@ -100,6 +281,7 @@ export function newWant(
         layer: init.layer,
         desc: init.desc,
         target: init.target,
+        resource: init.resource,
         weight: clamp01(init.weight),
         sat: clamp01(init.sat),
         sat0: clamp01(init.sat),
@@ -133,10 +315,19 @@ export function fadeStaleWants(wants: Want[], tick: number): Want[] {
     for (const w of wants) {
         if (w.retired || w.kind === 'economic' || w.source === 'genesis') continue;
         if (tick - w.bornTick < WANT.fadeMinAgeTicks) continue;
-        if (tension(w) >= WANT.fadeTensionBelow || w.recent > 0) continue;
+        if (w.recent > 0) continue; // still warm this window — leave it
+        // Lane #1 (§2.55): cold — satisfied or quiet, tension under the floor.
+        const cold = tension(w) < WANT.fadeTensionBelow;
+        // Lane #2 (H2): idle — a RIPPLE curiosity that never moved from its
+        // birth sat, i.e. surfaced once and never actually pursued. Reaped on
+        // age alone so it can't squat above the tension floor and hijack the
+        // driver. Scoped to ripples: aftermath/dream threads still burn on
+        // standing tension alone (a fresh grief want hasn't moved sat either).
+        const idle = w.source === 'ripple' && Math.abs(w.sat - w.sat0) < WANT.rippleIdleEps;
+        if (!cold && !idle) continue;
         w.retired = true;
         w.resolvedTick = tick;
-        w.resolvedNote = '（日子久了，淡了）';
+        w.resolvedNote = cold ? '（日子久了，淡了）' : '（一時好奇，過去了）';
         faded.push(w);
     }
     return faded;
@@ -233,7 +424,7 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
             spawned.push(
                 newWant({
                     characterId: d.characterId,
-                    layer: d.layer?.trim() || '其他',
+                    layer: normalizeLayer(d.layer),
                     desc: nt,
                     target: d.target,
                     weight: WANT.rippleWeight,

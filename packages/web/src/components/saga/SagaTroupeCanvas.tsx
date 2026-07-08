@@ -11,6 +11,7 @@ import {
   getSceneDetail,
   type SceneDetailSnapshot,
 } from '@/lib/actions/scene-detail';
+import { getSceneDoor } from '@/lib/actions/saga-live';
 import { FocusedSceneBackground, OverviewCanvas } from './TroupeCanvasScenery';
 import { CanvasHeader, FocusedSceneDetails, SceneGhostQuotes } from './TroupeCanvasPanels';
 
@@ -43,6 +44,25 @@ export function SagaTroupeCanvas({
   const [povId, setPovId] = useState<string | null>(null);
   const focusedScene = scenes.find((s) => s.id === focusedSceneId) ?? null;
   const worldTime = saga.worldTime;
+  const isPrivateScene = (focusedScene?.privacyLevel ?? 0) >= 3;
+  // 窗內門：private scenes read their content rating off the tick ledger —
+  // the door (and its 18+ pill) is metadata-driven, never prose-sniffed.
+  const [door, setDoor] = useState<{ rating: string } | null>(null);
+  useEffect(() => {
+    if (!focusedSceneId || !isPrivateScene) {
+      setDoor(null);
+      return;
+    }
+    let cancelled = false;
+    getSceneDoor(saga.id, focusedSceneId)
+      .then((d) => {
+        if (!cancelled) setDoor(d);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedSceneId, isPrivateScene, saga.id]);
 
   const handleBack = () => {
     if (onCloseFocused) {
@@ -138,23 +158,43 @@ export function SagaTroupeCanvas({
               </div>
 
               <div className="mt-auto pt-24 relative">
-                <SceneGhostQuotes
-                  scene={focusedScene}
-                  charactersById={charactersById}
-                  povId={povId}
-                  onPovChange={setPovId}
-                  liveQuotes={sceneDetail?.ghostQuotes ?? []}
-                />
+                {isPrivateScene ? (
+                  <div className="pointer-events-auto mx-auto max-w-md rounded-2xl border border-hairline/60 bg-surface/80 px-6 py-8 text-center backdrop-blur-md dark:bg-elevated/60">
+                    <p className="font-serif text-lg tracking-[0.3em] text-ink">窗內事</p>
+                    <p className="mt-3 text-2xs leading-relaxed tracking-[0.2em] text-mute">
+                      門閂落了。訂閱在場角色，方能聽見窗內的來回。
+                    </p>
+                    {door?.rating === 'consummate' ? (
+                      <span className="mt-4 inline-block rounded-full border border-cinnabar/50 px-3 py-1 text-2xs tracking-[0.25em] text-cinnabar">
+                        成人 18+
+                      </span>
+                    ) : null}
+                  </div>
+                ) : (
+                  <SceneGhostQuotes
+                    scene={focusedScene}
+                    charactersById={charactersById}
+                    povId={povId}
+                    onPovChange={setPovId}
+                    liveQuotes={sceneDetail?.ghostQuotes ?? []}
+                  />
+                )}
               </div>
             </div>
 
             {/* Screen 2: Details */}
             <div className="flex min-h-full flex-col snap-start snap-always px-4 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] pt-12 sm:px-10 sm:pb-12">
-              <FocusedSceneDetails
-                scene={focusedScene}
-                chaptersById={chaptersById}
-                events={sceneDetail?.events ?? []}
-              />
+              {isPrivateScene ? (
+                <div className="m-auto max-w-md rounded-2xl border border-hairline/60 bg-surface/80 px-6 py-8 text-center backdrop-blur-md dark:bg-elevated/60">
+                  <p className="text-2xs tracking-[0.25em] text-mute">窗內的往事，一樣在牆後。</p>
+                </div>
+              ) : (
+                <FocusedSceneDetails
+                  scene={focusedScene}
+                  chaptersById={chaptersById}
+                  events={sceneDetail?.events ?? []}
+                />
+              )}
             </div>
           </div>
         ) : (

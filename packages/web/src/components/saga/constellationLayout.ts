@@ -61,6 +61,19 @@ export const TONE_LABEL: Record<RelationshipTone, string> = {
   neutral: '平淡',
 };
 
+/** True on phone-width viewports, so the plan can switch to a portrait layout. */
+export function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return mobile;
+}
+
 export function useIsDark() {
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {
@@ -92,7 +105,11 @@ export function nodeCollisionRadius(kind: PositionedCharacter['kind']): number {
  * Pure geometry, deterministic (no randomness); initial placement carries the
  * "who's where" semantics, this only resolves overlap.
  */
-export function relaxOverlaps(nodes: PositionedCharacter[]): void {
+export function relaxOverlaps(
+  nodes: PositionedCharacter[],
+  w: number = VIEWBOX_W,
+  h: number = VIEWBOX_H,
+): void {
   const n = nodes.length;
   if (n < 2) return;
   const PAD = 10;
@@ -135,10 +152,83 @@ export function relaxOverlaps(nodes: PositionedCharacter[]): void {
       }
     }
     for (const p of nodes) {
-      p.x = clamp(p.x, 60, VIEWBOX_W - 60);
-      p.y = clamp(p.y, 60, VIEWBOX_H - 60);
+      p.x = clamp(p.x, 60, w - 60);
+      p.y = clamp(p.y, 60, h - 60);
     }
     if (!moved) break;
+  }
+}
+
+/**
+ * Relationship layout — position nodes by WHO-IS-TIED-TO-WHOM, not by physical
+ * scene. Tied characters attract, everyone repels, a gentle centre pull keeps
+ * the graph on canvas. Deterministic (index-seeded, no randomness → SSR-safe),
+ * so the graph reads as a relationship web that fills the space instead of the
+ * whole cast piling into one opening scene's room.
+ */
+export function relationshipLayout(
+  nodes: PositionedCharacter[],
+  edges: ReadonlyArray<{ fromId: string; toId: string; weight?: number }>,
+  w: number = VIEWBOX_W,
+  h: number = VIEWBOX_H,
+): void {
+  const n = nodes.length;
+  if (n === 0) return;
+  const cx = w / 2;
+  const cy = h / 2;
+  const idx = new Map(nodes.map((p, i) => [p.char.id, i]));
+
+  // seed on an ellipse, evenly spread by index (deterministic)
+  const rx = w * 0.34;
+  const ry = h * 0.34;
+  nodes.forEach((p, i) => {
+    const a = (i / n) * Math.PI * 2;
+    p.x = cx + Math.cos(a) * rx;
+    p.y = cy + Math.sin(a) * ry;
+  });
+
+  const links = edges
+    .filter((e) => idx.has(e.fromId) && idx.has(e.toId) && e.fromId !== e.toId)
+    .map((e) => ({ a: idx.get(e.fromId)!, b: idx.get(e.toId)!, w: clamp((e.weight ?? 1) / 6, 0.25, 1.5) }));
+
+  for (let iter = 0; iter < 320; iter++) {
+    const fx = new Array<number>(n).fill(0);
+    const fy = new Array<number>(n).fill(0);
+    // repulsion (spread everyone)
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let dx = nodes[j].x - nodes[i].x;
+        let dy = nodes[j].y - nodes[i].y;
+        let d2 = dx * dx + dy * dy || 1;
+        const d = Math.sqrt(d2);
+        const rep = 120_000 / d2;
+        const ux = dx / d;
+        const uy = dy / d;
+        fx[i] -= ux * rep; fy[i] -= uy * rep;
+        fx[j] += ux * rep; fy[j] += uy * rep;
+      }
+    }
+    // attraction along ties (pull the bonded together, by strength)
+    for (const l of links) {
+      const dx = nodes[l.b].x - nodes[l.a].x;
+      const dy = nodes[l.b].y - nodes[l.a].y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const f = (d - 210) * 0.02 * l.w;
+      const ux = dx / d;
+      const uy = dy / d;
+      fx[l.a] += ux * f; fy[l.a] += uy * f;
+      fx[l.b] -= ux * f; fy[l.b] -= uy * f;
+    }
+    // centre pull — outsiders drift to the rim
+    for (let i = 0; i < n; i++) {
+      const pull = nodes[i].kind === 'wild' ? 0.004 : 0.011;
+      fx[i] += (cx - nodes[i].x) * pull;
+      fy[i] += (cy - nodes[i].y) * pull;
+    }
+    for (let i = 0; i < n; i++) {
+      nodes[i].x = clamp(nodes[i].x + clamp(fx[i] * 0.85, -42, 42), 96, w - 96);
+      nodes[i].y = clamp(nodes[i].y + clamp(fy[i] * 0.85, -42, 42), 96, h - 96);
+    }
   }
 }
 

@@ -28,7 +28,7 @@ import { execAdminTx, getAdminContext } from '@/lib/chain/admin-signer';
 import { resolveNetwork } from '@/lib/chain/network';
 import { resolveRole } from '@/lib/chain/pov-core';
 import { evolveVariantPrompt, evolveVariantTone } from '@/lib/image-prompts';
-import { buildStagePrompt, type StageSlots } from '@/lib/stage-prompt';
+import { buildStagePrompt, buildProfessionPrompt, isStageRole, type StageSlots } from '@/lib/stage-prompt';
 import { generatePortrait } from './generate-portrait';
 import { curateStageSlots } from './stage-curator';
 
@@ -115,13 +115,18 @@ async function buildStageImgPrompt(
 ): Promise<string> {
     const gender = mapGender(pf.gender ?? '');
     const roleType = stageRoleHint(role);
+    const styleMode = kind === 'stage-real' ? '郎世寧半西洋油彩舞台劇照，寫實立體' : '郎世寧半西洋油彩畫風';
+    // B4: a non-performer (記者 / 歌女 / 衣箱 / 班主 / 客 …) gets their PROFESSION's
+    // period attire, not opera makeup forced onto a nonexistent 行當.
+    if (!isStageRole(roleType)) {
+        return buildProfessionPrompt(role ?? roleType, styleMode, occasion);
+    }
     const curated = await curateStageSlots({
         roleType,
         occasion,
         gender,
         ageYears: Number(pf.age_years ?? 0) || undefined,
     });
-    const styleMode = kind === 'stage-real' ? '寫實真人舞台劇照' : '淡彩水墨工筆畫風';
     // Sanitize the override: keep only non-empty string slots (the JSON comes from
     // an admin textarea, so a stray number must not reach buildStagePrompt's .trim()).
     const cleanOverride: Record<string, string> = {};

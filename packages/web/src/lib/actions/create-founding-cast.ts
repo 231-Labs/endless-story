@@ -29,7 +29,6 @@ import { isMemoryConfigured, missingMemoryEnvVars, rememberForCharacter } from '
 import { sagasApi } from '@/lib/api/index';
 import { listStoryPresets, loadStoryPreset } from '@/lib/stories/loader';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
-import { setHomeScene } from '@/lib/chain/spatial-routing';
 import { setCharacterSecret } from '@/lib/chain/character-secrets';
 import { DEFAULT_ATTRIBUTE_SCHEMA } from '../config/attribute-schema.js';
 import { generatePortrait } from './generate-portrait.js';
@@ -58,11 +57,17 @@ export interface FoundingCharSpec {
     /** Authored canon memories (你-form), seeded verbatim after mint. */
     memories?: string[];
     /**
-     * Scene name (must match an on-chain scene created for this saga) to mint
-     * into and register as night-routing residence. Omit → falls back to the
-     * batch default `CreateFoundingCastInput.sceneId`, no residence registered.
+     * Residence scene name (preset `home_scene`) — used here only as a mint
+     * fallback when `workScene` is absent. The night router's home map itself
+     * is seeded by home-seed.ts (ensureHomesSeeded), the single seeding path.
      */
     homeScene?: string;
+    /**
+     * 崗位 scene name (preset `work_scene`, G11). Dispersed minting: each
+     * character starts at their daytime post instead of everyone piling into
+     * sceneIds[0], so tick-1 scenes have natural quorum.
+     */
+    workScene?: string;
 }
 
 type AttrFloors = Partial<CharacterAttributes>;
@@ -115,7 +120,7 @@ function applyAttributeFloors(
 
 export interface CreateFoundingCastInput {
     specs: FoundingCharSpec[];
-    /** Scene to mint into when a spec has no `homeScene`; default deployment.sceneIds[0]. */
+    /** Scene to mint into when a spec has no `workScene`/`homeScene`; default deployment.sceneIds[0]. */
     sceneId?: string;
     /**
      * Escape hatch: proceed even though MemWal isn't configured, so the cast
@@ -194,16 +199,19 @@ export async function createFoundingCastAction(
         return { ok: false, ...EMPTY, error: err instanceof Error ? err.message : 'admin keypair 載入失敗' };
     }
 
-    // Home-scene resolution (per spec, by name) — dispersed minting instead of
-    // everyone piling into sceneIds[0]. On-chain scene names are the story
-    // preset's names (bootstrap.ts orders sceneIds to match); an unmatched or
-    // absent `homeScene` falls back to the batch default `sceneId`.
+    // Dispersed minting (per spec, by scene name) — each character starts at
+    // their 崗位 (work_scene), else residence (home_scene), else the batch
+    // default, instead of everyone piling into sceneIds[0]. On-chain scene
+    // names are the story preset's names (bootstrap.ts orders sceneIds to
+    // match). The night router's home map is NOT written here — home-seed.ts
+    // (ensureHomesSeeded) is the single seeding path for homes + work anchors.
     const sceneIdByName = new Map(
         (await fetchOnChainScenesForSaga(d.sagaId).catch(() => [])).map((s) => [s.name, s.id] as const),
     );
-    /** undefined = spec named no home / the name didn't resolve on-chain. */
-    const resolveHomeSceneId = (spec: FoundingCharSpec): string | undefined =>
-        spec.homeScene ? sceneIdByName.get(spec.homeScene) : undefined;
+    const resolveMintSceneId = (spec: FoundingCharSpec): string =>
+        (spec.workScene && sceneIdByName.get(spec.workScene)) ||
+        (spec.homeScene && sceneIdByName.get(spec.homeScene)) ||
+        sceneId;
 
     const minted: FoundingMintedEntry[] = [];
 
@@ -219,8 +227,7 @@ export async function createFoundingCastAction(
     // ── per spec: roll → portrait → mint → tags + persona ──
     for (const spec of specs) {
         try {
-            const homeSceneId = resolveHomeSceneId(spec);
-            const mintSceneId = homeSceneId || sceneId;
+            const mintSceneId = resolveMintSceneId(spec);
             const body = spec.body?.trim() || '勻稱';
             const seed = randomBytes(32);
             const seedBytes = Array.from(seed);
@@ -320,10 +327,9 @@ export async function createFoundingCastAction(
             minted.push({ id: characterId, name: candidate.name, digest: res.digest, portrait: Boolean(portraitUrl) });
             if (spec.memories?.length) authoredMemories.push({ id: characterId, memories: spec.memories });
             if (portraitUrl) viewTargets.push({ characterId, referenceUrl: portraitUrl });
-            // Night spatial routing (§2.50) only registers a residence when the spec
-            // named one that actually resolved on-chain — an unresolved homeScene
-            // silently falls back to the shared mint scene and gets no residence.
-            if (homeSceneId) setHomeScene(characterId, homeSceneId);
+            // Home/work maps are deliberately NOT written here: home-seed.ts
+            // (ensureHomesSeeded) resolves them from the preset by name at
+            // routing time — one seeding path, no mint-time twin to drift.
             // Off-chain inner-life secret store (character-secrets.ts): seeded here
             // regardless of memory config so POV/plan/scene-loop prompts can always
             // read it, independent of the MemWal genesis-memory pipeline below.
@@ -521,6 +527,7 @@ export async function loadFoundingPresetAction(): Promise<FoundingCharSpec[]> {
             minAttributes: c.minAttributes,
             memories: c.memories,
             homeScene: c.home_scene,
+            workScene: c.work_scene,
         }));
     } catch {
         return [];

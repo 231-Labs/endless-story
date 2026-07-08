@@ -109,6 +109,7 @@ async function main(): Promise<void> {
     // Secrets folded as (心底：…) so want-genesis can grow wants from them.
     seedWorld({
         withResource: true,
+        privateHomes: true,
         canonCast: [
             {
                 name: '柳生春',

@@ -15,6 +15,10 @@ import { SagaCharterPanel } from '@/components/saga/SagaCharterPanel';
 import { SagaDetailsTabs } from '@/components/saga/SagaDetailsTabs';
 import { OffTurfBoard } from '@/components/saga/OffTurfBoard';
 import { SagaTabsProvider } from '@/components/saga/SagaTabsContext';
+import { getSagaStanceSnapshot } from '@/lib/actions/saga-stance';
+import { getSagaHeartLedger } from '@/lib/actions/saga-live';
+import { loadWants } from '@/lib/chain/want-store';
+import { mergeFeltEdges, projectWantEdges } from '@/lib/chain/relationship-felt';
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -53,13 +57,15 @@ export default async function SagaPage({
     );
   }
 
-  const [cast, scenes, locations] = await Promise.all([
+  const [cast, scenes, locations, stanceSnap] = await Promise.all([
     charactersApi.listSagaCharacters(saga.id),
     scenesApi.listScenes(saga.id),
     Promise.all(
       (saga.coveredLocationIds ?? []).map((lid) => locationsApi.getLocation(lid))
     ).then((arr) => arr.filter((l): l is NonNullable<typeof l> => Boolean(l))),
+    getSagaStanceSnapshot(),
   ]);
+  const stance = stanceSnap.stance;
   const charactersById = byId(cast);
 
   // All outgoing edges: cast↔cast + cast→wild
@@ -85,7 +91,40 @@ export default async function SagaPage({
 
   // All renderable character ids (cast + wildCast)
   const allCharIds = new Set([...cast.map((c) => c.id), ...wildCast.map((c) => c.id)]);
-  const edges = [...allCastEdges, ...wildEdges].filter((e) => allCharIds.has(e.toId));
+  // felt layer: the cast's own wants project directed feelings (愛→戀慕), merged
+  // over the lived (scene-judged) seeds so both coexist per (pair, tone).
+  const idByName = new Map([...cast, ...wildCast].map((c) => [c.name, c.id]));
+  const feltEdges = projectWantEdges(loadWants(saga.id), {
+    resolveTargetId: (t) => (allCharIds.has(t) ? t : idByName.get(t)),
+    currentDay: saga.currentDay,
+  });
+  const edges = mergeFeltEdges([...allCastEdges, ...wildEdges], feltEdges).filter((e) =>
+    allCharIds.has(e.toId),
+  );
+
+  // Relationship climate for the charter — dedupe undirected per pair+tone, count
+  // by tone, drop the bland 平淡. Same edges the constellation draws, aggregated.
+  const TONE_LABELS: Record<string, string> = {
+    affection: '親近', romance: '戀慕', mentorship: '師承', rivalry: '競爭',
+    wary: '戒備', tension: '緊張', estrangement: '疏離', acquaintance: '故舊', neutral: '平淡',
+  };
+  const climateSeen = new Set<string>();
+  const toneCount = new Map<string, number>();
+  for (const e of edges) {
+    const [a, b] = e.fromId < e.toId ? [e.fromId, e.toId] : [e.toId, e.fromId];
+    const tone = e.tone ?? 'neutral';
+    const key = `${a}::${b}::${tone}`;
+    if (climateSeen.has(key)) continue;
+    climateSeen.add(key);
+    toneCount.set(tone, (toneCount.get(tone) ?? 0) + 1);
+  }
+  const relationshipClimate = [...toneCount.entries()]
+    .filter(([t]) => t !== 'neutral')
+    .map(([tone, count]) => ({ label: TONE_LABELS[tone] ?? tone, count }))
+    .sort((x, y) => y.count - x.count)
+    .slice(0, 5);
+
+  const heartLedger = await getSagaHeartLedger(saga.id);
 
   const recentChapterIds = Array.from(
     new Set(
@@ -201,7 +240,12 @@ export default async function SagaPage({
         }
         offTurfContent={<OffTurfBoard entries={offTurfEntries} />}
         charterContent={
-          <SagaCharterPanel saga={saga} />
+          <SagaCharterPanel
+            saga={saga}
+            stance={stance}
+            climate={relationshipClimate}
+            heart={heartLedger}
+          />
         }
       />
     </main>

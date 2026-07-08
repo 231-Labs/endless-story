@@ -79,6 +79,9 @@ export interface FakeScene {
     locationId: string;
     name: string;
     characterIds: string[];
+    /** access.privacy_level (default 0 = public). ≥3 = a private home the night
+     *  router can pull a pair into. */
+    privacyLevel?: number;
 }
 
 export interface FakeCharacter {
@@ -769,7 +772,7 @@ function encodeScene(sc: FakeScene): Uint8Array {
         id: sc.id,
         info: { name: sc.name, description: '', metadata_uri: '' },
         placement: { world_id: sc.worldId, saga_id: sc.sagaId, location_id: sc.locationId, pos_x: 0n, pos_y: 0n },
-        access: { privacy_level: 0 },
+        access: { privacy_level: sc.privacyLevel ?? 0 },
         params: { atmosphere: 50n, danger: 20n, prosperity: 50n },
         state: { causal_commitment_ids: [], current_character_ids: sc.characterIds, created_at_ms: 0n },
     }).toBytes();

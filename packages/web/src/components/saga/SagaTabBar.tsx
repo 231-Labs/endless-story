@@ -15,7 +15,7 @@ export function SagaTabBar() {
   const { containerRef, box } = useFlowingIndicator<HTMLDivElement>(view);
   return (
     <nav
-      className="pointer-events-none absolute bottom-[max(0.5rem,env(safe-area-inset-bottom,0px)+0.5rem)] left-1/2 z-[60] w-[min(calc(100vw-1.5rem),24rem)] -translate-x-1/2 sm:bottom-[max(0.75rem,env(safe-area-inset-bottom,0px)+0.75rem)] sm:w-auto sm:max-w-none"
+      className="pointer-events-none absolute bottom-[max(1.5rem,env(safe-area-inset-bottom,0px)+1.5rem)] left-1/2 z-[60] w-[min(calc(100vw-1.5rem),24rem)] -translate-x-1/2 sm:bottom-[max(2rem,env(safe-area-inset-bottom,0px)+2rem)] sm:w-auto sm:max-w-none"
       aria-label="場景、人物、在外與規章"
     >
       <div
@@ -33,7 +33,12 @@ export function SagaTabBar() {
               aria-pressed={isActive}
               onClick={() => {
                 setView(tab.key);
-                const id = tab.key === 'handscroll' ? 'saga-handscroll' : 'saga-details';
+                const id =
+                  tab.key === 'handscroll'
+                    ? 'saga-handscroll'
+                    : tab.key === 'charter'
+                      ? 'saga-charter'
+                      : 'saga-constellation';
                 document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
               }}
               className={`relative z-10 flex min-h-[44px] flex-1 items-center justify-center rounded-full px-3 py-2.5 text-sm font-medium tracking-wide transition-colors active:opacity-95 sm:flex-none sm:px-6 sm:py-2 ${

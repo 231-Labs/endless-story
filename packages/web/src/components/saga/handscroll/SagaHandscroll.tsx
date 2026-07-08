@@ -2,13 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chapter, Character, Saga, SagaLocation, Scene } from '@endless-story/shared';
-import { SagaScrollBackdrop } from './SagaScrollBackdrop';
-import { SceneVignette, type VignetteAnchor } from './SceneVignette';
-import { FloatingQuote } from './FloatingQuote';
-import { SagaTroupeCanvas } from '../SagaTroupeCanvas';
+import { FloatingStream, type StreamLine } from './FloatingQuote';
+import { SceneFan } from './SceneFan';
+import { SceneSheet } from './SceneSheet';
+import { terrainArtFor } from './terrainArt';
 import { computeHandscrollLayout, type ScenePlacement } from './handscrollLayout';
 import { SagaTabBar } from '../SagaTabBar';
-import { getSagaLiveSnapshot, type OpenEventStatus } from '@/lib/actions/saga-live';
+import { getSagaLiveSnapshot, getSceneLinesPulse, type OpenEventStatus } from '@/lib/actions/saga-live';
+
+/** A light day/night wash laid over each painted panel so the art lives in the
+ *  same hour as the clock (multiply so it darkens toward night). */
+/** A gentle hour tint over the painting (soft-light, not multiply) so the art
+ *  keeps its own warmth — just cooler by night, warmer by dusk, never dimmed. */
+const DAY_WASH: Record<string, { color: string; opacity: number }> = {
+  morning: { color: 'rgba(255,245,225,0.35)', opacity: 0.5 },
+  noon: { color: 'rgba(255,250,235,0.25)', opacity: 0.4 },
+  dusk: { color: 'rgba(200,110,70,0.5)', opacity: 0.55 },
+  night: { color: 'rgba(70,80,130,0.6)', opacity: 0.55 },
+};
 
 type LiveEvent = OpenEventStatus;
 
@@ -20,43 +31,12 @@ type LiveEvent = OpenEventStatus;
  *   - content width max(300vw, 1200px) — small phones can still swipe it open
  *     without crushing punctuation / quotes.
  *
- * Clicking a scene anchor → back to focused-mode (SagaTroupeCanvas renders one scene).
+ * Clicking a 團扇 opens the scene sheet (內頁).
  */
 
 // Handscroll horizontal layout is data-driven (see handscrollLayout.ts): one
 // segment per covered location, scenes placed within their segment. A scene
 // anchor = ScenePlacement xPct/yPct (percent of full scroll width/height).
-
-function placementAnchor(p: ScenePlacement): VignetteAnchor {
-  return { x: p.xPct, y: p.yPct, zone: p.zone };
-}
-
-function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v));
-}
-
-/** Stable per-scene hash → deterministic jitter (no Math.random, SSR-safe). */
-function hashStr(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i += 1) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-// Quote position (top-aligned). Vertical columns are tall, so the top edge stays
-// below the title (≥28%) and maxHeight caps the bottom; a stable per-scene hash
-// staggers each top (28-58%) so they aren't all level. left clamped to [5,95]%
-// so edge-of-segment quotes aren't pushed past the viewport's left/right.
-// RIGHT_BIAS nudges the whole column rightward so it clears its scene's figures.
-function quotePosition(anchor: VignetteAnchor, sceneId: string): { left: number; top: number } {
-  const RIGHT_BIAS = 5;
-  const left = clamp(anchor.x + RIGHT_BIAS + (anchor.zone === 'theater' ? 4 : -4), 5, 95);
-  const spread = hashStr(sceneId) % 27; // 0-26, stable per scene — wider, more 錯落
-  const top = clamp(28 + spread + (anchor.y - 56) * 0.4, 28, 58);
-  return { left, top };
-}
 
 interface Props {
   saga: Saga;
@@ -90,6 +70,47 @@ export function SagaHandscroll(props: Props) {
   const [liveLineByScene, setLiveLineByScene] = useState<
     Record<string, { characterId: string; text: string; kind: string }>
   >({});
+  // 題字流：per-scene recent beats from the local ring — polled OFTEN because
+  // it costs zero RPC (a file read server-side), unlike the chain snapshot.
+  const [streamByScene, setStreamByScene] = useState<Record<string, StreamLine[]>>({});
+  useEffect(() => {
+    if (!saga.id) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Private rooms never float their lines onto the public scroll — 窗內事.
+    const sceneIds = scenes.filter((s) => (s.privacyLevel ?? 0) < 3).map((s) => s.id);
+    const tick = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        try {
+          const { linesByScene } = await getSceneLinesPulse(sceneIds);
+          if (!cancelled) {
+            setStreamByScene((prev) => {
+              const next: Record<string, StreamLine[]> = { ...prev };
+              for (const [sid, lines] of Object.entries(linesByScene)) {
+                next[sid] = lines.map((l) => ({
+                  key: `${l.ts}-${l.characterId}`,
+                  text: l.text,
+                  speakerName: charactersById.get(l.characterId)?.name,
+                  kind: l.kind,
+                }));
+              }
+              return next;
+            });
+          }
+        } catch {
+          /* keep last stream */
+        }
+      }
+      if (!cancelled) timer = setTimeout(tick, 6000);
+    };
+    timer = setTimeout(tick, 300);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+    // charactersById is a stable Map prop per render of the page shell.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saga.id, scenes]);
   useEffect(() => {
     if (!saga.id) return;
     let cancelled = false;
@@ -129,10 +150,13 @@ export function SagaHandscroll(props: Props) {
           /* transient RPC failure — keep last good state */
         }
       }
-      if (!cancelled) timer = setTimeout(tick, 6000);
+      // Chain snapshot demoted to a slow cadence: presence and open events only
+      // change on admin ticks, and public-node polling at 6s was the 429 diet.
+      // The 題字流 above carries the "alive right now" feel at zero RPC.
+      if (!cancelled) timer = setTimeout(tick, 30000);
     };
-    // Fetch live data once on mount (quotes / presence / open events) so it
-    // appears before the first 6s tick; then poll every 6s. 300ms lets hydration settle.
+    // Fetch live data once on mount (presence / open events) so it appears
+    // early; then poll every 30s. 300ms lets hydration settle.
     timer = setTimeout(tick, 300);
     return () => {
       cancelled = true;
@@ -235,123 +259,140 @@ export function SagaHandscroll(props: Props) {
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
+  // Live scenes indexed by id, and grouped by covered location (in axis order),
+  // so each painted panel can list its own scenes' 團扇 in a row beneath it.
+  const liveById = new Map(liveScenes.map((s) => [s.id, s]));
+  const scenesByLocation = layout.segments.map((seg) => ({
+    seg,
+    scenes: seg.scenes.map((sp) => liveById.get(sp.scene.id) ?? sp.scene),
+  }));
+  const focusedScene = focusedSceneId ? liveById.get(focusedSceneId) ?? null : null;
+  const wash = DAY_WASH[partOfDay] ?? DAY_WASH.noon;
+
   return (
     <>
       <div
-        className={`absolute inset-0 ${
+        className={`absolute inset-0 flex flex-col ${
           isFocused ? 'pointer-events-none opacity-0' : 'opacity-100'
         } transition-opacity duration-300`}
       >
-        {/* 捲動容器 */}
+        {/* 標題 + 世界時 */}
+        <header className="shrink-0 px-[max(1rem,env(safe-area-inset-left))] pt-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+1rem)] sm:px-10">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="es-page-lead-eyebrow">梨園手卷</p>
+              <h1 className="es-page-lead-title">{saga.name}</h1>
+              <p className="mt-1.5 truncate font-serif text-2xs tracking-[0.25em] text-mute/80 sm:text-xs">
+                {shownLocationLabel}
+              </p>
+            </div>
+            {saga.worldTime ? (
+              <div className="shrink-0 text-right font-serif text-2xs tracking-[0.3em] text-mute/85 sm:text-xs">
+                <p>{saga.worldTime.label}</p>
+                <p className="mt-1 text-2xs">
+                  Day {saga.worldTime.day}
+                  {saga.worldTime.partOfDay ? ` · ${dayPartLabel(saga.worldTime.partOfDay)}` : ''}
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          {/* 正在上演 —— 一行，鏈上開著的戲 */}
+          <div className="mt-3 flex min-h-[1.5rem] items-center gap-2 overflow-x-auto no-scrollbar">
+            {eventCards.length > 0 ? (
+              <>
+                <span className="shrink-0 font-serif text-2xs tracking-[0.3em] text-cinnabar/90">正在上演</span>
+                {eventCards.map((e) => (
+                  <button
+                    key={e.eventId}
+                    onClick={() => setFocusedSceneId(e.sceneId)}
+                    className="shrink-0 rounded-full border border-cinnabar/35 bg-surface/70 px-3 py-1 font-serif text-2xs tracking-[0.15em] text-ink/85 backdrop-blur-sm hover:border-cinnabar/70 dark:bg-elevated/60"
+                  >
+                    {e.sceneName} · {e.title}
+                  </button>
+                ))}
+              </>
+            ) : (
+              <span className="font-serif text-2xs tracking-[0.3em] text-mute/55">幕未起 · 靜待開鑼</span>
+            )}
+          </div>
+        </header>
+
+        {/* 畫卷 —— 每個 location 一個直欄：完整比例的油畫（880×586≈3:2），
+            下方置中的團扇。欄與欄硬接（回到較優雅的版本），一同橫向捲動。 */}
         <div
           ref={scrollRef}
-          className="relative h-full w-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth no-scrollbar overscroll-x-contain touch-pan-x"
+          className="mt-3 flex-1 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth no-scrollbar overscroll-x-contain touch-pan-x"
         >
-          <div
-            className="relative h-[100dvh] flex-shrink-0"
-            style={{
-              width: `max(${scrollVw}vw, 1200px)`,
-              minWidth: `max(${scrollVw}vw, 1200px)`,
-            }}
-          >
-            <SagaScrollBackdrop segments={layout.segments} partOfDay={partOfDay} />
-
-            {/* 每個 location 一段（等寬）供 snap-x 吸附 */}
-            <div className="absolute inset-0 flex pointer-events-none">
-              {layout.segments.map((seg) => (
+          <div className="flex h-full w-max items-stretch">
+            {scenesByLocation.map(({ seg, scenes: locScenes }) => {
+              const art = terrainArtFor(seg.location.name);
+              const streamScene = locScenes.find((sc) => streamByScene[sc.id]?.length);
+              return (
                 <div
                   key={seg.location.id}
-                  className="h-full shrink-0 snap-center snap-always"
-                  style={{ width: `${100 / segmentCount}%` }}
-                />
-              ))}
-            </div>
-
-            {/* 場景錨 — 各自落在所屬 location 段內 */}
-            {liveScenes.map((scene) => {
-              const placement = placementById.get(scene.id);
-              if (!placement) return null;
-              return (
-                <SceneVignette
-                  key={scene.id}
-                  scene={scene}
-                  anchor={placementAnchor(placement)}
-                  charactersById={charactersById}
-                  onSelect={setFocusedSceneId}
-                  widthPct={vignetteWidthPct}
-                />
-              );
-            })}
-
-            {/* 飄字題款 */}
-            {liveScenes.map((scene) => {
-              const placement = placementById.get(scene.id);
-              if (!placement) return null;
-              // Prefer the live line (carries its register/kind); fall back to the
-              // scene's seeded ghost quote on first paint.
-              const live = liveLineByScene[scene.id];
-              const primary = live ?? scene.ghostQuotes?.[0];
-              if (!primary) return null;
-              const speaker = charactersById.get(primary.characterId) ?? null;
-              const { left, top } = quotePosition(placementAnchor(placement), scene.id);
-              const text = primary.text;
-              const truncated = text.length > 20 ? `${text.slice(0, 20)}…` : text;
-              return (
-                <FloatingQuote
-                  key={`quote-${scene.id}`}
-                  speaker={speaker}
-                  leftPct={left}
-                  topPct={top}
-                  delaySeconds={0.35}
-                  kind={live?.kind}
+                  // Column width is pinned to the painting width. Fans wrap and
+                  // scroll WITHIN this width so a crowded location (many 團扇)
+                  // can never stretch the column and open a gap in the scroll.
+                  className="flex h-full shrink-0 snap-center snap-always flex-col w-[clamp(330px,69vh,780px)] border-r border-black/[0.08] last:border-r-0 dark:border-white/[0.05]"
                 >
-                  「{truncated}」
-                </FloatingQuote>
+                  {/* 油畫 —— 高度定、寬度依 3:2 自算，完整展示不裁切 */}
+                  <div className="relative h-[clamp(220px,46vh,520px)] w-full shrink-0 overflow-hidden">
+                    {art ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={art} alt={seg.location.name} className="h-full w-full object-cover" draggable={false} />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-b from-surface to-canvas dark:from-elevated/50 dark:to-canvas" />
+                    )}
+                    <div className="pointer-events-none absolute inset-0 mix-blend-soft-light" style={{ background: wash.color, opacity: wash.opacity }} />
+                    <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap font-serif text-sm tracking-[0.4em] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
+                      {seg.location.name}
+                    </span>
+                    {streamScene ? (
+                      <FloatingStream lines={streamByScene[streamScene.id]} leftPct={50} topPct={16} />
+                    ) : null}
+                  </div>
+
+                  {/* 團扇 —— 置中，往兩邊平均展開。多了就在畫作寬內折行＋縱捲，
+                      不外撐欄寬（min-h-0 讓 flex 子項可縮、overflow-y-auto 收多餘）。 */}
+                  <div className="flex w-full flex-1 min-h-0 flex-wrap content-start justify-center gap-x-4 gap-y-3 overflow-y-auto no-scrollbar bg-canvas/30 px-3 pt-5">
+                    {locScenes.length ? (
+                      locScenes.map((sc) => (
+                        <SceneFan
+                          key={sc.id}
+                          scene={sc}
+                          onSelect={setFocusedSceneId}
+                          present={sc.currentCharacterIds?.length ?? 0}
+                        />
+                      ))
+                    ) : (
+                      <span className="pt-4 font-serif text-2xs tracking-[0.2em] text-mute/50">尚無場景</span>
+                    )}
+                  </div>
+                </div>
               );
             })}
-
-            {/* 地名匾 — 每個 covered location 一塊，置於該段正中、落在院落下方的雪地上
-                （避開左上角的固定標題；像地圖上的地名）。 */}
-            {layout.segments.map((seg) => (
-              <ZoneLabel
-                key={seg.location.id}
-                x={`${seg.labelXPct}%`}
-                y="78%"
-                main={seg.location.name}
-              />
-            ))}
           </div>
         </div>
 
-        {/* 固定上覆面板（絕對定位在畫卷容器外，與第一屏綁定） */}
-        <FixedOverlay
-          saga={saga}
-          locationLabel={shownLocationLabel}
-        />
-
-        {/* 正在上演 — 鏈上開著的事件（每 6s 輪詢，不重整就更新） */}
-        <LiveEventsOverlay events={eventCards} onSelect={setFocusedSceneId} />
-
-        {/* 底部膠囊：四頁（手卷／星圖／江湖／規章），與第二屏同一顆。
-            手卷在第一屏即高亮；點其他頁 → 捲到第二屏並停在該頁。
-            取代了原本「上下滾動／左右滑動」那行提示。 */}
         <SagaTabBar />
       </div>
-      
-      {/* Scene Detail View */}
-      {isFocused && (
-        <div className="absolute inset-0 z-50 animate-fade-in-up bg-canvas">
-          <SagaTroupeCanvas
-            saga={saga}
-            scenes={scenes}
-            charactersById={charactersById}
-            chaptersById={chaptersById}
-            locationLabel={locationLabel}
-            initialFocusedSceneId={focusedSceneId}
-            onCloseFocused={() => setFocusedSceneId(null)}
-          />
-        </div>
-      )}
+
+      {/* 內頁 —— 團扇點開，像走進 location 更深的一層（非彈窗遮罩） */}
+      {focusedScene ? (
+        <SceneSheet
+          scene={focusedScene}
+          sagaId={saga.id}
+          charactersById={charactersById}
+          clock={saga.worldTime?.partOfDay ? dayPartLabel(saga.worldTime.partOfDay) : undefined}
+          locationArt={
+            terrainArtFor(
+              layout.segments.find((s) => s.scenes.some((sp) => sp.scene.id === focusedScene.id))?.location.name,
+            ) ?? undefined
+          }
+          onClose={() => setFocusedSceneId(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -364,109 +405,6 @@ interface EventCard {
   actedCount: number;
   total: number;
   castNames: string[];
-}
-
-/**
- * "Now playing" live overlay — the saga's currently-open events, polled from
- * chain. Each card: title · scene · cast · how many have acted. Click to
- * focus that scene. Hidden when nothing's open.
- */
-function LiveEventsOverlay({
-  events,
-  onSelect,
-}: {
-  events: EventCard[];
-  onSelect: (sceneId: string) => void;
-}) {
-  if (events.length === 0) return null;
-  return (
-    <div className="pointer-events-none absolute left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+7.5rem)] z-30 flex max-w-[min(86vw,20rem)] flex-col gap-2 sm:left-10 sm:top-[calc(var(--es-site-nav-h)+8.5rem)]">
-      <div className="flex items-center gap-2 text-2xs tracking-[0.3em] text-cinnabar/90">
-        <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inset-0 animate-ping rounded-full bg-cinnabar opacity-75" />
-          <span className="relative block h-1.5 w-1.5 rounded-full bg-cinnabar" />
-        </span>
-        正在上演
-      </div>
-      {events.slice(0, 3).map((e) => (
-        <button
-          key={e.eventId}
-          type="button"
-          onClick={() => onSelect(e.sceneId)}
-          className="pointer-events-auto rounded-lg border border-hairline/60 bg-surface/90 px-3 py-2 text-left shadow-lg backdrop-blur-md transition-colors hover:border-cinnabar/50 dark:bg-elevated/85"
-        >
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-serif text-sm text-ink">《{e.title}》</span>
-            <span className="shrink-0 text-2xs tabular-nums tracking-widest text-mute">
-              {e.actedCount}/{e.total} 出牌
-            </span>
-          </div>
-          <div className="mt-0.5 truncate text-2xs tracking-widest text-mute">
-            {e.sceneName}
-            {e.castNames.length > 0 ? ` · ${e.castNames.join('、')}` : ''}
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ZoneLabel({ x, y, main, sub }: { x: string; y: string; main: string; sub?: string }) {
-  return (
-    <div
-      className="pointer-events-none absolute z-10 flex flex-col items-center gap-1.5 text-mute/55 drop-shadow-sm"
-      style={{ left: x, top: y, transform: 'translate(-50%, -50%)' }}
-      aria-hidden
-    >
-      <span className="font-serif text-xl tracking-[0.42em] sm:text-3xl">{main}</span>
-      {sub ? <span className="text-2xs tracking-widest text-mute/40">{sub}</span> : null}
-    </div>
-  );
-}
-
-function FixedOverlay({
-  saga,
-  locationLabel,
-}: {
-  saga: Saga;
-  locationLabel: string;
-}) {
-  const partOfDay = saga.worldTime?.partOfDay;
-
-  return (
-    <div className="pointer-events-none absolute inset-0 z-30">
-      {/* 標題 + 世界時 */}
-      <div className="absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] top-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+1.25rem)] flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:left-10 sm:right-10">
-        <div className="pointer-events-auto min-w-0 max-w-2xl">
-          <p className="es-page-lead-eyebrow">
-            <span className="sm:hidden">手卷</span>
-            <span className="hidden sm:inline">梨園手卷</span>
-          </p>
-          <h1 className="es-page-lead-title">
-            {saga.name}
-          </h1>
-          <p className="mt-2 font-serif text-2xs tracking-[0.25em] text-mute/80 sm:text-xs">
-            {locationLabel}
-          </p>
-        </div>
-        {saga.worldTime ? (
-          <div className="pointer-events-auto shrink-0 text-right text-2xs tracking-[0.3em] text-mute/85 sm:text-xs">
-            <p>{saga.worldTime.label}</p>
-            <p className="mt-1.5 text-2xs">
-              Day {saga.worldTime.day}
-              {partOfDay ? ` · ${dayPartLabel(partOfDay)}` : ''}
-            </p>
-          </div>
-        ) : null}
-      </div>
-
-      {/* 展卷小提示：手機提醒可左右滑（桌面用底部膠囊導覽，不再贅述滾動方式）。
-          置於膠囊上方，避免與膠囊重疊。 */}
-      <p className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+4.25rem)] left-1/2 -translate-x-1/2 animate-pulse whitespace-nowrap font-serif text-2xs tracking-widest text-mute/55 sm:hidden">
-        ← 左右滑動展卷 →
-      </p>
-    </div>
-  );
 }
 
 function dayPartLabel(p: string): string {

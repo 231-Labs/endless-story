@@ -180,6 +180,7 @@ export async function spinePlanAndOpen(
     nowTick: number,
 ): Promise<{ storylet?: TickStoryletResult; step: SpineStep }> {
     const step = decideSpineStep({
+        recentSceneIds: recentStagedScenes(ctx.sagaId),
         open: openList(ctx.sagaId)[0] ?? null,
         nowTick,
         minTicks: ctx.minTicks ?? 2,
@@ -201,6 +202,19 @@ export async function spinePlanAndOpen(
 }
 
 /** Push a BudgetEvent + deal hands for one OPEN step; null on chain failure. */
+
+/** G12 — last few scenes that staged an event, per saga (in-process ring). */
+const recentStagedBySaga = new Map<string, string[]>();
+function recentStagedScenes(sagaId: string): string[] {
+    return recentStagedBySaga.get(sagaId) ?? [];
+}
+function recordStagedScene(sagaId: string, sceneId: string): void {
+    const ring = recentStagedBySaga.get(sagaId) ?? [];
+    ring.push(sceneId);
+    if (ring.length > 4) ring.splice(0, ring.length - 4);
+    recentStagedBySaga.set(sagaId, ring);
+}
+
 async function openOneEvent(
     ctx: SpineCtx,
     step: Extract<SpineStep, { action: 'open' }>,
@@ -229,6 +243,7 @@ async function openOneEvent(
         openedAtTick: nowTick,
     };
     addOpen(ctx.sagaId, ev);
+    recordStagedScene(ctx.sagaId, ev.sceneId);
     return ev;
 }
 
@@ -244,6 +259,7 @@ export async function spinePlanAndOpenAll(
     nowTick: number,
 ): Promise<{ storylets: TickStoryletResult[]; steps: SpineStep[] }> {
     const steps = decideSpineSteps({
+        recentSceneIds: recentStagedScenes(ctx.sagaId),
         openEvents: openList(ctx.sagaId),
         nowTick,
         minTicks: ctx.minTicks ?? 2,

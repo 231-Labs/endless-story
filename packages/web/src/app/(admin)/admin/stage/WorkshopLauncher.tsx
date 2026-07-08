@@ -23,6 +23,7 @@ import { GenesisMemoryPanel } from '../director/GenesisMemoryPanel';
 import { PersonaRedistillPanel } from '../director/PersonaRedistillPanel';
 import { RelationshipAssessPanel } from '../director/RelationshipAssessPanel';
 import { CustodyPanel } from '../director/CustodyPanel';
+import { StanceKnobPanel } from '../director/StanceKnobPanel';
 
 /** Grouped launcher for every dev/test/maintenance panel: a rail selects one
  *  tool, and only the active tool mounts (so the page doesn't fire every
@@ -84,6 +85,13 @@ export function WorkshopLauncher({
         label: '活世界 · 真結算 tick',
         hint: '一鍵跑「打開全部新機制」的 tick：事件走 spine 結算（真判勝負、資源轉手）、角色感知當下處境。配後臺「帳本資源」看持有者有沒有易手。',
         render: () => <LiveWorldTickPanel />,
+      },
+      {
+        key: 'stance',
+        group: '推進世界',
+        label: '本班之氣 · 氣質旋鈕',
+        hint: '調戲班的情感筆調（克制／溫存／盡致）。這是 emotional_stance 真旋鈕，寫本地覆寫、不上鏈、不reseed，下個 tick 生效；規章頁的「氣質光譜」是它的唯讀鏡像。',
+        render: () => <StanceKnobPanel />,
       },
       {
         key: 'treasury',

@@ -135,6 +135,20 @@ test('fade lane: old cold picked-up threads retire; genesis and warm ones never 
     assert.ok(!genesis.retired && !young.retired && !hot.retired);
 });
 
+test('H2 idle lane: a ripple stuck at birth-sat retires on age despite high tension', () => {
+    // The gate-run pathology: a curiosity ripple (weight 0.5 × sat 0.2 →
+    // tension 0.40, above the 0.18 fade floor forever) that never moved and
+    // never drove a beat. The cold lane can't reap it; the idle lane must.
+    const stuck = newWant({ characterId: 'liu', layer: '其他', desc: '這箱子藏什麼秘密', weight: 0.5, sat: 0.2, resistance: 3, kind: 'narrative', source: 'ripple', bornTick: 0 });
+    const climbed = newWant({ characterId: 'liu', layer: '其他', desc: '這人眼神藏著針', weight: 0.5, sat: 0.2, resistance: 3, kind: 'narrative', source: 'ripple', bornTick: 0 });
+    climbed.sat = 0.45; // this one was actually acted on — keep it
+    assert.ok(tension(stuck) > WANT.fadeTensionBelow); // NOT cold — the whole point
+    const faded = fadeStaleWants([stuck, climbed], 10);
+    assert.deepEqual(faded.map((w) => w.desc), ['這箱子藏什麼秘密']);
+    assert.equal(stuck.resolvedNote, '（一時好奇，過去了）');
+    assert.equal(climbed.retired, undefined);
+});
+
 test('economic wants never force (settlement lane owns them)', () => {
     const w = newWant({ characterId: 'a', layer: '頭牌', desc: '掛頭牌', weight: 1, sat: 0, resistance: 1, kind: 'economic', source: 'genesis', bornTick: 0 });
     w.heat = 99;
