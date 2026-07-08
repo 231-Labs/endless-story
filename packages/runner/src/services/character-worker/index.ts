@@ -95,6 +95,8 @@ export interface RunCharacterWorkerInput {
     /** Current daily-life state tinting the chapter's texture. Omit = no
      *  injection (regression-safe). */
     state?: CharacterState;
+    /** This character's own private inner-life secret. See PovPromptInput.innerSecret. */
+    innerSecret?: string;
     /** Opt-in: append a private interior coda after the scene. pov mode only. */
     reflect?: boolean;
     /** Override LLM model. */
@@ -181,6 +183,7 @@ export async function runOnce(input: RunCharacterWorkerInput): Promise<RunCharac
         sceneBeats: input.sceneBeats,
         closing: input.closing,
         state: input.state,
+        innerSecret: input.innerSecret,
     });
 
     // A closing chapter must show a full arc, so it gets more headroom.

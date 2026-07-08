@@ -28,6 +28,7 @@ import { tickResourceCooldowns } from '@/lib/chain/gravity-core';
 import { drainMemoryWarnings, recallForCharacter } from '@/lib/chain/memory';
 import { fetchOnChainScenesForSaga } from '@/lib/chain/scene-read';
 import { buildSagaRoster, type SagaRosterEntry } from '@/lib/chain/roster';
+import { getCharacterSecret } from '@/lib/chain/character-secrets';
 import { charactersApi } from '@/lib/api/index';
 import { advanceTickAction, getWorldTimeSnapshot } from './world-time';
 import { isShadowDead } from '@/lib/economy/saga-economy';
@@ -236,14 +237,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     const rivalGravity = input.rivalGravity ?? envFlag('TICK_RIVAL_GRAVITY');
     // §4d.1: pick the staged contention by centrality, not urgency; falls back to
     // the deterministic tension-sort on failure. Default off.
-    const centrality = envFlag('TICK_CENTRALITY');
+    const centrality = input.centrality ?? envFlag('TICK_CENTRALITY');
     // §2.51: spotlight rotation, selection-only (settlement reads raw rows). Default off.
-    const actorFatigue = envFlag('TICK_ACTOR_FATIGUE');
+    const actorFatigue = input.actorFatigue ?? envFlag('TICK_ACTOR_FATIGUE');
     // Want-driven per-scene interaction loops as the narrative driver (§2.36–2.48);
     // contested resources keep only the economic settlement lane. Default off.
-    const wantEngine = envFlag('TICK_WANT_ENGINE');
+    const wantEngine = input.wantEngine ?? envFlag('TICK_WANT_ENGINE');
     // §4d.2: arc convergence state machine (off-chain arc state). Default off.
-    const arcConvergence = envFlag('TICK_ARC_CONVERGENCE');
+    const arcConvergence = input.arcConvergence ?? envFlag('TICK_ARC_CONVERGENCE');
     const maxConcurrentEvents = Math.max(
         1,
         input.maxConcurrentEvents ?? (Number(process.env.TICK_MAX_CONCURRENT_EVENTS) || 2),
@@ -273,6 +274,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // isNight must match the Chinese dusk/night labels too — a plain
     // `partOfDay === 'night'` check silently disabled sleep and the spatial router.
     const isNight = !!worldTime && (worldTime.partOfDay === 'night' || /夜|宵/.test(worldTime.partOfDay ?? ''));
+    // §2.19 daily-life state: derived fatigue curve (fresh at dawn → tired by
+    // night), recomputed each tick with no storage. Hoisted above PLAN so both
+    // the want-engine scene loop and POV share the same derivation.
+    const dayFatigue = worldTime
+        ? 0.15 + (worldTime.ticksPerDay > 1 ? worldTime.tickOfDay / (worldTime.ticksPerDay - 1) : 0.5) * 0.7
+        : 0.3;
 
     let characters: Character[] = await charactersApi.listSagaCharacters(d.sagaId).catch(() => []);
     if (characters.length === 0) {
@@ -357,6 +364,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     situation: situationByChar.get(c.id),
                     // §2.6: feed current relationships into planning so goals evolve from them.
                     relationshipPressure: await memoryContext.relationshipHints(c.id, 5),
+                    // Own-character-only: never another character's row (character-secrets.ts).
+                    innerSecret: getCharacterSecret(c.id),
                 });
                 tlog(`   · plan ${c.name} ✓${p.ok && p.longTermGoal ? `「${p.longTermGoal.slice(0, 36)}」` : ''}`);
                 return { c, p };
@@ -969,6 +978,10 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         ageYears: c.age,
                         description: c.description,
                         castNames: slice.map((x) => x.name),
+                        // Own-character-only: never another character's row (character-secrets.ts).
+                        secret: getCharacterSecret(c.id),
+                        // TODO: no saga premise is fetched in this scope yet; wire
+                        // sagaPremise once a cheap saga-description read lands here.
                     });
                     for (const g of derived) {
                         wants.push(
@@ -1027,6 +1040,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 name: c.name,
                                 persona: c.description,
                                 memories: memories.length > 0 ? memories : undefined,
+                                // §2.19 daily-life state, same derivation POV uses — want
+                                // scenes were the one acting surface it never reached.
+                                stateLine: runnerWorker.buildStateBlock({ hunger: 0.2, fatigue: dayFatigue, mood: 0 }) || undefined,
+                                // Own-character-only: never another character's row (character-secrets.ts).
+                                innerSecret: getCharacterSecret(c.id),
                             };
                         }),
                     );
@@ -1221,12 +1239,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
             if (record) sceneRecordByScene.set(sceneId, record);
         });
 
-        // §2.19 daily-life state: derived fatigue curve (fresh at dawn → tired by
-        // night), recomputed each tick with no storage. Tints the chapter's
+        // §2.19 daily-life state (dayFatigue, hoisted above): tints the chapter's
         // texture, never who they are; omitting it keeps the prompt byte-identical.
-        const dayFatigue = worldTime
-            ? 0.15 + (worldTime.ticksPerDay > 1 ? worldTime.tickOfDay / (worldTime.ticksPerDay - 1) : 0.5) * 0.7
-            : 0.3;
         // §4d.2: contesters around the central character feel the pressure — the
         // central character is NEVER instructed to resolve (that would script the
         // turn); they resolve only by responding.
@@ -1344,6 +1358,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     planHint: await memoryContext.plan(c.id),
                     skipMemoryRecall: true,
                     state: povState,
+                    // Own-character-only: never another character's row (character-secrets.ts).
+                    innerSecret: getCharacterSecret(c.id),
                 });
                 tlog(`   · POV ${c.name} ✓ (${r.chapter?.length ?? 0} chars)`);
                 dumpChapter(
@@ -1647,6 +1663,8 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     rosterContext: rosterContextById.get(pair.holderId),
                     rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
                     relationshipHints: await memoryContext.relationshipHints(pair.holderId, 5),
+                    // Own-character-only: never another character's row (character-secrets.ts).
+                    innerSecret: getCharacterSecret(pair.holderId),
                 });
                 if (enc.ok && enc.chapter?.trim()) {
                     lastEncounterPair = pair.pairKey;

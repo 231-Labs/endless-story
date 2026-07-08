@@ -22,6 +22,8 @@ export interface SceneLoopCastMember {
     persona: string;
     memories?: string[];
     stateLine?: string;
+    /** This character's own private inner-life secret; never another actor's. */
+    innerSecret?: string;
 }
 
 export interface SceneLoopInput {
@@ -149,6 +151,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             privateAlone,
             sceneLog: log.slice(-5).join('\n'),
             stateLine: actor.stateLine,
+            innerSecret: actor.innerSecret,
             etiquette: input.etiquette,
             consummate: gateBeat && input.emotionalStance === 'consummate',
         });

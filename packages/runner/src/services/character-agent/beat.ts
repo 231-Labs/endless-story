@@ -34,6 +34,9 @@ export interface ActBeatInput {
     sceneLog: string;
     /** Daily-life undertone line (state block), optional. */
     stateLine?: string;
+    /** This character's own private inner-life secret; never another actor's.
+     *  Colours the beat's subtext, must not surface as a spoken fact. */
+    innerSecret?: string;
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
     /** §2.47/§2.53: saga stance is consummate AND this beat is privateAlone on
@@ -85,10 +88,13 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.others.length ? input.others.join('、') : '只你一人'
     }。`;
     const state = input.stateLine ? `\n${input.stateLine}` : '';
+    const innerSecret = input.innerSecret
+        ? `\n【心底藏著、外人不知的事（只有你自己知道，不可說出口或被人看出破綻）】${input.innerSecret}`
+        : '';
     return [
         `你就是${input.name}。${input.persona}${mem}`,
         input.tone ?? '',
-        `【此刻】${input.clock}。${where}${input.stake ? `\n【風聲】${input.stake}` : ''}${state}`,
+        `【此刻】${input.clock}。${where}${input.stake ? `\n【風聲】${input.stake}` : ''}${state}${innerSecret}`,
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
         input.consummate ? CONSUMMATE_BEAT_NOTE : '',
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,

@@ -70,6 +70,10 @@ export interface PovPromptInput {
     /** Daily-life undertone (hunger/fatigue/mood): tints attention and gesture
      *  without changing who they are. Omit = no injection. */
     state?: CharacterState;
+    /** This character's own private inner-life secret (never on-chain, never
+     *  another character's prompt). Colours interiority; must not surface as
+     *  dialogue or a fact other characters could witness. Omit = no injection. */
+    innerSecret?: string;
 }
 
 /** Swaps only the framing; iron rules + voice apply to all. `pov` = serial
@@ -228,6 +232,10 @@ export function buildUserPrompt(input: PovPromptInput): string {
         ? `\n## 稀缺張力（讓它變成行動或視線，不要變成喊口號）\n${input.dramaHint}`
         : '';
     const stateBlock = buildStateBlock(input.state);
+    const innerSecretBlock = input.innerSecret
+        ? '\n## 心底藏著、外人不知的事（只有你自己知道；讓它悄悄牽動你的選擇、視線與言外之意，但不可變成你說出口的話或別人能看見的事實）\n' +
+          input.innerSecret
+        : '';
     const dreamBlock = dreamFragment
         ? `\n## 夢境片段（必須取其中一個意象，變成場面裡的感官錨點）\n${dreamFragment}`
         : '';
@@ -260,6 +268,7 @@ export function buildUserPrompt(input: PovPromptInput): string {
         planBlock,
         dramaBlock,
         stateBlock,
+        innerSecretBlock,
         dreamBlock,
         sceneBeatsBlock,
         closingBlock,

@@ -174,6 +174,13 @@ export interface StoryFoundingMember {
    * (JSON has no comments, so this is the toggle).
    */
   disabled?: boolean;
+  /**
+   * Scene name (must match a `scenes[].name`) this member is minted into AND
+   * registered as their night-routing residence (spatial-routing.ts setHomeScene).
+   * Omit → falls back to the caller's default mint scene, and the character
+   * gets no residence (night routing leaves them be, as before this field existed).
+   */
+  home_scene?: string;
 }
 
 export interface StoryPreset {

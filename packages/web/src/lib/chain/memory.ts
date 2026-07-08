@@ -71,6 +71,18 @@ export function isMemoryConfigured(): boolean {
     );
 }
 
+/** Names of the missing MemWal env vars, for a caller that wants to say exactly
+ *  what's absent (e.g. a hard-fail error) instead of just "not configured". */
+export function missingMemoryEnvVars(): string[] {
+    const e = memEnv();
+    const missing: string[] = [];
+    if (!e.delegateKey) missing.push('MEMWAL_PRIVATE_KEY');
+    if (!e.accountId) missing.push('MEMWAL_ACCOUNT_ID');
+    if (!e.suiPrivateKey) missing.push('SUI_ADMIN_PRIVATE_KEY');
+    if (!e.embeddingApiKey) missing.push('OPENAI_API_KEY');
+    return missing;
+}
+
 /** SEAL only runs on testnet/mainnet; clamp anything else to testnet.
  *  Exported so the dossier page can hand the network to the Owner-side
  *  browser decrypt component. */

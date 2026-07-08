@@ -66,6 +66,20 @@ export interface TickLoopInput {
      *  longer blind to this tick. Perception-scoped + omniscience-guarded. Step 1 of
      *  the perceive-step design. */
     situationPerceive?: boolean;
+    /** EXPERIMENTAL (default false, env TICK_WANT_ENGINE): want-driven per-scene
+     *  interaction loops (§2.36-2.48) as the narrative driver; contested resources
+     *  keep only the economic settlement lane. */
+    wantEngine?: boolean;
+    /** EXPERIMENTAL (default false, env TICK_CENTRALITY): pick the staged
+     *  contention by relationship centrality instead of raw tension (§4d.1). */
+    centrality?: boolean;
+    /** EXPERIMENTAL (default false, env TICK_ACTOR_FATIGUE): spotlight rotation —
+     *  featured actors tire and are suppressed at selection, never at settlement
+     *  (§2.51). */
+    actorFatigue?: boolean;
+    /** EXPERIMENTAL (default false, env TICK_ARC_CONVERGENCE): off-chain arc
+     *  convergence state machine (§4d.2). */
+    arcConvergence?: boolean;
     /** Preview: produce POV prose but don't advance / act / anchor. */
     dryRun?: boolean;
 }

@@ -44,6 +44,7 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
     const [rows, setRows] = useState<Row[]>([blankRow()]);
     const [result, setResult] = useState<CreateFoundingCastResult | null>(null);
     const [note, setNote] = useState<string | null>(null);
+    const [allowNoMemory, setAllowNoMemory] = useState(false);
     const [isPending, start] = useTransition();
 
     const patch = (i: number, p: Partial<Row>) =>
@@ -91,6 +92,8 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
             description: r.description.trim(),
             secret: r.secret?.trim() || undefined,
             minAttributes: r.minAttributes,
+            memories: r.memories,
+            homeScene: r.homeScene,
         }));
         if (specs.length === 0) {
             setNote('沒有完整的角色（每人需姓名、年齡、性別、行當、描述）');
@@ -99,7 +102,7 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
         setNote(null);
         setResult(null);
         start(async () => {
-            const r = await createFoundingCastAction({ specs });
+            const r = await createFoundingCastAction({ specs, allowNoMemory });
             setResult(r);
         });
     };
@@ -207,6 +210,16 @@ export function FoundingCastPanel({ roleSlots }: { roleSlots: RoleSlot[] }) {
                     </div>
                 ))}
             </div>
+
+            <label className="flex items-center gap-2 text-2xs tracking-widest text-mute">
+                <input
+                    type="checkbox"
+                    checked={allowNoMemory}
+                    onChange={(e) => setAllowNoMemory(e.target.checked)}
+                    disabled={isPending}
+                />
+                MemWal 未配置也強制立班（角色會是空白、無此生記憶 — 一般不要勾）
+            </label>
 
             <button
                 type="button"
