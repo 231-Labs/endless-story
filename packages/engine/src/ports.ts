@@ -17,6 +17,7 @@
  */
 
 import type { SceneAgent } from './core/scene-loop.ts';
+import type { RewriteLedgerInput, RewriteReply } from './core/want-rewrite.ts';
 import type * as Runner from '@endless-story/runner';
 
 // ── Re-used runner authorship shapes (type-only) ─────────────────────────────
@@ -27,6 +28,60 @@ export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
 export type WeaveTickInput = Runner.sceneRecord.WeaveTickInput;
 export type ComposeEpisodeInput = Runner.eventChapter.ComposeEpisodeInput;
+
+// ── Structured open-action (SEASON_ONE_SLICE §2/§3) ──────────────────────────
+/**
+ * A character's self-tagged action kind. The LLM tags its OWN action; the engine
+ * routes off the tag — NO regex classification of prose (the fix the emergence
+ * test demanded, where 蘇 添唱詞 = a compose was mis-read as personal). `target`
+ * only carries for `seek_person`.
+ */
+export type ActionKind =
+    | 'propose_play'
+    | 'join_play'
+    | 'compose'
+    | 'rehearse'
+    | 'seek_person'
+    | 'perform'
+    | 'personal';
+
+export interface ChooseActionInput {
+    name: string;
+    persona: string;
+    role?: string;
+    /** Private inner-life secret (colours the choice; never shown to others). */
+    secret?: string;
+    /** The character's live wants (layer + desc + optional target). */
+    wants: Array<{ layer: string; desc: string; target?: string }>;
+    /** Recalled memory snippets. */
+    memories?: string[];
+    /** Season world-fact injected as state-of-the-world (prologue essence at t0 +
+     *  the decrementing deadline line) — a FACT, never an instruction. */
+    worldFact: string;
+    /** Short running log of what everyone has recently done. */
+    sharedLog: string[];
+    /** Current state of the 新戲-in-progress, or null if none yet. */
+    playSummary?: string | null;
+    castNames: string[];
+}
+
+export interface ChooseActionResult {
+    /** First-person prose of what the character does this tick. */
+    prose: string;
+    /** The character's self-tag; the engine routes off this, never off the prose. */
+    kind: ActionKind;
+    /** Who the character seeks (name), only meaningful for `seek_person`. */
+    target?: string;
+}
+
+// ── Audience reaction (box-office PROSE only; never the number) ───────────────
+export interface AudienceReactionInput {
+    audienceName: string;
+    /** The performance material lines. */
+    performanceLines: string[];
+    /** This member's warmth toward the troupe (context for the prose only). */
+    warmth: number;
+}
 
 /**
  * The full narrative-LLM surface the loop needs. It EXTENDS the scene-loop's
@@ -42,6 +97,12 @@ export interface SceneAgentPort extends SceneAgent {
     judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]>;
     weaveTickChapter(input: WeaveTickInput): Promise<string | null>;
     composeEpisode(input: ComposeEpisodeInput): Promise<string | null>;
+    /** Structured open-action: prose + a self-tagged kind (§2/§3). */
+    chooseAction(input: ChooseActionInput): Promise<ChooseActionResult>;
+    /** Living-want self-rewrite after a scene/action (scene-scoped, RUNNER_V2 §9). */
+    rewriteWantLedger(input: RewriteLedgerInput): Promise<RewriteReply>;
+    /** Optional: PROSE of an audience member's reaction (never the box-office number). */
+    audienceReaction?(input: AudienceReactionInput): Promise<string | null>;
 }
 
 // ── Recall (memory) ──────────────────────────────────────────────────────────

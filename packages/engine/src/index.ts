@@ -13,6 +13,8 @@
 
 // Pure narrative core (relocated from web/lib/chain).
 export * from './core/want-core.ts';
+export * from './core/want-rewrite.ts';
+export * from './core/box-office.ts';
 export * from './core/scene-routing.ts';
 export * from './core/scene-loop.ts';
 export * from './core/actor-fatigue.ts';
