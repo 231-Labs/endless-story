@@ -127,6 +127,8 @@ interface Char {
     sleptDay: number | null;
     /** otherId -> accumulated verbatim of what passed between them TODAY (for reflect). */
     todayLedger: Map<string, string>;
+    /** scenes this character has been in TODAY — the fatigue signal (reset each day). */
+    scenesToday: number;
 }
 
 function buildCast(): Char[] {
@@ -157,6 +159,7 @@ function buildCast(): Char[] {
         venue: homeVenue,
         sleptDay: null,
         todayLedger: new Map(),
+        scenesToday: 0,
     });
 
     return [
@@ -218,7 +221,8 @@ function buildCast(): Char[] {
             ['我是蘇映雪，雲錦班的青衣，戲要好，人也要爭一口氣。'],
             [['柳生春', '同班的老生，最好的戲搭子，我那點心思他大約沒察覺']],
             [
-                { layer: '戲', desc: '在新戲裡跟柳生春排一場好的對兒戲', target: '柳生春', weight: 0.66, sat: 0.36, resistance: 4 },
+                { layer: '戲', desc: '去雲錦台戲台把新戲的旦角戲排出彩，掙一個立得住的角', weight: 0.7, sat: 0.34, resistance: 4 },
+                { layer: '情', desc: '私心想跟柳生春多排幾場對兒戲', target: '柳生春', weight: 0.56, sat: 0.4, resistance: 5 },
             ],
         ),
         mk(
@@ -232,7 +236,8 @@ function buildCast(): Char[] {
             ['我是沈雪笙，雲錦班的琴師，戲的骨頭在腔裡。'],
             [['柳生春', '班裡的角兒，他的嗓子配我的腔，戲才立得住']],
             [
-                { layer: '志', desc: '譜出一段能立住新戲的新腔', weight: 0.6, sat: 0.42, resistance: 5 },
+                { layer: '志', desc: '去雲錦台戲台把新戲的新腔跟班子立起來', weight: 0.66, sat: 0.38, resistance: 4 },
+                { layer: '藝', desc: '夜裡在沈宅把那段新腔的尾音磨順', weight: 0.5, sat: 0.46, resistance: 5 },
             ],
         ),
     ];
@@ -296,6 +301,7 @@ async function planTurn(
     clock: WorldClock,
     night: boolean,
     recalled: string[],
+    tired: boolean,
 ): Promise<PlanResult> {
     const system = [
         '你在扮演戲園世界裡一個活生生的人。此刻輪到你這一刻。',
@@ -334,6 +340,7 @@ async function planTurn(
         `\n# 這世界有哪些地方（你都知道怎麼去）\n${geographyBlock()}`,
         `\n# 你剛想起的幾件舊事\n${recallBlock}`,
         `\n# 現在是什麼時辰\n第${clock.day}日·${clock.partOfDay}${night ? '（入夜了）' : ''}`,
+        `\n# 你此刻的身子\n${tired ? '你今日已奔忙、應對了好一陣，身上乏了，眼皮也沉。' : '你精神還好。'}`,
         `\n此刻，你（${c.name}）決定做什麼？`,
     ]
         .filter(Boolean)
@@ -493,7 +500,9 @@ async function doInteract(
             isPrivate: priv,
             clock: clockLabel,
             stake: intent ? `${c.name}上門，${intent}。` : undefined,
-            emotionalStance: 'consummate',
+            // No 'consummate' stance: a reckoning should render as drama, not
+            // consummation. The love-layer gate still colours private beats,
+            // but the adult register stays closed (§2.46 intimacy stays scarce).
             cast,
             wants,
             tick: clock.currentTick,
@@ -505,6 +514,8 @@ async function doInteract(
         const sceneText = beats.map((b) => `${b.name}：${b.text}`).join('\n');
         c.todayLedger.set(target.id, `${c.todayLedger.get(target.id) ?? ''}\n${sceneText}`.trim());
         target.todayLedger.set(c.id, `${target.todayLedger.get(c.id) ?? ''}\n${sceneText}`.trim());
+        c.scenesToday += 1;
+        target.scenesToday += 1;
 
         const scene: SceneRecord = {
             venue: c.venue,
@@ -624,8 +635,9 @@ async function main(): Promise<void> {
 
         // PLAN
         let plan: PlanResult;
+        const tired = c.scenesToday >= 2;
         try {
-            plan = await planTurn(c, byId, present, clock, night, autoRecall);
+            plan = await planTurn(c, byId, present, clock, night, autoRecall, tired);
         } catch (e) {
             log(`   [plan] FAILED after retries, skipping turn: ${String(e).slice(0, 120)}`);
             continue;
@@ -732,6 +744,7 @@ async function main(): Promise<void> {
             for (const ch of cast) {
                 ch.sleptDay = null;
                 ch.todayLedger.clear();
+                ch.scenesToday = 0;
             }
             log(`  ── 第${clock.day}日終 ──`);
         }
@@ -756,13 +769,11 @@ function venueDist(m: Map<string, number>): string {
         .join('  ·  ');
 }
 
+/** The 了斷 = the 柳生春×金鳳 reckoning, wherever it renders (either travelled). */
 function findLiaoduanScene(scenes: SceneRecord[]): SceneRecord | null {
     return (
         scenes.find(
-            (s) =>
-                s.venue.includes('會樂里') &&
-                s.participants.includes('柳生春') &&
-                s.participants.includes('金鳳'),
+            (s) => s.participants.includes('柳生春') && s.participants.includes('金鳳'),
         ) ?? null
     );
 }
@@ -792,12 +803,18 @@ function printCounters(
     L(`戲台 share of scenes.................... ${stageShare}%  (season was 100%)`);
     L('');
     L('── 2) MOTIVATED TRAVEL + 了斷 AS A RENDERED SCENE ───────────────────────────');
-    const liu = byName.get('柳生春')!;
-    const liuMoves = turns.filter((t) => t.char === '柳生春').flatMap((t) => t.steps.filter((s) => s.tool === 'move'));
-    const liuToHui = liuMoves.some((s) => s.args.includes('會樂里'));
+    const liuToHui = turns
+        .filter((t) => t.char === '柳生春')
+        .flatMap((t) => t.steps.filter((s) => s.tool === 'move'))
+        .some((s) => s.args.includes('會樂里'));
+    const jinToLiu = turns
+        .filter((t) => t.char === '金鳳')
+        .flatMap((t) => t.steps.filter((s) => s.tool === 'move'))
+        .some((s) => s.args.includes('後台') || s.args.includes('戲台'));
     const liaoduan = findLiaoduanScene(scenes);
     L(`柳生春 chose move → 會樂里.............. ${liuToHui ? 'YES' : 'NO'}`);
-    L(`了斷 rendered as a SCENE at 會樂里...... ${liaoduan ? `YES (${liaoduan.beats.length} beats, ${liaoduan.isPrivate ? '私下' : '公開'})` : 'NO (no 柳×金鳳 scene at 會樂里)'}`);
+    L(`金鳳 chose move → 柳's world........... ${jinToLiu ? 'YES' : 'NO'}  (the reckoning can pull either way)`);
+    L(`了斷 (柳×金鳳) rendered as a SCENE...... ${liaoduan ? `YES @ ${liaoduan.venue} (${liaoduan.beats.length} beats, ${liaoduan.isPrivate ? '私下' : '公開'}) — NOT a log flip` : 'NO 柳×金鳳 scene formed'}`);
     if (liaoduan) {
         const resolved = liaoduan.resolved.length ? liaoduan.resolved.join('；') : '（本場未判了結）';
         L(`  scene resolved wants................. ${resolved}`);
@@ -886,14 +903,19 @@ function writeReport(args: {
     md.push('## 2) Motivated travel + 了斷 as a rendered scene');
     md.push('');
     if (liaoduan) {
-        md.push(`柳生春 travelled to **會樂里** and the 了斷 rendered as a **${liaoduan.isPrivate ? '私下' : '公開'} scene (${liaoduan.beats.length} beats)** — NOT a log flip.`);
+        // Whichever of the pair travelled INTO the reckoning venue is the motivated traveller.
+        const moveTurn = turns.find(
+            (t) =>
+                (t.char === '柳生春' || t.char === '金鳳') &&
+                t.steps.some((s) => s.tool === 'move' && s.args.includes(liaoduan.venue.slice(0, 3))),
+        );
+        const traveller = moveTurn?.char ?? '（其一）';
+        md.push(`The 了斷 (柳生春×金鳳 reckoning) rendered as a **${liaoduan.isPrivate ? '私下' : '公開'} scene of ${liaoduan.beats.length} beats at ${liaoduan.venue}** — NOT a log flip. The debt DROVE a character to travel: **${traveller}** chose \`move\` into the other's world, then \`interact\`.`);
         md.push('');
-        // Find 柳's move-decision plan text.
-        const liuMoveTurn = turns.find((t) => t.char === '柳生春' && t.steps.some((s) => s.tool === 'move' && s.args.includes('會樂里')));
-        if (liuMoveTurn) {
-            md.push(`**柳生春's move-decision (verbatim plan):**`);
+        if (moveTurn) {
+            md.push(`**${traveller}'s move-decision (verbatim plan):**`);
             md.push('');
-            md.push(`> ${liuMoveTurn.plan}`);
+            md.push(`> ${moveTurn.plan}`);
             md.push('');
         }
         md.push('**The 了斷 scene (verbatim beats):**');
@@ -902,7 +924,7 @@ function writeReport(args: {
         md.push('');
         if (liaoduan.resolved.length) md.push(`Resolved: ${liaoduan.resolved.join('；')}`);
     } else {
-        md.push('No 柳生春×金鳳 scene rendered at 會樂里 this run. (See honest read below.)');
+        md.push('No 柳生春×金鳳 reckoning scene formed this run. (See honest read below.)');
     }
     md.push('');
     md.push('## 3) Autonomous night');
