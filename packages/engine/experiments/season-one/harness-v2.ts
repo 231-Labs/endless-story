@@ -24,6 +24,7 @@
 import {
     applyRewrite,
     computeBoxOffice,
+    DEFAULT_BOX_OFFICE_WEIGHTS,
     computeSpatialRouting,
     jealousNightPursuit,
     newWant,
@@ -48,6 +49,12 @@ import { WorldState as WorldStateClass } from '../../src/world-state.ts';
 import type { RawPreset } from '../../src/preset.ts';
 import { makeSeasonConfig, PROLOGUE, type SeasonConfig } from './showrunner.ts';
 import { ProductionSpine, type CastingBid, type CiMeta, type StageStep } from './production-spine.ts';
+import type { DiscussionRecord, Reshape } from './discussion.ts';
+
+/** Season box-office qualityScale — WIDENED from the engine default (10) so a
+ *  strong show does not clamp to quality 1.0 (v2 raw 11.75 → 1.0) and an
+ *  under-rehearsed show scores measurably lower. Deterministic. */
+export const SEASON_QUALITY_SCALE = 40;
 
 export interface SeasonDeps {
     agent: SceneAgentPort;
@@ -110,9 +117,17 @@ export interface SeasonResultV2 {
     nightSceneKinds: string[];
     episodesProduced: number;
     finaleChapter: string | null;
+    // ── discussion layer ──
+    discussions: DiscussionRecord[];
+    castingDiscussion: DiscussionRecord | null;
+    reshapeApplied: Reshape | null;
+    liyiDecided: string | null;
+    thickMemoryCi: Array<{ author: string; ref?: string; memory: string }>;
     // ── box-office ──
     boxOffice: BoxOfficeResult | null;
     boxOfficeRepeat: BoxOfficeResult | null;
+    boxOfficeUnderRehearsed: BoxOfficeResult | null;
+    qualityScale: number;
     // ── living-want / ledger ──
     ledgerEvents: LedgerEvent[];
     wantsMutated: number;
@@ -221,8 +236,15 @@ export async function runSeasonV2(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
         nightSceneKinds: [],
         episodesProduced: 0,
         finaleChapter: null,
+        discussions: spine.discussions,
+        castingDiscussion: null,
+        reshapeApplied: null,
+        liyiDecided: null,
+        thickMemoryCi: [],
         boxOffice: null,
         boxOfficeRepeat: null,
+        boxOfficeUnderRehearsed: null,
+        qualityScale: SEASON_QUALITY_SCALE,
         ledgerEvents: [],
         wantsMutated: 0,
         crossCharacterLeak: 0,
@@ -230,6 +252,14 @@ export async function runSeasonV2(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
         recallUsed: false,
         snapshotRoundTrip: null,
         actionsByTick: [],
+    };
+
+    // Wire the MERGED thick+warm memories into the spine so 有感而發 詞 can be
+    // grounded in a REAL recalled memory (thick-memory→詞 provenance).
+    spine.recallMemory = async (worldId, _aboutId, query) => {
+        const rs = await recall.recall(worldId, query, 3, world.data.clock.day);
+        if (rs.length) res.recallUsed = true;
+        return rs[0]?.text ?? null;
     };
 
     // thick-memories check — count authored memories per cast member from the preset.
@@ -300,8 +330,15 @@ export async function runSeasonV2(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                 { id: 'sanke-4', name: '散客·路人甲', warmth: 0.1 },
             ];
             const repute = 0.4;
-            res.boxOffice = computeBoxOffice(audience, { contributions }, repute);
-            res.boxOfficeRepeat = computeBoxOffice(audience, { contributions }, repute);
+            // WIDENED qualityScale so a strong show does not clamp to 1.0 and an
+            // under-rehearsed show scores measurably lower (deterministic).
+            const boxWeights = { ...DEFAULT_BOX_OFFICE_WEIGHTS, qualityScale: SEASON_QUALITY_SCALE };
+            res.boxOffice = computeBoxOffice(audience, { contributions }, repute, boxWeights);
+            res.boxOfficeRepeat = computeBoxOffice(audience, { contributions }, repute, boxWeights);
+            // Counter-factual: the SAME show under-rehearsed (half the effort) — proves
+            // the settlement discriminates on rehearsal investment, not a flat clamp.
+            const underContribs = contributions.map((c) => ({ ...c, rehearsalEffort: Math.floor(c.rehearsalEffort / 2) }));
+            res.boxOfficeUnderRehearsed = computeBoxOffice(audience, { contributions: underContribs }, repute, boxWeights);
             res.predicate = seasonCompleteV2(spine);
             res.reachedPremiere = spine.premiered;
             res.takesCount = spine.prod.takes?.length ?? 0;
@@ -494,5 +531,14 @@ export async function runSeasonV2(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
     res.wantsMutated = res.ledgerEvents.filter((e) => e.kind === 'mutate').length;
     const wantOwner = new Map(wants.map((w) => [w.id, w.characterId]));
     res.crossCharacterLeak = res.ledgerEvents.filter((e) => (e.kind === 'mutate' || e.kind === 'close') && wantOwner.get(e.wantId) !== undefined && wantOwner.get(e.wantId) !== e.characterId).length;
+
+    // ── Discussion-layer summary ──
+    res.discussions = spine.discussions;
+    res.castingDiscussion = spine.discussions.find((d) => d.stage === '選角') ?? null;
+    res.reshapeApplied = spine.reshapeApplied;
+    res.liyiDecided = spine.liyiDecided;
+    res.thickMemoryCi = spine.ciMeta
+        .filter((c) => c.fromRecall && c.memoryProvenance)
+        .map((c) => ({ author: c.authorName, ref: c.refName, memory: c.memoryProvenance! }));
     return res;
 }

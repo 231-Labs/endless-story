@@ -44,11 +44,28 @@ import {
     type Lifecycle,
     type Part,
     type Production,
+    type Scene,
     type Score,
     type Script,
     type TroupeMember,
 } from '@endless-story/troupe';
 import { newWant, type WorldState } from '../../src/index.ts';
+import {
+    advocate,
+    arbitrateCasting,
+    deliberateLiyi,
+    noteOnCi,
+    noteOnRehearsal,
+    rebut,
+    refuseVerdict,
+    CASTING_ROUND_CAP,
+    LIGHT_ROUND_CAP,
+    type AdvocacyMove,
+    type AdvocateCard,
+    type DiscussionRecord,
+    type DiscussionTurn,
+    type Reshape,
+} from './discussion.ts';
 
 // ── The season troupe "casting sheet" — 行當 / skills / voice lifted from the
 //    validated tick-paced-production fixture, keyed by the WORLD character name so
@@ -69,6 +86,9 @@ interface CastingSheet {
     bids?: Array<{ partId: string; strength: number; desc: string; partName: string }>;
     /** a part this member LOBBIES another member to get (蘇 pushes 柳 for 許仙). */
     lobby?: { forWorldName: string; partId: string; partName: string; strength: number; desc: string };
+    /** a strong want NO existing part satisfies (連翹 wants 台心/被沈看見). When live
+     *  heat is high, the casting DISCUSSION lets 班主 reshape the production for it. */
+    spotlightWant?: { desc: string; strength: number };
 }
 
 const SEASON_SHEET: CastingSheet[] = [
@@ -173,6 +193,9 @@ const SEASON_SHEET: CastingSheet[] = [
             { withName: '沈雪笙', kind: '想被看見·台心', intensity: 45, note: '想問若我也站到台心，上海會不會終於看見我。' },
         ],
         bids: [{ partId: 'qing', partName: '小青', strength: 0.5, desc: '想演小青，紮靠亮相守在姐姐身側' }],
+        // slot-less: 小青 is a second; what she really wants (站台心/被沈看見) no part
+        // holds. The casting discussion gives 班主 a lever to reshape the show for it.
+        spotlightWant: { desc: '想站到台心、被沈雪笙看見，替自己寫一段鎮場武戲', strength: 0.7 },
     },
     {
         worldName: '金鳳', // 歌女 — NOT 梨園; 行當不撐戲，選角不會中 → stays OFF-STAGE (seam-2)
@@ -241,6 +264,10 @@ export interface CiMeta {
     refName?: string;
     /** for emergent 詞: is the other party OFF the 会串 cast? (seam-2 proof) */
     offStage: boolean;
+    /** a RECALLED thick+warm memory that grounded this 詞 (thick-memory→詞 wiring). */
+    memoryProvenance?: string;
+    /** true = the grounding memory came from the merged recall store, not the fixture. */
+    fromRecall?: boolean;
 }
 
 export interface StageStep {
@@ -268,6 +295,18 @@ export class ProductionSpine {
     readonly castingBids: Record<string, CastingBid[]> = {};
     readonly ciMeta: CiMeta[] = [];
     castingReason = '（未選）';
+    /** every JUDGMENT-stage discussion (立意 / 選角 / 提意見 / 排練), for audit. */
+    readonly discussions: DiscussionRecord[] = [];
+    /** a production reshape a hot slot-less want earned from the casting arbiter. */
+    reshapeApplied: Reshape | null = null;
+    /** debated 立意 line that overrode the repertoire default (選劇 discussion). */
+    liyiDecided: string | null = null;
+    /**
+     * Optional bridge to the MERGED thick+warm memories (recall store): given a
+     * performer + the party a 詞 is about, return a real recalled memory to ground
+     * the 有感而發 詞. Wired by the harness; absent → the fixture memory is used.
+     */
+    recallMemory?: (worldId: string, aboutId: string, query: string) => Promise<string | null>;
 
     private readonly world: WorldState;
     private readonly idByName: (n: string) => string;
@@ -317,6 +356,14 @@ export class ProductionSpine {
                 );
                 n++;
             }
+            if (s.spotlightWant) {
+                // a want NO part satisfies — target sentinel '台心' matches no partName,
+                // so the caster can't slot it; only a discussion RESHAPE can honour it.
+                this.world.data.wants.push(
+                    newWant({ characterId: id, layer: '志向', desc: s.spotlightWant.desc, target: '台心', weight: s.spotlightWant.strength, sat: 0.2, resistance: 6, kind: 'narrative', source: 'owner', bornTick: 0 }),
+                );
+                n++;
+            }
         }
         return n;
     }
@@ -340,14 +387,12 @@ export class ProductionSpine {
             .map((c) => ({ characterId: c.assignedId!, ability: abilityOf(c.assignedId!), rehearsalEffort: this.rehearsalEffort[c.assignedId!] ?? 0 }));
     }
 
-    // ── Seam 1: want-contested casting ────────────────────────────────────────
-    /** Read live wants → part bids; compute weight = want × skillFit × bondBoost;
-     *  pick the winner per part (行當-eligible only). Fills `castingBids`. */
-    private seamCast(script: Script): CastAssignment[] {
+    // ── Seam 1 (audit formula): want × 行當 × 緣分 ──────────────────────────────
+    /** Compute per-part bids (fills `castingBids`) over every 行當-eligible member.
+     *  This weight formula STILL RUNS: it is the audit trail, and it still picks the
+     *  winner for UNCONTESTED parts. Contested parts are decided by discussion. */
+    private computeBids(script: Script): void {
         const couple = resolvePlay(this.prod.brief!.classicKey).couple;
-        const taken = new Set<string>();
-        const result: CastAssignment[] = [];
-
         // lobbies: lobbiedWorldId → { forPart, strength, byName } (蘇 pushes 柳 for 許仙)
         const lobbies = new Map<string, { partId: string; strength: number; byName: string }>();
         for (const s of SEASON_SHEET) {
@@ -359,17 +404,12 @@ export class ProductionSpine {
             const heat = live ? live.weight * (1 - live.sat) : s.lobby.strength;
             lobbies.set(`${forId}|${s.lobby.partId}`, { partId: s.lobby.partId, strength: heat, byName: s.worldName });
         }
-
-        const memberById = new Map(this.troupe.map((m) => [m.id, m]));
         const strongestBond = (m: TroupeMember): number => Math.max(0, ...m.relationships.map((r) => r.intensity));
-
         for (const part of script.parts) {
             const bids: CastingBid[] = [];
             for (const m of this.troupe) {
-                if (taken.has(m.id)) continue;
                 const fit = fitScore(m, part);
                 if (fit <= 0) continue; // 行當 utterly wrong — not eligible at all
-                // self want-strength: a live 志向 want targeting this part's name.
                 const selfWant = this.world.liveWantsOf(m.id).find((w) => w.target === part.partName);
                 let wantStrength = selfWant ? selfWant.weight * (1 - selfWant.sat) : 0.15; // 0.15 = a body can be drafted
                 const lob = lobbies.get(`${m.id}|${part.partId}`);
@@ -380,15 +420,187 @@ export class ProductionSpine {
             }
             bids.sort((a, b) => b.weight - a.weight);
             this.castingBids[part.partId] = bids;
-            const winner = bids[0] ? memberById.get(bids[0].worldId)! : null;
-            const alternates = bids.slice(1, 3).map((b) => memberById.get(b.worldId)!).filter(Boolean);
+        }
+    }
+
+    /** A part is CONTESTED when ≥2 行當-eligible members each carry a live want
+     *  (>0.15) for it — exactly 許仙 (柳生春 + 江聞鶴). The formula used to settle
+     *  this silently; the discussion now argues it out. */
+    private contestedPartIds(): string[] {
+        return Object.entries(this.castingBids)
+            .filter(([, bs]) => bs.filter((b) => b.wantStrength > 0.15).length > 1)
+            .map(([partId]) => partId);
+    }
+
+    /** Assemble an advocate's card from world (secret + live wants) + troupe member. */
+    private advocateCard(worldName: string): AdvocateCard | null {
+        const id = this.world.idByName(worldName);
+        const member = this.troupe.find((m) => m.id === id);
+        if (!id || !member) return null;
+        const c = this.world.castById(id);
+        const live = this.world.liveWantsOf(id);
+        const wantLine = live.slice(0, 3).map((w) => `${w.desc}${w.target ? `（指向：${w.target}）` : ''}`).join('；') || '（此刻無強烈想望）';
+        const relLine = member.relationships.map((r) => `對${this.world.nameById(r.withId) ?? r.withId}：${r.kind}`).join('；') || '（無深緣）';
+        const canPlay = (this.prod.script?.parts ?? []).filter((p) => fitScore(member, p) > 0).map((p) => p.partName);
+        return { id, name: worldName, role: `${member.hangdang}行·${member.yinggong.join('/')}`, canPlay, description: member.voice ?? '', secret: c?.secret ?? '', want: wantLine, relationships: relLine };
+    }
+
+    /** The slot-less hot want (連翹's 站台心) — a live want no part can satisfy. */
+    private slotlessAdvocate(): { card: AdvocateCard; want: string } | null {
+        for (const s of SEASON_SHEET) {
+            if (!s.spotlightWant) continue;
+            const id = this.world.idByName(s.worldName);
+            if (!id) continue;
+            const live = this.world.liveWantsOf(id).find((w) => w.target === '台心');
+            const heat = live ? live.weight * (1 - live.sat) : 0;
+            if (heat > 0.3) {
+                const card = this.advocateCard(s.worldName);
+                if (card) return { card, want: live?.desc ?? s.spotlightWant.desc };
+            }
+        }
+        return null;
+    }
+
+    // ── Seam 1 (JUDGMENT): casting-by-DISCUSSION for contested parts ────────────
+    /** Contested parts are cast by the validated discussion scene (aspirants
+     *  advocate → rebut → 班主 沈雪笙 arbitrates → cast crystallizes). Uncontested
+     *  parts keep the cheap formula (top bid). A slot-less hot want can RESHAPE the
+     *  production (連翹's 亮相). Records a `DiscussionRecord`. */
+    private async seamCastDiscussion(ask: Ask, script: Script): Promise<CastAssignment[]> {
+        this.computeBids(script);
+        const memberById = new Map(this.troupe.map((m) => [m.id, m]));
+        const contested = this.contestedPartIds();
+        let arbCast: Record<string, string> | null = null;
+
+        if (contested.length > 0) {
+            const partLine = script.parts.map((p) => `${p.partName}（${p.hangdang}／${p.yinggong}）`).join('、');
+            const contestedNames = contested.map((pid) => this.castingBids[pid][0]?.partName ?? pid);
+            const brief = `排的戲：《${this.prod.brief?.title ?? '斷橋·新唱'}》，一場会串。要定的角：${partLine}。爭議角：${contestedNames.join('、')}（兩人以上都唱得了、都想要）。班主沈雪笙不上台，她拍板。`;
+
+            // speakers: contested contenders + the lobbyist(蘇) + the slot-less holder(連翹)
+            const speakerNames: string[] = [];
+            const seen = new Set<string>();
+            const addSpeaker = (n: string) => { if (n && !seen.has(n)) { seen.add(n); speakerNames.push(n); } };
+            for (const s of SEASON_SHEET) {
+                const id = this.world.idByName(s.worldName);
+                if (!id) continue;
+                const isContender = contested.some((pid) => this.castingBids[pid].some((b) => b.worldId === id && b.wantStrength > 0.15));
+                if (isContender || s.lobby || s.spotlightWant) addSpeaker(s.worldName);
+            }
+            const slotless = this.slotlessAdvocate();
+
+            const turns: DiscussionTurn[] = [];
+            let transcript = '';
+            const append = (name: string, m: AdvocacyMove, phase: string) => {
+                transcript += `${name}：「${m.speech}」\n`;
+                turns.push({ phase, speaker: name, said: m.speech, inner: m.inner });
+            };
+
+            // Round 1 — advocacy (each speaker once), each seeing the prior turns.
+            const moves: Array<{ name: string; move: AdvocacyMove }> = [];
+            for (const name of speakerNames) {
+                const card = this.advocateCard(name);
+                if (!card) continue;
+                const m = await advocate(ask, card, brief, transcript);
+                moves.push({ name, move: m });
+                append(name, m, '自薦');
+            }
+            // Round 2 — rebuttal: the contested self-aspirants answer the room, once.
+            const rebutters = speakerNames.filter((name) => {
+                const id = this.world.idByName(name);
+                return !!id && contested.some((pid) => this.castingBids[pid].some((b) => b.worldId === id && b.wantStrength > 0.15));
+            });
+            for (const name of rebutters) {
+                const card = this.advocateCard(name);
+                if (!card) continue;
+                const m = await rebut(ask, card, brief, transcript);
+                moves.push({ name, move: m });
+                append(name, m, '再爭');
+            }
+
+            // 班主 arbitrates — always reaches a decision (no deadlock).
+            const shenId = this.world.idByName('沈雪笙');
+            const arbiter = {
+                name: '沈雪笙',
+                description: (shenId ? memberById.get(shenId)?.voice : '') ?? '',
+                secret: (shenId ? this.world.castById(shenId)?.secret : '') ?? '',
+            };
+            const arb = await arbitrateCasting(ask, arbiter, brief, transcript, script.parts.map((p) => p.partName), slotless ? { name: slotless.card.name, want: slotless.want } : null);
+            arbCast = arb.cast;
+            turns.push({ phase: '拍板', speaker: '沈雪笙', said: arb.arbitration, inner: arb.reasoning });
+            this.reshapeApplied = arb.reshape ?? null;
+
+            const aspirants = [...new Set(moves.filter((x) => contestedNames.some((cn) => x.move.self_want?.includes(cn)) || x.move.push?.some((pp) => contestedNames.some((cn) => pp.part?.includes(cn)))).map((x) => x.name))];
+
+            // ONE optional refusal by a losing contested aspirant — their choice.
+            let refusal: { by: string; line: string } | null = null;
+            const contestedPartName = contestedNames[0];
+            const winnerName = arbCast[contestedPartName];
+            const loser = rebutters.find((n) => n !== winnerName);
+            if (loser) {
+                const card = this.advocateCard(loser);
+                if (card) {
+                    const r = await refuseVerdict(ask, card, `${contestedPartName} 歸 ${winnerName}`);
+                    if (r.refuse) { refusal = { by: loser, line: r.line }; turns.push({ phase: '不服（一次）', speaker: loser, said: r.line }); }
+                }
+            }
+
+            this.discussions.push({
+                stage: '選角',
+                contestedPart: contestedPartName,
+                aspirants,
+                turns,
+                arbiter: '沈雪笙',
+                arbitrationLine: arb.arbitration,
+                decision: script.parts.map((p) => `${p.partName}=${arbCast![p.partName] ?? '?'}`).join('、'),
+                rounds: 1 + (rebutters.length > 0 ? 1 : 0),
+                cap: CASTING_ROUND_CAP,
+                decided: script.parts.every((p) => !!arbCast![p.partName]),
+                reshape: arb.reshape ?? null,
+                refusal,
+                revision: null,
+            });
+        }
+
+        // ── Build the final cast: discussion winner for contested parts, formula
+        //    winner for the rest; uniqueness by a taken set. ──
+        const taken = new Set<string>();
+        const result: CastAssignment[] = [];
+        for (const part of script.parts) {
+            const bids = this.castingBids[part.partId] ?? [];
+            let winnerId: string | null = null;
+            if (contested.includes(part.partId) && arbCast) {
+                const nm = arbCast[part.partName];
+                const wid = nm ? this.world.idByName(nm) : undefined;
+                if (wid && !taken.has(wid) && bids.some((b) => b.worldId === wid)) winnerId = wid;
+            }
+            if (!winnerId) winnerId = bids.find((b) => !taken.has(b.worldId))?.worldId ?? null;
+            const winner = winnerId ? memberById.get(winnerId) ?? null : null;
+            const alternates = bids.filter((b) => b.worldId !== winnerId).slice(0, 2).map((b) => memberById.get(b.worldId)!).filter(Boolean);
             result.push(this.buildAssignment(part, winner, alternates, bids));
             if (winner) taken.add(winner.id);
         }
-        // A one-line reason for the timeline (the contested part + winner).
-        const contested = Object.values(this.castingBids).find((bs) => bs.filter((b) => b.wantStrength > 0.15).length > 1);
-        this.castingReason = contested
-            ? `${contested[0].partName} 由 ${contested[0].name} 奪得（欲望×行當×緣分）`
+
+        // ── Apply the RESHAPE: add a spotlight 亮相 part+scene for the slot-less want
+        //    (連翹 替自己寫一段鎮場戲), so a hot want reshapes the production. ──
+        if (this.reshapeApplied) {
+            const forId = this.world.idByName(this.reshapeApplied.forName);
+            const member = forId ? memberById.get(forId) : undefined;
+            if (member) {
+                const part: Part = { partId: 'liang', partName: this.reshapeApplied.beatTitle, hangdang: '旦', yinggong: '武旦', roleGender: 'female', martial: '武' };
+                script.parts.push(part);
+                const scene: Scene = { sceneId: 'sc_liang', title: this.reshapeApplied.beatTitle, parts: ['liang'], mood: 'wrath', beats: [{ beat: 1, summary: this.reshapeApplied.desc, tension: 0.85, mood: 'wrath' }], lines: [] };
+                script.scenes.push(scene);
+                result.push(this.buildAssignment(part, member, [], []));
+            } else {
+                this.reshapeApplied = null;
+            }
+        }
+
+        const castRec = this.discussions.find((d) => d.stage === '選角');
+        const winnerOf = arbCast && castRec?.contestedPart ? arbCast[castRec.contestedPart] : null;
+        this.castingReason = arbCast
+            ? `${castRec?.contestedPart ?? '許仙'} 經討論由 ${winnerOf ?? '—'} 定案（班主拍板，非公式）`
             : (result.find((c) => c.assignedName)?.assignedName ?? '—') + ' 等就位';
         return result;
     }
@@ -446,10 +658,18 @@ export class ProductionSpine {
                 if (!bond || made >= 4) continue;
                 const other = byId.get(bond.withId);
                 if (!other) continue;
-                const mem = performer.memories.find((m) => m.aboutId === other.id)?.text;
+                // Thick-memory→詞: ground the 詞 in a REAL recalled memory from the
+                // merged thick+warm store (about the other party), not just the thin
+                // fixture note. Falls back to the fixture memory if no recall wired.
+                let mem = performer.memories.find((m) => m.aboutId === other.id)?.text;
+                let fromRecall = false;
+                if (this.recallMemory) {
+                    const recalled = await this.recallMemory(performer.id, other.id, `${other.name} ${bond.kind} ${bond.note ?? ''}`);
+                    if (recalled && recalled.trim()) { mem = recalled.trim(); fromRecall = true; }
+                }
                 const emergent = await askOr(
                     ask,
-                    { system: `你是${performer.name}（${performer.hangdang}行）。不是被派去填詞——是此刻有感而發。你與${other.name}（${bond.kind}）情牽${off ? `，可${other.name}並不在這台會串戲裡，是台下一筆沒了的帳` : '，這齣又台上配對'}。寫一首私心的小詞/詩，4 句，含蓄、不點破。只給 4 句。一律使用繁體中文。`, user: `關係：${bond.kind}（深度${bond.intensity}）。她/他的事：${mem ?? '自小一處學戲'}。`, maxTokens: 220, temperature: 0.95 },
+                    { system: `你是${performer.name}（${performer.hangdang}行）。不是被派去填詞——是此刻有感而發。你與${other.name}（${bond.kind}）情牽${off ? `，可${other.name}並不在這台會串戲裡，是台下一筆沒了的帳` : '，這齣又台上配對'}。寫一首私心的小詞/詩，4 句，含蓄、不點破。只給 4 句。一律使用繁體中文。`, user: `關係：${bond.kind}（深度${bond.intensity}）。你心裡浮起的那件事：${mem ?? '自小一處學戲'}。`, maxTokens: 220, temperature: 0.95 },
                     () => (off ? ['會樂里的燈我繞著走', '一句交代拖成幾年秋', '身是你教的魂不由我', '欠的那聲對不住沒開口'] : ['同學一曲到如今', '台上夫妻假亦真', '一隻手放肩頭暖', '我裝沒事到天明']).join('\n'),
                 );
                 out.push({
@@ -459,18 +679,108 @@ export class ProductionSpine {
                     authorId: performer.id,
                     authorName: performer.name,
                     source: 'emergent',
-                    provenance: { kind: 'relationship', refId: other.id, why: `${bond.kind}，深度 ${bond.intensity}${off ? `；${other.name}不在會串戲裡，這是台下欠的一句（全關係場surfaces off-stage 恩怨）` : `；台上又配${cast.find((x) => x.assignedId === other.id)?.partName ?? '對手'}`}。` },
+                    provenance: { kind: fromRecall ? 'memory' : 'relationship', refId: other.id, why: `${bond.kind}，深度 ${bond.intensity}${fromRecall ? `；由回憶生詞：「${(mem ?? '').slice(0, 24)}…」` : ''}${off ? `；${other.name}不在會串戲裡，這是台下欠的一句` : `；台上又配${cast.find((x) => x.assignedId === other.id)?.partName ?? '對手'}`}。` },
                 });
-                this.ciMeta.push({ title: `${performer.name}·有感（${off ? '台下' : '台上'}）`, authorName: performer.name, source: 'emergent', refName: other.name, offStage: off });
+                this.ciMeta.push({ title: `${performer.name}·有感（${off ? '台下' : '台上'}）`, authorName: performer.name, source: 'emergent', refName: other.name, offStage: off, memoryProvenance: fromRecall ? mem : undefined, fromRecall });
                 made++;
             }
         }
         return out;
     }
 
+    // ── Discussion at the other JUDGMENT stages (lighter than casting) ─────────
+    /** 立意/選劇: a senior proposes an interpretation, 班主 rules, BEFORE the brief
+     *  locks. Stores the decided 立意 (the spine injects it into brief.qizhi). */
+    private async deliberateLiyiStage(ask: Ask): Promise<void> {
+        const play = resolvePlay(this.classicKey);
+        const senior = this.advocateCard('蘇映雪');
+        const shenId = this.world.idByName('沈雪笙');
+        if (!senior || !shenId) return;
+        const member = this.troupe.find((m) => m.id === shenId);
+        const arbiter = { name: '沈雪笙', description: member?.voice ?? '', secret: this.world.castById(shenId)?.secret ?? '' };
+        const d = await deliberateLiyi(ask, arbiter, senior, { title: play.title, defaultQizhi: play.qizhi, premiseSeed: play.premiseSeed });
+        this.liyiDecided = d.qizhi;
+        this.discussions.push({
+            stage: '選劇立意',
+            aspirants: [d.seniorName],
+            turns: [
+                { phase: '進言', speaker: d.seniorName, said: d.seniorNote },
+                { phase: '定案', speaker: '沈雪笙', said: d.line, inner: d.reasoning },
+            ],
+            arbiter: '沈雪笙',
+            arbitrationLine: d.line,
+            decision: `立意：${d.qizhi}`,
+            rounds: LIGHT_ROUND_CAP,
+            cap: LIGHT_ROUND_CAP,
+            decided: !!d.qizhi,
+            reshape: null,
+            refusal: null,
+            revision: null,
+        });
+    }
+
+    /** 填詞提意見: a critic notes the commissioned 詞; the author revises one line. */
+    private async ciNoteRound(ask: Ask): Promise<void> {
+        const ci = (this.prod.ci ?? []).find((c) => c.source === 'commissioned');
+        if (!ci) return;
+        const critic = this.advocateCard('沈雪笙') ?? this.advocateCard('江聞鶴');
+        if (!critic || critic.name === ci.authorName) return;
+        const note = await noteOnCi(ask, critic, { name: ci.authorName }, { title: ci.title, lines: ci.lines });
+        let revised = '';
+        if (note.revisedLine && note.revisedLine.trim() && ci.lines.length > 0) {
+            const before = ci.lines[ci.lines.length - 1];
+            ci.lines[ci.lines.length - 1] = note.revisedLine.trim();
+            revised = `「${before}」→「${note.revisedLine.trim()}」`;
+        }
+        this.discussions.push({
+            stage: '填詞提意見',
+            aspirants: [note.criticName],
+            turns: [
+                { phase: '提意見', speaker: note.criticName, said: note.note },
+                { phase: '改詞', speaker: note.authorName, said: revised || '（收下意見，未動詞）' },
+            ],
+            arbiter: note.authorName,
+            arbitrationLine: revised || note.note,
+            decision: revised || '（收下意見，未動詞）',
+            rounds: LIGHT_ROUND_CAP,
+            cap: LIGHT_ROUND_CAP,
+            decided: true,
+            reshape: null,
+            refusal: null,
+            revision: revised ? { of: ci.title, note: note.note, newLine: note.revisedLine.trim() } : null,
+        });
+    }
+
+    /** 排練身段: a craft-strong performer notes another's 台步; the target 找師姐對戲. */
+    private async rehearsalNoteRound(ask: Ask): Promise<void> {
+        const inCast = new Set((this.prod.cast ?? []).map((c) => c.assignedName));
+        const critic = this.advocateCard('江聞鶴');
+        const target = this.advocateCard('柳生春');
+        if (!critic || !target || !inCast.has('柳生春')) return;
+        const n = await noteOnRehearsal(ask, critic, target);
+        this.discussions.push({
+            stage: '排練身段',
+            aspirants: [n.criticName],
+            turns: [
+                { phase: '點戲', speaker: n.criticName, said: n.note },
+                { phase: '對戲', speaker: n.targetName, said: n.ack },
+            ],
+            arbiter: n.targetName,
+            arbitrationLine: n.ack,
+            decision: `${n.criticName} 點 ${n.targetName} 台步 → ${n.targetName} 找師姐對戲`,
+            rounds: LIGHT_ROUND_CAP,
+            cap: LIGHT_ROUND_CAP,
+            decided: true,
+            reshape: null,
+            refusal: null,
+            revision: null,
+        });
+    }
+
     // ── One stage per world-tick (the 班主 advances under deadline pressure) ────
-    /** Advance the production ONE stage. Injects the two seams via advance()'s
-     *  idempotency guards, accrues rehearsal effort, records the timeline. */
+    /** Advance the production ONE stage. Runs the JUDGMENT-stage discussions (立意 /
+     *  選角 / 填詞提意見 / 排練身段), injects the two seams via advance()'s idempotency
+     *  guards, accrues rehearsal effort, records the timeline. */
     async step(ask: Ask, daysLeft: number, tick: number): Promise<StageStep> {
         const from = this.prod.state;
         if (from === 'PREMIERED') {
@@ -478,11 +788,22 @@ export class ProductionSpine {
             this.timeline.push(step);
             return step;
         }
+        // 立意/選劇 discussion BEFORE the brief locks (its result overrides qizhi below).
+        if (from === 'PROPOSED' && this.discussions.every((d) => d.stage !== '選劇立意')) await this.deliberateLiyiStage(ask);
         // Seam injection — pre-populate so advance() skips its packaged version.
-        if (from === 'CAST' && !this.prod.cast) this.prod.cast = this.seamCast(this.prod.script!);
-        if (from === 'VERSIFIED' && !this.prod.ci) this.prod.ci = await this.seamWriteCi(this.prod.script!, this.prod.cast!, this.prod.scores!, ask);
+        // CONTESTED casting is now argued out (seamCastDiscussion); uncontested → formula.
+        if (from === 'CAST' && !this.prod.cast) this.prod.cast = await this.seamCastDiscussion(ask, this.prod.script!);
+        if (from === 'VERSIFIED' && !this.prod.ci) {
+            this.prod.ci = await this.seamWriteCi(this.prod.script!, this.prod.cast!, this.prod.scores!, ask);
+            await this.ciNoteRound(ask); // 填詞提意見 → revise
+        }
+        // 排練身段 notes before the ensemble rehearses (身段/台步; 找師姐對戲).
+        if (from === 'REHEARSING' && this.discussions.every((d) => d.stage !== '排練身段')) await this.rehearsalNoteRound(ask);
 
         await advance(this.prod, this.troupe, ask);
+
+        // Inject the debated 立意 into the just-created brief (選劇 discussion → qizhi).
+        if (from === 'PROPOSED' && this.liyiDecided && this.prod.brief) this.prod.brief.qizhi = this.liyiDecided;
         // `who` is read AFTER advance so it names the artifact just produced (script
         // author / composer / 詞 authors), keyed by the stage that was processed.
         const who = WHO_BY_STATE[from](this.prod, this);

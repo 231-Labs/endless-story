@@ -75,6 +75,31 @@ function printCounterBlock(r: SeasonResultV2): void {
     for (const c of r.ciMeta) L.push(`  [${c.source === 'emergent' ? (c.offStage ? '有感·台下' : '有感·台上') : '應場'}] ${c.title} — 作者 ${c.authorName}${c.refName ? ` · 念 ${c.refName}` : ''}${c.offStage ? '  ← OFF-STAGE 恩怨（seam-2 證據）' : ''}`);
     L.push(`emergent 詞 carrying an OFF-STAGE grudge... ${emergentOffStage.length >= 1 ? `YES (${emergentOffStage.map((c) => `${c.authorName}→${c.refName}`).join('、')})` : 'NO'}`);
     L.push('');
+    L.push('── DISCUSSION LAYER: judgments ARGUED, not formula\'d ─────────────────────────');
+    const cd = r.castingDiscussion;
+    L.push(`casting DISCUSSION ran for contested 許仙.. ${cd ? 'YES' : 'NO'}`);
+    if (cd) {
+        L.push(`  aspirants advocated (≥2)......... ${cd.aspirants.length} → ${cd.aspirants.join('、')}`);
+        for (const t of cd.turns) L.push(`    〔${t.phase}〕${t.speaker}：${t.said.slice(0, 44)}`);
+        L.push(`  班主 沈雪笙 拍板................. 「${cd.arbitrationLine.slice(0, 56)}」`);
+        L.push(`  resulting cast.................. ${cd.decision}`);
+        L.push(`  round cap held.................. ${cd.rounds <= cd.cap ? 'YES' : 'NO'} (rounds ${cd.rounds} ≤ cap ${cd.cap})   decided=${cd.decided ? 'YES' : 'NO'}`);
+        if (cd.refusal) L.push(`  losing aspirant refused ONCE.... ${cd.refusal.by}：「${cd.refusal.line.slice(0, 40)}」（戲，非腳本）`);
+    }
+    const rs = r.reshapeApplied;
+    L.push(`連翹 slot-less want RESHAPED the show.. ${rs ? `YES → ${rs.forName}·${rs.beatTitle}（${rs.kind}）` : 'NO'}`);
+    if (rs) L.push(`  reshape desc................... ${rs.desc.slice(0, 48)}`);
+    const other = r.discussions.filter((d) => d.stage !== '選角');
+    L.push(`discussion at OTHER stages......... ${other.length} → ${other.map((d) => d.stage).join('、') || '(none)'}`);
+    for (const d of other) L.push(`  〔${d.stage}〕→ ${d.decision.slice(0, 52)}${d.revision ? '  ← REVISED' : ''}`);
+    const capOk = r.discussions.every((d) => d.rounds <= d.cap && d.decided);
+    L.push(`every discussion: rounds≤cap & decided.. ${capOk ? 'YES' : 'NO'} (${r.discussions.length} discussions total)`);
+    L.push(`立意 debated & injected into brief.. ${r.liyiDecided ? `YES → ${r.liyiDecided.slice(0, 28)}` : 'NO'}`);
+    L.push('');
+    L.push('── THICK MEMORY → 詞 PROVENANCE (v2 weakness fixed) ──────────────────────────');
+    L.push(`詞 grounded in a RECALLED thick memory.. ${r.thickMemoryCi.length >= 1 ? `YES (${r.thickMemoryCi.length})` : 'NO'}`);
+    for (const t of r.thickMemoryCi) L.push(`  ${t.author}${t.ref ? `→${t.ref}` : ''}：憶「${t.memory.slice(0, 34)}…」`);
+    L.push('');
     L.push('── CHAPTER STREAM + CHARACTER LAYER ──────────────────────────────────────────');
     L.push(`章回 produced EVERY tick........... ${chaptersEveryTick ? 'YES' : 'NO'} (${r.chapterByTick.filter((c) => c !== null).length}/${r.chapterByTick.length})`);
     L.push(`  public-weave ticks............... ${r.publicWeaveTicks.join(',')}`);
@@ -90,7 +115,10 @@ function printCounterBlock(r: SeasonResultV2): void {
     L.push(`  components: brief=${pred.components.hasBrief} script=${pred.components.hasScript} cast≥2=${pred.components.castAtLeastTwo} scored=${pred.components.scored} versified=${pred.components.versified} rehearsed=${pred.components.rehearsed} premiered=${pred.components.premiered}`);
     L.push('');
     L.push('── BOX-OFFICE (deterministic) ────────────────────────────────────────────────');
-    L.push(`box-office......................... total=${bo.total}  quality=${bo.quality.toFixed(3)} (raw ${bo.qualityRaw.toFixed(2)})  repute=${bo.repute}  tickets=${bo.tickets}  repeats=${bo.repeats}`);
+    L.push(`box-office......................... total=${bo.total}  quality=${bo.quality.toFixed(3)} (raw ${bo.qualityRaw.toFixed(2)} ÷ scale ${r.qualityScale})  repute=${bo.repute}  tickets=${bo.tickets}  repeats=${bo.repeats}`);
+    L.push(`  quality NOT clamped to 1.0....... ${bo.quality < 1 ? 'YES' : 'NO'} (${bo.quality.toFixed(3)})`);
+    const ur = r.boxOfficeUnderRehearsed!;
+    L.push(`  under-rehearsed (½ effort)....... total=${ur.total}  quality=${ur.quality.toFixed(3)}  → discriminates=${ur.total < bo.total || ur.quality < bo.quality ? 'YES' : 'NO'}`);
     L.push(`  same-seed reproducible........... ${JSON.stringify(r.boxOffice) === JSON.stringify(r.boxOfficeRepeat) ? 'YES' : 'NO'}`);
     for (const a of bo.perAudience) L.push(`    ${a.name.padEnd(12)} warmth=${a.warmth.toFixed(2)} willingness=${a.willingness.toFixed(3)} bought=${a.bought} repeat=${a.repeat} → ${a.contribution}`);
     L.push('');
@@ -142,6 +170,23 @@ async function main(): Promise<void> {
     // seam 2 — full relational field: an OFF-STAGE grudge surfaced in a 詞
     assert.ok(r.ciMeta.some((c) => c.source === 'emergent' && c.offStage), 'an emergent 詞 carries an OFF-STAGE grudge (seam-2 proof)');
 
+    // discussion layer — casting argued out for the contested part
+    assert.ok(r.castingDiscussion, 'casting DISCUSSION ran for the contested part (許仙)');
+    assert.ok(r.castingDiscussion!.aspirants.length >= 2, `≥2 aspirants advocated; got ${r.castingDiscussion!.aspirants.length}`);
+    assert.ok(r.castingDiscussion!.arbitrationLine.length > 0, '班主 arbitration line present');
+    assert.ok(r.castingDiscussion!.decision.includes('許仙='), 'the casting discussion produced a resulting cast');
+    // 連翹's slot-less want reshaped the production
+    assert.ok(r.reshapeApplied, "連翹's slot-less want triggered a production RESHAPE (spotlight/亮相 beat)");
+    // discussion at ≥1 other stage produced a revision/decision
+    const otherStages = r.discussions.filter((d) => d.stage !== '選角');
+    assert.ok(otherStages.length >= 1, 'discussion ran at ≥1 other judgment stage');
+    assert.ok(otherStages.some((d) => d.decided && (d.revision || d.decision)), 'another stage produced a revision/decision');
+    // round cap held everywhere; every discussion reached a decision
+    assert.ok(r.discussions.every((d) => d.rounds <= d.cap), 'round cap held (no stage exceeded its cap)');
+    assert.ok(r.discussions.every((d) => d.decided), 'every discussion reached a decision (no deadlock)');
+    // thick memory → 詞 provenance
+    assert.ok(r.thickMemoryCi.length >= 1, 'a thick memory surfaced in a 詞 provenance');
+
     // chapter stream + character layer
     assert.ok(r.chapterByTick.every((c) => c !== null), 'a 章回 was produced EVERY tick');
     assert.ok(r.productionChapterTicks.length >= 1, 'production chapters joined the stream (rehearsal/premiere)');
@@ -159,6 +204,12 @@ async function main(): Promise<void> {
     assert.deepEqual(r.boxOffice, r.boxOfficeRepeat, 'box-office is deterministic (same inputs → same number)');
     assert.ok(r.boxOffice!.perAudience.length >= 4, 'per-audience breakdown present (白韻秋 + 散客)');
     assert.ok(r.boxOffice!.total > 0, 'box-office total > 0');
+    assert.ok(r.boxOffice!.quality < 1, `box-office quality NOT clamped to 1.0 (widened scale); got ${r.boxOffice!.quality}`);
+    assert.ok(r.boxOfficeUnderRehearsed, 'under-rehearsed box-office computed');
+    assert.ok(
+        r.boxOfficeUnderRehearsed!.total < r.boxOffice!.total || r.boxOfficeUnderRehearsed!.quality < r.boxOffice!.quality,
+        'an under-rehearsed show scores lower (box-office discriminates)',
+    );
 
     // thick memories + restore
     assert.ok(Math.min(...Object.values(r.memoriesPerCast)) >= 14, 'every cast member has ≥14 authored memories (thick-memories merge)');
