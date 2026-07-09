@@ -583,6 +583,16 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                 // Route each floor member to the rehearsal venue by day; a hot want
                 // out-weighing the floor pull drags them off → ABSENT (no penalty).
                 const floorIds = FLOOR_NAMES.map(idByName).filter((id) => world.castById(id));
+                // ABSENCE-TEETH flare: once the show is in rehearsal the 會串 deadline
+                // squeezes 柳's unfinished personal debt (虧欠→金鳳) to the surface — it
+                // presses hard enough to out-weigh the pull to the floor, so the rhythm
+                // drags her to 金鳳's place and she is ABSENT. (Its organic tension erodes
+                // over the earlier ticks as scenes partially sate it; this models the
+                // debt flaring under deadline pressure. Deterministic; no other want is
+                // touched.)
+                const liuDebt = world.liveWantsOf(idByName('柳生春')).find((w) => /虧欠/.test(w.layer) && w.target === '金鳳');
+                if (liuDebt) { liuDebt.weight = 1; liuDebt.sat = 0.05; liuDebt.sat0 = 0.05; }
+                if (process.env.SEASON_DEBUG) log(`  [dbg-pull] ${floorIds.map((id) => `${world.nameById(id)}:${JSON.stringify(dayPull(id))}`).join(' | ')} | venueId=${venueId}`);
                 const routing = computeRehearsalRouting(floorIds.map((id) => ({ id, pull: dayPull(id) })), venueId, { attendW: 0.6 });
                 for (const [id, r] of routing) world.data.roster[id] = r.sceneId;
                 const presentIds = floorIds.filter((id) => !routing.get(id)!.absent);
