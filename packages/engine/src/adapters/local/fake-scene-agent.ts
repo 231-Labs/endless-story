@@ -18,6 +18,8 @@ import type {
     GenesisWant,
     RippleJudgeDelta,
     SceneAgentPort,
+    SelfModelConsolidateInput,
+    SelfModelConsolidateReply,
 } from '../../ports.ts';
 import type { RewriteLedgerInput, RewriteReply } from '../../core/want-rewrite.ts';
 
@@ -196,5 +198,32 @@ export class FakeSceneAgent implements SceneAgentPort {
 
     async audienceReaction(input: AudienceReactionInput): Promise<string | null> {
         return `【${input.audienceName}】（假體驗·暖度${input.warmth.toFixed(2)}）看罷這場，心裡自有滋味。`;
+    }
+
+    /**
+     * Nightly self-model consolidation — a deterministic OVERWRITE stub. For each
+     * person dealt with today it returns ONE new first-person view that REPLACES
+     * the old one (latest-wins; the caller overwrites the map entry). A settled
+     * relationship (a want aimed at that person closed today) flips the line to a
+     * "兩清/了結" view — the headline proof that a changed relationship supersedes
+     * the stale line instead of accumulating beside it. Occasionally distills a
+     * durable identity insight (§2.52), deterministic on the day parity.
+     */
+    async consolidateSelfModel(input: SelfModelConsolidateInput): Promise<SelfModelConsolidateReply> {
+        // The view is the line AFTER the name (selfModelBlock renders `名：view`),
+        // so it must NOT repeat the name. A settled relationship flips to a 兩清 line.
+        const relationshipViews = input.interactions.map((it) => ({
+            otherId: it.otherId,
+            view: it.resolvedWithThem
+                ? '話說開了，那樁舊帳這一日了結，兩清了'
+                : '這一日又照過面，心裡對TA更定了幾分',
+        }));
+        // A durable identity insight lands on ~1 night in 3 (day parity), only if
+        // there was real interaction — mirrors §2.52 reflection landing rarely.
+        const identityInsight =
+            input.interactions.length > 0 && input.day % 3 === 0
+                ? `我漸漸認了：擔子越重，越要把人放在戲前頭`.slice(0, 30)
+                : undefined;
+        return { relationshipViews, identityInsight };
     }
 }

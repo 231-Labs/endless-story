@@ -36,6 +36,24 @@ export interface CastMember {
     age?: number;
     role?: string;
     state: StateVector;
+    /**
+     * MUTABLE SELF-MODEL (CHARACTER_LIFECYCLE §3, L3) — the character's CURRENT
+     * durable sense of who they are: a few self-facts (「我是坤生，女兒身扮小生」).
+     * ALWAYS injected, NEVER recalled. This is the eviction fix: identity lives
+     * here, current and un-evictable, so recency decay can't push it out of the
+     * recall top-K. OVERWRITE-latest (§2.52 insight may update it), never appended.
+     */
+    coreIdentity: string[];
+    /**
+     * The character's CURRENT one-line view of each significant other, keyed by
+     * that other's characterId: 「舊情人，如今我只欠她一句交代」. Updated by OVERWRITE
+     * each night (latest-wins) — a changed relationship (lover → 兩清) REPLACES the
+     * line, so there is never the stale + new pair append-only episodic memory
+     * would accumulate. Sits ALONGSIDE the mechanical `edges` tone graph (which
+     * drives routing/welcome); this is the narrative current-state, always
+     * injected into the acting character's prompts, never in the recall lottery.
+     */
+    relationshipView: Record<string, string>;
 }
 
 export interface SceneInfo {
@@ -85,6 +103,9 @@ export interface WorldStateData {
 }
 
 const SNAPSHOT_FILE = 'world.json';
+/** L3 identity is a small, un-evictable working set (CHARACTER_LIFECYCLE §3): a
+ *  handful of self-facts, merged when full — never an ever-growing list. */
+const CORE_IDENTITY_CAP = 6;
 
 export class WorldState {
     data: WorldStateData;
@@ -138,6 +159,93 @@ export class WorldState {
         row[toId] = cur && cur.tone === tone ? { tone, weight: cur.weight + 1 } : { tone, weight: (cur?.weight ?? 0) + 1 };
     }
 
+    // ── mutable self-model (latest-wins; never recalled) ───────────────────────
+    /** OVERWRITE `fromId`'s current one-line view of `toId` (latest-wins). Empty
+     *  line clears it. This is the whole point: a changed relationship replaces
+     *  the line rather than accumulating a stale + new pair. */
+    setRelationshipView(fromId: string, toId: string, line: string): void {
+        const m = this.castById(fromId);
+        if (!m) return;
+        const trimmed = line.trim();
+        if (trimmed) m.relationshipView[toId] = trimmed;
+        else delete m.relationshipView[toId];
+    }
+
+    /** `fromId`'s current view of `toId`, or undefined. */
+    relationshipView(fromId: string, toId: string): string | undefined {
+        return this.castById(fromId)?.relationshipView[toId];
+    }
+
+    /** Replace a character's durable identity facts wholesale. */
+    setCoreIdentity(id: string, lines: string[]): void {
+        const m = this.castById(id);
+        if (m) m.coreIdentity = lines.map((l) => l.trim()).filter(Boolean).slice(0, CORE_IDENTITY_CAP);
+    }
+
+    /** Merge a durable identity insight (§2.52) — dedup, capped. Newest kept. */
+    addCoreIdentity(id: string, line: string): void {
+        const m = this.castById(id);
+        const trimmed = line.trim();
+        if (!m || !trimmed || m.coreIdentity.includes(trimmed)) return;
+        m.coreIdentity.push(trimmed);
+        while (m.coreIdentity.length > CORE_IDENTITY_CAP) m.coreIdentity.shift();
+    }
+
+    /**
+     * The ALWAYS-AVAILABLE self-model injection block for an acting character:
+     * durable identity + the current one-line view of each significant other.
+     * `presentIds` scopes it to who is in the room (beats — anti-omniscience);
+     * omit it for a personal planning call (chooseAction) where the character may
+     * reason about someone not present. Reads only the mutable self-model, never
+     * recall — so it is current and un-evictable by definition. '' when empty.
+     */
+    selfModelBlock(actingId: string, presentIds?: string[]): string {
+        const m = this.castById(actingId);
+        if (!m) return '';
+        const out: string[] = [];
+        if (m.coreIdentity.length) {
+            out.push('【你恆常記得自己是誰（底色，不必回想，永遠在）】');
+            for (const f of m.coreIdentity) out.push(`· ${f}`);
+        }
+        const others = Object.keys(m.relationshipView).filter(
+            (oid) => oid !== actingId && (!presentIds || presentIds.includes(oid)),
+        );
+        if (others.length) {
+            out.push('【你此刻心裡對這些人的看法（當下的、最新的，不是舊帳）】');
+            for (const oid of others) out.push(`· ${this.nameById(oid)}：${m.relationshipView[oid]}`);
+        }
+        return out.join('\n');
+    }
+
+    /**
+     * Per-present-other tie lines for the scene-beat channel: the character's
+     * CURRENT relationship view (rich, latest-wins) when they hold one, else the
+     * mechanical edge tone as a fallback. Keyed by the other's characterId — the
+     * shape `SceneLoopCastMember.ties` expects. Only ever this character's OWN
+     * feeling (never the reverse edge — no omniscience).
+     */
+    selfTies(actingId: string, presentIds: string[]): Record<string, string> {
+        const ties: Record<string, string> = {};
+        for (const oid of presentIds) {
+            if (oid === actingId) continue;
+            const view = this.relationshipView(actingId, oid);
+            if (view) ties[oid] = view;
+            else {
+                const tone = this.data.edges[actingId]?.[oid]?.tone;
+                if (tone) ties[oid] = `你對TA：${tone}`;
+            }
+        }
+        return ties;
+    }
+
+    /** Persona with the durable identity facts prepended — the always-on identity
+     *  channel for the beat prompt (which renders `你就是<name>。<persona>`). */
+    beatPersona(id: string): string {
+        const m = this.castById(id);
+        if (!m) return '';
+        return m.coreIdentity.length ? `${m.coreIdentity.join('；')}。${m.persona}` : m.persona;
+    }
+
     // ── persistence ──────────────────────────────────────────────────────────
     /** Write the whole world to `<dir>/world.json`. Called every tick. */
     snapshot(dir: string): void {
@@ -154,6 +262,13 @@ export class WorldState {
     static restore(dir: string): WorldState {
         const p = path.join(dir, SNAPSHOT_FILE);
         const raw = fs.readFileSync(p, 'utf-8'); // throws if missing — loud by design
-        return new WorldState(JSON.parse(raw) as WorldStateData);
+        const data = JSON.parse(raw) as WorldStateData;
+        // Normalize the self-model fields so a snapshot written before this layer
+        // (or with the keys JSON-omitted when empty) restores to a valid shape.
+        for (const m of data.cast) {
+            if (!Array.isArray(m.coreIdentity)) m.coreIdentity = [];
+            if (!m.relationshipView || typeof m.relationshipView !== 'object') m.relationshipView = {};
+        }
+        return new WorldState(data);
     }
 }

@@ -19,6 +19,8 @@ import type {
     GenesisWant,
     RippleJudgeDelta,
     SceneAgentPort,
+    SelfModelConsolidateInput,
+    SelfModelConsolidateReply,
 } from '../ports.ts';
 import {
     coerceRewriteReply,
@@ -112,6 +114,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
             `# 你是誰`,
             `${input.name}（${input.role ?? ''}）:${input.persona}`,
             input.secret ? `\n# 你心底的事（只有你自己知道）\n${input.secret}` : '',
+            input.selfModel ? `\n${input.selfModel}` : '',
             memLines,
             `\n# 你此刻心裡掛著的事\n${wantLines}`,
             `\n# 眼下這世道（這些都是已經發生、擺在眼前的事實）\n${input.worldFact}`,
@@ -199,5 +202,69 @@ export class RunnerSceneAgent implements SceneAgentPort {
             temperature: 0.85,
         });
         return res.text.trim() || null;
+    }
+
+    /**
+     * Nightly self-model consolidation (user's ③). Given who the character dealt
+     * with today + what actually passed, it rewrites its CURRENT one-line view of
+     * each — OVERWRITE, latest-wins. Prompt is grounded in the day's events and
+     * forbids scripting (§2.43); it asks for the view AS IT NOW STANDS, so a
+     * changed relationship supersedes the old line rather than piling up beside it.
+     */
+    async consolidateSelfModel(input: SelfModelConsolidateInput): Promise<SelfModelConsolidateReply> {
+        const system = [
+            '入夜了。你替一個戲園角色做一件事:把 TA 心裡「此刻對某些人的看法」更新到最新。',
+            '',
+            '**鐵則**:',
+            '1. 每個人只給**一句**(≤40字、第一人稱)「此刻在我心裡，TA 是什麼」——寫的是**現在**,',
+            '   不是流水帳、不是回憶清單。今天若關係變了(舊帳了結、心涼了、更近了),就寫**新的**,',
+            '   舊的那句作廢。',
+            '2. 必須貼著今天實際發生的事,不要替 TA 安排以後要怎樣、不要暗示劇情。',
+            '3. 你可以(非必須)另外寫**一句**這一天讓 TA 對「自己是誰」有的新體悟(≤30字,第一人稱)。',
+            '',
+            '**輸出**:嚴格只輸出 JSON:',
+            '{"relationshipViews":[{"otherId":"…","view":"…"}],"identityInsight":"…可省略…"}',
+            '不要 markdown、不要多餘文字。',
+        ].join('\n');
+        const idBlock = input.coreIdentity.length ? `\n# 你一向記得自己是誰\n${input.coreIdentity.map((f) => `- ${f}`).join('\n')}` : '';
+        const people = input.interactions
+            .map(
+                (it) =>
+                    `- otherId=${it.otherId}｜${it.otherName}${it.currentView ? `｜你原本的看法:「${it.currentView}」` : '｜(你原本沒特別記著TA)'}${it.resolvedWithThem ? '｜(今天你和TA之間有一樁心事了結了)' : ''}\n  今天你和TA之間:${it.todayText || '(只是照了個面)'}`,
+            )
+            .join('\n');
+        const user = [
+            `# 你是誰\n${input.name}:${input.persona}`,
+            input.secret ? `\n# 你心底的事（只有你自己知道）\n${input.secret}` : '',
+            idBlock,
+            `\n# 今天你打過交道的人（第${input.day}日入夜）\n${people || '(今天沒和誰深交)'}`,
+            `\n把上面每個人「此刻在你（${input.name}）心裡是什麼」各寫一句最新的。`,
+        ]
+            .filter(Boolean)
+            .join('\n');
+
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system,
+            messages: [{ role: 'user', content: user }],
+            maxTokens: 500,
+            temperature: 0.7,
+        });
+        const obj = (extractRewriteJson(res.text) ?? {}) as {
+            relationshipViews?: Array<{ otherId?: unknown; view?: unknown }>;
+            identityInsight?: unknown;
+        };
+        const valid = new Set(input.interactions.map((it) => it.otherId));
+        const relationshipViews = Array.isArray(obj.relationshipViews)
+            ? obj.relationshipViews
+                  .map((r) => ({ otherId: String(r?.otherId ?? '').trim(), view: String(r?.view ?? '').trim().slice(0, 40) }))
+                  .filter((r) => r.otherId && r.view && valid.has(r.otherId))
+            : [];
+        const identityInsight =
+            typeof obj.identityInsight === 'string' && obj.identityInsight.trim()
+                ? obj.identityInsight.trim().slice(0, 30)
+                : undefined;
+        return { relationshipViews, identityInsight };
     }
 }

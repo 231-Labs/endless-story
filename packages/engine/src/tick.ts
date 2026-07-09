@@ -207,16 +207,14 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     ...others.slice(0, 2).map((n) => recall.recall(id, n, 1, today)),
                 ]);
                 const memories = [...new Set(recalls.flat().map((m) => m.text))].slice(0, 6);
-                const ties: Record<string, string> = {};
-                for (const o of ids) {
-                    if (o === id) continue;
-                    const tone = w.edges[id]?.[o]?.tone;
-                    if (tone) ties[o] = `你對TA：${tone}`;
-                }
+                // Self-model injection: current per-present-other view (latest-wins,
+                // never recalled) + durable identity folded into persona. Always
+                // available — the eviction fix for "who X is to me".
+                const ties = world.selfTies(id, ids);
                 return {
                     characterId: id,
                     name: member.name,
-                    persona: member.persona,
+                    persona: world.beatPersona(id),
                     memories: memories.length ? memories : undefined,
                     stateLine: stateLine(member.state.fatigue, member.state.hunger),
                     innerSecret: member.secret,

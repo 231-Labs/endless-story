@@ -40,6 +40,7 @@ import {
     buildWorldState,
     loadPresetFile,
     seedGenesisMemories,
+    seedRelationshipViews,
     type ArchivePort,
     type BoxOfficeAudienceMember,
     type BoxOfficeResult,
@@ -93,6 +94,14 @@ export interface SeasonOpts {
     midRestartAfterTick?: number;
     log?: (line: string) => void;
     audienceProse?: boolean;
+    /** Character NAME to probe for the self-model checks (records the injected
+     *  block at each decision + drives the always-available / latest-wins report).
+     *  Also seeds ~15 episodic trivia for that character so the contrast is real. */
+    selfModelProbe?: string;
+    /** Script a relationship change to prove latest-wins: `fromName` settles the
+     *  want it holds against `toName` in a private scene at `tick`; that night's
+     *  consolidation OVERWRITES fromName's view of toName. */
+    scriptSettle?: { fromName: string; toName: string; tick: number };
 }
 
 export interface TickActionRec {
@@ -133,6 +142,34 @@ export interface BedroomFinding {
     count: number;
     kinds: string[];
     reason: string;
+}
+
+/** The self-model channel's observations — proves the eviction fix + latest-wins. */
+export interface SelfModelReport {
+    /** The probe character, or null if none requested. */
+    probe: string | null;
+    /** Probe's episodic-memory count at the end (the "trivia" that would evict). */
+    probeEpisodicCount: number;
+    /** Every day-decision's injected self-model block for the probe (chronological). */
+    probeInjections: Array<{ tick: number; day: number; present: string[]; block: string }>;
+    /** The significant others whose CURRENT view stayed injected at EVERY probe
+     *  decision despite the trivia — the always-available proof. */
+    alwaysAvailable: string[];
+    /** Nightly OVERWRITE consolidations that ran (per character-relationship). */
+    consolidations: number;
+    /** Durable identity insights merged into coreIdentity (§2.52). */
+    identityInsightsAdded: number;
+    /** The scripted relationship change — before/after the OVERWRITE. */
+    latestWins: {
+        from: string;
+        to: string;
+        before: string;
+        after: string;
+        /** True iff the injected block shows ONLY the new view (old superseded). */
+        oldSuperseded: boolean;
+    } | null;
+    /** A few consolidated view lines to eyeball (from → to → view). */
+    sampleViews: Array<{ from: string; to: string; view: string }>;
 }
 
 export interface SeasonResultV3 {
@@ -183,6 +220,8 @@ export interface SeasonResultV3 {
     ledgerEvents: LedgerEvent[];
     wantsMutated: number;
     crossCharacterLeak: number;
+    // ── mutable self-model (identity/relationship channel; latest-wins) ──
+    selfModel: SelfModelReport;
     // ── memory / restore ──
     memoriesPerCast: Record<string, number>;
     recallUsed: boolean;
@@ -246,6 +285,25 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
 
     const idByName = (n: string): string => world.idByName(n) ?? n;
     world.setEdge(idByName('白韻秋'), idByName('柳生春'), '戀慕'); // 白 comes for 柳 (box-office warmth)
+
+    // ── Seed the CANON of each character's current view of the significant others
+    //    (the mutable self-model's relationship channel). Latest-wins; nightly
+    //    consolidation OVERWRITES these as relationships change. Sits ALONGSIDE the
+    //    mechanical `edges` tone graph. Authored one-liners carry what a bare tone
+    //    token can't (柳↔金鳳 舊情+虧欠、柳↔蘇 未剖白的暗慕、沈 封箱之痛). ──────────────
+    world.setEdge(idByName('柳生春'), idByName('金鳳'), '虧欠');
+    world.setEdge(idByName('柳生春'), idByName('蘇映雪'), '戀慕');
+    seedRelationshipViews(world, [
+        { from: '柳生春', to: '金鳳', view: '舊情人，如今我只欠她一句交代' },
+        { from: '柳生春', to: '蘇映雪', view: '師姐，我暗慕著，話卻始終沒敢說出口' },
+        { from: '金鳳', to: '柳生春', view: '欠我一句話的人，我等著他來了斷' },
+        { from: '蘇映雪', to: '柳生春', view: '師弟，戲搭得默契，情分我不點破' },
+        { from: '沈雪笙', to: '柳生春', view: '班裡的小生台柱，我盯著他的嗓子也盯著他的心' },
+    ]);
+    // A durable identity fact pinned for the probe-facing chars (§2.40 identity
+    //釘死): the坤生 self-fact and the班主 封箱之痛 — always injected, un-evictable.
+    world.addCoreIdentity(idByName('柳生春'), '我是坤生，女兒身扮小生，台上情長台下無人知');
+    world.addCoreIdentity(idByName('沈雪笙'), '我是沈雪笙，封了十五年戲箱的當家，疼人藏得極深');
 
     const cfg = makeSeasonConfig(totalTicks, 2);
 
@@ -319,6 +377,16 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
         recallUsed: false,
         snapshotRoundTrip: null,
         actionsByTick: [],
+        selfModel: {
+            probe: opts.selfModelProbe ?? null,
+            probeEpisodicCount: 0,
+            probeInjections: [],
+            alwaysAvailable: [],
+            consolidations: 0,
+            identityInsightsAdded: 0,
+            latestWins: null,
+            sampleViews: [],
+        },
     };
 
     // Wire the MERGED thick+warm memories into the spine so 有感而發 詞 grounds in a
@@ -346,15 +414,63 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                 const hot = world.liveWantsOf(id)[0];
                 const recalls = hot ? await recall.recall(id, hot.desc, 3, today) : [];
                 if (recalls.length) res.recallUsed = true;
-                const ties: Record<string, string> = {};
-                for (const o of ids) {
-                    if (o === id) continue;
-                    const tone = world.data.edges[id]?.[o]?.tone;
-                    if (tone) ties[o] = `你對TA：${tone}`;
-                }
-                return { characterId: id, name: m.name, persona: m.persona, memories: recalls.map((r) => r.text).slice(0, 6), stateLine: stateLine(m.state.fatigue, m.state.hunger), innerSecret: m.secret, role: m.role, ties };
+                // Self-model injection: current per-present-other view (latest-wins,
+                // never recalled) as `ties`, and durable identity folded into persona.
+                const ties = world.selfTies(id, ids);
+                return { characterId: id, name: m.name, persona: world.beatPersona(id), memories: recalls.map((r) => r.text).slice(0, 6), stateLine: stateLine(m.state.fatigue, m.state.hunger), innerSecret: m.secret, role: m.role, ties };
             }),
         );
+
+    // ── self-model bookkeeping ────────────────────────────────────────────────
+    const probeId = opts.selfModelProbe ? idByName(opts.selfModelProbe) : null;
+    /** from → to → verbatim of what passed between them today (grounds the OVERWRITE). */
+    let metToday = new Map<string, Map<string, string>>();
+    /** from → set of people a want-of-from AIMED-AT got settled with today. */
+    let settledToday = new Map<string, Set<string>>();
+    const noteMet = (ids: string[], text: string): void => {
+        for (const a of ids)
+            for (const b of ids) {
+                if (a === b) continue;
+                const row = metToday.get(a) ?? new Map<string, string>();
+                row.set(b, `${(row.get(b) ?? '').slice(-160)}\n${text}`.trim());
+                metToday.set(a, row);
+            }
+    };
+    const noteSettled = (fromId: string, toId: string): void => {
+        const s = settledToday.get(fromId) ?? new Set<string>();
+        s.add(toId);
+        settledToday.set(fromId, s);
+    };
+
+    /** Nightly self-model consolidation (user's ③): each character OVERWRITES its
+     *  current view of everyone it dealt with today (+ any settled relationship).
+     *  Latest-wins — the returned line REPLACES the map entry, never appends. */
+    const consolidateNight = async (day: number): Promise<void> => {
+        for (const m of world.data.cast) {
+            const met = metToday.get(m.id) ?? new Map<string, string>();
+            const settled = settledToday.get(m.id) ?? new Set<string>();
+            const others = new Set<string>([...met.keys(), ...settled]);
+            if (others.size === 0) continue;
+            const interactions = [...others].map((oid) => ({
+                otherId: oid,
+                otherName: world.nameById(oid),
+                currentView: world.relationshipView(m.id, oid),
+                todayText: met.get(oid) ?? '',
+                resolvedWithThem: settled.has(oid),
+            }));
+            const reply = await agent.consolidateSelfModel({ name: m.name, persona: m.persona, secret: m.secret, coreIdentity: world.castById(m.id)!.coreIdentity.slice(), interactions, day });
+            for (const rv of reply.relationshipViews) {
+                world.setRelationshipView(m.id, rv.otherId, rv.view); // OVERWRITE — latest-wins
+                res.selfModel.consolidations++;
+            }
+            if (reply.identityInsight) {
+                world.addCoreIdentity(m.id, reply.identityInsight);
+                res.selfModel.identityInsightsAdded++;
+            }
+        }
+        metToday = new Map();
+        settledToday = new Map();
+    };
 
     const rewriteFor = async (id: string, sceneText: string, tick: number): Promise<void> => {
         const live = world.liveWantsOf(id);
@@ -384,6 +500,18 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
         title: spine.prod.brief?.title ?? '白蛇傳·斷橋',
         qizhi: spine.prod.brief?.qizhi ?? spine.liyiDecided ?? '哀而不傷，重那句沒說出口的悔與不捨',
     });
+
+    // ── Seed ~15 episodic trivia for the probe so the eviction contrast is real:
+    //    these are exactly the kind of recent, low-stakes beats that in
+    //    feat/ultimatum-probe pushed the 5/5 core memories out of the recall top-K
+    //    by day 5. Here they live in the recall channel ONLY; the probe's view of
+    //    金鳳/蘇 lives in the self-model, so it is never in that lottery. ──────────
+    if (probeId) {
+        const trivia = ['後台的茶又涼了', '把水袖重新熨了一遍', '跟管箱的對了對明日的行頭', '廊下的燈籠換了根新蠟', '嗓子今早有點啞，含了片胖大海', '數了數這月的份例', '幫連翹補了道靠旗的線', '灶上的粥熬糊了一角', '院裡那隻花貓又來蹭腿', '把舊鞋底重新納了幾針', '聽見隔壁堂子在調弦', '雨後戲台有些潮，墊了層氈', '替江聞鶴帶了壺熱酒', '把用禿的筆換了一支', '晌午打了個盹，夢也沒記住'];
+        for (let i = 0; i < trivia.length; i++) {
+            await recall.remember(probeId, trivia[i], { kind: 'observation', importance: 2, day: 1 + Math.floor(i / 6) });
+        }
+    }
 
     // ── The season tick loop ──────────────────────────────────────────────────
     let clk = world.data.clock;
@@ -476,6 +604,7 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                 const who = ids.map((id) => world.nameById(id)).join('、');
                 for (const b of loop.beats) nightLines.push(`[${world.sceneNameById(sid)}·私] ${b.name}：${b.text}`);
                 log(`  夜場（${kind}）: ${who} 掩門入內——不入公開的日回。`);
+                noteMet(ids, loop.beats.map((b) => `${b.name}：${b.text}`).join('\n'));
                 for (const cid of new Set(loop.beats.map((b) => b.characterId))) await rewriteFor(cid, loop.beats.map((b) => `${b.name}：${b.text}`).join('\n'), tick);
             }
             if (nightLines.length > 0) {
@@ -490,6 +619,29 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
         } else {
             // ============================ DAY ============================
             const narratedExtra: string[] = []; // milestone + convened-casting + absence beats
+
+            // (0) SCRIPTED SETTLE (opt-in, latest-wins demo): the two meet privately
+            //     and the debtor settles the want it holds against the other. That
+            //     closes the want AND flags the pair as settled today, so tonight's
+            //     consolidation OVERWRITES the debtor's view of them (舊情人→兩清).
+            if (opts.scriptSettle && tick === opts.scriptSettle.tick) {
+                const fromId = idByName(opts.scriptSettle.fromName);
+                const toId = idByName(opts.scriptSettle.toName);
+                if (fromId && toId && fromId !== toId) {
+                    const loop = await runSceneLoop({ sceneId: `settle${tick}`, sceneName: '會樂里·金鳳寓所', isPrivate: true, clock: clockLabel, stake: `${opts.scriptSettle.fromName}上門，把那樁多年沒說清的舊帳，這一回當面了斷。`, cast: await sceneCast([fromId, toId], today), wants, tick, agent });
+                    const settleText = loop.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+                    noteMet([fromId, toId], settleText || `${opts.scriptSettle.fromName}當面把話說清了`);
+                    const debt = world.liveWantsOf(fromId).find((wt) => wt.target === opts.scriptSettle!.toName || wt.target === toId);
+                    if (debt) {
+                        debt.retired = true;
+                        debt.resolvedTick = tick;
+                        debt.resolvedNote = '當面交代清楚，兩清';
+                        res.ledgerEvents.push({ tick, characterId: fromId, kind: 'close', wantId: debt.id, fromDesc: debt.desc, note: '當面交代清楚，兩清' });
+                    }
+                    noteSettled(fromId, toId);
+                    log(`  〔了斷〕${opts.scriptSettle.fromName} → ${opts.scriptSettle.toName}：舊帳當面說清，兩清。`);
+                }
+            }
 
             // (1a) 班主 milestone announcement (state-driven, precedes the spine stage
             //      it names): 定角 the day before casting fires; 排練 the day before the
@@ -565,7 +717,16 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                 const hot = world.liveWantsOf(id)[0];
                 const recalls = hot ? await recall.recall(id, hot.desc, 3, today) : [];
                 if (recalls.length) res.recallUsed = true;
-                const choice = await agent.chooseAction({ name: m.name, persona: m.persona, role: m.role, secret: m.secret, wants: world.liveWantsOf(id).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })), memories: recalls.map((r) => r.text).slice(0, 5), worldFact, sharedLog: sharedLog.slice(-14), playSummary: spine.summaryLine(), castNames });
+                // ALWAYS-AVAILABLE self-model: a personal-planning decision, so the
+                // full self-model (every significant other, not just co-present) —
+                // the character can reason about someone not in the room. Current,
+                // un-evictable; injected regardless of what recall surfaced.
+                const selfModel = world.selfModelBlock(id);
+                const choice = await agent.chooseAction({ name: m.name, persona: m.persona, role: m.role, secret: m.secret, wants: world.liveWantsOf(id).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })), memories: recalls.map((r) => r.text).slice(0, 5), selfModel, worldFact, sharedLog: sharedLog.slice(-14), playSummary: spine.summaryLine(), castNames });
+                if (id === probeId) {
+                    const present = world.data.cast.map((x) => x.id).filter((oid) => oid !== id && world.relationshipView(id, oid)).map((oid) => world.nameById(oid));
+                    res.selfModel.probeInjections.push({ tick, day: today, present, block: selfModel });
+                }
                 actions.push({ actor: m.name, kind: choice.kind, target: choice.target, prose: choice.prose });
                 if (choice.kind === 'seek_person' && choice.target) {
                     const tid = idByName(choice.target);
@@ -607,6 +768,7 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                         log(`  [${REHEARSAL_VENUE}·排] ${b.name}：${b.text}`);
                     }
                     const sceneText = loop.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+                    if (loop.beats.length) noteMet(presentIds, sceneText);
                     for (const cid of new Set(loop.beats.map((b) => b.characterId))) rewrittenText.set(cid, sceneText);
                     for (const b of loop.beats) await recall.remember(b.characterId, `〔${REHEARSAL_VENUE}·排〕${b.text}`, { kind: 'chapter', importance: 5, day: today });
                 }
@@ -643,6 +805,7 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                     const loop = await runSceneLoop({ sceneId: `dnf${tick}-g${gi++}`, sceneName: world.sceneNameById(world.data.roster[ids[0]]) || '會樂里', isPrivate: false, clock: clockLabel, cast: await sceneCast(ids, today), wants, tick, agent });
                     for (const b of loop.beats) publicBeats.push(b);
                     const sceneText = loop.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+                    if (loop.beats.length) noteMet(ids, sceneText);
                     for (const cid of new Set(loop.beats.map((b) => b.characterId))) rewrittenText.set(cid, sceneText);
                 }
             } else {
@@ -666,6 +829,7 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                     const loop = await runSceneLoop({ sceneId: `d${tick}-g${gi++}`, sceneName: REHEARSAL_VENUE, isPrivate: false, clock: clockLabel, stake: tick === 0 ? '堂會的客與報館的人都在座，台上台下都有眼睛。' : undefined, cast: await sceneCast(ids, today), wants, tick, agent });
                     for (const b of loop.beats) { publicBeats.push(b); log(`  [${REHEARSAL_VENUE}] ${b.name}：${b.text}`); }
                     const sceneText = loop.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+                    if (loop.beats.length) noteMet(ids, sceneText);
                     for (const cid of new Set(loop.beats.map((b) => b.characterId))) rewrittenText.set(cid, sceneText);
                     for (const b of loop.beats) await recall.remember(b.characterId, `〔${REHEARSAL_VENUE}〕${b.text}`, { kind: 'chapter', importance: 5, day: today });
                 }
@@ -696,6 +860,26 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
             for (const m of world.data.cast) {
                 m.state.fatigue = Math.max(0, Math.min(1, m.state.fatigue + (actedIds.has(m.id) ? 0.12 : 0.05)));
                 m.state.hunger = Math.max(0, Math.min(1, clk.tickOfDay === 0 ? 0.15 : m.state.hunger + 0.12));
+            }
+        }
+
+        // ── Nightly self-model consolidation (user's ③) — the唯一 digestion window
+        //    (CHARACTER_LIFECYCLE §4). Each character OVERWRITES its view of everyone
+        //    it dealt with today (latest-wins). Runs once per day at day-end (a night
+        //    tick). Captures the probe's before-view so latest-wins is provable. ────
+        if (dayEnd) {
+            let beforeSettle: string | undefined;
+            if (probeId && opts.scriptSettle && idByName(opts.scriptSettle.fromName) === probeId) {
+                beforeSettle = world.relationshipView(probeId, idByName(opts.scriptSettle.toName));
+            }
+            await consolidateNight(today);
+            if (probeId && opts.scriptSettle && idByName(opts.scriptSettle.fromName) === probeId && !res.selfModel.latestWins) {
+                const toId = idByName(opts.scriptSettle.toName);
+                const after = world.relationshipView(probeId, toId);
+                if (beforeSettle && after && after !== beforeSettle) {
+                    const block = world.selfModelBlock(probeId);
+                    res.selfModel.latestWins = { from: opts.scriptSettle.fromName, to: opts.scriptSettle.toName, before: beforeSettle, after, oldSuperseded: !block.includes(beforeSettle) && block.includes(after) };
+                }
             }
         }
 
@@ -731,6 +915,30 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
     res.castingDiscussion = spine.discussions.find((d) => d.stage === '選角') ?? null;
     res.reshapeApplied = spine.reshapeApplied;
     res.liyiDecided = spine.liyiDecided;
+
+    // ── Self-model finalization ────────────────────────────────────────────────
+    if (probeId) {
+        res.selfModel.probeEpisodicCount = (
+            await recall.recall(probeId, '金鳳 蘇映雪 舊事 心事', 200, world.data.clock.day)
+        ).length;
+        // Always-available = the significant others whose current view stayed in the
+        // injected block at EVERY probe decision (never evicted — it's not recall).
+        const decisions = res.selfModel.probeInjections;
+        const canonOthers = ['金鳳', '蘇映雪'];
+        res.selfModel.alwaysAvailable = canonOthers.filter(
+            (n) => decisions.length > 0 && decisions.every((d) => d.block.includes(n)),
+        );
+    }
+    // A few consolidated view lines to eyeball (probe first, then others).
+    const viewSamples: Array<{ from: string; to: string; view: string }> = [];
+    for (const m of world.data.cast) {
+        for (const [toId, view] of Object.entries(m.relationshipView)) {
+            viewSamples.push({ from: m.name, to: world.nameById(toId), view });
+        }
+    }
+    res.selfModel.sampleViews = viewSamples
+        .sort((a, b) => (a.from === opts.selfModelProbe ? -1 : 0) - (b.from === opts.selfModelProbe ? -1 : 0))
+        .slice(0, 8);
     res.thickMemoryCi = spine.ciMeta
         .filter((c) => c.fromRecall && c.memoryProvenance)
         .map((c) => ({ author: c.authorName, ref: c.refName, memory: c.memoryProvenance! }));

@@ -53,6 +53,48 @@ export function loadPresetFile(presetId: string, storiesDir?: string): RawPreset
     return JSON.parse(fs.readFileSync(file, 'utf-8')) as RawPreset; // throws if absent
 }
 
+/** Deterministic identity distillation for the durable self-model: 「我是<name>，
+ *  <行當>」 + the bio's first clause (kept short). No LLM — nightly §2.52 insight
+ *  and explicit canon seeding refine it later. */
+function distillIdentity(name: string, role: string | undefined, description: string): string[] {
+    const facts: string[] = [`我是${name}${role ? `，${role}` : ''}`];
+    const firstClause = description.split(/[。；;\n]/)[0]?.trim();
+    if (firstClause && firstClause.length <= 40 && firstClause !== description.trim()) facts.push(firstClause);
+    return facts;
+}
+
+/**
+ * Seed each character's CURRENT relationship view from the seeded canon edges,
+ * as a first-person one-liner. This is the initial mutable self-model for the
+ * relationship channel; nightly consolidation OVERWRITES it as relationships
+ * change. Call AFTER the harness has seeded its `setEdge` canon. `overrides`
+ * lets a harness pin richer authored lines (柳→金鳳 debt, 柳→蘇 暗戀, …) that a
+ * bare tone token can't carry. Keyed [fromName, toName] → line.
+ */
+export function seedRelationshipViews(
+    world: WorldState,
+    overrides: Array<{ from: string; to: string; view: string }> = [],
+): number {
+    let seeded = 0;
+    // 1) derive a plain line from every canon edge tone.
+    for (const [fromId, row] of Object.entries(world.data.edges)) {
+        for (const [toId, edge] of Object.entries(row)) {
+            world.setRelationshipView(fromId, toId, `${edge.tone}（${world.nameById(toId)}）`);
+            seeded++;
+        }
+    }
+    // 2) pin the authored canon lines on top (latest-wins).
+    for (const o of overrides) {
+        const fromId = world.idByName(o.from);
+        const toId = world.idByName(o.to);
+        if (fromId && toId) {
+            world.setRelationshipView(fromId, toId, o.view);
+            seeded++;
+        }
+    }
+    return seeded;
+}
+
 /** Build a fresh WorldState from a parsed preset (pure; no I/O, no recall). */
 export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6): WorldState {
     const scenes: SceneInfo[] = (raw.scenes ?? []).map((s, i) => ({
@@ -83,6 +125,13 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
             age: c.ageYears,
             role: c.role,
             state: { fatigue: 0.3, hunger: 0.2, mood: 0 },
+            // Seed the durable self-model from persona: name + 行當 + the first
+            // clause of the bio as a deterministic identity distillation (no LLM).
+            // relationshipView starts empty; the seeded relationship canon (edges)
+            // fills it via `seedRelationshipViews`, and nightly consolidation
+            // overwrites it thereafter.
+            coreIdentity: distillIdentity(c.name, c.role, c.description),
+            relationshipView: {},
         });
         const work = resolveScene(c.work_scene, c.name, 'work_scene');
         homeByChar[id] = resolveScene(c.home_scene, c.name, 'home_scene');

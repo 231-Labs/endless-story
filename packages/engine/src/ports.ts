@@ -55,6 +55,10 @@ export interface ChooseActionInput {
     wants: Array<{ layer: string; desc: string; target?: string }>;
     /** Recalled memory snippets. */
     memories?: string[];
+    /** ALWAYS-AVAILABLE self-model block (durable identity + current one-line view
+     *  of significant others) from WorldState.selfModelBlock — NOT recall. Current
+     *  and un-evictable by construction; injected on every decision. */
+    selfModel?: string;
     /** Season world-fact injected as state-of-the-world (prologue essence at t0 +
      *  the decrementing deadline line) — a FACT, never an instruction. */
     worldFact: string;
@@ -83,6 +87,41 @@ export interface AudienceReactionInput {
     warmth: number;
 }
 
+// ── Nightly self-model consolidation (user's ③; latest-wins OVERWRITE) ─────────
+/** One person this character dealt with today, with the current view + what
+ *  actually happened, so the OVERWRITE is grounded (§2.43 no scripting). */
+export interface SelfModelInteraction {
+    otherId: string;
+    otherName: string;
+    /** The current (pre-consolidation) one-line view, if any. */
+    currentView?: string;
+    /** Verbatim of what passed between them today (scene beats / the settling). */
+    todayText: string;
+    /** True when a want of this character AIMED AT this person was settled/closed
+     *  today — the relationship materially changed (the latest-wins trigger). */
+    resolvedWithThem?: boolean;
+}
+
+export interface SelfModelConsolidateInput {
+    name: string;
+    persona: string;
+    secret?: string;
+    /** The character's current durable identity facts (may gain one insight). */
+    coreIdentity: string[];
+    /** People interacted with today + core relationships to refresh. */
+    interactions: SelfModelInteraction[];
+    /** The narrative day, for grounding phrasing. */
+    day: number;
+}
+
+export interface SelfModelConsolidateReply {
+    /** otherId → the NEW ≤40字 first-person view. OVERWRITES the map entry
+     *  (latest-wins) — the old line is superseded, never kept alongside. */
+    relationshipViews: Array<{ otherId: string; view: string }>;
+    /** Optional durable identity insight to merge into coreIdentity (§2.52). */
+    identityInsight?: string;
+}
+
 /**
  * The full narrative-LLM surface the loop needs. It EXTENDS the scene-loop's
  * injectable `SceneAgent` (actBeat + judgeWantResolved, consumed inside
@@ -101,6 +140,10 @@ export interface SceneAgentPort extends SceneAgent {
     chooseAction(input: ChooseActionInput): Promise<ChooseActionResult>;
     /** Living-want self-rewrite after a scene/action (scene-scoped, RUNNER_V2 §9). */
     rewriteWantLedger(input: RewriteLedgerInput): Promise<RewriteReply>;
+    /** Nightly self-model consolidation (user's ③): OVERWRITE this character's
+     *  current view of each person dealt with today + core relationships. Never
+     *  appends — the returned line REPLACES the map entry (latest-wins). */
+    consolidateSelfModel(input: SelfModelConsolidateInput): Promise<SelfModelConsolidateReply>;
     /** Optional: PROSE of an audience member's reaction (never the box-office number). */
     audienceReaction?(input: AudienceReactionInput): Promise<string | null>;
 }

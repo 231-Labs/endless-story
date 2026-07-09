@@ -17,8 +17,8 @@ function sampleWorld(): WorldState {
         sagaId: 'test',
         sagaPremise: 'a troupe',
         cast: [
-            { id: 'c0', name: '柳生春', persona: '小生', secret: '暗戀師姐', role: '小生', state: { fatigue: 0.3, hunger: 0.2, mood: 0 } },
-            { id: 'c1', name: '蘇映雪', persona: '花旦', role: '花旦', state: { fatigue: 0.4, hunger: 0.1, mood: 0 } },
+            { id: 'c0', name: '柳生春', persona: '小生', secret: '暗戀師姐', role: '小生', state: { fatigue: 0.3, hunger: 0.2, mood: 0 }, coreIdentity: ['我是坤生，女兒身扮小生'], relationshipView: { c1: '師姐，我暗慕著，話沒敢說' } },
+            { id: 'c1', name: '蘇映雪', persona: '花旦', role: '花旦', state: { fatigue: 0.4, hunger: 0.1, mood: 0 }, coreIdentity: ['我是蘇映雪，工花旦'], relationshipView: {} },
         ],
         scenes: [
             { id: 's0', name: '後台', privacyLevel: 2 },
@@ -68,4 +68,41 @@ test('welcome gate reads directed relationship tone', () => {
     assert.equal(w.welcome('c1', 'c0'), 0.5, 'no edge → neutral');
     w.setEdge('c1', 'c0', '妒');
     assert.ok(w.welcome('c1', 'c0') < 0.5, 'jealous edge shuts the door');
+});
+
+test('self-model (coreIdentity + relationshipView) survives snapshot/restore', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'es-world-sm-'));
+    const w = sampleWorld();
+    w.addCoreIdentity('c0', '我認了：戲比天大');
+    w.setRelationshipView('c0', 'c1', '師姐，這一晚我把話說了');
+    w.snapshot(dir);
+    const restored = WorldState.restore(dir);
+    assert.deepEqual(restored.castById('c0')!.coreIdentity, ['我是坤生，女兒身扮小生', '我認了：戲比天大']);
+    assert.equal(restored.relationshipView('c0', 'c1'), '師姐，這一晚我把話說了');
+    // The self-model block injects both channels, current and un-evictable.
+    const block = restored.selfModelBlock('c0', ['c1']);
+    assert.ok(block.includes('我是坤生'), 'identity injected');
+    assert.ok(block.includes('師姐，這一晚我把話說了'), 'current view injected');
+    fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('relationshipView is OVERWRITE latest-wins (not append) — old view superseded', () => {
+    const w = sampleWorld();
+    w.setRelationshipView('c0', 'c1', '舊情人，我只欠她一句交代');
+    assert.equal(w.relationshipView('c0', 'c1'), '舊情人，我只欠她一句交代');
+    // A changed relationship OVERWRITES — the entry is replaced, never doubled.
+    w.setRelationshipView('c0', 'c1', '話說開了，兩清了');
+    assert.equal(w.relationshipView('c0', 'c1'), '話說開了，兩清了', 'latest wins');
+    assert.equal(Object.keys(w.castById('c0')!.relationshipView).length, 1, 'exactly one view per person — no stale+new pair');
+    const block = w.selfModelBlock('c0', ['c1']);
+    assert.ok(block.includes('話說開了，兩清了') && !block.includes('舊情人'), 'injected block shows ONLY the new view');
+});
+
+test('selfTies prefers the current view, falls back to edge tone', () => {
+    const w = sampleWorld();
+    // c0 has a view of c1 already; c0 has an edge to c1 too — view wins.
+    assert.equal(w.selfTies('c0', ['c0', 'c1'])['c1'], '師姐，我暗慕著，話沒敢說');
+    // c1 has no view of c0 but (after setEdge) an edge → tone fallback.
+    w.setEdge('c1', 'c0', '競');
+    assert.equal(w.selfTies('c1', ['c0', 'c1'])['c0'], '你對TA：競');
 });
