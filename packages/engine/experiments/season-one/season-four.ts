@@ -127,7 +127,17 @@ function printCounterBlock(r: SeasonResultV3): void {
 }
 
 async function main(): Promise<void> {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'es-season4-'));
+    // Output dir. FAKE: a throwaway temp dir cleaned on success. REAL: a STABLE,
+    // announced dir (SEASON_OUT_DIR override) wiped at start and PRESERVED at the
+    // end, so there is exactly ONE unambiguous real-run archive to inspect (a
+    // successful run must NOT delete the prose the reviewer needs to read).
+    const dir = REAL
+        ? (process.env.SEASON_OUT_DIR ?? path.join(os.tmpdir(), 'es-season4-real'))
+        : fs.mkdtempSync(path.join(os.tmpdir(), 'es-season4-fake-'));
+    if (REAL) fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`[season-four] mode=${REAL ? 'REAL-LLM' : 'FAKE-LLM'}  output dir: ${dir}`);
+    console.log(`[season-four] archive → ${path.join(dir, 'archive')}  (daily 章回 = d<day>-t<tick>-chapter-*回-*.md, episode = d<day>-*-episode-*.md)`);
     const agent = await makeAgent();
     const troupeAsk: Ask = makeAsk({ mock: !REAL });
     const recall = new LocalRecall(path.join(dir, 'memory'));
@@ -206,8 +216,13 @@ async function main(): Promise<void> {
     assert.ok(Math.min(...Object.values(r.memoriesPerCast)) >= 14, 'every cast member ≥14 authored memories');
     assert.ok(r.snapshotRoundTrip && r.snapshotRoundTrip.ok, 'WorldState snapshot/restore round-trips mid-season');
 
-    console.log('\n✅ SEASON FOUR FAKE-LLM SMOKE GREEN — all mechanical counters pass.\n');
-    fs.rmSync(dir, { recursive: true, force: true });
+    console.log(`\n✅ SEASON FOUR ${REAL ? 'REAL-LLM RUN' : 'FAKE-LLM SMOKE'} GREEN — all mechanical counters pass.\n`);
+    if (REAL) {
+        console.log(`[season-four] REAL archive PRESERVED → ${path.join(dir, 'archive')}`);
+        console.log('  inspect the day-1 episode + a per-tick daily 章回 there; they hold the woven prose from the real agent.');
+    } else {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 }
 
 main().catch((err) => {

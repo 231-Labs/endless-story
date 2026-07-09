@@ -119,11 +119,53 @@ ending predicate................... complete=true
 
 `✅ SEASON FOUR FAKE-LLM SMOKE GREEN — all mechanical counters pass.`
 
-## Real-LLM command (STOP before running this round)
+## Chapter-recording diagnosis (real-run report of fake daily 章回)
+
+The real run reported the ARCHIVED daily 章回 + day episode coming out as
+FakeSceneAgent output (`（假織回）`, `X繞著「want」打轉`), while beats were real in
+stdout and the rehearsal/casting archived real.
+
+Findings after investigation:
+
+- `（假織回）` / `X繞著「want」打轉` exist ONLY in `fake-scene-agent.ts` (lines 116 /
+  43). The real weave/episode (`sceneRecord.weaveTickChapter`,
+  `eventChapter.composeEpisode`) return `null` on failure (never a fake string),
+  and `characterAgent.actBeat` fails to `（沉默。）` (never the fake template). So
+  those strings can ONLY be emitted by a **FakeSceneAgent instance** used as `agent`.
+- `harness-v3.ts`'s daily weave/episode/record path is byte-identical to the
+  working `harness-v2.ts`: it uses the passed-in `agent.weaveTickChapter` /
+  `agent.composeEpisode` throughout, with a real-beats fallback. No stray fake.
+- Reproduced the real code path with the real `RunnerSceneAgent` (engine LLM
+  stubbed via `ES_HARNESS=1`, zero keys): every archived daily 章回 + the day
+  episode contained REAL woven prose (`〔織回〕…`, `## 這一回 …`), **zero fake
+  markers**. Proof the daily record path is correct when `agent` is the real agent.
+
+Root cause = **archive dir confusion**: the old `season-four.ts` deleted the temp
+dir on a SUCCESSFUL run (`fs.rmSync`), so a successful real run left NO archive and
+any leftover `es-season4-*` dir was from a fake/failed run. Fix:
+
+- REAL runs now write to a STABLE, announced dir (`SEASON_OUT_DIR` override, default
+  `os.tmpdir()/es-season4-real`), wiped at start and **PRESERVED** at the end; the
+  path is printed at start and end. FAKE smoke keeps a throwaway dir cleaned on pass.
+- Banner + counter block now reflect the actual mode (was hard-coded FAKE).
+
+### Verify the real record path WITHOUT keys (real agent + stubbed LLM)
+
+```
+ES_HARNESS=1 SEASON_REAL_LLM=1 ./node_modules/.bin/tsx experiments/season-one/season-four.ts
+# archive → $TMPDIR/es-season4-real/archive  (real-path woven prose; note: a
+# downstream want-rewrite assertion fails only because the STUB LLM emits no valid
+# rewrite JSON — irrelevant to the archive, which is written before assertions)
+```
+
+## Real-LLM command (keys via env; archive is preserved + printed)
 
 ```
 POE_API_KEY=… OPENAI_API_KEY=… AI_PROVIDER=poe POE_MODEL_PRIMARY=GLM-4.6 \
   SEASON_REAL_LLM=1 ./node_modules/.bin/tsx experiments/season-one/season-four.ts
+# real archive PRESERVED at (printed at start+end): $TMPDIR/es-season4-real/archive
+# open d1-t*-chapter-*回-*.md and d1-t5-episode-*.md — must be real woven prose,
+# NOT （假織回） / 繞著「…」打轉
 ```
 
 ## What the real run will stress
