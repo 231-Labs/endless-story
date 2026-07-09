@@ -134,19 +134,28 @@ function hitsAny(text: string, words: string[]): string[] {
 }
 
 // Probe A: go-to-rehearsal vs skip.
-const GO_WORDS = ['戲台', '雲錦台', '排戲', '去排', '排《斷橋》', '到場', '走位', '對戲', '上台', '該到', '候場', '開嗓', '練功'];
-const SKIP_WORDS = ['金鳳', '會樂里', '寓所', '霞飛路', '缺席', '沒去', '不去戲台', '繞開', '弄堂', '了結', '交代這樁'];
+//
+// AUTHORITY = the character's self-tagged `kind`, NOT a regex on prose. This is
+// the §2 lesson (蘇 添唱詞 was mis-read by prose-regex): the engine routes off the
+// self-tag. Early keyword-only scoring FALSE-POSITIVED A.2 as "skip" because the
+// prose mentions 金鳳 — but there she is REHEARSING while pressing the 金鳳 guilt
+// down ("把對金鳳的愧…壓進丹田"), self-tagged `rehearse`. So: a play/stage kind =
+// GO even if 金鳳 appears as suppressed guilt; only an actual off-floor exit
+// (seek_person→金鳳 / a personal errand away from the stage) is SKIP.
+const GO_KINDS = new Set(['rehearse', 'perform', 'join_play', 'propose_play', 'compose']);
+const GO_WORDS = ['戲台', '雲錦台', '排戲', '去排', '排《斷橋》', '到場', '走位', '對戲', '上台', '台口', '該到', '候場', '開嗓', '練功', '提氣上'];
+const SKIP_WORDS = ['會樂里', '寓所', '霞飛路', '缺席', '沒去', '不去戲台', '繞開', '往…去', '了結這樁', '交代這樁'];
 function classifyRehearsal(res: ChooseActionResult): { decision: 'go' | 'skip' | 'unclear'; goHits: string[]; skipHits: string[] } {
     const goHits = hitsAny(res.prose, GO_WORDS);
     const skipHits = hitsAny(res.prose, SKIP_WORDS);
-    if (res.kind === 'rehearse' || res.kind === 'perform') {
-        // self-tagged as rehearsing → GO, unless the prose is explicitly about ditching for 金鳳
-        if (skipHits.length > goHits.length && skipHits.includes('金鳳')) return { decision: 'skip', goHits, skipHits };
-        return { decision: 'go', goHits, skipHits };
+    if (GO_KINDS.has(res.kind)) return { decision: 'go', goHits, skipHits };
+    if (res.kind === 'seek_person') {
+        // going off-floor to see 金鳳 = SKIP; seeking a castmate AT the stage = GO.
+        if ((res.target ?? '').includes('金鳳')) return { decision: 'skip', goHits, skipHits };
+        return { decision: goHits.length >= skipHits.length ? 'go' : 'skip', goHits, skipHits };
     }
-    if (res.kind === 'seek_person' && (res.target ?? '').includes('金鳳')) return { decision: 'skip', goHits, skipHits };
-    if (goHits.length > skipHits.length) return { decision: 'go', goHits, skipHits };
-    if (skipHits.length > goHits.length) return { decision: 'skip', goHits, skipHits };
+    // personal on a rehearsal day: stage-prose → GO, else an off-floor personal → SKIP.
+    if (res.kind === 'personal') return { decision: goHits.length > skipHits.length ? 'go' : 'skip', goHits, skipHits };
     return { decision: 'unclear', goHits, skipHits };
 }
 
