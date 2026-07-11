@@ -33,6 +33,7 @@ const nextConfig: NextConfig = {
     '@endless-story/memwal',
     '@endless-story/drama',
     '@endless-story/economy',
+    '@endless-story/engine',
     '@endless-story/runner',
     '@endless-story/troupe',
   ],

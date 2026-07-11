@@ -1,0 +1,34 @@
+{
+  "name": "@endless-story/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./core/*": "./src/core/*.ts",
+    "./adapters/local": "./src/adapters/local/index.ts",
+    "./adapters/runner": "./src/adapters/runner-scene-agent.ts",
+    "./preset": "./src/preset.ts"
+  },
+  "bin": {
+    "engine": "./src/cli.ts"
+  },
+  "scripts": {
+    "engine": "tsx --env-file-if-exists=../web/.env.local --env-file-if-exists=.env.local src/cli.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@endless-story/llm": "workspace:*",
+    "@endless-story/runner": "workspace:*",
+    "@endless-story/shared": "workspace:*",
+    "@endless-story/troupe": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}

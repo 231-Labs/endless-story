@@ -3,6 +3,7 @@
 > **狀態**：canonical · 2026-05-30 起 · 這份是敘事引擎的**唯一方向文件**。
 > **取代**：2026-05-26 的 runner 重寫 proposal、memory `cognition_port_plan`、其餘散落筆記。
 > 之後所有敘事層的開發**一律參照本檔**;與本檔衝突的舊文件以本檔為準。
+> **機制寫在哪裡**（研究/生產單一實作紀律、待搬遷清單）→ [ENGINE_CORE.md](./ENGINE_CORE.md)。
 
 > **北極星**：兩個自治 agent（**Director 導演** + **Character 角色/演員**），做到
 > **C 級全自治**（角色自己 perceive→plan→move→act→reflect,世界自己會動）。

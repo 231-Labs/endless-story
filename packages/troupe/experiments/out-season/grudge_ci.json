@@ -1,0 +1,18 @@
+{
+  "forSceneId": null,
+  "title": "柳生春·有感（欠金鳳一句交代）〔實驗補跑：off-stage 恩怨〕",
+  "lines": [
+    "霞飛路冷月如霜，",
+    "曾識溫柔在畫堂。",
+    "欠卻前言難啓齒，",
+    "繞行深巷怕回望。"
+  ],
+  "authorId": "kunsheng",
+  "authorName": "柳生春",
+  "source": "emergent",
+  "provenance": {
+    "kind": "relationship",
+    "refId": "jinfeng",
+    "why": "六七年身之情，欠一句交代；金鳳不在台上，包裝管線的 inCast 濾掉了她，此段為實驗補跑。"
+  }
+}

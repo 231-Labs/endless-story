@@ -89,6 +89,17 @@ export const WANT = {
      *  high (rippleSat 0.2 × weight = ~0.4, above fadeTensionBelow forever), so
      *  the tension lane can't reap it — this idle lane does, on age alone. */
     rippleIdleEps: 0.04,
+    /** H3d: a bond (love/debt) want this unsatisfied seeks its object at night
+     *  even when it is COLD (forcing idle) — desire pulls by how unmet it is, not
+     *  only by accumulated heat. Without this a love want that never gets to be a
+     *  scene's driver (a rivalry out-drives it) stays idle forever and the night
+     *  pair never forms. Tension-gated so only a genuine bond pulls, not a whim. */
+    bondYearnTension: 0.5,
+    /** H3d: heat a bond want gains per scene merely by sharing the stage with its
+     *  target, even when another want is the driver. Small (a driver gains +1/beat);
+     *  this lets a starved love/debt want climb toward edge over co-present ticks
+     *  instead of being frozen out of the heat economy entirely. */
+    bondCopresenceHeat: 0.5,
 } as const;
 
 export const tension = (w: Want): number => w.weight * (1 - w.sat);
@@ -118,6 +129,11 @@ const LOVE_LAYER = /愛|情/;
 const RECKON_LAYER = /虧欠|愧|償|怨/;
 /** Jealousy that walks in on a pair (撞破). */
 const JEALOUS_LAYER = /妒|怨/;
+
+/** A bond want (love or unsettled debt/grudge) — the layers that ache toward a
+ *  specific other person. The scene-loop heats these by co-presence (H3d). */
+export const isBondLayer = (layer: string): boolean =>
+    LOVE_LAYER.test(layer) || RECKON_LAYER.test(layer);
 
 /** Does the private 2-person scene hold a live `re`-layer want aimed across the
  *  pair? Shared by 幽會 / 了結 / the 撞破 pair check. Pure. */
@@ -164,20 +180,31 @@ export function qualifiesAsReckoning(
     return pairWantBetween(cs, privacyLevel, wants, RECKON_LAYER);
 }
 
+/** A want is ripe enough to move feet at night if it has accumulated heat
+ *  (forcing past idle). For a BOND want (yearn), a cold-but-strong desire also
+ *  counts: high standing tension pulls toward its object even without heat —
+ *  H3d, so a love want that a rivalry keeps out of the driver seat still seeks
+ *  its target at night rather than freezing at idle forever. */
+function nightRipe(w: Want, yearn: boolean): boolean {
+    if (forcingLevel(w) !== 'idle') return true;
+    return yearn && tension(w) >= WANT.bondYearnTension;
+}
+
 /** Shared night-pursuit core: the hottest live want whose layer matches `re`
- *  and that is at pressing+ points its owner toward its target. Returns the
- *  chosen want too, so callers can gate intrusion on its forcing level. Pure. */
+ *  and that is ripe points its owner toward its target. Returns the chosen want
+ *  too, so callers can gate intrusion on its forcing level / tension. Pure. */
 function nightPursuit(
     wants: ReadonlyArray<Want>,
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
     re: RegExp,
+    yearn = false,
 ): { id: string; w: number; want: Want } | null {
     let best: Want | null = null;
     for (const w of wants) {
         if (w.retired || w.characterId !== characterId || !w.target) continue;
         if (!re.test(w.layer)) continue;
-        if (forcingLevel(w) === 'idle') continue; // only a ripe want moves feet
+        if (!nightRipe(w, yearn)) continue; // only a ripe want moves feet
         if (!best || tension(w) > tension(best)) best = w;
     }
     if (!best) return null;
@@ -214,8 +241,20 @@ export function yearningNightPursuit(
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
 ): { id: string; w: number; intrude?: true } | null {
-    const p = nightPursuit(wants, characterId, resolveTargetId, new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`));
+    const p = nightPursuit(
+        wants,
+        characterId,
+        resolveTargetId,
+        new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`),
+        true, // yearn: a cold-but-strong bond still SEEKS its object (H3d) — it
+        //       becomes a candidate even at idle, so a love want a rivalry keeps
+        //       out of the driver seat no longer freezes out of the night.
+    );
     if (!p) return null;
+    // Intrude (barge in uninvited) stays reserved for a ripe (edge+) want, per
+    // H3c. A cold-but-yearning bond only SEEKS: it is welcome-gated, so a MUTUAL
+    // love pair still forms (each welcomes the other → propriety > 0 in the router)
+    // while a one-sided cold longing stays politely at a shut door.
     const fl = forcingLevel(p.want);
     return fl === 'edge' || fl === 'breaking'
         ? { id: p.id, w: pursuitWeight(p.want), intrude: true }

@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROUTING, pickNextActor, type NextActorCandidate } from './scene-routing.ts';
+import { ROUTING, pickNextActor, type NextActorCandidate } from '@endless-story/engine/core/scene-routing';
 
 const c = (characterId: string, tension: number, beatsTaken = 0, isAddressed = false): NextActorCandidate => ({
     characterId, tension, beatsTaken, isAddressed,

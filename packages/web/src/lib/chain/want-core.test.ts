@@ -21,7 +21,7 @@ import {
     pickSalient,
     tension,
     type Want,
-} from './want-core.ts';
+} from '@endless-story/engine/core/want-core';
 
 const mk = (characterId: string, desc: string, weight: number, sat: number, resistance = 6): Want =>
     newWant({ characterId, layer: 'test', desc, weight, sat, resistance, kind: 'narrative', source: 'genesis', bornTick: 0 });

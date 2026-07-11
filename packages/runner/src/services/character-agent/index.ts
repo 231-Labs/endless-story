@@ -82,9 +82,23 @@ export { activateDormant } from './activate.js';
 export type { ActivateInput, ActivatedCharacter } from './activate.js';
 export { deriveGenesisWants, deriveAftermathWant, assessResourceAffinity } from './want-genesis.js';
 export type { DeriveWantsInput, GenesisWant, AftermathInput, AffinityInput } from './want-genesis.js';
-export { actBeat, judgeWantResolved, judgeSceneIntimacy } from './beat.js';
+export {
+    actBeat,
+    judgeWantResolved,
+    judgeSceneIntimacy,
+    reviewScene,
+    povReflect,
+    pronounFromBody,
+    buildBeatSystemPrompt,
+} from './beat.js';
 export type { SceneIntimacyRating } from './beat.js';
 export type { ActBeatInput, BeatResult, BeatForcing, JudgeResolveInput, ResolveVerdict } from './beat.js';
+export type {
+    ReviewSceneInput,
+    ReviewSceneParticipant,
+    ReviewSceneReply,
+    PovReflectInput,
+} from './beat.js';
 export { judgeRipples } from './want-ripple.js';
 export type { RippleJudgeInput, RippleJudgeDelta } from './want-ripple.js';
 export {

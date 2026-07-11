@@ -25,7 +25,7 @@ import {
 } from '@/lib/chain/scene-lines';
 import { latestSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { loadWants } from '@/lib/chain/want-store';
-import { normalizeLayer } from '@/lib/chain/want-core';
+import { normalizeLayer } from '@endless-story/engine/core/want-core';
 
 /** A ghost-quote line for the handscroll: who, what, in which register. */
 export interface SceneLine {

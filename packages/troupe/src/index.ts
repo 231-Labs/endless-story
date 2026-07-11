@@ -7,7 +7,7 @@
  */
 
 export * from './types.ts';
-export { makeAsk, askOr, type Ask, type AskRequest } from './llm.ts';
+export { makeAsk, askOr, askJson, mapPool, type Ask, type AskRequest } from './llm.ts';
 export { springSnow } from './fixtures/spring-snow.ts';
 export { REPERTOIRE, resolvePlay, type Repertoire, type SceneSpec } from './repertoire.ts';
 export { newProduction, advance, runToPremiere } from './pipeline.ts';

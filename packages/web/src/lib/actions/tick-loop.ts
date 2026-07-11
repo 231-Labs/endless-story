@@ -42,9 +42,9 @@ import { forcingLevel, pressureAwareness } from '@/lib/chain/arc-pressure';
 import { frameIncident } from './event-framing';
 import { proposeResourceAction } from './propose-resources';
 import { coupleAttention, neglectHintFor } from '@/lib/chain/attention-core';
-import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@/lib/chain/actor-fatigue';
+import { applyActorFatigue, bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '@endless-story/engine/core/actor-fatigue';
 import { installNarrativeProfile } from '@/lib/chain/narrative-profile';
-import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, jealousNightPursuit, yearningNightPursuit, newWant, nightSceneKind } from '@/lib/chain/want-core';
+import { applyRipples, applyDreamStirToWants, decayWants, fadeStaleWants, jealousNightPursuit, yearningNightPursuit, newWant, nightSceneKind } from '@endless-story/engine/core/want-core';
 import { loadWants, saveWants, drainWantDreamStirs } from '@/lib/chain/want-store';
 import { recordSceneRating, type SceneRating } from '@/lib/chain/scene-rating-store';
 import { hasMomentToday, momentKey, recordMoment } from '@/lib/chain/moment-ledger';
@@ -52,7 +52,7 @@ import { recordSceneTruth } from '@/lib/chain/scene-truth';
 import { ensureHomesSeeded } from '@/lib/chain/home-seed';
 import { getHomeScene, getWorkScene } from '@/lib/chain/spatial-routing';
 import { loadBible } from '@/lib/chain/story-bible-store';
-import { runSceneLoop } from '@/lib/chain/scene-loop';
+import { runSceneLoop } from '@endless-story/engine/core/scene-loop';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,

@@ -57,18 +57,24 @@ async function listRoster() {
       id: c.id,
       name: c.name,
       hasPortrait: Boolean(c.gallery?.anchor?.imageUrl),
+      imageUrl: c.gallery?.anchor?.imageUrl ?? null,
+      role: c.role ?? null,
     })),
     edgeCount: edges.length,
     edges,
   });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  // `limit` bounds how many to mint this call (each portrait ~2min; the route
+  // caps at 800s). `skipNames` is the CALLER's confirmed-minted list — the
+  // on-chain roster read lags finality across calls, so relying on it alone
+  // duplicated characters; the client-tracked skip is what actually prevents it.
+  const body = (await req.json().catch(() => ({}))) as { limit?: number; skipNames?: string[] };
   const cast = await loadFoundingPresetAction();
   if (!cast.length) {
     return NextResponse.json({ ok: false, error: 'preset has no founding_cast' }, { status: 400 });
   }
-  // Same validity filter + spec map as FoundingCastPanel.handleMint.
   const specs = cast
     .filter(
       (r) => r.name?.trim() && r.description?.trim() && r.ageYears > 0 && r.gender?.trim() && r.role?.trim(),
@@ -82,6 +88,19 @@ export async function POST() {
       secret: r.secret?.trim() || undefined,
       minAttributes: r.minAttributes,
     }));
-  const result = await createFoundingCastAction({ specs });
-  return NextResponse.json({ requested: specs.length, ...result });
+  const skip = new Set(body.skipNames ?? []);
+  const existing = new Set(
+    (await charactersApi.listSagaCharacters(ENDLESS_STORY_DEPLOYMENT.sagaId)).map((c) => c.name),
+  );
+  let pending = specs.filter((s) => !existing.has(s.name) && !skip.has(s.name));
+  if (typeof body.limit === 'number' && body.limit > 0) pending = pending.slice(0, body.limit);
+  if (!pending.length) {
+    return NextResponse.json({ minted: [], remaining: 0, done: true });
+  }
+  const result = await createFoundingCastAction({ specs: pending });
+  const mintedNames = result.minted.map((m) => m.name);
+  const remaining = specs.filter(
+    (s) => !existing.has(s.name) && !skip.has(s.name) && !mintedNames.includes(s.name),
+  ).length;
+  return NextResponse.json({ minted: mintedNames, failures: result.failures, remaining, done: false });
 }
