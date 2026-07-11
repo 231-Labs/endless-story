@@ -87,6 +87,7 @@ function mealSpotFor(c: Char): { line: string; cost: number } | null {
 }
 import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
 import { pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
+import { bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
 import {
     type Play,
     PRODUCTION,
@@ -904,6 +905,10 @@ export async function runRound(
          *  boundary), killing the "二日入夜 → 三日日午 話音落地" time-mismatch. */
         lastWovenTick: number;
         lastWovenDay: number;
+        /** SPOTLIGHT ledger (engine core actor-fatigue): recent scene-carriers tire,
+         *  so scene-slot claiming favors FRESH pairs — breaks the hub monopoly where
+         *  every hot want targets the same star and she is in every rendered scene. */
+        spotlight: FatigueLedger;
         /** unordered-pair key → last rendered scene, for cross-時辰 continuation. */
         lastScene: Map<string, { tick: number; venue: string; tail: string }>;
         /** 修羅場 log for the season + a per-day guard against re-firing the same one. */
@@ -938,6 +943,7 @@ export async function runRound(
     const castNames = cast.map((c) => c.name);
 
     for (const c of cast) c.sceneThisRound = false;
+    out.spotlight = decayActorFatigue(out.spotlight);
     // PERCEPTION: fade traces older than the lingering window before this 時辰's senses.
     decayTraces(out.traces, clock.currentTick);
 
@@ -1218,7 +1224,21 @@ export async function runRound(
     const venuesWithActive = [...new Set(active.map((c) => c.venue))];
     for (const venue of venuesWithActive) {
         const present = cast.filter((c) => !c.dead && c.venue === venue); // asleep/idle included
-        for (const p of roundRec.placements) {
+        // Claim order = FRESHNESS first (engine spotlight ledger): the pair with the
+        // least recent screen time claims a scarce scene slot before the star's Nth
+        // scene of the day. Ties keep keenest-first (sort is stable). No matchmaking —
+        // only the ORDER of competing, self-chosen intents changes.
+        const claims = roundRec.placements
+            .filter((x) => x.interactIntent)
+            .map((x) => {
+                const ca = byName.get(x.char);
+                const cb = byName.get(x.interactIntent!.target) ?? [...byName.values()].find((y) => x.interactIntent!.target.includes(y.name));
+                const heat = (ca ? (out.spotlight[ca.id] ?? 0) : 0) + (cb ? (out.spotlight[cb.id] ?? 0) : 0);
+                return { p: x, heat };
+            })
+            .sort((x, y) => x.heat - y.heat)
+            .map((x) => x.p);
+        for (const p of claims) {
             if (scenes.length >= deps.maxScenesPerRound) break;
             if (!p.interactIntent) continue;
             const a = byName.get(p.char);
@@ -1268,6 +1288,7 @@ export async function runRound(
                 isContinuation, isContinuation ? prevPair!.tail : undefined, out.review, out.chapterReview,
             );
             scenes.push(scene);
+            out.spotlight = bumpActorFatigue(out.spotlight, [a.id, b.id]);
             out.lastScene.set(pairKey, {
                 tick: clock.currentTick,
                 venue,
@@ -1332,6 +1353,7 @@ export async function runRound(
             const aftermath = A.occupiedRestOfDay || B.occupiedRestOfDay;
             const disc = await renderDiscovery(C, A, B, clock, agent, recall, brokeIn, out.review, aftermath, out.chapterReview);
             scenes.push(disc);
+            out.spotlight = bumpActorFatigue(out.spotlight, disc.participants.map((n) => byName.get(n)?.id ?? n));
             out.discoveries.push({ tick: clock.currentTick, part, discoverer: C.name, pair: [A.name, B.name], venue: scene.venue, brokeIn, heard });
             log(`    ⚔ 修羅場：${C.name} ${heard ? '聞聲趕來、破門闖進，撞見' : brokeIn ? '破門闖進，撞見' : '撞見'} ${A.name}×${B.name} @ ${scene.venue} — ${disc.beats.length} 拍`);
             for (const bt of disc.beats) log(`         ${bt.name}：${bt.text}`);
@@ -1566,6 +1588,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         prevChapterTail: '',
         lastWovenTick: -1,
         lastWovenDay: -1,
+        spotlight: {},
         lastScene: new Map<string, { tick: number; venue: string; tail: string }>(),
         discoveries: [] as SeasonResult['discoveries'],
         discoveredToday: new Set<string>(),
