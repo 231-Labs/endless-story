@@ -16,12 +16,15 @@ import type {
     ChooseActionInput,
     ChooseActionResult,
     GenesisWant,
+    PovReflectInput,
+    ReviewSceneInput,
+    ReviewSceneReply,
     RippleJudgeDelta,
     SceneAgentPort,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
 } from '../../ports.ts';
-import type { RewriteLedgerInput, RewriteReply } from '../../core/want-rewrite.ts';
+import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from '../../core/want-rewrite.ts';
 
 /** Stable string hash (FNV-1a) — reproducible pseudo-randomness. */
 function hash(s: string): number {
@@ -124,6 +127,15 @@ export class FakeSceneAgent implements SceneAgentPort {
     }
 
     /**
+     * Chapter-level self-check / repair (fix #2) — a deterministic PASS-THROUGH: it
+     * returns the woven chapter UNCHANGED. It exists to prove the review is wired
+     * end-to-end after every weave; swap in RunnerSceneAgent for a real repair pass.
+     */
+    async reviewChapter(input: Runner.sceneRecord.ReviewChapterInput): Promise<Runner.sceneRecord.ReviewChapterReply | null> {
+        return { chapter: input.chapter };
+    }
+
+    /**
      * Structured open-action — a deterministic self-tagged stub (fix #1: the LLM
      * tags its own kind; the engine routes off the tag, never regex on prose).
      * Kinds are pinned per role so a fragment/cast/rehearsal spread is guaranteed:
@@ -198,6 +210,44 @@ export class FakeSceneAgent implements SceneAgentPort {
 
     async audienceReaction(input: AudienceReactionInput): Promise<string | null> {
         return `【${input.audienceName}】（假體驗·暖度${input.warmth.toFixed(2)}）看罷這場，心裡自有滋味。`;
+    }
+
+    /**
+     * Nightly want REGENERATION — deterministic stub proving the mechanism fires with
+     * NO artificial floor. A just-resolved want seeds a successor; a character left with
+     * NO live wants gets one from ambient world/lifecycle pressure; a character who still
+     * has live wants and hasn't just resolved anything gets nothing (null). Swap in
+     * RunnerSceneAgent for real, character-owned regeneration.
+     */
+    async regenerateWant(input: RegenerateWantInput): Promise<RewriteSpawn | null> {
+        if (input.liveWants.length >= 4) return null;
+        if (input.justResolved.length > 0) {
+            return { desc: `了了「${input.justResolved[0].slice(0, 8)}」，這口氣往後往哪擱`.slice(0, 30), layer: '續' };
+        }
+        if (input.liveWants.length === 0) {
+            return { desc: '這一季又過了，時候不等人，總得替自己掙點什麼', layer: '世' };
+        }
+        return null;
+    }
+
+    /**
+     * Scene self-check / repair (fix #3) — a deterministic PASS-THROUGH: it returns
+     * the input beats UNCHANGED (same names, order, count, inner). It exists to prove
+     * the review is wired end-to-end; swap in RunnerSceneAgent for a real repair pass.
+     */
+    async reviewScene(input: ReviewSceneInput): Promise<ReviewSceneReply | null> {
+        return { beats: input.beats.map((b) => ({ name: b.name, text: b.text, inner: b.inner })) };
+    }
+
+    /**
+     * POV daily reflection (fix #5) — a deterministic first-person one-liner built
+     * from the character's day + hottest want, so the subjective layer is exercised
+     * end-to-end without an LLM. Swap in RunnerSceneAgent for real subjective prose.
+     */
+    async povReflect(input: PovReflectInput): Promise<string | null> {
+        const hot = input.wants[0]?.desc;
+        const stir = input.todayText.trim() ? '今日這一遭，我心裡自有計較' : '今日晃了一天，沒個要緊事';
+        return `（第${input.day}日·我）${stir}${hot ? `，心裡還惦著「${hot}」` : ''}。`;
     }
 
     /**

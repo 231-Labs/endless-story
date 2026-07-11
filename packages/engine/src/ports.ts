@@ -17,7 +17,7 @@
  */
 
 import type { SceneAgent } from './core/scene-loop.ts';
-import type { RewriteLedgerInput, RewriteReply } from './core/want-rewrite.ts';
+import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from './core/want-rewrite.ts';
 import type * as Runner from '@endless-story/runner';
 
 // ── Re-used runner authorship shapes (type-only) ─────────────────────────────
@@ -27,7 +27,12 @@ export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
 export type WeaveTickInput = Runner.sceneRecord.WeaveTickInput;
+export type ReviewChapterInput = Runner.sceneRecord.ReviewChapterInput;
+export type ReviewChapterReply = Runner.sceneRecord.ReviewChapterReply;
 export type ComposeEpisodeInput = Runner.eventChapter.ComposeEpisodeInput;
+export type ReviewSceneInput = Runner.characterAgent.ReviewSceneInput;
+export type ReviewSceneReply = Runner.characterAgent.ReviewSceneReply;
+export type PovReflectInput = Runner.characterAgent.PovReflectInput;
 
 // ── Structured open-action (SEASON_ONE_SLICE §2/§3) ──────────────────────────
 /**
@@ -135,17 +140,35 @@ export interface SceneAgentPort extends SceneAgent {
     deriveAftermathWant(input: AftermathInput): Promise<GenesisWant | null>;
     judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]>;
     weaveTickChapter(input: WeaveTickInput): Promise<string | null>;
+    /** CHAPTER-LEVEL SELF-CHECK / REPAIR: re-read a WOVEN 章回 and return the same
+     *  passage with hard errors repaired (a 坤生/woman called 男人, wrong-gender
+     *  pronouns, logic slips, anachronism). Same events, no invented lines; null →
+     *  keep the original prose. GENERAL: the cast's bodyFacts drive the gender check. */
+    reviewChapter(input: ReviewChapterInput): Promise<ReviewChapterReply | null>;
     composeEpisode(input: ComposeEpisodeInput): Promise<string | null>;
     /** Structured open-action: prose + a self-tagged kind (§2/§3). */
     chooseAction(input: ChooseActionInput): Promise<ChooseActionResult>;
     /** Living-want self-rewrite after a scene/action (scene-scoped, RUNNER_V2 §9). */
     rewriteWantLedger(input: RewriteLedgerInput): Promise<RewriteReply>;
+    /** NIGHTLY want REGENERATION — runs for every character (even one with no scene).
+     *  A just-resolved want seeds its next phase (milestone → successor); ambient
+     *  world/lifecycle pressure (deadline, being broke, the year closing on a finite
+     *  life) can stir a fresh want. Returns one new want or null — NEVER forced: null
+     *  when no real pressure genuinely stirs one, so this is not an artificial floor. */
+    regenerateWant(input: RegenerateWantInput): Promise<RewriteSpawn | null>;
     /** Nightly self-model consolidation (user's ③): OVERWRITE this character's
      *  current view of each person dealt with today + core relationships. Never
      *  appends — the returned line REPLACES the map entry (latest-wins). */
     consolidateSelfModel(input: SelfModelConsolidateInput): Promise<SelfModelConsolidateReply>;
     /** Optional: PROSE of an audience member's reaction (never the box-office number). */
     audienceReaction?(input: AudienceReactionInput): Promise<string | null>;
+    /** SELF-CHECK / REPAIR: re-read a rendered scene and return the same beats with
+     *  text repaired (pronouns, wrong-gender anatomy, out-of-character voice,
+     *  anachronism, prose quality). Same names/order/count; null → keep originals. */
+    reviewScene(input: ReviewSceneInput): Promise<ReviewSceneReply | null>;
+    /** POV daily reflection: a FIRST-PERSON, subjective (possibly biased) account of
+     *  one character's day (the narrative-subjective layer). null → skip. */
+    povReflect(input: PovReflectInput): Promise<string | null>;
 }
 
 // ── Recall (memory) ──────────────────────────────────────────────────────────

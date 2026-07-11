@@ -37,6 +37,10 @@ export interface SceneLoopCastMember {
     innerSecret?: string;
     /** 行當 — shown to co-present speakers so address forms have footing. */
     role?: string;
+    /** Short in-world phrase for this member's 身/sex — threaded into the intimacy
+     *  register so a consummate beat is gender-correct for ANY pairing (data-driven,
+     *  never name-special-cased). */
+    bodyFact?: string;
     /** This member's OWN canon feeling toward each co-present member, keyed by
      *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
      *  the reverse edge — no omniscience about others' feelings. */
@@ -63,6 +67,13 @@ export interface SceneLoopInput {
     tick: number;
     /** Turn caps; defaults match §2.48 (private scenes run longer). */
     maxTurns?: number;
+    /** This scene CONTINUES a still-warm encounter (same pair, same private venue,
+     *  the immediately preceding tick): the first beat picks up mid-moment — no fresh
+     *  entrance, no re-locking the door. Keyed purely on (pair, venue, consecutive
+     *  tick) by the caller — fully general. */
+    continuation?: boolean;
+    /** The last beats of the prior scene in a continuation, as opening context. */
+    priorTail?: string;
     /** Injectable agent (composition tests script it); omit → runner LLM agent. */
     agent?: SceneAgent;
 }
@@ -130,7 +141,13 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     const agent = input.agent ?? (await defaultAgent());
 
     const solo = present.length === 1;
-    const maxTurns = input.maxTurns ?? (solo ? 1 : input.isPrivate ? 5 : 4);
+    // A consummate scene (established lovers, private, at night) earns MANY more beats —
+    // it is the emotional/physical climax and needs room to actually escalate into a real
+    // dramatic scene, not fade at the threshold. The bed-probe (bed-probe-long.ts) showed
+    // ~24 beats still escalate without degrading. TUNABLE via SEASON_BED_CAP (default 16);
+    // a hard ceiling of 32 keeps cost BOUNDED (never runaway). Restrained/public stay tight.
+    const consummateCap = Math.min(32, Math.max(1, Math.floor(Number(process.env.SEASON_BED_CAP ?? '16')) || 16));
+    const maxTurns = input.maxTurns ?? (solo ? 1 : input.emotionalStance === 'consummate' ? consummateCap : input.isPrivate ? 5 : 4);
     const log: string[] = [];
     const actedWants = new Map<string, Want>();
     /** In-scene beat counts — feeds turn routing so a duel can't monopolize. */
@@ -149,12 +166,18 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         w.heat += 1;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: present });
         const others = present.filter((c) => c.characterId !== actor!.characterId);
+        // A consummate scene = established lovers, private, the two of them alone. Their
+        // love-want may already be SETTLED (e.g. the debt got reckoned earlier that day),
+        // so we do NOT require a live 愛/情 want to open the intimacy register — old lovers
+        // going to bed need no unmet want to justify it. This is safely scoped: the
+        // 'consummate' stance is only ever set for the established-lover night 床 scene.
+        const consummateScene =
+            input.emotionalStance === 'consummate' && input.isPrivate && present.length === 2;
         const privateAlone =
             input.isPrivate &&
             present.length === 2 &&
-            !!w.target &&
-            others.some((o) => o.name === w.target || o.characterId === w.target);
-        const gateBeat = privateAlone && /愛|情/.test(w.layer);
+            (consummateScene || (!!w.target && others.some((o) => o.name === w.target || o.characterId === w.target)));
+        const gateBeat = privateAlone && (consummateScene || /愛|情/.test(w.layer));
         if (gateBeat) result.intimacyGateOpened = true;
 
         const r = await agent.actBeat({
@@ -169,7 +192,13 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 name: o.name,
                 role: o.role,
                 tie: actor!.ties?.[o.characterId],
+                bodyFact: o.bodyFact,
             })),
+            bodyFact: actor.bodyFact,
+            // Continuation context rides only on the FIRST beat (picking up mid-moment);
+            // later beats are the ongoing exchange and need no re-entry note.
+            continuation: turn === 0 ? input.continuation : undefined,
+            priorTail: turn === 0 ? input.priorTail : undefined,
             stake: turn === 0 ? input.stake : undefined,
             want: { desc: w.desc, target: w.target },
             forcing: levelAt(w, effR),

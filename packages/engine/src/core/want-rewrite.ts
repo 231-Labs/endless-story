@@ -29,6 +29,34 @@ export interface RewriteSpawn {
     layer?: string;
 }
 
+/**
+ * Input for world/lifecycle-driven want REGENERATION — distinct from the scene-scoped
+ * rewrite above. This runs nightly for EVERY character, even one who had no scene, so a
+ * character never flatlines once their personal arc resolves: a just-settled want can
+ * seed its next phase (milestone → successor), and ambient pressure (the finale
+ * deadline, being broke/hungry, the collective task, the year closing on a life that is
+ * finite) can stir a fresh want. There is NO artificial floor — a want appears only if
+ * one of these REAL pressures genuinely stirs one; a character with live wants and no
+ * acute pressure gets nothing.
+ */
+export interface RegenerateWantInput {
+    name: string;
+    persona: string;
+    secret?: string;
+    coreIdentity: string[];
+    /** the character's still-live wants (layer + desc). */
+    liveWants: Array<{ layer: string; desc: string }>;
+    /** descs of wants this character JUST resolved — the milestone → successor seed. */
+    justResolved: string[];
+    /** ambient EXTERNAL pressure: the finale deadline, being broke/hungry, the
+     *  collective task — the world pressing on TA, not a personal want already held. */
+    worldPressure: string;
+    /** FINITUDE: seasons already lived, the year closing, chances thinning — the
+     *  character knows time is limited (lifecycle awareness, the antidote to a want
+     *  that drifts forever). */
+    lifecycle: string;
+}
+
 /** The full reply the agent returns for one character's ledger. */
 export interface RewriteReply {
     decisions: RewriteDecision[];
@@ -129,30 +157,55 @@ export function applyRewrite(
         }
     }
     // Spawn (max 1), enforcing the ≤4-live-want budget per character.
-    if (reply.spawn) {
-        const desc = reply.spawn.desc.trim();
-        const liveNow = wants.filter((w) => !w.retired && w.characterId === characterId).length;
-        if (desc.length > 0 && desc.length <= 30 && liveNow < 4) {
-            const namesOther = castNames.some((n) => n !== characterId && desc.includes(n));
-            const hot = ROMANTIC_HOSTILE.test(desc) || ROMANTIC_HOSTILE.test(reply.spawn.layer ?? '');
-            const resistance = namesOther && hot ? 8 : 4;
-            const target = castNames.find((n) => n !== characterId && desc.includes(n));
-            const w = newWant({
-                characterId,
-                layer: reply.spawn.layer || '其他',
-                desc,
-                target,
-                weight: 0.5,
-                sat: 0.2,
-                resistance,
-                kind: 'narrative',
-                source: 'owner',
-                bornTick: tick,
-            });
-            wants.push(w);
-            events.push({ tick, characterId, kind: 'spawn', wantId: w.id, toDesc: desc, note: `layer=${w.layer} R=${resistance}` });
-        } else if (desc.length > 0) {
-            events.push({ tick, characterId, kind: 'spawn-rejected', wantId: '-', toDesc: desc, note: liveNow >= 4 ? 'budget≥4' : 'len' });
-        }
+    if (reply.spawn) spawnWant(wants, characterId, reply.spawn, tick, events, castNames);
+}
+
+/**
+ * Add at most one new want onto a shared ledger under the ≤4-live-want budget, deriving
+ * target + resistance the SAME way for every caller (the scene-scoped rewrite AND the
+ * nightly world/lifecycle regeneration). A romantic/hostile want that names another
+ * character gets high resistance (8) so it cannot resolve in a single beat; everything
+ * else gets the base 4. Records a spawn / spawn-rejected event. Returns whether a want
+ * was actually added. Pure aside from mutating `wants`/`events`.
+ */
+export function spawnWant(
+    wants: Want[],
+    characterId: string,
+    spawn: RewriteSpawn,
+    tick: number,
+    events: LedgerEvent[],
+    castNames: ReadonlyArray<string> = [],
+): boolean {
+    const raw = spawn.desc.trim();
+    // A want desc is a short label — an over-long line is TRUNCATED to 30, never dropped,
+    // so a genuine want (e.g. a forced regeneration for a wantless character) can't be lost
+    // to verbosity. Only the ≤4-live budget can still reject a spawn.
+    const desc = raw.length > 30 ? raw.slice(0, 30) : raw;
+    const liveNow = wants.filter((w) => !w.retired && w.characterId === characterId).length;
+    if (desc.length > 0 && liveNow < 4) {
+        const namesOther = castNames.some((n) => n !== characterId && desc.includes(n));
+        const hot = ROMANTIC_HOSTILE.test(desc) || ROMANTIC_HOSTILE.test(spawn.layer ?? '');
+        const resistance = namesOther && hot ? 8 : 4;
+        const target = castNames.find((n) => n !== characterId && desc.includes(n));
+        const w = newWant({
+            characterId,
+            layer: spawn.layer || '其他',
+            desc,
+            target,
+            weight: 0.5,
+            sat: 0.2,
+            resistance,
+            kind: 'narrative',
+            source: 'owner',
+            bornTick: tick,
+        });
+        wants.push(w);
+        events.push({ tick, characterId, kind: 'spawn', wantId: w.id, toDesc: desc, note: `layer=${w.layer} R=${resistance}` });
+        return true;
     }
+    if (raw.length > 0) {
+        // With truncation, the only remaining rejection is a full ledger.
+        events.push({ tick, characterId, kind: 'spawn-rejected', wantId: '-', toDesc: raw, note: 'budget≥4' });
+    }
+    return false;
 }

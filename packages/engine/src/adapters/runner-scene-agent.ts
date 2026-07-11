@@ -24,6 +24,8 @@ import type {
 } from '../ports.ts';
 import {
     coerceRewriteReply,
+    type RegenerateWantInput,
+    type RewriteSpawn,
     extractRewriteJson,
     type RewriteLedgerInput,
     type RewriteReply,
@@ -42,6 +44,18 @@ const ACTION_KINDS: ActionKind[] = [
 export class RunnerSceneAgent implements SceneAgentPort {
     actBeat = characterAgent.actBeat;
     judgeWantResolved = characterAgent.judgeWantResolved;
+
+    async reviewScene(
+        input: Parameters<typeof characterAgent.reviewScene>[0],
+    ): ReturnType<typeof characterAgent.reviewScene> {
+        return characterAgent.reviewScene(input);
+    }
+
+    async povReflect(
+        input: Parameters<typeof characterAgent.povReflect>[0],
+    ): ReturnType<typeof characterAgent.povReflect> {
+        return characterAgent.povReflect(input);
+    }
 
     async deriveGenesisWants(
         input: Parameters<typeof characterAgent.deriveGenesisWants>[0],
@@ -65,6 +79,12 @@ export class RunnerSceneAgent implements SceneAgentPort {
         input: Parameters<typeof sceneRecord.weaveTickChapter>[0],
     ): Promise<string | null> {
         return sceneRecord.weaveTickChapter(input);
+    }
+
+    async reviewChapter(
+        input: Parameters<typeof sceneRecord.reviewChapter>[0],
+    ): ReturnType<typeof sceneRecord.reviewChapter> {
+        return sceneRecord.reviewChapter(input);
     }
 
     async composeEpisode(
@@ -184,6 +204,70 @@ export class RunnerSceneAgent implements SceneAgentPort {
             temperature: 0.7,
         });
         return coerceRewriteReply(extractRewriteJson(res.text));
+    }
+
+    /**
+     * Nightly want REGENERATION (the antidote to a resolved arc going dormant). Unlike
+     * rewriteWantLedger — which reflects on a scene the character was IN — this runs for
+     * EVERY character, even one who did nothing, and asks whether a NEW want stirs from:
+     * a want just settled (its next phase), or the world pressing (the finale deadline,
+     * being broke/hungry, the collective task), or the year closing on a finite life.
+     * It is deliberately reluctant when the character STILL has live wants (returns null
+     * unless something genuinely stirs) — no artificial floor forced on a busy character.
+     * But when the character has NOTHING left (zero live wants), it MUST yield one: a
+     * living person is never truly wantless, and the year closing on an aging performer
+     * is exactly the pressure that surfaces a fresh drive. That is not a floor — it is the
+     * world doing its job on the most exposed case.
+     */
+    async regenerateWant(input: RegenerateWantInput): Promise<RewriteSpawn | null> {
+        const empty = input.liveWants.length === 0;
+        const system = [
+            '入夜了。你替一個戲園角色照看 TA「心裡還想要什麼」。給你 TA 是誰、此刻心裡還掛著的事,',
+            '剛剛了結的事,以及此刻壓在 TA 身上的世道與光陰。替 TA 誠實地想:**這時候,有沒有一件',
+            '新的心事,正從這些裡頭生出來?**',
+            '',
+            '**三個真正的來源(只從這裡長,不要無中生有)**:',
+            '1. 承接——剛了結一樁,人到了新的地步:守住了的怕失去、得不到的想放下、了了債的問往後怎麼過。',
+            '2. 世道——年關、大會串的死線、兜裡沒錢、餓著、班子的存亡,這些外頭的壓力逼出來的。',
+            '3. 光陰——又過了一季,人不會一直年輕,機會不多了,有些事再不做就來不及。',
+            '',
+            '**鐵則**:',
+            empty
+                ? '- TA 此刻心裡一件掛記也沒有了。**一個大活人不會真的什麼都不想**——年關在逼、身子在老、這行當要吃飯,總有一件從世道或光陰裡冒出來。**這種時候必須給一件,不許回空**,哪怕只是「我如今到底還想要什麼」。'
+                : '- TA 手上還有掛著的事、又沒什麼要緊的壓力,就別硬生——回 null。這不是配額,是真有才給。',
+            '- 至多一條。≤30字,第一人稱,像 TA 會對自己說的話,別像旁白替 TA 安排劇情、別暗示告白攤牌。',
+            '- 只誠實記一句「我如今想要什麼」,不寫計畫、不寫下一步怎麼做。',
+            '',
+            '**輸出**:嚴格只輸出 JSON。有新心事:{"desc":"…","layer":"…"};' + (empty ? '' : '沒有就:{"desc":""};') + '不要 markdown。',
+        ].join('\n');
+        const user = [
+            `# 你是誰\n${input.name}:${input.persona}`,
+            input.secret ? `\n# 你心底的事（只有你自己知道）\n${input.secret}` : '',
+            input.coreIdentity.length ? `\n# 你此刻怎麼看自己\n${input.coreIdentity.join('\n')}` : '',
+            `\n# 你此刻心裡還掛著的事\n${input.liveWants.map((w) => `- [${w.layer}] ${w.desc}`).join('\n') || '（一件也沒有了）'}`,
+            input.justResolved.length ? `\n# 你剛剛了結的事\n${input.justResolved.map((d) => `- ${d}`).join('\n')}` : '',
+            `\n# 此刻壓在你身上的世道\n${input.worldPressure}`,
+            `\n# 光陰\n${input.lifecycle}`,
+            `\n這時候,你（${input.name}）心裡有沒有一件新的想要,正從上面這些裡頭生出來?`,
+        ].join('\n');
+
+        try {
+            const client = llmText.createTextClient({ kind: 'primary' });
+            const res = await client.chat({
+                model: client.defaultModel,
+                system,
+                messages: [{ role: 'user', content: user }],
+                maxTokens: 220,
+                temperature: 0.8,
+            });
+            const obj = extractRewriteJson(res.text);
+            const desc = typeof obj?.desc === 'string' ? obj.desc.trim() : '';
+            if (!desc) return null;
+            const layer = typeof obj?.layer === 'string' ? obj.layer.trim() : undefined;
+            return { desc, layer };
+        } catch {
+            return null; // non-fatal: no want this night
+        }
     }
 
     /** Audience reaction PROSE only (never the box-office number). */

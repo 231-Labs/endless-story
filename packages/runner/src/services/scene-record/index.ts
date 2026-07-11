@@ -71,4 +71,12 @@ export async function composeSceneRecord(
     }
 }
 
-export { weaveTickChapter, type WeaveTickInput } from './weave-tick.js';
+export {
+    weaveTickChapter,
+    reviewChapter,
+    pronounFromBody,
+    type WeaveTickInput,
+    type CastBody,
+    type ReviewChapterInput,
+    type ReviewChapterReply,
+} from './weave-tick.js';

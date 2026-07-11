@@ -94,18 +94,34 @@ export class LocalRecall implements RecallPort {
         if (key) {
             const apiBase = (process.env.OPENAI_API_BASE ?? 'https://api.openai.com/v1').replace(/\/$/, '');
             const model = process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small';
-            const resp = await fetch(`${apiBase}/embeddings`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-                body: JSON.stringify({ model, input: text.slice(0, 8000) }),
-            });
-            if (!resp.ok) {
-                throw new Error(`[local-recall] embedding API error (${resp.status}): ${await resp.text()}`);
+            // TRANSIENT-TOLERANT: a season run embeds hundreds of memories serially; one
+            // 5xx/429/network blip must not kill a 45-minute run. Retry with backoff on
+            // transient failures; a non-transient 4xx (bad key etc.) still fails fast.
+            let lastErr: unknown;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * 4 ** (attempt - 1)));
+                let resp: Response;
+                try {
+                    resp = await fetch(`${apiBase}/embeddings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+                        body: JSON.stringify({ model, input: text.slice(0, 8000) }),
+                    });
+                } catch (err) {
+                    lastErr = err; // network-level failure → retry
+                    continue;
+                }
+                if (!resp.ok) {
+                    lastErr = new Error(`[local-recall] embedding API error (${resp.status}): ${await resp.text()}`);
+                    if (resp.status >= 500 || resp.status === 429) continue; // transient → retry
+                    throw lastErr; // non-transient (401/400/…) → fail fast
+                }
+                const data = (await resp.json()) as { data?: { embedding: number[] }[] };
+                const vec = data.data?.[0]?.embedding;
+                if (!vec) throw new Error('[local-recall] embedding API returned no data');
+                return vec;
             }
-            const data = (await resp.json()) as { data?: { embedding: number[] }[] };
-            const vec = data.data?.[0]?.embedding;
-            if (!vec) throw new Error('[local-recall] embedding API returned no data');
-            return vec;
+            throw lastErr instanceof Error ? lastErr : new Error('[local-recall] embedding failed after retries');
         }
         // Deterministic fallback: hash tokens into a fixed-dim bag (mechanism-only).
         const vec = new Array<number>(EMBED_DIM).fill(0);
