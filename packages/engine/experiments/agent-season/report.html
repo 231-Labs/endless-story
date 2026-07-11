@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>春雪社 · 重啟戲箱</title>
+<style>
+:root{--bg:#ece2cf;--panel:#f6efe0;--panel2:#f1e8d5;--ink:#2b2119;--dim:#7a6b56;--zhu:#a5322a;--zhu-soft:#b9564a;--gold:#8f6f2c;--gold-bright:#a9852f;--line:rgba(60,40,20,.16);--line-soft:rgba(60,40,20,.09);--serif:"Songti SC","STSong","Songti TC","Noto Serif CJK TC","宋体",serif;--kai:"Kaiti SC","STKaiti","KaiTi","楷体","Noto Serif CJK TC",serif;--sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;}
+@media (prefers-color-scheme:dark){:root{--bg:#15110d;--panel:#1e1811;--panel2:#231b13;--ink:#ece0c6;--dim:#a08d70;--zhu:#d1614d;--zhu-soft:#c9705e;--gold:#c9a24c;--gold-bright:#d8b25c;--line:rgba(220,190,140,.16);--line-soft:rgba(220,190,140,.08);}}
+:root[data-theme="light"]{--bg:#ece2cf;--panel:#f6efe0;--panel2:#f1e8d5;--ink:#2b2119;--dim:#7a6b56;--zhu:#a5322a;--gold:#8f6f2c;--gold-bright:#a9852f;--line:rgba(60,40,20,.16);--line-soft:rgba(60,40,20,.09);}
+:root[data-theme="dark"]{--bg:#15110d;--panel:#1e1811;--panel2:#231b13;--ink:#ece0c6;--dim:#a08d70;--zhu:#d1614d;--gold:#c9a24c;--gold-bright:#d8b25c;--line:rgba(220,190,140,.16);--line-soft:rgba(220,190,140,.08);}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(120% 80% at 50% -10%,color-mix(in srgb,var(--gold) 8%,transparent),transparent 60%),var(--bg);color:var(--ink);font-family:var(--serif);line-height:1.95;-webkit-font-smoothing:antialiased;}
+.scroll{max-width:44em;margin:0 auto;padding:clamp(1.1rem,4vw,3rem) clamp(1rem,4vw,2rem) 5rem;}
+h1,h2{font-family:var(--kai);font-weight:600;text-wrap:balance;letter-spacing:.02em;}
+p{margin:0 0 .5rem}
+.cover{text-align:center;padding:2rem 0 2.4rem;border-bottom:1px solid var(--line);}
+.seal{width:3.4rem;height:3.4rem;margin:0 auto 1.2rem;display:grid;place-items:center;background:var(--zhu);color:#f6efe0;font-family:var(--kai);font-size:1.8rem;border-radius:5px;box-shadow:0 2px 0 rgba(0,0,0,.15);transform:rotate(-2deg)}
+.title{font-size:clamp(2.1rem,7vw,3.2rem);margin:.2rem 0 .5rem;color:var(--ink)}
+.subtitle{font-family:var(--sans);font-size:.82rem;letter-spacing:.14em;color:var(--dim);margin-bottom:1.6rem}
+.thesis{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--zhu);border-radius:4px;padding:.9rem 1.1rem;text-align:left;font-size:1.02rem;margin:0 auto 1rem;max-width:34em}
+.thesis .lbl,.cast .lbl{display:block;font-family:var(--sans);font-size:.66rem;letter-spacing:.2em;color:var(--zhu);margin-bottom:.35rem}
+.deadline{font-family:var(--sans);font-size:.8rem;color:var(--dim);max-width:34em;margin:0 auto 1.4rem;display:flex;gap:.5rem;align-items:baseline;justify-content:center;line-height:1.6}
+.deadline .dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--zhu);flex:none;transform:translateY(1px)}
+.cast{max-width:34em;margin:0 auto;text-align:left}
+.cast ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5em,1fr));gap:.4rem .9rem}
+.cast li{display:flex;flex-direction:column;padding:.35rem 0;border-bottom:1px dotted var(--line-soft)}
+.cast li b{font-family:var(--kai);font-size:1.05rem}
+.cast li span{font-family:var(--sans);font-size:.72rem;color:var(--dim)}
+.chap-mark{font-family:var(--kai);color:var(--zhu);font-size:1.5rem;text-align:center;margin-top:2.2rem}
+.prologue,.finale{padding:1rem 0 1.4rem}
+.prologue h2,.finale h2{text-align:center;font-size:1.7rem;margin:.1rem 0 1.2rem;color:var(--zhu)}
+.prologue p{text-indent:2em;text-align:justify;margin-bottom:.7rem}
+.day{margin-top:2.6rem}
+.day-head{display:flex;align-items:center;gap:1rem;margin-bottom:1.3rem}
+.day-head:before,.day-head:after{content:"";height:1px;background:var(--line);flex:1}
+.juan{font-family:var(--kai);color:var(--gold);font-size:.95rem;letter-spacing:.35em;padding-left:.35em}
+.day-head h2{font-size:1.35rem;margin:0;white-space:nowrap}
+.hour{margin:0 0 1.5rem;padding-left:1rem;border-left:2px solid var(--line-soft)}
+.hour-label{font-family:var(--sans);font-size:.7rem;letter-spacing:.16em;color:var(--gold);margin-bottom:.55rem}
+.ff{color:var(--dim);font-style:italic;text-align:center;font-size:.92rem;margin:.2rem 0}
+.prose{text-indent:2em;text-align:justify;margin-bottom:.6rem}
+/* 時辰 decisions: who moved where and why (PASS A), collapsed above the woven prose. */
+details.decisions{margin:0 0 .7rem;border:1px solid var(--line-soft);border-radius:5px;background:var(--panel);overflow:hidden}
+details.decisions>summary{cursor:pointer;list-style:none;padding:.32rem .7rem;font-family:var(--sans);font-size:.66rem;letter-spacing:.14em;color:var(--dim);user-select:none}
+details.decisions>summary::-webkit-details-marker{display:none}
+details.decisions>summary:before{content:"◷ ";color:var(--gold)}
+details.decisions[open]>summary{border-bottom:1px solid var(--line-soft)}
+ol.dec-list{list-style:none;margin:0;padding:.4rem .8rem .5rem;counter-reset:dec}
+ol.dec-list li{padding:.4rem 0;border-bottom:1px dotted var(--line-soft)}
+ol.dec-list li:last-child{border-bottom:none}
+.dec-head{display:flex;gap:.6rem;align-items:baseline;counter-increment:dec}
+.dec-head:before{content:counter(dec);font-family:var(--sans);font-size:.62rem;color:var(--gold);flex:none;min-width:1.1em;text-align:right}
+.dec-who{font-family:var(--kai);font-size:1rem;color:var(--ink)}
+.dec-move{font-family:var(--sans);font-size:.72rem;color:var(--dim)}
+.dec-why{font-family:var(--serif);font-size:.9rem;color:var(--ink);opacity:.86;margin:.1rem 0 0 1.7em;line-height:1.7}
+.dec-intent{display:block;font-family:var(--sans);font-size:.7rem;color:var(--zhu-soft,var(--zhu));margin:.15rem 0 0 1.7em}
+/* private/床/修羅場 scene: woven 章回 primary + collapsible 分鏡 (raw beats) under it. */
+.privscene{margin:.9rem 0 1.2rem;padding-left:1rem;border-left:2px solid var(--line-soft)}
+.privscene.bed{border-left-color:color-mix(in srgb,var(--zhu) 45%,var(--line))}
+.privscene.shura{border-left-color:color-mix(in srgb,var(--zhu) 72%,var(--line))}
+.priv-head{font-family:var(--kai);font-size:.98rem;color:var(--ink);margin-bottom:.5rem;display:flex;align-items:center;gap:.6rem}
+details.storyboard{margin:.55rem 0 .2rem;border:1px solid var(--line-soft);border-radius:5px;background:var(--panel);overflow:hidden}
+details.storyboard summary{cursor:pointer;list-style:none;padding:.4rem .75rem;font-family:var(--sans);font-size:.68rem;letter-spacing:.12em;color:var(--dim);user-select:none;display:flex;align-items:center;gap:.5rem}
+details.storyboard summary::-webkit-details-marker{display:none}
+details.storyboard summary:after{content:"展開 ▾";margin-left:auto;font-size:.62rem;letter-spacing:.1em}
+details.storyboard[open] summary{border-bottom:1px solid var(--line-soft)}
+details.storyboard[open] summary:after{content:"收合 ▴"}
+.ptag{font-family:var(--sans);font-size:.62rem;letter-spacing:.12em;background:var(--dim);color:var(--bg);padding:.12rem .45rem;border-radius:3px;flex:none}
+.ptag.bed{background:var(--zhu)}
+.ptag.gold{background:var(--gold)}.ptag.zhu{background:var(--zhu)}
+.beats{padding:.2rem .9rem 1rem}
+.beats p,.premiere p{margin:.55rem 0;text-align:justify}
+.beats b,.premiere b{font-family:var(--kai);color:var(--zhu-soft);margin-right:.5em}
+.beats .inner{margin:-.25rem 0 .55rem 1.4em;font-size:.86rem;font-style:italic;color:var(--dim);opacity:.85;text-align:justify}
+.beats .inner:before{content:"";display:inline-block}
+.pov{margin-top:2.6rem}
+.pov h2{text-align:center;font-size:1.6rem;color:var(--gold);margin:.1rem 0 1rem}
+details.povblock{margin:.7rem 0;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:5px;background:var(--panel);overflow:hidden}
+details.povblock summary{cursor:pointer;list-style:none;padding:.55rem .8rem;font-family:var(--kai);font-size:1.02rem;display:flex;align-items:center;gap:.7rem;user-select:none}
+details.povblock summary::-webkit-details-marker{display:none}
+details.povblock summary:after{content:"展開 ▾";margin-left:auto;font-family:var(--sans);font-size:.66rem;color:var(--dim);letter-spacing:.1em}
+details.povblock[open] summary:after{content:"收合 ▴"}
+.povname{color:var(--zhu-soft)}
+.povrole{font-family:var(--sans);font-size:.7rem;color:var(--dim)}
+.povstream{padding:.3rem .95rem 1rem}
+.povday{margin:.5rem 0;text-align:justify;text-indent:0}
+.povd{font-family:var(--sans);font-size:.66rem;letter-spacing:.12em;color:var(--gold);background:color-mix(in srgb,var(--gold) 12%,transparent);padding:.08rem .45rem;border-radius:3px;margin-right:.6em;white-space:nowrap}
+.resolve{margin:.6rem 0;font-size:.98rem}
+.rtag{font-family:var(--sans);font-size:.62rem;letter-spacing:.14em;color:#f6efe0;background:var(--gold);padding:.1rem .5rem;border-radius:3px;margin-right:.6em;vertical-align:.12em}
+.finale h2{color:var(--zhu)}
+.prod{font-family:var(--sans);font-size:.86rem;color:var(--dim);margin:.3rem 0;line-height:1.7}
+.premiere{background:var(--panel2);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:5px;padding:.9rem 1.1rem;margin:1rem 0}
+.premiere .ptag{display:inline-block;margin-bottom:.4rem}
+.box{margin-top:2.6rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.box h2,.verdict h2{font-size:1.5rem;color:var(--zhu);text-align:center;margin-bottom:.8rem}
+.note{font-family:var(--sans);font-size:.76rem;color:var(--dim);text-align:center;max-width:32em;margin:0 auto 1.1rem;line-height:1.7}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.82rem;font-variant-numeric:tabular-nums}
+th,td{padding:.45rem .5rem;border-bottom:1px solid var(--line-soft);text-align:right}
+th{font-size:.66rem;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--line);font-weight:600}
+td.aud,th:first-child{text-align:left;font-family:var(--serif);font-size:.92rem}
+td.kind{text-align:left;font-size:.66rem;color:var(--dim)}
+td.will{color:var(--zhu);font-weight:600}
+td.tick{color:var(--gold-bright);text-align:center}
+.verdict{margin-top:2.2rem;text-align:center}
+.badge{display:inline-block;font-family:var(--kai);font-size:1.15rem;letter-spacing:.1em;padding:.35rem 1.2rem;border-radius:5px;margin:.3rem 0 .8rem}
+.badge.pass{background:var(--gold);color:#1a1206;box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.badge.fail{background:var(--zhu);color:#f6efe0}
+.razor-line{font-family:var(--sans);font-size:.78rem;color:var(--dim);margin-bottom:.8rem}
+.razor-item{font-family:var(--sans);font-size:.82rem;color:var(--ink);margin:.2rem 0}
+.colophon{margin-top:3rem;padding-top:1.4rem;border-top:1px solid var(--line);font-family:var(--sans);font-size:.72rem;color:var(--dim);text-align:center;line-height:1.8}
+</style></head><body>
+<article class="scroll">
+<header class="cover">
+<div class="seal">春</div>
+<h1 class="title">春雪社 · 重啟戲箱</h1>
+<p class="subtitle">一齣自治敘事引擎跑出的完整賽季 · 上海 · 一九二〇年代</p>
+<div class="thesis"><span class="lbl">立局人命題</span>春雪社能不能重啟戲箱、排出並演出一齣自己的新戲，趕在年底大會串之前。</div>
+<div class="deadline"><span class="dot"></span>死線 · 世界事實：年底霞飛路大會串（第1日入夜）。掛得上名的班子拿檔期版面，掛不上的被遺忘。</div>
+<div class="cast"><span class="lbl">角色</span><ul>
+<li><b>柳生春</b><span>小生</span></li>
+<li><b>金鳳</b><span>歌女</span></li>
+<li><b>蘇映雪</b><span>花旦</span></li>
+<li><b>白韻秋</b><span>客</span></li>
+<li><b>沈雪笙</b><span>班主</span></li>
+<li><b>江聞鶴</b><span>小生</span></li>
+<li><b>連翹</b><span>刀馬旦</span></li>
+</ul></div>
+</header>
+<section class="prologue"><div class="chap-mark">序</div><h2>序章</h2>
+<p>春雪社的這座戲台，原是清末一位官紳家的堂會戲台。改朝換代後，官宦人家的排場散了，這方戲台連著半進院子，被沈雪笙盤了下來，掛上春雪社的水牌。正樑上那塊舊匾額她一直沒換，燙金的字暗了，至今照舊掛著。</p>
+<p>戲台最裡頭的後台，那幾口樟木戲箱，落了十五年的灰。十五年前沈雪笙封箱那日，班裡如今這批台前的人多半還是孩子。她沒對任何人交代緣由，只說往後這幾箱小生的行頭不再動了。班子靠著幾齣熟戲，一年一年也就過來了，台下的人換了一批又一批，戲單卻還是那張戲單。</p>
+<p>今年不同。霞飛路那頭新起的戲園放出話來，年底要辦一場打對台的大會串。掛得上名的班子，往後的檔期、報上的版面、堂會的邀約，都在這一場上見高低。掛不上的，慢慢就沒人記得了。</p>
+<p>沈雪笙把那口最底下的箱子開了一條縫。裡頭壓著的，除了那幾件沒人再穿的小生戲衣，還有一只早停了的懷錶。</p>
+<p>戲箱要重開了。這一季，春雪社得排出一齣自己的新戲，趕在年底那場會串之前。至於箱底那些沒說完的舊事，沒有人交代該怎麼辦。</p>
+</section>
+<section class="day"><div class="day-head"><span class="juan">卷一</span><h2>第1日</h2></div>
+<div class="hour">
+<div class="hour-label">第1日·清晨</div>
+<p class="ff">天光未亮，戲子夜工，滿園還在夢裡，一時無話。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第1日·日午</div>
+<details class="decisions"><summary>本時辰 · 各人的決定與去向</summary><ol class="dec-list"><li><div class="dec-head"><span class="dec-who">金鳳</span><span class="dec-move">會樂里寓所</span></div><div class="dec-why">（金鳳）此刻晌午才起，寓所裡理著自己的事。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div></li><li><div class="dec-head"><span class="dec-who">柳生春</span><span class="dec-move">後台小廂房 → 練功房</span></div><div class="dec-why">（柳生春）此刻班主叫了排練，該去練功房吊嗓走位——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 蘇映雪：對這一折的戲，走一遍</span></li><li><div class="dec-head"><span class="dec-who">白韻秋</span><span class="dec-move">白公館繡樓 → 霞飛路商店街</span></div><div class="dec-why">（白韻秋）此刻晌午出門，逛霞飛路商店街，挑挑洋貨、在攤子上吃點東西，自己的天地。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div></li><li><div class="dec-head"><span class="dec-who">蘇映雪</span><span class="dec-move">二樓書寓 → 練功房</span></div><div class="dec-why">（蘇映雪）此刻班主叫了排練，該去練功房吊嗓走位——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 柳生春：對這一折的戲，走一遍</span></li><li><div class="dec-head"><span class="dec-who">江聞鶴</span><span class="dec-move">後進廂房 → 練功房</span></div><div class="dec-why">（江聞鶴）此刻班主叫了排練，該去練功房吊嗓走位——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 柳生春：較一較這場對手戲，誰也不讓誰</span></li><li><div class="dec-head"><span class="dec-who">沈雪笙</span><span class="dec-move">沈宅小樓 → 後台妝閣</span></div><div class="dec-why">（沈雪笙）此刻開了妝閣的門，看戲、看帳、看人心——今日排不排戲，我說了算。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div></li><li><div class="dec-head"><span class="dec-who">連翹</span><span class="dec-move">戲班大通鋪 → 練功房</span></div><div class="dec-why">（連翹）此刻班主叫了排練，該去練功房吊嗓走位——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 柳生春：對這一折的戲，走一遍</span></li></ol></details>
+<p class="prose">【第1日·日午】（假織回）</p>
+<p class="prose">[練功房] 柳生春：當著眾人，柳生春繞著「欠金鳳一句了斷，這些年一·經這場又深了些」打轉</p>
+<p class="prose">[練功房] 蘇映雪：當著眾人，蘇映雪繞著「去雲錦台把新戲的旦角戲排出彩，掙一個立得住的台柱」打轉</p>
+</div>
+<div class="hour">
+<div class="hour-label">第1日·晡時</div>
+<details class="decisions"><summary>本時辰 · 各人的決定與去向</summary><ol class="dec-list"><li><div class="dec-head"><span class="dec-who">金鳳</span><span class="dec-move">會樂里寓所</span></div><div class="dec-why">（金鳳）此刻午後的閒空，是我自己的。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div></li><li><div class="dec-head"><span class="dec-who">柳生春</span><span class="dec-move">練功房 → 雲錦台戲台</span></div><div class="dec-why">（柳生春）此刻班主叫了排練，該上戲台對戲——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 蘇映雪：對這一折的戲，走一遍</span></li><li><div class="dec-head"><span class="dec-who">白韻秋</span><span class="dec-move">霞飛路商店街 → 霞飛路</span></div><div class="dec-why">（白韻秋）此刻午後在霞飛路閒逛。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div></li><li><div class="dec-head"><span class="dec-who">江聞鶴</span><span class="dec-move">練功房</span></div><div class="dec-why">（江聞鶴）此刻班主叫了排練，該上戲台對戲——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 連翹：對這一折的戲，走一遍</span></li><li><div class="dec-head"><span class="dec-who">沈雪笙</span><span class="dec-move">後台妝閣</span></div><div class="dec-why">（沈雪笙）此刻坐鎮後台，盯著班子。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div></li><li><div class="dec-head"><span class="dec-who">蘇映雪</span><span class="dec-move">練功房 → 雲錦台戲台</span></div><div class="dec-why">（蘇映雪）此刻班主叫了排練，該上戲台對戲——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 柳生春：對這一折的戲，走一遍</span></li><li><div class="dec-head"><span class="dec-who">連翹</span><span class="dec-move">練功房</span></div><div class="dec-why">（連翹）此刻班主叫了排練，該上戲台對戲——排戲脫不開身。我順著自己的性子，趁著這半日，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 江聞鶴：對這一折的戲，走一遍</span></li></ol></details>
+<p class="prose">【第1日·晡時】（假織回）</p>
+<p class="prose">[雲錦台戲台] 柳生春：當著眾人，柳生春繞著「欠金鳳一句了斷，這些年一·經這場又深了些」打轉</p>
+<p class="prose">[雲錦台戲台] 蘇映雪：當著眾人，蘇映雪繞著「去雲錦台把新戲的旦角戲排出彩，掙一個立得住的台柱」打轉</p>
+<p class="prose">[練功房] 江聞鶴：當著眾人，江聞鶴繞著「在雲錦台站住，跟柳生春唱一場誰也不讓誰的對手戲」打轉，看向連翹</p>
+</div>
+<div class="hour">
+<div class="hour-label">第1日·深宵（入夜）</div>
+<details class="decisions"><summary>本時辰 · 各人的決定與去向</summary><ol class="dec-list"><li><div class="dec-head"><span class="dec-who">金鳳</span><span class="dec-move">霞飛路歌場 → 會樂里寓所</span></div><div class="dec-why">（金鳳）此刻深宵散了場，回會樂里寓所——有時等一個人。我順著自己的性子，趁著夜色，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 柳生春：當面要他認一句欠我的，這樁舊帳了結</span></li><li><div class="dec-head"><span class="dec-who">柳生春</span><span class="dec-move">雲錦台戲台 → 會樂里寓所</span></div><div class="dec-why">（柳生春）此刻深宵，該歇了。我順著自己的性子，趁著夜色，把心裡掛著的那樁事往前挪一挪。</div><span class="dec-intent">要找 金鳳：把當年欠她的那句話，當面說個了斷</span></li></ol></details>
+<div class="privscene bed"><div class="priv-head"><span class="ptag bed">私 · 床</span>會樂里寓所　金鳳×柳生春</div><p class="prose">【第1日·深宵】（假織回）</p><p class="prose">[會樂里寓所] 金鳳：挨得近了些，金鳳繞著「要柳生春當面認一句欠我的，那樁舊帳當面了斷」打轉，看向柳生春</p><p class="prose">[會樂里寓所] 柳生春：挨得近了些，柳生春繞著「欠金鳳一句了斷，這些年一·經這場又深了些」打轉</p><p class="prose">[會樂里寓所] 金鳳：挨得近了些，金鳳繞著「要柳生春當面認一句欠我的，那樁舊帳當面了斷」打轉，看向柳生春</p><p class="prose">[會樂里寓所] 柳生春：挨得近了些，柳生春繞著「欠金鳳一句了斷，這些年一·經這場又深了些」打轉</p><p class="prose">[會樂里寓所] 金鳳：挨得近了些，金鳳繞著「要柳生春當面認一句欠我的，那樁舊帳當面了斷」打轉，看向柳生春</p><p class="prose">[會樂里寓所] 柳生春：挨得近了些，柳生春繞著「排一齣新戲，把雲錦台重新撐起來，站回台心」打轉，看向金鳳</p><p class="prose">[會樂里寓所] 金鳳：挨得近了些，金鳳繞著「把這個月的堂會唱下來，撐住會樂里的門面」打轉</p><p class="prose">[會樂里寓所] 柳生春：挨得近了些，柳生春繞著「排一齣新戲，把雲錦台重新撐起來，站回台心」打轉</p><p class="prose">[會樂里寓所] 金鳳：挨得近了些，金鳳繞著「把這個月的堂會唱下來，撐住會樂里的門面」打轉，看向柳生春</p><details class="storyboard"><summary>分鏡 · 9 拍</summary><div class="beats"><p><b>金鳳</b>挨得近了些，金鳳繞著「要柳生春當面認一句欠我的，那樁舊帳當面了斷」打轉，看向柳生春</p><p class="inner">〔心〕要柳生春當面認一句欠我的，那樁舊帳當面了斷</p><p><b>柳生春</b>挨得近了些，柳生春繞著「欠金鳳一句了斷，這些年一·經這場又深了些」打轉</p><p class="inner">〔心〕欠金鳳一句了斷，這些年一·經這場又深了些</p><p><b>金鳳</b>挨得近了些，金鳳繞著「要柳生春當面認一句欠我的，那樁舊帳當面了斷」打轉，看向柳生春</p><p class="inner">〔心〕要柳生春當面認一句欠我的，那樁舊帳當面了斷</p><p><b>柳生春</b>挨得近了些，柳生春繞著「欠金鳳一句了斷，這些年一·經這場又深了些」打轉</p><p class="inner">〔心〕欠金鳳一句了斷，這些年一·經這場又深了些</p><p><b>金鳳</b>挨得近了些，金鳳繞著「要柳生春當面認一句欠我的，那樁舊帳當面了斷」打轉，看向柳生春</p><p class="inner">〔心〕要柳生春當面認一句欠我的，那樁舊帳當面了斷</p><p><b>柳生春</b>挨得近了些，柳生春繞著「排一齣新戲，把雲錦台重新撐起來，站回台心」打轉，看向金鳳</p><p class="inner">〔心〕排一齣新戲，把雲錦台重新撐起來，站回台心</p><p><b>金鳳</b>挨得近了些，金鳳繞著「把這個月的堂會唱下來，撐住會樂里的門面」打轉</p><p class="inner">〔心〕把這個月的堂會唱下來，撐住會樂里的門面</p><p><b>柳生春</b>挨得近了些，柳生春繞著「排一齣新戲，把雲錦台重新撐起來，站回台心」打轉</p><p class="inner">〔心〕排一齣新戲，把雲錦台重新撐起來，站回台心</p><p><b>金鳳</b>挨得近了些，金鳳繞著「把這個月的堂會唱下來，撐住會樂里的門面」打轉，看向柳生春</p><p class="inner">〔心〕把這個月的堂會唱下來，撐住會樂里的門面</p></div></details></div>
+<p class="resolve"><span class="rtag">了斷</span>柳生春：欠金鳳一句了斷，這些年一·經這場又深了些</p>
+</div>
+</section>
+<section class="pov"><div class="chap-mark">誌</div><h2>各人視角</h2>
+<p class="note">同一段日子，各人心裡是另一本帳。以下是各角色逐日的第一人稱自述（主觀、或有偏頗），與上面客觀的時辰章回並存——讀者可只跟著一個人走。</p>
+<details class="povblock"><summary><span class="povname">柳生春 的帳</span><span class="povrole">小生</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>（第1日·我）今日這一遭，我心裡自有計較，心裡還惦著「排一齣新戲，把雲錦台重新·經這場又深了些」。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">金鳳 的帳</span><span class="povrole">歌女</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>（第1日·我）今日這一遭，我心裡自有計較，心裡還惦著「把這個月的堂會唱下來，撐·經這場又深了些」。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">蘇映雪 的帳</span><span class="povrole">花旦</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>（第1日·我）今日這一遭，我心裡自有計較，心裡還惦著「去雲錦台把新戲的旦角戲排·經這場又深了些」。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">白韻秋 的帳</span><span class="povrole">客</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>（第1日·我）今日晃了一天，沒個要緊事，心裡還惦著「想法子親近柳生春，捧他捧成名角」。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">沈雪笙 的帳</span><span class="povrole">班主</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>（第1日·我）今日晃了一天，沒個要緊事，心裡還惦著「把封了多年的春雪社重新撐起來，排一齣立得住的新戲」。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">江聞鶴 的帳</span><span class="povrole">小生</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>（第1日·我）今日這一遭，我心裡自有計較，心裡還惦著「在雲錦台站住，跟柳生春唱·經這場又深了些」。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">連翹 的帳</span><span class="povrole">刀馬旦</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>（第1日·我）今日這一遭，我心裡自有計較，心裡還惦著「在一班名角裡，讓上海記住·經這場又深了些」。</p>
+</div></details>
+</section>
+<section class="finale"><div class="chap-mark">終</div><h2>大會串 · 首演</h2>
+<p class="prod">戲碼《牡丹亭·驚夢》 · 狀態 premiered · 選角 柳生春、蘇映雪、江聞鶴、連翹</p>
+<p class="prod">劇本片段：《牡丹亭·驚夢》開排：沈雪笙把封了多年的樟木戲箱開了，這一齣要重新立起來。</p>
+<div class="premiere"><div class="ptag gold">獻演</div>
+<p><b>柳生春</b>當著眾人，柳生春繞著「欠金鳳一句了斷，這些年一·經這場又深了些」打轉</p><p><b>蘇映雪</b>當著眾人，蘇映雪繞著「去雲錦台把新戲的旦角戲排出彩，掙一個立得住的台柱」打轉</p>
+</div>
+</section>
+<section class="box"><h2>票房 · 可審加總</h2>
+<p class="note">數字永不由 LLM 決定。willingness = 0.4·warmth + 0.3·repute + 0.3·quality；購票(willingness&gt;0)、回訪(&gt;0.6)。好票房是本季努力賺來的。</p>
+<p class="prod">票房總計 <b>7</b>（購票 5 人、回訪 2 次） · 戲之品相 0.61 · 班之名望 0.51</p>
+<div class="tblwrap"><table><thead><tr><th>觀眾</th><th>類</th><th>warmth</th><th>repute</th><th>quality</th><th>willingness</th><th>購票</th><th>回訪</th></tr></thead><tbody>
+<tr><td class="aud">白韻秋</td><td class="kind">cast</td><td>0.82</td><td>0.51</td><td>0.61</td><td class="will">0.66</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+<tr><td class="aud">老戲迷秦秀娥</td><td class="kind">materialized</td><td>0.78</td><td>0.51</td><td>0.61</td><td class="will">0.65</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+<tr><td class="aud">會樂里堂子客</td><td class="kind">materialized</td><td>0.64</td><td>0.51</td><td>0.61</td><td class="will">0.59</td><td class="tick">✓</td><td class="tick"></td></tr>
+<tr><td class="aud">洋行職員</td><td class="kind">materialized</td><td>0.50</td><td>0.51</td><td>0.61</td><td class="will">0.54</td><td class="tick">✓</td><td class="tick"></td></tr>
+<tr><td class="aud">報館先生</td><td class="kind">materialized</td><td>0.36</td><td>0.51</td><td>0.61</td><td class="will">0.48</td><td class="tick">✓</td><td class="tick"></td></tr>
+</tbody></table></div>
+<p class="prod">驅動品相（ability × effort）：柳生春(0.9×2=1.80)　蘇映雪(0.85×2=1.70)　江聞鶴(0.7×2=1.40)</p>
+</section>
+<section class="verdict"><h2>Showrunner · 收尾判準</h2>
+<div class="badge pass">PASS ✓</div>
+<p class="razor-line">razor：劇本&gt;0 ∧ 選角≥2 ∧ 排練投入≥門檻 ∧ 已在大會串演出。</p>
+<p class="razor-item">劇本片段 1 段（需 &gt;0）：PASS</p>
+<p class="razor-item">選角 4 人（需 ≥2）：PASS</p>
+<p class="razor-item">排練投入 8.0（需 ≥4）：PASS</p>
+<p class="razor-item">在大會串上被演出（state=premiered）：PASS</p>
+</section>
+<footer class="colophon">春雪社重啟戲箱 · 由兩個自治 agent（立局人 · 舞台監督 · 角色 · 說書人 · 畫師）在本地跑出。角色的意義由自己書寫，數字由引擎裁定。</footer>
+</article>
+</body></html>
