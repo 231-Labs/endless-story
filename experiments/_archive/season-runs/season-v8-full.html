@@ -1,0 +1,333 @@
+<title>春雪社 · 重啟戲箱</title>
+<style>
+:root{--bg:#ece2cf;--panel:#f6efe0;--panel2:#f1e8d5;--ink:#2b2119;--dim:#7a6b56;--zhu:#a5322a;--zhu-soft:#b9564a;--gold:#8f6f2c;--gold-bright:#a9852f;--line:rgba(60,40,20,.16);--line-soft:rgba(60,40,20,.09);--serif:"Songti SC","STSong","Songti TC","Noto Serif CJK TC","宋体",serif;--kai:"Kaiti SC","STKaiti","KaiTi","楷体","Noto Serif CJK TC",serif;--sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;}
+@media (prefers-color-scheme:dark){:root{--bg:#15110d;--panel:#1e1811;--panel2:#231b13;--ink:#ece0c6;--dim:#a08d70;--zhu:#d1614d;--zhu-soft:#c9705e;--gold:#c9a24c;--gold-bright:#d8b25c;--line:rgba(220,190,140,.16);--line-soft:rgba(220,190,140,.08);}}
+:root[data-theme="light"]{--bg:#ece2cf;--panel:#f6efe0;--panel2:#f1e8d5;--ink:#2b2119;--dim:#7a6b56;--zhu:#a5322a;--gold:#8f6f2c;--gold-bright:#a9852f;--line:rgba(60,40,20,.16);--line-soft:rgba(60,40,20,.09);}
+:root[data-theme="dark"]{--bg:#15110d;--panel:#1e1811;--panel2:#231b13;--ink:#ece0c6;--dim:#a08d70;--zhu:#d1614d;--gold:#c9a24c;--gold-bright:#d8b25c;--line:rgba(220,190,140,.16);--line-soft:rgba(220,190,140,.08);}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(120% 80% at 50% -10%,color-mix(in srgb,var(--gold) 8%,transparent),transparent 60%),var(--bg);color:var(--ink);font-family:var(--serif);line-height:1.95;-webkit-font-smoothing:antialiased;}
+.scroll{max-width:44em;margin:0 auto;padding:clamp(1.1rem,4vw,3rem) clamp(1rem,4vw,2rem) 5rem;}
+h1,h2{font-family:var(--kai);font-weight:600;text-wrap:balance;letter-spacing:.02em;}
+p{margin:0 0 .5rem}
+.cover{text-align:center;padding:2rem 0 2.4rem;border-bottom:1px solid var(--line);}
+.seal{width:3.4rem;height:3.4rem;margin:0 auto 1.2rem;display:grid;place-items:center;background:var(--zhu);color:#f6efe0;font-family:var(--kai);font-size:1.8rem;border-radius:5px;box-shadow:0 2px 0 rgba(0,0,0,.15);transform:rotate(-2deg)}
+.title{font-size:clamp(2.1rem,7vw,3.2rem);margin:.2rem 0 .5rem;color:var(--ink)}
+.subtitle{font-family:var(--sans);font-size:.82rem;letter-spacing:.14em;color:var(--dim);margin-bottom:1.6rem}
+.thesis{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--zhu);border-radius:4px;padding:.9rem 1.1rem;text-align:left;font-size:1.02rem;margin:0 auto 1rem;max-width:34em}
+.thesis .lbl,.cast .lbl{display:block;font-family:var(--sans);font-size:.66rem;letter-spacing:.2em;color:var(--zhu);margin-bottom:.35rem}
+.deadline{font-family:var(--sans);font-size:.8rem;color:var(--dim);max-width:34em;margin:0 auto 1.4rem;display:flex;gap:.5rem;align-items:baseline;justify-content:center;line-height:1.6}
+.deadline .dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--zhu);flex:none;transform:translateY(1px)}
+.cast{max-width:34em;margin:0 auto;text-align:left}
+.cast ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5em,1fr));gap:.4rem .9rem}
+.cast li{display:flex;flex-direction:column;padding:.35rem 0;border-bottom:1px dotted var(--line-soft)}
+.cast li b{font-family:var(--kai);font-size:1.05rem}
+.cast li span{font-family:var(--sans);font-size:.72rem;color:var(--dim)}
+.chap-mark{font-family:var(--kai);color:var(--zhu);font-size:1.5rem;text-align:center;margin-top:2.2rem}
+.prologue,.finale{padding:1rem 0 1.4rem}
+.prologue h2,.finale h2{text-align:center;font-size:1.7rem;margin:.1rem 0 1.2rem;color:var(--zhu)}
+.prologue p{text-indent:2em;text-align:justify;margin-bottom:.7rem}
+.day{margin-top:2.6rem}
+.day-head{display:flex;align-items:center;gap:1rem;margin-bottom:1.3rem}
+.day-head:before,.day-head:after{content:"";height:1px;background:var(--line);flex:1}
+.juan{font-family:var(--kai);color:var(--gold);font-size:.95rem;letter-spacing:.35em;padding-left:.35em}
+.day-head h2{font-size:1.35rem;margin:0;white-space:nowrap}
+.hour{margin:0 0 1.5rem;padding-left:1rem;border-left:2px solid var(--line-soft)}
+.hour-label{font-family:var(--sans);font-size:.7rem;letter-spacing:.16em;color:var(--gold);margin-bottom:.55rem}
+.ff{color:var(--dim);font-style:italic;text-align:center;font-size:.92rem;margin:.2rem 0}
+.prose{text-indent:2em;text-align:justify;margin-bottom:.6rem}
+/* private/床/修羅場 scene: woven 章回 primary + collapsible 分鏡 (raw beats) under it. */
+.privscene{margin:.9rem 0 1.2rem;padding-left:1rem;border-left:2px solid var(--line-soft)}
+.privscene.bed{border-left-color:color-mix(in srgb,var(--zhu) 45%,var(--line))}
+.privscene.shura{border-left-color:color-mix(in srgb,var(--zhu) 72%,var(--line))}
+.priv-head{font-family:var(--kai);font-size:.98rem;color:var(--ink);margin-bottom:.5rem;display:flex;align-items:center;gap:.6rem}
+details.storyboard{margin:.55rem 0 .2rem;border:1px solid var(--line-soft);border-radius:5px;background:var(--panel);overflow:hidden}
+details.storyboard summary{cursor:pointer;list-style:none;padding:.4rem .75rem;font-family:var(--sans);font-size:.68rem;letter-spacing:.12em;color:var(--dim);user-select:none;display:flex;align-items:center;gap:.5rem}
+details.storyboard summary::-webkit-details-marker{display:none}
+details.storyboard summary:after{content:"展開 ▾";margin-left:auto;font-size:.62rem;letter-spacing:.1em}
+details.storyboard[open] summary{border-bottom:1px solid var(--line-soft)}
+details.storyboard[open] summary:after{content:"收合 ▴"}
+.ptag{font-family:var(--sans);font-size:.62rem;letter-spacing:.12em;background:var(--dim);color:var(--bg);padding:.12rem .45rem;border-radius:3px;flex:none}
+.ptag.bed{background:var(--zhu)}
+.ptag.gold{background:var(--gold)}.ptag.zhu{background:var(--zhu)}
+.beats{padding:.2rem .9rem 1rem}
+.beats p,.premiere p{margin:.55rem 0;text-align:justify}
+.beats b,.premiere b{font-family:var(--kai);color:var(--zhu-soft);margin-right:.5em}
+.beats .inner{margin:-.25rem 0 .55rem 1.4em;font-size:.86rem;font-style:italic;color:var(--dim);opacity:.85;text-align:justify}
+.beats .inner:before{content:"";display:inline-block}
+.pov{margin-top:2.6rem}
+.pov h2{text-align:center;font-size:1.6rem;color:var(--gold);margin:.1rem 0 1rem}
+details.povblock{margin:.7rem 0;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:5px;background:var(--panel);overflow:hidden}
+details.povblock summary{cursor:pointer;list-style:none;padding:.55rem .8rem;font-family:var(--kai);font-size:1.02rem;display:flex;align-items:center;gap:.7rem;user-select:none}
+details.povblock summary::-webkit-details-marker{display:none}
+details.povblock summary:after{content:"展開 ▾";margin-left:auto;font-family:var(--sans);font-size:.66rem;color:var(--dim);letter-spacing:.1em}
+details.povblock[open] summary:after{content:"收合 ▴"}
+.povname{color:var(--zhu-soft)}
+.povrole{font-family:var(--sans);font-size:.7rem;color:var(--dim)}
+.povstream{padding:.3rem .95rem 1rem}
+.povday{margin:.5rem 0;text-align:justify;text-indent:0}
+.povd{font-family:var(--sans);font-size:.66rem;letter-spacing:.12em;color:var(--gold);background:color-mix(in srgb,var(--gold) 12%,transparent);padding:.08rem .45rem;border-radius:3px;margin-right:.6em;white-space:nowrap}
+.resolve{margin:.6rem 0;font-size:.98rem}
+.rtag{font-family:var(--sans);font-size:.62rem;letter-spacing:.14em;color:#f6efe0;background:var(--gold);padding:.1rem .5rem;border-radius:3px;margin-right:.6em;vertical-align:.12em}
+.finale h2{color:var(--zhu)}
+.prod{font-family:var(--sans);font-size:.86rem;color:var(--dim);margin:.3rem 0;line-height:1.7}
+.premiere{background:var(--panel2);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:5px;padding:.9rem 1.1rem;margin:1rem 0}
+.premiere .ptag{display:inline-block;margin-bottom:.4rem}
+.box{margin-top:2.6rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.box h2,.verdict h2{font-size:1.5rem;color:var(--zhu);text-align:center;margin-bottom:.8rem}
+.note{font-family:var(--sans);font-size:.76rem;color:var(--dim);text-align:center;max-width:32em;margin:0 auto 1.1rem;line-height:1.7}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.82rem;font-variant-numeric:tabular-nums}
+th,td{padding:.45rem .5rem;border-bottom:1px solid var(--line-soft);text-align:right}
+th{font-size:.66rem;letter-spacing:.08em;color:var(--dim);border-bottom:1px solid var(--line);font-weight:600}
+td.aud,th:first-child{text-align:left;font-family:var(--serif);font-size:.92rem}
+td.kind{text-align:left;font-size:.66rem;color:var(--dim)}
+td.will{color:var(--zhu);font-weight:600}
+td.tick{color:var(--gold-bright);text-align:center}
+.verdict{margin-top:2.2rem;text-align:center}
+.badge{display:inline-block;font-family:var(--kai);font-size:1.15rem;letter-spacing:.1em;padding:.35rem 1.2rem;border-radius:5px;margin:.3rem 0 .8rem}
+.badge.pass{background:var(--gold);color:#1a1206;box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.badge.fail{background:var(--zhu);color:#f6efe0}
+.razor-line{font-family:var(--sans);font-size:.78rem;color:var(--dim);margin-bottom:.8rem}
+.razor-item{font-family:var(--sans);font-size:.82rem;color:var(--ink);margin:.2rem 0}
+.colophon{margin-top:3rem;padding-top:1.4rem;border-top:1px solid var(--line);font-family:var(--sans);font-size:.72rem;color:var(--dim);text-align:center;line-height:1.8}
+</style>
+
+<article class="scroll">
+<header class="cover">
+<div class="seal">春</div>
+<h1 class="title">春雪社 · 重啟戲箱</h1>
+<p class="subtitle">一齣自治敘事引擎跑出的完整賽季 · 上海 · 一九二〇年代</p>
+<div class="thesis"><span class="lbl">立局人命題</span>春雪社能不能重啟戲箱、排出並演出一齣自己的新戲，趕在年底大會串之前。</div>
+<div class="deadline"><span class="dot"></span>死線 · 世界事實：年底霞飛路大會串（第5日入夜）。掛得上名的班子拿檔期版面，掛不上的被遺忘。</div>
+<div class="cast"><span class="lbl">角色</span><ul>
+<li><b>柳生春</b><span>小生</span></li>
+<li><b>金鳳</b><span>歌女</span></li>
+<li><b>蘇映雪</b><span>花旦</span></li>
+<li><b>白韻秋</b><span>客</span></li>
+<li><b>沈雪笙</b><span>班主</span></li>
+<li><b>江聞鶴</b><span>小生</span></li>
+<li><b>連翹</b><span>刀馬旦</span></li>
+</ul></div>
+</header>
+<section class="prologue"><div class="chap-mark">序</div><h2>序章</h2>
+<p>春雪社的這座戲台，原是清末一位官紳家的堂會戲台。改朝換代後，官宦人家的排場散了，這方戲台連著半進院子，被沈雪笙盤了下來，掛上春雪社的水牌。正樑上那塊舊匾額她一直沒換，燙金的字暗了，至今照舊掛著。</p>
+<p>戲台最裡頭的後台，那幾口樟木戲箱，落了十五年的灰。十五年前沈雪笙封箱那日，班裡如今這批台前的人多半還是孩子。她沒對任何人交代緣由，只說往後這幾箱小生的行頭不再動了。班子靠著幾齣熟戲，一年一年也就過來了，台下的人換了一批又一批，戲單卻還是那張戲單。</p>
+<p>今年不同。霞飛路那頭新起的戲園放出話來，年底要辦一場打對台的大會串。掛得上名的班子，往後的檔期、報上的版面、堂會的邀約，都在這一場上見高低。掛不上的，慢慢就沒人記得了。</p>
+<p>沈雪笙把那口最底下的箱子開了一條縫。裡頭壓著的，除了那幾件沒人再穿的小生戲衣，還有一只早停了的懷錶。</p>
+<p>戲箱要重開了。這一季，春雪社得排出一齣自己的新戲，趕在年底那場會串之前。至於箱底那些沒說完的舊事，沒有人交代該怎麼辦。</p>
+</section>
+<section class="day"><div class="day-head"><span class="juan">卷一</span><h2>第1日</h2></div>
+<div class="hour">
+<div class="hour-label">第1日·清晨</div>
+<p class="ff">天光未亮，戲子夜工，滿園還在夢裡，一時無話。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第1日·日午</div>
+<p class="prose">日午光景，練功房的半掩門扉被幾聲輕敲叩開，金鳳倚在框上，指尖點著木邊，一雙眼先遞了進去：「柳老闆，這歇口的工夫也不賞個臉？」裡頭柳生春恰將摺扇收攏，聞聲抬眼，嘴角那抹漫不經心的笑意掛得熟稔，懶洋洋把話搭過來：「什麼風把金鳳姑娘吹來了，我當是哪位貴客。」金鳳不慌不忙踱步近前，纖指往那剛合上的扇骨輕輕一搭，笑得爽利：「這不刮東風也不刮西風，單揀你落單的時候來。」柳生春任她指尖搭著，手腕順勢一讓，摺扇便滑入她掌心，人亦往旁側條凳上靠了靠，勻出半邊餘地，偏頭笑看她：「那真是好準的眼風，專揀我沒處躲的時候。」</p>
+<p class="prose">妝閣那頭，筆尖停駐。沈雪笙將帳本合起，抬眼望向跟前人，問得直截：「年底大會串的戲單，你想要什麼戲？」連翹手裡正攥著靠旗的繫帶，使力一扯、勒實了，迎上那目光，吐出三字：『穆柯寨。』沈雪笙指尖在帳本封皮上輕叩兩下，嘴角微挑：『穆柯寨……好大的胃口。你身子骨壓得住穆桂英的靠，那把降龍木，你拎得穩麼？』連翹腰桿一挺，將剛勒緊的靠旗往身後一撇，嗓音爽利擲地有聲：『降龍木是拿手拎的麼，班主？那是壓在脊樑骨上、拿命托住的。』</p>
+</div>
+<div class="hour">
+<div class="hour-label">第1日·晡時</div>
+<p class="prose">脊樑骨上的話音猶未落地，雲錦台上卻是一派纏綿靜沉。柳生春偏過臉去，躲開師姐那雙澄如秋水的眼，指尖卻似生了眼，順勢捏住她一截水袖，低低道了句：「師姐說對幾場就對幾場。」那聲氣極輕，倒像把自個兒的底全交到了對方手裡。蘇映雪不接這話，反手輕輕拂開他捏著水袖的指尖，觸碰處只若無痕，順勢便將那第三道褶皺一寸寸理平，眼底笑意輕淺，只囑咐道：「理好行頭再上台，別叫班主挑了眼。」柳生春默然，由著她理平水袖，再無半字回聲。待指尖離了袖口，蘇映雪轉身，只將戲服大襟上那點浮灰撣淨，聲氣穩穩的，又端出了台上那副正經架式：「這段生旦對口最吃默契，咱們再走一遍。」那拂開的指尖與撣淨的浮灰，早已將千般心緒盡數壓在了行頭之下。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第1日·入夜（入夜）</div>
+<p class="prose">茶盞落案，清脆一聲截斷了妝閣裡的浮光。沈雪笙眼波不興，目光越過鏡台，定定錨在連翹身上，靜聲開口：「妳既說站台心，便把妳那身真本事亮一亮——就當這後台是戲園子，我沈雪笙是妳唯一的看客。」</p>
+<p class="prose">言落，寒芒驟起。連翹探手拔出妝閣邊架上的長槍，腕底一沉，挽出個利落槍花，腳下踩步即刻亮了個矮勢，身形如弓，槍尖穩穩直指沈雪笙眉心一尺之外。</p>
+<p class="prose">那鋒刃堪堪懸在跟前，沈雪笙卻不閃不避，反倒身子往前微傾，目光順著那森冷槍尖直直逼入連翹眼底，緩緩道出斷語：「好槍。準頭有了，殺氣太盛——刀馬旦要的是點到人心上的疼，不是真見血。」</p>
+<p class="prose">聞言，連翹腕子一擰，將槍尖壓低三分，隨即槍桿尾端重重頓地，「咚」的一聲砸出個滿堂彩的硬派底子，身後靠旗隨勢一振，不亂半分。她抬起眼，毫不退讓地迎上那雙眸子，朗聲道：「不見血的疼，得先自己摔出過真疼才給得出台上的疼。」</p>
+<div class="privscene"><div class="priv-head"><span class="ptag">私</span>二樓書寓　柳生春×蘇映雪</div><p class="prose">指節微動，替人理衣的手順勢收回大袖之中，只餘指尖輕抵著摺扇柄端。柳生春低聲問了句師姐怎麼過來了，可是有話吩咐。蘇映雪就著那隻手微微側身，將那衣襟上的褶子細細順平，抬眼笑道：「沒事就不能來看看你？明兒雲錦台的戲，我這旦角可不能讓你這小生給比下去。」柳生春輕笑一聲，指尖仍抵著扇柄：「那我可得收著點，別把師姐的風頭搶盡了。」蘇映雪卻指尖隔著袖口，輕輕一按她抵著扇柄的手，低頭將那褶子又順了一遍，嘴角含著溫吞笑意：「你收著點？那年驚夢你一嗓子出來，滿堂誰還瞧得見旁人。」聽見「驚夢」二字，抵著扇柄的指節驟然一僵，眼底舊事翻湧，卻被垂下的眼簾掩了個嚴實。反手輕輕覆上師姐按在自己手背上的指尖，柳生春低聲道：「師姐又拿那齣戲打趣我…那晚的戲，是師姐唱得好，我只不過是借了你的光。」</p><details class="storyboard"><summary>分鏡 · 5 拍</summary><div class="beats"><p><b>柳生春</b>柳生春：挨過去替她理了理衣襟，低聲問：「師姐怎麼過來了？可是有話吩咐？」</p><p class="inner">〔心〕不敢看她的眼，怕一看，這身風流的殼就碎了。</p><p><b>蘇映雪</b>蘇映雪：就著她的手微微側了側身，把那衣襟上的褶子順平，抬眼笑道：「沒事就不能來看看你？明兒雲錦台的戲，我這旦角可不能讓你這小生給比下去。」</p><p class="inner">〔心〕他的手還是這樣暖，當年那夜也是這雙手。是我先冷了臉，才把他推到會樂里那些夜裡去的。</p><p><b>柳生春</b>柳生春：輕笑一聲，順勢將方才替她理衣襟的手收回袖中，只留指尖微抵著摺扇柄端，「那我可得收著點，別把師姐的風頭搶盡了。」</p><p class="inner">〔心〕十七歲那年的柳枝又遞到手邊了，可這回，我真敢接嗎？</p><p><b>蘇映雪</b>蘇映雪：指尖隔著袖口輕輕一按她抵著扇柄的手，低頭將那褶子又順了一遍，嘴角還掛著笑：「你收著點？那年驚夢你一嗓子出來，滿堂誰還瞧得見旁人。」</p><p class="inner">〔心〕你最懂怎麼搶我的心，偏裝得一臉無辜。</p><p><b>柳生春</b>柳生春：聽見「驚夢」二字，抵著扇柄的指節驟然一僵，隨即垂下眼簾掩住眼底翻湧的舊事，反手輕輕覆上她按在自己手背上的指尖，低聲道：「師姐又拿那齣戲打趣我…那晚的戲，是師姐唱得好，我只不過是借了你的光。」</p><p class="inner">〔心〕那夜散了戲，柳枝是你遞的，線也是你越的…如今只剩台上的光，底下的火早燒成灰了。</p></div></details></div>
+</div>
+</section>
+<section class="day"><div class="day-head"><span class="juan">卷二</span><h2>第2日</h2></div>
+<div class="hour">
+<div class="hour-label">第2日·清晨</div>
+<p class="ff">天光未亮，戲子夜工，滿園還在夢裡，一時無話。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第2日·日午</div>
+<p class="prose">一柄未撑的洋伞贴地搁落，伞骨磕在脚边，惊了地上的微尘。金凤仰着脸，眼风直直钉在柳老板面上，那话音里不掺半点水分：“柳老板，让扇让座我领了，可咱俩那笔旧账，你今儿到底认不认？”</p>
+<p class="prose">几步开外，练功房里正较着另一股劲。连翘一枪刺出，却被沈雪笙一抬手按住枪杆，生生将那股锐气压下半寸。沈雪笙不急不恼，只拨弄着这枪尖的走向：“力道收三分，枪尖别只顾着往前够，你得让那一下扎进看客的眼窝里，先叫他们替你疼。”</p>
+<p class="prose">连翘手腕一沉，将枪杆往回撤了半寸，眉心拧起，眼底那股从身骨里摔打出来的硬气尚未褪去：“我这身摔出来的疼还不够？非得收着，才叫人瞧见？”</p>
+<p class="prose">话音未落，沈雪笙骤然松手。那枪尖失了压制，便如出闸的活物，直直送出半寸，扎进旁边立着的木柱，“笃”的一声闷响，震落一层浮灰。沈雪笙不避那灰尘，只将话嚼碎了递过去：“摔出来的疼是你自己的，收回去再送出来的疼才是看客的。你非得把那口血咽回嗓子眼，他们才替你喊出来。”</p>
+<p class="prose">连翘伸手拔下嵌进木柱的枪尖，顺势抹去杆上浮灰。她没看那铁尖，偏将眼眸抬起来，望向沈雪笙，那问话轻飘飘却又沉甸甸地砸在了这灰蒙蒙的日午里：“咽回去的血，得拿什么换他们一声彩？”</p>
+</div>
+<div class="hour">
+<div class="hour-label">第2日·晡時</div>
+<p class="prose">枪尖那抹浮灰未落，连翘的冷笑已先挂在唇角。她将手中长枪往肩头一扛，指尖顺着杆上斑驳的旧痕一路抹过去，那上头尽是岁月磨出的毛刺与暗哑，一如她咽进肚里的千般苦楚。沈雪笙那头还未及答言，云锦台上却另起了一段文武交锋。</p>
+<p class="prose">江闻鹤把云帚往臂弯上一搭，脚底碾着戏毯走了一遭圆场，那步子行云流水，收停时眼皮一挑，冲连翘亮了个相，直拿行话说事：“连老板，这文戏的收放，全在脚跟站不站得稳，你且看这口气——”连翘哪吃这套，将枪杆往地上重重一顿，震起些许微尘，她偏不走那圆场，只提气收腹，背后靠旗纹丝不乱，硬生生亮出一个山膀：“脚跟站得稳，那是文戏的谱儿；武戏的根，在这口气能不能拿命托住。”</p>
+<p class="prose">江闻鹤被这硬邦邦的话一撞，一时语塞，手里云帚把子在手心里一转，到底没服软，反将那股子倔强顺着话头递了回去：“武戏拿命托，文戏就不是拿命换了？都是要把那口气立在台上，谁也不比谁轻省。”</p>
+<p class="prose">连翘眼底一寒，冷笑出声，扛起的枪杆压着肩头，指尖仍贪恋般抚着杆上旧痕，那话却比枪尖更冷更利：“你们文戏的命，报纸上替你们写得字字珠玑；我这口气摔出来的疼，戏单上连个名字都不给留。”</p>
+<div class="privscene"><div class="priv-head"><span class="ptag">私</span>會樂里寓所　金鳳×柳生春</div><p class="prose">金鳳指尖直抵他後腰那點，逼得人避無可避，口裡逼問的卻是筆陳年爛帳：「柳老闆，扇子讓了，座也讓了，獨獨這筆帳你還是死死賴著不認？」腰眼一麻，柳生春沒躲，反倒往那指尖迎了半寸，反手扣住她腕子，貼著耳根低啞道：「金鳳，我認。我哪回不認你？」她反手覆上他扣著自己的手，指腹沿著掌骨一寸寸收緊，將他的手硬生生按回自己後腰那點，眼眶一熱，卻笑出聲來：「認？柳老闆嘴上認得倒爽快。我要的可不是你這隨口一句認——你把心掏給了別人，獨把身子留給我，這筆欠我的帳，你當一個字就抹得平？」抵著後腰的指端像燒了塊烙鐵，他沒掙開她按著的手，只垂下眼睫，拇指摩挲過她腕骨，啞聲道：「金鳳，你要我怎樣？」她鬆開了按著他的手，指尖反倒輕輕一刮他腰眼，退了半步將身子上那股繃緊的勁兒卸了，歪頭看著他笑：「我要你怎樣？柳老闆真是貴人多忘事——雨夜拽進門，窄床擠到天光，那會子你丟了魂似的往我這兒躲，我可沒少替你擔驚受怕。如今你倒是心定了，就不興給我個準話，說那陣子究竟欠了我什麼？」</p><details class="storyboard"><summary>分鏡 · 5 拍</summary><div class="beats"><p><b>金鳳</b>金鳳：上前一步，指尖直抵他後腰那點，逼著他避無可避：「柳老闆，扇子讓了，座也讓了，獨獨這筆帳你還是死死賴著不認？」</p><p class="inner">〔心〕指尖底下的顫，他賴不掉。</p><p><b>柳生春</b>柳生春：腰眼一麻，他沒躲，反倒往她指尖蹭去半寸，反手扣住她腕子，貼著她耳根低啞道：「金鳳，我認。我哪回不認你？」</p><p class="inner">〔心〕這身子是你教的，哪裡碰得、哪裡受不住，你門清。我賴不掉，也不想賴了。</p><p><b>金鳳</b>金鳳：反手覆上他扣著自己腕子的手，指腹沿著他掌骨一寸寸收緊，將他的手硬按回自己後腰那點，眼眶一熱卻笑出聲來：「認？柳老闆嘴上認得倒爽快。我要的可不是你這隨口一句認——你把心掏給了別人，獨把身子留給我，這筆欠我的帳，你當一個字就抹得平？」</p><p class="inner">〔心〕他一碰我還是顫，可這顫裡沒有心，只有慣。我等了這麼久，等的就是逼你親口把這層窗戶紙捅破。</p><p><b>柳生春</b>柳生春：指尖抵著後腰那點像燒了塊烙鐵，他沒掙開她按著的手，反倒垂下眼睫，拇指摩挲過她腕骨，啞聲道：「金鳳，你要我怎樣？」</p><p class="inner">〔心〕她曉得哪裡是我的命門，句句往最疼處戳。我這身風流是空殼，裡頭早叫她看透了。</p><p><b>金鳳</b>金鳳：鬆開按著他的手，指尖反倒輕輕一刮他腰眼那點，退了半步將身子上那股勁兒卸了，歪頭看著他笑：「我要你怎樣？柳老闆真是貴人多忘事——雨夜拽進門，窄床擠到天光，那會子你丟了魂似的往我這兒躲，我可沒少替你擔驚受怕。如今你倒是心定了，就不興給我個準話，說那陣子究竟欠了我什麼？」</p><p class="inner">〔心〕你身子認我的手，這回又往我指尖上湊，可你眼裡還是空的。柳生春，我就等你親口把那筆帳算清。</p></div></details></div>
+</div>
+<div class="hour">
+<div class="hour-label">第2日·黃昏</div>
+<p class="prose">那口冷利的話音還壓在肩頭的舊痕上，一碗溫梨湯忽地推至眼前，甜潤的熱氣悄然化開了枪尖的寒意。沈雪笙嗓音微沉，話裡卻透著過骨的涼：“你說要摔出真疼才給得出？我當年可是疼得封了箱。”</p>
+<p class="prose">連翹指尖方觸及溫熱的碗沿，硬生生收了力，不躲不避地抬眼，直直釘住眼前人：“您封了箱，可我連翹的降龍木還沒舉起來，這疼便算不得疼，只是還債。”這一句，字字咬得極緊，把那還未見光的苦楚全認作了心甘情願的孽債。</p>
+<p class="prose">沈雪笙不接這話鋒，只將一隻停在舊時的懷錶拍在梨湯碗旁。錶蓋磕著瓷邊，清脆一聲響，指尖隨之死死壓住那不再走動的錶面：“那就把債背到台上，讓降龍木替你討。”</p>
+<p class="prose">連翹目光一落，一把抄起那隻懷錶緊緊揣入懷中，貼著心口似生了根。端起那碗梨湯仰頸一飲而盡，溫液入喉，嚥下的是暖亦是狠。空碗重重擱回桌面，震得燈影一晃，她迎著那目光道：“討不討得回，您且看著。”</p>
+<div class="privscene"><div class="priv-head"><span class="ptag">私</span>後台小廂房　蘇映雪×柳生春</div><p class="prose">簾箔方掀，一截皓腕劈面攥來。蘇映雪五指如鉗，死死扣住柳生春剛邁進門的脈門，連拽帶拖，竟將人直扯至那空落落的戲台中央。她仰面，第三道水袖驟然揚起，直挺挺釘在男人眼前，翻飛的綾羅間盡是不肯歇的執妄。</p><p class="prose">腕間鐵箍未脫，柳生春卻已反客為主，反掌扣住那攥著自己的柔荑。指節一寸一寸收緊，生生借了這死力，將人往懷中帶了半步。他垂下眼，聲線壓在喉底：「師姐，你越捏越緊，我當你還在台上沒醒。」</p><p class="prose">這半步她偏不退。蘇映雪迎身而上，額角直直抵住他硬朗下頷，喉間滾出微啞的字句：「那就別叫我醒。」</p><p class="prose">粗礪下頷微斂，輕輕蹭過她額際碎發，攬在纖腰後的大掌悄然收攏，將這身段兜了個嚴實。貼耳的嗓音壓得極低，卻似含著冰碴：「好，不醒。就怕散了戲，台底下的冷比台上還熬人。」</p><p class="prose">聽得此言，她貼著他掌心的指尖游移，沿著那縱橫紋路一點點勾緊，牽引著那隻大掌直落至自己單薄鎖骨之上，重重按住。嗓音微顫，字字卻燙：「我熬了八年，你拿什麼冷來唬我？」</p><details class="storyboard"><summary>分鏡 · 5 拍</summary><div class="beats"><p><b>蘇映雪</b>一把攥住他剛掀簾進來的手腕，拽到戲台中央揚起第三道水袖，死死釘在他眼前。</p><p class="inner">〔心〕你接不接？這輩子你若還認那個除夕夜，就接住這道袖。</p><p><b>柳生春</b>反手扣住她攥著自己的手，指節一寸寸收緊，借著這力道將人往懷裡帶了半步，低聲道：「師姐，你越捏越緊，我當你還在台上沒醒。」</p><p class="inner">〔心〕她指尖這麼燙，跟十七歲那夜一樣……我這身風流的殼子，一碰她就要漏底。</p><p><b>蘇映雪</b>偏不退那半步，反倒迎上去將額抵住他下頷，啞聲道：「那就別叫我醒。」</p><p class="inner">〔心〕你台下那身風流是我推出去的，今夜我偏要把你摁回來，看清誰才是你這輩子第一個人。</p><p><b>柳生春</b>下巴微斂蹭過她額發，攬在她腰後的手掌微微收攏，嗓音壓得極低：「好，不醒。就怕散了戲，台底下的冷比台上還熬人。」</p><p class="inner">〔心〕十七歲那夜也是這句不醒……師姐，你給的是魂，可這身風流的殼子早叫人磨穿了，我怕你一低頭就看見底下的破綻。</p><p><b>蘇映雪</b>指尖沿他掌心紋路慢慢勾緊，將他那只手拉至自己鎖骨處按住，嗓音微顫：'我熬了八年，你拿什麼冷來唬我？'</p><p class="inner">〔心〕怕你在別人那兒比在我這兒更像你自己，這會子你手貼著我，我才敢賭這一把。</p></div></details></div>
+<p class="resolve"><span class="rtag">了斷</span>連翹：我在沈雪笙跟前亮了槍，這身子骨是拿命托住降龍木的。</p>
+<p class="resolve"><span class="rtag">了斷</span>沈雪笙：連翹既拿命托住降龍木，這新戲的脊樑骨便有了。</p>
+<p class="resolve"><span class="rtag">了斷</span>連翹：她說我殺氣太盛、要點到人心上的疼，我這身摔出的疼還不夠麼？</p>
+</div>
+<div class="hour">
+<div class="hour-label">第2日·入夜（入夜）</div>
+<div class="privscene bed"><div class="priv-head"><span class="ptag bed">私 · 床</span>後台小廂房　金鳳×柳生春</div><p class="prose">廂房門遭一腳猛踢，反手落了閂，金鳳將柳生春逼退至榻邊，指尖猛地戳上他後腰那顆小痣，貼著耳根咬牙開口：「柳老闆，你讓扇讓座我不管，這筆帳你躲了這些年，今兒你認是不認？」脊背一僵，柳生春反手扣住她戳在腰後的手腕，順著力道仰頸倒進榻上，將她一併拽倒覆在身上，另一手攫住她下頷，拇指重重碾過她下唇，低喘著盯住她眼：「認……我哪回不認？」</p><p class="prose">身子順勢壓下，金鳳膝頭不容分說擠進他腿間，空出的手揪住他領口往兩邊一扯，低頭尋著他喉結狠狠吮出一個紅印，啞聲頂回去：「嘴上認得爽利，身子倒是老實……那這些年你心裡頭，念的是誰的名字？」腰身順她膝勢軟軼三分，腿根緊繃卻不掙，攥她下頜的手滑至後頸將她按低，挺腰去迎她唇，貼著她鼻尖笑喘：「你問哪一遭？念的是誰，這會兒在你身下叫的是誰——你比誰都明白。」指尖順著他脊溫一路下滑，重重摁死腰後那點小痣，不容他躲閃，下身抵著他腿間柔韌處緩緩蹭弄，貼著他唇角咬字。</p><p class="prose">脊背猛地弓起，柳生春喉間溢出一聲難掩的急喘，腿間柔韌處被她磨得發顫，卻反手扣緊她後腰、將人往自己懷裡死死一按，下頷抵著她額頭，啞聲咬著牙笑：「金鳳……你還真是一點虧都不肯吃。」指尖死死掐住那點小痣不放，另一手扣緊他後腦逼他抬頭看自己，下身順勢將他腿間那處柔韌抵得更實、狠研磨了兩下，貼著他咬出的血氣笑開：「吃虧？我這不是正討債麼——柳老闆，這十年你身子欠我的，今晚你得給我連本帶利認乾淨了。」</p><p class="prose">脊背遭那小痣處死掐，柳生春腰身不由自主軟塌下去，腿間柔韌被她抵實研磨，再禁不住咬出聲，手卻死扣她後腰不鬆，胸膛急喘著貼上去吻住她唇角血痕，啞聲混著喘息落進她耳裡。指尖狠狠一旋那點小痣，趁他腰軟身顫，金鳳將他腿間</p><details class="storyboard"><summary>分鏡 · 24 拍</summary><div class="beats"><p><b>金鳳</b>一腳踢上廂房門，反手落了閂，將他逼退到榻邊，指尖猛地戳上他後腰那顆小痣處，貼著他耳根咬著牙開口：「柳老闆，你讓扇讓座我不管，這筆帳你躲了這些年，今兒你認是不認？」</p><p class="inner">〔心〕那點熟悉的顫到底瞞不過我，你身子認得我的手，心再淡也沒用。</p><p><b>柳生春</b>脊背一僵，反手扣住她戳在腰後的手腕，順著那力道仰頸倒進榻上，將她一併拽倒覆在身上，另一手攥住她下頷，拇指重重碾過她下唇，低喘著盯住她眼：「認……我哪回不認？」</p><p class="inner">〔心〕這筆債，拿這身子還你就是了——可欠的不止這一樁。</p><p><b>金鳳</b>身子順勢壓下，膝頭不容分說擠進他腿間，空出的手揪住他領口往兩邊一扯，低頭尋著他喉結狠狠吮出一個紅印，啞聲頂回去：「嘴上認得爽利，身子倒是老實……那這些年你心裡頭，念的是誰的名字？」</p><p class="inner">〔心〕你認了身子，我偏要逼出那句心裡話。</p><p><b>柳生春</b>腰身順她膝勢軟軼三分，腿根緊繃卻不掙，攥她下頜的手滑至後頸將她按低，挺腰去迎她唇，貼著她鼻尖笑喘：「你問哪一遭？念的是誰，這會兒在你身下叫的是誰——你比誰都明白。」</p><p class="inner">〔心〕你曉得我的門道，我也曉得你的手段……這債，肉償了也還不清。</p><p><b>金鳳</b>指尖順著他脊溫一路下滑，重重摁死腰後那點小痣，不容他躲閃，下身抵著他腿間柔韌處緩緩蹭弄，貼著他唇角咬字：</p><p class="inner">〔心〕這點顫你瞞不過我，柳生春，你心裡裝的是誰，身子卻總是認我的。</p><p><b>柳生春</b>脊背猛地弓起，喉間溢出一聲難掩的急喘，腿間柔韌處被她磨得發顫，卻反手扣緊她後腰、將人往自己懷裡死死一按，下頷抵著她額頭，啞聲咬著牙笑：「金鳳……你還真是一點虧都不肯吃。」</p><p class="inner">〔心〕她手太刁，這身子骨子裡的門道全在她指尖上。</p><p><b>金鳳</b>指尖死死掐住那點小痣不放，另一手扣緊他後腦逼他抬頭看自己，下身順勢將他腿間那處柔韌抵得更實、狠研磨了兩下，貼著他咬出的血氣笑開：「吃虧？我這不是正討債麼——柳老闆，這十年你身子欠我的，今晚你得給我連本帶利認乾淨了。」</p><p class="inner">〔心〕他說我專揀他沒處躲時，我倒要看他能躲到幾時。</p><p><b>柳生春</b>脊背遭那小痣處死掐，腰身不由自主軟塌下去，腿間柔韌被她抵實研磨，再禁不住咬出聲，手卻死扣她後腰不鬆，胸膛急喘著貼上去吻住她唇角血痕，啞聲混著喘息落進她耳裡：</p><p class="inner">〔心〕欠你的何止這身帳……我連句交代都賴了六七年，你要討，我拿什麼還。</p><p><b>金鳳</b>指尖狠狠一旋那點小痣，趁他腰軟身顫，將他腿間那處抵得更實更狠，研磨間偏往那最難挨的寸寸地去，舌尖舔淨他唇邊血氣，貼著他耳根笑喘：『認了？光身子認可不作數——柳老闆，親口說，你欠我什麼。』</p><p class="inner">〔心〕你顫了，你身子到底認得我，可我要的是你那句話。</p><p><b>柳生春</b>腰身徹底塌進她懷裡，腿間那處被磨得陣陣發顫抽縮，卻咬著她耳垂重重吮出一圈紅痕，啞聲喘著認了：『……欠你個交代。這幾年我鬆了手、把你磨成了其中一個……是我對不住你。』</p><p class="inner">〔心〕到底還是吐出來了，這債還不清，可這句話再不說，我這身風流的皮都要被她揭穿。</p><p><b>金鳳</b>指尖驀地鬆了那顆小痣，反掌貼上他後腰不住發顫的軟肉，將人牢牢兜進懷裡，下身不再狠磨，只貼實了他輕輕緩頂，湊近他微睜的眼底，嗓音啞透卻字字咬得清楚：『交代？柳老闆，這句話我等了十年——你說了，可別想再收回去。』</p><p class="inner">〔心〕他認了。可這滋味怎麼不像贏，倒像心口讓人剜了一刀。</p><p><b>柳生春</b>眼眶逼紅，反手扣緊她兜著自己後腰的手，下身順她輕頂之勢迎上去、將那處柔韌貼得更濕更實，咬著牙喘出聲：『收不回去了……金鳳，你拿走的東西，我哪一樣討得回來。』</p><p class="inner">〔心〕魂是師姐的，身子卻是你開的，這兩筆債我這輩子也還不清。</p><p><b>金鳳</b>十指與他死扣的手絞緊，下身順勢重重一頂，將他腿間那處柔韌抵得沒了半點退路，貼著他通紅的耳根笑出聲：『討不回，就別討了——連人帶命，你柳老闆今夜全給我填上。』</p><p class="inner">〔心〕這句話我聽見了，你欠我的，到底還進了我手裡。</p><p><b>柳生春</b>將她絞緊的十指死死反握，腰身迎著那重重一頂徹底潰散，將腿間那處最軟的肉毫無保留地揉進她懷裡，仰頸咬住她下唇，啞聲從喉底逼出：『全給你……這條命、這具身，當年就是你教的，原本就該你來收。』</p><p class="inner">〔心〕十年債，今夜填——她要，我就給，連那層風流殼子一併碎給她看。</p><p><b>金鳳</b>心口猛地一撞，十指借勢狠狠將他反握的手扳倒按在枕上，下身不再留餘地、抵著那處抽顫的軟肉碾磨進去，俯身咬開他仰著的頸窩，嚐到鹹意才啞聲逼出一句：『好，我收。』</p><p class="inner">〔心〕十年，真到了這句，心倒揪得發疼——這身子認我的手，這命我也接了，可你心裡那個花旦呢？我拿什麼填？</p><p><b>柳生春</b>十指被按死在枕上，身子隨她碾磨之勢徹底軟下、只腰腹本能地迎著那深處不住輕顫，仰頸將滾燙的淚蹭進她咬著自己頸窩的唇齒間，斷續喘出：「那你收乾淨……別再鬆手，別再叫我回頭去裝那個風流假人……」</p><p class="inner">〔心〕這身殼子終於不用再撐了。</p><p><b>金鳳</b>舌捲過他頸窩那滴滾燙鹹濕，下身狠狠往深處一鑠、抵著那最軟的肉死死碾住不放，鬆開他一隻被按死的手，反手撫上他後腰那顆小痣，指尖重重一按，啞聲贴著他耳根道：『不裝了。這輩子你只認得我金鳳的手……回頭再碰那花旦一下，我就替你把這身拆了。』</p><p class="inner">〔心〕他認了。這句話我等了多少年，真聽見了，反倒怕自己捨不得鬆手。</p><p><b>柳生春</b>被按住後腰那小痣的指尖一熨，身子乍然繃緊又徹底癱軟，空出那手反扣住她按在腰際的腕、指甲陷進肉裡不肯放，下身迎著那死死碾住的深處顫著絞緊，仰頸將氣息全數喘進她懷裡，啞聲碎道：『拆了就拆了……這身子本就是你一樣樣摸出來的門道，除了你，誰也經不住。』</p><p class="inner">〔心〕六年了，她連我哪裡吃痛都記得這般清，我還躲什麼。</p><p><b>金鳳</b>指尖在那小痣上重重一旋，下身趁他絞緊之勢拔出寸許、復又狠頂進最深處抵著那軟肉死死研磨，俯身一口咬住他下頜，啞聲逼道：「那你說——你欠我多少？」</p><p class="inner">〔心〕這句話我熬了這許多年，今夜你總得給我吐出來。</p><p><b>柳生春</b>眼眶一熱，被他咬著下頷的身子順那狠頂之勢向上彈起又重重跌回榻上，扣著她腕子的手驟然收緊，下身深處迎著那研磨絞得發顫，啞聲從齒縫裡逼出來：『欠你一輩子……從你替我縫第一回水袖，到這身子每一寸門道，全是你金鳳的，還不清了……』</p><p class="inner">〔心〕這句話早該說的，拖了這些年，到底是在她身下才吐得出口。</p><p><b>金鳳</b>指尖那小痣上重重一掐，下身抵著那絞顫的深處再頂進半分死死壓住，俯身含住他滾燙的耳垂輕輕一咬，啞聲帶笑逼道：『好，一輩子。這話你記著——往後再替那花旦描眉的時候，身子要是再抖，你想想是誰教你這身門道的。』</p><p class="inner">〔心〕到底拿著了。可聽他哭出這一句，心裡那口十年懸著的氣忽地洩了，攥著他的手反倒鬆了三分，連自個兒都不明白是想留，還是捨不得走。</p><p><b>柳生春</b>扣著她腕子的手驟然鬆開，反掌摸上她後頸將人死死按下，主動仰頸將唇貼上她唇，舌尖帶著鹹澀硬闖進她口中攪纏，下身迎著那壓住的深處拼命往上頂去、將那軟肉送上去任她研磨，鼻音破碎地嗚咽一聲，滾燙淚水順著眼角滑進兩人相貼的鬢髮裡。</p><p class="inner">〔心〕師姐給的是魂，可這身子……真是你一寸寸拆出來的，我還不了，也躲不掉。</p><p><b>金鳳</b>指尖那小痣鬆了勁、轉作反覆輕撫，下身順著他拼命頂來之勢將那軟肉含緊了吞吐碾磨，舌尖捲住他闖進來的鹹澀不放、替他將那嗚咽全吞進喉裡，掌心滑上他眼角將那滾燙淚水一字字抹勻，啞聲貼著他唇縫笑道：「哭什麼……欠了一輩子，金鳳收著就是。」</p><p class="inner">〔心〕到底認了。這筆帳你既簽了字，往後心再野，身子也由不得你往旁人那去。</p><p><b>柳生春</b>下身死死箍緊她不放，腰腹顫著將那深處絞爛的軟肉全數送上去任她碾磨，唇齒廝磨間將那嗚咽全數哺入她口中，反手扣緊她後頸不許人退開，淚眼朦朧死死盯著她眼，啞聲逼出一句：「那年是我先鬆的手……你恨不恨我？」</p><p class="inner">〔心〕這句話欠了六年，今夜再藏不住。</p></div></details></div>
+<div class="privscene shura"><div class="priv-head"><span class="ptag zhu">修羅場</span>後台小廂房　白韻秋、金鳳、柳生春</div><p class="prose">撞開的門扇猶自吱呀作響，白韻秋死死攥著手袋，指節泛起毫無血色的慘白。那雙眼越過金鳳搭在柳生春肩頭的半截手臂，將喉間翻湧的酸澀死死摁回腹中，開口時聲氣輕極，似怕驚碎了什麼：「柳老闆，我當您嗓子不舒服先回了……原來是在這兒會客。」柳生春緩緩離了椅，將那把讓出的折扇隨手擱上妝台，越過金鳳直直望過去，嘴角牽出那副慣常的漂亮懶散：「白小姐，這後台寒磣，怎敢勞你踏這渾水。」白韻秋不接這話，只將手袋輕輕擱在桌角，抬手撥開金鳳搭在椅背上的披肩，逕自落了座，抬眼衝金鳳盈盈一笑：「金鳳姑娘也在，倒是我來得不湊巧了。」金鳳慢條斯理收回搭在柳生春肩頭的手，順手撈起椅背那方披肩搭回自家肩上，倚著妝台挑起眉梢，笑得爽利：「白小姐千金貴步，什麼時候來都是好時辰，哪有湊巧不湊巧一說。」白韻秋指尖將手袋面輕叩兩下，順著話音揚起唇角：「金鳳姑娘會說話，那便借您吉言，往後好時辰多的是。」</p><details class="storyboard"><summary>分鏡 · 5 拍</summary><div class="beats"><p><b>白韻秋</b>白韻秋：撞開的門還在晃，白韻秋死死攥著手袋的指節泛了白，目光掠過金鳳貼在她肩頭的那一幕，硬生生把喉嚨裡的酸澀咽下去，開口時聲音輕得像怕驚碎什麼：「柳老闆，我當您嗓子不舒服先回了……原來是在這兒會客。」</p><p class="inner">〔心〕那回她仰頭看雪、睫毛上落了兩點的笑，原來不是給我的。</p><p><b>柳生春</b>柳生春：她緩緩從椅上起身，將那把讓出的折扇隨手擱在妝台上，越過金鳳，直直望向白韻秋，嘴角勾起那副慣常的漂亮懶散：「白小姐，這後台寒磣，怎敢勞你踏這渾水。」</p><p class="inner">〔心〕欠了金的身，负了師姐的魂，连眼前这千金也是哄着的——这风流壳子全靠作假，今日怕是兜不住了。</p><p><b>白韻秋</b>白韻秋：將手袋輕輕擱在桌角，撥開金鳳搭在椅背上的披肩坐了下來，抬眼衝金鳳笑了一下：「金鳳姑娘也在，倒是我來得不湊巧了。」</p><p class="inner">〔心〕你护她，我便连她的体面也一并捧着，只要你不设防地笑那一刻还能是我的，谁也别想逼我退场。</p><p><b>金鳳</b>金鳳：慢條斯理將搭在柳生春肩頭的手收回，順手撈起椅背上那方披肩搭回自己肩上，倚著妝台沖白韻秋挑起眉梢笑得爽利：「白小姐千金貴步，什麼時候來都是好時辰，哪有湊巧不湊巧一說。」</p><p class="inner">〔心〕拿眼神壓不住心虛的，才會急著往人跟前坐。我倒要看看你這大戶人家的小姐，能端多大架子。</p><p><b>白韻秋</b>白韻秋：指尖將手袋面輕輕叩了兩下，順著金鳳的話音揚唇：「金鳳姑娘會說話，那便借您吉言，往後好時辰多的是。」</p><p class="inner">〔心〕她那手方才搭在柳老闆肩上，如今拿這話來堵我……我爭這口氣做什麼？我連她心裡究竟裝著誰都還沒弄清，又何必先跟個歌女較勁。</p></div></details></div>
+<p class="resolve"><span class="rtag">了斷</span>金鳳：他讓扇又讓位，身子沒躲，可那筆帳他還是不認。</p>
+<p class="resolve"><span class="rtag">了斷</span>柳生春：欠金鳳一句了斷，這些年一直沒給她個交代</p>
+<p class="resolve"><span class="rtag">了斷</span>金鳳：他說我專揀他沒處躲時，我倒要看他能躲到幾時。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第2日·深宵（入夜）</div>
+<p class="ff">夜深了，梨園上下各自歸寢，一夜無話。</p>
+</div>
+</section>
+<section class="day"><div class="day-head"><span class="juan">卷三</span><h2>第3日</h2></div>
+<div class="hour">
+<div class="hour-label">第3日·清晨</div>
+<p class="ff">天光未亮，戲子夜工，滿園還在夢裡，一時無話。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第3日·日午</div>
+<p class="prose">袖底暗叩，金屬涼意貼著指腹，那停擺的懷錶悄無聲息，恰似一段凝滯的舊日辰光。沈雪笙目光未抬，只落在連翹收槍站定的身姿上，那槍纓猶帶著幾分未歇的悍氣，微微輕顫。風過練功房，塵埃落定，冷眼看著這一出收場。雪笙指尖停了叩擊，唇邊逸出半涼的聲嗓：「摔出真疼才給得出？好大的口氣——」話音微頓，似有一縷極深極沉的底色壓在喉間，未曾全數吐露，「你曉不曉得，真疼到骨子裡的人，是封箱不唱的。」字字無波，卻似生鏽的釘子錘進朽木，再無迴旋的餘地。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第3日·晡時</div>
+<p class="prose">那生鏽釘子般的餘音尚在朽木間嗡鳴，雲錦台上水袖已翻，生生將這口沉氣截作兩段。蘇映雪腕底一沉，收束了翻飛的素練，槍尖微偏，不過輕輕往連翹腕側一引，帶出些許提點的暖意：「三分勢是對的，再多就搶了旦角的眼，來，再看這一合。」槍影遂起，破風聲裡只餘師徒過招的脆響。</p>
+<p class="prose">樓上珠簾半捲，隔開一室暗香浮動。白韻秋微微傾身，指尖抵著冰涼的琺瑯袖釦，將手邊那盞續得滾熱的茶往包廂邊沿推了推。目光越過半垂的珠璣，徑直落在柳生春身上，柔聲道：「柳老闆辛苦，這兒備了點熱茶。」</p>
+<p class="prose">柳生春聞聲抬眼，迎上那道目光，指尖捏著摺扇輕輕一轉，扇骨就著几面將那茶盞勾至手邊，卻不急飲，只拿杯蓋漫不經心撥了撥浮葉，唇角挑出三分笑意：「白小姐的茶，哪敢不領情。」</p>
+<p class="prose">白韻秋也不接她那三分笑，只順著她撥弄茶葉的指尖一寸寸往上挪，目光游移，終是堪堪停在半捲的珠簾邊，不再逾矩，輕聲道：「柳老闆既領情，就多喝兩口潤潤嗓，外頭風大，下了台可別急著走。」簾外寒風驟起，簾內茶煙裊裊，那半口未飲的熱茶，倒比戲台上的冷槍更熬人。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第3日·黃昏</div>
+<p class="prose">指尖隔著絲絨一托，那大氅才順勢攏回白韻秋肩頭，椅背上的餘溫便被這一挨，悉數接了過去。她挨著身側落座，溫聲問前日的話頭，柳生春卻只笑意淺淺地勾在嘴角，將自己摘得乾乾淨淨，說台下不過是個看客。白韻秋不依，反手便按住那剛替自己披衣的手背，拇指偏在腕骨上摩了一摩，目光直直釘進她眼底，硬是將那台上風流與台下真章程分剝開來，一併認下。柳生春翻腕反扣，卻不使力抽回，只任憑腕骨貼著那方掌心，身子微側，偏過臉去望向窗外暮色。那嘴角笑意仍掛著，話裡卻透出幾分退無可退的嘆息，倒顯得做戲的沒處躲了。簾內這掌心的腕骨尚溫，妝閣那廂的舊懷錶卻已是涼的。沈雪笙推開半掩的門，將那隻停擺的舊物輕輕擱在連翹面前的梳妝台上，聲音低穩，字字砸在十五年前的舊痕裡：當年也以為硬扛就是刀馬旦的骨氣，直到疼得封了箱；這錶停的那日，便是沒來得及將人留住。窗外暮色沉沉，台上冷槍台下真章，舊傷新暖，全熬在這一停一扣之間。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第3日·入夜（入夜）</div>
+<div class="privscene"><div class="priv-head"><span class="ptag">私</span>後台小廂房　蘇映雪×柳生春</div><p class="prose">門框方教人橫臂攔下，蘇映雪便直直盯入柳生春眼底，開口逼問：「柳生春，晡時覆上我手背那一下，你倒是說——算什麼？」柳生春未避那目光，只抬手覆上她攔在門框的那隻手，低聲道：「師姐，算我越了界。」話音未落，腕上反教人反扣死，蘇映雪將她拽離門框逼向牆角，貼近耳畔啞聲說：「越了界？那我今夜便把這界全踏碎了——」柳生春反手掙開那鉗制，卻未退開半步，反倒抵住牆角仰起臉，眼睫微顫，低啞著嗓開口：「師姐，這界你踏得，我卻不敢。」蘇映雪猛地鬆開手，指尖卻仍留在她頸側一寸，啞聲道：「你不敢？……好一個不敢。」</p><details class="storyboard"><summary>分鏡 · 5 拍</summary><div class="beats"><p><b>蘇映雪</b>蘇映雪：攔了門框，直直盯住她眼，開口：『柳生春，晡時覆上我手背那一下，你倒是說——算什麼？』</p><p class="inner">〔心〕你這一碰，把這幾年我熨平的行頭全皺了。</p><p><b>柳生春</b>柳生春：抬手覆上她攔在門框的那隻手，低聲道：「師姐，算我越了界。」</p><p class="inner">〔心〕她的手背同十七歲那夜一樣燙，我這身風流的殼快要裝不下去了——師姐要的是魂，可我這身皮肉的門道全是金鳳教的，我一碰你就心虛。</p><p><b>蘇映雪</b>蘇映雪：反手反扣住她的手背，將她拽離門框逼向牆角，貼近她耳邊啞聲說：「越了界？那我今夜便把這界全踏碎了——」</p><p class="inner">〔心〕是你先招我的，這回我再也不鬆手，哪怕把我這輩子的體面全賠進去，我也要看清楚你心裡究竟有沒有裝過別人。</p><p><b>柳生春</b>柳生春：反手掙開她的鉗制，卻未退開半步，反倒抵住牆角仰起臉，眼睫微顫，低啞著嗓開口：「師姐，這界你踏得，我卻不敢。」</p><p class="inner">〔心〕那夜柳枝上的溫度還燙在心口，金鳳教會的身子卻先一步知道怎麼退——我這風流的殼，怕你一碰就碎。</p><p><b>蘇映雪</b>蘇映雪：猛地鬆開手，指尖卻仍留在她頸側一寸，啞聲道：『你不敢？……好一個不敢。』</p><p class="inner">〔心〕他那聲不敢，扎得我這輩子最不成器的私心全漏了光——我冷你那段日子把你推到金鳳床上去，如今我伸手你倒不敢了，這筆帳我竟不知該找誰討。</p></div></details></div>
+</div>
+<div class="hour">
+<div class="hour-label">第3日·深宵（入夜）</div>
+<p class="ff">夜深了，梨園上下各自歸寢，一夜無話。</p>
+</div>
+</section>
+<section class="day"><div class="day-head"><span class="juan">卷四</span><h2>第4日</h2></div>
+<div class="hour">
+<div class="hour-label">第4日·清晨</div>
+<p class="ff">天光未亮，戲子夜工，滿園還在夢裡，一時無話。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第4日·日午</div>
+<p class="prose">指尖驀地按住衣襟內袋裡那塊停擺的懷錶，沈雪笙一步步走上前，將連翹手中長槍硬生生壓下三分，一雙眸子直視對方：「妳說摔出真疼才給得出——我當年可是疼得封了箱。」語擲地有聲，練功房裡這一搭言語尚在半空，那邊廂帕子已輕擱落案。白韻秋探手替柳生春攏了攏練功衣微敞的領口，指尖輕擦過鎖骨便即收回，溫聲道：「柳老闆歇口氣，霞飛路新到了洋點心，我讓人送了來，嚐嚐？」柳生春順著那手勢微偏了頭，沒躲也沒迎，接過話茬笑了一聲：「白小姐的點心，哪回敢不嚐？」白韻秋指尖輕扯她袖口，將人視線往案上食盒引去：「這回是栗子蒙布朗，配的淡奶油，不膩。」柳生春低頭瞥了眼食盒，拿摺扇挑起盒蓋一角，由著那奶油香氣漫將上來，笑意仍舊漂漂亮亮地掛在臉上：「蒙布朗？洋人這口味倒跟咱戲裡的甜頭一樣，看著蓬鬆綿軟，吃到嘴裡淨是粉渣子。」</p>
+</div>
+<div class="hour">
+<div class="hour-label">第4日·晡時</div>
+<p class="prose">那摺扇挑起的奶油香氣猶未散盡，這廂戲台邊欄上已「喀」的一聲輕響。沈雪笙拄著拐徐徐起身，掌中懷錶教他稳稳按在了木欄上，那金屬的涼意直透木紋。他也不看別處，只將目光釘子似的盯住連翹那桿槍尖，幽幽道出一句：「摔出的疼若只往骨頭裡鑽，便成了狠；得往心裡滲，才是角兒的戲。當年我那句沒出口的話，便是這不見血的疼。」話音落處，恰似那蒙布朗嚥下的粉渣子，綿軟裡藏著割喉的澀。不見血的疼，原比皮肉見紅更蝕骨些；那句沒出口的話，便如這硬壓下的甜腥，早滲進了臟腑深處，再也化不開了。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第4日·黃昏</div>
+<p class="prose">硬壓下的甜腥在喉底翻湧，卻叫一截微涼的指節輕輕叩破。妝閣門邊，白韻秋倚著木框，待那卸了半妝的人走近，低低拋出一句：「柳老闆，今兒這齣唱得真狠，我備了車在外頭，兜兜風去？」話音不重，偏似綿裡藏針，紮的全是癢處。</p>
+<p class="prose">柳生春將半闔的摺扇抵在掌心輕磕一下，那脆響收了臺上的餘威，笑意倒先攀上眼梢。身子微傾，湊近了半寸，眼風掃過去：「白小姐破費，那我可就不客氣了。」</p>
+<p class="prose">白韻秋不接這話，只將手裡攥著的汽車鑰匙輕輕擱上妝台，磕出一聲暗啞。順勢抬手，替她攏了攏剛卸妝微亂的鬢髮，指腹擦過耳際，收回手時笑得從容：「柳老闆客氣什麼，車本就為您備著的。」</p>
+<p class="prose">那把鑰匙還帶著掌心的餘溫，柳生春指尖一拈，拿了起來，卻不急著走。順勢一探，握住她還未全收回去的手腕，拇指正正按在腕骨上，不輕不重一碾，脈門處跳得厲害不厲害，全在這一按裡頭。只一瞬便鬆了手，轉身去勾椅背上的長衫，留個背影任人回味。</p>
+<p class="prose">妝閣這廂暗潮未歇，戲台那畔卻已挑開了直見血肉的舊創。</p>
+<p class="prose">沈雪笙把那隻停擺的懷錶擱在戲台欄杆上，銅殼映著黃昏殘照，像一隻死去的眼。她盯著連翹，開口時聲線極穩，字字卻似從結了痂的傷口底下硬揭起來：「你說摔出真疼才給得出，我當年可是疼得封了箱——這話你敢接？」</p>
+<p class="resolve"><span class="rtag">了斷</span>白韻秋：想法子親近柳生春，捧他捧成名角</p>
+</div>
+<div class="hour">
+<div class="hour-label">第4日·入夜（入夜）</div>
+<p class="prose">那結了痂的話音猶在半空墜著，這廂雲錦台上已陡然生了鋒芒。江聞鶴見柳生春步步走來，不閃不避，硬生生橫在通道正中，截住去路，那眼裡壓著團火，直問柳老板明日大會串敢不敢真刀真槍對上一場，別盡顧著上海灘那些花哨把戲，把戲唱虛了。</p>
+<p class="prose">柳生春腳底連個頓挫都無，直直逼到他跟前，抬手用指背慢條斯理地拂平他攔路衣袖的褶皺，反倒湊近他耳畔輕笑一聲：「唱虛了？江老板，這台上的真刀真槍，可不是靠嗓子大。」那一拂如風過林，偏帶著三分不露骨的輕慢。</p>
+<p class="prose">江聞鶴哪容她這般撩撥，順著她拂袖的手勢，一把攥住她手腕，將那柄方才反覆擦拭的扇子連同她的手一併死死握在掌心。他咬牙，低聲逼出一句：「那就對一折《叫畫》，不許帶半個看客要的花腔，誰先加一個虛字，誰就自己下台去！」那掌心滾燙，攥得骨節皆白，死死封了半點退路。</p>
+<p class="prose">柳生春不掙不扎，反手翻開被他攥死的摺扇，利落的扇骨直抵他掌心，硬逼他鬆勁，眼底那方才還帶著暖意的笑，一寸寸涼透到底，只留清寒：「《叫畫》就《叫畫》，江老板可別捨不得下台。」扇骨與筋脈角力，這一句對賭，便如刀尖抵著刀尖，把明日的台子，先在這夜色裡見了血。</p>
+<p class="resolve"><span class="rtag">了斷</span>江聞鶴：在雲錦台站住，跟柳生春唱一場誰也不讓誰的對手戲</p>
+</div>
+<div class="hour">
+<div class="hour-label">第4日·深宵（入夜）</div>
+<p class="ff">夜深了，梨園上下各自歸寢，一夜無話。</p>
+</div>
+</section>
+<section class="day"><div class="day-head"><span class="juan">卷五</span><h2>第5日</h2></div>
+<div class="hour">
+<div class="hour-label">第5日·清晨</div>
+<p class="ff">天光未亮，戲子夜工，滿園還在夢裡，一時無話。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第5日·日午</div>
+<p class="prose">練功房內槍影驟停。沈雪笙的手搭上連翹掌中的槍桿，指節未施半點力道，那沁人的微涼卻順著木紋透了下來。連翹身形一滯，長槍再遞不出半寸。那雙眼波不興，只將這冷意往人心底送：「摔出的疼若只往骨頭裡鑽便成了狠，得往心裡滲才是角兒的戲。當年我那句沒出口的話，便是這不見血的疼。」槍桿微顫，彷彿被這不見刃的話鋒鑿出了一道暗傷，餘韻無聲，皆封在這一按的涼意之中。</p>
+</div>
+<div class="hour">
+<div class="hour-label">第5日·晡時</div>
+<p class="prose">腕際一緊，那方才堪堪收回的力道未及落穩，便教人半路截了去。柳生春不認她那避開的水袖與定死的身段，反手死死攥住那截腕子，硬生生將人拽得側過半身。這一拽，扯碎了方才隔開的虛空，逼得兩人氣息交錯，逼近一寸，只盯著她眼尾。</p>
+<p class="prose">蘇映雪被鉗著的腕子不掙亦不脫，順勢反手扣住那幾節指骨，就著這半側的勢子，直直望進對方眼底，咬著字低聲笑：「我說了算，你敢不聽？」</p>
+<p class="prose">那掌中的力道忽地鬆了。柳生春卻未退，反掌一轉，虛虛實實地按上她後腰，借的仍是戲裡身段的巧勁，卻將人穩穩抵向自己頸窩。額角相貼，溫熱互染，低低一聲應，順著肌理直浸進來：「不敢。」</p>
+</div>
+<div class="hour">
+<div class="hour-label">第5日·入夜（入夜）</div>
+<p class="prose">妝閣內燈影昏黃，沈雪笙揚手，將那隻停擺的懷錶重重拍落案頭。錶蓋磕著硬木，脆響驚心，恰似一聲沉悶的碎鼓。她眼波不閃，直直逼視銅鏡前的連翹，一字一頓吐出冷語：「你說摔出真疼才給得出，我當年可是疼得封了箱——今夜大會串，你要是還護著那點不見血的體面，就趁早別上台。」案頭那懷錶停針不轉，映著滿閣寂然。</p>
+<p class="resolve"><span class="rtag">了斷</span>蘇映雪：去雲錦台把新戲的旦角戲排出彩，掙一個立得住的台柱</p>
+</div>
+<div class="hour">
+<div class="hour-label">第5日·深宵（入夜）</div>
+<p class="ff">夜深了，梨園上下各自歸寢，一夜無話。</p>
+</div>
+</section>
+<section class="pov"><div class="chap-mark">誌</div><h2>各人視角</h2>
+<p class="note">同一段日子，各人心裡是另一本帳。以下是各角色逐日的第一人稱自述（主觀、或有偏頗），與上面客觀的時辰章回並存——讀者可只跟著一個人走。</p>
+<details class="povblock"><summary><span class="povname">柳生春 的帳</span><span class="povrole">小生</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>金鳳那句「落單」像根刺，扎得我心裡發慌，只能用慣常的油嘴滑舌去擋，明明欠她個痛快卻軟了心腸。好在師姐來了，她指尖輕輕一按，我這顆飄蕩的心才算落了地。可一聽見「驚夢」，我臉上雖笑著，心裡卻全是那年她借我的光。師姐信我能撐起雲錦台，我哪敢讓她看見我底下的怯？</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">金鳳 的帳</span><span class="povrole">歌女</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>那摺扇讓得倒是輕巧，身子也往旁邊讓了半步，可心裡那筆舊帳他照舊裝糊塗。他說我專揀他沒處躲的時候，我倒要看，這霞飛路雖大，他柳生春到底能躲到幾時去？這份不由自主，我非得給他刨出來不可。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">蘇映雪 的帳</span><span class="povrole">花旦</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>生春那孩子，總愛拿話往我軟處戳。她指尖覆上來那刻，我心裡那點分寸險些就守不住，只能借著理褶子掩過去，裝作沒瞧見她眼底翻湧的舊事。嘴上笑著誇她那年驚夢唱得好，心裡卻在疼——她到底是不信自己，還是不敢信我？這層窗紙，今晚我是死也不能替她捅破的。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">白韻秋 的帳</span><span class="povrole">客</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>今兒天長，晃得人心慌。在霞飛路挑了好半晌絲綢，腦子裡全是柳生春那水袖一甩的樣子。我想著要是那行頭換成我店裡的蘇繡，他在台上該多耀眼？可下了台他是誰，我竟不敢細想。這闊綽日子過著沒勁，我就想拿這萬貫家財，換他真心實意對我笑一回。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">沈雪笙 的帳</span><span class="povrole">班主</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>聽她喊那一聲穆柯寨，我指尖在帳本上輕叩，心裡卻是驚的。這丫頭瘋魔，非要拿命托那降龍木，可她那句「摔出真疼」，偏生砸在我心坎上。當年我便是疼狠了才封箱，如今看著她槍尖指來，我哪裡是看戲，分明是看著當年的自己在拼命。這殺氣太盛，我不得不壓，可這股子要強的狠勁，正是春雪社最缺的脊樑骨。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">江聞鶴 的帳</span><span class="povrole">小生</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>今天晃了一天，看著上海灘這幫人忙著拍照上報，心裡真是不痛快，這哪是唱戲，分明是作秀。我這嗓子是拿命練出來的，到了這兒倒像是擺設。柳生春被那些女學員捧著，我不稀罕，我就想上台跟他真刀真槍對一場，看看是他那套花架子好使，還是我這跪步紮實。別看我嘴上不吭聲，我是憋著勁呢，非得讓這雲錦台認認我這個紹興來的小生不可。</p>
+</div></details>
+<details class="povblock"><summary><span class="povname">連翹 的帳</span><span class="povrole">刀馬旦</span></summary><div class="povstream">
+<p class="povday"><span class="povd">第1日</span>沈雪笙嫌我殺氣重，可她哪知道這槍尖的狠勁全是我從雜技場摔出來的？我這身真疼還不夠換她一聲好？降龍木我不光拎得動，還要壓在脊樑骨上給她看。她要人心上的疼，行，我就用這條命在台心砸出一個坑來，讓上海都知道連翹這名字是怎麼寫的。</p>
+</div></details>
+</section>
+<section class="finale"><div class="chap-mark">終</div><h2>大會串 · 首演</h2>
+<p class="prod">戲碼《牡丹亭·驚夢》 · 狀態 premiered · 選角 柳生春、蘇映雪、江聞鶴、連翹</p>
+<p class="prod">劇本片段：《牡丹亭·驚夢》開排：沈雪笙把封了多年的樟木戲箱開了，這一齣要重新立起來。</p>
+<div class="premiere"><div class="ptag gold">獻演</div>
+<p><b>蘇映雪</b>蘇映雪：水袖第三道揚起時指尖不偏不倚扣住他遞來的袖口，借力將他帶近半寸，眼波定定落進他眼底。</p><p><b>柳生春</b>柳生春：任她扣著袖口拉近，反手將指尖輕輕覆上她手背，眼底那層漫不經心的笑意褪盡，定定望進她眼裡。</p><p><b>蘇映雪</b>蘇映雪：反手翻腕，將他覆上來的那幾根手指一併攏進掌心，十指扣死在袖口那道摺痕裡，另一手揚袖掩去兩人交握的手，就著這姿態仰起臉貼近他耳邊啞聲道：「這回你別想再退。」</p><p><b>柳生春</b>柳生春：頸邊細細一顫，不掙不縮，空著的那隻手抬起來攬上她後腰將人結實按進懷裡，貼著她耳鬢低低笑了一聲：「那就別鬆手。」</p>
+</div>
+</section>
+<section class="box"><h2>票房 · 可審加總</h2>
+<p class="note">數字永不由 LLM 決定。willingness = 0.4·warmth + 0.3·repute + 0.3·quality；購票(willingness&gt;0)、回訪(&gt;0.6)。好票房是本季努力賺來的。</p>
+<p class="prod">票房總計 <b>10</b>（購票 5 人、回訪 5 次） · 戲之品相 1.00 · 班之名望 1.00</p>
+<div class="tblwrap"><table><thead><tr><th>觀眾</th><th>類</th><th>warmth</th><th>repute</th><th>quality</th><th>willingness</th><th>購票</th><th>回訪</th></tr></thead><tbody>
+<tr><td class="aud">白韻秋</td><td class="kind">cast</td><td>0.40</td><td>1.00</td><td>1.00</td><td class="will">0.76</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+<tr><td class="aud">老戲迷秦秀娥</td><td class="kind">materialized</td><td>0.78</td><td>1.00</td><td>1.00</td><td class="will">0.91</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+<tr><td class="aud">會樂里堂子客</td><td class="kind">materialized</td><td>0.64</td><td>1.00</td><td>1.00</td><td class="will">0.86</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+<tr><td class="aud">洋行職員</td><td class="kind">materialized</td><td>0.50</td><td>1.00</td><td>1.00</td><td class="will">0.80</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+<tr><td class="aud">報館先生</td><td class="kind">materialized</td><td>0.36</td><td>1.00</td><td>1.00</td><td class="will">0.74</td><td class="tick">✓</td><td class="tick">✓</td></tr>
+</tbody></table></div>
+<p class="prod">驅動品相（ability × effort）：蘇映雪(0.85×10=8.50)　江聞鶴(0.7×10=7.00)　連翹(0.6×9=5.40)</p>
+</section>
+<section class="box"><h2>排他 · 撞破修羅場</h2>
+<p class="note">撞破只在有情之人「真的走進那個房間」時才發生（感知靠在場、非全知）。撞破成戲、關係邊隨夜裡自我覆寫改寫。</p>
+<p class="prod">第2日·入夜：白韻秋 破門闖進撞破 金鳳×柳生春 @ 後台小廂房</p>
+</section>
+<section class="verdict"><h2>Showrunner · 收尾判準</h2>
+<div class="badge pass">PASS ✓</div>
+<p class="razor-line">razor：劇本&gt;0 ∧ 選角≥2 ∧ 排練投入≥門檻 ∧ 已在大會串演出。</p>
+<p class="razor-item">劇本片段 1 段（需 &gt;0）：PASS</p>
+<p class="razor-item">選角 4 人（需 ≥2）：PASS</p>
+<p class="razor-item">排練投入 32.0（需 ≥4）：PASS</p>
+<p class="razor-item">在大會串上被演出（state=premiered）：PASS</p>
+</section>
+<footer class="colophon">春雪社重啟戲箱 · 由兩個自治 agent（立局人 · 舞台監督 · 角色 · 說書人 · 畫師）在本地跑出。角色的意義由自己書寫，數字由引擎裁定。</footer>
+</article>
