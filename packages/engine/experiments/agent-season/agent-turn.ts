@@ -23,9 +23,10 @@ import { extractRewriteJson, tension, type Want, type WorldClock } from '../../s
 import type { Char } from './world.ts';
 import { VENUES, venueByName, WORLD_PREMISE } from './world.ts';
 import { rhythmPull, type RehearsalCall, type RhythmPull } from './rhythm.ts';
+import type { Perception } from './perception.ts';
 
 export interface ToolCall {
-    tool: 'time' | 'move' | 'recall' | 'interact';
+    tool: 'time' | 'move' | 'recall' | 'interact' | 'wait';
     dest?: string;
     target?: string;
     intent?: string;
@@ -49,20 +50,47 @@ export interface PlanContext {
     /** auto-recalled memories exposed to the plan. */
     recalled: string[];
     reh: RehearsalCall;
+    /** what this character KNOWS about their hot-want target's whereabouts this 時辰
+     *  (routine knowledge of someone they know). null → no known target / stranger. */
+    targetWhereabouts?: { name: string; note: string } | null;
+    /** the character is already POSTED UP waiting for someone (carried-over intent). */
+    waitingNote?: string | null;
+    /** the deadline WORLD FACT this 時辰 (「距年底大會串還有 X 天」). Injected as an
+     *  emergent fact, never an instruction (§2.42). null → no deadline in play. */
+    worldFactLine?: string | null;
+    /** where this character is welcome / not welcome (space access, soft). */
+    accessNote?: string | null;
+    /** PASSIVE, positionally-gated perception snapshot this 時辰 (眼耳鼻身). The engine
+     *  emits objective gated signals; the LLM interprets them subjectively. null → nothing
+     *  perceived worth surfacing. */
+    perception?: Perception | null;
+    /** true → surface the OPPORTUNITY-COST framing: this 時辰 is a finite block; going deep
+     *  with one person spends it and neglects the others. Always true when the engine passes
+     *  a plan this 時辰 (a flag is enough; the wording is general, no names). */
+    timeFinite?: boolean;
+    /** The 班主 is actively pulling THIS character (the troupe LEAD-by-ability, derived,
+     *  never name-cased) back to rehearsal because they carry the 大會串 yet have fallen
+     *  behind the castmates. Set only for the under-rehearsed lead on a rehearsal 時辰;
+     *  a professional lead answers the call. `venue` = where they're summoned to. */
+    banzhuSummons?: { venue: string; line: string } | null;
 }
 
 export interface Planner {
     plan(ctx: PlanContext): Promise<PlanResult>;
-    /** The 班主 rehearsal channel — an autonomous agent decision (not hardcoded). */
+    /** The 班主 rehearsal channel — an autonomous agent decision (not hardcoded).
+     *  Also CHOOSES the 戲碼 (title) to rehearse, reasoning from the troupe's strengths. */
     decideRehearsal(ctx: {
         char: Char;
         clock: WorldClock;
         reh: RehearsalCall;
         troupePresent: string[];
-    }): Promise<{ call: boolean; line: string }>;
+    }): Promise<{ call: boolean; line: string; title: string }>;
 }
 
-const MAX_TOOLS = 3;
+// A 時辰 is a finite block. The tool cap bounds how full a sequence a character can plan
+// in it — lifted past 3 so a character can plan a fuller night, but STILL bounded (time
+// is the scarce resource: they can never do unlimited things in one 時辰).
+const MAX_TOOLS = 5;
 const RETRIES = 4;
 const nape = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -130,16 +158,17 @@ export class FakePlanner implements Planner {
         clock: WorldClock;
         reh: RehearsalCall;
         troupePresent: string[];
-    }): Promise<{ call: boolean; line: string }> {
+    }): Promise<{ call: boolean; line: string; title: string }> {
         // 沈 opens the season by calling rehearsal on her first working 時辰.
-        if (ctx.reh.announced) return { call: false, line: '' };
+        if (ctx.reh.announced) return { call: false, line: '', title: '' };
         if (ctx.clock.partOfDay === '日午' && ctx.clock.day === 1) {
             return {
                 call: true,
-                line: '我把封了多年的樟木戲箱開了一條縫——傳我的話：從今兒起，春雪社排新戲，生旦武行都到戲台上來。',
+                line: '我把封了多年的樟木戲箱開了一條縫。傳我的話：從今兒起，春雪社排新戲，生旦武行都到戲台上來。',
+                title: '牡丹亭·驚夢', // deterministic 戲碼 (fits 柳×蘇 的《驚夢》seed)
             };
         }
-        return { call: false, line: '' };
+        return { call: false, line: '', title: '' };
     }
 }
 
@@ -203,10 +232,14 @@ export class RealPlanner implements Planner {
             '- move：動身去一個地方（你自己營生/起居的地方，或為了某個緣故去別人的地方）。填 dest=地名。',
             '- recall：再細想一件舊事。填 query=你想細想什麼。',
             '- interact：去對某個在場的人做點什麼、說點什麼（若對方也在場，就會當面演成一場戲）。填 target=名字、intent=你要做/說什麼。',
+            '- wait：你算準了某個人這個時辰該在的地方，守在那兒等他出現（哪怕他一時沒到，你也守著，直到他來或你等得沒了耐心）。填 target=名字、intent=你等著要對他說/做什麼。',
+            '',
+            '找一個人的訣竅：你認得的人，你大概知道他這個時辰照著營生會在哪（下面會告訴你）。要嘛動身去他那一帶找他，要嘛守在他必經的地方等他。別空等在一個他根本不會來的地方。',
             '',
             '鐵則：只順著你的性子、你的營生作息和心事，自己定這一刻做什麼、去哪裡、找誰。',
             '你這個時辰的作息是一股「拉力」，不是命令——你可以順著它，也可以為了心裡更重的一樁事偏離它。',
-            '我不會告訴你該去哪、該不該了結舊帳。至多做三件事，排好先後。',
+            '我不會告訴你該去哪、該不該了結舊帳。至多做五件事，排好先後。',
+            '你的眼耳鼻身或許會捎來一些動靜（隔壁的聲響、屋裡沒散的氣味、身上的乏），那是你自己察覺到的，未必知道是誰、是什麼——你可以順著它去追、也可以不理。',
             '',
             '嚴格只輸出 JSON，不要 markdown、不要多餘文字：',
             '{"plan":"第一人稱一段，你這一刻打算做什麼、為什麼（50-120字，貼著你的營生作息與心事）",',
@@ -219,6 +252,34 @@ export class RealPlanner implements Planner {
         const smBlock = selfModelBlock(c, ctx.byId);
         const recallBlock = recalled.length ? recalled.map((m) => `- ${m}`).join('\n') : '（一時想不起什麼）';
         const here = venueByName.get(c.venue);
+        const whereabouts = ctx.targetWhereabouts
+            ? `\n# 你曉得的行蹤（你認得的人，你大概知道他這個時辰照著營生會在哪）\n- ${ctx.targetWhereabouts.name}：${ctx.targetWhereabouts.note}`
+            : '';
+        const waiting = ctx.waitingNote ? `\n# 你正守著的事\n${ctx.waitingNote}` : '';
+        const access = ctx.accessNote ? `\n# 你進得去哪些地方（私處是有主的，別人的房要有人領或有交情才進得去）\n${ctx.accessNote}` : '';
+        // Deadline as a WORLD FACT (§2.42): the character lives in a world where this
+        // is simply true this 時辰. It is never an instruction to make/premiere a play.
+        const worldFact = ctx.worldFactLine ? `\n# 眼下這世道\n${ctx.worldFactLine}` : '';
+        // PASSIVE perception (眼耳鼻身) — only the channels actually sensed this 時辰.
+        const perc = ctx.perception;
+        const percLines: string[] = [];
+        if (perc?.sight) percLines.push(`- 眼：${perc.sight}`);
+        if (perc?.hear) percLines.push(`- 耳：${perc.hear}`);
+        if (perc?.smell) percLines.push(`- 鼻：${perc.smell}`);
+        if (perc?.body) percLines.push(`- 身：${perc.body}`);
+        const perception = percLines.length
+            ? `\n# 你此刻感知到的（眼耳鼻身，只是你察覺到的動靜，未必知道是誰、是什麼）\n${percLines.join('\n')}`
+            : '';
+        // OPPORTUNITY COST — a 時辰 is finite; going deep with one spends it on that one.
+        const oppCost = ctx.timeFinite
+            ? '\n# 這一個時辰只有這麼長\n這一刻是有限的。你若揀定一個人深談、溫存，這一整個時辰就都花在他身上，今夜便再顧不上你同樣掛心的旁人了。要在誰身上花這一刻，是你自己的取捨。'
+            : '';
+        // 班主 SUMMONS — a standing pull on the under-rehearsed troupe LEAD (derived by
+        // ability, no names). It is a professional obligation the lead carries, not an
+        // instruction to premiere: the 大會串 rides on them, and they've fallen behind.
+        const summons = ctx.banzhuSummons
+            ? `\n# 班主傳的話\n${ctx.banzhuSummons.line}你是這班子挑大梁的角兒，這齣大會串的戲眼在你身上，可你這些日子總不在排練場上。班主要你到${ctx.banzhuSummons.venue}歸班排戲。這是你這一行的本分，別誤了戲。`
+            : '';
         const user = [
             `# 你是誰\n${c.name}（${c.role}）：${c.persona}`,
             `\n# 你心底的事（只有你自己知道）\n${c.secret}`,
@@ -227,6 +288,13 @@ export class RealPlanner implements Planner {
             `\n# 你人在哪裡\n${c.venue}（${here?.hint ?? ''}）`,
             `\n# 你這個時辰的營生作息（一股拉力，不是命令）\n${pull.note}${pull.venue ? `（多半該在：${pull.venue}）` : ''}`,
             `\n# 此處有誰\n${presentLine}`,
+            whereabouts,
+            waiting,
+            access,
+            perception,
+            oppCost,
+            summons,
+            worldFact,
             `\n# 這世界有哪些地方（你都知道怎麼去）\n${geographyBlock()}`,
             `\n# 你剛想起的幾件舊事\n${recallBlock}`,
             `\n# 現在是什麼時辰\n第${clock.day}日·${clock.partOfDay}${night ? '（入夜了）' : ''}`,
@@ -253,7 +321,7 @@ export class RealPlanner implements Planner {
                 const tools: ToolCall[] = [];
                 for (const t of rawTools.slice(0, MAX_TOOLS)) {
                     const tool = String((t as any)?.tool ?? '').trim();
-                    if (!['time', 'move', 'recall', 'interact'].includes(tool)) continue;
+                    if (!['time', 'move', 'recall', 'interact', 'wait'].includes(tool)) continue;
                     tools.push({
                         tool: tool as ToolCall['tool'],
                         dest: str((t as any)?.dest),
@@ -273,13 +341,14 @@ export class RealPlanner implements Planner {
         clock: WorldClock;
         reh: RehearsalCall;
         troupePresent: string[];
-    }): Promise<{ call: boolean; line: string }> {
-        if (ctx.reh.announced) return { call: false, line: '' };
+    }): Promise<{ call: boolean; line: string; title: string }> {
+        if (ctx.reh.announced) return { call: false, line: '', title: '' };
         const system = [
             '你是春雪社的班主沈雪笙。此刻在後台妝閣，一天剛開場。',
             '你要拿一個主意：今兒起，要不要把班子叫齊了排一齣新戲。這是你自己的決定，不是誰吩咐的。',
-            '若你決意要排，寫一句你當眾傳出去的話（把班子喚到戲台的號令，貼著你的口吻）。',
-            '嚴格只輸出 JSON：{"call":true/false,"line":"若 call=true，你傳出去的那句話"}，不要多餘文字。',
+            '若你決意要排，順著班子這幾個角兒的長處，挑一齣戲碼（如《牡丹亭·驚夢》《白蛇傳》《玉堂春》之類），',
+            '再寫一句你當眾傳出去的話（把班子喚到戲台的號令，貼著你的口吻）。',
+            '嚴格只輸出 JSON：{"call":true/false,"title":"若 call=true，你挑的戲碼","line":"若 call=true，你傳出去的那句話"}，不要多餘文字。',
         ].join('\n');
         const user = [
             `# 你是誰\n${ctx.char.name}（${ctx.char.role}）：${ctx.char.persona}`,
@@ -301,10 +370,11 @@ export class RealPlanner implements Planner {
                     maxTokens: 240,
                     temperature: 0.8,
                 });
-                const obj = (extractRewriteJson(res.text) ?? {}) as { call?: unknown; line?: unknown };
+                const obj = (extractRewriteJson(res.text) ?? {}) as { call?: unknown; line?: unknown; title?: unknown };
                 const call = obj.call === true || String(obj.call).toLowerCase() === 'true';
                 const line = String(obj.line ?? '').trim() || '傳我的話：從今兒起，春雪社排新戲，都到戲台上來。';
-                return { call, line: call ? line : '' };
+                const title = String(obj.title ?? '').trim() || '新戲';
+                return { call, line: call ? line : '', title: call ? title : '' };
             },
             this.onLog,
         );

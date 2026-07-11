@@ -23,7 +23,32 @@ export const HEALTH = {
     wornAt: 0.45,
     /** at/below this the character is in danger (危). */
     dangerAt: 0.2,
+    /** hunger gained per awake 時辰 (a soft driver, like fatigue). */
+    hungerRise: 0.12,
 } as const;
+
+// ── the small economy: meals + coin ──────────────────────────────────────────
+/** Coin a meal at a street/food venue costs. */
+export const MEAL_COST = 3;
+/** Hunger a character resets to after eating (a full belly, not stone empty). */
+export const MEAL_HUNGER_LOW = 0.05;
+/** At/above this felt hunger the 身 line surfaces the pang (so the agent CAN decide to eat). */
+export const HUNGER_FELT = 0.4;
+
+/**
+ * EAT at a street/food venue: deduct MEAL_COST and reset hunger low. Returns whether a
+ * meal was actually eaten — a near-broke character (money < MEAL_COST) can't afford one,
+ * so they go without (money floored at 0). GENERAL: pure state, no character-name logic.
+ */
+export function eat(c: Char): boolean {
+    if (c.money < MEAL_COST) {
+        c.money = Math.max(0, c.money); // never negative
+        return false;
+    }
+    c.money -= MEAL_COST;
+    c.hunger = MEAL_HUNGER_LOW;
+    return true;
+}
 
 /** Apply one 時辰's health delta. `awake` = took an agent turn this 時辰;
  *  `scenes` = rendered scenes the character was in this 時辰. Returns whether the
@@ -33,6 +58,7 @@ export function applyRoundHealth(c: Char, awake: boolean, scenes: number): boole
     if (awake) {
         c.health -= HEALTH.awakeDrain + HEALTH.sceneDrain * Math.max(0, scenes);
         c.fatigue = Math.min(1, c.fatigue + 0.12 + 0.1 * Math.max(0, scenes));
+        c.hunger = Math.min(1, c.hunger + HEALTH.hungerRise); // an active 時辰 works up an appetite
     } else {
         c.health += HEALTH.sleepRecover;
         c.fatigue = Math.max(0, c.fatigue - 0.4);

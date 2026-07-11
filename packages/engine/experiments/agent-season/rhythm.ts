@@ -38,6 +38,12 @@ export interface RhythmPull {
     active: boolean;
     /** short context line shown to the agent (the time-driven life anchor). */
     note: string;
+    /** ON DUTY this 時辰 — tied to a livelihood commitment (rehearsing, singing the
+     *  堂會, running the house). A character on duty does NOT abandon it to chase a
+     *  private want; the FREE party is the one who comes to them (§ user: 柳 rehearsing
+     *  holds, idle 金鳳 comes to him). Their post is their venue; they can still be
+     *  engaged by whoever shows up. */
+    duty?: boolean;
 }
 
 /**
@@ -65,11 +71,11 @@ function troupeRhythm(c: Char, part: PartOfDay, reh: boolean): RhythmPull {
             return { venue: null, active: false, note: '天光未亮，戲子夜工，還在夢裡。' };
         case '日午':
             return reh
-                ? { venue: '練功房', active: true, note: '班主叫了排練，該去練功房吊嗓走位。' }
+                ? { venue: '練功房', active: true, duty: true, note: '班主叫了排練，該去練功房吊嗓走位——排戲脫不開身。' }
                 : { venue: c.homeVenue, active: true, note: '沒排練的日子，自己的時光。' };
         case '晡時':
             return reh
-                ? { venue: '雲錦台戲台', active: true, note: '班主叫了排練，該上戲台對戲。' }
+                ? { venue: '雲錦台戲台', active: true, duty: true, note: '班主叫了排練，該上戲台對戲——排戲脫不開身。' }
                 : { venue: c.homeVenue, active: true, note: '沒排練，理自己的事。' };
         case '黃昏':
             return { venue: c.homeVenue, active: true, note: '傍晚時分，歇口氣，理理心事。' };
@@ -85,13 +91,13 @@ function banzhuRhythm(c: Char, part: PartOfDay): RhythmPull {
         case '清晨':
             return { venue: null, active: false, note: '天光未亮，還沒起。' };
         case '日午':
-            return { venue: '後台妝閣', active: true, note: '開了妝閣的門，看戲、看帳、看人心——今日排不排戲，我說了算。' };
+            return { venue: '後台妝閣', active: true, duty: true, note: '開了妝閣的門，看戲、看帳、看人心——今日排不排戲，我說了算。' };
         case '晡時':
-            return { venue: '後台妝閣', active: true, note: '坐鎮後台，盯著班子。' };
+            return { venue: '後台妝閣', active: true, duty: true, note: '坐鎮後台，盯著班子。' };
         case '黃昏':
-            return { venue: '後台妝閣', active: true, note: '傍晚，理著班中事。' };
+            return { venue: '後台妝閣', active: true, duty: true, note: '傍晚，理著班中事。' };
         case '入夜':
-            return { venue: '後台妝閣', active: true, note: '入夜，二樓看戲看人。' };
+            return { venue: '後台妝閣', active: true, duty: true, note: '入夜，二樓看戲看人。' };
         case '深宵':
             return { venue: c.homeVenue, active: false, note: '深宵，回沈宅歇著。' };
     }
@@ -108,7 +114,7 @@ function geinuRhythm(c: Char, part: PartOfDay): RhythmPull {
         case '黃昏':
             return { venue: '會樂里寓所', active: true, note: '傍晚，理妝理嗓，預備出局。' };
         case '入夜':
-            return { venue: '霞飛路歌場', active: true, note: '入夜掛頭牌，霞飛路歌場唱這個月的堂會。' };
+            return { venue: '霞飛路歌場', active: true, duty: true, note: '入夜掛頭牌，霞飛路歌場唱這個月的堂會——上工抽不開身。' };
         case '深宵':
             return { venue: '會樂里寓所', active: true, note: '深宵散了場，回會樂里寓所——有時等一個人。' };
     }
@@ -119,7 +125,7 @@ function guestRhythm(c: Char, part: PartOfDay): RhythmPull {
         case '清晨':
             return { venue: null, active: false, note: '千金貪睡，清晨還在繡樓。' };
         case '日午':
-            return { venue: '霞飛路', active: true, note: '晌午出門，逛霞飛路、看洋片，自己的天地。' };
+            return { venue: '霞飛路商店街', active: true, note: '晌午出門，逛霞飛路商店街，挑挑洋貨、在攤子上吃點東西，自己的天地。' };
         case '晡時':
             return { venue: '霞飛路', active: true, note: '午後在霞飛路閒逛。' };
         case '黃昏':
@@ -128,6 +134,65 @@ function guestRhythm(c: Char, part: PartOfDay): RhythmPull {
             return { venue: '包廂茶座', active: true, note: '入夜在包廂聽戲、捧場。' };
         case '深宵':
             return { venue: c.homeVenue, active: false, note: '深宵回白公館繡樓歇著。' };
+    }
+}
+
+// ── ROUTINE KNOWLEDGE (predicting where a KNOWN person will be) ────────────────
+/**
+ * Venue clusters — the "same place / same building" grouping. A seeker who POSTS UP
+ * (waits) in one venue can catch someone who is anywhere in the SAME cluster (the
+ * 戲園 complex: stage, wings, dressing rooms, practice, the living quarters attached
+ * to it). Crossing clusters (across town) means really travelling — no free catch.
+ */
+export const VENUE_CLUSTER: Record<string, string> = {
+    雲錦台戲台: '戲園', 練功房: '戲園', 後台妝閣: '戲園', 後台小廂房: '戲園',
+    二樓書寓: '戲園', 後進廂房: '戲園', 戲班大通鋪: '戲園', 包廂茶座: '戲園',
+    戲園前街: '戲園',
+    會樂里寓所: '霞飛里', 霞飛路歌場: '霞飛里', 霞飛路: '霞飛里', 霞飛路商店街: '霞飛里',
+    沈宅小樓: '沈宅', 白公館繡樓: '白公館',
+};
+export const clusterOf = (venue: string): string => VENUE_CLUSTER[venue] ?? venue;
+export const sameCluster = (a: string, b: string): boolean => !!a && !!b && clusterOf(a) === clusterOf(b);
+
+export interface Whereabouts {
+    /** best single-venue guess for this 時辰. */
+    venue: string;
+    /** the AREA they'll be in (cluster) — a waiter here can catch them. */
+    cluster: string;
+    /** true → at this 時辰 they are resting at home (still findable, but asleep). */
+    asleep: boolean;
+    /** true → this 時辰 they are ON DUTY (tied to livelihood, hard to pull away). */
+    busy: boolean;
+    /** human line a character who KNOWS them would reason with (routine + when
+     *  they're tied up vs. when they get free — so the seeker can time the approach). */
+    note: string;
+}
+
+/** What someone who KNOWS `target` can predict about where they are — derived from
+ *  the SAME rhythm table `target` actually moves by, so a seeker who navigates to
+ *  this and a target who moves by rhythm CONVERGE (no stale-coordinate oscillation). */
+export function predictWhereabouts(target: Char, part: PartOfDay, reh: RehearsalCall): Whereabouts {
+    const pull = rhythmPull(target, part, reh);
+    const venue = pull.venue ?? target.homeVenue;
+    const asleep = !pull.active;
+    const busy = !!pull.duty;
+    const hint = `（這個時辰，約莫在：${venue}${asleep ? '，多半已歇下' : busy ? '，正忙著營生脫不開身' : '，這會兒得閒'}）`;
+    return { venue, cluster: clusterOf(venue), asleep, busy, note: routineNote(target, reh) + hint };
+}
+
+function routineNote(c: Char, reh: RehearsalCall): string {
+    const n = c.name;
+    switch (c.occupation) {
+        case 'troupe':
+            return reh.announced
+                ? `${n}最近跟著春雪社排新戲：日午晡時在戲園一帶排戲（練功房、戲台）脫不開身，黃昏入夜才得閒、歇在戲園後頭的住處，深宵安睡。`
+                : `${n}是春雪社的戲子，白日理自己的事，多在戲園一帶或住處。`;
+        case 'geinu':
+            return `${n}是霞飛路掛頭牌的歌女：晌午到黃昏在會樂里寓所得閒；入夜要到霞飛路歌場唱堂會、抽不開身；深宵散場才回會樂里。`;
+        case 'banzhu':
+            return `${n}是班主，日午到入夜都坐鎮後台妝閣看戲看帳、不好打攪，深宵才回沈宅歇著。`;
+        case 'guest':
+            return `${n}是白家千金：晌午逛霞飛路，傍晚起在戲園包廂聽戲捧場，深宵回白公館。`;
     }
 }
 

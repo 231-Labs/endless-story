@@ -20,12 +20,16 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { FakeSceneAgent, LocalRecall, LocalClock, type SceneAgentPort } from '../../src/index.ts';
-import { buildCast, type Char } from './world.ts';
+import { FakeSceneAgent, LocalRecall, LocalClock, applyRewrite, type SceneAgentPort } from '../../src/index.ts';
+import { buildCast, isPublicVenue, type Char } from './world.ts';
+import { snapshotCast, restoreCast, type CastSnapshot } from './persistence.ts';
 import { occLabel, type RehearsalCall } from './rhythm.ts';
 import { FakePlanner, RealPlanner, type Planner } from './agent-turn.ts';
 import { runSeason, type SeasonResult, type RoundRecord } from './round.ts';
 import { healthStatus } from './health.ts';
+import { newPlay, totalEffort } from './production.ts';
+import { makeShowrunner } from './showrunner.ts';
+import { renderSeasonHtml } from './season-html.ts';
 
 const REAL = process.env.SEASON_REAL_LLM === '1';
 const DAYS = Number(process.env.SEASON_DAYS ?? '1');
@@ -47,7 +51,14 @@ async function main(): Promise<void> {
           ? fs.mkdtempSync(path.join(os.tmpdir(), 'agent-season-real-'))
           : import.meta.dirname;
     fs.mkdirSync(outDir, { recursive: true });
-    const recallDir = REAL ? path.join(outDir, 'memory') : fs.mkdtempSync(path.join(os.tmpdir(), 'agent-season-mem-'));
+    // Memory is PERSISTED under <outDir>/memory whenever this run has a durable home
+    // (a real slice, or an explicit SEASON_OUT_DIR) — so a later week can restore it. A
+    // bare default smoke uses a throwaway temp dir (keeps the source tree clean).
+    const persistMemory = REAL || !!process.env.SEASON_OUT_DIR;
+    const recallDir = persistMemory
+        ? path.join(outDir, 'memory')
+        : fs.mkdtempSync(path.join(os.tmpdir(), 'agent-season-mem-'));
+    fs.mkdirSync(recallDir, { recursive: true });
 
     log('══════════════════════════════════════════════════════════════════════');
     log(` AGENT-SEASON — 時辰-round clean rebuild (${REAL ? 'REAL-LLM' : 'FAKE-LLM smoke'})`);
@@ -57,10 +68,90 @@ async function main(): Promise<void> {
 
     const agent: SceneAgentPort = REAL ? await realAgent() : new FakeSceneAgent();
     const planner: Planner = REAL ? new RealPlanner(log) : new FakePlanner();
-    const recall = new LocalRecall(recallDir);
     const clockPort = new LocalClock();
     const cast = buildCast(CAST);
     const byName = new Map(cast.map((c) => [c.name, c]));
+    const nameOf = new Map(cast.map((c) => [c.id, c.name]));
+
+    // ── SEASON PERSISTENCE — CONTINUE A WEEK. If SEASON_RESTORE points at a PRIOR run's
+    // outDir, overlay that week's mutated cast state onto this fresh seed AND carry its
+    // accumulated episodic memories forward (copy the prior memory dir into this recall
+    // dir BEFORE LocalRecall reads it). Canon seed memories are reloaded verbatim regardless.
+    const restorePath = process.env.SEASON_RESTORE ? path.resolve(process.env.SEASON_RESTORE) : null;
+    const restoreInfo: { continued: boolean; from?: string; restored: string[]; samples: string[] } = {
+        continued: false,
+        restored: [],
+        samples: [],
+    };
+    if (restorePath) {
+        const statePath = path.join(restorePath, 'cast-state.json');
+        if (fs.existsSync(statePath)) {
+            const snap = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as CastSnapshot;
+            const restored = restoreCast(cast, snap);
+            // carry the prior week's accumulated episodic memory forward (copy, never mutate).
+            const priorMem = path.join(restorePath, 'memory');
+            if (fs.existsSync(priorMem)) fs.cpSync(priorMem, recallDir, { recursive: true });
+            // sample a couple of carried-over relationship views to PROVE the round-trip.
+            const samples: string[] = [];
+            for (const c of cast) {
+                if (!snap.cast[c.id]) continue;
+                for (const [oid, view] of c.relationshipViews) {
+                    samples.push(`${c.name} 對 ${nameOf.get(oid) ?? oid}：「${view.slice(0, 28)}${view.length > 28 ? '…' : ''}」`);
+                    if (samples.length >= 2) break;
+                }
+                if (samples.length >= 2) break;
+            }
+            restoreInfo.continued = true;
+            restoreInfo.from = restorePath;
+            restoreInfo.restored = restored;
+            restoreInfo.samples = samples;
+            log(`\n▶ 續盤：從 ${restorePath} 載入 ${restored.length} 人狀態 + 記憶（${restored.map((id) => nameOf.get(id) ?? id).join('、')}）`);
+        } else {
+            log(`\n▶ SEASON_RESTORE 指向 ${restorePath}，但找不到 cast-state.json — 改開新盤。`);
+        }
+    } else {
+        log('\n▶ 開新盤（fresh season；未設 SEASON_RESTORE）。');
+    }
+
+    const recall = new LocalRecall(recallDir);
+
+    // ── 注夢 (DREAM INJECTION) — the paid-influence hook, WITHOUT puppeteering.
+    // SEASON_DREAM='角色名|夢境文字' plants last night's dream: the character REMEMBERS
+    // dreaming it (an episodic memory, recallable like any lived moment), and her OWN
+    // ledger-keeper (the validated rewriteWantLedger) decides what — if anything — it
+    // stirs: mutate a want, spawn one, or shrug it off. The dream whispers; she chooses.
+    const dreamSpec = process.env.SEASON_DREAM ?? '';
+    if (dreamSpec.includes('|')) {
+        const cut = dreamSpec.indexOf('|');
+        const dname = dreamSpec.slice(0, cut).trim();
+        const dtext = dreamSpec.slice(cut + 1).trim();
+        const dc = byName.get(dname);
+        if (dc && dtext) {
+            const dreamLine = `昨夜得了一個夢，醒來枕上心口都還跳著：${dtext}`;
+            await recall.remember(dc.id, dreamLine, { kind: 'observation', importance: 8, day: 0 });
+            log(`\n〔注夢〕${dc.name} 昨夜得夢：「${dtext.slice(0, 48)}${dtext.length > 48 ? '…' : ''}」`);
+            try {
+                const beforeLive = dc.wants.filter((w) => !w.retired).map((w) => w.desc).join('｜');
+                const reply = await agent.rewriteWantLedger({
+                    name: dc.name,
+                    persona: dc.persona,
+                    secret: dc.secret,
+                    wants: dc.wants.filter((w) => !w.retired).map((w) => ({ id: w.id, layer: w.layer, desc: w.desc })),
+                    sceneText: dreamLine,
+                });
+                applyRewrite(dc.wants, dc.id, reply, 0, [], cast.map((x) => x.name));
+                const afterLive = dc.wants.filter((w) => !w.retired).map((w) => w.desc).join('｜');
+                const reaction = reply.spawn?.desc
+                    ? `這夢在心裡撩起一樁：「${reply.spawn.desc}」`
+                    : afterLive !== beforeLive
+                      ? '舊念被這夢攪動、換了模樣'
+                      : '醒來只當是個夢，心帳未動';
+                log(`   → ${reaction}`);
+            } catch {
+                log('   → （夢注了，心帳未應——非致命）');
+            }
+        }
+    }
 
     // snapshot the initial self-model views for the latest-wins proof.
     const initialViews = new Map<string, Map<string, string>>();
@@ -73,6 +164,10 @@ async function main(): Promise<void> {
     log(`seed memories loaded (verbatim, non-thinned): ${seedCounts.join('  ')}\n`);
 
     const reh: RehearsalCall = { announced: false, line: '' };
+    const showrunner = makeShowrunner(DAYS);
+    const play = newPlay('', 'genesis');
+    log(`\nshowrunner 中心命題：${showrunner.centralQuestion}`);
+    log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} 年底大會串｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
     const result = await runSeason({
         cast,
         planner,
@@ -84,17 +179,50 @@ async function main(): Promise<void> {
         ticksPerDay: 6,
         maxScenesPerRound: REAL ? 3 : 4,
         reh,
+        play,
+        showrunner,
     });
 
-    printCounters(result, cast, byName, initialViews, seedCounts);
+    printCounters(result, cast, byName, initialViews, seedCounts, restoreInfo);
     const reportPath = path.join(outDir, 'report.md');
     writeReport(reportPath, { provider, model, realEmbed, result, cast, initialViews });
 
-    if (!REAL) fs.rmSync(recallDir, { recursive: true, force: true });
+    // SEASON PERSISTENCE — write the end-of-week snapshot so the NEXT week can restore it.
+    const statePath = path.join(outDir, 'cast-state.json');
+    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6)));
+
+    // ALWAYS emit a readable HTML next to the report (§ user: every run must produce
+    // an HTML to read, so problems are caught by reading the whole season).
+    const htmlPath = path.join(outDir, 'report.html');
+    fs.writeFileSync(
+        htmlPath,
+        renderSeasonHtml(result, {
+            title: '春雪社 · 重啟戲箱',
+            subtitle: '一齣自治敘事引擎跑出的完整賽季 · 上海 · 一九二〇年代',
+            centralQuestion: showrunner.centralQuestion,
+            deadlineLine: `死線 · 世界事實：年底霞飛路大會串（第${showrunner.deadlineDay}日${showrunner.finalePart}）。掛得上名的班子拿檔期版面，掛不上的被遺忘。`,
+            prologue: PROLOGUE,
+            cast,
+        }),
+    );
+
+    if (!persistMemory) fs.rmSync(recallDir, { recursive: true, force: true });
     log(`\n✅ AGENT-SEASON ${REAL ? 'REAL-LLM SLICE' : 'FAKE SMOKE'} COMPLETE`);
     log(`   report:  ${reportPath}`);
+    log(`   html:    ${htmlPath}`);
+    log(`   state:   ${statePath}  (snapshot → restore next week via SEASON_RESTORE=${outDir})`);
+    if (persistMemory) log(`   memory PRESERVED at: ${recallDir}`);
     if (REAL) log(`   archive PRESERVED at: ${outDir}`);
 }
+
+/** 序章 — world facts only (SEASON_ONE_SLICE §6); the reader's opening. */
+const PROLOGUE = [
+    '春雪社的這座戲台，原是清末一位官紳家的堂會戲台。改朝換代後，官宦人家的排場散了，這方戲台連著半進院子，被沈雪笙盤了下來，掛上春雪社的水牌。正樑上那塊舊匾額她一直沒換，燙金的字暗了，至今照舊掛著。',
+    '戲台最裡頭的後台，那幾口樟木戲箱，落了十五年的灰。十五年前沈雪笙封箱那日，班裡如今這批台前的人多半還是孩子。她沒對任何人交代緣由，只說往後這幾箱小生的行頭不再動了。班子靠著幾齣熟戲，一年一年也就過來了，台下的人換了一批又一批，戲單卻還是那張戲單。',
+    '今年不同。霞飛路那頭新起的戲園放出話來，年底要辦一場打對台的大會串。掛得上名的班子，往後的檔期、報上的版面、堂會的邀約，都在這一場上見高低。掛不上的，慢慢就沒人記得了。',
+    '沈雪笙把那口最底下的箱子開了一條縫。裡頭壓著的，除了那幾件沒人再穿的小生戲衣，還有一只早停了的懷錶。',
+    '戲箱要重開了。這一季，春雪社得排出一齣自己的新戲，趕在年底那場會串之前。至於箱底那些沒說完的舊事，沒有人交代該怎麼辦。',
+];
 
 async function realAgent(): Promise<SceneAgentPort> {
     const { RunnerSceneAgent } = await import('../../src/adapters/runner-scene-agent.ts');
@@ -116,6 +244,7 @@ function printCounters(
     byName: Map<string, Char>,
     initialViews: Map<string, Map<string, string>>,
     seedCounts: string[],
+    restoreInfo: { continued: boolean; from?: string; restored: string[]; samples: string[] },
 ): void {
     const L = (s = '') => log(s);
     const rounds = r.rounds;
@@ -233,8 +362,101 @@ function printCounters(
     L(`total rendered scenes.............. ${r.scenes.length}`);
     L(`deaths (health ≤ 0)................ ${r.deaths.length}  ${r.deaths.length ? '→ ' + r.deaths.join('、') : '(none this short slice)'}`);
     L(`health at end...................... ${cast.map((c) => `${c.name}:${c.health.toFixed(2)}[${healthStatus(c)}]`).join('  ')}`);
+
+    // 9) PRODUCTION + BOX OFFICE + SHOWRUNNER RAZOR (Stage 2)
+    L('');
+    L('── 9) PRODUCTION + BOX OFFICE + SHOWRUNNER RAZOR (deterministic, no LLM number) ──');
+    const play = r.play;
+    L(`play title......................... 《${play.title || '（未定）'}》`);
+    L(`play reached 'premiered'........... ${play.state === 'premiered' ? 'YES' : `NO (state=${play.state})`}`);
+    L(`cast (≥2 needed)................... ${play.cast.length}  → ${play.cast.join('、') || '（無）'}`);
+    L(`effort accumulated per char........ ${[...play.effort.entries()].map(([id, e]) => `${id}=${e}`).join('  ') || '（無）'}`);
+    L(`total rehearsal effort............. ${totalEffort(play).toFixed(1)}`);
+    L(`deadline world-fact injected....... ${r.deadlineInjections}  時辰-plans  (injected = ${r.deadlineInjections > 0 ? 'YES' : 'NO'})`);
+    if (r.boxOffice) {
+        const bo = r.boxOffice;
+        L(`box office computed deterministically. YES  → total=${bo.total}（購票 ${bo.ticketBuyers}、回訪 ${bo.repeats}）`);
+        L(`   quality=${bo.quality.toFixed(2)}  repute=${bo.repute.toFixed(2)}  (both audited accumulators)`);
+        for (const row of bo.rows) {
+            L(`   · ${row.name}[${row.kind}] warmth=${row.warmth.toFixed(2)} → willingness=${row.willingness.toFixed(2)}  ${row.bought ? '購票' : '未購'}${row.repeat ? '＋回訪' : ''}`);
+        }
+        L(`   drivers (ability×effort)....... ${bo.drivers.map((d) => `${d.name}(${d.ability}×${d.effort}=${d.contribution.toFixed(2)})`).join('  ')}`);
+    } else {
+        L('box office computed deterministically. NO (play never premiered)');
+    }
+    const v = r.showrunnerVerdict;
+    L(`showrunner razor (season predicate). ${v.passed ? 'PASS ✅' : 'FAIL ❌'}`);
+    for (const reason of v.reasons) L(`   · ${reason}`);
+
+    // 10) EXCLUSIVITY / DISCOVERY (修羅場) — general, driven by romantic stake + presence
+    L('');
+    L('── 10) 排他 / 撞破修羅場 (a jealous third caught an intimate pair; edges rewrite) ──');
+    L(`修羅場 fired this season........... ${r.discoveries.length}  ${r.discoveries.length ? '' : '(none — no invested third reached an intimate scene)'}`);
+    for (const d of r.discoveries) {
+        L(`   ⚔ 第${Math.floor(d.tick / 6) + 1}日·${d.part}：${d.discoverer} ${d.brokeIn ? '破門闖進撞破' : '撞破'} ${d.pair[0]}×${d.pair[1]} @ ${d.venue}`);
+    }
+
+    // 11) SCENE SELF-CHECK / REPAIR + POV subjective layer
+    L('');
+    L('── 11) 場景自檢/修訂 + 各人視角（主觀敘事層） ────────────────────────────────');
+    L(`scenes put through self-check...... ${r.reviewedScenes}  (reviewed = ${r.reviewedScenes > 0 ? 'YES' : 'NO'})`);
+    L(`beats whose text was repaired...... ${r.reviewedBeatsChanged}  ${r.reviewedBeatsChanged > 0 ? '' : '(fake = pass-through, 0 expected)'}`);
+    L(`woven 章回 put through reviewChapter ${r.reviewedChapters}  (chapter-level gender/logic guard = ${r.reviewedChapters > 0 ? 'YES' : 'NO'})`);
+    L(`章回 whose prose was repaired....... ${r.repairedChapters}  ${r.repairedChapters > 0 ? '' : '(fake = pass-through, 0 expected)'}`);
+    const povChars = Object.keys(r.povReflections);
+    const povTotal = povChars.reduce((n, id) => n + r.povReflections[id].length, 0);
+    L(`POV daily reflections generated.... ${povTotal}  across ${povChars.length} 人  (subjective layer = ${povTotal > 0 ? 'YES' : 'NO'})`);
+    for (const id of povChars) {
+        const rows = r.povReflections[id];
+        const nm = byName.get(id)?.name ?? id;
+        const last = rows[rows.length - 1];
+        L(`   · ${nm}：${rows.length} 日  ↳ 第${last.day}日「${last.text.slice(0, 40)}…」`);
+    }
+
+    // 12) PERCEPTION (眼耳鼻身, passive+gated) + TIME-AS-SCARCE-RESOURCE (opportunity cost)
+    L('');
+    L('── 12) 感知（眼耳鼻身，被動＋定位設限）＋ 時辰＝稀缺資源（機會成本） ──────────────');
+    L(`perception snapshots injected...... ${r.perceptionInjections}  (每個 plan 一次被動感知；gated = ${r.perceptionInjections > 0 ? 'YES' : 'NO'})`);
+    L(`修羅場 via ADJACENT-HEAR path...... ${r.hearDiscoveries}  (隔壁聽見→趕來破門；抓姦不再需同處一室)`);
+    L(`opportunity-cost framing injected.. ${r.oppCostFramings}  (每個 plan 皆知這一時辰有限；injected = ${r.oppCostFramings > 0 ? 'YES' : 'NO'})`);
+    L(`long/deep scenes (beats ≥ ${10}) that SPENT participants... ${r.longScenes}`);
+    L(`active-turns skipped (character spent by a long scene).... ${r.occupiedTurns}  ${r.occupiedTurns > 0 ? '→ 機會成本 BIT' : '(none this slice — 床戲 falls on 深宵, the day\'s last 時辰)'}`);
+
+    // 13) SEASON PERSISTENCE (snapshot / restore → continue a week)
+    L('');
+    L('── 13) 賽季存續（快照／續盤，把上週的狀態＋記憶接下去） ──────────────────────');
+    L(`this run was................ ${restoreInfo.continued ? '續盤 CONTINUATION' : '開新盤 FRESH SEASON'}`);
+    if (restoreInfo.continued) {
+        L(`restored from............... ${restoreInfo.from}`);
+        L(`characters restored......... ${restoreInfo.restored.length}  → ${restoreInfo.restored.map((id) => byId2(cast, id)?.name ?? id).join('、')}`);
+        L('sample carried-over relationship views (round-trip proof):');
+        for (const s of restoreInfo.samples) L(`   · ${s}`);
+    } else {
+        L('（本盤為新開；跑完會寫 cast-state.json，下週用 SEASON_RESTORE 指向本 outDir 即可續盤）');
+    }
+
+    // 14) STREET / FOOD / MONEY (daily life + a small economy)
+    L('');
+    L('── 14) 街市／吃食／錢（日常生活＋小經濟） ────────────────────────────────────');
+    const totalMeals = Object.values(r.meals).reduce((a, b) => a + b, 0);
+    L(`new PUBLIC street/food venues in geography.. 霞飛路商店街、戲園前街  (both isPublic = ${['霞飛路商店街', '戲園前街'].every((n) => isPublicVenue(n)) ? 'YES' : 'NO'})`);
+    L(`meals eaten this season (Σ)................. ${totalMeals}  ${totalMeals > 0 ? '→ 吃食機制 BIT' : '(nobody stood at a food venue on a free turn this slice)'}`);
+    L('per-character end-of-season 錢／餓／meals:');
+    for (const c of cast) {
+        L(`   · ${c.name}[${occLabel(c.occupation)}]  money=${c.money}  hunger=${c.hunger.toFixed(2)}  meals=${r.meals[c.id] ?? 0}`);
+    }
+    const richest = [...cast].sort((a, b) => b.money - a.money)[0];
+    const poorest = [...cast].sort((a, b) => a.money - b.money)[0];
+    L(`seeded wealth spread (DATA, not name-logic).. 最寬裕 ${richest.name}=${richest.money} ≫ 最緊 ${poorest.name}=${poorest.money}`);
+    L(`money never negative......................... ${cast.every((c) => c.money >= 0) ? 'YES' : 'NO'}`);
+
     L('');
     L('════════════════════════════════════════════════════════════════════════════════');
+}
+
+/** Local helper: find a cast member by id (the persistence counter prints names). */
+function byId2(cast: Char[], id: string): Char | undefined {
+    return cast.find((c) => c.id === id);
 }
 
 // ── report.md ─────────────────────────────────────────────────────────────────
@@ -268,6 +490,10 @@ function writeReport(
     md.push('## 時辰-round transcript (per 時辰)');
     md.push('');
     for (const x of r.rounds) md.push(roundMd(x, byName));
+    md.push(...povMd(r, cast));
+    md.push(...productionMd(r));
+    md.push(...boxOfficeMd(r));
+    md.push(...showrunnerMd(r));
     md.push('## Seed memories (verbatim, non-thinned)');
     md.push('');
     const liu = byName.get('柳生春');
@@ -309,8 +535,23 @@ function roundMd(x: RoundRecord, byName: Map<string, Char>): string {
         if (p.interactIntent) lines.push(`    - interact→ ${p.interactIntent.target}：${p.interactIntent.intent}`);
     }
     for (const s of x.scenes) {
-        lines.push(`  - **場景 @ ${s.venue}**${s.isPrivate ? '（私）' : ''}${s.consummate ? '〔床〕' : ''}：${s.participants.join('×')}`);
-        for (const b of s.beats) lines.push(`    > **${b.name}**：${b.text}`);
+        lines.push(`  - **場景 @ ${s.venue}**${s.isPrivate ? '（私）' : ''}${s.consummate ? '〔床〕' : ''}${s.discovery ? '〔修羅場〕' : ''}：${s.participants.join('×')}`);
+        // Private / 床 / 修羅場 scenes print their WOVEN 章回 first (the readable literary
+        // version), then the raw 分鏡 beats after it. Public scenes keep the raw beats
+        // (the per-時辰 public weave already renders their prose at the round level).
+        const privateWoven = (s.isPrivate || !!s.discovery) && !!s.chapter;
+        if (privateWoven) {
+            lines.push(`    - **章回（此場織回）**：`);
+            lines.push(`    > ${s.chapter!.replace(/\n/g, '\n    > ')}`);
+            lines.push(`    - 分鏡（${s.beats.length} 拍）：`);
+        }
+        // Private / 床 / 修羅場 scenes surface each beat's 內心一句 (〔心〕) under the
+        // spoken line — the emotional transition a reader otherwise never sees.
+        const showInner = s.isPrivate || !!s.discovery;
+        for (const b of s.beats) {
+            lines.push(`    > **${b.name}**：${b.text}`);
+            if (showInner && b.inner) lines.push(`    > 〔心〕${b.inner}`);
+        }
         if (s.resolved.length) lines.push(`    - 了結：${s.resolved.join('；')}`);
     }
     if (x.chapter) {
@@ -322,6 +563,85 @@ function roundMd(x: RoundRecord, byName: Map<string, Char>): string {
     }
     lines.push('');
     return lines.join('\n');
+}
+
+// ── POV subjective layer (report) ─────────────────────────────────────────────
+function povMd(r: SeasonResult, cast: Char[]): string[] {
+    const md: string[] = [];
+    const ids = cast.map((c) => c.id).filter((id) => (r.povReflections[id]?.length ?? 0) > 0);
+    if (!ids.length) return md;
+    md.push('## 各人視角 · POV daily reflections (subjective layer)');
+    md.push('');
+    md.push('> 第一人稱、主觀（或有偏頗）的每日自述，與客觀的時辰章回並存。讀者可只跟著一個人走。');
+    md.push('');
+    const byId = new Map(cast.map((c) => [c.id, c]));
+    for (const id of ids) {
+        md.push(`### ${byId.get(id)?.name ?? id} 的帳`);
+        for (const row of r.povReflections[id]) md.push(`- **第${row.day}日**：${row.text}`);
+        md.push('');
+    }
+    return md;
+}
+
+// ── Stage 2 report sections ───────────────────────────────────────────────────
+function productionMd(r: SeasonResult): string[] {
+    const play = r.play;
+    const md: string[] = [];
+    md.push('## 製作 Production');
+    md.push('');
+    md.push(`- **戲碼**：《${play.title || '（未定）'}》　**狀態**：${play.state}`);
+    md.push(`- **state timeline**：${play.timeline.map((t) => `${t.state}@${t.at}`).join(' → ')}`);
+    md.push(`- **選角（cast）**：${play.cast.join('、') || '（無）'}`);
+    md.push(`- **每角排練投入（effort）**：${[...play.effort.entries()].map(([id, e]) => `${id}=${e}`).join('　') || '（無）'}　（total=${totalEffort(play).toFixed(1)}）`);
+    md.push(`- **班之名望（repute accumulator）**：${play.repute.toFixed(2)}`);
+    md.push('- **劇本片段（script fragments）**：');
+    if (play.scriptFragments.length) for (const f of play.scriptFragments) md.push(`  - ${f}`);
+    else md.push('  - （無）');
+    if (r.premiere) {
+        md.push('- **大會串獻演（premiere scene）**：');
+        md.push(`  - @ ${r.premiere.venue}：${r.premiere.participants.join('×')}`);
+        for (const b of r.premiere.beats) md.push(`    > **${b.name}**：${b.text}`);
+    }
+    md.push('');
+    return md;
+}
+
+function boxOfficeMd(r: SeasonResult): string[] {
+    const md: string[] = [];
+    md.push('## 大會串 Finale + 票房 Box office');
+    md.push('');
+    const bo = r.boxOffice;
+    if (!bo) {
+        md.push('（本場未演成，無票房。）');
+        md.push('');
+        return md;
+    }
+    md.push('> 數字是可審加總，永不由 LLM 決定。willingness = 0.4·warmth + 0.3·repute + 0.3·quality；');
+    md.push('> box office = Σ 購票(willingness>0) + 回訪(willingness>0.6)。');
+    md.push('');
+    md.push(`- **票房總計**：**${bo.total}**（購票 ${bo.ticketBuyers} 人、回訪 ${bo.repeats} 次）`);
+    md.push(`- **戲之品相 quality**：${bo.quality.toFixed(2)}　**班之名望 repute**：${bo.repute.toFixed(2)}`);
+    md.push('');
+    md.push('| 觀眾 | 類 | warmth | repute | quality | willingness | 購票 | 回訪 |');
+    md.push('| --- | --- | --- | --- | --- | --- | --- | --- |');
+    for (const row of bo.rows) {
+        md.push(`| ${row.name} | ${row.kind} | ${row.warmth.toFixed(2)} | ${row.repute.toFixed(2)} | ${row.quality.toFixed(2)} | ${row.willingness.toFixed(2)} | ${row.bought ? '✓' : ''} | ${row.repeat ? '✓' : ''} |`);
+    }
+    md.push('');
+    md.push(`- **驅動品相的角色（ability × effort）**：${bo.drivers.map((d) => `${d.name}（${d.ability}×${d.effort}=${d.contribution.toFixed(2)}）`).join('　')}`);
+    md.push('');
+    return md;
+}
+
+function showrunnerMd(r: SeasonResult): string[] {
+    const md: string[] = [];
+    md.push('## Showrunner 收尾判準');
+    md.push('');
+    md.push(`**${r.showrunnerVerdict.passed ? 'PASS ✅' : 'FAIL ❌'}** — razor：劇本>0 ∧ 選角≥2 ∧ 排練投入≥門檻 ∧ state=premiered。`);
+    md.push('');
+    for (const reason of r.showrunnerVerdict.reasons) md.push(`- ${reason}`);
+    md.push('');
+    return md;
 }
 
 main().catch((err) => {
