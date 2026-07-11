@@ -1,0 +1,688 @@
+{
+  "productionId": "prod_baishe",
+  "sagaId": "saga_chunxue",
+  "classicKey": "baishe",
+  "skipScore": false,
+  "state": "PREMIERED",
+  "log": [
+    "PROPOSED → 班主沈雪笙提案《斷橋·新唱》（白蛇傳·哀而不傷，舊調新魂）",
+    "SCRIPTED → 編劇沈雪笙成稿，共 3 場",
+    "CAST → 選角完成：蘇映雪飾白素貞、柳生春飾許仙[坤生]、連翹飾小青",
+    "SCORED → 琴師沈硯秋譜成 3 段（西皮 原板 / 西皮 流水 / 二黃·反調 慢板（反二黃））",
+    "VERSIFIED → 詞 3 首（蘇映雪·應場、蘇映雪·有感而發、柳生春·有感而發）",
+    "REHEARSING → 全體排演，3 段 POV 織成戲中戲章回",
+    "PREMIERED → 首演（純驗證：到此產出齊備，上鏈為 gate-after）"
+  ],
+  "brief": {
+    "classicKey": "baishe",
+    "classicSource": "白蛇傳",
+    "title": "斷橋·新唱",
+    "premise": "不為了天條拆散，只為了凡塵裡那一點點捨不得。",
+    "qizhi": "哀而不傷，舊調新魂",
+    "budget": 1200,
+    "sceneOutline": [
+      {
+        "title": "遊湖借傘",
+        "mood": "joy",
+        "summary": "西湖初遇，許仙白娘子借傘定情。",
+        "parts": [
+          "bai",
+          "xu"
+        ]
+      },
+      {
+        "title": "驚變",
+        "mood": "tense",
+        "summary": "端午雄黃，白娘子現形，許仙驚仆。",
+        "parts": [
+          "bai",
+          "xu"
+        ]
+      },
+      {
+        "title": "斷橋",
+        "mood": "sorrow",
+        "summary": "水漫金山後重逢斷橋，恨與不捨交織。",
+        "parts": [
+          "bai",
+          "xu",
+          "qing"
+        ]
+      }
+    ],
+    "directorId": "banzhu",
+    "directorName": "沈雪笙"
+  },
+  "script": {
+    "title": "斷橋·新唱",
+    "premise": "不為了天條拆散，只為了凡塵裡那一點點捨不得。",
+    "parts": [
+      {
+        "partId": "bai",
+        "partName": "白素貞",
+        "hangdang": "旦",
+        "yinggong": "青衣",
+        "roleGender": "female",
+        "martial": "文"
+      },
+      {
+        "partId": "xu",
+        "partName": "許仙",
+        "hangdang": "生",
+        "yinggong": "文小生",
+        "roleGender": "male",
+        "martial": "文"
+      },
+      {
+        "partId": "qing",
+        "partName": "小青",
+        "hangdang": "旦",
+        "yinggong": "武旦",
+        "roleGender": "female",
+        "martial": "武"
+      }
+    ],
+    "scenes": [
+      {
+        "sceneId": "s1",
+        "title": "遊湖借傘",
+        "parts": [
+          "bai",
+          "xu"
+        ],
+        "mood": "joy",
+        "beats": [
+          {
+            "beat": 1,
+            "summary": "西湖初遇，許仙白娘子借傘定情。",
+            "tension": 0.3,
+            "mood": "joy"
+          }
+        ],
+        "lines": [
+          {
+            "type": "stage",
+            "text": "【西湖雨意，煙水迷離。許仙撐傘，見白素貞衣衫微濕，神色驚惶，不禁將傘斜過去。】"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "念",
+            "text": "娘子慢走，這西湖雨勢又急又密，若不棄嫌，且在小生這傘下避一避。"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "念",
+            "text": "多謝官人美意。只是雨驟風狂，若是淋壞了這把傷春悲秋的骨子，怕是難以再見青天。"
+          },
+          {
+            "type": "stage",
+            "text": "【白素貞素手輕扶傘柄，指尖似無意觸及許仙手背，許仙一顫，卻是沒有退縮。】"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "唱",
+            "text": "非是貪戀眼前春，只為伊人雨裡身。這傘兒借你遮風雨，莫教濕透翠羅裙。"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "唱",
+            "text": "天條冷律鎖雲津，誰解凡塵一縷真。今朝借得傘中意，不為成仙只為人。"
+          },
+          {
+            "type": "stage",
+            "text": "【二人相視，雨聲漸歇，唯餘心跳如鼓。白素貞接過油紙傘，目光纏綣。】"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "念",
+            "text": "官人，這傘我借去了。明日若還雨，我在斷橋等你；若天晴，我也在橋頭等你。"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "念",
+            "text": "好，好！無論晴雨，許仙必來。這傘便是憑證，斷橋便是歸處。"
+          }
+        ]
+      },
+      {
+        "sceneId": "s2",
+        "title": "驚變",
+        "parts": [
+          "bai",
+          "xu"
+        ],
+        "mood": "tense",
+        "beats": [
+          {
+            "beat": 1,
+            "summary": "端午雄黃，白娘子現形，許仙驚仆。",
+            "tension": 0.9,
+            "mood": "tense"
+          }
+        ],
+        "lines": [
+          {
+            "type": "stage",
+            "text": "【雄黃酒氣上湧，白素貞面露難色，強自鎮壓，身形微晃】"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "念",
+            "text": "官人，這酒氣太烈，妾身……妾身有些不適，且去歇息片刻。"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "念",
+            "text": "娘子臉色煞白，莫非是中了暑氣？待為夫扶你回帳安歇。"
+          },
+          {
+            "type": "stage",
+            "text": "【許仙伸手欲扶，觸及素貞手，驚覺冰冷刺骨；素貞痛呼一聲，頭上隱現蛇形冠角】"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "念",
+            "text": "啊！這……這是何物？娘子你……你究竟是人是妖？！"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "唱",
+            "text": "【西皮散板】非是妖魔降凡塵，只為官人一片真。天條縱有千斤重，難斷我夫妻一點恩。"
+          },
+          {
+            "type": "stage",
+            "text": "【狂風驟起，帳幔翻飛，白素貞現出原形半身，淚眼婆娑望向許仙】"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "念",
+            "text": "妖……妖怪！救命！救命啊！"
+          },
+          {
+            "type": "stage",
+            "text": "【許仙雙目翻白，驚恐過度，仰面仆倒在地，昏死過去】"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "唱",
+            "text": "【哭頭】眼睜睜，官人嚇斷魂，千年的道行拋雲端。不為了成仙登極樂，只為了凡塵裡這一點點捨不得！"
+          },
+          {
+            "type": "stage",
+            "text": "【白素貞撲倒在許仙身上，恢復人形，痛哭失聲】"
+          }
+        ]
+      },
+      {
+        "sceneId": "s3",
+        "title": "斷橋",
+        "parts": [
+          "bai",
+          "xu",
+          "qing"
+        ],
+        "mood": "sorrow",
+        "beats": [
+          {
+            "beat": 1,
+            "summary": "水漫金山後重逢斷橋，恨與不捨交織。",
+            "tension": 0.8,
+            "mood": "sorrow"
+          }
+        ],
+        "lines": [
+          {
+            "type": "stage",
+            "text": "【西風緊，殘荷敗葉。白素貞扶腹踉蹌上，小青怒氣沖沖扶之。許仙遠遠望見，戰戰兢兢趨前。】"
+          },
+          {
+            "type": "line",
+            "who": "小青",
+            "mode": "念",
+            "text": "好你個負心漢！金山一戰，姐姐幾乎喪命，你還有臉來見我們？"
+          },
+          {
+            "type": "stage",
+            "text": "【小青拔劍欲刺，白素貞攔住，身形一晃，掩面而泣。許仙雙膝跪地。】"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "唱",
+            "text": "看斷橋，橋未斷，卻斷了柔腸。恨郎君，聽讒言，險些兒送我入黃粱。"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "念",
+            "text": "娘子！我悔之晚矣！法海以此惑我，如今方知娘子情深意重，我萬死難贖其罪。"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "唱",
+            "text": "非是怨天條律法森嚴，也非恨法海無端拆散。只恨你，心裡無我，任由風雨摧殘。"
+          },
+          {
+            "type": "stage",
+            "text": "【白素貞俯身扶起許仙，指尖輕顫，整理其凌亂衣襟，眼中淚光閃爍。】"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "念",
+            "text": "起來吧。若真個恨極，早在金山便絕了情分，何苦帶著身孕，受盡風波來此尋你？"
+          },
+          {
+            "type": "line",
+            "who": "許仙",
+            "mode": "唱",
+            "text": "娘子恩德，許仙銘感五內，此生此世，再不相負！"
+          },
+          {
+            "type": "line",
+            "who": "白素貞",
+            "mode": "念",
+            "text": "休說此生。只要凡塵裡這一點點捨不得還在，便是天兵天將將我鎮在雷峰塔下，我也甘願。"
+          },
+          {
+            "type": "stage",
+            "text": "【三人相對，白素貞輕嘆一聲，緊握許仙手，緩緩向橋下走去。】"
+          }
+        ]
+      }
+    ],
+    "authorId": "banzhu",
+    "authorName": "沈雪笙"
+  },
+  "cast": [
+    {
+      "partId": "bai",
+      "partName": "白素貞",
+      "hangdang": "旦",
+      "yinggong": "青衣",
+      "roleGender": "female",
+      "martial": "文",
+      "assignedId": "huadan",
+      "assignedName": "蘇映雪",
+      "actorGender": "female",
+      "isCrossCast": false,
+      "crossCastLabel": null,
+      "alternates": [
+        "金鳳",
+        "白韻秋"
+      ]
+    },
+    {
+      "partId": "xu",
+      "partName": "許仙",
+      "hangdang": "生",
+      "yinggong": "文小生",
+      "roleGender": "male",
+      "martial": "文",
+      "assignedId": "kunsheng",
+      "assignedName": "柳生春",
+      "actorGender": "female",
+      "isCrossCast": true,
+      "crossCastLabel": "坤生",
+      "alternates": [
+        "江聞鶴",
+        "沈雪笙"
+      ],
+      "note": "情緒選角：與對手演員台下亦有深緣，台上夫妻照見台下情。 坤生：柳生春（坤伶）反串許仙（男角），是看點不是錯誤。"
+    },
+    {
+      "partId": "qing",
+      "partName": "小青",
+      "hangdang": "旦",
+      "yinggong": "武旦",
+      "roleGender": "female",
+      "martial": "武",
+      "assignedId": "wudan",
+      "assignedName": "連翹",
+      "actorGender": "female",
+      "isCrossCast": false,
+      "crossCastLabel": null,
+      "alternates": [
+        "金鳳",
+        "白韻秋"
+      ]
+    }
+  ],
+  "scores": [
+    {
+      "forSceneId": "s1",
+      "title": "遊湖借傘·過門",
+      "banshi": "西皮 原板",
+      "mode": "宮調式（do 為主音）",
+      "keyForPlayer": "1=D，明亮平穩",
+      "tempoBpm": 84,
+      "jianpu": "1  2  3  5  6 —  5  4  3",
+      "notes": [
+        {
+          "degree": "1",
+          "midi": 62,
+          "beats": 1
+        },
+        {
+          "degree": "2",
+          "midi": 64,
+          "beats": 1
+        },
+        {
+          "degree": "3",
+          "midi": 66,
+          "beats": 1
+        },
+        {
+          "degree": "5",
+          "midi": 69,
+          "beats": 1
+        },
+        {
+          "degree": "6",
+          "midi": 71,
+          "beats": 2
+        },
+        {
+          "degree": "5",
+          "midi": 69,
+          "beats": 1
+        },
+        {
+          "degree": "4",
+          "midi": 67,
+          "beats": 1
+        },
+        {
+          "degree": "3",
+          "midi": 66,
+          "beats": 1
+        }
+      ],
+      "articulation": [
+        {
+          "at": "6",
+          "tech": "小滑"
+        },
+        {
+          "at": "4",
+          "tech": "拖腔 加花"
+        }
+      ],
+      "composerId": "qinshi",
+      "composerName": "沈硯秋"
+    },
+    {
+      "forSceneId": "s2",
+      "title": "驚變·過門",
+      "banshi": "西皮 流水",
+      "mode": "宮調式（do 為主音）",
+      "keyForPlayer": "1=D，吉他當 D 調快板",
+      "tempoBpm": 138,
+      "jianpu": "5  6  1̇  6  5  3  5  2  1  2  3  4  5",
+      "notes": [
+        {
+          "degree": "5",
+          "midi": 69,
+          "beats": 0.5
+        },
+        {
+          "degree": "6",
+          "midi": 71,
+          "beats": 0.5
+        },
+        {
+          "degree": "1̇",
+          "midi": 74,
+          "beats": 0.5
+        },
+        {
+          "degree": "6",
+          "midi": 71,
+          "beats": 0.5
+        },
+        {
+          "degree": "5",
+          "midi": 69,
+          "beats": 0.5
+        },
+        {
+          "degree": "3",
+          "midi": 66,
+          "beats": 0.5
+        },
+        {
+          "degree": "5",
+          "midi": 69,
+          "beats": 1
+        },
+        {
+          "degree": "2",
+          "midi": 64,
+          "beats": 0.5
+        },
+        {
+          "degree": "1",
+          "midi": 62,
+          "beats": 0.5
+        },
+        {
+          "degree": "2",
+          "midi": 64,
+          "beats": 0.5
+        },
+        {
+          "degree": "3",
+          "midi": 66,
+          "beats": 0.5
+        },
+        {
+          "degree": "4",
+          "midi": 67,
+          "beats": 1
+        },
+        {
+          "degree": "5",
+          "midi": 69,
+          "beats": 1
+        }
+      ],
+      "articulation": [
+        {
+          "at": "5",
+          "tech": "頓弓"
+        },
+        {
+          "at": "4",
+          "tech": "拖腔 加花"
+        }
+      ],
+      "composerId": "qinshi",
+      "composerName": "沈硯秋"
+    },
+    {
+      "forSceneId": "s3",
+      "title": "斷橋·過門",
+      "banshi": "二黃·反調 慢板（反二黃）",
+      "mode": "羽調式（la 為主音，聽感如小調）",
+      "keyForPlayer": "1=C → 主音落 6(la=A)，吉他當 Am 彈",
+      "tempoBpm": 48,
+      "jianpu": "6̣  1  2 —  3  2  1  6̣  5̣  6̣  1  6̣  6̣  5̣ — — —",
+      "notes": [
+        {
+          "degree": "6̣",
+          "midi": 57,
+          "beats": 1
+        },
+        {
+          "degree": "1",
+          "midi": 60,
+          "beats": 1
+        },
+        {
+          "degree": "2",
+          "midi": 62,
+          "beats": 2
+        },
+        {
+          "degree": "3",
+          "midi": 64,
+          "beats": 1
+        },
+        {
+          "degree": "2",
+          "midi": 62,
+          "beats": 1
+        },
+        {
+          "degree": "1",
+          "midi": 60,
+          "beats": 1
+        },
+        {
+          "degree": "6̣",
+          "midi": 57,
+          "beats": 1
+        },
+        {
+          "degree": "5̣",
+          "midi": 55,
+          "beats": 1
+        },
+        {
+          "degree": "6̣",
+          "midi": 57,
+          "beats": 1
+        },
+        {
+          "degree": "1",
+          "midi": 60,
+          "beats": 1
+        },
+        {
+          "degree": "6̣",
+          "midi": 57,
+          "beats": 1
+        },
+        {
+          "degree": "6̣",
+          "midi": 57,
+          "beats": 1
+        },
+        {
+          "degree": "5̣",
+          "midi": 55,
+          "beats": 4
+        }
+      ],
+      "articulation": [
+        {
+          "at": "3",
+          "tech": "下滑音 ↘"
+        },
+        {
+          "at": "6̣",
+          "tech": "揉弦 ~"
+        },
+        {
+          "at": "6̣",
+          "tech": "拖腔 加花"
+        },
+        {
+          "at": "5̣",
+          "tech": "回滑收尾 微顫"
+        }
+      ],
+      "composerId": "qinshi",
+      "composerName": "沈硯秋"
+    }
+  ],
+  "ci": [
+    {
+      "forSceneId": "s3",
+      "title": "〈斷橋〉唱詞",
+      "lines": [
+        "雨打殘荷風送冷",
+        "斷橋獨立倍傷神",
+        "千辛萬苦重相見",
+        "恨郎薄倖負深情"
+      ],
+      "authorId": "huadan",
+      "authorName": "蘇映雪",
+      "source": "commissioned"
+    },
+    {
+      "forSceneId": null,
+      "title": "蘇映雪·有感（贈柳生春）",
+      "lines": [
+        "鏡裡朱顏曾似舊，",
+        "當年驚夢越重樓。",
+        "此番再演情深處，",
+        "只待除夕共白頭。"
+      ],
+      "authorId": "huadan",
+      "authorName": "蘇映雪",
+      "source": "emergent",
+      "provenance": {
+        "kind": "relationship",
+        "refId": "kunsheng",
+        "why": "八年生旦·暗戀·除夕暗號，深度 92；台上又配許仙。"
+      }
+    },
+    {
+      "forSceneId": null,
+      "title": "柳生春·有感（贈蘇映雪）",
+      "lines": [
+        "霓裳舞罷月如鉤，",
+        "夢裡驚鴻水自流。",
+        "此夜春風知我意，",
+        "一生心事付蘇州。"
+      ],
+      "authorId": "kunsheng",
+      "authorName": "柳生春",
+      "source": "emergent",
+      "provenance": {
+        "kind": "relationship",
+        "refId": "huadan",
+        "why": "師姐·給魂·暗戀，深度 90；台上又配白素貞。"
+      }
+    }
+  ],
+  "takes": [
+    {
+      "partId": "bai",
+      "partName": "白素貞",
+      "actorId": "huadan",
+      "actorName": "蘇映雪",
+      "pov": "這淚水含在眼眶裡不敢落，恰似這霞飛路上的風雨欲來，我得替這班子把台步走得四平八穩，半點驚惶都不能露給人看。許仙狠心那一劍刺在心口，痛得我身子微顫，可心裡頭念的卻是那未說出口的詞：怕只怕曲終人散，這戲台子還在，台下看客卻早已換了新天。這份拿捏了一輩子的分寸，是護身的殼，也是困人的牢，此刻竟分不清究竟是白素貞在恨許郎，還是蘇映雪在嘆這涼薄的世道。"
+    },
+    {
+      "partId": "xu",
+      "partName": "許仙",
+      "actorId": "kunsheng",
+      "actorName": "柳生春",
+      "pov": "摺扇一抖，借著許仙那點怯懦，倒掩了我這女兒身不敢示人的真心。台下爭的是霞飛路的檔期，台上我這一跪，只為了這兩日裡那個讀不懂我眼波的人。這出戲唱罷，我是人是鬼是男是女都不打緊，只怕曲終人散，我藏在袖裡的那闋「相見爭如不見」，終究是沒膽量唱給你聽。"
+    },
+    {
+      "partId": "qing",
+      "partName": "小青",
+      "actorId": "wudan",
+      "actorName": "連翹",
+      "pov": "這腰間的軟鞭一抖，若是按我早年在武場的舊性子，早該抽碎了許仙這負心漢的軟筋，可今兒是唱旦，這股子煞氣得硬生生揉進青兒的委屈裡去。台上我護著娘子步步退讓，台下心裡卻比誰都清楚，這霞飛路的大戲台若是這兩天拿不下真本事，過了年誰還記得連翹是誰？那亮相時的一瞪眼，一半是恨薄情郎，一半是給台下那些挑班的行家瞧，這身功夫我還沒丟。"
+    }
+  ],
+  "chapter": "蘇映雪眼含淚不敢落，恰似霞飛路風雨欲來，身子隨許仙一劍微顫，痛的卻是怕曲終人散、看客換了新天；柳生春摺扇一抖，借許仙怯懦掩了女兒身真心，跪在台上只為那讀不懂眼波的人，袖裡藏着沒膽唱出的相見爭如不見；連翹腰間軟鞭想抽碎負心漢，卻將煞氣硬揉進青兒委屈，台上護娘子步步退讓，亮相時那一瞪眼，一半是恨薄情郎，一半是給挑班行家瞧，這身功夫沒丟。"
+}
