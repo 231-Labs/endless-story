@@ -48,6 +48,7 @@ import {
 } from '../experiments/agent-season/perception.ts';
 import { canEnter } from '../experiments/agent-season/access.ts';
 import { applyRoundHealth, healthStatus, eat, MEAL_COST } from '../experiments/agent-season/health.ts';
+import { rhythmPull } from '../experiments/agent-season/rhythm.ts';
 import { DAY_PARTS } from '../experiments/agent-season/rhythm.ts';
 import { newPlay } from '../experiments/agent-season/production.ts';
 import { makeShowrunner } from '../experiments/agent-season/showrunner.ts';
@@ -818,4 +819,58 @@ test('economy in a full fake season: meals get eaten and money stays non-negativ
     const totalMeals = Object.values(result.meals).reduce((a, b) => a + b, 0);
     assert.ok(totalMeals > 0, 'at least one meal was eaten (白韻秋 shops the street at 日午)');
     assert.ok(cast.every((c) => c.money >= 0), 'no character ends the season with negative money');
+});
+
+/* ── metabolism closed loop (eat-in-passing / starvation teeth / wages) ── */
+
+test('metabolism: starving (hunger ≥ 0.8) drains health faster awake and halves sleep recovery', () => {
+    const [fed, starved] = buildCast(['柳生春', '江聞鶴']);
+    fed.hunger = 0;
+    starved.hunger = 1;
+    fed.health = starved.health = 0.8;
+    applyRoundHealth(fed, true, 0);
+    applyRoundHealth(starved, true, 0);
+    assert.ok(starved.health < fed.health, 'awake starving drains extra health');
+    const [fed2, starved2] = buildCast(['柳生春', '江聞鶴']);
+    fed2.hunger = 0;
+    starved2.hunger = 1;
+    fed2.health = starved2.health = 0.5;
+    applyRoundHealth(fed2, false, 0);
+    applyRoundHealth(starved2, false, 0);
+    assert.ok(starved2.health < fed2.health, 'a starving sleep restores poorly');
+});
+
+test('metabolism in a full fake season: hunger no longer saturates for the whole cast, money flows', async () => {
+    const { cast, result } = await runFakeSeason(6);
+    // The old collapse: EVERY character ended pegged at hunger=1.00 with meals=0 except
+    // the one guest. With eat-in-passing (cluster food venues / 家常), a solvent
+    // character no longer starves for want of scheduling.
+    const starvedSolvent = cast.filter((c) => !c.dead && c.money >= MEAL_COST && c.hunger >= 0.99);
+    assert.equal(starvedSolvent.length, 0, `no solvent character stays pegged at hunger 1.0 (${starvedSolvent.map((c) => c.name).join('、')})`);
+    const eaters = Object.entries(result.meals).filter(([, n]) => n > 0);
+    assert.ok(eaters.length >= 4, `most of the cast eats over 6 days (got ${eaters.length} eaters)`);
+    // Wages: at least one worker's money moved ABOVE their seed (income exists at all).
+    assert.ok(cast.some((c) => c.money !== buildCast([c.name])[0].money), 'money is no longer frozen at seed values');
+    assert.ok(cast.every((c) => c.money >= 0), 'money never negative');
+});
+
+test('metabolism invariant: every occupation\'s rhythm is sustainable on a no-scene day (drama, not the timetable, causes decline)', () => {
+    const PARTS = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
+    const sample = buildCast(['柳生春', '金鳳', '白韻秋', '沈雪笙']);
+    for (const reh of [false, true]) {
+        for (const c of sample) {
+            let awake = 0;
+            let asleep = 0;
+            for (const part of PARTS) {
+                const pull = rhythmPull(c, part, { announced: reh, line: '' });
+                if (pull.active) awake += 1;
+                else asleep += 1;
+            }
+            const net = asleep * 0.15 - awake * 0.06;
+            assert.ok(
+                net >= 0,
+                `${c.name}[${c.occupation}] reh=${reh}: baseline day net health ${net.toFixed(2)} must be ≥ 0 (awake=${awake}, sleep=${asleep})`,
+            );
+        }
+    }
 });

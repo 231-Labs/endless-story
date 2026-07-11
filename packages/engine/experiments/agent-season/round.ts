@@ -63,7 +63,28 @@ const WAIT_PATIENCE = 2;
 /** A scene this many beats or longer is a LONG/deep scene — it EATS the whole 時辰 and
  *  SPENDS its participants for the rest of the day (opportunity cost's teeth). */
 export const OCCUPY_BEATS = 10;
-import { applyRoundHealth, bodyLine, eat, HEALTH, MEAL_COST } from './health.ts';
+import {
+    applyRoundHealth,
+    bodyLine,
+    eat,
+    ECON,
+    HEALTH,
+    HOME_MEAL_COST,
+    HUNGER_FELT,
+    HUNGER_STARVING,
+    MEAL_COST,
+} from './health.ts';
+
+/** Where (and at what price) this character can eat RIGHT NOW: the food venue they
+ *  stand at, a food venue in the same cluster (順路), or a cheaper 家常 meal at their
+ *  own home. null = no reachable meal this 時辰 (geography, not poverty). Pure. */
+function mealSpotFor(c: Char): { line: string; cost: number } | null {
+    if (isFoodVenue(c.venue)) return { line: `在 ${c.venue} 攤子上吃了點東西`, cost: MEAL_COST };
+    const nearby = VENUES.find((v) => isFoodVenue(v.name) && sameCluster(v.name, c.venue));
+    if (nearby) return { line: `順路到 ${nearby.name} 打了個尖`, cost: MEAL_COST };
+    if (c.venue === c.homeVenue) return { line: `在${c.venue}自己弄了口家常吃食`, cost: HOME_MEAL_COST };
+    return null;
+}
 import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
 import {
     type Play,
@@ -1388,17 +1409,50 @@ export async function runRound(
         }
     }
 
-    // DAILY LIFE — EATING (the small economy). A character standing at a street/food venue
-    // on a NON-scene turn grabs something to eat: deduct MEAL_COST, reset hunger low. A
-    // near-broke character can't afford it and goes without (money floors at 0). GENERAL:
-    // gated by venue kind + scene state + coin, never by character name.
+    // DAILY LIFE — WAGES (the income side of the small economy). A duty 時辰 actually
+    // WORKED at the duty venue pays the occupation's wage (DATA: ECON table); wandering
+    // off duty forfeits it — opportunity cost with an economic edge. The 千金's family
+    // allowance lands once a day at 日午 regardless of venue. Never name-cased.
     for (const c of active) {
-        if (c.dead || c.sceneThisRound || !isFoodVenue(c.venue)) continue;
-        if (eat(c)) {
+        if (c.dead) continue;
+        const econ = ECON[c.occupation];
+        if (!econ) continue;
+        const pull = rhythmPull(c, part, reh);
+        // "Worked" = at the duty venue, OR at another WORK venue in the same cluster —
+        // a rehearsal split (生旦上戲台、武行在練功房) is still a worked duty 時辰.
+        const kind = venueByName.get(c.venue)?.kind;
+        const atWork =
+            c.venue === pull.venue ||
+            ((kind === 'stage' || kind === 'practice' || kind === 'backstage' || kind === 'nightclub') &&
+                !!pull.venue &&
+                sameCluster(c.venue, pull.venue));
+        if (econ.dutyWage > 0 && pull.duty && pull.venue && atWork) {
+            c.money += econ.dutyWage;
+            log(`    · 〔工錢〕${c.name} 在 ${c.venue} 當值，掙下 ${econ.dutyWage}（身上 ${c.money}）。`);
+        }
+        if (econ.dailyAllowance > 0 && part === '日午') {
+            c.money += econ.dailyAllowance;
+            log(`    · 〔月例〕${c.name} 家裡的月例到手 ${econ.dailyAllowance}（身上 ${c.money}）。`);
+        }
+    }
+
+    // DAILY LIFE — EATING (the small economy). Eating is life maintenance, not a
+    // dramatic decision: a hungry character on a NON-scene turn eats in passing — at
+    // the food venue they stand at, at a food venue in the SAME cluster (順路), or a
+    // cheaper 家常 meal at their own home. The ONLY thing that blocks a meal is coin
+    // (money < cost) — poverty, not scheduling, is the dramatic signal. GENERAL:
+    // gated by hunger + venue geography + coin, never by character name.
+    for (const c of active) {
+        if (c.dead || c.sceneThisRound || c.hunger < HUNGER_FELT) continue;
+        const spot = mealSpotFor(c);
+        if (!spot) continue;
+        if (eat(c, spot.cost)) {
             out.meals[c.id] = (out.meals[c.id] ?? 0) + 1;
-            log(`    · 〔吃食〕${c.name} 在 ${c.venue} 攤子上吃了點東西（花去 ${MEAL_COST}，餘 ${c.money}）。`);
+            log(`    · 〔吃食〕${c.name} ${spot.line}（花去 ${spot.cost}，餘 ${c.money}）。`);
+        } else if (c.hunger >= HUNGER_STARVING) {
+            log(`    · 〔囊空〕${c.name} 餓得發慌，摸遍身上只有 ${c.money}，連碗麵都吃不起，硬撐著。`);
         } else {
-            log(`    · 〔捨不得〕${c.name} 在 ${c.venue}，摸摸身上只剩 ${c.money}，吃食的錢都要掂量，餓著肚子走開了。`);
+            log(`    · 〔捨不得〕${c.name} 摸摸身上只剩 ${c.money}，吃食的錢都要掂量，先餓著。`);
         }
     }
 
