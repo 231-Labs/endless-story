@@ -249,8 +249,18 @@ test('H1/H3c 夜赴: pressing = welcome-gated (no intrude), edge+ = intrude', ()
     // edge so the private scene forms BEFORE the want breaks + resolves publicly).
     assert.equal(yearningNightPursuit([debtWant({ heat: 9 })], LIU.id, resolve)?.intrude, true);
     assert.equal(yearningNightPursuit([loveWant({ heat: 8 })], BAI.id, resolve)?.intrude, true);
-    // Idle (un-ripe) stays home.
-    assert.equal(yearningNightPursuit([debtWant({ heat: 0, frust: 0 })], LIU.id, resolve), null);
+    // H3d: an idle bond that is still STRONG (high standing tension) now SEEKS its
+    // object at night — welcome-gated, no intrude — so a love want a rivalry keeps
+    // cold no longer freezes out of the night entirely.
+    const coldButStrong = yearningNightPursuit([debtWant({ heat: 0, frust: 0 })], LIU.id, resolve);
+    assert.equal(coldButStrong?.id, BAI.id);
+    assert.equal((coldButStrong as { intrude?: boolean }).intrude, undefined);
+    // A cold AND weak bond (tension below bondYearnTension 0.5) stays home:
+    // debtWant weight 0.9 × (1 − 0.6) = 0.36 < 0.5.
+    assert.equal(
+        yearningNightPursuit([debtWant({ heat: 0, frust: 0, sat: 0.6 })], LIU.id, resolve),
+        null,
+    );
 });
 
 test('H3 breaking + reckoning: edge/breaking debt barges in; the pair plays as 了結', () => {
@@ -332,4 +342,43 @@ test('H3b routing: a one-sided breaking intrusion forms the pair against a wary 
     const targets = computeSpatialRouting(actors, scenes, true, noWelcome);
     // Intrusion is a compulsion — it overrides tiredness and the shut door.
     assert.equal(targets.get(LIU.id), 'suHome');
+});
+
+test('H3d: cold mutual love (a rivalry kept it off the driver seat) still forms the night tryst', () => {
+    // The stall this fixes: a love want that never wins the driver seat stays at
+    // idle forcing forever, so the OLD night-pursuit (forcing-gated) never fired
+    // and the pair never formed. Now a cold-but-strong bond SEEKS by tension —
+    // welcome-gated, so a MUTUAL pair forms while a one-sided cold longing does not.
+    const resolve = (t: string) => (t === LIU.name ? LIU.id : t === BAI.name ? BAI.id : undefined);
+    const wants = [
+        loveWant({ characterId: LIU.id, target: BAI.name, heat: 0, frust: 0 }), // 柳→白, cold
+        loveWant({ characterId: BAI.id, target: LIU.name, heat: 0, frust: 0 }), // 白→柳, cold
+    ];
+    assert.equal(forcingLevel(wants[0]), 'idle'); // genuinely un-heated…
+    const pL = yearningNightPursuit(wants, LIU.id, resolve);
+    const pB = yearningNightPursuit(wants, BAI.id, resolve);
+    assert.equal(pL?.id, BAI.id); // …yet each still seeks the other,
+    assert.equal(pB?.id, LIU.id);
+    assert.equal((pL as { intrude?: boolean }).intrude, undefined); // politely (no barge-in).
+    assert.equal((pB as { intrude?: boolean }).intrude, undefined);
+
+    const scenes = [
+        { id: 'hall', privacyLevel: 0 },
+        { id: 'liuHome', privacyLevel: 4 },
+        { id: 'baiHome', privacyLevel: 4 },
+    ];
+    const welcome = (host: string, visitor: string) =>
+        (host === LIU.id && visitor === BAI.id) || (host === BAI.id && visitor === LIU.id) ? 1 : 0;
+    const actors = [
+        { id: LIU.id, sceneId: 'hall', homeSceneId: 'liuHome', fatigue: 0.6, pursue: { id: BAI.id, w: pL!.w } },
+        { id: BAI.id, sceneId: 'hall', homeSceneId: 'baiHome', fatigue: 0.6, pursue: { id: LIU.id, w: pB!.w } },
+    ];
+    const targets = computeSpatialRouting(actors, scenes, true, welcome);
+    // The mutual welcome + softened home pull lands both in ONE private home.
+    const liuAt = targets.get(LIU.id);
+    const baiAt = targets.get(BAI.id);
+    assert.equal(liuAt, baiAt, '柳白同宿一處（私會成局）');
+    assert.ok(liuAt === 'liuHome' || liuAt === 'baiHome', '落在某人的私宅');
+    // And that private pair with a live love want across it plays as a 幽會.
+    assert.equal(nightSceneKind([LIU, BAI], 4, wants), 'tryst');
 });

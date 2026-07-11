@@ -23,6 +23,7 @@ import {
     WANT,
     applyBeat,
     forcingPressure,
+    isBondLayer,
     tension,
     type Want,
 } from './want-core.ts';
@@ -254,6 +255,22 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             }),
         );
         actor = candidates.find((c) => c.characterId === nextId);
+    }
+
+    // H3d co-presence heat: a bond (love/debt) want warms just by sharing the
+    // stage with its target, even when a rivalry was the scene's driver. Without
+    // this a love want that never wins the driver seat stays frozen at idle and
+    // never reaches the night pair / breaking. Applied once per scene, only when
+    // the target is actually present, and skipped for a want already heated as
+    // this scene's driver (actedWants) so it isn't double-counted.
+    const presentIds = new Set(present.map((c) => c.characterId));
+    const presentNames = new Set(present.map((c) => c.name));
+    for (const w of input.wants) {
+        if (w.retired || actedWants.has(w.id)) continue;
+        if (!presentIds.has(w.characterId) || !isBondLayer(w.layer) || !w.target) continue;
+        if (presentIds.has(w.target) || presentNames.has(w.target)) {
+            w.heat += WANT.bondCopresenceHeat;
+        }
     }
 
     // Strict resolve pass: only edge-level acted wants are even judged (§2.31).
