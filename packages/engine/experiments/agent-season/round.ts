@@ -86,6 +86,7 @@ function mealSpotFor(c: Char): { line: string; cost: number } | null {
     return null;
 }
 import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
+import { pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
 import {
     type Play,
     PRODUCTION,
@@ -1099,7 +1100,7 @@ export async function runRound(
             } else if (t.tool === 'interact') {
                 if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話' };
             } else if (t.tool === 'wait') {
-                if (t.target) choseWait = { target: t.target, intent: t.intent ?? '守著等他出現，把話說開' };
+                if (t.target) choseWait = { target: t.target, intent: t.intent ?? '守著等人出現，把話說開' };
             }
         }
 
@@ -1241,7 +1242,7 @@ export async function runRound(
                     // re-guessing a stale coordinate next 時辰 (this is what kills the oscillation).
                     if (knowsRoutine(a, b)) {
                         a.waitingFor = a.waitingFor ?? { target: b.id, venue: a.venue, intent: p.interactIntent.intent, since: clock.currentTick };
-                        log(`    · ${a.name} 在 ${a.venue} 守著等 ${b.name}（他此刻在 ${b.venue}，尚未過來）。`);
+                        log(`    · ${a.name} 在 ${a.venue} 守著等 ${b.name}（${pronounFromBody(b.bodyFact)}此刻在 ${b.venue}，尚未過來）。`);
                     } else {
                         log(`    · ${a.name} 想在 ${venue} 找 ${b.name}，撲了個空（${b.name}此刻在 ${b.venue}）。`);
                     }
