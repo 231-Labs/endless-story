@@ -874,3 +874,18 @@ test('metabolism invariant: every occupation\'s rhythm is sustainable on a no-sc
         }
     }
 });
+
+test('deep-night work runs even on a fast-forwarded 深宵 (the sleeping mind still does its shift)', async () => {
+    const { cast, result } = await runFakeSeason(2);
+    // W1 real-run bug: every 深宵 was empty → fast-forward skipped consolidation,
+    // POV, want decay AND the per-day reset for the whole week. The reset is the
+    // mechanical proof the block ran regardless of wakefulness.
+    for (const c of cast) {
+        assert.equal(c.todayLedger.size, 0, `${c.name} todayLedger cleared at day end`);
+        assert.equal(c.scenesToday, 0, `${c.name} scenesToday reset at day end`);
+        assert.equal(c.occupiedRestOfDay, false, `${c.name} occupiedRestOfDay reset`);
+    }
+    // and the day-end marker appears once per day even if 深宵 fast-forwarded.
+    const deepRounds = result.rounds.filter((r) => r.part === '深宵');
+    assert.equal(deepRounds.length, 2, 'two 深宵 rounds over two days');
+});

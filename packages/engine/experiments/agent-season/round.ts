@@ -992,7 +992,52 @@ export async function runRound(
     log('──────────────────────────────────────────────────────────────────────');
     log(`時辰 ${clock.currentTick}  第${clock.day}日·${part}${night ? '（入夜）' : ''}  active=${active.length ? active.map((c) => c.name).join('、') : '（無）'}`);
 
-    // FAST-FORWARD an empty 時辰.
+    // SCHEDULED DEEP-NIGHT WORK — the sleeping mind's shift (self-model overwrite,
+    // POV diary, want decay/regeneration, per-day reset). Defined here so BOTH paths
+    // run it: a 深宵 where nobody stirred is the CANONICAL night, not an exception —
+    // fast-forwarding used to skip this entirely, so a whole real week passed with
+    // zero consolidations, zero diaries and zero want regeneration.
+    const deepNightWork = async (): Promise<void> => {
+        for (const c of cast) {
+            if (c.dead) continue;
+            const updated = await nightConsolidate(c, byId, clock.day, clock.currentTick, agent, castNames, showrunner);
+            if (updated.length) roundRec.consolidations.push({ char: c.name, updated });
+            // POV DAILY REFLECTION (narrative-subjective layer): a first-person, possibly
+            // biased account of THIS character's day (their ledger + wants + self-model),
+            // stored separately from the objective 時辰 章回. Read BEFORE the ledger clear.
+            const dayText = [...c.todayLedger.values()].join('\n').slice(0, 1200);
+            try {
+                const refl = await agent.povReflect({
+                    name: c.name,
+                    persona: c.persona,
+                    day: clock.day,
+                    todayText: dayText,
+                    wants: c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })),
+                    selfModel: c.coreIdentity.join('\n') || undefined,
+                    // pronoun guard: me + everyone today's ledger touched (the diary was the
+                    // one un-guarded path that let a 坤生 lover be written 他/男人).
+                    castBodies: [c, ...[...c.todayLedger.keys()].map((oid) => byId.get(oid)).filter(Boolean) as Char[]].map(
+                        (x) => ({ name: x.name, bodyFact: x.bodyFact }),
+                    ),
+                });
+                if (refl) (out.povReflections[c.id] ??= []).push({ day: clock.day, text: refl });
+            } catch {
+                /* non-fatal at night */
+            }
+            decayWants(c.wants);
+        }
+        for (const c of cast) {
+            c.todayLedger.clear();
+            c.scenesToday = 0;
+            c.addressedToday.clear();
+            c.occupiedRestOfDay = false; // a new day: the spent character rises again
+        }
+        out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
+        log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
+    };
+
+    // FAST-FORWARD an empty 時辰 — bodies rest, but on a 深宵 the sleeping mind still
+    // does its shift (consolidation/diary/regeneration must not depend on wakefulness).
     if (active.length === 0) {
         roundRec.fastForward = true;
         roundRec.passLine = deep
@@ -1002,6 +1047,7 @@ export async function runRound(
               : '這個時辰無人在外走動，一時無話。';
         for (const c of cast) if (!c.dead) applyRoundHealth(c, false, 0); // everyone rests → recover
         log(`  〔過場〕${roundRec.passLine}`);
+        if (deep) await deepNightWork();
         return roundRec;
     }
 
@@ -1465,7 +1511,11 @@ export async function runRound(
     // cheaper 家常 meal at their own home. The ONLY thing that blocks a meal is coin
     // (money < cost) — poverty, not scheduling, is the dramatic signal. GENERAL:
     // gated by hunger + venue geography + coin, never by character name.
-    for (const c of active) {
+    // EVERYONE eats — including a RESTING character (a person recovering at home
+    // still feeds themselves; only being in a scene blocks a meal). W1 starvation
+    // trap: the worn-down star rested every turn, the eat loop only covered
+    // `active`, and starving-halved sleep recovery kept her pinned at 危 forever.
+    for (const c of cast) {
         if (c.dead || c.sceneThisRound || c.hunger < HUNGER_FELT) continue;
         const spot = mealSpotFor(c);
         if (!spot) continue;
@@ -1481,42 +1531,7 @@ export async function runRound(
 
     // (f) 深宵 = scheduled night consolidation for everyone, then per-day reset.
     if (deep) {
-        for (const c of cast) {
-            if (c.dead) continue;
-            const updated = await nightConsolidate(c, byId, clock.day, clock.currentTick, agent, castNames, showrunner);
-            if (updated.length) roundRec.consolidations.push({ char: c.name, updated });
-            // POV DAILY REFLECTION (narrative-subjective layer): a first-person, possibly
-            // biased account of THIS character's day (their ledger + wants + self-model),
-            // stored separately from the objective 時辰 章回. Read BEFORE the ledger clear.
-            const dayText = [...c.todayLedger.values()].join('\n').slice(0, 1200);
-            try {
-                const refl = await agent.povReflect({
-                    name: c.name,
-                    persona: c.persona,
-                    day: clock.day,
-                    todayText: dayText,
-                    wants: c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })),
-                    selfModel: c.coreIdentity.join('\n') || undefined,
-                    // pronoun guard: me + everyone today's ledger touched (the diary was the
-                    // one un-guarded path that let a 坤生 lover be written 他/男人).
-                    castBodies: [c, ...[...c.todayLedger.keys()].map((oid) => byId.get(oid)).filter(Boolean) as Char[]].map(
-                        (x) => ({ name: x.name, bodyFact: x.bodyFact }),
-                    ),
-                });
-                if (refl) (out.povReflections[c.id] ??= []).push({ day: clock.day, text: refl });
-            } catch {
-                /* non-fatal at night */
-            }
-            decayWants(c.wants);
-        }
-        for (const c of cast) {
-            c.todayLedger.clear();
-            c.scenesToday = 0;
-            c.addressedToday.clear();
-            c.occupiedRestOfDay = false; // a new day: the spent character rises again
-        }
-        out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
-        log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
+        await deepNightWork();
     } else {
         for (const c of active) decayWants(c.wants);
     }
