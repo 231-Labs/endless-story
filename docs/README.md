@@ -23,8 +23,8 @@ Organised by the three architecture layers. Useful for implementation detail; no
 docs/
   public/           ← curated public spec (see above)
   protocol/         PRIMITIVES · WALRUS_STORAGE
-  narrative/        NARRATIVE_AGENTS · EVENT_LIFECYCLE · CONTENT_PIPELINE · PRODUCTION_ENGINE
-                      PROMPTS · CHARACTER_ECONOMY · ASSET_MANAGEMENT · DEPLOYMENT
+  narrative/        NARRATIVE_AGENTS · ENGINE_CORE · EVENT_LIFECYCLE · CONTENT_PIPELINE
+                      PRODUCTION_ENGINE · PROMPTS · CHARACTER_ECONOMY · ASSET_MANAGEMENT · DEPLOYMENT
   participation/    PRODUCT_POSITIONING · PRODUCTION_PLAN · PITCH_DECK · API_CONTRACT
   research/         WHITEPAPER (long-form research notes)
 ```
