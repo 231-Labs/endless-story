@@ -57,8 +57,10 @@ POV 章回 / reflection / dream / resource 全走 `suix_queryEvents`。把這個
 > 結果是**獨立的 [`packages/indexer`](../../packages/indexer/)（不是 `runner` 內的 service）**，採**透明 sdk 縫**而非 `DATA_SOURCE=api` HTTP 端點重寫：
 > - 縫在 [`sdk/src/read/query-retry.ts`](../../packages/sdk/src/read/query-retry.ts)：有註冊 store 時 `queryEventsWithRetry` 改讀 store，回傳同一個 `{ data, hasNextPage, nextCursor }` 信封，**所有 caller 不改一行**；無 store 時退回原本的 live-RPC 重試路。
 > - web 在 `runTickLoopAction` 經 [`lib/server/event-store.ts`](../../packages/web/src/lib/server/event-store.ts) 註冊 `PgEventStore`，**gate 在 `DATABASE_URL`**：沒設＝no-op、讀續走 RPC；註冊失敗（DB 連不上）吞掉、下個 tick 重試，永不弄壞 tick。
-> - capture ＝**自架 poller**（[`poll.ts`](../../packages/indexer/src/poll.ts) 的 `FetchPage`：JSON-RPC adapter 為現在的 stopgap、GraphQL 為 7/31 後的耐久路），落 Postgres；事件身分＝鏈上 `(txDigest, eventSeq)`，故換 source 不變身分。早期的 Surflux Flux 推流 capture（`capture.ts`/`flux.ts`）已被自架輪詢取代（dashboard 不穩），檔案暫留樹中。
-> - 仍待：web 的 `api` HTTP 端點（characters/chapters/scenes…）＋ `NEXT_PUBLIC_DATA_SOURCE=api` 全切（上面兩個 bullet），讓 web runtime **完全零 RPC**；目前縫只把**事件讀**導向 store，非事件讀（object/tx）仍直連。
+> - capture ＝**自架 poller**（[`poll.ts`](../../packages/indexer/src/poll.ts) 的 `FetchPage`），落 Postgres；事件身分＝鏈上 `(txDigest, eventSeq)`，故換 source 不變身分。早期的 Surflux Flux 推流 capture（`capture.ts`/`flux.ts`）已被自架輪詢取代（dashboard 不穩），檔案暫留樹中。
+> - 仍待：web 的 `api` HTTP 端點（characters/chapters/scenes…）＋ `NEXT_PUBLIC_DATA_SOURCE=api` 全切（上面兩個 bullet），讓 web runtime **完全零直連鏈**；目前縫只把**事件讀**導向 store，非事件讀（object/tx）仍直連 gRPC。
+>
+> **進度（2026-07-07，PR [#78](https://github.com/231-Labs/endless-story/pull/78) 已併）**：整個 repo 已從棄用的 JSON-RPC 遷到 **gRPC Core API**（object/tx/coin/balance 讀取 + 上鏈）＋ **GraphQL**（事件查詢，gRPC 無 `queryEvents` 對應）。poller 的 `FetchPage` 現在**預設 `graphqlFetchPage`**（`SUI_GRAPHQL_URL`，預設官方 testnet GraphQL），`jsonRpcFetchPage` 留作退路;無 store 時 `queryEventsWithRetry` 也 fallback GraphQL。本檔上文的 `SUI_RPC_URL` / `suix_queryEvents` / 「web 不碰 RPC」措辭是遷移前的規劃語境，現況讀取層＝gRPC + GraphQL，寫路徑走 sdk 的 `execute` seam（`signAndExecute` / `normalizeTxResult` / `findCreatedObjectId`）。
 
 ### Phase P2 — mainnet 換軌
 | 項目 | testnet 現況 | production |
