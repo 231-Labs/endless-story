@@ -409,7 +409,7 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
 
     const sceneCast = async (ids: string[], today: number): Promise<SceneLoopCastMember[]> =>
         Promise.all(
-            ids.map(async (id) => {
+            ids.filter((id) => world.castById(id)).map(async (id) => {
                 const m = world.castById(id)!;
                 const hot = world.liveWantsOf(id)[0];
                 const recalls = hot ? await recall.recall(id, hot.desc, 3, today) : [];
