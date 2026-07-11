@@ -445,6 +445,7 @@ async function doInteract(
     priorTail?: string,
     reviewCtr?: ReviewCounter,
     chapterCtr?: ChapterReviewCounter,
+    opts?: { maxTurns?: number },
 ): Promise<SceneRecord> {
     const venue = a.venue;
     const isPrivate = !isPublicVenue(venue); // a home / private venue → private
@@ -468,7 +469,7 @@ async function doInteract(
         isPrivate,
         clock: clockLabel,
         stake: `${a.name}${intent}。`,
-        maxTurns: worn ? 3 : undefined,
+        maxTurns: worn ? 3 : opts?.maxTurns,
         emotionalStance: consummate ? 'consummate' : undefined,
         etiquette: WORLD_PREMISE, // pinned era facts colour every beat (anti-anachronism)
         cast,
@@ -1556,7 +1557,7 @@ export async function runRound(
             const scene = await doInteract(
                 a,
                 b,
-                `在年底大會串的戲台上，合演這一齣新排的《${play.title}》`,
+                `在年底大會串的戲台上，領銜合演這一齣新排的《${play.title}》——台下滿座，同行都來了，一季的積怨與情分都坐在台下看著；這一場定春雪社的名`,
                 clock,
                 night,
                 agent,
@@ -1567,6 +1568,9 @@ export async function runRound(
                 undefined,
                 out.review,
                 out.chapterReview,
+                // The finale is the season's PAYOFF, not a want negotiation — give it
+                // room to be a real performance set-piece (body's veto still wins).
+                { maxTurns: 10 },
             );
             out.premiere = scene;
             out.boxOffice = computeBoxOffice(play, cast);
