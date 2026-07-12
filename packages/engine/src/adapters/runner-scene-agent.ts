@@ -19,6 +19,7 @@ import type {
     GenesisWant,
     RippleJudgeDelta,
     SceneAgentPort,
+    EvolveSecretInput,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
 } from '../ports.ts';
@@ -292,6 +293,48 @@ export class RunnerSceneAgent implements SceneAgentPort {
             return { desc, layer };
         } catch {
             return null; // non-fatal: no want this night
+        }
+    }
+
+    /** NIGHTLY 心事自改 — the secret moves to its own next step when today truly
+     *  landed on it. Same-heart rule: the new matter must grow from the OLD one's
+     *  own grain (a demanded 認 in hand → 留不留/還來不來), never invented plot. */
+    async evolveSecret(input: EvolveSecretInput): Promise<string | null> {
+        const system = [
+            '深宵。你替一個人照看TA埋在心底、沒對人說過的那樁心事。今天有些事真的落了地。',
+            '先判斷:落地之事是否真的「兌了/推翻/往前推了」這樁心事?若沒有真碰到它——回 {"secret":""}(保持不變)。',
+            '若真碰到了,替TA把心事改寫成它自己的下一步。',
+            '',
+            '**鐵則**:',
+            '- 新心事必須從舊心事自己的紋理長出來,是同一顆心的下一步(例:苦等的一句「認」真拿到了手,懸著的自然變成「往後TA留不留/還來不來」)。不許新編劇情、不許引入沒發生的事。',
+            '- 仍是「沒說出口的心事」——不是決定,不是計畫,不寫TA打算怎麼做。',
+            '- 2-3句,寫法同原心事的口吻(第三人稱的內心白描);提到旁人用名字。',
+            '- 比喻的本性不許漂移:情分的帳仍是情分,不變銀錢文書。',
+            '- 用TA的性子:爽利的不繞彎、藏心事的留白、傲的不說滿。',
+            '',
+            '嚴格只輸出 JSON:{"secret":"…"} 或 {"secret":""}。不要 markdown。',
+        ].join('\n');
+        const user = [
+            `# TA是誰\n${input.name}:${input.persona}`,
+            input.selfModel?.length ? `\n# TA此刻怎麼看自己\n${input.selfModel.join('\n')}` : '',
+            `\n# 那樁心事(此刻的樣子)\n${input.secret}`,
+            `\n# 今天真落了地的事\n${input.landed.map((d) => `- ${d}`).join('\n')}`,
+            `\n第${input.day}日夜。這樁心事,如今變成什麼樣子了?`,
+        ].join('\n');
+        try {
+            const client = llmText.createTextClient({ kind: 'primary' });
+            const res = await client.chat({
+                model: client.defaultModel,
+                system,
+                messages: [{ role: 'user', content: user }],
+                maxTokens: 320,
+                temperature: 0.75,
+            });
+            const obj = extractRewriteJson(res.text) as { secret?: unknown } | null;
+            const next = typeof obj?.secret === 'string' ? obj.secret.trim() : '';
+            return next || null;
+        } catch {
+            return null; // non-fatal: the matter keeps its shape tonight
         }
     }
 

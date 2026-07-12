@@ -1004,3 +1004,24 @@ test('intimacy is negotiated in-scene: advance→accept opens the register; decl
     const declined = await runSceneLoop({ ...base, sceneId: 'nego2', agent: mk(['advance', 'decline', undefined, undefined]) });
     assert.equal(declined.intimacyAccepted, false, 'a decline is honoured — no event, no status');
 });
+
+// ── 心事自改 (secret evolution) ────────────────────────────────────────────────
+test('心事自改: a landed milestone moves the secret to its next step, and it persists across seasons', async () => {
+    const [jin] = buildCast(['金鳳']);
+    const fake = new FakeSceneAgent();
+    const seed = jin.secret;
+    // nothing landed → the matter keeps its shape
+    assert.equal(await fake.evolveSecret({ name: jin.name, persona: jin.persona, secret: seed, landed: [], day: 5 }), null);
+    // a landed resolution → the secret moves (and differs from the frozen seed)
+    const evolved = await fake.evolveSecret({
+        name: jin.name, persona: jin.persona, secret: seed,
+        landed: ['「要他當面認一句欠我的」——他親口說了我認'], day: 5,
+    });
+    assert.ok(evolved && evolved !== seed, 'secret evolved off the seed');
+    jin.secret = evolved!;
+    // survives snapshot → restore (else next week re-freezes the old matter)
+    const snap = snapshotCast([jin], 41, []);
+    const fresh = buildCast(['金鳳']);
+    restoreCast(fresh, snap);
+    assert.equal(fresh[0].secret, evolved, 'evolved secret carried across the season boundary');
+});

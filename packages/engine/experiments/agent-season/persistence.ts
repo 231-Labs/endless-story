@@ -39,6 +39,8 @@ export interface CharSnapshot {
     /** seasons already lived (FINITUDE). Absent in an old snapshot → treated as 0. On
      *  restore it is bumped +1, so a restored character knows one more year has passed. */
     seasonsLived?: number;
+    /** The EVOLVED unspoken matter (心事自改). Absent → seed secret stands. */
+    secret?: string;
 }
 
 /** A versioned, JSON-serializable snapshot of the whole cast's mutated overlay. */
@@ -69,6 +71,7 @@ export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: stri
             hunger: c.hunger,
             carried: c.carried.length ? c.carried.map((it) => ({ ...it })) : undefined,
             seasonsLived: c.seasonsLived,
+            secret: c.secret,
         };
     }
     return { version: 1, savedTick, establishedPairs, cast: out };
@@ -104,6 +107,7 @@ export function restoreCast(cast: Char[], snap: CastSnapshot): string[] {
         c.carried = s.carried ? s.carried.map((it) => ({ ...it })) : [];
         c.hunger = s.hunger;
         c.seasonsLived = (s.seasonsLived ?? 0) + 1; // one more year has passed
+        if (s.secret) c.secret = s.secret; // the matter kept the shape it grew into
         restored.push(c.id);
     }
     return restored;

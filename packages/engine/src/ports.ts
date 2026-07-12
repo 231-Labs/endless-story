@@ -126,6 +126,19 @@ export interface SelfModelConsolidateInput {
     day: number;
 }
 
+/** NIGHTLY 心事自改 input — the unspoken matter and what LANDED on it today. */
+export interface EvolveSecretInput {
+    name: string;
+    persona: string;
+    /** The unspoken matter as it currently stands. */
+    secret: string;
+    /** What actually landed today that touches it (resolved-want notes, vows kept). */
+    landed: string[];
+    /** Current self-model lines (grounding). */
+    selfModel?: string[];
+    day: number;
+}
+
 export interface SelfModelConsolidateReply {
     /** otherId → the NEW ≤40字 first-person view. OVERWRITES the map entry
      *  (latest-wins) — the old line is superseded, never kept alongside. */
@@ -184,6 +197,13 @@ export interface SceneAgentPort extends SceneAgent {
      *  (never steers it) — a true verdict promotes the pair into the established
      *  set, unlocking (not scripting) the consummate register. */
     judgeEstablished(input: JudgeEstablishedInput): Promise<boolean>;
+    /** NIGHTLY 心事自改: the secret is a LIVING thing, not frozen canon. When
+     *  something真的落地 today (a milestone resolved, a vow kept), the unspoken
+     *  matter may move to its own next step — a debt collected becomes 「留不留」.
+     *  Frozen secrets re-seed the same want forever (金鳳 kept collecting a debt
+     *  the world had already paid). Grows FROM the old secret in the same heart;
+     *  never invents plot, never decides futures. null → unchanged. */
+    evolveSecret(input: EvolveSecretInput): Promise<string | null>;
 }
 
 // ── Recall (memory) ──────────────────────────────────────────────────────────

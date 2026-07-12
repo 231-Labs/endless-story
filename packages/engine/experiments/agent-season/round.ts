@@ -1137,6 +1137,38 @@ export async function runRound(
             } catch {
                 /* non-fatal at night */
             }
+            // 心事自改 (the day-end log line promised this; now it is real): when a
+            // narrative want truly RESOLVED today, the character's SECRET may move to
+            // its own next step. Frozen canon otherwise re-seeds the same want forever
+            // (金鳳 kept collecting a debt the world had already paid, §W5).
+            const landed = c.wants
+                .filter(
+                    (w) =>
+                        w.kind === 'narrative' &&
+                        w.retired &&
+                        !!w.resolvedNote &&
+                        w.resolvedTick != null &&
+                        w.resolvedTick > clock.currentTick - 6,
+                )
+                .map((w) => `「${w.desc}」——${w.resolvedNote}`);
+            if (landed.length && c.secret) {
+                try {
+                    const evolved = await agent.evolveSecret({
+                        name: c.name,
+                        persona: c.persona,
+                        secret: c.secret,
+                        landed,
+                        selfModel: c.coreIdentity.length ? c.coreIdentity : undefined,
+                        day: clock.day,
+                    });
+                    if (evolved) {
+                        c.secret = evolved;
+                        log(`  〔心事自改〕${c.name}：${evolved}`);
+                    }
+                } catch {
+                    /* non-fatal at night */
+                }
+            }
             decayWants(c.wants);
         }
         for (const c of cast) {
