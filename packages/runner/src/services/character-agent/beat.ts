@@ -50,7 +50,9 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
     // The model often self-prefixes its own name (「蘇映雪：…」); every renderer
     // prepends the speaker itself, so strip a leading self-name here (once).
     const esc = input.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const deName = (t: string): string => t.replace(new RegExp(`^${esc}\\s*[:：]\\s*`), '');
+    // Strips 「名：」 AND a bare leading self-name (「連翹把靠旗…」) — but not a
+    // possessive self-reference (「連翹的靴」 keeps its subject).
+    const deName = (t: string): string => t.replace(new RegExp(`^${esc}(?!的)\\s*[:：]?\\s*`), '');
     return {
         beat: deName(s(o.beat)) || '（沉默。）',
         inner: deName(s(o.inner)),
@@ -63,6 +65,9 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
 
 export interface JudgeResolveInput {
     name: string;
+    /** Owner's 身/sex phrase — pronoun guard for the note (an unguarded judge wrote
+     *  他咬緊牙關 for a 坤生). */
+    ownerBody?: string;
     wantDesc: string;
     /** The scene beats, newest last. */
     beats: string[];
@@ -258,6 +263,7 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
                 '你就是這個人。夜深了，替自己把今天在心裡過一遍——用**第一人稱**，寫我今天遇上了什麼、' +
                 '心裡是什麼滋味、我還想怎麼樣。這是**我的主觀**，可以偏心、可以只記我在意的、可以埋怨、' +
                 '可以自欺；不是公正的流水帳。只寫一小段（60-140字），不要標題、不要 JSON、不要分行成清單。' +
+                '這帳是一夜一夜寫下去的：別把前幾夜寫過的那句命題再抄一遍，今晚只寫今晚真正戳到我的。' +
                 bodyNote,
             messages: [
                 {
@@ -421,7 +427,9 @@ export async function judgeWantResolved(input: JudgeResolveInput): Promise<Resol
                 '你是嚴格的「不可逆裁判」。判斷一件懸著的心事，在這場戲裡有沒有被**當事人自己**用' +
                 '**放不回頭的行動**了結。鐵則：①只認當事人自己的抉擇成定局，別人的動作不算;' +
                 '②拖延不算（收拾行李、說改天再說、先忍下、再想想，一律 resolved=false）;' +
-                '③說破/做成/斷絕/應承這類覆水難收的才算。輸出 JSON：' +
+                '③說破/做成/斷絕/應承這類覆水難收的才算。' +
+                (input.ownerBody ? `④代詞鐵則：心事主人${input.name}是${pronounFromBody(input.ownerBody)}（${input.ownerBody}），note 裡的代詞照此寫。` : '') +
+                '輸出 JSON：' +
                 '{"resolved":true/false,"note":"若 true,一句寫明是哪個放不回頭的行動"}。不要 markdown。',
             messages: [
                 {

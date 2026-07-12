@@ -110,6 +110,8 @@ export interface SceneLoopResult {
     /** An in-scene advance→accept happened: the pair BECAME lovers here (an
      *  event, not a verdict) — callers record it as established. */
     intimacyAccepted: boolean;
+    /** Beat index where the accept landed (for the on-page 床 test). */
+    acceptedAtBeat?: number;
 }
 
 /** §2.45: privacy drops the wall — alone with the want's target in a private
@@ -280,6 +282,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 registerOpen = true;
                 result.intimacyAccepted = true;
                 result.intimacyGateOpened = true;
+                result.acceptedAtBeat = result.beats.length - 1;
                 pendingAdvanceBy = null;
                 // The register opened MID-scene: the cap must open with it, or the
                 // world grants permission but not time (a negotiated first night was
@@ -354,12 +357,16 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     // fails to form (H3c: don't make public harder until the private path lands).
     for (const w of actedWants.values()) {
         if (w.retired) continue;
+        // A targeted want is only judged where its target actually IS: a semantic
+        // match once resolved 金鳳's debt-want inside a 江柳 scene (wrong person).
+        if (w.target && !presentIds.has(w.target) && !presentNames.has(w.target)) continue;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: input.cast });
         if (forcingPressure(w) < effR) continue;
         const owner = input.cast.find((c) => c.characterId === w.characterId);
         if (!owner) continue;
         const verdict = await agent.judgeWantResolved({
             name: owner.name,
+            ownerBody: owner.bodyFact,
             wantDesc: w.desc,
             beats: log,
         });

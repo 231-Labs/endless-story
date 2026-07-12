@@ -633,8 +633,12 @@ async function doInteract(
         part: clock.partOfDay,
         isPublic: isPublicVenue(venue),
         isPrivate,
-        // Ex-post: a scene may BECOME consummate through its own advance→accept.
-        consummate: consummate || loop.intimacyAccepted,
+        // Ex-post 床 needs to have HAPPENED ON PAGE: an accept opens the register,
+        // but the stamp requires them to have actually stayed in it (≥4 beats past
+        // the accept). A vow/taunt mis-tag used to stamp 床 on a doorway scene.
+        consummate:
+            consummate ||
+            (loop.intimacyAccepted && loop.acceptedAtBeat != null && loop.beats.length - 1 - loop.acceptedAtBeat >= 4),
         intimacyGate: loop.intimacyGateOpened,
         intimacyAccepted: loop.intimacyAccepted || undefined,
         participants: [a.name, b.name],
@@ -1126,7 +1130,13 @@ export async function runRound(
                     day: clock.day,
                     todayText: dayText,
                     wants: c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })),
-                    selfModel: c.coreIdentity.join('\n') || undefined,
+                    // Day-rotated identity injection: a fixed full dump let one 命題句
+                    // anchor every night's diary (「上海會不會終於看見我」×3 nights).
+                    selfModel:
+                        (c.coreIdentity.length > 3
+                            ? [c.coreIdentity[0], ...c.coreIdentity.slice(1).filter((_, i) => (i + clock.day) % 2 === 0)]
+                            : c.coreIdentity
+                        ).join('\n') || undefined,
                     // pronoun guard: me + everyone today's ledger touched (the diary was the
                     // one un-guarded path that let a 坤生 lover be written 他/男人).
                     castBodies: [c, ...[...c.todayLedger.keys()].map((oid) => byId.get(oid)).filter(Boolean) as Char[]].map(
@@ -1482,7 +1492,7 @@ export async function runRound(
             scenes.push(scene);
             // 相許 as an EVENT (no judge): they walked there themselves in this
             // scene; the world records the fact (for 修羅場 stakes + persistence).
-            if (scene.intimacyAccepted) {
+            if (scene.intimacyAccepted && !areEstablishedLovers(a, b)) {
                 const pk = [a.id, b.id].sort().join('|');
                 if (!out.establishedDyn.has(pk)) {
                     out.establishedDyn.add(pk);
