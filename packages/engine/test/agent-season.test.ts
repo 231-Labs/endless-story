@@ -904,3 +904,19 @@ test('orthogonal threads: regen sampling picks the memories FURTHEST from curren
     assert.ok(picked.includes(memories[2]), '攢錢線頭被選中');
     assert.ok(!picked.includes(memories[0]), '台心同題記憶不被選（它已經在燒）');
 });
+
+test('season restore rebases want clocks: last season\'s resolutions are NOT "just resolved" tonight', () => {
+    const [a] = buildCast(['柳生春']);
+    a.wants[0].retired = true;
+    a.wants[0].resolvedTick = 41; // resolved on the prior season's last day
+    a.wants[0].bornTick = 2;
+    const snap = snapshotCast([a], 42);
+    const [b] = buildCast(['柳生春']);
+    restoreCast([b], snap);
+    const w = b.wants.find((x) => x.retired)!;
+    assert.equal(w.resolvedTick, -1, 'resolvedTick rebased below the new season clock');
+    assert.equal(w.bornTick, 2 - 42, 'bornTick rebased (continuous age)');
+    // The nightly justResolved window (resolvedTick > tick-6) must NOT catch it on day 1.
+    const tick = 5;
+    assert.ok(!(w.resolvedTick! > tick - 6), 'not counted as 承接 on the new season\'s first night');
+});

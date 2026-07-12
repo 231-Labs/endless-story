@@ -85,7 +85,16 @@ export function restoreCast(cast: Char[], snap: CastSnapshot): string[] {
         const s = snap.cast[c.id];
         if (!s) continue; // absent → keep seed defaults
         c.relationshipViews = new Map(Object.entries(s.relationshipViews));
-        c.wants = s.wants.map((w) => ({ ...w }));
+        // REBASE want time fields onto the NEW season's clock (which restarts at 0):
+        // without this, every want the prior season resolved at tick 35-41 counts as
+        // "just resolved" in EVERY nightly regen window of the new season (a 承接
+        // flood drowning the 線頭/世道 sources), and restored wants look newborn to
+        // age-based fading. savedTick is the prior season's end tick.
+        c.wants = s.wants.map((w) => ({
+            ...w,
+            bornTick: w.bornTick - snap.savedTick,
+            resolvedTick: w.resolvedTick != null ? w.resolvedTick - snap.savedTick : w.resolvedTick,
+        }));
         c.coreIdentity = [...s.coreIdentity];
         c.health = s.health;
         c.fatigue = s.fatigue;
