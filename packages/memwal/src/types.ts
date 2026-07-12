@@ -136,6 +136,9 @@ export interface MemWalManualConfig {
     ownerCapId?: string;
     /** Sui network (default: mainnet) */
     suiNetwork?: "testnet" | "mainnet";
+    /** Optional gRPC endpoint override (falls back to env SUI_GRPC_URL, then the
+     *  network's public fullnode). Used when no `suiClient` is injected. */
+    suiGrpcUrl?: string;
     /**
      * Full SEAL server configs, including committee aggregators.
      * Takes priority over legacy sealKeyServers when provided.
