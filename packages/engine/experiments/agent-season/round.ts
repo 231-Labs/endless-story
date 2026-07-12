@@ -93,7 +93,7 @@ function mealSpotFor(c: Char): { line: string; cost: number } | null {
 }
 import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
 import { pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
-import { bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
+import { bumpActorFatigue, pickOrthogonalThreads, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
 import {
     type Play,
     PRODUCTION,
@@ -832,6 +832,15 @@ async function nightConsolidate(
             .filter((w) => w.retired && w.resolvedTick != null && w.resolvedTick > tick - PARTS_PER_DAY)
             .map((w) => w.desc);
         const liveWants = c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc }));
+        // The door out of a single-axis loop: sample the character's OWN memory
+        // threads FURTHEST from everything they already want (incl. secret — for a
+        // single-axis character the secret IS the burning theme), so 識字/攢錢/舊債
+        // can become a want when pressure hits, not just the same theme's successor.
+        const otherThreads = pickOrthogonalThreads(
+            c.thickMemories.map((m) => m.text),
+            [...liveWants.map((w) => w.desc), ...justResolved, c.secret ?? ''],
+            3,
+        );
         const spawn = await agent.regenerateWant({
             name: c.name,
             persona: c.persona,
@@ -841,6 +850,7 @@ async function nightConsolidate(
             justResolved,
             worldPressure: worldPressureFor(c, day, showrunner),
             lifecycle: lifecycleFor(c),
+            otherThreads,
         });
         if (process.env.SEASON_REGEN_DIAG) {
             // eslint-disable-next-line no-console

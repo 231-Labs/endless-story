@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { FakeSceneAgent } from '../src/adapters/local/fake-scene-agent.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
 import { LocalClock } from '../src/adapters/local/clock.ts';
-import { runSceneLoop, makeClock, spawnWant, type SceneLoopCastMember } from '../src/index.ts';
+import { runSceneLoop, makeClock, spawnWant, pickOrthogonalThreads, type SceneLoopCastMember } from '../src/index.ts';
 // Import the node-clean PURE leaf directly — the character-agent barrel is
 // tsx-only (`.js` specifiers + eager llm import) and cannot load under node --test.
 import { buildBeatSystemPrompt, pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
@@ -888,4 +888,19 @@ test('deep-night work runs even on a fast-forwarded 深宵 (the sleeping mind st
     // and the day-end marker appears once per day even if 深宵 fast-forwarded.
     const deepRounds = result.rounds.filter((r) => r.part === '深宵');
     assert.equal(deepRounds.length, 2, 'two 深宵 rounds over two days');
+});
+
+test('orthogonal threads: regen sampling picks the memories FURTHEST from current wants (the single-axis door)', () => {
+    const memories = [
+        '你要在一班名角裡站上台心，讓上海記住你靠身體掙來的名字。',
+        '你不認得幾個字，戲單上自己的名字你認不全，你想總有一天能自己唸給自己聽。',
+        '你有個鐵皮餅乾盒，攢著銅板要買一身真正屬於自己的靠，照現在的攢法還要三年。',
+        '台心那個位置你夜裡量過，七步半，你其實已經站過了，只是沒人看。',
+    ];
+    const wants = ['在一班名角裡，讓上海記住一個靠身體站上台心的人', '大會串的台心，我得拿自己的戲再踩一響'];
+    const picked = pickOrthogonalThreads(memories, wants, 2);
+    assert.equal(picked.length, 2);
+    assert.ok(picked.includes(memories[1]), '識字線頭（與台心 want 最不重疊）被選中');
+    assert.ok(picked.includes(memories[2]), '攢錢線頭被選中');
+    assert.ok(!picked.includes(memories[0]), '台心同題記憶不被選（它已經在燒）');
 });

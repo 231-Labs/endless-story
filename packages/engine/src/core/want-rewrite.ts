@@ -55,6 +55,45 @@ export interface RegenerateWantInput {
      *  character knows time is limited (lifecycle awareness, the antidote to a want
      *  that drifts forever). */
     lifecycle: string;
+    /** UNFINISHED LIFE THREADS: the character's own remembered threads FURTHEST
+     *  from their current wants (orthogonal sample via pickOrthogonalThreads) —
+     *  the door out of a single-axis loop where a resolved 台心 want forever
+     *  spawns the next 台心 want. Optional; empty = source unavailable. */
+    otherThreads?: string[];
+}
+
+/** Character-level n-grams of a Chinese text (punctuation/space stripped). */
+function grams(s: string, n = 4): Set<string> {
+    const clean = s.replace(/[\s「」『』，。！？；：、—…·()（）\[\]]/g, '');
+    const out = new Set<string>();
+    for (let i = 0; i + n <= clean.length; i++) out.add(clean.slice(i, i + n));
+    return out;
+}
+
+/**
+ * ORTHOGONAL THREAD SAMPLER — pick the K memories LEAST like the character's
+ * current wants (lowest char-4-gram overlap; ties keep input order). This is the
+ * mechanical diversity injection for want regeneration: a single-axis character's
+ * persona/secret always point the same way, so the door to their OTHER life
+ * threads (learning to read, the biscuit-tin savings, an unspoken debt) must be
+ * opened from their own memory, not from the theme already burning. Pure.
+ */
+export function pickOrthogonalThreads(
+    memories: ReadonlyArray<string>,
+    wantDescs: ReadonlyArray<string>,
+    k = 3,
+): string[] {
+    if (!memories.length) return [];
+    const wantGrams = new Set<string>();
+    for (const d of wantDescs) for (const g of grams(d)) wantGrams.add(g);
+    const scored = memories.map((m, i) => {
+        const g = grams(m);
+        let hit = 0;
+        for (const x of g) if (wantGrams.has(x)) hit += 1;
+        return { m, i, overlap: g.size ? hit / g.size : 0 };
+    });
+    scored.sort((a, b) => a.overlap - b.overlap || a.i - b.i);
+    return scored.slice(0, k).map((x) => x.m);
 }
 
 /** The full reply the agent returns for one character's ledger. */

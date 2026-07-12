@@ -236,6 +236,8 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '1. 承接——剛了結一樁,人到了新的地步:守住了的怕失去、得不到的想放下、了了債的問往後怎麼過。',
             '2. 世道——年關、大會串的死線、兜裡沒錢、餓著、班子的存亡,這些外頭的壓力逼出來的。',
             '3. 光陰——又過了一季,人不會一直年輕,機會不多了,有些事再不做就來不及。',
+            '4. 線頭——你記憶裡一直擱著、與眼下這樁無關的事:沒學會的、沒攢夠的、沒說出口的、欠著誰的。',
+            '   人不是只有一件事;有時新的想要,是從另一條線裡冒出來的。',
             '',
             '**鐵則**:',
             empty
@@ -243,6 +245,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
                 : '- TA 手上還有掛著的事、又沒什麼要緊的壓力,就別硬生——回 null。這不是配額,是真有才給。',
             '- 至多一條。≤30字,第一人稱,像 TA 會對自己說的話,別像旁白替 TA 安排劇情、別暗示告白攤牌。',
             '- 只誠實記一句「我如今想要什麼」,不寫計畫、不寫下一步怎麼做。',
+            '- 若新心事只是剛了結那樁換句話再要一遍,先想想線頭裡有沒有更真的——同一樁事不必翻來覆去地要。',
             '',
             '**輸出**:嚴格只輸出 JSON。有新心事:{"desc":"…","layer":"…"};' + (empty ? '' : '沒有就:{"desc":""};') + '不要 markdown。',
         ].join('\n');
@@ -254,6 +257,9 @@ export class RunnerSceneAgent implements SceneAgentPort {
             input.justResolved.length ? `\n# 你剛剛了結的事\n${input.justResolved.map((d) => `- ${d}`).join('\n')}` : '',
             `\n# 此刻壓在你身上的世道\n${input.worldPressure}`,
             `\n# 光陰\n${input.lifecycle}`,
+            input.otherThreads?.length
+                ? `\n# 你記憶裡擱著的別的線頭\n${input.otherThreads.map((t) => `- ${t}`).join('\n')}`
+                : '',
             `\n這時候,你（${input.name}）心裡有沒有一件新的想要,正從上面這些裡頭生出來?`,
         ].join('\n');
 
