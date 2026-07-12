@@ -1373,6 +1373,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                     venue: sceneName,
                                     clock,
                                     beats: loop.beats.map((b) => ({ name: b.name, text: b.text })),
+                                    // Identity guard: 行當 per participant so the POV
+                                    // writer never re-assigns an identity (坤生歸坤生).
+                                    castBodies: cs.map((x) => ({ name: x.name, role: roleById.get(x.id) })),
                                 })
                                 .catch(() => null);
                             if (povText) {

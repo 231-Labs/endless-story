@@ -366,7 +366,7 @@ async function renderPovVersions(
                 venueHint: venueByName.get(venue)?.hint,
                 clock: clockLabel,
                 beats: beats.map((b) => ({ name: b.name, text: b.text })),
-                castBodies: participants.map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+                castBodies: participants.map((x) => ({ name: x.name, bodyFact: x.bodyFact, role: x.role })),
             });
             if (v) out[c.name] = v;
         } catch {

@@ -147,7 +147,7 @@ async function main(): Promise<void> {
                 const m = l.match(/^([^：（]+)：(.+)$/);
                 return m ? { name: m[1], text: m[2] } : { name: '場記', text: l };
             }),
-            castBodies: cast.map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+            castBodies: cast.map((x) => ({ name: x.name, bodyFact: x.bodyFact, role: x.role })),
         });
         if (v) povs[c.name] = v;
         console.log(`✓ ${c.name} POV（${v?.length ?? 0} 字）`);

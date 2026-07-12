@@ -292,8 +292,11 @@ export interface PovSceneInput {
     clock: string;
     /** The scene's OBJECTIVE beats, in order (the canon this version must keep). */
     beats: Array<{ name: string; text: string }>;
-    /** 身/sex facts for pronoun correctness across the retelling. */
-    castBodies?: Array<{ name: string; bodyFact?: string }>;
+    /** Identity facts for everyone present: 身/sex for pronouns AND 行當 (role) so
+     *  the retelling never re-assigns an identity — a POV writer with no role data
+     *  once called the 花旦's hand 「坤生的手」 (the troupe's strongest 行當
+     *  association bled onto the wrong person). */
+    castBodies?: Array<{ name: string; bodyFact?: string; role?: string }>;
 }
 
 /**
@@ -312,8 +315,11 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
         const soil = input.memories?.length ? input.memories.map((m) => `- ${m}`).join('\n') : '';
         const bodies = (input.castBodies ?? [])
             .filter((c) => c.name)
-            .map((c) => `${c.name}是${pronounFromBody(c.bodyFact)}（${c.bodyFact ?? '身不詳'}）`);
-        const bodyNote = bodies.length ? `\n【在場人的身（代詞鐵則）】${bodies.join('、')}——坤生／女子縱台上扮男，心裡仍是「她」。` : '';
+            .map((c) => `${c.name}＝${c.role ?? '行當不詳'}｜${pronounFromBody(c.bodyFact)}（${c.bodyFact ?? '身不詳'}）`);
+        const bodyNote = bodies.length
+            ? `\n【在場人的身份（鐵則）】${bodies.join('、')}。行當是誰的就是誰的——坤生、花旦、刀馬旦各歸其主，` +
+              '別把一個人的行當、來歷安到另一個人頭上；坤生／女子縱台上扮男，心裡仍是「她」。'
+            : '';
         const client = llmText.createTextClient({ kind: 'primary' });
         const res = await client.chat({
             model: client.defaultModel,
