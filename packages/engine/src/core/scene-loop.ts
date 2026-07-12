@@ -179,12 +179,12 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     const agent = input.agent ?? (await defaultAgent());
 
     const solo = present.length === 1;
-    // A consummate scene (established lovers, private, at night) earns MANY more beats —
-    // it is the emotional/physical climax and needs room to actually escalate into a real
-    // dramatic scene, not fade at the threshold. The bed-probe (bed-probe-long.ts) showed
-    // ~24 beats still escalate without degrading. TUNABLE via SEASON_BED_CAP (default 16);
-    // a hard ceiling of 32 keeps cost BOUNDED (never runaway). Restrained/public stay tight.
-    const consummateCap = Math.min(32, Math.max(1, Math.floor(Number(process.env.SEASON_BED_CAP ?? '16')) || 16));
+    // A register scene has NO narrative cap: the close beat is the one true exit — the
+    // pair decides where the night ends (a M/F first night self-closed at 11; a F/F
+    // 16-beat psychological duel hit the old wall still clothed). What remains is a
+    // RUNAWAY BACKSTOP only (cost fuse, never a curtain): default 32, hard 64.
+    // TUNABLE via SEASON_BED_CAP. Restrained/public scenes stay tight.
+    const consummateCap = Math.min(64, Math.max(1, Math.floor(Number(process.env.SEASON_BED_CAP ?? '32')) || 32));
     let maxTurns = input.maxTurns ?? (solo ? 1 : input.emotionalStance === 'consummate' ? consummateCap : input.isPrivate ? 5 : 4);
     const log: string[] = [];
     const actedWants = new Map<string, Want>();

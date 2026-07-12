@@ -489,7 +489,8 @@ test('per-scene weave: at least one PRIVATE scene carries a non-empty woven 章�
 
 test('床戲 beat cap: the consummate maxTurns default is > 8 (a bed scene can develop)', async () => {
     // A consummate scene with a non-leaving agent runs the FULL cap of beats. The default
-    // cap (SEASON_BED_CAP unset → 16) is well past the old 8, proving the lift landed.
+    // backstop (SEASON_BED_CAP unset → 32) is well past the old 8 — the close beat is the
+    // narrative exit; the cap is only a runaway cost fuse.
     const [liu, jin] = buildCast(['柳生春', '金鳳']);
     const cm = (c: Char, other: Char): SceneLoopCastMember => ({
         characterId: c.id, name: c.name, persona: c.persona, memories: [],
