@@ -971,10 +971,10 @@ test('the actor\'s own ending: a close beat wraps the scene before the cap', asy
 });
 
 test('intimacy is negotiated in-scene: advance→accept opens the register; decline is honoured', async () => {
-    const mk = (tags) => {
+    const mk = (tags: Array<'advance' | 'accept' | 'decline' | undefined>) => {
         let i = -1;
         return {
-            actBeat: async (inp) => {
+            actBeat: async (inp: unknown) => {
                 i += 1;
                 const tag = tags[i];
                 return { beat: `第${i}拍`, inner: '', intimacy: tag, close: i >= tags.length - 1 ? true : undefined };
