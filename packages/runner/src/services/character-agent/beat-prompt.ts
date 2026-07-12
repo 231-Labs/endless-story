@@ -230,10 +230,12 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             : '',
         input.consummate ? CONSUMMATE_BEAT_NOTE + genderNote(input) : '',
         input.intimacyOffered
-            ? '【方才那一拍】TA 遞了親近的意圖過來。接或不接，全由你此刻的心：接，就讓這一拍應上去（intimacy:"accept"）；不接，安安穩穩地把它放下（intimacy:"decline"），不必失禮也不必解釋——那也是一拍戲。'
+            ? '【方才那一拍】TA 遞了親近的意圖過來。接或不接，全由你此刻的心：接，就讓這一拍應上去（intimacy:"accept"）；不接，安安穩穩地把它放下（intimacy:"decline"），不必失禮也不必解釋——那也是一拍戲。' +
+              '**「接」只指一件事：你心裡允了這份肌膚親近。**若你這拍是接招、邀戰、譏誚回敬（「拿來看」「誰怕誰」之類），那是較勁不是允諾——不要標 accept；拿不準就什麼都不標。'
             : '',
         !input.intimacyOffered && input.intimacyPossible && !input.consummate
-            ? '【若你想】此處只你二人。若你此刻真起了親近TA的心，就讓這一拍帶著那個意圖（intimacy:"advance"）——但多數的夜，什麼也不必發生；由你的心與分寸。'
+            ? '【若你想】此處只你二人。若你此刻真起了親近TA的心，就讓這一拍帶著那個意圖（intimacy:"advance"）——但多數的夜，什麼也不必發生；由你的心與分寸。' +
+              '**「遞意」只指親近之心（意在這個人，想與TA肌膚相親）**；比武叫陣、威逼壓制、拿身子佔上風都不是遞意，別標。'
             : '',
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
         '一場戲裡，別把同一個比方、同一句口頭禪翻來覆去地用，話要活。',
