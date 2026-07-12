@@ -258,6 +258,13 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         });
 
         log.push(`${actor.name}：${r.beat}`);
+        // DAWN PRESSURE (world fact, not a director): some pairs structurally cannot
+        // close (an uncapped 金柳 replay rode its debt-loop straight into the 32 fuse,
+        // sailing PAST its own perfect curtain). Deep into a register night the sky
+        // starts paling in the scene log — the world states time, they decide the end.
+        if (registerOpen && turn === Math.floor((consummateCap * 3) / 4)) {
+            log.push('（夜已深透，天光快要透進來了）');
+        }
         result.beats.push({
             sceneId: input.sceneId,
             characterId: actor.characterId,
