@@ -51,6 +51,8 @@ export interface SceneLoopCastMember {
 export interface SceneLoopInput {
     sceneId: string;
     sceneName: string;
+    /** The venue's physical description (anti-teleport grounding for beats). */
+    sceneHint?: string;
     isPrivate: boolean;
     clock: string;
     /** External pressure line, injected on the first beat only. */
@@ -188,6 +190,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             tone: input.tone,
             clock: input.clock,
             sceneName: input.sceneName,
+            sceneHint: input.sceneHint,
             isPrivate: input.isPrivate,
             others: others.map((o) => ({
                 name: o.name,

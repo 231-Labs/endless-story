@@ -361,11 +361,14 @@ async function reviewBeats(
     participants: Char[],
     beats: Array<{ name: string; text: string; inner: string }>,
     ctr: ReviewCounter,
+    venue?: string,
 ): Promise<Array<{ name: string; text: string; inner: string }>> {
     if (!beats.length) return beats;
     try {
         const reply = await agent.reviewScene({
             worldPremise: WORLD_PREMISE,
+            venue,
+            venueHint: venue ? venueByName.get(venue)?.hint : undefined,
             participants: participants.map((c) => ({
                 name: c.name,
                 bodyFact: c.bodyFact,
@@ -466,6 +469,7 @@ async function doInteract(
     const loop = await runSceneLoop({
         sceneId: `d${clock.day}p${clock.tickOfDay}-${a.id}`,
         sceneName: venue,
+        sceneHint: venueByName.get(venue)?.hint,
         isPrivate,
         clock: clockLabel,
         stake: `${a.name}${intent}。`,
@@ -484,7 +488,7 @@ async function doInteract(
     // SELF-CHECK / REPAIR pass: re-read the rendered scene and REPLACE the beats with
     // the repaired ones (pronouns / anatomy / voice / anachronism / prose), before the
     // outcome propagates so ledgers + memory carry the corrected text.
-    if (reviewCtr) beats = await reviewBeats(agent, [a, b], beats, reviewCtr);
+    if (reviewCtr) beats = await reviewBeats(agent, [a, b], beats, reviewCtr, venue);
     const resolved = loop.resolved.map((r) => `${r.want.characterId}：${r.want.desc}｜${r.note ?? ''}`);
     const sceneText = beats.map((x) => `${x.name}：${x.text}`).join('\n');
 
@@ -606,7 +610,7 @@ export async function renderDiscovery(
         agent,
     });
     let beats = loop.beats.map((x) => ({ name: x.name, text: x.text, inner: x.inner }));
-    if (reviewCtr) beats = await reviewBeats(agent, [disc, a, b], beats, reviewCtr);
+    if (reviewCtr) beats = await reviewBeats(agent, [disc, a, b], beats, reviewCtr, a.venue);
     const sceneText = beats.map((x) => `${x.name}：${x.text}`).join('\n');
     // Propagate the rupture into every pairing's ledger → night consolidation rewrites edges.
     for (const [p, q] of [[disc, a], [disc, b], [a, disc], [b, disc]] as const) {

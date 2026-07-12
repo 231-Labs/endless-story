@@ -120,6 +120,10 @@ export interface ReviewSceneParticipant {
 export interface ReviewSceneInput {
     /** Pinned era facts (anti-anachronism). */
     worldPremise: string;
+    /** Where this scene physically happens (name + world hint) — feeds the
+     *  object-not-here check (a remembered prop from elsewhere must not appear). */
+    venue?: string;
+    venueHint?: string;
     participants: ReviewSceneParticipant[];
     beats: Array<{ name: string; text: string; inner?: string }>;
 }
@@ -157,13 +161,16 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
                 '②寫出不合其身子的器官／動作，或憑空生出兩人身上沒有的器官（尤其同性之間別寫「插入」「那沒根的東西」）；' +
                 '③口吻走樣、不像這個人；' +
                 '④時代錯亂（違反下面的世道鐵則）；' +
-                '⑤筆病——一面倒的獨角戲、對白太少（金瓶梅是話多的）、同一句口頭禪／比喻反覆。' +
+                '⑤筆病——一面倒的獨角戲、對白太少（金瓶梅是話多的）、同一句口頭禪／比喻反覆；' +
+                '⑥物不在場——把別處的物事寫成就在眼前（誰家窗台的花、誰房裡的擺設憑空出現在此處）；' +
+                '這類要嘛改成就地取材、要嘛改成用話語提及那件別處的東西。' +
                 '沒問題的拍，text 原樣照抄。只輸出 JSON：{"beats":[{"i":序號,"text":"改後這一拍"}...]}。不要 markdown。',
             messages: [
                 {
                     role: 'user',
                     content:
                         `【世道鐵則】${input.worldPremise}\n\n` +
+                        (input.venue ? `【此處】${input.venue}${input.venueHint ? `——${input.venueHint}` : ''}\n\n` : '') +
                         `【在場的人（性別代詞：${pronouns}）】\n${who}\n\n` +
                         `【這場戲逐拍】\n${numbered}\n\n` +
                         `逐拍校訂，回同樣 ${input.beats.length} 拍。`,
@@ -181,7 +188,15 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
         for (const raw of arr) {
             if (!raw || typeof raw !== 'object') continue;
             const idx = Number((raw as { i?: unknown }).i);
-            const t = s((raw as { text?: unknown }).text);
+            let t = s((raw as { text?: unknown }).text);
+            // The reviewer reads beats as 「名：text」 and tends to echo the name back
+            // into its revision — strip the speaker's own leading name (this was how
+            // the self-name doubling survived the actBeat strip).
+            const nm = input.beats[idx]?.name;
+            if (t && nm) {
+                const escNm = nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                t = t.replace(new RegExp(`^${escNm}\\s*[:：]\\s*`), '');
+            }
             if (Number.isInteger(idx) && t) revisedById.set(idx, t);
         }
         return {

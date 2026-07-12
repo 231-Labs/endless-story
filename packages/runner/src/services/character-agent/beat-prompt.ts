@@ -22,6 +22,10 @@ export interface ActBeatInput {
     /** Clock label, e.g. 黃昏. */
     clock: string;
     sceneName: string;
+    /** What this place physically is/looks like (the venue's world hint). Grounds the
+     *  beat in THIS room — the anti-teleport rule rides on it (a remembered object that
+     *  lives elsewhere must not materialize here). */
+    sceneHint?: string;
     isPrivate: boolean;
     /** Co-present characters (empty = alone). `role` = 行當; `tie` = the actor's
      *  OWN canon feeling toward them (e.g. 你對TA：師承) so address forms come
@@ -185,6 +189,9 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         `你就是${input.name}。${input.persona}${mem}`,
         input.tone ?? '',
         `【此刻】${input.clock}。${where}${input.stake ? `\n【風聲】${input.stake}` : ''}${state}${innerSecret}`,
+        input.sceneHint
+            ? `【此處光景】${input.sceneHint}。眼前只有此處真有的物事——記憶裡別處的東西（誰家窗台的花、誰房裡的擺設）不會憑空出現在這裡，除非有人隨身帶了來；要提別處的物件，用話語提，不用手指。`
+            : '',
         pronounNote(input),
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
         // A continuation picks up a still-warm private encounter mid-moment (general;
