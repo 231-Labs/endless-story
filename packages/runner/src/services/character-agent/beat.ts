@@ -57,6 +57,7 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
         addressed: addressed && addressed !== '無' ? addressed : undefined,
         move: move && move !== '無' ? move : undefined,
         close: o.close === true ? true : undefined,
+        intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
     };
 }
 

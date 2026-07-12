@@ -131,6 +131,9 @@ export interface SceneRecord {
     intimacyGate: boolean;
     participants: string[];
     participantIds: string[];
+    /** An in-scene advance→accept happened here: the pair BECAME lovers in this
+     *  scene (event, not verdict) — the caller records them as established. */
+    intimacyAccepted?: boolean;
     /** POV versions (追角 lens): participant name → the scene retold through their
      *  eyes (probe-validated subjective layer). Only rendered for FOLLOWED
      *  characters (SEASON_POV_CHARS) — cost scales with subscribers. */
@@ -630,8 +633,10 @@ async function doInteract(
         part: clock.partOfDay,
         isPublic: isPublicVenue(venue),
         isPrivate,
-        consummate,
+        // Ex-post: a scene may BECOME consummate through its own advance→accept.
+        consummate: consummate || loop.intimacyAccepted,
         intimacyGate: loop.intimacyGateOpened,
+        intimacyAccepted: loop.intimacyAccepted || undefined,
         participants: [a.name, b.name],
         participantIds: [a.id, b.id],
         povVersions,
@@ -1134,53 +1139,6 @@ export async function runRound(
             }
             decayWants(c.wants);
         }
-        // MILESTONE PROMOTION — establishment used to be static seed data, so a
-        // pair that crossed the confession line in play could never reach the
-        // consummate register (the post-W1 床戲/修羅場 drought). Candidates: both
-        // sides show a romantic signal toward each other (view or live want); the
-        // judge READS whether they are now 相許 — a promotion unlocks a register,
-        // it never scripts a scene.
-        const ROM = /情|愛|戀|癡|心上|相許/;
-        for (let i = 0; i < cast.length; i++) {
-            for (let j = i + 1; j < cast.length; j++) {
-                const a = cast[i];
-                const b = cast[j];
-                if (a.dead || b.dead) continue;
-                const key = [a.id, b.id].sort().join('|');
-                if (out.establishedDyn.has(key) || areEstablishedLovers(a, b)) continue;
-                const aView = a.relationshipViews.get(b.id);
-                const bView = b.relationshipViews.get(a.id);
-                const aWant = a.wants.some((w) => !w.retired && ROM.test(w.layer) && (w.target === b.id || w.target === b.name));
-                const bWant = b.wants.some((w) => !w.retired && ROM.test(w.layer) && (w.target === a.id || w.target === a.name));
-                // Candidate gate = mutual ATTENTION, judged by the LLM for meaning.
-                // A keyword regex cannot read a living pair's private imagery (蘇柳
-                // spoke in 拔暖/魂/骨縫 — zero 情愛 keywords — and never reached the
-                // judge). Both views existing, or mutual romantic wants, is enough;
-                // the judge's strict 相許 wording carries the real discrimination.
-                const aSignal = !!aView || aWant;
-                const bSignal = !!bView || bWant;
-                if (!aSignal || !bSignal) continue;
-                try {
-                    const yes = await agent.judgeEstablished({
-                        aName: a.name,
-                        bName: b.name,
-                        aView,
-                        bView,
-                        wants: [
-                            ...a.wants.filter((w) => !w.retired && (w.target === b.id || w.target === b.name)).map((w) => `${a.name}：${w.desc}`),
-                            ...b.wants.filter((w) => !w.retired && (w.target === a.id || w.target === a.name)).map((w) => `${b.name}：${w.desc}`),
-                        ],
-                        lastSceneTail: out.lastScene.get(key)?.tail,
-                    });
-                    if (yes) {
-                        out.establishedDyn.add(key);
-                        log(`  〔相許〕${a.name} 與 ${b.name}——兩心俱明，自今夜起是彼此的人（判官讀得，非導演安排）。`);
-                    }
-                } catch {
-                    /* no promotion on error */
-                }
-            }
-        }
         for (const c of cast) {
             c.todayLedger.clear();
             c.scenesToday = 0;
@@ -1490,6 +1448,15 @@ export async function runRound(
                 undefined, out.establishedDyn,
             );
             scenes.push(scene);
+            // 相許 as an EVENT (no judge): they walked there themselves in this
+            // scene; the world records the fact (for 修羅場 stakes + persistence).
+            if (scene.intimacyAccepted) {
+                const pk = [a.id, b.id].sort().join('|');
+                if (!out.establishedDyn.has(pk)) {
+                    out.establishedDyn.add(pk);
+                    log(`  〔相許〕${a.name} 與 ${b.name}——這一場裡遞了意、接了意，自此是彼此的人（他們自己走到的）。`);
+                }
+            }
             out.spotlight = bumpActorFatigue(out.spotlight, [a.id, b.id]);
             out.lastScene.set(pairKey, {
                 tick: clock.currentTick,

@@ -107,6 +107,9 @@ export interface SceneLoopResult {
     /** True when some beat ran privateAlone on a love-layer want — the ex-ante
      *  intimacy gate. Content rating (ex post) is the caller's judge call. */
     intimacyGateOpened: boolean;
+    /** An in-scene advance→accept happened: the pair BECAME lovers here (an
+     *  event, not a verdict) — callers record it as established. */
+    intimacyAccepted: boolean;
 }
 
 /** §2.45: privacy drops the wall — alone with the want's target in a private
@@ -170,7 +173,7 @@ function carriedInScene(
 }
 
 export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResult> {
-    const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false };
+    const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false, intimacyAccepted: false };
     const present = [...input.cast];
     if (present.length === 0) return result;
     const agent = input.agent ?? (await defaultAgent());
@@ -194,6 +197,12 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         return (wc ? tension(wc) : -1) > (wb ? tension(wb) : -1) ? c : b;
     });
 
+    // In-scene intimacy negotiation (no judge, no status gate): an 'advance'
+    // puts an overture on the table; the OTHER's 'accept' opens the register,
+    // a 'decline' clears it — both honoured. Seed-established pairs at night
+    // start with the register open (old lovers renegotiate nothing).
+    let registerOpen = input.emotionalStance === 'consummate' && input.isPrivate;
+    let pendingAdvanceBy: string | null = null;
     for (let turn = 0; turn < maxTurns; turn++) {
         if (!actor) break;
         const w = hottestOf(input.wants, actor.characterId);
@@ -206,8 +215,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         // so we do NOT require a live 愛/情 want to open the intimacy register — old lovers
         // going to bed need no unmet want to justify it. This is safely scoped: the
         // 'consummate' stance is only ever set for the established-lover night 床 scene.
-        const consummateScene =
-            input.emotionalStance === 'consummate' && input.isPrivate && present.length === 2;
+        const consummateScene = (registerOpen || (input.emotionalStance === 'consummate' && input.isPrivate)) && present.length === 2;
         const privateAlone =
             input.isPrivate &&
             present.length === 2 &&
@@ -244,7 +252,9 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             stateLine: actor.stateLine,
             innerSecret: actor.innerSecret,
             etiquette: input.etiquette,
-            consummate: gateBeat && input.emotionalStance === 'consummate',
+            consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
+            intimacyOffered: pendingAdvanceBy != null && pendingAdvanceBy !== actor.characterId,
+            intimacyPossible: input.isPrivate && present.length === 2 && !registerOpen,
         });
 
         log.push(`${actor.name}：${r.beat}`);
@@ -257,6 +267,19 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             addressed: r.addressed,
         });
         if (!result.actedCharacterIds.includes(actor.characterId)) result.actedCharacterIds.push(actor.characterId);
+        // Intimacy negotiation bookkeeping (their choices, honoured verbatim).
+        if (input.isPrivate && present.length === 2) {
+            if (r.intimacy === 'accept' && pendingAdvanceBy && pendingAdvanceBy !== actor.characterId) {
+                registerOpen = true;
+                result.intimacyAccepted = true;
+                result.intimacyGateOpened = true;
+                pendingAdvanceBy = null;
+            } else if (r.intimacy === 'decline') {
+                pendingAdvanceBy = null;
+            } else if (r.intimacy === 'advance') {
+                pendingAdvanceBy = actor.characterId;
+            }
+        }
         // The actor's own ending: a close beat (sleep/farewell/enough) wraps the
         // scene — length is theirs, the cap above is only a ceiling.
         if (r.close) break;

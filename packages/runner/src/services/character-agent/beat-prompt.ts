@@ -63,12 +63,16 @@ export interface ActBeatInput {
     carried?: string[];
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
-    /** §2.47/§2.53: the intimacy register is AVAILABLE (established pair, private,
-     *  night). Availability is permission, never a push: whether to be 風流 or
-     *  矜持, and when to close the scene, is the characters' own beat-by-beat
-     *  choice — the world's costs (the 時辰 spent, sleep compressed, the risk of
-     *  being walked in on) tax it honestly. */
+    /** §2.47/§2.53: the intimacy register is OPEN for this beat — either an old
+     *  established pair alone at night, or this scene's own advance→accept
+     *  negotiation opened it. Availability is permission, never a push. */
     consummate?: boolean;
+    /** The other JUST made an overture (their previous beat tagged 'advance'):
+     *  accepting or declining is entirely this actor's choice. */
+    intimacyOffered?: boolean;
+    /** Private 2-person scene where an overture is POSSIBLE this beat (no status
+     *  gate — wanting to be close is a choice, not a permission). */
+    intimacyPossible?: boolean;
 }
 
 /**
@@ -157,6 +161,12 @@ export interface BeatResult {
     /** The actor CLOSES the scene on this beat (sleep/farewell/enough) — their
      *  own ending, honoured by the loop. */
     close?: boolean;
+    /** Intimacy negotiation, self-tagged (private 2-person scenes only):
+     *  'advance' = this beat carries an overture toward the other;
+     *  'accept' / 'decline' = the answer to an overture on the table.
+     *  No judge, no status gate — the pair negotiates in-scene; a decline is
+     *  honoured and is itself a beat of drama. */
+    intimacy?: 'advance' | 'accept' | 'decline';
 }
 
 /** §2.43-validated pressure language: removes stalling, never writes the answer. */
@@ -219,14 +229,20 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             ? `【承接前情】你們方才已在此處相擁纏綿，這一刻是同一段未了的光景往下走，不是重新進門、不必再敲門落鎖，順著剛才的姿態與氣息接續。${input.priorTail ? `方才到這裡：${input.priorTail}` : ''}`
             : '',
         input.consummate ? CONSUMMATE_BEAT_NOTE + genderNote(input) : '',
+        input.intimacyOffered
+            ? '【方才那一拍】TA 遞了親近的意圖過來。接或不接，全由你此刻的心：接，就讓這一拍應上去（intimacy:"accept"）；不接，安安穩穩地把它放下（intimacy:"decline"），不必失禮也不必解釋——那也是一拍戲。'
+            : '',
+        !input.intimacyOffered && input.intimacyPossible && !input.consummate
+            ? '【若你想】此處只你二人。若你此刻真起了親近TA的心，就讓這一拍帶著那個意圖（intimacy:"advance"）——但多數的夜，什麼也不必發生；由你的心與分寸。'
+            : '',
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
         '一場戲裡，別把同一個比方、同一句口頭禪翻來覆去地用，話要活。',
         forceNote(input.forcing, input.privateAlone),
         input.consummate
             ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或（若你們往那處去了）床笫間的一下進退(一到三句)。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（這一拍把這場收了：睡去/道別/歇下，就 true）}。不要 markdown。'
+              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。'
             : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事(開放一句)。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（話已說盡、要收這場就 true）}。不要 markdown。',
+              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。',
     ]
         .filter(Boolean)
         .join('\n');

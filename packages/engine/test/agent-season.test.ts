@@ -969,3 +969,37 @@ test('the actor\'s own ending: a close beat wraps the scene before the cap', asy
     });
     assert.equal(loop.beats.length, 2, 'the scene ended on the actor\'s close, not the cap');
 });
+
+test('intimacy is negotiated in-scene: advance→accept opens the register; decline is honoured', async () => {
+    const mk = (tags) => {
+        let i = -1;
+        return {
+            actBeat: async (inp) => {
+                i += 1;
+                const tag = tags[i];
+                return { beat: `第${i}拍`, inner: '', intimacy: tag, close: i >= tags.length - 1 ? true : undefined };
+            },
+            judgeWantResolved: async () => ({ resolved: false }),
+        };
+    };
+    const [liu, su] = buildCast(['柳生春', '蘇映雪']);
+    const base = {
+        sceneId: 'nego',
+        sceneName: '二樓書寓',
+        isPrivate: true,
+        clock: '第1日·入夜',
+        etiquette: '',
+        cast: [
+            { characterId: liu.id, name: liu.name, persona: liu.persona },
+            { characterId: su.id, name: su.name, persona: su.persona },
+        ],
+        wants: [...liu.wants, ...su.wants],
+        tick: 4,
+        maxTurns: 4,
+    };
+    const accepted = await runSceneLoop({ ...base, agent: mk(['advance', 'accept', undefined, undefined]) });
+    assert.equal(accepted.intimacyAccepted, true, 'advance→accept = they became lovers HERE (event)');
+    assert.equal(accepted.intimacyGateOpened, true, 'the register opened');
+    const declined = await runSceneLoop({ ...base, sceneId: 'nego2', agent: mk(['advance', 'decline', undefined, undefined]) });
+    assert.equal(declined.intimacyAccepted, false, 'a decline is honoured — no event, no status');
+});
