@@ -199,6 +199,9 @@ async function main(): Promise<void> {
     log(`\nshowrunner 中心命題：${showrunner.centralQuestion}`);
     log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} ${showrunner.finaleName}｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
     const result = await runSeason({
+        checkpoint: (endedTick, establishedPairs) => {
+            fs.writeFileSync(path.join(outDir, 'cast-state.json'), JSON.stringify(snapshotCast(cast, endedTick, establishedPairs)));
+        },
         cast,
         planner,
         agent,

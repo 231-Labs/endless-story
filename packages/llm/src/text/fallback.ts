@@ -24,14 +24,20 @@ export async function chatWithFallback(
   let lastErr: unknown;
   for (let i = 0; i < models.length; i++) {
     const model = models[i];
-    try {
-      return await fn({ ...baseRequest, model });
-    } catch (err) {
-      lastErr = err;
-      if (!isRetryableError(err)) throw err;
-      const next = models[i + 1];
-      if (next && onFallback) onFallback(model, next, err);
+    // Same-model retry with backoff first: a transient (network reset, 429,
+    // overloaded) usually clears in seconds — falling to another model (or
+    // dying, when there is no fallback) should be the LAST resort.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fn({ ...baseRequest, model });
+      } catch (err) {
+        lastErr = err;
+        if (!isRetryableError(err)) throw err;
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * 4 ** attempt));
+      }
     }
+    const next = models[i + 1];
+    if (next && onFallback) onFallback(model, next, lastErr);
   }
   throw lastErr ?? new Error('chatWithFallback: all models exhausted');
 }

@@ -204,6 +204,10 @@ export interface SeasonDeps {
     play: Play;
     /** the立局人 config: central question, deadline day, finale part, razor threshold. */
     showrunner: SeasonConfig;
+    /** Called at each day boundary with the tick just finished and the pairs
+     *  established so far — the caller persists a CHECKPOINT snapshot, so a
+     *  mid-season crash (a TCP reset once ate two days) loses at most a day. */
+    checkpoint?: (endedTick: number, establishedPairs: string[]) => void;
 }
 
 export interface SeasonResult {
@@ -1846,6 +1850,13 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         rounds.push(rec);
         allScenes.push(...rec.scenes);
         deaths.push(...rec.deaths);
+        if (deps.checkpoint && (tick + 1) % deps.ticksPerDay === 0) {
+            try {
+                deps.checkpoint(tick + 1, [...out.establishedDyn]);
+            } catch {
+                /* checkpointing must never kill the season */
+            }
+        }
     }
     return {
         rounds,
