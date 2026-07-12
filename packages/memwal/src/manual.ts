@@ -221,44 +221,60 @@ export class MemWalManual {
             if (this.config.suiClient) {
                 this._suiClient = this.config.suiClient;
             } else {
-                // Fallback: create client via dynamic import.
-                // @mysten/sui v2.17+ renamed `SuiClient` → `SuiJsonRpcClient`
-                // and moved it to the `/jsonRpc` subpath. Try the new path
-                // first; fall back to the legacy `/client` subpath for older
+                // Fallback: create a client via dynamic import. JSON-RPC is
+                // DEPRECATED (sunset 2026-07-31): prefer the gRPC client — it
+                // exposes the `core` API SEAL needs (SealCompatibleClient) and
+                // `signAndExecuteTransaction`/`Transaction.build` alike. The
+                // JSON-RPC constructors remain only as a last resort for old
                 // peer-dep installs.
                 const network = this.config.suiNetwork ?? "mainnet";
-                let Ctor: any;
-                let url: string | undefined;
+                const urls: Record<string, string> = {
+                    testnet: "https://fullnode.testnet.sui.io:443",
+                    mainnet: "https://fullnode.mainnet.sui.io:443",
+                };
+                const baseUrl =
+                    this.config.suiGrpcUrl ??
+                    (typeof process !== "undefined" ? process.env?.SUI_GRPC_URL : undefined) ??
+                    urls[network] ??
+                    urls.mainnet;
                 try {
                     // @ts-ignore — optional peer dependency
-                    const mod = await import("@mysten/sui/jsonRpc");
-                    Ctor = (mod as any).SuiJsonRpcClient;
-                    const getUrl = (mod as any).getJsonRpcFullnodeUrl;
-                    if (typeof getUrl === "function") url = getUrl(network);
+                    const grpc = await import("@mysten/sui/grpc");
+                    const Grpc = (grpc as any).SuiGrpcClient;
+                    if (typeof Grpc === "function") {
+                        this._suiClient = new Grpc({ network, baseUrl });
+                    }
                 } catch {
-                    // jsonRpc subpath not present — fall through to legacy.
+                    // grpc subpath not present (older @mysten/sui) — fall through.
                 }
-                if (typeof Ctor !== "function") {
-                    // @ts-ignore — optional peer dependency
-                    const legacy = await import("@mysten/sui/client");
-                    Ctor = (legacy as any).SuiClient;
-                }
-                if (typeof Ctor !== "function") {
-                    throw new Error(
-                        "Sui client constructor not found in @mysten/sui. " +
-                        "For v2.17+ pass `suiClient` in config " +
-                        "(e.g. from dapp-kit's useSuiClient() or " +
-                        "@endless-story/sdk's makeSuiClient())."
+                if (!this._suiClient) {
+                    let Ctor: any;
+                    try {
+                        // @ts-ignore — optional peer dependency
+                        const mod = await import("@mysten/sui/jsonRpc");
+                        Ctor = (mod as any).SuiJsonRpcClient;
+                    } catch {
+                        // jsonRpc subpath not present — fall through to legacy.
+                    }
+                    if (typeof Ctor !== "function") {
+                        // @ts-ignore — optional peer dependency
+                        const legacy = await import("@mysten/sui/client");
+                        Ctor = (legacy as any).SuiClient;
+                    }
+                    if (typeof Ctor !== "function") {
+                        throw new Error(
+                            "Sui client constructor not found in @mysten/sui. " +
+                            "Pass `suiClient` in config " +
+                            "(e.g. from dapp-kit's useSuiClient() or " +
+                            "@endless-story/sdk's makeSuiClient())."
+                        );
+                    }
+                    console.warn(
+                        "[memwal] falling back to the DEPRECATED Sui JSON-RPC client — " +
+                        "upgrade @mysten/sui to a grpc-capable version."
                     );
+                    this._suiClient = new Ctor({ url: baseUrl, network });
                 }
-                if (!url) {
-                    const urls: Record<string, string> = {
-                        testnet: "https://fullnode.testnet.sui.io:443",
-                        mainnet: "https://fullnode.mainnet.sui.io:443",
-                    };
-                    url = urls[network] ?? urls.mainnet;
-                }
-                this._suiClient = new Ctor({ url, network });
             }
         }
         return this._suiClient;
@@ -293,10 +309,18 @@ export class MemWalManual {
         }
         const keypair = await this.getKeypair();
         const suiClient = await this.getSuiClient();
-        return suiClient.signAndExecuteTransaction({
+        const res: any = await suiClient.signAndExecuteTransaction({
             signer: keypair,
             transaction,
         });
+        // JSON-RPC returns { digest }; gRPC returns the $kind-tagged union with
+        // the payload under Transaction / FailedTransaction. Normalize.
+        const digest =
+            res?.digest ?? res?.Transaction?.digest ?? res?.FailedTransaction?.digest;
+        if (!digest) {
+            throw new Error("signAndExecuteTransaction: no digest in result");
+        }
+        return { digest };
     }
 
     private async getSealClient() {
