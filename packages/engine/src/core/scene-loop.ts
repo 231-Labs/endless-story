@@ -38,9 +38,12 @@ export interface SceneLoopCastMember {
     innerSecret?: string;
     /** 行當 — shown to co-present speakers so address forms have footing. */
     role?: string;
-    /** Items this member carries (隨身物 with provenance); surfaced only to the
-     *  member's OWN beats — bringing one out is their in-scene choice. */
-    carried?: string[];
+    /** Items this member carries (隨身物). `from` = giver's name/id. The SALIENCE
+     *  GATE decides per scene whether an item is even mentioned to the actor:
+     *  a gift surfaces when its giver is co-present; anything else only through
+     *  a low-frequency deterministic ambient window. Bringing one out remains
+     *  the character's own in-scene choice. */
+    carried?: Array<{ desc: string; from?: string }>;
     /** Short in-world phrase for this member's 身/sex — threaded into the intimacy
      *  register so a consummate beat is gender-correct for ANY pairing (data-driven,
      *  never name-special-cased). */
@@ -140,6 +143,29 @@ const hottestOf = (wants: ReadonlyArray<Want>, characterId: string): Want | null
     return best;
 };
 
+/** SALIENCE GATE for carried items (隨身物): mention an item to its carrier only
+ *  when the scene gives it a reason to exist — its GIVER is co-present — or through
+ *  a sparse deterministic ambient window (~1 in 4 scenes), so a keepsake colours
+ *  the scenes it belongs in without hijacking every beat (gift-probe: a naive
+ *  every-beat mention put the fan in 5/6 beats of an accounting talk). */
+function carriedInScene(
+    actor: SceneLoopCastMember,
+    others: SceneLoopCastMember[],
+    tick: number,
+): string[] | undefined {
+    if (!actor.carried?.length) return undefined;
+    const out: string[] = [];
+    for (let i = 0; i < actor.carried.length; i++) {
+        const it = actor.carried[i];
+        const giverHere = !!it.from && others.some((o) => o.name === it.from || o.characterId === it.from);
+        let h = tick + i * 7;
+        for (const ch of actor.characterId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        const ambient = h % 4 === 0;
+        if (giverHere || ambient) out.push(it.desc);
+    }
+    return out.length ? out : undefined;
+}
+
 export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResult> {
     const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false };
     const present = [...input.cast];
@@ -202,7 +228,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 bodyFact: o.bodyFact,
             })),
             bodyFact: actor.bodyFact,
-            carried: actor.carried,
+            carried: carriedInScene(actor, others, input.tick),
             // Continuation context rides only on the FIRST beat (picking up mid-moment);
             // later beats are the ongoing exchange and need no re-entry note.
             continuation: turn === 0 ? input.continuation : undefined,
