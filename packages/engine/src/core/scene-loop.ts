@@ -185,7 +185,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     // ~24 beats still escalate without degrading. TUNABLE via SEASON_BED_CAP (default 16);
     // a hard ceiling of 32 keeps cost BOUNDED (never runaway). Restrained/public stay tight.
     const consummateCap = Math.min(32, Math.max(1, Math.floor(Number(process.env.SEASON_BED_CAP ?? '16')) || 16));
-    const maxTurns = input.maxTurns ?? (solo ? 1 : input.emotionalStance === 'consummate' ? consummateCap : input.isPrivate ? 5 : 4);
+    let maxTurns = input.maxTurns ?? (solo ? 1 : input.emotionalStance === 'consummate' ? consummateCap : input.isPrivate ? 5 : 4);
     const log: string[] = [];
     const actedWants = new Map<string, Want>();
     /** In-scene beat counts — feeds turn routing so a duel can't monopolize. */
@@ -274,6 +274,11 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 result.intimacyAccepted = true;
                 result.intimacyGateOpened = true;
                 pendingAdvanceBy = null;
+                // The register opened MID-scene: the cap must open with it, or the
+                // world grants permission but not time (a negotiated first night was
+                // getting cut at the 5-beat private default while seed-established
+                // pairs enjoyed the full ceiling). Close remains their exit.
+                if (!input.maxTurns && maxTurns < consummateCap) maxTurns = consummateCap;
             } else if (r.intimacy === 'decline') {
                 pendingAdvanceBy = null;
             } else if (r.intimacy === 'advance') {
