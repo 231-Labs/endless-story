@@ -1081,6 +1081,8 @@ export async function runRound(
         /** 修羅場 log for the season + a per-day guard against re-firing the same one. */
         discoveries: SeasonResult['discoveries'];
         discoveredToday: Set<string>;
+        /** pairKeys that already had a 傾吐 today (once per pair per day). */
+        confidedToday: Set<string>;
         /** self-check pass accumulator (scenes reviewed / beats whose text changed). */
         review: ReviewCounter;
         /** chapter-level self-check accumulator (woven 章回 reviewed / prose repaired). */
