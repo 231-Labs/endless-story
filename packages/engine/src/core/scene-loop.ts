@@ -83,6 +83,10 @@ export interface SceneLoopInput {
     continuation?: boolean;
     /** The last beats of the prior scene in a continuation, as opening context. */
     priorTail?: string;
+    /** Open the scene on THIS member (e.g. a confider must say their piece on
+     *  page — the first rendered beat was landing on the listener's reaction,
+     *  so the confidence itself never transferred). Later turns route normally. */
+    firstActorId?: string;
     /** Injectable agent (composition tests script it); omit → runner LLM agent. */
     agent?: SceneAgent;
 }
@@ -193,11 +197,13 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     /** In-scene beat counts — feeds turn routing so a duel can't monopolize. */
     const beatsBy = new Map<string, number>();
 
-    let actor: SceneLoopCastMember | undefined = present.reduce((b, c) => {
-        const wb = hottestOf(input.wants, b.characterId);
-        const wc = hottestOf(input.wants, c.characterId);
-        return (wc ? tension(wc) : -1) > (wb ? tension(wb) : -1) ? c : b;
-    });
+    let actor: SceneLoopCastMember | undefined =
+        (input.firstActorId && present.find((c) => c.characterId === input.firstActorId)) ||
+        present.reduce((b, c) => {
+            const wb = hottestOf(input.wants, b.characterId);
+            const wc = hottestOf(input.wants, c.characterId);
+            return (wc ? tension(wc) : -1) > (wb ? tension(wb) : -1) ? c : b;
+        });
 
     // In-scene intimacy negotiation (no judge, no status gate): an 'advance'
     // puts an overture on the table; the OTHER's 'accept' opens the register,

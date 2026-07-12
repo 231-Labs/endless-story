@@ -81,7 +81,12 @@ export interface ActBeatInput {
  * person's correct pronoun so the prose stops defaulting 她 onto a male co-star.
  */
 export function pronounFromBody(bodyFact?: string): '他' | '她' {
-    return bodyFact && bodyFact.includes('男') ? '他' : '她';
+    // 女 outranks 男: a 坤生's bodyFact reads 「女兒身…台上扮男」 — the naive
+    // includes('男') made the GUARD ITSELF emit 他 for her, poisoning every
+    // prompt it was meant to protect (the root of the persistent 他-slips).
+    if (!bodyFact) return '她';
+    if (bodyFact.includes('女')) return '她';
+    return bodyFact.includes('男') ? '他' : '她';
 }
 
 /**

@@ -1053,3 +1053,9 @@ test('傾吐: only said-aloud transfers to the listener recall, and the confider
     assert.ok(lianLines.length === 0 || lianLines.every((t: string) => !stored.includes(t)), 'listener lines never enter the confidence');
     assert.notEqual(su.secret, seedSecret, 'saying it out loud moved the secret (fake evolve)');
 });
+
+test('pronounFromBody: 女兒身扮男 is 她 (the guard must not poison itself)', () => {
+    assert.equal(pronounFromBody('女兒身，坤生（台上扮男、台下是女子）'), '她');
+    assert.equal(pronounFromBody('男子之身'), '他');
+    assert.equal(pronounFromBody(undefined), '她');
+});

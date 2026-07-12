@@ -565,6 +565,7 @@ export async function doInteract(
         sceneHint: venueByName.get(venue)?.hint,
         isPrivate,
         clock: clockLabel,
+        firstActorId: confide ? a.id : undefined,
         stake: `${a.name}${intent}。${confide ? `（${a.name}是自己尋過來想說說心裡話的——說多少、怎麼說、說不說得出口，都由TA。）` : ''}`,
         maxTurns: worn ? 3 : opts?.maxTurns,
         emotionalStance: consummate ? 'consummate' : undefined,
