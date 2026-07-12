@@ -153,6 +153,27 @@ async function main(): Promise<void> {
         }
     }
 
+    // ── 贈禮 (GIFT INJECTION) — the 捧角/恩主 hook, WITHOUT puppeteering. A fan
+    // OUTSIDE the world (the owner) sends an item backstage under a pen name — 1920s
+    // 捧角文化 verbatim, no fourth wall broken. SEASON_GIFT='角色|物件描述|落款':
+    // the item enters the character's 隨身 (carried, provenance = the pen name, a
+    // fresh-gift salience window) and she REMEMBERS receiving it. Whether she wears
+    // it, sleeves it, or one day pawns it — her choice; every answer is a signal.
+    const giftSpec = process.env.SEASON_GIFT ?? '';
+    if (giftSpec.split('|').length >= 2) {
+        const [gname, gdesc, gsigner = '一位不具名的戲迷'] = giftSpec.split('|').map((s) => s.trim());
+        const gc = byName.get(gname);
+        if (gc && gdesc) {
+            gc.carried.push({ desc: `${gsigner}所贈的${gdesc}`, from: gsigner, newUntil: 12 });
+            await recall.remember(
+                gc.id,
+                `今晨戲園門房轉來一件東西：${gdesc}。附著一張素箋，只落了款：「${gsigner}」。這樣的東西，收是收下了，怎麼用、用不用，由你。`,
+                { kind: 'observation', importance: 7, day: 0 },
+            );
+            log(`\n〔贈禮〕${gc.name} 收到 ${gsigner} 所贈：「${gdesc.slice(0, 40)}${gdesc.length > 40 ? '…' : ''}」`);
+        }
+    }
+
     // snapshot the initial self-model views for the latest-wins proof.
     const initialViews = new Map<string, Map<string, string>>();
     for (const c of cast) initialViews.set(c.id, new Map(c.relationshipViews));

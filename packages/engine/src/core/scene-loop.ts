@@ -43,7 +43,7 @@ export interface SceneLoopCastMember {
      *  a gift surfaces when its giver is co-present; anything else only through
      *  a low-frequency deterministic ambient window. Bringing one out remains
      *  the character's own in-scene choice. */
-    carried?: Array<{ desc: string; from?: string }>;
+    carried?: Array<{ desc: string; from?: string; newUntil?: number }>;
     /** Short in-world phrase for this member's 身/sex — threaded into the intimacy
      *  register so a consummate beat is gender-correct for ANY pairing (data-driven,
      *  never name-special-cased). */
@@ -158,10 +158,13 @@ function carriedInScene(
     for (let i = 0; i < actor.carried.length; i++) {
         const it = actor.carried[i];
         const giverHere = !!it.from && others.some((o) => o.name === it.from || o.characterId === it.from);
+        // A JUST-RECEIVED item stays on the mind for its first ticks (a fan's gift
+        // from OUTSIDE the cast has no co-present giver — this window is its way in).
+        const fresh = it.newUntil != null && tick < it.newUntil;
         let h = tick + i * 7;
         for (const ch of actor.characterId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
         const ambient = h % 4 === 0;
-        if (giverHere || ambient) out.push(it.desc);
+        if (giverHere || fresh || ambient) out.push(it.desc);
     }
     return out.length ? out : undefined;
 }

@@ -116,7 +116,7 @@ export interface Char {
      *  scene-loop salience gate injects a gift when its giver is co-present, else
      *  only through a low-frequency ambient window — so a keepsake colours scenes
      *  it belongs in instead of hijacking every beat (gift-probe finding). */
-    carried: Array<{ desc: string; from?: string }>;
+    carried: Array<{ desc: string; from?: string; newUntil?: number }>;
     /** 0..1 felt hunger. Rises a little each active 時辰 (like fatigue), resets low when
      *  the character EATS at a street/food venue. Surfaced as a soft driver in the 身 line. */
     hunger: number;

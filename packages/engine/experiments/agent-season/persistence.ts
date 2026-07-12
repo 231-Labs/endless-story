@@ -35,7 +35,7 @@ export interface CharSnapshot {
     money: number;
     hunger: number;
     /** 隨身物/行頭 (gifts with provenance) — property persists across weeks. */
-    carried?: Array<{ desc: string; from?: string }>;
+    carried?: Array<{ desc: string; from?: string; newUntil?: number }>;
     /** seasons already lived (FINITUDE). Absent in an old snapshot → treated as 0. On
      *  restore it is bumped +1, so a restored character knows one more year has passed. */
     seasonsLived?: number;
