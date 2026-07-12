@@ -311,6 +311,13 @@ function castMember(c: Char, others: Char[]): SceneLoopCastMember {
     };
 }
 
+/** Tiny deterministic hash of the clock label (soil rotation key — no RNG). */
+function clockLabelHash(s: string): number {
+    let h = 0;
+    for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return h;
+}
+
 /** Render the 追角 POV versions of a finished scene for FOLLOWED participants.
  *  Ties/soil come from the viewer's own graph + memories (never the reverse edge).
  *  Non-fatal: a failed render just skips that lens. */
@@ -335,11 +342,19 @@ async function renderPovVersions(
             .join('\n');
         const names = others.map((o) => o.name).join('|');
         const soilRe = new RegExp(names ? `${names}|肌膚|暗戀` : '肌膚|暗戀');
-        const soil = c.thickMemories
+        // Soil ROTATION (anti-anchoring): always keep the single most important
+        // memory (the identity anchor), but rotate the remaining picks across the
+        // sorted rest by scene time — W3 showed a fixed top-4 soil makes the same
+        // thesis sentence echo through every one of a character's POV scenes.
+        const sorted = c.thickMemories
             .filter((m) => soilRe.test(m.tag + m.text))
-            .sort((a, b) => b.importance - a.importance)
-            .slice(0, 4)
-            .map((m) => m.text);
+            .sort((a, b) => b.importance - a.importance);
+        const rest = sorted.slice(1);
+        const rot = rest.length ? ((clockLabelHash(clockLabel) % rest.length) + rest.length) % rest.length : 0;
+        const soil = [
+            ...sorted.slice(0, 1),
+            ...rest.slice(rot).concat(rest.slice(0, rot)).slice(0, 3),
+        ].map((m) => m.text);
         try {
             const v = await agent.povScene({
                 name: c.name,

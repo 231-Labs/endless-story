@@ -14,6 +14,8 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext, withAdminLock, execAdminTx } from '@/lib/chain/admin-signer';
 import { ensureEventStoreRegistered } from '@/lib/server/event-store';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
+import { subscriptionsApi } from '@/lib/api/index';
+import { getCarried, toSceneCarried } from '@/lib/chain/carried-store';
 import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
 import { characterAgent, sceneRecord, characterWorker as runnerWorker, eventChapter as runnerEventChapter, signAndAnchor } from '@endless-story/runner';
 import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
@@ -1185,6 +1187,22 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }
                 let beatCount = 0;
                 const privateSceneIds = new Set<string>();
+                // ③⁹⁺ 追角 per-scene POV (flag TICK_POV_SCENE): a FOLLOWED (subscribed)
+                // participant gets this scene retold through their own eyes — probe-
+                // validated subjective layer; cost scales with subscribers. Anchored
+                // below as their own chapters (one PTB per saga).
+                const povSceneOn = process.env.TICK_POV_SCENE === '1';
+                const subscribedCache = new Map<string, boolean>();
+                const isFollowed = async (id: string): Promise<boolean> => {
+                    if (!povSceneOn) return false;
+                    const hit = subscribedCache.get(id);
+                    if (hit !== undefined) return hit;
+                    const subs = await subscriptionsApi.listSubscribers(id).catch(() => []);
+                    const val = subs.length > 0;
+                    subscribedCache.set(id, val);
+                    return val;
+                };
+                const povScenePending: { characterId: string; chapter: string }[] = [];
                 for (const [sceneId, cs] of byScene) {
                     const info = activeScenes.find((sc) => sc.id === sceneId);
                     const isPrivate = (info?.privacyLevel ?? 0) >= 3;
@@ -1217,6 +1235,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 stateLine,
                                 // Own-character-only: never another character's row (character-secrets.ts).
                                 innerSecret: getCharacterSecret(c.id),
+                                // 隨身物/行頭 (owner gifts): the engine salience gate decides
+                                // per scene whether an item is even mentioned; using it is hers.
+                                carried: toSceneCarried(getCarried(c.id), nowTick),
                                 role: roleById.get(c.id),
                                 ties: Object.fromEntries(
                                     cs
@@ -1333,6 +1354,33 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             tlog(`③⁹ new thread: ${nameById.get(sp.characterId) ?? '?'}「${sp.desc}」`);
                         }
                     }
+                    // ③⁹⁺ 追角: this scene through each FOLLOWED participant's eyes.
+                    // Attention/interpretation diverge; events never do (povScene).
+                    if (loop.beats.length > 0) {
+                        for (const c of cs) {
+                            if (!(await isFollowed(c.id))) continue;
+                            const member = castWithMem.find((m) => m.characterId === c.id);
+                            const ties = Object.entries(member?.ties ?? {})
+                                .map(([oid, t]) => `對${nameById.get(oid) ?? oid}：${t}`)
+                                .join('\n');
+                            const povText = await characterAgent
+                                .povScene({
+                                    name: c.name,
+                                    persona: c.description,
+                                    secret: getCharacterSecret(c.id) ?? undefined,
+                                    ties: ties || undefined,
+                                    memories: member?.memories,
+                                    venue: sceneName,
+                                    clock,
+                                    beats: loop.beats.map((b) => ({ name: b.name, text: b.text })),
+                                })
+                                .catch(() => null);
+                            if (povText) {
+                                povScenePending.push({ characterId: c.id, chapter: povText });
+                                tlog(`③⁹⁺ 追角 ${c.name} 眼中 [${sceneName}]: ${povText.length} chars`);
+                            }
+                        }
+                    }
                 }
                 saveWants(d.sagaId, wants);
                 const allBeatLines: string[] = [];
@@ -1351,6 +1399,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         dumpChapter({ kind: 'cut', day: worldTime?.day, name: 'want-回' }, woven);
                         tlog(`③⁹ 織回: ${woven.length} chars (dumped; anchor wiring in Wave 1.5)`);
                     }
+                }
+                // ③⁹⁺ 追角: anchor the followed participants' scene-POV chapters (one
+                // PTB; batch also writes each text into its author's MemWal as kind
+                // 'chapter'). Non-fatal: a failed anchor never blocks the tick.
+                if (povScenePending.length > 0) {
+                    try {
+                        await anchorPovChaptersBatch(admin, d.sagaId, povScenePending);
+                        tlog(`③⁹⁺ 追角 anchored: ${povScenePending.length} scene-POV chapter(s)`);
+                    } catch (err) {
+                        tlog(`③⁹⁺ 追角 anchor failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                    povScenePending.length = 0;
                 }
                 if (actorFatigue && wantActed.length > 0) {
                     const bumped = bumpActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? fatigueLedger, wantActed);
