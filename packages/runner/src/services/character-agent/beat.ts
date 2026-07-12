@@ -277,6 +277,57 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
     }
 }
 
+// ── Established-pair judge (relationship milestone promotion) ────────────────
+export interface JudgeEstablishedInput {
+    aName: string;
+    bName: string;
+    /** Each side's CURRENT view of the other (their own graph lines). */
+    aView?: string;
+    bView?: string;
+    /** Their live/recent romantic want descs toward each other (evidence). */
+    wants?: string[];
+    /** Tail of their most recent private scene together, if any. */
+    lastSceneTail?: string;
+}
+
+/**
+ * MILESTONE JUDGE — are these two, as of now, 相許 (openly each other's)?
+ * Establishment used to be STATIC seed data, so a pair that crossed the
+ * confession milestone in play could never reach the consummate register —
+ * no 床戲, hence nothing for a jealous third to walk in on (the post-W1
+ * 修羅場 drought). This judge READS the relationship (never steers it);
+ * a promotion only unlocks a register the pair may or may not use.
+ */
+export async function judgeEstablished(input: JudgeEstablishedInput): Promise<boolean> {
+    try {
+        const client = llmText.createTextClient({ kind: 'cheap' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system:
+                '你是關係判官。就下面兩人各自心裡的認知與近況，判斷他們此刻是否已「相許」——' +
+                '雙方都已挑明、都認了彼此（不是單戀、不是曖昧、不是只有一方交了心）。' +
+                '嚴格：有一方仍未挑明或仍在退，就是 false。輸出 JSON：{"established":true|false}。不要 markdown。',
+            messages: [
+                {
+                    role: 'user',
+                    content:
+                        `${input.aName} 心裡對 ${input.bName}：${input.aView ?? '（不詳）'}\n` +
+                        `${input.bName} 心裡對 ${input.aName}：${input.bView ?? '（不詳）'}\n` +
+                        (input.wants?.length ? `兩人心裡掛著的：\n${input.wants.map((w) => `- ${w}`).join('\n')}\n` : '') +
+                        (input.lastSceneTail ? `他們最近一場私下相處的尾聲：${input.lastSceneTail}\n` : '') +
+                        `\n此刻他們算不算已相許？`,
+                },
+            ],
+            maxTokens: 60,
+            temperature: 0.1,
+        });
+        const o = extractJson(res.text) ?? {};
+        return o.established === true;
+    } catch {
+        return false; // fail closed: no promotion on error
+    }
+}
+
 // ── POV scene rendering (the 追角 lens: one scene, one participant's eyes) ────
 export interface PovSceneInput {
     /** The witnessing participant (whose eyes render the scene). */

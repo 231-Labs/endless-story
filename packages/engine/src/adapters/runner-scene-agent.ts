@@ -63,6 +63,12 @@ export class RunnerSceneAgent implements SceneAgentPort {
         return characterAgent.povScene(input);
     }
 
+    async judgeEstablished(
+        input: Parameters<typeof characterAgent.judgeEstablished>[0],
+    ): ReturnType<typeof characterAgent.judgeEstablished> {
+        return characterAgent.judgeEstablished(input);
+    }
+
     async deriveGenesisWants(
         input: Parameters<typeof characterAgent.deriveGenesisWants>[0],
     ): Promise<GenesisWant[]> {
@@ -188,6 +194,8 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '5. 不要替 TA 安排劇情,不要暗示告白攤牌。只誠實記錄心裡的變化。',
             '6. 比喻的本性不許漂移:「帳／債／欠」若指的是情分、話語、交代,改寫後仍是情分,',
             '   不可漸漸寫成銀錢文書之債;反之亦然。',
+            '7. 用 TA 自己的話寫:TA 的行當、出身、慣用的比喻——武行想的是勁與樁,歌女想的是曲與局,',
+            '   班主想的是箱與班。別讓所有人共用一套記帳腔。',
             '',
             '**輸出**:嚴格只輸出 JSON:',
             '{"decisions":[{"id":"…","action":"keep|mutate|close","newDesc":"…","note":"一句"}],',
@@ -249,6 +257,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '- 只誠實記一句「我如今想要什麼」,不寫計畫、不寫下一步怎麼做。',
             '- 若新心事只是剛了結那樁換句話再要一遍,先想想線頭裡有沒有更真的——同一樁事不必翻來覆去地要。',
             '- 比喻的本性不許漂移:心裡的「帳/債」是情分就寫情分,別寫成銀錢文書之債。',
+            '- 用 TA 自己的話寫:TA 的行當、出身、慣用的比喻,別用共用的記帳腔。',
             '',
             '**輸出**:嚴格只輸出 JSON。有新心事:{"desc":"…","layer":"…"};' + (empty ? '' : '沒有就:{"desc":""};') + '不要 markdown。',
         ].join('\n');

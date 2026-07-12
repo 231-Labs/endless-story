@@ -34,6 +34,7 @@ export type ReviewSceneInput = Runner.characterAgent.ReviewSceneInput;
 export type ReviewSceneReply = Runner.characterAgent.ReviewSceneReply;
 export type PovReflectInput = Runner.characterAgent.PovReflectInput;
 export type PovSceneInput = Runner.characterAgent.PovSceneInput;
+export type JudgeEstablishedInput = Runner.characterAgent.JudgeEstablishedInput;
 
 // ── Structured open-action (SEASON_ONE_SLICE §2/§3) ──────────────────────────
 /**
@@ -174,6 +175,10 @@ export interface SceneAgentPort extends SceneAgent {
      *  through one participant's eyes — attention/interpretation diverge, events
      *  never do (probe-validated). Caller gates by followers. null → skip. */
     povScene(input: PovSceneInput): Promise<string | null>;
+    /** MILESTONE JUDGE: are these two, as of now, 相許? READS the relationship
+     *  (never steers it) — a true verdict promotes the pair into the established
+     *  set, unlocking (not scripting) the consummate register. */
+    judgeEstablished(input: JudgeEstablishedInput): Promise<boolean>;
 }
 
 // ── Recall (memory) ──────────────────────────────────────────────────────────

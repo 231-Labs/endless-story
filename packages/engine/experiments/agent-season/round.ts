@@ -180,6 +180,9 @@ export interface RoundRecord {
 }
 
 export interface SeasonDeps {
+    /** Dynamically-established pairs carried over from the prior season (pairKey =
+     *  sorted ids joined '|'). The milestone judge adds to this set in play. */
+    establishedPairs?: string[];
     cast: Char[];
     planner: Planner;
     agent: SceneAgentPort;
@@ -205,6 +208,8 @@ export interface SeasonResult {
     rehearsalGathering: Array<{ tick: number; part: string; venue: string; members: string[] }>;
     timeToolUses: number;
     deaths: string[];
+    /** pairs promoted to established IN PLAY (persist via snapshotCast). */
+    establishedPairs: string[];
     /** the accumulated play at season end. */
     play: Play;
     /** the deterministic box office (null if the play never premiered). */
@@ -525,10 +530,11 @@ async function doInteract(
     reviewCtr?: ReviewCounter,
     chapterCtr?: ChapterReviewCounter,
     opts?: { maxTurns?: number },
+    establishedDyn?: Set<string>,
 ): Promise<SceneRecord> {
     const venue = a.venue;
     const isPrivate = !isPublicVenue(venue); // a home / private venue → private
-    const established = areEstablishedLovers(a, b);
+    const established = areEstablishedLovers(a, b) || !!establishedDyn?.has([a.id, b.id].sort().join('|'));
     // RELATIONSHIP-DEPENDENT intimacy: established lovers alone in a private venue
     // at night → consummate register (a real 床戲 is correct for THIS pair);
     // everyone else → default restrained (forbidden/unconfessed stays held).
@@ -639,9 +645,10 @@ async function doInteract(
  *  on X if C is X's established lover, or carries a LIVE want of a romantic layer
  *  aimed at X. Drives jealousy/discovery for ANY cast, not a hardcoded triangle. */
 const ROMANTIC_LAYERS = /情|愛|暗戀|癡/;
-export function hasRomanticStake(c: Char, x: Char): boolean {
+export function hasRomanticStake(c: Char, x: Char, establishedDyn?: Set<string>): boolean {
     if (c.id === x.id) return false;
     if (areEstablishedLovers(c, x)) return true;
+    if (establishedDyn?.has([c.id, x.id].sort().join('|'))) return true;
     return c.wants.some(
         (w) => !w.retired && ROMANTIC_LAYERS.test(w.layer) && !!w.target && (w.target === x.id || w.target === x.name),
     );
@@ -1006,6 +1013,8 @@ export async function runRound(
          *  so scene-slot claiming favors FRESH pairs — breaks the hub monopoly where
          *  every hot want targets the same star and she is in every rendered scene. */
         spotlight: FatigueLedger;
+        /** pairs promoted to established IN PLAY (milestone judge); persisted. */
+        establishedDyn: Set<string>;
         /** unordered-pair key → last rendered scene, for cross-時辰 continuation. */
         lastScene: Map<string, { tick: number; venue: string; tail: string }>;
         /** 修羅場 log for the season + a per-day guard against re-firing the same one. */
@@ -1122,6 +1131,48 @@ export async function runRound(
                 /* non-fatal at night */
             }
             decayWants(c.wants);
+        }
+        // MILESTONE PROMOTION — establishment used to be static seed data, so a
+        // pair that crossed the confession line in play could never reach the
+        // consummate register (the post-W1 床戲/修羅場 drought). Candidates: both
+        // sides show a romantic signal toward each other (view or live want); the
+        // judge READS whether they are now 相許 — a promotion unlocks a register,
+        // it never scripts a scene.
+        const ROM = /情|愛|戀|癡|心上|相許/;
+        for (let i = 0; i < cast.length; i++) {
+            for (let j = i + 1; j < cast.length; j++) {
+                const a = cast[i];
+                const b = cast[j];
+                if (a.dead || b.dead) continue;
+                const key = [a.id, b.id].sort().join('|');
+                if (out.establishedDyn.has(key) || areEstablishedLovers(a, b)) continue;
+                const aView = a.relationshipViews.get(b.id);
+                const bView = b.relationshipViews.get(a.id);
+                const aWant = a.wants.some((w) => !w.retired && ROM.test(w.layer) && (w.target === b.id || w.target === b.name));
+                const bWant = b.wants.some((w) => !w.retired && ROM.test(w.layer) && (w.target === a.id || w.target === a.name));
+                const aSignal = (aView && ROM.test(aView)) || aWant;
+                const bSignal = (bView && ROM.test(bView)) || bWant;
+                if (!aSignal || !bSignal) continue;
+                try {
+                    const yes = await agent.judgeEstablished({
+                        aName: a.name,
+                        bName: b.name,
+                        aView,
+                        bView,
+                        wants: [
+                            ...a.wants.filter((w) => !w.retired && (w.target === b.id || w.target === b.name)).map((w) => `${a.name}：${w.desc}`),
+                            ...b.wants.filter((w) => !w.retired && (w.target === a.id || w.target === a.name)).map((w) => `${b.name}：${w.desc}`),
+                        ],
+                        lastSceneTail: out.lastScene.get(key)?.tail,
+                    });
+                    if (yes) {
+                        out.establishedDyn.add(key);
+                        log(`  〔相許〕${a.name} 與 ${b.name}——兩心俱明，自今夜起是彼此的人（判官讀得，非導演安排）。`);
+                    }
+                } catch {
+                    /* no promotion on error */
+                }
+            }
         }
         for (const c of cast) {
             c.todayLedger.clear();
@@ -1429,6 +1480,7 @@ export async function runRound(
             const scene = await doInteract(
                 a, b, p.interactIntent.intent, clock, night, agent, recall, tags, out.surfaced,
                 isContinuation, isContinuation ? prevPair!.tail : undefined, out.review, out.chapterReview,
+                undefined, out.establishedDyn,
             );
             scenes.push(scene);
             out.spotlight = bumpActorFatigue(out.spotlight, [a.id, b.id]);
@@ -1481,7 +1533,7 @@ export async function runRound(
             const atTheDoor = doorList.has(C.id);
             const heard = !present && !atTheDoor && !!hearsScene(C, scene);
             if (!present && !atTheDoor && !heard) continue;
-            if (!(hasRomanticStake(C, A) || hasRomanticStake(C, B))) continue;
+            if (!(hasRomanticStake(C, A, out.establishedDyn) || hasRomanticStake(C, B, out.establishedDyn))) continue;
             const key = `${C.id}|${aId}|${bId}`;
             if (out.discoveredToday.has(key)) continue; // dedupe per (discoverer,pair) per day
             out.discoveredToday.add(key);
@@ -1667,6 +1719,7 @@ export async function runRound(
                 // The finale is the season's PAYOFF, not a want negotiation — give it
                 // room to be a real performance set-piece (body's veto still wins).
                 { maxTurns: 10 },
+                out.establishedDyn,
             );
             out.premiere = scene;
             out.boxOffice = computeBoxOffice(play, cast);
@@ -1704,6 +1757,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         lastWovenTick: -1,
         lastWovenDay: -1,
         spotlight: {},
+        establishedDyn: new Set<string>(deps.establishedPairs ?? []),
         lastScene: new Map<string, { tick: number; venue: string; tail: string }>(),
         discoveries: [] as SeasonResult['discoveries'],
         discoveredToday: new Set<string>(),
@@ -1739,6 +1793,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         timeToolUses: out.timeToolUses.n,
         deaths,
         play: deps.play,
+        establishedPairs: [...out.establishedDyn],
         boxOffice: out.boxOffice,
         premiere: out.premiere,
         showrunnerVerdict: razor(deps.showrunner, deps.play),

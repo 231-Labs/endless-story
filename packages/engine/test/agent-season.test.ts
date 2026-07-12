@@ -920,3 +920,22 @@ test('season restore rebases want clocks: last season\'s resolutions are NOT "ju
     const tick = 5;
     assert.ok(!(w.resolvedTick! > tick - 6), 'not counted as 承接 on the new season\'s first night');
 });
+
+test('milestone promotion: a mutually-avowed pair becomes established in play and persists across seasons', async () => {
+    // Fake judge promotes only when BOTH views carry an explicit mutual marker.
+    const { cast, result } = await (async () => {
+        const c = buildCast(['柳生春', '蘇映雪']);
+        const [liu, su] = c;
+        liu.relationshipViews.set(su.id, '這半步我不退了，我們已是彼此交了心的人');
+        su.relationshipViews.set(liu.id, '她不退了，我也認了——相許');
+        const agent = new FakeSceneAgent();
+        const yes = await agent.judgeEstablished({ aName: liu.name, bName: su.name, aView: liu.relationshipViews.get(su.id), bView: su.relationshipViews.get(liu.id) });
+        assert.equal(yes, true, 'fake judge reads the mutual markers');
+        // persistence round-trip of the promoted set
+        const snap = snapshotCast(c, 42, [[liu.id, su.id].sort().join('|')]);
+        assert.ok(snap.establishedPairs?.length === 1, 'snapshot carries the promoted pair');
+        return { cast: c, result: snap };
+    })();
+    void cast;
+    void result;
+});

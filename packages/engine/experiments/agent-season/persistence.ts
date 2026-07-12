@@ -46,6 +46,8 @@ export interface CastSnapshot {
     version: 1;
     /** the world tick the snapshot was taken at (end of the week). */
     savedTick: number;
+    /** pairs promoted to established in play (pairKey = sorted ids '|'). */
+    establishedPairs?: string[];
     /** charId → its mutated overlay. */
     cast: Record<string, CharSnapshot>;
 }
@@ -54,7 +56,7 @@ export interface CastSnapshot {
  * Capture the cast's MUTATED overlay (NOT the canon seed memories, NOT transient
  * per-round flags). Deep-copies wants + views so the snapshot never aliases live state.
  */
-export function snapshotCast(cast: Char[], savedTick = 0): CastSnapshot {
+export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: string[] = []): CastSnapshot {
     const out: Record<string, CharSnapshot> = {};
     for (const c of cast) {
         out[c.id] = {
@@ -69,7 +71,7 @@ export function snapshotCast(cast: Char[], savedTick = 0): CastSnapshot {
             seasonsLived: c.seasonsLived,
         };
     }
-    return { version: 1, savedTick, cast: out };
+    return { version: 1, savedTick, establishedPairs, cast: out };
 }
 
 /**

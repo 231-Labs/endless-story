@@ -78,6 +78,7 @@ async function main(): Promise<void> {
     // accumulated episodic memories forward (copy the prior memory dir into this recall
     // dir BEFORE LocalRecall reads it). Canon seed memories are reloaded verbatim regardless.
     const restorePath = process.env.SEASON_RESTORE ? path.resolve(process.env.SEASON_RESTORE) : null;
+    let restoredEstablished: string[] = [];
     const restoreInfo: { continued: boolean; from?: string; restored: string[]; samples: string[] } = {
         continued: false,
         restored: [],
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
         if (fs.existsSync(statePath)) {
             const snap = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as CastSnapshot;
             const restored = restoreCast(cast, snap);
+            restoredEstablished = snap.establishedPairs ?? [];
             // carry the prior week's accumulated episodic memory forward (copy, never mutate).
             const priorMem = path.join(restorePath, 'memory');
             if (fs.existsSync(priorMem)) fs.cpSync(priorMem, recallDir, { recursive: true });
@@ -202,6 +204,7 @@ async function main(): Promise<void> {
         reh,
         play,
         showrunner,
+        establishedPairs: restoredEstablished,
     });
 
     printCounters(result, cast, byName, initialViews, seedCounts, restoreInfo);
@@ -210,7 +213,7 @@ async function main(): Promise<void> {
 
     // SEASON PERSISTENCE — write the end-of-week snapshot so the NEXT week can restore it.
     const statePath = path.join(outDir, 'cast-state.json');
-    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6)));
+    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6, result.establishedPairs)));
 
     // ALWAYS emit a readable HTML next to the report (§ user: every run must produce
     // an HTML to read, so problems are caught by reading the whole season).
