@@ -138,6 +138,9 @@ export interface SceneRecord {
      *  eyes (probe-validated subjective layer). Only rendered for FOLLOWED
      *  characters (SEASON_POV_CHARS) — cost scales with subscribers. */
     povVersions?: Record<string, string>;
+    /** Set when this scene was a 傾吐 (confide): the name of the one who unburdened.
+     *  Only what they SAID ALOUD transferred into the listener's memory. */
+    confideBy?: string;
     /** true → this scene is a 修羅場: a jealous third walked in on an intimate pair. */
     discovery?: boolean;
     /** true → this 修羅場 broke in on the STILL-WARM AFTERMATH of a pair spent by a recent
@@ -161,7 +164,7 @@ export interface Placement {
     tools: string[];
     autoRecall: string[];
     timeQueried: boolean;
-    interactIntent: { target: string; intent: string } | null;
+    interactIntent: { target: string; intent: string; confide?: boolean } | null;
 }
 
 export interface RoundRecord {
@@ -516,7 +519,7 @@ async function weaveSceneChapter(
     }
 }
 
-async function doInteract(
+export async function doInteract(
     a: Char,
     b: Char,
     intent: string,
@@ -534,6 +537,7 @@ async function doInteract(
     chapterCtr?: ChapterReviewCounter,
     opts?: { maxTurns?: number },
     establishedDyn?: Set<string>,
+    confide = false,
 ): Promise<SceneRecord> {
     const venue = a.venue;
     const isPrivate = !isPublicVenue(venue); // a home / private venue → private
@@ -557,7 +561,7 @@ async function doInteract(
         sceneHint: venueByName.get(venue)?.hint,
         isPrivate,
         clock: clockLabel,
-        stake: `${a.name}${intent}。`,
+        stake: `${a.name}${intent}。${confide ? `（${a.name}是自己尋過來想說說心裡話的——說多少、怎麼說、說不說得出口，都由TA。）` : ''}`,
         maxTurns: worn ? 3 : opts?.maxTurns,
         emotionalStance: consummate ? 'consummate' : undefined,
         etiquette: WORLD_PREMISE, // pinned era facts colour every beat (anti-anachronism)
@@ -627,6 +631,45 @@ async function doInteract(
     // 追角 lens: the followed participants' subjective versions of THIS scene.
     const povVersions = await renderPovVersions(agent, [a, b], beats, venue, clockLabel);
 
+    // 傾吐 (confide): an information MEDIUM, not a special scene track. What
+    // transfers is ONLY what the confider actually SAID ALOUD (objective beat
+    // text) — the listener remembers the confider's VERSION, never their inner
+    // (probe: 蘇 circled her secret in craft-metaphor; the tea she kept warm for
+    // 生春 leaked as evidence, the confession never came — that's the medium's
+    // correct granularity). Saying it out loud is itself a landing event: the
+    // confider's secret may move (心事自改).
+    let confideBy: string | undefined;
+    if (confide && loop.beats.length >= 2) {
+        const saidAloud = loop.beats.filter((x) => x.characterId === a.id).map((x) => x.text).join(' ');
+        if (saidAloud.trim()) {
+            confideBy = a.name;
+            try {
+                await recall.remember(
+                    b.id,
+                    `${clockLabel}，${a.name}在${venue}找我說了心裡話：${saidAloud}`.slice(0, 600),
+                    { kind: 'observation', importance: 7, day: clock.day },
+                );
+            } catch {
+                /* non-fatal */
+            }
+            if (a.secret) {
+                try {
+                    const evolved = await agent.evolveSecret({
+                        name: a.name,
+                        persona: a.persona,
+                        secret: a.secret,
+                        landed: [`今夜我把心裡的事對${b.name}說出了口——我親口說的是：${saidAloud.slice(0, 400)}`],
+                        selfModel: a.coreIdentity.length ? a.coreIdentity : undefined,
+                        day: clock.day,
+                    });
+                    if (evolved) a.secret = evolved;
+                } catch {
+                    /* non-fatal */
+                }
+            }
+        }
+    }
+
     return {
         venue,
         day: clock.day,
@@ -641,6 +684,7 @@ async function doInteract(
             (loop.intimacyAccepted && loop.acceptedAtBeat != null && loop.beats.length - 1 - loop.acceptedAtBeat >= 4),
         intimacyGate: loop.intimacyGateOpened,
         intimacyAccepted: loop.intimacyAccepted || undefined,
+        confideBy,
         participants: [a.name, b.name],
         participantIds: [a.id, b.id],
         povVersions,
@@ -1305,7 +1349,7 @@ export async function runRound(
                 const more = await doRecall(c, t.query ?? query, recall, clock.day, tags, hotTarget, 'plan', hot?.desc ?? '', out.surfaced);
                 autoRecall.push(...more.filter((m) => !autoRecall.includes(m)));
             } else if (t.tool === 'interact') {
-                if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話' };
+                if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話', confide: t.confide === true };
             } else if (t.tool === 'wait') {
                 if (t.target) choseWait = { target: t.target, intent: t.intent ?? '守著等人出現，把話說開' };
             }
@@ -1487,9 +1531,10 @@ export async function runRound(
             const scene = await doInteract(
                 a, b, p.interactIntent.intent, clock, night, agent, recall, tags, out.surfaced,
                 isContinuation, isContinuation ? prevPair!.tail : undefined, out.review, out.chapterReview,
-                undefined, out.establishedDyn,
+                undefined, out.establishedDyn, p.interactIntent.confide === true,
             );
             scenes.push(scene);
+            if (scene.confideBy) log(`  〔傾吐〕${a.name} 找 ${b.name} 說了心裡壓著的事——說出口的那些，${b.name} 記下了。`);
             // 相許 as an EVENT (no judge): they walked there themselves in this
             // scene; the world records the fact (for 修羅場 stakes + persistence).
             if (scene.intimacyAccepted && !areEstablishedLovers(a, b)) {

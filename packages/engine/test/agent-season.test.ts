@@ -31,6 +31,7 @@ import { CANON } from '../experiments/agent-season/canon-seed.ts';
 import { FakePlanner } from '../experiments/agent-season/agent-turn.ts';
 import {
     runSeason,
+    doInteract,
     hasRomanticStake,
     renderDiscovery,
     determineActive,
@@ -1024,4 +1025,31 @@ test('心事自改: a landed milestone moves the secret to its next step, and it
     const fresh = buildCast(['金鳳']);
     restoreCast(fresh, snap);
     assert.equal(fresh[0].secret, evolved, 'evolved secret carried across the season boundary');
+});
+
+// ── 傾吐 (confide) — information medium mechanics ─────────────────────────────
+test('傾吐: only said-aloud transfers to the listener recall, and the confider secret moves', async () => {
+    const cast = buildCast(['蘇映雪', '連翹']);
+    const [su, lian] = cast;
+    su.venue = '後台妝閣';
+    lian.venue = '後台妝閣';
+    const recall = new LocalRecall();
+    const clock = makeClock(6, 16); // 第3日·入夜
+    const seedSecret = su.secret;
+    const scene = await doInteract(
+        su, lian, '找連翹把心裡壓著的事說一說', clock, true,
+        new FakeSceneAgent(), recall, new Map(), [],
+        false, undefined, undefined, undefined, undefined, undefined, true,
+    );
+    assert.equal(scene.confideBy, su.name, 'scene records who unburdened');
+    const surfaced = await recall.recall(lian.id, '蘇映雪 心裡話', 3, clock.day);
+    assert.ok(surfaced.some((m) => m.text.includes('蘇映雪') && m.text.includes('心裡話')), 'listener remembers the confidence');
+    // anti-omniscience (structural): the confidence is built ONLY from the
+    // CONFIDER's beats — the listener's own lines never enter it. (The fake's
+    // inner is a substring of its beat text by stub design, so the inner-leak
+    // claim is probe territory: the real-LLM confide probe asserts it.)
+    const stored = surfaced.map((m) => m.text).join('');
+    const lianLines = scene.beats.filter((b: { name: string }) => b.name === lian.name).map((b: { text: string }) => b.text);
+    assert.ok(lianLines.length === 0 || lianLines.every((t: string) => !stored.includes(t)), 'listener lines never enter the confidence');
+    assert.notEqual(su.secret, seedSecret, 'saying it out loud moved the secret (fake evolve)');
 });

@@ -31,6 +31,9 @@ export interface ToolCall {
     target?: string;
     intent?: string;
     query?: string;
+    /** SELF-TAGGED confide (傾吐): this interact is going to someone to unburden a
+     *  pressing inner matter. The character tags its OWN action — no prose regex. */
+    confide?: boolean;
 }
 
 export interface PlanResult {
@@ -231,7 +234,8 @@ export class RealPlanner implements Planner {
             '- time：先問一問現在是什麼時辰，好定準自己這一刻該做什麼（通常先做這個）。',
             '- move：動身去一個地方（你自己營生/起居的地方，或為了某個緣故去別人的地方）。填 dest=地名。',
             '- recall：再細想一件舊事。填 query=你想細想什麼。',
-            '- interact：去對某個在場的人做點什麼、說點什麼（若對方也在場，就會當面演成一場戲）。填 target=名字、intent=你要做/說什麼。',
+            '- interact：去對某個在場的人做點什麼、說點什麼（若對方也在場，就會當面演成一場戲）。填 target=名字、intent=你要做/說什麼。' +
+                '若這一趟是要找信得過的人把心裡壓著的事說一說（傾吐，真心話不吐不快），多加 "confide":true——只有真起了想說的心才標，公事/較勁/寒暄不標。',
             '- wait：你算準了某個人這個時辰該在的地方，守在那兒等他出現（哪怕他一時沒到，你也守著，直到他來或你等得沒了耐心）。填 target=名字、intent=你等著要對他說/做什麼。',
             '',
             '找一個人的訣竅：你認得的人，你大概知道他這個時辰照著營生會在哪（下面會告訴你）。要嘛動身去他那一帶找他，要嘛守在他必經的地方等他。別空等在一個他根本不會來的地方。',
@@ -328,6 +332,7 @@ export class RealPlanner implements Planner {
                         target: str((t as any)?.target),
                         intent: str((t as any)?.intent),
                         query: str((t as any)?.query),
+                        confide: (t as any)?.confide === true,
                     });
                 }
                 return { plan, tools };
