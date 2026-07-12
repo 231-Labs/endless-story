@@ -660,6 +660,7 @@ export async function doInteract(
                         secret: a.secret,
                         landed: [`今夜我把心裡的事對${b.name}說出了口——我親口說的是：${saidAloud.slice(0, 400)}`],
                         selfModel: a.coreIdentity.length ? a.coreIdentity : undefined,
+                        castBodies: [a, b].map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
                         day: clock.day,
                     });
                     if (evolved) a.secret = evolved;
@@ -1213,6 +1214,7 @@ export async function runRound(
                         secret: c.secret,
                         landed,
                         selfModel: c.coreIdentity.length ? c.coreIdentity : undefined,
+                        castBodies: cast.map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
                         day: clock.day,
                     });
                     if (evolved) {

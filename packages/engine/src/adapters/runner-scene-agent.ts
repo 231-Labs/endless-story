@@ -311,6 +311,11 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '- 2-3句,寫法同原心事的口吻(第三人稱的內心白描);提到旁人用名字。',
             '- 比喻的本性不許漂移:情分的帳仍是情分,不變銀錢文書。',
             '- 用TA的性子:爽利的不繞彎、藏心事的留白、傲的不說滿。',
+            ...(input.castBodies?.length
+                ? [
+                      `- 代詞鐵則:${input.castBodies.map((c) => `${c.name}（${c.bodyFact ?? '身不詳'}）`).join('、')}——心事裡提到誰,代詞按其身寫;坤生/女子縱台上扮男仍是「她」。`,
+                  ]
+                : []),
             '',
             '嚴格只輸出 JSON:{"secret":"…"} 或 {"secret":""}。不要 markdown。',
         ].join('\n');

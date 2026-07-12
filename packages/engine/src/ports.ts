@@ -136,6 +136,9 @@ export interface EvolveSecretInput {
     landed: string[];
     /** Current self-model lines (grounding). */
     selfModel?: string[];
+    /** 身/sex facts for anyone the matter may mention (pronoun guard — the 6th
+     *  generation path to leak 他 for a 坤生 was the evolved secret itself). */
+    castBodies?: Array<{ name: string; bodyFact?: string }>;
     day: number;
 }
 
