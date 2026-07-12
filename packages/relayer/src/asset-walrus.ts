@@ -21,8 +21,14 @@ import { join } from "node:path";
 const CLI = process.env.WALRUS_CLI?.trim(); // e.g. "walrus"; unset → dev-local mock
 const CONTEXT = process.env.WALRUS_CONTEXT?.trim(); // walrus client config context (optional)
 const NETWORK = process.env.WALRUS_NETWORK?.trim() ?? "testnet";
-const SUI_RPC =
-  NETWORK === "mainnet" ? "https://fullnode.mainnet.sui.io:443" : "https://fullnode.testnet.sui.io:443";
+// JSON-RPC is deprecated (sunset 2026-07-31); balances go over GraphQL now —
+// raw fetch keeps this package dependency-free (same pattern as the indexer's
+// event migration). Override with SUI_GRAPHQL_URL when self-hosting.
+const SUI_GRAPHQL =
+  process.env.SUI_GRAPHQL_URL?.trim() ??
+  (NETWORK === "mainnet"
+    ? "https://graphql.mainnet.sui.io/graphql"
+    : "https://graphql.testnet.sui.io/graphql");
 
 export interface StoreResult {
   blobId: string;
@@ -99,28 +105,35 @@ export class AssetWalrus {
   /**
    * Publisher wallet SUI + WAL balance (for the dashboard low-water warning).
    * `walrus info` carries NO balance — read the wallet address from the sui client
-   * config and ask the Sui fullnode (`suix_getAllBalances`). Balances are in MIST (9 decimals).
+   * config and ask the Sui GraphQL RPC (JSON-RPC `suix_getAllBalances` is sunset).
+   * Balances are in MIST (9 decimals).
    */
   async wallet(): Promise<WalletBalance> {
     if (this.local) return { sui: 999, wal: 999 };
     const addr = walletAddress();
     if (!addr) return { sui: null, wal: null };
     try {
-      const res = await fetch(SUI_RPC, {
+      const query =
+        "query($a:SuiAddress!){address(address:$a){balances{nodes{coinType{repr}totalBalance}}}}";
+      const res = await fetch(SUI_GRAPHQL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "suix_getAllBalances", params: [addr] }),
+        body: JSON.stringify({ query, variables: { a: addr } }),
         signal: AbortSignal.timeout(8000),
       });
-      const j = (await res.json()) as { result?: Array<{ coinType?: string; totalBalance?: string }> };
+      const j = (await res.json()) as {
+        data?: {
+          address?: { balances?: { nodes?: Array<{ coinType?: { repr?: string }; totalBalance?: string }> } };
+        };
+      };
       let sui: number | null = null;
       let wal: number | null = null;
-      for (const b of j.result ?? []) {
+      for (const b of j.data?.address?.balances?.nodes ?? []) {
         const amt = num(b.totalBalance) / 1e9;
-        if (b.coinType?.endsWith("::sui::SUI")) sui = amt;
-        else if (b.coinType?.endsWith("::wal::WAL")) wal = amt;
+        if (b.coinType?.repr?.endsWith("::sui::SUI")) sui = amt;
+        else if (b.coinType?.repr?.endsWith("::wal::WAL")) wal = amt;
       }
-      // result omits coins with zero balance → treat "present address, coin absent" as 0
+      // the result omits coins with zero balance → present address, absent coin = 0
       return { sui: sui ?? 0, wal: wal ?? 0 };
     } catch {
       return { sui: null, wal: null };
