@@ -90,7 +90,10 @@ export async function weaveTickChapter(input: WeaveTickInput): Promise<string | 
                 (input.tone ? `\n底色：${input.tone}` : '') +
                 '\n輸出一段純散文（不要標題、不要 JSON）。',
             messages: [{ role: 'user', content: `【${input.clock}】素材：\n${input.lines.join('\n')}` }],
-            maxTokens: 850,
+            // A woven passage runs about the length of its material. The old fixed 850
+            // covered ordinary ticks but TRUNCATED long register scenes (an 11-beat 床
+            // scene lost its last two beats mid-sentence) — scale with input, bounded.
+            maxTokens: Math.max(850, Math.min(2400, Math.round(input.lines.join('').length * 0.9))),
             temperature: 0.85,
         });
         const text = res.text?.trim();
