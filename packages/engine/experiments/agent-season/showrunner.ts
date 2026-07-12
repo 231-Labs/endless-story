@@ -13,20 +13,39 @@ import { type Play, totalEffort } from './production.ts';
 
 export interface SeasonConfig {
     centralQuestion: string;
-    /** the last day = the 大會串 finale. */
+    /** the last day = the finale. */
     deadlineDay: number;
     /** the 時辰 the finale premieres in. */
     finalePart: string;
     /** rehearsal-effort floor the razor requires. */
     rehearsalEffortThreshold: number;
+    /** what the season's terminal event is CALLED in-world (e.g. 年底大會串). */
+    finaleName: string;
+    /** one world-context line appended to the countdown (the stakes flavor). */
+    countdownFlavor: string;
 }
 
-export function makeShowrunner(days: number): SeasonConfig {
+/** Per-season theme overrides — a NEW season should grow its question out of the
+ *  prior season's ending, not re-run 重啟戲箱 forever (theme fatigue). The
+ *  showrunner/owner sets WORLD FACTS only; characters still choose everything. */
+export interface SeasonTheme {
+    centralQuestion?: string;
+    finaleName?: string;
+    countdownFlavor?: string;
+    rehearsalEffortThreshold?: number;
+}
+
+export function makeShowrunner(days: number, theme: SeasonTheme = {}): SeasonConfig {
     return {
-        centralQuestion: '春雪社能不能重啟戲箱、排出並演出一齣自己的新戲，趕在年底大會串之前。',
+        centralQuestion:
+            theme.centralQuestion ?? '春雪社能不能重啟戲箱、排出並演出一齣自己的新戲，趕在年底大會串之前。',
         deadlineDay: days,
         finalePart: '入夜',
-        rehearsalEffortThreshold: 4,
+        rehearsalEffortThreshold: theme.rehearsalEffortThreshold ?? 4,
+        finaleName: theme.finaleName ?? '年底大會串',
+        countdownFlavor:
+            theme.countdownFlavor ??
+            '霞飛路新戲園要辦一場打對台的大會串，掛得上名的班子往後的檔期、報上的版面、堂會的邀約都在這一場上見高低。',
     };
 }
 
@@ -36,16 +55,10 @@ export function makeShowrunner(days: number): SeasonConfig {
  */
 export function countdownLine(cfg: SeasonConfig, currentDay: number): string {
     const remaining = Math.max(0, cfg.deadlineDay - currentDay);
-    if (remaining <= 0) {
-        return '距年底大會串只剩今日：霞飛路新戲園今夜就要打對台，掛得上名的班子這一場見高低，掛不上的往後沒人記得。';
-    }
-    if (remaining === 1) {
-        return '距年底大會串還有一天：霞飛路那頭的燈牌都掛出來了，就在明日，滿城的班子都在備著。';
-    }
-    if (remaining <= 3) {
-        return `距年底大會串還有 ${remaining} 天：日子近了，霞飛路上議論的都是這場打對台。`;
-    }
-    return `距年底大會串還有 ${remaining} 天：霞飛路新戲園要辦一場打對台的大會串，掛得上名的班子往後的檔期、報上的版面、堂會的邀約都在這一場上見高低。`;
+    if (remaining <= 0) return `距${cfg.finaleName}只剩今日：就在今夜，滿城的眼睛都望著這一場。`;
+    if (remaining === 1) return `距${cfg.finaleName}還有一天：就在明日，滿城的班子都在備著。`;
+    if (remaining <= 3) return `距${cfg.finaleName}還有 ${remaining} 天：日子近了，街面上議論的都是這一場。`;
+    return `距${cfg.finaleName}還有 ${remaining} 天：${cfg.countdownFlavor}`;
 }
 
 export interface Verdict {

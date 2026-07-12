@@ -1705,7 +1705,7 @@ export async function runRound(
             const scene = await doInteract(
                 a,
                 b,
-                `在年底大會串的戲台上，領銜合演這一齣新排的《${play.title}》——台下滿座，同行都來了，一季的積怨與情分都坐在台下看著；這一場定春雪社的名`,
+                `在${showrunner.finaleName}的戲台上，領銜合演這一齣新排的《${play.title}》——台下滿座，同行都來了，一季的積怨與情分都坐在台下看著；這一場定春雪社的名`,
                 clock,
                 night,
                 agent,

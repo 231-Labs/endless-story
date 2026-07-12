@@ -187,10 +187,17 @@ async function main(): Promise<void> {
     log(`seed memories loaded (verbatim, non-thinned): ${seedCounts.join('  ')}\n`);
 
     const reh: RehearsalCall = { announced: false, line: '' };
-    const showrunner = makeShowrunner(DAYS);
+    // Per-season theme (SEASON_THEME_FILE = json from the propose-season probe):
+    // a new season's question grows out of the prior season's ending.
+    let theme: { title?: string; centralQuestion?: string; finaleName?: string; countdownFlavor?: string; prologue?: string[] } = {};
+    if (process.env.SEASON_THEME_FILE) {
+        theme = JSON.parse(fs.readFileSync(path.resolve(process.env.SEASON_THEME_FILE), 'utf-8'));
+        log(`\n▶ 季主題：${theme.title ?? theme.centralQuestion ?? '(custom)'}`);
+    }
+    const showrunner = makeShowrunner(DAYS, theme);
     const play = newPlay('', 'genesis');
     log(`\nshowrunner 中心命題：${showrunner.centralQuestion}`);
-    log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} 年底大會串｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
+    log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} ${showrunner.finaleName}｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
     const result = await runSeason({
         cast,
         planner,
@@ -225,7 +232,7 @@ async function main(): Promise<void> {
             subtitle: '一齣自治敘事引擎跑出的完整賽季 · 上海 · 一九二〇年代',
             centralQuestion: showrunner.centralQuestion,
             deadlineLine: `死線 · 世界事實：年底霞飛路大會串（第${showrunner.deadlineDay}日${showrunner.finalePart}）。掛得上名的班子拿檔期版面，掛不上的被遺忘。`,
-            prologue: PROLOGUE,
+            prologue: theme.prologue ?? PROLOGUE,
             cast,
         }),
     );
