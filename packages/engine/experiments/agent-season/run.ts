@@ -552,6 +552,12 @@ function roundMd(x: RoundRecord, byName: Map<string, Char>): string {
             lines.push(`    > **${b.name}**：${b.text}`);
             if (showInner && b.inner) lines.push(`    > 〔心〕${b.inner}`);
         }
+        if (s.povVersions) {
+            for (const [viewer, text] of Object.entries(s.povVersions)) {
+                lines.push(`    - **${viewer}眼中（追角）**：`);
+                lines.push(`    > ${text.replace(/\n+/g, '\n    > ')}`);
+            }
+        }
         if (s.resolved.length) lines.push(`    - 了結：${s.resolved.join('；')}`);
     }
     if (x.chapter) {

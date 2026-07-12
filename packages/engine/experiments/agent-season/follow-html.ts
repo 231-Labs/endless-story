@@ -30,6 +30,8 @@ interface Scene {
     chapter: string[];
     beats: Array<{ name: string; text: string; inner?: string }>;
     resolved: string[];
+    /** 追角 lens: viewer name → the scene retold through their eyes. */
+    pov: Record<string, string[]>;
     part: string;
 }
 interface Round {
@@ -52,9 +54,11 @@ function parseReport(md: string, dayOffset: number): { rounds: Round[]; pov: Map
         const lines = b.split('\n');
         let cur: Scene | null = null;
         let mode: 'none' | 'sceneChapter' | 'roundChapter' = 'none';
+        let povViewer: string | null = null;
         for (const l of lines) {
             const sc = l.match(/^ {2}- \*\*場景 @ ([^*]+?)\*\*((?:（私）|〔床〕|〔修羅場〕)*)：(.+)$/);
             if (sc) {
+                povViewer = null;
                 cur = {
                     venue: sc[1].trim(),
                     isPrivate: sc[2].includes('（私）'),
@@ -64,6 +68,7 @@ function parseReport(md: string, dayOffset: number): { rounds: Round[]; pov: Map
                     chapter: [],
                     beats: [],
                     resolved: [],
+                    pov: {},
                     part: round.part,
                 };
                 round.scenes.push(cur);
@@ -72,15 +77,24 @@ function parseReport(md: string, dayOffset: number): { rounds: Round[]; pov: Map
             }
             if (/^ {2}- \*\*章回（織回）\*\*：/.test(l)) {
                 cur = null;
+                povViewer = null;
                 mode = 'roundChapter';
                 continue;
             }
             if (/^ {4}- \*\*章回（此場織回）\*\*：/.test(l)) {
+                povViewer = null;
                 mode = 'sceneChapter';
                 continue;
             }
             if (/^ {4}- 分鏡（/.test(l)) {
                 mode = 'none';
+                continue;
+            }
+            const povHead = l.match(/^ {4}- \*\*(.+?)眼中（追角）\*\*：/);
+            if (povHead && cur) {
+                mode = 'none';
+                povViewer = povHead[1];
+                cur.pov[povViewer] = [];
                 continue;
             }
             const res = l.match(/^ {4}- 了結：(.+)$/);
@@ -99,6 +113,8 @@ function parseReport(md: string, dayOffset: number): { rounds: Round[]; pov: Map
                     cur.beats.push({ name: beat[1], text });
                 } else if (/^〔心〕/.test(t) && cur?.beats.length) {
                     cur.beats[cur.beats.length - 1].inner = t.replace(/^〔心〕/, '');
+                } else if (povViewer && cur && cur.pov[povViewer]) {
+                    cur.pov[povViewer].push(t);
                 } else if (mode === 'sceneChapter' && cur) {
                     cur.chapter.push(t);
                 } else if (mode === 'roundChapter') {
@@ -164,8 +180,15 @@ function render(rounds: Round[], pov: Map<string, Map<number, string>>, castName
                             `<div class="who">${esc(s.participants.join('　×　'))}</div>` +
                             `</header>`;
                         const prose = s.chapter.length
-                            ? `<div class="prose">${s.chapter.map((p) => `<p>${esc(p)}</p>`).join('')}</div>`
+                            ? `<div class="prose objective">${s.chapter.map((p) => `<p>${esc(p)}</p>`).join('')}</div>`
                             : '';
+                        // 追角 lens versions: hidden until that viewer's lens is on.
+                        const povDivs = Object.entries(s.pov)
+                            .map(
+                                ([viewer, paras]) =>
+                                    `<div class="prose povtext hidden" data-viewer="${esc(viewer)}"><div class="povtag">${esc(viewer)}眼中的這一場</div>${paras.map((p) => `<p>${esc(p)}</p>`).join('')}</div>`,
+                            )
+                            .join('');
                         const beats = s.beats.length
                             ? `<details${s.chapter.length ? '' : ' open'}><summary>分鏡 ${s.beats.length} 拍</summary>${s.beats
                                   .map(
@@ -177,7 +200,7 @@ function render(rounds: Round[], pov: Map<string, Map<number, string>>, castName
                         const res = s.resolved.length
                             ? `<div class="resolved">✦ ${s.resolved.map((x) => esc(x.split('｜')[0])).join('；')}</div>`
                             : '';
-                        parts.push(`<article class="scene" data-cast="${esc(s.participants.join('|'))}">${banner}<div class="card-body">${prose}${beats}${res}</div></article>`);
+                        parts.push(`<article class="scene" data-cast="${esc(s.participants.join('|'))}">${banner}<div class="card-body">${povDivs}${prose}${beats}${res}</div></article>`);
                     }
                     if (r.chapter.length && !r.scenes.some((s) => s.chapter.length)) {
                         parts.push(
@@ -246,6 +269,8 @@ details summary{cursor:pointer;font-size:.86rem;font-family:var(--kai)}
 .diary header{font-family:var(--kai);display:flex;align-items:center;gap:.5rem;color:var(--gold);margin-bottom:.3rem}
 .seal-dot{width:.6rem;height:.6rem;border-radius:2px;background:var(--zhu);transform:rotate(-4deg);display:inline-block}
 .diary p{margin:.2rem 0;font-size:.95rem;font-family:var(--kai);line-height:2.05}
+.povtext{border-left:3px solid var(--zhu);padding-left:.9rem;font-family:var(--kai)}
+.povtag{font-family:var(--kai);color:var(--zhu);font-size:.85rem;margin-bottom:.2rem}
 .hidden{display:none}
 ${artCss}
 </style>
@@ -261,6 +286,14 @@ function lens(who){
   document.querySelectorAll('.scene,.diary').forEach(el=>{
     const cast=(el.dataset.cast||'').split('|');
     el.classList.toggle('hidden', !!who && !cast.includes(who));
+  });
+  // 追角: inside a visible scene, show the viewer's OWN version when it exists;
+  // fall back to the objective prose otherwise.
+  document.querySelectorAll('.scene').forEach(sc=>{
+    const mine = who ? sc.querySelector('.povtext[data-viewer="'+who+'"]') : null;
+    sc.querySelectorAll('.povtext').forEach(pv=>pv.classList.toggle('hidden', pv!==mine));
+    const obj = sc.querySelector('.objective');
+    if (obj) obj.classList.toggle('hidden', !!mine);
   });
 }
 </script>`;

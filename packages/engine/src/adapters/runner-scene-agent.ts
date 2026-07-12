@@ -57,6 +57,12 @@ export class RunnerSceneAgent implements SceneAgentPort {
         return characterAgent.povReflect(input);
     }
 
+    async povScene(
+        input: Parameters<typeof characterAgent.povScene>[0],
+    ): ReturnType<typeof characterAgent.povScene> {
+        return characterAgent.povScene(input);
+    }
+
     async deriveGenesisWants(
         input: Parameters<typeof characterAgent.deriveGenesisWants>[0],
     ): Promise<GenesisWant[]> {

@@ -275,6 +275,80 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
     }
 }
 
+// ── POV scene rendering (the 追角 lens: one scene, one participant's eyes) ────
+export interface PovSceneInput {
+    /** The witnessing participant (whose eyes render the scene). */
+    name: string;
+    persona: string;
+    /** Their private inner-life secret — interpretive soil, never another's. */
+    secret?: string;
+    /** Their OWN canon feelings toward the others present (「對TA：…」lines). */
+    ties?: string;
+    /** Their own memories that bear on this scene (interpretive soil). */
+    memories?: string[];
+    venue: string;
+    venueHint?: string;
+    /** Clock label, e.g. 第1日·黃昏. */
+    clock: string;
+    /** The scene's OBJECTIVE beats, in order (the canon this version must keep). */
+    beats: Array<{ name: string; text: string }>;
+    /** 身/sex facts for pronoun correctness across the retelling. */
+    castBodies?: Array<{ name: string; bodyFact?: string }>;
+}
+
+/**
+ * SCENE-LEVEL SUBJECTIVE RENDERING — retell ONE rendered scene in first person
+ * through one participant's eyes, biased by their persona + secret + ties + own
+ * memories, WITHOUT changing what objectively happened (attention and
+ * interpretation diverge; events never do). Validated by the pov-scene probe
+ * (pairwise 5-gram overlap 3-8%, zero invented events; the same gesture read
+ * three mutually exclusive ways). Reader-facing → primary model; caller gates
+ * by followers so cost scales with subscribers. Returns prose or null.
+ */
+export async function povScene(input: PovSceneInput): Promise<string | null> {
+    if (!input.beats.length) return null;
+    try {
+        const sceneText = input.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+        const soil = input.memories?.length ? input.memories.map((m) => `- ${m}`).join('\n') : '';
+        const bodies = (input.castBodies ?? [])
+            .filter((c) => c.name)
+            .map((c) => `${c.name}是${pronounFromBody(c.bodyFact)}（${c.bodyFact ?? '身不詳'}）`);
+        const bodyNote = bodies.length ? `\n【在場人的身（代詞鐵則）】${bodies.join('、')}——坤生／女子縱台上扮男，心裡仍是「她」。` : '';
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system: [
+                `你就是${input.name}。${input.persona}`,
+                input.secret ? `【你心底的事（只有你自己知道）】${input.secret}` : '',
+                input.ties ? `【你對人的真實感受】\n${input.ties}` : '',
+                soil ? `【你身上帶著的舊事】\n${soil}` : '',
+                '',
+                '下面是方才那一場的客觀經過（誰做了什麼、說了什麼，一字不差）。',
+                '用你的眼睛把這一場重新講一遍：第一人稱、當下時態的敘事（不是日記），四到六段。',
+                '鐵則：',
+                '- 客觀發生的事一件不許改、一件不許漏——誰的手在哪、誰說了哪句，都照實；',
+                '- 但你只寫你「看見、聽見、感覺到」的：你的注意力落在哪、哪個細節刺你、你把它解讀成什麼——這才是你的版本；',
+                '- 你看不進別人心裡：別人的心思只能從其言行猜，猜測就寫成猜測；',
+                '- 你自己此刻沒說出口的，寫出來。',
+                '只輸出敘事正文，不要標題、不要 markdown。' + bodyNote,
+            ]
+                .filter(Boolean)
+                .join('\n'),
+            messages: [
+                {
+                    role: 'user',
+                    content: `【那一場的客觀經過】${input.clock}，${input.venue}${input.venueHint ? `（${input.venueHint}）` : ''}。\n${sceneText}\n\n輪到你（${input.name}）講你的版本。`,
+                },
+            ],
+            maxTokens: 900,
+            temperature: 0.9,
+        });
+        return res.text.trim() || null;
+    } catch {
+        return null;
+    }
+}
+
 /** Strict §2.31 judge: stalling moves (收拾布包/先讓我唱完/明天再說) never count;
  *  only the protagonist's OWN act that cannot be taken back does. */
 export async function judgeWantResolved(input: JudgeResolveInput): Promise<ResolveVerdict> {

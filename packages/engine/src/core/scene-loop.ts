@@ -38,6 +38,9 @@ export interface SceneLoopCastMember {
     innerSecret?: string;
     /** 行當 — shown to co-present speakers so address forms have footing. */
     role?: string;
+    /** Items this member carries (隨身物 with provenance); surfaced only to the
+     *  member's OWN beats — bringing one out is their in-scene choice. */
+    carried?: string[];
     /** Short in-world phrase for this member's 身/sex — threaded into the intimacy
      *  register so a consummate beat is gender-correct for ANY pairing (data-driven,
      *  never name-special-cased). */
@@ -199,6 +202,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 bodyFact: o.bodyFact,
             })),
             bodyFact: actor.bodyFact,
+            carried: actor.carried,
             // Continuation context rides only on the FIRST beat (picking up mid-moment);
             // later beats are the ongoing exchange and need no re-entry note.
             continuation: turn === 0 ? input.continuation : undefined,
