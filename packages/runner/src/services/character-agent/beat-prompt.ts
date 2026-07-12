@@ -196,6 +196,9 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.sceneHint
             ? `【此處光景】${input.sceneHint}。眼前只有此處真有的物事——記憶裡別處的東西（誰家窗台的花、誰房裡的擺設）不會憑空出現在這裡，除非有人隨身帶了來；要提別處的物件，用話語提，不用手指。`
             : '',
+        // Metaphor stays metaphor: the want language runs on 帳/債/欠 imagery, and an
+        // ungarded beat once materialized a paper 借據 to collect an EMOTIONAL debt.
+        '【比喻不落地】心帳不是紙帳：欠的若是情分、話語、一句交代，就不可憑空掏出借據、文書、銀錢等有形物來討——手上能拿出的東西，只有此處真有的和你隨身帶著的。',
         pronounNote(input),
         input.carried?.length
             ? `【隨身】你身上帶著：${input.carried.join('、')}。用不用、何時拿出來，由你——對景就讓它出手，不對景就讓它待在袖底，別為了提而提。`
