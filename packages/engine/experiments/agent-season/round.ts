@@ -1239,6 +1239,7 @@ export async function runRound(
             c.occupiedRestOfDay = false; // a new day: the spent character rises again
         }
         out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
+        out.confidedToday.clear(); // a new day may bring a new confidence
         log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
     };
 
@@ -1538,7 +1539,10 @@ export async function runRound(
             const scene = await doInteract(
                 a, b, p.interactIntent.intent, clock, night, agent, recall, tags, out.surfaced,
                 isContinuation, isContinuation ? prevPair!.tail : undefined, out.review, out.chapterReview,
-                undefined, out.establishedDyn, p.interactIntent.confide === true,
+                undefined, out.establishedDyn,
+                // 傾吐 cooldown: once per pair per day (a mechanical counter, not a
+                // director) — the tag was drifting toward "any earnest talk".
+                p.interactIntent.confide === true && !out.confidedToday.has(pairKey) && (out.confidedToday.add(pairKey), true),
             );
             scenes.push(scene);
             if (scene.confideBy) log(`  〔傾吐〕${a.name} 找 ${b.name} 說了心裡壓著的事——說出口的那些，${b.name} 記下了。`);
@@ -1829,6 +1833,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         lastScene: new Map<string, { tick: number; venue: string; tail: string }>(),
         discoveries: [] as SeasonResult['discoveries'],
         discoveredToday: new Set<string>(),
+        confidedToday: new Set<string>(),
         review: { scenes: 0, beatsChanged: 0 } as ReviewCounter,
         chapterReview: { chapters: 0, repaired: 0 } as ChapterReviewCounter,
         povReflections: {} as Record<string, Array<{ day: number; text: string }>>,
