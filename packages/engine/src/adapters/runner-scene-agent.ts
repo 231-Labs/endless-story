@@ -329,6 +329,10 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '   不是流水帳、不是回憶清單。今天若關係變了(舊帳了結、心涼了、更近了),就寫**新的**,',
             '   舊的那句作廢。',
             '2. 必須貼著今天實際發生的事,不要替 TA 安排以後要怎樣、不要暗示劇情。',
+            '2b. 代詞鐵則:對方是女子(含坤生,台上扮男台下仍是她)就寫「她」,男子寫「他」,',
+            '    行當各歸其主,別張冠李戴。',
+            '2c. 比喻的本性不許漂移:心裡的「帳/債/欠」是情分就仍是情分,不可寫成銀錢文書',
+            '    (借據、欠條);已經走樣的舊看法,趁這一晚改回本性。',
             '3. 你可以(非必須)另外寫**一句**這一天讓 TA 對「自己是誰」有的新體悟(≤30字,第一人稱)。',
             '',
             '**輸出**:嚴格只輸出 JSON:',
@@ -339,7 +343,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
         const people = input.interactions
             .map(
                 (it) =>
-                    `- otherId=${it.otherId}｜${it.otherName}${it.currentView ? `｜你原本的看法:「${it.currentView}」` : '｜(你原本沒特別記著TA)'}${it.resolvedWithThem ? '｜(今天你和TA之間有一樁心事了結了)' : ''}\n  今天你和TA之間:${it.todayText || '(只是照了個面)'}`,
+                    `- otherId=${it.otherId}｜${it.otherName}${it.otherRole ? `｜${it.otherRole}` : ''}${it.otherBodyFact ? `｜${it.otherBodyFact}` : ''}${it.currentView ? `｜你原本的看法:「${it.currentView}」` : '｜(你原本沒特別記著TA)'}${it.resolvedWithThem ? '｜(今天你和TA之間有一樁心事了結了)' : ''}\n  今天你和TA之間:${it.todayText || '(只是照了個面)'}`,
             )
             .join('\n');
         const user = [

@@ -100,6 +100,11 @@ export interface AudienceReactionInput {
 export interface SelfModelInteraction {
     otherId: string;
     otherName: string;
+    /** Identity guard data: the other's 身/sex + 行當, so the nightly view never
+     *  flips a pronoun or re-assigns a trade (金鳳's view once wrote the 坤生 as
+     *  「他身子」 and kept a literalized 借據 alive for weeks). */
+    otherBodyFact?: string;
+    otherRole?: string;
     /** The current (pre-consolidation) one-line view, if any. */
     currentView?: string;
     /** Verbatim of what passed between them today (scene beats / the settling). */

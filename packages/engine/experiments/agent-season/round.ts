@@ -796,6 +796,8 @@ async function nightConsolidate(
             return {
                 otherId: oid,
                 otherName: o.name,
+                otherBodyFact: o.bodyFact,
+                otherRole: o.role,
                 currentView: c.relationshipViews.get(oid),
                 todayText: c.todayLedger.get(oid) ?? '（今天只是照了個面）',
                 resolvedWithThem: c.wants.some((w) => w.retired && w.target && (w.target === o.name || w.target === oid)),
@@ -1150,8 +1152,13 @@ export async function runRound(
                 const bView = b.relationshipViews.get(a.id);
                 const aWant = a.wants.some((w) => !w.retired && ROM.test(w.layer) && (w.target === b.id || w.target === b.name));
                 const bWant = b.wants.some((w) => !w.retired && ROM.test(w.layer) && (w.target === a.id || w.target === a.name));
-                const aSignal = (aView && ROM.test(aView)) || aWant;
-                const bSignal = (bView && ROM.test(bView)) || bWant;
+                // Candidate gate = mutual ATTENTION, judged by the LLM for meaning.
+                // A keyword regex cannot read a living pair's private imagery (蘇柳
+                // spoke in 拔暖/魂/骨縫 — zero 情愛 keywords — and never reached the
+                // judge). Both views existing, or mutual romantic wants, is enough;
+                // the judge's strict 相許 wording carries the real discrimination.
+                const aSignal = !!aView || aWant;
+                const bSignal = !!bView || bWant;
                 if (!aSignal || !bSignal) continue;
                 try {
                     const yes = await agent.judgeEstablished({
