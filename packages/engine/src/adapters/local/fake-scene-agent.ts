@@ -17,6 +17,7 @@ import type {
     ChooseActionResult,
     GenesisWant,
     PovReflectInput,
+    PovSceneInput,
     ReviewSceneInput,
     ReviewSceneReply,
     RippleJudgeDelta,
@@ -244,6 +245,12 @@ export class FakeSceneAgent implements SceneAgentPort {
      * from the character's day + hottest want, so the subjective layer is exercised
      * end-to-end without an LLM. Swap in RunnerSceneAgent for real subjective prose.
      */
+    /** Deterministic POV-scene stub: proves the wiring (name + beat count), no LLM. */
+    async povScene(input: PovSceneInput): Promise<string | null> {
+        if (!input.beats.length) return null;
+        return `${input.name}眼中的這一場（${input.venue}，${input.beats.length}拍）：我把方才每一下都記著。`;
+    }
+
     async povReflect(input: PovReflectInput): Promise<string | null> {
         const hot = input.wants[0]?.desc;
         const stir = input.todayText.trim() ? '今日這一遭，我心裡自有計較' : '今日晃了一天，沒個要緊事';

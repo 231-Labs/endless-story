@@ -34,6 +34,8 @@ export interface CharSnapshot {
     fatigue: number;
     money: number;
     hunger: number;
+    /** 隨身物/行頭 (gifts with provenance) — property persists across weeks. */
+    carried?: Array<{ desc: string; from?: string; newUntil?: number }>;
     /** seasons already lived (FINITUDE). Absent in an old snapshot → treated as 0. On
      *  restore it is bumped +1, so a restored character knows one more year has passed. */
     seasonsLived?: number;
@@ -63,6 +65,7 @@ export function snapshotCast(cast: Char[], savedTick = 0): CastSnapshot {
             fatigue: c.fatigue,
             money: c.money,
             hunger: c.hunger,
+            carried: c.carried.length ? c.carried.map((it) => ({ ...it })) : undefined,
             seasonsLived: c.seasonsLived,
         };
     }
@@ -87,6 +90,7 @@ export function restoreCast(cast: Char[], snap: CastSnapshot): string[] {
         c.health = s.health;
         c.fatigue = s.fatigue;
         c.money = s.money;
+        c.carried = s.carried ? s.carried.map((it) => ({ ...it })) : [];
         c.hunger = s.hunger;
         c.seasonsLived = (s.seasonsLived ?? 0) + 1; // one more year has passed
         restored.push(c.id);

@@ -120,6 +120,10 @@ export interface ReviewSceneParticipant {
 export interface ReviewSceneInput {
     /** Pinned era facts (anti-anachronism). */
     worldPremise: string;
+    /** Where this scene physically happens (name + world hint) — feeds the
+     *  object-not-here check (a remembered prop from elsewhere must not appear). */
+    venue?: string;
+    venueHint?: string;
     participants: ReviewSceneParticipant[];
     beats: Array<{ name: string; text: string; inner?: string }>;
 }
@@ -157,13 +161,16 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
                 '②寫出不合其身子的器官／動作，或憑空生出兩人身上沒有的器官（尤其同性之間別寫「插入」「那沒根的東西」）；' +
                 '③口吻走樣、不像這個人；' +
                 '④時代錯亂（違反下面的世道鐵則）；' +
-                '⑤筆病——一面倒的獨角戲、對白太少（金瓶梅是話多的）、同一句口頭禪／比喻反覆。' +
+                '⑤筆病——一面倒的獨角戲、對白太少（金瓶梅是話多的）、同一句口頭禪／比喻反覆；' +
+                '⑥物不在場——把別處的物事寫成就在眼前（誰家窗台的花、誰房裡的擺設憑空出現在此處）；' +
+                '這類要嘛改成就地取材、要嘛改成用話語提及那件別處的東西。' +
                 '沒問題的拍，text 原樣照抄。只輸出 JSON：{"beats":[{"i":序號,"text":"改後這一拍"}...]}。不要 markdown。',
             messages: [
                 {
                     role: 'user',
                     content:
                         `【世道鐵則】${input.worldPremise}\n\n` +
+                        (input.venue ? `【此處】${input.venue}${input.venueHint ? `——${input.venueHint}` : ''}\n\n` : '') +
                         `【在場的人（性別代詞：${pronouns}）】\n${who}\n\n` +
                         `【這場戲逐拍】\n${numbered}\n\n` +
                         `逐拍校訂，回同樣 ${input.beats.length} 拍。`,
@@ -181,7 +188,15 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
         for (const raw of arr) {
             if (!raw || typeof raw !== 'object') continue;
             const idx = Number((raw as { i?: unknown }).i);
-            const t = s((raw as { text?: unknown }).text);
+            let t = s((raw as { text?: unknown }).text);
+            // The reviewer reads beats as 「名：text」 and tends to echo the name back
+            // into its revision — strip the speaker's own leading name (this was how
+            // the self-name doubling survived the actBeat strip).
+            const nm = input.beats[idx]?.name;
+            if (t && nm) {
+                const escNm = nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                t = t.replace(new RegExp(`^${escNm}\\s*[:：]\\s*`), '');
+            }
             if (Number.isInteger(idx) && t) revisedById.set(idx, t);
         }
         return {
@@ -252,6 +267,80 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
                 },
             ],
             maxTokens: 320,
+            temperature: 0.9,
+        });
+        return res.text.trim() || null;
+    } catch {
+        return null;
+    }
+}
+
+// ── POV scene rendering (the 追角 lens: one scene, one participant's eyes) ────
+export interface PovSceneInput {
+    /** The witnessing participant (whose eyes render the scene). */
+    name: string;
+    persona: string;
+    /** Their private inner-life secret — interpretive soil, never another's. */
+    secret?: string;
+    /** Their OWN canon feelings toward the others present (「對TA：…」lines). */
+    ties?: string;
+    /** Their own memories that bear on this scene (interpretive soil). */
+    memories?: string[];
+    venue: string;
+    venueHint?: string;
+    /** Clock label, e.g. 第1日·黃昏. */
+    clock: string;
+    /** The scene's OBJECTIVE beats, in order (the canon this version must keep). */
+    beats: Array<{ name: string; text: string }>;
+    /** 身/sex facts for pronoun correctness across the retelling. */
+    castBodies?: Array<{ name: string; bodyFact?: string }>;
+}
+
+/**
+ * SCENE-LEVEL SUBJECTIVE RENDERING — retell ONE rendered scene in first person
+ * through one participant's eyes, biased by their persona + secret + ties + own
+ * memories, WITHOUT changing what objectively happened (attention and
+ * interpretation diverge; events never do). Validated by the pov-scene probe
+ * (pairwise 5-gram overlap 3-8%, zero invented events; the same gesture read
+ * three mutually exclusive ways). Reader-facing → primary model; caller gates
+ * by followers so cost scales with subscribers. Returns prose or null.
+ */
+export async function povScene(input: PovSceneInput): Promise<string | null> {
+    if (!input.beats.length) return null;
+    try {
+        const sceneText = input.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+        const soil = input.memories?.length ? input.memories.map((m) => `- ${m}`).join('\n') : '';
+        const bodies = (input.castBodies ?? [])
+            .filter((c) => c.name)
+            .map((c) => `${c.name}是${pronounFromBody(c.bodyFact)}（${c.bodyFact ?? '身不詳'}）`);
+        const bodyNote = bodies.length ? `\n【在場人的身（代詞鐵則）】${bodies.join('、')}——坤生／女子縱台上扮男，心裡仍是「她」。` : '';
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system: [
+                `你就是${input.name}。${input.persona}`,
+                input.secret ? `【你心底的事（只有你自己知道）】${input.secret}` : '',
+                input.ties ? `【你對人的真實感受】\n${input.ties}` : '',
+                soil ? `【你身上帶著的舊事】\n${soil}` : '',
+                '',
+                '下面是方才那一場的客觀經過（誰做了什麼、說了什麼，一字不差）。',
+                '用你的眼睛把這一場重新講一遍：第一人稱、當下時態的敘事（不是日記），四到六段。',
+                '鐵則：',
+                '- 客觀發生的事一件不許改、一件不許漏——誰的手在哪、誰說了哪句，都照實；',
+                '- 但你只寫你「看見、聽見、感覺到」的：你的注意力落在哪、哪個細節刺你、你把它解讀成什麼——這才是你的版本；',
+                '- 你看不進別人心裡：別人的心思只能從其言行猜，猜測就寫成猜測；',
+                '- 你自己此刻沒說出口的，寫出來。',
+                '只輸出敘事正文，不要標題、不要 markdown。' + bodyNote,
+            ]
+                .filter(Boolean)
+                .join('\n'),
+            messages: [
+                {
+                    role: 'user',
+                    content: `【那一場的客觀經過】${input.clock}，${input.venue}${input.venueHint ? `（${input.venueHint}）` : ''}。\n${sceneText}\n\n輪到你（${input.name}）講你的版本。`,
+                },
+            ],
+            maxTokens: 900,
             temperature: 0.9,
         });
         return res.text.trim() || null;

@@ -22,6 +22,10 @@ export interface ActBeatInput {
     /** Clock label, e.g. 黃昏. */
     clock: string;
     sceneName: string;
+    /** What this place physically is/looks like (the venue's world hint). Grounds the
+     *  beat in THIS room — the anti-teleport rule rides on it (a remembered object that
+     *  lives elsewhere must not materialize here). */
+    sceneHint?: string;
     isPrivate: boolean;
     /** Co-present characters (empty = alone). `role` = 行當; `tie` = the actor's
      *  OWN canon feeling toward them (e.g. 你對TA：師承) so address forms come
@@ -53,6 +57,10 @@ export interface ActBeatInput {
      *  Colours the beat's subtext; hidden by default, but whether it ever
      *  surfaces is the character's own in-scene choice (§2.43: never script it). */
     innerSecret?: string;
+    /** Items this character CARRIES right now (隨身物/行頭, each with provenance,
+     *  e.g. 「白韻秋所贈的湘妃竹摺扇」). Whether/when to bring one out is the
+     *  character's own in-scene choice — never scripted, never forced. */
+    carried?: string[];
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
     /** §2.47/§2.53: saga stance is consummate AND this beat is privateAlone on
@@ -185,7 +193,13 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         `你就是${input.name}。${input.persona}${mem}`,
         input.tone ?? '',
         `【此刻】${input.clock}。${where}${input.stake ? `\n【風聲】${input.stake}` : ''}${state}${innerSecret}`,
+        input.sceneHint
+            ? `【此處光景】${input.sceneHint}。眼前只有此處真有的物事——記憶裡別處的東西（誰家窗台的花、誰房裡的擺設）不會憑空出現在這裡，除非有人隨身帶了來；要提別處的物件，用話語提，不用手指。`
+            : '',
         pronounNote(input),
+        input.carried?.length
+            ? `【隨身】你身上帶著：${input.carried.join('、')}。用不用、何時拿出來，由你——對景就讓它出手，不對景就讓它待在袖底，別為了提而提。`
+            : '',
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
         // A continuation picks up a still-warm private encounter mid-moment (general;
         // keyed by caller on pair+venue+consecutive-tick). No fresh entrance, no re-lock.

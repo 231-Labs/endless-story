@@ -58,6 +58,12 @@ import {
     type RehearsalCall,
 } from './rhythm.ts';
 
+/** FOLLOWED characters (追角): comma-separated names whose scenes ALSO get a
+ *  first-person POV rendering (the subscriber-gated subjective layer). */
+const POV_CHARS = new Set(
+    (process.env.SEASON_POV_CHARS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+);
+
 /** How many 時辰 a character will POST UP waiting for someone before giving up. */
 const WAIT_PATIENCE = 2;
 /** A scene this many beats or longer is a LONG/deep scene — it EATS the whole 時辰 and
@@ -125,6 +131,10 @@ export interface SceneRecord {
     intimacyGate: boolean;
     participants: string[];
     participantIds: string[];
+    /** POV versions (追角 lens): participant name → the scene retold through their
+     *  eyes (probe-validated subjective layer). Only rendered for FOLLOWED
+     *  characters (SEASON_POV_CHARS) — cost scales with subscribers. */
+    povVersions?: Record<string, string>;
     /** true → this scene is a 修羅場: a jealous third walked in on an intimate pair. */
     discovery?: boolean;
     /** true → this 修羅場 broke in on the STILL-WARM AFTERMATH of a pair spent by a recent
@@ -296,8 +306,59 @@ function castMember(c: Char, others: Char[]): SceneLoopCastMember {
         innerSecret: c.secret,
         role: c.role,
         bodyFact: c.bodyFact, // 身/sex — feeds the gender-correct intimacy register (data, not name-cased)
+        carried: c.carried.length ? c.carried : undefined,
         ties,
     };
+}
+
+/** Render the 追角 POV versions of a finished scene for FOLLOWED participants.
+ *  Ties/soil come from the viewer's own graph + memories (never the reverse edge).
+ *  Non-fatal: a failed render just skips that lens. */
+async function renderPovVersions(
+    agent: SceneAgentPort,
+    participants: Char[],
+    beats: Array<{ name: string; text: string }>,
+    venue: string,
+    clockLabel: string,
+): Promise<Record<string, string> | undefined> {
+    const followed = participants.filter((c) => POV_CHARS.has(c.name));
+    if (!followed.length || !beats.length) return undefined;
+    const out: Record<string, string> = {};
+    for (const c of followed) {
+        const others = participants.filter((o) => o.id !== c.id);
+        const ties = others
+            .map((o) => {
+                const v = c.relationshipViews.get(o.id);
+                return v ? `對${o.name}：${v}` : '';
+            })
+            .filter(Boolean)
+            .join('\n');
+        const names = others.map((o) => o.name).join('|');
+        const soilRe = new RegExp(names ? `${names}|肌膚|暗戀` : '肌膚|暗戀');
+        const soil = c.thickMemories
+            .filter((m) => soilRe.test(m.tag + m.text))
+            .sort((a, b) => b.importance - a.importance)
+            .slice(0, 4)
+            .map((m) => m.text);
+        try {
+            const v = await agent.povScene({
+                name: c.name,
+                persona: c.persona,
+                secret: c.secret,
+                ties: ties || undefined,
+                memories: soil.length ? soil : undefined,
+                venue,
+                venueHint: venueByName.get(venue)?.hint,
+                clock: clockLabel,
+                beats: beats.map((b) => ({ name: b.name, text: b.text })),
+                castBodies: participants.map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+            });
+            if (v) out[c.name] = v;
+        } catch {
+            /* skip this lens */
+        }
+    }
+    return Object.keys(out).length ? out : undefined;
 }
 
 /** A mutable accumulator for the self-check pass (scenes reviewed / beats changed). */
@@ -361,11 +422,14 @@ async function reviewBeats(
     participants: Char[],
     beats: Array<{ name: string; text: string; inner: string }>,
     ctr: ReviewCounter,
+    venue?: string,
 ): Promise<Array<{ name: string; text: string; inner: string }>> {
     if (!beats.length) return beats;
     try {
         const reply = await agent.reviewScene({
             worldPremise: WORLD_PREMISE,
+            venue,
+            venueHint: venue ? venueByName.get(venue)?.hint : undefined,
             participants: participants.map((c) => ({
                 name: c.name,
                 bodyFact: c.bodyFact,
@@ -466,6 +530,7 @@ async function doInteract(
     const loop = await runSceneLoop({
         sceneId: `d${clock.day}p${clock.tickOfDay}-${a.id}`,
         sceneName: venue,
+        sceneHint: venueByName.get(venue)?.hint,
         isPrivate,
         clock: clockLabel,
         stake: `${a.name}${intent}。`,
@@ -484,7 +549,7 @@ async function doInteract(
     // SELF-CHECK / REPAIR pass: re-read the rendered scene and REPLACE the beats with
     // the repaired ones (pronouns / anatomy / voice / anachronism / prose), before the
     // outcome propagates so ledgers + memory carry the corrected text.
-    if (reviewCtr) beats = await reviewBeats(agent, [a, b], beats, reviewCtr);
+    if (reviewCtr) beats = await reviewBeats(agent, [a, b], beats, reviewCtr, venue);
     const resolved = loop.resolved.map((r) => `${r.want.characterId}：${r.want.desc}｜${r.note ?? ''}`);
     const sceneText = beats.map((x) => `${x.name}：${x.text}`).join('\n');
 
@@ -535,6 +600,8 @@ async function doInteract(
     // PER-SCENE WEAVE: this scene's own beats → a readable 章回. For a 床戲/私戲 this is
     // the literary version the per-時辰 PUBLIC weave never produces (it skips privates).
     const chapter = await weaveSceneChapter(agent, clock, venue, beats, [a, b], chapterCtr);
+    // 追角 lens: the followed participants' subjective versions of THIS scene.
+    const povVersions = await renderPovVersions(agent, [a, b], beats, venue, clockLabel);
 
     return {
         venue,
@@ -546,6 +613,7 @@ async function doInteract(
         intimacyGate: loop.intimacyGateOpened,
         participants: [a.name, b.name],
         participantIds: [a.id, b.id],
+        povVersions,
         beats,
         chapter,
         resolved,
@@ -606,7 +674,7 @@ export async function renderDiscovery(
         agent,
     });
     let beats = loop.beats.map((x) => ({ name: x.name, text: x.text, inner: x.inner }));
-    if (reviewCtr) beats = await reviewBeats(agent, [disc, a, b], beats, reviewCtr);
+    if (reviewCtr) beats = await reviewBeats(agent, [disc, a, b], beats, reviewCtr, a.venue);
     const sceneText = beats.map((x) => `${x.name}：${x.text}`).join('\n');
     // Propagate the rupture into every pairing's ledger → night consolidation rewrites edges.
     for (const [p, q] of [[disc, a], [disc, b], [a, disc], [b, disc]] as const) {
@@ -623,6 +691,8 @@ export async function renderDiscovery(
     // PER-SCENE WEAVE: a 修羅場 is private → the per-時辰 PUBLIC weave skips it. Give the
     // reader a woven 章回 of the confrontation too (raw beats stay under it).
     const chapter = await weaveSceneChapter(agent, clock, venue, beats, [disc, a, b], chapterCtr);
+    // 追角 lens on the 修羅場 too — the walk-in IS the followed reader's money scene.
+    const povVersions = await renderPovVersions(agent, [disc, a, b], beats, venue, `第${clock.day}日·${clock.partOfDay}`);
     return {
         venue,
         day: clock.day,
@@ -633,6 +703,7 @@ export async function renderDiscovery(
         intimacyGate: false,
         participants: [disc.name, a.name, b.name],
         participantIds: [disc.id, a.id, b.id],
+        povVersions,
         discovery: true,
         aftermath,
         beats,

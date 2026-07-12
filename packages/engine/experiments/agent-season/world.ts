@@ -112,6 +112,11 @@ export interface Char {
      *  character in SPECS (DATA). Never goes negative (floored at 0 when they try to eat
      *  broke). Persisted in the season snapshot. */
     money: number;
+    /** Items carried on the person (隨身物/行頭). `from` = the giver's name; the
+     *  scene-loop salience gate injects a gift when its giver is co-present, else
+     *  only through a low-frequency ambient window — so a keepsake colours scenes
+     *  it belongs in instead of hijacking every beat (gift-probe finding). */
+    carried: Array<{ desc: string; from?: string; newUntil?: number }>;
     /** 0..1 felt hunger. Rises a little each active 時辰 (like fatigue), resets low when
      *  the character EATS at a street/food venue. Surfaced as a soft driver in the 身 line. */
     hunger: number;
@@ -321,6 +326,7 @@ export function buildCast(only?: string[]): Char[] {
             fatigue: 0,
             money: s.money, // DATA-seeded starting coin
             hunger: 0,
+            carried: [],
             waitingFor: null,
             occupiedRestOfDay: false,
             dead: false,

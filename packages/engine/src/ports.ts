@@ -33,6 +33,7 @@ export type ComposeEpisodeInput = Runner.eventChapter.ComposeEpisodeInput;
 export type ReviewSceneInput = Runner.characterAgent.ReviewSceneInput;
 export type ReviewSceneReply = Runner.characterAgent.ReviewSceneReply;
 export type PovReflectInput = Runner.characterAgent.PovReflectInput;
+export type PovSceneInput = Runner.characterAgent.PovSceneInput;
 
 // ── Structured open-action (SEASON_ONE_SLICE §2/§3) ──────────────────────────
 /**
@@ -169,6 +170,10 @@ export interface SceneAgentPort extends SceneAgent {
     /** POV daily reflection: a FIRST-PERSON, subjective (possibly biased) account of
      *  one character's day (the narrative-subjective layer). null → skip. */
     povReflect(input: PovReflectInput): Promise<string | null>;
+    /** POV SCENE rendering (the 追角 lens): retell ONE rendered scene first-person
+     *  through one participant's eyes — attention/interpretation diverge, events
+     *  never do (probe-validated). Caller gates by followers. null → skip. */
+    povScene(input: PovSceneInput): Promise<string | null>;
 }
 
 // ── Recall (memory) ──────────────────────────────────────────────────────────
