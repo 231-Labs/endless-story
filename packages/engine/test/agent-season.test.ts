@@ -939,3 +939,33 @@ test('milestone promotion: a mutually-avowed pair becomes established in play an
     void cast;
     void result;
 });
+
+test('the actor\'s own ending: a close beat wraps the scene before the cap', async () => {
+    let calls = 0;
+    const scripted = {
+        actBeat: async () => {
+            calls += 1;
+            return calls >= 2
+                ? { beat: '她吹熄了燈，把這一夜收了。', inner: '到這裡就好。', close: true }
+                : { beat: '她替他斟了盞茶。', inner: '' };
+        },
+        judgeWantResolved: async () => ({ resolved: false }),
+    };
+    const [liu, jin] = buildCast(['柳生春', '金鳳']);
+    const loop = await runSceneLoop({
+        sceneId: 'close-test',
+        sceneName: '後台小廂房',
+        isPrivate: true,
+        clock: '第1日·深宵',
+        etiquette: '',
+        cast: [
+            { characterId: liu.id, name: liu.name, persona: liu.persona },
+            { characterId: jin.id, name: jin.name, persona: jin.persona },
+        ],
+        wants: [...liu.wants, ...jin.wants],
+        tick: 5,
+        maxTurns: 8,
+        agent: scripted as never,
+    });
+    assert.equal(loop.beats.length, 2, 'the scene ended on the actor\'s close, not the cap');
+});

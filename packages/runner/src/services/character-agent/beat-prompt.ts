@@ -63,9 +63,11 @@ export interface ActBeatInput {
     carried?: string[];
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
-    /** §2.47/§2.53: saga stance is consummate AND this beat is privateAlone on
-     *  a love-layer want — unlocks the classical literary-erotic register and
-     *  a longer beat. Anywhere else the beat is byte-identical to before. */
+    /** §2.47/§2.53: the intimacy register is AVAILABLE (established pair, private,
+     *  night). Availability is permission, never a push: whether to be 風流 or
+     *  矜持, and when to close the scene, is the characters' own beat-by-beat
+     *  choice — the world's costs (the 時辰 spent, sleep compressed, the risk of
+     *  being walked in on) tax it honestly. */
     consummate?: boolean;
 }
 
@@ -92,13 +94,17 @@ function pronounNote(input: ActBeatInput): string {
     return `【稱呼在場的人用對的代詞】${people.join('、')}——別張冠李戴、別把男子寫成「她」。`;
 }
 
-/** §2.53-validated L3 register (the quality/stability sweet spot; L5-style
- *  "maximally explicit" wording regresses output and is deliberately absent). */
+/** §2.53-validated L3 register, AGENCY-FRAMED: availability is permission, not a
+ *  push. The craft constraints (艷而有情、露而不穢) hold IF the pair goes there;
+ *  whether they go there, and when they close the night, is theirs — with the
+ *  cost named (the hour spent, sleep shortened). */
 const CONSUMMATE_BEAT_NOTE = [
-    '【此刻分寸（僅此私處、兩情相悅時）】容許寬衣解帶、肌膚相親、雲雨纏綿，並可細狀其實——',
-    '身體的反應、氣息的亂、節奏的緩急、手與唇的門道、情動到極處的失守，皆可落筆，',
-    '不必每到關頭就化開。以古典艷情話本筆法（敢於露骨、卻仍是綺麗）：艷而有情、露而不穢。',
-    '忌現代醫學詞、忌髒字、忌器官說明書式冷描。',
+    '【此處的許可（僅此私處、兩情相悅時）】此處無人，你們已是彼此的人——要不要往那處去、',
+    '走到哪一步，由你們一拍一拍自己定。要風流，容許寬衣解帶、肌膚相親、雲雨纏綿，並可細狀其實：',
+    '身體的反應、氣息的亂、節奏的緩急、手與唇的門道、情動到極處的失守，皆可落筆，不必每到關頭就化開，',
+    '以古典艷情話本筆法（敢於露骨、卻仍是綺麗）：艷而有情、露而不穢，忌現代醫學詞、忌髒字、忌器官說明書式冷描。',
+    '要矜持，就留在言語與相守——誰也不欠誰一場雲雨。',
+    '【代價】夜有多深、明日有無戲，這一晚怎麼花是你們自己的帳；盡興了、乏了、或心裡到了，就把這場收了。',
 ].join('');
 
 /**
@@ -148,6 +154,9 @@ export interface BeatResult {
     addressed?: string;
     /** Scene name to move to, if leaving. */
     move?: string;
+    /** The actor CLOSES the scene on this beat (sleep/farewell/enough) — their
+     *  own ending, honoured by the loop. */
+    close?: boolean;
 }
 
 /** §2.43-validated pressure language: removes stalling, never writes the answer. */
@@ -214,10 +223,10 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         '一場戲裡，別把同一個比方、同一句口頭禪翻來覆去地用，話要活。',
         forceNote(input.forcing, input.privateAlone),
         input.consummate
-            ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或床笫間的一下進退(一到三句，容許上述分寸的露骨)。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無"}。不要 markdown。'
+            ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或（若你們往那處去了）床笫間的一下進退(一到三句)。' +
+              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（這一拍把這場收了：睡去/道別/歇下，就 true）}。不要 markdown。'
             : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事(開放一句)。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無"}。不要 markdown。',
+              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（話已說盡、要收這場就 true）}。不要 markdown。',
     ]
         .filter(Boolean)
         .join('\n');

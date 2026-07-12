@@ -257,6 +257,9 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             addressed: r.addressed,
         });
         if (!result.actedCharacterIds.includes(actor.characterId)) result.actedCharacterIds.push(actor.characterId);
+        // The actor's own ending: a close beat (sleep/farewell/enough) wraps the
+        // scene — length is theirs, the cap above is only a ceiling.
+        if (r.close) break;
         actedWants.set(w.id, w);
         beatsBy.set(actor.characterId, (beatsBy.get(actor.characterId) ?? 0) + 1);
 
