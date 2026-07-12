@@ -47,9 +47,13 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
     const o = extractJson(res.text) ?? {};
     const addressed = s(o.addressed);
     const move = s(o.move);
+    // The model often self-prefixes its own name (「蘇映雪：…」); every renderer
+    // prepends the speaker itself, so strip a leading self-name here (once).
+    const esc = input.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const deName = (t: string): string => t.replace(new RegExp(`^${esc}\\s*[:：]\\s*`), '');
     return {
-        beat: s(o.beat) || '（沉默。）',
-        inner: s(o.inner),
+        beat: deName(s(o.beat)) || '（沉默。）',
+        inner: deName(s(o.inner)),
         addressed: addressed && addressed !== '無' ? addressed : undefined,
         move: move && move !== '無' ? move : undefined,
     };

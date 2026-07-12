@@ -63,8 +63,31 @@ const WAIT_PATIENCE = 2;
 /** A scene this many beats or longer is a LONG/deep scene — it EATS the whole 時辰 and
  *  SPENDS its participants for the rest of the day (opportunity cost's teeth). */
 export const OCCUPY_BEATS = 10;
-import { applyRoundHealth, bodyLine, eat, HEALTH, MEAL_COST } from './health.ts';
+import {
+    applyRoundHealth,
+    bodyLine,
+    eat,
+    ECON,
+    HEALTH,
+    HOME_MEAL_COST,
+    HUNGER_FELT,
+    HUNGER_STARVING,
+    MEAL_COST,
+} from './health.ts';
+
+/** Where (and at what price) this character can eat RIGHT NOW: the food venue they
+ *  stand at, a food venue in the same cluster (順路), or a cheaper 家常 meal at their
+ *  own home. null = no reachable meal this 時辰 (geography, not poverty). Pure. */
+function mealSpotFor(c: Char): { line: string; cost: number } | null {
+    if (isFoodVenue(c.venue)) return { line: `在 ${c.venue} 攤子上吃了點東西`, cost: MEAL_COST };
+    const nearby = VENUES.find((v) => isFoodVenue(v.name) && sameCluster(v.name, c.venue));
+    if (nearby) return { line: `順路到 ${nearby.name} 打了個尖`, cost: MEAL_COST };
+    if (c.venue === c.homeVenue) return { line: `在${c.venue}自己弄了口家常吃食`, cost: HOME_MEAL_COST };
+    return null;
+}
 import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
+import { pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
+import { bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
 import {
     type Play,
     PRODUCTION,
@@ -422,6 +445,7 @@ async function doInteract(
     priorTail?: string,
     reviewCtr?: ReviewCounter,
     chapterCtr?: ChapterReviewCounter,
+    opts?: { maxTurns?: number },
 ): Promise<SceneRecord> {
     const venue = a.venue;
     const isPrivate = !isPublicVenue(venue); // a home / private venue → private
@@ -445,7 +469,7 @@ async function doInteract(
         isPrivate,
         clock: clockLabel,
         stake: `${a.name}${intent}。`,
-        maxTurns: worn ? 3 : undefined,
+        maxTurns: worn ? 3 : opts?.maxTurns,
         emotionalStance: consummate ? 'consummate' : undefined,
         etiquette: WORLD_PREMISE, // pinned era facts colour every beat (anti-anachronism)
         cast,
@@ -882,6 +906,10 @@ export async function runRound(
          *  boundary), killing the "二日入夜 → 三日日午 話音落地" time-mismatch. */
         lastWovenTick: number;
         lastWovenDay: number;
+        /** SPOTLIGHT ledger (engine core actor-fatigue): recent scene-carriers tire,
+         *  so scene-slot claiming favors FRESH pairs — breaks the hub monopoly where
+         *  every hot want targets the same star and she is in every rendered scene. */
+        spotlight: FatigueLedger;
         /** unordered-pair key → last rendered scene, for cross-時辰 continuation. */
         lastScene: Map<string, { tick: number; venue: string; tail: string }>;
         /** 修羅場 log for the season + a per-day guard against re-firing the same one. */
@@ -916,6 +944,7 @@ export async function runRound(
     const castNames = cast.map((c) => c.name);
 
     for (const c of cast) c.sceneThisRound = false;
+    out.spotlight = decayActorFatigue(out.spotlight);
     // PERCEPTION: fade traces older than the lingering window before this 時辰's senses.
     decayTraces(out.traces, clock.currentTick);
 
@@ -964,7 +993,52 @@ export async function runRound(
     log('──────────────────────────────────────────────────────────────────────');
     log(`時辰 ${clock.currentTick}  第${clock.day}日·${part}${night ? '（入夜）' : ''}  active=${active.length ? active.map((c) => c.name).join('、') : '（無）'}`);
 
-    // FAST-FORWARD an empty 時辰.
+    // SCHEDULED DEEP-NIGHT WORK — the sleeping mind's shift (self-model overwrite,
+    // POV diary, want decay/regeneration, per-day reset). Defined here so BOTH paths
+    // run it: a 深宵 where nobody stirred is the CANONICAL night, not an exception —
+    // fast-forwarding used to skip this entirely, so a whole real week passed with
+    // zero consolidations, zero diaries and zero want regeneration.
+    const deepNightWork = async (): Promise<void> => {
+        for (const c of cast) {
+            if (c.dead) continue;
+            const updated = await nightConsolidate(c, byId, clock.day, clock.currentTick, agent, castNames, showrunner);
+            if (updated.length) roundRec.consolidations.push({ char: c.name, updated });
+            // POV DAILY REFLECTION (narrative-subjective layer): a first-person, possibly
+            // biased account of THIS character's day (their ledger + wants + self-model),
+            // stored separately from the objective 時辰 章回. Read BEFORE the ledger clear.
+            const dayText = [...c.todayLedger.values()].join('\n').slice(0, 1200);
+            try {
+                const refl = await agent.povReflect({
+                    name: c.name,
+                    persona: c.persona,
+                    day: clock.day,
+                    todayText: dayText,
+                    wants: c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })),
+                    selfModel: c.coreIdentity.join('\n') || undefined,
+                    // pronoun guard: me + everyone today's ledger touched (the diary was the
+                    // one un-guarded path that let a 坤生 lover be written 他/男人).
+                    castBodies: [c, ...[...c.todayLedger.keys()].map((oid) => byId.get(oid)).filter(Boolean) as Char[]].map(
+                        (x) => ({ name: x.name, bodyFact: x.bodyFact }),
+                    ),
+                });
+                if (refl) (out.povReflections[c.id] ??= []).push({ day: clock.day, text: refl });
+            } catch {
+                /* non-fatal at night */
+            }
+            decayWants(c.wants);
+        }
+        for (const c of cast) {
+            c.todayLedger.clear();
+            c.scenesToday = 0;
+            c.addressedToday.clear();
+            c.occupiedRestOfDay = false; // a new day: the spent character rises again
+        }
+        out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
+        log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
+    };
+
+    // FAST-FORWARD an empty 時辰 — bodies rest, but on a 深宵 the sleeping mind still
+    // does its shift (consolidation/diary/regeneration must not depend on wakefulness).
     if (active.length === 0) {
         roundRec.fastForward = true;
         roundRec.passLine = deep
@@ -974,6 +1048,7 @@ export async function runRound(
               : '這個時辰無人在外走動，一時無話。';
         for (const c of cast) if (!c.dead) applyRoundHealth(c, false, 0); // everyone rests → recover
         log(`  〔過場〕${roundRec.passLine}`);
+        if (deep) await deepNightWork();
         return roundRec;
     }
 
@@ -1078,7 +1153,7 @@ export async function runRound(
             } else if (t.tool === 'interact') {
                 if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話' };
             } else if (t.tool === 'wait') {
-                if (t.target) choseWait = { target: t.target, intent: t.intent ?? '守著等他出現，把話說開' };
+                if (t.target) choseWait = { target: t.target, intent: t.intent ?? '守著等人出現，把話說開' };
             }
         }
 
@@ -1196,7 +1271,21 @@ export async function runRound(
     const venuesWithActive = [...new Set(active.map((c) => c.venue))];
     for (const venue of venuesWithActive) {
         const present = cast.filter((c) => !c.dead && c.venue === venue); // asleep/idle included
-        for (const p of roundRec.placements) {
+        // Claim order = FRESHNESS first (engine spotlight ledger): the pair with the
+        // least recent screen time claims a scarce scene slot before the star's Nth
+        // scene of the day. Ties keep keenest-first (sort is stable). No matchmaking —
+        // only the ORDER of competing, self-chosen intents changes.
+        const claims = roundRec.placements
+            .filter((x) => x.interactIntent)
+            .map((x) => {
+                const ca = byName.get(x.char);
+                const cb = byName.get(x.interactIntent!.target) ?? [...byName.values()].find((y) => x.interactIntent!.target.includes(y.name));
+                const heat = (ca ? (out.spotlight[ca.id] ?? 0) : 0) + (cb ? (out.spotlight[cb.id] ?? 0) : 0);
+                return { p: x, heat };
+            })
+            .sort((x, y) => x.heat - y.heat)
+            .map((x) => x.p);
+        for (const p of claims) {
             if (scenes.length >= deps.maxScenesPerRound) break;
             if (!p.interactIntent) continue;
             const a = byName.get(p.char);
@@ -1220,7 +1309,7 @@ export async function runRound(
                     // re-guessing a stale coordinate next 時辰 (this is what kills the oscillation).
                     if (knowsRoutine(a, b)) {
                         a.waitingFor = a.waitingFor ?? { target: b.id, venue: a.venue, intent: p.interactIntent.intent, since: clock.currentTick };
-                        log(`    · ${a.name} 在 ${a.venue} 守著等 ${b.name}（他此刻在 ${b.venue}，尚未過來）。`);
+                        log(`    · ${a.name} 在 ${a.venue} 守著等 ${b.name}（${pronounFromBody(b.bodyFact)}此刻在 ${b.venue}，尚未過來）。`);
                     } else {
                         log(`    · ${a.name} 想在 ${venue} 找 ${b.name}，撲了個空（${b.name}此刻在 ${b.venue}）。`);
                     }
@@ -1246,6 +1335,7 @@ export async function runRound(
                 isContinuation, isContinuation ? prevPair!.tail : undefined, out.review, out.chapterReview,
             );
             scenes.push(scene);
+            out.spotlight = bumpActorFatigue(out.spotlight, [a.id, b.id]);
             out.lastScene.set(pairKey, {
                 tick: clock.currentTick,
                 venue,
@@ -1310,6 +1400,7 @@ export async function runRound(
             const aftermath = A.occupiedRestOfDay || B.occupiedRestOfDay;
             const disc = await renderDiscovery(C, A, B, clock, agent, recall, brokeIn, out.review, aftermath, out.chapterReview);
             scenes.push(disc);
+            out.spotlight = bumpActorFatigue(out.spotlight, disc.participants.map((n) => byName.get(n)?.id ?? n));
             out.discoveries.push({ tick: clock.currentTick, part, discoverer: C.name, pair: [A.name, B.name], venue: scene.venue, brokeIn, heard });
             log(`    ⚔ 修羅場：${C.name} ${heard ? '聞聲趕來、破門闖進，撞見' : brokeIn ? '破門闖進，撞見' : '撞見'} ${A.name}×${B.name} @ ${scene.venue} — ${disc.beats.length} 拍`);
             for (const bt of disc.beats) log(`         ${bt.name}：${bt.text}`);
@@ -1388,58 +1479,60 @@ export async function runRound(
         }
     }
 
-    // DAILY LIFE — EATING (the small economy). A character standing at a street/food venue
-    // on a NON-scene turn grabs something to eat: deduct MEAL_COST, reset hunger low. A
-    // near-broke character can't afford it and goes without (money floors at 0). GENERAL:
-    // gated by venue kind + scene state + coin, never by character name.
+    // DAILY LIFE — WAGES (the income side of the small economy). A duty 時辰 actually
+    // WORKED at the duty venue pays the occupation's wage (DATA: ECON table); wandering
+    // off duty forfeits it — opportunity cost with an economic edge. The 千金's family
+    // allowance lands once a day at 日午 regardless of venue. Never name-cased.
     for (const c of active) {
-        if (c.dead || c.sceneThisRound || !isFoodVenue(c.venue)) continue;
-        if (eat(c)) {
+        if (c.dead) continue;
+        const econ = ECON[c.occupation];
+        if (!econ) continue;
+        const pull = rhythmPull(c, part, reh);
+        // "Worked" = at the duty venue, OR at another WORK venue in the same cluster —
+        // a rehearsal split (生旦上戲台、武行在練功房) is still a worked duty 時辰.
+        const kind = venueByName.get(c.venue)?.kind;
+        const atWork =
+            c.venue === pull.venue ||
+            ((kind === 'stage' || kind === 'practice' || kind === 'backstage' || kind === 'nightclub') &&
+                !!pull.venue &&
+                sameCluster(c.venue, pull.venue));
+        if (econ.dutyWage > 0 && pull.duty && pull.venue && atWork) {
+            c.money += econ.dutyWage;
+            log(`    · 〔工錢〕${c.name} 在 ${c.venue} 當值，掙下 ${econ.dutyWage}（身上 ${c.money}）。`);
+        }
+        if (econ.dailyAllowance > 0 && part === '日午') {
+            c.money += econ.dailyAllowance;
+            log(`    · 〔月例〕${c.name} 家裡的月例到手 ${econ.dailyAllowance}（身上 ${c.money}）。`);
+        }
+    }
+
+    // DAILY LIFE — EATING (the small economy). Eating is life maintenance, not a
+    // dramatic decision: a hungry character on a NON-scene turn eats in passing — at
+    // the food venue they stand at, at a food venue in the SAME cluster (順路), or a
+    // cheaper 家常 meal at their own home. The ONLY thing that blocks a meal is coin
+    // (money < cost) — poverty, not scheduling, is the dramatic signal. GENERAL:
+    // gated by hunger + venue geography + coin, never by character name.
+    // EVERYONE eats — including a RESTING character (a person recovering at home
+    // still feeds themselves; only being in a scene blocks a meal). W1 starvation
+    // trap: the worn-down star rested every turn, the eat loop only covered
+    // `active`, and starving-halved sleep recovery kept her pinned at 危 forever.
+    for (const c of cast) {
+        if (c.dead || c.sceneThisRound || c.hunger < HUNGER_FELT) continue;
+        const spot = mealSpotFor(c);
+        if (!spot) continue;
+        if (eat(c, spot.cost)) {
             out.meals[c.id] = (out.meals[c.id] ?? 0) + 1;
-            log(`    · 〔吃食〕${c.name} 在 ${c.venue} 攤子上吃了點東西（花去 ${MEAL_COST}，餘 ${c.money}）。`);
+            log(`    · 〔吃食〕${c.name} ${spot.line}（花去 ${spot.cost}，餘 ${c.money}）。`);
+        } else if (c.hunger >= HUNGER_STARVING) {
+            log(`    · 〔囊空〕${c.name} 餓得發慌，摸遍身上只有 ${c.money}，連碗麵都吃不起，硬撐著。`);
         } else {
-            log(`    · 〔捨不得〕${c.name} 在 ${c.venue}，摸摸身上只剩 ${c.money}，吃食的錢都要掂量，餓著肚子走開了。`);
+            log(`    · 〔捨不得〕${c.name} 摸摸身上只剩 ${c.money}，吃食的錢都要掂量，先餓著。`);
         }
     }
 
     // (f) 深宵 = scheduled night consolidation for everyone, then per-day reset.
     if (deep) {
-        for (const c of cast) {
-            if (c.dead) continue;
-            const updated = await nightConsolidate(c, byId, clock.day, clock.currentTick, agent, castNames, showrunner);
-            if (updated.length) roundRec.consolidations.push({ char: c.name, updated });
-            // POV DAILY REFLECTION (narrative-subjective layer): a first-person, possibly
-            // biased account of THIS character's day (their ledger + wants + self-model),
-            // stored separately from the objective 時辰 章回. Read BEFORE the ledger clear.
-            const dayText = [...c.todayLedger.values()].join('\n').slice(0, 1200);
-            try {
-                const refl = await agent.povReflect({
-                    name: c.name,
-                    persona: c.persona,
-                    day: clock.day,
-                    todayText: dayText,
-                    wants: c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })),
-                    selfModel: c.coreIdentity.join('\n') || undefined,
-                    // pronoun guard: me + everyone today's ledger touched (the diary was the
-                    // one un-guarded path that let a 坤生 lover be written 他/男人).
-                    castBodies: [c, ...[...c.todayLedger.keys()].map((oid) => byId.get(oid)).filter(Boolean) as Char[]].map(
-                        (x) => ({ name: x.name, bodyFact: x.bodyFact }),
-                    ),
-                });
-                if (refl) (out.povReflections[c.id] ??= []).push({ day: clock.day, text: refl });
-            } catch {
-                /* non-fatal at night */
-            }
-            decayWants(c.wants);
-        }
-        for (const c of cast) {
-            c.todayLedger.clear();
-            c.scenesToday = 0;
-            c.addressedToday.clear();
-            c.occupiedRestOfDay = false; // a new day: the spent character rises again
-        }
-        out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
-        log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
+        await deepNightWork();
     } else {
         for (const c of active) decayWants(c.wants);
     }
@@ -1464,7 +1557,7 @@ export async function runRound(
             const scene = await doInteract(
                 a,
                 b,
-                `在年底大會串的戲台上，合演這一齣新排的《${play.title}》`,
+                `在年底大會串的戲台上，領銜合演這一齣新排的《${play.title}》——台下滿座，同行都來了，一季的積怨與情分都坐在台下看著；這一場定春雪社的名`,
                 clock,
                 night,
                 agent,
@@ -1475,6 +1568,9 @@ export async function runRound(
                 undefined,
                 out.review,
                 out.chapterReview,
+                // The finale is the season's PAYOFF, not a want negotiation — give it
+                // room to be a real performance set-piece (body's veto still wins).
+                { maxTurns: 10 },
             );
             out.premiere = scene;
             out.boxOffice = computeBoxOffice(play, cast);
@@ -1511,6 +1607,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         prevChapterTail: '',
         lastWovenTick: -1,
         lastWovenDay: -1,
+        spotlight: {},
         lastScene: new Map<string, { tick: number; venue: string; tail: string }>(),
         discoveries: [] as SeasonResult['discoveries'],
         discoveredToday: new Set<string>(),

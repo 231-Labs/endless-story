@@ -78,9 +78,17 @@ function troupeRhythm(c: Char, part: PartOfDay, reh: boolean): RhythmPull {
                 ? { venue: '雲錦台戲台', active: true, duty: true, note: '班主叫了排練，該上戲台對戲——排戲脫不開身。' }
                 : { venue: c.homeVenue, active: true, note: '沒排練，理自己的事。' };
         case '黃昏':
-            return { venue: c.homeVenue, active: true, note: '傍晚時分，歇口氣，理理心事。' };
+            return {
+                venue: c.homeVenue,
+                active: true,
+                note: '傍晚散了工，這時辰是自己的：可回房歇口氣理理心事；戲園前街的茶湯麵攤正熱鬧，包廂茶座也有人吃茶聽戲——想見誰、想躲誰，都在這一步。',
+            };
         case '入夜':
-            return { venue: c.homeVenue, active: true, note: '入夜了，自己的夜。' };
+            return {
+                venue: c.homeVenue,
+                active: true,
+                note: '入夜了，自己的夜：可以關起門過自己的日子，也可以出門——霞飛路歌場正開唱、戲園前街還亮著攤燈。心裡掛著誰，這時辰是能去尋的。',
+            };
         case '深宵':
             return { venue: c.homeVenue, active: false, note: '深宵，該歇了。' };
     }
@@ -116,7 +124,11 @@ function geinuRhythm(c: Char, part: PartOfDay): RhythmPull {
         case '入夜':
             return { venue: '霞飛路歌場', active: true, duty: true, note: '入夜掛頭牌，霞飛路歌場唱這個月的堂會——上工抽不開身。' };
         case '深宵':
-            return { venue: '會樂里寓所', active: true, note: '深宵散了場，回會樂里寓所——有時等一個人。' };
+            // Default = REST (the rhythm must be metabolically sustainable; a 5-awake
+            // 時辰 day was a structural death spiral for the 歌女). A burning want still
+            // keeps her up — the night-pursuit / hot-情 layer overrides rest, so 等一個人
+            // remains possible; it is now the WANT's doing, not the timetable's.
+            return { venue: '會樂里寓所', active: false, note: '深宵散了場，回會樂里寓所歇下——除非心裡燒著一樁放不下的。' };
     }
 }
 

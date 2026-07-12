@@ -373,7 +373,9 @@ export class RealPlanner implements Planner {
                 const obj = (extractRewriteJson(res.text) ?? {}) as { call?: unknown; line?: unknown; title?: unknown };
                 const call = obj.call === true || String(obj.call).toLowerCase() === 'true';
                 const line = String(obj.line ?? '').trim() || '傳我的話：從今兒起，春雪社排新戲，都到戲台上來。';
-                const title = String(obj.title ?? '').trim() || '新戲';
+                // The model naturally returns 《戲名》; callers typeset their own 《》,
+                // so strip a surrounding pair here (prevents 《《白蛇傳》》).
+                const title = (String(obj.title ?? '').trim() || '新戲').replace(/^《(.+)》$/, '$1');
                 return { call, line: call ? line : '', title: call ? title : '' };
             },
             this.onLog,
