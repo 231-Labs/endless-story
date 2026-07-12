@@ -93,7 +93,7 @@ export async function weaveTickChapter(input: WeaveTickInput): Promise<string | 
             // A woven passage runs about the length of its material. The old fixed 850
             // covered ordinary ticks but TRUNCATED long register scenes (an 11-beat 床
             // scene lost its last two beats mid-sentence) — scale with input, bounded.
-            maxTokens: Math.max(850, Math.min(2400, Math.round(input.lines.join('').length * 0.9))),
+            maxTokens: Math.max(850, Math.min(3000, Math.round(input.lines.join('').length * 1.5))),
             temperature: 0.85,
         });
         const text = res.text?.trim();
