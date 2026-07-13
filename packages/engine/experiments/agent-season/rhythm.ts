@@ -70,7 +70,10 @@ export function rhythmPull(c: Char, part: PartOfDay, reh: RehearsalCall): Rhythm
 function reporterRhythm(c: Char, part: PartOfDay): RhythmPull {
     switch (part) {
         case '清晨':
-            return { venue: '申報館', active: true, duty: true, note: '清晨到報館交昨夜的稿、看今日的版——截稿是天，主筆的臉就是天氣。' };
+            // A deep-night deadline man SLEEPS at dawn — the double-duty rhythm
+            // (dawn + deep night, zero rest slots) worked 方競西 into collapse in
+            // his first season: the metabolic invariant applies to every trade.
+            return { venue: c.homeVenue, active: false, note: '趕完稿天都亮了，倒頭睡在報館後閣，晌午前叫不醒。' };
         case '日午':
             return { venue: '戲園前街', active: true, note: '晌午出門採風，戲園前街的茶湯攤、糖粥擔都是他的眼線，一碗茶錢一句話。' };
         case '晡時':

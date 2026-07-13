@@ -420,6 +420,12 @@ export interface ChapterReviewCounter {
     repaired: number;
 }
 
+/** One-line PUBLIC dossier per participant (canon description's first clause —
+ *  the world-known identity, never the secret). */
+function dossierOf(cs: Char[]): string[] {
+    return cs.map((c) => `${c.name}（${c.role}）：${(CANON[c.id]?.description ?? c.persona).split('。')[0]}。`);
+}
+
 /** Build the DATA-DRIVEN cast-body list (name + 身/sex) for the gender-aware weave +
  *  chapter review, from a scene's actual participants. No names or pairings hardcoded. */
 function castBodies(participants: Char[]): Array<{ name: string; bodyFact?: string }> {
@@ -529,6 +535,7 @@ async function weaveSceneChapter(
         const woven = await agent.weaveTickChapter({
             clock: `第${clock.day}日·${clock.partOfDay}`,
             context,
+            dossier: dossierOf(participants),
             lines: beats.map((x) => `[${venue}] ${x.name}：${x.text}`),
             // Feed the scene's participants' 身/sex so the weaver keeps genders/pronouns
             // correct (a 坤生 is never rendered "男人"). DATA, never name-cased.
@@ -1267,6 +1274,7 @@ export async function runRound(
     // collected so the 說書人 can weave LIFE around the drama (user: 營生描寫
     // 太少). Zero extra LLM cost — same weave, richer material.
     const worldTexture: string[] = [];
+    const workedThisRound: string[] = [];
     const roundRec: RoundRecord = {
         tick: clock.currentTick,
         day: clock.day,
@@ -1304,6 +1312,12 @@ export async function runRound(
             // arithmetic, never the mechanism's.
             const ledgerLines = relationLedger(c, byId, out.lastScene, clock.currentTick, deps.ticksPerDay);
             const tieNotes = ledgerLines.length ? [`【你與眾人的近疏（事實）】${ledgerLines.join('；')}。`] : [];
+            // 功課盤 (identity, not economy): a 戲子 who hasn't touched the craft
+            // knows it in her hands — the fact goes to the night mind; what it
+            // means to who she is, she decides.
+            if (c.occupation === 'troupe' && (c.daysSincePractice ?? 0) >= 2) {
+                tieNotes.push(`（你已${c.daysSincePractice}日沒正經摸功了。手上的感覺，你自己知道。）`);
+            }
             const dayText = [[...c.todayLedger.values()].join('\n'), ...tieNotes].join('\n').slice(0, 1400);
             try {
                 const refl = await agent.povReflect({
@@ -1363,6 +1377,26 @@ export async function runRound(
                     /* non-fatal at night */
                 }
             }
+            // 小算盤 (the strategic layer wants alone lack): a hot want that has
+            // lived ≥2 days without resolving earns a nightly scheme in the
+            // character's own voice — tomorrow's plans read it as their OWN idea.
+            // Resolved/absent want → the scheme dissolves with it.
+            try {
+                const stuck = c.wants
+                    .filter((w) => !w.retired && w.kind === 'narrative' && clock.currentTick - w.bornTick >= 2 * deps.ticksPerDay)
+                    .sort((x, y) => y.heat + y.frust - (x.heat + x.frust))[0];
+                if (stuck) {
+                    const drafted = await planner.draftScheme({ char: c, want: stuck, clock });
+                    if (drafted) {
+                        c.scheme = drafted;
+                        log(`  〔盤算〕${c.name}：${drafted.slice(0, 60)}${drafted.length > 60 ? '…' : ''}`);
+                    }
+                } else {
+                    c.scheme = null;
+                }
+            } catch {
+                /* non-fatal at night */
+            }
             decayWants(c.wants);
         }
         for (const c of cast) {
@@ -1375,6 +1409,7 @@ export async function runRound(
                 // talent floor (天分鏽不掉), and the peak is expensive to hold.
                 const base = 0.35 + 0.25 * Math.min(1, abilityOf(c.id) / 5);
                 if (!c.practicedToday) c.craft = base + (c.craft - base) * 0.97;
+                c.daysSincePractice = c.practicedToday ? 0 : (c.daysSincePractice ?? 0) + 1;
             }
             c.practicedToday = false;
         }
@@ -1509,6 +1544,14 @@ export async function runRound(
                 autoRecall.push(...more.filter((m) => !autoRecall.includes(m)));
             } else if (t.tool === 'interact') {
                 if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話', confide: t.confide === true };
+            } else if (t.tool === 'work') {
+                // A first-class hour of one's OWN trade (user: 練功是為了保持自己
+                // 是誰): mechanical effect now, visibility via the solo vignette.
+                if (c.occupation === 'troupe') {
+                    c.practicedToday = true;
+                    c.craft = Math.min(1, c.craft + 0.015);
+                }
+                workedThisRound.push(c.id);
             } else if (t.tool === 'relations') {
                 // Her own call to take stock: the fact sheet lands in her working
                 // context exactly like a recall — she reads it, the plan/scene react.
@@ -1837,6 +1880,50 @@ export async function runRound(
             }
         }
     }
+    // SOLO VIGNETTE — one worker per 時辰 gets a rendered beat of their OWN craft
+    // (solo life was invisible: a practice hour produced zero story, so the page
+    // over-represented socializing). One extra LLM call per 時辰 at most.
+    {
+        const workers = workedThisRound.map((id) => byId.get(id)).filter((c): c is Char => !!c && !c.dead && !c.sceneThisRound);
+        if (workers.length && scenes.length < deps.maxScenesPerRound) {
+            const w = workers[clock.currentTick % workers.length];
+            try {
+                const solo = await runSceneLoop({
+                    sceneId: `work-d${clock.day}p${clock.tickOfDay}-${w.id}`,
+                    sceneName: w.venue,
+                    sceneHint: venueByName.get(w.venue)?.hint,
+                    isPrivate: !isPublicVenue(w.venue),
+                    clock: `第${clock.day}日·${part}`,
+                    stake: `${w.name}這個時辰守著自己的功課——一個人，把手上的正事做實。`,
+                    etiquette: WORLD_PREMISE,
+                    cast: [castMember(w, [])],
+                    wants: w.wants,
+                    tick: clock.currentTick,
+                    agent,
+                });
+                if (solo.beats.length) {
+                    scenes.push({
+                        venue: w.venue,
+                        day: clock.day,
+                        part,
+                        isPublic: isPublicVenue(w.venue),
+                        isPrivate: !isPublicVenue(w.venue),
+                        consummate: false,
+                        intimacyGate: false,
+                        participants: [w.name],
+                        participantIds: [w.id],
+                        beats: solo.beats.map((b) => ({ name: b.name, text: b.text, inner: b.inner ?? '' })),
+                        chapter: null,
+                        resolved: [],
+                    } as unknown as SceneRecord);
+                    log(`    · 〔功課〕${w.name} @ ${w.venue} — ${solo.beats[0].text.slice(0, 60)}…`);
+                }
+            } catch {
+                /* solo hour stays quiet */
+            }
+        }
+    }
+
     // (d.5) DISCOVERY / 修羅場 — a romantically-invested third who CAME to (or is at)
     // a private INTIMATE scene walks in on it. General: driven by hasRomanticStake +
     // physical presence / having sought a participant, never a hardcoded triangle. The
@@ -1932,6 +2019,7 @@ export async function runRound(
             const woven = await agent.weaveTickChapter({
                 clock: `第${clock.day}日·${part}`,
                 lines: [...lines, ...worldTexture.slice(0, 6).map((t) => `[世相] ${t}。`)],
+                dossier: dossierOf(partChars),
                 prevTail,
                 castBodies: castBodies(partChars),
                 context,
