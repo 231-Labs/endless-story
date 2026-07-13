@@ -420,6 +420,12 @@ export interface ChapterReviewCounter {
     repaired: number;
 }
 
+/** One-line PUBLIC dossier per participant (canon description's first clause —
+ *  the world-known identity, never the secret). */
+function dossierOf(cs: Char[]): string[] {
+    return cs.map((c) => `${c.name}（${c.role}）：${(CANON[c.id]?.description ?? c.persona).split('。')[0]}。`);
+}
+
 /** Build the DATA-DRIVEN cast-body list (name + 身/sex) for the gender-aware weave +
  *  chapter review, from a scene's actual participants. No names or pairings hardcoded. */
 function castBodies(participants: Char[]): Array<{ name: string; bodyFact?: string }> {
@@ -529,6 +535,7 @@ async function weaveSceneChapter(
         const woven = await agent.weaveTickChapter({
             clock: `第${clock.day}日·${clock.partOfDay}`,
             context,
+            dossier: dossierOf(participants),
             lines: beats.map((x) => `[${venue}] ${x.name}：${x.text}`),
             // Feed the scene's participants' 身/sex so the weaver keeps genders/pronouns
             // correct (a 坤生 is never rendered "男人"). DATA, never name-cased.
@@ -1932,6 +1939,7 @@ export async function runRound(
             const woven = await agent.weaveTickChapter({
                 clock: `第${clock.day}日·${part}`,
                 lines: [...lines, ...worldTexture.slice(0, 6).map((t) => `[世相] ${t}。`)],
+                dossier: dossierOf(partChars),
                 prevTail,
                 castBodies: castBodies(partChars),
                 context,
