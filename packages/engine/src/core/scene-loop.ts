@@ -221,9 +221,33 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     let pendingAdvanceBy: string | null = null;
     for (let turn = 0; turn < maxTurns; turn++) {
         if (!actor) break;
-        const w = hottestOf(input.wants, actor.characterId);
-        if (!w) break;
-        w.heat += 1;
+        let w = hottestOf(input.wants, actor.characterId);
+        let synthetic = false;
+        if (!w) {
+            // A settled heart still finishes the scene: an actor with NO live want
+            // (e.g. everything resolved that morning) acts on presence alone instead
+            // of KILLING the scene mid-exchange (the 大會串 once died at 1 beat
+            // because the lead's wants were all retired by noon). Synthetic want:
+            // no ledger bookkeeping, pure presence.
+            synthetic = true;
+            w = {
+                id: `presence-${actor.characterId}`,
+                characterId: actor.characterId,
+                layer: '當下',
+                desc: '把眼前這一場好好走完',
+                weight: 0.3,
+                sat: 0.5,
+                sat0: 0.5,
+                resistance: 6,
+                heat: 0,
+                frust: 0,
+                recent: 0,
+                kind: 'narrative',
+                source: 'genesis',
+                bornTick: input.tick,
+            };
+        }
+        if (!synthetic) w.heat += 1;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: present });
         const others = present.filter((c) => c.characterId !== actor!.characterId);
         // A consummate scene = established lovers, private, the two of them alone. Their
@@ -290,6 +314,9 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             addressed: r.addressed,
         });
         if (!result.actedCharacterIds.includes(actor.characterId)) result.actedCharacterIds.push(actor.characterId);
+        if (synthetic) {
+            // presence-only beat: no want ledger to update
+        }
         // Intimacy negotiation bookkeeping (their choices, honoured verbatim).
         if (input.isPrivate && present.length === 2) {
             if (r.intimacy === 'accept' && pendingAdvanceBy && pendingAdvanceBy !== actor.characterId) {
@@ -316,7 +343,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             result.endReason = 'close';
             break;
         }
-        actedWants.set(w.id, w);
+        if (!synthetic) actedWants.set(w.id, w);
         beatsBy.set(actor.characterId, (beatsBy.get(actor.characterId) ?? 0) + 1);
 
         w.recent += 1;

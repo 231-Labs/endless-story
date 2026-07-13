@@ -1178,6 +1178,8 @@ export async function runRound(
         bonds: BondGraph;
         /** sorted pair keys that shared a scene today (skip cooling tonight). */
         togetherToday: Set<string>;
+        /** pairKey → rendered scenes today (the SAME pair's Nth scene yields the slot). */
+        pairScenesToday: Map<string, number>;
         /** self-check pass accumulator (scenes reviewed / beats whose text changed). */
         review: ReviewCounter;
         /** chapter-level self-check accumulator (woven 章回 reviewed / prose repaired). */
@@ -1354,6 +1356,7 @@ export async function runRound(
         out.togetherToday.clear();
         out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
         out.confidedToday.clear(); // a new day may bring a new confidence
+        out.pairScenesToday.clear();
         log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
     };
 
@@ -1686,7 +1689,12 @@ export async function runRound(
                 const ca = byName.get(x.char);
                 const cb = byName.get(x.interactIntent!.target) ?? [...byName.values()].find((y) => x.interactIntent!.target.includes(y.name));
                 const heat = (ca ? (out.spotlight[ca.id] ?? 0) : 0) + (cb ? (out.spotlight[cb.id] ?? 0) : 0);
-                return { p: x, heat };
+                // PAIR-FRESHNESS: the SAME pair's Nth scene of the day yields the slot
+                // to anyone else's first — a hot couple stops sealing themselves into a
+                // private bubble the rest of the world can't reach (蘇連 spent a whole
+                // season appearing ONLY with each other). Order only; no matchmaking.
+                const pairN = ca && cb ? (out.pairScenesToday.get([ca.id, cb.id].sort().join('|')) ?? 0) : 0;
+                return { p: x, heat: heat + pairN * 10 };
             })
             .sort((x, y) => x.heat - y.heat)
             .map((x) => x.p);
@@ -1747,6 +1755,7 @@ export async function runRound(
             scenes.push(scene);
             // BOND ledger: the scene warms the edge (both directions, saturating).
             out.togetherToday.add([a.id, b.id].sort().join('|'));
+            out.pairScenesToday.set([a.id, b.id].sort().join('|'), (out.pairScenesToday.get([a.id, b.id].sort().join('|')) ?? 0) + 1);
             bumpBond(
                 out.bonds,
                 a.id,
@@ -2045,6 +2054,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         dormants: deps.dormants ?? buildDormants(),
         bonds: deps.bonds ?? new Map(),
         togetherToday: new Set<string>(),
+        pairScenesToday: new Map<string, number>(),
         review: { scenes: 0, beatsChanged: 0 } as ReviewCounter,
         chapterReview: { chapters: 0, repaired: 0 } as ChapterReviewCounter,
         povReflections: {} as Record<string, Array<{ day: number; text: string }>>,
