@@ -60,6 +60,7 @@ import {
     sameCluster,
     type RehearsalCall,
     transitStreets,
+    occLabel,
 } from './rhythm.ts';
 
 /** FOLLOWED characters (追角): comma-separated names whose scenes ALSO get a
