@@ -425,17 +425,9 @@ body {
   animation: endless-banner-rise 1200ms cubic-bezier(0.22, 1, 0.36, 1) 700ms both;
 }
 
-/* ─────────── Handscroll ambient keyframes ─────────── */
-
 /* ─────────── 載入／等待 圖樣動畫 ───────────
- * es-ripple：鑼音 / 墨暈外擴。es-seal-breathe：方印呼吸。
+ * es-seal-breathe：方印呼吸。
  * es-wait-dot：等待中的三點墨痕。prefers-reduced-motion 時全部停用（見上）。 */
-@keyframes es-ripple {
-  0%   { transform: scale(0.55); opacity: 0.5; }
-  70%  { opacity: 0.16; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-
 @keyframes es-seal-breathe {
   0%, 100% { transform: scale(1); }
   50%      { transform: scale(1.055); }
@@ -444,23 +436,4 @@ body {
 @keyframes es-wait-dot {
   0%, 60%, 100% { opacity: 0.18; transform: translateY(0); }
   30%           { opacity: 1; transform: translateY(-1.5px); }
-}
-
-
-@keyframes es-figure-idle {
-  0%, 100% { transform: translateY(0) rotate(-0.6deg); }
-  50%      { transform: translateY(-2px) rotate(0.6deg); }
-}
-.es-figure-idle {
-  animation: es-figure-idle 4.2s ease-in-out infinite;
-  transform-origin: bottom center;
-}
-
-@keyframes es-lantern-flicker {
-  0%, 100% { opacity: 0.75; }
-  35%      { opacity: 1; }
-  65%      { opacity: 0.6; }
-}
-.es-lantern-flicker {
-  animation: es-lantern-flicker 3.8s ease-in-out infinite;
 }

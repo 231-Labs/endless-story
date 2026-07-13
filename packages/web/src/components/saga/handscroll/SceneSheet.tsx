@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import type { Character, Scene } from '@endless-story/shared';
 import { getSceneBoard, type SceneBoard } from '@/lib/actions/saga-live';
 import { SubscribeButton } from '@/components/common/SubscribeButton';
+import { BlobImage } from '@/components/common/BlobImage';
 import { sceneArtFor } from './terrainArt';
 
 /** The present cast a subscribe gate acts on — subscription is per-character,
@@ -97,7 +98,8 @@ export function SceneSheet({
       className="absolute inset-0 z-50 overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.35 }}
+      exit={{ opacity: 0, transition: { duration: 0.3, ease: 'easeOut' } }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
     >
       {/* the location painting fills the frame and pushes forward — 走進去 */}
       <motion.div
@@ -106,12 +108,15 @@ export function SceneSheet({
         animate={{ scale: 1.06 }}
         transition={{ duration: 6, ease: 'easeOut' }}
       >
+        <div className="absolute inset-0 bg-canvas" />
         {backdrop ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={backdrop} alt="" className="h-full w-full object-cover brightness-[0.82] dark:brightness-100" />
-        ) : (
-          <div className="h-full w-full bg-canvas" />
-        )}
+          <BlobImage
+            src={backdrop}
+            alt=""
+            className="object-cover brightness-[0.82] dark:brightness-100"
+            sizes="100vw"
+          />
+        ) : null}
         {/* scrims — theme-aware: canvas-tinted by day, black by night, so the
             text panels read in either mode without hiding the place. */}
         <div className="absolute inset-0 bg-gradient-to-t from-canvas/92 via-canvas/68 to-canvas/50 dark:from-black/85 dark:via-black/45 dark:to-black/28" />
@@ -128,6 +133,7 @@ export function SceneSheet({
         aria-label={scene.name}
         initial={{ opacity: 0, y: 42 }}
         animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 24, transition: { duration: 0.3, ease: 'easeOut' } }}
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         className="pointer-events-none relative z-10 flex h-full flex-col"
       >
@@ -157,12 +163,13 @@ export function SceneSheet({
               {/* stage: 當前一幕（有圖才現身）+ beats（面板內自捲，整頁保持一屏） */}
               <div className="flex min-h-0 flex-col gap-4">
                 {moment ? (
-                  <div className="relative shrink-0 overflow-hidden rounded-xl ring-1 ring-hairline/50 dark:ring-white/15">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                  // 3:2 預留框（同油畫比例）：圖還在載時面板不塌、載完下方 beats 不被推移。
+                  <div className="relative aspect-[3/2] max-h-[34dvh] w-full shrink-0 overflow-hidden rounded-xl bg-black/20 ring-1 ring-hairline/50 dark:ring-white/15">
+                    <BlobImage
                       src={moment}
                       alt={`當前一幕：${scene.name}`}
-                      className="max-h-[34dvh] w-full object-cover"
+                      className="object-cover"
+                      sizes="(min-width: 768px) 60vw, 100vw"
                     />
                     <span className="absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 font-serif text-2xs tracking-[0.15em] text-white/90">
                       當前一幕
