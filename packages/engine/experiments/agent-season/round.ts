@@ -516,11 +516,13 @@ async function weaveSceneChapter(
     beats: Array<{ name: string; text: string; inner: string }>,
     participants: Char[],
     chapterCtr?: ChapterReviewCounter,
+    context?: string[],
 ): Promise<string | undefined> {
     if (!beats.length) return undefined;
     try {
         const woven = await agent.weaveTickChapter({
             clock: `第${clock.day}日·${clock.partOfDay}`,
+            context,
             lines: beats.map((x) => `[${venue}] ${x.name}：${x.text}`),
             // Feed the scene's participants' 身/sex so the weaver keeps genders/pronouns
             // correct (a 坤生 is never rendered "男人"). DATA, never name-cased.
@@ -542,6 +544,10 @@ async function weaveSceneChapter(
  * the character reads the numbers with her own heart. Used by the nightly
  * mind AND by the on-demand `relations` faculty (her own call to take stock).
  */
+function byIdOf(list: Char[], id: string): Char | undefined {
+    return list.find((c) => c.id === id);
+}
+
 function relationLedger(
     c: Char,
     byId: Map<string, Char>,
@@ -688,7 +694,19 @@ export async function doInteract(
 
     // PER-SCENE WEAVE: this scene's own beats → a readable 章回. For a 床戲/私戲 this is
     // the literary version the per-時辰 PUBLIC weave never produces (it skips privates).
-    const chapter = await weaveSceneChapter(agent, clock, venue, beats, [a, b], chapterCtr);
+    // The scene's CAUSALITY rides into the weave: why the seeker came, and how
+    // the encounter actually ENDED (their close / the hour / someone walking
+    // out) — a chapter that neither arrives nor leaves reads like a hard cut.
+    const endLine =
+        loop.endReason === 'close' && loop.closedBy
+            ? `這場是${loop.closedBy}自己收住的`
+            : loop.moves.length
+              ? `散時${loop.moves.map((m) => `${byIdOf([a, b], m.characterId)?.name ?? ''}起身往${m.toSceneName}去了`).join('、')}`
+              : loop.endReason === 'drained'
+                ? '人散了，這場便斷在半途'
+                : '一個時辰盡了，各自歸位';
+    const sceneCtx = [`${a.name}來此的緣故：${intent}`, `結束的光景：${endLine}`];
+    const chapter = await weaveSceneChapter(agent, clock, venue, beats, [a, b], chapterCtr, sceneCtx);
     // 追角 lens: the followed participants' subjective versions of THIS scene.
     const povVersions = await renderPovVersions(agent, [a, b], beats, venue, clockLabel);
 

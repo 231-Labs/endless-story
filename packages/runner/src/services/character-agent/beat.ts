@@ -41,7 +41,9 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
                 content: `【這場戲剛剛的來回】\n${input.sceneLog || '（戲方起。）'}\n\n輪到你（${input.name}）。`,
             },
         ],
-        maxTokens: input.consummate ? 700 : 240,
+        // Loosened (user: give the drama room to grow) — beats may breathe a
+        // second sentence; the register still decides how much gets used.
+        maxTokens: input.consummate ? 900 : 480,
         temperature: 0.95,
     });
     const o = extractJson(res.text) ?? {};
@@ -263,7 +265,7 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
             system:
                 '你就是這個人。夜深了，替自己把今天在心裡過一遍——用**第一人稱**，寫我今天遇上了什麼、' +
                 '心裡是什麼滋味、我還想怎麼樣。這是**我的主觀**，可以偏心、可以只記我在意的、可以埋怨、' +
-                '可以自欺；不是公正的流水帳。只寫一小段（60-140字），不要標題、不要 JSON、不要分行成清單。' +
+                '可以自欺；不是公正的流水帳。只寫一小段（80-200字），不要標題、不要 JSON、不要分行成清單。' +
                 '這日記是一夜一夜寫下去的：別把前幾夜寫過的那句命題再抄一遍，今晚只寫今晚真正戳到我的。' +
                 bodyNote,
             messages: [
@@ -277,7 +279,7 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
                         `\n\n把今天在你（${input.name}）心裡過一遍。`,
                 },
             ],
-            maxTokens: 320,
+            maxTokens: 480,
             temperature: 0.9,
         });
         return res.text.trim() || null;
@@ -408,7 +410,7 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
                     content: `【那一場的客觀經過】${input.clock}，${input.venue}${input.venueHint ? `（${input.venueHint}）` : ''}。\n${sceneText}\n\n輪到你（${input.name}）講你的版本。`,
                 },
             ],
-            maxTokens: 900,
+            maxTokens: 1200,
             temperature: 0.9,
         });
         return res.text.trim() || null;

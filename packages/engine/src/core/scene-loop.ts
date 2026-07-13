@@ -116,6 +116,10 @@ export interface SceneLoopResult {
     intimacyAccepted: boolean;
     /** Beat index where the accept landed (for the on-page 床 test). */
     acceptedAtBeat?: number;
+    /** Who dropped the curtain (their close beat), if anyone. */
+    closedBy?: string;
+    /** How it ended: their close / the hour ran out / people drained away. */
+    endReason?: 'close' | 'hour' | 'drained';
 }
 
 /** §2.45: privacy drops the wall — alone with the want's target in a private
@@ -303,7 +307,11 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         }
         // The actor's own ending: a close beat (sleep/farewell/enough) wraps the
         // scene — length is theirs, the cap above is only a ceiling.
-        if (r.close) break;
+        if (r.close) {
+            result.closedBy = actor.name;
+            result.endReason = 'close';
+            break;
+        }
         actedWants.set(w.id, w);
         beatsBy.set(actor.characterId, (beatsBy.get(actor.characterId) ?? 0) + 1);
 
@@ -382,5 +390,6 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         }
     }
 
+    if (!result.endReason) result.endReason = present.length < 2 ? 'drained' : 'hour';
     return result;
 }
