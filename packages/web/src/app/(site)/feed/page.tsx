@@ -9,6 +9,7 @@ import { CutList } from '@/components/feed/CutList';
 import { GroupedCutList } from '@/components/feed/GroupedCutList';
 import { ProductionList } from '@/components/feed/ProductionList';
 import { FeedTabs, type FeedMode } from '@/components/feed/FeedTabs';
+import { SeededDossierTeaser } from '@/components/feed/SeededDossierTeaser';
 
 export const metadata = {
   title: '梨園章回',
@@ -136,18 +137,25 @@ async function FeedContent({
           {mode === 'episode' ? (
             (() => {
               const episodes = cuts.filter((c) => c.kind === 'episode');
-              return episodes.length > 0 ? (
-                <CutList cuts={episodes} sagaName={saga.name} />
-              ) : (
-                <div className="es-card p-8 text-center">
-                  <p className="font-serif text-lg text-ink">說書人尚未開講</p>
-                  <p className="mt-2 text-sm tracking-wide text-mute">
-                    今日的回目在戲台落幕後編成；先到
-                    <Link href={{ pathname: '/feed', query: { mode: 'chapter' } }} className="mx-1 text-cinnabar hover:underline">
-                      章回
-                    </Link>
-                    看事件合本。
-                  </p>
+              return (
+                <div>
+                  <SeededDossierTeaser />
+                  {episodes.length > 0 ? (
+                    <div>
+                      <div className="mb-5 flex items-baseline justify-between">
+                        <h2 className="font-serif text-xl tracking-wide text-ink">鏈上連載</h2>
+                        <span className="text-2xs tracking-[0.2em] text-mute">最新事件合本</span>
+                      </div>
+                      <CutList cuts={episodes} sagaName={saga.name} />
+                    </div>
+                  ) : (
+                    <div className="border-t border-hairline/60 py-7 text-center">
+                      <p className="font-serif text-base text-ink">下一回仍在台後發生</p>
+                      <p className="mt-2 text-sm tracking-wide text-mute">
+                        先讀完這只停錶的三種說法；新的鏈上事件會接在這裡。
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             })()

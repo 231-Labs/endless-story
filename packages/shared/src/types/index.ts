@@ -13,3 +13,4 @@ export * from './appearance';
 export * from './liveState';
 export * from './magnetism';
 export * from './story';
+export * from './epistemicProvenance';
