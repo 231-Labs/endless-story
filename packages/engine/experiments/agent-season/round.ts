@@ -56,6 +56,9 @@ import {
     predictWhereabouts,
     sameCluster,
     type RehearsalCall,
+    transitStreets,
+    streetSight,
+    streetBuy,
 } from './rhythm.ts';
 
 /** FOLLOWED characters (追角): comma-separated names whose scenes ALSO get a
@@ -1436,6 +1439,33 @@ export async function runRound(
             c.waitingFor = null;
             interactIntent = null;
             log(`    · 〔班主叫班〕${c.name}（挑梁的角兒）落了排練，被叫回 ${banzhuSummons.venue} 歸班排戲。`);
+        }
+
+        // TRANSIT (no teleport): a cross-cluster walk physically passes the streets
+        // between. The walker OBSERVES the town on the way — who's out, what the
+        // street smells like — and may pick something up. Deterministic, zero LLM:
+        // sights land in the ledger + memory so the night mind and tomorrow's plans
+        // can react (daily-life texture; observations, not scenes).
+        if (c.venue !== from) {
+            for (const street of transitStreets(from, c.venue)) {
+                const seen = cast.filter((o) => o.id !== c.id && !o.dead && o.venue === street).slice(0, 2);
+                const sight = seen.length
+                    ? `遠遠見著${seen.map((o) => o.name).join('、')}也在街上`
+                    : streetSight(street, clock.currentTick, c.id);
+                const line = `第${clock.day}日·${part}，打${from}往${c.venue}，路過${street}，${sight}。`;
+                c.todayLedger.set(`transit:${street}:${clock.currentTick}`, line);
+                await writeMem(recall, c.id, line, seen.length ? 4 : 3, clock.day);
+                if (seen.length) log(`    · 〔路上〕${c.name} 路過 ${street}，${sight}。`);
+                // 順路 small purchase (~1/4 walks, needs coin): a flower, a paper of sweets.
+                let h = clock.currentTick * 31 + street.length;
+                for (const ch of c.id) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+                if (h % 4 === 0 && c.money >= 2) {
+                    c.money -= 1;
+                    const buy = streetBuy(street, h);
+                    c.todayLedger.set(`buy:${street}:${clock.currentTick}`, `路過${street}順手${buy}（花去 1）。`);
+                    log(`    · 〔路上〕${c.name} 路過 ${street}，順手${buy}。`);
+                }
+            }
         }
 
         // EPISODIC MEMORY of the character's own ACTION this 時辰 (append-only).

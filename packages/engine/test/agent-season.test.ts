@@ -1059,3 +1059,12 @@ test('pronounFromBody: 女兒身扮男 is 她 (the guard must not poison itself)
     assert.equal(pronounFromBody('男子之身'), '他');
     assert.equal(pronounFromBody(undefined), '她');
 });
+
+// ── TRANSIT (no teleport): cross-cluster walks pass real streets ─────────────
+test('transit: cross-cluster routes pass physical streets; same cluster has none', async () => {
+    const { transitStreets } = await import('../experiments/agent-season/rhythm.ts');
+    assert.deepEqual(transitStreets('後台妝閣', '會樂里寓所'), ['戲園前街', '霞飛路商店街'], '戲園→霞飛里 walks both throats');
+    assert.deepEqual(transitStreets('練功房', '雲錦台戲台'), [], 'same cluster = no transit');
+    assert.deepEqual(transitStreets('沈宅小樓', '白公館繡樓'), ['霞飛路商店街'], 'two private houses meet the main road');
+    assert.deepEqual(transitStreets('戲園前街', '後台妝閣'), [], 'the street itself is inside the cluster');
+});
