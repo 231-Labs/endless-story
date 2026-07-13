@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: type-check + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm version comes from package.json's "packageManager" field
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Type-check all packages
+        run: pnpm -r type-check
+      - name: Unit tests (all packages)
+        run: pnpm -r test
+
+  build-web:
+    name: web production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # No secrets in CI: the app is built env-less. Every page that needs
+      # chain/LLM credentials resolves them at request time, so `next build`
+      # only has to compile and prerender the static shell.
+      - name: Build @endless-story/web
+        run: pnpm --filter @endless-story/web build
