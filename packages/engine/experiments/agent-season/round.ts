@@ -533,6 +533,43 @@ async function weaveSceneChapter(
     }
 }
 
+/**
+ * 關係盤 (facts only, NO thresholds): for every person this character KNOWS —
+ * has a view of, is established with, or carries a bond-want toward — how long
+ * since they last shared a scene. The mechanism never decides what "distant"
+ * means (two days is an eternity for a new lover and nothing for the 班主);
+ * the character reads the numbers with her own heart. Used by the nightly
+ * mind AND by the on-demand `relations` faculty (her own call to take stock).
+ */
+function relationLedger(
+    c: Char,
+    byId: Map<string, Char>,
+    lastScene: Map<string, { tick: number }>,
+    currentTick: number,
+    ticksPerDay: number,
+): string[] {
+    const ids = new Set<string>([...c.relationshipViews.keys()]);
+    for (const w of c.wants) {
+        if (!w.retired && isBondLayer(w.layer) && w.target) {
+            const t = byId.get(w.target) ?? [...byId.values()].find((o) => o.name === w.target);
+            if (t) ids.add(t.id);
+        }
+    }
+    const out: string[] = [];
+    for (const oid of ids) {
+        const t = byId.get(oid);
+        if (!t || t.dead || t.id === c.id) continue;
+        const last = lastScene.get([c.id, oid].sort().join('|'));
+        const label = last
+            ? Math.floor((currentTick - last.tick) / ticksPerDay) === 0
+                ? '今日才同過場'
+                : `${Math.floor((currentTick - last.tick) / ticksPerDay)}日沒單獨說過話`
+            : '這一季還沒單獨說過話';
+        out.push(`${t.name}：${label}`);
+    }
+    return out;
+}
+
 export async function doInteract(
     a: Char,
     b: Char,
@@ -1195,42 +1232,11 @@ export async function runRound(
             // POV DAILY REFLECTION (narrative-subjective layer): a first-person, possibly
             // biased account of THIS character's day (their ledger + wants + self-model),
             // stored separately from the objective 時辰 章回. Read BEFORE the ledger clear.
-            // 冷淡感知 (attention is zero-sum, and people NOTICE): for each person
-            // this character's heart is tied to (established partner / live bond-want
-            // target), how long since they last shared a scene? ≥2 days apart → the
-            // night mind gets the FACT plus whatever this character actually
-            // remembers about them lately (own memories only — no omniscience).
-            // Whether it reads as 「TA忙」 or 「TA變心了」 is the character's own call.
-            const tieNotes: string[] = [];
-            const tieIds = new Set<string>();
-            for (const pk of out.establishedDyn) {
-                const [x, y] = pk.split('|');
-                if (x === c.id) tieIds.add(y);
-                if (y === c.id) tieIds.add(x);
-            }
-            for (const w of c.wants) {
-                if (!w.retired && isBondLayer(w.layer) && w.target) {
-                    const t = byId.get(w.target) ?? [...byId.values()].find((o) => o.name === w.target);
-                    if (t && t.id !== c.id) tieIds.add(t.id);
-                }
-            }
-            for (const tid of tieIds) {
-                const t = byId.get(tid);
-                if (!t || t.dead) continue;
-                const pk = [c.id, tid].sort().join('|');
-                const last = out.lastScene.get(pk);
-                const daysApart = last ? Math.floor((clock.currentTick - last.tick) / deps.ticksPerDay) : 99;
-                if (daysApart < 2) continue;
-                let recent: string[] = [];
-                try {
-                    recent = (await recall.recall(c.id, t.name, 2, clock.day)).map((m) => m.text.slice(0, 60));
-                } catch {
-                    /* non-fatal */
-                }
-                tieNotes.push(
-                    `（你心裡繫著的${t.name}，已${daysApart >= 99 ? '許久' : `${daysApart}日`}沒同你單獨說過話。你近來記得的：${recent.join('；') || '竟想不起什麼'}。這意味著什麼，你自己掂。）`,
-                );
-            }
+            // 關係盤 into the night mind: plain facts for EVERY known tie, no
+            // threshold — what counts as "too long" is the character's own heart's
+            // arithmetic, never the mechanism's.
+            const ledgerLines = relationLedger(c, byId, out.lastScene, clock.currentTick, deps.ticksPerDay);
+            const tieNotes = ledgerLines.length ? [`【你與眾人的近疏（事實）】${ledgerLines.join('；')}。`] : [];
             const dayText = [[...c.todayLedger.values()].join('\n'), ...tieNotes].join('\n').slice(0, 1400);
             try {
                 const refl = await agent.povReflect({
@@ -1419,6 +1425,11 @@ export async function runRound(
                 autoRecall.push(...more.filter((m) => !autoRecall.includes(m)));
             } else if (t.tool === 'interact') {
                 if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話', confide: t.confide === true };
+            } else if (t.tool === 'relations') {
+                // Her own call to take stock: the fact sheet lands in her working
+                // context exactly like a recall — she reads it, the plan/scene react.
+                const lines = relationLedger(c, byId, out.lastScene, clock.currentTick, deps.ticksPerDay);
+                if (lines.length) autoRecall.push(`（你靜下心盤了盤身邊眾人的近疏）${lines.join('；')}。`);
             } else if (t.tool === 'wait') {
                 if (t.target) choseWait = { target: t.target, intent: t.intent ?? '守著等人出現，把話說開' };
             }

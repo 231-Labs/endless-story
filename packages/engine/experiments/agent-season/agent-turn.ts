@@ -26,7 +26,7 @@ import { rhythmPull, type RehearsalCall, type RhythmPull } from './rhythm.ts';
 import type { Perception } from './perception.ts';
 
 export interface ToolCall {
-    tool: 'time' | 'move' | 'recall' | 'interact' | 'wait';
+    tool: 'time' | 'move' | 'recall' | 'interact' | 'wait' | 'relations';
     dest?: string;
     target?: string;
     intent?: string;
@@ -315,6 +315,7 @@ export class RealPlanner implements Planner {
             '- interact：去對某個在場的人做點什麼、說點什麼（若對方也在場，就會當面演成一場戲）。填 target=名字、intent=你要做/說什麼。' +
                 '若這一趟是要找信得過的人把心裡壓著的**私事**說一說（傾吐：情、愧、怕、瞞著的往事），多加 "confide":true——只有真起了想說的心才標；戲務、功夫、排戲、切磋、公事、較勁、寒暄一概不算傾吐，別標。',
             '- wait：你算準了某個人這個時辰該在的地方，守在那兒等他出現（哪怕他一時沒到，你也守著，直到他來或你等得沒了耐心）。填 target=名字、intent=你等著要對他說/做什麼。',
+            '- relations：靜下心，盤一盤你與身邊眾人的近疏——誰多久沒同你單獨說過話了。想清楚了再定這個時辰做什麼。',
             '',
             '找一個人的訣竅：你認得的人，你大概知道他這個時辰照著營生會在哪（下面會告訴你）。要嘛動身去他那一帶找他，要嘛守在他必經的地方等他。別空等在一個他根本不會來的地方。',
             '',
@@ -403,7 +404,7 @@ export class RealPlanner implements Planner {
                 const tools: ToolCall[] = [];
                 for (const t of rawTools.slice(0, MAX_TOOLS)) {
                     const tool = String((t as any)?.tool ?? '').trim();
-                    if (!['time', 'move', 'recall', 'interact', 'wait'].includes(tool)) continue;
+                    if (!['time', 'move', 'recall', 'interact', 'wait', 'relations'].includes(tool)) continue;
                     tools.push({
                         tool: tool as ToolCall['tool'],
                         dest: str((t as any)?.dest),
