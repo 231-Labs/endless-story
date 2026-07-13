@@ -146,7 +146,13 @@ async function RosterCards({
 
   const cards: CardData[] = await Promise.all(
     characters.map(async (character) => {
-      const magnetism = await charactersApi.getMagnetism(character.id);
+      // The three roots are independent — fetch them in one round per card
+      // (was four sequential awaits, so the roster paid 4× RPC depth per card).
+      const [magnetism, edges, subscribers] = await Promise.all([
+        charactersApi.getMagnetism(character.id),
+        relationshipsApi.listOutgoingEdges(character.id),
+        subscriptionsApi.listSubscribers(character.id),
+      ]);
       const sigQuote = magnetism?.signatureQuote;
       const quoteChapter = sigQuote?.chapterId
         ? await chaptersApi.getChapter(sigQuote.chapterId)
@@ -162,7 +168,6 @@ async function RosterCards({
       // Only surface a relationship when the character genuinely feels something
       // strong toward someone — skip 平淡(neutral) / 故舊(acquaintance), and pick the
       // strongest tie by weight rather than whatever edge happened to be first.
-      const edges = await relationshipsApi.listOutgoingEdges(character.id);
       const strongEdge = edges
         .filter((e) => e.tone && e.tone !== 'neutral' && e.tone !== 'acquaintance')
         .sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0))[0];
@@ -170,7 +175,6 @@ async function RosterCards({
       const tension =
         strongEdge && target ? { targetName: target.name, label: strongEdge.label } : undefined;
 
-      const subscribers = await subscriptionsApi.listSubscribers(character.id);
       const subscriberWallets = uniqueWallets(
         subscribers
           .filter((s) => !s.isOwner)
@@ -261,6 +265,7 @@ async function DossierDetail({
     chainPovChapters,
     reflections,
     appearance,
+    currentWants,
   ] = await Promise.all([
     charactersApi.listCharacters(),
     relationshipsApi.listOutgoingEdges(character.id),
@@ -293,6 +298,10 @@ async function DossierDetail({
     // 形貌 description (content road, own subject) — only needed by 設定集·形貌,
     // so skip the chain read on other tabs. null → caption falls back to facts.
     tab === 'gallery' ? appearanceApi.getAppearance(character.id) : Promise.resolve(null),
+    // 當下心事 — the character's live wants (drives behind their current intent).
+    tab === 'profile' && character.sagaId
+      ? getCharacterWants(character.sagaId, character.id).catch(() => [])
+      : Promise.resolve([]),
   ]);
   const charactersById = byId(allCharacters);
   // felt layer: wants project directed feelings (愛→戀慕) over the lived seeds,
@@ -314,22 +323,19 @@ async function DossierDetail({
     ...mergedOutgoing.map((e) => e.toId),
     ...mergedIncoming.map((e) => e.fromId),
   ]);
-  const missingPartners = await Promise.all(
-    [...partnerIds]
-      .filter((pid) => pid !== character.id && !charactersById.has(pid))
-      .map((pid) => charactersApi.getCharacter(pid)),
-  );
+  const [missingPartners, personaRegenChapter] = await Promise.all([
+    Promise.all(
+      [...partnerIds]
+        .filter((pid) => pid !== character.id && !charactersById.has(pid))
+        .map((pid) => charactersApi.getCharacter(pid)),
+    ),
+    persona?.lastRegenChapterId
+      ? chaptersApi.getChapter(persona.lastRegenChapterId).then((c) => c ?? null)
+      : Promise.resolve(null),
+  ]);
   for (const partner of missingPartners) {
     if (partner) charactersById.set(partner.id, partner);
   }
-  const personaRegenChapter = persona?.lastRegenChapterId
-    ? (await chaptersApi.getChapter(persona.lastRegenChapterId)) ?? null
-    : null;
-  // 當下心事 — the character's live wants (drives behind their current intent).
-  const currentWants =
-    tab === 'profile' && character.sagaId
-      ? await getCharacterWants(character.sagaId, character.id).catch(() => [])
-      : [];
 
   return (
     <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
