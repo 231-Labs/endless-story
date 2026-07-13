@@ -135,10 +135,26 @@ class Mind {
     }
 
     async reflect(day: number): Promise<string> {
-        this.transcript.push({ role: 'user', content: `（夜深了，第${day}日過完。這一天在你心裡留下什麼？只對自己說，說人話。）` });
+        this.transcript.push({
+            role: 'user',
+            content: `（夜深了，第${day}日過完。這一天在你心裡留下什麼？只對自己說，說人話——這裡不用那個 JSON 格式，直接把心裡話寫出來就好。）`,
+        });
         const raw = await llmChat(this.system, this.transcript, 400);
-        this.transcript.push({ role: 'assistant', content: raw });
-        return raw.trim();
+        // De-shell: acting format leaks into reflections (```json {"心裡":…}).
+        // Store the CLEAN voice in the transcript so the habit doesn't compound.
+        let clean = raw.trim();
+        const jsonish = clean.match(/\{[\s\S]*\}/);
+        if (jsonish) {
+            try {
+                const o = JSON.parse(jsonish[0]) as Record<string, unknown>;
+                const parts = Object.values(o).filter((v): v is string => typeof v === 'string' && v.length > 0);
+                if (parts.length) clean = parts.join(' ');
+            } catch {
+                clean = clean.replace(/```json|```/g, '').trim();
+            }
+        }
+        this.transcript.push({ role: 'assistant', content: clean });
+        return clean;
     }
 
     hear(note: string): void {
@@ -230,9 +246,12 @@ async function main(): Promise<void> {
                     }
                 }
             }
-            // street sightings: any two movers this tick glimpse each other
+            // street sightings: two movers this tick glimpse each other — unless
+            // they are heading to the SAME place (converging, not crossing;
+            // they'll simply meet there next tick).
             for (let i = 0; i < moved.length; i++)
                 for (let j = i + 1; j < moved.length; j++) {
+                    if (moved[i].venue === moved[j].venue) continue;
                     moved[i].hear(`（路上你遠遠瞧見${moved[j].name}也在街面上，往${moved[j].venue}那頭去了。）`);
                     moved[j].hear(`（路上你遠遠瞧見${moved[i].name}也在街面上，往${moved[i].venue}那頭去了。）`);
                     log(`  〔街面〕${moved[i].name} 與 ${moved[j].name} 錯身而過，彼此瞧見了。`);
