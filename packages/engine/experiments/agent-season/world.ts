@@ -193,6 +193,8 @@ export interface Char {
      *  strategic layer wants alone lack — desire without a plan only ever
      *  advances by collision. */
     scheme: string | null;
+    /** consecutive days without real practice (identity fact for the night mind). */
+    daysSincePractice: number;
 }
 
 /** A knows B's ROUTINE only if they KNOW each other — A carries a relationship view
@@ -403,6 +405,7 @@ export function buildCast(only?: string[]): Char[] {
             craft: 0.7, // 技藝手感 (0..1): practice keeps it warm, neglect lets it slide
             practicedToday: false,
             scheme: null,
+            daysSincePractice: 0,
             waitingFor: null,
             occupiedRestOfDay: false,
             dead: false,
