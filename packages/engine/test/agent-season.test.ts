@@ -1084,3 +1084,27 @@ test('dormant lives: a street purchase is remembered by BOTH sides and heat pers
     assert.equal(restored.heat, 3, 'heat carries across the season boundary');
     assert.equal(restored.ledger[0]?.note, '連翹來買過一枝白蘭花', 'the vendor remembers who touched her life');
 });
+
+// ── BOND graph — the numeric relationship underlay ────────────────────────────
+test('bond: saturating growth, floored cooling, and the advance affordance gate', async () => {
+    const { bumpBond, decayBonds, bondOf, advanceReady, seedBond, BOND } = await import('../src/core/bond-graph.ts');
+    const g = new Map();
+    // strangers: no advance card until courted
+    assert.equal(advanceReady(g, 'a', 'b'), false, 'a stranger gets no advance card');
+    // court through scenes: growth saturates (never exceeds 1)
+    for (let i = 0; i < 6; i++) bumpBond(g, 'a', 'b', 'confide');
+    assert.ok(bondOf(g, 'a', 'b') >= BOND.advanceAt, 'six confidences earn standing');
+    // cooling drifts toward the floor of the PEAK, never to stranger
+    const peak = bondOf(g, 'a', 'b');
+    for (let i = 0; i < 200; i++) decayBonds(g, new Set());
+    const cooled = bondOf(g, 'a', 'b');
+    assert.ok(cooled < peak, 'apart days cool the edge');
+    assert.ok(cooled >= BOND.floorOfPeak * peak - 1e-9, 'an old flame never cools below 30% of its peak');
+    // seeds only raise
+    seedBond(g, 'a', 'b', 0.2);
+    assert.ok(bondOf(g, 'a', 'b') >= cooled, 'seeding never lowers a lived edge');
+    // together today = no cooling
+    const before = bondOf(g, 'a', 'b');
+    decayBonds(g, new Set(['a|b']));
+    assert.equal(bondOf(g, 'a', 'b'), before, 'a pair that met today does not cool');
+});

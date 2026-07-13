@@ -20,6 +20,7 @@
 
 import type { Want } from '../../src/index.ts';
 import type { Char, DormantChar } from './world.ts';
+import { bondsToJSON, bondsFromJSON, type BondGraph } from '../../src/core/bond-graph.ts';
 
 /** The mutated overlay captured per character. */
 export interface CharSnapshot {
@@ -55,6 +56,8 @@ export interface CastSnapshot {
     /** dormant lives (street vendors …): ledger + heat carry across seasons —
      *  the world keeps growing from being touched. */
     dormants?: Array<{ id: string; heat: number; ledger: Array<{ day: number; note: string }> }>;
+    /** the numeric relationship underlay (directed edges + peaks). */
+    bonds?: Array<{ k: string; v: number; peak: number }>;
     /** charId → its mutated overlay. */
     cast: Record<string, CharSnapshot>;
 }
@@ -63,7 +66,7 @@ export interface CastSnapshot {
  * Capture the cast's MUTATED overlay (NOT the canon seed memories, NOT transient
  * per-round flags). Deep-copies wants + views so the snapshot never aliases live state.
  */
-export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: string[] = [], dormants: DormantChar[] = []): CastSnapshot {
+export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: string[] = [], dormants: DormantChar[] = [], bonds?: BondGraph): CastSnapshot {
     const out: Record<string, CharSnapshot> = {};
     for (const c of cast) {
         out[c.id] = {
@@ -85,6 +88,7 @@ export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: stri
         savedTick,
         establishedPairs,
         dormants: dormants.length ? dormants.map((d) => ({ id: d.id, heat: d.heat, ledger: d.ledger.map((l) => ({ ...l })) })) : undefined,
+        bonds: bonds?.size ? bondsToJSON(bonds) : undefined,
         cast: out,
     };
 }
@@ -96,6 +100,11 @@ export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: stri
  * snapshot is left with its seed defaults. Canon thick memories are untouched (they were
  * reloaded verbatim by buildCast). Returns the ids that were actually restored.
  */
+/** Restore the bond graph from a snapshot (empty graph if absent). */
+export function restoreBonds(snap: CastSnapshot): BondGraph {
+    return bondsFromJSON(snap.bonds);
+}
+
 /** Overlay saved dormant state (heat/ledger) onto a fresh dormant population. */
 export function restoreDormants(dormants: DormantChar[], snap: CastSnapshot): void {
     for (const d of dormants) {

@@ -48,6 +48,10 @@ export interface SceneLoopCastMember {
      *  register so a consummate beat is gender-correct for ANY pairing (data-driven,
      *  never name-special-cased). */
     bodyFact?: string;
+    /** STANDING for the advance affordance (bond-gated by the caller): without
+     *  it the world simply never deals this actor the advance card — courting
+     *  happens through scenes and confidences first. Default true (probes). */
+    advanceReady?: boolean;
     /** This member's OWN canon feeling toward each co-present member, keyed by
      *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
      *  the reverse edge — no omniscience about others' feelings. */
@@ -266,7 +270,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             etiquette: input.etiquette,
             consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
             intimacyOffered: pendingAdvanceBy != null && pendingAdvanceBy !== actor.characterId,
-            intimacyPossible: input.isPrivate && present.length === 2 && !registerOpen,
+            intimacyPossible: input.isPrivate && present.length === 2 && !registerOpen && actor.advanceReady !== false,
         });
 
         log.push(`${actor.name}：${r.beat}`);

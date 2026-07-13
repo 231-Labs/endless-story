@@ -100,6 +100,7 @@ import { pronounFromBody } from '@endless-story/runner/services/character-agent/
 import { bumpActorFatigue, pickOrthogonalThreads, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
 import { isBondLayer } from '../../src/core/want-core.ts';
 import { CANON } from './canon-seed.ts';
+import { bondOf, bumpBond, decayBonds, advanceReady, seedBond, BOND, type BondGraph } from '../../src/core/bond-graph.ts';
 import {
     type Play,
     PRODUCTION,
@@ -217,6 +218,8 @@ export interface SeasonDeps {
     /** The world's dormant population (street vendors etc.) — real entities,
      *  never flavor strings. Defaults to buildDormants(). */
     dormants?: DormantChar[];
+    /** the numeric relationship underlay (seeded from canon; persisted). */
+    bonds?: BondGraph;
 }
 
 export interface SeasonResult {
@@ -231,6 +234,8 @@ export interface SeasonResult {
     establishedPairs: string[];
     /** the dormant population as the season left it (ledgers + heat persist). */
     dormants: DormantChar[];
+    /** the bond graph as the season left it. */
+    bonds: BondGraph;
     /** the accumulated play at season end. */
     play: Play;
     /** the deterministic box office (null if the play never premiered). */
@@ -596,6 +601,7 @@ export async function doInteract(
     opts?: { maxTurns?: number },
     establishedDyn?: Set<string>,
     confide = false,
+    bonds?: BondGraph,
 ): Promise<SceneRecord> {
     const venue = a.venue;
     const isPrivate = !isPublicVenue(venue); // a home / private venue → private
@@ -605,6 +611,13 @@ export async function doInteract(
     // everyone else → default restrained (forbidden/unconfessed stays held).
     const consummate = established && isPrivate && night;
     const cast = [castMember(a, [b]), castMember(b, [a])];
+    // STANDING gates the ADVANCE affordance (never the answer): you court a
+    // stranger with scenes and confidences first; the world only deals the
+    // advance card on real footing. Numbers never reach the prompt.
+    if (bonds) {
+        cast[0].advanceReady = advanceReady(bonds, a.id, b.id);
+        cast[1].advanceReady = advanceReady(bonds, b.id, a.id);
+    }
     const wants = [...a.wants, ...b.wants];
     const clockLabel = `第${clock.day}日·${clock.partOfDay}`;
 
@@ -1161,6 +1174,10 @@ export async function runRound(
         /** pairKeys that already had a 傾吐 today (once per pair per day). */
         confidedToday: Set<string>;
         dormants: DormantChar[];
+        /** the numeric relationship underlay (directed; never enters a prompt). */
+        bonds: BondGraph;
+        /** sorted pair keys that shared a scene today (skip cooling tonight). */
+        togetherToday: Set<string>;
         /** self-check pass accumulator (scenes reviewed / beats whose text changed). */
         review: ReviewCounter;
         /** chapter-level self-check accumulator (woven 章回 reviewed / prose repaired). */
@@ -1323,9 +1340,18 @@ export async function runRound(
             c.scenesToday = 0;
             c.addressedToday.clear();
             c.occupiedRestOfDay = false; // a new day: the spent character rises again
-            if (c.occupation === 'troupe' && !c.practicedToday) c.craft = Math.max(0.2, c.craft - 0.015);
+            if (c.occupation === 'troupe') {
+                // craft_{t+1} = base + (craft − base)·λ : skill erodes toward the
+                // talent floor (天分鏽不掉), and the peak is expensive to hold.
+                const base = 0.35 + 0.25 * Math.min(1, abilityOf(c.id) / 5);
+                if (!c.practicedToday) c.craft = base + (c.craft - base) * 0.97;
+            }
             c.practicedToday = false;
         }
+        // COOLING: edges whose pair never met today drift toward their floor
+        // (an old flame never cools back to stranger — 30% of its peak holds).
+        decayBonds(out.bonds, out.togetherToday);
+        out.togetherToday.clear();
         out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
         out.confidedToday.clear(); // a new day may bring a new confidence
         log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
@@ -1631,7 +1657,8 @@ export async function runRound(
                 for (const m of memberChars) accumulateEffort(play, m.id, PRODUCTION.effortPerGathering, at);
                 for (const m of memberChars) {
                     m.practicedToday = true;
-                    m.craft = Math.min(1, m.craft + 0.02);
+                    // diminishing daily returns: 0.015/時辰, effective cap ~3 sessions
+                    m.craft = Math.min(1, m.craft + 0.015);
                 }
                 bumpReputeFromEffort(play, memberChars.length);
             }
@@ -1715,8 +1742,17 @@ export async function runRound(
                 // 傾吐 cooldown: once per pair per day (a mechanical counter, not a
                 // director) — the tag was drifting toward "any earnest talk".
                 p.interactIntent.confide === true && !out.confidedToday.has(pairKey) && (out.confidedToday.add(pairKey), true),
+                out.bonds,
             );
             scenes.push(scene);
+            // BOND ledger: the scene warms the edge (both directions, saturating).
+            out.togetherToday.add([a.id, b.id].sort().join('|'));
+            bumpBond(
+                out.bonds,
+                a.id,
+                b.id,
+                scene.consummate ? 'bed' : scene.intimacyAccepted ? 'accept' : scene.confideBy ? 'confide' : scene.isPrivate ? 'private' : 'shared',
+            );
             if (scene.confideBy) log(`  〔傾吐〕${a.name} 找 ${b.name} 說了心裡壓著的事——說出口的那些，${b.name} 記下了。`);
             // 相許 as an EVENT (no judge): they walked there themselves in this
             // scene; the world records the fact (for 修羅場 stakes + persistence).
@@ -1966,7 +2002,7 @@ export async function runRound(
                 out.establishedDyn,
             );
             out.premiere = scene;
-            out.boxOffice = computeBoxOffice(play, cast);
+            out.boxOffice = computeBoxOffice(play, cast, (a.craft + b.craft) / 2);
             roundRec.scenes.push(scene);
             roundRec.sceneVenues = [...new Set(roundRec.scenes.map((s) => s.venue))];
             log(`  〔大會串〕春雪社在雲錦台獻演《${play.title}》 — ${a.name}×${b.name} 領銜，共 ${scene.beats.length} 拍。`);
@@ -2007,6 +2043,8 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         discoveredToday: new Set<string>(),
         confidedToday: new Set<string>(),
         dormants: deps.dormants ?? buildDormants(),
+        bonds: deps.bonds ?? new Map(),
+        togetherToday: new Set<string>(),
         review: { scenes: 0, beatsChanged: 0 } as ReviewCounter,
         chapterReview: { chapters: 0, repaired: 0 } as ChapterReviewCounter,
         povReflections: {} as Record<string, Array<{ day: number; text: string }>>,
@@ -2048,6 +2086,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         play: deps.play,
         establishedPairs: [...out.establishedDyn],
         dormants: out.dormants,
+        bonds: out.bonds,
         boxOffice: out.boxOffice,
         premiere: out.premiere,
         showrunnerVerdict: razor(deps.showrunner, deps.play),

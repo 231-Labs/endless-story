@@ -22,7 +22,8 @@ import * as path from 'node:path';
 
 import { FakeSceneAgent, LocalRecall, LocalClock, applyRewrite, type SceneAgentPort } from '../../src/index.ts';
 import { buildCast, isPublicVenue, type Char } from './world.ts';
-import { snapshotCast, restoreCast, restoreDormants, type CastSnapshot } from './persistence.ts';
+import { snapshotCast, restoreCast, restoreDormants, restoreBonds, type CastSnapshot } from './persistence.ts';
+import { seedBond, BOND, type BondGraph } from '../../src/core/bond-graph.ts';
 import { occLabel, type RehearsalCall } from './rhythm.ts';
 import { FakePlanner, RealPlanner, type Planner } from './agent-turn.ts';
 import { runSeason, type SeasonResult, type RoundRecord } from './round.ts';
@@ -213,13 +214,31 @@ async function main(): Promise<void> {
         })
         .filter((d) => d.name && d.day > 0 && d.text);
 
-    const { buildDormants } = await import('./world.ts');
+    const { buildDormants, areEstablishedLovers } = await import('./world.ts');
     const dormants = buildDormants();
     if (RESTORE_SNAP) restoreDormants(dormants, RESTORE_SNAP);
+    // BOND graph: restore, then seed the canon floor (data-driven, no names):
+    // established lovers 0.75 both ways; a one-way 暗戀/想念 tag 0.6; anyone
+    // with a seeded view 0.35. seedBond only ever raises, so restored state wins.
+    const bonds: BondGraph = RESTORE_SNAP ? restoreBonds(RESTORE_SNAP) : new Map();
+    for (const x of cast) {
+        for (const y of cast) {
+            if (x.id === y.id) continue;
+            if (areEstablishedLovers(x, y)) seedBond(bonds, x.id, y.id, BOND.seed.established);
+            else if (x.thickMemories.some((m) => (m.tag.startsWith('暗戀') || m.tag.startsWith('肌膚')) && m.tag.includes(y.name.slice(0, 1)))) seedBond(bonds, x.id, y.id, BOND.seed.yearning);
+            else if (x.relationshipViews.has(y.id)) seedBond(bonds, x.id, y.id, BOND.seed.known);
+        }
+    }
+    for (const pk of restoredEstablished) {
+        const [xa, xb] = pk.split('|');
+        seedBond(bonds, xa, xb, BOND.seed.established);
+        seedBond(bonds, xb, xa, BOND.seed.established);
+    }
     const result = await runSeason({
         dormants,
+        bonds,
         checkpoint: (endedTick, establishedPairs) => {
-            fs.writeFileSync(path.join(outDir, 'cast-state.json'), JSON.stringify(snapshotCast(cast, endedTick, establishedPairs, dormants)));
+            fs.writeFileSync(path.join(outDir, 'cast-state.json'), JSON.stringify(snapshotCast(cast, endedTick, establishedPairs, dormants, bonds)));
             const endedDay = Math.floor(endedTick / 6);
             for (const d of dreams) {
                 if (d.day !== endedDay + 1) continue; // lands on the NIGHT before day d.day
@@ -250,7 +269,7 @@ async function main(): Promise<void> {
 
     // SEASON PERSISTENCE — write the end-of-week snapshot so the NEXT week can restore it.
     const statePath = path.join(outDir, 'cast-state.json');
-    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6, result.establishedPairs, result.dormants)));
+    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6, result.establishedPairs, result.dormants, result.bonds)));
 
     // ALWAYS emit a readable HTML next to the report (§ user: every run must produce
     // an HTML to read, so problems are caught by reading the whole season).
