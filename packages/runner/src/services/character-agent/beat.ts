@@ -431,6 +431,8 @@ export async function judgeWantResolved(input: JudgeResolveInput): Promise<Resol
                 '**放不回頭的行動**了結。鐵則：①只認當事人自己的抉擇成定局，別人的動作不算;' +
                 '②拖延不算（收拾行李、說改天再說、先忍下、再想想，一律 resolved=false）;' +
                 '③說破/做成/斷絕/應承這類覆水難收的才算。' +
+                '④覆水難收≠押命：尋常的了結是一句說破的實話、一件交出去的物、一個當眾的舉動——' +
+                '把「命/一輩子/終身」押出去是一生一兩次的大事，note 裡別把小事寫成終身盟。' +
                 (input.ownerBody ? `④代詞鐵則：心事主人${input.name}是${pronounFromBody(input.ownerBody)}（${input.ownerBody}），note 裡的代詞照此寫。` : '') +
                 '輸出 JSON：' +
                 '{"resolved":true/false,"note":"若 true,一句寫明是哪個放不回頭的行動"}。不要 markdown。',

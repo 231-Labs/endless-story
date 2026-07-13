@@ -405,6 +405,12 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         // A targeted want is only judged where its target actually IS: a semantic
         // match once resolved 金鳳's debt-want inside a 江柳 scene (wrong person).
         if (w.target && !presentIds.has(w.target) && !presentNames.has(w.target)) continue;
+        // RESOLUTION NEEDS HISTORY (anti vow-inflation): a matter of the heart is
+        // not settled the first time it is touched — the want must have been truly
+        // WORKED (≥4 acted beats over its life) before the judge is even consulted.
+        // A ten-year debt was clearing in a single scene; every scene played like a
+        // season finale because the fastest road to progress was an instant 終身誓.
+        if (w.heat < 4) continue;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: input.cast });
         if (forcingPressure(w) < effR) continue;
         const owner = input.cast.find((c) => c.characterId === w.characterId);
