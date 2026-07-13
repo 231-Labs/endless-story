@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import type { Chapter, Character, Saga, SagaLocation, Scene } from '@endless-story/shared';
 import { FloatingStream, type StreamLine } from './FloatingQuote';
 import { SceneFan } from './SceneFan';
@@ -8,6 +9,7 @@ import { SceneSheet } from './SceneSheet';
 import { terrainArtFor } from './terrainArt';
 import { computeHandscrollLayout, type ScenePlacement } from './handscrollLayout';
 import { SagaTabBar } from '../SagaTabBar';
+import { BlobImage } from '@/components/common/BlobImage';
 import { getSagaLiveSnapshot, getSceneLinesPulse, type OpenEventStatus } from '@/lib/actions/saga-live';
 
 /** A light day/night wash laid over each painted panel so the art lives in the
@@ -201,20 +203,60 @@ export function SagaHandscroll(props: Props) {
     ? layout.segments.map((s) => s.location.name).join(' + ')
     : locationLabel;
 
-  // Intercept vertical wheel events and turn them into horizontal snap between segments
+  // Intercept vertical wheel events and page horizontally between location
+  // columns. The scroll target is the adjacent column's own snap position
+  // (centre-aligned, same as CSS snap-center), and the glide is a rAF tween
+  // with snap suspended for its duration: native smooth-scroll + mandatory
+  // snap re-animating on top of each other was the old judder. The tween
+  // lands exactly on a snap point, so restoring snap causes no jump, and its
+  // completion releases the wheel lock (no magic-number timeout).
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
     let isScrolling = false;
+    let raf = 0;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const tweenScroll = (target: HTMLElement, axis: 'left' | 'top', to: number) => {
+      isScrolling = true;
+      const done = () => {
+        isScrolling = false;
+      };
+      const from = axis === 'left' ? target.scrollLeft : target.scrollTop;
+      const delta = to - from;
+      const apply = (v: number) => {
+        if (axis === 'left') target.scrollLeft = v;
+        else target.scrollTop = v;
+      };
+      if (reducedMotion.matches || Math.abs(delta) < 1) {
+        apply(to);
+        done();
+        return;
+      }
+      const prevSnap = target.style.scrollSnapType;
+      target.style.scrollSnapType = 'none';
+      const t0 = performance.now();
+      const duration = 480;
+      const step = (now: number) => {
+        const t = Math.min(1, (now - t0) / duration);
+        apply(from + delta * easeOut(t));
+        if (t < 1) {
+          raf = requestAnimationFrame(step);
+        } else {
+          target.style.scrollSnapType = prevSnap;
+          done();
+        }
+      };
+      raf = requestAnimationFrame(step);
+    };
 
     const handleWheel = (e: WheelEvent) => {
       // If the user is already scrolling horizontally (e.g. trackpad), let it through
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
 
       const isScrollDown = e.deltaY > 0;
-      const isScrollUp = e.deltaY < 0;
-
       const maxScrollLeft = el.scrollWidth - el.clientWidth;
       const atRightEdge = el.scrollLeft >= maxScrollLeft - 2;
       const atLeftEdge = el.scrollLeft <= 2;
@@ -227,36 +269,51 @@ export function SagaHandscroll(props: Props) {
       // Scrolled to far right/left: hand vertical scroll to the outer full-bleed snap, avoid getting stuck mid-way
       if (
         outer &&
-        ((isScrollDown && atRightEdge && canPageDown) || (isScrollUp && atLeftEdge && canPageUp))
+        ((isScrollDown && atRightEdge && canPageDown) || (!isScrollDown && atLeftEdge && canPageUp))
       ) {
-        if (isScrolling) return;
         e.preventDefault();
-        isScrolling = true;
-        const stride = outer.clientHeight;
-        outer.scrollBy({ top: isScrollDown ? stride : -stride, behavior: 'smooth' });
-        setTimeout(() => {
-          isScrolling = false;
-        }, 700);
+        if (isScrolling) return;
+        tweenScroll(
+          outer,
+          'top',
+          outer.scrollTop + (isScrollDown ? outer.clientHeight : -outer.clientHeight),
+        );
         return;
       }
 
-      if ((isScrollDown && !atRightEdge) || (isScrollUp && !atLeftEdge)) {
+      if ((isScrollDown && !atRightEdge) || (!isScrollDown && !atLeftEdge)) {
         e.preventDefault();
-
         if (isScrolling) return;
 
-        isScrolling = true;
-        const sign = isScrollDown ? 1 : -1;
-        el.scrollBy({ left: sign * window.innerWidth, behavior: 'smooth' });
-
-        setTimeout(() => {
-          isScrolling = false;
-        }, 700);
+        // Step to the neighbouring column's snap-centre position.
+        const columns = Array.from(el.firstElementChild?.children ?? []) as HTMLElement[];
+        if (!columns.length) return;
+        const viewCentre = el.scrollLeft + el.clientWidth / 2;
+        let nearest = 0;
+        let bestDist = Infinity;
+        columns.forEach((c, i) => {
+          const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - viewCentre);
+          if (d < bestDist) {
+            bestDist = d;
+            nearest = i;
+          }
+        });
+        const next = Math.min(columns.length - 1, Math.max(0, nearest + (isScrollDown ? 1 : -1)));
+        const col = columns[next];
+        const left = Math.min(
+          maxScrollLeft,
+          Math.max(0, col.offsetLeft + col.offsetWidth / 2 - el.clientWidth / 2),
+        );
+        if (Math.abs(left - el.scrollLeft) < 1) return;
+        tweenScroll(el, 'left', left);
       }
     };
 
     el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   // Live scenes indexed by id, and grouped by covered location (in axis order),
@@ -274,7 +331,7 @@ export function SagaHandscroll(props: Props) {
       <div
         className={`absolute inset-0 flex flex-col ${
           isFocused ? 'pointer-events-none opacity-0' : 'opacity-100'
-        } transition-opacity duration-300`}
+        } transition-opacity duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)]`}
       >
         {/* 標題 + 世界時 */}
         <header className="shrink-0 px-[max(1rem,env(safe-area-inset-left))] pt-[calc(env(safe-area-inset-top,0px)+var(--es-site-nav-h)+1rem)] sm:px-10">
@@ -322,7 +379,9 @@ export function SagaHandscroll(props: Props) {
             下方置中的團扇。欄與欄硬接（回到較優雅的版本），一同橫向捲動。 */}
         <div
           ref={scrollRef}
-          className="mt-3 flex-1 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth no-scrollbar overscroll-x-contain touch-pan-x"
+          // No CSS scroll-smooth here: wheel paging passes an explicit behavior,
+          // and doubling smooth-scroll onto snap re-animation is what caused judder.
+          className="mt-3 flex-1 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar overscroll-x-contain touch-pan-x"
         >
           <div className="flex h-full w-max items-stretch">
             {scenesByLocation.map(({ seg, scenes: locScenes }) => {
@@ -336,14 +395,13 @@ export function SagaHandscroll(props: Props) {
                   // can never stretch the column and open a gap in the scroll.
                   className="flex h-full shrink-0 snap-center snap-always flex-col w-[clamp(330px,69vh,780px)] border-r border-black/[0.08] last:border-r-0 dark:border-white/[0.05]"
                 >
-                  {/* 油畫 —— 高度定、寬度依 3:2 自算，完整展示不裁切 */}
+                  {/* 油畫 —— 高度定、寬度依 3:2 自算，完整展示不裁切。
+                      紙色漸層常駐墊底，畫作解碼完成才淡入（BlobImage），不再 pop-in。 */}
                   <div className="relative h-[clamp(220px,46vh,520px)] w-full shrink-0 overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-b from-surface to-canvas dark:from-elevated/50 dark:to-canvas" />
                     {art ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={art} alt={seg.location.name} className="h-full w-full object-cover" draggable={false} />
-                    ) : (
-                      <div className="h-full w-full bg-gradient-to-b from-surface to-canvas dark:from-elevated/50 dark:to-canvas" />
-                    )}
+                      <BlobImage src={art} alt={seg.location.name} className="object-cover" sizes="(min-width: 640px) 780px, 100vw" />
+                    ) : null}
                     <div className="pointer-events-none absolute inset-0 mix-blend-soft-light" style={{ background: wash.color, opacity: wash.opacity }} />
                     <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap font-serif text-sm tracking-[0.4em] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
                       {seg.location.name}
@@ -378,21 +436,25 @@ export function SagaHandscroll(props: Props) {
         <SagaTabBar />
       </div>
 
-      {/* 內頁 —— 團扇點開，像走進 location 更深的一層（非彈窗遮罩） */}
-      {focusedScene ? (
-        <SceneSheet
-          scene={focusedScene}
-          sagaId={saga.id}
-          charactersById={charactersById}
-          clock={saga.worldTime?.partOfDay ? dayPartLabel(saga.worldTime.partOfDay) : undefined}
-          locationArt={
-            terrainArtFor(
-              layout.segments.find((s) => s.scenes.some((sp) => sp.scene.id === focusedScene.id))?.location.name,
-            ) ?? undefined
-          }
-          onClose={() => setFocusedSceneId(null)}
-        />
-      ) : null}
+      {/* 內頁 —— 團扇點開，像走進 location 更深的一層（非彈窗遮罩）。
+          AnimatePresence 讓退出也有淡出（進場有 350ms 淡入，退場不能跳切）。 */}
+      <AnimatePresence>
+        {focusedScene ? (
+          <SceneSheet
+            key={focusedScene.id}
+            scene={focusedScene}
+            sagaId={saga.id}
+            charactersById={charactersById}
+            clock={saga.worldTime?.partOfDay ? dayPartLabel(saga.worldTime.partOfDay) : undefined}
+            locationArt={
+              terrainArtFor(
+                layout.segments.find((s) => s.scenes.some((sp) => sp.scene.id === focusedScene.id))?.location.name,
+              ) ?? undefined
+            }
+            onClose={() => setFocusedSceneId(null)}
+          />
+        ) : null}
+      </AnimatePresence>
     </>
   );
 }
