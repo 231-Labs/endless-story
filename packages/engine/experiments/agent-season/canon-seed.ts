@@ -26,11 +26,16 @@ export interface CanonChar {
     homeScene: string;
     workScene: string;
     memories: SeedMemory[];
+    /** Canon keepsakes this character CARRIES (ownership lives in the carried
+     *  system, salience-gated) — a prose-only object has no owner, so 沈's
+     *  private 懷錶 once teleported into someone else's love scene. */
+    carried?: Array<{ desc: string; from?: string }>;
 }
 
 export const CANON: Record<string, CanonChar> = {
     '柳生春': {
         name: '柳生春',
+        carried: [{ desc: '一柄不離身的湘妃竹摺扇（台上台下的招牌物件）' }],
         role: '小生',
         ageYears: 24,
         description: '春雪社當紅小生（坤生，女兒身扮小生）。生得清俊中性、骨相秀致：眉目英朗清潤、鼻樑秀挺、下頷柔和、頸線纖細，是那種一眼看得出是女子、卻自有一段瀟灑英氣的俊秀——如越劇小生陳麗君般清儒雅致的女兒身扮相，英氣只在眉眼神采、不在骨架，絕非陽剛男相。台上一柄摺扇便能撩動滿堂春水。她的風流是溫柔不主動也不拒絕的那種：不追誰，也從不把人推開，人人便都當自己是特別的那一個。唯獨在師姐蘇映雪跟前，她一向聽話——師姐皺一下眉她就收手，散了戲替她拎包、擋酒、送到家門口才肯走。人前她總是一身滿不在乎的漂亮，笑得像什麼都不往心裡去。',
@@ -177,6 +182,7 @@ export const CANON: Record<string, CanonChar> = {
     },
     '沈雪笙': {
         name: '沈雪笙',
+        carried: [{ desc: '一只停擺多年的舊懷錶（她箱底的私物，連著白蘭那段未了的往事，輕易不示人）' }],
         role: '班主',
         ageYears: 42,
         description: '春雪社班主，昔年工小生行的名角。年輕時她也是霞飛路上最亮的一位少年郎，扇一開，滿堂人都像被春風照面；如今封箱多年，坐在二樓包廂裡看戲、看帳、看人心。她懂舊戲班的規矩，也懂上海的新熱鬧：哪張劇照該送去報館，哪場堂會不能推，哪個角兒該護，哪個角兒該放出去被風浪磨一磨。沈雪笙不是冷，她只是把疼人藏得很深。她可以為了春雪社的生意說狠話，也會在散戲後讓人把一碗溫梨湯送到嗓子發緊的角兒房裡。她最厲害的地方不是管住所有人，而是看得出誰正要成角、誰快被名聲壓壞、誰只差一場戲就能站起來。',

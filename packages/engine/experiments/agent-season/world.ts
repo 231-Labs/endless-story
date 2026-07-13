@@ -326,7 +326,7 @@ export function buildCast(only?: string[]): Char[] {
             fatigue: 0,
             money: s.money, // DATA-seeded starting coin
             hunger: 0,
-            carried: [],
+            carried: (CANON[s.id].carried ?? []).map((it) => ({ ...it })),
             waitingFor: null,
             occupiedRestOfDay: false,
             dead: false,
