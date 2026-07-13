@@ -611,6 +611,26 @@ export async function doInteract(
     // everyone else → default restrained (forbidden/unconfessed stays held).
     const consummate = established && isPrivate && night;
     const cast = [castMember(a, [b]), castMember(b, [a])];
+    // LIVED memory reaches the scene (user-caught gap): castMember carries only
+    // the canon seeds, so a character could spend a season in someone's bed and
+    // still walk into a scene UNABLE to recall a single night of it — her lived
+    // life reached beats only as distilled secret/view idiom (釘子 without the
+    // name). Two episodic recalls per participant, keyed to the co-present other
+    // + this scene's cause, ride in alongside the canon.
+    try {
+        const [ea, eb] = await Promise.all(
+            [
+                { self: a, other: b },
+                { self: b, other: a },
+            ].map(({ self, other }) =>
+                recall.recall(self.id, `${other.name} ${intent}`.slice(0, 60), 2, clock.day).then((ms) => ms.map((m) => m.text.slice(0, 100))),
+            ),
+        );
+        cast[0].memories = [...(cast[0].memories ?? []), ...ea].slice(0, 7);
+        cast[1].memories = [...(cast[1].memories ?? []), ...eb].slice(0, 7);
+    } catch {
+        /* non-fatal: canon-only context tonight */
+    }
     // STANDING gates the ADVANCE affordance (never the answer): you court a
     // stranger with scenes and confidences first; the world only deals the
     // advance card on real footing. Numbers never reach the prompt.
