@@ -241,7 +241,8 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
               '**「遞意」只指親近之心（意在這個人，想與TA肌膚相親）**；比武叫陣、威逼壓制、拿身子佔上風都不是遞意，別標。'
             : '',
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
-        '一場戲裡，別把同一個比方、同一句口頭禪翻來覆去地用，話要活。',
+        '【說人話】多數的話是直說的——問路、催飯、道謝、抱怨、叫人名字；比方留給真到了那一步的時刻，'+
+            '同一個比方一場戲至多用一次。兩個人說話不是猜謎，聽的人（和看戲的人）得聽得懂。',
         forceNote(input.forcing, input.privateAlone),
         // WARMTH SOIL (not a push): when nothing is burning, ordinary tenderness is
         // legitimate DRAMA — affection is mostly accrued in these small beats, and a

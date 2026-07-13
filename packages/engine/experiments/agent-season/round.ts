@@ -1201,6 +1201,9 @@ export async function runRound(
         togetherToday: Set<string>;
         /** pairKey → rendered scenes today (the SAME pair's Nth scene yields the slot). */
         pairScenesToday: Map<string, number>;
+        /** PLAIN-LANGUAGE day digest lines (mechanical, from structured events) —
+         *  the reader's orientation layer: no idiom, just who did what. */
+        dayEvents: string[];
         /** self-check pass accumulator (scenes reviewed / beats whose text changed). */
         review: ReviewCounter;
         /** chapter-level self-check accumulator (woven 章回 reviewed / prose repaired). */
@@ -1380,6 +1383,12 @@ export async function runRound(
         decayBonds(out.bonds, out.togetherToday);
         out.togetherToday.clear();
         out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
+        // ── 本日提要 (PLAIN, mechanical): the reader's orientation layer ──
+        if (out.dayEvents.length) {
+            log(`  ── 本日提要（白話） ──`);
+            for (const e of [...new Set(out.dayEvents)].slice(0, 10)) log(`  ・${e}`);
+            out.dayEvents.length = 0;
+        }
         out.confidedToday.clear(); // a new day may bring a new confidence
         out.pairScenesToday.clear();
         log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
@@ -1625,6 +1634,7 @@ export async function runRound(
                             c.waitingFor = null;
                             interactIntent = { target: seen[0].name, intent: reaction.word ?? '把街上撞見的這一刻接下去' };
                             log(`    · 〔路遇〕${c.name} 在 ${street} 撞見 ${seen[0].name}，把原本的事擱下，追了上去——${reaction.word ?? ''}`);
+                            out.dayEvents.push(`${c.name}在${street}攔住了${seen[0].name}`);
                             c.todayLedger.set(`engage:${street}:${clock.currentTick}`, `在${street}撞見${seen[0].name}，擱下原本的事追了上去。`);
                             break; // the walk ends here
                         }
@@ -1782,6 +1792,7 @@ export async function runRound(
             scenes.push(scene);
             // BOND ledger: the scene warms the edge (both directions, saturating).
             out.togetherToday.add([a.id, b.id].sort().join('|'));
+            if (scene.consummate) out.dayEvents.push(`${a.name}與${b.name}共度了一夜（${venue}）`);
             out.pairScenesToday.set([a.id, b.id].sort().join('|'), (out.pairScenesToday.get([a.id, b.id].sort().join('|')) ?? 0) + 1);
             bumpBond(
                 out.bonds,
@@ -1789,7 +1800,10 @@ export async function runRound(
                 b.id,
                 scene.consummate ? 'bed' : scene.intimacyAccepted ? 'accept' : scene.confideBy ? 'confide' : scene.isPrivate ? 'private' : 'shared',
             );
-            if (scene.confideBy) log(`  〔傾吐〕${a.name} 找 ${b.name} 說了心裡壓著的事——說出口的那些，${b.name} 記下了。`);
+            if (scene.confideBy) {
+                log(`  〔傾吐〕${a.name} 找 ${b.name} 說了心裡壓著的事——說出口的那些，${b.name} 記下了。`);
+                out.dayEvents.push(`${a.name}向${b.name}吐露了心事`);
+            }
             // 相許 as an EVENT (no judge): they walked there themselves in this
             // scene; the world records the fact (for 修羅場 stakes + persistence).
             if (scene.intimacyAccepted && !areEstablishedLovers(a, b)) {
@@ -1797,6 +1811,7 @@ export async function runRound(
                 if (!out.establishedDyn.has(pk)) {
                     out.establishedDyn.add(pk);
                     log(`  〔相許〕${a.name} 與 ${b.name}——這一場裡遞了意、接了意，自此是彼此的人（他們自己走到的）。`);
+                    out.dayEvents.push(`${a.name}與${b.name}正式相許，成了彼此的人`);
                 }
             }
             out.spotlight = bumpActorFatigue(out.spotlight, [a.id, b.id]);
@@ -1865,6 +1880,7 @@ export async function runRound(
             const disc = await renderDiscovery(C, A, B, clock, agent, recall, brokeIn, out.review, aftermath, out.chapterReview);
             scenes.push(disc);
             out.spotlight = bumpActorFatigue(out.spotlight, disc.participants.map((n) => byName.get(n)?.id ?? n));
+            out.dayEvents.push(`${C.name}撞見了${A.name}與${B.name}的私情現場`);
             out.discoveries.push({ tick: clock.currentTick, part, discoverer: C.name, pair: [A.name, B.name], venue: scene.venue, brokeIn, heard });
             log(`    ⚔ 修羅場：${C.name} ${heard ? '聞聲趕來、破門闖進，撞見' : brokeIn ? '破門闖進，撞見' : '撞見'} ${A.name}×${B.name} @ ${scene.venue} — ${disc.beats.length} 拍`);
             for (const bt of disc.beats) log(`         ${bt.name}：${bt.text}`);
@@ -2084,6 +2100,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         bonds: deps.bonds ?? new Map(),
         togetherToday: new Set<string>(),
         pairScenesToday: new Map<string, number>(),
+        dayEvents: [] as string[],
         review: { scenes: 0, beatsChanged: 0 } as ReviewCounter,
         chapterReview: { chapters: 0, repaired: 0 } as ChapterReviewCounter,
         povReflections: {} as Record<string, Array<{ day: number; text: string }>>,
