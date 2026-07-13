@@ -104,6 +104,10 @@ export interface Planner {
     plan(ctx: PlanContext): Promise<PlanResult>;
     /** In-the-moment street reaction. Default norm: most sightings pass. */
     transitReact(ctx: TransitReactCtx): Promise<TransitReaction>;
+    /** Nightly 小算盤 for ONE stuck hot want: 2-3 concrete in-world steps in the
+     *  character's own voice (找誰/備什麼/在哪堵人). Their OWN scheme, revised or
+     *  dropped as life moves — never a director's outline. null → no scheme. */
+    draftScheme(ctx: { char: Char; want: Want; clock: WorldClock }): Promise<string | null>;
     /** The 班主 rehearsal channel — an autonomous agent decision (not hardcoded).
      *  Also CHOOSES the 戲碼 (title) to rehearse, reasoning from the troupe's strengths. */
     decideRehearsal(ctx: {
@@ -161,6 +165,10 @@ export class FakePlanner implements Planner {
         let h = ctx.clock.currentTick;
         for (const ch of ctx.char.id + ctx.seen.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
         return { act: h % 3 === 0 ? 'greet' : 'pass' };
+    }
+
+    async draftScheme(ctx: { char: Char; want: Want; clock: WorldClock }): Promise<string | null> {
+        return `為「${ctx.want.desc.slice(0, 12)}」：明日先尋${ctx.want.target ?? '相干的人'}把話挑明，再看臉色行事。`;
     }
 
     async plan(ctx: PlanContext): Promise<PlanResult> {
@@ -259,6 +267,39 @@ export class RealPlanner implements Planner {
         this.onLog = onLog;
     }
 
+    async draftScheme(ctx: { char: Char; want: Want; clock: WorldClock }): Promise<string | null> {
+        try {
+            const t = await llm();
+            const client = t.createTextClient({ kind: 'primary' });
+            const res = await client.chat({
+                model: client.defaultModel,
+                system: [
+                    '夜深了。你心裡有樁事懸了許久沒進展，睡前替自己打個小算盤——不是宏圖，是市井人的盤算：',
+                    '明後天先找誰、備什麼、在哪個時辰哪個地方堵人、話怎麼開口。2-3 步，每步都是你真做得到的事。',
+                    '用你自己的性子和口吻寫（急性子的算盤糙、細心人的算盤密）。',
+                    '嚴格只輸出 JSON：{"scheme":"一段話，2-3步的盤算"}。不要 markdown。',
+                ].join('\n'),
+                messages: [
+                    {
+                        role: 'user',
+                        content:
+                            `# 你是誰\n${ctx.char.name}：${ctx.char.persona}` +
+                            (ctx.char.secret ? `\n\n# 你心底的事\n${ctx.char.secret}` : '') +
+                            `\n\n# 懸著沒進展的心事\n「${ctx.want.desc}」${ctx.want.target ? `（牽涉${ctx.want.target}）` : ''}` +
+                            `\n\n第${ctx.clock.day}日夜。你的小算盤？`,
+                    },
+                ],
+                maxTokens: 240,
+                temperature: 0.8,
+            });
+            const obj = (extractRewriteJson(res.text) ?? {}) as { scheme?: unknown };
+            const s = typeof obj.scheme === 'string' ? obj.scheme.trim() : '';
+            return s || null;
+        } catch {
+            return null;
+        }
+    }
+
     /** In-the-moment street encounter: one small LLM call, only when someone was
      *  actually SEEN (rare). The cost is stated as world fact, never a rule. */
     async transitReact(ctx: TransitReactCtx): Promise<TransitReaction> {
@@ -343,6 +384,7 @@ export class RealPlanner implements Planner {
         // Deadline as a WORLD FACT (§2.42): the character lives in a world where this
         // is simply true this 時辰. It is never an instruction to make/premiere a play.
         const worldFact = ctx.worldFactLine ? `\n# 眼下這世道\n${ctx.worldFactLine}` : '';
+        const schemeNote = c.scheme ? `\n# 你前夜替自己打的小算盤（自己的主意，照不照辦由你）\n${c.scheme}` : '';
         // PASSIVE perception (眼耳鼻身) — only the channels actually sensed this 時辰.
         const perc = ctx.perception;
         const percLines: string[] = [];
@@ -378,6 +420,7 @@ export class RealPlanner implements Planner {
             oppCost,
             summons,
             worldFact,
+            schemeNote,
             `\n# 這世界有哪些地方（你都知道怎麼去）\n${geographyBlock()}`,
             `\n# 你剛想起的幾件舊事\n${recallBlock}`,
             `\n# 現在是什麼時辰\n第${clock.day}日·${clock.partOfDay}${night ? '（入夜了）' : ''}`,

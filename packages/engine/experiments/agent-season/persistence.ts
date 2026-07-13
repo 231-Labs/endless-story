@@ -44,6 +44,8 @@ export interface CharSnapshot {
     secret?: string;
     /** 技藝手感 — practice keeps it, neglect lets it slide (zero-sum time). */
     craft?: number;
+    /** 小算盤 — the character's own live scheme, if any. */
+    scheme?: string | null;
 }
 
 /** A versioned, JSON-serializable snapshot of the whole cast's mutated overlay. */
@@ -81,6 +83,7 @@ export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: stri
             seasonsLived: c.seasonsLived,
             secret: c.secret,
             craft: c.craft,
+            scheme: c.scheme,
         };
     }
     return {
@@ -140,6 +143,7 @@ export function restoreCast(cast: Char[], snap: CastSnapshot): string[] {
         c.seasonsLived = (s.seasonsLived ?? 0) + 1; // one more year has passed
         if (s.secret) c.secret = s.secret; // the matter kept the shape it grew into
         if (typeof s.craft === 'number') c.craft = s.craft;
+        if (s.scheme !== undefined) c.scheme = s.scheme;
         restored.push(c.id);
     }
     return restored;

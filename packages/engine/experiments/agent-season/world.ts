@@ -188,6 +188,11 @@ export interface Char {
     craft: number;
     /** did TODAY include real practice (rehearsal gathering / work-venue craft)? */
     practicedToday: boolean;
+    /** 小算盤 (the character's OWN multi-day scheme for a stuck want): drafted at
+     *  night, read by tomorrow's plans, revised or dropped as life moves. The
+     *  strategic layer wants alone lack — desire without a plan only ever
+     *  advances by collision. */
+    scheme: string | null;
 }
 
 /** A knows B's ROUTINE only if they KNOW each other — A carries a relationship view
@@ -397,6 +402,7 @@ export function buildCast(only?: string[]): Char[] {
             carried: (CANON[s.id].carried ?? []).map((it) => ({ ...it })),
             craft: 0.7, // 技藝手感 (0..1): practice keeps it warm, neglect lets it slide
             practicedToday: false,
+            scheme: null,
             waitingFor: null,
             occupiedRestOfDay: false,
             dead: false,

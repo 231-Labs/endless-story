@@ -1370,6 +1370,26 @@ export async function runRound(
                     /* non-fatal at night */
                 }
             }
+            // 小算盤 (the strategic layer wants alone lack): a hot want that has
+            // lived ≥2 days without resolving earns a nightly scheme in the
+            // character's own voice — tomorrow's plans read it as their OWN idea.
+            // Resolved/absent want → the scheme dissolves with it.
+            try {
+                const stuck = c.wants
+                    .filter((w) => !w.retired && w.kind === 'narrative' && clock.currentTick - w.bornTick >= 2 * deps.ticksPerDay)
+                    .sort((x, y) => y.heat + y.frust - (x.heat + x.frust))[0];
+                if (stuck) {
+                    const drafted = await planner.draftScheme({ char: c, want: stuck, clock });
+                    if (drafted) {
+                        c.scheme = drafted;
+                        log(`  〔盤算〕${c.name}：${drafted.slice(0, 60)}${drafted.length > 60 ? '…' : ''}`);
+                    }
+                } else {
+                    c.scheme = null;
+                }
+            } catch {
+                /* non-fatal at night */
+            }
             decayWants(c.wants);
         }
         for (const c of cast) {
