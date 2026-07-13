@@ -57,6 +57,22 @@ const TEXTURE = [
 type Msg = { role: 'user' | 'assistant'; content: string };
 interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string }
 
+/** Strip the acting-JSON shell when a free-voice reply comes back wrapped. */
+function deshell(raw: string): string {
+    let clean = raw.trim();
+    const jsonish = clean.match(/\{[\s\S]*\}/);
+    if (jsonish) {
+        try {
+            const o = JSON.parse(jsonish[0]) as Record<string, unknown>;
+            const parts = Object.values(o).filter((v): v is string => typeof v === 'string' && v.length > 0);
+            if (parts.length) clean = parts.join(' ');
+        } catch {
+            clean = clean.replace(/```json|```/g, '').trim();
+        }
+    }
+    return clean;
+}
+
 async function llmChat(system: string, messages: Msg[], maxTokens: number): Promise<string> {
     const { text } = await import('@endless-story/llm');
     const client = text.createTextClient({ kind: 'primary' });
@@ -193,27 +209,38 @@ class Mind {
         }
     }
 
-    async reflect(day: number): Promise<string> {
-        this.transcript.push({
-            role: 'user',
-            content: `（夜深了，第${day}日過完。這一天在你心裡留下什麼？只對自己說，說人話——這裡不用那個 JSON 格式，直接把心裡話寫出來就好。）`,
-        });
-        const raw = await llmChat(this.system, this.transcript, 400);
-        // De-shell: acting format leaks into reflections (```json {"心裡":…}).
-        // Store the CLEAN voice in the transcript so the habit doesn't compound.
-        let clean = raw.trim();
-        const jsonish = clean.match(/\{[\s\S]*\}/);
-        if (jsonish) {
-            try {
-                const o = JSON.parse(jsonish[0]) as Record<string, unknown>;
-                const parts = Object.values(o).filter((v): v is string => typeof v === 'string' && v.length > 0);
-                if (parts.length) clean = parts.join(' ');
-            } catch {
-                clean = clean.replace(/```json|```/g, '').trim();
-            }
-        }
+    /** A free-voice self-exchange: the reply lives clean in the transcript. */
+    private async selfTalk(prompt: string, maxTokens: number): Promise<string> {
+        this.transcript.push({ role: 'user', content: prompt });
+        const clean = deshell(await llmChat(this.system, this.transcript, maxTokens));
         this.transcript.push({ role: 'assistant', content: clean });
         return clean;
+    }
+
+    async reflect(day: number): Promise<string> {
+        return this.selfTalk(
+            `（夜深了，第${day}日過完。這一天在你心裡留下什麼？只對自己說，說人話——這裡不用那個 JSON 格式，直接把心裡話寫出來就好。）`,
+            400,
+        );
+    }
+
+    /** PROSPECTIVE slot, nightly: the mind gives ITSELF tomorrow's marching
+     *  orders. Waking, this is the last thing in its memory — no re-briefing,
+     *  the transcript adjacency does the work. */
+    async plan(): Promise<string> {
+        return this.selfTalk(
+            '（那明日呢？天亮之後你打算怎麼辦——有什麼非做不可、非見不可、非說不可的？又有什麼要離遠些的？給自己拿個主意，一兩句，不用 JSON。）',
+            250,
+        );
+    }
+
+    /** PROSPECTIVE slot, once at season start: the mind names what it is
+     *  playing FOR — a self-authored long-term want, in its own words. */
+    async aspire(): Promise<string> {
+        return this.selfTalk(
+            '（開季頭一夜，萬籟俱寂。往後這些日子，你心裡到底圖個什麼？有什麼帳非了不可、什麼事非成不可、什麼人繞不過去？只對自己說真話，三五句，不用 JSON。）',
+            350,
+        );
     }
 
     hear(note: string): void {
@@ -243,6 +270,14 @@ async function main(): Promise<void> {
 
     /** The reporter's filed copy, if any — printed at next dawn. */
     let pendingPaper: { by: string; text: string } | null = null;
+
+    // Season eve: each mind names what it is playing for (self-authored want).
+    log(`── 開季前夜（各自的圖謀） ──`);
+    for (const m of minds) {
+        const a = await m.aspire();
+        log(`  〔${m.name} 圖謀〕${a.slice(0, 200)}`);
+        m.save();
+    }
 
     for (let day = 1; day <= DAYS; day++) {
         const texture = TEXTURE[(day - 1) % TEXTURE.length];
@@ -376,6 +411,10 @@ async function main(): Promise<void> {
         for (const m of minds) {
             const r = await m.reflect(day);
             log(`  〔${m.name} 夜語〕${r.slice(0, 220)}`);
+            if (day < DAYS) {
+                const p = await m.plan();
+                log(`  〔${m.name} 盤算〕${p.slice(0, 160)}`);
+            }
             // ── physics: sleep repays the body; the day's craft settles ──
             m.fatigue = Math.max(0, m.fatigue - (m.occ === 'reporter' ? 0.15 : 0.45));
             if (m.occ === 'reporter') m.fatigue = Math.max(0, m.fatigue - 0.35); // sleeps past dawn
