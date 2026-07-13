@@ -99,6 +99,7 @@ import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
 import { pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
 import { bumpActorFatigue, pickOrthogonalThreads, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
 import { isBondLayer } from '../../src/core/want-core.ts';
+import { CANON } from './canon-seed.ts';
 import {
     type Play,
     PRODUCTION,
@@ -721,6 +722,7 @@ export async function doInteract(
                         landed: [`今夜我把心裡的事對${b.name}說出了口——我親口說的是：${saidAloud.slice(0, 400)}`],
                         selfModel: a.coreIdentity.length ? a.coreIdentity : undefined,
                         castBodies: [a, b].map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+                        canonSeed: CANON[a.id]?.secret,
                         day: clock.day,
                     });
                     if (evolved) a.secret = evolved;
@@ -1285,6 +1287,7 @@ export async function runRound(
                         landed,
                         selfModel: c.coreIdentity.length ? c.coreIdentity : undefined,
                         castBodies: cast.map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+                        canonSeed: CANON[c.id]?.secret,
                         day: clock.day,
                     });
                     if (evolved) {

@@ -318,6 +318,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '- **主根不許丟**:這個人心底最深的那根刺可以變形、可以結痂,不許憑空消失——若今日之事真拔了它,新心事要寫「拔掉之後」的樣子,不是當它從未存在。',
             '- **換句重說=不動**:若新寫出來的只是舊心事換個說法,回 {"secret":""}。心事不必每夜都動,多數的夜它只是躺著。',
             '- 肉身重話留給真到了那一步的時刻,尋常心事用尋常話。',
+            '- **過往的硬事實不許漂**:年數、身世、誰做過什麼,一律照最初底稿——心境會變,歷史不會(糾纏六七年就是六七年,不因寫順口變成十年)。',
             ...(input.castBodies?.length
                 ? [
                       `- 代詞鐵則:${input.castBodies.map((c) => `${c.name}（${c.bodyFact ?? '身不詳'}）`).join('、')}——心事裡提到誰,代詞按其身寫;坤生/女子縱台上扮男仍是「她」。`,
@@ -329,6 +330,9 @@ export class RunnerSceneAgent implements SceneAgentPort {
         const user = [
             `# TA是誰\n${input.name}:${input.persona}`,
             input.selfModel?.length ? `\n# TA此刻怎麼看自己\n${input.selfModel.join('\n')}` : '',
+            input.canonSeed && input.canonSeed !== input.secret
+                ? `\n# 這樁心事最初的底稿(過往的硬事實以此為準)\n${input.canonSeed}`
+                : '',
             `\n# 那樁心事(此刻的樣子)\n${input.secret}`,
             `\n# 今天真落了地的事\n${input.landed.map((d) => `- ${d}`).join('\n')}`,
             `\n第${input.day}日夜。這樁心事,如今變成什麼樣子了?`,

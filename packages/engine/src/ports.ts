@@ -139,6 +139,11 @@ export interface EvolveSecretInput {
     /** 身/sex facts for anyone the matter may mention (pronoun guard — the 6th
      *  generation path to leak 他 for a 坤生 was the evolved secret itself). */
     castBodies?: Array<{ name: string; bodyFact?: string }>;
+    /** The IMMUTABLE canon seed of this secret (bedrock): hard facts of the past
+     *  — years, origins, who-did-what — must match it forever. Evolution moves
+     *  the HEART, never the history (a 六七年 entanglement drifted to 十年 and
+     *  the evolved secret locked the wrong number in). */
+    canonSeed?: string;
     day: number;
 }
 
