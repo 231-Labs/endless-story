@@ -38,12 +38,17 @@ export interface DossierPerspectiveSource {
     characterId: string;
     characterName: string;
     role?: string;
+    /** Immutable body/sex canon used only for pronoun and identity guards. */
+    bodyFact?: string;
     portrait?: string;
     lead?: string;
     /** First-person prose projected read-only from this character's session. */
     body: string;
     /** Optional audited claims. Missing claims get a conservative session claim. */
     claims?: NarrativeClaim[];
+    /** Claim ids selected for each zero-based POV paragraph by the epistemic
+     * editor. This keeps one claim from being stamped onto unrelated prose. */
+    passageClaimIds?: Record<number, string[]>;
     /** Private memory evidence actually used by this perspective. */
     evidence?: NarrativeEvidence[];
 }
@@ -63,17 +68,33 @@ function paragraphs(body: string): string[] {
     return body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
 }
 
+function excerpt(body: string, max = 38): string {
+    const first = paragraphs(body)[0]?.replace(/\s+/g, '') ?? '';
+    return first.length > max ? `${first.slice(0, max)}……` : first;
+}
+
+function fallbackLead(source: DossierPerspectiveSource): string {
+    const remembered = excerpt(source.body);
+    return remembered
+        ? `${source.characterName}把「${remembered}」留成了這一刻最難放下的部分。`
+        : `${source.characterName}留下了一份只有自己能說明的沉默。`;
+}
+
 function safeSlug(value: string): string {
     return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 72) || 'event';
 }
 
 function conservativeClaim(source: DossierPerspectiveSource, eventId: string): NarrativeClaim {
+    const remembered = excerpt(source.body, 46);
     return {
         id: `${eventId}:claim:${source.characterId}:session`,
-        text: `${source.characterName}如何理解這一事件，只能證明其主觀詮釋，不能反向改寫客觀逐拍。`,
+        text: remembered
+            ? `${source.characterName}把這一幕記成「${remembered}」；目前只能確認這是其主觀版本。`
+            : `${source.characterName}留下了主觀版本，但沒有足夠內容可與正史逐拍核對。`,
         epistemicMode: 'inferred' satisfies EpistemicMode,
-        relation: 'reinterprets',
+        relation: 'unresolved',
         review: 'unresolved',
+        editorialNote: '這份說法只有角色 session 可作證，尚無公開逐拍可確認或反駁。',
         evidenceRefs: [`${eventId}:session:${source.characterId}`],
     };
 }
@@ -111,17 +132,19 @@ export function compileDossier(input: CompileDossierInput): EpistemicDossierBund
                 }
             }
             const claims = source.claims?.length ? source.claims : [conservativeClaim(source, event.id)];
+            const claimIds = new Set(claims.map((claim) => claim.id));
             return {
                 id: `${event.id}:perspective:${source.characterId}`,
                 characterId: source.characterId,
                 characterName: source.characterName,
                 role: source.role ?? '在場者',
                 portrait: source.portrait ?? '/hero/saga-day.webp',
-                lead: source.lead ?? `${source.characterName}記住的，不必等於別人看見的。`,
+                lead: source.lead ?? fallbackLead(source),
                 passages: paragraphs(source.body).map((text, i) => ({
                     id: `${event.id}:passage:${source.characterId}:${i}`,
                     text,
-                    claimIds: claims.map((c) => c.id),
+                    claimIds: source.passageClaimIds?.[i]?.filter((id) => claimIds.has(id))
+                        ?? claims.map((c) => c.id),
                 })),
                 claims,
             };

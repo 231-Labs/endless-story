@@ -9,7 +9,7 @@
  * dynamically imported by the CLI only when `--real-llm` is set.
  */
 
-import { characterAgent, sceneRecord, eventChapter } from '@endless-story/runner';
+import { characterAgent, sceneRecord, eventChapter, eventDossier } from '@endless-story/runner';
 import { text as llmText } from '@endless-story/llm';
 import * as path from 'node:path';
 import type {
@@ -22,6 +22,8 @@ import type {
     SceneAgentPort,
     ObserveSceneInput,
     EvolveSecretInput,
+    DossierCanonicalEvent,
+    DossierPerspectiveSource,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
 } from '../ports.ts';
@@ -59,6 +61,7 @@ export interface RunnerSceneAgentOptions {
 
 export class RunnerSceneAgent implements SceneAgentPort {
     private readonly sessions?: PersistentCharacterSessions;
+    private dossierClient?: ReturnType<typeof llmText.createTextClient>;
 
     constructor(options: RunnerSceneAgentOptions = {}) {
         if (options.sessionDir) {
@@ -152,6 +155,49 @@ export class RunnerSceneAgent implements SceneAgentPort {
         );
     }
 
+    async curateDossier(
+        event: DossierCanonicalEvent,
+        perspectives: DossierPerspectiveSource[],
+    ): Promise<DossierPerspectiveSource[]> {
+        this.dossierClient ??= llmText.createTextClient({ kind: 'primary' });
+        const curateOne = async (source: DossierPerspectiveSource): Promise<DossierPerspectiveSource> => {
+            // One editor writes one POV, but it still needs immutable identity
+            // facts for everybody that POV may mention.
+            const prompt = eventDossier.buildClaimAuditPrompt(event, [source], perspectives);
+            let lastErrors: string[] = [];
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const response = await this.dossierClient!.chat({
+                    model: this.dossierClient!.defaultModel,
+                    system: `你是${source.characterName}這一份卷宗的專屬認識論編輯。只寫導語、比較既有說法與封存證據；不續寫故事，不創造證據。`,
+                    messages: [{
+                        role: 'user',
+                        content: attempt === 0
+                            ? prompt
+                            : `${prompt}\n\n【上次輸出未通過】\n${lastErrors.join('\n')}\n請重新輸出完整 JSON，必須有以角色姓名開頭的專屬 lead、1–2 個主觀 claim，並覆蓋每個 p:N。`,
+                    }],
+                    maxTokens: 1500,
+                    temperature: attempt === 0 ? 0.32 : 0.15,
+                });
+                const [curated] = eventDossier.applyClaimAudit(event, [source], response.text);
+                const validationErrors = eventDossier.validateClaimAudit([curated]);
+                if (!validationErrors.length) return curated;
+                lastErrors = [
+                    ...validationErrors,
+                    `輸出結構：${eventDossier.diagnoseClaimAudit(response.text)}`,
+                ];
+            }
+            throw new Error(`incomplete dossier audit for ${source.characterName}: ${lastErrors.join('; ')}`);
+        };
+
+        // Each character gets a separate editorial pass. Besides producing more
+        // specific copy, this prevents a long ensemble JSON response from
+        // truncating later characters or collapsing each to one generic claim.
+        const curated = await Promise.all(perspectives.map(curateOne));
+        const errors = eventDossier.validateClaimAudit(curated);
+        if (errors.length) throw new Error(`incomplete dossier audit: ${errors.join('; ')}`);
+        return curated;
+    }
+
     async reviewScene(
         input: Parameters<typeof characterAgent.reviewScene>[0],
     ): ReturnType<typeof characterAgent.reviewScene> {
@@ -170,10 +216,18 @@ export class RunnerSceneAgent implements SceneAgentPort {
         const identity = this.identity(input);
         if (!identity || !this.sessions) return characterAgent.povScene(input);
         const objective = input.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+        const castCanon = (input.castBodies ?? [])
+            .filter((member) => member.name)
+            .map((member) => {
+                const pronoun = !member.bodyFact || member.bodyFact.includes('女') ? '她' : '他';
+                return `${member.name}＝${member.role ?? '行當不詳'}｜${pronoun}（${member.bodyFact ?? '身不詳'}）`;
+            })
+            .join('、');
         return this.sessions.project(
             identity,
             [
                 `【事件】${input.eventId ?? '未編號事件'}｜${input.clock}｜${input.venue}`,
+                castCanon ? `【在場人的身份（不可改）】${castCanon}。女子縱然在台上扮小生，敘事仍用「她」。` : '',
                 '【不可更動的客觀逐拍】',
                 objective,
                 input.ties ? `【我向來怎麼看在場的人】\n${input.ties}` : '',
@@ -183,7 +237,8 @@ export class RunnerSceneAgent implements SceneAgentPort {
                 eventId: input.eventId,
                 instruction:
                     '把同一客觀事件寫成第一人稱章回。注意、誤讀與情感可以偏；人物、順序、動作、對白不可改。' +
-                    '不要替別人斷言內心；不知道的就留白。純正文，350至900字。',
+                    '不要替別人斷言內心；不知道的就留白。人物行當、身與第三人稱代詞嚴格按輸入 canon。' +
+                    '純正文，350至900字。',
                 maxTokens: 1500,
                 temperature: 0.82,
             },

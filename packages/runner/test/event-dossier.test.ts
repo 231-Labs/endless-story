@@ -6,7 +6,7 @@ import {
     parseDossierHeader,
     validateDossier,
 } from '../src/services/event-dossier/compile.ts';
-import { applyClaimAudit, buildClaimAuditPrompt } from '../src/services/event-dossier/claims.ts';
+import { applyClaimAudit, buildClaimAuditPrompt, validateClaimAudit } from '../src/services/event-dossier/claims.ts';
 
 const source = {
     event: {
@@ -24,9 +24,9 @@ const source = {
         ],
     },
     perspectives: [
-        { characterId: 'liu', characterName: '柳生春', role: '許仙', body: '我唱出口才知道，這句話已經不只屬於我。' },
-        { characterId: 'su', characterName: '蘇映雪', role: '白素貞', body: '我先看見她的口形變了。\n\n槍尾替我守住半拍。' },
-        { characterId: 'lq', characterName: '連翹', role: '小青', body: '她們都在看彼此，只有我看著鑼點。' },
+        { characterId: 'liu', characterName: '柳生春', role: '許仙', bodyFact: '女', body: '我唱出口才知道，這句話已經不只屬於我。' },
+        { characterId: 'su', characterName: '蘇映雪', role: '白素貞', bodyFact: '女', body: '我先看見她的口形變了。\n\n槍尾替我守住半拍。' },
+        { characterId: 'lq', characterName: '連翹', role: '小青', bodyFact: '女', body: '她們都在看彼此，只有我看著鑼點。' },
     ],
 };
 
@@ -87,19 +87,97 @@ test('one POV is not publishable as a multi-POV dossier', () => {
 });
 
 test('claim audit uses a closed evidence vocabulary and drops invented refs', () => {
-    const prompt = buildClaimAuditPrompt(source.event, source.perspectives);
+    const prompt = buildClaimAuditPrompt(source.event, source.perspectives.slice(0, 1), source.perspectives);
     assert.match(prompt, /beat:0/);
     assert.match(prompt, /session/);
+    assert.match(prompt, /第三人稱代詞用「她」/);
+    assert.match(prompt, /柳生春｜許仙｜女｜第三人稱「她」/);
+    assert.match(prompt, /連翹｜小青｜女｜第三人稱「她」/);
+    assert.match(prompt, /女子扮小生仍用「她」/);
     const enriched = applyClaimAudit(source.event, source.perspectives, JSON.stringify({
         perspectives: [{
             characterId: 'liu',
+            lead: '柳生春把臨時添唱當成出口，直到接唱聲讓那句話再也收不回來。',
             claims: [
-                { text: '柳生春確實添唱。', mode: 'observed', relation: 'supports', review: 'verified', evidenceRefs: ['beat:0'] },
-                { text: '台下有人替她哭。', mode: 'heard', relation: 'unresolved', review: 'unresolved', evidenceRefs: ['invented:review'] },
+                {
+                    text: '柳生春確實添唱。',
+                    mode: 'observed',
+                    relation: 'supports',
+                    review: 'unresolved',
+                    evidenceRefs: ['beat:0'],
+                    passageRefs: ['p:0'],
+                    editorialNote: '客觀逐拍第一拍直接記錄了柳生春添唱，因此可由公開層核對。',
+                },
+                {
+                    text: '台下有人替她哭。',
+                    mode: 'heard',
+                    relation: 'unresolved',
+                    evidenceRefs: ['invented:review'],
+                    passageRefs: ['p:0'],
+                    editorialNote: '這句話沒有任何封存證據可以支撐。',
+                },
             ],
         }],
     }));
     assert.equal(enriched[0].claims?.length, 1);
     assert.deepEqual(enriched[0].claims?.[0].evidenceRefs, ['spring-snow:d81:stage:beat:0']);
-    assert.equal(enriched[1].claims, undefined);
+    assert.equal(enriched[0].claims?.[0].review, 'verified', 'verified anchor is generated only from the frozen beat');
+    assert.match(enriched[0].claims?.[0].text ?? '', /添了一句定稿沒有的唱詞/);
+    assert.deepEqual(enriched[0].passageClaimIds?.[0], ['spring-snow:d81:stage:claim:liu:0']);
+    assert.equal(enriched[1].claims?.length, 1, 'every POV gets only its deterministic canon anchor until its own audit arrives');
+});
+
+test('complete audit requires bespoke copy, mixed grounded decisions, and every passage mapped', () => {
+    const onePerspective = source.perspectives.slice(0, 1);
+    const enriched = applyClaimAudit(source.event, onePerspective, JSON.stringify({
+        perspectives: [{
+            characterId: 'liu',
+            lead: '柳生春把臨時添唱當成出口，直到接唱聲讓那句話再也收不回來。',
+            claims: [
+                {
+                    text: '柳生春確實添了一句定稿沒有的唱詞。',
+                    mode: 'observed',
+                    relation: 'supports',
+                    evidenceRefs: ['beat:0'],
+                    passageRefs: ['p:0'],
+                    editorialNote: '客觀逐拍第一拍直接記錄添唱，這一項與正史完全相符。',
+                },
+                {
+                    text: '她認為唱詞出口後便不再只屬於自己。',
+                    mode: 'observed',
+                    relation: 'reinterprets',
+                    evidenceRefs: ['beat:0', 'session'],
+                    passageRefs: ['p:0'],
+                    editorialNote: '添唱是公開事實，但歸屬感的改變只存在柳生春自己的理解裡。',
+                },
+            ],
+        }],
+    }));
+
+    assert.deepEqual(validateClaimAudit(enriched), []);
+    assert.deepEqual(enriched[0].claims?.map((claim) => claim.review), ['verified', 'contested']);
+    assert.deepEqual(enriched[0].claims?.map((claim) => claim.relation), ['supports', 'reinterprets']);
+    assert.deepEqual(enriched[0].claims?.map((claim) => claim.epistemicMode), ['observed', 'inferred']);
+});
+
+test('dedicated one-POV audit accepts an exact character-name id alias', () => {
+    const onePerspective = source.perspectives.slice(0, 1);
+    const enriched = applyClaimAudit(source.event, onePerspective, JSON.stringify({
+        perspectives: [{
+            characterId: '柳生春',
+            lead: '柳生春把添唱當成出口，卻在接唱聲裡聽見那句話已經離手。',
+            claims: [{
+                text: '她認為唱詞一出口，就不再只屬於自己。',
+                mode: 'inferred',
+                relation: 'reinterprets',
+                evidenceRefs: ['beat:0', 'session'],
+                passageRefs: ['p:0'],
+                editorialNote: '添唱可由客觀逐拍核對，但話語是否離手只屬於柳生春的理解。',
+            }],
+        }],
+    }));
+
+    assert.deepEqual(validateClaimAudit(enriched), []);
+    assert.equal(enriched[0].claims?.length, 2);
+    assert.equal(enriched[0].lead?.startsWith('柳生春'), true);
 });

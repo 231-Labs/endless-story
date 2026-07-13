@@ -35,6 +35,8 @@ export type ReviewSceneReply = Runner.characterAgent.ReviewSceneReply;
 export type PovReflectInput = Runner.characterAgent.PovReflectInput;
 export type PovSceneInput = Runner.characterAgent.PovSceneInput;
 export type JudgeEstablishedInput = Runner.characterAgent.JudgeEstablishedInput;
+export type DossierCanonicalEvent = Runner.eventDossier.DossierCanonicalEvent;
+export type DossierPerspectiveSource = Runner.eventDossier.DossierPerspectiveSource;
 
 // ── Objective event → character-session delivery ───────────────────────────
 export interface CanonicalSceneBeat {
@@ -204,6 +206,14 @@ export interface SceneAgentPort extends SceneAgent {
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;
+    /** Epistemic editor: writes one bespoke lead per character, extracts
+     * passage-level claims, and compares them with the frozen public event.
+     * Optional for deterministic/offline adapters; real adapters must fail loud
+     * rather than returning an incomplete audit. */
+    curateDossier?(
+        event: DossierCanonicalEvent,
+        perspectives: DossierPerspectiveSource[],
+    ): Promise<DossierPerspectiveSource[]>;
     deriveGenesisWants(input: DeriveWantsInput): Promise<GenesisWant[]>;
     deriveAftermathWant(input: AftermathInput): Promise<GenesisWant | null>;
     judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]>;

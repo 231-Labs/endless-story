@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { EpistemicDossierBundle } from '@endless-story/shared/types';
 import { parseDossierHeader } from '@endless-story/runner/services/event-dossier';
 import { EventDossier } from '@/components/feed/EventDossier';
@@ -48,6 +50,15 @@ const dossiers = {
 } as const;
 
 async function loadDynamicDossier(slug: string): Promise<EpistemicDossierBundle | null> {
+  const artifactDir = process.env.EVENT_DOSSIER_DIR;
+  if (artifactDir && /^[\p{L}\p{N}._-]+$/u.test(slug)) {
+    const artifact = await readFile(join(artifactDir, `${slug}.md`), 'utf8').catch(() => null);
+    if (artifact) {
+      const localBundle = parseDossierHeader(artifact).bundle;
+      if (localBundle) return localBundle;
+    }
+  }
+
   const cut = await cutsApi.getEventCut(slug).catch(() => null);
   if (!cut?.body) return null;
   // cut-read has already removed es:cut; es:dossier is the next header.
