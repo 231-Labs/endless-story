@@ -19,7 +19,7 @@
  */
 
 import type { Want } from '../../src/index.ts';
-import type { Char } from './world.ts';
+import type { Char, DormantChar } from './world.ts';
 
 /** The mutated overlay captured per character. */
 export interface CharSnapshot {
@@ -50,6 +50,9 @@ export interface CastSnapshot {
     savedTick: number;
     /** pairs promoted to established in play (pairKey = sorted ids '|'). */
     establishedPairs?: string[];
+    /** dormant lives (street vendors …): ledger + heat carry across seasons —
+     *  the world keeps growing from being touched. */
+    dormants?: Array<{ id: string; heat: number; ledger: Array<{ day: number; note: string }> }>;
     /** charId → its mutated overlay. */
     cast: Record<string, CharSnapshot>;
 }
@@ -58,7 +61,7 @@ export interface CastSnapshot {
  * Capture the cast's MUTATED overlay (NOT the canon seed memories, NOT transient
  * per-round flags). Deep-copies wants + views so the snapshot never aliases live state.
  */
-export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: string[] = []): CastSnapshot {
+export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: string[] = [], dormants: DormantChar[] = []): CastSnapshot {
     const out: Record<string, CharSnapshot> = {};
     for (const c of cast) {
         out[c.id] = {
@@ -74,7 +77,13 @@ export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: stri
             secret: c.secret,
         };
     }
-    return { version: 1, savedTick, establishedPairs, cast: out };
+    return {
+        version: 1,
+        savedTick,
+        establishedPairs,
+        dormants: dormants.length ? dormants.map((d) => ({ id: d.id, heat: d.heat, ledger: d.ledger.map((l) => ({ ...l })) })) : undefined,
+        cast: out,
+    };
 }
 
 /**
@@ -84,6 +93,16 @@ export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: stri
  * snapshot is left with its seed defaults. Canon thick memories are untouched (they were
  * reloaded verbatim by buildCast). Returns the ids that were actually restored.
  */
+/** Overlay saved dormant state (heat/ledger) onto a fresh dormant population. */
+export function restoreDormants(dormants: DormantChar[], snap: CastSnapshot): void {
+    for (const d of dormants) {
+        const s = snap.dormants?.find((x) => x.id === d.id);
+        if (!s) continue;
+        d.heat = s.heat;
+        d.ledger = s.ledger.map((l) => ({ ...l }));
+    }
+}
+
 export function restoreCast(cast: Char[], snap: CastSnapshot): string[] {
     const restored: string[] = [];
     for (const c of cast) {

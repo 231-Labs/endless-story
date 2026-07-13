@@ -60,6 +60,51 @@ export const VENUES: Venue[] = [
 ];
 
 export const venueByName = new Map(VENUES.map((v) => [v.name, v]));
+
+/**
+ * DORMANT characters (§multi-saga vision: no painted backdrops — the flower
+ * lady is a PERSON, not a flavor string). A dormant entity has a name, a haunt,
+ * a livelihood and a body; it takes NO planner turns and costs NO LLM. It is
+ * OBSERVABLE (a passerby sees her doing her trade), TRANSACTABLE (buying is a
+ * real micro-exchange both sides remember) and ACCUMULATES heat — enough
+ * touches and it becomes a lazy-activation candidate (the world grows from
+ * being touched, never from a table of strings).
+ */
+export interface DormantChar {
+    id: string;
+    name: string;
+    /** livelihood, e.g. 賣花. */
+    role: string;
+    /** the venue this person works/haunts. */
+    haunt: string;
+    /** what a passerby SEES them doing (their trade, present tense). */
+    doing: string;
+    bodyFact: string;
+    /** things they sell (a walker's 順路買 goes through a real vendor). */
+    sells?: string[];
+    /** tiny persistent memory: who touched this life, when, how. */
+    ledger: Array<{ day: number; note: string }>;
+    /** accumulated narrative touches — crossing the threshold flags a
+     *  lazy-activation candidate (〔世界生長〕). */
+    heat: number;
+}
+
+/** Fresh dormant population (per run — mutable state never shared module-wide). */
+export function buildDormants(): DormantChar[] {
+    return [
+        { id: 'd-花攤阿婆', name: '花攤阿婆', role: '賣花', haunt: '霞飛路商店街', doing: '守著花攤理梔子和白蘭花', bodyFact: '上了年紀的婦人', sells: ['一枝白蘭花', '一把梔子'], ledger: [], heat: 0 },
+        { id: 'd-生煎攤老闆娘', name: '生煎攤老闆娘', role: '賣生煎', haunt: '霞飛路商店街', doing: '掀著鍋蓋煎生煎，油香一路飄', bodyFact: '利落的中年婦人', sells: ['一客生煎'], ledger: [], heat: 0 },
+        { id: 'd-報童小四', name: '報童小四', role: '賣報', haunt: '霞飛路商店街', doing: '滿街吆喝著晚報', bodyFact: '十來歲的男孩', sells: ['一份晚報'], ledger: [], heat: 0 },
+        { id: 'd-茶湯老倌', name: '茶湯老倌', role: '賣茶湯', haunt: '戲園前街', doing: '守著冒白汽的茶湯攤', bodyFact: '沉默的老漢', sells: ['一碗茶湯'], ledger: [], heat: 0 },
+        { id: 'd-糖粥王嫂', name: '糖粥王嫂', role: '賣糖粥', haunt: '戲園前街', doing: '敲著小梆子賣糖粥', bodyFact: '嗓門亮的婦人', sells: ['一碗糖粥', '兩塊糖年糕'], ledger: [], heat: 0 },
+        { id: 'd-車夫老周', name: '車夫老周', role: '拉洋車', haunt: '戲園前街', doing: '把洋車靠在簷下等座', bodyFact: '精瘦的中年漢子', ledger: [], heat: 0 },
+    ];
+}
+
+/** Is this dormant OUT at this 時辰? Street trades keep street hours. */
+export function dormantPresent(d: DormantChar, part: string): boolean {
+    return part !== '深宵' && part !== '清晨';
+}
 export const isPublicVenue = (name: string): boolean => venueByName.get(name)?.isPublic ?? false;
 
 /** Street/food venues — a character standing here on a non-scene turn can EAT (§ economy).

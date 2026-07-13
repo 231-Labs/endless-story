@@ -1068,3 +1068,19 @@ test('transit: cross-cluster routes pass physical streets; same cluster has none
     assert.deepEqual(transitStreets('沈宅小樓', '白公館繡樓'), ['霞飛路商店街'], 'two private houses meet the main road');
     assert.deepEqual(transitStreets('戲園前街', '後台妝閣'), [], 'the street itself is inside the cluster');
 });
+
+test('dormant lives: a street purchase is remembered by BOTH sides and heat persists across seasons', async () => {
+    const { buildDormants } = await import('../experiments/agent-season/world.ts');
+    const { restoreDormants } = await import('../experiments/agent-season/persistence.ts');
+    const dormants = buildDormants();
+    const granny = dormants.find((d) => d.id === 'd-花攤阿婆')!;
+    granny.ledger.push({ day: 2, note: '連翹來買過一枝白蘭花' });
+    granny.heat = 3;
+    const cast = buildCast(['連翹']);
+    const snap = snapshotCast(cast, 41, [], dormants);
+    const fresh = buildDormants();
+    restoreDormants(fresh, snap);
+    const restored = fresh.find((d) => d.id === 'd-花攤阿婆')!;
+    assert.equal(restored.heat, 3, 'heat carries across the season boundary');
+    assert.equal(restored.ledger[0]?.note, '連翹來買過一枝白蘭花', 'the vendor remembers who touched her life');
+});

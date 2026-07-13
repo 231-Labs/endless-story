@@ -47,6 +47,9 @@ import {
     venueByName,
     VENUES,
     WORLD_PREMISE,
+    buildDormants,
+    dormantPresent,
+    type DormantChar,
 } from './world.ts';
 import {
     rhythmPull,
@@ -57,8 +60,6 @@ import {
     sameCluster,
     type RehearsalCall,
     transitStreets,
-    streetSight,
-    streetBuy,
 } from './rhythm.ts';
 
 /** FOLLOWED characters (追角): comma-separated names whose scenes ALSO get a
@@ -211,6 +212,9 @@ export interface SeasonDeps {
      *  established so far — the caller persists a CHECKPOINT snapshot, so a
      *  mid-season crash (a TCP reset once ate two days) loses at most a day. */
     checkpoint?: (endedTick: number, establishedPairs: string[]) => void;
+    /** The world's dormant population (street vendors etc.) — real entities,
+     *  never flavor strings. Defaults to buildDormants(). */
+    dormants?: DormantChar[];
 }
 
 export interface SeasonResult {
@@ -223,6 +227,8 @@ export interface SeasonResult {
     deaths: string[];
     /** pairs promoted to established IN PLAY (persist via snapshotCast). */
     establishedPairs: string[];
+    /** the dormant population as the season left it (ledgers + heat persist). */
+    dormants: DormantChar[];
     /** the accumulated play at season end. */
     play: Play;
     /** the deterministic box office (null if the play never premiered). */
@@ -1089,6 +1095,7 @@ export async function runRound(
         discoveredToday: Set<string>;
         /** pairKeys that already had a 傾吐 today (once per pair per day). */
         confidedToday: Set<string>;
+        dormants: DormantChar[];
         /** self-check pass accumulator (scenes reviewed / beats whose text changed). */
         review: ReviewCounter;
         /** chapter-level self-check accumulator (woven 章回 reviewed / prose repaired). */
@@ -1449,10 +1456,18 @@ export async function runRound(
         if (c.venue !== from) {
             const dest = c.venue;
             for (const street of transitStreets(from, dest)) {
+                // The street's REAL state this 時辰: cast members standing there +
+                // dormant lives at their trades (entities, never painted backdrop).
                 const seen = cast.filter((o) => o.id !== c.id && !o.dead && o.venue === street).slice(0, 2);
+                const streetFolk = out.dormants.filter((d) => d.haunt === street && dormantPresent(d, part));
+                let h = clock.currentTick * 31 + street.length;
+                for (const ch of c.id) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+                const folk = streetFolk.length ? streetFolk[h % streetFolk.length] : undefined;
                 const sight = seen.length
                     ? `遠遠見著${seen.map((o) => o.name).join('、')}也在街上`
-                    : streetSight(street, clock.currentTick, c.id);
+                    : folk
+                      ? `${folk.name}正${folk.doing}`
+                      : '街面上冷冷清清';
                 const line = `第${clock.day}日·${part}，打${from}往${dest}，路過${street}，${sight}。`;
                 c.todayLedger.set(`transit:${street}:${clock.currentTick}`, line);
                 await writeMem(recall, c.id, line, seen.length ? 4 : 3, clock.day);
@@ -1489,14 +1504,21 @@ export async function runRound(
                         /* the road goes on */
                     }
                 }
-                // 順路 small purchase (~1/4 walks, needs coin): a flower, a paper of sweets.
-                let h = clock.currentTick * 31 + street.length;
-                for (const ch of c.id) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
-                if (h % 4 === 0 && c.money >= 2) {
+                // 順路 purchase (~1/4 walks, needs coin) — a REAL exchange with a
+                // real vendor: both sides remember it, and the vendor's life gains
+                // heat (enough touches → lazy-activation candidate; the world grows
+                // from being touched).
+                const vendor = streetFolk.find((d) => d.sells?.length);
+                if (vendor && h % 4 === 0 && c.money >= 2) {
                     c.money -= 1;
-                    const buy = streetBuy(street, h);
-                    c.todayLedger.set(`buy:${street}:${clock.currentTick}`, `路過${street}順手${buy}（花去 1）。`);
-                    log(`    · 〔路上〕${c.name} 路過 ${street}，順手${buy}。`);
+                    const bought = vendor.sells![h % vendor.sells!.length];
+                    c.todayLedger.set(`buy:${street}:${clock.currentTick}`, `路過${street}，同${vendor.name}買了${bought}（花去 1）。`);
+                    vendor.ledger.push({ day: clock.day, note: `${c.name}來買過${bought}` });
+                    vendor.heat += 1;
+                    log(`    · 〔路上〕${c.name} 路過 ${street}，同 ${vendor.name} 買了${bought}。`);
+                    if (vendor.heat === 5) {
+                        log(`    · 〔世界生長〕${vendor.name} 的攤子這些日子被戲班的人踏熟了——這條命有了自己的份量（惰性生成候選）。`);
+                    }
                 }
             }
         }
@@ -1902,6 +1924,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         discoveries: [] as SeasonResult['discoveries'],
         discoveredToday: new Set<string>(),
         confidedToday: new Set<string>(),
+        dormants: deps.dormants ?? buildDormants(),
         review: { scenes: 0, beatsChanged: 0 } as ReviewCounter,
         chapterReview: { chapters: 0, repaired: 0 } as ChapterReviewCounter,
         povReflections: {} as Record<string, Array<{ day: number; text: string }>>,
@@ -1942,6 +1965,7 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         deaths,
         play: deps.play,
         establishedPairs: [...out.establishedDyn],
+        dormants: out.dormants,
         boxOffice: out.boxOffice,
         premiere: out.premiere,
         showrunnerVerdict: razor(deps.showrunner, deps.play),

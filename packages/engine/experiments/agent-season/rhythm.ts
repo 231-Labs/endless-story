@@ -181,24 +181,6 @@ export function transitStreets(from: string, to: string): string[] {
     return legs.length ? [...new Set(legs)] : ['霞飛路商店街'];
 }
 
-/** Deterministic street life (no LLM): what a walker's eye lands on this pass. */
-const STREET_SIGHTS: Record<string, string[]> = {
-    霞飛路商店街: ['花攤上梔子開得正白', '生煎攤的油香一路飄過來', '綢緞莊新掛出一匹洋布', '電車叮叮噹噹擦身過去', '報童滿街吆喝著晚報'],
-    戲園前街: ['茶湯攤冒著白汽', '糖粥擔子敲著小梆子', '散戲的人潮還沒散盡', '牆上新刷了戲報子', '拉洋車的在簷下打盹'],
-};
-const STREET_BUYS: Record<string, string[]> = {
-    霞飛路商店街: ['買了枝白蘭花', '稱了一包桂花糖', '捎了份晚報'],
-    戲園前街: ['買了碗糖粥暖手', '捎了包茶湯', '買了兩塊糖年糕'],
-};
-const pickBy = (arr: string[], h: number): string => arr[h % arr.length];
-export function streetSight(street: string, tick: number, walkerId: string): string {
-    let h = tick;
-    for (const ch of walkerId + street) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    return pickBy(STREET_SIGHTS[street] ?? ['街面上人來人往'], h);
-}
-export function streetBuy(street: string, h: number): string {
-    return pickBy(STREET_BUYS[street] ?? ['買了點零嘴'], h);
-}
 
 export interface Whereabouts {
     /** best single-venue guess for this 時辰. */

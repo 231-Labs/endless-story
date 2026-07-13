@@ -22,7 +22,7 @@ import * as path from 'node:path';
 
 import { FakeSceneAgent, LocalRecall, LocalClock, applyRewrite, type SceneAgentPort } from '../../src/index.ts';
 import { buildCast, isPublicVenue, type Char } from './world.ts';
-import { snapshotCast, restoreCast, type CastSnapshot } from './persistence.ts';
+import { snapshotCast, restoreCast, restoreDormants, type CastSnapshot } from './persistence.ts';
 import { occLabel, type RehearsalCall } from './rhythm.ts';
 import { FakePlanner, RealPlanner, type Planner } from './agent-turn.ts';
 import { runSeason, type SeasonResult, type RoundRecord } from './round.ts';
@@ -84,10 +84,12 @@ async function main(): Promise<void> {
         restored: [],
         samples: [],
     };
+    let RESTORE_SNAP: CastSnapshot | null = null;
     if (restorePath) {
         const statePath = path.join(restorePath, 'cast-state.json');
         if (fs.existsSync(statePath)) {
             const snap = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as CastSnapshot;
+            RESTORE_SNAP = snap;
             const restored = restoreCast(cast, snap);
             restoredEstablished = snap.establishedPairs ?? [];
             // carry the prior week's accumulated episodic memory forward (copy, never mutate).
@@ -198,9 +200,13 @@ async function main(): Promise<void> {
     const play = newPlay('', 'genesis');
     log(`\nshowrunner 中心命題：${showrunner.centralQuestion}`);
     log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} ${showrunner.finaleName}｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
+    const { buildDormants } = await import('./world.ts');
+    const dormants = buildDormants();
+    if (RESTORE_SNAP) restoreDormants(dormants, RESTORE_SNAP);
     const result = await runSeason({
+        dormants,
         checkpoint: (endedTick, establishedPairs) => {
-            fs.writeFileSync(path.join(outDir, 'cast-state.json'), JSON.stringify(snapshotCast(cast, endedTick, establishedPairs)));
+            fs.writeFileSync(path.join(outDir, 'cast-state.json'), JSON.stringify(snapshotCast(cast, endedTick, establishedPairs, dormants)));
         },
         cast,
         planner,
@@ -223,7 +229,7 @@ async function main(): Promise<void> {
 
     // SEASON PERSISTENCE — write the end-of-week snapshot so the NEXT week can restore it.
     const statePath = path.join(outDir, 'cast-state.json');
-    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6, result.establishedPairs)));
+    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6, result.establishedPairs, result.dormants)));
 
     // ALWAYS emit a readable HTML next to the report (§ user: every run must produce
     // an HTML to read, so problems are caught by reading the whole season).
