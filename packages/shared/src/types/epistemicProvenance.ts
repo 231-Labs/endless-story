@@ -33,6 +33,9 @@ export interface NarrativeClaim {
   epistemicMode: EpistemicMode;
   relation: ClaimRelation;
   review: ClaimReview;
+  /** Short editor-written explanation of why this claim has this relation and
+   * review state. Optional for older anchored dossiers. */
+  editorialNote?: string;
   evidenceRefs: string[];
 }
 

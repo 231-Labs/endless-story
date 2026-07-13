@@ -84,7 +84,7 @@ async function main(): Promise<void> {
 
     for (let i = 0; i < args.ticks; i++) {
         const report = await runTick(world, { agent, recall, archive, clock }, { snapshotDir: stateDir });
-        const dossiers = writeTickDossiers(args.out, report, world.data.cast);
+        const dossiers = await writeTickDossiers(args.out, report, world.data.cast, args.realLlm ? agent : undefined);
         for (const dossier of dossiers) console.log(`  dossier: ${dossier.eventId} → ${dossier.filename}`);
     }
 

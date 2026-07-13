@@ -34,13 +34,19 @@ const RELATION_LABELS: Record<ClaimRelation, string> = {
 const REVIEW_LABELS: Record<ClaimReview, string> = {
   verified: '已錨定',
   contested: '有異說',
-  unresolved: '未定',
+  unresolved: '尚無外證',
 };
 
 const REVIEW_STYLES: Record<ClaimReview, string> = {
   verified: 'border-jade/50 bg-jade/10 text-jade',
   contested: 'border-cinnabar/45 bg-cinnabar/10 text-cinnabar',
   unresolved: 'border-hairline bg-surface text-mute',
+};
+
+const REVIEW_EXPLANATIONS: Record<ClaimReview, string> = {
+  verified: '能直接回到封存的客觀逐拍。',
+  contested: '動作可核對；角色賦予它的意義仍是一家之言。',
+  unresolved: '目前只有角色 session 留下這項說法。',
 };
 
 export function EventDossier({
@@ -363,9 +369,22 @@ function EvidenceCard({
           {REVIEW_LABELS[claim.review]}
         </span>
       </div>
+      <p className="mt-2 text-[0.66rem] leading-5 text-[#8a7b6c] dark:text-mute">
+        {REVIEW_EXPLANATIONS[claim.review]}
+      </p>
       <p className="mt-4 font-serif text-sm leading-7 text-[#3d332d] dark:text-ink">
         {claim.text}
       </p>
+      {claim.editorialNote ? (
+        <div className="mt-4 border-t border-[#d7cbbc]/70 pt-3 dark:border-hairline">
+          <p className="text-[0.62rem] tracking-[0.18em] text-[#9a4b3e] dark:text-cinnabar">
+            卷宗判讀
+          </p>
+          <p className="mt-1.5 text-xs leading-6 text-[#786c62] dark:text-mute">
+            {claim.editorialNote}
+          </p>
+        </div>
+      ) : null}
       <p className="mt-4 border-t border-[#d7cbbc]/70 pt-3 text-[0.68rem] tracking-[0.16em] text-[#9a4b3e] dark:border-hairline dark:text-cinnabar">
         {RELATION_LABELS[claim.relation]}
       </p>
