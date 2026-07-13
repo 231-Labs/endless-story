@@ -20,14 +20,19 @@ import { LocalClock } from '../src/adapters/local/clock.ts';
 import { createWorldFromPreset } from '../src/preset.ts';
 import { runTick, type TickReport } from '../src/tick.ts';
 import { WorldState } from '../src/world-state.ts';
-import type { ObserveSceneInput } from '../src/ports.ts';
+import type { ObserveSceneInput, RippleJudgeDelta, RippleJudgeInput } from '../src/ports.ts';
 
 const quiet = () => {}; // silence per-beat logging in the test
 
 class RecordingSessionAgent extends FakeSceneAgent {
     observations: ObserveSceneInput[] = [];
+    rippleRosters: string[][] = [];
     async observeScene(input: ObserveSceneInput): Promise<void> {
         this.observations.push(input);
+    }
+    async judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]> {
+        this.rippleRosters.push(input.roster.map((member) => member.characterId));
+        return [];
     }
 }
 
@@ -71,6 +76,14 @@ test('8-tick run + restart continues, with mechanical counters', async () => {
             `${event.id}: exactly the witnesses received it`,
         );
         assert.ok(deliveries.every((item) => event.witnessIds.includes(item.characterId)), 'no off-scene delivery');
+    }
+    assert.equal(agent.rippleRosters.length, objectiveEvents.length, 'each event gets exactly one ripple judgment');
+    for (let i = 0; i < objectiveEvents.length; i++) {
+        assert.deepEqual(
+            new Set(agent.rippleRosters[i]),
+            new Set(objectiveEvents[i].witnessIds),
+            `${objectiveEvents[i].id}: only witnesses may receive a want ripple`,
+        );
     }
 
     // ── counter 2: night ticks route toward home anchors ──────────────────────

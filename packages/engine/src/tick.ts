@@ -63,6 +63,15 @@ export interface TickReport {
     episode: boolean;
     /** Frozen objective events produced this tick, before any POV interpretation. */
     events: CanonicalSceneEvent[];
+    /** Read-only session projections, linked back to their frozen event. */
+    eventPovs: TickEventPov[];
+}
+
+export interface TickEventPov {
+    characterId: string;
+    name: string;
+    eventId: string;
+    body: string;
 }
 
 /** A lean daily-life state line from the state vector (undertone, not an event). */
@@ -192,7 +201,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const acc = w.dayAccum;
     /** Per-character angle on this tick: objective act + inner thought. */
     const pov = new Map<string, { name: string; lines: string[] }>();
-    const eventPovs: Array<{ characterId: string; name: string; eventId: string; body: string }> = [];
+    const eventPovs: TickEventPov[] = [];
     const events: CanonicalSceneEvent[] = [];
 
     for (const [sid, ids] of byScene) {
@@ -373,11 +382,16 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             const deltas = await agent.judgeRipples({
                 sceneName,
                 beats: loop.beats.map((b) => `${b.name}：${b.text}`),
-                roster: w.cast.map((m) => ({
-                    characterId: m.id,
-                    name: m.name,
-                    wants: wants.filter((x) => !x.retired && x.characterId === m.id).map((x) => x.desc),
-                })),
+                // A scene can stir only its witnesses. News can travel later as
+                // another physical event; the ripple judge is not a telepathic bus.
+                roster: ids.map((id) => {
+                    const member = world.castById(id)!;
+                    return {
+                        characterId: id,
+                        name: member.name,
+                        wants: wants.filter((x) => !x.retired && x.characterId === id).map((x) => x.desc),
+                    };
+                }),
             });
             for (const sp of applyRipples(wants, deltas, nowTick)) {
                 log(`  new thread: ${world.nameById(sp.characterId)}「${sp.desc}」`);
@@ -456,5 +470,6 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         wove,
         episode,
         events,
+        eventPovs,
     };
 }

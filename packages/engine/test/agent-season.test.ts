@@ -340,6 +340,8 @@ test('pronoun correctness: buildBeatSystemPrompt names a male co-star 他 (data-
     });
     assert.ok(prompt.includes(`${jiang.name}是他`), `the guard names ${jiang.name} 他 (male) — got no 他 line`);
     assert.ok(prompt.includes(`${su.name}是她`), `the guard names ${su.name} 她 (female)`);
+    assert.ok(prompt.includes('beat 是寫入正史逐拍的敘述'), 'the action is framed as an objective ledger beat');
+    assert.ok(prompt.includes('不要以「我」起筆'), 'the model must not leak first-person framing into canon');
 });
 
 test('scene self-check: FakeSceneAgent.reviewScene is a pass-through AND the round loop wires it', async () => {

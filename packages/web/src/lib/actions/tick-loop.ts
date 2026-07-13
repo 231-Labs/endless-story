@@ -1388,7 +1388,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         const deltas = await characterAgent.judgeRipples({
                             sceneName,
                             beats: loop.beats.map((b) => `${b.name}：${b.text}`),
-                            roster: slice.map((c) => ({
+                            // Only people physically in this scene can be stirred.
+                            // Off-scene news must arrive through a later event.
+                            roster: cs.map((c) => ({
                                 characterId: c.id,
                                 name: c.name,
                                 wants: wants
