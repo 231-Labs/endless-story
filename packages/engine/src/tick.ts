@@ -27,7 +27,7 @@ import {
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneLoopCastMember } from './core/scene-loop.ts';
 import { computeSpatialRouting } from './core/spatial-routing.ts';
-import type { ArchivePort, ClockPort, RecallPort, SceneAgentPort } from './ports.ts';
+import type { ArchivePort, CanonicalSceneEvent, ClockPort, RecallPort, SceneAgentPort } from './ports.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -61,6 +61,8 @@ export interface TickReport {
     routed: Record<string, string>;
     wove: boolean;
     episode: boolean;
+    /** Frozen objective events produced this tick, before any POV interpretation. */
+    events: CanonicalSceneEvent[];
 }
 
 /** A lean daily-life state line from the state vector (undertone, not an event). */
@@ -190,6 +192,8 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const acc = w.dayAccum;
     /** Per-character angle on this tick: objective act + inner thought. */
     const pov = new Map<string, { name: string; lines: string[] }>();
+    const eventPovs: Array<{ characterId: string; name: string; eventId: string; body: string }> = [];
+    const events: CanonicalSceneEvent[] = [];
 
     for (const [sid, ids] of byScene) {
         if (ids.length === 0) continue;
@@ -225,6 +229,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         );
 
         const loop = await runSceneLoop({
+            sagaId: w.sagaId,
             sceneId: sid,
             sceneName,
             isPrivate,
@@ -234,6 +239,33 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             tick: nowTick,
             agent,
         });
+
+        const eventId = `${w.sagaId}:d${today}:t${nowTick}:${sid}`;
+        const event: CanonicalSceneEvent = {
+            v: 1,
+            id: eventId,
+            sagaId: w.sagaId,
+            day: today,
+            tick: nowTick,
+            clock: clockLabel,
+            sceneId: sid,
+            sceneName,
+            visibility: isPrivate ? 'private' : 'public',
+            witnessIds: [...ids],
+            beats: loop.beats.map((b) => ({
+                characterId: b.characterId,
+                name: b.name,
+                text: b.text,
+                inner: b.inner || undefined,
+            })),
+        };
+        if (event.beats.length) {
+            events.push(event);
+            for (const id of ids) {
+                const member = world.castById(id)!;
+                await agent.observeScene?.({ event, characterId: id, name: member.name, persona: member.persona });
+            }
+        }
 
         if (loop.beats.length && acc.lines[acc.lines.length - 1] !== `【${clockLabel}】`) acc.lines.push(`【${clockLabel}】`);
         const shoujuan: string[] = [];
@@ -255,7 +287,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         if (loop.beats.length) {
             beats += loop.beats.length;
             beatScenes.push(sid);
-            await archive.commit({ kind: 'shoujuan', day: today, tick: nowTick, name: sceneName, sceneId: sid, body: shoujuan.join('\n') });
+            await archive.commit({ kind: 'shoujuan', day: today, tick: nowTick, name: sceneName, sceneId: sid, eventId, body: shoujuan.join('\n') });
             // Remember each actor's turn so the next tick continues from it.
             for (const b of loop.beats) {
                 await recall.remember(b.characterId, `〔${sceneName}〕${b.text}（心下：${b.inner}）`, {
@@ -263,6 +295,36 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     importance: 5,
                     day: today,
                 });
+            }
+        }
+
+
+        // Render the frozen event through each witness's own durable session.
+        if (loop.beats.length) {
+            for (const id of ids) {
+                const member = world.castById(id)!;
+                const rendered = await agent.povScene({
+                    sagaId: w.sagaId,
+                    characterId: id,
+                    eventId,
+                    name: member.name,
+                    persona: member.persona,
+                    secret: member.secret,
+                    ties: Object.entries(world.selfTies(id, ids)).map(([oid, t]) => `對${world.nameById(oid)}：${t}`).join('\n') || undefined,
+                    venue: sceneName,
+                    clock: clockLabel,
+                    beats: loop.beats.map((b) => ({ name: b.name, text: b.text })),
+                    castBodies: ids.map((cid) => {
+                        const x = world.castById(cid)!;
+                        return { name: x.name, bodyFact: x.gender, role: x.role };
+                    }),
+                });
+                if (rendered) {
+                    const aggregate = pov.get(id) ?? { name: member.name, lines: [] };
+                    aggregate.lines.push(rendered);
+                    pov.set(id, aggregate);
+                    eventPovs.push({ characterId: id, name: member.name, eventId, body: rendered });
+                }
             }
         }
 
@@ -343,9 +405,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
     // 7) PER-CHARACTER POV — each actor's own angle this tick (objective + inner).
     //    Full first-person serial prose is M1; M0 archives the captured angle.
-    for (const [id, p] of pov) {
-        await archive.commit({ kind: 'pov', day: today, tick: nowTick, name: p.name, characterId: id, body: p.lines.join('\n\n') });
-        acc.povByName[p.name] = p.lines.join('\n');
+    for (const p of eventPovs) {
+        await archive.commit({ kind: 'pov', day: today, tick: nowTick, name: p.name, characterId: p.characterId, eventId: p.eventId, body: p.body });
+    }
+    for (const p of pov.values()) {
+        acc.povByName[p.name] = p.lines.join('\n\n');
     }
 
     // 8) DAY-END EPISODE.
@@ -391,5 +455,6 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         routed,
         wove,
         episode,
+        events,
     };
 }

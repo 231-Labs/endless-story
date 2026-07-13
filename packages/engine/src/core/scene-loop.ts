@@ -59,6 +59,8 @@ export interface SceneLoopCastMember {
 }
 
 export interface SceneLoopInput {
+    /** Saga namespace for persistent character-session isolation. */
+    sagaId?: string;
     sceneId: string;
     sceneName: string;
     /** The venue's physical description (anti-teleport grounding for beats). */
@@ -264,6 +266,9 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         if (gateBeat) result.intimacyGateOpened = true;
 
         const r = await agent.actBeat({
+            sagaId: input.sagaId,
+            characterId: actor.characterId,
+            perceptId: input.sagaId ? `${input.sagaId}:t${input.tick}:${input.sceneId}:turn${turn}` : undefined,
             name: actor.name,
             persona: actor.persona,
             memories: actor.memories,

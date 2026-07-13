@@ -8,7 +8,7 @@
  */
 
 import { text as llmText } from '@endless-story/llm';
-import { buildBeatSystemPrompt, pronounFromBody, type ActBeatInput, type BeatResult } from './beat-prompt.js';
+import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, type ActBeatInput, type BeatResult } from './beat-prompt.js';
 
 // Pure prompt surface (types + builders) lives in the node-clean leaf
 // `beat-prompt.ts`; re-exported here so the package surface is unchanged.
@@ -46,23 +46,7 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
         maxTokens: input.consummate ? 900 : 480,
         temperature: 0.95,
     });
-    const o = extractJson(res.text) ?? {};
-    const addressed = s(o.addressed);
-    const move = s(o.move);
-    // The model often self-prefixes its own name (「蘇映雪：…」); every renderer
-    // prepends the speaker itself, so strip a leading self-name here (once).
-    const esc = input.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Strips 「名：」 AND a bare leading self-name (「連翹把靠旗…」) — but not a
-    // possessive self-reference (「連翹的靴」 keeps its subject).
-    const deName = (t: string): string => t.replace(new RegExp(`^${esc}(?!的)\\s*[:：]?\\s*`), '');
-    return {
-        beat: deName(s(o.beat)) || '（沉默。）',
-        inner: deName(s(o.inner)),
-        addressed: addressed && addressed !== '無' ? addressed : undefined,
-        move: move && move !== '無' ? move : undefined,
-        close: o.close === true ? true : undefined,
-        intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
-    };
+    return parseBeatResult(res.text, input.name);
 }
 
 export interface JudgeResolveInput {
@@ -341,6 +325,10 @@ export async function judgeEstablished(input: JudgeEstablishedInput): Promise<bo
 
 // ── POV scene rendering (the 追角 lens: one scene, one participant's eyes) ────
 export interface PovSceneInput {
+    /** Provenance for reading the matching persistent character session. */
+    sagaId?: string;
+    characterId?: string;
+    eventId?: string;
     /** The witnessing participant (whose eyes render the scene). */
     name: string;
     persona: string;

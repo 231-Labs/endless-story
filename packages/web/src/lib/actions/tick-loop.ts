@@ -55,6 +55,8 @@ import { ensureHomesSeeded } from '@/lib/chain/home-seed';
 import { getHomeScene, getWorkScene } from '@/lib/chain/spatial-routing';
 import { loadBible } from '@/lib/chain/story-bible-store';
 import { runSceneLoop } from '@endless-story/engine/core/scene-loop';
+import { RunnerSceneAgent } from '@endless-story/engine/adapters/runner';
+import { join as joinPath } from 'node:path';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -114,6 +116,7 @@ import {
     publicTagsWithRole,
     mapPool,
 } from './tick-phases/support';
+
 import {
     runMovePhase,
     applyMoveResultsToScenes,
@@ -124,6 +127,13 @@ import { runAskPhase } from './tick-phases/ask';
 import { runGivePhase } from './tick-phases/give';
 import { runSettlePhase } from './tick-phases/settle';
 import { runActPhase, cardActionPhrase } from './tick-phases/act';
+
+// One durable transcript per (saga, character). The directory should point at
+// a persistent volume in production; local development uses the existing data/.
+const sessionSceneAgent = new RunnerSceneAgent({
+    sessionDir: process.env.CHARACTER_SESSION_DIR ?? joinPath(process.cwd(), 'data', 'character-sessions'),
+    sessionKey: process.env.CHARACTER_SESSION_KEY,
+});
 
 /** Recent-topic history per saga (process-level): anti-repeat so the world
  *  rotates contentions instead of locking on one. */
@@ -248,8 +258,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // §2.51: spotlight rotation, selection-only (settlement reads raw rows). Default off.
     const actorFatigue = input.actorFatigue ?? envFlag('TICK_ACTOR_FATIGUE');
     // Want-driven per-scene interaction loops as the narrative driver (§2.36–2.48);
-    // contested resources keep only the economic settlement lane. Default off.
-    const wantEngine = input.wantEngine ?? envFlag('TICK_WANT_ENGINE');
+    // The physical want/session engine is now the production character lane.
+    // Explicit input wins; an existing env value can still disable it with 0/
+    // false. With no flag it is ON (the old opt-in default kept production on
+    // the stateless path even after the session migration).
+    const wantEngine = input.wantEngine ??
+        (process.env.TICK_WANT_ENGINE == null ? true : envFlag('TICK_WANT_ENGINE'));
     // §4d.2: arc convergence state machine (off-chain arc state). Default off.
     const arcConvergence = input.arcConvergence ?? envFlag('TICK_ARC_CONVERGENCE');
     // Contest experiment: the "檯面上的爭奪" overlay (stake list fed to genesis,
@@ -1231,6 +1245,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 characterId: c.id,
                                 name: c.name,
                                 persona: c.description,
+                                bodyFact: c.physicalFacts || c.gender,
                                 memories: memories.length > 0 ? memories : undefined,
                                 stateLine,
                                 // Own-character-only: never another character's row (character-secrets.ts).
@@ -1249,6 +1264,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         }),
                     );
                     const loop = await runSceneLoop({
+                        sagaId: d.sagaId,
                         sceneId,
                         sceneName,
                         isPrivate,
@@ -1259,7 +1275,37 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         cast: castWithMem,
                         wants,
                         tick: nowTick,
+                        agent: sessionSceneAgent,
                     });
+                    const objectiveEventId = `${d.sagaId}:d${worldTime?.day ?? 0}:t${nowTick}:${sceneId}`;
+                    if (loop.beats.length > 0) {
+                        const objectiveEvent = {
+                            v: 1 as const,
+                            id: objectiveEventId,
+                            sagaId: d.sagaId,
+                            day: worldTime?.day ?? 0,
+                            tick: nowTick,
+                            clock,
+                            sceneId,
+                            sceneName,
+                            visibility: isPrivate ? 'private' as const : 'public' as const,
+                            witnessIds: cs.map((c) => c.id),
+                            beats: loop.beats.map((b) => ({
+                                characterId: b.characterId,
+                                name: b.name,
+                                text: b.text,
+                                inner: b.inner || undefined,
+                            })),
+                        };
+                        for (const c of cs) {
+                            await sessionSceneAgent.observeScene({
+                                event: objectiveEvent,
+                                characterId: c.id,
+                                name: c.name,
+                                persona: c.description,
+                            });
+                        }
+                    }
                     const acc = episodeDayBySaga.get(d.sagaId) ?? { lines: [], actorIds: new Set<string>(), sceneIds: [], povByName: new Map<string, string>() };
                     if (loop.beats.length > 0 && acc.lines[acc.lines.length - 1] !== `【${clock}】`) acc.lines.push(`【${clock}】`);
                     for (const b of loop.beats) {
@@ -1270,6 +1316,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         if (!isPrivate) {
                             recordSceneTruth(d.sagaId, sceneId, {
                                 day: worldTime?.day,
+                                characterId: b.characterId,
                                 name: b.name,
                                 text: b.text,
                                 inner: b.inner,
@@ -1363,8 +1410,11 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                             const ties = Object.entries(member?.ties ?? {})
                                 .map(([oid, t]) => `對${nameById.get(oid) ?? oid}：${t}`)
                                 .join('\n');
-                            const povText = await characterAgent
+                            const povText = await sessionSceneAgent
                                 .povScene({
+                                    sagaId: d.sagaId,
+                                    characterId: c.id,
+                                    eventId: objectiveEventId,
                                     name: c.name,
                                     persona: c.description,
                                     secret: getCharacterSecret(c.id) ?? undefined,
@@ -1375,7 +1425,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                     beats: loop.beats.map((b) => ({ name: b.name, text: b.text })),
                                     // Identity guard: 行當 per participant so the POV
                                     // writer never re-assigns an identity (坤生歸坤生).
-                                    castBodies: cs.map((x) => ({ name: x.name, role: roleById.get(x.id) })),
+                                    castBodies: cs.map((x) => ({ name: x.name, bodyFact: x.physicalFacts || x.gender, role: roleById.get(x.id) })),
                                 })
                                 .catch(() => null);
                             if (povText) {
@@ -1593,7 +1643,44 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     fatigue: Math.min(1, dayFatigue + (freshBeat ? 0.1 : 0)),
                     mood: 0,
                 };
-                const r = await runPovForCharacter(admin, c.id, {
+                const sessionBeats = sceneId
+                    ? (beatsByScene.get(sceneId) ?? []).map((beat) => ({
+                          name: nameById.get(beat.actorId) ?? '某人',
+                          text: beat.text.replace(/^[^：]{1,20}：/, ''),
+                      }))
+                    : [];
+                const sessionEventId = myEvent?.digest ??
+                    (sceneId ? `${d.sagaId}:d${worldTime?.day ?? 0}:t${worldTime?.currentTick ?? 0}:${sceneId}` : undefined);
+                const sessionChapter = sessionBeats.length > 0 && sceneId && sessionEventId
+                    ? await sessionSceneAgent.povScene({
+                          sagaId: d.sagaId,
+                          characterId: c.id,
+                          eventId: sessionEventId,
+                          name: c.name,
+                          persona: c.description,
+                          secret: getCharacterSecret(c.id) ?? undefined,
+                          venue: rosterById.get(c.id)?.currentSceneName ?? '戲班',
+                          clock: worldTime?.partOfDay ?? '白日',
+                          beats: sessionBeats,
+                          castBodies: activeRoster
+                              .filter((x) => x.currentSceneId === sceneId)
+                              .map((x) => ({
+                                  name: x.name,
+                                  bodyFact: x.gender,
+                                  role: x.role,
+                              })),
+                      }).catch(() => null)
+                    : null;
+                // The session projection is the primary POV lane. The old worker
+                // remains only for legacy/ambient moments that have no frozen beats.
+                const r = sessionChapter
+                    ? {
+                          ok: true,
+                          chapter: sessionChapter,
+                          anchored: false,
+                          recalledCount: 0,
+                      } satisfies Awaited<ReturnType<typeof runPovForCharacter>>
+                    : await runPovForCharacter(admin, c.id, {
                     triggerNarrative: trigger,
                     forceRun: true,
                     dryRun: true,
@@ -1847,6 +1934,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 day: worldTime?.day,
                                 povs: cutPovs,
                                 rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
+                                dossierCharacters: Object.fromEntries(
+                                    st.characterIds.map((id) => {
+                                        const character = characters.find((item) => item.id === id);
+                                        return [id, {
+                                            role: roleById.get(id),
+                                            portrait: character?.gallery.anchor.imageUrl,
+                                        }];
+                                    }),
+                                ),
                             });
                             console.log(
                                 `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
@@ -2195,4 +2291,3 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         memoryDegraded: memoryWarnings.length > 0,
     };
 }
-

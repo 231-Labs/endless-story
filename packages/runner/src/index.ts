@@ -14,6 +14,7 @@ export * as characterWorker from './services/character-worker/index.js';
 export type { SagaSoul, EmotionalStance } from './services/character-worker/index.js';
 export * as gazette from './services/gazette-compiler/index.js';
 export * as eventChapter from './services/event-chapter-compiler/index.js';
+export * as eventDossier from './services/event-dossier/index.js';
 export * as storyteller from './services/storyteller-chapter/index.js';
 export * as sceneRecord from './services/scene-record/index.js';
 export * as reflection from './services/reflection-trigger/index.js';

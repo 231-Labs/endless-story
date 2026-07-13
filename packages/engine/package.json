@@ -10,6 +10,7 @@
     "./core/*": "./src/core/*.ts",
     "./adapters/local": "./src/adapters/local/index.ts",
     "./adapters/runner": "./src/adapters/runner-scene-agent.ts",
+    "./session": "./src/session/character-session.ts",
     "./preset": "./src/preset.ts"
   },
   "bin": {

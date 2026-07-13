@@ -33,7 +33,8 @@ export class FileArchive implements ArchivePort {
         fs.mkdirSync(this.dir, { recursive: true });
         const n = String(this.seq++).padStart(4, '0');
         const file = `d${a.day}-t${a.tick}-${a.kind}-${slug(a.name)}-${n}.md`;
-        const header = `# 〔${KIND_LABEL[a.kind]}〕${a.name}  (day ${a.day} · tick ${a.tick})\n\n---\n\n`;
+        const event = a.eventId ? ` · event ${a.eventId}` : '';
+        const header = `# 〔${KIND_LABEL[a.kind]}〕${a.name}  (day ${a.day} · tick ${a.tick}${event})\n\n---\n\n`;
         fs.writeFileSync(path.join(this.dir, file), header + a.body.trim() + '\n');
     }
 }

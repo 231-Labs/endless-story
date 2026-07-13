@@ -92,6 +92,7 @@ export {
     judgeEstablished,
     pronounFromBody,
     buildBeatSystemPrompt,
+    parseBeatResult,
 } from './beat.js';
 export type { SceneIntimacyRating } from './beat.js';
 export type { ActBeatInput, BeatResult, BeatForcing, JudgeResolveInput, ResolveVerdict } from './beat.js';

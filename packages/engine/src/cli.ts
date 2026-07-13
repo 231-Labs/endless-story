@@ -48,7 +48,10 @@ async function main(): Promise<void> {
     let agent: SceneAgentPort;
     if (args.realLlm) {
         const { RunnerSceneAgent } = await import('./adapters/runner-scene-agent.ts');
-        agent = new RunnerSceneAgent();
+        agent = new RunnerSceneAgent({
+            sessionDir: path.join(args.out, 'sessions'),
+            sessionKey: process.env.CHARACTER_SESSION_KEY,
+        });
     } else {
         agent = new FakeSceneAgent();
     }

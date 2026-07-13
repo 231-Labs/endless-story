@@ -13,6 +13,10 @@
 export type BeatForcing = 'idle' | 'pressing' | 'edge' | 'breaking';
 
 export interface ActBeatInput {
+    /** Provenance for a durable character session. Omit for stateless probes. */
+    sagaId?: string;
+    characterId?: string;
+    perceptId?: string;
     name: string;
     persona: string;
     /** Memory snippets — surface only when the moment calls (§2.45 暗號 echoes). */
@@ -170,6 +174,33 @@ export interface BeatResult {
      *  No judge, no status gate — the pair negotiates in-scene; a decline is
      *  honoured and is itself a beat of drama. */
     intimacy?: 'advance' | 'accept' | 'decline';
+}
+
+function extractBeatJson(raw: string): Record<string, unknown> | null {
+    const blocks = raw.match(/\{[\s\S]*\}/g);
+    if (!blocks?.length) return null;
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        try { return JSON.parse(blocks[i]) as Record<string, unknown>; } catch { /* earlier block */ }
+    }
+    return null;
+}
+
+/** Shared by the stateless runner and the persistent-session adapter. */
+export function parseBeatResult(raw: string, actorName: string): BeatResult {
+    const o = extractBeatJson(raw) ?? {};
+    const str = (v: unknown): string => typeof v === 'string' ? v.trim() : '';
+    const esc = actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const deName = (t: string): string => t.replace(new RegExp(`^${esc}(?!的)\\s*[:：]?\\s*`), '');
+    const addressed = str(o.addressed);
+    const move = str(o.move);
+    return {
+        beat: deName(str(o.beat)) || '（沉默。）',
+        inner: deName(str(o.inner)),
+        addressed: addressed && addressed !== '無' ? addressed : undefined,
+        move: move && move !== '無' ? move : undefined,
+        close: o.close === true ? true : undefined,
+        intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
+    };
 }
 
 /** §2.43-validated pressure language: removes stalling, never writes the answer. */

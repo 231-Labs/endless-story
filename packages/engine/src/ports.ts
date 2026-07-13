@@ -36,6 +36,36 @@ export type PovReflectInput = Runner.characterAgent.PovReflectInput;
 export type PovSceneInput = Runner.characterAgent.PovSceneInput;
 export type JudgeEstablishedInput = Runner.characterAgent.JudgeEstablishedInput;
 
+// ── Objective event → character-session delivery ───────────────────────────
+export interface CanonicalSceneBeat {
+    characterId: string;
+    name: string;
+    text: string;
+    /** Private to the actor; delivery adapters must never show it to witnesses. */
+    inner?: string;
+}
+
+export interface CanonicalSceneEvent {
+    v: 1;
+    id: string;
+    sagaId: string;
+    day: number;
+    tick: number;
+    clock: string;
+    sceneId: string;
+    sceneName: string;
+    visibility: 'public' | 'private';
+    witnessIds: string[];
+    beats: CanonicalSceneBeat[];
+}
+
+export interface ObserveSceneInput {
+    event: CanonicalSceneEvent;
+    characterId: string;
+    name: string;
+    persona: string;
+}
+
 // ── Structured open-action (SEASON_ONE_SLICE §2/§3) ──────────────────────────
 /**
  * A character's self-tagged action kind. The LLM tags its OWN action; the engine
@@ -164,6 +194,9 @@ export interface SelfModelConsolidateReply {
  * with zero LLM.
  */
 export interface SceneAgentPort extends SceneAgent {
+    /** Deliver a frozen event to one witness's durable session. The adapter may
+     *  include that witness's own inner lines, never another actor's. */
+    observeScene?(input: ObserveSceneInput): Promise<void>;
     deriveGenesisWants(input: DeriveWantsInput): Promise<GenesisWant[]>;
     deriveAftermathWant(input: AftermathInput): Promise<GenesisWant | null>;
     judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]>;
@@ -266,6 +299,8 @@ export interface ArchiveArtifact {
     body: string;
     characterId?: string;
     sceneId?: string;
+    /** Canonical event id carried into the archived/anchored artifact. */
+    eventId?: string;
 }
 
 /** Commits a finished story artifact. M0 = FileArchive (markdown). M2 = chain

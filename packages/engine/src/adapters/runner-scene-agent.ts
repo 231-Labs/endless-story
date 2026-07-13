@@ -11,6 +11,7 @@
 
 import { characterAgent, sceneRecord, eventChapter } from '@endless-story/runner';
 import { text as llmText } from '@endless-story/llm';
+import * as path from 'node:path';
 import type {
     ActionKind,
     AudienceReactionInput,
@@ -19,6 +20,7 @@ import type {
     GenesisWant,
     RippleJudgeDelta,
     SceneAgentPort,
+    ObserveSceneInput,
     EvolveSecretInput,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
@@ -31,6 +33,11 @@ import {
     type RewriteLedgerInput,
     type RewriteReply,
 } from '../core/want-rewrite.ts';
+import {
+    FileCharacterSessionStore,
+    PersistentCharacterSessions,
+    type CharacterSessionIdentity,
+} from '../session/character-session.ts';
 
 const ACTION_KINDS: ActionKind[] = [
     'propose_play',
@@ -42,9 +49,102 @@ const ACTION_KINDS: ActionKind[] = [
     'personal',
 ];
 
+export interface RunnerSceneAgentOptions {
+    /** Durable directory. Omit to keep legacy stateless behaviour. */
+    sessionDir?: string;
+    /** 32-byte hex/base64 AES key for private session files. */
+    sessionKey?: string;
+}
+
 export class RunnerSceneAgent implements SceneAgentPort {
-    actBeat = characterAgent.actBeat;
+    private readonly sessions?: PersistentCharacterSessions;
+
+    constructor(options: RunnerSceneAgentOptions = {}) {
+        if (options.sessionDir) {
+            const client = llmText.createTextClient({ kind: 'primary' });
+            this.sessions = new PersistentCharacterSessions(
+                new FileCharacterSessionStore(path.resolve(options.sessionDir), options.sessionKey),
+                {
+                    complete: async (input) => {
+                        const res = await client.chat({
+                            model: client.defaultModel,
+                            system: input.system,
+                            messages: input.messages,
+                            maxTokens: input.maxTokens,
+                            temperature: input.temperature,
+                        });
+                        return res.text;
+                    },
+                },
+            );
+        }
+    }
+
+    private identity(input: {
+        sagaId?: string;
+        characterId?: string;
+        name: string;
+        persona: string;
+        role?: string;
+        bodyFact?: string;
+    }): CharacterSessionIdentity | null {
+        if (!this.sessions || !input.sagaId || !input.characterId) return null;
+        return {
+            sagaId: input.sagaId,
+            characterId: input.characterId,
+            characterName: input.name,
+            // Keep this cross-surface stable: actBeat and povScene do not carry
+            // identical metadata, but both always carry name + persona.
+            canon: `你就是${input.name}。\n${input.persona}`,
+        };
+    }
+
+    async actBeat(
+        input: Parameters<typeof characterAgent.actBeat>[0],
+    ): ReturnType<typeof characterAgent.actBeat> {
+        const identity = this.identity(input);
+        if (!identity || !this.sessions) return characterAgent.actBeat(input);
+        const dynamic = characterAgent.buildBeatSystemPrompt(input);
+        const percept = [
+            '【世界在此刻投遞給你的知覺與行動邊界】',
+            dynamic,
+            `【這場戲剛剛的來回】\n${input.sceneLog || '（戲方起。）'}`,
+            `輪到你（${input.name}）。`,
+        ].join('\n\n');
+        const raw = await this.sessions.respond(identity, percept, {
+            eventId: input.perceptId,
+            maxTokens: input.consummate ? 900 : 480,
+            temperature: 0.95,
+        });
+        return characterAgent.parseBeatResult(raw, input.name);
+    }
+
     judgeWantResolved = characterAgent.judgeWantResolved;
+
+    async observeScene(input: ObserveSceneInput): Promise<void> {
+        if (!this.sessions) return;
+        const identity = this.identity({
+            sagaId: input.event.sagaId,
+            characterId: input.characterId,
+            name: input.name,
+            persona: input.persona,
+        });
+        if (!identity) return;
+        const lines = input.event.beats.map((b) => {
+            const own = b.characterId === input.characterId && b.inner ? `（我心裡：${b.inner}）` : '';
+            return `${b.name}：${b.text}${own}`;
+        });
+        await this.sessions.observe(
+            identity,
+            [
+                `【我親歷的客觀事件 ${input.event.id}】`,
+                `${input.event.clock}｜${input.event.sceneName}｜${input.event.visibility === 'private' ? '私下' : '公開'}`,
+                ...lines,
+                '以上是我當時真正看見／聽見的逐拍；別人的心裡話不在其中。',
+            ].join('\n'),
+            input.event.id,
+        );
+    }
 
     async reviewScene(
         input: Parameters<typeof characterAgent.reviewScene>[0],
@@ -61,7 +161,27 @@ export class RunnerSceneAgent implements SceneAgentPort {
     async povScene(
         input: Parameters<typeof characterAgent.povScene>[0],
     ): ReturnType<typeof characterAgent.povScene> {
-        return characterAgent.povScene(input);
+        const identity = this.identity(input);
+        if (!identity || !this.sessions) return characterAgent.povScene(input);
+        const objective = input.beats.map((b) => `${b.name}：${b.text}`).join('\n');
+        return this.sessions.project(
+            identity,
+            [
+                `【事件】${input.eventId ?? '未編號事件'}｜${input.clock}｜${input.venue}`,
+                '【不可更動的客觀逐拍】',
+                objective,
+                input.ties ? `【我向來怎麼看在場的人】\n${input.ties}` : '',
+                '只用我在這個 session 裡真正知道的事，寫我如何經歷這一場。',
+            ].filter(Boolean).join('\n\n'),
+            {
+                eventId: input.eventId,
+                instruction:
+                    '把同一客觀事件寫成第一人稱章回。注意、誤讀與情感可以偏；人物、順序、動作、對白不可改。' +
+                    '不要替別人斷言內心；不知道的就留白。純正文，350至900字。',
+                maxTokens: 1500,
+                temperature: 0.82,
+            },
+        );
     }
 
     async judgeEstablished(

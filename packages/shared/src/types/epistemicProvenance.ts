@@ -66,3 +66,25 @@ export interface EpistemicProvenanceManifest {
   evidence: NarrativeEvidence[];
   perspectives: NarrativePerspective[];
 }
+
+/** Reader-facing event metadata kept next to, but not mixed into, provenance. */
+export interface DossierEventPresentation {
+  slug: string;
+  saga: string;
+  day: number;
+  scene: string;
+  title: string;
+  kicker: string;
+  summary: string;
+  hero: string;
+  heroAlt: string;
+  heroZoom?: boolean;
+  canonFacts: readonly string[];
+}
+
+/** Complete portable payload rendered by the multi-POV dossier UI. */
+export interface EpistemicDossierBundle {
+  v: 1;
+  event: DossierEventPresentation;
+  manifest: EpistemicProvenanceManifest;
+}
