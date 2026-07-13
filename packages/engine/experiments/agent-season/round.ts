@@ -566,8 +566,11 @@ export async function doInteract(
         isPrivate,
         clock: clockLabel,
         firstActorId: confide ? a.id : undefined,
-        stake: `${a.name}${intent}。${confide ? `（${a.name}是自己尋過來想說說心裡話的——說多少、怎麼說、說不說得出口，都由TA。）` : ''}`,
-        maxTurns: worn ? 3 : opts?.maxTurns,
+        stake: `${a.name}${intent}。${confide ? `（${a.name}是自己尋過來想說說心裡話的——說多少、怎麼說、說不說得出口，都由TA。）` : ''}${worn && opts?.maxTurns ? '（有人是拖著乏透的身子上的台——那點撐不住，也是這場戲的一部分。）' : ''}`,
+        // The body's veto caps an ordinary scene — but a scene with an EXPLICIT
+        // cap (the finale set piece) keeps its stage: a worn lead performing the
+        // 大會串 is DRAMA (帶傷登台), not a truncation. The stake carries it.
+        maxTurns: worn && !opts?.maxTurns ? 3 : opts?.maxTurns,
         emotionalStance: consummate ? 'consummate' : undefined,
         etiquette: WORLD_PREMISE, // pinned era facts colour every beat (anti-anachronism)
         cast,
