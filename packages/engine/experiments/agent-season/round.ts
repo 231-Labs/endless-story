@@ -580,7 +580,12 @@ export async function doInteract(
         // cap (the finale set piece) keeps its stage: a worn lead performing the
         // 大會串 is DRAMA (帶傷登台), not a truncation. The stake carries it.
         maxTurns: worn && !opts?.maxTurns ? 3 : opts?.maxTurns,
-        emotionalStance: consummate ? 'consummate' : undefined,
+        // AXIOM (user, 2026-07-13): the WORLD never opens the register — only the
+        // pair does, in-scene, via advance→accept. Seed-established lovers are not
+        // auto-opened nightly (that was the mechanism deciding "tonight yes" for
+        // them, saturating every private night with the adult register); their
+        // establishment still counts for 修羅場 stakes and fast familiarity.
+        emotionalStance: undefined,
         etiquette: WORLD_PREMISE, // pinned era facts colour every beat (anti-anachronism)
         cast,
         wants,

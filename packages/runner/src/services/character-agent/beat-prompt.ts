@@ -108,11 +108,9 @@ function pronounNote(input: ActBeatInput): string {
  *  whether they go there, and when they close the night, is theirs — with the
  *  cost named (the hour spent, sleep shortened). */
 const CONSUMMATE_BEAT_NOTE = [
-    '【此處的許可（僅此私處、兩情相悅時）】此處無人，你們已是彼此的人——要不要往那處去、',
-    '走到哪一步，由你們一拍一拍自己定。要風流，容許寬衣解帶、肌膚相親、雲雨纏綿，並可細狀其實：',
-    '身體的反應、氣息的亂、節奏的緩急、手與唇的門道、情動到極處的失守，皆可落筆，不必每到關頭就化開，',
-    '以古典艷情話本筆法（敢於露骨、卻仍是綺麗）：艷而有情、露而不穢，忌現代醫學詞、忌髒字、忌器官說明書式冷描。',
-    '要矜持，就留在言語與相守——誰也不欠誰一場雲雨。',
+    '【此處的許可（僅此私處、兩情相悅時）】此處無人，彼此的心意已經接上——要不要親近、',
+    '走到哪一步、用什麼分寸，全由你們一拍一拍自己定；矜持與熱烈都是戲，誰也不欠誰一場雲雨。',
+    '若真到了雲雨處，以古典話本筆法寫：艷而有情、露而不穢，忌現代詞、忌髒字。',
     '【代價】夜有多深、明日有無戲，這一晚怎麼花由你們自己掂量；盡興了、乏了、或心裡到了，就把這場收了。',
 ].join('');
 
@@ -245,6 +243,12 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
         '一場戲裡，別把同一個比方、同一句口頭禪翻來覆去地用，話要活。',
         forceNote(input.forcing, input.privateAlone),
+        // WARMTH SOIL (not a push): when nothing is burning, ordinary tenderness is
+        // legitimate DRAMA — affection is mostly accrued in these small beats, and a
+        // register that only knows pressure reads loveless between the beds.
+        input.forcing === 'idle' && !input.consummate && input.isPrivate
+            ? '【尋常的暖】若此刻沒什麼要緊事逼著，家常的細碎也是戲：一碗茶、一句閒話、替TA整整衣領、陪TA站一會兒——情分多半是這些一點點攢出來的。'
+            : '',
         input.consummate
             ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或（若你們往那處去了）床笫間的一下進退(一到三句)。' +
               '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。'
