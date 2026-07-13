@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { Markdown } from '@/components/common/Markdown';
+import { ProseSkeleton } from '@/components/common/ProseSkeleton';
 import { objectUrl } from '@/lib/explorer';
 import { formatDate, truncateAddress } from '@/lib/format';
 import type { ReflectionEntry } from '@/lib/chain/reflection-read';
@@ -159,7 +160,7 @@ function ClientReflectionBody({ blobUrl }: { blobUrl: string }) {
         );
     }
     if (body == null) {
-        return <p className="mt-4 text-sm text-mute">讀取中…</p>;
+        return <ProseSkeleton lines={4} className="mt-4" />;
     }
     return <Markdown source={body} className="mt-4" />;
 }

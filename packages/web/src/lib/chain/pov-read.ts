@@ -90,36 +90,39 @@ export async function fetchPovChaptersForCharacter(
     }
     if (summaries.length === 0) return [];
 
-    const out: PovChapterEntry[] = [];
-    for (const s of summaries) {
-        try {
-            const res = await read.commitment.getCommitment(client, s.commitmentId);
-            const json = res.json as unknown as {
-                blob_id?: number[] | string;
-                content_hash?: number[] | string;
-            };
-            const blobId = normalizeWalrusBlobId(json.blob_id);
-            const contentHashHex = decodeBytesHex(json.content_hash);
-            if (!blobId) continue;
-            const blobUrl = buildWalrusBlobUrl(blobId);
-            out.push({
-                commitmentId: s.commitmentId,
-                sagaId: s.sagaId,
-                subjectId: s.subjectId,
-                committedAtMs: s.committedAtMs,
-                blobId,
-                blobUrl,
-                contentHashHex,
-                ...(opts.withTeaser
-                    ? { teaser: await extractTeaser(blobUrl) }
-                    : {}),
-            });
-        } catch {
-            // Drop unreadable commitments silently — chain is source of truth,
-            // but we don't want one bad blob to hide the rest.
-        }
-    }
-    return out;
+    // Each entry resolves independently (commitment object + optional teaser
+    // blob) — resolve them concurrently instead of one 2-read chain at a time.
+    const entries = await Promise.all(
+        summaries.map(async (s): Promise<PovChapterEntry | null> => {
+            try {
+                const res = await read.commitment.getCommitment(client, s.commitmentId);
+                const json = res.json as unknown as {
+                    blob_id?: number[] | string;
+                    content_hash?: number[] | string;
+                };
+                const blobId = normalizeWalrusBlobId(json.blob_id);
+                if (!blobId) return null;
+                const blobUrl = buildWalrusBlobUrl(blobId);
+                return {
+                    commitmentId: s.commitmentId,
+                    sagaId: s.sagaId,
+                    subjectId: s.subjectId,
+                    committedAtMs: s.committedAtMs,
+                    blobId,
+                    blobUrl,
+                    contentHashHex: decodeBytesHex(json.content_hash),
+                    ...(opts.withTeaser
+                        ? { teaser: await extractTeaser(blobUrl) }
+                        : {}),
+                };
+            } catch {
+                // Drop unreadable commitments silently — chain is source of truth,
+                // but we don't want one bad blob to hide the rest.
+                return null;
+            }
+        }),
+    );
+    return entries.filter((e): e is PovChapterEntry => e !== null);
 }
 
 /**
@@ -188,33 +191,39 @@ export async function fetchPovChaptersForSaga(
         return [];
     }
 
-    const out: PovChapterEntry[] = [];
-    for (const s of summaries) {
-        if (out.length >= limit) break;
-        if (s.subjectId === sagaId) continue;
-        if (characterIds && !characterIds.has(s.subjectId)) continue;
-        try {
-            const res = await read.commitment.getCommitment(client, s.commitmentId);
-            const json = res.json as unknown as {
-                blob_id?: number[] | string;
-                content_hash?: number[] | string;
-            };
-            const blobId = normalizeWalrusBlobId(json.blob_id);
-            if (!blobId) continue;
-            out.push({
-                commitmentId: s.commitmentId,
-                sagaId: s.sagaId,
-                subjectId: s.subjectId,
-                committedAtMs: s.committedAtMs,
-                blobId,
-                blobUrl: buildWalrusBlobUrl(blobId),
-                contentHashHex: decodeBytesHex(json.content_hash),
-            });
-        } catch {
-            // Skip unreadable commitments; the rest of the feed can still render.
-        }
-    }
-    return out;
+    // Filter to POV candidates first, then resolve concurrently. A small
+    // over-fetch (+8) absorbs the odd unreadable commitment without opening
+    // an unbounded parallel burst against the public node.
+    const candidates = summaries
+        .filter((s) => s.subjectId !== sagaId)
+        .filter((s) => !characterIds || characterIds.has(s.subjectId))
+        .slice(0, limit + 8);
+    const entries = await Promise.all(
+        candidates.map(async (s): Promise<PovChapterEntry | null> => {
+            try {
+                const res = await read.commitment.getCommitment(client, s.commitmentId);
+                const json = res.json as unknown as {
+                    blob_id?: number[] | string;
+                    content_hash?: number[] | string;
+                };
+                const blobId = normalizeWalrusBlobId(json.blob_id);
+                if (!blobId) return null;
+                return {
+                    commitmentId: s.commitmentId,
+                    sagaId: s.sagaId,
+                    subjectId: s.subjectId,
+                    committedAtMs: s.committedAtMs,
+                    blobId,
+                    blobUrl: buildWalrusBlobUrl(blobId),
+                    contentHashHex: decodeBytesHex(json.content_hash),
+                };
+            } catch {
+                // Skip unreadable commitments; the rest of the feed can still render.
+                return null;
+            }
+        }),
+    );
+    return entries.filter((e): e is PovChapterEntry => e !== null).slice(0, limit);
 }
 
 export async function fetchPovChapterByCommitment(

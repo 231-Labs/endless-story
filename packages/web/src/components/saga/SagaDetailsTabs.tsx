@@ -20,8 +20,6 @@ export function SagaDetailsTabs({
   charterContent,
 }: {
   constellationContent: ReactNode;
-  /** Kept for when other sagas exist; 在外 is hidden for now (see SAGA_TABS). */
-  offTurfContent?: ReactNode;
   charterContent: ReactNode;
 }) {
   const { view, setView } = useSagaTabs();
