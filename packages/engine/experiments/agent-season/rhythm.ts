@@ -139,7 +139,11 @@ function guestRhythm(c: Char, part: PartOfDay): RhythmPull {
         case '日午':
             return { venue: '霞飛路商店街', active: true, note: '晌午出門，逛霞飛路商店街，挑挑洋貨、在攤子上吃點東西，自己的天地。' };
         case '晡時':
-            return { venue: '霞飛路', active: true, note: '午後在霞飛路閒逛。' };
+            // A 名門 daughter has 名門 duties: the one anchored hour her family
+            // claims (帳房、老夫人、家中規矩) — the guest occupation was the only
+            // life with ZERO duty, making her a free radical any hot want could
+            // hijack at no cost.
+            return { venue: c.homeVenue, active: true, duty: true, note: '午後回白公館理家事、對帳房、陪老夫人說話——名門的女兒有名門的功課，這個時辰家裡點卯。' };
         case '黃昏':
             return { venue: '包廂茶座', active: true, note: '傍晚訂了包廂，預備聽戲。' };
         case '入夜':
