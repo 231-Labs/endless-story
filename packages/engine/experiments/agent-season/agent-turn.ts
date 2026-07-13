@@ -78,8 +78,32 @@ export interface PlanContext {
     banzhuSummons?: { venue: string; line: string } | null;
 }
 
+/** An in-the-moment street encounter decision (§C-level agency): the walker SAW
+ *  someone mid-transit and decides NOW — engage costs the errand (the 時辰 is
+ *  finite: duty wage, the person they meant to find, all slip). */
+export interface TransitReactCtx {
+    char: Char;
+    /** whom they spotted on the street. */
+    seen: Char;
+    street: string;
+    from: string;
+    dest: string;
+    /** what this walk was FOR (the cost of stopping) — duty/seek/plain move. */
+    errand: string;
+    clock: WorldClock;
+    night: boolean;
+}
+export interface TransitReaction {
+    /** pass = 裝沒看見/腳不停; greet = 點頭招呼不停步; engage = 停下來，追上去. */
+    act: 'pass' | 'greet' | 'engage';
+    /** engage: what they go do/say (their own words, one line). */
+    word?: string;
+}
+
 export interface Planner {
     plan(ctx: PlanContext): Promise<PlanResult>;
+    /** In-the-moment street reaction. Default norm: most sightings pass. */
+    transitReact(ctx: TransitReactCtx): Promise<TransitReaction>;
     /** The 班主 rehearsal channel — an autonomous agent decision (not hardcoded).
      *  Also CHOOSES the 戲碼 (title) to rehearse, reasoning from the troupe's strengths. */
     decideRehearsal(ctx: {
@@ -127,6 +151,18 @@ const GENERDAN = new Set(['柳生春', '蘇映雪']); // 生旦 pair → 戲台
 const WUHANG = new Set(['江聞鶴', '連翹']); // 武行 → 練功房
 
 export class FakePlanner implements Planner {
+    /** Deterministic: engage only when the sighted person is the hottest want's
+     *  target (a real pull); greet on a small hash window; otherwise pass. */
+    async transitReact(ctx: TransitReactCtx): Promise<TransitReaction> {
+        const hot = hottest(ctx.char);
+        if (hot?.target && (hot.target === ctx.seen.id || hot.target === ctx.seen.name)) {
+            return { act: 'engage', word: `把心裡掛著的那樁事，趁這一撞當面挪一挪` };
+        }
+        let h = ctx.clock.currentTick;
+        for (const ch of ctx.char.id + ctx.seen.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        return { act: h % 3 === 0 ? 'greet' : 'pass' };
+    }
+
     async plan(ctx: PlanContext): Promise<PlanResult> {
         const { char: c, pull, clock, night, reh } = ctx;
         const tools: ToolCall[] = [{ tool: 'time' }];
@@ -221,6 +257,48 @@ export class RealPlanner implements Planner {
     private onLog?: (s: string) => void;
     constructor(onLog?: (s: string) => void) {
         this.onLog = onLog;
+    }
+
+    /** In-the-moment street encounter: one small LLM call, only when someone was
+     *  actually SEEN (rare). The cost is stated as world fact, never a rule. */
+    async transitReact(ctx: TransitReactCtx): Promise<TransitReaction> {
+        try {
+            const { char: c, seen } = ctx;
+            const view = c.relationshipViews.get(seen.id);
+            const hot = hottest(c);
+            const t = await llm();
+            const client = t.createTextClient({ kind: 'primary' });
+            const res = await client.chat({
+                model: client.defaultModel,
+                system: [
+                    '你在扮演戲園世界裡一個活生生的人。你正在街上趕路，忽然遠遠瞧見一個認得的人。',
+                    '這一刻由你自己定：多數時候，人趕著路、點個頭就過去了（pass 或 greet）；',
+                    '只有心裡真有事牽著這個人、此刻又值得誤了原本的事，才會停下腳追上去（engage）。',
+                    '【代價（世界事實）】追上去，這個時辰原本要辦的事就誤了——' + ctx.errand,
+                    '嚴格只輸出 JSON：{"act":"pass|greet|engage","word":"若 engage，你追上去要做/說什麼（一句，用你自己的話）"}。不要 markdown。',
+                ].join('\n'),
+                messages: [
+                    {
+                        role: 'user',
+                        content:
+                            `# 你是誰\n${c.name}：${c.persona}` +
+                            (c.secret ? `\n\n# 你心底的事（只有你自己知道）\n${c.secret}` : '') +
+                            (hot ? `\n\n# 你此刻心裡最重的\n「${hot.desc}」${hot.target ? `（牽涉${hot.target}）` : ''}` : '') +
+                            `\n\n# 街上這一撞\n${ctx.clock.day}日${ctx.night ? '入夜' : '白日'}，你打${ctx.from}往${ctx.dest}，路過${ctx.street}，遠遠瞧見${seen.name}（${seen.role}）也在街上。` +
+                            (view ? `\n你心裡對${seen.name}：${view}` : '') +
+                            `\n\n這一刻，你怎麼做？`,
+                    },
+                ],
+                maxTokens: 160,
+                temperature: 0.8,
+            });
+            const obj = (extractRewriteJson(res.text) ?? {}) as { act?: unknown; word?: unknown };
+            const act = obj.act === 'engage' || obj.act === 'greet' ? obj.act : 'pass';
+            const word = typeof obj.word === 'string' && obj.word.trim() ? obj.word.trim() : undefined;
+            return { act, word };
+        } catch {
+            return { act: 'pass' }; // the road goes on
+        }
     }
 
     async plan(ctx: PlanContext): Promise<PlanResult> {

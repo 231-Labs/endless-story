@@ -1447,15 +1447,48 @@ export async function runRound(
         // sights land in the ledger + memory so the night mind and tomorrow's plans
         // can react (daily-life texture; observations, not scenes).
         if (c.venue !== from) {
-            for (const street of transitStreets(from, c.venue)) {
+            const dest = c.venue;
+            for (const street of transitStreets(from, dest)) {
                 const seen = cast.filter((o) => o.id !== c.id && !o.dead && o.venue === street).slice(0, 2);
                 const sight = seen.length
                     ? `遠遠見著${seen.map((o) => o.name).join('、')}也在街上`
                     : streetSight(street, clock.currentTick, c.id);
-                const line = `第${clock.day}日·${part}，打${from}往${c.venue}，路過${street}，${sight}。`;
+                const line = `第${clock.day}日·${part}，打${from}往${dest}，路過${street}，${sight}。`;
                 c.todayLedger.set(`transit:${street}:${clock.currentTick}`, line);
                 await writeMem(recall, c.id, line, seen.length ? 4 : 3, clock.day);
                 if (seen.length) log(`    · 〔路上〕${c.name} 路過 ${street}，${sight}。`);
+                // IN-THE-MOMENT reaction (§C-level agency): the walker decides NOW —
+                // most sightings pass; engaging costs the errand (the finite 時辰:
+                // duty wage, the person they meant to find — all slip, mechanically,
+                // because they simply never arrive). A summoned lead stays summoned
+                // (the call of duty already spent this 時辰).
+                if (seen.length && !banzhuSummons) {
+                    try {
+                        const errand = interactIntent
+                            ? `你原是要去找${interactIntent.target}（${interactIntent.intent}）`
+                            : pull.duty
+                              ? '你原是要去當值營生（這一時辰的工錢）'
+                              : `你原是要往${dest}去辦自己的事`;
+                        const reaction = await planner.transitReact({
+                            char: c, seen: seen[0], street, from, dest, errand, clock, night,
+                        });
+                        if (reaction.act === 'engage') {
+                            c.venue = street; // stopped mid-road — the errand slips
+                            c.waitingFor = null;
+                            interactIntent = { target: seen[0].name, intent: reaction.word ?? '把街上撞見的這一刻接下去' };
+                            log(`    · 〔路遇〕${c.name} 在 ${street} 撞見 ${seen[0].name}，把原本的事擱下，追了上去——${reaction.word ?? ''}`);
+                            c.todayLedger.set(`engage:${street}:${clock.currentTick}`, `在${street}撞見${seen[0].name}，擱下原本的事追了上去。`);
+                            break; // the walk ends here
+                        }
+                        if (reaction.act === 'greet') {
+                            c.todayLedger.set(`greet:${street}:${clock.currentTick}`, `在${street}與${seen[0].name}打了個照面，點頭而過。`);
+                            seen[0].todayLedger.set(`greeted:${street}:${clock.currentTick}`, `在${street}與${c.name}打了個照面。`);
+                            log(`    · 〔路上〕${c.name} 與 ${seen[0].name} 在 ${street} 打了個照面，各自趕路。`);
+                        }
+                    } catch {
+                        /* the road goes on */
+                    }
+                }
                 // 順路 small purchase (~1/4 walks, needs coin): a flower, a paper of sweets.
                 let h = clock.currentTick * 31 + street.length;
                 for (const ch of c.id) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
