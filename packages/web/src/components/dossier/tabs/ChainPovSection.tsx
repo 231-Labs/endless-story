@@ -11,6 +11,7 @@ import type { PovChapterEntry } from '@/lib/chain/pov-read';
 import { parseProvenance } from '@/lib/chain/chapter-provenance';
 import { CHAPTER_COPY } from '@/lib/copy/chapters';
 import { SubscribeButton } from '@/components/common/SubscribeButton';
+import { ProseSkeleton } from '@/components/common/ProseSkeleton';
 
 /**
  * 角色回 — a character's first-person POV chapters, owner + subscriber gated.
@@ -163,7 +164,7 @@ function ClientPovBody({ blobId }: { blobId: string }) {
         return <p className="text-sm text-mute">{CHAPTER_COPY.pov.bodyUnavailable}</p>;
     }
     if (raw == null) {
-        return <p className="text-sm text-mute">{CHAPTER_COPY.pov.bodyLoading}</p>;
+        return <ProseSkeleton className="py-1" />;
     }
     // Strip the embedded on-chain-event provenance header before rendering;
     // surface it as a verifiable source line instead of leaking the raw comment.

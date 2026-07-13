@@ -28,6 +28,18 @@ export function SubscriptionsContent() {
   const [data, setData] = useState<SubscriptionsPageData | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  // Wallet auto-connect takes a beat after hydration; keep the skeleton up
+  // during that grace window instead of flashing「尚未連結錢包」at every
+  // visitor who IS connected.
+  const [walletSettling, setWalletSettling] = useState(true);
+  useEffect(() => {
+    if (wallet) {
+      setWalletSettling(false);
+      return;
+    }
+    const t = setTimeout(() => setWalletSettling(false), 1500);
+    return () => clearTimeout(t);
+  }, [wallet]);
 
   const refetch = useCallback(() => setRefreshTick((t) => t + 1), []);
 
@@ -54,6 +66,7 @@ export function SubscriptionsContent() {
   }, [wallet, refreshTick]);
 
   if (!wallet) {
+    if (walletSettling) return <SubscriptionsSkeleton />;
     return (
       <section className="mx-auto max-w-3xl px-5 py-20 text-center sm:px-10">
         <p className="font-serif text-2xl text-ink">尚未連結錢包</p>

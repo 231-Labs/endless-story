@@ -34,6 +34,44 @@ export type ReviewSceneInput = Runner.characterAgent.ReviewSceneInput;
 export type ReviewSceneReply = Runner.characterAgent.ReviewSceneReply;
 export type PovReflectInput = Runner.characterAgent.PovReflectInput;
 export type PovSceneInput = Runner.characterAgent.PovSceneInput;
+export type JudgeEstablishedInput = Runner.characterAgent.JudgeEstablishedInput;
+
+// ── Objective event → character-session delivery ───────────────────────────
+export interface CanonicalSceneBeat {
+    characterId: string;
+    name: string;
+    text: string;
+    /** Named addressee, when the actor directed the beat at one person. */
+    addressed?: string;
+    /** Structured delivery intent, never inferred from the prose. */
+    audience: 'scene' | 'addressed';
+    /** Characters who perceived the exact content; other co-present witnesses
+     *  receive a redacted physical observation instead. */
+    perceiverIds: string[];
+    /** Private to the actor; delivery adapters must never show it to witnesses. */
+    inner?: string;
+}
+
+export interface CanonicalSceneEvent {
+    v: 1;
+    id: string;
+    sagaId: string;
+    day: number;
+    tick: number;
+    clock: string;
+    sceneId: string;
+    sceneName: string;
+    visibility: 'public' | 'private';
+    witnessIds: string[];
+    beats: CanonicalSceneBeat[];
+}
+
+export interface ObserveSceneInput {
+    event: CanonicalSceneEvent;
+    characterId: string;
+    name: string;
+    persona: string;
+}
 
 // ── Structured open-action (SEASON_ONE_SLICE §2/§3) ──────────────────────────
 /**
@@ -99,6 +137,11 @@ export interface AudienceReactionInput {
 export interface SelfModelInteraction {
     otherId: string;
     otherName: string;
+    /** Identity guard data: the other's 身/sex + 行當, so the nightly view never
+     *  flips a pronoun or re-assigns a trade (金鳳's view once wrote the 坤生 as
+     *  「他身子」 and kept a literalized 借據 alive for weeks). */
+    otherBodyFact?: string;
+    otherRole?: string;
     /** The current (pre-consolidation) one-line view, if any. */
     currentView?: string;
     /** Verbatim of what passed between them today (scene beats / the settling). */
@@ -120,6 +163,27 @@ export interface SelfModelConsolidateInput {
     day: number;
 }
 
+/** NIGHTLY 心事自改 input — the unspoken matter and what LANDED on it today. */
+export interface EvolveSecretInput {
+    name: string;
+    persona: string;
+    /** The unspoken matter as it currently stands. */
+    secret: string;
+    /** What actually landed today that touches it (resolved-want notes, vows kept). */
+    landed: string[];
+    /** Current self-model lines (grounding). */
+    selfModel?: string[];
+    /** 身/sex facts for anyone the matter may mention (pronoun guard — the 6th
+     *  generation path to leak 他 for a 坤生 was the evolved secret itself). */
+    castBodies?: Array<{ name: string; bodyFact?: string }>;
+    /** The IMMUTABLE canon seed of this secret (bedrock): hard facts of the past
+     *  — years, origins, who-did-what — must match it forever. Evolution moves
+     *  the HEART, never the history (a 六七年 entanglement drifted to 十年 and
+     *  the evolved secret locked the wrong number in). */
+    canonSeed?: string;
+    day: number;
+}
+
 export interface SelfModelConsolidateReply {
     /** otherId → the NEW ≤40字 first-person view. OVERWRITES the map entry
      *  (latest-wins) — the old line is superseded, never kept alongside. */
@@ -137,6 +201,9 @@ export interface SelfModelConsolidateReply {
  * with zero LLM.
  */
 export interface SceneAgentPort extends SceneAgent {
+    /** Deliver a frozen event to one witness's durable session. The adapter may
+     *  include that witness's own inner lines, never another actor's. */
+    observeScene?(input: ObserveSceneInput): Promise<void>;
     deriveGenesisWants(input: DeriveWantsInput): Promise<GenesisWant[]>;
     deriveAftermathWant(input: AftermathInput): Promise<GenesisWant | null>;
     judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]>;
@@ -174,6 +241,17 @@ export interface SceneAgentPort extends SceneAgent {
      *  through one participant's eyes — attention/interpretation diverge, events
      *  never do (probe-validated). Caller gates by followers. null → skip. */
     povScene(input: PovSceneInput): Promise<string | null>;
+    /** MILESTONE JUDGE: are these two, as of now, 相許? READS the relationship
+     *  (never steers it) — a true verdict promotes the pair into the established
+     *  set, unlocking (not scripting) the consummate register. */
+    judgeEstablished(input: JudgeEstablishedInput): Promise<boolean>;
+    /** NIGHTLY 心事自改: the secret is a LIVING thing, not frozen canon. When
+     *  something真的落地 today (a milestone resolved, a vow kept), the unspoken
+     *  matter may move to its own next step — a debt collected becomes 「留不留」.
+     *  Frozen secrets re-seed the same want forever (金鳳 kept collecting a debt
+     *  the world had already paid). Grows FROM the old secret in the same heart;
+     *  never invents plot, never decides futures. null → unchanged. */
+    evolveSecret(input: EvolveSecretInput): Promise<string | null>;
 }
 
 // ── Recall (memory) ──────────────────────────────────────────────────────────
@@ -228,6 +306,8 @@ export interface ArchiveArtifact {
     body: string;
     characterId?: string;
     sceneId?: string;
+    /** Canonical event id carried into the archived/anchored artifact. */
+    eventId?: string;
 }
 
 /** Commits a finished story artifact. M0 = FileArchive (markdown). M2 = chain

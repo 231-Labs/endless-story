@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AnimatePresence, motion, useInView } from 'framer-motion';
-import type { Character } from '@endless-story/shared';
+import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 /** Register of the line → a brush-mark glyph + on-brand tint, so the world reads
  *  alive in more than one key: 爭(act) hot, 暖(warmth) cool, 行/念 neutral. */
@@ -68,16 +67,16 @@ export function FloatingStream({
       style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: 'translate(-50%, 0)' }}
     >
       {/* mode="wait": the old column drifts fully out before the next rises —
-          strictly one at a time, so columns never overlap. */}
+          strictly one at a time, so columns never overlap. Exit is kept short
+          (0.55s vs the 1.3s rise) so the anchor never reads as empty for long. */}
       <AnimatePresence mode="wait">
         <motion.div
           key={cur.key}
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -44, transition: { duration: 1.1, ease: 'easeOut' } }}
+          exit={{ opacity: 0, y: -44, transition: { duration: 0.55, ease: 'easeOut' } }}
           transition={{ duration: 1.3, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center rounded-md bg-surface/55 px-2 py-3 shadow-sm ring-1 ring-hairline/40 backdrop-blur-sm [writing-mode:vertical-rl] dark:bg-elevated/45"
-          style={{ transform: 'translateX(-50%)' }}
         >
           {style.glyph ? (
             <span
@@ -106,72 +105,3 @@ export function FloatingStream({
   );
 }
 
-export function FloatingQuote({
-  speaker,
-  children,
-  leftPct,
-  topPct,
-  delaySeconds = 0,
-  kind,
-}: {
-  speaker?: Character | null;
-  children: ReactNode;
-  leftPct: number; // relative to the handscroll container
-  topPct: number;
-  delaySeconds?: number;
-  kind?: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  // once + low threshold: fire as soon as it's partly on the first screen and
-  // never hide again, so it doesn't require scrolling away and back to appear.
-  const inView = useInView(ref, { once: true, amount: 0.1 });
-  const style = (kind && KIND_STYLE[kind]) || { glyph: '', tint: 'text-cinnabar/80' };
-
-  return (
-    <div
-      ref={ref}
-      className="pointer-events-none absolute z-30"
-      style={{
-        left: `${leftPct}%`,
-        top: `${topPct}%`,
-        // Top-aligned: topPct sits below the title; the column only grows downward, never over the title.
-        transform: 'translate(-50%, 0)',
-        // Max height + clip: keep very long quotes from spilling off the bottom (already truncated to 20 chars, rarely hits).
-        maxHeight: '52dvh',
-        overflow: 'hidden',
-      }}
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
-        transition={{
-          duration: 1.2,
-          delay: delaySeconds,
-          ease: [0.22, 1, 0.36, 1],
-        }}
-        className="flex flex-col items-center rounded-md bg-surface/55 px-2 py-3 shadow-sm ring-1 ring-hairline/40 backdrop-blur-sm dark:bg-elevated/45"
-        style={{ writingMode: 'vertical-rl' as const }}
-      >
-        {style.glyph ? (
-          <span
-            className={`mb-2 font-serif text-[10px] tracking-[0.2em] ${style.tint} opacity-70`}
-            aria-hidden
-          >
-            {style.glyph}
-          </span>
-        ) : null}
-        <span
-          className="block font-serif text-sm leading-snug tracking-[0.16em] text-ink/85 drop-shadow-sm"
-          style={{ maxHeight: 'min(30dvh, 13rem)' }}
-        >
-          {children}
-        </span>
-        {speaker ? (
-          <span className={`mt-3 font-serif text-xs tracking-[0.3em] ${style.tint}`}>
-            — {speaker.name}
-          </span>
-        ) : null}
-      </motion.div>
-    </div>
-  );
-}

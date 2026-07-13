@@ -5,6 +5,7 @@ import { SiteNav } from '@/components/home/SiteNav';
 import { Markdown } from '@/components/common/Markdown';
 import { eventUrl, objectUrl } from '@/lib/explorer';
 import { CHAPTER_COPY } from '@/lib/copy/chapters';
+import { eventDossier } from '@endless-story/runner';
 
 /**
  * 章回（事件合本）閱讀頁 — the canonical "回".
@@ -23,10 +24,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const cut = await cutsApi.getEventCut(id).catch(() => null);
   if (!cut) return { title: '找不到章回' };
-  const title = firstHeading(cut.body) ?? cut.eventLabel ?? `第 ${cut.day ?? '—'} 日`;
+  const { body } = eventDossier.parseDossierHeader(cut.body);
+  const title = firstHeading(body) ?? cut.eventLabel ?? `第 ${cut.day ?? '—'} 日`;
   return {
     title,
-    description: cut.body.replace(/^#.*$/m, '').replace(/\s+/g, ' ').trim().slice(0, 120),
+    description: body.replace(/^#.*$/m, '').replace(/\s+/g, ' ').trim().slice(0, 120),
   };
 }
 
@@ -48,6 +50,8 @@ export default async function CutPage({ params }: { params: Promise<{ id: string
       </main>
     );
   }
+
+  const dossier = eventDossier.parseDossierHeader(cut.body);
 
   return (
     <main className="min-h-screen">
@@ -83,8 +87,17 @@ export default async function CutPage({ params }: { params: Promise<{ id: string
             </p>
           ) : null}
 
+          {dossier.bundle ? (
+            <Link
+              href={`/feed/event/${cut.commitmentId}`}
+              className="mt-6 inline-flex items-center rounded-full border border-cinnabar/35 px-4 py-2 text-xs tracking-[0.16em] text-cinnabar transition hover:bg-cinnabar hover:text-canvas"
+            >
+              切換角色視角
+            </Link>
+          ) : null}
+
           <Markdown
-            source={cut.body}
+            source={dossier.body}
             className="chapter-prose mt-8 text-lg leading-loose text-ink/85 sm:text-xl sm:leading-[2.2]"
           />
 

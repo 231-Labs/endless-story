@@ -14,6 +14,8 @@ import { ENDLESS_STORY_DEPLOYMENT, tx as endlessTx } from '@endless-story/sdk';
 import { getAdminContext, withAdminLock, execAdminTx } from '@/lib/chain/admin-signer';
 import { ensureEventStoreRegistered } from '@/lib/server/event-store';
 import { runPovForCharacter, anchorPovChaptersBatch, anchorPovChapter, LIFE_QUERY } from '@/lib/chain/pov-core';
+import { subscriptionsApi } from '@/lib/api/index';
+import { getCarried, toSceneCarried } from '@/lib/chain/carried-store';
 import { pickEncounterPair, buildEncounterTrigger, buildConfessTrigger } from './tick-phases/encounter';
 import { characterAgent, sceneRecord, characterWorker as runnerWorker, eventChapter as runnerEventChapter, signAndAnchor } from '@endless-story/runner';
 import { evolveRelationshipsFromScene } from '@/lib/chain/relationship-evolve';
@@ -53,6 +55,9 @@ import { ensureHomesSeeded } from '@/lib/chain/home-seed';
 import { getHomeScene, getWorkScene } from '@/lib/chain/spatial-routing';
 import { loadBible } from '@/lib/chain/story-bible-store';
 import { runSceneLoop } from '@endless-story/engine/core/scene-loop';
+import { deriveBeatPerceiverIds, projectEventBeatsForWitness, redactedSceneBeatText } from '@endless-story/engine/core/scene-perception';
+import { RunnerSceneAgent } from '@endless-story/engine/adapters/runner';
+import { join as joinPath } from 'node:path';
 import { buildAxisCandidates, type SpineStep } from '@/lib/chain/spine-core';
 import {
     spineClockTick,
@@ -112,6 +117,7 @@ import {
     publicTagsWithRole,
     mapPool,
 } from './tick-phases/support';
+
 import {
     runMovePhase,
     applyMoveResultsToScenes,
@@ -122,6 +128,13 @@ import { runAskPhase } from './tick-phases/ask';
 import { runGivePhase } from './tick-phases/give';
 import { runSettlePhase } from './tick-phases/settle';
 import { runActPhase, cardActionPhrase } from './tick-phases/act';
+
+// One durable transcript per (saga, character). The directory should point at
+// a persistent volume in production; local development uses the existing data/.
+const sessionSceneAgent = new RunnerSceneAgent({
+    sessionDir: process.env.CHARACTER_SESSION_DIR ?? joinPath(process.cwd(), 'data', 'character-sessions'),
+    sessionKey: process.env.CHARACTER_SESSION_KEY,
+});
 
 /** Recent-topic history per saga (process-level): anti-repeat so the world
  *  rotates contentions instead of locking on one. */
@@ -246,8 +259,12 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
     // §2.51: spotlight rotation, selection-only (settlement reads raw rows). Default off.
     const actorFatigue = input.actorFatigue ?? envFlag('TICK_ACTOR_FATIGUE');
     // Want-driven per-scene interaction loops as the narrative driver (§2.36–2.48);
-    // contested resources keep only the economic settlement lane. Default off.
-    const wantEngine = input.wantEngine ?? envFlag('TICK_WANT_ENGINE');
+    // The physical want/session engine is now the production character lane.
+    // Explicit input wins; an existing env value can still disable it with 0/
+    // false. With no flag it is ON (the old opt-in default kept production on
+    // the stateless path even after the session migration).
+    const wantEngine = input.wantEngine ??
+        (process.env.TICK_WANT_ENGINE == null ? true : envFlag('TICK_WANT_ENGINE'));
     // §4d.2: arc convergence state machine (off-chain arc state). Default off.
     const arcConvergence = input.arcConvergence ?? envFlag('TICK_ARC_CONVERGENCE');
     // Contest experiment: the "檯面上的爭奪" overlay (stake list fed to genesis,
@@ -999,12 +1016,23 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
 
     // Objective per-scene beat ledger: same-scene POVs receive the SAME facts so
     // chapters interpret one shared reality. Private observations are excluded.
-    const beatsByScene = new Map<string, Array<{ actorId: string; text: string }>>();
-    const pushBeat = (sceneId: string | undefined, actorId: string, text: string) => {
+    const beatsByScene = new Map<string, Array<{
+        actorId: string;
+        text: string;
+        addressed?: string;
+        perceiverIds?: string[];
+    }>>();
+    const pushBeat = (
+        sceneId: string | undefined,
+        actorId: string,
+        text: string,
+        perception?: { addressed?: string; perceiverIds?: string[] },
+    ) => {
         if (!sceneId) return;
         const list = beatsByScene.get(sceneId);
-        if (list) list.push({ actorId, text });
-        else beatsByScene.set(sceneId, [{ actorId, text }]);
+        const beat = { actorId, text, ...perception };
+        if (list) list.push(beat);
+        else beatsByScene.set(sceneId, [beat]);
     };
     for (const m of moves) {
         if (!m.ok || !m.toSceneId) continue;
@@ -1185,6 +1213,22 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                 }
                 let beatCount = 0;
                 const privateSceneIds = new Set<string>();
+                // ③⁹⁺ 追角 per-scene POV (flag TICK_POV_SCENE): a FOLLOWED (subscribed)
+                // participant gets this scene retold through their own eyes — probe-
+                // validated subjective layer; cost scales with subscribers. Anchored
+                // below as their own chapters (one PTB per saga).
+                const povSceneOn = process.env.TICK_POV_SCENE === '1';
+                const subscribedCache = new Map<string, boolean>();
+                const isFollowed = async (id: string): Promise<boolean> => {
+                    if (!povSceneOn) return false;
+                    const hit = subscribedCache.get(id);
+                    if (hit !== undefined) return hit;
+                    const subs = await subscriptionsApi.listSubscribers(id).catch(() => []);
+                    const val = subs.length > 0;
+                    subscribedCache.set(id, val);
+                    return val;
+                };
+                const povScenePending: { characterId: string; chapter: string }[] = [];
                 for (const [sceneId, cs] of byScene) {
                     const info = activeScenes.find((sc) => sc.id === sceneId);
                     const isPrivate = (info?.privacyLevel ?? 0) >= 3;
@@ -1213,10 +1257,14 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 characterId: c.id,
                                 name: c.name,
                                 persona: c.description,
+                                bodyFact: c.physicalFacts || c.gender,
                                 memories: memories.length > 0 ? memories : undefined,
                                 stateLine,
                                 // Own-character-only: never another character's row (character-secrets.ts).
                                 innerSecret: getCharacterSecret(c.id),
+                                // 隨身物/行頭 (owner gifts): the engine salience gate decides
+                                // per scene whether an item is even mentioned; using it is hers.
+                                carried: toSceneCarried(getCarried(c.id), nowTick),
                                 role: roleById.get(c.id),
                                 ties: Object.fromEntries(
                                     cs
@@ -1228,6 +1276,7 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         }),
                     );
                     const loop = await runSceneLoop({
+                        sagaId: d.sagaId,
                         sceneId,
                         sceneName,
                         isPrivate,
@@ -1238,17 +1287,82 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         cast: castWithMem,
                         wants,
                         tick: nowTick,
+                        agent: sessionSceneAgent,
                     });
+                    if (loop.beats.length > 0 && cs.length > 1) {
+                        const reviewed = await sessionSceneAgent.reviewScene({
+                            worldPremise: [
+                                `saga=${d.sagaId}`,
+                                narrativeProfile?.soul?.toneRegister,
+                                narrativeProfile?.etiquette,
+                            ].filter(Boolean).join('；'),
+                            venue: sceneName,
+                            participants: cs.map((c) => ({
+                                name: c.name,
+                                bodyFact: c.physicalFacts || c.gender,
+                                role: roleById.get(c.id),
+                                carried: toSceneCarried(getCarried(c.id), nowTick)?.map((item) => item.desc) ?? [],
+                                relationship: Object.values(
+                                    castWithMem.find((member) => member.characterId === c.id)?.ties ?? {},
+                                ).join('、') || undefined,
+                            })),
+                            beats: loop.beats.map((beat) => ({ name: beat.name, text: beat.text, inner: beat.inner })),
+                        }).catch(() => null);
+                        if (reviewed?.beats.length === loop.beats.length && reviewed.beats.every((beat, i) => beat.name === loop.beats[i].name)) {
+                            loop.beats = loop.beats.map((beat, i) => ({
+                                ...beat,
+                                text: reviewed.beats[i].text,
+                                inner: reviewed.beats[i].inner ?? beat.inner,
+                            }));
+                        }
+                    }
+                    const objectiveEventId = `${d.sagaId}:d${worldTime?.day ?? 0}:t${nowTick}:${sceneId}`;
+                    const sceneParticipants = cs.map((c) => ({ id: c.id, name: c.name }));
+                    if (loop.beats.length > 0) {
+                        const objectiveEvent = {
+                            v: 1 as const,
+                            id: objectiveEventId,
+                            sagaId: d.sagaId,
+                            day: worldTime?.day ?? 0,
+                            tick: nowTick,
+                            clock,
+                            sceneId,
+                            sceneName,
+                            visibility: isPrivate ? 'private' as const : 'public' as const,
+                            witnessIds: cs.map((c) => c.id),
+                            beats: loop.beats.map((b) => ({
+                                characterId: b.characterId,
+                                name: b.name,
+                                text: b.text,
+                                addressed: b.addressed,
+                                audience: b.audience ?? 'scene',
+                                perceiverIds: deriveBeatPerceiverIds(b, sceneParticipants),
+                                inner: b.inner || undefined,
+                            })),
+                        };
+                        for (const c of cs) {
+                            await sessionSceneAgent.observeScene({
+                                event: objectiveEvent,
+                                characterId: c.id,
+                                name: c.name,
+                                persona: c.description,
+                            });
+                        }
+                    }
                     const acc = episodeDayBySaga.get(d.sagaId) ?? { lines: [], actorIds: new Set<string>(), sceneIds: [], povByName: new Map<string, string>() };
                     if (loop.beats.length > 0 && acc.lines[acc.lines.length - 1] !== `【${clock}】`) acc.lines.push(`【${clock}】`);
                     for (const b of loop.beats) {
-                        pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`);
+                        pushBeat(sceneId, b.characterId, `${b.name}：${b.text}`, {
+                            addressed: b.addressed,
+                            perceiverIds: deriveBeatPerceiverIds(b, sceneParticipants),
+                        });
                         recordSceneLine(sceneId, b.characterId, b.text, 'act');
                         // Enacted truth → the cut weaver's observations/intents
                         // (public scenes only; 窗內事 never reaches a public cut).
                         if (!isPrivate) {
                             recordSceneTruth(d.sagaId, sceneId, {
                                 day: worldTime?.day,
+                                characterId: b.characterId,
                                 name: b.name,
                                 text: b.text,
                                 inner: b.inner,
@@ -1320,7 +1434,9 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         const deltas = await characterAgent.judgeRipples({
                             sceneName,
                             beats: loop.beats.map((b) => `${b.name}：${b.text}`),
-                            roster: slice.map((c) => ({
+                            // Only people physically in this scene can be stirred.
+                            // Off-scene news must arrive through a later event.
+                            roster: cs.map((c) => ({
                                 characterId: c.id,
                                 name: c.name,
                                 wants: wants
@@ -1331,6 +1447,48 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         const spawned = applyRipples(wants, deltas, nowTick);
                         for (const sp of spawned) {
                             tlog(`③⁹ new thread: ${nameById.get(sp.characterId) ?? '?'}「${sp.desc}」`);
+                        }
+                    }
+                    // ③⁹⁺ 追角: this scene through each FOLLOWED participant's eyes.
+                    // Attention/interpretation diverge; events never do (povScene).
+                    if (loop.beats.length > 0) {
+                        for (const c of cs) {
+                            if (!(await isFollowed(c.id))) continue;
+                            const member = castWithMem.find((m) => m.characterId === c.id);
+                            const ties = Object.entries(member?.ties ?? {})
+                                .map(([oid, t]) => `對${nameById.get(oid) ?? oid}：${t}`)
+                                .join('\n');
+                            const povText = await sessionSceneAgent
+                                .povScene({
+                                    sagaId: d.sagaId,
+                                    characterId: c.id,
+                                    eventId: objectiveEventId,
+                                    name: c.name,
+                                    persona: c.description,
+                                    secret: getCharacterSecret(c.id) ?? undefined,
+                                    ties: ties || undefined,
+                                    memories: member?.memories,
+                                    venue: sceneName,
+                                    clock,
+                                    beats: projectEventBeatsForWitness({
+                                        beats: loop.beats.map((b) => ({
+                                            characterId: b.characterId,
+                                            name: b.name,
+                                            text: b.text,
+                                            addressed: b.addressed,
+                                            audience: b.audience ?? 'scene',
+                                            perceiverIds: deriveBeatPerceiverIds(b, sceneParticipants),
+                                        })),
+                                    }, c.id),
+                                    // Identity guard: 行當 per participant so the POV
+                                    // writer never re-assigns an identity (坤生歸坤生).
+                                    castBodies: cs.map((x) => ({ name: x.name, bodyFact: x.physicalFacts || x.gender, role: roleById.get(x.id) })),
+                                })
+                                .catch(() => null);
+                            if (povText) {
+                                povScenePending.push({ characterId: c.id, chapter: povText });
+                                tlog(`③⁹⁺ 追角 ${c.name} 眼中 [${sceneName}]: ${povText.length} chars`);
+                            }
                         }
                     }
                 }
@@ -1351,6 +1509,18 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                         dumpChapter({ kind: 'cut', day: worldTime?.day, name: 'want-回' }, woven);
                         tlog(`③⁹ 織回: ${woven.length} chars (dumped; anchor wiring in Wave 1.5)`);
                     }
+                }
+                // ③⁹⁺ 追角: anchor the followed participants' scene-POV chapters (one
+                // PTB; batch also writes each text into its author's MemWal as kind
+                // 'chapter'). Non-fatal: a failed anchor never blocks the tick.
+                if (povScenePending.length > 0) {
+                    try {
+                        await anchorPovChaptersBatch(admin, d.sagaId, povScenePending);
+                        tlog(`③⁹⁺ 追角 anchored: ${povScenePending.length} scene-POV chapter(s)`);
+                    } catch (err) {
+                        tlog(`③⁹⁺ 追角 anchor failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                    povScenePending.length = 0;
                 }
                 if (actorFatigue && wantActed.length > 0) {
                     const bumped = bumpActorFatigue(actorFatigueBySaga.get(d.sagaId) ?? fatigueLedger, wantActed);
@@ -1530,7 +1700,49 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                     fatigue: Math.min(1, dayFatigue + (freshBeat ? 0.1 : 0)),
                     mood: 0,
                 };
-                const r = await runPovForCharacter(admin, c.id, {
+                const sessionBeats = sceneId
+                    ? (beatsByScene.get(sceneId) ?? []).map((beat) => ({
+                          name: nameById.get(beat.actorId) ?? '某人',
+                          text: !beat.perceiverIds || beat.perceiverIds.includes(c.id)
+                              ? beat.text.replace(/^[^：]{1,20}：/, '')
+                              : redactedSceneBeatText({
+                                    name: nameById.get(beat.actorId) ?? '某人',
+                                    addressed: beat.addressed,
+                                }),
+                      }))
+                    : [];
+                const sessionEventId = myEvent?.digest ??
+                    (sceneId ? `${d.sagaId}:d${worldTime?.day ?? 0}:t${worldTime?.currentTick ?? 0}:${sceneId}` : undefined);
+                const sessionChapter = sessionBeats.length > 0 && sceneId && sessionEventId
+                    ? await sessionSceneAgent.povScene({
+                          sagaId: d.sagaId,
+                          characterId: c.id,
+                          eventId: sessionEventId,
+                          name: c.name,
+                          persona: c.description,
+                          secret: getCharacterSecret(c.id) ?? undefined,
+                          venue: rosterById.get(c.id)?.currentSceneName ?? '戲班',
+                          clock: worldTime?.partOfDay ?? '白日',
+                          beats: sessionBeats,
+                          castBodies: activeRoster
+                              .filter((x) => x.currentSceneId === sceneId)
+                              .map((x) => ({
+                                  name: x.name,
+                                  bodyFact: x.gender,
+                                  role: x.role,
+                              })),
+                      }).catch(() => null)
+                    : null;
+                // The session projection is the primary POV lane. The old worker
+                // remains only for legacy/ambient moments that have no frozen beats.
+                const r = sessionChapter
+                    ? {
+                          ok: true,
+                          chapter: sessionChapter,
+                          anchored: false,
+                          recalledCount: 0,
+                      } satisfies Awaited<ReturnType<typeof runPovForCharacter>>
+                    : await runPovForCharacter(admin, c.id, {
                     triggerNarrative: trigger,
                     forceRun: true,
                     dryRun: true,
@@ -1784,6 +1996,15 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
                                 day: worldTime?.day,
                                 povs: cutPovs,
                                 rosterPeople: activeRoster.map((rp) => ({ name: rp.name, gender: rp.gender, role: rp.role })),
+                                dossierCharacters: Object.fromEntries(
+                                    st.characterIds.map((id) => {
+                                        const character = characters.find((item) => item.id === id);
+                                        return [id, {
+                                            role: roleById.get(id),
+                                            portrait: character?.gallery.anchor.imageUrl,
+                                        }];
+                                    }),
+                                ),
                             });
                             console.log(
                                 `[tick-loop] event cut (${st.templateId}): povCount=${cut.povCount}` +
@@ -2132,4 +2353,3 @@ export async function runTickLoopAction(input: TickLoopInput = {}): Promise<Tick
         memoryDegraded: memoryWarnings.length > 0,
     };
 }
-

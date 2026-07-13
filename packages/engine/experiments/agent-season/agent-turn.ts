@@ -26,11 +26,14 @@ import { rhythmPull, type RehearsalCall, type RhythmPull } from './rhythm.ts';
 import type { Perception } from './perception.ts';
 
 export interface ToolCall {
-    tool: 'time' | 'move' | 'recall' | 'interact' | 'wait';
+    tool: 'time' | 'move' | 'recall' | 'interact' | 'wait' | 'relations' | 'work';
     dest?: string;
     target?: string;
     intent?: string;
     query?: string;
+    /** SELF-TAGGED confide (傾吐): this interact is going to someone to unburden a
+     *  pressing inner matter. The character tags its OWN action — no prose regex. */
+    confide?: boolean;
 }
 
 export interface PlanResult {
@@ -75,8 +78,36 @@ export interface PlanContext {
     banzhuSummons?: { venue: string; line: string } | null;
 }
 
+/** An in-the-moment street encounter decision (§C-level agency): the walker SAW
+ *  someone mid-transit and decides NOW — engage costs the errand (the 時辰 is
+ *  finite: duty wage, the person they meant to find, all slip). */
+export interface TransitReactCtx {
+    char: Char;
+    /** whom they spotted on the street. */
+    seen: Char;
+    street: string;
+    from: string;
+    dest: string;
+    /** what this walk was FOR (the cost of stopping) — duty/seek/plain move. */
+    errand: string;
+    clock: WorldClock;
+    night: boolean;
+}
+export interface TransitReaction {
+    /** pass = 裝沒看見/腳不停; greet = 點頭招呼不停步; engage = 停下來，追上去. */
+    act: 'pass' | 'greet' | 'engage';
+    /** engage: what they go do/say (their own words, one line). */
+    word?: string;
+}
+
 export interface Planner {
     plan(ctx: PlanContext): Promise<PlanResult>;
+    /** In-the-moment street reaction. Default norm: most sightings pass. */
+    transitReact(ctx: TransitReactCtx): Promise<TransitReaction>;
+    /** Nightly 小算盤 for ONE stuck hot want: 2-3 concrete in-world steps in the
+     *  character's own voice (找誰/備什麼/在哪堵人). Their OWN scheme, revised or
+     *  dropped as life moves — never a director's outline. null → no scheme. */
+    draftScheme(ctx: { char: Char; want: Want; clock: WorldClock }): Promise<string | null>;
     /** The 班主 rehearsal channel — an autonomous agent decision (not hardcoded).
      *  Also CHOOSES the 戲碼 (title) to rehearse, reasoning from the troupe's strengths. */
     decideRehearsal(ctx: {
@@ -124,6 +155,22 @@ const GENERDAN = new Set(['柳生春', '蘇映雪']); // 生旦 pair → 戲台
 const WUHANG = new Set(['江聞鶴', '連翹']); // 武行 → 練功房
 
 export class FakePlanner implements Planner {
+    /** Deterministic: engage only when the sighted person is the hottest want's
+     *  target (a real pull); greet on a small hash window; otherwise pass. */
+    async transitReact(ctx: TransitReactCtx): Promise<TransitReaction> {
+        const hot = hottest(ctx.char);
+        if (hot?.target && (hot.target === ctx.seen.id || hot.target === ctx.seen.name)) {
+            return { act: 'engage', word: `把心裡掛著的那樁事，趁這一撞當面挪一挪` };
+        }
+        let h = ctx.clock.currentTick;
+        for (const ch of ctx.char.id + ctx.seen.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        return { act: h % 3 === 0 ? 'greet' : 'pass' };
+    }
+
+    async draftScheme(ctx: { char: Char; want: Want; clock: WorldClock }): Promise<string | null> {
+        return `為「${ctx.want.desc.slice(0, 12)}」：明日先尋${ctx.want.target ?? '相干的人'}把話挑明，再看臉色行事。`;
+    }
+
     async plan(ctx: PlanContext): Promise<PlanResult> {
         const { char: c, pull, clock, night, reh } = ctx;
         const tools: ToolCall[] = [{ tool: 'time' }];
@@ -141,6 +188,7 @@ export class FakePlanner implements Planner {
         // Interact intent, resolved against who ELSE actually lands at dest.
         const here = (o: Char): boolean => fakeDest(o, clock.partOfDay, reh) === dest && !o.dead && o.id !== c.id;
         const plan = fakePlanProse(c, pull, night);
+        if (!target && tools.length < MAX_TOOLS) tools.push({ tool: 'work' });
         if (target && here(target) && tools.length < MAX_TOOLS) {
             tools.push({ tool: 'interact', target: target.name, intent: fakeIntent(c, target) });
         } else if (c.occupation === 'troupe' && reh.announced && isWorkVenue(dest) && tools.length < MAX_TOOLS) {
@@ -220,6 +268,81 @@ export class RealPlanner implements Planner {
         this.onLog = onLog;
     }
 
+    async draftScheme(ctx: { char: Char; want: Want; clock: WorldClock }): Promise<string | null> {
+        try {
+            const t = await llm();
+            const client = t.createTextClient({ kind: 'primary' });
+            const res = await client.chat({
+                model: client.defaultModel,
+                system: [
+                    '夜深了。你心裡有樁事懸了許久沒進展，睡前替自己打個小算盤——不是宏圖，是市井人的盤算：',
+                    '明後天先找誰、備什麼、在哪個時辰哪個地方堵人、話怎麼開口。2-3 步，每步都是你真做得到的事。',
+                    '用你自己的性子和口吻寫（急性子的算盤糙、細心人的算盤密）。',
+                    '嚴格只輸出 JSON：{"scheme":"一段話，2-3步的盤算"}。不要 markdown。',
+                ].join('\n'),
+                messages: [
+                    {
+                        role: 'user',
+                        content:
+                            `# 你是誰\n${ctx.char.name}：${ctx.char.persona}` +
+                            (ctx.char.secret ? `\n\n# 你心底的事\n${ctx.char.secret}` : '') +
+                            `\n\n# 懸著沒進展的心事\n「${ctx.want.desc}」${ctx.want.target ? `（牽涉${ctx.want.target}）` : ''}` +
+                            `\n\n第${ctx.clock.day}日夜。你的小算盤？`,
+                    },
+                ],
+                maxTokens: 240,
+                temperature: 0.8,
+            });
+            const obj = (extractRewriteJson(res.text) ?? {}) as { scheme?: unknown };
+            const s = typeof obj.scheme === 'string' ? obj.scheme.trim() : '';
+            return s || null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** In-the-moment street encounter: one small LLM call, only when someone was
+     *  actually SEEN (rare). The cost is stated as world fact, never a rule. */
+    async transitReact(ctx: TransitReactCtx): Promise<TransitReaction> {
+        try {
+            const { char: c, seen } = ctx;
+            const view = c.relationshipViews.get(seen.id);
+            const hot = hottest(c);
+            const t = await llm();
+            const client = t.createTextClient({ kind: 'primary' });
+            const res = await client.chat({
+                model: client.defaultModel,
+                system: [
+                    '你在扮演戲園世界裡一個活生生的人。你正在街上趕路，忽然遠遠瞧見一個認得的人。',
+                    '這一刻由你自己定：多數時候，人趕著路、點個頭就過去了（pass 或 greet）；',
+                    '只有心裡真有事牽著這個人、此刻又值得誤了原本的事，才會停下腳追上去（engage）。',
+                    '【代價（世界事實）】追上去，這個時辰原本要辦的事就誤了——' + ctx.errand,
+                    '嚴格只輸出 JSON：{"act":"pass|greet|engage","word":"若 engage，你追上去要做/說什麼（一句，用你自己的話）"}。不要 markdown。',
+                ].join('\n'),
+                messages: [
+                    {
+                        role: 'user',
+                        content:
+                            `# 你是誰\n${c.name}：${c.persona}` +
+                            (c.secret ? `\n\n# 你心底的事（只有你自己知道）\n${c.secret}` : '') +
+                            (hot ? `\n\n# 你此刻心裡最重的\n「${hot.desc}」${hot.target ? `（牽涉${hot.target}）` : ''}` : '') +
+                            `\n\n# 街上這一撞\n${ctx.clock.day}日${ctx.night ? '入夜' : '白日'}，你打${ctx.from}往${ctx.dest}，路過${ctx.street}，遠遠瞧見${seen.name}（${seen.role}）也在街上。` +
+                            (view ? `\n你心裡對${seen.name}：${view}` : '') +
+                            `\n\n這一刻，你怎麼做？`,
+                    },
+                ],
+                maxTokens: 160,
+                temperature: 0.8,
+            });
+            const obj = (extractRewriteJson(res.text) ?? {}) as { act?: unknown; word?: unknown };
+            const act = obj.act === 'engage' || obj.act === 'greet' ? obj.act : 'pass';
+            const word = typeof obj.word === 'string' && obj.word.trim() ? obj.word.trim() : undefined;
+            return { act, word };
+        } catch {
+            return { act: 'pass' }; // the road goes on
+        }
+    }
+
     async plan(ctx: PlanContext): Promise<PlanResult> {
         const { char: c, present, clock, night, pull, recalled } = ctx;
         const system = [
@@ -231,8 +354,14 @@ export class RealPlanner implements Planner {
             '- time：先問一問現在是什麼時辰，好定準自己這一刻該做什麼（通常先做這個）。',
             '- move：動身去一個地方（你自己營生/起居的地方，或為了某個緣故去別人的地方）。填 dest=地名。',
             '- recall：再細想一件舊事。填 query=你想細想什麼。',
-            '- interact：去對某個在場的人做點什麼、說點什麼（若對方也在場，就會當面演成一場戲）。填 target=名字、intent=你要做/說什麼。',
+            '- interact：去對某個在場的人做點什麼、說點什麼（若對方也在場，就會當面演成一場戲）。填 target=名字、intent=你要做/說什麼。' +
+                '若這一趟是要找信得過的人把心裡壓著的**私事**說一說（傾吐：情、愧、怕、瞞著的往事），多加 "confide":true——只有真起了想說的心才標；戲務、功夫、排戲、切磋、公事、較勁、寒暄一概不算傾吐，別標。',
             '- wait：你算準了某個人這個時辰該在的地方，守在那兒等他出現（哪怕他一時沒到，你也守著，直到他來或你等得沒了耐心）。填 target=名字、intent=你等著要對他說/做什麼。',
+            '- relations：靜下心，盤一盤你與身邊眾人的近疏——誰多久沒同你單獨說過話了。想清楚了再定這個時辰做什麼。',
+            '- work：守著自己的功課與營生，把這一個時辰花在正事上（吊嗓、走位、練槍、對帳、寫稿、理家）。',
+            '',
+            '**過日子的常識**：不是每個時辰都要去找人——功課是你之所以是你：戲子不吊嗓便不再是角兒，',
+            '記者不寫稿便沒了版面。多數的日子，人守著自己的營生；心裡的事，挑要緊的時辰去辦。',
             '',
             '找一個人的訣竅：你認得的人，你大概知道他這個時辰照著營生會在哪（下面會告訴你）。要嘛動身去他那一帶找他，要嘛守在他必經的地方等他。別空等在一個他根本不會來的地方。',
             '',
@@ -260,6 +389,7 @@ export class RealPlanner implements Planner {
         // Deadline as a WORLD FACT (§2.42): the character lives in a world where this
         // is simply true this 時辰. It is never an instruction to make/premiere a play.
         const worldFact = ctx.worldFactLine ? `\n# 眼下這世道\n${ctx.worldFactLine}` : '';
+        const schemeNote = c.scheme ? `\n# 你前夜替自己打的小算盤（自己的主意，照不照辦由你）\n${c.scheme}` : '';
         // PASSIVE perception (眼耳鼻身) — only the channels actually sensed this 時辰.
         const perc = ctx.perception;
         const percLines: string[] = [];
@@ -295,6 +425,7 @@ export class RealPlanner implements Planner {
             oppCost,
             summons,
             worldFact,
+            schemeNote,
             `\n# 這世界有哪些地方（你都知道怎麼去）\n${geographyBlock()}`,
             `\n# 你剛想起的幾件舊事\n${recallBlock}`,
             `\n# 現在是什麼時辰\n第${clock.day}日·${clock.partOfDay}${night ? '（入夜了）' : ''}`,
@@ -321,13 +452,14 @@ export class RealPlanner implements Planner {
                 const tools: ToolCall[] = [];
                 for (const t of rawTools.slice(0, MAX_TOOLS)) {
                     const tool = String((t as any)?.tool ?? '').trim();
-                    if (!['time', 'move', 'recall', 'interact', 'wait'].includes(tool)) continue;
+                    if (!['time', 'move', 'recall', 'interact', 'wait', 'relations', 'work'].includes(tool)) continue;
                     tools.push({
                         tool: tool as ToolCall['tool'],
                         dest: str((t as any)?.dest),
                         target: str((t as any)?.target),
                         intent: str((t as any)?.intent),
                         query: str((t as any)?.query),
+                        confide: (t as any)?.confide === true,
                     });
                 }
                 return { plan, tools };

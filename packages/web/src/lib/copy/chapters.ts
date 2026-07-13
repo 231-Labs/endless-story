@@ -34,7 +34,6 @@ export const CHAPTER_COPY = {
     lockHint: '這一回只給班主與訂閱者。',
     /** When a body fails to load. */
     bodyUnavailable: '— 章回內容暫時讀不到 —',
-    bodyLoading: '讀取中…',
     /** Provenance, embedded-event line. */
     fromEvent: (label: string) => `本回出自鏈上事件「${label}」`,
   },

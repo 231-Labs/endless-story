@@ -89,8 +89,10 @@ export {
     reviewScene,
     povReflect,
     povScene,
+    judgeEstablished,
     pronounFromBody,
     buildBeatSystemPrompt,
+    parseBeatResult,
 } from './beat.js';
 export type { SceneIntimacyRating } from './beat.js';
 export type { ActBeatInput, BeatResult, BeatForcing, JudgeResolveInput, ResolveVerdict } from './beat.js';
@@ -100,6 +102,7 @@ export type {
     ReviewSceneReply,
     PovReflectInput,
     PovSceneInput,
+    JudgeEstablishedInput,
 } from './beat.js';
 export { judgeRipples } from './want-ripple.js';
 export type { RippleJudgeInput, RippleJudgeDelta } from './want-ripple.js';

@@ -22,7 +22,8 @@ import * as path from 'node:path';
 
 import { FakeSceneAgent, LocalRecall, LocalClock, applyRewrite, type SceneAgentPort } from '../../src/index.ts';
 import { buildCast, isPublicVenue, type Char } from './world.ts';
-import { snapshotCast, restoreCast, type CastSnapshot } from './persistence.ts';
+import { snapshotCast, restoreCast, restoreDormants, restoreBonds, type CastSnapshot } from './persistence.ts';
+import { seedBond, BOND, type BondGraph } from '../../src/core/bond-graph.ts';
 import { occLabel, type RehearsalCall } from './rhythm.ts';
 import { FakePlanner, RealPlanner, type Planner } from './agent-turn.ts';
 import { runSeason, type SeasonResult, type RoundRecord } from './round.ts';
@@ -78,16 +79,20 @@ async function main(): Promise<void> {
     // accumulated episodic memories forward (copy the prior memory dir into this recall
     // dir BEFORE LocalRecall reads it). Canon seed memories are reloaded verbatim regardless.
     const restorePath = process.env.SEASON_RESTORE ? path.resolve(process.env.SEASON_RESTORE) : null;
+    let restoredEstablished: string[] = [];
     const restoreInfo: { continued: boolean; from?: string; restored: string[]; samples: string[] } = {
         continued: false,
         restored: [],
         samples: [],
     };
+    let RESTORE_SNAP: CastSnapshot | null = null;
     if (restorePath) {
         const statePath = path.join(restorePath, 'cast-state.json');
         if (fs.existsSync(statePath)) {
             const snap = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as CastSnapshot;
+            RESTORE_SNAP = snap;
             const restored = restoreCast(cast, snap);
+            restoredEstablished = snap.establishedPairs ?? [];
             // carry the prior week's accumulated episodic memory forward (copy, never mutate).
             const priorMem = path.join(restorePath, 'memory');
             if (fs.existsSync(priorMem)) fs.cpSync(priorMem, recallDir, { recursive: true });
@@ -185,11 +190,64 @@ async function main(): Promise<void> {
     log(`seed memories loaded (verbatim, non-thinned): ${seedCounts.join('  ')}\n`);
 
     const reh: RehearsalCall = { announced: false, line: '' };
-    const showrunner = makeShowrunner(DAYS);
+    // Per-season theme (SEASON_THEME_FILE = json from the propose-season probe):
+    // a new season's question grows out of the prior season's ending.
+    let theme: { title?: string; centralQuestion?: string; finaleName?: string; countdownFlavor?: string; prologue?: string[] } = {};
+    if (process.env.SEASON_THEME_FILE) {
+        theme = JSON.parse(fs.readFileSync(path.resolve(process.env.SEASON_THEME_FILE), 'utf-8'));
+        log(`\n▶ 季主題：${theme.title ?? theme.centralQuestion ?? '(custom)'}`);
+    }
+    const showrunner = makeShowrunner(DAYS, theme);
     const play = newPlay('', 'genesis');
     log(`\nshowrunner 中心命題：${showrunner.centralQuestion}`);
-    log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} 年底大會串｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
+    log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} ${showrunner.finaleName}｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
+    // 注夢 (§2.51, owner whisper): SEASON_DREAM='名:日:夢文;名:日:夢文' — at that
+    // day's DEEP NIGHT the dream lands as a memory (kind dream, high importance);
+    // the next regeneration reads it as a thread. One whisper, no steering.
+    const dreams = (process.env.SEASON_DREAM ?? '')
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => {
+            const [name, day, ...rest] = s.split(':');
+            return { name: name?.trim(), day: Number(day), text: rest.join(':').trim() };
+        })
+        .filter((d) => d.name && d.day > 0 && d.text);
+
+    const { buildDormants, areEstablishedLovers } = await import('./world.ts');
+    const dormants = buildDormants();
+    if (RESTORE_SNAP) restoreDormants(dormants, RESTORE_SNAP);
+    // BOND graph: restore, then seed the canon floor (data-driven, no names):
+    // established lovers 0.75 both ways; a one-way 暗戀/想念 tag 0.6; anyone
+    // with a seeded view 0.35. seedBond only ever raises, so restored state wins.
+    const bonds: BondGraph = RESTORE_SNAP ? restoreBonds(RESTORE_SNAP) : new Map();
+    for (const x of cast) {
+        for (const y of cast) {
+            if (x.id === y.id) continue;
+            if (areEstablishedLovers(x, y)) seedBond(bonds, x.id, y.id, BOND.seed.established);
+            else if (x.thickMemories.some((m) => (m.tag.startsWith('暗戀') || m.tag.startsWith('肌膚')) && m.tag.includes(y.name.slice(0, 1)))) seedBond(bonds, x.id, y.id, BOND.seed.yearning);
+            else if (x.relationshipViews.has(y.id)) seedBond(bonds, x.id, y.id, BOND.seed.known);
+        }
+    }
+    for (const pk of restoredEstablished) {
+        const [xa, xb] = pk.split('|');
+        seedBond(bonds, xa, xb, BOND.seed.established);
+        seedBond(bonds, xb, xa, BOND.seed.established);
+    }
     const result = await runSeason({
+        dormants,
+        bonds,
+        checkpoint: (endedTick, establishedPairs) => {
+            fs.writeFileSync(path.join(outDir, 'cast-state.json'), JSON.stringify(snapshotCast(cast, endedTick, establishedPairs, dormants, bonds)));
+            const endedDay = Math.floor(endedTick / 6);
+            for (const d of dreams) {
+                if (d.day !== endedDay + 1) continue; // lands on the NIGHT before day d.day
+                const target = cast.find((x) => x.name === d.name);
+                if (!target) continue;
+                void recall.remember(target.id, `昨夜有夢，醒來心口還跳：${d.text}`, { kind: 'dream', importance: 8, day: endedDay + 1 });
+                log(`  〔注夢〕${d.name} 這一夜有夢——${d.text.slice(0, 40)}…`);
+            }
+        },
         cast,
         planner,
         agent,
@@ -202,6 +260,7 @@ async function main(): Promise<void> {
         reh,
         play,
         showrunner,
+        establishedPairs: restoredEstablished,
     });
 
     printCounters(result, cast, byName, initialViews, seedCounts, restoreInfo);
@@ -210,7 +269,7 @@ async function main(): Promise<void> {
 
     // SEASON PERSISTENCE — write the end-of-week snapshot so the NEXT week can restore it.
     const statePath = path.join(outDir, 'cast-state.json');
-    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6)));
+    fs.writeFileSync(statePath, JSON.stringify(snapshotCast(cast, DAYS * 6, result.establishedPairs, result.dormants, result.bonds)));
 
     // ALWAYS emit a readable HTML next to the report (§ user: every run must produce
     // an HTML to read, so problems are caught by reading the whole season).
@@ -222,7 +281,7 @@ async function main(): Promise<void> {
             subtitle: '一齣自治敘事引擎跑出的完整賽季 · 上海 · 一九二〇年代',
             centralQuestion: showrunner.centralQuestion,
             deadlineLine: `死線 · 世界事實：年底霞飛路大會串（第${showrunner.deadlineDay}日${showrunner.finalePart}）。掛得上名的班子拿檔期版面，掛不上的被遺忘。`,
-            prologue: PROLOGUE,
+            prologue: theme.prologue ?? PROLOGUE,
             cast,
         }),
     );

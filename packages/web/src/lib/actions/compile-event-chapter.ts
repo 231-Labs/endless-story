@@ -22,6 +22,7 @@ type EventCutPov = runnerEventChapter.EventCutPov;
 
 export interface CompileEventChapterActionInput {
     sceneId: string;
+    sagaName?: string;
     sceneName?: string;
     eventTx?: string;
     eventLabel?: string;
@@ -33,6 +34,10 @@ export interface CompileEventChapterActionInput {
     /** Saga peers with gender, for the self-check's pronoun rules on the woven cut. */
     rosterPeople?: Array<{ name: string; gender: string; role?: string }>;
     dryRun?: boolean;
+    /** Existing oil-painting scene cover or generated event still. */
+    hero?: string;
+    heroAlt?: string;
+    dossierCharacters?: Record<string, { role?: string; portrait?: string; lead?: string }>;
 }
 
 export interface CompileEventChapterActionResult {
@@ -44,6 +49,8 @@ export interface CompileEventChapterActionResult {
     commitmentId?: string;
     blobId?: string;
     digest?: string;
+    /** Product route for an anchored dossier chapter. */
+    dossierHref?: string;
     error?: string;
 }
 
@@ -94,6 +101,27 @@ export async function compileEventChapterAction(
     const intents = truth
         .filter((t): t is typeof t & { inner: string } => Boolean(t.inner?.trim()))
         .map((t) => ({ name: t.name, line: t.inner }));
+    const truthEventId = input.eventTx ?? `${d.sagaId}:d${input.day ?? 0}:${input.sceneId}`;
+    const dossierEvent = truth.length > 0
+        ? {
+              id: truthEventId,
+              canonHead: input.eventTx ?? truthEventId,
+              eventTx: input.eventTx,
+              saga: input.sagaName ?? '',
+              day: input.day ?? truth[0]?.day ?? 0,
+              scene: input.sceneName ?? '戲班',
+              title: input.eventLabel ?? `${input.sceneName ?? '戲班'}的一樁事`,
+              kicker: '客觀逐拍只有一份；在場的人，各自帶走了不同的一份真相。',
+              summary: truth.map((t) => `${t.name}：${t.text}`).join(' '),
+              hero: input.hero,
+              heroAlt: input.heroAlt,
+              beats: truth.map((t) => ({
+                  characterId: t.characterId ?? input.povs?.find((p) => p.characterName === t.name)?.characterId ?? t.name,
+                  name: t.name,
+                  text: t.text,
+              })),
+          }
+        : undefined;
 
     try {
         const res = await runnerEventChapter.runOnce({
@@ -114,6 +142,15 @@ export async function compileEventChapterAction(
             signer: input.dryRun
                 ? undefined
                 : { keypair: admin.signer, storytellerCapId: d.storytellerCapId },
+            dossierEvent,
+            dossierPerspectives: input.povs?.map((p) => ({
+                characterId: p.characterId,
+                characterName: p.characterName,
+                role: input.dossierCharacters?.[p.characterId]?.role ?? p.role,
+                portrait: input.dossierCharacters?.[p.characterId]?.portrait,
+                lead: input.dossierCharacters?.[p.characterId]?.lead,
+                body: p.body,
+            })),
         });
 
         // 啟後 — fold the woven 回 back into the bible so the NEXT chapter picks it
@@ -145,6 +182,7 @@ export async function compileEventChapterAction(
             commitmentId: res.commitmentId,
             blobId: res.blobId,
             digest: res.digest,
+            dossierHref: res.dossier && res.commitmentId ? `/feed/event/${res.commitmentId}` : undefined,
         };
     } catch (err) {
         return {

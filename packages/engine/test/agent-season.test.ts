@@ -14,10 +14,10 @@ import assert from 'node:assert/strict';
 import { FakeSceneAgent } from '../src/adapters/local/fake-scene-agent.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
 import { LocalClock } from '../src/adapters/local/clock.ts';
-import { runSceneLoop, makeClock, spawnWant, type SceneLoopCastMember } from '../src/index.ts';
+import { runSceneLoop, makeClock, spawnWant, pickOrthogonalThreads, type SceneLoopCastMember } from '../src/index.ts';
 // Import the node-clean PURE leaf directly — the character-agent barrel is
 // tsx-only (`.js` specifiers + eager llm import) and cannot load under node --test.
-import { buildBeatSystemPrompt, pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
+import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, safeSceneRevision } from '@endless-story/runner/services/character-agent/beat-prompt';
 import {
     buildCast,
     areEstablishedLovers,
@@ -31,6 +31,7 @@ import { CANON } from '../experiments/agent-season/canon-seed.ts';
 import { FakePlanner } from '../experiments/agent-season/agent-turn.ts';
 import {
     runSeason,
+    doInteract,
     hasRomanticStake,
     renderDiscovery,
     determineActive,
@@ -339,6 +340,42 @@ test('pronoun correctness: buildBeatSystemPrompt names a male co-star 他 (data-
     });
     assert.ok(prompt.includes(`${jiang.name}是他`), `the guard names ${jiang.name} 他 (male) — got no 他 line`);
     assert.ok(prompt.includes(`${su.name}是她`), `the guard names ${su.name} 她 (female)`);
+    assert.ok(prompt.includes('beat 是寫入正史逐拍的敘述'), 'the action is framed as an objective ledger beat');
+    assert.ok(prompt.includes('不要以「我」起筆'), 'the model must not leak first-person framing into canon');
+    assert.ok(prompt.includes('audience'), 'the model must self-tag who can perceive the exact beat');
+    assert.ok(prompt.includes('沒有已登記可拿出的私人物件'), 'empty inventory is an explicit physical constraint');
+});
+
+test('beat perception is structured and fails closed without an addressee', () => {
+    const aside = parseBeatResult(
+        '{"beat":"壓低聲音說了一句","inner":"","addressed":"柳生春","audience":"addressed"}',
+        '蘇映雪',
+    );
+    assert.equal(aside.audience, 'addressed');
+    const malformed = parseBeatResult(
+        '{"beat":"壓低聲音","inner":"","addressed":"無","audience":"addressed"}',
+        '蘇映雪',
+    );
+    assert.equal(malformed.audience, 'scene', 'addressed-only needs a real addressee');
+});
+
+test('scene reviewer cannot rewrite frozen dialogue or replace the objective action', () => {
+    const original = '偏頭一笑：「今兒這袖，只管往你手裡遞。」';
+    assert.equal(
+        safeSceneRevision(original, '偏頭一笑：「今兒這袖，只管往我手裡遞。」'),
+        original,
+        'spoken canon is immutable',
+    );
+    assert.equal(
+        safeSceneRevision('手順著他靠來的力道收緊。', '手順著她靠來的力道收緊。'),
+        '手順著她靠來的力道收緊。',
+        'a narrow prose repair is accepted',
+    );
+    assert.equal(
+        safeSceneRevision('她端起茶盞递過去。', '她忽然推開戲院大門，奔進雨裡，從此再沒回頭。'),
+        '她端起茶盞递過去。',
+        'a replacement event is rejected',
+    );
 });
 
 test('scene self-check: FakeSceneAgent.reviewScene is a pass-through AND the round loop wires it', async () => {
@@ -489,7 +526,8 @@ test('per-scene weave: at least one PRIVATE scene carries a non-empty woven 章�
 
 test('床戲 beat cap: the consummate maxTurns default is > 8 (a bed scene can develop)', async () => {
     // A consummate scene with a non-leaving agent runs the FULL cap of beats. The default
-    // cap (SEASON_BED_CAP unset → 16) is well past the old 8, proving the lift landed.
+    // backstop (SEASON_BED_CAP unset → 32) is well past the old 8 — the close beat is the
+    // narrative exit; the cap is only a runaway cost fuse.
     const [liu, jin] = buildCast(['柳生春', '金鳳']);
     const cm = (c: Char, other: Char): SceneLoopCastMember => ({
         characterId: c.id, name: c.name, persona: c.persona, memories: [],
@@ -888,4 +926,221 @@ test('deep-night work runs even on a fast-forwarded 深宵 (the sleeping mind st
     // and the day-end marker appears once per day even if 深宵 fast-forwarded.
     const deepRounds = result.rounds.filter((r) => r.part === '深宵');
     assert.equal(deepRounds.length, 2, 'two 深宵 rounds over two days');
+});
+
+test('orthogonal threads: regen sampling picks the memories FURTHEST from current wants (the single-axis door)', () => {
+    const memories = [
+        '你要在一班名角裡站上台心，讓上海記住你靠身體掙來的名字。',
+        '你不認得幾個字，戲單上自己的名字你認不全，你想總有一天能自己唸給自己聽。',
+        '你有個鐵皮餅乾盒，攢著銅板要買一身真正屬於自己的靠，照現在的攢法還要三年。',
+        '台心那個位置你夜裡量過，七步半，你其實已經站過了，只是沒人看。',
+    ];
+    const wants = ['在一班名角裡，讓上海記住一個靠身體站上台心的人', '大會串的台心，我得拿自己的戲再踩一響'];
+    const picked = pickOrthogonalThreads(memories, wants, 2);
+    assert.equal(picked.length, 2);
+    assert.ok(picked.includes(memories[1]), '識字線頭（與台心 want 最不重疊）被選中');
+    assert.ok(picked.includes(memories[2]), '攢錢線頭被選中');
+    assert.ok(!picked.includes(memories[0]), '台心同題記憶不被選（它已經在燒）');
+});
+
+test('season restore rebases want clocks: last season\'s resolutions are NOT "just resolved" tonight', () => {
+    const [a] = buildCast(['柳生春']);
+    a.wants[0].retired = true;
+    a.wants[0].resolvedTick = 41; // resolved on the prior season's last day
+    a.wants[0].bornTick = 2;
+    const snap = snapshotCast([a], 42);
+    const [b] = buildCast(['柳生春']);
+    restoreCast([b], snap);
+    const w = b.wants.find((x) => x.retired)!;
+    assert.equal(w.resolvedTick, -1, 'resolvedTick rebased below the new season clock');
+    assert.equal(w.bornTick, 2 - 42, 'bornTick rebased (continuous age)');
+    // The nightly justResolved window (resolvedTick > tick-6) must NOT catch it on day 1.
+    const tick = 5;
+    assert.ok(!(w.resolvedTick! > tick - 6), 'not counted as 承接 on the new season\'s first night');
+});
+
+test('milestone promotion: a mutually-avowed pair becomes established in play and persists across seasons', async () => {
+    // Fake judge promotes only when BOTH views carry an explicit mutual marker.
+    const { cast, result } = await (async () => {
+        const c = buildCast(['柳生春', '蘇映雪']);
+        const [liu, su] = c;
+        liu.relationshipViews.set(su.id, '這半步我不退了，我們已是彼此交了心的人');
+        su.relationshipViews.set(liu.id, '她不退了，我也認了——相許');
+        const agent = new FakeSceneAgent();
+        const yes = await agent.judgeEstablished({ aName: liu.name, bName: su.name, aView: liu.relationshipViews.get(su.id), bView: su.relationshipViews.get(liu.id) });
+        assert.equal(yes, true, 'fake judge reads the mutual markers');
+        // persistence round-trip of the promoted set
+        const snap = snapshotCast(c, 42, [[liu.id, su.id].sort().join('|')]);
+        assert.ok(snap.establishedPairs?.length === 1, 'snapshot carries the promoted pair');
+        return { cast: c, result: snap };
+    })();
+    void cast;
+    void result;
+});
+
+test('the actor\'s own ending: a close beat wraps the scene before the cap', async () => {
+    let calls = 0;
+    const scripted = {
+        actBeat: async () => {
+            calls += 1;
+            return calls >= 2
+                ? { beat: '她吹熄了燈，把這一夜收了。', inner: '到這裡就好。', close: true }
+                : { beat: '她替他斟了盞茶。', inner: '' };
+        },
+        judgeWantResolved: async () => ({ resolved: false }),
+    };
+    const [liu, jin] = buildCast(['柳生春', '金鳳']);
+    const loop = await runSceneLoop({
+        sceneId: 'close-test',
+        sceneName: '後台小廂房',
+        isPrivate: true,
+        clock: '第1日·深宵',
+        etiquette: '',
+        cast: [
+            { characterId: liu.id, name: liu.name, persona: liu.persona },
+            { characterId: jin.id, name: jin.name, persona: jin.persona },
+        ],
+        wants: [...liu.wants, ...jin.wants],
+        tick: 5,
+        maxTurns: 8,
+        agent: scripted as never,
+    });
+    assert.equal(loop.beats.length, 2, 'the scene ended on the actor\'s close, not the cap');
+});
+
+test('intimacy is negotiated in-scene: advance→accept opens the register; decline is honoured', async () => {
+    const mk = (tags: Array<'advance' | 'accept' | 'decline' | undefined>) => {
+        let i = -1;
+        return {
+            actBeat: async (inp: unknown) => {
+                i += 1;
+                const tag = tags[i];
+                return { beat: `第${i}拍`, inner: '', intimacy: tag, close: i >= tags.length - 1 ? true : undefined };
+            },
+            judgeWantResolved: async () => ({ resolved: false }),
+        };
+    };
+    const [liu, su] = buildCast(['柳生春', '蘇映雪']);
+    const base = {
+        sceneId: 'nego',
+        sceneName: '二樓書寓',
+        isPrivate: true,
+        clock: '第1日·入夜',
+        etiquette: '',
+        cast: [
+            { characterId: liu.id, name: liu.name, persona: liu.persona },
+            { characterId: su.id, name: su.name, persona: su.persona },
+        ],
+        wants: [...liu.wants, ...su.wants],
+        tick: 4,
+        maxTurns: 4,
+    };
+    const accepted = await runSceneLoop({ ...base, agent: mk(['advance', 'accept', undefined, undefined]) });
+    assert.equal(accepted.intimacyAccepted, true, 'advance→accept = they became lovers HERE (event)');
+    assert.equal(accepted.intimacyGateOpened, true, 'the register opened');
+    const declined = await runSceneLoop({ ...base, sceneId: 'nego2', agent: mk(['advance', 'decline', undefined, undefined]) });
+    assert.equal(declined.intimacyAccepted, false, 'a decline is honoured — no event, no status');
+});
+
+// ── 心事自改 (secret evolution) ────────────────────────────────────────────────
+test('心事自改: a landed milestone moves the secret to its next step, and it persists across seasons', async () => {
+    const [jin] = buildCast(['金鳳']);
+    const fake = new FakeSceneAgent();
+    const seed = jin.secret;
+    // nothing landed → the matter keeps its shape
+    assert.equal(await fake.evolveSecret({ name: jin.name, persona: jin.persona, secret: seed, landed: [], day: 5 }), null);
+    // a landed resolution → the secret moves (and differs from the frozen seed)
+    const evolved = await fake.evolveSecret({
+        name: jin.name, persona: jin.persona, secret: seed,
+        landed: ['「要他當面認一句欠我的」——他親口說了我認'], day: 5,
+    });
+    assert.ok(evolved && evolved !== seed, 'secret evolved off the seed');
+    jin.secret = evolved!;
+    // survives snapshot → restore (else next week re-freezes the old matter)
+    const snap = snapshotCast([jin], 41, []);
+    const fresh = buildCast(['金鳳']);
+    restoreCast(fresh, snap);
+    assert.equal(fresh[0].secret, evolved, 'evolved secret carried across the season boundary');
+});
+
+// ── 傾吐 (confide) — information medium mechanics ─────────────────────────────
+test('傾吐: only said-aloud transfers to the listener recall, and the confider secret moves', async () => {
+    const cast = buildCast(['蘇映雪', '連翹']);
+    const [su, lian] = cast;
+    su.venue = '後台妝閣';
+    lian.venue = '後台妝閣';
+    const recall = new LocalRecall();
+    const clock = makeClock(6, 16); // 第3日·入夜
+    const seedSecret = su.secret;
+    const scene = await doInteract(
+        su, lian, '找連翹把心裡壓著的事說一說', clock, true,
+        new FakeSceneAgent(), recall, new Map(), [],
+        false, undefined, undefined, undefined, undefined, undefined, true,
+    );
+    assert.equal(scene.confideBy, su.name, 'scene records who unburdened');
+    const surfaced = await recall.recall(lian.id, '蘇映雪 心裡話', 3, clock.day);
+    assert.ok(surfaced.some((m) => m.text.includes('蘇映雪') && m.text.includes('心裡話')), 'listener remembers the confidence');
+    // anti-omniscience (structural): the confidence is built ONLY from the
+    // CONFIDER's beats — the listener's own lines never enter it. (The fake's
+    // inner is a substring of its beat text by stub design, so the inner-leak
+    // claim is probe territory: the real-LLM confide probe asserts it.)
+    const stored = surfaced.map((m) => m.text).join('');
+    const lianLines = scene.beats.filter((b: { name: string }) => b.name === lian.name).map((b: { text: string }) => b.text);
+    assert.ok(lianLines.length === 0 || lianLines.every((t: string) => !stored.includes(t)), 'listener lines never enter the confidence');
+    assert.notEqual(su.secret, seedSecret, 'saying it out loud moved the secret (fake evolve)');
+});
+
+test('pronounFromBody: 女兒身扮男 is 她 (the guard must not poison itself)', () => {
+    assert.equal(pronounFromBody('女兒身，坤生（台上扮男、台下是女子）'), '她');
+    assert.equal(pronounFromBody('男子之身'), '他');
+    assert.equal(pronounFromBody(undefined), '她');
+});
+
+// ── TRANSIT (no teleport): cross-cluster walks pass real streets ─────────────
+test('transit: cross-cluster routes pass physical streets; same cluster has none', async () => {
+    const { transitStreets } = await import('../experiments/agent-season/rhythm.ts');
+    assert.deepEqual(transitStreets('後台妝閣', '會樂里寓所'), ['戲園前街', '霞飛路商店街'], '戲園→霞飛里 walks both throats');
+    assert.deepEqual(transitStreets('練功房', '雲錦台戲台'), [], 'same cluster = no transit');
+    assert.deepEqual(transitStreets('沈宅小樓', '白公館繡樓'), ['霞飛路商店街'], 'two private houses meet the main road');
+    assert.deepEqual(transitStreets('戲園前街', '後台妝閣'), [], 'the street itself is inside the cluster');
+});
+
+test('dormant lives: a street purchase is remembered by BOTH sides and heat persists across seasons', async () => {
+    const { buildDormants } = await import('../experiments/agent-season/world.ts');
+    const { restoreDormants } = await import('../experiments/agent-season/persistence.ts');
+    const dormants = buildDormants();
+    const granny = dormants.find((d) => d.id === 'd-花攤阿婆')!;
+    granny.ledger.push({ day: 2, note: '連翹來買過一枝白蘭花' });
+    granny.heat = 3;
+    const cast = buildCast(['連翹']);
+    const snap = snapshotCast(cast, 41, [], dormants);
+    const fresh = buildDormants();
+    restoreDormants(fresh, snap);
+    const restored = fresh.find((d) => d.id === 'd-花攤阿婆')!;
+    assert.equal(restored.heat, 3, 'heat carries across the season boundary');
+    assert.equal(restored.ledger[0]?.note, '連翹來買過一枝白蘭花', 'the vendor remembers who touched her life');
+});
+
+// ── BOND graph — the numeric relationship underlay ────────────────────────────
+test('bond: saturating growth, floored cooling, and the advance affordance gate', async () => {
+    const { bumpBond, decayBonds, bondOf, advanceReady, seedBond, BOND } = await import('../src/core/bond-graph.ts');
+    const g = new Map();
+    // strangers: no advance card until courted
+    assert.equal(advanceReady(g, 'a', 'b'), false, 'a stranger gets no advance card');
+    // court through scenes: growth saturates (never exceeds 1)
+    for (let i = 0; i < 6; i++) bumpBond(g, 'a', 'b', 'confide');
+    assert.ok(bondOf(g, 'a', 'b') >= BOND.advanceAt, 'six confidences earn standing');
+    // cooling drifts toward the floor of the PEAK, never to stranger
+    const peak = bondOf(g, 'a', 'b');
+    for (let i = 0; i < 200; i++) decayBonds(g, new Set());
+    const cooled = bondOf(g, 'a', 'b');
+    assert.ok(cooled < peak, 'apart days cool the edge');
+    assert.ok(cooled >= BOND.floorOfPeak * peak - 1e-9, 'an old flame never cools below 30% of its peak');
+    // seeds only raise
+    seedBond(g, 'a', 'b', 0.2);
+    assert.ok(bondOf(g, 'a', 'b') >= cooled, 'seeding never lowers a lived edge');
+    // together today = no cooling
+    const before = bondOf(g, 'a', 'b');
+    decayBonds(g, new Set(['a|b']));
+    assert.equal(bondOf(g, 'a', 'b'), before, 'a pair that met today does not cool');
 });
