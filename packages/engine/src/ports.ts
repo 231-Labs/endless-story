@@ -41,6 +41,13 @@ export interface CanonicalSceneBeat {
     characterId: string;
     name: string;
     text: string;
+    /** Named addressee, when the actor directed the beat at one person. */
+    addressed?: string;
+    /** Structured delivery intent, never inferred from the prose. */
+    audience: 'scene' | 'addressed';
+    /** Characters who perceived the exact content; other co-present witnesses
+     *  receive a redacted physical observation instead. */
+    perceiverIds: string[];
     /** Private to the actor; delivery adapters must never show it to witnesses. */
     inner?: string;
 }

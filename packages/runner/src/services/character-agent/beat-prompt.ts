@@ -163,6 +163,10 @@ export interface BeatResult {
     inner: string;
     /** Who this beat addresses (co-present name), if anyone. */
     addressed?: string;
+    /** Who can perceive the exact words/action. `addressed` is a deliberate
+     *  aside/whisper; everyone else only observes that a private exchange took
+     *  place. This is structured so the engine never infers privacy from prose. */
+    audience?: 'scene' | 'addressed';
     /** Scene name to move to, if leaving. */
     move?: string;
     /** The actor CLOSES the scene on this beat (sleep/farewell/enough) — their
@@ -192,15 +196,48 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
     const esc = actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const deName = (t: string): string => t.replace(new RegExp(`^${esc}(?!的)\\s*[:：]?\\s*`), '');
     const addressed = str(o.addressed);
+    const audience = o.audience === 'addressed' && addressed && addressed !== '無'
+        ? 'addressed'
+        : 'scene';
     const move = str(o.move);
     return {
         beat: deName(str(o.beat)) || '（沉默。）',
         inner: deName(str(o.inner)),
         addressed: addressed && addressed !== '無' ? addressed : undefined,
+        audience,
         move: move && move !== '無' ? move : undefined,
         close: o.close === true ? true : undefined,
         intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
     };
+}
+
+function editDistance(a: string, b: string): number {
+    let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+        const current = [i];
+        for (let j = 1; j <= b.length; j++) {
+            current[j] = Math.min(
+                current[j - 1] + 1,
+                previous[j] + 1,
+                previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+            );
+        }
+        previous = current;
+    }
+    return previous[b.length];
+}
+
+function spokenSegments(text: string): string[] {
+    return text.match(/[「『“"][^」』”"]*[」』”"]/g) ?? [];
+}
+
+/** A reviewer is an editor, not a second author. Reject candidate text that
+ * changes spoken dialogue or rewrites too much of the objective action. */
+export function safeSceneRevision(original: string, candidate: string): string {
+    if (!candidate.trim()) return original;
+    if (JSON.stringify(spokenSegments(original)) !== JSON.stringify(spokenSegments(candidate))) return original;
+    const maxEdit = Math.max(6, Math.ceil(original.length * 0.28));
+    return editDistance(original, candidate) <= maxEdit ? candidate : original;
 }
 
 /** §2.43-validated pressure language: removes stalling, never writes the answer. */
@@ -255,7 +292,7 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         pronounNote(input),
         input.carried?.length
             ? `【隨身】你身上帶著：${input.carried.join('、')}。用不用、何時拿出來，由你——對景就讓它出手，不對景就讓它待在袖底，別為了提而提。`
-            : '',
+            : '【隨身】此刻沒有已登記可拿出的私人物件；不得從口袋、袖底憑空摸出懷錶、信、相片等道具。可用眼前場景原有的公共物件，也可觸碰自己正穿著的衣物。',
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
         // A continuation picks up a still-warm private encounter mid-moment (general;
         // keyed by caller on pair+venue+consecutive-tick). No fresh entrance, no re-lock.
@@ -277,6 +314,7 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         '【說人話】多數的話是直說的——問路、催飯、道謝、抱怨、叫人名字；比方留給真到了那一步的時刻，'+
             '同一個比方一場戲至多用一次。兩個人說話不是猜謎，聽的人（和看戲的人）得聽得懂。',
         forceNote(input.forcing, input.privateAlone),
+        '【知覺邊界】audience 只有兩種：scene＝同場者都看得／聽得這一拍完整內容；addressed＝你故意壓低聲音、耳語或遮掩，只讓 addressed 那個人知道完整內容。不要由文字後猜，在 JSON 裡自己標清楚；沒有對象時不得標 addressed。',
         // WARMTH SOIL (not a push): when nothing is burning, ordinary tenderness is
         // legitimate DRAMA — affection is mostly accrued in these small beats, and a
         // register that only knows pressure reads loveless between the beds.
@@ -286,10 +324,10 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.consummate
             ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或（若你們往那處去了）床笫間的一下進退(一到三句)。' +
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。'
+              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。'
             : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——一到兩句，動作與話都可以帶著性子多走半步。' +
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。',
+              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。',
     ]
         .filter(Boolean)
         .join('\n');

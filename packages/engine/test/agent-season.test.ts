@@ -17,7 +17,7 @@ import { LocalClock } from '../src/adapters/local/clock.ts';
 import { runSceneLoop, makeClock, spawnWant, pickOrthogonalThreads, type SceneLoopCastMember } from '../src/index.ts';
 // Import the node-clean PURE leaf directly — the character-agent barrel is
 // tsx-only (`.js` specifiers + eager llm import) and cannot load under node --test.
-import { buildBeatSystemPrompt, pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
+import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, safeSceneRevision } from '@endless-story/runner/services/character-agent/beat-prompt';
 import {
     buildCast,
     areEstablishedLovers,
@@ -342,6 +342,40 @@ test('pronoun correctness: buildBeatSystemPrompt names a male co-star 他 (data-
     assert.ok(prompt.includes(`${su.name}是她`), `the guard names ${su.name} 她 (female)`);
     assert.ok(prompt.includes('beat 是寫入正史逐拍的敘述'), 'the action is framed as an objective ledger beat');
     assert.ok(prompt.includes('不要以「我」起筆'), 'the model must not leak first-person framing into canon');
+    assert.ok(prompt.includes('audience'), 'the model must self-tag who can perceive the exact beat');
+    assert.ok(prompt.includes('沒有已登記可拿出的私人物件'), 'empty inventory is an explicit physical constraint');
+});
+
+test('beat perception is structured and fails closed without an addressee', () => {
+    const aside = parseBeatResult(
+        '{"beat":"壓低聲音說了一句","inner":"","addressed":"柳生春","audience":"addressed"}',
+        '蘇映雪',
+    );
+    assert.equal(aside.audience, 'addressed');
+    const malformed = parseBeatResult(
+        '{"beat":"壓低聲音","inner":"","addressed":"無","audience":"addressed"}',
+        '蘇映雪',
+    );
+    assert.equal(malformed.audience, 'scene', 'addressed-only needs a real addressee');
+});
+
+test('scene reviewer cannot rewrite frozen dialogue or replace the objective action', () => {
+    const original = '偏頭一笑：「今兒這袖，只管往你手裡遞。」';
+    assert.equal(
+        safeSceneRevision(original, '偏頭一笑：「今兒這袖，只管往我手裡遞。」'),
+        original,
+        'spoken canon is immutable',
+    );
+    assert.equal(
+        safeSceneRevision('手順著他靠來的力道收緊。', '手順著她靠來的力道收緊。'),
+        '手順著她靠來的力道收緊。',
+        'a narrow prose repair is accepted',
+    );
+    assert.equal(
+        safeSceneRevision('她端起茶盞递過去。', '她忽然推開戲院大門，奔進雨裡，從此再沒回頭。'),
+        '她端起茶盞递過去。',
+        'a replacement event is rejected',
+    );
 });
 
 test('scene self-check: FakeSceneAgent.reviewScene is a pass-through AND the round loop wires it', async () => {

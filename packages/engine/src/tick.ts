@@ -28,6 +28,7 @@ import {
 import { runSceneLoop, type SceneLoopCastMember } from './core/scene-loop.ts';
 import { computeSpatialRouting } from './core/spatial-routing.ts';
 import type { ArchivePort, CanonicalSceneEvent, ClockPort, RecallPort, SceneAgentPort } from './ports.ts';
+import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -232,6 +233,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     stateLine: stateLine(member.state.fatigue, member.state.hunger),
                     innerSecret: member.secret,
                     role: member.role,
+                    bodyFact: member.gender,
                     ties,
                 };
             }),
@@ -249,6 +251,34 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             agent,
         });
 
+        // Freeze only after the existing scene checker has repaired hard prose
+        // errors. The checker may edit text, never actors/order/count; structured
+        // perception metadata remains attached to the original beat.
+        if (loop.beats.length > 0 && ids.length > 1) {
+            const reviewed = await agent.reviewScene({
+                worldPremise: w.sagaPremise,
+                venue: sceneName,
+                participants: ids.map((id) => {
+                    const member = world.castById(id)!;
+                    return {
+                        name: member.name,
+                        bodyFact: member.gender,
+                        role: member.role,
+                        carried: [],
+                        relationship: Object.values(world.selfTies(id, ids)).join('、') || undefined,
+                    };
+                }),
+                beats: loop.beats.map((beat) => ({ name: beat.name, text: beat.text, inner: beat.inner })),
+            });
+            if (reviewed?.beats.length === loop.beats.length && reviewed.beats.every((beat, i) => beat.name === loop.beats[i].name)) {
+                loop.beats = loop.beats.map((beat, i) => ({
+                    ...beat,
+                    text: reviewed.beats[i].text,
+                    inner: reviewed.beats[i].inner ?? beat.inner,
+                }));
+            }
+        }
+
         const eventId = `${w.sagaId}:d${today}:t${nowTick}:${sid}`;
         const event: CanonicalSceneEvent = {
             v: 1,
@@ -265,6 +295,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 characterId: b.characterId,
                 name: b.name,
                 text: b.text,
+                addressed: b.addressed,
+                audience: b.audience ?? 'scene',
+                perceiverIds: deriveBeatPerceiverIds(b, ids.map((id) => ({ id, name: world.nameById(id) }))),
                 inner: b.inner || undefined,
             })),
         };
@@ -322,7 +355,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     ties: Object.entries(world.selfTies(id, ids)).map(([oid, t]) => `對${world.nameById(oid)}：${t}`).join('\n') || undefined,
                     venue: sceneName,
                     clock: clockLabel,
-                    beats: loop.beats.map((b) => ({ name: b.name, text: b.text })),
+                    beats: projectEventBeatsForWitness(event, id),
                     castBodies: ids.map((cid) => {
                         const x = world.castById(cid)!;
                         return { name: x.name, bodyFact: x.gender, role: x.role };

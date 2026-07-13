@@ -8,7 +8,7 @@
  */
 
 import { text as llmText } from '@endless-story/llm';
-import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, type ActBeatInput, type BeatResult } from './beat-prompt.js';
+import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, safeSceneRevision, type ActBeatInput, type BeatResult } from './beat-prompt.js';
 
 // Pure prompt surface (types + builders) lives in the node-clean leaf
 // `beat-prompt.ts`; re-exported here so the package surface is unchanged.
@@ -108,6 +108,9 @@ export interface ReviewSceneParticipant {
     role?: string;
     /** One-line canon relationship toward the others (footing for voice checks). */
     relationship?: string;
+    /** World-registered personal props. Empty means the editor must remove any
+     * pocket/sleeve prop the draft invented. */
+    carried?: string[];
 }
 
 export interface ReviewSceneInput {
@@ -141,7 +144,7 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
             .map((p) => `${p.name}＝${pronounFromBody(p.bodyFact)}（${p.bodyFact ?? '身不詳'}）`)
             .join('、');
         const who = input.participants
-            .map((p) => `- ${p.name}｜${p.role ?? '—'}｜身：${p.bodyFact ?? '不詳'}${p.relationship ? `｜與人：${p.relationship}` : ''}`)
+            .map((p) => `- ${p.name}｜${p.role ?? '—'}｜身：${p.bodyFact ?? '不詳'}｜隨身：${p.carried?.length ? p.carried.join('、') : '無登記私人物'}${p.relationship ? `｜與人：${p.relationship}` : ''}`)
             .join('\n');
         const numbered = input.beats.map((b, i) => `${i}｜${b.name}：${b.text}`).join('\n');
         const client = llmText.createTextClient({ kind: 'cheap' });
@@ -159,6 +162,7 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
                 '這類要嘛改成就地取材、要嘛改成用話語提及那件別處的東西；' +
                 '⑦比喻落地——把「帳／債／欠」這類心裡的比喻坐實成憑空冒出的有形物（借據、文書、銀錢）。' +
                 '⑧隨身物歸屬——別人的貼身物件（誰的懷錶、誰的摺扇）憑空出現在另一人手裡；除非這場戲裡真演了交接，物件跟著主人走。' +
+                '引號裡是角色已經說出口的正史台詞，一字不得改；代詞若是角色自己說的，也保留為那個人的說法。' +
                 '欠的是情分就照情分討：改成話語、動作、眼神，把那紙上的道具拿掉。' +
                 '沒問題的拍，text 原樣照抄。只輸出 JSON：{"beats":[{"i":序號,"text":"改後這一拍"}...]}。不要 markdown。',
             messages: [
@@ -193,7 +197,9 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
                 const escNm = nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 t = t.replace(new RegExp(`^${escNm}\\s*[:：]\\s*`), '');
             }
-            if (Number.isInteger(idx) && t) revisedById.set(idx, t);
+            if (Number.isInteger(idx) && input.beats[idx] && t) {
+                revisedById.set(idx, safeSceneRevision(input.beats[idx].text, t));
+            }
         }
         return {
             beats: input.beats.map((b, i) => ({ name: b.name, text: revisedById.get(i) ?? b.text, inner: b.inner })),

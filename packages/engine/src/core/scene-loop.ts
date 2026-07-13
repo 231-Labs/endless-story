@@ -104,6 +104,7 @@ export interface SceneBeat {
     text: string;
     inner: string;
     addressed?: string;
+    audience?: 'scene' | 'addressed';
 }
 
 export interface SceneLoopResult {
@@ -317,6 +318,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             text: r.beat,
             inner: r.inner,
             addressed: r.addressed,
+            audience: r.audience,
         });
         if (!result.actedCharacterIds.includes(actor.characterId)) result.actedCharacterIds.push(actor.characterId);
         if (synthetic) {

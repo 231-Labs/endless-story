@@ -27,12 +27,22 @@ const quiet = () => {}; // silence per-beat logging in the test
 class RecordingSessionAgent extends FakeSceneAgent {
     observations: ObserveSceneInput[] = [];
     rippleRosters: string[][] = [];
+    sceneReviews: Array<Parameters<FakeSceneAgent['reviewScene']>[0]> = [];
     async observeScene(input: ObserveSceneInput): Promise<void> {
         this.observations.push(input);
     }
     async judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]> {
         this.rippleRosters.push(input.roster.map((member) => member.characterId));
         return [];
+    }
+    async reviewScene(input: Parameters<FakeSceneAgent['reviewScene']>[0]) {
+        this.sceneReviews.push(input);
+        return {
+            beats: input.beats.map((beat, index) => ({
+                ...beat,
+                text: index === 0 ? `${beat.text}〔已校〕` : beat.text,
+            })),
+        };
     }
 }
 
@@ -77,6 +87,15 @@ test('8-tick run + restart continues, with mechanical counters', async () => {
         );
         assert.ok(deliveries.every((item) => event.witnessIds.includes(item.characterId)), 'no off-scene delivery');
     }
+    assert.ok(agent.sceneReviews.length > 0, 'multi-character scenes run the quality review before freezing');
+    assert.ok(
+        agent.sceneReviews.every((review) => review.participants.every((p) => Boolean(p.bodyFact))),
+        'the review receives data-driven body facts for pronoun repair',
+    );
+    assert.ok(
+        objectiveEvents.some((event) => event.beats[0]?.text.endsWith('〔已校〕')),
+        'the repaired text, not the raw beat, is what enters canonical events',
+    );
     assert.equal(agent.rippleRosters.length, objectiveEvents.length, 'each event gets exactly one ripple judgment');
     for (let i = 0; i < objectiveEvents.length; i++) {
         assert.deepEqual(

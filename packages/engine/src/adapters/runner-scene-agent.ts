@@ -25,6 +25,7 @@ import type {
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
 } from '../ports.ts';
+import { projectEventBeatsForWitness } from '../core/scene-perception.ts';
 import {
     coerceRewriteReply,
     type RegenerateWantInput,
@@ -130,9 +131,10 @@ export class RunnerSceneAgent implements SceneAgentPort {
             persona: input.persona,
         });
         if (!identity) return;
-        const lines = input.event.beats.map((b) => {
+        const perceived = projectEventBeatsForWitness(input.event, input.characterId);
+        const lines = input.event.beats.map((b, index) => {
             const own = b.characterId === input.characterId && b.inner ? `（我心裡：${b.inner}）` : '';
-            return `${b.name}：${b.text}${own}`;
+            return `${perceived[index].name}：${perceived[index].text}${own}`;
         });
         await this.sessions.observe(
             identity,

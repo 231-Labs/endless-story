@@ -15,8 +15,8 @@ const publicEvent = {
     visibility: 'public' as const,
     witnessIds: ['su', 'liu', 'qiao'],
     beats: [
-        { characterId: 'su', name: '蘇映雪', text: '把溫茶推到生春手邊。' },
-        { characterId: 'liu', name: '柳生春', text: '接過茶盞，偏頭一笑。' },
+        { characterId: 'su', name: '蘇映雪', text: '把溫茶推到生春手邊。', audience: 'scene' as const, perceiverIds: ['su', 'liu', 'qiao'] },
+        { characterId: 'liu', name: '柳生春', text: '接過茶盞，偏頭一笑。', audience: 'scene' as const, perceiverIds: ['su', 'liu', 'qiao'] },
     ],
 };
 
