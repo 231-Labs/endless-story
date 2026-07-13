@@ -1259,6 +1259,10 @@ export async function runRound(
     const { active, occupiedSkipped } = determineActive(cast, byName, part, reh, deep, night);
     out.occupiedTurns.n += occupiedSkipped;
 
+    // 世相 (the day's living texture): meals, wages sung for, street walks —
+    // collected so the 說書人 can weave LIFE around the drama (user: 營生描寫
+    // 太少). Zero extra LLM cost — same weave, richer material.
+    const worldTexture: string[] = [];
     const roundRec: RoundRecord = {
         tick: clock.currentTick,
         day: clock.day,
@@ -1599,6 +1603,7 @@ export async function runRound(
                 c.todayLedger.set(`transit:${street}:${clock.currentTick}`, line);
                 await writeMem(recall, c.id, line, seen.length ? 4 : 3, clock.day);
                 if (seen.length) log(`    · 〔路上〕${c.name} 路過 ${street}，${sight}。`);
+                worldTexture.push(`${c.name}打${from}往${dest}，路過${street}，${sight}`);
                 // IN-THE-MOMENT reaction (§C-level agency): the walker decides NOW —
                 // most sightings pass; engaging costs the errand (the finite 時辰:
                 // duty wage, the person they meant to find — all slip, mechanically,
@@ -1643,6 +1648,7 @@ export async function runRound(
                     vendor.ledger.push({ day: clock.day, note: `${c.name}來買過${bought}` });
                     vendor.heat += 1;
                     log(`    · 〔路上〕${c.name} 路過 ${street}，同 ${vendor.name} 買了${bought}。`);
+                    worldTexture.push(`${c.name}在${street}同${vendor.name}買了${bought}`);
                     if (vendor.heat === 5) {
                         log(`    · 〔世界生長〕${vendor.name} 的攤子這些日子被戲班的人踏熟了——這條命有了自己的份量（惰性生成候選）。`);
                     }
@@ -1908,7 +1914,7 @@ export async function runRound(
         try {
             const woven = await agent.weaveTickChapter({
                 clock: `第${clock.day}日·${part}`,
-                lines,
+                lines: [...lines, ...worldTexture.slice(0, 6).map((t) => `[世相] ${t}。`)],
                 prevTail,
                 castBodies: castBodies(partChars),
                 context,
@@ -1956,6 +1962,7 @@ export async function runRound(
         if (econ.dutyWage > 0 && pull.duty && pull.venue && atWork) {
             c.money += econ.dutyWage;
             log(`    · 〔工錢〕${c.name} 在 ${c.venue} 當值，掙下 ${econ.dutyWage}（身上 ${c.money}）。`);
+            worldTexture.push(`${c.name}這個時辰在${c.venue}當值營生（${occLabel(c.occupation)}的活計）`);
         }
         if (econ.dailyAllowance > 0 && part === '日午') {
             c.money += econ.dailyAllowance;
@@ -1980,6 +1987,7 @@ export async function runRound(
         if (eat(c, spot.cost)) {
             out.meals[c.id] = (out.meals[c.id] ?? 0) + 1;
             log(`    · 〔吃食〕${c.name} ${spot.line}（花去 ${spot.cost}，餘 ${c.money}）。`);
+            worldTexture.push(`${c.name}${spot.line}`);
         } else if (c.hunger >= HUNGER_STARVING) {
             log(`    · 〔囊空〕${c.name} 餓得發慌，摸遍身上只有 ${c.money}，連碗麵都吃不起，硬撐著。`);
         } else {
