@@ -62,11 +62,15 @@ export class RunnerSceneAgent implements SceneAgentPort {
 
     constructor(options: RunnerSceneAgentOptions = {}) {
         if (options.sessionDir) {
-            const client = llmText.createTextClient({ kind: 'primary' });
+            // Do not resolve a provider while Next.js imports /api/tick during
+            // build/page-data collection. Configuration is required only when a
+            // real character turn actually asks the model to complete text.
+            let client: ReturnType<typeof llmText.createTextClient> | undefined;
             this.sessions = new PersistentCharacterSessions(
                 new FileCharacterSessionStore(path.resolve(options.sessionDir), options.sessionKey),
                 {
                     complete: async (input) => {
+                        client ??= llmText.createTextClient({ kind: 'primary' });
                         const res = await client.chat({
                             model: client.defaultModel,
                             system: input.system,
