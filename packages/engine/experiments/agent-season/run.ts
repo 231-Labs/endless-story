@@ -200,6 +200,19 @@ async function main(): Promise<void> {
     const play = newPlay('', 'genesis');
     log(`\nshowrunner 中心命題：${showrunner.centralQuestion}`);
     log(`死線（世界事實）：第${showrunner.deadlineDay}日·${showrunner.finalePart} ${showrunner.finaleName}｜排練投入門檻 ≥${showrunner.rehearsalEffortThreshold}`);
+    // 注夢 (§2.51, owner whisper): SEASON_DREAM='名:日:夢文;名:日:夢文' — at that
+    // day's DEEP NIGHT the dream lands as a memory (kind dream, high importance);
+    // the next regeneration reads it as a thread. One whisper, no steering.
+    const dreams = (process.env.SEASON_DREAM ?? '')
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => {
+            const [name, day, ...rest] = s.split(':');
+            return { name: name?.trim(), day: Number(day), text: rest.join(':').trim() };
+        })
+        .filter((d) => d.name && d.day > 0 && d.text);
+
     const { buildDormants } = await import('./world.ts');
     const dormants = buildDormants();
     if (RESTORE_SNAP) restoreDormants(dormants, RESTORE_SNAP);
@@ -207,6 +220,14 @@ async function main(): Promise<void> {
         dormants,
         checkpoint: (endedTick, establishedPairs) => {
             fs.writeFileSync(path.join(outDir, 'cast-state.json'), JSON.stringify(snapshotCast(cast, endedTick, establishedPairs, dormants)));
+            const endedDay = Math.floor(endedTick / 6);
+            for (const d of dreams) {
+                if (d.day !== endedDay + 1) continue; // lands on the NIGHT before day d.day
+                const target = cast.find((x) => x.name === d.name);
+                if (!target) continue;
+                void recall.remember(target.id, `昨夜有夢，醒來心口還跳：${d.text}`, { kind: 'dream', importance: 8, day: endedDay + 1 });
+                log(`  〔注夢〕${d.name} 這一夜有夢——${d.text.slice(0, 40)}…`);
+            }
         },
         cast,
         planner,

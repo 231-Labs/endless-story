@@ -98,6 +98,7 @@ function mealSpotFor(c: Char): { line: string; cost: number } | null {
 import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
 import { pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
 import { bumpActorFatigue, pickOrthogonalThreads, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
+import { isBondLayer } from '../../src/core/want-core.ts';
 import {
     type Play,
     PRODUCTION,
@@ -841,6 +842,8 @@ function worldPressureFor(c: Char, day: number, cfg: SeasonConfig): string {
     const parts = [countdownLine(cfg, day), `班子這一季的大事：${cfg.centralQuestion}`];
     if (c.money <= 8) parts.push(`你手頭只剩 ${c.money} 個錢，緊得很，一頓飯的錢都要掂量。`);
     if (c.hunger >= 0.6) parts.push('你餓著，肚裡空得發慌，這也是件要緊的事。');
+    // ZERO-SUM TIME made visible: hours spent elsewhere are hours off the barre.
+    if (c.occupation === 'troupe' && c.craft < 0.62) parts.push('你這些日子疏了功，手上明顯生了——台上的身段騙不了行家，這件事拖不得。');
     return parts.join('\n');
 }
 
@@ -1192,7 +1195,43 @@ export async function runRound(
             // POV DAILY REFLECTION (narrative-subjective layer): a first-person, possibly
             // biased account of THIS character's day (their ledger + wants + self-model),
             // stored separately from the objective 時辰 章回. Read BEFORE the ledger clear.
-            const dayText = [...c.todayLedger.values()].join('\n').slice(0, 1200);
+            // 冷淡感知 (attention is zero-sum, and people NOTICE): for each person
+            // this character's heart is tied to (established partner / live bond-want
+            // target), how long since they last shared a scene? ≥2 days apart → the
+            // night mind gets the FACT plus whatever this character actually
+            // remembers about them lately (own memories only — no omniscience).
+            // Whether it reads as 「TA忙」 or 「TA變心了」 is the character's own call.
+            const tieNotes: string[] = [];
+            const tieIds = new Set<string>();
+            for (const pk of out.establishedDyn) {
+                const [x, y] = pk.split('|');
+                if (x === c.id) tieIds.add(y);
+                if (y === c.id) tieIds.add(x);
+            }
+            for (const w of c.wants) {
+                if (!w.retired && isBondLayer(w.layer) && w.target) {
+                    const t = byId.get(w.target) ?? [...byId.values()].find((o) => o.name === w.target);
+                    if (t && t.id !== c.id) tieIds.add(t.id);
+                }
+            }
+            for (const tid of tieIds) {
+                const t = byId.get(tid);
+                if (!t || t.dead) continue;
+                const pk = [c.id, tid].sort().join('|');
+                const last = out.lastScene.get(pk);
+                const daysApart = last ? Math.floor((clock.currentTick - last.tick) / deps.ticksPerDay) : 99;
+                if (daysApart < 2) continue;
+                let recent: string[] = [];
+                try {
+                    recent = (await recall.recall(c.id, t.name, 2, clock.day)).map((m) => m.text.slice(0, 60));
+                } catch {
+                    /* non-fatal */
+                }
+                tieNotes.push(
+                    `（你心裡繫著的${t.name}，已${daysApart >= 99 ? '許久' : `${daysApart}日`}沒同你單獨說過話。你近來記得的：${recent.join('；') || '竟想不起什麼'}。這意味著什麼，你自己掂。）`,
+                );
+            }
+            const dayText = [[...c.todayLedger.values()].join('\n'), ...tieNotes].join('\n').slice(0, 1400);
             try {
                 const refl = await agent.povReflect({
                     name: c.name,
@@ -1257,6 +1296,8 @@ export async function runRound(
             c.scenesToday = 0;
             c.addressedToday.clear();
             c.occupiedRestOfDay = false; // a new day: the spent character rises again
+            if (c.occupation === 'troupe' && !c.practicedToday) c.craft = Math.max(0.2, c.craft - 0.015);
+            c.practicedToday = false;
         }
         out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
         out.confidedToday.clear(); // a new day may bring a new confidence
@@ -1556,6 +1597,10 @@ export async function runRound(
                 out.rehearsalGathering.push({ tick: clock.currentTick, part, venue: v, members: memberChars.map((c) => c.name) });
                 for (const m of memberChars) addCast(play, m.id, at); // reach 'cast' first
                 for (const m of memberChars) accumulateEffort(play, m.id, PRODUCTION.effortPerGathering, at);
+                for (const m of memberChars) {
+                    m.practicedToday = true;
+                    m.craft = Math.min(1, m.craft + 0.02);
+                }
                 bumpReputeFromEffort(play, memberChars.length);
             }
         }

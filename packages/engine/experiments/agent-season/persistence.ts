@@ -41,6 +41,8 @@ export interface CharSnapshot {
     seasonsLived?: number;
     /** The EVOLVED unspoken matter (心事自改). Absent → seed secret stands. */
     secret?: string;
+    /** 技藝手感 — practice keeps it, neglect lets it slide (zero-sum time). */
+    craft?: number;
 }
 
 /** A versioned, JSON-serializable snapshot of the whole cast's mutated overlay. */
@@ -75,6 +77,7 @@ export function snapshotCast(cast: Char[], savedTick = 0, establishedPairs: stri
             carried: c.carried.length ? c.carried.map((it) => ({ ...it })) : undefined,
             seasonsLived: c.seasonsLived,
             secret: c.secret,
+            craft: c.craft,
         };
     }
     return {
@@ -127,6 +130,7 @@ export function restoreCast(cast: Char[], snap: CastSnapshot): string[] {
         c.hunger = s.hunger;
         c.seasonsLived = (s.seasonsLived ?? 0) + 1; // one more year has passed
         if (s.secret) c.secret = s.secret; // the matter kept the shape it grew into
+        if (typeof s.craft === 'number') c.craft = s.craft;
         restored.push(c.id);
     }
     return restored;

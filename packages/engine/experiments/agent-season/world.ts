@@ -180,6 +180,12 @@ export interface Char {
      *  closing, chances thinning) so want-regeneration is grounded in a lifecycle, not an
      *  immortal drift. Persisted in the season snapshot. */
     seasonsLived: number;
+    /** 技藝手感 (0..1): the zero-sum face of TIME — hours spent on love are hours
+     *  not spent at the barre. Practice bumps it; neglect decays it; a slid hand
+     *  becomes 世道 pressure (「手生了」) the character herself must answer. */
+    craft: number;
+    /** did TODAY include real practice (rehearsal gathering / work-venue craft)? */
+    practicedToday: boolean;
 }
 
 /** A knows B's ROUTINE only if they KNOW each other — A carries a relationship view
@@ -372,6 +378,8 @@ export function buildCast(only?: string[]): Char[] {
             money: s.money, // DATA-seeded starting coin
             hunger: 0,
             carried: (CANON[s.id].carried ?? []).map((it) => ({ ...it })),
+            craft: 0.7, // 技藝手感 (0..1): practice keeps it warm, neglect lets it slide
+            practicedToday: false,
             waitingFor: null,
             occupiedRestOfDay: false,
             dead: false,
