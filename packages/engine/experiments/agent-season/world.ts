@@ -19,7 +19,7 @@ import { newWant, type Want } from '../../src/index.ts';
 import { CANON, type SeedMemory } from './canon-seed.ts';
 import { abilityOf } from './production.ts';
 
-export type Occupation = 'troupe' | 'banzhu' | 'geinu' | 'guest';
+export type Occupation = 'troupe' | 'banzhu' | 'geinu' | 'guest' | 'reporter';
 
 /**
  * PINNED world-premise (always injected) — stops the LLM drifting into
@@ -57,6 +57,8 @@ export const VENUES: Venue[] = [
     // STREET / FOOD grounds — neutral meeting places AND where people eat (攤子/小吃/食肆).
     { name: '霞飛路商店街', kind: 'public', hint: '霞飛路上一長排店鋪食攤，綢緞洋貨、餛飩生煎樣樣有，逛街的、討生活的都在這打尖', isPublic: true },
     { name: '戲園前街', kind: 'public', hint: '戲園門前那條街，擺著茶湯、麵攤、糖粥的小吃攤子，散戲進戲的人在這歇腳吃食', isPublic: true },
+    { name: '申報館', kind: 'public', hint: '《春申快訊》報館，油墨味沖鼻，排字房的鉛字聲日夜不停，牆上釘滿當期大樣', isPublic: true },
+    { name: '報館後閣', kind: 'home', hint: '方競西在報館樓上的小閣樓，稿紙堆到床沿，窗正對霞飛路的燈', isPublic: false },
 ];
 
 export const venueByName = new Map(VENUES.map((v) => [v.name, v]));
@@ -286,6 +288,21 @@ const SPECS: CastSpec[] = [
         wants: [
             { layer: '癡', desc: '想法子親近柳生春，捧他捧成名角', target: '柳生春', weight: 0.7, sat: 0.3, resistance: 5 },
             { layer: '世', desc: '弄明白自己要的到底是台上那位，還是卸了妝那個人', weight: 0.48, sat: 0.4, resistance: 5 },
+        ],
+    },
+    {
+        id: '方競西', occupation: 'reporter', homeVenue: '報館後閣', workVenue: '申報館',
+        socialFact: '你是《春申快訊》的頭牌記者，筆名競西，版面就是你的地盤，梨園內外都賣你三分面子。',
+        bodyFact: '男子',
+        money: 30, // 頭牌記者，稿費過得去
+        coreIdentity: [
+            '我是方競西，《春申快訊》的筆桿子，上海灘的事瞞得過巡捕房瞞不過我。',
+            '看客有知道的權利——這話我信了半輩子，也疑了半輩子。',
+        ],
+        views: [['沈雪笙', '春雪社的班主，封箱多年重開戲箱，這班子藏著故事']],
+        wants: [
+            { layer: '志', desc: '挖出春雪社重啟戲箱背後的頭條，讓競西二字再響一回', weight: 0.7, sat: 0.2, resistance: 5 },
+            { layer: '愧', desc: '打聽白蘭的下落，說不清是想賠罪還是想寫那篇沒人寫得出的稿', weight: 0.5, sat: 0.2, resistance: 8 },
         ],
     },
     {

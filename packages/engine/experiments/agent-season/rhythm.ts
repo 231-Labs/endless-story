@@ -62,6 +62,25 @@ export function rhythmPull(c: Char, part: PartOfDay, reh: RehearsalCall): Rhythm
             return geinuRhythm(c, part);
         case 'guest':
             return guestRhythm(c, part);
+        case 'reporter':
+            return reporterRhythm(c, part);
+    }
+}
+
+function reporterRhythm(c: Char, part: PartOfDay): RhythmPull {
+    switch (part) {
+        case '清晨':
+            return { venue: '申報館', active: true, duty: true, note: '清晨到報館交昨夜的稿、看今日的版——截稿是天，主筆的臉就是天氣。' };
+        case '日午':
+            return { venue: '戲園前街', active: true, note: '晌午出門採風，戲園前街的茶湯攤、糖粥擔都是他的眼線，一碗茶錢一句話。' };
+        case '晡時':
+            return { venue: '霞飛路商店街', active: true, note: '午後在霞飛路商店街轉悠，聽街面的風聲，看誰家的馬車停在誰家門口。' };
+        case '黃昏':
+            return { venue: '包廂茶座', active: true, note: '傍晚進戲園茶座蹲點——票自己掏錢，戲他真看，人他更看。' };
+        case '入夜':
+            return { venue: '包廂茶座', active: true, note: '入夜看戲盯人，散戲後跟著人流走一段，聽足看客的嘴。' };
+        case '深宵':
+            return { venue: '申報館', active: true, duty: true, note: '深宵回報館趕稿，鉛字房的燈陪他到後半夜。' };
     }
 }
 
@@ -166,6 +185,7 @@ export const VENUE_CLUSTER: Record<string, string> = {
     戲園前街: '戲園',
     會樂里寓所: '霞飛里', 霞飛路歌場: '霞飛里', 霞飛路: '霞飛里', 霞飛路商店街: '霞飛里',
     沈宅小樓: '沈宅', 白公館繡樓: '白公館',
+    申報館: '報館', 報館後閣: '報館',
 };
 export const clusterOf = (venue: string): string => VENUE_CLUSTER[venue] ?? venue;
 export const sameCluster = (a: string, b: string): boolean => !!a && !!b && clusterOf(a) === clusterOf(b);
@@ -225,6 +245,8 @@ function routineNote(c: Char, reh: RehearsalCall): string {
             return `${n}是班主，日午到入夜都坐鎮後台妝閣看戲看帳、不好打攪，深宵才回沈宅歇著。`;
         case 'guest':
             return `${n}是白家千金：晌午逛霞飛路，傍晚起在戲園包廂聽戲捧場，深宵回白公館。`;
+        case 'reporter':
+            return `${n}是《春申快訊》的記者：清晨與深宵在申報館趕稿脫不開身；白日在街面採風（戲園前街、霞飛路一帶），黃昏入夜多半在戲園茶座看戲盯人。`;
     }
 }
 
@@ -241,5 +263,5 @@ export function activeVenues(cast: Char[], part: PartOfDay, reh: RehearsalCall):
 
 /** Occupation label for reports. */
 export function occLabel(o: Occupation): string {
-    return { troupe: '戲班', banzhu: '班主', geinu: '歌女', guest: '客' }[o];
+    return { troupe: '戲班', banzhu: '班主', geinu: '歌女', guest: '客', reporter: '記者' }[o];
 }
