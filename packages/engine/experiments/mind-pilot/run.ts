@@ -115,17 +115,26 @@ const log = (s: string): void => {
     console.log(s);
 };
 
-/** Simple rhythm facts (world truths delivered as percepts, never commands). */
-function rhythmFact(id: string, part: string): string {
+/** World facts delivered as percepts — never commands. PHYSICS v2 adds:
+ *  ① whereabouts intel (六七年舊識自然曉得彼此的日程 — knowledge is what makes
+ *    seeking POSSIBLE; v1 minds couldn't find each other even if they wanted),
+ *  ② the day-3 大會串: each livelihood independently pulls both to the SAME
+ *    stage — the world's collision, their choice to answer it. */
+function rhythmFact(id: string, part: string, day: number): string {
+    const finale = day === DAYS;
     if (id === '柳生春') {
-        if (part === '日午' || part === '晡時') return '這個時辰班裡照例排戲吊嗓（雲錦台戲台），你的營生在那裡。';
+        const intel = '（你曉得金鳳的日子：白日多半在會樂里寓所得閒，入夜在霞飛路歌場唱堂會。）';
+        if (finale && (part === '黃昏' || part === '入夜')) return `今夜年關大會串，你領銜《白蛇傳》，雲錦台戲台開鑼——聽說霞飛路歌場也受邀來助唱。${intel}`;
+        if (part === '日午' || part === '晡時') return `這個時辰班裡照例排戲吊嗓（雲錦台戲台），你的營生在那裡。${intel}`;
         if (part === '深宵') return '夜深了，各處都歇了。';
-        return '';
+        return intel;
     }
     if (id === '金鳳') {
-        if (part === '入夜') return '入夜是你唱堂會的時辰（霞飛路歌場），你的營生在那裡。';
+        const intel = '（你曉得柳生春的日子：白日在戲園一帶排戲吊嗓，深宵歇在後台小廂房。）';
+        if (finale && (part === '黃昏' || part === '入夜')) return `今夜雲錦台年關大會串，歌場受邀去助唱，妳掛頭牌——這是霞飛路的臉面，去不去在妳。柳生春領銜開鑼。${intel}`;
+        if (part === '入夜') return `入夜是你唱堂會的時辰（霞飛路歌場），你的營生在那裡。${intel}`;
         if (part === '深宵') return '散場了，夜深了。';
-        return '';
+        return intel;
     }
     return '';
 }
@@ -148,7 +157,7 @@ async function main(): Promise<void> {
                 [
                     `【第${day}日·${part}】你在${m.venue}。`,
                     together ? `${m === liu ? jin.name : liu.name}也在這裡。` : '',
-                    rhythmFact(m.id, part),
+                    rhythmFact(m.id, part, day),
                     extra ?? '',
                     '此刻你？',
                 ]
@@ -156,13 +165,26 @@ async function main(): Promise<void> {
                     .join(' ');
 
             if (!together) {
+                const movedTo: Record<string, string | null> = {};
                 for (const m of minds) {
                     const act = await m.perceiveAndAct(percept(m));
                     log(`  ${m.name} @ ${m.venue}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
-                    if (act.去 && VENUE_NAMES.includes(act.去)) {
-                        m.venue = act.去;
-                        log(`  → ${m.name} 動身去了 ${act.去}`);
+                    movedTo[m.id] = act.去 && VENUE_NAMES.includes(act.去) ? act.去 : null;
+                    if (movedTo[m.id]) {
+                        m.venue = movedTo[m.id]!;
+                        log(`  → ${m.name} 動身去了 ${movedTo[m.id]}`);
                     }
+                }
+                // STREET SIGHTING (collision physics): both out on the town this
+                // tick → each catches a far glimpse of the other; what to do with
+                // it lands in their NEXT hour's heart.
+                if (movedTo[liu.id] && movedTo[jin.id]) {
+                    for (const m of minds) {
+                        const other = m === liu ? jin : liu;
+                        m.transcript.push({ role: 'user', content: `（路上你遠遠瞧見${other.name}也在街面上，往${other.venue}那頭去了。人聲車聲裡，一晃就過去了。）` });
+                        m.transcript.push({ role: 'assistant', content: '（看在眼裡，記在心裡。）' });
+                    }
+                    log(`  〔街面〕兩人在城裡錯身而過，彼此都瞧見了。`);
                 }
             } else {
                 // co-located: alternating live exchange
