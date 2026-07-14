@@ -81,6 +81,21 @@ export function parseWhisper(
     return targetName ? { targetName, content } : null;
 }
 
+/** Letter (捎信): "給誰｜信裡的話" → recipient may be ANYWHERE. Unlike a
+ *  whisper (co-present, instant), a letter crosses distance and arrives on a
+ *  DELAY (the postman's real job) — the physic that unblocks cross-venue
+ *  contact when腿 alone can't reach. Recipient resolves against the whole
+ *  cast, not just the present room. */
+export function parseLetter(
+    field: string,
+    castNames: string[],
+): { toName: string; content: string } | null {
+    const [rcvName, content] = field.split(/[｜|]/).map((s) => s.trim());
+    if (!rcvName || !content) return null;
+    const toName = castNames.find((n) => rcvName.includes(n) || n.includes(rcvName));
+    return toName ? { toName, content } : null;
+}
+
 /** Bolting/opening one's own door is an act the world parses. */
 export function parseDoorIntent(narration: string): 'lock' | 'unlock' | null {
     if (/閉門|落閂|上閂|插上門|鎖上門|閂上/.test(narration)) return 'lock';

@@ -9,6 +9,7 @@ import {
     parseGiftNarration,
     parseGiftField,
     parseWhisper,
+    parseLetter,
     parseDoorIntent,
     sightingPairs,
     SceneFeed,
@@ -75,6 +76,15 @@ test('whisper: target resolves among the co-present only', () => {
     assert.ok(w);
     assert.equal(w.targetName, '唐桂蘭');
     assert.equal(parseWhisper('白蘭｜想你。', ['唐桂蘭']), null, '不在場的人聽不見耳語');
+});
+
+// ── letters: reach anyone, not just the co-present ────────────────────────
+test('letter: recipient resolves against the whole cast, present or not', () => {
+    const l = parseLetter('柳生春｜我初三就走，你別來送。', ['柳生春', '蘇映雪', '沈雪笙']);
+    assert.ok(l);
+    assert.equal(l.toName, '柳生春');
+    assert.match(l.content, /我初三就走/);
+    assert.equal(parseLetter('沒名沒姓的話', ['柳生春']), null);
 });
 
 // ── doors ──────────────────────────────────────────────────────────────────

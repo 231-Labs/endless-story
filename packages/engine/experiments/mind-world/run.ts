@@ -42,6 +42,7 @@ import {
     parseGiftNarration,
     parseGiftField,
     parseWhisper,
+    parseLetter,
     parseDoorIntent,
     sightingPairs,
     SceneFeed,
@@ -63,6 +64,11 @@ const MEMOIR_AT = 24000;
 const SEASON = process.env.MW_SEASON ?? 'premiere';
 const BACKSTAGE = SEASON === 'backstage';
 const UNBOXING = SEASON === 'unboxing';
+/** S4 去留季: the 禁娼令 crackdown reaches 會樂里 (1925, historically grounded);
+ *  金鳳 must register (accept the label), leave 上海 for a 南洋 offer, or stay
+ *  and fight — with the good years freshly loaded into recall, and letters
+ *  now a real way to say what she can't say to a face. */
+const DEPARTURE = SEASON === 'departure';
 /** INTERLUDE (憶季): a time-machine camera on the PAST — young selves, one
  *  quiet corner of the world, no season goal, no finale. Afterwards each mind
  *  distils the days into memory lines (memories-extra.json) that future
@@ -100,6 +106,14 @@ const WORLD_EVENTS: WorldEvent[] = INTERLUDE
           { day: 2, part: '日午', occ: 'troupe', fact: '班裡賞了雙份點心錢，管事的說今兒排得早，晡時就散。' },
           { day: 3, part: '晡時', occ: 'geinu', fact: '天要落大雨，堂子裡的局散得早，姊妹們都各自家去了。' },
       ]
+    : DEPARTURE
+    ? [
+          { day: 1, part: '日午', name: '金鳳', fact: '南洋茶商的管事親自登門，遞來船票和一紙契書：初三的客船，頭等艙兩張，說你點頭就走，身份的事他來辦乾淨。' },
+          { day: 2, part: '晡時', name: '金鳳', fact: '巡捕房的人挨家挨戶來抄門牌了，記了你的名、你的行當，臨走撂下一句：限期不報，鋪保作廢。' },
+          { day: 2, part: '黃昏', name: '沈雪笙', fact: '有人來探口風：若春雪社肯出面替金鳳作個「良家清唱」的鋪保，這門牌的事或許能轉圜——但要班主擔干係。' },
+          { day: 3, part: '日午', name: '柳生春', fact: '會樂里那邊傳來風聲：金鳳收了南洋的船票，初三就走。你手一抖，撕壞了半條水袖。' },
+          { day: 4, part: '日午', name: '金鳳', fact: '茶商管事又來催了：船位不等人，明日晌午前不回話，就當你不去了，票另轉旁人。' },
+      ]
     : [
           { day: 1, part: '晡時', occ: 'geinu', fact: '歌場的堂倌捎話來：今夜有位南洋來的茶商包了廳，點名要聽你的《四季相思》，賞格開得不小。' },
           { day: 2, part: '日午', occ: 'reporter', fact: '排字房捎來口信：主編拍了桌子，這一版的空還等著你的字，明日再交不出就換人補。' },
@@ -112,7 +126,15 @@ const WORLD_EVENTS: WorldEvent[] = INTERLUDE
 const deliveredEvents = new Set<WorldEvent>();
 
 /** 世相 — the town's day, cycled if the run outlives the table. */
-const TEXTURE = INTERLUDE
+const TEXTURE = DEPARTURE
+    ? [
+          '巡捕房貼出告示：會樂里一帶的門牌限期清查登記，過期未報者，鋪保作廢、勒令遷出。',
+          '會樂里家家關起門來商量，有人連夜收拾細軟，有人去託關係、走門路。',
+          '碼頭上南洋來的客船靠了岸，招工的、招角兒的、招人下南洋的告示貼滿了棧橋。',
+          '風聲一日緊過一日，霞飛路上巡捕多了一倍，歌場堂子都掛出「良家清唱、概不留客」的水牌自保。',
+          '清查的限期就是明日。會樂里這條弄堂，過了今夜就要變天了。',
+      ]
+    : INTERLUDE
     ? [
           '入了梅，雨下下停停，弄堂裡的溼衣裳總晾不乾。',
           '難得放晴，家家把被褥抬出來曬，弄堂裡一排花花綠綠。',
@@ -146,7 +168,11 @@ const TEXTURE = INTERLUDE
 
 /** SEASON SCENARIO — the group goal is calendar physics; the ambition itself
  *  is seeded at CANON level in one mind, not directed. */
-const SEASON_NOTE: Record<string, string> = UNBOXING
+const SEASON_NOTE: Record<string, string> = DEPARTURE
+    ? {
+          '金鳳': '【你近來壓在心口的事】巡捕房要清查會樂里的門牌了，限期就這幾日——你這掛頭牌紅歌女的體面，眼看要被一紙告示打成「待遷出的堂子」。南洋來的茶商托人捎了實信：肯出重金替你贖了這身份，帶你下南洋另起爐灶，只等你點頭。走，是一條乾淨的活路；留，得低頭去登記、認那個門牌。這些年你攢的體己，本就是為了有朝一日離開這一行。可真到了要走的關口，你才發覺這城裡有一個人，是你怎麼算計都繞不過去的。',
+      }
+    : UNBOXING
     ? {
           '唐桂蘭': '【你近來壓在心口的念頭】開春曬箱的吉日就在眼前。這是衣箱師傅躲不開的本分：全班的箱子都要開、都要曬——包括角落那一口。十五年了，開不開、怎麼開、當著誰的面開，這回你躲不掉要拿主意了。',
       }
@@ -159,7 +185,7 @@ const SEASON_NOTE: Record<string, string> = UNBOXING
       };
 
 type Msg = { role: 'user' | 'assistant'; content: string };
-interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string; 贈?: string; 私?: string }
+interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string; 贈?: string; 私?: string; 信?: string }
 interface PlayScene { author: string; day: number; part: string; text: string }
 
 /** Strip the acting-JSON shell when a free-voice reply comes back wrapped. */
@@ -289,6 +315,8 @@ class Mind {
             `地方：${VENUE_NAMES.join('、')}。`,
             INTERLUDE
                 ? '【此時的世道】尋常年月，沒有大事。日子就是日子。'
+                : DEPARTURE
+                ? `【本季】巡捕房清查會樂里門牌，限期第${DAYS}日。過了那日，這條弄堂就要變天——留下的低頭登記，走的各奔前程。`
                 : UNBOXING
                 ? `【本季】出了正月，班裡告示：第3日開春吉日，啟箱曬行頭、祭祖師——全班的箱子都要見天光；第${DAYS}日夜，開春第一鑼。`
                 : BACKSTAGE
@@ -303,6 +331,7 @@ class Mind {
             '你有自己的營生與功課，不是每個時辰都要找人；對人說話時「說」裡直接說。',
             '把隨身物件送出手時，多加一欄 "贈":"物件｜給誰"——東西離了手，就真的不在你身上了。',
             '要跟在場的某一個人咬耳朵，多加一欄 "私":"對誰｜要說的話"——只有那人聽得真，旁人只看見你們低語。',
+            '要給不在跟前的人捎一封信，多加一欄 "信":"給誰｜信裡的話"——寫下就交了郵差，隔些時候才送到對方手上，話出了手收不回。',
             '在自己家裡要閉門謝客，就在「做」裡寫明閉門落閂——門閂上了，外人便進不來，叩門你聽得見。',
             occ === 'reporter'
                 ? '你另有一支筆：若你決意把稿子付印，在 JSON 裡多加一欄 "印":"明日見報的那段文字（百來字）"。見了報，滿城都讀得到，收不回來。不印就不加這欄。'
@@ -366,7 +395,7 @@ class Mind {
         try {
             const m = raw.match(/\{[\s\S]*\}/);
             const o = JSON.parse(m ? m[0] : raw) as Partial<MindAct>;
-            return { 心裡: o.心裡 ?? '', 做: o.做 ?? '', 說: o.說 || undefined, 去: o.去 || undefined, 印: o.印 || undefined, 筆: o.筆 || undefined, 贈: o.贈 || undefined, 私: o.私 || undefined };
+            return { 心裡: o.心裡 ?? '', 做: o.做 ?? '', 說: o.說 || undefined, 去: o.去 || undefined, 印: o.印 || undefined, 筆: o.筆 || undefined, 贈: o.贈 || undefined, 私: o.私 || undefined, 信: o.信 || undefined };
         } catch {
             return { 心裡: '', 做: raw.slice(0, 120) };
         }
@@ -498,6 +527,9 @@ async function main(): Promise<void> {
     /** The reporter's filed copy, if any — printed at next dawn. */
     let pendingPaper: { by: string; text: string } | null = null;
 
+    /** Letters in the postman's bag — written this tick, delivered the next. */
+    let mailbag: Array<{ from: string; to: Mind; content: string }> = [];
+
     /** THE PLAY — a world object. Minds write it; the world only stores and
      *  shows it (scoped: you read it where it physically lies, at the theatre). */
     const playbook: { title: string | null; scenes: PlayScene[]; finalNote: string | null } = {
@@ -528,10 +560,23 @@ async function main(): Promise<void> {
                 pendingPaper = null;
             }
 
+            // postman round: letters written last tick reach their reader now,
+            // wherever that reader happens to be (crosses distance — unlike a
+            // whisper — and cannot be unsaid).
+            if (mailbag.length) {
+                for (const { from, to, content } of mailbag) {
+                    to.hear(`（郵差送來一封信，是${from}的字：「${content}」）`);
+                    log(`  〔捎信〕${from} → ${to.name}：「${content.slice(0, 40)}…」`);
+                }
+                mailbag = [];
+            }
+
             const finaleFact =
                 day === DAYS && (part === '黃昏' || part === '入夜')
                     ? INTERLUDE
                         ? ''
+                        : DEPARTURE
+                        ? `今夜是清查限期的最後一夜——會樂里過了今夜就要變天。走的、留的、要說的話、要交代的人，都只剩這一夜了。`
                         : UNBOXING
                         ? `今夜開春第一鑼——封了一冬的戲台重新開鑼，滿城的人都來聽這聲響。${
                               part === '入夜' ? '這一個時辰就是開鑼正場。' : ''
@@ -558,6 +603,14 @@ async function main(): Promise<void> {
                     pendingPaper = { by: m.name, text: act.印.slice(0, 220) };
                     log(`  〔付印〕${m.name} 把稿子交了下去，明晨見報。`);
                 }
+            };
+            const takeLetter = (m: Mind, act: MindAct): void => {
+                if (!act.信) return;
+                const l = parseLetter(act.信, minds.filter((o) => o !== m).map((o) => o.name));
+                if (!l) return;
+                const to = minds.find((o) => o.name === l.toName)!;
+                mailbag.push({ from: m.name, to, content: l.content.slice(0, 300) });
+                log(`  〔寄信〕${m.name} 給 ${to.name} 寫了封信，交了郵差。`);
             };
             const takePen = async (m: Mind, act: MindAct): Promise<void> => {
                 if (m.occ !== 'troupe' && m.occ !== 'banzhu') return;
@@ -709,6 +762,7 @@ async function main(): Promise<void> {
                     takePrint(m, act);
                     await takePen(m, act);
                     takeGift(m, act, group);
+                    takeLetter(m, act);
                     takeDoor(m, act);
                     if (tryMove(m, act) === 'moved') log(`  → ${m.name} 動身去了 ${act.去}`);
                 } else {
@@ -732,6 +786,7 @@ async function main(): Promise<void> {
                             takePrint(m, act);
                             await takePen(m, act);
                             takeGift(m, act, group);
+                            takeLetter(m, act);
                             takeDoor(m, act);
                             const whisperNote = takeWhisper(m, act, group.filter((o) => !departed.has(o)));
                             if (act.說 || act.私) anySpoke = true;
@@ -788,7 +843,7 @@ async function main(): Promise<void> {
                     for (const m of inHouse) m.hear(`（今夜合樂，滿堂自己人：${sound}。）`);
                 }
             }
-            if (!BACKSTAGE && !INTERLUDE && day === DAYS && part === '入夜') {
+            if (!BACKSTAGE && !INTERLUDE && !DEPARTURE && day === DAYS && part === '入夜') {
                 const inHouse = minds.filter((m) => m.venue === '雲錦台戲台');
                 const onStage = inHouse.filter((m) => m.occ === 'troupe' && m.venue === m.work);
                 if (onStage.length) {
