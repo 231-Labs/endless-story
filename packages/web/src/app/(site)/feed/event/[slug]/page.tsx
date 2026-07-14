@@ -20,6 +20,16 @@ import {
   borrowedLineEvent,
   borrowedLineManifest,
 } from '@/lib/story-dossier/borrowed-line';
+import {
+  BROKEN_FAN_SLUG,
+  brokenFanEvent,
+  brokenFanManifest,
+} from '@/lib/story-dossier/broken-fan';
+import {
+  MIDNIGHT_INQUEST_SLUG,
+  midnightInquestEvent,
+  midnightInquestManifest,
+} from '@/lib/story-dossier/midnight-inquest';
 import { cutsApi } from '@/lib/api/index';
 
 const dossiers = {
@@ -45,6 +55,22 @@ const dossiers = {
     related: {
       href: `/feed/event/${NIGHT_TUBEROSE_SLUG}`,
       label: nightTuberoseEvent.title,
+    },
+  },
+  [BROKEN_FAN_SLUG]: {
+    event: brokenFanEvent,
+    manifest: brokenFanManifest,
+    related: {
+      href: `/feed/event/${MIDNIGHT_INQUEST_SLUG}`,
+      label: midnightInquestEvent.title,
+    },
+  },
+  [MIDNIGHT_INQUEST_SLUG]: {
+    event: midnightInquestEvent,
+    manifest: midnightInquestManifest,
+    related: {
+      href: `/feed/event/${BROKEN_FAN_SLUG}`,
+      label: brokenFanEvent.title,
     },
   },
 } as const;
