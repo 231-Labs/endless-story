@@ -30,6 +30,11 @@ import {
   midnightInquestEvent,
   midnightInquestManifest,
 } from '@/lib/story-dossier/midnight-inquest';
+import {
+  ROMANCE_LEDGER_SLUG,
+  romanceLedgerEvent,
+  romanceLedgerManifest,
+} from '@/lib/story-dossier/romance-ledger';
 import { cutsApi } from '@/lib/api/index';
 
 const dossiers = {
@@ -69,8 +74,16 @@ const dossiers = {
     event: midnightInquestEvent,
     manifest: midnightInquestManifest,
     related: {
-      href: `/feed/event/${BROKEN_FAN_SLUG}`,
-      label: brokenFanEvent.title,
+      href: `/feed/event/${ROMANCE_LEDGER_SLUG}`,
+      label: romanceLedgerEvent.title,
+    },
+  },
+  [ROMANCE_LEDGER_SLUG]: {
+    event: romanceLedgerEvent,
+    manifest: romanceLedgerManifest,
+    related: {
+      href: `/feed/event/${MIDNIGHT_INQUEST_SLUG}`,
+      label: midnightInquestEvent.title,
     },
   },
 } as const;
