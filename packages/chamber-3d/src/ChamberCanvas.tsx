@@ -22,6 +22,8 @@ export interface ChamberCanvasProps extends SceneEditProps {
   roomScale?: number;
   /** 立軸感: mist-reveal entrance + slow idle orbit (stops on first interaction). */
   cinematic?: boolean;
+  /** initial camera position override (e.g. a wide shot over multi-zone vaults). */
+  cameraPos?: [number, number, number];
 }
 
 /** Front standing spots for overlaying real character standees on a code scene. */
@@ -57,6 +59,7 @@ export function ChamberCanvas({
   envOverride,
   roomScale = 1,
   cinematic = false,
+  cameraPos,
   editable,
   selectedIndex,
   transformMode,
@@ -87,11 +90,12 @@ export function ChamberCanvas({
   const isVault = design.backdrop.style === '藏閣';
   const bright = env.timeOfDay === 'day' || env.timeOfDay === 'dawn';
   // 明閣: pull the fog back and tint it paper, or every still reads washed-out
-  const fogScale = isVault && bright ? 1.9 : 1;
-  const fogColor = isVault && bright ? '#e7dfcd' : palette.bg;
+  const fogScale = isVault && bright ? 2.6 : 1;
+  const fogColor = isVault && bright ? '#e0e3d2' : palette.bg;
   const fogNear = dims.depth * 1.4 * fogScale;
   const fogFar = (dims.depth * 5 + 14) * fogScale;
-  const camPos: [number, number, number] = [dims.width * 0.5, dims.height * 0.55, dims.depth * 0.95 + 3.4];
+  const camPos: [number, number, number] =
+    cameraPos ?? [dims.width * 0.5, dims.height * 0.55, dims.depth * 0.95 + 3.4];
 
   return (
     <Canvas
@@ -148,7 +152,7 @@ export function ChamberCanvas({
         dampingFactor={0.05}
         target={[0, dims.height * 0.34, -dims.depth * 0.15]}
         minDistance={3}
-        maxDistance={dims.width * 1.9}
+        maxDistance={dims.width * (design.platforms?.length ? 2.6 : 1.9)}
         maxPolarAngle={Math.PI * 0.52}
         autoRotate={cinematic && !interacted && !editable}
         autoRotateSpeed={0.45}

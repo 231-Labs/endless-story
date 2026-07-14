@@ -57,11 +57,22 @@ export interface SceneElement {
   params?: Record<string, unknown>;
 }
 
+/** A satellite exhibit platform (展區) floating beside the main island. */
+export interface PlatformSpec {
+  /** centre of the platform, metres from scene origin. */
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+}
+
 export interface SceneDesign {
   backdrop: { style: BackdropStyle; palette?: string[] };
   /** `y` lowers the floor plane (e.g. -0.75 puts the water below a stage). */
   floor: { type: FloorType; color?: string; y?: number };
   mood: { timeOfDay: TimeOfDay; season?: Season; weather: Weather; atmosphere?: number };
+  /** extra 展區 islands (the main island is implicit). */
+  platforms?: PlatformSpec[];
   elements: SceneElement[];
 }
 

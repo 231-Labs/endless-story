@@ -8,6 +8,7 @@ import { MeshReflectorMaterial, TransformControls } from '@react-three/drei';
 import { ChamberLights } from './ChamberLights.js';
 import { SkyBackdrop } from './SkyBackdrop.js';
 import { VaultBackdrop } from './VaultBackdrop.js';
+import { VaultScenery } from './VaultScenery.js';
 import { DisplayCurio, DisplayStill } from './VaultDisplays.js';
 import { Weather } from './Weather.js';
 import { DriftingMist } from './Mist.js';
@@ -59,6 +60,38 @@ function darkenHex(hex: string, f: number): string {
 }
 
 const SLAB_H = 0.22;
+
+/**
+ * 展區 satellite islands — matte slabs (a MeshReflectorMaterial per island
+ * would cost one extra render pass each, so only the main island mirrors).
+ */
+function SatelliteIslands({
+  platforms,
+  color,
+  timeOfDay,
+}: {
+  platforms: { x: number; z: number; width: number; depth: number }[];
+  color?: string;
+  timeOfDay: string;
+}) {
+  const top = color ?? LACQUER[timeOfDay] ?? LACQUER.day;
+  return (
+    <group>
+      {platforms.map((p, i) => (
+        <group key={i} position={[p.x, 0, p.z]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+            <planeGeometry args={[p.width, p.depth]} />
+            <meshStandardMaterial color={top} roughness={0.32} metalness={0.25} />
+          </mesh>
+          <mesh position={[0, -SLAB_H / 2 - 0.001, 0]}>
+            <boxGeometry args={[p.width, SLAB_H, p.depth]} />
+            <meshStandardMaterial color={darkenHex(top, 0.55)} roughness={0.85} metalness={0.05} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
 
 function Floor({
   type,
@@ -297,7 +330,14 @@ export function SceneRenderer({
   return (
     <group>
       {design.backdrop.style === '藏閣' ? (
-        <VaultBackdrop tone={bright ? 'day' : 'night'} />
+        <>
+          <VaultBackdrop tone={bright ? 'day' : 'night'} />
+          <VaultScenery
+            tone={bright ? 'day' : 'night'}
+            dims={dims}
+            platforms={design.platforms}
+          />
+        </>
       ) : (
         <SkyBackdrop env={env} />
       )}
@@ -309,6 +349,13 @@ export function SceneRenderer({
         dims={dims}
         timeOfDay={env.timeOfDay}
       />
+      {design.platforms?.length ? (
+        <SatelliteIslands
+          platforms={design.platforms}
+          color={design.floor.color}
+          timeOfDay={env.timeOfDay}
+        />
+      ) : null}
       <Weather weather={env.weather} dims={dims} />
       {/* 雲氣 — the 虛無 layer: mist hugging the water plane (thinner by day,
           so the exhibits stay crisp under paper light) */}
@@ -316,7 +363,7 @@ export function SceneRenderer({
         <DriftingMist
           dims={dims}
           tone={bright ? '#f2f5f1' : '#aab6c6'}
-          opacity={bright ? 0.06 : 0.16}
+          opacity={bright ? 0.1 : 0.16}
         />
       </group>
       {design.elements.map((el, i) => (

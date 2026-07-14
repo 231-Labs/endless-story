@@ -12,7 +12,7 @@ import { isDeployed, normalizeTxResult, read, tx as endlessTx } from '@endless-s
 import { getVaultInventory, type VaultInventory } from '@/lib/actions/vault-collection';
 import { curateVault } from '@/lib/actions/curate-vault';
 import { uploadVaultLayout } from '@/lib/actions/save-vault-layout';
-import { buildVaultDesign } from '@/lib/chamber/vault-design-build';
+import { buildVaultDesign, MAX_ZONES } from '@/lib/chamber/vault-design-build';
 import { acquiredVaultItems, loadAcquired } from '@/lib/chamber/shop-catalog';
 import { fetchVaultLayout, serializeVaultLayout, type VaultLayoutRoom } from '@/lib/chamber/vault-layout';
 import { audioUnlocked, playPluck, playRevealMotif, unlockAudio } from '@/lib/chamber/sound';
@@ -51,6 +51,8 @@ interface Room {
   keys: string[];
   overrides: Record<string, LayoutOverride>;
   lights: Record<string, { color: string; intensity: number }>;
+  /** 展區 count (1 = main island only); each extra zone floats a new platform. */
+  zones?: number;
   note?: string;
   props?: CurateProp[];
 }
@@ -202,6 +204,11 @@ export function ChamberView({
   const [poemIdx, setPoemIdx] = useState(0);
   const [inkOverlay, setInkOverlay] = useState(true);
   const aliveRef = useRef(true);
+
+  // 日/夜 scene tone — defaults to the site theme, overridable in-scene so
+  // both the paper-light day hall and the moonlit night hall are one tap away.
+  const [sceneTone, setSceneTone] = useState<'day' | 'night' | null>(null);
+  const sceneNight = sceneTone ? sceneTone === 'night' : isDark;
 
   const room = roomsState?.rooms.find((r) => r.id === roomsState.activeId) ?? null;
 
@@ -363,7 +370,10 @@ export function ChamberView({
     if (!inventory || !room) return null;
     const stills = inventory.stills.filter((s) => room.keys.includes(s.key));
     const curios = inventory.curios.filter((c) => room.keys.includes(c.key));
-    const base: SceneDesign = buildVaultDesign(stills, curios, { bright: !isDark });
+    const base: SceneDesign = buildVaultDesign(stills, curios, {
+      bright: !sceneNight,
+      zones: room.zones ?? 1,
+    });
     const elements = base.elements.map((el, i) => {
       const k = elKey(el, i);
       const o = room.overrides[k];
@@ -385,7 +395,7 @@ export function ChamberView({
       params: null,
       design: { ...base, elements: [...elements, ...propElements] },
     };
-  }, [inventory, room, ownerAddr, isDark]);
+  }, [inventory, room, ownerAddr, sceneNight]);
 
   const commitTransform = useCallback(
     (index: number, pos: [number, number, number], yawDeg: number, scale: number) => {
@@ -706,6 +716,23 @@ export function ChamberView({
           鏈上 v{vault?.layoutVersion ?? 0}
           {isOwner && dirty ? ' · 未保存' : ''}
         </span>
+        {/* 日/夜 — flip the hall between paper light and moonlight */}
+        <div className="inline-flex items-center rounded-full border border-[#3a332a]/25 bg-[#fbf7ec]/65 p-0.5 backdrop-blur-md dark:border-white/20 dark:bg-black/25">
+          {(['day', 'night'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setSceneTone(t)}
+              title={t === 'day' ? '晝 · 青綠山水' : '夜 · 月宮星河'}
+              className={[
+                'rounded-full px-2.5 py-1 text-xs transition-colors',
+                (t === 'night') === sceneNight ? UI.tabOn : 'text-[#6b5f4e]/80 dark:text-white/55',
+              ].join(' ')}
+            >
+              {t === 'day' ? '☀ 日' : '☾ 夜'}
+            </button>
+          ))}
+        </div>
         {isOwner ? (
           <>
             <button
@@ -912,14 +939,42 @@ export function ChamberView({
               )}
             </div>
             {panelMode === 'arrange' ? (
-              <button
-                type="button"
-                onClick={saveToChain}
-                disabled={chainSaving || !roomsState || !dirty}
-                className={['mt-3 w-full rounded-full border px-4 py-1.5 text-xs transition-colors disabled:opacity-40', UI.aiBtn].join(' ')}
-              >
-                {chainSaving ? '上鏈中…' : dirty ? '鏈上保存（所有佈置）' : '已是最新'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={saveToChain}
+                  disabled={chainSaving || !roomsState || !dirty}
+                  className={['mt-3 w-full rounded-full border px-4 py-1.5 text-xs transition-colors disabled:opacity-40', UI.aiBtn].join(' ')}
+                >
+                  {chainSaving ? '上鏈中…' : dirty ? '鏈上保存（所有佈置）' : '已是最新'}
+                </button>
+                {/* 展區 — each extra zone floats a new island platform */}
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className={['text-[10px] tracking-widest', UI.mute].join(' ')}>
+                    展區 {room?.zones ?? 1} 座{(room?.zones ?? 1) > 1 ? ' · 藏品攤展至各台' : ''}
+                  </span>
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => updateRoom((r) => ({ ...r, zones: Math.max(1, (r.zones ?? 1) - 1) }))}
+                      disabled={(room?.zones ?? 1) <= 1}
+                      title="收回一座展區"
+                      className={['rounded-full px-2.5 py-0.5 text-xs transition-colors disabled:opacity-30', UI.tabOff].join(' ')}
+                    >
+                      －
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateRoom((r) => ({ ...r, zones: Math.min(MAX_ZONES, (r.zones ?? 1) + 1) }))}
+                      disabled={(room?.zones ?? 1) >= MAX_ZONES}
+                      title="加一座展區（浮出新台子）"
+                      className={['rounded-full px-2.5 py-0.5 text-xs transition-colors disabled:opacity-30', UI.tabOff].join(' ')}
+                    >
+                      ＋
+                    </button>
+                  </div>
+                </div>
+              </>
             ) : null}
           </div>
 

@@ -26,6 +26,8 @@ export interface VaultLayoutRoom {
   keys: string[];
   overrides: Record<string, VaultLayoutOverride>;
   lights: Record<string, { color: string; intensity: number }>;
+  /** 展區 count (1 = main island only); extra zones float new platforms. */
+  zones?: number;
   note?: string;
   props?: VaultLayoutProp[];
 }

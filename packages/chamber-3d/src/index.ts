@@ -9,6 +9,7 @@ export type {
   BackdropStyle,
   FloorType,
   TableItem,
+  PlatformSpec,
 } from './scene-design.js';
 export { ChamberDiorama } from './ChamberDiorama.js';
 export { CurioPreview } from './CurioPreview.js';
