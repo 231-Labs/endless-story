@@ -64,8 +64,18 @@ const SEASON_NOTE: Record<string, string> = {
 };
 
 type Msg = { role: 'user' | 'assistant'; content: string };
-interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string }
+interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string; 贈?: string }
 interface PlayScene { author: string; day: number; part: string; text: string }
+
+/** bigram overlap — does the narration mention this object? */
+function mentionsItem(text: string, itemDesc: string): boolean {
+    const clean = itemDesc.replace(/[（(].*?[)）]/g, '');
+    for (let i = 0; i + 2 <= clean.length; i++) {
+        const gram = clean.slice(i, i + 2);
+        if (/[一-鿿]{2}/.test(gram) && text.includes(gram)) return true;
+    }
+    return false;
+}
 
 /** Strip the acting-JSON shell when a free-voice reply comes back wrapped. */
 function deshell(raw: string): string {
@@ -147,6 +157,8 @@ class Mind {
     lastToldMoney = -1;
     daysSincePractice = 0;
     practicedToday = false;
+    /** WORLD object ledger — keepsakes are mutable state, not persona text. */
+    carried: string[];
 
     constructor(id: string, occ: string, home: string, work: string, money: number) {
         this.id = id;
@@ -157,6 +169,7 @@ class Mind {
         this.work = work;
         this.venue = home;
         this.money = money;
+        this.carried = (c.carried ?? []).map((k) => k.desc);
         const ability = abilityOf(id);
         this.craftBase = 0.35 + 0.25 * ability;
         this.craft = Math.min(1, this.craftBase + 0.2);
@@ -171,7 +184,6 @@ class Mind {
             `【你是誰】${c.description}`,
             `【你心底的事（只有你自己知道）】${c.secret}`,
             `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}`,
-            c.carried?.length ? `【你隨身的物件】${c.carried.map((k) => k.desc).join('；')}` : '',
             SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
@@ -181,6 +193,7 @@ class Mind {
             '{"心裡":"念頭(一兩句)","做":"你客觀做了什麼(一兩句,第三人稱)","說":"說出口的話(沒有就空)","去":"要動身去的地方(留原地就空)"}',
             '規矩：話用人話說；「命/一輩子」是一生說一兩次的字；你只知道親歷親聞的事；',
             '你有自己的營生與功課，不是每個時辰都要找人；對人說話時「說」裡直接說。',
+            '把隨身物件送出手時，多加一欄 "贈":"物件｜給誰"——東西離了手，就真的不在你身上了。',
             occ === 'reporter'
                 ? '你另有一支筆：若你決意把稿子付印，在 JSON 裡多加一欄 "印":"明日見報的那段文字（百來字）"。見了報，滿城都讀得到，收不回來。不印就不加這欄。'
                 : '',
@@ -211,6 +224,7 @@ class Mind {
                 lines.push(`（荷包裡${purseFeel(this.money)}。）`);
                 this.lastToldMoney = this.money;
             }
+            if (this.carried.length) lines.push(`（你隨身帶著：${this.carried.join('；')}。）`);
         } else if (this.fatigue >= 1) {
             lines.push('（身子撐不住了，做什麼都提不起力氣。）');
         }
@@ -242,7 +256,7 @@ class Mind {
         try {
             const m = raw.match(/\{[\s\S]*\}/);
             const o = JSON.parse(m ? m[0] : raw) as Partial<MindAct>;
-            return { 心裡: o.心裡 ?? '', 做: o.做 ?? '', 說: o.說 || undefined, 去: o.去 || undefined, 印: o.印 || undefined };
+            return { 心裡: o.心裡 ?? '', 做: o.做 ?? '', 說: o.說 || undefined, 去: o.去 || undefined, 印: o.印 || undefined, 筆: o.筆 || undefined, 贈: o.贈 || undefined };
         } catch {
             return { 心裡: '', 做: raw.slice(0, 120) };
         }
@@ -259,7 +273,7 @@ class Mind {
     async reflect(day: number): Promise<string> {
         return this.selfTalk(
             `（夜深了，第${day}日過完。這一天在你心裡留下什麼？只對自己說，說人話——這裡不用那個 JSON 格式，直接把心裡話寫出來就好。）`,
-            400,
+            650,
         );
     }
 
@@ -269,7 +283,7 @@ class Mind {
     async plan(): Promise<string> {
         return this.selfTalk(
             '（那明日呢？天亮之後你打算怎麼辦——有什麼非做不可、非見不可、非說不可的？又有什麼要離遠些的？給自己拿個主意，一兩句，不用 JSON。）',
-            250,
+            350,
         );
     }
 
@@ -279,6 +293,16 @@ class Mind {
         return this.selfTalk(
             '（開季頭一夜，萬籟俱寂。往後這些日子，你心裡到底圖個什麼？有什麼帳非了不可、什麼事非成不可、什麼人繞不過去？只對自己說真話，三五句，不用 JSON。）',
             350,
+        );
+    }
+
+    /** SCRIPT LOCK: the banzhu's trade duty on premiere eve — read the whole
+     *  stack, settle title/scene order, POLISH role names (a roman à clef in a
+     *  town with a reporter is a hazard), and cast every member. */
+    async finalize(sceneList: string): Promise<string> {
+        return this.selfTalk(
+            `（首演在明晚，這是班主的本分：定本。你把整疊戲本鋪開通讀，現有場次——\n${sceneList}\n寫一張定本單：戲名定一個；場次取捨與先後；戲中人物名字全數潤飾過，別叫看客一眼對上班裡真人，這是要見報的東西；派角——誰演哪個，文場武場都得有著落，全班都得有戲。不用 JSON，直接寫定本單。）`,
+            900,
         );
     }
 
@@ -322,7 +346,11 @@ async function main(): Promise<void> {
 
     /** THE PLAY — a world object. Minds write it; the world only stores and
      *  shows it (scoped: you read it where it physically lies, at the theatre). */
-    const playbook: { title: string | null; scenes: PlayScene[] } = { title: null, scenes: [] };
+    const playbook: { title: string | null; scenes: PlayScene[]; finalNote: string | null } = {
+        title: null,
+        scenes: [],
+        finalNote: null,
+    };
 
     // Season eve: each mind names what it is playing for (self-authored want).
     log(`── 開季前夜（各自的圖謀） ──`);
@@ -348,7 +376,9 @@ async function main(): Promise<void> {
 
             const finaleFact =
                 day === DAYS && (part === '黃昏' || part === '入夜')
-                    ? `今夜${playbook.title ? `《${playbook.title}》` : '春雪社新戲'}首演，雲錦台開鑼——水牌貼了這些天，滿城的人都往那兒去。`
+                    ? `今夜${playbook.title ? `《${playbook.title}》` : '春雪社新戲'}首演，雲錦台開鑼——水牌貼了這些天，滿城的人都往那兒去。${
+                          part === '入夜' ? '這一個時辰就是正戲：照著本子與定本，一場一場真演下去。' : ''
+                      }`
                     : '';
 
             // group by venue for multi-party exchanges
@@ -381,7 +411,40 @@ async function main(): Promise<void> {
                 playbook.scenes.push({ author: m.name, day, part, text });
                 log(`  〔戲本〕${m.name} 寫下一場（累計 ${playbook.scenes.length} 場）：${text.replace(/\s+/g, ' ').slice(0, 80)}…`);
             };
-            for (const [, group] of atVenue) {
+            // GIFT physics: an object that leaves your hand is truly gone.
+            // Explicit 贈 field first; narrated giving of a carried keepsake
+            // (same principle as narrated writing) is parsed as intent.
+            const takeGift = (m: Mind, act: MindAct, group: Mind[]): void => {
+                let itemIdx = -1;
+                let receiver: Mind | undefined;
+                if (act.贈) {
+                    const [itemName, rcvName] = act.贈.split(/[｜|]/).map((s) => s.trim());
+                    itemIdx = m.carried.findIndex((d) => itemName && mentionsItem(itemName, d));
+                    receiver = minds.find((o) => o !== m && rcvName && (rcvName.includes(o.name) || o.name.includes(rcvName)));
+                    if (itemIdx < 0 && itemName && receiver) {
+                        // giving something not in the ledger: it comes into being in the receiver's hands
+                        receiver.carried.push(itemName);
+                        log(`  〔贈物〕${m.name} 把「${itemName}」給了 ${receiver.name}。`);
+                        receiver.hear(`（${m.name}把「${itemName}」交到了你手上。）`);
+                        return;
+                    }
+                } else {
+                    const text = act.做 + (act.說 ?? '');
+                    if (!/留給|遞給|送給|交給|留下|相贈|贈與/.test(text)) return;
+                    itemIdx = m.carried.findIndex((d) => mentionsItem(text, d));
+                    if (itemIdx < 0) return;
+                    receiver = minds.find((o) => o !== m && text.includes(o.name)) ??
+                        (group.length === 2 ? group.find((o) => o !== m) : undefined);
+                }
+                if (itemIdx < 0 || !receiver) return;
+                const [item] = m.carried.splice(itemIdx, 1);
+                receiver.carried.push(item);
+                log(`  〔贈物〕${m.name} 把「${item.slice(0, 24)}」給了 ${receiver.name}。`);
+                receiver.hear(`（${m.name}把那件東西——${item}——交到了你手上，如今在你身上了。）`);
+                m.hear(`（那件東西離了你的手，如今在${receiver.name}那裡了。）`);
+            };
+            for (const [venue, group] of atVenue) {
+                if (group.length > 1) log(`  〔${venue}〕${group.map((m) => m.name).join('、')}同在。`);
                 const nearby = (m: Mind): string => {
                     const sameCluster = minds.filter((o) => o !== m && o.venue !== m.venue && clusterOf(o.venue) === clusterOf(m.venue));
                     return sameCluster.length ? `你聽得見那頭的動靜——${sameCluster.map((o) => `${o.name}在${o.venue}`).join('、')}。` : '';
@@ -399,7 +462,8 @@ async function main(): Promise<void> {
                             ? '（案上擺著新戲的空本子——到這一刻，紙上還沒有落下一個字。水牌上的日子不等人。）'
                             : '';
                     const last = playbook.scenes[playbook.scenes.length - 1];
-                    return `（案上的戲本：${playbook.title ? `《${playbook.title}》` : '新戲'}已成${playbook.scenes.length}場。最新一場是${last.author}的筆——「${last.text.replace(/\s+/g, ' ').slice(0, 300)}…」）`;
+                    const lock = playbook.finalNote ? `（班主的定本單壓在戲本上：「${playbook.finalNote.replace(/\s+/g, ' ').slice(0, 260)}…」）` : '';
+                    return `（案上的戲本：${playbook.title ? `《${playbook.title}》` : '新戲'}已成${playbook.scenes.length}場。最新一場是${last.author}的筆——「${last.text.replace(/\s+/g, ' ').slice(0, 300)}…」）${lock}`;
                 };
                 const percept = (m: Mind, extra?: string): string =>
                     [
@@ -425,6 +489,7 @@ async function main(): Promise<void> {
                     log(`  ${m.name} @ ${m.venue}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
                     takePrint(m, act);
                     await takePen(m, act);
+                    takeGift(m, act, group);
                     if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
                         m.venue = act.去;
                         moved.push(m);
@@ -444,6 +509,7 @@ async function main(): Promise<void> {
                             log(`  ${m.name}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
                             takePrint(m, act);
                             await takePen(m, act);
+                            takeGift(m, act, group);
                             if (act.說) anySpoke = true;
                             carry = `${m.name}${act.說 ? `說：「${act.說}」` : ''}（${act.做}）`;
                             if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
@@ -503,10 +569,10 @@ async function main(): Promise<void> {
         log(`\n── 第${day}日·深宵（各自的心） ──`);
         for (const m of minds) {
             const r = await m.reflect(day);
-            log(`  〔${m.name} 夜語〕${r.slice(0, 220)}`);
+            log(`  〔${m.name} 夜語〕${r.replace(/\s+/g, ' ')}`);
             if (day < DAYS) {
                 const p = await m.plan();
-                log(`  〔${m.name} 盤算〕${p.slice(0, 160)}`);
+                log(`  〔${m.name} 盤算〕${p.replace(/\s+/g, ' ')}`);
             }
             // ── physics: sleep repays the body; the day's craft settles ──
             m.fatigue = Math.max(0, m.fatigue - (m.occ === 'reporter' ? 0.15 : 0.45));
@@ -523,11 +589,35 @@ async function main(): Promise<void> {
             }
             m.save();
         }
+        // premiere eve: the banzhu locks the script (trade duty, not direction)
+        if (day === DAYS - 1 && playbook.scenes.length) {
+            const banzhu = minds.find((m) => m.occ === 'banzhu');
+            if (banzhu) {
+                const list = playbook.scenes
+                    .map((s, i) => `${i + 1}. ${s.author} 筆：${s.text.replace(/\s+/g, ' ').slice(0, 60)}`)
+                    .join('\n');
+                playbook.finalNote = await banzhu.finalize(list);
+                log(`  〔定本〕${banzhu.name} 連夜定本：${playbook.finalNote.replace(/\s+/g, ' ').slice(0, 180)}…`);
+                banzhu.save();
+            }
+        }
     }
     fs.writeFileSync(path.join(OUT, 'history.md'), history.join('\n'));
     fs.writeFileSync(
         path.join(OUT, 'physics.json'),
-        JSON.stringify(minds.map((m) => ({ name: m.name, craft: m.craft, fatigue: m.fatigue, money: m.money })), null, 1),
+        JSON.stringify(
+            minds.map((m) => ({
+                name: m.name,
+                // craft is a PERFORMER's ledger; occupations without a practice
+                // economy do not get judged by a meter that never moves for them
+                craft: dutyParts(m.occ).length ? m.craft : null,
+                fatigue: m.fatigue,
+                money: m.money,
+                carried: m.carried,
+            })),
+            null,
+            1,
+        ),
     );
     if (playbook.scenes.length) {
         fs.writeFileSync(
@@ -535,6 +625,7 @@ async function main(): Promise<void> {
             [
                 `# ${playbook.title ? `《${playbook.title}》` : '（未題名新戲）'}`,
                 '',
+                ...(playbook.finalNote ? [`## 班主定本單\n\n${playbook.finalNote}\n`] : []),
                 ...playbook.scenes.map((s) => `## 第${s.day}日·${s.part}｜${s.author} 筆\n\n${s.text}\n`),
             ].join('\n'),
         );
