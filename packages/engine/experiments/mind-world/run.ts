@@ -51,11 +51,21 @@ const MEMOIR_AT = 24000;
 const TEXTURE = [
     '年關前落了細雪，街面上人人縮著脖子趕年貨。',
     '雪停了，各家鋪子掃雪掛紅，年味一日濃過一日。',
-    '大會串的水牌今晨貼出去了，滿城茶館都在議論今夜雲錦台。',
+    '茶館裡有人議論雲錦台的水牌，說春雪社要出新戲；也有人斷言排不成。',
+    '城裡各家戲園年關檔期都貼出戲碼了，清一色熟口熟面的老戲。',
+    '首演的日子到了，雲錦台外的水牌底下從一早就圍著人。',
 ];
 
+/** SEASON SCENARIO — an original full-length play, not a gala restaging.
+ *  The premiere date on the theatre's board is world physics (calendar);
+ *  the ambition itself is seeded at CANON level in one mind, not directed. */
+const SEASON_NOTE: Record<string, string> = {
+    '沈雪笙': '【你近來壓在心口的念頭】班子重啟，老戲碼撐不起場面。你要排一齣誰也沒見過的新編全本大戲——本子還沒有，戲名也還沒有，可首演的水牌你已經叫人貼出去了，退路是沒有的。',
+};
+
 type Msg = { role: 'user' | 'assistant'; content: string };
-interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string }
+interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string }
+interface PlayScene { author: string; day: number; part: string; text: string }
 
 /** Strip the acting-JSON shell when a free-voice reply comes back wrapped. */
 function deshell(raw: string): string {
@@ -162,8 +172,10 @@ class Mind {
             `【你心底的事（只有你自己知道）】${c.secret}`,
             `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}`,
             c.carried?.length ? `【你隨身的物件】${c.carried.map((k) => k.desc).join('；')}` : '',
+            SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
+            `【本季】雲錦台外貼出了水牌：第${DAYS}日夜，春雪社新編大戲首演。滿城都在看春雪社這回拿什麼出來。`,
             '',
             '【你怎麼活】你會不斷收到「此刻的感知」。每次收到，回覆你此刻真實的反應，嚴格只輸出 JSON：',
             '{"心裡":"念頭(一兩句)","做":"你客觀做了什麼(一兩句,第三人稱)","說":"說出口的話(沒有就空)","去":"要動身去的地方(留原地就空)"}',
@@ -171,6 +183,9 @@ class Mind {
             '你有自己的營生與功課，不是每個時辰都要找人；對人說話時「說」裡直接說。',
             occ === 'reporter'
                 ? '你另有一支筆：若你決意把稿子付印，在 JSON 裡多加一欄 "印":"明日見報的那段文字（百來字）"。見了報，滿城都讀得到，收不回來。不印就不加這欄。'
+                : '',
+            occ === 'troupe' || occ === 'banzhu'
+                ? '你也提得動筆：若你決意把這個時辰全花在寫戲上（編場次、念白、唱詞），在 JSON 裡多加一欄 "筆":"這一場你打算寫什麼"。世界會替你鋪紙磨墨。不寫就不加這欄。'
                 : '',
         ]
             .filter(Boolean)
@@ -267,6 +282,16 @@ class Mind {
         );
     }
 
+    /** AUTHORING: the world lays out paper and ink — a focused session where
+     *  this mind actually WRITES the thing it set out to write. The artifact
+     *  is the mind's own words, produced with real craft discipline. */
+    async compose(intent: string): Promise<string> {
+        return this.selfTalk(
+            `（你鋪開紙，磨了墨，這一個時辰靜下來只做一件事：${intent}。正經把它寫出來——場目、誰上場（行當）、念白、唱詞（註明板式或曲牌），要能直接拿去排的本子。若這是頭一場，先題上戲名《…》。不用 JSON，直接寫。）`,
+            1600,
+        );
+    }
+
     hear(note: string): void {
         this.transcript.push({ role: 'user', content: note });
         this.transcript.push({ role: 'assistant', content: '（看在眼裡，記在心裡。）' });
@@ -295,6 +320,10 @@ async function main(): Promise<void> {
     /** The reporter's filed copy, if any — printed at next dawn. */
     let pendingPaper: { by: string; text: string } | null = null;
 
+    /** THE PLAY — a world object. Minds write it; the world only stores and
+     *  shows it (scoped: you read it where it physically lies, at the theatre). */
+    const playbook: { title: string | null; scenes: PlayScene[] } = { title: null, scenes: [] };
+
     // Season eve: each mind names what it is playing for (self-authored want).
     log(`── 開季前夜（各自的圖謀） ──`);
     for (const m of minds) {
@@ -319,7 +348,7 @@ async function main(): Promise<void> {
 
             const finaleFact =
                 day === DAYS && (part === '黃昏' || part === '入夜')
-                    ? '今夜年關大會串在雲錦台戲台開鑼——春雪社領銜，霞飛路歌場受邀助唱，滿城的人都往那兒去。'
+                    ? `今夜${playbook.title ? `《${playbook.title}》` : '春雪社新戲'}首演，雲錦台開鑼——水牌貼了這些天，滿城的人都往那兒去。`
                     : '';
 
             // group by venue for multi-party exchanges
@@ -333,6 +362,16 @@ async function main(): Promise<void> {
                     log(`  〔付印〕${m.name} 把稿子交了下去，明晨見報。`);
                 }
             };
+            const takePen = async (m: Mind, act: MindAct): Promise<void> => {
+                if (!act.筆 || (m.occ !== 'troupe' && m.occ !== 'banzhu')) return;
+                const text = await m.compose(act.筆);
+                if (!playbook.title) {
+                    const t = text.match(/《(.+?)》/);
+                    if (t) playbook.title = t[1];
+                }
+                playbook.scenes.push({ author: m.name, day, part, text });
+                log(`  〔戲本〕${m.name} 寫下一場（累計 ${playbook.scenes.length} 場）：${text.replace(/\s+/g, ' ').slice(0, 80)}…`);
+            };
             for (const [, group] of atVenue) {
                 const nearby = (m: Mind): string => {
                     const sameCluster = minds.filter((o) => o !== m && o.venue !== m.venue && clusterOf(o.venue) === clusterOf(m.venue));
@@ -341,6 +380,14 @@ async function main(): Promise<void> {
                 const present = (m: Mind): string => {
                     const here = group.filter((o) => o !== m);
                     return here.length ? `${here.map((o) => o.name).join('、')}也在這裡。` : '';
+                };
+                // the playbook is a physical object at the theatre: you can
+                // only read where it lies (scoped perception, not knowledge)
+                const playFact = (m: Mind): string => {
+                    if (!playbook.scenes.length) return '';
+                    if (m.venue !== '雲錦台戲台' && m.venue !== '後台妝閣') return '';
+                    const last = playbook.scenes[playbook.scenes.length - 1];
+                    return `（案上的戲本：${playbook.title ? `《${playbook.title}》` : '新戲'}已成${playbook.scenes.length}場。最新一場是${last.author}的筆——「${last.text.replace(/\s+/g, ' ').slice(0, 300)}…」）`;
                 };
                 const percept = (m: Mind, extra?: string): string =>
                     [
@@ -352,6 +399,7 @@ async function main(): Promise<void> {
                         // body veto is physics: a collapsed body has no duty
                         m.fatigue >= 1 ? '' : dutyFact(m.occ, m.work, part, day),
                         finaleFact,
+                        playFact(m),
                         ...m.felt(part),
                         extra ?? '',
                         '此刻你？',
@@ -364,6 +412,7 @@ async function main(): Promise<void> {
                     const act = await m.act(percept(m));
                     log(`  ${m.name} @ ${m.venue}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
                     takePrint(m, act);
+                    await takePen(m, act);
                     if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
                         m.venue = act.去;
                         moved.push(m);
@@ -382,6 +431,7 @@ async function main(): Promise<void> {
                             const act = await m.act(round === 0 && !carry ? percept(m) : `${carry} 此刻你？`);
                             log(`  ${m.name}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
                             takePrint(m, act);
+                            await takePen(m, act);
                             if (act.說) anySpoke = true;
                             carry = `${m.name}${act.說 ? `說：「${act.說}」` : ''}（${act.做}）`;
                             if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
@@ -422,11 +472,13 @@ async function main(): Promise<void> {
                 const onStage = inHouse.filter((m) => m.occ === 'troupe' && m.venue === m.work);
                 if (onStage.length) {
                     const lead = onStage.reduce((a, b) => (a.craft >= b.craft ? a : b));
-                    const grade = 0.4 + 0.6 * lead.craft;
+                    // an unfinished play collapses on its opening night — physics
+                    const completeness = Math.min(1, playbook.scenes.length / 3);
+                    const grade = (0.4 + 0.6 * lead.craft) * (0.55 + 0.45 * completeness);
                     const house =
                         grade > 0.9 ? '滿場彩聲，加了三回簾' :
                         grade > 0.75 ? '彩聲不斷' : '前排有人嗑瓜子聊開了，彩聲稀稀落落';
-                    log(`  〔票房〕大會串品相 ${grade.toFixed(2)}（領銜 ${lead.name}）——${house}。`);
+                    log(`  〔票房〕首演品相 ${grade.toFixed(2)}（領銜 ${lead.name}，本子 ${playbook.scenes.length} 場）——${house}。`);
                     for (const m of inHouse) m.hear(`（今夜場內：${house}。）`);
                     for (const m of onStage) m.money += 8;
                     for (const m of inHouse) if (m.occ === 'geinu') m.money += 6;
@@ -465,7 +517,17 @@ async function main(): Promise<void> {
         path.join(OUT, 'physics.json'),
         JSON.stringify(minds.map((m) => ({ name: m.name, craft: m.craft, fatigue: m.fatigue, money: m.money })), null, 1),
     );
-    console.log(`\n✅ MIND WORLD COMPLETE — ${minds.length} 顆心 × ${DAYS} 日；正史: ${path.join(OUT, 'history.md')}`);
+    if (playbook.scenes.length) {
+        fs.writeFileSync(
+            path.join(OUT, 'playbook.md'),
+            [
+                `# ${playbook.title ? `《${playbook.title}》` : '（未題名新戲）'}`,
+                '',
+                ...playbook.scenes.map((s) => `## 第${s.day}日·${s.part}｜${s.author} 筆\n\n${s.text}\n`),
+            ].join('\n'),
+        );
+    }
+    console.log(`\n✅ MIND WORLD COMPLETE — ${minds.length} 顆心 × ${DAYS} 日；正史: ${path.join(OUT, 'history.md')}；戲本 ${playbook.scenes.length} 場`);
 }
 
 main().catch((err) => {
