@@ -291,6 +291,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             sceneName,
             visibility: isPrivate ? 'private' : 'public',
             witnessIds: [...ids],
+            editorialSignals: {
+                resolvedWants: loop.resolved.length,
+                departures: loop.moves.filter((move) => w.scenes.some((scene) => scene.name === move.toSceneName)).length,
+                relationshipTurn: loop.intimacyAccepted,
+            },
             beats: loop.beats.map((b) => ({
                 characterId: b.characterId,
                 name: b.name,

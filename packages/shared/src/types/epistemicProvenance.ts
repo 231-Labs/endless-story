@@ -83,6 +83,15 @@ export interface DossierEventPresentation {
   heroAlt: string;
   heroZoom?: boolean;
   canonFacts: readonly string[];
+  /** Structured facts the season editor can rank without guessing from prose. */
+  editorialSignals?: {
+    /** Character wants closed by an irreversible act in this scene. */
+    resolvedWants: number;
+    /** Characters who physically changed scene after the exchange. */
+    departures: number;
+    /** The intimacy gate was accepted and the relationship materially turned. */
+    relationshipTurn: boolean;
+  };
 }
 
 /** Complete portable payload rendered by the multi-POV dossier UI. */

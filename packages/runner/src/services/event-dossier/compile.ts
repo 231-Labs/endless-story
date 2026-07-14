@@ -11,6 +11,7 @@ import type {
     NarrativeEvidence,
     NarrativePerspective,
 } from '@endless-story/shared';
+import { povParagraphs } from '../narrative-format/pov-paragraphs.ts';
 
 export interface DossierCanonicalBeat {
     characterId: string;
@@ -32,6 +33,11 @@ export interface DossierCanonicalEvent {
     heroAlt?: string;
     heroZoom?: boolean;
     beats: DossierCanonicalBeat[];
+    editorialSignals?: {
+        resolvedWants: number;
+        departures: number;
+        relationshipTurn: boolean;
+    };
 }
 
 export interface DossierPerspectiveSource {
@@ -65,7 +71,7 @@ export interface DossierValidation {
 }
 
 function paragraphs(body: string): string[] {
-    return body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    return povParagraphs(body);
 }
 
 function excerpt(body: string, max = 38): string {
@@ -162,6 +168,7 @@ export function compileDossier(input: CompileDossierInput): EpistemicDossierBund
         heroAlt: event.heroAlt ?? `${event.scene}的事件場景`,
         ...(event.heroZoom == null ? {} : { heroZoom: event.heroZoom }),
         canonFacts: event.beats.map((b) => `${b.name}：${b.text}`),
+        ...(event.editorialSignals ? { editorialSignals: event.editorialSignals } : {}),
     };
 
     const bundle: EpistemicDossierBundle = {
@@ -210,11 +217,35 @@ export function embedDossierHeader(prose: string, bundle: EpistemicDossierBundle
     return `<!--es:dossier ${JSON.stringify(bundle)}-->\n\n${prose}`;
 }
 
+/** Reader-only migration for previously sealed presentation payloads. It does
+ * not change prose bytes, evidence, or claim ids: only paragraph boundaries and
+ * a redundant pair of display quotes from the first dossier compiler. */
+function normalizeLegacyProjection(bundle: EpistemicDossierBundle): EpistemicDossierBundle {
+    for (const perspective of bundle.manifest.perspectives) {
+        if (perspective.passages.length < 3) {
+            perspective.passages = perspective.passages.flatMap((passage) => {
+                const parts = povParagraphs(passage.text);
+                return parts.map((text, index) => ({
+                    ...passage,
+                    id: index === 0 ? passage.id : `${passage.id}:part:${index}`,
+                    text,
+                }));
+            });
+        }
+        perspective.claims = perspective.claims.map((claim) => {
+            if (claim.relation !== 'supports' || claim.review !== 'verified') return claim;
+            const legacy = claim.text.match(/^客觀逐拍記錄：([^「]+)「([\s\S]*)」$/);
+            return legacy ? { ...claim, text: `客觀逐拍記錄：${legacy[1]}：${legacy[2]}` } : claim;
+        });
+    }
+    return bundle;
+}
+
 export function parseDossierHeader(content: string): { bundle?: EpistemicDossierBundle; body: string } {
     const match = content.match(DOSSIER_RE);
     if (!match) return { body: content };
     try {
-        const bundle = JSON.parse(match[1]) as EpistemicDossierBundle;
+        const bundle = normalizeLegacyProjection(JSON.parse(match[1]) as EpistemicDossierBundle);
         return validateDossier(bundle).ok ? { bundle, body: content.slice(match[0].length) } : { body: content };
     } catch {
         return { body: content };

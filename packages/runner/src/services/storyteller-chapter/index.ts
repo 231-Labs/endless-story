@@ -12,3 +12,5 @@ export * from './gate.js';
 export * from './compose.js';
 export * from './story-bible.js';
 export * from './fold.js';
+export * from './anthology.js';
+export * from './season-editor-agent.js';

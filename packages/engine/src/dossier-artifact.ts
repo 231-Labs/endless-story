@@ -61,6 +61,7 @@ export async function compileTickDossiers(
             scene: event.sceneName,
             title: `${event.sceneName}的一樁事`,
             kicker: '客觀逐拍只有一份；在場的人，各自帶走了不同的一份真相。',
+            editorialSignals: event.editorialSignals,
             beats: event.beats.map((beat) => ({
                 characterId: beat.characterId,
                 name: beat.name,

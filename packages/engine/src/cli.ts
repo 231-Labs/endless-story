@@ -17,6 +17,7 @@ import { FakeSceneAgent, FileArchive, LocalClock, LocalRecall } from './adapters
 import { createWorldFromPreset } from './preset.ts';
 import { runTick } from './tick.ts';
 import { writeTickDossiers } from './dossier-artifact.ts';
+import { refreshSeasonEditorial, type AnthologyComposer } from './editorial-artifact.ts';
 import { WorldState } from './world-state.ts';
 import type { SceneAgentPort } from './ports.ts';
 
@@ -55,12 +56,16 @@ async function main(): Promise<void> {
     const clock = new LocalClock();
 
     let agent: SceneAgentPort;
+    let composeAnthology: AnthologyComposer | undefined;
     if (args.realLlm) {
         const { RunnerSceneAgent } = await import('./adapters/runner-scene-agent.ts');
+        const { SeasonEditorAgent } = await import('@endless-story/runner/services/storyteller-chapter');
+        const editor = new SeasonEditorAgent();
         agent = new RunnerSceneAgent({
             sessionDir: path.join(args.out, 'sessions'),
             sessionKey: process.env.CHARACTER_SESSION_KEY,
         });
+        composeAnthology = (plan, bundles) => editor.compose(plan, bundles);
     } else {
         agent = new FakeSceneAgent();
     }
@@ -86,6 +91,11 @@ async function main(): Promise<void> {
         const report = await runTick(world, { agent, recall, archive, clock }, { snapshotDir: stateDir });
         const dossiers = await writeTickDossiers(args.out, report, world.data.cast, args.realLlm ? agent : undefined);
         for (const dossier of dossiers) console.log(`  dossier: ${dossier.eventId} → ${dossier.filename}`);
+        const editorial = await refreshSeasonEditorial(args.out, composeAnthology);
+        if (editorial.selectionChanged) {
+            console.log(`  season editor: ${editorial.plan.reason}`);
+        }
+        if (editorial.anthologyWritten) console.log('  anthology: editorial/season-anthology.md');
     }
 
     const live = world.data.wants.filter((x) => !x.retired).length;

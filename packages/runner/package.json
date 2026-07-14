@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./services/character-agent/beat-prompt": "./src/services/character-agent/beat-prompt.ts",
     "./services/event-dossier/compile": "./src/services/event-dossier/compile.ts",
+    "./services/storyteller-chapter/anthology": "./src/services/storyteller-chapter/anthology.ts",
     "./services/*": "./src/services/*/index.ts",
     "./types": "./src/types/index.ts"
   },
