@@ -110,7 +110,9 @@ function dutyFact(occ: string, work: string, part: string, day: number): string 
         case 'geinu':
             return part === '入夜' ? `入夜是你唱堂會的時辰（${work}），你的營生在那裡。` : '';
         case 'banzhu':
-            return part === '日午' || part === '晡時' || part === '黃昏' ? `這個時辰你照例在${work}坐鎮，看帳、盯排戲。` : '';
+            return part === '日午' || part === '晡時' || part === '黃昏'
+                ? `這個時辰你照例在${work}坐鎮，看帳、盯排戲、審各人交上來的本子——這是班主的日課。`
+                : '';
         case 'reporter':
             return part === '深宵' ? `深宵回報館趕稿（${work}），截稿是天。` : part === '清晨' ? '趕完稿天亮才睡下，晌午前起不來。' : '';
         case 'guest':
