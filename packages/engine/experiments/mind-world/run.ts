@@ -356,7 +356,7 @@ class Mind {
             // identity wholesale — the future must not exist in this context
             era ? era.note : `你是${c.name}（${c.role}）。【你是誰】${c.description}`,
             `【你心底的事（只有你自己知道）】${era ? era.secret : c.secret}`,
-            era ? '' : `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((m) => `\n・${m.text}`).join('')}`,
+            era ? '' : `【你記得的過往】（這些是「發生過的事」，不是你的台詞。說起舊事時，用你此刻的話重新講——你記得的是那件事、那個滋味，不是這幾行字句。切莫照抄底下的原句。）\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((m) => `\n・${m.text}`).join('')}`,
             SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
@@ -829,7 +829,7 @@ async function main(): Promise<void> {
                     m.lastRecalled = mem.text;
                     const deep = charge >= 0.7;
                     log(`  〔憶起${deep ? '·深' : ''}〕${m.name}（見${other.name}，張力${charge.toFixed(2)}）：${mem.text.slice(0, 26)}…`);
-                    const body = `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事翻上心頭——${ageFrame(mem.text, mem.ageYears, mem.importance)}）`;
+                    const body = `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事翻上心頭——${ageFrame(mem.text, mem.ageYears, mem.importance)}。這是那件事的意思，不是要你背這句話：真說起來，用你此刻的話。）`;
                     return deep ? `${body}（這念頭一起，你心裡那些年一下子全回來了，眼眶發熱，一時竟挪不開。）` : body;
                 };
                 const percept = (m: Mind, extra?: string): string =>
