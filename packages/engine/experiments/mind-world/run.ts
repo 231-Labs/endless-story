@@ -90,11 +90,41 @@ const INTERLUDE_PERSONA: Record<string, { note: string; secret: string }> = {
 /** Where each interlude cast member LIVES in that era. */
 const INTERLUDE_HOME: Record<string, string> = { '柳生春': '會樂里寓所' };
 
+/** A remembered thing: importance is FIXED at the moment it was recorded (it
+ *  decides whether it surfaces at all); ageYears only blurs the FIDELITY of the
+ *  surfaced form (older = hazier) — the faithful recency model. */
+interface RecallMem {
+    text: string;
+    importance: number; // 0..1, set at encode, never changes
+    ageYears: number; // how old this memory is, THIS season
+}
+
+/** Default age (years) for a loaded memory that carries no age stamp. */
+const MEM_AGE = Number(process.env.MW_MEM_AGE ?? 6.5);
+
+function normMem(m: string | Partial<RecallMem>, i: number): RecallMem {
+    if (typeof m === 'string') return { text: m, importance: Math.max(0.35, 0.9 - i * 0.1), ageYears: MEM_AGE };
+    return { text: m.text ?? '', importance: m.importance ?? Math.max(0.35, 0.9 - i * 0.1), ageYears: m.ageYears ?? MEM_AGE };
+}
+
 /** Lived-past memory lines distilled from finished interludes — merged into
  *  every later season's recall (memory genesis by living, not by prose). */
-const EXTRA_MEM: Record<string, string[]> = process.env.MW_EXTRA_MEMORIES
-    ? (JSON.parse(fs.readFileSync(process.env.MW_EXTRA_MEMORIES, 'utf-8')) as Record<string, string[]>)
+const EXTRA_MEM_RAW: Record<string, Array<string | Partial<RecallMem>>> = process.env.MW_EXTRA_MEMORIES
+    ? (JSON.parse(fs.readFileSync(process.env.MW_EXTRA_MEMORIES, 'utf-8')) as Record<string, Array<string | Partial<RecallMem>>>)
     : {};
+const EXTRA_MEM: Record<string, RecallMem[]> = Object.fromEntries(
+    Object.entries(EXTRA_MEM_RAW).map(([k, v]) => [k, v.map(normMem)]),
+);
+
+/** Age blurs the surfaced form: recent memories return sharp, old ones return
+ *  hazy — the mind then holds them accordingly (aching, half-lost). */
+function ageFrame(text: string, ageYears: number): string {
+    if (ageYears < 1) return `這事還新，你清清楚楚記得：${text}`;
+    if (ageYears < 3) return `你還記得清楚：${text}`;
+    if (ageYears < 6) return `隔了幾年，你記得個大概：${text}`;
+    if (ageYears < 12) return `隔了這些年，記不真了，只恍惚剩點影子：${text}`;
+    return `太久遠了，早模糊了，只依稀還剩：${text}`;
+}
 
 /** SMALL WORLD EVENTS (世事) — the days between big goals need weather of
  *  their own. A deterministic deck, targeted by occupation: the world THROWS
@@ -283,8 +313,9 @@ class Mind {
     /** TRIGGERED RECALL: loaded relationship memories, consumed as they surface
      *  (recency = never repeated). Surface when the memory's subject is present
      *  (relevance) — the three-factor recall's PRINCIPLE without the embeddings. */
-    recallPool: string[] = [];
+    recallMems: RecallMem[] = [];
     recalledToday = new Set<string>();
+    lastRecalled = '';
     /** WORLD object ledger — keepsakes are mutable state, not persona text. */
     carried: string[];
 
@@ -316,7 +347,7 @@ class Mind {
             // identity wholesale — the future must not exist in this context
             era ? era.note : `你是${c.name}（${c.role}）。【你是誰】${c.description}`,
             `【你心底的事（只有你自己知道）】${era ? era.secret : c.secret}`,
-            era ? '' : `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((t) => `\n・${t}`).join('')}`,
+            era ? '' : `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((m) => `\n・${m.text}`).join('')}`,
             SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
@@ -559,7 +590,7 @@ async function main(): Promise<void> {
     const remembererIds = minds.filter((m) => (EXTRA_MEM[m.id] ?? []).length).map((m) => m.id);
     const partnerOf = new Map<string, Set<string>>();
     for (const m of minds) {
-        m.recallPool = (EXTRA_MEM[m.id] ?? []).slice();
+        m.recallMems = (EXTRA_MEM[m.id] ?? []).slice();
         partnerOf.set(m.id, new Set(remembererIds.filter((o) => o !== m.id)));
     }
 
@@ -759,21 +790,25 @@ async function main(): Promise<void> {
                     }
                     return `（${ev.fact}）`;
                 };
-                // TRIGGERED RECALL: seeing someone you share a deep past with
-                // surfaces ONE unspent memory of them into this moment (relevance
-                // = subject present; recency = consumed, never repeats; at most
-                // once per pair per day). The mind then RESPONDS to the memory —
-                // it may harden the resolve to leave, or crack it.
+                // TRIGGERED RECALL — the faithful model: seeing someone you share
+                // a deep past with surfaces a memory of them. IMPORTANCE (fixed at
+                // encode) decides WHICH surfaces + whether at all (low-importance
+                // fades to nothing); AGE decides the FIDELITY of the surfaced form
+                // (old = hazy). Not consumed — memory persists — but the same line
+                // won't fire twice running, and at most once per pair per day.
                 const nostalgia = (m: Mind): string => {
-                    if (!m.recallPool.length) return '';
+                    if (!m.recallMems.length) return '';
                     const other = group.find(
                         (o) => o !== m && partnerOf.get(m.id)?.has(o.id) && !m.recalledToday.has(o.id),
                     );
                     if (!other) return '';
+                    const pool = m.recallMems.filter((r) => r.importance >= 0.3 && r.text !== m.lastRecalled);
+                    if (!pool.length) return '';
+                    const mem = pool.reduce((a, b) => (b.importance > a.importance ? b : a));
                     m.recalledToday.add(other.id);
-                    const line = m.recallPool.shift()!;
-                    log(`  〔憶起〕${m.name}（見${other.name}）：${line.slice(0, 36)}…`);
-                    return `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事忽然翻上心頭：${line}）`;
+                    m.lastRecalled = mem.text;
+                    log(`  〔憶起〕${m.name}（見${other.name}，${mem.ageYears}年前·重${mem.importance.toFixed(2)}）：${mem.text.slice(0, 30)}…`);
+                    return `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事翻上心頭——${ageFrame(mem.text, mem.ageYears)}）`;
                 };
                 const percept = (m: Mind, extra?: string): string =>
                     [
@@ -975,13 +1010,16 @@ async function main(): Promise<void> {
             }
         }
     }
-    // interlude epilogue: each mind distils the days into future-canon recall
+    // interlude epilogue: each mind distils the days into future-canon recall.
+    // IMPORTANCE is fixed HERE, at encode — by the order the mind lists them
+    // (what stuck most, first); ageYears starts at 0 and grows each season.
     if (INTERLUDE) {
-        const extra: Record<string, string[]> = {};
+        const extra: Record<string, RecallMem[]> = {};
         for (const m of minds) {
-            extra[m.id] = await m.distill();
+            const lines = await m.distill();
+            extra[m.id] = lines.map((text, i) => ({ text, importance: Math.max(0.4, 0.95 - i * 0.1), ageYears: 0 }));
             log(`\n〔憶〕${m.name} 刻進心裡的：`);
-            for (const line of extra[m.id]) log(`  ・${line}`);
+            for (const r of extra[m.id]) log(`  ・[重${r.importance.toFixed(2)}] ${r.text}`);
             m.save();
         }
         fs.writeFileSync(path.join(OUT, 'memories-extra.json'), JSON.stringify(extra, null, 1));
