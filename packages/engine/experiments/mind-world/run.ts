@@ -278,6 +278,7 @@ class Mind {
     lastToldMoney = -1;
     daysSincePractice = 0;
     practicedToday = false;
+    broodedToday = false;
     /** WORLD object ledger — keepsakes are mutable state, not persona text. */
     carried: string[];
 
@@ -413,6 +414,17 @@ class Mind {
         return this.selfTalk(
             `（夜深了，第${day}日過完。這一天在你心裡留下什麼？只對自己說，說人話——這裡不用那個 JSON 格式，直接把心裡話寫出來就好。）`,
             650,
+        );
+    }
+
+    /** SOLITUDE beat: a mind alone in a quiet hour (at home, or behind a
+     *  bolted door) turns something over — not a reaction to this instant like
+     *  the 心裡 field, but a real brood. Distinct from the nightly reflect():
+     *  this happens IN the day, in the middle of a life, when no one is watching. */
+    async brood(part: string): Promise<string> {
+        return this.selfTalk(
+            `（${part}，屋裡就你一個人，靜下來了。這會兒沒人瞧著，心裡頭最放不下的那樁事，自個兒對自個兒說說吧——不用 JSON，說人話。）`,
+            450,
         );
     }
 
@@ -764,7 +776,20 @@ async function main(): Promise<void> {
                     takeGift(m, act, group);
                     takeLetter(m, act);
                     takeDoor(m, act);
-                    if (tryMove(m, act) === 'moved') log(`  → ${m.name} 動身去了 ${act.去}`);
+                    const stayed = tryMove(m, act) !== 'moved';
+                    if (!stayed) log(`  → ${m.name} 動身去了 ${act.去}`);
+                    // SOLITUDE brood: alone, staying put, in a quiet hour, at home
+                    // or behind a bolted door, nobody within earshot — once a day.
+                    else if (
+                        !m.broodedToday &&
+                        (part === '晡時' || part === '入夜') &&
+                        (m.venue === m.home || m.doorLocked) &&
+                        !minds.some((o) => o !== m && clusterOf(o.venue) === clusterOf(m.venue))
+                    ) {
+                        m.broodedToday = true;
+                        const b = await m.brood(part);
+                        log(`  〔獨處〕${m.name}：${b.replace(/\s+/g, ' ').slice(0, 120)}`);
+                    }
                 } else {
                     // multi-party exchange over a SCENE FEED: every participant
                     // hears EVERYTHING since their own last turn (the single-slot
@@ -887,6 +912,7 @@ async function main(): Promise<void> {
                 }
                 m.practicedToday = false;
             }
+            m.broodedToday = false;
             m.save();
         }
         // premiere eve: the banzhu locks the script (trade duty, not direction)
