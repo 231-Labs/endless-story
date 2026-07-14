@@ -53,9 +53,42 @@ const MEMOIR_AT = 24000;
 const SEASON = process.env.MW_SEASON ?? 'premiere';
 const BACKSTAGE = SEASON === 'backstage';
 const UNBOXING = SEASON === 'unboxing';
+/** INTERLUDE (憶季): a time-machine camera on the PAST — young selves, one
+ *  quiet corner of the world, no season goal, no finale. Afterwards each mind
+ *  distils the days into memory lines (memories-extra.json) that future
+ *  seasons merge into canon recall — memory genesis by living, not by prose. */
+const INTERLUDE = SEASON === 'interlude';
+
+/** Era-shifted personas for the interlude (hand-authored per 憶季). */
+const INTERLUDE_PERSONA: Record<string, { note: string; secret: string }> = {
+    '柳生春': {
+        note: '【此時】這是六七年前的日子。你還在雲錦台跑龍套，戲單上沒有你的名字；白日在戲園扛槍旗蹭一口飯，夜裡宿在會樂里金鳳的寓所——她在你最落魄的時候把你從戲園後門拽進了屋。你的風流殼子還沒長出來，見人還會臉紅。屋裡只有一張窄床，你們常擠著說戲到天光。',
+        secret: '你心裡明白自己台上是男人、台下是女娃，這具身子的門道是金鳳一樣樣教你的。你怕自己一輩子紅不了，更怕紅了以後，就配不上這間屋子裡的燈。',
+    },
+    '金鳳': {
+        note: '【此時】這是六七年前。你剛在霞飛路掛上頭牌，會樂里的寓所是你自己一分一分掙下的。戲園後門撿回來的那個跑龍套坤生，如今夜夜宿在你屋裡。你替她描眉，她替你縫水袖；她後腰那顆小痣，全上海只有你識得。',
+        secret: '你的假心裝了十年，頭一回真跳。你曉得這樣的日子長不了——她遲早要紅，紅了就是雲錦台的人。你偷偷替她攢著戲份錢，想著哪天她掛牌，你就當沒養過這隻貓。這話你死也不說。',
+    },
+};
+/** Where each interlude cast member LIVES in that era. */
+const INTERLUDE_HOME: Record<string, string> = { '柳生春': '會樂里寓所' };
+
+/** Lived-past memory lines distilled from finished interludes — merged into
+ *  every later season's recall (memory genesis by living, not by prose). */
+const EXTRA_MEM: Record<string, string[]> = process.env.MW_EXTRA_MEMORIES
+    ? (JSON.parse(fs.readFileSync(process.env.MW_EXTRA_MEMORIES, 'utf-8')) as Record<string, string[]>)
+    : {};
 
 /** 世相 — the town's day, cycled if the run outlives the table. */
-const TEXTURE = UNBOXING
+const TEXTURE = INTERLUDE
+    ? [
+          '入了梅，雨下下停停，弄堂裡的溼衣裳總晾不乾。',
+          '難得放晴，家家把被褥抬出來曬，弄堂裡一排花花綠綠。',
+          '弄口的餛飩攤換了新湯頭，香味飄了半條會樂里。',
+          '夜裡落了點細雨，青石板亮著，賣梔子花的阿婆收攤早。',
+          '立秋，晚風頭一回帶了涼意，弄堂裡有人吹笛。',
+      ]
+    : UNBOXING
     ? [
           '出了正月，河開了凍，後巷的雪堆見了底。班裡貼出告示：第三日開春吉日，啟箱曬行頭、祭祖師。',
           '天放晴，後台把長竹竿一根根架起來，就等吉日曬箱。',
@@ -221,15 +254,19 @@ class Mind {
             occ === 'guest' ? `晡時常在${work}吃茶聽戲` :
             occ === 'musician' ? `白日在${work}吊弦合樂` :
             occ === 'wardrobe' ? `成日在${work}漿洗縫補、點檢行頭` : '起居隨意';
+        const era = INTERLUDE ? INTERLUDE_PERSONA[id] : undefined;
         this.system = [
             `你是${c.name}（${c.role}），活在 1920 年代的上海。這不是扮演——你就是這個人，活在連續的時間裡。`,
             `【你是誰】${c.description}`,
-            `【你心底的事（只有你自己知道）】${c.secret}`,
-            `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}`,
+            era ? era.note : '',
+            `【你心底的事（只有你自己知道）】${era ? era.secret : c.secret}`,
+            era ? '' : `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((t) => `\n・${t}`).join('')}`,
             SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
-            UNBOXING
+            INTERLUDE
+                ? '【此時的世道】尋常年月，沒有大事。日子就是日子。'
+                : UNBOXING
                 ? `【本季】出了正月，班裡告示：第3日開春吉日，啟箱曬行頭、祭祖師——全班的箱子都要見天光；第${DAYS}日夜，開春第一鑼。`
                 : BACKSTAGE
                 ? `【本季】雲錦台貼出封箱的日子：第${DAYS}日夜，封箱酒、立班規、合一堂全樂；過了那夜，戲箱上鎖到開春。`
@@ -354,6 +391,19 @@ class Mind {
         );
     }
 
+    /** DISTILL (interlude only): years later, the mind looks back and names
+     *  what stuck — each line becomes canon-grade recall for future seasons. */
+    async distill(): Promise<string[]> {
+        const raw = await this.selfTalk(
+            '（多年以後，你回望這段日子。把真正刻進心裡的，寫成四到六條記憶——一條一行，每條都是一件具體的事、一句具體的話或一個具體的物件，說人話，不用 JSON，不加編號以外的裝飾。）',
+            700,
+        );
+        return raw
+            .split('\n')
+            .map((l) => l.replace(/^[\d一二三四五六七八九十、.．\s・-]+/, '').trim())
+            .filter((l) => l.length > 8);
+    }
+
     /** AUTHORING: the world lays out paper and ink — a focused session where
      *  this mind actually WRITES the thing it set out to write. The artifact
      *  is the mind's own words, produced with real craft discipline. */
@@ -382,7 +432,9 @@ const log = (s: string): void => {
 
 async function main(): Promise<void> {
     const specs = buildCast(CAST);
-    const minds = specs.map((c) => new Mind(c.id, c.occupation, c.homeVenue, c.workVenue, c.money));
+    const minds = specs.map((c) =>
+        new Mind(c.id, c.occupation, INTERLUDE ? INTERLUDE_HOME[c.id] ?? c.homeVenue : c.homeVenue, c.workVenue, c.money),
+    );
 
     // SEASON CONTINUITY: minds are persistent — given an archive, they wake
     // up with last season's life verbatim. New cast members simply have no
@@ -453,7 +505,9 @@ async function main(): Promise<void> {
 
             const finaleFact =
                 day === DAYS && (part === '黃昏' || part === '入夜')
-                    ? UNBOXING
+                    ? INTERLUDE
+                        ? ''
+                        : UNBOXING
                         ? `今夜開春第一鑼——封了一冬的戲台重新開鑼，滿城的人都來聽這聲響。${
                               part === '入夜' ? '這一個時辰就是開鑼正場。' : ''
                           }`
@@ -691,7 +745,7 @@ async function main(): Promise<void> {
                     for (const m of inHouse) m.hear(`（今夜合樂，滿堂自己人：${sound}。）`);
                 }
             }
-            if (!BACKSTAGE && day === DAYS && part === '入夜') {
+            if (!BACKSTAGE && !INTERLUDE && day === DAYS && part === '入夜') {
                 const inHouse = minds.filter((m) => m.venue === '雲錦台戲台');
                 const onStage = inHouse.filter((m) => m.occ === 'troupe' && m.venue === m.work);
                 if (onStage.length) {
@@ -750,6 +804,18 @@ async function main(): Promise<void> {
             }
         }
     }
+    // interlude epilogue: each mind distils the days into future-canon recall
+    if (INTERLUDE) {
+        const extra: Record<string, string[]> = {};
+        for (const m of minds) {
+            extra[m.id] = await m.distill();
+            log(`\n〔憶〕${m.name} 刻進心裡的：`);
+            for (const line of extra[m.id]) log(`  ・${line}`);
+            m.save();
+        }
+        fs.writeFileSync(path.join(OUT, 'memories-extra.json'), JSON.stringify(extra, null, 1));
+    }
+
     fs.writeFileSync(path.join(OUT, 'history.md'), history.join('\n'));
     fs.writeFileSync(
         path.join(OUT, 'physics.json'),
