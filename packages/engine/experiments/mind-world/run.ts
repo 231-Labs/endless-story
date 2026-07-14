@@ -48,12 +48,22 @@ const VENUE_NAMES = VENUES.map((v) => v.name);
 const MEMOIR_AT = 24000;
 
 /** Scenario switch: 'premiere' (S1, an original play) | 'backstage' (S2, no
- *  audience — rebuild the company's insides before 封箱). */
+ *  audience — rebuild the company's insides before 封箱) | 'unboxing' (S3,
+ *  spring rite: every trunk sees daylight — including the sealed one). */
 const SEASON = process.env.MW_SEASON ?? 'premiere';
 const BACKSTAGE = SEASON === 'backstage';
+const UNBOXING = SEASON === 'unboxing';
 
 /** 世相 — the town's day, cycled if the run outlives the table. */
-const TEXTURE = BACKSTAGE
+const TEXTURE = UNBOXING
+    ? [
+          '出了正月，河開了凍，後巷的雪堆見了底。班裡貼出告示：第三日開春吉日，啟箱曬行頭、祭祖師。',
+          '天放晴，後台把長竹竿一根根架起來，就等吉日曬箱。',
+          '啟箱吉日。後台設了香案，全班的樟木箱一口一口抬到院裡見天光。',
+          '滿院曬著的行頭五顏六色，隔著牆街坊都聞得見樟腦味。',
+          '開春第一鑼在即，雲錦台的水牌刷了新漆，滿城等著聽這一聲響。',
+      ]
+    : BACKSTAGE
     ? [
           '年關將近，雲錦台貼出封箱的日子；班裡新請的琴師、鼓佬今日進班，老衣箱唐桂蘭也回來了。',
           '落了整夜的雪，後台燒起炭盆，樟木箱的味道混著松香味。',
@@ -71,7 +81,11 @@ const TEXTURE = BACKSTAGE
 
 /** SEASON SCENARIO — the group goal is calendar physics; the ambition itself
  *  is seeded at CANON level in one mind, not directed. */
-const SEASON_NOTE: Record<string, string> = BACKSTAGE
+const SEASON_NOTE: Record<string, string> = UNBOXING
+    ? {
+          '唐桂蘭': '【你近來壓在心口的念頭】開春曬箱的吉日就在眼前。這是衣箱師傅躲不開的本分：全班的箱子都要開、都要曬——包括角落那一口。十五年了，開不開、怎麼開、當著誰的面開，這回你躲不掉要拿主意了。',
+      }
+    : BACKSTAGE
     ? {
           '沈雪笙': '【你近來壓在心口的念頭】首演撐過去了，可你比誰都清楚：全班連一把場面都沒有，行頭七零八落，分帳還是一筆糊塗帳。你新請了琴師裴硯樵、鼓佬杜三通，今日進班；老衣箱唐桂蘭也回來了。封箱之前，文武場要立起來、行頭要修造齊、班規分帳要立出新章程。這是裡子的仗，沒有觀眾。',
       }
@@ -80,7 +94,7 @@ const SEASON_NOTE: Record<string, string> = BACKSTAGE
       };
 
 type Msg = { role: 'user' | 'assistant'; content: string };
-interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string; 贈?: string }
+interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string; 贈?: string; 私?: string }
 interface PlayScene { author: string; day: number; part: string; text: string }
 
 /** bigram overlap — does the narration mention this object? */
@@ -173,6 +187,8 @@ class Mind {
     system: string;
     transcript: Msg[] = [];
     venue: string;
+    /** DOOR physics: locked at one's own home = outsiders bounce at the door. */
+    doorLocked = false;
     // ── physics state (world truths; the mind only ever FEELS these) ──
     craft: number;
     craftBase: number;
@@ -213,7 +229,9 @@ class Mind {
             SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
-            BACKSTAGE
+            UNBOXING
+                ? `【本季】出了正月，班裡告示：第3日開春吉日，啟箱曬行頭、祭祖師——全班的箱子都要見天光；第${DAYS}日夜，開春第一鑼。`
+                : BACKSTAGE
                 ? `【本季】雲錦台貼出封箱的日子：第${DAYS}日夜，封箱酒、立班規、合一堂全樂；過了那夜，戲箱上鎖到開春。`
                 : `【本季】雲錦台外貼出了水牌：第${DAYS}日夜，春雪社新編大戲首演。滿城都在看春雪社這回拿什麼出來。`,
             '',
@@ -222,6 +240,8 @@ class Mind {
             '規矩：話用人話說；「命/一輩子」是一生說一兩次的字；你只知道親歷親聞的事；',
             '你有自己的營生與功課，不是每個時辰都要找人；對人說話時「說」裡直接說。',
             '把隨身物件送出手時，多加一欄 "贈":"物件｜給誰"——東西離了手，就真的不在你身上了。',
+            '要跟在場的某一個人咬耳朵，多加一欄 "私":"對誰｜要說的話"——只有那人聽得真，旁人只看見你們低語。',
+            '在自己家裡要閉門謝客，就在「做」裡寫明閉門落閂——門閂上了，外人便進不來，叩門你聽得見。',
             occ === 'reporter'
                 ? '你另有一支筆：若你決意把稿子付印，在 JSON 裡多加一欄 "印":"明日見報的那段文字（百來字）"。見了報，滿城都讀得到，收不回來。不印就不加這欄。'
                 : '',
@@ -284,7 +304,7 @@ class Mind {
         try {
             const m = raw.match(/\{[\s\S]*\}/);
             const o = JSON.parse(m ? m[0] : raw) as Partial<MindAct>;
-            return { 心裡: o.心裡 ?? '', 做: o.做 ?? '', 說: o.說 || undefined, 去: o.去 || undefined, 印: o.印 || undefined, 筆: o.筆 || undefined, 贈: o.贈 || undefined };
+            return { 心裡: o.心裡 ?? '', 做: o.做 ?? '', 說: o.說 || undefined, 去: o.去 || undefined, 印: o.印 || undefined, 筆: o.筆 || undefined, 贈: o.贈 || undefined, 私: o.私 || undefined };
         } catch {
             return { 心裡: '', 做: raw.slice(0, 120) };
         }
@@ -433,7 +453,11 @@ async function main(): Promise<void> {
 
             const finaleFact =
                 day === DAYS && (part === '黃昏' || part === '入夜')
-                    ? BACKSTAGE
+                    ? UNBOXING
+                        ? `今夜開春第一鑼——封了一冬的戲台重新開鑼，滿城的人都來聽這聲響。${
+                              part === '入夜' ? '這一個時辰就是開鑼正場。' : ''
+                          }`
+                        : BACKSTAGE
                         ? `今夜封箱：全班在雲錦台吃封箱酒、立班規、合一堂全樂——過了今夜，戲箱上鎖到開春。${
                               part === '入夜' ? '這一個時辰就是封箱酒與合樂的正場。' : ''
                           }`
@@ -504,6 +528,29 @@ async function main(): Promise<void> {
                 receiver.hear(`（${m.name}把那件東西——${item}——交到了你手上，如今在你身上了。）`);
                 m.hear(`（那件東西離了你的手，如今在${receiver.name}那裡了。）`);
             };
+            // WHISPER physics: content reaches ONE ear; the act of whispering
+            // is public. Returns a public note for the scene carry, if any.
+            const takeWhisper = (m: Mind, act: MindAct, group: Mind[]): string => {
+                if (!act.私) return '';
+                const [rcvName, content] = act.私.split(/[｜|]/).map((s) => s.trim());
+                const target = group.find((o) => o !== m && rcvName && (rcvName.includes(o.name) || o.name.includes(rcvName)));
+                if (!target || !content) return '';
+                target.hear(`（${m.name}湊到你耳邊，壓低了聲：「${content}」）`);
+                log(`  〔私語〕${m.name} → ${target.name}：「${content}」`);
+                return `（並湊到${target.name}耳邊低語了幾句，旁人聽不真。）`;
+            };
+            // DOOR physics: bolting your own door is an act; the world parses it.
+            const takeDoor = (m: Mind, act: MindAct): void => {
+                if (m.venue !== m.home) return;
+                if (/閉門|落閂|上閂|插上門|鎖上門|閂上/.test(act.做)) {
+                    if (!m.doorLocked) {
+                        m.doorLocked = true;
+                        log(`  〔門戶〕${m.name} 閉門落閂。`);
+                    }
+                } else if (/開門|拔閂|啟門|把門敞/.test(act.做)) {
+                    m.doorLocked = false;
+                }
+            };
             for (const [venue, group] of atVenue) {
                 if (group.length > 1) log(`  〔${venue}〕${group.map((m) => m.name).join('、')}同在。`);
                 const nearby = (m: Mind): string => {
@@ -551,10 +598,19 @@ async function main(): Promise<void> {
                     takePrint(m, act);
                     await takePen(m, act);
                     takeGift(m, act, group);
+                    takeDoor(m, act);
                     if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
-                        m.venue = act.去;
-                        moved.push(m);
-                        log(`  → ${m.name} 動身去了 ${act.去}`);
+                        const lockedOwner = minds.find((o) => o !== m && o.home === act.去 && o.venue === act.去 && o.doorLocked);
+                        if (lockedOwner) {
+                            m.hear(`（你到了${act.去}門外叩門，門閂著，半天沒人應。）`);
+                            lockedOwner.hear(`（有人在門外叩門——聽腳步嗓音，像是${m.name}。你沒應。）`);
+                            log(`  〔門戶〕${m.name} 叩${act.去}的門，無人應。`);
+                        } else {
+                            if (m.doorLocked) m.doorLocked = false;
+                            m.venue = act.去;
+                            moved.push(m);
+                            log(`  → ${m.name} 動身去了 ${act.去}`);
+                        }
                     }
                 } else {
                     // multi-party round-robin. The hour's capacity bounds the
@@ -571,9 +627,20 @@ async function main(): Promise<void> {
                             takePrint(m, act);
                             await takePen(m, act);
                             takeGift(m, act, group);
-                            if (act.說) anySpoke = true;
-                            carry = `${m.name}${act.說 ? `說：「${act.說}」` : ''}（${act.做}）`;
+                            takeDoor(m, act);
+                            const whisperNote = takeWhisper(m, act, group);
+                            if (act.說 || act.私) anySpoke = true;
+                            carry = `${m.name}${act.說 ? `說：「${act.說}」` : ''}（${act.做}）${whisperNote}`;
                             if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
+                                const lockedOwner = minds.find((o) => o !== m && o.home === act.去 && o.venue === act.去 && o.doorLocked);
+                                if (lockedOwner) {
+                                    m.hear(`（你到了${act.去}門外叩門，門閂著，半天沒人應。）`);
+                                    lockedOwner.hear(`（有人在門外叩門——聽腳步嗓音，像是${m.name}。你沒應。）`);
+                                    log(`  〔門戶〕${m.name} 叩${act.去}的門，無人應。`);
+                                    ended = true;
+                                    break;
+                                }
+                                if (m.doorLocked) m.doorLocked = false;
                                 m.venue = act.去;
                                 moved.push(m);
                                 log(`  → ${m.name} 起身去了 ${act.去}`);
@@ -624,13 +691,14 @@ async function main(): Promise<void> {
                 const onStage = inHouse.filter((m) => m.occ === 'troupe' && m.venue === m.work);
                 if (onStage.length) {
                     const lead = onStage.reduce((a, b) => (a.craft >= b.craft ? a : b));
-                    // an unfinished play collapses on its opening night — physics
-                    const completeness = Math.min(1, playbook.scenes.length / 3);
+                    // an unfinished play collapses on its opening night — physics.
+                    // A repertoire night (第一鑼) plays the existing book instead.
+                    const completeness = SEASON === 'premiere' ? Math.min(1, playbook.scenes.length / 3) : 1;
                     const grade = (0.4 + 0.6 * lead.craft) * (0.55 + 0.45 * completeness);
                     const house =
                         grade > 0.9 ? '滿場彩聲，加了三回簾' :
                         grade > 0.75 ? '彩聲不斷' : '前排有人嗑瓜子聊開了，彩聲稀稀落落';
-                    log(`  〔票房〕首演品相 ${grade.toFixed(2)}（領銜 ${lead.name}，本子 ${playbook.scenes.length} 場）——${house}。`);
+                    log(`  〔票房〕${UNBOXING ? '第一鑼' : '首演'}品相 ${grade.toFixed(2)}（領銜 ${lead.name}）——${house}。`);
                     for (const m of inHouse) m.hear(`（今夜場內：${house}。）`);
                     for (const m of onStage) m.money += 8;
                     for (const m of inHouse) if (m.occ === 'geinu') m.money += 6;
@@ -653,7 +721,8 @@ async function main(): Promise<void> {
             if (m.occ === 'reporter') m.fatigue = Math.max(0, m.fatigue - 0.35); // sleeps past dawn
             if (dutyParts(m.occ).length) {
                 if (m.practicedToday) {
-                    m.craft = Math.min(1, m.craft + 0.03);
+                    // asymptotic gains — mastery approaches 1 but never caps flat
+                    m.craft = m.craft + 0.03 * (1 - m.craft);
                     m.daysSincePractice = 0;
                 } else {
                     m.daysSincePractice += 1;
