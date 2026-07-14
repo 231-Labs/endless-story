@@ -778,14 +778,11 @@ async function main(): Promise<void> {
                     takeDoor(m, act);
                     const stayed = tryMove(m, act) !== 'moved';
                     if (!stayed) log(`  → ${m.name} 動身去了 ${act.去}`);
-                    // SOLITUDE brood: alone, staying put, in a quiet hour, at home
-                    // or behind a bolted door, nobody within earshot — once a day.
-                    else if (
-                        !m.broodedToday &&
-                        (part === '晡時' || part === '入夜') &&
-                        (m.venue === m.home || m.doorLocked) &&
-                        !minds.some((o) => o !== m && clusterOf(o.venue) === clusterOf(m.venue))
-                    ) {
+                    // SOLITUDE brood: alone at a venue (this branch already means
+                    // no one else here), staying put, in a quiet hour — a mind by
+                    // itself turns something over. Once a day. A bolted door makes
+                    // it certain; being alone anywhere quiet is enough.
+                    else if (!m.broodedToday && (part === '晡時' || part === '入夜' || m.doorLocked)) {
                         m.broodedToday = true;
                         const b = await m.brood(part);
                         log(`  〔獨處〕${m.name}：${b.replace(/\s+/g, ' ').slice(0, 120)}`);
