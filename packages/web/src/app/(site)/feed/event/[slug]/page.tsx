@@ -35,6 +35,11 @@ import {
   romanceLedgerEvent,
   romanceLedgerManifest,
 } from '@/lib/story-dossier/romance-ledger';
+import {
+  GOOD_YEARS_SLUG,
+  goodYearsEvent,
+  goodYearsManifest,
+} from '@/lib/story-dossier/good-years';
 import { cutsApi } from '@/lib/api/index';
 
 const dossiers = {
@@ -82,8 +87,16 @@ const dossiers = {
     event: romanceLedgerEvent,
     manifest: romanceLedgerManifest,
     related: {
-      href: `/feed/event/${MIDNIGHT_INQUEST_SLUG}`,
-      label: midnightInquestEvent.title,
+      href: `/feed/event/${GOOD_YEARS_SLUG}`,
+      label: goodYearsEvent.title,
+    },
+  },
+  [GOOD_YEARS_SLUG]: {
+    event: goodYearsEvent,
+    manifest: goodYearsManifest,
+    related: {
+      href: `/feed/event/${BROKEN_FAN_SLUG}`,
+      label: brokenFanEvent.title,
     },
   },
 } as const;
