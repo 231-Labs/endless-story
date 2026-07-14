@@ -185,7 +185,7 @@ class Mind {
                 ? '你另有一支筆：若你決意把稿子付印，在 JSON 裡多加一欄 "印":"明日見報的那段文字（百來字）"。見了報，滿城都讀得到，收不回來。不印就不加這欄。'
                 : '',
             occ === 'troupe' || occ === 'banzhu'
-                ? '你也提得動筆：若你決意把這個時辰全花在寫戲上（編場次、念白、唱詞），在 JSON 裡多加一欄 "筆":"這一場你打算寫什麼"。世界會替你鋪紙磨墨。不寫就不加這欄。'
+                ? '你也提得動筆：若你決意把這個時辰全花在寫戲上（編場次、念白、唱詞），在 JSON 裡多加一欄 "筆":"這一場你打算寫什麼"。世界會替你鋪紙磨墨。留神——只在「做」裡說你寫了本子，紙上是不會真有字的；要落筆，必須用 "筆" 這一欄。'
                 : '',
         ]
             .filter(Boolean)
@@ -384,8 +384,11 @@ async function main(): Promise<void> {
                 // the playbook is a physical object at the theatre: you can
                 // only read where it lies (scoped perception, not knowledge)
                 const playFact = (m: Mind): string => {
-                    if (!playbook.scenes.length) return '';
                     if (m.venue !== '雲錦台戲台' && m.venue !== '後台妝閣') return '';
+                    if (!playbook.scenes.length)
+                        return m.occ === 'troupe' || m.occ === 'banzhu'
+                            ? '（案上擺著新戲的空本子——到這一刻，紙上還沒有落下一個字。水牌上的日子不等人。）'
+                            : '';
                     const last = playbook.scenes[playbook.scenes.length - 1];
                     return `（案上的戲本：${playbook.title ? `《${playbook.title}》` : '新戲'}已成${playbook.scenes.length}場。最新一場是${last.author}的筆——「${last.text.replace(/\s+/g, ' ').slice(0, 300)}…」）`;
                 };
