@@ -37,6 +37,16 @@ import { CANON } from '../agent-season/canon-seed.ts';
 import { WORLD_PREMISE, VENUES, buildCast } from '../agent-season/world.ts';
 import { clusterOf } from '../agent-season/rhythm.ts';
 import { abilityOf } from '../agent-season/production.ts';
+import {
+    mentionsItem,
+    parseGiftNarration,
+    parseGiftField,
+    parseWhisper,
+    parseDoorIntent,
+    sightingPairs,
+    SceneFeed,
+    type Move,
+} from './physics.ts';
 
 const OUT = path.resolve(process.argv[2] ?? 'experiments/mind-world/out');
 fs.mkdirSync(OUT, { recursive: true });
@@ -78,6 +88,24 @@ const INTERLUDE_HOME: Record<string, string> = { '柳生春': '會樂里寓所' 
 const EXTRA_MEM: Record<string, string[]> = process.env.MW_EXTRA_MEMORIES
     ? (JSON.parse(fs.readFileSync(process.env.MW_EXTRA_MEMORIES, 'utf-8')) as Record<string, string[]>)
     : {};
+
+/** SMALL WORLD EVENTS (世事) — the days between big goals need weather of
+ *  their own. A deterministic deck, targeted by occupation: the world THROWS
+ *  a small fact at someone and walks away — how they answer is theirs.
+ *  (Early-stage: hand-dealt. Later: cross-saga butterflies.) */
+interface WorldEvent { day: number; part: string; occ?: string; name?: string; fact: string }
+const WORLD_EVENTS: WorldEvent[] = INTERLUDE
+    ? []
+    : [
+          { day: 1, part: '晡時', occ: 'geinu', fact: '歌場的堂倌捎話來：今夜有位南洋來的茶商包了廳，點名要聽你的《四季相思》，賞格開得不小。' },
+          { day: 2, part: '日午', occ: 'reporter', fact: '排字房捎來口信：主編拍了桌子，這一版的空還等著你的字，明日再交不出就換人補。' },
+          { day: 2, part: '黃昏', occ: 'geinu', fact: '裁縫鋪夥計送來改好的旗袍，多嘴帶了句閒話：鄰家姆媽問，儂那位唱戲的朋友近來怎不見來？' },
+          { day: 3, part: '晡時', occ: 'guest', fact: '家裡帳房來人：莊上到了一批杭紡新貨，老爺問你何時回去過目——話裡有催你少往戲園跑的意思。' },
+          { day: 4, part: '日午', occ: 'musician', fact: '同春班一個老相識托人帶話：他們文場缺人，出雙倍份錢挖你，三日內要回話。' },
+          { day: 4, part: '晡時', occ: 'geinu', fact: '堂子裡的姊妹來借頭面，順嘴說：近來風聲緊，巡捕房在一條條查會樂里的門牌。' },
+          { day: 5, part: '日午', occ: 'wardrobe', fact: '綢布莊夥計送料子來，捎一句：白公館訂的那批雲錦，掌櫃問還做不做。' },
+      ];
+const deliveredEvents = new Set<WorldEvent>();
 
 /** 世相 — the town's day, cycled if the run outlives the table. */
 const TEXTURE = INTERLUDE
@@ -129,16 +157,6 @@ const SEASON_NOTE: Record<string, string> = UNBOXING
 type Msg = { role: 'user' | 'assistant'; content: string };
 interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string; 贈?: string; 私?: string }
 interface PlayScene { author: string; day: number; part: string; text: string }
-
-/** bigram overlap — does the narration mention this object? */
-function mentionsItem(text: string, itemDesc: string): boolean {
-    const clean = itemDesc.replace(/[（(].*?[)）]/g, '');
-    for (let i = 0; i + 2 <= clean.length; i++) {
-        const gram = clean.slice(i, i + 2);
-        if (/[一-鿿]{2}/.test(gram) && text.includes(gram)) return true;
-    }
-    return false;
-}
 
 /** Strip the acting-JSON shell when a free-voice reply comes back wrapped. */
 function deshell(raw: string): string {
@@ -256,9 +274,10 @@ class Mind {
             occ === 'wardrobe' ? `成日在${work}漿洗縫補、點檢行頭` : '起居隨意';
         const era = INTERLUDE ? INTERLUDE_PERSONA[id] : undefined;
         this.system = [
-            `你是${c.name}（${c.role}），活在 1920 年代的上海。這不是扮演——你就是這個人，活在連續的時間裡。`,
-            `【你是誰】${c.description}`,
-            era ? era.note : '',
+            `你是${c.name}，活在 1920 年代的上海。這不是扮演——你就是這個人，活在連續的時間裡。`,
+            // a TIME-CUT is a real cut: the era note REPLACES the present-day
+            // identity wholesale — the future must not exist in this context
+            era ? era.note : `你是${c.name}（${c.role}）。【你是誰】${c.description}`,
             `【你心底的事（只有你自己知道）】${era ? era.secret : c.secret}`,
             era ? '' : `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((t) => `\n・${t}`).join('')}`,
             SEASON_NOTE[id] ?? '',
@@ -524,7 +543,10 @@ async function main(): Promise<void> {
             const atVenue = new Map<string, Mind[]>();
             for (const m of minds) atVenue.set(m.venue, [...(atVenue.get(m.venue) ?? []), m]);
 
-            const moved: Mind[] = [];
+            const moved: Array<Move & { mind: Mind }> = [];
+            const recordMove = (m: Mind, from: string, to: string): void => {
+                moved.push({ mind: m, name: m.name, fromCluster: clusterOf(from), toCluster: clusterOf(to), to });
+            };
             const takePrint = (m: Mind, act: MindAct): void => {
                 if (act.印 && m.occ === 'reporter') {
                     pendingPaper = { by: m.name, text: act.印.slice(0, 220) };
@@ -554,30 +576,26 @@ async function main(): Promise<void> {
             // Explicit 贈 field first; narrated giving of a carried keepsake
             // (same principle as narrated writing) is parsed as intent.
             const takeGift = (m: Mind, act: MindAct, group: Mind[]): void => {
+                const otherNames = minds.filter((o) => o !== m).map((o) => o.name);
                 let itemIdx = -1;
                 let receiver: Mind | undefined;
                 if (act.贈) {
-                    const [itemName, rcvName] = act.贈.split(/[｜|]/).map((s) => s.trim());
-                    itemIdx = m.carried.findIndex((d) => itemName && mentionsItem(itemName, d));
-                    receiver = minds.find((o) => o !== m && rcvName && (rcvName.includes(o.name) || o.name.includes(rcvName)));
-                    if (itemIdx < 0 && itemName && receiver) {
+                    const g = parseGiftField(act.贈, m.carried, otherNames);
+                    if (!g) return;
+                    itemIdx = g.itemIdx;
+                    receiver = minds.find((o) => o.name === g.receiverName);
+                    if (itemIdx < 0 && receiver) {
                         // giving something not in the ledger: it comes into being in the receiver's hands
-                        receiver.carried.push(itemName);
-                        log(`  〔贈物〕${m.name} 把「${itemName}」給了 ${receiver.name}。`);
-                        receiver.hear(`（${m.name}把「${itemName}」交到了你手上。）`);
+                        receiver.carried.push(g.itemName);
+                        log(`  〔贈物〕${m.name} 把「${g.itemName}」給了 ${receiver.name}。`);
+                        receiver.hear(`（${m.name}把「${g.itemName}」交到了你手上。）`);
                         return;
                     }
                 } else {
-                    const text = act.做 + (act.說 ?? '');
-                    const vm = text.match(/留給|遞給|送給|交給|留下|相贈|贈與/);
-                    if (!vm || vm.index === undefined) return;
-                    // verb and object must be CLAUSE-NEIGHBOURS — a sentence
-                    // mentioning boxes-given-to-X and keys elsewhere must not
-                    // hand over the keys (run-5 false positive).
-                    const win = text.slice(Math.max(0, vm.index - 14), vm.index + vm[0].length + 14);
-                    itemIdx = m.carried.findIndex((d) => mentionsItem(win, d));
-                    if (itemIdx < 0) return;
-                    receiver = minds.find((o) => o !== m && win.includes(o.name)) ??
+                    const g = parseGiftNarration(act.做 + (act.說 ?? ''), m.carried, otherNames);
+                    if (!g) return;
+                    itemIdx = g.itemIdx;
+                    receiver = minds.find((o) => o.name === g.receiverName) ??
                         (group.length === 2 ? group.find((o) => o !== m) : undefined);
                 }
                 if (itemIdx < 0 || !receiver) return;
@@ -591,22 +609,22 @@ async function main(): Promise<void> {
             // is public. Returns a public note for the scene carry, if any.
             const takeWhisper = (m: Mind, act: MindAct, group: Mind[]): string => {
                 if (!act.私) return '';
-                const [rcvName, content] = act.私.split(/[｜|]/).map((s) => s.trim());
-                const target = group.find((o) => o !== m && rcvName && (rcvName.includes(o.name) || o.name.includes(rcvName)));
-                if (!target || !content) return '';
-                target.hear(`（${m.name}湊到你耳邊，壓低了聲：「${content}」）`);
-                log(`  〔私語〕${m.name} → ${target.name}：「${content}」`);
+                const w = parseWhisper(act.私, group.filter((o) => o !== m).map((o) => o.name));
+                if (!w) return '';
+                const target = group.find((o) => o.name === w.targetName);
+                if (!target) return '';
+                target.hear(`（${m.name}湊到你耳邊，壓低了聲：「${w.content}」）`);
+                log(`  〔私語〕${m.name} → ${target.name}：「${w.content}」`);
                 return `（並湊到${target.name}耳邊低語了幾句，旁人聽不真。）`;
             };
             // DOOR physics: bolting your own door is an act; the world parses it.
             const takeDoor = (m: Mind, act: MindAct): void => {
                 if (m.venue !== m.home) return;
-                if (/閉門|落閂|上閂|插上門|鎖上門|閂上/.test(act.做)) {
-                    if (!m.doorLocked) {
-                        m.doorLocked = true;
-                        log(`  〔門戶〕${m.name} 閉門落閂。`);
-                    }
-                } else if (/開門|拔閂|啟門|把門敞/.test(act.做)) {
+                const intent = parseDoorIntent(act.做);
+                if (intent === 'lock' && !m.doorLocked) {
+                    m.doorLocked = true;
+                    log(`  〔門戶〕${m.name} 閉門落閂。`);
+                } else if (intent === 'unlock') {
                     m.doorLocked = false;
                 }
             };
@@ -632,10 +650,22 @@ async function main(): Promise<void> {
                     const lock = playbook.finalNote ? `（班主的定本單壓在戲本上：「${playbook.finalNote.replace(/\s+/g, ' ').slice(0, 260)}…」）` : '';
                     return `（案上的戲本：${playbook.title ? `《${playbook.title}》` : '新戲'}已成${playbook.scenes.length}場。最新一場是${last.author}的筆——「${last.text.replace(/\s+/g, ' ').slice(0, 300)}…」）${lock}`;
                 };
+                const worldEvent = (m: Mind): string => {
+                    const ev = WORLD_EVENTS.find(
+                        (e) => e.day === day && e.part === part && (e.name ? e.name === m.name : e.occ === m.occ),
+                    );
+                    if (!ev) return '';
+                    if (!deliveredEvents.has(ev)) {
+                        deliveredEvents.add(ev);
+                        log(`  〔世事〕${m.name} ← ${ev.fact.slice(0, 40)}…`);
+                    }
+                    return `（${ev.fact}）`;
+                };
                 const percept = (m: Mind, extra?: string): string =>
                     [
                         `【第${day}日·${part}】你在${m.venue}。`,
                         part === '清晨' ? `（${texture}）` : '',
+                        worldEvent(m),
                         paperLine,
                         present(m),
                         nearby(m),
@@ -650,6 +680,22 @@ async function main(): Promise<void> {
                         .filter(Boolean)
                         .join(' ');
 
+                // attempt a move; returns true if the mind actually left.
+                const tryMove = (m: Mind, act: MindAct): 'moved' | 'bounced' | null => {
+                    if (!act.去 || !VENUE_NAMES.includes(act.去) || act.去 === m.venue) return null;
+                    const lockedOwner = minds.find((o) => o !== m && o.home === act.去 && o.venue === act.去 && o.doorLocked);
+                    if (lockedOwner) {
+                        m.hear(`（你到了${act.去}門外叩門，門閂著，半天沒人應。）`);
+                        lockedOwner.hear(`（有人在門外叩門——聽腳步嗓音，像是${m.name}。你沒應。）`);
+                        log(`  〔門戶〕${m.name} 叩${act.去}的門，無人應。`);
+                        return 'bounced';
+                    }
+                    if (m.doorLocked) m.doorLocked = false;
+                    recordMove(m, m.venue, act.去);
+                    m.venue = act.去;
+                    return 'moved';
+                };
+
                 if (group.length === 1) {
                     const m = group[0];
                     const act = await m.act(percept(m));
@@ -658,70 +704,61 @@ async function main(): Promise<void> {
                     await takePen(m, act);
                     takeGift(m, act, group);
                     takeDoor(m, act);
-                    if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
-                        const lockedOwner = minds.find((o) => o !== m && o.home === act.去 && o.venue === act.去 && o.doorLocked);
-                        if (lockedOwner) {
-                            m.hear(`（你到了${act.去}門外叩門，門閂著，半天沒人應。）`);
-                            lockedOwner.hear(`（有人在門外叩門——聽腳步嗓音，像是${m.name}。你沒應。）`);
-                            log(`  〔門戶〕${m.name} 叩${act.去}的門，無人應。`);
-                        } else {
-                            if (m.doorLocked) m.doorLocked = false;
-                            m.venue = act.去;
-                            moved.push(m);
-                            log(`  → ${m.name} 動身去了 ${act.去}`);
-                        }
-                    }
+                    if (tryMove(m, act) === 'moved') log(`  → ${m.name} 動身去了 ${act.去}`);
                 } else {
-                    // multi-party round-robin. The hour's capacity bounds the
-                    // scene (time physics, max 4 rounds); it ends EARLY when the
-                    // minds let it — a full round of silence means the scene
-                    // dissolved on its own, someone leaving breaks it up.
-                    let carry = '';
-                    let ended = false;
-                    for (let round = 0; round < 4 && !ended; round++) {
+                    // multi-party exchange over a SCENE FEED: every participant
+                    // hears EVERYTHING since their own last turn (the single-slot
+                    // carry once made a direct question inaudible two seats away).
+                    // The hour bounds the scene (max 4 rounds); a full round of
+                    // silence dissolves it; someone leaving no longer freezes the
+                    // rest — the scene continues without them.
+                    const feed = new SceneFeed();
+                    const departed = new Set<Mind>();
+                    for (let round = 0; round < 4; round++) {
                         let anySpoke = false;
                         for (const m of group) {
-                            const act = await m.act(round === 0 && !carry ? percept(m) : `${carry} 此刻你？`);
+                            if (departed.has(m)) continue;
+                            if (group.length - departed.size < 2) break;
+                            const delta = feed.unseen(m.name);
+                            const prompt = round === 0 && !delta ? percept(m) : `${delta || '（各人做著各自的事。）'} 此刻你？`;
+                            const act = await m.act(prompt);
                             log(`  ${m.name}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
                             takePrint(m, act);
                             await takePen(m, act);
                             takeGift(m, act, group);
                             takeDoor(m, act);
-                            const whisperNote = takeWhisper(m, act, group);
+                            const whisperNote = takeWhisper(m, act, group.filter((o) => !departed.has(o)));
                             if (act.說 || act.私) anySpoke = true;
-                            carry = `${m.name}${act.說 ? `說：「${act.說}」` : ''}（${act.做}）${whisperNote}`;
-                            if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
-                                const lockedOwner = minds.find((o) => o !== m && o.home === act.去 && o.venue === act.去 && o.doorLocked);
-                                if (lockedOwner) {
-                                    m.hear(`（你到了${act.去}門外叩門，門閂著，半天沒人應。）`);
-                                    lockedOwner.hear(`（有人在門外叩門——聽腳步嗓音，像是${m.name}。你沒應。）`);
-                                    log(`  〔門戶〕${m.name} 叩${act.去}的門，無人應。`);
-                                    ended = true;
-                                    break;
-                                }
-                                if (m.doorLocked) m.doorLocked = false;
-                                m.venue = act.去;
-                                moved.push(m);
+                            feed.push(m.name, `${m.name}${act.說 ? `說：「${act.說}」` : ''}（${act.做}）${whisperNote}`);
+                            const mv = tryMove(m, act);
+                            if (mv === 'moved') {
                                 log(`  → ${m.name} 起身去了 ${act.去}`);
-                                for (const o of group) if (o !== m) o.hear(`（${m.name}起身走了，往${act.去}去。）`);
-                                ended = true;
-                                break;
+                                feed.push(m.name, `（${m.name}起身走了，往${act.去}去。）`);
+                                feed.markDeparted(m.name);
+                                departed.add(m);
                             }
                         }
-                        if (!anySpoke) break;
+                        if (!anySpoke && round > 0) break;
+                        if (group.length - departed.size < 2) break;
+                    }
+                    // scene-end flush: whatever anyone witnessed but was never
+                    // prompted with still lands in their lived transcript.
+                    for (const m of group) {
+                        const rest = feed.flush(m.name);
+                        if (rest) m.hear(`（這一場裡你還瞧見聽見：${rest}）`);
                     }
                 }
             }
-            // street sightings: two movers this tick glimpse each other — unless
-            // they are heading to the SAME place (converging, not crossing;
-            // they'll simply meet there next tick).
-            for (let i = 0; i < moved.length; i++)
-                for (let j = i + 1; j < moved.length; j++) {
-                    if (moved[i].venue === moved[j].venue) continue;
-                    moved[i].hear(`（路上你遠遠瞧見${moved[j].name}也在街面上，往${moved[j].venue}那頭去了。）`);
-                    moved[j].hear(`（路上你遠遠瞧見${moved[i].name}也在街面上，往${moved[i].venue}那頭去了。）`);
-                    log(`  〔街面〕${moved[i].name} 與 ${moved[j].name} 錯身而過，彼此瞧見了。`);
-                }
+            // street sightings: same-hour movers glimpse each other only when
+            // their routes plausibly CROSS (shared cluster) and they are not
+            // simply converging on the same doorway.
+            for (const [a, b] of sightingPairs(moved)) {
+                const am = (a as Move & { mind: Mind }).mind;
+                const bm = (b as Move & { mind: Mind }).mind;
+                am.hear(`（路上你遠遠瞧見${b.name}也在街面上，往${b.to}那頭去了。）`);
+                bm.hear(`（路上你遠遠瞧見${a.name}也在街面上，往${a.to}那頭去了。）`);
+                log(`  〔街面〕${a.name} 與 ${b.name} 錯身而過，彼此瞧見了。`);
+            }
             // ── physics tick: fatigue accrues; duty presence = practice ──
             for (const m of minds) {
                 m.fatigue = Math.min(1.2, m.fatigue + (m.venue === m.home ? 0.02 : 0.06));
