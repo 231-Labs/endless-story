@@ -363,8 +363,17 @@ async function main(): Promise<void> {
                 }
             };
             const takePen = async (m: Mind, act: MindAct): Promise<void> => {
-                if (!act.筆 || (m.occ !== 'troupe' && m.occ !== 'banzhu')) return;
-                const text = await m.compose(act.筆);
+                if (m.occ !== 'troupe' && m.occ !== 'banzhu') return;
+                // narrated writing IS writing intent — 做 is the mind's action
+                // declaration, same as 去 is for movement. When the narration
+                // says the pen moved, the world lays paper and real ink flows.
+                const narrated =
+                    !act.筆 &&
+                    /寫|落筆|提筆|蘸墨|批註|改本|填詞/.test(act.做) &&
+                    /本子|戲本|新戲|唱詞|唱段|念白|一場|場子/.test(act.做 + (act.說 ?? ''));
+                const intent = act.筆 ?? (narrated ? `把你方才動筆要寫的那一段真正寫完（${act.做}）` : null);
+                if (!intent) return;
+                const text = await m.compose(intent);
                 if (!playbook.title) {
                     const t = text.match(/《(.+?)》/);
                     if (t) playbook.title = t[1];
