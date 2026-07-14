@@ -223,7 +223,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
                 return `${member.name}＝${member.role ?? '行當不詳'}｜${pronoun}（${member.bodyFact ?? '身不詳'}）`;
             })
             .join('、');
-        return this.sessions.project(
+        const projected = await this.sessions.project(
             identity,
             [
                 `【事件】${input.eventId ?? '未編號事件'}｜${input.clock}｜${input.venue}`,
@@ -243,6 +243,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
                 temperature: 0.82,
             },
         );
+        return characterAgent.formatPovSceneParagraphs(projected) || null;
     }
 
     async judgeEstablished(

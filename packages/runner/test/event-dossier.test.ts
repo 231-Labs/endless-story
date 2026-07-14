@@ -82,6 +82,24 @@ test('dossier header round-trips inside the same immutable chapter blob', () => 
     assert.equal(parsed.body, prose);
 });
 
+test('legacy headers get lossless paragraph shaping and redundant quote repair at read time', () => {
+    const bundle = compileDossier(source);
+    const perspective = bundle.manifest.perspectives[0];
+    const raw = '晨光落上台板。江聞鶴揚聲道：「先走兩圈。」柳生春偏頭一笑。她沒有退。蘇映雪抱著手臂。連翹沉腰站穩。鑼聲還沒響。眾人都在等。';
+    perspective.passages[0].text = raw;
+    perspective.claims[0] = {
+        ...perspective.claims[0],
+        text: '客觀逐拍記錄：柳生春「偏頭笑道：「你先請。」」',
+        relation: 'supports',
+        review: 'verified',
+    };
+    const parsed = parseDossierHeader(embedDossierHeader('正文', bundle)).bundle!;
+    const migrated = parsed.manifest.perspectives[0];
+    assert.equal(migrated.passages.length, 4);
+    assert.equal(migrated.passages.map((passage) => passage.text).join(''), raw);
+    assert.equal(migrated.claims[0].text, '客觀逐拍記錄：柳生春：偏頭笑道：「你先請。」');
+});
+
 test('one POV is not publishable as a multi-POV dossier', () => {
     assert.throws(() => compileDossier({ ...source, perspectives: source.perspectives.slice(0, 1) }), /fewer than two/);
 });
@@ -123,6 +141,7 @@ test('claim audit uses a closed evidence vocabulary and drops invented refs', ()
     assert.deepEqual(enriched[0].claims?.[0].evidenceRefs, ['spring-snow:d81:stage:beat:0']);
     assert.equal(enriched[0].claims?.[0].review, 'verified', 'verified anchor is generated only from the frozen beat');
     assert.match(enriched[0].claims?.[0].text ?? '', /添了一句定稿沒有的唱詞/);
+    assert.doesNotMatch(enriched[0].claims?.[0].text ?? '', /。」」/);
     assert.deepEqual(enriched[0].passageClaimIds?.[0], ['spring-snow:d81:stage:claim:liu:0']);
     assert.equal(enriched[1].claims?.length, 1, 'every POV gets only its deterministic canon anchor until its own audit arrives');
 });

@@ -4,13 +4,14 @@
 
 import type { ClaimRelation, ClaimReview, NarrativeClaim } from '@endless-story/shared';
 import type { DossierCanonicalEvent, DossierPerspectiveSource } from './compile.js';
+import { povParagraphs } from '../narrative-format/pov-paragraphs.ts';
 
 const MODES = new Set(['canonical', 'observed', 'heard', 'inferred', 'remembered', 'dreamed', 'fabricated']);
 const SUBJECTIVE_RELATIONS = new Set(['contradicts', 'reinterprets', 'unresolved']);
 const GENERIC_LEAD = /記住的，不必等於別人看見的|同一件事|主觀版本/;
 
 function paragraphs(body: string): string[] {
-    return body.split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+    return povParagraphs(body);
 }
 
 function pronounForBody(bodyFact?: string): '他' | '她' {
@@ -136,7 +137,7 @@ function canonicalAnchor(event: DossierCanonicalEvent, source: DossierPerspectiv
     const beat = event.beats[index];
     return {
         id: `${event.id}:claim:${source.characterId}:0`,
-        text: `客觀逐拍記錄：${beat.name}「${beat.text}」`,
+        text: `客觀逐拍記錄：${beat.name}：${beat.text}`,
         epistemicMode: 'observed',
         relation: 'supports',
         review: 'verified',

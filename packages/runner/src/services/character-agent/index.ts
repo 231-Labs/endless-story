@@ -94,6 +94,7 @@ export {
     buildBeatSystemPrompt,
     parseBeatResult,
 } from './beat.js';
+export { formatPovSceneParagraphs } from '../narrative-format/pov-paragraphs.ts';
 export type { SceneIntimacyRating } from './beat.js';
 export type { ActBeatInput, BeatResult, BeatForcing, JudgeResolveInput, ResolveVerdict } from './beat.js';
 export type {

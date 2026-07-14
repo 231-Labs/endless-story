@@ -14,6 +14,7 @@ const publicEvent = {
     sceneName: '雲錦台戲台',
     visibility: 'public' as const,
     witnessIds: ['su', 'liu', 'qiao'],
+    editorialSignals: { resolvedWants: 1, departures: 0, relationshipTurn: false },
     beats: [
         { characterId: 'su', name: '蘇映雪', text: '把溫茶推到生春手邊。', audience: 'scene' as const, perceiverIds: ['su', 'liu', 'qiao'] },
         { characterId: 'liu', name: '柳生春', text: '接過茶盞，偏頭一笑。', audience: 'scene' as const, perceiverIds: ['su', 'liu', 'qiao'] },
@@ -37,6 +38,7 @@ test('a tick event compiles into the same grounded header the UI parses', async 
     assert.equal(artifact.bundle.manifest.perspectives.length, 2, 'non-witness POV must be dropped');
     assert.equal(artifact.bundle.manifest.evidence.filter((e) => e.visibility === 'public').length, 2);
     assert.equal(artifact.bundle.manifest.canonHead, publicEvent.id);
+    assert.equal(artifact.bundle.event.editorialSignals?.resolvedWants, 1);
     const parsed = parseDossierHeader(artifact.content);
     assert.equal(parsed.bundle?.manifest.eventId, publicEvent.id);
     assert.match(parsed.body, /蘇映雪：把溫茶推到生春手邊/);

@@ -66,6 +66,12 @@ export interface CanonicalSceneEvent {
     visibility: 'public' | 'private';
     witnessIds: string[];
     beats: CanonicalSceneBeat[];
+    /** Objective dramatic movement captured before any prose editor sees it. */
+    editorialSignals?: {
+        resolvedWants: number;
+        departures: number;
+        relationshipTurn: boolean;
+    };
 }
 
 export interface ObserveSceneInput {
