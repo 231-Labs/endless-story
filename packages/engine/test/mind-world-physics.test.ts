@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    parseMindAct,
     mentionsItem,
     parseGiftNarration,
     parseGiftField,
@@ -76,6 +77,32 @@ test('whisper: target resolves among the co-present only', () => {
     assert.ok(w);
     assert.equal(w.targetName, '唐桂蘭');
     assert.equal(parseWhisper('白蘭｜想你。', ['唐桂蘭']), null, '不在場的人聽不見耳語');
+});
+
+// ── act parsing: the ```json-in-beat regression (柳生春's long outputs) ────
+test('parseMindAct: strips ```json fences and parses', () => {
+    const o = parseMindAct('```json\n{"心裡":"門閂上了","做":"轉身往霞飛路走","說":"你保重"}\n```');
+    assert.equal(o.心裡, '門閂上了');
+    assert.equal(o.做, '轉身往霞飛路走');
+    assert.equal(o.說, '你保重');
+});
+
+test('parseMindAct: trailing prose after the object cannot break the parse', () => {
+    const o = parseMindAct('{"做":"朝金鳳微微頷首","說":"一路順風"}（旁白：她轉身走了）{壞}');
+    assert.equal(o.做, '朝金鳳微微頷首');
+    assert.equal(o.說, '一路順風');
+});
+
+test('parseMindAct: normalizes the 心裦 typo key', () => {
+    assert.equal(parseMindAct('{"心裦":"我怕的是我自己","做":"低頭"}').心裡, '我怕的是我自己');
+});
+
+test('parseMindAct: recovers fields from truncated/broken JSON, never dumps fences', () => {
+    // closing brace lost to truncation
+    const o = parseMindAct('```json\n{"心裡":"金鳳走了","做":"攥緊腰後的師承柄，轉身往霞飛路走');
+    assert.equal(o.心裡, '金鳳走了');
+    assert.match(o.做, /攥緊腰後的師承柄/);
+    assert.doesNotMatch(o.做, /json|```/);
 });
 
 // ── letters: reach anyone, not just the co-present ────────────────────────

@@ -41,6 +41,7 @@ import {
     mentionsItem,
     parseGiftNarration,
     parseGiftField,
+    parseMindAct,
     parseWhisper,
     parseLetter,
     parseDoorIntent,
@@ -391,15 +392,24 @@ class Mind {
     async act(percept: string): Promise<MindAct> {
         await this.maybeCompress();
         this.transcript.push({ role: 'user', content: percept });
-        const raw = await llmChat(this.system, this.transcript, 500);
+        // 700 tokens: a four-season resumed mind (柳生春) has a huge context and
+        // writes long — 500 truncated her JSON mid-object, breaking the parse.
+        const raw = await llmChat(this.system, this.transcript, 700);
         this.transcript.push({ role: 'assistant', content: raw });
-        try {
-            const m = raw.match(/\{[\s\S]*\}/);
-            const o = JSON.parse(m ? m[0] : raw) as Partial<MindAct>;
-            return { 心裡: o.心裡 ?? '', 做: o.做 ?? '', 說: o.說 || undefined, 去: o.去 || undefined, 印: o.印 || undefined, 筆: o.筆 || undefined, 贈: o.贈 || undefined, 私: o.私 || undefined, 信: o.信 || undefined };
-        } catch {
-            return { 心裡: '', 做: raw.slice(0, 120) };
-        }
+        // robust parse: strips ```json fences, extracts the first balanced
+        // object, recovers per-field on broken JSON — never dumps raw into 做.
+        const o = parseMindAct(raw);
+        return {
+            心裡: o.心裡,
+            做: o.做,
+            說: o.說 || undefined,
+            去: o.去 || undefined,
+            印: o.印 || undefined,
+            筆: o.筆 || undefined,
+            贈: o.贈 || undefined,
+            私: o.私 || undefined,
+            信: o.信 || undefined,
+        };
     }
 
     /** A free-voice self-exchange: the reply lives clean in the transcript. */

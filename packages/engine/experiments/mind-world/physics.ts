@@ -7,6 +7,78 @@
  * scripted acts and assert deliveries.
  */
 
+export interface ParsedAct {
+    心裡: string;
+    做: string;
+    說?: string;
+    去?: string;
+    印?: string;
+    筆?: string;
+    贈?: string;
+    私?: string;
+    信?: string;
+}
+
+/** Extract the FIRST balanced {...} object, respecting strings — so trailing
+ *  prose after the JSON, or a stray brace, can't make a greedy match span
+ *  past the real object (the ```json-in-beat bug: 柳生春's long outputs). */
+function firstJsonObject(s: string): string | null {
+    const start = s.indexOf('{');
+    if (start < 0) return null;
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let i = start; i < s.length; i++) {
+        const c = s[i];
+        if (inStr) {
+            if (esc) esc = false;
+            else if (c === '\\') esc = true;
+            else if (c === '"') inStr = false;
+        } else if (c === '"') inStr = true;
+        else if (c === '{') depth++;
+        else if (c === '}' && --depth === 0) return s.slice(start, i + 1);
+    }
+    return null;
+}
+
+const ACT_KEYS: Array<keyof ParsedAct> = ['心裡', '做', '說', '去', '印', '筆', '贈', '私', '信'];
+
+/** Robustly parse a mind's acting JSON: strip code fences, extract the first
+ *  balanced object, normalize the 心裦 typo, and on total failure fall back to
+ *  per-field regex — NEVER dump raw fenced text into 做. */
+export function parseMindAct(raw: string): ParsedAct {
+    const s = raw
+        .trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+        .replace(/心裦/g, '心裡')
+        .trim();
+    const fields: Record<string, string> = {};
+    const obj = firstJsonObject(s);
+    if (obj) {
+        try {
+            const o = JSON.parse(obj) as Record<string, unknown>;
+            for (const k of ACT_KEYS) {
+                const v = o[k];
+                if (typeof v === 'string' && v) fields[k] = v;
+            }
+            if (fields.做 || fields.心裡 || fields.說) return { 心裡: '', 做: '', ...fields };
+        } catch {
+            // fall through to regex recovery
+        }
+    }
+    // regex recovery: pull each field even from broken/truncated JSON —
+    // a terminated value first, else an unterminated final value to line-end.
+    for (const k of ACT_KEYS) {
+        const m =
+            s.match(new RegExp(`"${k}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`)) ??
+            s.match(new RegExp(`"${k}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)$`, 'm'));
+        if (m) fields[k] = m[1].replace(/\\"/g, '"').trim();
+    }
+    if (!fields.做 && !fields.心裡 && !fields.說) fields.做 = s.replace(/[{}"]/g, '').slice(0, 120);
+    return { 心裡: '', 做: '', ...fields };
+}
+
 /** function-word characters — a bigram containing one is too weak to prove
  *  an object mention (「的舊」 once matched 白蘭的舊事 against 舊懷錶). */
 const STOP_CHAR = /[的了一是在把那這只之其個裡]/;
