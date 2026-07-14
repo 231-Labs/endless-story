@@ -100,6 +100,16 @@ function dutyFact(occ: string, work: string, part: string, day: number): string 
     }
 }
 
+/** One's own purse is knowable at a glance — an approximate FACT, not a verdict. */
+function purseFeel(money: number): string {
+    if (money <= 2) return '見了底';
+    if (money <= 8) return '只剩幾塊錢';
+    if (money <= 15) return '剩十來塊錢';
+    if (money <= 25) return '剩二十來塊錢';
+    if (money <= 45) return '剩三四十塊錢';
+    return '還算寬裕';
+}
+
 /** Duty parts per occupation — being AT one's work during these = practice. */
 function dutyParts(occ: string): string[] {
     switch (occ) {
@@ -124,6 +134,7 @@ class Mind {
     craftBase: number;
     fatigue = 0.2;
     money: number;
+    lastToldMoney = -1;
     daysSincePractice = 0;
     practicedToday = false;
 
@@ -166,15 +177,28 @@ class Mind {
             .join('\n');
     }
 
-    /** What the body/hands tell this mind right now — physics, felt not counted. */
+    /** What the body/purse tell this mind — FACTS and graded feel, never
+     *  verdicts: wording scales with the value instead of appearing at a
+     *  behavior gate. The mind decides what any of it means. */
     felt(part: string): string[] {
         const lines: string[] = [];
-        if (part === '清晨' && this.fatigue > 0.9)
-            lines.push('（這幾日熬得狠了，身子沉得像灌了鉛，今日撐不起大事，得歇。）');
-        else if (this.fatigue > 0.7) lines.push('（身上乏得很，是連日沒好生歇著的乏。）');
-        if (part === '清晨' && dutyParts(this.occ).length && this.daysSincePractice >= 2)
-            lines.push('（你有兩三日沒正經吊嗓練功了，手上嗓上都覺出鈍來——功課是騙不了人的。）');
-        if (this.money <= 5) lines.push('（手頭快見底了，年關的開銷卻一樣不少。）');
+        if (part === '清晨') {
+            if (this.fatigue >= 1) lines.push('（身子是真的透支了，眼前發黑，今日非歇不可。）');
+            else if (this.fatigue > 0.45) {
+                const deg = this.fatigue > 0.8 ? '沉得像灌了鉛' : this.fatigue > 0.6 ? '乏得很' : '有些發乏';
+                lines.push(`（連日下來，身上${deg}。）`);
+            }
+            if (dutyParts(this.occ).length && this.daysSincePractice >= 1) {
+                const n = '一兩三四五六七'[Math.min(this.daysSincePractice, 7) - 1];
+                lines.push(`（你已${n}日沒正經吊嗓練功${this.daysSincePractice >= 2 ? '，手上嗓上覺出鈍來' : ''}。）`);
+            }
+            if (this.money !== this.lastToldMoney || this.money <= 8) {
+                lines.push(`（荷包裡${purseFeel(this.money)}。）`);
+                this.lastToldMoney = this.money;
+            }
+        } else if (this.fatigue >= 1) {
+            lines.push('（身子撐不住了，做什麼都提不起力氣。）');
+        }
         return lines;
     }
 
@@ -325,8 +349,8 @@ async function main(): Promise<void> {
                         paperLine,
                         present(m),
                         nearby(m),
-                        // body veto: past the limit, the day's duty gives way
-                        m.fatigue > 0.9 ? '' : dutyFact(m.occ, m.work, part, day),
+                        // body veto is physics: a collapsed body has no duty
+                        m.fatigue >= 1 ? '' : dutyFact(m.occ, m.work, part, day),
                         finaleFact,
                         ...m.felt(part),
                         extra ?? '',
@@ -346,14 +370,19 @@ async function main(): Promise<void> {
                         log(`  → ${m.name} 動身去了 ${act.去}`);
                     }
                 } else {
-                    // multi-party round-robin: up to 2 rounds, everyone hears everyone
+                    // multi-party round-robin. The hour's capacity bounds the
+                    // scene (time physics, max 4 rounds); it ends EARLY when the
+                    // minds let it — a full round of silence means the scene
+                    // dissolved on its own, someone leaving breaks it up.
                     let carry = '';
                     let ended = false;
-                    for (let round = 0; round < 2 && !ended; round++) {
+                    for (let round = 0; round < 4 && !ended; round++) {
+                        let anySpoke = false;
                         for (const m of group) {
                             const act = await m.act(round === 0 && !carry ? percept(m) : `${carry} 此刻你？`);
                             log(`  ${m.name}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
                             takePrint(m, act);
+                            if (act.說) anySpoke = true;
                             carry = `${m.name}${act.說 ? `說：「${act.說}」` : ''}（${act.做}）`;
                             if (act.去 && VENUE_NAMES.includes(act.去) && act.去 !== m.venue) {
                                 m.venue = act.去;
@@ -364,6 +393,7 @@ async function main(): Promise<void> {
                                 break;
                             }
                         }
+                        if (!anySpoke) break;
                     }
                 }
             }
@@ -383,26 +413,25 @@ async function main(): Promise<void> {
                 if (dutyParts(m.occ).includes(part) && m.venue === m.work) m.practicedToday = true;
             }
 
-            // finale box office: after the finale night plays, the house answers
+            // finale box office. The house's SOUND is an objective scene fact
+            // heard only by those in the building; pay lands silently in the
+            // ledger (the purse tells them come morning). No pre-worded
+            // feelings, no town-wide broadcast.
             if (day === DAYS && part === '入夜') {
-                const onStage = minds.filter((m) => m.occ === 'troupe' && m.venue === m.work);
-                const helpers = minds.filter((m) => m.occ === 'geinu' && m.venue === '雲錦台戲台');
+                const inHouse = minds.filter((m) => m.venue === '雲錦台戲台');
+                const onStage = inHouse.filter((m) => m.occ === 'troupe' && m.venue === m.work);
                 if (onStage.length) {
                     const lead = onStage.reduce((a, b) => (a.craft >= b.craft ? a : b));
                     const grade = 0.4 + 0.6 * lead.craft;
                     const house =
-                        grade > 0.9 ? '滿場彩聲喝好，加了三回簾' :
-                        grade > 0.75 ? '座兒捧場，彩聲不斷' : '前排有人嗑瓜子聊開了，彩聲稀稀落落';
+                        grade > 0.9 ? '滿場彩聲，加了三回簾' :
+                        grade > 0.75 ? '彩聲不斷' : '前排有人嗑瓜子聊開了，彩聲稀稀落落';
                     log(`  〔票房〕大會串品相 ${grade.toFixed(2)}（領銜 ${lead.name}）——${house}。`);
-                    for (const m of [...onStage, ...helpers]) {
-                        m.money += m.occ === 'troupe' ? 8 : 6;
-                        m.hear(`（今夜的座兒是騙不了人的：${house}。散戲後帳房把戲份銀子發到了你手上。）`);
-                    }
+                    for (const m of inHouse) m.hear(`（今夜場內：${house}。）`);
+                    for (const m of onStage) m.money += 8;
+                    for (const m of inHouse) if (m.occ === 'geinu') m.money += 6;
                     const banzhu = minds.find((m) => m.occ === 'banzhu');
-                    if (banzhu) {
-                        banzhu.money += 12;
-                        banzhu.hear(`（今夜的座兒：${house}。帳房合過帳，班裡這一季能不能翻身，就看這一夜的口碑了。）`);
-                    }
+                    if (banzhu) banzhu.money += 12;
                 }
             }
             for (const m of minds) m.save();
