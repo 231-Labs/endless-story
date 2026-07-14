@@ -102,9 +102,15 @@ interface RecallMem {
 /** Default age (years) for a loaded memory that carries no age stamp. */
 const MEM_AGE = Number(process.env.MW_MEM_AGE ?? 6.5);
 
+// A DISTILLED memory already passed the "刻進心裡" filter — everything that
+// survived is unforgettable, so importance stays uniformly HIGH (a faint order
+// nudge, no real demotion). Raw un-distilled memories would carry their own.
+function distilledImportance(i: number): number {
+    return Math.max(0.8, 0.92 - i * 0.03);
+}
 function normMem(m: string | Partial<RecallMem>, i: number): RecallMem {
-    if (typeof m === 'string') return { text: m, importance: Math.max(0.35, 0.9 - i * 0.1), ageYears: MEM_AGE };
-    return { text: m.text ?? '', importance: m.importance ?? Math.max(0.35, 0.9 - i * 0.1), ageYears: m.ageYears ?? MEM_AGE };
+    if (typeof m === 'string') return { text: m, importance: distilledImportance(i), ageYears: MEM_AGE };
+    return { text: m.text ?? '', importance: m.importance ?? distilledImportance(i), ageYears: m.ageYears ?? MEM_AGE };
 }
 
 /** Lived-past memory lines distilled from finished interludes — merged into
@@ -116,13 +122,16 @@ const EXTRA_MEM: Record<string, RecallMem[]> = Object.fromEntries(
     Object.entries(EXTRA_MEM_RAW).map(([k, v]) => [k, v.map(normMem)]),
 );
 
-/** Age blurs the surfaced form: recent memories return sharp, old ones return
- *  hazy — the mind then holds them accordingly (aching, half-lost). */
-function ageFrame(text: string, ageYears: number): string {
-    if (ageYears < 1) return `這事還新，你清清楚楚記得：${text}`;
-    if (ageYears < 3) return `你還記得清楚：${text}`;
-    if (ageYears < 6) return `隔了幾年，你記得個大概：${text}`;
-    if (ageYears < 12) return `隔了這些年，記不真了，只恍惚剩點影子：${text}`;
+/** Fidelity of a surfaced memory = age blurred, but IMPORTANCE resists the
+ *  blur: the unforgettable stays vivid for decades (time softens detail, not
+ *  the ache), the trivial fades to a shadow fast. effectiveAge collapses for
+ *  high-importance memories — so a 一生難忘 memory at 6-7 years is still clear. */
+function ageFrame(text: string, ageYears: number, importance: number): string {
+    const eff = ageYears * Math.max(0.12, 1.15 - importance);
+    if (eff < 1.2) return `這事你記得清清楚楚，像是刻下的：${text}`;
+    if (eff < 3) return `你還記得清楚：${text}`;
+    if (eff < 6) return `隔了些年，細節淡了，可那點意思你還記得：${text}`;
+    if (eff < 12) return `隔了這些年，記不真了，只恍惚剩點影子：${text}`;
     return `太久遠了，早模糊了，只依稀還剩：${text}`;
 }
 
@@ -808,7 +817,7 @@ async function main(): Promise<void> {
                     m.recalledToday.add(other.id);
                     m.lastRecalled = mem.text;
                     log(`  〔憶起〕${m.name}（見${other.name}，${mem.ageYears}年前·重${mem.importance.toFixed(2)}）：${mem.text.slice(0, 30)}…`);
-                    return `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事翻上心頭——${ageFrame(mem.text, mem.ageYears)}）`;
+                    return `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事翻上心頭——${ageFrame(mem.text, mem.ageYears, mem.importance)}）`;
                 };
                 const percept = (m: Mind, extra?: string): string =>
                     [
@@ -1017,7 +1026,7 @@ async function main(): Promise<void> {
         const extra: Record<string, RecallMem[]> = {};
         for (const m of minds) {
             const lines = await m.distill();
-            extra[m.id] = lines.map((text, i) => ({ text, importance: Math.max(0.4, 0.95 - i * 0.1), ageYears: 0 }));
+            extra[m.id] = lines.map((text, i) => ({ text, importance: distilledImportance(i), ageYears: 0 }));
             log(`\n〔憶〕${m.name} 刻進心裡的：`);
             for (const r of extra[m.id]) log(`  ・[重${r.importance.toFixed(2)}] ${r.text}`);
             m.save();
