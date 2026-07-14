@@ -515,10 +515,15 @@ async function main(): Promise<void> {
                     }
                 } else {
                     const text = act.做 + (act.說 ?? '');
-                    if (!/留給|遞給|送給|交給|留下|相贈|贈與/.test(text)) return;
-                    itemIdx = m.carried.findIndex((d) => mentionsItem(text, d));
+                    const vm = text.match(/留給|遞給|送給|交給|留下|相贈|贈與/);
+                    if (!vm || vm.index === undefined) return;
+                    // verb and object must be CLAUSE-NEIGHBOURS — a sentence
+                    // mentioning boxes-given-to-X and keys elsewhere must not
+                    // hand over the keys (run-5 false positive).
+                    const win = text.slice(Math.max(0, vm.index - 14), vm.index + vm[0].length + 14);
+                    itemIdx = m.carried.findIndex((d) => mentionsItem(win, d));
                     if (itemIdx < 0) return;
-                    receiver = minds.find((o) => o !== m && text.includes(o.name)) ??
+                    receiver = minds.find((o) => o !== m && win.includes(o.name)) ??
                         (group.length === 2 ? group.find((o) => o !== m) : undefined);
                 }
                 if (itemIdx < 0 || !receiver) return;
