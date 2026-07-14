@@ -19,7 +19,7 @@ import { newWant, type Want } from '../../src/index.ts';
 import { CANON, type SeedMemory } from './canon-seed.ts';
 import { abilityOf } from './production.ts';
 
-export type Occupation = 'troupe' | 'banzhu' | 'geinu' | 'guest' | 'reporter';
+export type Occupation = 'troupe' | 'banzhu' | 'geinu' | 'guest' | 'reporter' | 'musician' | 'wardrobe';
 
 /**
  * PINNED world-premise (always injected) — stops the LLM drifting into
@@ -361,6 +361,59 @@ const SPECS: CastSpec[] = [
             { layer: '名', desc: '在一班名角裡，讓上海記住一個靠身體站上台心的人', weight: 0.64, sat: 0.38, resistance: 4 },
         ],
     },
+{
+        id: '唐桂蘭', occupation: 'wardrobe', homeVenue: '衣箱房', workVenue: '衣箱房',
+        socialFact: '你是春雪社的老衣箱師傅，全班行頭家當都在你那串鑰匙底下；衣箱房是你的地界，規矩是你立的。',
+        bodyFact: '上了年紀的婦人',
+        money: 12, // 老衣箱，靠手藝過活，儉省
+        coreIdentity: [
+            '我是唐桂蘭，春雪社的衣箱。行頭在，班子就散不乾淨。',
+            '戲箱重地，外人止步。',
+            '有些事我都看見了，可衣箱師傅的本分是收著，不是說。',
+        ],
+        views: [
+            ['沈雪笙', '十五年的班主。白蘭那夜的事，你們倆誰也沒說破'],
+            ['柳生春', '身條跟當年的班主一個尺寸的孩子，我替她量身時就看出來了'],
+        ],
+        wants: [
+            { layer: '志', desc: '封箱前把全班行頭修造齊整，一口口樟木箱點清上鎖', weight: 0.72, sat: 0.3, resistance: 4 },
+        ],
+    },
+    {
+        id: '裴硯樵', occupation: 'musician', homeVenue: '戲班大通鋪', workVenue: '雲錦台戲台',
+        socialFact: '你是新進班的琴師，文場的頭把交椅；吊弦合樂是你的營生，音準是你的法度。',
+        bodyFact: '清瘦的中年男子',
+        money: 15, // 走碼頭的琴師，手藝人身家
+        coreIdentity: [
+            '我是裴硯樵，拉了三十年胡琴。文場是戲的骨頭。',
+            '只管琴，不管帳，不管人心。',
+            '聽見了，往琴裡咽。',
+        ],
+        views: [
+            ['沈雪笙', '新東家。十五年前雲錦台全盛時我在台下聽過，那牌匾我記得'],
+        ],
+        wants: [
+            { layer: '志', desc: '把春雪社的文場立起來，找一個能託付終老的班子', weight: 0.75, sat: 0.2, resistance: 4 },
+        ],
+    },
+    {
+        id: '杜三通', occupation: 'musician', homeVenue: '戲班大通鋪', workVenue: '雲錦台戲台',
+        socialFact: '你是新進班的鼓佬，武場的節拍器；全班的氣口都吊在你的檀板上。',
+        bodyFact: '敦實的漢子',
+        money: 8, // 半路出家的鼓佬，錢都往家裡寄
+        coreIdentity: [
+            '我是杜三通，司鼓。開唱收板，都聽我的檀板。',
+            '記性就是我的譜。',
+            '再攢七個月，就夠接女兒來上海的船票。',
+        ],
+        views: [
+            ['裴硯樵', '文場的頭把交椅，耳朵毒得嚇人，跟他搭檔得打起十二分精神'],
+        ],
+        wants: [
+            { layer: '家', desc: '攢夠接女兒來上海的船票錢，一文都不能亂花', weight: 0.8, sat: 0.25, resistance: 5 },
+        ],
+    },
+
 ];
 
 /** Romantic want-layers (mirror of round.ts's ROMANTIC_LAYERS) — a want on any of these

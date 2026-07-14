@@ -44,6 +44,9 @@ export const ABILITY: Record<string, number> = {
     沈雪笙: 0.75,
     江聞鶴: 0.7,
     連翹: 0.6,
+    唐桂蘭: 0.7,
+    裴硯樵: 0.85,
+    杜三通: 0.65,
 };
 
 export function abilityOf(id: string): number {

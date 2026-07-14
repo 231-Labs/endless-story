@@ -47,21 +47,37 @@ const VENUE_NAMES = VENUES.map((v) => v.name);
 /** transcript char budget before self-compression. */
 const MEMOIR_AT = 24000;
 
-/** 世相 — the town's day, cycled if the run outlives the table. */
-const TEXTURE = [
-    '年關前落了細雪，街面上人人縮著脖子趕年貨。',
-    '雪停了，各家鋪子掃雪掛紅，年味一日濃過一日。',
-    '茶館裡有人議論雲錦台的水牌，說春雪社要出新戲；也有人斷言排不成。',
-    '城裡各家戲園年關檔期都貼出戲碼了，清一色熟口熟面的老戲。',
-    '首演的日子到了，雲錦台外的水牌底下從一早就圍著人。',
-];
+/** Scenario switch: 'premiere' (S1, an original play) | 'backstage' (S2, no
+ *  audience — rebuild the company's insides before 封箱). */
+const SEASON = process.env.MW_SEASON ?? 'premiere';
+const BACKSTAGE = SEASON === 'backstage';
 
-/** SEASON SCENARIO — an original full-length play, not a gala restaging.
- *  The premiere date on the theatre's board is world physics (calendar);
- *  the ambition itself is seeded at CANON level in one mind, not directed. */
-const SEASON_NOTE: Record<string, string> = {
-    '沈雪笙': '【你近來壓在心口的念頭】班子重啟，老戲碼撐不起場面。你要排一齣誰也沒見過的新編全本大戲——本子還沒有，戲名也還沒有，可首演的水牌你已經叫人貼出去了，退路是沒有的。',
-};
+/** 世相 — the town's day, cycled if the run outlives the table. */
+const TEXTURE = BACKSTAGE
+    ? [
+          '年關將近，雲錦台貼出封箱的日子；班裡新請的琴師、鼓佬今日進班，老衣箱唐桂蘭也回來了。',
+          '落了整夜的雪，後台燒起炭盆，樟木箱的味道混著松香味。',
+          '街面上年貨攤擠得走不動；戲班牆裡斷斷續續傳出弦聲鼓點，路人聽著新鮮。',
+          '封箱酒的席面訂下了，帳房開始合這一季的總帳。',
+          '封箱日到了。過了今夜，戲箱上鎖到開春。',
+      ]
+    : [
+          '年關前落了細雪，街面上人人縮著脖子趕年貨。',
+          '雪停了，各家鋪子掃雪掛紅，年味一日濃過一日。',
+          '茶館裡有人議論雲錦台的水牌，說春雪社要出新戲；也有人斷言排不成。',
+          '城裡各家戲園年關檔期都貼出戲碼了，清一色熟口熟面的老戲。',
+          '首演的日子到了，雲錦台外的水牌底下從一早就圍著人。',
+      ];
+
+/** SEASON SCENARIO — the group goal is calendar physics; the ambition itself
+ *  is seeded at CANON level in one mind, not directed. */
+const SEASON_NOTE: Record<string, string> = BACKSTAGE
+    ? {
+          '沈雪笙': '【你近來壓在心口的念頭】首演撐過去了，可你比誰都清楚：全班連一把場面都沒有，行頭七零八落，分帳還是一筆糊塗帳。你新請了琴師裴硯樵、鼓佬杜三通，今日進班；老衣箱唐桂蘭也回來了。封箱之前，文武場要立起來、行頭要修造齊、班規分帳要立出新章程。這是裡子的仗，沒有觀眾。',
+      }
+    : {
+          '沈雪笙': '【你近來壓在心口的念頭】班子重啟，老戲碼撐不起場面。你要排一齣誰也沒見過的新編全本大戲——本子還沒有，戲名也還沒有，可首演的水牌你已經叫人貼出去了，退路是沒有的。',
+      };
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 interface MindAct { 心裡: string; 做: string; 說?: string; 去?: string; 印?: string; 筆?: string; 贈?: string }
@@ -117,6 +133,10 @@ function dutyFact(occ: string, work: string, part: string, day: number): string 
             return part === '深宵' ? `深宵回報館趕稿（${work}），截稿是天。` : part === '清晨' ? '趕完稿天亮才睡下，晌午前起不來。' : '';
         case 'guest':
             return part === '晡時' ? `這個時辰你照例在${work}吃茶聽戲，城裡的體面人都認得你的座。` : '';
+        case 'musician':
+            return part === '日午' || part === '晡時' ? `這個時辰文武場照例在${work}吊弦合樂，你的營生在那裡。` : '';
+        case 'wardrobe':
+            return part === '日午' || part === '晡時' ? `這個時辰你照例在${work}漿洗縫補、點檢行頭——全班的家當都在你手裡。` : '';
         default:
             return '';
     }
@@ -137,6 +157,8 @@ function dutyParts(occ: string): string[] {
     switch (occ) {
         case 'troupe': return ['日午', '晡時'];
         case 'geinu': return ['入夜'];
+        case 'musician': return ['日午', '晡時'];
+        case 'wardrobe': return ['日午', '晡時'];
         default: return [];
     }
 }
@@ -180,7 +202,9 @@ class Mind {
             occ === 'geinu' ? `入夜在${work}唱堂會、白日多在住處` :
             occ === 'banzhu' ? `白日在${work}坐鎮` :
             occ === 'reporter' ? `深宵在${work}趕稿、白日在街面採風` :
-            occ === 'guest' ? `晡時常在${work}吃茶聽戲` : '起居隨意';
+            occ === 'guest' ? `晡時常在${work}吃茶聽戲` :
+            occ === 'musician' ? `白日在${work}吊弦合樂` :
+            occ === 'wardrobe' ? `成日在${work}漿洗縫補、點檢行頭` : '起居隨意';
         this.system = [
             `你是${c.name}（${c.role}），活在 1920 年代的上海。這不是扮演——你就是這個人，活在連續的時間裡。`,
             `【你是誰】${c.description}`,
@@ -189,7 +213,9 @@ class Mind {
             SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
-            `【本季】雲錦台外貼出了水牌：第${DAYS}日夜，春雪社新編大戲首演。滿城都在看春雪社這回拿什麼出來。`,
+            BACKSTAGE
+                ? `【本季】雲錦台貼出封箱的日子：第${DAYS}日夜，封箱酒、立班規、合一堂全樂；過了那夜，戲箱上鎖到開春。`
+                : `【本季】雲錦台外貼出了水牌：第${DAYS}日夜，春雪社新編大戲首演。滿城都在看春雪社這回拿什麼出來。`,
             '',
             '【你怎麼活】你會不斷收到「此刻的感知」。每次收到，回覆你此刻真實的反應，嚴格只輸出 JSON：',
             '{"心裡":"念頭(一兩句)","做":"你客觀做了什麼(一兩句,第三人稱)","說":"說出口的話(沒有就空)","去":"要動身去的地方(留原地就空)"}',
@@ -338,6 +364,35 @@ async function main(): Promise<void> {
     const specs = buildCast(CAST);
     const minds = specs.map((c) => new Mind(c.id, c.occupation, c.homeVenue, c.workVenue, c.money));
 
+    // SEASON CONTINUITY: minds are persistent — given an archive, they wake
+    // up with last season's life verbatim. New cast members simply have no
+    // transcript yet; that asymmetry IS the newcomer experience.
+    const resumeDir = process.env.MW_RESUME_DIR;
+    if (resumeDir) {
+        const physPath = path.join(resumeDir, 'physics.json');
+        const phys = fs.existsSync(physPath)
+            ? (JSON.parse(fs.readFileSync(physPath, 'utf-8')) as Array<{ name: string; craft: number | null; fatigue: number; money: number; carried?: string[] }>)
+            : [];
+        const carriedPath = path.join(resumeDir, 'carried-state.json');
+        const carriedState = fs.existsSync(carriedPath)
+            ? (JSON.parse(fs.readFileSync(carriedPath, 'utf-8')) as Record<string, string[]>)
+            : null;
+        for (const m of minds) {
+            const t = path.join(resumeDir, `mind-${m.id}.json`);
+            if (fs.existsSync(t)) {
+                m.transcript = JSON.parse(fs.readFileSync(t, 'utf-8')) as Msg[];
+                log(`〔續命〕${m.name} 帶著前一季的日子醒來（${m.transcript.length} 段親歷）。`);
+            }
+            const p = phys.find((x) => x.name === m.name);
+            if (p) {
+                if (typeof p.craft === 'number') m.craft = p.craft;
+                m.money = p.money;
+                if (p.carried) m.carried = p.carried;
+            }
+            if (carriedState?.[m.name]) m.carried = carriedState[m.name];
+        }
+    }
+
     // Whereabouts intel is standing knowledge (small town) — it lives in the
     // SYSTEM once, not in every percept.
     for (const m of minds)
@@ -378,9 +433,13 @@ async function main(): Promise<void> {
 
             const finaleFact =
                 day === DAYS && (part === '黃昏' || part === '入夜')
-                    ? `今夜${playbook.title ? `《${playbook.title}》` : '春雪社新戲'}首演，雲錦台開鑼——水牌貼了這些天，滿城的人都往那兒去。${
-                          part === '入夜' ? '這一個時辰就是正戲：照著本子與定本，一場一場真演下去。' : ''
-                      }`
+                    ? BACKSTAGE
+                        ? `今夜封箱：全班在雲錦台吃封箱酒、立班規、合一堂全樂——過了今夜，戲箱上鎖到開春。${
+                              part === '入夜' ? '這一個時辰就是封箱酒與合樂的正場。' : ''
+                          }`
+                        : `今夜${playbook.title ? `《${playbook.title}》` : '春雪社新戲'}首演，雲錦台開鑼——水牌貼了這些天，滿城的人都往那兒去。${
+                              part === '入夜' ? '這一個時辰就是正戲：照著本子與定本，一場一場真演下去。' : ''
+                          }`
                     : '';
 
             // group by venue for multi-party exchanges
@@ -547,7 +606,20 @@ async function main(): Promise<void> {
             // heard only by those in the building; pay lands silently in the
             // ledger (the purse tells them come morning). No pre-worded
             // feelings, no town-wide broadcast.
-            if (day === DAYS && part === '入夜') {
+            if (BACKSTAGE && day === DAYS && part === '入夜') {
+                // 封箱合樂 — no audience: the ensemble hears its own tightness
+                const inHouse = minds.filter((m) => m.venue === '雲錦台戲台');
+                const players = inHouse.filter((m) => m.occ === 'troupe' || m.occ === 'musician');
+                if (players.length) {
+                    const grade = players.reduce((s, m) => s + m.craft, 0) / players.length;
+                    const sound =
+                        grade > 0.85 ? '弦鼓與唱做咬得嚴絲合縫，滿堂自己人都聽出來了：這班子成了' :
+                        grade > 0.7 ? '大體齊整，只幾處氣口還毛著邊' : '弦是弦、鼓是鼓，各唱各的，離「一班」還遠';
+                    log(`  〔合樂〕封箱合樂品相 ${grade.toFixed(2)}（${players.length} 人上場）——${sound}。`);
+                    for (const m of inHouse) m.hear(`（今夜合樂，滿堂自己人：${sound}。）`);
+                }
+            }
+            if (!BACKSTAGE && day === DAYS && part === '入夜') {
                 const inHouse = minds.filter((m) => m.venue === '雲錦台戲台');
                 const onStage = inHouse.filter((m) => m.occ === 'troupe' && m.venue === m.work);
                 if (onStage.length) {

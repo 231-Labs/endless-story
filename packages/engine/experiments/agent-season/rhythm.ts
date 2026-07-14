@@ -64,6 +64,11 @@ export function rhythmPull(c: Char, part: PartOfDay, reh: RehearsalCall): Rhythm
             return guestRhythm(c, part);
         case 'reporter':
             return reporterRhythm(c, part);
+        case 'musician':
+            // the band keeps troupe hours: 合樂 follows the rehearsal call
+            return troupeRhythm(c, part, reh.announced);
+        case 'wardrobe':
+            return banzhuRhythm(c, part);
     }
 }
 
@@ -250,6 +255,10 @@ function routineNote(c: Char, reh: RehearsalCall): string {
             return `${n}是白家千金：晌午逛霞飛路，傍晚起在戲園包廂聽戲捧場，深宵回白公館。`;
         case 'reporter':
             return `${n}是《春申快訊》的記者：清晨與深宵在申報館趕稿脫不開身；白日在街面採風（戲園前街、霞飛路一帶），黃昏入夜多半在戲園茶座看戲盯人。`;
+        case 'musician':
+            return `${n}是春雪社的樂師：日午晡時在戲台吊弦合樂脫不開身，夜裡歇在戲班大通鋪。`;
+        case 'wardrobe':
+            return `${n}是春雪社的衣箱師傅：白日都在衣箱房漿洗縫補、點檢行頭，輕易不出後台。`;
     }
 }
 
@@ -266,5 +275,5 @@ export function activeVenues(cast: Char[], part: PartOfDay, reh: RehearsalCall):
 
 /** Occupation label for reports. */
 export function occLabel(o: Occupation): string {
-    return { troupe: '戲班', banzhu: '班主', geinu: '歌女', guest: '客', reporter: '記者' }[o];
+    return { troupe: '戲班', banzhu: '班主', geinu: '歌女', guest: '客', reporter: '記者', musician: '樂師', wardrobe: '衣箱' }[o];
 }
