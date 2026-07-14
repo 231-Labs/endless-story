@@ -799,14 +799,25 @@ async function main(): Promise<void> {
                     }
                     return `（${ev.fact}）`;
                 };
-                // TRIGGERED RECALL — the faithful model: seeing someone you share
-                // a deep past with surfaces a memory of them. IMPORTANCE (fixed at
-                // encode) decides WHICH surfaces + whether at all (low-importance
-                // fades to nothing); AGE decides the FIDELITY of the surfaced form
-                // (old = hazy). Not consumed — memory persists — but the same line
-                // won't fire twice running, and at most once per pair per day.
-                const nostalgia = (m: Mind): string => {
-                    if (!m.recallMems.length) return '';
+                // AROUSAL / scene charge: how emotionally high-stakes THIS moment
+                // is. Ordinary hours are low; a finale, a season's last days, or
+                // charged content (goodbye words, tears, kneeling, leaving) run
+                // high. From world signals + scene content — no mind-reading.
+                const sceneCharge = (feedText: string): number => {
+                    let c = 0.12;
+                    if (day === DAYS) c += 0.35; // the decisive day
+                    if (finaleFact) c += 0.2; // the finale window itself
+                    if (DEPARTURE && day >= DAYS - 1) c += 0.2; // parting imminent
+                    if (/訣別|一路順風|送行|南洋|最後一|走了|別了|再沒回頭|上船|跪|淚|燒香|保重/.test(feedText)) c += 0.3;
+                    return Math.min(1, c);
+                };
+                // TRIGGERED RECALL — the faithful model, GATED BY AROUSAL: you
+                // don't dwell on the past at an ordinary breakfast; it floods back
+                // deep only when the moment is charged (生離死別). IMPORTANCE picks
+                // WHICH surfaces; AGE (resisted by importance) sets fidelity; scene
+                // charge decides WHETHER it surfaces and HOW DEEP.
+                const nostalgia = (m: Mind, charge: number): string => {
+                    if (charge < 0.4 || !m.recallMems.length) return '';
                     const other = group.find(
                         (o) => o !== m && partnerOf.get(m.id)?.has(o.id) && !m.recalledToday.has(o.id),
                     );
@@ -816,8 +827,10 @@ async function main(): Promise<void> {
                     const mem = pool.reduce((a, b) => (b.importance > a.importance ? b : a));
                     m.recalledToday.add(other.id);
                     m.lastRecalled = mem.text;
-                    log(`  〔憶起〕${m.name}（見${other.name}，${mem.ageYears}年前·重${mem.importance.toFixed(2)}）：${mem.text.slice(0, 30)}…`);
-                    return `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事翻上心頭——${ageFrame(mem.text, mem.ageYears, mem.importance)}）`;
+                    const deep = charge >= 0.7;
+                    log(`  〔憶起${deep ? '·深' : ''}〕${m.name}（見${other.name}，張力${charge.toFixed(2)}）：${mem.text.slice(0, 26)}…`);
+                    const body = `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事翻上心頭——${ageFrame(mem.text, mem.ageYears, mem.importance)}）`;
+                    return deep ? `${body}（這念頭一起，你心裡那些年一下子全回來了，眼眶發熱，一時竟挪不開。）` : body;
                 };
                 const percept = (m: Mind, extra?: string): string =>
                     [
@@ -827,7 +840,7 @@ async function main(): Promise<void> {
                         paperLine,
                         present(m),
                         nearby(m),
-                        nostalgia(m),
+                        nostalgia(m, sceneCharge(finaleFact)),
                         // body veto is physics: a collapsed body has no duty
                         m.fatigue >= 1 ? '' : dutyFact(m.occ, m.work, part, day),
                         finaleFact,
@@ -894,7 +907,7 @@ async function main(): Promise<void> {
                             // subject, not just the scene's opener (percept only
                             // runs on turn 0); percept's own nostalgia is guarded
                             // against double-firing by recalledToday.
-                            const recallNote = round === 0 && !delta ? '' : nostalgia(m);
+                            const recallNote = round === 0 && !delta ? '' : nostalgia(m, sceneCharge(finaleFact + ' ' + delta));
                             const base = round === 0 && !delta ? percept(m) : `${delta || '（各人做著各自的事。）'} 此刻你？`;
                             const act = await m.act(recallNote ? `${recallNote} ${base}` : base);
                             log(`  ${m.name}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
