@@ -280,6 +280,11 @@ class Mind {
     daysSincePractice = 0;
     practicedToday = false;
     broodedToday = false;
+    /** TRIGGERED RECALL: loaded relationship memories, consumed as they surface
+     *  (recency = never repeated). Surface when the memory's subject is present
+     *  (relevance) — the three-factor recall's PRINCIPLE without the embeddings. */
+    recallPool: string[] = [];
+    recalledToday = new Set<string>();
     /** WORLD object ledger — keepsakes are mutable state, not persona text. */
     carried: string[];
 
@@ -546,6 +551,18 @@ async function main(): Promise<void> {
     for (const m of minds)
         m.system += `\n【你曉得旁人的日子】${minds.filter((o) => o !== m).map((o) => `${o.name}${o.routine}`).join('；')}。`;
 
+    // TRIGGERED RECALL setup: loaded relationship memories (好年頭 etc.) stay in
+    // the system as background knowledge, but ALSO seed a recall pool that
+    // FOREGROUNDS a specific memory when its subject is co-present — the
+    // perceive→recall step the parting was missing (loaded past sat inert as
+    // wallpaper). Partners = the minds who share a loaded memory source.
+    const remembererIds = minds.filter((m) => (EXTRA_MEM[m.id] ?? []).length).map((m) => m.id);
+    const partnerOf = new Map<string, Set<string>>();
+    for (const m of minds) {
+        m.recallPool = (EXTRA_MEM[m.id] ?? []).slice();
+        partnerOf.set(m.id, new Set(remembererIds.filter((o) => o !== m.id)));
+    }
+
     /** The reporter's filed copy, if any — printed at next dawn. */
     let pendingPaper: { by: string; text: string } | null = null;
 
@@ -742,6 +759,22 @@ async function main(): Promise<void> {
                     }
                     return `（${ev.fact}）`;
                 };
+                // TRIGGERED RECALL: seeing someone you share a deep past with
+                // surfaces ONE unspent memory of them into this moment (relevance
+                // = subject present; recency = consumed, never repeats; at most
+                // once per pair per day). The mind then RESPONDS to the memory —
+                // it may harden the resolve to leave, or crack it.
+                const nostalgia = (m: Mind): string => {
+                    if (!m.recallPool.length) return '';
+                    const other = group.find(
+                        (o) => o !== m && partnerOf.get(m.id)?.has(o.id) && !m.recalledToday.has(o.id),
+                    );
+                    if (!other) return '';
+                    m.recalledToday.add(other.id);
+                    const line = m.recallPool.shift()!;
+                    log(`  〔憶起〕${m.name}（見${other.name}）：${line.slice(0, 36)}…`);
+                    return `（這一刻你的眼睛落在${other.name}身上，一樁舊年的事忽然翻上心頭：${line}）`;
+                };
                 const percept = (m: Mind, extra?: string): string =>
                     [
                         `【第${day}日·${part}】你在${m.venue}。`,
@@ -750,6 +783,7 @@ async function main(): Promise<void> {
                         paperLine,
                         present(m),
                         nearby(m),
+                        nostalgia(m),
                         // body veto is physics: a collapsed body has no duty
                         m.fatigue >= 1 ? '' : dutyFact(m.occ, m.work, part, day),
                         finaleFact,
@@ -812,8 +846,13 @@ async function main(): Promise<void> {
                             if (departed.has(m)) continue;
                             if (group.length - departed.size < 2) break;
                             const delta = feed.unseen(m.name);
-                            const prompt = round === 0 && !delta ? percept(m) : `${delta || '（各人做著各自的事。）'} 此刻你？`;
-                            const act = await m.act(prompt);
+                            // recall can fire for ANY participant seeing their
+                            // subject, not just the scene's opener (percept only
+                            // runs on turn 0); percept's own nostalgia is guarded
+                            // against double-firing by recalledToday.
+                            const recallNote = round === 0 && !delta ? '' : nostalgia(m);
+                            const base = round === 0 && !delta ? percept(m) : `${delta || '（各人做著各自的事。）'} 此刻你？`;
+                            const act = await m.act(recallNote ? `${recallNote} ${base}` : base);
                             log(`  ${m.name}｜${act.做}${act.說 ? `「${act.說}」` : ''}`);
                             takePrint(m, act);
                             await takePen(m, act);
@@ -920,6 +959,7 @@ async function main(): Promise<void> {
                 m.practicedToday = false;
             }
             m.broodedToday = false;
+            m.recalledToday.clear();
             m.save();
         }
         // premiere eve: the banzhu locks the script (trade duty, not direction)
