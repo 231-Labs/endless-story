@@ -40,6 +40,11 @@ import {
   goodYearsEvent,
   goodYearsManifest,
 } from '@/lib/story-dossier/good-years';
+import {
+  SOUTHBOUND_SLUG,
+  southboundEvent,
+  southboundManifest,
+} from '@/lib/story-dossier/southbound';
 import { cutsApi } from '@/lib/api/index';
 
 const dossiers = {
@@ -95,8 +100,16 @@ const dossiers = {
     event: goodYearsEvent,
     manifest: goodYearsManifest,
     related: {
-      href: `/feed/event/${BROKEN_FAN_SLUG}`,
-      label: brokenFanEvent.title,
+      href: `/feed/event/${SOUTHBOUND_SLUG}`,
+      label: southboundEvent.title,
+    },
+  },
+  [SOUTHBOUND_SLUG]: {
+    event: southboundEvent,
+    manifest: southboundManifest,
+    related: {
+      href: `/feed/event/${GOOD_YEARS_SLUG}`,
+      label: goodYearsEvent.title,
     },
   },
 } as const;
