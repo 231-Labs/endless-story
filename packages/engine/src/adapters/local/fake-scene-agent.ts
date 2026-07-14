@@ -16,8 +16,10 @@ import type {
     ChooseActionInput,
     ChooseActionResult,
     GenesisWant,
+    EvolveSecretInput,
     PovReflectInput,
     PovSceneInput,
+    JudgeEstablishedInput,
     ReviewSceneInput,
     ReviewSceneReply,
     RippleJudgeDelta,
@@ -245,6 +247,19 @@ export class FakeSceneAgent implements SceneAgentPort {
      * from the character's day + hottest want, so the subjective layer is exercised
      * end-to-end without an LLM. Swap in RunnerSceneAgent for real subjective prose.
      */
+    /** Deterministic milestone stub: promoted only when BOTH views carry an
+     *  explicit mutual marker (相許/已是彼此) — mechanical, no LLM. */
+    async judgeEstablished(input: JudgeEstablishedInput): Promise<boolean> {
+        const re = /相許|已是彼此|交了心|不退了/;
+        return re.test(input.aView ?? '') && re.test(input.bView ?? '');
+    }
+
+    /** Deterministic 心事自改 stub: moves the secret one step when something landed. */
+    async evolveSecret(input: EvolveSecretInput): Promise<string | null> {
+        if (!input.landed.length) return null;
+        return `那樁心事落了地（${input.landed[0].slice(0, 24)}）。如今懸在心裡的，是往後這一步。`;
+    }
+
     /** Deterministic POV-scene stub: proves the wiring (name + beat count), no LLM. */
     async povScene(input: PovSceneInput): Promise<string | null> {
         if (!input.beats.length) return null;

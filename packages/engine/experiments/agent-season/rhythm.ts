@@ -62,6 +62,28 @@ export function rhythmPull(c: Char, part: PartOfDay, reh: RehearsalCall): Rhythm
             return geinuRhythm(c, part);
         case 'guest':
             return guestRhythm(c, part);
+        case 'reporter':
+            return reporterRhythm(c, part);
+    }
+}
+
+function reporterRhythm(c: Char, part: PartOfDay): RhythmPull {
+    switch (part) {
+        case '清晨':
+            // A deep-night deadline man SLEEPS at dawn — the double-duty rhythm
+            // (dawn + deep night, zero rest slots) worked 方競西 into collapse in
+            // his first season: the metabolic invariant applies to every trade.
+            return { venue: c.homeVenue, active: false, note: '趕完稿天都亮了，倒頭睡在報館後閣，晌午前叫不醒。' };
+        case '日午':
+            return { venue: '戲園前街', active: true, note: '晌午出門採風，戲園前街的茶湯攤、糖粥擔都是他的眼線，一碗茶錢一句話。' };
+        case '晡時':
+            return { venue: '霞飛路商店街', active: true, note: '午後在霞飛路商店街轉悠，聽街面的風聲，看誰家的馬車停在誰家門口。' };
+        case '黃昏':
+            return { venue: '包廂茶座', active: true, note: '傍晚進戲園茶座蹲點——票自己掏錢，戲他真看，人他更看。' };
+        case '入夜':
+            return { venue: '包廂茶座', active: true, note: '入夜看戲盯人，散戲後跟著人流走一段，聽足看客的嘴。' };
+        case '深宵':
+            return { venue: '申報館', active: true, duty: true, note: '深宵回報館趕稿，鉛字房的燈陪他到後半夜。' };
     }
 }
 
@@ -139,7 +161,11 @@ function guestRhythm(c: Char, part: PartOfDay): RhythmPull {
         case '日午':
             return { venue: '霞飛路商店街', active: true, note: '晌午出門，逛霞飛路商店街，挑挑洋貨、在攤子上吃點東西，自己的天地。' };
         case '晡時':
-            return { venue: '霞飛路', active: true, note: '午後在霞飛路閒逛。' };
+            // A 名門 daughter has 名門 duties: the one anchored hour her family
+            // claims (帳房、老夫人、家中規矩) — the guest occupation was the only
+            // life with ZERO duty, making her a free radical any hot want could
+            // hijack at no cost.
+            return { venue: c.homeVenue, active: true, duty: true, note: '午後回白公館理家事、對帳房、陪老夫人說話——名門的女兒有名門的功課，這個時辰家裡點卯。' };
         case '黃昏':
             return { venue: '包廂茶座', active: true, note: '傍晚訂了包廂，預備聽戲。' };
         case '入夜':
@@ -162,9 +188,26 @@ export const VENUE_CLUSTER: Record<string, string> = {
     戲園前街: '戲園',
     會樂里寓所: '霞飛里', 霞飛路歌場: '霞飛里', 霞飛路: '霞飛里', 霞飛路商店街: '霞飛里',
     沈宅小樓: '沈宅', 白公館繡樓: '白公館',
+    申報館: '報館', 報館後閣: '報館',
 };
 export const clusterOf = (venue: string): string => VENUE_CLUSTER[venue] ?? venue;
 export const sameCluster = (a: string, b: string): boolean => !!a && !!b && clusterOf(a) === clusterOf(b);
+
+/** The street a cluster opens onto (its physical throat). Private-house clusters
+ *  (沈宅/白公館) have none of their own and reach town by the main road. */
+export const CLUSTER_STREET: Record<string, string> = { 戲園: '戲園前街', 霞飛里: '霞飛路商店街' };
+
+/** Streets a cross-cluster walk PHYSICALLY passes, in order — no teleporting:
+ *  you leave through your cluster's street and arrive through theirs. Same
+ *  cluster = a few steps, no transit. Two street-less clusters = the main road. */
+export function transitStreets(from: string, to: string): string[] {
+    if (!from || !to || sameCluster(from, to)) return [];
+    const legs = [CLUSTER_STREET[clusterOf(from)], CLUSTER_STREET[clusterOf(to)]].filter(
+        (s): s is string => !!s && s !== from && s !== to,
+    );
+    return legs.length ? [...new Set(legs)] : ['霞飛路商店街'];
+}
+
 
 export interface Whereabouts {
     /** best single-venue guess for this 時辰. */
@@ -205,6 +248,8 @@ function routineNote(c: Char, reh: RehearsalCall): string {
             return `${n}是班主，日午到入夜都坐鎮後台妝閣看戲看帳、不好打攪，深宵才回沈宅歇著。`;
         case 'guest':
             return `${n}是白家千金：晌午逛霞飛路，傍晚起在戲園包廂聽戲捧場，深宵回白公館。`;
+        case 'reporter':
+            return `${n}是《春申快訊》的記者：清晨與深宵在申報館趕稿脫不開身；白日在街面採風（戲園前街、霞飛路一帶），黃昏入夜多半在戲園茶座看戲盯人。`;
     }
 }
 
@@ -221,5 +266,5 @@ export function activeVenues(cast: Char[], part: PartOfDay, reh: RehearsalCall):
 
 /** Occupation label for reports. */
 export function occLabel(o: Occupation): string {
-    return { troupe: '戲班', banzhu: '班主', geinu: '歌女', guest: '客' }[o];
+    return { troupe: '戲班', banzhu: '班主', geinu: '歌女', guest: '客', reporter: '記者' }[o];
 }

@@ -5,9 +5,8 @@
  * character's memory survives a restart — the same durability the WorldState
  * snapshot gives the world.
  *
- *   · OPENAI_API_KEY set → real text-embedding-3-small (genuine relevance).
- *   · no key            → deterministic token-hash vectors (mechanism only;
- *                          the wiring runs and hits, relevance is crude).
+ *   · embeddings=auto + OPENAI_API_KEY → real text-embedding-3-small.
+ *   · embeddings=deterministic (or no key) → local token-hash vectors.
  *
  * LOUD on failure: a configured embedding call that errors THROWS — the tick run
  * fails with a clear message rather than silently recalling nothing.
@@ -61,12 +60,14 @@ export class LocalRecall implements RecallPort {
     private store = new Map<string, StoredMemory[]>();
     private seq = 0;
     private readonly file?: string;
+    private readonly embeddings: 'auto' | 'deterministic';
     /** Cumulative recall hits — the smoke reports it as a mechanical counter. */
     hits = 0;
 
     /** @param dir when set, memory is persisted to `<dir>/recall.json`. */
-    constructor(dir?: string) {
+    constructor(dir?: string, options: { embeddings?: 'auto' | 'deterministic' } = {}) {
         this.file = dir ? path.join(dir, STORE_FILE) : undefined;
+        this.embeddings = options.embeddings ?? 'auto';
         this.load();
     }
 
@@ -90,7 +91,7 @@ export class LocalRecall implements RecallPort {
     }
 
     private async embed(text: string): Promise<number[]> {
-        const key = process.env.OPENAI_API_KEY;
+        const key = this.embeddings === 'auto' ? process.env.OPENAI_API_KEY : undefined;
         if (key) {
             const apiBase = (process.env.OPENAI_API_BASE ?? 'https://api.openai.com/v1').replace(/\/$/, '');
             const model = process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small';

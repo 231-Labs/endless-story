@@ -27,7 +27,8 @@ import {
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneLoopCastMember } from './core/scene-loop.ts';
 import { computeSpatialRouting } from './core/spatial-routing.ts';
-import type { ArchivePort, ClockPort, RecallPort, SceneAgentPort } from './ports.ts';
+import type { ArchivePort, CanonicalSceneEvent, ClockPort, RecallPort, SceneAgentPort } from './ports.ts';
+import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -61,6 +62,17 @@ export interface TickReport {
     routed: Record<string, string>;
     wove: boolean;
     episode: boolean;
+    /** Frozen objective events produced this tick, before any POV interpretation. */
+    events: CanonicalSceneEvent[];
+    /** Read-only session projections, linked back to their frozen event. */
+    eventPovs: TickEventPov[];
+}
+
+export interface TickEventPov {
+    characterId: string;
+    name: string;
+    eventId: string;
+    body: string;
 }
 
 /** A lean daily-life state line from the state vector (undertone, not an event). */
@@ -190,6 +202,8 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const acc = w.dayAccum;
     /** Per-character angle on this tick: objective act + inner thought. */
     const pov = new Map<string, { name: string; lines: string[] }>();
+    const eventPovs: TickEventPov[] = [];
+    const events: CanonicalSceneEvent[] = [];
 
     for (const [sid, ids] of byScene) {
         if (ids.length === 0) continue;
@@ -219,12 +233,14 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     stateLine: stateLine(member.state.fatigue, member.state.hunger),
                     innerSecret: member.secret,
                     role: member.role,
+                    bodyFact: member.gender,
                     ties,
                 };
             }),
         );
 
         const loop = await runSceneLoop({
+            sagaId: w.sagaId,
             sceneId: sid,
             sceneName,
             isPrivate,
@@ -234,6 +250,69 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             tick: nowTick,
             agent,
         });
+
+        // Freeze only after the existing scene checker has repaired hard prose
+        // errors. The checker may edit text, never actors/order/count; structured
+        // perception metadata remains attached to the original beat.
+        if (loop.beats.length > 0 && ids.length > 1) {
+            const reviewed = await agent.reviewScene({
+                worldPremise: w.sagaPremise,
+                venue: sceneName,
+                participants: ids.map((id) => {
+                    const member = world.castById(id)!;
+                    return {
+                        name: member.name,
+                        bodyFact: member.gender,
+                        role: member.role,
+                        carried: [],
+                        relationship: Object.values(world.selfTies(id, ids)).join('、') || undefined,
+                    };
+                }),
+                beats: loop.beats.map((beat) => ({ name: beat.name, text: beat.text, inner: beat.inner })),
+            });
+            if (reviewed?.beats.length === loop.beats.length && reviewed.beats.every((beat, i) => beat.name === loop.beats[i].name)) {
+                loop.beats = loop.beats.map((beat, i) => ({
+                    ...beat,
+                    text: reviewed.beats[i].text,
+                    inner: reviewed.beats[i].inner ?? beat.inner,
+                }));
+            }
+        }
+
+        const eventId = `${w.sagaId}:d${today}:t${nowTick}:${sid}`;
+        const event: CanonicalSceneEvent = {
+            v: 1,
+            id: eventId,
+            sagaId: w.sagaId,
+            day: today,
+            tick: nowTick,
+            clock: clockLabel,
+            sceneId: sid,
+            sceneName,
+            visibility: isPrivate ? 'private' : 'public',
+            witnessIds: [...ids],
+            editorialSignals: {
+                resolvedWants: loop.resolved.length,
+                departures: loop.moves.filter((move) => w.scenes.some((scene) => scene.name === move.toSceneName)).length,
+                relationshipTurn: loop.intimacyAccepted,
+            },
+            beats: loop.beats.map((b) => ({
+                characterId: b.characterId,
+                name: b.name,
+                text: b.text,
+                addressed: b.addressed,
+                audience: b.audience ?? 'scene',
+                perceiverIds: deriveBeatPerceiverIds(b, ids.map((id) => ({ id, name: world.nameById(id) }))),
+                inner: b.inner || undefined,
+            })),
+        };
+        if (event.beats.length) {
+            events.push(event);
+            for (const id of ids) {
+                const member = world.castById(id)!;
+                await agent.observeScene?.({ event, characterId: id, name: member.name, persona: member.persona });
+            }
+        }
 
         if (loop.beats.length && acc.lines[acc.lines.length - 1] !== `【${clockLabel}】`) acc.lines.push(`【${clockLabel}】`);
         const shoujuan: string[] = [];
@@ -255,7 +334,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         if (loop.beats.length) {
             beats += loop.beats.length;
             beatScenes.push(sid);
-            await archive.commit({ kind: 'shoujuan', day: today, tick: nowTick, name: sceneName, sceneId: sid, body: shoujuan.join('\n') });
+            await archive.commit({ kind: 'shoujuan', day: today, tick: nowTick, name: sceneName, sceneId: sid, eventId, body: shoujuan.join('\n') });
             // Remember each actor's turn so the next tick continues from it.
             for (const b of loop.beats) {
                 await recall.remember(b.characterId, `〔${sceneName}〕${b.text}（心下：${b.inner}）`, {
@@ -263,6 +342,36 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     importance: 5,
                     day: today,
                 });
+            }
+        }
+
+
+        // Render the frozen event through each witness's own durable session.
+        if (loop.beats.length) {
+            for (const id of ids) {
+                const member = world.castById(id)!;
+                const rendered = await agent.povScene({
+                    sagaId: w.sagaId,
+                    characterId: id,
+                    eventId,
+                    name: member.name,
+                    persona: member.persona,
+                    secret: member.secret,
+                    ties: Object.entries(world.selfTies(id, ids)).map(([oid, t]) => `對${world.nameById(oid)}：${t}`).join('\n') || undefined,
+                    venue: sceneName,
+                    clock: clockLabel,
+                    beats: projectEventBeatsForWitness(event, id),
+                    castBodies: ids.map((cid) => {
+                        const x = world.castById(cid)!;
+                        return { name: x.name, bodyFact: x.gender, role: x.role };
+                    }),
+                });
+                if (rendered) {
+                    const aggregate = pov.get(id) ?? { name: member.name, lines: [] };
+                    aggregate.lines.push(rendered);
+                    pov.set(id, aggregate);
+                    eventPovs.push({ characterId: id, name: member.name, eventId, body: rendered });
+                }
             }
         }
 
@@ -311,11 +420,16 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             const deltas = await agent.judgeRipples({
                 sceneName,
                 beats: loop.beats.map((b) => `${b.name}：${b.text}`),
-                roster: w.cast.map((m) => ({
-                    characterId: m.id,
-                    name: m.name,
-                    wants: wants.filter((x) => !x.retired && x.characterId === m.id).map((x) => x.desc),
-                })),
+                // A scene can stir only its witnesses. News can travel later as
+                // another physical event; the ripple judge is not a telepathic bus.
+                roster: ids.map((id) => {
+                    const member = world.castById(id)!;
+                    return {
+                        characterId: id,
+                        name: member.name,
+                        wants: wants.filter((x) => !x.retired && x.characterId === id).map((x) => x.desc),
+                    };
+                }),
             });
             for (const sp of applyRipples(wants, deltas, nowTick)) {
                 log(`  new thread: ${world.nameById(sp.characterId)}「${sp.desc}」`);
@@ -343,9 +457,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
     // 7) PER-CHARACTER POV — each actor's own angle this tick (objective + inner).
     //    Full first-person serial prose is M1; M0 archives the captured angle.
-    for (const [id, p] of pov) {
-        await archive.commit({ kind: 'pov', day: today, tick: nowTick, name: p.name, characterId: id, body: p.lines.join('\n\n') });
-        acc.povByName[p.name] = p.lines.join('\n');
+    for (const p of eventPovs) {
+        await archive.commit({ kind: 'pov', day: today, tick: nowTick, name: p.name, characterId: p.characterId, eventId: p.eventId, body: p.body });
+    }
+    for (const p of pov.values()) {
+        acc.povByName[p.name] = p.lines.join('\n\n');
     }
 
     // 8) DAY-END EPISODE.
@@ -391,5 +507,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         routed,
         wove,
         episode,
+        events,
+        eventPovs,
     };
 }

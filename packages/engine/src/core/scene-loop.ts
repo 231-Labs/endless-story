@@ -48,6 +48,10 @@ export interface SceneLoopCastMember {
      *  register so a consummate beat is gender-correct for ANY pairing (data-driven,
      *  never name-special-cased). */
     bodyFact?: string;
+    /** STANDING for the advance affordance (bond-gated by the caller): without
+     *  it the world simply never deals this actor the advance card — courting
+     *  happens through scenes and confidences first. Default true (probes). */
+    advanceReady?: boolean;
     /** This member's OWN canon feeling toward each co-present member, keyed by
      *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
      *  the reverse edge — no omniscience about others' feelings. */
@@ -55,6 +59,8 @@ export interface SceneLoopCastMember {
 }
 
 export interface SceneLoopInput {
+    /** Saga namespace for persistent character-session isolation. */
+    sagaId?: string;
     sceneId: string;
     sceneName: string;
     /** The venue's physical description (anti-teleport grounding for beats). */
@@ -83,6 +89,10 @@ export interface SceneLoopInput {
     continuation?: boolean;
     /** The last beats of the prior scene in a continuation, as opening context. */
     priorTail?: string;
+    /** Open the scene on THIS member (e.g. a confider must say their piece on
+     *  page — the first rendered beat was landing on the listener's reaction,
+     *  so the confidence itself never transferred). Later turns route normally. */
+    firstActorId?: string;
     /** Injectable agent (composition tests script it); omit → runner LLM agent. */
     agent?: SceneAgent;
 }
@@ -94,6 +104,7 @@ export interface SceneBeat {
     text: string;
     inner: string;
     addressed?: string;
+    audience?: 'scene' | 'addressed';
 }
 
 export interface SceneLoopResult {
@@ -107,6 +118,15 @@ export interface SceneLoopResult {
     /** True when some beat ran privateAlone on a love-layer want — the ex-ante
      *  intimacy gate. Content rating (ex post) is the caller's judge call. */
     intimacyGateOpened: boolean;
+    /** An in-scene advance→accept happened: the pair BECAME lovers here (an
+     *  event, not a verdict) — callers record it as established. */
+    intimacyAccepted: boolean;
+    /** Beat index where the accept landed (for the on-page 床 test). */
+    acceptedAtBeat?: number;
+    /** Who dropped the curtain (their close beat), if anyone. */
+    closedBy?: string;
+    /** How it ended: their close / the hour ran out / people drained away. */
+    endReason?: 'close' | 'hour' | 'drained';
 }
 
 /** §2.45: privacy drops the wall — alone with the want's target in a private
@@ -170,35 +190,67 @@ function carriedInScene(
 }
 
 export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResult> {
-    const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false };
+    const result: SceneLoopResult = { beats: [], moves: [], resolved: [], actedCharacterIds: [], intimacyGateOpened: false, intimacyAccepted: false };
     const present = [...input.cast];
     if (present.length === 0) return result;
     const agent = input.agent ?? (await defaultAgent());
 
     const solo = present.length === 1;
-    // A consummate scene (established lovers, private, at night) earns MANY more beats —
-    // it is the emotional/physical climax and needs room to actually escalate into a real
-    // dramatic scene, not fade at the threshold. The bed-probe (bed-probe-long.ts) showed
-    // ~24 beats still escalate without degrading. TUNABLE via SEASON_BED_CAP (default 16);
-    // a hard ceiling of 32 keeps cost BOUNDED (never runaway). Restrained/public stay tight.
-    const consummateCap = Math.min(32, Math.max(1, Math.floor(Number(process.env.SEASON_BED_CAP ?? '16')) || 16));
-    const maxTurns = input.maxTurns ?? (solo ? 1 : input.emotionalStance === 'consummate' ? consummateCap : input.isPrivate ? 5 : 4);
+    // A register scene has NO narrative cap: the close beat is the one true exit — the
+    // pair decides where the night ends (a M/F first night self-closed at 11; a F/F
+    // 16-beat psychological duel hit the old wall still clothed). What remains is a
+    // RUNAWAY BACKSTOP only (cost fuse, never a curtain): default 32, hard 64.
+    // TUNABLE via SEASON_BED_CAP. Restrained/public scenes stay tight.
+    const consummateCap = Math.min(64, Math.max(1, Math.floor(Number(process.env.SEASON_BED_CAP ?? '32')) || 32));
+    let maxTurns = input.maxTurns ?? (solo ? 1 : input.emotionalStance === 'consummate' ? consummateCap : input.isPrivate ? 5 : 4);
     const log: string[] = [];
     const actedWants = new Map<string, Want>();
     /** In-scene beat counts — feeds turn routing so a duel can't monopolize. */
     const beatsBy = new Map<string, number>();
 
-    let actor: SceneLoopCastMember | undefined = present.reduce((b, c) => {
-        const wb = hottestOf(input.wants, b.characterId);
-        const wc = hottestOf(input.wants, c.characterId);
-        return (wc ? tension(wc) : -1) > (wb ? tension(wb) : -1) ? c : b;
-    });
+    let actor: SceneLoopCastMember | undefined =
+        (input.firstActorId && present.find((c) => c.characterId === input.firstActorId)) ||
+        present.reduce((b, c) => {
+            const wb = hottestOf(input.wants, b.characterId);
+            const wc = hottestOf(input.wants, c.characterId);
+            return (wc ? tension(wc) : -1) > (wb ? tension(wb) : -1) ? c : b;
+        });
 
+    // In-scene intimacy negotiation (no judge, no status gate): an 'advance'
+    // puts an overture on the table; the OTHER's 'accept' opens the register,
+    // a 'decline' clears it — both honoured. Seed-established pairs at night
+    // start with the register open (old lovers renegotiate nothing).
+    let registerOpen = input.emotionalStance === 'consummate' && input.isPrivate;
+    let pendingAdvanceBy: string | null = null;
     for (let turn = 0; turn < maxTurns; turn++) {
         if (!actor) break;
-        const w = hottestOf(input.wants, actor.characterId);
-        if (!w) break;
-        w.heat += 1;
+        let w = hottestOf(input.wants, actor.characterId);
+        let synthetic = false;
+        if (!w) {
+            // A settled heart still finishes the scene: an actor with NO live want
+            // (e.g. everything resolved that morning) acts on presence alone instead
+            // of KILLING the scene mid-exchange (the 大會串 once died at 1 beat
+            // because the lead's wants were all retired by noon). Synthetic want:
+            // no ledger bookkeeping, pure presence.
+            synthetic = true;
+            w = {
+                id: `presence-${actor.characterId}`,
+                characterId: actor.characterId,
+                layer: '當下',
+                desc: '把眼前這一場好好走完',
+                weight: 0.3,
+                sat: 0.5,
+                sat0: 0.5,
+                resistance: 6,
+                heat: 0,
+                frust: 0,
+                recent: 0,
+                kind: 'narrative',
+                source: 'genesis',
+                bornTick: input.tick,
+            };
+        }
+        if (!synthetic) w.heat += 1;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: present });
         const others = present.filter((c) => c.characterId !== actor!.characterId);
         // A consummate scene = established lovers, private, the two of them alone. Their
@@ -206,8 +258,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         // so we do NOT require a live 愛/情 want to open the intimacy register — old lovers
         // going to bed need no unmet want to justify it. This is safely scoped: the
         // 'consummate' stance is only ever set for the established-lover night 床 scene.
-        const consummateScene =
-            input.emotionalStance === 'consummate' && input.isPrivate && present.length === 2;
+        const consummateScene = (registerOpen || (input.emotionalStance === 'consummate' && input.isPrivate)) && present.length === 2;
         const privateAlone =
             input.isPrivate &&
             present.length === 2 &&
@@ -216,6 +267,9 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         if (gateBeat) result.intimacyGateOpened = true;
 
         const r = await agent.actBeat({
+            sagaId: input.sagaId,
+            characterId: actor.characterId,
+            perceptId: input.sagaId ? `${input.sagaId}:t${input.tick}:${input.sceneId}:turn${turn}` : undefined,
             name: actor.name,
             persona: actor.persona,
             memories: actor.memories,
@@ -244,10 +298,19 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             stateLine: actor.stateLine,
             innerSecret: actor.innerSecret,
             etiquette: input.etiquette,
-            consummate: gateBeat && input.emotionalStance === 'consummate',
+            consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
+            intimacyOffered: pendingAdvanceBy != null && pendingAdvanceBy !== actor.characterId,
+            intimacyPossible: input.isPrivate && present.length === 2 && !registerOpen && actor.advanceReady !== false,
         });
 
         log.push(`${actor.name}：${r.beat}`);
+        // DAWN PRESSURE (world fact, not a director): some pairs structurally cannot
+        // close (an uncapped 金柳 replay rode its debt-loop straight into the 32 fuse,
+        // sailing PAST its own perfect curtain). Deep into a register night the sky
+        // starts paling in the scene log — the world states time, they decide the end.
+        if (registerOpen && turn === Math.floor((consummateCap * 3) / 4)) {
+            log.push('（夜已深透，天光快要透進來了）');
+        }
         result.beats.push({
             sceneId: input.sceneId,
             characterId: actor.characterId,
@@ -255,9 +318,39 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             text: r.beat,
             inner: r.inner,
             addressed: r.addressed,
+            audience: r.audience,
         });
         if (!result.actedCharacterIds.includes(actor.characterId)) result.actedCharacterIds.push(actor.characterId);
-        actedWants.set(w.id, w);
+        if (synthetic) {
+            // presence-only beat: no want ledger to update
+        }
+        // Intimacy negotiation bookkeeping (their choices, honoured verbatim).
+        if (input.isPrivate && present.length === 2) {
+            if (r.intimacy === 'accept' && pendingAdvanceBy && pendingAdvanceBy !== actor.characterId) {
+                registerOpen = true;
+                result.intimacyAccepted = true;
+                result.intimacyGateOpened = true;
+                result.acceptedAtBeat = result.beats.length - 1;
+                pendingAdvanceBy = null;
+                // The register opened MID-scene: the cap must open with it, or the
+                // world grants permission but not time (a negotiated first night was
+                // getting cut at the 5-beat private default while seed-established
+                // pairs enjoyed the full ceiling). Close remains their exit.
+                if (!input.maxTurns && maxTurns < consummateCap) maxTurns = consummateCap;
+            } else if (r.intimacy === 'decline') {
+                pendingAdvanceBy = null;
+            } else if (r.intimacy === 'advance') {
+                pendingAdvanceBy = actor.characterId;
+            }
+        }
+        // The actor's own ending: a close beat (sleep/farewell/enough) wraps the
+        // scene — length is theirs, the cap above is only a ceiling.
+        if (r.close) {
+            result.closedBy = actor.name;
+            result.endReason = 'close';
+            break;
+        }
+        if (!synthetic) actedWants.set(w.id, w);
         beatsBy.set(actor.characterId, (beatsBy.get(actor.characterId) ?? 0) + 1);
 
         w.recent += 1;
@@ -316,12 +409,22 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     // fails to form (H3c: don't make public harder until the private path lands).
     for (const w of actedWants.values()) {
         if (w.retired) continue;
+        // A targeted want is only judged where its target actually IS: a semantic
+        // match once resolved 金鳳's debt-want inside a 江柳 scene (wrong person).
+        if (w.target && !presentIds.has(w.target) && !presentNames.has(w.target)) continue;
+        // RESOLUTION NEEDS HISTORY (anti vow-inflation): a matter of the heart is
+        // not settled the first time it is touched — the want must have been truly
+        // WORKED (≥4 acted beats over its life) before the judge is even consulted.
+        // A ten-year debt was clearing in a single scene; every scene played like a
+        // season finale because the fastest road to progress was an instant 終身誓.
+        if (w.heat < 4) continue;
         const effR = effectiveResistance(w, { isPrivate: input.isPrivate, cast: input.cast });
         if (forcingPressure(w) < effR) continue;
         const owner = input.cast.find((c) => c.characterId === w.characterId);
         if (!owner) continue;
         const verdict = await agent.judgeWantResolved({
             name: owner.name,
+            ownerBody: owner.bodyFact,
             wantDesc: w.desc,
             beats: log,
         });
@@ -331,5 +434,6 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         }
     }
 
+    if (!result.endReason) result.endReason = present.length < 2 ? 'drained' : 'hour';
     return result;
 }

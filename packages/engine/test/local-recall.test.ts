@@ -34,3 +34,16 @@ test('a wall of recent trivia crowds out an older core memory in the top-K (the 
     const top3 = await r.recall('c0', '後台瑣事', 3, 6);
     assert.ok(!top3.some((m) => m.text.includes('舊情人')), 'core memory evicted from top-3 by recent trivia — recall behaves as before');
 });
+
+test('deterministic mode never contacts OpenAI merely because a key exists', async () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = 'must-not-be-used';
+    try {
+        const r = new LocalRecall(undefined, { embeddings: 'deterministic' });
+        await r.remember('c0', '只留在本機的記憶', { kind: 'observation', importance: 5, day: 1 });
+        assert.equal((await r.recall('c0', '本機記憶', 1, 1))[0]?.text, '只留在本機的記憶');
+    } finally {
+        if (previous === undefined) delete process.env.OPENAI_API_KEY;
+        else process.env.OPENAI_API_KEY = previous;
+    }
+});

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { eventChapter } from '@endless-story/runner';
+import { eventChapter, eventDossier } from '@endless-story/runner';
 import type { EventCutEntry } from '@/lib/api/cuts';
 import { fetchChapterText } from '@/lib/chain/pov-read';
 import { CHAPTER_COPY } from '@/lib/copy/chapters';
@@ -34,12 +34,13 @@ export async function CutList({
     return (
         <div className="space-y-6">
             {cuts.map((c, i) => {
-                const { body } = eventChapter.parseCutHeader((raws[i] ?? '').trim());
+                const { body: cutBody } = eventChapter.parseCutHeader((raws[i] ?? '').trim());
+                const { bundle, body } = eventDossier.parseDossierHeader(cutBody);
                 const { title, excerpt } = splitCutBody(body);
                 return (
                     <Link
                         key={c.commitmentId}
-                        href={`/feed/cut/${c.commitmentId}`}
+                        href={bundle ? `/feed/event/${c.commitmentId}` : `/feed/cut/${c.commitmentId}`}
                         className="group block es-card p-6 transition-all duration-300 hover:bg-surface hover:border-cinnabar/30 hover:shadow-sm sm:p-8"
                     >
                         <div className="flex flex-wrap items-center gap-3 text-2xs tracking-widest text-mute/80">
@@ -66,7 +67,9 @@ export async function CutList({
                         ) : (
                             <p className="mt-3 text-sm text-mute">{CHAPTER_COPY.pov.bodyUnavailable}</p>
                         )}
-                        <p className="mt-4 text-sm tracking-widest text-cinnabar">{CHAPTER_COPY.cut.readThisCut}</p>
+                        <p className="mt-4 text-sm tracking-widest text-cinnabar">
+                            {bundle ? '切換角色視角' : CHAPTER_COPY.cut.readThisCut}
+                        </p>
                     </Link>
                 );
             })}

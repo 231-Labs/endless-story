@@ -8,7 +8,8 @@
  */
 
 import { text as llmText } from '@endless-story/llm';
-import { buildBeatSystemPrompt, pronounFromBody, type ActBeatInput, type BeatResult } from './beat-prompt.js';
+import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, safeSceneRevision, type ActBeatInput, type BeatResult } from './beat-prompt.js';
+import { formatPovSceneParagraphs } from '../narrative-format/pov-paragraphs.ts';
 
 // Pure prompt surface (types + builders) lives in the node-clean leaf
 // `beat-prompt.ts`; re-exported here so the package surface is unchanged.
@@ -41,26 +42,19 @@ export async function actBeat(input: ActBeatInput): Promise<BeatResult> {
                 content: `【這場戲剛剛的來回】\n${input.sceneLog || '（戲方起。）'}\n\n輪到你（${input.name}）。`,
             },
         ],
-        maxTokens: input.consummate ? 700 : 240,
+        // Loosened (user: give the drama room to grow) — beats may breathe a
+        // second sentence; the register still decides how much gets used.
+        maxTokens: input.consummate ? 900 : 480,
         temperature: 0.95,
     });
-    const o = extractJson(res.text) ?? {};
-    const addressed = s(o.addressed);
-    const move = s(o.move);
-    // The model often self-prefixes its own name (「蘇映雪：…」); every renderer
-    // prepends the speaker itself, so strip a leading self-name here (once).
-    const esc = input.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const deName = (t: string): string => t.replace(new RegExp(`^${esc}\\s*[:：]\\s*`), '');
-    return {
-        beat: deName(s(o.beat)) || '（沉默。）',
-        inner: deName(s(o.inner)),
-        addressed: addressed && addressed !== '無' ? addressed : undefined,
-        move: move && move !== '無' ? move : undefined,
-    };
+    return parseBeatResult(res.text, input.name);
 }
 
 export interface JudgeResolveInput {
     name: string;
+    /** Owner's 身/sex phrase — pronoun guard for the note (an unguarded judge wrote
+     *  他咬緊牙關 for a 坤生). */
+    ownerBody?: string;
     wantDesc: string;
     /** The scene beats, newest last. */
     beats: string[];
@@ -115,6 +109,9 @@ export interface ReviewSceneParticipant {
     role?: string;
     /** One-line canon relationship toward the others (footing for voice checks). */
     relationship?: string;
+    /** World-registered personal props. Empty means the editor must remove any
+     * pocket/sleeve prop the draft invented. */
+    carried?: string[];
 }
 
 export interface ReviewSceneInput {
@@ -148,7 +145,7 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
             .map((p) => `${p.name}＝${pronounFromBody(p.bodyFact)}（${p.bodyFact ?? '身不詳'}）`)
             .join('、');
         const who = input.participants
-            .map((p) => `- ${p.name}｜${p.role ?? '—'}｜身：${p.bodyFact ?? '不詳'}${p.relationship ? `｜與人：${p.relationship}` : ''}`)
+            .map((p) => `- ${p.name}｜${p.role ?? '—'}｜身：${p.bodyFact ?? '不詳'}｜隨身：${p.carried?.length ? p.carried.join('、') : '無登記私人物'}${p.relationship ? `｜與人：${p.relationship}` : ''}`)
             .join('\n');
         const numbered = input.beats.map((b, i) => `${i}｜${b.name}：${b.text}`).join('\n');
         const client = llmText.createTextClient({ kind: 'cheap' });
@@ -163,7 +160,11 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
                 '④時代錯亂（違反下面的世道鐵則）；' +
                 '⑤筆病——一面倒的獨角戲、對白太少（金瓶梅是話多的）、同一句口頭禪／比喻反覆；' +
                 '⑥物不在場——把別處的物事寫成就在眼前（誰家窗台的花、誰房裡的擺設憑空出現在此處）；' +
-                '這類要嘛改成就地取材、要嘛改成用話語提及那件別處的東西。' +
+                '這類要嘛改成就地取材、要嘛改成用話語提及那件別處的東西；' +
+                '⑦比喻落地——把「帳／債／欠」這類心裡的比喻坐實成憑空冒出的有形物（借據、文書、銀錢）。' +
+                '⑧隨身物歸屬——別人的貼身物件（誰的懷錶、誰的摺扇）憑空出現在另一人手裡；除非這場戲裡真演了交接，物件跟著主人走。' +
+                '引號裡是角色已經說出口的正史台詞，一字不得改；代詞若是角色自己說的，也保留為那個人的說法。' +
+                '欠的是情分就照情分討：改成話語、動作、眼神，把那紙上的道具拿掉。' +
                 '沒問題的拍，text 原樣照抄。只輸出 JSON：{"beats":[{"i":序號,"text":"改後這一拍"}...]}。不要 markdown。',
             messages: [
                 {
@@ -197,7 +198,9 @@ export async function reviewScene(input: ReviewSceneInput): Promise<ReviewSceneR
                 const escNm = nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 t = t.replace(new RegExp(`^${escNm}\\s*[:：]\\s*`), '');
             }
-            if (Number.isInteger(idx) && t) revisedById.set(idx, t);
+            if (Number.isInteger(idx) && input.beats[idx] && t) {
+                revisedById.set(idx, safeSceneRevision(input.beats[idx].text, t));
+            }
         }
         return {
             beats: input.beats.map((b, i) => ({ name: b.name, text: revisedById.get(i) ?? b.text, inner: b.inner })),
@@ -253,7 +256,8 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
             system:
                 '你就是這個人。夜深了，替自己把今天在心裡過一遍——用**第一人稱**，寫我今天遇上了什麼、' +
                 '心裡是什麼滋味、我還想怎麼樣。這是**我的主觀**，可以偏心、可以只記我在意的、可以埋怨、' +
-                '可以自欺；不是公正的流水帳。只寫一小段（60-140字），不要標題、不要 JSON、不要分行成清單。' +
+                '可以自欺；不是公正的流水帳。只寫一小段（80-200字），不要標題、不要 JSON、不要分行成清單。' +
+                '這日記是一夜一夜寫下去的：別把前幾夜寫過的那句命題再抄一遍，今晚只寫今晚真正戳到我的。' +
                 bodyNote,
             messages: [
                 {
@@ -266,7 +270,7 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
                         `\n\n把今天在你（${input.name}）心裡過一遍。`,
                 },
             ],
-            maxTokens: 320,
+            maxTokens: 480,
             temperature: 0.9,
         });
         return res.text.trim() || null;
@@ -275,8 +279,63 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
     }
 }
 
+// ── Established-pair judge (relationship milestone promotion) ────────────────
+export interface JudgeEstablishedInput {
+    aName: string;
+    bName: string;
+    /** Each side's CURRENT view of the other (their own graph lines). */
+    aView?: string;
+    bView?: string;
+    /** Their live/recent romantic want descs toward each other (evidence). */
+    wants?: string[];
+    /** Tail of their most recent private scene together, if any. */
+    lastSceneTail?: string;
+}
+
+/**
+ * MILESTONE JUDGE — are these two, as of now, 相許 (openly each other's)?
+ * Establishment used to be STATIC seed data, so a pair that crossed the
+ * confession milestone in play could never reach the consummate register —
+ * no 床戲, hence nothing for a jealous third to walk in on (the post-W1
+ * 修羅場 drought). This judge READS the relationship (never steers it);
+ * a promotion only unlocks a register the pair may or may not use.
+ */
+export async function judgeEstablished(input: JudgeEstablishedInput): Promise<boolean> {
+    try {
+        const client = llmText.createTextClient({ kind: 'cheap' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system:
+                '你是關係判官。就下面兩人各自心裡的認知與近況，判斷他們此刻是否已「相許」——' +
+                '雙方都已挑明、都認了彼此（不是單戀、不是曖昧、不是只有一方交了心）。' +
+                '嚴格：有一方仍未挑明或仍在退，就是 false。輸出 JSON：{"established":true|false}。不要 markdown。',
+            messages: [
+                {
+                    role: 'user',
+                    content:
+                        `${input.aName} 心裡對 ${input.bName}：${input.aView ?? '（不詳）'}\n` +
+                        `${input.bName} 心裡對 ${input.aName}：${input.bView ?? '（不詳）'}\n` +
+                        (input.wants?.length ? `兩人心裡掛著的：\n${input.wants.map((w) => `- ${w}`).join('\n')}\n` : '') +
+                        (input.lastSceneTail ? `他們最近一場私下相處的尾聲：${input.lastSceneTail}\n` : '') +
+                        `\n此刻他們算不算已相許？`,
+                },
+            ],
+            maxTokens: 60,
+            temperature: 0.1,
+        });
+        const o = extractJson(res.text) ?? {};
+        return o.established === true;
+    } catch {
+        return false; // fail closed: no promotion on error
+    }
+}
+
 // ── POV scene rendering (the 追角 lens: one scene, one participant's eyes) ────
 export interface PovSceneInput {
+    /** Provenance for reading the matching persistent character session. */
+    sagaId?: string;
+    characterId?: string;
+    eventId?: string;
     /** The witnessing participant (whose eyes render the scene). */
     name: string;
     persona: string;
@@ -292,8 +351,11 @@ export interface PovSceneInput {
     clock: string;
     /** The scene's OBJECTIVE beats, in order (the canon this version must keep). */
     beats: Array<{ name: string; text: string }>;
-    /** 身/sex facts for pronoun correctness across the retelling. */
-    castBodies?: Array<{ name: string; bodyFact?: string }>;
+    /** Identity facts for everyone present: 身/sex for pronouns AND 行當 (role) so
+     *  the retelling never re-assigns an identity — a POV writer with no role data
+     *  once called the 花旦's hand 「坤生的手」 (the troupe's strongest 行當
+     *  association bled onto the wrong person). */
+    castBodies?: Array<{ name: string; bodyFact?: string; role?: string }>;
 }
 
 /**
@@ -312,8 +374,11 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
         const soil = input.memories?.length ? input.memories.map((m) => `- ${m}`).join('\n') : '';
         const bodies = (input.castBodies ?? [])
             .filter((c) => c.name)
-            .map((c) => `${c.name}是${pronounFromBody(c.bodyFact)}（${c.bodyFact ?? '身不詳'}）`);
-        const bodyNote = bodies.length ? `\n【在場人的身（代詞鐵則）】${bodies.join('、')}——坤生／女子縱台上扮男，心裡仍是「她」。` : '';
+            .map((c) => `${c.name}＝${c.role ?? '行當不詳'}｜${pronounFromBody(c.bodyFact)}（${c.bodyFact ?? '身不詳'}）`);
+        const bodyNote = bodies.length
+            ? `\n【在場人的身份（鐵則）】${bodies.join('、')}。行當是誰的就是誰的——坤生、花旦、刀馬旦各歸其主，` +
+              '別把一個人的行當、來歷安到另一個人頭上；坤生／女子縱台上扮男，心裡仍是「她」。'
+            : '';
         const client = llmText.createTextClient({ kind: 'primary' });
         const res = await client.chat({
             model: client.defaultModel,
@@ -340,10 +405,10 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
                     content: `【那一場的客觀經過】${input.clock}，${input.venue}${input.venueHint ? `（${input.venueHint}）` : ''}。\n${sceneText}\n\n輪到你（${input.name}）講你的版本。`,
                 },
             ],
-            maxTokens: 900,
+            maxTokens: 1200,
             temperature: 0.9,
         });
-        return res.text.trim() || null;
+        return formatPovSceneParagraphs(res.text) || null;
     } catch {
         return null;
     }
@@ -360,7 +425,11 @@ export async function judgeWantResolved(input: JudgeResolveInput): Promise<Resol
                 '你是嚴格的「不可逆裁判」。判斷一件懸著的心事，在這場戲裡有沒有被**當事人自己**用' +
                 '**放不回頭的行動**了結。鐵則：①只認當事人自己的抉擇成定局，別人的動作不算;' +
                 '②拖延不算（收拾行李、說改天再說、先忍下、再想想，一律 resolved=false）;' +
-                '③說破/做成/斷絕/應承這類覆水難收的才算。輸出 JSON：' +
+                '③說破/做成/斷絕/應承這類覆水難收的才算。' +
+                '④覆水難收≠押命：尋常的了結是一句說破的實話、一件交出去的物、一個當眾的舉動——' +
+                '把「命/一輩子/終身」押出去是一生一兩次的大事，note 裡別把小事寫成終身盟。' +
+                (input.ownerBody ? `④代詞鐵則：心事主人${input.name}是${pronounFromBody(input.ownerBody)}（${input.ownerBody}），note 裡的代詞照此寫。` : '') +
+                '輸出 JSON：' +
                 '{"resolved":true/false,"note":"若 true,一句寫明是哪個放不回頭的行動"}。不要 markdown。',
             messages: [
                 {

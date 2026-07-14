@@ -13,6 +13,10 @@
 export type BeatForcing = 'idle' | 'pressing' | 'edge' | 'breaking';
 
 export interface ActBeatInput {
+    /** Provenance for a durable character session. Omit for stateless probes. */
+    sagaId?: string;
+    characterId?: string;
+    perceptId?: string;
     name: string;
     persona: string;
     /** Memory snippets — surface only when the moment calls (§2.45 暗號 echoes). */
@@ -63,10 +67,16 @@ export interface ActBeatInput {
     carried?: string[];
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
-    /** §2.47/§2.53: saga stance is consummate AND this beat is privateAlone on
-     *  a love-layer want — unlocks the classical literary-erotic register and
-     *  a longer beat. Anywhere else the beat is byte-identical to before. */
+    /** §2.47/§2.53: the intimacy register is OPEN for this beat — either an old
+     *  established pair alone at night, or this scene's own advance→accept
+     *  negotiation opened it. Availability is permission, never a push. */
     consummate?: boolean;
+    /** The other JUST made an overture (their previous beat tagged 'advance'):
+     *  accepting or declining is entirely this actor's choice. */
+    intimacyOffered?: boolean;
+    /** Private 2-person scene where an overture is POSSIBLE this beat (no status
+     *  gate — wanting to be close is a choice, not a permission). */
+    intimacyPossible?: boolean;
 }
 
 /**
@@ -75,7 +85,12 @@ export interface ActBeatInput {
  * person's correct pronoun so the prose stops defaulting 她 onto a male co-star.
  */
 export function pronounFromBody(bodyFact?: string): '他' | '她' {
-    return bodyFact && bodyFact.includes('男') ? '他' : '她';
+    // 女 outranks 男: a 坤生's bodyFact reads 「女兒身…台上扮男」 — the naive
+    // includes('男') made the GUARD ITSELF emit 他 for her, poisoning every
+    // prompt it was meant to protect (the root of the persistent 他-slips).
+    if (!bodyFact) return '她';
+    if (bodyFact.includes('女')) return '她';
+    return bodyFact.includes('男') ? '他' : '她';
 }
 
 /**
@@ -92,13 +107,15 @@ function pronounNote(input: ActBeatInput): string {
     return `【稱呼在場的人用對的代詞】${people.join('、')}——別張冠李戴、別把男子寫成「她」。`;
 }
 
-/** §2.53-validated L3 register (the quality/stability sweet spot; L5-style
- *  "maximally explicit" wording regresses output and is deliberately absent). */
+/** §2.53-validated L3 register, AGENCY-FRAMED: availability is permission, not a
+ *  push. The craft constraints (艷而有情、露而不穢) hold IF the pair goes there;
+ *  whether they go there, and when they close the night, is theirs — with the
+ *  cost named (the hour spent, sleep shortened). */
 const CONSUMMATE_BEAT_NOTE = [
-    '【此刻分寸（僅此私處、兩情相悅時）】容許寬衣解帶、肌膚相親、雲雨纏綿，並可細狀其實——',
-    '身體的反應、氣息的亂、節奏的緩急、手與唇的門道、情動到極處的失守，皆可落筆，',
-    '不必每到關頭就化開。以古典艷情話本筆法（敢於露骨、卻仍是綺麗）：艷而有情、露而不穢。',
-    '忌現代醫學詞、忌髒字、忌器官說明書式冷描。',
+    '【此處的許可（僅此私處、兩情相悅時）】此處無人，彼此的心意已經接上——要不要親近、',
+    '走到哪一步、用什麼分寸，全由你們一拍一拍自己定；矜持與熱烈都是戲，誰也不欠誰一場雲雨。',
+    '若真到了雲雨處，以古典話本筆法寫：艷而有情、露而不穢，忌現代詞、忌髒字。',
+    '【代價】夜有多深、明日有無戲，這一晚怎麼花由你們自己掂量；盡興了、乏了、或心裡到了，就把這場收了。',
 ].join('');
 
 /**
@@ -146,8 +163,81 @@ export interface BeatResult {
     inner: string;
     /** Who this beat addresses (co-present name), if anyone. */
     addressed?: string;
+    /** Who can perceive the exact words/action. `addressed` is a deliberate
+     *  aside/whisper; everyone else only observes that a private exchange took
+     *  place. This is structured so the engine never infers privacy from prose. */
+    audience?: 'scene' | 'addressed';
     /** Scene name to move to, if leaving. */
     move?: string;
+    /** The actor CLOSES the scene on this beat (sleep/farewell/enough) — their
+     *  own ending, honoured by the loop. */
+    close?: boolean;
+    /** Intimacy negotiation, self-tagged (private 2-person scenes only):
+     *  'advance' = this beat carries an overture toward the other;
+     *  'accept' / 'decline' = the answer to an overture on the table.
+     *  No judge, no status gate — the pair negotiates in-scene; a decline is
+     *  honoured and is itself a beat of drama. */
+    intimacy?: 'advance' | 'accept' | 'decline';
+}
+
+function extractBeatJson(raw: string): Record<string, unknown> | null {
+    const blocks = raw.match(/\{[\s\S]*\}/g);
+    if (!blocks?.length) return null;
+    for (let i = blocks.length - 1; i >= 0; i--) {
+        try { return JSON.parse(blocks[i]) as Record<string, unknown>; } catch { /* earlier block */ }
+    }
+    return null;
+}
+
+/** Shared by the stateless runner and the persistent-session adapter. */
+export function parseBeatResult(raw: string, actorName: string): BeatResult {
+    const o = extractBeatJson(raw) ?? {};
+    const str = (v: unknown): string => typeof v === 'string' ? v.trim() : '';
+    const esc = actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const deName = (t: string): string => t.replace(new RegExp(`^${esc}(?!的)\\s*[:：]?\\s*`), '');
+    const addressed = str(o.addressed);
+    const audience = o.audience === 'addressed' && addressed && addressed !== '無'
+        ? 'addressed'
+        : 'scene';
+    const move = str(o.move);
+    return {
+        beat: deName(str(o.beat)) || '（沉默。）',
+        inner: deName(str(o.inner)),
+        addressed: addressed && addressed !== '無' ? addressed : undefined,
+        audience,
+        move: move && move !== '無' ? move : undefined,
+        close: o.close === true ? true : undefined,
+        intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
+    };
+}
+
+function editDistance(a: string, b: string): number {
+    let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+        const current = [i];
+        for (let j = 1; j <= b.length; j++) {
+            current[j] = Math.min(
+                current[j - 1] + 1,
+                previous[j] + 1,
+                previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+            );
+        }
+        previous = current;
+    }
+    return previous[b.length];
+}
+
+function spokenSegments(text: string): string[] {
+    return text.match(/[「『“"][^」』”"]*[」』”"]/g) ?? [];
+}
+
+/** A reviewer is an editor, not a second author. Reject candidate text that
+ * changes spoken dialogue or rewrites too much of the objective action. */
+export function safeSceneRevision(original: string, candidate: string): string {
+    if (!candidate.trim()) return original;
+    if (JSON.stringify(spokenSegments(original)) !== JSON.stringify(spokenSegments(candidate))) return original;
+    const maxEdit = Math.max(6, Math.ceil(original.length * 0.28));
+    return editDistance(original, candidate) <= maxEdit ? candidate : original;
 }
 
 /** §2.43-validated pressure language: removes stalling, never writes the answer. */
@@ -196,10 +286,13 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.sceneHint
             ? `【此處光景】${input.sceneHint}。眼前只有此處真有的物事——記憶裡別處的東西（誰家窗台的花、誰房裡的擺設）不會憑空出現在這裡，除非有人隨身帶了來；要提別處的物件，用話語提，不用手指。`
             : '',
+        // Metaphor stays metaphor: the want language runs on 帳/債/欠 imagery, and an
+        // ungarded beat once materialized a paper 借據 to collect an EMOTIONAL debt.
+        '【比喻不落地】心帳不是紙帳：欠的若是情分、話語、一句交代，就不可憑空掏出借據、文書、銀錢等有形物來討——手上能拿出的東西，只有此處真有的和你隨身帶著的。',
         pronounNote(input),
         input.carried?.length
             ? `【隨身】你身上帶著：${input.carried.join('、')}。用不用、何時拿出來，由你——對景就讓它出手，不對景就讓它待在袖底，別為了提而提。`
-            : '',
+            : '【隨身】此刻沒有已登記可拿出的私人物件；不得從口袋、袖底憑空摸出懷錶、信、相片等道具。可用眼前場景原有的公共物件，也可觸碰自己正穿著的衣物。',
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
         // A continuation picks up a still-warm private encounter mid-moment (general;
         // keyed by caller on pair+venue+consecutive-tick). No fresh entrance, no re-lock.
@@ -207,14 +300,34 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             ? `【承接前情】你們方才已在此處相擁纏綿，這一刻是同一段未了的光景往下走，不是重新進門、不必再敲門落鎖，順著剛才的姿態與氣息接續。${input.priorTail ? `方才到這裡：${input.priorTail}` : ''}`
             : '',
         input.consummate ? CONSUMMATE_BEAT_NOTE + genderNote(input) : '',
+        input.intimacyOffered
+            ? '【方才那一拍】TA 遞了親近的意圖過來。接或不接，全由你此刻的心：接，就讓這一拍應上去（intimacy:"accept"）；不接，安安穩穩地把它放下（intimacy:"decline"），不必失禮也不必解釋——那也是一拍戲。' +
+              '**「接」只指一件事：你心裡允了這份肌膚親近。**若你這拍是接招、邀戰、譏誚回敬（「拿來看」「誰怕誰」之類），那是較勁不是允諾——不要標 accept；拿不準就什麼都不標。'
+            : '',
+        !input.intimacyOffered && input.intimacyPossible && !input.consummate
+            ? '【若你想】此處只你二人。若你此刻真起了親近TA的心，就讓這一拍帶著那個意圖（intimacy:"advance"）——但多數的夜，什麼也不必發生；由你的心與分寸。' +
+              '**「遞意」只指親近之心（意在這個人，想與TA肌膚相親）**；比武叫陣、威逼壓制、拿身子佔上風都不是遞意，別標。'
+            : '',
         `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
-        '一場戲裡，別把同一個比方、同一句口頭禪翻來覆去地用，話要活。',
+        '【誓言有價】「命」「一輩子」「終身」是一生說一兩次的字——尋常的情話用尋常的字，'+
+            '尋常的允諾給尋常的分量（今晚、這一場、這一件事）。天天押命的人，說的命就不值錢了。',
+        '【說人話】多數的話是直說的——問路、催飯、道謝、抱怨、叫人名字；比方留給真到了那一步的時刻，'+
+            '同一個比方一場戲至多用一次。兩個人說話不是猜謎，聽的人（和看戲的人）得聽得懂。',
         forceNote(input.forcing, input.privateAlone),
+        '【知覺邊界】audience 只有兩種：scene＝同場者都看得／聽得這一拍完整內容；addressed＝你故意壓低聲音、耳語或遮掩，只讓 addressed 那個人知道完整內容。不要由文字後猜，在 JSON 裡自己標清楚；沒有對象時不得標 addressed。',
+        // WARMTH SOIL (not a push): when nothing is burning, ordinary tenderness is
+        // legitimate DRAMA — affection is mostly accrued in these small beats, and a
+        // register that only knows pressure reads loveless between the beds.
+        input.forcing === 'idle' && !input.consummate && input.isPrivate
+            ? '【尋常的暖】若此刻沒什麼要緊事逼著，家常的細碎也是戲：一碗茶、一句閒話、替TA整整衣領、陪TA站一會兒——情分多半是這些一點點攢出來的。'
+            : '',
         input.consummate
-            ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或床笫間的一下進退(一到三句，容許上述分寸的露骨)。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無"}。不要 markdown。'
-            : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事(開放一句)。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","move":"要去別處就填場景名/否則無"}。不要 markdown。',
+            ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或（若你們往那處去了）床笫間的一下進退(一到三句)。' +
+              'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
+              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。'
+            : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——一到兩句，動作與話都可以帶著性子多走半步。' +
+              'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
+              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。',
     ]
         .filter(Boolean)
         .join('\n');

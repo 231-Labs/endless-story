@@ -90,8 +90,11 @@ function castWarmth(a: Char, playCast: string[]): number {
  * Compute the deterministic box office for a premiered play. `cast` is the full
  * world cast (to locate the cast audience member, 白韻秋).
  */
-export function computeBoxOffice(play: Play, cast: Char[]): BoxOffice {
-    const quality = round2(playQuality(play));
+export function computeBoxOffice(play: Play, cast: Char[], leadCraft = 1): BoxOffice {
+    // The night's QUALITY is rehearsal × the leads' actual hands (craft) — a
+    // premiere led by someone who spent the day in bed pays for it here. The
+    // deterministic economy stops being blind to performance.
+    const quality = round2(playQuality(play) * (0.4 + 0.6 * leadCraft));
     const repute = round2(play.repute);
     const rows: BoxOfficeRow[] = [];
 

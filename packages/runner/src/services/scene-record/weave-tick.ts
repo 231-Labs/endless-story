@@ -55,6 +55,9 @@ export interface WeaveTickInput {
     /** The scene participants' 身/sex facts, so the weaver keeps every person's gender
      *  and pronoun correct (a 坤生 is never rendered "男人"). DATA, not name-casing. */
     castBodies?: CastBody[];
+    /** One-line PUBLIC dossiers of who appears (name+trade+standing) — licence for
+     *  classical exposition: a reader must never meet a stranger mid-duel. */
+    dossier?: string[];
     /** WHY each participant came together this 時辰 — their own reason for being here, in
      *  the order they moved. This is the extra context that lets the weaver render the
      *  scene's CAUSALITY (who sought whom, and why) as ONE coherent passage with 前因後果,
@@ -85,12 +88,20 @@ export async function weaveTickChapter(input: WeaveTickInput): Promise<string | 
                     ? `\n【眾人為何到此（背景，照這個順序把這一段寫成一個有前因後果的連貫場景）】\n${input.context.join('\n')}\n` +
                       '這些是各人心裡的盤算，只作背景幫你把場面寫連貫；正文仍只寫素材裡真正發生的事，不許把某人的盤算當成已發生的情節。'
                     : '') +
+                (input.dossier?.length
+                    ? `\n【人物來歷（公開的身份，供補敘）】\n${input.dossier.join('\n')}\n` +
+                      '生人頭一回在這段裡登場、或話裡牽出讀者沒見過的舊事時，准你用說書人口吻補一句來歷' +
+                      '（「看官有所不知——」之類），一段至多一次，點到為止；熟人熟事別重複交代。'
+                    : '') +
                 '\n【筆法】開頭與轉場要變化，別每段都用「且說」「話說」「與此同時／那廂」這類固定套語起頭或轉場——可從一個人、一個動作、一件物、一句話、或直接接上文起。同一段裡別反覆套用同一個詞或比喻。' +
                 castBodyNote(input.castBodies) +
                 (input.tone ? `\n底色：${input.tone}` : '') +
                 '\n輸出一段純散文（不要標題、不要 JSON）。',
             messages: [{ role: 'user', content: `【${input.clock}】素材：\n${input.lines.join('\n')}` }],
-            maxTokens: 850,
+            // A woven passage runs about the length of its material. The old fixed 850
+            // covered ordinary ticks but TRUNCATED long register scenes (an 11-beat 床
+            // scene lost its last two beats mid-sentence) — scale with input, bounded.
+            maxTokens: Math.max(850, Math.min(3000, Math.round(input.lines.join('').length * 1.5))),
             temperature: 0.85,
         });
         const text = res.text?.trim();

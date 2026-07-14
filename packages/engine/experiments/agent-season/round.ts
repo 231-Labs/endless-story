@@ -47,6 +47,9 @@ import {
     venueByName,
     VENUES,
     WORLD_PREMISE,
+    buildDormants,
+    dormantPresent,
+    type DormantChar,
 } from './world.ts';
 import {
     rhythmPull,
@@ -56,6 +59,8 @@ import {
     predictWhereabouts,
     sameCluster,
     type RehearsalCall,
+    transitStreets,
+    occLabel,
 } from './rhythm.ts';
 
 /** FOLLOWED characters (追角): comma-separated names whose scenes ALSO get a
@@ -93,7 +98,10 @@ function mealSpotFor(c: Char): { line: string; cost: number } | null {
 }
 import { hottest, type Planner, type ToolCall } from './agent-turn.ts';
 import { pronounFromBody } from '@endless-story/runner/services/character-agent/beat-prompt';
-import { bumpActorFatigue, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
+import { bumpActorFatigue, pickOrthogonalThreads, decayActorFatigue, type FatigueLedger } from '../../src/index.ts';
+import { isBondLayer } from '../../src/core/want-core.ts';
+import { CANON } from './canon-seed.ts';
+import { bondOf, bumpBond, decayBonds, advanceReady, seedBond, BOND, type BondGraph } from '../../src/core/bond-graph.ts';
 import {
     type Play,
     PRODUCTION,
@@ -131,10 +139,16 @@ export interface SceneRecord {
     intimacyGate: boolean;
     participants: string[];
     participantIds: string[];
+    /** An in-scene advance→accept happened here: the pair BECAME lovers in this
+     *  scene (event, not verdict) — the caller records them as established. */
+    intimacyAccepted?: boolean;
     /** POV versions (追角 lens): participant name → the scene retold through their
      *  eyes (probe-validated subjective layer). Only rendered for FOLLOWED
      *  characters (SEASON_POV_CHARS) — cost scales with subscribers. */
     povVersions?: Record<string, string>;
+    /** Set when this scene was a 傾吐 (confide): the name of the one who unburdened.
+     *  Only what they SAID ALOUD transferred into the listener's memory. */
+    confideBy?: string;
     /** true → this scene is a 修羅場: a jealous third walked in on an intimate pair. */
     discovery?: boolean;
     /** true → this 修羅場 broke in on the STILL-WARM AFTERMATH of a pair spent by a recent
@@ -158,7 +172,7 @@ export interface Placement {
     tools: string[];
     autoRecall: string[];
     timeQueried: boolean;
-    interactIntent: { target: string; intent: string } | null;
+    interactIntent: { target: string; intent: string; confide?: boolean } | null;
 }
 
 export interface RoundRecord {
@@ -180,6 +194,9 @@ export interface RoundRecord {
 }
 
 export interface SeasonDeps {
+    /** Dynamically-established pairs carried over from the prior season (pairKey =
+     *  sorted ids joined '|'). The milestone judge adds to this set in play. */
+    establishedPairs?: string[];
     cast: Char[];
     planner: Planner;
     agent: SceneAgentPort;
@@ -195,6 +212,15 @@ export interface SeasonDeps {
     play: Play;
     /** the立局人 config: central question, deadline day, finale part, razor threshold. */
     showrunner: SeasonConfig;
+    /** Called at each day boundary with the tick just finished and the pairs
+     *  established so far — the caller persists a CHECKPOINT snapshot, so a
+     *  mid-season crash (a TCP reset once ate two days) loses at most a day. */
+    checkpoint?: (endedTick: number, establishedPairs: string[]) => void;
+    /** The world's dormant population (street vendors etc.) — real entities,
+     *  never flavor strings. Defaults to buildDormants(). */
+    dormants?: DormantChar[];
+    /** the numeric relationship underlay (seeded from canon; persisted). */
+    bonds?: BondGraph;
 }
 
 export interface SeasonResult {
@@ -205,6 +231,12 @@ export interface SeasonResult {
     rehearsalGathering: Array<{ tick: number; part: string; venue: string; members: string[] }>;
     timeToolUses: number;
     deaths: string[];
+    /** pairs promoted to established IN PLAY (persist via snapshotCast). */
+    establishedPairs: string[];
+    /** the dormant population as the season left it (ledgers + heat persist). */
+    dormants: DormantChar[];
+    /** the bond graph as the season left it. */
+    bonds: BondGraph;
     /** the accumulated play at season end. */
     play: Play;
     /** the deterministic box office (null if the play never premiered). */
@@ -311,6 +343,13 @@ function castMember(c: Char, others: Char[]): SceneLoopCastMember {
     };
 }
 
+/** Tiny deterministic hash of the clock label (soil rotation key — no RNG). */
+function clockLabelHash(s: string): number {
+    let h = 0;
+    for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return h;
+}
+
 /** Render the 追角 POV versions of a finished scene for FOLLOWED participants.
  *  Ties/soil come from the viewer's own graph + memories (never the reverse edge).
  *  Non-fatal: a failed render just skips that lens. */
@@ -335,11 +374,19 @@ async function renderPovVersions(
             .join('\n');
         const names = others.map((o) => o.name).join('|');
         const soilRe = new RegExp(names ? `${names}|肌膚|暗戀` : '肌膚|暗戀');
-        const soil = c.thickMemories
+        // Soil ROTATION (anti-anchoring): always keep the single most important
+        // memory (the identity anchor), but rotate the remaining picks across the
+        // sorted rest by scene time — W3 showed a fixed top-4 soil makes the same
+        // thesis sentence echo through every one of a character's POV scenes.
+        const sorted = c.thickMemories
             .filter((m) => soilRe.test(m.tag + m.text))
-            .sort((a, b) => b.importance - a.importance)
-            .slice(0, 4)
-            .map((m) => m.text);
+            .sort((a, b) => b.importance - a.importance);
+        const rest = sorted.slice(1);
+        const rot = rest.length ? ((clockLabelHash(clockLabel) % rest.length) + rest.length) % rest.length : 0;
+        const soil = [
+            ...sorted.slice(0, 1),
+            ...rest.slice(rot).concat(rest.slice(0, rot)).slice(0, 3),
+        ].map((m) => m.text);
         try {
             const v = await agent.povScene({
                 name: c.name,
@@ -351,7 +398,7 @@ async function renderPovVersions(
                 venueHint: venueByName.get(venue)?.hint,
                 clock: clockLabel,
                 beats: beats.map((b) => ({ name: b.name, text: b.text })),
-                castBodies: participants.map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+                castBodies: participants.map((x) => ({ name: x.name, bodyFact: x.bodyFact, role: x.role })),
             });
             if (v) out[c.name] = v;
         } catch {
@@ -371,6 +418,12 @@ export interface ReviewCounter {
 export interface ChapterReviewCounter {
     chapters: number;
     repaired: number;
+}
+
+/** One-line PUBLIC dossier per participant (canon description's first clause —
+ *  the world-known identity, never the secret). */
+function dossierOf(cs: Char[]): string[] {
+    return cs.map((c) => `${c.name}（${c.role}）：${(CANON[c.id]?.description ?? c.persona).split('。')[0]}。`);
 }
 
 /** Build the DATA-DRIVEN cast-body list (name + 身/sex) for the gender-aware weave +
@@ -475,11 +528,14 @@ async function weaveSceneChapter(
     beats: Array<{ name: string; text: string; inner: string }>,
     participants: Char[],
     chapterCtr?: ChapterReviewCounter,
+    context?: string[],
 ): Promise<string | undefined> {
     if (!beats.length) return undefined;
     try {
         const woven = await agent.weaveTickChapter({
             clock: `第${clock.day}日·${clock.partOfDay}`,
+            context,
+            dossier: dossierOf(participants),
             lines: beats.map((x) => `[${venue}] ${x.name}：${x.text}`),
             // Feed the scene's participants' 身/sex so the weaver keeps genders/pronouns
             // correct (a 坤生 is never rendered "男人"). DATA, never name-cased.
@@ -493,7 +549,48 @@ async function weaveSceneChapter(
     }
 }
 
-async function doInteract(
+/**
+ * 關係盤 (facts only, NO thresholds): for every person this character KNOWS —
+ * has a view of, is established with, or carries a bond-want toward — how long
+ * since they last shared a scene. The mechanism never decides what "distant"
+ * means (two days is an eternity for a new lover and nothing for the 班主);
+ * the character reads the numbers with her own heart. Used by the nightly
+ * mind AND by the on-demand `relations` faculty (her own call to take stock).
+ */
+function byIdOf(list: Char[], id: string): Char | undefined {
+    return list.find((c) => c.id === id);
+}
+
+function relationLedger(
+    c: Char,
+    byId: Map<string, Char>,
+    lastScene: Map<string, { tick: number }>,
+    currentTick: number,
+    ticksPerDay: number,
+): string[] {
+    const ids = new Set<string>([...c.relationshipViews.keys()]);
+    for (const w of c.wants) {
+        if (!w.retired && isBondLayer(w.layer) && w.target) {
+            const t = byId.get(w.target) ?? [...byId.values()].find((o) => o.name === w.target);
+            if (t) ids.add(t.id);
+        }
+    }
+    const out: string[] = [];
+    for (const oid of ids) {
+        const t = byId.get(oid);
+        if (!t || t.dead || t.id === c.id) continue;
+        const last = lastScene.get([c.id, oid].sort().join('|'));
+        const label = last
+            ? Math.floor((currentTick - last.tick) / ticksPerDay) === 0
+                ? '今日才同過場'
+                : `${Math.floor((currentTick - last.tick) / ticksPerDay)}日沒單獨說過話`
+            : '這一季還沒單獨說過話';
+        out.push(`${t.name}：${label}`);
+    }
+    return out;
+}
+
+export async function doInteract(
     a: Char,
     b: Char,
     intent: string,
@@ -510,15 +607,45 @@ async function doInteract(
     reviewCtr?: ReviewCounter,
     chapterCtr?: ChapterReviewCounter,
     opts?: { maxTurns?: number },
+    establishedDyn?: Set<string>,
+    confide = false,
+    bonds?: BondGraph,
 ): Promise<SceneRecord> {
     const venue = a.venue;
     const isPrivate = !isPublicVenue(venue); // a home / private venue → private
-    const established = areEstablishedLovers(a, b);
+    const established = areEstablishedLovers(a, b) || !!establishedDyn?.has([a.id, b.id].sort().join('|'));
     // RELATIONSHIP-DEPENDENT intimacy: established lovers alone in a private venue
     // at night → consummate register (a real 床戲 is correct for THIS pair);
     // everyone else → default restrained (forbidden/unconfessed stays held).
     const consummate = established && isPrivate && night;
     const cast = [castMember(a, [b]), castMember(b, [a])];
+    // LIVED memory reaches the scene (user-caught gap): castMember carries only
+    // the canon seeds, so a character could spend a season in someone's bed and
+    // still walk into a scene UNABLE to recall a single night of it — her lived
+    // life reached beats only as distilled secret/view idiom (釘子 without the
+    // name). Two episodic recalls per participant, keyed to the co-present other
+    // + this scene's cause, ride in alongside the canon.
+    try {
+        const [ea, eb] = await Promise.all(
+            [
+                { self: a, other: b },
+                { self: b, other: a },
+            ].map(({ self, other }) =>
+                recall.recall(self.id, `${other.name} ${intent}`.slice(0, 60), 2, clock.day).then((ms) => ms.map((m) => m.text.slice(0, 100))),
+            ),
+        );
+        cast[0].memories = [...(cast[0].memories ?? []), ...ea].slice(0, 7);
+        cast[1].memories = [...(cast[1].memories ?? []), ...eb].slice(0, 7);
+    } catch {
+        /* non-fatal: canon-only context tonight */
+    }
+    // STANDING gates the ADVANCE affordance (never the answer): you court a
+    // stranger with scenes and confidences first; the world only deals the
+    // advance card on real footing. Numbers never reach the prompt.
+    if (bonds) {
+        cast[0].advanceReady = advanceReady(bonds, a.id, b.id);
+        cast[1].advanceReady = advanceReady(bonds, b.id, a.id);
+    }
     const wants = [...a.wants, ...b.wants];
     const clockLabel = `第${clock.day}日·${clock.partOfDay}`;
 
@@ -533,9 +660,18 @@ async function doInteract(
         sceneHint: venueByName.get(venue)?.hint,
         isPrivate,
         clock: clockLabel,
-        stake: `${a.name}${intent}。`,
-        maxTurns: worn ? 3 : opts?.maxTurns,
-        emotionalStance: consummate ? 'consummate' : undefined,
+        firstActorId: confide ? a.id : undefined,
+        stake: `${a.name}${intent}。${confide ? `（${a.name}是自己尋過來想說說心裡話的——說多少、怎麼說、說不說得出口，都由TA。）` : ''}${worn && opts?.maxTurns ? '（有人是拖著乏透的身子上的台——那點撐不住，也是這場戲的一部分。）' : ''}`,
+        // The body's veto caps an ordinary scene — but a scene with an EXPLICIT
+        // cap (the finale set piece) keeps its stage: a worn lead performing the
+        // 大會串 is DRAMA (帶傷登台), not a truncation. The stake carries it.
+        maxTurns: worn && !opts?.maxTurns ? 3 : opts?.maxTurns,
+        // AXIOM (user, 2026-07-13): the WORLD never opens the register — only the
+        // pair does, in-scene, via advance→accept. Seed-established lovers are not
+        // auto-opened nightly (that was the mechanism deciding "tonight yes" for
+        // them, saturating every private night with the adult register); their
+        // establishment still counts for 修羅場 stakes and fast familiarity.
+        emotionalStance: undefined,
         etiquette: WORLD_PREMISE, // pinned era facts colour every beat (anti-anachronism)
         cast,
         wants,
@@ -599,9 +735,62 @@ async function doInteract(
 
     // PER-SCENE WEAVE: this scene's own beats → a readable 章回. For a 床戲/私戲 this is
     // the literary version the per-時辰 PUBLIC weave never produces (it skips privates).
-    const chapter = await weaveSceneChapter(agent, clock, venue, beats, [a, b], chapterCtr);
+    // The scene's CAUSALITY rides into the weave: why the seeker came, and how
+    // the encounter actually ENDED (their close / the hour / someone walking
+    // out) — a chapter that neither arrives nor leaves reads like a hard cut.
+    const endLine =
+        loop.endReason === 'close' && loop.closedBy
+            ? `這場是${loop.closedBy}自己收住的`
+            : loop.moves.length
+              ? `散時${loop.moves.map((m) => `${byIdOf([a, b], m.characterId)?.name ?? ''}起身往${m.toSceneName}去了`).join('、')}`
+              : loop.endReason === 'drained'
+                ? '人散了，這場便斷在半途'
+                : '一個時辰盡了，各自歸位';
+    const sceneCtx = [`${a.name}來此的緣故：${intent}`, `結束的光景：${endLine}`];
+    const chapter = await weaveSceneChapter(agent, clock, venue, beats, [a, b], chapterCtr, sceneCtx);
     // 追角 lens: the followed participants' subjective versions of THIS scene.
     const povVersions = await renderPovVersions(agent, [a, b], beats, venue, clockLabel);
+
+    // 傾吐 (confide): an information MEDIUM, not a special scene track. What
+    // transfers is ONLY what the confider actually SAID ALOUD (objective beat
+    // text) — the listener remembers the confider's VERSION, never their inner
+    // (probe: 蘇 circled her secret in craft-metaphor; the tea she kept warm for
+    // 生春 leaked as evidence, the confession never came — that's the medium's
+    // correct granularity). Saying it out loud is itself a landing event: the
+    // confider's secret may move (心事自改).
+    let confideBy: string | undefined;
+    if (confide && loop.beats.length >= 2) {
+        const saidAloud = loop.beats.filter((x) => x.characterId === a.id).map((x) => x.text).join(' ');
+        if (saidAloud.trim()) {
+            confideBy = a.name;
+            try {
+                await recall.remember(
+                    b.id,
+                    `${clockLabel}，${a.name}在${venue}找我說了心裡話：${saidAloud}`.slice(0, 600),
+                    { kind: 'observation', importance: 7, day: clock.day },
+                );
+            } catch {
+                /* non-fatal */
+            }
+            if (a.secret) {
+                try {
+                    const evolved = await agent.evolveSecret({
+                        name: a.name,
+                        persona: a.persona,
+                        secret: a.secret,
+                        landed: [`今夜我把心裡的事對${b.name}說出了口——我親口說的是：${saidAloud.slice(0, 400)}`],
+                        selfModel: a.coreIdentity.length ? a.coreIdentity : undefined,
+                        castBodies: [a, b].map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+                        canonSeed: CANON[a.id]?.secret,
+                        day: clock.day,
+                    });
+                    if (evolved) a.secret = evolved;
+                } catch {
+                    /* non-fatal */
+                }
+            }
+        }
+    }
 
     return {
         venue,
@@ -609,8 +798,15 @@ async function doInteract(
         part: clock.partOfDay,
         isPublic: isPublicVenue(venue),
         isPrivate,
-        consummate,
+        // Ex-post 床 needs to have HAPPENED ON PAGE: an accept opens the register,
+        // but the stamp requires them to have actually stayed in it (≥4 beats past
+        // the accept). A vow/taunt mis-tag used to stamp 床 on a doorway scene.
+        consummate:
+            consummate ||
+            (loop.intimacyAccepted && loop.acceptedAtBeat != null && loop.beats.length - 1 - loop.acceptedAtBeat >= 4),
         intimacyGate: loop.intimacyGateOpened,
+        intimacyAccepted: loop.intimacyAccepted || undefined,
+        confideBy,
         participants: [a.name, b.name],
         participantIds: [a.id, b.id],
         povVersions,
@@ -624,9 +820,10 @@ async function doInteract(
  *  on X if C is X's established lover, or carries a LIVE want of a romantic layer
  *  aimed at X. Drives jealousy/discovery for ANY cast, not a hardcoded triangle. */
 const ROMANTIC_LAYERS = /情|愛|暗戀|癡/;
-export function hasRomanticStake(c: Char, x: Char): boolean {
+export function hasRomanticStake(c: Char, x: Char, establishedDyn?: Set<string>): boolean {
     if (c.id === x.id) return false;
     if (areEstablishedLovers(c, x)) return true;
+    if (establishedDyn?.has([c.id, x.id].sort().join('|'))) return true;
     return c.wants.some(
         (w) => !w.retired && ROMANTIC_LAYERS.test(w.layer) && !!w.target && (w.target === x.id || w.target === x.name),
     );
@@ -743,6 +940,8 @@ function worldPressureFor(c: Char, day: number, cfg: SeasonConfig): string {
     const parts = [countdownLine(cfg, day), `班子這一季的大事：${cfg.centralQuestion}`];
     if (c.money <= 8) parts.push(`你手頭只剩 ${c.money} 個錢，緊得很，一頓飯的錢都要掂量。`);
     if (c.hunger >= 0.6) parts.push('你餓著，肚裡空得發慌，這也是件要緊的事。');
+    // ZERO-SUM TIME made visible: hours spent elsewhere are hours off the barre.
+    if (c.occupation === 'troupe' && c.craft < 0.62) parts.push('你這些日子疏了功，手上明顯生了——台上的身段騙不了行家，這件事拖不得。');
     return parts.join('\n');
 }
 
@@ -774,6 +973,8 @@ async function nightConsolidate(
             return {
                 otherId: oid,
                 otherName: o.name,
+                otherBodyFact: o.bodyFact,
+                otherRole: o.role,
                 currentView: c.relationshipViews.get(oid),
                 todayText: c.todayLedger.get(oid) ?? '（今天只是照了個面）',
                 resolvedWithThem: c.wants.some((w) => w.retired && w.target && (w.target === o.name || w.target === oid)),
@@ -832,6 +1033,15 @@ async function nightConsolidate(
             .filter((w) => w.retired && w.resolvedTick != null && w.resolvedTick > tick - PARTS_PER_DAY)
             .map((w) => w.desc);
         const liveWants = c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc }));
+        // The door out of a single-axis loop: sample the character's OWN memory
+        // threads FURTHEST from everything they already want (incl. secret — for a
+        // single-axis character the secret IS the burning theme), so 識字/攢錢/舊債
+        // can become a want when pressure hits, not just the same theme's successor.
+        const otherThreads = pickOrthogonalThreads(
+            c.thickMemories.map((m) => m.text),
+            [...liveWants.map((w) => w.desc), ...justResolved, c.secret ?? ''],
+            3,
+        );
         const spawn = await agent.regenerateWant({
             name: c.name,
             persona: c.persona,
@@ -841,6 +1051,7 @@ async function nightConsolidate(
             justResolved,
             worldPressure: worldPressureFor(c, day, showrunner),
             lifecycle: lifecycleFor(c),
+            otherThreads,
         });
         if (process.env.SEASON_REGEN_DIAG) {
             // eslint-disable-next-line no-console
@@ -981,11 +1192,25 @@ export async function runRound(
          *  so scene-slot claiming favors FRESH pairs — breaks the hub monopoly where
          *  every hot want targets the same star and she is in every rendered scene. */
         spotlight: FatigueLedger;
+        /** pairs promoted to established IN PLAY (milestone judge); persisted. */
+        establishedDyn: Set<string>;
         /** unordered-pair key → last rendered scene, for cross-時辰 continuation. */
         lastScene: Map<string, { tick: number; venue: string; tail: string }>;
         /** 修羅場 log for the season + a per-day guard against re-firing the same one. */
         discoveries: SeasonResult['discoveries'];
         discoveredToday: Set<string>;
+        /** pairKeys that already had a 傾吐 today (once per pair per day). */
+        confidedToday: Set<string>;
+        dormants: DormantChar[];
+        /** the numeric relationship underlay (directed; never enters a prompt). */
+        bonds: BondGraph;
+        /** sorted pair keys that shared a scene today (skip cooling tonight). */
+        togetherToday: Set<string>;
+        /** pairKey → rendered scenes today (the SAME pair's Nth scene yields the slot). */
+        pairScenesToday: Map<string, number>;
+        /** PLAIN-LANGUAGE day digest lines (mechanical, from structured events) —
+         *  the reader's orientation layer: no idiom, just who did what. */
+        dayEvents: string[];
         /** self-check pass accumulator (scenes reviewed / beats whose text changed). */
         review: ReviewCounter;
         /** chapter-level self-check accumulator (woven 章回 reviewed / prose repaired). */
@@ -1045,6 +1270,11 @@ export async function runRound(
     const { active, occupiedSkipped } = determineActive(cast, byName, part, reh, deep, night);
     out.occupiedTurns.n += occupiedSkipped;
 
+    // 世相 (the day's living texture): meals, wages sung for, street walks —
+    // collected so the 說書人 can weave LIFE around the drama (user: 營生描寫
+    // 太少). Zero extra LLM cost — same weave, richer material.
+    const worldTexture: string[] = [];
+    const workedThisRound: string[] = [];
     const roundRec: RoundRecord = {
         tick: clock.currentTick,
         day: clock.day,
@@ -1077,7 +1307,18 @@ export async function runRound(
             // POV DAILY REFLECTION (narrative-subjective layer): a first-person, possibly
             // biased account of THIS character's day (their ledger + wants + self-model),
             // stored separately from the objective 時辰 章回. Read BEFORE the ledger clear.
-            const dayText = [...c.todayLedger.values()].join('\n').slice(0, 1200);
+            // 關係盤 into the night mind: plain facts for EVERY known tie, no
+            // threshold — what counts as "too long" is the character's own heart's
+            // arithmetic, never the mechanism's.
+            const ledgerLines = relationLedger(c, byId, out.lastScene, clock.currentTick, deps.ticksPerDay);
+            const tieNotes = ledgerLines.length ? [`【你與眾人的近疏（事實）】${ledgerLines.join('；')}。`] : [];
+            // 功課盤 (identity, not economy): a 戲子 who hasn't touched the craft
+            // knows it in her hands — the fact goes to the night mind; what it
+            // means to who she is, she decides.
+            if (c.occupation === 'troupe' && (c.daysSincePractice ?? 0) >= 2) {
+                tieNotes.push(`（你已${c.daysSincePractice}日沒正經摸功了。手上的感覺，你自己知道。）`);
+            }
+            const dayText = [[...c.todayLedger.values()].join('\n'), ...tieNotes].join('\n').slice(0, 1400);
             try {
                 const refl = await agent.povReflect({
                     name: c.name,
@@ -1085,7 +1326,13 @@ export async function runRound(
                     day: clock.day,
                     todayText: dayText,
                     wants: c.wants.filter((w) => !w.retired).map((w) => ({ layer: w.layer, desc: w.desc, target: w.target })),
-                    selfModel: c.coreIdentity.join('\n') || undefined,
+                    // Day-rotated identity injection: a fixed full dump let one 命題句
+                    // anchor every night's diary (「上海會不會終於看見我」×3 nights).
+                    selfModel:
+                        (c.coreIdentity.length > 3
+                            ? [c.coreIdentity[0], ...c.coreIdentity.slice(1).filter((_, i) => (i + clock.day) % 2 === 0)]
+                            : c.coreIdentity
+                        ).join('\n') || undefined,
                     // pronoun guard: me + everyone today's ledger touched (the diary was the
                     // one un-guarded path that let a 坤生 lover be written 他/男人).
                     castBodies: [c, ...[...c.todayLedger.keys()].map((oid) => byId.get(oid)).filter(Boolean) as Char[]].map(
@@ -1096,6 +1343,60 @@ export async function runRound(
             } catch {
                 /* non-fatal at night */
             }
+            // 心事自改 (the day-end log line promised this; now it is real): when a
+            // narrative want truly RESOLVED today, the character's SECRET may move to
+            // its own next step. Frozen canon otherwise re-seeds the same want forever
+            // (金鳳 kept collecting a debt the world had already paid, §W5).
+            const landed = c.wants
+                .filter(
+                    (w) =>
+                        w.kind === 'narrative' &&
+                        w.retired &&
+                        !!w.resolvedNote &&
+                        w.resolvedTick != null &&
+                        w.resolvedTick > clock.currentTick - 6,
+                )
+                .map((w) => `「${w.desc}」——${w.resolvedNote}`);
+            if (landed.length && c.secret) {
+                try {
+                    const evolved = await agent.evolveSecret({
+                        name: c.name,
+                        persona: c.persona,
+                        secret: c.secret,
+                        landed,
+                        selfModel: c.coreIdentity.length ? c.coreIdentity : undefined,
+                        castBodies: cast.map((x) => ({ name: x.name, bodyFact: x.bodyFact })),
+                        canonSeed: CANON[c.id]?.secret,
+                        day: clock.day,
+                    });
+                    if (evolved) {
+                        c.secret = evolved;
+                        log(`  〔心事自改〕${c.name}：${evolved}`);
+                    }
+                } catch {
+                    /* non-fatal at night */
+                }
+            }
+            // 小算盤 (the strategic layer wants alone lack): a hot want that has
+            // lived ≥2 days without resolving earns a nightly scheme in the
+            // character's own voice — tomorrow's plans read it as their OWN idea.
+            // Resolved/absent want → the scheme dissolves with it.
+            try {
+                const stuck = c.wants
+                    .filter((w) => !w.retired && w.kind === 'narrative' && clock.currentTick - w.bornTick >= 2 * deps.ticksPerDay)
+                    .sort((x, y) => y.heat + y.frust - (x.heat + x.frust))[0];
+                if (stuck) {
+                    const drafted = await planner.draftScheme({ char: c, want: stuck, clock });
+                    if (drafted) {
+                        c.scheme = drafted;
+                        log(`  〔盤算〕${c.name}：${drafted.slice(0, 60)}${drafted.length > 60 ? '…' : ''}`);
+                    }
+                } else {
+                    c.scheme = null;
+                }
+            } catch {
+                /* non-fatal at night */
+            }
             decayWants(c.wants);
         }
         for (const c of cast) {
@@ -1103,8 +1404,28 @@ export async function runRound(
             c.scenesToday = 0;
             c.addressedToday.clear();
             c.occupiedRestOfDay = false; // a new day: the spent character rises again
+            if (c.occupation === 'troupe') {
+                // craft_{t+1} = base + (craft − base)·λ : skill erodes toward the
+                // talent floor (天分鏽不掉), and the peak is expensive to hold.
+                const base = 0.35 + 0.25 * Math.min(1, abilityOf(c.id) / 5);
+                if (!c.practicedToday) c.craft = base + (c.craft - base) * 0.97;
+                c.daysSincePractice = c.practicedToday ? 0 : (c.daysSincePractice ?? 0) + 1;
+            }
+            c.practicedToday = false;
         }
+        // COOLING: edges whose pair never met today drift toward their floor
+        // (an old flame never cools back to stranger — 30% of its peak holds).
+        decayBonds(out.bonds, out.togetherToday);
+        out.togetherToday.clear();
         out.discoveredToday.clear(); // a new day can re-catch (jealousy is not spent in one night)
+        // ── 本日提要 (PLAIN, mechanical): the reader's orientation layer ──
+        if (out.dayEvents.length) {
+            log(`  ── 本日提要（白話） ──`);
+            for (const e of [...new Set(out.dayEvents)].slice(0, 10)) log(`  ・${e}`);
+            out.dayEvents.length = 0;
+        }
+        out.confidedToday.clear(); // a new day may bring a new confidence
+        out.pairScenesToday.clear();
         log(`  ── 第${clock.day}日終（深宵覆蓋自我模型 + 心事自改 + 反省）──`);
     };
 
@@ -1222,7 +1543,20 @@ export async function runRound(
                 const more = await doRecall(c, t.query ?? query, recall, clock.day, tags, hotTarget, 'plan', hot?.desc ?? '', out.surfaced);
                 autoRecall.push(...more.filter((m) => !autoRecall.includes(m)));
             } else if (t.tool === 'interact') {
-                if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話' };
+                if (t.target) interactIntent = { target: t.target, intent: t.intent ?? '說幾句話', confide: t.confide === true };
+            } else if (t.tool === 'work') {
+                // A first-class hour of one's OWN trade (user: 練功是為了保持自己
+                // 是誰): mechanical effect now, visibility via the solo vignette.
+                if (c.occupation === 'troupe') {
+                    c.practicedToday = true;
+                    c.craft = Math.min(1, c.craft + 0.015);
+                }
+                workedThisRound.push(c.id);
+            } else if (t.tool === 'relations') {
+                // Her own call to take stock: the fact sheet lands in her working
+                // context exactly like a recall — she reads it, the plan/scene react.
+                const lines = relationLedger(c, byId, out.lastScene, clock.currentTick, deps.ticksPerDay);
+                if (lines.length) autoRecall.push(`（你靜下心盤了盤身邊眾人的近疏）${lines.join('；')}。`);
             } else if (t.tool === 'wait') {
                 if (t.target) choseWait = { target: t.target, intent: t.intent ?? '守著等人出現，把話說開' };
             }
@@ -1298,6 +1632,84 @@ export async function runRound(
             log(`    · 〔班主叫班〕${c.name}（挑梁的角兒）落了排練，被叫回 ${banzhuSummons.venue} 歸班排戲。`);
         }
 
+        // TRANSIT (no teleport): a cross-cluster walk physically passes the streets
+        // between. The walker OBSERVES the town on the way — who's out, what the
+        // street smells like — and may pick something up. Deterministic, zero LLM:
+        // sights land in the ledger + memory so the night mind and tomorrow's plans
+        // can react (daily-life texture; observations, not scenes).
+        if (c.venue !== from) {
+            const dest = c.venue;
+            for (const street of transitStreets(from, dest)) {
+                // The street's REAL state this 時辰: cast members standing there +
+                // dormant lives at their trades (entities, never painted backdrop).
+                const seen = cast.filter((o) => o.id !== c.id && !o.dead && o.venue === street).slice(0, 2);
+                const streetFolk = out.dormants.filter((d) => d.haunt === street && dormantPresent(d, part));
+                let h = clock.currentTick * 31 + street.length;
+                for (const ch of c.id) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+                const folk = streetFolk.length ? streetFolk[h % streetFolk.length] : undefined;
+                const sight = seen.length
+                    ? `遠遠見著${seen.map((o) => o.name).join('、')}也在街上`
+                    : folk
+                      ? `${folk.name}正${folk.doing}`
+                      : '街面上冷冷清清';
+                const line = `第${clock.day}日·${part}，打${from}往${dest}，路過${street}，${sight}。`;
+                c.todayLedger.set(`transit:${street}:${clock.currentTick}`, line);
+                await writeMem(recall, c.id, line, seen.length ? 4 : 3, clock.day);
+                if (seen.length) log(`    · 〔路上〕${c.name} 路過 ${street}，${sight}。`);
+                worldTexture.push(`${c.name}打${from}往${dest}，路過${street}，${sight}`);
+                // IN-THE-MOMENT reaction (§C-level agency): the walker decides NOW —
+                // most sightings pass; engaging costs the errand (the finite 時辰:
+                // duty wage, the person they meant to find — all slip, mechanically,
+                // because they simply never arrive). A summoned lead stays summoned
+                // (the call of duty already spent this 時辰).
+                if (seen.length && !banzhuSummons) {
+                    try {
+                        const errand = interactIntent
+                            ? `你原是要去找${interactIntent.target}（${interactIntent.intent}）`
+                            : pull.duty
+                              ? '你原是要去當值營生（這一時辰的工錢）'
+                              : `你原是要往${dest}去辦自己的事`;
+                        const reaction = await planner.transitReact({
+                            char: c, seen: seen[0], street, from, dest, errand, clock, night,
+                        });
+                        if (reaction.act === 'engage') {
+                            c.venue = street; // stopped mid-road — the errand slips
+                            c.waitingFor = null;
+                            interactIntent = { target: seen[0].name, intent: reaction.word ?? '把街上撞見的這一刻接下去' };
+                            log(`    · 〔路遇〕${c.name} 在 ${street} 撞見 ${seen[0].name}，把原本的事擱下，追了上去——${reaction.word ?? ''}`);
+                            out.dayEvents.push(`${c.name}在${street}攔住了${seen[0].name}`);
+                            c.todayLedger.set(`engage:${street}:${clock.currentTick}`, `在${street}撞見${seen[0].name}，擱下原本的事追了上去。`);
+                            break; // the walk ends here
+                        }
+                        if (reaction.act === 'greet') {
+                            c.todayLedger.set(`greet:${street}:${clock.currentTick}`, `在${street}與${seen[0].name}打了個照面，點頭而過。`);
+                            seen[0].todayLedger.set(`greeted:${street}:${clock.currentTick}`, `在${street}與${c.name}打了個照面。`);
+                            log(`    · 〔路上〕${c.name} 與 ${seen[0].name} 在 ${street} 打了個照面，各自趕路。`);
+                        }
+                    } catch {
+                        /* the road goes on */
+                    }
+                }
+                // 順路 purchase (~1/4 walks, needs coin) — a REAL exchange with a
+                // real vendor: both sides remember it, and the vendor's life gains
+                // heat (enough touches → lazy-activation candidate; the world grows
+                // from being touched).
+                const vendor = streetFolk.find((d) => d.sells?.length);
+                if (vendor && h % 4 === 0 && c.money >= 2) {
+                    c.money -= 1;
+                    const bought = vendor.sells![h % vendor.sells!.length];
+                    c.todayLedger.set(`buy:${street}:${clock.currentTick}`, `路過${street}，同${vendor.name}買了${bought}（花去 1）。`);
+                    vendor.ledger.push({ day: clock.day, note: `${c.name}來買過${bought}` });
+                    vendor.heat += 1;
+                    log(`    · 〔路上〕${c.name} 路過 ${street}，同 ${vendor.name} 買了${bought}。`);
+                    worldTexture.push(`${c.name}在${street}同${vendor.name}買了${bought}`);
+                    if (vendor.heat === 5) {
+                        log(`    · 〔世界生長〕${vendor.name} 的攤子這些日子被戲班的人踏熟了——這條命有了自己的份量（惰性生成候選）。`);
+                    }
+                }
+            }
+        }
+
         // EPISODIC MEMORY of the character's own ACTION this 時辰 (append-only).
         const moveNote = c.venue !== from ? `我從${from}去了${c.venue}` : `我留在${c.venue}`;
         const intentNote = interactIntent ? `，想找${interactIntent.target}${interactIntent.intent}` : '';
@@ -1326,6 +1738,11 @@ export async function runRound(
                 out.rehearsalGathering.push({ tick: clock.currentTick, part, venue: v, members: memberChars.map((c) => c.name) });
                 for (const m of memberChars) addCast(play, m.id, at); // reach 'cast' first
                 for (const m of memberChars) accumulateEffort(play, m.id, PRODUCTION.effortPerGathering, at);
+                for (const m of memberChars) {
+                    m.practicedToday = true;
+                    // diminishing daily returns: 0.015/時辰, effective cap ~3 sessions
+                    m.craft = Math.min(1, m.craft + 0.015);
+                }
                 bumpReputeFromEffort(play, memberChars.length);
             }
         }
@@ -1352,7 +1769,12 @@ export async function runRound(
                 const ca = byName.get(x.char);
                 const cb = byName.get(x.interactIntent!.target) ?? [...byName.values()].find((y) => x.interactIntent!.target.includes(y.name));
                 const heat = (ca ? (out.spotlight[ca.id] ?? 0) : 0) + (cb ? (out.spotlight[cb.id] ?? 0) : 0);
-                return { p: x, heat };
+                // PAIR-FRESHNESS: the SAME pair's Nth scene of the day yields the slot
+                // to anyone else's first — a hot couple stops sealing themselves into a
+                // private bubble the rest of the world can't reach (蘇連 spent a whole
+                // season appearing ONLY with each other). Order only; no matchmaking.
+                const pairN = ca && cb ? (out.pairScenesToday.get([ca.id, cb.id].sort().join('|')) ?? 0) : 0;
+                return { p: x, heat: heat + pairN * 10 };
             })
             .sort((x, y) => x.heat - y.heat)
             .map((x) => x.p);
@@ -1404,8 +1826,37 @@ export async function runRound(
             const scene = await doInteract(
                 a, b, p.interactIntent.intent, clock, night, agent, recall, tags, out.surfaced,
                 isContinuation, isContinuation ? prevPair!.tail : undefined, out.review, out.chapterReview,
+                undefined, out.establishedDyn,
+                // 傾吐 cooldown: once per pair per day (a mechanical counter, not a
+                // director) — the tag was drifting toward "any earnest talk".
+                p.interactIntent.confide === true && !out.confidedToday.has(pairKey) && (out.confidedToday.add(pairKey), true),
+                out.bonds,
             );
             scenes.push(scene);
+            // BOND ledger: the scene warms the edge (both directions, saturating).
+            out.togetherToday.add([a.id, b.id].sort().join('|'));
+            if (scene.consummate) out.dayEvents.push(`${a.name}與${b.name}共度了一夜（${venue}）`);
+            out.pairScenesToday.set([a.id, b.id].sort().join('|'), (out.pairScenesToday.get([a.id, b.id].sort().join('|')) ?? 0) + 1);
+            bumpBond(
+                out.bonds,
+                a.id,
+                b.id,
+                scene.consummate ? 'bed' : scene.intimacyAccepted ? 'accept' : scene.confideBy ? 'confide' : scene.isPrivate ? 'private' : 'shared',
+            );
+            if (scene.confideBy) {
+                log(`  〔傾吐〕${a.name} 找 ${b.name} 說了心裡壓著的事——說出口的那些，${b.name} 記下了。`);
+                out.dayEvents.push(`${a.name}向${b.name}吐露了心事`);
+            }
+            // 相許 as an EVENT (no judge): they walked there themselves in this
+            // scene; the world records the fact (for 修羅場 stakes + persistence).
+            if (scene.intimacyAccepted && !areEstablishedLovers(a, b)) {
+                const pk = [a.id, b.id].sort().join('|');
+                if (!out.establishedDyn.has(pk)) {
+                    out.establishedDyn.add(pk);
+                    log(`  〔相許〕${a.name} 與 ${b.name}——這一場裡遞了意、接了意，自此是彼此的人（他們自己走到的）。`);
+                    out.dayEvents.push(`${a.name}與${b.name}正式相許，成了彼此的人`);
+                }
+            }
             out.spotlight = bumpActorFatigue(out.spotlight, [a.id, b.id]);
             out.lastScene.set(pairKey, {
                 tick: clock.currentTick,
@@ -1429,6 +1880,50 @@ export async function runRound(
             }
         }
     }
+    // SOLO VIGNETTE — one worker per 時辰 gets a rendered beat of their OWN craft
+    // (solo life was invisible: a practice hour produced zero story, so the page
+    // over-represented socializing). One extra LLM call per 時辰 at most.
+    {
+        const workers = workedThisRound.map((id) => byId.get(id)).filter((c): c is Char => !!c && !c.dead && !c.sceneThisRound);
+        if (workers.length && scenes.length < deps.maxScenesPerRound) {
+            const w = workers[clock.currentTick % workers.length];
+            try {
+                const solo = await runSceneLoop({
+                    sceneId: `work-d${clock.day}p${clock.tickOfDay}-${w.id}`,
+                    sceneName: w.venue,
+                    sceneHint: venueByName.get(w.venue)?.hint,
+                    isPrivate: !isPublicVenue(w.venue),
+                    clock: `第${clock.day}日·${part}`,
+                    stake: `${w.name}這個時辰守著自己的功課——一個人，把手上的正事做實。`,
+                    etiquette: WORLD_PREMISE,
+                    cast: [castMember(w, [])],
+                    wants: w.wants,
+                    tick: clock.currentTick,
+                    agent,
+                });
+                if (solo.beats.length) {
+                    scenes.push({
+                        venue: w.venue,
+                        day: clock.day,
+                        part,
+                        isPublic: isPublicVenue(w.venue),
+                        isPrivate: !isPublicVenue(w.venue),
+                        consummate: false,
+                        intimacyGate: false,
+                        participants: [w.name],
+                        participantIds: [w.id],
+                        beats: solo.beats.map((b) => ({ name: b.name, text: b.text, inner: b.inner ?? '' })),
+                        chapter: null,
+                        resolved: [],
+                    } as unknown as SceneRecord);
+                    log(`    · 〔功課〕${w.name} @ ${w.venue} — ${solo.beats[0].text.slice(0, 60)}…`);
+                }
+            } catch {
+                /* solo hour stays quiet */
+            }
+        }
+    }
+
     // (d.5) DISCOVERY / 修羅場 — a romantically-invested third who CAME to (or is at)
     // a private INTIMATE scene walks in on it. General: driven by hasRomanticStake +
     // physical presence / having sought a participant, never a hardcoded triangle. The
@@ -1456,7 +1951,7 @@ export async function runRound(
             const atTheDoor = doorList.has(C.id);
             const heard = !present && !atTheDoor && !!hearsScene(C, scene);
             if (!present && !atTheDoor && !heard) continue;
-            if (!(hasRomanticStake(C, A) || hasRomanticStake(C, B))) continue;
+            if (!(hasRomanticStake(C, A, out.establishedDyn) || hasRomanticStake(C, B, out.establishedDyn))) continue;
             const key = `${C.id}|${aId}|${bId}`;
             if (out.discoveredToday.has(key)) continue; // dedupe per (discoverer,pair) per day
             out.discoveredToday.add(key);
@@ -1472,6 +1967,7 @@ export async function runRound(
             const disc = await renderDiscovery(C, A, B, clock, agent, recall, brokeIn, out.review, aftermath, out.chapterReview);
             scenes.push(disc);
             out.spotlight = bumpActorFatigue(out.spotlight, disc.participants.map((n) => byName.get(n)?.id ?? n));
+            out.dayEvents.push(`${C.name}撞見了${A.name}與${B.name}的私情現場`);
             out.discoveries.push({ tick: clock.currentTick, part, discoverer: C.name, pair: [A.name, B.name], venue: scene.venue, brokeIn, heard });
             log(`    ⚔ 修羅場：${C.name} ${heard ? '聞聲趕來、破門闖進，撞見' : brokeIn ? '破門闖進，撞見' : '撞見'} ${A.name}×${B.name} @ ${scene.venue} — ${disc.beats.length} 拍`);
             for (const bt of disc.beats) log(`         ${bt.name}：${bt.text}`);
@@ -1522,7 +2018,8 @@ export async function runRound(
         try {
             const woven = await agent.weaveTickChapter({
                 clock: `第${clock.day}日·${part}`,
-                lines,
+                lines: [...lines, ...worldTexture.slice(0, 6).map((t) => `[世相] ${t}。`)],
+                dossier: dossierOf(partChars),
                 prevTail,
                 castBodies: castBodies(partChars),
                 context,
@@ -1570,6 +2067,7 @@ export async function runRound(
         if (econ.dutyWage > 0 && pull.duty && pull.venue && atWork) {
             c.money += econ.dutyWage;
             log(`    · 〔工錢〕${c.name} 在 ${c.venue} 當值，掙下 ${econ.dutyWage}（身上 ${c.money}）。`);
+            worldTexture.push(`${c.name}這個時辰在${c.venue}當值營生（${occLabel(c.occupation)}的活計）`);
         }
         if (econ.dailyAllowance > 0 && part === '日午') {
             c.money += econ.dailyAllowance;
@@ -1594,6 +2092,7 @@ export async function runRound(
         if (eat(c, spot.cost)) {
             out.meals[c.id] = (out.meals[c.id] ?? 0) + 1;
             log(`    · 〔吃食〕${c.name} ${spot.line}（花去 ${spot.cost}，餘 ${c.money}）。`);
+            worldTexture.push(`${c.name}${spot.line}`);
         } else if (c.hunger >= HUNGER_STARVING) {
             log(`    · 〔囊空〕${c.name} 餓得發慌，摸遍身上只有 ${c.money}，連碗麵都吃不起，硬撐著。`);
         } else {
@@ -1628,7 +2127,7 @@ export async function runRound(
             const scene = await doInteract(
                 a,
                 b,
-                `在年底大會串的戲台上，領銜合演這一齣新排的《${play.title}》——台下滿座，同行都來了，一季的積怨與情分都坐在台下看著；這一場定春雪社的名`,
+                `在${showrunner.finaleName}的戲台上，領銜合演這一齣新排的《${play.title}》——台下滿座，同行都來了，一季的積怨與情分都坐在台下看著；這一場定春雪社的名`,
                 clock,
                 night,
                 agent,
@@ -1642,9 +2141,10 @@ export async function runRound(
                 // The finale is the season's PAYOFF, not a want negotiation — give it
                 // room to be a real performance set-piece (body's veto still wins).
                 { maxTurns: 10 },
+                out.establishedDyn,
             );
             out.premiere = scene;
-            out.boxOffice = computeBoxOffice(play, cast);
+            out.boxOffice = computeBoxOffice(play, cast, (a.craft + b.craft) / 2);
             roundRec.scenes.push(scene);
             roundRec.sceneVenues = [...new Set(roundRec.scenes.map((s) => s.venue))];
             log(`  〔大會串〕春雪社在雲錦台獻演《${play.title}》 — ${a.name}×${b.name} 領銜，共 ${scene.beats.length} 拍。`);
@@ -1679,9 +2179,16 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         lastWovenTick: -1,
         lastWovenDay: -1,
         spotlight: {},
+        establishedDyn: new Set<string>(deps.establishedPairs ?? []),
         lastScene: new Map<string, { tick: number; venue: string; tail: string }>(),
         discoveries: [] as SeasonResult['discoveries'],
         discoveredToday: new Set<string>(),
+        confidedToday: new Set<string>(),
+        dormants: deps.dormants ?? buildDormants(),
+        bonds: deps.bonds ?? new Map(),
+        togetherToday: new Set<string>(),
+        pairScenesToday: new Map<string, number>(),
+        dayEvents: [] as string[],
         review: { scenes: 0, beatsChanged: 0 } as ReviewCounter,
         chapterReview: { chapters: 0, repaired: 0 } as ChapterReviewCounter,
         povReflections: {} as Record<string, Array<{ day: number; text: string }>>,
@@ -1704,6 +2211,13 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         rounds.push(rec);
         allScenes.push(...rec.scenes);
         deaths.push(...rec.deaths);
+        if (deps.checkpoint && (tick + 1) % deps.ticksPerDay === 0) {
+            try {
+                deps.checkpoint(tick + 1, [...out.establishedDyn]);
+            } catch {
+                /* checkpointing must never kill the season */
+            }
+        }
     }
     return {
         rounds,
@@ -1714,6 +2228,9 @@ export async function runSeason(deps: SeasonDeps): Promise<SeasonResult> {
         timeToolUses: out.timeToolUses.n,
         deaths,
         play: deps.play,
+        establishedPairs: [...out.establishedDyn],
+        dormants: out.dormants,
+        bonds: out.bonds,
         boxOffice: out.boxOffice,
         premiere: out.premiere,
         showrunnerVerdict: razor(deps.showrunner, deps.play),

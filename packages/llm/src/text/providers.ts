@@ -36,7 +36,12 @@ export function isRetryableError(err: unknown): boolean {
   const e = err as { status?: number; message?: string };
   if (e?.status === 429 || e?.status === 503 || e?.status === 529) return true;
   const msg = (e?.message ?? '').toLowerCase();
-  return msg.includes('overloaded') || msg.includes('rate_limit') || msg.includes('rate limit');
+  if (msg.includes('overloaded') || msg.includes('rate_limit') || msg.includes('rate limit')) return true;
+  // Network-level transients (a TCP reset once killed a whole season at day 3):
+  // undici surfaces them as `fetch failed` with the syscall error in `cause`.
+  const causeCode = String((e as { cause?: { code?: string } })?.cause?.code ?? '');
+  if (['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'].includes(causeCode)) return true;
+  return msg.includes('fetch failed') || msg.includes('socket hang up') || msg.includes('econnreset') || msg.includes('network');
 }
 
 /**

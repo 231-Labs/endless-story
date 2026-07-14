@@ -43,6 +43,15 @@ import {
     type EventCutHeader,
 } from './prompt.js';
 import type { SagaSoul } from '../character-worker/saga-soul.js';
+import {
+    compileDossier,
+    embedDossierHeader,
+    buildClaimAuditPrompt,
+    applyClaimAudit,
+    type DossierCanonicalEvent,
+    type DossierPerspectiveSource,
+} from '../event-dossier/index.js';
+import type { EpistemicDossierBundle } from '@endless-story/shared';
 
 export {
     buildSystemPrompt as buildEventCutSystemPrompt,
@@ -106,6 +115,11 @@ export interface CompileEventChapterInput {
     model?: string;
     /** Dry-run: produce prose but don't anchor on chain. */
     dryRun?: boolean;
+    /** Frozen objective event. When present, the same anchored blob also carries
+     *  an es:dossier payload for the multi-POV UI. */
+    dossierEvent?: DossierCanonicalEvent;
+    /** Optional enriched metadata/claims; defaults to the supplied event POVs. */
+    dossierPerspectives?: DossierPerspectiveSource[];
 }
 
 export interface CompileEventChapterResult {
@@ -125,6 +139,7 @@ export interface CompileEventChapterResult {
     /** Debug: the context handed to the LLM. */
     context?: EventCutContext;
     errors?: string[];
+    dossier?: EpistemicDossierBundle;
 }
 
 export async function runOnce(input: CompileEventChapterInput): Promise<CompileEventChapterResult> {
@@ -223,6 +238,32 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
     const userPrompt = buildUserPrompt(context);
     let chapter = toTraditional(response.text.trim());
     const povCount = countDistinctVoices(povs);
+    const dossierEvent = input.dossierEvent
+        ? { ...input.dossierEvent, saga: input.dossierEvent.saga || sagaName }
+        : undefined;
+    let dossierSources = input.dossierPerspectives ?? povs.map((p) => ({
+        characterId: p.characterId,
+        characterName: p.characterName,
+        role: p.role,
+        body: p.body,
+    }));
+    if (dossierEvent && voices >= 2) {
+        try {
+            const audited = await llm.chat({
+                model: modelId,
+                system: '你只做認識論標記，不續寫故事，不創造證據。',
+                messages: [{ role: 'user', content: buildClaimAuditPrompt(dossierEvent, dossierSources) }],
+                maxTokens: 1800,
+                temperature: 0.2,
+            });
+            dossierSources = applyClaimAudit(dossierEvent, dossierSources, audited.text);
+        } catch (err) {
+            errors.push(`dossier claims: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    const dossier = dossierEvent && voices >= 2
+        ? compileDossier({ event: dossierEvent, perspectives: dossierSources })
+        : undefined;
 
     // Deterministic self-check (see narrative-audit). An ensemble cut has no single
     // subject, so use a permissive subject (empty role ⇒ the craft layer — beard/play
@@ -259,6 +300,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
             anchored: false,
             sourcePovBlobIds: sourcePovBlobIds.length ? sourcePovBlobIds : undefined,
             context,
+            dossier,
             errors: errors.length ? errors : undefined,
         };
     }
@@ -280,7 +322,9 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
     const anchor = await signAndAnchor({
         sagaId: input.sagaId,
         subjectId: input.sceneId,
-        content: new TextEncoder().encode(embedCutHeader(chapter, header)),
+        content: new TextEncoder().encode(
+            embedCutHeader(dossier ? embedDossierHeader(chapter, dossier) : chapter, header),
+        ),
         contentType: 'text/markdown',
         signer: input.signer.keypair,
     });
@@ -297,6 +341,7 @@ export async function runOnce(input: CompileEventChapterInput): Promise<CompileE
         digest: anchor.digest,
         sourcePovBlobIds: sourcePovBlobIds.length ? sourcePovBlobIds : undefined,
         context,
+        dossier,
         errors: errors.length ? errors : undefined,
     };
 }

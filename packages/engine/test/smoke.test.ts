@@ -20,8 +20,31 @@ import { LocalClock } from '../src/adapters/local/clock.ts';
 import { createWorldFromPreset } from '../src/preset.ts';
 import { runTick, type TickReport } from '../src/tick.ts';
 import { WorldState } from '../src/world-state.ts';
+import type { ObserveSceneInput, RippleJudgeDelta, RippleJudgeInput } from '../src/ports.ts';
 
 const quiet = () => {}; // silence per-beat logging in the test
+
+class RecordingSessionAgent extends FakeSceneAgent {
+    observations: ObserveSceneInput[] = [];
+    rippleRosters: string[][] = [];
+    sceneReviews: Array<Parameters<FakeSceneAgent['reviewScene']>[0]> = [];
+    async observeScene(input: ObserveSceneInput): Promise<void> {
+        this.observations.push(input);
+    }
+    async judgeRipples(input: RippleJudgeInput): Promise<RippleJudgeDelta[]> {
+        this.rippleRosters.push(input.roster.map((member) => member.characterId));
+        return [];
+    }
+    async reviewScene(input: Parameters<FakeSceneAgent['reviewScene']>[0]) {
+        this.sceneReviews.push(input);
+        return {
+            beats: input.beats.map((beat, index) => ({
+                ...beat,
+                text: index === 0 ? `${beat.text}〔已校〕` : beat.text,
+            })),
+        };
+    }
+}
 
 test('8-tick run + restart continues, with mechanical counters', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'es-smoke-'));
@@ -29,7 +52,7 @@ test('8-tick run + restart continues, with mechanical counters', async () => {
     const memDir = path.join(dir, 'memory');
     const archiveDir = path.join(dir, 'archive');
 
-    const agent = new FakeSceneAgent();
+    const agent = new RecordingSessionAgent();
     const recall = new LocalRecall(memDir);
     const archive = new FileArchive(archiveDir);
     const clock = new LocalClock();
@@ -49,6 +72,38 @@ test('8-tick run + restart continues, with mechanical counters', async () => {
     const totalBeats = reports.reduce((n, r) => n + r.beats, 0);
     assert.ok(distinctBeatScenes.size >= 2, `beats in ≥2 scenes (got ${distinctBeatScenes.size})`);
     assert.ok(totalBeats > 0, 'some beats occurred');
+
+    // ── epistemic boundary: only actual witnesses receive an event ──────────
+    const objectiveEvents = reports.flatMap((r) => r.events);
+    assert.ok(objectiveEvents.length > 0, 'tick emitted frozen objective events');
+    assert.ok(objectiveEvents.some((event) => event.witnessIds.length < world.data.cast.length), 'some events are off-scene for part of the cast');
+    assert.ok(objectiveEvents.some((event) => event.visibility === 'private'), 'night produced a private event');
+    for (const event of objectiveEvents) {
+        const deliveries = agent.observations.filter((item) => item.event.id === event.id);
+        assert.deepEqual(
+            new Set(deliveries.map((item) => item.characterId)),
+            new Set(event.witnessIds),
+            `${event.id}: exactly the witnesses received it`,
+        );
+        assert.ok(deliveries.every((item) => event.witnessIds.includes(item.characterId)), 'no off-scene delivery');
+    }
+    assert.ok(agent.sceneReviews.length > 0, 'multi-character scenes run the quality review before freezing');
+    assert.ok(
+        agent.sceneReviews.every((review) => review.participants.every((p) => Boolean(p.bodyFact))),
+        'the review receives data-driven body facts for pronoun repair',
+    );
+    assert.ok(
+        objectiveEvents.some((event) => event.beats[0]?.text.endsWith('〔已校〕')),
+        'the repaired text, not the raw beat, is what enters canonical events',
+    );
+    assert.equal(agent.rippleRosters.length, objectiveEvents.length, 'each event gets exactly one ripple judgment');
+    for (let i = 0; i < objectiveEvents.length; i++) {
+        assert.deepEqual(
+            new Set(agent.rippleRosters[i]),
+            new Set(objectiveEvents[i].witnessIds),
+            `${objectiveEvents[i].id}: only witnesses may receive a want ripple`,
+        );
+    }
 
     // ── counter 2: night ticks route toward home anchors ──────────────────────
     const nightReports = reports.filter((r) => r.night);

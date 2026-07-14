@@ -6,8 +6,9 @@
  *     run --preset spring-snow --ticks 8 --out ./run [--real-llm]
  *
  * Default = FakeSceneAgent + deterministic recall (no creds). `--real-llm`
- * swaps in RunnerSceneAgent (needs a text-provider key) + real OpenAI embeddings
- * (if OPENAI_API_KEY is set). A run is resumable: if `<out>/state/world.json`
+ * swaps in RunnerSceneAgent (needs a text-provider key). Embeddings remain local
+ * unless `--real-embeddings` is explicitly passed, even if an OpenAI key happens
+ * to be present. A run is resumable: if `<out>/state/world.json`
  * exists it is restored and continued; otherwise a fresh world is seeded.
  */
 
@@ -15,6 +16,8 @@ import * as path from 'node:path';
 import { FakeSceneAgent, FileArchive, LocalClock, LocalRecall } from './adapters/local/index.ts';
 import { createWorldFromPreset } from './preset.ts';
 import { runTick } from './tick.ts';
+import { writeTickDossiers } from './dossier-artifact.ts';
+import { refreshSeasonEditorial, type AnthologyComposer } from './editorial-artifact.ts';
 import { WorldState } from './world-state.ts';
 import type { SceneAgentPort } from './ports.ts';
 
@@ -23,10 +26,11 @@ interface Args {
     ticks: number;
     out: string;
     realLlm: boolean;
+    realEmbeddings: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-    const a: Args = { preset: 'spring-snow', ticks: 8, out: './engine-run', realLlm: false };
+    const a: Args = { preset: 'spring-snow', ticks: 8, out: './engine-run', realLlm: false, realEmbeddings: false };
     const rest = argv[0] === 'run' ? argv.slice(1) : argv;
     for (let i = 0; i < rest.length; i++) {
         const k = rest[i];
@@ -34,6 +38,7 @@ function parseArgs(argv: string[]): Args {
         else if (k === '--ticks') a.ticks = Math.max(1, Number(rest[++i]) || 8);
         else if (k === '--out') a.out = rest[++i];
         else if (k === '--real-llm') a.realLlm = true;
+        else if (k === '--real-embeddings') a.realEmbeddings = true;
     }
     return a;
 }
@@ -41,14 +46,26 @@ function parseArgs(argv: string[]): Args {
 async function main(): Promise<void> {
     const args = parseArgs(process.argv.slice(2));
     const stateDir = path.join(args.out, 'state');
-    const recall = new LocalRecall(path.join(args.out, 'memory'));
+    if (args.realEmbeddings && !process.env.OPENAI_API_KEY) {
+        throw new Error('--real-embeddings requires OPENAI_API_KEY');
+    }
+    const recall = new LocalRecall(path.join(args.out, 'memory'), {
+        embeddings: args.realEmbeddings ? 'auto' : 'deterministic',
+    });
     const archive = new FileArchive(path.join(args.out, 'archive'));
     const clock = new LocalClock();
 
     let agent: SceneAgentPort;
+    let composeAnthology: AnthologyComposer | undefined;
     if (args.realLlm) {
         const { RunnerSceneAgent } = await import('./adapters/runner-scene-agent.ts');
-        agent = new RunnerSceneAgent();
+        const { SeasonEditorAgent } = await import('@endless-story/runner/services/storyteller-chapter');
+        const editor = new SeasonEditorAgent();
+        agent = new RunnerSceneAgent({
+            sessionDir: path.join(args.out, 'sessions'),
+            sessionKey: process.env.CHARACTER_SESSION_KEY,
+        });
+        composeAnthology = (plan, bundles) => editor.compose(plan, bundles);
     } else {
         agent = new FakeSceneAgent();
     }
@@ -56,7 +73,7 @@ async function main(): Promise<void> {
     console.log('═'.repeat(64));
     console.log(`ENDLESS STORY ENGINE · preset=${args.preset} ticks=${args.ticks} out=${args.out}`);
     console.log(`  agent      : ${args.realLlm ? 'RunnerSceneAgent (real LLM)' : 'FakeSceneAgent (deterministic)'}`);
-    console.log(`  embeddings : ${process.env.OPENAI_API_KEY ? 'real OpenAI' : 'deterministic hash (mechanism only)'}`);
+    console.log(`  embeddings : ${args.realEmbeddings ? 'real OpenAI (explicit opt-in)' : 'deterministic hash (local only)'}`);
     console.log('═'.repeat(64));
 
     let world: WorldState;
@@ -71,7 +88,14 @@ async function main(): Promise<void> {
     }
 
     for (let i = 0; i < args.ticks; i++) {
-        await runTick(world, { agent, recall, archive, clock }, { snapshotDir: stateDir });
+        const report = await runTick(world, { agent, recall, archive, clock }, { snapshotDir: stateDir });
+        const dossiers = await writeTickDossiers(args.out, report, world.data.cast, args.realLlm ? agent : undefined);
+        for (const dossier of dossiers) console.log(`  dossier: ${dossier.eventId} → ${dossier.filename}`);
+        const editorial = await refreshSeasonEditorial(args.out, composeAnthology);
+        if (editorial.selectionChanged) {
+            console.log(`  season editor: ${editorial.plan.reason}`);
+        }
+        if (editorial.anthologyWritten) console.log('  anthology: editorial/season-anthology.md');
     }
 
     const live = world.data.wants.filter((x) => !x.retired).length;
