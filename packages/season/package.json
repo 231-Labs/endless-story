@@ -1,0 +1,25 @@
+{
+  "name": "@endless-story/season",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./driver": "./driver/run.ts"
+  },
+  "scripts": {
+    "run": "node --env-file-if-exists=../web/.env.local --env-file-if-exists=.env.local driver/run.ts",
+    "run:mock": "node driver/run.ts --mock",
+    "report": "node driver/report.ts",
+    "run:tsx": "tsx --env-file-if-exists=../web/.env.local --env-file-if-exists=.env.local driver/run.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
