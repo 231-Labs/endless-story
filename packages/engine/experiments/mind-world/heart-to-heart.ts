@@ -58,20 +58,33 @@ async function main(): Promise<void> {
     // charged opening: her last night before sailing; recall floods (unforgettable → clear)
     const memA = memText(nameA);
     const memB = memText(nameB);
+    // MW_SETTING overrides the scene; MW_FIRST forces A's opening line verbatim
+    // (used when the question itself is the experiment — 「怎麼樣你才會回來」).
     const setting =
+        process.env.MW_SETTING ??
         `南洋的船票遞到${nameB}手上了，她還沒點頭。今夜她把${nameA}叫到會樂里的屋裡，趁著還沒拿定主意，想把這些年掏出來說清楚。一盞燈，一壺沒怎麼動的酒，你們倆促膝對坐，誰也沒急著走。四下靜下來的這一刻，那些年一下子全回來了，清清楚楚，像是刻下的：`;
     const sceneA = `（${setting}${memA[0] ?? ''}）你此刻對坐在你面前的${nameB}，想開口說什麼？（記住：只說你自己的，別替她走。）`;
     const sceneB = `（${setting}${memB[0] ?? ''}）${nameA}對坐在你面前。你此刻想開口說什麼？（記住：只說你自己的，別替她走。）`;
 
-    const log: string[] = [`# ${nameA} × ${nameB} · 促膝長談（她走前最後一夜）\n`];
+    const log: string[] = [`# ${nameA} × ${nameB} · ${process.env.MW_TITLE ?? '促膝長談（她走前最後一夜）'}\n`];
     const say = (who: string, s: string): void => {
         log.push(`**${who}**：${s}\n`);
         console.log(`\n〔${who}〕${s}`);
     };
 
-    trA.push({ role: 'user', content: sceneA });
-    let utter = await llm(sysA, trA, 800);
-    trA.push({ role: 'assistant', content: utter });
+    // MW_FIRST: A's opening is fixed verbatim rather than generated. Only for
+    // probes where the QUESTION is the experiment and must be asked exactly —
+    // B's answer stays entirely B's.
+    let utter: string;
+    if (process.env.MW_FIRST) {
+        utter = process.env.MW_FIRST;
+        trA.push({ role: 'user', content: sceneA });
+        trA.push({ role: 'assistant', content: utter });
+    } else {
+        trA.push({ role: 'user', content: sceneA });
+        utter = await llm(sysA, trA, 800);
+        trA.push({ role: 'assistant', content: utter });
+    }
     say(nameA, utter);
 
     let speakerSys = sysB, speakerTr = trB, speakerName = nameB, listenerName = nameA, opened = false;
