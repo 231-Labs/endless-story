@@ -298,6 +298,22 @@ const SPECS: CastSpec[] = [
         ],
     },
     {
+        // WITNESS probe (2026-07-15): the only other person present that night.
+        id: '何蘊之', occupation: 'guest', homeVenue: '霞飛路商店街', workVenue: '霞飛路商店街',
+        socialFact: '你是女子中學的國文教員，中西女塾出身，正經人家的姑娘。',
+        bodyFact: '女子',
+        money: 22, // 教員薪水，清貧但體面
+        coreIdentity: [
+            '我是何蘊之，教國文的。',
+            '有一夜的事，我背了四年，連日記都不敢寫。',
+        ],
+        views: [['柳生春', '我糟蹋了她的名聲，她替我背了四年。我如今連戲園門口都繞著走']],
+        wants: [
+            { layer: '心', desc: '把那一夜的真話說出口，還她一個清白', target: '柳生春', weight: 0.68, sat: 0.05, resistance: 7 },
+            { layer: '世', desc: '安安分分教書，別再叫人瞧見我從前那副癡樣', weight: 0.42, sat: 0.5, resistance: 3 },
+        ],
+    },
+    {
         // DRIFT-season cast (2026-07-15). Venues are canon-attested, not invented:
         // 「帶你逛霞飛路、看洋片」 puts him on 霞飛路, so 蘇 going there at night IS
         // going to him — no new venue needed.

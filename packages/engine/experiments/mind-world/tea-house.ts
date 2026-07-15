@@ -21,7 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CANON } from '../agent-season/canon-seed.ts';
-import { WORLD_PREMISE, VENUES } from '../agent-season/world.ts';
+import { WORLD_PREMISE, VENUES, buildCast } from '../agent-season/world.ts';
 import { SceneFeed } from './physics.ts';
 
 const [runDir, roundsArg, outPath, ...names] = process.argv.slice(2);
@@ -53,6 +53,23 @@ async function llm(system: string, messages: Msg[], maxTokens: number, model?: s
     return (res.text ?? '').trim();
 }
 
+/** Data-driven pronoun anchor, same approach as production's beat-prompt.ts
+ *  pronounNote(): composed at call time from each present person's ACTUAL
+ *  bodyFact, no names hardcoded. Without it a mind meeting a NEW character has
+ *  nothing to anchor on and the model defaults to 他 — the witness probe's first
+ *  run had 柳生春 call 何蘊之 「他」 and 「何師兄」 within two beats (validator
+ *  case #1, gender drift, firing live). Every other harness got this; tea-house
+ *  did not, because its table used to be all faces the model already knew. */
+const BODY = new Map(buildCast().map((c) => [c.name, (c as { bodyFact?: string }).bodyFact ?? '']));
+const pronounOf = (body: string): string => (body.includes('女') || body.includes('婦') ? '她' : '他');
+function pronounNote(id: string, others: string[]): string {
+    const rows = [id, ...others]
+        .map((n) => ({ n, b: BODY.get(n) ?? '' }))
+        .filter((r) => r.b)
+        .map((r) => `${r.n}是${r.b}，稱${r.n}用「${pronounOf(r.b)}」`);
+    return rows.length ? `【在座各人的身】${rows.join('；')}。別張冠李戴。` : '';
+}
+
 function buildSystem(id: string, others: string[]): string {
     const c = CANON[id];
     return [
@@ -62,6 +79,7 @@ function buildSystem(id: string, others: string[]): string {
         `【你記得的過往】（這些是發生過的事，不是你的台詞。說起舊事用你此刻的話重新講，切莫照抄原句。）\n${c.memories.map((m) => `・${m.text}`).join('\n')}${memText(id).map((t) => `\n・${t}`).join('')}`,
         `【這個世界】${WORLD_PREMISE}`,
         `地方：${VENUES.map((v) => v.name).join('、')}。`,
+        pronounNote(id, others),
         '',
         `此刻你和${others.join('、')}同坐一張桌子，一壺茶。就這樣，沒別的。`,
         '【鐵規矩】',
@@ -76,7 +94,11 @@ async function main(): Promise<void> {
     const tr: Record<string, Msg[]> = {};
     for (const n of names) {
         sys[n] = buildSystem(n, names.filter((o) => o !== n));
-        tr[n] = SEED ? [] : (JSON.parse(fs.readFileSync(path.join(runDir, `mind-${n}.json`), 'utf-8')) as Msg[]);
+        // A mind with no transcript in this archive is simply new to the table —
+        // it walks in carrying only its canon. Mixed tables (resumed + fresh) are
+        // the point of the witness probe: 柳/金 carry years, 何蘊之 carries one night.
+        const p = path.join(runDir, `mind-${n}.json`);
+        tr[n] = SEED || !fs.existsSync(p) ? [] : (JSON.parse(fs.readFileSync(p, 'utf-8')) as Msg[]);
     }
     console.log(
         `〔設定〕${SEED ? '種子（未活過任何一季）' : `續命自 ${path.basename(runDir)}`}｜` +

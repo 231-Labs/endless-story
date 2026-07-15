@@ -258,6 +258,34 @@ export const CANON: Record<string, CanonChar> = {
             { text: '春雪社重啟戲箱的消息你盯了一季了。封箱多年的班子、坤生掛頭牌、名門小姐砸錢共本——這裡頭有戲，你的鼻子從不會錯。', importance: 7, tag: '春雪社-題' },
         ],
     },
+    // ADDED 2026-07-15 for the WITNESS probe. 何蘊之 is the 女學生 of 柳生春's own
+    // memory — the ONLY other person present that night, and therefore the only
+    // testimony that can exculpate her. Assembled from the single canon fragment
+    // that attests her, nothing invented beyond what it implies:
+    //   「有過一夜堂會散得晚，一位捧你的女學生紅著臉塞給你一方手帕，你半醉半真應了
+    //    她一宿。天亮她哭著說再不敢見你，你也沒攔。這樣的夜你記不清有多少。」
+    // Note what the fragment does NOT say: it never says they had sex. 柳生春 says
+    // 「應了」 and 「這樣的夜」 — she is CONCLUDING, not remembering. And drift night 1
+    // established she cannot refuse a toast (「那幫人非拉著敬酒，推都推不掉」), so
+    // 「半醉」 is canon-anchored. The night is 四年前, era 柳生春 20 / 何蘊之 19.
+    '何蘊之': {
+        name: '何蘊之',
+        role: '女校教員',
+        ageYears: 23,
+        description: '中西女塾出身，如今在一所女子中學教國文。剪了短髮，穿陰丹士林布旗袍，說話輕，眼睛卻不躲人。十九歲那年她是柳生春最癡的一個戲迷——場場不落，把零用錢全買了池座的票，在課本扉頁上抄柳夢梅的念白。如今她不聽戲了，戲園門口都繞著走；同事約她去雲錦台，她總說功課忙。',
+        secret: '四年前那一夜，是她自己鑽進柳生春懷裡的。堂會散得晚，那幫人一輪輪灌酒，柳生春推不掉，出來時腳下都是飄的。她攙著人回了客棧廂房，柳生春一沾枕頭就睡死了——什麼也沒做，一根指頭都沒碰她。是她借著酒氣、借著夜色，自己解了盤扣鑽進那個懷裡，貼著睡了一整夜。天快亮她慌了，怕得渾身抖——不是怕柳生春，是怕她自己。柳生春醒過來，眼神茫然，臉上是那種「我又做了什麼」的難看，張口要說話，她哭著跑了，一句「再不敢見你」是給自己說的。這四年她聽著外頭傳柳生春如何風流、如何糟蹋人，其中至少有一夜是假的——那一夜是她糟蹋了柳生春的名聲，柳生春替她背了四年。這事她誰也沒說過，連日記都不敢寫。',
+        homeScene: '霞飛路商店街',
+        workScene: '霞飛路商店街',
+        memories: [
+            { text: '十九歲那年你把零用錢全買了池座的票，場場不落。課本扉頁上抄滿柳夢梅的念白，被先生翻到，罰站了一堂課你也不改。', importance: 7, tag: '柳生春' },
+            { text: '那夜堂會散得晚，你在後台擠著把一方繡了字的手帕塞給她。她笑著接了——那個笑你記了一輩子，因為她根本沒看清你是誰。', importance: 8, tag: '那一夜' },
+            { text: '那幫人一輪輪灌她酒，她推不掉，一杯接一杯。出來時腳下是飄的，你攙著她的胳膊，那條胳膊沉得嚇人。', importance: 8, tag: '那一夜' },
+            { text: '她一沾枕頭就睡死了，呼吸沉得像個孩子。她什麼也沒做，一根指頭都沒碰你。是你自己解了盤扣，鑽進她懷裡，貼著她睡了一整夜——那一夜你是偷的。', importance: 10, tag: '那一夜' },
+            { text: '天快亮你慌了，抖得停不住。她醒過來眼神茫然，臉上是那種「我又做了什麼」的難看，張口要說話——你哭著跑了。那句「再不敢見你」，是說給你自己聽的。', importance: 10, tag: '那一夜' },
+            { text: '這四年你聽著外頭傳她如何風流、如何糟蹋人。你曉得裡頭至少有一夜是假的，是你糟蹋了她的名聲，她替你背了四年。這事你連日記都不敢寫。', importance: 10, tag: '那一夜' },
+            { text: '你如今不聽戲了。戲園門口你都繞著走，同事約你去雲錦台，你總說功課忙。', importance: 6, tag: 'ambient' },
+        ],
+    },
     // ADDED 2026-07-15 for the DRIFT season. 顧敬亭 was never a CANON character —
     // he existed only inside other minds' memories (5 of them). Everything below
     // is ASSEMBLED FROM THOSE ATTESTATIONS, not invented:
