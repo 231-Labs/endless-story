@@ -514,9 +514,17 @@ class Mind {
 
     /** DISTILL (interlude only): years later, the mind looks back and names
      *  what stuck — each line becomes canon-grade recall for future seasons. */
+    /** SELF-COMPRESSION. Keeps the WHY, not just the image: a probe (2026-07-15)
+     *  showed distilled memories recorded the event and the picture (「那個笑盈盈
+     *  的眼神」) but never the motive, so every later recall had to manufacture a
+     *  fresh reason — and two recalls of one memory could invent contradicting
+     *  ones. Events are what happened; a mind also keeps why it did it. */
     async distill(): Promise<string[]> {
         const raw = await this.selfTalk(
-            '（多年以後，你回望這段日子。把真正刻進心裡的，寫成四到六條記憶——一條一行，每條都是一件具體的事、一句具體的話或一個具體的物件，說人話，不用 JSON，不加編號以外的裝飾。）',
+            '（多年以後，你回望這段日子。把真正刻進心裡的，寫成四到六條記憶——一條一行。' +
+                '每條都要有一件具體的事（或一句具體的話、一個具體的物件），' +
+                '**並且要帶著你當時為什麼那麼做、當時心裡是什麼滋味**——事跟緣由寫在同一條裡，別只留畫面。' +
+                '說人話，不用 JSON，不加編號以外的裝飾。）',
             700,
         );
         return raw

@@ -31,14 +31,22 @@ if (!runDir || !who || !question) {
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
+/** Lived (interlude-distilled) memories, same as the other harnesses — without
+ *  these the mind lacks everything it actually PLAYED, so a probe asking it to
+ *  cite grounds can only reach for the handed-down canon. */
+const EXTRA: Record<string, Array<string | { text: string }>> = process.env.MW_EXTRA_MEMORIES
+    ? JSON.parse(fs.readFileSync(process.env.MW_EXTRA_MEMORIES, 'utf-8'))
+    : {};
+
 async function main(): Promise<void> {
     const c = CANON[who];
     const transcript = JSON.parse(fs.readFileSync(path.join(runDir, `mind-${who}.json`), 'utf-8')) as Msg[];
+    const lived = (EXTRA[who] ?? []).map((m) => (typeof m === 'string' ? m : m.text));
     const system = [
         `你是${c.name}（${c.role}），活在 1920 年代的上海。這不是扮演——你就是這個人，活在連續的時間裡。`,
         `【你是誰】${c.description}`,
         `【你心底的事（只有你自己知道）】${c.secret}`,
-        `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}`,
+        `【你記得的過往】\n${c.memories.map((m) => `・${m.text}`).join('\n')}${lived.map((t) => `\n・${t}`).join('')}`,
         `【這個世界】${V3C_PREMISE}`,
         `地方：${VENUES.map((v) => v.name).join('、')}。`,
     ].join('\n');
