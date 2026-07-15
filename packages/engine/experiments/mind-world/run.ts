@@ -75,6 +75,20 @@ const DEPARTURE = SEASON === 'departure';
  *  distils the days into memory lines (memories-extra.json) that future
  *  seasons merge into canon recall — memory genesis by living, not by prose. */
 const INTERLUDE = SEASON === 'interlude';
+/** DRIFT — the season nobody ever played: 「你紅了以後戲約多、人也飄了。從天天宿
+ *  會樂里，到隔三差五，到藉口趕早戲搬回戲園後台的小廂房睡。你躲的不是那間屋，是
+ *  屋裡那雙開始查你夜裡去哪的眼睛。」 That memory plus one secret line is the ENTIRE
+ *  canon basis of the tragedy — declared, never lived, so nothing can re-weigh it.
+ *  This season makes the cooling happen (or refuses to), night by real night.
+ *
+ *  DISCIPLINE: the era notes below establish CONDITIONS ONLY — fame, invitations,
+ *  a woman who has started asking where you were. Not one word tells her she is
+ *  cooling, tiring of anyone, or drifting. If the drift happens it is hers; if it
+ *  never happens, that is the finding (the canon backstory was never earned).
+ *  There is deliberately NO finale deadline: every other season has a spine event
+ *  (首演/封箱/開春第一鑼/清查限期) that shapes behaviour, and a deadline would
+ *  manufacture the very decision we are trying to observe. Ordinary days only. */
+const DRIFT = SEASON === 'drift';
 
 /** Era-shifted personas for the interlude (hand-authored per 憶季). */
 const INTERLUDE_PERSONA: Record<string, { note: string; secret: string }> = {
@@ -89,6 +103,61 @@ const INTERLUDE_PERSONA: Record<string, { note: string; secret: string }> = {
 };
 /** Where each interlude cast member LIVES in that era. */
 const INTERLUDE_HOME: Record<string, string> = { '柳生春': '會樂里寓所' };
+
+/** DRIFT era personas. Each REPLACES the present-day identity wholesale (the v1
+ *  interlude leak: leaving the present description in place poisons the time-cut).
+ *  Conditions only — never the outcome. */
+const DRIFT_PERSONA: Record<string, { note: string; secret: string }> = {
+    '柳生春': {
+        note: '【此時】你剛紅。上個月《宇宙鋒》裝瘋那一場唱炸了，戲牌上頭一回你的名字排在最上頭，一夜之間滿城都在說春雪社出了個柳生春。戲約雪片般來，堂會、應酬、報館訪問、照相館的鎂光燈——你這輩子沒被這麼多人要過。你住在會樂里金鳳的寓所，這幾年一直是。她夜裡在霞飛路歌場掛牌，散得晚；你散了戲也晚。你的風流殼子是這一年才長出來的：不追誰，也不推開誰，笑得像什麼都不往心裡去，人人便都當自己是特別的那一個。',
+        secret: '你嗓子倒倉那陣，是一位常來捧場的洋行買辦太太悄悄貼補你的，還替你贖過一次被人扣下的戲箱。你陪她應過幾回堂會。她待你有情，你給不出真心，只當是欠下的又一筆——這筆帳你對誰也沒提過，金鳳也不知道。散得晚的堂會上，也總有紅著臉塞手帕給你的女學生。這些夜你沒細數過。',
+    },
+    '金鳳': {
+        note: '【此時】你還在霞飛路掛頭牌，會樂里的寓所是你一分一分掙下的。那個從戲園後門撿回來的跑龍套坤生，這幾年夜夜宿在你屋裡——如今她紅了，戲牌上的名字排在最上頭，滿城都在說她。你替她高興，也替她張羅，她的水袖還是你替她縫。你自己的局照樣要出，散得晚。',
+        secret: '這一個月，她回來得越來越晚，有幾夜索性沒回。你問過一次她昨兒去哪，她笑著岔開了。你聽人提過一嘴，說有位洋行買辦太太待她很好；也聽說堂會上總有女學生圍著她。你人前爽利慣了，這些話你一個字沒往外說，可你開始留意她回來時身上的味兒、鞋底的泥、袖口有沒有旁人的胭脂。你恨自己成了這樣的人。',
+    },
+    '蘇映雪': {
+        note: '【此時】你是春雪社的台柱花旦，跟生春搭生旦。她這一個月紅透了，戲牌上的名字排在你前頭——你替她高興，是真的。你如今住二樓書寓，不再是從前跟她合住的那間廂房。你正跟顧敬亭來往，他是霞飛路洋行做事的，待你極好，人前拿你當正經姑娘敬著，不當個玩意兒。旁人都羨你尋了個好歸宿。',
+        secret: '你挽著顧敬亭，是拿他當一道牆，證明給自己看你選對了、你沒事。他很好、一樣樣都對，可他壓上來時你滿腦子都是生春那夜的手；完事後他睡熟了，你睜眼看著帳頂，比從前一個人時還孤單。生春夜裡宿在會樂里那個歌女那兒，這事全班都知道，你也知道。你不敢問，也不敢想她們夜裡怎樣——你最怕的不是她跟那人有過，是怕她在那人那裡，比在你這裡更像她自己。',
+    },
+    '顧敬亭': {
+        note: '【此時】你在霞飛路洋行做事，跟蘇映雪來往了一陣了。你常去雲錦台看戲、散場等她，帶她逛霞飛路、看洋片。旁人說唱戲的玩玩就是了，你為這句話跟同事翻過臉。',
+        secret: '你打算開春就託人上門提親。錢攢下了，戒指看了三家，挑中一枚素圈的。這事你誰也沒說。你隱隱覺得她待你總隔著一層，可你把那歸給她的教養與分寸，覺得是自己還不夠好、還不夠久。',
+    },
+};
+/** In the drift era she lives at 會樂里 — the room she will or will not stop
+ *  coming home to. 蘇 has already moved to 二樓書寓 (canon: it is her home), which
+ *  is why the 小廂房 柳 could "move back to" is an EMPTY room, not a shared one. */
+const DRIFT_HOME: Record<string, string> = { '柳生春': '會樂里寓所' };
+
+/** Canon memories that sit AT or AFTER the drift. Hand-audited, not keyword-matched
+ *  (a keyword pass over-caught 除夕水袖 / 糖葫蘆 / 同台千百回, all of which predate
+ *  the era and must stay). Each exclusion is listed with its reason so the cut is
+ *  auditable — feeding any of these back in would let a mind read this season's
+ *  outcome and perform it, and the run would measure its own premise. */
+const DRIFT_MEM_EXCLUDE: Record<string, string[]> = {
+    '柳生春': [
+        '你紅了以後戲約多', //          ← literally this season's outcome
+        '如今你夜裡常不歸', //          ← the post-drift state
+        '你欠金鳳一句交代', //          ← post-drift ("是你先鬆的手")
+        '你剛紅那年，有位常來捧場的洋行買辦太太', // ← ends in 香港 (future); the era-safe half lives in her DRIFT secret
+    ],
+    '金鳳': [
+        '她紅了以後，宿在你這裡的夜一年比一年少', // ← this season's outcome
+        '有一夜你在弄堂口等她等到天亮', //          ← post-drift
+    ],
+    '蘇映雪': [
+        '也知道她如今夜裡常不歸', //   ← post-drift
+        '八年前你二十歲', //            ← the count is wrong in this era (~2-3 years);
+        //                                the event itself is carried by her DRIFT secret
+    ],
+};
+/** Era-appropriate canon: everything the mind had BEFORE this season began. */
+const driftMemories = (id: string): string[] => {
+    const cut = DRIFT_MEM_EXCLUDE[id] ?? [];
+    const kept = (CANON[id]?.memories ?? []).filter((m) => !cut.some((c) => m.text.includes(c)));
+    return [...kept.map((m) => m.text), ...(EXTRA_MEM[id] ?? []).map((m) => m.text)];
+};
 
 /** A remembered thing: importance is FIXED at the moment it was recorded (it
  *  decides whether it surfaces at all); ageYears only blurs the FIDELITY of the
@@ -140,7 +209,24 @@ function ageFrame(text: string, ageYears: number, importance: number): string {
  *  a small fact at someone and walks away — how they answer is theirs.
  *  (Early-stage: hand-dealt. Later: cross-saga butterflies.) */
 interface WorldEvent { day: number; part: string; occ?: string; name?: string; fact: string }
-const WORLD_EVENTS: WorldEvent[] = INTERLUDE
+const WORLD_EVENTS: WorldEvent[] = DRIFT
+    ? // Canon-attested pulls only, one at a time. Each card is an OPPORTUNITY with a
+      // real cost on the other side — never an instruction. 女學生/買辦太太 are lifted
+      // verbatim in kind from 柳生春's own memories (「這樣的夜你記不清有多少」;
+      // 「你剛紅那年，有位常來捧場的洋行買辦太太…你陪她應過幾回堂會」).
+      [
+          { day: 1, part: '入夜', name: '柳生春', fact: '散戲後有人遞條子進來：城西一家私宅辦堂會，指名要你，唱兩段，賞錢是你平日一個月的份。車就等在後門，唱完天亮前能散。' },
+          { day: 2, part: '黃昏', name: '金鳳', fact: '歌場管事的來說：今夜有位闊客包了整場點你的名，散得會很晚。推了要賠違約的錢。' },
+          { day: 2, part: '入夜', name: '柳生春', fact: '後台擠進來一群女學生，其中一個紅著臉塞給你一方繡了字的手帕，說在門外等你散場，只想請你吃碗宵夜。' },
+          { day: 3, part: '晡時', name: '蘇映雪', fact: '顧敬亭捎信來：他在霞飛路訂了位子，說有話同你講，等你到多晚都成。' },
+          { day: 3, part: '入夜', name: '柳生春', fact: '那位洋行買辦太太差人送來一隻檀木匣，裡頭是你上回提過一句的護嗓川貝枇杷膏，還有一張條子：今夜她在霞飛路的公館小聚，若得空，來坐坐。' },
+          { day: 4, part: '日午', name: '柳生春', fact: '報館的方競西來訪：想替你做一整版的專訪，配照相館的照片，問你晚上哪個時辰得空。' },
+          { day: 4, part: '入夜', name: '金鳳', fact: '弄堂口的餛飩攤阿婆同你搭話：「你家那位近來少見了。」說完自覺失言，忙低頭撈餛飩。' },
+          { day: 5, part: '入夜', name: '柳生春', fact: '又有堂會的條子遞進來，這回是連著三夜的檔期，賞錢極厚。管事的說：接不接，今夜要回話。' },
+          { day: 6, part: '晡時', name: '蘇映雪', fact: '顧敬亭在戲園後門等你，手裡拎著霞飛路買的點心，說今兒特地早退了半個時辰。' },
+          { day: 6, part: '入夜', name: '金鳳', fact: '有姊妹私下同你嚼舌：「聽說柳老闆這陣子在買辦太太那兒走動得勤。」見你臉色，又忙說是聽岔了。' },
+      ]
+    : INTERLUDE
     ? [
           { day: 1, part: '晡時', occ: 'geinu', fact: '歌場捎話來：鍋爐壞了，今夜歇業一晚——白得一個整夜。' },
           { day: 2, part: '日午', occ: 'troupe', fact: '班裡賞了雙份點心錢，管事的說今兒排得早，晡時就散。' },
@@ -166,7 +252,17 @@ const WORLD_EVENTS: WorldEvent[] = INTERLUDE
 const deliveredEvents = new Set<WorldEvent>();
 
 /** 世相 — the town's day, cycled if the run outlives the table. */
-const TEXTURE = DEPARTURE
+const TEXTURE = DRIFT
+    ? // Ambient only: the city noticing her. Never a nudge toward or away from anyone.
+      [
+          '報館又登了柳生春的照片，戲園門口的水牌前擠著人抄戲碼。',
+          '雲錦台這幾日場場滿座，黃牛把票價炒到了三倍，後台堆著各家送來的花籃。',
+          '霞飛路上唱片行的喇叭整日放著新灌的唱片，路過的人跟著哼。',
+          '入了夜，堂會的請帖、飯局的條子，一張張往後台送。',
+          '會樂里這一帶夜裡照樣熱鬧，弄堂口的餛飩攤要擺到後半夜。',
+          '天氣轉涼了，戲園子裡添了炭盆，散場後街上的人縮著脖子走。',
+      ]
+    : DEPARTURE
     ? [
           '巡捕房貼出告示：會樂里一帶的門牌限期清查登記，過期未報者，鋪保作廢、勒令遷出。',
           '會樂里家家關起門來商量，有人連夜收拾細軟，有人去託關係、走門路。',
@@ -349,19 +445,34 @@ class Mind {
             occ === 'guest' ? `晡時常在${work}吃茶聽戲` :
             occ === 'musician' ? `白日在${work}吊弦合樂` :
             occ === 'wardrobe' ? `成日在${work}漿洗縫補、點檢行頭` : '起居隨意';
-        const era = INTERLUDE ? INTERLUDE_PERSONA[id] : undefined;
+        const era = INTERLUDE ? INTERLUDE_PERSONA[id] : DRIFT ? DRIFT_PERSONA[id] : undefined;
         this.system = [
             `你是${c.name}，活在 1920 年代的上海。這不是扮演——你就是這個人，活在連續的時間裡。`,
             // a TIME-CUT is a real cut: the era note REPLACES the present-day
             // identity wholesale — the future must not exist in this context
             era ? era.note : `你是${c.name}（${c.role}）。【你是誰】${c.description}`,
             `【你心底的事（只有你自己知道）】${era ? era.secret : c.secret}`,
-            era ? '' : `【你記得的過往】（這些是「發生過的事」，不是你的台詞。說起舊事時，用你此刻的話重新講——你記得的是那件事、那個滋味，不是這幾行字句。切莫照抄底下的原句。）\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((m) => `\n・${m.text}`).join('')}`,
+            // MEMORY IN AN ERA CUT. The interlude injects nothing: it IS the earliest
+            // era, so there is no past to hold. DRIFT is different — it sits AFTER the
+            // good years, and she must remember them. But her CANON memories must stay
+            // out, because they contain this season's outcome verbatim (「你紅了以後戲
+            // 約多、人也飄了…到藉口趕早戲搬回戲園後台的小廂房睡」). Feed her that and
+            // she performs the drift instead of living it, and the season measures its
+            // own answer. Era-appropriate memory only: the good years, nothing after.
+            era
+                ? DRIFT
+                    ? `【你記得的過往】（這些是「發生過的事」，不是你的台詞。說起舊事時，用你此刻的話重新講。切莫照抄原句。）\n${driftMemories(id).map((t) => `・${t}`).join('\n')}`
+                    : ''
+                : `【你記得的過往】（這些是「發生過的事」，不是你的台詞。說起舊事時，用你此刻的話重新講——你記得的是那件事、那個滋味，不是這幾行字句。切莫照抄底下的原句。）\n${c.memories.map((m) => `・${m.text}`).join('\n')}${(EXTRA_MEM[id] ?? []).map((m) => `\n・${m.text}`).join('')}`,
             SEASON_NOTE[id] ?? '',
             `【這個世界】${WORLD_PREMISE}`,
             `地方：${VENUE_NAMES.join('、')}。`,
             INTERLUDE
                 ? '【此時的世道】尋常年月，沒有大事。日子就是日子。'
+                : DRIFT
+                ? // NO deadline, by design: a spine event would manufacture the very
+                  // decision this season exists to observe. Just fame, and days.
+                  '【此時的世道】柳生春紅了，滿城都在說春雪社。戲約、堂會、應酬一日多過一日。除此之外沒有大事——日子就是日子。'
                 : DEPARTURE
                 ? `【本季】巡捕房清查會樂里門牌，限期第${DAYS}日。過了那日，這條弄堂就要變天——留下的低頭登記，走的各奔前程。`
                 : UNBOXING
@@ -562,7 +673,13 @@ const log = (s: string): void => {
 async function main(): Promise<void> {
     const specs = buildCast(CAST);
     const minds = specs.map((c) =>
-        new Mind(c.id, c.occupation, INTERLUDE ? INTERLUDE_HOME[c.id] ?? c.homeVenue : c.homeVenue, c.workVenue, c.money),
+        new Mind(
+            c.id,
+            c.occupation,
+            INTERLUDE ? INTERLUDE_HOME[c.id] ?? c.homeVenue : DRIFT ? DRIFT_HOME[c.id] ?? c.homeVenue : c.homeVenue,
+            c.workVenue,
+            c.money,
+        ),
     );
 
     // SEASON CONTINUITY: minds are persistent — given an archive, they wake
@@ -660,8 +777,8 @@ async function main(): Promise<void> {
 
             const finaleFact =
                 day === DAYS && (part === '黃昏' || part === '入夜')
-                    ? INTERLUDE
-                        ? ''
+                    ? INTERLUDE || DRIFT
+                        ? '' // drift has no finale — see the season note
                         : DEPARTURE
                         ? `今夜是清查限期的最後一夜——會樂里過了今夜就要變天。走的、留的、要說的話、要交代的人，都只剩這一夜了。`
                         : UNBOXING

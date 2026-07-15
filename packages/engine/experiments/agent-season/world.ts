@@ -298,6 +298,24 @@ const SPECS: CastSpec[] = [
         ],
     },
     {
+        // DRIFT-season cast (2026-07-15). Venues are canon-attested, not invented:
+        // 「帶你逛霞飛路、看洋片」 puts him on 霞飛路, so 蘇 going there at night IS
+        // going to him — no new venue needed.
+        id: '顧敬亭', occupation: 'guest', homeVenue: '霞飛路', workVenue: '霞飛路',
+        socialFact: '你是霞飛路一家洋行的職員，正經人家、正經差事，看戲是散心，不是捧角。',
+        bodyFact: '男子',
+        money: 40, // 洋行職員，體面但不闊；戒指的錢是一分一分攢的
+        coreIdentity: [
+            '我是顧敬亭，霞飛路洋行做事的。',
+            '一個人再紅、行當再賤，也是個人——這是我的規矩。',
+        ],
+        views: [['蘇映雪', '我要娶的人。她待我總隔著一層，我當是她的教養，是我還不夠久']],
+        wants: [
+            { layer: '癡', desc: '開春託人上門提親，把蘇映雪明媒正娶進門', target: '蘇映雪', weight: 0.72, sat: 0.3, resistance: 6 },
+            { layer: '世', desc: '想法子讓家裡點頭，別讓「娶個唱戲的」這句話糟蹋了她', weight: 0.5, sat: 0.25, resistance: 6 },
+        ],
+    },
+    {
         id: '方競西', occupation: 'reporter', homeVenue: '報館後閣', workVenue: '申報館',
         socialFact: '你是《春申快訊》的頭牌記者，筆名競西，版面就是你的地盤，梨園內外都賣你三分面子。',
         bodyFact: '男子',
