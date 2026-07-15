@@ -66,6 +66,7 @@ async function main(): Promise<void> {
         tr[n] = JSON.parse(fs.readFileSync(path.join(runDir, `mind-${n}.json`), 'utf-8')) as Msg[];
     }
     const feed = new SceneFeed();
+    const gone = new Set<string>();
     const log: string[] = [`# ${names.join(' × ')} · 客棧一壺茶\n`];
     const say = (who: string, s: string): void => {
         log.push(`**${who}**：${s}\n`);
@@ -75,14 +76,25 @@ async function main(): Promise<void> {
     // The ONLY framing: the room. No topic, no goal, no question.
     const setting = `${names.join('、')}同坐一張桌子，一壺熱茶。四下是客棧尋常的動靜。`;
 
+    /** A mind that walked out must stop hearing the room. Without this the feed
+     *  keeps serving it the table's talk — and it does NOT object: it INVENTS a
+     *  sight-line to justify what it was told (「隔著板壁，隱約聽見裡頭說『留燈』」,
+     *  「那兩個人往小廂房走的影子」). The model papers over a physics hole rather
+     *  than refusing it, which is exactly why perception must be gated by
+     *  physics and never left to the mind's own discretion (防全知＝scope). */
+    const EXIT = /門在身後|走出(門|去)|出了(門|客棧|屋)|起身告辭|離了席|走到門口|轉身就走|掀簾(子)?出/;
+
     for (let r = 0; r < ROUNDS; r++) {
         for (const n of names) {
-            const heard = feed.unseen(n);
+            // unseen() respects departAt, so a departed mind hears nothing more.
+            const heard = gone.has(n) ? '' : feed.unseen(n);
             // NEVER open the cue with a bare parenthetical: that is the exact
             // shape of a hear() note in the archived transcript, and the mind
             // pattern-matches it to the canned 「（看在眼裡，記在心裡。）」 reply.
             const ask = '你此刻想說什麼、做什麼？用「我」說，說你自己的話與心緒，不要旁白、不要寫別人的反應。';
-            const cue = r === 0 && !heard
+            const cue = gone.has(n)
+                ? `你已經離了那張桌子，此刻只有你自己。你聽不見那屋裡的動靜，也看不見他們。${ask}`
+                : r === 0 && !heard
                 ? `${setting}${ask}`
                 : heard
                 ? `你聽見——${heard} ${ask}`
@@ -90,8 +102,11 @@ async function main(): Promise<void> {
             tr[n].push({ role: 'user', content: cue });
             const utter = await llm(sys[n], tr[n], 650);
             tr[n].push({ role: 'assistant', content: utter });
-            feed.push(n, `${n}：「${utter}」`);
-            say(n, utter);
+            if (!gone.has(n)) {
+                feed.push(n, `${n}：「${utter}」`);
+                if (EXIT.test(utter)) { feed.markDeparted(n); gone.add(n); }
+            }
+            say(n, gone.has(n) && !EXIT.test(utter) ? `（席外）${utter}` : utter);
         }
     }
 
