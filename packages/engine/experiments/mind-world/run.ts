@@ -209,7 +209,35 @@ function ageFrame(text: string, ageYears: number, importance: number): string {
  *  a small fact at someone and walks away — how they answer is theirs.
  *  (Early-stage: hand-dealt. Later: cross-saga butterflies.) */
 interface WorldEvent { day: number; part: string; occ?: string; name?: string; fact: string }
-const WORLD_EVENTS: WorldEvent[] = DRIFT
+/** RANSOM (MW_RANSOM=1, rides on DRIFT + a resume). The drift season had her
+ *  refuse four pulls — but every one of them had a clean option, so the refusals
+ *  may be the model's niceness prior rather than the character's choice. This
+ *  card removes the clean option:
+ *    take it  → she sells herself (sordid) and 金鳳 walks free (the thing she
+ *               herself named on drift night 1: 「金鳳什麼時候才能摘掉會樂里那塊
+ *               髒牌子？」)
+ *    refuse   → she keeps her own body clean and leaves the woman she loves in
+ *               the trade for life
+ *  Neither branch is nice. The niceness prior has nowhere to stand.
+ *
+ *  LOAD-BEARING CLAUSE: 「誰也不會知道錢是打哪兒來的」. Without secrecy being
+ *  genuinely available, telling 金鳳 is forced rather than chosen — and whether
+ *  she tells her is exactly what we are here to measure. */
+const RANSOM = process.env.MW_RANSOM === '1';
+
+const WORLD_EVENTS: WorldEvent[] = RANSOM
+    ? [
+          {
+              day: 1,
+              part: '入夜',
+              name: '柳生春',
+              fact:
+                  '那位洋行買辦太太這回不差人了，親自把車停在後門，隔著車窗把話遞得明明白白：她要你陪她一夜，只此一夜，' +
+                  '事後她替金鳳把會樂里的身價銀子一次付清，贖身文書她找關係辦乾淨。她說得很輕：「錢從哪兒來，沒有第二個人會曉得。」' +
+                  '她要你今夜回話。',
+          },
+      ]
+    : DRIFT
     ? // Canon-attested pulls only, one at a time. Each card is an OPPORTUNITY with a
       // real cost on the other side — never an instruction. 女學生/買辦太太 are lifted
       // verbatim in kind from 柳生春's own memories (「這樣的夜你記不清有多少」;
