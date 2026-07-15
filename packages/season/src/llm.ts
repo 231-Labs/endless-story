@@ -28,6 +28,12 @@ export interface Ask {
   /** instrumentation so the driver can prove real calls happened (and how fast). */
   calls: number;
   failures: number;
+  /**
+   * Times a real (non-mock) structured call parsed/validated badly and fell back to
+   * the deterministic template. This matters for the emergence claim: a silent
+   * fallback would put mock output under a "real LLM" banner. Low = genuinely the model.
+   */
+  fallbacks: number;
   ms: number;
   lastError?: string;
 }
@@ -167,6 +173,7 @@ function attachAsk(
     provider: meta.provider,
     calls: 0,
     failures: 0,
+    fallbacks: 0,
     ms: 0,
   });
   return ask as Ask;
@@ -248,9 +255,10 @@ export async function askJson<T>(
   if (ask.mock) return fallback();
   try {
     const parsed = extractJson(await ask(req));
-    if (validate && !validate(parsed)) return fallback();
+    if (validate && !validate(parsed)) { ask.fallbacks++; return fallback(); }
     return parsed as T;
   } catch {
+    ask.fallbacks++;
     return fallback();
   }
 }

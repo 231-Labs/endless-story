@@ -142,6 +142,10 @@ async function main() {
   } else {
     const verdict = ask.failures === 0 ? '全部成功 ✓' : `⚠️ ${ask.failures}/${ask.calls} 失敗（退回本機模型）`;
     console.log(`\n真 LLM（${ask.provider}）：呼叫 ${ask.calls} 次，${verdict}，耗時 ${(ask.ms / 1000).toFixed(1)}s`);
+    // The emergence claim only holds if the layers came from the model, not the
+    // deterministic template. High fallbacks ⇒ the "real LLM" result is contaminated.
+    const clean = ask.calls - ask.fallbacks;
+    console.log(`  五層／注意力／行動由模型產出：${clean}/${ask.calls}（退回模板 ${ask.fallbacks}）` + (ask.fallbacks === 0 ? ' — 湧現結果乾淨 ✓' : ask.fallbacks > ask.calls * 0.2 ? ' — ⚠️ 退回過多，湧現結論打折' : ''));
     if (ask.failures > 0 && ask.lastError) console.log(`  首個錯誤：${ask.lastError}`);
   }
   console.log(`產物：${files.length} 個檔 → ${OUT}\n`);
