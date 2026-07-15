@@ -28,15 +28,28 @@ const [runDir, roundsArg, outPath, ...names] = process.argv.slice(2);
 const ROUNDS = Number(roundsArg ?? 7);
 type Msg = { role: 'user' | 'assistant'; content: string };
 
+/** SEED mode: canon only, no lived seasons. The A-side of "was this personality
+ *  formed by living, or was it always declared?" — same canon, minus the years. */
+const SEED = process.env.MW_SEED === '1';
+/** Per-mind model, e.g. "金鳳=GLM-5.1-FW,柳生春=Qwen3-Max,蘇映雪=Claude-Sonnet-4.5".
+ *  Lets each mind run on a different vendor at the same tier, to see whether the
+ *  character survives the swap or is an artefact of one model's voice. */
+const MODELS: Record<string, string> = Object.fromEntries(
+    (process.env.MW_MODELS ?? '')
+        .split(',')
+        .filter(Boolean)
+        .map((p) => p.split('=').map((s) => s.trim()) as [string, string]),
+);
+
 const EXTRA: Record<string, Array<string | { text: string }>> = process.env.MW_EXTRA_MEMORIES
     ? JSON.parse(fs.readFileSync(process.env.MW_EXTRA_MEMORIES, 'utf-8'))
     : {};
 const memText = (id: string): string[] => (EXTRA[id] ?? []).map((m) => (typeof m === 'string' ? m : m.text));
 
-async function llm(system: string, messages: Msg[], maxTokens: number): Promise<string> {
+async function llm(system: string, messages: Msg[], maxTokens: number, model?: string): Promise<string> {
     const { text } = await import('@endless-story/llm');
     const client = text.createTextClient({ kind: 'primary' });
-    const res = await client.chat({ model: client.defaultModel, system, messages, maxTokens, temperature: 0.9 });
+    const res = await client.chat({ model: model ?? client.defaultModel, system, messages, maxTokens, temperature: 0.9 });
     return (res.text ?? '').trim();
 }
 
@@ -63,8 +76,12 @@ async function main(): Promise<void> {
     const tr: Record<string, Msg[]> = {};
     for (const n of names) {
         sys[n] = buildSystem(n, names.filter((o) => o !== n));
-        tr[n] = JSON.parse(fs.readFileSync(path.join(runDir, `mind-${n}.json`), 'utf-8')) as Msg[];
+        tr[n] = SEED ? [] : (JSON.parse(fs.readFileSync(path.join(runDir, `mind-${n}.json`), 'utf-8')) as Msg[]);
     }
+    console.log(
+        `〔設定〕${SEED ? '種子（未活過任何一季）' : `續命自 ${path.basename(runDir)}`}｜` +
+            names.map((n) => `${n}=${MODELS[n] ?? 'default'}`).join('  '),
+    );
     const feed = new SceneFeed();
     const gone = new Set<string>();
     const log: string[] = [`# ${names.join(' × ')} · 客棧一壺茶\n`];
@@ -100,7 +117,7 @@ async function main(): Promise<void> {
                 ? `你聽見——${heard} ${ask}`
                 : `一桌子靜著，茶還熱著。${ask}`;
             tr[n].push({ role: 'user', content: cue });
-            const utter = await llm(sys[n], tr[n], 650);
+            const utter = await llm(sys[n], tr[n], 650, MODELS[n]);
             tr[n].push({ role: 'assistant', content: utter });
             if (!gone.has(n)) {
                 feed.push(n, `${n}：「${utter}」`);
