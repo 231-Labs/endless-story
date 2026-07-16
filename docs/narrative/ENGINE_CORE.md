@@ -64,4 +64,5 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
 2. **engine core 永遠 node-clean**：`node --test` 零 creds 可跑全部機制測試。
 3. **實驗不 fork core**：harness 只能經 ports 注入差異（fake agent、本地 recall、參數）。
    對照組用同一份 core + 不同 flag/參數，不用複製檔案。
-4. 生產接線改動照 [research-line 規則](../../experiments/RULES.md)：feat/* → dev PR。
+4. 生產接線改動照 research-line 規則：**feat/* → dev PR**，research 分支只改實驗/harness。
+   （完整版 `RULES.md` 目前只在 `research` 分支上，本分支沒有這個檔，故不放連結。）
