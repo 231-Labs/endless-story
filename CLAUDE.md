@@ -31,3 +31,5 @@ Needs Sui testnet access plus Poe, OpenAI, and MemWal credentials — see [`pack
 ## Documentation
 
 Design docs live in [`docs/`](./docs/) — whitepaper, product positioning, narrative agent architecture, content pipeline, economy, deployment, and the Walrus asset model. The pitch deck is in [`pitch/`](./pitch/).
+
+**Dev-branch agents:** scripts/lab workflow → [`skills/endless-story-scripts-lab/SKILL.md`](./skills/endless-story-scripts-lab/SKILL.md) (also via [`.claude/skills/`](./.claude/skills/) / [`.cursor/skills/`](./.cursor/skills/)); see [`AGENTS.md`](./AGENTS.md) and [`docs/SCRIPT_LAB_WORKFLOW.md`](./docs/SCRIPT_LAB_WORKFLOW.md).

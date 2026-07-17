@@ -13,8 +13,10 @@ coverage
 # Admin-edited runtime data (auto-seeded from mocks on first read)
 packages/web/data/
 
-# Claude Code runtime artifacts
-.claude/
+# Claude Code runtime artifacts (project skills are tracked)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 
 # Sui CLI publish-state (we re-publish freely; contract-ids.ts is the source of truth)
 **/Published.toml
