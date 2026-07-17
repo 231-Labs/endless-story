@@ -349,10 +349,18 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         };
     }
 
-    // contract commands share resolution
-    const contractId = cmd.contractId ?? '';
+    // contract commands share resolution. Models routinely hand back the
+    // PAPER's object id instead of the ledger id (they read it off the scene's
+    // object list) — accept the obvious alias instead of dying on it.
+    let contractId = cmd.contractId ?? '';
+    if (!contract.contracts[contractId]) {
+        const byObject = Object.entries(data.contractObjectIds).find(([, objectId]) => objectId === contractId);
+        if (byObject) contractId = byObject[0];
+    }
     const c = contract.contracts[contractId];
-    if (!c) return fail(`不認得這份契約：${contractId || '（未填 contractId）'}`);
+    if (!c) {
+        return fail(`不認得這份契約：${cmd.contractId || '（未填 contractId）'}；現有契約：${Object.keys(contract.contracts).join('、') || '（無）'}`);
+    }
     // Contract acts are physical acts: the paper must be before the actor.
     const linkedObjectId = data.contractObjectIds[contractId];
     const paper = linkedObjectId ? world.objectById(linkedObjectId) : undefined;
@@ -411,6 +419,11 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
     if (cmd.action === 'contract_sign') {
         if (!contractParties.has(req.actorId)) {
             return fail(`「${c.label}」的筆只在當事人（${partyNames}）手裡；${actorName}簽不了別人的約`);
+        }
+        // a redundant signature on a done deal is confirmation, not a crime —
+        // killing the beat over it rolled back a settled contract in v16 live
+        if (c.status === 'settled' && c.signedBy.includes(req.actorId)) {
+            return { ok: true, publicLines: [`${actorName}又按了按「${c.label}」——墨跡已乾，約早生效無誤`] };
         }
         const signed = signContract(contract, { contractId, signerId: req.actorId, causeEventId: req.causeEventId });
         if (signed.rejection) return fail(signed.rejection.message);

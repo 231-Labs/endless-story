@@ -576,6 +576,16 @@ test('counter-offer: an accepted demand amends the terms, grants a grace day, an
         assert.equal(done.ok, true, done.reason);
     }
     assert.equal(world.data.economy!.contracts['anchun-exclusive'].status, 'settled');
+
+    // the paper's object id works as an alias, and re-signing a done deal is
+    // harmless confirmation — both v16 live crash shapes
+    const aliasSign = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu], day: 4,
+        command: { action: 'contract_sign', contractId: 'anchun-exclusive-contract' },
+        causeEventId: 'test:c4', seq: 0,
+    });
+    assert.equal(aliasSign.ok, true, aliasSign.reason);
+    assert.match(aliasSign.publicLines[0], /約早生效無誤/);
     assert.deepEqual(auditSeasonEconomy(world), []);
 });
 
