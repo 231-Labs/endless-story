@@ -34,7 +34,7 @@ import { renderSeasonHtml } from './season-html.ts';
 
 const REAL = process.env.SEASON_REAL_LLM === '1';
 const DAYS = Number(process.env.SEASON_DAYS ?? '1');
-const CAST = (process.env.SEASON_CAST ?? '柳生春,蘇映雪,金鳳,白韻秋,沈雪笙,江聞鶴,連翹').split(',').map((s) => s.trim()).filter(Boolean);
+const CAST = (process.env.SEASON_CAST ?? '柳安春,蘇映雪,金鳳,白韻秋,沈雪笙,江聞鶴,連翹').split(',').map((s) => s.trim()).filter(Boolean);
 
 const logLines: string[] = [];
 function log(line = ''): void {
@@ -388,7 +388,7 @@ function printCounters(
     L('');
     L('── 6) SEED MEMORIES — VERBATIM, NON-THINNED (the user\'s hard requirement) ────');
     L(`seed memory counts loaded into recall + self-model: ${seedCounts.join('  ')}`);
-    const liu = byName.get('柳生春')!;
+    const liu = byName.get('柳安春')!;
     const jinC = byName.get('金鳳')!;
     const su = byName.get('蘇映雪')!;
     const carnalLiu = liu.thickMemories.filter((m) => m.tag.startsWith('肌膚'));
@@ -398,11 +398,11 @@ function printCounters(
     L(`柳↔金鳳 肌膚/相伴 memories present.. 柳=${carnalLiu.length}、金鳳=${carnalJin.length}  → ${carnalLiu.length && carnalJin.length ? 'BOTH PRESENT' : 'MISSING'}`);
     L(`柳↔蘇 師姐妹/暗戀 memories present.. 柳=${anlianLiu.length}、蘇=${anlianSu.length}  → ${anlianLiu.length && anlianSu.length ? 'BOTH PRESENT' : 'MISSING'}`);
     L('');
-    L('   ▽ 柳生春 ↔ 金鳳（身之情 / 相伴數年）— 逐字：');
+    L('   ▽ 柳安春 ↔ 金鳳（身之情 / 相伴數年）— 逐字：');
     for (const m of carnalLiu.sort((a, b) => b.importance - a.importance).slice(0, 3)) L(`     ·(柳,imp${m.importance}) ${m.text}`);
     for (const m of carnalJin.sort((a, b) => b.importance - a.importance).slice(0, 2)) L(`     ·(金鳳,imp${m.importance}) ${m.text}`);
     L('');
-    L('   ▽ 柳生春 ↔ 蘇映雪（八年師姐妹 / 未剖白的暗戀）— 逐字：');
+    L('   ▽ 柳安春 ↔ 蘇映雪（八年師姐妹 / 未剖白的暗戀）— 逐字：');
     for (const m of anlianLiu.sort((a, b) => b.importance - a.importance).slice(0, 2)) L(`     ·(柳,imp${m.importance}) ${m.text}`);
     for (const m of anlianSu.sort((a, b) => b.importance - a.importance).slice(0, 2)) L(`     ·(蘇,imp${m.importance}) ${m.text}`);
 
@@ -576,17 +576,17 @@ function writeReport(
     md.push(...showrunnerMd(r));
     md.push('## Seed memories (verbatim, non-thinned)');
     md.push('');
-    const liu = byName.get('柳生春');
+    const liu = byName.get('柳安春');
     const jin = byName.get('金鳳');
     const su = byName.get('蘇映雪');
     if (liu && jin) {
-        md.push('### 柳生春 ↔ 金鳳 — 身之情 / 相伴數年 (肌膚)');
+        md.push('### 柳安春 ↔ 金鳳 — 身之情 / 相伴數年 (肌膚)');
         for (const m of liu.thickMemories.filter((z) => z.tag.startsWith('肌膚'))) md.push(`- (柳, imp${m.importance}) ${m.text}`);
         for (const m of jin.thickMemories.filter((z) => z.tag.startsWith('肌膚'))) md.push(`- (金鳳, imp${m.importance}) ${m.text}`);
         md.push('');
     }
     if (liu && su) {
-        md.push('### 柳生春 ↔ 蘇映雪 — 八年師姐妹 / 未剖白的暗戀 (暗戀)');
+        md.push('### 柳安春 ↔ 蘇映雪 — 八年師姐妹 / 未剖白的暗戀 (暗戀)');
         for (const m of liu.thickMemories.filter((z) => z.tag.startsWith('暗戀'))) md.push(`- (柳, imp${m.importance}) ${m.text}`);
         for (const m of su.thickMemories.filter((z) => z.tag.startsWith('暗戀'))) md.push(`- (蘇, imp${m.importance}) ${m.text}`);
         md.push('');

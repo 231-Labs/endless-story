@@ -24,7 +24,7 @@ export {
     buildSystemPrompt as buildPlanSystemPrompt,
     buildUserPrompt as buildPlanUserPrompt,
 } from './plan.js';
-export { decideMove } from './move.js';
+export { decideMove, sanitizeMoveReason } from './move.js';
 export type { MoveDecideInput, MoveDecideResult, MoveSceneOption } from './move.js';
 export {
     buildSystemPrompt as buildMoveSystemPrompt,
@@ -96,7 +96,7 @@ export {
 } from './beat.js';
 export { formatPovSceneParagraphs } from '../narrative-format/pov-paragraphs.ts';
 export type { SceneIntimacyRating } from './beat.js';
-export type { ActBeatInput, BeatResult, BeatForcing, JudgeResolveInput, ResolveVerdict } from './beat.js';
+export type { ActBeatInput, BeatResult, BeatObjectEffect, BeatEconomyCommand, BeatForcing, JudgeResolveInput, ResolveVerdict } from './beat.js';
 export type {
     ReviewSceneInput,
     ReviewSceneParticipant,

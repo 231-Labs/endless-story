@@ -17,7 +17,7 @@ function sampleWorld(): WorldState {
         sagaId: 'test',
         sagaPremise: 'a troupe',
         cast: [
-            { id: 'c0', name: '柳生春', persona: '小生', secret: '暗戀師姐', role: '小生', state: { fatigue: 0.3, hunger: 0.2, mood: 0 }, coreIdentity: ['我是坤生，女兒身扮小生'], relationshipView: { c1: '師姐，我暗慕著，話沒敢說' } },
+            { id: 'c0', name: '柳安春', persona: '小生', secret: '暗戀師姐', role: '小生', state: { fatigue: 0.3, hunger: 0.2, mood: 0 }, coreIdentity: ['我是坤生，女兒身扮小生'], relationshipView: { c1: '師姐，我暗慕著，話沒敢說' } },
             { id: 'c1', name: '蘇映雪', persona: '花旦', role: '花旦', state: { fatigue: 0.4, hunger: 0.1, mood: 0 }, coreIdentity: ['我是蘇映雪，工花旦'], relationshipView: {} },
         ],
         scenes: [
@@ -32,8 +32,9 @@ function sampleWorld(): WorldState {
         ],
         edges: { c0: { c1: { tone: '戀慕', weight: 2 } } },
         clock: makeClock(6, 3),
-        dayAccum: { lines: ['【黃昏】', '[後台] 柳生春：把扇子擱下'], actorIds: ['c0'], sceneIds: ['s0'], povByName: { 柳生春: '心下一動' } },
+        dayAccum: { lines: ['【黃昏】', '[後台] 柳安春：把扇子擱下'], actorIds: ['c0'], sceneIds: ['s0'], povByName: { 柳安春: '心下一動' } },
         contestedResources: [{ label: 'spotlight:頭牌' }],
+        objects: [],
     };
     return new WorldState(data);
 }
@@ -60,6 +61,27 @@ test('restore throws loudly when no snapshot exists', () => {
     assert.equal(WorldState.exists(dir), false);
     assert.throws(() => WorldState.restore(dir));
     fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('legacy prose-only carriage is normalized into a structured carrier', () => {
+    const base = sampleWorld().data;
+    const migrated = new WorldState({
+        ...structuredClone(base),
+        objects: [{
+            id: 'negative',
+            label: '底片封套',
+            aliases: ['底片封套'],
+            sceneId: 's0',
+            portable: true,
+            visibility: 'hidden',
+            container: '柳安春懷中',
+            version: 1,
+            knownBy: ['c0'],
+        }],
+    });
+    assert.equal(migrated.objectById('negative')?.carriedBy, 'c0');
+    migrated.moveCharacter('c0', 's1');
+    assert.equal(migrated.objectById('negative')?.sceneId, 's1');
 });
 
 test('welcome gate reads directed relationship tone', () => {

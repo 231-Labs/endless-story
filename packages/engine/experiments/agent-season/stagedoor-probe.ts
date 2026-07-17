@@ -37,7 +37,7 @@ const TODAY = [
 
 async function main(): Promise<void> {
     const { text: llmText } = await import('@endless-story/llm');
-    const [liu] = buildCast(['柳生春']);
+    const [liu] = buildCast(['柳安春']);
     const outDir = import.meta.dirname;
 
     // ── stage 1: HER script ──

@@ -134,7 +134,7 @@ export async function runSeason(deps: SeasonDeps, opts: SeasonOpts = {}): Promis
     const presetId = opts.presetId ?? 'spring-snow';
     const totalTicks = opts.totalTicks ?? 10;
     const ticksPerDay = opts.ticksPerDay ?? 6;
-    const castNames = opts.cast ?? ['沈雪笙', '柳生春', '蘇映雪', '金鳳', '江聞鶴', '連翹', '白韻秋'];
+    const castNames = opts.cast ?? ['沈雪笙', '柳安春', '蘇映雪', '金鳳', '江聞鶴', '連翹', '白韻秋'];
 
     // ── Build the world from the preset, restricted to the season cast ─────────
     const rawFull = loadPresetFile(presetId);
@@ -144,8 +144,8 @@ export async function runSeason(deps: SeasonDeps, opts: SeasonOpts = {}): Promis
     await seedGenesisMemories(raw, world, recall);
 
     const idByName = (n: string): string => world.idByName(n) ?? n;
-    // Intimacy/relationship soil: 白韻秋 comes for 柳生春 (feeds box-office warmth).
-    world.setEdge(idByName('白韻秋'), idByName('柳生春'), '戀慕');
+    // Intimacy/relationship soil: 白韻秋 comes for 柳安春 (feeds box-office warmth).
+    world.setEdge(idByName('白韻秋'), idByName('柳安春'), '戀慕');
 
     const cfg = makeSeasonConfig(totalTicks, opts.rehearsalThreshold ?? 2);
 

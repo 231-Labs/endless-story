@@ -10,6 +10,8 @@
  * surface, so package consumers are unaffected.
  */
 
+import { toTraditional } from '@endless-story/shared/to-traditional';
+
 export type BeatForcing = 'idle' | 'pressing' | 'edge' | 'breaking';
 
 export interface ActBeatInput {
@@ -30,6 +32,14 @@ export interface ActBeatInput {
      *  beat in THIS room — the anti-teleport rule rides on it (a remembered object that
      *  lives elsewhere must not materialize here). */
     sceneHint?: string;
+    /** Objective object affordances at this venue for this actor. Knowledge of an
+     * off-scene object never places it here. */
+    objects?: Array<{
+        id: string;
+        label: string;
+        state?: string;
+        container?: string;
+    }>;
     isPrivate: boolean;
     /** Co-present characters (empty = alone). `role` = 行當; `tie` = the actor's
      *  OWN canon feeling toward them (e.g. 你對TA：師承) so address forms come
@@ -55,6 +65,10 @@ export interface ActBeatInput {
     privateAlone: boolean;
     /** Last few beats of this scene's exchange. */
     sceneLog: string;
+    /** A previous proposal for this same turn was rejected by objective world
+     *  validation. That proposal never happened; preserve the intent but choose
+     *  an action that fits the refreshed physical affordances. */
+    physicalRejection?: string;
     /** Daily-life undertone line (state block), optional. */
     stateLine?: string;
     /** This character's own private inner-life secret; never another actor's.
@@ -77,6 +91,50 @@ export interface ActBeatInput {
     /** Private 2-person scene where an overture is POSSIBLE this beat (no status
      *  gate — wanting to be close is a choice, not a permission). */
     intimacyPossible?: boolean;
+    /** Season money ledger for THIS actor (pre-scoped by the engine: own purse,
+     *  authorized treasury view, live contract terms, purchasable items here).
+     *  Rendered verbatim; money moves only through economyCommands. */
+    economyLine?: string;
+}
+
+export interface BeatObjectEffect {
+    objectId: string;
+    /** Destination venue name. Omit when the object stays in this scene. */
+    toScene?: string;
+    /** Registered object id or an ordinary in-scene container label; null clears it. */
+    container?: string | null;
+    /** True when the acting character takes it onto their person; false when
+     * they set it down or hand it off. The engine resolves "actor" to an id. */
+    carried?: boolean;
+    /** Formal co-present character name when handing the object directly to
+     * someone else. This is distinct from carried:false (set it down). */
+    carrierName?: string | null;
+    visibility?: 'visible' | 'hidden' | 'destroyed';
+    /** Concrete state after the beat, e.g. open/closed/torn. */
+    state?: string;
+}
+
+/**
+ * A structured money/contract command proposed by a beat. Prose alone never
+ * moves money — the engine validates authority, balance, price and contract
+ * state against the season economy ledger, then commits or rejects the beat
+ * (the same fail-loud contract as objectEffects/physical canon).
+ */
+export interface BeatEconomyCommand {
+    action: 'purchase' | 'pay' | 'contract_sign' | 'contract_reject' | 'contract_fill_partner';
+    /** purchase: a catalog item id from the beat's money-ledger listing. */
+    itemId?: string;
+    /** pay: recipient — a formal character name, or 班庫 for the troupe treasury. */
+    toName?: string;
+    /** pay: amount in whole 圓 (positive integer). */
+    amountYuan?: number;
+    /** Source of funds: own purse (default) or the troupe treasury (authorized only). */
+    fromAccount?: 'self' | 'troupe';
+    /** contract_*: the contract id from the beat's money-ledger listing. */
+    contractId?: string;
+    /** contract_fill_partner: the named 聯名搭檔's formal character name. */
+    partnerName?: string;
+    memo?: string;
 }
 
 /**
@@ -168,6 +226,8 @@ export interface BeatResult {
      *  place. This is structured so the engine never infers privacy from prose. */
     audience?: 'scene' | 'addressed';
     /** Scene name to move to, if leaving. */
+    /** @deprecated Parsed only so the engine can reject legacy cross-scene
+     * proposals. Venue changes belong exclusively to decideMove. */
     move?: string;
     /** The actor CLOSES the scene on this beat (sleep/farewell/enough) — their
      *  own ending, honoured by the loop. */
@@ -178,6 +238,13 @@ export interface BeatResult {
      *  No judge, no status gate — the pair negotiates in-scene; a decline is
      *  honoured and is itself a beat of drama. */
     intimacy?: 'advance' | 'accept' | 'decline';
+    /** Objective physical mutations proposed by this beat. The engine validates
+     * preconditions and commits them; prose alone can never move an object. */
+    objectEffects?: BeatObjectEffect[];
+    /** Structured money/contract commands proposed by this beat. The engine
+     * validates authority/balance/price and commits them; prose alone can never
+     * move money or sign a contract. */
+    economyCommands?: BeatEconomyCommand[];
 }
 
 function extractBeatJson(raw: string): Record<string, unknown> | null {
@@ -193,21 +260,64 @@ function extractBeatJson(raw: string): Record<string, unknown> | null {
 export function parseBeatResult(raw: string, actorName: string): BeatResult {
     const o = extractBeatJson(raw) ?? {};
     const str = (v: unknown): string => typeof v === 'string' ? v.trim() : '';
+    const prose = (v: unknown): string => toTraditional(str(v));
     const esc = actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const deName = (t: string): string => t.replace(new RegExp(`^${esc}(?!的)\\s*[:：]?\\s*`), '');
-    const addressed = str(o.addressed);
+    const addressed = prose(o.addressed);
     const audience = o.audience === 'addressed' && addressed && addressed !== '無'
         ? 'addressed'
         : 'scene';
-    const move = str(o.move);
+    const move = prose(o.move);
+    const ECONOMY_ACTIONS = ['purchase', 'pay', 'contract_sign', 'contract_reject', 'contract_fill_partner'] as const;
+    const economyCommands = Array.isArray(o.economyCommands)
+        ? o.economyCommands.flatMap((rawCommand): BeatEconomyCommand[] => {
+            if (!rawCommand || typeof rawCommand !== 'object') return [];
+            const command = rawCommand as Record<string, unknown>;
+            const action = ECONOMY_ACTIONS.find((candidate) => candidate === command.action);
+            if (!action) return [];
+            const amountYuan = typeof command.amountYuan === 'number' && Number.isFinite(command.amountYuan)
+                ? Math.floor(command.amountYuan)
+                : undefined;
+            return [{
+                action,
+                itemId: str(command.itemId) || undefined,
+                toName: prose(command.toName) || undefined,
+                amountYuan,
+                fromAccount: command.fromAccount === 'troupe' ? 'troupe' : command.fromAccount === 'self' ? 'self' : undefined,
+                contractId: str(command.contractId) || undefined,
+                partnerName: prose(command.partnerName) || undefined,
+                memo: prose(command.memo) || undefined,
+            }];
+        })
+        : [];
+    const objectEffects = Array.isArray(o.objectEffects)
+        ? o.objectEffects.flatMap((rawEffect): BeatObjectEffect[] => {
+            if (!rawEffect || typeof rawEffect !== 'object') return [];
+            const effect = rawEffect as Record<string, unknown>;
+            const objectId = str(effect.objectId);
+            if (!objectId) return [];
+            const visibility = effect.visibility === 'visible' || effect.visibility === 'hidden' || effect.visibility === 'destroyed'
+                ? effect.visibility
+                : undefined;
+            const container = effect.container === null ? null : prose(effect.container) || undefined;
+            const carried = typeof effect.carried === 'boolean' ? effect.carried : undefined;
+            const carrierName = effect.carrierName === null ? null : prose(effect.carrierName) || undefined;
+            const toScene = prose(effect.toScene) || undefined;
+            const state = prose(effect.state) || undefined;
+            if (!visibility && container === undefined && carried === undefined && carrierName === undefined && !toScene && !state) return [];
+            return [{ objectId, visibility, container, carried, carrierName, toScene, state }];
+        })
+        : [];
     return {
-        beat: deName(str(o.beat)) || '（沉默。）',
-        inner: deName(str(o.inner)),
+        beat: deName(prose(o.beat)) || '（沉默。）',
+        inner: deName(prose(o.inner)),
         addressed: addressed && addressed !== '無' ? addressed : undefined,
         audience,
         move: move && move !== '無' ? move : undefined,
         close: o.close === true ? true : undefined,
         intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
+        objectEffects: objectEffects.length ? objectEffects : undefined,
+        economyCommands: economyCommands.length ? economyCommands : undefined,
     };
 }
 
@@ -234,10 +344,11 @@ function spokenSegments(text: string): string[] {
 /** A reviewer is an editor, not a second author. Reject candidate text that
  * changes spoken dialogue or rewrites too much of the objective action. */
 export function safeSceneRevision(original: string, candidate: string): string {
-    if (!candidate.trim()) return original;
-    if (JSON.stringify(spokenSegments(original)) !== JSON.stringify(spokenSegments(candidate))) return original;
+    const normalized = toTraditional(candidate.trim());
+    if (!normalized) return original;
+    if (JSON.stringify(spokenSegments(original)) !== JSON.stringify(spokenSegments(normalized))) return original;
     const maxEdit = Math.max(6, Math.ceil(original.length * 0.28));
-    return editDistance(original, candidate) <= maxEdit ? candidate : original;
+    return editDistance(original, normalized) <= maxEdit ? normalized : original;
 }
 
 /** §2.43-validated pressure language: removes stalling, never writes the answer. */
@@ -279,6 +390,21 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
     const innerSecret = input.innerSecret
         ? `\n【心底藏著、外人不知的事（只有你自己知道。平日它藏著、只從言外之意漏出來；藏不藏得住、要不要讓它見光，由你在這一拍自己拿主意）】${input.innerSecret}`
         : '';
+    const objectLedger = input.objects?.length
+        ? [
+            '【本場物理帳（唯一真相）】只有下列物件在此刻可看見／觸碰：',
+            ...input.objects.map((object) => `- id=${object.id}｜${object.label}${object.container ? `｜在${object.container}內` : ''}${object.state ? `｜${object.state}` : ''}`),
+            '若這一拍使登記物件換場、換容器、被藏起／公開／毀去，必須同步填 objectEffects；沒有 effect，世界就不會改。拿進自己懷裡、袖中或口袋並打算帶走時填 carried:true；放下填 carried:false；直接交給同場某人必須填 carrierName:對方正式姓名（不能只填 carried:false）。',
+            '不可操作清單外的物件。記得它在別處，只能說起或在 inner 想起，不能用眼看、用手碰。',
+        ].join('\n')
+        : '【本場物理帳（唯一真相）】沒有可操作的登記物件。知道別處有某物，只能在話裡或 inner 提及，不可看見、指向或觸碰。';
+    const economyLedger = input.economyLine
+        ? [
+            input.economyLine,
+            '銀錢與契約只在 economyCommands 裡動：口頭說付錢、簽字而不出 command，銀錢與契約就不會動；',
+            '不可買清單外的東西、不可動你無權動的帳。命令若不合法（錢不夠、無權、契約已了結），世界會拒絕這一拍。',
+        ].join('\n')
+        : '';
     return [
         `你就是${input.name}。${input.persona}${mem}`,
         input.tone ?? '',
@@ -286,6 +412,14 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.sceneHint
             ? `【此處光景】${input.sceneHint}。眼前只有此處真有的物事——記憶裡別處的東西（誰家窗台的花、誰房裡的擺設）不會憑空出現在這裡，除非有人隨身帶了來；要提別處的物件，用話語提，不用手指。`
             : '',
+        objectLedger,
+        economyLedger,
+        input.physicalRejection
+            ? `【上一個動作沒有發生】世界拒絕了你剛才的提案：${input.physicalRejection}\n` +
+              '那不是回憶、不是上一拍，也不可辯解或在台詞裡提到規則。保留你原本的心意，重新做一個此刻此地真的辦得到的動作；嚴格以刷新後的物理帳為準。'
+            : '',
+        '【位置已提交】本 tick 的自主移動已經完成，你現在確實位於此處。這一拍只做此處做得到的事，不能再走去另一個場景。若想離場，用 close:true 收住此場；下一 tick 你會重新得到合法去處選項。',
+        '【文字】beat、inner 與所有文字欄位一律使用繁體中文（臺灣用字），不得繁簡混雜。',
         // Metaphor stays metaphor: the want language runs on 帳/債/欠 imagery, and an
         // ungarded beat once materialized a paper 借據 to collect an EMOTIONAL debt.
         '【比喻不落地】心帳不是紙帳：欠的若是情分、話語、一句交代，就不可憑空掏出借據、文書、銀錢等有形物來討——手上能拿出的東西，只有此處真有的和你隨身帶著的。',
@@ -324,10 +458,13 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.consummate
             ? '**這是一段正在進行的來回，接著剛剛的話與動作往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——可以是一個動作、一句話、或（若你們往那處去了）床笫間的一下進退(一到三句)。' +
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。'
+              '輸出 JSON：{"beat":"客觀做了/說了什麼","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無","objectEffects":[{"objectId":"登記id","toScene":"新場景或省略","container":"新容器/null/省略","carried":true或false或省略,"carrierName":"交給的同場者正式姓名或省略","visibility":"visible|hidden|destroyed或省略","state":"新狀態或省略"}]}。沒有物理改變就給空陣列。不要 markdown。'
             : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——一到兩句，動作與話都可以帶著性子多走半步。' +
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
-              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","move":"要去別處就填場景名/否則無","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無"}。不要 markdown。',
+              '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無","objectEffects":[{"objectId":"登記id","toScene":"新場景或省略","container":"新容器/null/省略","carried":true或false或省略,"carrierName":"交給的同場者正式姓名或省略","visibility":"visible|hidden|destroyed或省略","state":"新狀態或省略"}]}。沒有物理改變就給空陣列。不要 markdown。',
+        input.economyLine
+            ? '若這一拍真有銀錢或契約動作，另在同一個 JSON 加 "economyCommands":[{"action":"purchase|pay|contract_sign|contract_reject|contract_fill_partner","itemId":"購買項目id或省略","toName":"收款人正式姓名或班庫或省略","amountYuan":整數圓或省略,"fromAccount":"self|troupe(省略=self)","contractId":"契約id或省略","partnerName":"聯名搭檔正式姓名或省略","memo":"一句緣由或省略"}]；沒有銀錢動作就整欄省略。簽署契約的那一拍，economyCommands 與 objectEffects（契約物件狀態）要一起出。'
+            : '',
     ]
         .filter(Boolean)
         .join('\n');

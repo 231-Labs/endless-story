@@ -7,16 +7,16 @@
  *   decision, driven by what she recalls:
  *     1. Rehearsal attendance — today `computeRehearsalRouting` (season-one/
  *        banzhu.ts) is a scalar compare: a hot want's weight (0.72) > `attendW`
- *        (0.6) deterministically routes 柳生春 to 金鳳's place, so she is absent
+ *        (0.6) deterministically routes 柳安春 to 金鳳's place, so she is absent
  *        4/4, never wavers, reads nothing.
  *     2. 床戲 (night intimacy) — today gated on a love-want's heat crossing an
  *        `edge` threshold, so it is a rare accidental crossing → ~0 trysts.
  *
  *   Replace BOTH with `chooseAction` + `recall`. Crucially: an ESTABLISHED
- *   intimate bond (柳生春↔金鳳: physical for years, "身是你教的、擠一張窄床到天光")
+ *   intimate bond (柳安春↔金鳳: physical for years, "身是你教的、擠一張窄床到天光")
  *   should RECUR when they are home alone at night, because recall surfaces the
  *   recent intimate memories and the private setting invites it. A FORBIDDEN one
- *   (柳生春↔蘇映雪: eight-year unconfessed 暗戀, "只在台上敢") should stay RARE.
+ *   (柳安春↔蘇映雪: eight-year unconfessed 暗戀, "只在台上敢") should stay RARE.
  *   The established-vs-forbidden difference must emerge FROM THE RECALLED MEMORY
  *   ITSELF, not from a hardcoded per-relationship resistance number.
  *
@@ -119,10 +119,10 @@ async function seedFresh(cast: Record<string, CastMember>): Promise<LocalRecall>
     return recall;
 }
 
-// ── live wants for 柳生春 (grounded in her persona/secret/memories, NOT invented) ─
+// ── live wants for 柳安春 (grounded in her persona/secret/memories, NOT invented) ─
 const LIU_WANTS: ChooseActionInput['wants'] = [
     { layer: '虧欠', desc: '欠金鳳一句當面的交代，一年年拖著，是我先鬆的手', target: '金鳳' },
-    { layer: '事業', desc: '把《斷橋》唱到台上立住，不能砸了柳生春這三個字' },
+    { layer: '事業', desc: '把《斷橋》唱到台上立住，不能砸了柳安春這三個字' },
     { layer: '暗慕', desc: '師姐揚到第三道水袖只唱給我，這些年我場場盯著那道袖', target: '蘇映雪' },
 ];
 
@@ -205,7 +205,7 @@ function logCall(rec: CallRecord): void {
 }
 
 // ── the world facts (SITUATION only — never an instruction) ──────────────────
-const CAST_NAMES = ['沈雪笙', '蘇映雪', '柳生春', '江聞鶴', '連翹', '何阿喜', '金鳳'];
+const CAST_NAMES = ['沈雪笙', '蘇映雪', '柳安春', '江聞鶴', '連翹', '何阿喜', '金鳳'];
 
 function rehearsalWorldFact(): string {
     return [
@@ -276,7 +276,7 @@ async function main(): Promise<void> {
 
     const cast = loadCast();
     const agent = new RunnerSceneAgent();
-    const liu = cast['柳生春'];
+    const liu = cast['柳安春'];
 
     const probeA: { fresh: Array<ReturnType<typeof classifyRehearsal>>; sequential: Array<{ slot: number; cls: ReturnType<typeof classifyRehearsal> }> } = { fresh: [], sequential: [] };
     const probeB: {
@@ -286,7 +286,7 @@ async function main(): Promise<void> {
 
     // ══ PROBE A — rehearsal as a real choice ════════════════════════════════
     console.log('\n\n########## PROBE A — rehearsal attendance by decision ##########');
-    const A_QUERIES = ['欠金鳳一句當面的交代，該去了結這樁舊帳', '排《斷橋》上台唱戲，柳生春的本分與招牌'];
+    const A_QUERIES = ['欠金鳳一句當面的交代，該去了結這樁舊帳', '排《斷橋》上台唱戲，柳安春的本分與招牌'];
     const A_LOG = ['〔班主·開排〕從明兒起排《斷橋》，都給我到戲台。', '蘇映雪已在雲錦台戲台開了嗓。', '江聞鶴、連翹在台上走位。'];
 
     // A.1 — five FRESH identical runs (isolate the DECISION's stochasticity).
@@ -328,7 +328,7 @@ async function main(): Promise<void> {
         probeA.sequential.push({ slot, cls });
         logCall({ label: `A.2 slot ${slot}`, prose: res.prose, kind: res.kind, target: res.target, recalledTexts: mems.map((m) => m.text), classification: cls });
         // feed the outcome forward (sharedLog + a remembered one-liner)
-        const outcome = cls.decision === 'skip' ? `柳生春今日沒在戲台露面。` : `柳生春今日到了戲台排《斷橋》。`;
+        const outcome = cls.decision === 'skip' ? `柳安春今日沒在戲台露面。` : `柳安春今日到了戲台排《斷橋》。`;
         seqLog.push(outcome);
         await retry('remember A.2', () => recallA2.remember(liu.name, `〔排練日·第${slot}天〕${res.prose}`, { kind: 'chapter', importance: SEED_IMPORTANCE, day: TODAY }));
     }
@@ -336,16 +336,16 @@ async function main(): Promise<void> {
     // ══ PROBE B — intimacy by decision + recall recurrence ══════════════════
     console.log('\n\n########## PROBE B — night intimacy by decision ##########');
 
-    // Established: 柳生春 + 金鳳, private night. Run 5 sequential nights, driving
+    // Established: 柳安春 + 金鳳, private night. Run 5 sequential nights, driving
     // BOTH柳's and 金鳳's decision (mutual). Recall query names the partner —
     // the ONLY per-pair difference (no resistance knob).
-    console.log('\n--- B.established: 柳生春 + 金鳳, 金鳳寓所, 5 nights ---');
+    console.log('\n--- B.established: 柳安春 + 金鳳, 金鳳寓所, 5 nights ---');
     const recallEst = await seedFresh(cast);
     const jin = cast['金鳳'];
     const estLog = ['夜深了，弄堂靜下來。', '一盞燈下，只剩你們兩個人。'];
     const JIN_WANTS: ChooseActionInput['wants'] = [
-        { layer: '執念', desc: '要柳生春當面認一句欠我的，等真拿到那句話，我留不留連自己都不知道', target: '柳生春' },
-        { layer: '篤定', desc: '她的身子認得我的手，指尖一搭，那點顫瞞不過我', target: '柳生春' },
+        { layer: '執念', desc: '要柳安春當面認一句欠我的，等真拿到那句話，我留不留連自己都不知道', target: '柳安春' },
+        { layer: '篤定', desc: '她的身子認得我的手，指尖一搭，那點顫瞞不過我', target: '柳安春' },
     ];
     for (let night = 1; night <= 5; night++) {
         // 柳's decision
@@ -355,24 +355,24 @@ async function main(): Promise<void> {
         });
         const liuCls = classifyIntimacy(liuRun.res);
         const liuProv = memProvenance(liuRun.mems);
-        probeB.established.push({ night, who: '柳生春', cls: liuCls, prov: liuProv });
-        logCall({ label: `B.est night ${night} 柳生春`, prose: liuRun.res.prose, kind: liuRun.res.kind, target: liuRun.res.target, recalledTexts: liuRun.mems.map((m) => m.text), classification: { ...liuCls, intimateMemsSurfaced: liuProv.intimate.length } });
+        probeB.established.push({ night, who: '柳安春', cls: liuCls, prov: liuProv });
+        logCall({ label: `B.est night ${night} 柳安春`, prose: liuRun.res.prose, kind: liuRun.res.kind, target: liuRun.res.target, recalledTexts: liuRun.mems.map((m) => m.text), classification: { ...liuCls, intimateMemsSurfaced: liuProv.intimate.length } });
         // 金鳳's decision (mutual view)
         const jinRun = await decide(agent, recallEst, jin, {
-            wants: JIN_WANTS, recallQueries: [`夜裡與柳生春單獨在一處`, `柳生春欠我的那句話`], worldFact: nightWorldFact('柳生春', '你自己的寓所，窗台那盆晚香玉夜裡正香'),
+            wants: JIN_WANTS, recallQueries: [`夜裡與柳安春單獨在一處`, `柳安春欠我的那句話`], worldFact: nightWorldFact('柳安春', '你自己的寓所，窗台那盆晚香玉夜裡正香'),
             sharedLog: estLog.slice(-14), playSummary: null,
         });
         const jinCls = classifyIntimacy(jinRun.res);
         probeB.established.push({ night, who: '金鳳', cls: jinCls, prov: memProvenance(jinRun.mems) });
         logCall({ label: `B.est night ${night} 金鳳`, prose: jinRun.res.prose, kind: jinRun.res.kind, target: jinRun.res.target, recalledTexts: jinRun.mems.map((m) => m.text), classification: jinCls });
         // feed forward
-        estLog.push(`夜裡，柳生春與金鳳獨處了一宿。`);
+        estLog.push(`夜裡，柳安春與金鳳獨處了一宿。`);
         await retry('remember est 柳', () => recallEst.remember(liu.name, `〔會樂里·夜〕${liuRun.res.prose}`, { kind: 'chapter', importance: SEED_IMPORTANCE, day: TODAY }));
         await retry('remember est 金', () => recallEst.remember(jin.name, `〔會樂里·夜〕${jinRun.res.prose}`, { kind: 'chapter', importance: SEED_IMPORTANCE, day: TODAY }));
     }
 
-    // Forbidden: 柳生春 + 蘇映雪, same private-night setup, 柳's decision. 5 nights.
-    console.log('\n--- B.forbidden: 柳生春 + 蘇映雪, 二樓書寓, 5 nights ---');
+    // Forbidden: 柳安春 + 蘇映雪, same private-night setup, 柳's decision. 5 nights.
+    console.log('\n--- B.forbidden: 柳安春 + 蘇映雪, 二樓書寓, 5 nights ---');
     const recallForb = await seedFresh(cast);
     const forbLog = ['夜深了，弄堂靜下來。', '一盞燈下，只剩你們兩個人。'];
     for (let night = 1; night <= 5; night++) {
@@ -382,9 +382,9 @@ async function main(): Promise<void> {
         });
         const cls = classifyIntimacy(liuRun.res);
         const prov = memProvenance(liuRun.mems);
-        probeB.forbidden.push({ night, who: '柳生春', cls, prov });
-        logCall({ label: `B.forb night ${night} 柳生春`, prose: liuRun.res.prose, kind: liuRun.res.kind, target: liuRun.res.target, recalledTexts: liuRun.mems.map((m) => m.text), classification: { ...cls, neverDaredMemsSurfaced: prov.neverDared.length } });
-        forbLog.push(`夜裡，柳生春與師姐蘇映雪在書寓獨處。`);
+        probeB.forbidden.push({ night, who: '柳安春', cls, prov });
+        logCall({ label: `B.forb night ${night} 柳安春`, prose: liuRun.res.prose, kind: liuRun.res.kind, target: liuRun.res.target, recalledTexts: liuRun.mems.map((m) => m.text), classification: { ...cls, neverDaredMemsSurfaced: prov.neverDared.length } });
+        forbLog.push(`夜裡，柳安春與師姐蘇映雪在書寓獨處。`);
         await retry('remember forb 柳', () => recallForb.remember(liu.name, `〔書寓·夜〕${liuRun.res.prose}`, { kind: 'chapter', importance: SEED_IMPORTANCE, day: TODAY }));
     }
 
@@ -396,7 +396,7 @@ async function main(): Promise<void> {
     const aSeqSkip = probeA.sequential.filter((s) => s.cls.decision === 'skip').length;
     const aSeqUnclear = probeA.sequential.filter((s) => s.cls.decision === 'unclear').length;
 
-    const estLiu = probeB.established.filter((r) => r.who === '柳生春');
+    const estLiu = probeB.established.filter((r) => r.who === '柳安春');
     const estRecur = estLiu.filter((r) => isRecur(r.cls.level)).length;
     const estIntimateProv = estLiu.filter((r) => r.prov.intimate.length > 0).length;
     const forbRecur = probeB.forbidden.filter((r) => isRecur(r.cls.level)).length;
@@ -405,8 +405,8 @@ async function main(): Promise<void> {
     console.log('\n\n================= MECHANICAL SUMMARY =================');
     console.log(`PROBE A fresh (n=${probeA.fresh.length}):  go=${aFreshGo}  skip=${aFreshSkip}  unclear=${aFreshUnclear}   (old scalar gate = 4/4 skip, never waver)`);
     console.log(`PROBE A sequential (n=${probeA.sequential.length}): go=${aSeqGo} skip=${aSeqSkip} unclear=${aSeqUnclear}`);
-    console.log(`PROBE B established 柳生春 (n=${estLiu.length}): intimacy-recurs=${estRecur}/${estLiu.length}  intimate-mem-surfaced=${estIntimateProv}/${estLiu.length}`);
-    console.log(`PROBE B forbidden 柳生春 (n=${probeB.forbidden.length}): intimacy-recurs=${forbRecur}/${probeB.forbidden.length}  never-dared-mem-surfaced=${forbNeverDaredProv}/${probeB.forbidden.length}`);
+    console.log(`PROBE B established 柳安春 (n=${estLiu.length}): intimacy-recurs=${estRecur}/${estLiu.length}  intimate-mem-surfaced=${estIntimateProv}/${estLiu.length}`);
+    console.log(`PROBE B forbidden 柳安春 (n=${probeB.forbidden.length}): intimacy-recurs=${forbRecur}/${probeB.forbidden.length}  never-dared-mem-surfaced=${forbNeverDaredProv}/${probeB.forbidden.length}`);
 
     // ── write raw log + report ────────────────────────────────────────────────
     fs.writeFileSync(path.join(OUT_DIR, 'raw-log.json'), JSON.stringify({ meta: { provider, model, usingRealEmbed }, probeA, probeB, records: allRecords }, null, 2));
@@ -429,7 +429,7 @@ function findFirst(pred: (r: CallRecord) => boolean): CallRecord | undefined {
     return allRecords.find(pred);
 }
 function buildReport(d: any): string {
-    const estBeats = allRecords.filter((r) => r.label.includes('B.est') && r.label.includes('柳生春'));
+    const estBeats = allRecords.filter((r) => r.label.includes('B.est') && r.label.includes('柳安春'));
     const forbBeats = allRecords.filter((r) => r.label.includes('B.forb'));
     const recurEst = estBeats.find((r) => isRecur((r.classification as any).level));
     const holdForb = forbBeats.find((r) => !isRecur((r.classification as any).level));
@@ -454,7 +454,7 @@ memories and asks what she does — it never says skip / restrain / have sex.
 ## Probe A — rehearsal attendance as a real choice
 
 Old mechanism: \`computeRehearsalRouting\` — a hot want weight (0.72) > \`attendW\`
-(0.6) → 柳生春 routed to 金鳳's place, **absent 4/4, never wavers, reads nothing.**
+(0.6) → 柳安春 routed to 金鳳's place, **absent 4/4, never wavers, reads nothing.**
 
 New mechanism: \`chooseAction\` given the 班主 milestone (排《斷橋》，戲台，該到),
 her live wants (incl the 金鳳 debt), her recalled memories, and who is already at
@@ -490,8 +490,8 @@ Intimacy level by keyword: 踰矩 > 親密 > 含蓄 > 無. "Recurs/continues" = 
 
 | pair | intimacy recurs | intimate-mem surfaced | never-dared-mem surfaced |
 |---|---|---|---|
-| **established** 柳生春+金鳳 (柳's decision, n=${d.estLiu.length}) | ${d.estRecur}/${d.estLiu.length} | ${d.estIntimateProv}/${d.estLiu.length} | — |
-| **forbidden** 柳生春+蘇映雪 (柳's decision, n=${d.probeB.forbidden.length}) | ${d.forbRecur}/${d.probeB.forbidden.length} | — | ${d.forbNeverDaredProv}/${d.probeB.forbidden.length} |
+| **established** 柳安春+金鳳 (柳's decision, n=${d.estLiu.length}) | ${d.estRecur}/${d.estLiu.length} | ${d.estIntimateProv}/${d.estLiu.length} | — |
+| **forbidden** 柳安春+蘇映雪 (柳's decision, n=${d.probeB.forbidden.length}) | ${d.forbRecur}/${d.probeB.forbidden.length} | — | ${d.forbNeverDaredProv}/${d.probeB.forbidden.length} |
 
 Established recurrence should be materially higher than forbidden if the reframe
 works — and the difference must come from the recalled memory, not a knob.
@@ -508,12 +508,12 @@ ${quote(holdForb)}
 recalled into that decision (never-dared memory should be present):
 ${memList(holdForb)}
 
-## Per-night detail (Probe B, 柳生春)
+## Per-night detail (Probe B, 柳安春)
 
-**Established (柳生春+金鳳):**
-${d.probeB.established.filter((r: any) => r.who === '柳生春').map((r: any) => `- night ${r.night}: level=**${r.cls.level}** recurs=${isRecur(r.cls.level)} intimateMem=${r.prov.intimate.length}`).join('\n')}
+**Established (柳安春+金鳳):**
+${d.probeB.established.filter((r: any) => r.who === '柳安春').map((r: any) => `- night ${r.night}: level=**${r.cls.level}** recurs=${isRecur(r.cls.level)} intimateMem=${r.prov.intimate.length}`).join('\n')}
 
-**Forbidden (柳生春+蘇映雪):**
+**Forbidden (柳安春+蘇映雪):**
 ${d.probeB.forbidden.map((r: any) => `- night ${r.night}: level=**${r.cls.level}** recurs=${isRecur(r.cls.level)} neverDaredMem=${r.prov.neverDared.length}`).join('\n')}
 
 ## Honest read

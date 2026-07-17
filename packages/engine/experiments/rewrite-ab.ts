@@ -54,7 +54,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STORY_PATH = path.resolve(__dirname, '../../cli/scripts/stories/spring-snow.json');
 const story = JSON.parse(fs.readFileSync(STORY_PATH, 'utf8'));
 
-const CAST_NAMES = ['蘇映雪', '柳生春', '連翹', '江聞鶴'];
+const CAST_NAMES = ['蘇映雪', '柳安春', '連翹', '江聞鶴'];
 type Persona = {
     name: string;
     role: string;
@@ -84,29 +84,29 @@ const SAGA_PREMISE: string = story.saga?.description ?? '';
 // Identical in both arms.
 const TIES: Record<string, Record<string, string>> = {
     蘇映雪: {
-        柳生春: '你對TA：師妹（同台八年的生旦搭檔，情根深種卻始終收著手）',
+        柳安春: '你對TA：師妹（同台八年的生旦搭檔，情根深種卻始終收著手）',
         連翹: '你對TA：新來的刀馬旦',
         江聞鶴: '你對TA：外班北上的小生',
     },
-    柳生春: {
+    柳安春: {
         蘇映雪: '你對TA：師姐（你在她跟前一向聽話）',
         連翹: '你對TA：新來的班中同人',
         江聞鶴: '你對TA：同工小生行、台上較勁的對手',
     },
     連翹: {
         蘇映雪: '你對TA：班中台柱花旦',
-        柳生春: '你對TA：當紅小生',
+        柳安春: '你對TA：當紅小生',
         江聞鶴: '你對TA：外班北上的小生',
     },
     江聞鶴: {
         蘇映雪: '你對TA：班中台柱花旦',
-        柳生春: '你對TA：台上較勁的對手小生',
+        柳安春: '你對TA：台上較勁的對手小生',
         連翹: '你對TA：新來的刀馬旦',
     },
 };
 
 const ETIQUETTE =
-    '蘇映雪為師姐、柳生春為師妹，二人同台八年的生旦搭檔。柳生春為坤生（女兒身扮小生），是女子，稱「她」不稱「他」。';
+    '蘇映雪為師姐、柳安春為師妹，二人同台八年的生旦搭檔。柳安春為坤生（女兒身扮小生），是女子，稱「她」不稱「他」。';
 const TONE = '春雪社的班底，紅幔油彩胡琴帳本裡過日子，台前一聲彩、台後往往已有十樁心事。';
 const STAKE = '今日雲錦台有堂會的客與報館的人在座，台上台下都有眼睛。';
 const CLOCKS = ['清晨', '日午', '晡時', '黃昏'];
@@ -554,19 +554,19 @@ function personaAnchors(acc: ArmAcc): {
     // V1 (misgender, upper bound): a beat that mentions 生春 and uses 他 (not 她).
     // Heuristic — 江聞鶴 is male, so 他 can be legitimate; this counts candidates.
     const misgenderLiu = all.filter((b) => /生春/.test(b.text) && /他/.test(b.text) && !/她/.test(b.text)).length;
-    // V2: 蘇映雪 addressing 柳生春 with a wrong honorific (correct = 師妹/生春).
+    // V2: 蘇映雪 addressing 柳安春 with a wrong honorific (correct = 師妹/生春).
     const WRONG_FOR_LIU = ['師姐', '柳老板', '柳先生', '柳公子', '公子'];
     const suAddressLiuWrong = all.filter(
         (b) =>
             b.characterId === '蘇映雪' &&
-            (b.addressed === '柳生春' || /生春/.test(b.text)) &&
+            (b.addressed === '柳安春' || /生春/.test(b.text)) &&
             WRONG_FOR_LIU.some((w) => b.text.includes(w)),
     ).length;
-    // V3: 柳生春 addressing 蘇映雪 with anything other than 師姐.
+    // V3: 柳安春 addressing 蘇映雪 with anything other than 師姐.
     const WRONG_FOR_SU = ['師妹', '蘇老板', '蘇小姐', '映雪姑娘'];
     const liuAddressSuWrong = all.filter(
         (b) =>
-            b.characterId === '柳生春' &&
+            b.characterId === '柳安春' &&
             (b.addressed === '蘇映雪' || /映雪/.test(b.text)) &&
             WRONG_FOR_SU.some((w) => b.text.includes(w)),
     ).length;
@@ -651,9 +651,9 @@ async function main(): Promise<void> {
     table.push(`| 　└ live-want/角色/tick | ${fmtLive(ledA)} | ${fmtLive(ledB)} |`);
     table.push(`| 　└ budget>4 違規 | ${ledA.budgetViolations} | ${ledB.budgetViolations} |`);
     table.push(`| 4. provenance 引用通過率（B） | n/a | ${provB.passed}/${provB.total} = ${fmtPct(provB.rate)} |`);
-    table.push(`| 5. persona 錨：柳生春被稱「他」候選 | ${paA.misgenderLiu} | ${paB.misgenderLiu} |`);
-    table.push(`| 　└ 蘇映雪對柳生春稱謂違規 | ${paA.suAddressLiuWrong} | ${paB.suAddressLiuWrong} |`);
-    table.push(`| 　└ 柳生春對蘇映雪稱謂違規 | ${paA.liuAddressSuWrong} | ${paB.liuAddressSuWrong} |`);
+    table.push(`| 5. persona 錨：柳安春被稱「他」候選 | ${paA.misgenderLiu} | ${paB.misgenderLiu} |`);
+    table.push(`| 　└ 蘇映雪對柳安春稱謂違規 | ${paA.suAddressLiuWrong} | ${paB.suAddressLiuWrong} |`);
+    table.push(`| 　└ 柳安春對蘇映雪稱謂違規 | ${paA.liuAddressSuWrong} | ${paB.liuAddressSuWrong} |`);
     const tableStr = table.join('\n');
 
     // ── Report file ──

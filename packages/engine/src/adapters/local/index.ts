@@ -10,3 +10,4 @@ export { FakeSceneAgent } from './fake-scene-agent.ts';
 export { LocalRecall } from './local-recall.ts';
 export { FileArchive } from './file-archive.ts';
 export { LocalClock, makeClock } from './clock.ts';
+export { LocalEconomy } from './local-economy.ts';

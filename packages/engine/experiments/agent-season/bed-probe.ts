@@ -1,7 +1,7 @@
 /**
  * AGENT-SEASON · BED-SCENE PROBE (decoupled, one scene only).
  * ============================================================================
- * Renders JUST the 深宵 established-lover 床戲 between 柳生春 × 金鳳, on the exact
+ * Renders JUST the 深宵 established-lover 床戲 between 柳安春 × 金鳳, on the exact
  * post-reckoning setup the season produced: their 情-layer wants ALREADY SETTLED
  * (retired), the two of them alone in 柳's private room at night, emotionalStance
  * 'consummate'. Proves the intimacy-register fix (open the adult register + more
@@ -16,7 +16,7 @@ import { buildCast } from './world.ts';
 import { WORLD_PREMISE } from './world.ts';
 
 async function main() {
-    const [liu, jin] = buildCast(['柳生春', '金鳳']);
+    const [liu, jin] = buildCast(['柳安春', '金鳳']);
     if (!liu || !jin) throw new Error('cast build failed');
 
     // Simulate the arc: the reckoning earlier that day SETTLED both 情 wants.
@@ -40,13 +40,13 @@ async function main() {
     const { RunnerSceneAgent } = await import('../../src/adapters/runner-scene-agent.ts');
     const agent = new RunnerSceneAgent();
 
-    console.log('── 深宵 · 後台小廂房（私）〔床〕 · 金鳳×柳生春（情帳已了，純餘身之情）──\n');
+    console.log('── 深宵 · 後台小廂房（私）〔床〕 · 金鳳×柳安春（情帳已了，純餘身之情）──\n');
     const loop = await runSceneLoop({
         sceneId: 'bed-probe',
         sceneName: '後台小廂房',
         isPrivate: true,
         clock: '第2日·深宵',
-        stake: '金鳳散了場沒回會樂里，偏來守在柳生春門口，這夜深了。',
+        stake: '金鳳散了場沒回會樂里，偏來守在柳安春門口，這夜深了。',
         etiquette: WORLD_PREMISE,
         emotionalStance: 'consummate',
         cast: [member(jin, liu), member(liu, jin)],

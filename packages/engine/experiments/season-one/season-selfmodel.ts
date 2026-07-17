@@ -36,9 +36,9 @@ import { runSeasonV3, type SeasonResultV3 } from './harness-v3.ts';
 
 const REAL = process.env.SEASON_REAL_LLM === '1';
 const TOTAL_TICKS = 12;
-const PROBE = '柳生春';
+const PROBE = '柳安春';
 /** Settle 柳's 金鳳 debt on day-1 (before that day's night consolidation at tick 5). */
-const SETTLE = { fromName: '柳生春', toName: '金鳳', tick: 3 };
+const SETTLE = { fromName: '柳安春', toName: '金鳳', tick: 3 };
 
 async function makeAgent(): Promise<SceneAgentPort> {
     if (!REAL) return new FakeSceneAgent();

@@ -10,6 +10,7 @@
 import { text as llmText } from '@endless-story/llm';
 import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, safeSceneRevision, type ActBeatInput, type BeatResult } from './beat-prompt.js';
 import { formatPovSceneParagraphs } from '../narrative-format/pov-paragraphs.ts';
+import { toTraditional } from '@endless-story/shared/to-traditional';
 
 // Pure prompt surface (types + builders) lives in the node-clean leaf
 // `beat-prompt.ts`; re-exported here so the package surface is unchanged.
@@ -273,7 +274,7 @@ export async function povReflect(input: PovReflectInput): Promise<string | null>
             maxTokens: 480,
             temperature: 0.9,
         });
-        return res.text.trim() || null;
+        return toTraditional(res.text.trim()) || null;
     } catch {
         return null;
     }
@@ -408,7 +409,7 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
             maxTokens: 1200,
             temperature: 0.9,
         });
-        return formatPovSceneParagraphs(res.text) || null;
+        return formatPovSceneParagraphs(toTraditional(res.text)) || null;
     } catch {
         return null;
     }

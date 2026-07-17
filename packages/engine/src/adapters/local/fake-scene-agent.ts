@@ -1,6 +1,6 @@
 /**
  * FakeSceneAgent — a deterministic, prompt-free SceneAgentPort for smoke tests.
- * No LLM, no keys. Beats echo the driving want; address/leave fire on a stable
+ * No LLM, no keys. Beats echo the driving want; address fires on a stable
  * hash so a run is reproducible. Genesis hands each character a small spread of
  * wants (one love-layer aimed at a castmate, one ambition, one daily) so the
  * routing, want-decay and night-anchor machinery all exercise. Aftermath grows a
@@ -40,18 +40,19 @@ function hash(s: string): number {
 }
 
 export class FakeSceneAgent implements SceneAgentPort {
+    async decideMove(_input: Runner.characterAgent.MoveDecideInput): Promise<Runner.characterAgent.MoveDecideResult> {
+        return { move: false, reason: 'fake: stay' };
+    }
+
     async actBeat(input: Runner.characterAgent.ActBeatInput): Promise<Runner.characterAgent.BeatResult> {
         const h = hash(`${input.name}|${input.want.desc}|${input.sceneLog.length}`);
         const others = input.others ?? [];
         const addressed = others.length && h % 2 === 0 ? others[h % others.length].name : undefined;
-        // Rare leave: drops out of the scene (the loop removes them from present).
-        const move = h % 7 === 0 ? '別處' : undefined;
         const near = input.privateAlone ? '挨得近了些' : input.isPrivate ? '壓著聲' : '當著眾人';
         return {
             beat: `${near}，${input.name}繞著「${input.want.desc}」打轉${addressed ? `，看向${addressed}` : ''}`,
             inner: input.want.desc,
             addressed,
-            move,
         };
     }
 
@@ -159,7 +160,7 @@ export class FakeSceneAgent implements SceneAgentPort {
                 return { kind: 'propose_play', prose: `我把封了十五年的樟木戲箱開了一條縫，這一季，春雪社要排一齣自己的新戲，趕在年底會串之前。` };
             if (input.name === '蘇映雪')
                 return { kind: 'compose', prose: `我在本子空白處提筆，替生旦對手戲添了一句唱詞。` };
-            if (input.name === '柳生春' && loveTarget)
+            if (input.name === '柳安春' && loveTarget)
                 return { kind: 'seek_person', target: loveTarget, prose: `我尋了個空，去找${loveTarget}說幾句話。` };
             return { kind: 'personal', prose: `我自個兒在廊下練了會兒功，理著心裡的事。` };
         }
@@ -176,13 +177,13 @@ export class FakeSceneAgent implements SceneAgentPort {
                     : { kind: 'rehearse', prose: `我把這折的身段又走了一趟，求個準。` };
             case '連翹':
                 return { kind: 'rehearse', prose: `我紮上靠旗，把這折武戲的槍花走實了一遍。` };
-            case '柳生春':
+            case '柳安春':
                 return loveTarget
                     ? { kind: 'seek_person', target: loveTarget, prose: `我去尋${loveTarget}，想與TA對對這段生旦戲。` }
                     : { kind: 'rehearse', prose: `我對著空戲台走了一遍生角的步子。` };
             case '金鳳':
                 return parity === 0
-                    ? { kind: 'seek_person', target: '柳生春', prose: `我遣人去請柳生春過來一趟。` }
+                    ? { kind: 'seek_person', target: '柳安春', prose: `我遣人去請柳安春過來一趟。` }
                     : { kind: 'personal', prose: `我在寓所裡理著堂子的帳，等一個人。` };
             default:
                 return { kind: 'personal', prose: `我在包廂裡看著這一切，心裡自有盤算。` };

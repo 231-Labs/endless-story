@@ -11,7 +11,11 @@ import { pickNextActor } from './scene-routing.ts';
 
 /** The two agent calls a scene needs — injectable so composition tests can run
  *  the REAL loop with a scripted agent (no LLM, no runner resolution). */
-export type SceneAgent = Pick<typeof CharacterAgentNs, 'actBeat' | 'judgeWantResolved'>;
+export type SceneAgent = Pick<typeof CharacterAgentNs, 'actBeat' | 'judgeWantResolved'> & {
+    /** Stateless repair lane for a proposal rejected by objective validation.
+     *  The rejected draft must not enter the character's durable session. */
+    replanBeat?: typeof CharacterAgentNs.actBeat;
+};
 
 /** Production default: resolved lazily so importing this module stays
  *  node-clean (the runner package uses `.js` specifiers node --test can't load). */
@@ -56,6 +60,12 @@ export interface SceneLoopCastMember {
      *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
      *  the reverse edge — no omniscience about others' feelings. */
     ties?: Record<string, string>;
+    /** Actor-specific objective affordances at this venue. */
+    objects?: Array<{ id: string; label: string; state?: string; container?: string }>;
+    sceneHint?: string;
+    /** Pre-scoped season money ledger (own purse / authorized treasury view /
+     *  contract terms / purchasable items here); refreshed by beforeBeat. */
+    economyLine?: string;
 }
 
 export interface SceneLoopInput {
@@ -77,6 +87,8 @@ export interface SceneLoopInput {
      *  when (and only when) the intimacy gate opens for a beat. */
     emotionalStance?: string;
     cast: SceneLoopCastMember[];
+    /** Full formal cast vocabulary for detecting stale-session vocatives. */
+    castNames?: string[];
     /** The saga's full want array (live + retired; mutated in place). */
     wants: Want[];
     tick: number;
@@ -95,6 +107,11 @@ export interface SceneLoopInput {
     firstActorId?: string;
     /** Injectable agent (composition tests script it); omit → runner LLM agent. */
     agent?: SceneAgent;
+    /** Refresh actor-specific affordances immediately before each turn. */
+    beforeBeat?: (actor: SceneLoopCastMember) => void | Promise<void>;
+    /** Validate/commit structured side effects immediately after each beat so
+     * the next actor sees the new world, not the scene's starting snapshot. */
+    onBeat?: (beat: SceneBeat) => void | Promise<void>;
 }
 
 export interface SceneBeat {
@@ -105,11 +122,14 @@ export interface SceneBeat {
     inner: string;
     addressed?: string;
     audience?: 'scene' | 'addressed';
+    objectEffects?: CharacterAgentNs.BeatObjectEffect[];
+    economyCommands?: CharacterAgentNs.BeatEconomyCommand[];
 }
 
 export interface SceneLoopResult {
     beats: SceneBeat[];
-    /** Characters who asked to leave, with their destination scene name. */
+    /** @deprecated Cross-scene movement is committed before scene play through
+     *  decideMove. Kept empty for snapshot/API compatibility. */
     moves: Array<{ characterId: string; toSceneName: string }>;
     /** Wants answered irreversibly this scene (already retired). */
     resolved: Array<{ want: Want; note?: string }>;
@@ -224,6 +244,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     let pendingAdvanceBy: string | null = null;
     for (let turn = 0; turn < maxTurns; turn++) {
         if (!actor) break;
+        await input.beforeBeat?.(actor);
         let w = hottestOf(input.wants, actor.characterId);
         let synthetic = false;
         if (!w) {
@@ -266,7 +287,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         const gateBeat = privateAlone && (consummateScene || /愛|情/.test(w.layer));
         if (gateBeat) result.intimacyGateOpened = true;
 
-        const r = await agent.actBeat({
+        const beatInput: CharacterAgentNs.ActBeatInput = {
             sagaId: input.sagaId,
             characterId: actor.characterId,
             perceptId: input.sagaId ? `${input.sagaId}:t${input.tick}:${input.sceneId}:turn${turn}` : undefined,
@@ -276,7 +297,8 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             tone: input.tone,
             clock: input.clock,
             sceneName: input.sceneName,
-            sceneHint: input.sceneHint,
+            sceneHint: actor.sceneHint ?? input.sceneHint,
+            objects: actor.objects,
             isPrivate: input.isPrivate,
             others: others.map((o) => ({
                 name: o.name,
@@ -297,11 +319,84 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             sceneLog: log.slice(-5).join('\n'),
             stateLine: actor.stateLine,
             innerSecret: actor.innerSecret,
+            economyLine: actor.economyLine,
             etiquette: input.etiquette,
             consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
             intimacyOffered: pendingAdvanceBy != null && pendingAdvanceBy !== actor.characterId,
             intimacyPossible: input.isPrivate && present.length === 2 && !registerOpen && actor.advanceReady !== false,
-        });
+        };
+
+        let r!: CharacterAgentNs.BeatResult;
+        let acceptedBeat!: SceneBeat;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) {
+                await input.beforeBeat?.(actor);
+                beatInput.sceneHint = actor.sceneHint ?? input.sceneHint;
+                beatInput.objects = actor.objects;
+                beatInput.economyLine = actor.economyLine;
+            }
+            r = attempt > 0 && agent.replanBeat
+                ? await agent.replanBeat(beatInput)
+                : await agent.actBeat(beatInput);
+            // There is exactly one authority for changing venue: the autonomous
+            // movement phase that ran before this scene. It deals the character a
+            // clamped list of scene ids, validates the choice, then commits the
+            // roster transition. A free-text scene beat must never become a second,
+            // unvalidated movement channel. Legacy models may still emit `move`;
+            // reject that draft before it reaches onBeat/session/canon and replan
+            // statelessly at the already-committed venue.
+            if (r.move && r.move !== input.sceneName) {
+                if (attempt >= 2) {
+                    throw new Error(
+                        `scene beat attempted cross-scene movement after movement phase: ${actor.name} -> ${r.move}`,
+                    );
+                }
+                beatInput.physicalRejection =
+                    `你的位置已在本 tick 的移動階段提交為「${input.sceneName}」。` +
+                    `這一拍不能再前往「${r.move}」；若想離場，可 close 收住此場，下一 tick 再從合法選項決定去處。`;
+                continue;
+            }
+            const structuredAddressee = r.addressed
+                ? others.find((candidate) => r.addressed === candidate.name || r.addressed?.includes(candidate.name))
+                : undefined;
+            const openingVocative = (input.castNames ?? present.map((candidate) => candidate.name)).find((name) => {
+                const aliases = [name, ...(name.length >= 3 ? [name.slice(1)] : [])];
+                return aliases.some((alias) => {
+                    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    return new RegExp(`[「『“\"]\\s*${escaped}[，,：:]`).test(r.beat);
+                });
+            });
+            if (
+                (r.addressed && !structuredAddressee) ||
+                (openingVocative && structuredAddressee && openingVocative !== structuredAddressee.name)
+            ) {
+                if (attempt >= 2) {
+                    throw new Error(`scene beat used a stale addressee: ${r.addressed ?? openingVocative}`);
+                }
+                beatInput.physicalRejection =
+                    `你這一拍的結構化對象是「${structuredAddressee?.name ?? r.addressed ?? '無'}」，` +
+                    `但開口卻叫了「${openingVocative ?? r.addressed}」。只能回應此刻同場的人，不可混入上一場的對話對象。`;
+                continue;
+            }
+            acceptedBeat = {
+                sceneId: input.sceneId,
+                characterId: actor.characterId,
+                name: actor.name,
+                text: r.beat,
+                inner: r.inner,
+                addressed: r.addressed,
+                audience: r.audience,
+                objectEffects: r.objectEffects,
+                economyCommands: r.economyCommands,
+            };
+            try {
+                await input.onBeat?.(acceptedBeat);
+                break;
+            } catch (error) {
+                if (attempt >= 2) throw error;
+                beatInput.physicalRejection = error instanceof Error ? error.message : String(error);
+            }
+        }
 
         log.push(`${actor.name}：${r.beat}`);
         // DAWN PRESSURE (world fact, not a director): some pairs structurally cannot
@@ -311,15 +406,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         if (registerOpen && turn === Math.floor((consummateCap * 3) / 4)) {
             log.push('（夜已深透，天光快要透進來了）');
         }
-        result.beats.push({
-            sceneId: input.sceneId,
-            characterId: actor.characterId,
-            name: actor.name,
-            text: r.beat,
-            inner: r.inner,
-            addressed: r.addressed,
-            audience: r.audience,
-        });
+        result.beats.push(acceptedBeat);
         if (!result.actedCharacterIds.includes(actor.characterId)) result.actedCharacterIds.push(actor.characterId);
         if (synthetic) {
             // presence-only beat: no want ledger to update
@@ -358,14 +445,6 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         if (forcingPressure(w) >= effR) w.frust += 1;
         if (w.recent >= WANT.saturateAt) w.sat = Math.min(1, w.sat + WANT.saturationBump);
 
-        if (r.move && r.move !== input.sceneName) {
-            result.moves.push({ characterId: actor.characterId, toSceneName: r.move });
-            const idx = present.findIndex((c) => c.characterId === actor!.characterId);
-            if (idx >= 0) present.splice(idx, 1);
-            if (present.length < 2) break;
-            actor = present[0];
-            continue;
-        }
         if (solo) break;
 
         const candidates = present.filter((c) => c.characterId !== actor!.characterId);

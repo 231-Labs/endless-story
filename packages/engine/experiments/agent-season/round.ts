@@ -1111,7 +1111,7 @@ export function determineActive(
         }
         // Worn-down characters at night REST to recover (sleep's teeth) — UNIVERSALLY. Even a
         // reckoning-chaser rests when the body is failing; the reckoning waits for a day they
-        // can survive. (A prior name-cased exemption kept 柳生春 awake every night and, once a
+        // can survive. (A prior name-cased exemption kept 柳安春 awake every night and, once a
         // restored week carried her fatigue forward with no rest, burned her to 油盡燈枯 by
         // day 1 — the real cause of "柳 does nothing", not any want-regen gap.)
         if (isActive && night && c.health <= HEALTH.wornAt) isActive = false;

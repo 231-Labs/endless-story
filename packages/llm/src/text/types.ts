@@ -29,6 +29,8 @@ export interface ChatRequest {
   temperature?: number;
   /** Enable extended thinking with budget. Provider may ignore if unsupported. */
   thinking?: { budgetTokens: number };
+  /** Cancels the provider request; runtimes use this to bound an atomic cycle. */
+  signal?: AbortSignal;
 }
 
 export interface ChatResponse {

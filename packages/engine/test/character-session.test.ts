@@ -22,8 +22,8 @@ class RecordingModel implements CharacterSessionModel {
 const liu: CharacterSessionIdentity = {
     sagaId: 'spring-snow',
     characterId: 'liu',
-    characterName: '柳生春',
-    canon: '你就是柳生春。英氣風流的坤生。',
+    characterName: '柳安春',
+    canon: '你就是柳安春。英氣風流的坤生。',
 };
 
 test('persistent character session resumes after process-style registry restart', async () => {

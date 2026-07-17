@@ -19,16 +19,17 @@ import {
     applyRipples,
     decayWants,
     fadeStaleWants,
-    jealousNightPursuit,
+    forcingLevel,
     newWant,
     nightSceneKind,
-    yearningNightPursuit,
+    shouldDeriveAftermath,
     tension,
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneLoopCastMember } from './core/scene-loop.ts';
-import { computeSpatialRouting } from './core/spatial-routing.ts';
-import type { ArchivePort, CanonicalSceneEvent, ClockPort, RecallPort, SceneAgentPort } from './ports.ts';
+import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
+import { commitBeatPhysics } from './core/physical-canon.ts';
+import { enforceContractCommandPairing, settleTenancyMoveIns } from './core/season-economy.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -36,6 +37,9 @@ export interface TickDeps {
     recall: RecallPort;
     archive: ArchivePort;
     clock: ClockPort;
+    /** Season money physics. REQUIRED when the world carries economy data —
+     *  a moneyed world without a settlement port must fail loud, not drift. */
+    economy?: EconomyPort;
 }
 
 export interface TickOpts {
@@ -58,7 +62,7 @@ export interface TickReport {
     resolved: number;
     liveWants: number;
     actedCharacterIds: string[];
-    /** Scene ids each awake character routed to this tick (night only). */
+    /** Scene ids chosen by characters and committed by the engine this tick. */
     routed: Record<string, string>;
     wove: boolean;
     episode: boolean;
@@ -66,6 +70,8 @@ export interface TickReport {
     events: CanonicalSceneEvent[];
     /** Read-only session projections, linked back to their frozen event. */
     eventPovs: TickEventPov[];
+    /** Objective settlement facts (wages/costs/deadlines) when this tick closed a day. */
+    economyNotices?: string[];
 }
 
 export interface TickEventPov {
@@ -87,8 +93,11 @@ function stateLine(fatigue: number, hunger: number): string | undefined {
 
 export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts = {}): Promise<TickReport> {
     const log = opts.log ?? ((l: string) => console.log(l));
-    const { agent, recall, archive, clock } = deps;
+    const { agent, recall, archive, clock, economy } = deps;
     const w = world.data;
+    if (w.economy && !economy) {
+        throw new Error('world carries season economy data but TickDeps.economy is missing — pass a LocalEconomy');
+    }
     const c = w.clock;
     const nowTick = c.currentTick;
     const today = c.day;
@@ -96,8 +105,64 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const dayEnd = clock.isDayEnd(c);
     const clockLabel = c.partOfDay;
     const wants = w.wants; // mutated in place; snapshot persists it
+    const events: CanonicalSceneEvent[] = [];
+    const eventPovs: TickEventPov[] = [];
 
     log(`── tick ${nowTick} · day ${today} · ${clockLabel}${night ? ' · 夜' : ''} ──`);
+
+    // 0) SCHEDULED WORLD EVENTS — machine-readable clocks enter objective canon
+    // exactly once, before movement. They are percepts, never scripted choices.
+    const deliveredScheduled = new Set(w.deliveredScheduledEventIds ?? []);
+    const dueScheduledEvents = (w.scheduledEvents ?? []).filter(
+        (scheduled) => scheduled.atTick <= nowTick && !deliveredScheduled.has(scheduled.id),
+    );
+    for (const scheduled of dueScheduledEvents) {
+        const sceneName = world.sceneNameById(scheduled.sceneId);
+        const event: CanonicalSceneEvent = {
+            v: 1,
+            id: `${w.sagaId}:scheduled:${scheduled.id}`,
+            sagaId: w.sagaId,
+            day: today,
+            tick: nowTick,
+            clock: scheduled.clock ?? clockLabel,
+            sceneId: scheduled.sceneId,
+            sceneName,
+            visibility: scheduled.visibility,
+            witnessIds: [...scheduled.witnessIds],
+            editorialSignals: { resolvedWants: 0, departures: 0, relationshipTurn: false },
+            beats: [{
+                characterId: '__world__',
+                name: '世界',
+                text: scheduled.text,
+                audience: 'scene',
+                perceiverIds: [...scheduled.witnessIds],
+            }],
+        };
+        for (const id of scheduled.witnessIds) {
+            const member = world.castById(id);
+            if (!member) throw new Error(`scheduled event ${scheduled.id} has unknown witness id: ${id}`);
+            await recall.remember(id, `〔${sceneName}·${event.clock}〕世界：${scheduled.text}`, {
+                kind: 'observation',
+                importance: 10,
+                day: today,
+            });
+            await agent.observeScene?.({ event, characterId: id, name: member.name, persona: member.persona });
+        }
+        await archive.commit({
+            kind: 'shoujuan',
+            day: today,
+            tick: nowTick,
+            name: `${sceneName}·${scheduled.id}`,
+            sceneId: scheduled.sceneId,
+            eventId: event.id,
+            body: `世界：${scheduled.text}`,
+        });
+        w.dayAccum.lines.push(`【${event.clock}】`, `[${sceneName}] 世界：${scheduled.text}`);
+        events.push(event);
+        deliveredScheduled.add(scheduled.id);
+        log(`  world event: [${sceneName}] ${scheduled.text}`);
+    }
+    w.deliveredScheduledEventIds = [...deliveredScheduled];
 
     // 1) GENESIS + ledger upkeep — daytime only (§3.9: night consolidates).
     let genesisRan = 0;
@@ -142,41 +207,108 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         for (const f of fadeStaleWants(wants, nowTick)) log(`  淡了: ${world.nameById(f.characterId)}「${f.desc}」`);
     }
 
-    // 2) ROUTING — night: place by home + want-driven pursuit; dawn: disperse to work.
+    // 2) AUTONOMOUS MOVEMENT — there is exactly one movement authority:
+    // the world enumerates legal destinations, the character chooses a
+    // structured scene id, then the engine validates and commits it. Home and
+    // work are affordance labels, never deterministic teleport destinations.
     const routed: Record<string, string> = {};
-    if (night) {
-        const idByName = new Map(w.cast.map((m) => [m.name, m.id]));
-        const presentIds = new Set(w.cast.map((m) => m.id));
-        const resolveTgt = (t: string) => (presentIds.has(t) ? t : idByName.get(t));
-        const actors = w.cast.map((m) => {
-            const jealous = jealousNightPursuit(wants, m.id, resolveTgt);
-            const yearning = yearningNightPursuit(wants, m.id, resolveTgt);
-            return {
-                id: m.id,
-                sceneId: w.roster[m.id],
-                homeSceneId: w.homeByChar[m.id] ?? w.roster[m.id],
-                fatigue: m.state.fatigue,
-                pursue: jealous ?? yearning ?? undefined,
-            };
-        });
-        const targets = computeSpatialRouting(
-            actors,
-            w.scenes.map((s) => ({ id: s.id, privacyLevel: s.privacyLevel })),
-            true,
-            (host, visitor) => world.welcome(host, visitor),
-        );
-        for (const [id, sid] of targets) {
-            w.roster[id] = sid;
-            routed[id] = sid;
-        }
-    } else if (c.tickOfDay === 0) {
-        for (const m of w.cast) {
-            const work = w.workByChar[m.id];
-            if (work && w.roster[m.id] !== work) {
-                w.roster[m.id] = work;
-                routed[m.id] = work;
+    const orderedMovers = [...w.cast].sort((a, b) => {
+        const aw = world.liveWantsOf(a.id)[0];
+        const bw = world.liveWantsOf(b.id)[0];
+        return (bw ? tension(bw) : 0) - (aw ? tension(aw) : 0);
+    });
+    const lastMovedTickByChar = (w.lastMovedTickByChar ??= {});
+    for (const member of orderedMovers) {
+        const lastMovedTick = lastMovedTickByChar[member.id];
+        // Intentional travel consumes time. A one-tick rest prevents oscillation
+        // and makes "I went there" persist long enough to become a scene. At
+        // night a recent mover may still CHOOSE to return home, but no other
+        // destination is offered during cooldown.
+        const coolingDown = lastMovedTick !== undefined && nowTick - lastMovedTick < 2;
+        if (coolingDown && !night) continue;
+        const currentSceneId = w.roster[member.id];
+        const live = world.liveWantsOf(member.id).slice(0, 4);
+        const options = w.scenes.flatMap((scene) => {
+            if (scene.id === currentSceneId) return [];
+            if (coolingDown && scene.id !== w.homeByChar[member.id]) return [];
+            const occupancy = w.cast.filter((candidate) => w.roster[candidate.id] === scene.id).length;
+            const capacity = scene.capacity ?? (scene.privacyLevel >= 3 ? 2 : scene.privacyLevel >= 2 ? 4 : 8);
+            if (occupancy >= capacity) return [];
+            const ownerIds = Object.entries(w.homeByChar)
+                .filter(([, home]) => home === scene.id)
+                .map(([id]) => id);
+            if (scene.privacyLevel >= 3 && ownerIds.length > 0 && !ownerIds.includes(member.id)) {
+                const admitted = ownerIds.some(
+                    (ownerId) => w.roster[ownerId] === scene.id && world.welcome(ownerId, member.id) >= 0.7,
+                );
+                if (!admitted) return [];
             }
-        }
+            const presentCharacters = w.cast
+                .filter((candidate) => candidate.id !== member.id && w.roster[candidate.id] === scene.id)
+                .map((candidate) => ({
+                    id: candidate.id,
+                    name: candidate.name,
+                    role: candidate.role ?? '—',
+                    bodyFact: candidate.gender,
+                    tieToward: member.relationshipView[candidate.id] ?? w.edges[member.id]?.[candidate.id]?.tone,
+                }));
+            return [{
+                sceneId: scene.id,
+                name: scene.name,
+                description: scene.description,
+                presentCharacters,
+                privacyLevel: scene.privacyLevel,
+                homeOfName: ownerIds[0] ? world.nameById(ownerIds[0]) : undefined,
+                isHome: w.homeByChar[member.id] === scene.id,
+                isWork: w.workByChar[member.id] === scene.id,
+            }];
+        });
+        const decision = await agent.decideMove({
+            name: member.name,
+            role: member.role ?? '—',
+            bodyFact: member.gender,
+            currentSituation: [
+                ...dueScheduledEvents
+                    .filter((event) => event.witnessIds.includes(member.id))
+                    .map((event) => event.text),
+                ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
+            ].filter(Boolean).join('\n') || undefined,
+            planHint: live.map((want) => `- [${want.layer}] ${want.desc}`).join('\n'),
+            currentSceneName: world.sceneNameById(currentSceneId),
+            options,
+            clock: clockLabel,
+            isNight: night,
+            heart: live.map((want) => ({
+                desc: want.desc,
+                towardName: want.target
+                    ? (world.castById(want.target)?.name ?? want.target)
+                    : undefined,
+                ripe: forcingLevel(want),
+            })),
+        });
+        if (!decision.move || !decision.targetSceneId) continue;
+        if (!options.some((option) => option.sceneId === decision.targetSceneId)) continue;
+        const from = world.sceneNameById(currentSceneId);
+        world.moveCharacter(member.id, decision.targetSceneId);
+        routed[member.id] = decision.targetSceneId;
+        lastMovedTickByChar[member.id] = nowTick;
+        log(`  move: ${member.name} ${from} → ${world.sceneNameById(decision.targetSceneId)}${decision.reason ? `（${decision.reason}）` : ''}`);
+    }
+
+    // 2.5) TENANCY MOVE-INS — a leased room becomes home the moment its tenant
+    // arrives carrying the lease. The travel was their own committed choice;
+    // this only settles the objective consequence (and cans it for the record).
+    for (const moveIn of settleTenancyMoveIns(world)) {
+        log(`  [遷入] ${moveIn.line}`);
+        w.dayAccum.lines.push(`[帳房] ${moveIn.line}`);
+        (w.scheduledEvents ??= []).push({
+            id: `tenancy-${moveIn.characterId}-t${nowTick}`,
+            atTick: nowTick + 1,
+            sceneId: w.homeByChar[moveIn.characterId],
+            text: moveIn.line,
+            visibility: 'public',
+            witnessIds: w.cast.map((member) => member.id),
+        });
     }
 
     // 3) Group co-present cast by scene; at night keep only qualifying scenes.
@@ -189,7 +321,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         for (const [sid, ids] of [...byScene]) {
             const info = world.sceneById(sid);
             const cs = ids.map((id) => ({ id, name: world.nameById(id) }));
-            if (!nightSceneKind(cs, info?.privacyLevel ?? 0, wants)) byScene.delete(sid);
+            const deliberateEncounter =
+                ids.length > 1 && ids.some((id) => lastMovedTickByChar[id] === nowTick);
+            if (!deliberateEncounter && !nightSceneKind(cs, info?.privacyLevel ?? 0, wants)) {
+                byScene.delete(sid);
+            }
         }
         log(byScene.size ? `  夜場: ${byScene.size} 私戲` : '  夜: 快轉, sleep consolidates');
     }
@@ -202,8 +338,6 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const acc = w.dayAccum;
     /** Per-character angle on this tick: objective act + inner thought. */
     const pov = new Map<string, { name: string; lines: string[] }>();
-    const eventPovs: TickEventPov[] = [];
-    const events: CanonicalSceneEvent[] = [];
 
     for (const [sid, ids] of byScene) {
         if (ids.length === 0) continue;
@@ -235,20 +369,82 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     role: member.role,
                     bodyFact: member.gender,
                     ties,
+                    sceneHint: world.physicalHint(id, sid),
+                    objects: world.accessibleObjects(id, sid).map((object) => ({
+                        id: object.id,
+                        label: object.label,
+                        state: object.state,
+                        container: object.container ? world.objectById(object.container)?.label ?? object.container : undefined,
+                    })),
+                    economyLine: economy?.projectFor(world, id, sid),
                 };
             }),
         );
 
+        const eventId = `${w.sagaId}:d${today}:t${nowTick}:${sid}`;
+        let beatIndex = 0;
         const loop = await runSceneLoop({
             sagaId: w.sagaId,
             sceneId: sid,
             sceneName,
             isPrivate,
             clock: clockLabel,
+            etiquette: w.etiquette,
             cast: castWithMem,
+            castNames: w.cast.map((member) => member.name),
             wants,
             tick: nowTick,
             agent,
+            beforeBeat: (actor) => {
+                actor.sceneHint = world.physicalHint(actor.characterId, sid);
+                actor.objects = world.accessibleObjects(actor.characterId, sid).map((object) => ({
+                    id: object.id,
+                    label: object.label,
+                    state: object.state,
+                    container: object.container ? world.objectById(object.container)?.label ?? object.container : undefined,
+                }));
+                actor.economyLine = economy?.projectFor(world, actor.characterId, sid);
+            },
+            onBeat: (beat) => {
+                const addressedId = beat.addressed ? world.idByName(beat.addressed) : undefined;
+                // A beat that touches a contract paper must also move the ledger —
+                // checked BEFORE physics so a rejected draft leaves no object change.
+                enforceContractCommandPairing(world, beat.objectEffects, beat.economyCommands);
+                commitBeatPhysics({
+                    world,
+                    sceneId: sid,
+                    actorId: beat.characterId,
+                    actorName: beat.name,
+                    witnessIds: ids,
+                    text: beat.text,
+                    audience: beat.audience,
+                    addressedId,
+                    effects: beat.objectEffects,
+                });
+                const causeEventId = `${eventId}:b${beatIndex}`;
+                beatIndex += 1;
+                if (beat.economyCommands?.length && !economy) {
+                    throw new Error(`[economy] ${beat.name} proposed money commands but this world has no economy`);
+                }
+                for (const [seq, command] of (beat.economyCommands ?? []).entries()) {
+                    const outcome = economy!.commitCommand(world, {
+                        actorId: beat.characterId,
+                        sceneId: sid,
+                        witnessIds: ids,
+                        command,
+                        causeEventId,
+                        seq,
+                        day: today,
+                    });
+                    if (!outcome.ok) {
+                        throw new Error(`[economy] ${beat.name} 的銀錢動作沒有發生：${outcome.reason}`);
+                    }
+                    for (const line of outcome.publicLines) {
+                        log(`  [銀錢] ${line}`);
+                        if (!isPrivate) acc.lines.push(`[${sceneName}] （帳）${line}`);
+                    }
+                }
+            },
         });
 
         // Freeze only after the existing scene checker has repaired hard prose
@@ -258,6 +454,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             const reviewed = await agent.reviewScene({
                 worldPremise: w.sagaPremise,
                 venue: sceneName,
+                venueHint: world.physicalHint('__reviewer__', sid),
                 participants: ids.map((id) => {
                     const member = world.castById(id)!;
                     return {
@@ -279,7 +476,6 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
         }
 
-        const eventId = `${w.sagaId}:d${today}:t${nowTick}:${sid}`;
         const event: CanonicalSceneEvent = {
             v: 1,
             id: eventId,
@@ -293,8 +489,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             witnessIds: [...ids],
             editorialSignals: {
                 resolvedWants: loop.resolved.length,
-                departures: loop.moves.filter((move) => w.scenes.some((scene) => scene.name === move.toSceneName)).length,
+                // Venue transitions are committed in the autonomous movement
+                // phase before this event. A scene beat has no movement authority.
+                departures: 0,
                 relationshipTurn: loop.intimacyAccepted,
+                objectChanges: loop.beats.reduce((count, beat) => count + (beat.objectEffects?.length ?? 0), 0),
             },
             beats: loop.beats.map((b) => ({
                 characterId: b.characterId,
@@ -304,6 +503,8 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 audience: b.audience ?? 'scene',
                 perceiverIds: deriveBeatPerceiverIds(b, ids.map((id) => ({ id, name: world.nameById(id) }))),
                 inner: b.inner || undefined,
+                objectEffects: b.objectEffects,
+                economyCommands: b.economyCommands,
             })),
         };
         if (event.beats.length) {
@@ -375,20 +576,44 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
         }
 
-        // Apply scene-loop moves that resolve to a real scene (fake's sentinel ignored).
-        for (const mv of loop.moves) {
-            const dest = w.scenes.find((s) => s.name === mv.toSceneName);
-            if (dest) w.roster[mv.characterId] = dest.id;
-        }
-
         for (const id of loop.actedCharacterIds) if (!actedCharacterIds.includes(id)) actedCharacterIds.push(id);
+
+        // relationshipFallback: bank today's exchanges per co-present pair for
+        // the nightly self-model consolidation (capped, latest lines win).
+        if (w.relationshipFallback && loop.beats.length && ids.length > 1) {
+            const sceneLines = loop.beats.map((b) => `${b.name}：${b.text}`).slice(-12);
+            const interactions = (acc.interactions ??= {});
+            for (const a of ids) {
+                for (const b of ids) {
+                    if (a === b) continue;
+                    const bank = ((interactions[a] ??= {})[b] ??= []);
+                    bank.push(...sceneLines);
+                    if (bank.length > 24) interactions[a][b] = bank.slice(-24);
+                }
+            }
+        }
 
         // Resolutions → aftermath wants.
         for (const rv of loop.resolved) {
             resolvedCount++;
             log(`  resolved: ${world.nameById(rv.want.characterId)}「${rv.want.desc}」${rv.note ? ` — ${rv.note}` : ''}`);
+            if (w.relationshipFallback && rv.want.target) {
+                const targetId = world.castById(rv.want.target) ? rv.want.target : world.idByName(rv.want.target);
+                if (targetId) {
+                    const resolvedWith = (acc.resolvedWith ??= {});
+                    (resolvedWith[rv.want.characterId] ??= []).push(targetId);
+                }
+            }
+            if (w.relationshipFallback) {
+                const landed = (acc.landedByChar ??= {});
+                (landed[rv.want.characterId] ??= []).push(`「${rv.want.desc}」${rv.note ? `──${rv.note}` : '，這一樁落定了'}`);
+            }
             const owner = world.castById(rv.want.characterId);
             if (!owner) continue;
+            if (!shouldDeriveAftermath(rv.want)) {
+                log(`  aftermath settled: ${owner.name}（不再自動生成下一層 aftermath want）`);
+                continue;
+            }
             const after = await agent.deriveAftermathWant({
                 name: owner.name,
                 persona: owner.persona,
@@ -416,7 +641,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         }
 
         // Ripples → shift/spawn threads.
-        if (loop.beats.length) {
+        if (loop.beats.length && ids.length > 1) {
             const deltas = await agent.judgeRipples({
                 sceneName,
                 beats: loop.beats.map((b) => `${b.name}：${b.text}`),
@@ -464,6 +689,93 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         acc.povByName[p.name] = p.lines.join('\n\n');
     }
 
+    // 7.5) DAY-END ECONOMY SETTLEMENT — deterministic, idempotent per day.
+    // Wages, fixed living/operating costs and contract deadlines settle HERE,
+    // never in prose. Objective consequences land now (hunger, object states,
+    // escrow release); the notices post as next-morning scheduled events so the
+    // cast PERCEIVES the settlement before choosing anything (aftermath tick).
+    let economyNotices: string[] | undefined;
+    if (dayEnd && economy && w.economy) {
+        const settled = economy.settleDay(world, { day: today, nowTick });
+        if (settled.settled) {
+            economyNotices = settled.publicNotices;
+            for (const line of settled.publicNotices) {
+                log(`  [結算] ${line}`);
+                acc.lines.push(`[帳房] ${line}`);
+            }
+            for (const notice of settled.privateNotices) {
+                log(`  [結算·私] ${world.nameById(notice.characterId)}：${notice.text}`);
+            }
+        }
+    }
+
+    // 7.6) NIGHTLY SELF-MODEL CONSOLIDATION (relationshipFallback wiring):
+    // OVERWRITE each character's current one-line view of everyone they dealt
+    // with today (latest-wins, never appended) + optional identity insight.
+    // The anti-decay half of the structural fallback — validated on the web
+    // tick path; here gated behind the flag until a long-season A/B lands.
+    if (dayEnd && w.relationshipFallback && acc.interactions) {
+        for (const [actorId, others] of Object.entries(acc.interactions)) {
+            const member = world.castById(actorId);
+            if (!member) continue;
+            const interactions = Object.entries(others).map(([otherId, sceneLines]) => {
+                const other = world.castById(otherId);
+                return {
+                    otherId,
+                    otherName: other?.name ?? otherId,
+                    otherBodyFact: other?.gender,
+                    otherRole: other?.role,
+                    currentView: member.relationshipView[otherId],
+                    todayText: sceneLines.join('\n').slice(-1200),
+                    resolvedWithThem: (acc.resolvedWith?.[actorId] ?? []).includes(otherId) || undefined,
+                };
+            });
+            const reply = await agent.consolidateSelfModel({
+                name: member.name,
+                persona: member.persona,
+                secret: member.secret,
+                coreIdentity: member.coreIdentity,
+                interactions,
+                day: today,
+            });
+            for (const view of reply.relationshipViews) world.setRelationshipView(actorId, view.otherId, view.view);
+            if (reply.identityInsight) world.addCoreIdentity(actorId, reply.identityInsight);
+            if (reply.relationshipViews.length) log(`  self-model: ${member.name} 更新對 ${reply.relationshipViews.length} 人的看法`);
+        }
+        delete acc.interactions;
+        delete acc.resolvedWith;
+    }
+
+    // 7.7) NIGHTLY 心事自改 (relationshipFallback wiring): the secret is a
+    // LIVING thing. When something真的落地 today (a resolved want), the unspoken
+    // matter may move to its own next step — 蘇映雪 saying 行不通 out loud must
+    // be able to move what 柳安春 keeps under her tongue, not only her view
+    // line. canonSeed pins the bedrock facts; only the heart moves. null → keep.
+    if (dayEnd && w.relationshipFallback && acc.landedByChar) {
+        for (const [actorId, landed] of Object.entries(acc.landedByChar)) {
+            const member = world.castById(actorId);
+            if (!member?.secret || landed.length === 0) continue;
+            const evolved = await agent.evolveSecret({
+                name: member.name,
+                persona: member.persona,
+                secret: member.secret,
+                landed,
+                selfModel: [
+                    ...member.coreIdentity,
+                    ...Object.entries(member.relationshipView).map(([oid, view]) => `對${world.nameById(oid)}：${view}`),
+                ],
+                castBodies: w.cast.map((candidate) => ({ name: candidate.name, bodyFact: candidate.gender })),
+                canonSeed: member.secretSeed,
+                day: today,
+            });
+            if (evolved && evolved.trim() && evolved.trim() !== member.secret) {
+                member.secret = evolved.trim();
+                log(`  心事自改: ${member.name}`);
+            }
+        }
+        delete acc.landedByChar;
+    }
+
     // 8) DAY-END EPISODE.
     let episode = false;
     if (dayEnd && acc.lines.length >= 3) {
@@ -509,5 +821,6 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         episode,
         events,
         eventPovs,
+        economyNotices,
     };
 }

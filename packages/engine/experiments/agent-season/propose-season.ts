@@ -29,7 +29,7 @@ const OUT_DIR = arg('--out', import.meta.dirname);
 
 async function main(): Promise<void> {
     const { text: llmText } = await import('@endless-story/llm');
-    const cast = buildCast(['柳生春', '蘇映雪', '金鳳', '白韻秋', '沈雪笙', '江聞鶴', '連翹']);
+    const cast = buildCast(['柳安春', '蘇映雪', '金鳳', '白韻秋', '沈雪笙', '江聞鶴', '連翹']);
     const snap = JSON.parse(fs.readFileSync(path.join(RESTORE, 'cast-state.json'), 'utf-8')) as CastSnapshot;
     restoreCast(cast, snap);
     const nameOf = new Map(cast.map((c) => [c.id, c.name]));

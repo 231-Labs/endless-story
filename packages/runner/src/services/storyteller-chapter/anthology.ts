@@ -17,6 +17,7 @@ export interface AnthologyCandidate {
         resolvedWants: number;
         departures: number;
         relationshipTurn: boolean;
+        objectChanges: number;
         contestedClaims: number;
         perspectiveCount: number;
     };
@@ -61,13 +62,15 @@ export function anthologyCandidateFromDossier(bundle: EpistemicDossierBundle): A
         resolvedWants: 0,
         departures: 0,
         relationshipTurn: false,
+        objectChanges: 0,
     };
+    const objectChanges = editorial.objectChanges ?? 0;
     const contestedClaims = bundle.manifest.perspectives.reduce(
         (total, perspective) => total + perspective.claims.filter((claim) => claim.review === 'contested').length,
         0,
     );
     const perspectiveCount = bundle.manifest.perspectives.length;
-    const hasWorldTurn = editorial.resolvedWants > 0 || editorial.departures > 0 || editorial.relationshipTurn;
+    const hasWorldTurn = editorial.resolvedWants > 0 || editorial.departures > 0 || editorial.relationshipTurn || objectChanges > 0;
     const role: AnthologyRole = hasWorldTurn
         ? 'turning_point'
         : contestedClaims > 0 && perspectiveCount >= 2
@@ -78,6 +81,7 @@ export function anthologyCandidateFromDossier(bundle: EpistemicDossierBundle): A
     const score = editorial.resolvedWants * 10
         + editorial.departures * 5
         + (editorial.relationshipTurn ? 9 : 0)
+        + objectChanges * 7
         + Math.min(contestedClaims, 4)
         + Math.min(Math.max(perspectiveCount - 1, 0), 3);
 
@@ -94,6 +98,7 @@ export function anthologyCandidateFromDossier(bundle: EpistemicDossierBundle): A
         role,
         signals: {
             ...editorial,
+            objectChanges,
             contestedClaims,
             perspectiveCount,
         },
@@ -105,6 +110,7 @@ function turningReason(candidate: AnthologyCandidate): string {
     if (candidate.signals.resolvedWants) parts.push(`${candidate.signals.resolvedWants} 條欲望線得到不可逆回應`);
     if (candidate.signals.relationshipTurn) parts.push('人物關係實際轉折');
     if (candidate.signals.departures) parts.push(`${candidate.signals.departures} 人改變去向`);
+    if (candidate.signals.objectChanges) parts.push(`${candidate.signals.objectChanges} 項物件狀態改變`);
     return parts.join('、') || '世界狀態推進';
 }
 

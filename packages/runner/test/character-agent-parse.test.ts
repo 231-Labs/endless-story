@@ -17,6 +17,7 @@ import {
     hasAuthorityDrift,
     driftsForRole,
 } from '../src/services/character-agent/parse.ts';
+import { sanitizeMoveReason } from '../src/services/character-agent/move-guard.ts';
 
 /* ── MOVE ───────────────────────────────────────────────────────────── */
 
@@ -31,6 +32,58 @@ test('parseMove: no JSON object → null', () => {
 
 test('parseMove: broken JSON → null', () => {
     assert.equal(parseMove('{"move": true,'), null);
+});
+
+test('move reason is traditionalized and wrong unambiguous gender falls back neutrally', () => {
+    const input = {
+        name: '金鳳',
+        role: '花旦',
+        bodyFact: '女子',
+        currentSceneName: '花廳',
+        options: [{
+            sceneId: 'stage',
+            name: '雲錦台戲台',
+            presentCharacters: [{ id: 'liu', name: '柳安春', role: '坤生', bodyFact: '女兒身，台上扮男' }],
+        }],
+    };
+    assert.equal(
+        sanitizeMoveReason('我要去找柳安春，逼他认那筆账。', input, 'stage'),
+        '我決定去雲錦台戲台，照應心裡掛著的事。',
+    );
+});
+
+test('move reason keeps its meaning while converting simplified characters', () => {
+    const input = {
+        name: '柳安春',
+        role: '坤生',
+        currentSceneName: '戲台',
+        options: [{ sceneId: 'backstage', name: '後台妝閣', presentCharacters: [] }],
+    };
+    assert.equal(
+        sanitizeMoveReason('联名那格得先问清楚。', input, 'backstage'),
+        '聯名那格得先問清楚。',
+    );
+});
+
+test('move reason may preserve a subjective mistaken belief about where someone is', () => {
+    const input = {
+        options: [
+            {
+                sceneId: 'newsroom',
+                name: '報館茶室',
+                presentCharacters: [{ id: 'shen', name: '沈雪笙', bodyFact: '女子' }],
+            },
+            {
+                sceneId: 'stage',
+                name: '雲錦台戲台',
+                presentCharacters: [{ id: 'liu', name: '柳安春', bodyFact: '女兒身，台上扮男' }],
+            },
+        ],
+    };
+    assert.equal(
+        sanitizeMoveReason('去找柳安春，問問校樣的事。', input, 'newsroom'),
+        '去找柳安春，問問校樣的事。',
+    );
 });
 
 /* ── ACT (card play) ────────────────────────────────────────────────── */

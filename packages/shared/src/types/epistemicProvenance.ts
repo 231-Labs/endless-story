@@ -91,6 +91,8 @@ export interface DossierEventPresentation {
     departures: number;
     /** The intimacy gate was accepted and the relationship materially turned. */
     relationshipTurn: boolean;
+    /** Validated registered-object mutations committed in the scene. */
+    objectChanges?: number;
   };
 }
 

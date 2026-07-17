@@ -54,7 +54,7 @@ export async function judgeRipples(input: RippleJudgeInput): Promise<RippleJudge
                 '只能根據逐拍明寫的動作、話語與此人已有心事；不可憑空造出逐拍沒有的物件、消息、承諾或後續。' +
                 '只報真被牽動的(0~3 人)，沒有就回空陣列。\n各人現有心事：\n' +
                 rosterLines +
-                '\n輸出 JSON：{"ripples":[{"name":"誰","shift":"tighten/loosen/none","newThread":"≤18字或省略","layer":"層","target":"若指向某人"}]}。不要 markdown。',
+                '\n輸出 JSON：{"ripples":[{"name":"誰","shift":"tighten/loosen/none","newThread":"一件具體的新心事","layer":"層","target":"若指向某人"}]}。沒有新心事時必須完全省去 newThread 欄位，不可填「省略」「無」或其他佔位字。不要 markdown。',
             messages: [{ role: 'user', content: input.beats.join('\n') }],
             maxTokens: 260,
             temperature: 0.5,
@@ -71,7 +71,9 @@ export async function judgeRipples(input: RippleJudgeInput): Promise<RippleJudge
             out.push({
                 characterId,
                 shift: shift === 'tighten' || shift === 'loosen' ? shift : 'none',
-                newThread: s(e.newThread) || undefined,
+                newThread: /^(省略|無|沒有|不新增|none|null|n\/?a)$/i.test(s(e.newThread))
+                    ? undefined
+                    : s(e.newThread) || undefined,
                 layer: s(e.layer) || undefined,
                 target: s(e.target) || undefined,
             });

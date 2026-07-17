@@ -22,6 +22,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@endless-story/economy": "workspace:*",
     "@endless-story/llm": "workspace:*",
     "@endless-story/runner": "workspace:*",
     "@endless-story/shared": "workspace:*",

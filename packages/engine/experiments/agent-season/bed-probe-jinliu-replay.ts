@@ -38,18 +38,18 @@ function member(c: Char, other: Char): SceneLoopCastMember {
 }
 
 async function main(): Promise<void> {
-    const cast = buildCast(['柳生春', '金鳳']);
+    const cast = buildCast(['柳安春', '金鳳']);
     const statePath = path.join(RESTORE, 'cast-state.json');
     if (fs.existsSync(statePath)) {
         restoreCast(cast, JSON.parse(fs.readFileSync(statePath, 'utf-8')) as CastSnapshot);
     }
     const [liu, jin] = cast;
-    const stake = '深宵，後台小廂房只剩你們二人，燈影半明。白日裡柳生春又替蘇映雪描了眉，這事金鳳知道。';
+    const stake = '深宵，後台小廂房只剩你們二人，燈影半明。白日裡柳安春又替蘇映雪描了眉，這事金鳳知道。';
 
     const { RunnerSceneAgent } = await import('../../src/adapters/runner-scene-agent.ts');
     const agent = new RunnerSceneAgent();
 
-    console.log('── 柳生春×金鳳 @ 後台小廂房（私・重放・無上限版）──\n');
+    console.log('── 柳安春×金鳳 @ 後台小廂房（私・重放・無上限版）──\n');
     const loop = await runSceneLoop({
         sceneId: 'bed-replay-jinliu',
         sceneName: '後台小廂房',

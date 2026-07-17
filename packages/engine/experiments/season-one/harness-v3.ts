@@ -22,7 +22,7 @@
  *   3. RHYTHM + SPACE = the teeth. After the 排練 milestone, during DAY slots the
  *      daily rhythm routes each troupe member to the rehearsal venue (the DAY-slot
  *      sibling of the night home router). A member pulled elsewhere by a hot want
- *      (柳生春 → 金鳳's place) is PHYSICALLY ABSENT from the rehearsal scene; the
+ *      (柳安春 → 金鳳's place) is PHYSICALLY ABSENT from the rehearsal scene; the
  *      scene runs without them and 班主 NOTICES in-world (diegetic consequence, NO
  *      number penalty — the consequence is the absence itself, surfaced in prose).
  */
@@ -74,7 +74,7 @@ const SHEN_STYLE = '疼人藏得極深的當家：話短、狠、底下有暖；
 /** The rehearsal-floor venue (the 戲台); the rhythm routes the troupe here by day. */
 const REHEARSAL_VENUE = '雲錦台戲台';
 /** Troupe members expected on the rehearsal floor (performers + 班主 overseeing). */
-const FLOOR_NAMES = ['沈雪笙', '蘇映雪', '柳生春', '江聞鶴', '連翹'];
+const FLOOR_NAMES = ['沈雪笙', '蘇映雪', '柳安春', '江聞鶴', '連翹'];
 
 export interface SeasonDeps {
     agent: SceneAgentPort;
@@ -274,7 +274,7 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
     const classicKey = opts.classicKey ?? 'baishe';
     const totalTicks = opts.totalTicks ?? 12;
     const ticksPerDay = opts.ticksPerDay ?? 6;
-    const castNames = opts.cast ?? ['沈雪笙', '柳生春', '蘇映雪', '金鳳', '江聞鶴', '連翹', '白韻秋'];
+    const castNames = opts.cast ?? ['沈雪笙', '柳安春', '蘇映雪', '金鳳', '江聞鶴', '連翹', '白韻秋'];
 
     // ── Build the world from the preset, restricted to the season cast ─────────
     const rawFull = loadPresetFile(presetId);
@@ -284,25 +284,25 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
     await seedGenesisMemories(raw, world, recall);
 
     const idByName = (n: string): string => world.idByName(n) ?? n;
-    world.setEdge(idByName('白韻秋'), idByName('柳生春'), '戀慕'); // 白 comes for 柳 (box-office warmth)
+    world.setEdge(idByName('白韻秋'), idByName('柳安春'), '戀慕'); // 白 comes for 柳 (box-office warmth)
 
     // ── Seed the CANON of each character's current view of the significant others
     //    (the mutable self-model's relationship channel). Latest-wins; nightly
     //    consolidation OVERWRITES these as relationships change. Sits ALONGSIDE the
     //    mechanical `edges` tone graph. Authored one-liners carry what a bare tone
     //    token can't (柳↔金鳳 舊情+虧欠、柳↔蘇 未剖白的暗慕、沈 封箱之痛). ──────────────
-    world.setEdge(idByName('柳生春'), idByName('金鳳'), '虧欠');
-    world.setEdge(idByName('柳生春'), idByName('蘇映雪'), '戀慕');
+    world.setEdge(idByName('柳安春'), idByName('金鳳'), '虧欠');
+    world.setEdge(idByName('柳安春'), idByName('蘇映雪'), '戀慕');
     seedRelationshipViews(world, [
-        { from: '柳生春', to: '金鳳', view: '舊情人，如今我只欠她一句交代' },
-        { from: '柳生春', to: '蘇映雪', view: '師姐，我暗慕著，話卻始終沒敢說出口' },
-        { from: '金鳳', to: '柳生春', view: '欠我一句話的人，我等著他來了斷' },
-        { from: '蘇映雪', to: '柳生春', view: '師弟，戲搭得默契，情分我不點破' },
-        { from: '沈雪笙', to: '柳生春', view: '班裡的小生台柱，我盯著他的嗓子也盯著他的心' },
+        { from: '柳安春', to: '金鳳', view: '舊情人，如今我只欠她一句交代' },
+        { from: '柳安春', to: '蘇映雪', view: '師姐，我暗慕著，話卻始終沒敢說出口' },
+        { from: '金鳳', to: '柳安春', view: '欠我一句話的人，我等著他來了斷' },
+        { from: '蘇映雪', to: '柳安春', view: '師弟，戲搭得默契，情分我不點破' },
+        { from: '沈雪笙', to: '柳安春', view: '班裡的小生台柱，我盯著他的嗓子也盯著他的心' },
     ]);
     // A durable identity fact pinned for the probe-facing chars (§2.40 identity
     //釘死): the坤生 self-fact and the班主 封箱之痛 — always injected, un-evictable.
-    world.addCoreIdentity(idByName('柳生春'), '我是坤生，女兒身扮小生，台上情長台下無人知');
+    world.addCoreIdentity(idByName('柳安春'), '我是坤生，女兒身扮小生，台上情長台下無人知');
     world.addCoreIdentity(idByName('沈雪笙'), '我是沈雪笙，封了十五年戲箱的當家，疼人藏得極深');
 
     const cfg = makeSeasonConfig(totalTicks, 2);
@@ -320,13 +320,13 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
     const castingWantsSeeded = spine.seedCastingWants();
     log(`[spine] 種下 ${castingWantsSeeded} 條選角欲望（志向 want，seam-1 讀活的 want 定選角）`);
 
-    // ── ABSENCE-TEETH seed: 柳生春 owes 金鳳 a 交代. A hot 虧欠-layer want targeting
+    // ── ABSENCE-TEETH seed: 柳安春 owes 金鳳 a 交代. A hot 虧欠-layer want targeting
     //    an OFF-FLOOR person (金鳳, a 歌女 who never joins the 會串 cast). Its tension
     //    (0.85 × 0.85 ≈ 0.72) out-weighs the pull to the rehearsal floor (0.6), so
     //    on rehearsal days the daily rhythm drags 柳 to 金鳳's place — she is ABSENT
     //    from rehearsal and 班主 notices. (The night lanes also read 虧欠 for a 了結.)
     world.data.wants.push(
-        newWant({ characterId: idByName('柳生春'), layer: '虧欠', desc: '欠金鳳一句交代，會樂里那條弄堂繞著走', target: '金鳳', weight: 0.85, sat: 0.15, resistance: 7, kind: 'narrative', source: 'owner', bornTick: 0 }),
+        newWant({ characterId: idByName('柳安春'), layer: '虧欠', desc: '欠金鳳一句交代，會樂里那條弄堂繞著走', target: '金鳳', weight: 0.85, sat: 0.15, resistance: 7, kind: 'narrative', source: 'owner', bornTick: 0 }),
     );
 
     const wants = world.data.wants;
@@ -751,7 +751,7 @@ export async function runSeasonV3(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
                 // over the earlier ticks as scenes partially sate it; this models the
                 // debt flaring under deadline pressure. Deterministic; no other want is
                 // touched.)
-                const liuDebt = world.liveWantsOf(idByName('柳生春')).find((w) => /虧欠/.test(w.layer) && w.target === '金鳳');
+                const liuDebt = world.liveWantsOf(idByName('柳安春')).find((w) => /虧欠/.test(w.layer) && w.target === '金鳳');
                 if (liuDebt) { liuDebt.weight = 1; liuDebt.sat = 0.05; liuDebt.sat0 = 0.05; }
                 if (process.env.SEASON_DEBUG) log(`  [dbg-pull] ${floorIds.map((id) => `${world.nameById(id)}:${JSON.stringify(dayPull(id))}`).join(' | ')} | venueId=${venueId}`);
                 const routing = computeRehearsalRouting(floorIds.map((id) => ({ id, pull: dayPull(id) })), venueId, { attendW: 0.6 });

@@ -22,12 +22,12 @@ function report(tick: number, relationshipTurn = false) {
             witnessIds: ['liu', 'su'],
             editorialSignals: { resolvedWants: relationshipTurn ? 0 : 1, departures: 0, relationshipTurn },
             beats: [
-                { characterId: 'liu', name: '柳生春', text: '把戲帖交到映雪手裡。', audience: 'scene' as const, perceiverIds: ['liu', 'su'] },
+                { characterId: 'liu', name: '柳安春', text: '把戲帖交到映雪手裡。', audience: 'scene' as const, perceiverIds: ['liu', 'su'] },
                 { characterId: 'su', name: '蘇映雪', text: '接住戲帖，沒有退回去。', audience: 'scene' as const, perceiverIds: ['liu', 'su'] },
             ],
         }],
         eventPovs: [
-            { characterId: 'liu', name: '柳生春', eventId: id, body: '她終於沒有把戲帖退回來。' },
+            { characterId: 'liu', name: '柳安春', eventId: id, body: '她終於沒有把戲帖退回來。' },
             { characterId: 'su', name: '蘇映雪', eventId: id, body: '我接住的不是一張紙。' },
         ],
     };
@@ -37,7 +37,7 @@ test('periodic editor waits for two turns and only recomposes when selection cha
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'endless-editor-'));
     t.after(() => fs.rmSync(out, { recursive: true, force: true }));
     const cast = [
-        { id: 'liu', name: '柳生春', role: '坤生', gender: '女' },
+        { id: 'liu', name: '柳安春', role: '坤生', gender: '女' },
         { id: 'su', name: '蘇映雪', role: '花旦', gender: '女' },
     ];
     let compositions = 0;
@@ -62,4 +62,29 @@ test('periodic editor waits for two turns and only recomposes when selection cha
     assert.equal(unchanged.selectionChanged, false);
     assert.equal(unchanged.anthologyWritten, false);
     assert.equal(compositions, 1);
+});
+
+test('periodic editor repairs a missing anthology without replaying canon', async (t) => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'endless-editor-repair-'));
+    t.after(() => fs.rmSync(out, { recursive: true, force: true }));
+    const cast = [
+        { id: 'liu', name: '柳安春', role: '坤生', gender: '女' },
+        { id: 'su', name: '蘇映雪', role: '花旦', gender: '女' },
+    ];
+
+    await writeTickDossiers(out, report(1), cast);
+    await writeTickDossiers(out, report(2, true), cast);
+    const first = await refreshSeasonEditorial(out);
+    assert.equal(first.plan.publishable, true);
+    assert.equal(first.anthologyWritten, false);
+
+    let compositions = 0;
+    const repaired = await refreshSeasonEditorial(out, async () => {
+        compositions++;
+        return '# 補成的季選集';
+    });
+    assert.equal(repaired.selectionChanged, false);
+    assert.equal(repaired.anthologyWritten, true);
+    assert.equal(compositions, 1);
+    assert.match(fs.readFileSync(path.join(out, 'editorial', 'season-anthology.md'), 'utf8'), /補成/);
 });

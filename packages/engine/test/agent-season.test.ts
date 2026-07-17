@@ -54,7 +54,7 @@ import { DAY_PARTS } from '../experiments/agent-season/rhythm.ts';
 import { newPlay } from '../experiments/agent-season/production.ts';
 import { makeShowrunner } from '../experiments/agent-season/showrunner.ts';
 
-const SMALL = ['柳生春', '蘇映雪', '金鳳', '白韻秋', '沈雪笙', '江聞鶴', '連翹'];
+const SMALL = ['柳安春', '蘇映雪', '金鳳', '白韻秋', '沈雪笙', '江聞鶴', '連翹'];
 
 async function runFakeSeason(days = 1) {
     const cast = buildCast(SMALL);
@@ -146,7 +146,7 @@ test('seed memories loaded VERBATIM & non-thinned (counts match canon)', async (
         for (const m of c.thickMemories) assert.ok(canonTexts.has(m.text), 'memory text is verbatim canon');
     }
     // The two headline relationships are present and tagged.
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     const jin = cast.find((c) => c.id === '金鳳')!;
     const su = cast.find((c) => c.id === '蘇映雪')!;
     assert.ok(liu.thickMemories.some((m) => m.tag === '肌膚-金鳳'), '柳 carries 肌膚-金鳳 memories');
@@ -156,7 +156,7 @@ test('seed memories loaded VERBATIM & non-thinned (counts match canon)', async (
 });
 
 test('seed memory SURFACES: 柳 recalling 金鳳 pulls up the 肌膚/相伴 history', async () => {
-    const cast = buildCast(['柳生春', '金鳳']);
+    const cast = buildCast(['柳安春', '金鳳']);
     const recall = new LocalRecall();
     const liu = cast[0];
     for (const m of liu.thickMemories) await recall.remember(liu.id, m.text, { kind: 'reflection', importance: m.importance, day: 1 });
@@ -169,7 +169,7 @@ test('seed memory SURFACES: 柳 recalling 金鳳 pulls up the 肌膚/相伴 hist
 
 test('relationship-dependent intimacy: 柳×金鳳 established lovers; 柳×蘇 not', async () => {
     const cast = buildCast(SMALL);
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     const jin = cast.find((c) => c.id === '金鳳')!;
     const su = cast.find((c) => c.id === '蘇映雪')!;
     assert.equal(areEstablishedLovers(liu, jin), true, '柳×金鳳 = established lovers (carnal history both sides)');
@@ -179,8 +179,8 @@ test('relationship-dependent intimacy: 柳×金鳳 established lovers; 柳×蘇 
 test('self-model latest-wins: night consolidation OVERWRITES a changed view', async () => {
     const { cast } = await runFakeSeason(1);
     // 柳 dealt with 金鳳 (the 深宵 reckoning) → his view of 金鳳 is overwritten from seed.
-    const liu = cast.find((c) => c.id === '柳生春')!;
-    const seedView = buildCast(['柳生春']).find((c) => c.id === '柳生春')!.relationshipViews.get('金鳳');
+    const liu = cast.find((c) => c.id === '柳安春')!;
+    const seedView = buildCast(['柳安春']).find((c) => c.id === '柳安春')!.relationshipViews.get('金鳳');
     const now = liu.relationshipViews.get('金鳳');
     assert.ok(now, '柳 still holds a view of 金鳳');
     assert.notEqual(now, seedView, 'the view was overwritten by night consolidation (latest-wins)');
@@ -191,7 +191,7 @@ test('append-only episodic memory: a scene writes POV records both participants 
     assert.ok(result.scenes.length > 0, 'scenes happened');
     const recall = new LocalRecall();
     // Rebuild a tiny check: run a fresh 2-char season and confirm each remembers acting.
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     void recall;
     void liu;
     // The season already wrote memories; assert via the surfaced-record channel that
@@ -227,7 +227,7 @@ test('Stage 2 box office: deterministic and auditable (same inputs → identical
 });
 
 test('gender-aware intimacy: a consummate scene feeds BOTH participants their 身 (bodyFact), general', async () => {
-    const [liu, jin] = buildCast(['柳生春', '金鳳']);
+    const [liu, jin] = buildCast(['柳安春', '金鳳']);
     const cm = (c: Char, other: Char): SceneLoopCastMember => ({
         characterId: c.id, name: c.name, persona: c.persona, memories: [],
         innerSecret: c.secret, role: c.role, bodyFact: c.bodyFact,
@@ -255,9 +255,9 @@ test('gender-aware intimacy: a consummate scene feeds BOTH participants their �
 });
 
 test('排他 predicate: hasRomanticStake is GENERAL — romantic want-layer OR established lover, no name-casing', async () => {
-    const c = buildCast(['蘇映雪', '柳生春', '金鳳', '連翹']);
+    const c = buildCast(['蘇映雪', '柳安春', '金鳳', '連翹']);
     const by = (id: string) => c.find((x) => x.id === id)!;
-    const su = by('蘇映雪'), liu = by('柳生春'), jin = by('金鳳'), lian = by('連翹');
+    const su = by('蘇映雪'), liu = by('柳安春'), jin = by('金鳳'), lian = by('連翹');
     assert.equal(hasRomanticStake(su, liu), true, '蘇 holds a 情-layer want aimed at 柳 → stake');
     assert.equal(hasRomanticStake(jin, liu), true, '金鳳×柳 are established lovers → stake');
     assert.equal(hasRomanticStake(lian, liu), false, '連翹 wants 名, not 柳 → no romantic stake');
@@ -265,9 +265,9 @@ test('排他 predicate: hasRomanticStake is GENERAL — romantic want-layer OR e
 });
 
 test('修羅場: a discovery renders a 3-way confrontation and writes the rupture to all three (edges rewrite)', async () => {
-    const c = buildCast(['蘇映雪', '柳生春', '金鳳']);
+    const c = buildCast(['蘇映雪', '柳安春', '金鳳']);
     const su = c.find((x) => x.id === '蘇映雪')!;
-    const liu = c.find((x) => x.id === '柳生春')!;
+    const liu = c.find((x) => x.id === '柳安春')!;
     const jin = c.find((x) => x.id === '金鳳')!;
     liu.venue = '後台小廂房';
     su.venue = '後台小廂房';
@@ -275,40 +275,40 @@ test('修羅場: a discovery renders a 3-way confrontation and writes the ruptur
     const clock = makeClock(6, 5); // 深宵
     const scene = await renderDiscovery(su, liu, jin, clock, new FakeSceneAgent(), recall);
     assert.equal(scene.discovery, true, 'the scene is flagged a 修羅場');
-    assert.deepEqual(scene.participantIds, ['蘇映雪', '柳生春', '金鳳'], 'all three are in it');
+    assert.deepEqual(scene.participantIds, ['蘇映雪', '柳安春', '金鳳'], 'all three are in it');
     assert.ok(scene.beats.length >= 1, 'the confrontation rendered beats');
     // The rupture is written so the night self-model overwrite REWRITES the edges.
-    assert.ok(su.todayLedger.get('柳生春') && su.todayLedger.get('金鳳'), '蘇 ledger holds the rupture toward BOTH');
+    assert.ok(su.todayLedger.get('柳安春') && su.todayLedger.get('金鳳'), '蘇 ledger holds the rupture toward BOTH');
     assert.ok(liu.todayLedger.get('蘇映雪') && jin.todayLedger.get('蘇映雪'), '柳 and 金鳳 ledgers record being caught');
-    const suMem = await recall.recall('蘇映雪', '撞見 柳生春 金鳳 纏綿 這一眼', 3, 1);
+    const suMem = await recall.recall('蘇映雪', '撞見 柳安春 金鳳 纏綿 這一眼', 3, 1);
     assert.ok(suMem.some((m) => m.text.includes('撞見')), '蘇 genuinely remembers the discovery');
 });
 
 test('space access: owned rooms gate on ownership + standing keys (lovers reach each other; sealed room shut)', () => {
     // 柳 owns her 小廂房; 金鳳(old lover) & 蘇(師姐) hold standing keys; 白韻秋(pursuer) does not.
-    assert.equal(canEnter('柳生春', '後台小廂房'), true, 'owner enters own room');
+    assert.equal(canEnter('柳安春', '後台小廂房'), true, 'owner enters own room');
     assert.equal(canEnter('金鳳', '後台小廂房'), true, 'old lover holds a standing key');
     assert.equal(canEnter('蘇映雪', '後台小廂房'), true, '師姐 holds a key');
     assert.equal(canEnter('白韻秋', '後台小廂房'), false, 'the pursuer has NO key (must be led in, or break in)');
     // lovers hold mutual keys → trysts stay reachable.
-    assert.equal(canEnter('柳生春', '會樂里寓所'), true, '柳 holds a key to 金鳳 的 會樂里');
+    assert.equal(canEnter('柳安春', '會樂里寓所'), true, '柳 holds a key to 金鳳 的 會樂里');
     // public venues are free; the sealed 衣箱房 admits only its owner.
     assert.equal(canEnter('江聞鶴', '雲錦台戲台'), true, 'a public venue is free');
-    assert.equal(canEnter('柳生春', '衣箱房'), false, 'the sealed 衣箱房 admits nobody but its owner');
+    assert.equal(canEnter('柳安春', '衣箱房'), false, 'the sealed 衣箱房 admits nobody but its owner');
     assert.equal(canEnter('沈雪笙', '衣箱房'), true, 'the 班主 owns the sealed room');
 });
 
 test('修羅場 破門: a break-in discovery reads as forcing the door + records the transgression', async () => {
-    const c = buildCast(['白韻秋', '柳生春', '金鳳']);
+    const c = buildCast(['白韻秋', '柳安春', '金鳳']);
     const bai = c.find((x) => x.id === '白韻秋')!;
-    const liu = c.find((x) => x.id === '柳生春')!;
+    const liu = c.find((x) => x.id === '柳安春')!;
     const jin = c.find((x) => x.id === '金鳳')!;
     liu.venue = '後台小廂房';
     const recall = new LocalRecall();
     const scene = await renderDiscovery(bai, liu, jin, makeClock(6, 4), new FakeSceneAgent(), recall, true /* brokeIn */);
     assert.equal(scene.discovery, true, 'a 修羅場 rendered');
-    assert.deepEqual(scene.participantIds, ['白韻秋', '柳生春', '金鳳']);
-    const baiMem = await recall.recall('白韻秋', '推開那扇本不該我推的門 撞見 柳生春 金鳳', 3, 1);
+    assert.deepEqual(scene.participantIds, ['白韻秋', '柳安春', '金鳳']);
+    const baiMem = await recall.recall('白韻秋', '推開那扇本不該我推的門 撞見 柳安春 金鳳', 3, 1);
     assert.ok(baiMem.some((m) => m.text.includes('推開')), '白 remembers forcing the door (a costly transgression)');
 });
 
@@ -318,8 +318,8 @@ test('pronoun correctness: buildBeatSystemPrompt names a male co-star 他 (data-
     assert.equal(pronounFromBody('女子'), '她', 'a non-男 bodyFact → 她');
     assert.equal(pronounFromBody(undefined), '她', 'unknown 身 defaults 她');
     // The injected guard line names 江聞鶴 (male) as 他 and a female co-star as 她.
-    const cast = buildCast(['柳生春', '江聞鶴', '蘇映雪']);
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const cast = buildCast(['柳安春', '江聞鶴', '蘇映雪']);
+    const liu = cast.find((c) => c.id === '柳安春')!;
     const jiang = cast.find((c) => c.id === '江聞鶴')!;
     const su = cast.find((c) => c.id === '蘇映雪')!;
     const prompt = buildBeatSystemPrompt({
@@ -344,11 +344,13 @@ test('pronoun correctness: buildBeatSystemPrompt names a male co-star 他 (data-
     assert.ok(prompt.includes('不要以「我」起筆'), 'the model must not leak first-person framing into canon');
     assert.ok(prompt.includes('audience'), 'the model must self-tag who can perceive the exact beat');
     assert.ok(prompt.includes('沒有已登記可拿出的私人物件'), 'empty inventory is an explicit physical constraint');
+    assert.ok(prompt.includes('本 tick 的自主移動已經完成'), 'scene prose knows movement was already committed');
+    assert.ok(!prompt.includes('"move":"要去別處'), 'scene beat JSON exposes no second movement field');
 });
 
 test('beat perception is structured and fails closed without an addressee', () => {
     const aside = parseBeatResult(
-        '{"beat":"壓低聲音說了一句","inner":"","addressed":"柳生春","audience":"addressed"}',
+        '{"beat":"壓低聲音說了一句","inner":"","addressed":"柳安春","audience":"addressed"}',
         '蘇映雪',
     );
     assert.equal(aside.audience, 'addressed');
@@ -357,6 +359,44 @@ test('beat perception is structured and fails closed without an addressee', () =
         '蘇映雪',
     );
     assert.equal(malformed.audience, 'scene', 'addressed-only needs a real addressee');
+});
+
+test('beat parser normalizes model prose to Traditional before canon', () => {
+    const beat = parseBeatResult(
+        '{"beat":"指尖划过那张侧影，直视苏映雪。","inner":"这纸要按我的规矩印。","addressed":"苏映雪","audience":"scene","objectEffects":[]}',
+        '柳安春',
+    );
+    assert.equal(beat.beat, '指尖劃過那張側影，直視蘇映雪。');
+    assert.equal(beat.inner, '這紙要按我的規矩印。');
+    assert.equal(beat.addressed, '蘇映雪');
+});
+
+test('beat object effects parse into a structured physical proposal', () => {
+    const result = parseBeatResult(
+        '{"beat":"把懷錶塞進戲靴筒。","inner":"","objectEffects":[{"objectId":"stopped-watch","container":"戲靴筒","visibility":"hidden"}]}',
+        '唐桂蘭',
+    );
+    assert.deepEqual(result.objectEffects, [{
+        objectId: 'stopped-watch',
+        visibility: 'hidden',
+        container: '戲靴筒',
+        carried: undefined,
+        carrierName: undefined,
+        toScene: undefined,
+        state: undefined,
+    }]);
+
+    const carried = parseBeatResult(
+        '{"beat":"把懷錶揣進自己懷中。","inner":"","objectEffects":[{"objectId":"stopped-watch","container":"唐桂蘭懷中","carried":true,"visibility":"hidden"}]}',
+        '唐桂蘭',
+    );
+    assert.equal(carried.objectEffects?.[0].carried, true);
+
+    const handed = parseBeatResult(
+        '{"beat":"把懷錶交給沈雪笙。","inner":"","objectEffects":[{"objectId":"stopped-watch","carrierName":"沈雪笙"}]}',
+        '方競西',
+    );
+    assert.equal(handed.objectEffects?.[0].carrierName, '沈雪笙');
 });
 
 test('scene reviewer cannot rewrite frozen dialogue or replace the objective action', () => {
@@ -423,9 +463,9 @@ test('gender-aware weave: the weave receives the participants 身/sex (castBodie
             return super.weaveTickChapter(input);
         }
     }
-    const c = buildCast(['蘇映雪', '柳生春', '金鳳']);
+    const c = buildCast(['蘇映雪', '柳安春', '金鳳']);
     const su = c.find((x) => x.id === '蘇映雪')!;
-    const liu = c.find((x) => x.id === '柳生春')!;
+    const liu = c.find((x) => x.id === '柳安春')!;
     const jin = c.find((x) => x.id === '金鳳')!;
     liu.venue = '後台小廂房';
     su.venue = '後台小廂房';
@@ -438,14 +478,14 @@ test('gender-aware weave: the weave receives the participants 身/sex (castBodie
         assert.ok(row, `${p.name} is in the fed castBodies`);
         assert.equal(row!.bodyFact, p.bodyFact, `${p.name}'s 身 is the real data`);
     }
-    // 柳生春 is a 坤生 (a woman) → her 身 phrase carries 女 so the weaver never writes 男人.
-    assert.ok(bodies.find((b) => b.name === '柳生春')!.bodyFact!.includes('女'), '坤生 fed as 女 (guards against 男人)');
+    // 柳安春 is a 坤生 (a woman) → her 身 phrase carries 女 so the weaver never writes 男人.
+    assert.ok(bodies.find((b) => b.name === '柳安春')!.bodyFact!.includes('女'), '坤生 fed as 女 (guards against 男人)');
 });
 
 test('break-in aftermath: a discovery on an OCCUPIED (still-abed) pair carries the continuation flag', async () => {
-    const c = buildCast(['白韻秋', '柳生春', '金鳳']);
+    const c = buildCast(['白韻秋', '柳安春', '金鳳']);
     const bai = c.find((x) => x.id === '白韻秋')!;
-    const liu = c.find((x) => x.id === '柳生春')!;
+    const liu = c.find((x) => x.id === '柳安春')!;
     const jin = c.find((x) => x.id === '金鳳')!;
     liu.venue = '後台小廂房';
     // The pair were just spent by a deep 床戲 (occupiedRestOfDay) — the exact predicate the
@@ -456,9 +496,9 @@ test('break-in aftermath: a discovery on an OCCUPIED (still-abed) pair carries t
     assert.equal(scene.discovery, true, 'a 修羅場 rendered');
     assert.equal(scene.aftermath, true, 'the break-in is flagged as bursting in on the still-warm aftermath');
     // A fresh (non-occupied) pair does NOT carry the aftermath flag.
-    const c2 = buildCast(['白韻秋', '柳生春', '金鳳']);
+    const c2 = buildCast(['白韻秋', '柳安春', '金鳳']);
     const bai2 = c2.find((x) => x.id === '白韻秋')!;
-    const liu2 = c2.find((x) => x.id === '柳生春')!;
+    const liu2 = c2.find((x) => x.id === '柳安春')!;
     const jin2 = c2.find((x) => x.id === '金鳳')!;
     liu2.venue = '後台小廂房';
     const fresh = liu2.occupiedRestOfDay || jin2.occupiedRestOfDay;
@@ -528,7 +568,7 @@ test('床戲 beat cap: the consummate maxTurns default is > 8 (a bed scene can d
     // A consummate scene with a non-leaving agent runs the FULL cap of beats. The default
     // backstop (SEASON_BED_CAP unset → 32) is well past the old 8 — the close beat is the
     // narrative exit; the cap is only a runaway cost fuse.
-    const [liu, jin] = buildCast(['柳生春', '金鳳']);
+    const [liu, jin] = buildCast(['柳安春', '金鳳']);
     const cm = (c: Char, other: Char): SceneLoopCastMember => ({
         characterId: c.id, name: c.name, persona: c.persona, memories: [],
         innerSecret: c.secret, role: c.role, bodyFact: c.bodyFact,
@@ -553,7 +593,7 @@ test('perception 耳: an ADJACENT notable scene leaks a HEAR signal; same-venue 
     const bai = cast.find((c) => c.id === '白韻秋')!; // the jealous third
     // 柳×金鳳 in an intimate 床 scene at 後台小廂房 (cluster 戲園).
     const intimate: PerceivedScene = {
-        venue: '後台小廂房', participantIds: ['柳生春', '金鳳'],
+        venue: '後台小廂房', participantIds: ['柳安春', '金鳳'],
         consummate: true, isPrivate: true, intimacyGate: false,
     };
     const empty: TraceStore = new Map();
@@ -561,7 +601,7 @@ test('perception 耳: an ADJACENT notable scene leaks a HEAR signal; same-venue 
     bai.venue = '後台妝閣';
     const adj = computePerception(bai, cast, [intimate], empty, '深宵');
     assert.ok(adj.hear && adj.hear.length > 0, 'an adjacent notable scene leaks a muffled 耳 signal');
-    assert.ok(!adj.hear!.includes('柳生春') && !adj.hear!.includes('金鳳'), 'the 耳 signal NEVER names who (leaky by design)');
+    assert.ok(!adj.hear!.includes('柳安春') && !adj.hear!.includes('金鳳'), 'the 耳 signal NEVER names who (leaky by design)');
     // SAME ROOM: you would be present, not "hearing" → no 耳 leak.
     bai.venue = '後台小廂房';
     assert.equal(computePerception(bai, cast, [intimate], empty, '深宵').hear, undefined, 'same-venue → no hear (you are present)');
@@ -581,7 +621,7 @@ test('perception 鼻: a fresh TRACE at your venue yields a SMELL line (but not t
     const jin = cast.find((c) => c.id === '金鳳')!;
     const traces: TraceStore = new Map();
     // 金鳳 left an intimate trace at 後台小廂房 (a scene 白 was NOT in).
-    leaveTrace(traces, { venue: '後台小廂房', participantIds: ['金鳳', '柳生春'], consummate: true, isPrivate: true, intimacyGate: false }, 5);
+    leaveTrace(traces, { venue: '後台小廂房', participantIds: ['金鳳', '柳安春'], consummate: true, isPrivate: true, intimacyGate: false }, 5);
     bai.venue = '後台小廂房';
     const perc = computePerception(bai, cast, [], traces, '深宵');
     assert.ok(perc.smell && perc.smell.length > 0, 'a fresh trace at your venue is SMELLED by a newcomer');
@@ -592,7 +632,7 @@ test('perception 鼻: a fresh TRACE at your venue yields a SMELL line (but not t
 
 test('perception 眼: sight lists co-present others in your OWN room only', () => {
     const cast = buildCast(SMALL);
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     const su = cast.find((c) => c.id === '蘇映雪')!;
     const jin = cast.find((c) => c.id === '金鳳')!;
     liu.venue = '雲錦台戲台';
@@ -607,10 +647,10 @@ test('discovery-by-hearing: adjacent + heard + romantic stake is the NEW break-i
     const cast = buildCast(SMALL);
     const bai = cast.find((c) => c.id === '白韻秋')!; // 癡-layer want aimed at 柳 → stake
     const lian = cast.find((c) => c.id === '連翹')!; // wants 名, not 柳 → no stake
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     const jin = cast.find((c) => c.id === '金鳳')!;
     const intimate: PerceivedScene = {
-        venue: '後台小廂房', participantIds: ['柳生春', '金鳳'],
+        venue: '後台小廂房', participantIds: ['柳安春', '金鳳'],
         consummate: true, isPrivate: true, intimacyGate: false,
     };
     // The exact conjunction the round's d.5 pass uses for the adjacent-hear path.
@@ -624,7 +664,7 @@ test('discovery-by-hearing: adjacent + heard + romantic stake is the NEW break-i
     liu.venue = '後台小廂房';
     return renderDiscovery(bai, liu, jin, makeClock(6, 5), new FakeSceneAgent(), new LocalRecall(), true).then((scene) => {
         assert.equal(scene.discovery, true, 'the heard-and-rushed break-in renders a 修羅場');
-        assert.deepEqual(scene.participantIds, ['白韻秋', '柳生春', '金鳳']);
+        assert.deepEqual(scene.participantIds, ['白韻秋', '柳安春', '金鳳']);
     });
 });
 
@@ -679,7 +719,7 @@ test('sleep has teeth: sustained wakefulness drains health to death; sleep recov
 // ── SUBSYSTEM A — SEASON PERSISTENCE (snapshot / restore → continue a week) ────────
 test('persistence round-trip: snapshot → restore reproduces mutated view + retired want + health/money', async () => {
     const cast = buildCast(SMALL);
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     // MUTATE a live overlay: overwrite a relationship view, retire a want, change health/money/hunger.
     liu.relationshipViews.set('金鳳', '那樁舊帳當面了斷了，如今心裡乾淨了');
     const retireMe = liu.wants.find((w) => !w.retired)!;
@@ -694,13 +734,13 @@ test('persistence round-trip: snapshot → restore reproduces mutated view + ret
 
     // Restore onto a FRESH seeded cast.
     const fresh = buildCast(SMALL);
-    const freshLiu = fresh.find((c) => c.id === '柳生春')!;
+    const freshLiu = fresh.find((c) => c.id === '柳安春')!;
     // sanity: before restore the fresh cast holds SEED values, not the mutations.
     assert.notEqual(freshLiu.relationshipViews.get('金鳳'), liu.relationshipViews.get('金鳳'), 'fresh seed differs pre-restore');
     assert.equal(freshLiu.health, 1, 'fresh seed health = 1');
 
     const restored = restoreCast(fresh, snap);
-    assert.ok(restored.includes('柳生春'), 'restore reports 柳生春 as restored');
+    assert.ok(restored.includes('柳安春'), 'restore reports 柳安春 as restored');
     assert.equal(freshLiu.relationshipViews.get('金鳳'), '那樁舊帳當面了斷了，如今心裡乾淨了', 'mutated view round-trips');
     const freshRetired = freshLiu.wants.find((w) => w.id === retireMe.id)!;
     assert.equal(freshRetired.retired, true, 'the retired want stays retired after round-trip');
@@ -727,7 +767,7 @@ test('persistence: a character ABSENT from the snapshot keeps its seed defaults'
 test("body veto: a collapsed (危) character takes no active turn at any hour — the lead can't be loved to death", () => {
     const cast = buildCast(SMALL);
     const byName = new Map(cast.map((c) => [c.name, c]));
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     liu.health = 0.15; // ≤ dangerAt → 臥床
     const day = determineActive(cast, byName, '日午', { announced: false, line: '' }, false, false);
     assert.ok(!day.active.includes(liu), 'a 危 character is skipped even on a work 時辰 (daytime)');
@@ -742,7 +782,7 @@ test("body veto: a collapsed (危) character takes no active turn at any hour �
 // ── SUBSYSTEM C — WANT REGENERATION (a resolved arc seeds the next; no flatline) ──
 test('want-regeneration: milestone → successor, empty → world/lifecycle-driven, content → null (no artificial floor)', async () => {
     const agent = new FakeSceneAgent();
-    const base = { name: '柳生春', persona: '當紅小生', coreIdentity: [] as string[] };
+    const base = { name: '柳安春', persona: '當紅小生', coreIdentity: [] as string[] };
     // (1) a JUST-RESOLVED want seeds a successor even when no live want remains.
     const successor = await agent.regenerateWant({
         ...base,
@@ -773,36 +813,36 @@ test('want-regeneration: milestone → successor, empty → world/lifecycle-driv
 });
 
 test('want-regeneration: spawnWant adds one want under the ≤4-live budget, sets high resistance for a named romantic want, rejects the 5th', () => {
-    const [liu] = buildCast(['柳生春', '金鳳']);
+    const [liu] = buildCast(['柳安春', '金鳳']);
     liu.wants.forEach((w) => (w.retired = true)); // start from an emptied ledger
     const events: Parameters<typeof spawnWant>[4] = [];
-    const ok = spawnWant(liu.wants, '柳生春', { desc: '我如今只想守住金鳳', layer: '情' }, 10, events, ['柳生春', '金鳳']);
+    const ok = spawnWant(liu.wants, '柳安春', { desc: '我如今只想守住金鳳', layer: '情' }, 10, events, ['柳安春', '金鳳']);
     assert.equal(ok, true, 'spawns onto an emptied ledger');
-    const w = liu.wants.find((x) => !x.retired && x.characterId === '柳生春')!;
+    const w = liu.wants.find((x) => !x.retired && x.characterId === '柳安春')!;
     assert.equal(w.target, '金鳳', 'derives the target from the named other');
     assert.equal(w.resistance, 8, 'a named romantic want gets high resistance so it cannot resolve in one beat');
-    const liveCount = () => liu.wants.filter((x) => !x.retired && x.characterId === '柳生春').length;
-    while (liveCount() < 4) spawnWant(liu.wants, '柳生春', { desc: `雜念${liu.wants.length}`, layer: '世' }, 10, events, []);
+    const liveCount = () => liu.wants.filter((x) => !x.retired && x.characterId === '柳安春').length;
+    while (liveCount() < 4) spawnWant(liu.wants, '柳安春', { desc: `雜念${liu.wants.length}`, layer: '世' }, 10, events, []);
     const before = liveCount();
-    const rejected = spawnWant(liu.wants, '柳生春', { desc: '第五個念頭壓不進來', layer: '世' }, 10, events, []);
+    const rejected = spawnWant(liu.wants, '柳安春', { desc: '第五個念頭壓不進來', layer: '世' }, 10, events, []);
     assert.equal(rejected, false, 'rejects a 5th live want (budget ≥ 4)');
     assert.equal(liveCount(), before, 'no want is added once the budget is full');
 });
 
 test('lifecycle: seasonsLived seeds at 0, carries in the snapshot, and increments +1 on each restore (finitude)', () => {
     const cast = buildCast(SMALL);
-    const liu = cast.find((c) => c.id === '柳生春')!;
+    const liu = cast.find((c) => c.id === '柳安春')!;
     assert.equal(liu.seasonsLived, 0, 'a fresh seed has lived 0 seasons');
     liu.seasonsLived = 2; // pretend two weeks already lived
     const snap = snapshotCast(cast, 0);
     const fresh = buildCast(SMALL);
     restoreCast(fresh, snap);
-    assert.equal(fresh.find((c) => c.id === '柳生春')!.seasonsLived, 3, 'restore bumps seasonsLived +1 (another year passed)');
+    assert.equal(fresh.find((c) => c.id === '柳安春')!.seasonsLived, 3, 'restore bumps seasonsLived +1 (another year passed)');
     // an OLD snapshot lacking the field is treated as 0 → restored to 1.
-    delete (snap.cast['柳生春'] as { seasonsLived?: number }).seasonsLived;
+    delete (snap.cast['柳安春'] as { seasonsLived?: number }).seasonsLived;
     const fresh2 = buildCast(SMALL);
     restoreCast(fresh2, snap);
-    assert.equal(fresh2.find((c) => c.id === '柳生春')!.seasonsLived, 1, 'absent seasonsLived is treated as 0 → restored to 1');
+    assert.equal(fresh2.find((c) => c.id === '柳安春')!.seasonsLived, 1, 'absent seasonsLived is treated as 0 → restored to 1');
 });
 
 // ── SUBSYSTEM B — STREET / FOOD / MONEY (daily life + a small economy) ────────────
@@ -862,14 +902,14 @@ test('economy in a full fake season: meals get eaten and money stays non-negativ
 /* ── metabolism closed loop (eat-in-passing / starvation teeth / wages) ── */
 
 test('metabolism: starving (hunger ≥ 0.8) drains health faster awake and halves sleep recovery', () => {
-    const [fed, starved] = buildCast(['柳生春', '江聞鶴']);
+    const [fed, starved] = buildCast(['柳安春', '江聞鶴']);
     fed.hunger = 0;
     starved.hunger = 1;
     fed.health = starved.health = 0.8;
     applyRoundHealth(fed, true, 0);
     applyRoundHealth(starved, true, 0);
     assert.ok(starved.health < fed.health, 'awake starving drains extra health');
-    const [fed2, starved2] = buildCast(['柳生春', '江聞鶴']);
+    const [fed2, starved2] = buildCast(['柳安春', '江聞鶴']);
     fed2.hunger = 0;
     starved2.hunger = 1;
     fed2.health = starved2.health = 0.5;
@@ -894,7 +934,7 @@ test('metabolism in a full fake season: hunger no longer saturates for the whole
 
 test('metabolism invariant: every occupation\'s rhythm is sustainable on a no-scene day (drama, not the timetable, causes decline)', () => {
     const PARTS = ['清晨', '日午', '晡時', '黃昏', '入夜', '深宵'] as const;
-    const sample = buildCast(['柳生春', '金鳳', '白韻秋', '沈雪笙']);
+    const sample = buildCast(['柳安春', '金鳳', '白韻秋', '沈雪笙']);
     for (const reh of [false, true]) {
         for (const c of sample) {
             let awake = 0;
@@ -944,12 +984,12 @@ test('orthogonal threads: regen sampling picks the memories FURTHEST from curren
 });
 
 test('season restore rebases want clocks: last season\'s resolutions are NOT "just resolved" tonight', () => {
-    const [a] = buildCast(['柳生春']);
+    const [a] = buildCast(['柳安春']);
     a.wants[0].retired = true;
     a.wants[0].resolvedTick = 41; // resolved on the prior season's last day
     a.wants[0].bornTick = 2;
     const snap = snapshotCast([a], 42);
-    const [b] = buildCast(['柳生春']);
+    const [b] = buildCast(['柳安春']);
     restoreCast([b], snap);
     const w = b.wants.find((x) => x.retired)!;
     assert.equal(w.resolvedTick, -1, 'resolvedTick rebased below the new season clock');
@@ -962,7 +1002,7 @@ test('season restore rebases want clocks: last season\'s resolutions are NOT "ju
 test('milestone promotion: a mutually-avowed pair becomes established in play and persists across seasons', async () => {
     // Fake judge promotes only when BOTH views carry an explicit mutual marker.
     const { cast, result } = await (async () => {
-        const c = buildCast(['柳生春', '蘇映雪']);
+        const c = buildCast(['柳安春', '蘇映雪']);
         const [liu, su] = c;
         liu.relationshipViews.set(su.id, '這半步我不退了，我們已是彼此交了心的人');
         su.relationshipViews.set(liu.id, '她不退了，我也認了——相許');
@@ -989,7 +1029,7 @@ test('the actor\'s own ending: a close beat wraps the scene before the cap', asy
         },
         judgeWantResolved: async () => ({ resolved: false }),
     };
-    const [liu, jin] = buildCast(['柳生春', '金鳳']);
+    const [liu, jin] = buildCast(['柳安春', '金鳳']);
     const loop = await runSceneLoop({
         sceneId: 'close-test',
         sceneName: '後台小廂房',
@@ -1008,6 +1048,81 @@ test('the actor\'s own ending: a close beat wraps the scene before the cap', asy
     assert.equal(loop.beats.length, 2, 'the scene ended on the actor\'s close, not the cap');
 });
 
+test('scene beats cannot create a second movement channel after decideMove committed the venue', async () => {
+    let repairs = 0;
+    let committed = 0;
+    const scripted = {
+        actBeat: async () => ({
+            beat: '轉身朝柳安春住處走去。',
+            inner: '我要當面問她。',
+            move: '柳安春住處',
+        }),
+        replanBeat: async (input: { physicalRejection?: string }) => {
+            repairs += 1;
+            assert.match(input.physicalRejection ?? '', /移動階段提交/);
+            return {
+                beat: '在街沿停住腳，將要問的話先壓回心底。',
+                inner: '下一刻再走。',
+                close: true,
+            };
+        },
+        judgeWantResolved: async () => ({ resolved: false }),
+    };
+    const [lian] = buildCast(['連翹']);
+    const loop = await runSceneLoop({
+        sceneId: 'street',
+        sceneName: '戲園前街',
+        isPrivate: false,
+        clock: '第2日·日午',
+        cast: [{ characterId: lian.id, name: lian.name, persona: lian.persona }],
+        wants: [...lian.wants],
+        tick: 7,
+        maxTurns: 1,
+        agent: scripted as never,
+        onBeat: () => { committed += 1; },
+    });
+    assert.equal(repairs, 1, 'legacy free-text movement is replanned statelessly');
+    assert.equal(committed, 1, 'only the repaired in-place beat reaches canon');
+    assert.equal(loop.beats[0]?.text, '在街沿停住腳，將要問的話先壓回心底。');
+    assert.deepEqual(loop.moves, [], 'scene-loop movement compatibility field stays empty');
+});
+
+test('a stale session vocative is replanned before it reaches canon', async () => {
+    let repairs = 0;
+    const scripted = {
+        actBeat: async () => ({
+            beat: '迎上江聞鶴的眼：『阿喜，這八個字我一個不讓。』',
+            inner: '不能退。',
+            addressed: '江聞鶴',
+        }),
+        replanBeat: async (input: { physicalRejection?: string }) => {
+            repairs += 1;
+            assert.match(input.physicalRejection ?? '', /上一場的對話對象/);
+            return {
+                beat: '迎上江聞鶴的眼：『江老闆，這八個字我一個不讓。』',
+                inner: '不能退。',
+                addressed: '江聞鶴',
+                close: true,
+            };
+        },
+        judgeWantResolved: async () => ({ resolved: false }),
+    };
+    const [fang, jiang] = buildCast(['方競西', '江聞鶴']);
+    const loop = await runSceneLoop({
+        sceneId: 'newsroom', sceneName: '報館茶室', isPrivate: false, clock: '深宵',
+        cast: [
+            { characterId: fang.id, name: fang.name, persona: fang.persona },
+            { characterId: jiang.id, name: jiang.name, persona: jiang.persona },
+        ],
+        castNames: ['方競西', '江聞鶴', '何阿喜'],
+        wants: [...fang.wants, ...jiang.wants], tick: 17, maxTurns: 1,
+        agent: scripted as never,
+    });
+    assert.equal(repairs, 1);
+    assert.match(loop.beats[0]?.text ?? '', /江老闆/);
+    assert.doesNotMatch(loop.beats[0]?.text ?? '', /阿喜/);
+});
+
 test('intimacy is negotiated in-scene: advance→accept opens the register; decline is honoured', async () => {
     const mk = (tags: Array<'advance' | 'accept' | 'decline' | undefined>) => {
         let i = -1;
@@ -1020,7 +1135,7 @@ test('intimacy is negotiated in-scene: advance→accept opens the register; decl
             judgeWantResolved: async () => ({ resolved: false }),
         };
     };
-    const [liu, su] = buildCast(['柳生春', '蘇映雪']);
+    const [liu, su] = buildCast(['柳安春', '蘇映雪']);
     const base = {
         sceneId: 'nego',
         sceneName: '二樓書寓',

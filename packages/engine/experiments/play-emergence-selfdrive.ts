@@ -13,7 +13,7 @@
  * SETUP (decoupling discipline, §2.43 "never write the answer")
  * ------------------------------------------------------------
  * - 5 troupe members (real persona/secret/first-3 memories from spring-snow.json):
- *   沈雪笙(班主) 柳生春(小生) 蘇映雪(花旦) 江聞鶴(小生) 連翹(刀馬旦).
+ *   沈雪笙(班主) 柳安春(小生) 蘇映雪(花旦) 江聞鶴(小生) 連翹(刀馬旦).
  * - Genesis wants derived once per char via runner deriveGenesisWants (WITH secret
  *   + a sagaPremise summarizing the season situation), capped 3 each.
  * - A season WORLD-FACT (prologue essence + the deadline line) is injected VERBATIM
@@ -84,7 +84,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STORY_PATH = path.resolve(__dirname, '../../cli/scripts/stories/spring-snow.json');
 const story = JSON.parse(fs.readFileSync(STORY_PATH, 'utf8'));
 
-const CAST_NAMES = ['沈雪笙', '柳生春', '蘇映雪', '江聞鶴', '連翹'];
+const CAST_NAMES = ['沈雪笙', '柳安春', '蘇映雪', '江聞鶴', '連翹'];
 type Persona = {
     name: string;
     role: string;

@@ -24,7 +24,7 @@
  *   sleep()               — end the day (at home)
  *
  * THE POINT: characters START AT THEIR OWN PLACES. Non-troupe 金鳳 (歌女) and
- * 白韻秋 (千金) do NOT loiter at the 戲台; their WANTS point at 柳生春 so any
+ * 白韻秋 (千金) do NOT loiter at the 戲台; their WANTS point at 柳安春 so any
  * intersection with his world is MOTIVATED (柳 goes to 會樂里 / 白韻秋 summons him),
  * never scenery-filling. The pipeline piled 49/49 scenes at the 戲台 and flipped
  * the pivotal 〔了斷〕 in a LOG with no scene; this loop must spread venues,
@@ -99,7 +99,7 @@ interface Venue {
 }
 const VENUES: Venue[] = [
     { name: '雲錦台戲台', kind: 'work', hint: '雲錦班的戲台，排戲、登台都在這' },
-    { name: '後台小廂房', kind: 'home', hint: '柳生春在戲台後頭的住處' },
+    { name: '後台小廂房', kind: 'home', hint: '柳安春在戲台後頭的住處' },
     { name: '會樂里長三堂子花廳', kind: 'home', hint: '金鳳做歌女、也起居的長三堂子' },
     { name: '白公館', kind: 'home', hint: '白韻秋娘家，白府千金的宅邸' },
     { name: '包廂茶座', kind: 'public', hint: '戲園子邊上的雅座，白韻秋常來聽戲的地方' },
@@ -164,7 +164,7 @@ function buildCast(): Char[] {
 
     return [
         mk(
-            '柳生春', '柳生春', '當家老生', true, '後台小廂房',
+            '柳安春', '柳安春', '當家老生', true, '後台小廂房',
             '雲錦班的當家老生，戲比天大，台上端方雍容，台下卻是個不肯回頭認舊帳的人。嗓子壓得住場，心事壓得更死。',
             '當年在會樂里，他答應過金鳳一句話，後來一走了之，這些年只當沒發生。',
             [
@@ -172,7 +172,7 @@ function buildCast(): Char[] {
                 { text: '金鳳住在會樂里長三堂子花廳，這些年他繞著會樂里走，連那條巷子口都不敢站。', importance: 8 },
                 { text: '師父臨終攥著他的手說「戲子先做人，欠人的總要還」，他應了，卻一直沒還金鳳那句。', importance: 7 },
             ],
-            ['我是柳生春，雲錦班的當家老生，台上不能塌。', '師父教過我：戲子先做人，欠人的總要還。'],
+            ['我是柳安春，雲錦班的當家老生，台上不能塌。', '師父教過我：戲子先做人，欠人的總要還。'],
             [['金鳳', '會樂里的舊相好，我欠她一句了斷，這些年不敢面對'], ['蘇映雪', '同班的旦角，戲搭子，她待我似有若無有股熱勁']],
             [
                 { layer: '情', desc: '欠金鳳一句了斷，這些年一直沒給她個交代', target: '金鳳', weight: 0.82, sat: 0.24, resistance: 3 },
@@ -182,47 +182,47 @@ function buildCast(): Char[] {
         mk(
             '金鳳', '金鳳', '長三歌女', false, '會樂里長三堂子花廳',
             '會樂里長三堂子的紅歌女，一副好嗓，脾氣也硬。人前笑語迎客，人後只認一個當年沒回來的人。',
-            '她這些年攢下的體己，本是替柳生春留的贖身錢，誰也沒說。',
+            '她這些年攢下的體己，本是替柳安春留的贖身錢，誰也沒說。',
             [
-                { text: '那年冬天她替柳生春擋了債主，他說「回來給你個交代」，她信了，就在會樂里等，一等就是這些年。', importance: 9 },
+                { text: '那年冬天她替柳安春擋了債主，他說「回來給你個交代」，她信了，就在會樂里等，一等就是這些年。', importance: 9 },
                 { text: '客人裡也有捧她的，要替她贖身，她都推了，只說「我這身子有主了」，其實那個「主」早不見人影。', importance: 8 },
-                { text: '她攢的體己藏在花廳梳妝匣底層，本是想著哪天柳生春回來，能有個乾淨的了斷。', importance: 7 },
+                { text: '她攢的體己藏在花廳梳妝匣底層，本是想著哪天柳安春回來，能有個乾淨的了斷。', importance: 7 },
             ],
             ['我是金鳳，會樂里的歌女，人硬心也硬，就這一件事軟。'],
-            [['柳生春', '當年說要回來給我交代的人，我在會樂里等他一句話']],
+            [['柳安春', '當年說要回來給我交代的人，我在會樂里等他一句話']],
             [
-                { layer: '情', desc: '要柳生春給我一句話，當年的事總得當面了斷', target: '柳生春', weight: 0.86, sat: 0.2, resistance: 3 },
+                { layer: '情', desc: '要柳安春給我一句話，當年的事總得當面了斷', target: '柳安春', weight: 0.86, sat: 0.2, resistance: 3 },
                 { layer: '生', desc: '把這個月的堂會唱下來，撐住花廳的門面', weight: 0.5, sat: 0.5, resistance: 5 },
             ],
         ),
         mk(
             '白韻秋', '白韻秋', '白府千金', false, '白公館',
-            '白公館的獨生千金，養尊處優，聽戲聽出了痴，一顆心全撲在雲錦班的柳生春身上，想的是捧他、近他。',
+            '白公館的獨生千金，養尊處優，聽戲聽出了痴，一顆心全撲在雲錦班的柳安春身上，想的是捧他、近他。',
             '她瞞著家裡挪用了自己的嫁妝銀子，替雲錦班的新戲砸包銀捧場。',
             [
-                { text: '頭回在包廂茶座聽柳生春唱《斷橋》，她聽得落了淚，從此逢戲必到，戲牌上有他的名字就包廂全訂下。', importance: 8 },
-                { text: '她差人給後台送過好幾回東西，柳生春都客客氣氣退了，越退她越上心。', importance: 7 },
-                { text: '她瞞著爹娘動了嫁妝銀子，想著替雲錦班的新戲砸個彩頭，好教柳生春記著她的好。', importance: 7 },
+                { text: '頭回在包廂茶座聽柳安春唱《斷橋》，她聽得落了淚，從此逢戲必到，戲牌上有他的名字就包廂全訂下。', importance: 8 },
+                { text: '她差人給後台送過好幾回東西，柳安春都客客氣氣退了，越退她越上心。', importance: 7 },
+                { text: '她瞞著爹娘動了嫁妝銀子，想著替雲錦班的新戲砸個彩頭，好教柳安春記著她的好。', importance: 7 },
             ],
             ['我是白韻秋，白府千金，認準的事九頭牛也拉不回。'],
-            [['柳生春', '雲錦班的角兒，我非捧他不可，想法子親近他']],
+            [['柳安春', '雲錦班的角兒，我非捧他不可，想法子親近他']],
             [
-                { layer: '癡', desc: '想法子親近柳生春，捧他捧成名角', target: '柳生春', weight: 0.72, sat: 0.3, resistance: 4 },
+                { layer: '癡', desc: '想法子親近柳安春，捧他捧成名角', target: '柳安春', weight: 0.72, sat: 0.3, resistance: 4 },
             ],
         ),
         mk(
             '蘇映雪', '蘇映雪', '當家青衣', true, '二樓書寓',
-            '雲錦班的當家青衣，才情高，心氣也高，戲裡戲外都想和柳生春唱一齣對兒戲，那點熱勁自己也不肯認。',
-            '她私下改了新戲的本子，把旦角的戲份往柳生春的老生身上靠，好多幾場對戲。',
+            '雲錦班的當家青衣，才情高，心氣也高，戲裡戲外都想和柳安春唱一齣對兒戲，那點熱勁自己也不肯認。',
+            '她私下改了新戲的本子，把旦角的戲份往柳安春的老生身上靠，好多幾場對戲。',
             [
-                { text: '和柳生春合過《斷橋》，那一場水袖對眼神，台下叫好聲裡她心跳得厲害，散戲後誰也沒提。', importance: 8 },
+                { text: '和柳安春合過《斷橋》，那一場水袖對眼神，台下叫好聲裡她心跳得厲害，散戲後誰也沒提。', importance: 8 },
                 { text: '她在書寓改新戲的本子，悄悄把旦角和老生的對戲加了兩場，自己都覺得臉熱。', importance: 6 },
             ],
             ['我是蘇映雪，雲錦班的青衣，戲要好，人也要爭一口氣。'],
-            [['柳生春', '同班的老生，最好的戲搭子，我那點心思他大約沒察覺']],
+            [['柳安春', '同班的老生，最好的戲搭子，我那點心思他大約沒察覺']],
             [
                 { layer: '戲', desc: '去雲錦台戲台把新戲的旦角戲排出彩，掙一個立得住的角', weight: 0.7, sat: 0.34, resistance: 4 },
-                { layer: '情', desc: '私心想跟柳生春多排幾場對兒戲', target: '柳生春', weight: 0.56, sat: 0.4, resistance: 5 },
+                { layer: '情', desc: '私心想跟柳安春多排幾場對兒戲', target: '柳安春', weight: 0.56, sat: 0.4, resistance: 5 },
             ],
         ),
         mk(
@@ -234,7 +234,7 @@ function buildCast(): Char[] {
                 { text: '班裡都當他只是個拉琴的，沒人知道那幾齣叫座的戲的腔是他悄悄編的。', importance: 6 },
             ],
             ['我是沈雪笙，雲錦班的琴師，戲的骨頭在腔裡。'],
-            [['柳生春', '班裡的角兒，他的嗓子配我的腔，戲才立得住']],
+            [['柳安春', '班裡的角兒，他的嗓子配我的腔，戲才立得住']],
             [
                 { layer: '志', desc: '去雲錦台戲台把新戲的新腔跟班子立起來', weight: 0.66, sat: 0.38, resistance: 4 },
                 { layer: '藝', desc: '夜裡在沈宅把那段新腔的尾音磨順', weight: 0.5, sat: 0.46, resistance: 5 },
@@ -769,11 +769,11 @@ function venueDist(m: Map<string, number>): string {
         .join('  ·  ');
 }
 
-/** The 了斷 = the 柳生春×金鳳 reckoning, wherever it renders (either travelled). */
+/** The 了斷 = the 柳安春×金鳳 reckoning, wherever it renders (either travelled). */
 function findLiaoduanScene(scenes: SceneRecord[]): SceneRecord | null {
     return (
         scenes.find(
-            (s) => s.participants.includes('柳生春') && s.participants.includes('金鳳'),
+            (s) => s.participants.includes('柳安春') && s.participants.includes('金鳳'),
         ) ?? null
     );
 }
@@ -804,7 +804,7 @@ function printCounters(
     L('');
     L('── 2) MOTIVATED TRAVEL + 了斷 AS A RENDERED SCENE ───────────────────────────');
     const liuToHui = turns
-        .filter((t) => t.char === '柳生春')
+        .filter((t) => t.char === '柳安春')
         .flatMap((t) => t.steps.filter((s) => s.tool === 'move'))
         .some((s) => s.args.includes('會樂里'));
     const jinToLiu = turns
@@ -812,7 +812,7 @@ function printCounters(
         .flatMap((t) => t.steps.filter((s) => s.tool === 'move'))
         .some((s) => s.args.includes('後台') || s.args.includes('戲台'));
     const liaoduan = findLiaoduanScene(scenes);
-    L(`柳生春 chose move → 會樂里.............. ${liuToHui ? 'YES' : 'NO'}`);
+    L(`柳安春 chose move → 會樂里.............. ${liuToHui ? 'YES' : 'NO'}`);
     L(`金鳳 chose move → 柳's world........... ${jinToLiu ? 'YES' : 'NO'}  (the reckoning can pull either way)`);
     L(`了斷 (柳×金鳳) rendered as a SCENE...... ${liaoduan ? `YES @ ${liaoduan.venue} (${liaoduan.beats.length} beats, ${liaoduan.isPrivate ? '私下' : '公開'}) — NOT a log flip` : 'NO 柳×金鳳 scene formed'}`);
     if (liaoduan) {
@@ -887,7 +887,7 @@ function writeReport(args: {
     md.push('');
     md.push('## What this replaces');
     md.push('');
-    md.push('The season harness (`experiments/season-one/harness-v3.ts`) runs a FIXED PIPELINE — perceive→plan→move→scene per tick for everyone, with mechanical `computeRehearsalRouting` (a 0.6-vs-want-weight scalar). In the real season run that produced **33/49 scenes at [雲錦台戲台], 16 at [戲台·排], ZERO at any other venue**; nights were all "快轉, 無合格私戲"; the pivotal 〔了斷〕柳生春→金鳳 was a **LOG state-flip with NO scene**.');
+    md.push('The season harness (`experiments/season-one/harness-v3.ts`) runs a FIXED PIPELINE — perceive→plan→move→scene per tick for everyone, with mechanical `computeRehearsalRouting` (a 0.6-vs-want-weight scalar). In the real season run that produced **33/49 scenes at [雲錦台戲台], 16 at [戲台·排], ZERO at any other venue**; nights were all "快轉, 無合格私戲"; the pivotal 〔了斷〕柳安春→金鳳 was a **LOG state-flip with NO scene**.');
     md.push('');
     md.push('This experiment makes each character an **AGENT**: the tick spotlights one; it PLANS (first-person, grounded in location/self-model/wants/situation/recall/who-is-present), then invokes a SEQUENCE OF TOOLS (cap 3) — `move / recall / reflect / interact / sleep`. §2.43: the plan prompt lists the tools as capabilities and asks "what do you do"; it never says go-here / reflect / settle-the-debt. Characters **start at their own places**.');
     md.push('');
@@ -906,11 +906,11 @@ function writeReport(args: {
         // Whichever of the pair travelled INTO the reckoning venue is the motivated traveller.
         const moveTurn = turns.find(
             (t) =>
-                (t.char === '柳生春' || t.char === '金鳳') &&
+                (t.char === '柳安春' || t.char === '金鳳') &&
                 t.steps.some((s) => s.tool === 'move' && s.args.includes(liaoduan.venue.slice(0, 3))),
         );
         const traveller = moveTurn?.char ?? '（其一）';
-        md.push(`The 了斷 (柳生春×金鳳 reckoning) rendered as a **${liaoduan.isPrivate ? '私下' : '公開'} scene of ${liaoduan.beats.length} beats at ${liaoduan.venue}** — NOT a log flip. The debt DROVE a character to travel: **${traveller}** chose \`move\` into the other's world, then \`interact\`.`);
+        md.push(`The 了斷 (柳安春×金鳳 reckoning) rendered as a **${liaoduan.isPrivate ? '私下' : '公開'} scene of ${liaoduan.beats.length} beats at ${liaoduan.venue}** — NOT a log flip. The debt DROVE a character to travel: **${traveller}** chose \`move\` into the other's world, then \`interact\`.`);
         md.push('');
         if (moveTurn) {
             md.push(`**${traveller}'s move-decision (verbatim plan):**`);
@@ -924,7 +924,7 @@ function writeReport(args: {
         md.push('');
         if (liaoduan.resolved.length) md.push(`Resolved: ${liaoduan.resolved.join('；')}`);
     } else {
-        md.push('No 柳生春×金鳳 reckoning scene formed this run. (See honest read below.)');
+        md.push('No 柳安春×金鳳 reckoning scene formed this run. (See honest read below.)');
     }
     md.push('');
     md.push('## 3) Autonomous night');

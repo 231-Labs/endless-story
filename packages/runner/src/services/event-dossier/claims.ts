@@ -37,7 +37,7 @@ export function buildClaimAuditPrompt(
     return [
         '你是章回卷宗的認識論編輯，不是續寫作者。你要替每個角色完成兩件事：',
         '一、寫一句只屬於此人的 lead（24–52字，以角色姓名開頭，指出這個版本真正卡住的情感或誤讀；必須使用該 POV 的具體意象，不准套模板，不准改性別）。',
-        '二、從該 POV 提煉 1–2 個主觀 claim，逐一說明它與封存客觀層的關係。系統會另加一條逐字來自客觀 beat 的「已錨定」claim，你不要代寫或重複它。',
+        '二、從該 POV 提煉 1–4 個主觀 claim，逐一說明它與封存客觀層的關係；以最少 claim 完整覆蓋全部段落。系統會另加一條逐字來自客觀 beat 的「已錨定」claim，你不要代寫或重複它。',
         '',
         '每個 claim 必須有：',
         '- text：角色實際主張了什麼，不是空泛的「這是主觀詮釋」。',
@@ -184,7 +184,7 @@ export function applyClaimAudit(
         const passageClaimIds: Record<number, string[]> = {};
         if (anchor && sourceParagraphs.length) passageClaimIds[0] = [anchor.id];
 
-        for (const item of rawClaims.slice(0, 2)) {
+        for (const item of rawClaims.slice(0, 4)) {
             if (!item || typeof item !== 'object') continue;
             const c = item as Record<string, unknown>;
             const text = typeof c.text === 'string' ? c.text.trim() : '';

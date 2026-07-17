@@ -184,7 +184,7 @@ export async function runSeasonV2(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
     const classicKey = opts.classicKey ?? 'baishe';
     const totalTicks = opts.totalTicks ?? 10;
     const ticksPerDay = opts.ticksPerDay ?? 6;
-    const castNames = opts.cast ?? ['沈雪笙', '柳生春', '蘇映雪', '金鳳', '江聞鶴', '連翹', '白韻秋'];
+    const castNames = opts.cast ?? ['沈雪笙', '柳安春', '蘇映雪', '金鳳', '江聞鶴', '連翹', '白韻秋'];
 
     // ── Build the world from the preset, restricted to the season cast ─────────
     const rawFull = loadPresetFile(presetId);
@@ -194,7 +194,7 @@ export async function runSeasonV2(deps: SeasonDeps, opts: SeasonOpts = {}): Prom
     await seedGenesisMemories(raw, world, recall);
 
     const idByName = (n: string): string => world.idByName(n) ?? n;
-    world.setEdge(idByName('白韻秋'), idByName('柳生春'), '戀慕'); // 白 comes for 柳 (box-office warmth)
+    world.setEdge(idByName('白韻秋'), idByName('柳安春'), '戀慕'); // 白 comes for 柳 (box-office warmth)
 
     const cfg = makeSeasonConfig(totalTicks, 2);
 
