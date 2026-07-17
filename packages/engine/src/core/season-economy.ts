@@ -732,6 +732,14 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
     //     seam where a live counterparty agent plugs in later.
     for (const [id, c] of Object.entries(contract.contracts)) {
         if (!c.pendingCounter) continue;
+        if (c.status !== 'offered') {
+            // the world moved first — a demand on a done deal dies unanswered
+            const voided = resolveCounter(contract, { contractId: id, accept: false, day: req.day, causeEventId });
+            if (voided.rejection) throw new Error(`economy: stale counter on ${id} failed to void: ${voided.rejection.message}`);
+            contract = voided.state;
+            publicNotices.push(`「${c.label}」已有定局，${accountLabel(contract, c.pendingCounter.byId)}那句還價不了了之。`);
+            continue;
+        }
         const policy = (data.negotiations ?? {})[id];
         const accept = !!policy && policy.acceptDemandsMatching.some((needle) => c.pendingCounter!.demand.includes(needle));
         const answered = resolveCounter(contract, {

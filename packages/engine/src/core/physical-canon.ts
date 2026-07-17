@@ -7,9 +7,11 @@ import type { WorldState, WorldObject } from '../world-state.ts';
  * where it started; treating every touch as a mutation made ordinary blocking
  * impossible. These phrases instead imply that the post-beat location,
  * container, visibility or state has changed and therefore require an effect.
+ * Perfective description of an ACCOMPLISHED state（已簽妥的契約、既封之匣）
+ * is narration of current canon, not a new mutation — hence the lookbehinds.
  */
 const DURABLE_MUTATION =
-    /拿走|帶走|拾走|撿走|收走|抽出|取出|放(?:進|入|到)|塞(?:進|入)|揣(?:進|入)|藏(?:進|入|起)|鎖(?:進|入|上)|關上|打開|掀開|挑開|揭開|啟封|拆封|抽開|拉開|扯開|撬開|拆開|剪開|解開|撕|燒|毀|拆|簽|署名|填(?:上|入|寫)|塗(?:掉|改)|交給|遞給|移到|搬到|掛上|穿上|封(?:起|上)/;
+    /拿走|帶走|拾走|撿走|收走|抽出|取出|放(?:進|入|到)|塞(?:進|入)|揣(?:進|入)|藏(?:進|入|起)|鎖(?:進|入|上)|關上|打開|掀開|挑開|揭開|啟封|拆封|抽開|拉開|扯開|撬開|拆開|剪開|解開|撕|燒|毀|拆|(?<![已既])簽|(?<![已既])署名|(?<![已既])填(?:上|入|寫)|塗(?:掉|改)|交給|遞給|移到|搬到|掛上|穿上|(?<![已既])封(?:起|上)/;
 
 /** Verbs that assert the actor can physically perceive or handle the noun.
  * Merely discussing a known off-scene object is epistemically valid and must
