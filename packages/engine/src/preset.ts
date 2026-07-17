@@ -10,8 +10,8 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { RecallPort } from './ports.ts';
+import { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
 import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-economy.ts';
 import { makeClock } from './adapters/local/clock.ts';
 import {
@@ -93,14 +93,7 @@ export interface SeasonFrame {
     economy?: SeasonEconomyFrame;
 }
 
-/** Default location of the shared story presets, relative to this module. */
-function defaultStoriesDir(): string {
-    return path.resolve(fileURLToPath(import.meta.url), '../../../cli/scripts/stories');
-}
-
-function defaultSeasonsDir(): string {
-    return path.resolve(fileURLToPath(import.meta.url), '../../../cli/scripts/seasons');
-}
+export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
 
 /** Read + parse a preset JSON. Throws loudly if the file is missing. */
 export function loadPresetFile(presetId: string, storiesDir?: string): RawPreset {
@@ -113,6 +106,13 @@ export function loadSeasonFrameFile(seasonId: string, seasonsDir?: string): Seas
     const dir = seasonsDir ?? defaultSeasonsDir();
     const file = path.join(dir, `${seasonId}.json`);
     return JSON.parse(fs.readFileSync(file, 'utf-8')) as SeasonFrame;
+}
+
+/** Load the season named by `ES_ACTIVE_SEASON`, or the explicit id. */
+export function loadSeasonFrame(seasonId?: string, seasonsDir?: string): SeasonFrame {
+    const id = seasonId ?? activeSeasonId();
+    if (!id) throw new Error('no season id: pass one or set ES_ACTIVE_SEASON');
+    return loadSeasonFrameFile(id, seasonsDir);
 }
 
 /**

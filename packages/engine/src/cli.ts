@@ -16,7 +16,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { FakeSceneAgent, FileArchive, LocalClock, LocalEconomy, LocalRecall } from './adapters/local/index.ts';
 import { auditSeasonEconomy } from './core/season-economy.ts';
-import { applySeasonFrame, createWorldFromPreset, loadSeasonFrameFile, reconcileSeasonObjects, seedRelationshipViews } from './preset.ts';
+import { applySeasonFrame, createWorldFromPreset, loadSeasonFrame, reconcileSeasonObjects, seedRelationshipViews } from './preset.ts';
+import { activePresetId, activeSeasonId, defaultLabRunDir } from './workspace-paths.ts';
 import { seedSeasonOpening } from './season-opening.ts';
 import { runTick } from './tick.ts';
 import { writeTickDossiers } from './dossier-artifact.ts';
@@ -38,7 +39,15 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-    const a: Args = { preset: 'spring-snow', ticks: 8, out: './engine-run', realLlm: false, realEmbeddings: false, relationshipFallback: false };
+    const a: Args = {
+        preset: activePresetId() ?? 'spring-snow',
+        ticks: 8,
+        out: defaultLabRunDir(),
+        season: activeSeasonId(),
+        realLlm: false,
+        realEmbeddings: false,
+        relationshipFallback: false,
+    };
     const rest = argv[0] === 'run' ? argv.slice(1) : argv;
     for (let i = 0; i < rest.length; i++) {
         const k = rest[i];
@@ -71,7 +80,7 @@ function recordPostprocessFailure(outDir: string, stage: string, tick: number, e
 async function main(): Promise<void> {
     const args = parseArgs(process.argv.slice(2));
     const stateDir = path.join(args.out, 'state');
-    const seasonFrame = args.season ? loadSeasonFrameFile(args.season) : undefined;
+    const seasonFrame = args.season ? loadSeasonFrame(args.season) : undefined;
     const transaction = new TickFilesystemTransaction(args.out);
     const recoveredTick = transaction.recoverInterrupted();
     if (recoveredTick != null) {

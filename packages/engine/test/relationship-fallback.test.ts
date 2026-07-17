@@ -12,7 +12,8 @@ import { FakeSceneAgent } from '../src/adapters/local/fake-scene-agent.ts';
 import { LocalClock } from '../src/adapters/local/clock.ts';
 import { LocalEconomy } from '../src/adapters/local/local-economy.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
-import { applySeasonFrame, buildWorldState, loadPresetFile, loadSeasonFrameFile, seedRelationshipViews } from '../src/preset.ts';
+import { buildAnchunAcceptanceFrame } from './fixtures/anchun-acceptance-frame.ts';
+import { applySeasonFrame, buildWorldState, loadPresetFile, seedRelationshipViews } from '../src/preset.ts';
 import { runTick } from '../src/tick.ts';
 import type { WorldState } from '../src/world-state.ts';
 import type { ArchivePort, EvolveSecretInput, SelfModelConsolidateInput, SelfModelConsolidateReply } from '../src/ports.ts';
@@ -26,7 +27,7 @@ function deps(agent: FakeSceneAgent) {
 
 function seasonWorld(): WorldState {
     const world = buildWorldState(loadPresetFile('spring-snow'));
-    applySeasonFrame(world, loadSeasonFrameFile('anchun-after-curtain'));
+    applySeasonFrame(world, buildAnchunAcceptanceFrame());
     return world;
 }
 

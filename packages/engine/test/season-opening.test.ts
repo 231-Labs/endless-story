@@ -5,7 +5,8 @@ import { FakeSceneAgent } from '../src/adapters/local/fake-scene-agent.ts';
 import { LocalClock, makeClock } from '../src/adapters/local/clock.ts';
 import { LocalEconomy } from '../src/adapters/local/local-economy.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
-import { applySeasonFrame, buildWorldState, loadPresetFile, loadSeasonFrameFile, reconcileSeasonObjects } from '../src/preset.ts';
+import { buildAnchunAcceptanceFrame } from './fixtures/anchun-acceptance-frame.ts';
+import { applySeasonFrame, buildWorldState, loadPresetFile, reconcileSeasonObjects } from '../src/preset.ts';
 import { buildSeasonOpeningEvent, seedSeasonOpening } from '../src/season-opening.ts';
 import { runTick } from '../src/tick.ts';
 import type { ArchiveArtifact, ArchivePort, MoveDecideInput } from '../src/ports.ts';
@@ -21,7 +22,7 @@ class SituationRecordingAgent extends FakeSceneAgent {
 
 test('season opening is one public event perceived by the full cast', () => {
     const world = buildWorldState(loadPresetFile('spring-snow'));
-    const frame = loadSeasonFrameFile('anchun-after-curtain');
+    const frame = buildAnchunAcceptanceFrame();
     const event = buildSeasonOpeningEvent(world, frame);
 
     assert.equal(event.visibility, 'public');
@@ -34,7 +35,7 @@ test('season opening is one public event perceived by the full cast', () => {
 
 test('season opening enters every recall ledger and the objective archive', async () => {
     const world = buildWorldState(loadPresetFile('spring-snow'));
-    const frame = loadSeasonFrameFile('anchun-after-curtain');
+    const frame = buildAnchunAcceptanceFrame();
     const recall = new LocalRecall();
     const artifacts: ArchiveArtifact[] = [];
     const archive: ArchivePort = { commit: async (artifact) => { artifacts.push(artifact); } };
@@ -56,7 +57,7 @@ test('season opening enters every recall ledger and the objective archive', asyn
 
 test('a scheduled deadline enters canon once and reaches movement as a current percept', async () => {
     const world = buildWorldState(loadPresetFile('spring-snow'));
-    const frame = loadSeasonFrameFile('anchun-after-curtain');
+    const frame = buildAnchunAcceptanceFrame();
     applySeasonFrame(world, frame);
     world.data.clock = makeClock(6, 17);
 
@@ -79,7 +80,7 @@ test('a scheduled deadline enters canon once and reaches movement as a current p
 
 test('resume reconciliation adds omitted objects without overwriting existing physics', () => {
     const world = buildWorldState(loadPresetFile('spring-snow'));
-    const frame = loadSeasonFrameFile('anchun-after-curtain');
+    const frame = buildAnchunAcceptanceFrame();
     applySeasonFrame(world, frame);
     const contract = world.objectById('anchun-exclusive-contract');
     assert.ok(contract);

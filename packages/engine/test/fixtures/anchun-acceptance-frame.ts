@@ -1,4 +1,8 @@
-{
+import type { SeasonFrame } from '../../src/preset.ts';
+
+/** Deterministic economy-acceptance season frame (no JSON in public repo). */
+export function buildAnchunAcceptanceFrame(): SeasonFrame {
+  return {
   "id": "anchun-after-curtain",
   "title": "柳安春，下戲以後",
   "openingScene": "後台妝閣",
@@ -350,4 +354,5 @@
       }
     ]
   }
+} as SeasonFrame;
 }

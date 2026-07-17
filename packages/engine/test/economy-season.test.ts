@@ -20,7 +20,8 @@ import { LocalClock } from '../src/adapters/local/clock.ts';
 import { LocalEconomy } from '../src/adapters/local/local-economy.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
 import { auditSeasonEconomy, economyPerceptFor, enforceContractCommandPairing, settleSeasonDay, settleTenancyMoveIns } from '../src/core/season-economy.ts';
-import { applySeasonFrame, buildWorldState, loadPresetFile, loadSeasonFrameFile } from '../src/preset.ts';
+import { buildAnchunAcceptanceFrame } from './fixtures/anchun-acceptance-frame.ts';
+import { applySeasonFrame, buildWorldState, loadPresetFile } from '../src/preset.ts';
 import { runTick, type TickReport } from '../src/tick.ts';
 import { WorldState } from '../src/world-state.ts';
 import type { ArchivePort, MoveDecideInput, MoveDecideResult } from '../src/ports.ts';
@@ -31,7 +32,7 @@ const nullArchive: ArchivePort = { commit: async () => {} };
 
 function buildSeasonWorld(): WorldState {
     const world = buildWorldState(loadPresetFile('spring-snow'));
-    applySeasonFrame(world, loadSeasonFrameFile('anchun-after-curtain'));
+    applySeasonFrame(world, buildAnchunAcceptanceFrame());
     return world;
 }
 

@@ -9,9 +9,9 @@ import {
     applySeasonFrame,
     buildWorldState,
     loadPresetFile,
-    loadSeasonFrameFile,
     seedGenesisMemories,
 } from '../src/preset.ts';
+import { buildAnchunAcceptanceFrame } from './fixtures/anchun-acceptance-frame.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
 
 test('loadPresetFile + buildWorldState assembles the spring-snow world', () => {
@@ -60,7 +60,7 @@ test('season frame adds public pressure without rewriting the shared seed', () =
     const raw = loadPresetFile('spring-snow');
     const world = buildWorldState(raw);
     const beforeCast = structuredClone(world.data.cast);
-    const frame = loadSeasonFrameFile('anchun-after-curtain');
+    const frame = buildAnchunAcceptanceFrame();
 
     applySeasonFrame(world, frame);
 

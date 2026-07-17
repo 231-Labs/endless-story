@@ -25,6 +25,9 @@ packages/web/public/chamber/ref/
 # local chapter-dump validation output (ES_CHAPTER_DUMP_DIR)
 chapters-out/
 
+# local engine runs (use ES_LAB_ROOT + lab:publish instead)
+engine-run/
+
 # Internal dev-only docs & experiments (kept on disk, never delivered)
 /internal/
 
