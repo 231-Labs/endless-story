@@ -83,6 +83,7 @@ export interface SceneLoopInput {
     tone?: string;
     /** Canon honorifics facts (identity guardrail). */
     etiquette?: string;
+    timeCharter?: string;
     /** Saga emotional stance; 'consummate' unlocks the adult beat register
      *  when (and only when) the intimacy gate opens for a beat. */
     emotionalStance?: string;
@@ -321,6 +322,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             innerSecret: actor.innerSecret,
             economyLine: actor.economyLine,
             etiquette: input.etiquette,
+            timeCharter: input.timeCharter,
             consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
             intimacyOffered: pendingAdvanceBy != null && pendingAdvanceBy !== actor.characterId,
             intimacyPossible: input.isPrivate && present.length === 2 && !registerOpen && actor.advanceReady !== false,

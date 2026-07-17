@@ -111,6 +111,17 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
     log(`── tick ${nowTick} · day ${today} · ${clockLabel}${night ? ' · 夜' : ''} ──`);
 
+    // The clock constitution, stated to every mind every beat: agents cannot
+    // budget a day they do not know the shape of (v17: both leads burned the
+    // deadline night between stage and paper because nobody told them 戲散之後
+    // 仍有兩個時辰). World facts, not direction.
+    const timeCharter = [
+        `一日六個時辰：${PARTS_OF_DAY.join('、')}；每個時辰你只有一次行動（先擇去處，再在場中言行）。`,
+        '入夜與深宵屬夜，各自歸宿或私訪。',
+        ...(w.economy?.performance ? [`黃昏【${w.economy.performance.venueSceneName}】開鑼，白日在台上排過戲夜裡才叫得動座。`] : []),
+        ...(w.economy ? ['每日深宵之末日結：工錢、食宿、帳期一併清算；契約限期之日以子夜收卷。'] : []),
+    ].join('');
+
     // 0) SCHEDULED WORLD EVENTS — machine-readable clocks enter objective canon
     // exactly once, before movement. They are percepts, never scripted choices.
     const deliveredScheduled = new Set(w.deliveredScheduledEventIds ?? []);
@@ -269,6 +280,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             role: member.role ?? '—',
             bodyFact: member.gender,
             currentSituation: [
+                timeCharter,
                 ...dueScheduledEvents
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => event.text),
@@ -394,6 +406,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             isPrivate,
             clock: clockLabel,
             etiquette: w.etiquette,
+            timeCharter,
             cast: castWithMem,
             castNames: w.cast.map((member) => member.name),
             wants,

@@ -81,6 +81,10 @@ export interface ActBeatInput {
     carried?: string[];
     /** Canon honorifics facts (identity guardrail, e.g. 蘇映雪為師姐). */
     etiquette?: string;
+    /** the world's clock constitution: parts of day, one action per part,
+     *  when the show opens and when the ledger settles — the rules an agent
+     *  needs to BUDGET a day instead of living one beat at a time. */
+    timeCharter?: string;
     /** §2.47/§2.53: the intimacy register is OPEN for this beat — either an old
      *  established pair alone at night, or this scene's own advance→accept
      *  negotiation opened it. Availability is permission, never a push. */
@@ -431,6 +435,7 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             ? `【隨身】你身上帶著：${input.carried.join('、')}。用不用、何時拿出來，由你——對景就讓它出手，不對景就讓它待在袖底，別為了提而提。`
             : '【隨身】此刻沒有已登記可拿出的私人物件；不得從口袋、袖底憑空摸出懷錶、信、相片等道具。可用眼前場景原有的公共物件，也可觸碰自己正穿著的衣物。',
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
+        input.timeCharter ? `【時辰之律】${input.timeCharter}` : '',
         // A continuation picks up a still-warm private encounter mid-moment (general;
         // keyed by caller on pair+venue+consecutive-tick). No fresh entrance, no re-lock.
         input.continuation
