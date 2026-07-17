@@ -17,8 +17,10 @@ import {
     accountRunwayDays,
     collectDue,
     conservesProduction,
+    depositExternal,
     emptyEconomy,
     expireContracts,
+    fileCounter,
     fillPartnerSlot,
     maySpend,
     offerContract,
@@ -30,6 +32,7 @@ import {
     purchase,
     readyToSettle,
     rejectContract,
+    resolveCounter,
     restoreContracts,
     restoreEconomy,
     settleContract,
@@ -116,6 +119,24 @@ export interface SeasonEconomyData {
     /** granted-but-not-yet-lived leases: lease objectId → who may move where.
      *  Cleared when the move-in actually happens. */
     tenancies?: Record<string, { characterId: string; sceneName: string }>;
+    /** the nightly show: banked rehearsal presence + box-office config. */
+    performance?: {
+        venueSceneName: string;
+        leadIds: string[];
+        minCast: number;
+        fullHouseSubunits: string;
+        boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
+        /** cast seen at the venue during 日午/晡時 — quality is earned in daylight. */
+        rehearsedToday: string[];
+    };
+    /** contractId → the proposer's authored answer policy for counter-demands.
+     *  The replaceable seam: swap for a live counterparty agent later. */
+    negotiations?: Record<string, {
+        acceptDemandsMatching: string[];
+        graceDaysOnAccept?: number;
+        acceptNote?: string;
+        refusalNote?: string;
+    }>;
     state: PersistedEconomyState;
     contracts: Record<string, PersistedEconomicContract>;
 }
@@ -339,10 +360,18 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         };
     }
 
-    // contract commands share resolution
-    const contractId = cmd.contractId ?? '';
+    // contract commands share resolution. Models routinely hand back the
+    // PAPER's object id instead of the ledger id (they read it off the scene's
+    // object list) — accept the obvious alias instead of dying on it.
+    let contractId = cmd.contractId ?? '';
+    if (!contract.contracts[contractId]) {
+        const byObject = Object.entries(data.contractObjectIds).find(([, objectId]) => objectId === contractId);
+        if (byObject) contractId = byObject[0];
+    }
     const c = contract.contracts[contractId];
-    if (!c) return fail(`不認得這份契約：${contractId || '（未填 contractId）'}`);
+    if (!c) {
+        return fail(`不認得這份契約：${cmd.contractId || '（未填 contractId）'}；現有契約：${Object.keys(contract.contracts).join('、') || '（無）'}`);
+    }
     // Contract acts are physical acts: the paper must be before the actor.
     const linkedObjectId = data.contractObjectIds[contractId];
     const paper = linkedObjectId ? world.objectById(linkedObjectId) : undefined;
@@ -362,7 +391,31 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         return { ok: true, publicLines: [`${actorName}在「${c.label}」唯一聯名搭檔欄親筆填上${cmd.partnerName}`] };
     }
 
+    const contractParties = new Set([...c.requiredSignerIds, ...(c.partnerSlot.filledBy ? [c.partnerSlot.filledBy] : [])]);
+    const contractVoices = new Set([...contractParties, ...c.negotiatorIds]);
+    const partyNames = [...contractParties].map((id) => accountLabel(contract, id)).join('、');
+
+    if (cmd.action === 'contract_counter') {
+        if (!contractVoices.has(req.actorId)) {
+            return fail(`「${c.label}」的還價資格在當事人（${partyNames}）與受益方當家手裡，${actorName}插不上手——要影響此約，去勸得動的人`);
+        }
+        if (!cmd.demand?.trim()) return fail('要還價就得寫明 demand（你要的條款，一句）');
+        const countered = fileCounter(contract, {
+            contractId, actorId: req.actorId, demand: cmd.demand, day: req.day, causeEventId: req.causeEventId,
+        });
+        if (countered.rejection) return fail(countered.rejection.message);
+        contract = countered.state;
+        persist(world, contract);
+        return {
+            ok: true,
+            publicLines: [`${actorName}就「${c.label}」當面還價：『${cmd.demand.trim()}』——${accountLabel(contract, c.proposerAccountId)}的回話要等明晨`],
+        };
+    }
+
     if (cmd.action === 'contract_reject') {
+        if (!contractParties.has(req.actorId)) {
+            return fail(`「${c.label}」只有當事人（${partyNames}）能拒簽；${actorName}若有意見，該做的是還價或勸人`);
+        }
         const rejected = rejectContract(contract, { contractId, actorId: req.actorId, causeEventId: req.causeEventId });
         if (rejected.rejection) return fail(rejected.rejection.message);
         contract = rejected.state;
@@ -375,6 +428,14 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
     }
 
     if (cmd.action === 'contract_sign') {
+        if (!contractParties.has(req.actorId)) {
+            return fail(`「${c.label}」的筆只在當事人（${partyNames}）手裡；${actorName}簽不了別人的約`);
+        }
+        // a redundant signature on a done deal is confirmation, not a crime —
+        // killing the beat over it rolled back a settled contract in v16 live
+        if (c.status === 'settled' && c.signedBy.includes(req.actorId)) {
+            return { ok: true, publicLines: [`${actorName}又按了按「${c.label}」——墨跡已乾，約早生效無誤`] };
+        }
         const signed = signContract(contract, { contractId, signerId: req.actorId, causeEventId: req.causeEventId });
         if (signed.rejection) return fail(signed.rejection.message);
         contract = signed.state;
@@ -573,11 +634,33 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             const partner = c.partnerSlot.required ? `；聯名搭檔欄：${c.partnerSlot.filledBy ? accountLabel(contract, c.partnerSlot.filledBy) : '空白'}` : '';
             const waiting = pendingSigners(c).map((id) => accountLabel(contract, id)).join('、');
             lines.push(`「${c.label}」（contractId=${c.id}，白紙黑字，人人可查）：若成立——${splits}；限第 ${c.deadlineDay} 日夜裡截止${partner}；尚欠署名：${waiting || '（只欠搭檔欄）'}。`);
+            if (c.terms.length) lines.push(`約中條款：${c.terms.join('；')}。`);
+            if (c.pendingCounter) {
+                lines.push(`還價待覆：${accountLabel(contract, c.pendingCounter.byId)}所提『${c.pendingCounter.demand}』，${accountLabel(contract, c.proposerAccountId)}明晨回話。`);
+            }
             const isParty = c.requiredSignerIds.includes(characterId) || c.partnerSlot.filledBy === characterId;
-            if (isParty) lines.push(`你是這份契約的當事人：可 contract_sign 簽署、contract_reject 拒簽${c.requiredSignerIds.includes(characterId) && c.partnerSlot.required && !c.partnerSlot.filledBy ? '、contract_fill_partner 填上唯一聯名搭檔' : ''}。`);
+            if (isParty) {
+                const counterHint = c.pendingCounter ? '' : '、contract_counter 還價（demand 寫你要的條款，對方明晨回話）';
+                lines.push(`你是這份契約的當事人：可 contract_sign 簽署、contract_reject 拒簽${c.requiredSignerIds.includes(characterId) && c.partnerSlot.required && !c.partnerSlot.filledBy ? '、contract_fill_partner 填上唯一聯名搭檔' : ''}${counterHint}。`);
+            } else if (c.negotiatorIds.includes(characterId)) {
+                lines.push(c.pendingCounter
+                    ? `你是受益方當家，可就此約還價——但眼下已有一則還價待覆，等回話再說。`
+                    : `你雖非簽署人，但受益方的家當繫在此約上：可 contract_counter 還價（demand 寫你要的條款）；簽與拒只在${[...new Set(c.requiredSignerIds.map((id) => accountLabel(contract, id)))].join('、')}手裡。`);
+            }
         } else {
             const outcome = c.status === 'settled' ? `已簽署生效，款項分訖（${splits}）` : c.status === 'rejected' ? '已拒簽，預付款退回' : '已逾期失效，預付款收回';
             lines.push(`「${c.label}」${outcome}。`);
+        }
+    }
+    if (data.performance) {
+        const part = world.data.clock.partOfDay;
+        if (part === '清晨' || part === '日午' || part === '晡時' || part === '黃昏') {
+            const perf = data.performance;
+            const isLead = perf.leadIds.includes(characterId);
+            lines.push(
+                `今日黃昏【${perf.venueSceneName}】開鑼${isLead ? `——你是領銜，你不上台這戲就塌` : `（領銜：${perf.leadIds.map((id) => world.nameById(id)).join('、')}）`}；` +
+                `到場不足 ${perf.minCast} 人停鑼、票房歸零，白日到台上排過戲今夜才叫得動座。票房是班庫唯一的活水。`,
+            );
         }
     }
     for (const [keyObjectId, tenancy] of Object.entries(data.tenancies ?? {})) {
@@ -652,6 +735,87 @@ export function settleTenancyMoveIns(world: WorldState): TenancyMoveIn[] {
     return moves;
 }
 
+// ── the nightly show：排戲在白日，開鑼在黃昏，票房是收入面 ──
+
+export interface PerformanceOutcome {
+    performed: boolean;
+    /** objective line for the day log / world event. */
+    line: string;
+    takingsSubunits?: bigint;
+}
+
+/** Bank who showed up to rehearse (日午/晡時 at the venue). Quality is earned
+ *  in daylight; an unrehearsed evening plays to a thinner house. */
+export function bankRehearsalAttendance(world: WorldState, partIndex: number): void {
+    const perf = world.data.economy?.performance;
+    if (!perf || (partIndex !== 1 && partIndex !== 2)) return;
+    const venue = world.data.scenes.find((scene) => scene.name === perf.venueSceneName);
+    if (!venue) return;
+    for (const member of world.data.cast) {
+        if (world.data.roster[member.id] === venue.id && !perf.rehearsedToday.includes(member.id)) {
+            perf.rehearsedToday.push(member.id);
+        }
+    }
+}
+
+/**
+ * 黃昏開鑼。Attendance decides the evening deterministically: no lead on the
+ * boards or too few hands → 停鑼, zero income; otherwise the house pays by
+ * what it sees (leads, rehearsal, mended instruments), and the box office is
+ * REAL money entering the treasury. Idempotent per day via the txn id.
+ */
+export function settleEveningPerformance(
+    world: WorldState,
+    req: { day: number; partIndex: number },
+): PerformanceOutcome | null {
+    const parsed = live(world);
+    const perf = world.data.economy?.performance;
+    if (!parsed || !perf || req.partIndex !== 3) return null;
+    let contract = parsed.contract;
+    const data = parsed.data;
+    const venue = world.data.scenes.find((scene) => scene.name === perf.venueSceneName);
+    if (!venue) throw new Error(`[economy] performance venue is not a scene: ${perf.venueSceneName}`);
+    const present = world.data.cast.filter((member) => world.data.roster[member.id] === venue.id);
+    const leadsPresent = perf.leadIds.filter((id) => present.some((member) => member.id === id));
+    const leadNames = (ids: string[]) => ids.map((id) => world.nameById(id)).join('、');
+    if (leadsPresent.length === 0 || present.length < perf.minCast) {
+        perf.rehearsedToday = [];
+        return {
+            performed: false,
+            line: `【${perf.venueSceneName}】今夜停鑼：${leadsPresent.length === 0 ? `領銜（${leadNames(perf.leadIds)}）無一人上台` : `到場僅 ${present.length} 人，湊不成一台戲`}，看客退票散去，票房分文未進。`,
+        };
+    }
+    let pct = 100n;
+    if (leadsPresent.length < perf.leadIds.length) pct = (pct * 60n) / 100n;
+    if (perf.rehearsedToday.length < perf.minCast) pct = (pct * 70n) / 100n;
+    for (const boost of perf.boosts ?? []) {
+        const object = world.objectById(boost.objectId);
+        if (!object || object.visibility === 'destroyed') continue;
+        if (boost.stateIncludes && !(object.state ?? '').includes(boost.stateIncludes)) continue;
+        pct += BigInt(boost.pct);
+    }
+    const takings = (BigInt(perf.fullHouseSubunits) * pct) / 100n;
+    const deposited = depositExternal(contract.economy, {
+        txnId: `day${req.day}:boxoffice`,
+        to: data.troupeAccountId,
+        amount: takings,
+        memo: '今晚票房',
+        causeEventId: `${world.data.sagaId}:boxoffice:d${req.day}`,
+    });
+    if (deposited.duplicate) return null;
+    if (deposited.rejection) throw new Error(`[economy] box office failed: ${deposited.rejection.message}`);
+    contract = { economy: deposited.state, contracts: contract.contracts };
+    persist(world, contract);
+    const rehearsed = perf.rehearsedToday.length;
+    perf.rehearsedToday = [];
+    const house = pct >= 110n ? '滿堂彩' : pct >= 100n ? '滿座' : pct >= 70n ? '七成座' : '半座';
+    return {
+        performed: true,
+        line: `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsed >= perf.minCast ? '' : '，白日未曾好好排過'}：${house}，票房 ${formatMoney(data, takings)} 入${accountLabel(contract, data.troupeAccountId)}。`,
+        takingsSubunits: takings,
+    };
+}
+
 // ── daily settlement + deadline resolution ──
 
 export interface SettleSeasonDayRequest {
@@ -677,6 +841,35 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
     const causeEventId = `${world.data.sagaId}:settle:d${req.day}`;
     const publicNotices: string[] = [];
     const privateNotices: Array<{ characterId: string; text: string }> = [];
+
+    // 0.5 counter-demands are answered overnight — BEFORE the deadline sweep,
+    //     so an accepted amendment (with its grace day) can outlive the clock.
+    //     Today the answer comes from the authored policy; this call is the
+    //     seam where a live counterparty agent plugs in later.
+    for (const [id, c] of Object.entries(contract.contracts)) {
+        if (!c.pendingCounter) continue;
+        if (c.status !== 'offered') {
+            // the world moved first — a demand on a done deal dies unanswered
+            const voided = resolveCounter(contract, { contractId: id, accept: false, day: req.day, causeEventId });
+            if (voided.rejection) throw new Error(`economy: stale counter on ${id} failed to void: ${voided.rejection.message}`);
+            contract = voided.state;
+            publicNotices.push(`「${c.label}」已有定局，${accountLabel(contract, c.pendingCounter.byId)}那句還價不了了之。`);
+            continue;
+        }
+        const policy = (data.negotiations ?? {})[id];
+        const accept = !!policy && policy.acceptDemandsMatching.some((needle) => c.pendingCounter!.demand.includes(needle));
+        const answered = resolveCounter(contract, {
+            contractId: id, accept, day: req.day, graceDays: policy?.graceDaysOnAccept ?? 1, causeEventId,
+        });
+        if (answered.rejection) throw new Error(`economy: counter on ${id} failed to resolve: ${answered.rejection.message}`);
+        contract = answered.state;
+        const proposer = accountLabel(contract, c.proposerAccountId);
+        publicNotices.push(accept
+            ? (policy?.acceptNote ?? `${proposer}回話：條款照辦——『${c.pendingCounter.demand}』白紙黑字補進「${c.label}」，簽期順延至第 ${contract.contracts[id].deadlineDay} 日夜裡。`)
+            : (policy?.refusalNote ?? `${proposer}回話：不讓步。「${c.label}」原約原期，第 ${c.deadlineDay} 日夜裡為限。`));
+        syncContractObject(world, data, contract, id, world.data.cast.map((member) => member.id));
+    }
+    persist(world, contract);
 
     // 1. contract deadlines FIRST — a fully-signed offer settles, an unsigned
     //    one expires and its escrow releases (deadlineDay is the last valid day).
@@ -831,6 +1024,17 @@ export interface SeasonEconomyFrame {
     };
     /** periodic lump-sum bills due on specific days (amounts in 圓). */
     bills?: Array<{ id: string; label: string; amountYuan: number; dueDay: number; creditor?: string }>;
+    /** the troupe's own trade: 黃昏開鑼。Box office is the ledger's INCOME side,
+     *  so a season is never reduced to "sign the contract or die". */
+    performance?: {
+        venueScene: string;
+        /** at least one lead must be on stage or the evening折鑼; all present = full draw. */
+        leadNames: string[];
+        minCast: number;
+        fullHouseYuan: number;
+        /** objects whose state lifts the takings (a mended huqin, new robes…). */
+        boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
+    };
     businesses?: Array<{ id: string; label: string; openingYuan: number }>;
     /** per-character overrides; unlisted cast get characterDefaults. */
     characters?: Array<{ name: string; openingYuan?: number; dailyFixedCostYuan?: number }>;
@@ -860,6 +1064,19 @@ export interface SeasonEconomyFrame {
         partnerRequired?: boolean;
         /** last narrative day (1-indexed) a signature can complete it. */
         deadlineDay: number;
+        /** the written conditions as first offered. */
+        terms?: string[];
+        /** how the proposer answers counter-demands. Today an authored policy;
+         *  later a real counterparty agent (another saga's stakeholder) sits
+         *  exactly at this seam. */
+        negotiation?: {
+            /** demands containing ANY of these substrings are accepted. */
+            acceptDemandsMatching: string[];
+            /** extra days to sign after an accepted amendment (default 1). */
+            graceDaysOnAccept?: number;
+            acceptNote?: string;
+            refusalNote?: string;
+        };
     }>;
 }
 
@@ -910,9 +1127,19 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
     let contract: ContractState = { economy: openAccounts(emptyEconomy(world.data.clock.day), seeds), contracts: {} };
 
     const contractObjectIds: Record<string, string> = {};
+    const negotiations: NonNullable<SeasonEconomyData['negotiations']> = {};
     for (const spec of frame.contracts ?? []) {
         const resolveBeneficiary = (to: string): string =>
             to === PARTNER_SLOT ? PARTNER_SLOT : to === '班庫' ? troupeId : (world.idByName(to) ?? to);
+        // money interest buys a voice on conditions: whoever stewards a
+        // beneficiary account (the 班主 of a treasury owed 140 圓) may counter,
+        // though the pen stays with the named signers.
+        const negotiatorIds = [...new Set(spec.splits.flatMap((split) => {
+            const beneficiary = resolveBeneficiary(split.to);
+            if (beneficiary === PARTNER_SLOT) return [];
+            const account = contract.economy.accounts[beneficiary];
+            return account ? account.authorizedSpenderIds : [];
+        }))];
         const offered = offerContract(contract, {
             id: spec.id,
             label: spec.label,
@@ -926,11 +1153,14 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
             requiredSignerIds: spec.requiredSignerNames.map(idFor),
             partnerRequired: spec.partnerRequired ?? false,
             deadlineDay: spec.deadlineDay,
+            terms: spec.terms,
+            negotiatorIds,
             causeEventId: `${seasonId}:offer:${spec.id}`,
         });
         if (offered.rejection) throw new Error(`season contract ${spec.id} failed to seed: ${offered.rejection.message}`);
         contract = offered.state;
         if (spec.objectId) contractObjectIds[spec.id] = spec.objectId;
+        if (spec.negotiation) (negotiations[spec.id] = { ...spec.negotiation });
     }
 
     world.data.economy = {
@@ -940,6 +1170,19 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
         troupeAccountId: troupeId,
         ...(frame.troupe.costNote ? { troupeCostNote: frame.troupe.costNote } : {}),
         ...(frame.troupe.shortfallCreditor ? { shortfallCreditor: frame.troupe.shortfallCreditor } : {}),
+        ...(Object.keys(negotiations).length ? { negotiations } : {}),
+        ...(frame.performance
+            ? {
+                performance: {
+                    venueSceneName: frame.performance.venueScene,
+                    leadIds: frame.performance.leadNames.map(idFor),
+                    minCast: frame.performance.minCast,
+                    fullHouseSubunits: asSubunits(frame.performance.fullHouseYuan).toString(),
+                    ...(frame.performance.boosts ? { boosts: frame.performance.boosts.map((boost) => ({ ...boost })) } : {}),
+                    rehearsedToday: [],
+                },
+            }
+            : {}),
         ...(frame.bills?.length
             ? {
                 bills: frame.bills.map((bill) => ({

@@ -45,6 +45,16 @@ test('physical mutation needs a structured effect and commits one version', () =
         world: w, sceneId: 's0', actorId: 'c0', actorName: '甲', witnessIds: ['c0'],
         text: '將懷錶匣抽開半寸，偏頭往縫隙裡覷。',
     }), /without objectEffects/);
+    // perfective description of accomplished state is narration, not mutation:
+    // the live v16 crash — she merely laid the ALREADY-signed paper flat
+    assert.doesNotThrow(() => commitBeatPhysics({
+        world: w, sceneId: 's0', actorId: 'c0', actorName: '甲', witnessIds: ['c0'],
+        text: '她將已簽妥的懷錶匣輕輕挪正，掌心覆在上頭按了按：「成了。」',
+    }));
+    assert.throws(() => commitBeatPhysics({
+        world: w, sceneId: 's0', actorId: 'c0', actorName: '甲', witnessIds: ['c0'],
+        text: '提筆在懷錶匣的封籤上簽了名。',
+    }), /without objectEffects/);
     assert.throws(() => commitBeatPhysics({
         world: w, sceneId: 's0', actorId: 'c0', actorName: '甲', witnessIds: ['c0'],
         text: '挑開封口，從懷錶匣裡抽出懷錶。',

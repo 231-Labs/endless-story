@@ -51,6 +51,9 @@ export interface EconomicContract {
   deadlineDay: number;
   /** the written terms of the offer; accepted counter-demands append here. */
   terms: string[];
+  /** ids beyond the signers allowed to push terms back — money interest buys
+   *  a voice on CONDITIONS (a beneficiary treasury's steward), never a pen. */
+  negotiatorIds: string[];
   /** an unanswered counter-demand from a party — one at a time; the proposer
    *  answers through resolveCounter (an authored policy today, a real
    *  counterparty agent from another saga later). */
@@ -104,6 +107,7 @@ function cloneContracts(contracts: Record<string, EconomicContract>): Record<str
       partnerSlot: { ...c.partnerSlot },
       signedBy: [...c.signedBy],
       terms: [...c.terms],
+      negotiatorIds: [...c.negotiatorIds],
       pendingCounter: c.pendingCounter ? { ...c.pendingCounter } : undefined,
     };
   }
@@ -121,6 +125,8 @@ export interface ContractOffer {
   deadlineDay: number;
   /** the written conditions of the offer as proposed. */
   terms?: string[];
+  /** extra ids with counter-offer rights (beneficiary stewards). */
+  negotiatorIds?: string[];
   causeEventId: string;
 }
 
@@ -156,6 +162,7 @@ export function offerContract(state: ContractState, offer: ContractOffer): Contr
     status: "offered",
     deadlineDay: offer.deadlineDay,
     terms: [...(offer.terms ?? [])],
+    negotiatorIds: [...(offer.negotiatorIds ?? [])],
     causeEventId: offer.causeEventId,
   };
   return { state: { economy: escrow.state, contracts }, applied: escrow.applied, duplicate: false };
@@ -173,11 +180,12 @@ export function fileCounter(
   const contract = state.contracts[req.contractId];
   if (!contract) return fail(state, "NO_CONTRACT", `unknown contract ${req.contractId}`);
   if (contract.status !== "offered") return fail(state, "NOT_OFFERED", `${contract.label} is ${contract.status}`);
-  const parties = new Set([
+  const voices = new Set([
     ...contract.requiredSignerIds,
     ...(contract.partnerSlot.filledBy ? [contract.partnerSlot.filledBy] : []),
+    ...contract.negotiatorIds,
   ]);
-  if (!parties.has(req.actorId)) return fail(state, "NOT_SIGNER", `${req.actorId} is not a party to ${contract.label}`);
+  if (!voices.has(req.actorId)) return fail(state, "NOT_SIGNER", `${req.actorId} has no negotiating standing on ${contract.label}`);
   if (!req.demand.trim()) return fail(state, "EMPTY_DEMAND", "a counter-offer needs a written demand");
   if (contract.pendingCounter) {
     return fail(state, "COUNTER_PENDING", `${contract.label} already has an unanswered demand: ${contract.pendingCounter.demand}`);
@@ -389,6 +397,7 @@ export interface PersistedEconomicContract {
   status: ContractStatus;
   deadlineDay: number;
   terms: string[];
+  negotiatorIds?: string[];
   pendingCounter?: { byId: string; demand: string; day: number };
   causeEventId: string;
   outcomeEventId?: string;
@@ -409,6 +418,7 @@ export function persistContracts(contracts: Record<string, EconomicContract>): R
       status: c.status,
       deadlineDay: c.deadlineDay,
       terms: [...c.terms],
+      negotiatorIds: [...c.negotiatorIds],
       causeEventId: c.causeEventId,
     };
     if (c.outcomeEventId) row.outcomeEventId = c.outcomeEventId;
@@ -429,6 +439,7 @@ export function restoreContracts(persisted: Record<string, PersistedEconomicCont
       partnerSlot: { ...c.partnerSlot },
       signedBy: [...c.signedBy],
       terms: [...(c.terms ?? [])],
+      negotiatorIds: [...(c.negotiatorIds ?? [])],
       pendingCounter: c.pendingCounter ? { ...c.pendingCounter } : undefined,
     };
   }
