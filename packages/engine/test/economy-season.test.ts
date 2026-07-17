@@ -517,13 +517,25 @@ test('counter-offer: an accepted demand amends the terms, grants a grace day, an
     const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
     for (const id of [shen, liu, su]) world.moveCharacter(id, paperScene);
 
-    // 沈雪笙 is not a party — the world refuses his counter, so 柳安春 files it
-    const notParty = economy.commitCommand(world, {
-        actorId: shen, sceneId: paperScene, witnessIds: [shen], day: 3,
-        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '那張半卸妝校樣不許用，肖像須另拍定妝照' },
+    // 金鳳 is a true outsider — refused with a named, actionable message;
+    // 沈雪笙 stewards the beneficiary treasury, so HIS standing is real
+    const jin = world.idByName('金鳳')!;
+    world.moveCharacter(jin, paperScene);
+    const outsider = economy.commitCommand(world, {
+        actorId: jin, sceneId: paperScene, witnessIds: [jin], day: 3,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '加錢' },
         causeEventId: 'test:c0', seq: 0,
     });
-    assert.equal(notParty.ok, false);
+    assert.equal(outsider.ok, false);
+    assert.match(outsider.reason!, /插不上手/);
+    assert.match(outsider.reason!, /柳安春/);
+    const stewardSign = economy.commitCommand(world, {
+        actorId: shen, sceneId: paperScene, witnessIds: [shen], day: 3,
+        command: { action: 'contract_sign', contractId: 'anchun-exclusive' },
+        causeEventId: 'test:c0b', seq: 0,
+    });
+    assert.equal(stewardSign.ok, false, 'standing to negotiate is not a pen');
+    assert.match(stewardSign.reason!, /簽不了別人的約/);
 
     const countered = economy.commitCommand(world, {
         actorId: liu, sceneId: paperScene, witnessIds: [liu, shen], day: 3,

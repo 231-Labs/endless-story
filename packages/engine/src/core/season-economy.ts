@@ -372,7 +372,14 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         return { ok: true, publicLines: [`${actorName}在「${c.label}」唯一聯名搭檔欄親筆填上${cmd.partnerName}`] };
     }
 
+    const contractParties = new Set([...c.requiredSignerIds, ...(c.partnerSlot.filledBy ? [c.partnerSlot.filledBy] : [])]);
+    const contractVoices = new Set([...contractParties, ...c.negotiatorIds]);
+    const partyNames = [...contractParties].map((id) => accountLabel(contract, id)).join('、');
+
     if (cmd.action === 'contract_counter') {
+        if (!contractVoices.has(req.actorId)) {
+            return fail(`「${c.label}」的還價資格在當事人（${partyNames}）與受益方當家手裡，${actorName}插不上手——要影響此約，去勸得動的人`);
+        }
         if (!cmd.demand?.trim()) return fail('要還價就得寫明 demand（你要的條款，一句）');
         const countered = fileCounter(contract, {
             contractId, actorId: req.actorId, demand: cmd.demand, day: req.day, causeEventId: req.causeEventId,
@@ -387,6 +394,9 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
     }
 
     if (cmd.action === 'contract_reject') {
+        if (!contractParties.has(req.actorId)) {
+            return fail(`「${c.label}」只有當事人（${partyNames}）能拒簽；${actorName}若有意見，該做的是還價或勸人`);
+        }
         const rejected = rejectContract(contract, { contractId, actorId: req.actorId, causeEventId: req.causeEventId });
         if (rejected.rejection) return fail(rejected.rejection.message);
         contract = rejected.state;
@@ -399,6 +409,9 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
     }
 
     if (cmd.action === 'contract_sign') {
+        if (!contractParties.has(req.actorId)) {
+            return fail(`「${c.label}」的筆只在當事人（${partyNames}）手裡；${actorName}簽不了別人的約`);
+        }
         const signed = signContract(contract, { contractId, signerId: req.actorId, causeEventId: req.causeEventId });
         if (signed.rejection) return fail(signed.rejection.message);
         contract = signed.state;
@@ -605,6 +618,10 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             if (isParty) {
                 const counterHint = c.pendingCounter ? '' : '、contract_counter 還價（demand 寫你要的條款，對方明晨回話）';
                 lines.push(`你是這份契約的當事人：可 contract_sign 簽署、contract_reject 拒簽${c.requiredSignerIds.includes(characterId) && c.partnerSlot.required && !c.partnerSlot.filledBy ? '、contract_fill_partner 填上唯一聯名搭檔' : ''}${counterHint}。`);
+            } else if (c.negotiatorIds.includes(characterId)) {
+                lines.push(c.pendingCounter
+                    ? `你是受益方當家，可就此約還價——但眼下已有一則還價待覆，等回話再說。`
+                    : `你雖非簽署人，但受益方的家當繫在此約上：可 contract_counter 還價（demand 寫你要的條款）；簽與拒只在${[...new Set(c.requiredSignerIds.map((id) => accountLabel(contract, id)))].join('、')}手裡。`);
             }
         } else {
             const outcome = c.status === 'settled' ? `已簽署生效，款項分訖（${splits}）` : c.status === 'rejected' ? '已拒簽，預付款退回' : '已逾期失效，預付款收回';
@@ -979,6 +996,15 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
     for (const spec of frame.contracts ?? []) {
         const resolveBeneficiary = (to: string): string =>
             to === PARTNER_SLOT ? PARTNER_SLOT : to === '班庫' ? troupeId : (world.idByName(to) ?? to);
+        // money interest buys a voice on conditions: whoever stewards a
+        // beneficiary account (the 班主 of a treasury owed 140 圓) may counter,
+        // though the pen stays with the named signers.
+        const negotiatorIds = [...new Set(spec.splits.flatMap((split) => {
+            const beneficiary = resolveBeneficiary(split.to);
+            if (beneficiary === PARTNER_SLOT) return [];
+            const account = contract.economy.accounts[beneficiary];
+            return account ? account.authorizedSpenderIds : [];
+        }))];
         const offered = offerContract(contract, {
             id: spec.id,
             label: spec.label,
@@ -993,6 +1019,7 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
             partnerRequired: spec.partnerRequired ?? false,
             deadlineDay: spec.deadlineDay,
             terms: spec.terms,
+            negotiatorIds,
             causeEventId: `${seasonId}:offer:${spec.id}`,
         });
         if (offered.rejection) throw new Error(`season contract ${spec.id} failed to seed: ${offered.rejection.message}`);
