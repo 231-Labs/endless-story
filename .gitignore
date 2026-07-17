@@ -13,8 +13,10 @@ coverage
 # Admin-edited runtime data (auto-seeded from mocks on first read)
 packages/web/data/
 
-# Claude Code runtime artifacts
-.claude/
+# Claude Code runtime artifacts (project skills are tracked)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
 
 # Sui CLI publish-state (we re-publish freely; contract-ids.ts is the source of truth)
 **/Published.toml
@@ -24,6 +26,9 @@ packages/web/public/chamber/ref/
 
 # local chapter-dump validation output (ES_CHAPTER_DUMP_DIR)
 chapters-out/
+
+# local engine runs (use ES_LAB_ROOT + lab:publish instead)
+engine-run/
 
 # Internal dev-only docs & experiments (kept on disk, never delivered)
 /internal/

@@ -102,6 +102,9 @@ importers:
 
   packages/engine:
     dependencies:
+      '@endless-story/economy':
+        specifier: workspace:*
+        version: link:../economy
       '@endless-story/llm':
         specifier: workspace:*
         version: link:../llm

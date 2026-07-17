@@ -5,13 +5,13 @@ import type { CanonicalSceneEvent } from '../src/ports.ts';
 
 const cast = [
     { id: 'su', name: '蘇映雪' },
-    { id: 'liu', name: '柳生春' },
+    { id: 'liu', name: '柳安春' },
     { id: 'jiang', name: '江聞鶴' },
 ];
 
 test('addressed aside reaches only actor and addressee; outsider gets redacted physics', () => {
     const perceiverIds = deriveBeatPerceiverIds(
-        { characterId: 'su', addressed: '柳生春', audience: 'addressed' },
+        { characterId: 'su', addressed: '柳安春', audience: 'addressed' },
         cast,
     );
     assert.deepEqual(perceiverIds, ['su', 'liu']);
@@ -30,7 +30,7 @@ test('addressed aside reaches only actor and addressee; outsider gets redacted p
             characterId: 'su',
             name: '蘇映雪',
             text: '貼著她說：「只給你。」',
-            addressed: '柳生春',
+            addressed: '柳安春',
             audience: 'addressed',
             perceiverIds,
         }],

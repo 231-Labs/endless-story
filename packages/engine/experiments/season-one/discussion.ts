@@ -360,7 +360,7 @@ function fallbackAdvocate(c: AdvocateCard): AdvocacyMove {
                 speech: '許仙這個少年郎，我想唱一場真的。輸贏在其次，戲得立得住——一個外聘的男小生，也該有一場真對手戲。',
                 inner: '怕自己這套本事，在新的上海已經不夠人看。',
             };
-        case '柳生春':
+        case '柳安春':
             return {
                 self_want: '許仙',
                 push: [],
@@ -370,7 +370,7 @@ function fallbackAdvocate(c: AdvocateCard): AdvocacyMove {
         case '蘇映雪':
             return {
                 self_want: '白素貞',
-                push: [{ who: '柳生春', part: '許仙' }],
+                push: [{ who: '柳安春', part: '許仙' }],
                 speech: '白素貞我來。許仙——我舉薦生春，八年生旦，台上夫妻該是台下照見的那一對。',
                 inner: '台下最貼近那一步，我總收住手。',
             };
@@ -395,7 +395,7 @@ function fallbackRebut(c: AdvocateCard): AdvocacyMove {
                 speech: '柳老板的難處我懂。可正因為難，這場對手戲才值得真刀真槍地唱一回。',
                 inner: '我越怕，越不肯走。',
             };
-        case '柳生春':
+        case '柳安春':
             return {
                 self_want: '許仙',
                 push: [],
@@ -413,7 +413,7 @@ function fallbackArbitration(
 ): CastArbitration {
     const cast: Record<string, string> = {};
     if (partNames.includes('白素貞')) cast['白素貞'] = '蘇映雪';
-    if (partNames.includes('許仙')) cast['許仙'] = '柳生春';
+    if (partNames.includes('許仙')) cast['許仙'] = '柳安春';
     if (partNames.includes('小青')) cast['小青'] = '連翹';
     // Fill any remaining part deterministically so there is never a deadlock.
     for (const p of partNames) if (!cast[p]) cast[p] = '蘇映雪';

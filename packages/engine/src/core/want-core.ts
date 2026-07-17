@@ -104,6 +104,15 @@ export const WANT = {
 
 export const tension = (w: Want): number => w.weight * (1 - w.sat);
 
+/**
+ * A settled first-order drive may open one aftermath thread, but settling that
+ * aftermath must not recursively manufacture another aftermath. The lived
+ * consequence still reaches memory, belief and ripple processing; it simply
+ * does not become an endless `resolved -> empty -> resolved` want chain.
+ */
+export const shouldDeriveAftermath = (want: Pick<Want, 'source'>): boolean =>
+    want.source !== 'aftermath';
+
 export const forcingPressure = (w: Want): number => w.heat + w.frust;
 
 export type ForcingLevel = 'idle' | 'pressing' | 'edge' | 'breaking';
@@ -446,7 +455,10 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
                 d.shift === 'tighten' ? hottest.sat - WANT.tighten : hottest.sat + WANT.loosen,
             );
         }
-        const nt = d.newThread?.trim();
+        const candidate = d.newThread?.trim();
+        const nt = candidate && !/^(省略|無|沒有|不新增|none|null|n\/?a)$/i.test(candidate)
+            ? candidate
+            : undefined;
         const picked = mine.filter((w) => w.source !== 'genesis').length;
         if (
             nt &&

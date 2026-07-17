@@ -1,7 +1,7 @@
 /**
  * BED-PROBE (long, parametric) — one 床戲 with the cap lifted, printed as raw beats +
  * woven 章回. Compare pairings (memory/personality) and models.
- *   BED_A=柳生春 BED_B=金鳳 BED_CAP=24 [BED_FORCE=1] POE_MODEL_PRIMARY=GLM-5.1-FW \
+ *   BED_A=柳安春 BED_B=金鳳 BED_CAP=24 [BED_FORCE=1] POE_MODEL_PRIMARY=GLM-5.1-FW \
  *   AI_PROVIDER=poe POE_API_KEY=… OPENAI_API_KEY=… \
  *   ./node_modules/.bin/tsx experiments/agent-season/bed-probe-long.ts
  * BED_FORCE=1 forces the consummate register even for a NON-established pair (so a
@@ -11,7 +11,7 @@ import { runSceneLoop, type SceneLoopCastMember } from '../../src/index.ts';
 import { buildCast, WORLD_PREMISE, areEstablishedLovers, type Char } from './world.ts';
 
 const CAP = Number(process.env.BED_CAP ?? '24');
-const A_ID = process.env.BED_A ?? '柳生春';
+const A_ID = process.env.BED_A ?? '柳安春';
 const B_ID = process.env.BED_B ?? '金鳳';
 const FORCE = process.env.BED_FORCE === '1';
 

@@ -151,7 +151,7 @@ export const hottest = (c: Char): Want | null => {
 };
 
 // ── FAKE planner (deterministic, rhythm-grounded, zero LLM) ───────────────────
-const GENERDAN = new Set(['柳生春', '蘇映雪']); // 生旦 pair → 戲台
+const GENERDAN = new Set(['柳安春', '蘇映雪']); // 生旦 pair → 戲台
 const WUHANG = new Set(['江聞鶴', '連翹']); // 武行 → 練功房
 
 export class FakePlanner implements Planner {
@@ -231,7 +231,7 @@ function fakeDest(c: Char, part: PartOfDayLike, reh: RehearsalCall): string {
     }
     // 柳's 深宵 hot-want override: leaves home to settle the 了斷 at 金鳳's 會樂里.
     const hot = hottest(c);
-    if (c.id === '柳生春' && part === '深宵' && hot?.layer === '情' && !hot.retired) dest = '會樂里寓所';
+    if (c.id === '柳安春' && part === '深宵' && hot?.layer === '情' && !hot.retired) dest = '會樂里寓所';
     return dest;
 }
 type PartOfDayLike = Parameters<typeof rhythmPull>[1];
@@ -242,11 +242,11 @@ function isWorkVenue(name: string): boolean {
 }
 
 function fakeIntent(c: Char, target: Char): string {
-    if (c.id === '柳生春' && target.id === '金鳳') return '把當年欠她的那句話，當面說個了斷';
-    if (c.id === '金鳳' && target.id === '柳生春') return '當面要他認一句欠我的，這樁舊帳了結';
-    if (c.id === '蘇映雪' && target.id === '柳生春') return '對一段生旦的對手戲，多搭幾場';
-    if (c.id === '白韻秋' && target.id === '柳生春') return '尋個由頭近她一近，說幾句捧場的話';
-    if (c.id === '江聞鶴' && target.id === '柳生春') return '較一較這場對手戲，誰也不讓誰';
+    if (c.id === '柳安春' && target.id === '金鳳') return '把當年欠她的那句話，當面說個了斷';
+    if (c.id === '金鳳' && target.id === '柳安春') return '當面要他認一句欠我的，這樁舊帳了結';
+    if (c.id === '蘇映雪' && target.id === '柳安春') return '對一段生旦的對手戲，多搭幾場';
+    if (c.id === '白韻秋' && target.id === '柳安春') return '尋個由頭近她一近，說幾句捧場的話';
+    if (c.id === '江聞鶴' && target.id === '柳安春') return '較一較這場對手戲，誰也不讓誰';
     return '說幾句話';
 }
 

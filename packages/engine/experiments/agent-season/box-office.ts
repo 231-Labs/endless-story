@@ -81,7 +81,7 @@ function castWarmth(a: Char, playCast: string[]): number {
     let best = 0;
     for (const w of a.wants) {
         if (w.retired || !w.target) continue;
-        if (w.target === '柳生春' || playCast.includes(w.target)) best = Math.max(best, w.weight);
+        if (w.target === '柳安春' || playCast.includes(w.target)) best = Math.max(best, w.weight);
     }
     return round2(clamp01(0.4 + 0.6 * best));
 }

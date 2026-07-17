@@ -37,6 +37,7 @@ export interface DossierCanonicalEvent {
         resolvedWants: number;
         departures: number;
         relationshipTurn: boolean;
+        objectChanges?: number;
     };
 }
 

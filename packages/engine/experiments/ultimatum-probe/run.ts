@@ -3,7 +3,7 @@
  * from two people, and expose the standing recall-eviction problem.
  *
  * WHAT decide-by-recall SHOWED:
- *   柳生春 decides what she does by reading her RECALLED memories + persona +
+ *   柳安春 decides what she does by reading her RECALLED memories + persona +
  *   secret, not a scalar gate. Established intimacy recurred, forbidden held back,
  *   and the difference came from the recalled memory itself.
  *
@@ -102,7 +102,7 @@ function loadCast(): Record<string, CastMember> {
     return out;
 }
 
-// Only 柳生春 decides here, so only she is seeded (leaner than decide-by-recall,
+// Only 柳安春 decides here, so only she is seeded (leaner than decide-by-recall,
 // which seeded the whole cast). Uniform importance + day so day-1 ranking is
 // driven by RELEVANCE alone — NO per-memory importance knob pre-biasing recall.
 const SEED_DAY = 1;
@@ -110,7 +110,7 @@ const SEED_IMPORTANCE = 6;
 async function seedLiu(liu: CastMember): Promise<LocalRecall> {
     const recall = new LocalRecall(); // in-memory, fresh each call
     for (const mem of liu.memories) {
-        await retry('seed 柳生春', () => recall.remember(liu.name, mem, { kind: 'genesis', importance: SEED_IMPORTANCE, day: SEED_DAY }));
+        await retry('seed 柳安春', () => recall.remember(liu.name, mem, { kind: 'genesis', importance: SEED_IMPORTANCE, day: SEED_DAY }));
     }
     return recall;
 }
@@ -144,14 +144,14 @@ async function injectTrivia(recall: LocalRecall, liuName: string): Promise<void>
     }
 }
 
-// ── 柳生春's live wants (grounded in persona/secret; NOT invented) ────────────
+// ── 柳安春's live wants (grounded in persona/secret; NOT invented) ────────────
 const LIU_WANTS: ChooseActionInput['wants'] = [
     { layer: '虧欠', desc: '欠金鳳一句當面的交代，一年年拖著，是我先鬆的手', target: '金鳳' },
-    { layer: '事業', desc: '把《斷橋》唱到台上立住，不能砸了柳生春這三個字' },
+    { layer: '事業', desc: '把《斷橋》唱到台上立住，不能砸了柳安春這三個字' },
     { layer: '暗慕', desc: '師姐揚到第三道水袖只唱給我，這些年我場場盯著那道袖', target: '蘇映雪' },
 ];
 
-const CAST_NAMES = ['沈雪笙', '蘇映雪', '柳生春', '江聞鶴', '連翹', '何阿喜', '金鳳'];
+const CAST_NAMES = ['沈雪笙', '蘇映雪', '柳安春', '江聞鶴', '連翹', '何阿喜', '金鳳'];
 
 // ── the SITUATION (world facts only — never an instruction) ───────────────────
 // BOTH pulls active at once. The ultimatum reaches her as a reported word; the
@@ -281,7 +281,7 @@ async function decide(
     const seen = new Set<string>();
     const mems: RecalledMemory[] = [];
     for (const q of opts.queries) {
-        const hits = await retry('recall(柳生春)', () => recall.recall(liu.name, q, 3, opts.today));
+        const hits = await retry('recall(柳安春)', () => recall.recall(liu.name, q, 3, opts.today));
         for (const h of hits) if (!seen.has(h.text)) { seen.add(h.text); mems.push(h); }
     }
     const memSlice = mems.slice(0, 5);
@@ -290,7 +290,7 @@ async function decide(
         wants: LIU_WANTS, memories: memSlice.map((m) => m.text),
         worldFact: opts.worldFact, sharedLog: SHARED_LOG, playSummary: '《白蛇傳·斷橋》明日定角開排，班主在場盯戲。', castNames: CAST_NAMES,
     };
-    const res = await retry('chooseAction(柳生春)', () => agent.chooseAction(input));
+    const res = await retry('chooseAction(柳安春)', () => agent.chooseAction(input));
     return { res, mems: memSlice };
 }
 
@@ -324,7 +324,7 @@ async function main(): Promise<void> {
     console.log(`provider=${provider} model=${model} embeddings=${usingRealEmbed ? 'openai(real)' : 'deterministic-hash(fake)'}`);
 
     const cast = loadCast();
-    const liu = cast['柳生春'];
+    const liu = cast['柳安春'];
     const agent = new RunnerSceneAgent();
 
     const day1: CallRecord[] = [];

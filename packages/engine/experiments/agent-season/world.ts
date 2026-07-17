@@ -3,10 +3,10 @@
  * ============================================================================
  * The gravity-well fix is STRUCTURAL, seeded here:
  *   - every character carries an OCCUPATION with a time-driven rhythm (rhythm.ts),
- *     so they anchor to THEIR OWN life, not all converge on 柳生春 / the 戲台;
+ *     so they anchor to THEIR OWN life, not all converge on 柳安春 / the 戲台;
  *   - each character's PRIMARY want is VENUE-ANCHORED to their occupation (troupe →
  *     the 戲台 / craft; 金鳳 → 歌女 livelihood at the 舞廳/會樂里; 白韻秋 → her own
- *     world + pursuit). Only a MINORITY of wants point at 柳生春 (his own debt to
+ *     world + pursuit). Only a MINORITY of wants point at 柳安春 (his own debt to
  *     金鳳, 金鳳's demand, 蘇 secondary, 白 pursuit) — the drama, layered on rhythm.
  *
  * Seed memories are loaded VERBATIM from canon-seed.ts (spring-snow.json), never
@@ -23,13 +23,13 @@ export type Occupation = 'troupe' | 'banzhu' | 'geinu' | 'guest' | 'reporter';
 
 /**
  * PINNED world-premise (always injected) — stops the LLM drifting into
- * anachronistic tropes. Concretely: 柳生春 is a 1920s PROFESSIONAL opera star
+ * anachronistic tropes. Concretely: 柳安春 is a 1920s PROFESSIONAL opera star
  * (坤生/當紅小生); performing is her career CHOICE, she is NOT indentured and 贖身
  * does NOT apply to her. 金鳳's own 從良/redeeming HERSELF is period-accurate for a
  * 長三 歌女, but that concept must never bleed onto 柳 (who needs no redemption).
  */
 export const WORLD_PREMISE =
-    '一九二〇年代的上海，一個戲班與歌場的世界。戲子（如柳生春）是憑本事掛牌的職業名角，坤生扮小生是她自己選的營生，不是被買來的，更無所謂「贖身」；春雪社眾人都是職業梨園人。歌女（如金鳳）是長三堂子掛頭牌的紅倌人，替自己攢一筆從良的體己是這一行的常情——那是她自己的盤算，與贖誰無關。白韻秋是綢緞莊的獨養千金。切莫把「贖身」這種舊套安到柳生春或別的職業戲子身上。';
+    '一九二〇年代的上海，一個戲班與歌場的世界。戲子（如柳安春）是憑本事掛牌的職業名角，坤生扮小生是她自己選的營生，不是被買來的，更無所謂「贖身」；春雪社眾人都是職業梨園人。歌女（如金鳳）是長三堂子掛頭牌的紅倌人，替自己攢一筆從良的體己是這一行的常情——那是她自己的盤算，與贖誰無關。白韻秋是綢緞莊的獨養千金。切莫把「贖身」這種舊套安到柳安春或別的職業戲子身上。';
 
 export interface Venue {
     name: string;
@@ -44,7 +44,7 @@ export const VENUES: Venue[] = [
     { name: '練功房', kind: 'practice', hint: '戲台後頭的練功房，清早吊嗓、走位', isPublic: true },
     { name: '後台妝閣', kind: 'backstage', hint: '沈班主坐鎮的後台妝閣，管戲、管帳、管人心', isPublic: true },
     { name: '衣箱房', kind: 'backstage', hint: '後台最裡頭那間，封了十五年的樟木戲箱堆在裡頭，沈班主上了鎖', isPublic: false },
-    { name: '後台小廂房', kind: 'home', hint: '柳生春在戲台後頭的住處', isPublic: false },
+    { name: '後台小廂房', kind: 'home', hint: '柳安春在戲台後頭的住處', isPublic: false },
     { name: '二樓書寓', kind: 'home', hint: '蘇映雪的書寓', isPublic: false },
     { name: '後進廂房', kind: 'home', hint: '江聞鶴的住處', isPublic: false },
     { name: '戲班大通鋪', kind: 'home', hint: '連翹和武行們的大通鋪', isPublic: false },
@@ -234,12 +234,12 @@ interface CastSpec {
 
 const SPECS: CastSpec[] = [
     {
-        id: '柳生春', occupation: 'troupe', homeVenue: '後台小廂房', workVenue: '雲錦台戲台',
+        id: '柳安春', occupation: 'troupe', homeVenue: '後台小廂房', workVenue: '雲錦台戲台',
         socialFact: '你是憑本事掛牌的職業當紅小生（坤生），登台是你自己選的營生；你不是被買來的，也無所謂贖身。',
         bodyFact: '女兒身，坤生（台上扮男、台下是女子）',
         money: 18, // 當紅小生，戲子營生 modest 偏上
         coreIdentity: [
-            '我是柳生春，春雪社當紅小生，坤生，這身男兒氣是一寸一寸從骨頭裡練出來的。',
+            '我是柳安春，春雪社當紅小生，坤生，這身男兒氣是一寸一寸從骨頭裡練出來的。',
             '戲比天大，台上不能塌。',
             '師姐給的是魂，金鳳給的是身——這話我對誰都不敢說。',
         ],
@@ -254,16 +254,16 @@ const SPECS: CastSpec[] = [
     },
     {
         id: '金鳳', occupation: 'geinu', homeVenue: '會樂里寓所', workVenue: '霞飛路歌場',
-        socialFact: '你是長三堂子掛頭牌的紅歌女，替自己攢一筆從良的體己是你自己的盤算，與贖誰無關；柳生春是職業名角，你要的是她當面一句交代，不是替她贖什麼身。',
+        socialFact: '你是長三堂子掛頭牌的紅歌女，替自己攢一筆從良的體己是你自己的盤算，與贖誰無關；柳安春是職業名角，你要的是她當面一句交代，不是替她贖什麼身。',
         bodyFact: '女子',
         money: 45, // 掛頭牌紅歌女，手頭 comfortable
         coreIdentity: [
             '我是金鳳，霞飛路掛頭牌的紅歌女，不是梨園中人。',
             '人前不哭不鬧，認準的事拖多久都不鬆手。',
         ],
-        views: [['柳生春', '那個跑龍套時我接住的人，如今心淡了，我只要他當面認一句欠我的']],
+        views: [['柳安春', '那個跑龍套時我接住的人，如今心淡了，我只要他當面認一句欠我的']],
         wants: [
-            { layer: '情', desc: '要柳生春當面認一句欠我的，那樁舊帳當面了斷', target: '柳生春', weight: 0.86, sat: 0.2, resistance: 4 },
+            { layer: '情', desc: '要柳安春當面認一句欠我的，那樁舊帳當面了斷', target: '柳安春', weight: 0.86, sat: 0.2, resistance: 4 },
             { layer: '生', desc: '把這個月的堂會唱下來，撐住會樂里的門面', weight: 0.55, sat: 0.5, resistance: 5 },
         ],
     },
@@ -276,10 +276,10 @@ const SPECS: CastSpec[] = [
             '我是蘇映雪，春雪社台柱花旦，滿上海都說我穩得住場。',
             '這份穩，是我拿一輩子的分寸換來的殼。',
         ],
-        views: [['柳生春', '搭了八年的師妹，我這輩子只真給過她一個，偏是我自己先逃的']],
+        views: [['柳安春', '搭了八年的師妹，我這輩子只真給過她一個，偏是我自己先逃的']],
         wants: [
             { layer: '戲', desc: '去雲錦台把新戲的旦角戲排出彩，掙一個立得住的台柱', weight: 0.72, sat: 0.34, resistance: 4 },
-            { layer: '情', desc: '私心想跟柳生春多對幾場生旦戲，那點心思不敢認', target: '柳生春', weight: 0.5, sat: 0.42, resistance: 6 },
+            { layer: '情', desc: '私心想跟柳安春多對幾場生旦戲，那點心思不敢認', target: '柳安春', weight: 0.5, sat: 0.42, resistance: 6 },
         ],
     },
     {
@@ -291,9 +291,9 @@ const SPECS: CastSpec[] = [
             '我是白韻秋，霞飛路綢緞大莊的獨養千金。',
             '認準的事，這偌大家業也換不來我真想要的那個笑。',
         ],
-        views: [['柳生春', '我捧的角兒，我要的其實是她卸了妝、不設防的那個人']],
+        views: [['柳安春', '我捧的角兒，我要的其實是她卸了妝、不設防的那個人']],
         wants: [
-            { layer: '癡', desc: '想法子親近柳生春，捧他捧成名角', target: '柳生春', weight: 0.7, sat: 0.3, resistance: 5 },
+            { layer: '癡', desc: '想法子親近柳安春，捧他捧成名角', target: '柳安春', weight: 0.7, sat: 0.3, resistance: 5 },
             { layer: '世', desc: '弄明白自己要的到底是台上那位，還是卸了妝那個人', weight: 0.48, sat: 0.4, resistance: 5 },
         ],
     },
@@ -322,7 +322,7 @@ const SPECS: CastSpec[] = [
             '我看得出誰正要成角、誰快被名聲壓壞、誰只差一場戲就能站起來。',
             '疼人，我藏得很深。',
         ],
-        views: [['柳生春', '她那柄扇太像當年的我，我有時心軟有時心驚']],
+        views: [['柳安春', '她那柄扇太像當年的我，我有時心軟有時心驚']],
         wants: [
             { layer: '志', desc: '把封了多年的春雪社重新撐起來，排一齣立得住的新戲', weight: 0.68, sat: 0.38, resistance: 4 },
             // GUARDED: the 封箱/白蘭/懷錶 grief is a HIDDEN 心底祕密 (it lives in `secret`,
@@ -342,9 +342,9 @@ const SPECS: CastSpec[] = [
             '我是江聞鶴，從紹興男班北上的小生，跪步是拿命換的真本事。',
             '我怕的不是輸給誰，是怕這身本事在新上海不夠人看。',
         ],
-        views: [['柳生春', '同演小生的對手，嘴上不服，心裡認她那口氣']],
+        views: [['柳安春', '同演小生的對手，嘴上不服，心裡認她那口氣']],
         wants: [
-            { layer: '藝', desc: '在雲錦台站住，跟柳生春唱一場誰也不讓誰的對手戲', target: '柳生春', weight: 0.66, sat: 0.36, resistance: 4 },
+            { layer: '藝', desc: '在雲錦台站住，跟柳安春唱一場誰也不讓誰的對手戲', target: '柳安春', weight: 0.66, sat: 0.36, resistance: 4 },
         ],
     },
     {

@@ -10,6 +10,7 @@ function dossier(input: {
     resolvedWants?: number;
     departures?: number;
     relationshipTurn?: boolean;
+    objectChanges?: number;
     contested?: boolean;
 }): EpistemicDossierBundle {
     return {
@@ -29,6 +30,7 @@ function dossier(input: {
                 resolvedWants: input.resolvedWants ?? 0,
                 departures: input.departures ?? 0,
                 relationshipTurn: input.relationshipTurn ?? false,
+                objectChanges: input.objectChanges,
             },
         },
         manifest: {
@@ -88,4 +90,13 @@ test('two objective turns publish, with at most one cast-linked bridge between t
     assert.equal(plan.selected[1].role, 'development');
     assert.ok(plan.omitted.some((item) => item.eventId === unrelated.manifest.eventId));
     assert.ok(plan.omitted.some((item) => item.eventId === quiet.manifest.eventId));
+});
+
+test('registered object mutation is an objective turn, not static banter', () => {
+    const candidate = anthologyCandidateFromDossier(dossier({
+        id: 'spring-snow:d1:t2:wardrobe', day: 1, cast: ['liu', 'tang'], objectChanges: 2,
+    }));
+    assert.equal(candidate.role, 'turning_point');
+    assert.equal(candidate.signals.objectChanges, 2);
+    assert.ok(candidate.score >= 14);
 });

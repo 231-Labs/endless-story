@@ -100,20 +100,20 @@ const CAST: Actor[] = [
         persona:
             '春雪社班主，昔年霞飛路上最亮的小生。如今封箱，坐二樓包廂看戲、看帳、看人心。懂舊班規矩也懂上海新熱鬧，看得出誰要成角、誰快被名聲壓壞、誰只差一場戲就站得起來。不是冷，是把疼人藏得極深：能為生意說狠話，也會散戲後讓人送一碗溫梨湯到嗓子發緊的角兒房裡。',
         secret:
-            '封箱那年不是唱不動了。有一齣戲、一個人、一句沒能說出口的話，讓她明白台上再亮也照不見自己真正想留住的東西。那只停了的懷錶一直收著。看柳生春在台上，那柄扇太像當年的自己。',
+            '封箱那年不是唱不動了。有一齣戲、一個人、一句沒能說出口的話，讓她明白台上再亮也照不見自己真正想留住的東西。那只停了的懷錶一直收著。看柳安春在台上，那柄扇太像當年的自己。',
         memories: [
             '你封箱那年並不是唱不動了。有一齣戲、一個人、一句沒能說出口的話，忽然讓你明白台上再亮，也照不見自己真正想留住的東西。',
             '那只停了的懷錶你一直收著。錶是那個人的，停在那個人走的那一天。',
-            '看柳生春在台上做小生，你有時心軟，有時心驚：她那柄扇，開合之間太像當年的你自己。',
+            '看柳安春在台上做小生，你有時心軟，有時心驚：她那柄扇，開合之間太像當年的你自己。',
         ],
         style: '疼人藏得極深的當家：話短、狠、底下有暖；能拍板定生死，也記得誰的嗓子該送溫梨湯。',
         comp: { 唱腔: 90, 身段: 90, 武場: 60 },
         want: '把春雪社這齣年底會串撐起來、立住名，護住正要成的角。',
-        relationships: '護柳生春、倚重蘇映雪、冷眼看江聞鶴的本事、留意連翹的野。',
+        relationships: '護柳安春、倚重蘇映雪、冷眼看江聞鶴的本事、留意連翹的野。',
     },
     {
         id: 'liu',
-        name: '柳生春',
+        name: '柳安春',
         role: '小生（坤生，女兒身扮小生）',
         hangdang: '小生',
         banzhu: false,
@@ -124,7 +124,7 @@ const CAST: Actor[] = [
         memories: [
             '十七歲頭一回跟師姐同台唱《驚夢》，散了戲兩人都沒醒，在她廂房裡越了線。那是你的初夜，給了師姐。',
             '師姐冷你那段日子，一個散場雨夜，歌女金鳳把你拽進會樂里她的屋裡。你沒推開——你向來不推開誰。',
-            '十六歲頭一回挑梁唱《白蛇傳》的許仙。斷橋一場你一個踉蹌跪下去，滿場彩聲轟地起來，那一夜後戲單上頭一回有了柳生春三個字。',
+            '十六歲頭一回挑梁唱《白蛇傳》的許仙。斷橋一場你一個踉蹌跪下去，滿場彩聲轟地起來，那一夜後戲單上頭一回有了柳安春三個字。',
         ],
         style: '摺扇風流、溫柔不主動也不拒絕；台下嬌軟、在師姐前收著；笑得像什麼都不往心裡去，狠話也裹在軟裡。',
         comp: { 唱腔: 82, 身段: 88, 武場: 42 },
@@ -138,7 +138,7 @@ const CAST: Actor[] = [
         hangdang: '花旦',
         banzhu: false,
         persona:
-            '春雪社台柱花旦。台上端莊，台下極懂分寸：替班主圓場、同唱片行談價、把一班人的難堪輕輕接住。與柳生春搭了八年生旦，眼波水袖間的默契是全班招牌。待這師妹格外上心，卻總在最貼近那一步收住手。',
+            '春雪社台柱花旦。台上端莊，台下極懂分寸：替班主圓場、同唱片行談價、把一班人的難堪輕輕接住。與柳安春搭了八年生旦，眼波水袖間的默契是全班招牌。待這師妹格外上心，卻總在最貼近那一步收住手。',
         secret:
             '這輩子只真給過一個人，偏是她自己先逃的。她知道生春台下那身風流是打她冷了人那段起的頭，這筆帳記了一輩子。最怕的不是生春跟金鳳有過，是怕生春在金鳳那裡比在她這裡更像她自己。',
         memories: [
@@ -149,7 +149,7 @@ const CAST: Actor[] = [
         style: '端莊懂分寸、替全班圓場滴水不漏；真心只在台上第三道水袖那一揚才敢透一口氣出來。',
         comp: { 唱腔: 88, 身段: 84, 武場: 30 },
         want: '想演白素貞、同生春配一齣生旦，又總在最貼近那一步收住手。',
-        relationships: '對柳生春藏了八年的情與帳、替班主圓場、記著金鳳那筆account。',
+        relationships: '對柳安春藏了八年的情與帳、替班主圓場、記著金鳳那筆account。',
     },
     {
         id: 'jiang',
@@ -158,18 +158,18 @@ const CAST: Actor[] = [
         hangdang: '小生',
         banzhu: false,
         persona:
-            '從紹興男班北上的小生，台步穩、嗓子亮、說話帶舊戲班的直。看不慣上海萬事都要上報拍照灌唱片，也不明白女學生太太們為何為柳生春那樣的小生爭得厲害。不是來砸場，是真想把小生唱好；嘴上挑剔，台上卻肯接戲肯托人。',
+            '從紹興男班北上的小生，台步穩、嗓子亮、說話帶舊戲班的直。看不慣上海萬事都要上報拍照灌唱片，也不明白女學生太太們為何為柳安春那樣的小生爭得厲害。不是來砸場，是真想把小生唱好；嘴上挑剔，台上卻肯接戲肯托人。',
         secret:
-            '嘴上說上海新派花哨，其實頭回在包廂聽見滿堂為柳生春叫好時，心裡不是輕視，是慌：怕自己這套從小練出的本事，在新的上海已經不夠人看。可偏偏越怕，越想留下來唱一場真正漂亮的對手戲。',
+            '嘴上說上海新派花哨，其實頭回在包廂聽見滿堂為柳安春叫好時，心裡不是輕視，是慌：怕自己這套從小練出的本事，在新的上海已經不夠人看。可偏偏越怕，越想留下來唱一場真正漂亮的對手戲。',
         memories: [
             '你從紹興男班一路唱上來，臺步是跪在青石板上磨出來的。你不明白上海為什麼萬事都要上報、拍照、灌唱片。',
-            '頭一回在包廂聽滿堂為柳生春叫好，你心裡不是輕視，是慌：怕自己這套從小練出的本事，在新的上海已經不夠人看。',
+            '頭一回在包廂聽滿堂為柳安春叫好，你心裡不是輕視，是慌：怕自己這套從小練出的本事，在新的上海已經不夠人看。',
             '你越怕，越想留下來，同這位柳老板唱一場真正漂亮的對手戲。輸贏在其次，戲得是真的。',
         ],
         style: '紹興男班的直與硬：跪步硬橋硬馬、信磨爛的膝蓋才是真本事；嘴上挑剔、怕被新上海淘汰，話糙理不糙。',
         comp: { 唱腔: 85, 身段: 80, 武場: 58 },
-        want: '想同柳生春唱一場誰也不讓誰的真對手戲，證明紹興的本事在新上海還立得住。',
-        relationships: '與柳生春較勁又暗認她那口氣、被沈班主一句「別在上海跪太久」點著、心裡憋著要唱給爹聽。',
+        want: '想同柳安春唱一場誰也不讓誰的真對手戲，證明紹興的本事在新上海還立得住。',
+        relationships: '與柳安春較勁又暗認她那口氣、被沈班主一句「別在上海跪太久」點著、心裡憋著要唱給爹聽。',
     },
     {
         id: 'lian',
@@ -390,7 +390,7 @@ async function actorTurn(ask: Ask, a: Actor, milestone: Milestone | null, daysLe
 function fallbackActor(a: Actor): { action: string; speech: string; inner: string; serves: string; target_part: string } {
     switch (a.id) {
         case 'liu':
-            return { action: '柳生春在後台掌心開合摺扇三回，低聲吊了段許仙的清板', speech: '許仙這角，我想在師姐對面唱一場真的。', inner: '怕這演出來的男人比不過一個真的。', serves: 'milestone', target_part: '許仙' };
+            return { action: '柳安春在後台掌心開合摺扇三回，低聲吊了段許仙的清板', speech: '許仙這角，我想在師姐對面唱一場真的。', inner: '怕這演出來的男人比不過一個真的。', serves: 'milestone', target_part: '許仙' };
         case 'jiang':
             return { action: '江聞鶴到台口跪步走了一趟，膝蓋壓在台板上磨', speech: '定角就定角。許仙這場對手戲，我跪着也要爭。', inner: '越怕，越不肯走。', serves: 'milestone', target_part: '許仙' };
         case 'su':
@@ -648,7 +648,7 @@ function buildReport(
     const rehearseServed = pl.some((a) => a.servedMechanical);
     const chain = hasDingjiaoAnn && prepServed && convened && castFilled && hasPailianAnn && rehearseServed;
 
-    const liuActs = nonBanzhuActions.filter((a) => a.who === '柳生春');
+    const liuActs = nonBanzhuActions.filter((a) => a.who === '柳安春');
     const jiangActs = nonBanzhuActions.filter((a) => a.who === '江聞鶴');
 
     const L: string[] = [];
@@ -677,7 +677,7 @@ function buildReport(
     L.push('');
     L.push('| tick | who | forced | action | milestone | served (mech) | lex hits | style-tag |');
     L.push('|---|---|---|---|---|---|---|---|');
-    const styleTag: Record<string, string> = { 沈雪笙: '班主·藏疼', 柳生春: '摺扇風流', 蘇映雪: '端莊圓場', 江聞鶴: '紹興硬橋', 連翹: '刀馬硬氣' };
+    const styleTag: Record<string, string> = { 沈雪笙: '班主·藏疼', 柳安春: '摺扇風流', 蘇映雪: '端莊圓場', 江聞鶴: '紹興硬橋', 連翹: '刀馬硬氣' };
     const actByTick = new Map(rl.actions.map((a) => [a.tick, a]));
     for (const so of rl.spotlightOrder) {
         const a = actByTick.get(so.tick);
@@ -712,11 +712,11 @@ function buildReport(
     L.push('');
 
     // 4 — style distinctness: 柳 vs 江
-    L.push('## 4 · Style distinctness — 柳生春 vs 江聞鶴 (2 each)');
+    L.push('## 4 · Style distinctness — 柳安春 vs 江聞鶴 (2 each)');
     L.push('');
-    L.push('**柳生春（摺扇風流·嬌軟裹狠）**');
+    L.push('**柳安春（摺扇風流·嬌軟裹狠）**');
     for (const a of liuActs.slice(0, 2)) L.push(`- (tick ${a.tick}) ${a.action}${a.speech ? `｜「${a.speech}」` : ''}${a.inner ? `　〔心〕${a.inner}` : ''}`);
-    if (!liuActs.length) L.push('- *(no 柳生春 spotlight captured)*');
+    if (!liuActs.length) L.push('- *(no 柳安春 spotlight captured)*');
     L.push('');
     L.push('**江聞鶴（紹興硬橋·跪步直硬）**');
     for (const a of jiangActs.slice(0, 2)) L.push(`- (tick ${a.tick}) ${a.action}${a.speech ? `｜「${a.speech}」` : ''}${a.inner ? `　〔心〕${a.inner}` : ''}`);

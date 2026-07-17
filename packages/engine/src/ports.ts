@@ -23,6 +23,8 @@ import type * as Runner from '@endless-story/runner';
 // ── Re-used runner authorship shapes (type-only) ─────────────────────────────
 export type DeriveWantsInput = Runner.characterAgent.DeriveWantsInput;
 export type GenesisWant = Runner.characterAgent.GenesisWant;
+export type MoveDecideInput = Runner.characterAgent.MoveDecideInput;
+export type MoveDecideResult = Runner.characterAgent.MoveDecideResult;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -52,6 +54,11 @@ export interface CanonicalSceneBeat {
     perceiverIds: string[];
     /** Private to the actor; delivery adapters must never show it to witnesses. */
     inner?: string;
+    /** Validated objective physical mutations committed with this beat. */
+    objectEffects?: Runner.characterAgent.BeatObjectEffect[];
+    /** Validated money/contract commands committed with this beat (the ledger
+     *  receipts are recoverable by causeEventId in the season economy). */
+    economyCommands?: Runner.characterAgent.BeatEconomyCommand[];
 }
 
 export interface CanonicalSceneEvent {
@@ -71,6 +78,7 @@ export interface CanonicalSceneEvent {
         resolvedWants: number;
         departures: number;
         relationshipTurn: boolean;
+        objectChanges?: number;
     };
 }
 
@@ -209,6 +217,9 @@ export interface SelfModelConsolidateReply {
  * with zero LLM.
  */
 export interface SceneAgentPort extends SceneAgent {
+    /** Autonomous movement is an explicit affordance choice: the world supplies
+     *  reachable scene ids and the character chooses one (or stays). */
+    decideMove(input: MoveDecideInput): Promise<MoveDecideResult>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;
@@ -348,6 +359,11 @@ export interface WorldClock {
     tickOfDay: number;
     partOfDay: PartOfDay;
 }
+
+// ── Economy (season money physics) ───────────────────────────────────────────
+/** Defined next to the pure season-economy core to avoid a runtime cycle with
+ *  world-state; re-exported here so adapters/tick keep one port import site. */
+export type { EconomyPort } from './core/season-economy.ts';
 
 /** Advances and interprets the world clock. Local-first authority — the engine
  *  owns its clock (no chain WorldState). */

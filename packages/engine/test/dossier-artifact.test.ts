@@ -17,7 +17,7 @@ const publicEvent = {
     editorialSignals: { resolvedWants: 1, departures: 0, relationshipTurn: false },
     beats: [
         { characterId: 'su', name: '蘇映雪', text: '把溫茶推到生春手邊。', audience: 'scene' as const, perceiverIds: ['su', 'liu', 'qiao'] },
-        { characterId: 'liu', name: '柳生春', text: '接過茶盞，偏頭一笑。', audience: 'scene' as const, perceiverIds: ['su', 'liu', 'qiao'] },
+        { characterId: 'liu', name: '柳安春', text: '接過茶盞，偏頭一笑。', audience: 'scene' as const, perceiverIds: ['su', 'liu', 'qiao'] },
     ],
 };
 
@@ -26,12 +26,12 @@ test('a tick event compiles into the same grounded header the UI parses', async 
         events: [publicEvent],
         eventPovs: [
             { characterId: 'su', name: '蘇映雪', eventId: publicEvent.id, body: '我只當她又在逞強。' },
-            { characterId: 'liu', name: '柳生春', eventId: publicEvent.id, body: '那盞茶比話暖。' },
+            { characterId: 'liu', name: '柳安春', eventId: publicEvent.id, body: '那盞茶比話暖。' },
             { characterId: 'outsider', name: '場外人', eventId: publicEvent.id, body: '我什麼都知道。' },
         ],
     }, [
         { id: 'su', name: '蘇映雪', role: '花旦' },
-        { id: 'liu', name: '柳生春', role: '坤生' },
+        { id: 'liu', name: '柳安春', role: '坤生' },
     ]);
 
     assert.ok(artifact);
@@ -51,7 +51,7 @@ test('private or single-POV events never become public dossiers', async () => {
         events: [{ ...publicEvent, visibility: 'private' as const }],
         eventPovs: [
             ...lonePov,
-            { characterId: 'liu', name: '柳生春', eventId: publicEvent.id, body: '只她知道。' },
+            { characterId: 'liu', name: '柳安春', eventId: publicEvent.id, body: '只她知道。' },
         ],
     }, []), []);
 });
@@ -98,11 +98,11 @@ test('real curator supplies bespoke leads, mixed review states, and passage-leve
         events: [publicEvent],
         eventPovs: [
             { characterId: 'su', name: '蘇映雪', eventId: publicEvent.id, body: '我只當她又在逞強。' },
-            { characterId: 'liu', name: '柳生春', eventId: publicEvent.id, body: '那盞茶比話暖。' },
+            { characterId: 'liu', name: '柳安春', eventId: publicEvent.id, body: '那盞茶比話暖。' },
         ],
     }, [
         { id: 'su', name: '蘇映雪', role: '花旦', gender: '女' },
-        { id: 'liu', name: '柳生春', role: '坤生', gender: '女' },
+        { id: 'liu', name: '柳安春', role: '坤生', gender: '女' },
     ], curator);
 
     assert.notEqual(artifact.bundle.manifest.perspectives[0].lead, artifact.bundle.manifest.perspectives[1].lead);

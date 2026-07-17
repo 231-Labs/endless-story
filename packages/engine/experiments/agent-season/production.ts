@@ -39,7 +39,7 @@ export interface Play {
  * else is 0 (they never enter a play's cast).
  */
 export const ABILITY: Record<string, number> = {
-    柳生春: 0.9,
+    柳安春: 0.9,
     蘇映雪: 0.85,
     沈雪笙: 0.75,
     江聞鶴: 0.7,

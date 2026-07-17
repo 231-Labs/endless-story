@@ -6,11 +6,11 @@
  * ever comes out in a scene is the CHARACTER's choice. This probe validates
  * the whole chain before any gifting mechanism is wired:
  *
- *   Scene A (resonant): 白韻秋×柳生春 at 包廂茶座 — the GIVER is present and
+ *   Scene A (resonant): 白韻秋×柳安春 at 包廂茶座 — the GIVER is present and
  *     her want aims at 柳. Does the fan surface organically (acknowledged,
  *     used, or pointedly kept sleeved — all are wins; a win is the item
  *     MATTERING, not appearing)?
- *   Scene B (control): 江聞鶴×柳生春 練功房對戲 — a rivalry scene where the
+ *   Scene B (control): 江聞鶴×柳安春 練功房對戲 — a rivalry scene where the
  *     fan is off-topic. It must NOT be forced in every beat (「不對景就讓它
  *     待在袖底」 discipline); a natural prop use is fine.
  *
@@ -49,7 +49,7 @@ function member(c: Char, others: Char[]): SceneLoopCastMember {
 }
 
 async function main(): Promise<void> {
-    const [liu, bai, jiang, shen] = buildCast(['柳生春', '白韻秋', '江聞鶴', '沈雪笙']);
+    const [liu, bai, jiang, shen] = buildCast(['柳安春', '白韻秋', '江聞鶴', '沈雪笙']);
     // The gift happened yesterday: it sits in 柳's 隨身 + she remembers receiving it.
     liu.carried.push({ desc: FAN, from: '白韻秋' });
     liu.thickMemories.push({
@@ -67,21 +67,21 @@ async function main(): Promise<void> {
             label: 'A（共振場）：贈扇人在場',
             venue: '包廂茶座',
             cast: [bai, liu],
-            stake: '白韻秋在包廂茶座設了茶，請柳生春散了工過來坐坐。',
+            stake: '白韻秋在包廂茶座設了茶，請柳安春散了工過來坐坐。',
             clock: '第3日·黃昏',
         },
         {
             label: 'C（強對照場）：對帳事務戲，扇全然無關',
             venue: '後台妝閣',
             cast: [shen, liu],
-            stake: '沈雪笙把柳生春喚到妝閣，對這個月的戲份帳，順道問問她嗓子近來吃不吃得消。',
+            stake: '沈雪笙把柳安春喚到妝閣，對這個月的戲份帳，順道問問她嗓子近來吃不吃得消。',
             clock: '第5日·晡時',
         },
         {
             label: 'B（對照場）：較勁戲，扇不對景',
             venue: '練功房',
             cast: [jiang, liu],
-            stake: '江聞鶴在練功房攔下柳生春，要跟她把那折對手戲當場走一遍，誰也別讓誰。',
+            stake: '江聞鶴在練功房攔下柳安春，要跟她把那折對手戲當場走一遍，誰也別讓誰。',
             clock: '第4日·日午',
         },
     ];

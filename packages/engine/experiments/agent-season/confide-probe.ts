@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     });
 
     // ③ PROPAGATION — the listener's later scenes surface it like any memory.
-    const surfaced = await recall.recall(lian.id, '蘇映雪 柳生春 心事 師姐', 3, 4);
+    const surfaced = await recall.recall(lian.id, '蘇映雪 柳安春 心事 師姐', 3, 4);
 
     // ── mechanical verdicts ──
     const bothSpoke = new Set(loop.beats.map((b) => b.characterId)).size === 2;

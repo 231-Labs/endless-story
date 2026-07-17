@@ -10,8 +10,9 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { RecallPort } from './ports.ts';
+import { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
+import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-economy.ts';
 import { makeClock } from './adapters/local/clock.ts';
 import {
     WorldState,
@@ -25,9 +26,19 @@ import {
 interface RawPreset {
     id: string;
     label?: string;
-    saga?: { name?: string; description?: string; nature_prompt?: string };
+    saga?: {
+        name?: string;
+        description?: string;
+        nature_prompt?: string;
+        /** narrative.etiquette = canon honorifics facts (稱謂鐵則). */
+        narrative?: { etiquette?: string };
+    };
+    /** Authored canon-pair one-line views (from → to, first person, ≤40字),
+     *  derived from the cast's secrets. Seeded only when the relationship
+     *  fallback wiring is enabled — the always-on structural bias. */
+    relationship_views?: Array<{ from: string; to: string; view: string }>;
     drama_resources?: Array<{ label: string; statement?: string }>;
-    scenes?: Array<{ name: string; privacy?: number }>;
+    scenes?: Array<{ name: string; description?: string; privacy?: number; capacity?: number }>;
     founding_cast?: Array<{
         name: string;
         ageYears?: number;
@@ -41,16 +52,167 @@ interface RawPreset {
     }>;
 }
 
-/** Default location of the shared story presets, relative to this module. */
-function defaultStoriesDir(): string {
-    return path.resolve(fileURLToPath(import.meta.url), '../../../cli/scripts/stories');
+export interface SeasonFrame {
+    id: string;
+    title: string;
+    centralQuestion: string;
+    incitingIncident: string;
+    deadline: string;
+    stakes: string[];
+    publicFacts: string[];
+    contestedResources?: Array<{ label: string; statement?: string }>;
+    openingScene?: string;
+    initialObjects?: Array<{
+        id: string;
+        label: string;
+        aliases?: string[];
+        scene: string;
+        portable?: boolean;
+        visibility?: 'visible' | 'hidden';
+        container?: string;
+        state?: string;
+        /** Omit for public props. Hidden biographical objects should name only
+         * characters whose seed memories establish knowledge of them. */
+        knownByNames?: string[];
+    }>;
+    /** Clock-bound world facts. `atTick` is relative to the fresh season start;
+     * they enter canon before movement on that tick, so the deadline is an
+     * affordance-changing event rather than decorative prompt prose. */
+    scheduledEvents?: Array<{
+        id: string;
+        atTick: number;
+        scene: string;
+        clock?: string;
+        text: string;
+        visibility?: 'public' | 'private';
+        witnessNames?: string[];
+    }>;
+    /** Season money physics: accounts, wages, priced affordances and structured
+     * contracts. Seeded into WorldStateData.economy so a contract's advance is
+     * real escrowed money, never a text-only prop. */
+    economy?: SeasonEconomyFrame;
 }
+
+export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
 
 /** Read + parse a preset JSON. Throws loudly if the file is missing. */
 export function loadPresetFile(presetId: string, storiesDir?: string): RawPreset {
     const dir = storiesDir ?? defaultStoriesDir();
     const file = path.join(dir, `${presetId}.json`);
     return JSON.parse(fs.readFileSync(file, 'utf-8')) as RawPreset; // throws if absent
+}
+
+export function loadSeasonFrameFile(seasonId: string, seasonsDir?: string): SeasonFrame {
+    const dir = seasonsDir ?? defaultSeasonsDir();
+    const file = path.join(dir, `${seasonId}.json`);
+    return JSON.parse(fs.readFileSync(file, 'utf-8')) as SeasonFrame;
+}
+
+/** Load the season named by `ES_ACTIVE_SEASON`, or the explicit id. */
+export function loadSeasonFrame(seasonId?: string, seasonsDir?: string): SeasonFrame {
+    const id = seasonId ?? activeSeasonId();
+    if (!id) throw new Error('no season id: pass one or set ES_ACTIVE_SEASON');
+    return loadSeasonFrameFile(id, seasonsDir);
+}
+
+/**
+ * Add a season's public situation to the shared saga seed without rewriting
+ * any character biography, secret or memory. The frame is world context, not
+ * a prescribed outcome: it states the incident, clock and costs, then leaves
+ * every response to the characters.
+ */
+export function applySeasonFrame(world: WorldState, frame: SeasonFrame): void {
+    const block = [
+        `【本季：${frame.title}】`,
+        `中心問題：${frame.centralQuestion}`,
+        `公開事件：${frame.incitingIncident}`,
+        `期限：${frame.deadline}`,
+        '已公開的世界事實：',
+        ...frame.publicFacts.map((fact) => `- ${fact}`),
+        '無法同時保全的代價：',
+        ...frame.stakes.map((stake) => `- ${stake}`),
+        '這些只是世界事實與壓力；沒有任何角色的選擇、台詞、感情或結局被預先決定。',
+    ].join('\n');
+    world.data.sagaPremise = `${world.data.sagaPremise}\n\n${block}`;
+
+    const existing = new Set(world.data.contestedResources.map((resource) => resource.label));
+    for (const resource of frame.contestedResources ?? []) {
+        if (existing.has(resource.label)) continue;
+        world.data.contestedResources.push({ ...resource });
+        existing.add(resource.label);
+    }
+
+    appendMissingSeasonObjects(world, frame, false);
+
+    const scheduled = (world.data.scheduledEvents ??= []);
+    const scheduledIds = new Set(scheduled.map((event) => event.id));
+    const seasonStartTick = world.data.clock.currentTick;
+    for (const spec of frame.scheduledEvents ?? []) {
+        if (scheduledIds.has(spec.id)) throw new Error(`duplicate scheduled event id: ${spec.id}`);
+        if (!Number.isInteger(spec.atTick) || spec.atTick < 0) {
+            throw new Error(`scheduled event ${spec.id} has invalid atTick: ${spec.atTick}`);
+        }
+        const scene = world.data.scenes.find((candidate) => candidate.name === spec.scene);
+        if (!scene) throw new Error(`scheduled event ${spec.id} references unknown scene: ${spec.scene}`);
+        const witnessIds = spec.witnessNames?.map((name) => {
+            const id = world.idByName(name);
+            if (!id) throw new Error(`scheduled event ${spec.id} references unknown witness: ${name}`);
+            return id;
+        }) ?? world.data.cast.map((member) => member.id);
+        scheduled.push({
+            id: spec.id,
+            atTick: seasonStartTick + spec.atTick,
+            sceneId: scene.id,
+            clock: spec.clock,
+            text: spec.text,
+            visibility: spec.visibility ?? 'public',
+            witnessIds,
+        });
+        scheduledIds.add(spec.id);
+    }
+
+    if (frame.economy && !world.data.economy) seedSeasonEconomy(world, frame.economy, frame.id);
+}
+
+function appendMissingSeasonObjects(world: WorldState, frame: SeasonFrame, tolerateExisting: boolean): number {
+    const objects = (world.data.objects ??= []);
+    const knownIds = new Set(objects.map((object) => object.id));
+    const allCharacters = world.data.cast.map((member) => member.id);
+    let added = 0;
+    for (const spec of frame.initialObjects ?? []) {
+        if (knownIds.has(spec.id)) {
+            if (tolerateExisting) continue;
+            throw new Error(`duplicate season object id: ${spec.id}`);
+        }
+        const scene = world.data.scenes.find((candidate) => candidate.name === spec.scene);
+        if (!scene) throw new Error(`season object ${spec.id} references unknown scene: ${spec.scene}`);
+        const knownBy = spec.knownByNames?.map((name) => {
+            const id = world.idByName(name);
+            if (!id) throw new Error(`season object ${spec.id} references unknown knower: ${name}`);
+            return id;
+        }) ?? allCharacters;
+        objects.push({
+            id: spec.id,
+            label: spec.label,
+            aliases: [...new Set([spec.label, ...(spec.aliases ?? [])])],
+            sceneId: scene.id,
+            portable: spec.portable !== false,
+            visibility: spec.visibility ?? 'visible',
+            container: spec.container,
+            state: spec.state,
+            version: 0,
+            knownBy: [...new Set(knownBy)],
+        });
+        knownIds.add(spec.id);
+        added += 1;
+    }
+    return added;
+}
+
+/** Idempotent resume migration. It only appends newly declared objects and
+ * never overwrites a prop that characters have already moved or changed. */
+export function reconcileSeasonObjects(world: WorldState, frame: SeasonFrame): number {
+    return appendMissingSeasonObjects(world, frame, true);
 }
 
 /** Deterministic identity distillation for the durable self-model: 「我是<name>，
@@ -97,11 +259,20 @@ export function seedRelationshipViews(
 
 /** Build a fresh WorldState from a parsed preset (pure; no I/O, no recall). */
 export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6): WorldState {
-    const scenes: SceneInfo[] = (raw.scenes ?? []).map((s, i) => ({
-        id: `s${i}`,
-        name: s.name,
-        privacyLevel: s.privacy ?? 0,
-    }));
+    const scenes: SceneInfo[] = (raw.scenes ?? []).map((s, i) => {
+        const privacyLevel = s.privacy ?? 0;
+        const capacity = s.capacity ?? (privacyLevel >= 3 ? 2 : privacyLevel >= 2 ? 4 : 8);
+        if (!Number.isInteger(capacity) || capacity < 1) {
+            throw new Error(`[preset] scene "${s.name}" has invalid capacity: ${capacity}`);
+        }
+        return {
+            id: `s${i}`,
+            name: s.name,
+            description: s.description,
+            privacyLevel,
+            capacity,
+        };
+    });
     const sceneIdByName = new Map(scenes.map((s) => [s.name, s.id]));
     const resolveScene = (name: string | undefined, who: string, field: string): string => {
         if (!name) throw new Error(`[preset] ${who} has no ${field}`);
@@ -121,6 +292,7 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
             name: c.name,
             persona: c.description,
             secret: c.secret,
+            secretSeed: c.secret,
             gender: c.gender,
             age: c.ageYears,
             role: c.role,
@@ -149,6 +321,7 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
     const data: WorldStateData = {
         sagaId,
         sagaPremise: premise,
+        etiquette: raw.saga?.narrative?.etiquette,
         cast,
         scenes,
         roster,
@@ -159,6 +332,7 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
         clock: makeClock(ticksPerDay, 0),
         dayAccum: { lines: [], actorIds: [], sceneIds: [], povByName: {} },
         contestedResources,
+        objects: [],
     };
     return new WorldState(data);
 }

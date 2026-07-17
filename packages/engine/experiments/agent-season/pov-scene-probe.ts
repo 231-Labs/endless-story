@@ -27,25 +27,25 @@ import { buildCast } from './world.ts';
 // ── the scene under test: W1 · 第1日·黃昏 · 後台小廂房 · 修羅場 (verbatim) ────
 const SCENE_META = {
     venue: '後台小廂房',
-    venueHint: '柳生春在戲台後頭的住處',
+    venueHint: '柳安春在戲台後頭的住處',
     clock: '第1日·黃昏',
-    kind: '修羅場（蘇映雪聞聲趕來、破門闖進，撞見金鳳×柳生春）',
+    kind: '修羅場（蘇映雪聞聲趕來、破門闖進，撞見金鳳×柳安春）',
 };
 const BEATS: Array<{ name: string; text: string }> = [
     { name: '蘇映雪', text: '扶住門框站定，目光在兩人交纏處一掠而過，隨即垂下眼，聲音穩得像什麼也沒撞見：「金鳳姑娘，班主在前頭找你呢。」' },
-    { name: '金鳳', text: '指尖在柳生春後腰那顆痣處不輕不重地一按，這才慢條斯理地抽回手，轉過身去對門口的人笑：「勞蘇姑娘傳話，這就來。」' },
-    { name: '柳生春', text: '趁金鳳轉身的當口，一把攥住她的手腕，力道緊得骨節都泛了白，頸邊青筋一跳啞聲道：「金鳳……別走。」' },
+    { name: '金鳳', text: '指尖在柳安春後腰那顆痣處不輕不重地一按，這才慢條斯理地抽回手，轉過身去對門口的人笑：「勞蘇姑娘傳話，這就來。」' },
+    { name: '柳安春', text: '趁金鳳轉身的當口，一把攥住她的手腕，力道緊得骨節都泛了白，頸邊青筋一跳啞聲道：「金鳳……別走。」' },
     { name: '蘇映雪', text: '抬手將搭在臂上的帕子抖落，替她將領口那粒鬆了的盤扣不疾不徐地繫上，擋住後腰那處紅痕，聲音穩得挑不出一絲褶皺：「師妹，扣子散了，仔細台前人笑。」' },
-    { name: '柳生春', text: '鬆開金鳳的手，任師姐替自己繫扣子，垂著眼不敢看她，只低低應了一聲：「曉得了。」' },
+    { name: '柳安春', text: '鬆開金鳳的手，任師姐替自己繫扣子，垂著眼不敢看她，只低低應了一聲：「曉得了。」' },
 ];
 /** Objective anchor facts every POV version must keep (substring tokens). */
 const ANCHORS = ['盤扣', '班主', '傳話'];
 
-const POV_CHARS = ['蘇映雪', '金鳳', '柳生春'];
+const POV_CHARS = ['蘇映雪', '金鳳', '柳安春'];
 
 async function main(): Promise<void> {
     const { text: llmText } = await import('@endless-story/llm');
-    const cast = buildCast(['柳生春', '蘇映雪', '金鳳']);
+    const cast = buildCast(['柳安春', '蘇映雪', '金鳳']);
     const byName = new Map(cast.map((c) => [c.name, c]));
     const sceneText = BEATS.map((b) => `${b.name}：${b.text}`).join('\n');
     const outDir = import.meta.dirname;

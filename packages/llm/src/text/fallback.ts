@@ -1,7 +1,7 @@
 /**
  * Model-fallback wrapper — retry on overload / rate-limit with cheaper models.
  *
- * Caller passes a chain of model ids; on retryable error (429/503/529 or
+ * Caller passes a chain of model ids; on retryable error (429/502/503/504/529 or
  * messages mentioning overloaded/rate_limit), try the next one. Non-retryable
  * errors propagate immediately.
  */

@@ -105,11 +105,11 @@ const SEASON_SHEET: CastingSheet[] = [
             { key: 'lyricism', label: '填詞', value: 52 },
         ],
         memories: [
-            { id: 'sx2', text: '那只停了的懷錶我一直收著，停在那個人走的那一天。箱底還壓著一件本不該在小生箱裡的旦角戲衣，是我放的。', mood: 'sorrow', aboutName: '柳生春' },
-            { id: 'sx3', text: '看柳生春在台上做小生，我有時心軟，有時心驚：她那柄扇，開合之間太像當年的我自己。', mood: 'longing', aboutName: '柳生春' },
+            { id: 'sx2', text: '那只停了的懷錶我一直收著，停在那個人走的那一天。箱底還壓著一件本不該在小生箱裡的旦角戲衣，是我放的。', mood: 'sorrow', aboutName: '柳安春' },
+            { id: 'sx3', text: '看柳安春在台上做小生，我有時心軟，有時心驚：她那柄扇，開合之間太像當年的我自己。', mood: 'longing', aboutName: '柳安春' },
         ],
         relationships: [
-            { withName: '柳生春', kind: '班主與角兒（心軟心驚）', intensity: 60, note: '她的扇太像當年的我；我護她，也怕她走上我的舊路。' },
+            { withName: '柳安春', kind: '班主與角兒（心軟心驚）', intensity: 60, note: '她的扇太像當年的我；我護她，也怕她走上我的舊路。' },
         ],
     },
     {
@@ -125,17 +125,17 @@ const SEASON_SHEET: CastingSheet[] = [
             { key: 'movement', label: '身段', value: 72 },
         ],
         memories: [
-            { id: 'sy1', text: '八年前我二十歲，同十七歲的生春頭一回合演《驚夢》。下了戲誰也沒醒，在我廂房裡越了那道線。', mood: 'longing', aboutName: '柳生春' },
-            { id: 'sy3', text: '水袖第三道的暗號是某年除夕我定的：往後台上我接你揚到第三道的水袖，就是只唱給你。', mood: 'longing', aboutName: '柳生春' },
+            { id: 'sy1', text: '八年前我二十歲，同十七歲的生春頭一回合演《驚夢》。下了戲誰也沒醒，在我廂房裡越了那道線。', mood: 'longing', aboutName: '柳安春' },
+            { id: 'sy3', text: '水袖第三道的暗號是某年除夕我定的：往後台上我接你揚到第三道的水袖，就是只唱給你。', mood: 'longing', aboutName: '柳安春' },
         ],
         relationships: [
-            { withName: '柳生春', kind: '八年生旦·暗戀·除夕暗號', intensity: 92, note: '台上千百回杜麗娘與柳夢梅，台下最貼近那一步我總收住手。' },
+            { withName: '柳安春', kind: '八年生旦·暗戀·除夕暗號', intensity: 92, note: '台上千百回杜麗娘與柳夢梅，台下最貼近那一步我總收住手。' },
         ],
         bids: [{ partId: 'bai', partName: '白素貞', strength: 0.5, desc: '想演白素貞，與生春配一齣生旦' }],
-        lobby: { forWorldName: '柳生春', partId: 'xu', partName: '許仙', strength: 0.3, desc: '想讓柳生春演許仙，好與我配對' },
+        lobby: { forWorldName: '柳安春', partId: 'xu', partName: '許仙', strength: 0.3, desc: '想讓柳安春演許仙，好與我配對' },
     },
     {
-        worldName: '柳生春', // 坤生 小生 — body-not-brush (填詞 45, gated out of commissioned 詞)
+        worldName: '柳安春', // 坤生 小生 — body-not-brush (填詞 45, gated out of commissioned 詞)
         hangdang: '生',
         yinggong: ['文小生', '武小生'],
         actorGender: 'female',
@@ -168,10 +168,10 @@ const SEASON_SHEET: CastingSheet[] = [
             { key: 'literati', label: '文墨', value: 55 },
         ],
         memories: [
-            { id: 'jw2', text: '我越怕，越想留下來，同這位柳老板唱一場真正漂亮的對手戲。輸贏在其次，戲得是真的。', mood: 'tense', aboutName: '柳生春' },
+            { id: 'jw2', text: '我越怕，越想留下來，同這位柳老板唱一場真正漂亮的對手戲。輸贏在其次，戲得是真的。', mood: 'tense', aboutName: '柳安春' },
         ],
         relationships: [
-            { withName: '柳生春', kind: '同行較勁·想唱一場真對手戲', intensity: 55, note: '爭的不是男女高下，是怎樣把少年郎唱得可信。' },
+            { withName: '柳安春', kind: '同行較勁·想唱一場真對手戲', intensity: 55, note: '爭的不是男女高下，是怎樣把少年郎唱得可信。' },
         ],
         bids: [{ partId: 'xu', partName: '許仙', strength: 0.45, desc: '想演許仙，唱一場真對手戲' }],
     },
@@ -208,10 +208,10 @@ const SEASON_SHEET: CastingSheet[] = [
             { key: 'lyricism', label: '填詞', value: 50 },
         ],
         memories: [
-            { id: 'jf3', text: '我不要拆散誰，我要她當面認一句欠我的。等真拿到那句話，我留不留，連我自己都不知道。', mood: 'wrath', aboutName: '柳生春' },
+            { id: 'jf3', text: '我不要拆散誰，我要她當面認一句欠我的。等真拿到那句話，我留不留，連我自己都不知道。', mood: 'wrath', aboutName: '柳安春' },
         ],
         relationships: [
-            { withName: '柳生春', kind: '六七年身之情·要一句交代', intensity: 85, note: '她的心從頭到尾在那個花旦身上；我要的是她當面認一句欠我的。' },
+            { withName: '柳安春', kind: '六七年身之情·要一句交代', intensity: 85, note: '她的心從頭到尾在那個花旦身上；我要的是她當面認一句欠我的。' },
         ],
     },
     {
@@ -222,10 +222,10 @@ const SEASON_SHEET: CastingSheet[] = [
         voice: '綢緞莊千金，捧角捧得體面，被婉拒也不糾纏；體面底下還不甘心退場。',
         skills: [{ key: 'vocal', label: '唱腔', value: 40 }],
         memories: [
-            { id: 'by1', text: '有一回她卸了妝、不設防地朝我笑了一下。我最想要的其實是那個人，不是台上那位少年郎。', mood: 'longing', aboutName: '柳生春' },
+            { id: 'by1', text: '有一回她卸了妝、不設防地朝我笑了一下。我最想要的其實是那個人，不是台上那位少年郎。', mood: 'longing', aboutName: '柳安春' },
         ],
         relationships: [
-            { withName: '柳生春', kind: '捧角·不甘退場', intensity: 50, note: '想要的是卸了妝那個人；不想贏過誰，只想弄明白自己輸在哪裡。' },
+            { withName: '柳安春', kind: '捧角·不甘退場', intensity: 50, note: '想要的是卸了妝那個人；不想贏過誰，只想弄明白自己輸在哪裡。' },
         ],
     },
 ];
@@ -350,7 +350,7 @@ export class ProductionSpine {
                 n++;
             }
             if (s.lobby) {
-                // lobby is a want targeting the LOBBIED member (柳生春), desc names the part.
+                // lobby is a want targeting the LOBBIED member (柳安春), desc names the part.
                 this.world.data.wants.push(
                     newWant({ characterId: id, layer: '志向', desc: s.lobby.desc, target: s.lobby.forWorldName, weight: s.lobby.strength, sat: 0.25, resistance: 5, kind: 'narrative', source: 'owner', bornTick: 0 }),
                 );
@@ -424,7 +424,7 @@ export class ProductionSpine {
     }
 
     /** A part is CONTESTED when ≥2 行當-eligible members each carry a live want
-     *  (>0.15) for it — exactly 許仙 (柳生春 + 江聞鶴). The formula used to settle
+     *  (>0.15) for it — exactly 許仙 (柳安春 + 江聞鶴). The formula used to settle
      *  this silently; the discussion now argues it out. */
     private contestedPartIds(): string[] {
         return Object.entries(this.castingBids)
@@ -755,8 +755,8 @@ export class ProductionSpine {
     private async rehearsalNoteRound(ask: Ask): Promise<void> {
         const inCast = new Set((this.prod.cast ?? []).map((c) => c.assignedName));
         const critic = this.advocateCard('江聞鶴');
-        const target = this.advocateCard('柳生春');
-        if (!critic || !target || !inCast.has('柳生春')) return;
+        const target = this.advocateCard('柳安春');
+        if (!critic || !target || !inCast.has('柳安春')) return;
         const n = await noteOnRehearsal(ask, critic, target);
         this.discussions.push({
             stage: '排練身段',

@@ -15,6 +15,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Want } from './core/want-core.ts';
+import type { SeasonEconomyData } from './core/season-economy.ts';
 import type { WorldClock } from './ports.ts';
 
 /** Daily-life state vector (§2.16); derived tint, persisted so a restart keeps
@@ -30,8 +31,14 @@ export interface CastMember {
     name: string;
     /** Public persona / bio (POV-visible). */
     persona: string;
-    /** Private inner-life secret — grows wants, colours beats, never shown to others. */
+    /** Private inner-life secret — grows wants, colours beats, never shown to
+     *  others. A LIVING thing under the relationship fallback: nightly 心事自改
+     *  may move the heart when something真的落地 (evolveSecret). */
     secret?: string;
+    /** The IMMUTABLE canon seed of the secret (bedrock facts of the past).
+     *  Evolution moves the HEART, never the history — the guard that stopped
+     *  a 六七年 entanglement drifting to 十年 on the web path. */
+    secretSeed?: string;
     gender?: string;
     age?: number;
     role?: string;
@@ -59,8 +66,12 @@ export interface CastMember {
 export interface SceneInfo {
     id: string;
     name: string;
+    description?: string;
     /** 0 public … 5 fully private. ≥3 ⇒ a private home. */
     privacyLevel: number;
+    /** Maximum simultaneous roster size. Explicit world physics, with preset
+     * defaults derived from privacy when older snapshots omit it. */
+    capacity?: number;
 }
 
 /** A directed relationship edge (from → to), tone + accumulated weight (§2.4). */
@@ -74,15 +85,57 @@ export interface ContestedResource {
     statement?: string;
 }
 
+/** Objective, versioned physical state. Character memories may disagree with
+ * this record; only a validated beat effect may mutate it. */
+export interface WorldObject {
+    id: string;
+    label: string;
+    aliases: string[];
+    sceneId: string;
+    portable: boolean;
+    visibility: 'visible' | 'hidden' | 'destroyed';
+    /** Object id for a registered container, otherwise an in-scene container label. */
+    container?: string;
+    /** Character currently carrying it. Structured ownership makes the object
+     * follow roster movement; `container` remains the prose-facing placement. */
+    carriedBy?: string;
+    state?: string;
+    version: number;
+    /** Characters who know a hidden object's current placement. */
+    knownBy: string[];
+}
+
+/** A clock-bound fact injected by the world, not authored by a character. The
+ * event becomes canon exactly once when `atTick` is reached and is delivered to
+ * the named witnesses before they choose where to go. */
+export interface ScheduledWorldEvent {
+    id: string;
+    atTick: number;
+    sceneId: string;
+    clock?: string;
+    text: string;
+    visibility: 'public' | 'private';
+    witnessIds: string[];
+}
+
 /** The fully-serializable world. */
 export interface WorldStateData {
     sagaId: string;
     /** Saga premise (world facts that set want resistance). */
     sagaPremise: string;
+    /** Canon honorifics facts (稱謂鐵則) — threaded into every scene beat. */
+    etiquette?: string;
+    /** Structural relationship fallback (b)+(a1): seeded canon-pair views +
+     *  nightly self-model consolidation. Flag lives in the world so resume
+     *  keeps the run's wiring; validated on long seasons before default-on. */
+    relationshipFallback?: boolean;
     cast: CastMember[];
     scenes: SceneInfo[];
     /** characterId → current sceneId. */
     roster: Record<string, string>;
+    /** Last tick of an intentional agent move. Optional for snapshots predating
+     * the single autonomous movement channel. */
+    lastMovedTickByChar?: Record<string, number>;
     /** characterId → home sceneId (night anchor). */
     homeByChar: Record<string, string>;
     /** characterId → work sceneId (day anchor). */
@@ -98,8 +151,26 @@ export interface WorldStateData {
         actorIds: string[];
         sceneIds: string[];
         povByName: Record<string, string>;
+        /** relationshipFallback only: actor → co-present other → today's scene
+         *  lines between them, feeding the nightly self-model consolidation. */
+        interactions?: Record<string, Record<string, string[]>>;
+        /** relationshipFallback only: actor → others a want aimed at them
+         *  resolved with today (the latest-wins overwrite trigger). */
+        resolvedWith?: Record<string, string[]>;
+        /** relationshipFallback only: actor → what真的落地 today (resolved-want
+         *  notes) — the nightly 心事自改 trigger; empty day = secret unchanged. */
+        landedByChar?: Record<string, string[]>;
     };
     contestedResources: ContestedResource[];
+    /** Optional for backward-compatible restore of snapshots predating physics. */
+    objects?: WorldObject[];
+    /** Optional for snapshots predating machine-readable season clocks. */
+    scheduledEvents?: ScheduledWorldEvent[];
+    deliveredScheduledEventIds?: string[];
+    /** Season money physics (accounts/contracts/ledger); optional for worlds
+     * and snapshots predating the economy layer. Persisted with the world so
+     * snapshot/restore/rollback carry the ledger atomically. */
+    economy?: SeasonEconomyData;
 }
 
 const SNAPSHOT_FILE = 'world.json';
@@ -112,6 +183,25 @@ export class WorldState {
 
     constructor(data: WorldStateData) {
         this.data = data;
+        this.normalizeLegacyCarriers();
+    }
+
+    /** Backward-compatible migration for snapshots that recorded
+     * `江聞鶴懷中` only as prose. The frozen beat already established carriage;
+     * this derives the missing structure without inventing a new event. */
+    private normalizeLegacyCarriers(): void {
+        // worlds predating 心事自改: the current secret IS the bedrock seed
+        for (const member of this.data.cast) {
+            if (member.secret && !member.secretSeed) member.secretSeed = member.secret;
+        }
+        for (const object of this.data.objects ?? []) {
+            if (object.carriedBy || !object.container || object.visibility === 'destroyed') continue;
+            if (!/懷|袖|手中|身上|兜|袋/.test(object.container)) continue;
+            const carrier = this.data.cast.find((member) => object.container!.includes(member.name));
+            if (!carrier) continue;
+            object.carriedBy = carrier.id;
+            object.sceneId = this.data.roster[carrier.id] ?? object.sceneId;
+        }
     }
 
     // ── lookups ──────────────────────────────────────────────────────────────
@@ -132,6 +222,53 @@ export class WorldState {
     }
     idByName(name: string): string | undefined {
         return this.data.cast.find((c) => c.name === name)?.id;
+    }
+
+    objectById(id: string): WorldObject | undefined {
+        return (this.data.objects ?? []).find((object) => object.id === id);
+    }
+
+    private containerOpen(object: WorldObject): boolean {
+        if (!object.container) return true;
+        const parent = this.objectById(object.container);
+        if (!parent) return true;
+        return parent.visibility !== 'destroyed' && parent.state !== 'closed' && this.containerOpen(parent);
+    }
+
+    objectAccessibleTo(object: WorldObject, characterId: string, sceneId: string): boolean {
+        if (object.visibility === 'destroyed' || object.sceneId !== sceneId || !this.containerOpen(object)) return false;
+        if (object.carriedBy && object.carriedBy !== characterId && object.visibility !== 'visible') return false;
+        return object.visibility === 'visible' || object.knownBy.includes(characterId);
+    }
+
+    /** The only roster mutation entry point inside the engine. Carried objects
+     * move atomically with their carrier, so positions cannot diverge. */
+    moveCharacter(characterId: string, sceneId: string): void {
+        this.data.roster[characterId] = sceneId;
+        for (const object of this.data.objects ?? []) {
+            if (object.carriedBy === characterId && object.visibility !== 'destroyed') object.sceneId = sceneId;
+        }
+    }
+
+    accessibleObjects(characterId: string, sceneId: string): WorldObject[] {
+        return (this.data.objects ?? []).filter((object) => this.objectAccessibleTo(object, characterId, sceneId));
+    }
+
+    /** Actor-specific physical affordances. Public knowledge is deliberately not
+     * included: remembering an object elsewhere does not put it in this room. */
+    physicalHint(characterId: string, sceneId: string): string {
+        const objects = this.accessibleObjects(characterId, sceneId);
+        if (!objects.length) return '本場沒有可觸碰的登記物件。知道別處有某物，不等於眼前有它；只能在話裡提及。';
+        return [
+            '本場可觸碰的登記物件（id 是物理提交用，不必說出口）：',
+            ...objects.map((object) => {
+                const carried = object.carriedBy ? `，由${this.nameById(object.carriedBy)}隨身攜帶` : '';
+                const placement = object.container ? `，在${this.objectById(object.container)?.label ?? object.container}內` : '';
+                const hidden = object.visibility === 'hidden' ? '【隱藏；未公開前，旁人只能看見你的外在動作】' : '';
+                return `- ${object.id}＝${object.label}${hidden}${carried}${placement}${object.state ? `，狀態：${object.state}` : ''}`;
+            }),
+            '除此清單外，記憶裡的物件只可在話裡或心裡提及，不可看見、指向或觸碰。',
+        ].join('\n');
     }
 
     /** characterId → live wants of that character, hottest first. */
@@ -269,6 +406,7 @@ export class WorldState {
             if (!Array.isArray(m.coreIdentity)) m.coreIdentity = [];
             if (!m.relationshipView || typeof m.relationshipView !== 'object') m.relationshipView = {};
         }
+        if (!Array.isArray(data.objects)) data.objects = [];
         return new WorldState(data);
     }
 }

@@ -15,7 +15,7 @@
 
 /** venue → owning characterId. A venue absent here is PUBLIC (free to enter). */
 export const VENUE_OWNER: Record<string, string> = {
-    後台小廂房: '柳生春',
+    後台小廂房: '柳安春',
     二樓書寓: '蘇映雪',
     後進廂房: '江聞鶴',
     戲班大通鋪: '連翹', // communal武行 quarters (grants open it to the troupe)
@@ -29,10 +29,10 @@ export const VENUE_OWNER: Record<string, string> = {
 /** venue → characterIds who hold a STANDING key (relationship-encoded from canon). */
 export const STANDING_GRANTS: Record<string, string[]> = {
     後台小廂房: ['金鳳', '蘇映雪'], // 金鳳 = old lover; 蘇 = 師姐 who tends her things
-    會樂里寓所: ['柳生春'], // 柳 = old lover, always let in
-    二樓書寓: ['柳生春'], // 師妹
-    戲班大通鋪: ['柳生春', '蘇映雪', '江聞鶴', '連翹'], // communal to the troupe
-    後台妝閣: ['柳生春', '蘇映雪', '江聞鶴', '連翹', '白韻秋'], // troupe backstage + 白韻秋 the 金主
+    會樂里寓所: ['柳安春'], // 柳 = old lover, always let in
+    二樓書寓: ['柳安春'], // 師妹
+    戲班大通鋪: ['柳安春', '蘇映雪', '江聞鶴', '連翹'], // communal to the troupe
+    後台妝閣: ['柳安春', '蘇映雪', '江聞鶴', '連翹', '白韻秋'], // troupe backstage + 白韻秋 the 金主
     // 衣箱房: (none) — sealed
     // 沈宅小樓 / 白公館繡樓 / 後進廂房: (none) — strictly private
 };

@@ -11,7 +11,7 @@
  * micro-gaps the camera reads (the half-step distance).
  *
  * Pipeline (all from state, no operator copy):
- *   1. restore 柳生春+蘇映雪 from the season snapshot,
+ *   1. restore 柳安春+蘇映雪 from the season snapshot,
  *   2. beats via actBeat, one per fan message (+ opener/closer), decorum-toned,
  *   3. povScene ×2 — the same send-off through each one's eyes (訂閱層),
  *   4. audienceReaction ×3 — fan-comment highlights for the chat rail.
@@ -57,15 +57,15 @@ type ShowEvent =
 const TRAFFIC: ShowEvent[] = [
     { k: 'open' },
     { k: 'fan', n: '月白君', t: '二位老板，今夜斷橋那一折，我眼淚實在沒忍住。明兒還演麼？', to: '蘇映雪' },
-    { k: 'fan', n: '看客（前排的小夥計）', t: '柳老板辛苦！給簽個扇面成不成？我攢了半個月的工錢買的頭排！', to: '柳生春' },
-    { k: 'fan', n: '好事的太太', t: '柳老板，台上那句「這齣戲該落了」——台下呢，也落了麼？', to: '柳生春' },
+    { k: 'fan', n: '看客（前排的小夥計）', t: '柳老板辛苦！給簽個扇面成不成？我攢了半個月的工錢買的頭排！', to: '柳安春' },
+    { k: 'fan', n: '好事的太太', t: '柳老板，台上那句「這齣戲該落了」——台下呢，也落了麼？', to: '柳安春' },
     { k: 'gift', t: '門房捧上一只錦盒：聽雪客所贈，一對護嗓的川貝枇杷膏，箋上只寫「入冬了，二位老板仔細嗓子」。', to: '蘇映雪' },
     { k: 'fan', n: '角落裡壓低嗓子的男人', t: '前日夜裡，有人瞧見金鳳姑娘出了你們後台——蘇老板，可有這事？', to: '蘇映雪' },
     { k: 'close' },
 ];
 
 async function main(): Promise<void> {
-    const cast = buildCast(['柳生春', '蘇映雪']);
+    const cast = buildCast(['柳安春', '蘇映雪']);
     const statePath = path.join(RESTORE, 'cast-state.json');
     if (fs.existsSync(statePath)) {
         restoreCast(cast, JSON.parse(fs.readFileSync(statePath, 'utf-8')) as CastSnapshot);
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
     for (const ev of TRAFFIC) {
         if (ev.k === 'open') {
             log.push('（大會串散戲，看客湧出雲錦台，燈籠一路亮到街口。二位領銜的角兒立在門口送客。）');
-            await beat(byName.get('柳生春')!, '你們二人並肩立在門口，看客的道賀一聲接一聲。');
+            await beat(byName.get('柳安春')!, '你們二人並肩立在門口，看客的道賀一聲接一聲。');
             await beat(byName.get('蘇映雪')!);
         } else if (ev.k === 'fan') {
             log.push(`看客·${ev.n}：${ev.t}`);
@@ -123,7 +123,7 @@ async function main(): Promise<void> {
         } else if (ev.k === 'close') {
             log.push('（人潮漸稀，燈籠次第熄了。）');
             await beat(byName.get('蘇映雪')!, '客送得差不多了，該收場了。');
-            await beat(byName.get('柳生春')!, '最後一批看客出了街口。');
+            await beat(byName.get('柳安春')!, '最後一批看客出了街口。');
         }
     }
     const beats = events.filter((e) => e.k === 'beat') as Array<{ k: string; n: string; t: string }>;

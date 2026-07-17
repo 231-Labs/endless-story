@@ -11,6 +11,7 @@
 
 import { characterAgent, sceneRecord, eventChapter, eventDossier } from '@endless-story/runner';
 import { text as llmText } from '@endless-story/llm';
+import { toTraditional } from '@endless-story/shared/to-traditional';
 import * as path from 'node:path';
 import type {
     ActionKind,
@@ -119,15 +120,29 @@ export class RunnerSceneAgent implements SceneAgentPort {
             `【這場戲剛剛的來回】\n${input.sceneLog || '（戲方起。）'}`,
             `輪到你（${input.name}）。`,
         ].join('\n\n');
-        const raw = await this.sessions.respond(identity, percept, {
+        // A proposed action is not a lived memory. Read the durable session to
+        // draft it, but do not append the proposal. Only observeScene records the
+        // engine-accepted event after physical/canon validation succeeds.
+        const raw = await this.sessions.project(identity, percept, {
             eventId: input.perceptId,
+            instruction: '依照此刻知覺提出一拍待世界驗證的行動；這只是提案，尚未發生。只輸出指定 JSON。',
             maxTokens: input.consummate ? 900 : 480,
             temperature: 0.95,
         });
         return characterAgent.parseBeatResult(raw, input.name);
     }
 
+    /** A rejected physical proposal never enters the durable character session.
+     *  Replan statelessly from the refreshed affordances; the accepted event is
+     *  delivered to the session later through observeScene. */
+    async replanBeat(
+        input: Parameters<typeof characterAgent.actBeat>[0],
+    ): ReturnType<typeof characterAgent.actBeat> {
+        return characterAgent.actBeat(input);
+    }
+
     judgeWantResolved = characterAgent.judgeWantResolved;
+    decideMove = characterAgent.decideMove;
 
     async observeScene(input: ObserveSceneInput): Promise<void> {
         if (!this.sessions) return;
@@ -173,7 +188,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
                         role: 'user',
                         content: attempt === 0
                             ? prompt
-                            : `${prompt}\n\n【上次輸出未通過】\n${lastErrors.join('\n')}\n請重新輸出完整 JSON，必須有以角色姓名開頭的專屬 lead、1–2 個主觀 claim，並覆蓋每個 p:N。`,
+                            : `${prompt}\n\n【上次輸出未通過】\n${lastErrors.join('\n')}\n請重新輸出完整 JSON，必須有以角色姓名開頭的專屬 lead、1–4 個主觀 claim，並覆蓋每個 p:N。`,
                     }],
                     maxTokens: 1500,
                     temperature: attempt === 0 ? 0.32 : 0.15,
@@ -207,7 +222,8 @@ export class RunnerSceneAgent implements SceneAgentPort {
     async povReflect(
         input: Parameters<typeof characterAgent.povReflect>[0],
     ): ReturnType<typeof characterAgent.povReflect> {
-        return characterAgent.povReflect(input);
+        const prose = await characterAgent.povReflect(input);
+        return prose ? toTraditional(prose) : null;
     }
 
     async povScene(
@@ -243,7 +259,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
                 temperature: 0.82,
             },
         );
-        return characterAgent.formatPovSceneParagraphs(projected) || null;
+        return characterAgent.formatPovSceneParagraphs(toTraditional(projected)) || null;
     }
 
     async judgeEstablished(
@@ -273,19 +289,22 @@ export class RunnerSceneAgent implements SceneAgentPort {
     async weaveTickChapter(
         input: Parameters<typeof sceneRecord.weaveTickChapter>[0],
     ): Promise<string | null> {
-        return sceneRecord.weaveTickChapter(input);
+        const prose = await sceneRecord.weaveTickChapter(input);
+        return prose ? toTraditional(prose) : null;
     }
 
     async reviewChapter(
         input: Parameters<typeof sceneRecord.reviewChapter>[0],
     ): ReturnType<typeof sceneRecord.reviewChapter> {
-        return sceneRecord.reviewChapter(input);
+        const reviewed = await sceneRecord.reviewChapter(input);
+        return reviewed ? { ...reviewed, chapter: toTraditional(reviewed.chapter) } : null;
     }
 
     async composeEpisode(
         input: Parameters<typeof eventChapter.composeEpisode>[0],
     ): Promise<string | null> {
-        return eventChapter.composeEpisode(input);
+        const prose = await eventChapter.composeEpisode(input);
+        return prose ? toTraditional(prose) : null;
     }
 
     /**

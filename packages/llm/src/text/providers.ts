@@ -15,27 +15,43 @@ const POE_ENDPOINT = 'https://api.poe.com/v1/chat/completions';
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 const ZAI_MIN_MAX_TOKENS = 1024;
+/** A provider that never answers must not hold an atomic world tick forever.
+ * Three minutes still accommodates slow creative calls; fallback owns retry. */
+const REQUEST_TIMEOUT_MS = 180_000;
+
+function boundedSignal(callerSignal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  return callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout;
+}
 
 export class LLMHttpError extends Error {
+  status: number;
+  provider: 'zai' | 'poe' | 'anthropic';
+  model: string;
+
   constructor(
-    public status: number,
-    public provider: 'zai' | 'poe' | 'anthropic',
-    public model: string,
+    status: number,
+    provider: 'zai' | 'poe' | 'anthropic',
+    model: string,
     bodySnippet: string,
   ) {
     super(`[${provider}] HTTP ${status} on ${model}: ${bodySnippet}`);
     this.name = 'LLMHttpError';
+    this.status = status;
+    this.provider = provider;
+    this.model = model;
   }
 }
 
 /** Is this an overload / transient / rate-limit error worth retrying with another model? */
 export function isRetryableError(err: unknown): boolean {
   if (err instanceof LLMHttpError) {
-    return err.status === 429 || err.status === 503 || err.status === 529;
+    return err.status === 429 || err.status === 502 || err.status === 503 || err.status === 504 || err.status === 529;
   }
   const e = err as { status?: number; message?: string };
-  if (e?.status === 429 || e?.status === 503 || e?.status === 529) return true;
+  if (e?.status === 429 || e?.status === 502 || e?.status === 503 || e?.status === 504 || e?.status === 529) return true;
   const msg = (e?.message ?? '').toLowerCase();
+  if ((e as { name?: string })?.name === 'TimeoutError' || msg.includes('timed out') || msg.includes('timeout')) return true;
   if (msg.includes('overloaded') || msg.includes('rate_limit') || msg.includes('rate limit')) return true;
   // Network-level transients (a TCP reset once killed a whole season at day 3):
   // undici surfaces them as `fetch failed` with the syscall error in `cause`.
@@ -77,6 +93,7 @@ export async function callZAI(apiKey: string, baseUrl: string, req: ChatRequest)
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: boundedSignal(req.signal),
   });
 
   if (!res.ok) {
@@ -133,6 +150,7 @@ export async function callPoe(apiKey: string, req: ChatRequest): Promise<ChatRes
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: boundedSignal(req.signal),
   });
 
   if (!res.ok) {
@@ -179,6 +197,7 @@ export async function callAnthropic(apiKey: string, req: ChatRequest): Promise<C
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: boundedSignal(req.signal),
   });
 
   if (!res.ok) {

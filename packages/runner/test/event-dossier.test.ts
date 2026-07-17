@@ -200,3 +200,45 @@ test('dedicated one-POV audit accepts an exact character-name id alias', () => {
     assert.equal(enriched[0].claims?.length, 2);
     assert.equal(enriched[0].lead?.startsWith('柳生春'), true);
 });
+
+test('audit keeps a third grounded claim when long POV needs it for passage coverage', () => {
+    const long = [{
+        ...source.perspectives[0],
+        body: '我先唱出了那句。\n\n她接住了我。\n\n鑼點落下時，我才知道回不去了。',
+    }];
+    const enriched = applyClaimAudit(source.event, long, JSON.stringify({
+        perspectives: [{
+            characterId: 'liu',
+            lead: '柳生春先把添唱當成出口，直到鑼點落下才知道那句話已經回不來。',
+            claims: [
+                {
+                    text: '她把自己先唱出的事理解成主動跨線。',
+                    mode: 'inferred',
+                    relation: 'reinterprets',
+                    evidenceRefs: ['beat:0', 'session'],
+                    passageRefs: ['p:0'],
+                    editorialNote: '添唱可由第一拍核對，但是否主動跨線只屬於她的自我理解。',
+                },
+                {
+                    text: '她認為蘇映雪接住了自己。',
+                    mode: 'remembered',
+                    relation: 'reinterprets',
+                    evidenceRefs: ['beat:1', 'session'],
+                    passageRefs: ['p:1'],
+                    editorialNote: '接唱是第二拍的客觀動作，接住一詞則是柳生春賦予它的意義。',
+                },
+                {
+                    text: '鑼點使她感到事情已經無法收回。',
+                    mode: 'inferred',
+                    relation: 'reinterprets',
+                    evidenceRefs: ['beat:2', 'session'],
+                    passageRefs: ['p:2'],
+                    editorialNote: '槍尾頓臺可核對，無法收回是她在該時刻形成的主觀判斷。',
+                },
+            ],
+        }],
+    }));
+
+    assert.deepEqual(validateClaimAudit(enriched), []);
+    assert.equal(enriched[0].claims?.length, 4, 'one canonical anchor plus three subjective claims');
+});

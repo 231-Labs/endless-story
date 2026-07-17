@@ -88,6 +88,7 @@ export function createTextClient(opts: CreateTextClientOptions = {}): TextClient
       maxTokens: req.maxTokens,
       temperature: req.temperature,
       thinking: req.thinking,
+      signal: req.signal,
     };
     if (fallbackChain && model === defaultModel) {
       return chatWithFallback(callOne, base, fallbackChain, opts.onFallback);
