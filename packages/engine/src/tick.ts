@@ -26,10 +26,11 @@ import {
     tension,
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneLoopCastMember } from './core/scene-loop.ts';
+import { PARTS_OF_DAY } from './ports.ts';
 import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { enforceContractCommandPairing, settleTenancyMoveIns } from './core/season-economy.ts';
+import { bankRehearsalAttendance, enforceContractCommandPairing, settleEveningPerformance, settleTenancyMoveIns } from './core/season-economy.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -310,6 +311,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             witnessIds: w.cast.map((member) => member.id),
         });
     }
+
+    // 2.6) Rehearsal presence banks after movement — quality earned in daylight.
+    bankRehearsalAttendance(world, PARTS_OF_DAY.indexOf(w.clock.partOfDay));
 
     // 3) Group co-present cast by scene; at night keep only qualifying scenes.
     const byScene = new Map<string, string[]>();
@@ -660,6 +664,22 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 log(`  new thread: ${world.nameById(sp.characterId)}「${sp.desc}」`);
             }
         }
+    }
+
+    // 4.9) 黃昏開鑼 — the show settles on whoever the movement phase brought
+    // to the boards; box office is the treasury's income side.
+    const performance = settleEveningPerformance(world, { day: today, partIndex: PARTS_OF_DAY.indexOf(w.clock.partOfDay) });
+    if (performance) {
+        log(`  [開鑼] ${performance.line}`);
+        w.dayAccum.lines.push(`[戲園] ${performance.line}`);
+        (w.scheduledEvents ??= []).push({
+            id: `boxoffice-t${nowTick}`,
+            atTick: nowTick + 1,
+            sceneId: w.scenes.find((scene) => scene.name === w.economy!.performance!.venueSceneName)!.id,
+            text: performance.line,
+            visibility: 'public',
+            witnessIds: w.cast.map((member) => member.id),
+        });
     }
 
     // 5) Advance the daily-life state vector (undertone; derived, persisted).

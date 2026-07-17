@@ -17,6 +17,7 @@ import {
     accountRunwayDays,
     collectDue,
     conservesProduction,
+    depositExternal,
     emptyEconomy,
     expireContracts,
     fileCounter,
@@ -118,6 +119,16 @@ export interface SeasonEconomyData {
     /** granted-but-not-yet-lived leases: lease objectId → who may move where.
      *  Cleared when the move-in actually happens. */
     tenancies?: Record<string, { characterId: string; sceneName: string }>;
+    /** the nightly show: banked rehearsal presence + box-office config. */
+    performance?: {
+        venueSceneName: string;
+        leadIds: string[];
+        minCast: number;
+        fullHouseSubunits: string;
+        boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
+        /** cast seen at the venue during 日午/晡時 — quality is earned in daylight. */
+        rehearsedToday: string[];
+    };
     /** contractId → the proposer's authored answer policy for counter-demands.
      *  The replaceable seam: swap for a live counterparty agent later. */
     negotiations?: Record<string, {
@@ -641,6 +652,17 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             lines.push(`「${c.label}」${outcome}。`);
         }
     }
+    if (data.performance) {
+        const part = world.data.clock.partOfDay;
+        if (part === '清晨' || part === '日午' || part === '晡時' || part === '黃昏') {
+            const perf = data.performance;
+            const isLead = perf.leadIds.includes(characterId);
+            lines.push(
+                `今日黃昏【${perf.venueSceneName}】開鑼${isLead ? `——你是領銜，你不上台這戲就塌` : `（領銜：${perf.leadIds.map((id) => world.nameById(id)).join('、')}）`}；` +
+                `到場不足 ${perf.minCast} 人停鑼、票房歸零，白日到台上排過戲今夜才叫得動座。票房是班庫唯一的活水。`,
+            );
+        }
+    }
     for (const [keyObjectId, tenancy] of Object.entries(data.tenancies ?? {})) {
         if (tenancy.characterId !== characterId) continue;
         const key = world.objectById(keyObjectId);
@@ -711,6 +733,87 @@ export function settleTenancyMoveIns(world: WorldState): TenancyMoveIn[] {
         });
     }
     return moves;
+}
+
+// ── the nightly show：排戲在白日，開鑼在黃昏，票房是收入面 ──
+
+export interface PerformanceOutcome {
+    performed: boolean;
+    /** objective line for the day log / world event. */
+    line: string;
+    takingsSubunits?: bigint;
+}
+
+/** Bank who showed up to rehearse (日午/晡時 at the venue). Quality is earned
+ *  in daylight; an unrehearsed evening plays to a thinner house. */
+export function bankRehearsalAttendance(world: WorldState, partIndex: number): void {
+    const perf = world.data.economy?.performance;
+    if (!perf || (partIndex !== 1 && partIndex !== 2)) return;
+    const venue = world.data.scenes.find((scene) => scene.name === perf.venueSceneName);
+    if (!venue) return;
+    for (const member of world.data.cast) {
+        if (world.data.roster[member.id] === venue.id && !perf.rehearsedToday.includes(member.id)) {
+            perf.rehearsedToday.push(member.id);
+        }
+    }
+}
+
+/**
+ * 黃昏開鑼。Attendance decides the evening deterministically: no lead on the
+ * boards or too few hands → 停鑼, zero income; otherwise the house pays by
+ * what it sees (leads, rehearsal, mended instruments), and the box office is
+ * REAL money entering the treasury. Idempotent per day via the txn id.
+ */
+export function settleEveningPerformance(
+    world: WorldState,
+    req: { day: number; partIndex: number },
+): PerformanceOutcome | null {
+    const parsed = live(world);
+    const perf = world.data.economy?.performance;
+    if (!parsed || !perf || req.partIndex !== 3) return null;
+    let contract = parsed.contract;
+    const data = parsed.data;
+    const venue = world.data.scenes.find((scene) => scene.name === perf.venueSceneName);
+    if (!venue) throw new Error(`[economy] performance venue is not a scene: ${perf.venueSceneName}`);
+    const present = world.data.cast.filter((member) => world.data.roster[member.id] === venue.id);
+    const leadsPresent = perf.leadIds.filter((id) => present.some((member) => member.id === id));
+    const leadNames = (ids: string[]) => ids.map((id) => world.nameById(id)).join('、');
+    if (leadsPresent.length === 0 || present.length < perf.minCast) {
+        perf.rehearsedToday = [];
+        return {
+            performed: false,
+            line: `【${perf.venueSceneName}】今夜停鑼：${leadsPresent.length === 0 ? `領銜（${leadNames(perf.leadIds)}）無一人上台` : `到場僅 ${present.length} 人，湊不成一台戲`}，看客退票散去，票房分文未進。`,
+        };
+    }
+    let pct = 100n;
+    if (leadsPresent.length < perf.leadIds.length) pct = (pct * 60n) / 100n;
+    if (perf.rehearsedToday.length < perf.minCast) pct = (pct * 70n) / 100n;
+    for (const boost of perf.boosts ?? []) {
+        const object = world.objectById(boost.objectId);
+        if (!object || object.visibility === 'destroyed') continue;
+        if (boost.stateIncludes && !(object.state ?? '').includes(boost.stateIncludes)) continue;
+        pct += BigInt(boost.pct);
+    }
+    const takings = (BigInt(perf.fullHouseSubunits) * pct) / 100n;
+    const deposited = depositExternal(contract.economy, {
+        txnId: `day${req.day}:boxoffice`,
+        to: data.troupeAccountId,
+        amount: takings,
+        memo: '今晚票房',
+        causeEventId: `${world.data.sagaId}:boxoffice:d${req.day}`,
+    });
+    if (deposited.duplicate) return null;
+    if (deposited.rejection) throw new Error(`[economy] box office failed: ${deposited.rejection.message}`);
+    contract = { economy: deposited.state, contracts: contract.contracts };
+    persist(world, contract);
+    const rehearsed = perf.rehearsedToday.length;
+    perf.rehearsedToday = [];
+    const house = pct >= 110n ? '滿堂彩' : pct >= 100n ? '滿座' : pct >= 70n ? '七成座' : '半座';
+    return {
+        performed: true,
+        line: `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsed >= perf.minCast ? '' : '，白日未曾好好排過'}：${house}，票房 ${formatMoney(data, takings)} 入${accountLabel(contract, data.troupeAccountId)}。`,
+        takingsSubunits: takings,
+    };
 }
 
 // ── daily settlement + deadline resolution ──
@@ -921,6 +1024,17 @@ export interface SeasonEconomyFrame {
     };
     /** periodic lump-sum bills due on specific days (amounts in 圓). */
     bills?: Array<{ id: string; label: string; amountYuan: number; dueDay: number; creditor?: string }>;
+    /** the troupe's own trade: 黃昏開鑼。Box office is the ledger's INCOME side,
+     *  so a season is never reduced to "sign the contract or die". */
+    performance?: {
+        venueScene: string;
+        /** at least one lead must be on stage or the evening折鑼; all present = full draw. */
+        leadNames: string[];
+        minCast: number;
+        fullHouseYuan: number;
+        /** objects whose state lifts the takings (a mended huqin, new robes…). */
+        boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
+    };
     businesses?: Array<{ id: string; label: string; openingYuan: number }>;
     /** per-character overrides; unlisted cast get characterDefaults. */
     characters?: Array<{ name: string; openingYuan?: number; dailyFixedCostYuan?: number }>;
@@ -1057,6 +1171,18 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
         ...(frame.troupe.costNote ? { troupeCostNote: frame.troupe.costNote } : {}),
         ...(frame.troupe.shortfallCreditor ? { shortfallCreditor: frame.troupe.shortfallCreditor } : {}),
         ...(Object.keys(negotiations).length ? { negotiations } : {}),
+        ...(frame.performance
+            ? {
+                performance: {
+                    venueSceneName: frame.performance.venueScene,
+                    leadIds: frame.performance.leadNames.map(idFor),
+                    minCast: frame.performance.minCast,
+                    fullHouseSubunits: asSubunits(frame.performance.fullHouseYuan).toString(),
+                    ...(frame.performance.boosts ? { boosts: frame.performance.boosts.map((boost) => ({ ...boost })) } : {}),
+                    rehearsedToday: [],
+                },
+            }
+            : {}),
         ...(frame.bills?.length
             ? {
                 bills: frame.bills.map((bill) => ({
