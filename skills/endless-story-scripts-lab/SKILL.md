@@ -127,6 +127,10 @@ PR 目標分支：**`dev`**（除非使用者指定 main）。
 
 migrate 後更新 `internal/README.md` 指向兩個 private repo。
 
+## Lab 研究筆記（讀結論從這裡）
+
+`$ES_LAB_ROOT/research/notes/consolidated/00-index.md` — 11 篇「坑 + 結論」筆記；原始檔在 `sources/`，計畫在 `planning/`。
+
 ## 程式錨點（公開 repo）
 
 - 路徑解析：`packages/engine/src/workspace-paths.ts`
