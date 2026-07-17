@@ -6,9 +6,11 @@ An engine for persistent, on-chain story worlds, built on **Walrus + Sui** with 
 
 - `packages/web` — Next.js app: admin cockpit + reader site
 - `packages/runner` — autonomous tick / world loop (Director + Character agents)
+- `packages/engine` — the single home for narrative mechanism: pure `src/core` (want, scene loop, routing, fatigue, box-office), ports/adapters/tick, and durable per-character sessions. See [`docs/narrative/ENGINE_CORE.md`](./docs/narrative/ENGINE_CORE.md)
 - `packages/sdk`, `packages/shared` — Sui contract bindings + shared types
 - `packages/memwal` — MemWal SDK integration (character memory on Walrus / Seal)
 - `packages/relayer` — self-hosted MemWal relayer
+- `packages/indexer` — durable chain-event store (Postgres capture + `queryEvents`-shaped reads)
 - `packages/llm` — prompt registry + LLM client
 - `packages/drama`, `packages/economy`, `packages/troupe` — engine validators (deterministic core, economy life cycle, troupe production)
 - `packages/chamber-3d` — R3F 3D diorama renderer

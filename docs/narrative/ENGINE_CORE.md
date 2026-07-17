@@ -13,7 +13,7 @@
 | 家 | 放什麼 | 不放什麼 |
 |---|---|---|
 | **`packages/engine/src/core`** | 一切敘事機制（want、scene-loop、routing、fatigue、box-office…）。純函數/純狀態機，零 I/O、零鏈、零 LLM 呼叫 | prompt、鏈上讀寫、檔案存儲 |
-| **`packages/engine`（ports/adapters/tick）** | `SceneAgentPort`/`RecallPort`/`ArchivePort`/`ClockPort` 介面、local adapters（fake/JSON/markdown）、`RunnerSceneAgent`（真 LLM delegate）、tick pipeline、WorldState snapshot/restore | 機制本體（進 core）、web 專屬 wiring |
+| **`packages/engine`（ports/adapters/tick/session）** | `SceneAgentPort`/`RecallPort`/`ArchivePort`/`ClockPort` 介面、local adapters（fake/JSON/markdown）、`RunnerSceneAgent`（真 LLM delegate）、tick pipeline、WorldState snapshot/restore、`src/session/character-session.ts`（每角色持久 LLM session，key = (sagaId, characterId)，匯出 `@endless-story/engine/session`） | 機制本體（進 core）、web 專屬 wiring |
 | **`packages/runner`** | LLM authorship services：prompt 建構與驗證（beat、weave、review、POV、判官）。純 prompt 部分抽 node-clean leaf（如 `beat-prompt.ts`） | 機制數學（進 engine core）、tick 編排 |
 | **`packages/web`** | 鏈上 I/O、durable stores（file-store）、server actions、UI。機制一律 `import '@endless-story/engine/core/*'` | 機制實作。`web/lib/chain` 不再新增機制模組 |
 
@@ -31,11 +31,15 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
 前例：`spatial-routing` 的拆法（純置放數學在 engine，file-store 皮留在 web）、
 `beat-prompt.ts`（純 prompt builder 抽 leaf，runner barrel 維持 tsx-only）。
 
-## 3. 已完成的搬遷（2026-07-12 現況）
+## 3. 已完成的搬遷（2026-07-16 現況）
 
 `want-core` · `want-rewrite` · `scene-loop` · `scene-routing` · `spatial-routing`（數學）·
 `actor-fatigue` · `box-office` 已住進 `engine/src/core`；web 的 `tick-loop` 與 harness
-直接 import engine；H3d（bond yearn）已直接落在 engine 單一實作。
+直接 import engine；H3d（bond yearn）已直接落在 engine 單一實作（`core/bond-graph.ts`）。
+
+`core/scene-perception.ts`（beat 層感知邊界：誰聽得到這一句）也是 engine 單一實作，
+從結構欄位（`audience` / `addressed`）判定，不從生成的散文反推隱私；`addressed` 指不到人
+時 fail closed 退回只有說話者聽見，不廣播。
 
 ## 4. 待搬遷清單（`web/lib/chain` 剩餘機制模組）
 
@@ -44,11 +48,10 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
 | 模組 | 備註 |
 |---|---|
 | `contest.ts` | 意圖×能力結算（§8c），純模型，搬遷成本低 |
-| `drama-core.ts` / `drama.ts` | 張力引擎核心 vs 鏈上 wiring，先拆再搬 |
+| `drama-core.ts` / `drama.ts` | 張力引擎核心 vs 鏈上 wiring，先拆再搬。注夢攪動（`applyDreamStirs`，§2.51 劑量語義）住在 `drama-core.ts` 裡，沒有獨立的 `dream-stir.ts`；測試在 `dream-stir.test.ts`，搬遷時跟著 `drama-core` 走 |
 | `event-planner.ts` | 導演出牌規劃 |
 | `attention-core.ts` | spotlight/注意力 |
 | `arc-pressure.ts` / `arc-lifecycle.ts` / `arc-convergence.ts` | 弧線壓力/生命週期 |
-| `dream-stir.ts` | 注夢攪動 |
 | `character-secrets.ts` | 秘密機制（store 部分留 web） |
 | `centrality-select.ts` | 選角中心度 |
 
@@ -61,4 +64,5 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
 2. **engine core 永遠 node-clean**：`node --test` 零 creds 可跑全部機制測試。
 3. **實驗不 fork core**：harness 只能經 ports 注入差異（fake agent、本地 recall、參數）。
    對照組用同一份 core + 不同 flag/參數，不用複製檔案。
-4. 生產接線改動照 [research-line 規則](../../experiments/RULES.md)：feat/* → dev PR。
+4. 生產接線改動照 research-line 規則：**feat/* → dev PR**，research 分支只改實驗/harness。
+   （完整版 `RULES.md` 目前只在 `research` 分支上，本分支沒有這個檔，故不放連結。）
