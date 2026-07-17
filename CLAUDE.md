@@ -9,6 +9,7 @@ An engine for persistent, on-chain story worlds, built on **Walrus + Sui** with 
 - `packages/sdk`, `packages/shared` — Sui contract bindings + shared types
 - `packages/memwal` — MemWal SDK integration (character memory on Walrus / Seal)
 - `packages/relayer` — self-hosted MemWal relayer
+- `packages/indexer` — durable chain-event store (Postgres capture + `queryEvents`-shaped reads)
 - `packages/llm` — prompt registry + LLM client
 - `packages/drama`, `packages/economy`, `packages/troupe` — engine validators (deterministic core, economy life cycle, troupe production)
 - `packages/chamber-3d` — R3F 3D diorama renderer

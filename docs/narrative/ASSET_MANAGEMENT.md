@@ -154,6 +154,8 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 | 回收 | `walrus delete --blob-obj-id <suiObjectId>`(僅 `deletable`) |
 | 錢包 | `walrus info` / `sui client balance`(或 JSON-RPC)讀 SUI＋WAL |
 
+> **JSON-RPC 退役提醒（2026-07-31）**：上表的主路徑是 `walrus` CLI ＋ `sui client` CLI，不受影響。但括號裡的「Sui JSON-RPC `sui_getObject` / JSON-RPC 讀餘額」屬 2026-07-31 退役的 JSON-RPC；relayer 資產工具仍留這條退路（其自身 gRPC 遷移排在退役前）。要純程式讀 blob object 到期，改走 gRPC Core `getObject`（見 [`DEPLOYMENT.md`](./DEPLOYMENT.md) §節點）或直接靠 `walrus blob-status`。
+
 > 既有**記憶 blob** 的 remember 路徑(`Walrus.upload()` 走 `WALRUS_PUBLISHER_URL` HTTP PUT)**維持原樣不動**,
 > 記憶 blob 不納管(決策 ⑥)。asset service 是獨立新增,不碰它。
 

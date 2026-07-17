@@ -9,6 +9,8 @@
 >
 > 本檔只管「production 化」這一條線。
 
+> **現況（2026-07-07 更新）**：目標架構（§1 indexer 解耦）已落地。P1a 的 [`packages/indexer`](../../packages/indexer/)（PgEventStore ＋ 自架 poller ＋ 透明 sdk 縫）已上；同時 PR [#78](https://github.com/231-Labs/endless-story/pull/78) 把讀鏈整條從棄用的 JSON-RPC 遷到 **gRPC Core API**（object/tx/coin/balance）＋ **GraphQL**（事件，`SUI_GRAPHQL_URL`，無 store 時 fallback），因為 JSON-RPC 本身 2026-07-31 退役。所以下面 §2 P0 的「挑一家 archival JSON-RPC 廠商、`SUI_RPC_URL` 直連」與 §3 的廠商選型**已非現行路徑**，保留當歷史脈絡。仍待收尾＝ P1b：web runtime 全切 `DATA_SOURCE=api`、零 RPC（見 §4）。節點與環境變數的權威說明在 [`../narrative/DEPLOYMENT.md`](../narrative/DEPLOYMENT.md) §節點。
+
 ---
 
 ## 0. 為什麼現況不能直接上 production
@@ -77,6 +79,8 @@ POV 章回 / reflection / dream / resource 全走 `suix_queryEvents`。把這個
 
 ## 3. RPC 廠商建議
 
+> **已被取代（2026-07-07，PR [#78](https://github.com/231-Labs/endless-story/pull/78)）**：本節是「挑一家 archival JSON-RPC 廠商、web 直連跑 `suix_queryEvents`」的 P0 選型，那條路已作廢。事件讀取現走 **GraphQL**（`SUI_GRAPHQL_URL`，預設官方 testnet endpoint）＋自架 [`packages/indexer`](../../packages/indexer/) 的 Postgres store，object/tx 讀走 **gRPC Core API**；JSON-RPC 本身 2026-07-31 退役。下面的 `suix_queryEvents` archival 判準只在還沒切 GraphQL/indexer 的退路情境下有意義，保留當歷史脈絡。硬指標現況＝GraphQL endpoint 要能回全歷史事件、rate limit 夠 poller 輪詢。
+
 需求：**支援 `queryEvents` 全歷史（archival）+ 夠高的 rate limit + testnet/mainnet 都有**。
 注意：P1 之後 indexer 是單一消費者，rate limit 重要性大降，**archival（event 不被 prune）才是硬指標**。
 
@@ -103,7 +107,7 @@ suix_queryEvents { MoveEventType: "<packageId>::character::CharacterMinted" }
 
 ## 4. 驗收 checklist
 
-- [ ] P0：`SUI_RPC_URL` = archival 廠商；`queryEvents(CharacterMinted)` 實測回 6 角色；roster 不再 mock。
+- [~] P0：`SUI_RPC_URL` = archival 廠商；`queryEvents(CharacterMinted)` 實測回 6 角色；roster 不再 mock。**已被 P1a（indexer）＋ #78（gRPC＋GraphQL 遷移）取代**：不再靠 web 直連挑 archival JSON-RPC 廠商，事件讀走 GraphQL/indexer store（見 §3 頂註）。
 - [ ] P0：roster/feed 套 read-cache SWR；觀測 RPC 呼叫數 / 429 率下降。
 - [x] P1a：`packages/indexer` 落地（PgEventStore + 自架 poller + 透明 sdk 縫）；設 `DATABASE_URL` 後**事件讀**改走 Postgres。
 - [ ] P1b：web `api` HTTP 端點 + `DATA_SOURCE=api` 全切，web runtime **零 RPC**（grep 確認不再 `makeSuiClient`，含非事件 object/tx 讀）。
