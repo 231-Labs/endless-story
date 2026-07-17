@@ -25,10 +25,24 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /contracts
 COPY contracts/endless_story ./endless_story
+# cmdoss/walrus 映像沒有 sui client config；不先建立會觸發互動式提示、
+# 污染 stdout 並讓 dump 無效。只需最小 testnet config（對齊線上部署網路）。
+RUN mkdir -p /root/.sui/sui_config \
+    && printf '[]\n' > /root/.sui/sui_config/sui.keystore \
+    && printf '%s\n' \
+        '---' \
+        'keystore:' \
+        '  File: /root/.sui/sui_config/sui.keystore' \
+        'envs:' \
+        '  - alias: testnet' \
+        '    rpc: "https://fullnode.testnet.sui.io:443"' \
+        '    ws: ~' \
+        'active_env: testnet' \
+        > /root/.sui/sui_config/client.yaml
 # `--dump-bytecode-as-base64` 輸出 { modules, dependencies, digest } JSON;
 # 這正是 upgrade.ts 需要的格式。test -s 確保非空(build 失敗就讓 image build 失敗)。
 RUN cd endless_story \
-    && sui move build --dump-bytecode-as-base64 > /tmp/bytecode-dump.json \
+    && sui move build -e testnet --no-tree-shaking --dump-bytecode-as-base64 > /tmp/bytecode-dump.json \
     && test -s /tmp/bytecode-dump.json
 
 # ──────────────────────────────────────────────────────────────────────────
