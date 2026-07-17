@@ -46,65 +46,106 @@ function faceCentreYaw(x: number, z: number): number {
   return (Math.atan2(-x, -z) * 180) / Math.PI;
 }
 
+/** 展區 satellite islands: centre offsets, added in this order. */
+const ZONE_ORIGINS: [number, number][] = [
+  [16, 1],
+  [-16, 1],
+  [-12.5, 10],
+];
+const ZONE_SIZE = { width: 8, depth: 7 };
+export const MAX_ZONES = ZONE_ORIGINS.length + 1;
+
+/** per-zone display capacity: the main ring is roomier than a satellite. */
+const STILL_CAPS = [10, 6, 6, 6];
+const CURIO_CAPS = [4, 2, 2, 2];
+const ZONE_STILL_RADIUS = 2.35;
+const ZONE_CURIO_RADIUS = 1.9;
+
+/** split items across zones, front-loading evenly but respecting caps. */
+function chunkAcrossZones<T>(items: T[], zones: number, caps: number[]): T[][] {
+  const out: T[][] = [];
+  let idx = 0;
+  for (let z = 0; z < zones; z++) {
+    const remainingZones = zones - z;
+    const take = Math.min(caps[z] ?? 0, Math.ceil((items.length - idx) / remainingZones));
+    out.push(items.slice(idx, idx + Math.max(0, take)));
+    idx += Math.max(0, take);
+  }
+  return out;
+}
+
 export function buildVaultDesign(
   stills: VaultStillItem[],
   curios: VaultCurioItem[],
-  opts?: { bright?: boolean },
+  opts?: { bright?: boolean; zones?: number },
 ): SceneDesign {
   const bright = opts?.bright ?? false;
+  const zones = Math.max(1, Math.min(opts?.zones ?? 1, MAX_ZONES));
   const elements: SceneElement[] = [];
 
-  // outer ring: 劇照 light shafts, evenly spread, front gap for the camera
-  const n = Math.min(stills.length, 10);
-  for (let i = 0; i < n; i++) {
-    // arc from 36° to 324° (leave the front opening toward the camera)
-    const t = n === 1 ? 0.5 : i / (n - 1);
-    const theta = ((36 + t * 288) * Math.PI) / 180;
-    const x = Math.sin(theta) * STILL_RADIUS;
-    const z = Math.cos(theta) * STILL_RADIUS;
-    elements.push({
-      kind: 'display_still',
-      pos: [x, 0, z],
-      yaw: faceCentreYaw(x, z),
-      assetUrl: proxyStillUrl(stills[i].url),
-      label: stills[i].title,
-      params: { key: stills[i].key, subtitle: stills[i].subtitle, phase: i * 0.9 },
-    });
-  }
+  const platforms = ZONE_ORIGINS.slice(0, zones - 1).map(([x, z]) => ({ x, z, ...ZONE_SIZE }));
+  const origins: [number, number][] = [[0, 0], ...ZONE_ORIGINS.slice(0, zones - 1)];
 
-  // inner ring: 珍玩 plinths flanking the centre
-  const m = Math.min(curios.length, 4);
-  for (let i = 0; i < m; i++) {
-    const theta = ((120 + i * (360 / Math.max(m, 2))) * Math.PI) / 180;
-    const x = Math.sin(theta) * CURIO_RADIUS;
-    const z = Math.cos(theta) * CURIO_RADIUS;
-    elements.push({
-      kind: 'display_curio',
-      pos: [x, 0, z],
-      yaw: faceCentreYaw(x, z),
-      assetUrl: curios[i].assetUrl,
-      fitHeight: curios[i].fitHeight,
-      tag: curios[i].tag,
-      label: curios[i].title,
-      params: { key: curios[i].key, subtitle: curios[i].subtitle, phase: i * 1.7 },
-    });
-  }
+  const stillChunks = chunkAcrossZones(stills, zones, STILL_CAPS);
+  const curioChunks = chunkAcrossZones(curios, zones, CURIO_CAPS);
+
+  origins.forEach(([ox, oz], zi) => {
+    const ring = zi === 0 ? STILL_RADIUS : ZONE_STILL_RADIUS;
+    const zoneStills = stillChunks[zi] ?? [];
+    const n = zoneStills.length;
+    for (let i = 0; i < n; i++) {
+      // arc from 36° to 324° (leave the front opening toward the camera)
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      const theta = ((36 + t * 288) * Math.PI) / 180;
+      const x = Math.sin(theta) * ring;
+      const z = Math.cos(theta) * ring;
+      elements.push({
+        kind: 'display_still',
+        pos: [ox + x, 0, oz + z],
+        yaw: faceCentreYaw(x, z),
+        assetUrl: proxyStillUrl(zoneStills[i].url),
+        label: zoneStills[i].title,
+        params: { key: zoneStills[i].key, subtitle: zoneStills[i].subtitle, phase: zi * 2.3 + i * 0.9 },
+      });
+    }
+
+    const ringC = zi === 0 ? CURIO_RADIUS : ZONE_CURIO_RADIUS;
+    const zoneCurios = curioChunks[zi] ?? [];
+    const m = zoneCurios.length;
+    for (let i = 0; i < m; i++) {
+      const theta = ((120 + i * (360 / Math.max(m, 2))) * Math.PI) / 180;
+      const x = Math.sin(theta) * ringC;
+      const z = Math.cos(theta) * ringC;
+      elements.push({
+        kind: 'display_curio',
+        pos: [ox + x, 0, oz + z],
+        yaw: faceCentreYaw(x, z),
+        assetUrl: zoneCurios[i].assetUrl,
+        fitHeight: zoneCurios[i].fitHeight,
+        tag: zoneCurios[i].tag,
+        label: zoneCurios[i].title,
+        params: { key: zoneCurios[i].key, subtitle: zoneCurios[i].subtitle, phase: zi * 1.1 + i * 1.7 },
+      });
+    }
+  });
 
   // user-centric: no character at the heart — only a breath of incense.
   // (The room belongs to the collector's wallet, not to any one character.)
+  // Satellite hearts are dressed by VaultScenery's stage-prop vignettes.
   elements.push({ kind: 'incense', pos: [0, 0, 0], scale: 0.9 });
 
   return {
     backdrop: { style: '藏閣' },
-    // 明閣 (site day theme): pale waxed stone instead of black lacquer —
-    // the reflector material reads it as honed marble under paper light.
-    floor: { type: 'lacquer', color: bright ? '#b9b0a0' : undefined },
+    // 江南水鄉: the mirror floor reads as water — pale celadon shallows by
+    // day, deep blue-green night water after dark (not brown lacquer).
+    floor: { type: 'lacquer', color: bright ? '#aeb5a4' : '#141a1f' },
     mood: {
       timeOfDay: bright ? 'day' : 'night',
       season: 'spring',
       weather: 'clear',
       atmosphere: bright ? 0.25 : 0.45,
     },
+    platforms: platforms.length ? platforms : undefined,
     elements,
   };
 }

@@ -117,14 +117,14 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 **為什麼**：引擎所有「讀鏈事件」(結算、合本歸屬、名冊、公報) 原本都 live 打 JSON-RPC `queryEvents`。公開節點會限流 (429) 且只保留約三天事件,**而 JSON-RPC 本身 2026-07-31 退役**。三者疊起來把結算讀空 → 劇情乾巴巴重複。
 
 **做法**：自架事件 indexer,把 live 讀取換成持久化 store,**不改任何呼叫端**。
-- **event-poller**(`packages/cli/scripts/indexer-poll.ts`,`Dockerfile.event-poller`)：常駐輪詢鏈事件灌進 Postgres `chain_events`。來源是可插拔的 `FetchPage`(現在 JSON-RPC adapter,七月前換 GraphQL)。
+- **event-poller**(`packages/cli/scripts/indexer-poll.ts`,`Dockerfile.event-poller`)：常駐輪詢鏈事件灌進 Postgres `chain_events`。來源是可插拔的 `FetchPage`;**自 #78 (2026-07-07) 起預設走 GraphQL `graphqlFetchPage`**(gRPC 沒有 `queryEvents` 對應,JSON-RPC 也在 2026-07-31 退役)。`jsonRpcFetchPage` 仍留著當退路。source cursor 是 opaque 的,換 source 對 poll 核心透明。
 - **Postgres**：`@endless-story/indexer` 的 `PgEventStore`。事件身分 = `(txDigest, eventSeq)`,idempotent upsert。
-- **web 讀取**：sdk 的 read seam (`queryEventsWithRetry`) 偵測到有註冊 store 就讀 Postgres、否則 fallback live RPC,重現 `queryEvents` 的 page/cursor 契約。**`pg` 永遠不進 sdk**(sdk root 被 client component import,進去會炸 build);註冊只在 server-only 點 (`/api/tick`、`(site)`/`(admin)` layout) 做。
-- 全程 gated on `DATABASE_URL`：沒設就是純 live-RPC 行為(一鍵回滾)。
+- **web 讀取**：sdk 的 read seam (`queryEventsWithRetry`) 偵測到有註冊 store 就讀 Postgres、否則 fallback GraphQL(`SUI_GRAPHQL_URL`,預設官方 testnet endpoint),重現 `queryEvents` 的 page/cursor 契約。**`pg` 永遠不進 sdk**(sdk root 被 client component import,進去會炸 build);註冊只在 server-only 點 (`/api/tick`、`(site)`/`(admin)` layout) 做。
+- 全程 gated on `DATABASE_URL`：沒設就是純 GraphQL fallback 行為(一鍵回滾)。
 
 **上線順序**：event-poller 先跑起來灌 DB → 驗 DB 有資料 → 再給 web 設 `DATABASE_URL` redeploy(翻開關,拿掉即回滾)。`ensureSchema` 在 poller + web 開機自動建表,免手動 psql。cli-world-runner 不用改、不用 `DATABASE_URL`(它只打 `/api/tick`,不直接讀事件)。
 
-> **節點**：用官方 archival (`https://fullnode.testnet.sui.io:443`)。indexer 已把最重的事件 fan-out 搬去 store,RPC 只剩輕量(live poll + 偶發 action),官方不再 429;公開 prune 節點(如 publicnode)會讓沒註冊 store 的讀取路徑硬噴「找不到事件」。見 [`docs/protocol`](../protocol) 與本檔 §6。
+> **節點**：object/tx/coin/balance 讀取與上鏈都走 **gRPC Core API**(`SUI_GRPC_URL`,同一台官方 fullnode host,`:443` 供 gRPC-web;不設就用預設)。事件走 **GraphQL**(`SUI_GRAPHQL_URL`)。indexer 已把最重的事件 fan-out 搬去 store,gRPC 只剩輕量讀取,官方不再 429;沒註冊 store 時讀取路徑退回 GraphQL,公開 endpoint 有限流。見 [`docs/protocol`](../protocol) 與本檔 §6。
 
 ---
 
@@ -136,6 +136,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 | 變數 | 用途 | ★ |
 |---|---|---|
 | `NEXT_PUBLIC_SUI_NETWORK` / `SUI_NETWORK` | 網路（testnet/mainnet） | |
+| `NEXT_PUBLIC_SUI_GRPC_URL`（或 legacy `NEXT_PUBLIC_SUI_RPC_URL`） | 前端 dapp-kit 錢包/瀏覽器讀取的節點；不設用官方 fullnode（藏閣/名冊 read fan-out 撞 429 時填專屬 endpoint） | |
 | `NEXT_PUBLIC_DATA_SOURCE` / `NEXT_PUBLIC_API_BASE_URL` | 前端資料來源 | |
 | `SUI_ADMIN_PRIVATE_KEY`（或 `SUI_PRIVATE_KEY`） | admin 上鏈（tick/mint/settle） | ★ |
 | `POE_API_KEY` | LLM（GLM-4.6 / GLM-5.1） | ★ |
@@ -147,7 +148,9 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 | `RECRUITMENT_MOD_SECRET` / `MODERATION_ALLOW_UNCONFIGURED` | 招募/審核 | ★ |
 | `DEMO_CLIPS_URL` / `DEMO_CLIPS_FILE` | 首頁 demo/trailer clips JSON override；沒填會讀 `public/demo-clips.json`，再 fallback mock | |
 | `CHAIN_READ_CACHE_TTL_MS` | 公開 chain reads 的短 TTL cache；預設 10–15s，填 `0` 可關閉 | |
-| `DATABASE_URL` | 事件 indexer 的 Postgres（ref 自 Postgres service）；設了才讀 store、沒設純 live RPC | ★ |
+| `SUI_GRPC_URL`（或 legacy `SUI_RPC_URL`，同一 host） | object/tx/coin/balance 讀取 + 上鏈的 gRPC 節點；不設用官方 fullnode | |
+| `SUI_GRAPHQL_URL` | 事件讀取的 GraphQL endpoint（無 store 時 fallback）；不設用官方 testnet GraphQL | |
+| `DATABASE_URL` | 事件 indexer 的 Postgres（ref 自 Postgres service）；設了才讀 store、沒設走 GraphQL fallback | ★ |
 
 **Zeabur — world-loop runner**
 | 變數 | 用途 | ★ |
@@ -166,7 +169,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 | 變數 | 用途 | ★ |
 |---|---|---|
 | `DATABASE_URL` | Postgres 連線字串（ref 自 Postgres service）；poller 灌、web 讀,同一個 | ★ |
-| `SUI_RPC_URL` | 輪詢來源節點（archival；預設官方 testnet fullnode） | |
+| `SUI_GRAPHQL_URL` | 輪詢來源的 GraphQL endpoint（預設官方 testnet GraphQL；有限流,量大時換專屬 endpoint） | |
 
 **Zeabur — relayer**
 | 變數 | 用途 | ★ |
