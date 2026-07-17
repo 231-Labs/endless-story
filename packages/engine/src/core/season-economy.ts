@@ -19,6 +19,7 @@ import {
     conservesProduction,
     emptyEconomy,
     expireContracts,
+    fileCounter,
     fillPartnerSlot,
     maySpend,
     offerContract,
@@ -30,6 +31,7 @@ import {
     purchase,
     readyToSettle,
     rejectContract,
+    resolveCounter,
     restoreContracts,
     restoreEconomy,
     settleContract,
@@ -116,6 +118,14 @@ export interface SeasonEconomyData {
     /** granted-but-not-yet-lived leases: lease objectId → who may move where.
      *  Cleared when the move-in actually happens. */
     tenancies?: Record<string, { characterId: string; sceneName: string }>;
+    /** contractId → the proposer's authored answer policy for counter-demands.
+     *  The replaceable seam: swap for a live counterparty agent later. */
+    negotiations?: Record<string, {
+        acceptDemandsMatching: string[];
+        graceDaysOnAccept?: number;
+        acceptNote?: string;
+        refusalNote?: string;
+    }>;
     state: PersistedEconomyState;
     contracts: Record<string, PersistedEconomicContract>;
 }
@@ -362,6 +372,20 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         return { ok: true, publicLines: [`${actorName}在「${c.label}」唯一聯名搭檔欄親筆填上${cmd.partnerName}`] };
     }
 
+    if (cmd.action === 'contract_counter') {
+        if (!cmd.demand?.trim()) return fail('要還價就得寫明 demand（你要的條款，一句）');
+        const countered = fileCounter(contract, {
+            contractId, actorId: req.actorId, demand: cmd.demand, day: req.day, causeEventId: req.causeEventId,
+        });
+        if (countered.rejection) return fail(countered.rejection.message);
+        contract = countered.state;
+        persist(world, contract);
+        return {
+            ok: true,
+            publicLines: [`${actorName}就「${c.label}」當面還價：『${cmd.demand.trim()}』——${accountLabel(contract, c.proposerAccountId)}的回話要等明晨`],
+        };
+    }
+
     if (cmd.action === 'contract_reject') {
         const rejected = rejectContract(contract, { contractId, actorId: req.actorId, causeEventId: req.causeEventId });
         if (rejected.rejection) return fail(rejected.rejection.message);
@@ -573,8 +597,15 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             const partner = c.partnerSlot.required ? `；聯名搭檔欄：${c.partnerSlot.filledBy ? accountLabel(contract, c.partnerSlot.filledBy) : '空白'}` : '';
             const waiting = pendingSigners(c).map((id) => accountLabel(contract, id)).join('、');
             lines.push(`「${c.label}」（contractId=${c.id}，白紙黑字，人人可查）：若成立——${splits}；限第 ${c.deadlineDay} 日夜裡截止${partner}；尚欠署名：${waiting || '（只欠搭檔欄）'}。`);
+            if (c.terms.length) lines.push(`約中條款：${c.terms.join('；')}。`);
+            if (c.pendingCounter) {
+                lines.push(`還價待覆：${accountLabel(contract, c.pendingCounter.byId)}所提『${c.pendingCounter.demand}』，${accountLabel(contract, c.proposerAccountId)}明晨回話。`);
+            }
             const isParty = c.requiredSignerIds.includes(characterId) || c.partnerSlot.filledBy === characterId;
-            if (isParty) lines.push(`你是這份契約的當事人：可 contract_sign 簽署、contract_reject 拒簽${c.requiredSignerIds.includes(characterId) && c.partnerSlot.required && !c.partnerSlot.filledBy ? '、contract_fill_partner 填上唯一聯名搭檔' : ''}。`);
+            if (isParty) {
+                const counterHint = c.pendingCounter ? '' : '、contract_counter 還價（demand 寫你要的條款，對方明晨回話）';
+                lines.push(`你是這份契約的當事人：可 contract_sign 簽署、contract_reject 拒簽${c.requiredSignerIds.includes(characterId) && c.partnerSlot.required && !c.partnerSlot.filledBy ? '、contract_fill_partner 填上唯一聯名搭檔' : ''}${counterHint}。`);
+            }
         } else {
             const outcome = c.status === 'settled' ? `已簽署生效，款項分訖（${splits}）` : c.status === 'rejected' ? '已拒簽，預付款退回' : '已逾期失效，預付款收回';
             lines.push(`「${c.label}」${outcome}。`);
@@ -677,6 +708,27 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
     const causeEventId = `${world.data.sagaId}:settle:d${req.day}`;
     const publicNotices: string[] = [];
     const privateNotices: Array<{ characterId: string; text: string }> = [];
+
+    // 0.5 counter-demands are answered overnight — BEFORE the deadline sweep,
+    //     so an accepted amendment (with its grace day) can outlive the clock.
+    //     Today the answer comes from the authored policy; this call is the
+    //     seam where a live counterparty agent plugs in later.
+    for (const [id, c] of Object.entries(contract.contracts)) {
+        if (!c.pendingCounter) continue;
+        const policy = (data.negotiations ?? {})[id];
+        const accept = !!policy && policy.acceptDemandsMatching.some((needle) => c.pendingCounter!.demand.includes(needle));
+        const answered = resolveCounter(contract, {
+            contractId: id, accept, day: req.day, graceDays: policy?.graceDaysOnAccept ?? 1, causeEventId,
+        });
+        if (answered.rejection) throw new Error(`economy: counter on ${id} failed to resolve: ${answered.rejection.message}`);
+        contract = answered.state;
+        const proposer = accountLabel(contract, c.proposerAccountId);
+        publicNotices.push(accept
+            ? (policy?.acceptNote ?? `${proposer}回話：條款照辦——『${c.pendingCounter.demand}』白紙黑字補進「${c.label}」，簽期順延至第 ${contract.contracts[id].deadlineDay} 日夜裡。`)
+            : (policy?.refusalNote ?? `${proposer}回話：不讓步。「${c.label}」原約原期，第 ${c.deadlineDay} 日夜裡為限。`));
+        syncContractObject(world, data, contract, id, world.data.cast.map((member) => member.id));
+    }
+    persist(world, contract);
 
     // 1. contract deadlines FIRST — a fully-signed offer settles, an unsigned
     //    one expires and its escrow releases (deadlineDay is the last valid day).
@@ -860,6 +912,19 @@ export interface SeasonEconomyFrame {
         partnerRequired?: boolean;
         /** last narrative day (1-indexed) a signature can complete it. */
         deadlineDay: number;
+        /** the written conditions as first offered. */
+        terms?: string[];
+        /** how the proposer answers counter-demands. Today an authored policy;
+         *  later a real counterparty agent (another saga's stakeholder) sits
+         *  exactly at this seam. */
+        negotiation?: {
+            /** demands containing ANY of these substrings are accepted. */
+            acceptDemandsMatching: string[];
+            /** extra days to sign after an accepted amendment (default 1). */
+            graceDaysOnAccept?: number;
+            acceptNote?: string;
+            refusalNote?: string;
+        };
     }>;
 }
 
@@ -910,6 +975,7 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
     let contract: ContractState = { economy: openAccounts(emptyEconomy(world.data.clock.day), seeds), contracts: {} };
 
     const contractObjectIds: Record<string, string> = {};
+    const negotiations: NonNullable<SeasonEconomyData['negotiations']> = {};
     for (const spec of frame.contracts ?? []) {
         const resolveBeneficiary = (to: string): string =>
             to === PARTNER_SLOT ? PARTNER_SLOT : to === '班庫' ? troupeId : (world.idByName(to) ?? to);
@@ -926,11 +992,13 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
             requiredSignerIds: spec.requiredSignerNames.map(idFor),
             partnerRequired: spec.partnerRequired ?? false,
             deadlineDay: spec.deadlineDay,
+            terms: spec.terms,
             causeEventId: `${seasonId}:offer:${spec.id}`,
         });
         if (offered.rejection) throw new Error(`season contract ${spec.id} failed to seed: ${offered.rejection.message}`);
         contract = offered.state;
         if (spec.objectId) contractObjectIds[spec.id] = spec.objectId;
+        if (spec.negotiation) (negotiations[spec.id] = { ...spec.negotiation });
     }
 
     world.data.economy = {
@@ -940,6 +1008,7 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
         troupeAccountId: troupeId,
         ...(frame.troupe.costNote ? { troupeCostNote: frame.troupe.costNote } : {}),
         ...(frame.troupe.shortfallCreditor ? { shortfallCreditor: frame.troupe.shortfallCreditor } : {}),
+        ...(Object.keys(negotiations).length ? { negotiations } : {}),
         ...(frame.bills?.length
             ? {
                 bills: frame.bills.map((bill) => ({

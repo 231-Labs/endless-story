@@ -506,3 +506,83 @@ test('economy state survives snapshot/restore byte-for-byte and never double-set
         fs.rmSync(dir, { recursive: true, force: true });
     }
 });
+
+test('counter-offer: an accepted demand amends the terms, grants a grace day, and the deal that died in v15 signs', () => {
+    const world = buildSeasonWorld();
+    const economy = new LocalEconomy();
+    const shen = world.idByName('沈雪笙')!;
+    const liu = world.idByName('柳安春')!;
+    const su = world.idByName('蘇映雪')!;
+    const at = (id: string) => world.data.roster[id];
+    const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
+    for (const id of [shen, liu, su]) world.moveCharacter(id, paperScene);
+
+    // 沈雪笙 is not a party — the world refuses his counter, so 柳安春 files it
+    const notParty = economy.commitCommand(world, {
+        actorId: shen, sceneId: paperScene, witnessIds: [shen], day: 3,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '那張半卸妝校樣不許用，肖像須另拍定妝照' },
+        causeEventId: 'test:c0', seq: 0,
+    });
+    assert.equal(notParty.ok, false);
+
+    const countered = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu, shen], day: 3,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '那張半卸妝校樣不許用，肖像須另拍定妝照' },
+        causeEventId: 'test:c1', seq: 0,
+    });
+    assert.equal(countered.ok, true, countered.reason);
+    assert.match(countered.publicLines[0], /還價/);
+
+    // one demand at a time; and her percept shows it pending
+    const second = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu], day: 3,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '再加一百圓' },
+        causeEventId: 'test:c2', seq: 0,
+    });
+    assert.equal(second.ok, false);
+    assert.match(economyPerceptFor(world, liu, at(liu))!, /還價待覆/);
+
+    // overnight (day-3 settle): the demand matches the authored policy → terms
+    // amend, the deadline stretches past the old midnight, no expiry tonight
+    const settle3 = settleSeasonDay(world, { day: 3, nowTick: 17 });
+    assert.ok(settle3.publicNotices.some((line) => line.includes('條款照辦')), settle3.publicNotices.join(' / '));
+    const amended = world.data.economy!.contracts['anchun-exclusive'];
+    assert.equal(amended.status, 'offered', 'the accepted amendment outlives the old deadline');
+    assert.equal(amended.deadlineDay, 4);
+    assert.ok(amended.terms.some((term) => term.includes('定妝照')));
+
+    // day 4: partner named, everyone signs the amended paper — it settles
+    for (const [actor, command] of [
+        [liu, { action: 'contract_fill_partner', contractId: 'anchun-exclusive', partnerName: '蘇映雪' }],
+        [liu, { action: 'contract_sign', contractId: 'anchun-exclusive' }],
+        [su, { action: 'contract_sign', contractId: 'anchun-exclusive' }],
+    ] as const) {
+        const done = economy.commitCommand(world, {
+            actorId: actor, sceneId: paperScene, witnessIds: [actor], day: 4,
+            command: command as never, causeEventId: `test:c3:${actor}:${command.action}`, seq: 0,
+        });
+        assert.equal(done.ok, true, done.reason);
+    }
+    assert.equal(world.data.economy!.contracts['anchun-exclusive'].status, 'settled');
+    assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('counter-offer: a demand outside the policy is refused and the clock stays', () => {
+    const world = buildSeasonWorld();
+    const economy = new LocalEconomy();
+    const liu = world.idByName('柳安春')!;
+    const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
+    world.moveCharacter(liu, paperScene);
+    const countered = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu], day: 3,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '預付款再加一百圓' },
+        causeEventId: 'test:r1', seq: 0,
+    });
+    assert.equal(countered.ok, true, countered.reason);
+    const settle3 = settleSeasonDay(world, { day: 3, nowTick: 17 });
+    assert.ok(settle3.publicNotices.some((line) => line.includes('不改')), settle3.publicNotices.join(' / '));
+    const c = world.data.economy!.contracts['anchun-exclusive'];
+    assert.equal(c.status, 'expired', 'refused counter leaves the original midnight in force');
+    assert.equal(c.pendingCounter, undefined);
+    assert.deepEqual(auditSeasonEconomy(world), []);
+});

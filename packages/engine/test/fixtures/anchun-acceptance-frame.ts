@@ -341,7 +341,17 @@ export function buildAnchunAcceptanceFrame(): SeasonFrame {
           "柳安春"
         ],
         "partnerRequired": true,
-        "deadlineDay": 3
+        "deadlineDay": 3,
+        "terms": [
+          "一年內不得替別家留聲或拍片",
+          "宣傳刊出半卸妝後台肖像",
+          "親筆填上唯一聯名搭檔"
+        ],
+        "negotiation": {
+          "acceptDemandsMatching": ["肖像", "校樣", "定妝照"],
+          "graceDaysOnAccept": 1,
+          "refusalNote": "華光影片社回話：價與期都不改，第三日夜裡為限。"
+        },
       }
     ],
     "bills": [
