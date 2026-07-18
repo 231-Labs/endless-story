@@ -10,10 +10,10 @@ import type { LabCharacterLive } from '@/lib/lab/types';
 
 export function LabCastRail({
     characters,
-    onSelectScene,
+    onSelectCharacter,
 }: {
     characters: LabCharacterLive[];
-    onSelectScene?: (sceneId: string) => void;
+    onSelectCharacter?: (characterId: string) => void;
 }) {
     return (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -21,7 +21,8 @@ export function LabCastRail({
                 <button
                     key={c.id}
                     type="button"
-                    onClick={() => c.sceneId && onSelectScene?.(c.sceneId)}
+                    onClick={() => onSelectCharacter?.(c.id)}
+                    title={`開「${c.name}」內頁`}
                     className="es-card group p-3 text-left transition hover:border-cinnabar/50"
                 >
                     <div className="flex items-center gap-2.5">

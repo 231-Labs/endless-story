@@ -11,7 +11,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
 import { IconBurn, IconExhibit, IconGallery, IconSeed } from '@/components/lab/LabIcons';
+import { useLabDialog } from '@/components/lab/LabDialog';
 import { labApi } from '@/components/lab/useLab';
+import { useToast } from '@/components/common/Toaster';
 import type { LabRunSummary, LabSeasonSummary, LabSeedSummary } from '@/lib/lab/types';
 
 export default function LabHomePage() {
@@ -60,12 +62,15 @@ export default function LabHomePage() {
         setCreating(true);
         setError(null);
         try {
+            // the season picker value encodes "source/id" so custom frames resolve
+            const [seasonSource, ...seasonRest] = form.seasonId ? form.seasonId.split('/') : [];
             const { meta } = await labApi.createRun({
                 title: form.title.trim() || `${chosenSeed.label ?? chosenSeed.id}`,
                 config: {
                     presetId: chosenSeed.id,
                     seedSource: chosenSeed.source,
-                    seasonId: form.seasonId || undefined,
+                    seasonId: seasonRest.length ? seasonRest.join('/') : undefined,
+                    seasonSource: seasonSource === 'custom' ? 'custom' : 'builtin',
                     llm: form.llm,
                     relationshipFallback: form.relationshipFallback,
                     ticksPerDay: form.ticksPerDay,
@@ -129,7 +134,7 @@ export default function LabHomePage() {
                             href="/lab/seeds"
                             aria-label="劇本館"
                             title="劇本館 · 撰改 seed"
-                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
                         >
                             <IconSeed />
                         </Link>
@@ -137,7 +142,7 @@ export default function LabHomePage() {
                             href="/lab/assets"
                             aria-label="圖庫"
                             title="圖庫 · 人物與場景之圖"
-                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
                         >
                             <IconGallery />
                         </Link>
@@ -145,7 +150,7 @@ export default function LabHomePage() {
                             href="/lab/exhibits"
                             aria-label="展覽室"
                             title="展覽室 · 認領外來卷／實驗報告／自上展品"
-                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
                         >
                             <IconExhibit />
                         </Link>
@@ -230,10 +235,13 @@ export default function LabHomePage() {
                             value={form.seasonId}
                             onChange={(e) => setForm({ ...form, seasonId: e.target.value })}
                             className="es-field px-2 py-1.5 text-xs"
+                            title="季框：季目標＋契約紙＋天時＋（若帶 economy）簽約錢物理"
                         >
                             <option value="">不掛季框</option>
                             {seasons.map((s) => (
-                                <option key={`${s.source}/${s.id}`} value={s.id}>{s.title ?? s.id}</option>
+                                <option key={`${s.source}/${s.id}`} value={`${s.source}/${s.id}`}>
+                                    {s.title ?? s.id}{s.source === 'custom' ? ' ·自撰' : ''}
+                                </option>
                             ))}
                         </select>
                     ) : null}
@@ -285,6 +293,8 @@ function RunCard({
     onChanged: () => void;
     depth?: number;
 }) {
+    const dialog = useLabDialog();
+    const toast = useToast();
     const s = run.status;
     return (
         <div style={{ marginLeft: depth ? depth * 18 : 0 }}>
@@ -332,9 +342,21 @@ function RunCard({
                 <button
                     type="button"
                     onClick={() => {
-                        if (window.confirm(`焚毀「${run.meta.title}」？一卷連同記憶、章回、卷宗俱不可復。`)) {
-                            void labApi.deleteRun(run.meta.id).then(onChanged).catch((e) => window.alert(String(e)));
-                        }
+                        void dialog
+                            .confirm({
+                                title: `焚毀「${run.meta.title}」？`,
+                                body: '一卷連同記憶、章回、卷宗俱不可復。',
+                                confirmLabel: '焚',
+                                danger: true,
+                            })
+                            .then((ok) => {
+                                if (!ok) return;
+                                return labApi.deleteRun(run.meta.id).then(() => {
+                                    toast('一卷成灰。', 'info');
+                                    onChanged();
+                                });
+                            })
+                            .catch((e) => toast(String(e), 'error'));
                     }}
                     aria-label={`焚毀「${run.meta.title}」`}
                     title="焚毀此卷（不可復）"

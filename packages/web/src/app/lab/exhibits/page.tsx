@@ -12,8 +12,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Markdown } from '@/components/common/Markdown';
 import { IconBack, IconBurn, IconFork, IconScroll } from '@/components/lab/LabIcons';
+import { useLabDialog } from '@/components/lab/LabDialog';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
 import { labApi } from '@/components/lab/useLab';
+import { useToast } from '@/components/common/Toaster';
 
 interface RepoReport {
     rel: string;
@@ -49,6 +51,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export default function LabExhibitsPage() {
     const router = useRouter();
+    const dialog = useLabDialog();
+    const toast = useToast();
     const [reports, setReports] = useState<RepoReport[]>([]);
     const [uploads, setUploads] = useState<UploadedExhibit[]>([]);
     const [orphans, setOrphans] = useState<OrphanRun[]>([]);
@@ -94,12 +98,13 @@ export default function LabExhibitsPage() {
         setBusy(true);
         setError(null);
         try {
-            const title = window.prompt('這卷之名', orphan.dir) ?? '';
+            const title = await dialog.prompt({ title: '認領此卷', body: orphan.dir, defaultValue: orphan.dir, confirmLabel: '上卷架' });
             if (!title) return;
             const { meta } = await request<{ meta: { id: string } }>('/api/lab/exhibits', {
                 method: 'POST',
                 body: JSON.stringify({ kind: 'adopt', dir: orphan.dir, title }),
             });
+            toast(`「${title}」已上卷架。`, 'success');
             router.push(`/lab/run/${meta.id}`);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
@@ -112,13 +117,26 @@ export default function LabExhibitsPage() {
         setBusy(true);
         setError(null);
         try {
-            const title = window.prompt('復活之卷之名', defaultTitle);
+            const title = await dialog.prompt({
+                title: '復活成卷',
+                body: '秘密／關係／心事全數承接，自第 1 日重新起拍。',
+                defaultValue: defaultTitle,
+                confirmLabel: '起',
+            });
             if (!title) return;
-            const llm = window.confirm('以「實錄」（真 LLM）續走？\n確定＝實錄（需模型鑰）　取消＝排演（零鑰）') ? 'real' : 'fake';
+            const llm = await dialog.choose({
+                title: '以何檔續走？',
+                options: [
+                    { key: 'fake', label: '排演', hint: '確定性假角，零鑰零費——先驗機制' },
+                    { key: 'real', label: '實錄', hint: '真 LLM 續命，一拍數分鐘（需模型鑰）' },
+                ],
+            });
+            if (!llm) return;
             const { meta } = await request<{ meta: { id: string } }>('/api/lab/exhibits', {
                 method: 'POST',
                 body: JSON.stringify({ kind: 'revive', ...source, title, llm }),
             });
+            toast(`「${title}」已復活。`, 'success');
             router.push(`/lab/run/${meta.id}`);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
@@ -305,11 +323,17 @@ export default function LabExhibitsPage() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (window.confirm(`焚去展品「${upload.title}」？`)) {
-                                            void request(`/api/lab/exhibits?upload=${encodeURIComponent(upload.id)}`, { method: 'DELETE' })
-                                                .then(load)
-                                                .catch((e) => setError(String(e)));
-                                        }
+                                        void dialog
+                                            .confirm({ title: `焚去展品「${upload.title}」？`, confirmLabel: '焚', danger: true })
+                                            .then((ok) => {
+                                                if (!ok) return;
+                                                return request(`/api/lab/exhibits?upload=${encodeURIComponent(upload.id)}`, { method: 'DELETE' })
+                                                    .then(() => {
+                                                        toast('展品已焚。', 'info');
+                                                        return load();
+                                                    });
+                                            })
+                                            .catch((e) => setError(String(e)));
                                     }}
                                     aria-label={`焚去 ${upload.title}`}
                                     title="焚去此展品"

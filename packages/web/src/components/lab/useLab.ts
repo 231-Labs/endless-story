@@ -32,8 +32,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const labApi = {
     seeds: () => request<{ seeds: LabSeedSummary[]; seasons: LabSeasonSummary[] }>('/api/lab/seeds'),
-    seedText: (source: string, id: string) =>
-        request<{ json: string }>(`/api/lab/seeds/${source}/${encodeURIComponent(id)}`),
+    seedText: (source: string, id: string, kind: 'seed' | 'season' = 'seed') =>
+        request<{ json: string }>(`/api/lab/seeds/${source}/${encodeURIComponent(id)}${kind === 'season' ? '?kind=season' : ''}`),
     saveSeed: (kind: 'seed' | 'season', id: string, json: string) =>
         request<{ saved: LabSeedSummary | LabSeasonSummary }>('/api/lab/seeds', {
             method: 'POST',
@@ -77,7 +77,26 @@ export const labApi = {
             { method: 'POST', body: JSON.stringify(op) },
         ),
     assets: () =>
-        request<{ assets: Array<{ kind: string; file: string; key: string; url: string; bytes: number }> }>('/api/lab/assets'),
+        request<{
+            assets: Array<{ kind: string; file: string; key: string; url: string; bytes: number }>;
+            notes: Array<{ kind: string; key: string; note: string }>;
+        }>('/api/lab/assets'),
+    saveAssetNote: (kind: string, name: string, note: string) =>
+        request<{ noted: string }>('/api/lab/assets', { method: 'POST', body: JSON.stringify({ kind, name, note }) }),
+    gallery: (kind: string, name: string) =>
+        request<{ gallery: Array<{ file: string; url: string; type: 'image' | 'video' }> }>(
+            `/api/lab/assets?galleryKind=${kind}&galleryName=${encodeURIComponent(name)}`,
+        ),
+    addGalleryItem: (kind: string, name: string, dataUrl: string) =>
+        request<{ added: { file: string; url: string } }>('/api/lab/assets', {
+            method: 'POST',
+            body: JSON.stringify({ kind, name, galleryDataUrl: dataUrl }),
+        }),
+    deleteGalleryItem: (kind: string, key: string, file: string) =>
+        request<{ deleted: string }>(
+            `/api/lab/assets?kind=${kind}&galleryKey=${encodeURIComponent(key)}&galleryFile=${encodeURIComponent(file)}`,
+            { method: 'DELETE' },
+        ),
     uploadAsset: (kind: string, name: string, dataUrl: string) =>
         request<{ saved: { kind: string; file: string; key: string; url: string } }>('/api/lab/assets', {
             method: 'POST',
