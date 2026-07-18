@@ -184,9 +184,9 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
                     return (
                         <div
                             key={seg.location.id}
-                            className="flex h-full w-[clamp(300px,58vh,640px)] shrink-0 snap-center snap-always flex-col border-r border-black/[0.08] last:border-r-0 dark:border-white/[0.05]"
+                            className="flex h-full w-[clamp(320px,62vh,680px)] shrink-0 snap-center snap-always flex-col border-r border-black/[0.08] last:border-r-0 dark:border-white/[0.05]"
                         >
-                            <div className="relative h-[clamp(170px,34vh,380px)] w-full shrink-0 overflow-hidden">
+                            <div className="relative h-[clamp(210px,42vh,480px)] w-full shrink-0 overflow-hidden">
                                 <div className="absolute inset-0 bg-gradient-to-b from-surface to-canvas dark:from-elevated/50 dark:to-canvas" />
                                 {art ? (
                                     <BlobImage src={art} alt={seg.location.name} className="object-cover" sizes="(min-width: 640px) 640px, 100vw" />
@@ -199,7 +199,8 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
                                     {seg.location.name}
                                 </span>
                                 {streamScene ? (
-                                    <FloatingStream lines={streams[streamScene.id]} leftPct={50} topPct={14} />
+                                    /* 飄字自畫面上緣讓開一截 —— 與界籤膠囊拉出餘裕 */
+                                    <FloatingStream lines={streams[streamScene.id]} leftPct={50} topPct={26} />
                                 ) : null}
                             </div>
                             <div className="flex w-full flex-1 min-h-0 flex-wrap content-start justify-center gap-x-4 gap-y-3 overflow-y-auto bg-canvas/30 px-3 pt-4 no-scrollbar">

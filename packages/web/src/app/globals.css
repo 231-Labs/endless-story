@@ -439,7 +439,20 @@ body {
 }
 
 /* ─────────── Cinema-lab 片場 ───────────
- * 珠簾（bead curtain）與飛簷（eaves）裝飾層。純 CSS，pointer-events: none，
+ * 片場面材語彙（settled in batch 3）：
+ *   - 大圖卡（海報／立卡／圖庫實體卡）: rounded-xl ＋光影浮起，無邊線
+ *   - 面板／盒（抽屜、對話盒、點戲台、文章）: .es-lab-panel（rounded-xl 毛玻璃）
+ *   - 列項（卷架列、tick 摺疊、清單卡）: .es-lab-row（rounded-lg 輕紗）
+ *   - 籤／篩／鍵: rounded-full；名印／出處章: rounded-sm（印章方角，刻意的）
+ *   - 邊線只留髮線分隔用，面材一律以光影與紗分層 */
+.es-lab-panel {
+  @apply rounded-xl bg-surface/85 shadow-[0_2px_20px_rgba(20,12,8,0.10)] backdrop-blur-md dark:bg-elevated/60;
+}
+.es-lab-row {
+  @apply rounded-lg bg-surface/70 shadow-[0_1px_10px_rgba(20,12,8,0.08)] dark:bg-elevated/40;
+}
+
+/* 珠簾（bead curtain）與飛簷（eaves）裝飾層。純 CSS，pointer-events: none，
  * prefers-reduced-motion 時簾靜止（沿用全站 reduce 規則的精神，動畫關掉）。 */
 @keyframes es-bead-sway {
   0%, 100% { transform: rotate(0.7deg); }
