@@ -8,9 +8,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
-import { IconBack, IconBurn } from '@/components/lab/LabIcons';
+import { IconBurn } from '@/components/lab/LabIcons';
+import { LabPageHeader } from '@/components/lab/LabPageHeader';
 import { useLabDialog } from '@/components/lab/LabDialog';
 import { labApi } from '@/components/lab/useLab';
 import { useToast } from '@/components/common/Toaster';
@@ -270,23 +269,15 @@ export default function LabAssetsPage() {
 
     return (
         <main className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
-            <header className="relative pt-5">
-                <LabEaves />
-                <BeadCurtain className="-mt-2 h-14 opacity-60" />
-                <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
-                    <div>
-                        <p className="es-page-lead-eyebrow">片場 · 圖庫</p>
-                        <h1 className="font-serif text-2xl tracking-[0.18em] text-ink" title="以名為鍵：同名者，眾卷共用一圖一述。未上傳者以館藏畫作或紙面名款代之。">
-                            人物與場景之圖
-                        </h1>
-                        <p className="mt-1 font-serif text-2xs tracking-[0.2em] text-mute/70">
-                            自本機拖檔入卡即上 —— 人物卡上落肖像、下落美術集（可整批）
-                        </p>
-                    </div>
-                    <Link href="/lab" aria-label="回片場" title="回片場" className="inline-flex items-center gap-1.5 font-serif text-lg text-mute hover:text-cinnabar">
-                        <IconBack />
-                    </Link>
-                </div>
+            <LabPageHeader
+                eyebrow="片場 · 圖庫"
+                title="人物與場景之圖"
+                titleTip="以名為鍵：同名者，眾卷共用一圖一述。未上傳者以館藏畫作或紙面名款代之。自本機拖檔入卡即上 —— 人物卡上落肖像、下落美術集（可整批）。"
+                backHref="/lab"
+            >
+                <p className="mt-1 font-serif text-2xs tracking-[0.2em] text-mute/70">
+                    自本機拖檔入卡即上 —— 人物卡上落肖像、下落美術集（可整批）
+                </p>
                 <nav className="mt-4 flex gap-1.5 overflow-x-auto no-scrollbar">
                     {seeds.map((s) => {
                         const key = `${s.source}/${s.id}`;
@@ -306,7 +297,7 @@ export default function LabAssetsPage() {
                         );
                     })}
                 </nav>
-            </header>
+            </LabPageHeader>
 
             {error ? <p className="mt-4 font-serif text-xs text-cinnabar" role="alert">{error}</p> : null}
 

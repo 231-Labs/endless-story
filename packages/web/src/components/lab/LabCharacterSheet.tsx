@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
 import type { LabCharacterLive } from '@/lib/lab/types';
 
@@ -37,6 +37,17 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
     const [tab, setTab] = useState<TabKey>('wants');
     const [memories, setMemories] = useState<Array<{ seq: number; content: string; kind: string; day: number; importance: number }>>([]);
     const [memErr, setMemErr] = useState<string | null>(null);
+    /** 燈箱 —— 點圖放大，點任一處或 Esc 收。 */
+    const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!zoomUrl) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setZoomUrl(null);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [zoomUrl]);
 
     useEffect(() => {
         let cancelled = false;
@@ -88,7 +99,9 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                             initial={{ scale: 1.06, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                            className="absolute inset-0 h-full w-full object-cover object-top"
+                            onClick={() => setZoomUrl(art)}
+                            title="點看原圖"
+                            className="absolute inset-0 h-full w-full cursor-zoom-in object-cover object-top"
                         />
                     ) : (
                         <span className="absolute inset-0 bg-gradient-to-b from-surface via-canvas to-surface dark:from-elevated dark:via-canvas dark:to-elevated">
@@ -248,8 +261,10 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                                                 // eslint-disable-next-line jsx-a11y/media-has-caption
                                                 <video src={item.url} controls playsInline className="w-full bg-black/60" />
                                             ) : (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={item.url} alt="" className="h-auto w-full" />
+                                                <button type="button" onClick={() => setZoomUrl(item.url)} title="點看原圖" className="block w-full cursor-zoom-in">
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                    <img src={item.url} alt="" className="h-auto w-full" />
+                                                </button>
                                             )}
                                         </div>
                                     ))}
@@ -261,6 +276,39 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                     </div>
                 </div>
             </div>
+
+            {/* 燈箱 —— 原圖滿幕靜觀 */}
+            <AnimatePresence>
+                {zoomUrl ? (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                        onClick={() => setZoomUrl(null)}
+                        role="dialog"
+                        aria-label="原圖"
+                        className="fixed inset-0 z-[70] flex cursor-zoom-out items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+                    >
+                        <motion.img
+                            src={zoomUrl}
+                            alt=""
+                            initial={{ scale: 0.96 }}
+                            animate={{ scale: 1 }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                            className="max-h-[94vh] max-w-[94vw] rounded-lg object-contain shadow-2xl"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setZoomUrl(null)}
+                            aria-label="合上原圖"
+                            className="absolute right-4 top-4 font-serif text-lg text-white/70 transition hover:text-white"
+                        >
+                            ✕
+                        </button>
+                    </motion.div>
+                ) : null}
+            </AnimatePresence>
         </motion.section>
     );
 }

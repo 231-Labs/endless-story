@@ -13,12 +13,25 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { LabLiveBeat } from '@/lib/lab/types';
 
 const SLIP_W = 300;
-const SLIP_H = 136; // 8.5rem — 底片格恆定尺寸
+const SLIP_W_SHORT = 180; // 行蹤／天時這類「事」箋 —— 短一截，一眼分流
+const SLIP_H = 136; // 8.5rem — 底片格恆定高度
 
 function toneDot(b: LabLiveBeat): string {
     if (b.kind === 'world') return 'bg-seal';
     if (b.kind === 'move') return 'bg-mute/60';
     return b.isPrivate ? 'bg-jade/80' : 'bg-cinnabar/80';
+}
+
+/** 言箋寬、事箋短。 */
+function slipW(b: LabLiveBeat): number {
+    return b.kind === 'move' || b.kind === 'world' ? SLIP_W_SHORT : SLIP_W;
+}
+
+/** 箋底分色：言＝紙面、行＝墨染、世＝金染。 */
+function slipTint(b: LabLiveBeat): string {
+    if (b.kind === 'world') return 'bg-seal/[0.14] dark:bg-seal/[0.10]';
+    if (b.kind === 'move') return 'bg-ink/[0.05] dark:bg-white/[0.03]';
+    return 'bg-surface/45 dark:bg-white/[0.06]';
 }
 
 function SlipHeader({ b }: { b: LabLiveBeat }) {
@@ -144,11 +157,15 @@ export function LabBeatDock({
                                             showOverlay(b.seq, e.currentTarget);
                                             setPinnedSeq((s) => (s === b.seq ? null : b.seq));
                                         }}
-                                        style={{ width: SLIP_W, height: SLIP_H }}
-                                        className="animate-beat-in shrink-0 cursor-pointer overflow-hidden rounded-lg bg-surface/45 px-3.5 py-2.5 shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md dark:bg-white/[0.06]"
+                                        style={{ width: slipW(b), height: SLIP_H }}
+                                        className={`animate-beat-in shrink-0 cursor-pointer overflow-hidden rounded-lg px-3.5 py-2.5 shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md ${slipTint(b)}`}
                                     >
                                         <SlipHeader b={b} />
-                                        <p className={`mt-1.5 line-clamp-3 font-serif text-sm leading-relaxed ${b.kind === 'move' ? 'text-mute' : 'text-ink/90'}`}>
+                                        <p className={`mt-1.5 font-serif leading-relaxed ${
+                                            b.kind === 'move' || b.kind === 'world'
+                                                ? 'line-clamp-4 text-xs text-mute'
+                                                : 'line-clamp-3 text-sm text-ink/90'
+                                        }`}>
                                             {b.text}
                                         </p>
                                     </article>
@@ -170,7 +187,7 @@ export function LabBeatDock({
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: SLIP_H, opacity: 0 }}
                             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                            style={{ left: overlay.left, bottom: overlay.bottom, width: SLIP_W }}
+                            style={{ left: overlay.left, bottom: overlay.bottom, width: slipW(expandedBeat) }}
                             onMouseEnter={cancelHide}
                             onMouseLeave={scheduleHide}
                             onClick={() => setPinnedSeq((s) => (s === overlay.seq ? null : overlay.seq))}

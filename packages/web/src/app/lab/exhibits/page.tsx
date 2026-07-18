@@ -8,12 +8,11 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Markdown } from '@/components/common/Markdown';
-import { IconBack, IconBurn, IconFork, IconScroll } from '@/components/lab/LabIcons';
+import { IconBurn, IconFork, IconScroll } from '@/components/lab/LabIcons';
 import { useLabDialog } from '@/components/lab/LabDialog';
-import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
+import { LabPageHeader } from '@/components/lab/LabPageHeader';
 import { labApi } from '@/components/lab/useLab';
 import { useToast } from '@/components/common/Toaster';
 
@@ -165,24 +164,12 @@ export default function LabExhibitsPage() {
 
     return (
         <main className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
-            <header className="relative pt-5">
-                <LabEaves />
-                <BeadCurtain className="-mt-2 h-14 opacity-60" />
-                <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
-                    <div>
-                        <p className="es-page-lead-eyebrow">片場 · 展覽室</p>
-                        <h1
-                            className="font-serif text-2xl tracking-[0.18em] text-ink"
-                            title="實驗的產出在此展示：外來 engine run 認領上卷架；實驗報告與自撰展品直接展讀。"
-                        >
-                            實驗展品
-                        </h1>
-                    </div>
-                    <Link href="/lab" aria-label="回片場" title="回片場" className="inline-flex items-center font-serif text-base text-mute hover:text-cinnabar">
-                        <IconBack />
-                    </Link>
-                </div>
-            </header>
+            <LabPageHeader
+                eyebrow="片場 · 展覽室"
+                title="實驗展品"
+                titleTip="實驗的產出在此展示：外來 engine run 認領上卷架；實驗報告與自撰展品直接展讀。"
+                backHref="/lab"
+            />
 
             {error ? <p className="mt-4 font-serif text-xs text-cinnabar" role="alert">{error}</p> : null}
 

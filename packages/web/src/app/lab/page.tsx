@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
 import { IconBurn, IconExhibit, IconGallery, IconSeed } from '@/components/lab/LabIcons';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { LAB_ICON_BUTTON } from '@/components/lab/LabPageHeader';
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
 import { useLabDialog } from '@/components/lab/LabDialog';
 import { labApi } from '@/components/lab/useLab';
@@ -105,13 +106,14 @@ export default function LabHomePage() {
             <header className="relative pt-6">
                 <LabEaves />
                 <BeadCurtain className="-mt-2 h-20" />
-                <div className="absolute right-0 top-8 flex items-center gap-2">
-                    <ThemeToggle className="es-icon-button !h-11 !w-11 text-[20px]" />
+                {/* 印鍵一列在簾「下」的常流 —— 永不與珠簾相疊（與各分頁頂欄同律） */}
+                <div className="mt-2 flex justify-end gap-2">
+                    <ThemeToggle className={LAB_ICON_BUTTON} />
                     <Link
                         href="/lab/seeds"
                         aria-label="劇本館"
                         title="劇本館 · 撰改劇本與季框"
-                        className="es-icon-button !h-11 !w-11 text-[20px]"
+                        className={LAB_ICON_BUTTON}
                     >
                         <IconSeed />
                     </Link>
@@ -119,7 +121,7 @@ export default function LabHomePage() {
                         href="/lab/assets"
                         aria-label="圖庫"
                         title="圖庫 · 人物與場景之圖"
-                        className="es-icon-button !h-11 !w-11 text-[20px]"
+                        className={LAB_ICON_BUTTON}
                     >
                         <IconGallery />
                     </Link>
@@ -127,12 +129,12 @@ export default function LabHomePage() {
                         href="/lab/exhibits"
                         aria-label="展覽室"
                         title="展覽室 · 認領外來卷／實驗報告／自上展品"
-                        className="es-icon-button !h-11 !w-11 text-[20px]"
+                        className={LAB_ICON_BUTTON}
                     >
                         <IconExhibit />
                     </Link>
                 </div>
-                <div className="mt-4 text-center">
+                <div className="mt-2 text-center lg:-mt-6">
                     <p className="es-page-lead-eyebrow">endless story · 完全鏈下實驗場</p>
                     <h1
                         className="mt-1 font-serif text-xl tracking-[0.4em] text-ink sm:text-2xl"
