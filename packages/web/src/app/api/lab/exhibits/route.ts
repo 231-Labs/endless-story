@@ -5,11 +5,13 @@ import {
     deleteUploadedExhibit,
     listRepoReports,
     listUploadedExhibits,
+    readRepoCastState,
     readRepoReport,
     readUploadedExhibit,
     saveUploadedExhibit,
 } from '@/lib/lab/exhibits';
 import { adoptRun, listOrphanRuns } from '@/lib/lab/import';
+import { reviveFromCastState, type CastStateFile } from '@/lib/lab/revive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,7 +39,8 @@ export async function POST(req: Request) {
     try {
         const body = (await req.json()) as
             | { kind: 'upload'; id?: string; markdown?: string }
-            | { kind: 'adopt'; dir?: string; title?: string; note?: string };
+            | { kind: 'adopt'; dir?: string; title?: string; note?: string }
+            | { kind: 'revive'; castStateRel?: string; json?: string; title?: string; presetId?: string; llm?: 'fake' | 'real' };
         if (body.kind === 'upload') {
             if (!body.id || !body.markdown) return fail(new Error('id and markdown are required'));
             return ok({ saved: saveUploadedExhibit(body.id, body.markdown) }, 201);
@@ -46,7 +49,21 @@ export async function POST(req: Request) {
             if (!body.dir) return fail(new Error('dir is required'));
             return ok({ meta: adoptRun(body.dir, body.title, body.note) }, 201);
         }
-        return fail(new Error('kind must be upload|adopt'));
+        if (body.kind === 'revive') {
+            if (!body.title?.trim()) return fail(new Error('title is required'));
+            const text = body.castStateRel ? readRepoCastState(body.castStateRel) : body.json;
+            if (!text) return fail(new Error('castStateRel or json is required'));
+            const castState = JSON.parse(text) as CastStateFile;
+            const meta = await reviveFromCastState({
+                castState,
+                title: body.title,
+                presetId: body.presetId,
+                llm: body.llm,
+                sourceLabel: body.castStateRel ?? '貼上之 cast-state',
+            });
+            return ok({ meta }, 201);
+        }
+        return fail(new Error('kind must be upload|adopt|revive'));
     } catch (error) {
         return fail(error);
     }

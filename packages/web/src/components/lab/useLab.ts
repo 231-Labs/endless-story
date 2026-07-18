@@ -67,6 +67,15 @@ export const labApi = {
     config: (id: string) => request<{ config: LabWorldConfig }>(`/api/lab/runs/${id}/config`),
     configOp: (id: string, op: unknown) =>
         request<{ config: LabWorldConfig }>(`/api/lab/runs/${id}/config`, { method: 'POST', body: JSON.stringify(op) }),
+    memories: (id: string, characterId: string) =>
+        request<{ memories: Array<{ seq: number; content: string; kind: string; day: number; importance: number }> }>(
+            `/api/lab/runs/${id}/memories?characterId=${encodeURIComponent(characterId)}`,
+        ),
+    memoryOp: (id: string, op: unknown) =>
+        request<{ memories: Array<{ seq: number; content: string; kind: string; day: number; importance: number }> }>(
+            `/api/lab/runs/${id}/memories`,
+            { method: 'POST', body: JSON.stringify(op) },
+        ),
     assets: () =>
         request<{ assets: Array<{ kind: string; file: string; key: string; url: string; bytes: number }> }>('/api/lab/assets'),
     uploadAsset: (kind: string, name: string, dataUrl: string) =>

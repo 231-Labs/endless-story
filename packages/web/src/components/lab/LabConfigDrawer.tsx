@@ -14,10 +14,11 @@ import type { LabWorldConfig } from '@/lib/lab/types';
 interface Props {
     runId: string;
     running: boolean;
+    characters: Array<{ id: string; name: string }>;
     onClose: () => void;
 }
 
-export function LabConfigDrawer({ runId, running, onClose }: Props) {
+export function LabConfigDrawer({ runId, running, characters, onClose }: Props) {
     const [config, setConfig] = useState<LabWorldConfig | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -49,10 +50,43 @@ export function LabConfigDrawer({ runId, running, onClose }: Props) {
         }
     };
 
+    const applyMemoryOp = async (op: unknown) => {
+        setBusy(true);
+        setError(null);
+        try {
+            const { memories } = await labApi.memoryOp(runId, op);
+            setMemories(memories);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     // ── local form state ────────────────────────────────────────────────────
     const [resourceText, setResourceText] = useState<string | null>(null);
     const [objectForm, setObjectForm] = useState({ label: '', sceneId: '', visibility: 'visible', container: '', state: '', portable: true });
     const [eventForm, setEventForm] = useState({ inTicks: 1, sceneId: '', text: '', clock: '', visibility: 'public' });
+    const [memChar, setMemChar] = useState('');
+    const [memories, setMemories] = useState<Array<{ seq: number; content: string; kind: string; day: number; importance: number }>>([]);
+    const [memForm, setMemForm] = useState({ text: '', kind: 'genesis', importance: 7 });
+
+    useEffect(() => {
+        if (!memChar) {
+            setMemories([]);
+            return;
+        }
+        let cancelled = false;
+        labApi
+            .memories(runId, memChar)
+            .then(({ memories }) => {
+                if (!cancelled) setMemories(memories);
+            })
+            .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+        return () => {
+            cancelled = true;
+        };
+    }, [runId, memChar]);
 
     if (!config) {
         return (
@@ -265,6 +299,95 @@ export function LabConfigDrawer({ runId, running, onClose }: Props) {
                 >
                     排入天時
                 </button>
+            </section>
+
+            {/* 記憶 */}
+            <section className="mt-5">
+                <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90" title="LocalRecall 記憶帳：靜場時可植入新憶或焚去舊憶；重要度 1–10 影響召回排序">
+                    記憶
+                </h4>
+                <select
+                    value={memChar}
+                    onChange={(e) => setMemChar(e.target.value)}
+                    className="es-field mt-2 w-full px-2 py-1.5 text-xs"
+                >
+                    <option value="">誰的記憶…</option>
+                    {characters.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                </select>
+                {memChar ? (
+                    <>
+                        <ul className="mt-2 max-h-44 space-y-1.5 overflow-y-auto no-scrollbar">
+                            {memories.map((m) => (
+                                <li key={m.seq} className="flex items-start justify-between gap-2 border-b border-hairline/40 pb-1.5">
+                                    <span className="min-w-0 font-serif text-2xs leading-relaxed text-ink/85">
+                                        <span className="mr-1.5 text-mute">{m.kind}·{m.importance}·d{m.day}</span>
+                                        {m.content}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        disabled={disabled}
+                                        onClick={() =>
+                                            void applyMemoryOp({ op: 'forget', characterId: memChar, seq: m.seq })
+                                        }
+                                        aria-label="焚去此憶"
+                                        title="焚去此憶"
+                                        className="shrink-0 font-serif text-2xs tracking-[0.2em] text-mute hover:text-cinnabar disabled:opacity-40"
+                                    >
+                                        焚
+                                    </button>
+                                </li>
+                            ))}
+                            {!memories.length ? <li className="font-serif text-2xs text-mute/60">白紙一張。</li> : null}
+                        </ul>
+                        <textarea
+                            value={memForm.text}
+                            onChange={(e) => setMemForm({ ...memForm, text: e.target.value })}
+                            placeholder="植一段記憶（以角色第一人稱寫最順）…"
+                            rows={2}
+                            className="es-field mt-2 w-full px-2.5 py-1.5 font-serif text-xs leading-relaxed"
+                        />
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                            <select
+                                value={memForm.kind}
+                                onChange={(e) => setMemForm({ ...memForm, kind: e.target.value })}
+                                className="es-field px-2 py-1 text-2xs"
+                                title="記憶種類"
+                            >
+                                {['genesis', 'observation', 'relationship', 'dream', 'reflection'].map((k) => (
+                                    <option key={k} value={k}>{k}</option>
+                                ))}
+                            </select>
+                            <input
+                                type="number"
+                                min={1}
+                                max={10}
+                                value={memForm.importance}
+                                onChange={(e) => setMemForm({ ...memForm, importance: Math.max(1, Math.min(10, Number(e.target.value) || 7)) })}
+                                className="es-field w-12 px-1 py-1 text-center text-2xs"
+                                title="重要度 1–10"
+                                aria-label="重要度"
+                            />
+                            <button
+                                type="button"
+                                disabled={disabled || !memForm.text.trim()}
+                                onClick={() =>
+                                    void applyMemoryOp({
+                                        op: 'add',
+                                        characterId: memChar,
+                                        text: memForm.text,
+                                        kind: memForm.kind,
+                                        importance: memForm.importance,
+                                    }).then(() => setMemForm({ ...memForm, text: '' }))
+                                }
+                                className="es-button-ghost px-3 py-1 text-xs disabled:opacity-40"
+                            >
+                                植入
+                            </button>
+                        </div>
+                    </>
+                ) : null}
             </section>
 
             {/* 場景物理 */}

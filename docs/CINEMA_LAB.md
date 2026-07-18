@@ -103,6 +103,27 @@ rsync -av ~/endless-story-lab/runs/2026-07-16/engine-run/ \
 - 自上：任何 markdown 貼進「自上之展品」，存 `$LAB_DATA_DIR/exhibits/`（隨 volume
   持久），可焚。私庫（lab repo）的 season 報告、consolidated 筆記走這條。
 
+**C. cast-state 窗口 → 復活成可續走之卷**（`revive.ts`）：agent-season 存的
+`cast-state.json`（演化後 secret、relationshipViews、coreIdentity、全量 want 帳、
+establishedPairs）可一鍵「復活」：以 preset 建底世界（場景/崗位/創世記憶），按名
+覆疊存檔狀態，成為卷架上普通的一卷，走拍即續命。館藏報告旁有「復活」鈕；私庫
+窗口貼 JSON 走「貼 cast-state 復活」。誠實對映：
+- want 帳原樣承接（名→id 重映；負 bornTick＝「季前所生」，衰減數學是相對的，成立）
+- secret／relationshipViews／coreIdentity 原樣；establishedPairs → 雙向戀慕邊
+- 名稱漂移容忍：恰差一字且唯一候選才配（柳生春→柳安春），記入卷注
+- harness 專有欄（health/money/seasonsLived）WorldState 無屋，記卷注不硬塞
+- 原窗口 tick 不承接——復活卷自第 1 日重新起拍（時間是這卷自己的）
+
+### 3.6 靜場可撥的四樣東西（物界抽屜）
+
+觀測台「物界」抽屜，靜場（非走拍中）可改，改即落卷：
+1. **爭奪之物**（drama stakes）— 換一批爭搶物，下一拍慾望即重新對位
+2. **registered 物件** — 置一封信於妝閣、藏一只錶進戲箱（容器/隱顯/狀態）
+3. **天時** — 排定 clock-bound 世界事件（幾拍後、何處、誰見）
+4. **記憶** — 每角的 LocalRecall 帳：檢視全部、**植入**新憶（kind＋重要度 1–10）、
+   **焚去**舊憶。活卷經同一 recall 實例操作、冷卷直開檔案，永不撕裂。
+   （production MemWal 維持 append-only；這是 lab 自己的排練簿。）
+
 ## 4. API（`/api/lab/*`，皆 server-side）
 
 `GET/POST seeds` · `GET seeds/[source]/[id]` · `GET/POST runs` · `GET/PATCH/DELETE runs/[id]`

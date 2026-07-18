@@ -43,6 +43,8 @@ export interface RepoReport {
     mtime: string;
     /** A sibling self-contained HTML version, when the harness wrote one. */
     htmlRel?: string;
+    /** A sibling cast-state.json — revivable into a steppable run. */
+    castStateRel?: string;
 }
 
 function firstHeading(file: string): string | null {
@@ -79,12 +81,16 @@ export function listRepoReports(): RepoReport[] {
             if (stat.size > MAX_REPORT_BYTES) continue;
             const rel = path.relative(root, full);
             const htmlSibling = full.replace(/\.md$/, '.html');
+            const castStateSibling = path.join(path.dirname(full), 'cast-state.json');
             out.push({
                 rel,
                 title: firstHeading(full) ?? rel,
                 bytes: stat.size,
                 mtime: stat.mtime.toISOString(),
                 htmlRel: fs.existsSync(htmlSibling) ? rel.replace(/\.md$/, '.html') : undefined,
+                castStateRel: fs.existsSync(castStateSibling)
+                    ? path.join(path.dirname(rel), 'cast-state.json')
+                    : undefined,
             });
         }
     };
@@ -92,7 +98,7 @@ export function listRepoReports(): RepoReport[] {
     return out.sort((a, b) => b.mtime.localeCompare(a.mtime));
 }
 
-function safeRepoPath(rel: string, ext: '.md' | '.html'): string {
+function safeRepoPath(rel: string, ext: '.md' | '.html' | '.json'): string {
     const root = repoReportsDir();
     if (!root) throw new Error('experiments library not found on this host');
     if (!rel.endsWith(ext)) throw new Error(`path must end with ${ext}`);
@@ -107,6 +113,10 @@ export function readRepoReport(rel: string): string {
 
 export function readRepoReportHtml(rel: string): string {
     return fs.readFileSync(safeRepoPath(rel, '.html'), 'utf8');
+}
+
+export function readRepoCastState(rel: string): string {
+    return fs.readFileSync(safeRepoPath(rel, '.json'), 'utf8');
 }
 
 // ── uploaded exhibits ─────────────────────────────────────────────────────────

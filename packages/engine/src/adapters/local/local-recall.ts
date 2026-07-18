@@ -155,6 +155,27 @@ export class LocalRecall implements RecallPort {
         return true;
     }
 
+    /** Operator surface (lab cockpit): enumerate one character's stored
+     *  memories, newest first. Read-only projection — no scoring, no hits. */
+    listMemories(characterId: string): Array<{ seq: number; content: string; kind: MemoryKind; day: number; importance: number }> {
+        return (this.store.get(characterId) ?? [])
+            .map(({ content, kind, day, importance, seq }) => ({ seq, content, kind, day, importance }))
+            .sort((a, b) => b.seq - a.seq);
+    }
+
+    /** Operator surface (lab cockpit): remove one stored memory by seq.
+     *  Authoring-time surgery for local runs — production MemWal stays
+     *  append-only; this adapter is the operator's own notebook. */
+    forgetMemory(characterId: string, seq: number): boolean {
+        const list = this.store.get(characterId);
+        if (!list) return false;
+        const index = list.findIndex((m) => m.seq === seq);
+        if (index < 0) return false;
+        list.splice(index, 1);
+        this.save();
+        return true;
+    }
+
     async recall(characterId: string, query: string, limit: number, today: number): Promise<RecalledMemory[]> {
         const list = this.store.get(characterId);
         if (!list || list.length === 0) return [];

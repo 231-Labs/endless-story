@@ -159,7 +159,12 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
             {/* 物界抽屜 */}
             {drawer ? (
                 <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md p-3 sm:p-4">
-                    <LabConfigDrawer runId={id} running={snapshot.phase === 'running'} onClose={() => setDrawer(false)} />
+                    <LabConfigDrawer
+                        runId={id}
+                        running={snapshot.phase === 'running'}
+                        characters={snapshot.characters.map((c) => ({ id: c.id, name: c.name }))}
+                        onClose={() => setDrawer(false)}
+                    />
                 </div>
             ) : null}
         </main>

@@ -20,6 +20,7 @@ interface RepoReport {
     title: string;
     mtime: string;
     htmlRel?: string;
+    castStateRel?: string;
 }
 
 interface UploadedExhibit {
@@ -57,6 +58,7 @@ export default function LabExhibitsPage() {
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState({ id: '', markdown: '' });
     const [composing, setComposing] = useState(false);
+    const [castStateDraft, setCastStateDraft] = useState('');
 
     const load = useCallback(async () => {
         try {
@@ -97,6 +99,25 @@ export default function LabExhibitsPage() {
             const { meta } = await request<{ meta: { id: string } }>('/api/lab/exhibits', {
                 method: 'POST',
                 body: JSON.stringify({ kind: 'adopt', dir: orphan.dir, title }),
+            });
+            router.push(`/lab/run/${meta.id}`);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const revive = async (source: { castStateRel?: string; json?: string }, defaultTitle: string) => {
+        setBusy(true);
+        setError(null);
+        try {
+            const title = window.prompt('復活之卷之名', defaultTitle);
+            if (!title) return;
+            const llm = window.confirm('以「實錄」（真 LLM）續走？\n確定＝實錄（需模型鑰）　取消＝排演（零鑰）') ? 'real' : 'fake';
+            const { meta } = await request<{ meta: { id: string } }>('/api/lab/exhibits', {
+                method: 'POST',
+                body: JSON.stringify({ kind: 'revive', ...source, title, llm }),
             });
             router.push(`/lab/run/${meta.id}`);
         } catch (e) {
@@ -214,6 +235,18 @@ export default function LabExhibitsPage() {
                                         <IconScroll />
                                     </a>
                                 ) : null}
+                                {report.castStateRel ? (
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void revive({ castStateRel: report.castStateRel }, report.title)}
+                                        aria-label="復活成可續走之卷"
+                                        title="復活：cast-state → 新卷（秘密／關係／心事全數承接，自第 1 日重新起拍）"
+                                        className="shrink-0 font-serif text-2xs tracking-[0.15em] text-jade/90 hover:text-cinnabar disabled:opacity-40"
+                                    >
+                                        復活
+                                    </button>
+                                ) : null}
                             </li>
                         ))}
                         {!reports.length ? <li className="font-serif text-xs text-mute/60">此機無館藏。</li> : null}
@@ -288,6 +321,31 @@ export default function LabExhibitsPage() {
                         ))}
                         {!uploads.length && !composing ? <li className="font-serif text-xs text-mute/60">尚無展品。</li> : null}
                     </ul>
+
+                    {/* 貼 cast-state 復活（私庫窗口走這條） */}
+                    <details className="mt-6">
+                        <summary
+                            className="cursor-pointer list-none font-serif text-sm tracking-[0.35em] text-cinnabar/90"
+                            title="私庫實驗窗口的 cast-state.json 貼此，復活成可續走之卷"
+                        >
+                            貼 cast-state 復活
+                        </summary>
+                        <textarea
+                            value={castStateDraft}
+                            onChange={(e) => setCastStateDraft(e.target.value)}
+                            placeholder='{"version":1,"savedTick":…,"cast":{…}}'
+                            rows={5}
+                            className="es-field mt-2 w-full px-2.5 py-2 font-mono text-2xs leading-relaxed"
+                        />
+                        <button
+                            type="button"
+                            disabled={busy || !castStateDraft.trim()}
+                            onClick={() => void revive({ json: castStateDraft }, '復活之卷')}
+                            className="es-button-ghost mt-1.5 px-3 py-1 text-xs disabled:opacity-40"
+                        >
+                            復活
+                        </button>
+                    </details>
                 </div>
 
                 {/* 展讀 */}
