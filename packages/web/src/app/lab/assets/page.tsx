@@ -34,6 +34,11 @@ interface StoredAsset {
 
 const KIND_LABEL: Record<Kind, string> = { location: '地界', scene: '場景', character: '人物' };
 
+const IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp'];
+const VIDEO_MIME = ['video/mp4', 'video/webm'];
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 48 * 1024 * 1024;
+
 function readFileAsDataUrl(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -58,6 +63,17 @@ export default function LabAssetsPage() {
         const { assets, notes } = await labApi.assets();
         setAssets(assets);
         setNotes(notes);
+    }, []);
+
+    // 頁面層擋掉瀏覽器預設：拖檔落在卡外不要整頁跳圖
+    useEffect(() => {
+        const prevent = (e: DragEvent) => e.preventDefault();
+        window.addEventListener('dragover', prevent);
+        window.addEventListener('drop', prevent);
+        return () => {
+            window.removeEventListener('dragover', prevent);
+            window.removeEventListener('drop', prevent);
+        };
     }, []);
 
     useEffect(() => {
@@ -205,6 +221,49 @@ export default function LabAssetsPage() {
         }
     };
 
+    /** 拖入美術集：整批逐件上傳，不合規者略過並各自報一聲。 */
+    const dropGallery = async (entity: Entity, files: File[]) => {
+        setBusyName(entity.name);
+        let added = 0;
+        try {
+            for (const f of files) {
+                const isImage = IMAGE_MIME.includes(f.type);
+                const isVideo = VIDEO_MIME.includes(f.type);
+                if (!isImage && !isVideo) {
+                    toast(`「${f.name}」非圖非影（收 png/jpg/webp、mp4/webm），略過。`, 'error');
+                    continue;
+                }
+                if (isImage && f.size > MAX_IMAGE_BYTES) {
+                    toast(`「${f.name}」逾 6MB，略過。`, 'error');
+                    continue;
+                }
+                if (isVideo && f.size > MAX_VIDEO_BYTES) {
+                    toast(`「${f.name}」逾 48MB，略過。`, 'error');
+                    continue;
+                }
+                await labApi.addGalleryItem(entity.kind, entity.name, await readFileAsDataUrl(f));
+                added += 1;
+            }
+            if (added) toast(`「${entity.name}」美術集已添 ${added} 件。`, 'success');
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusyName(null);
+        }
+    };
+
+    /** 拖入肖像：取第一張合規的圖；人物卡上多拖的其餘檔順手入美術集。 */
+    const dropPortrait = async (entity: Entity, files: File[]) => {
+        const img = files.find((f) => IMAGE_MIME.includes(f.type) && f.size <= MAX_IMAGE_BYTES);
+        if (!img) {
+            toast('肖像只收圖（png/jpg/webp ≤6MB）。', 'error');
+            return;
+        }
+        await upload(entity, img);
+        const rest = files.filter((f) => f !== img);
+        if (rest.length && entity.kind === 'character') await dropGallery(entity, rest);
+    };
+
     return (
         <main className="mx-auto max-w-6xl px-5 pb-20 sm:px-8">
             <header className="relative pt-5">
@@ -216,6 +275,9 @@ export default function LabAssetsPage() {
                         <h1 className="font-serif text-2xl tracking-[0.18em] text-ink" title="以名為鍵：同名者，眾卷共用一圖一述。未上傳者以館藏畫作或紙面名款代之。">
                             人物與場景之圖
                         </h1>
+                        <p className="mt-1 font-serif text-2xs tracking-[0.2em] text-mute/70">
+                            自本機拖檔入卡即上 —— 人物卡上落肖像、下落美術集（可整批）
+                        </p>
                     </div>
                     <Link href="/lab" aria-label="回片場" title="回片場" className="inline-flex items-center gap-1.5 font-serif text-lg text-mute hover:text-cinnabar">
                         <IconBack />
@@ -278,6 +340,8 @@ export default function LabAssetsPage() {
                                         onEditNote={() => void editNote(entity, note)}
                                         onManageGallery={entity.kind === 'character' ? (input) => void manageGallery(entity, input) : undefined}
                                         onUploadGallery={(file) => void uploadGallery(entity, file)}
+                                        onDropPortrait={(files) => void dropPortrait(entity, files)}
+                                        onDropGallery={entity.kind === 'character' ? (files) => void dropGallery(entity, files) : undefined}
                                     />
                                 );
                             })}
@@ -300,6 +364,8 @@ function EntityCard({
     onEditNote,
     onManageGallery,
     onUploadGallery,
+    onDropPortrait,
+    onDropGallery,
 }: {
     entity: Entity;
     src: string | null;
@@ -311,11 +377,44 @@ function EntityCard({
     onEditNote: () => void;
     onManageGallery?: (galleryInput: HTMLInputElement | null) => void;
     onUploadGallery: (file: File) => void;
+    onDropPortrait: (files: File[]) => void;
+    /** 有此者（人物卡）拖入時分上下兩落點：肖像／美術集。 */
+    onDropGallery?: (files: File[]) => void;
 }) {
     const inputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
+    // 拖入計數（enter/leave 在子元素間穿梭會連發，計數歸零才真離開）
+    const [dragDepth, setDragDepth] = useState(0);
+    const [dropZone, setDropZone] = useState<'portrait' | 'gallery'>('portrait');
+    const dragging = dragDepth > 0;
+    const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
     return (
-        <div className="es-card group relative overflow-hidden p-0">
+        <div
+            className="es-card group relative overflow-hidden p-0"
+            onDragEnter={(e) => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                setDragDepth((d) => d + 1);
+            }}
+            onDragOver={(e) => {
+                if (hasFiles(e)) e.preventDefault();
+            }}
+            onDragLeave={(e) => {
+                if (!hasFiles(e)) return;
+                setDragDepth((d) => Math.max(0, d - 1));
+            }}
+            onDrop={(e) => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                const files = Array.from(e.dataTransfer.files);
+                const zone = dropZone;
+                setDragDepth(0);
+                setDropZone('portrait');
+                if (!files.length || busy) return;
+                if (onDropGallery && zone === 'gallery') onDropGallery(files);
+                else onDropPortrait(files);
+            }}
+        >
             <button
                 type="button"
                 disabled={busy}
@@ -396,6 +495,30 @@ function EntityCard({
                     ) : null}
                 </span>
             </div>
+
+            {/* 拖入落點紗 —— 人物卡分上下（肖像／美術集），其餘整卡換圖 */}
+            {dragging ? (
+                <div className="absolute inset-0 z-10 flex flex-col bg-canvas/75 backdrop-blur-sm">
+                    <div
+                        onDragOver={() => setDropZone('portrait')}
+                        className={`flex flex-1 items-center justify-center font-serif text-sm tracking-[0.35em] transition ${
+                            dropZone === 'portrait' ? 'bg-cinnabar/20 text-cinnabar' : 'text-mute'
+                        }`}
+                    >
+                        {onDropGallery ? '肖像' : '上圖'}
+                    </div>
+                    {onDropGallery ? (
+                        <div
+                            onDragOver={() => setDropZone('gallery')}
+                            className={`flex flex-1 items-center justify-center font-serif text-sm tracking-[0.35em] transition ${
+                                dropZone === 'gallery' ? 'bg-jade/20 text-jade' : 'text-mute'
+                            }`}
+                        >
+                            美術集
+                        </div>
+                    ) : null}
+                </div>
+            ) : null}
         </div>
     );
 }
