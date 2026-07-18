@@ -64,6 +64,7 @@ export function beatsFromTickRecords(
     name: string;
     text: string;
     inner?: string;
+    kind?: 'beat' | 'world';
 }> {
     const out: ReturnType<typeof beatsFromTickRecords> = [];
     for (const record of records) {
@@ -81,6 +82,7 @@ export function beatsFromTickRecords(
                     name: beat.name,
                     text: beat.text,
                     inner: beat.inner,
+                    kind: beat.characterId === '__world__' ? 'world' : 'beat',
                 });
             }
         }

@@ -49,6 +49,48 @@ import type { LabLiveBeat, LabRunMeta, LabRunPhase, LabTickRecord } from './type
 const BEAT_RING_CAP = 600;
 const LOG_RING_CAP = 300;
 
+const ECONOMY_ACTION_LABEL: Record<string, string> = {
+    purchase: '購置',
+    pay: '給錢',
+    give: '相贈',
+    contract_sign: '簽約',
+    contract_decline: '拒簽',
+    contract_fill_partner: '填搭檔',
+    counter_offer: '還價',
+};
+
+/** Humanize the structured mechanical acts riding on a committed beat —
+ *  物件操作與銀錢動作，讓「角色對世界做了什麼」在拍流裡看得見。 */
+function humanizeBeatActs(
+    world: WorldState,
+    beat: { objectEffects?: ReadonlyArray<object>; economyCommands?: ReadonlyArray<object> },
+): string[] {
+    const acts: string[] = [];
+    for (const effect of (beat.objectEffects ?? []) as Array<Record<string, unknown>>) {
+        const label = (typeof effect.objectId === 'string' && world.objectById(effect.objectId)?.label) || String(effect.objectId ?? '某物');
+        const parts = [
+            effect.carried === true ? '隨身攜起' : effect.carried === false ? '放下' : '',
+            typeof effect.container === 'string' && effect.container ? `入${effect.container}` : '',
+            typeof effect.toScene === 'string' && effect.toScene ? `移往${effect.toScene}` : '',
+            effect.visibility === 'hidden' ? '藏起' : effect.visibility === 'destroyed' ? '毀去' : '',
+            typeof effect.state === 'string' && effect.state ? `（${effect.state}）` : '',
+        ].filter(Boolean);
+        acts.push(`物 · ${label}${parts.length ? '：' + parts.join('、') : '有所動'}`);
+    }
+    for (const command of (beat.economyCommands ?? []) as Array<Record<string, unknown>>) {
+        const action = typeof command.action === 'string' ? command.action : '';
+        const parts = [
+            ECONOMY_ACTION_LABEL[action] ?? action,
+            typeof command.itemId === 'string' && command.itemId ? String(command.itemId) : '',
+            typeof command.amountYuan === 'number' ? `${command.amountYuan} 元` : '',
+            typeof command.toName === 'string' && command.toName ? `→ ${command.toName}` : '',
+            typeof command.contractId === 'string' && command.contractId ? `〔${command.contractId}〕` : '',
+        ].filter(Boolean);
+        acts.push(`錢 · ${parts.join(' ')}`);
+    }
+    return acts;
+}
+
 interface RunManifest {
     version: 1;
     preset: string;
@@ -341,6 +383,7 @@ export class LabRunManager {
         try {
             while (run.pendingTicks > 0) {
                 const tick = run.world.data.clock.currentTick;
+                const prevRoster = { ...run.world.data.roster };
                 run.transaction.begin(tick);
                 let report: TickReport;
                 try {
@@ -348,6 +391,7 @@ export class LabRunManager {
                         snapshotDir: stateDir,
                         log: (line) => this.log(run, line),
                         onBeat: (observation) => {
+                            const acts = humanizeBeatActs(run.world, observation.beat);
                             this.pushBeat(run, {
                                 day: observation.day,
                                 tick: observation.tick,
@@ -359,6 +403,8 @@ export class LabRunManager {
                                 name: observation.beat.name,
                                 text: observation.beat.text,
                                 inner: observation.beat.inner || undefined,
+                                kind: 'beat',
+                                acts: acts.length ? acts : undefined,
                             });
                         },
                     });
@@ -366,6 +412,41 @@ export class LabRunManager {
                 } catch (error) {
                     run.transaction.rollback();
                     throw error;
+                }
+                // 移步與天時進拍流：機制動作顯性化（引擎已提交，僅回放）。
+                // 直接 diff 前後 roster —— 自主移動、夜歸、私訪走哪條通道都抓得到。
+                for (const [characterId, toSceneId] of Object.entries(run.world.data.roster)) {
+                    const fromSceneId = prevRoster[characterId];
+                    if (!fromSceneId || fromSceneId === toSceneId) continue;
+                    this.pushBeat(run, {
+                        day: report.day,
+                        tick: report.tick,
+                        clock: report.partOfDay,
+                        sceneId: toSceneId,
+                        sceneName: run.world.sceneNameById(toSceneId),
+                        isPrivate: false,
+                        characterId,
+                        name: run.world.nameById(characterId),
+                        text: `自${run.world.sceneNameById(fromSceneId)}移步${run.world.sceneNameById(toSceneId)}`,
+                        kind: 'move',
+                    });
+                }
+                for (const event of report.events) {
+                    for (const beat of event.beats) {
+                        if (beat.characterId !== '__world__') continue;
+                        this.pushBeat(run, {
+                            day: report.day,
+                            tick: report.tick,
+                            clock: event.clock,
+                            sceneId: event.sceneId,
+                            sceneName: event.sceneName,
+                            isPrivate: event.visibility === 'private',
+                            characterId: '__world__',
+                            name: '世界',
+                            text: beat.text,
+                            kind: 'world',
+                        });
+                    }
                 }
                 run.pendingTicks -= 1;
                 this.appendTickRecord(run, report);
