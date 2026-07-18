@@ -239,22 +239,24 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                         ) : null}
 
                         {tab === 'media' ? (
-                            <div className="grid max-w-3xl grid-cols-2 gap-2.5 sm:grid-cols-3">
-                                {c.gallery.map((item) => (
-                                    <div key={item.url} className="animate-beat-in overflow-hidden rounded-lg shadow-[0_2px_12px_rgba(20,12,8,0.16)]">
-                                        {item.type === 'video' ? (
-                                            // eslint-disable-next-line jsx-a11y/media-has-caption
-                                            <video src={item.url} controls playsInline className="aspect-video w-full bg-black/60 object-contain" />
-                                        ) : (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={item.url} alt="" className="aspect-square w-full object-cover" />
-                                        )}
-                                    </div>
-                                ))}
-                                {!c.gallery.length ? (
-                                    <p className="col-span-full font-serif text-sm text-mute/70">尚無影像 —— 到圖庫以其名補圖，此處自動換裝。</p>
-                                ) : null}
-                            </div>
+                            c.gallery.length ? (
+                                /* 拼貼牆 —— CSS columns 疊瓦式，原始比例直出，不裁不方 */
+                                <div className="max-w-3xl columns-2 gap-2.5 sm:columns-3">
+                                    {c.gallery.map((item) => (
+                                        <div key={item.url} className="animate-beat-in mb-2.5 break-inside-avoid overflow-hidden rounded-lg shadow-[0_2px_12px_rgba(20,12,8,0.16)]">
+                                            {item.type === 'video' ? (
+                                                // eslint-disable-next-line jsx-a11y/media-has-caption
+                                                <video src={item.url} controls playsInline className="w-full bg-black/60" />
+                                            ) : (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={item.url} alt="" className="h-auto w-full" />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="font-serif text-sm text-mute/70">尚無影像 —— 到圖庫以其名補圖，此處自動換裝。</p>
+                            )
                         ) : null}
                     </div>
                 </div>
