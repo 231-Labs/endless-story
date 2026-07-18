@@ -16,6 +16,14 @@ import { computeHandscrollLayout } from '@/components/saga/handscroll/handscroll
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
 import type { LabStreamLine } from '@/lib/lab/live';
 
+/** 穩定偽隨機（djb2）——飄字的段數與落點由地界＋最新一拍決定：
+ *  同一拍之內紋絲不動，新一拍落卷才換一口氣。 */
+function hashStr(s: string): number {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+    return h;
+}
+
 const DAY_WASH: Record<string, { color: string; opacity: number }> = {
     morning: { color: 'rgba(255,245,225,0.35)', opacity: 0.5 },
     noon: { color: 'rgba(255,250,235,0.25)', opacity: 0.4 },
@@ -180,7 +188,44 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
                 {layout.segments.map((seg) => {
                     const locScenes = seg.scenes.map((sp) => byId.get(sp.scene.id) ?? sp.scene);
                     const art = artByLocationId?.[seg.location.id] ?? terrainArtFor(seg.location.name);
-                    const streamScene = locScenes.find((sc) => streams[sc.id]?.length);
+
+                    // 飄字：隨機 1～2 段，橫軸落在左右兩翼（避開中軸的地名與界籤），
+                    // 兩段時高低錯落一點點。段數與落點以 hash 定 —— 拍不動位不動。
+                    const linesByScene = locScenes
+                        .map((sc) => streams[sc.id] ?? [])
+                        .filter((ls) => ls.length);
+                    const quoteSegs: Array<{ key: string; lines: LabStreamLine[]; leftPct: number; topPct: number }> = [];
+                    if (linesByScene.length) {
+                        const seed = hashStr(`${seg.location.id}|${linesByScene[0][0]?.key ?? ''}`);
+                        const canTwo = linesByScene.length > 1 || linesByScene[0].length >= 4;
+                        const two = canTwo && (seed & 1) === 1;
+                        const leftWing = 20 + ((seed >> 2) % 15); // 20–34%
+                        const rightWing = 66 + ((seed >> 4) % 15); // 66–80%
+                        const firstOnLeft = ((seed >> 6) & 1) === 0;
+                        const top1 = 20 + ((seed >> 7) % 9); // 20–28%
+                        const top2 = top1 + 6 + ((seed >> 9) % 5); // 低 6–10%
+                        const [a, b] =
+                            linesByScene.length > 1
+                                ? [linesByScene[0], linesByScene[1]]
+                                : [
+                                      linesByScene[0].filter((_, i) => i % 2 === 0),
+                                      linesByScene[0].filter((_, i) => i % 2 === 1),
+                                  ];
+                        quoteSegs.push({
+                            key: 'q1',
+                            lines: a,
+                            leftPct: firstOnLeft ? leftWing : rightWing,
+                            topPct: top1,
+                        });
+                        if (two && b.length) {
+                            quoteSegs.push({
+                                key: 'q2',
+                                lines: b,
+                                leftPct: firstOnLeft ? rightWing : leftWing,
+                                topPct: top2,
+                            });
+                        }
+                    }
                     return (
                         <div
                             key={seg.location.id}
@@ -198,10 +243,9 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
                                 <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap font-serif text-sm tracking-[0.4em] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
                                     {seg.location.name}
                                 </span>
-                                {streamScene ? (
-                                    /* 飄字自畫面上緣讓開一截 —— 與界籤膠囊拉出餘裕 */
-                                    <FloatingStream lines={streams[streamScene.id]} leftPct={50} topPct={26} />
-                                ) : null}
+                                {quoteSegs.map((q) => (
+                                    <FloatingStream key={q.key} lines={q.lines} leftPct={q.leftPct} topPct={q.topPct} />
+                                ))}
                             </div>
                             <div className="flex w-full flex-1 min-h-0 flex-wrap content-start justify-center gap-x-4 gap-y-3 overflow-y-auto bg-canvas/30 px-3 pt-4 no-scrollbar">
                                 {locScenes.length ? (
