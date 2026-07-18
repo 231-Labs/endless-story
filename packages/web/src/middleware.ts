@@ -1,9 +1,14 @@
 /**
- * Middleware — stub gate for /admin/* plus an optional shared-secret gate for
- * the cinema-lab (/lab/*). Set LAB_SECRET in production; visiting
- * /lab?key=<secret> once stores the cookie, after which the lab (pages and
- * /api/lab, which re-checks the same cookie server-side) is usable.
- * Unset LAB_SECRET = open, for local development.
+ * Middleware — stub gate for /admin/* plus the cinema-lab door policy:
+ *
+ *   LAB_DISABLED=1  the lab does not exist on this host — /lab/* and
+ *                   /api/lab/* answer 404. Set it on the production web
+ *                   service when the lab runs as its own Zeabur service
+ *                   (same image, different env — see docs/CINEMA_LAB.md §6).
+ *   LAB_SECRET      shared-secret lock: /lab?key=<secret> once stores the
+ *                   cookie (30 days); pages and /api/lab (which re-checks the
+ *                   same cookie server-side) are then usable.
+ *   neither set     open — local development.
  *
  * Admin auth stays a Phase 2 TODO (wallet allowlist), unchanged.
  */
@@ -13,9 +18,14 @@ const LAB_COOKIE = 'es_lab_key';
 
 export function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
-  if (pathname === '/lab' || pathname.startsWith('/lab/')) {
+  const isLabPage = pathname === '/lab' || pathname.startsWith('/lab/');
+  const isLabApi = pathname.startsWith('/api/lab');
+  if (isLabPage || isLabApi) {
+    if (process.env.LAB_DISABLED === '1') {
+      return new NextResponse('not found', { status: 404 });
+    }
     const secret = process.env.LAB_SECRET?.trim();
-    if (!secret) return NextResponse.next();
+    if (!secret || isLabApi) return NextResponse.next(); // API auth is checked in-route
     const key = searchParams.get('key');
     if (key === secret) {
       const url = req.nextUrl.clone();
@@ -39,5 +49,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/lab/:path*'],
+  matcher: ['/admin/:path*', '/lab/:path*', '/api/lab/:path*'],
 };

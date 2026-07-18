@@ -150,29 +150,42 @@ lab run 目錄與 engine CLI 完全互通：CLI 跑到一半的 `--out` 目錄�
 
 ## 6. 部署（Zeabur → 自架 VPS）
 
-cinema-lab 就在 `packages/web` 裡，隨既有 web 服務一起部署（root Dockerfile，
-build context = repo 根），**不需要新服務**。要點只有三件：
+cinema-lab 就在 `packages/web` 裡（root Dockerfile，build context = repo 根）。
+**推薦拓撲：同一個 image 部署兩個 Zeabur service** — 程式碼一份、美術永遠同步，
+但 process／資源／域名／生命週期完全隔離：
+
+| service | env | 用途 |
+|---|---|---|
+| `web`（生產站） | `LAB_DISABLED=1` | 讀者站。`/lab` 與 `/api/lab` 一律 404 — 實驗場在這台**不存在** |
+| `lab`（實驗機） | `LAB_SECRET=…`、`LAB_DATA_DIR=/data/cinema-lab`（掛自己的 volume） | 你專屬的實驗場。實驗跑掛、redeploy 頻繁，都波及不到讀者站 |
+
+單服務起步也完全可以（省一台）：不設 `LAB_DISABLED`、設 `LAB_SECRET`，
+lab 與讀者站同 process；流量起來或實驗變重時再分。lab 的 run 狀態是單程序
+in-process — 分兩台後 `web` 可自由多 replica，`lab` 維持單實例即可。
 
 ### 6.1 持久 volume（沒有它，redeploy 卷全失）
 
-Zeabur 服務掛 volume 到 `/data`，然後：
+lab 服務掛 volume 到 `/data`，然後：
 
 ```bash
 LAB_DATA_DIR=/data/cinema-lab
 ```
 
-（與既有 `DEPLOYMENT_MANIFEST_PATH=/data/contract-ids.json`、
+（單服務部署時與既有 `DEPLOYMENT_MANIFEST_PATH=/data/contract-ids.json`、
 `CHARACTER_SESSION_DIR=/data/character-sessions` 同一顆 volume 即可。）
 
-### 6.2 門禁
+### 6.2 門禁三檔
 
 ```bash
-LAB_SECRET=$(openssl rand -hex 16)          # 未設 = 全開（僅限本機開發）
+LAB_DISABLED=1                              # 這台沒有實驗場（生產 web 服務用）
+LAB_SECRET=$(openssl rand -hex 16)          # 鎖門（實驗機用）
+# 兩者皆不設 = 全開（僅限本機開發）
 ```
 
-設了之後：瀏覽器開 `https://<host>/lab?key=<LAB_SECRET>` 一次換 cookie（30 天），
-`/lab/*` 頁面與 `/api/lab/*` 全部驗同一把（API 亦可 `Authorization: Bearer`）。
-生產環境務必設。
+`LAB_SECRET` 設了之後：瀏覽器開 `https://<host>/lab?key=<LAB_SECRET>` 一次換
+cookie（30 天），`/lab/*` 頁面與 `/api/lab/*` 全部驗同一把（API 亦可
+`Authorization: Bearer`）。`LAB_DISABLED=1` 在 middleware 層直接 404（`/lab/*`
+與 `/api/lab/*` 皆是），API 層另有 defence-in-depth。
 
 ### 6.3 實錄檔的環境
 
@@ -192,10 +205,11 @@ promise chain（同 `/api/tick` 的模式），沒有 serverless 時限；容器
 
 ### 6.4 檢查單
 
-- [ ] Zeabur web 服務（root = repo 根，既有 Dockerfile）build 綠
-- [ ] volume 掛 `/data`，`LAB_DATA_DIR=/data/cinema-lab`
-- [ ] `LAB_SECRET` 已設，`/lab?key=…` 可進、無 key 401
-- [ ] 排演卷：點燈 → 走一拍 → 拍流有字 → 讀卷處有券宗
+- [ ] 兩個 Zeabur service（或起步一個）都用 root Dockerfile，build 綠
+- [ ] 生產 `web`：`LAB_DISABLED=1`，開 `/lab` 得 404
+- [ ] 實驗 `lab`：volume 掛 `/data`、`LAB_DATA_DIR=/data/cinema-lab`
+- [ ] 實驗 `lab`：`LAB_SECRET` 已設，`/lab?key=…` 可進、無 key 401
+- [ ] 排演卷：點燈 → 走一拍 → 拍流有字 → 讀卷處有卷宗
 - [ ] （實錄）文字模型鑰已注入，`點燈開拍` 選實錄不再報「needs a configured text provider」
 
 ## 7. 已知邊界（誠實清單）

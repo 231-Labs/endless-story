@@ -7,8 +7,11 @@ export const LAB_COOKIE = 'es_lab_key';
 /**
  * Optional shared-secret gate. Unset LAB_SECRET = open (local dev).
  * Set it in production; the middleware turns ?key=… into the cookie.
+ * LAB_DISABLED=1 kills the lab entirely (middleware 404s first; this is
+ * defence-in-depth for any path the matcher misses).
  */
 export function labAuthorized(req: Request): boolean {
+    if (process.env.LAB_DISABLED === '1') return false;
     const secret = process.env.LAB_SECRET?.trim();
     if (!secret) return true;
     if (req.headers.get('authorization') === `Bearer ${secret}`) return true;
