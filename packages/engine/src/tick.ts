@@ -25,7 +25,7 @@ import {
     shouldDeriveAftermath,
     tension,
 } from './core/want-core.ts';
-import { runSceneLoop, type SceneLoopCastMember } from './core/scene-loop.ts';
+import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
 import { PARTS_OF_DAY } from './ports.ts';
 import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
@@ -48,6 +48,22 @@ export interface TickOpts {
     snapshotDir?: string;
     /** Log line sink (default console.log). */
     log?: (line: string) => void;
+    /** Live observer for committed beats (post-physics, post-economy, pre-review).
+     *  Observability only: the tick never awaits it, and an observer failure is
+     *  logged and swallowed — mechanism must not depend on it. */
+    onBeat?: (observation: TickBeatObservation) => void;
+}
+
+/** One committed beat as seen live, mid-tick, before the scene freezes. */
+export interface TickBeatObservation {
+    day: number;
+    tick: number;
+    clock: string;
+    sceneId: string;
+    sceneName: string;
+    isPrivate: boolean;
+    beatIndex: number;
+    beat: SceneBeat;
 }
 
 export interface TickReport {
@@ -464,6 +480,22 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     for (const line of outcome.publicLines) {
                         log(`  [銀錢] ${line}`);
                         if (!isPrivate) acc.lines.push(`[${sceneName}] （帳）${line}`);
+                    }
+                }
+                if (opts.onBeat) {
+                    try {
+                        opts.onBeat({
+                            day: today,
+                            tick: nowTick,
+                            clock: clockLabel,
+                            sceneId: sid,
+                            sceneName,
+                            isPrivate,
+                            beatIndex: beatIndex - 1,
+                            beat,
+                        });
+                    } catch (error) {
+                        log(`  [observer] onBeat failed: ${error instanceof Error ? error.message : String(error)}`);
                     }
                 }
             },

@@ -11,7 +11,9 @@
     "./adapters/local": "./src/adapters/local/index.ts",
     "./adapters/runner": "./src/adapters/runner-scene-agent.ts",
     "./session": "./src/session/character-session.ts",
-    "./preset": "./src/preset.ts"
+    "./preset": "./src/preset.ts",
+    "./dossier-artifact": "./src/dossier-artifact.ts",
+    "./editorial-artifact": "./src/editorial-artifact.ts"
   },
   "bin": {
     "engine": "./src/cli.ts"

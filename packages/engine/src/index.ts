@@ -26,6 +26,8 @@ export * from './world-state.ts';
 export * from './tick.ts';
 export * from './preset.ts';
 export * from './session/character-session.ts';
+export * from './season-opening.ts';
+export * from './tick-transaction.ts';
 
 // Local-first adapters (node-clean).
-export { FakeSceneAgent, LocalRecall, FileArchive, LocalClock, makeClock } from './adapters/local/index.ts';
+export { FakeSceneAgent, LocalRecall, FileArchive, LocalClock, LocalEconomy, makeClock } from './adapters/local/index.ts';
