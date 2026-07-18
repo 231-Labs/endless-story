@@ -160,11 +160,11 @@ cinema-lab 就在 `packages/web` 裡（build context = repo 根）。
 | service | Dockerfile | env | 用途 |
 |---|---|---|---|
 | `web`（生產站） | root `Dockerfile`（完整版，~1GB） | `LAB_DISABLED=1` | 讀者站＋管理台。管理台要 spawn `pnpm --filter cli run …`（升級合約等），所以帶整個 workspace |
-| `lab`（實驗機） | `Dockerfile.lab`（standalone 瘦身版，~200MB） | `LAB_SECRET=…`、`LAB_DATA_DIR=/data/cinema-lab`（掛自己的 volume） | 你專屬的實驗場。完全鏈下、不用合約 CLI —— 瘦映像拉取秒級，redeploy 不再等 |
+| `Endless-Story-Lab`（實驗機） | `Dockerfile.Endless-Story-Lab`（standalone 瘦身版，~200MB） | `LAB_SECRET=…`、`LAB_DATA_DIR=/data/cinema-lab`（掛自己的 volume） | 你專屬的實驗場。完全鏈下、不用合約 CLI —— 瘦映像拉取秒級，redeploy 不再等 |
 
-`Dockerfile.lab` 的掛法：Zeabur 以 **`Dockerfile.[服務名]`** 慣例選檔（同
-`Dockerfile.event-poller`）——把 lab 服務命名為 `lab` 即自動選用；服務叫別的名字，
-就把檔案複製成 `Dockerfile.<你的服務名>`。瘦身版靠 Next `output: 'standalone'`
+瘦身版的掛法：Zeabur 以 **`Dockerfile.[服務名]`** 慣例選檔（同
+`Dockerfile.event-poller`）——lab 服務現名 `Endless-Story-Lab`，故檔名為
+`Dockerfile.Endless-Story-Lab`；日後改服務名，檔名跟著改。瘦身版靠 Next `output: 'standalone'`
 （build 時 `NEXT_STANDALONE=1`，見 `next.config.ts`），內建劇本 JSON 已補進
 映像同路徑；自撰劇本／季框／美術全在 volume 上，與映像無關。
 
@@ -214,7 +214,7 @@ promise chain（同 `/api/tick` 的模式），沒有 serverless 時限；容器
 
 ### 6.4 檢查單
 
-- [ ] 生產 `web` 用 root Dockerfile、實驗 `lab` 用 `Dockerfile.lab`（服務名叫 `lab` 即自動選用），build 綠
+- [ ] 生產 `web` 用 root Dockerfile、實驗機用 `Dockerfile.Endless-Story-Lab`（檔名尾巴＝Zeabur 服務名），build 綠
 - [ ] 生產 `web`：`LAB_DISABLED=1`，開 `/lab` 得 404
 - [ ] 實驗 `lab`：volume 掛 `/data`、`LAB_DATA_DIR=/data/cinema-lab`
 - [ ] 實驗 `lab`：`LAB_SECRET` 已設，`/lab?key=…` 可進、無 key 401

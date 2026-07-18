@@ -17,8 +17,8 @@ try {
 }
 
 const nextConfig: NextConfig = {
-  // Standalone output (NEXT_STANDALONE=1, used by Dockerfile.lab) traces only the
-  // files the server actually needs — the lab image drops from ~1GB to ~200MB.
+  // Standalone output (NEXT_STANDALONE=1, used by Dockerfile.Endless-Story-Lab)
+  // traces only the files the server needs — the lab image drops ~1GB → ~200MB.
   // The full image (Dockerfile) keeps plain `next start`: the admin cockpit
   // spawns `pnpm --filter @endless-story/cli run …`, which needs the workspace.
   ...(process.env.NEXT_STANDALONE === '1' ? { output: 'standalone' as const } : {}),
