@@ -115,10 +115,15 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // budget a day they do not know the shape of (v17: both leads burned the
     // deadline night between stage and paper because nobody told them 戲散之後
     // 仍有兩個時辰). World facts, not direction.
+    // The full rulebook, not just the clock: a game hands players its physics
+    // before they step in (the user's rule: 「物理上的規則應該要清楚揭露，像個
+    // skill 一樣」). Facts about how the world works; never direction.
     const timeCharter = [
         `一日六個時辰：${PARTS_OF_DAY.join('、')}；每個時辰你只有一次行動（先擇去處，再在場中言行）。`,
-        '入夜與深宵屬夜，各自歸宿或私訪。',
-        ...(w.economy?.performance ? [`黃昏【${w.economy.performance.venueSceneName}】開鑼，白日在台上排過戲夜裡才叫得動座。`] : []),
+        '去處只能從當下列給你的合法選項中挑；場地有容量，滿了便進不去。入夜與深宵屬夜，各自歸宿或私訪。',
+        '紙、物、錢都是真的：動物件須出 objectEffects、動銀錢須出 economyCommands（買賣、給錢、簽約、拒簽、填搭檔、還價），只在嘴上說的世界不認帳。',
+        '簽約、拒簽、填欄、還價都得人在契約紙前；還價一次一句條款，對方隔夜回話。',
+        ...(w.economy?.performance ? [`黃昏【${w.economy.performance.venueSceneName}】開鑼：領銜缺席戲就塌，白日在台上排過戲夜裡才叫得動座，票房入班庫。`] : []),
         ...(w.economy ? ['每日深宵之末日結：工錢、食宿、帳期一併清算；契約限期之日以子夜收卷。'] : []),
     ].join('');
 
