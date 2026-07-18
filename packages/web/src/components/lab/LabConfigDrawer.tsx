@@ -68,20 +68,19 @@ export function LabConfigDrawer({ runId, running, onClose }: Props) {
     return (
         <aside className="es-card max-h-[78vh] overflow-y-auto p-4 no-scrollbar">
             <div className="flex items-baseline justify-between gap-3">
-                <h3 className="font-serif text-base tracking-[0.2em] text-ink">物界配置</h3>
+                <h3 className="font-serif text-base tracking-[0.2em] text-ink" title="每一筆更動即刻落卷（world.json），下一拍生效；走拍中不可改。">
+                    物界
+                </h3>
                 <button type="button" onClick={onClose} className="es-icon-button" aria-label="合上">↩</button>
             </div>
-            {running ? (
-                <p className="mt-2 font-serif text-xs text-cinnabar/90">走拍中不可改物界——先停，再動手。</p>
-            ) : (
-                <p className="mt-2 font-serif text-xs text-mute/80">每一筆更動即刻落卷（world.json），下一拍生效。</p>
-            )}
+            {running ? <p className="mt-2 font-serif text-xs text-cinnabar/90">走拍中——先停再改。</p> : null}
             {error ? <p className="mt-2 font-serif text-xs text-cinnabar" role="alert">{error}</p> : null}
 
             {/* 爭奪之物 */}
             <section className="mt-4">
-                <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90">爭奪之物</h4>
-                <p className="mt-1 font-serif text-2xs text-mute/75">一行一物：「標的｜說明」。慾望只經標的與世界相爭。</p>
+                <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90" title="一行一物：「標的｜說明」。慾望只經標的與世界相爭。">
+                    爭奪之物
+                </h4>
                 <textarea
                     value={resourceValue}
                     onChange={(e) => setResourceText(e.target.value)}
@@ -310,7 +309,9 @@ export function LabConfigDrawer({ runId, running, onClose }: Props) {
                     ))}
                 </ul>
                 {config.hasEconomy ? (
-                    <p className="mt-3 font-serif text-2xs text-mute/70">此卷帶銀錢物理（season economy）——帳冊隨 world.json 落卷，暫以唯讀待之。</p>
+                    <p className="mt-3 font-serif text-2xs text-mute/70" title="season economy 帳冊隨 world.json 落卷，暫以唯讀待之">
+                        帶銀錢物理 · 唯讀
+                    </p>
                 ) : null}
             </section>
         </aside>

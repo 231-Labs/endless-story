@@ -11,6 +11,7 @@ import { use, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { BeadCurtain } from '@/components/lab/LabOrnaments';
+import { IconBack, IconGallery, IconObjects, IconScroll } from '@/components/lab/LabIcons';
 import { LabBeatFeed } from '@/components/lab/LabBeatFeed';
 import { LabCastRail } from '@/components/lab/LabCastRail';
 import { LabConfigDrawer } from '@/components/lab/LabConfigDrawer';
@@ -50,32 +51,52 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
 
     return (
         <main className="flex min-h-dvh flex-col">
-            {/* 簷口一線 */}
+            {/* 簷口一線 —— 珠簾即當日行程：一拍亮一段，走拍的那串在呼吸 */}
             <header className="relative border-b border-hairline/60 bg-surface/60 px-4 pb-3 pt-4 backdrop-blur-sm dark:bg-elevated/40 sm:px-8">
-                <BeadCurtain strings={34} className="absolute inset-x-0 top-0 h-8 opacity-45" />
+                <BeadCurtain
+                    strings={34}
+                    className="absolute inset-x-0 top-0 h-8 opacity-60"
+                    progress={{
+                        total: snapshot.clock.ticksPerDay,
+                        done: snapshot.clock.tickOfDay,
+                        active: snapshot.phase === 'running',
+                    }}
+                />
                 <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <Link href="/lab" className="font-serif text-2xs tracking-[0.3em] text-mute hover:text-cinnabar">
-                        ← 卷架
+                    <Link href="/lab" aria-label="回卷架" title="回卷架" className="inline-flex items-center font-serif text-base text-mute hover:text-cinnabar">
+                        <IconBack />
                     </Link>
                     <div className="min-w-0">
                         <h1 className="truncate font-serif text-lg tracking-[0.15em] text-ink">{snapshot.meta.title}</h1>
-                        <p className="truncate font-serif text-2xs tracking-[0.18em] text-mute">
+                        <p className="truncate font-serif text-2xs tracking-[0.18em] text-mute" title={`${snapshot.saga.name} · 本日第 ${snapshot.clock.tickOfDay + 1}／${snapshot.clock.ticksPerDay} 拍`}>
                             {snapshot.saga.name} · {snapshot.saga.worldTime?.label}
                         </p>
                     </div>
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-1.5">
                         <Link
                             href={`/lab/run/${id}/reading`}
-                            className="es-button-ghost px-3 py-1.5 text-xs"
+                            aria-label="卷宗與章回"
+                            title="卷宗與章回"
+                            className="es-icon-button !h-9 !w-9 text-[15px]"
                         >
-                            卷宗與章回
+                            <IconScroll />
+                        </Link>
+                        <Link
+                            href="/lab/assets"
+                            aria-label="圖庫"
+                            title="圖庫 · 人物與場景之圖"
+                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                        >
+                            <IconGallery />
                         </Link>
                         <button
                             type="button"
                             onClick={() => setDrawer((v) => !v)}
-                            className={`es-button-ghost px-3 py-1.5 text-xs ${drawer ? 'border-cinnabar/60 text-cinnabar' : ''}`}
+                            aria-label="物界配置"
+                            title="物界 · 爭奪之物／物件／天時／場景物理"
+                            className={`es-icon-button !h-9 !w-9 text-[15px] ${drawer ? 'border-cinnabar/60 text-cinnabar' : ''}`}
                         >
-                            物界
+                            <IconObjects />
                         </button>
                     </div>
                     <div className="w-full">
@@ -96,6 +117,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                         scenes={snapshot.scenes}
                         locations={snapshot.locations}
                         streams={snapshot.streams}
+                        artByLocationId={snapshot.artByLocationId}
                         onSelectScene={setFocusedSceneId}
                     />
                     <AnimatePresence>
@@ -117,7 +139,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                 <aside className="min-h-0 border-t border-hairline/60 lg:border-l lg:border-t-0">
                     <div className="flex h-full min-h-0 flex-col">
                         <div className="border-b border-hairline/50 px-4 py-2.5">
-                            <p className="font-serif text-2xs tracking-[0.35em] text-cinnabar/90">拍流 · 誰此刻開了口</p>
+                            <p className="font-serif text-2xs tracking-[0.35em] text-cinnabar/90" title="每個角色此刻回的話與心聲；幽＝窗內事">拍流</p>
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 no-scrollbar lg:max-h-none">
                             <LabBeatFeed feed={feed} />
@@ -128,7 +150,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
 
             {/* 名帖排 */}
             <section className="border-t border-hairline/60 px-4 py-4 sm:px-8">
-                <p className="font-serif text-2xs tracking-[0.35em] text-mute">名帖 · 各自身在何處</p>
+                <p className="font-serif text-2xs tracking-[0.35em] text-mute" title="各自身在何處、心頭最熱的一樁；點名帖跳到其所在場景">名帖</p>
                 <div className="mt-3">
                     <LabCastRail characters={snapshot.characters} onSelectScene={setFocusedSceneId} />
                 </div>

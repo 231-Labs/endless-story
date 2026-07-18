@@ -71,20 +71,33 @@ export function LabEaves({ className = '' }: { className?: string }) {
 export function BeadCurtain({
     strings = 26,
     className = '',
+    progress,
 }: {
     strings?: number;
     className?: string;
+    /** When set, the curtain doubles as the day's tick progress: strings light
+     *  up cinnabar left→right as `done/total` advances; the boundary string
+     *  breathes while a tick is walking (`active`). */
+    progress?: { total: number; done: number; active?: boolean };
 }) {
+    const fraction = progress ? Math.max(0, Math.min(1, progress.done / Math.max(1, progress.total))) : 0;
+    const lit = progress ? Math.round(fraction * strings) : 0;
     return (
         <div
-            aria-hidden
+            aria-hidden={progress ? undefined : true}
+            role={progress ? 'img' : undefined}
+            aria-label={progress ? `本日行程 ${progress.done}／${progress.total} 拍` : undefined}
+            title={progress ? `本日 ${progress.done}／${progress.total} 拍${progress.active ? ' · 走拍中' : ''}` : undefined}
             className={`pointer-events-none flex select-none items-start justify-between overflow-hidden px-3 ${className}`}
         >
             {Array.from({ length: strings }).map((_, i) => {
                 // 簾腳參差：中間略長，兩側收短，像被風理過（整數高度，水合穩定）
                 const t = i / (strings - 1);
                 const h = Math.round(26 + Math.sin(Math.PI * t) * 34 + ((i * 7) % 11));
-                return <span key={i} className="es-bead-string" style={{ height: `${h}px` }} />;
+                const isLit = progress ? i < lit : false;
+                const isLive = Boolean(progress?.active) && i === Math.min(strings - 1, lit);
+                const cls = `es-bead-string${isLit ? ' es-bead-string--lit' : ''}${isLive ? ' es-bead-string--live' : ''}`;
+                return <span key={i} className={cls} style={{ height: `${h}px` }} />;
             })}
         </div>
     );

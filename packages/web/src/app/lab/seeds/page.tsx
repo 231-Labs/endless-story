@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
+import { IconBack } from '@/components/lab/LabIcons';
 import { labApi } from '@/components/lab/useLab';
 import type { LabSeedSummary } from '@/lib/lab/types';
 
@@ -73,15 +74,20 @@ export default function LabSeedsPage() {
                 <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
                     <div>
                         <p className="es-page-lead-eyebrow">片場 · 劇本館</p>
-                        <h1 className="font-serif text-2xl tracking-[0.18em] text-ink">劇本與配置</h1>
-                        <p className="mt-2 max-w-2xl font-serif text-xs leading-relaxed text-mute">
-                            一份 seed JSON 就是一整個世界的批量配置：saga 前提、地界與場景（privacy／capacity／座標）、
-                            開班角色（persona／secret／genesis memories／崗位與居所）、爭奪之物、關係底稿。
-                            存檔即以引擎本身驗證（buildWorldState），錯在此處擋下，不帶進跑卷。
-                        </p>
+                        <h1
+                            className="font-serif text-2xl tracking-[0.18em] text-ink"
+                            title="一份 seed JSON 就是一整個世界的批量配置：saga 前提、地界與場景、開班角色（persona／secret／memories／崗位居所）、爭奪之物、關係底稿。存檔即以引擎 buildWorldState 驗證。"
+                        >
+                            劇本與配置
+                        </h1>
                     </div>
-                    <Link href="/lab" className="font-serif text-2xs tracking-[0.3em] text-mute hover:text-cinnabar">
-                        ← 回片場
+                    <Link
+                        href="/lab"
+                        aria-label="回片場"
+                        title="回片場"
+                        className="inline-flex items-center font-serif text-base text-mute hover:text-cinnabar"
+                    >
+                        <IconBack />
                     </Link>
                 </div>
             </header>

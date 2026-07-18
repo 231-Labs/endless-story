@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
+import { IconBurn, IconGallery, IconSeed } from '@/components/lab/LabIcons';
 import { labApi } from '@/components/lab/useLab';
 import type { LabRunSummary, LabSeasonSummary, LabSeedSummary } from '@/lib/lab/types';
 
@@ -98,11 +99,13 @@ export default function LabHomePage() {
                 <BeadCurtain className="-mt-2 h-20" />
                 <div className="mt-4 text-center">
                     <p className="es-page-lead-eyebrow">endless story · 完全鏈下實驗場</p>
-                    <h1 className="es-page-lead-title mt-1">片場 · Cinema Lab</h1>
-                    <p className="mx-auto mt-3 max-w-xl font-serif text-sm leading-relaxed text-mute">
-                        底層如戲：時間、位置、慾望、物件、因果，一拍一拍自己走。
-                        表面如卷：你只展卷靜看，或在靜場時撥一撥物界。
-                    </p>
+                    <h1
+                        className="es-page-lead-title mt-1"
+                        title="底層如戲：時間、位置、慾望、物件、因果，一拍一拍自己走。表面如卷：展卷靜看，靜場撥物。"
+                    >
+                        片場 · Cinema Lab
+                    </h1>
+                    <p className="mx-auto mt-2 font-serif text-xs tracking-[0.3em] text-mute/80">底層如戲 · 表面如卷</p>
                 </div>
             </header>
 
@@ -114,15 +117,32 @@ export default function LabHomePage() {
 
             {/* 開新一卷 */}
             <section className="mt-10">
-                <div className="flex flex-wrap items-baseline justify-between gap-3">
-                    <h2 className="font-serif text-lg tracking-[0.25em] text-ink">開新一卷</h2>
-                    <Link href="/lab/seeds" className="font-serif text-2xs tracking-[0.3em] text-mute hover:text-cinnabar">
-                        劇本館 · 撰改 seed →
-                    </Link>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2
+                        className="font-serif text-lg tracking-[0.25em] text-ink"
+                        title="選一部劇本（seed 批量帶入人物、場景、記憶與爭奪之物），點一盞燈。"
+                    >
+                        開新一卷
+                    </h2>
+                    <span className="flex items-center gap-2">
+                        <Link
+                            href="/lab/seeds"
+                            aria-label="劇本館"
+                            title="劇本館 · 撰改 seed"
+                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                        >
+                            <IconSeed />
+                        </Link>
+                        <Link
+                            href="/lab/assets"
+                            aria-label="圖庫"
+                            title="圖庫 · 人物與場景之圖"
+                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                        >
+                            <IconGallery />
+                        </Link>
+                    </span>
                 </div>
-                <p className="mt-1 font-serif text-xs text-mute/80">
-                    選一部劇本（seed 批量帶入人物、場景、記憶與爭奪之物），點一盞燈。
-                </p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {seeds.map((seed) => {
                         const chosen = seed.id === form.presetId && seed.source === form.seedSource;
@@ -135,16 +155,18 @@ export default function LabHomePage() {
                             >
                                 <p className="font-serif text-base tracking-[0.12em] text-ink">{seed.label ?? seed.id}</p>
                                 <p className="mt-1 font-serif text-2xs tracking-[0.15em] text-mute">
-                                    {seed.source === 'custom' ? '自撰 · ' : '館藏 · '}{seed.id}
+                                    {seed.source === 'custom' ? '自撰' : '館藏'} · {seed.id}
                                 </p>
-                                <p className="mt-2 font-serif text-xs leading-relaxed text-ink/70">
-                                    {seed.castCount} 名角 · {seed.sceneCount} 場景 · {seed.locationCount} 地界 · {seed.memoryCount} 條創世記憶
+                                <p
+                                    className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-serif text-xs text-ink/75"
+                                    title={`${seed.castCount} 名角 · ${seed.sceneCount} 場景 · ${seed.locationCount} 地界 · ${seed.memoryCount} 條創世記憶${seed.resources.length ? ` · 爭奪：${seed.resources.join('、')}` : ''}`}
+                                >
+                                    <span>角 {seed.castCount}</span>
+                                    <span>景 {seed.sceneCount}</span>
+                                    <span>界 {seed.locationCount}</span>
+                                    <span>憶 {seed.memoryCount}</span>
+                                    {seed.resources.length ? <span className="text-jade/90">爭 {seed.resources.length}</span> : null}
                                 </p>
-                                {seed.resources.length ? (
-                                    <p className="mt-1 truncate font-serif text-2xs text-jade/90" title={seed.resources.join('、')}>
-                                        爭：{seed.resources.join('、')}
-                                    </p>
-                                ) : null}
                             </button>
                         );
                     })}
@@ -172,7 +194,10 @@ export default function LabHomePage() {
                             </button>
                         ))}
                     </span>
-                    <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute">
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="關係底稿：種入劇本裡的初始關係視角＋每夜自我整理（建議開）"
+                    >
                         <input
                             type="checkbox"
                             checked={form.relationshipFallback}
@@ -180,7 +205,7 @@ export default function LabHomePage() {
                         />
                         關係底稿
                     </label>
-                    <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute">
+                    <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日
                         <input
                             type="number"
@@ -208,15 +233,11 @@ export default function LabHomePage() {
                         type="button"
                         disabled={!chosenSeed || creating}
                         onClick={() => void create()}
+                        title={form.llm === 'real' ? '實錄：需伺服端備一把文字模型鑰（ZAI／POE／ANTHROPIC），一拍約數分鐘' : '排演：確定性假角，零鑰即走，機制與實錄同一份'}
                         className="es-button-primary px-5 py-2 text-sm disabled:opacity-40"
                     >
                         {creating ? '點燈中…' : '點燈開拍'}
                     </button>
-                    {form.llm === 'real' ? (
-                        <span className="w-full font-serif text-2xs text-mute/75">
-                            實錄需伺服端備一把文字模型鑰（ZAI / POE / ANTHROPIC）；一拍約數分鐘。排演零鑰即走，機制與實錄同一份。
-                        </span>
-                    ) : null}
                 </div>
             </section>
 
@@ -235,8 +256,8 @@ export default function LabHomePage() {
                         <RunCard key={run.meta.id} run={run} childrenRuns={childrenOf.get(run.meta.id) ?? []} onChanged={load} />
                     ))}
                     {!runs.length ? (
-                        <p className="font-serif text-sm leading-relaxed text-mute/70">
-                            卷架尚空。上面選一部劇本，點燈開拍——第一卷會從創世記憶裡自己醒來。
+                        <p className="font-serif text-sm text-mute/70" title="選一部劇本，點燈開拍——第一卷會從創世記憶裡自己醒來">
+                            卷架尚空。
                         </p>
                     ) : null}
                 </div>
@@ -276,8 +297,15 @@ function RunCard({
                     </p>
                 </Link>
                 {s ? (
-                    <p className="shrink-0 font-serif text-xs tracking-[0.15em] text-ink/75">
-                        第{s.day}日 · 第{s.tick}拍 · {s.partOfDay} · 心事 {s.liveWants} · 事件 {s.eventsTotal}
+                    <p
+                        className="flex shrink-0 gap-x-3 font-serif text-xs tracking-[0.15em] text-ink/75"
+                        title={`第${s.day}日 · 第${s.tick}拍 · ${s.partOfDay} · ${s.liveWants} 樁活著的心事 · ${s.eventsTotal} 件已成之事`}
+                    >
+                        <span>日{s.day}</span>
+                        <span>拍{s.tick}</span>
+                        <span>{s.partOfDay}</span>
+                        <span className="text-cinnabar/80">心{s.liveWants}</span>
+                        <span className="text-jade/90">事{s.eventsTotal}</span>
                     </p>
                 ) : (
                     <p className="shrink-0 font-serif text-xs text-mute/70">未醒</p>
@@ -300,9 +328,11 @@ function RunCard({
                             void labApi.deleteRun(run.meta.id).then(onChanged).catch((e) => window.alert(String(e)));
                         }
                     }}
-                    className="shrink-0 font-serif text-2xs tracking-[0.2em] text-mute/70 hover:text-cinnabar"
+                    aria-label={`焚毀「${run.meta.title}」`}
+                    title="焚毀此卷（不可復）"
+                    className="shrink-0 text-mute/60 transition hover:text-cinnabar"
                 >
-                    焚
+                    <IconBurn />
                 </button>
             </div>
             {childrenRuns.map((child) => (

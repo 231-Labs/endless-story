@@ -18,6 +18,7 @@ import { labManager } from './manager';
 import { runDir } from './paths';
 import { readRunMeta } from './store';
 import { readSeedRaw } from './seeds';
+import { assetUrlFor } from './assets';
 import { beatsFromTickRecords, tailTickRecords } from './artifacts';
 import type { LabCharacterLive, LabLiveBeat, LabRunMeta, LabRunPhase } from './types';
 
@@ -50,9 +51,14 @@ export interface LabLiveSnapshot {
     epoch: string;
     /** Latest beat seq in the ring — pass back as ?after= next poll. */
     seq: number;
+    /** The world clock in full — drives the day-progress bead curtain. */
+    clock: { day: number; currentTick: number; tickOfDay: number; ticksPerDay: number; partOfDay: string };
     saga: Saga;
     locations: SagaLocation[];
     scenes: Scene[];
+    /** Uploaded location art (lab 圖庫) keyed by location id; overrides the
+     *  built-in name-matched oil panels. */
+    artByLocationId: Record<string, string>;
     characters: LabCharacterLive[];
     /** Per-scene recent public lines (newest first) for the 題字流. */
     streams: Record<string, LabStreamLine[]>;
@@ -124,6 +130,11 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             terrain: loc.terrain,
         }))
         : [{ id: 'loc0', name: raw.saga?.name ?? meta.title, description: raw.saga?.description ?? '', terrain: undefined }];
+    const artByLocationId: Record<string, string> = {};
+    for (const location of locations) {
+        const url = assetUrlFor('location', location.name);
+        if (url) artByLocationId[location.id] = url;
+    }
 
     // ── beats / streams ────────────────────────────────────────────────────
     const allBeats = active ? active.beats : coldBeats(runId);
@@ -173,6 +184,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             posY: rawScene?.pos_y,
             privacyLevel: Math.min(Math.max(scene.privacyLevel, 0), 5) as Scene['privacyLevel'],
             currentCharacterIds: presentByScene.get(scene.id) ?? [],
+            imageUrl: assetUrlFor('scene', scene.name),
             ghostQuotes: ghost ? [{ characterId: '', text: ghost.text }] : undefined,
             performance: activeTickScenes.has(scene.id)
                 ? { title: '戲正上演', startedAt: '' }
@@ -190,6 +202,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             role: member.role,
             gender: member.gender,
             age: member.age,
+            portraitUrl: assetUrlFor('character', member.name),
             sceneId,
             sceneName: world.sceneNameById(sceneId),
             fatigue: member.state.fatigue,
@@ -233,9 +246,17 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         model: active?.model,
         epoch: active?.epoch ?? 'cold',
         seq: latestSeq,
+        clock: {
+            day: clock.day,
+            currentTick: clock.currentTick,
+            tickOfDay: clock.tickOfDay,
+            ticksPerDay: clock.ticksPerDay,
+            partOfDay: clock.partOfDay,
+        },
         saga,
         locations,
         scenes,
+        artByLocationId,
         characters,
         streams,
         beats,

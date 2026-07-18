@@ -9,6 +9,7 @@
 import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Markdown } from '@/components/common/Markdown';
+import { IconBack } from '@/components/lab/LabIcons';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
 import { labApi } from '@/components/lab/useLab';
 import type { LabTickRecord } from '@/lib/lab/types';
@@ -89,8 +90,13 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                         <p className="es-page-lead-eyebrow">片場 · 讀卷處</p>
                         <h1 className="font-serif text-2xl tracking-[0.18em] text-ink">卷宗與章回</h1>
                     </div>
-                    <Link href={`/lab/run/${id}`} className="font-serif text-2xs tracking-[0.3em] text-mute hover:text-cinnabar">
-                        ← 回觀測台
+                    <Link
+                        href={`/lab/run/${id}`}
+                        aria-label="回觀測台"
+                        title="回觀測台"
+                        className="inline-flex items-center gap-1.5 font-serif text-base text-mute hover:text-cinnabar"
+                    >
+                        <IconBack />
                     </Link>
                 </div>
                 <nav className="mt-5 flex gap-1 overflow-x-auto no-scrollbar">
@@ -128,8 +134,8 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                         </Link>
                     ))}
                     {!dossiers.length ? (
-                        <p className="font-serif text-sm leading-relaxed text-mute/70">
-                            尚無卷宗。公開事件湊足兩份以上的視角，才立一卷——我們能驗證事情發生過，卻不能證明一個人如何理解它。
+                        <p className="font-serif text-sm text-mute/70" title="公開事件湊足兩份以上的視角，才立一卷">
+                            尚無卷宗。
                         </p>
                     ) : null}
                 </section>
@@ -181,7 +187,7 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                         {openFile ? (
                             <Markdown source={fileContent || '展卷中…'} className="chapter-prose" />
                         ) : (
-                            <p className="font-serif text-sm text-mute/70">左手邊揀一回。織回承先啟後；日終是一天的收束。</p>
+                            <p className="font-serif text-sm text-mute/70">左手邊揀一回。</p>
                         )}
                     </article>
                 </section>
@@ -251,8 +257,8 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                             <Markdown source={anthology} className="chapter-prose" />
                         </article>
                     ) : (
-                        <p className="font-serif text-sm leading-relaxed text-mute/70">
-                            選集未成。季度編輯會從全部卷宗裡揀出值得留名的事件，織成一冊——多走幾拍再來。
+                        <p className="font-serif text-sm text-mute/70" title="季度編輯從全部卷宗揀出值得留名的事件織成一冊">
+                            選集未成，多走幾拍再來。
                         </p>
                     )}
                 </section>

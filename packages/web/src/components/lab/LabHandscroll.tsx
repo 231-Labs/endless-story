@@ -28,10 +28,13 @@ interface Props {
     scenes: Scene[];
     locations: SagaLocation[];
     streams: Record<string, LabStreamLine[]>;
+    /** 圖庫 location art overrides (by location id); falls back to name-matched
+     *  built-in oils, then plain paper. */
+    artByLocationId?: Record<string, string>;
     onSelectScene: (sceneId: string) => void;
 }
 
-export function LabHandscroll({ saga, scenes, locations, streams, onSelectScene }: Props) {
+export function LabHandscroll({ saga, scenes, locations, streams, artByLocationId, onSelectScene }: Props) {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const layout = useMemo(() => computeHandscrollLayout(locations, scenes), [locations, scenes]);
@@ -115,7 +118,7 @@ export function LabHandscroll({ saga, scenes, locations, streams, onSelectScene 
             <div className="flex h-full w-max items-stretch">
                 {layout.segments.map((seg) => {
                     const locScenes = seg.scenes.map((sp) => byId.get(sp.scene.id) ?? sp.scene);
-                    const art = terrainArtFor(seg.location.name);
+                    const art = artByLocationId?.[seg.location.id] ?? terrainArtFor(seg.location.name);
                     const streamScene = locScenes.find((sc) => streams[sc.id]?.length);
                     return (
                         <div

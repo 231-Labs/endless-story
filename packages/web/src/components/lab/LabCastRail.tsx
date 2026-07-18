@@ -25,10 +25,19 @@ export function LabCastRail({
                     className="es-card group p-3 text-left transition hover:border-cinnabar/50"
                 >
                     <div className="flex items-center gap-2.5">
-                        {/* 名印：一字為記 */}
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-cinnabar/85 font-serif text-base text-white shadow-sm">
-                            {c.name.slice(0, 1)}
-                        </span>
+                        {c.portraitUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                                src={c.portraitUrl}
+                                alt={c.name}
+                                className="h-9 w-9 shrink-0 rounded-md object-cover shadow-sm ring-1 ring-hairline/60"
+                            />
+                        ) : (
+                            /* 名印：一字為記 */
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-cinnabar/85 font-serif text-base text-white shadow-sm">
+                                {c.name.slice(0, 1)}
+                            </span>
+                        )}
                         <div className="min-w-0">
                             <p className="truncate font-serif text-sm tracking-[0.12em] text-ink">
                                 {c.name}

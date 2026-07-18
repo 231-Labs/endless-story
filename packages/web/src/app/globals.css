@@ -493,3 +493,26 @@ body {
 .animate-lab-live-dot {
   animation: es-lab-live-dot 1.6s ease-in-out infinite;
 }
+
+/* 珠簾＝當日行程：亮簾（已走的拍）與活簾（正在走的那一拍） */
+.es-bead-string--lit {
+  background-image: radial-gradient(circle at 50% 4px, rgb(var(--color-cinnabar) / 0.75) 0 1.7px, transparent 2.3px);
+}
+.es-bead-string--lit::after {
+  background: rgb(var(--color-cinnabar) / 0.95);
+  box-shadow: 0 0 5px rgb(var(--color-cinnabar) / 0.5);
+}
+@keyframes es-bead-breathe {
+  0%, 100% { opacity: 0.55; transform: rotate(0.7deg); }
+  50%      { opacity: 1; transform: rotate(-0.7deg); }
+}
+.es-bead-string--live {
+  animation: es-bead-breathe 1.4s ease-in-out infinite;
+}
+.es-bead-string--live::after {
+  background: rgb(var(--color-cinnabar));
+  box-shadow: 0 0 8px rgb(var(--color-cinnabar) / 0.8);
+}
+@media (prefers-reduced-motion: reduce) {
+  .es-bead-string--live { animation: none; opacity: 1; }
+}

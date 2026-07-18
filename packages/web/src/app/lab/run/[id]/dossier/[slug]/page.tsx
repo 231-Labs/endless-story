@@ -7,6 +7,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { EventDossier } from '@/components/feed/EventDossier';
+import { IconBack } from '@/components/lab/LabIcons';
 import { readDossier } from '@/lib/lab/artifacts';
 
 export const runtime = 'nodejs';
@@ -35,9 +36,11 @@ export default async function LabDossierPage({
             <div className="border-b border-hairline/60 px-5 py-3 sm:px-8">
                 <Link
                     href={`/lab/run/${id}/reading`}
-                    className="font-serif text-2xs tracking-[0.3em] text-mute hover:text-cinnabar"
+                    aria-label="回讀卷處"
+                    title="回讀卷處"
+                    className="inline-flex items-center font-serif text-base text-mute hover:text-cinnabar"
                 >
-                    ← 回讀卷處
+                    <IconBack />
                 </Link>
             </div>
             <EventDossier event={dossier.bundle.event} manifest={dossier.bundle.manifest} />

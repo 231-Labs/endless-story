@@ -5,6 +5,14 @@
 
 export type LabLlmMode = 'fake' | 'real';
 
+/** Entity name → asset file key. Client-safe (pure string), shared with the
+ *  server store so the 圖庫 UI can match uploads without a round trip. */
+export function labAssetKeyFor(name: string): string {
+    const key = name.trim().replace(/[/\\:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+    if (!key || key.includes('..')) throw new Error(`invalid asset name: ${name}`);
+    return key;
+}
+
 export interface LabRunConfig {
     /** Story preset id (file name without .json). */
     presetId: string;
@@ -79,6 +87,8 @@ export interface LabCharacterLive {
     role?: string;
     gender?: string;
     age?: number;
+    /** Uploaded portrait from the lab 圖庫 (by character name), if any. */
+    portraitUrl?: string;
     sceneId: string;
     sceneName: string;
     fatigue: number;

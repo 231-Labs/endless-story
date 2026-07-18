@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * LabControls — the operator's hand: step one beat of the world (一拍 = one
- * tick), run a stretch, pause, or fork the run into a sibling branch.
+ * LabControls — the operator's hand, wordless: step one tick, run a stretch,
+ * pause, fork. Every icon carries an aria-label + title; text only where a
+ * number or an error must be read.
  */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { IconFork, IconPause, IconRun, IconStep } from './LabIcons';
 import { labApi } from './useLab';
 import type { LabLiveSnapshot } from '@/lib/lab/live';
 
@@ -30,9 +32,13 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
         }
     };
 
+    const iconButton =
+        'es-icon-button !h-9 !w-9 text-[15px] disabled:opacity-35 disabled:hover:border-hairline';
+
     return (
         <div className="flex flex-wrap items-center gap-2">
             <span
+                title={running ? `走拍中 · 佇列尚餘 ${snapshot.pendingTicks} 拍` : snapshot.phase === 'error' ? '出錯（詳見下方）' : '靜場'}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-serif text-2xs tracking-[0.2em] ${
                     snapshot.phase === 'error'
                         ? 'border-cinnabar/60 text-cinnabar'
@@ -46,25 +52,30 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
                         running ? 'bg-cinnabar animate-lab-live-dot' : snapshot.phase === 'error' ? 'bg-cinnabar' : 'bg-jade/70'
                     }`}
                 />
-                {running ? `走拍中 · 餘 ${snapshot.pendingTicks}` : snapshot.phase === 'error' ? '出錯' : '靜場'}
+                {running ? snapshot.pendingTicks : snapshot.phase === 'error' ? '!' : '靜'}
             </span>
 
             <button
                 type="button"
                 disabled={busy !== null || running}
                 onClick={() => act('step', () => labApi.control(snapshot.runId, { action: 'step' }))}
-                className="es-button-primary px-3 py-1.5 text-xs disabled:opacity-40"
+                aria-label="走一拍"
+                title="走一拍"
+                className={`${iconButton} border-cinnabar/50 text-cinnabar hover:border-cinnabar`}
             >
-                走一拍
+                <IconStep />
             </button>
+
             <span className="inline-flex items-center gap-1">
                 <button
                     type="button"
                     disabled={busy !== null || running}
                     onClick={() => act('run', () => labApi.control(snapshot.runId, { action: 'run', ticks }))}
-                    className="es-button-ghost px-3 py-1.5 text-xs disabled:opacity-40"
+                    aria-label={`連走 ${ticks} 拍`}
+                    title={`連走 ${ticks} 拍`}
+                    className={iconButton}
                 >
-                    連走
+                    <IconRun />
                 </button>
                 <input
                     type="number"
@@ -72,42 +83,47 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
                     max={600}
                     value={ticks}
                     onChange={(e) => setTicks(Math.max(1, Math.min(600, Number(e.target.value) || 1)))}
-                    className="es-field w-16 px-2 py-1.5 text-center text-xs"
+                    className="es-field w-14 px-1.5 py-1.5 text-center text-xs"
                     aria-label="連走拍數"
+                    title="連走拍數"
                 />
-                <span className="font-serif text-2xs tracking-[0.2em] text-mute">拍</span>
             </span>
+
             <button
                 type="button"
                 disabled={!running}
                 onClick={() => act('pause', () => labApi.control(snapshot.runId, { action: 'pause' }))}
-                className="es-button-ghost px-3 py-1.5 text-xs disabled:opacity-40"
+                aria-label="停（本拍走完即靜場）"
+                title="停（本拍走完即靜場）"
+                className={iconButton}
             >
-                停
+                <IconPause />
             </button>
+
             <button
                 type="button"
                 disabled={busy !== null || running}
                 onClick={() =>
                     act('fork', async () => {
-                        const title = window.prompt('分支之名（自此一拍另開一卷）', `${snapshot.meta.title} · 別卷`);
+                        const title = window.prompt('分卷之名（自此一拍另開一卷）', `${snapshot.meta.title} · 別卷`);
                         if (!title) return;
                         const { meta } = await labApi.control(snapshot.runId, { action: 'fork', title });
                         if (meta) router.push(`/lab/run/${meta.id}`);
                     })
                 }
-                className="es-button-ghost px-3 py-1.5 text-xs disabled:opacity-40"
+                aria-label="另開一卷（分支）"
+                title="另開一卷（自此一拍分支）"
+                className={iconButton}
             >
-                另開一卷
+                <IconFork />
             </button>
 
-            {snapshot.provider ? (
-                <span className="font-serif text-2xs tracking-[0.15em] text-mute/80">
-                    {snapshot.provider} · {snapshot.model}
-                </span>
-            ) : (
-                <span className="font-serif text-2xs tracking-[0.15em] text-mute/80">排演（確定性假角）</span>
-            )}
+            <span
+                className="font-serif text-2xs tracking-[0.15em] text-mute/80"
+                title={snapshot.provider ? `實錄 · ${snapshot.provider} / ${snapshot.model}` : '排演 · 確定性假角，零鑰零費'}
+            >
+                {snapshot.provider ? '錄' : '排'}
+            </span>
 
             {(error || snapshot.lastError) ? (
                 <span className="w-full font-serif text-xs text-cinnabar" role="alert">

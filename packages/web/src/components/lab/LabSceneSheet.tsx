@@ -71,9 +71,15 @@ export function LabSceneSheet({ scene, characters, beats, locationArt, clock, on
                         <ul className="mt-3 space-y-3">
                             {present.map((c) => (
                                 <li key={c.id} className="es-soft-panel p-3">
-                                    <div className="flex items-baseline justify-between gap-3">
-                                        <span className="font-serif text-base tracking-[0.15em] text-ink">{c.name}</span>
-                                        <span className="font-serif text-2xs tracking-[0.2em] text-mute">{c.role ?? ''}</span>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="flex min-w-0 items-center gap-2 font-serif text-base tracking-[0.15em] text-ink">
+                                            {c.portraitUrl ? (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img src={c.portraitUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-hairline/60" />
+                                            ) : null}
+                                            <span className="truncate">{c.name}</span>
+                                        </span>
+                                        <span className="shrink-0 font-serif text-2xs tracking-[0.2em] text-mute">{c.role ?? ''}</span>
                                     </div>
                                     {c.wants[0] ? (
                                         <div className="mt-2">

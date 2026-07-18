@@ -67,6 +67,15 @@ export const labApi = {
     config: (id: string) => request<{ config: LabWorldConfig }>(`/api/lab/runs/${id}/config`),
     configOp: (id: string, op: unknown) =>
         request<{ config: LabWorldConfig }>(`/api/lab/runs/${id}/config`, { method: 'POST', body: JSON.stringify(op) }),
+    assets: () =>
+        request<{ assets: Array<{ kind: string; file: string; key: string; url: string; bytes: number }> }>('/api/lab/assets'),
+    uploadAsset: (kind: string, name: string, dataUrl: string) =>
+        request<{ saved: { kind: string; file: string; key: string; url: string } }>('/api/lab/assets', {
+            method: 'POST',
+            body: JSON.stringify({ kind, name, dataUrl }),
+        }),
+    deleteAsset: (kind: string, file: string) =>
+        request<{ deleted: string }>(`/api/lab/assets?kind=${kind}&file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
 };
 
 const FEED_CAP = 240;
