@@ -19,7 +19,7 @@ import { runDir } from './paths';
 import { readRunMeta } from './store';
 import { readSeedRaw } from './seeds';
 import { assetUrlFor } from './assets';
-import { beatsFromTickRecords, tailTickRecords } from './artifacts';
+import { beatsFromTickRecords, listArchiveEntries, readArchiveEntry, tailTickRecords } from './artifacts';
 import type { LabCharacterLive, LabLiveBeat, LabRunMeta, LabRunPhase } from './types';
 
 /** The chain-only preset fields the engine ignores but the handscroll wants. */
@@ -99,13 +99,61 @@ function presetView(meta: LabRunMeta): RawPresetView {
     }
 }
 
-/** Backfill the beat feed of a cold run from the last few tick records. */
-function coldBeats(runId: string): LabLiveBeat[] {
-    return beatsFromTickRecords(tailTickRecords(runId, 3)).map((beat, i) => ({
+/** Backfill the beat feed of a cold run from the last few tick records; for
+ *  adopted engine-CLI runs (no ticks.jsonl) fall back to parsing the last few
+ *  手卷 archive files, so an imported run still opens as a living scroll. */
+function coldBeats(runId: string, world: WorldState): LabLiveBeat[] {
+    const fromRecords = beatsFromTickRecords(tailTickRecords(runId, 3)).map((beat, i) => ({
         ...beat,
         seq: i + 1,
         ts: 0,
     }));
+    if (fromRecords.length) return fromRecords;
+    return coldBeatsFromShoujuan(runId, world);
+}
+
+function coldBeatsFromShoujuan(runId: string, world: WorldState): LabLiveBeat[] {
+    const entries = listArchiveEntries(runId).filter((entry) => entry.kind === 'shoujuan').slice(-6);
+    const beats: LabLiveBeat[] = [];
+    let seq = 0;
+    for (const entry of entries) {
+        let content: string;
+        try {
+            content = readArchiveEntry(runId, entry.file);
+        } catch {
+            continue;
+        }
+        const header = /^# 〔手卷〕(.+?)\s+\(day \d+ · tick \d+(?: · event (\S+))?\)/m.exec(content);
+        const sceneName = header?.[1]?.trim() ?? entry.slug;
+        const idFromEvent = header?.[2]?.split(':').pop();
+        const scene = (idFromEvent ? world.sceneById(idFromEvent) : undefined)
+            ?? world.data.scenes.find((s) => s.name === sceneName);
+        const ticksPerDay = Math.max(1, world.data.clock.ticksPerDay);
+        const tickOfDay = ((entry.tick % ticksPerDay) + ticksPerDay) % ticksPerDay;
+        const clockLabel = PARTS_OF_DAY[Math.min(PARTS_OF_DAY.length - 1, Math.floor((tickOfDay / ticksPerDay) * PARTS_OF_DAY.length))];
+        const body = content.split(/\n---\n/)[1] ?? content;
+        for (const line of body.split('\n')) {
+            const beat = /^([^：\s]{1,12})：(.+)$/.exec(line.trim());
+            if (!beat) continue;
+            const characterId = world.idByName(beat[1]);
+            if (!characterId && beat[1] !== '世界') continue;
+            seq += 1;
+            beats.push({
+                seq,
+                ts: 0,
+                day: entry.day,
+                tick: entry.tick,
+                clock: clockLabel,
+                sceneId: scene?.id ?? '',
+                sceneName,
+                isPrivate: (scene?.privacyLevel ?? 0) >= 3,
+                characterId: characterId ?? '__world__',
+                name: beat[1],
+                text: beat[2].trim(),
+            });
+        }
+    }
+    return beats;
 }
 
 export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<LabLiveSnapshot> {
@@ -137,7 +185,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
     }
 
     // ── beats / streams ────────────────────────────────────────────────────
-    const allBeats = active ? active.beats : coldBeats(runId);
+    const allBeats = active ? active.beats : coldBeats(runId, world);
     const beats = allBeats.filter((b) => b.seq > afterSeq);
     const latestSeq = allBeats.length ? allBeats[allBeats.length - 1].seq : 0;
 

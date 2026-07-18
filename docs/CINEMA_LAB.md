@@ -60,6 +60,7 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
 | `/lab/run/[id]` | 觀測台：手卷（人物在何處、場景圓點、題字流）＋拍流（每角此刻的話與心聲）＋名帖排＋控制（走一拍/連走/停/另開一卷）＋物界抽屜。**簷口珠簾＝當日行程**：一日幾拍幾串亮，已走的拍朱砂點亮、正走的那串呼吸 |
 | `/lab/run/[id]/reading` | 讀卷處：事件卷宗（客觀/主觀選集）、章回（織回+日終+POV 原料）、拍案（逐拍客觀 × 各家所見）、選集（季度 anthology） |
 | `/lab/run/[id]/dossier/[slug]` | 單卷卷宗：沿用讀者站 `EventDossier`（正史層 + 多視角 + 認識論標記） |
+| `/lab/exhibits` | 展覽室：認領外來卷、館藏實驗報告、自上之展品（見 §3.5） |
 
 **圖庫（人物圖與場景資源的管理處）**：`$LAB_DATA_DIR/assets/<character|scene|location>/<名>.<png|jpg|webp>`，
 **以名為鍵**——seed 以名字指涉人事地，分卷、重跑同名共用一圖，上一次圖全站生效。
@@ -71,6 +72,36 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
 （放一封信進妝閣、藏一只錶進戲箱）、天時（clock-bound 世界事件）、場景物理
 （privacy/capacity）。規則：**走拍中不可改；改了立刻落 world.json** —— 配置本身就是
 世界事實，不是 prompt 悄悄話。
+
+### 3.5 把實驗產出搬進片場（展覽室）
+
+實驗產出分兩類，各有一扇門：
+
+**A. engine 格式的 run 目錄**（`state/` + `archive/` + `dossiers/`，即 CLI `--out`
+或 `$ES_LAB_ROOT/runs/<日期>/engine-run`）→ **認領上卷架**，成為完整的一卷
+（手卷冷觀、章回、卷宗、選集全數可讀）：
+
+```bash
+# 本機 dev：拷進 lab 資料根
+cp -r ~/endless-story-lab/runs/2026-07-16/engine-run \
+      packages/web/data/cinema-lab/runs/anchun-0716
+# VPS：rsync 上 volume
+rsync -av ~/endless-story-lab/runs/2026-07-16/engine-run/ \
+      <vps>:/data/cinema-lab/runs/anchun-0716/
+```
+
+然後開 `/lab/exhibits` →「認領外來卷」點一下即可。config 從 run 自己的
+`run-manifest.json` + `world.json` 推斷；沒有 `ticks.jsonl` 的外來卷，手卷的
+題字流會自動從最近幾份〔手卷〕markdown 回填（拍案 tab 則自認領後才開始累積）。
+**誠實限界**：他鑰錄的卷（如 poe 錄的）在本機任何時候都可讀可展；要「續走」
+則須本機 provider 與原卷一致（引擎溯源檢查，防偷換敘事者）。
+
+**B. 報告型產出**（`report.md`／`report.html`、研究筆記、A/B 數據）→ **展覽室展讀**：
+- 館藏：`packages/engine/experiments/**` 的 `report.md`／`*-report.md` 隨 image
+  自動列出（agent-season 各窗口、play-emergence、rewrite-ab…），有 `report.html`
+  的旁邊一鍵開原版。掃描根可用 `LAB_REPORTS_DIR` 覆蓋。
+- 自上：任何 markdown 貼進「自上之展品」，存 `$LAB_DATA_DIR/exhibits/`（隨 volume
+  持久），可焚。私庫（lab repo）的 season 報告、consolidated 筆記走這條。
 
 ## 4. API（`/api/lab/*`，皆 server-side）
 

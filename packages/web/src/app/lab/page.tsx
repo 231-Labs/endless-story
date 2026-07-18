@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
-import { IconBurn, IconGallery, IconSeed } from '@/components/lab/LabIcons';
+import { IconBurn, IconExhibit, IconGallery, IconSeed } from '@/components/lab/LabIcons';
 import { labApi } from '@/components/lab/useLab';
 import type { LabRunSummary, LabSeasonSummary, LabSeedSummary } from '@/lib/lab/types';
 
@@ -140,6 +140,14 @@ export default function LabHomePage() {
                             className="es-icon-button !h-9 !w-9 text-[15px]"
                         >
                             <IconGallery />
+                        </Link>
+                        <Link
+                            href="/lab/exhibits"
+                            aria-label="展覽室"
+                            title="展覽室 · 認領外來卷／實驗報告／自上展品"
+                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                        >
+                            <IconExhibit />
                         </Link>
                     </span>
                 </div>

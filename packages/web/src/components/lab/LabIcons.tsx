@@ -102,6 +102,17 @@ export function IconGallery(props: SVGProps<SVGSVGElement>) {
     );
 }
 
+/** 展覽室 — a hung plaque (匾額). */
+export function IconExhibit(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg {...base(props)}>
+            <path d="M6 8 4.5 4.5M18 8l1.5-3.5" />
+            <rect x="3.5" y="8" width="17" height="10" rx="1" />
+            <path d="M7.5 13h2M12 11.5v3M14.5 13h2" />
+        </svg>
+    );
+}
+
 /** 焚 — a small flame for irreversible deletion. */
 export function IconBurn(props: SVGProps<SVGSVGElement>) {
     return (
