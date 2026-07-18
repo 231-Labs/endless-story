@@ -135,10 +135,10 @@ export default function LabHomePage() {
                 <div className="mt-4 text-center">
                     <p className="es-page-lead-eyebrow">endless story · 完全鏈下實驗場</p>
                     <h1
-                        className="es-page-lead-title mt-1"
+                        className="mt-1 font-serif text-xl tracking-[0.4em] text-ink sm:text-2xl"
                         title="底層如戲：時間、位置、慾望、物件、因果，一拍一拍自己走。表面如卷：展卷靜看，靜場撥物。"
                     >
-                        片場 · Cinema Lab
+                        Cinema Lab
                     </h1>
                     <p className="mx-auto mt-2 font-serif text-xs tracking-[0.3em] text-mute/80">底層如戲 · 表面如卷</p>
                 </div>
