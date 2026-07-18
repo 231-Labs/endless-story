@@ -38,7 +38,7 @@ export function LabBeatDock({
 
     return (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
-            <div className="pointer-events-auto bg-gradient-to-t from-canvas via-canvas/85 to-transparent pb-1.5 pt-5">
+            <div className="pointer-events-auto bg-gradient-to-t from-canvas/90 via-canvas/55 to-transparent pb-1.5 pt-6">
                 {/* 帶首一线：拍流籤 + 活點 + 名帖引 */}
                 <div className="flex items-center justify-between px-4 sm:px-8">
                     <button
@@ -75,25 +75,30 @@ export function LabBeatDock({
                         >
                             <div
                                 ref={stripRef}
-                                className="mt-1.5 flex gap-2.5 overflow-x-auto px-4 pb-1 no-scrollbar sm:px-8"
+                                className="mt-2 flex items-start gap-3 overflow-x-auto px-4 pb-1.5 no-scrollbar sm:px-8"
                             >
                                 {feed.map((b) => (
                                     <article
                                         key={b.seq}
-                                        className={`animate-beat-in w-[248px] shrink-0 border-l-2 ${slipTone(b)} bg-ink/[0.035] px-3 py-2 backdrop-blur-[2px] dark:bg-white/[0.045]`}
+                                        className={`animate-beat-in max-h-[34vh] w-[340px] shrink-0 overflow-y-auto border-l-2 no-scrollbar ${slipTone(b)} bg-ink/[0.02] px-3.5 py-2.5 backdrop-blur-[1.5px] dark:bg-white/[0.025]`}
                                     >
-                                        <p className="flex items-baseline gap-x-1.5 truncate font-serif text-2xs tracking-[0.14em] text-mute">
-                                            <span className="shrink-0 text-ink/85">{b.name}</span>
+                                        <p className="flex items-baseline gap-x-2 truncate font-serif text-2xs tracking-[0.16em] text-mute">
+                                            <span className="shrink-0 text-ink/90">{b.name}</span>
                                             <span className="shrink-0 text-jade/90">{b.sceneName}</span>
                                             <span className="shrink-0">{b.clock}</span>
                                             {b.isPrivate && b.kind !== 'world' ? <span className="shrink-0 text-jade/80">幽</span> : null}
                                         </p>
-                                        <p className={`mt-1 line-clamp-2 font-serif text-xs leading-relaxed ${b.kind === 'move' ? 'text-mute' : 'text-ink/90'}`}>
+                                        <p className={`mt-1.5 font-serif text-sm leading-relaxed ${b.kind === 'move' ? 'text-mute' : 'text-ink/90'}`}>
                                             {b.text}
                                         </p>
-                                        {b.kind === 'beat' && (b.inner || b.acts?.length) ? (
-                                            <p className="mt-0.5 line-clamp-1 font-serif text-2xs leading-relaxed text-mute/80">
-                                                {b.acts?.length ? b.acts.join('　') : b.inner}
+                                        {b.kind === 'beat' && b.inner ? (
+                                            <p className="mt-1.5 border-l border-hairline/50 pl-2 font-serif text-xs leading-relaxed text-mute/85">
+                                                {b.inner}
+                                            </p>
+                                        ) : null}
+                                        {b.kind === 'beat' && b.acts?.length ? (
+                                            <p className="mt-1 font-serif text-2xs leading-relaxed tracking-[0.06em] text-seal">
+                                                {b.acts.join('　')}
                                             </p>
                                         ) : null}
                                     </article>

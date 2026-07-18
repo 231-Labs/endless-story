@@ -11,6 +11,7 @@ import { use, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { BeadCurtain } from '@/components/lab/LabOrnaments';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { IconBack, IconGallery, IconObjects, IconScroll } from '@/components/lab/LabIcons';
 import { LabBeatDock } from '@/components/lab/LabBeatDock';
 import { LabCastRail } from '@/components/lab/LabCastRail';
@@ -89,6 +90,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                         </p>
                     </div>
                     <div className="ml-auto flex items-center gap-2">
+                        <ThemeToggle className="es-icon-button !h-11 !w-11 text-[20px]" />
                         <Link
                             href={`/lab/run/${id}/reading`}
                             aria-label="卷宗與章回"
