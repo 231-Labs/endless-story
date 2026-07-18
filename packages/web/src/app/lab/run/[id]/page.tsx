@@ -56,7 +56,9 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
     }
 
     return (
-        <main className="flex min-h-dvh flex-col">
+        <main className="h-dvh snap-y snap-mandatory overflow-y-auto no-scrollbar">
+            {/* 第一屏 —— 純手卷與拍流 */}
+            <section className="relative flex h-dvh snap-start snap-always flex-col">
             {/* 簷口一線 —— 珠簾即當日行程：一拍亮一段，走拍的那串在呼吸 */}
             <header className="relative border-b border-hairline/60 bg-surface/60 px-4 pb-3 pt-4 backdrop-blur-sm dark:bg-elevated/40 sm:px-8">
                 <BeadCurtain
@@ -160,11 +162,40 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                 </AnimatePresence>
             </div>
 
-            {/* 名帖排 */}
-            <section className="border-t border-hairline/60 px-4 py-4 sm:px-8">
-                <p className="font-serif text-2xs tracking-[0.35em] text-mute" title="點名帖開人物內頁：狀態／心事／記憶／影像">名帖</p>
-                <div className="mt-3">
-                    <LabCastRail characters={snapshot.characters} onSelectCharacter={setFocusedCharacterId} />
+                {/* 屏腳一縷：往下有名帖 */}
+                <button
+                    type="button"
+                    onClick={() => document.getElementById('lab-cast-screen')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="absolute inset-x-0 bottom-1.5 z-20 mx-auto flex w-fit flex-col items-center gap-0.5 font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
+                    title="下有名帖（人物內頁自此開）"
+                >
+                    名帖
+                    <span aria-hidden className="text-[10px] leading-none">▾</span>
+                </button>
+            </section>
+
+            {/* 第二屏 —— 名帖 */}
+            <section id="lab-cast-screen" className="min-h-dvh snap-start snap-always px-4 pb-12 pt-10 sm:px-8">
+                <div className="flex items-baseline justify-between">
+                    <p className="font-serif text-sm tracking-[0.4em] text-ink" title="點名帖開人物內頁：狀態／心事／記憶／影像">名帖</p>
+                    <button
+                        type="button"
+                        onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
+                        title="回手卷"
+                    >
+                        ▴ 手卷
+                    </button>
+                </div>
+                <div className="mt-5">
+                    <LabCastRail
+                        characters={snapshot.characters}
+                        onSelectCharacter={(characterId) => {
+                            // 內頁開在第一屏的舞台上——先捲回去再開
+                            document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                            setFocusedCharacterId(characterId);
+                        }}
+                    />
                 </div>
             </section>
 

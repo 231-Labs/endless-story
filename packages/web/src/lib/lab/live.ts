@@ -192,6 +192,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
     const streams: Record<string, LabStreamLine[]> = {};
     for (const beat of allBeats) {
         if (beat.isPrivate) continue; // 窗內事 never floats onto the public scroll
+        if (beat.kind === 'move') continue; // 移步是痕跡，不是題字
         const list = (streams[beat.sceneId] ??= []);
         list.unshift({
             key: `b${beat.seq}`,
@@ -202,7 +203,10 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
     }
 
     const latestBeatByChar = new Map<string, LabLiveBeat>();
-    for (const beat of allBeats) latestBeatByChar.set(beat.characterId, beat);
+    for (const beat of allBeats) {
+        if (beat.kind === 'move' || beat.characterId === '__world__') continue;
+        latestBeatByChar.set(beat.characterId, beat);
+    }
     const activeTickScenes = new Set(
         allBeats.filter((b) => b.tick === clock.currentTick).map((b) => b.sceneId),
     );

@@ -63,7 +63,8 @@ export interface LabRunSummary {
     lastError?: string;
 }
 
-/** One committed beat, as streamed live to the UI mid-tick. */
+/** One live-feed item. `kind` distinguishes what the world just did:
+ *  beat＝場中言行、move＝移步、world＝天時（clock-bound 世界事件）. */
 export interface LabLiveBeat {
     seq: number;
     ts: number;
@@ -79,6 +80,10 @@ export interface LabLiveBeat {
     /** Private interiority — the lab is an operator cockpit, so it is shown,
      *  visually separated as 心聲. */
     inner?: string;
+    kind?: 'beat' | 'move' | 'world';
+    /** Structured mechanical acts committed with this beat, humanized:
+     *  物件操作（藏/移/開/毀）與銀錢動作（給錢/簽約/還價…）. */
+    acts?: string[];
 }
 
 export interface LabCharacterLive {
