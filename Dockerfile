@@ -70,7 +70,9 @@ ARG NEXT_PUBLIC_WALRUS_AGGREGATOR=https://walrus.231labs.xyz
 ENV NEXT_PUBLIC_SUI_NETWORK=$NEXT_PUBLIC_SUI_NETWORK \
     NEXT_PUBLIC_WALRUS_AGGREGATOR=$NEXT_PUBLIC_WALRUS_AGGREGATOR
 
-RUN pnpm --filter @endless-story/web build
+RUN pnpm --filter @endless-story/web build \
+    # webpack 的磁碟快取只對「下一次 build」有用，對 runtime 純屬死重（可達數百 MB）
+    && rm -rf packages/web/.next/cache
 
 WORKDIR /repo/packages/web
 ENV NODE_ENV=production

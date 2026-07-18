@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import type { NextConfig } from 'next';
 
 // Walrus aggregator hosts whose images go through next/image optimization
@@ -16,6 +17,13 @@ try {
 }
 
 const nextConfig: NextConfig = {
+  // Standalone output (NEXT_STANDALONE=1, used by Dockerfile.lab) traces only the
+  // files the server actually needs — the lab image drops from ~1GB to ~200MB.
+  // The full image (Dockerfile) keeps plain `next start`: the admin cockpit
+  // spawns `pnpm --filter @endless-story/cli run …`, which needs the workspace.
+  ...(process.env.NEXT_STANDALONE === '1' ? { output: 'standalone' as const } : {}),
+  // Monorepo: trace from the repo root so workspace deps land in .next/standalone.
+  outputFileTracingRoot: path.join(__dirname, '..', '..'),
   images: {
     remotePatterns: walrusRemotePatterns,
   },
