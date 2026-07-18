@@ -32,8 +32,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const labApi = {
     seeds: () => request<{ seeds: LabSeedSummary[]; seasons: LabSeasonSummary[] }>('/api/lab/seeds'),
-    seedText: (source: string, id: string) =>
-        request<{ json: string }>(`/api/lab/seeds/${source}/${encodeURIComponent(id)}`),
+    seedText: (source: string, id: string, kind: 'seed' | 'season' = 'seed') =>
+        request<{ json: string }>(`/api/lab/seeds/${source}/${encodeURIComponent(id)}${kind === 'season' ? '?kind=season' : ''}`),
     saveSeed: (kind: 'seed' | 'season', id: string, json: string) =>
         request<{ saved: LabSeedSummary | LabSeasonSummary }>('/api/lab/seeds', {
             method: 'POST',

@@ -62,6 +62,11 @@ export function readSeedText(source: 'builtin' | 'custom', id: string): string {
     return fs.readFileSync(path.join(seedDirFor(source), `${id}.json`), 'utf8');
 }
 
+export function readSeasonText(source: 'builtin' | 'custom', id: string): string {
+    assertSafeId(id, 'season id');
+    return fs.readFileSync(path.join(seasonDirFor(source), `${id}.json`), 'utf8');
+}
+
 export function listSeeds(): LabSeedSummary[] {
     const out: LabSeedSummary[] = [];
     for (const source of ['builtin', 'custom'] as const) {

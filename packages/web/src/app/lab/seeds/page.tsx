@@ -1,10 +1,13 @@
 'use client';
 
 /**
- * 劇本館 — batch story configuration. Load any seed JSON (built-in library or
- * custom), edit it whole (cast / scenes / memories / stakes in one file), and
- * save it under a new custom id. Saving validates by building a WorldState
- * with the engine's own loader, so a bad seed fails here, not mid-run.
+ * 劇本館 — batch story configuration, two shelves:
+ *   劇本 seed    the whole world in one JSON (cast/scenes/memories/stakes);
+ *                saving validates by building a WorldState with the engine's
+ *                own loader, so a bad seed fails here, not mid-run
+ *   季框 season  the season frame (中心問題/開場事變/期限/賭注/契約紙/天時/
+ *                economy 簽約物理); 簽約戲 lives here — a run only gains money
+ *                physics when it mounts a season carrying an `economy` block
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -12,10 +15,33 @@ import Link from 'next/link';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
 import { IconBack } from '@/components/lab/LabIcons';
 import { labApi } from '@/components/lab/useLab';
-import type { LabSeedSummary } from '@/lib/lab/types';
+import type { LabSeasonSummary, LabSeedSummary } from '@/lib/lab/types';
+
+type ShelfKind = 'seed' | 'season';
+
+const SEASON_SKELETON = `{
+  "id": "my-season",
+  "title": "一季之名",
+  "centralQuestion": "這一季逼問所有人的那個問題？",
+  "incitingIncident": "開場事變（人人皆知的公開事實）",
+  "deadline": "限期（如：七日後的堂會之夜）",
+  "stakes": ["無法同時保全的代價一", "代價二"],
+  "publicFacts": ["已公開的世界事實"],
+  "contestedResources": [{ "label": "contract:一紙獨家唱片契約" }],
+  "initialObjects": [
+    { "id": "contract-paper", "label": "唱片行的契約紙", "scene": "包廂茶座", "portable": true, "state": "未簽" }
+  ],
+  "scheduledEvents": [
+    { "id": "deadline-night", "atTick": 36, "scene": "雲錦台戲台", "text": "堂會之夜開鑼，答覆之期已至。" }
+  ]
+}`;
+// 簽約戲的錢物理：季框再加 "economy" 區塊（帳戶/薪餉/計價作為/結構化契約），
+// 形狀照私庫 seasons/anchun-after-curtain.json 原樣貼即可 — 引擎在點燈時驗證。
 
 export default function LabSeedsPage() {
     const [seeds, setSeeds] = useState<LabSeedSummary[]>([]);
+    const [seasons, setSeasons] = useState<LabSeasonSummary[]>([]);
+    const [shelf, setShelf] = useState<ShelfKind>('seed');
     const [loadedFrom, setLoadedFrom] = useState<string | null>(null);
     const [text, setText] = useState('');
     const [saveId, setSaveId] = useState('');
@@ -24,8 +50,9 @@ export default function LabSeedsPage() {
 
     const load = useCallback(async () => {
         try {
-            const { seeds } = await labApi.seeds();
+            const { seeds, seasons } = await labApi.seeds();
             setSeeds(seeds);
+            setSeasons(seasons);
         } catch (e) {
             setMessage({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
         }
@@ -35,16 +62,24 @@ export default function LabSeedsPage() {
         void load();
     }, [load]);
 
-    const openSeed = async (seed: LabSeedSummary) => {
+    const openItem = async (source: 'builtin' | 'custom', id: string) => {
         setMessage(null);
         try {
-            const { json } = await labApi.seedText(seed.source, seed.id);
+            const { json } = await labApi.seedText(source, id, shelf);
             setText(json);
-            setLoadedFrom(`${seed.source}/${seed.id}`);
-            setSaveId(seed.source === 'custom' ? seed.id : `${seed.id}-變奏`);
+            setLoadedFrom(`${source}/${id}`);
+            setSaveId(source === 'custom' ? id : `${id}-變奏`);
         } catch (e) {
             setMessage({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
         }
+    };
+
+    const switchShelf = (next: ShelfKind) => {
+        setShelf(next);
+        setLoadedFrom(null);
+        setText(next === 'season' ? SEASON_SKELETON : '');
+        setSaveId(next === 'season' ? 'my-season' : '');
+        setMessage(null);
     };
 
     const save = async () => {
@@ -55,9 +90,14 @@ export default function LabSeedsPage() {
             const parsed = JSON.parse(text) as { id?: string };
             parsed.id = saveId.trim();
             const body = JSON.stringify(parsed, null, 2);
-            await labApi.saveSeed('seed', saveId.trim(), body);
+            await labApi.saveSeed(shelf, saveId.trim(), body);
             setText(body);
-            setMessage({ kind: 'ok', text: `已存為自撰劇本「${saveId.trim()}」，回片場即可點燈。` });
+            setMessage({
+                kind: 'ok',
+                text: shelf === 'season'
+                    ? `已存季框「${saveId.trim()}」。回片場開新卷時，「季框」下拉即可掛上。`
+                    : `已存為自撰劇本「${saveId.trim()}」，回片場即可點燈。`,
+            });
             await load();
         } catch (e) {
             setMessage({ kind: 'err', text: e instanceof Error ? e.message : String(e) });
@@ -94,24 +134,61 @@ export default function LabSeedsPage() {
 
             <section className="mt-6 grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
                 <div>
-                    <p className="font-serif text-2xs tracking-[0.3em] text-mute">館藏與自撰</p>
-                    <ul className="mt-2 space-y-1.5">
-                        {seeds.map((seed) => (
-                            <li key={`${seed.source}/${seed.id}`}>
-                                <button
-                                    type="button"
-                                    onClick={() => void openSeed(seed)}
-                                    className={`w-full rounded-md px-3 py-2 text-left transition ${
-                                        loadedFrom === `${seed.source}/${seed.id}` ? 'bg-cinnabar/10' : 'hover:bg-surface'
-                                    }`}
-                                >
-                                    <p className="font-serif text-sm tracking-[0.1em] text-ink">{seed.label ?? seed.id}</p>
-                                    <p className="font-serif text-2xs tracking-[0.12em] text-mute">
-                                        {seed.source === 'custom' ? '自撰' : '館藏'} · {seed.id} · {seed.castCount}角/{seed.sceneCount}景/{seed.memoryCount}憶
-                                    </p>
-                                </button>
-                            </li>
+                    <div className="flex gap-1">
+                        {(['seed', 'season'] as const).map((k) => (
+                            <button
+                                key={k}
+                                type="button"
+                                onClick={() => switchShelf(k)}
+                                title={k === 'seed' ? '整個世界的批量配置' : '季目標：中心問題／期限／賭注／契約紙／economy 簽約物理'}
+                                className={`rounded-full px-3.5 py-1.5 font-serif text-xs tracking-[0.25em] transition ${
+                                    shelf === k ? 'bg-cinnabar text-white' : 'text-mute hover:text-ink'
+                                }`}
+                            >
+                                {k === 'seed' ? '劇本' : '季框'}
+                            </button>
                         ))}
+                    </div>
+                    <ul className="mt-3 space-y-1.5">
+                        {shelf === 'seed'
+                            ? seeds.map((seed) => (
+                                <li key={`${seed.source}/${seed.id}`}>
+                                    <button
+                                        type="button"
+                                        onClick={() => void openItem(seed.source, seed.id)}
+                                        className={`w-full rounded-md px-3 py-2 text-left transition ${
+                                            loadedFrom === `${seed.source}/${seed.id}` ? 'bg-cinnabar/10' : 'hover:bg-surface'
+                                        }`}
+                                    >
+                                        <p className="font-serif text-sm tracking-[0.1em] text-ink">{seed.label ?? seed.id}</p>
+                                        <p className="font-serif text-2xs tracking-[0.12em] text-mute">
+                                            {seed.source === 'custom' ? '自撰' : '館藏'} · {seed.id} · {seed.castCount}角/{seed.sceneCount}景/{seed.memoryCount}憶
+                                        </p>
+                                    </button>
+                                </li>
+                            ))
+                            : seasons.map((season) => (
+                                <li key={`${season.source}/${season.id}`}>
+                                    <button
+                                        type="button"
+                                        onClick={() => void openItem(season.source, season.id)}
+                                        className={`w-full rounded-md px-3 py-2 text-left transition ${
+                                            loadedFrom === `${season.source}/${season.id}` ? 'bg-cinnabar/10' : 'hover:bg-surface'
+                                        }`}
+                                    >
+                                        <p className="font-serif text-sm tracking-[0.1em] text-ink">{season.title ?? season.id}</p>
+                                        <p className="truncate font-serif text-2xs tracking-[0.12em] text-mute" title={season.centralQuestion}>
+                                            {season.source === 'custom' ? '自撰' : '館藏'} · {season.id}
+                                        </p>
+                                    </button>
+                                </li>
+                            ))}
+                        {shelf === 'season' && !seasons.length ? (
+                            <li className="px-1 font-serif text-2xs leading-relaxed text-mute/70">
+                                架上無季。右邊已備好骨架——或把私庫 seasons/*.json 整份貼上（簽約戲的
+                                economy 區塊照原樣帶著），存了就能在開卷時掛。
+                            </li>
+                        ) : null}
                     </ul>
                 </div>
 
@@ -120,7 +197,7 @@ export default function LabSeedsPage() {
                         <input
                             value={saveId}
                             onChange={(e) => setSaveId(e.target.value)}
-                            placeholder="另存之名（如：spring-snow-變奏）"
+                            placeholder={shelf === 'season' ? '季框之名（如：anchun-after-curtain）' : '另存之名（如：spring-snow-變奏）'}
                             className="es-field w-72 px-3 py-2 text-sm"
                         />
                         <button
@@ -145,7 +222,7 @@ export default function LabSeedsPage() {
                         onChange={(e) => setText(e.target.value)}
                         spellCheck={false}
                         rows={30}
-                        placeholder="左手邊揀一部劇本展開，或整份貼上。"
+                        placeholder={shelf === 'season' ? '貼上季框 JSON（私庫 seasons/*.json 原樣可貼）。' : '左手邊揀一部劇本展開，或整份貼上。'}
                         className="es-field mt-3 w-full px-4 py-3 font-mono text-xs leading-relaxed"
                     />
                 </div>

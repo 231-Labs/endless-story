@@ -60,12 +60,15 @@ export default function LabHomePage() {
         setCreating(true);
         setError(null);
         try {
+            // the season picker value encodes "source/id" so custom frames resolve
+            const [seasonSource, ...seasonRest] = form.seasonId ? form.seasonId.split('/') : [];
             const { meta } = await labApi.createRun({
                 title: form.title.trim() || `${chosenSeed.label ?? chosenSeed.id}`,
                 config: {
                     presetId: chosenSeed.id,
                     seedSource: chosenSeed.source,
-                    seasonId: form.seasonId || undefined,
+                    seasonId: seasonRest.length ? seasonRest.join('/') : undefined,
+                    seasonSource: seasonSource === 'custom' ? 'custom' : 'builtin',
                     llm: form.llm,
                     relationshipFallback: form.relationshipFallback,
                     ticksPerDay: form.ticksPerDay,
@@ -230,10 +233,13 @@ export default function LabHomePage() {
                             value={form.seasonId}
                             onChange={(e) => setForm({ ...form, seasonId: e.target.value })}
                             className="es-field px-2 py-1.5 text-xs"
+                            title="季框：季目標＋契約紙＋天時＋（若帶 economy）簽約錢物理"
                         >
                             <option value="">不掛季框</option>
                             {seasons.map((s) => (
-                                <option key={`${s.source}/${s.id}`} value={s.id}>{s.title ?? s.id}</option>
+                                <option key={`${s.source}/${s.id}`} value={`${s.source}/${s.id}`}>
+                                    {s.title ?? s.id}{s.source === 'custom' ? ' ·自撰' : ''}
+                                </option>
                             ))}
                         </select>
                     ) : null}
