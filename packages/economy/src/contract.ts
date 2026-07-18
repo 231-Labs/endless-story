@@ -212,7 +212,12 @@ export function resolveCounter(
   const next = contracts[req.contractId];
   if (req.accept) {
     next.terms = [...next.terms, next.pendingCounter!.demand];
-    next.deadlineDay = Math.max(next.deadlineDay, req.day + (req.graceDays ?? 0));
+    // An accepted amendment re-issues the paper: the WRITTEN deadline extends
+    // by the grace, exactly as the overnight answer promises（簽期順延一日）.
+    // The old max(deadline, day+grace) silently granted NOTHING when the
+    // counter was answered early — the world broke its own written word and
+    // collected the advance at the un-extended midnight (v18 live).
+    next.deadlineDay = next.deadlineDay + (req.graceDays ?? 0);
   }
   next.pendingCounter = undefined;
   return { state: { economy: state.economy, contracts }, applied: [], duplicate: false };
