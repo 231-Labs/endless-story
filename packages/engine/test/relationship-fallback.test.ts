@@ -67,6 +67,14 @@ test('(c) etiquette: the preset 稱謂鐵則 reaches every scene beat', async ()
         agent.beatInputs.every((input) => input.etiquette?.includes('蘇映雪為師姐')),
         'every beat carries the canon honorifics facts',
     );
+    assert.ok(
+        agent.beatInputs.every((input) => input.timeCharter?.includes('一日六個時辰')),
+        'every beat carries the clock constitution',
+    );
+    assert.ok(
+        agent.beatInputs.every((input) => input.timeCharter?.includes('日結')),
+        'the charter states when the ledger settles',
+    );
 });
 
 test('(a1) seeded canon views ride ties into beats — only under the flag wiring', async () => {

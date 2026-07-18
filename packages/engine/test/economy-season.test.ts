@@ -16,7 +16,7 @@ import * as path from 'node:path';
 import test from 'node:test';
 
 import { FakeSceneAgent } from '../src/adapters/local/fake-scene-agent.ts';
-import { LocalClock } from '../src/adapters/local/clock.ts';
+import { LocalClock, makeClock } from '../src/adapters/local/clock.ts';
 import { LocalEconomy } from '../src/adapters/local/local-economy.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
 import { auditSeasonEconomy, economyPerceptFor, enforceContractCommandPairing, settleSeasonDay, settleTenancyMoveIns } from '../src/core/season-economy.ts';
@@ -607,4 +607,13 @@ test('counter-offer: a demand outside the policy is refused and the clock stays'
     assert.equal(c.status, 'expired', 'refused counter leaves the original midnight in force');
     assert.equal(c.pendingCounter, undefined);
     assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('deadline-day percept does the time arithmetic the agents cannot', () => {
+    const world = buildSeasonWorld();
+    world.data.clock = makeClock(6, 13); // day 3 (deadline day) 日午
+    const liu = world.idByName('柳安春')!;
+    const percept = economyPerceptFor(world, liu, world.data.roster[liu])!;
+    assert.match(percept, /限期就在今夜子夜/);
+    assert.match(percept, /還餘 4 個時辰/);
 });
