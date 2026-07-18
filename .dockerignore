@@ -5,7 +5,12 @@
 **/.next
 .git
 .claude
+.cursor
 .DS_Store
 **/*.log
 .env.local
 **/.env.local
+# runtime 用不到的重物：文件、簡報、技能說明
+docs
+pitch
+skills

@@ -1,0 +1,56 @@
+# Endless Story · lab (片場 Cinema Lab) — slim standalone image.
+#
+# 專給 lab 服務用的瘦身版：Next `output: 'standalone'` 只帶 server 真正用到的
+# 檔案，映像自 ~1GB 縮到 ~200MB，拉取／部署快一個檔次。
+#
+# 與根目錄 Dockerfile（正式站 web 用）的差異：
+#   - 不編 Move bytecode（lab 完全鏈下，管理台「升級合約」不在此服務使用）
+#   - runtime 不帶 workspace node_modules 與 pnpm（lab 不 spawn cli scripts）
+#   - 內建劇本以同路徑補進映像（engine 於 build 時把 /repo 絕對路徑 inline 進
+#     bundle，故 builder 與 runtime 都必須以 /repo 為根，佈局才對得上）
+#
+# Zeabur 掛法：把 lab 服務命名為 `lab`（Dockerfile.[服務名] 慣例，同
+# Dockerfile.event-poller），root 留在 repo 根。環境變數照舊：LAB_SECRET、
+# LAB_DATA_DIR=/data/cinema-lab（volume）、POE_API_KEY 等 runtime 注入。
+
+# ──────────────────────────────────────────────────────────────────────────
+# Stage 1 — builder：整個 workspace 安裝 + standalone build
+# ──────────────────────────────────────────────────────────────────────────
+FROM node:23-slim AS builder
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile
+
+# NEXT_PUBLIC_* 是 build 時 inline（公開、非機密）；機密 env 全是 runtime 注入。
+ARG NEXT_PUBLIC_SUI_NETWORK=testnet
+ARG NEXT_PUBLIC_WALRUS_AGGREGATOR=https://walrus.231labs.xyz
+ENV NEXT_PUBLIC_SUI_NETWORK=$NEXT_PUBLIC_SUI_NETWORK \
+    NEXT_PUBLIC_WALRUS_AGGREGATOR=$NEXT_PUBLIC_WALRUS_AGGREGATOR \
+    NEXT_STANDALONE=1
+
+RUN pnpm --filter @endless-story/web build
+
+# ──────────────────────────────────────────────────────────────────────────
+# Stage 2 — runtime：只有 standalone server + static + public + 內建劇本
+# ──────────────────────────────────────────────────────────────────────────
+FROM node:23-slim
+WORKDIR /repo
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0
+
+# standalone 樹以 repo 佈局為鏡（outputFileTracingRoot=/repo）：
+# /repo/node_modules（追蹤出的最小集）+ /repo/packages/web/server.js + .next/server
+COPY --from=builder /repo/packages/web/.next/standalone/ ./
+COPY --from=builder /repo/packages/web/.next/static ./packages/web/.next/static
+COPY --from=builder /repo/packages/web/public ./packages/web/public
+
+# 內建劇本（seed JSON）：engine 在 runtime 以 fs 讀取，路徑是 build 時 inline 的
+# /repo/packages/cli/scripts/stories —— 補進同一位置。（builtin seasons 目前無此目錄；
+# 自撰劇本／季框都在 $LAB_DATA_DIR volume 上，與映像無關。）
+COPY --from=builder /repo/packages/cli/scripts/stories ./packages/cli/scripts/stories
+
+VOLUME ["/data"]
+EXPOSE 3000
+# standalone server 讀 PORT／HOSTNAME（Zeabur 注入 PORT）。
+CMD ["node", "packages/web/server.js"]
