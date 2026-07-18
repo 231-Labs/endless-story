@@ -39,6 +39,14 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
         () => snapshot?.characters.find((c) => c.id === focusedCharacterId) ?? null,
         [snapshot, focusedCharacterId],
     );
+    const activeCharacterIds = useMemo(() => {
+        const currentTick = snapshot?.clock.currentTick;
+        if (currentTick == null) return new Set<string>();
+        // 本拍或上一拍有言行者（tick 走完後 currentTick 已 +1）
+        return new Set(
+            feed.filter((b) => b.kind !== 'move' && b.tick >= currentTick - 1).map((b) => b.characterId),
+        );
+    }, [feed, snapshot?.clock.currentTick]);
     const focusedLocationArt = useMemo(() => {
         if (!snapshot || !focusedScene) return undefined;
         const loc = snapshot.locations.find((l) => l.id === focusedScene.locationId);
@@ -130,7 +138,11 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                         setFocusedSceneId(sceneId);
                     }}
                 />
-                <LabBeatDock feed={feed} running={snapshot.phase === 'running'} />
+                <LabBeatDock
+                    feed={feed}
+                    running={snapshot.phase === 'running'}
+                    onCastClick={() => document.getElementById('lab-cast-screen')?.scrollIntoView({ behavior: 'smooth' })}
+                />
                 <AnimatePresence>
                     {focusedScene ? (
                         <LabSceneSheet
@@ -162,16 +174,6 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                 </AnimatePresence>
             </div>
 
-                {/* 屏腳一縷：往下有名帖 */}
-                <button
-                    type="button"
-                    onClick={() => document.getElementById('lab-cast-screen')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="absolute inset-x-0 bottom-1.5 z-20 mx-auto flex w-fit flex-col items-center gap-0.5 font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
-                    title="下有名帖（人物內頁自此開）"
-                >
-                    名帖
-                    <span aria-hidden className="text-[10px] leading-none">▾</span>
-                </button>
             </section>
 
             {/* 第二屏 —— 名帖 */}
@@ -190,6 +192,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                 <div className="mt-5">
                     <LabCastRail
                         characters={snapshot.characters}
+                        activeIds={activeCharacterIds}
                         onSelectCharacter={(characterId) => {
                             // 內頁開在第一屏的舞台上——先捲回去再開
                             document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
