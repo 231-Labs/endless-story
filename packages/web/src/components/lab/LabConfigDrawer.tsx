@@ -90,7 +90,7 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
 
     if (!config) {
         return (
-            <aside className="es-card p-4">
+            <aside className="es-lab-panel p-4">
                 <p className="font-serif text-sm text-mute">{error ?? '正在展開物界帳冊…'}</p>
             </aside>
         );
@@ -100,7 +100,7 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
     const resourceValue = resourceText ?? config.contestedResources.map((r) => (r.statement ? `${r.label}｜${r.statement}` : r.label)).join('\n');
 
     return (
-        <aside className="es-card max-h-[78vh] overflow-y-auto p-4 no-scrollbar">
+        <aside className="es-lab-panel max-h-[78vh] overflow-y-auto p-4 no-scrollbar">
             <div className="flex items-baseline justify-between gap-3">
                 <h3 className="font-serif text-base tracking-[0.2em] text-ink" title="每一筆更動即刻落卷（world.json），下一拍生效；走拍中不可改。">
                     物界

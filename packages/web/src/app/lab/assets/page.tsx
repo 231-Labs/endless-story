@@ -23,6 +23,8 @@ interface Entity {
     kind: Kind;
     name: string;
     hint?: string;
+    /** 劇本原描述 —— 「述」對話盒以此打底，改起來不用從零。 */
+    desc?: string;
 }
 
 interface StoredAsset {
@@ -99,14 +101,14 @@ export default function LabAssetsPage() {
             try {
                 const { json } = await labApi.seedText(source, rest.join('/'));
                 const raw = JSON.parse(json) as {
-                    locations?: Array<{ name: string; terrain?: string }>;
-                    scenes?: Array<{ name: string }>;
-                    founding_cast?: Array<{ name: string; role?: string }>;
+                    locations?: Array<{ name: string; terrain?: string; description?: string }>;
+                    scenes?: Array<{ name: string; description?: string }>;
+                    founding_cast?: Array<{ name: string; role?: string; description?: string }>;
                 };
                 setEntities([
-                    ...(raw.locations ?? []).map((l): Entity => ({ kind: 'location', name: l.name, hint: l.terrain })),
-                    ...(raw.scenes ?? []).map((s): Entity => ({ kind: 'scene', name: s.name })),
-                    ...(raw.founding_cast ?? []).map((c): Entity => ({ kind: 'character', name: c.name, hint: c.role })),
+                    ...(raw.locations ?? []).map((l): Entity => ({ kind: 'location', name: l.name, hint: l.terrain, desc: l.description })),
+                    ...(raw.scenes ?? []).map((s): Entity => ({ kind: 'scene', name: s.name, desc: s.description })),
+                    ...(raw.founding_cast ?? []).map((c): Entity => ({ kind: 'character', name: c.name, hint: c.role, desc: c.description })),
                 ]);
                 setError(null);
             } catch (e) {
@@ -163,15 +165,17 @@ export default function LabAssetsPage() {
     const editNote = async (entity: Entity, currentNote: string | undefined) => {
         const note = await dialog.prompt({
             title: `「${entity.name}」的描述`,
-            body: '蓋過劇本原描述，顯示於內頁與場景頁；留空即回落原描述。',
-            defaultValue: currentNote ?? '',
+            body: currentNote
+                ? '現用自撰之述（已帶入）；改後定稿，清空即回落劇本原文。'
+                : '劇本原文已帶入打底 —— 就地增刪即可；清空定稿即回落原文。',
+            defaultValue: currentNote ?? entity.desc ?? '',
             multiline: true,
             confirmLabel: '定稿',
         });
-        if (note === null && !currentNote) return; // 取消且原本無述 — 無事
+        if (note === null) return; // 取消 —— 一字不動；清空定稿才回落原文
         setBusyName(entity.name);
         try {
-            await labApi.saveAssetNote(entity.kind, entity.name, note ?? '');
+            await labApi.saveAssetNote(entity.kind, entity.name, note);
             await loadAssets();
             toast(note ? '描述已定。' : '描述已清，回落原文。', 'success');
         } catch (e) {
@@ -390,7 +394,7 @@ function EntityCard({
     const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
     return (
         <div
-            className="es-card group relative overflow-hidden p-0"
+            className="group relative overflow-hidden rounded-xl bg-surface/70 shadow-[0_2px_16px_rgba(20,12,8,0.14)] transition-shadow duration-300 hover:shadow-[0_4px_22px_rgba(20,12,8,0.22)] dark:bg-elevated/40"
             onDragEnter={(e) => {
                 if (!hasFiles(e)) return;
                 e.preventDefault();

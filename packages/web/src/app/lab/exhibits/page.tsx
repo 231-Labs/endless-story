@@ -194,7 +194,7 @@ export default function LabExhibitsPage() {
                     </h2>
                     <div className="mt-3 space-y-2">
                         {orphans.map((orphan) => (
-                            <div key={orphan.dir} className="es-card flex flex-wrap items-center gap-3 p-3.5">
+                            <div key={orphan.dir} className="es-lab-row flex flex-wrap items-center gap-3 p-3.5">
                                 <div className="min-w-0 flex-1">
                                     <p className="truncate font-serif text-sm tracking-[0.1em] text-ink">{orphan.dir}</p>
                                     <p className="mt-0.5 flex gap-x-3 font-serif text-2xs tracking-[0.15em] text-mute">
@@ -233,7 +233,7 @@ export default function LabExhibitsPage() {
                                 <button
                                     type="button"
                                     onClick={() => void openItem('report', report.rel, report.title)}
-                                    className={`min-w-0 flex-1 rounded-md px-3 py-1.5 text-left font-serif text-xs transition ${
+                                    className={`min-w-0 flex-1 rounded-lg px-3 py-1.5 text-left font-serif text-xs transition ${
                                         open?.kind === 'report' && open.id === report.rel ? 'bg-cinnabar/10 text-ink' : 'text-mute hover:text-ink'
                                     }`}
                                     title={report.rel}
@@ -314,7 +314,7 @@ export default function LabExhibitsPage() {
                                 <button
                                     type="button"
                                     onClick={() => void openItem('upload', upload.id, upload.title)}
-                                    className={`min-w-0 flex-1 rounded-md px-3 py-1.5 text-left font-serif text-xs transition ${
+                                    className={`min-w-0 flex-1 rounded-lg px-3 py-1.5 text-left font-serif text-xs transition ${
                                         open?.kind === 'upload' && open.id === upload.id ? 'bg-cinnabar/10 text-ink' : 'text-mute hover:text-ink'
                                     }`}
                                 >
@@ -373,7 +373,7 @@ export default function LabExhibitsPage() {
                 </div>
 
                 {/* 展讀 */}
-                <article className="es-card min-h-[46vh] max-h-[74vh] overflow-y-auto p-5 no-scrollbar sm:p-7">
+                <article className="es-lab-panel min-h-[46vh] max-h-[74vh] overflow-y-auto p-5 no-scrollbar sm:p-7">
                     {open ? (
                         <>
                             <p className="mb-4 border-b border-hairline/50 pb-2 font-serif text-2xs tracking-[0.25em] text-mute">

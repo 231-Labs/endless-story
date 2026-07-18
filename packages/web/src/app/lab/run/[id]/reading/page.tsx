@@ -124,7 +124,7 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                         <Link
                             key={d.slug}
                             href={`/lab/run/${id}/dossier/${d.slug}`}
-                            className="es-card p-4 transition hover:border-cinnabar/50"
+                            className="es-lab-row p-4 transition hover:shadow-[0_4px_18px_rgba(176,74,60,0.20)]"
                         >
                             <p className="font-serif text-2xs tracking-[0.25em] text-mute">第{d.day}日 · {d.scene}</p>
                             <p className="mt-1 font-serif text-base tracking-[0.08em] text-ink">{d.title}</p>
@@ -151,7 +151,7 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                                     <button
                                         type="button"
                                         onClick={() => void openArchive(e.file)}
-                                        className={`w-full rounded-md px-3 py-2 text-left font-serif text-xs transition ${
+                                        className={`w-full rounded-lg px-3 py-2 text-left font-serif text-xs transition ${
                                             openFile === e.file ? 'bg-cinnabar/10 text-ink' : 'text-mute hover:text-ink'
                                         }`}
                                     >
@@ -171,7 +171,7 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                                             <button
                                                 type="button"
                                                 onClick={() => void openArchive(e.file)}
-                                                className={`w-full rounded-md px-3 py-1.5 text-left font-serif text-2xs transition ${
+                                                className={`w-full rounded-lg px-3 py-1.5 text-left font-serif text-2xs transition ${
                                                     openFile === e.file ? 'bg-cinnabar/10 text-ink' : 'text-mute/85 hover:text-ink'
                                                 }`}
                                             >
@@ -183,7 +183,7 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                             </>
                         ) : null}
                     </div>
-                    <article className="es-card min-h-[40vh] max-h-[68vh] overflow-y-auto p-5 no-scrollbar sm:p-7">
+                    <article className="es-lab-panel min-h-[40vh] max-h-[68vh] overflow-y-auto p-5 no-scrollbar sm:p-7">
                         {openFile ? (
                             <Markdown source={fileContent || '展卷中…'} className="chapter-prose" />
                         ) : (
@@ -197,7 +197,7 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
             {mode === 'ticks' ? (
                 <section className="mt-6 space-y-5">
                     {[...records].reverse().map((r) => (
-                        <details key={`${r.day}-${r.tick}`} className="es-card p-4" open={r.tick === records[records.length - 1]?.tick}>
+                        <details key={`${r.day}-${r.tick}`} className="es-lab-row p-4" open={r.tick === records[records.length - 1]?.tick}>
                             <summary className="cursor-pointer list-none font-serif text-sm tracking-[0.15em] text-ink">
                                 第{r.day}日 · 第{r.tick}拍 · {r.partOfDay}
                                 <span className="ml-3 font-serif text-2xs tracking-[0.15em] text-mute">
@@ -253,7 +253,7 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
             {mode === 'anthology' ? (
                 <section className="mt-6">
                     {anthology ? (
-                        <article className="es-card p-5 sm:p-8">
+                        <article className="es-lab-panel p-5 sm:p-8">
                             <Markdown source={anthology} className="chapter-prose" />
                         </article>
                     ) : (

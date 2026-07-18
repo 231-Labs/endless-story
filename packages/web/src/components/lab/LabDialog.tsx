@@ -76,10 +76,8 @@ export function LabDialogProvider({ children }: { children: ReactNode }) {
         setPending(null);
     };
 
-    const submitPrompt = () => {
-        const value = promptValue.trim();
-        close(value || null);
-    };
+    // 空字串是合法答案（例如「清空描述回落原文」）——取消才回 null
+    const submitPrompt = () => close(promptValue.trim());
 
     return (
         <LabDialogContext.Provider value={api}>
@@ -104,7 +102,7 @@ export function LabDialogProvider({ children }: { children: ReactNode }) {
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 6 }}
                             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                            className="es-card w-full max-w-sm p-5"
+                            className="es-lab-panel w-full max-w-sm p-5"
                         >
                             <p className="font-serif text-base tracking-[0.12em] text-ink">{pending.opts.title}</p>
                             {pending.opts.body ? (
@@ -140,7 +138,7 @@ export function LabDialogProvider({ children }: { children: ReactNode }) {
                                             key={option.key}
                                             type="button"
                                             onClick={() => close(option.key)}
-                                            className="es-choice-card w-full p-3 text-left transition hover:border-cinnabar/60"
+                                            className="w-full rounded-lg bg-ink/[0.04] p-3 text-left transition hover:bg-cinnabar/10 dark:bg-white/[0.05] dark:hover:bg-cinnabar/15"
                                         >
                                             <span className="font-serif text-sm tracking-[0.1em] text-ink">{option.label}</span>
                                             {option.hint ? (

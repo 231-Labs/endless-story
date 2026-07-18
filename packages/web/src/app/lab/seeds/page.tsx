@@ -156,7 +156,7 @@ export default function LabSeedsPage() {
                                     <button
                                         type="button"
                                         onClick={() => void openItem(seed.source, seed.id)}
-                                        className={`w-full rounded-md px-3 py-2 text-left transition ${
+                                        className={`w-full rounded-lg px-3 py-2 text-left transition ${
                                             loadedFrom === `${seed.source}/${seed.id}` ? 'bg-cinnabar/10' : 'hover:bg-surface'
                                         }`}
                                     >
@@ -172,7 +172,7 @@ export default function LabSeedsPage() {
                                     <button
                                         type="button"
                                         onClick={() => void openItem(season.source, season.id)}
-                                        className={`w-full rounded-md px-3 py-2 text-left transition ${
+                                        className={`w-full rounded-lg px-3 py-2 text-left transition ${
                                             loadedFrom === `${season.source}/${season.id}` ? 'bg-cinnabar/10' : 'hover:bg-surface'
                                         }`}
                                     >

@@ -71,7 +71,7 @@ export function LabSceneSheet({ scene, characters, beats, locationArt, clock, on
                         <p className="font-serif text-2xs tracking-[0.3em] text-cinnabar/90">此刻在場 · {present.length} 人</p>
                         <ul className="mt-3 space-y-3">
                             {present.map((c) => (
-                                <li key={c.id} className="es-soft-panel p-3">
+                                <li key={c.id} className="rounded-lg bg-ink/[0.03] p-3 dark:bg-white/[0.04]">
                                     <div className="flex items-center justify-between gap-3">
                                         <button
                                             type="button"

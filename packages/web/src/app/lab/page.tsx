@@ -145,7 +145,7 @@ export default function LabHomePage() {
             </header>
 
             {error ? (
-                <p className="mt-6 rounded-md border border-cinnabar/40 bg-cinnabar/5 px-3 py-2 font-serif text-sm text-cinnabar" role="alert">
+                <p className="mt-6 rounded-lg bg-cinnabar/10 px-3 py-2 font-serif text-sm text-cinnabar" role="alert">
                     {error}
                 </p>
             ) : null}
@@ -236,7 +236,7 @@ export default function LabHomePage() {
                 </div>
 
                 {/* 點戲台 —— 開拍參數一列 */}
-                <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl bg-surface/80 p-4 shadow-[0_2px_20px_rgba(20,12,8,0.08)] backdrop-blur-sm dark:bg-elevated/40">
+                <div className="es-lab-panel mt-5 flex flex-wrap items-center gap-3 p-4">
                     <input
                         placeholder={chosenSeed ? `這一卷之名（默認「${chosenSeed.label ?? chosenSeed.id}」）` : '先點一齣戲'}
                         value={form.title}
