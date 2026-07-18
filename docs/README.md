@@ -28,6 +28,7 @@ docs/
                       ASSET_MANAGEMENT · DEPLOYMENT
   participation/    PRODUCT_POSITIONING · PRODUCTION_PLAN · PITCH_DECK · API_CONTRACT
   research/         WHITEPAPER (long-form research notes)
+  CINEMA_LAB.md     片場 /lab — fully off-chain server-side experiment stage (usage + deploy)
 ```
 
 Suggested reading order for engineers: [protocol/PRIMITIVES.md](./protocol/PRIMITIVES.md) → [narrative/NARRATIVE_AGENTS.md](./narrative/NARRATIVE_AGENTS.md) → [participation/PRODUCT_POSITIONING.md](./participation/PRODUCT_POSITIONING.md).

@@ -1,0 +1,251 @@
+/**
+ * Live projection — turn an engine WorldState (+ the in-process beat ring)
+ * into exactly the shapes the existing handscroll components consume:
+ * `Saga` / `SagaLocation[]` / `Scene[]` from @endless-story/shared, plus the
+ * lab's own character/beat feeds. Pure mapping, no engine mutation.
+ *
+ * Works in two modes:
+ *   - active run (manager has it open): live in-memory world + streaming beats
+ *   - cold run  (viewing only): world.json + the tail of ticks.jsonl, so a
+ *     freshly opened page still shows a living scroll without touching the LLM
+ */
+
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { PARTS_OF_DAY, WorldState, type RawPreset } from '@endless-story/engine';
+import type { DayPart, Saga, SagaLocation, Scene } from '@endless-story/shared';
+import { labManager } from './manager';
+import { runDir } from './paths';
+import { readRunMeta } from './store';
+import { readSeedRaw } from './seeds';
+import { beatsFromTickRecords, tailTickRecords } from './artifacts';
+import type { LabCharacterLive, LabLiveBeat, LabRunMeta, LabRunPhase } from './types';
+
+/** The chain-only preset fields the engine ignores but the handscroll wants. */
+interface RawPresetView extends RawPreset {
+    locations?: Array<{ name: string; description?: string; terrain?: string }>;
+    scenes?: Array<NonNullable<RawPreset['scenes']>[number] & {
+        location_index?: number;
+        pos_x?: number;
+        pos_y?: number;
+    }>;
+}
+
+export interface LabStreamLine {
+    key: string;
+    text: string;
+    speakerName?: string;
+    kind?: string;
+}
+
+export interface LabLiveSnapshot {
+    runId: string;
+    meta: LabRunMeta;
+    phase: LabRunPhase;
+    pendingTicks: number;
+    lastError?: string;
+    provider?: string;
+    model?: string;
+    /** Beat-seq space id — when it changes, the client must reset its cursor. */
+    epoch: string;
+    /** Latest beat seq in the ring — pass back as ?after= next poll. */
+    seq: number;
+    saga: Saga;
+    locations: SagaLocation[];
+    scenes: Scene[];
+    characters: LabCharacterLive[];
+    /** Per-scene recent public lines (newest first) for the 題字流. */
+    streams: Record<string, LabStreamLine[]>;
+    /** Beats newer than the requested cursor (empty on cold runs). */
+    beats: LabLiveBeat[];
+    /** Log tail for the operator console. */
+    logs: Array<{ ts: number; line: string }>;
+}
+
+const DAY_PART_MAP: Record<string, DayPart> = {
+    清晨: 'morning',
+    日午: 'noon',
+    晡時: 'noon',
+    黃昏: 'dusk',
+    入夜: 'night',
+    深宵: 'night',
+};
+
+export function toDayPart(partOfDay: string): DayPart {
+    return DAY_PART_MAP[partOfDay] ?? 'noon';
+}
+
+function loadWorldReadOnly(runId: string): WorldState | null {
+    const stateDir = path.join(runDir(runId), 'state');
+    if (!WorldState.exists(stateDir)) return null;
+    try {
+        return WorldState.restore(stateDir);
+    } catch {
+        return null;
+    }
+}
+
+function presetView(meta: LabRunMeta): RawPresetView {
+    try {
+        return readSeedRaw(meta.config.seedSource, meta.config.presetId) as RawPresetView;
+    } catch {
+        return { id: meta.config.presetId } as RawPresetView;
+    }
+}
+
+/** Backfill the beat feed of a cold run from the last few tick records. */
+function coldBeats(runId: string): LabLiveBeat[] {
+    return beatsFromTickRecords(tailTickRecords(runId, 3)).map((beat, i) => ({
+        ...beat,
+        seq: i + 1,
+        ts: 0,
+    }));
+}
+
+export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<LabLiveSnapshot> {
+    const manager = labManager();
+    const active = manager.get(runId);
+    const meta = active?.meta ?? readRunMeta(runId);
+    if (!meta) throw new Error(`run not found: ${runId}`);
+
+    const world = active?.world ?? loadWorldReadOnly(runId);
+    if (!world) throw new Error(`run has no world snapshot yet: ${runId}`);
+    const raw = active ? (active.raw as RawPresetView) : presetView(meta);
+    const w = world.data;
+    const clock = w.clock;
+
+    // ── locations ──────────────────────────────────────────────────────────
+    const rawLocations = raw.locations ?? [];
+    const locations: SagaLocation[] = rawLocations.length
+        ? rawLocations.map((loc, i) => ({
+            id: `loc${i}`,
+            name: loc.name,
+            description: loc.description ?? '',
+            terrain: loc.terrain,
+        }))
+        : [{ id: 'loc0', name: raw.saga?.name ?? meta.title, description: raw.saga?.description ?? '', terrain: undefined }];
+
+    // ── beats / streams ────────────────────────────────────────────────────
+    const allBeats = active ? active.beats : coldBeats(runId);
+    const beats = allBeats.filter((b) => b.seq > afterSeq);
+    const latestSeq = allBeats.length ? allBeats[allBeats.length - 1].seq : 0;
+
+    const streams: Record<string, LabStreamLine[]> = {};
+    for (const beat of allBeats) {
+        if (beat.isPrivate) continue; // 窗內事 never floats onto the public scroll
+        const list = (streams[beat.sceneId] ??= []);
+        list.unshift({
+            key: `b${beat.seq}`,
+            text: beat.text,
+            speakerName: beat.name,
+        });
+        if (list.length > 5) list.pop();
+    }
+
+    const latestBeatByChar = new Map<string, LabLiveBeat>();
+    for (const beat of allBeats) latestBeatByChar.set(beat.characterId, beat);
+    const activeTickScenes = new Set(
+        allBeats.filter((b) => b.tick === clock.currentTick).map((b) => b.sceneId),
+    );
+
+    // ── scenes (engine scene id `s${i}` ↔ preset scene index i) ────────────
+    const rawScenes = raw.scenes ?? [];
+    const presentByScene = new Map<string, string[]>();
+    for (const [charId, sceneId] of Object.entries(w.roster)) {
+        const list = presentByScene.get(sceneId) ?? [];
+        list.push(charId);
+        presentByScene.set(sceneId, list);
+    }
+    const scenes: Scene[] = w.scenes.map((scene) => {
+        const index = Number(scene.id.slice(1));
+        const rawScene = Number.isFinite(index) ? rawScenes[index] : undefined;
+        const locationId = rawLocations.length
+            ? `loc${Math.min(Math.max(rawScene?.location_index ?? 0, 0), rawLocations.length - 1)}`
+            : 'loc0';
+        const ghost = streams[scene.id]?.[0];
+        return {
+            id: scene.id,
+            sagaId: w.sagaId,
+            locationId,
+            name: scene.name,
+            description: scene.description ?? '',
+            posX: rawScene?.pos_x,
+            posY: rawScene?.pos_y,
+            privacyLevel: Math.min(Math.max(scene.privacyLevel, 0), 5) as Scene['privacyLevel'],
+            currentCharacterIds: presentByScene.get(scene.id) ?? [],
+            ghostQuotes: ghost ? [{ characterId: '', text: ghost.text }] : undefined,
+            performance: activeTickScenes.has(scene.id)
+                ? { title: '戲正上演', startedAt: '' }
+                : undefined,
+        };
+    });
+
+    // ── characters ─────────────────────────────────────────────────────────
+    const characters: LabCharacterLive[] = w.cast.map((member) => {
+        const sceneId = w.roster[member.id] ?? '';
+        const latest = latestBeatByChar.get(member.id);
+        return {
+            id: member.id,
+            name: member.name,
+            role: member.role,
+            gender: member.gender,
+            age: member.age,
+            sceneId,
+            sceneName: world.sceneNameById(sceneId),
+            fatigue: member.state.fatigue,
+            hunger: member.state.hunger,
+            mood: member.state.mood,
+            wants: world.liveWantsOf(member.id).slice(0, 3).map((want) => ({
+                desc: want.desc,
+                layer: want.layer,
+                tension: Math.round(want.weight * (1 - want.sat) * 100) / 100,
+            })),
+            latestLine: latest
+                ? { text: latest.text, clock: latest.clock, day: latest.day, sceneName: latest.sceneName }
+                : undefined,
+        };
+    });
+
+    // ── saga ───────────────────────────────────────────────────────────────
+    const partOfDay = toDayPart(clock.partOfDay);
+    const saga: Saga = {
+        id: w.sagaId,
+        name: raw.saga?.name ?? raw.label ?? meta.title,
+        description: raw.saga?.description ?? '',
+        currentDay: clock.day,
+        castIds: w.cast.map((member) => member.id),
+        premise: w.sagaPremise,
+        coveredLocationIds: locations.map((location) => location.id),
+        worldTime: {
+            day: clock.day,
+            partOfDay,
+            label: `第${clock.day}日 · ${clock.partOfDay}`,
+        },
+    };
+
+    return {
+        runId,
+        meta,
+        phase: active?.phase ?? 'idle',
+        pendingTicks: active?.pendingTicks ?? 0,
+        lastError: active?.lastError,
+        provider: active?.provider,
+        model: active?.model,
+        epoch: active?.epoch ?? 'cold',
+        seq: latestSeq,
+        saga,
+        locations,
+        scenes,
+        characters,
+        streams,
+        beats,
+        logs: (active?.logs ?? []).slice(-40),
+    };
+}
+
+/** Ensure PARTS_OF_DAY stays imported (documents the 六時辰 rhythm source). */
+export const LAB_PARTS_OF_DAY = PARTS_OF_DAY;
+
+export function runExistsOnDisk(runId: string): boolean {
+    return fs.existsSync(path.join(runDir(runId), 'lab-run.json'));
+}
