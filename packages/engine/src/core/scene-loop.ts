@@ -83,6 +83,7 @@ export interface SceneLoopInput {
     tone?: string;
     /** Canon honorifics facts (identity guardrail). */
     etiquette?: string;
+    timeCharter?: string;
     /** Saga emotional stance; 'consummate' unlocks the adult beat register
      *  when (and only when) the intimacy gate opens for a beat. */
     emotionalStance?: string;
@@ -321,6 +322,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             innerSecret: actor.innerSecret,
             economyLine: actor.economyLine,
             etiquette: input.etiquette,
+            timeCharter: input.timeCharter,
             consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
             intimacyOffered: pendingAdvanceBy != null && pendingAdvanceBy !== actor.characterId,
             intimacyPossible: input.isPrivate && present.length === 2 && !registerOpen && actor.advanceReady !== false,
@@ -328,6 +330,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
 
         let r!: CharacterAgentNs.BeatResult;
         let acceptedBeat!: SceneBeat;
+        let beatLanded = false;
         for (let attempt = 0; attempt < 3; attempt++) {
             if (attempt > 0) {
                 await input.beforeBeat?.(actor);
@@ -346,11 +349,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             // reject that draft before it reaches onBeat/session/canon and replan
             // statelessly at the already-committed venue.
             if (r.move && r.move !== input.sceneName) {
-                if (attempt >= 2) {
-                    throw new Error(
-                        `scene beat attempted cross-scene movement after movement phase: ${actor.name} -> ${r.move}`,
-                    );
-                }
+                if (attempt >= 2) break;
                 beatInput.physicalRejection =
                     `你的位置已在本 tick 的移動階段提交為「${input.sceneName}」。` +
                     `這一拍不能再前往「${r.move}」；若想離場，可 close 收住此場，下一 tick 再從合法選項決定去處。`;
@@ -370,9 +369,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 (r.addressed && !structuredAddressee) ||
                 (openingVocative && structuredAddressee && openingVocative !== structuredAddressee.name)
             ) {
-                if (attempt >= 2) {
-                    throw new Error(`scene beat used a stale addressee: ${r.addressed ?? openingVocative}`);
-                }
+                if (attempt >= 2) break;
                 beatInput.physicalRejection =
                     `你這一拍的結構化對象是「${structuredAddressee?.name ?? r.addressed ?? '無'}」，` +
                     `但開口卻叫了「${openingVocative ?? r.addressed}」。只能回應此刻同場的人，不可混入上一場的對話對象。`;
@@ -391,11 +388,22 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             };
             try {
                 await input.onBeat?.(acceptedBeat);
+                beatLanded = true;
                 break;
             } catch (error) {
-                if (attempt >= 2) throw error;
+                if (attempt >= 2) break;
                 beatInput.physicalRejection = error instanceof Error ? error.message : String(error);
             }
+        }
+
+        // A beat that cannot satisfy world physics in three drafts does not get
+        // to kill a live season: every guard held, nothing invalid entered
+        // canon, and the stubborn intent simply fails to happen. The character
+        // falls silent this beat; the log says so out loud (four live runs died
+        // on this class of stalemate before this rule).
+        if (!beatLanded) {
+            log.push(`[跳拍] ${actor.name}這一拍三改仍違世界物理，沒能落地，只得按下不表。`);
+            continue;
         }
 
         log.push(`${actor.name}：${r.beat}`);

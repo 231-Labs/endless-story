@@ -46,10 +46,12 @@ export class LLMHttpError extends Error {
 /** Is this an overload / transient / rate-limit error worth retrying with another model? */
 export function isRetryableError(err: unknown): boolean {
   if (err instanceof LLMHttpError) {
-    return err.status === 429 || err.status === 502 || err.status === 503 || err.status === 504 || err.status === 529;
+    // 500 included: Poe surfaces transient internal errors as plain 500s —
+    // two live seasons died to one-off "provider_error" 500s before this.
+    return err.status === 429 || err.status === 500 || err.status === 502 || err.status === 503 || err.status === 504 || err.status === 529;
   }
   const e = err as { status?: number; message?: string };
-  if (e?.status === 429 || e?.status === 502 || e?.status === 503 || e?.status === 504 || e?.status === 529) return true;
+  if (e?.status === 429 || e?.status === 500 || e?.status === 502 || e?.status === 503 || e?.status === 504 || e?.status === 529) return true;
   const msg = (e?.message ?? '').toLowerCase();
   if ((e as { name?: string })?.name === 'TimeoutError' || msg.includes('timed out') || msg.includes('timeout')) return true;
   if (msg.includes('overloaded') || msg.includes('rate_limit') || msg.includes('rate limit')) return true;

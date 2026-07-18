@@ -45,6 +45,7 @@ import {
     type PersistedEconomicContract,
     type PersistedEconomyState,
 } from '@endless-story/economy';
+import { PARTS_OF_DAY } from '../ports.ts';
 import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 import type { WorldState } from '../world-state.ts';
 
@@ -635,6 +636,18 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             const waiting = pendingSigners(c).map((id) => accountLabel(contract, id)).join('、');
             lines.push(`「${c.label}」（contractId=${c.id}，白紙黑字，人人可查）：若成立——${splits}；限第 ${c.deadlineDay} 日夜裡截止${partner}；尚欠署名：${waiting || '（只欠搭檔欄）'}。`);
             if (c.terms.length) lines.push(`約中條款：${c.terms.join('；')}。`);
+            // deadline-day time arithmetic: the schedule is a WORLD FACT. Three
+            // runs showed agents know the deadline but cannot sequence a night
+            // (v17: both leads burned 黃昏..深宵 on the paper, lost the show AND
+            // the signature). State the hours; the choice stays theirs.
+            if (c.deadlineDay === world.data.clock.day) {
+                const partIndex = PARTS_OF_DAY.indexOf(world.data.clock.partOfDay);
+                const remaining = Math.max(0, (PARTS_OF_DAY.length - 1) - partIndex);
+                lines.push(
+                    `「${c.label}」限期就在今夜子夜（深宵之末）；此刻${world.data.clock.partOfDay}，今夜還餘 ${remaining} 個時辰` +
+                    (data.performance && partIndex <= 3 ? '——開鑼在黃昏，戲散之後入夜、深宵仍來得及到紙前落筆。' : '。'),
+                );
+            }
             if (c.pendingCounter) {
                 lines.push(`還價待覆：${accountLabel(contract, c.pendingCounter.byId)}所提『${c.pendingCounter.demand}』，${accountLabel(contract, c.proposerAccountId)}明晨回話。`);
             }
