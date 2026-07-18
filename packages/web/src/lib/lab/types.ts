@@ -118,11 +118,17 @@ export interface LabSeedSummary {
     id: string;
     source: 'builtin' | 'custom';
     label?: string;
+    /** Saga premise (saga.description) — the poster's one-breath pitch. */
+    premise?: string;
     castCount: number;
     sceneCount: number;
     locationCount: number;
     memoryCount: number;
     resources: string[];
+    /** 主演名單 — playbill cast line. */
+    castNames: string[];
+    /** Location names, in seed order — the UI matches terrain art for the poster. */
+    locationNames: string[];
 }
 
 export interface LabSeasonSummary {

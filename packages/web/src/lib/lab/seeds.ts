@@ -39,15 +39,21 @@ export function seasonDirFor(source: 'builtin' | 'custom'): string {
 function summarizeSeed(id: string, source: 'builtin' | 'custom', raw: RawPreset): LabSeedSummary {
     const cast = raw.founding_cast ?? [];
     const rawWithLocations = raw as RawPreset & { locations?: unknown[] };
+    const locations = Array.isArray(rawWithLocations.locations) ? rawWithLocations.locations : [];
     return {
         id,
         source,
         label: raw.label ?? raw.saga?.name,
+        premise: raw.saga?.description,
         castCount: cast.length,
         sceneCount: raw.scenes?.length ?? 0,
-        locationCount: Array.isArray(rawWithLocations.locations) ? rawWithLocations.locations.length : 0,
+        locationCount: locations.length,
         memoryCount: cast.reduce((n, c) => n + (c.memories?.length ?? 0), 0),
         resources: (raw.drama_resources ?? []).map((r) => r.label),
+        castNames: cast.map((c) => c.name),
+        locationNames: locations
+            .map((l) => (l && typeof l === 'object' && typeof (l as { name?: unknown }).name === 'string' ? (l as { name: string }).name : null))
+            .filter((n): n is string => Boolean(n)),
     };
 }
 
