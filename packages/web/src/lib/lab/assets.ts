@@ -119,6 +119,137 @@ export function deleteAsset(kind: AssetKind, file: string): void {
     fs.rmSync(path.join(assetsDir(kind), file), { force: true });
 }
 
+// ── 描述 sidecar（<key>.txt）— 圖庫可改人物/場景/地界的展示描述 ─────────────
+
+export function assetNoteFor(kind: AssetKind, name: string): string | undefined {
+    try {
+        const text = fs.readFileSync(path.join(assetsDir(kind), `${assetKeyFor(name)}.txt`), 'utf8').trim();
+        return text || undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+export function saveAssetNote(kind: AssetKind, name: string, note: string): void {
+    const key = assetKeyFor(name);
+    const file = path.join(assetsDir(kind), `${key}.txt`);
+    const trimmed = note.trim();
+    if (!trimmed) {
+        fs.rmSync(file, { force: true });
+        return;
+    }
+    if (trimmed.length > 2000) throw new Error('描述太長（>2000 字）');
+    ensureDir(assetsDir(kind));
+    fs.writeFileSync(file, `${trimmed}\n`, 'utf8');
+}
+
+export function listAssetNotes(): Array<{ kind: AssetKind; key: string; note: string }> {
+    const out: Array<{ kind: AssetKind; key: string; note: string }> = [];
+    for (const kind of KINDS) {
+        let files: string[];
+        try {
+            files = fs.readdirSync(assetsDir(kind));
+        } catch {
+            continue;
+        }
+        for (const file of files) {
+            if (!file.endsWith('.txt')) continue;
+            const note = fs.readFileSync(path.join(assetsDir(kind), file), 'utf8').trim();
+            if (note) out.push({ kind, key: file.slice(0, -'.txt'.length), note });
+        }
+    }
+    return out;
+}
+
+// ── 多媒體 gallery（<kind>/<key>-gallery/）— 多張圖 + 影片 ────────────────────
+
+const GALLERY_MIME: Record<string, string> = {
+    ...MIME_BY_EXT,
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+};
+const MAX_VIDEO_BYTES = 48 * 1024 * 1024;
+
+function galleryDir(kind: AssetKind, key: string): string {
+    return path.join(assetsDir(kind), `${key}-gallery`);
+}
+
+export interface GalleryItem {
+    file: string;
+    url: string;
+    type: 'image' | 'video';
+    bytes: number;
+}
+
+export function listGallery(kind: AssetKind, name: string): GalleryItem[] {
+    let key: string;
+    try {
+        key = assetKeyFor(name);
+    } catch {
+        return [];
+    }
+    let files: string[];
+    try {
+        files = fs.readdirSync(galleryDir(kind, key));
+    } catch {
+        return [];
+    }
+    return files
+        .filter((file) => GALLERY_MIME[file.split('.').pop() ?? ''])
+        .sort()
+        .map((file) => {
+            const ext = file.split('.').pop()!;
+            return {
+                file,
+                url: `/api/lab/assets/gallery?kind=${kind}&key=${encodeURIComponent(key)}&file=${encodeURIComponent(file)}`,
+                type: ext === 'mp4' || ext === 'webm' ? 'video' as const : 'image' as const,
+                bytes: fs.statSync(path.join(galleryDir(kind, key), file)).size,
+            };
+        });
+}
+
+export function addGalleryItem(kind: AssetKind, name: string, dataUrl: string): GalleryItem {
+    const match = /^data:(image\/(?:png|jpeg|webp)|video\/(?:mp4|webm));base64,(.+)$/s.exec(dataUrl);
+    if (!match) throw new Error('gallery upload must be png/jpeg/webp/mp4/webm data URL');
+    const mime = match[1];
+    const ext = mime === 'image/png' ? 'png'
+        : mime === 'image/webp' ? 'webp'
+            : mime === 'image/jpeg' ? 'jpg'
+                : mime === 'video/mp4' ? 'mp4' : 'webm';
+    const isVideo = mime.startsWith('video/');
+    const bytes = Buffer.from(match[2], 'base64');
+    if (!bytes.length) throw new Error('empty media');
+    const cap = isVideo ? MAX_VIDEO_BYTES : MAX_BYTES;
+    if (bytes.length > cap) throw new Error(`media too large (>${Math.round(cap / 1024 / 1024)}MB)`);
+    const key = assetKeyFor(name);
+    ensureDir(galleryDir(kind, key));
+    const file = `g${Date.now().toString(36)}.${ext}`;
+    fs.writeFileSync(path.join(galleryDir(kind, key), file), bytes);
+    return {
+        file,
+        url: `/api/lab/assets/gallery?kind=${kind}&key=${encodeURIComponent(key)}&file=${encodeURIComponent(file)}`,
+        type: isVideo ? 'video' : 'image',
+        bytes: bytes.length,
+    };
+}
+
+export function deleteGalleryItem(kind: AssetKind, key: string, file: string): void {
+    if (!/^[^/\\]+\.(png|jpg|webp|mp4|webm)$/.test(file) || file.includes('..') || key.includes('..') || /[/\\]/.test(key)) {
+        throw new Error(`invalid gallery ref: ${key}/${file}`);
+    }
+    fs.rmSync(path.join(galleryDir(kind, key), file), { force: true });
+}
+
+export function readGalleryFile(kind: AssetKind, key: string, file: string): { bytes: Buffer; mime: string } | null {
+    if (!/^[^/\\]+\.(png|jpg|webp|mp4|webm)$/.test(file) || file.includes('..') || key.includes('..') || /[/\\]/.test(key)) return null;
+    const ext = file.split('.').pop()!;
+    try {
+        return { bytes: fs.readFileSync(path.join(galleryDir(kind, key), file)), mime: GALLERY_MIME[ext] };
+    } catch {
+        return null;
+    }
+}
+
 export function readAssetFile(kind: AssetKind, file: string): { bytes: Buffer; mime: string } | null {
     if (!/^[^/\\]+\.(png|jpg|webp)$/.test(file) || file.includes('..')) return null;
     const ext = file.split('.').pop()!;

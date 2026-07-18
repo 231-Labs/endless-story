@@ -7,7 +7,7 @@
  * The lab page owns the data (useLabLive) and passes it in.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Saga, SagaLocation, Scene } from '@endless-story/shared';
 import { BlobImage } from '@/components/common/BlobImage';
 import { FloatingStream } from '@/components/saga/handscroll/FloatingQuote';
@@ -34,12 +34,37 @@ interface Props {
     onSelectScene: (sceneId: string) => void;
 }
 
+type FanFilter = 'occupied' | 'performing' | 'private';
+
 export function LabHandscroll({ saga, scenes, locations, streams, artByLocationId, onSelectScene }: Props) {
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [filters, setFilters] = useState<Set<FanFilter>>(new Set());
 
     const layout = useMemo(() => computeHandscrollLayout(locations, scenes), [locations, scenes]);
     const partOfDay = saga.worldTime?.partOfDay ?? 'noon';
     const wash = DAY_WASH[partOfDay] ?? DAY_WASH.noon;
+
+    const toggleFilter = (f: FanFilter) =>
+        setFilters((prev) => {
+            const next = new Set(prev);
+            if (next.has(f)) next.delete(f);
+            else next.add(f);
+            return next;
+        });
+
+    /** All active filters must hold (AND) — 篩的是「此刻要看的質地」. */
+    const fanMatches = (scene: Scene): boolean => {
+        if (filters.has('occupied') && !(scene.currentCharacterIds?.length ?? 0)) return false;
+        if (filters.has('performing') && !scene.performance) return false;
+        if (filters.has('private') && (scene.privacyLevel ?? 0) < 3) return false;
+        return true;
+    };
+
+    const jumpToColumn = (index: number) => {
+        const el = scrollRef.current;
+        const column = el?.firstElementChild?.children[index] as HTMLElement | undefined;
+        column?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    };
 
     // Vertical wheel → horizontal column paging (same rAF tween as the reader
     // handscroll, minus the outer full-page snap handoff the lab doesn't have).
@@ -111,10 +136,46 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
     const byId = new Map(scenes.map((s) => [s.id, s]));
 
     return (
-        <div
-            ref={scrollRef}
-            className="h-full min-h-0 flex-1 touch-pan-x snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain no-scrollbar"
-        >
+        <div className="relative h-full min-h-0">
+            {/* 界籤與篩子 —— 一列薄簾：點地界跳欄、點質地篩扇 */}
+            <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex justify-center px-3">
+                <div className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-hairline/60 bg-surface/80 px-2 py-1 shadow-sm backdrop-blur-md no-scrollbar dark:bg-elevated/75">
+                    {layout.segments.map((seg, i) => (
+                        <button
+                            key={seg.location.id}
+                            type="button"
+                            onClick={() => jumpToColumn(i)}
+                            title={`跳到 ${seg.location.name}`}
+                            className="shrink-0 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.15em] text-mute transition hover:text-cinnabar"
+                        >
+                            {seg.location.name}
+                        </button>
+                    ))}
+                    <span aria-hidden className="mx-1 h-3 w-px shrink-0 bg-hairline/70" />
+                    {([
+                        ['occupied', '有人', '只亮此刻有人的場景'],
+                        ['performing', '上演', '只亮正走拍的場景'],
+                        ['private', '幽', '只亮窗內私地'],
+                    ] as Array<[FanFilter, string, string]>).map(([key, label, hint]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => toggleFilter(key)}
+                            title={hint}
+                            className={`shrink-0 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.2em] transition ${
+                                filters.has(key) ? 'bg-cinnabar text-white' : 'text-mute hover:text-ink'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div
+                ref={scrollRef}
+                className="h-full min-h-0 touch-pan-x snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain no-scrollbar"
+            >
             <div className="flex h-full w-max items-stretch">
                 {layout.segments.map((seg) => {
                     const locScenes = seg.scenes.map((sp) => byId.get(sp.scene.id) ?? sp.scene);
@@ -144,12 +205,16 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
                             <div className="flex w-full flex-1 min-h-0 flex-wrap content-start justify-center gap-x-4 gap-y-3 overflow-y-auto bg-canvas/30 px-3 pt-4 no-scrollbar">
                                 {locScenes.length ? (
                                     locScenes.map((sc) => (
-                                        <SceneFan
+                                        <span
                                             key={sc.id}
-                                            scene={sc}
-                                            onSelect={onSelectScene}
-                                            present={sc.currentCharacterIds?.length ?? 0}
-                                        />
+                                            className={`transition-opacity duration-300 ${fanMatches(sc) ? 'opacity-100' : 'opacity-20'}`}
+                                        >
+                                            <SceneFan
+                                                scene={sc}
+                                                onSelect={onSelectScene}
+                                                present={sc.currentCharacterIds?.length ?? 0}
+                                            />
+                                        </span>
                                     ))
                                 ) : (
                                     <span className="pt-4 font-serif text-2xs tracking-[0.2em] text-mute/50">尚無場景</span>
@@ -158,6 +223,7 @@ export function LabHandscroll({ saga, scenes, locations, streams, artByLocationI
                         </div>
                     );
                 })}
+                </div>
             </div>
         </div>
     );

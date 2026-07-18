@@ -12,8 +12,9 @@ import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { BeadCurtain } from '@/components/lab/LabOrnaments';
 import { IconBack, IconGallery, IconObjects, IconScroll } from '@/components/lab/LabIcons';
-import { LabBeatFeed } from '@/components/lab/LabBeatFeed';
+import { LabBeatDock } from '@/components/lab/LabBeatDock';
 import { LabCastRail } from '@/components/lab/LabCastRail';
+import { LabCharacterSheet } from '@/components/lab/LabCharacterSheet';
 import { LabConfigDrawer } from '@/components/lab/LabConfigDrawer';
 import { LabControls } from '@/components/lab/LabControls';
 import { LabHandscroll } from '@/components/lab/LabHandscroll';
@@ -27,11 +28,16 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
     const id = decodeURIComponent(rawId);
     const { snapshot, feed, error, refresh } = useLabLive(id);
     const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
+    const [focusedCharacterId, setFocusedCharacterId] = useState<string | null>(null);
     const [drawer, setDrawer] = useState(false);
 
     const focusedScene = useMemo(
         () => snapshot?.scenes.find((s) => s.id === focusedSceneId) ?? null,
         [snapshot, focusedSceneId],
+    );
+    const focusedCharacter = useMemo(
+        () => snapshot?.characters.find((c) => c.id === focusedCharacterId) ?? null,
+        [snapshot, focusedCharacterId],
     );
     const focusedLocationArt = useMemo(() => {
         if (!snapshot || !focusedScene) return undefined;
@@ -72,12 +78,12 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             {snapshot.saga.name} · {snapshot.saga.worldTime?.label}
                         </p>
                     </div>
-                    <div className="ml-auto flex items-center gap-1.5">
+                    <div className="ml-auto flex items-center gap-2">
                         <Link
                             href={`/lab/run/${id}/reading`}
                             aria-label="卷宗與章回"
                             title="卷宗與章回"
-                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
                         >
                             <IconScroll />
                         </Link>
@@ -85,7 +91,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             href="/lab/assets"
                             aria-label="圖庫"
                             title="圖庫 · 人物與場景之圖"
-                            className="es-icon-button !h-9 !w-9 text-[15px]"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
                         >
                             <IconGallery />
                         </Link>
@@ -93,8 +99,8 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             type="button"
                             onClick={() => setDrawer((v) => !v)}
                             aria-label="物界配置"
-                            title="物界 · 爭奪之物／物件／天時／場景物理"
-                            className={`es-icon-button !h-9 !w-9 text-[15px] ${drawer ? 'border-cinnabar/60 text-cinnabar' : ''}`}
+                            title="物界 · 爭奪之物／物件／天時／場景物理／記憶"
+                            className={`es-icon-button !h-11 !w-11 text-[20px] ${drawer ? 'border-cinnabar/60 text-cinnabar' : ''}`}
                         >
                             <IconObjects />
                         </button>
@@ -109,50 +115,56 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                 <p className="px-4 py-2 font-serif text-xs text-cinnabar sm:px-8" role="alert">{error}</p>
             ) : null}
 
-            {/* 主舞台 */}
-            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <section className="relative min-h-[52vh] overflow-hidden lg:min-h-0">
-                    <LabHandscroll
-                        saga={snapshot.saga}
-                        scenes={snapshot.scenes}
-                        locations={snapshot.locations}
-                        streams={snapshot.streams}
-                        artByLocationId={snapshot.artByLocationId}
-                        onSelectScene={setFocusedSceneId}
-                    />
-                    <AnimatePresence>
-                        {focusedScene ? (
-                            <LabSceneSheet
-                                key={focusedScene.id}
-                                scene={focusedScene}
-                                characters={snapshot.characters}
-                                beats={feed}
-                                locationArt={focusedLocationArt}
-                                clock={snapshot.saga.worldTime?.label}
-                                onClose={() => setFocusedSceneId(null)}
-                            />
-                        ) : null}
-                    </AnimatePresence>
-                </section>
-
-                {/* 拍流 */}
-                <aside className="min-h-0 border-t border-hairline/60 lg:border-l lg:border-t-0">
-                    <div className="flex h-full min-h-0 flex-col">
-                        <div className="border-b border-hairline/50 px-4 py-2.5">
-                            <p className="font-serif text-2xs tracking-[0.35em] text-cinnabar/90" title="每個角色此刻回的話與心聲；幽＝窗內事">拍流</p>
-                        </div>
-                        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 no-scrollbar lg:max-h-none">
-                            <LabBeatFeed feed={feed} />
-                        </div>
-                    </div>
-                </aside>
+            {/* 主舞台 —— 手卷滿幅；拍流是懸浮可折的匣，不再切走橫向 */}
+            <div className="relative min-h-[56vh] flex-1 overflow-hidden">
+                <LabHandscroll
+                    saga={snapshot.saga}
+                    scenes={snapshot.scenes}
+                    locations={snapshot.locations}
+                    streams={snapshot.streams}
+                    artByLocationId={snapshot.artByLocationId}
+                    onSelectScene={(sceneId) => {
+                        setFocusedCharacterId(null);
+                        setFocusedSceneId(sceneId);
+                    }}
+                />
+                <LabBeatDock feed={feed} running={snapshot.phase === 'running'} />
+                <AnimatePresence>
+                    {focusedScene ? (
+                        <LabSceneSheet
+                            key={focusedScene.id}
+                            scene={focusedScene}
+                            characters={snapshot.characters}
+                            beats={feed}
+                            locationArt={focusedLocationArt}
+                            clock={snapshot.saga.worldTime?.label}
+                            onSelectCharacter={(characterId) => {
+                                setFocusedSceneId(null);
+                                setFocusedCharacterId(characterId);
+                            }}
+                            onClose={() => setFocusedSceneId(null)}
+                        />
+                    ) : null}
+                    {focusedCharacter ? (
+                        <LabCharacterSheet
+                            key={focusedCharacter.id}
+                            runId={id}
+                            character={focusedCharacter}
+                            onJumpToScene={(sceneId) => {
+                                setFocusedCharacterId(null);
+                                setFocusedSceneId(sceneId);
+                            }}
+                            onClose={() => setFocusedCharacterId(null)}
+                        />
+                    ) : null}
+                </AnimatePresence>
             </div>
 
             {/* 名帖排 */}
             <section className="border-t border-hairline/60 px-4 py-4 sm:px-8">
-                <p className="font-serif text-2xs tracking-[0.35em] text-mute" title="各自身在何處、心頭最熱的一樁；點名帖跳到其所在場景">名帖</p>
+                <p className="font-serif text-2xs tracking-[0.35em] text-mute" title="點名帖開人物內頁：狀態／心事／記憶／影像">名帖</p>
                 <div className="mt-3">
-                    <LabCastRail characters={snapshot.characters} onSelectScene={setFocusedSceneId} />
+                    <LabCastRail characters={snapshot.characters} onSelectCharacter={setFocusedCharacterId} />
                 </div>
             </section>
 

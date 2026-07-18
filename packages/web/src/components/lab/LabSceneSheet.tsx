@@ -19,10 +19,11 @@ interface Props {
     beats: LabLiveBeat[];
     locationArt?: string;
     clock?: string;
+    onSelectCharacter?: (characterId: string) => void;
     onClose: () => void;
 }
 
-export function LabSceneSheet({ scene, characters, beats, locationArt, clock, onClose }: Props) {
+export function LabSceneSheet({ scene, characters, beats, locationArt, clock, onSelectCharacter, onClose }: Props) {
     const present = characters.filter((c) => c.sceneId === scene.id);
     const sceneBeats = beats.filter((b) => b.sceneId === scene.id).slice(-14).reverse();
     const art = scene.imageUrl || sceneArtFor(scene.name) || locationArt;
@@ -72,13 +73,18 @@ export function LabSceneSheet({ scene, characters, beats, locationArt, clock, on
                             {present.map((c) => (
                                 <li key={c.id} className="es-soft-panel p-3">
                                     <div className="flex items-center justify-between gap-3">
-                                        <span className="flex min-w-0 items-center gap-2 font-serif text-base tracking-[0.15em] text-ink">
+                                        <button
+                                            type="button"
+                                            onClick={() => onSelectCharacter?.(c.id)}
+                                            title={`開「${c.name}」內頁`}
+                                            className="flex min-w-0 items-center gap-2 font-serif text-base tracking-[0.15em] text-ink transition hover:text-cinnabar"
+                                        >
                                             {c.portraitUrl ? (
                                                 // eslint-disable-next-line @next/next/no-img-element
                                                 <img src={c.portraitUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-hairline/60" />
                                             ) : null}
                                             <span className="truncate">{c.name}</span>
-                                        </span>
+                                        </button>
                                         <span className="shrink-0 font-serif text-2xs tracking-[0.2em] text-mute">{c.role ?? ''}</span>
                                     </div>
                                     {c.wants[0] ? (

@@ -94,9 +94,19 @@ export interface LabCharacterLive {
     fatigue: number;
     hunger: number;
     mood: number;
-    /** Top live wants, hottest first. */
-    wants: Array<{ desc: string; layer: string; tension: number }>;
+    /** ALL live wants, hottest first (cards show [0]; the 內頁 shows all). */
+    wants: Array<{ desc: string; layer: string; tension: number; target?: string }>;
     latestLine?: { text: string; clock: string; day: number; sceneName: string };
+    /** Seed persona (or 圖庫 description override when present). */
+    description: string;
+    /** Durable self-model facts (L3). */
+    coreIdentity: string[];
+    /** Private inner life — operator cockpit shows it, marked 心底事. */
+    secret?: string;
+    /** Current one-line views of significant others (latest-wins). */
+    views: Array<{ name: string; line: string }>;
+    /** 圖庫 multimedia gallery (images + video clips). */
+    gallery: Array<{ url: string; type: 'image' | 'video' }>;
 }
 
 export interface LabSeedSummary {

@@ -18,7 +18,7 @@ import { labManager } from './manager';
 import { runDir } from './paths';
 import { readRunMeta } from './store';
 import { readSeedRaw } from './seeds';
-import { assetUrlFor } from './assets';
+import { assetNoteFor, assetUrlFor, listGallery } from './assets';
 import { beatsFromTickRecords, listArchiveEntries, readArchiveEntry, tailTickRecords } from './artifacts';
 import type { LabCharacterLive, LabLiveBeat, LabRunMeta, LabRunPhase } from './types';
 
@@ -227,7 +227,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             sagaId: w.sagaId,
             locationId,
             name: scene.name,
-            description: scene.description ?? '',
+            description: assetNoteFor('scene', scene.name) ?? scene.description ?? '',
             posX: rawScene?.pos_x,
             posY: rawScene?.pos_y,
             privacyLevel: Math.min(Math.max(scene.privacyLevel, 0), 5) as Scene['privacyLevel'],
@@ -256,14 +256,23 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             fatigue: member.state.fatigue,
             hunger: member.state.hunger,
             mood: member.state.mood,
-            wants: world.liveWantsOf(member.id).slice(0, 3).map((want) => ({
+            wants: world.liveWantsOf(member.id).map((want) => ({
                 desc: want.desc,
                 layer: want.layer,
                 tension: Math.round(want.weight * (1 - want.sat) * 100) / 100,
+                target: want.target,
             })),
             latestLine: latest
                 ? { text: latest.text, clock: latest.clock, day: latest.day, sceneName: latest.sceneName }
                 : undefined,
+            description: assetNoteFor('character', member.name) ?? member.persona,
+            coreIdentity: member.coreIdentity,
+            secret: member.secret,
+            views: Object.entries(member.relationshipView).map(([otherId, line]) => ({
+                name: world.nameById(otherId),
+                line,
+            })),
+            gallery: listGallery('character', member.name).map(({ url, type }) => ({ url, type })),
         };
     });
 

@@ -9,11 +9,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { IconFork, IconPause, IconRun, IconStep } from './LabIcons';
+import { useLabDialog } from './LabDialog';
 import { labApi } from './useLab';
+import { useToast } from '@/components/common/Toaster';
 import type { LabLiveSnapshot } from '@/lib/lab/live';
 
 export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot; onChanged: () => void }) {
     const router = useRouter();
+    const dialog = useLabDialog();
+    const toast = useToast();
     const [ticks, setTicks] = useState(6);
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -105,10 +109,18 @@ export function LabControls({ snapshot, onChanged }: { snapshot: LabLiveSnapshot
                 disabled={busy !== null || running}
                 onClick={() =>
                     act('fork', async () => {
-                        const title = window.prompt('分卷之名（自此一拍另開一卷）', `${snapshot.meta.title} · 別卷`);
+                        const title = await dialog.prompt({
+                            title: '另開一卷',
+                            body: '自此一拍分支成兄弟卷，世系記於卷架。',
+                            defaultValue: `${snapshot.meta.title} · 別卷`,
+                            confirmLabel: '開卷',
+                        });
                         if (!title) return;
                         const { meta } = await labApi.control(snapshot.runId, { action: 'fork', title });
-                        if (meta) router.push(`/lab/run/${meta.id}`);
+                        if (meta) {
+                            toast(`分卷「${title}」已開。`, 'success');
+                            router.push(`/lab/run/${meta.id}`);
+                        }
                     })
                 }
                 aria-label="另開一卷（分支）"
