@@ -25,6 +25,8 @@ export type DeriveWantsInput = Runner.characterAgent.DeriveWantsInput;
 export type GenesisWant = Runner.characterAgent.GenesisWant;
 export type MoveDecideInput = Runner.characterAgent.MoveDecideInput;
 export type MoveDecideResult = Runner.characterAgent.MoveDecideResult;
+export type TransitReactInput = Runner.characterAgent.TransitReactInput;
+export type TransitReaction = Runner.characterAgent.TransitReaction;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -247,6 +249,12 @@ export interface SceneAgentPort extends SceneAgent {
     /** Autonomous movement is an explicit affordance choice: the world supplies
      *  reachable scene ids and the character chooses one (or stays). */
     decideMove(input: MoveDecideInput): Promise<MoveDecideResult>;
+    /** 路遇 (optional): a cross-district traveller who passes someone on the road
+     *  decides — pass / greet / engage. `engage` stops them there and the errand
+     *  slips. Real adapters implement it (one cheap LLM call, fail-safe to pass);
+     *  deterministic/fake adapters omit it, and the tick just lets travellers
+     *  arrive uninterrupted. */
+    transitReact?(input: TransitReactInput): Promise<TransitReaction>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;

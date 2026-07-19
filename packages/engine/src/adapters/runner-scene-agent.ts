@@ -145,6 +145,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
 
     judgeWantResolved = characterAgent.judgeWantResolved;
     decideMove = characterAgent.decideMove;
+    transitReact = characterAgent.transitReact;
 
     async observeScene(input: ObserveSceneInput): Promise<void> {
         if (!this.sessions) return;

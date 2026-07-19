@@ -30,6 +30,8 @@ export {
     buildSystemPrompt as buildMoveSystemPrompt,
     buildUserPrompt as buildMoveUserPrompt,
 } from './move.js';
+export { transitReact } from './transit.js';
+export type { TransitReactInput, TransitReaction } from './transit.js';
 export { decideSocialAction } from './social.js';
 export type {
     SocialActionInput,

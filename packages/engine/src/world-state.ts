@@ -78,6 +78,11 @@ export interface SceneInfo {
     /** Maximum simultaneous roster size. Explicit world physics, with preset
      * defaults derived from privacy when older snapshots omit it. */
     capacity?: number;
+    /** The DISTRICT this scene belongs to (preset location_index) — scenes with
+     * the same index are one place / a few steps apart; different indices are a
+     * real cross-town journey. Drives movement time-cost + roadside 路遇.
+     * Optional & backward-compatible: absent ⇒ no grouping (flat/uniform). */
+    locationIndex?: number;
 }
 
 /** A directed relationship edge (from → to), tone + accumulated weight (§2.4). */
@@ -158,8 +163,13 @@ export interface WorldStateData {
     /** characterId → current sceneId. */
     roster: Record<string, string>;
     /** Last tick of an intentional agent move. Optional for snapshots predating
-     * the single autonomous movement channel. */
+     * the single autonomous movement channel. Also marks "arrived this tick" for
+     * the night deliberate-encounter rule. */
     lastMovedTickByChar?: Record<string, number>;
+    /** characterId → tick until which a cross-district traveller rests (books the
+     * movement time-cost). Only far trips set it; same-district hops stay free.
+     * Optional & backward-compatible with snapshots predating distance-cost. */
+    restUntilTickByChar?: Record<string, number>;
     /** characterId → home sceneId (night anchor). */
     homeByChar: Record<string, string>;
     /** characterId → work sceneId (day anchor). */
@@ -254,6 +264,67 @@ export class WorldState {
     }
     idByName(name: string): string | undefined {
         return this.data.cast.find((c) => c.name === name)?.id;
+    }
+
+    // ── spatial (district grouping — movement time-cost + 路遇) ─────────────────
+    /** The district a scene sits in, or undefined when the seed carries no
+     *  location grouping (older snapshots / seeds without location_index). */
+    districtOf(sceneId: string): number | undefined {
+        return this.sceneById(sceneId)?.locationIndex;
+    }
+    /** True only when BOTH scenes carry a district and it's the same one — a
+     *  few-steps hop. Undefined districts are treated as far (cross-town), so a
+     *  seed without grouping keeps the old flat, uniform-cost behaviour. */
+    sameDistrict(a: string, b: string): boolean {
+        const da = this.districtOf(a);
+        const db = this.districtOf(b);
+        return da !== undefined && db !== undefined && da === db;
+    }
+    /** Tri-state for prompt legibility: true = same district, false = a real
+     *  cross-town trip, undefined = the seed carries no grouping (so don't mark
+     *  distance at all). */
+    nearby(a: string, b: string): boolean | undefined {
+        const da = this.districtOf(a);
+        const db = this.districtOf(b);
+        if (da === undefined || db === undefined) return undefined;
+        return da === db;
+    }
+    /** The public "front" of a district — its lowest-privacy scene (ties: lowest
+     *  id) — the throat a traveller passes through leaving or entering. undefined
+     *  when the district has no scene. Deterministic. */
+    districtGate(locationIndex: number): string | undefined {
+        let best: SceneInfo | undefined;
+        for (const scene of this.data.scenes) {
+            if (scene.locationIndex !== locationIndex) continue;
+            if (
+                !best ||
+                scene.privacyLevel < best.privacyLevel ||
+                (scene.privacyLevel === best.privacyLevel && scene.id < best.id)
+            ) {
+                best = scene;
+            }
+        }
+        return best?.id;
+    }
+    /** The scenes a cross-district traveller passes on the road: the origin
+     *  district's gate, then the destination district's gate — the endpoints and
+     *  any duplicate removed. EMPTY for a same-district hop (no road to walk).
+     *  These are exactly where a roadside 路遇 can waylay the traveller. */
+    transitWaypoints(fromSceneId: string, toSceneId: string): string[] {
+        if (this.sameDistrict(fromSceneId, toSceneId)) return [];
+        const fromDistrict = this.districtOf(fromSceneId);
+        const toDistrict = this.districtOf(toSceneId);
+        const seen = new Set<string>([fromSceneId, toSceneId]);
+        const out: string[] = [];
+        for (const district of [fromDistrict, toDistrict]) {
+            if (district === undefined) continue;
+            const gate = this.districtGate(district);
+            if (gate && !seen.has(gate)) {
+                seen.add(gate);
+                out.push(gate);
+            }
+        }
+        return out;
     }
 
     objectById(id: string): WorldObject | undefined {
