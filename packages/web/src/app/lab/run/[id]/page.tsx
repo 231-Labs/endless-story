@@ -100,7 +100,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             <IconScroll />
                         </Link>
                         <Link
-                            href="/lab/assets"
+                            href={`/lab/assets?from=${encodeURIComponent(`/lab/run/${id}`)}`}
                             aria-label="圖庫"
                             title="圖庫 · 人物與場景之圖"
                             className="es-icon-button !h-11 !w-11 text-[20px]"
@@ -111,7 +111,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             type="button"
                             onClick={() => setDrawer((v) => !v)}
                             aria-label="物界配置"
-                            title="物界 · 爭奪之物／物件／天時／場景物理／記憶"
+                            title="物界 · 物（爭奪之物／物件）／景（場景物理）／時（天時）／憶（記憶）"
                             className={`es-icon-button !h-11 !w-11 text-[20px] ${drawer ? 'border-cinnabar/60 text-cinnabar' : ''}`}
                         >
                             <IconObjects />
