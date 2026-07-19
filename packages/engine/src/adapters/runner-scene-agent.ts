@@ -148,6 +148,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
     transitReact = characterAgent.transitReact;
     negotiateCounter = characterAgent.negotiateCounter;
     decideRehearsal = characterAgent.decideRehearsal;
+    speakPrayer = characterAgent.speakPrayer;
 
     async observeScene(input: ObserveSceneInput): Promise<void> {
         if (!this.sessions) return;

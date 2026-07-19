@@ -48,6 +48,7 @@ import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPo
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
 import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
+import { deityHintFor, framePrayerFallback, isStuckWant, templeScenesOf } from './core/temple-prayer.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -378,6 +379,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // is inert there. spendableOf reads a character's OWN purse (self-paid meals).
     const HUNGER_SEEK = 0.55; // pressing hunger — pull the mover to go eat first
     const foodScenes: Map<string, SeasonCatalogItem> = w.economy ? foodScenesOf(world) : new Map();
+    // 廟願 — scene ids that read as a temple (神明 前). Precomputed once; EMPTY for
+    // a world with no temple scene, so the 廟 PULL below and the §3.6 祈願 step are
+    // both fully inert there (backward compat: zero behaviour change).
+    const templeScenes: Set<string> = templeScenesOf(world);
     const spendableOf = (id: string): bigint => BigInt(w.economy?.state.accounts[id]?.available ?? '0');
     // 夜訪商量 PULL reads the bond underlay as PERSISTED at tick start. The lazy
     // canon seed (§2.95) runs after this movement phase, so on the very FIRST tick
@@ -507,6 +512,26 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         }
                         if (bestConfidant) {
                             return `這樁事在心裡壓了整日，總沒個主意——不如趁夜去尋${world.nameById(bestConfidant.id)}，把心事與TA說道說道，或許就明朗了。`;
+                        }
+                    }
+                }
+                // 廟 PULL (祈願) — at 清晨 or 黃昏 a character carrying a STUCK want
+                // (high tension, long-carried, still pressing — 求人無門) is softly
+                // drawn to a reachable temple to say it out loud to 神明. Mirror of
+                // the confide PULL: a soft hint only (the single movement authority
+                // is untouched), placed AFTER confide so 「有人可商量」takes precedence
+                // and this fires when there is no one to turn to. Low-frequency and
+                // temple-gated, so it never overrides livelihood; a world with no
+                // temple scene has an empty templeScenes ⇒ this never fires. Prefers a
+                // temple in the mover's own district; skipped if already at one.
+                if ((clockLabel === '清晨' || clockLabel === '黃昏') && templeScenes.size && !templeScenes.has(currentSceneId)) {
+                    const stuck = live.find((wnt) => isStuckWant(wnt, nowTick));
+                    if (stuck) {
+                        const reachableTemples = options.filter((o) => templeScenes.has(o.sceneId));
+                        const templePick =
+                            reachableTemples.find((o) => world.sameDistrict(currentSceneId, o.sceneId)) ?? reachableTemples[0];
+                        if (templePick) {
+                            return `這樁心事求人無門，不如往${templePick.name}去，對神明討個主意、許個願。`;
                         }
                     }
                 }
@@ -652,6 +677,30 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         });
         w.dayAccum.lines.push(`[${sceneName}] 世界：${text}`);
         log(`  production: ${text}`);
+    };
+
+    // A CHARACTER-attributed public beat (mirror of emitWorldBeat, but spoken BY a
+    // character rather than by 世界) — surfaces to the lab 拍流 and joins the day's
+    // material exactly like a scene beat. Used by the §3.6 祈願 step so a spoken
+    // prayer reads as the CHARACTER addressing 神明, not a world announcement.
+    const emitCharacterBeat = (sceneId: string, characterId: string, name: string, text: string): void => {
+        const sceneName = world.sceneNameById(sceneId);
+        const witnessIds = w.cast.map((member) => member.id);
+        events.push({
+            v: 1,
+            id: `${w.sagaId}:prayer:t${nowTick}:${events.length}`,
+            sagaId: w.sagaId,
+            day: today,
+            tick: nowTick,
+            clock: clockLabel,
+            sceneId,
+            sceneName,
+            visibility: 'public',
+            witnessIds,
+            editorialSignals: { resolvedWants: 0, departures: 0, relationshipTurn: false },
+            beats: [{ characterId, name, text, audience: 'scene', perceiverIds: witnessIds }],
+        });
+        w.dayAccum.lines.push(`[${sceneName}] ${name}：${text}`);
     };
 
     // 2.7) ACTIONS — the 劇本產出 action layer (flag-gated, OFF by default). A
@@ -822,6 +871,67 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             } catch (error) {
                 log(`  [食] ${member.name} 進食未成：${error instanceof Error ? error.message : String(error)}`);
             }
+        }
+    }
+
+    // 3.6) 祈願 (say a prayer at a temple) — a DELIBERATE SPOKEN prayer to 神明,
+    // autonomic and once-per-day, mirroring §3.5 eat-in-passing: any character
+    // whose ROSTER scene is a temple, who carries a live want, and who has NOT
+    // prayed today speaks their hottest want out loud as a prayer. The runner
+    // voices it (agent.speakPrayer, cheap tier, fail-safe to null); the fake OMITS
+    // the method, so a DETERMINISTIC framing (framePrayerFallback) voices it — the
+    // mechanism runs, and is testable, with no LLM. Runs BOTH day and night (廟宇
+    // stays open late) and reads the roster directly, so a pilgrim is fed a prayer
+    // even when the night cull drops the temple scene. A prayer is EXPRESSION, not
+    // resolution — the want is never mutated (only a tiny mood relief). The
+    // once-per-day bound keeps the temple from flooding. Inert for a world with no
+    // temple scene (templeScenes empty).
+    if (templeScenes.size) {
+        for (const member of w.cast) {
+            const rosterScene = w.roster[member.id];
+            if (!templeScenes.has(rosterScene)) continue;       // not standing at a temple
+            if (world.prayedToday(member.id, today)) continue;  // once per day — no flooding
+            const hot = world.liveWantsOf(member.id)[0];
+            if (!hot) continue;                                 // a prayer needs a live 心願
+            const templeName = world.sceneNameById(rosterScene);
+            const targetName = hot.target ? (world.castById(hot.target)?.name ?? hot.target) : undefined;
+            let text: string | null = null;
+            if (agent.speakPrayer) {
+                try {
+                    text = await agent.speakPrayer({
+                        name: member.name,
+                        persona: member.persona,
+                        role: member.role,
+                        want: { desc: hot.desc, layer: hot.layer, target: targetName },
+                        clock: clockLabel,
+                        templeName,
+                        deity: deityHintFor(templeName),
+                    });
+                } catch {
+                    text = null; // fail safe: the deterministic framing voices it
+                }
+            }
+            if (!text) text = framePrayerFallback(member.name, hot.desc, member.gender);
+            world.addPrayer({
+                id: `${w.sagaId}:prayer:d${today}:t${nowTick}:${member.id}`,
+                characterId: member.id,
+                name: member.name,
+                day: today,
+                tick: nowTick,
+                clock: clockLabel,
+                sceneId: rosterScene,
+                sceneName: templeName,
+                text,
+                wantDesc: hot.desc,
+                layer: hot.layer,
+                target: targetName,
+            });
+            // A CHARACTER-attributed beat at the temple so the prayer reads as the
+            // character speaking (surfaces live in the 拍流, joins the day's material).
+            emitCharacterBeat(rosterScene, member.id, member.name, text);
+            // Optional tiny mood relief — saying it out loud eases the heart a little.
+            member.state.mood = Math.max(-1, Math.min(1, member.state.mood + 0.05));
+            log(`  [祈願] ${member.name}在${templeName}對神明求告：${text}`);
         }
     }
 

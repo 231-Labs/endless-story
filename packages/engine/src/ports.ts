@@ -31,6 +31,7 @@ export type NegotiateCounterInput = Runner.characterAgent.NegotiateCounterInput;
 export type NegotiateCounterReply = Runner.characterAgent.NegotiateCounterReply;
 export type RehearsalDecideInput = Runner.characterAgent.RehearsalDecideInput;
 export type RehearsalDecideReply = Runner.characterAgent.RehearsalDecideReply;
+export type SpeakPrayerInput = Runner.characterAgent.SpeakPrayerInput;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -275,6 +276,14 @@ export interface SceneAgentPort extends SceneAgent {
      *  Real adapters implement it (one cheap LLM call, fail-safe to null); the fake
      *  omits it, so the tick simply never calls rehearsal. A null reply → no call. */
     decideRehearsal?(input: RehearsalDecideInput): Promise<RehearsalDecideReply | null>;
+    /** 祈願 (optional): voice a first-person, in-character SPOKEN prayer addressed
+     *  to 神明 at a temple — 角色真的來求、對神明說出口的話 —含蓄、民國語感、≤40字
+     *  (e.g.「城隍老爺在上，信女柳氏，只求那一紙契約莫奪了我的名字」). Real adapters
+     *  implement it (one cheap LLM call, fail-safe to null); the fake OMITS it, so
+     *  the tick's DETERMINISTIC framing (framePrayerFallback) voices the prayer
+     *  instead — the mechanism works and is testable with no LLM. null → the tick
+     *  falls back to the deterministic framing just the same. */
+    speakPrayer?(input: SpeakPrayerInput): Promise<string | null>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;

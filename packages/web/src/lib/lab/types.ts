@@ -146,6 +146,32 @@ export interface LabCharacterLive {
     carrying: Array<{ id: string; label: string; state?: string; hidden?: boolean; origin?: { day: number; tick: number; source: 'season' | 'lab' } }>;
 }
 
+/**
+ * 願牆 — one SPOKEN prayer a character voiced at a temple (神明 前). This is
+ * 對神明說出口的話 — a deliberate spoken utterance made at a physical temple —
+ * distinct from the internal 心事 aggregated on the 願榜 (`LabCharacterLive.wants`).
+ * `text` is the spoken prayer (the hero line); `wantDesc`/`layer` carry the
+ * underlying 心願 that drove it (a subtle sub-line).
+ */
+export interface LabPrayer {
+    id: string;
+    characterId: string;
+    name: string;
+    /** Uploaded portrait (by character name), if any. */
+    portraitUrl?: string;
+    day: number;
+    tick: number;
+    /** Part-of-day the prayer was spoken (清晨/黃昏/…). */
+    clock?: string;
+    /** The temple the prayer was spoken at. */
+    templeName: string;
+    /** The SPOKEN prayer, addressed to 神明. */
+    text: string;
+    /** The underlying 心願 (the want that drove the prayer). */
+    wantDesc?: string;
+    layer?: string;
+}
+
 export interface LabSeedSummary {
     id: string;
     source: 'builtin' | 'custom';

@@ -20,7 +20,7 @@ import { readRunMeta } from './store';
 import { readSeedRaw } from './seeds';
 import { assetNoteFor, assetUrlFor, listGallery } from './assets';
 import { beatsFromTickRecords, listArchiveEntries, readArchiveEntry, tailTickRecords } from './artifacts';
-import type { LabCharacterLive, LabLiveBeat, LabRunMeta, LabRunPhase } from './types';
+import type { LabCharacterLive, LabLiveBeat, LabPrayer, LabRunMeta, LabRunPhase } from './types';
 
 /** The chain-only preset fields the engine ignores but the handscroll wants. */
 interface RawPresetView extends RawPreset {
@@ -60,6 +60,10 @@ export interface LabLiveSnapshot {
      *  built-in name-matched oil panels. */
     artByLocationId: Record<string, string>;
     characters: LabCharacterLive[];
+    /** 願牆 — spoken prayers voiced at temples (神明 前), newest first. Distinct
+     *  from the internal 心事 on the 願榜 (`characters[].wants`). Empty when the
+     *  world carries no temple / nobody has prayed. */
+    prayers: LabPrayer[];
     /** Per-scene recent public lines (newest first) for the 題字流. */
     streams: Record<string, LabStreamLine[]>;
     /** Beats newer than the requested cursor (empty on cold runs). */
@@ -356,6 +360,26 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         };
     });
 
+    // ── 願牆 (spoken prayers at temples) ─────────────────────────────────────
+    // newest-first; portrait resolves by the prayer-giver's name (圖庫). The
+    // engine `Prayer.sceneName` is the temple; the internal 心願 rides along as
+    // wantDesc/layer for the plaque's subtle sub-line.
+    const prayers: LabPrayer[] = [...(w.prayers ?? [])]
+        .sort((a, b) => b.tick - a.tick || b.day - a.day)
+        .map((p) => ({
+            id: p.id,
+            characterId: p.characterId,
+            name: p.name,
+            portraitUrl: assetUrlFor('character', p.name),
+            day: p.day,
+            tick: p.tick,
+            clock: p.clock,
+            templeName: p.sceneName,
+            text: p.text,
+            wantDesc: p.wantDesc,
+            layer: p.layer,
+        }));
+
     // ── saga ───────────────────────────────────────────────────────────────
     const partOfDay = toDayPart(clock.partOfDay);
     const saga: Saga = {
@@ -409,6 +433,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         scenes,
         artByLocationId,
         characters,
+        prayers,
         streams,
         beats,
         logs: (active?.logs ?? []).slice(-40),

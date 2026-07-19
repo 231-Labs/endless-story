@@ -140,6 +140,34 @@ export interface WorldObject {
     origin?: WorldObjectOrigin;
 }
 
+/**
+ * A DELIBERATE SPOKEN prayer a character voiced at a physical temple (神明 前) —
+ * 角色真的來求、對神明說出口的話. This is NOT an internal unspoken want (that is a
+ * `Want`, aggregated on the 願榜); a Prayer is the spoken utterance itself,
+ * collected on the 願牆. `text` is the spoken line; `wantDesc`/`layer`/`target`
+ * carry the 心願 that drove it. Optional & backward-compatible (a world with no
+ * temple never records one). */
+export interface Prayer {
+    id: string;
+    characterId: string;
+    name: string;
+    /** Narrative day + monotonic tick the prayer was spoken. */
+    day: number;
+    tick: number;
+    /** Part-of-day label (清晨/黃昏/…) — when it was spoken. */
+    clock?: string;
+    /** The temple scene the prayer was spoken at. */
+    sceneId: string;
+    sceneName: string;
+    /** The SPOKEN prayer, addressed to 神明 (first-person, in-character). */
+    text: string;
+    /** The underlying 心願 that drove the prayer (the want's own words). */
+    wantDesc?: string;
+    layer?: string;
+    /** Optional target character id/name the underlying want ached toward. */
+    target?: string;
+}
+
 /** A clock-bound fact injected by the world, not authored by a character. The
  * event becomes canon exactly once when `atTick` is reached and is delivered to
  * the named witnesses before they choose where to go. */
@@ -236,6 +264,12 @@ export interface WorldStateData {
      *  established night pair opens the intimacy register directly. Optional &
      *  backward-compatible (absent ⇒ nobody established yet). */
     establishedPairs?: string[];
+    /** 願牆 — the spoken prayers characters have voiced at a temple (神明 前),
+     *  newest appended last. Distinct from `wants` (the internal 心事 on the
+     *  願榜): a Prayer is 對神明說出口的話. Optional & backward-compatible — a world
+     *  with no temple scene never records one, so `restore` restoring an absent
+     *  field leaves the 願牆 empty. */
+    prayers?: Prayer[];
 }
 
 const SNAPSHOT_FILE = 'world.json';
@@ -525,6 +559,18 @@ export class WorldState {
         const set = (this.data.establishedPairs ??= []);
         if (!set.includes(key)) set.push(key);
     }
+    // ── 願牆 (spoken prayers at a temple) ──────────────────────────────────────
+    /** Record one spoken prayer onto the 願牆 (append-only; lazily created). */
+    addPrayer(prayer: Prayer): void {
+        (this.data.prayers ??= []).push(prayer);
+    }
+    /** Has this character already voiced a prayer today? The once-per-day bound
+     *  that keeps a temple from flooding — a prayer is a deliberate visit, not a
+     *  reflex. Absent 願牆 ⇒ false. */
+    prayedToday(characterId: string, day: number): boolean {
+        return (this.data.prayers ?? []).some((p) => p.characterId === characterId && p.day === day);
+    }
+
     /** Rebuild the working bond graph from the persisted rows (empty ⇒ empty Map). */
     bondGraph(): BondGraph {
         return bondsFromJSON(this.data.bonds);
