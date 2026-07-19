@@ -240,35 +240,65 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                                                 {r.episode ? <span className="rounded-full bg-seal/80 px-2 py-0.5 text-white">收日</span> : null}
                                             </span>
                                         </summary>
-                                        <div className="mt-3 space-y-4">
-                                            {r.events.map((ev) => (
-                                                <div key={ev.id} className="border-l-2 border-hairline/70 pl-3">
-                                                    <p className="font-serif text-xs tracking-[0.2em] text-jade/90">
-                                                        {ev.sceneName}
-                                                        {ev.visibility === 'private' ? <span className="ml-2 text-jade/70">窗內事</span> : null}
-                                                        <span className="ml-2 text-mute/70">{ev.id}</span>
-                                                    </p>
-                                                    <ol className="mt-2 space-y-1.5">
-                                                        {ev.beats.map((b, i) => (
-                                                            <li key={i} className="font-serif text-sm leading-relaxed text-ink/85">
-                                                                <span className="text-ink">{b.name}</span>：{b.text}
-                                                                {b.inner ? <span className="ml-1 text-xs text-mute/80">（心聲：{b.inner}）</span> : null}
-                                                            </li>
-                                                        ))}
-                                                    </ol>
-                                                    {r.eventPovs.filter((p) => p.eventId === ev.id).length ? (
-                                                        <div className="mt-2 space-y-1.5 border-t border-hairline/40 pt-2">
-                                                            {r.eventPovs
-                                                                .filter((p) => p.eventId === ev.id)
-                                                                .map((p) => (
-                                                                    <p key={p.characterId} className="font-serif text-xs leading-relaxed text-mute/90">
-                                                                        <span className="text-cinnabar/85">{p.name}所見</span>｜{p.body}
+                                        <div className="mt-3 space-y-3">
+                                            {r.events.map((ev) => {
+                                                const evPovs = r.eventPovs.filter((p) => p.eventId === ev.id);
+                                                return (
+                                                    <div key={ev.id} className="rounded-lg bg-ink/[0.02] p-3.5 dark:bg-white/[0.03]">
+                                                        {/* 場籤一行：何地・質地・事號 */}
+                                                        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                                            <span className="rounded-sm bg-jade/15 px-1.5 py-0.5 font-serif text-2xs tracking-[0.2em] text-jade">
+                                                                {ev.sceneName}
+                                                            </span>
+                                                            {ev.visibility === 'private' ? (
+                                                                <span className="font-serif text-2xs tracking-[0.2em] text-jade/70">窗內事</span>
+                                                            ) : null}
+                                                            <span className="font-serif text-2xs tracking-[0.06em] text-mute/50">{ev.id}</span>
+                                                        </p>
+
+                                                        {/* 客觀之拍：名籤起行，心聲另起一縮行 —— 不再擠成一團 */}
+                                                        <ol className="mt-2.5 max-w-3xl space-y-2.5">
+                                                            {ev.beats.map((b, i) => (
+                                                                <li key={i}>
+                                                                    <p className="font-serif text-sm leading-relaxed text-ink/85">
+                                                                        <span className="mr-1.5 text-ink">{b.name}</span>
+                                                                        {b.text}
                                                                     </p>
+                                                                    {b.inner ? (
+                                                                        <p className="mt-1 border-l border-hairline/50 pl-2 font-serif text-xs leading-relaxed text-mute/80">
+                                                                            心聲｜{b.inner}
+                                                                        </p>
+                                                                    ) : null}
+                                                                </li>
+                                                            ))}
+                                                        </ol>
+
+                                                        {/* 眾聲：一家一摺 —— 名籤＋一行預覽，點開才展全文 */}
+                                                        {evPovs.length ? (
+                                                            <div className="mt-3 space-y-1.5 border-t border-hairline/40 pt-2.5">
+                                                                {evPovs.map((p) => (
+                                                                    <details key={p.characterId} className="group max-w-3xl">
+                                                                        <summary className="flex cursor-pointer list-none items-baseline gap-2">
+                                                                            <span className="shrink-0 rounded-sm bg-cinnabar/10 px-1.5 py-0.5 font-serif text-2xs tracking-[0.2em] text-cinnabar">
+                                                                                {p.name}所見
+                                                                            </span>
+                                                                            <span className="min-w-0 truncate font-serif text-xs text-mute/70 group-open:hidden">
+                                                                                {p.body}
+                                                                            </span>
+                                                                            <span aria-hidden className="ml-auto shrink-0 font-serif text-2xs text-mute/50 transition-transform group-open:rotate-180">
+                                                                                ▾
+                                                                            </span>
+                                                                        </summary>
+                                                                        <p className="mt-1.5 whitespace-pre-wrap font-serif text-xs leading-relaxed text-ink/75">
+                                                                            {p.body}
+                                                                        </p>
+                                                                    </details>
                                                                 ))}
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                            ))}
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                );
+                                            })}
                                             {r.economyNotices?.length ? (
                                                 <div className="border-l-2 border-seal/50 pl-3">
                                                     {r.economyNotices.map((line, i) => (
