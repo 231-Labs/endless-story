@@ -13,6 +13,7 @@
 
 // Pure narrative core (relocated from web/lib/chain).
 export * from './core/want-core.ts';
+export * from './core/bond-graph.ts';
 export * from './core/want-rewrite.ts';
 export * from './core/box-office.ts';
 export * from './core/scene-routing.ts';
