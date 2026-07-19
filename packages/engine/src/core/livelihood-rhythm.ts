@@ -16,10 +16,13 @@
  * instead of wandering.
  *
  * Occupation specifics (a 歌女 who sings at 入夜, a 記者 who files at 深宵) are
- * deliberately NOT modelled here: that knowledge is per-world and would hard-
- * code one saga's venues into the engine core. The generic day/night shape
- * fits ANY seed; a character whose living runs against the common clock simply
- * overrides the pull with their standing plan or a live want.
+ * deliberately NOT HARD-CODED here: that knowledge is per-world and would nail
+ * one saga's venues into the engine core. The generic day/night shape fits ANY
+ * seed; a character whose living runs against the common clock simply overrides
+ * the pull with their standing plan or a live want. When a seed DOES declare a
+ * character's行當專屬節律 (a per-part duty venue), the tick passes the resolved
+ * duty into `dutyRhythm` below — the venue still comes from the SEED, so this
+ * module stays seed-agnostic; it only renders whatever duty it is handed.
  *
  * Keyed on the six canonical part-of-day labels (see PARTS_OF_DAY in ports),
  * which the clock always produces regardless of ticks-per-day.
@@ -67,4 +70,46 @@ export function livelihoodRhythm(
         default:
             return undefined;
     }
+}
+
+/** Parts of the day where being on-post reads as working AGAINST the common
+ *  clock (everyone else is winding down / asleep) — a 歌女 singing 堂會 or a
+ *  記者 chasing the 付梓 deadline. A duty at these parts is framed as the night
+ *  shift the trade demands; day duties read as the ordinary working middle. */
+const NIGHT_DUTY_PARTS = new Set(['入夜', '深宵']);
+
+/**
+ * Duty-aware livelihood rhythm (行當專屬節律). When a character has a resolved
+ * duty for THIS part of the clock, this returns a stronger, ON-POST line naming
+ * the duty venue — framed as binding營生 (the trade's demand, your keep + your
+ * face in this line ride on it), NOT a want the character may weigh. It is still
+ * only fed into the move prompt as a soft pull; the tick keeps exactly one
+ * movement authority (the character's own choice), so a ripe want can still
+ * override it — but the framing tells the character this is the hour their
+ * living is earned. With no duty it delegates to `livelihoodRhythm` unchanged.
+ *
+ * Pure + seed-agnostic: the venue/note are handed in (resolved from the seed's
+ * occupationDuties at seed time), never hard-coded here.
+ *
+ * @param partOfDay one of the six canonical labels (清晨/日午/晡時/黃昏/入夜/深宵)
+ * @param duty this part's resolved duty (venue name + optional note), or undefined
+ * @param workScene the character's 做活處 name — the no-duty fallback's day anchor
+ * @param homeScene the character's 住處 name — the no-duty fallback's night anchor
+ * @returns an on-post duty line, or the generic rhythm line when there is no duty
+ */
+export function dutyRhythm(
+    partOfDay: string,
+    duty: { sceneName: string; note?: string } | undefined,
+    workScene?: string,
+    homeScene?: string,
+): string | undefined {
+    if (!duty) return livelihoodRhythm(partOfDay, workScene, homeScene);
+    const note = duty.note ? `${duty.note}，` : '';
+    const venue = `「${duty.sceneName}」`;
+    if (NIGHT_DUTY_PARTS.has(partOfDay)) {
+        // Night duty: the trade works while the town sleeps — a stronger 當值 pull.
+        return `${partOfDay}正是你當值的時辰：${note}該在${venue}當差。旁人這時辰都歇下了，你的營生偏在此刻——這不是想不想去，你的進項、你這行的臉面都在這上頭。旁的事，等當差歇了再說。`;
+    }
+    // Day duty: the ordinary working hours, but this is your post, not a choice.
+    return `${partOfDay}正是你當差的時辰：${note}該在${venue}上坐鎮理事。這是營生正事，不是想不想去——你的進項、你這行的臉面都繫在這上頭。旁的事，等當差歇了再說。`;
 }

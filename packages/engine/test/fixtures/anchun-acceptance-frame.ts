@@ -392,6 +392,18 @@ export function buildAnchunAcceptanceFrame(): SeasonFrame {
         "creditor": "錢莊先生與房東"
       }
     ]
+  },
+  "occupationDuties": {
+    "歌女": [
+      { "part": "入夜", "sceneName": "長三堂子花廳", "duty": true, "note": "唱堂會、接局" }
+    ],
+    "記者": [
+      { "part": "深宵", "sceneName": "報館茶室", "duty": true, "note": "趕稿、盯付梓" }
+    ],
+    "班主": [
+      { "part": "日午", "sceneName": "後台妝閣", "duty": true, "note": "坐鎮、理事、發落排戲" },
+      { "part": "晡時", "sceneName": "後台妝閣", "duty": true }
+    ]
   }
 } as SeasonFrame;
 }
