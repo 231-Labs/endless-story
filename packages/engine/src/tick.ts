@@ -28,6 +28,7 @@ import {
     shouldDeriveAftermath,
     tension,
 } from './core/want-core.ts';
+import { pickOrthogonalThreads, spawnWant, type LedgerEvent } from './core/want-rewrite.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
 import { BOND, advanceReady, bondOf, bumpBond, decayBonds, seedBond } from './core/bond-graph.ts';
 import { dutyRhythm } from './core/livelihood-rhythm.ts';
@@ -1465,6 +1466,99 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
         }
         delete acc.landedByChar;
+    }
+
+    // 7.75) NIGHTLY WANT REGENERATION (relationshipFallback wiring) — 願生不息.
+    // The structural guard against livelihood machinery crowding out feeling: a
+    // fresh want (especially an emotional one) can be BORN each night for EVERY
+    // character — even one who had no scene — so nobody flatlines once their
+    // personal arc resolves. Runs AFTER self-model + 心事自改 so it sees the day's
+    // resolutions. The agent alone decides IF one is born (a successor seeded by a
+    // want just resolved, or an ambient want stirred by real world/lifecycle
+    // pressure); the ≤4-live budget inside spawnWant is the ONLY cap, so it never
+    // spams, and there is NO artificial floor — null when nothing real stirs one.
+    // Only NARRATIVE wants are added (spawnWant → kind:'narrative'); no economic
+    // want, so season balances are untouched. Ledger figures NEVER enter the
+    // prompt: worldPressure/lifecycle are terse PROSE (「銀錢將盡」, not 「餘 3 圓」).
+    if (dayEnd && w.relationshipFallback) {
+        const dayStartTick = nowTick - c.tickOfDay; // first tick of today
+        const castNames = w.cast.map((member) => member.name);
+        const regenEvents: LedgerEvent[] = [];
+        // Money units struck from any scheduled-event handle so no ledger figure
+        // leaks; day-counts I compose in `lifecycle` are explicitly allowed.
+        const figureFree = (s: string) => s.replace(/[0-9０-９]+\s*[圓分兩文錢]?/g, '').replace(/\s+/g, '');
+        // The nearest still-offered contract deadline — a clean PROSE label (名目),
+        // number-free, feeding both the imminence clause and the finitude line.
+        const nearContract = w.economy
+            ? Object.values(w.economy.contracts)
+                  .filter((ct) => ct.status === 'offered' && ct.deadlineDay >= today)
+                  .sort((a, b) => a.deadlineDay - b.deadlineDay)[0]
+            : undefined;
+        for (const member of w.cast) {
+            const liveWants = world.liveWantsOf(member.id).map((x) => ({ layer: x.layer, desc: x.desc }));
+            // descs of wants this character RESOLVED today (resolvedTick since day-start).
+            const justResolved = wants
+                .filter(
+                    (x) =>
+                        x.retired &&
+                        x.characterId === member.id &&
+                        x.resolvedTick != null &&
+                        x.resolvedTick >= dayStartTick,
+                )
+                .map((x) => x.desc);
+
+            // worldPressure — the EXTERNAL world pressing on TA (not a want already
+            // held): broke / short runway, the nearest looming deadline, acute
+            // hunger. 0–2 terse PROSE clauses, no ledger figures.
+            const pressure: string[] = [];
+            const acct = w.economy?.state.accounts[member.id];
+            if (acct) {
+                const avail = BigInt(acct.available);
+                const daily = BigInt(acct.dailyFixedCost);
+                if (avail < 0n) pressure.push('入不敷出');
+                else if (daily > 0n && avail / daily <= 2n) pressure.push('銀錢將盡');
+            }
+            const nextScheduled = (w.scheduledEvents ?? [])
+                .filter((s) => s.atTick > nowTick && s.witnessIds.includes(member.id))
+                .sort((a, b) => a.atTick - b.atTick)[0];
+            const deadlineHandle = nextScheduled
+                ? nextScheduled.clock ?? figureFree(nextScheduled.text).slice(0, 12)
+                : nearContract?.label;
+            if (deadlineHandle) pressure.push(`${deadlineHandle}之期將至`);
+            if (member.state.hunger > 0.6) pressure.push('腹餒');
+            const worldPressure = pressure.slice(0, 2).join('，');
+
+            // lifecycle — a terse finitude line (day-counts are allowed here).
+            const lifecycle = nearContract
+                ? `第${today}日，離「${nearContract.label}」大限尚${Math.max(0, nearContract.deadlineDay - today)}日`
+                : `第${today}日，又過了些時日`;
+
+            // otherThreads — the character's OWN remembered threads furthest from
+            // their current wants (the door out of a single-axis loop). Best-effort.
+            let otherThreads: string[] = [];
+            try {
+                const hits = await recall.recall(member.id, member.name, 8, today);
+                const mems = [...new Set(hits.map((h) => h.text).filter(Boolean))];
+                otherThreads = pickOrthogonalThreads(mems, liveWants.map((x) => x.desc), 3);
+            } catch {
+                otherThreads = []; // recall unavailable → no threads, not fatal
+            }
+
+            const spawn = await agent.regenerateWant({
+                name: member.name,
+                persona: member.persona,
+                secret: member.secret,
+                coreIdentity: member.coreIdentity,
+                liveWants,
+                justResolved,
+                worldPressure,
+                lifecycle,
+                otherThreads,
+            });
+            if (spawn && spawnWant(wants, member.id, spawn, nowTick, regenEvents, castNames)) {
+                log(`  願生: ${member.name}「${spawn.desc}」`);
+            }
+        }
     }
 
     // 7.8) PRODUCTION PREMIERE — at day-end, if the razor holds (a scripted work,
