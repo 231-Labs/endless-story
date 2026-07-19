@@ -26,6 +26,7 @@ import {
     tension,
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
+import { livelihoodRhythm } from './core/livelihood-rhythm.ts';
 import { PARTS_OF_DAY } from './ports.ts';
 import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
@@ -318,6 +319,15 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 member.plan ? `【你這些日子的打算】\n${member.plan}` : '',
                 `【眼下心事】\n${live.map((want) => `- [${want.layer}] ${want.desc}`).join('\n')}`,
             ].filter(Boolean).join('\n'),
+            // Livelihood day-rhythm (行當節律): a soft, overridable pull toward the
+            // character's 做活處 by day and 住處 at night, drawn from this seed's
+            // own home/work anchors. Never routes — just gives an idle character a
+            // default of earning their keep / going home rather than wandering.
+            rhythmHint: livelihoodRhythm(
+                clockLabel,
+                w.workByChar[member.id] ? world.sceneNameById(w.workByChar[member.id]) : undefined,
+                w.homeByChar[member.id] ? world.sceneNameById(w.homeByChar[member.id]) : undefined,
+            ),
             currentSceneName: world.sceneNameById(currentSceneId),
             options,
             clock: clockLabel,
