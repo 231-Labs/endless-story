@@ -174,6 +174,34 @@ export function buildAnchunAcceptanceFrame(): SeasonFrame {
         "id": "huaguang",
         "label": "華光影片社",
         "openingYuan": 400
+      },
+      {
+        "id": "shensheng",
+        "label": "申聲唱片行",
+        "openingYuan": 260,
+        "dailyFixedCostYuan": 6,
+        "costNote": "壓片工錢、行棧租與電費"
+      },
+      {
+        "id": "shenbao",
+        "label": "申報館",
+        "openingYuan": 180,
+        "dailyFixedCostYuan": 5,
+        "costNote": "紙墨、排字工與館舍開銷",
+        "wages": [
+          { "name": "方競西", "amountYuan": 3 }
+        ]
+      },
+      {
+        "id": "changsan",
+        "label": "長三堂子",
+        "openingYuan": 320,
+        "dailyFixedCostYuan": 8,
+        "costNote": "堂子門面、琴師與粉頭月例",
+        "shortfallCreditor": "堂子的老鴇",
+        "wages": [
+          { "name": "金鳳", "amountYuan": 6 }
+        ]
       }
     ],
     "characterDefaults": {

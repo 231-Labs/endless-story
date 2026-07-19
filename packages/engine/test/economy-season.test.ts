@@ -195,6 +195,27 @@ test('ignored control: the deadline expires deterministically and the aftermath 
     assert.deepEqual(auditSeasonEconomy(world), []);
 });
 
+test('多堂口: each establishment pays its own people from its own pot', async () => {
+    const world = buildSeasonWorld();
+    await runDays(world, new FakeSceneAgent(), 7); // day 1 settles, into day 2
+
+    const b = balances(world);
+    // 金鳳 (歌女) draws 6圓/day from 長三堂子, pays 3圓 食宿 → net +3, no longer bleeding
+    assert.ok(b['金鳳'] > 15n * YUAN, `金鳳 should earn from her 堂子, got ${b['金鳳']}`);
+    // and the wage came out of 長三堂子's OWN pot, never the troupe
+    const jin = world.idByName('金鳳')!;
+    const jinWages = world.data.economy!.state.ledger.filter((txn) => txn.kind === 'wage' && txn.to === jin);
+    assert.ok(jinWages.length > 0 && jinWages.every((txn) => txn.from === 'changsan'), '金鳳 is paid by 長三堂子, not 班庫');
+    assert.ok(b['長三堂子'] < 320n * YUAN, '長三堂子 funded her wage + its own fixed cost from its reserves');
+
+    // 記者 方競西 draws from 申報館; the troupe 班庫 pays neither of them
+    const fang = world.idByName('方競西')!;
+    const fangWages = world.data.economy!.state.ledger.filter((txn) => txn.kind === 'wage' && txn.to === fang);
+    assert.ok(fangWages.length > 0 && fangWages.every((txn) => txn.from === 'shenbao'), '方競西 is paid by 申報館');
+    const troupePaid = world.data.economy!.state.ledger.filter((txn) => txn.kind === 'wage' && txn.from === 'troupe').map((txn) => txn.to);
+    assert.ok(!troupePaid.includes(jin) && !troupePaid.includes(fang), '班庫 pays only its own troupe hands');
+});
+
 test('契約限期: the moot 搭檔 want is foreclosed and a party-private percept is delivered', async () => {
     const world = buildSeasonWorld();
     const liu = world.idByName('柳安春')!;
@@ -252,11 +273,13 @@ test('percepts are knowledge- and authority-scoped', () => {
     assert.doesNotMatch(jinPercept, /班庫現有/);
     assert.match(jinPercept, /核准權在沈雪笙/);
 
-    // stakes are knowledge-scoped: a wage-drawer knows her livelihood hangs on
-    // the troupe; 金鳳 (not on the payroll) carries no such line
+    // stakes are knowledge- AND establishment-scoped: a troupe hand knows her
+    // keep hangs on the 班庫; 金鳳, on the 長三堂子 payroll, knows hers hangs on her
+    // OWN house — never the troupe's.
     const lian = world.idByName('連翹')!;
     assert.match(economyPerceptFor(world, lian, world.data.roster[lian])!, /你的工錢喫住都繫在/);
-    assert.doesNotMatch(jinPercept, /工錢喫住/);
+    assert.match(jinPercept, /工錢喫住繫在長三堂子/);
+    assert.doesNotMatch(jinPercept, /都繫在.*這一班/);
 });
 
 test('a light pay packet escalates the livelihood stakes in the percept', () => {

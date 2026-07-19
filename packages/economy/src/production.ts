@@ -349,12 +349,21 @@ export interface WageOrder {
   amount: bigint;
 }
 
+/** One establishment's payroll: it pays its own people out of its own pot,
+ *  prorated on shortfall independently of every other establishment. */
+export interface WagePayroll {
+  payerAccountId: string;
+  orders: WageOrder[];
+}
+
 export interface DaySettleOrder {
   day: number;
   causeEventId: string;
-  /** wage schedule paid from the payer account, prorated on shortfall the same way
-   *  settleDay prorates payroll (budget < sum → each gets amount·budget/sum). */
-  wages?: { payerAccountId: string; orders: WageOrder[] };
+  /** wage schedule(s) — each payroll is paid from its own payer account and
+   *  prorated on shortfall the same way settleDay prorates (budget < sum → each
+   *  gets amount·budget/sum). Accepts a single payroll (one establishment, the
+   *  legacy shape) or an array (multi-establishment: troupe, song house, paper…). */
+  wages?: WagePayroll | WagePayroll[];
   /** account that absorbs fixed costs (rent-collectors, rice shops, the street). */
   marketAccountId: string;
 }
@@ -396,20 +405,22 @@ export function settleEconomyDay(state: EconomyState, order: DaySettleOrder): Ec
     return perAccount[id];
   };
 
-  // 1. wages — prorate when the pot cannot cover the schedule (same rule as settleDay).
-  if (order.wages) {
-    const payer = next.accounts[order.wages.payerAccountId];
-    if (!payer) throw new Error(`economy: unknown wage payer ${order.wages.payerAccountId}`);
+  // 1. wages — each establishment's payroll prorates against ITS OWN pot (same
+  //    rule as settleDay), independently of every other establishment.
+  const payrolls = order.wages ? (Array.isArray(order.wages) ? order.wages : [order.wages]) : [];
+  for (const payroll of payrolls) {
+    const payer = next.accounts[payroll.payerAccountId];
+    if (!payer) throw new Error(`economy: unknown wage payer ${payroll.payerAccountId}`);
     let sum = 0n;
-    for (const w of order.wages.orders) sum += w.amount;
+    for (const w of payroll.orders) sum += w.amount;
     const budget = bmin(payer.available, sum);
-    for (const w of order.wages.orders) {
+    for (const w of payroll.orders) {
       const pay = sum === 0n ? 0n : budget < sum ? (w.amount * budget) / sum : w.amount;
       if (pay <= 0n) continue;
       const moved = move(next, {
-        txnId: `day${order.day}:wage:${order.wages.payerAccountId}->${w.memberAccountId}`,
+        txnId: `day${order.day}:wage:${payroll.payerAccountId}->${w.memberAccountId}`,
         day: order.day, kind: "wage",
-        from: order.wages.payerAccountId, to: w.memberAccountId,
+        from: payroll.payerAccountId, to: w.memberAccountId,
         amount: pay, memo: "daily wage", causeEventId: order.causeEventId, actorId: null,
       });
       if (moved.rejection) throw new Error(`economy: wage settlement failed: ${moved.rejection.message}`);

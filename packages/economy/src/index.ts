@@ -80,6 +80,7 @@ export type {
   EconomyResult,
   TransactionKind,
   WageOrder,
+  WagePayroll,
   DaySettleOrder,
   AccountDayLedger,
   EconomyDaySettle,
