@@ -188,6 +188,14 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                                     {o.visibility !== 'visible' ? ` · ${o.visibility === 'hidden' ? '隱' : '毀'}` : ''}
                                     {o.state ? ` · ${o.state}` : ''}
                                 </span>
+                                {o.origin ? (
+                                    <span
+                                        className="mt-0.5 block font-serif text-2xs tracking-[0.1em] text-mute/55"
+                                        title={`唯一身分 ${o.id}　生於第${o.origin.day}日·第${o.origin.tick}拍（${o.origin.source === 'season' ? '季框種下' : 'lab 置入'}）`}
+                                    >
+                                        {o.origin.source === 'season' ? '季' : '手'}·生於 d{o.origin.day}·t{o.origin.tick}
+                                    </span>
+                                ) : null}
                             </span>
                             <button
                                 type="button"
