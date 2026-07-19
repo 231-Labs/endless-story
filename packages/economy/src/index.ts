@@ -100,6 +100,7 @@ export {
   expireContracts,
   fileCounter,
   resolveCounter,
+  counterAskGate,
   pendingSigners,
   readyToSettle,
   persistContracts,

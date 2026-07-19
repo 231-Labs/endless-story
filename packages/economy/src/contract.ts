@@ -56,8 +56,11 @@ export interface EconomicContract {
   negotiatorIds: string[];
   /** an unanswered counter-demand from a party — one at a time; the proposer
    *  answers through resolveCounter (an authored policy today, a real
-   *  counterparty agent from another saga later). */
-  pendingCounter?: { byId: string; demand: string; day: number };
+   *  counterparty agent from another saga later). A money counter carries `ask`:
+   *  the subunits delta the demander wants added to the deal; accepting it raises
+   *  total, bumps a split, and re-escrows the delta. Absent `ask` = a CONDITION
+   *  counter (today's behaviour: append a term, extend the deadline, no money moves). */
+  pendingCounter?: { byId: string; demand: string; day: number; ask?: bigint };
   causeEventId: string;
   /** terminal settlement event, set exactly once. */
   outcomeEventId?: string;
@@ -82,7 +85,9 @@ export interface ContractRejection {
     | "PAST_DEADLINE"
     | "COUNTER_PENDING"
     | "NO_COUNTER"
-    | "EMPTY_DEMAND";
+    | "EMPTY_DEMAND"
+    | "BAD_ASK"
+    | "ASK_NEEDS_BENEFICIARY";
   message: string;
 }
 
@@ -170,12 +175,14 @@ export function offerContract(state: ContractState, offer: ContractOffer): Contr
 
 /**
  * A party pushes the terms back instead of signing or walking: one pending
- * demand at a time, answered by resolveCounter. Filing a counter never moves
- * money — it is a claim on the CONDITIONS.
+ * demand at a time, answered by resolveCounter. A CONDITION counter (no `ask`)
+ * never moves money — it is a claim on the CONDITIONS. A MONEY counter carries
+ * `ask` (subunits delta the demander wants added): filing it still moves no
+ * money; only accepting it (resolveCounter) re-escrows and bumps the deal.
  */
 export function fileCounter(
   state: ContractState,
-  req: { contractId: string; actorId: string; demand: string; day: number; causeEventId: string },
+  req: { contractId: string; actorId: string; demand: string; day: number; ask?: bigint; causeEventId: string },
 ): ContractResult {
   const contract = state.contracts[req.contractId];
   if (!contract) return fail(state, "NO_CONTRACT", `unknown contract ${req.contractId}`);
@@ -187,11 +194,17 @@ export function fileCounter(
   ]);
   if (!voices.has(req.actorId)) return fail(state, "NOT_SIGNER", `${req.actorId} has no negotiating standing on ${contract.label}`);
   if (!req.demand.trim()) return fail(state, "EMPTY_DEMAND", "a counter-offer needs a written demand");
+  if (req.ask !== undefined && req.ask <= 0n) {
+    return fail(state, "BAD_ASK", `a money counter's ask must be positive, got ${req.ask}`);
+  }
   if (contract.pendingCounter) {
     return fail(state, "COUNTER_PENDING", `${contract.label} already has an unanswered demand: ${contract.pendingCounter.demand}`);
   }
   const contracts = cloneContracts(state.contracts);
-  contracts[req.contractId].pendingCounter = { byId: req.actorId, demand: req.demand.trim(), day: req.day };
+  contracts[req.contractId].pendingCounter =
+    req.ask !== undefined
+      ? { byId: req.actorId, demand: req.demand.trim(), day: req.day, ask: req.ask }
+      : { byId: req.actorId, demand: req.demand.trim(), day: req.day };
   return { state: { economy: state.economy, contracts }, applied: [], duplicate: false };
 }
 
@@ -200,18 +213,57 @@ export function fileCounter(
  * the seam is where a real counterparty agent (another saga's stakeholder)
  * plugs in later. Accepting writes the demand into the terms and may grant
  * grace days to sign the amended paper; refusing leaves the offer as it was.
+ *
+ * A MONEY counter (pending.ask set) accepted with a `bumpBeneficiary` re-issues
+ * the paper WITH more money: the delta is re-escrowed on the proposer's account
+ * (a real ledger transaction, so the conservation audit stays green), `total`
+ * grows by the ask, and the named beneficiary's split grows by the ask (a fresh
+ * split is pushed if that beneficiary had none). The escrow release/payout paths
+ * key off `contract.total`, so the bumped total already covers the extra reserve.
+ * Refusing a money counter moves nothing — it clears the demand like any other.
  */
 export function resolveCounter(
   state: ContractState,
-  req: { contractId: string; accept: boolean; day: number; graceDays?: number; causeEventId: string },
+  req: { contractId: string; accept: boolean; day: number; graceDays?: number; bumpBeneficiary?: string; causeEventId: string },
 ): ContractResult {
   const contract = state.contracts[req.contractId];
   if (!contract) return fail(state, "NO_CONTRACT", `unknown contract ${req.contractId}`);
-  if (!contract.pendingCounter) return fail(state, "NO_COUNTER", `${contract.label} has no pending demand`);
+  const pending = contract.pendingCounter;
+  if (!pending) return fail(state, "NO_COUNTER", `${contract.label} has no pending demand`);
+
+  // A money counter accepted: re-escrow the delta, then bump total + the named split.
+  if (req.accept && pending.ask !== undefined) {
+    if (!req.bumpBeneficiary) {
+      return fail(state, "ASK_NEEDS_BENEFICIARY", `${contract.label} carries a money ask but names no beneficiary to bump`);
+    }
+    // Re-escrow the delta on the proposer's account. The caller pre-checks the
+    // gate (counterAskGate), so a rejection here is defensive — surface it.
+    const reserved = reserveFunds(state.economy, {
+      txnId: `contract:${contract.id}:counter:${req.day}:escrow`,
+      accountId: contract.proposerAccountId,
+      amount: pending.ask,
+      memo: `${contract.label} 還價加碼補押`,
+      causeEventId: req.causeEventId,
+    });
+    if (reserved.rejection) return fail(state, reserved.rejection.code, reserved.rejection.message);
+    const contracts = cloneContracts(state.contracts);
+    const next = contracts[req.contractId];
+    next.total = next.total + pending.ask;
+    const split = next.splits.find((s) => s.beneficiary === req.bumpBeneficiary);
+    if (split) split.amount = split.amount + pending.ask;
+    else next.splits.push({ beneficiary: req.bumpBeneficiary, amount: pending.ask, memo: "還價加碼" });
+    // Then the existing accept behaviour: the demand becomes a term, the written
+    // deadline extends by the grace（簽期順延一日）.
+    next.terms = [...next.terms, pending.demand];
+    next.deadlineDay = next.deadlineDay + (req.graceDays ?? 0);
+    next.pendingCounter = undefined;
+    return { state: { economy: reserved.state, contracts }, applied: reserved.applied, duplicate: false };
+  }
+
   const contracts = cloneContracts(state.contracts);
   const next = contracts[req.contractId];
   if (req.accept) {
-    next.terms = [...next.terms, next.pendingCounter!.demand];
+    next.terms = [...next.terms, pending.demand];
     // An accepted amendment re-issues the paper: the WRITTEN deadline extends
     // by the grace, exactly as the overnight answer promises（簽期順延一日）.
     // The old max(deadline, day+grace) silently granted NOTHING when the
@@ -221,6 +273,28 @@ export function resolveCounter(
   }
   next.pendingCounter = undefined;
   return { state: { economy: state.economy, contracts }, applied: [], duplicate: false };
+}
+
+/**
+ * The mechanical gate for a MONEY counter (§3 CONTRACT_ESCROW): may the proposer
+ * afford to re-escrow `ask` AND stay above its runway floor? Pure — no mutation,
+ * no ledger. The caller runs this BEFORE resolveCounter; an agent座席 may only
+ * choose within the space this gate leaves open (LLM 永不碰數字). ok ⇔ the account
+ * exists ∧ available covers the ask ∧ what remains still clears
+ * dailyFixedCost × floorDays days of runway.
+ */
+export function counterAskGate(
+  economy: EconomyState,
+  proposerAccountId: string,
+  ask: bigint,
+  floorDays: number,
+): { ok: boolean; reason?: string } {
+  const account = economy.accounts[proposerAccountId];
+  if (!account) return { ok: false, reason: "找不到出資堂口的帳" };
+  if (account.available < ask) return { ok: false, reason: "帳上現銀不夠補這筆押款" };
+  const floor = account.dailyFixedCost * BigInt(floorDays);
+  if (account.available - ask < floor) return { ok: false, reason: "補了這筆押款便要破底" };
+  return { ok: true };
 }
 
 /** Name the 聯名搭檔. Only a required signer may fill it; refilling is rejected. */
@@ -403,7 +477,9 @@ export interface PersistedEconomicContract {
   deadlineDay: number;
   terms: string[];
   negotiatorIds?: string[];
-  pendingCounter?: { byId: string; demand: string; day: number };
+  /** `ask` persists as a decimal string (bigint cannot survive JSON). Older
+   *  persisted rows have no `askSubunits` and restore to `ask: undefined`. */
+  pendingCounter?: { byId: string; demand: string; day: number; askSubunits?: string };
   causeEventId: string;
   outcomeEventId?: string;
 }
@@ -427,7 +503,14 @@ export function persistContracts(contracts: Record<string, EconomicContract>): R
       causeEventId: c.causeEventId,
     };
     if (c.outcomeEventId) row.outcomeEventId = c.outcomeEventId;
-    if (c.pendingCounter) row.pendingCounter = { ...c.pendingCounter };
+    if (c.pendingCounter) {
+      row.pendingCounter = {
+        byId: c.pendingCounter.byId,
+        demand: c.pendingCounter.demand,
+        day: c.pendingCounter.day,
+      };
+      if (c.pendingCounter.ask !== undefined) row.pendingCounter.askSubunits = c.pendingCounter.ask.toString();
+    }
     out[id] = row;
   }
   return out;
@@ -445,7 +528,14 @@ export function restoreContracts(persisted: Record<string, PersistedEconomicCont
       signedBy: [...c.signedBy],
       terms: [...(c.terms ?? [])],
       negotiatorIds: [...(c.negotiatorIds ?? [])],
-      pendingCounter: c.pendingCounter ? { ...c.pendingCounter } : undefined,
+      pendingCounter: c.pendingCounter
+        ? {
+            byId: c.pendingCounter.byId,
+            demand: c.pendingCounter.demand,
+            day: c.pendingCounter.day,
+            ask: c.pendingCounter.askSubunits !== undefined ? BigInt(c.pendingCounter.askSubunits) : undefined,
+          }
+        : undefined,
     };
   }
   return out;
