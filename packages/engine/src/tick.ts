@@ -42,7 +42,7 @@ import { PARTS_OF_DAY } from './ports.ts';
 import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds } from './core/season-economy.ts';
+import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -367,6 +367,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const rehearsalToday = w.rehearsalCall?.day === today ? w.rehearsalCall : undefined;
     const rehearsalTroupe = rehearsalToday ? troupePlayerIds(world) : new Set<string>();
     const rehearsalVenueName = rehearsalToday ? world.sceneNameById(rehearsalToday.venueSceneId) : '';
+    // HUNGER as a movement driver (餓了去食肆買東西吃): a pressing belly outranks
+    // work. Precomputed once — sceneId → the cheapest location-anchored meal —
+    // and EMPTY for any seed whose meals carry no sceneName, so the whole drive
+    // is inert there. spendableOf reads a character's OWN purse (self-paid meals).
+    const HUNGER_SEEK = 0.55; // pressing hunger — pull the mover to go eat first
+    const foodScenes: Map<string, SeasonCatalogItem> = w.economy ? foodScenesOf(world) : new Map();
+    const spendableOf = (id: string): bigint => BigInt(w.economy?.state.accounts[id]?.available ?? '0');
     for (const member of orderedMovers) {
         const restUntil = restUntilByChar[member.id];
         // Travel across town consumes time: a one-tick rest prevents oscillation
@@ -437,25 +444,47 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // 入夜唱堂會、記者深宵趕稿、班主坐鎮後台), dutyRhythm swaps in a stronger
             // on-post line naming the duty venue; otherwise it delegates to the
             // generic rhythm above. Still a soft hint — movement authority is untouched.
-            rhythmHint: dutyRhythm(
-                clockLabel,
-                (() => {
-                    // A player's OWN 行當專屬 duty for this part takes precedence.
-                    const memberDuty = member.duties?.find((d) => d.part === clockLabel && d.duty);
-                    if (memberDuty) return { sceneName: world.sceneNameById(memberDuty.sceneId), note: memberDuty.note };
-                    // Else the 班主's called rehearsal is a TRANSIENT afternoon duty for
-                    // troupe players with no own duty this part: it pulls them to the
-                    // venue so bankRehearsalAttendance banks presence (box-office quality)
-                    // and, with emergentProduction, their rehearse accrues effort. Soft
-                    // hint only — the single movement authority is untouched.
-                    if (rehearsalToday && (clockLabel === '日午' || clockLabel === '晡時') && rehearsalTroupe.has(member.id)) {
-                        return { sceneName: rehearsalVenueName, note: `排《${rehearsalToday.title}》，班主叫的` };
+            rhythmHint: (() => {
+                // HUNGER outranks work — 空著肚子做不了活. When hunger presses and a
+                // location-anchored food scene sells a meal this mover can afford,
+                // the strongest pull is to go eat FIRST (matching the old agent-
+                // season eat drive). Skipped when already standing at a food scene
+                // (§3.5 feeds them in passing) or when none is affordable — then it
+                // falls through to the own-duty / rehearsal / generic rhythm below.
+                // Soft hint only; the single movement authority is untouched. A seed
+                // with no sceneName'd meal has an empty foodScenes ⇒ this never fires.
+                if (w.economy && foodScenes.size && member.state.hunger > HUNGER_SEEK && !foodScenes.has(currentSceneId)) {
+                    const affordable = [...foodScenes].filter(([, item]) => spendableOf(member.id) >= BigInt(item.priceSubunits));
+                    // prefer a food scene in the mover's own district; else any affordable one.
+                    const sameDistrict = affordable.filter(([foodSceneId]) => world.sameDistrict(currentSceneId, foodSceneId));
+                    const pick = sameDistrict[0] ?? affordable[0];
+                    if (pick) {
+                        const [foodSceneId, meal] = pick;
+                        const foodSceneName = world.sceneNameById(foodSceneId);
+                        const priceText = formatMoney(w.economy, BigInt(meal.priceSubunits));
+                        return `腹中空得發慌，空著肚子做不了活——先往「${foodSceneName}」墊墊肚子（一份${meal.label}${priceText}），趁早去吃，旁的事等吃過再說。`;
                     }
-                    return undefined;
-                })(),
-                w.workByChar[member.id] ? world.sceneNameById(w.workByChar[member.id]) : undefined,
-                w.homeByChar[member.id] ? world.sceneNameById(w.homeByChar[member.id]) : undefined,
-            ),
+                }
+                return dutyRhythm(
+                    clockLabel,
+                    (() => {
+                        // A player's OWN 行當專屬 duty for this part takes precedence.
+                        const memberDuty = member.duties?.find((d) => d.part === clockLabel && d.duty);
+                        if (memberDuty) return { sceneName: world.sceneNameById(memberDuty.sceneId), note: memberDuty.note };
+                        // Else the 班主's called rehearsal is a TRANSIENT afternoon duty for
+                        // troupe players with no own duty this part: it pulls them to the
+                        // venue so bankRehearsalAttendance banks presence (box-office quality)
+                        // and, with emergentProduction, their rehearse accrues effort. Soft
+                        // hint only — the single movement authority is untouched.
+                        if (rehearsalToday && (clockLabel === '日午' || clockLabel === '晡時') && rehearsalTroupe.has(member.id)) {
+                            return { sceneName: rehearsalVenueName, note: `排《${rehearsalToday.title}》，班主叫的` };
+                        }
+                        return undefined;
+                    })(),
+                    w.workByChar[member.id] ? world.sceneNameById(w.workByChar[member.id]) : undefined,
+                    w.homeByChar[member.id] ? world.sceneNameById(w.homeByChar[member.id]) : undefined,
+                );
+            })(),
             currentSceneName: world.sceneNameById(currentSceneId),
             options,
             clock: clockLabel,
@@ -662,6 +691,42 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
         }
         log(byScene.size ? `  夜場: ${byScene.size} 私戲` : '  夜: 快轉, sleep consolidates');
+    }
+
+    // 3.5) 順路而食 (eat-in-passing) — autonomic survival, deterministic by design.
+    // This is 餓了就吃, not a dramatic choice (the old agent-season `eat`): an awake
+    // character standing at a food scene who is at all hungry, can pay, and hasn't
+    // eaten there today buys the meal — the relieve-hunger effect fires through the
+    // SAME purchase path prose money must go through. NO scene beat is emitted (it
+    // must never inflate scene counts); a [食] day-log + log line is the whole
+    // surface. Never fatal: any rejection (broke / once-per-day / no economy) is
+    // swallowed. Runs BEFORE scenes so a just-fed belly no longer reads as 腹中空 in
+    // this tick's stateLine. Inert for any seed with no sceneName'd meal.
+    if (!night && economy && w.economy && foodScenes.size) {
+        const EAT_AT_STALL = 0.35; // at the stall and at all hungry ⇒ you eat
+        for (const member of w.cast) {
+            const rosterScene = w.roster[member.id];
+            const meal = foodScenes.get(rosterScene);
+            if (!meal || member.state.hunger <= EAT_AT_STALL) continue;
+            if (spendableOf(member.id) < BigInt(meal.priceSubunits)) continue;
+            try {
+                const outcome = economy.commitCommand(world, {
+                    actorId: member.id,
+                    sceneId: rosterScene,
+                    witnessIds: [member.id],
+                    command: { action: 'purchase', itemId: meal.id },
+                    causeEventId: `${w.sagaId}:eat:d${today}:t${nowTick}:${member.id}`,
+                    seq: 0,
+                    day: today,
+                });
+                if (!outcome.ok) continue; // once-per-day / can't afford — never fatal
+                const eaten = `${member.name}在${world.sceneNameById(rosterScene)}吃了${meal.label}（${formatMoney(w.economy, BigInt(meal.priceSubunits))}）`;
+                w.dayAccum.lines.push(`[食] ${eaten}`);
+                log(`  [食] ${eaten}`);
+            } catch (error) {
+                log(`  [食] ${member.name} 進食未成：${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
     }
 
     // 4) SCENES — self-assembled interaction loops.
