@@ -49,6 +49,11 @@ export interface MoveSceneOption {
     /** Personal anchors are prompt-visible affordances, never engine routing. */
     isHome?: boolean;
     isWork?: boolean;
+    /** True when this scene is in the SAME district as where you stand — a few
+     *  steps, no road. False ⇒ a cross-town trip: it costs you the turn to walk
+     *  (you'll likely rest after), and you may be waylaid by someone on the way.
+     *  Visible physics, never engine routing. */
+    near?: boolean;
 }
 
 /** A live longing the mover carries — the ache that MIGHT move their feet at
@@ -108,6 +113,7 @@ export function buildSystemPrompt(isNight?: boolean): string {
         '4. reason 用第一人稱、≤30 字,寫出你**為什麼**走(或留)。',
         '5. 若提到別人，姓名與第三人稱必須照場景清單的正式資料；不可改名、倒字或把女兒身寫成「他」。',
         '6. 一律使用繁體中文（臺灣用字），不可混入簡體字。',
+        '7. 標「跨區·得走一趟」的去處在城裡另一頭：走這一趟要花掉這一拍的工夫（到了多半也就歇了），路上還可能撞見人被絆住。本區挪步則輕省。想去就去，但要值得。',
     ];
     if (isNight) {
         base.push(
@@ -163,7 +169,11 @@ export function buildUserPrompt(input: MoveDecideInput): string {
                 .filter(Boolean)
                 .map((label) => `〔${label}〕`)
                 .join('');
-            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${privacy}(${who})${desc}`;
+            // Cross-district trips are marked so the cost is legible: only mark
+            // the far ones (near is the quiet default) and only when the seed
+            // actually carries districts (near is undefined ⇒ no marker).
+            const far = o.near === false ? '〔跨區·得走一趟〕' : '';
+            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${far}${privacy}(${who})${desc}`;
         })
         .join('\n');
     const heart =

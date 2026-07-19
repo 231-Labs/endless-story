@@ -38,7 +38,7 @@ interface RawPreset {
      *  fallback wiring is enabled — the always-on structural bias. */
     relationship_views?: Array<{ from: string; to: string; view: string }>;
     drama_resources?: Array<{ label: string; statement?: string }>;
-    scenes?: Array<{ name: string; description?: string; privacy?: number; capacity?: number }>;
+    scenes?: Array<{ name: string; description?: string; privacy?: number; capacity?: number; location_index?: number }>;
     founding_cast?: Array<{
         name: string;
         ageYears?: number;
@@ -273,6 +273,12 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
             description: s.description,
             privacyLevel,
             capacity,
+            // The preset groups scenes under locations (location_index) — the
+            // generic "district" a scene belongs to. Carried so the tick can tell
+            // a few-steps hop (same district) from a real cross-town journey
+            // (movement time-cost + roadside 路遇). Optional: seeds/snapshots
+            // without it fall back to the flat, uniform-cooldown behaviour.
+            ...(Number.isInteger(s.location_index) ? { locationIndex: s.location_index } : {}),
         };
     });
     const sceneIdByName = new Map(scenes.map((s) => [s.name, s.id]));

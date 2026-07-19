@@ -279,13 +279,19 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         return (bw ? tension(bw) : 0) - (aw ? tension(aw) : 0);
     });
     const lastMovedTickByChar = (w.lastMovedTickByChar ??= {});
+    // Distance-aware rest: only a CROSS-DISTRICT trip books a rest (you spent the
+    // turn walking across town). A same-district hop is a few steps and books
+    // none — so local movement stays fluid. `lastMovedTickByChar` is still
+    // stamped on EVERY move because it also marks "arrived here this tick" for
+    // the night deliberate-encounter test; the rest window is tracked separately.
+    const restUntilByChar = (w.restUntilTickByChar ??= {});
     for (const member of orderedMovers) {
-        const lastMovedTick = lastMovedTickByChar[member.id];
-        // Intentional travel consumes time. A one-tick rest prevents oscillation
+        const restUntil = restUntilByChar[member.id];
+        // Travel across town consumes time: a one-tick rest prevents oscillation
         // and makes "I went there" persist long enough to become a scene. At
-        // night a recent mover may still CHOOSE to return home, but no other
-        // destination is offered during cooldown.
-        const coolingDown = lastMovedTick !== undefined && nowTick - lastMovedTick < 2;
+        // night a resting mover may still CHOOSE to return home, but no other
+        // destination is offered during the rest.
+        const coolingDown = restUntil !== undefined && nowTick < restUntil;
         if (coolingDown && !night) continue;
         const currentSceneId = w.roster[member.id];
         const live = world.liveWantsOf(member.id).slice(0, 4);
@@ -322,6 +328,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 homeOfName: ownerIds[0] ? world.nameById(ownerIds[0]) : undefined,
                 isHome: w.homeByChar[member.id] === scene.id,
                 isWork: w.workByChar[member.id] === scene.id,
+                near: world.nearby(currentSceneId, scene.id),
             }];
         });
         const decision = await agent.decideMove({
@@ -363,11 +370,71 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         });
         if (!decision.move || !decision.targetSceneId) continue;
         if (!options.some((option) => option.sceneId === decision.targetSceneId)) continue;
-        const from = world.sceneNameById(currentSceneId);
-        world.moveCharacter(member.id, decision.targetSceneId);
-        routed[member.id] = decision.targetSceneId;
+        const fromSceneId = currentSceneId;
+        const from = world.sceneNameById(fromSceneId);
+        let arrivalSceneId = decision.targetSceneId;
+
+        // 路遇 — a cross-district journey passes each district's public throat.
+        // If someone the traveller CARES about stands on that road, they may be
+        // waylaid: stop there and the errand slips (they never reach where they
+        // meant to go). Optional agent seam — the fake omits transitReact, so the
+        // deterministic path never intercepts and travellers always arrive. Only
+        // asks when a relevant person is actually on the way, so it stays rare.
+        if (agent.transitReact && !world.sameDistrict(fromSceneId, arrivalSceneId)) {
+            for (const waypointId of world.transitWaypoints(fromSceneId, arrivalSceneId)) {
+                const wpScene = world.sceneById(waypointId);
+                const wpOccupancy = w.cast.filter((candidate) => w.roster[candidate.id] === waypointId).length;
+                if (!wpScene || wpOccupancy >= (wpScene.capacity ?? 8)) continue; // don't overflow the road
+                const onRoad = w.cast.find(
+                    (other) =>
+                        other.id !== member.id &&
+                        w.roster[other.id] === waypointId &&
+                        (live.some((want) => want.target === other.id) ||
+                            member.relationshipView[other.id] !== undefined ||
+                            w.edges[member.id]?.[other.id] !== undefined),
+                );
+                if (!onRoad) continue;
+                const errand = live[0] ? `你正惦記著「${live[0].desc}」` : `你自往「${world.sceneNameById(arrivalSceneId)}」去辦自己的事`;
+                const react = await agent
+                    .transitReact({
+                        name: member.name,
+                        role: member.role ?? '—',
+                        bodyFact: member.gender,
+                        seenName: onRoad.name,
+                        seenRole: onRoad.role ?? '—',
+                        seenBodyFact: onRoad.gender,
+                        tieToward: member.relationshipView[onRoad.id] ?? w.edges[member.id]?.[onRoad.id]?.tone,
+                        waypointName: world.sceneNameById(waypointId),
+                        fromName: from,
+                        toName: world.sceneNameById(arrivalSceneId),
+                        errand,
+                        clock: clockLabel,
+                        isNight: night,
+                    })
+                    .catch(() => ({ act: 'pass' as const }));
+                if (react.act === 'engage') {
+                    arrivalSceneId = waypointId; // stopped mid-road — the errand slips
+                    log(`  路遇: ${member.name} 在${world.sceneNameById(waypointId)}被${onRoad.name}絆住${react.word ? `（${react.word}）` : ''}`);
+                    w.dayAccum.lines.push(`[路遇] ${member.name}在${world.sceneNameById(waypointId)}遇著${onRoad.name}，${react.word ?? '把原本要辦的事擱下了'}`);
+                    break;
+                }
+                if (react.act === 'greet') {
+                    log(`  路遇: ${member.name} 與${onRoad.name}在${world.sceneNameById(waypointId)}打了個照面${react.word ? `（${react.word}）` : ''}`);
+                }
+            }
+        }
+
+        world.moveCharacter(member.id, arrivalSceneId);
+        routed[member.id] = arrivalSceneId;
+        // Every move marks "arrived here this tick" (the night encounter test
+        // reads it). Only a cross-district trip books the rest window — a same-
+        // district hop is a few steps and stays free, so local movement is
+        // fluid. Seeds without districts read as "far" (sameDistrict=false), so
+        // they keep the old uniform 2-tick cost. A waylaid mover pays only for
+        // how far they ACTUALLY got (arrival vs origin district).
         lastMovedTickByChar[member.id] = nowTick;
-        log(`  move: ${member.name} ${from} → ${world.sceneNameById(decision.targetSceneId)}${decision.reason ? `（${decision.reason}）` : ''}`);
+        if (!world.sameDistrict(fromSceneId, arrivalSceneId)) restUntilByChar[member.id] = nowTick + 2;
+        log(`  move: ${member.name} ${from} → ${world.sceneNameById(arrivalSceneId)}${decision.reason ? `（${decision.reason}）` : ''}`);
     }
 
     // 2.5) TENANCY MOVE-INS — a leased room becomes home the moment its tenant
