@@ -97,6 +97,11 @@ export const labApi = {
             `/api/lab/assets?kind=${kind}&galleryKey=${encodeURIComponent(key)}&galleryFile=${encodeURIComponent(file)}`,
             { method: 'DELETE' },
         ),
+    clearGallery: (kind: string, name: string) =>
+        request<{ cleared: number }>(
+            `/api/lab/assets?kind=${kind}&galleryClearName=${encodeURIComponent(name)}`,
+            { method: 'DELETE' },
+        ),
     uploadAsset: (kind: string, name: string, dataUrl: string) =>
         request<{ saved: { kind: string; file: string; key: string; url: string } }>('/api/lab/assets', {
             method: 'POST',

@@ -245,6 +245,27 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
     });
 
     // ── characters ─────────────────────────────────────────────────────────
+    // 錢：僅掛 economy 季框的卷才有；available 是「分」（subunit）整數字串。
+    const economy = w.economy;
+    const moneyOf = (id: string): string | undefined => {
+        const acct = economy?.state.accounts[id];
+        if (!acct) return undefined;
+        const per = BigInt(Math.max(1, economy!.subunitsPerUnit || 100));
+        let sub: bigint;
+        try { sub = BigInt(acct.available); } catch { return undefined; }
+        const neg = sub < 0n;
+        const abs = neg ? -sub : sub;
+        const unit = economy!.unitLabel || '圓';
+        const body = abs % per === 0n ? `${abs / per} ${unit}` : `${abs / per} ${unit} ${abs % per} 分`;
+        return neg ? `欠 ${body}` : body;
+    };
+    // 物品欄：carriedBy===此人、未毀之物件。
+    const worldObjects = w.objects ?? [];
+    const carryingOf = (id: string) =>
+        worldObjects
+            .filter((o) => o.carriedBy === id && o.visibility !== 'destroyed')
+            .map((o) => ({ id: o.id, label: o.label, state: o.state, hidden: o.visibility === 'hidden', origin: o.origin }));
+
     const characters: LabCharacterLive[] = w.cast.map((member) => {
         const sceneId = w.roster[member.id] ?? '';
         const latest = latestBeatByChar.get(member.id);
@@ -277,6 +298,8 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
                 line,
             })),
             gallery: listGallery('character', member.name).map(({ url, type }) => ({ url, type })),
+            money: moneyOf(member.id),
+            carrying: carryingOf(member.id),
         };
     });
 

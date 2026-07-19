@@ -112,6 +112,10 @@ export interface LabCharacterLive {
     views: Array<{ name: string; line: string }>;
     /** 圖庫 multimedia gallery (images + video clips). */
     gallery: Array<{ url: string; type: 'image' | 'video' }>;
+    /** 身上的錢 —— 已格式化（如「3 圓 20 分」）。僅掛 economy 季框的卷才有。 */
+    money?: string;
+    /** 隨身物品欄：carriedBy===此人、未毀之物件（含唯一 id 與出身戳）。 */
+    carrying: Array<{ id: string; label: string; state?: string; hidden?: boolean; origin?: { day: number; tick: number; source: 'season' | 'lab' } }>;
 }
 
 export interface LabSeedSummary {
