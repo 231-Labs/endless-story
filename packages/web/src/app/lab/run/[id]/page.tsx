@@ -21,6 +21,7 @@ import { LabControls } from '@/components/lab/LabControls';
 import { LabHandscroll } from '@/components/lab/LabHandscroll';
 import { LabProductionPanel } from '@/components/lab/LabProductionPanel';
 import { LabSceneSheet } from '@/components/lab/LabSceneSheet';
+import { LabWishBoard } from '@/components/lab/LabWishBoard';
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
 import { useLabLive } from '@/components/lab/useLab';
 
@@ -204,6 +205,28 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                         }}
                     />
                 </div>
+            </section>
+
+            {/* 第三屏 —— 願榜（全戲班心事收攏，張力排序） */}
+            <section id="lab-wish-screen" className="min-h-dvh snap-start snap-always px-4 pb-12 pt-10 sm:px-8">
+                <div className="flex items-baseline justify-between">
+                    <p className="font-serif text-sm tracking-[0.4em] text-ink" title="願榜：全戲班此刻活著的心事，張力高者在前。點頭像開內頁。">願榜</p>
+                    <button
+                        type="button"
+                        onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
+                        title="回手卷"
+                    >
+                        ▴ 手卷
+                    </button>
+                </div>
+                <LabWishBoard
+                    characters={snapshot.characters}
+                    onSelectCharacter={(characterId) => {
+                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                        setFocusedCharacterId(characterId);
+                    }}
+                />
             </section>
 
             {/* 物界抽屜 */}
