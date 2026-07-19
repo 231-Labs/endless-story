@@ -67,6 +67,12 @@ export interface MoveDecideInput {
     bodyFact?: string;
     /** Current plan text (N6) — the lever for goal-directed movement. */
     planHint?: string;
+    /** Livelihood day-rhythm — a soft, overridable expectation of where an
+     * honest day takes this person at THIS part of the clock: at their 做活處
+     * earning their keep by day, home to rest at night. A PULL, not a schedule:
+     * a ripe want or a called duty rightly overrides it. Absent it, an idle
+     * character with no pressing want just wanders. */
+    rhythmHint?: string;
     /** Objective facts that entered canon this tick (arrival, alarm, deadline).
      * This is a percept, not an instruction: the character may answer it, flee,
      * or stay, but cannot be unaware of a public event they witnessed. */
@@ -179,6 +185,7 @@ export function buildUserPrompt(input: MoveDecideInput): string {
         input.clock ? `- 此刻:${input.clock}` : '',
         input.currentSituation ? `\n## 剛剛發生的客觀事件\n${input.currentSituation}` : '',
         input.planHint ? `\n## 你的目標與打算\n${input.planHint}` : '',
+        input.rhythmHint ? `\n## 這個時辰，尋常人在哪裡（營生的節律，非硬規矩）\n${input.rhythmHint}` : '',
         heart ? `\n## 你心裡放不下的事(這才是深夜動身的真正理由)\n${heart}` : '',
         '',
         `## 你此刻所在`,
