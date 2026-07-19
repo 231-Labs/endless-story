@@ -23,6 +23,7 @@ import {
     fadeStaleWants,
     forcingLevel,
     hasHostileWantToward,
+    jealousNightPursuit,
     newWant,
     nightSceneKind,
     shouldDeriveAftermath,
@@ -401,16 +402,48 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         if (coolingDown && !night) continue;
         const currentSceneId = w.roster[member.id];
         const live = world.liveWantsOf(member.id).slice(0, 4);
+        // 撞破 (jealous-intrude) — at NIGHT the mover's hottest RIPE jealousy/grudge
+        // (妒/怨, pressing+) may BARGE INTO its target's private tryst: the one setup
+        // where BOTH the capacity bar and the welcome gate are skipped, so the
+        // 3-person confrontation nightSceneKind already recognises can actually form.
+        // It fires ONLY into a genuine 撞破 — the target sits in a PRIVATE (≥3) scene
+        // holding EXACTLY 2 (the target + one other, an intimate pair the jealous
+        // third is NOT part of) and the mover is not already there. No ripe jealousy,
+        // or a target who is alone / in public / by day ⇒ intrudeSceneId undefined ⇒
+        // every scene keeps both bars byte-for-byte, exactly as before.
+        const resolveTargetId = (t: string): string | undefined =>
+            world.castById(t) ? t : world.idByName(t);
+        const intrude = night ? jealousNightPursuit(wants, member.id, resolveTargetId) : null;
+        const intrudeSceneId = (() => {
+            if (!intrude || intrude.id === member.id) return undefined;
+            const sid = w.roster[intrude.id];
+            if (!sid || sid === currentSceneId) return undefined;   // already there ⇒ no barge
+            const scene = world.sceneById(sid);
+            if (!scene || scene.privacyLevel < 3) return undefined;  // a掩門私會 is private
+            const occupants = w.cast.filter((candidate) => w.roster[candidate.id] === sid);
+            if (occupants.length !== 2) return undefined;            // an intimate PAIR, no more
+            if (occupants.some((candidate) => candidate.id === member.id)) return undefined; // not us
+            return sid;
+        })();
+        // A salient inner pull so the offered intrude option is chosen under real
+        // pressure — the character still decides (restraint is valid); no numbers.
+        const intrudePull = intrudeSceneId
+            ? `聽聞${world.nameById(intrude!.id)}此刻與人在${world.sceneNameById(intrudeSceneId)}掩門私會，你妒火中燒，明知不請自來，也按捺不住要去撞破。`
+            : undefined;
         const options = w.scenes.flatMap((scene) => {
             if (scene.id === currentSceneId) return [];
             if (coolingDown && scene.id !== w.homeByChar[member.id]) return [];
+            // 撞破: for the ONE jealous-intrude target scene, skip BOTH bars below
+            // (over-capacity by design, uninvited by design). Every other scene keeps
+            // capacity + welcome exactly as before.
+            const isIntrudeTarget = scene.id === intrudeSceneId;
             const occupancy = w.cast.filter((candidate) => w.roster[candidate.id] === scene.id).length;
             const capacity = scene.capacity ?? (scene.privacyLevel >= 3 ? 2 : scene.privacyLevel >= 2 ? 4 : 8);
-            if (occupancy >= capacity) return [];
+            if (!isIntrudeTarget && occupancy >= capacity) return [];
             const ownerIds = Object.entries(w.homeByChar)
                 .filter(([, home]) => home === scene.id)
                 .map(([id]) => id);
-            if (scene.privacyLevel >= 3 && ownerIds.length > 0 && !ownerIds.includes(member.id)) {
+            if (!isIntrudeTarget && scene.privacyLevel >= 3 && ownerIds.length > 0 && !ownerIds.includes(member.id)) {
                 const admitted = ownerIds.some(
                     (ownerId) => w.roster[ownerId] === scene.id && world.welcome(ownerId, member.id) >= 0.7,
                 );
@@ -435,6 +468,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 isHome: w.homeByChar[member.id] === scene.id,
                 isWork: w.workByChar[member.id] === scene.id,
                 near: world.nearby(currentSceneId, scene.id),
+                // 撞破: mark the barged-into tryst so decideMove frames choosing it as
+                // bursting in uninvited (明知不請自來，妒火中燒也要去撞破).
+                ...(isIntrudeTarget ? { intrude: true as const } : {}),
             }];
         });
         const decision = await agent.decideMove({
@@ -447,6 +483,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => event.text),
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
+                ...(intrudePull ? [intrudePull] : []),
             ].filter(Boolean).join('\n') || undefined,
             planHint: [
                 // Standing plan (if any) leads — the character heads toward goals, not just reacts.

@@ -54,6 +54,14 @@ export interface MoveSceneOption {
      *  (you'll likely rest after), and you may be waylaid by someone on the way.
      *  Visible physics, never engine routing. */
     near?: boolean;
+    /** 撞破 (jealous-intrude): this private scene is a tryst the mover's burning
+     *  jealousy is bursting into — offered DESPITE it being over-capacity and
+     *  un-welcomed. Choosing it is barging in uninvited (明知不請自來，妒火中燒也要
+     *  去撞破); the mover still decides (restraint is valid). Engine-set only when
+     *  a ripe 妒/怨 want's target is mid-tryst in a private pair. */
+    intrude?: boolean;
+    /** Optional one-line reason carried by an intrude option, shown in the prompt. */
+    intrudeNote?: string;
 }
 
 /** A live longing the mover carries — the ache that MIGHT move their feet at
@@ -122,6 +130,7 @@ export function buildSystemPrompt(isNight?: boolean): string {
             '- 除非你心裡那樁念想已經壓不住,值得擔那個險,否則你會回自己住處、或安於原地。',
             '- 深夜擅入私宅會被人撞見、會有後果(閒話、翻臉、規矩)。要去,是因為你**認了那個後果**也要去,不是隨意。',
             '- 若那處是別人的私宅、而你與其中人並無深交或情分,你**不會**貿然踏入。',
+            '- 若某去處標了「妒火·撞破」,那是你惦記的人此刻正與旁人掩門私會、你並未受邀——妒火燒得你按不住,明知不請自來也想闖進去撞破。去或不去仍由你定:忍下是一種,闖進去掀了那場私會也是一種。',
             '預設是歇息(回家或留下);唯有心之所繫、且此刻再難按捺,才動身。',
         );
     }
@@ -173,7 +182,11 @@ export function buildUserPrompt(input: MoveDecideInput): string {
             // the far ones (near is the quiet default) and only when the seed
             // actually carries districts (near is undefined ⇒ no marker).
             const far = o.near === false ? '〔跨區·得走一趟〕' : '';
-            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${far}${privacy}(${who})${desc}`;
+            // 撞破: mark a barged-into tryst so the choice reads as bursting in uninvited.
+            const intrudeMark = o.intrude
+                ? `〔妒火·撞破：${o.intrudeNote ?? '那處掩門私會、你並未受邀，妒火中燒也要闖進去'}〕`
+                : '';
+            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${far}${intrudeMark}${privacy}(${who})${desc}`;
         })
         .join('\n');
     const heart =
