@@ -10,7 +10,7 @@
 #     bundle，故 builder 與 runtime 都必須以 /repo 為根，佈局才對得上）
 #
 # Zeabur 掛法：檔名尾巴＝服務名（Dockerfile.[服務名] 慣例，同
-# Dockerfile.event-poller）。lab 服務現名 Endless-Story-Lab，故此檔名。
+# Dockerfile.event-poller）。lab 服務現名 cinema-lab，故此檔名。
 # root 留在 repo 根。環境變數照舊：LAB_SECRET、
 # LAB_DATA_DIR=/data/cinema-lab（volume）、POE_API_KEY 等 runtime 注入。
 
