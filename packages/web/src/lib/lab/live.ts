@@ -12,7 +12,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PARTS_OF_DAY, PRODUCTION, totalEffort, WorldState, type ProductionStatus, type RawPreset } from '@endless-story/engine';
+import { bondOf, PARTS_OF_DAY, PRODUCTION, totalEffort, WorldState, type ProductionStatus, type RawPreset } from '@endless-story/engine';
 import type { DayPart, Saga, SagaLocation, Scene } from '@endless-story/shared';
 import { labManager } from './manager';
 import { runDir } from './paths';
@@ -285,9 +285,13 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             .map((o) => ({ id: o.id, label: o.label, state: o.state, hidden: o.visibility === 'hidden', origin: o.origin }));
 
     const roleById = new Map(w.cast.map((m) => [m.id, m.role]));
+    // The numeric bond underlay, if the world carries one (empty Map otherwise).
+    const bondGraph = world.bondGraph();
+    const bondKey = (from: string, to: string) => `${from}→${to}`; // mirrors bond-graph.ts key()
     // 羈絆：this member → every significant other, UNIONing the narrative view
     // lines with the mechanical edge graph so a seeded edge (no line) and a view
-    // (no edge) both surface. `warmth` is the emotional NUMBER (welcome 0..1).
+    // (no edge) both surface. `warmth` prefers the continuous bond value (0..1)
+    // when the graph carries the pair, else the coarse tone-bucketed welcome.
     const bondsOf = (member: (typeof w.cast)[number]) => {
         const otherIds = new Set<string>([
             ...Object.keys(member.relationshipView),
@@ -303,10 +307,15 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
                     role: roleById.get(oId),
                     portraitUrl: assetUrlFor('character', otherName),
                     tone: w.edges[member.id]?.[oId]?.tone,
-                    warmth: world.welcome(member.id, oId),
-                    warmthBack: world.welcome(oId, member.id),
+                    warmth: bondGraph.has(bondKey(member.id, oId))
+                        ? bondOf(bondGraph, member.id, oId)
+                        : world.welcome(member.id, oId),
+                    warmthBack: bondGraph.has(bondKey(oId, member.id))
+                        ? bondOf(bondGraph, oId, member.id)
+                        : world.welcome(oId, member.id),
                     line: member.relationshipView[oId],
-                    // established: reserved for a coming engine layer — undefined for now.
+                    // 相許 badge — lit once the world recognises this pair as established.
+                    established: world.isEstablished(member.id, oId),
                 };
             })
             .sort((a, b) => b.warmth - a.warmth);

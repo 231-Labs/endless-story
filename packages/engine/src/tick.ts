@@ -26,6 +26,7 @@ import {
     tension,
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
+import { BOND, advanceReady, bumpBond, decayBonds, seedBond } from './core/bond-graph.ts';
 import { dutyRhythm } from './core/livelihood-rhythm.ts';
 import {
     accumulateEffort,
@@ -674,6 +675,48 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         }
     }
 
+    // 2.95) BOND UNDERLAY — the NUMERIC relationship layer (bond-graph.ts). Lazily
+    // derive the initial graph + the 相許 set from EXISTING canon (the `edges` tone
+    // graph + each member's relationship-view text), ONCE per world (guard on
+    // `bonds === undefined`; both fields are initialised to at least [] so it never
+    // re-seeds). Classification is data-driven regex on the tone/view TEXT, NEVER
+    // name-cased. Empty edges + no intimate markers ⇒ both stay [], fully inert
+    // (no behaviour change on a bond-less world). Numbers never enter a prompt —
+    // the graph only gates world affordances (the advance card, the register).
+    if (w.bonds === undefined) {
+        const seedG = world.bondGraph(); // empty
+        const seededPairs = new Set<string>();
+        const INTIMATE = /舊情|舊愛|舊侶|舊歡|情人|夫妻|結髮|相許|恩愛|枕|同衾|露水|入幕|恩客|雲雨|一夜|眷侶/;
+        const YEARNING = /暗戀|傾心|眷|相思|心悅|念著|放不下|愛慕|暗慕/;
+        const KNOWN = /師|徒|搭檔|同儕|舊識|交好|同門|故人|夥伴|知交|親厚/;
+        const classify = (from: string, to: string, text: string | undefined): void => {
+            if (!text || from === to) return;
+            if (INTIMATE.test(text)) {
+                // past/present lover — establish the (symmetric) pair; either
+                // direction's marker establishes (old lovers).
+                seedBond(seedG, from, to, BOND.seed.established);
+                seededPairs.add(world.pairKey(from, to));
+            } else if (YEARNING.test(text)) {
+                seedBond(seedG, from, to, BOND.seed.yearning); // NOT established
+            } else if (KNOWN.test(text)) {
+                seedBond(seedG, from, to, BOND.seed.known);
+            }
+            // else stranger — no seed.
+        };
+        for (const [from, row] of Object.entries(w.edges)) {
+            for (const [to, edge] of Object.entries(row)) classify(from, to, edge.tone);
+        }
+        for (const member of w.cast) {
+            for (const [to, view] of Object.entries(member.relationshipView)) classify(member.id, to, view);
+        }
+        world.setBonds(seedG);                    // at least [] — never re-seeds
+        w.establishedPairs ??= [...seededPairs];   // at least []
+    }
+    // The working bond graph for this tick (mutated by scenes, written back at end).
+    const bonds = world.bondGraph();
+    // Unordered pair keys that shared a scene today — spared tonight's cooling.
+    const togetherToday = new Set<string>();
+
     // 3) Group co-present cast by scene; at night keep only qualifying scenes.
     const byScene = new Map<string, string[]>();
     for (const m of w.cast) {
@@ -769,6 +812,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     role: member.role,
                     bodyFact: member.gender,
                     ties,
+                    // STANDING for the advance affordance: in a 2-person scene the
+                    // world deals the advance card only on real bond standing
+                    // (bond ≥ advanceAt); ≠2 people ⇒ leave undefined (default true).
+                    advanceReady: ids.length === 2 ? advanceReady(bonds, id, ids.find((o) => o !== id)!) : undefined,
                     sceneHint: world.physicalHint(id, sid),
                     objects: world.accessibleObjects(id, sid).map((object) => ({
                         id: object.id,
@@ -791,6 +838,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             clock: clockLabel,
             etiquette: w.etiquette,
             timeCharter,
+            // Established lovers alone at night open the intimacy register directly
+            // (old lovers renegotiate nothing). Every other scene: undefined.
+            emotionalStance: (night && isPrivate && ids.length === 2 && world.isEstablished(ids[0], ids[1])) ? 'consummate' : undefined,
             cast: castWithMem,
             castNames: w.cast.map((member) => member.name),
             wants,
@@ -863,6 +913,53 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 }
             },
         });
+
+        // BOND UPDATE (§2.1/2.4) — every unordered co-present pair warms just by
+        // sharing the stage; a private scene warms more. Record who met so tonight's
+        // cooling spares them (an old flame that met stays warm).
+        for (let i = 0; i < ids.length; i++) {
+            for (let j = i + 1; j < ids.length; j++) {
+                bumpBond(bonds, ids[i], ids[j], isPrivate ? 'private' : 'shared');
+                togetherToday.add(world.pairKey(ids[i], ids[j]));
+            }
+        }
+        // 相許 (event) — an in-scene advance→accept made them lovers HERE: warm the
+        // bond hard (床) and record the milestone into the established set.
+        if (loop.intimacyAccepted && ids.length === 2) {
+            bumpBond(bonds, ids[0], ids[1], 'bed');
+            world.addEstablished(ids[0], ids[1]);
+            log(`  [相許] ${world.nameById(ids[0])} 與 ${world.nameById(ids[1])} 這一場成了彼此`);
+        }
+        // 相許 (verdict) — a settled night pair not yet established but still carrying
+        // a live love-want toward each other: ask the milestone judge whether they
+        // are, as of now, 相許 (READS the relationship, never steers it). Runs AFTER
+        // the accept path above so an already-established pair is never re-judged.
+        if (night && isPrivate && ids.length === 2 && !world.isEstablished(ids[0], ids[1])) {
+            const [a, b] = ids;
+            const loveWantBetween = wants.some((wnt) => {
+                if (wnt.retired || !/愛|情/.test(wnt.layer) || !wnt.target) return false;
+                if (wnt.characterId !== a && wnt.characterId !== b) return false;
+                const other = wnt.characterId === a ? b : a;
+                return wnt.target === other || wnt.target === world.nameById(other);
+            });
+            if (loveWantBetween) {
+                const established = await agent.judgeEstablished({
+                    aName: world.nameById(a),
+                    bName: world.nameById(b),
+                    aView: world.relationshipView(a, b),
+                    bView: world.relationshipView(b, a),
+                    wants: wants
+                        .filter((wnt) => !wnt.retired && /愛|情/.test(wnt.layer) && (wnt.characterId === a || wnt.characterId === b))
+                        .map((wnt) => wnt.desc),
+                    lastSceneTail: loop.beats.slice(-4).map((bt) => `${bt.name}：${bt.text}`).join('\n') || undefined,
+                });
+                if (established) {
+                    world.addEstablished(a, b);
+                    bumpBond(bonds, a, b, 'accept');
+                    log(`  [相許] ${world.nameById(a)} 與 ${world.nameById(b)} 已交了心`);
+                }
+            }
+        }
 
         // Freeze only after the existing scene checker has repaired hard prose
         // errors. The checker may edit text, never actors/order/count; structured
@@ -1332,8 +1429,16 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         w.dayAccum = { lines: [], actorIds: [], sceneIds: [], povByName: {} };
     }
 
-    // 9) Advance clock + snapshot the whole world.
+    // 8.5) NIGHTLY BOND COOLING — at day-end every pair that did NOT share a scene
+    // today cools toward its floor (floorOfPeak · peak): idle acquaintances drift
+    // apart while an old flame (high peak) never cools back to stranger. Pairs that
+    // met today (togetherToday) are spared. Unconditional world physics — NOT behind
+    // relationshipFallback.
+    if (dayEnd) decayBonds(bonds, togetherToday);
+
+    // 9) Advance clock + write bonds back, then snapshot the whole world.
     w.clock = clock.advance(c);
+    world.setBonds(bonds); // establishedPairs already live on w.data via addEstablished
     if (opts.snapshotDir) world.snapshot(opts.snapshotDir);
 
     const liveWants = wants.filter((x) => !x.retired).length;

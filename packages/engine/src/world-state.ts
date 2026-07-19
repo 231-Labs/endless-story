@@ -18,6 +18,7 @@ import type { Want } from './core/want-core.ts';
 import type { SeasonEconomyData } from './core/season-economy.ts';
 import type { Production } from './core/production.ts';
 import type { WorldClock } from './ports.ts';
+import { bondsFromJSON, bondsToJSON, type BondGraph } from './core/bond-graph.ts';
 
 /** Daily-life state vector (§2.16); derived tint, persisted so a restart keeps
  *  the arc rather than resetting everyone to neutral. */
@@ -224,6 +225,17 @@ export interface WorldStateData {
      *  (box-office quality) and, with emergentProduction, their rehearse accrues
      *  effort. Optional & backward-compatible with snapshots predating it. */
     rehearsalCall?: { day: number; title: string; venueSceneId: string };
+    /** The NUMERIC relationship underlay (bond-graph.ts): directed bond edges
+     *  `from→to` with a current value + historical peak. Optional & backward-
+     *  compatible — absent on snapshots predating the bond layer; lazily seeded
+     *  from canon once per world (empty edges ⇒ stays []). Serialized shape is
+     *  `bondsToJSON(g)`. */
+    bonds?: Array<{ k: string; v: number; peak: number }>;
+    /** Pairs the world has recognised as 相許 (established lovers), each a sorted
+     *  `[a,b].sort().join('|')` key. Old lovers renegotiate nothing: an
+     *  established night pair opens the intimacy register directly. Optional &
+     *  backward-compatible (absent ⇒ nobody established yet). */
+    establishedPairs?: string[];
 }
 
 const SNAPSHOT_FILE = 'world.json';
@@ -495,6 +507,31 @@ export class WorldState {
         const m = this.castById(id);
         if (!m) return '';
         return m.coreIdentity.length ? `${m.coreIdentity.join('；')}。${m.persona}` : m.persona;
+    }
+
+    // ── bonds (numeric relationship underlay) + 相許 milestone ──────────────────
+    /** Canonical, order-independent key for an unordered pair. */
+    pairKey(a: string, b: string): string {
+        return [a, b].sort().join('|');
+    }
+    /** True once this pair has been recognised as 相許 (either direction marks it —
+     *  old lovers). Reads the persisted set; absent ⇒ false. */
+    isEstablished(a: string, b: string): boolean {
+        return (this.data.establishedPairs ?? []).includes(this.pairKey(a, b));
+    }
+    /** Record this pair as 相許 (idempotent). */
+    addEstablished(a: string, b: string): void {
+        const key = this.pairKey(a, b);
+        const set = (this.data.establishedPairs ??= []);
+        if (!set.includes(key)) set.push(key);
+    }
+    /** Rebuild the working bond graph from the persisted rows (empty ⇒ empty Map). */
+    bondGraph(): BondGraph {
+        return bondsFromJSON(this.data.bonds);
+    }
+    /** Persist a working bond graph back onto the world (snapshot serializes it). */
+    setBonds(g: BondGraph): void {
+        this.data.bonds = bondsToJSON(g);
     }
 
     // ── persistence ──────────────────────────────────────────────────────────
