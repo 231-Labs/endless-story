@@ -72,6 +72,8 @@ export function LabBeatDock({
     const dockRef = useRef<HTMLDivElement>(null);
     const stripRef = useRef<HTMLDivElement>(null);
     const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /** 是否貼尾追新拍：只在使用者停在最右（最新）時追尾；一往回看即鬆手。 */
+    const stickRef = useRef(true);
     const lastSeq = feed.length ? feed[feed.length - 1].seq : 0;
 
     const cancelHide = () => {
@@ -102,11 +104,35 @@ export function LabBeatDock({
     const pinnedSeqRef = useRef<number | null>(null);
     pinnedSeqRef.current = pinnedSeq;
 
-    // 新箋落帶即追尾（使用者若正回看，追尾也只是輕輕帶到最新）
+    // 新箋落帶即追尾 —— 但只在使用者停在最右時；正回看舊拍就不打擾
     useEffect(() => {
+        if (!stickRef.current) return;
         const el = stripRef.current;
         if (el) el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' });
     }, [lastSeq, open]);
+
+    // PC 直輪即橫捲：一般滑鼠只有縱向滾輪，映成帶的左右捲，才回看得到先前的動作。
+    // 監聽掛在整條 dock（不只 strip）—— 展開紗浮在 strip 之上會吃掉滾輪，掛 dock
+    // 才不論游標在紗上或帶上都捲得動。到左右盡頭則放行給頁面（縱向雙屏 snap 照舊）。
+    useEffect(() => {
+        const dock = dockRef.current;
+        if (!dock) return;
+        const onWheel = (e: WheelEvent) => {
+            const el = stripRef.current;
+            if (!el) return;
+            const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+            if (!delta) return;
+            const maxLeft = el.scrollWidth - el.clientWidth;
+            if (maxLeft <= 0) return;
+            const atStart = el.scrollLeft <= 0;
+            const atEnd = el.scrollLeft >= maxLeft - 1;
+            if ((delta < 0 && atStart) || (delta > 0 && atEnd)) return; // 盡頭放行
+            e.preventDefault();
+            el.scrollLeft += delta;
+        };
+        dock.addEventListener('wheel', onWheel, { passive: false });
+        return () => dock.removeEventListener('wheel', onWheel);
+    }, [open]);
 
     useEffect(() => cancelHide, []);
 
@@ -151,10 +177,13 @@ export function LabBeatDock({
                         >
                             <div
                                 ref={stripRef}
-                                onScroll={() => {
+                                onScroll={(e) => {
                                     // 帶一捲動，量好的錨位就作廢 —— 收紗（含釘住的）
                                     setOverlay(null);
                                     setPinnedSeq(null);
+                                    // 停在最右才追新拍；往回看即鬆手（回到尾端會自動再貼上）
+                                    const el = e.currentTarget;
+                                    stickRef.current = el.scrollLeft >= el.scrollWidth - el.clientWidth - 24;
                                 }}
                                 className="mt-2 flex items-start gap-2.5 overflow-x-auto px-4 pb-1.5 no-scrollbar sm:px-8"
                             >
