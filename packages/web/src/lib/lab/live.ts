@@ -12,7 +12,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PARTS_OF_DAY, WorldState, type RawPreset } from '@endless-story/engine';
+import { PARTS_OF_DAY, PRODUCTION, totalEffort, WorldState, type ProductionStatus, type RawPreset } from '@endless-story/engine';
 import type { DayPart, Saga, SagaLocation, Scene } from '@endless-story/shared';
 import { labManager } from './manager';
 import { runDir } from './paths';
@@ -66,6 +66,24 @@ export interface LabLiveSnapshot {
     beats: LabLiveBeat[];
     /** Log tail for the operator console. */
     logs: Array<{ ts: number; line: string }>;
+    /** 劇本產出 current state — present only when the flag is on and a production
+     *  has begun. Drives the run page's 製作中 panel. */
+    production?: LabProductionLive;
+}
+
+/** The in-progress (or premiered) production, shaped for the 製作中 panel. */
+export interface LabProductionLive {
+    title: string;
+    status: ProductionStatus;
+    /** Everyone who has contributed, resolved to display names. */
+    contributors: Array<{ id: string; name: string }>;
+    scriptFragments: number;
+    /** Banked effort and the threshold it must cross to premiere. */
+    effort: number;
+    threshold: number;
+    premieredDay?: number;
+    /** Recent lifecycle lines (proposal / fragments / premiere), newest last. */
+    timeline: string[];
 }
 
 const DAY_PART_MAP: Record<string, DayPart> = {
@@ -320,6 +338,20 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         },
     };
 
+    // ── 劇本產出 ───────────────────────────────────────────────────────────
+    const production: LabProductionLive | undefined = w.production
+        ? {
+            title: w.production.title,
+            status: w.production.status,
+            contributors: w.production.contributors.map((id) => ({ id, name: world.nameById(id) })),
+            scriptFragments: w.production.scriptFragments.length,
+            effort: totalEffort(w.production),
+            threshold: PRODUCTION.rehearsalThreshold,
+            premieredDay: w.production.premieredDay,
+            timeline: w.production.timeline.slice(-6),
+        }
+        : undefined;
+
     return {
         runId,
         meta,
@@ -345,6 +377,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         streams,
         beats,
         logs: (active?.logs ?? []).slice(-40),
+        production,
     };
 }
 

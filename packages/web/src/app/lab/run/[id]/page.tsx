@@ -19,6 +19,7 @@ import { LabCharacterSheet } from '@/components/lab/LabCharacterSheet';
 import { LabConfigDrawer } from '@/components/lab/LabConfigDrawer';
 import { LabControls } from '@/components/lab/LabControls';
 import { LabHandscroll } from '@/components/lab/LabHandscroll';
+import { LabProductionPanel } from '@/components/lab/LabProductionPanel';
 import { LabSceneSheet } from '@/components/lab/LabSceneSheet';
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
 import { useLabLive } from '@/components/lab/useLab';
@@ -145,6 +146,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                     running={snapshot.phase === 'running'}
                     onCastClick={() => document.getElementById('lab-cast-screen')?.scrollIntoView({ behavior: 'smooth' })}
                 />
+                {snapshot.production ? <LabProductionPanel production={snapshot.production} /> : null}
                 <AnimatePresence>
                     {focusedScene ? (
                         <LabSceneSheet
