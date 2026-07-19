@@ -39,10 +39,10 @@ import {
     type ProductionStatus,
 } from './core/production.ts';
 import { PARTS_OF_DAY } from './ports.ts';
-import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, SceneAgentPort } from './ports.ts';
+import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, settleEveningPerformance, settleTenancyMoveIns } from './core/season-economy.ts';
+import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds } from './core/season-economy.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -268,6 +268,81 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         for (const f of fadeStaleWants(wants, nowTick)) log(`  淡了: ${world.nameById(f.characterId)}「${f.desc}」`);
     }
 
+    // 1.6) DAY-START 班主 REHEARSAL CALL — at 清晨, before movement, the troupe
+    // leader decides whether to call today's rehearsal and which 戲碼. It is the
+    // 班主's judgment (排戲撐起今晚開鑼、也把新戲往前推，但佔掉白日、累著角兒); the
+    // engine only READS the verdict. A call records w.rehearsalCall (the afternoon
+    // movement phase pulls the troupe players to the venue → bankRehearsalAttendance
+    // banks box-office quality, and, with emergentProduction, their rehearse accrues
+    // production effort), announces it to the troupe as a next-morning-style public
+    // percept, and — with emergentProduction and no play yet — BOOTSTRAPS the
+    // production so it no longer waits on an individual propose_play. Optional agent
+    // seam (fake omits decideRehearsal → never calls); a throw or null → no call.
+    if (c.tickOfDay === 0 && w.economy && agent.decideRehearsal) {
+        const banzhuId = troupeLeaderId(world);
+        if (banzhuId) {
+            const banzhu = world.castById(banzhuId);
+            const banzhuName = banzhu?.name ?? '班主';
+            const troupe = troupePlayerIds(world);
+            const troupeNames = [...troupe].map((id) => world.nameById(id));
+            const perf = w.economy.performance;
+            const venueName = perf?.venueSceneName
+                ?? (w.workByChar[banzhuId] ? world.sceneNameById(w.workByChar[banzhuId]) : world.sceneNameById(w.roster[banzhuId]));
+            // Terse objective pressure the 班主 weighs: tonight's 開鑼, the treasury
+            // runway, and the nearest looming contract deadline — facts, not advice.
+            const situationParts: string[] = [];
+            if (perf) situationParts.push(`今夜黃昏【${perf.venueSceneName}】開鑼，到場不足${perf.minCast}人便停鑼、票房歸零`);
+            const troupeAcct = w.economy.state.accounts[w.economy.troupeAccountId];
+            if (troupeAcct) {
+                const avail = BigInt(troupeAcct.available);
+                const cost = BigInt(troupeAcct.dailyFixedCost);
+                situationParts.push(cost > 0n ? `班庫現銀約可撐 ${avail / cost} 日` : '班庫暫可周轉');
+            }
+            const nearestDeadline = Object.values(w.economy.contracts)
+                .filter((contract) => contract.status === 'offered' && contract.deadlineDay >= today)
+                .sort((a, b) => a.deadlineDay - b.deadlineDay)[0];
+            if (nearestDeadline) situationParts.push(`「${nearestDeadline.label}」限第${nearestDeadline.deadlineDay}日簽成`);
+
+            let reply: RehearsalDecideReply | null = null;
+            try {
+                reply = await agent.decideRehearsal({
+                    banzhuName,
+                    role: banzhu?.role,
+                    troupeNames,
+                    rehearsalVenue: venueName,
+                    playSummary: w.production ? productionSummary(w.production) : null,
+                    dayLabel: `第${today}日`,
+                    situation: situationParts.join('；') || undefined,
+                });
+            } catch {
+                reply = null; // fail safe: no rehearsal called this day
+            }
+            if (reply?.call) {
+                const title = reply.title?.trim() || w.production?.title || '新戲';
+                const venueScene = w.scenes.find((scene) => scene.name === venueName);
+                const venueSceneId = venueScene?.id ?? w.roster[banzhuId];
+                w.rehearsalCall = { day: today, title, venueSceneId };
+                const witnessIds = troupe.size ? [...troupe] : w.cast.map((member) => member.id);
+                const announceText = reply.line?.trim()
+                    || `「${banzhuName}發話：今日排《${title}》，午後到「${venueName}」。」`;
+                (w.scheduledEvents ??= []).push({
+                    id: `rehearsal-call-d${today}-t${nowTick}`,
+                    atTick: nowTick + 1,
+                    sceneId: venueSceneId,
+                    text: announceText,
+                    visibility: 'public',
+                    witnessIds,
+                });
+                w.dayAccum.lines.push(`[戲班] ${announceText}`);
+                log(`  [排戲] ${banzhuName} 叫排《${title}》 → 午後「${venueName}」`);
+                if (w.emergentProduction && !w.production) {
+                    w.production = startProduction(title, banzhuId, today);
+                    log(`  [排戲] 班主之命立起新戲《${title}》`);
+                }
+            }
+        }
+    }
+
     // 2) AUTONOMOUS MOVEMENT — there is exactly one movement authority:
     // the world enumerates legal destinations, the character chooses a
     // structured scene id, then the engine validates and commits it. Home and
@@ -285,6 +360,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // stamped on EVERY move because it also marks "arrived here this tick" for
     // the night deliberate-encounter test; the rest window is tracked separately.
     const restUntilByChar = (w.restUntilTickByChar ??= {});
+    // 班主叫的排戲 — the day's called rehearsal, resolved once for the afternoon
+    // pull below: the venue name + which troupe players it can draw. Only live on
+    // the day it was called and during the two rehearsal parts (日午/晡時), the
+    // window bankRehearsalAttendance banks presence in.
+    const rehearsalToday = w.rehearsalCall?.day === today ? w.rehearsalCall : undefined;
+    const rehearsalTroupe = rehearsalToday ? troupePlayerIds(world) : new Set<string>();
+    const rehearsalVenueName = rehearsalToday ? world.sceneNameById(rehearsalToday.venueSceneId) : '';
     for (const member of orderedMovers) {
         const restUntil = restUntilByChar[member.id];
         // Travel across town consumes time: a one-tick rest prevents oscillation
@@ -358,10 +440,18 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             rhythmHint: dutyRhythm(
                 clockLabel,
                 (() => {
+                    // A player's OWN 行當專屬 duty for this part takes precedence.
                     const memberDuty = member.duties?.find((d) => d.part === clockLabel && d.duty);
-                    return memberDuty
-                        ? { sceneName: world.sceneNameById(memberDuty.sceneId), note: memberDuty.note }
-                        : undefined;
+                    if (memberDuty) return { sceneName: world.sceneNameById(memberDuty.sceneId), note: memberDuty.note };
+                    // Else the 班主's called rehearsal is a TRANSIENT afternoon duty for
+                    // troupe players with no own duty this part: it pulls them to the
+                    // venue so bankRehearsalAttendance banks presence (box-office quality)
+                    // and, with emergentProduction, their rehearse accrues effort. Soft
+                    // hint only — the single movement authority is untouched.
+                    if (rehearsalToday && (clockLabel === '日午' || clockLabel === '晡時') && rehearsalTroupe.has(member.id)) {
+                        return { sceneName: rehearsalVenueName, note: `排《${rehearsalToday.title}》，班主叫的` };
+                    }
+                    return undefined;
                 })(),
                 w.workByChar[member.id] ? world.sceneNameById(w.workByChar[member.id]) : undefined,
                 w.homeByChar[member.id] ? world.sceneNameById(w.homeByChar[member.id]) : undefined,

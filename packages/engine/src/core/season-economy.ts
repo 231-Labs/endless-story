@@ -831,6 +831,32 @@ export interface PerformanceOutcome {
     castShareSubunits?: bigint;
 }
 
+/** The troupe leader (班主): the first authorized spender on the 班庫 account —
+ *  the same authority the box-office percept names as the treasury's approver.
+ *  undefined when the world has no economy or no authorized spender is seeded.
+ *  Reads the persisted state directly (no ledger restore). */
+export function troupeLeaderId(world: WorldState): string | undefined {
+    const data = world.data.economy;
+    if (!data) return undefined;
+    return data.state.accounts[data.troupeAccountId]?.authorizedSpenderIds[0];
+}
+
+/** The troupe players: a performance lead, or anyone drawing a wage out of the
+ *  班庫 (fromAccountId defaults to the troupe). This is the SAME membership signal
+ *  the box-office percept uses to decide who has a personal stake in the night's
+ *  house — reused so the 班主's rehearsal pull lands on exactly the troupe. Empty
+ *  set when the world has no economy. */
+export function troupePlayerIds(world: WorldState): Set<string> {
+    const data = world.data.economy;
+    const ids = new Set<string>();
+    if (!data) return ids;
+    for (const id of data.performance?.leadIds ?? []) ids.add(id);
+    for (const wage of data.wages) {
+        if ((wage.fromAccountId ?? data.troupeAccountId) === data.troupeAccountId) ids.add(wage.accountId);
+    }
+    return ids;
+}
+
 /** Bank who showed up to rehearse (日午/晡時 at the venue). Quality is earned
  *  in daylight; an unrehearsed evening plays to a thinner house. */
 export function bankRehearsalAttendance(world: WorldState, partIndex: number): void {
