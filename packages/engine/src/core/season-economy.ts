@@ -17,6 +17,7 @@ import {
     accountRunwayDays,
     collectDue,
     conservesProduction,
+    counterAskGate,
     depositExternal,
     emptyEconomy,
     expireContracts,
@@ -41,6 +42,8 @@ import {
     transferMoney,
     type AccountSeed,
     type ContractState,
+    type EconomicContract,
+    type EconomyAccount,
     type EconomyTransaction,
     type PersistedEconomicContract,
     type PersistedEconomyState,
@@ -141,6 +144,13 @@ export interface SeasonEconomyData {
         acceptNote?: string;
         refusalNote?: string;
     }>;
+    /** accountId → authored 立場 for that establishment's counterparty agent seat
+     *  (what the house cares about, its concession logic, its 口風). AGENT-ONLY:
+     *  the mechanical counterAskGate never reads it — it only decides 值不值得讓. */
+    stances?: Record<string, string>;
+    /** floor days of runway a money-counter 加碼 must leave the proposer above
+     *  (counterAskGate's dailyFixedCost × N). Default 3 at use sites. */
+    counterFloorDays?: number;
     state: PersistedEconomyState;
     contracts: Record<string, PersistedEconomicContract>;
 }
@@ -417,15 +427,23 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
             return fail(`「${c.label}」的還價資格在當事人（${partyNames}）與受益方當家手裡，${actorName}插不上手——要影響此約，去勸得動的人`);
         }
         if (!cmd.demand?.trim()) return fail('要還價就得寫明 demand（你要的條款，一句）');
+        // A money counter carries a self-tagged askYuan: the demander wants the
+        // deal's total bumped by this many 圓 (LLM tags the intent; the engine —
+        // never regex on prose — turns it into subunits). Absent → a条件-only
+        // counter, today's behaviour bit-for-bit.
+        const ask = cmd.askYuan !== undefined ? subunits(data, cmd.askYuan) : undefined;
         const countered = fileCounter(contract, {
-            contractId, actorId: req.actorId, demand: cmd.demand, day: req.day, causeEventId: req.causeEventId,
+            contractId, actorId: req.actorId, demand: cmd.demand, day: req.day,
+            ...(ask !== undefined ? { ask } : {}),
+            causeEventId: req.causeEventId,
         });
         if (countered.rejection) return fail(countered.rejection.message);
         contract = countered.state;
         persist(world, contract);
+        const askClause = ask !== undefined ? `，並要在總價外加碼 ${formatMoney(data, ask)}` : '';
         return {
             ok: true,
-            publicLines: [`${actorName}就「${c.label}」當面還價：『${cmd.demand.trim()}』——${accountLabel(contract, c.proposerAccountId)}的回話要等明晨`],
+            publicLines: [`${actorName}就「${c.label}」當面還價：『${cmd.demand.trim()}』${askClause}——${accountLabel(contract, c.proposerAccountId)}的回話要等明晨`],
         };
     }
 
@@ -679,12 +697,12 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             }
             const isParty = c.requiredSignerIds.includes(characterId) || c.partnerSlot.filledBy === characterId;
             if (isParty) {
-                const counterHint = c.pendingCounter ? '' : '、contract_counter 還價（demand 寫你要的條款，對方明晨回話）';
+                const counterHint = c.pendingCounter ? '' : '、contract_counter 還價（demand 寫你要的條款，對方明晨回話；還價若要對方加碼銀錢，demand 之外再標 askYuan＝整數圓）';
                 lines.push(`你是這份契約的當事人：可 contract_sign 簽署、contract_reject 拒簽${c.requiredSignerIds.includes(characterId) && c.partnerSlot.required && !c.partnerSlot.filledBy ? '、contract_fill_partner 填上唯一聯名搭檔' : ''}${counterHint}。`);
             } else if (c.negotiatorIds.includes(characterId)) {
                 lines.push(c.pendingCounter
                     ? `你是受益方當家，可就此約還價——但眼下已有一則還價待覆，等回話再說。`
-                    : `你雖非簽署人，但受益方的家當繫在此約上：可 contract_counter 還價（demand 寫你要的條款）；簽與拒只在${[...new Set(c.requiredSignerIds.map((id) => accountLabel(contract, id)))].join('、')}手裡。`);
+                    : `你雖非簽署人，但受益方的家當繫在此約上：可 contract_counter 還價（demand 寫你要的條款；要對方加碼銀錢則另標 askYuan＝整數圓）；簽與拒只在${[...new Set(c.requiredSignerIds.map((id) => accountLabel(contract, id)))].join('、')}手裡。`);
             }
         } else {
             const outcome = c.status === 'settled' ? `已簽署生效，款項分訖（${splits}）` : c.status === 'rejected' ? '已拒簽，預付款退回' : '已逾期失效，預付款收回';
@@ -860,6 +878,46 @@ export function settleEveningPerformance(
 export interface SettleSeasonDayRequest {
     day: number;
     nowTick: number;
+    /** Per-contract agent 座席 verdicts computed in the tick's 7.45 phase (async,
+     *  BEFORE this pure settle), keyed by contractId. A money-counter verdict only
+     *  chooses within what counterAskGate already allows; a condition-counter
+     *  verdict outranks the authored acceptDemandsMatching policy. Absent (rehearsal
+     *  / no seat) → settle falls back deterministically. */
+    counterVerdicts?: Record<string, { accept: boolean; note?: string }>;
+}
+
+/**
+ * WHOSE split a money-counter's 加碼 lands on (§6-A CONTRACT_ESCROW). Resolution
+ * order: the demander's own split if they already hold one; else the PARTNER_SLOT
+ * split when the demander is the filled partner; else a beneficiary account the
+ * demander stewards (their id in authorizedSpenderIds — the 班主 of a treasury);
+ * else undefined — the 加碼 has no home, so the caller refuses rather than guess.
+ */
+function resolveBumpBeneficiary(contract: ContractState, c: EconomicContract, demanderId: string): string | undefined {
+    if (c.splits.some((split) => split.beneficiary === demanderId)) return demanderId;
+    if (c.partnerSlot.filledBy === demanderId && c.splits.some((split) => split.beneficiary === PARTNER_SLOT)) {
+        return PARTNER_SLOT;
+    }
+    for (const split of c.splits) {
+        if (split.beneficiary === PARTNER_SLOT) continue;
+        if (contract.economy.accounts[split.beneficiary]?.authorizedSpenderIds.includes(demanderId)) {
+            return split.beneficiary;
+        }
+    }
+    return undefined;
+}
+
+/** The proposer's book facts as the 座席 reads them (現銀/押著/開銷/跑道) — plain
+ *  facts, no advice, no number the seat could recompute (reuses formatMoney +
+ *  the account runway helper the rest of the file uses). */
+function booksViewFor(data: SeasonEconomyData, account: EconomyAccount): string {
+    const runway = accountRunwayDays(account);
+    return [
+        `現銀 ${formatMoney(data, account.available)}`,
+        `已按約押著 ${formatMoney(data, account.reserved)}`,
+        `每日開銷 ${formatMoney(data, account.dailyFixedCost)}`,
+        runway !== null ? `照此跑道約 ${runway} 日` : '每日開銷不成負擔',
+    ].join('；') + '。';
 }
 
 /**
@@ -884,8 +942,15 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
 
     // 0.5 counter-demands are answered overnight — BEFORE the deadline sweep,
     //     so an accepted amendment (with its grace day) can outlive the clock.
-    //     Today the answer comes from the authored policy; this call is the
-    //     seam where a live counterparty agent plugs in later.
+    //     A MONEY counter (pending.ask) is decided FIRST by the mechanical gate
+    //     (does the proposer's real底 cover the 加碼? — LLM 永不碰數字); an agent
+    //     座席 verdict (req.counterVerdicts, computed in the tick's 7.45 phase) only
+    //     chooses WITHIN what the gate allows, and gate-pass with NO verdict
+    //     auto-accepts (rehearsal, replayable). A CONDITION counter (no ask) is
+    //     decided by the verdict when present, else the authored policy (byte-for-
+    //     byte the old acceptDemandsMatching path — 排演 stays deterministic).
+    const floorDays = data.counterFloorDays ?? 3;
+    const allWitnesses = world.data.cast.map((member) => member.id);
     for (const [id, c] of Object.entries(contract.contracts)) {
         if (!c.pendingCounter) continue;
         if (c.status !== 'offered') {
@@ -896,18 +961,65 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
             publicNotices.push(`「${c.label}」已有定局，${accountLabel(contract, c.pendingCounter.byId)}那句還價不了了之。`);
             continue;
         }
+        const pending = c.pendingCounter;
         const policy = (data.negotiations ?? {})[id];
-        const accept = !!policy && policy.acceptDemandsMatching.some((needle) => c.pendingCounter!.demand.includes(needle));
+        const proposer = accountLabel(contract, c.proposerAccountId);
+        const verdict = req.counterVerdicts?.[id];
+
+        // ── MONEY counter: the mechanical gate is the sole truth on the number ──
+        if (pending.ask !== undefined) {
+            const ask = pending.ask;
+            const gate = counterAskGate(contract.economy, c.proposerAccountId, ask, floorDays);
+            // gate FAIL → forced refuse; the money never moves, the clock stays.
+            // gate PASS → the seat decides, or (no verdict) gate-pass auto-accepts.
+            let accept = gate.ok && (verdict?.accept ?? true);
+            let notice: string;
+            let bumpBeneficiary: string | undefined;
+            if (accept) {
+                bumpBeneficiary = resolveBumpBeneficiary(contract, c, pending.byId);
+                if (!bumpBeneficiary) {
+                    // 加碼 with nowhere to land — refuse rather than guess a beneficiary
+                    accept = false;
+                    notice = `${proposer}回話：說不清這筆加碼該落誰帳上，這一筆不認，「${c.label}」原約原期。`;
+                } else {
+                    notice = ''; // set after the resolve, so the notice can quote the new deadline
+                }
+            } else if (!gate.ok) {
+                notice = `${proposer}回話：${pending.demand}——${gate.reason}，這個數不讓。`;
+            } else {
+                notice = verdict?.note ?? policy?.refusalNote
+                    ?? `${proposer}回話：不讓步。「${c.label}」原約原期，第 ${c.deadlineDay} 日夜裡為限。`;
+            }
+            const answered = resolveCounter(contract, {
+                contractId: id, accept, day: req.day,
+                graceDays: policy?.graceDaysOnAccept ?? 1,
+                ...(accept && bumpBeneficiary ? { bumpBeneficiary } : {}),
+                causeEventId,
+            });
+            if (answered.rejection) throw new Error(`economy: money counter on ${id} failed to resolve: ${answered.rejection.message}`);
+            contract = answered.state;
+            if (accept) {
+                notice = verdict?.note
+                    ?? `${proposer}回話：加碼 ${formatMoney(data, ask)}照辦——『${pending.demand}』白紙黑字補進「${c.label}」，簽期順延至第 ${contract.contracts[id].deadlineDay} 日夜裡。`;
+            }
+            publicNotices.push(notice);
+            syncContractObject(world, data, contract, id, allWitnesses);
+            continue;
+        }
+
+        // ── CONDITION counter: the verdict decides when present, else the policy ──
+        const accept = verdict !== undefined
+            ? verdict.accept
+            : (!!policy && policy.acceptDemandsMatching.some((needle) => pending.demand.includes(needle)));
         const answered = resolveCounter(contract, {
             contractId: id, accept, day: req.day, graceDays: policy?.graceDaysOnAccept ?? 1, causeEventId,
         });
         if (answered.rejection) throw new Error(`economy: counter on ${id} failed to resolve: ${answered.rejection.message}`);
         contract = answered.state;
-        const proposer = accountLabel(contract, c.proposerAccountId);
         publicNotices.push(accept
-            ? (policy?.acceptNote ?? `${proposer}回話：條款照辦——『${c.pendingCounter.demand}』白紙黑字補進「${c.label}」，簽期順延至第 ${contract.contracts[id].deadlineDay} 日夜裡。`)
-            : (policy?.refusalNote ?? `${proposer}回話：不讓步。「${c.label}」原約原期，第 ${c.deadlineDay} 日夜裡為限。`));
-        syncContractObject(world, data, contract, id, world.data.cast.map((member) => member.id));
+            ? (verdict?.note ?? policy?.acceptNote ?? `${proposer}回話：條款照辦——『${pending.demand}』白紙黑字補進「${c.label}」，簽期順延至第 ${contract.contracts[id].deadlineDay} 日夜裡。`)
+            : (verdict?.note ?? policy?.refusalNote ?? `${proposer}回話：不讓步。「${c.label}」原約原期，第 ${c.deadlineDay} 日夜裡為限。`));
+        syncContractObject(world, data, contract, id, allWitnesses);
     }
     persist(world, contract);
 
@@ -1064,6 +1176,52 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
     return { settled: true, publicNotices, privateNotices, foreclosures };
 }
 
+/**
+ * Build the establishment counterparty seats for the tick's 7.45 phase: one per
+ * `offered` contract carrying a pendingCounter that a seat may actually decide.
+ * A money-counter whose 加碼 fails the mechanical gate is EXCLUDED — its refusal
+ * is settled deterministically and needs no agent; a gate-passing one gets an
+ * askLine stating the delta already cleared. Condition counters are included
+ * without an askLine. The engine writes each seat's booksView (the house's facts)
+ * and 立場; the seat reads them and never computes a number (LLM 永不碰數字).
+ */
+export function buildNegotiationSeats(
+    world: WorldState,
+): Array<{ contractId: string; input: CharacterAgentNs.NegotiateCounterInput }> {
+    const parsed = live(world);
+    if (!parsed) return [];
+    const { data, contract } = parsed;
+    const floorDays = data.counterFloorDays ?? 3;
+    const seats: Array<{ contractId: string; input: CharacterAgentNs.NegotiateCounterInput }> = [];
+    for (const c of Object.values(contract.contracts)) {
+        if (c.status !== 'offered' || !c.pendingCounter) continue;
+        const proposer = contract.economy.accounts[c.proposerAccountId];
+        if (!proposer) continue;
+        let askLine: string | undefined;
+        if (c.pendingCounter.ask !== undefined) {
+            const gate = counterAskGate(contract.economy, c.proposerAccountId, c.pendingCounter.ask, floorDays);
+            if (!gate.ok) continue; // mechanical refusal needs no seat
+            askLine = `這句還價要在總價外加碼 ${formatMoney(data, c.pendingCounter.ask)}；帳上撥得出、也不破底。`;
+        }
+        const stance = data.stances?.[c.proposerAccountId];
+        seats.push({
+            contractId: c.id,
+            input: {
+                establishmentLabel: proposer.label,
+                ...(stance ? { stance } : {}),
+                booksView: booksViewFor(data, proposer),
+                contractLabel: c.label,
+                terms: c.terms,
+                demandBy: world.nameById(c.pendingCounter.byId),
+                demand: c.pendingCounter.demand,
+                ...(askLine ? { askLine } : {}),
+                clock: `第${world.data.clock.day}日`,
+            },
+        });
+    }
+    return seats;
+}
+
 // ── season-frame seeding (authored JSON → live ledger) ──
 
 /** The `economy` block a season frame JSON may author. Amounts in whole 圓. */
@@ -1072,6 +1230,9 @@ export interface SeasonEconomyFrame {
     subunitsPerUnit?: number;
     /** scene NAME where public settlement notices post. */
     noticeScene: string;
+    /** floor days of runway a money-counter 加碼 must leave a proposer above
+     *  (counterAskGate). Default 3 when omitted. */
+    counterFloorDays?: number;
     market?: { id?: string; label?: string };
     troupe: {
         id?: string;
@@ -1110,6 +1271,9 @@ export interface SeasonEconomyFrame {
         authorizedSpenderNames?: string[];
         /** who this establishment pays a daily wage (its own hands). */
         wages?: Array<{ name: string; amountYuan: number }>;
+        /** authored 立場 for this house's counterparty agent seat (what it cares
+         *  about, its concession logic, its 口風). Agent-only — never the gate. */
+        stance?: string;
     }>;
     /** per-character overrides; unlisted cast get characterDefaults. */
     characters?: Array<{ name: string; openingYuan?: number; dailyFixedCostYuan?: number }>;
@@ -1206,6 +1370,12 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
 
     const contractObjectIds: Record<string, string> = {};
     const negotiations: NonNullable<SeasonEconomyData['negotiations']> = {};
+    // authored 立場 per establishment (agent-only). Keep the persisted map clean:
+    // only businesses that authored a stance get a key.
+    const stances: Record<string, string> = {};
+    for (const business of frame.businesses ?? []) {
+        if (business.stance) stances[business.id] = business.stance;
+    }
     for (const spec of frame.contracts ?? []) {
         const resolveBeneficiary = (to: string): string =>
             to === PARTNER_SLOT ? PARTNER_SLOT : to === '班庫' ? troupeId : (world.idByName(to) ?? to);
@@ -1249,6 +1419,8 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
         ...(frame.troupe.costNote ? { troupeCostNote: frame.troupe.costNote } : {}),
         ...(frame.troupe.shortfallCreditor ? { shortfallCreditor: frame.troupe.shortfallCreditor } : {}),
         ...(Object.keys(negotiations).length ? { negotiations } : {}),
+        ...(Object.keys(stances).length ? { stances } : {}),
+        ...(frame.counterFloorDays !== undefined ? { counterFloorDays: frame.counterFloorDays } : {}),
         ...(frame.performance
             ? {
                 performance: {

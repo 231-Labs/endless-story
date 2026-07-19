@@ -27,6 +27,8 @@ export type MoveDecideInput = Runner.characterAgent.MoveDecideInput;
 export type MoveDecideResult = Runner.characterAgent.MoveDecideResult;
 export type TransitReactInput = Runner.characterAgent.TransitReactInput;
 export type TransitReaction = Runner.characterAgent.TransitReaction;
+export type NegotiateCounterInput = Runner.characterAgent.NegotiateCounterInput;
+export type NegotiateCounterReply = Runner.characterAgent.NegotiateCounterReply;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -255,6 +257,14 @@ export interface SceneAgentPort extends SceneAgent {
      *  deterministic/fake adapters omit it, and the tick just lets travellers
      *  arrive uninterrupted. */
     transitReact?(input: TransitReactInput): Promise<TransitReaction>;
+    /** 對方座席 (optional): the establishment counterparty across the contract table
+     *  (華光影片社、申聲唱片行…) answers an overnight 還價 within the space the
+     *  deterministic reserve-gate already allows — READING its house's book facts +
+     *  frame-authored 立場, never computing a number (LLM 永不碰數字). Real adapters
+     *  implement it; the fake omits it, so the tick's deterministic fallback rules
+     *  (money-counter → the mechanical gate; condition → the authored policy). A
+     *  null reply is no verdict — the tick falls back just the same. */
+    negotiateCounter?(input: NegotiateCounterInput): Promise<NegotiateCounterReply | null>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;

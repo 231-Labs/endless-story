@@ -32,6 +32,8 @@ export {
 } from './move.js';
 export { transitReact } from './transit.js';
 export type { TransitReactInput, TransitReaction } from './transit.js';
+export { negotiateCounter } from './negotiate.js';
+export type { NegotiateCounterInput, NegotiateCounterReply } from './negotiate.js';
 export { decideSocialAction } from './social.js';
 export type {
     SocialActionInput,

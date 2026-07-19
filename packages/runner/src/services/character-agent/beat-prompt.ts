@@ -145,6 +145,9 @@ export interface BeatEconomyCommand {
     partnerName?: string;
     /** contract_counter: the written demand pushed back at the proposer (still their choice to accept). */
     demand?: string;
+    /** contract_counter: 還價要對方在總價外加碼的圓數（整數）；只改條件不改錢則不填 — a
+     *  SELF-TAG the engine routes on, never regex on prose. */
+    askYuan?: number;
     memo?: string;
 }
 
@@ -289,6 +292,11 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
             const amountYuan = typeof command.amountYuan === 'number' && Number.isFinite(command.amountYuan)
                 ? Math.floor(command.amountYuan)
                 : undefined;
+            // askYuan is a self-tag the engine routes money-counters on: only a
+            // finite positive integer counts; anything else drops the field.
+            const askYuan = typeof command.askYuan === 'number' && Number.isInteger(command.askYuan) && command.askYuan > 0
+                ? command.askYuan
+                : undefined;
             return [{
                 action,
                 itemId: str(command.itemId) || undefined,
@@ -298,6 +306,7 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
                 contractId: str(command.contractId) || undefined,
                 partnerName: prose(command.partnerName) || undefined,
                 demand: prose(command.demand) || undefined,
+                askYuan,
                 memo: prose(command.memo) || undefined,
             }];
         })
@@ -479,7 +488,7 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
               '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無","objectEffects":[{"objectId":"登記id","toScene":"新場景或省略","container":"新容器/null/省略","carried":true或false或省略,"carrierName":"交給的同場者正式姓名或省略","visibility":"visible|hidden|destroyed或省略","state":"新狀態或省略"}]}。沒有物理改變就給空陣列。不要 markdown。',
         input.economyLine
-            ? '若這一拍真有銀錢或契約動作，另在同一個 JSON 加 "economyCommands":[{"action":"purchase|pay|contract_sign|contract_reject|contract_fill_partner|contract_counter","itemId":"購買項目id或省略","toName":"收款人正式姓名或班庫或省略","amountYuan":整數圓或省略,"fromAccount":"self|troupe(省略=self)","contractId":"契約id或省略","partnerName":"聯名搭檔正式姓名或省略","demand":"還價條款一句（contract_counter 用）或省略","memo":"一句緣由或省略"}]；沒有銀錢動作就整欄省略。簽署契約的那一拍，economyCommands 與 objectEffects（契約物件狀態）要一起出。'
+            ? '若這一拍真有銀錢或契約動作，另在同一個 JSON 加 "economyCommands":[{"action":"purchase|pay|contract_sign|contract_reject|contract_fill_partner|contract_counter","itemId":"購買項目id或省略","toName":"收款人正式姓名或班庫或省略","amountYuan":整數圓或省略,"fromAccount":"self|troupe(省略=self)","contractId":"契約id或省略","partnerName":"聯名搭檔正式姓名或省略","demand":"還價條款一句（contract_counter 用）：寫你要的條款；若這句還價是要對方加碼銀錢，另附下面的 askYuan，並在 demand 裡寫明這筆錢該落誰帳上、為什麼。或省略","askYuan":整數圓數（加碼的數目，contract_counter 銀錢還價才附；只改條件不改錢就省略）或省略,"memo":"一句緣由或省略"}]；沒有銀錢動作就整欄省略。簽署契約的那一拍，economyCommands 與 objectEffects（契約物件狀態）要一起出。'
             : '',
     ]
         .filter(Boolean)
