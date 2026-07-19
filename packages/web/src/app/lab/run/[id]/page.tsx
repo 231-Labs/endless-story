@@ -173,6 +173,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                                 setFocusedCharacterId(null);
                                 setFocusedSceneId(sceneId);
                             }}
+                            onSelectCharacter={(cid) => setFocusedCharacterId(cid)}
                             onClose={() => setFocusedCharacterId(null)}
                         />
                     ) : null}
