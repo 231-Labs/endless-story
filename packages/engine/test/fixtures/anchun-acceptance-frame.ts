@@ -173,7 +173,8 @@ export function buildAnchunAcceptanceFrame(): SeasonFrame {
       {
         "id": "huaguang",
         "label": "華光影片社",
-        "openingYuan": 400
+        "openingYuan": 400,
+        "stance": "肖像與獨家期是華光的命根，半步不讓；小錢加碼倒撥得動——片酬多添幾個，只要不動一年獨家與那張肖像的用法。回話留三分餘地，話別說死。"
       },
       {
         "id": "shensheng",

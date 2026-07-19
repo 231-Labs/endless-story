@@ -25,7 +25,7 @@ import { applySeasonFrame, buildWorldState, loadPresetFile } from '../src/preset
 import { runTick, type TickReport } from '../src/tick.ts';
 import { newWant } from '../src/core/want-core.ts';
 import { WorldState } from '../src/world-state.ts';
-import type { ArchivePort, MoveDecideInput, MoveDecideResult } from '../src/ports.ts';
+import type { ArchivePort, MoveDecideInput, MoveDecideResult, NegotiateCounterInput, NegotiateCounterReply } from '../src/ports.ts';
 import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 
 const YUAN = 100n;
@@ -672,4 +672,189 @@ test('deadline-day percept does the time arithmetic the agents cannot', () => {
     const percept = economyPerceptFor(world, liu, world.data.roster[liu])!;
     assert.match(percept, /限期就在今夜子夜/);
     assert.match(percept, /還餘 4 個時辰/);
+});
+
+test('銀錢還價·排演自動照辦: a gate-pass money counter bumps total, split + escrow and extends the deadline', () => {
+    const world = buildSeasonWorld();
+    const economy = new LocalEconomy();
+    const liu = world.idByName('柳安春')!;
+    const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
+    world.moveCharacter(liu, paperScene);
+
+    // 柳安春 (a required signer + a named beneficiary) asks for 20 圓 more on her line
+    const countered = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu], day: 1,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '片酬替我加二十圓，記在我這一路', askYuan: 20 },
+        causeEventId: 'test:m1', seq: 0,
+    });
+    assert.equal(countered.ok, true, countered.reason);
+    assert.match(countered.publicLines[0], /加碼/);
+    assert.equal(world.data.economy!.contracts['anchun-exclusive'].pendingCounter!.askSubunits, '2000');
+
+    // day-1 settle with NO agent → gate-pass auto-accepts (deterministic, replayable)
+    const settle = settleSeasonDay(world, { day: 1, nowTick: 5 });
+    const c = world.data.economy!.contracts['anchun-exclusive'];
+    assert.equal(c.status, 'offered', 'the amendment outlives its old midnight');
+    assert.equal(c.pendingCounter, undefined);
+    assert.ok(c.terms.some((t) => t.includes('加二十圓')), 'the money demand is written into the terms');
+    assert.equal(BigInt(c.total), 290n * YUAN, 'total bumped by 20 圓 (2000 分)');
+    const liuSplit = c.splits.find((s) => s.beneficiary === liu)!;
+    assert.equal(BigInt(liuSplit.amount), 100n * YUAN, "柳安春's split bumped 80 → 100 圓");
+    assert.equal(BigInt(world.data.economy!.state.accounts.huaguang.reserved), 290n * YUAN, 'proposer re-escrowed the delta');
+    assert.equal(c.deadlineDay, 4, 'the grace day extends the written deadline');
+    assert.ok(settle.publicNotices.some((line) => line.includes('加碼')), settle.publicNotices.join(' / '));
+    assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('破底必拒: a money counter beyond the proposer\'s real底 is refused by the gate, nothing moves', () => {
+    const world = buildSeasonWorld();
+    const economy = new LocalEconomy();
+    const liu = world.idByName('柳安春')!;
+    const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
+    world.moveCharacter(liu, paperScene);
+
+    const before = world.data.economy!.contracts['anchun-exclusive'];
+    const totalBefore = BigInt(before.total);
+    const splitBefore = BigInt(before.splits.find((s) => s.beneficiary === liu)!.amount);
+    const reservedBefore = BigInt(world.data.economy!.state.accounts.huaguang.reserved);
+
+    const countered = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu], day: 1,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '片酬替我加五百圓', askYuan: 500 },
+        causeEventId: 'test:m2', seq: 0,
+    });
+    assert.equal(countered.ok, true, countered.reason);
+
+    const settle = settleSeasonDay(world, { day: 1, nowTick: 5 });
+    const c = world.data.economy!.contracts['anchun-exclusive'];
+    assert.equal(c.pendingCounter, undefined, 'the counter is cleared');
+    assert.equal(BigInt(c.total), totalBefore, 'total unchanged');
+    assert.equal(BigInt(c.splits.find((s) => s.beneficiary === liu)!.amount), splitBefore, 'split unchanged');
+    assert.equal(c.deadlineDay, 3, 'deadline unchanged');
+    assert.equal(BigInt(world.data.economy!.state.accounts.huaguang.reserved), reservedBefore, 'no extra escrow');
+    assert.ok(
+        settle.publicNotices.some((line) => line.includes('這個數不讓') && line.includes('不夠')),
+        `mechanical refusal reason missing: ${settle.publicNotices.join(' / ')}`,
+    );
+    assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+/** A counterparty seat that files a gate-pass money counter as 柳安春, then answers
+ *  it as 華光影片社 with a scripted verdict; captures the seat input it was handed. */
+class CounterpartySeatAgent extends FakeSceneAgent {
+    filedCounter = false;
+    lastSeatInput?: NegotiateCounterInput;
+    private readonly askYuan: number;
+    private readonly verdict: NegotiateCounterReply | null;
+    constructor(askYuan: number, verdict: NegotiateCounterReply | null) {
+        super();
+        this.askYuan = askYuan;
+        this.verdict = verdict;
+    }
+    override async decideMove(input: MoveDecideInput): Promise<MoveDecideResult> {
+        if (input.name === '柳安春') {
+            const dressing = input.options.find((option) => option.name === '後台妝閣');
+            if (dressing) return { move: true, targetSceneId: dressing.sceneId, reason: '去還價' };
+        }
+        return { move: false, reason: 'stay' };
+    }
+    override async actBeat(input: CharacterAgentNs.ActBeatInput): Promise<CharacterAgentNs.BeatResult> {
+        if (!this.filedCounter && input.name === '柳安春') {
+            this.filedCounter = true;
+            return {
+                beat: '把約書按在桌上，開口要在片酬上加碼。',
+                inner: '這條命，值這個數。',
+                economyCommands: [{ action: 'contract_counter', contractId: 'anchun-exclusive', demand: '片酬替我加十五圓，記在我這一路', askYuan: this.askYuan }],
+            };
+        }
+        return super.actBeat(input);
+    }
+    async negotiateCounter(input: NegotiateCounterInput): Promise<NegotiateCounterReply | null> {
+        this.lastSeatInput = input;
+        return this.verdict;
+    }
+}
+
+test('座席判決注入: an establishment seat REFUSES a gate-pass money counter through runTick', async () => {
+    const world = buildSeasonWorld();
+    const agent = new CounterpartySeatAgent(15, { accept: false, note: '華光回話：這個數面上過不去，不讓。' });
+    const reports = await runDays(world, agent, 6); // day 1, day-end settle at tick index 5
+
+    const c = world.data.economy!.contracts['anchun-exclusive'];
+    assert.equal(c.pendingCounter, undefined, 'the counter is resolved');
+    assert.equal(BigInt(c.total), 270n * YUAN, 'refused → total not bumped');
+    assert.ok(!c.terms.some((t) => t.includes('加十五圓')), 'refused → demand not written in');
+
+    const notices = reports[5].economyNotices ?? [];
+    assert.ok(notices.some((line) => line.includes('這個數面上過不去')), `seat verdict note missing: ${notices.join(' / ')}`);
+
+    // the seat WAS built and handed the house's books + 立場 (華光影片社 + its stance)
+    const seat = agent.lastSeatInput;
+    assert.ok(seat, 'buildNegotiationSeats consulted the seat');
+    assert.equal(seat!.establishmentLabel, '華光影片社');
+    assert.match(seat!.booksView, /現銀/);
+    assert.ok(seat!.stance && seat!.stance.includes('命根'), `stance not handed to the seat: ${seat!.stance}`);
+    const blob = `${seat!.establishmentLabel}｜${seat!.booksView}｜${seat!.stance}`;
+    assert.ok(blob.includes('華光影片社') && blob.includes('命根'), blob);
+    assert.ok(seat!.askLine && seat!.askLine.includes('加碼'), `gate-pass askLine missing: ${seat!.askLine}`);
+    assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('座席可拍板條件型: a verdict accepts a condition demand the authored policy would refuse', () => {
+    const world = buildSeasonWorld();
+    const economy = new LocalEconomy();
+    const liu = world.idByName('柳安春')!;
+    const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
+    world.moveCharacter(liu, paperScene);
+
+    // a plain condition counter OUTSIDE acceptDemandsMatching (肖像/校樣/定妝照)
+    const countered = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu], day: 1,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '一年獨家改半年' },
+        causeEventId: 'test:v1', seq: 0,
+    });
+    assert.equal(countered.ok, true, countered.reason);
+
+    // the authored policy would REFUSE this demand; the seat's verdict overrides it
+    const settle = settleSeasonDay(world, {
+        day: 1, nowTick: 5,
+        counterVerdicts: { 'anchun-exclusive': { accept: true, note: '華光回話：獨家期就退半年，賣你這個面子。' } },
+    });
+    const c = world.data.economy!.contracts['anchun-exclusive'];
+    assert.equal(c.status, 'offered');
+    assert.equal(c.pendingCounter, undefined);
+    assert.ok(c.terms.some((t) => t.includes('半年')), 'the amended demand is written in');
+    assert.equal(c.deadlineDay, 4, 'accept grants a grace day');
+    assert.ok(settle.publicNotices.some((line) => line.includes('賣你這個面子')), settle.publicNotices.join(' / '));
+    assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('a pending money-counter survives snapshot→restore with its ask intact', () => {
+    const world = buildSeasonWorld();
+    const economy = new LocalEconomy();
+    const liu = world.idByName('柳安春')!;
+    const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
+    world.moveCharacter(liu, paperScene);
+    const filed = economy.commitCommand(world, {
+        actorId: liu, sceneId: paperScene, witnessIds: [liu], day: 1,
+        command: { action: 'contract_counter', contractId: 'anchun-exclusive', demand: '片酬替我加二十圓', askYuan: 20 },
+        causeEventId: 'test:snap', seq: 0,
+    });
+    assert.equal(filed.ok, true, filed.reason);
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'economy-counter-snapshot-'));
+    try {
+        world.snapshot(dir);
+        const restored = WorldState.restore(dir);
+        assert.deepEqual(restored.data.economy, world.data.economy);
+        assert.equal(restored.data.economy!.contracts['anchun-exclusive'].pendingCounter!.askSubunits, '2000');
+
+        // the restored counter resolves through the same gate-pass path, bit-identical
+        const settle = settleSeasonDay(restored, { day: 1, nowTick: 5 });
+        assert.ok(settle.publicNotices.some((line) => line.includes('加碼')));
+        assert.equal(BigInt(restored.data.economy!.contracts['anchun-exclusive'].total), 290n * YUAN);
+        assert.deepEqual(auditSeasonEconomy(restored), []);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 });

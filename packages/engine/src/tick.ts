@@ -42,7 +42,7 @@ import { PARTS_OF_DAY } from './ports.ts';
 import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { bankRehearsalAttendance, enforceContractCommandPairing, settleEveningPerformance, settleTenancyMoveIns } from './core/season-economy.ts';
+import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, settleEveningPerformance, settleTenancyMoveIns } from './core/season-economy.ts';
 import type { WorldState } from './world-state.ts';
 
 export interface TickDeps {
@@ -957,6 +957,29 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         acc.povByName[p.name] = p.lines.join('\n\n');
     }
 
+    // 7.45) OVERNIGHT COUNTER SEATS — the establishment counterparty answers each
+    // pending 還價 HERE, one async agent call per seat, so the 7.5 settle below
+    // stays a PURE, replayable function: the verdicts are computed in this phase
+    // and injected. The seat only chooses WITHIN what the mechanical gate allows
+    // (a money-counter that breaks the reserve floor never reaches a seat — it is
+    // refused deterministically inside settle). A throw or null reply → no verdict,
+    // and settle falls back to its deterministic path for that contract.
+    let counterVerdicts: Record<string, { accept: boolean; note?: string }> | undefined;
+    if (dayEnd && economy && w.economy && agent.negotiateCounter) {
+        for (const seat of buildNegotiationSeats(world)) {
+            let reply: { accept: boolean; note?: string } | null = null;
+            try {
+                reply = await agent.negotiateCounter(seat.input);
+            } catch {
+                reply = null;
+            }
+            if (!reply) continue;
+            (counterVerdicts ??= {})[seat.contractId] = { accept: reply.accept, note: reply.note };
+            const label = w.economy.contracts[seat.contractId]?.label ?? seat.contractId;
+            log(`  [還價·座席] ${label}: ${reply.accept ? '讓' : '不讓'}`);
+        }
+    }
+
     // 7.5) DAY-END ECONOMY SETTLEMENT — deterministic, idempotent per day.
     // Wages, fixed living/operating costs and contract deadlines settle HERE,
     // never in prose. Objective consequences land now (hunger, object states,
@@ -964,7 +987,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // cast PERCEIVES the settlement before choosing anything (aftermath tick).
     let economyNotices: string[] | undefined;
     if (dayEnd && economy && w.economy) {
-        const settled = economy.settleDay(world, { day: today, nowTick });
+        const settled = economy.settleDay(world, { day: today, nowTick, ...(counterVerdicts ? { counterVerdicts } : {}) });
         if (settled.settled) {
             economyNotices = settled.publicNotices;
             for (const line of settled.publicNotices) {
