@@ -609,6 +609,30 @@ function runwayLine(data: SeasonEconomyData, available: bigint, dailyCost: bigin
     return `，照此可撐約 ${days} 日`;
 }
 
+/**
+ * sceneId → the cheapest location-anchored meal sold there. A "food scene" is a
+ * scene where a `kind:'meal'` catalog item carrying an explicit `sceneName` is
+ * sold (餓了去食肆買東西吃) — the anchor a hungry character can be pulled to and
+ * fed at. Meals with NO sceneName are buyable-anywhere and are NOT location food,
+ * so a seed whose meals are all unanchored yields an EMPTY map and the hunger
+ * driver stays completely inert for it. Pure read (no ledger restore).
+ */
+export function foodScenesOf(world: WorldState): Map<string, SeasonCatalogItem> {
+    const out = new Map<string, SeasonCatalogItem>();
+    const data = world.data.economy;
+    if (!data) return out;
+    for (const item of data.catalog) {
+        if (item.kind !== 'meal' || !item.sceneName) continue;
+        const scene = world.data.scenes.find((candidate) => candidate.name === item.sceneName);
+        if (!scene) continue; // a sceneName that resolves to no real scene is inert
+        const existing = out.get(scene.id);
+        if (!existing || BigInt(item.priceSubunits) < BigInt(existing.priceSubunits)) {
+            out.set(scene.id, item); // keep the cheapest when several are sold there
+        }
+    }
+    return out;
+}
+
 export function economyPerceptFor(world: WorldState, characterId: string, sceneId?: string): string | undefined {
     const parsed = live(world);
     if (!parsed) return undefined;
@@ -751,6 +775,17 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
         const key = world.objectById(keyObjectId);
         if (!key || key.visibility === 'destroyed') continue;
         lines.push(`你已賃定【${tenancy.sceneName}】的屋子（${key.label}${key.carriedBy === characterId ? '在你身上' : `在${world.sceneNameById(key.sceneId)}`}）；何時遷入、帶什麼走，由你——人帶著契到了那裡，家才算搬。`);
+    }
+    // hunger as a driver: when the belly presses and a meal can be had at a NAMED
+    // spot, state WHERE and for HOW MUCH — a fact the character may act on (go
+    // eat), never an order. Empty when no meal is location-anchored, so a seed
+    // without a food spot shows nothing new here.
+    const myHunger = world.castById(characterId)?.state.hunger ?? 0;
+    if (myHunger > 0.5) {
+        const spots = [...foodScenesOf(world)]
+            .map(([foodSceneId, item]) => `【${world.sceneNameById(foodSceneId)}】一份${item.label} ${formatMoney(data, BigInt(item.priceSubunits))}`)
+            .join('；');
+        if (spots) lines.push(`腹中已餓，可就食之處：${spots}——去那兒便買著吃。`);
     }
     if (me) {
         const here = sceneId ? world.sceneNameById(sceneId) : undefined;
