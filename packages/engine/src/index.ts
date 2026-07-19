@@ -18,6 +18,7 @@ export * from './core/want-rewrite.ts';
 export * from './core/box-office.ts';
 export * from './core/scene-routing.ts';
 export * from './core/scene-loop.ts';
+export * from './core/skills.ts';
 export * from './core/actor-fatigue.ts';
 export * from './core/spatial-routing.ts';
 export * from './core/production.ts';

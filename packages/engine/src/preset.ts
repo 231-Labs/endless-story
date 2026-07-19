@@ -19,6 +19,7 @@ import {
     type CastMember,
     type ContestedResource,
     type SceneInfo,
+    type Skill,
     type WorldStateData,
 } from './world-state.ts';
 
@@ -49,6 +50,9 @@ interface RawPreset {
         memories?: string[];
         work_scene?: string;
         home_scene?: string;
+        /** Authored SKILLS — style-imparting capabilities (see `Skill`). Carried
+         *  verbatim onto the CastMember; optional & backward-compatible. */
+        skills?: Skill[];
     }>;
 }
 
@@ -333,6 +337,9 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
             // overwrites it thereafter.
             coreIdentity: distillIdentity(c.name, c.role, c.description),
             relationshipView: {},
+            // Authored skills carried verbatim (omit the field when none, so a
+            // skill-less preset produces a skill-less — unchanged — CastMember).
+            ...(c.skills?.length ? { skills: c.skills } : {}),
         });
         const work = resolveScene(c.work_scene, c.name, 'work_scene');
         homeByChar[id] = resolveScene(c.home_scene, c.name, 'home_scene');
