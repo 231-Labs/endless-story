@@ -17,16 +17,19 @@
 
 import {
     applyRipples,
+    confideWorry,
+    confiderOf,
     decayWants,
     fadeStaleWants,
     forcingLevel,
+    hasHostileWantToward,
     newWant,
     nightSceneKind,
     shouldDeriveAftermath,
     tension,
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
-import { BOND, advanceReady, bumpBond, decayBonds, seedBond } from './core/bond-graph.ts';
+import { BOND, advanceReady, bondOf, bumpBond, decayBonds, seedBond } from './core/bond-graph.ts';
 import { dutyRhythm } from './core/livelihood-rhythm.ts';
 import {
     accumulateEffort,
@@ -375,6 +378,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const HUNGER_SEEK = 0.55; // pressing hunger — pull the mover to go eat first
     const foodScenes: Map<string, SeasonCatalogItem> = w.economy ? foodScenesOf(world) : new Map();
     const spendableOf = (id: string): bigint => BigInt(w.economy?.state.accounts[id]?.available ?? '0');
+    // 夜訪商量 PULL reads the bond underlay as PERSISTED at tick start. The lazy
+    // canon seed (§2.95) runs after this movement phase, so on the very FIRST tick
+    // this Map is empty and the confide pull is inert — by design; a confidence is
+    // taken to someone you already have standing with, which only exists once ties
+    // are seeded/warmed. Read-only here (never mutated before movement).
+    const bondsAtMove = world.bondGraph();
     for (const member of orderedMovers) {
         const restUntil = restUntilByChar[member.id];
         // Travel across town consumes time: a one-tick rest prevents oscillation
@@ -464,6 +473,40 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         const foodSceneName = world.sceneNameById(foodSceneId);
                         const priceText = formatMoney(w.economy, BigInt(meal.priceSubunits));
                         return `腹中空得發慌，空著肚子做不了活——先往「${foodSceneName}」墊墊肚子（一份${meal.label}${priceText}），趁早去吃，旁的事等吃過再說。`;
+                    }
+                }
+                // 夜訪商量 PULL (confide) — at 黃昏/入夜/深宵 a character weighed down by a
+                // pressing NON-romantic worry is drawn to go talk it over with their most-
+                // trusted confidant. Mirror of the hunger PULL: a soft hint only (the single
+                // movement authority is untouched), it fires only when the mover carries a
+                // confideWorry AND a trusted confidant (bond ≥ known, non-hostile) sits at a
+                // DIFFERENT, reachable scene. Prefers a confidant in the mover's own district;
+                // skipped if already co-located; never forces. Falls through to the own-duty /
+                // rehearsal / generic night rhythm below.
+                if (clockLabel === '黃昏' || clockLabel === '入夜' || clockLabel === '深宵') {
+                    const worry = confideWorry(wants, member.id);
+                    if (worry) {
+                        let bestConfidant: { id: string; near: boolean; bond: number } | null = null;
+                        for (const other of w.cast) {
+                            if (other.id === member.id) continue;
+                            const otherScene = w.roster[other.id];
+                            if (!otherScene || otherScene === currentSceneId) continue; // co-located ⇒ no pull
+                            if (!options.some((o) => o.sceneId === otherScene)) continue; // must be reachable
+                            const bond = bondOf(bondsAtMove, member.id, other.id);
+                            if (bond < BOND.seed.known) continue; // not trusted enough
+                            if (hasHostileWantToward(wants, member.id, other.id, other.name)) continue; // resented
+                            const near = world.sameDistrict(currentSceneId, otherScene);
+                            if (
+                                !bestConfidant ||
+                                (near && !bestConfidant.near) ||
+                                (near === bestConfidant.near && bond > bestConfidant.bond)
+                            ) {
+                                bestConfidant = { id: other.id, near, bond };
+                            }
+                        }
+                        if (bestConfidant) {
+                            return `這樁事在心裡壓了整日，總沒個主意——不如趁夜去尋${world.nameById(bestConfidant.id)}，把心事與TA說道說道，或許就明朗了。`;
+                        }
                     }
                 }
                 return dutyRhythm(
@@ -716,6 +759,15 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const bonds = world.bondGraph();
     // Unordered pair keys that shared a scene today — spared tonight's cooling.
     const togetherToday = new Set<string>();
+    // 夜訪商量 (confide) trust predicate — a confidant is someone this character has
+    // real standing with (bond ≥ known, confider→other, ASYMMETRIC) and does NOT
+    // resent (no jealous/reckon want aimed at them). Injected into nightSceneKind
+    // (so a confide pair survives the night cull without a deliberate encounter)
+    // and reused to pick the confide scene's opening actor. An empty graph ⇒ every
+    // bond reads stranger (< known) ⇒ false for all pairs, so confide stays fully
+    // inert on a bond-less world (zero behaviour change).
+    const isTrustedConfidant = (a: string, b: string): boolean =>
+        bondOf(bonds, a, b) >= BOND.seed.known && !hasHostileWantToward(wants, a, b, world.nameById(b));
 
     // 3) Group co-present cast by scene; at night keep only qualifying scenes.
     const byScene = new Map<string, string[]>();
@@ -729,7 +781,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             const cs = ids.map((id) => ({ id, name: world.nameById(id) }));
             const deliberateEncounter =
                 ids.length > 1 && ids.some((id) => lastMovedTickByChar[id] === nowTick);
-            if (!deliberateEncounter && !nightSceneKind(cs, info?.privacyLevel ?? 0, wants)) {
+            if (!deliberateEncounter && !nightSceneKind(cs, info?.privacyLevel ?? 0, wants, isTrustedConfidant)) {
                 byScene.delete(sid);
             }
         }
@@ -787,6 +839,21 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         const isPrivate = (info?.privacyLevel ?? 0) >= 3;
         const sceneName = world.sceneNameById(sid);
 
+        // 夜訪商量: when this night 2-person private pair qualifies as confide, the
+        // confider (the worrier) OPENS the scene — firstActorId brings their matter
+        // onto the page, so the confidence itself transfers rather than the beat
+        // landing on the listener's reaction. Precedence-correct: nightSceneKind
+        // gates out tryst/reckoning first, so this only fires for a true confide.
+        const confideOpenerId =
+            night && isPrivate && ids.length === 2
+                ? (() => {
+                      const cs = ids.map((id) => ({ id, name: world.nameById(id) }));
+                      return nightSceneKind(cs, info?.privacyLevel ?? 0, wants, isTrustedConfidant) === 'confide'
+                          ? confiderOf(cs, wants, isTrustedConfidant) ?? undefined
+                          : undefined;
+                  })()
+                : undefined;
+
         const castWithMem: SceneLoopCastMember[] = await Promise.all(
             ids.map(async (id) => {
                 const member = world.castById(id)!;
@@ -841,6 +908,8 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // Established lovers alone at night open the intimacy register directly
             // (old lovers renegotiate nothing). Every other scene: undefined.
             emotionalStance: (night && isPrivate && ids.length === 2 && world.isEstablished(ids[0], ids[1])) ? 'consummate' : undefined,
+            // 夜訪商量: the confider opens; every other scene routes normally (undefined).
+            firstActorId: confideOpenerId,
             cast: castWithMem,
             castNames: w.cast.map((member) => member.name),
             wants,
