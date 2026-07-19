@@ -10,6 +10,7 @@
  * prompt-side whisper.
  */
 
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { WorldState, type WorldObject } from '@endless-story/engine';
 import { labManager } from './manager';
@@ -81,6 +82,7 @@ export function readWorldConfig(runId: string): LabWorldConfig {
             carriedByName: object.carriedBy ? world.nameById(object.carriedBy) : undefined,
             state: object.state,
             knownBy: object.knownBy.map((id) => world.nameById(id)),
+            origin: object.origin,
         })),
         scheduledEvents: (w.scheduledEvents ?? []).map((event) => ({
             id: event.id,
@@ -102,8 +104,6 @@ export function readWorldConfig(runId: string): LabWorldConfig {
         hasEconomy: Boolean(w.economy),
     };
 }
-
-let objectCounter = 0;
 
 export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): LabWorldConfig {
     const { world, persist } = openWorldForEdit(runId);
@@ -142,8 +142,10 @@ export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): Lab
                 existing.knownBy = [...new Set(knownBy)];
                 existing.version += 1;
             } else {
-                objectCounter += 1;
-                const id = spec.id?.trim() || `lab-obj-${Date.now().toString(36)}-${objectCounter}`;
+                // Globally-unique, stable id — survives forks byte-for-byte and
+                // never collides across runs/process restarts (the old
+                // timestamp+process-counter scheme could repeat after a restart).
+                const id = spec.id?.trim() || `lab-obj-${randomUUID()}`;
                 if (objects.some((o) => o.id === id)) throw new Error(`duplicate object id: ${id}`);
                 const object: WorldObject = {
                     id,
@@ -156,6 +158,7 @@ export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): Lab
                     state: spec.state?.trim() || undefined,
                     version: 0,
                     knownBy: [...new Set(knownBy)],
+                    origin: { runId, day: w.clock.day, tick: w.clock.currentTick, source: 'lab' },
                 };
                 objects.push(object);
             }
@@ -178,7 +181,7 @@ export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): Lab
                 if (!world.castById(id)) throw new Error(`unknown witness: ${id}`);
             }
             const scheduled = (w.scheduledEvents ??= []);
-            const id = `lab-ev-${Date.now().toString(36)}-${scheduled.length}`;
+            const id = `lab-ev-${randomUUID()}`;
             scheduled.push({
                 id,
                 atTick: w.clock.currentTick + spec.inTicks,

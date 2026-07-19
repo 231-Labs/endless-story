@@ -85,6 +85,22 @@ export interface ContestedResource {
     statement?: string;
 }
 
+/** Where an object first entered the world — provenance for cross-run and
+ * cross-generation tracing (a prop can drift across parallel worlds and one day
+ * become an exhibited heirloom). Optional & backward-compatible with snapshots
+ * predating object provenance; stamped once at creation and never mutated. */
+export interface WorldObjectOrigin {
+    /** Lab run the object was born in (undefined for engine-seeded season objects,
+     *  which the lab layer may backfill). */
+    runId?: string;
+    /** 1-indexed narrative day at creation. */
+    day: number;
+    /** Monotonic tick at creation. */
+    tick: number;
+    /** Season frame (authored slug id) vs placed via the lab UI. */
+    source: 'season' | 'lab';
+}
+
 /** Objective, versioned physical state. Character memories may disagree with
  * this record; only a validated beat effect may mutate it. */
 export interface WorldObject {
@@ -103,6 +119,8 @@ export interface WorldObject {
     version: number;
     /** Characters who know a hidden object's current placement. */
     knownBy: string[];
+    /** Birth provenance (stable across forks/resume; never renumbered). */
+    origin?: WorldObjectOrigin;
 }
 
 /** A clock-bound fact injected by the world, not authored by a character. The

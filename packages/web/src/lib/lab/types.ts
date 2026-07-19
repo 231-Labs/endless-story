@@ -185,6 +185,8 @@ export interface LabWorldConfig {
         carriedByName?: string;
         state?: string;
         knownBy: string[];
+        /** 出身戳：這只物件生於哪一卷、哪一日拍，season 種下或 lab 置入。 */
+        origin?: { runId?: string; day: number; tick: number; source: 'season' | 'lab' };
     }>;
     scheduledEvents: Array<{
         id: string;

@@ -202,6 +202,8 @@ function appendMissingSeasonObjects(world: WorldState, frame: SeasonFrame, toler
             state: spec.state,
             version: 0,
             knownBy: [...new Set(knownBy)],
+            // provenance stamped at seed/reconcile time (deterministic from the clock)
+            origin: { day: world.data.clock.day, tick: world.data.clock.currentTick, source: 'season' },
         });
         knownIds.add(spec.id);
         added += 1;
