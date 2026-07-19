@@ -218,6 +218,12 @@ export interface WorldStateData {
     /** The single in-progress (or premiered) production, when the flag is on.
      *  Persisted with the world so snapshot/restore carries the accumulator. */
     production?: Production;
+    /** 班主叫的排戲: the day's called rehearsal (day + 戲碼 + venue). Set at day
+     *  start by the 班主's decideRehearsal; the afternoon movement phase pulls the
+     *  troupe players to `venueSceneId` so bankRehearsalAttendance banks the roster
+     *  (box-office quality) and, with emergentProduction, their rehearse accrues
+     *  effort. Optional & backward-compatible with snapshots predating it. */
+    rehearsalCall?: { day: number; title: string; venueSceneId: string };
 }
 
 const SNAPSHOT_FILE = 'world.json';

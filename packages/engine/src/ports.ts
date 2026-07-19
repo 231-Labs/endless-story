@@ -29,6 +29,8 @@ export type TransitReactInput = Runner.characterAgent.TransitReactInput;
 export type TransitReaction = Runner.characterAgent.TransitReaction;
 export type NegotiateCounterInput = Runner.characterAgent.NegotiateCounterInput;
 export type NegotiateCounterReply = Runner.characterAgent.NegotiateCounterReply;
+export type RehearsalDecideInput = Runner.characterAgent.RehearsalDecideInput;
+export type RehearsalDecideReply = Runner.characterAgent.RehearsalDecideReply;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -265,6 +267,14 @@ export interface SceneAgentPort extends SceneAgent {
      *  (money-counter → the mechanical gate; condition → the authored policy). A
      *  null reply is no verdict — the tick falls back just the same. */
     negotiateCounter?(input: NegotiateCounterInput): Promise<NegotiateCounterReply | null>;
+    /** 班主叫排戲 (optional): the troupe leader's MORNING rehearsal call. At day
+     *  start it weighs the troupe's straits against tonight's 開鑼 and decides
+     *  whether排戲 is worth the day it costs, and which 戲碼 — a called rehearsal
+     *  announces to the troupe, pulls the players to the venue that afternoon
+     *  (feeding box-office quality + production effort), and bootstraps the play.
+     *  Real adapters implement it (one cheap LLM call, fail-safe to null); the fake
+     *  omits it, so the tick simply never calls rehearsal. A null reply → no call. */
+    decideRehearsal?(input: RehearsalDecideInput): Promise<RehearsalDecideReply | null>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;
