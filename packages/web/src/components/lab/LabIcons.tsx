@@ -130,3 +130,24 @@ export function IconBack(props: SVGProps<SVGSVGElement>) {
         </svg>
     );
 }
+
+/** 行蹤 — footprints, someone moved. */
+export function IconMove(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg {...base(props)}>
+            <ellipse cx="8.5" cy="8" rx="2" ry="3" transform="rotate(-20 8.5 8)" fill="currentColor" stroke="none" />
+            <ellipse cx="15" cy="15.5" rx="2" ry="3" transform="rotate(-20 15 15.5)" fill="currentColor" stroke="none" />
+        </svg>
+    );
+}
+
+/** 天時 — a sun rising over the horizon (clock-bound world events). */
+export function IconWorld(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg {...base(props)}>
+            <path d="M3.5 17.5h17" />
+            <path d="M7.5 17.5a4.5 4.5 0 0 1 9 0" />
+            <path d="M12 5.5v2.4M5.7 8.2l1.5 1.5M18.3 8.2l-1.5 1.5" />
+        </svg>
+    );
+}

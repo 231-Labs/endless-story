@@ -254,6 +254,25 @@ export function deleteGalleryItem(kind: AssetKind, key: string, file: string): v
     fs.rmSync(path.join(galleryDir(kind, key), file), { force: true });
 }
 
+/** Burn the whole gallery (每一件) for an entity; returns how many media were removed. */
+export function clearGallery(kind: AssetKind, name: string): number {
+    let key: string;
+    try {
+        key = assetKeyFor(name);
+    } catch {
+        return 0;
+    }
+    const dir = galleryDir(kind, key);
+    let count: number;
+    try {
+        count = fs.readdirSync(dir).filter((f) => GALLERY_MIME[f.split('.').pop() ?? '']).length;
+    } catch {
+        return 0;
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+    return count;
+}
+
 export function readGalleryFile(kind: AssetKind, key: string, file: string): { bytes: Buffer; mime: string } | null {
     if (!/^[^/\\]+\.(png|jpg|webp|mp4|webm)$/.test(file) || file.includes('..') || key.includes('..') || /[/\\]/.test(key)) return null;
     const ext = file.split('.').pop()!;

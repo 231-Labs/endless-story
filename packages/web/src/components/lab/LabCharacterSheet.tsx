@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
 import type { LabCharacterLive } from '@/lib/lab/types';
 
-type TabKey = 'wants' | 'bonds' | 'dossier' | 'memory' | 'media';
+type TabKey = 'wants' | 'estate' | 'bonds' | 'dossier' | 'memory' | 'media';
 
 function Gauge({ label, value, tone, title }: { label: string; value: number; tone: string; title: string }) {
     const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
@@ -65,6 +65,7 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
     const art = c.portraitUrl ?? c.gallery.find((g) => g.type === 'image')?.url;
     const tabs: Array<{ key: TabKey; label: string; count?: number; title: string }> = [
         { key: 'wants', label: '心事', count: c.wants.length, title: '全部活著的心事，張力排序' },
+        { key: 'estate', label: '身家', count: c.carrying.length, title: '身上的錢與隨身物品欄' },
         { key: 'bonds', label: '羈絆', count: c.views.length, title: '我看眾人 —— 當下的、最新的關係視角' },
         { key: 'dossier', label: '檔案', title: '其人・恆常自我・心底事' },
         { key: 'memory', label: '記憶', count: memories.length, title: 'LocalRecall 全帳（植入／焚去到「物界 → 記憶」）' },
@@ -152,7 +153,9 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                         {c.name.slice(0, 1)}
                     </span>
 
-                    <div className="relative flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    {/* 內容置中一柱 —— 寬屏不再左偏一邊 */}
+                    <div className="relative mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                         {tabs.map((t) => (
                             <button
                                 key={t.key}
@@ -193,6 +196,46 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                                 ))}
                                 {!c.wants.length ? <li className="font-serif text-sm text-mute/70">心無罣礙。</li> : null}
                             </ul>
+                        ) : null}
+
+                        {tab === 'estate' ? (
+                            <div className="space-y-5">
+                                {/* 錢 —— 一枚錢牌 */}
+                                <section className="animate-beat-in">
+                                    <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">銀錢</h3>
+                                    {c.money ? (
+                                        <div className="mt-2 inline-flex items-center gap-2.5 rounded-lg bg-gradient-to-br from-cinnabar/15 to-seal/10 px-4 py-2.5 shadow-[0_2px_12px_rgba(176,74,60,0.14)]">
+                                            <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-full bg-seal/80 font-serif text-sm text-white shadow-inner">錢</span>
+                                            <span className="font-serif text-xl tracking-[0.08em] text-ink tabular-nums">{c.money}</span>
+                                        </div>
+                                    ) : (
+                                        <p className="mt-2 font-serif text-sm text-mute/70">此界無銀錢流通（未掛帶 economy 的季框）。</p>
+                                    )}
+                                </section>
+
+                                {/* 物品欄 —— 遊戲式格位 */}
+                                <section className="animate-beat-in">
+                                    <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">物品欄 · {c.carrying.length}</h3>
+                                    <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                        {c.carrying.map((it) => (
+                                            <div
+                                                key={it.id}
+                                                title={`${it.label}${it.state ? `（${it.state}）` : ''}${it.hidden ? ' · 藏' : ''}${it.origin ? `　生於 d${it.origin.day}·t${it.origin.tick}（${it.origin.source === 'season' ? '季' : '手'}）` : ''}`}
+                                                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-cinnabar/30 bg-gradient-to-br from-ink/[0.04] to-transparent p-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] dark:from-white/[0.05]"
+                                            >
+                                                <span aria-hidden className="font-serif text-lg text-cinnabar/70">物</span>
+                                                <span className="line-clamp-2 font-serif text-2xs leading-tight text-ink/85">{it.label}</span>
+                                                {it.hidden ? <span className="font-serif text-[9px] tracking-[0.2em] text-jade/80">藏</span> : null}
+                                            </div>
+                                        ))}
+                                        {/* 幾格空位 —— 遊戲感 */}
+                                        {Array.from({ length: Math.max(0, 3 - (c.carrying.length % 3 || 3)) + (c.carrying.length ? 0 : 3) }).map((_, i) => (
+                                            <div key={`empty-${i}`} className="aspect-square rounded-lg border border-dashed border-hairline/50 bg-ink/[0.015] dark:bg-white/[0.02]" />
+                                        ))}
+                                    </div>
+                                    {!c.carrying.length ? <p className="mt-2 font-serif text-sm text-mute/70">身無長物。</p> : null}
+                                </section>
+                            </div>
                         ) : null}
 
                         {tab === 'bonds' ? (
@@ -273,6 +316,7 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                                 <p className="font-serif text-sm text-mute/70">尚無影像 —— 到圖庫以其名補圖，此處自動換裝。</p>
                             )
                         ) : null}
+                    </div>
                     </div>
                 </div>
             </div>

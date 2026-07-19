@@ -195,18 +195,34 @@ export default function LabAssetsPage() {
                 title: `「${entity.name}」的影像 · ${gallery.length} 件`,
                 options: [
                     { key: '__add__', label: '＋ 添新影像', hint: '多張圖（≤6MB）或影片 mp4/webm（≤48MB）' },
+                    { key: '__clear__', label: `焚去全部 ${gallery.length} 件`, hint: '整套美術集盡焚，不可復' },
                     ...gallery.map((g) => ({
                         key: g.file,
                         label: `焚去 ${g.type === 'video' ? '影' : '圖'} · ${g.file}`,
                     })),
                 ],
             });
+            if (!picked) return;
             if (picked === '__add__') {
                 galleryInput?.click();
-            } else if (picked) {
-                await labApi.deleteGalleryItem(entity.kind, labAssetKeyFor(entity.name), picked);
-                toast('影像已焚。', 'info');
+                return;
             }
+            if (picked === '__clear__') {
+                const ok = await dialog.confirm({
+                    title: `焚去「${entity.name}」全部影像？`,
+                    body: `${gallery.length} 件盡焚，不可復。`,
+                    confirmLabel: '全焚',
+                    danger: true,
+                });
+                if (!ok) return;
+                const { cleared } = await labApi.clearGallery(entity.kind, entity.name);
+                toast(`已焚 ${cleared} 件。`, 'info');
+                return;
+            }
+            // 單件焚後再開一次 —— 一次可焚多件，不必每焚一件重按「影」
+            await labApi.deleteGalleryItem(entity.kind, labAssetKeyFor(entity.name), picked);
+            toast('影像已焚。', 'info');
+            await manageGallery(entity, galleryInput);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         }

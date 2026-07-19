@@ -3,6 +3,7 @@
 import { labAuthorized, ok, fail, unauthorized } from '@/lib/lab/http';
 import {
     addGalleryItem,
+    clearGallery,
     deleteAsset,
     deleteGalleryItem,
     isAssetKind,
@@ -62,6 +63,10 @@ export async function DELETE(req: Request) {
         const url = new URL(req.url);
         const kind = url.searchParams.get('kind') ?? '';
         if (!isAssetKind(kind)) return fail(new Error('kind must be character|scene|location'));
+        const galleryClearName = url.searchParams.get('galleryClearName');
+        if (galleryClearName) {
+            return ok({ cleared: clearGallery(kind, galleryClearName) });
+        }
         const galleryKey = url.searchParams.get('galleryKey');
         const galleryFile = url.searchParams.get('galleryFile');
         if (galleryKey && galleryFile) {
