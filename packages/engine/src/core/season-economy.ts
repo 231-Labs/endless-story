@@ -96,8 +96,11 @@ export interface SeasonEconomyData {
     shortfallCreditor?: string;
     /** scene NAME where public settlement notices post next morning. */
     noticeSceneName: string;
-    /** daily wage schedule out of the troupe treasury: accountId → subunits. */
-    wages: Array<{ accountId: string; amountSubunits: string }>;
+    /** daily wage schedule: accountId → subunits, paid by `fromAccountId` (the
+     *  establishment that employs them — defaults to the troupe when absent, so
+     *  older snapshots keep paying everyone from 班庫). Multi-establishment: a
+     *  歌女 draws from 長三堂子, a 記者 from 申報館 — each pot pays its own people. */
+    wages: Array<{ accountId: string; amountSubunits: string; fromAccountId?: string }>;
     /** periodic lump-sum obligations (錢莊月息、屋租按期付，不是每日勻繳)。
      *  due at the END of dueDay; short payment rolls forward as a standing
      *  debt chased at every later settle until cleared. */
@@ -629,9 +632,19 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             const approvers = troupe.authorizedSpenderIds.map((id) => world.nameById(id)).join('、');
             lines.push(`你無權動用${troupe.label}；核准權在${approvers || '班主'}手上。`);
             if (myWage) {
-                lines.push(wageCameShort
-                    ? '昨日班中俸已經發不足——這班眼看撐不了幾日；真散了班，你的工錢、鋪位與營生一併沒了，得各自另尋出路。'
-                    : `你的工錢喫住都繫在${troupe.label.replace('班庫', '')}這一班：班若散了，戲散人散，各自另尋營生。`);
+                // Whose books does this person's keep actually hang on? A troupe
+                // hand → the 班庫; a 歌女 of 長三堂子 / 記者 of 申報館 → their OWN house.
+                const employerId = myWage.fromAccountId ?? data.troupeAccountId;
+                const employer = contract.economy.accounts[employerId];
+                if (employerId === data.troupeAccountId) {
+                    lines.push(wageCameShort
+                        ? '昨日班中俸已經發不足——這班眼看撐不了幾日；真散了班，你的工錢、鋪位與營生一併沒了，得各自另尋出路。'
+                        : `你的工錢喫住都繫在${troupe.label.replace('班庫', '')}這一班：班若散了，戲散人散，各自另尋營生。`);
+                } else if (employer) {
+                    lines.push(wageCameShort
+                        ? `${employer.label}上回的例錢已發不足，你這營生也不比從前穩了。`
+                        : `你的工錢喫住繫在${employer.label}，與春雪社的班庫無干。`);
+                }
             }
         }
     }
@@ -955,12 +968,22 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
         }
     }
 
-    // 2b. wages + fixed costs through the ONE settlement transition.
+    // 2b. wages + fixed costs through the ONE settlement transition. Wages group
+    //     by employer establishment (fromAccountId, default 班庫): each pot pays
+    //     its own people, prorated against its own reserves independently.
+    const payrollByPayer = new Map<string, Array<{ memberAccountId: string; amount: bigint }>>();
+    for (const wage of data.wages) {
+        const payer = wage.fromAccountId ?? data.troupeAccountId;
+        (payrollByPayer.get(payer) ?? payrollByPayer.set(payer, []).get(payer)!).push({
+            memberAccountId: wage.accountId,
+            amount: BigInt(wage.amountSubunits),
+        });
+    }
     const settle = settleEconomyDay(contract.economy, {
         day: req.day,
         causeEventId,
-        wages: data.wages.length
-            ? { payerAccountId: data.troupeAccountId, orders: data.wages.map((wage) => ({ memberAccountId: wage.accountId, amount: BigInt(wage.amountSubunits) })) }
+        wages: payrollByPayer.size
+            ? [...payrollByPayer].map(([payerAccountId, orders]) => ({ payerAccountId, orders }))
             : undefined,
         marketAccountId: data.marketAccountId,
     });
@@ -986,13 +1009,16 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
         );
     }
 
-    // 3. shortfalls become objective world state, not adjectives.
-    let wagesShort = false;
+    // 3. shortfalls become objective world state, not adjectives. The 班庫 notice
+    //    speaks only for troupe-paid wages; another establishment's payroll
+    //    shortfall shows up as its own people simply getting less (+ hunger).
+    let troupeWagesShort = false;
     for (const wage of data.wages) {
+        if ((wage.fromAccountId ?? data.troupeAccountId) !== data.troupeAccountId) continue;
         const paid = settle.perAccount[wage.accountId]?.wage ?? 0n;
-        if (paid < BigInt(wage.amountSubunits)) wagesShort = true;
+        if (paid < BigInt(wage.amountSubunits)) troupeWagesShort = true;
     }
-    if (wagesShort) publicNotices.push('班庫見底，今日班中俸未能發足——欠薪記在眾人眼裡的那本帳上。');
+    if (troupeWagesShort) publicNotices.push('班庫見底，今日班中俸未能發足——欠薪記在眾人眼裡的那本帳上。');
     const troupeLedger = settle.perAccount[data.troupeAccountId];
     if (troupeLedger && troupeLedger.shortfall > 0n) {
         const troupeLabel = contract.economy.accounts[data.troupeAccountId]?.label ?? '班庫';
@@ -1071,11 +1097,25 @@ export interface SeasonEconomyFrame {
         /** objects whose state lifts the takings (a mended huqin, new robes…). */
         boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
     };
-    businesses?: Array<{ id: string; label: string; openingYuan: number }>;
+    /** other economic establishments — a film co, newspaper, record label, song
+     *  house. Each is a first-class pot with its own reserves, fixed cost, and
+     *  (optionally) its OWN payroll: a 歌女 draws from 長三堂子, a 記者 from 申報館. */
+    businesses?: Array<{
+        id: string;
+        label: string;
+        openingYuan: number;
+        dailyFixedCostYuan?: number;
+        costNote?: string;
+        shortfallCreditor?: string;
+        authorizedSpenderNames?: string[];
+        /** who this establishment pays a daily wage (its own hands). */
+        wages?: Array<{ name: string; amountYuan: number }>;
+    }>;
     /** per-character overrides; unlisted cast get characterDefaults. */
     characters?: Array<{ name: string; openingYuan?: number; dailyFixedCostYuan?: number }>;
     characterDefaults?: { openingYuan: number; dailyFixedCostYuan: number };
-    /** daily wage out of the troupe treasury; unlisted cast draw no wage. */
+    /** daily wage out of the troupe treasury; unlisted cast draw no wage.
+     *  (An establishment's own payroll is declared on that business instead.) */
     wages?: Array<{ name: string; amountYuan: number }>;
     catalog?: Array<{
         id: string;
@@ -1147,6 +1187,8 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
             ownerType: 'business',
             label: business.label,
             opening: asSubunits(business.openingYuan),
+            dailyFixedCost: asSubunits(business.dailyFixedCostYuan ?? 0),
+            authorizedSpenderIds: (business.authorizedSpenderNames ?? []).map(idFor),
         })),
         ...world.data.cast.map((member): AccountSeed => {
             const authored = frame.characters?.find((entry) => entry.name === member.name);
@@ -1232,7 +1274,15 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
             }
             : {}),
         noticeSceneName: frame.noticeScene,
-        wages: (frame.wages ?? []).map((wage) => ({ accountId: idFor(wage.name), amountSubunits: asSubunits(wage.amountYuan).toString() })),
+        // Multi-establishment payroll: top-level wages are troupe-paid; each
+        // business may declare its own payroll (歌女 from 長三堂子, 記者 from 申報館),
+        // tagged with fromAccountId so settle pays each out of its own pot.
+        wages: [
+            ...(frame.wages ?? []).map((wage) => ({ accountId: idFor(wage.name), amountSubunits: asSubunits(wage.amountYuan).toString(), fromAccountId: troupeId })),
+            ...(frame.businesses ?? []).flatMap((business) =>
+                (business.wages ?? []).map((wage) => ({ accountId: idFor(wage.name), amountSubunits: asSubunits(wage.amountYuan).toString(), fromAccountId: business.id })),
+            ),
+        ],
         catalog: (frame.catalog ?? []).map((item) => ({
             id: item.id,
             label: item.label,
