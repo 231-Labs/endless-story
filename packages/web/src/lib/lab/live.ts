@@ -354,6 +354,8 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             secret: member.secret,
             plan: member.plan,
             bonds: bondsOf(member),
+            // 技藝 — the character's authored skills (empty when none).
+            skills: (member.skills ?? []).map((s) => ({ name: s.name, kind: s.kind, style: s.style, level: s.level, note: s.note })),
             gallery: listGallery('character', member.name).map(({ url, type }) => ({ url, type })),
             money: moneyOf(member.id),
             carrying: carryingOf(member.id),

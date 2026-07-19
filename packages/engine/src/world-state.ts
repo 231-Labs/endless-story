@@ -28,6 +28,31 @@ export interface StateVector {
     mood: number;
 }
 
+/**
+ * A SKILL — a style-imparting capability that gives a character a distinctive
+ * STYLE of conduct and output. This is the character-SKILL framework's data
+ * atom: pure authored data, gathered by `core/skills.ts` and injected at
+ * matching HANG POINTS (the first being the scene beat). A new skill is just
+ * data; a new hang point is one gather call.
+ */
+export interface Skill {
+    /** The skill's name (悲工, 辛辣文筆, 識人眼, 圓場話, 一副好嗓…). */
+    name: string;
+    /** The DOMAIN this skill colours — a free-text tag (like a want `layer`)
+     *  that hang points match against. Canonical: 談(speech/conduct)、風(bearing/
+     *  處世)、唱(perform/sing)、身(stage movement)、文(writing)、眼(reading people)、
+     *  手(craft). Free-text — new kinds are allowed. */
+    kind: string;
+    /** A short PROSE descriptor of the style this skill imparts (「悲切，以情帶聲，
+     *  一句三嘆」「筆鋒辛辣，一針見血」). This is the ONLY part injected into a prompt
+     *  at a matching hang point — never a number. */
+    style: string;
+    /** Optional 1–5 proficiency: display + tie-break only, NEVER a hard gate. */
+    level?: number;
+    /** Optional free note (provenance, caveats) — display only. */
+    note?: string;
+}
+
 export interface CastMember {
     id: string;
     name: string;
@@ -73,6 +98,12 @@ export interface CastMember {
      *  character is on-post (歌女入夜唱堂會、記者深宵趕稿、班主坐鎮後台) — a stronger
      *  pull than the generic work/home rhythm. Optional & backward-compatible. */
     duties?: Array<{ part: string; sceneId: string; duty: boolean; note?: string }>;
+    /** The character's SKILLS — style-imparting capabilities that give distinctive
+     *  conduct + output (see `Skill`). OPTIONAL & backward-compatible: a character
+     *  with no skills reads exactly as before, and snapshots predating skills
+     *  restore fine (the field is simply absent). Carried by snapshot/restore as
+     *  plain JSON. */
+    skills?: Skill[];
 }
 
 export interface SceneInfo {

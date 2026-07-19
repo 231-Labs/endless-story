@@ -80,6 +80,13 @@ export interface ActBeatInput {
      *  want — a compass, never a script; acting on景 or setting it aside is the
      *  character's own choice. Undefined = no plan (reactive as before). */
     standingPlan?: string;
+    /** SKILL style hint (character-SKILL framework): a compact prose descriptor
+     *  of this character's conduct/風 skills (`〔技藝〕悲工·…；圓場話·…`), injected
+     *  so their SPEECH + BEARING carry their skills — a 悲工 lead's beats read
+     *  mournful, a 辛辣 記者's cutting. Advisory colour woven into conduct, never
+     *  a script and never a menu to recite. Undefined = no conduct skill (beat
+     *  unchanged, full backward-compat). */
+    styleHint?: string;
     /** Items this character CARRIES right now (隨身物/行頭, each with provenance,
      *  e.g. 「白韻秋所贈的湘妃竹摺扇」). Whether/when to bring one out is the
      *  character's own in-scene choice — never scripted, never forced. */
@@ -451,6 +458,9 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
         input.standingPlan
             ? `【你這些日子的打算（心裡的盤算，不是台詞）】\n${input.standingPlan}\n——對景就往那裡走一步，不對景就先擱著；別把它照唸出來、也別為了提而提。`
+            : '',
+        input.styleHint
+            ? `【你的看家本事與行事風格（貫在言行裡，別報菜名）】\n${input.styleHint}\n——它是你出手、開口、待人的底色；自然帶出來，不要照唸技藝的名目。`
             : '',
         input.timeCharter ? `【時辰之律】${input.timeCharter}` : '',
         // A continuation picks up a still-warm private encounter mid-moment (general;

@@ -138,6 +138,11 @@ export interface LabCharacterLive {
          *  when truthy; undefined for now. */
         established?: boolean;
     }>;
+    /** 技藝 — this character's SKILLS (style-imparting capabilities). Each gives a
+     *  distinctive conduct/output style; `kind` is the domain it colours, `style`
+     *  the prose descriptor, `level` an optional 1–5 proficiency. Empty when the
+     *  character carries no authored skills. */
+    skills: Array<{ name: string; kind: string; style: string; level?: number; note?: string }>;
     /** 圖庫 multimedia gallery (images + video clips). */
     gallery: Array<{ url: string; type: 'image' | 'video' }>;
     /** 身上的錢 —— 已格式化（如「3 圓 20 分」）。僅掛 economy 季框的卷才有。 */

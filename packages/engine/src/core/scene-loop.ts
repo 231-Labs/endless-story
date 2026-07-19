@@ -59,6 +59,11 @@ export interface SceneLoopCastMember {
      *  it the world simply never deals this actor the advance card — courting
      *  happens through scenes and confidences first. Default true (probes). */
     advanceReady?: boolean;
+    /** SKILL style hint (character-SKILL framework hang point): the compact prose
+     *  descriptor of this actor's conduct-kind skills (from `skillStyleHint`), so
+     *  their speech + bearing reflect their skills. Advisory colour, never a
+     *  script; undefined when the actor has no conduct skill (beat unchanged). */
+    styleHint?: string;
     /** This member's OWN canon feeling toward each co-present member, keyed by
      *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
      *  the reverse edge — no omniscience about others' feelings. */
@@ -324,6 +329,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             stateLine: actor.stateLine,
             innerSecret: actor.innerSecret,
             standingPlan: actor.standingPlan,
+            styleHint: actor.styleHint,
             economyLine: actor.economyLine,
             etiquette: input.etiquette,
             timeCharter: input.timeCharter,

@@ -15,7 +15,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
 import type { LabCharacterLive } from '@/lib/lab/types';
 
-type TabKey = 'overview' | 'wants' | 'bonds' | 'dossier' | 'estate' | 'memory' | 'pov' | 'media';
+type TabKey = 'overview' | 'wants' | 'bonds' | 'dossier' | 'skills' | 'estate' | 'memory' | 'pov' | 'media';
 type Bond = LabCharacterLive['bonds'][number];
 type Want = LabCharacterLive['wants'][number];
 
@@ -28,6 +28,15 @@ function layerPalette(layer: string): { chip: string; bar: string } {
     if (/志|圖|業|功|名|利|錢/.test(layer)) return { chip: 'border-cinnabar/30 bg-cinnabar/[0.07] text-cinnabar/90', bar: 'bg-cinnabar/70' };
     if (/恨|仇|怨|懼|怕/.test(layer)) return { chip: 'border-seal/30 bg-seal/[0.08] text-seal/90', bar: 'bg-seal/75' };
     return { chip: 'border-hairline bg-ink/[0.04] text-mute', bar: 'bg-mute/60' };
+}
+
+/** 技藝 domain → tint (same lens family as 願榜/羈絆, so the whole app speaks one
+ *  colour language). Stage arts（唱/身/口）warm rose; word arts（文/談）cinnabar;
+ *  perception / craft / bearing（眼/手/風/處世 & any new kind）muted. */
+function skillKindPalette(kind: string): { chip: string; dot: string } {
+    if (/唱|身|口/.test(kind)) return { chip: 'border-rose-400/30 bg-rose-400/[0.07] text-rose-400/90', dot: 'bg-rose-400/70' };
+    if (/文|談/.test(kind)) return { chip: 'border-cinnabar/30 bg-cinnabar/[0.07] text-cinnabar/90', dot: 'bg-cinnabar/70' };
+    return { chip: 'border-hairline bg-ink/[0.05] text-mute', dot: 'bg-mute/60' };
 }
 
 /** 溫度 tint — the emotional NUMBER read as colour. Tone leads (關係語 tells warm
@@ -204,6 +213,30 @@ function BondCard({ bond, compact, onSelectCharacter }: {
     );
 }
 
+/** 技藝卡 — an RPG "ability" row: domain chip + skill name (serif, prominent) +
+ *  a ●-dot 造詣 indicator (1–5 when present), the style descriptor as the sub-line. */
+function SkillRow({ skill }: { skill: LabCharacterLive['skills'][number] }) {
+    const pal = skillKindPalette(skill.kind);
+    const lvl = skill.level && skill.level > 0 ? Math.min(5, Math.round(skill.level)) : 0;
+    return (
+        <div className="animate-beat-in rounded-lg border border-hairline bg-canvas/70 p-3 backdrop-blur-sm dark:bg-white/[0.03]">
+            <div className="flex items-center gap-2">
+                <span className={`shrink-0 rounded-sm border px-1.5 py-px font-serif text-[10px] tracking-[0.15em] ${pal.chip}`}>{skill.kind}</span>
+                <span className="font-serif text-base tracking-[0.08em] text-ink/90">{skill.name}</span>
+                {lvl ? (
+                    <span className="ml-auto flex shrink-0 items-center gap-0.5" title={`造詣 ${lvl}／5`} aria-label={`造詣 ${lvl} 之 5`}>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <span key={i} className={`h-1.5 w-1.5 rounded-full ${i < lvl ? pal.dot : 'bg-ink/10 dark:bg-white/[0.12]'}`} />
+                        ))}
+                    </span>
+                ) : null}
+            </div>
+            <p className="mt-1.5 font-serif text-sm leading-relaxed text-ink/75">{skill.style}</p>
+            {skill.note ? <p className="mt-1 font-serif text-2xs tracking-[0.12em] text-mute/70">{skill.note}</p> : null}
+        </div>
+    );
+}
+
 export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene, onSelectCharacter }: {
     runId: string;
     character: LabCharacterLive;
@@ -284,6 +317,7 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
         { key: 'wants', label: '執念', count: c.wants.length, title: '全部活著的心事，張力排序 —— 最盛者為主線' },
         { key: 'bonds', label: '羈絆', count: c.bonds.length, title: '我看眾人 —— 關係語、溫度數值、相待之衡；點頭像即翻到那人' },
         { key: 'dossier', label: '身世', title: '其人・恆常自我・心底事' },
+        { key: 'skills', label: '技藝', count: c.skills.length, title: '看家本事：一身風格與行事之道（貫在言行裡的底色）' },
         { key: 'estate', label: '身家', count: c.carrying.length, title: '身上的錢與隨身物品欄' },
         { key: 'memory', label: '憶', count: memories.length, title: 'LocalRecall 全帳（植入／焚去到「物界 → 記憶」）' },
         { key: 'pov', label: '述', count: povs.length, title: '以此人為主角、逐拍第一人稱的連貫視角（眾聲之一線）' },
@@ -509,6 +543,19 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                         </section>
                                     ) : null}
                                 </div>
+                            ) : null}
+
+                            {/* ── 技藝 —— 看家本事與行事風格 ─────────────────────── */}
+                            {tab === 'skills' ? (
+                                c.skills.length ? (
+                                    <div className="space-y-2.5">
+                                        {c.skills.map((s, i) => (
+                                            <SkillRow key={`${s.kind}-${s.name}-${i}`} skill={s} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="font-serif text-sm text-mute/70">尚無載錄的技藝。</p>
+                                )
                             ) : null}
 
                             {/* ── 身家 ──────────────────────────────────────────── */}
