@@ -10,12 +10,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { sceneArtFor, terrainArtFor } from '@/components/saga/handscroll/terrainArt';
 import type { LabLiveBeat } from '@/lib/lab/types';
 
 const SLIP_W = 300;
-const SLIP_W_SHORT = 112; // 行蹤／天時「事籤」—— 瘦成一條，字待 hover 紗再現
+const SLIP_W_SHORT = 112; // 行蹤／天時「事籤」—— 收合瘦成一條
 const SLIP_H = 136; // 8.5rem — 底片格恆定高度
-const OVERLAY_W_SHORT = 280; // 事籤的展開紗回到可讀寬度
+const EVENT_EXPAND_W = 300; // 事籤 hover 向右展開至此，推擠右側諸卡
+
+/** 事籤有地點者，取其場景／地界畫作作底（懸停時現）。 */
+function eventArt(b: LabLiveBeat): string | null {
+    return sceneArtFor(b.sceneName) ?? terrainArtFor(b.sceneName);
+}
 
 function toneDot(b: LabLiveBeat): string {
     if (b.kind === 'world') return 'bg-seal';
@@ -25,16 +31,6 @@ function toneDot(b: LabLiveBeat): string {
 
 function isEventSlip(b: LabLiveBeat): boolean {
     return b.kind === 'move' || b.kind === 'world';
-}
-
-/** 言箋寬、事籤瘦。 */
-function slipW(b: LabLiveBeat): number {
-    return isEventSlip(b) ? SLIP_W_SHORT : SLIP_W;
-}
-
-/** 展開紗的寬：事籤放寬到可讀，言箋同幅。 */
-function overlayW(b: LabLiveBeat): number {
-    return isEventSlip(b) ? OVERLAY_W_SHORT : SLIP_W;
 }
 
 /** 箋底分色：言＝紙面、行＝墨染、世＝金染。 */
@@ -67,7 +63,9 @@ export function LabBeatDock({
 }) {
     const [open, setOpen] = useState(true);
     const [pinnedSeq, setPinnedSeq] = useState<number | null>(null);
-    /** 展開紗的錨位（相對 dock），量自被懸停那格的外框。 */
+    /** 事籤（行/世）就地向右展開的那一枚 —— 與言箋的展開紗兩套機制。 */
+    const [hoverSeq, setHoverSeq] = useState<number | null>(null);
+    /** 展開紗的錨位（相對 dock），量自被懸停那格的外框（只用於言箋）。 */
     const [overlay, setOverlay] = useState<{ seq: number; left: number; bottom: number } | null>(null);
     const dockRef = useRef<HTMLDivElement>(null);
     const stripRef = useRef<HTMLDivElement>(null);
@@ -187,44 +185,72 @@ export function LabBeatDock({
                                 }}
                                 className="mt-2 flex items-start gap-2.5 overflow-x-auto px-4 pb-1.5 no-scrollbar sm:px-8"
                             >
-                                {feed.map((b) => (
-                                    <article
-                                        key={b.seq}
-                                        onMouseEnter={(e) => showOverlay(b.seq, e.currentTarget)}
-                                        onMouseLeave={scheduleHide}
-                                        onClick={(e) => {
-                                            showOverlay(b.seq, e.currentTarget);
-                                            setPinnedSeq((s) => (s === b.seq ? null : b.seq));
-                                        }}
-                                        style={{ width: slipW(b), height: SLIP_H }}
-                                        className={`animate-beat-in shrink-0 cursor-pointer overflow-hidden rounded-lg shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md ${slipTint(b)} ${
-                                            isEventSlip(b) ? 'px-2 py-2' : 'px-3.5 py-2.5'
-                                        }`}
-                                    >
-                                        {isEventSlip(b) ? (
-                                            /* 事籤：只記「何時·何事·何人」，全文待 hover 紗 */
-                                            <div className="flex h-full flex-col items-center justify-between">
-                                                <span className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.14em] text-mute">
-                                                    <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${toneDot(b)}`} />
-                                                    {b.clock}
-                                                </span>
-                                                <span aria-hidden className={`font-serif text-2xl ${b.kind === 'world' ? 'text-seal/75' : 'text-mute/60'}`}>
-                                                    {b.kind === 'world' ? '世' : '行'}
-                                                </span>
-                                                <span className="max-w-full truncate font-serif text-2xs tracking-[0.12em] text-ink/80">
-                                                    {b.kind === 'world' ? b.sceneName : b.name}
-                                                </span>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <SlipHeader b={b} />
-                                                <p className="mt-1.5 line-clamp-3 font-serif text-sm leading-relaxed text-ink/90">
-                                                    {b.text}
-                                                </p>
-                                            </>
-                                        )}
-                                    </article>
-                                ))}
+                                {feed.map((b) => {
+                                    if (isEventSlip(b)) {
+                                        // 事籤：hover 就地向右展開（推擠右側諸卡，CSS width 過渡）；
+                                        // 有地點者展開時襯場景畫、覆一層配色紗使字仍清晰。
+                                        const expanded = hoverSeq === b.seq;
+                                        const art = expanded ? eventArt(b) : null;
+                                        return (
+                                            <article
+                                                key={b.seq}
+                                                onMouseEnter={() => setHoverSeq(b.seq)}
+                                                onMouseLeave={() => setHoverSeq((s) => (s === b.seq ? null : s))}
+                                                style={{ width: expanded ? EVENT_EXPAND_W : SLIP_W_SHORT, height: SLIP_H }}
+                                                className={`animate-beat-in relative shrink-0 overflow-hidden rounded-lg shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${slipTint(b)}`}
+                                            >
+                                                {art ? (
+                                                    <>
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                        <img src={art} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                                                        {/* 配色紗：左濃右淡 —— 左承字（可讀）、右透場景畫 */}
+                                                        <span className={`absolute inset-0 ${b.kind === 'world' ? 'bg-gradient-to-r from-canvas/90 via-canvas/72 to-seal/20 dark:from-black/84 dark:via-black/66 dark:to-seal/25' : 'bg-gradient-to-r from-canvas/90 via-canvas/74 to-canvas/52 dark:from-black/84 dark:via-black/66 dark:to-black/46'}`} />
+                                                    </>
+                                                ) : null}
+                                                {expanded ? (
+                                                    <div className="relative flex h-full flex-col px-3 py-2.5">
+                                                        <SlipHeader b={b} />
+                                                        <p className={`mt-1.5 line-clamp-4 font-serif text-xs leading-relaxed text-ink/90 ${art ? 'drop-shadow-sm' : ''}`}>
+                                                            {b.text}
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="relative flex h-full flex-col items-center justify-between px-2 py-2">
+                                                        <span className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.14em] text-mute">
+                                                            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${toneDot(b)}`} />
+                                                            {b.clock}
+                                                        </span>
+                                                        <span aria-hidden className={`font-serif text-2xl ${b.kind === 'world' ? 'text-seal/75' : 'text-mute/60'}`}>
+                                                            {b.kind === 'world' ? '世' : '行'}
+                                                        </span>
+                                                        <span className="max-w-full truncate font-serif text-2xs tracking-[0.12em] text-ink/80">
+                                                            {b.kind === 'world' ? b.sceneName : b.name}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </article>
+                                        );
+                                    }
+                                    // 言箋：維持向上生長的展開紗（點釘、覆而不推）
+                                    return (
+                                        <article
+                                            key={b.seq}
+                                            onMouseEnter={(e) => showOverlay(b.seq, e.currentTarget)}
+                                            onMouseLeave={scheduleHide}
+                                            onClick={(e) => {
+                                                showOverlay(b.seq, e.currentTarget);
+                                                setPinnedSeq((s) => (s === b.seq ? null : b.seq));
+                                            }}
+                                            style={{ width: SLIP_W, height: SLIP_H }}
+                                            className={`animate-beat-in shrink-0 cursor-pointer overflow-hidden rounded-lg px-3.5 py-2.5 shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md ${slipTint(b)}`}
+                                        >
+                                            <SlipHeader b={b} />
+                                            <p className="mt-1.5 line-clamp-3 font-serif text-sm leading-relaxed text-ink/90">
+                                                {b.text}
+                                            </p>
+                                        </article>
+                                    );
+                                })}
                                 {!feed.length ? (
                                     <p className="px-1 py-2 font-serif text-xs text-mute/70">尚無一拍。點「走一拍」，看世界自己動。</p>
                                 ) : null}
@@ -242,7 +268,7 @@ export function LabBeatDock({
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: SLIP_H, opacity: 0 }}
                             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                            style={{ left: overlay.left, bottom: overlay.bottom, width: overlayW(expandedBeat) }}
+                            style={{ left: overlay.left, bottom: overlay.bottom, width: SLIP_W }}
                             onMouseEnter={cancelHide}
                             onMouseLeave={scheduleHide}
                             onClick={() => setPinnedSeq((s) => (s === overlay.seq ? null : overlay.seq))}
