@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
 import type { LabCharacterLive } from '@/lib/lab/types';
 
-type TabKey = 'wants' | 'estate' | 'bonds' | 'dossier' | 'memory' | 'media';
+type TabKey = 'wants' | 'estate' | 'bonds' | 'pov' | 'dossier' | 'memory' | 'media';
 
 function Gauge({ label, value, tone, title }: { label: string; value: number; tone: string; title: string }) {
     const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
@@ -37,6 +37,8 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
     const [tab, setTab] = useState<TabKey>('wants');
     const [memories, setMemories] = useState<Array<{ seq: number; content: string; kind: string; day: number; importance: number }>>([]);
     const [memErr, setMemErr] = useState<string | null>(null);
+    /** 自述 —— 以此人為主角、逐拍第一人稱的連貫視角（tick eventPovs 依 characterId 濾）。 */
+    const [povs, setPovs] = useState<Array<{ day: number; tick: number; scene: string; body: string }>>([]);
     /** 燈箱 —— 點圖放大，點任一處或 Esc 收。 */
     const [zoomUrl, setZoomUrl] = useState<string | null>(null);
 
@@ -62,11 +64,34 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
         };
     }, [runId, c.id]);
 
+    // 自述：抽此人在每一拍的 POV，串成一線
+    useEffect(() => {
+        let cancelled = false;
+        labApi
+            .ticks(runId, 400)
+            .then(({ records }) => {
+                if (cancelled) return;
+                const out: Array<{ day: number; tick: number; scene: string; body: string }> = [];
+                for (const r of records) {
+                    const sceneByEvent = new Map(r.events.map((e) => [e.id, e.sceneName]));
+                    for (const p of r.eventPovs) {
+                        if (p.characterId === c.id) out.push({ day: r.day, tick: r.tick, scene: sceneByEvent.get(p.eventId) ?? '', body: p.body });
+                    }
+                }
+                setPovs(out);
+            })
+            .catch(() => { /* 冷卷或尚未走拍 —— 空 */ });
+        return () => {
+            cancelled = true;
+        };
+    }, [runId, c.id]);
+
     const art = c.portraitUrl ?? c.gallery.find((g) => g.type === 'image')?.url;
     const tabs: Array<{ key: TabKey; label: string; count?: number; title: string }> = [
         { key: 'wants', label: '心事', count: c.wants.length, title: '全部活著的心事，張力排序' },
         { key: 'estate', label: '身家', count: c.carrying.length, title: '身上的錢與隨身物品欄' },
         { key: 'bonds', label: '羈絆', count: c.views.length, title: '我看眾人 —— 當下的、最新的關係視角' },
+        { key: 'pov', label: '自述', count: povs.length, title: '以此人為主角、逐拍第一人稱的連貫視角（眾聲之一線）' },
         { key: 'dossier', label: '檔案', title: '其人・恆常自我・心底事' },
         { key: 'memory', label: '記憶', count: memories.length, title: 'LocalRecall 全帳（植入／焚去到「物界 → 記憶」）' },
         { key: 'media', label: '影像', count: c.gallery.length, title: '圖庫多媒體：多圖＋影片' },
@@ -250,6 +275,22 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene 
                                 ))}
                                 {!c.views.length ? <li className="font-serif text-sm text-mute/70">眼中尚無他人。</li> : null}
                             </ul>
+                        ) : null}
+
+                        {tab === 'pov' ? (
+                            <div className="space-y-5">
+                                {povs.map((p, i) => (
+                                    <article key={i} className="animate-beat-in border-l-2 border-cinnabar/30 pl-3">
+                                        <p className="font-serif text-2xs tracking-[0.3em] text-mute">
+                                            第{p.day}日 · 第{p.tick}拍{p.scene ? ` · ${p.scene}` : ''}
+                                        </p>
+                                        <p className="mt-1.5 whitespace-pre-wrap font-serif text-sm leading-relaxed text-ink/85">{p.body}</p>
+                                    </article>
+                                ))}
+                                {!povs.length ? (
+                                    <p className="font-serif text-sm text-mute/70">尚無自述 —— 走幾拍，其視角自成一線（實錄卷才生 POV）。</p>
+                                ) : null}
+                            </div>
                         ) : null}
 
                         {tab === 'dossier' ? (
