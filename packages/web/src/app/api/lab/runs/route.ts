@@ -47,6 +47,7 @@ export async function POST(req: Request) {
             seasonSource: body.config.seasonSource === 'custom' ? 'custom' : 'builtin',
             llm: body.config.llm === 'real' ? 'real' : 'fake',
             relationshipFallback: body.config.relationshipFallback !== false,
+            emergentProduction: body.config.emergentProduction === true,
             ticksPerDay: Number.isInteger(body.config.ticksPerDay) && (body.config.ticksPerDay as number) > 0
                 ? (body.config.ticksPerDay as number)
                 : 6,

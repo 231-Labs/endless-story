@@ -23,6 +23,9 @@ export interface LabRunConfig {
     seasonSource?: 'builtin' | 'custom';
     llm: LabLlmMode;
     relationshipFallback: boolean;
+    /** 劇本產出: characters may spend daytime ticks proposing/joining/writing/
+     *  rehearsing a play that premieres when the razor holds. Off by default. */
+    emergentProduction?: boolean;
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
     realEmbeddings: boolean;

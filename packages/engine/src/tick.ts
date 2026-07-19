@@ -27,6 +27,17 @@ import {
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
 import { livelihoodRhythm } from './core/livelihood-rhythm.ts';
+import {
+    accumulateEffort,
+    addScriptFragment,
+    canPremiere,
+    ensureContributor,
+    markPremiered,
+    productionSummary,
+    startProduction,
+    totalEffort,
+    type ProductionStatus,
+} from './core/production.ts';
 import { PARTS_OF_DAY } from './ports.ts';
 import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
@@ -90,6 +101,16 @@ export interface TickReport {
     eventPovs: TickEventPov[];
     /** Objective settlement facts (wages/costs/deadlines) when this tick closed a day. */
     economyNotices?: string[];
+    /** Emergent-production snapshot when the flag is on — lets the lab surface a
+     *  「製作中」 panel without re-reading the world file. Absent when off. */
+    production?: {
+        title: string;
+        status: ProductionStatus;
+        contributors: number;
+        totalEffort: number;
+        scriptFragments: number;
+        premieredDay?: number;
+    };
 }
 
 export interface TickEventPov {
@@ -367,6 +388,95 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
     // 2.6) Rehearsal presence banks after movement — quality earned in daylight.
     bankRehearsalAttendance(world, PARTS_OF_DAY.indexOf(w.clock.partOfDay));
+
+    // Emit a public 世界 beat this tick (surfaces to the lab 拍流 exactly like a
+    // scheduled event and joins the day's episode material). Used for the two
+    // production lifecycle moments worth announcing: a proposal and a premiere.
+    const emitWorldBeat = (sceneId: string, text: string): void => {
+        const sceneName = world.sceneNameById(sceneId);
+        const witnessIds = w.cast.map((member) => member.id);
+        events.push({
+            v: 1,
+            id: `${w.sagaId}:production:t${nowTick}:${events.length}`,
+            sagaId: w.sagaId,
+            day: today,
+            tick: nowTick,
+            clock: clockLabel,
+            sceneId,
+            sceneName,
+            visibility: 'public',
+            witnessIds,
+            editorialSignals: { resolvedWants: 0, departures: 0, relationshipTurn: false },
+            beats: [{ characterId: '__world__', name: '世界', text, audience: 'scene', perceiverIds: witnessIds }],
+        });
+        w.dayAccum.lines.push(`[${sceneName}] 世界：${text}`);
+        log(`  production: ${text}`);
+    };
+
+    // 2.7) ACTIONS — the 劇本產出 action layer (flag-gated, OFF by default). A
+    // character may spend this daytime tick's action on a collaborative
+    // production instead of only moving/speaking: propose a new play, join one,
+    // add a script fragment, or rehearse. chooseAction is an existing port seam
+    // (fake = deterministic, real = one cheap LLM call); the engine routes off the
+    // self-tagged kind, NEVER a regex on prose. Effort is a deterministic
+    // accumulator; the work premieres at day-end when the razor holds (§7.8).
+    // Night is for rest — production is daytime livelihood.
+    if (w.emergentProduction && !night) {
+        for (const member of orderedMovers) {
+            const memWants = world.liveWantsOf(member.id).slice(0, 4);
+            const result = await agent.chooseAction({
+                name: member.name,
+                persona: member.persona,
+                role: member.role,
+                secret: member.secret,
+                wants: memWants.map((want) => ({
+                    layer: want.layer,
+                    desc: want.desc,
+                    target: want.target ? (world.castById(want.target)?.name ?? want.target) : undefined,
+                })),
+                selfModel: world.selfModelBlock(member.id),
+                worldFact: [w.sagaPremise, timeCharter, w.production ? productionSummary(w.production) : '尚無新戲在排']
+                    .filter(Boolean)
+                    .join('\n'),
+                sharedLog: w.dayAccum.lines.slice(-8),
+                playSummary: w.production ? productionSummary(w.production) : null,
+                castNames: w.cast.map((other) => other.name),
+            });
+            const prod = w.production;
+            switch (result.kind) {
+                case 'propose_play':
+                    if (!prod) {
+                        w.production = startProduction('新戲', member.id, today);
+                        emitWorldBeat(w.roster[member.id], `${member.name}提議排一齣新戲，招人同做。`);
+                    } else {
+                        ensureContributor(prod, member.id);
+                    }
+                    break;
+                case 'compose':
+                    if (prod) {
+                        addScriptFragment(prod, member.id, result.prose);
+                        prod.timeline.push(`第${today}日：${member.name} 添戲文`);
+                        w.dayAccum.lines.push(`[做活] ${member.name}：${result.prose}`);
+                    }
+                    break;
+                case 'join_play':
+                    if (prod) {
+                        ensureContributor(prod, member.id);
+                        prod.timeline.push(`第${today}日：${member.name} 入夥`);
+                        w.dayAccum.lines.push(`[做活] ${member.name}：${result.prose}`);
+                    }
+                    break;
+                case 'rehearse':
+                    if (prod) {
+                        accumulateEffort(prod, member.id, 1);
+                        prod.timeline.push(`第${today}日：${member.name} 走了一遍`);
+                        w.dayAccum.lines.push(`[做活] ${member.name}：${result.prose}`);
+                    }
+                    break;
+                // seek_person / perform / personal: no production effect this tick.
+            }
+        }
+    }
 
     // 3) Group co-present cast by scene; at night keep only qualifying scenes.
     const byScene = new Map<string, string[]>();
@@ -909,6 +1019,16 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         delete acc.landedByChar;
     }
 
+    // 7.8) PRODUCTION PREMIERE — at day-end, if the razor holds (a scripted work,
+    // real collaborators, enough rehearsal banked), the play premieres. Purely
+    // mechanical, so the premiere is auditable. Runs before the episode so the
+    // premiere lands in the day's woven material.
+    if (w.emergentProduction && dayEnd && w.production && canPremiere(w.production)) {
+        markPremiered(w.production, today);
+        const venue = w.roster[w.production.initiatorId] ?? w.roster[w.cast[0].id];
+        emitWorldBeat(venue, `《${w.production.title}》今日首演，${w.production.contributors.length}人共成之，積功${totalEffort(w.production)}。`);
+    }
+
     // 8) DAY-END EPISODE.
     let episode = false;
     if (dayEnd && acc.lines.length >= 3) {
@@ -955,5 +1075,15 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         events,
         eventPovs,
         economyNotices,
+        production: w.production
+            ? {
+                  title: w.production.title,
+                  status: w.production.status,
+                  contributors: w.production.contributors.length,
+                  totalEffort: totalEffort(w.production),
+                  scriptFragments: w.production.scriptFragments.length,
+                  premieredDay: w.production.premieredDay,
+              }
+            : undefined,
     };
 }

@@ -99,6 +99,7 @@ interface RunManifest {
     provider: string;
     model: string;
     relationshipFallback: boolean;
+    emergentProduction: boolean;
 }
 
 export interface ActiveRun {
@@ -210,11 +211,12 @@ export class LabRunManager {
             provider: provider ?? 'deterministic',
             model: model ?? 'fake',
             relationshipFallback: cfg.relationshipFallback,
+            emergentProduction: cfg.emergentProduction ?? false,
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
-            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback'] as const) {
-                const prior = key === 'relationshipFallback' ? (previous[key] ?? false) : previous[key];
+            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction'] as const) {
+                const prior = key === 'relationshipFallback' || key === 'emergentProduction' ? (previous[key] ?? false) : previous[key];
                 if (prior !== manifest[key]) {
                     throw new Error(`run provenance mismatch for ${key}: ${String(prior)} != ${String(manifest[key])}`);
                 }
@@ -244,6 +246,7 @@ export class LabRunManager {
                 world.data.relationshipFallback = true;
                 seedRelationshipViews(world, created.raw.relationship_views ?? []);
             }
+            if (cfg.emergentProduction) world.data.emergentProduction = true;
             freshWorld = true;
         }
         if (seasonFrame) writeJsonAtomic(path.join(out, 'season-frame.json'), seasonFrame);

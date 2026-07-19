@@ -35,6 +35,7 @@ export default function LabHomePage() {
         title: '',
         llm: 'fake' as 'fake' | 'real',
         relationshipFallback: true,
+        emergentProduction: false,
         ticksPerDay: 6,
     });
 
@@ -77,6 +78,7 @@ export default function LabHomePage() {
                     seasonSource: seasonSource === 'custom' ? 'custom' : 'builtin',
                     llm: form.llm,
                     relationshipFallback: form.relationshipFallback,
+                    emergentProduction: form.emergentProduction,
                     ticksPerDay: form.ticksPerDay,
                 },
             });
@@ -269,6 +271,17 @@ export default function LabHomePage() {
                             onChange={(e) => setForm({ ...form, relationshipFallback: e.target.checked })}
                         />
                         關係底稿
+                    </label>
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="劇本產出：角色白天抽空提議／入夥／寫戲／排練，攢夠了便首演（實驗，預設關）"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={form.emergentProduction}
+                            onChange={(e) => setForm({ ...form, emergentProduction: e.target.checked })}
+                        />
+                        劇本產出
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日
