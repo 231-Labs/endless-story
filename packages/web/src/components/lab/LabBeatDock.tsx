@@ -13,8 +13,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { LabLiveBeat } from '@/lib/lab/types';
 
 const SLIP_W = 300;
-const SLIP_W_SHORT = 180; // 行蹤／天時這類「事」箋 —— 短一截，一眼分流
+const SLIP_W_SHORT = 112; // 行蹤／天時「事籤」—— 瘦成一條，字待 hover 紗再現
 const SLIP_H = 136; // 8.5rem — 底片格恆定高度
+const OVERLAY_W_SHORT = 280; // 事籤的展開紗回到可讀寬度
 
 function toneDot(b: LabLiveBeat): string {
     if (b.kind === 'world') return 'bg-seal';
@@ -22,9 +23,18 @@ function toneDot(b: LabLiveBeat): string {
     return b.isPrivate ? 'bg-jade/80' : 'bg-cinnabar/80';
 }
 
-/** 言箋寬、事箋短。 */
+function isEventSlip(b: LabLiveBeat): boolean {
+    return b.kind === 'move' || b.kind === 'world';
+}
+
+/** 言箋寬、事籤瘦。 */
 function slipW(b: LabLiveBeat): number {
-    return b.kind === 'move' || b.kind === 'world' ? SLIP_W_SHORT : SLIP_W;
+    return isEventSlip(b) ? SLIP_W_SHORT : SLIP_W;
+}
+
+/** 展開紗的寬：事籤放寬到可讀，言箋同幅。 */
+function overlayW(b: LabLiveBeat): number {
+    return isEventSlip(b) ? OVERLAY_W_SHORT : SLIP_W;
 }
 
 /** 箋底分色：言＝紙面、行＝墨染、世＝金染。 */
@@ -158,16 +168,32 @@ export function LabBeatDock({
                                             setPinnedSeq((s) => (s === b.seq ? null : b.seq));
                                         }}
                                         style={{ width: slipW(b), height: SLIP_H }}
-                                        className={`animate-beat-in shrink-0 cursor-pointer overflow-hidden rounded-lg px-3.5 py-2.5 shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md ${slipTint(b)}`}
+                                        className={`animate-beat-in shrink-0 cursor-pointer overflow-hidden rounded-lg shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md ${slipTint(b)} ${
+                                            isEventSlip(b) ? 'px-2 py-2' : 'px-3.5 py-2.5'
+                                        }`}
                                     >
-                                        <SlipHeader b={b} />
-                                        <p className={`mt-1.5 font-serif leading-relaxed ${
-                                            b.kind === 'move' || b.kind === 'world'
-                                                ? 'line-clamp-4 text-xs text-mute'
-                                                : 'line-clamp-3 text-sm text-ink/90'
-                                        }`}>
-                                            {b.text}
-                                        </p>
+                                        {isEventSlip(b) ? (
+                                            /* 事籤：只記「何時·何事·何人」，全文待 hover 紗 */
+                                            <div className="flex h-full flex-col items-center justify-between">
+                                                <span className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.14em] text-mute">
+                                                    <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${toneDot(b)}`} />
+                                                    {b.clock}
+                                                </span>
+                                                <span aria-hidden className={`font-serif text-2xl ${b.kind === 'world' ? 'text-seal/75' : 'text-mute/60'}`}>
+                                                    {b.kind === 'world' ? '世' : '行'}
+                                                </span>
+                                                <span className="max-w-full truncate font-serif text-2xs tracking-[0.12em] text-ink/80">
+                                                    {b.kind === 'world' ? b.sceneName : b.name}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <SlipHeader b={b} />
+                                                <p className="mt-1.5 line-clamp-3 font-serif text-sm leading-relaxed text-ink/90">
+                                                    {b.text}
+                                                </p>
+                                            </>
+                                        )}
                                     </article>
                                 ))}
                                 {!feed.length ? (
@@ -187,7 +213,7 @@ export function LabBeatDock({
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: SLIP_H, opacity: 0 }}
                             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                            style={{ left: overlay.left, bottom: overlay.bottom, width: slipW(expandedBeat) }}
+                            style={{ left: overlay.left, bottom: overlay.bottom, width: overlayW(expandedBeat) }}
                             onMouseEnter={cancelHide}
                             onMouseLeave={scheduleHide}
                             onClick={() => setPinnedSeq((s) => (s === overlay.seq ? null : overlay.seq))}
