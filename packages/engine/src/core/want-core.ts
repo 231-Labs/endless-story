@@ -270,19 +270,97 @@ export function yearningNightPursuit(
         : { id: p.id, w: pursuitWeight(p.want) };
 }
 
+/** A worry that can move feet at night: this character's hottest RIPE want whose
+ *  layer is neither a bond (love/reckon) nor jealousy — a life decision / 事務 /
+ *  志向 / 身家 matter pressing on them (the contract weighing on 柳安春 is such a
+ *  want). Ripe = forcing past idle (nightRipe with yearn off). May carry NO
+ *  target (a worry need not be aimed at anyone). Pure. */
+export function confideWorry(wants: ReadonlyArray<Want>, characterId: string): Want | null {
+    let best: Want | null = null;
+    for (const w of wants) {
+        if (w.retired || w.characterId !== characterId) continue;
+        if (isBondLayer(w.layer) || JEALOUS_LAYER.test(w.layer)) continue; // not love/debt/jealousy
+        if (!nightRipe(w, false)) continue; // ripe enough to move feet (forcing past idle)
+        if (!best || tension(w) > tension(best)) best = w;
+    }
+    return best;
+}
+
+/** Does `fromId` carry a live HOSTILE want (jealousy, or an unsettled
+ *  debt/grudge reckoning) aimed at the other (matched by id or name)? A
+ *  confidant must NOT be someone you resent — the confide gate skips any such
+ *  pair, so trust is never extended to a rival or a creditor. Pure. */
+export function hasHostileWantToward(
+    wants: ReadonlyArray<Want>,
+    fromId: string,
+    toId: string,
+    toName?: string,
+): boolean {
+    return wants.some(
+        (w) =>
+            !w.retired &&
+            w.characterId === fromId &&
+            !!w.target &&
+            (JEALOUS_LAYER.test(w.layer) || RECKON_LAYER.test(w.layer)) &&
+            (w.target === toId || (toName !== undefined && w.target === toName)),
+    );
+}
+
+/** Who, if anyone, is the confider in this pair (夜訪商量): the one carrying a
+ *  confideWorry who TRUSTS the other. Trust is injected + asymmetric — the
+ *  confider→other direction (`isTrusted(worrier, other)`). Ties break toward the
+ *  hotter worry. null when neither qualifies. Pure — the tick builds `isTrusted`
+ *  from the bond graph and reuses this to pick the scene's opening actor. */
+export function confiderOf(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    wants: ReadonlyArray<Want>,
+    isTrusted: (a: string, b: string) => boolean,
+): string | null {
+    if (cs.length !== 2) return null;
+    let best: { id: string; t: number } | null = null;
+    for (const a of cs) {
+        const other = cs.find((o) => o.id !== a.id)!;
+        const worry = confideWorry(wants, a.id);
+        if (!worry || !isTrusted(a.id, other.id)) continue;
+        const t = tension(worry);
+        if (!best || t > best.t) best = { id: a.id, t };
+    }
+    return best?.id ?? null;
+}
+
+/** 夜訪商量 qualification: a private 2-person night pair where one carries a
+ *  pressing non-bond, non-jealous worry AND trusts the other (a confidant).
+ *  Pure — shares the tick's night gate. */
+export function qualifiesAsConfide(
+    cs: ReadonlyArray<{ id: string; name: string }>,
+    privacyLevel: number,
+    wants: ReadonlyArray<Want>,
+    isTrusted: (a: string, b: string) => boolean,
+): boolean {
+    if (cs.length !== 2 || privacyLevel < 3) return false;
+    return confiderOf(cs, wants, isTrusted) !== null;
+}
+
 /** Night-scene qualification (G8/G8b, H1): a private scene plays at night as a
  *  幽會 tryst (the pair + a live love want), a 了結 reckoning (the pair + an
- *  unsettled debt/grudge want), or a 撞破 confrontation (either pair + ONE
- *  jealous third aimed at one of them). Anything else sleeps. */
+ *  unsettled debt/grudge want), a 夜訪商量 confide (the pair + one pressing
+ *  non-bond worry taken to a TRUSTED confidant), or a 撞破 confrontation (either
+ *  pair + ONE jealous third aimed at one of them). Anything else sleeps.
+ *  Precedence for a 2-person pair: tryst → reckoning → confide. The confide lane
+ *  fires ONLY when a trust predicate is injected; a 3-arg call behaves EXACTLY
+ *  as before (no confide), so every existing caller/test is unchanged and a
+ *  bond-less world (isTrusted false for all) leaves it inert. */
 export function nightSceneKind(
     cs: ReadonlyArray<{ id: string; name: string }>,
     privacyLevel: number,
     wants: ReadonlyArray<Want>,
-): 'tryst' | 'reckoning' | 'confrontation' | null {
+    isTrusted?: (a: string, b: string) => boolean,
+): 'tryst' | 'reckoning' | 'confide' | 'confrontation' | null {
     if (privacyLevel < 3) return null;
     if (cs.length === 2) {
         if (qualifiesAsTryst(cs, privacyLevel, wants)) return 'tryst';
         if (qualifiesAsReckoning(cs, privacyLevel, wants)) return 'reckoning';
+        if (isTrusted && qualifiesAsConfide(cs, privacyLevel, wants, isTrusted)) return 'confide';
         return null;
     }
     if (cs.length !== 3) return null;
