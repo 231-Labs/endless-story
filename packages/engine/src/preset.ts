@@ -91,6 +91,9 @@ export interface SeasonFrame {
      * contracts. Seeded into WorldStateData.economy so a contract's advance is
      * real escrowed money, never a text-only prop. */
     economy?: SeasonEconomyFrame;
+    /** role → per-part-of-day duty schedule (行當專屬節律). sceneName resolved to id
+     * at seed time; a character whose role has no entry keeps the generic rhythm. */
+    occupationDuties?: Record<string, Array<{ part: string; sceneName: string; duty?: boolean; note?: string }>>;
 }
 
 export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
@@ -172,6 +175,24 @@ export function applySeasonFrame(world: WorldState, frame: SeasonFrame): void {
     }
 
     if (frame.economy && !world.data.economy) seedSeasonEconomy(world, frame.economy, frame.id);
+
+    // 行當專屬節律: resolve each character's per-part-of-day duty from the frame's
+    // role-keyed schedule. A duty names a venue the character is ON-POST at (歌女
+    // 入夜唱堂會、記者深宵趕稿、班主坐鎮後台) — a stronger pull than the generic
+    // work/home rhythm. Unknown scenes are skipped (a partial schedule still
+    // seeds); an empty result leaves `duties` unset so snapshots stay clean.
+    if (frame.occupationDuties) {
+        for (const member of world.data.cast) {
+            const sched = frame.occupationDuties[member.role ?? ''];
+            if (!sched) continue;
+            const duties = sched.flatMap((entry) => {
+                const scene = world.data.scenes.find((candidate) => candidate.name === entry.sceneName);
+                if (!scene) return [];
+                return [{ part: entry.part, sceneId: scene.id, duty: entry.duty ?? true, note: entry.note }];
+            });
+            if (duties.length) member.duties = duties;
+        }
+    }
 }
 
 function appendMissingSeasonObjects(world: WorldState, frame: SeasonFrame, tolerateExisting: boolean): number {

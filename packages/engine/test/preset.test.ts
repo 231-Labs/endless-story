@@ -64,7 +64,16 @@ test('season frame adds public pressure without rewriting the shared seed', () =
 
     applySeasonFrame(world, frame);
 
-    assert.deepEqual(world.data.cast, beforeCast, 'bios, secrets and identities stay untouched');
+    // The frame legitimately resolves each role's 行當專屬 duty schedule onto the
+    // cast (歌女入夜唱堂會、記者深宵發稿、班主坐鎮後台); that is the ONLY cast
+    // mutation it may make. Bios, secrets and identities must still be untouched,
+    // so compare everything EXCEPT the newly-seeded `duties`.
+    const withoutDuties = (cast: typeof beforeCast) => cast.map(({ duties: _duties, ...rest }) => rest);
+    assert.deepEqual(withoutDuties(world.data.cast), withoutDuties(beforeCast), 'bios, secrets and identities stay untouched');
+    assert.ok(
+        world.castById(world.idByName('沈雪笙')!)!.duties?.length,
+        'the frame resolves the 班主 duty schedule onto the cast',
+    );
     assert.match(world.data.sagaPremise, /本季：柳安春，下戲以後/);
     assert.match(world.data.sagaPremise, /沒有任何角色的選擇、台詞、感情或結局被預先決定/);
     assert.ok(world.data.contestedResources.some((resource) => resource.label.includes('聯名搭檔')));

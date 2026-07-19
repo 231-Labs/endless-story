@@ -26,7 +26,7 @@ import {
     tension,
 } from './core/want-core.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
-import { livelihoodRhythm } from './core/livelihood-rhythm.ts';
+import { dutyRhythm } from './core/livelihood-rhythm.ts';
 import {
     accumulateEffort,
     addScriptFragment,
@@ -351,8 +351,18 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // character's 做活處 by day and 住處 at night, drawn from this seed's
             // own home/work anchors. Never routes — just gives an idle character a
             // default of earning their keep / going home rather than wandering.
-            rhythmHint: livelihoodRhythm(
+            // When this character has a resolved 行當專屬 duty for THIS part (歌女
+            // 入夜唱堂會、記者深宵趕稿、班主坐鎮後台), dutyRhythm swaps in a stronger
+            // on-post line naming the duty venue; otherwise it delegates to the
+            // generic rhythm above. Still a soft hint — movement authority is untouched.
+            rhythmHint: dutyRhythm(
                 clockLabel,
+                (() => {
+                    const memberDuty = member.duties?.find((d) => d.part === clockLabel && d.duty);
+                    return memberDuty
+                        ? { sceneName: world.sceneNameById(memberDuty.sceneId), note: memberDuty.note }
+                        : undefined;
+                })(),
                 w.workByChar[member.id] ? world.sceneNameById(w.workByChar[member.id]) : undefined,
                 w.homeByChar[member.id] ? world.sceneNameById(w.homeByChar[member.id]) : undefined,
             ),

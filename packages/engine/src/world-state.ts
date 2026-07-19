@@ -67,6 +67,11 @@ export interface CastMember {
      *  and injected into next-day movement + beats. Only real (LLM) runs write it;
      *  optional & backward-compatible with snapshots predating planning. */
     plan?: string;
+    /** Per-part-of-day livelihood duty (行當專屬), resolved at seed time from the
+     *  frame's occupationDuties keyed by this character's role. At a duty part the
+     *  character is on-post (歌女入夜唱堂會、記者深宵趕稿、班主坐鎮後台) — a stronger
+     *  pull than the generic work/home rhythm. Optional & backward-compatible. */
+    duties?: Array<{ part: string; sceneId: string; duty: boolean; note?: string }>;
 }
 
 export interface SceneInfo {
