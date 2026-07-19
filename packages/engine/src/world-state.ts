@@ -16,6 +16,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Want } from './core/want-core.ts';
 import type { SeasonEconomyData } from './core/season-economy.ts';
+import type { Production } from './core/production.ts';
 import type { WorldClock } from './ports.ts';
 
 /** Daily-life state vector (§2.16); derived tint, persisted so a restart keeps
@@ -194,6 +195,14 @@ export interface WorldStateData {
      * and snapshots predating the economy layer. Persisted with the world so
      * snapshot/restore/rollback carry the ledger atomically. */
     economy?: SeasonEconomyData;
+    /** 劇本產出 flag: when on, the tick runs the emergent-production action layer
+     *  (characters may spend a tick's action proposing/joining/writing/rehearsing
+     *  a play). Off by default — like relationshipFallback, the wiring lives in
+     *  the world so resume keeps it, and it's validated before any default-on. */
+    emergentProduction?: boolean;
+    /** The single in-progress (or premiered) production, when the flag is on.
+     *  Persisted with the world so snapshot/restore carries the accumulator. */
+    production?: Production;
 }
 
 const SNAPSHOT_FILE = 'world.json';
