@@ -153,6 +153,19 @@ export interface SeasonDaySettleReport {
     settled: boolean;
     publicNotices: string[];
     privateNotices: Array<{ characterId: string; text: string }>;
+    /** Contracts that hit their 限期 unsigned this settle. The tick turns each
+     *  into a next-morning PERCEPT for the parties (so a signer who never signed
+     *  actually LEARNS it's over) and forecloses the wants it kills. */
+    foreclosures?: Array<{
+        contractId: string;
+        label: string;
+        /** Required signers + any filled partner — the people whose 心事 hung on it. */
+        partyIds: string[];
+        /** The 聯名搭檔 欄 lapsed empty — the specific matter 柳安春 kept carrying. */
+        slotUnfilled: boolean;
+        /** Where the contract paper sits — the locus of the announcement. */
+        sceneId: string;
+    }>;
 }
 
 // ── parse / persist ──
@@ -854,6 +867,7 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
     const causeEventId = `${world.data.sagaId}:settle:d${req.day}`;
     const publicNotices: string[] = [];
     const privateNotices: Array<{ characterId: string; text: string }> = [];
+    const foreclosures: NonNullable<SeasonDaySettleReport['foreclosures']> = [];
 
     // 0.5 counter-demands are answered overnight — BEFORE the deadline sweep,
     //     so an accepted amendment (with its grace day) can outlive the clock.
@@ -894,6 +908,15 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
         syncContractObject(world, data, contract, id, world.data.cast.map((member) => member.id));
         if (c.status === 'expired') {
             publicNotices.push(`「${c.label}」期限已過而未簽成：${formatMoney(data, c.total)}預付款由${accountLabel(contract, c.proposerAccountId)}原封收回。`);
+            const paperId = data.contractObjectIds[id];
+            const paperScene = paperId ? world.objectById(paperId)?.sceneId : undefined;
+            foreclosures.push({
+                contractId: id,
+                label: c.label,
+                partyIds: [...new Set([...c.requiredSignerIds, ...(c.partnerSlot.filledBy ? [c.partnerSlot.filledBy] : [])])],
+                slotUnfilled: c.partnerSlot.required && !c.partnerSlot.filledBy,
+                sceneId: paperScene ?? world.data.scenes[0]?.id ?? '',
+            });
         } else if (c.status === 'settled') {
             publicNotices.push(`「${c.label}」在期限最後一刻生效，款項按約分訖。`);
         }
@@ -1012,7 +1035,7 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
         });
     }
 
-    return { settled: true, publicNotices, privateNotices };
+    return { settled: true, publicNotices, privateNotices, foreclosures };
 }
 
 // ── season-frame seeding (authored JSON → live ledger) ──

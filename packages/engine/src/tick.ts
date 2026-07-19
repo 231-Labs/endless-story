@@ -974,6 +974,33 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             for (const notice of settled.privateNotices) {
                 log(`  [結算·私] ${world.nameById(notice.characterId)}：${notice.text}`);
             }
+            // Contract 限期 foreclosure — the day's generic settlement percept
+            // already went out, but it never names the SLOT and never retires the
+            // want it kills. So a party who never signed keeps a 心事 for a 聯名
+            // 搭檔欄 that can no longer be filled (the 柳安春 case). Deliver a sharp,
+            // party-private percept so they KNOW it's over, and foreclose the moot
+            // want so it stops pressing — tonight's self-rewrite then moves the heart.
+            for (const foreclosure of settled.foreclosures ?? []) {
+                const slotNote = foreclosure.slotUnfilled ? '——聯名搭檔那一欄，你終究沒填上一個名字' : '';
+                (w.scheduledEvents ??= []).push({
+                    id: `contract-foreclosed-${foreclosure.contractId}-t${nowTick}`,
+                    atTick: nowTick + 1,
+                    sceneId: foreclosure.sceneId,
+                    text: `「${foreclosure.label}」的限期過了，這約終究沒簽成${slotNote}；擱在心上的那樁，就這麼無處著落了。`,
+                    visibility: 'private',
+                    witnessIds: foreclosure.partyIds.length ? foreclosure.partyIds : w.cast.map((member) => member.id),
+                });
+                for (const want of wants) {
+                    if (want.retired || !foreclosure.partyIds.includes(want.characterId)) continue;
+                    const aboutIt =
+                        want.desc.includes(foreclosure.label) ||
+                        (foreclosure.slotUnfilled && /搭檔|聯名|署名|填.{0,3}名|簽/.test(want.desc));
+                    if (!aboutIt) continue;
+                    want.retired = true;
+                    log(`  [限期作廢] ${world.nameById(want.characterId)}「${want.desc}」隨約作廢`);
+                    acc.lines.push(`[帳房] ${world.nameById(want.characterId)}擱在心上的「${want.desc}」，隨這約限期一過，也就了了。`);
+                }
+            }
         }
     }
 
