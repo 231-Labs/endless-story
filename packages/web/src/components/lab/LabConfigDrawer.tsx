@@ -2,14 +2,27 @@
 
 /**
  * LabConfigDrawer — 物界配置：the off-chain "contract objects" surface.
- * Contested resources (stakes), registered world objects, clock-bound world
- * events, and scene physics (privacy/capacity). Edits are legal only while
- * the run is idle; every edit snapshots the world (a durable world fact).
+ * 四頁歸位（各司其職，不再一長滾）：
+ *   物 obj    爭奪之物（stakes）＋ registered 物件（位置/容器/隱顯/狀態）
+ *   景 scene  場景物理（privacy 私／capacity 容）
+ *   時 time   天時（clock-bound 世界事件）
+ *   憶 mem    每角 LocalRecall 記憶帳（植入／焚去）
+ * 這些都是 per-run 的活世界狀態（object 有位置、隨身、隱顯——只存於一卷之內），
+ * 故落於觀測台之側，而非跨卷、以名為鍵的圖庫。走拍中不可改；改即落 world.json。
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { labApi } from './useLab';
 import type { LabWorldConfig } from '@/lib/lab/types';
+
+type ConfigTab = 'obj' | 'scene' | 'time' | 'mem';
+
+const TABS: Array<{ key: ConfigTab; label: string; tip: string }> = [
+    { key: 'obj', label: '物', tip: '爭奪之物與登記物件 —— 世界裡被爭、被藏、被移的東西' },
+    { key: 'scene', label: '景', tip: '場景物理：私（privacy 0–5）與容（capacity）' },
+    { key: 'time', label: '時', tip: '天時：排定的 clock-bound 世界事件' },
+    { key: 'mem', label: '憶', tip: '每角 LocalRecall 記憶帳：植入新憶、焚去舊憶' },
+];
 
 interface Props {
     runId: string;
@@ -64,6 +77,7 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
     };
 
     // ── local form state ────────────────────────────────────────────────────
+    const [tab, setTab] = useState<ConfigTab>('obj');
     const [resourceText, setResourceText] = useState<string | null>(null);
     const [objectForm, setObjectForm] = useState({ label: '', sceneId: '', visibility: 'visible', container: '', state: '', portable: true });
     const [eventForm, setEventForm] = useState({ inTicks: 1, sceneId: '', text: '', clock: '', visibility: 'public' });
@@ -110,7 +124,26 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
             {running ? <p className="mt-2 font-serif text-xs text-cinnabar/90">走拍中——先停再改。</p> : null}
             {error ? <p className="mt-2 font-serif text-xs text-cinnabar" role="alert">{error}</p> : null}
 
-            {/* 爭奪之物 */}
+            {/* 四頁分流 */}
+            <nav className="mt-3 flex gap-1">
+                {TABS.map((t) => (
+                    <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setTab(t.key)}
+                        title={t.tip}
+                        className={`flex-1 rounded-full py-1.5 font-serif text-sm tracking-[0.3em] transition ${
+                            tab === t.key ? 'bg-cinnabar text-white shadow-[0_2px_12px_rgba(176,74,60,0.30)]' : 'text-mute hover:bg-ink/5 hover:text-ink dark:hover:bg-white/5'
+                        }`}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </nav>
+
+            {/* 物 —— 爭奪之物 */}
+            {tab === 'obj' ? (
+            <>
             <section className="mt-4">
                 <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90" title="一行一物：「標的｜說明」。慾望只經標的與世界相爭。">
                     爭奪之物
@@ -228,8 +261,17 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                 </button>
             </section>
 
-            {/* 天時 */}
-            <section className="mt-5">
+            {config.hasEconomy ? (
+                <p className="mt-4 font-serif text-2xs text-mute/70" title="season economy 帳冊隨 world.json 落卷，暫以唯讀待之">
+                    帶銀錢物理 · 唯讀
+                </p>
+            ) : null}
+            </>
+            ) : null}
+
+            {/* 時 —— 天時 */}
+            {tab === 'time' ? (
+            <section className="mt-4">
                 <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90">天時（排定的世界事件）</h4>
                 <ul className="mt-2 space-y-1.5">
                     {config.scheduledEvents.map((ev) => (
@@ -300,9 +342,11 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                     排入天時
                 </button>
             </section>
+            ) : null}
 
-            {/* 記憶 */}
-            <section className="mt-5">
+            {/* 憶 —— 記憶 */}
+            {tab === 'mem' ? (
+            <section className="mt-4">
                 <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90" title="LocalRecall 記憶帳：靜場時可植入新憶或焚去舊憶；重要度 1–10 影響召回排序">
                     記憶
                 </h4>
@@ -389,11 +433,13 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                     </>
                 ) : null}
             </section>
+            ) : null}
 
-            {/* 場景物理 */}
-            <section className="mt-5">
-                <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90">場景物理</h4>
-                <ul className="mt-2 space-y-1">
+            {/* 景 —— 場景物理 */}
+            {tab === 'scene' ? (
+            <section className="mt-4">
+                <p className="font-serif text-2xs leading-relaxed text-mute/70">私＝privacy（0 全開 … 5 密室）；容＝capacity（同場人數上限）。改即落卷。</p>
+                <ul className="mt-3 space-y-1">
                     {config.scenes.map((s) => (
                         <li key={s.id} className="flex items-center justify-between gap-2">
                             <span className="min-w-0 truncate font-serif text-xs text-ink/85">{s.name}</span>
@@ -431,12 +477,8 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                         </li>
                     ))}
                 </ul>
-                {config.hasEconomy ? (
-                    <p className="mt-3 font-serif text-2xs text-mute/70" title="season economy 帳冊隨 world.json 落卷，暫以唯讀待之">
-                        帶銀錢物理 · 唯讀
-                    </p>
-                ) : null}
             </section>
+            ) : null}
         </aside>
     );
 }

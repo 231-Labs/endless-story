@@ -4,15 +4,28 @@
  * LabPageHeader — 片場各分頁共用的簷下頂欄：飛簷＋珠簾作簷口裝飾，
  * 題款（眉批＋大題）居左，右手一列印鍵 —— 日夜鍵永在，其餘由頁面補
  * （actions），回程鍵收尾。所有印鍵都在簾「下」的常流之中，永不與簾疊。
+ *
+ * 回程鍵＝「回上頁」：跨頁面來的（?from=/lab/...）就回那一頁，否則回
+ * backHref 預設地。圖庫這種「首頁與觀測台皆可入」的頁，靠此不再一律墜回首頁。
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { BeadCurtain, LabEaves } from './LabOrnaments';
 import { IconBack } from './LabIcons';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 export const LAB_ICON_BUTTON = 'es-icon-button !h-11 !w-11 text-[20px]';
+
+/** 讀取來處：只認站內 /lab 路徑，防開放重導。客端後讀，不觸 prerender。 */
+function useFromHref(): string | null {
+    const [from, setFrom] = useState<string | null>(null);
+    useEffect(() => {
+        const raw = new URLSearchParams(window.location.search).get('from');
+        if (raw && raw.startsWith('/lab')) setFrom(raw);
+    }, []);
+    return from;
+}
 
 export function LabPageHeader({
     eyebrow,
@@ -33,6 +46,9 @@ export function LabPageHeader({
     /** 題款列之下的頁面自有列（如籤頁 nav）。 */
     children?: ReactNode;
 }) {
+    const fromHref = useFromHref();
+    const effectiveBack = fromHref ?? backHref;
+    const effectiveTitle = fromHref ? '回上頁' : backTitle;
     return (
         <header className="relative pt-5">
             <LabEaves />
@@ -47,8 +63,8 @@ export function LabPageHeader({
                 <span className="flex items-center gap-2">
                     <ThemeToggle className={LAB_ICON_BUTTON} />
                     {actions}
-                    {backHref ? (
-                        <Link href={backHref} aria-label={backTitle} title={backTitle} className={LAB_ICON_BUTTON}>
+                    {effectiveBack ? (
+                        <Link href={effectiveBack} aria-label={effectiveTitle} title={effectiveTitle} className={LAB_ICON_BUTTON}>
                             <IconBack />
                         </Link>
                     ) : null}
