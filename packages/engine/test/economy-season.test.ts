@@ -23,6 +23,7 @@ import { auditSeasonEconomy, economyPerceptFor, enforceContractCommandPairing, s
 import { buildAnchunAcceptanceFrame } from './fixtures/anchun-acceptance-frame.ts';
 import { applySeasonFrame, buildWorldState, loadPresetFile } from '../src/preset.ts';
 import { runTick, type TickReport } from '../src/tick.ts';
+import { newWant } from '../src/core/want-core.ts';
 import { WorldState } from '../src/world-state.ts';
 import type { ArchivePort, MoveDecideInput, MoveDecideResult } from '../src/ports.ts';
 import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
@@ -192,6 +193,38 @@ test('ignored control: the deadline expires deterministically and the aftermath 
         'day-3 settlement posts as a next-morning canonical event',
     );
     assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('契約限期: the moot 搭檔 want is foreclosed and a party-private percept is delivered', async () => {
+    const world = buildSeasonWorld();
+    const liu = world.idByName('柳安春')!;
+    // 柳安春 carries a 心事 hung on WHOSE name to write in the 聯名搭檔 slot —
+    // exactly the want the world will foreclose when the contract lapses unsigned.
+    const stale = newWant({
+        characterId: liu,
+        layer: '志向',
+        desc: '聯名搭檔那一欄，究竟該填誰的名字才好',
+        weight: 0.8,
+        sat: 0.2,
+        resistance: 5,
+        kind: 'narrative',
+        source: 'owner',
+        bornTick: 0,
+    });
+    world.data.wants.push(stale);
+
+    // nobody signs → the deadline expires (day 3 settle) + the day-4 aftermath tick
+    const reports = await runDays(world, new FakeSceneAgent(), 19);
+    assert.equal(world.data.economy!.contracts['anchun-exclusive'].status, 'expired');
+
+    assert.equal(stale.retired, true, '柳安春 stops carrying the slot 心事 once the 限期 forecloses it');
+
+    // and he is told, personally — a slot-specific percept reaches the party
+    const worldBeats = reports.flatMap((r) => r.events).flatMap((e) => e.beats).filter((b) => b.characterId === '__world__');
+    assert.ok(
+        worldBeats.some((b) => b.text.includes('聯名搭檔那一欄') && b.perceiverIds?.includes(liu)),
+        'the foreclosure percept names the slot and reaches 柳安春',
+    );
 });
 
 test('percepts are knowledge- and authority-scoped', () => {
