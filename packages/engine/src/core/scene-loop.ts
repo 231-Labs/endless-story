@@ -40,6 +40,9 @@ export interface SceneLoopCastMember {
     stateLine?: string;
     /** This character's own private inner-life secret; never another actor's. */
     innerSecret?: string;
+    /** This character's standing daily plan (N6): injected so beats act toward
+     *  their goals, not just the hottest want. Real runs only; may be undefined. */
+    standingPlan?: string;
     /** 行當 — shown to co-present speakers so address forms have footing. */
     role?: string;
     /** Items this member carries (隨身物). `from` = giver's name/id. The SALIENCE
@@ -320,6 +323,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             sceneLog: log.slice(-5).join('\n'),
             stateLine: actor.stateLine,
             innerSecret: actor.innerSecret,
+            standingPlan: actor.standingPlan,
             economyLine: actor.economyLine,
             etiquette: input.etiquette,
             timeCharter: input.timeCharter,

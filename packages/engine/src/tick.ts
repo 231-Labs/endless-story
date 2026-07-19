@@ -134,8 +134,14 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // The full rulebook, not just the clock: a game hands players its physics
     // before they step in (the user's rule: 「物理上的規則應該要清楚揭露，像個
     // skill 一樣」). Facts about how the world works; never direction.
+    const perDay = c.ticksPerDay;
+    const leftToday = Math.max(0, perDay - c.tickOfDay - 1);
     const timeCharter = [
-        `一日六個時辰：${PARTS_OF_DAY.join('、')}；每個時辰你只有一次行動（先擇去處，再在場中言行）。`,
+        // Charter derives the day's shape from the ACTUAL clock (not a hardcoded 6):
+        // whatever ticks-per-day this run uses, agents are told the real count, one
+        // action per tick, and exactly where they stand — 本日第 X／N 拍、還剩 M 拍 —
+        // so they can budget a day whose shape they now truly know.
+        `一日${perDay}拍${perDay === PARTS_OF_DAY.length ? '，一拍一時辰' : ''}，循${PARTS_OF_DAY.join('、')}${perDay === PARTS_OF_DAY.length ? '' : '推移'}；每一拍你只有一次行動（先擇去處，再在場中言行）。此刻${clockLabel}，為本日第${c.tickOfDay + 1}／${perDay}拍，過此還有${leftToday}拍。`,
         '去處只能從當下列給你的合法選項中挑；場地有容量，滿了便進不去。入夜與深宵屬夜，各自歸宿或私訪。',
         '紙、物、錢都是真的：動物件須出 objectEffects、動銀錢須出 economyCommands（買賣、給錢、簽約、拒簽、填搭檔、還價），只在嘴上說的世界不認帳。',
         '簽約、拒簽、填欄、還價都得人在契約紙前；還價一次一句條款，對方隔夜回話。',
@@ -307,7 +313,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .map((event) => event.text),
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
             ].filter(Boolean).join('\n') || undefined,
-            planHint: live.map((want) => `- [${want.layer}] ${want.desc}`).join('\n'),
+            planHint: [
+                // Standing plan (if any) leads — the character heads toward goals, not just reacts.
+                member.plan ? `【你這些日子的打算】\n${member.plan}` : '',
+                `【眼下心事】\n${live.map((want) => `- [${want.layer}] ${want.desc}`).join('\n')}`,
+            ].filter(Boolean).join('\n'),
             currentSceneName: world.sceneNameById(currentSceneId),
             options,
             clock: clockLabel,
@@ -403,6 +413,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     memories: memories.length ? memories : undefined,
                     stateLine: stateLine(member.state.fatigue, member.state.hunger),
                     innerSecret: member.secret,
+                    standingPlan: member.plan,
                     role: member.role,
                     bodyFact: member.gender,
                     ties,
@@ -777,6 +788,48 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 log(`  [結算·私] ${world.nameById(notice.characterId)}：${notice.text}`);
             }
         }
+    }
+
+    // 7.55) NIGHTLY DAY-PLANNING (N6): each character evolves a standing plan for
+    // the day ahead — 長期目標／眼下打算／未竟之事 — so tomorrow's movement and beats
+    // budget toward goals & the season deadline instead of being purely reactive.
+    // Real adapters only (planDay is optional; fake omits it → planning skipped).
+    if (dayEnd && agent.planDay) {
+        const pendingDeadlines = (w.scheduledEvents ?? []).filter(
+            (scheduled) => !deliveredScheduled.has(scheduled.id) && scheduled.atTick > nowTick,
+        );
+        for (const member of w.cast) {
+            const todayLines = acc.interactions?.[member.id]
+                ? Object.values(acc.interactions[member.id]).flat().join('\n').slice(-1200)
+                : undefined;
+            const situation = [
+                timeCharter,
+                ...pendingDeadlines
+                    .filter((event) => event.witnessIds.includes(member.id))
+                    .map((event) => `〔將臨〕第${event.atTick}拍將有：${event.text}`),
+                ...(economy ? [economy.projectFor(world, member.id, w.roster[member.id] ?? '') ?? ''] : []),
+            ].filter(Boolean).join('\n') || undefined;
+            const relationshipPressure = Object.entries(member.relationshipView).map(
+                ([otherId, view]) => `對${world.nameById(otherId)}：${view}`,
+            );
+            try {
+                const reply = await agent.planDay({
+                    name: member.name,
+                    role: member.role ?? '—',
+                    sagaName: w.sagaId,
+                    dayLabel: `第${today}日 · ${clockLabel}`,
+                    currentPlan: member.plan,
+                    recentSituation: todayLines,
+                    situation,
+                    relationshipPressure: relationshipPressure.length ? relationshipPressure : undefined,
+                    innerSecret: member.secret,
+                });
+                if (reply && reply.planText.trim()) member.plan = reply.planText.trim();
+            } catch (err) {
+                log(`  planDay 失敗（${member.name}）：${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        log(`  日程：${w.cast.length} 人各定明日之計`);
     }
 
     // 7.6) NIGHTLY SELF-MODEL CONSOLIDATION (relationshipFallback wiring):

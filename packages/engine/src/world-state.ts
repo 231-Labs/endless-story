@@ -61,6 +61,11 @@ export interface CastMember {
      * injected into the acting character's prompts, never in the recall lottery.
      */
     relationshipView: Record<string, string>;
+    /** STANDING DAILY PLAN (N6) — the character's evolving 「我想要什麼、接下來
+     *  怎麼走」: 長期目標／眼下打算／未竟之事, regenerated each night by planDay
+     *  and injected into next-day movement + beats. Only real (LLM) runs write it;
+     *  optional & backward-compatible with snapshots predating planning. */
+    plan?: string;
 }
 
 export interface SceneInfo {

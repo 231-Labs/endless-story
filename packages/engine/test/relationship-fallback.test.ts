@@ -68,8 +68,10 @@ test('(c) etiquette: the preset 稱謂鐵則 reaches every scene beat', async ()
         'every beat carries the canon honorifics facts',
     );
     assert.ok(
-        agent.beatInputs.every((input) => input.timeCharter?.includes('一日六個時辰')),
-        'every beat carries the clock constitution',
+        // charter is now derived from the clock: this season is 6 ticks/day → 「一日6拍」,
+        // and every beat still states the one-action-per-tick constitution.
+        agent.beatInputs.every((input) => input.timeCharter?.includes('一日6拍') && input.timeCharter?.includes('每一拍你只有一次行動')),
+        'every beat carries the clock constitution (derived from ticks-per-day)',
     );
     assert.ok(
         agent.beatInputs.every((input) => input.timeCharter?.includes('日結')),

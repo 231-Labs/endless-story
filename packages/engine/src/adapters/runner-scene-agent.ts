@@ -27,6 +27,8 @@ import type {
     DossierPerspectiveSource,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
+    PlanDayInput,
+    PlanDayReply,
 } from '../ports.ts';
 import { projectEventBeatsForWitness } from '../core/scene-perception.ts';
 import {
@@ -580,6 +582,22 @@ export class RunnerSceneAgent implements SceneAgentPort {
      * forbids scripting (§2.43); it asks for the view AS IT NOW STANDS, so a
      * changed relationship supersedes the old line rather than piling up beside it.
      */
+    async planDay(input: PlanDayInput): Promise<PlanDayReply | null> {
+        const result = await characterAgent.updatePlan({
+            name: input.name,
+            role: input.role,
+            sagaName: input.sagaName,
+            dayLabel: input.dayLabel,
+            recalledMemories: [],
+            currentPlan: input.currentPlan,
+            recentSituation: input.recentSituation,
+            situation: input.situation,
+            relationshipPressure: input.relationshipPressure,
+            innerSecret: input.innerSecret,
+        });
+        return { planText: result.planText };
+    }
+
     async consolidateSelfModel(input: SelfModelConsolidateInput): Promise<SelfModelConsolidateReply> {
         const system = [
             '入夜了。你替一個戲園角色做一件事:把 TA 心裡「此刻對某些人的看法」更新到最新。',

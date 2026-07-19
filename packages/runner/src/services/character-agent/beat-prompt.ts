@@ -75,6 +75,11 @@ export interface ActBeatInput {
      *  Colours the beat's subtext; hidden by default, but whether it ever
      *  surfaces is the character's own in-scene choice (§2.43: never script it). */
     innerSecret?: string;
+    /** This character's standing daily plan (N6: 長期目標／眼下打算／未竟之事).
+     *  Injected so the beat can act toward the plan, not just react to the hottest
+     *  want — a compass, never a script; acting on景 or setting it aside is the
+     *  character's own choice. Undefined = no plan (reactive as before). */
+    standingPlan?: string;
     /** Items this character CARRIES right now (隨身物/行頭, each with provenance,
      *  e.g. 「白韻秋所贈的湘妃竹摺扇」). Whether/when to bring one out is the
      *  character's own in-scene choice — never scripted, never forced. */
@@ -435,6 +440,9 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             ? `【隨身】你身上帶著：${input.carried.join('、')}。用不用、何時拿出來，由你——對景就讓它出手，不對景就讓它待在袖底，別為了提而提。`
             : '【隨身】此刻沒有已登記可拿出的私人物件；不得從口袋、袖底憑空摸出懷錶、信、相片等道具。可用眼前場景原有的公共物件，也可觸碰自己正穿著的衣物。',
         input.etiquette ? `【稱謂鐵則】${input.etiquette}——輩分與稱呼不可顛倒、不可自創。` : '',
+        input.standingPlan
+            ? `【你這些日子的打算（心裡的盤算，不是台詞）】\n${input.standingPlan}\n——對景就往那裡走一步，不對景就先擱著；別把它照唸出來、也別為了提而提。`
+            : '',
         input.timeCharter ? `【時辰之律】${input.timeCharter}` : '',
         // A continuation picks up a still-warm private encounter mid-moment (general;
         // keyed by caller on pair+venue+consecutive-tick). No fresh entrance, no re-lock.
