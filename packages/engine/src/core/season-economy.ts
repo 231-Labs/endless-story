@@ -135,6 +135,10 @@ export interface SeasonEconomyData {
         boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
         /** cast seen at the venue during 日午/晡時 — quality is earned in daylight. */
         rehearsedToday: string[];
+        /** basis points (of the night's takings) shared out among the performers
+         *  actually on the boards, credited to their OWN accounts; the remainder
+         *  goes to 班庫. 0/absent ⇒ all to the troupe (today's behaviour). */
+        castShareBps?: number;
     };
     /** contractId → the proposer's authored answer policy for counter-demands.
      *  The replaceable seam: swap for a live counterparty agent later. */
@@ -718,6 +722,28 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
                 `今日黃昏【${perf.venueSceneName}】開鑼${isLead ? `——你是領銜，你不上台這戲就塌` : `（領銜：${perf.leadIds.map((id) => world.nameById(id)).join('、')}）`}；` +
                 `到場不足 ${perf.minCast} 人停鑼、票房歸零，白日到台上排過戲今夜才叫得動座。票房是班庫唯一的活水。`,
             );
+            // Box-office 利害: when the takings are shared, tell each troupe player
+            // their PERSONAL stake in tonight's house — leads carry double weight.
+            // Gated to troupe players (a lead, or someone on the 班庫 payroll): a
+            // non-troupe house's people (金鳳 of 長三堂子, 方競西 of 申報館) get no cut,
+            // so no cut-line. The full-house figures are illustrative estimates
+            // over the troupe roster; the real split settles on who takes the stage.
+            const bps = perf.castShareBps ?? 0;
+            const drawsTroupeWage = data.wages.some((wage) =>
+                wage.accountId === characterId && (wage.fromAccountId ?? data.troupeAccountId) === data.troupeAccountId);
+            if (bps > 0 && (isLead || drawsTroupeWage)) {
+                const fullCastShare = (BigInt(perf.fullHouseSubunits) * BigInt(bps)) / 10000n;
+                const troupePlayerIds = new Set<string>(perf.leadIds);
+                for (const wage of data.wages) {
+                    if ((wage.fromAccountId ?? data.troupeAccountId) === data.troupeAccountId) troupePlayerIds.add(wage.accountId);
+                }
+                let estWeight = 0n;
+                for (const id of troupePlayerIds) estWeight += perf.leadIds.includes(id) ? 2n : 1n;
+                const perHead = estWeight > 0n ? fullCastShare / estWeight : 0n;
+                lines.push(isLead
+                    ? `你是今晚的台柱，滿座你這一路約可分得 ${formatMoney(data, perHead * 2n)}，缺你這台戲就塌、一文沒有。`
+                    : `上台就有份：滿座票房登台眾人分 ${formatMoney(data, fullCastShare)}（你這一份約 ${formatMoney(data, perHead)}），你到場才分得到，停鑼則全泡湯。`);
+            }
         }
     }
     for (const [keyObjectId, tenancy] of Object.entries(data.tenancies ?? {})) {
@@ -799,6 +825,10 @@ export interface PerformanceOutcome {
     /** objective line for the day log / world event. */
     line: string;
     takingsSubunits?: bigint;
+    /** what the troupe banked this night (takings minus the cast's cut). */
+    troupeShareSubunits?: bigint;
+    /** what the performers on the boards shared between them this night. */
+    castShareSubunits?: bigint;
 }
 
 /** Bank who showed up to rehearse (日午/晡時 at the venue). Quality is earned
@@ -852,24 +882,62 @@ export function settleEveningPerformance(
         pct += BigInt(boost.pct);
     }
     const takings = (BigInt(perf.fullHouseSubunits) * pct) / 100n;
-    const deposited = depositExternal(contract.economy, {
-        txnId: `day${req.day}:boxoffice`,
-        to: data.troupeAccountId,
-        amount: takings,
-        memo: '今晚票房',
-        causeEventId: `${world.data.sagaId}:boxoffice:d${req.day}`,
-    });
-    if (deposited.duplicate) return null;
-    if (deposited.rejection) throw new Error(`[economy] box office failed: ${deposited.rejection.message}`);
-    contract = { economy: deposited.state, contracts: contract.contracts };
+    const causeEventId = `${world.data.sagaId}:boxoffice:d${req.day}`;
+    // idempotent per day: any takings deposit already booked tonight → replay is a no-op.
+    if (contract.economy.ledger.some((txn) => txn.causeEventId === causeEventId)) return null;
+
+    // ── the cast's cut ── a frame-configurable share of the takings is paid to
+    // the people who actually made the show (roster === the venue tonight),
+    // credited to their OWN accounts; a lead counts double. Falsy share, no
+    // takings, or an empty house all fall back to today's all-to-troupe path,
+    // so nothing is minted or lost — every 分 enters from the SAME external
+    // source (depositExternal / kind 'external-in') the treasury always used.
+    const castShareBps = perf.castShareBps ?? 0;
+    const shares: Array<{ accountId: string; amount: bigint }> = [];
+    let castShare = 0n;
+    let troupeShare = takings;
+    if (castShareBps > 0 && takings > 0n && present.length > 0) {
+        castShare = (takings * BigInt(castShareBps)) / 10000n;
+        troupeShare = takings - castShare;
+        const weightOf = (id: string): bigint => (perf.leadIds.includes(id) ? 2n : 1n);
+        let totalWeight = 0n;
+        for (const member of present) totalWeight += weightOf(member.id);
+        let paid = 0n;
+        for (const member of present) {
+            const cut = (castShare * weightOf(member.id)) / totalWeight;
+            if (cut > 0n) shares.push({ accountId: member.id, amount: cut });
+            paid += cut;
+        }
+        // integer-division remainder lands in the troupe — never minted or lost.
+        troupeShare += castShare - paid;
+    }
+
+    const deposit = (to: string, amount: bigint, txnId: string, memo: string): void => {
+        if (amount <= 0n) return;
+        const done = depositExternal(contract.economy, { txnId, to, amount, memo, causeEventId });
+        if (done.rejection) throw new Error(`[economy] box office failed: ${done.rejection.message}`);
+        contract = { economy: done.state, contracts: contract.contracts };
+    };
+    deposit(data.troupeAccountId, troupeShare, `day${req.day}:boxoffice`, '今晚票房');
+    for (const share of shares) {
+        deposit(share.accountId, share.amount, `day${req.day}:boxoffice:${share.accountId}`, '今晚票房·登台分紅');
+    }
     persist(world, contract);
     const rehearsed = perf.rehearsedToday.length;
     perf.rehearsedToday = [];
     const house = pct >= 110n ? '滿堂彩' : pct >= 100n ? '滿座' : pct >= 70n ? '七成座' : '半座';
+    const rehearsedSuffix = rehearsed >= perf.minCast ? '' : '，白日未曾好好排過';
+    // default (no share) keeps the notice byte-identical to today's; a share night
+    // names the split so the settle notice can say who got what.
+    const line = castShare > 0n
+        ? `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}：${house}，票房 ${formatMoney(data, takings)}——班庫得 ${formatMoney(data, troupeShare)}，登台的 ${shares.length} 人分了 ${formatMoney(data, castShare)}。`
+        : `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}：${house}，票房 ${formatMoney(data, takings)} 入${accountLabel(contract, data.troupeAccountId)}。`;
     return {
         performed: true,
-        line: `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsed >= perf.minCast ? '' : '，白日未曾好好排過'}：${house}，票房 ${formatMoney(data, takings)} 入${accountLabel(contract, data.troupeAccountId)}。`,
+        line,
         takingsSubunits: takings,
+        troupeShareSubunits: troupeShare,
+        castShareSubunits: castShare,
     };
 }
 
@@ -1257,6 +1325,10 @@ export interface SeasonEconomyFrame {
         fullHouseYuan: number;
         /** objects whose state lifts the takings (a mended huqin, new robes…). */
         boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
+        /** basis points of the takings shared among the performers on the boards
+         *  (a lead counts double), credited to their own accounts. Absent/0 ⇒
+         *  all takings to 班庫, the box office's original behaviour. */
+        castShareBps?: number;
     };
     /** other economic establishments — a film co, newspaper, record label, song
      *  house. Each is a first-class pot with its own reserves, fixed cost, and
@@ -1429,6 +1501,8 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
                     minCast: frame.performance.minCast,
                     fullHouseSubunits: asSubunits(frame.performance.fullHouseYuan).toString(),
                     ...(frame.performance.boosts ? { boosts: frame.performance.boosts.map((boost) => ({ ...boost })) } : {}),
+                    // only persist the key when a share is actually configured — keeps the JSON clean.
+                    ...(frame.performance.castShareBps ? { castShareBps: frame.performance.castShareBps } : {}),
                     rehearsedToday: [],
                 },
             }
