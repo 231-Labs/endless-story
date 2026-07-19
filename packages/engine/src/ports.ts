@@ -179,6 +179,33 @@ export interface SelfModelConsolidateInput {
     day: number;
 }
 
+// ── Nightly day-planning (N6): evolve a standing plan across days ─────────────
+/** Input for one character's nightly plan regeneration. The tick populates only
+ *  cheaply-available facts; the adapter maps it onto the full runner PlanInput. */
+export interface PlanDayInput {
+    name: string;
+    role: string;
+    sagaName: string;
+    /** "第 N 日 · 時辰" for time-grounding. */
+    dayLabel: string;
+    /** Previous plan text (the thing we evolve, not reset). */
+    currentPlan?: string;
+    /** Today's lines that involved this character (grounds the plan in what happened). */
+    recentSituation?: string;
+    /** Objective world pressure right now: the day's charter, due deadlines, economy. */
+    situation?: string;
+    /** This character's current one-line views of significant others (their bonds). */
+    relationshipPressure?: string[];
+    /** This character's own private secret (colours what they guard while planning). */
+    innerSecret?: string;
+}
+
+export interface PlanDayReply {
+    /** Formatted standing-plan block (長期目標／眼下打算／未竟之事) to store + inject.
+     *  Empty string → keep the prior plan unchanged. */
+    planText: string;
+}
+
 /** NIGHTLY 心事自改 input — the unspoken matter and what LANDED on it today. */
 export interface EvolveSecretInput {
     name: string;
@@ -255,6 +282,12 @@ export interface SceneAgentPort extends SceneAgent {
      *  current view of each person dealt with today + core relationships. Never
      *  appends — the returned line REPLACES the map entry (latest-wins). */
     consolidateSelfModel(input: SelfModelConsolidateInput): Promise<SelfModelConsolidateReply>;
+    /** NIGHTLY DAY-PLANNING (N6, optional): evolve this character's standing plan
+     *  (長期目標／眼下打算／未竟之事) for the day ahead — so movement + beats aren't
+     *  purely reactive but budget toward goals & the season deadline. Real adapters
+     *  implement it (one cheap LLM call); deterministic/fake adapters omit it, and
+     *  the tick simply skips planning. null → keep the prior plan. */
+    planDay?(input: PlanDayInput): Promise<PlanDayReply | null>;
     /** Optional: PROSE of an audience member's reaction (never the box-office number). */
     audienceReaction?(input: AudienceReactionInput): Promise<string | null>;
     /** SELF-CHECK / REPAIR: re-read a rendered scene and return the same beats with
