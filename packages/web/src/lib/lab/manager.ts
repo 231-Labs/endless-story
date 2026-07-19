@@ -434,9 +434,14 @@ export class LabRunManager {
                         kind: 'move',
                     });
                 }
+                // 天時（世界事件）與祈願（角色對神明說出口的話）進拍流：兩者都經
+                // events 提交、未走 onBeat，故在此顯性化。世界旁白＝world；祈願是
+                // 角色親口的一拍＝beat（角色 id/名，非 __world__）。
                 for (const event of report.events) {
+                    const isPrayer = event.id.includes(':prayer:');
                     for (const beat of event.beats) {
-                        if (beat.characterId !== '__world__') continue;
+                        const isWorld = beat.characterId === '__world__';
+                        if (!isWorld && !isPrayer) continue;
                         this.pushBeat(run, {
                             day: report.day,
                             tick: report.tick,
@@ -444,10 +449,10 @@ export class LabRunManager {
                             sceneId: event.sceneId,
                             sceneName: event.sceneName,
                             isPrivate: event.visibility === 'private',
-                            characterId: '__world__',
-                            name: '世界',
+                            characterId: beat.characterId,
+                            name: beat.name,
                             text: beat.text,
-                            kind: 'world',
+                            kind: isWorld ? 'world' : 'beat',
                         });
                     }
                 }

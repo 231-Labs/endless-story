@@ -22,6 +22,7 @@ import { LabHandscroll } from '@/components/lab/LabHandscroll';
 import { LabProductionPanel } from '@/components/lab/LabProductionPanel';
 import { LabSceneSheet } from '@/components/lab/LabSceneSheet';
 import { LabWishBoard } from '@/components/lab/LabWishBoard';
+import { LabWishWall } from '@/components/lab/LabWishWall';
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
 import { useLabLive } from '@/components/lab/useLab';
 
@@ -223,6 +224,28 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                 </div>
                 <LabWishBoard
                     characters={snapshot.characters}
+                    onSelectCharacter={(characterId) => {
+                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                        setFocusedCharacterId(characterId);
+                    }}
+                />
+            </section>
+
+            {/* 第四屏 —— 願牆（眾生對神明說出口的話，與願榜的「心裡的」相對） */}
+            <section id="lab-wish-wall-screen" className="min-h-dvh snap-start snap-always px-4 pb-12 pt-10 sm:px-8">
+                <div className="flex items-baseline justify-between">
+                    <p className="font-serif text-sm tracking-[0.4em] text-ink" title="願牆：眾生在廟裡對神明親口說出的祈願（對神明說出口的話），與願榜（心裡的心事）相對。點頭像開內頁。">願牆</p>
+                    <button
+                        type="button"
+                        onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
+                        title="回手卷"
+                    >
+                        ▴ 手卷
+                    </button>
+                </div>
+                <LabWishWall
+                    prayers={snapshot.prayers}
                     onSelectCharacter={(characterId) => {
                         document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
                         setFocusedCharacterId(characterId);
