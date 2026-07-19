@@ -196,6 +196,21 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                                         {o.origin.source === 'season' ? '季' : '手'}·生於 d{o.origin.day}·t{o.origin.tick}
                                     </span>
                                 ) : null}
+                                {/* 轉手／贈物：operator 把它交到某人手上（放下＝留在原場景） */}
+                                <select
+                                    value={o.carriedBy ?? ''}
+                                    disabled={disabled}
+                                    onChange={(e) =>
+                                        void applyOp({ op: 'give-object', objectId: o.id, toCharacterId: e.target.value || null })
+                                    }
+                                    title="交到誰手上（贈物）；「放下」＝置於原場景"
+                                    className="es-field mt-1 px-1.5 py-0.5 text-2xs"
+                                >
+                                    <option value="">放下（無人隨身）</option>
+                                    {characters.map((ch) => (
+                                        <option key={ch.id} value={ch.id}>交 → {ch.name}</option>
+                                    ))}
+                                </select>
                             </span>
                             <button
                                 type="button"

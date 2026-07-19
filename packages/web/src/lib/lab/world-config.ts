@@ -34,6 +34,9 @@ export type WorldConfigOp =
         };
     }
     | { op: 'remove-object'; objectId: string }
+    /** 轉手／贈物：operator 把一件物直接交到某角色手上（或 null＝放下）。
+     *  這是 god-move —— 玩家替角色贈物；LLM 實錄的 carrierName 交遞是另一路。 */
+    | { op: 'give-object'; objectId: string; toCharacterId: string | null }
     | {
         op: 'add-scheduled-event';
         event: { inTicks: number; sceneId: string; clock?: string; text: string; visibility?: 'public' | 'private'; witnessIds?: string[] };
@@ -169,6 +172,20 @@ export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): Lab
             const index = objects.findIndex((o) => o.id === operation.objectId);
             if (index < 0) throw new Error(`object not found: ${operation.objectId}`);
             objects.splice(index, 1);
+            break;
+        }
+        case 'give-object': {
+            const object = (w.objects ?? []).find((o) => o.id === operation.objectId);
+            if (!object) throw new Error(`object not found: ${operation.objectId}`);
+            if (operation.toCharacterId === null) {
+                object.carriedBy = undefined; // 放下 —— 留在原場景
+            } else {
+                if (!world.castById(operation.toCharacterId)) throw new Error(`unknown character: ${operation.toCharacterId}`);
+                object.carriedBy = operation.toCharacterId;
+                const carrierScene = w.roster[operation.toCharacterId];
+                if (carrierScene) object.sceneId = carrierScene; // 物隨人走
+            }
+            object.version += 1;
             break;
         }
         case 'add-scheduled-event': {
