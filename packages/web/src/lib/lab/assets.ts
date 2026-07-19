@@ -31,6 +31,20 @@ export function assetsDir(kind: AssetKind): string {
     return path.join(labDataDir(), 'assets', kind);
 }
 
+/** Version-addressed URL — the file path is name-stable (so it's shared across
+ *  runs), but a re-upload replaces bytes in place under the SAME name. Stamping
+ *  the file's mtime as `?v=` mints a fresh URL on every replace, so a焚-then-
+ *  re-upload is never served from the browser's cache of the old bytes. */
+function assetFileUrl(kind: AssetKind, dir: string, file: string): string {
+    let v = '';
+    try {
+        v = `?v=${Math.floor(fs.statSync(path.join(dir, file)).mtimeMs)}`;
+    } catch {
+        /* file vanished between listing and stat — serve unversioned */
+    }
+    return `/api/lab/assets/file/${kind}/${encodeURIComponent(file)}${v}`;
+}
+
 export function isAssetKind(value: string): value is AssetKind {
     return (KINDS as string[]).includes(value);
 }
@@ -49,7 +63,7 @@ export function assetUrlFor(kind: AssetKind, name: string): string | undefined {
     for (const ext of EXTS) {
         const file = `${key}.${ext}`;
         if (fs.existsSync(path.join(assetsDir(kind), file))) {
-            return `/api/lab/assets/file/${kind}/${encodeURIComponent(file)}`;
+            return assetFileUrl(kind, assetsDir(kind), file);
         }
     }
     return undefined;
@@ -80,7 +94,7 @@ export function listAssets(): StoredAsset[] {
                 kind,
                 file,
                 key: file.slice(0, -(ext.length + 1)),
-                url: `/api/lab/assets/file/${kind}/${encodeURIComponent(file)}`,
+                url: assetFileUrl(kind, assetsDir(kind), file),
                 bytes: stat.size,
             });
         }
@@ -109,7 +123,7 @@ export function saveAsset(kind: AssetKind, name: string, dataUrl: string): Store
         kind,
         file,
         key,
-        url: `/api/lab/assets/file/${kind}/${encodeURIComponent(file)}`,
+        url: assetFileUrl(kind, assetsDir(kind), file),
         bytes: bytes.length,
     };
 }
