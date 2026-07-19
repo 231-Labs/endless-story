@@ -11,11 +11,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { sceneArtFor, terrainArtFor } from '@/components/saga/handscroll/terrainArt';
-import { IconMove, IconWorld } from './LabIcons';
 import type { LabLiveBeat } from '@/lib/lab/types';
 
 const SLIP_W = 300;
-const SLIP_W_SHORT = 72; // 行蹤／天時「事籤」—— 收合僅一枚印記，無字
+const SLIP_W_SHORT = 108; // 行蹤／天時「事籤」—— 收合帶字（時辰／類目／其人其地）
 const SLIP_H = 136; // 8.5rem — 底片格恆定高度
 const EVENT_EXPAND_W = 300; // 事籤 hover 向右展開至此，推擠右側諸卡
 
@@ -216,12 +215,18 @@ export function LabBeatDock({
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    /* 收合：僅一枚印記，無字（行＝足印、世＝天時） */
-                                                    <div
-                                                        className={`relative flex h-full items-center justify-center text-[26px] ${b.kind === 'world' ? 'text-seal/70' : 'text-mute/55'}`}
-                                                        title={`${b.kind === 'world' ? '天時' : b.name} · ${b.sceneName} · ${b.clock}`}
-                                                    >
-                                                        {b.kind === 'world' ? <IconWorld /> : <IconMove />}
+                                                    /* 收合帶字：時辰／類目（小字「天時」「行蹤」）／其人其地 */
+                                                    <div className="relative flex h-full flex-col items-center justify-between px-2 py-2.5">
+                                                        <span className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.14em] text-mute">
+                                                            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${toneDot(b)}`} />
+                                                            {b.clock}
+                                                        </span>
+                                                        <span className={`font-serif text-sm tracking-[0.3em] ${b.kind === 'world' ? 'text-seal/80' : 'text-mute/70'}`}>
+                                                            {b.kind === 'world' ? '天時' : '行蹤'}
+                                                        </span>
+                                                        <span className="max-w-full truncate font-serif text-2xs tracking-[0.12em] text-ink/75">
+                                                            {b.kind === 'world' ? b.sceneName : b.name}
+                                                        </span>
                                                     </div>
                                                 )}
                                             </article>
