@@ -111,8 +111,33 @@ export interface LabCharacterLive {
     coreIdentity: string[];
     /** Private inner life — operator cockpit shows it, marked 心底事. */
     secret?: string;
-    /** Current one-line views of significant others (latest-wins). */
-    views: Array<{ name: string; line: string }>;
+    /** STANDING objective (N6 planDay) — 長期目標／眼下打算. Real (LLM) runs only. */
+    plan?: string;
+    /**
+     * 羈絆 — this character's directed bonds toward every significant other. The
+     * UNION of `relationshipView` (the narrative 「我看TA」 line, latest-wins) and
+     * the mechanical `edges` tone-graph, so a seeded edge with no view line still
+     * surfaces, and a view with no edge does too. Sorted by `warmth` desc.
+     */
+    bonds: Array<{
+        /** The other person's characterId — tap to traverse the sheet to them. */
+        id: string;
+        name: string;
+        role?: string;
+        portraitUrl?: string;
+        /** 關係語 — the directed edge tone (舊情人／師承／暗戀…), when an edge exists. */
+        tone?: string;
+        /** 溫度 — tone-aware directed affinity (this char → other), 0..1. Coarse
+         *  today (buckets by tone); becomes continuous later — cards read either way. */
+        warmth: number;
+        /** other → this char affinity, so the card can hint MUTUAL vs one-sided. */
+        warmthBack: number;
+        /** 「我看TA」 — this char's current one-line view of the other, if any. */
+        line?: string;
+        /** 相許／舊情 display SLOT for a coming engine layer — render a badge only
+         *  when truthy; undefined for now. */
+        established?: boolean;
+    }>;
     /** 圖庫 multimedia gallery (images + video clips). */
     gallery: Array<{ url: string; type: 'image' | 'video' }>;
     /** 身上的錢 —— 已格式化（如「3 圓 20 分」）。僅掛 economy 季框的卷才有。 */

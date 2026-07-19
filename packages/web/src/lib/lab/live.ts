@@ -284,6 +284,34 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             .filter((o) => o.carriedBy === id && o.visibility !== 'destroyed')
             .map((o) => ({ id: o.id, label: o.label, state: o.state, hidden: o.visibility === 'hidden', origin: o.origin }));
 
+    const roleById = new Map(w.cast.map((m) => [m.id, m.role]));
+    // 羈絆：this member → every significant other, UNIONing the narrative view
+    // lines with the mechanical edge graph so a seeded edge (no line) and a view
+    // (no edge) both surface. `warmth` is the emotional NUMBER (welcome 0..1).
+    const bondsOf = (member: (typeof w.cast)[number]) => {
+        const otherIds = new Set<string>([
+            ...Object.keys(member.relationshipView),
+            ...Object.keys(w.edges[member.id] ?? {}),
+        ]);
+        otherIds.delete(member.id); // never self
+        return [...otherIds]
+            .map((oId) => {
+                const otherName = world.nameById(oId);
+                return {
+                    id: oId,
+                    name: otherName,
+                    role: roleById.get(oId),
+                    portraitUrl: assetUrlFor('character', otherName),
+                    tone: w.edges[member.id]?.[oId]?.tone,
+                    warmth: world.welcome(member.id, oId),
+                    warmthBack: world.welcome(oId, member.id),
+                    line: member.relationshipView[oId],
+                    // established: reserved for a coming engine layer — undefined for now.
+                };
+            })
+            .sort((a, b) => b.warmth - a.warmth);
+    };
+
     const characters: LabCharacterLive[] = w.cast.map((member) => {
         const sceneId = w.roster[member.id] ?? '';
         const latest = latestBeatByChar.get(member.id);
@@ -311,10 +339,8 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             description: assetNoteFor('character', member.name) ?? member.persona,
             coreIdentity: member.coreIdentity,
             secret: member.secret,
-            views: Object.entries(member.relationshipView).map(([otherId, line]) => ({
-                name: world.nameById(otherId),
-                line,
-            })),
+            plan: member.plan,
+            bonds: bondsOf(member),
             gallery: listGallery('character', member.name).map(({ url, type }) => ({ url, type })),
             money: moneyOf(member.id),
             carrying: carryingOf(member.id),
