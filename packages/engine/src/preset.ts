@@ -102,7 +102,7 @@ export interface SeasonFrame {
     /** 房產/租約 — 擁有權≠使用權 的開局配置; each private dwelling's 屋主 (deed) and
      * optional 租客 (lease: holds a physical key + standing use-right). Seeded so the
      * world begins housing-STABLE (everyone already housed; no money flows). */
-    properties?: Array<{ scene: string; ownerNames: string[]; lease?: { tenantName: string; keyObjectId: string; keyLabel?: string; rentYuan?: number; rentDueDay?: number } }>;
+    properties?: Array<{ scene: string; ownerNames: string[]; lease?: { tenantName: string; keyObjectId: string; keyLabel?: string; rentYuan?: number; rentDueDay?: number; rentLabel?: string } }>;
 }
 
 export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
@@ -201,6 +201,7 @@ export function applySeasonFrame(world: WorldState, frame: SeasonFrame): void {
                     keyLabel: p.lease.keyLabel,
                     rentYuan: p.lease.rentYuan,
                     rentDueDay: p.lease.rentDueDay,
+                    rentLabel: p.lease.rentLabel,
                 },
             })),
         );
