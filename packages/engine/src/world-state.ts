@@ -239,6 +239,11 @@ export interface WorldStateData {
      * movement time-cost). Only far trips set it; same-district hops stay free.
      * Optional & backward-compatible with snapshots predating distance-cost. */
     restUntilTickByChar?: Record<string, number>;
+    /** 資助搭救 — giverId → narrative day on which they last ran the aid decision.
+     * Bounds the mechanism to ONE aid decision per giver per day (a giver does not
+     * re-canvass the room for the needy every daytime tick). Optional & backward-
+     * compatible; carried verbatim by snapshot/restore. */
+    aidGivenTodayByChar?: Record<string, number>;
     /** characterId → home sceneId (night anchor). */
     homeByChar: Record<string, string>;
     /** characterId → work sceneId (day anchor). */

@@ -46,7 +46,7 @@ import {
     type ProductionStatus,
 } from './core/production.ts';
 import { PARTS_OF_DAY } from './ports.ts';
-import type { ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
+import type { AidActionInput, AidActionResult, AidPeer, AidSituation, AidVitality, ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
 import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
@@ -1031,6 +1031,186 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // Optional tiny mood relief — saying it out loud eases the heart a little.
             member.state.mood = Math.max(-1, Math.min(1, member.state.mood + 0.05));
             log(`  [祈願] ${member.name}在${templeName}對神明求告：${text}`);
+        }
+    }
+
+    // 3.7) 資助搭救 (financial aid / rescue) — daytime, economy-only, autonomic-but-
+    // JUDGED, mirroring §3.5 順路而食 / §3.6 祈願. A character holding CLEAR SURPLUS
+    // coin who stands co-present with someone in REAL hardship (broke / no runway /
+    // acutely starving) decides whether to give some of their OWN money to help —
+    // and how much, to whom. The give/no-give JUDGMENT is the capability's
+    // (agent.decideAid, shaped by personality + each bond); the runner path's
+    // finalizeAid enforces the HARD safety inside it (recipient a real LISTED peer,
+    // running total ≤ funds, NO overdraft — the same rule as the on-chain transfer).
+    // The fake OMITS decideAid, so a DETERMINISTIC fallback voices it: a small,
+    // surplus-clamped gift to the neediest WARMLY-BONDED co-present peer — so the
+    // mechanism runs and is testable with no LLM, and ordinary runs don't leak
+    // charity everywhere. The money moves ONLY through the conserving pay path
+    // (giver debited, recipient credited, SAME ledger, no mint) → auditSeasonEconomy
+    // stays []. Generosity deepens ties (bumpBond 'gift', both ways) and spares the
+    // pair tonight's cooling. Bounded to ONE aid decision per giver per day. NOT at
+    // night — rest. Fully inert when the world carries no economy.
+    if (!night && economy && w.economy) {
+        const data = w.economy;
+        const per = BigInt(data.subunitsPerUnit);
+        const AID_FLOOR_DAYS = 3n;         // a giver keeps ≥ this many days of own keep back
+        const AID_STARVING = 0.8;          // acutely starving reads as hardship even when solvent
+        const AID_FALLBACK_GIFT_YUAN = 3n; // the fallback's small fixed sum (圓), always clamped ≤ surplus
+        const aidedToday = (w.aidGivenTodayByChar ??= {});
+        const acctOf = (id: string) => data.state.accounts[id];
+        // whole-day runway from subunits (∞ → 999 when there is no daily burn).
+        const runwayDaysOf = (avail: bigint, cost: bigint): number => (cost > 0n ? Number(avail / cost) : 999);
+        const vitalityOf = (avail: bigint, cost: bigint, hunger: number): AidVitality => {
+            const runway = runwayDaysOf(avail, cost);
+            if (hunger > AID_STARVING || runway <= 0) return 'failing';
+            if (hunger > 0.5 || runway <= 2) return 'strained';
+            return 'healthy';
+        };
+        // hardship — in a conserving world `available` is never < 0, so this reads as
+        // runway ~0 (can't cover even a full day) or acute starving.
+        const isHardship = (id: string): boolean => {
+            const a = acctOf(id);
+            if (!a) return false;
+            const avail = BigInt(a.available);
+            const cost = BigInt(a.dailyFixedCost);
+            const hunger = world.castById(id)?.state.hunger ?? 0;
+            return avail < 0n || (cost > 0n ? avail < cost : avail <= 0n) || hunger > AID_STARVING;
+        };
+        // how the giver SEES this person — text (never a number), drives the LLM's
+        // weighing. Derived from the established set / relationship-view / edge tone /
+        // bond; a coarse, safe default (neutral) when nothing is known.
+        const relationFor = (giverId: string, peerId: string): AidPeer['relation'] => {
+            if (world.isEstablished(giverId, peerId)) return 'lover';
+            const view = world.relationshipView(giverId, peerId) ?? w.edges[giverId]?.[peerId]?.tone ?? '';
+            if (/仇|怨|恨|敵|過節/.test(view)) return 'rival';
+            if (/恩師|師父|師傅|師姐|師兄/.test(view)) return 'mentor';
+            if (/徒|門生|後輩|徒兒/.test(view)) return 'protege';
+            if (/親|家人|骨肉|兄|弟|姊|妹|爹|娘|父|母/.test(view)) return 'family';
+            const bond = bondOf(bonds, giverId, peerId);
+            if (bond >= BOND.seed.yearning) return 'ambiguous';
+            if (bond >= BOND.seed.known) return 'friend';
+            return 'neutral';
+        };
+        const distressOf = (avail: bigint, cost: bigint, hunger: number): { situation: AidSituation; distress: string } => {
+            if (hunger > AID_STARVING) return { situation: 'dire-need', distress: '餓得發昏，撐不住了' };
+            if (avail <= 0n || runwayDaysOf(avail, cost) <= 0) return { situation: 'dire-need', distress: '身上錢已見底，連今日都難挨' };
+            return { situation: 'tight', distress: '手頭拮据，日子緊巴巴' };
+        };
+
+        for (const [sid, ids] of byScene) {
+            if (ids.length < 2) continue; // aid needs someone to aid, right here
+            for (const giverId of ids) {
+                if (aidedToday[giverId] === today) continue; // one aid decision per giver per day
+                const giverAcct = acctOf(giverId);
+                const giver = world.castById(giverId);
+                if (!giverAcct || !giver) continue;
+                const available = BigInt(giverAcct.available);
+                const dailyCost = BigInt(giverAcct.dailyFixedCost);
+                // surplus — comfortably positive above a small floor (keep some days of
+                // own keep; a zero-burn giver still keeps ≥ 1 圓), so aid never beggars.
+                const floorSub = dailyCost > 0n ? dailyCost * AID_FLOOR_DAYS : per;
+                const surplusSub = available - floorSub;
+                if (surplusSub < per) continue; // no clear (≥ 1 圓) surplus → this giver gives nothing
+                // co-present others in real hardship — the only candidates for aid.
+                const hardshipIds = ids.filter((id) => id !== giverId && isHardship(id));
+                if (hardshipIds.length === 0) continue;
+
+                const peers: AidPeer[] = hardshipIds.map((id) => {
+                    const member = world.castById(id)!;
+                    const a = acctOf(id)!;
+                    const pAvail = BigInt(a.available);
+                    const pCost = BigInt(a.dailyFixedCost);
+                    const { situation, distress } = distressOf(pAvail, pCost, member.state.hunger);
+                    return {
+                        id,
+                        name: member.name,
+                        role: member.role ?? '—',
+                        relation: relationFor(giverId, id),
+                        personality: member.persona,
+                        situation,
+                        distress,
+                        runwayDays: runwayDaysOf(pAvail, pCost),
+                    };
+                });
+
+                // Real state fed to the capability — funds/daily/runway are exactly what
+                // aid-prompt.ts already consumes (the giver's own purse), no more.
+                const input: AidActionInput = {
+                    name: giver.name,
+                    role: giver.role ?? '—',
+                    persona: giver.persona,
+                    traits: [],
+                    funds: Number(available / per),
+                    dailyCost: Number(dailyCost / per),
+                    runwayDays: runwayDaysOf(available, dailyCost),
+                    vitalityState: vitalityOf(available, dailyCost, giver.state.hunger),
+                    peers,
+                };
+
+                // The give/no-give judgment: the capability's when present (finalizeAid
+                // guards overdraft inside it), else the deterministic fallback — a small
+                // clamped gift to the neediest WARMLY-BONDED co-present peer.
+                let result: AidActionResult;
+                if (agent.decideAid) {
+                    try {
+                        result = await agent.decideAid(input);
+                    } catch {
+                        result = { gifts: [] }; // fail-safe: no aid this turn
+                    }
+                } else {
+                    const neediest = [...peers].sort((a, b) => {
+                        const aa = BigInt(acctOf(a.id)!.available);
+                        const ba = BigInt(acctOf(b.id)!.available);
+                        if (aa !== ba) return aa < ba ? -1 : 1; // poorest first
+                        return (world.castById(b.id)?.state.hunger ?? 0) - (world.castById(a.id)?.state.hunger ?? 0);
+                    })[0];
+                    const warm = bondOf(bonds, giverId, neediest.id) >= BOND.seed.known;
+                    const surplusYuan = surplusSub / per; // ≥ 1n (guarded above)
+                    const giftYuan = surplusYuan < AID_FALLBACK_GIFT_YUAN ? surplusYuan : AID_FALLBACK_GIFT_YUAN;
+                    result =
+                        warm && giftYuan > 0n
+                            ? {
+                                  gifts: [{
+                                      recipientId: neediest.id,
+                                      recipientName: neediest.name,
+                                      amount: Number(giftYuan),
+                                      memo: 'gift',
+                                      line: '這個你先拿著，別跟我客氣。',
+                                      reason: 'deterministic: warm bond + clear surplus + neediest co-present peer',
+                                  }],
+                                  reason: 'fallback aid',
+                              }
+                            : { gifts: [] };
+                }
+
+                aidedToday[giverId] = today; // bound: one aid decision per giver per day, give or not
+
+                for (const gift of result.gifts) {
+                    if (gift.recipientId === giverId || !ids.includes(gift.recipientId)) continue; // a real co-present OTHER
+                    if (!(gift.amount > 0)) continue;
+                    const recipientName = world.nameById(gift.recipientId);
+                    try {
+                        const outcome = economy.commitCommand(world, {
+                            actorId: giverId,
+                            sceneId: sid,
+                            witnessIds: ids,
+                            command: { action: 'pay', toName: recipientName, amountYuan: gift.amount, memo: gift.line ?? '接濟' },
+                            causeEventId: `${w.sagaId}:aid:d${today}:t${nowTick}:${giverId}:${gift.recipientId}`,
+                            seq: 0,
+                            day: today,
+                        });
+                        if (!outcome.ok) continue; // insufficient / bad target — swallowed, never fatal (like the hunger buy)
+                        // generosity deepens ties both ways; a met pair is spared tonight's cooling.
+                        bumpBond(bonds, giverId, gift.recipientId, 'gift');
+                        togetherToday.add(world.pairKey(giverId, gift.recipientId));
+                        const aided = `${giver.name} 接濟 ${recipientName} ${formatMoney(data, BigInt(gift.amount) * per)}${gift.line ? `（${gift.line}）` : ''}`;
+                        w.dayAccum.lines.push(`[濟] ${aided}`);
+                        log(`  [濟] ${aided}`);
+                    } catch (error) {
+                        log(`  [濟] ${giver.name} 接濟未成：${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+            }
         }
     }
 

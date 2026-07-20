@@ -149,6 +149,9 @@ export class RunnerSceneAgent implements SceneAgentPort {
     negotiateCounter = characterAgent.negotiateCounter;
     decideRehearsal = characterAgent.decideRehearsal;
     speakPrayer = characterAgent.speakPrayer;
+    // 資助搭救 — delegate straight to the runner capability (real LLM judge by
+    // default; finalizeAid enforces real-peer + no-overdraft inside it).
+    decideAid = characterAgent.decideAidAction;
 
     async observeScene(input: ObserveSceneInput): Promise<void> {
         if (!this.sessions) return;
