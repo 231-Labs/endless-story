@@ -261,14 +261,15 @@ export class RunnerSceneAgent implements SceneAgentPort {
             {
                 eventId: input.eventId,
                 instruction:
-                    '把同一客觀事件寫成第一人稱章回。注意、誤讀與情感可以偏；人物、順序、動作、對白不可改。' +
+                    '把同一客觀事件寫成第一人稱的敘事段落。注意、誤讀與情感可以偏；人物、順序、動作、對白不可改。' +
                     '不要替別人斷言內心；不知道的就留白。人物行當、身與第三人稱代詞嚴格按輸入 canon。' +
-                    '純正文，350至900字。',
+                    '只輸出敘事正文本身：不要標題行、不要「第X回」或任何回目／章節編號、不要 markdown 井號（#）' +
+                    '（畫面自帶第X日·第Y拍·場景的眉題）。純正文，350至900字。',
                 maxTokens: 1500,
                 temperature: 0.82,
             },
         );
-        return characterAgent.formatPovSceneParagraphs(toTraditional(projected)) || null;
+        return characterAgent.formatPovSceneParagraphs(characterAgent.stripPovTitle(toTraditional(projected))) || null;
     }
 
     async judgeEstablished(

@@ -57,6 +57,17 @@ test('the shipped spring-snow-market season runs a full week composed, conservin
     assert.equal(world.data.cast.length, cast0, 'the cast is intact across the week');
     assert.deepEqual(Object.keys(world.data.economy!.state.accounts).sort(), accountIds0, 'the account set is stable');
 
+    // 劇本產出 (flag ON) reaches a PREMIERE over the season — the whole point of the
+    // toggle. With emergentProduction on, characters spend daytime ticks proposing/
+    // writing/rehearsing and the work premieres once the razor holds (script + ≥2
+    // hands + banked effort). This locks in that the gate actually fires in the
+    // shipped composed season, not just the bare production-tick smoke. (Flag OFF ⇒
+    // world.data.production stays undefined — covered by production-tick.test.)
+    const prod = world.data.production;
+    assert.ok(prod, 'a production emerged with emergentProduction on');
+    assert.equal(prod!.status, 'premiered', 'the production reached premiere within the week');
+    assert.ok(prod!.premieredDay, 'the premiere day is stamped');
+
     // the whole living world still JSON round-trips (snapshot = JSON.stringify(data)),
     // and the restored world still conserves — the persistence contract survives a
     // week of every mechanism writing into WorldStateData (bonds, accessGrants,
