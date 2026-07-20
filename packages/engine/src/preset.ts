@@ -103,6 +103,13 @@ export interface SeasonFrame {
      * optional 租客 (lease: holds a physical key + standing use-right). Seeded so the
      * world begins housing-STABLE (everyone already housed; no money flows). */
     properties?: Array<{ scene: string; ownerNames: string[]; lease?: { tenantName: string; keyObjectId: string; keyLabel?: string; rentYuan?: number; rentDueDay?: number; rentLabel?: string } }>;
+    /** 相識分寸 (subjective acquaintance): when true, the RUN harness (lab manager /
+     * CLI) turns on `world.data.subjectiveNaming` and seeds the acquaintance map for
+     * this season — characters refer to each other at their own resolution of
+     * acquaintance (不識／認姓／識全名). Read at the run layer AFTER cast/edges/views are
+     * seeded, NOT inside `applySeasonFrame`, so a world built directly from a frame
+     * (engine tests) stays flag-off / byte-identical. Absent ⇒ off. */
+    subjectiveNaming?: boolean;
 }
 
 export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';

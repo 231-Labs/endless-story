@@ -137,6 +137,13 @@ export interface LabCharacterLive {
         /** 相許／舊情 display SLOT for a coming engine layer — render a badge only
          *  when truthy; undefined for now. */
         established?: boolean;
+        /** 相識分寸: how THIS character REFERS to the other at their own resolution of
+         *  acquaintance (不識→行當／認姓→姓氏稱謂／識全名→全名). Equals `name` when the
+         *  subjective-naming flag is off. Meaningful only with the flag on. */
+        perceivedName?: string;
+        /** 相識分寸: this character's acquaintance level toward the other — drives a
+         *  small 面生／認得 chip. 'named' (or flag off) needs no chip. */
+        acquaint?: 'stranger' | 'acquainted' | 'named';
     }>;
     /** 技藝 — this character's SKILLS (style-imparting capabilities). Each gives a
      *  distinctive conduct/output style; `kind` is the domain it colours, `style`

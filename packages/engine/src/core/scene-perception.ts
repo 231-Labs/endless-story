@@ -3,6 +3,11 @@ import type { CanonicalSceneBeat, CanonicalSceneEvent } from '../ports.ts';
 export interface SceneParticipant {
     id: string;
     name: string;
+    /** 相識分寸: how the SPEAKER perceives this participant（perceivedName/knownAs），
+     *  when the subjective-naming flag is on. A beat may address someone by this
+     *  perceived name; matching it here keeps the addressed→id round-trip safe.
+     *  Absent（flag off / canonical only）⇒ matching is unchanged (byte-identical). */
+    knownAs?: string;
 }
 
 export interface SceneBeatPerceptionInput {
@@ -20,7 +25,14 @@ export function deriveBeatPerceiverIds(
 ): string[] {
     if (beat.audience !== 'addressed') return participants.map((p) => p.id);
     const target = beat.addressed
-        ? participants.find((p) => p.name === beat.addressed || beat.addressed!.includes(p.name))
+        ? participants.find(
+              (p) =>
+                  p.name === beat.addressed ||
+                  beat.addressed!.includes(p.name) ||
+                  // 相識分寸: a beat may address a co-present other by their perceived
+                  // name (knownAs); resolve that back to the right id too.
+                  (p.knownAs !== undefined && (p.knownAs === beat.addressed || beat.addressed!.includes(p.knownAs))),
+          )
         : undefined;
     return [...new Set([beat.characterId, target?.id].filter((id): id is string => Boolean(id)))];
 }

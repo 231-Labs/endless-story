@@ -128,6 +128,72 @@ export interface RelationshipEdge {
     weight: number;
 }
 
+/**
+ * 相識分寸 (subjective acquaintance) — how well a PERCEIVER knows a TARGET, and
+ * so how they refer to them:
+ *   'stranger'   不識      — trade + appearance, no name（「一個賣生煎的漢子」）。
+ *   'acquainted' 認得·知姓 — surname + honorific（「趙師傅」「殷婆婆」），或無姓者以行當代稱。
+ *   'named'      識全名    — the full name（「趙阿福」）。
+ * SUBJECTIVE: this shapes ONLY what a CHARACTER perceives (their percept/prompt
+ * inputs). Authorial narration stays omniscient — `nameById` everywhere in the
+ * 述 (day accumulator, weaver, scene-record, logs).
+ */
+export type AcquaintLevel = 'stranger' | 'acquainted' | 'named';
+
+/** Monotonic order for `setAcquaint`: a level may only ever RISE, never fall. */
+const ACQUAINT_RANK: Record<AcquaintLevel, number> = { stranger: 0, acquainted: 1, named: 2 };
+/** 老 threshold（歲）for the 老丈／婆婆 person-words + elder honorific. */
+const ELDER_AGE = 60;
+
+/** role → 行當 trade-noun（…的）for the不識／認姓稱謂. The built-in v1 map; a season
+ *  frame override map is NOT required for v1. Fallback: the raw role string. */
+const TRADE_NOUN: Record<string, string> = {
+    小販: '賣吃食的', 花婆: '賣花的', 記者: '報館的', 歌女: '堂子的',
+    班主: '班主', 衣箱: '管箱的',
+    花旦: '戲班的', 小生: '戲班的', 刀馬旦: '戲班的', 丑: '戲班的',
+};
+/** roles whose gender-neutral surname suffix stands on its own（沈班主／趙班主）. */
+const ROLE_SUFFIX: Record<string, string> = { 班主: '班主' };
+/** 男 tradesman roles addressed 師傅（擔販／手藝人），else 先生（報人／文墨／台上人）. */
+const TRADESMAN_ROLES = new Set(['小販', '衣箱', '花婆']);
+/** 女 artisan roles addressed 師傅（管箱的 等），else 姑娘. */
+const ARTISAN_ROLES = new Set(['衣箱', '花婆']);
+
+/** A real, addressable surname exists when the name is ≥3字（民國全名如殷阿婆／趙阿福／
+ *  方競西）; 2字的藝名（金鳳／連翹）算無姓，認姓層以行當代稱。Deterministic v1 heuristic. */
+function hasSurname(name: string): boolean {
+    return [...name].length >= 3;
+}
+function surnameOf(name: string): string {
+    return [...name][0] ?? name;
+}
+/** gender(+age) → a person-word for a nameless reference（漢子／姑娘／老丈／婆婆）. */
+function personWord(gender?: string, age?: number): string {
+    const old = typeof age === 'number' && age >= ELDER_AGE;
+    if (gender === '男') return old ? '老丈' : '漢子';
+    if (gender === '女') return old ? '婆婆' : '姑娘';
+    return '人';
+}
+/** surname + honorific for the 認得·知姓 level：趙師傅／殷婆婆／方先生／沈班主／唐師傅. */
+function surnameHonorific(name: string, role?: string, gender?: string, age?: number): string {
+    const surname = surnameOf(name);
+    const suffix = role ? ROLE_SUFFIX[role] : undefined;
+    if (suffix) return `${surname}${suffix}`; // gender-neutral（班主）
+    const old = typeof age === 'number' && age >= ELDER_AGE;
+    if (gender === '男') return `${surname}${role && TRADESMAN_ROLES.has(role) ? '師傅' : '先生'}`;
+    if (gender === '女') {
+        if (old) return `${surname}婆婆`;
+        return `${surname}${role && ARTISAN_ROLES.has(role) ? '師傅' : '姑娘'}`;
+    }
+    return `${surname}師傅`; // 身不詳 — neutral respectful fallback
+}
+/** 不識 rendering：trade + person-word（一個賣花的婆婆），或無行當者以面生代之（一位面生的姑娘）. */
+function strangerDescriptor(role?: string, gender?: string, age?: number): string {
+    const pw = personWord(gender, age);
+    const trade = role ? TRADE_NOUN[role] : undefined;
+    return trade ? `一個${trade}${pw}` : `一位面生的${pw}`;
+}
+
 /** 訪問權限 key kind: a 半永久 standing key (self-let-in) vs a 一次性 one-time pass
  *  (led in once, consumed on entry). */
 export type AccessGrantKind = 'standing' | 'oneTime';
@@ -233,6 +299,18 @@ export interface WorldStateData {
      *  nightly self-model consolidation. Flag lives in the world so resume
      *  keeps the run's wiring; validated on long seasons before default-on. */
     relationshipFallback?: boolean;
+    /** 相識分寸 (subjective acquaintance) master flag. Absent/false ⇒ the feature
+     *  is OFF ⇒ `perceivedName` === `nameById` and `acquaintLevel` === 'named'
+     *  everywhere — the ENTIRE engine is byte-identical to a world without this
+     *  layer (the backward-compat guarantee). Like relationshipFallback the wiring
+     *  lives in the world so resume keeps it; carried verbatim by snapshot/restore. */
+    subjectiveNaming?: boolean;
+    /** perceiverId → targetId → how well the perceiver knows the target. Only
+     *  meaningful when `subjectiveNaming` is on. An absent map, or an unrecorded
+     *  pair, ⇒ 'stranger'（不識）; a perceiver's view of THEMSELVES ⇒ always 'named'.
+     *  Seeded once by `seedAcquaintance` and raised (monotonically) by the tick's
+     *  co-presence / interaction hooks. Carried verbatim by snapshot/restore. */
+    acquaintance?: Record<string, Record<string, AcquaintLevel>>;
     cast: CastMember[];
     scenes: SceneInfo[];
     /** characterId → current sceneId. */
@@ -500,7 +578,10 @@ export class WorldState {
         return [
             '本場可觸碰的登記物件（id 是物理提交用，不必說出口）：',
             ...objects.map((object) => {
-                const carried = object.carriedBy ? `，由${this.nameById(object.carriedBy)}隨身攜帶` : '';
+                // 相識分寸: the carrier is named as the VIEWER (characterId) knows them;
+                // flag-off ⇒ perceivedName === nameById (byte-identical). A non-cast
+                // viewer（'__reviewer__'）stays omniscient inside perceivedName.
+                const carried = object.carriedBy ? `，由${this.perceivedName(characterId, object.carriedBy)}隨身攜帶` : '';
                 const placement = object.container ? `，在${this.objectById(object.container)?.label ?? object.container}內` : '';
                 const hidden = object.visibility === 'hidden' ? '【隱藏；未公開前，旁人只能看見你的外在動作】' : '';
                 // 實體鑰匙: a key OBJECT carries a use-right you may hand over — annotate
@@ -538,6 +619,66 @@ export class WorldState {
         const row = (this.data.edges[fromId] ??= {});
         const cur = row[toId];
         row[toId] = cur && cur.tone === tone ? { tone, weight: cur.weight + 1 } : { tone, weight: (cur?.weight ?? 0) + 1 };
+    }
+
+    // ── 相識分寸 (subjective acquaintance) ──────────────────────────────────────
+    /** How well `perceiverId` knows `targetId`. Self ⇒ always 'named'; flag off ⇒
+     *  'named' (so `perceivedName` === `nameById`); else the recorded level, or
+     *  'stranger' for an absent/unrecorded pair. */
+    acquaintLevel(perceiverId: string, targetId: string): AcquaintLevel {
+        if (perceiverId === targetId) return 'named';
+        if (!this.data.subjectiveNaming) return 'named';
+        return this.data.acquaintance?.[perceiverId]?.[targetId] ?? 'stranger';
+    }
+
+    /** Raise `perceiverId`'s acquaintance with `targetId` to `level` — MONOTONIC
+     *  (named > acquainted > stranger; never downgrades), idempotent, lazily
+     *  creating the map only when the level actually rises. Self is a no-op
+     *  (implicitly always 'named'). */
+    setAcquaint(perceiverId: string, targetId: string, level: AcquaintLevel): void {
+        if (perceiverId === targetId) return;
+        const cur = this.data.acquaintance?.[perceiverId]?.[targetId] ?? 'stranger';
+        if (ACQUAINT_RANK[level] <= ACQUAINT_RANK[cur]) return; // never downgrade / idempotent
+        const table = (this.data.acquaintance ??= {});
+        const row = (table[perceiverId] ??= {});
+        row[targetId] = level;
+    }
+
+    /** How `perceiverId` REFERS to `targetId`, at their acquaintance resolution:
+     *  self / flag-off / 'named' ⇒ the full `nameById`; 'acquainted' ⇒ surname +
+     *  honorific（趙師傅／殷婆婆），or a行當 descriptor（堂子的）when the target has no
+     *  real surname; 'stranger' ⇒ a trade + appearance descriptor（一個賣花的婆婆）.
+     *  A non-cast perceiver（如 '__reviewer__'）is authorial ⇒ always omniscient. */
+    perceivedName(perceiverId: string, targetId: string): string {
+        if (perceiverId === targetId || !this.data.subjectiveNaming) return this.nameById(targetId);
+        if (!this.castById(perceiverId)) return this.nameById(targetId); // authorial / synthetic
+        const level = this.acquaintLevel(perceiverId, targetId);
+        if (level === 'named') return this.nameById(targetId);
+        const t = this.castById(targetId);
+        if (!t) return this.nameById(targetId); // robustness — unknown target
+        if (level === 'acquainted') {
+            return hasSurname(t.name)
+                ? surnameHonorific(t.name, t.role, t.gender, t.age)
+                : TRADE_NOUN[t.role ?? ''] ?? t.role ?? '人'; // 無姓藝名 → 行當代稱（堂子的）
+        }
+        return strangerDescriptor(t.role, t.gender, t.age); // 不識
+    }
+
+    /** Resolve an `addressed` display string — which may be a perceived name
+     *  (knownAs) — back to a co-present target id, from the SPEAKER's POV. Tries an
+     *  exact canonical-name match first（identical to `idByName`, so flag-off is
+     *  byte-identical）; only when the flag is on does it additionally match each
+     *  candidate's perceived name. Keeps addressing round-trip-safe. */
+    resolveAddressed(speakerId: string, addressed: string, candidateIds: string[]): string | undefined {
+        const direct = this.idByName(addressed);
+        if (direct) return direct;
+        if (!this.data.subjectiveNaming) return undefined;
+        for (const tid of candidateIds) {
+            if (tid === speakerId) continue;
+            const known = this.perceivedName(speakerId, tid);
+            if (addressed === known || addressed.includes(known)) return tid;
+        }
+        return undefined;
     }
 
     // ── mutable self-model (latest-wins; never recalled) ───────────────────────
@@ -593,7 +734,9 @@ export class WorldState {
         );
         if (others.length) {
             out.push('【你此刻心裡對這些人的看法（當下的、最新的，不是舊帳）】');
-            for (const oid of others) out.push(`· ${this.nameById(oid)}：${m.relationshipView[oid]}`);
+            // 相識分寸: refer to each other as the acting character KNOWS them;
+            // flag-off ⇒ perceivedName === nameById (byte-identical).
+            for (const oid of others) out.push(`· ${this.perceivedName(actingId, oid)}：${m.relationshipView[oid]}`);
         }
         return out.join('\n');
     }
