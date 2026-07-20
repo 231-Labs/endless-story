@@ -31,7 +31,7 @@ import {
 } from './core/want-core.ts';
 import { pickOrthogonalThreads, spawnWant, type LedgerEvent } from './core/want-rewrite.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
-import { CONDUCT_KINDS, skillStyleHint } from './core/skills.ts';
+import { CONDUCT_KINDS, STAGE_KINDS, isStageScene, skillStyleHint } from './core/skills.ts';
 import { BOND, advanceReady, bondOf, bumpBond, decayBonds, seedBond } from './core/bond-graph.ts';
 import { dutyRhythm } from './core/livelihood-rhythm.ts';
 import {
@@ -1064,6 +1064,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                   })()
                 : undefined;
 
+        // SKILL hang point #2 — on the boards, a performer's stage craft (唱/身)
+        // colours their beats on top of their daily bearing (conduct); off-stage
+        // only conduct. So a 悲工/文戲 lead's on-stage OUTPUT reads different from
+        // how they carry themselves at the tea-table — the framework's "different
+        // style of output" made concrete, with one gather call + a wider kind set.
+        const onStage = isStageScene(sceneName);
+        const beatSkillKinds = onStage ? [...CONDUCT_KINDS, ...STAGE_KINDS] : [...CONDUCT_KINDS];
         const castWithMem: SceneLoopCastMember[] = await Promise.all(
             ids.map(async (id) => {
                 const member = world.castById(id)!;
@@ -1088,10 +1095,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     standingPlan: member.plan,
                     role: member.role,
                     bodyFact: member.gender,
-                    // SKILL hang point: fold this member's conduct-kind skills into
-                    // a style hint so their speech + bearing carry their skills.
-                    // undefined when they have no conduct skill (beat unchanged).
-                    styleHint: skillStyleHint(member.skills, [...CONDUCT_KINDS]),
+                    // SKILL hang point: fold this member's skills into a style hint
+                    // so their speech + bearing (and, on the boards, their stage
+                    // craft) carry their skills. undefined when nothing matches (beat
+                    // unchanged) — the on-stage set adds 唱/身 to the conduct kinds.
+                    styleHint: skillStyleHint(member.skills, beatSkillKinds),
                     ties,
                     // STANDING for the advance affordance: in a 2-person scene the
                     // world deals the advance card only on real bond standing

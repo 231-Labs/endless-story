@@ -21,6 +21,20 @@ import type { Skill } from '../world-state.ts';
  *  not match here (it belongs to a different, later hang point). */
 export const CONDUCT_KINDS = ['談', '風', '處世', '口'] as const;
 
+/** The stage-craft domains a PERFORMANCE beat colours — how a character sings and
+ *  moves on the boards. A SECOND hang point gathers these (on top of CONDUCT_KINDS)
+ *  only when the scene is a stage, so a 悲工/文戲 lead's on-stage output carries
+ *  their craft, distinct from their daily bearing off it — the framework's
+ *  "different STYLE of output" made concrete. */
+export const STAGE_KINDS = ['唱', '身'] as const;
+
+/** Does this scene read as a stage / the boards (where a performance happens)?
+ *  Free-text name match, like the temple/food scene detectors — a seed names its
+ *  stage 戲台/舞臺 and it lights up; anything else stays off-stage (conduct only). */
+export function isStageScene(sceneName: string | undefined): boolean {
+    return !!sceneName && /戲[台臺]|舞[台臺]|台上|登台|開鑼/.test(sceneName);
+}
+
 /**
  * Gather the skills whose `kind` is in `kinds` (highest `level` first, cap 3),
  * formatted as a compact style hint: `〔技藝〕<name>·<style>；<name>·<style>`.

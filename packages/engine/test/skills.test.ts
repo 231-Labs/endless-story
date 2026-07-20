@@ -15,7 +15,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { CONDUCT_KINDS, skillStyleHint } from '../src/core/skills.ts';
+import { CONDUCT_KINDS, STAGE_KINDS, isStageScene, skillStyleHint } from '../src/core/skills.ts';
 import { runSceneLoop, type SceneAgent, type SceneLoopCastMember } from '../src/core/scene-loop.ts';
 import { buildWorldState, loadPresetFile, type RawPreset } from '../src/preset.ts';
 import { WorldState, type Skill, type WorldStateData } from '../src/world-state.ts';
@@ -169,6 +169,71 @@ test('2b) the tick folds a member’s conduct skills into the styleHint that rea
     assert.equal(opener!.styleHint, expected, 'the beat input carries the tick-computed conduct styleHint');
     assert.ok(opener!.styleHint?.includes('調度') && opener!.styleHint?.includes('鎮得住場'), 'both conduct skills present');
     assert.ok(!opener!.styleHint?.includes('舊日小生'), 'the 唱 role-craft skill is excluded from conduct');
+});
+
+// ── 2c) hang point #2 — stage craft colours on-stage beats ───────────────────
+
+test('isStageScene detects the boards and nothing else', () => {
+    for (const n of ['雲錦台戲台', '雲錦台戲臺', '舞台', '舞臺', '台上', '登台開鑼']) {
+        assert.ok(isStageScene(n), `${n} reads as a stage`);
+    }
+    for (const n of ['小樓', '金鳳寓所', '戲園前街', '後台妝閣', '會樂里觀音堂', undefined]) {
+        assert.ok(!isStageScene(n), `${n} is off-stage`);
+    }
+});
+
+test('skillStyleHint with the stage kind-set folds in the 唱/身 craft that conduct excludes', () => {
+    const skills: Skill[] = [
+        { name: '悲工', kind: '唱', style: '悲切以情帶聲', level: 5 },
+        { name: '文戲', kind: '身', style: '身段清儒俊雅', level: 5 },
+        { name: '清冷自持', kind: '風', style: '笑得像什麼都不往心裡去', level: 4 },
+    ];
+    // conduct only ⇒ just the 風 bearing skill.
+    assert.equal(skillStyleHint(skills, [...CONDUCT_KINDS]), '〔技藝〕清冷自持·笑得像什麼都不往心裡去');
+    // on the boards ⇒ the two level-5 craft skills lead, bearing trails (cap 3).
+    const onStage = skillStyleHint(skills, [...CONDUCT_KINDS, ...STAGE_KINDS]);
+    assert.ok(onStage?.includes('悲工') && onStage?.includes('文戲'), 'stage craft (唱/身) present on the boards');
+});
+
+/** Two performers on a public stage by day — the scene plays without night rules. */
+function stageWorld(c0Skills: Skill[]): WorldState {
+    const data: WorldStateData = {
+        sagaId: 'skills-stage',
+        sagaPremise: '一個戲班',
+        cast: [
+            { id: 'c0', name: '柳安春', persona: '小生', state: { fatigue: 0, hunger: 0, mood: 0 }, coreIdentity: [], relationshipView: {}, skills: c0Skills },
+            { id: 'c1', name: '蘇映雪', persona: '花旦', state: { fatigue: 0, hunger: 0, mood: 0 }, coreIdentity: [], relationshipView: {} },
+        ],
+        scenes: [
+            { id: 's0', name: '雲錦台戲台', privacyLevel: 0 },
+            { id: 's1', name: '小樓', privacyLevel: 3 },
+        ],
+        roster: { c0: 's0', c1: 's0' },
+        homeByChar: { c0: 's1', c1: 's1' },
+        workByChar: { c0: 's0', c1: 's0' },
+        wants: [],
+        edges: {},
+        clock: makeClock(6, 2), // 日午 — a daytime performance scene plays
+        dayAccum: { lines: [], actorIds: [], sceneIds: [], povByName: {} },
+        contestedResources: [],
+        objects: [],
+    };
+    return new WorldState(data);
+}
+
+test('2c) on a stage scene the tick folds the performer’s 唱/身 craft into the styleHint', async () => {
+    const skills: Skill[] = [
+        { name: '悲工', kind: '唱', style: '悲切以情帶聲', level: 5 },
+        { name: '文戲', kind: '身', style: '身段清儒俊雅', level: 5 },
+        { name: '清冷自持', kind: '風', style: '笑得像什麼都不往心裡去', level: 4 },
+    ];
+    const world = stageWorld(skills);
+    const agent = new RecordingAgent();
+    await runTick(world, deps(agent), { log: () => {} });
+
+    const liu = agent.beatInputs.find((i) => i.characterId === 'c0');
+    assert.ok(liu, 'the performer acted on the boards');
+    assert.ok(liu!.styleHint?.includes('悲工') && liu!.styleHint?.includes('文戲'), 'stage craft reaches the on-stage beat');
 });
 
 // ── 3) backward-compat ───────────────────────────────────────────────────────
