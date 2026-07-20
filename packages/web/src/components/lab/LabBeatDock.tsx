@@ -118,6 +118,22 @@ export function LabBeatDock({
         const onWheel = (e: WheelEvent) => {
             const el = stripRef.current;
             if (!el) return;
+            // 先讓路：若游標落在 dock 內某枚「縱向可捲」的卡（展開紗／長箋），
+            // 且該方向還捲得動，就放手讓瀏覽器捲那張卡的內文 —— 不劫走做橫捲。
+            // 唯有 dock 內無人能吃下這道縱向滾動時，才行下方的橫帶轉換。
+            if (e.deltaY) {
+                let node: HTMLElement | null = e.target instanceof HTMLElement ? e.target : null;
+                while (node && node !== dock) {
+                    const oy = getComputedStyle(node).overflowY;
+                    const scrollableY = node.scrollHeight > node.clientHeight + 1 && (oy === 'auto' || oy === 'scroll');
+                    if (scrollableY) {
+                        const canUp = e.deltaY < 0 && node.scrollTop > 0;
+                        const canDown = e.deltaY > 0 && node.scrollTop < node.scrollHeight - node.clientHeight - 1;
+                        if (canUp || canDown) return; // 讓這張卡自行縱捲，不 preventDefault
+                    }
+                    node = node.parentElement;
+                }
+            }
             const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
             if (!delta) return;
             const maxLeft = el.scrollWidth - el.clientWidth;

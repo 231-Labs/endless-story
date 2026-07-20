@@ -15,6 +15,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Markdown } from '@/components/common/Markdown';
 import { LabPageHeader } from '@/components/lab/LabPageHeader';
+import { NarrativeProse, ReaderScaleControl, useReaderScale } from '@/components/lab/NarrativeProse';
 import { labApi } from '@/components/lab/useLab';
 import type { LabTickRecord } from '@/lib/lab/types';
 
@@ -45,6 +46,8 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
     const id = decodeURIComponent(rawId);
     const [mode, setMode] = useState<Mode>('dossiers');
     const [error, setError] = useState<string | null>(null);
+    /** 讀者字級 —— 章回／眾聲讀面共用同一把字級（與人物內頁述頁同源，記 localStorage）。 */
+    const reader = useReaderScale();
 
     const [dossiers, setDossiers] = useState<Array<{ slug: string; title: string; day: number; scene: string; perspectives: string[] }>>([]);
     const [anthology, setAnthology] = useState<string | undefined>();
@@ -144,9 +147,18 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                 ))}
                 {!pool.length ? <p className="px-1 font-serif text-xs text-mute/60">{empty}</p> : null}
             </div>
-            <article className="es-lab-panel min-h-[40vh] max-h-[68vh] overflow-y-auto p-5 no-scrollbar sm:p-7">
+            <article className="es-lab-panel flex min-h-[40vh] max-h-[68vh] flex-col p-5 sm:p-7">
                 {openFile ? (
-                    <Markdown source={fileContent || '展卷中…'} className="chapter-prose" />
+                    <>
+                        {/* 讀者字級 —— 書頁排版，字級讀者自控 */}
+                        <ReaderScaleControl reader={reader} className="mb-4 shrink-0" />
+                        <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
+                            {/* 讀卷 —— 舒適欄寬置中，字級隨讀者字級縮放 */}
+                            <div className="mx-auto max-w-[40em]" style={{ fontSize: `${reader.px}px` }}>
+                                <NarrativeProse body={fileContent || '展卷中…'} />
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <p className="font-serif text-sm text-mute/70">左手邊揀一卷。</p>
                 )}
@@ -289,9 +301,9 @@ export default function LabReadingPage({ params }: { params: Promise<{ id: strin
                                                                                 ▾
                                                                             </span>
                                                                         </summary>
-                                                                        <p className="mt-1.5 whitespace-pre-wrap font-serif text-xs leading-relaxed text-ink/75">
-                                                                            {p.body}
-                                                                        </p>
+                                                                        <div className="mt-1.5 font-serif text-xs text-ink/75">
+                                                                            <NarrativeProse body={p.body} />
+                                                                        </div>
                                                                     </details>
                                                                 ))}
                                                             </div>
