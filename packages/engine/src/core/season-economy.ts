@@ -152,6 +152,15 @@ export interface SeasonEconomyData {
          *  SKILL_HOUSE_CAP). Absent/false ⇒ the house ignores talent, byte-
          *  identical to before this hang point existed (backward-compat). */
         performerBoost?: boolean;
+        /** 看客成群 — when true, the settle reports a REAL audience figure
+         *  (看客約 N 人 = houseSeats × pct/100, distinct from the cast on the
+         *  boards) and the PRESENT leads' public 名頭 draws extra house
+         *  (`renownDrawPct`, capped at RENOWN_HOUSE_CAP). Absent/false ⇒ the
+         *  settle line and pct stay byte-identical to before (backward-compat). */
+        audienceHouse?: boolean;
+        /** full-house seat count behind the 看客 figure. Default 120 when
+         *  `audienceHouse` is on; meaningless when it is off. */
+        houseSeats?: number;
     };
     /** contractId → the proposer's authored answer policy for counter-demands.
      *  The replaceable seam: swap for a live counterparty agent later. */
@@ -877,6 +886,9 @@ export interface PerformanceOutcome {
     troupeShareSubunits?: bigint;
     /** what the performers on the boards shared between them this night. */
     castShareSubunits?: bigint;
+    /** 看客約 N 人 — the paying house as a real figure (houseSeats × pct/100).
+     *  Only set when the frame opts into `audienceHouse`; absent otherwise. */
+    audience?: number;
 }
 
 /** The troupe leader (班主): the first authorized spender on the 班庫 account —
@@ -954,6 +966,33 @@ export function performerSkillBoostPct(world: WorldState, presentMemberIds: stri
     return Math.min(total, SKILL_HOUSE_CAP);
 }
 
+/** RENOWN_HOUSE_CAP — the ceiling on how much fuller a night's house can play
+ *  for the billed leads' public 名頭 (名頭引座). At most +30%, so even a bill of
+ *  當紅名角 can't swell the house without bound: takings stay bounded and
+ *  conservation holds by construction (the takings still enter as external-in,
+ *  same as always). */
+export const RENOWN_HOUSE_CAP = 30;
+
+/**
+ * 名頭引座 — how much fuller tonight's house plays for the public 名頭 of the
+ * leads actually on the boards, as a conservation-safe pct the settle folds
+ * into the house draw exactly like the object boosts. Each PRESENT lead
+ * contributes `round(renownOf(lead) × 20)` (a 名頭 0.8 lead adds +16); the sum
+ * across leads is capped at RENOWN_HOUSE_CAP so two hot bills lift — but never
+ * mint — the house. Absent leads draw nothing (an absent 名角 draws no house —
+ * the same principle as skills). Pure + deterministic: 名頭 is world state read
+ * at settle time, so the settle stays replayable. NUMBERS live only in the
+ * ledger math here — never a prompt. This closes the 口碑 loop mechanically:
+ * the nightly ±0.05/0.06 renown bumps now feed back as 名頭→座→票房→名頭.
+ */
+export function renownDrawPct(world: WorldState, leadsPresent: string[]): number {
+    let total = 0;
+    for (const id of leadsPresent) {
+        total += Math.round(world.renownOf(id) * 20);
+    }
+    return Math.min(total, RENOWN_HOUSE_CAP);
+}
+
 /**
  * 黃昏開鑼。Attendance decides the evening deterministically: no lead on the
  * boards or too few hands → 停鑼, zero income; otherwise the house pays by
@@ -1006,6 +1045,18 @@ export function settleEveningPerformance(
     if (perf.performerBoost) {
         pct += BigInt(performerSkillBoostPct(world, present.map((member) => member.id)));
     }
+    // 名頭引座 — the billed leads' public 名頭 fills seats, a conservation-safe pct
+    // exactly like the terms above (`renownDrawPct`, capped at RENOWN_HOUSE_CAP).
+    // Opt-in per frame via audienceHouse: off ⇒ 0, so existing seasons settle
+    // byte-for-byte as before. Only the leads actually on the boards tonight
+    // count — an absent 名角 draws no house.
+    if (perf.audienceHouse) {
+        pct += BigInt(renownDrawPct(world, leadsPresent));
+    }
+    // 看客 — the paying house as a REAL figure (約 N 人), derived from the SAME
+    // final pct as the takings so the two never disagree. Off ⇒ undefined: the
+    // house stays abstract and nothing downstream changes.
+    const audience = perf.audienceHouse ? Number((BigInt(perf.houseSeats ?? 120) * pct) / 100n) : undefined;
     const takings = (BigInt(perf.fullHouseSubunits) * pct) / 100n;
     const causeEventId = `${world.data.sagaId}:boxoffice:d${req.day}`;
     // idempotent per day: any takings deposit already booked tonight → replay is a no-op.
@@ -1069,17 +1120,24 @@ export function settleEveningPerformance(
     perf.rehearsedToday = [];
     const house = pct >= 110n ? '滿堂彩' : pct >= 100n ? '滿座' : pct >= 70n ? '七成座' : '半座';
     const rehearsedSuffix = rehearsed >= perf.minCast ? '' : '，白日未曾好好排過';
-    // default (no share) keeps the notice byte-identical to today's; a share night
-    // names the split so the settle notice can say who got what.
-    const line = castShare > 0n
-        ? `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}：${house}，票房 ${formatMoney(data, takings)}——班庫得 ${formatMoney(data, troupeShare)}，登台的 ${shares.length} 人分了 ${formatMoney(data, castShare)}。`
-        : `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}：${house}，票房 ${formatMoney(data, takings)} 入${accountLabel(contract, data.troupeAccountId)}。`;
+    // audienceHouse ON: the notice names 台上 (the cast on the boards) and 看客
+    // (the paying house) as DISTINCT figures — no more 「到場 4 人、滿堂彩」reading
+    // as four spectators. OFF: the EXACT legacy strings, byte-for-byte — the two
+    // branches deliberately share no template so the off path can never drift.
+    const line = perf.audienceHouse
+        ? (castShare > 0n
+            ? `【${perf.venueSceneName}】今夜上燈開鑼，台上 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}，看客約 ${audience} 人：${house}，票房 ${formatMoney(data, takings)}——班庫得 ${formatMoney(data, troupeShare)}，登台的 ${shares.length} 人分了 ${formatMoney(data, castShare)}。`
+            : `【${perf.venueSceneName}】今夜上燈開鑼，台上 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}，看客約 ${audience} 人：${house}，票房 ${formatMoney(data, takings)} 入${accountLabel(contract, data.troupeAccountId)}。`)
+        : (castShare > 0n
+            ? `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}：${house}，票房 ${formatMoney(data, takings)}——班庫得 ${formatMoney(data, troupeShare)}，登台的 ${shares.length} 人分了 ${formatMoney(data, castShare)}。`
+            : `【${perf.venueSceneName}】今夜上燈開鑼，到場 ${present.length} 人、領銜${leadNames(leadsPresent)}${rehearsedSuffix}：${house}，票房 ${formatMoney(data, takings)} 入${accountLabel(contract, data.troupeAccountId)}。`);
     return {
         performed: true,
         line,
         takingsSubunits: takings,
         troupeShareSubunits: troupeShare,
         castShareSubunits: castShare,
+        ...(audience !== undefined ? { audience } : {}),
     };
 }
 
@@ -1482,6 +1540,13 @@ export interface SeasonEconomyFrame {
          *  draws no extra house, byte-identical to the box office's original
          *  behaviour (a skill-less cast is unaffected either way). */
         performerBoost?: boolean;
+        /** 看客成群 — when true, the settle names a real audience figure (看客約
+         *  N 人) distinct from the cast on the boards, and the present leads'
+         *  public 名頭 draws extra house (capped at RENOWN_HOUSE_CAP). Absent/
+         *  false ⇒ the settle line and takings stay byte-identical to before. */
+        audienceHouse?: boolean;
+        /** full-house seat count for the 看客 figure (default 120). */
+        houseSeats?: number;
     };
     /** other economic establishments — a film co, newspaper, record label, song
      *  house. Each is a first-class pot with its own reserves, fixed cost, and
@@ -1658,6 +1723,9 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
                     ...(frame.performance.castShareBps ? { castShareBps: frame.performance.castShareBps } : {}),
                     // 名角滿座 opt-in — persisted only when the frame turns it on.
                     ...(frame.performance.performerBoost ? { performerBoost: true } : {}),
+                    // 看客成群 opt-in — persisted only when the frame turns it on.
+                    ...(frame.performance.audienceHouse ? { audienceHouse: true } : {}),
+                    ...(frame.performance.houseSeats !== undefined ? { houseSeats: frame.performance.houseSeats } : {}),
                     rehearsedToday: [],
                 },
             }
