@@ -7,11 +7,13 @@
  * it; 租客 (tenant) lives in (homeByChar) a scene they do NOT own and holds a
  * STANDING key — 一把帶在身上的門鑰, a real physical OBJECT that names its lock
  * (`WorldObject.keyFor`). This stage seeds a housing-STABLE opening: everyone
- * already housed, owners own by deed, tenants hold a standing key. NO money flows
- * (rent is a later stage) — conservation is untouched.
+ * already housed, owners own by deed, tenants hold a standing key. A lease is also
+ * registered (`leases`); when it bears rent (`rentYuan`) a periodic 租金 bill is
+ * minted — a 租客→屋主 TRANSFER between two existing accounts, never a mint, so
+ * conservation is untouched (a rentless lease still moves no money at all).
  *
- * Pure data, no I/O and no LLM: it only sets `propertyOwners`, grants standing
- * keys and mints key objects on the WorldState. Throws loudly with `[housing]`-
+ * Pure data, no I/O and no LLM: it sets `propertyOwners` + `leases`, grants standing
+ * keys, mints key objects and pushes any rent bill. Throws loudly with `[housing]`-
  * prefixed messages (like the `[economy]` module) so a mis-authored deed fails at
  * seed time rather than drifting silently.
  */
@@ -27,8 +29,11 @@ export interface PropertyDecl {
     /** The 屋主(s) who hold the deed, by character name. */
     ownerNames: string[];
     /** When present, the dwelling is let: the 租客 lives here (homeByChar) and is
-     *  handed a standing key object. */
-    lease?: { tenantName: string; keyObjectId: string; keyLabel?: string };
+     *  handed a standing key object. `rentYuan`, when set, makes the lease bear
+     *  rent — a periodic 租金 bill (租客→屋主) due at the end of `rentDueDay` (default
+     *  day 1). Rentless leases (rentYuan absent) stay money-neutral, exactly as
+     *  Stage 1 seeded them. */
+    lease?: { tenantName: string; keyObjectId: string; keyLabel?: string; rentYuan?: number; rentDueDay?: number };
 }
 
 /**
@@ -57,7 +62,7 @@ export function seedHousing(world: WorldState, decls: PropertyDecl[]): void {
         if (!decl.lease) continue; // owner-occupied — deed recorded, no key object
 
         // ── resolve the 租客 (lease) — must actually dwell in the leased scene ─────
-        const { tenantName, keyObjectId, keyLabel } = decl.lease;
+        const { tenantName, keyObjectId, keyLabel, rentYuan, rentDueDay } = decl.lease;
         const tenantId = world.idByName(tenantName);
         if (!tenantId) throw new Error(`[housing] lease of "${decl.sceneName}" names unknown tenant: ${tenantName}`);
         if (world.data.homeByChar[tenantId] !== scene.id) {
@@ -90,5 +95,36 @@ export function seedHousing(world: WorldState, decls: PropertyDecl[]): void {
             knownBy: [tenantId, ...ownerIds],
         };
         (world.data.objects ??= []).push(key);
+
+        // ── 租約登記 (+ 租金) — always record the lease (ties deed/use-right/rent for
+        //    逐客 and 收租); when the lease bears rent, mint a periodic 租客→屋主 bill.
+        const lease: { ownerId: string; tenantId: string; rentBillId?: string } = { ownerId: ownerIds[0], tenantId };
+        (world.data.leases ??= {})[scene.id] = lease;
+        if (rentYuan !== undefined) {
+            if (!world.data.economy) {
+                throw new Error(`[housing] lease of "${decl.sceneName}" bears rent but the world has no economy`);
+            }
+            const billId = `rent-${scene.id}`;
+            const bills = (world.data.economy.bills ??= []);
+            if (bills.some((existing) => existing.id === billId)) {
+                throw new Error(`[housing] rent bill ${billId} already exists`);
+            }
+            // 租金 is a TRANSFER between two existing accounts (租客→屋主), never a mint:
+            // both the tenant's and the owner's economy accounts are their characterIds
+            // and always exist. Seeding the bill moves no money (it is a future
+            // obligation) — conservation is untouched until it settles.
+            const amountSubunits = BigInt(Math.round(rentYuan * world.data.economy.subunitsPerUnit)).toString();
+            bills.push({
+                id: billId,
+                label: `${decl.sceneName}租金`,
+                amountSubunits,
+                dueDay: rentDueDay ?? 1,
+                fromAccountId: tenantId,
+                toAccountId: ownerIds[0],
+                creditor: world.nameById(ownerIds[0]),
+                paidSubunits: '0',
+            });
+            lease.rentBillId = billId;
+        }
     }
 }

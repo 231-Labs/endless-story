@@ -69,7 +69,7 @@
     }
   ],
   "properties": [
-    { "scene": "後台小廂房", "ownerNames": ["沈雪笙"], "lease": { "tenantName": "柳安春", "keyObjectId": "key-liuanchun-backstage", "keyLabel": "後台小廂房的門鑰" } },
+    { "scene": "後台小廂房", "ownerNames": ["沈雪笙"], "lease": { "tenantName": "柳安春", "keyObjectId": "key-liuanchun-backstage", "keyLabel": "後台小廂房的門鑰", "rentYuan": 3, "rentDueDay": 3 } },
     { "scene": "二樓書寓", "ownerNames": ["蘇映雪"] },
     { "scene": "金鳳寓所", "ownerNames": ["金鳳"] },
     { "scene": "沈宅小樓", "ownerNames": ["沈雪笙"] },

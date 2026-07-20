@@ -616,10 +616,30 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                                     {c.home.tenure === 'own'
                                                         ? `自有 · ${c.home.sceneName}`
                                                         : c.home.tenure === 'rent'
-                                                          ? `租住 · ${c.home.sceneName}（屋主：${c.home.ownerNames.join('、')}）`
+                                                          ? `租住 · ${c.home.sceneName}（屋主：${c.home.ownerNames.join('、')}）${c.home.rentYuan !== undefined ? `，租金 ${c.home.rentYuan}圓` : ''}`
                                                           : `借宿 · ${c.home.sceneName}`}
                                                 </span>
                                             </div>
+                                        </section>
+                                    ) : null}
+
+                                    {/* 收租 —— rentals this character is the landlord of (leases they own) */}
+                                    {c.rentalsOut?.length ? (
+                                        <section className="animate-beat-in">
+                                            <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">收租</h3>
+                                            <ul className="mt-2 space-y-1.5">
+                                                {c.rentalsOut.map((r) => (
+                                                    <li
+                                                        key={r.sceneName}
+                                                        className="flex items-center gap-2 rounded-lg border border-hairline bg-canvas/70 px-2.5 py-1.5 dark:bg-white/[0.03]"
+                                                    >
+                                                        <span aria-hidden className="shrink-0 font-serif text-sm text-cinnabar/70">租</span>
+                                                        <span className="min-w-0 flex-1 truncate font-serif text-sm text-ink/85">
+                                                            {r.sceneName}（租客 {r.tenantName}{r.rentYuan !== undefined ? `，${r.rentYuan}圓` : ''}）
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </section>
                                     ) : null}
 
