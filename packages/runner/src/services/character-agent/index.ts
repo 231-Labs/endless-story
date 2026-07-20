@@ -38,6 +38,8 @@ export { decideRehearsal } from './rehearsal.js';
 export type { RehearsalDecideInput, RehearsalDecideReply } from './rehearsal.js';
 export { decideAdmit, parseAdmitReply } from './admit.js';
 export type { AdmitDecideInput, AdmitDecideReply } from './admit.js';
+export { decideInvite, parseInviteReply } from './invite.js';
+export type { InviteDecideInput, InviteDecideReply } from './invite.js';
 export {
     buildSystemPrompt as buildAdmitSystemPrompt,
     buildUserPrompt as buildAdmitUserPrompt,

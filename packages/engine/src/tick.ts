@@ -352,6 +352,69 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         }
     }
 
+    // 1.95) 邀約 —— 叩門的反向（晡時，reconcileVisit 旗標同轄）。白日心事壓不住
+    // 的人，若正與心上人同場、自家私處對方又進不得，可遞句話「今夜來我處」——
+    // 一次性領入（grantAccess oneTime），今夜用不用仍全由對方的移動選擇。遞不遞
+    // 由 decideInvite 座席定（缺席＝嚥回去，確定性）；每人每日至多遞一次。兩造
+    // 各記一條私密 scheduledEvent（與叩門拒門同渠道）。旗標關 ⇒ 整段跳過。
+    if (w.reconcileVisit && clockLabel === '晡時' && agent.decideInvite) {
+        const INVITE_LAYER = /愛|情|虧欠|愧|償/; // 怨不邀（記恨的人不會開自家門）
+        for (const inviter of w.cast) {
+            if ((w.inviteDayByChar?.[inviter.id] ?? 0) >= w.clock.day) continue; // 一日一話
+            const home = w.homeByChar[inviter.id];
+            const homeScene = home ? world.sceneById(home) : undefined;
+            if (!homeScene || homeScene.privacyLevel < 3) continue; // 沒有私處可開
+            if (!world.ownersOf(home).includes(inviter.id) && w.homeByChar[inviter.id] !== home) continue;
+            const here = w.roster[inviter.id];
+            const pressing = wants.find(
+                (want) =>
+                    !want.retired &&
+                    want.characterId === inviter.id &&
+                    INVITE_LAYER.test(want.layer) &&
+                    !!want.target &&
+                    forcingLevel(want) !== 'idle',
+            );
+            if (!pressing) continue;
+            const targetId = world.castById(pressing.target!) ? pressing.target! : world.idByName(pressing.target!);
+            if (!targetId || targetId === inviter.id) continue;
+            if (w.roster[targetId] !== here) continue; // 要同場才遞得了話
+            if (world.canEnter(targetId, home)) continue; // 人家本就進得來，無需遞話
+            const reply = await agent.decideInvite({
+                inviterName: inviter.name,
+                inviterRole: inviter.role ?? '—',
+                inviterGender: inviter.gender,
+                targetName: world.perceivedName(inviter.id, targetId),
+                targetRole: world.castById(targetId)?.role ?? '—',
+                wantDesc: pressing.desc,
+                tieTowardTarget: inviter.relationshipView[targetId] ?? w.edges[inviter.id]?.[targetId]?.tone,
+                sceneName: world.sceneNameById(here),
+                homeName: world.sceneNameById(home),
+                clockLabel,
+            }).catch(() => null);
+            (w.inviteDayByChar ??= {})[inviter.id] = w.clock.day; // 問過即記日（嚥回也算開過口的一天）
+            if (reply?.invite !== true) continue;
+            world.grantAccess(home, targetId, 'oneTime');
+            const said = reply.line?.trim() || undefined;
+            log(`  [邀約] ${inviter.name} 向${world.nameById(targetId)}遞話：今夜可來${world.sceneNameById(home)}${said ? `（${said}）` : ''}`);
+            (w.scheduledEvents ??= []).push({
+                id: `invite-given-${inviter.id}-t${nowTick}`,
+                atTick: nowTick + 1,
+                sceneId: here,
+                text: `你把話遞出去了——請${world.perceivedName(inviter.id, targetId)}今夜來${world.sceneNameById(home)}坐坐${said ? `：「${said}」` : ''}。這句話出了口，就收不回了。`,
+                visibility: 'private',
+                witnessIds: [inviter.id],
+            });
+            (w.scheduledEvents ??= []).push({
+                id: `invite-received-${targetId}-t${nowTick}`,
+                atTick: nowTick + 1,
+                sceneId: here,
+                text: `${world.perceivedName(targetId, inviter.id)}${clockLabel}悄悄遞了句話：今夜得空，來${world.sceneNameById(home)}坐坐${said ? `——「${said}」` : ''}。去不去，在你。`,
+                visibility: 'private',
+                witnessIds: [targetId],
+            });
+        }
+    }
+
     // 2) AUTONOMOUS MOVEMENT — there is exactly one movement authority:
     // the world enumerates legal destinations, the character chooses a
     // structured scene id, then the engine validates and commits it. Home and
