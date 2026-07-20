@@ -157,6 +157,10 @@ export interface LabCharacterLive {
         holding: Array<{ sceneId: string; sceneName: string; kind: 'standing' | 'oneTime' }>;
         myPlaceHolders: Array<{ id: string; name: string; portraitUrl?: string; kind: 'standing' | 'oneTime' }>;
     };
+    /** 居所 — where this character dwells (homeByChar) and their tenure of it:
+     *  'own'＝自有屋主, 'rent'＝租住(屋主 ownerNames), 'public'＝公處借宿(無主). Omitted
+     *  when the character has no home scene. Read-only, derived from ownersOf. */
+    home?: { sceneName: string; tenure: 'own' | 'rent' | 'public'; ownerNames: string[] };
 }
 
 /**

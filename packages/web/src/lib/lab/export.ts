@@ -206,6 +206,18 @@ function buildWorld(world: WorldState | null): string {
         const keys = world.keysHeldBy(member.id).map(
             (k) => `${world.sceneNameById(k.sceneId)}（${k.kind === 'standing' ? '常' : '次'}）`,
         );
+        // 居所 tenure — deed-aware via ownersOf: 自有 / 租住(屋主 X) / 公處(無主借宿).
+        const homeId = w.homeByChar[member.id];
+        let home = '';
+        if (homeId) {
+            const owners = world.ownersOf(homeId);
+            const homeName = world.sceneNameById(homeId);
+            home = owners.length === 0
+                ? `公處 · ${homeName}`
+                : owners.includes(member.id)
+                  ? `自有 · ${homeName}`
+                  : `租住 · ${homeName}（屋主 ${owners.map((id) => world.nameById(id)).join('、')}）`;
+        }
         const parts = [
             `**${member.name}**（${member.role ?? '—'}｜${member.id}）@ ${sceneName}`,
             `狀態 乏 ${n2(member.state.fatigue)}／飢 ${n2(member.state.hunger)}／緒 ${n2(member.state.mood)}`
@@ -214,6 +226,7 @@ function buildWorld(world: WorldState | null): string {
         if (wants.length) parts.push(`心事：${wants.join('；')}`);
         if (bonds.length) parts.push(`羈絆：${bonds.join('、')}`);
         if (skills.length) parts.push(`技藝：${skills.join('、')}`);
+        if (home) parts.push(`居所：${home}`);
         if (keys.length) parts.push(`持鑰：${keys.join('、')}`);
         if (member.plan) parts.push(`打算：${member.plan.replace(/\s+/g, ' ').trim()}`);
         castLines.push('- ' + parts.join('\n  · '));

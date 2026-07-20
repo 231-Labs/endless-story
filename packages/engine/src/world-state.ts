@@ -495,7 +495,13 @@ export class WorldState {
                 const carried = object.carriedBy ? `，由${this.nameById(object.carriedBy)}隨身攜帶` : '';
                 const placement = object.container ? `，在${this.objectById(object.container)?.label ?? object.container}內` : '';
                 const hidden = object.visibility === 'hidden' ? '【隱藏；未公開前，旁人只能看見你的外在動作】' : '';
-                return `- ${object.id}＝${object.label}${hidden}${carried}${placement}${object.state ? `，狀態：${object.state}` : ''}`;
+                // 實體鑰匙: a key OBJECT carries a use-right you may hand over — annotate
+                // so the acting character knows交手即授、交還屋主即收回. Only for keyFor
+                // objects; a non-key world's hint stays byte-identical.
+                const keyNote = object.keyFor
+                    ? `（此乃「${this.sceneNameById(object.keyFor)}」的門鑰；交到誰手裡，誰便可自行進出，交還屋主便是收回）`
+                    : '';
+                return `- ${object.id}＝${object.label}${hidden}${carried}${placement}${object.state ? `，狀態：${object.state}` : ''}${keyNote}`;
             }),
             '除此清單外，記憶裡的物件只可在話裡或心裡提及，不可看見、指向或觸碰。',
         ].join('\n');

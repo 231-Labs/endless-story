@@ -606,6 +606,23 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                         {!c.carrying.length ? <p className="mt-2 font-serif text-sm text-mute/70">身無長物。</p> : null}
                                     </section>
 
+                                    {/* 居所 —— 居所 tenure：自有屋主 / 租住(屋主 X) / 公處借宿 */}
+                                    {c.home ? (
+                                        <section className="animate-beat-in">
+                                            <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">居所</h3>
+                                            <div className="mt-2 flex items-center gap-2 rounded-lg border border-hairline bg-canvas/70 px-2.5 py-1.5 dark:bg-white/[0.03]">
+                                                <span aria-hidden className="shrink-0 font-serif text-sm text-cinnabar/70">居</span>
+                                                <span className="min-w-0 flex-1 truncate font-serif text-sm text-ink/85">
+                                                    {c.home.tenure === 'own'
+                                                        ? `自有 · ${c.home.sceneName}`
+                                                        : c.home.tenure === 'rent'
+                                                          ? `租住 · ${c.home.sceneName}（屋主：${c.home.ownerNames.join('、')}）`
+                                                          : `借宿 · ${c.home.sceneName}`}
+                                                </span>
+                                            </div>
+                                        </section>
+                                    ) : null}
+
                                     {/* 持鑰 —— 訪問權限：你能進的私處、與持你家鑰匙的人 */}
                                     <section className="animate-beat-in">
                                         <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">持鑰 · 訪問權限</h3>
