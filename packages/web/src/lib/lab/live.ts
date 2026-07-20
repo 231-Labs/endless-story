@@ -329,6 +329,11 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
                     line: member.relationshipView[oId],
                     // 相許 badge — lit once the world recognises this pair as established.
                     established: world.isEstablished(member.id, oId),
+                    // 相識分寸: how THIS member refers to the other, at their own
+                    // resolution of acquaintance. Flag off ⇒ perceivedName === name,
+                    // acquaint === 'named' (no chip, no visible change).
+                    perceivedName: world.perceivedName(member.id, oId),
+                    acquaint: world.acquaintLevel(member.id, oId),
                 };
             })
             .sort((a, b) => b.warmth - a.warmth);

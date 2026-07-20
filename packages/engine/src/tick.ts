@@ -453,7 +453,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 .filter((candidate) => candidate.id !== member.id && w.roster[candidate.id] === scene.id)
                 .map((candidate) => ({
                     id: candidate.id,
-                    name: candidate.name,
+                    // 相識分寸: the mover sees each present other as THEY know them;
+                    // flag-off ⇒ perceivedName === nameById (byte-identical). The id
+                    // stays intact — the move percept never matches on this name.
+                    name: world.perceivedName(member.id, candidate.id),
                     role: candidate.role ?? '—',
                     bodyFact: candidate.gender,
                     tieToward: member.relationshipView[candidate.id] ?? w.edges[member.id]?.[candidate.id]?.tone,
@@ -464,7 +467,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 description: scene.description,
                 presentCharacters,
                 privacyLevel: scene.privacyLevel,
-                homeOfName: ownerIds[0] ? world.nameById(ownerIds[0]) : undefined,
+                homeOfName: ownerIds[0] ? world.perceivedName(member.id, ownerIds[0]) : undefined,
                 isHome: w.homeByChar[member.id] === scene.id,
                 isWork: w.workByChar[member.id] === scene.id,
                 near: world.nearby(currentSceneId, scene.id),
@@ -1209,6 +1212,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         // generosity deepens ties both ways; a met pair is spared tonight's cooling.
                         bumpBond(bonds, giverId, gift.recipientId, 'gift');
                         togetherToday.add(world.pairKey(giverId, gift.recipientId));
+                        // 相識分寸: aiding someone by name exchanges names — raise to 'named'.
+                        if (w.subjectiveNaming) {
+                            world.setAcquaint(giverId, gift.recipientId, 'named');
+                            world.setAcquaint(gift.recipientId, giverId, 'named');
+                        }
                         const aided = `${giver.name} 接濟 ${recipientName} ${formatMoney(data, BigInt(gift.amount) * per)}${gift.line ? `（${gift.line}）` : ''}`;
                         w.dayAccum.lines.push(`[濟] ${aided}`);
                         log(`  [濟] ${aided}`);
@@ -1271,9 +1279,18 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 // never recalled) + durable identity folded into persona. Always
                 // available — the eviction fix for "who X is to me".
                 const ties = world.selfTies(id, ids);
+                // 相識分寸: how THIS actor perceives each co-present other's NAME
+                // (keyed by their id, same POV shape as `ties`). Only built when the
+                // flag is on; undefined ⇒ the runner displays the canonical name
+                // (byte-identical). The canonical `name` below stays intact for
+                // addressed matching — the runner shows knownAs ?? name.
+                const knownAs = w.subjectiveNaming
+                    ? Object.fromEntries(ids.filter((o) => o !== id).map((o) => [o, world.perceivedName(id, o)]))
+                    : undefined;
                 return {
                     characterId: id,
                     name: member.name,
+                    knownAs,
                     persona: world.beatPersona(id),
                     memories: memories.length ? memories : undefined,
                     stateLine: stateLine(member.state.fatigue, member.state.hunger),
@@ -1334,7 +1351,18 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 actor.economyLine = economy?.projectFor(world, actor.characterId, sid);
             },
             onBeat: (beat) => {
-                const addressedId = beat.addressed ? world.idByName(beat.addressed) : undefined;
+                // 相識分寸: resolve the addressed display back to an id — perceived-name
+                // aware (knownAs), so addressing 「趙師傅」still finds 趙阿福. Flag-off ⇒
+                // exactly `idByName` (byte-identical).
+                const addressedId = beat.addressed
+                    ? world.resolveAddressed(beat.characterId, beat.addressed, ids)
+                    : undefined;
+                // Directly addressing a co-present other exchanges names — raise the
+                // pair to 'named' BOTH ways (monotonic; flag-gated).
+                if (w.subjectiveNaming && addressedId && addressedId !== beat.characterId && ids.includes(addressedId)) {
+                    world.setAcquaint(beat.characterId, addressedId, 'named');
+                    world.setAcquaint(addressedId, beat.characterId, 'named');
+                }
                 // A beat that touches a contract paper must also move the ledger —
                 // checked BEFORE physics so a rejected draft leaves no object change.
                 enforceContractCommandPairing(world, beat.objectEffects, beat.economyCommands);
@@ -1359,6 +1387,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     if (!receiverId || receiverId === beat.characterId || !ids.includes(receiverId)) continue;
                     bumpBond(bonds, beat.characterId, receiverId, 'gift');
                     togetherToday.add(world.pairKey(beat.characterId, receiverId));
+                    // 相識分寸: handing something to someone exchanges names — raise the
+                    // pair to 'named' both ways (monotonic; flag-gated).
+                    if (w.subjectiveNaming) {
+                        world.setAcquaint(beat.characterId, receiverId, 'named');
+                        world.setAcquaint(receiverId, beat.characterId, 'named');
+                    }
                     log(`  [贈] ${beat.name} 以物贈 ${world.nameById(receiverId)}，情意近了些`);
                     // 實體鑰匙 (Stage 2) — 使用權只隨門鑰的當面交手而動。commitBeatPhysics
                     // 已把物件的 carriedBy 移到收受者，此處只補使用權：這只物件是不是一把
@@ -1438,6 +1472,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             for (let j = i + 1; j < ids.length; j++) {
                 bumpBond(bonds, ids[i], ids[j], isPrivate ? 'private' : 'shared');
                 togetherToday.add(world.pairKey(ids[i], ids[j]));
+                // 相識分寸: sharing a played scene means you now recognise this person
+                // by face/trade — raise stranger→acquainted BOTH ways (monotonic, so a
+                // named pair is untouched). One shared scene is enough. Flag-gated.
+                if (w.subjectiveNaming) {
+                    world.setAcquaint(ids[i], ids[j], 'acquainted');
+                    world.setAcquaint(ids[j], ids[i], 'acquainted');
+                }
             }
         }
         // 相許 (event) — an in-scene advance→accept made them lovers HERE: warm the
@@ -1446,6 +1487,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             bumpBond(bonds, ids[0], ids[1], 'bed');
             world.addEstablished(ids[0], ids[1]);
             grantMutualHomeKeys(ids[0], ids[1]); // 相許 → 授權: mutual standing keys
+            if (w.subjectiveNaming) { world.setAcquaint(ids[0], ids[1], 'named'); world.setAcquaint(ids[1], ids[0], 'named'); }
             log(`  [相許] ${world.nameById(ids[0])} 與 ${world.nameById(ids[1])} 這一場成了彼此`);
         }
         // 相許 (verdict) — a settled night pair not yet established but still carrying
@@ -1474,6 +1516,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 if (established) {
                     world.addEstablished(a, b);
                     grantMutualHomeKeys(a, b); // 相許 → 授權: mutual standing keys
+                    if (w.subjectiveNaming) { world.setAcquaint(a, b, 'named'); world.setAcquaint(b, a, 'named'); }
                     bumpBond(bonds, a, b, 'accept');
                     log(`  [相許] ${world.nameById(a)} 與 ${world.nameById(b)} 已交了心`);
                 }
@@ -1534,7 +1577,17 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 text: b.text,
                 addressed: b.addressed,
                 audience: b.audience ?? 'scene',
-                perceiverIds: deriveBeatPerceiverIds(b, ids.map((id) => ({ id, name: world.nameById(id) }))),
+                // 相識分寸: participants carry knownAs from the SPEAKER's POV so a beat
+                // that addresses someone by their perceived name still resolves the
+                // right witness. Flag-off ⇒ knownAs undefined ⇒ matching unchanged.
+                perceiverIds: deriveBeatPerceiverIds(
+                    b,
+                    ids.map((id) => ({
+                        id,
+                        name: world.nameById(id),
+                        knownAs: w.subjectiveNaming ? world.perceivedName(b.characterId, id) : undefined,
+                    })),
+                ),
                 inner: b.inner || undefined,
                 objectEffects: b.objectEffects,
                 economyCommands: b.economyCommands,
@@ -1591,7 +1644,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     name: member.name,
                     persona: member.persona,
                     secret: member.secret,
-                    ties: Object.entries(world.selfTies(id, ids)).map(([oid, t]) => `對${world.nameById(oid)}：${t}`).join('\n') || undefined,
+                    ties: Object.entries(world.selfTies(id, ids)).map(([oid, t]) => `對${world.perceivedName(id, oid)}：${t}`).join('\n') || undefined,
                     venue: sceneName,
                     clock: clockLabel,
                     beats: projectEventBeatsForWitness(event, id),

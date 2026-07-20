@@ -68,6 +68,12 @@ export interface SceneLoopCastMember {
      *  their characterId (e.g. 你對TA：師承). From the lived+felt graph, never
      *  the reverse edge — no omniscience about others' feelings. */
     ties?: Record<string, string>;
+    /** 相識分寸: how THIS member perceives each co-present other's NAME
+     *  (perceivedName), keyed by the other's characterId — the same POV shape as
+     *  `ties`. The beat prompt DISPLAYS knownAs ?? name; the canonical `name` stays
+     *  intact for matching. Absent（flag off）⇒ the display is the canonical name
+     *  (byte-identical). */
+    knownAs?: Record<string, string>;
     /** Actor-specific objective affordances at this venue. */
     objects?: Array<{ id: string; label: string; state?: string; container?: string }>;
     sceneHint?: string;
@@ -314,6 +320,9 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 role: o.role,
                 tie: actor!.ties?.[o.characterId],
                 bodyFact: o.bodyFact,
+                // 相識分寸: the display name from THIS actor's POV; the runner shows
+                // knownAs ?? name. undefined ⇒ flag off ⇒ canonical name (unchanged).
+                knownAs: actor!.knownAs?.[o.characterId],
             })),
             bodyFact: actor.bodyFact,
             carried: carriedInScene(actor, others, input.tick),
@@ -366,7 +375,16 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 continue;
             }
             const structuredAddressee = r.addressed
-                ? others.find((candidate) => r.addressed === candidate.name || r.addressed?.includes(candidate.name))
+                ? others.find((candidate) => {
+                      // 相識分寸: match the canonical name AND, if present, the perceived
+                      // name this actor knows them by（addressing 「趙師傅」still resolves）.
+                      const known = actor!.knownAs?.[candidate.characterId];
+                      return (
+                          r.addressed === candidate.name ||
+                          r.addressed?.includes(candidate.name) ||
+                          (known !== undefined && (r.addressed === known || r.addressed?.includes(known)))
+                      );
+                  })
                 : undefined;
             const openingVocative = (input.castNames ?? present.map((candidate) => candidate.name)).find((name) => {
                 const aliases = [name, ...(name.length >= 3 ? [name.slice(1)] : [])];
@@ -467,7 +485,11 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
 
         const candidates = present.filter((c) => c.characterId !== actor!.characterId);
         const addressed = r.addressed
-            ? candidates.find((c) => c.name === r.addressed || r.addressed!.includes(c.name))
+            ? candidates.find((c) => {
+                  // 相識分寸: canonical name OR the perceived name this actor knows them by.
+                  const known = actor!.knownAs?.[c.characterId];
+                  return c.name === r.addressed || r.addressed!.includes(c.name) || (known !== undefined && (known === r.addressed || r.addressed!.includes(known)));
+              })
             : undefined;
         const nextId = pickNextActor(
             candidates.map((c) => {

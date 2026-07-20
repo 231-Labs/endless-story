@@ -17,6 +17,7 @@ import * as path from 'node:path';
 import { FakeSceneAgent, FileArchive, LocalClock, LocalEconomy, LocalRecall } from './adapters/local/index.ts';
 import { auditSeasonEconomy } from './core/season-economy.ts';
 import { applySeasonFrame, createWorldFromPreset, loadSeasonFrame, reconcileSeasonObjects, seedRelationshipViews } from './preset.ts';
+import { seedAcquaintance } from './core/acquaintance.ts';
 import { activePresetId, activeSeasonId, defaultLabRunDir } from './workspace-paths.ts';
 import { seedSeasonOpening } from './season-opening.ts';
 import { runTick } from './tick.ts';
@@ -174,6 +175,14 @@ async function main(): Promise<void> {
             world.data.relationshipFallback = true;
             const seededViews = seedRelationshipViews(world, raw.relationship_views ?? []);
             console.log(`  relationship fallback: ON · ${seededViews} seeded canon view(s)`);
+        }
+        // 相識分寸: a season may declare subjective naming; seed the acquaintance map
+        // AFTER cast/edges/views so co-workers/edge-holders start named. Post-build,
+        // mirroring the relationship-fallback flag above.
+        if (seasonFrame?.subjectiveNaming) {
+            world.data.subjectiveNaming = true;
+            seedAcquaintance(world);
+            console.log('  subjective naming: ON · seeded 相識分寸 acquaintance map');
         }
         freshWorld = true;
         console.log(`seeded fresh world · ${world.data.cast.length} cast · ${world.data.scenes.length} scenes · ${seeded} genesis memories`);

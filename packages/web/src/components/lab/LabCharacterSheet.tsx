@@ -157,6 +157,17 @@ function WantCard({ want, hero, target, onSelectCharacter }: {
     );
 }
 
+/** 相識分寸 chip — how well this character knows the other. Only rendered when it
+ *  adds signal (面生／認得); a fully-'named' acquaintance needs no chip, and a
+ *  flag-off world reports 'named' everywhere (so nothing shows). Subtle by design. */
+function acquaintChip(acquaint?: 'stranger' | 'acquainted' | 'named') {
+    if (!acquaint || acquaint === 'named') return null;
+    const label = acquaint === 'stranger' ? '面生' : '認得';
+    return (
+        <span className="rounded-sm border border-hairline bg-ink/[0.04] px-1.5 py-px font-serif text-[10px] tracking-[0.15em] text-mute/80">{label}</span>
+    );
+}
+
 /** 羈絆卡 — a social-link card. Tapping the portrait/name traverses the sheet to
  *  that person. Warmth is the emotional NUMBER; a ⇄ cue hints mutual vs one-sided. */
 function BondCard({ bond, compact, onSelectCharacter }: {
@@ -182,10 +193,16 @@ function BondCard({ bond, compact, onSelectCharacter }: {
                             <span className="truncate font-serif text-sm tracking-[0.08em] text-ink/90 transition group-hover:text-cinnabar">{bond.name}</span>
                             {bond.role ? <span className="shrink-0 font-serif text-[10px] tracking-[0.1em] text-mute/70">{bond.role}</span> : null}
                         </span>
+                        {/* 相識分寸: how THIS character refers to the other, when it differs
+                            from the canonical name (i.e. they don't know the full name). */}
+                        {bond.perceivedName && bond.perceivedName !== bond.name ? (
+                            <span className="mt-0.5 block truncate font-serif text-2xs tracking-[0.12em] text-mute/80">稱：{bond.perceivedName}</span>
+                        ) : null}
                         {bond.tone ? <span className="mt-0.5 block truncate font-serif text-2xs tracking-[0.12em] text-mute">{bond.tone}</span> : null}
                     </span>
                 </button>
                 <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {acquaintChip(bond.acquaint)}
                     {bond.established ? (
                         <span className="rounded-sm border border-jade/40 bg-jade/[0.08] px-1.5 py-px font-serif text-[10px] tracking-[0.15em] text-jade/90">相許</span>
                     ) : null}

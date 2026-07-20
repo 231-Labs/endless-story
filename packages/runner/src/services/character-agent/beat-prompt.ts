@@ -47,7 +47,7 @@ export interface ActBeatInput {
      *  other's inner state reaches an actor only through enacted behavior.
      *  `bodyFact` = a short in-world phrase for that co-present person's 身/sex,
      *  used ONLY to make the intimacy register gender-correct (data-driven). */
-    others: Array<{ name: string; role?: string; tie?: string; bodyFact?: string }>;
+    others: Array<{ name: string; role?: string; tie?: string; bodyFact?: string; knownAs?: string }>;
     /** This character's OWN 身/sex phrase — half of the gender-aware intimacy note
      *  (the other half is each co-present other's bodyFact). Never a name special-case. */
     bodyFact?: string;
@@ -180,7 +180,8 @@ export function pronounFromBody(bodyFact?: string): '他' | '她' {
 function pronounNote(input: ActBeatInput): string {
     const people: string[] = [`${input.name}是${pronounFromBody(input.bodyFact)}`];
     for (const o of input.others) {
-        if (o.bodyFact) people.push(`${o.name}是${pronounFromBody(o.bodyFact)}`);
+        // 相識分寸: refer to each other as this actor knows them (knownAs ?? name).
+        if (o.bodyFact) people.push(`${o.knownAs ?? o.name}是${pronounFromBody(o.bodyFact)}`);
     }
     if (people.length <= 1) return '';
     return `【稱呼在場的人用對的代詞】${people.join('、')}——別張冠李戴、別把男子寫成「她」。`;
@@ -208,7 +209,7 @@ function genderNote(input: ActBeatInput): string {
     const you = input.bodyFact ? `${input.name}（${input.bodyFact}）` : input.name;
     const withBody = input.others.filter((o) => o.bodyFact);
     const them = withBody.length
-        ? withBody.map((o) => `${o.name}（${o.bodyFact}）`).join('、')
+        ? withBody.map((o) => `${o.knownAs ?? o.name}（${o.bodyFact}）`).join('、')
         : input.want.target ?? '對方';
     // SAME-SEX detection is data-driven (both 身 derive to the same 他/她) and only
     // fires when we hold both bodyFacts. It bans heteronormative penetration + the
@@ -408,8 +409,11 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         input.others.length
             ? input.others
                   .map((o) => {
+                      // 相識分寸: DISPLAY the perceived name (knownAs ?? name); the
+                      // canonical name stays intact upstream for addressed matching.
+                      const shown = o.knownAs ?? o.name;
                       const facts = [o.role, o.tie].filter(Boolean).join('｜');
-                      return facts ? `${o.name}（${facts}）` : o.name;
+                      return facts ? `${shown}（${facts}）` : shown;
                   })
                   .join('、')
             : '只你一人'

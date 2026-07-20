@@ -22,6 +22,7 @@ export * from './core/skills.ts';
 export * from './core/actor-fatigue.ts';
 export * from './core/spatial-routing.ts';
 export * from './core/production.ts';
+export * from './core/acquaintance.ts';
 export * from './core/temple-prayer.ts';
 
 // Ports + world + pipeline + preset.

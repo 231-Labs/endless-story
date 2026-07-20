@@ -28,6 +28,7 @@ import {
     loadSeasonFrameFile,
     reconcileSeasonObjects,
     runTick,
+    seedAcquaintance,
     seedRelationshipViews,
     seedSeasonOpening,
     type RawPreset,
@@ -247,6 +248,13 @@ export class LabRunManager {
                 seedRelationshipViews(world, created.raw.relationship_views ?? []);
             }
             if (cfg.emergentProduction) world.data.emergentProduction = true;
+            // 相識分寸: a season may declare subjective naming; seed the acquaintance
+            // map AFTER cast/edges/views are seeded (so co-workers/edge-holders start
+            // named). Mirrors how the flags above flip world.data.<flag> post-build.
+            if (seasonFrame?.subjectiveNaming) {
+                world.data.subjectiveNaming = true;
+                seedAcquaintance(world);
+            }
             freshWorld = true;
         }
         if (seasonFrame) writeJsonAtomic(path.join(out, 'season-frame.json'), seasonFrame);
