@@ -44,6 +44,12 @@ export type AidSituation = Runner.characterAgent.AidSituation;
 export type AidVitality = Runner.characterAgent.AidVitality;
 export type AidMemo = Runner.characterAgent.AidMemo;
 export type AidManner = Runner.characterAgent.AidManner;
+// 叩門/放行 (decideAdmit): the occupant of a private home decides, through the
+// door, whether to admit a night knocker; consent lives with the occupant,
+// never the visitor's ardor. The judgment is the capability's (runner admit.ts);
+// the engine only feeds it real state and reads the verdict.
+export type AdmitDecideInput = Runner.characterAgent.AdmitDecideInput;
+export type AdmitDecideReply = Runner.characterAgent.AdmitDecideReply;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -312,6 +318,15 @@ export interface SceneAgentPort extends SceneAgent {
      *  neediest warmly-bonded co-present peer) runs instead — the mechanism works and
      *  is testable with no LLM. The money moves ONLY through the conserving pay path. */
     decideAid?(input: AidActionInput): Promise<AidActionResult>;
+    /** 叩門/放行 (optional): the occupant of a private home decides, THROUGH the
+     *  door, whether to admit a night knocker — consent lives with the OCCUPANT,
+     *  never the visitor's ardor; a shut door is also an answer. An admit mints a
+     *  one-time pass (grantAccess oneTime) that entry consumes; a refusal leaves
+     *  the knocker outside with the move spent. Real adapters implement it (one
+     *  cheap LLM call, fail-safe to null); the fake OMITS it, so the tick's
+     *  DEFAULT — deterministic, conservative — is to REFUSE (null reply refuses
+     *  just the same: never an entry the occupant didn't grant). */
+    decideAdmit?(input: AdmitDecideInput): Promise<AdmitDecideReply | null>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;

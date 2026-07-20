@@ -431,31 +431,36 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         const intrudePull = intrudeSceneId
             ? `聽聞${world.nameById(intrude!.id)}此刻與人在${world.sceneNameById(intrudeSceneId)}掩門私會，你妒火中燒，明知不請自來，也按捺不住要去撞破。`
             : undefined;
-        // 登門修好 (reconcile-visit) — PARALLEL to 撞破 but for reconciliation, not
-        // jealousy. ACTIVE ONLY when the reconcileVisit flag is on. At night a ripe
+        // 叩門夜訪 (knock-visit) — PARALLEL to 撞破's targeting but WITHOUT its
+        // license. ACTIVE ONLY when the reconcileVisit flag is on. At night a ripe
         // (edge+) 愛/虧欠 want may SEEK its target who is HOME ALONE in a private
-        // scene, going uninvited to 把話說開、了結虧欠. Like 撞破 it bypasses BOTH the
-        // capacity bar and the 訪問權限 key gate; UNLIKE it, the target sits ALONE
-        // (occupancy EXACTLY 1 — the mover joins to make an intimate pair of 2), not
-        // mid-tryst. Flag off ⇒ yearn null ⇒ visitSceneId undefined ⇒ every scene
+        // scene — but the visitor's ardor never opens the door: the mover may only
+        // walk up and KNOCK (求見). The knock-target option is EMITTED despite the
+        // 訪問權限 key gate (else the mover could never even reach the door), yet it
+        // carries NO entry: admission is the OCCUPANT's one-time 放行, resolved
+        // after decideMove through the optional decideAdmit seat (absent seat ⇒
+        // REFUSE). The capacity bar is NOT bypassed (occupancy===1 in a private
+        // home passes the default bar anyway). The target sits ALONE (occupancy
+        // EXACTLY 1 — an admitted mover joins to make an intimate pair of 2), not
+        // mid-tryst. Flag off ⇒ yearn null ⇒ knockSceneId undefined ⇒ every scene
         // keeps both bars byte-for-byte, exactly as before.
         const yearn = (night && w.reconcileVisit) ? yearningNightPursuit(wants, member.id, resolveTargetId) : null;
-        const visitSceneId = (() => {
+        const knockSceneId = (() => {
             if (!yearn || yearn.intrude !== true || yearn.id === member.id) return undefined; // ripe edge+ only
             const sid = w.roster[yearn.id];
             if (!sid || sid === currentSceneId) return undefined;   // already there ⇒ no visit
             const scene = world.sceneById(sid);
             if (!scene || scene.privacyLevel < 3) return undefined;  // a private home
             const occupants = w.cast.filter((candidate) => w.roster[candidate.id] === sid);
-            if (occupants.length !== 1) return undefined;            // target HOME ALONE (mover joins ⇒ pair)
+            if (occupants.length !== 1) return undefined;            // target HOME ALONE (admitted mover joins ⇒ pair)
             if (occupants[0].id === member.id) return undefined;     // that lone occupant isn't us
             if (sid === intrudeSceneId) return undefined;            // same scene ⇒ jealousy is the acuter claim
             return sid;
         })();
-        // A salient inner pull so the offered 登門 option is chosen under real
+        // A salient inner pull so the offered 叩門 option is weighed under real
         // pressure — the character still decides (restraint is valid); no numbers.
-        const visitPull = visitSceneId
-            ? `你心裡放不下${world.nameById(yearn!.id)}，聽聞他此刻獨在${world.sceneNameById(visitSceneId)}，明知冒昧，也想登門把話說開、把這樁虧欠了結。`
+        const knockPull = knockSceneId
+            ? `你心裡放不下${world.nameById(yearn!.id)}，聽聞他此刻獨在${world.sceneNameById(knockSceneId)}——你進不得那扇門，但可以上前叩門求見；開不開，由屋裡人。`
             : undefined;
         const options = w.scenes.flatMap((scene) => {
             if (scene.id === currentSceneId) return [];
@@ -464,13 +469,17 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // (over-capacity by design, uninvited by design). Every other scene keeps
             // capacity + welcome exactly as before.
             const isIntrudeTarget = scene.id === intrudeSceneId;
-            // 登門: the ONE reconcile-visit target scene skips BOTH bars below too, just
-            // like 撞破 (over-capacity by design once the mover joins, uninvited by
-            // design). visitSceneId already excludes intrudeSceneId, so never both.
-            const isVisitTarget = scene.id === visitSceneId;
+            // 叩門: the ONE knock-target scene is emitted PAST the canEnter filter
+            // below (else the barred mover could never even reach the door to
+            // knock) — but it carries NO entry license and NO capacity exemption:
+            // choosing it walks the mover to the door, and whether it opens is the
+            // occupant's 放行 (resolved after decideMove). A mover who ALREADY
+            // holds a key needs no knock — their option stays a normal entry.
+            // knockSceneId already excludes intrudeSceneId, so never both.
+            const isKnockTarget = scene.id === knockSceneId && !world.canEnter(member.id, scene.id);
             const occupancy = w.cast.filter((candidate) => w.roster[candidate.id] === scene.id).length;
             const capacity = scene.capacity ?? (scene.privacyLevel >= 3 ? 2 : scene.privacyLevel >= 2 ? 4 : 8);
-            if (!isIntrudeTarget && !isVisitTarget && occupancy >= capacity) return [];
+            if (!isIntrudeTarget && occupancy >= capacity) return [];
             const ownerIds = Object.entries(w.homeByChar)
                 .filter(([, home]) => home === scene.id)
                 .map(([id]) => id);
@@ -478,8 +487,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // admits only its owner or a key-holder (standing/oneTime). A public
             // scene / an owner / a key-holder ⇒ canEnter true (never barred). The
             // 撞破 break-in ignores keys — isIntrudeTarget bypasses this exactly as
-            // it bypassed the old gate.
-            if (!isIntrudeTarget && !isVisitTarget && !world.canEnter(member.id, scene.id)) return [];
+            // it bypassed the old gate. A 叩門 target passes the FILTER only (the
+            // option must exist to be knocked on); it is never an entry here.
+            if (!isIntrudeTarget && !isKnockTarget && !world.canEnter(member.id, scene.id)) return [];
             const presentCharacters = w.cast
                 .filter((candidate) => candidate.id !== member.id && w.roster[candidate.id] === scene.id)
                 .map((candidate) => ({
@@ -505,9 +515,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 // 撞破: mark the barged-into tryst so decideMove frames choosing it as
                 // bursting in uninvited (明知不請自來，妒火中燒也要去撞破).
                 ...(isIntrudeTarget ? { intrude: true as const } : {}),
-                // 登門: mark the home-alone scene so decideMove frames choosing it as
-                // an uninvited reconcile-visit (明知冒昧，也想登門把話說開、了結虧欠).
-                ...(isVisitTarget ? { visit: true as const } : {}),
+                // 叩門: mark the home-alone scene so decideMove frames choosing it
+                // as walking up to KNOCK (求見) — entry is the occupant's to grant,
+                // never the mover's to take (開不開，由屋裡人).
+                ...(isKnockTarget ? { knock: true as const } : {}),
             }];
         });
         const decision = await agent.decideMove({
@@ -521,7 +532,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .map((event) => event.text),
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
                 ...(intrudePull ? [intrudePull] : []),
-                ...(visitPull ? [visitPull] : []),
+                ...(knockPull ? [knockPull] : []),
             ].filter(Boolean).join('\n') || undefined,
             planHint: [
                 // Standing plan (if any) leads — the character heads toward goals, not just reacts.
@@ -566,7 +577,8 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             })),
         });
         if (!decision.move || !decision.targetSceneId) continue;
-        if (!options.some((option) => option.sceneId === decision.targetSceneId)) continue;
+        const chosenOption = options.find((option) => option.sceneId === decision.targetSceneId);
+        if (!chosenOption) continue;
         const fromSceneId = currentSceneId;
         const from = world.sceneNameById(fromSceneId);
         let arrivalSceneId = decision.targetSceneId;
@@ -621,11 +633,89 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
         }
 
+        // 叩門/放行 (knock + consent) — the chosen option was a KNOCK, not an
+        // entry: the mover walked to the door of a home they may NOT enter
+        // (canEnter false) and asked. Whether the door opens is the OCCUPANT's
+        // decision, through the optional decideAdmit seat; an absent seat or a
+        // null/invalid reply ⇒ REFUSE (deterministic, conservative — the fake
+        // agent inherits this default by simply omitting the seat). ADMIT mints a
+        // one-time 放行 (grantAccess oneTime) and the move commits through the
+        // SAME path as any other accepted move, where consumeOneTime (below) uses
+        // the pass up on entry — granted and consumed exactly once. A waylaid
+        // knocker (路遇 above re-aimed arrivalSceneId) never reached the door, so
+        // their stop-over commits as a normal move instead.
+        let moveAnnotation = decision.reason ? `（${decision.reason}）` : '';
+        if (chosenOption.knock && arrivalSceneId === knockSceneId) {
+            // Recompute the lone occupant NOW — earlier movers this phase may have
+            // shifted the roster since the option was built (never trust stale locals).
+            const occupantsNow = w.cast.filter(
+                (candidate) => candidate.id !== member.id && w.roster[candidate.id] === arrivalSceneId,
+            );
+            const occupant = occupantsNow.length === 1 ? occupantsNow[0] : undefined;
+            const reply = occupant && agent.decideAdmit
+                ? await agent.decideAdmit({
+                      occupantName: occupant.name,
+                      occupantRole: occupant.role ?? '—',
+                      occupantGender: occupant.gender,
+                      occupantState: {
+                          fatigue: occupant.state.fatigue,
+                          hunger: occupant.state.hunger,
+                          mood: occupant.state.mood,
+                      },
+                      // 相識分寸: the occupant hears the knocker AS THEY know them —
+                      // an unfamiliar voice at night reads as 深夜生人.
+                      knockerName: world.perceivedName(occupant.id, member.id),
+                      knockerRole: member.role ?? '—',
+                      clockLabel,
+                      sceneName: world.sceneNameById(arrivalSceneId),
+                      tieTowardKnocker:
+                          occupant.relationshipView[member.id] ?? w.edges[occupant.id]?.[member.id]?.tone,
+                      isNight: true,
+                  }).catch(() => null)
+                : null;
+            const doorLine = reply?.line?.trim() || undefined;
+            if (reply?.admit === true && occupant) {
+                world.grantAccess(arrivalSceneId, member.id, 'oneTime');
+                moveAnnotation = `（叩門，${world.nameById(occupant.id)}放行${doorLine ? `：${doorLine}` : ''}）`;
+            } else {
+                // REFUSED (or nobody answered): the door stays shut, no access is
+                // granted, the roster never changes — but the walk there and back
+                // SPENT the move (same arrived/rest bookkeeping as a committed
+                // move that ends at the mover's CURRENT scene). Both sides keep
+                // the moment: two party-private scheduled events deliver it next
+                // tick as a real percept (recall.remember + observeScene + the
+                // 拍流/紀事 lines — the same channel 帳房/戲園 lines ride).
+                log(`  [叩門] ${member.name} 在${world.sceneNameById(arrivalSceneId)}外叩門，${occupant ? `${world.nameById(occupant.id)}沒有開門` : '無人應門'}${doorLine ? `（隔門：${doorLine}）` : ''}`);
+                (w.scheduledEvents ??= []).push({
+                    id: `knock-refused-${member.id}-t${nowTick}`,
+                    atTick: nowTick + 1,
+                    sceneId: fromSceneId,
+                    text: `深宵你去叩了${occupant ? world.perceivedName(member.id, occupant.id) : world.sceneNameById(arrivalSceneId)}的門，門沒開${doorLine ? `，只隔門聽得一句：${doorLine}` : ''}。`,
+                    visibility: 'private',
+                    witnessIds: [member.id],
+                });
+                if (occupant) {
+                    (w.scheduledEvents ??= []).push({
+                        id: `knock-refused-${occupant.id}-t${nowTick}`,
+                        atTick: nowTick + 1,
+                        sceneId: arrivalSceneId,
+                        text: `${clockLabel}有人叩門，你聽出是${world.perceivedName(occupant.id, member.id)}，你沒有開門。`,
+                        visibility: 'private',
+                        witnessIds: [occupant.id],
+                    });
+                }
+                lastMovedTickByChar[member.id] = nowTick;
+                if (!world.sameDistrict(fromSceneId, arrivalSceneId)) restUntilByChar[member.id] = nowTick + 2;
+                continue;
+            }
+        }
+
         world.moveCharacter(member.id, arrivalSceneId);
         routed[member.id] = arrivalSceneId;
         // 一次性 領入: if the mover entered on a one-time pass, it is used up here
         // (owners / standing key-holders consume nothing). A 撞破 break-in holds no
-        // pass, so it consumes nothing either.
+        // pass, so it consumes nothing either. A just-放行'd knocker holds exactly
+        // the pass minted above — consumed right here, on this entry.
         if (world.consumeOneTime(arrivalSceneId, member.id)) {
             log(`  [門] ${member.name} 用掉一次${world.sceneNameById(arrivalSceneId)}的門路`);
         }
@@ -637,7 +727,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         // how far they ACTUALLY got (arrival vs origin district).
         lastMovedTickByChar[member.id] = nowTick;
         if (!world.sameDistrict(fromSceneId, arrivalSceneId)) restUntilByChar[member.id] = nowTick + 2;
-        log(`  move: ${member.name} ${from} → ${world.sceneNameById(arrivalSceneId)}${decision.reason ? `（${decision.reason}）` : ''}`);
+        log(`  move: ${member.name} ${from} → ${world.sceneNameById(arrivalSceneId)}${moveAnnotation}`);
     }
 
     // 2.5) TENANCY MOVE-INS — a leased room becomes home the moment its tenant

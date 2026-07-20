@@ -1,19 +1,26 @@
 /**
- * 登門修好 (reconcile-visit) — the yearning night-visit movement medium.
- * Deterministic PLUMBING tests (FakeSceneAgent, no LLM). PARALLEL to 撞破 but for
- * RECONCILIATION, not jealousy: at night a character carrying a ripe (edge+) 愛/虧欠
- * want (love / unsettled debt) aimed at someone who is HOME ALONE in a private
- * scene may go UNINVITED — skipping the 訪問權限 key gate AND capacity — so the pair
- * can form and 把話說開/了結虧欠. Gated behind world.data.reconcileVisit (default OFF).
+ * 叩門夜訪 (knock-visit) — the yearning night-knock movement medium.
+ * Deterministic PLUMBING tests (FakeSceneAgent, no LLM). Uses 撞破's TARGETING but
+ * NOT its license: at night a character carrying a ripe (edge+) 愛/虧欠 want (love /
+ * unsettled debt) aimed at someone who is HOME ALONE in a private scene may walk to
+ * that door and KNOCK (求見) — the option is emitted despite the 訪問權限 key gate
+ * barring entry, but it carries NO entry: admission is the OCCUPANT's one-time 放行
+ * (decideAdmit → grantAccess oneTime, consumed on entry), never the visitor's ardor.
+ * An absent decideAdmit seat ⇒ deterministic REFUSE — the door stays shut, the move
+ * is spent, and both sides keep the moment as party-private scheduled percepts.
+ * Gated behind world.data.reconcileVisit (default OFF).
  *
  *   1. yearningNightPursuit returns intrude:true for a ripe (edge+) 愛/虧欠 want,
  *      and NOT for a cold one (below edge it only SEEKS, welcome-gated);
  *   2. flag OFF ⇒ the home-alone private home is NOT offered (canEnter false, no
- *      visit bypass) — the two bars are byte-for-byte unchanged (backward compat);
- *   3. flag ON ⇒ the home-alone private home IS offered, marked visit:true, DESPITE
- *      the mover holding no key — and the 登門 pull surfaces in currentSituation;
- *   4. flag ON but the target is NOT alone (occupancy 2) ⇒ no visit option: the
- *      occupancy===1 gate rejects a pair (a 撞破, not a 登門).
+ *      knock emission) — the two bars are byte-for-byte unchanged (backward compat);
+ *   3. flag ON, seat ABSENT ⇒ the knock option IS offered (marked knock:true) and
+ *      choosing it REFUSES by default: no move, no access grant, refuse percepts
+ *      recorded for BOTH sides (scheduledEvents) + the 逐拍 [叩門] log line;
+ *   4. flag ON, seat ADMITS ⇒ a one-time 放行 is granted and CONSUMED on entry in
+ *      the same tick: the mover's roster becomes the home, no lingering oneTime;
+ *   5. flag ON but the target is NOT alone (occupancy 2) ⇒ no knock option: the
+ *      occupancy===1 gate rejects a pair (a 撞破 setup, not a 叩門).
  */
 
 import assert from 'node:assert/strict';
@@ -25,7 +32,7 @@ import { LocalRecall } from '../src/adapters/local/local-recall.ts';
 import { runTick } from '../src/tick.ts';
 import { WorldState, type WorldStateData } from '../src/world-state.ts';
 import { newWant, yearningNightPursuit, type Want } from '../src/core/want-core.ts';
-import type { ArchivePort } from '../src/ports.ts';
+import type { AdmitDecideInput, AdmitDecideReply, ArchivePort } from '../src/ports.ts';
 import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 
 const nullArchive: ArchivePort = { commit: async () => {} };
@@ -74,7 +81,7 @@ function makeWorld(over: Partial<WorldStateData> = {}): WorldState {
         ],
         scenes: [
             { id: 's0', name: '前廳', privacyLevel: 1 }, // public — 甲's home/work
-            { id: 's1', name: '西廂', privacyLevel: 3, capacity: 3 }, // private; 乙's home (capacity 3 so occupancy 2 is NOT capped — isolates the visit gate)
+            { id: 's1', name: '西廂', privacyLevel: 3, capacity: 3 }, // private; 乙's home (capacity 3 so occupancy 2 is NOT capped — isolates the knock gate)
             { id: 's2', name: '庭院', privacyLevel: 1 }, // a normal reachable public option
         ],
         roster: { c0: 's0', c1: 's1', c2: 's0' }, // 甲 public, 乙 home ALONE, 丙 elsewhere
@@ -85,6 +92,11 @@ function makeWorld(over: Partial<WorldStateData> = {}): WorldState {
         bonds: [],
         establishedPairs: [],
         clock: makeClock(6, 4), // 入夜 — night
+        // The 訪問權限 first-tick seeding would hand 甲 (a live-愛 suitor of the
+        // owner 乙) a oneTime 領入 pass AFTER movement — an unrelated, pre-existing
+        // seam. Mark the world as already seeded so every grant observed in these
+        // tests can come ONLY from the knock resolution (放行 or nothing).
+        accessSeeded: true,
         lastMovedTickByChar: {},
         dayAccum: { lines: [], actorIds: [], sceneIds: [], povByName: {} },
         contestedResources: [],
@@ -93,11 +105,16 @@ function makeWorld(over: Partial<WorldStateData> = {}): WorldState {
     return new WorldState({ ...base, ...over });
 }
 
-/** Records every decideMove input so the pre-move offer to a mover can be inspected. */
+/** Records every decideMove input so the pre-move offer to a mover can be
+ *  inspected — and CHOOSES a knock option whenever one is offered, so the
+ *  knock-resolution path (refuse-by-default / admit) actually exercises. Has NO
+ *  decideAdmit seat, so the tick's deterministic default (REFUSE) applies. */
 class RecordingMover extends FakeSceneAgent {
     inputs: CharacterAgentNs.MoveDecideInput[] = [];
     override async decideMove(input: CharacterAgentNs.MoveDecideInput): Promise<CharacterAgentNs.MoveDecideResult> {
         this.inputs.push(input);
+        const knock = input.options.find((option) => option.knock);
+        if (knock) return { move: true, targetSceneId: knock.sceneId, reason: '去叩乙的門' };
         return { move: false, reason: 'stay' };
     }
     optionsFor(name: string): CharacterAgentNs.MoveSceneOption[] {
@@ -105,6 +122,16 @@ class RecordingMover extends FakeSceneAgent {
     }
     situationFor(name: string): string | undefined {
         return this.inputs.find((i) => i.name === name)?.currentSituation;
+    }
+}
+
+/** RecordingMover + the occupant's 放行 seat: admits the knocker with one line
+ *  through the door (the ONLY consent path — never the visitor's desire). */
+class AdmittingMover extends RecordingMover {
+    admitInputs: AdmitDecideInput[] = [];
+    async decideAdmit(input: AdmitDecideInput): Promise<AdmitDecideReply | null> {
+        this.admitInputs.push(input);
+        return { admit: true, line: '進來吧' };
     }
 }
 
@@ -130,26 +157,68 @@ test('2) flag OFF ⇒ the home-alone private home is NOT offered (both bars unch
     const agent = new RecordingMover();
     await runTick(makeWorld(), deps(agent), { log: () => {} }); // reconcileVisit unset ⇒ falsy
     const jia = agent.optionsFor('甲');
-    assert.equal(jia.some((o) => o.visit), false, 'no visit marker anywhere with the flag off');
-    assert.equal(jia.some((o) => o.sceneId === 's1'), false, '乙的私宅 stays blocked (no key, no visit bypass)');
+    assert.equal(jia.some((o) => o.knock), false, 'no knock marker anywhere with the flag off');
+    assert.equal(jia.some((o) => o.sceneId === 's1'), false, '乙的私宅 stays blocked (no key, no knock emission)');
     assert.equal(jia.some((o) => o.sceneId === 's2'), true, 'the normal public option is still offered (bars byte-for-byte unchanged)');
 });
 
-test('3) flag ON ⇒ the home-alone private home IS offered, marked visit, despite no key', async () => {
-    const agent = new RecordingMover();
-    await runTick(makeWorld({ reconcileVisit: true }), deps(agent), { log: () => {} });
+test('3) flag ON, no decideAdmit seat ⇒ the knock is offered, chosen — and REFUSED by default', async () => {
+    const agent = new RecordingMover(); // no decideAdmit ⇒ the tick's conservative default: the door stays shut
+    const world = makeWorld({ reconcileVisit: true });
+    const logs: string[] = [];
+    await runTick(world, deps(agent), { log: (line) => logs.push(line) });
+
+    // The knock option WAS offered — marked knock, never intrude — with the pull.
     const jia = agent.optionsFor('甲');
     const home = jia.find((o) => o.sceneId === 's1');
-    assert.ok(home, '甲 is offered 乙的私宅 DESPITE holding no key (canEnter false)');
-    assert.equal(home?.visit, true, 'the offered home-alone scene is flagged as a reconcile-visit');
-    assert.equal(home?.intrude, undefined, 'a 登門 option is a visit, never a 撞破');
-    assert.match(agent.situationFor('甲') ?? '', /登門/, 'the 登門 pull surfaces in 甲的 currentSituation');
+    assert.ok(home, '甲 is offered 乙的私宅 to KNOCK on, despite holding no key (canEnter false)');
+    assert.equal(home?.knock, true, 'the offered home-alone scene is flagged as a knock');
+    assert.equal(home?.intrude, undefined, 'a 叩門 option is a knock, never a 撞破');
+    assert.match(agent.situationFor('甲') ?? '', /叩門/, 'the 叩門 pull surfaces in 甲的 currentSituation');
+
+    // Chosen — but the occupant never opened: no move, no grant of any kind.
+    assert.equal(world.data.roster.c0, 's0', '甲 stays where she was — refused at the door, the roster never changes');
+    assert.equal(world.canEnter('c0', 's1'), false, 'no access of any kind was granted to the refused knocker');
+    assert.equal(world.keysHeldBy('c0').length, 0, 'no oneTime/standing key appeared for 甲');
+
+    // BOTH sides keep the moment: party-private scheduled percepts + the 逐拍 log.
+    const scheduled = world.data.scheduledEvents ?? [];
+    const moverSide = scheduled.find((s) => s.witnessIds.length === 1 && s.witnessIds[0] === 'c0');
+    const occupantSide = scheduled.find((s) => s.witnessIds.length === 1 && s.witnessIds[0] === 'c1');
+    assert.ok(moverSide, 'the knocker gets a private percept of the shut door');
+    assert.match(moverSide!.text, /叩了/, 'the mover-side line records the knock');
+    assert.match(moverSide!.text, /門沒開/, 'the mover-side line records the refusal');
+    assert.ok(occupantSide, 'the occupant gets a private percept of the knock they did not answer');
+    assert.match(occupantSide!.text, /你沒有開門/, 'the occupant-side line records their own refusal');
+    assert.equal(moverSide!.visibility, 'private', 'the refusal is party-private, never public canon');
+    assert.ok(logs.some((line) => line.includes('叩門') && line.includes('沒有開門')), 'the 逐拍紀事 carries the [叩門] refusal line');
 });
 
-test('4) flag ON but the target is NOT alone (occupancy 2) ⇒ no visit option', async () => {
+test('4) flag ON, the occupant ADMITS ⇒ one-time 放行 granted AND consumed on entry', async () => {
+    const agent = new AdmittingMover();
+    const world = makeWorld({ reconcileVisit: true });
+    const logs: string[] = [];
+    await runTick(world, deps(agent), { log: (line) => logs.push(line) });
+
+    // The occupant (乙) — not the knocker — was asked, with the knocker as 乙 knows them.
+    assert.equal(agent.admitInputs.length, 1, 'exactly one knock reached the occupant');
+    assert.equal(agent.admitInputs[0].occupantName, '乙', 'the OCCUPANT decides — consent lives behind the door');
+    assert.equal(agent.admitInputs[0].knockerName, '甲', 'the occupant hears the knocker as they know them');
+
+    // Admitted ⇒ the move committed through the normal path.
+    assert.equal(world.data.roster.c0, 's1', '放行 ⇒ 甲 enters 乙的西廂');
+    assert.ok(logs.some((line) => line.includes('放行')), 'the move: line records 叩門/放行 in the 逐拍紀事');
+
+    // The one-time pass was granted AND consumed on entry — nothing lingers.
+    assert.equal(world.keysHeldBy('c0').length, 0, 'no lingering oneTime for s1 — granted then consumed on this entry');
+    assert.equal(world.canEnter('c0', 's1'), false, 'the pass is spent: 甲 could not walk in again tomorrow');
+    assert.ok(logs.some((line) => line.includes('用掉一次')), 'the [門] line proves consumeOneTime fired exactly on entry');
+});
+
+test('5) flag ON but the target is NOT alone (occupancy 2) ⇒ no knock option', async () => {
     // 丙 joins 乙 in the private 西廂 → occupancy 2. capacity 3 leaves the capacity bar
-    // OPEN, so any offer of s1 could only come from the visit bypass — which the
-    // occupancy===1 gate must refuse (a pair is a 撞破 setup, not a 登門).
+    // OPEN, so any offer of s1 could only come from the knock emission — which the
+    // occupancy===1 gate must refuse (a pair is a 撞破 setup, not a 叩門).
     const agent = new RecordingMover();
     await runTick(
         makeWorld({ reconcileVisit: true, roster: { c0: 's0', c1: 's1', c2: 's1' } }),
@@ -157,6 +226,6 @@ test('4) flag ON but the target is NOT alone (occupancy 2) ⇒ no visit option',
         { log: () => {} },
     );
     const jia = agent.optionsFor('甲');
-    assert.equal(jia.some((o) => o.visit), false, 'a target who is NOT home alone is no 登門');
+    assert.equal(jia.some((o) => o.knock), false, 'a target who is NOT home alone is no 叩門');
     assert.equal(jia.some((o) => o.sceneId === 's1'), false, 'the occupied private home stays blocked (no key, occupancy≠1)');
 });

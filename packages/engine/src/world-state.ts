@@ -408,10 +408,12 @@ export interface WorldStateData {
      *  a play). Off by default — like relationshipFallback, the wiring lives in
      *  the world so resume keeps it, and it's validated before any default-on. */
     emergentProduction?: boolean;
-    /** 登門修好 flag: when on, a ripe 愛/虧欠 want may seek its target home-alone at
-     *  night, uninvited — a reconcile-visit that bypasses capacity + the key gate
-     *  (mirrors 撞破, but for reconciliation not jealousy). Off by default; the
-     *  wiring lives in the world so resume keeps it. */
+    /** 叩門夜訪 flag: when on, a ripe 愛/虧欠 want may walk to its target's door at
+     *  night — the target home ALONE in a private scene — and KNOCK (求見). No
+     *  bypass: entry is the OCCUPANT's one-time 放行 (decideAdmit → grantAccess
+     *  oneTime, consumed on entry), never the visitor's ardor; a shut door is also
+     *  an answer. Off by default; the wiring lives in the world so resume keeps
+     *  it. (Key name kept from the earlier 登門修好 iteration for manifest compat.) */
     reconcileVisit?: boolean;
     /** The single in-progress (or premiered) production, when the flag is on.
      *  Persisted with the world so snapshot/restore carries the accumulator. */

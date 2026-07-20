@@ -62,15 +62,16 @@ export interface MoveSceneOption {
     intrude?: boolean;
     /** Optional one-line reason carried by an intrude option, shown in the prompt. */
     intrudeNote?: string;
-    /** 登門修好 (reconcile-visit): this private home holds the mover's beloved /
-     *  someone they owe, HOME ALONE — offered DESPITE the mover holding no key and
-     *  the room being about to go over capacity. Choosing it is calling uninvited to
-     *  make peace (明知冒昧，也想登門把話說開、了結虧欠); the mover still decides (restraint
-     *  is valid). Engine-set only when a ripe 愛/虧欠 want's target is home alone in a
-     *  private scene and the reconcileVisit flag is on. Never both intrude and visit. */
-    visit?: boolean;
-    /** Optional one-line reason carried by a visit option, shown in the prompt. */
-    visitNote?: string;
+    /** 叩門 (knock-visit): this private home holds the mover's beloved / someone
+     *  they owe, HOME ALONE — and the mover holds NO key. Choosing it does NOT
+     *  enter: the mover walks up and KNOCKS (求見), and whether the door opens is
+     *  the OCCUPANT's one-time 放行 — never the visitor's ardor; a shut door is
+     *  also an answer. Engine-set only when a ripe 愛/虧欠 want's target is home
+     *  alone in a private scene and the reconcileVisit flag is on. Never both
+     *  intrude and knock. */
+    knock?: boolean;
+    /** Optional one-line reason carried by a knock option, shown in the prompt. */
+    knockNote?: string;
 }
 
 /** A live longing the mover carries — the ache that MIGHT move their feet at
@@ -195,12 +196,13 @@ export function buildUserPrompt(input: MoveDecideInput): string {
             const intrudeMark = o.intrude
                 ? `〔妒火·撞破：${o.intrudeNote ?? '那處掩門私會、你並未受邀，妒火中燒也要闖進去'}〕`
                 : '';
-            // 登門: mark a home-alone scene so the choice reads as calling uninvited
-            // to make peace (an option is never both intrude and visit).
-            const visitMark = o.visit
-                ? `〔情牽·登門：${o.visitNote ?? '你心裡放不下那人，明知冒昧，仍想登門把話說開'}〕`
+            // 叩門: mark a knockable home-alone scene — choosing it means walking up
+            // to knock (求見), not entering; the occupant decides (放行, or a shut
+            // door — which is also an answer). Never both intrude and knock.
+            const knockMark = o.knock
+                ? `〔叩門：${o.knockNote ?? '這扇門你進不得——可上前叩門求見，開不開由屋裡人；吃了閉門羹也是一種回答'}〕`
                 : '';
-            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${far}${intrudeMark}${visitMark}${privacy}(${who})${desc}`;
+            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${far}${intrudeMark}${knockMark}${privacy}(${who})${desc}`;
         })
         .join('\n');
     const heart =
