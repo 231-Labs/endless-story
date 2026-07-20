@@ -128,6 +128,10 @@ export interface RelationshipEdge {
     weight: number;
 }
 
+/** 訪問權限 key kind: a 半永久 standing key (self-let-in) vs a 一次性 one-time pass
+ *  (led in once, consumed on entry). */
+export type AccessGrantKind = 'standing' | 'oneTime';
+
 export interface ContestedResource {
     label: string;
     statement?: string;
@@ -295,6 +299,15 @@ export interface WorldStateData {
      *  established night pair opens the intimacy register directly. Optional &
      *  backward-compatible (absent ⇒ nobody established yet). */
     establishedPairs?: string[];
+    /** 訪問權限 — the space access-grant table: per PRIVATE scene (privacyLevel ≥ 3
+     *  with an owner), the guests who hold a key. `standing` = 半永久 key-holders
+     *  (old lovers, the 師姐, the 金主 — let themselves in), `oneTime` = 一次性
+     *  pass-holders (a tentative suitor / a summoned guest — led in ONCE, the pass
+     *  consumed on entry). Keyed by sceneId. Optional & backward-compatible: an
+     *  absent table is lazily seeded from the warmth gate + canon 相許 (§2.96), so a
+     *  world predating this layer behaves the same on day 1; a public world has no
+     *  entry at all. Carried verbatim by snapshot/restore (plain JSON). */
+    accessGrants?: Record<string, { standing: string[]; oneTime: string[] }>;
     /** 願牆 — the spoken prayers characters have voiced at a temple (神明 前),
      *  newest appended last. Distinct from `wants` (the internal 心事 on the
      *  願榜): a Prayer is 對神明說出口的話. Optional & backward-compatible — a world
@@ -589,6 +602,93 @@ export class WorldState {
         const key = this.pairKey(a, b);
         const set = (this.data.establishedPairs ??= []);
         if (!set.includes(key)) set.push(key);
+    }
+
+    // ── 訪問權限 (space access grants) ──────────────────────────────────────────
+    /** The OWNERS of a scene: characters whose home (`homeByChar`) is this scene
+     *  AND the scene is a private space (privacyLevel ≥ 3). A scene with no such
+     *  owner OR a privacyLevel < 3 is PUBLIC (empty list ⇒ free to enter). */
+    ownersOf(sceneId: string): string[] {
+        const scene = this.sceneById(sceneId);
+        if (!scene || scene.privacyLevel < 3) return [];
+        return Object.entries(this.data.homeByChar)
+            .filter(([, home]) => home === sceneId)
+            .map(([id]) => id);
+    }
+
+    /** May `charId` enter `sceneId`? PUBLIC (no owner / privacyLevel < 3) ⇒ true;
+     *  an OWNER ⇒ true; a standing OR one-time key-holder ⇒ true; else false. Does
+     *  NOT consume a one-time pass — that is `consumeOneTime`, called on real entry. */
+    canEnter(charId: string, sceneId: string): boolean {
+        const owners = this.ownersOf(sceneId);
+        if (owners.length === 0) return true; // public / unowned
+        if (owners.includes(charId)) return true; // owner
+        const rec = this.data.accessGrants?.[sceneId];
+        if (!rec) return false;
+        return rec.standing.includes(charId) || rec.oneTime.includes(charId);
+    }
+
+    /** 授權 — grant `guestId` a key to `sceneId` (idempotent). Never grants to an
+     *  owner/self or a public scene (no-op). Granting `standing` drops any redundant
+     *  `oneTime` (a permanent key supersedes a single pass); granting `oneTime` when
+     *  the guest already holds standing is a no-op (canEnter already admits them). */
+    grantAccess(sceneId: string, guestId: string, kind: AccessGrantKind): void {
+        const owners = this.ownersOf(sceneId);
+        if (owners.length === 0 || owners.includes(guestId)) return; // public or self/owner
+        const table = (this.data.accessGrants ??= {});
+        const rec = (table[sceneId] ??= { standing: [], oneTime: [] });
+        if (kind === 'standing') {
+            if (!rec.standing.includes(guestId)) rec.standing.push(guestId);
+            rec.oneTime = rec.oneTime.filter((id) => id !== guestId); // standing supersedes a pass
+        } else {
+            if (rec.standing.includes(guestId)) return; // already a permanent key-holder
+            if (!rec.oneTime.includes(guestId)) rec.oneTime.push(guestId);
+        }
+    }
+
+    /** 撤銷／換鎖 — revoke `guestId`'s key to `sceneId`, dropping it from BOTH sets. */
+    revokeAccess(sceneId: string, guestId: string): void {
+        const rec = this.data.accessGrants?.[sceneId];
+        if (!rec) return;
+        rec.standing = rec.standing.filter((id) => id !== guestId);
+        rec.oneTime = rec.oneTime.filter((id) => id !== guestId);
+    }
+
+    /** Consume `guestId`'s ONE-TIME pass to `sceneId` on entry: if they held a
+     *  one-time pass (and are not an owner / standing key-holder), remove it and
+     *  return true (the pass was used up). Owners and standing holders consume
+     *  nothing (return false) — their access is durable. */
+    consumeOneTime(sceneId: string, guestId: string): boolean {
+        const rec = this.data.accessGrants?.[sceneId];
+        if (!rec) return false;
+        if (this.ownersOf(sceneId).includes(guestId)) return false; // owner — durable
+        if (rec.standing.includes(guestId)) return false; // standing — durable
+        if (!rec.oneTime.includes(guestId)) return false; // held no pass
+        rec.oneTime = rec.oneTime.filter((id) => id !== guestId);
+        return true;
+    }
+
+    /** The private scenes `charId` may enter as a GUEST (holds a key, not owner),
+     *  each tagged with the kind of key. UI read helper (內頁 持鑰). */
+    keysHeldBy(charId: string): Array<{ sceneId: string; kind: AccessGrantKind }> {
+        const out: Array<{ sceneId: string; kind: AccessGrantKind }> = [];
+        for (const [sceneId, rec] of Object.entries(this.data.accessGrants ?? {})) {
+            if (this.ownersOf(sceneId).includes(charId)) continue; // an owner is not a guest key-holder
+            if (rec.standing.includes(charId)) out.push({ sceneId, kind: 'standing' });
+            else if (rec.oneTime.includes(charId)) out.push({ sceneId, kind: 'oneTime' });
+        }
+        return out;
+    }
+
+    /** Who holds a key to `sceneId`, each tagged standing/oneTime (standing wins
+     *  when both are somehow present). UI read helper (內頁 持鑰). */
+    keyHoldersOf(sceneId: string): Array<{ charId: string; kind: AccessGrantKind }> {
+        const rec = this.data.accessGrants?.[sceneId];
+        if (!rec) return [];
+        const out: Array<{ charId: string; kind: AccessGrantKind }> = [];
+        for (const id of rec.standing) out.push({ charId: id, kind: 'standing' });
+        for (const id of rec.oneTime) if (!rec.standing.includes(id)) out.push({ charId: id, kind: 'oneTime' });
+        return out;
     }
     // ── 願牆 (spoken prayers at a temple) ──────────────────────────────────────
     /** Record one spoken prayer onto the 願牆 (append-only; lazily created). */
