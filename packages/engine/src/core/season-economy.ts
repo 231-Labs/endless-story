@@ -49,6 +49,7 @@ import {
     type PersistedEconomyState,
 } from '@endless-story/economy';
 import { PARTS_OF_DAY } from '../ports.ts';
+import { STAGE_KINDS } from './skills.ts';
 import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 import type { WorldState } from '../world-state.ts';
 
@@ -139,6 +140,11 @@ export interface SeasonEconomyData {
          *  actually on the boards, credited to their OWN accounts; the remainder
          *  goes to 班庫. 0/absent ⇒ all to the troupe (today's behaviour). */
         castShareBps?: number;
+        /** 名角滿座 — when true, the STAGE CRAFT (唱/身) of the performers on the
+         *  boards lifts the house (`performerSkillBoostPct`, capped at
+         *  SKILL_HOUSE_CAP). Absent/false ⇒ the house ignores talent, byte-
+         *  identical to before this hang point existed (backward-compat). */
+        performerBoost?: boolean;
     };
     /** contractId → the proposer's authored answer policy for counter-demands.
      *  The replaceable seam: swap for a live counterparty agent later. */
@@ -906,11 +912,47 @@ export function bankRehearsalAttendance(world: WorldState, partIndex: number): v
     }
 }
 
+/** SKILL_HOUSE_CAP — the ceiling on how much fuller a night's house can play
+ *  for on-stage talent (名角滿座). At most +40%, so a troupe of masters can't
+ *  swell the house without bound: takings stay bounded and conservation holds
+ *  by construction (the takings still enter as external-in, same as always). */
+export const SKILL_HOUSE_CAP = 40;
+
+/**
+ * 名角滿座 — the third box-office hang point. How much fuller tonight's house
+ * plays for the STAGE CRAFT (唱/身) of the performers actually on the boards,
+ * as a conservation-safe pct the settle folds into the house draw exactly like
+ * the object boosts. Each PRESENT performer contributes their BEST stage-skill
+ * level (max over skills whose `kind ∈ STAGE_KINDS`; missing `level` = 0; a
+ * performer with no stage skill contributes 0); the sum across performers is
+ * capped at SKILL_HOUSE_CAP so a full troupe of 名角 lifts — but never mints —
+ * the house. Pure + deterministic: skills are static authored data, so the
+ * settle stays replayable. NUMBERS live only in the ledger math here — never a
+ * prompt. Returns 0 when no present performer carries a stage skill, so a
+ * skill-less cast settles byte-for-byte as before (full backward-compat).
+ */
+export function performerSkillBoostPct(world: WorldState, presentMemberIds: string[]): number {
+    let total = 0;
+    for (const id of presentMemberIds) {
+        const skills = world.castById(id)?.skills;
+        if (!skills?.length) continue;
+        let best = 0;
+        for (const skill of skills) {
+            if (!(STAGE_KINDS as readonly string[]).includes(skill.kind)) continue;
+            const level = skill.level ?? 0;
+            if (level > best) best = level;
+        }
+        total += best;
+    }
+    return Math.min(total, SKILL_HOUSE_CAP);
+}
+
 /**
  * 黃昏開鑼。Attendance decides the evening deterministically: no lead on the
  * boards or too few hands → 停鑼, zero income; otherwise the house pays by
- * what it sees (leads, rehearsal, mended instruments), and the box office is
- * REAL money entering the treasury. Idempotent per day via the txn id.
+ * what it sees (leads, rehearsal, mended instruments, the 名角 on the boards),
+ * and the box office is REAL money entering the treasury. Idempotent per day
+ * via the txn id.
  */
 export function settleEveningPerformance(
     world: WorldState,
@@ -941,6 +983,14 @@ export function settleEveningPerformance(
         if (!object || object.visibility === 'destroyed') continue;
         if (boost.stateIncludes && !(object.state ?? '').includes(boost.stateIncludes)) continue;
         pct += BigInt(boost.pct);
+    }
+    // 名角滿座 — the stage craft of the performers on the boards lifts the house,
+    // a conservation-safe pct exactly like the object boosts above. Opt-in per
+    // frame (like castShareBps): off ⇒ 0, so existing seasons settle byte-for-
+    // byte as before; on ⇒ 0 anyway for a skill-less cast. Only the performers
+    // actually on the boards tonight count — an absent 名角 draws no house.
+    if (perf.performerBoost) {
+        pct += BigInt(performerSkillBoostPct(world, present.map((member) => member.id)));
     }
     const takings = (BigInt(perf.fullHouseSubunits) * pct) / 100n;
     const causeEventId = `${world.data.sagaId}:boxoffice:d${req.day}`;
@@ -1390,6 +1440,11 @@ export interface SeasonEconomyFrame {
          *  (a lead counts double), credited to their own accounts. Absent/0 ⇒
          *  all takings to 班庫, the box office's original behaviour. */
         castShareBps?: number;
+        /** 名角滿座 — when true, the on-stage performers' stage craft (唱/身) lifts
+         *  the night's house (capped at SKILL_HOUSE_CAP). Absent/false ⇒ talent
+         *  draws no extra house, byte-identical to the box office's original
+         *  behaviour (a skill-less cast is unaffected either way). */
+        performerBoost?: boolean;
     };
     /** other economic establishments — a film co, newspaper, record label, song
      *  house. Each is a first-class pot with its own reserves, fixed cost, and
@@ -1564,6 +1619,8 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
                     ...(frame.performance.boosts ? { boosts: frame.performance.boosts.map((boost) => ({ ...boost })) } : {}),
                     // only persist the key when a share is actually configured — keeps the JSON clean.
                     ...(frame.performance.castShareBps ? { castShareBps: frame.performance.castShareBps } : {}),
+                    // 名角滿座 opt-in — persisted only when the frame turns it on.
+                    ...(frame.performance.performerBoost ? { performerBoost: true } : {}),
                     rehearsedToday: [],
                 },
             }
