@@ -92,7 +92,7 @@ test('foodScenesOf: the shipped anchun fixture (no sceneName meal) yields an emp
     assert.equal(foodScenesOf(buildSeasonWorld()).size, 0);
 });
 
-test('hunger pull: a hungry, solvent character away from the food spot is pulled to eat first', async () => {
+test('hunger line: a hungry, solvent character away from the food spot gets a NEUTRAL, demoted hunger stake', async () => {
     const world = stageFoodWorld();
     world.data.clock = makeClock(6, 1); // day 1 日午 — daytime, no day-start rehearsal call
     const liu = world.idByName('柳安春')!;  // works at 雲錦台戲台 — a different district from the stall
@@ -106,24 +106,27 @@ test('hunger pull: a hungry, solvent character away from the food spot is pulled
     const agent = new RhythmCaptureAgent();
     await runTick(world, deps(agent), { log: () => {} });
 
-    // hungry + solvent + away → the strongest pull names the stall, the meal, its
-    // price, and frames it as eat-first.
+    // hungry + solvent + away → the brief carries ONE neutral hunger line naming the
+    // stall, the meal and its price — no longer a forced-first pull. The old
+    // 『空著肚子做不了活…旁的事等吃過再說』framing is gone (guards the demotion).
     const liuHint = agent.rhythmByName.get('柳安春');
     assert.ok(liuHint, '柳安春 got a rhythm hint');
-    assert.match(liuHint!, /戲園前街/, 'the hunger pull names the food scene');
-    assert.match(liuHint!, /餛飩/, 'the hunger pull names the meal');
-    assert.match(liuHint!, /3 圓/, 'the hunger pull names the price');
-    assert.match(liuHint!, /墊墊肚子|趁早去吃/, 'the hunger pull frames eating as first');
+    assert.match(liuHint!, /戲園前街/, 'the hunger line names the food scene');
+    assert.match(liuHint!, /餛飩/, 'the hunger line names the meal');
+    assert.match(liuHint!, /3 圓/, 'the hunger line names the price');
+    assert.match(liuHint!, /墊墊/, 'the hunger line is a neutral 墊墊 stake');
+    assert.doesNotMatch(liuHint!, /旁的事等吃過再說/, 'hunger is no longer forced first (demotion guard)');
+    assert.doesNotMatch(liuHint!, /空著肚子做不了活/, 'the old eat-first framing is gone');
 
-    // a well-fed character gets no food pull.
+    // a well-fed character gets no food line.
     const suHint = agent.rhythmByName.get('蘇映雪');
     assert.ok(suHint !== undefined, '蘇映雪 got a rhythm hint');
-    assert.doesNotMatch(suHint!, /墊墊肚子/, 'a well-fed character is not pulled to eat');
+    assert.doesNotMatch(suHint!, /墊墊/, 'a well-fed character is not offered a meal');
 
-    // a broke hungry character gets no food pull (can't afford it).
+    // a broke hungry character gets no food line (can't afford it).
     const shenHint = agent.rhythmByName.get('沈雪笙');
     assert.ok(shenHint !== undefined, '沈雪笙 got a rhythm hint');
-    assert.doesNotMatch(shenHint!, /墊墊肚子/, 'a character who cannot afford the meal is not pulled to it');
+    assert.doesNotMatch(shenHint!, /墊墊/, 'a character who cannot afford the meal is not offered one');
 });
 
 test('順路而食: a hungry, solvent character at the food scene eats deterministically, once per day', async () => {
@@ -172,9 +175,9 @@ test('backward compat: the shipped anchun frame drives no hunger pull and no aut
     const agent = new RhythmCaptureAgent();
     await runTick(world, deps(agent), { log: () => {} });
 
-    // no sceneName'd meal ⇒ empty food map ⇒ nobody is pulled to eat and nobody auto-eats.
+    // no sceneName'd meal ⇒ empty food map ⇒ nobody is offered a meal and nobody auto-eats.
     for (const hint of agent.rhythmByName.values()) {
-        if (hint) assert.doesNotMatch(hint, /墊墊肚子/, 'no food pull without a location-anchored meal');
+        if (hint) assert.doesNotMatch(hint, /墊墊/, 'no food line without a location-anchored meal');
     }
     assert.equal(BigInt(world.data.economy!.state.accounts[axi]!.available), before, 'no auto-eat without a food scene');
     assert.ok(!world.data.dayAccum.lines.some((l) => l.startsWith('[食]')), 'no [食] line without a food scene');

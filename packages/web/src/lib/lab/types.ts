@@ -113,6 +113,12 @@ export interface LabCharacterLive {
     secret?: string;
     /** STANDING objective (N6 planDay) — 長期目標／眼下打算. Real (LLM) runs only. */
     plan?: string;
+    /** 口碑・名頭 — PUBLIC renown (the street-verdict on this person's standing), 0..1.
+     *  Present only when the world seeded renown; the 內頁 renders a compact 名頭 line. */
+    renown?: number;
+    /** 自視 — PRIVATE self-regard (how they rate their OWN standing), 0..1. May DIVERGE
+     *  from `renown` (當紅卻怕不夠好). Shown subtler than 名頭, as an inner note. */
+    selfRegard?: number;
     /**
      * 羈絆 — this character's directed bonds toward every significant other. The
      * UNION of `relationshipView` (the narrative 「我看TA」 line, latest-wins) and

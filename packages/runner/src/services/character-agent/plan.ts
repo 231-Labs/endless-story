@@ -37,6 +37,10 @@ export interface PlanInput {
      *  they plan; hidden by default, but planning to one day say it out loud is
      *  a legitimate goal (§2.43: never script it). Omit = no injection. */
     innerSecret?: string;
+    /** 營生・口碑 framing: a role-rhythm + reputation stake so the plan orients toward
+     *  the character's craft and standing (登台是本分、名頭一場場攢), not just 去吃糖粥.
+     *  A soft backdrop like `situation`; never scripts the plan. Omit = no injection. */
+    livelihoodFraming?: string;
 }
 
 export interface PlanResult {
@@ -98,6 +102,12 @@ export function buildUserPrompt(input: PlanInput): string {
         ? '\n## 心底藏著、外人不知的事（只有你自己知道；讓它悄悄牽動你的盤算。平日它藏著，但要不要有朝一日把它說開，是你自己可以打的主意）\n' +
           input.innerSecret
         : '';
+    // 營生・口碑: a role-rhythm + reputation backdrop so plans orient toward the
+    // character's craft and standing, not just 去吃糖粥. Soft context, never a script.
+    const livelihoodBlock = input.livelihoodFraming
+        ? '\n## 你的營生與名頭（你這一行怎麼過日子、名聲怎麼攢——盤算時放在心上，但怎麼走仍是你自己的事）\n' +
+          input.livelihoodFraming
+        : '';
     return [
         `# 你是誰`,
         `- 姓名:${input.name}`,
@@ -106,6 +116,7 @@ export function buildUserPrompt(input: PlanInput): string {
         `- 所屬:${input.sagaName}`,
         `- 此刻:${input.dayLabel}`,
         situationBlock,
+        livelihoodBlock,
         relBlock,
         memBlock,
         planBlock,

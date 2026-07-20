@@ -224,5 +224,19 @@
       { "part": "日午", "sceneName": "戲園前街", "duty": true, "note": "擺擔、應客" },
       { "part": "晡時", "sceneName": "戲園前街", "duty": true }
     ]
+  },
+  "renown": {
+    "柳安春": { "renown": 0.8, "self": 0.55 },
+    "蘇映雪": { "renown": 0.75, "self": 0.6 },
+    "沈雪笙": { "renown": 0.7, "self": 0.75 },
+    "江聞鶴": { "renown": 0.4, "self": 0.4 },
+    "連翹": { "renown": 0.35, "self": 0.6 },
+    "金鳳": { "renown": 0.6, "self": 0.6 },
+    "白韻秋": { "renown": 0.65, "self": 0.6 },
+    "方競西": { "renown": 0.5, "self": 0.45 },
+    "何阿喜": { "renown": 0.35, "self": 0.55 },
+    "唐桂蘭": { "renown": 0.3, "self": 0.6 },
+    "殷阿婆": { "renown": 0.3, "self": 0.65 },
+    "趙阿福": { "renown": 0.3, "self": 0.6 }
   }
 }

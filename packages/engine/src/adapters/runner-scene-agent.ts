@@ -601,6 +601,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
             situation: input.situation,
             relationshipPressure: input.relationshipPressure,
             innerSecret: input.innerSecret,
+            livelihoodFraming: input.livelihoodFraming,
         });
         return { planText: result.planText };
     }

@@ -14,6 +14,7 @@ import type { RecallPort } from './ports.ts';
 import { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
 import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-economy.ts';
 import { seedHousing } from './core/housing.ts';
+import { seedRenown } from './core/renown.ts';
 import { makeClock } from './adapters/local/clock.ts';
 import {
     WorldState,
@@ -110,6 +111,13 @@ export interface SeasonFrame {
      * seeded, NOT inside `applySeasonFrame`, so a world built directly from a frame
      * (engine tests) stays flag-off / byte-identical. Absent ⇒ off. */
     subjectiveNaming?: boolean;
+    /** 口碑 — per-character seed of PUBLIC 名頭 (renown) + PRIVATE 自視 (self-regard),
+     * keyed by character name. Each value is 0..1; `self` may DIVERGE from `renown`
+     * (當紅卻怕不夠好). A name absent here takes a ROLE-based default (see
+     * `core/renown.ts`); seeded idempotently by `applySeasonFrame` (only sets what is
+     * still undefined, so a resumed world keeps its earned values). Optional &
+     * backward-compatible. */
+    renown?: Record<string, { renown?: number; self?: number }>;
 }
 
 export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
@@ -231,6 +239,12 @@ export function applySeasonFrame(world: WorldState, frame: SeasonFrame): void {
             if (duties.length) member.duties = duties;
         }
     }
+
+    // 口碑: seed each member's PUBLIC 名頭 + PRIVATE 自視 from the frame's optional
+    // name-keyed table (else a role default). Idempotent per field — a resumed world
+    // keeps values already earned on the box office. renown is NOT money; this
+    // touches no ledger and leaves `auditSeasonEconomy` untouched.
+    seedRenown(world, frame.renown);
 }
 
 function appendMissingSeasonObjects(world: WorldState, frame: SeasonFrame, tolerateExisting: boolean): number {
