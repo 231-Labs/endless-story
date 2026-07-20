@@ -112,6 +112,7 @@
         "costNote": "炭火、進貨與攤捐",
         "shortfallCreditor": "碼頭花行與米行",
         "stance": "前街食肆薄利，靠的是人氣同回頭客；賒給春雪社的帳寧可慢慢收，也不當眾撕破臉——戲班紅火了，這一條街才有生意。",
+        "allowsTab": true,
         "wages": [
           { "name": "殷阿婆", "amountYuan": 2 },
           { "name": "趙阿福", "amountYuan": 2 }

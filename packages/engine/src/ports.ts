@@ -50,6 +50,11 @@ export type AidManner = Runner.characterAgent.AidManner;
 // the engine only feeds it real state and reads the verdict.
 export type AdmitDecideInput = Runner.characterAgent.AdmitDecideInput;
 export type AdmitDecideReply = Runner.characterAgent.AdmitDecideReply;
+// 告借/應借 (decideLend): 借錢是兩造的事——錢動之前，出借的人先點頭；婉拒也是
+// 一句回答。The judgment is the capability's (runner lend.ts); the engine only
+// feeds it real state and commits the verdict (transfer + 欠條 bill on a yes).
+export type LendDecideInput = Runner.characterAgent.LendDecideInput;
+export type LendDecideReply = Runner.characterAgent.LendDecideReply;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -327,6 +332,15 @@ export interface SceneAgentPort extends SceneAgent {
      *  DEFAULT — deterministic, conservative — is to REFUSE (null reply refuses
      *  just the same: never an entry the occupant didn't grant). */
     decideAdmit?(input: AdmitDecideInput): Promise<AdmitDecideReply | null>;
+    /** 告借/應借 (optional): a co-present cast member is ASKED for a personal
+     *  loan (a beat's `borrow` command) — 借錢是兩造的事：錢動之前，出借的人先
+     *  點頭；婉拒也是一句回答，不是違規。The lender weighs their own purse, the
+     *  tie toward the asker, the stated 緣故 and any 舊帳 standing, then answers
+     *  lend / refuse plus one line. Real adapters implement it (one cheap LLM
+     *  call, fail-safe to null); the fake OMITS it, so the tick's DEFAULT —
+     *  deterministic, conservative — is to REFUSE (a null reply refuses just
+     *  the same: never a loan the lender didn't grant). */
+    decideLend?(input: LendDecideInput): Promise<LendDecideReply | null>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;

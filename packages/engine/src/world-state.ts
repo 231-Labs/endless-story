@@ -415,6 +415,12 @@ export interface WorldStateData {
      *  an answer. Off by default; the wiring lives in the world so resume keeps
      *  it. (Key name kept from the earlier 登門修好 iteration for manifest compat.) */
     reconcileVisit?: boolean;
+    /** 借賒有據 flag: when on, the credit verbs are live — 同場可開口告借
+     *  （borrow：錢動之前出借的人先點頭 via decideLend，婉拒也是一句回答）、
+     *  repay 還帳沖銷欠條、允賒的食擔可賒帳（記成真 bill 帳期，到期照例催討）；
+     *  欠條過期自會生怨（settle spawns 虧欠/催討 wants）。Off by default; the
+     *  wiring lives in the world so resume keeps it. */
+    creditVerbs?: boolean;
     /** The single in-progress (or premiered) production, when the flag is on.
      *  Persisted with the world so snapshot/restore carries the accumulator. */
     production?: Production;

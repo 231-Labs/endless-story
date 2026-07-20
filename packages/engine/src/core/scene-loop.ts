@@ -80,6 +80,11 @@ export interface SceneLoopCastMember {
     /** Pre-scoped season money ledger (own purse / authorized treasury view /
      *  contract terms / purchasable items here); refreshed by beforeBeat. */
     economyLine?: string;
+    /** 借賒有據 (creditVerbs): which credit verbs the beat prompt should 亮牌 for
+     *  this actor here (`borrow` needs a co-present cast member, `repay` an open
+     *  欠條 to one). Refreshed by beforeBeat; undefined ⇒ flag off, prompt
+     *  byte-identical. */
+    credit?: { borrow?: boolean; repay?: boolean };
 }
 
 export interface SceneLoopInput {
@@ -340,6 +345,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             standingPlan: actor.standingPlan,
             styleHint: actor.styleHint,
             economyLine: actor.economyLine,
+            credit: actor.credit,
             etiquette: input.etiquette,
             timeCharter: input.timeCharter,
             consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
@@ -356,6 +362,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 beatInput.sceneHint = actor.sceneHint ?? input.sceneHint;
                 beatInput.objects = actor.objects;
                 beatInput.economyLine = actor.economyLine;
+                beatInput.credit = actor.credit;
             }
             r = attempt > 0 && agent.replanBeat
                 ? await agent.replanBeat(beatInput)
