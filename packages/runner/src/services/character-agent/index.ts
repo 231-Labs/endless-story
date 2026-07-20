@@ -42,6 +42,12 @@ export {
     buildSystemPrompt as buildAdmitSystemPrompt,
     buildUserPrompt as buildAdmitUserPrompt,
 } from './admit.js';
+export { decideLend, parseLendReply } from './lend.js';
+export type { LendDecideInput, LendDecideReply } from './lend.js';
+export {
+    buildSystemPrompt as buildLendSystemPrompt,
+    buildUserPrompt as buildLendUserPrompt,
+} from './lend.js';
 export { speakPrayer } from './speak-prayer.js';
 export type { SpeakPrayerInput } from './speak-prayer.js';
 export {

@@ -37,6 +37,7 @@ export default function LabHomePage() {
         relationshipFallback: true,
         emergentProduction: false,
         reconcileVisit: false,
+        creditVerbs: false,
         ticksPerDay: 6,
     });
 
@@ -81,6 +82,7 @@ export default function LabHomePage() {
                     relationshipFallback: form.relationshipFallback,
                     emergentProduction: form.emergentProduction,
                     reconcileVisit: form.reconcileVisit,
+                    creditVerbs: form.creditVerbs,
                     ticksPerDay: form.ticksPerDay,
                 },
             });
@@ -295,6 +297,17 @@ export default function LabHomePage() {
                             onChange={(e) => setForm({ ...form, reconcileVisit: e.target.checked })}
                         />
                         叩門夜訪
+                    </label>
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="借賒有據：同場可開口告借（對方定奪）、食擔可賒帳記入真帳；欠條到期未清自會生怨（實驗，預設關）"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={form.creditVerbs}
+                            onChange={(e) => setForm({ ...form, creditVerbs: e.target.checked })}
+                        />
+                        借賒有據
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日

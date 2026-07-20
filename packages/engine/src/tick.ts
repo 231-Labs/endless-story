@@ -48,7 +48,7 @@ import { PARTS_OF_DAY } from './ports.ts';
 import type { AidActionInput, AidActionResult, AidPeer, AidSituation, AidVitality, ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
+import { bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
 import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple-prayer.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
 import { renownLabel, type WorldState } from './world-state.ts';
@@ -1363,6 +1363,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         container: object.container ? world.objectById(object.container)?.label ?? object.container : undefined,
                     })),
                     economyLine: economy?.projectFor(world, id, sid),
+                    // 借賒有據: which credit verbs to 亮牌 for this actor in THIS
+                    // scene (borrow needs a co-present cast member; repay an open
+                    // 欠條 to one). undefined when the flag is off — byte-identical.
+                    credit: creditAdvertFor(world, id, ids),
                 };
             }),
         );
@@ -1396,8 +1400,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     container: object.container ? world.objectById(object.container)?.label ?? object.container : undefined,
                 }));
                 actor.economyLine = economy?.projectFor(world, actor.characterId, sid);
+                actor.credit = creditAdvertFor(world, actor.characterId, ids);
             },
-            onBeat: (beat) => {
+            onBeat: async (beat) => {
                 // 相識分寸: resolve the addressed display back to an id — perceived-name
                 // aware (knownAs), so addressing 「趙師傅」still finds 趙阿福. Flag-off ⇒
                 // exactly `idByName` (byte-identical).
@@ -1476,6 +1481,26 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     throw new Error(`[economy] ${beat.name} proposed money commands but this world has no economy`);
                 }
                 for (const [seq, command] of (beat.economyCommands ?? []).entries()) {
+                    // 借錢是兩造的事 (creditVerbs): a borrow reaches the ledger
+                    // only through the LENDER's consent seat — decideLend answers
+                    // lend/refuse HERE, before the pure commit; an absent seat /
+                    // null / throw REFUSES deterministically (the fake agent
+                    // inherits this by omitting the seat). A refusal is a REAL
+                    // social event (ok:true + a 婉拒 line), never a replan.
+                    let lendVerdict: { lend: boolean; line?: string } | null | undefined;
+                    if (command.action === 'borrow') {
+                        lendVerdict = null;
+                        const seatInput = w.creditVerbs && agent.decideLend
+                            ? buildLendSeatInput(world, { actorId: beat.characterId, sceneId: sid, command })
+                            : null;
+                        if (seatInput) {
+                            try {
+                                lendVerdict = (await agent.decideLend!(seatInput)) ?? null;
+                            } catch {
+                                lendVerdict = null;
+                            }
+                        }
+                    }
                     const outcome = economy!.commitCommand(world, {
                         actorId: beat.characterId,
                         sceneId: sid,
@@ -1484,6 +1509,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         causeEventId,
                         seq,
                         day: today,
+                        ...(lendVerdict !== undefined ? { lendVerdict } : {}),
                     });
                     if (!outcome.ok) {
                         throw new Error(`[economy] ${beat.name} 的銀錢動作沒有發生：${outcome.reason}`);
@@ -1903,6 +1929,22 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     want.retired = true;
                     log(`  [限期作廢] ${world.nameById(want.characterId)}「${want.desc}」隨約作廢`);
                     acc.lines.push(`[帳房] ${world.nameById(want.characterId)}擱在心上的「${want.desc}」，隨這約限期一過，也就了了。`);
+                }
+            }
+            // 欠條生怨 (creditVerbs) — after the chase, every OVERDUE 欠條 between
+            // two cast members stirs BOTH hearts exactly once (dedup by bill
+            // marker; a spawn the ≤4-live budget rejects retries at the next
+            // settle). Vendor bills spawn debtor-side only when the business maps
+            // cleanly to a single cast owner; 前街食肆 declares none, so its 賒帳
+            // stays on the books without a want. Flag off ⇒ zero new behavior.
+            if (w.creditVerbs) {
+                const debtEvents: LedgerEvent[] = [];
+                const castNames = w.cast.map((member) => member.name);
+                for (const seed of collectOverdueDebtWants(world, today)) {
+                    if (spawnWant(wants, seed.characterId, { desc: seed.desc, layer: seed.layer }, nowTick, debtEvents, castNames)) {
+                        (w.economy!.debtWantsSpawned ??= []).push(seed.marker);
+                        log(`  [欠條生怨] ${world.nameById(seed.characterId)}「${seed.desc}」`);
+                    }
                 }
             }
         }

@@ -156,6 +156,9 @@ export class RunnerSceneAgent implements SceneAgentPort {
     // the occupant, never the visitor's ardor. Fail-safe to null ⇒ the tick
     // refuses the door.
     decideAdmit = characterAgent.decideAdmit;
+    // 告借/應借 — the asked lender answers a borrow face to face; 借錢是兩造的事，
+    // 錢動之前出借的人先點頭。Fail-safe to null ⇒ the tick refuses the loan.
+    decideLend = characterAgent.decideLend;
 
     async observeScene(input: ObserveSceneInput): Promise<void> {
         if (!this.sessions) return;

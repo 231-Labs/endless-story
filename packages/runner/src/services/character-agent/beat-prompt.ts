@@ -111,6 +111,12 @@ export interface ActBeatInput {
      *  authorized treasury view, live contract terms, purchasable items here).
      *  Rendered verbatim; money moves only through economyCommands. */
     economyLine?: string;
+    /** 借賒有據 (creditVerbs): which credit verbs to 亮牌 for this actor RIGHT
+     *  HERE — `borrow` when a co-present cast member could be asked, `repay`
+     *  when the actor holds an open 欠條 to someone co-present. Computed by the
+     *  engine (flag-gated); absent ⇒ the money-ledger advertisement is
+     *  byte-identical to before (characters only invoke what's advertised). */
+    credit?: { borrow?: boolean; repay?: boolean };
 }
 
 export interface BeatObjectEffect {
@@ -137,13 +143,17 @@ export interface BeatObjectEffect {
  * (the same fail-loud contract as objectEffects/physical canon).
  */
 export interface BeatEconomyCommand {
-    action: 'purchase' | 'pay' | 'contract_sign' | 'contract_reject' | 'contract_fill_partner' | 'contract_counter';
+    action: 'purchase' | 'pay' | 'borrow' | 'repay' | 'contract_sign' | 'contract_reject' | 'contract_fill_partner' | 'contract_counter';
     /** purchase: a catalog item id from the beat's money-ledger listing. */
     itemId?: string;
-    /** pay: recipient — a formal character name, or 班庫 for the troupe treasury. */
+    /** pay: recipient — a formal character name, or 班庫 for the troupe treasury.
+     *  borrow: the CO-PRESENT lender's formal name (their consent decides).
+     *  repay: the creditor being repaid (a 欠條 holder). */
     toName?: string;
-    /** pay: amount in whole 圓 (positive integer). */
+    /** pay / borrow / repay: amount in whole 圓 (positive integer). */
     amountYuan?: number;
+    /** borrow: 約定還期日數（正整數；省略＝15，至多 60）。 */
+    dueDays?: number;
     /** Source of funds: own purse (default) or the troupe treasury (authorized only). */
     fromAccount?: 'self' | 'troupe';
     /** contract_*: the contract id from the beat's money-ledger listing. */
@@ -290,7 +300,7 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
         ? 'addressed'
         : 'scene';
     const move = prose(o.move);
-    const ECONOMY_ACTIONS = ['purchase', 'pay', 'contract_sign', 'contract_reject', 'contract_fill_partner', 'contract_counter'] as const;
+    const ECONOMY_ACTIONS = ['purchase', 'pay', 'borrow', 'repay', 'contract_sign', 'contract_reject', 'contract_fill_partner', 'contract_counter'] as const;
     const economyCommands = Array.isArray(o.economyCommands)
         ? o.economyCommands.flatMap((rawCommand): BeatEconomyCommand[] => {
             if (!rawCommand || typeof rawCommand !== 'object') return [];
@@ -305,11 +315,17 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
             const askYuan = typeof command.askYuan === 'number' && Number.isInteger(command.askYuan) && command.askYuan > 0
                 ? command.askYuan
                 : undefined;
+            // dueDays (borrow) likewise: only a positive integer counts — the
+            // engine defaults 15 / caps 60 when absent or dropped.
+            const dueDays = typeof command.dueDays === 'number' && Number.isInteger(command.dueDays) && command.dueDays > 0
+                ? command.dueDays
+                : undefined;
             return [{
                 action,
                 itemId: str(command.itemId) || undefined,
                 toName: prose(command.toName) || undefined,
                 amountYuan,
+                dueDays,
                 fromAccount: command.fromAccount === 'troupe' ? 'troupe' : command.fromAccount === 'self' ? 'self' : undefined,
                 contractId: str(command.contractId) || undefined,
                 partnerName: prose(command.partnerName) || undefined,
@@ -502,7 +518,18 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
               '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無","objectEffects":[{"objectId":"登記id","toScene":"新場景或省略","container":"新容器/null/省略","carried":true或false或省略,"carrierName":"交給的同場者正式姓名或省略","visibility":"visible|hidden|destroyed或省略","state":"新狀態或省略"}]}。沒有物理改變就給空陣列。不要 markdown。',
         input.economyLine
-            ? '若這一拍真有銀錢或契約動作，另在同一個 JSON 加 "economyCommands":[{"action":"purchase|pay|contract_sign|contract_reject|contract_fill_partner|contract_counter","itemId":"購買項目id或省略","toName":"收款人正式姓名或班庫或省略","amountYuan":整數圓或省略,"fromAccount":"self|troupe(省略=self)","contractId":"契約id或省略","partnerName":"聯名搭檔正式姓名或省略","demand":"還價條款一句（contract_counter 用）：寫你要的條款；若這句還價是要對方加碼銀錢，另附下面的 askYuan，並在 demand 裡寫明這筆錢該落誰帳上、為什麼。或省略","askYuan":整數圓數（加碼的數目，contract_counter 銀錢還價才附；只改條件不改錢就省略）或省略,"memo":"一句緣由或省略"}]；沒有銀錢動作就整欄省略。簽署契約的那一拍，economyCommands 與 objectEffects（契約物件狀態）要一起出。'
+            ? '若這一拍真有銀錢或契約動作，另在同一個 JSON 加 "economyCommands":[{"action":"purchase|pay|' +
+              // 借賒有據: the credit verbs are advertised ONLY when the engine says
+              // they apply here (flag on + a counterpart / an open 欠條) — absent
+              // `credit` keeps this advertisement byte-identical to before.
+              `${input.credit?.borrow ? 'borrow|' : ''}${input.credit?.repay ? 'repay|' : ''}` +
+              'contract_sign|contract_reject|contract_fill_partner|contract_counter","itemId":"購買項目id或省略","toName":"收款人正式姓名或班庫或省略","amountYuan":整數圓或省略,"fromAccount":"self|troupe(省略=self)","contractId":"契約id或省略","partnerName":"聯名搭檔正式姓名或省略","demand":"還價條款一句（contract_counter 用）：寫你要的條款；若這句還價是要對方加碼銀錢，另附下面的 askYuan，並在 demand 裡寫明這筆錢該落誰帳上、為什麼。或省略","askYuan":整數圓數（加碼的數目，contract_counter 銀錢還價才附；只改條件不改錢就省略）或省略,"memo":"一句緣由或省略"}]；沒有銀錢動作就整欄省略。簽署契約的那一拍，economyCommands 與 objectEffects（契約物件狀態）要一起出。' +
+              (input.credit?.borrow
+                  ? '\n同場可開口告借（borrow）：toName＝出借人正式姓名、amountYuan＝整數圓、dueDays＝約定幾日內還（省略＝15，至多60）、memo＝緣故——借不借由對方當場定奪：應了錢即刻過手、欠條記帳到期照催；婉拒也作數，這一拍照樣落地。'
+                  : '') +
+              (input.credit?.repay
+                  ? '\n你名下有欠條可還（repay）：toName＝債主正式姓名、amountYuan＝整數圓，當面還帳沖銷欠條——只沖欠著的數，白給請用 pay。'
+                  : '')
             : '',
     ]
         .filter(Boolean)

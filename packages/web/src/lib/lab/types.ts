@@ -30,6 +30,9 @@ export interface LabRunConfig {
      *  KNOCK — entry is the occupant's one-time 放行, never the visitor's ardor.
      *  Off by default. (Key name kept from the 登門修好 iteration for compat.) */
     reconcileVisit?: boolean;
+    /** 借賒有據: 同場可開口告借（對方定奪）、允賒的食擔可賒帳記入真帳期；欠條
+     *  到期未清自會生怨。Off by default. */
+    creditVerbs?: boolean;
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
     realEmbeddings: boolean;

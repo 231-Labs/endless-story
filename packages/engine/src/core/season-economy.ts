@@ -174,6 +174,15 @@ export interface SeasonEconomyData {
      *  (what the house cares about, its concession logic, its 口風). AGENT-ONLY:
      *  the mechanical counterAskGate never reads it — it only decides 值不值得讓. */
     stances?: Record<string, string>;
+    /** 賒帳 terms: vendor accountId → tab dueDays, for businesses whose frame set
+     *  `allowsTab` (趙阿福's 紅字帳 made mechanical). Read ONLY when the world's
+     *  creditVerbs flag is on — a broke buyer's purchase at such a vendor then
+     *  becomes a real bill (buyer→vendor) instead of a refusal. */
+    vendorTabs?: Record<string, { dueDays: number }>;
+    /** 欠條生怨 dedup: `${billId}:debtor` / `${billId}:creditor` markers whose
+     *  overdue-debt want ALREADY spawned at a settle — each overdue 欠條 stirs
+     *  each heart exactly once. */
+    debtWantsSpawned?: string[];
     /** floor days of runway a money-counter 加碼 must leave the proposer above
      *  (counterAskGate's dailyFixedCost × N). Default 3 at use sites. */
     counterFloorDays?: number;
@@ -297,6 +306,21 @@ export interface CommitEconomyCommandRequest {
     /** disambiguates multiple commands within one beat. */
     seq: number;
     day: number;
+    /** 借錢兩造 (borrow only): the LENDER's consent verdict, computed by the
+     *  dispatcher through the optional decideLend seat BEFORE this pure commit.
+     *  undefined / null / lend:false ⇒ REFUSE — a real social event (ok:true
+     *  with a 婉拒 public line, NEVER a replan); lend:true ⇒ the money moves
+     *  now and a dated 欠條 bill records the debt. */
+    lendVerdict?: { lend: boolean; line?: string } | null;
+}
+
+/** 告借還期: default / cap on a personal loan's dueDays（借錢憑欠條，期不可無限）. */
+export const LOAN_DUE_DAYS_DEFAULT = 15;
+export const LOAN_DUE_DAYS_CAP = 60;
+
+function clampLoanDueDays(dueDays: number | undefined): number {
+    if (dueDays === undefined || !Number.isInteger(dueDays) || dueDays <= 0) return LOAN_DUE_DAYS_DEFAULT;
+    return Math.min(dueDays, LOAN_DUE_DAYS_CAP);
 }
 
 /**
@@ -325,17 +349,24 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         const bought = contract.economy.ledger.filter(
             (t) => t.kind === 'purchase' && t.memo.startsWith(`${item.id}|`),
         );
+        // 賒帳 bills count toward the SAME once-per-day / unique guards as cash
+        // purchases (a meal tabbed at noon is the day's meal). Their ids carry
+        // item + day + payer, so both checks read off the id alone. With the
+        // creditVerbs flag off no tab bill exists, so the guards are unchanged.
+        const tabStamp = `tab:${item.id}:d${req.day}:${payerId}:`;
+        const tabbedToday = (data.bills ?? []).some((bill) => bill.id.startsWith(tabStamp));
+        const tabbedEver = (data.bills ?? []).some((bill) => bill.id.startsWith(`tab:${item.id}:`));
         // a settled sponsorship IS the item being done; a pending one holds the slot
         const sponsorStates = Object.entries(data.sponsorships ?? {})
             .filter(([, s]) => s.itemId === item.id)
             .map(([cid]) => contract.contracts[cid]?.status);
-        if (item.unique && (bought.length > 0 || sponsorStates.some((s) => s === 'settled'))) {
+        if (item.unique && (bought.length > 0 || tabbedEver || sponsorStates.some((s) => s === 'settled'))) {
             return fail(`「${item.label}」已經辦過了，不能重複`);
         }
         if (item.unique && sponsorStates.some((s) => s === 'offered')) {
             return fail(`「${item.label}」已有人出資、正等當事人答覆，不能搶辦`);
         }
-        if (item.oncePerDay && bought.some((t) => t.day === req.day && t.from === payerId)) {
+        if (item.oncePerDay && (bought.some((t) => t.day === req.day && t.from === payerId) || tabbedToday)) {
             return fail(`「${item.label}」今日已經用過一次`);
         }
 
@@ -368,6 +399,37 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
                     `${actorName}願出${formatMoney(data, price)}辦「${item.label}」（${payerId === data.troupeAccountId ? '班庫出帳' : '自掏腰包'}）——` +
                     `錢已入押，允不允由${beneficiaryName}自己；限明日夜裡答覆，逾期原封退回`,
                 ],
+            };
+        }
+
+        // 賒帳 — 趙阿福的紅字帳 made mechanical: when the buyer's purse cannot
+        // cover the price at a vendor whose frame extends tab (`allowsTab`), the
+        // purchase still happens and a REAL bill (buyer→vendor, chased by the
+        // daily settle exactly like every other 帳期) records the debt. A bill is
+        // a promise, not money: NO transfer, so conservation is untouched and
+        // `auditSeasonEconomy` stays []. Flag off / no allowsTab / troupe payer
+        // without authority ⇒ the exact old insufficient-funds refusal below.
+        const tab = item.vendorAccountId ? data.vendorTabs?.[item.vendorAccountId] : undefined;
+        const payerAccount = contract.economy.accounts[payerId];
+        if (
+            world.data.creditVerbs && tab && item.vendorAccountId && payerAccount &&
+            maySpend(payerAccount, req.actorId) && payerAccount.available < price
+        ) {
+            const vendorLabel = accountLabel(contract, item.vendorAccountId);
+            (data.bills ??= []).push({
+                id: `${tabStamp}${txnId}`,
+                label: `賒${item.label}`,
+                amountSubunits: price.toString(),
+                dueDay: req.day + tab.dueDays,
+                creditor: vendorLabel,
+                paidSubunits: '0',
+                fromAccountId: payerId,
+                toAccountId: item.vendorAccountId,
+            });
+            applyCatalogEffect(world, item, req);
+            return {
+                ok: true,
+                publicLines: [`${actorName}在${vendorLabel}賒下一份${item.label}，記在帳上。`],
             };
         }
 
@@ -410,6 +472,115 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         return {
             ok: true,
             publicLines: [`${actorName}將${formatMoney(data, subunits(data, cmd.amountYuan))}交到${accountLabel(contract, toId)}名下${cmd.memo ? `（${cmd.memo}）` : ''}`],
+        };
+    }
+
+    if (cmd.action === 'borrow') {
+        // 借錢是兩造的事：錢動之前，出借的人先點頭（req.lendVerdict, computed by
+        // the dispatcher through the decideLend seat）。A REFUSED loan is a real
+        // social event — ok:true with a 婉拒 line, never a replan; only malformed
+        // commands (flag off / bad name / not co-present / non-positive) fail.
+        if (!world.data.creditVerbs) return fail('此界不興當面告借（creditVerbs 未開）——要給錢請用 pay');
+        if (!cmd.toName || !cmd.amountYuan || cmd.amountYuan <= 0 || !Number.isInteger(cmd.amountYuan)) {
+            return fail('告借要填 toName（同場出借人正式姓名）與正整數 amountYuan');
+        }
+        const lenderId = world.idByName(cmd.toName);
+        if (!lenderId || !world.castById(lenderId)) return fail(`不認得這位出借人：${cmd.toName}`);
+        if (lenderId === req.actorId) return fail('不能向自己告借');
+        if (world.data.roster[lenderId] !== req.sceneId) {
+            return fail(`${cmd.toName}不在此處——告借是當面開口的事`);
+        }
+        const dueDays = clampLoanDueDays(cmd.dueDays);
+        const dueDay = req.day + dueDays;
+        const lenderName = world.nameById(lenderId);
+        const line = req.lendVerdict?.line?.trim() || undefined;
+        if (!req.lendVerdict?.lend) {
+            // 婉拒也是一句回答 — no money moves, and the beat still lands.
+            return {
+                ok: true,
+                publicLines: [`${actorName}向${lenderName}開口告借${cmd.amountYuan}圓，${lenderName}婉拒了${line ? `：「${line}」` : ''}。`],
+            };
+        }
+        const amount = subunits(data, cmd.amountYuan);
+        // The lender consented — THEY move their own money (actorId: lenderId),
+        // through the same conserving transfer as any hand-to-hand payment.
+        const lent = transferMoney(contract.economy, {
+            txnId,
+            actorId: lenderId,
+            from: lenderId,
+            to: req.actorId,
+            amount,
+            memo: `告借${cmd.memo ? `（${cmd.memo}）` : ''}`,
+            causeEventId: req.causeEventId,
+        });
+        if (lent.rejection) return fail(lent.rejection.message);
+        contract = { economy: lent.state, contracts: contract.contracts };
+        persist(world, contract);
+        // The bill IS the debt instrument — the exact shape the daily settle
+        // chases (due at END of dueDay, short payment rolls forward).
+        (data.bills ??= []).push({
+            id: `loan:${txnId}`,
+            label: `欠${lenderName}${cmd.amountYuan}圓${cmd.memo ? `（${cmd.memo}）` : ''}`,
+            amountSubunits: amount.toString(),
+            dueDay,
+            creditor: lenderName,
+            paidSubunits: '0',
+            fromAccountId: req.actorId,
+            toAccountId: lenderId,
+        });
+        return {
+            ok: true,
+            publicLines: [`${actorName}向${lenderName}告借${cmd.amountYuan}圓，${lenderName}應了${line ? `：「${line}」` : ''}——這筆欠著，第${dueDay}日為期。`],
+        };
+    }
+
+    if (cmd.action === 'repay') {
+        // 還帳 sugar: one conserving transfer + the OLDEST open 欠條(s) toward
+        // this creditor shrink by the same amount — the SAME paidSubunits
+        // representation the daily settle chases, so a partial repay simply
+        // leaves less to chase.
+        if (!world.data.creditVerbs) return fail('此界不興欠條還帳（creditVerbs 未開）——要給錢請用 pay');
+        if (!cmd.toName || !cmd.amountYuan || cmd.amountYuan <= 0 || !Number.isInteger(cmd.amountYuan)) {
+            return fail('還帳要填 toName（債主）與正整數 amountYuan');
+        }
+        const creditorId = resolveAccountId(world, data, cmd.toName);
+        if (!creditorId) return fail(`不認得這位債主：${cmd.toName}`);
+        const open = (data.bills ?? []).filter((bill) =>
+            bill.fromAccountId === req.actorId &&
+            bill.toAccountId === creditorId &&
+            BigInt(bill.amountSubunits) > BigInt(bill.paidSubunits));
+        if (!open.length) return fail('你不欠此人錢——白給請用 pay');
+        let owed = 0n;
+        for (const bill of open) owed += BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+        // 還帳只還欠著的數 — the transfer is capped at what is owed, so an
+        // overshoot never becomes a hidden gift riding a repay (白給 belongs to pay).
+        const asked = subunits(data, cmd.amountYuan);
+        const amount = asked < owed ? asked : owed;
+        const repaid = transferMoney(contract.economy, {
+            txnId,
+            actorId: req.actorId,
+            from: req.actorId,
+            to: creditorId,
+            amount,
+            memo: `還帳${cmd.memo ? `（${cmd.memo}）` : ''}`,
+            causeEventId: req.causeEventId,
+        });
+        if (repaid.rejection) return fail(repaid.rejection.message);
+        contract = { economy: repaid.state, contracts: contract.contracts };
+        persist(world, contract);
+        // oldest first: data.bills is append-ordered, and `open` preserves it.
+        let left = amount;
+        for (const bill of open) {
+            if (left <= 0n) break;
+            const remaining = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+            const put = left < remaining ? left : remaining;
+            bill.paidSubunits = (BigInt(bill.paidSubunits) + put).toString();
+            left -= put;
+        }
+        const rest = owed - amount;
+        return {
+            ok: true,
+            publicLines: [`${actorName}還了${accountLabel(contract, creditorId)}${formatMoney(data, amount)}${rest === 0n ? '，這筆欠條兩清' : `，欠條上還記著${formatMoney(data, rest)}`}。`],
         };
     }
 
@@ -621,6 +792,152 @@ export function enforceContractCommandPairing(
     }
 }
 
+// ── 借賒有據 (creditVerbs): consent seat input + 亮牌 gate + 欠條生怨 ──
+
+/**
+ * Assemble the LENDER's consent-seat input for a beat's `borrow` command —
+ * called by the dispatcher (tick onBeat) BEFORE the pure commit, so the async
+ * decideLend seat stays outside commitEconomyCommand. Returns null when the
+ * command would not validate anyway (flag off / bad name / not co-present /
+ * non-positive) — the commit then fails with its own precise reason and no
+ * seat call is wasted. The seat READS numbers (balance / debt in whole 圓),
+ * never computes one (LLM 永不碰數字).
+ */
+export function buildLendSeatInput(
+    world: WorldState,
+    req: { actorId: string; sceneId: string; command: BeatEconomyCommand },
+): CharacterAgentNs.LendDecideInput | null {
+    const data = world.data.economy;
+    const cmd = req.command;
+    if (!data || !world.data.creditVerbs || cmd.action !== 'borrow') return null;
+    if (!cmd.toName || !cmd.amountYuan || cmd.amountYuan <= 0 || !Number.isInteger(cmd.amountYuan)) return null;
+    const lenderId = world.idByName(cmd.toName);
+    const lender = lenderId ? world.castById(lenderId) : undefined;
+    if (!lenderId || !lender || lenderId === req.actorId) return null;
+    if (world.data.roster[lenderId] !== req.sceneId) return null;
+    const borrower = world.castById(req.actorId);
+    const per = BigInt(data.subunitsPerUnit);
+    const account = data.state.accounts[lenderId];
+    let existingDebt = 0n;
+    for (const bill of data.bills ?? []) {
+        if (bill.fromAccountId !== req.actorId || bill.toAccountId !== lenderId) continue;
+        const remaining = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+        if (remaining > 0n) existingDebt += remaining;
+    }
+    const tie = lender.relationshipView[req.actorId] ?? world.data.edges[lenderId]?.[req.actorId]?.tone;
+    return {
+        lenderName: lender.name,
+        lenderRole: lender.role ?? '—',
+        lenderBalanceYuan: account ? Number(BigInt(account.available) / per) : 0,
+        // 相識分寸: the lender hears the asker AS THEY know them.
+        borrowerName: world.perceivedName(lenderId, req.actorId),
+        borrowerRole: borrower?.role ?? '—',
+        amountYuan: cmd.amountYuan,
+        dueDays: clampLoanDueDays(cmd.dueDays),
+        ...(cmd.memo ? { memo: cmd.memo } : {}),
+        ...(tie ? { tieTowardBorrower: tie } : {}),
+        existingDebtYuan: Number(existingDebt / per),
+    };
+}
+
+/**
+ * 亮牌 gate for the credit verbs: which of borrow/repay the beat prompt should
+ * advertise to THIS actor in THIS scene. `borrow` needs a co-present cast
+ * member to ask; `repay` needs an open 欠條 whose creditor is co-present.
+ * undefined when the flag is off / no economy / nobody to deal with — the
+ * beat prompt then stays byte-identical to before.
+ */
+export function creditAdvertFor(
+    world: WorldState,
+    characterId: string,
+    copresentIds: readonly string[],
+): { borrow?: boolean; repay?: boolean } | undefined {
+    const data = world.data.economy;
+    if (!data || !world.data.creditVerbs) return undefined;
+    const others = copresentIds.filter((id) => id !== characterId && !!world.castById(id));
+    if (!others.length) return undefined;
+    const repay = (data.bills ?? []).some((bill) =>
+        bill.fromAccountId === characterId &&
+        !!bill.toAccountId && others.includes(bill.toAccountId) &&
+        BigInt(bill.amountSubunits) > BigInt(bill.paidSubunits));
+    return { borrow: true, ...(repay ? { repay: true } : {}) };
+}
+
+/** One overdue-debt want the settle should try to spawn (dedup by `marker`). */
+export interface OverdueDebtWantSeed {
+    characterId: string;
+    layer: string;
+    desc: string;
+    /** Stable dedup marker (`${billId}:debtor` / `${billId}:creditor`); pushed
+     *  into `data.debtWantsSpawned` by the caller ONLY when the want actually
+     *  spawned, so a budget-rejected spawn retries at the next settle. */
+    marker: string;
+}
+
+/**
+ * 欠條生怨 — after the settle's bill chase, every OVERDUE 欠條 (day ≥ dueDay,
+ * still owing) between two CAST characters stirs both hearts: the debtor a
+ * 虧欠-layer want toward the creditor, the creditor a 催討-layer want toward
+ * the debtor — once per bill per side (markers). Vendor (business) bills spawn
+ * the debtor side ONLY when the business maps cleanly to a single cast owner
+ * (its sole authorized spender); 前街食肆 declares none, so its 賒帳 stays on
+ * the books without a want. Pure read aside from nothing — the caller spawns
+ * and marks. Flag off ⇒ [] (byte-compat: an overdue 租金 bill between cast
+ * spawns nothing, exactly as before).
+ */
+export function collectOverdueDebtWants(world: WorldState, day: number): OverdueDebtWantSeed[] {
+    const data = world.data.economy;
+    if (!data?.bills?.length || !world.data.creditVerbs) return [];
+    const spawned = new Set(data.debtWantsSpawned ?? []);
+    const per = BigInt(data.subunitsPerUnit);
+    const yuanText = (amount: bigint): string => {
+        const whole = amount / per;
+        const rest = amount % per;
+        return rest === 0n ? `${whole}圓` : `${whole}圓${rest}分`;
+    };
+    const out: OverdueDebtWantSeed[] = [];
+    for (const bill of data.bills) {
+        const remaining = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+        if (remaining <= 0n || day < bill.dueDay) continue;
+        const debtor = bill.fromAccountId ? world.castById(bill.fromAccountId) : undefined;
+        if (!debtor) continue; // only a CAST debtor carries 虧欠; establishment debts stay on the books
+        const creditor = bill.toAccountId ? world.castById(bill.toAccountId) : undefined;
+        if (creditor) {
+            if (!spawned.has(`${bill.id}:debtor`)) {
+                out.push({
+                    characterId: debtor.id,
+                    layer: '虧欠',
+                    desc: `欠著${creditor.name}的${yuanText(remaining)}過了期，見面都矮半截`,
+                    marker: `${bill.id}:debtor`,
+                });
+            }
+            if (!spawned.has(`${bill.id}:creditor`)) {
+                out.push({
+                    characterId: creditor.id,
+                    layer: '催討',
+                    desc: `${debtor.name}欠的${yuanText(remaining)}到期未還，這口氣咽不平`,
+                    marker: `${bill.id}:creditor`,
+                });
+            }
+            continue;
+        }
+        // vendor bill: debtor side only, and only via a clean single-owner mapping.
+        const account = bill.toAccountId ? data.state.accounts[bill.toAccountId] : undefined;
+        if (!account || account.ownerType !== 'business') continue;
+        const owners = account.authorizedSpenderIds.filter((id) => !!world.castById(id));
+        if (owners.length !== 1) continue;
+        if (!spawned.has(`${bill.id}:debtor`)) {
+            out.push({
+                characterId: debtor.id,
+                layer: '虧欠',
+                desc: `欠著${world.nameById(owners[0])}的${yuanText(remaining)}過了期，見面都矮半截`,
+                marker: `${bill.id}:debtor`,
+            });
+        }
+    }
+    return out;
+}
+
 // ── percept projection (knowledge- and authority-scoped) ──
 
 /** runway in days for an account given its balance and daily burn (mirrors
@@ -673,6 +990,25 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             for (const txn of outToday) total += txn.amount;
             const detail = outToday.map((txn) => `${formatMoney(data, txn.amount)}（${txn.memo.includes('|') ? txn.memo.split('|')[1] : txn.memo}，給${accountLabel(contract, txn.to)}）`).join('、');
             lines.push(`你今日已出帳共 ${formatMoney(data, total)}：${detail}。同一筆缺口不必重複去填。`);
+        }
+        // 借賒有據 — one's own open 欠條 (both directions, with due days) ride
+        // every money percept: a debtor should KNOW they owe. Flag-gated so a
+        // flag-off world's percept (e.g. one carrying a 租金 bill) is untouched.
+        if (world.data.creditVerbs) {
+            const today = world.data.clock.day;
+            for (const bill of data.bills ?? []) {
+                const remaining = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+                if (remaining <= 0n) continue;
+                if (bill.fromAccountId === characterId && bill.toAccountId) {
+                    const holder = accountLabel(contract, bill.toAccountId);
+                    const due = today > bill.dueDay ? '已過了期，臉上須掛不住' : `第 ${bill.dueDay} 日為期`;
+                    lines.push(`你欠著${holder} ${formatMoney(data, remaining)}（${bill.label}），${due}——到期會照例催討；手頭便時可當面還帳（repay）。`);
+                } else if (bill.toAccountId === characterId && bill.fromAccountId) {
+                    const debtor = accountLabel(contract, bill.fromAccountId);
+                    const due = today > bill.dueDay ? '已到期未清' : `第 ${bill.dueDay} 日為期`;
+                    lines.push(`${debtor}欠著你 ${formatMoney(data, remaining)}（${bill.label}），${due}。`);
+                }
+            }
         }
     }
     const troupe = contract.economy.accounts[data.troupeAccountId];
@@ -822,7 +1158,12 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             lines.push(`本處現錢可辦（economyCommands 用 itemId）：${buyable.map((item) => {
                 const beneficiaryId = sponsorshipBeneficiary(world, item);
                 const consent = beneficiaryId && beneficiaryId !== characterId ? `；出資後須${world.nameById(beneficiaryId)}本人點頭才作數` : '';
-                return `${item.id}＝${item.label}（${formatMoney(data, BigInt(item.priceSubunits))}${consent}）`;
+                // 賒帳 note (creditVerbs): the vendor extends tab — flag off ⇒
+                // the listing is byte-identical to before.
+                const tabNote = world.data.creditVerbs && item.vendorAccountId && data.vendorTabs?.[item.vendorAccountId]
+                    ? '；銀錢不趁手也可賒，記帳'
+                    : '';
+                return `${item.id}＝${item.label}（${formatMoney(data, BigInt(item.priceSubunits))}${consent}${tabNote}）`;
             }).join('／')}。`);
         }
     }
@@ -1564,6 +1905,13 @@ export interface SeasonEconomyFrame {
         /** authored 立場 for this house's counterparty agent seat (what it cares
          *  about, its concession logic, its 口風). Agent-only — never the gate. */
         stance?: string;
+        /** 賒帳: this establishment extends tab — a broke buyer's purchase here
+         *  still happens, recorded as a REAL bill (buyer→vendor) the daily
+         *  settle chases. Live only when the world's creditVerbs flag is on;
+         *  absent/false ⇒ cash only, byte-identical. */
+        allowsTab?: boolean;
+        /** days until a tab bill falls due (default 15). */
+        tabDueDays?: number;
     }>;
     /** per-character overrides; unlisted cast get characterDefaults. */
     characters?: Array<{ name: string; openingYuan?: number; dailyFixedCostYuan?: number }>;
@@ -1666,6 +2014,12 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
     for (const business of frame.businesses ?? []) {
         if (business.stance) stances[business.id] = business.stance;
     }
+    // 賒帳 terms per vendor (accountId → dueDays) — only businesses that allow
+    // it get a key, mirroring how stances parse. Inert unless creditVerbs is on.
+    const vendorTabs: Record<string, { dueDays: number }> = {};
+    for (const business of frame.businesses ?? []) {
+        if (business.allowsTab) vendorTabs[business.id] = { dueDays: business.tabDueDays ?? LOAN_DUE_DAYS_DEFAULT };
+    }
     for (const spec of frame.contracts ?? []) {
         const resolveBeneficiary = (to: string): string =>
             to === PARTNER_SLOT ? PARTNER_SLOT : to === '班庫' ? troupeId : (world.idByName(to) ?? to);
@@ -1710,6 +2064,7 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
         ...(frame.troupe.shortfallCreditor ? { shortfallCreditor: frame.troupe.shortfallCreditor } : {}),
         ...(Object.keys(negotiations).length ? { negotiations } : {}),
         ...(Object.keys(stances).length ? { stances } : {}),
+        ...(Object.keys(vendorTabs).length ? { vendorTabs } : {}),
         ...(frame.counterFloorDays !== undefined ? { counterFloorDays: frame.counterFloorDays } : {}),
         ...(frame.performance
             ? {
