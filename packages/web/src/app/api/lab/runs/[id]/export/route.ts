@@ -17,10 +17,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     try {
         const { id } = await params;
         const md = buildRunDiagnostics(id);
+        // HTTP headers are Latin-1 (ByteString): a run id may carry CJK (its title
+        // is slugified keeping \p{L}), so the raw name can't go straight into
+        // Content-Disposition. Give an ASCII-only `filename` fallback plus an
+        // RFC 5987 `filename*` UTF-8 name so browsers still get the full name.
+        const rawName = `endless-story-${id}-${stamp()}.md`;
+        const asciiName = rawName.replace(/[^\x20-\x7E]/g, '-').replace(/["\\]/g, '-');
         return new Response(md, {
             headers: {
                 'Content-Type': 'text/markdown; charset=utf-8',
-                'Content-Disposition': `attachment; filename="endless-story-${id}-${stamp()}.md"`,
+                'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`,
             },
         });
     } catch (error) {
