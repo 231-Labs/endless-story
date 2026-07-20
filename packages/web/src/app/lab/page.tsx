@@ -38,6 +38,7 @@ export default function LabHomePage() {
         emergentProduction: false,
         reconcileVisit: false,
         creditVerbs: false,
+        seekRouting: false,
         ticksPerDay: 6,
     });
 
@@ -83,6 +84,7 @@ export default function LabHomePage() {
                     emergentProduction: form.emergentProduction,
                     reconcileVisit: form.reconcileVisit,
                     creditVerbs: form.creditVerbs,
+                    seekRouting: form.seekRouting,
                     ticksPerDay: form.ticksPerDay,
                 },
             });
@@ -308,6 +310,17 @@ export default function LabHomePage() {
                             onChange={(e) => setForm({ ...form, creditVerbs: e.target.checked })}
                         />
                         借賒有據
+                    </label>
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="尋人掛心：角色宣告去找某人後會真的掛在心上——見得到就去尋、碰上了才了願、三日尋不著就擱下（實驗，預設關）"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={form.seekRouting}
+                            onChange={(e) => setForm({ ...form, seekRouting: e.target.checked })}
+                        />
+                        尋人掛心
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日
