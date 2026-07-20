@@ -421,6 +421,18 @@ export interface WorldStateData {
      *  欠條過期自會生怨（settle spawns 虧欠/催討 wants）。Off by default; the
      *  wiring lives in the world so resume keeps it. */
     creditVerbs?: boolean;
+    /** 尋人有路 flag: when on, a `seek_person` open action RECORDS a persistent
+     *  尋人掛心 (`seeking`) that ROUTES at movement time as a soft pull only —
+     *  同場即了、私處且候、三日不遇日結時擱下（記成當事人私有一筆）。Off by
+     *  default; like reconcileVisit the wiring lives in the world so resume
+     *  keeps it, and with the flag off the deterministic path (including the
+     *  FakeSceneAgent's pinned seek_person actions) stays byte-identical. */
+    seekRouting?: boolean;
+    /** 尋人掛心 — a declared seek_person intention that persists across ticks
+     *  until met/expired: actorId → the sought targetId + the tick the intention
+     *  was declared. Optional & absent-by-default so snapshots predating it (and
+     *  worlds that never seek) restore/serialize untouched. */
+    seeking?: Record<string, { targetId: string; sinceTick: number }>;
     /** The single in-progress (or premiered) production, when the flag is on.
      *  Persisted with the world so snapshot/restore carries the accumulator. */
     production?: Production;

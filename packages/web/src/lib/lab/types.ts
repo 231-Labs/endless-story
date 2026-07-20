@@ -33,6 +33,9 @@ export interface LabRunConfig {
     /** 借賒有據: 同場可開口告借（對方定奪）、允賒的食擔可賒帳記入真帳期；欠條
      *  到期未清自會生怨。Off by default. */
     creditVerbs?: boolean;
+    /** 尋人掛心: seek_person 宣告後真的掛在心上——見得到就去尋、碰上了才了願、
+     *  三日尋不著就擱下（留一條私憶）。Off by default. */
+    seekRouting?: boolean;
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
     realEmbeddings: boolean;

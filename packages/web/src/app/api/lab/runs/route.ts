@@ -50,6 +50,7 @@ export async function POST(req: Request) {
             emergentProduction: body.config.emergentProduction === true,
             reconcileVisit: body.config.reconcileVisit === true,
             creditVerbs: body.config.creditVerbs === true,
+            seekRouting: body.config.seekRouting === true,
             ticksPerDay: Number.isInteger(body.config.ticksPerDay) && (body.config.ticksPerDay as number) > 0
                 ? (body.config.ticksPerDay as number)
                 : 6,

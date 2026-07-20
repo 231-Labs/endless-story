@@ -521,6 +521,33 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 ...(isKnockTarget ? { knock: true as const } : {}),
             }];
         });
+        // 尋人掛心 (seekRouting flag) — a PERSISTED seek_person intention routes
+        // here as a SOFT pull only (decideMove stays the single movement
+        // authority; options/bars are untouched): target co-present ⇒ the
+        // intention is MET and the entry clears; target's scene among the
+        // offered options ⇒ a salient reminder pull; target shut away where the
+        // seeker can't follow ⇒ the pull counsels waiting (at night the existing
+        // 叩門/撞破 machinery takes over on its own when eligible — never
+        // duplicated here). Flag off, or no live entry, ⇒ zero extra lines —
+        // decideMove inputs byte-identical (backward compat).
+        const seekMap = w.seekRouting ? w.seeking : undefined;
+        const seekEntry = seekMap?.[member.id];
+        let seekPull: string | undefined;
+        if (seekMap && seekEntry) {
+            if (!world.castById(seekEntry.targetId)) {
+                delete seekMap[member.id]; // target no longer in the world — the intention lapses
+            } else if (w.roster[seekEntry.targetId] === currentSceneId) {
+                delete seekMap[member.id]; // 尋著了 — met face to face, the intention is fulfilled
+                log(`  [尋人] ${member.name} 尋著了${world.nameById(seekEntry.targetId)}`);
+            } else {
+                const seekSceneId = w.roster[seekEntry.targetId];
+                // 相識分寸: the seeker names the sought as THEY know them.
+                const seekName = world.perceivedName(member.id, seekEntry.targetId);
+                seekPull = options.some((option) => option.sceneId === seekSceneId)
+                    ? `你先前打定主意要去尋${seekName}，此刻他在${world.sceneNameById(seekSceneId)}——這樁心事還掛著。`
+                    : `你先前打定主意要去尋${seekName}，可他此刻在私處，白日不便闖——且等他露面。`;
+            }
+        }
         const decision = await agent.decideMove({
             name: member.name,
             role: member.role ?? '—',
@@ -533,6 +560,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
                 ...(intrudePull ? [intrudePull] : []),
                 ...(knockPull ? [knockPull] : []),
+                ...(seekPull ? [seekPull] : []),
             ].filter(Boolean).join('\n') || undefined,
             planHint: [
                 // Standing plan (if any) leads — the character heads toward goals, not just reacts.
@@ -857,7 +885,32 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         w.dayAccum.lines.push(`[做活] ${member.name}：${result.prose}`);
                     }
                     break;
-                // seek_person / perform / personal: no production effect this tick.
+                case 'seek_person': {
+                    // 尋人掛心 (seekRouting flag): a declared seek becomes a PERSISTED
+                    // intention — recorded here, ROUTED at the next movement phase as a
+                    // soft pull (同場即了、私處且候), expired at day-end after 3 blank
+                    // days. Target resolves by id or name, exactly like the movement
+                    // phase's resolveTargetId. Flag off (or an unresolvable/self
+                    // target) ⇒ the old no-op — but LOGGED now, never hidden.
+                    const seekTargetId = result.target
+                        ? (world.castById(result.target) ? result.target : world.idByName(result.target))
+                        : undefined;
+                    if (w.seekRouting && seekTargetId && seekTargetId !== member.id) {
+                        (w.seeking ??= {})[member.id] = { targetId: seekTargetId, sinceTick: nowTick };
+                        log(`  [尋人] ${member.name} 打定主意去尋${world.nameById(seekTargetId)}`);
+                    } else {
+                        log(`  action noop: seek_person (${member.name})`);
+                    }
+                    break;
+                }
+                // perform / personal: still no production effect this tick — but the
+                // diagnostics stop hiding them (one log line each, nothing more).
+                case 'perform':
+                    log(`  action noop: perform (${member.name})`);
+                    break;
+                case 'personal':
+                    log(`  action noop: personal (${member.name})`);
+                    break;
             }
         }
     }
@@ -2209,6 +2262,33 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     }
                 }
             }
+        }
+    }
+
+    // 7.79) 尋人掛心到期 (seekRouting flag) — at day-end an intention older than
+    // 3 full days lapses: the seeker never crossed paths with the one they meant
+    // to find. The entry clears and the seeker keeps the letting-go as a party-
+    // PRIVATE scheduled percept (the same channel the 叩門 refusal rides —
+    // recall.remember + observeScene next tick), never public canon. Flag off /
+    // no entries ⇒ fully inert; fresher entries keep waiting (跨拍守候).
+    if (dayEnd && w.seekRouting && w.seeking) {
+        for (const [seekerId, seekEntry] of Object.entries(w.seeking)) {
+            if (nowTick - seekEntry.sinceTick < perDay * 3) continue;
+            delete w.seeking[seekerId];
+            const seeker = world.castById(seekerId);
+            if (!seeker) continue;
+            const seekName = world.castById(seekEntry.targetId)
+                ? world.perceivedName(seekerId, seekEntry.targetId)
+                : seekEntry.targetId;
+            log(`  [尋人] ${seeker.name} 這幾日終究沒尋著${seekName}，念頭且擱下了`);
+            (w.scheduledEvents ??= []).push({
+                id: `seek-expired-${seekerId}-t${nowTick}`,
+                atTick: nowTick + 1,
+                sceneId: w.roster[seekerId],
+                text: `這幾日總想去尋${seekName}，終究沒碰上——這念頭且先擱下。`,
+                visibility: 'private',
+                witnessIds: [seekerId],
+            });
         }
     }
 
