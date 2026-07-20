@@ -468,6 +468,9 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             : '',
         '【位置已提交】本 tick 的自主移動已經完成，你現在確實位於此處。這一拍只做此處做得到的事，不能再走去另一個場景。若想離場，用 close:true 收住此場；下一 tick 你會重新得到合法去處選項。',
         '【文字】beat、inner 與所有文字欄位一律使用繁體中文（臺灣用字），不得繁簡混雜。',
+        // 量測自真跑卷的兩大文筆病灶：同角色小動作意象 ≥3 拍重演（磕鏟沿×4、摸花串×3）、
+        // 銀錢數字全卷覆誦（三十四圓半×8）。一條戒律同治兩者。
+        '【身段換樣】同一個小動作意象（磕鏟沿、轉摺扇、抹嘴角、摸鬢邊之類）別拍拍重演——前幾拍你用過的身段，這一拍換個樣子，或干脆讓手閒著；銀錢數目與帳面數字，場上有人說過一次就夠，你至多一句帶過，不可再照數覆誦。',
         // Metaphor stays metaphor: the want language runs on 帳/債/欠 imagery, and an
         // ungarded beat once materialized a paper 借據 to collect an EMOTIONAL debt.
         '【比喻不落地】心帳不是紙帳：欠的若是情分、話語、一句交代，就不可憑空掏出借據、文書、銀錢等有形物來討——手上能拿出的東西，只有此處真有的和你隨身帶著的。',
