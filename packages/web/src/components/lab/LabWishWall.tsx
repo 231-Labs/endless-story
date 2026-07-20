@@ -72,6 +72,14 @@ export function LabWishWall({
                             <span className="font-serif text-2xs tracking-[0.1em] text-ink/85 transition group-hover:text-cinnabar">
                                 {prayer.name}
                             </span>
+                            {prayer.fulfilled ? (
+                                <span
+                                    title="願已還：所求之事成了，當事人回廟還過願"
+                                    className="shrink-0 rounded-sm border border-jade/40 bg-jade/[0.08] px-1 py-px font-serif text-[10px] tracking-[0.15em] text-jade/90"
+                                >
+                                    已還願
+                                </span>
+                            ) : null}
                             <span className="ml-auto shrink-0 font-serif text-[10px] tracking-[0.12em] text-mute/70">
                                 {prayer.templeName}
                                 {prayer.clock ? ` · 第${prayer.day}日 ${prayer.clock}` : ` · 第${prayer.day}日`}

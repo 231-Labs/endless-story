@@ -437,6 +437,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             tick: p.tick,
             clock: p.clock,
             templeName: p.sceneName,
+            fulfilled: p.fulfilledTick !== undefined,
             text: p.text,
             wantDesc: p.wantDesc,
             layer: p.layer,

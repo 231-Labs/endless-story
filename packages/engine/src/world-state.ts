@@ -313,6 +313,10 @@ export interface Prayer {
     layer?: string;
     /** Optional target character id/name the underlying want ached toward. */
     target?: string;
+    /** 還願：the pray-er returned to the temple AFTER the want truly resolved
+     *  (judge-resolved, not faded/foreclosed) and fulfilled the vow. */
+    fulfilledDay?: number;
+    fulfilledTick?: number;
 }
 
 /** A clock-bound fact injected by the world, not authored by a character. The

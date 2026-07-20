@@ -450,6 +450,39 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // a world with no temple scene, so the 廟 PULL below and the §3.6 祈願 step are
     // both fully inert there (backward compat: zero behaviour change).
     const templeScenes: Set<string> = templeScenesOf(world);
+
+    // 2.35) 還願 —— 廟願生命週期的下半環。曾在廟裡親口許過的願，其後真的了結
+    // （judge 判成——淡忘與限期作廢不算：後者不寫 resolvedTick），當事人再踏進
+    // 廟門那一拍便還了願：願籤記上 fulfilled、得一條私憶。無廟、無願、無了結
+    // ⇒ 整段惰性（additive，無旗標）。
+    if (w.prayers?.length && templeScenes.size) {
+        for (const p of w.prayers) {
+            if (p.fulfilledTick !== undefined) continue;
+            const standing = w.roster[p.characterId];
+            if (!standing || !templeScenes.has(standing)) continue; // 要人真的在廟裡
+            const done = wants.find(
+                (want) =>
+                    want.characterId === p.characterId &&
+                    want.retired &&
+                    want.resolvedTick !== undefined &&
+                    !/淡了|過去了/.test(want.resolvedNote ?? '') &&
+                    !!p.wantDesc &&
+                    want.desc === p.wantDesc,
+            );
+            if (!done) continue;
+            p.fulfilledDay = w.clock.day;
+            p.fulfilledTick = nowTick;
+            log(`  [還願] ${world.nameById(p.characterId)} 在${p.sceneName}還了那樁願（${p.wantDesc}）`);
+            (w.scheduledEvents ??= []).push({
+                id: `prayer-fulfilled-${p.id}`,
+                atTick: nowTick + 1,
+                sceneId: standing,
+                text: `你回到${p.sceneName}，對神明還了那樁願——當日求的「${p.wantDesc}」，如今成了。`,
+                visibility: 'private',
+                witnessIds: [p.characterId],
+            });
+        }
+    }
     const spendableOf = (id: string): bigint => BigInt(w.economy?.state.accounts[id]?.available ?? '0');
     // 夜訪商量 PULL reads the bond underlay as PERSISTED at tick start. The lazy
     // canon seed (§2.95) runs after this movement phase, so on the very FIRST tick

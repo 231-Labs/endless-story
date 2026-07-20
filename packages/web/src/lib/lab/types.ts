@@ -212,6 +212,8 @@ export interface LabPrayer {
     templeName: string;
     /** The SPOKEN prayer, addressed to 神明. */
     text: string;
+    /** 還願：the vow was fulfilled — the pray-er returned after the want resolved. */
+    fulfilled?: boolean;
     /** The underlying 心願 (the want that drove the prayer). */
     wantDesc?: string;
     layer?: string;

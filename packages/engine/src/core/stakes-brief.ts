@@ -184,5 +184,25 @@ export function buildStakesBrief(input: StakesBriefInput): string | undefined {
         }
     }
 
+    // 還願 (OPTION) — a prayer whose want has since truly RESOLVED (not faded;
+    // foreclosure writes no resolvedTick) pulls its pray-er back to the temple.
+    if ((clockLabel === '清晨' || clockLabel === '黃昏') && templeScenes.size) {
+        const owed = (world.data.prayers ?? []).find(
+            (p) =>
+                p.characterId === member.id &&
+                p.fulfilledTick === undefined &&
+                !!p.wantDesc &&
+                wants.some(
+                    (wnt) =>
+                        wnt.characterId === member.id &&
+                        wnt.retired &&
+                        wnt.resolvedTick !== undefined &&
+                        !/淡了|過去了/.test(wnt.resolvedNote ?? '') &&
+                        wnt.desc === p.wantDesc,
+                ),
+        );
+        if (owed) lines.push(`那樁在${owed.sceneName}求過的事成了——得空該去還個願。`);
+    }
+
     return lines.length ? lines.join('\n') : undefined;
 }
