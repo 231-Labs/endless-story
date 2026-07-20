@@ -32,8 +32,9 @@ export interface PropertyDecl {
      *  handed a standing key object. `rentYuan`, when set, makes the lease bear
      *  rent — a periodic 租金 bill (租客→屋主) due at the end of `rentDueDay` (default
      *  day 1). Rentless leases (rentYuan absent) stay money-neutral, exactly as
-     *  Stage 1 seeded them. */
-    lease?: { tenantName: string; keyObjectId: string; keyLabel?: string; rentYuan?: number; rentDueDay?: number };
+     *  Stage 1 seeded them. `rentLabel` is the rent bill's label; default
+     *  `${sceneName}租金`. Set to frame it as 膳宿 rather than commercial rent. */
+    lease?: { tenantName: string; keyObjectId: string; keyLabel?: string; rentYuan?: number; rentDueDay?: number; rentLabel?: string };
 }
 
 /**
@@ -116,7 +117,7 @@ export function seedHousing(world: WorldState, decls: PropertyDecl[]): void {
             const amountSubunits = BigInt(Math.round(rentYuan * world.data.economy.subunitsPerUnit)).toString();
             bills.push({
                 id: billId,
-                label: `${decl.sceneName}租金`,
+                label: (decl.lease.rentLabel) ?? `${decl.sceneName}租金`,
                 amountSubunits,
                 dueDay: rentDueDay ?? 1,
                 fromAccountId: tenantId,

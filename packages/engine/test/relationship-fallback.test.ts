@@ -88,8 +88,8 @@ test('(a1) seeded canon views ride ties into beats — only under the flag wirin
 
     const liu = world.idByName('柳安春')!;
     const su = world.idByName('蘇映雪')!;
-    assert.match(world.relationshipView(liu, su) ?? '', /師姐給的是魂/);
-    assert.match(world.selfTies(liu, [liu, su])[su] ?? '', /師姐給的是魂/);
+    assert.match(world.relationshipView(liu, su) ?? '', /十七歲的初夜/);
+    assert.match(world.selfTies(liu, [liu, su])[su] ?? '', /十七歲的初夜/);
 
     // and the tie reaches the actual beat prompt input when both share a scene
     const agent = new BeatRecordingAgent();
@@ -98,7 +98,7 @@ test('(a1) seeded canon views ride ties into beats — only under the flag wirin
     const withSu = liuBeats.filter((input) => input.others.some((other) => other.name === '蘇映雪'));
     if (withSu.length) {
         assert.ok(
-            withSu.some((input) => input.others.find((other) => other.name === '蘇映雪')?.tie?.includes('師姐給的是魂')),
+            withSu.some((input) => input.others.find((other) => other.name === '蘇映雪')?.tie?.includes('十七歲的初夜')),
             '柳安春 sees her authored view of 蘇映雪 when they share a scene',
         );
     }
