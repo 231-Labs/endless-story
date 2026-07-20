@@ -104,6 +104,20 @@ export interface CastMember {
      *  restore fine (the field is simply absent). Carried by snapshot/restore as
      *  plain JSON. */
     skills?: Skill[];
+    /** 口碑・名頭 (renown) — the PUBLIC street-verdict on this person's standing,
+     *  0..1, observable by ALL (名滿上海／名頭黯淡). This is DISTINCT from the private
+     *  `bondGraph`/`edges` (personal feeling one soul holds toward another): renown
+     *  is what the whole town would say of them. Accrues over a season on the
+     *  box-office (滿座長臉、停鑼折面子). Optional & backward-compatible: absent ⇒ a
+     *  neutral baseline (`renownOf` ⇒ 0.5). Plain JSON, carried by snapshot/restore. */
+    renown?: number;
+    /** 自視・自估 (self-regard) — how this person PRIVATELY rates their OWN standing,
+     *  0..1. It may DIVERGE from `renown`: a 當紅卻怕不夠好 star carries high renown
+     *  and low self-regard; a nobody may think the world owes them their due. Only
+     *  ever surfaced to the character themselves (the inner voice), never to others.
+     *  Optional & backward-compatible: absent ⇒ falls back to `renownOf` (they rate
+     *  themselves as the street does). Plain JSON, carried by snapshot/restore. */
+    selfRegard?: number;
 }
 
 export interface SceneInfo {
@@ -192,6 +206,32 @@ function strangerDescriptor(role?: string, gender?: string, age?: number): strin
     const pw = personWord(gender, age);
     const trade = role ? TRADE_NOUN[role] : undefined;
     return trade ? `一個${trade}${pw}` : `一位面生的${pw}`;
+}
+
+/** Clamp a 0..1 vector value (renown / self-regard). */
+function clamp01(v: number): number {
+    return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** 口碑・名頭 descriptor — the PUBLIC verdict rendered as a street-word, for percepts
+ *  (never a number in a prompt). Thresholds descend 0.8／0.6／0.4／0.2. Pure. */
+export function renownLabel(v: number): string {
+    if (v >= 0.8) return '名滿上海';
+    if (v >= 0.6) return '名頭正盛';
+    if (v >= 0.4) return '小有名氣';
+    if (v >= 0.2) return '無甚名氣';
+    return '名頭黯淡';
+}
+
+/** 自視・自估 descriptor — the INNER voice (how they rate their own斤兩), for the
+ *  acting character's self-model only. Same thresholds as `renownLabel`; a famous-
+ *  but-insecure star reads 名頭正盛 outside yet 心裡發虛 within. Pure. */
+export function selfRegardLabel(v: number): string {
+    if (v >= 0.8) return '自負得很';
+    if (v >= 0.6) return '頗自許';
+    if (v >= 0.4) return '尚算託底';
+    if (v >= 0.2) return '心裡不踏實';
+    return '心裡發虛';
 }
 
 /** 訪問權限 key kind: a 半永久 standing key (self-let-in) vs a 一次性 one-time pass
@@ -621,6 +661,32 @@ export class WorldState {
         row[toId] = cur && cur.tone === tone ? { tone, weight: cur.weight + 1 } : { tone, weight: (cur?.weight ?? 0) + 1 };
     }
 
+    // ── 口碑 / 自視 (public renown + private self-regard) ──────────────────────
+    /** This character's PUBLIC 口碑・名頭, 0..1. Absent (never seeded, or a world
+     *  predating the layer) ⇒ 0.5, a neutral baseline. */
+    renownOf(id: string): number {
+        return this.castById(id)?.renown ?? 0.5;
+    }
+    /** This character's PRIVATE 自視・自估, 0..1. Absent ⇒ falls back to `renownOf`
+     *  (they rate themselves as the street does — until something moves it). */
+    selfRegardOf(id: string): number {
+        return this.castById(id)?.selfRegard ?? this.renownOf(id);
+    }
+    /** Nudge PUBLIC renown by `delta`, clamped 0..1. No-op on an unknown id.
+     *  Reads through `renownOf`, so a never-seeded member moves from the 0.5 base. */
+    bumpRenown(id: string, delta: number): void {
+        const m = this.castById(id);
+        if (!m) return;
+        m.renown = clamp01(this.renownOf(id) + delta);
+    }
+    /** Nudge PRIVATE self-regard by `delta`, clamped 0..1. No-op on an unknown id.
+     *  Reads through `selfRegardOf`, so an unset self-regard moves from renown. */
+    bumpSelfRegard(id: string, delta: number): void {
+        const m = this.castById(id);
+        if (!m) return;
+        m.selfRegard = clamp01(this.selfRegardOf(id) + delta);
+    }
+
     // ── 相識分寸 (subjective acquaintance) ──────────────────────────────────────
     /** How well `perceiverId` knows `targetId`. Self ⇒ always 'named'; flag off ⇒
      *  'named' (so `perceivedName` === `nameById`); else the recorded level, or
@@ -737,6 +803,12 @@ export class WorldState {
             // 相識分寸: refer to each other as the acting character KNOWS them;
             // flag-off ⇒ perceivedName === nameById (byte-identical).
             for (const oid of others) out.push(`· ${this.perceivedName(actingId, oid)}：${m.relationshipView[oid]}`);
+        }
+        // 自視: the PRIVATE inner reckoning of one's own斤兩 — only ever shown to the
+        // acting character (self), never to others. Only when it has been seeded/moved
+        // (undefined ⇒ nothing to say); a famous-but-insecure star reads 心裡發虛 here.
+        if (m.selfRegard !== undefined) {
+            out.push(`【你心裡掂量自己的斤兩：${selfRegardLabel(m.selfRegard)}。】`);
         }
         return out.join('\n');
     }

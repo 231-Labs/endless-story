@@ -217,6 +217,11 @@ export interface PlanDayInput {
     relationshipPressure?: string[];
     /** This character's own private secret (colours what they guard while planning). */
     innerSecret?: string;
+    /** 營生・口碑 framing: a role-rhythm + reputation stake so the plan orients toward
+     *  the character's CRAFT and standing (『白天排戲、入夜登台是本分；名頭要靠一場場戲
+     *  攢』), not just 去吃糖粥. Tailored per role by the tick (performer vs non-troupe;
+     *  omitted when the world carries no livelihood). Optional & backward-compatible. */
+    livelihoodFraming?: string;
 }
 
 export interface PlanDayReply {

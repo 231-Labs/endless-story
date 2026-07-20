@@ -59,6 +59,26 @@ function mutualCue(delta: number): { show: boolean; label: string } {
     return delta > 0 ? { show: true, label: '你待TA更暖' } : { show: true, label: 'TA待你更暖' };
 }
 
+/** 名頭 (public renown) descriptor — mirrors the engine's `renownLabel` thresholds
+ *  (0.8／0.6／0.4／0.2) so the 內頁 speaks the same street-word as the percepts. */
+function renownWord(v: number): string {
+    if (v >= 0.8) return '名滿上海';
+    if (v >= 0.6) return '名頭正盛';
+    if (v >= 0.4) return '小有名氣';
+    if (v >= 0.2) return '無甚名氣';
+    return '名頭黯淡';
+}
+
+/** 自視 (private self-regard) descriptor — the inner voice, mirrors the engine's
+ *  `selfRegardLabel`. May diverge from 名頭 (名頭正盛 outside, 心裡發虛 within). */
+function selfRegardWord(v: number): string {
+    if (v >= 0.8) return '自負得很';
+    if (v >= 0.6) return '頗自許';
+    if (v >= 0.4) return '尚算託底';
+    if (v >= 0.2) return '心裡不踏實';
+    return '心裡發虛';
+}
+
 /** 立繪柱身心計 — thin white-on-dark gauge. */
 function Gauge({ label, value, tone, title }: { label: string; value: number; tone: string; title: string }) {
     const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
@@ -632,6 +652,22 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                         <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">其人</h3>
                                         <p className="mt-2 font-serif text-sm leading-relaxed text-ink/85">{c.description}</p>
                                     </section>
+                                    {/* 名頭 —— 公論之口碑（公開），自視為裡（私），僅在此卷種下名頭時現 */}
+                                    {c.renown !== undefined ? (
+                                        <section className="animate-beat-in">
+                                            <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">名頭</h3>
+                                            <div className="mt-2 flex items-center gap-2.5" title={`口碑（滿街公論）${c.renown.toFixed(2)}`}>
+                                                <span className="shrink-0 font-serif text-sm tracking-[0.08em] text-ink/85">{renownWord(c.renown)}</span>
+                                                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink/10 dark:bg-white/10">
+                                                    <div className="h-full rounded-full bg-cinnabar/70 transition-[width] duration-700" style={{ width: `${Math.round(c.renown * 100)}%` }} />
+                                                </div>
+                                                <span className="w-7 shrink-0 text-right font-serif text-2xs tabular-nums text-mute/70">{Math.round(c.renown * 100)}</span>
+                                            </div>
+                                            {c.selfRegard !== undefined ? (
+                                                <p className="mt-1.5 font-serif text-2xs leading-relaxed text-mute/70">自視 · 幽：{selfRegardWord(c.selfRegard)}（心裡掂量自己的斤兩）</p>
+                                            ) : null}
+                                        </section>
+                                    ) : null}
                                     {c.coreIdentity.length ? (
                                         <section className="animate-beat-in">
                                             <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">恆常自我</h3>

@@ -17,7 +17,6 @@
 
 import {
     applyRipples,
-    confideWorry,
     confiderOf,
     decayWants,
     fadeStaleWants,
@@ -33,7 +32,6 @@ import { pickOrthogonalThreads, spawnWant, type LedgerEvent } from './core/want-
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
 import { CONDUCT_KINDS, STAGE_KINDS, isStageScene, skillStyleHint } from './core/skills.ts';
 import { BOND, advanceReady, bondOf, bumpBond, decayBonds, seedBond } from './core/bond-graph.ts';
-import { dutyRhythm } from './core/livelihood-rhythm.ts';
 import {
     accumulateEffort,
     addScriptFragment,
@@ -50,8 +48,9 @@ import type { AidActionInput, AidActionResult, AidPeer, AidSituation, AidVitalit
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
 import { bankRehearsalAttendance, buildNegotiationSeats, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
-import { deityHintFor, framePrayerFallback, isStuckWant, templeScenesOf } from './core/temple-prayer.ts';
-import type { WorldState } from './world-state.ts';
+import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple-prayer.ts';
+import { buildStakesBrief } from './core/stakes-brief.ts';
+import { renownLabel, type WorldState } from './world-state.ts';
 
 export interface TickDeps {
     agent: SceneAgentPort;
@@ -375,11 +374,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const rehearsalToday = w.rehearsalCall?.day === today ? w.rehearsalCall : undefined;
     const rehearsalTroupe = rehearsalToday ? troupePlayerIds(world) : new Set<string>();
     const rehearsalVenueName = rehearsalToday ? world.sceneNameById(rehearsalToday.venueSceneId) : '';
-    // HUNGER as a movement driver (餓了去食肆買東西吃): a pressing belly outranks
-    // work. Precomputed once — sceneId → the cheapest location-anchored meal —
-    // and EMPTY for any seed whose meals carry no sceneName, so the whole drive
-    // is inert there. spendableOf reads a character's OWN purse (self-paid meals).
-    const HUNGER_SEEK = 0.55; // pressing hunger — pull the mover to go eat first
+    // Food scenes: sceneId → the cheapest location-anchored meal, precomputed once —
+    // the anchor a hungry mover can be pulled toward and fed at (§3.5). EMPTY for any
+    // seed whose meals carry no sceneName, so the 利害簡報's demoted hunger line and
+    // the eat-in-passing step are both inert there. spendableOf reads a character's
+    // OWN purse (self-paid meals). The hunger THRESHOLD (HUNGER_SEEK) now lives with
+    // the brief in stakes-brief.ts.
     const foodScenes: Map<string, SeasonCatalogItem> = w.economy ? foodScenesOf(world) : new Map();
     // 廟願 — scene ids that read as a temple (神明 前). Precomputed once; EMPTY for
     // a world with no temple scene, so the 廟 PULL below and the §3.6 祈願 step are
@@ -493,109 +493,31 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 member.plan ? `【你這些日子的打算】\n${member.plan}` : '',
                 `【眼下心事】\n${live.map((want) => `- [${want.layer}] ${want.desc}`).join('\n')}`,
             ].filter(Boolean).join('\n'),
-            // Livelihood day-rhythm (行當節律): a soft, overridable pull toward the
-            // character's 做活處 by day and 住處 at night, drawn from this seed's
-            // own home/work anchors. Never routes — just gives an idle character a
-            // default of earning their keep / going home rather than wandering.
-            // When this character has a resolved 行當專屬 duty for THIS part (歌女
-            // 入夜唱堂會、記者深宵趕稿、班主坐鎮後台), dutyRhythm swaps in a stronger
-            // on-post line naming the duty venue; otherwise it delegates to the
-            // generic rhythm above. Still a soft hint — movement authority is untouched.
-            rhythmHint: (() => {
-                // HUNGER outranks work — 空著肚子做不了活. When hunger presses and a
-                // location-anchored food scene sells a meal this mover can afford,
-                // the strongest pull is to go eat FIRST (matching the old agent-
-                // season eat drive). Skipped when already standing at a food scene
-                // (§3.5 feeds them in passing) or when none is affordable — then it
-                // falls through to the own-duty / rehearsal / generic rhythm below.
-                // Soft hint only; the single movement authority is untouched. A seed
-                // with no sceneName'd meal has an empty foodScenes ⇒ this never fires.
-                if (w.economy && foodScenes.size && member.state.hunger > HUNGER_SEEK && !foodScenes.has(currentSceneId)) {
-                    const affordable = [...foodScenes].filter(([, item]) => spendableOf(member.id) >= BigInt(item.priceSubunits));
-                    // prefer a food scene in the mover's own district; else any affordable one.
-                    const sameDistrict = affordable.filter(([foodSceneId]) => world.sameDistrict(currentSceneId, foodSceneId));
-                    const pick = sameDistrict[0] ?? affordable[0];
-                    if (pick) {
-                        const [foodSceneId, meal] = pick;
-                        const foodSceneName = world.sceneNameById(foodSceneId);
-                        const priceText = formatMoney(w.economy, BigInt(meal.priceSubunits));
-                        return `腹中空得發慌，空著肚子做不了活——先往「${foodSceneName}」墊墊肚子（一份${meal.label}${priceText}），趁早去吃，旁的事等吃過再說。`;
-                    }
-                }
-                // 夜訪商量 PULL (confide) — at 黃昏/入夜/深宵 a character weighed down by a
-                // pressing NON-romantic worry is drawn to go talk it over with their most-
-                // trusted confidant. Mirror of the hunger PULL: a soft hint only (the single
-                // movement authority is untouched), it fires only when the mover carries a
-                // confideWorry AND a trusted confidant (bond ≥ known, non-hostile) sits at a
-                // DIFFERENT, reachable scene. Prefers a confidant in the mover's own district;
-                // skipped if already co-located; never forces. Falls through to the own-duty /
-                // rehearsal / generic night rhythm below.
-                if (clockLabel === '黃昏' || clockLabel === '入夜' || clockLabel === '深宵') {
-                    const worry = confideWorry(wants, member.id);
-                    if (worry) {
-                        let bestConfidant: { id: string; near: boolean; bond: number } | null = null;
-                        for (const other of w.cast) {
-                            if (other.id === member.id) continue;
-                            const otherScene = w.roster[other.id];
-                            if (!otherScene || otherScene === currentSceneId) continue; // co-located ⇒ no pull
-                            if (!options.some((o) => o.sceneId === otherScene)) continue; // must be reachable
-                            const bond = bondOf(bondsAtMove, member.id, other.id);
-                            if (bond < BOND.seed.known) continue; // not trusted enough
-                            if (hasHostileWantToward(wants, member.id, other.id, other.name)) continue; // resented
-                            const near = world.sameDistrict(currentSceneId, otherScene);
-                            if (
-                                !bestConfidant ||
-                                (near && !bestConfidant.near) ||
-                                (near === bestConfidant.near && bond > bestConfidant.bond)
-                            ) {
-                                bestConfidant = { id: other.id, near, bond };
-                            }
-                        }
-                        if (bestConfidant) {
-                            return `這樁事在心裡壓了整日，總沒個主意——不如趁夜去尋${world.nameById(bestConfidant.id)}，把心事與TA說道說道，或許就明朗了。`;
-                        }
-                    }
-                }
-                // 廟 PULL (祈願) — at 清晨 or 黃昏 a character carrying a STUCK want
-                // (high tension, long-carried, still pressing — 求人無門) is softly
-                // drawn to a reachable temple to say it out loud to 神明. Mirror of
-                // the confide PULL: a soft hint only (the single movement authority
-                // is untouched), placed AFTER confide so 「有人可商量」takes precedence
-                // and this fires when there is no one to turn to. Low-frequency and
-                // temple-gated, so it never overrides livelihood; a world with no
-                // temple scene has an empty templeScenes ⇒ this never fires. Prefers a
-                // temple in the mover's own district; skipped if already at one.
-                if ((clockLabel === '清晨' || clockLabel === '黃昏') && templeScenes.size && !templeScenes.has(currentSceneId)) {
-                    const stuck = live.find((wnt) => isStuckWant(wnt, nowTick));
-                    if (stuck) {
-                        const reachableTemples = options.filter((o) => templeScenes.has(o.sceneId));
-                        const templePick =
-                            reachableTemples.find((o) => world.sameDistrict(currentSceneId, o.sceneId)) ?? reachableTemples[0];
-                        if (templePick) {
-                            return `這樁心事求人無門，不如往${templePick.name}去，對神明討個主意、許個願。`;
-                        }
-                    }
-                }
-                return dutyRhythm(
-                    clockLabel,
-                    (() => {
-                        // A player's OWN 行當專屬 duty for this part takes precedence.
-                        const memberDuty = member.duties?.find((d) => d.part === clockLabel && d.duty);
-                        if (memberDuty) return { sceneName: world.sceneNameById(memberDuty.sceneId), note: memberDuty.note };
-                        // Else the 班主's called rehearsal is a TRANSIENT afternoon duty for
-                        // troupe players with no own duty this part: it pulls them to the
-                        // venue so bankRehearsalAttendance banks presence (box-office quality)
-                        // and, with emergentProduction, their rehearse accrues effort. Soft
-                        // hint only — the single movement authority is untouched.
-                        if (rehearsalToday && (clockLabel === '日午' || clockLabel === '晡時') && rehearsalTroupe.has(member.id)) {
-                            return { sceneName: rehearsalVenueName, note: `排《${rehearsalToday.title}》，班主叫的` };
-                        }
-                        return undefined;
-                    })(),
-                    w.workByChar[member.id] ? world.sceneNameById(w.workByChar[member.id]) : undefined,
-                    w.homeByChar[member.id] ? world.sceneNameById(w.homeByChar[member.id]) : undefined,
-                );
-            })(),
+            // 利害簡報 (stakes brief): the soft movement hint, now a NEUTRAL BRIEFING
+            // instead of the old single-winner priority cascade. It COLLECTS every
+            // applicable stake — tonight's show / livelihood (the piece the cascade
+            // never surfaced), 口碑, the 行當本分 rhythm, a DEMOTED hunger line, plus the
+            // optional 夜訪/廟 pulls — livelihood/reputation first, appetite one line
+            // among others (never『旁的事等吃過再說』). Still a soft hint: the single
+            // movement authority (decideMove) is untouched, and the deterministic
+            // FakeSceneAgent ignores it, so the mechanical movement/economy path is
+            // byte-identical. The heavy lifting is the pure `buildStakesBrief` helper.
+            rhythmHint: buildStakesBrief({
+                world,
+                member,
+                currentSceneId,
+                clockLabel,
+                nowTick,
+                liveWants: live,
+                wants,
+                options,
+                bonds: bondsAtMove,
+                foodScenes,
+                templeScenes,
+                rehearsalToday,
+                rehearsalTroupe,
+                rehearsalVenueName,
+            }),
             currentSceneName: world.sceneNameById(currentSceneId),
             options,
             clock: clockLabel,
@@ -1869,6 +1791,18 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         const pendingDeadlines = (w.scheduledEvents ?? []).filter(
             (scheduled) => !deliveredScheduled.has(scheduled.id) && scheduled.atTick > nowTick,
         );
+        // 營生・口碑 framing per character: performers get the 排戲/登台 rhythm + the
+        // 名頭一場場攢 stake; a non-troupe hand a lighter 「自有活路、名聲亦要攢」 line.
+        // Omitted when the world carries no livelihood (economy) — nothing to frame.
+        const planTroupeIds = w.economy ? troupePlayerIds(world) : new Set<string>();
+        const livelihoodFramingFor = (memberId: string): string | undefined => {
+            if (!w.economy) return undefined;
+            const standing = renownLabel(world.renownOf(memberId));
+            if (planTroupeIds.has(memberId)) {
+                return `你是戲班的角兒，白天排戲、入夜登台是本分；開鑼時人在台上，戲才唱得成，一場票房是全班的生計，你也有分潤。名頭（眼下${standing}）要靠一場場戲攢，攢得起也跌得下——排你的戲、守你的台，才是正經營生。`;
+            }
+            return `你在這條街上自有活路，靠手上的本分營生（不繫在班庫那一場戲上）；名頭（眼下${standing}）也是一件件事攢起來的，攢得起也跌得下。`;
+        };
         for (const member of w.cast) {
             const todayLines = acc.interactions?.[member.id]
                 ? Object.values(acc.interactions[member.id]).flat().join('\n').slice(-1200)
@@ -1894,6 +1828,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     situation,
                     relationshipPressure: relationshipPressure.length ? relationshipPressure : undefined,
                     innerSecret: member.secret,
+                    livelihoodFraming: livelihoodFramingFor(member.id),
                 });
                 if (reply && reply.planText.trim()) member.plan = reply.planText.trim();
             } catch (err) {

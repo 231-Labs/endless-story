@@ -977,6 +977,13 @@ export function settleEveningPerformance(
     const leadNames = (ids: string[]) => ids.map((id) => world.nameById(id)).join('、');
     if (leadsPresent.length === 0 || present.length < perf.minCast) {
         perf.rehearsedToday = [];
+        // 口碑: 停鑼 dents the BILLED leads' 名頭 (a cancelled show折面子) and stings
+        // the insecure (自視). renown is NOT money — no ledger touched here, so
+        // conservation + `auditSeasonEconomy` are unaffected.
+        for (const id of perf.leadIds) {
+            world.bumpRenown(id, -0.06);
+            world.bumpSelfRegard(id, -0.04);
+        }
         return {
             performed: false,
             line: `【${perf.venueSceneName}】今夜停鑼：${leadsPresent.length === 0 ? `領銜（${leadNames(perf.leadIds)}）無一人上台` : `到場僅 ${present.length} 人，湊不成一台戲`}，看客退票散去，票房分文未進。`,
@@ -1003,6 +1010,23 @@ export function settleEveningPerformance(
     const causeEventId = `${world.data.sagaId}:boxoffice:d${req.day}`;
     // idempotent per day: any takings deposit already booked tonight → replay is a no-op.
     if (contract.economy.ledger.some((txn) => txn.causeEventId === causeEventId)) return null;
+
+    // 口碑: the house moves standing. 叫座 (滿座 and above, pct ≥ 100) lifts the
+    // performers actually on the boards (esp. the leads); a 冷場 (半座, pct < 70)
+    // dents the leads who took the stage. Small steps that accrue over a season.
+    // Placed AFTER the per-day idempotency guard above, so a replayed settle never
+    // double-counts. renown is NOT money — no ledger touched, audit unaffected.
+    if (pct >= 100n) {
+        for (const member of present) {
+            world.bumpRenown(member.id, 0.05);
+            world.bumpSelfRegard(member.id, 0.03);
+        }
+    } else if (pct < 70n) {
+        for (const id of leadsPresent) {
+            world.bumpRenown(id, -0.06);
+            world.bumpSelfRegard(id, -0.04);
+        }
+    }
 
     // ── the cast's cut ── a frame-configurable share of the takings is paid to
     // the people who actually made the show (roster === the venue tonight),

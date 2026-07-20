@@ -367,6 +367,11 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             coreIdentity: member.coreIdentity,
             secret: member.secret,
             plan: member.plan,
+            // 口碑：只在此卷確實種下名頭時才掛（renownOf 自帶 0.5 底、selfRegardOf 回落
+            // 至 renown），免得無名頭的卷每個人都顯「小有名氣」。
+            ...(member.renown !== undefined
+                ? { renown: world.renownOf(member.id), selfRegard: world.selfRegardOf(member.id) }
+                : {}),
             bonds: bondsOf(member),
             // 技藝 — the character's authored skills (empty when none).
             skills: (member.skills ?? []).map((s) => ({ name: s.name, kind: s.kind, style: s.style, level: s.level, note: s.note })),
