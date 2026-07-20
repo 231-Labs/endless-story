@@ -68,6 +68,14 @@
       "text": "又到月半，前街照例結一回帳。趙阿福的食擔前排起了要賒要還的人，殷阿婆的花也該把這半月的零賬收一收；雲錦台這半月的戲牌時明時暗，這條街的活路，就看今晚的鑼響不響、座滿不滿。"
     }
   ],
+  "properties": [
+    { "scene": "後台小廂房", "ownerNames": ["沈雪笙"], "lease": { "tenantName": "柳安春", "keyObjectId": "key-liuanchun-backstage", "keyLabel": "後台小廂房的門鑰" } },
+    { "scene": "二樓書寓", "ownerNames": ["蘇映雪"] },
+    { "scene": "金鳳寓所", "ownerNames": ["金鳳"] },
+    { "scene": "沈宅小樓", "ownerNames": ["沈雪笙"] },
+    { "scene": "報館閣樓", "ownerNames": ["方競西"] },
+    { "scene": "白公館繡樓", "ownerNames": ["白韻秋"] }
+  ],
   "economy": {
     "unitLabel": "圓",
     "subunitsPerUnit": 100,

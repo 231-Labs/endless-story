@@ -13,6 +13,7 @@ import * as path from 'node:path';
 import type { RecallPort } from './ports.ts';
 import { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
 import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-economy.ts';
+import { seedHousing } from './core/housing.ts';
 import { makeClock } from './adapters/local/clock.ts';
 import {
     WorldState,
@@ -98,6 +99,10 @@ export interface SeasonFrame {
     /** role → per-part-of-day duty schedule (行當專屬節律). sceneName resolved to id
      * at seed time; a character whose role has no entry keeps the generic rhythm. */
     occupationDuties?: Record<string, Array<{ part: string; sceneName: string; duty?: boolean; note?: string }>>;
+    /** 房產/租約 — 擁有權≠使用權 的開局配置; each private dwelling's 屋主 (deed) and
+     * optional 租客 (lease: holds a physical key + standing use-right). Seeded so the
+     * world begins housing-STABLE (everyone already housed; no money flows). */
+    properties?: Array<{ scene: string; ownerNames: string[]; lease?: { tenantName: string; keyObjectId: string; keyLabel?: string } }>;
 }
 
 export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
@@ -179,6 +184,25 @@ export function applySeasonFrame(world: WorldState, frame: SeasonFrame): void {
     }
 
     if (frame.economy && !world.data.economy) seedSeasonEconomy(world, frame.economy, frame.id);
+
+    // 房產/租約/實體鑰匙: after the economy seed, record each private dwelling's deed
+    // (擁有權) and hand any 租客 a standing key OBJECT (使用權). A housing-STABLE
+    // opening — everyone already housed, no money moves (rent is a later stage).
+    // Absent `properties` ⇒ no-op, so a world without deeds behaves exactly as today.
+    if (frame.properties?.length) {
+        seedHousing(
+            world,
+            frame.properties.map((p) => ({
+                sceneName: p.scene,
+                ownerNames: p.ownerNames,
+                lease: p.lease && {
+                    tenantName: p.lease.tenantName,
+                    keyObjectId: p.lease.keyObjectId,
+                    keyLabel: p.lease.keyLabel,
+                },
+            })),
+        );
+    }
 
     // 行當專屬節律: resolve each character's per-part-of-day duty from the frame's
     // role-keyed schedule. A duty names a venue the character is ON-POST at (歌女
