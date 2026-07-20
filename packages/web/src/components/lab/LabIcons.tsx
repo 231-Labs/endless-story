@@ -141,6 +141,17 @@ export function IconMove(props: SVGProps<SVGSVGElement>) {
     );
 }
 
+/** 導出 — a tray with a brush-stroke arrow descending into it (download/export). */
+export function IconExport(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg {...base(props)}>
+            <path d="M12 4v10" />
+            <path d="M8.5 10.5 12 14l3.5-3.5" />
+            <path d="M5 15.5v3A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-3" />
+        </svg>
+    );
+}
+
 /** 天時 — a sun rising over the horizon (clock-bound world events). */
 export function IconWorld(props: SVGProps<SVGSVGElement>) {
     return (

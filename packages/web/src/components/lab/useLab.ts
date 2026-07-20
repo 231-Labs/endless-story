@@ -51,6 +51,19 @@ export const labApi = {
             body: JSON.stringify(body),
         }),
     live: (id: string, after: number) => request<LabLiveSnapshot>(`/api/lab/runs/${id}/live?after=${after}`),
+    /** 診斷導出 — fetch the run's diagnostic Markdown as a downloadable blob. Uses
+     *  the same cookie auth every other lab fetch relies on (same-origin fetch
+     *  carries `es_lab_key`); returns the blob + server-suggested filename. */
+    export: async (id: string): Promise<{ blob: Blob; filename: string }> => {
+        const res = await fetch(`/api/lab/runs/${id}/export`, { cache: 'no-store' });
+        if (!res.ok) {
+            const data = (await res.json().catch(() => ({}))) as { error?: string };
+            throw new Error(data?.error ?? `${res.status} ${res.statusText}`);
+        }
+        const disposition = res.headers.get('Content-Disposition') ?? '';
+        const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `endless-story-${id}.md`;
+        return { blob: await res.blob(), filename };
+    },
     ticks: (id: string, limit?: number) =>
         request<{ records: LabTickRecord[] }>(`/api/lab/runs/${id}/ticks${limit ? `?limit=${limit}` : ''}`),
     archive: (id: string) =>

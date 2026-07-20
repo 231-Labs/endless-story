@@ -7,12 +7,12 @@
  * /api/lab/runs/[id]/live; faster cadence while a tick is walking.
  */
 
-import { use, useMemo, useState } from 'react';
+import { use, useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { BeadCurtain } from '@/components/lab/LabOrnaments';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
-import { IconBack, IconGallery, IconObjects, IconScroll } from '@/components/lab/LabIcons';
+import { IconBack, IconExport, IconGallery, IconObjects, IconScroll } from '@/components/lab/LabIcons';
 import { LabBeatDock } from '@/components/lab/LabBeatDock';
 import { LabCastRail } from '@/components/lab/LabCastRail';
 import { LabCharacterSheet } from '@/components/lab/LabCharacterSheet';
@@ -24,7 +24,7 @@ import { LabSceneSheet } from '@/components/lab/LabSceneSheet';
 import { LabWishBoard } from '@/components/lab/LabWishBoard';
 import { LabWishWall } from '@/components/lab/LabWishWall';
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
-import { useLabLive } from '@/components/lab/useLab';
+import { labApi, useLabLive } from '@/components/lab/useLab';
 
 export default function LabRunPage({ params }: { params: Promise<{ id: string }> }) {
     // page params keep their percent-encoding; run ids may contain CJK
@@ -34,6 +34,26 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
     const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
     const [focusedCharacterId, setFocusedCharacterId] = useState<string | null>(null);
     const [drawer, setDrawer] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState<string | null>(null);
+
+    const onExport = useCallback(async () => {
+        setExporting(true);
+        setExportError(null);
+        try {
+            const { blob, filename } = await labApi.export(id);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            setExportError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setExporting(false);
+        }
+    }, [id]);
 
     const focusedScene = useMemo(
         () => snapshot?.scenes.find((s) => s.id === focusedSceneId) ?? null,
@@ -119,6 +139,16 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                         >
                             <IconObjects />
                         </button>
+                        <button
+                            type="button"
+                            onClick={onExport}
+                            disabled={exporting}
+                            aria-label="導出診斷（給 AI 看的卷宗全紀）"
+                            title={exporting ? '導出中…' : '導出診斷（給 AI 看的卷宗全紀）'}
+                            className="es-icon-button !h-11 !w-11 text-[20px] disabled:opacity-50"
+                        >
+                            <IconExport />
+                        </button>
                     </div>
                     <div className="w-full">
                         <LabControls snapshot={snapshot} onChanged={refresh} />
@@ -128,6 +158,9 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
 
             {error ? (
                 <p className="px-4 py-2 font-serif text-xs text-cinnabar sm:px-8" role="alert">{error}</p>
+            ) : null}
+            {exportError ? (
+                <p className="px-4 py-2 font-serif text-xs text-cinnabar sm:px-8" role="alert">導出失敗：{exportError}</p>
             ) : null}
 
             {/* 主舞台 —— 手卷滿幅；拍流是懸浮可折的匣，不再切走橫向 */}
