@@ -523,7 +523,7 @@ export interface RippleDelta {
 }
 
 /** Apply LLM-judged ripples: shift the target's hottest want, spawn new threads. */
-export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, tick: number): Want[] {
+export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, tick: number, nextId?: () => string): Want[] {
     const spawned: Want[] = [];
     for (const d of deltas) {
         const mine = wants.filter((w) => !w.retired && w.characterId === d.characterId);
@@ -552,6 +552,7 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
         ) {
             spawned.push(
                 newWant({
+                    id: nextId?.(),
                     characterId: d.characterId,
                     layer: normalizeLayer(d.layer),
                     desc: nt,
