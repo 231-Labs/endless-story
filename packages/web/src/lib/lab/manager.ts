@@ -305,6 +305,17 @@ export class LabRunManager {
     private log(run: ActiveRun, line: string): void {
         run.logs.push({ ts: Date.now(), line });
         if (run.logs.length > LOG_RING_CAP) run.logs.splice(0, run.logs.length - LOG_RING_CAP);
+        // Durable tee — beyond the in-memory ring, append every line to
+        // <runDir>/engine-log.txt so the full mechanic trace ([食]/[濟]/[門]/
+        // movement/[economy-audit]/[fatal]…) survives the cap AND a restart, and
+        // stays exportable for a cold run. The engine emits a `── tick N · day D
+        // · part ──` header each tick, so raw append preserves tick grouping.
+        // Best-effort: a failed tee must never break the run.
+        try {
+            fs.appendFileSync(path.join(runDir(run.meta.id), 'engine-log.txt'), `${line}\n`, 'utf8');
+        } catch {
+            // logging must never throw
+        }
     }
 
     private pushBeat(run: ActiveRun, beat: Omit<LabLiveBeat, 'seq' | 'ts'>): void {
