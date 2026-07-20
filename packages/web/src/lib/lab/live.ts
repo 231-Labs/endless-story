@@ -20,7 +20,7 @@ import { readRunMeta } from './store';
 import { readSeedRaw } from './seeds';
 import { assetNoteFor, assetUrlFor, listGallery } from './assets';
 import { beatsFromTickRecords, listArchiveEntries, readArchiveEntry, tailTickRecords } from './artifacts';
-import type { LabCharacterLive, LabLiveBeat, LabPrayer, LabRunMeta, LabRunPhase } from './types';
+import type { LabCharacterLive, LabLiveBeat, LabPrayer, LabRunMeta, LabRunPhase, LabSceneObject } from './types';
 
 /** The chain-only preset fields the engine ignores but the handscroll wants. */
 interface RawPresetView extends RawPreset {
@@ -64,6 +64,9 @@ export interface LabLiveSnapshot {
      *  from the internal 心事 on the 願榜 (`characters[].wants`). Empty when the
      *  world carries no temple / nobody has prayed. */
     prayers: LabPrayer[];
+    /** 物在世 — every registered, non-destroyed world object with its current
+     *  placement (scene/container or carried), for the scene 內頁 facets. */
+    objects: LabSceneObject[];
     /** Per-scene recent public lines (newest first) for the 題字流. */
     streams: Record<string, LabStreamLine[]>;
     /** Beats newer than the requested cursor (empty on cold runs). */
@@ -439,6 +442,21 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             layer: p.layer,
         }));
 
+    // ── 物在世 (world objects with placement) ───────────────────────────────
+    const objects: LabSceneObject[] = (w.objects ?? [])
+        .filter((o) => o.visibility !== 'destroyed')
+        .map((o) => ({
+            id: o.id,
+            label: o.label,
+            sceneId: o.sceneId,
+            sceneName: world.sceneNameById(o.sceneId),
+            container: o.container,
+            state: o.state,
+            carriedBy: o.carriedBy,
+            carriedByName: o.carriedBy ? world.nameById(o.carriedBy) : undefined,
+            visibility: o.visibility as 'visible' | 'hidden',
+        }));
+
     // ── saga ───────────────────────────────────────────────────────────────
     const partOfDay = toDayPart(clock.partOfDay);
     const saga: Saga = {
@@ -493,6 +511,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         artByLocationId,
         characters,
         prayers,
+        objects,
         streams,
         beats,
         logs: (active?.logs ?? []).slice(-40),

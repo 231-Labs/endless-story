@@ -217,6 +217,22 @@ export interface LabPrayer {
     layer?: string;
 }
 
+/** A registered world object shaped for the scene 內頁's 物在此處 facet —
+ *  where it sits (sceneId/container), what shape it's in (state), or on whose
+ *  person it rides (carriedBy). Hidden objects come marked, not omitted: the
+ *  operator sees everything, 幽 texture stays legible as 幽. */
+export interface LabSceneObject {
+    id: string;
+    label: string;
+    sceneId: string;
+    sceneName: string;
+    container?: string;
+    state?: string;
+    carriedBy?: string;
+    carriedByName?: string;
+    visibility: 'visible' | 'hidden';
+}
+
 export interface LabSeedSummary {
     id: string;
     source: 'builtin' | 'custom';

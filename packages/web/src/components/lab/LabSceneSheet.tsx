@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 import type { Scene } from '@endless-story/shared';
 import { BlobImage } from '@/components/common/BlobImage';
 import { sceneArtFor } from '@/components/saga/handscroll/terrainArt';
-import type { LabCharacterLive, LabLiveBeat } from '@/lib/lab/types';
+import type { LabCharacterLive, LabLiveBeat, LabPrayer, LabSceneObject } from '@/lib/lab/types';
 
 interface Props {
     scene: Scene;
@@ -19,14 +19,25 @@ interface Props {
     beats: LabLiveBeat[];
     locationArt?: string;
     clock?: string;
+    /** 物在世 — the run's registered objects; the sheet filters to this scene. */
+    objects?: LabSceneObject[];
+    /** 願牆 — spoken prayers; the sheet shows the ones voiced HERE (願籤). */
+    prayers?: LabPrayer[];
     onSelectCharacter?: (characterId: string) => void;
     onClose: () => void;
 }
 
-export function LabSceneSheet({ scene, characters, beats, locationArt, clock, onSelectCharacter, onClose }: Props) {
+export function LabSceneSheet({ scene, characters, beats, locationArt, clock, objects, prayers, onSelectCharacter, onClose }: Props) {
     const present = characters.filter((c) => c.sceneId === scene.id);
     const sceneBeats = beats.filter((b) => b.sceneId === scene.id).slice(-14).reverse();
     const art = scene.imageUrl || sceneArtFor(scene.name) || locationArt;
+    // 物在此處：擱在這屋裡的（不含隨身）；幽物標記不隱去——操作者全知，幽仍是幽。
+    const placedHere = (objects ?? []).filter((o) => o.sceneId === scene.id && !o.carriedBy);
+    // 隨身在場：在場人身上帶著的（花串、繡帕、門鑰……會跟人走）。
+    const presentIds = new Set(characters.filter((c) => c.sceneId === scene.id).map((c) => c.id));
+    const carriedHere = (objects ?? []).filter((o) => o.carriedBy && presentIds.has(o.carriedBy));
+    // 願籤：在此處對神明說出口的話（廟宇自然有，別處自然無）。
+    const prayersHere = (prayers ?? []).filter((p) => p.templeName === scene.name).slice(0, 8);
     const isPrivate = (scene.privacyLevel ?? 0) >= 3;
 
     return (
@@ -116,6 +127,55 @@ export function LabSceneSheet({ scene, characters, beats, locationArt, clock, on
                                 </li>
                             ) : null}
                         </ul>
+
+                        {/* 物在此處 —— 這屋子裡擱著的東西（幽物標「幽」不隱去） */}
+                        {placedHere.length ? (
+                            <div className="mt-6">
+                                <p className="font-serif text-2xs tracking-[0.3em] text-cinnabar/80">物在此處</p>
+                                <ul className="mt-2 space-y-1.5">
+                                    {placedHere.map((o) => (
+                                        <li key={o.id} className={`font-serif text-xs leading-relaxed ${o.visibility === 'hidden' ? 'text-mute/60' : 'text-ink/80'}`}>
+                                            {o.visibility === 'hidden' ? <span className="mr-1.5 text-jade/80">幽</span> : <span className="mr-1.5 text-mute/50">·</span>}
+                                            {o.label}
+                                            {o.container ? <span className="ml-1.5 text-2xs text-mute/60">（在{o.container}）</span> : null}
+                                            {o.state ? <span className="ml-1.5 text-2xs text-mute/70">—— {o.state}</span> : null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+
+                        {/* 隨身在場 —— 在場人身上帶著的物件 */}
+                        {carriedHere.length ? (
+                            <div className="mt-5">
+                                <p className="font-serif text-2xs tracking-[0.3em] text-mute/70">隨身在場</p>
+                                <ul className="mt-2 space-y-1">
+                                    {carriedHere.map((o) => (
+                                        <li key={o.id} className="font-serif text-xs leading-relaxed text-ink/75">
+                                            <span className="text-mute/70">{o.carriedByName}</span> 隨身 · {o.label}
+                                            {o.state ? <span className="ml-1.5 text-2xs text-mute/60">—— {o.state}</span> : null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+
+                        {/* 願籤 —— 在此處對神明說出口的話（廟宇自然有，別處自然無） */}
+                        {prayersHere.length ? (
+                            <div className="mt-5">
+                                <p className="font-serif text-2xs tracking-[0.3em] text-seal/80">願籤</p>
+                                <ul className="mt-2 space-y-2">
+                                    {prayersHere.map((p) => (
+                                        <li key={p.id} className="border-l-2 border-seal/30 pl-3">
+                                            <p className="font-serif text-2xs tracking-[0.15em] text-mute/70">
+                                                第{p.day}日{p.clock ? ` · ${p.clock}` : ''} · {p.name}
+                                            </p>
+                                            <p className="mt-0.5 font-serif text-xs leading-relaxed text-ink/80">「{p.text}」</p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
                     </div>
 
                     {/* 方才此處 */}
