@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
+import { NarrativeProse, ReaderScaleControl, useReaderScale } from './NarrativeProse';
 import type { LabCharacterLive } from '@/lib/lab/types';
 
 type TabKey = 'overview' | 'wants' | 'bonds' | 'dossier' | 'skills' | 'estate' | 'memory' | 'pov' | 'media';
@@ -330,52 +331,6 @@ function KeyChip({ kind }: { kind: 'standing' | 'oneTime' }) {
     );
 }
 
-/** 述頁讀者字級 —— the reading-view font sizes the operator can step through. */
-const READER_SCALES = [0.9, 1, 1.15, 1.32, 1.52, 1.75] as const;
-
-/** 述文分塊 —— the woven POV body carries light markup: `# 場景題`, `---` 分隔線,
- *  and prose / 對白 paragraphs. Parse it so the 述頁 renders as a page, not raw
- *  pre-wrapped text. Pure; tolerant of blank lines and half/full-width rules. */
-type ProseBlock = { kind: 'head' | 'rule' | 'para'; text: string };
-function parseProse(body: string): ProseBlock[] {
-    const out: ProseBlock[] = [];
-    for (const raw of body.split('\n')) {
-        const line = raw.trim();
-        if (!line) continue;
-        const h = /^#{1,4}\s*(.+)$/.exec(line);
-        if (h) { out.push({ kind: 'head', text: h[1].trim() }); continue; }
-        if (/^([-–—]{2,}|·{3,}|\*{3,}|—+)$/.test(line)) { out.push({ kind: 'rule', text: '' }); continue; }
-        out.push({ kind: 'para', text: line });
-    }
-    return out;
-}
-
-/** 述頁 —— one POV body as a reading page: centred 場景題, ornamental 分隔, and
- *  首行縮排 paragraphs at book line-height. Font-size is inherited from the
- *  reader-scaled container, so everything zooms together. */
-function NarrativeProse({ body }: { body: string }) {
-    const blocks = useMemo(() => parseProse(body), [body]);
-    return (
-        <div className="space-y-[0.72em]" style={{ lineHeight: 1.95 }}>
-            {blocks.map((b, i) => {
-                if (b.kind === 'head') {
-                    return (
-                        <div key={i} className="flex items-center justify-center gap-3 pt-[0.5em]">
-                            <span aria-hidden className="h-px w-8 bg-cinnabar/25" />
-                            <span className="font-serif text-[1.02em] tracking-[0.22em] text-cinnabar/80">{b.text}</span>
-                            <span aria-hidden className="h-px w-8 bg-cinnabar/25" />
-                        </div>
-                    );
-                }
-                if (b.kind === 'rule') {
-                    return <div key={i} aria-hidden className="py-[0.15em] text-center font-serif text-[0.8em] tracking-[0.6em] text-cinnabar/25">❖</div>;
-                }
-                return <p key={i} className="font-serif text-ink/90" style={{ textIndent: '2em' }}>{b.text}</p>;
-            })}
-        </div>
-    );
-}
-
 export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene, onSelectCharacter }: {
     runId: string;
     character: LabCharacterLive;
@@ -391,20 +346,8 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
     const [povs, setPovs] = useState<Array<{ day: number; tick: number; scene: string; body: string }>>([]);
     /** 燈箱 —— 點圖放大，點任一處或 Esc 收。 */
     const [zoomUrl, setZoomUrl] = useState<string | null>(null);
-    /** 述頁讀者字級 —— index into READER_SCALES, persisted so it sticks across卷/角色. */
-    const [readerIdx, setReaderIdx] = useState(1);
-    useEffect(() => {
-        try {
-            const saved = Number(localStorage.getItem('es-lab-reader-scale'));
-            if (Number.isInteger(saved) && saved >= 0 && saved < READER_SCALES.length) setReaderIdx(saved);
-        } catch { /* no storage — keep the default */ }
-    }, []);
-    const stepReader = (delta: number) =>
-        setReaderIdx((i) => {
-            const next = Math.max(0, Math.min(READER_SCALES.length - 1, i + delta));
-            try { localStorage.setItem('es-lab-reader-scale', String(next)); } catch { /* no storage */ }
-            return next;
-        });
+    /** 述頁讀者字級 —— shared hook: persists across 卷／角色／頁 (localStorage). */
+    const reader = useReaderScale();
 
     /** name → bond, so a want's target (a name string) can borrow the bonded
      *  person's portrait + id and become tappable — the same traversal loop. */
@@ -561,14 +504,14 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                 </div>
 
                 {/* 譜頁柱 —— RPG 式選單 */}
-                <div className="relative flex min-h-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-8">
+                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col px-5 pb-5 pt-4 sm:px-8">
                     {/* 巨字水印 */}
                     <span aria-hidden className="pointer-events-none absolute -right-4 -top-2 select-none font-serif text-[26vh] leading-none text-ink/[0.045] dark:text-white/[0.04]">
                         {c.name.slice(0, 1)}
                     </span>
 
                     {/* 內容置中一柱 —— 寬屏不再左偏一邊 */}
-                    <div className="relative mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
+                    <div className="relative mx-auto flex min-h-0 w-full min-w-0 max-w-2xl flex-1 flex-col">
                         <nav className="flex items-center gap-0.5 overflow-x-auto border-b border-hairline/60 no-scrollbar">
                             {tabs.map((t) => {
                                 const on = tab === t.key;
@@ -733,7 +676,10 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                             <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">恆常自我</h3>
                                             <ul className="mt-2 space-y-1">
                                                 {c.coreIdentity.map((line, i) => (
-                                                    <li key={i} className="font-serif text-sm leading-relaxed text-ink/85">· {line}</li>
+                                                    <li key={i} className="flex gap-1.5 font-serif text-sm leading-relaxed text-ink/85">
+                                                        <span aria-hidden className="shrink-0 text-mute/45">·</span>
+                                                        <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]">{line}</span>
+                                                    </li>
                                                 ))}
                                             </ul>
                                         </section>
@@ -741,7 +687,7 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                     {c.secret ? (
                                         <section className="animate-beat-in">
                                             <h3 className="font-serif text-2xs tracking-[0.35em] text-jade/90">心底事 · 幽</h3>
-                                            <p className="mt-2 border-l-2 border-jade/40 pl-3 font-serif text-sm leading-relaxed text-ink/75">{c.secret}</p>
+                                            <p className="mt-2 whitespace-normal break-words [overflow-wrap:anywhere] border-l-2 border-jade/40 pl-3 font-serif text-sm leading-relaxed text-ink/75">{c.secret}</p>
                                         </section>
                                     ) : null}
                                 </div>
@@ -924,31 +870,10 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                     <p className="font-serif text-sm text-mute/70">尚無自述 —— 走幾拍，其視角自成一線（實錄卷才生 POV）。</p>
                                 ) : (
                                     <div>
-                                        {/* 讀者字級 —— 自控放大，記在 localStorage */}
-                                        <div className="mb-4 flex items-center justify-end gap-2">
-                                            <span className="font-serif text-2xs tracking-[0.2em] text-mute/55">字級</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => stepReader(-1)}
-                                                disabled={readerIdx === 0}
-                                                title="縮小"
-                                                className="flex h-6 w-6 items-center justify-center rounded-md border border-hairline bg-canvas/70 font-serif text-sm leading-none text-ink/70 transition hover:border-cinnabar/40 hover:text-cinnabar disabled:opacity-30 dark:bg-white/[0.04]"
-                                            >
-                                                －
-                                            </button>
-                                            <span className="w-9 text-center font-serif text-2xs tabular-nums text-mute/70">{Math.round(READER_SCALES[readerIdx] * 100)}%</span>
-                                            <button
-                                                type="button"
-                                                onClick={() => stepReader(1)}
-                                                disabled={readerIdx === READER_SCALES.length - 1}
-                                                title="放大"
-                                                className="flex h-6 w-6 items-center justify-center rounded-md border border-hairline bg-canvas/70 font-serif text-sm leading-none text-ink/70 transition hover:border-cinnabar/40 hover:text-cinnabar disabled:opacity-30 dark:bg-white/[0.04]"
-                                            >
-                                                ＋
-                                            </button>
-                                        </div>
-                                        {/* 讀卷 —— 舒適欄寬置中，字級隨 readerIdx 縮放，全篇同步 */}
-                                        <div className="mx-auto max-w-[40em] space-y-[1.7em]" style={{ fontSize: `${Math.round(15.5 * READER_SCALES[readerIdx])}px` }}>
+                                        {/* 讀者字級 —— 自控放大，記在 localStorage（共用控件） */}
+                                        <ReaderScaleControl reader={reader} className="mb-4" />
+                                        {/* 讀卷 —— 舒適欄寬置中，字級隨讀者字級縮放，全篇同步 */}
+                                        <div className="mx-auto max-w-[40em] space-y-[1.7em]" style={{ fontSize: `${reader.px}px` }}>
                                             {povs.map((p, i) => (
                                                 <article key={i} className="animate-beat-in">
                                                     <p className="mb-[0.7em] flex items-center gap-2 font-serif text-[0.7em] tracking-[0.3em] text-mute/70">
