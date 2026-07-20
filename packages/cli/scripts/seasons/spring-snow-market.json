@@ -99,7 +99,9 @@
       "minCast": 4,
       "fullHouseYuan": 30,
       "castShareBps": 2000,
-      "performerBoost": true
+      "performerBoost": true,
+      "audienceHouse": true,
+      "houseSeats": 120
     },
     "businesses": [
       {
