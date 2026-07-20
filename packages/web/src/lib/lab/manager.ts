@@ -101,6 +101,7 @@ interface RunManifest {
     model: string;
     relationshipFallback: boolean;
     emergentProduction: boolean;
+    reconcileVisit: boolean;
 }
 
 export interface ActiveRun {
@@ -213,11 +214,12 @@ export class LabRunManager {
             model: model ?? 'fake',
             relationshipFallback: cfg.relationshipFallback,
             emergentProduction: cfg.emergentProduction ?? false,
+            reconcileVisit: cfg.reconcileVisit ?? false,
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
-            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction'] as const) {
-                const prior = key === 'relationshipFallback' || key === 'emergentProduction' ? (previous[key] ?? false) : previous[key];
+            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'reconcileVisit'] as const) {
+                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'reconcileVisit' ? (previous[key] ?? false) : previous[key];
                 if (prior !== manifest[key]) {
                     throw new Error(`run provenance mismatch for ${key}: ${String(prior)} != ${String(manifest[key])}`);
                 }
@@ -248,6 +250,7 @@ export class LabRunManager {
                 seedRelationshipViews(world, created.raw.relationship_views ?? []);
             }
             if (cfg.emergentProduction) world.data.emergentProduction = true;
+            if (cfg.reconcileVisit) world.data.reconcileVisit = true;
             // 相識分寸: a season may declare subjective naming; seed the acquaintance
             // map AFTER cast/edges/views are seeded (so co-workers/edge-holders start
             // named). Mirrors how the flags above flip world.data.<flag> post-build.

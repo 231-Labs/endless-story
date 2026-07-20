@@ -29,6 +29,7 @@ interface RunManifestView {
     model?: string;
     relationshipFallback?: boolean;
     emergentProduction?: boolean;
+    reconcileVisit?: boolean;
 }
 
 const ENGINE_LOG_TAIL_LINES = 4000;
@@ -87,6 +88,7 @@ function buildHeader(runId: string, meta: LabRunMeta | null, manifest: RunManife
     const flags = [
         cfg.relationshipFallback ? 'relationshipFallback' : null,
         cfg.emergentProduction ? 'emergentProduction' : null,
+        cfg.reconcileVisit ? 'reconcileVisit' : null,
         cfg.realEmbeddings ? 'realEmbeddings' : null,
     ].filter(Boolean);
     const source = `seed ${cfg.seedSource}/${cfg.presetId}`

@@ -36,6 +36,7 @@ export default function LabHomePage() {
         llm: 'fake' as 'fake' | 'real',
         relationshipFallback: true,
         emergentProduction: false,
+        reconcileVisit: false,
         ticksPerDay: 6,
     });
 
@@ -79,6 +80,7 @@ export default function LabHomePage() {
                     llm: form.llm,
                     relationshipFallback: form.relationshipFallback,
                     emergentProduction: form.emergentProduction,
+                    reconcileVisit: form.reconcileVisit,
                     ticksPerDay: form.ticksPerDay,
                 },
             });
@@ -282,6 +284,17 @@ export default function LabHomePage() {
                             onChange={(e) => setForm({ ...form, emergentProduction: e.target.checked })}
                         />
                         劇本產出
+                    </label>
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="登門修好：入夜後，情牽或虧欠已深的角色，聽聞舊人獨在私宅，明知冒昧也登門把話說開（實驗，預設關）"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={form.reconcileVisit}
+                            onChange={(e) => setForm({ ...form, reconcileVisit: e.target.checked })}
+                        />
+                        登門修好
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日
