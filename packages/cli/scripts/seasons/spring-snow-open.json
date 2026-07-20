@@ -1,0 +1,417 @@
+{
+  "id": "spring-snow-open",
+  "title": "前街：各自的活法（開放對照組）",
+  "openingScene": "戲園前街",
+  "subjectiveNaming": true,
+  "centralQuestion": "戲園前街這十來個人——班主、生旦、歌女、記者、賣花的、賣吃食的、繡樓千金——各自揣著各自的心事與活計。這半月裡，他們會怎麼過各自的日子，彼此之間又會生出什麼？沒有誰替他們定題，就看他們自己怎麼活。",
+  "incitingIncident": "連日陰雨方歇，霞飛路的電車照常叮鈴，雲錦台這半月的戲牌時明時暗。前街的花攤、食擔、繡樓各自開張，戲班照常排戲開鑼——又是尋常的一日光景。各人揣著各人的事，在這條街上過活。",
+  "deadline": "月半結帳是前街的老規矩，賒賬、花賬、繡賬到日子照例算一算。尋常的月中結帳，日子照過。",
+  "stakes": [
+    "前街上各人的活計各有來處：戲班靠票房，花婆靠碼頭接來的花，食擔靠回頭客，繡樓靠白家的家底。",
+    "日子怎麼過、心事怎麼了，各人有各人的打算，沒有一條非走不可的路。"
+  ],
+  "publicFacts": [
+    "前街食肆賒飯給春雪社後台是明擺著的事：跑龍套、武行、衣箱房散戲後在趙阿福擔前墊肚子，錢賒著記帳，人人都知道。",
+    "殷阿婆天沒亮到蘇州河碼頭接花，串成花串在雲錦台門前賣給看戲的、堂子的姑娘；花價幾何、賣得動賣不動，前街都看得見。",
+    "白家繡樓接繡帕的訂單、繡工照做照付，錢從白家綢緞莊的家底出，與春雪社班庫無干——這一條，滿前街都清楚。",
+    "連日陰雨改文戲、雲錦台座冷、票房清淡，是這半月人盡皆知的世道。",
+    "月半結帳是前街的老規矩，賒賬、花賬、繡賬到日子都要算一算——這是章程，不是誰說了算。"
+  ],
+  "contestedResources": [
+    {
+      "label": "credit:春雪社在前街食肆的那本賒帳",
+      "statement": "戲班在前街食肆賒下的飯錢記在帳上，票房好時慢慢還，是這條街尋常的人情往來。"
+    }
+  ],
+  "initialObjects": [
+    {
+      "id": "frontstreet-flower-basket",
+      "label": "殷阿婆的花籃",
+      "aliases": [
+        "花籃",
+        "花擔"
+      ],
+      "scene": "戲園前街",
+      "portable": false,
+      "state": "梔子、白蘭、晚香玉拿紅絨線串成一串串，香透半條街"
+    },
+    {
+      "id": "frontstreet-food-stall",
+      "label": "趙阿福的食擔",
+      "aliases": [
+        "食擔",
+        "生煎鍋"
+      ],
+      "scene": "戲園前街",
+      "portable": false,
+      "state": "一鍋生煎滋滋作響，湯麵鍋冒著白氣，糖粥缸溫著"
+    },
+    {
+      "id": "frontstreet-credit-book",
+      "label": "趙阿福記在心裡的那本賒帳",
+      "aliases": [
+        "賒帳",
+        "人情帳"
+      ],
+      "scene": "前街攤棚",
+      "portable": false,
+      "state": "多是春雪社後台的紅字，他從不當眾催"
+    },
+    {
+      "id": "baijia-embroidery-frame",
+      "label": "白家繡樓的繡繃",
+      "aliases": [
+        "繡繃",
+        "繃架"
+      ],
+      "scene": "白公館繡樓",
+      "portable": false,
+      "state": "繃著一方才起針的素帕"
+    }
+  ],
+  "scheduledEvents": [
+    {
+      "id": "frontstreet-tab-day",
+      "atTick": 5,
+      "clock": "月半·前街結帳",
+      "scene": "戲園前街",
+      "visibility": "public",
+      "text": "又到月半，前街照例結一回帳。趙阿福的食擔前有要賒要還的人，殷阿婆的花也把這半月的零賬收一收——尋常的月中光景，各人算各人的帳。"
+    }
+  ],
+  "properties": [
+    {
+      "scene": "後台小廂房",
+      "ownerNames": [
+        "沈雪笙"
+      ],
+      "lease": {
+        "tenantName": "柳安春",
+        "keyObjectId": "key-liuanchun-backstage",
+        "keyLabel": "後台小廂房的門鑰",
+        "rentYuan": 3,
+        "rentDueDay": 3,
+        "rentLabel": "後台小廂房膳宿"
+      }
+    },
+    {
+      "scene": "二樓書寓",
+      "ownerNames": [
+        "蘇映雪"
+      ]
+    },
+    {
+      "scene": "金鳳寓所",
+      "ownerNames": [
+        "金鳳"
+      ]
+    },
+    {
+      "scene": "沈宅小樓",
+      "ownerNames": [
+        "沈雪笙"
+      ]
+    },
+    {
+      "scene": "白公館繡樓",
+      "ownerNames": [
+        "白韻秋"
+      ]
+    }
+  ],
+  "economy": {
+    "unitLabel": "圓",
+    "subunitsPerUnit": 100,
+    "noticeScene": "戲園前街",
+    "market": {
+      "id": "market",
+      "label": "上海市面"
+    },
+    "troupe": {
+      "id": "troupe",
+      "label": "春雪社班庫",
+      "openingYuan": 42,
+      "dailyFixedCostYuan": 10,
+      "costNote": "電燈、捐稅與雜支",
+      "shortfallCreditor": "錢莊先生與房東",
+      "authorizedSpenderNames": [
+        "沈雪笙"
+      ]
+    },
+    "performance": {
+      "venueScene": "雲錦台戲台",
+      "leadNames": [
+        "柳安春",
+        "蘇映雪"
+      ],
+      "minCast": 4,
+      "fullHouseYuan": 30,
+      "castShareBps": 2000,
+      "performerBoost": true
+    },
+    "businesses": [
+      {
+        "id": "前街食肆",
+        "label": "前街食肆",
+        "openingYuan": 30,
+        "dailyFixedCostYuan": 3,
+        "costNote": "炭火、進貨與攤捐",
+        "shortfallCreditor": "碼頭花行與米行",
+        "stance": "前街食肆薄利，靠的是人氣同回頭客；賒給春雪社的帳寧可慢慢收，也不當眾撕破臉——戲班紅火了，這一條街才有生意。",
+        "wages": [
+          {
+            "name": "殷阿婆",
+            "amountYuan": 2
+          },
+          {
+            "name": "趙阿福",
+            "amountYuan": 2
+          }
+        ]
+      },
+      {
+        "id": "白家繡樓",
+        "label": "白家繡樓",
+        "openingYuan": 60,
+        "dailyFixedCostYuan": 4,
+        "costNote": "絲線、繡工月例與樓面",
+        "stance": "白家繡樓是綢緞大莊的臉面，繡品只講工到料足，價錢半分不還——白家的針線，不與人論斤兩。",
+        "wages": [
+          {
+            "name": "白韻秋",
+            "amountYuan": 3
+          }
+        ]
+      }
+    ],
+    "characterDefaults": {
+      "openingYuan": 6,
+      "dailyFixedCostYuan": 3
+    },
+    "characters": [
+      {
+        "name": "柳安春",
+        "openingYuan": 12,
+        "dailyFixedCostYuan": 3
+      },
+      {
+        "name": "蘇映雪",
+        "openingYuan": 20,
+        "dailyFixedCostYuan": 3
+      },
+      {
+        "name": "沈雪笙",
+        "openingYuan": 8,
+        "dailyFixedCostYuan": 3
+      },
+      {
+        "name": "白韻秋",
+        "openingYuan": 80,
+        "dailyFixedCostYuan": 5
+      },
+      {
+        "name": "殷阿婆",
+        "openingYuan": 4,
+        "dailyFixedCostYuan": 1
+      },
+      {
+        "name": "趙阿福",
+        "openingYuan": 4,
+        "dailyFixedCostYuan": 1
+      }
+    ],
+    "wages": [
+      {
+        "name": "柳安春",
+        "amountYuan": 2
+      },
+      {
+        "name": "蘇映雪",
+        "amountYuan": 2
+      },
+      {
+        "name": "江聞鶴",
+        "amountYuan": 1
+      },
+      {
+        "name": "連翹",
+        "amountYuan": 1
+      },
+      {
+        "name": "何阿喜",
+        "amountYuan": 1
+      },
+      {
+        "name": "唐桂蘭",
+        "amountYuan": 1
+      }
+    ],
+    "catalog": [
+      {
+        "id": "meal-frontstreet-noodle",
+        "label": "前街食肆一碗熱湯麵",
+        "priceYuan": 3,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆"
+      },
+      {
+        "id": "meal-frontstreet-shengjian",
+        "label": "趙阿福一客生煎",
+        "priceYuan": 2,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆"
+      },
+      {
+        "id": "meal-frontstreet-tangzhou",
+        "label": "前街食肆一碗糖粥",
+        "priceYuan": 1,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆"
+      },
+      {
+        "id": "flower-frontstreet-bailan",
+        "label": "殷阿婆一串白蘭花（替人簪上）",
+        "priceYuan": 1,
+        "kind": "costume",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "spawn-object",
+          "objectId": "frontstreet-bailan-spray",
+          "label": "一串新摘的白蘭花",
+          "sceneName": "戲園前街",
+          "state": "紅絨線串著，香得正好，替人簪在襟上",
+          "aliases": [
+            "白蘭花",
+            "花串"
+          ]
+        },
+        "unique": true,
+        "vendorAccountId": "前街食肆"
+      },
+      {
+        "id": "embroidery-baijia-kerchief",
+        "label": "白家繡樓一方繡帕",
+        "priceYuan": 4,
+        "kind": "costume",
+        "effect": {
+          "kind": "spawn-object",
+          "objectId": "baijia-embroidered-kerchief",
+          "label": "白家繡樓的一方素緞繡帕",
+          "sceneName": "白公館繡樓",
+          "state": "素緞細繡，針腳齊整，才下繃的新帕",
+          "aliases": [
+            "繡帕",
+            "素帕"
+          ]
+        },
+        "unique": true,
+        "vendorAccountId": "白家繡樓"
+      }
+    ]
+  },
+  "occupationDuties": {
+    "花婆": [
+      {
+        "part": "清晨",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "碼頭接花、串花、擺攤"
+      },
+      {
+        "part": "日午",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "門前兜售"
+      },
+      {
+        "part": "晡時",
+        "sceneName": "戲園前街",
+        "duty": true
+      }
+    ],
+    "小販": [
+      {
+        "part": "清晨",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "生爐子、煎頭鍋生煎"
+      },
+      {
+        "part": "日午",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "擺擔、應客"
+      },
+      {
+        "part": "晡時",
+        "sceneName": "戲園前街",
+        "duty": true
+      }
+    ]
+  },
+  "renown": {
+    "柳安春": {
+      "renown": 0.8,
+      "self": 0.55
+    },
+    "蘇映雪": {
+      "renown": 0.75,
+      "self": 0.6
+    },
+    "沈雪笙": {
+      "renown": 0.7,
+      "self": 0.75
+    },
+    "江聞鶴": {
+      "renown": 0.4,
+      "self": 0.4
+    },
+    "連翹": {
+      "renown": 0.35,
+      "self": 0.6
+    },
+    "金鳳": {
+      "renown": 0.6,
+      "self": 0.6
+    },
+    "白韻秋": {
+      "renown": 0.65,
+      "self": 0.6
+    },
+    "方競西": {
+      "renown": 0.5,
+      "self": 0.45
+    },
+    "何阿喜": {
+      "renown": 0.35,
+      "self": 0.55
+    },
+    "唐桂蘭": {
+      "renown": 0.3,
+      "self": 0.6
+    },
+    "殷阿婆": {
+      "renown": 0.3,
+      "self": 0.65
+    },
+    "趙阿福": {
+      "renown": 0.3,
+      "self": 0.6
+    }
+  }
+}
