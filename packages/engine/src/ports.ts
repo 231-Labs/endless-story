@@ -50,6 +50,12 @@ export type AidManner = Runner.characterAgent.AidManner;
 // the engine only feeds it real state and reads the verdict.
 export type AdmitDecideInput = Runner.characterAgent.AdmitDecideInput;
 export type AdmitDecideReply = Runner.characterAgent.AdmitDecideReply;
+// 邀約 (decideInvite): the REVERSE of 叩門 — by day a pressing 愛/情/虧欠 want
+// toward a co-present person may hand them tonight's word (a one-time 領入 to
+// the inviter's OWN home). Offering is the inviter's decision; using it tonight
+// stays the invitee's move choice. Not offering is also an answer.
+export type InviteDecideInput = Runner.characterAgent.InviteDecideInput;
+export type InviteDecideReply = Runner.characterAgent.InviteDecideReply;
 // 告借/應借 (decideLend): 借錢是兩造的事——錢動之前，出借的人先點頭；婉拒也是
 // 一句回答。The judgment is the capability's (runner lend.ts); the engine only
 // feeds it real state and commits the verdict (transfer + 欠條 bill on a yes).
@@ -332,6 +338,12 @@ export interface SceneAgentPort extends SceneAgent {
      *  DEFAULT — deterministic, conservative — is to REFUSE (null reply refuses
      *  just the same: never an entry the occupant didn't grant). */
     decideAdmit?(input: AdmitDecideInput): Promise<AdmitDecideReply | null>;
+    /** 邀約 (optional): by day, a character whose 愛/情/虧欠 want presses toward a
+     *  CO-PRESENT person may offer tonight's word —— 今夜來我處 —— a one-time 領入
+     *  to their own private home. Real adapters implement it (one cheap LLM call,
+     *  fail-safe null); the fake OMITS it, so the tick's DEFAULT — deterministic,
+     *  conservative — is to SWALLOW the word (no grant the inviter didn't voice). */
+    decideInvite?(input: InviteDecideInput): Promise<InviteDecideReply | null>;
     /** 告借/應借 (optional): a co-present cast member is ASKED for a personal
      *  loan (a beat's `borrow` command) — 借錢是兩造的事：錢動之前，出借的人先
      *  點頭；婉拒也是一句回答，不是違規。The lender weighs their own purse, the

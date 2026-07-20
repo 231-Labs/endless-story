@@ -431,6 +431,8 @@ export interface WorldStateData {
     /** 願望流水號 —— 世界自帶的 want id 序號（快照隨行）。id 由此而出，
      *  同種子重跑 byte-identical；缺席（舊卷）時 newWant 退回舊式 wall-clock id。 */
     wantSeq?: number;
+    /** 邀約：每人每日至多遞一次話（day 記號，快照隨行）。 */
+    inviteDayByChar?: Record<string, number>;
     /** 尋人掛心 — a declared seek_person intention that persists across ticks
      *  until met/expired: actorId → the sought targetId + the tick the intention
      *  was declared. Optional & absent-by-default so snapshots predating it (and
