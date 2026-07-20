@@ -10,7 +10,7 @@
  * Operator cockpit：資訊一樣不少，數值（張力／溫度／身心）皆現，窗內質地以「幽」標記。
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
 import type { LabCharacterLive } from '@/lib/lab/types';
@@ -73,20 +73,6 @@ function Gauge({ label, value, tone, title }: { label: string; value: number; to
     );
 }
 
-/** 譜頁身心計 — same shape, ink-on-canvas for the codex pages. */
-function InkGauge({ label, value, tone, title }: { label: string; value: number; tone: string; title: string }) {
-    const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
-    return (
-        <div className="flex items-center gap-2.5" title={`${title} ${value.toFixed(2)}`}>
-            <span className="w-4 shrink-0 font-serif text-2xs tracking-[0.2em] text-mute">{label}</span>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink/[0.07] dark:bg-white/10">
-                <div className={`h-full rounded-full ${tone} transition-[width] duration-700 ${EASE}`} style={{ width: `${pct}%` }} />
-            </div>
-            <span className="w-7 shrink-0 text-right font-serif text-2xs tabular-nums text-mute/70">{pct}</span>
-        </div>
-    );
-}
-
 /** 小圓像 — circular portrait chip, initial-fallback on cinnabar. */
 function PortraitChip({ name, url, cls, textCls }: { name: string; url?: string; cls: string; textCls: string }) {
     return url ? (
@@ -109,6 +95,67 @@ function SectionHead({ title, count, moreLabel, onMore }: { title: string; count
                     {moreLabel}
                 </button>
             ) : null}
+        </div>
+    );
+}
+
+/** 打算 —— parsed out of the flat `char.plan` string. Any of the three sections
+ *  may be absent; when the string carries none of the markers, `raw` holds the
+ *  whole thing so it can still show as a single 打算 block. */
+type ParsedPlan = {
+    longGoal?: string; // 長期目標 —— the north star
+    nowPlan?: string; // 眼下打算 —— what they are about to do
+    todos: string[]; // 未竟之事 —— checklist rows
+    raw?: string; // fallback: the whole plan when no markers were found
+};
+
+/** 未竟之事 body → individual rows: split on " - " / a leading "- " (also tolerates
+ *  newline-delimited "- " rows and "•" bullets); trims; drops empties. */
+function splitTodoItems(body: string): string[] {
+    return body
+        .replace(/^\s*[-•]\s*/, '') // drop a single leading bullet
+        .split(/\s+[-•]\s+/) // items separated by " - " / " • "
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+/** Parse `char.plan`. Tolerates half/full-width brackets around the markers
+ *  (`[長期目標]` or `【長期目標】`) and arbitrary surrounding whitespace, and is
+ *  robust to any subset of the three sections being present. Returns null only for
+ *  an empty/whitespace plan. Pure — never throws. */
+function parsePlan(plan?: string | null): ParsedPlan | null {
+    const s = (plan ?? '').trim();
+    if (!s) return null;
+    const markerRe = /[[【]\s*(長期目標|眼下打算|未竟之事)\s*[\]】]/g;
+    const hits: Array<{ key: string; from: number; to: number }> = [];
+    for (let m = markerRe.exec(s); m; m = markerRe.exec(s)) {
+        hits.push({ key: m[1], from: m.index, to: markerRe.lastIndex });
+    }
+    if (!hits.length) return { todos: [], raw: s };
+    const out: ParsedPlan = { todos: [] };
+    hits.forEach((h, i) => {
+        const bodyEnd = i + 1 < hits.length ? hits[i + 1].from : s.length;
+        const body = s.slice(h.to, bodyEnd).trim();
+        if (h.key === '長期目標') out.longGoal = body || undefined;
+        else if (h.key === '眼下打算') out.nowPlan = body || undefined;
+        else out.todos = splitTodoItems(body);
+    });
+    return out;
+}
+
+/** 打算一段 —— a labelled plan block: a small cinnabar glyph badge + eyebrow label
+ *  over an ink rail, matching the sheet's 絹本/serif section vocabulary. */
+function PlanBlock({ glyph, label, count, children }: { glyph: string; label: string; count?: number; children: ReactNode }) {
+    return (
+        <div className="animate-beat-in">
+            <div className="flex items-center gap-1.5">
+                <span aria-hidden className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-cinnabar/25 bg-cinnabar/[0.06] font-serif text-[11px] leading-none text-cinnabar/80">
+                    {glyph}
+                </span>
+                <span className="font-serif text-2xs tracking-[0.25em] text-mute">{label}</span>
+                {count != null ? <span className="font-serif text-2xs tabular-nums text-mute/45">{count}</span> : null}
+            </div>
+            <div className="ml-[8px] mt-1.5 border-l-2 border-cinnabar/20 pl-3">{children}</div>
         </div>
     );
 }
@@ -292,6 +339,9 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
         return { name: targetName, portraitUrl: b?.portraitUrl, id: b?.id };
     };
 
+    /** 打算 —— parse the flat plan string into 長期目標／眼下打算／未竟之事. */
+    const plan = useMemo(() => parsePlan(c.plan), [c.plan]);
+
     useEffect(() => {
         if (!zoomUrl) return;
         const onKey = (e: KeyboardEvent) => {
@@ -339,7 +389,7 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
     const art = c.portraitUrl ?? c.gallery.find((g) => g.type === 'image')?.url;
     const hottest = c.wants[0];
     const tabs: Array<{ key: TabKey; label: string; count?: number; title: string }> = [
-        { key: 'overview', label: '總覽', title: '一眼看盡：驅動（心事）／羈絆（關係）／此身（身心與所在）' },
+        { key: 'overview', label: '總覽', title: '一眼看盡：驅動（心事）／羈絆（關係）／此身（所在與打算）' },
         { key: 'wants', label: '執念', count: c.wants.length, title: '全部活著的心事，張力排序 —— 最盛者為主線' },
         { key: 'bonds', label: '羈絆', count: c.bonds.length, title: '我看眾人 —— 關係語、溫度數值、相待之衡；點頭像即翻到那人' },
         { key: 'dossier', label: '身世', title: '其人・恆常自我・心底事' },
@@ -494,26 +544,56 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
 
                                     <section>
                                         <SectionHead title="此身" />
-                                        <div className="mt-2.5 rounded-lg border border-hairline bg-canvas/70 p-3.5 dark:bg-white/[0.03]">
-                                            <div className="space-y-2">
-                                                <InkGauge label="乏" value={c.fatigue} tone="bg-seal/80" title="疲乏" />
-                                                <InkGauge label="飢" value={c.hunger} tone="bg-cinnabar/70" title="飢餓" />
-                                                <InkGauge label="緒" value={(c.mood + 1) / 2} tone="bg-jade/80" title="情緒（-1…1 折半）" />
-                                            </div>
+                                        <div className="mt-2.5 space-y-4 rounded-lg border border-hairline bg-canvas/70 p-3.5 dark:bg-white/[0.03]">
+                                            {/* 現於 —— 當下所在（點開其場景）。身心三計已在立繪柱常現，此處不再重出 */}
                                             <button
                                                 type="button"
                                                 onClick={() => c.sceneId && onJumpToScene?.(c.sceneId)}
                                                 title="開其所在場景"
-                                                className="mt-3 font-serif text-2xs tracking-[0.2em] text-mute transition hover:text-cinnabar"
+                                                className="group flex w-full items-baseline gap-1.5 font-serif text-sm tracking-[0.08em] text-ink/85 transition hover:text-cinnabar"
                                             >
-                                                現於 {c.sceneName} →
+                                                <span className="shrink-0 font-serif text-2xs tracking-[0.2em] text-mute/70">現於</span>
+                                                <span className="truncate">{c.sceneName}</span>
+                                                <span aria-hidden className="shrink-0 text-mute/45 transition group-hover:text-cinnabar">→</span>
                                             </button>
-                                            {c.plan ? (
-                                                <p className="mt-2.5 border-l-2 border-cinnabar/30 pl-3 font-serif text-sm leading-relaxed text-ink/80">
-                                                    <span className="mr-1.5 font-serif text-2xs tracking-[0.2em] text-mute/70">現下打算</span>
-                                                    {c.plan}
-                                                </p>
-                                            ) : null}
+
+                                            {/* 打算 —— 長期目標／眼下打算／未竟之事，各成一段 */}
+                                            {plan ? (
+                                                plan.raw ? (
+                                                    <PlanBlock glyph="算" label="打算">
+                                                        <p className="font-serif text-sm leading-relaxed text-ink/85">{plan.raw}</p>
+                                                    </PlanBlock>
+                                                ) : plan.longGoal || plan.nowPlan || plan.todos.length ? (
+                                                    <div className="space-y-4">
+                                                        {plan.longGoal ? (
+                                                            <PlanBlock glyph="遠" label="長期目標">
+                                                                <p className="font-serif text-sm leading-relaxed text-ink/85">{plan.longGoal}</p>
+                                                            </PlanBlock>
+                                                        ) : null}
+                                                        {plan.nowPlan ? (
+                                                            <PlanBlock glyph="近" label="眼下打算">
+                                                                <p className="font-serif text-sm leading-relaxed text-ink/85">{plan.nowPlan}</p>
+                                                            </PlanBlock>
+                                                        ) : null}
+                                                        {plan.todos.length ? (
+                                                            <PlanBlock glyph="未" label="未竟之事" count={plan.todos.length}>
+                                                                <ul className="space-y-1.5">
+                                                                    {plan.todos.map((t, i) => (
+                                                                        <li key={i} className="flex items-start gap-2">
+                                                                            <span aria-hidden className="mt-[0.42em] h-[9px] w-[9px] shrink-0 rounded-[3px] border border-cinnabar/45" />
+                                                                            <span className="font-serif text-sm leading-relaxed text-ink/85">{t}</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </PlanBlock>
+                                                        ) : null}
+                                                    </div>
+                                                ) : (
+                                                    <p className="font-serif text-sm text-mute/70">尚無打算。</p>
+                                                )
+                                            ) : (
+                                                <p className="font-serif text-sm text-mute/70">尚無打算。</p>
+                                            )}
                                         </div>
                                     </section>
                                 </div>
