@@ -27,6 +27,7 @@ import {
     nightSceneKind,
     shouldDeriveAftermath,
     tension,
+    yearningNightPursuit,
 } from './core/want-core.ts';
 import { pickOrthogonalThreads, spawnWant, type LedgerEvent } from './core/want-rewrite.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
@@ -430,6 +431,32 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         const intrudePull = intrudeSceneId
             ? `聽聞${world.nameById(intrude!.id)}此刻與人在${world.sceneNameById(intrudeSceneId)}掩門私會，你妒火中燒，明知不請自來，也按捺不住要去撞破。`
             : undefined;
+        // 登門修好 (reconcile-visit) — PARALLEL to 撞破 but for reconciliation, not
+        // jealousy. ACTIVE ONLY when the reconcileVisit flag is on. At night a ripe
+        // (edge+) 愛/虧欠 want may SEEK its target who is HOME ALONE in a private
+        // scene, going uninvited to 把話說開、了結虧欠. Like 撞破 it bypasses BOTH the
+        // capacity bar and the 訪問權限 key gate; UNLIKE it, the target sits ALONE
+        // (occupancy EXACTLY 1 — the mover joins to make an intimate pair of 2), not
+        // mid-tryst. Flag off ⇒ yearn null ⇒ visitSceneId undefined ⇒ every scene
+        // keeps both bars byte-for-byte, exactly as before.
+        const yearn = (night && w.reconcileVisit) ? yearningNightPursuit(wants, member.id, resolveTargetId) : null;
+        const visitSceneId = (() => {
+            if (!yearn || yearn.intrude !== true || yearn.id === member.id) return undefined; // ripe edge+ only
+            const sid = w.roster[yearn.id];
+            if (!sid || sid === currentSceneId) return undefined;   // already there ⇒ no visit
+            const scene = world.sceneById(sid);
+            if (!scene || scene.privacyLevel < 3) return undefined;  // a private home
+            const occupants = w.cast.filter((candidate) => w.roster[candidate.id] === sid);
+            if (occupants.length !== 1) return undefined;            // target HOME ALONE (mover joins ⇒ pair)
+            if (occupants[0].id === member.id) return undefined;     // that lone occupant isn't us
+            if (sid === intrudeSceneId) return undefined;            // same scene ⇒ jealousy is the acuter claim
+            return sid;
+        })();
+        // A salient inner pull so the offered 登門 option is chosen under real
+        // pressure — the character still decides (restraint is valid); no numbers.
+        const visitPull = visitSceneId
+            ? `你心裡放不下${world.nameById(yearn!.id)}，聽聞他此刻獨在${world.sceneNameById(visitSceneId)}，明知冒昧，也想登門把話說開、把這樁虧欠了結。`
+            : undefined;
         const options = w.scenes.flatMap((scene) => {
             if (scene.id === currentSceneId) return [];
             if (coolingDown && scene.id !== w.homeByChar[member.id]) return [];
@@ -437,9 +464,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // (over-capacity by design, uninvited by design). Every other scene keeps
             // capacity + welcome exactly as before.
             const isIntrudeTarget = scene.id === intrudeSceneId;
+            // 登門: the ONE reconcile-visit target scene skips BOTH bars below too, just
+            // like 撞破 (over-capacity by design once the mover joins, uninvited by
+            // design). visitSceneId already excludes intrudeSceneId, so never both.
+            const isVisitTarget = scene.id === visitSceneId;
             const occupancy = w.cast.filter((candidate) => w.roster[candidate.id] === scene.id).length;
             const capacity = scene.capacity ?? (scene.privacyLevel >= 3 ? 2 : scene.privacyLevel >= 2 ? 4 : 8);
-            if (!isIntrudeTarget && occupancy >= capacity) return [];
+            if (!isIntrudeTarget && !isVisitTarget && occupancy >= capacity) return [];
             const ownerIds = Object.entries(w.homeByChar)
                 .filter(([, home]) => home === scene.id)
                 .map(([id]) => id);
@@ -448,7 +479,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // scene / an owner / a key-holder ⇒ canEnter true (never barred). The
             // 撞破 break-in ignores keys — isIntrudeTarget bypasses this exactly as
             // it bypassed the old gate.
-            if (!isIntrudeTarget && !world.canEnter(member.id, scene.id)) return [];
+            if (!isIntrudeTarget && !isVisitTarget && !world.canEnter(member.id, scene.id)) return [];
             const presentCharacters = w.cast
                 .filter((candidate) => candidate.id !== member.id && w.roster[candidate.id] === scene.id)
                 .map((candidate) => ({
@@ -474,6 +505,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 // 撞破: mark the barged-into tryst so decideMove frames choosing it as
                 // bursting in uninvited (明知不請自來，妒火中燒也要去撞破).
                 ...(isIntrudeTarget ? { intrude: true as const } : {}),
+                // 登門: mark the home-alone scene so decideMove frames choosing it as
+                // an uninvited reconcile-visit (明知冒昧，也想登門把話說開、了結虧欠).
+                ...(isVisitTarget ? { visit: true as const } : {}),
             }];
         });
         const decision = await agent.decideMove({
@@ -487,6 +521,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .map((event) => event.text),
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
                 ...(intrudePull ? [intrudePull] : []),
+                ...(visitPull ? [visitPull] : []),
             ].filter(Boolean).join('\n') || undefined,
             planHint: [
                 // Standing plan (if any) leads — the character heads toward goals, not just reacts.

@@ -62,6 +62,15 @@ export interface MoveSceneOption {
     intrude?: boolean;
     /** Optional one-line reason carried by an intrude option, shown in the prompt. */
     intrudeNote?: string;
+    /** 登門修好 (reconcile-visit): this private home holds the mover's beloved /
+     *  someone they owe, HOME ALONE — offered DESPITE the mover holding no key and
+     *  the room being about to go over capacity. Choosing it is calling uninvited to
+     *  make peace (明知冒昧，也想登門把話說開、了結虧欠); the mover still decides (restraint
+     *  is valid). Engine-set only when a ripe 愛/虧欠 want's target is home alone in a
+     *  private scene and the reconcileVisit flag is on. Never both intrude and visit. */
+    visit?: boolean;
+    /** Optional one-line reason carried by a visit option, shown in the prompt. */
+    visitNote?: string;
 }
 
 /** A live longing the mover carries — the ache that MIGHT move their feet at
@@ -186,7 +195,12 @@ export function buildUserPrompt(input: MoveDecideInput): string {
             const intrudeMark = o.intrude
                 ? `〔妒火·撞破：${o.intrudeNote ?? '那處掩門私會、你並未受邀，妒火中燒也要闖進去'}〕`
                 : '';
-            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${far}${intrudeMark}${privacy}(${who})${desc}`;
+            // 登門: mark a home-alone scene so the choice reads as calling uninvited
+            // to make peace (an option is never both intrude and visit).
+            const visitMark = o.visit
+                ? `〔情牽·登門：${o.visitNote ?? '你心裡放不下那人，明知冒昧，仍想登門把話說開'}〕`
+                : '';
+            return `- sceneId=${o.sceneId} 「${o.name}」${anchors}${far}${intrudeMark}${visitMark}${privacy}(${who})${desc}`;
         })
         .join('\n');
     const heart =

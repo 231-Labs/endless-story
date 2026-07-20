@@ -26,6 +26,9 @@ export interface LabRunConfig {
     /** 劇本產出: characters may spend daytime ticks proposing/joining/writing/
      *  rehearsing a play that premieres when the razor holds. Off by default. */
     emergentProduction?: boolean;
+    /** 登門修好: a ripe 愛/虧欠 want may seek its target home-alone at night,
+     *  uninvited (mirrors 撞破, but for reconciliation not jealousy). Off by default. */
+    reconcileVisit?: boolean;
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
     realEmbeddings: boolean;
