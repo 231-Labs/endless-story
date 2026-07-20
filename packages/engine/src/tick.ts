@@ -253,6 +253,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             for (const g of derived) {
                 wants.push(
                     newWant({
+                        id: world.nextWantId(),
                         characterId: member.id,
                         layer: g.layer,
                         desc: g.desc,
@@ -1836,6 +1837,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             if (after) {
                 wants.push(
                     newWant({
+                        id: world.nextWantId(),
                         characterId: owner.id,
                         layer: after.layer,
                         desc: after.desc,
@@ -1868,7 +1870,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     };
                 }),
             });
-            for (const sp of applyRipples(wants, deltas, nowTick)) {
+            for (const sp of applyRipples(wants, deltas, nowTick, () => world.nextWantId())) {
                 log(`  new thread: ${world.nameById(sp.characterId)}「${sp.desc}」`);
             }
         }
@@ -1994,7 +1996,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 const debtEvents: LedgerEvent[] = [];
                 const castNames = w.cast.map((member) => member.name);
                 for (const seed of collectOverdueDebtWants(world, today)) {
-                    if (spawnWant(wants, seed.characterId, { desc: seed.desc, layer: seed.layer }, nowTick, debtEvents, castNames)) {
+                    if (spawnWant(wants, seed.characterId, { desc: seed.desc, layer: seed.layer }, nowTick, debtEvents, castNames, () => world.nextWantId())) {
                         (w.economy!.debtWantsSpawned ??= []).push(seed.marker);
                         log(`  [欠條生怨] ${world.nameById(seed.characterId)}「${seed.desc}」`);
                     }
@@ -2212,7 +2214,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 lifecycle,
                 otherThreads,
             });
-            if (spawn && spawnWant(wants, member.id, spawn, nowTick, regenEvents, castNames)) {
+            if (spawn && spawnWant(wants, member.id, spawn, nowTick, regenEvents, castNames, () => world.nextWantId())) {
                 log(`  願生: ${member.name}「${spawn.desc}」`);
             }
         }

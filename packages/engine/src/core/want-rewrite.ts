@@ -177,6 +177,7 @@ export function applyRewrite(
     tick: number,
     events: LedgerEvent[],
     castNames: ReadonlyArray<string> = [],
+    nextId?: () => string,
 ): void {
     const byId = new Map(wants.map((w) => [w.id, w]));
     for (const d of reply.decisions) {
@@ -196,7 +197,7 @@ export function applyRewrite(
         }
     }
     // Spawn (max 1), enforcing the ≤4-live-want budget per character.
-    if (reply.spawn) spawnWant(wants, characterId, reply.spawn, tick, events, castNames);
+    if (reply.spawn) spawnWant(wants, characterId, reply.spawn, tick, events, castNames, nextId);
 }
 
 /**
@@ -214,6 +215,8 @@ export function spawnWant(
     tick: number,
     events: LedgerEvent[],
     castNames: ReadonlyArray<string> = [],
+    /** 確定性 id 源（world.nextWantId）；缺席退回 newWant 的 wall-clock id。 */
+    nextId?: () => string,
 ): boolean {
     const raw = spawn.desc.trim();
     // A want desc is a short label — an over-long line is TRUNCATED to 30, never dropped,
@@ -227,6 +230,7 @@ export function spawnWant(
         const resistance = namesOther && hot ? 8 : 4;
         const target = castNames.find((n) => n !== characterId && desc.includes(n));
         const w = newWant({
+            id: nextId?.(),
             characterId,
             layer: spawn.layer || '其他',
             desc,

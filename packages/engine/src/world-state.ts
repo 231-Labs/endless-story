@@ -428,6 +428,9 @@ export interface WorldStateData {
      *  keeps it, and with the flag off the deterministic path (including the
      *  FakeSceneAgent's pinned seek_person actions) stays byte-identical. */
     seekRouting?: boolean;
+    /** 願望流水號 —— 世界自帶的 want id 序號（快照隨行）。id 由此而出，
+     *  同種子重跑 byte-identical；缺席（舊卷）時 newWant 退回舊式 wall-clock id。 */
+    wantSeq?: number;
     /** 尋人掛心 — a declared seek_person intention that persists across ticks
      *  until met/expired: actorId → the sought targetId + the tick the intention
      *  was declared. Optional & absent-by-default so snapshots predating it (and
@@ -699,6 +702,13 @@ export class WorldState {
     }
     /** Nudge PUBLIC renown by `delta`, clamped 0..1. No-op on an unknown id.
      *  Reads through `renownOf`, so a never-seeded member moves from the 0.5 base. */
+    /** 下一個 want id —— 世界自帶序號，確定性、快照隨行（w1, w2, …）。舊式
+     *  wall-clock id 必含 '-'，新式不含，永不相撞。 */
+    nextWantId(): string {
+        this.data.wantSeq = (this.data.wantSeq ?? 0) + 1;
+        return `w${this.data.wantSeq}`;
+    }
+
     bumpRenown(id: string, delta: number): void {
         const m = this.castById(id);
         if (!m) return;
