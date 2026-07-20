@@ -36,6 +36,12 @@ export { negotiateCounter } from './negotiate.js';
 export type { NegotiateCounterInput, NegotiateCounterReply } from './negotiate.js';
 export { decideRehearsal } from './rehearsal.js';
 export type { RehearsalDecideInput, RehearsalDecideReply } from './rehearsal.js';
+export { decideAdmit, parseAdmitReply } from './admit.js';
+export type { AdmitDecideInput, AdmitDecideReply } from './admit.js';
+export {
+    buildSystemPrompt as buildAdmitSystemPrompt,
+    buildUserPrompt as buildAdmitUserPrompt,
+} from './admit.js';
 export { speakPrayer } from './speak-prayer.js';
 export type { SpeakPrayerInput } from './speak-prayer.js';
 export {

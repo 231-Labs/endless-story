@@ -287,14 +287,14 @@ export default function LabHomePage() {
                     </label>
                     <label
                         className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
-                        title="登門修好：入夜後，情牽或虧欠已深的角色，聽聞舊人獨在私宅，明知冒昧也登門把話說開（實驗，預設關）"
+                        title="叩門夜訪：入夜後，情牽或虧欠已深的角色會走到心上人門外叩門求見；開不開門由屋裡人決定（實驗，預設關）"
                     >
                         <input
                             type="checkbox"
                             checked={form.reconcileVisit}
                             onChange={(e) => setForm({ ...form, reconcileVisit: e.target.checked })}
                         />
-                        登門修好
+                        叩門夜訪
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日

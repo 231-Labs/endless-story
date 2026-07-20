@@ -152,6 +152,10 @@ export class RunnerSceneAgent implements SceneAgentPort {
     // 資助搭救 — delegate straight to the runner capability (real LLM judge by
     // default; finalizeAid enforces real-peer + no-overdraft inside it).
     decideAid = characterAgent.decideAidAction;
+    // 叩門/放行 — the occupant answers the door (through it); consent lives with
+    // the occupant, never the visitor's ardor. Fail-safe to null ⇒ the tick
+    // refuses the door.
+    decideAdmit = characterAgent.decideAdmit;
 
     async observeScene(input: ObserveSceneInput): Promise<void> {
         if (!this.sessions) return;
