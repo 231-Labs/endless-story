@@ -189,6 +189,8 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             scene={focusedScene}
                             characters={snapshot.characters}
                             beats={feed}
+                            objects={snapshot.objects}
+                            prayers={snapshot.prayers}
                             locationArt={focusedLocationArt}
                             clock={snapshot.saga.worldTime?.label}
                             onSelectCharacter={(characterId) => {
