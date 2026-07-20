@@ -317,6 +317,14 @@ export interface WorldStateData {
      *  homeByChar derivation (backward-compat). Optional & carried verbatim by
      *  snapshot/restore (plain JSON). */
     propertyOwners?: Record<string, string[]>;
+    /** 租約登記: sceneId → 屋主/租客 (+ the rent bill id if the lease bears rent).
+     *  Ties deed (擁有權) + use-right (使用權/門鑰) + rent together, so eviction (逐客)
+     *  can end all three at once and the UI can surface 收租. DISTINCT from the
+     *  economy's `tenancies` move-in scaffolding (a granted-but-not-yet-lived lease
+     *  object) — do not conflate them. Optional & backward-compatible: absent ⇒ a
+     *  world with no registered leases (behaves exactly as before). Carried verbatim
+     *  by snapshot/restore (plain JSON). */
+    leases?: Record<string, { ownerId: string; tenantId: string; rentBillId?: string }>;
     /** 訪問權限 — the space access-grant table: per PRIVATE scene (privacyLevel ≥ 3
      *  with an owner), the guests who hold a key. `standing` = 半永久 key-holders
      *  (old lovers, the 師姐, the 金主 — let themselves in), `oneTime` = 一次性
@@ -655,6 +663,25 @@ export class WorldState {
         return Object.entries(this.data.homeByChar)
             .filter(([, home]) => home === sceneId)
             .map(([id]) => id);
+    }
+
+    /** The scenes `charId` holds the deed to (擁有權), deed-aware via `ownersOf`.
+     *  Covers an owner-occupied home AND any rental they own but do not live in —
+     *  exactly the set an owner may 換鎖/逐客 on. Unchanged for deedless worlds (the
+     *  homeByChar fallback still resolves the owner of their own home). */
+    ownedScenesBy(charId: string): string[] {
+        return this.data.scenes.filter((s) => this.ownersOf(s.id).includes(charId)).map((s) => s.id);
+    }
+
+    /** 收租 — the registered leases whose 屋主 is `ownerId` (UI read helper): each a
+     *  rental this character is the landlord of, with the tenant and (if the lease
+     *  bears rent) the rent bill id. Empty when the world carries no leases. */
+    rentalsBy(ownerId: string): Array<{ sceneId: string; tenantId: string; rentBillId?: string }> {
+        const out: Array<{ sceneId: string; tenantId: string; rentBillId?: string }> = [];
+        for (const [sceneId, lease] of Object.entries(this.data.leases ?? {})) {
+            if (lease.ownerId === ownerId) out.push({ sceneId, tenantId: lease.tenantId, rentBillId: lease.rentBillId });
+        }
+        return out;
     }
 
     /** May `charId` enter `sceneId`? PUBLIC (no owner / privacyLevel < 3) ⇒ true;

@@ -2010,29 +2010,48 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         }
     }
 
-    // 7.78) 撤銷 on souring (換鎖) — at day-end an OWNER whose heart has turned
-    // hostile toward a current STANDING key-holder takes the key back: a live
-    // 妒/怨/恨/仇 want aimed at a holder revokes that holder's key. A real 撤銷
-    // driven by the relationship turning (not a static table). Core mechanism —
-    // unconditional world physics, NOT behind relationshipFallback.
+    // 7.78) 撤銷 on souring (換鎖) + 逐客 (eviction) — at day-end an OWNER whose heart
+    // has turned hostile toward a current STANDING key-holder takes the key back: a
+    // live 妒/怨/恨/仇 want aimed at a holder revokes that holder's key. Generalized
+    // over ownedScenesBy (deed-aware), so a LANDLORD may 換鎖 on a soured 租客 of a
+    // rental they own but do NOT live in — not only their own home. A real 撤銷 driven
+    // by the relationship turning (not a static table). Core mechanism — unconditional
+    // world physics, NOT behind relationshipFallback.
     if (dayEnd) {
         const HOSTILE = /妒|怨|恨|仇/;
         for (const owner of w.cast) {
-            const home = w.homeByChar[owner.id];
-            if (!home || !world.ownersOf(home).includes(owner.id)) continue; // owns no private home
-            for (const holder of world.keyHoldersOf(home)) {
-                if (holder.kind !== 'standing') continue; // a one-time pass is consumed on entry, not revoked
-                const soured = wants.some(
-                    (wnt) =>
-                        !wnt.retired &&
-                        wnt.characterId === owner.id &&
-                        HOSTILE.test(wnt.layer) &&
-                        !!wnt.target &&
-                        (wnt.target === holder.charId || wnt.target === world.nameById(holder.charId)),
-                );
-                if (soured) {
-                    world.revokeAccess(home, holder.charId);
-                    log(`  [門] ${owner.name} 換了鎖，${world.nameById(holder.charId)} 進不去了`);
+            for (const sceneId of world.ownedScenesBy(owner.id)) {
+                for (const holder of world.keyHoldersOf(sceneId)) {
+                    if (holder.kind !== 'standing') continue; // a one-time pass is consumed on entry, not revoked
+                    const soured = wants.some(
+                        (wnt) =>
+                            !wnt.retired &&
+                            wnt.characterId === owner.id &&
+                            HOSTILE.test(wnt.layer) &&
+                            !!wnt.target &&
+                            (wnt.target === holder.charId || wnt.target === world.nameById(holder.charId)),
+                    );
+                    if (!soured) continue;
+                    world.revokeAccess(sceneId, holder.charId);
+                    // 逐客: a rekey on a LEASED scene where THIS holder is the 租客 ends the
+                    // lease — the deed-holder evicted their tenant. Drop the lease registry
+                    // entry and any future rent bill (already-paid rent stays paid: removing
+                    // an unpaid FUTURE obligation moves no money, so conservation is
+                    // untouched). A non-lease rekey (an old lover's key) is unchanged.
+                    const lease = w.leases?.[sceneId];
+                    if (lease && lease.tenantId === holder.charId) {
+                        if (lease.rentBillId && w.economy?.bills) {
+                            w.economy.bills = w.economy.bills.filter((bill) => bill.id !== lease.rentBillId);
+                        }
+                        delete w.leases![sceneId];
+                        // NOTE (deliberate for this stage): the evicted 租客 is NOT auto-
+                        // rehoused — their homeByChar still points at the now-barred scene;
+                        // the movement gate already handles a barred home gracefully (they
+                        // simply can no longer let themselves in). Rehousing is a later arc.
+                        log(`  [門] ${owner.name} 把${world.sceneNameById(sceneId)}的鎖換了，逐了租客${world.nameById(holder.charId)}，租約就此斷了`);
+                    } else {
+                        log(`  [門] ${owner.name} 換了鎖，${world.nameById(holder.charId)} 進不去了`);
+                    }
                 }
             }
         }

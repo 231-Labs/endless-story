@@ -159,8 +159,13 @@ export interface LabCharacterLive {
     };
     /** 居所 — where this character dwells (homeByChar) and their tenure of it:
      *  'own'＝自有屋主, 'rent'＝租住(屋主 ownerNames), 'public'＝公處借宿(無主). Omitted
-     *  when the character has no home scene. Read-only, derived from ownersOf. */
-    home?: { sceneName: string; tenure: 'own' | 'rent' | 'public'; ownerNames: string[] };
+     *  when the character has no home scene. Read-only, derived from ownersOf.
+     *  `rentYuan` present only when a 'rent' tenure bears rent (from the lease's bill). */
+    home?: { sceneName: string; tenure: 'own' | 'rent' | 'public'; ownerNames: string[]; rentYuan?: number };
+    /** 收租 — the rentals this character is the LANDLORD of (leases whose 屋主 is this
+     *  character), each with the tenant and the 圓 rent (when the lease bears it).
+     *  Omitted when this character lets nothing out. Read-only, derived from leases. */
+    rentalsOut?: Array<{ sceneName: string; tenantName: string; rentYuan?: number }>;
 }
 
 /**

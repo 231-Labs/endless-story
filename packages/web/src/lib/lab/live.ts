@@ -281,6 +281,15 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         const body = abs % per === 0n ? `${abs / per} ${unit}` : `${abs / per} ${unit} ${abs % per} 分`;
         return neg ? `欠 ${body}` : body;
     };
+    // 租金：resolve a lease's rent bill → 圓 amount (divide 分 by subunitsPerUnit).
+    // undefined when the bill is absent or the world carries no economy.
+    const rentSubunitsPerUnit = Math.max(1, economy?.subunitsPerUnit || 100);
+    const rentYuanOf = (rentBillId?: string): number | undefined => {
+        if (!rentBillId || !economy) return undefined;
+        const bill = (economy.bills ?? []).find((b) => b.id === rentBillId);
+        if (!bill) return undefined;
+        try { return Number(BigInt(bill.amountSubunits)) / rentSubunitsPerUnit; } catch { return undefined; }
+    };
     // 物品欄：carriedBy===此人、未毀之物件。
     const worldObjects = w.objects ?? [];
     const carryingOf = (id: string) =>
@@ -374,12 +383,28 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             },
             // 居所 — the dwelling this character calls home + their tenure of it,
             // deed-aware via ownersOf (自有屋主／租住／公處借宿). Omitted when homeless.
+            // A 'rent' tenure surfaces its 租金 when the registered lease bears one.
             home: (() => {
                 const homeId = w.homeByChar[member.id];
                 if (!homeId) return undefined;
                 const owners = world.ownersOf(homeId);
-                const tenure = owners.length === 0 ? 'public' : owners.includes(member.id) ? 'own' : 'rent';
-                return { sceneName: world.sceneNameById(homeId), tenure, ownerNames: owners.map((id) => world.nameById(id)) };
+                const tenure: 'own' | 'rent' | 'public' = owners.length === 0 ? 'public' : owners.includes(member.id) ? 'own' : 'rent';
+                const base = { sceneName: world.sceneNameById(homeId), tenure, ownerNames: owners.map((id) => world.nameById(id)) };
+                if (tenure === 'rent') {
+                    const rentYuan = rentYuanOf(w.leases?.[homeId]?.rentBillId);
+                    if (rentYuan !== undefined) return { ...base, rentYuan };
+                }
+                return base;
+            })(),
+            // 收租 — the rentals this character is the landlord of (leases they own).
+            rentalsOut: (() => {
+                const rentals = world.rentalsBy(member.id);
+                if (!rentals.length) return undefined;
+                return rentals.map((r) => ({
+                    sceneName: world.sceneNameById(r.sceneId),
+                    tenantName: world.nameById(r.tenantId),
+                    rentYuan: rentYuanOf(r.rentBillId),
+                }));
             })(),
         };
     });

@@ -107,7 +107,10 @@ export interface SeasonEconomyData {
     wages: Array<{ accountId: string; amountSubunits: string; fromAccountId?: string }>;
     /** periodic lump-sum obligations (錢莊月息、屋租按期付，不是每日勻繳)。
      *  due at the END of dueDay; short payment rolls forward as a standing
-     *  debt chased at every later settle until cleared. */
+     *  debt chased at every later settle until cleared. `fromAccountId`/`toAccountId`
+     *  route the collection: 默認 班庫→市面; a 租金 bill sets 租客→屋主 (a tenant pays
+     *  his landlord). Absent ⇒ the troupe/market default, so existing bills stay
+     *  byte-identical. */
     bills?: Array<{
         id: string;
         label: string;
@@ -115,6 +118,10 @@ export interface SeasonEconomyData {
         dueDay: number;
         creditor?: string;
         paidSubunits: string;
+        /** payer account — 默認 班庫 (troupeAccountId); a 租金 bill sets the 租客. */
+        fromAccountId?: string;
+        /** payee account — 默認 市面 (marketAccountId); a 租金 bill sets the 屋主. */
+        toAccountId?: string;
     }>;
     catalog: SeasonCatalogItem[];
     /** contractId → linked WorldObject id whose state mirrors contract status. */
@@ -1231,13 +1238,19 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
     for (const bill of data.bills ?? []) {
         const remaining = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
         if (remaining <= 0n || req.day < bill.dueDay) continue;
-        const troupe = contract.economy.accounts[data.troupeAccountId];
-        const pay = troupe.available < remaining ? troupe.available : remaining;
+        // 默認 班庫→市面; a 租金 bill routes 租客→屋主 (from/to on the bill). The
+        // collection is a TRANSFER between two existing accounts either way, so
+        // conservation is untouched — only WHOSE purse pays and WHO receives moves.
+        const payerId = bill.fromAccountId ?? data.troupeAccountId;
+        const payeeId = bill.toAccountId ?? data.marketAccountId;
+        const payer = contract.economy.accounts[payerId];
+        if (!payer) throw new Error(`[economy] bill ${bill.id} names unknown payer account: ${payerId}`);
+        const pay = payer.available < remaining ? payer.available : remaining;
         if (pay > 0n) {
             const moved = collectDue(contract.economy, {
                 txnId: `day${req.day}:bill:${bill.id}`,
-                from: data.troupeAccountId,
-                to: data.marketAccountId,
+                from: payerId,
+                to: payeeId,
                 amount: pay,
                 memo: bill.label,
                 causeEventId,

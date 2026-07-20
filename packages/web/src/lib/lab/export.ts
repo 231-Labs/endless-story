@@ -191,6 +191,15 @@ function buildWorld(world: WorldState | null): string {
     }
     const w = world.data;
     const economy = w.economy;
+    // 租金：resolve a lease's rent bill → 圓 amount (分 ÷ subunitsPerUnit); undefined
+    // when the bill is absent or the world carries no economy.
+    const rentSubunitsPerUnit = Math.max(1, economy?.subunitsPerUnit || 100);
+    const rentYuanOf = (rentBillId?: string): number | undefined => {
+        if (!rentBillId || !economy) return undefined;
+        const bill = (economy.bills ?? []).find((b) => b.id === rentBillId);
+        if (!bill) return undefined;
+        try { return Number(BigInt(bill.amountSubunits)) / rentSubunitsPerUnit; } catch { return undefined; }
+    };
 
     // ── cast ──
     out.push('### 戲班（cast）');
@@ -212,11 +221,15 @@ function buildWorld(world: WorldState | null): string {
         if (homeId) {
             const owners = world.ownersOf(homeId);
             const homeName = world.sceneNameById(homeId);
-            home = owners.length === 0
-                ? `公處 · ${homeName}`
-                : owners.includes(member.id)
-                  ? `自有 · ${homeName}`
-                  : `租住 · ${homeName}（屋主 ${owners.map((id) => world.nameById(id)).join('、')}）`;
+            if (owners.length === 0) {
+                home = `公處 · ${homeName}`;
+            } else if (owners.includes(member.id)) {
+                home = `自有 · ${homeName}`;
+            } else {
+                const rentYuan = rentYuanOf(w.leases?.[homeId]?.rentBillId);
+                home = `租住 · ${homeName}（屋主 ${owners.map((id) => world.nameById(id)).join('、')}）`
+                    + (rentYuan !== undefined ? `，租金 ${rentYuan}圓` : '');
+            }
         }
         const parts = [
             `**${member.name}**（${member.role ?? '—'}｜${member.id}）@ ${sceneName}`,
@@ -227,6 +240,14 @@ function buildWorld(world: WorldState | null): string {
         if (bonds.length) parts.push(`羈絆：${bonds.join('、')}`);
         if (skills.length) parts.push(`技藝：${skills.join('、')}`);
         if (home) parts.push(`居所：${home}`);
+        // 收租 — rentals this member is the landlord of (leases they own by deed).
+        const rentals = world.rentalsBy(member.id);
+        if (rentals.length) {
+            parts.push('收租：' + rentals.map((r) => {
+                const rentYuan = rentYuanOf(r.rentBillId);
+                return `${world.sceneNameById(r.sceneId)}（租客 ${world.nameById(r.tenantId)}${rentYuan !== undefined ? `，${rentYuan}圓` : ''}）`;
+            }).join('、'));
+        }
         if (keys.length) parts.push(`持鑰：${keys.join('、')}`);
         if (member.plan) parts.push(`打算：${member.plan.replace(/\s+/g, ' ').trim()}`);
         castLines.push('- ' + parts.join('\n  · '));
