@@ -90,7 +90,8 @@
       "leadNames": ["柳安春", "蘇映雪"],
       "minCast": 4,
       "fullHouseYuan": 30,
-      "castShareBps": 2000
+      "castShareBps": 2000,
+      "performerBoost": true
     },
     "businesses": [
       {
