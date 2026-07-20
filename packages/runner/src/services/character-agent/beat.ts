@@ -9,7 +9,7 @@
 
 import { text as llmText } from '@endless-story/llm';
 import { buildBeatSystemPrompt, parseBeatResult, pronounFromBody, safeSceneRevision, type ActBeatInput, type BeatResult } from './beat-prompt.js';
-import { formatPovSceneParagraphs } from '../narrative-format/pov-paragraphs.ts';
+import { formatPovSceneParagraphs, stripPovTitle } from '../narrative-format/pov-paragraphs.ts';
 import { toTraditional } from '@endless-story/shared/to-traditional';
 
 // Pure prompt surface (types + builders) lives in the node-clean leaf
@@ -396,7 +396,8 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
                 '- 但你只寫你「看見、聽見、感覺到」的：你的注意力落在哪、哪個細節刺你、你把它解讀成什麼——這才是你的版本；',
                 '- 你看不進別人心裡：別人的心思只能從其言行猜，猜測就寫成猜測；',
                 '- 你自己此刻沒說出口的，寫出來。',
-                '只輸出敘事正文，不要標題、不要 markdown。' + bodyNote,
+                '只輸出第一人稱敘事正文本身：不要標題行、不要「第X回」或任何回目／章節編號、不要 markdown 井號（#）。' +
+                    '（畫面自帶第X日·第Y拍·場景的眉題，正文再標一次是多餘。）' + bodyNote,
             ]
                 .filter(Boolean)
                 .join('\n'),
@@ -409,7 +410,7 @@ export async function povScene(input: PovSceneInput): Promise<string | null> {
             maxTokens: 1200,
             temperature: 0.9,
         });
-        return formatPovSceneParagraphs(toTraditional(res.text)) || null;
+        return formatPovSceneParagraphs(stripPovTitle(toTraditional(res.text))) || null;
     } catch {
         return null;
     }
