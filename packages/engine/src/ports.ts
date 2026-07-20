@@ -32,6 +32,18 @@ export type NegotiateCounterReply = Runner.characterAgent.NegotiateCounterReply;
 export type RehearsalDecideInput = Runner.characterAgent.RehearsalDecideInput;
 export type RehearsalDecideReply = Runner.characterAgent.RehearsalDecideReply;
 export type SpeakPrayerInput = Runner.characterAgent.SpeakPrayerInput;
+// 資助搭救 (decideAid): a moneyed character weighs giving some of their OWN coin
+// to a co-present peer in real hardship. The give/no-give judgment is the
+// capability's (runner aid.ts); the engine only feeds it real state.
+export type AidActionInput = Runner.characterAgent.AidActionInput;
+export type AidActionResult = Runner.characterAgent.AidActionResult;
+export type AidPeer = Runner.characterAgent.AidPeer;
+export type AidGift = Runner.characterAgent.AidGift;
+export type AidRelation = Runner.characterAgent.AidRelation;
+export type AidSituation = Runner.characterAgent.AidSituation;
+export type AidVitality = Runner.characterAgent.AidVitality;
+export type AidMemo = Runner.characterAgent.AidMemo;
+export type AidManner = Runner.characterAgent.AidManner;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -284,6 +296,17 @@ export interface SceneAgentPort extends SceneAgent {
      *  instead — the mechanism works and is testable with no LLM. null → the tick
      *  falls back to the deterministic framing just the same. */
     speakPrayer?(input: SpeakPrayerInput): Promise<string | null>;
+    /** 資助搭救 (optional): a character holding surplus coin, co-present with someone
+     *  in real hardship (broke / no runway / acutely starving), decides whether to
+     *  give some of their OWN money to help — and how much, to whom, under what
+     *  名目. The give/no-give JUDGMENT is the capability's (runner aid.ts, shaped by
+     *  personality + each bond); finalizeAid enforces the HARD safety (recipient a
+     *  real listed peer, running total ≤ funds, NO overdraft — the same rule as the
+     *  on-chain transfer). Real adapters implement it (one cheap LLM call); the fake
+     *  OMITS it, so the tick's DETERMINISTIC fallback (a small clamped gift to the
+     *  neediest warmly-bonded co-present peer) runs instead — the mechanism works and
+     *  is testable with no LLM. The money moves ONLY through the conserving pay path. */
+    decideAid?(input: AidActionInput): Promise<AidActionResult>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;
