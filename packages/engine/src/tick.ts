@@ -852,18 +852,23 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
     // 2.96) 訪問權限 (space access grants) — lazily seed STANDING keys for every
     // PRIVATE owned space from EXISTING canon, ONCE per world (guard on
-    // `accessGrants === undefined`; initialised to at least {} so it never
-    // re-seeds). LOSSLESS migration of the old warmth gate: anyone the owner would
-    // have admitted (welcome ≥ 0.7) gets a standing key, so existing runs behave
-    // the same; PLUS old lovers (isEstablished) hold each other's keys (老情人持彼此
+    // `accessSeeded`; NOT on `accessGrants === undefined`, because the housing seed
+    // may pre-populate `accessGrants` with tenant keys at frame-apply time — the
+    // undefined guard would then wrongly skip this social seed). `accessGrants` is
+    // still initialised to at least {} here so the accessors always find a table.
+    // LOSSLESS migration of the old warmth gate: anyone the owner would have
+    // admitted (welcome ≥ 0.7) gets a standing key, so existing runs behave the
+    // same; PLUS old lovers (isEstablished) hold each other's keys (老情人持彼此
     // 鑰匙). Runs AFTER §2.95 so established pairs are already seeded. A tentative
     // suitor (a live 愛/情 want toward an owner, not warm/established) is 領入 with a
     // ONE-TIME pass — exercising the 一次性 seam; a full LLM-chosen "invite" is a
-    // future seat, the method (grantAccess … 'oneTime') is the seam. An empty/
-    // edgeless world derives to owner-only (no grants), so a public world is
-    // untouched and there is no regression.
-    if (w.accessGrants === undefined) {
-        w.accessGrants = {};
+    // future seat, the method (grantAccess … 'oneTime') is the seam. It reads the
+    // now deed-aware `ownersOf` and the idempotent `grantAccess`, so it stays
+    // ADDITIVE over any housing-seeded tenant keys. An empty/edgeless world derives
+    // to owner-only (no grants), so a public world is untouched and there is no
+    // regression.
+    if (!w.accessSeeded) {
+        w.accessGrants ??= {};
         const LOVE_WANT = /愛|情/;
         for (const scene of w.scenes) {
             const owners = world.ownersOf(scene.id); // [] unless private (≥3) with an owner
@@ -892,6 +897,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         if (Object.keys(w.accessGrants).length) {
             log(`  訪問權限: 為 ${Object.keys(w.accessGrants).length} 處私處立鑰`);
         }
+        w.accessSeeded = true; // never re-seed (separates 'never seeded' from housing pre-population)
     }
     // The working bond graph for this tick (mutated by scenes, written back at end).
     const bonds = world.bondGraph();

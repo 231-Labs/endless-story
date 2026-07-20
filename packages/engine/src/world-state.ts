@@ -173,6 +173,12 @@ export interface WorldObject {
     knownBy: string[];
     /** Birth provenance (stable across forks/resume; never renumbered). */
     origin?: WorldObjectOrigin;
+    /** The sceneId this object UNLOCKS — a key OBJECT names its lock (使用權 made
+     *  physical: 一把帶在身上的門鑰 vs the abstract grant in `accessGrants`).
+     *  Optional & backward-compatible — most objects are not keys; it is seeded
+     *  now (housing) and consumed by later stages. Plain JSON, so snapshot/restore
+     *  already carry it. */
+    keyFor?: string;
 }
 
 /**
@@ -304,6 +310,13 @@ export interface WorldStateData {
      *  established night pair opens the intimacy register directly. Optional &
      *  backward-compatible (absent ⇒ nobody established yet). */
     establishedPairs?: string[];
+    /** 擁有權 / 地契: sceneId → the OWNER characterId(s) of a private dwelling.
+     *  DISTINCT from dwelling: a 租客 lives in (homeByChar) a scene they do NOT own;
+     *  the 屋主 owns it whether they live there or not. When a scene has an explicit
+     *  deed here, THIS is authoritative for `ownersOf`; absent ⇒ fall back to the
+     *  homeByChar derivation (backward-compat). Optional & carried verbatim by
+     *  snapshot/restore (plain JSON). */
+    propertyOwners?: Record<string, string[]>;
     /** 訪問權限 — the space access-grant table: per PRIVATE scene (privacyLevel ≥ 3
      *  with an owner), the guests who hold a key. `standing` = 半永久 key-holders
      *  (old lovers, the 師姐, the 金主 — let themselves in), `oneTime` = 一次性
@@ -313,6 +326,14 @@ export interface WorldStateData {
      *  world predating this layer behaves the same on day 1; a public world has no
      *  entry at all. Carried verbatim by snapshot/restore (plain JSON). */
     accessGrants?: Record<string, { standing: string[]; oneTime: string[] }>;
+    /** true once the one-time social access seed (§2.96) has run; separates
+     *  'never seeded' from 'seeded then persisted' now that the housing seed may
+     *  pre-populate `accessGrants` (tenant keys) at frame-apply time — so the §2.96
+     *  guard can no longer key off `accessGrants === undefined`. Optional &
+     *  backward-compatible: an OLD snapshot with `accessGrants` defined but this
+     *  field absent was already seeded under the undefined-guard regime, so
+     *  `restore` migrates it to `true` (must NOT re-seed). */
+    accessSeeded?: boolean;
     /** 願牆 — the spoken prayers characters have voiced at a temple (神明 前),
      *  newest appended last. Distinct from `wants` (the internal 心事 on the
      *  願榜): a Prayer is 對神明說出口的話. Optional & backward-compatible — a world
@@ -610,12 +631,21 @@ export class WorldState {
     }
 
     // ── 訪問權限 (space access grants) ──────────────────────────────────────────
-    /** The OWNERS of a scene: characters whose home (`homeByChar`) is this scene
-     *  AND the scene is a private space (privacyLevel ≥ 3). A scene with no such
-     *  owner OR a privacyLevel < 3 is PUBLIC (empty list ⇒ free to enter). */
+    /** The OWNERS of a scene — 擁有權, deed-first. A scene with privacyLevel < 3 (or
+     *  none) is PUBLIC/unowned (empty list ⇒ free to enter). Otherwise: if an
+     *  explicit deed exists in `propertyOwners` (after filtering to ids that resolve
+     *  in the cast) and is non-empty, THAT wins — so a 屋主 who does not live here
+     *  still owns it, and a 租客 who lives here does NOT. Absent (or all-unresolved)
+     *  deed ⇒ fall back to the homeByChar derivation (unchanged for worlds without
+     *  deeds): characters whose home is this scene. */
     ownersOf(sceneId: string): string[] {
         const scene = this.sceneById(sceneId);
         if (!scene || scene.privacyLevel < 3) return [];
+        const deed = this.data.propertyOwners?.[sceneId];
+        if (deed) {
+            const resolved = deed.filter((id) => this.castById(id));
+            if (resolved.length) return resolved; // the deed is authoritative
+        }
         return Object.entries(this.data.homeByChar)
             .filter(([, home]) => home === sceneId)
             .map(([id]) => id);
@@ -740,6 +770,11 @@ export class WorldState {
             if (!m.relationshipView || typeof m.relationshipView !== 'object') m.relationshipView = {};
         }
         if (!Array.isArray(data.objects)) data.objects = [];
+        // A snapshot written under the old undefined-guard regime carries
+        // `accessGrants` but no `accessSeeded`: it was ALREADY seeded (§2.96), so
+        // mark it so — otherwise the housing-era guard would re-seed and un-revoke
+        // any souring-revoked keys. A fresh, never-seeded world has neither field.
+        if (data.accessGrants !== undefined && data.accessSeeded === undefined) data.accessSeeded = true;
         return new WorldState(data);
     }
 }
