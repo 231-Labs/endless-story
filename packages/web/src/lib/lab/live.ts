@@ -359,6 +359,19 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             gallery: listGallery('character', member.name).map(({ url, type }) => ({ url, type })),
             money: moneyOf(member.id),
             carrying: carryingOf(member.id),
+            // 持鑰 — the 訪問權限 keys this character holds (as a guest) + who holds a
+            // key to their own home. Names/portraits resolved from the cast.
+            keys: {
+                holding: world.keysHeldBy(member.id).map((k) => ({
+                    sceneId: k.sceneId,
+                    sceneName: world.sceneNameById(k.sceneId),
+                    kind: k.kind,
+                })),
+                myPlaceHolders: (w.homeByChar[member.id] ? world.keyHoldersOf(w.homeByChar[member.id]) : []).map((h) => {
+                    const holderName = world.nameById(h.charId);
+                    return { id: h.charId, name: holderName, portraitUrl: assetUrlFor('character', holderName), kind: h.kind };
+                }),
+            },
         };
     });
 

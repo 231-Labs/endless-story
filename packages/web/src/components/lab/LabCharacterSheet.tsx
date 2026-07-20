@@ -237,6 +237,15 @@ function SkillRow({ skill }: { skill: LabCharacterLive['skills'][number] }) {
     );
 }
 
+/** 鑰匙牌 — 常 (standing, durable jade) vs 次 (one-time, cinnabar). */
+function KeyChip({ kind }: { kind: 'standing' | 'oneTime' }) {
+    return kind === 'standing' ? (
+        <span title="半永久 · 常持之鑰" className="shrink-0 rounded-sm border border-jade/40 bg-jade/[0.08] px-1.5 py-px font-serif text-[10px] tracking-[0.15em] text-jade/90">常</span>
+    ) : (
+        <span title="一次性 · 用一回便收" className="shrink-0 rounded-sm border border-cinnabar/40 bg-cinnabar/[0.08] px-1.5 py-px font-serif text-[10px] tracking-[0.15em] text-cinnabar/90">次</span>
+    );
+}
+
 export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene, onSelectCharacter }: {
     runId: string;
     character: LabCharacterLive;
@@ -595,6 +604,68 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                             ))}
                                         </div>
                                         {!c.carrying.length ? <p className="mt-2 font-serif text-sm text-mute/70">身無長物。</p> : null}
+                                    </section>
+
+                                    {/* 持鑰 —— 訪問權限：你能進的私處、與持你家鑰匙的人 */}
+                                    <section className="animate-beat-in">
+                                        <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">持鑰 · 訪問權限</h3>
+                                        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                                            {/* 你持有的鑰匙 —— which private places this character may enter as a guest */}
+                                            <div>
+                                                <p className="font-serif text-[10px] tracking-[0.2em] text-mute/70">你持有的鑰匙</p>
+                                                {c.keys.holding.length ? (
+                                                    <ul className="mt-1.5 space-y-1.5">
+                                                        {c.keys.holding.map((k) => (
+                                                            <li
+                                                                key={k.sceneId}
+                                                                className="flex items-center gap-2 rounded-lg border border-hairline bg-canvas/70 px-2.5 py-1.5 dark:bg-white/[0.03]"
+                                                            >
+                                                                <span aria-hidden className="shrink-0 font-serif text-sm text-cinnabar/70">鑰</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => onJumpToScene?.(k.sceneId)}
+                                                                    title={`開「${k.sceneName}」`}
+                                                                    className="min-w-0 flex-1 truncate text-left font-serif text-sm text-ink/85 transition hover:text-cinnabar"
+                                                                >
+                                                                    {k.sceneName}
+                                                                </button>
+                                                                <KeyChip kind={k.kind} />
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="mt-1.5 font-serif text-sm text-mute/70">無旁人私處可自由出入。</p>
+                                                )}
+                                            </div>
+
+                                            {/* 持你家鑰匙的 —— who holds a key to this character's own home */}
+                                            <div>
+                                                <p className="font-serif text-[10px] tracking-[0.2em] text-mute/70">持你家鑰匙的</p>
+                                                {c.keys.myPlaceHolders.length ? (
+                                                    <ul className="mt-1.5 space-y-1.5">
+                                                        {c.keys.myPlaceHolders.map((h) => (
+                                                            <li
+                                                                key={h.id}
+                                                                className="flex items-center gap-2 rounded-lg border border-hairline bg-canvas/70 px-2.5 py-1.5 dark:bg-white/[0.03]"
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => onSelectCharacter?.(h.id)}
+                                                                    title={`往「${h.name}」內頁`}
+                                                                    className="group flex min-w-0 flex-1 items-center gap-2 text-left"
+                                                                >
+                                                                    <PortraitChip name={h.name} url={h.portraitUrl} cls="h-6 w-6" textCls="text-[10px]" />
+                                                                    <span className="truncate font-serif text-sm text-ink/85 transition group-hover:text-cinnabar">{h.name}</span>
+                                                                </button>
+                                                                <KeyChip kind={h.kind} />
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="mt-1.5 font-serif text-sm text-mute/70">你的門，只你自己開。</p>
+                                                )}
+                                            </div>
+                                        </div>
                                     </section>
                                 </div>
                             ) : null}

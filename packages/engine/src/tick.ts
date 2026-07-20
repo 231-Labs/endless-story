@@ -443,12 +443,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             const ownerIds = Object.entries(w.homeByChar)
                 .filter(([, home]) => home === scene.id)
                 .map(([id]) => id);
-            if (!isIntrudeTarget && scene.privacyLevel >= 3 && ownerIds.length > 0 && !ownerIds.includes(member.id)) {
-                const admitted = ownerIds.some(
-                    (ownerId) => w.roster[ownerId] === scene.id && world.welcome(ownerId, member.id) >= 0.7,
-                );
-                if (!admitted) return [];
-            }
+            // 訪問權限 gate (replaces the old warmth admit): a private owned space
+            // admits only its owner or a key-holder (standing/oneTime). A public
+            // scene / an owner / a key-holder ⇒ canEnter true (never barred). The
+            // 撞破 break-in ignores keys — isIntrudeTarget bypasses this exactly as
+            // it bypassed the old gate.
+            if (!isIntrudeTarget && !world.canEnter(member.id, scene.id)) return [];
             const presentCharacters = w.cast
                 .filter((candidate) => candidate.id !== member.id && w.roster[candidate.id] === scene.id)
                 .map((candidate) => ({
@@ -663,6 +663,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
         world.moveCharacter(member.id, arrivalSceneId);
         routed[member.id] = arrivalSceneId;
+        // 一次性 領入: if the mover entered on a one-time pass, it is used up here
+        // (owners / standing key-holders consume nothing). A 撞破 break-in holds no
+        // pass, so it consumes nothing either.
+        if (world.consumeOneTime(arrivalSceneId, member.id)) {
+            log(`  [門] ${member.name} 用掉一次${world.sceneNameById(arrivalSceneId)}的門路`);
+        }
         // Every move marks "arrived here this tick" (the night encounter test
         // reads it). Only a cross-district trip books the rest window — a same-
         // district hop is a few steps and stays free, so local movement is
@@ -843,6 +849,50 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         world.setBonds(seedG);                    // at least [] — never re-seeds
         w.establishedPairs ??= [...seededPairs];   // at least []
     }
+
+    // 2.96) 訪問權限 (space access grants) — lazily seed STANDING keys for every
+    // PRIVATE owned space from EXISTING canon, ONCE per world (guard on
+    // `accessGrants === undefined`; initialised to at least {} so it never
+    // re-seeds). LOSSLESS migration of the old warmth gate: anyone the owner would
+    // have admitted (welcome ≥ 0.7) gets a standing key, so existing runs behave
+    // the same; PLUS old lovers (isEstablished) hold each other's keys (老情人持彼此
+    // 鑰匙). Runs AFTER §2.95 so established pairs are already seeded. A tentative
+    // suitor (a live 愛/情 want toward an owner, not warm/established) is 領入 with a
+    // ONE-TIME pass — exercising the 一次性 seam; a full LLM-chosen "invite" is a
+    // future seat, the method (grantAccess … 'oneTime') is the seam. An empty/
+    // edgeless world derives to owner-only (no grants), so a public world is
+    // untouched and there is no regression.
+    if (w.accessGrants === undefined) {
+        w.accessGrants = {};
+        const LOVE_WANT = /愛|情/;
+        for (const scene of w.scenes) {
+            const owners = world.ownersOf(scene.id); // [] unless private (≥3) with an owner
+            if (owners.length === 0) continue;
+            for (const guest of w.cast) {
+                if (owners.includes(guest.id)) continue; // an owner needs no key
+                const warmlyAdmitted = owners.some((ownerId) => world.welcome(ownerId, guest.id) >= 0.7);
+                const oldLovers = owners.some((ownerId) => world.isEstablished(ownerId, guest.id));
+                if (warmlyAdmitted || oldLovers) {
+                    world.grantAccess(scene.id, guest.id, 'standing');
+                    continue;
+                }
+                // 一次性 領入: a one-sided suitor (a live love want aimed at an owner
+                // this space does not yet welcome) is led in exactly once.
+                const suitor = wants.some(
+                    (wnt) =>
+                        !wnt.retired &&
+                        wnt.characterId === guest.id &&
+                        LOVE_WANT.test(wnt.layer) &&
+                        !!wnt.target &&
+                        owners.some((ownerId) => wnt.target === ownerId || wnt.target === world.nameById(ownerId)),
+                );
+                if (suitor) world.grantAccess(scene.id, guest.id, 'oneTime');
+            }
+        }
+        if (Object.keys(w.accessGrants).length) {
+            log(`  訪問權限: 為 ${Object.keys(w.accessGrants).length} 處私處立鑰`);
+        }
+    }
     // The working bond graph for this tick (mutated by scenes, written back at end).
     const bonds = world.bondGraph();
     // Unordered pair keys that shared a scene today — spared tonight's cooling.
@@ -856,6 +906,17 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // inert on a bond-less world (zero behaviour change).
     const isTrustedConfidant = (a: string, b: string): boolean =>
         bondOf(bonds, a, b) >= BOND.seed.known && !hasHostileWantToward(wants, a, b, world.nameById(b));
+
+    // 授權 on 相許 — becoming lovers hands over the key: each gets a STANDING key to
+    // the OTHER's home (homeByChar). Called wherever the tick records a pair as 相許.
+    // grantAccess is idempotent and no-ops on a co-owned (cohabiting) or public
+    // home, so it is always safe to call.
+    const grantMutualHomeKeys = (a: string, b: string): void => {
+        const homeA = w.homeByChar[a];
+        const homeB = w.homeByChar[b];
+        if (homeB) world.grantAccess(homeB, a, 'standing');
+        if (homeA) world.grantAccess(homeA, b, 'standing');
+    };
 
     // 3) Group co-present cast by scene; at night keep only qualifying scenes.
     const byScene = new Map<string, string[]>();
@@ -1150,6 +1211,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         if (loop.intimacyAccepted && ids.length === 2) {
             bumpBond(bonds, ids[0], ids[1], 'bed');
             world.addEstablished(ids[0], ids[1]);
+            grantMutualHomeKeys(ids[0], ids[1]); // 相許 → 授權: mutual standing keys
             log(`  [相許] ${world.nameById(ids[0])} 與 ${world.nameById(ids[1])} 這一場成了彼此`);
         }
         // 相許 (verdict) — a settled night pair not yet established but still carrying
@@ -1177,6 +1239,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 });
                 if (established) {
                     world.addEstablished(a, b);
+                    grantMutualHomeKeys(a, b); // 相許 → 授權: mutual standing keys
                     bumpBond(bonds, a, b, 'accept');
                     log(`  [相許] ${world.nameById(a)} 與 ${world.nameById(b)} 已交了心`);
                 }
@@ -1709,6 +1772,34 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             });
             if (spawn && spawnWant(wants, member.id, spawn, nowTick, regenEvents, castNames)) {
                 log(`  願生: ${member.name}「${spawn.desc}」`);
+            }
+        }
+    }
+
+    // 7.78) 撤銷 on souring (換鎖) — at day-end an OWNER whose heart has turned
+    // hostile toward a current STANDING key-holder takes the key back: a live
+    // 妒/怨/恨/仇 want aimed at a holder revokes that holder's key. A real 撤銷
+    // driven by the relationship turning (not a static table). Core mechanism —
+    // unconditional world physics, NOT behind relationshipFallback.
+    if (dayEnd) {
+        const HOSTILE = /妒|怨|恨|仇/;
+        for (const owner of w.cast) {
+            const home = w.homeByChar[owner.id];
+            if (!home || !world.ownersOf(home).includes(owner.id)) continue; // owns no private home
+            for (const holder of world.keyHoldersOf(home)) {
+                if (holder.kind !== 'standing') continue; // a one-time pass is consumed on entry, not revoked
+                const soured = wants.some(
+                    (wnt) =>
+                        !wnt.retired &&
+                        wnt.characterId === owner.id &&
+                        HOSTILE.test(wnt.layer) &&
+                        !!wnt.target &&
+                        (wnt.target === holder.charId || wnt.target === world.nameById(holder.charId)),
+                );
+                if (soured) {
+                    world.revokeAccess(home, holder.charId);
+                    log(`  [門] ${owner.name} 換了鎖，${world.nameById(holder.charId)} 進不去了`);
+                }
             }
         }
     }

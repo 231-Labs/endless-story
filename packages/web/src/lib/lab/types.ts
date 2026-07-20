@@ -149,6 +149,14 @@ export interface LabCharacterLive {
     money?: string;
     /** 隨身物品欄：carriedBy===此人、未毀之物件（含唯一 id 與出身戳）。 */
     carrying: Array<{ id: string; label: string; state?: string; hidden?: boolean; origin?: { day: number; tick: number; source: 'season' | 'lab' } }>;
+    /** 持鑰 — 訪問權限: which private places this character may enter as a GUEST
+     *  (`holding`, a standing 常 or one-time 次 key) and who holds a key to THIS
+     *  character's own home (`myPlaceHolders`). Empty for a character with no keys
+     *  and a home nobody holds a key to. */
+    keys: {
+        holding: Array<{ sceneId: string; sceneName: string; kind: 'standing' | 'oneTime' }>;
+        myPlaceHolders: Array<{ id: string; name: string; portraitUrl?: string; kind: 'standing' | 'oneTime' }>;
+    };
 }
 
 /**
