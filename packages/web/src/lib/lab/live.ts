@@ -372,6 +372,15 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
                     return { id: h.charId, name: holderName, portraitUrl: assetUrlFor('character', holderName), kind: h.kind };
                 }),
             },
+            // 居所 — the dwelling this character calls home + their tenure of it,
+            // deed-aware via ownersOf (自有屋主／租住／公處借宿). Omitted when homeless.
+            home: (() => {
+                const homeId = w.homeByChar[member.id];
+                if (!homeId) return undefined;
+                const owners = world.ownersOf(homeId);
+                const tenure = owners.length === 0 ? 'public' : owners.includes(member.id) ? 'own' : 'rent';
+                return { sceneName: world.sceneNameById(homeId), tenure, ownerNames: owners.map((id) => world.nameById(id)) };
+            })(),
         };
     });
 

@@ -1360,6 +1360,34 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     bumpBond(bonds, beat.characterId, receiverId, 'gift');
                     togetherToday.add(world.pairKey(beat.characterId, receiverId));
                     log(`  [贈] ${beat.name} 以物贈 ${world.nameById(receiverId)}，情意近了些`);
+                    // 實體鑰匙 (Stage 2) — 使用權只隨門鑰的當面交手而動。commitBeatPhysics
+                    // 已把物件的 carriedBy 移到收受者，此處只補使用權：這只物件是不是一把
+                    // 門鑰（keyFor）。因為整段在 `ids.includes(receiverId)` 之內，物理相遇
+                    // 已是結構性前提——沒當面遇著，鑰匙遞不出去，使用權也就動不了。
+                    const obj = world.objectById(eff.objectId);
+                    if (obj?.keyFor) {
+                        const lock = obj.keyFor;                       // the sceneId this key opens
+                        const owners = world.ownersOf(lock);
+                        if (owners.includes(receiverId)) {
+                            // 收回: the key was surrendered to an OWNER — the giver, if a
+                            // non-owner holder, loses their use-right (物理相遇拿回). The
+                            // owner enters by deed regardless; a giver who was already an
+                            // owner surrenders nothing.
+                            if (!owners.includes(beat.characterId) && world.canEnter(beat.characterId, lock)) {
+                                world.revokeAccess(lock, beat.characterId);
+                                log(`  [門] ${beat.name} 把${world.sceneNameById(lock)}的鑰匙交還${world.nameById(receiverId)}，自此進不去了`);
+                            }
+                        } else {
+                            // 授鑰: handed to a non-owner — they gain a STANDING use-right
+                            // (grantAccess no-ops for an owner/public scene, so this is
+                            // safe). 借鑰/lending (非屋主→非屋主) thus grants the receiver
+                            // and does NOT revoke the giver: 撤銷 is its own deliberate act
+                            // (交還屋主，或 §7.78 換鎖). Handing a key is trust made physical;
+                            // the gift-bond bump above already warmed it (門鑰亦是贈物).
+                            world.grantAccess(lock, receiverId, 'standing');
+                            log(`  [門] ${beat.name} 把${world.sceneNameById(lock)}的鑰匙交到${world.nameById(receiverId)}手裡，往後自行進出`);
+                        }
+                    }
                 }
                 const causeEventId = `${eventId}:b${beatIndex}`;
                 beatIndex += 1;
