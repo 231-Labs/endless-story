@@ -1163,6 +1163,18 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     addressedId,
                     effects: beat.objectEffects,
                 });
+                // 贈物暖情 — handing an object to a co-present person is affection made
+                // physical (殷阿婆的白蘭買來簪在心上人襟前）: the gift warms the bond
+                // both ways (bumpBond is symmetric). carrierName names the receiver;
+                // skip a hand to oneself / an off-scene or unresolvable name.
+                for (const eff of beat.objectEffects ?? []) {
+                    if (!eff.carrierName) continue;
+                    const receiverId = world.idByName(eff.carrierName);
+                    if (!receiverId || receiverId === beat.characterId || !ids.includes(receiverId)) continue;
+                    bumpBond(bonds, beat.characterId, receiverId, 'gift');
+                    togetherToday.add(world.pairKey(beat.characterId, receiverId));
+                    log(`  [贈] ${beat.name} 以物贈 ${world.nameById(receiverId)}，情意近了些`);
+                }
                 const causeEventId = `${eventId}:b${beatIndex}`;
                 beatIndex += 1;
                 if (beat.economyCommands?.length && !economy) {

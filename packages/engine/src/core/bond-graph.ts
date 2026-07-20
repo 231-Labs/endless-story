@@ -18,7 +18,7 @@ export const BOND = {
     /** growth rate per shared scene (before warmth multiplier + saturation). */
     alpha: 0.06,
     /** warmth multipliers by what the scene actually was. */
-    warmth: { shared: 1.0, private: 1.5, confide: 2.0, confided: 1.5, accept: 3.0, bed: 4.0 } as Record<string, number>,
+    warmth: { shared: 1.0, private: 1.5, gift: 2.0, confide: 2.0, confided: 1.5, accept: 3.0, bed: 4.0 } as Record<string, number>,
     /** per-day cooling factor for a pair that did NOT share a scene. */
     mu: 0.985,
     /** an old flame never cools below this fraction of its historical peak. */
