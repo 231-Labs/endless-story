@@ -447,6 +447,16 @@ export interface WorldStateData {
      *  love never fades; NON-love wants (志向/身份) are never touched. Off by
      *  default; flag off ⇒ the day-end fade pass is inert (byte-identical). */
     heartsCanFade?: boolean;
+    /** 執念自揀 flag (beatPicksWant): when on, a beat is handed the FULL menu of its
+     *  actor's live wants (hottest-first, each with QUALITATIVE ripeness — never a
+     *  number) instead of the single pre-picked salient want, and may self-tag which
+     *  one it actually pushed (`pushWant`). The ledger (heat/frust/sat + the strict
+     *  resolve pass) then follows the character's real choice, not the engine's
+     *  hottest-want guess. The scene's physical gates (intimacy register, forcing
+     *  texture) stay keyed to the hottest want — only WHICH want the beat WORKED
+     *  moves to the character. Off by default; with the flag off (or when a beat
+     *  names nothing) the engine keeps its hottest-want handoff, byte-identical. */
+    beatPicksWant?: boolean;
     /** 願望流水號 —— 世界自帶的 want id 序號（快照隨行）。id 由此而出，
      *  同種子重跑 byte-identical；缺席（舊卷）時 newWant 退回舊式 wall-clock id。 */
     wantSeq?: number;

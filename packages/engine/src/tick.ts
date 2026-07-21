@@ -1631,6 +1631,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // scene-loop reads it for each actor's imagery-avoid window and appends
             // each committed beat, so a character's verbal tic is caught across scenes.
             recentBeatsByChar: (w.recentBeatsByChar ??= {}),
+            // 執念自揀: when on, each beat is handed its actor's full live-want menu and
+            // may self-tag which it pushed; the ledger follows the choice. Off ⇒ the
+            // single-want handoff (byte-identical, incl. the FakeSceneAgent path).
+            beatPicksWant: w.beatPicksWant === true,
             beforeBeat: (actor) => {
                 actor.sceneHint = world.physicalHint(actor.characterId, sid);
                 actor.objects = world.accessibleObjects(actor.characterId, sid).map((object) => ({

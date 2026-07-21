@@ -44,6 +44,9 @@ async function runWeek(): Promise<{ world: WorldState; logs: string[] }> {
     world.data.reconcileVisit = true; // 叩門
     world.data.creditVerbs = true; //    借賒
     world.data.seekRouting = true; //    尋人
+    world.data.beatPicksWant = true; // 執念自揀 — the fake never tags pushWant, so the
+    //                                   menu path is a no-op on state (byte-identical),
+    //                                   but its composition + determinism are guarded here.
 
     const deps = { agent: new FakeSceneAgent(), recall: new LocalRecall(), archive: nullArchive, clock: new LocalClock(), economy: new LocalEconomy() };
     const logs: string[] = [];

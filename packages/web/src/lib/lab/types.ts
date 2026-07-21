@@ -40,6 +40,10 @@ export interface LabRunConfig {
      *  want retires + a private percept); the engine forces nothing else — the
      *  character decides. Off ⇒ the old permanent-love world. */
     heartsCanFade?: boolean;
+    /** 執念自揀: a beat is handed its actor's full live-want menu (qualitative ripeness,
+     *  no numbers) and self-tags which one it pushed; the ledger follows that choice
+     *  instead of the engine's hottest-want guess. Off ⇒ the single-want handoff. */
+    beatPicksWant?: boolean;
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
     realEmbeddings: boolean;

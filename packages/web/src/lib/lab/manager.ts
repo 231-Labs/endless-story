@@ -105,6 +105,7 @@ interface RunManifest {
     creditVerbs: boolean;
     seekRouting: boolean;
     heartsCanFade: boolean;
+    beatPicksWant: boolean;
 }
 
 export interface ActiveRun {
@@ -221,11 +222,12 @@ export class LabRunManager {
             creditVerbs: cfg.creditVerbs ?? false,
             seekRouting: cfg.seekRouting ?? false,
             heartsCanFade: cfg.heartsCanFade ?? false,
+            beatPicksWant: cfg.beatPicksWant ?? false,
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
-            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'reconcileVisit', 'creditVerbs', 'seekRouting', 'heartsCanFade'] as const) {
-                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'reconcileVisit' || key === 'creditVerbs' || key === 'seekRouting' || key === 'heartsCanFade' ? (previous[key] ?? false) : previous[key];
+            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'reconcileVisit', 'creditVerbs', 'seekRouting', 'heartsCanFade', 'beatPicksWant'] as const) {
+                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'reconcileVisit' || key === 'creditVerbs' || key === 'seekRouting' || key === 'heartsCanFade' || key === 'beatPicksWant' ? (previous[key] ?? false) : previous[key];
                 if (prior !== manifest[key]) {
                     // A run's manifest is frozen at creation so a diagnostic export never
                     // lies about which model/preset/flags wrote which tick. The usual
@@ -267,6 +269,7 @@ export class LabRunManager {
             if (cfg.creditVerbs) world.data.creditVerbs = true;
             if (cfg.seekRouting) world.data.seekRouting = true;
             if (cfg.heartsCanFade) world.data.heartsCanFade = true;
+            if (cfg.beatPicksWant) world.data.beatPicksWant = true;
             // 相識分寸: a season may declare subjective naming; seed the acquaintance
             // map AFTER cast/edges/views are seeded (so co-workers/edge-holders start
             // named). Mirrors how the flags above flip world.data.<flag> post-build.
