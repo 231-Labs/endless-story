@@ -340,6 +340,13 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             forcing: levelAt(w, effR),
             privateAlone,
             sceneLog: log.slice(-5).join('\n'),
+            // 文筆二階: this actor's OWN prior beats this scene (prefix stripped) —
+            // the window recurringImagery scans for phrase-tics to name back. The
+            // full scene log filtered to this speaker, since the looping is
+            // per-character and scene-dense (not local to the last few beats).
+            selfSceneBeats: log
+                .filter((line) => line.startsWith(`${actor!.name}：`))
+                .map((line) => line.slice(actor!.name.length + 1)),
             stateLine: actor.stateLine,
             innerSecret: actor.innerSecret,
             standingPlan: actor.standingPlan,
