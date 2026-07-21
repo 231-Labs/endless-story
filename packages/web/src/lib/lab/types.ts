@@ -112,8 +112,9 @@ export interface LabCharacterLive {
     fatigue: number;
     hunger: number;
     mood: number;
-    /** ALL live wants, hottest first (cards show [0]; the 內頁 shows all). */
-    wants: Array<{ desc: string; layer: string; tension: number; target?: string }>;
+    /** ALL live wants, hottest first (cards show [0]; the 內頁 shows all).
+     *  `id` is the engine want id — the handle 香火 (offer-incense) points at. */
+    wants: Array<{ id: string; desc: string; layer: string; tension: number; target?: string }>;
     latestLine?: { text: string; clock: string; day: number; sceneName: string };
     /** Seed persona (or 圖庫 description override when present). */
     description: string;

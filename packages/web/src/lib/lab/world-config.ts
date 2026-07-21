@@ -12,7 +12,7 @@
 
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
-import { WorldState, type WorldObject } from '@endless-story/engine';
+import { offerIncense, WorldState, type WorldObject } from '@endless-story/engine';
 import { labManager } from './manager';
 import { runDir } from './paths';
 import type { LabWorldConfig } from './types';
@@ -42,7 +42,12 @@ export type WorldConfigOp =
         event: { inTicks: number; sceneId: string; clock?: string; text: string; visibility?: 'public' | 'private'; witnessIds?: string[] };
     }
     | { op: 'remove-scheduled-event'; eventId: string }
-    | { op: 'set-scene'; sceneId: string; privacyLevel?: number; capacity?: number };
+    | { op: 'set-scene'; sceneId: string; privacyLevel?: number; capacity?: number }
+    /** 香火（RECRUIT_INCENSE_SPEC §3）：operator 替一個角色上一炷香——指向他
+     *  心裡既有的一樁活願，願籤掛上願牆（source:'owner'）、那樁願得一絲熱
+     *  （heat += ε）、角色只得一行「無端又想起」的私感應。每角每日一炷；
+     *  refusal（無此願／已了／今日已上過）以人話拋出。 */
+    | { op: 'offer-incense'; characterId: string; wantId: string; text: string };
 
 interface WorldHandle {
     world: WorldState;
@@ -217,6 +222,24 @@ export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): Lab
             if (index < 0) throw new Error(`scheduled event not found: ${operation.eventId}`);
             if (delivered.has(operation.eventId)) throw new Error('a delivered event is canon — it cannot be removed');
             scheduled.splice(index, 1);
+            break;
+        }
+        case 'offer-incense': {
+            const outcome = offerIncense(world, {
+                characterId: operation.characterId,
+                wantId: operation.wantId,
+                text: operation.text,
+            });
+            if (!outcome.ok) {
+                const copy: Record<string, string> = {
+                    'no-character': `unknown character: ${operation.characterId}`,
+                    'no-temple': '此世無廟，香無處上。',
+                    'daily-cap': '今日的香已上過了——明日請早。',
+                    'no-want': '香火只照拂心裡已有的那樁事——這樁願不在此人心上。',
+                    'retired-want': '那樁事已了——香火不點已了之願。',
+                };
+                throw new Error(copy[outcome.reason] ?? outcome.reason);
+            }
             break;
         }
         case 'set-scene': {

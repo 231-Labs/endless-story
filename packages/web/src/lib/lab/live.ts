@@ -358,6 +358,7 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
             hunger: member.state.hunger,
             mood: member.state.mood,
             wants: world.liveWantsOf(member.id).map((want) => ({
+                id: want.id,
                 desc: want.desc,
                 layer: want.layer,
                 tension: Math.round(want.weight * (1 - want.sat) * 100) / 100,
