@@ -458,18 +458,30 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     if (w.prayers?.length && templeScenes.size) {
         for (const p of w.prayers) {
             if (p.fulfilledTick !== undefined) continue;
+            const trulyDone = () =>
+                wants.some(
+                    (want) =>
+                        want.characterId === p.characterId &&
+                        want.retired &&
+                        want.resolvedTick !== undefined &&
+                        !/淡了|過去了/.test(want.resolvedNote ?? '') &&
+                        !!p.wantDesc &&
+                        want.desc === p.wantDesc,
+                );
+            // 香火願 (source 'owner') 應驗s SILENTLY the moment the want truly
+            // resolves: the character never made this vow — never knew it exists
+            // — so there is no temple visit to wait for and no private memory to
+            // keep. The 願牆 stamp alone tells the owner their incense answered.
+            if (p.source === 'owner') {
+                if (!trulyDone()) continue;
+                p.fulfilledDay = w.clock.day;
+                p.fulfilledTick = nowTick;
+                log(`  [香火應驗] ${world.nameById(p.characterId)}的那樁香火願成了（${p.wantDesc}）`);
+                continue;
+            }
             const standing = w.roster[p.characterId];
             if (!standing || !templeScenes.has(standing)) continue; // 要人真的在廟裡
-            const done = wants.find(
-                (want) =>
-                    want.characterId === p.characterId &&
-                    want.retired &&
-                    want.resolvedTick !== undefined &&
-                    !/淡了|過去了/.test(want.resolvedNote ?? '') &&
-                    !!p.wantDesc &&
-                    want.desc === p.wantDesc,
-            );
-            if (!done) continue;
+            if (!trulyDone()) continue;
             p.fulfilledDay = w.clock.day;
             p.fulfilledTick = nowTick;
             log(`  [還願] ${world.nameById(p.characterId)} 在${p.sceneName}還了那樁願（${p.wantDesc}）`);

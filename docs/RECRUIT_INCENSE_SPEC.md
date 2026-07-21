@@ -75,9 +75,12 @@
 
 ## 5. MVP 順序與驗收
 
-1. 復核座席（engine PR ×1）＋鑄造流（web）→ 內測鑄 5 角
+1. 復核座席（engine 側 ✅ `decideRecruit` 座席：recruit-prompt 三關＋拓寫、
+   `hasVerbatimAnchor` 錨點驗證、敗退拒收）＋鑄造流（web，待做）→ 內測鑄 5 角
 2. 每日回目推播（POV 已有，缺推送管道）
-3. 香火（engine PR ×1：owner-prayer＋heat nudge＋願牆標記）
+3. 香火（engine 側 ✅ `offerIncense`：owner-prayer（`source:'owner'`）＋
+   heat ε nudge＋日上限＋私感應 percept＋願牆「香火／應驗」標記；
+   缺前端一炷香流）
 4. **20 人付費 alpha → 量 D7 回目開啟率**；同時量正典戲份佔比與
    香火轉化率
 5. D7 及格線（暫定 ≥40%）→ 才談家書/餽贈/多世界

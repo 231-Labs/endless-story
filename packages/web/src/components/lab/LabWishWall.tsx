@@ -72,12 +72,20 @@ export function LabWishWall({
                             <span className="font-serif text-2xs tracking-[0.1em] text-ink/85 transition group-hover:text-cinnabar">
                                 {prayer.name}
                             </span>
+                            {prayer.owner ? (
+                                <span
+                                    title="香火：擁有者替此角上的香——角色本人並不知情（神明感應）"
+                                    className="shrink-0 rounded-sm border border-amber-600/40 bg-amber-500/[0.08] px-1 py-px font-serif text-[10px] tracking-[0.15em] text-amber-700/90 dark:text-amber-400/90"
+                                >
+                                    香火
+                                </span>
+                            ) : null}
                             {prayer.fulfilled ? (
                                 <span
-                                    title="願已還：所求之事成了，當事人回廟還過願"
+                                    title={prayer.owner ? '香火應驗：所求之事成了' : '願已還：所求之事成了，當事人回廟還過願'}
                                     className="shrink-0 rounded-sm border border-jade/40 bg-jade/[0.08] px-1 py-px font-serif text-[10px] tracking-[0.15em] text-jade/90"
                                 >
-                                    已還願
+                                    {prayer.owner ? '應驗' : '已還願'}
                                 </span>
                             ) : null}
                             <span className="ml-auto shrink-0 font-serif text-[10px] tracking-[0.12em] text-mute/70">
