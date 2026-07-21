@@ -80,7 +80,8 @@
 2. 每日回目推播（POV 已有，缺推送管道）
 3. 香火（engine 側 ✅ `offerIncense`：owner-prayer（`source:'owner'`）＋
    heat ε nudge＋日上限＋私感應 percept＋願牆「香火／應驗」標記；
-   缺前端一炷香流）
+   前端一炷香流 ✅ lab 內頁執念卡「上香」→ `offer-incense` world-config op
+   —— reader 站正式版沿同一 op 接）
 4. **20 人付費 alpha → 量 D7 回目開啟率**；同時量正典戲份佔比與
    香火轉化率
 5. D7 及格線（暫定 ≥40%）→ 才談家書/餽贈/多世界

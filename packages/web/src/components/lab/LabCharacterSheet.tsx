@@ -225,6 +225,76 @@ function WantCard({ want, hero, target, onSelectCharacter }: {
     );
 }
 
+/** 香火 — the owner's one-stick-a-day influence channel (RECRUIT_INCENSE_SPEC §3).
+ *  Points at ONE existing live want: the 願籤 hangs on the 願牆 (source 'owner'),
+ *  the want gains a whisper of heat, the character only feels 「無端又想起」 —
+ *  never told, never steered. Refusals (今日已上過／願已了) surface as the
+ *  engine's own gentle copy. Rendered per want card in the 執念 tab. */
+function IncenseOffering({ runId, characterId, want }: { runId: string; characterId: string; want: Want }) {
+    const [open, setOpen] = useState(false);
+    const [text, setText] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [note, setNote] = useState<{ ok: boolean; msg: string } | null>(null);
+
+    const offer = async () => {
+        setBusy(true);
+        setNote(null);
+        try {
+            await labApi.configOp(runId, { op: 'offer-incense', characterId, wantId: want.id, text });
+            setNote({ ok: true, msg: '香已上——願籤掛上願牆，那樁事會無端浮上心頭。' });
+            setText('');
+            setOpen(false);
+        } catch (error) {
+            setNote({ ok: false, msg: error instanceof Error ? error.message : String(error) });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="mt-2">
+            {open ? (
+                <div className="flex items-center gap-1.5">
+                    <input
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        maxLength={60}
+                        placeholder="對神明說的一句話（可空）"
+                        className="min-w-0 flex-1 rounded-md border border-amber-600/30 bg-canvas/80 px-2 py-1 font-serif text-2xs text-ink/90 placeholder:text-mute/50 focus:border-amber-600/60 focus:outline-none dark:bg-white/[0.04]"
+                    />
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void offer()}
+                        className="shrink-0 rounded-md border border-amber-600/40 bg-amber-500/[0.08] px-2 py-1 font-serif text-2xs tracking-[0.15em] text-amber-700/90 transition hover:bg-amber-500/[0.16] disabled:opacity-50 dark:text-amber-400/90"
+                    >
+                        {busy ? '點香…' : '點香'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setOpen(false); setNote(null); }}
+                        className="shrink-0 rounded-md border border-hairline px-2 py-1 font-serif text-2xs text-mute/70 transition hover:border-mute/40"
+                    >
+                        罷了
+                    </button>
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => { setOpen(true); setNote(null); }}
+                    title="香火：替這樁心事上一炷香——只推「放不下」，不推「去做」；每日一炷，角色不知情"
+                    className="rounded-md border border-amber-600/25 bg-amber-500/[0.05] px-2 py-0.5 font-serif text-[10px] tracking-[0.2em] text-amber-700/80 transition hover:border-amber-600/50 hover:bg-amber-500/[0.12] dark:text-amber-400/80"
+                >
+                    上香
+                </button>
+            )}
+            {note ? (
+                <p className={`mt-1.5 font-serif text-2xs leading-relaxed ${note.ok ? 'text-jade/90' : 'text-seal/90'}`}>{note.msg}</p>
+            ) : null}
+        </div>
+    );
+}
+
 /** 相識分寸 chip — how well this character knows the other. Only rendered when it
  *  adds signal (面生／認得); a fully-'named' acquaintance needs no chip, and a
  *  flag-off world reports 'named' everywhere (so nothing shows). Subtle by design. */
@@ -627,7 +697,10 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                 c.wants.length ? (
                                     <div className="space-y-2.5">
                                         {c.wants.map((w, i) => (
-                                            <WantCard key={i} want={w} hero={i === 0} target={resolveTarget(w.target)} onSelectCharacter={onSelectCharacter} />
+                                            <div key={w.id || i}>
+                                                <WantCard want={w} hero={i === 0} target={resolveTarget(w.target)} onSelectCharacter={onSelectCharacter} />
+                                                <IncenseOffering runId={runId} characterId={c.id} want={w} />
+                                            </div>
                                         ))}
                                     </div>
                                 ) : (
