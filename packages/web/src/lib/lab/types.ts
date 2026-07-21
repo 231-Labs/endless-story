@@ -36,8 +36,9 @@ export interface LabRunConfig {
     /** 尋人掛心: seek_person 宣告後真的掛在心上——見得到就去尋、碰上了才了願、
      *  三日尋不著就擱下（留一條私憶）。Off by default. */
     seekRouting?: boolean;
-    /** 情分會淡: love wants starve when their target is long unseen, and a 相許
-     *  whose binding love faded lapses. Off ⇒ the old permanent-love world. */
+    /** 情分會淡: a love want whose target is long unseen starves and fades (the
+     *  want retires + a private percept); the engine forces nothing else — the
+     *  character decides. Off ⇒ the old permanent-love world. */
     heartsCanFade?: boolean;
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
