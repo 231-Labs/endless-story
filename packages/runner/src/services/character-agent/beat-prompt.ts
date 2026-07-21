@@ -65,6 +65,10 @@ export interface ActBeatInput {
     privateAlone: boolean;
     /** Last few beats of this scene's exchange. */
     sceneLog: string;
+    /** 文筆二階: this actor's OWN prior beat prose in this scene (prefix stripped),
+     *  used to build the dynamic imagery avoid-list (`recurringImagery`). Absent /
+     *  empty ⇒ no avoid-list ⇒ prompt byte-identical (fresh scene, or fake agent). */
+    selfSceneBeats?: string[];
     /** A previous proposal for this same turn was rejected by objective world
      *  validation. That proposal never happened; preserve the intent but choose
      *  an action that fits the refreshed physical affordances. */
@@ -417,6 +421,63 @@ function forceNote(forcing: BeatForcing, privateAlone: boolean): string {
         : '再也按不住了——這一刻你得做一件放不回頭的事，由你的心。';
 }
 
+/** Two CJK strings share a 3-char contiguous run (used to fold near-duplicate
+ *  n-grams into one representative tic). */
+function sharesRun3(a: string, b: string): boolean {
+    for (let i = 0; i + 3 <= a.length; i++) {
+        if (b.includes(a.slice(i, i + 3))) return true;
+    }
+    return false;
+}
+
+/**
+ * 文筆二階 — dynamic imagery avoid-list. Given a character's OWN prior beats in
+ * this scene, returns the vivid phrase-tics they are ALREADY looping — the
+ * somatic/imagery 5-grams a long scene starts re-performing.
+ *
+ * The window is deliberately the actor's own beats, not the mixed exchange:
+ * measured on a real 床戲, the pathology is per-character and scene-dense — 金鳳
+ * reached for 「空著的那隻手」in 5 of 16 own beats, 柳安春 for 「著的那隻手」in 7 —
+ * yet ANY 5-beat mixed window caught nothing, because each tic recurs every few
+ * beats, not back-to-back. So we look at what THIS actor keeps doing across the
+ * whole scene (last 12 beats), mirroring the offline metric's per-character
+ * contiguous-CJK-5-gram count (once per beat).
+ *
+ * Static #171 forbids a fixed menu of gestures; this catches whatever THIS
+ * character is over-using in THIS scene, by name.
+ *
+ * Pure & inert-by-default: <2 own beats or no repetition ⇒ `[]` ⇒ the prompt is
+ * byte-identical to before. Returns distinct tics (near-duplicate n-grams
+ * folded), highest-count first, capped.
+ */
+export function recurringImagery(ownSceneBeats: string[] | undefined): string[] {
+    if (!ownSceneBeats || ownSceneBeats.length < 2) return [];
+    const recent = ownSceneBeats.slice(-12);
+    const CJK5 = /^[一-鿿]{5}$/;
+    const counts = new Map<string, number>();
+    for (const beat of recent) {
+        const seen = new Set<string>();
+        for (let i = 0; i + 5 <= beat.length; i++) {
+            const gram = beat.slice(i, i + 5);
+            if (CJK5.test(gram) && !seen.has(gram)) {
+                seen.add(gram);
+                counts.set(gram, (counts.get(gram) ?? 0) + 1);
+            }
+        }
+    }
+    const hot = [...counts.entries()]
+        .filter(([, n]) => n >= 2)
+        .sort((a, b) => b[1] - a[1])
+        .map(([gram]) => gram);
+    const kept: string[] = [];
+    for (const gram of hot) {
+        if (kept.some((k) => sharesRun3(k, gram))) continue;
+        kept.push(gram);
+        if (kept.length >= 6) break;
+    }
+    return kept;
+}
+
 export function buildBeatSystemPrompt(input: ActBeatInput): string {
     const mem = input.memories?.length
         ? `\n你心底偶爾翻起的舊事(對景就讓它浮上來、不對景別硬提)：\n- ${input.memories.join('\n- ')}`
@@ -471,6 +532,15 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
         // 量測自真跑卷的兩大文筆病灶：同角色小動作意象 ≥3 拍重演（磕鏟沿×4、摸花串×3）、
         // 銀錢數字全卷覆誦（三十四圓半×8）。一條戒律同治兩者。
         '【身段換樣】同一個小動作意象（磕鏟沿、轉摺扇、抹嘴角、摸鬢邊之類）別拍拍重演——前幾拍你用過的身段，這一拍換個樣子，或干脆讓手閒著；銀錢數目與帳面數字，場上有人說過一次就夠，你至多一句帶過，不可再照數覆誦。',
+        // 文筆二階（動態）：靜態戒律管不住「這一場」正在滾的字眼——長戲會自我複讀
+        // 某幾個身體落點（脈門、喉頭、額頭相抵）。從近拍實抽正在反覆的片語，指名叫它
+        // 換一種。近拍太短或無重複 ⇒ 空 ⇒ 這條不出現（與從前逐字相同）。
+        ...(() => {
+            const tics = recurringImagery(input.selfSceneBeats);
+            return tics.length
+                ? [`【近拍已用・這一拍換一種】方才幾拍裡（你或對手）已反覆出現這些字眼：${tics.map((g) => `「${g}」`).join('、')}。別再落回同一個點——同一層意思，改用另一個身體部位、另一個動作或比喻寫出來，讓這一拍的身段與前幾拍不一樣。`]
+                : [];
+        })(),
         // Metaphor stays metaphor: the want language runs on 帳/債/欠 imagery, and an
         // ungarded beat once materialized a paper 借據 to collect an EMOTIONAL debt.
         '【比喻不落地】心帳不是紙帳：欠的若是情分、話語、一句交代，就不可憑空掏出借據、文書、銀錢等有形物來討——手上能拿出的東西，只有此處真有的和你隨身帶著的。',
