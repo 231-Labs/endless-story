@@ -295,6 +295,59 @@ function IncenseOffering({ runId, characterId, want }: { runId: string; characte
     );
 }
 
+/** 注夢 — the owner's second influence channel (MORTALITY_AND_DREAMS §1).
+ *  Hands the character ONE image for the next 深宵's dream — imagery, never an
+ *  instruction; the dream spawns nothing itself (the character's own heart does
+ *  the reading). 每三日一夢. Refusals surface as the engine's own gentle copy. */
+function DreamOffering({ runId, characterId }: { runId: string; characterId: string }) {
+    const [imagery, setImagery] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [note, setNote] = useState<{ ok: boolean; msg: string } | null>(null);
+
+    const send = async () => {
+        setBusy(true);
+        setNote(null);
+        try {
+            await labApi.configOp(runId, { op: 'inject-dream', characterId, imagery });
+            setNote({ ok: true, msg: '夢已託下——下一個深宵入夢，怎麼讀是他的事。' });
+            setImagery('');
+        } catch (error) {
+            setNote({ ok: false, msg: error instanceof Error ? error.message : String(error) });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div className="rounded-lg border border-indigo-400/25 bg-indigo-400/[0.04] p-3 dark:bg-indigo-400/[0.06]">
+            <div className="flex items-center gap-1.5">
+                <input
+                    value={imagery}
+                    onChange={(e) => setImagery(e.target.value)}
+                    maxLength={60}
+                    placeholder="一幅意象（如：雪地裡一枝壓彎的紅梅）"
+                    className="min-w-0 flex-1 rounded-md border border-indigo-400/30 bg-canvas/80 px-2 py-1 font-serif text-2xs text-ink/90 placeholder:text-mute/50 focus:border-indigo-400/60 focus:outline-none dark:bg-white/[0.04]"
+                />
+                <button
+                    type="button"
+                    disabled={busy || !imagery.trim()}
+                    onClick={() => void send()}
+                    title="注夢：意象非指令；夢不直接生願——角色自己的心去讀；每三日一夢"
+                    className="shrink-0 rounded-md border border-indigo-400/40 bg-indigo-400/[0.08] px-2 py-1 font-serif text-2xs tracking-[0.15em] text-indigo-500/90 transition hover:bg-indigo-400/[0.16] disabled:opacity-50 dark:text-indigo-300/90"
+                >
+                    {busy ? '託夢…' : '託夢'}
+                </button>
+            </div>
+            <p className="mt-1.5 font-serif text-[10px] leading-relaxed tracking-[0.05em] text-mute/60">
+                下一個深宵入夢。意象非指令；夢生不生心事，是他自己的事。三日一夢。
+            </p>
+            {note ? (
+                <p className={`mt-1 font-serif text-2xs leading-relaxed ${note.ok ? 'text-jade/90' : 'text-seal/90'}`}>{note.msg}</p>
+            ) : null}
+        </div>
+    );
+}
+
 /** 相識分寸 chip — how well this character knows the other. Only rendered when it
  *  adds signal (面生／認得); a fully-'named' acquaintance needs no chip, and a
  *  flag-off world reports 'named' everywhere (so nothing shows). Subtle by design. */
@@ -687,6 +740,13 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                             ) : (
                                                 <p className="font-serif text-sm text-mute/70">尚無打算。</p>
                                             )}
+                                        </div>
+                                    </section>
+
+                                    <section>
+                                        <SectionHead title="注夢" />
+                                        <div className="mt-2.5">
+                                            <DreamOffering runId={runId} characterId={c.id} />
                                         </div>
                                     </section>
                                 </div>

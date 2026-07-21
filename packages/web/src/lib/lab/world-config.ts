@@ -12,7 +12,7 @@
 
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
-import { offerIncense, WorldState, type WorldObject } from '@endless-story/engine';
+import { injectDream, offerIncense, WorldState, type WorldObject } from '@endless-story/engine';
 import { labManager } from './manager';
 import { runDir } from './paths';
 import type { LabWorldConfig } from './types';
@@ -47,7 +47,11 @@ export type WorldConfigOp =
      *  心裡既有的一樁活願，願籤掛上願牆（source:'owner'）、那樁願得一絲熱
      *  （heat += ε）、角色只得一行「無端又想起」的私感應。每角每日一炷；
      *  refusal（無此願／已了／今日已上過）以人話拋出。 */
-    | { op: 'offer-incense'; characterId: string; wantId: string; text: string };
+    | { op: 'offer-incense'; characterId: string; wantId: string; text: string }
+    /** 注夢（MORTALITY_AND_DREAMS §1）：operator 給一個角色遞一幅夢中意象——
+     *  下一個深宵入夢（私 percept，夢框敘語）；意象非指令、夢不直接生願
+     *  （角色自己的心去讀）；每角每三日一夢。refusal 以人話拋出。 */
+    | { op: 'inject-dream'; characterId: string; imagery: string };
 
 interface WorldHandle {
     world: WorldState;
@@ -237,6 +241,21 @@ export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): Lab
                     'daily-cap': '今日的香已上過了——明日請早。',
                     'no-want': '香火只照拂心裡已有的那樁事——這樁願不在此人心上。',
                     'retired-want': '那樁事已了——香火不點已了之願。',
+                };
+                throw new Error(copy[outcome.reason] ?? outcome.reason);
+            }
+            break;
+        }
+        case 'inject-dream': {
+            const outcome = injectDream(world, {
+                characterId: operation.characterId,
+                imagery: operation.imagery,
+            });
+            if (!outcome.ok) {
+                const copy: Record<string, string> = {
+                    'no-character': `unknown character: ${operation.characterId}`,
+                    'no-imagery': '夢要有畫面——給一幅意象，別給一句吩咐。',
+                    cadence: '夢不可夜夜託——三日一夢，心才會當真。',
                 };
                 throw new Error(copy[outcome.reason] ?? outcome.reason);
             }
