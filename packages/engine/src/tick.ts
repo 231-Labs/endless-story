@@ -1065,9 +1065,22 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     const seekTargetId = result.target
                         ? (world.castById(result.target) ? result.target : world.idByName(result.target))
                         : undefined;
-                    if (w.seekRouting && seekTargetId && seekTargetId !== member.id) {
+                    // Two guards, measured from a real run (q4sn): 白韻秋 declared
+                    // 「去尋柳安春」6× and 尋著 5× in 15 拍 — a spin. (a) You cannot
+                    // resolve to go FIND someone already standing with you; that intent
+                    // belongs in this beat's words, not a 掛心 (and it would re-resolve
+                    // as 尋著 instantly). (b) Re-declaring the SAME target you are ALREADY
+                    // seeking must not re-stamp sinceTick — that resets the 3-day expiry
+                    // so the intention could never lapse — nor spam a second 拍流 line.
+                    const coPresent = !!seekTargetId && w.roster[seekTargetId] === w.roster[member.id];
+                    const alreadySeeking = !!seekTargetId && w.seeking?.[member.id]?.targetId === seekTargetId;
+                    if (w.seekRouting && seekTargetId && seekTargetId !== member.id && !coPresent && !alreadySeeking) {
                         (w.seeking ??= {})[member.id] = { targetId: seekTargetId, sinceTick: nowTick };
                         log(`  [尋人] ${member.name} 打定主意去尋${world.nameById(seekTargetId)}`);
+                    } else if (w.seekRouting && coPresent) {
+                        log(`  action noop: seek_person (${member.name} 與${world.nameById(seekTargetId!)}已同處，這心意該當面說)`);
+                    } else if (w.seekRouting && alreadySeeking) {
+                        log(`  action noop: seek_person (${member.name} 續尋${world.nameById(seekTargetId!)}，念頭照舊)`);
                     } else {
                         log(`  action noop: seek_person (${member.name})`);
                     }
