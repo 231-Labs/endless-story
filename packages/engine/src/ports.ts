@@ -61,6 +61,14 @@ export type InviteDecideReply = Runner.characterAgent.InviteDecideReply;
 // feeds it real state and commits the verdict (transfer + 欠條 bill on a yes).
 export type LendDecideInput = Runner.characterAgent.LendDecideInput;
 export type LendDecideReply = Runner.characterAgent.LendDecideReply;
+// 復核座席 (decideRecruit): a user-minted candidate (命名權＋seed 權) passes the
+// 班主's three gates (正典/文風/安全) before the world admits them; an accept
+// 拓寫s the user's seed into cast format, preserving ≥1 user sentence verbatim
+// in memories (擁有感錨點). Driven by the MINT flow, not the tick.
+export type RecruitCandidate = Runner.characterAgent.RecruitCandidate;
+export type RecruitDecideInput = Runner.characterAgent.RecruitDecideInput;
+export type RecruitDecideReply = Runner.characterAgent.RecruitDecideReply;
+export type RecruitExpandedSeed = Runner.characterAgent.RecruitExpandedSeed;
 export type AftermathInput = Runner.characterAgent.AftermathInput;
 export type RippleJudgeInput = Runner.characterAgent.RippleJudgeInput;
 export type RippleJudgeDelta = Runner.characterAgent.RippleJudgeDelta;
@@ -353,6 +361,15 @@ export interface SceneAgentPort extends SceneAgent {
      *  deterministic, conservative — is to REFUSE (a null reply refuses just
      *  the same: never a loan the lender didn't grant). */
     decideLend?(input: LendDecideInput): Promise<LendDecideReply | null>;
+    /** 復核座席 (optional): the 班主 reviews a USER-MINTED candidate through three
+     *  gates — 正典 (era/worldview fit), 文風 (梨園 register), 安全 — and on accept
+     *  拓寫s the user's seed into cast format (description/secret/memories×3/
+     *  skills×2), preserving ≥1 user sentence VERBATIM in memories (擁有感錨點;
+     *  `hasVerbatimAnchor` makes it checkable). Called by the MINT flow, never the
+     *  tick. Real adapters implement it (one cheap LLM call, fail-safe null); the
+     *  fake OMITS it — a null reply admits NOBODY (never a cast member the 班主
+     *  didn't pass). */
+    decideRecruit?(input: RecruitDecideInput): Promise<RecruitDecideReply | null>;
     /** Deliver a frozen event to one witness's durable session. The adapter may
      *  include that witness's own inner lines, never another actor's. */
     observeScene?(input: ObserveSceneInput): Promise<void>;

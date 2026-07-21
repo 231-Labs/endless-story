@@ -317,6 +317,13 @@ export interface Prayer {
      *  (judge-resolved, not faded/foreclosed) and fulfilled the vow. */
     fulfilledDay?: number;
     fulfilledTick?: number;
+    /** 香火 (RECRUIT_INCENSE_SPEC §3): who spoke this prayer. Absent/'character'
+     *  = the character's own spoken vow (the #33 祈願 path). 'owner' = the
+     *  character's OWNER burned incense on their behalf — it hangs on the 願牆
+     *  and the temple 內頁 like any 願籤, but the CHARACTER DOES NOT KNOW it
+     *  exists (world-internal reading: 神明感應), so it never obliges a 還願
+     *  visit and its 應驗 stamps silently (no private memory). */
+    source?: 'character' | 'owner';
 }
 
 /** A clock-bound fact injected by the world, not authored by a character. The
@@ -437,6 +444,10 @@ export interface WorldStateData {
     wantSeq?: number;
     /** 邀約：每人每日至多遞一次話（day 記號，快照隨行）。 */
     inviteDayByChar?: Record<string, number>;
+    /** 香火：每個角色每日至多受一炷香（characterId → day 記號，快照隨行）。
+     *  The owner-side daily cap of RECRUIT_INCENSE_SPEC §3 — influence stays a
+     *  whisper, never a firehose. Optional & backward-compatible. */
+    incenseDayByChar?: Record<string, number>;
     /** 尋人掛心 — a declared seek_person intention that persists across ticks
      *  until met/expired: actorId → the sought targetId + the tick the intention
      *  was declared. Optional & absent-by-default so snapshots predating it (and

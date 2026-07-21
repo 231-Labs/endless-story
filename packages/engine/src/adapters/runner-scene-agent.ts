@@ -160,6 +160,9 @@ export class RunnerSceneAgent implements SceneAgentPort {
     // 告借/應借 — the asked lender answers a borrow face to face; 借錢是兩造的事，
     // 錢動之前出借的人先點頭。Fail-safe to null ⇒ the tick refuses the loan.
     decideLend = characterAgent.decideLend;
+    // 復核座席 — the 班主 reviews a user-minted candidate (mint flow, not tick).
+    // Fail-safe to null ⇒ the candidate is NOT admitted.
+    decideRecruit = characterAgent.decideRecruit;
 
     async observeScene(input: ObserveSceneInput): Promise<void> {
         if (!this.sessions) return;

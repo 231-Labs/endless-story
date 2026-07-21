@@ -50,6 +50,19 @@ export {
     buildSystemPrompt as buildLendSystemPrompt,
     buildUserPrompt as buildLendUserPrompt,
 } from './lend.js';
+export {
+    decideRecruit,
+    parseRecruitReply,
+    hasVerbatimAnchor,
+    buildRecruitSystemPrompt,
+    buildRecruitUserPrompt,
+} from './recruit.js';
+export type {
+    RecruitCandidate,
+    RecruitDecideInput,
+    RecruitDecideReply,
+    RecruitExpandedSeed,
+} from './recruit.js';
 export { speakPrayer } from './speak-prayer.js';
 export type { SpeakPrayerInput } from './speak-prayer.js';
 export {

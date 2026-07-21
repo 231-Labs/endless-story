@@ -214,6 +214,9 @@ export interface LabPrayer {
     text: string;
     /** 還願：the vow was fulfilled — the pray-er returned after the want resolved. */
     fulfilled?: boolean;
+    /** 香火：the character's OWNER burned this stick (Prayer.source 'owner') —
+     *  the character does not know it exists (神明感應). */
+    owner?: boolean;
     /** The underlying 心願 (the want that drove the prayer). */
     wantDesc?: string;
     layer?: string;
