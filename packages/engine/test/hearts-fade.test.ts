@@ -1,10 +1,11 @@
 /**
- * 情分會淡 (heartsCanFade) — the two romance immortalities lifted, so a season
- * stops replaying the same seeded couple. A LOVE want whose target goes long
- * UNSEEN starves at day-end; past a grace its weight erodes until the heart lets
- * go (「情分淡了」). A faded love that had reached 相許 LAPSES the 相許 — the
- * standing keys it granted are revoked. Meeting resets the clock; NON-love wants
- * are never touched. Flag OFF ⇒ the whole pass is inert (permanent-love world).
+ * 情分會淡 (heartsCanFade) — the seeded-love immortality lifted, so a season stops
+ * replaying the same couple. A LOVE want whose target goes long UNSEEN starves at
+ * day-end; past a grace its weight erodes until the heart lets go (「情分淡了」):
+ * the want retires and the character keeps a private percept. The engine does
+ * NOTHING else — it does NOT revoke the key the 相許 granted, does NOT dissolve the
+ * 相許. Seeing the feeling cooled, the character decides the rest. Meeting resets
+ * the clock; NON-love wants are never touched. Flag OFF ⇒ the whole pass is inert.
  */
 
 import assert from 'node:assert/strict';
@@ -66,7 +67,7 @@ async function starveFor(world: WorldState, days: number): Promise<void> {
     }
 }
 
-test('a starved love fades and lapses the 相許 (flag ON); a craft want is untouched', async () => {
+test('a starved love fades to a private percept (flag ON) — the engine forces nothing else', async () => {
     const world = makeWorld({ heartsCanFade: true });
     assert.ok(world.canEnter('c0', 's1'), '甲 starts with the 相許 key to 乙的寓所');
 
@@ -75,12 +76,13 @@ test('a starved love fades and lapses the 相許 (flag ON); a craft want is unto
     const love = world.data.wants.find((w) => w.id === 'w-love')!;
     assert.ok(love.retired, 'the long-unseen love has faded');
     assert.match(love.resolvedNote ?? '', /淡了/, 'it faded (「情分淡了」), not resolved');
-    assert.equal(world.isEstablished('c0', 'c1'), false, 'the 相許 lapsed with the love');
-    assert.equal(world.canEnter('c0', 's1'), false, 'the standing key the 相許 granted was revoked');
     assert.ok(
-        (world.data.scheduledEvents ?? []).some((e) => e.id.startsWith('love-lapsed-') && e.text.includes('隔了一層')),
-        'both keep a private note of the drift',
+        (world.data.scheduledEvents ?? []).some((e) => e.id.startsWith('love-faded-c0') && e.text.includes('隔了一層')),
+        'the character keeps a private percept to READ',
     );
+    // The engine forces NOTHING physical/relational — those are the character's to decide.
+    assert.equal(world.isEstablished('c0', 'c1'), true, 'the 相許 is NOT dissolved by the engine');
+    assert.equal(world.canEnter('c0', 's1'), true, 'the key is NOT revoked — handing it back is 甲的 choice');
 
     const craft = world.data.wants.find((w) => w.id === 'w-craft')!;
     assert.equal(craft.retired, undefined, 'a 志向 want never starves — who you ARE does not fade');

@@ -326,7 +326,7 @@ export default function LabHomePage() {
                     </label>
                     <label
                         className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
-                        title="情分會淡：久不相見的情願會慢慢淡去，連相許也會散——去掉「種下的情永不死」，讓每卷情路走得不一樣（實驗，預設關）"
+                        title="情分會淡：久不相見的情願會慢慢淡去（記一筆心事、角色自己看著辦，引擎不收鑰匙也不拆相許）——去掉「種下的情永不死」，讓每卷情路走得不一樣（實驗，預設關）"
                     >
                         <input
                             type="checkbox"

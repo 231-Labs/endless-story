@@ -439,12 +439,13 @@ export interface WorldStateData {
      *  keeps it, and with the flag off the deterministic path (including the
      *  FakeSceneAgent's pinned seek_person actions) stays byte-identical. */
     seekRouting?: boolean;
-    /** 情分會淡 flag: when on, the two romance immortalities are lifted — a LOVE
-     *  want whose target goes long unseen starves and fades (「情分淡了」), and a
-     *  相許 whose binding love faded LAPSES (keys revoked, both keep a private
-     *  note). Meeting resets the starve clock, so a tended love never fades; NON-
-     *  love wants (志向/身份) are never touched. Off by default; flag off ⇒ the
-     *  day-end fade pass is inert (byte-identical, the old permanent-love world). */
+    /** 情分會淡 flag: when on, the seeded-love immortality is lifted — a LOVE want
+     *  whose target goes long unseen STARVES and fades (「情分淡了」): the want
+     *  retires and the character keeps a private percept. The engine does NOTHING
+     *  else — no key revoked, no 相許 dissolved, no routing; seeing the feeling
+     *  cooled, the character decides the rest. Meeting resets the clock, so a tended
+     *  love never fades; NON-love wants (志向/身份) are never touched. Off by
+     *  default; flag off ⇒ the day-end fade pass is inert (byte-identical). */
     heartsCanFade?: boolean;
     /** 願望流水號 —— 世界自帶的 want id 序號（快照隨行）。id 由此而出，
      *  同種子重跑 byte-identical；缺席（舊卷）時 newWant 退回舊式 wall-clock id。 */
@@ -931,16 +932,6 @@ export class WorldState {
         const key = this.pairKey(a, b);
         const set = (this.data.establishedPairs ??= []);
         if (!set.includes(key)) set.push(key);
-    }
-    /** 相許散了 (情分會淡): drop this pair from the established set. The caller owns
-     *  the consequences (revoking the keys 相許 granted, the private memory). No-op
-     *  if they were never established. */
-    removeEstablished(a: string, b: string): void {
-        const set = this.data.establishedPairs;
-        if (!set) return;
-        const key = this.pairKey(a, b);
-        const i = set.indexOf(key);
-        if (i >= 0) set.splice(i, 1);
     }
 
     // ── 訪問權限 (space access grants) ──────────────────────────────────────────
