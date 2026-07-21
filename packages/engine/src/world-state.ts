@@ -457,6 +457,12 @@ export interface WorldStateData {
      *  閒置時直接兌現、不經此佇列。Optional & backward-compatible（空／缺席時
      *  tick 的排空段完全惰性）。 */
     pendingDreams?: Array<{ characterId: string; imagery: string }>;
+    /** 文筆二階 v2：每角色最近數拍「自己」的 beat 原文（跨拍／跨場滾動緩衝，
+     *  characterId → 近拍原文陣列，上限見 scene-loop CROSS_SCENE_BEAT_WINDOW）。
+     *  餵給 beat prompt 的 recurringImagery 抽正在反覆的意象——tic 是跨場的
+     *  角色口頭簽名（每場用一兩次、散在數日），單場窗口抓不到。純觀測資料、
+     *  不入任何機制；快照隨行、確定性。Optional & backward-compatible。 */
+    recentBeatsByChar?: Record<string, string[]>;
     /** 尋人掛心 — a declared seek_person intention that persists across ticks
      *  until met/expired: actorId → the sought targetId + the tick the intention
      *  was declared. Optional & absent-by-default so snapshots predating it (and

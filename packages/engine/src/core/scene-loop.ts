@@ -132,7 +132,19 @@ export interface SceneLoopInput {
     /** Validate/commit structured side effects immediately after each beat so
      * the next actor sees the new world, not the scene's starting snapshot. */
     onBeat?: (beat: SceneBeat) => void | Promise<void>;
+    /** 文筆二階 v2: the world's per-character rolling beat buffer (w.recentBeatsByChar,
+     *  passed by reference). Read to build each actor's `selfSceneBeats` (the
+     *  cross-scene imagery-avoid window), and APPENDED here as each beat commits —
+     *  so the window spans ticks/scenes, catching a character's recurring verbal
+     *  signature. Absent (fake/tests) ⇒ no avoid-list, prompt byte-identical. */
+    recentBeatsByChar?: Record<string, string[]>;
 }
+
+/** 文筆二階 v2 — how many of a character's OWN most-recent beats the imagery
+ *  avoid-list scans. Spans ticks/scenes (a per-character verbal tic recurs every
+ *  few beats across scenes, not back-to-back), yet bounded so a marathon night
+ *  can't grow it without limit. */
+export const CROSS_SCENE_BEAT_WINDOW = 12;
 
 export interface SceneBeat {
     sceneId: string;
@@ -340,13 +352,16 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             forcing: levelAt(w, effR),
             privateAlone,
             sceneLog: log.slice(-5).join('\n'),
-            // 文筆二階: this actor's OWN prior beats this scene (prefix stripped) —
-            // the window recurringImagery scans for phrase-tics to name back. The
-            // full scene log filtered to this speaker, since the looping is
-            // per-character and scene-dense (not local to the last few beats).
-            selfSceneBeats: log
-                .filter((line) => line.startsWith(`${actor!.name}：`))
-                .map((line) => line.slice(actor!.name.length + 1)),
+            // 文筆二階 v2: this actor's OWN recent beats — the window recurringImagery
+            // scans for phrase-tics to name back. Reads the cross-scene rolling
+            // buffer (spanning ticks), not just this scene's log, because the tic is
+            // a per-character verbal signature reused once-or-twice per scene across
+            // days. The buffer already holds this scene's earlier turns (appended as
+            // each beat commits below), so it is the complete self-window. A copy —
+            // downstream never mutates the world's buffer.
+            selfSceneBeats: input.recentBeatsByChar?.[actor.characterId]
+                ? [...input.recentBeatsByChar[actor.characterId]]
+                : undefined,
             stateLine: actor.stateLine,
             innerSecret: actor.innerSecret,
             standingPlan: actor.standingPlan,
@@ -449,6 +464,14 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         }
 
         log.push(`${actor.name}：${r.beat}`);
+        // 文筆二階 v2: append this committed beat to the actor's cross-scene rolling
+        // buffer (bounded), so later beats — this scene AND later scenes/ticks — can
+        // be told which of THIS character's phrasings are already worn.
+        if (input.recentBeatsByChar) {
+            const buf = (input.recentBeatsByChar[actor.characterId] ??= []);
+            buf.push(r.beat);
+            if (buf.length > CROSS_SCENE_BEAT_WINDOW) buf.splice(0, buf.length - CROSS_SCENE_BEAT_WINDOW);
+        }
         // DAWN PRESSURE (world fact, not a director): some pairs structurally cannot
         // close (an uncapped 金柳 replay rode its debt-loop straight into the 32 fuse,
         // sailing PAST its own perfect curtain). Deep into a register night the sky

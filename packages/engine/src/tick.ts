@@ -1627,6 +1627,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             wants,
             tick: nowTick,
             agent,
+            // 文筆二階 v2: the cross-scene per-character beat buffer (by reference) —
+            // scene-loop reads it for each actor's imagery-avoid window and appends
+            // each committed beat, so a character's verbal tic is caught across scenes.
+            recentBeatsByChar: (w.recentBeatsByChar ??= {}),
             beforeBeat: (actor) => {
                 actor.sceneHint = world.physicalHint(actor.characterId, sid);
                 actor.objects = world.accessibleObjects(actor.characterId, sid).map((object) => ({
