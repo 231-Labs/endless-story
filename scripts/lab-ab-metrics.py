@@ -65,8 +65,9 @@ def parse(md: str) -> dict:
     # ---- per-tick 逐拍 ----
     ticks = re.split(r'### (第\d+日·第\d+拍（[^）]+）)', md)
     night_moves = {'solo': 0, 'visit': 0, 'work_public': 0}
-    episodes = pairs_private = tick_ct = 0
+    episodes = pairs_private = tick_ct = night_visit_scenes = 0
     intimate_hits = beat_ct = 0
+    pair_counts = {}   # '甲 × 乙' -> how many private 2-person 拍次 they shared
     for i in range(1, len(ticks), 2):
         label, body = ticks[i], ticks[i+1]
         tick_ct += 1
@@ -78,7 +79,10 @@ def parse(md: str) -> dict:
         for cm in re.finditer(r'（心下(.+?)）', body, re.S):
             beat_ct += 1
             if INTIMATE_KW.search(cm[1]): intimate_hits += 1
-        # night destinations
+        # night MOVEMENT breakdown (from 移步). Movement-only: a mover who ARRIVED an
+        # earlier tick isn't in this tick's 移步, so this UNDERCOUNTS who's actually
+        # in a private scene tonight — the scene-page pass below is the truth for
+        # whether intimacy formed. (privacy≥3 = a real private home.)
         if is_night:
             mv = re.search(r'移步：(.+)', body)
             if mv:
@@ -89,19 +93,38 @@ def parse(md: str) -> dict:
                     hk = home.get(ch)
                     if hk and dest == hk[1]:
                         night_moves['solo'] += 1
-                    elif priv.get(dest, 0) >= 2 and owns.get(dest) and owns.get(dest) != ch:
-                        night_moves['visit'] += 1     # 登門: went to someone else's private place
+                    elif priv.get(dest, 0) >= 3 and owns.get(dest) and owns.get(dest) != ch:
+                        night_moves['visit'] += 1
                     else:
                         night_moves['work_public'] += 1
-        # private 2-person scene blocks in this tick (approx: scene header + speakers)
-        for sm in re.finditer(r'〔([^〕·]+)(?:·私)?〕(.*?)(?=〔|\n旗標|\Z)', body, re.S):
-            sc, blk = sm[1].strip(), sm[2]
-            speakers = set(re.findall(r'\n\s{0,2}([一-鿿]{2,4})：', blk))
-            if priv.get(sc, 0) >= 2 and len(speakers) == 2:
+        # SCENE PAGES (the truth). Scene headers stand ALONE on a line — 〔前廳〕 /
+        # 〔金鳳寓所·私〕 — whereas 〔向 X〕 addressee tags sit at the END of a beat
+        # line. The old regex matched BOTH and cut a scene block off at the first
+        # 〔向 X〕, so a 2-person 床戲 read as 1 speaker (all 金柳 私處 scenes were
+        # silently missed). Collect speakers by own-line header instead.
+        scene_list = []; cur = None; sp = set()
+        for ln in body.splitlines():
+            hm = re.match(r'〔([^〕]+?)(?:·私)?〕\s*$', ln)
+            if hm:
+                if cur is not None: scene_list.append((cur, sp))
+                cur, sp = hm[1].strip(), set(); continue
+            bm = re.match(r'\s{0,2}([一-鿿]{2,4})：', ln)
+            if bm and bm[1] not in ('世界', '旗標', '移步'): sp.add(bm[1])
+        if cur is not None: scene_list.append((cur, sp))
+        for scene, speakers in scene_list:
+            p = priv.get(scene, 0)
+            if p >= 3 and len(speakers) == 2:
                 pairs_private += 1
+                pair_counts[' × '.join(sorted(speakers))] = pair_counts.get(' × '.join(sorted(speakers)), 0) + 1
+            # 登門 (truth): a private (≥3) scene at night holding someone who is NOT
+            # its owner — a visit happened, whether they moved this tick or earlier.
+            if is_night and p >= 3 and owns.get(scene) and any(s != owns.get(scene) for s in speakers):
+                night_visit_scenes += 1
     R['night_moves'] = night_moves
     R['episodes'], R['ticks'] = episodes, tick_ct
     R['pairs_private_ticks'] = pairs_private
+    R['pair_counts'] = pair_counts
+    R['night_visit_scenes'] = night_visit_scenes
     R['intimate_hits'], R['beat_ct'] = intimate_hits, beat_ct
     return R
 
@@ -110,9 +133,12 @@ def show(R):
     print(f"  旗標           : {R.get('flags')}")
     print(f"  進度           : 第{R.get('day')}日·第{R.get('tick')}拍 · cast {R.get('cast')} · liveWants {R.get('liveWants')}")
     nm = R['night_moves']; tot = sum(nm.values()) or 1
-    print(f"  夜間去向        : 獨居 {nm['solo']} · 登門(去別人私處) {nm['visit']} · 工作/公開 {nm['work_public']}"
-          f"   → 登門率 {nm['visit']/tot*100:.0f}%")
-    print(f"  私處二人場景    : {R['pairs_private_ticks']} 拍次")
+    print(f"  夜間移動(移步)   : 獨居 {nm['solo']} · 往私處 {nm['visit']} · 工作/公開 {nm['work_public']}"
+          f"   （移動而已，非到場真相）")
+    print(f"  夜訪私處場景    : {R['night_visit_scenes']} 場   （非屋主現於 privacy≥3 私處的夜場景）")
+    pc = R.get('pair_counts') or {}
+    detail = '｜'.join(f'{k} ×{v}' for k, v in sorted(pc.items(), key=lambda x: -x[1])) if pc else '無'
+    print(f"  私處二人場景    : {R['pairs_private_ticks']} 拍次   （{detail}）")
     print(f"  相許 / 願牆     : {R['establishedPairs']} / {R['prayers']}")
     we, wl = R['want_emo'], R['want_live']; wt = (we+wl) or 1
     print(f"  心事層 情感:營生 : {we}:{wl}  （情感佔 {we/wt*100:.0f}%）")
@@ -185,8 +211,8 @@ def main():
     if len(arms) == 2:
         a, b = arms
         print("\n═══ Δ (arm2 − arm1) ═══")
-        va = a['night_moves']['visit']; vb = b['night_moves']['visit']
-        print(f"  登門(去別人私處)  : {va} → {vb}   ({'+' if vb>=va else ''}{vb-va})")
+        va = a['night_visit_scenes']; vb = b['night_visit_scenes']
+        print(f"  夜訪私處場景      : {va} → {vb}   ({'+' if vb>=va else ''}{vb-va})")
         print(f"  私處二人場景拍次   : {a['pairs_private_ticks']} → {b['pairs_private_ticks']}")
         print(f"  相許 establishedPairs: {a['establishedPairs']} → {b['establishedPairs']}")
         ea = a['episodes']/(a['ticks'] or 1); eb = b['episodes']/(b['ticks'] or 1)
