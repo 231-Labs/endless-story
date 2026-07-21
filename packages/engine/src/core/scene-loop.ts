@@ -138,6 +138,12 @@ export interface SceneLoopInput {
      *  so the window spans ticks/scenes, catching a character's recurring verbal
      *  signature. Absent (fake/tests) ⇒ no avoid-list, prompt byte-identical. */
     recentBeatsByChar?: Record<string, string[]>;
+    /** 執念自揀 (beatPicksWant): when true, each beat is handed the FULL menu of its
+     *  actor's live wants (hottest-first, qualitative ripeness only) and may self-tag
+     *  which one it pushed; the ledger then follows that choice. The scene's physical
+     *  gates stay keyed to the hottest want. Absent/false ⇒ the single-want handoff
+     *  (byte-identical). */
+    beatPicksWant?: boolean;
 }
 
 /** 文筆二階 v2 — how many of a character's OWN most-recent beats the imagery
@@ -319,6 +325,27 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         const gateBeat = privateAlone && (consummateScene || /愛|情/.test(w.layer));
         if (gateBeat) result.intimacyGateOpened = true;
 
+        // 執念自揀: hand the beat the FULL menu of THIS actor's live wants (hottest-first,
+        // qualitative ripeness only — never a number), so it chooses which to push rather
+        // than the engine pre-picking. Only when there is a REAL choice (≥2 live wants);
+        // one want ⇒ no menu ⇒ the single-want line stays (byte-identical). The scene's
+        // physical gates above still key off `w` (the hottest); only the LEDGER re-binds
+        // to the beat's choice after it lands.
+        const menuWants: Want[] =
+            input.beatPicksWant && !synthetic
+                ? input.wants
+                      .filter((x) => !x.retired && x.characterId === actor!.characterId)
+                      .sort((a, b) => tension(b) - tension(a))
+                : [];
+        const wantMenu =
+            menuWants.length > 1
+                ? menuWants.map((x) => ({
+                      desc: x.desc,
+                      target: x.target,
+                      ripe: levelAt(x, effectiveResistance(x, { isPrivate: input.isPrivate, cast: present })),
+                  }))
+                : undefined;
+
         const beatInput: CharacterAgentNs.ActBeatInput = {
             sagaId: input.sagaId,
             characterId: actor.characterId,
@@ -349,6 +376,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             priorTail: turn === 0 ? input.priorTail : undefined,
             stake: turn === 0 ? input.stake : undefined,
             want: { desc: w.desc, target: w.target },
+            wantMenu,
             forcing: levelAt(w, effR),
             privateAlone,
             sceneLog: log.slice(-5).join('\n'),
@@ -510,13 +538,31 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             result.endReason = 'close';
             break;
         }
-        if (!synthetic) actedWants.set(w.id, w);
+        // 執念自揀: the beat may have named which want it actually pushed (pushWant, a
+        // 1-based menu index). The LEDGER — actedWants (→ the strict resolve pass) plus
+        // the recent/sat/frust bumps — follows that choice, so heat and resolution track
+        // what the character WORKED, not the engine's hottest-want guess. Absent / no menu
+        // / out-of-range ⇒ the hottest want `w` (byte-identical to the single-want path).
+        let ledgerWant = w;
+        if (wantMenu && r.pushWant && r.pushWant <= menuWants.length) {
+            const chosen = menuWants[r.pushWant - 1];
+            if (chosen && !chosen.retired) ledgerWant = chosen;
+        }
+        const effRLedger = ledgerWant === w ? effR : effectiveResistance(ledgerWant, { isPrivate: input.isPrivate, cast: present });
+        // The pre-beat heat bump (above) landed on the hottest `w` — the tension the
+        // scene formed around. When the character REDIRECTED to a different want, that
+        // want was the one actually worked this beat, so it earns the attention-heat too
+        // (else a redirected want gathers sat but never enough heat to reach its resolve
+        // threshold). No redirect (or flag off) ⇒ this never fires (byte-identical).
+        if (!synthetic && ledgerWant !== w) ledgerWant.heat += 1;
+
+        if (!synthetic) actedWants.set(ledgerWant.id, ledgerWant);
         beatsBy.set(actor.characterId, (beatsBy.get(actor.characterId) ?? 0) + 1);
 
-        w.recent += 1;
-        w.sat = Math.min(1, w.sat + satGainFor(w, input.isPrivate));
-        if (forcingPressure(w) >= effR) w.frust += 1;
-        if (w.recent >= WANT.saturateAt) w.sat = Math.min(1, w.sat + WANT.saturationBump);
+        ledgerWant.recent += 1;
+        ledgerWant.sat = Math.min(1, ledgerWant.sat + satGainFor(ledgerWant, input.isPrivate));
+        if (forcingPressure(ledgerWant) >= effRLedger) ledgerWant.frust += 1;
+        if (ledgerWant.recent >= WANT.saturateAt) ledgerWant.sat = Math.min(1, ledgerWant.sat + WANT.saturationBump);
 
         if (solo) break;
 

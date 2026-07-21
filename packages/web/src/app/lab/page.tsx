@@ -40,6 +40,7 @@ export default function LabHomePage() {
         creditVerbs: false,
         seekRouting: false,
         heartsCanFade: false,
+        beatPicksWant: false,
         ticksPerDay: 6,
     });
 
@@ -87,6 +88,7 @@ export default function LabHomePage() {
                     heartsCanFade: form.heartsCanFade,
                     creditVerbs: form.creditVerbs,
                     seekRouting: form.seekRouting,
+                    beatPicksWant: form.beatPicksWant,
                     ticksPerDay: form.ticksPerDay,
                 },
             });
@@ -334,6 +336,17 @@ export default function LabHomePage() {
                             onChange={(e) => setForm({ ...form, heartsCanFade: e.target.checked })}
                         />
                         情分會淡
+                    </label>
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="執念自揀：把角色心裡所有的執念一次全攤在他眼前（只給火候、不給數字），讓他自己挑這一拍要推哪一件；熱度與了結跟著他真正推的那條走，而不是引擎替他選最熱的那條——更貼近「給現況與選擇、讓角色自主」的原則（實驗，預設關）"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={form.beatPicksWant}
+                            onChange={(e) => setForm({ ...form, beatPicksWant: e.target.checked })}
+                        />
+                        執念自揀
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日

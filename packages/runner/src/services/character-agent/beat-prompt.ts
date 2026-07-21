@@ -60,6 +60,12 @@ export interface ActBeatInput {
     /** External pressure line (風聲), first beat only. */
     stake?: string;
     want: { desc: string; target?: string };
+    /** 執念自揀 (beatPicksWant): the FULL menu of this actor's live wants, hottest-first,
+     *  each with qualitative ripeness — NO numbers. When present the beat is invited to
+     *  choose which one it pushes THIS beat (or none) via `pushWant` (1-based index into
+     *  this list; item 1 == `want`, the hottest). Absent ⇒ the single-want handoff
+     *  (prompt byte-identical). */
+    wantMenu?: Array<{ desc: string; target?: string; ripe: BeatForcing }>;
     forcing: BeatForcing;
     /** Private scene, exactly two present, and the want's target is the other one. */
     privateAlone: boolean;
@@ -274,6 +280,12 @@ export interface BeatResult {
      *  No judge, no status gate — the pair negotiates in-scene; a decline is
      *  honoured and is itself a beat of drama. */
     intimacy?: 'advance' | 'accept' | 'decline';
+    /** 執念自揀 (beatPicksWant): 1-based index into the `wantMenu` the actor was shown,
+     *  naming which want this beat actually pushed. Only meaningful when a menu was
+     *  offered; the engine re-binds the ledger (heat/frust/sat/resolution) to the
+     *  chosen want. Absent / 0 / out-of-range ⇒ the engine keeps its hottest-want
+     *  default (a beat that pushes nothing in particular is legitimate). */
+    pushWant?: number;
     /** Objective physical mutations proposed by this beat. The engine validates
      * preconditions and commits them; prose alone can never move an object. */
     objectEffects?: BeatObjectEffect[];
@@ -304,6 +316,11 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
         ? 'addressed'
         : 'scene';
     const move = prose(o.move);
+    // 執念自揀: a 1-based menu index. Only a positive integer counts; 0 / absent /
+    // non-integer ⇒ the engine keeps its hottest-want default (pushed nothing).
+    const pushWant = typeof o.pushWant === 'number' && Number.isInteger(o.pushWant) && o.pushWant > 0
+        ? o.pushWant
+        : undefined;
     const ECONOMY_ACTIONS = ['purchase', 'pay', 'borrow', 'repay', 'contract_sign', 'contract_reject', 'contract_fill_partner', 'contract_counter'] as const;
     const economyCommands = Array.isArray(o.economyCommands)
         ? o.economyCommands.flatMap((rawCommand): BeatEconomyCommand[] => {
@@ -365,6 +382,7 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
         move: move && move !== '無' ? move : undefined,
         close: o.close === true ? true : undefined,
         intimacy: o.intimacy === 'advance' || o.intimacy === 'accept' || o.intimacy === 'decline' ? o.intimacy : undefined,
+        pushWant,
         objectEffects: objectEffects.length ? objectEffects : undefined,
         economyCommands: economyCommands.length ? economyCommands : undefined,
     };
@@ -398,6 +416,29 @@ export function safeSceneRevision(original: string, candidate: string): string {
     if (JSON.stringify(spokenSegments(original)) !== JSON.stringify(spokenSegments(normalized))) return original;
     const maxEdit = Math.max(6, Math.ceil(original.length * 0.28));
     return editDistance(original, normalized) <= maxEdit ? normalized : original;
+}
+
+/** 執念自揀: qualitative ripeness for a menu item — the SAME lexicon family as the
+ *  move prompt's RIPE_ZH (numbers never enter the prompt), phrased for a beat. */
+const RIPE_BEAT_ZH: Record<BeatForcing, string> = {
+    idle: '淡淡的，擱著也不急',
+    pressing: '按得住，卻總想起',
+    edge: '快按不住了',
+    breaking: '再壓就要溢出來了',
+};
+
+/** 執念自揀: render the full want menu (hottest-first, qualitative ripeness only)
+ *  and hand the choice to the character. Replaces the single-want line when a menu
+ *  is offered (beatPicksWant on). Item numbers are for the `pushWant` tag ONLY and
+ *  must never bleed into the prose. */
+function wantMenuNote(menu: NonNullable<ActBeatInput['wantMenu']>): string {
+    return [
+        '【你心裡這些事，此刻都在（火候各異，這一拍推哪一件由你）】',
+        ...menu.map((m, i) => `〔${i + 1}〕「${m.desc}」${m.target ? `（牽涉${m.target}）` : ''}——此刻${RIPE_BEAT_ZH[m.ripe]}`),
+        '這一拍你真正使力去推的是哪一件，由你的心與分寸；在 JSON 裡標 "pushWant":該編號。' +
+            '若這拍你誰也不特別推——只是應個景、陪著、家常——標 0 或省略即可，不必勉強挑一件。' +
+            '編號只為讓你回報所推之事，別把數字或「執念/想要」這類字眼寫進台詞。',
+    ].join('\n');
 }
 
 /** §2.43-validated pressure language: removes stalling, never writes the answer. */
@@ -570,7 +611,9 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             ? '【若你想】此處只你二人。若你此刻真起了親近TA的心，就讓這一拍帶著那個意圖（intimacy:"advance"）——但多數的夜，什麼也不必發生；由你的心與分寸。' +
               '**「遞意」只指親近之心（意在這個人，想與TA肌膚相親）**；比武叫陣、威逼壓制、拿身子佔上風都不是遞意，別標。'
             : '',
-        `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
+        input.wantMenu?.length
+            ? wantMenuNote(input.wantMenu)
+            : `你心裡最重的：「${input.want.desc}」${input.want.target ? `（牽涉${input.want.target}）` : ''}。`,
         '【誓言有價】「命」「一輩子」「終身」是一生說一兩次的字——尋常的情話用尋常的字，'+
             '尋常的允諾給尋常的分量（今晚、這一場、這一件事）。天天押命的人，說的命就不值錢了。',
         '【說人話】多數的話是直說的——問路、催飯、道謝、抱怨、叫人名字；比方留給真到了那一步的時刻，'+
@@ -590,6 +633,10 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——一到兩句，動作與話都可以帶著性子多走半步。' +
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
               '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無","objectEffects":[{"objectId":"登記id","toScene":"新場景或省略","container":"新容器/null/省略","carried":true或false或省略,"carrierName":"交給的同場者正式姓名或省略","visibility":"visible|hidden|destroyed或省略","state":"新狀態或省略"}]}。沒有物理改變就給空陣列。不要 markdown。',
+        // 執念自揀: only when a menu was offered — keeps the flag-off schema byte-identical.
+        input.wantMenu?.length
+            ? '（承上「你心裡這些事」：在同一個 JSON 裡另加 "pushWant":你這一拍真正使力那件的編號；誰也不特別推就給 0 或省略。）'
+            : '',
         input.economyLine
             ? '若這一拍真有銀錢或契約動作，另在同一個 JSON 加 "economyCommands":[{"action":"purchase|pay|' +
               // 借賒有據: the credit verbs are advertised ONLY when the engine says
