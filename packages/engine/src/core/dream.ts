@@ -99,3 +99,59 @@ export function injectDream(world: WorldState, input: DreamInput): DreamOutcome 
 
     return { ok: true, eventId, atTick };
 }
+
+export type QueueDreamRefusal = 'no-character' | 'no-imagery';
+
+export type QueueDreamOutcome =
+    | { ok: true; queued: number }
+    | { ok: false; reason: QueueDreamRefusal };
+
+/**
+ * Queue one dream WITHOUT applying it — for callers who cannot mutate the live
+ * scene safely (a run mid-tick). The request lands in `w.pendingDreams`; the
+ * NEXT tick drains the queue at its start (see `drainPendingDreams`), and only
+ * THEN are cadence + 深宵 timing decided against that tick's clock. So a dream
+ * can be sent at any moment — it takes effect at the next beat, never demanding
+ * the tick already ended.
+ *
+ * Validates only what's knowable now (the character exists, the imagery isn't
+ * empty); the cadence cap is intentionally deferred to drain time. Refusals are
+ * DATA, mirroring injectDream.
+ */
+export function queueDream(world: WorldState, input: DreamInput): QueueDreamOutcome {
+    const w = world.data;
+    const member = w.cast.find((c) => c.id === input.characterId);
+    if (!member) return { ok: false, reason: 'no-character' };
+    const imagery = input.imagery.trim().slice(0, DREAM.maxImageryChars);
+    if (!imagery) return { ok: false, reason: 'no-imagery' };
+    const queue = (w.pendingDreams ??= []);
+    queue.push({ characterId: member.id, imagery });
+    return { ok: true, queued: queue.length };
+}
+
+/**
+ * Drain the owner's queued dreams at a safe point (the start of a tick). Each is
+ * realised through `injectDream` against the CURRENT clock, so cadence + 深宵
+ * timing resolve now, not when it was queued. Returns one human line per
+ * request (fulfilled or gently refused) for the tick log. Empty/absent queue ⇒
+ * no work, no lines (fully inert — backward compatible).
+ */
+export function drainPendingDreams(world: WorldState): string[] {
+    const w = world.data;
+    const queued = w.pendingDreams;
+    if (!queued?.length) return [];
+    w.pendingDreams = [];
+    const lines: string[] = [];
+    for (const req of queued) {
+        const name = world.data.cast.find((c) => c.id === req.characterId)?.name ?? req.characterId;
+        const outcome = injectDream(world, req);
+        if (outcome.ok) {
+            lines.push(`[注夢] ${name}的一夢已排定（第${outcome.atTick}拍深宵入夢）`);
+        } else if (outcome.reason === 'cadence') {
+            lines.push(`[注夢] ${name}的夢暫且擱下——三日一夢，尚未到時`);
+        } else {
+            lines.push(`[注夢] 一則託夢無法兌現（${outcome.reason}）`);
+        }
+    }
+    return lines;
+}

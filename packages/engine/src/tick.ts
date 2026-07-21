@@ -50,6 +50,7 @@ import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scen
 import { commitBeatPhysics } from './core/physical-canon.ts';
 import { bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
 import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple-prayer.ts';
+import { drainPendingDreams } from './core/dream.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
 import { renownLabel, type WorldState } from './world-state.ts';
 
@@ -72,6 +73,26 @@ export interface TickOpts {
      *  Observability only: the tick never awaits it, and an observer failure is
      *  logged and swallowed — mechanism must not depend on it. */
     onBeat?: (observation: TickBeatObservation) => void;
+    /** Live observer for the tick's committed MOVES, fired ONCE the movement
+     *  phase closes — i.e. BEFORE any scene beat is played, so a live feed can
+     *  place 行蹤 in true chronological order (moves precede the beats they lead
+     *  to, not trail them). Observability only, same swallow-on-failure contract
+     *  as onBeat. Absent ⇒ no move observation (backward compatible). */
+    onMoves?: (moves: TickMoveObservation[]) => void;
+}
+
+/** One committed movement this tick — where a character was, and where the
+ *  movement phase left them. Emitted as a batch via TickOpts.onMoves. */
+export interface TickMoveObservation {
+    day: number;
+    tick: number;
+    clock: string;
+    characterId: string;
+    name: string;
+    fromSceneId: string;
+    fromSceneName: string;
+    toSceneId: string;
+    toSceneName: string;
 }
 
 /** One committed beat as seen live, mid-tick, before the scene freezes. */
@@ -178,6 +199,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         ...(w.economy?.performance ? [`黃昏【${w.economy.performance.venueSceneName}】開鑼：領銜缺席戲就塌，白日在台上排過戲夜裡才叫得動座，票房入班庫。`] : []),
         ...(w.economy ? ['每日深宵之末日結：工錢、食宿、帳期一併清算；契約限期之日以子夜收卷。'] : []),
     ].join('');
+
+    // 0.0) 注夢佇列 — dreams the owner queued at any moment (even while a prior
+    // tick was running) are realised HERE, at the tick's safe start, before the
+    // scheduled-event delivery below picks up whatever they schedule. Cadence +
+    // 深宵 timing resolve against THIS clock. Empty/absent queue ⇒ no-op.
+    for (const line of drainPendingDreams(world)) log(`  ${line}`);
 
     // 0) SCHEDULED WORLD EVENTS — machine-readable clocks enter objective canon
     // exactly once, before movement. They are percepts, never scripted choices.
@@ -502,6 +529,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // taken to someone you already have standing with, which only exists once ties
     // are seeded/warmed. Read-only here (never mutated before movement).
     const bondsAtMove = world.bondGraph();
+    // Roster as it stands BEFORE this tick's movement phase — diffed after the
+    // phase (incl. tenancy move-ins) to observe the tick's committed moves in
+    // chronological order (onMoves fires before any scene beat plays).
+    const rosterBeforeMoves = { ...w.roster };
     for (const member of orderedMovers) {
         const restUntil = restUntilByChar[member.id];
         // Travel across town consumes time: a one-tick rest prevents oscillation
@@ -881,6 +912,36 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             visibility: 'public',
             witnessIds: w.cast.map((member) => member.id),
         });
+    }
+
+    // 2.55) MOVE OBSERVATION — the movement phase (incl. tenancy move-ins) is
+    // closed; publish the tick's committed moves to any live observer NOW, before
+    // scene beats play, so 行蹤 reads in true order (move → the beats it leads to).
+    // Pure observability: a diff of the roster, never a mechanism input.
+    if (opts.onMoves) {
+        const moves: TickMoveObservation[] = [];
+        for (const [characterId, toSceneId] of Object.entries(w.roster)) {
+            const fromSceneId = rosterBeforeMoves[characterId];
+            if (!fromSceneId || fromSceneId === toSceneId) continue;
+            moves.push({
+                day: today,
+                tick: nowTick,
+                clock: clockLabel,
+                characterId,
+                name: world.nameById(characterId),
+                fromSceneId,
+                fromSceneName: world.sceneNameById(fromSceneId),
+                toSceneId,
+                toSceneName: world.sceneNameById(toSceneId),
+            });
+        }
+        if (moves.length) {
+            try {
+                opts.onMoves(moves);
+            } catch (error) {
+                log(`  [observer] onMoves failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
     }
 
     // 2.6) Rehearsal presence banks after movement — quality earned in daylight.
@@ -2129,9 +2190,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             if (!w.economy) return undefined;
             const standing = renownLabel(world.renownOf(memberId));
             if (planTroupeIds.has(memberId)) {
-                return `你是戲班的角兒，白天排戲、入夜登台是本分；開鑼時人在台上，戲才唱得成，一場票房是全班的生計，你也有分潤。名頭（眼下${standing}）要靠一場場戲攢，攢得起也跌得下——排你的戲、守你的台，才是正經營生。`;
+                return `你是戲班的角兒，白天排戲、入夜登台是你的活路；開鑼時人在台上，戲才唱得成，一場票房是全班的生計，你也有分潤。名頭（眼下${standing}）靠一場場戲攢，攢得起也跌得下。這條營生怎麼經營、幾時上心，由你自己拿捏。`;
             }
-            return `你在這條街上自有活路，靠手上的本分營生（不繫在班庫那一場戲上）；名頭（眼下${standing}）也是一件件事攢起來的，攢得起也跌得下。`;
+            return `你在這條街上自有活路，靠手上的本事營生（不繫在班庫那一場戲上）；名頭（眼下${standing}）也是一件件事攢起來的，攢得起也跌得下。怎麼營生、往哪處使力，由你自己拿主意。`;
         };
         for (const member of w.cast) {
             const todayLines = acc.interactions?.[member.id]

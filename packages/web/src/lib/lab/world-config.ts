@@ -12,7 +12,7 @@
 
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
-import { injectDream, offerIncense, WorldState, type WorldObject } from '@endless-story/engine';
+import { injectDream, offerIncense, queueDream, WorldState, type WorldObject } from '@endless-story/engine';
 import { labManager } from './manager';
 import { runDir } from './paths';
 import type { LabWorldConfig } from './types';
@@ -117,7 +117,47 @@ export function readWorldConfig(runId: string): LabWorldConfig {
     };
 }
 
+/** 注夢 can be sent at ANY moment — including while a tick is running. A running
+ *  run enqueues the request (drained at the next tick's start); an idle run
+ *  applies it immediately. This is the ONLY world-config op that doesn't require
+ *  an idle run — every other edit still goes through the idle gate below. */
+function injectOrQueueDream(runId: string, characterId: string, imagery: string): LabWorldConfig {
+    const active = labManager().get(runId);
+    if (active && active.phase === 'running') {
+        const outcome = queueDream(active.world, { characterId, imagery });
+        if (!outcome.ok) {
+            const copy: Record<string, string> = {
+                'no-character': `unknown character: ${characterId}`,
+                'no-imagery': '夢要有畫面——給一幅意象，別給一句吩咐。',
+            };
+            throw new Error(copy[outcome.reason] ?? outcome.reason);
+        }
+        // No persist here: the running tick owns the world snapshot; it will drain
+        // the queue and snapshot at its own tick boundary. The read below reflects
+        // the queued state from the live in-memory world.
+        return readWorldConfig(runId);
+    }
+    // Idle: apply straight away (unchanged behaviour), then snapshot.
+    const { world, persist } = openWorldForEdit(runId);
+    const outcome = injectDream(world, { characterId, imagery });
+    if (!outcome.ok) {
+        const copy: Record<string, string> = {
+            'no-character': `unknown character: ${characterId}`,
+            'no-imagery': '夢要有畫面——給一幅意象，別給一句吩咐。',
+            cadence: '夢不可夜夜託——三日一夢，心才會當真。',
+        };
+        throw new Error(copy[outcome.reason] ?? outcome.reason);
+    }
+    persist();
+    return readWorldConfig(runId);
+}
+
 export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): LabWorldConfig {
+    // 注夢 is the one op that need not wait for an idle run (queue-then-drain).
+    if (operation.op === 'inject-dream') {
+        return injectOrQueueDream(runId, operation.characterId, operation.imagery);
+    }
+
     const { world, persist } = openWorldForEdit(runId);
     const w = world.data;
 
@@ -241,21 +281,6 @@ export function applyWorldConfigOp(runId: string, operation: WorldConfigOp): Lab
                     'daily-cap': '今日的香已上過了——明日請早。',
                     'no-want': '香火只照拂心裡已有的那樁事——這樁願不在此人心上。',
                     'retired-want': '那樁事已了——香火不點已了之願。',
-                };
-                throw new Error(copy[outcome.reason] ?? outcome.reason);
-            }
-            break;
-        }
-        case 'inject-dream': {
-            const outcome = injectDream(world, {
-                characterId: operation.characterId,
-                imagery: operation.imagery,
-            });
-            if (!outcome.ok) {
-                const copy: Record<string, string> = {
-                    'no-character': `unknown character: ${operation.characterId}`,
-                    'no-imagery': '夢要有畫面——給一幅意象，別給一句吩咐。',
-                    cadence: '夢不可夜夜託——三日一夢，心才會當真。',
                 };
                 throw new Error(copy[outcome.reason] ?? outcome.reason);
             }

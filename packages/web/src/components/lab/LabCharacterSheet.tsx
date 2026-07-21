@@ -309,7 +309,7 @@ function DreamOffering({ runId, characterId }: { runId: string; characterId: str
         setNote(null);
         try {
             await labApi.configOp(runId, { op: 'inject-dream', characterId, imagery });
-            setNote({ ok: true, msg: '夢已託下——下一個深宵入夢，怎麼讀是他的事。' });
+            setNote({ ok: true, msg: '夢已託下——跑拍中也收，下一個深宵入夢，怎麼讀是他的事。' });
             setImagery('');
         } catch (error) {
             setNote({ ok: false, msg: error instanceof Error ? error.message : String(error) });
@@ -339,7 +339,7 @@ function DreamOffering({ runId, characterId }: { runId: string; characterId: str
                 </button>
             </div>
             <p className="mt-1.5 font-serif text-[10px] leading-relaxed tracking-[0.05em] text-mute/60">
-                下一個深宵入夢。意象非指令；夢生不生心事，是他自己的事。三日一夢。
+                何時都能託，跑拍中也收（排入下一拍）。下一個深宵入夢。意象非指令；夢生不生心事，是他自己的事。三日一夢。
             </p>
             {note ? (
                 <p className={`mt-1 font-serif text-2xs leading-relaxed ${note.ok ? 'text-jade/90' : 'text-seal/90'}`}>{note.msg}</p>

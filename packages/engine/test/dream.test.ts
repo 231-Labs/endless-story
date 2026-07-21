@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { makeClock } from '../src/adapters/local/clock.ts';
-import { DREAM, injectDream, nextDeepNightTick } from '../src/core/dream.ts';
+import { DREAM, drainPendingDreams, injectDream, nextDeepNightTick, queueDream } from '../src/core/dream.ts';
 import { WorldState, type WorldStateData } from '../src/world-state.ts';
 import { newWant, type Want } from '../src/core/want-core.ts';
 
@@ -102,4 +102,45 @@ test('refusals: unknown character and empty imagery leave the world untouched', 
     assert.deepEqual(injectDream(world, { characterId: 'c0', imagery: '   ' }), { ok: false, reason: 'no-imagery' });
     assert.equal(world.data.scheduledEvents, undefined, 'nothing queued');
     assert.equal(world.data.dreamDayByChar, undefined, 'no cadence stamp on refusal');
+});
+
+test('queue-then-drain: a dream sent mid-run lands only when drained, at the next 深宵', () => {
+    const world = makeWorld();
+
+    // Queuing does NOT schedule a percept yet — it only records the intent.
+    const q = queueDream(world, { characterId: 'c0', imagery: '雪地裡一枝壓彎的紅梅' });
+    assert.deepEqual(q, { ok: true, queued: 1 });
+    assert.equal((world.data.scheduledEvents ?? []).length, 0, 'nothing scheduled before drain');
+    assert.equal(world.data.dreamDayByChar, undefined, 'no cadence stamp before drain');
+
+    // Draining realises it exactly like injectDream, against the CURRENT clock.
+    const lines = drainPendingDreams(world);
+    assert.equal(lines.length, 1, 'one drain line');
+    assert.match(lines[0], /注夢/, 'the drain reports the dream');
+    assert.equal(world.data.pendingDreams!.length, 0, 'the queue is emptied');
+    const ev = (world.data.scheduledEvents ?? []).find((e) => e.id.startsWith('dream-'));
+    assert.ok(ev, 'the percept is now scheduled');
+    assert.equal(ev!.atTick, 5, 'day 1 tick 1 ⇒ 深宵 is tick 5');
+    assert.ok(ev!.text.includes('雪地裡一枝壓彎的紅梅'), 'the imagery rode through the queue');
+
+    // Draining an empty queue is a no-op.
+    assert.deepEqual(drainPendingDreams(world), []);
+});
+
+test('queue refusals: unknown character / empty imagery never enqueue', () => {
+    const world = makeWorld();
+    assert.deepEqual(queueDream(world, { characterId: 'c9', imagery: '紅梅' }), { ok: false, reason: 'no-character' });
+    assert.deepEqual(queueDream(world, { characterId: 'c0', imagery: '  ' }), { ok: false, reason: 'no-imagery' });
+    assert.ok(!world.data.pendingDreams?.length, 'nothing queued on refusal');
+});
+
+test('drain honours the cadence cap: a too-soon queued dream is dropped with a gentle line', () => {
+    const world = makeWorld();
+    assert.ok(injectDream(world, { characterId: 'c0', imagery: '紅梅' }).ok, 'first dream today');
+    // Same day: a queued second dream drains to a cadence refusal (no new percept).
+    queueDream(world, { characterId: 'c0', imagery: '又一夢' });
+    const before = (world.data.scheduledEvents ?? []).filter((e) => e.id.startsWith('dream-')).length;
+    const lines = drainPendingDreams(world);
+    assert.equal((world.data.scheduledEvents ?? []).filter((e) => e.id.startsWith('dream-')).length, before, 'no second percept within the cadence');
+    assert.match(lines[0], /擱下|三日一夢/, 'the drop is reported as a cadence deferral');
 });
