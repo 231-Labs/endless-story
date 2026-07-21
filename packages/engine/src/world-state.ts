@@ -448,6 +448,10 @@ export interface WorldStateData {
      *  The owner-side daily cap of RECRUIT_INCENSE_SPEC §3 — influence stays a
      *  whisper, never a firehose. Optional & backward-compatible. */
     incenseDayByChar?: Record<string, number>;
+    /** 注夢：每個角色每三日至多得一夢（characterId → 上一夢的 day 記號，快照
+     *  隨行）。The dream-cadence cap of MORTALITY_AND_DREAMS §1 — dreams that
+     *  come nightly stop being omens. Optional & backward-compatible. */
+    dreamDayByChar?: Record<string, number>;
     /** 尋人掛心 — a declared seek_person intention that persists across ticks
      *  until met/expired: actorId → the sought targetId + the tick the intention
      *  was declared. Optional & absent-by-default so snapshots predating it (and

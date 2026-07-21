@@ -34,10 +34,13 @@
    拾起的願 `source: 'dream'`——型別欄位等了它一路。
 3. 角色永不知夢從何來（夢就是夢）；擁有者永不知角色會怎麼讀（這正是產品）。
 
-**實作草圖**（全騎現軌）：`injectDream(world, {characterId, imagery})` →
-夜裡下一個深宵拍的私 scheduledEvent（夢框敘語）＋ `recall.remember`
-（kind `'dream'`）；`dreamDayByChar` 記頻率上限。與 `offerIncense` 同構，
-lab 走同一條 world-config op 軌。
+**實作**（✅ 已落地，全騎現軌）：`core/dream.ts` 的
+`injectDream(world, {characterId, imagery})` → 下一個**深宵**拍、落在其
+**居所**的私 scheduledEvent（夢框敘語：「深宵得了一夢：…醒轉時那畫面還
+壓在心口」）；tick 的既有遞送 pass 自會把它帶進記憶與下一拍情境。
+`dreamDayByChar` 記三日節奏。與 `offerIncense` 同構；lab 走同一條
+world-config op 軌（`inject-dream`），內頁總覽有「注夢」一欄。
+測試釘死紅線：夢本身不生願、不動 heat。
 
 ## 2. 老化與退場 —— 生死節律
 

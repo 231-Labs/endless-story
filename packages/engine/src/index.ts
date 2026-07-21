@@ -25,6 +25,7 @@ export * from './core/production.ts';
 export * from './core/acquaintance.ts';
 export * from './core/temple-prayer.ts';
 export * from './core/incense.ts';
+export * from './core/dream.ts';
 
 // Ports + world + pipeline + preset.
 export * from './ports.ts';
