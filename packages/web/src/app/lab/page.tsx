@@ -39,6 +39,7 @@ export default function LabHomePage() {
         reconcileVisit: false,
         creditVerbs: false,
         seekRouting: false,
+        heartsCanFade: false,
         ticksPerDay: 6,
     });
 
@@ -83,6 +84,7 @@ export default function LabHomePage() {
                     relationshipFallback: form.relationshipFallback,
                     emergentProduction: form.emergentProduction,
                     reconcileVisit: form.reconcileVisit,
+                    heartsCanFade: form.heartsCanFade,
                     creditVerbs: form.creditVerbs,
                     seekRouting: form.seekRouting,
                     ticksPerDay: form.ticksPerDay,
@@ -321,6 +323,17 @@ export default function LabHomePage() {
                             onChange={(e) => setForm({ ...form, seekRouting: e.target.checked })}
                         />
                         尋人掛心
+                    </label>
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="情分會淡：久不相見的情願會慢慢淡去，連相許也會散——去掉「種下的情永不死」，讓每卷情路走得不一樣（實驗，預設關）"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={form.heartsCanFade}
+                            onChange={(e) => setForm({ ...form, heartsCanFade: e.target.checked })}
+                        />
+                        情分會淡
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日

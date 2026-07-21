@@ -104,6 +104,7 @@ interface RunManifest {
     reconcileVisit: boolean;
     creditVerbs: boolean;
     seekRouting: boolean;
+    heartsCanFade: boolean;
 }
 
 export interface ActiveRun {
@@ -219,13 +220,21 @@ export class LabRunManager {
             reconcileVisit: cfg.reconcileVisit ?? false,
             creditVerbs: cfg.creditVerbs ?? false,
             seekRouting: cfg.seekRouting ?? false,
+            heartsCanFade: cfg.heartsCanFade ?? false,
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
-            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'reconcileVisit', 'creditVerbs', 'seekRouting'] as const) {
-                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'reconcileVisit' || key === 'creditVerbs' || key === 'seekRouting' ? (previous[key] ?? false) : previous[key];
+            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'reconcileVisit', 'creditVerbs', 'seekRouting', 'heartsCanFade'] as const) {
+                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'reconcileVisit' || key === 'creditVerbs' || key === 'seekRouting' || key === 'heartsCanFade' ? (previous[key] ?? false) : previous[key];
                 if (prior !== manifest[key]) {
-                    throw new Error(`run provenance mismatch for ${key}: ${String(prior)} != ${String(manifest[key])}`);
+                    // A run's manifest is frozen at creation so a diagnostic export never
+                    // lies about which model/preset/flags wrote which tick. The usual
+                    // trigger is changing POE_MODEL_PRIMARY (or a flag) then RE-OPENING an
+                    // existing run — actionable copy beats a bare field name.
+                    const hint = key === 'model' || key === 'provider'
+                        ? `此卷建立時用的是 ${String(prior)}，現在的配置是 ${String(manifest[key])}。一卷不可中途換${key === 'model' ? '模型' : '供應商'}——換了請開「新卷」（新卷會從第一拍記錄新${key === 'model' ? '模型' : '供應商'}）；若確定要沿用此卷，手動改其 run-manifest.json 的 "${key}" 欄。`
+                        : `此卷建立時 ${key}=${String(prior)}，現在的配置是 ${String(manifest[key])}。一卷的設定不可中途改——改了請開新卷。`;
+                    throw new Error(`卷宗設定不符（${key}）：${hint}`);
                 }
             }
         } else {
@@ -257,6 +266,7 @@ export class LabRunManager {
             if (cfg.reconcileVisit) world.data.reconcileVisit = true;
             if (cfg.creditVerbs) world.data.creditVerbs = true;
             if (cfg.seekRouting) world.data.seekRouting = true;
+            if (cfg.heartsCanFade) world.data.heartsCanFade = true;
             // 相識分寸: a season may declare subjective naming; seed the acquaintance
             // map AFTER cast/edges/views are seeded (so co-workers/edge-holders start
             // named). Mirrors how the flags above flip world.data.<flag> post-build.
