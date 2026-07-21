@@ -187,3 +187,34 @@ test('5) no seeking ⇒ decideMove inputs byte-identical to a world without the 
         'an idle seekRouting flag adds not one byte to any mover offer',
     );
 });
+
+// ── anti-spin guards (measured from a real run: 白韻秋 declared 去尋X 6× / 尋著 5× in 15 拍) ──
+
+test('6) seek_person for an ALREADY co-present target records nothing (that心意 belongs in the beat)', async () => {
+    // 乙 already stands with 甲 in 前廳 — 「去尋」 a person right here is a non-move.
+    const world = makeWorld({ seekRouting: true, emergentProduction: true, roster: { c0: 's0', c1: 's0', c2: 's0' } });
+    const logs: string[] = [];
+    await runTick(world, deps(new SeekingActor()), { log: (line) => logs.push(line) });
+    assert.equal(world.data.seeking?.c0, undefined, 'no 掛心 recorded for someone already present');
+    assert.ok(logs.some((l) => l.includes('action noop: seek_person') && l.includes('已同處')), 'logged as a co-present no-op');
+    assert.ok(!logs.some((l) => l.includes('[尋人]') && l.includes('打定主意')), 'no spurious 尋人 declaration line');
+});
+
+test('7) re-declaring the SAME seek preserves sinceTick (expiry clock survives) and spams no line', async () => {
+    // 甲 is ALREADY seeking 乙 (since tick 0); 乙 sits unreachable in the private 西廂,
+    // so the movement phase can neither meet nor clear it. Re-declaring must be inert.
+    const world = makeWorld({
+        seekRouting: true,
+        emergentProduction: true,
+        seeking: { c0: { targetId: 'c1', sinceTick: 0 } },
+    });
+    const logs: string[] = [];
+    await runTick(world, deps(new SeekingActor()), { log: (line) => logs.push(line) }); // 日午, tick 1
+    assert.deepEqual(
+        world.data.seeking?.c0,
+        { targetId: 'c1', sinceTick: 0 },
+        'the original sinceTick is preserved — re-declaring never resets the 3-day expiry',
+    );
+    assert.ok(logs.some((l) => l.includes('action noop: seek_person') && l.includes('續尋')), 'logged as a continue-seeking no-op');
+    assert.ok(!logs.some((l) => l.includes('[尋人]') && l.includes('打定主意')), 'no second 打定主意 line for a target already being sought');
+});
