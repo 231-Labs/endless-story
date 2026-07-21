@@ -79,9 +79,18 @@ test('the shipped season runs a full week with EVERY flag on — coherent, conse
     assert.ok(prod, 'a production emerged under all flags');
     assert.equal(prod!.status, 'premiered', 'the production still reaches premiere under all flags');
 
-    // 尋人 was genuinely EXERCISED: the deterministic fake emits seek_person open
-    // actions under emergentProduction, and seekRouting records them.
-    assert.ok(world.data.seeking !== undefined, 'seekRouting recorded at least one 尋人掛心 during the week');
+    // 尋人 was genuinely EXERCISED under all flags: the deterministic fake emits
+    // seek_person open actions, and seekRouting processes each. In THIS composed
+    // season the fake's loveTarget falls on a castmate who shares 柳安春's 大通鋪,
+    // so the seek is correctly DECLINED as co-present (你不「去尋」身邊的人 — the
+    // anti-spin guard added after q4sn's re-seek loop) rather than recorded. Either
+    // outcome proves the seekRouting path ran; assert the PATH, not one result.
+    const seekProcessed = first.logs.some(
+        (line) =>
+            (line.includes('[尋人]') && line.includes('打定主意')) ||
+            (line.includes('action noop: seek_person') && (line.includes('同處') || line.includes('續尋'))),
+    );
+    assert.ok(seekProcessed, 'seekRouting processed a seek_person under all flags (recorded, or correctly declined as co-present)');
 
     // 看客 was genuinely EXERCISED: the frame opts in audienceHouse, so every
     // performed settle line carries the audience figure.
