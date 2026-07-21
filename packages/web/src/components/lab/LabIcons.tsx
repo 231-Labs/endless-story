@@ -162,3 +162,25 @@ export function IconWorld(props: SVGProps<SVGSVGElement>) {
         </svg>
     );
 }
+
+/** 香火 — an incense stick in its holder, one wisp of smoke curling up. */
+export function IconIncense(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg {...base(props)}>
+            <path d="M12 19.5v-8" />
+            <path d="M9.5 19.5h5" />
+            <path d="M12 11c1.5-1.3-1.5-2.7 0-4 1.5-1.3-1.5-2.7 0-4" />
+            <circle cx="12" cy="11" r="0.9" fill="currentColor" stroke="none" />
+        </svg>
+    );
+}
+
+/** 注夢 — a crescent moon with a single twinkle (the deep-night dream). */
+export function IconDream(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg {...base(props)}>
+            <path d="M16.2 4.6A7.6 7.6 0 1 0 19.5 13.4 6.1 6.1 0 0 1 16.2 4.6Z" />
+            <path d="M7 5v2M6 6h2" />
+        </svg>
+    );
+}

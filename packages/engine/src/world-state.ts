@@ -452,6 +452,11 @@ export interface WorldStateData {
      *  隨行）。The dream-cadence cap of MORTALITY_AND_DREAMS §1 — dreams that
      *  come nightly stop being omens. Optional & backward-compatible. */
     dreamDayByChar?: Record<string, number>;
+    /** 注夢佇列：擁有者可在 ANY 時刻託夢（連 tick 進行中也收單）——請求先落此
+     *  佇列，下一拍在起手安全點被 injectDream 逐一兌現（此時才算 cadence／深宵）。
+     *  閒置時直接兌現、不經此佇列。Optional & backward-compatible（空／缺席時
+     *  tick 的排空段完全惰性）。 */
+    pendingDreams?: Array<{ characterId: string; imagery: string }>;
     /** 尋人掛心 — a declared seek_person intention that persists across ticks
      *  until met/expired: actorId → the sought targetId + the tick the intention
      *  was declared. Optional & absent-by-default so snapshots predating it (and

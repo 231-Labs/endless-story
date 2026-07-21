@@ -33,6 +33,31 @@ function isEventSlip(b: LabLiveBeat): boolean {
     return b.kind === 'move' || b.kind === 'world';
 }
 
+/** A render row: either one beat, or a run of same-tick 行蹤 collapsed into one
+ *  slip. Night sends the whole troupe home in a single tick, so the raw feed
+ *  shows a wall of identical 行蹤 cards; folding a same-tick run into one 「行蹤・N人」
+ *  slip (expandable to each person's route) keeps the strip legible. */
+type FeedRow =
+    | { kind: 'one'; beat: LabLiveBeat }
+    | { kind: 'moveGroup'; lead: LabLiveBeat; moves: LabLiveBeat[] };
+
+function buildFeedRows(feed: LabLiveBeat[]): FeedRow[] {
+    const rows: FeedRow[] = [];
+    for (const b of feed) {
+        if (b.kind === 'move') {
+            const last = rows[rows.length - 1];
+            if (last && last.kind === 'moveGroup' && last.lead.day === b.day && last.lead.tick === b.tick) {
+                last.moves.push(b);
+                continue;
+            }
+            rows.push({ kind: 'moveGroup', lead: b, moves: [b] });
+            continue;
+        }
+        rows.push({ kind: 'one', beat: b });
+    }
+    return rows;
+}
+
 /** 箋底分色：言＝紙面、行＝墨染、世＝金染。 */
 function slipTint(b: LabLiveBeat): string {
     if (b.kind === 'world') return 'bg-seal/[0.14] dark:bg-seal/[0.10]';
@@ -151,6 +176,7 @@ export function LabBeatDock({
     useEffect(() => cancelHide, []);
 
     const expandedBeat = overlay ? feed.find((x) => x.seq === overlay.seq) ?? null : null;
+    const rows = buildFeedRows(feed);
 
     return (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
@@ -201,7 +227,53 @@ export function LabBeatDock({
                                 }}
                                 className="mt-2 flex items-start gap-2.5 overflow-x-auto px-4 pb-1.5 no-scrollbar sm:px-8"
                             >
-                                {feed.map((b) => {
+                                {rows.map((row) => {
+                                    // 併籤：一拍裡連著幾筆行蹤（入夜全班歸巢）收成一枚
+                                    // 「行蹤・N人」事籤，hover 向右展開列出各人去向。
+                                    if (row.kind === 'moveGroup' && row.moves.length > 1) {
+                                        const lead = row.lead;
+                                        const expanded = hoverSeq === lead.seq;
+                                        return (
+                                            <article
+                                                key={lead.seq}
+                                                onMouseEnter={() => setHoverSeq(lead.seq)}
+                                                onMouseLeave={() => setHoverSeq((s) => (s === lead.seq ? null : s))}
+                                                style={{ width: expanded ? EVENT_EXPAND_W : SLIP_W_SHORT, height: SLIP_H }}
+                                                className={`animate-beat-in relative shrink-0 overflow-hidden rounded-lg shadow-[0_2px_14px_rgba(20,12,8,0.10)] backdrop-blur-md transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${slipTint(lead)}`}
+                                            >
+                                                {expanded ? (
+                                                    <div className="relative flex h-full flex-col px-3 py-2.5">
+                                                        <p className="flex items-baseline gap-x-2 truncate font-serif text-2xs tracking-[0.16em] text-mute">
+                                                            <span aria-hidden className={`h-1.5 w-1.5 shrink-0 self-center rounded-full ${toneDot(lead)}`} />
+                                                            <span className="shrink-0 text-ink/90">行蹤</span>
+                                                            <span className="shrink-0">{lead.clock}</span>
+                                                            <span className="shrink-0 text-mute/70">{row.moves.length} 人</span>
+                                                        </p>
+                                                        <div className="mt-1.5 flex-1 overflow-y-auto no-scrollbar">
+                                                            {row.moves.map((m) => (
+                                                                <p key={m.seq} className="truncate font-serif text-2xs leading-relaxed text-ink/80">
+                                                                    <span className="text-ink/90">{m.name}</span>
+                                                                    <span className="text-mute/70">　{m.text}</span>
+                                                                </p>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="relative flex h-full flex-col items-center justify-between px-2 py-2.5">
+                                                        <span className="flex items-center gap-1.5 font-serif text-2xs tracking-[0.14em] text-mute">
+                                                            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${toneDot(lead)}`} />
+                                                            {lead.clock}
+                                                        </span>
+                                                        <span className="font-serif text-sm tracking-[0.3em] text-mute/70">行蹤</span>
+                                                        <span className="max-w-full truncate font-serif text-2xs tracking-[0.12em] text-ink/75">
+                                                            {row.moves.length} 人各歸
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </article>
+                                        );
+                                    }
+                                    const b = row.kind === 'moveGroup' ? row.lead : row.beat;
                                     if (isEventSlip(b)) {
                                         // 事籤：hover 就地向右展開（推擠右側諸卡，CSS width 過渡）；
                                         // 有地點者展開時襯場景畫、覆一層配色紗使字仍清晰。

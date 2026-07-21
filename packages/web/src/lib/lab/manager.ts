@@ -414,13 +414,32 @@ export class LabRunManager {
         try {
             while (run.pendingTicks > 0) {
                 const tick = run.world.data.clock.currentTick;
-                const prevRoster = { ...run.world.data.roster };
                 run.transaction.begin(tick);
                 let report: TickReport;
                 try {
                     report = await runTick(run.world, run.deps, {
                         snapshotDir: stateDir,
                         log: (line) => this.log(run, line),
+                        // 移步進拍流 —— fired as the movement phase closes, BEFORE any
+                        // scene beat plays, so 行蹤 lands in true chronological order
+                        // (a character's move precedes the beats it leads to). The
+                        // engine hands us each committed transition; we only replay it.
+                        onMoves: (moves) => {
+                            for (const m of moves) {
+                                this.pushBeat(run, {
+                                    day: m.day,
+                                    tick: m.tick,
+                                    clock: m.clock,
+                                    sceneId: m.toSceneId,
+                                    sceneName: m.toSceneName,
+                                    isPrivate: false,
+                                    characterId: m.characterId,
+                                    name: m.name,
+                                    text: `自${m.fromSceneName}移步${m.toSceneName}`,
+                                    kind: 'move',
+                                });
+                            }
+                        },
                         onBeat: (observation) => {
                             const acts = humanizeBeatActs(run.world, observation.beat);
                             this.pushBeat(run, {
@@ -443,24 +462,6 @@ export class LabRunManager {
                 } catch (error) {
                     run.transaction.rollback();
                     throw error;
-                }
-                // 移步與天時進拍流：機制動作顯性化（引擎已提交，僅回放）。
-                // 直接 diff 前後 roster —— 自主移動、夜歸、私訪走哪條通道都抓得到。
-                for (const [characterId, toSceneId] of Object.entries(run.world.data.roster)) {
-                    const fromSceneId = prevRoster[characterId];
-                    if (!fromSceneId || fromSceneId === toSceneId) continue;
-                    this.pushBeat(run, {
-                        day: report.day,
-                        tick: report.tick,
-                        clock: report.partOfDay,
-                        sceneId: toSceneId,
-                        sceneName: run.world.sceneNameById(toSceneId),
-                        isPrivate: false,
-                        characterId,
-                        name: run.world.nameById(characterId),
-                        text: `自${run.world.sceneNameById(fromSceneId)}移步${run.world.sceneNameById(toSceneId)}`,
-                        kind: 'move',
-                    });
                 }
                 // 天時（世界事件）與祈願（角色對神明說出口的話）進拍流：兩者都經
                 // events 提交、未走 onBeat，故在此顯性化。世界旁白＝world；祈願是

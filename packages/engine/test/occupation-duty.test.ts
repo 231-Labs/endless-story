@@ -52,13 +52,17 @@ class MoveCapturingAgent extends FakeSceneAgent {
 
 // ── 1) pure dutyRhythm ──────────────────────────────────────────────────────
 
-test('dutyRhythm with a duty names the venue + note, framed as on-post 當值 (not a want)', () => {
+test('dutyRhythm with a duty names the venue + note, surfaces the stake, leaves the choice', () => {
     const line = dutyRhythm('入夜', { sceneName: '長三堂子花廳', note: '唱堂會、接局' }, '長三堂子花廳', '金鳳寓所');
     assert.ok(line, 'a duty yields a line');
     assert.ok(line!.includes('長三堂子花廳'), 'the line names the duty venue');
     assert.ok(line!.includes('唱堂會、接局'), 'the duty note rides along');
     assert.ok(line!.includes('當值') || line!.includes('當差'), 'framed as being on-post');
-    assert.ok(line!.includes('不是想不想去'), 'framed as binding livelihood, not a want');
+    // The stake is surfaced (進項／臉面 ride on it)…
+    assert.ok(line!.includes('進項') || line!.includes('臉面'), 'the livelihood stake is stated');
+    // …but the decision is handed back — a pull, never a command (general principle).
+    assert.ok(line!.includes('你自己') || line!.includes('權衡') || line!.includes('拿主意'), 'the choice stays the character\'s own');
+    assert.doesNotMatch(line!, /不是想不想去|旁的事，等當差歇了再說/, 'no coercive framing');
     assert.ok(line!.includes('入夜'), 'the line is anchored to the part-of-day');
     // it is NOT the generic night line (which would send her home instead)
     assert.notEqual(line, livelihoodRhythm('入夜', '長三堂子花廳', '金鳳寓所'));

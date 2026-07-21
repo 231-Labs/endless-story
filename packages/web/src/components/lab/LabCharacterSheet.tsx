@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
 import { NarrativeProse, ReaderScaleControl, useReaderScale } from './NarrativeProse';
+import { IconIncense, IconDream } from './LabIcons';
 import type { LabCharacterLive } from '@/lib/lab/types';
 
 type TabKey = 'overview' | 'wants' | 'bonds' | 'dossier' | 'skills' | 'estate' | 'memory' | 'pov' | 'media';
@@ -106,9 +107,10 @@ function PortraitChip({ name, url, cls, textCls }: { name: string; url?: string;
     );
 }
 
-function SectionHead({ title, count, moreLabel, onMore }: { title: string; count?: number; moreLabel?: string; onMore?: () => void }) {
+function SectionHead({ title, count, moreLabel, onMore, glyph }: { title: string; count?: number; moreLabel?: string; onMore?: () => void; glyph?: ReactNode }) {
     return (
         <div className="flex items-baseline gap-2">
+            {glyph ? <span aria-hidden className="self-center text-[13px] text-mute/70">{glyph}</span> : null}
             <h3 className="font-serif text-2xs tracking-[0.35em] text-mute">{title}</h3>
             {count != null ? <span className="font-serif text-2xs tabular-nums text-mute/50">{count}</span> : null}
             {moreLabel && onMore ? (
@@ -254,28 +256,31 @@ function IncenseOffering({ runId, characterId, want }: { runId: string; characte
     return (
         <div className="mt-2">
             {open ? (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 rounded-md border border-hairline bg-surface/30 px-2 py-1.5 dark:bg-white/[0.02]">
+                    <IconIncense aria-hidden className="shrink-0 text-[13px] text-mute/70" />
                     <input
+                        autoFocus
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         maxLength={60}
                         placeholder="對神明說的一句話（可空）"
-                        className="min-w-0 flex-1 rounded-md border border-amber-600/30 bg-canvas/80 px-2 py-1 font-serif text-2xs text-ink/90 placeholder:text-mute/50 focus:border-amber-600/60 focus:outline-none dark:bg-white/[0.04]"
+                        className="min-w-0 flex-1 border-0 border-b border-hairline bg-transparent px-0.5 py-0.5 font-serif text-2xs text-ink/90 placeholder:text-mute/40 transition focus:border-cinnabar/45 focus:outline-none"
                     />
                     <button
                         type="button"
                         disabled={busy}
                         onClick={() => void offer()}
-                        className="shrink-0 rounded-md border border-amber-600/40 bg-amber-500/[0.08] px-2 py-1 font-serif text-2xs tracking-[0.15em] text-amber-700/90 transition hover:bg-amber-500/[0.16] disabled:opacity-50 dark:text-amber-400/90"
+                        className="shrink-0 rounded px-1.5 py-0.5 font-serif text-2xs tracking-[0.15em] text-mute/80 transition hover:text-cinnabar/90 disabled:opacity-40"
                     >
                         {busy ? '點香…' : '點香'}
                     </button>
                     <button
                         type="button"
+                        aria-label="罷了"
                         onClick={() => { setOpen(false); setNote(null); }}
-                        className="shrink-0 rounded-md border border-hairline px-2 py-1 font-serif text-2xs text-mute/70 transition hover:border-mute/40"
+                        className="shrink-0 rounded px-1 py-0.5 font-serif text-2xs text-mute/45 transition hover:text-mute/80"
                     >
-                        罷了
+                        罷
                     </button>
                 </div>
             ) : (
@@ -283,9 +288,10 @@ function IncenseOffering({ runId, characterId, want }: { runId: string; characte
                     type="button"
                     onClick={() => { setOpen(true); setNote(null); }}
                     title="香火：替這樁心事上一炷香——只推「放不下」，不推「去做」；每日一炷，角色不知情"
-                    className="rounded-md border border-amber-600/25 bg-amber-500/[0.05] px-2 py-0.5 font-serif text-[10px] tracking-[0.2em] text-amber-700/80 transition hover:border-amber-600/50 hover:bg-amber-500/[0.12] dark:text-amber-400/80"
+                    className="group inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-mute/55 transition hover:text-cinnabar/90"
                 >
-                    上香
+                    <IconIncense aria-hidden className="text-[13px] transition-transform group-hover:-translate-y-px" />
+                    <span className="font-serif text-[10px] tracking-[0.3em]">上香</span>
                 </button>
             )}
             {note ? (
@@ -309,7 +315,7 @@ function DreamOffering({ runId, characterId }: { runId: string; characterId: str
         setNote(null);
         try {
             await labApi.configOp(runId, { op: 'inject-dream', characterId, imagery });
-            setNote({ ok: true, msg: '夢已託下——下一個深宵入夢，怎麼讀是他的事。' });
+            setNote({ ok: true, msg: '夢已託下——跑拍中也收，下一個深宵入夢，怎麼讀是他的事。' });
             setImagery('');
         } catch (error) {
             setNote({ ok: false, msg: error instanceof Error ? error.message : String(error) });
@@ -319,30 +325,31 @@ function DreamOffering({ runId, characterId }: { runId: string; characterId: str
     };
 
     return (
-        <div className="rounded-lg border border-indigo-400/25 bg-indigo-400/[0.04] p-3 dark:bg-indigo-400/[0.06]">
-            <div className="flex items-center gap-1.5">
+        <div className="rounded-lg border border-hairline bg-surface/30 p-3 dark:bg-white/[0.02]">
+            <div className="flex items-center gap-1.5 rounded-md border border-hairline bg-canvas/40 px-2 py-1.5 focus-within:border-cinnabar/40 dark:bg-white/[0.02]">
+                <IconDream aria-hidden className="shrink-0 text-[13px] text-mute/70" />
                 <input
                     value={imagery}
                     onChange={(e) => setImagery(e.target.value)}
                     maxLength={60}
                     placeholder="一幅意象（如：雪地裡一枝壓彎的紅梅）"
-                    className="min-w-0 flex-1 rounded-md border border-indigo-400/30 bg-canvas/80 px-2 py-1 font-serif text-2xs text-ink/90 placeholder:text-mute/50 focus:border-indigo-400/60 focus:outline-none dark:bg-white/[0.04]"
+                    className="min-w-0 flex-1 border-0 bg-transparent px-0.5 py-0.5 font-serif text-2xs text-ink/90 placeholder:text-mute/40 focus:outline-none"
                 />
                 <button
                     type="button"
                     disabled={busy || !imagery.trim()}
                     onClick={() => void send()}
                     title="注夢：意象非指令；夢不直接生願——角色自己的心去讀；每三日一夢"
-                    className="shrink-0 rounded-md border border-indigo-400/40 bg-indigo-400/[0.08] px-2 py-1 font-serif text-2xs tracking-[0.15em] text-indigo-500/90 transition hover:bg-indigo-400/[0.16] disabled:opacity-50 dark:text-indigo-300/90"
+                    className="shrink-0 rounded px-1.5 py-0.5 font-serif text-2xs tracking-[0.15em] text-mute/80 transition hover:text-cinnabar/90 disabled:opacity-40"
                 >
                     {busy ? '託夢…' : '託夢'}
                 </button>
             </div>
-            <p className="mt-1.5 font-serif text-[10px] leading-relaxed tracking-[0.05em] text-mute/60">
-                下一個深宵入夢。意象非指令；夢生不生心事，是他自己的事。三日一夢。
+            <p className="mt-2 font-serif text-[10px] leading-relaxed tracking-[0.05em] text-mute/55">
+                何時都能託，跑拍中也收（排入下一拍）。下一個深宵入夢；意象非指令，夢生不生心事是他自己的事。三日一夢。
             </p>
             {note ? (
-                <p className={`mt-1 font-serif text-2xs leading-relaxed ${note.ok ? 'text-jade/90' : 'text-seal/90'}`}>{note.msg}</p>
+                <p className={`mt-1.5 font-serif text-2xs leading-relaxed ${note.ok ? 'text-jade/90' : 'text-seal/90'}`}>{note.msg}</p>
             ) : null}
         </div>
     );
@@ -744,7 +751,7 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                                     </section>
 
                                     <section>
-                                        <SectionHead title="注夢" />
+                                        <SectionHead title="注夢" glyph={<IconDream />} />
                                         <div className="mt-2.5">
                                             <DreamOffering runId={runId} characterId={c.id} />
                                         </div>

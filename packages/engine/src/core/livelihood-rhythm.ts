@@ -81,12 +81,13 @@ const NIGHT_DUTY_PARTS = new Set(['入夜', '深宵']);
 /**
  * Duty-aware livelihood rhythm (行當專屬節律). When a character has a resolved
  * duty for THIS part of the clock, this returns a stronger, ON-POST line naming
- * the duty venue — framed as binding營生 (the trade's demand, your keep + your
- * face in this line ride on it), NOT a want the character may weigh. It is still
- * only fed into the move prompt as a soft pull; the tick keeps exactly one
- * movement authority (the character's own choice), so a ripe want can still
- * override it — but the framing tells the character this is the hour their
- * living is earned. With no duty it delegates to `livelihoodRhythm` unchanged.
+ * the duty venue and the stake that rides on it (your keep + your face in this
+ * line). It PRESENTS that stake plainly and hands the decision back — 要不要去、
+ * 幾時去，你自己權衡 — never commands (the general principle: give a character the
+ * facts and the choice, not an order). It is fed into the move prompt as a soft
+ * pull; the tick keeps exactly one movement authority (the character's own
+ * choice), so a ripe want freely outweighs it. With no duty it delegates to
+ * `livelihoodRhythm` unchanged.
  *
  * Pure + seed-agnostic: the venue/note are handed in (resolved from the seed's
  * occupationDuties at seed time), never hard-coded here.
@@ -107,9 +108,11 @@ export function dutyRhythm(
     const note = duty.note ? `${duty.note}，` : '';
     const venue = `「${duty.sceneName}」`;
     if (NIGHT_DUTY_PARTS.has(partOfDay)) {
-        // Night duty: the trade works while the town sleeps — a stronger 當值 pull.
-        return `${partOfDay}正是你當值的時辰：${note}該在${venue}當差。旁人這時辰都歇下了，你的營生偏在此刻——這不是想不想去，你的進項、你這行的臉面都在這上頭。旁的事，等當差歇了再說。`;
+        // Night duty: the trade works while the town sleeps. State the stake plainly
+        // — the choice of whether/when to answer it stays the character's own.
+        return `${partOfDay}是你當值的時辰：${note}你這行的活計在${venue}。旁人這時辰都歇下了，你的營生偏在此刻——你的進項、你這行的臉面都繫在這上頭。要不要去、幾時去，你自己權衡。`;
     }
-    // Day duty: the ordinary working hours, but this is your post, not a choice.
-    return `${partOfDay}正是你當差的時辰：${note}該在${venue}上坐鎮理事。這是營生正事，不是想不想去——你的進項、你這行的臉面都繫在這上頭。旁的事，等當差歇了再說。`;
+    // Day duty: your post during the ordinary working hours. Same framing — a
+    // surfaced stake, never a command; the character weighs it against the rest.
+    return `${partOfDay}是你當差的時辰：${note}你這行的活計在${venue}，是坐鎮理事的正經營生。你的進項、你這行的臉面都繫在這上頭——要不要去、幾時去，由你自己拿主意。`;
 }
