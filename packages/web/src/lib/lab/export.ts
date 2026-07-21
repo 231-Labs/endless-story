@@ -32,6 +32,7 @@ interface RunManifestView {
     reconcileVisit?: boolean;
     creditVerbs?: boolean;
     seekRouting?: boolean;
+    heartsCanFade?: boolean;
 }
 
 const ENGINE_LOG_TAIL_LINES = 4000;
@@ -93,6 +94,7 @@ function buildHeader(runId: string, meta: LabRunMeta | null, manifest: RunManife
         cfg.reconcileVisit ? 'reconcileVisit' : null,
         cfg.creditVerbs ? 'creditVerbs' : null,
         cfg.seekRouting ? 'seekRouting' : null,
+        cfg.heartsCanFade ? 'heartsCanFade' : null,
         cfg.realEmbeddings ? 'realEmbeddings' : null,
     ].filter(Boolean);
     const source = `seed ${cfg.seedSource}/${cfg.presetId}`

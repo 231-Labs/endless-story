@@ -35,6 +35,10 @@ export interface Want {
     /** Recent-actions counter for the saturation bump. */
     recent: number;
     retired?: boolean;
+    /** 情分會淡 (heartsCanFade): consecutive days this LOVE want's target went unseen.
+     *  Reset to 0 the day they share a scene; past a grace it erodes weight until the
+     *  heart lets go. Only ever set on love wants under the flag; absent otherwise. */
+    starveDays?: number;
     /** One line on how it resolved (feeds aftermath context). */
     resolvedNote?: string;
     kind: 'narrative' | 'economic';

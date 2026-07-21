@@ -2518,6 +2518,58 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // relationshipFallback.
     if (dayEnd) decayBonds(bonds, togetherToday);
 
+    // 8.6) 情分會淡 (heartsCanFade, opt-in) — lift the two romance immortalities that
+    // made every season replay the SAME seeded couple: a genesis LOVE that never
+    // fades, and a 相許 that never lapses. At day-end a love-want whose target went
+    // UNSEEN today starves; past a grace its weight erodes, and once it drops under
+    // the floor the heart lets go (「情分淡了」). A faded love that had reached 相許
+    // lapses the 相許 too — the standing keys it granted are revoked and both keep a
+    // private note. Meeting resets the clock, so a tended love never fades; NON-love
+    // wants (志向/身份 — who you ARE) are never touched. Flag off ⇒ inert (byte-
+    // identical, the old permanent-love world).
+    if (dayEnd && w.heartsCanFade) {
+        const LOVE_LAYER = /愛|情|戀|眷|慾/;
+        const STARVE_GRACE = 3;   // days apart before a love begins to fade
+        const FADE_FACTOR = 0.7;  // weight retained per further day apart
+        const FADE_FLOOR = 0.25;  // below this the heart lets go
+        for (const wnt of wants) {
+            if (wnt.retired || !LOVE_LAYER.test(wnt.layer) || !wnt.target) continue;
+            const targetId = world.castById(wnt.target) ? wnt.target : world.idByName(wnt.target);
+            if (!targetId || targetId === wnt.characterId) continue;
+            if (togetherToday.has(world.pairKey(wnt.characterId, targetId))) {
+                wnt.starveDays = 0;
+                continue;
+            }
+            wnt.starveDays = (wnt.starveDays ?? 0) + 1;
+            if (wnt.starveDays <= STARVE_GRACE) continue;
+            wnt.weight *= FADE_FACTOR;
+            if (wnt.weight >= FADE_FLOOR) continue;
+            wnt.retired = true;
+            wnt.resolvedTick = nowTick;
+            wnt.resolvedNote = '（久不相見，情分淡了）';
+            log(`  [淡了] ${world.nameById(wnt.characterId)} 對 ${world.nameById(targetId)} 那點心思，日子久了淡了`);
+            // A faded love that had reached 相許 lets the 相許 itself lapse.
+            if (world.isEstablished(wnt.characterId, targetId)) {
+                world.removeEstablished(wnt.characterId, targetId);
+                const homeA = w.homeByChar[wnt.characterId];
+                const homeB = w.homeByChar[targetId];
+                if (homeB) world.revokeAccess(homeB, wnt.characterId);
+                if (homeA) world.revokeAccess(homeA, targetId);
+                for (const [who, other] of [[wnt.characterId, targetId], [targetId, wnt.characterId]] as const) {
+                    (w.scheduledEvents ??= []).push({
+                        id: `love-lapsed-${who}-t${nowTick}`,
+                        atTick: nowTick + 1,
+                        sceneId: w.roster[who],
+                        text: `這些日子沒見著${world.perceivedName(who, other)}，那點熱乎氣倒像隔了一層——說不清是誰先淡的。`,
+                        visibility: 'private',
+                        witnessIds: [who],
+                    });
+                }
+                log(`  [情分淡了] ${world.nameById(wnt.characterId)} 與 ${world.nameById(targetId)} 的相許，久疏而散`);
+            }
+        }
+    }
+
     // 9) Advance clock + write bonds back, then snapshot the whole world.
     w.clock = clock.advance(c);
     world.setBonds(bonds); // establishedPairs already live on w.data via addEstablished
