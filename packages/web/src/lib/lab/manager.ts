@@ -101,9 +101,6 @@ interface RunManifest {
     model: string;
     relationshipFallback: boolean;
     emergentProduction: boolean;
-    reconcileVisit: boolean;
-    creditVerbs: boolean;
-    seekRouting: boolean;
     heartsCanFade: boolean;
     beatPicksWant: boolean;
 }
@@ -218,16 +215,13 @@ export class LabRunManager {
             model: model ?? 'fake',
             relationshipFallback: cfg.relationshipFallback,
             emergentProduction: cfg.emergentProduction ?? false,
-            reconcileVisit: cfg.reconcileVisit ?? false,
-            creditVerbs: cfg.creditVerbs ?? false,
-            seekRouting: cfg.seekRouting ?? false,
             heartsCanFade: cfg.heartsCanFade ?? false,
             beatPicksWant: cfg.beatPicksWant ?? false,
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
-            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'reconcileVisit', 'creditVerbs', 'seekRouting', 'heartsCanFade', 'beatPicksWant'] as const) {
-                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'reconcileVisit' || key === 'creditVerbs' || key === 'seekRouting' || key === 'heartsCanFade' || key === 'beatPicksWant' ? (previous[key] ?? false) : previous[key];
+            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'heartsCanFade', 'beatPicksWant'] as const) {
+                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'heartsCanFade' || key === 'beatPicksWant' ? (previous[key] ?? false) : previous[key];
                 if (prior !== manifest[key]) {
                     // A run's manifest is frozen at creation so a diagnostic export never
                     // lies about which model/preset/flags wrote which tick. The usual
@@ -265,9 +259,7 @@ export class LabRunManager {
                 seedRelationshipViews(world, created.raw.relationship_views ?? []);
             }
             if (cfg.emergentProduction) world.data.emergentProduction = true;
-            if (cfg.reconcileVisit) world.data.reconcileVisit = true;
-            if (cfg.creditVerbs) world.data.creditVerbs = true;
-            if (cfg.seekRouting) world.data.seekRouting = true;
+            // 叩門/借賒/尋人 已畢業為常駐（引擎無條件常開，不再由設定翻旗標）。
             if (cfg.heartsCanFade) world.data.heartsCanFade = true;
             if (cfg.beatPicksWant) world.data.beatPicksWant = true;
             // 相識分寸: a season may declare subjective naming; seed the acquaintance

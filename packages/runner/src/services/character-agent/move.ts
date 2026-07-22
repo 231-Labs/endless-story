@@ -67,8 +67,8 @@ export interface MoveSceneOption {
      *  enter: the mover walks up and KNOCKS (求見), and whether the door opens is
      *  the OCCUPANT's one-time 放行 — never the visitor's ardor; a shut door is
      *  also an answer. Engine-set only when a ripe 愛/虧欠 want's target is home
-     *  alone in a private scene and the reconcileVisit flag is on. Never both
-     *  intrude and knock. */
+     *  alone in a private scene (叩門夜訪 is now always-on). Never both intrude
+     *  and knock. */
     knock?: boolean;
     /** Optional one-line reason carried by a knock option, shown in the prompt. */
     knockNote?: string;

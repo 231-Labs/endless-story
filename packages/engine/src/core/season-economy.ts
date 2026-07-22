@@ -412,7 +412,7 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         const tab = item.vendorAccountId ? data.vendorTabs?.[item.vendorAccountId] : undefined;
         const payerAccount = contract.economy.accounts[payerId];
         if (
-            world.data.creditVerbs && tab && item.vendorAccountId && payerAccount &&
+            tab && item.vendorAccountId && payerAccount &&
             maySpend(payerAccount, req.actorId) && payerAccount.available < price
         ) {
             const vendorLabel = accountLabel(contract, item.vendorAccountId);
@@ -480,7 +480,6 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         // the dispatcher through the decideLend seat）。A REFUSED loan is a real
         // social event — ok:true with a 婉拒 line, never a replan; only malformed
         // commands (flag off / bad name / not co-present / non-positive) fail.
-        if (!world.data.creditVerbs) return fail('此界不興當面告借（creditVerbs 未開）——要給錢請用 pay');
         if (!cmd.toName || !cmd.amountYuan || cmd.amountYuan <= 0 || !Number.isInteger(cmd.amountYuan)) {
             return fail('告借要填 toName（同場出借人正式姓名）與正整數 amountYuan');
         }
@@ -539,7 +538,6 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         // this creditor shrink by the same amount — the SAME paidSubunits
         // representation the daily settle chases, so a partial repay simply
         // leaves less to chase.
-        if (!world.data.creditVerbs) return fail('此界不興欠條還帳（creditVerbs 未開）——要給錢請用 pay');
         if (!cmd.toName || !cmd.amountYuan || cmd.amountYuan <= 0 || !Number.isInteger(cmd.amountYuan)) {
             return fail('還帳要填 toName（債主）與正整數 amountYuan');
         }
@@ -809,7 +807,7 @@ export function buildLendSeatInput(
 ): CharacterAgentNs.LendDecideInput | null {
     const data = world.data.economy;
     const cmd = req.command;
-    if (!data || !world.data.creditVerbs || cmd.action !== 'borrow') return null;
+    if (!data || cmd.action !== 'borrow') return null;
     if (!cmd.toName || !cmd.amountYuan || cmd.amountYuan <= 0 || !Number.isInteger(cmd.amountYuan)) return null;
     const lenderId = world.idByName(cmd.toName);
     const lender = lenderId ? world.castById(lenderId) : undefined;
@@ -853,7 +851,7 @@ export function creditAdvertFor(
     copresentIds: readonly string[],
 ): { borrow?: boolean; repay?: boolean } | undefined {
     const data = world.data.economy;
-    if (!data || !world.data.creditVerbs) return undefined;
+    if (!data) return undefined;
     const others = copresentIds.filter((id) => id !== characterId && !!world.castById(id));
     if (!others.length) return undefined;
     const repay = (data.bills ?? []).some((bill) =>
@@ -887,7 +885,7 @@ export interface OverdueDebtWantSeed {
  */
 export function collectOverdueDebtWants(world: WorldState, day: number): OverdueDebtWantSeed[] {
     const data = world.data.economy;
-    if (!data?.bills?.length || !world.data.creditVerbs) return [];
+    if (!data?.bills?.length) return [];
     const spawned = new Set(data.debtWantsSpawned ?? []);
     const per = BigInt(data.subunitsPerUnit);
     const yuanText = (amount: bigint): string => {
@@ -992,9 +990,9 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
             lines.push(`你今日已出帳共 ${formatMoney(data, total)}：${detail}。同一筆缺口不必重複去填。`);
         }
         // 借賒有據 — one's own open 欠條 (both directions, with due days) ride
-        // every money percept: a debtor should KNOW they owe. Flag-gated so a
-        // flag-off world's percept (e.g. one carrying a 租金 bill) is untouched.
-        if (world.data.creditVerbs) {
+        // every money percept: a debtor should KNOW they owe. 借賒有據已常駐——
+        // 欠條在利害簡報裡照例現身（不再由旗標控制）。
+        {
             const today = world.data.clock.day;
             for (const bill of data.bills ?? []) {
                 const remaining = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
@@ -1160,7 +1158,7 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
                 const consent = beneficiaryId && beneficiaryId !== characterId ? `；出資後須${world.nameById(beneficiaryId)}本人點頭才作數` : '';
                 // 賒帳 note (creditVerbs): the vendor extends tab — flag off ⇒
                 // the listing is byte-identical to before.
-                const tabNote = world.data.creditVerbs && item.vendorAccountId && data.vendorTabs?.[item.vendorAccountId]
+                const tabNote = item.vendorAccountId && data.vendorTabs?.[item.vendorAccountId]
                     ? '；銀錢不趁手也可賒，記帳'
                     : '';
                 return `${item.id}＝${item.label}（${formatMoney(data, BigInt(item.priceSubunits))}${consent}${tabNote}）`;

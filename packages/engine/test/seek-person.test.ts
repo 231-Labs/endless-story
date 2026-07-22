@@ -8,17 +8,17 @@
  * salient reminder pull in currentSituation; unreachable ⇒ the pull counsels
  * waiting. At day-end an intention older than 3 full days lapses into a party-
  * PRIVATE scheduled percept (the same channel the 叩門 refusal rides).
- * Gated behind world.data.seekRouting (default OFF).
+ * 尋人有路 已畢業為常駐（不再由旗標控制、永遠常開）。
  *
  *   1. parse→record: a seek_person action with a resolvable (by-name) target
- *      writes w.seeking; flag OFF ⇒ nothing recorded, the noop is LOGGED;
+ *      writes w.seeking + logs the [尋人] record line;
  *   2. seeking + target visible in the offered options ⇒ the pull line appears in
  *      that mover's decideMove currentSituation; other movers unaffected;
  *   3. seeking + target co-present ⇒ the entry clears (尋著了), no pull;
  *   4. expiry: an entry 3+ full days old clears at day-end + the private memory
  *      percept is emitted; a fresher entry keeps waiting (跨拍守候);
- *   5. no seeking ⇒ decideMove inputs byte-identical to a world without the
- *      field (backward compat).
+ *   5. no active seeking ⇒ decideMove inputs byte-identical to an empty seeking
+ *      map (an idle seek adds nothing).
  */
 
 import assert from 'node:assert/strict';
@@ -97,9 +97,8 @@ class SeekingActor extends RecordingMover {
     }
 }
 
-test('1) parse→record: a seek_person action writes w.seeking (flag ON); flag OFF stays a LOGGED no-op', async () => {
-    // Flag ON — the declared seek becomes a persisted intention.
-    const world = makeWorld({ seekRouting: true, emergentProduction: true });
+test('1) parse→record: a seek_person action writes w.seeking (尋人有路已常駐)', async () => {
+    const world = makeWorld({ emergentProduction: true });
     const logs: string[] = [];
     await runTick(world, deps(new SeekingActor()), { log: (line) => logs.push(line) });
     assert.deepEqual(
@@ -108,22 +107,12 @@ test('1) parse→record: a seek_person action writes w.seeking (flag ON); flag O
         'the by-name target resolved to its cast id and the intention was recorded with its tick',
     );
     assert.ok(logs.some((line) => line.includes('[尋人]') && line.includes('打定主意')), 'the 逐拍紀事 carries the [尋人] record line');
-
-    // Flag OFF — byte-compat: nothing recorded; the old no-op is now LOGGED
-    // (seek_person + the still-noop personal), never silently swallowed.
-    const off = makeWorld({ emergentProduction: true });
-    const offLogs: string[] = [];
-    await runTick(off, deps(new SeekingActor()), { log: (line) => offLogs.push(line) });
-    assert.equal(off.data.seeking, undefined, 'flag off ⇒ the seeking field never appears');
-    assert.ok(offLogs.some((line) => line.includes('action noop: seek_person (甲)')), 'the flag-off seek is logged as a noop');
-    assert.ok(offLogs.some((line) => line.includes('action noop: personal (乙)')), 'personal remains a no-op but is logged');
 });
 
 test('2) seeking + target visible in the options ⇒ the pull appears in that mover alone', async () => {
     // 乙 stands in the public 庭院(s2) — a legally offered destination for 甲.
     const agent = new RecordingMover();
     const world = makeWorld({
-        seekRouting: true,
         seeking: { c0: { targetId: 'c1', sinceTick: 0 } },
         roster: { c0: 's0', c1: 's2', c2: 's0' },
     });
@@ -140,7 +129,6 @@ test('2) seeking + target visible in the options ⇒ the pull appears in that mo
 test('3) seeking + target co-present ⇒ the entry clears (尋著了), no pull', async () => {
     const agent = new RecordingMover();
     const world = makeWorld({
-        seekRouting: true,
         seeking: { c0: { targetId: 'c1', sinceTick: 0 } },
         roster: { c0: 's0', c1: 's0', c2: 's0' }, // 乙 shares 甲's scene already
     });
@@ -157,7 +145,6 @@ test('4) expiry: a 3+ day old entry clears at day-end + the private memory perce
     // 深宵 of day 4 (tick 23, dayEnd). 甲's entry is from day 1 (tick 2): 21 ticks
     // ≥ 3 full days ⇒ lapses. 丙's entry is from this very day (tick 20) ⇒ waits.
     const world = makeWorld({
-        seekRouting: true,
         seeking: { c0: { targetId: 'c1', sinceTick: 2 }, c2: { targetId: 'c1', sinceTick: 20 } },
         clock: makeClock(6, 23),
     });
@@ -175,16 +162,16 @@ test('4) expiry: a 3+ day old entry clears at day-end + the private memory perce
     assert.ok(logs.some((line) => line.includes('[尋人]') && line.includes('沒尋著')), 'the 逐拍紀事 carries the lapse');
 });
 
-test('5) no seeking ⇒ decideMove inputs byte-identical to a world without the field (backward compat)', async () => {
+test('5) no active seeking ⇒ decideMove inputs byte-identical to an empty seeking map (idle adds nothing)', async () => {
     const plain = new RecordingMover();
-    const flagged = new RecordingMover();
-    await runTick(makeWorld(), deps(plain), { log: () => {} }); // no flag, no field
-    await runTick(makeWorld({ seekRouting: true }), deps(flagged), { log: () => {} }); // flag on, nothing seeking
+    const idle = new RecordingMover();
+    await runTick(makeWorld(), deps(plain), { log: () => {} }); // no seeking field
+    await runTick(makeWorld({ seeking: {} }), deps(idle), { log: () => {} }); // an empty seeking map
     assert.equal(plain.inputs.length > 0, true, 'the movement phase actually ran');
     assert.equal(
-        JSON.stringify(flagged.inputs),
+        JSON.stringify(idle.inputs),
         JSON.stringify(plain.inputs),
-        'an idle seekRouting flag adds not one byte to any mover offer',
+        'an idle seek map adds not one byte to any mover offer',
     );
 });
 
@@ -192,7 +179,7 @@ test('5) no seeking ⇒ decideMove inputs byte-identical to a world without the 
 
 test('6) seek_person for an ALREADY co-present target records nothing (that心意 belongs in the beat)', async () => {
     // 乙 already stands with 甲 in 前廳 — 「去尋」 a person right here is a non-move.
-    const world = makeWorld({ seekRouting: true, emergentProduction: true, roster: { c0: 's0', c1: 's0', c2: 's0' } });
+    const world = makeWorld({ emergentProduction: true, roster: { c0: 's0', c1: 's0', c2: 's0' } });
     const logs: string[] = [];
     await runTick(world, deps(new SeekingActor()), { log: (line) => logs.push(line) });
     assert.equal(world.data.seeking?.c0, undefined, 'no 掛心 recorded for someone already present');
@@ -204,7 +191,6 @@ test('7) re-declaring the SAME seek preserves sinceTick (expiry clock survives) 
     // 甲 is ALREADY seeking 乙 (since tick 0); 乙 sits unreachable in the private 西廂,
     // so the movement phase can neither meet nor clear it. Re-declaring must be inert.
     const world = makeWorld({
-        seekRouting: true,
         emergentProduction: true,
         seeking: { c0: { targetId: 'c1', sinceTick: 0 } },
     });

@@ -41,9 +41,7 @@ async function runWeek(): Promise<{ world: WorldState; logs: string[] }> {
     applySeasonFrame(world, loadSeasonFrameFile('spring-snow-market')); // audienceHouse rides the frame
     world.data.relationshipFallback = true;
     world.data.emergentProduction = true;
-    world.data.reconcileVisit = true; // 叩門
-    world.data.creditVerbs = true; //    借賒
-    world.data.seekRouting = true; //    尋人
+    // 叩門/借賒/尋人 已畢業為常駐（不再是旗標）—— 它們照樣在這一週的合流裡運轉。
     world.data.beatPicksWant = true; // 執念自揀 — the fake never tags pushWant, so the
     //                                   menu path is a no-op on state (byte-identical),
     //                                   but its composition + determinism are guarded here.

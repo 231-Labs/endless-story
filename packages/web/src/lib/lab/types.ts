@@ -26,16 +26,7 @@ export interface LabRunConfig {
     /** 劇本產出: characters may spend daytime ticks proposing/joining/writing/
      *  rehearsing a play that premieres when the razor holds. Off by default. */
     emergentProduction?: boolean;
-    /** 叩門夜訪: a ripe 愛/虧欠 want may walk to its target's door at night and
-     *  KNOCK — entry is the occupant's one-time 放行, never the visitor's ardor.
-     *  Off by default. (Key name kept from the 登門修好 iteration for compat.) */
-    reconcileVisit?: boolean;
-    /** 借賒有據: 同場可開口告借（對方定奪）、允賒的食擔可賒帳記入真帳期；欠條
-     *  到期未清自會生怨。Off by default. */
-    creditVerbs?: boolean;
-    /** 尋人掛心: seek_person 宣告後真的掛在心上——見得到就去尋、碰上了才了願、
-     *  三日尋不著就擱下（留一條私憶）。Off by default. */
-    seekRouting?: boolean;
+    // 叩門夜訪 / 借賒有據 / 尋人掛心 已畢業為常駐（不再是可切換的旗標，永遠常開）。
     /** 情分會淡: a love want whose target is long unseen starves and fades (the
      *  want retires + a private percept); the engine forces nothing else — the
      *  character decides. Off ⇒ the old permanent-love world. */

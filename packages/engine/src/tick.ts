@@ -384,7 +384,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // 一次性領入（grantAccess oneTime），今夜用不用仍全由對方的移動選擇。遞不遞
     // 由 decideInvite 座席定（缺席＝嚥回去，確定性）；每人每日至多遞一次。兩造
     // 各記一條私密 scheduledEvent（與叩門拒門同渠道）。旗標關 ⇒ 整段跳過。
-    if (w.reconcileVisit && clockLabel === '晡時' && agent.decideInvite) {
+    if (clockLabel === '晡時' && agent.decideInvite) {
         const INVITE_LAYER = /愛|情|虧欠|愧|償/; // 怨不邀（記恨的人不會開自家門）
         for (const inviter of w.cast) {
             if ((w.inviteDayByChar?.[inviter.id] ?? 0) >= w.clock.day) continue; // 一日一話
@@ -584,7 +584,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         // EXACTLY 1 — an admitted mover joins to make an intimate pair of 2), not
         // mid-tryst. Flag off ⇒ yearn null ⇒ knockSceneId undefined ⇒ every scene
         // keeps both bars byte-for-byte, exactly as before.
-        const yearn = (night && w.reconcileVisit) ? yearningNightPursuit(wants, member.id, resolveTargetId) : null;
+        const yearn = night ? yearningNightPursuit(wants, member.id, resolveTargetId) : null;
         const knockSceneId = (() => {
             if (!yearn || yearn.intrude !== true || yearn.id === member.id) return undefined; // ripe edge+ only
             const sid = w.roster[yearn.id];
@@ -670,7 +670,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         // 叩門/撞破 machinery takes over on its own when eligible — never
         // duplicated here). Flag off, or no live entry, ⇒ zero extra lines —
         // decideMove inputs byte-identical (backward compat).
-        const seekMap = w.seekRouting ? w.seeking : undefined;
+        const seekMap = w.seeking;
         const seekEntry = seekMap?.[member.id];
         let seekPull: string | undefined;
         if (seekMap && seekEntry) {
@@ -1074,12 +1074,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     // so the intention could never lapse — nor spam a second 拍流 line.
                     const coPresent = !!seekTargetId && w.roster[seekTargetId] === w.roster[member.id];
                     const alreadySeeking = !!seekTargetId && w.seeking?.[member.id]?.targetId === seekTargetId;
-                    if (w.seekRouting && seekTargetId && seekTargetId !== member.id && !coPresent && !alreadySeeking) {
+                    if (seekTargetId && seekTargetId !== member.id && !coPresent && !alreadySeeking) {
                         (w.seeking ??= {})[member.id] = { targetId: seekTargetId, sinceTick: nowTick };
                         log(`  [尋人] ${member.name} 打定主意去尋${world.nameById(seekTargetId)}`);
-                    } else if (w.seekRouting && coPresent) {
+                    } else if (coPresent) {
                         log(`  action noop: seek_person (${member.name} 與${world.nameById(seekTargetId!)}已同處，這心意該當面說)`);
-                    } else if (w.seekRouting && alreadySeeking) {
+                    } else if (alreadySeeking) {
                         log(`  action noop: seek_person (${member.name} 續尋${world.nameById(seekTargetId!)}，念頭照舊)`);
                     } else {
                         log(`  action noop: seek_person (${member.name})`);
@@ -1734,7 +1734,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     let lendVerdict: { lend: boolean; line?: string } | null | undefined;
                     if (command.action === 'borrow') {
                         lendVerdict = null;
-                        const seatInput = w.creditVerbs && agent.decideLend
+                        const seatInput = agent.decideLend
                             ? buildLendSeatInput(world, { actorId: beat.characterId, sceneId: sid, command })
                             : null;
                         if (seatInput) {
@@ -2182,7 +2182,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             // settle). Vendor bills spawn debtor-side only when the business maps
             // cleanly to a single cast owner; 前街食肆 declares none, so its 賒帳
             // stays on the books without a want. Flag off ⇒ zero new behavior.
-            if (w.creditVerbs) {
+            { // 欠條生怨（借賒有據已常駐）—— 逾期欠條到期生 虧欠/催討 want
                 const debtEvents: LedgerEvent[] = [];
                 const castNames = w.cast.map((member) => member.name);
                 for (const seed of collectOverdueDebtWants(world, today)) {
@@ -2463,7 +2463,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // PRIVATE scheduled percept (the same channel the 叩門 refusal rides —
     // recall.remember + observeScene next tick), never public canon. Flag off /
     // no entries ⇒ fully inert; fresher entries keep waiting (跨拍守候).
-    if (dayEnd && w.seekRouting && w.seeking) {
+    if (dayEnd && w.seeking) {
         for (const [seekerId, seekEntry] of Object.entries(w.seeking)) {
             if (nowTick - seekEntry.sinceTick < perDay * 3) continue;
             delete w.seeking[seekerId];

@@ -36,9 +36,6 @@ export default function LabHomePage() {
         llm: 'fake' as 'fake' | 'real',
         relationshipFallback: true,
         emergentProduction: false,
-        reconcileVisit: false,
-        creditVerbs: false,
-        seekRouting: false,
         heartsCanFade: false,
         beatPicksWant: false,
         ticksPerDay: 6,
@@ -84,10 +81,7 @@ export default function LabHomePage() {
                     llm: form.llm,
                     relationshipFallback: form.relationshipFallback,
                     emergentProduction: form.emergentProduction,
-                    reconcileVisit: form.reconcileVisit,
                     heartsCanFade: form.heartsCanFade,
-                    creditVerbs: form.creditVerbs,
-                    seekRouting: form.seekRouting,
                     beatPicksWant: form.beatPicksWant,
                     ticksPerDay: form.ticksPerDay,
                 },
@@ -293,39 +287,7 @@ export default function LabHomePage() {
                         />
                         劇本產出
                     </label>
-                    <label
-                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
-                        title="叩門夜訪：入夜後，情牽或虧欠已深的角色會走到心上人門外叩門求見；開不開門由屋裡人決定（實驗，預設關）"
-                    >
-                        <input
-                            type="checkbox"
-                            checked={form.reconcileVisit}
-                            onChange={(e) => setForm({ ...form, reconcileVisit: e.target.checked })}
-                        />
-                        叩門夜訪
-                    </label>
-                    <label
-                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
-                        title="借賒有據：同場可開口告借（對方定奪）、食擔可賒帳記入真帳；欠條到期未清自會生怨（實驗，預設關）"
-                    >
-                        <input
-                            type="checkbox"
-                            checked={form.creditVerbs}
-                            onChange={(e) => setForm({ ...form, creditVerbs: e.target.checked })}
-                        />
-                        借賒有據
-                    </label>
-                    <label
-                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
-                        title="尋人掛心：角色宣告去找某人後會真的掛在心上——見得到就去尋、碰上了才了願、三日尋不著就擱下（實驗，預設關）"
-                    >
-                        <input
-                            type="checkbox"
-                            checked={form.seekRouting}
-                            onChange={(e) => setForm({ ...form, seekRouting: e.target.checked })}
-                        />
-                        尋人掛心
-                    </label>
+                    {/* 叩門夜訪 / 借賒有據 / 尋人掛心 已畢業為常駐，不再需要開關 */}
                     <label
                         className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
                         title="情分會淡：久不相見的情願會慢慢淡去（記一筆心事、角色自己看著辦，引擎不收鑰匙也不拆相許）——去掉「種下的情永不死」，讓每卷情路走得不一樣（實驗，預設關）"

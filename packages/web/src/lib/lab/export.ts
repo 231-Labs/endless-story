@@ -29,9 +29,6 @@ interface RunManifestView {
     model?: string;
     relationshipFallback?: boolean;
     emergentProduction?: boolean;
-    reconcileVisit?: boolean;
-    creditVerbs?: boolean;
-    seekRouting?: boolean;
     heartsCanFade?: boolean;
     beatPicksWant?: boolean;
 }
@@ -92,9 +89,6 @@ function buildHeader(runId: string, meta: LabRunMeta | null, manifest: RunManife
     const flags = [
         cfg.relationshipFallback ? 'relationshipFallback' : null,
         cfg.emergentProduction ? 'emergentProduction' : null,
-        cfg.reconcileVisit ? 'reconcileVisit' : null,
-        cfg.creditVerbs ? 'creditVerbs' : null,
-        cfg.seekRouting ? 'seekRouting' : null,
         cfg.heartsCanFade ? 'heartsCanFade' : null,
         cfg.beatPicksWant ? 'beatPicksWant' : null,
         cfg.realEmbeddings ? 'realEmbeddings' : null,

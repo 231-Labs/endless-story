@@ -116,12 +116,10 @@ export function buildStakesBrief(input: StakesBriefInput): string | undefined {
     );
     if (dutyLine) lines.push(dutyLine);
 
-    // 欠條過期 (creditVerbs) — an OVERDUE personal debt to a cast member is a
-    // stake the debtor carries into every encounter: one line, first such 欠條.
-    // Flag-gated: personal 欠條 only exist with 借賒有據 on, and the gate keeps a
-    // flag-off world byte-identical even where an overdue cast-to-cast 租金 bill
-    // exists (lease worlds never saw this line before).
-    if (w.creditVerbs && econ) {
+    // 欠條過期 —— an OVERDUE personal debt to a cast member is a stake the debtor
+    // carries into every encounter: one line, first such 欠條. 借賒有據已常駐，
+    // 故凡有 econ 帳即照例掛（不再由旗標控制）。
+    if (econ) {
         const overdue = (econ.bills ?? []).find((bill) =>
             bill.fromAccountId === member.id &&
             !!bill.toAccountId && !!world.castById(bill.toAccountId) &&
