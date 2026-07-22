@@ -110,7 +110,9 @@ test('the percept tells the cast the show is tonight and the lead that it rests 
     const world = stageWorld();
     const liu = world.idByName('柳安春')!;
     const he = world.idByName('何阿喜')!;
-    assert.match(economyPerceptFor(world, liu, world.data.roster[liu])!, /你是領銜，你不上台這戲就塌/);
+    // 戲佔定檔: the daylight run-up now also names the 黃昏、入夜 戲檔 for the lead.
+    assert.match(economyPerceptFor(world, liu, world.data.roster[liu])!, /你是領銜，.*你不上台這戲就塌/);
+    assert.match(economyPerceptFor(world, liu, world.data.roster[liu])!, /黃昏、入夜這兩格是你的戲檔/);
     assert.match(economyPerceptFor(world, he, world.data.roster[he])!, /今日黃昏【雲錦台戲台】開鑼/);
 });
 

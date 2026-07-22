@@ -1098,8 +1098,13 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
         if (part === '清晨' || part === '日午' || part === '晡時' || part === '黃昏') {
             const perf = data.performance;
             const isLead = perf.leadIds.includes(characterId);
+            // 戲佔定檔: 黃昏是開鑼此刻——present-tense「人正該在臺上」；白日則預告
+            // 黃昏、入夜這兩格是釘死的戲檔，別把別的事壓上去。
+            const head = part === '黃昏'
+                ? `此刻正是【${perf.venueSceneName}】開鑼的時辰${isLead ? `——你是領銜，這一格是你的戲，人得在臺上、不是辦別的事的時候` : `（領銜：${perf.leadIds.map((id) => world.nameById(id)).join('、')}）`}；`
+                : `今日黃昏【${perf.venueSceneName}】開鑼、演到入夜${isLead ? `——你是領銜，${SHOW_ONSTAGE_LABEL}這兩格是你的戲檔，你不上台這戲就塌` : `（領銜：${perf.leadIds.map((id) => world.nameById(id)).join('、')}）`}；`;
             lines.push(
-                `今日黃昏【${perf.venueSceneName}】開鑼${isLead ? `——你是領銜，你不上台這戲就塌` : `（領銜：${perf.leadIds.map((id) => world.nameById(id)).join('、')}）`}；` +
+                head +
                 `到場不足 ${perf.minCast} 人停鑼、票房歸零，白日到台上排過戲今夜才叫得動座。票房是班庫唯一的活水。`,
             );
             // Box-office 利害: when the takings are shared, tell each troupe player
@@ -1254,6 +1259,31 @@ export function troupePlayerIds(world: WorldState): Set<string> {
         if ((wage.fromAccountId ?? data.troupeAccountId) === data.troupeAccountId) ids.add(wage.accountId);
     }
     return ids;
+}
+
+// 戲佔定檔 —— 一場戲佔的「臺上時段」：黃昏開鑼、演到入夜。演員規劃當日時，這兩格
+// 是釘死的檔期，別的事得排到別的時辰。這是一個定義好的 DURATION，不是一閃即過的
+// 黃昏瞬間——票房仍在黃昏開鑼那一拍結算，但演員的檔期覆蓋整段戲。
+export const SHOW_ONSTAGE_PARTS: readonly number[] = [3, 4]; // 黃昏、入夜
+const SHOW_ONSTAGE_LABEL = SHOW_ONSTAGE_PARTS.map((i) => PARTS_OF_DAY[i]).join('、');
+
+/** 規劃避讓 —— the PLAN-time duty line for a lead/troupe player when a performance
+ *  stands: it names the committed on-stage 時段 (黃昏、入夜) as a fixed booking so the
+ *  character reserves them and schedules everything else (personal wants, love, debts)
+ *  AROUND the show — 清晨/日午/晡時 before, or 深宵 after. This is the answer to
+ *  「角色規劃時要能判斷哪些時段不能安排」: the show is a known block, stated as a fact,
+ *  the choice of how to fill the rest stays theirs. Undefined when no performance
+ *  stands, or the member is not on tonight's bill. */
+export function performanceDutyLine(world: WorldState, characterId: string): string | undefined {
+    const perf = world.data.economy?.performance;
+    if (!perf) return undefined;
+    const isLead = perf.leadIds.includes(characterId);
+    if (!isLead && !troupePlayerIds(world).has(characterId)) return undefined;
+    return (
+        `【定檔】明日【${perf.venueSceneName}】${SHOW_ONSTAGE_LABEL}是開鑼到散戲的檔期——` +
+        `${isLead ? '你是領銜，' : '你當班，'}這兩個時段你人在臺上、挪不動；` +
+        `要辦的別的事（心事、舊帳、私會），趁清晨、日午、晡時，或散戲後的深宵去安排，別壓著這兩格。`
+    );
 }
 
 /** Bank who showed up to rehearse (日午/晡時 at the venue). Quality is earned
