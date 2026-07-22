@@ -43,6 +43,15 @@ export default function InterviewRosterPage({ params }: { params: Promise<{ id: 
     const [interviewer, setInterviewer] = useState('');
     const [anchorId, setAnchorId] = useState('');
     const [starting, setStarting] = useState<string | null>(null);
+    // 名帖深連結：?actor=<id> —— 捲至該卡並點亮（不自動開訪，時刻/模式仍由人定）。
+    const [highlight, setHighlight] = useState<string | null>(null);
+    useEffect(() => {
+        setHighlight(new URLSearchParams(window.location.search).get('actor'));
+    }, []);
+    useEffect(() => {
+        if (!highlight || !actors?.length) return;
+        document.getElementById(`actor-${highlight}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, [highlight, actors]);
 
     useEffect(() => {
         let cancelled = false;
@@ -232,7 +241,11 @@ export default function InterviewRosterPage({ params }: { params: Promise<{ id: 
             ) : (
                 <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {actors.map((actor) => (
-                        <article key={actor.id} className="es-lab-panel flex gap-4 p-4">
+                        <article
+                            key={actor.id}
+                            id={`actor-${actor.id}`}
+                            className={`es-lab-panel flex gap-4 p-4 ${highlight === actor.id ? 'ring-1 ring-cinnabar/60' : ''}`}
+                        >
                             <div className="h-24 w-20 shrink-0 overflow-hidden rounded border border-hairline bg-elevated/40">
                                 {actor.portraitUrl ? (
                                     // eslint-disable-next-line @next/next/no-img-element
