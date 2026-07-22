@@ -10,8 +10,14 @@ differently. Pure data — the engine is untouched.
 Emits:
   packages/cli/scripts/stories/spring-snow-chamber-jin.json   (柳安春 × 金鳳)
   packages/cli/scripts/stories/spring-snow-chamber-su.json    (柳安春 × 蘇映雪)
+  packages/cli/scripts/stories/spring-snow-chamber-trio.json  (柳安春 × 金鳳 × 蘇映雪)
   packages/cli/scripts/seasons/spring-snow-chamber-jin.json   (frame: 金鳳寓所)
   packages/cli/scripts/seasons/spring-snow-chamber-su.json     (frame: 二樓書寓)
+  packages/cli/scripts/seasons/spring-snow-chamber-trio.json  (frame: 後台妝閣, 中立地)
+
+The trio卷 is the showdown: hold 柳's identity byte-identical, put BOTH women in the
+room on neutral ground, and see who she chooses (or won't). A 3-person scene opens no
+bed register by design, so it plays as a confrontation — the drama is the choice.
 """
 import json, copy, pathlib
 
@@ -80,6 +86,50 @@ def make_frame(fid, title, venue, partner):
     }
 
 
+def make_trio_preset(pid, label, venue):
+    """The showdown卷: 柳安春 + BOTH women in ONE room on NEUTRAL ground. Only the
+    STAGE (work_scene) moves to the shared venue so all three open the day together;
+    每個人的 home 都留正典（中立地不是誰的家）。柳的身分區塊仍與兩份對手卷、與正典
+    逐位元相同——變因只有「這回兩個人同時在場」。"""
+    liu = block("柳安春")
+    jin = block("金鳳")
+    su = block("蘇映雪")
+    for c in (liu, jin, su):
+        c["work_scene"] = venue  # open together on neutral ground; homes stay canon
+    return {
+        "id": pid,
+        "label": label,
+        "world": src["world"],
+        "world_rules": src["world_rules"],
+        "locations": src["locations"],
+        "saga": src.get("saga"),
+        "saga_attributes": src.get("saga_attributes"),
+        "card_weight_rules": src.get("card_weight_rules"),
+        "drama_resources": src.get("drama_resources"),
+        "scenes": src["scenes"],
+        "founding_cast": [liu, jin, su],
+        "relationship_views": views_between(["柳安春", "金鳳", "蘇映雪"]),
+    }
+
+
+def make_trio_frame(fid, title, venue):
+    return {
+        "id": fid,
+        "title": title,
+        "openingScene": venue,
+        "centralQuestion": "這一夜，屋裡是她和她放不下的兩個人——師姐的舊夢在左，會樂里的真話在右。沒有旁人、沒有戲要趕，燈下這一晚，柳安春會怎麼過？誰會先開口，她又當著另一個的面認不認？",
+        "incitingIncident": "戲散了，燈也熄了大半條街。偏是這一夜，三個人湊在同一間妝閣裡，誰都沒先走。",
+        "deadline": "天亮之前，這一夜是她們三個的。天光一透，各人又是各人的日子。",
+        "stakes": [
+            "有些話當著兩個人的面說開，就再也收不回了。",
+            "選了一個未必留得住；誰也不選，未必走得掉。",
+        ],
+        "publicFacts": [
+            "這一夜，柳安春、金鳳、蘇映雪同在一間妝閣，門外沒有別人。",
+        ],
+    }
+
+
 def write(path, obj):
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("wrote", path.relative_to(ROOT))
@@ -94,8 +144,19 @@ write(SEASONS / "spring-snow-chamber-jin.json",
 write(SEASONS / "spring-snow-chamber-su.json",
       make_frame("spring-snow-chamber-su", "一夜 · 二樓書寓", "二樓書寓", "蘇映雪"))
 
-# Proof the two 柳 blocks are identity-identical (only work_scene differs).
-a = json.loads((STORIES / "spring-snow-chamber-jin.json").read_text(encoding="utf-8"))["founding_cast"][0]
-b = json.loads((STORIES / "spring-snow-chamber-su.json").read_text(encoding="utf-8"))["founding_cast"][0]
-diff = [k for k in a if a[k] != b.get(k)]
-print("柳 block differs only on:", diff, "(expected: ['work_scene'])")
+# The showdown卷: 柳 + BOTH women on neutral ground (後台妝閣). No bed register fires
+# in a 3-person scene by design — this becomes a confrontation, which is the point:
+# who does she choose (or refuse to), beat by beat, with beatPicksWant on.
+write(STORIES / "spring-snow-chamber-trio.json",
+      make_trio_preset("spring-snow-chamber-trio", "室內劇 · 柳安春與兩人的一夜", "後台妝閣"))
+write(SEASONS / "spring-snow-chamber-trio.json",
+      make_trio_frame("spring-snow-chamber-trio", "一夜 · 妝閣三人", "後台妝閣"))
+
+# Proof 柳's identity block is byte-identical across ALL THREE卷 (only work_scene moves).
+liu_blocks = [
+    json.loads((STORIES / f"spring-snow-chamber-{k}.json").read_text(encoding="utf-8"))["founding_cast"][0]
+    for k in ("jin", "su", "trio")
+]
+ref = liu_blocks[0]
+diffs = sorted({k for b in liu_blocks[1:] for k in ref if ref[k] != b.get(k)})
+print("柳 block differs across all三卷 only on:", diffs, "(expected: ['work_scene'])")
