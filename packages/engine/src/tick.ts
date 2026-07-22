@@ -48,7 +48,7 @@ import { PARTS_OF_DAY } from './ports.ts';
 import type { AidActionInput, AidActionResult, AidPeer, AidSituation, AidVitality, ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
+import { bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, performanceDutyLine, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
 import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple-prayer.ts';
 import { drainPendingDreams } from './core/dream.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
@@ -2211,7 +2211,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             if (!w.economy) return undefined;
             const standing = renownLabel(world.renownOf(memberId));
             if (planTroupeIds.has(memberId)) {
-                return `你是戲班的角兒，白天排戲、入夜登台是你的活路；開鑼時人在台上，戲才唱得成，一場票房是全班的生計，你也有分潤。名頭（眼下${standing}）靠一場場戲攢，攢得起也跌得下。這條營生怎麼經營、幾時上心，由你自己拿捏。`;
+                // 規劃避讓: when a show stands, name its committed 時段 (黃昏、入夜) as a
+                // fixed booking so the plan reserves them and schedules the rest around it.
+                const duty = performanceDutyLine(world, memberId);
+                return `你是戲班的角兒，白天排戲、入夜登台是你的活路；開鑼時人在台上，戲才唱得成，一場票房是全班的生計，你也有分潤。名頭（眼下${standing}）靠一場場戲攢，攢得起也跌得下。這條營生怎麼經營、幾時上心，由你自己拿捏。${duty ? `\n${duty}` : ''}`;
             }
             return `你在這條街上自有活路，靠手上的本事營生（不繫在班庫那一場戲上）；名頭（眼下${standing}）也是一件件事攢起來的，攢得起也跌得下。怎麼營生、往哪處使力，由你自己拿主意。`;
         };
