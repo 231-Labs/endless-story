@@ -48,9 +48,6 @@ export async function POST(req: Request) {
             llm: body.config.llm === 'real' ? 'real' : 'fake',
             relationshipFallback: body.config.relationshipFallback !== false,
             emergentProduction: body.config.emergentProduction === true,
-            reconcileVisit: body.config.reconcileVisit === true,
-            creditVerbs: body.config.creditVerbs === true,
-            seekRouting: body.config.seekRouting === true,
             heartsCanFade: body.config.heartsCanFade === true,
             beatPicksWant: body.config.beatPicksWant === true,
             ticksPerDay: Number.isInteger(body.config.ticksPerDay) && (body.config.ticksPerDay as number) > 0

@@ -121,10 +121,10 @@ export interface ActBeatInput {
      *  authorized treasury view, live contract terms, purchasable items here).
      *  Rendered verbatim; money moves only through economyCommands. */
     economyLine?: string;
-    /** 借賒有據 (creditVerbs): which credit verbs to 亮牌 for this actor RIGHT
+    /** 借賒有據: which credit verbs to 亮牌 for this actor RIGHT
      *  HERE — `borrow` when a co-present cast member could be asked, `repay`
      *  when the actor holds an open 欠條 to someone co-present. Computed by the
-     *  engine (flag-gated); absent ⇒ the money-ledger advertisement is
+     *  engine (借賒有據 now always-on); absent ⇒ the money-ledger advertisement is
      *  byte-identical to before (characters only invoke what's advertised). */
     credit?: { borrow?: boolean; repay?: boolean };
 }

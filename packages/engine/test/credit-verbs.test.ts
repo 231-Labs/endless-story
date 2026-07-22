@@ -100,7 +100,6 @@ class LendingAgent extends BorrowScriptAgent {
  *  hottest want so he opens the scene (tension = weight×(1−sat)). */
 function borrowStage(): { world: WorldState; liu: string; su: string } {
     const world = buildMarketWorld();
-    world.data.creditVerbs = true;
     const liu = world.idByName('柳安春')!;
     const su = world.idByName('蘇映雪')!;
     const street = sceneId(world, '戲園前街');
@@ -181,7 +180,6 @@ test('2) borrow with NO seat ⇒ deterministic REFUSE: no money, a 婉拒 public
 
 test('3) repay: partial shrinks the oldest 欠條, an over-repay is capped at what is owed, no debt ⇒ 白給請用 pay', () => {
     const world = buildMarketWorld();
-    world.data.creditVerbs = true;
     const economy = new LocalEconomy();
     const liu = world.idByName('柳安春')!;
     const su = world.idByName('蘇映雪')!;
@@ -238,7 +236,6 @@ test('3) repay: partial shrinks the oldest 欠條, an over-repay is capped at wh
 
 test('4) 賒帳: a broke buyer at the allowsTab 食肆 still eats — bill, no transfer, oncePerDay holds; a no-tab vendor keeps the old fail', () => {
     const world = buildMarketWorld();
-    world.data.creditVerbs = true;
     const economy = new LocalEconomy();
     const street = sceneId(world, '戲園前街');
     const he = world.idByName('何阿喜')!;
@@ -342,7 +339,7 @@ function makeDebtWorld(over: Partial<WorldStateData> = {}): WorldState {
 }
 
 test('5) an overdue 欠條 between cast spawns BOTH wants at settle — exactly once across two settles', async () => {
-    const world = makeDebtWorld({ creditVerbs: true });
+    const world = makeDebtWorld();
     const agent = new FakeSceneAgent();
     const logs = await runDays(world, agent, 1); // day-2 settle: chase pays 0 ⇒ overdue
 
@@ -362,63 +359,4 @@ test('5) an overdue 欠條 between cast spawns BOTH wants at settle — exactly 
     assert.equal(world.data.wants.filter((w) => w.desc.includes('過了期')).length, 1, 'idempotent: no duplicate 虧欠 want');
     assert.equal(world.data.wants.filter((w) => w.desc.includes('咽不平')).length, 1, 'idempotent: no duplicate 催討 want');
     assert.deepEqual(auditSeasonEconomy(world), []);
-});
-
-test('6) flag OFF ⇒ zero new behavior: verbs rejected, tab falls back, no advert/percept lines, no wants', async () => {
-    // (a) borrow / repay are rejected even with a willing verdict in hand.
-    const world = buildMarketWorld(); // creditVerbs unset
-    const economy = new LocalEconomy();
-    const liu = world.idByName('柳安春')!;
-    const su = world.idByName('蘇映雪')!;
-    const scene = world.data.roster[su];
-    world.data.roster[liu] = scene;
-    const borrow = economy.commitCommand(world, {
-        actorId: liu, sceneId: scene, witnessIds: [liu, su], day: 1,
-        command: { action: 'borrow', toName: '蘇映雪', amountYuan: 5 },
-        causeEventId: 'test:off-borrow', seq: 0,
-        lendVerdict: { lend: true },
-    });
-    assert.equal(borrow.ok, false, 'borrow is rejected with the flag off');
-    const repay = economy.commitCommand(world, {
-        actorId: liu, sceneId: scene, witnessIds: [liu, su], day: 1,
-        command: { action: 'repay', toName: '蘇映雪', amountYuan: 5 },
-        causeEventId: 'test:off-repay', seq: 0,
-    });
-    assert.equal(repay.ok, false, 'repay is rejected with the flag off');
-    // (the frame's own seeded 租金 bill rides the array; no CREDIT bill may appear)
-    assert.ok(!bills(world).some((bill) => bill.id.startsWith('loan:') || bill.id.startsWith('tab:')), 'no credit bill appeared');
-
-    // (b) the tab is inert: a broke buyer at the allowsTab 食肆 gets the OLD fail.
-    const street = sceneId(world, '戲園前街');
-    const he = world.idByName('何阿喜')!;
-    const drained = economy.commitCommand(world, {
-        actorId: he, sceneId: street, witnessIds: [he], day: 1,
-        command: { action: 'pay', toName: '白韻秋', amountYuan: 6 },
-        causeEventId: 'test:off-drain', seq: 0,
-    });
-    assert.equal(drained.ok, true, drained.reason);
-    const broke = economy.commitCommand(world, {
-        actorId: he, sceneId: street, witnessIds: [he], day: 1,
-        command: { action: 'purchase', itemId: 'meal-frontstreet-tangzhou' },
-        causeEventId: 'test:off-tab', seq: 0,
-    });
-    assert.equal(broke.ok, false, 'the old insufficient-funds refusal, byte-for-byte path');
-    assert.ok(!bills(world).some((bill) => bill.id.startsWith('tab:')), 'no tab bill appeared');
-
-    // (c) no advertisement, no percept lines — even with a hand-written personal bill.
-    assert.equal(creditAdvertFor(world, liu, [liu, su]), undefined, 'nothing is 亮牌 with the flag off');
-    world.data.economy!.bills = [{
-        id: 'loan:off', label: '欠蘇映雪3圓', amountSubunits: '300', dueDay: 1,
-        creditor: '蘇映雪', paidSubunits: '0', fromAccountId: liu, toAccountId: su,
-    }];
-    const percept = economyPerceptFor(world, liu, scene) ?? '';
-    assert.ok(!percept.includes('你欠著'), 'the debt line stays silent with the flag off');
-    assert.ok(!(economyPerceptFor(world, he, street) ?? '').includes('可賒'), 'the tab note stays silent with the flag off');
-    assert.deepEqual(auditSeasonEconomy(world), []);
-
-    // (d) the settle spawns NO wants for an overdue cast-to-cast bill (lease compat).
-    const debtWorld = makeDebtWorld(); // creditVerbs unset
-    await runDays(debtWorld, new FakeSceneAgent(), 1);
-    assert.ok(!debtWorld.data.wants.some((w) => w.desc.includes('過了期') || w.desc.includes('咽不平')), 'no 欠條 wants with the flag off');
-    assert.equal(debtWorld.data.economy!.debtWantsSpawned, undefined, 'no markers either');
 });

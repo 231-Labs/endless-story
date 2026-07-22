@@ -419,26 +419,11 @@ export interface WorldStateData {
      *  a play). Off by default — like relationshipFallback, the wiring lives in
      *  the world so resume keeps it, and it's validated before any default-on. */
     emergentProduction?: boolean;
-    /** 叩門夜訪 flag: when on, a ripe 愛/虧欠 want may walk to its target's door at
-     *  night — the target home ALONE in a private scene — and KNOCK (求見). No
-     *  bypass: entry is the OCCUPANT's one-time 放行 (decideAdmit → grantAccess
-     *  oneTime, consumed on entry), never the visitor's ardor; a shut door is also
-     *  an answer. Off by default; the wiring lives in the world so resume keeps
-     *  it. (Key name kept from the earlier 登門修好 iteration for manifest compat.) */
-    reconcileVisit?: boolean;
-    /** 借賒有據 flag: when on, the credit verbs are live — 同場可開口告借
-     *  （borrow：錢動之前出借的人先點頭 via decideLend，婉拒也是一句回答）、
-     *  repay 還帳沖銷欠條、允賒的食擔可賒帳（記成真 bill 帳期，到期照例催討）；
-     *  欠條過期自會生怨（settle spawns 虧欠/催討 wants）。Off by default; the
-     *  wiring lives in the world so resume keeps it. */
-    creditVerbs?: boolean;
-    /** 尋人有路 flag: when on, a `seek_person` open action RECORDS a persistent
-     *  尋人掛心 (`seeking`) that ROUTES at movement time as a soft pull only —
-     *  同場即了、私處且候、三日不遇日結時擱下（記成當事人私有一筆）。Off by
-     *  default; like reconcileVisit the wiring lives in the world so resume
-     *  keeps it, and with the flag off the deterministic path (including the
-     *  FakeSceneAgent's pinned seek_person actions) stays byte-identical. */
-    seekRouting?: boolean;
+    // 世情動詞已畢業為常駐（不再由旗標控制，永遠常開）：
+    //   叩門夜訪 (was reconcileVisit)  —— ripe 愛/虧欠 want 夜叩對方門，入不入由屋主放行；
+    //   借賒有據 (was creditVerbs)     —— 同場告借/還帳/賒帳成真帳，欠條過期生怨；
+    //   尋人有路 (was seekRouting)     —— seek_person 記成持久掛心、移動時軟拉、三日不遇擱下。
+    // 三者各自驗過（#164/#166/#167）並合流測過，故不再留開關。
     /** 情分會淡 flag: when on, the seeded-love immortality is lifted — a LOVE want
      *  whose target goes long unseen STARVES and fades (「情分淡了」): the want
      *  retires and the character keeps a private percept. The engine does NOTHING

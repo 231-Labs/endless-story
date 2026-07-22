@@ -4,9 +4,8 @@
  * want presses toward someone CO-PRESENT — whose own private home the target
  * cannot enter — may offer tonight's word via the optional decideInvite seat:
  * offered ⇒ grantAccess('oneTime') + two party-private scheduledEvents; seat
- * absent (FakeSceneAgent) ⇒ the word is swallowed, nothing changes. Gated on
- * the same reconcileVisit flag as 叩門 (the night-door consent family); once
- * per person per day.
+ * absent (FakeSceneAgent) ⇒ the word is swallowed, nothing changes. 常駐（與 叩門
+ * 同屬已畢業的夜門知情一家，不再由旗標控制）；once per person per day.
  */
 
 import assert from 'node:assert/strict';
@@ -84,9 +83,9 @@ class InvitingAgent extends FakeSceneAgent {
     }
 }
 
-test('flag ON + inviting seat ⇒ oneTime granted, both sides remember, once per day', async () => {
+test('邀約常駐 + inviting seat ⇒ oneTime granted, both sides remember, once per day', async () => {
     const agent = new InvitingAgent();
-    const world = makeWorld({ reconcileVisit: true });
+    const world = makeWorld();
     await runTick(world, deps(agent), { log: () => {} });
 
     assert.equal(agent.calls.length, 1, 'the seat was asked exactly once');
@@ -104,10 +103,10 @@ test('flag ON + inviting seat ⇒ oneTime granted, both sides remember, once per
     assert.equal(again.calls.length, 0, 'no second invite the same day');
 });
 
-test('flag ON + seat declines (or absent) ⇒ the word is swallowed, nothing changes', async () => {
+test('邀約常駐 + seat declines (or absent) ⇒ the word is swallowed, nothing changes', async () => {
     const decliner = new InvitingAgent();
     decliner.reply = { invite: false, line: '話到嘴邊又嚥了回去' };
-    const world = makeWorld({ reconcileVisit: true });
+    const world = makeWorld();
     await runTick(world, deps(decliner), { log: () => {} });
     assert.equal(decliner.calls.length, 1, 'the seat WAS consulted');
     assert.equal(world.canEnter('c1', 's1'), false, 'declined ⇒ no grant');
@@ -115,29 +114,20 @@ test('flag ON + seat declines (or absent) ⇒ the word is swallowed, nothing cha
     assert.equal(world.data.inviteDayByChar?.c0, world.data.clock.day, 'but the day marker is spent (one nerve a day)');
 
     // Absent seat (plain FakeSceneAgent): deterministic no-op.
-    const world2 = makeWorld({ reconcileVisit: true });
+    const world2 = makeWorld();
     await runTick(world2, deps(new FakeSceneAgent()), { log: () => {} });
     assert.equal(world2.canEnter('c1', 's1'), false, 'absent seat ⇒ no grant');
 });
 
-test('flag OFF ⇒ the pass never runs (byte-compat)', async () => {
-    const agent = new InvitingAgent();
-    const world = makeWorld(); // reconcileVisit unset
-    await runTick(world, deps(agent), { log: () => {} });
-    assert.equal(agent.calls.length, 0, 'the seat is never consulted with the flag off');
-    assert.equal(world.canEnter('c1', 's1'), false, 'no grant with the flag off');
-    assert.equal(world.data.inviteDayByChar, undefined, 'no day marker with the flag off');
-});
-
 test('no invite when the target can already enter, or nobody is co-present', async () => {
     // Target already holds a standing key ⇒ no word needed.
-    const keyed = makeWorld({ reconcileVisit: true, accessGrants: { s1: { standing: ['c1'], oneTime: [] } } });
+    const keyed = makeWorld({ accessGrants: { s1: { standing: ['c1'], oneTime: [] } } });
     const agent1 = new InvitingAgent();
     await runTick(keyed, deps(agent1), { log: () => {} });
     assert.equal(agent1.calls.length, 0, 'a key-holder needs no invite');
 
     // Target elsewhere ⇒ no word can be handed.
-    const apart = makeWorld({ reconcileVisit: true, roster: { c0: 's0', c1: 's1' } });
+    const apart = makeWorld({ roster: { c0: 's0', c1: 's1' } });
     const agent2 = new InvitingAgent();
     await runTick(apart, deps(agent2), { log: () => {} });
     assert.equal(agent2.calls.length, 0, 'no co-presence ⇒ no invite');
