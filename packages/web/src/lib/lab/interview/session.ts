@@ -63,7 +63,7 @@ function fakeModel(characterName: string): CharacterSessionModel {
                 const line = body.split('\n').map((l) => l.trim()).find((l) => l.startsWith('-') || l.startsWith('·'));
                 return line?.replace(/^[-·]\s*/, '').replace(/^（第\d+日）/, '');
             };
-            const memory = pick('【心頭浮起的記憶】');
+            const memory = pick('【心頭又浮起的記憶】') ?? pick('【心頭浮起的記憶】');
             const concern = pick('【心上懸著的事】');
             const isDiary = percept.includes('【今日私記之邀】') || percept.includes('【落筆之引】');
             if (isDiary) {

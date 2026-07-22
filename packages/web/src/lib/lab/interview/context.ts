@@ -207,13 +207,19 @@ export interface InterviewContext {
 const PROMPT_RELATION_CAP = 6;
 const PROMPT_MEMORY_LIMIT = 7;
 const PANEL_MEMORY_CAP = 12;
+/** 輪換底線：新記憶不足時，至多讓這麼多條舊記憶回鍋（她真只記得這些時，
+ *  誠實見底，別硬湊）。 */
+const REPEAT_FLOOR = 3;
 
-/** 組一輪訪談的完整上下文（known＋directorOnly＋prompt 素材）。 */
+/** 組一輪訪談的完整上下文（known＋directorOnly＋prompt 素材）。
+ *  `excludeSeqs`＝此場訪談先前各輪已注入過的記憶 —— 召回時讓位給沒上過
+ *  桌的（記憶輪換：小池子不再每問都端同一批 top-N 出來）。 */
 export async function buildInterviewContext(
     runId: string,
     characterId: string,
     tick: number | null,
     question: string,
+    opts: { excludeSeqs?: number[] } = {},
 ): Promise<InterviewContext> {
     const moment = resolveMoment(runId, tick);
     const { world, day, partOfDay } = moment;
@@ -231,8 +237,22 @@ export async function buildInterviewContext(
     // 召回：以問題為引，錨在受訪之日（recency 以那一天算，不是卷的今天）。
     // 快照訪談加 as-of 篩（她想不起還沒活過的日子）；同日之內無法再細分
     // —— 誠實限界，記在 docs。
+    // 記憶輪換：多召一輪候選，先端沒上過桌的；新的不夠才讓少量舊的回鍋。
     const query = question.trim() || '今日 心事 想對人說的話';
-    const recalled = await recall.recall(characterId, query, PROMPT_MEMORY_LIMIT, day, tick !== null ? day : undefined);
+    const exclude = new Set(opts.excludeSeqs ?? []);
+    const candidates = await recall.recall(
+        characterId,
+        query,
+        PROMPT_MEMORY_LIMIT + exclude.size + 5,
+        day,
+        tick !== null ? day : undefined,
+    );
+    const freshOnes = candidates.filter((m) => m.seq === undefined || !exclude.has(m.seq));
+    const repeats = candidates.filter((m) => m.seq !== undefined && exclude.has(m.seq));
+    const recalled = [
+        ...freshOnes.slice(0, PROMPT_MEMORY_LIMIT),
+        ...repeats.slice(0, Math.max(0, Math.min(REPEAT_FLOOR, PROMPT_MEMORY_LIMIT - freshOnes.length))),
+    ];
     const relations = relationsOf(world, member);
     const wants = world.liveWantsOf(member.id);
     const stateWords = stateWordsOf(member.state);
