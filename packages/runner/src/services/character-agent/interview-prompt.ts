@@ -65,7 +65,7 @@ export interface InterviewPerceptInput {
     stateWords: string[];
     /** 今日親歷（見證投影後）。 */
     witnessedToday: InterviewKnownEventLine[];
-    /** 心頭浮起的記憶（召回結果）。 */
+    /** 心頭浮起的記憶（召回結果；後續輪只給「新翻出的」）。 */
     memories: InterviewMemoryLine[];
     /** 眼中眾人。 */
     relations: InterviewRelationLine[];
@@ -77,6 +77,12 @@ export interface InterviewPerceptInput {
     interviewerIdentity?: string;
     /** 訪問者這一問。日記模式可空（用預設邀請）。 */
     question: string;
+    /** 同場訪談的後續輪：時刻凍結未變，開席那輪的世界素材都還在
+     *  transcript 裡 —— 不再原封重塞（重塞會把她錨在同幾句上），只給
+     *  新翻出的記憶＋問題。 */
+    followUp?: boolean;
+    /** 反覆誦迴避清單（她此場訪談已用過的字句意象，recurringImagery 產出）。 */
+    avoidEchoes?: string[];
 }
 
 /** 知識邊界 —— 訪談之約（canon 固定段）。 */
@@ -153,6 +159,7 @@ export function buildInterviewPercept(input: InterviewPerceptInput): string {
             .map((e) => `· ${e.clock ? `${e.clock} · ` : ''}${e.sceneName}\n${e.lines.map((l) => `  ${l}`).join('\n')}`)
             .join('\n')
         : '（今日到此刻尚無大事）';
+    const memoryHeader = input.followUp ? '【心頭又浮起的記憶】' : '【心頭浮起的記憶】';
     const memories = input.memories.length
         ? input.memories
             .map((m) => `- ${m.day !== undefined ? `（第${m.day}日）` : ''}${m.text}`)
@@ -169,6 +176,9 @@ export function buildInterviewPercept(input: InterviewPerceptInput): string {
     const concerns = input.concerns.length
         ? input.concerns.map((c) => `- ${c}`).join('\n')
         : '';
+    const avoid = input.avoidEchoes?.length
+        ? `【莫再重彈】這些字句意象你方才已經用過，換新的說法、新的細節，或乾脆說別的：${input.avoidEchoes.join('、')}`
+        : '';
 
     const ask = input.mode === 'diary'
         ? (input.question.trim()
@@ -180,14 +190,28 @@ export function buildInterviewPercept(input: InterviewPerceptInput): string {
         ? `（以${input.name}自己的手筆寫這段私記，不要對任何人說話的口吻，不要旁白。）`
         : `（用${input.name}自己的口吻回一段話——可以停頓、可以避、可以反問；一次回答之內說完，不要旁白，不要條列。）`;
 
+    // 後續輪：時刻凍結，開席素材都在 transcript —— 只給一句錨、新翻出的
+    // 記憶與問題；已答過的舊事別逐字再誦。
+    if (input.followUp) {
+        return [
+            `【此刻】仍是${input.momentLabel}，你在${input.sceneName}，方才那席話還在繼續。`,
+            memories ? `${memoryHeader}\n${memories}` : '（這一問沒翻出新的舊事——就憑方才所知與你自己的心思回。）',
+            avoid,
+            '（方才已答過的事，別原樣重誦；同一樁事若再被問到，換個角度、添點沒說過的細節，或坦然說今日想不出更多。）',
+            ask,
+            closing,
+        ].filter(Boolean).join('\n\n');
+    }
+
     return [
         `【此刻】${input.momentLabel}，你在${input.sceneName}。${state}`,
         `【今日親歷】\n${events}`,
-        memories ? `【心頭浮起的記憶】\n${memories}` : '',
+        memories ? `${memoryHeader}\n${memories}` : '',
         relations ? `【眼中眾人】\n${relations}` : '',
         concerns ? `【心上懸著的事】\n${concerns}` : '',
         input.plan ? `【眼下打算】${input.plan}` : '',
         interviewModeContext(input.mode, input.interviewerIdentity),
+        avoid,
         ask,
         closing,
     ].filter(Boolean).join('\n\n');

@@ -6,6 +6,7 @@
  * prompt 素材只取自 known 半邊；directorOnly 只給查驗與面板。
  */
 
+import { recurringImagery } from '@endless-story/runner/services/character-agent/beat-prompt';
 import {
     buildInterviewPercept,
 } from '@endless-story/runner/services/character-agent/interview-prompt';
@@ -93,7 +94,13 @@ export async function postInterviewQuestion(
     const question = rawQuestion.trim();
     if (!question && interview.mode !== 'diary') throw new Error('問題不可為空');
 
-    const context = await buildInterviewContext(runId, interview.characterId, interview.tick, question);
+    // 記憶輪換＋反覆誦：先前各輪已上桌的記憶讓位給新召回；她此場已用過的
+    // 字句意象列進迴避清單（與場上 beat 的 recurringImagery 同一把尺）。
+    const previousAnswers = interview.messages.filter((m) => m.role === 'character').map((m) => m.content);
+    const followUp = previousAnswers.length > 0;
+    const excludeSeqs = [...new Set(interview.messages.flatMap((m) => m.recalledMemorySeqs ?? []))];
+
+    const context = await buildInterviewContext(runId, interview.characterId, interview.tick, question, { excludeSeqs });
     const real = interviewProviderAvailable();
     const shadow = ensureShadowSession({
         runId,
@@ -119,6 +126,8 @@ export async function postInterviewQuestion(
         plan: context.known.plan,
         interviewerIdentity: interview.interviewerIdentity,
         question,
+        followUp,
+        avoidEchoes: recurringImagery(previousAnswers),
     });
 
     const replyText = (await shadow.sessions.respond(shadow.identity, percept, {
