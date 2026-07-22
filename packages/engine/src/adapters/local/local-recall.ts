@@ -176,9 +176,16 @@ export class LocalRecall implements RecallPort {
         return true;
     }
 
-    async recall(characterId: string, query: string, limit: number, today: number): Promise<RecalledMemory[]> {
-        const list = this.store.get(characterId);
+    /** @param maxDay when set, memories written after that narrative day are
+     *  invisible — an as-of query for time-frozen surfaces (演員訪談室 asks a
+     *  checkpointed character; she must not recall what she has not yet lived). */
+    async recall(characterId: string, query: string, limit: number, today: number, maxDay?: number): Promise<RecalledMemory[]> {
+        let list = this.store.get(characterId);
         if (!list || list.length === 0) return [];
+        if (maxDay !== undefined) {
+            list = list.filter((m) => m.day <= maxDay);
+            if (list.length === 0) return [];
+        }
         const q = await this.embed(query);
         const scored = list.map((m) => {
             const relevance = relevanceWeight(1 - cosine(q, m.embedding)); // distance = 1 - cos
@@ -192,6 +199,7 @@ export class LocalRecall implements RecallPort {
             importance: m.importance,
             day: m.day,
             anchored: false,
+            seq: m.seq,
         }));
         this.hits += out.length;
         return out;

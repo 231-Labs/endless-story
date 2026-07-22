@@ -37,7 +37,9 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
     ├── run-manifest.json           #   引擎溯源（preset/season/provider/model —— 不合即拒開）
     ├── ticks.jsonl                 #   每拍一行：客觀事件 + 各家 POV + 帳面通告
     ├── state/world.json            #   整個世界（每拍快照；resume 之源）
+    ├── state/checkpoints/t<拍>/    #   時光快照：每拍走完凍存一份 world.json（訪談室之源）
     ├── memory/  sessions/          #   LocalRecall + 每角色持久 LLM session
+    ├── interviews/<id>/            #   演員訪談室：interview.json + 影子 session + marks.json
     ├── archive/                    #   手卷/織回/日終/POV markdown
     ├── dossiers/                   #   事件卷宗（EpistemicDossierBundle 內嵌 header）
     └── editorial/                  #   季度選集（season-anthology.md + selection）
@@ -61,6 +63,7 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
 | `/lab/run/[id]/reading` | 讀卷處：事件卷宗（客觀/主觀選集）、章回（織回+日終+POV 原料）、拍案（逐拍客觀 × 各家所見）、選集（季度 anthology） |
 | `/lab/run/[id]/dossier/[slug]` | 單卷卷宗：沿用讀者站 `EventDossier`（正史層 + 多視角 + 認識論標記） |
 | `/lab/exhibits` | 展覽室：認領外來卷、館藏實驗報告、自上之展品（見 §3.5） |
+| `/lab/run/[id]/interview` | **演員訪談室**：演員名錄（報館名錄口徑）→ 選時刻（時光快照／事件錨）× 四模式（自由/公開/私下/日記）開訪；訪談間左對話右三籤（所知＝角色可知、內裡＝僅導演、查驗＝預檢+評審+內容候選標記）；`/compare` 同題並問兩個時間點。詳見 [`ACTOR_INTERVIEW.md`](./ACTOR_INTERVIEW.md) |
 
 **圖庫（人物圖與場景資源的管理處）**：`$LAB_DATA_DIR/assets/<character|scene|location>/<名>.<png|jpg|webp>`，
 **以名為鍵**——seed 以名字指涉人事地，分卷、重跑同名共用一圖，上一次圖全站生效。
@@ -138,6 +141,9 @@ establishedPairs）可一鍵「復活」：以 preset 建底世界（場景/崗�
 · `POST runs/[id]/control`（step/run/pause/fork/open）· `GET runs/[id]/live?after=<seq>`
 （輪詢即時流：世界投影 + 增量拍）· `GET runs/[id]/ticks` · `GET runs/[id]/archive`
 · `GET runs/[id]/dossiers` · `GET/POST runs/[id]/config`（物界操作）
+· 訪談室：`GET runs/[id]/interview/{actors,checkpoints,snapshot}` ·
+`GET/POST runs/[id]/interviews` · `GET/DELETE runs/[id]/interviews/[sid]`
+· `POST runs/[id]/interviews/[sid]/{messages,marks}`（角色上下文全在 server 組裝）
 
 即時性：走拍中 1.8s 輪詢、靜場 6s；`epoch` 換代即重置游標（run 重開不漏拍）。
 LLM 兩檔：`fake`（排演——確定性假角，機制同一份、零鑰零費）、`real`（實錄——

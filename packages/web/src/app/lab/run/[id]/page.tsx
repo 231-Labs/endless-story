@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { BeadCurtain } from '@/components/lab/LabOrnaments';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
-import { IconBack, IconExport, IconGallery, IconObjects, IconScroll } from '@/components/lab/LabIcons';
+import { IconBack, IconExport, IconGallery, IconInterview, IconObjects, IconScroll } from '@/components/lab/LabIcons';
 import { LabBeatDock } from '@/components/lab/LabBeatDock';
 import { LabCastRail } from '@/components/lab/LabCastRail';
 import { LabCharacterSheet } from '@/components/lab/LabCharacterSheet';
@@ -129,6 +129,14 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             className="es-icon-button !h-11 !w-11 text-[20px]"
                         >
                             <IconGallery />
+                        </Link>
+                        <Link
+                            href={`/lab/run/${id}/interview`}
+                            aria-label="演員訪談室"
+                            title="演員訪談室 · 訪問一位剛經歷完今天的演員"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
+                        >
+                            <IconInterview />
                         </Link>
                         <button
                             type="button"

@@ -1,8 +1,16 @@
-# 演員訪談室 · Actor Interview — 盤點與實作計劃
+# 演員訪談室 · Actor Interview — 盤點與實作
 
-> **狀態**：proposal · 2026-07-22。本檔是「演員訪談室」需求的**現況盤點 + 差異調整 + 分階段實作藍圖**，
-> 尚未動工。歸屬鐵律照 [`narrative/ENGINE_CORE.md`](./narrative/ENGINE_CORE.md)；
-> lab 解耦邊界照 [`CINEMA_LAB.md`](./CINEMA_LAB.md) §1。
+> **狀態**：**implemented（V1，含對照模式）** · 2026-07-22。本檔前半是當日的
+> 現況盤點與差異調整（保留為決策紀錄），§3–§12 的設計已全數落地；與實作
+> 的少量出入在各節就地以「落地註」標明。歸屬鐵律照
+> [`narrative/ENGINE_CORE.md`](./narrative/ENGINE_CORE.md)；lab 解耦邊界照
+> [`CINEMA_LAB.md`](./CINEMA_LAB.md) §1。
+>
+> **入口**：觀測台 header 的「訪談」印鍵 → `/lab/run/[id]/interview`（名錄）
+> → 訪談間 `/interview/[sid]`、對照 `/interview/compare`。
+> 排演卷零鑰可跑全程（確定性假答、查驗顯示「未評」）；備模型鑰即實錄。
+> 已煙囪驗證：排演卷走 3 拍 → checkpoint 凍存 → 訪 tick 1 的柳安春 →
+> 召回 7 憶、只注入她見證的 2 事件 → 日記、標記、清除、當前訪談皆通。
 
 ---
 
@@ -100,8 +108,10 @@ LLM 兩檔照 lab 慣例：**實錄**走 `PersistentCharacterSessions`（primary
 
 ### 4.1 落盤
 
-- 新增 `runs/<id>/state/checkpoints/world.<tick 六位>.json`：每拍 `TickFilesystemTransaction`
-  提交成功後，由 `LabRunManager.loop` 順手把剛寫好的 `world.json` 複製一份（原子寫）。
+- 新增 `runs/<id>/state/checkpoints/t<tick 六位>/world.json`（一快照一目錄，
+  `WorldState.restore(dir)` 原樣可用，零 engine 改動）：每拍
+  `TickFilesystemTransaction` 提交成功後，由 `LabRunManager.loop` 順手把剛寫好
+  的 `world.json` 複製一份。（落地註：實作為目錄制，非本節初稿的單檔命名。）
 - 磁碟：world.json 每拍 ~100KB，數十拍的卷多 3–10MB —— 在既有磁碟預算內；V1 全保留，不做裁剪。
 - fork 卷整目錄複製，checkpoints 天然隨行。
 - 舊卷提供「補記當前 checkpoint」一鍵（只能從今起有史，歷史無法回補）。
@@ -246,9 +256,11 @@ POST /api/lab/runs/[id]/interviews                  # 建訪談 { characterId, t
 GET  /api/lab/runs/[id]/interviews[?characterId]    # 列表
 GET  /api/lab/runs/[id]/interviews/[sid]            # 詳情（含 evaluations/marks）
 POST /api/lab/runs/[id]/interviews/[sid]/messages   # 問一輪（組 context → respond → 預檢+評審 → 存）
-POST /api/lab/runs/[id]/interviews/[sid]/marks      # 標記內容候選
-GET  /api/lab/runs/[id]/interview/compare?a=<sid>&b=<sid>     # 比較模式（Phase 3）
+GET/POST /api/lab/runs/[id]/interviews/[sid]/marks  # 標記內容候選
 ```
+
+（落地註：比較模式不需獨立 API —— `/interview/compare` 頁在 client 端以
+「建兩場訪談＋同題並問＋各取 snapshot」組合既有端點完成。）
 
 原則不變：**角色上下文全在 server 組裝**，前端只送問題與模式，不能傳入/改動核心設定與私人記憶。
 

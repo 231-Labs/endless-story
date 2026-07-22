@@ -15,6 +15,21 @@ import { parseDecision } from './parse.js';
 
 export type { HandCard, DecideInput } from './prompt.js';
 export {
+    buildInterviewCanon,
+    buildInterviewPercept,
+    interviewModeContext,
+    closenessWord,
+    stateWordsOf,
+} from './interview-prompt.js';
+export type {
+    InterviewCanonInput,
+    InterviewPerceptInput,
+    InterviewMode,
+    InterviewKnownEventLine,
+    InterviewMemoryLine,
+    InterviewRelationLine,
+} from './interview-prompt.js';
+export {
     buildSystemPrompt as buildActSystemPrompt,
     buildUserPrompt as buildActUserPrompt,
 } from './prompt.js';

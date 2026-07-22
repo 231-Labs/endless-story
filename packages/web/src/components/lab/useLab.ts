@@ -18,6 +18,15 @@ import type {
     LabTickRecord,
     LabWorldConfig,
 } from '@/lib/lab/types';
+import type {
+    InterviewActorCard,
+    InterviewCheckpointList,
+    InterviewContentMark,
+    InterviewMessageRecord,
+    InterviewSessionFile,
+    InterviewSnapshotView,
+    InterviewSummary,
+} from '@/lib/lab/interview/types';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
@@ -122,6 +131,38 @@ export const labApi = {
         }),
     deleteAsset: (kind: string, file: string) =>
         request<{ deleted: string }>(`/api/lab/assets?kind=${kind}&file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
+    // ── 演員訪談室 ──────────────────────────────────────────────────────────
+    interviewActors: (id: string) =>
+        request<{ actors: InterviewActorCard[] }>(`/api/lab/runs/${id}/interview/actors`),
+    interviewCheckpoints: (id: string) =>
+        request<InterviewCheckpointList>(`/api/lab/runs/${id}/interview/checkpoints`),
+    interviewSnapshot: (id: string, characterId: string, tick: number | null) =>
+        request<InterviewSnapshotView>(
+            `/api/lab/runs/${id}/interview/snapshot?characterId=${encodeURIComponent(characterId)}&tick=${tick ?? 'current'}`,
+        ),
+    interviews: (id: string, characterId?: string) =>
+        request<{ interviews: InterviewSummary[] }>(
+            `/api/lab/runs/${id}/interviews${characterId ? `?characterId=${encodeURIComponent(characterId)}` : ''}`,
+        ),
+    createInterview: (id: string, body: { characterId: string; tick: number | 'current' | null; mode: string; interviewerIdentity?: string }) =>
+        request<{ interview: InterviewSessionFile }>(`/api/lab/runs/${id}/interviews`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+        }),
+    interview: (id: string, sid: string) =>
+        request<{ interview: InterviewSessionFile; marks: InterviewContentMark[] }>(`/api/lab/runs/${id}/interviews/${sid}`),
+    deleteInterview: (id: string, sid: string) =>
+        request<{ deleted: string }>(`/api/lab/runs/${id}/interviews/${sid}`, { method: 'DELETE' }),
+    askInterview: (id: string, sid: string, question: string) =>
+        request<{ interview: InterviewSessionFile; question: InterviewMessageRecord | null; answer: InterviewMessageRecord }>(
+            `/api/lab/runs/${id}/interviews/${sid}/messages`,
+            { method: 'POST', body: JSON.stringify({ question }) },
+        ),
+    markInterview: (id: string, sid: string, body: { messageId: string; kind: string; note?: string }) =>
+        request<{ marks: InterviewContentMark[] }>(`/api/lab/runs/${id}/interviews/${sid}/marks`, {
+            method: 'POST',
+            body: JSON.stringify(body),
+        }),
 };
 
 const FEED_CAP = 240;

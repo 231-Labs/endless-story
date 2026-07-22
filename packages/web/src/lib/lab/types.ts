@@ -287,6 +287,12 @@ export interface LabTickRecord {
             text: string;
             inner?: string;
             addressed?: string;
+            /** Structured delivery intent (records since the interview layer;
+             *  absent on older lines — treat as 'scene'). */
+            audience?: 'scene' | 'addressed';
+            /** Who perceived the exact content — 私語 redaction for knowledge
+             *  reconstruction. Absent on older lines ⇒ all witnesses heard. */
+            perceiverIds?: string[];
         }>;
     }>;
     eventPovs: Array<{ characterId: string; name: string; eventId: string; body: string }>;
