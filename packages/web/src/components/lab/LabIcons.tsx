@@ -184,3 +184,13 @@ export function IconDream(props: SVGProps<SVGSVGElement>) {
         </svg>
     );
 }
+
+/** 訪談 — 一問一答隔桌相對（兩帖，一實一虛）。 */
+export function IconInterview(props: SVGProps<SVGSVGElement>) {
+    return (
+        <svg {...base(props)}>
+            <path d="M4 5.5h9v6.5h-5l-2.5 2.5v-2.5H4z" />
+            <path d="M14.5 10h5.5v5.5h-1.5v2l-2-2h-2z" strokeDasharray="0" />
+        </svg>
+    );
+}

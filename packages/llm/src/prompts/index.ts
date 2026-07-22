@@ -67,6 +67,13 @@ export {
 } from './public-tags.js';
 
 export {
+  buildInterviewEvaluatePrompt,
+  parseInterviewEvaluation,
+  type BuildInterviewEvaluatePromptOptions,
+  type InterviewEvaluation,
+} from './interview-evaluate.js';
+
+export {
   buildSceneSpecPrompt,
   parseSceneSpecResponse,
   buildCritiquePrompt,

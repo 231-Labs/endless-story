@@ -42,6 +42,7 @@ import { writeTickDossiers } from '@endless-story/engine/dossier-artifact';
 import { refreshSeasonEditorial, type AnthologyComposer } from '@endless-story/engine/editorial-artifact';
 import { loadLLMConfig, resolveTextProvider } from '@endless-story/llm';
 import { beatsFromTickRecords, tailTickRecords } from './artifacts';
+import { writeCheckpoint } from './checkpoints';
 import { readJson, runDir, writeJsonAtomic } from './paths';
 import { readRunMeta, writeRunStatus } from './store';
 import { readSeedRaw, seasonDirFor, seedDirFor } from './seeds';
@@ -385,6 +386,8 @@ export class LabRunManager {
                     text: beat.text,
                     inner: beat.inner,
                     addressed: beat.addressed,
+                    audience: beat.audience,
+                    perceiverIds: beat.perceiverIds,
                 })),
             })),
             eventPovs: report.eventPovs,
@@ -492,6 +495,13 @@ export class LabRunManager {
                 }
                 run.pendingTicks -= 1;
                 this.appendTickRecord(run, report);
+                // 時光快照 — freeze the just-committed world as this tick's
+                // checkpoint so 演員訪談室 can visit "the character right after
+                // tick N" later. Best-effort: a failed copy logs, never fatals.
+                {
+                    const checkpointError = writeCheckpoint(run.meta.id, report.tick);
+                    if (checkpointError) this.log(run, `[checkpoint] tick ${report.tick} 快照失敗：${checkpointError}`);
+                }
                 // Post-processing mirrors the CLI: never fatal after the world
                 // snapshot committed — record and continue.
                 try {

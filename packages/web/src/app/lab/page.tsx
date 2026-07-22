@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BeadCurtain, LabEaves } from '@/components/lab/LabOrnaments';
-import { IconBurn, IconExhibit, IconGallery, IconSeed } from '@/components/lab/LabIcons';
+import { IconBurn, IconExhibit, IconGallery, IconInterview, IconSeed } from '@/components/lab/LabIcons';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { LAB_ICON_BUTTON } from '@/components/lab/LabPageHeader';
 import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
@@ -440,6 +440,14 @@ function RunCard({
                     >
                         {running ? `走拍 ${run.pendingTicks}` : run.phase === 'error' ? '出錯' : '靜場'}
                     </span>
+                    <Link
+                        href={`/lab/run/${run.meta.id}/interview`}
+                        aria-label="演員訪談室"
+                        title="演員訪談室 · 訪問此卷中一位剛經歷完今天的演員"
+                        className="es-icon-button !h-9 !w-9 shrink-0 text-[17px]"
+                    >
+                        <IconInterview />
+                    </Link>
                     <button
                         type="button"
                         onClick={() => {

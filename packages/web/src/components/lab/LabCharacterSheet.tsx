@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import { labApi } from './useLab';
 import { NarrativeProse, ReaderScaleControl, useReaderScale } from './NarrativeProse';
@@ -614,6 +615,13 @@ export function LabCharacterSheet({ runId, character: c, onClose, onJumpToScene,
                         >
                             在 {c.sceneName} →
                         </button>
+                        <Link
+                            href={`/lab/run/${encodeURIComponent(runId)}/interview?actor=${encodeURIComponent(c.id)}`}
+                            className="mt-1 block font-serif text-xs tracking-[0.15em] text-white/85 transition hover:text-white"
+                            title="演員訪談室 · 訪問剛經歷完今天的TA"
+                        >
+                            請至訪談室 →
+                        </Link>
                         <div className="mt-3 space-y-1.5">
                             <Gauge label="乏" value={c.fatigue} tone="bg-seal/90" title="疲乏" />
                             <Gauge label="飢" value={c.hunger} tone="bg-cinnabar/80" title="飢餓" />

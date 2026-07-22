@@ -456,6 +456,10 @@ export interface RecalledMemory {
     /** Narrative day written (recency). */
     day?: number;
     anchored?: boolean;
+    /** Stable per-store id when the adapter keeps one (LocalRecall's insertion
+     *  seq) — lets an operator surface cite exactly which stored memories a
+     *  prompt carried. Optional: adapters without durable ids omit it. */
+    seq?: number;
 }
 
 export interface RememberOpts {
