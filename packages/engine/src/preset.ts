@@ -300,6 +300,87 @@ function distillIdentity(name: string, role: string | undefined, description: st
     return facts;
 }
 
+// ── 中途入場（mid-run cast join） ────────────────────────────────────────────
+
+export interface JoinCastInput {
+    name: string;
+    /** Public persona (same semantics as founding `description`). */
+    description: string;
+    /** Private inner life; empty = none (secretSeed mirrors it, as at founding). */
+    secret?: string;
+    gender?: string;
+    ageYears?: number;
+    role?: string;
+    skills?: Array<{ name: string; kind: string; style: string; level?: number; note?: string }>;
+    /** Scene NAMES (as authored), resolved against the live world. */
+    home_scene: string;
+    work_scene: string;
+    /** Where they stand the moment they arrive; defaults to work_scene. */
+    arrival_scene?: string;
+}
+
+/**
+ * 中途入場 — add one character to a LIVE world, between ticks. Mirrors the
+ * founding-cast construction exactly (persona/secret/secretSeed/distilled
+ * core identity/state defaults), so a joiner is indistinguishable from a
+ * founder except for having no past:
+ *   · no wants — the next daytime tick's genesis phase derives them
+ *     (`deriveGenesisWants` tops up any member without genesis wants);
+ *   · no bonds/edges/views — stranger to everyone until scenes say otherwise;
+ *   · no acquaintance entries — under subjective naming that reads as 面生
+ *     (the co-worker seeding ran at world start and is never re-run).
+ * Pure state mutation, zero I/O: genesis memories are the caller's job
+ * (`recall.remember(kind:'genesis')`), as is announcing the arrival as a
+ * scheduled world event so co-present witnesses learn it structurally.
+ */
+export function joinCastMember(world: WorldState, input: JoinCastInput): CastMember {
+    const w = world.data;
+    const name = input.name.trim();
+    if (!name) throw new Error('[join] 入場之人要有名字');
+    if (world.idByName(name)) throw new Error(`[join] 已有同名之人在卷中：${name}`);
+    if (!input.description.trim()) throw new Error(`[join] ${name} 要有身分描述（persona）`);
+
+    const sceneIdByName = new Map(w.scenes.map((s) => [s.name, s.id]));
+    const resolveScene = (sceneName: string | undefined, field: string): string => {
+        if (!sceneName) throw new Error(`[join] ${name} 缺 ${field}`);
+        const id = sceneIdByName.get(sceneName);
+        if (!id) throw new Error(`[join] ${name} 的 ${field}「${sceneName}」不在此卷場景之列`);
+        return id;
+    };
+
+    // Validate EVERYTHING before touching the world — a refused join must
+    // leave the cast/roster byte-identical (no half-added member).
+    const homeId = resolveScene(input.home_scene, 'home_scene');
+    const workId = resolveScene(input.work_scene, 'work_scene');
+    const arrivalId = resolveScene(input.arrival_scene ?? input.work_scene, 'arrival_scene');
+
+    // Next free founding-style id — cast only ever grows, so `c${length}` is
+    // free unless a fork/migration left a gap; bump until vacant to be safe.
+    let index = w.cast.length;
+    while (world.castById(`c${index}`)) index += 1;
+    const id = `c${index}`;
+
+    const member: CastMember = {
+        id,
+        name,
+        persona: input.description.trim(),
+        secret: input.secret?.trim() || '',
+        secretSeed: input.secret?.trim() || '',
+        gender: input.gender,
+        age: input.ageYears,
+        role: input.role,
+        state: { fatigue: 0.3, hunger: 0.2, mood: 0 },
+        coreIdentity: distillIdentity(name, input.role, input.description),
+        relationshipView: {},
+        ...(input.skills?.length ? { skills: input.skills } : {}),
+    };
+    w.cast.push(member);
+    w.homeByChar[id] = homeId;
+    w.workByChar[id] = workId;
+    w.roster[id] = arrivalId;
+    return member;
+}
+
 /**
  * Seed each character's CURRENT relationship view from the seeded canon edges,
  * as a first-person one-liner. This is the initial mutable self-model for the

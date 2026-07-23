@@ -131,6 +131,15 @@ export const labApi = {
         }),
     deleteAsset: (kind: string, file: string) =>
         request<{ deleted: string }>(`/api/lab/assets?kind=${kind}&file=${encodeURIComponent(file)}`, { method: 'DELETE' }),
+    /** 中途入場：靜場時把一個新角色加進活卷（改即落 world.json，下一拍生效）。 */
+    joinCast: (id: string, body: {
+        name: string; description: string; secret?: string; gender?: string; ageYears?: number; role?: string;
+        homeScene: string; workScene: string; arrivalScene?: string; memories?: string[]; arrivalNote?: string;
+    }) =>
+        request<{ joined: { id: string; name: string; arrivalSceneName: string; memoriesSeeded: number } }>(
+            `/api/lab/runs/${id}/cast`,
+            { method: 'POST', body: JSON.stringify(body) },
+        ),
     // ── 演員訪談室 ──────────────────────────────────────────────────────────
     interviewActors: (id: string) =>
         request<{ actors: InterviewActorCard[] }>(`/api/lab/runs/${id}/interview/actors`),
