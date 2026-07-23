@@ -1,0 +1,298 @@
+{
+ "id": "rehearsal-hall-trio",
+ "label": "實驗 · 三不識排練廳（生旦淨）",
+ "world": {
+  "name": "民國上海",
+  "description": "民國十七年前後的上海，老閘北一條僻靜里弄裡，有一間按日出租的排練廳：一面大鏡、幾條長凳、一張缺角的八仙桌，牆角立著別人寄存的舊衣箱。里弄外電車叮鈴、報童叫賣，都隔著一層牆，聽得見，夠不著。",
+  "currency": {
+   "name": "Endless",
+   "symbol": "ENDLESS"
+  },
+  "time_config": {
+   "days_per_tick_bp": 1670,
+   "tick_interval_ms": 120000
+  },
+  "narrative": {
+   "genre_base": "風格是民初白話小說：舊白話為主，可有少量文言意象；不要現代網文腔、心理諮商腔、設定說明書腔。"
+  }
+ },
+ "world_rules": {
+  "species": [
+   "human",
+   "spirit",
+   "beast"
+  ],
+  "attributes": [
+   {
+    "key": "appearance",
+    "label": "外貌",
+    "min": 0,
+    "max": 100
+   },
+   {
+    "key": "constitution",
+    "label": "筋骨",
+    "min": 0,
+    "max": 100
+   },
+   {
+    "key": "acuity",
+    "label": "機敏",
+    "min": 0,
+    "max": 100
+   },
+   {
+    "key": "disposition",
+    "label": "心性",
+    "min": 0,
+    "max": 100
+   }
+  ]
+ },
+ "locations": [
+  {
+   "name": "老閘北里弄",
+   "description": "僻靜的石庫門里弄，白日曬著被單，夜裡只有一盞路燈。排練廳就在弄底，三間下處分租在同一條弄堂裡。",
+   "terrain": "alley",
+   "x": 100,
+   "y": 100,
+   "adjacent_indices": []
+  }
+ ],
+ "saga": {
+  "name": "三不識",
+  "description": "三個素不相識的人——一個唱生的、一個唱旦的、一個唱淨的——各自收到一紙短約：自某日起，每日到老閘北某排練廳等候，按日支錢，自有安排。約上沒寫要做什麼，沒寫是誰出的錢，也沒寫還有旁人。三人到了才發現彼此，誰也不認得誰。",
+  "covered_location_indices": [
+   0
+  ],
+  "owner_bps": 4000,
+  "storyteller_bps": 4000,
+  "treasury_bps": 2000,
+  "departure_policy": "約既蹊蹺，去留自便：不想等了，留張字條走人即可，無人追究。",
+  "nature_prompt": "這是一場觀察實驗：三個互不相識、只帶著各自行當與來歷的人，被同一紙含糊短約困在一間排練廳裡。不要預設他們該談什麼、該做什麼、該不該投緣；衝突不必有，交情不必有，戲也不必有。讓他們自己決定開不開口、開口聊什麼、無聊了做什麼。沉默、試探、客套、生疏都是正當的內容；一切關係與話題都必須從零自己長出來。",
+  "rhythm_hints": "開局極慢極閒：頭幾日就是等——認生、客套、各佔一條長凳。白日在排練廳消磨，夜裡各自回下處。沒有演出、沒有班主、沒有觀眾；唯一的日程是「到場等候」。",
+  "portrait_tone": "郎世寧半西洋油彩肖像：中西合璧的清宮油畫風，細膩寫實的光影立體感、溫潤古典的油彩設色、柔和側光塑形，質地厚潤如郎世寧筆下的絹本油畫；統一素淨中性背景，只畫單人素顏頭肩四分之三側面；民國上海氣質只見於髮型與常服。",
+  "narrative": {
+   "framings": {
+    "generic": "一樁懸而未決的小事，在這一場裡慢慢發酵"
+   },
+   "features": {
+    "event_image": true,
+    "stills": true,
+    "video": false
+   },
+   "art_style": "絹本工筆：清明上河圖式細膩線描、赭石淡墨設色、陳年絹底暖米金基調",
+   "etiquette": "蘇映雪為師姐、柳安春為師妹（蘇長柳四歲、同科姊妹）；沈雪笙為班主，班中稱班主或師父，不稱師姐；何阿喜為師兄（丑行）；江聞鶴為外聘小生，與生旦同輩相稱；金鳳、白韻秋為班外之人，不用班中稱謂。",
+   "emotional_stance": "不預設任何情感走向：投緣、疏遠、不耐、好奇皆可，全由相處自生。"
+  }
+ },
+ "saga_attributes": [
+  {
+   "key": "vocal",
+   "label": "唱腔",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "key": "movement",
+   "label": "身段",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "key": "stage_presence",
+   "label": "台緣",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "key": "martial",
+   "label": "武場",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "key": "literati",
+   "label": "文墨",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "key": "networking",
+   "label": "交際",
+   "min": 0,
+   "max": 100
+  }
+ ],
+ "card_weight_rules": [
+  {
+   "intent": 1,
+   "attribute_key": "martial",
+   "bonus_per_point": 4
+  },
+  {
+   "intent": 2,
+   "attribute_key": "constitution",
+   "bonus_per_point": 3
+  },
+  {
+   "intent": 4,
+   "attribute_key": "networking",
+   "bonus_per_point": 4
+  },
+  {
+   "intent": 6,
+   "attribute_key": "acuity",
+   "bonus_per_point": 3
+  },
+  {
+   "intent": 7,
+   "attribute_key": "stage_presence",
+   "bonus_per_point": 4
+  },
+  {
+   "intent": 8,
+   "attribute_key": "literati",
+   "bonus_per_point": 3
+  },
+  {
+   "intent": 1,
+   "attribute_key": "movement",
+   "bonus_per_point": 3
+  },
+  {
+   "intent": 4,
+   "attribute_key": "vocal",
+   "bonus_per_point": 3
+  }
+ ],
+ "drama_resources": [],
+ "scenes": [
+  {
+   "name": "排練廳",
+   "description": "弄底的出租排練廳：一面大鏡、幾條長凳、一張缺角八仙桌、別人寄存的舊衣箱。日光從高窗斜下來，地板空得能聽見回聲。",
+   "location_index": 0,
+   "privacy": 0,
+   "capacity": 6,
+   "atmosphere": 50,
+   "danger": 5,
+   "prosperity": 35,
+   "pos_x": 50,
+   "pos_y": 35
+  },
+  {
+   "name": "東廂下處",
+   "description": "弄堂東側分租的一小間，一床一桌一窗。",
+   "location_index": 0,
+   "privacy": 4,
+   "capacity": 2,
+   "atmosphere": 40,
+   "danger": 5,
+   "prosperity": 30,
+   "pos_x": 22,
+   "pos_y": 70
+  },
+  {
+   "name": "西廂下處",
+   "description": "弄堂西側分租的一小間，窗對著曬被單的竹竿。",
+   "location_index": 0,
+   "privacy": 4,
+   "capacity": 2,
+   "atmosphere": 40,
+   "danger": 5,
+   "prosperity": 30,
+   "pos_x": 50,
+   "pos_y": 76
+  },
+  {
+   "name": "後屋下處",
+   "description": "弄底後屋的一小間，牆薄，聽得見隔壁人家的留聲機。",
+   "location_index": 0,
+   "privacy": 4,
+   "capacity": 2,
+   "atmosphere": 40,
+   "danger": 5,
+   "prosperity": 30,
+   "pos_x": 78,
+   "pos_y": 70
+  }
+ ],
+ "founding_cast": [
+  {
+   "name": "沈硯青",
+   "ageYears": 26,
+   "gender": "男",
+   "role": "小生",
+   "skills": [
+    {
+     "name": "文工",
+     "kind": "唱",
+     "style": "嗓音清潤含蓄，說話也像行腔，字斟句酌，不搶不佔",
+     "level": 3
+    }
+   ],
+   "description": "科班出身的年輕小生，七歲坐科、唱了十幾年，前個班社散了，暫無去處。生得清瘦斯文，性子安靜，慣於先看人再開口。他只知道自己是唱生行的，接了一紙只寫「到場等候」的短約。",
+   "secret": "",
+   "minAttributes": {
+    "appearance": 68,
+    "constitution": 55,
+    "acuity": 66,
+    "disposition": 62
+   },
+   "memories": [],
+   "home_scene": "東廂下處",
+   "work_scene": "排練廳"
+  },
+  {
+   "name": "顏繡宜",
+   "ageYears": 24,
+   "gender": "女",
+   "role": "青衣",
+   "skills": [
+    {
+     "name": "閨門功",
+     "kind": "唱",
+     "style": "行腔端穩，話不多，問話卻問得直，眼神先於言語",
+     "level": 3
+    }
+   ],
+   "description": "票友下海的青衣，正經搭班不過兩年，離家來滬自己討生活。性子爽利，不耐虛套。她只知道自己是唱旦行的，接了同樣一紙含糊短約。",
+   "secret": "",
+   "minAttributes": {
+    "appearance": 70,
+    "constitution": 52,
+    "acuity": 68,
+    "disposition": 60
+   },
+   "memories": [],
+   "home_scene": "西廂下處",
+   "work_scene": "排練廳"
+  },
+  {
+   "name": "雷萬鈞",
+   "ageYears": 38,
+   "gender": "男",
+   "role": "淨行",
+   "skills": [
+    {
+     "name": "架子功",
+     "kind": "身",
+     "style": "嗓門洪亮坐不住，手腳大開大合，悶久了就要找話說、找事做",
+     "level": 3
+    }
+   ],
+   "description": "跑碼頭出身的花臉，南北班社都待過幾年，哪兒有飯吃往哪兒去。生得魁梧，嗓門大，最怕閒著。他只知道自己是唱淨行的，接了同樣一紙含糊短約。",
+   "secret": "",
+   "minAttributes": {
+    "appearance": 50,
+    "constitution": 78,
+    "acuity": 55,
+    "disposition": 58
+   },
+   "memories": [],
+   "home_scene": "後屋下處",
+   "work_scene": "排練廳"
+  }
+ ],
+ "relationship_views": []
+}
