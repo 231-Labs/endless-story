@@ -1522,6 +1522,22 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
     for (const [sid, ids] of byScene) {
         if (ids.length === 0) continue;
+        // 惰息存在 (quietPresence): a LONE character with nothing pressing (no want past
+        // idle) and nobody seeking them is QUIETED this tick — skip the solo musing beat
+        // entirely (no LLM), instead of spending a call on ambient filler. Reactive
+        // solitude survives: a pressing want or a seeker keeps them on. Their breath is
+        // not lost — it is folded into ONE day-end reflection below. Flag off ⇒ the solo
+        // beat plays as before (byte-identical).
+        if (w.quietPresence && ids.length === 1) {
+            const only = ids[0];
+            const pressing = world.liveWantsOf(only).some((wnt) => forcingLevel(wnt) !== 'idle');
+            const sought = Object.values(w.seeking ?? {}).some((s) => s.targetId === only);
+            if (!pressing && !sought) {
+                (w.dayAccum.quietedIds ??= []).push(only);
+                log(`  [惰息] ${world.nameById(only)} 這拍無事、無人尋，惰息（不叫戲）`);
+                continue;
+            }
+        }
         const info = world.sceneById(sid);
         const isPrivate = (info?.privacyLevel ?? 0) >= 3;
         const sceneName = world.sceneNameById(sid);
@@ -2484,6 +2500,38 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 visibility: 'private',
                 witnessIds: [seekerId],
             });
+        }
+    }
+
+    // 7.79) 惰息呼吸 (quietPresence) — each character QUIETED today (idle solo turns
+    // folded away) gets ONE consolidated first-person reflection here, in place of the
+    // scattered per-tick self-talk the pre-filter skipped. Wires the otherwise-dormant
+    // povReflect; the line rides the POV channel (acc.povByName) into the day's episode.
+    // Breathing room preserved — once a day, with weight — while the LLM calls were saved.
+    if (dayEnd && w.quietPresence && agent.povReflect && w.dayAccum.quietedIds?.length) {
+        for (const id of new Set(w.dayAccum.quietedIds)) {
+            const member = world.castById(id);
+            if (!member) continue;
+            const todayText = acc.interactions?.[id]
+                ? Object.values(acc.interactions[id]).flat().join('\n').slice(-1200)
+                : '';
+            try {
+                const line = await agent.povReflect({
+                    name: member.name,
+                    persona: member.persona,
+                    day: today,
+                    todayText,
+                    wants: world.liveWantsOf(id).map((x) => ({ layer: x.layer, desc: x.desc, target: x.target })),
+                    selfModel: member.coreIdentity?.length ? member.coreIdentity.join('\n') : undefined,
+                    castBodies: w.cast.map((c) => ({ name: c.name, bodyFact: c.gender })),
+                });
+                if (line) {
+                    acc.povByName[member.name] = acc.povByName[member.name] ? `${acc.povByName[member.name]}\n\n${line}` : line;
+                    log(`  [惰息·反思] ${member.name} 這一日的內心一筆`);
+                }
+            } catch (err) {
+                log(`  povReflect 失敗（${member.name}）：${err instanceof Error ? err.message : String(err)}`);
+            }
         }
     }
 

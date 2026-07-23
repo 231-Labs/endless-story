@@ -35,6 +35,12 @@ export interface LabRunConfig {
      *  no numbers) and self-tags which one it pushed; the ledger follows that choice
      *  instead of the engine's hottest-want guess. Off ⇒ the single-want handoff. */
     beatPicksWant?: boolean;
+    /** 惰息存在: a lone character with nothing pressing and nobody seeking them is
+     *  quieted — the engine skips their ambient solo musing beat (no LLM call) and
+     *  instead gives them ONE consolidated first-person reflection at day-end.
+     *  Reactive solitude (a pressing want) still gets its beat. Off ⇒ every solo
+     *  turn spends a beat as before. */
+    quietPresence?: boolean;
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
     realEmbeddings: boolean;

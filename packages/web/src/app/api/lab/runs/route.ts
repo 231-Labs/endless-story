@@ -50,6 +50,7 @@ export async function POST(req: Request) {
             emergentProduction: body.config.emergentProduction === true,
             heartsCanFade: body.config.heartsCanFade === true,
             beatPicksWant: body.config.beatPicksWant === true,
+            quietPresence: body.config.quietPresence === true,
             ticksPerDay: Number.isInteger(body.config.ticksPerDay) && (body.config.ticksPerDay as number) > 0
                 ? (body.config.ticksPerDay as number)
                 : 6,
