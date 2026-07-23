@@ -394,6 +394,9 @@ export interface WorldStateData {
         actorIds: string[];
         sceneIds: string[];
         povByName: Record<string, string>;
+        /** quietPresence only: characters quieted (idle solo turn folded away) at least
+         *  once today — they each get ONE consolidated day-end reflection. Reset daily. */
+        quietedIds?: string[];
         /** relationshipFallback only: actor → co-present other → today's scene
          *  lines between them, feeding the nightly self-model consolidation. */
         interactions?: Record<string, Record<string, string[]>>;
@@ -442,6 +445,16 @@ export interface WorldStateData {
      *  moves to the character. Off by default; with the flag off (or when a beat
      *  names nothing) the engine keeps its hottest-want handoff, byte-identical. */
     beatPicksWant?: boolean;
+    /** 惰息存在 flag (quietPresence): when on, a character who is ALONE this tick with
+     *  NOTHING pressing (no want past idle) and NOBODY seeking them is QUIETED — the
+     *  engine skips their solo musing beat entirely (no LLM call), instead of spending
+     *  a beat on ambient filler ("雨歇了"). Reactive solitude survives: a pressing want
+     *  keeps them on. Their breathing room is not lost but CONSOLIDATED — at day-end
+     *  each quieted character gets ONE first-person reflection (povReflect) folded into
+     *  their POV, in place of scattered per-tick self-talk. Off by default; flag off ⇒
+     *  solo beats play exactly as before (byte-identical). Cost: fewer LLM calls in the
+     *  quiet stretches; texture: interiority becomes a daily beat, not tick filler. */
+    quietPresence?: boolean;
     /** 願望流水號 —— 世界自帶的 want id 序號（快照隨行）。id 由此而出，
      *  同種子重跑 byte-identical；缺席（舊卷）時 newWant 退回舊式 wall-clock id。 */
     wantSeq?: number;

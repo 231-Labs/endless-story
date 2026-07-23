@@ -38,6 +38,7 @@ export default function LabHomePage() {
         emergentProduction: false,
         heartsCanFade: false,
         beatPicksWant: false,
+        quietPresence: false,
         ticksPerDay: 6,
     });
 
@@ -83,6 +84,7 @@ export default function LabHomePage() {
                     emergentProduction: form.emergentProduction,
                     heartsCanFade: form.heartsCanFade,
                     beatPicksWant: form.beatPicksWant,
+                    quietPresence: form.quietPresence,
                     ticksPerDay: form.ticksPerDay,
                 },
             });
@@ -309,6 +311,17 @@ export default function LabHomePage() {
                             onChange={(e) => setForm({ ...form, beatPicksWant: e.target.checked })}
                         />
                         執念自揀
+                    </label>
+                    <label
+                        className="inline-flex items-center gap-1.5 font-serif text-xs text-mute"
+                        title="惰息存在：獨自一人、心裡沒有急事、也無人來尋的角色，這一拍就讓他歇著（不叫戲、不花一次 LLM），把那份呼吸留到日末——每個歇下的角色在深宵得一段自己的內心獨白（把散碎的自言自語併成一日一筆）。心裡有急事的獨處仍照樣起戲（實驗，預設關）"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={form.quietPresence}
+                            onChange={(e) => setForm({ ...form, quietPresence: e.target.checked })}
+                        />
+                        惰息存在
                     </label>
                     <label className="inline-flex items-center gap-1.5 font-serif text-xs text-mute" title="一日幾拍（時辰數）">
                         一日

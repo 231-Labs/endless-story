@@ -104,6 +104,7 @@ interface RunManifest {
     emergentProduction: boolean;
     heartsCanFade: boolean;
     beatPicksWant: boolean;
+    quietPresence: boolean;
 }
 
 export interface ActiveRun {
@@ -218,11 +219,12 @@ export class LabRunManager {
             emergentProduction: cfg.emergentProduction ?? false,
             heartsCanFade: cfg.heartsCanFade ?? false,
             beatPicksWant: cfg.beatPicksWant ?? false,
+            quietPresence: cfg.quietPresence ?? false,
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
-            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'heartsCanFade', 'beatPicksWant'] as const) {
-                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'heartsCanFade' || key === 'beatPicksWant' ? (previous[key] ?? false) : previous[key];
+            for (const key of ['preset', 'season', 'realLlm', 'provider', 'model', 'relationshipFallback', 'emergentProduction', 'heartsCanFade', 'beatPicksWant', 'quietPresence'] as const) {
+                const prior = key === 'relationshipFallback' || key === 'emergentProduction' || key === 'heartsCanFade' || key === 'beatPicksWant' || key === 'quietPresence' ? (previous[key] ?? false) : previous[key];
                 if (prior !== manifest[key]) {
                     // A run's manifest is frozen at creation so a diagnostic export never
                     // lies about which model/preset/flags wrote which tick. The usual
@@ -263,6 +265,7 @@ export class LabRunManager {
             // 叩門/借賒/尋人 已畢業為常駐（引擎無條件常開，不再由設定翻旗標）。
             if (cfg.heartsCanFade) world.data.heartsCanFade = true;
             if (cfg.beatPicksWant) world.data.beatPicksWant = true;
+            if (cfg.quietPresence) world.data.quietPresence = true;
             // 相識分寸: a season may declare subjective naming; seed the acquaintance
             // map AFTER cast/edges/views are seeded (so co-workers/edge-holders start
             // named). Mirrors how the flags above flip world.data.<flag> post-build.
