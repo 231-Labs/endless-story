@@ -58,8 +58,10 @@ interface WorldHandle {
     persist: () => void;
 }
 
-/** Prefer the active in-memory world; otherwise edit the snapshot on disk. */
-function openWorldForEdit(runId: string): WorldHandle {
+/** Prefer the active in-memory world; otherwise edit the snapshot on disk.
+ *  Shared with sibling idle-gated edit surfaces (join-cast) — same discipline:
+ *  idle only, mutate through WorldState, persist immediately. */
+export function openWorldForEdit(runId: string): WorldHandle {
     const manager = labManager();
     manager.assertIdle(runId);
     const stateDir = path.join(runDir(runId), 'state');

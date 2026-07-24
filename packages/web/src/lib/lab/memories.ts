@@ -23,7 +23,7 @@ export interface LabMemory {
 
 const EDITABLE_KINDS: MemoryKind[] = ['genesis', 'observation', 'relationship', 'dream', 'reflection', 'plan'];
 
-function recallFor(runId: string): { recall: LocalRecall; active: boolean } {
+export function recallFor(runId: string): { recall: LocalRecall; active: boolean } {
     const manager = labManager();
     manager.assertIdle(runId);
     const active = manager.get(runId);

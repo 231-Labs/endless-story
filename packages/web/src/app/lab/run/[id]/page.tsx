@@ -142,7 +142,7 @@ export default function LabRunPage({ params }: { params: Promise<{ id: string }>
                             type="button"
                             onClick={() => setDrawer((v) => !v)}
                             aria-label="物界配置"
-                            title="物界 · 物（爭奪之物／物件）／景（場景物理）／時（天時）／憶（記憶）"
+                            title="物界 · 物（爭奪之物／物件）／景（場景物理）／時（天時）／憶（記憶）／人（中途入場）"
                             className={`es-icon-button !h-11 !w-11 text-[20px] ${drawer ? 'border-cinnabar/60 text-cinnabar' : ''}`}
                         >
                             <IconObjects />

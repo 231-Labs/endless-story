@@ -15,13 +15,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { labApi } from './useLab';
 import type { LabWorldConfig } from '@/lib/lab/types';
 
-type ConfigTab = 'obj' | 'scene' | 'time' | 'mem';
+type ConfigTab = 'obj' | 'scene' | 'time' | 'mem' | 'join';
 
 const TABS: Array<{ key: ConfigTab; label: string; tip: string }> = [
     { key: 'obj', label: '物', tip: '爭奪之物與登記物件 —— 世界裡被爭、被藏、被移的東西' },
     { key: 'scene', label: '景', tip: '場景物理：私（privacy 0–5）與容（capacity）' },
     { key: 'time', label: '時', tip: '天時：排定的 clock-bound 世界事件' },
     { key: 'mem', label: '憶', tip: '每角 LocalRecall 記憶帳：植入新憶、焚去舊憶' },
+    { key: 'join', label: '人', tip: '中途入場：靜場時把一個新角色加進卷中——下一拍到場' },
 ];
 
 interface Props {
@@ -81,6 +82,8 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
     const [resourceText, setResourceText] = useState<string | null>(null);
     const [objectForm, setObjectForm] = useState({ label: '', sceneId: '', visibility: 'visible', container: '', state: '', portable: true });
     const [eventForm, setEventForm] = useState({ inTicks: 1, sceneId: '', text: '', clock: '', visibility: 'public' });
+    const [joinForm, setJoinForm] = useState({ name: '', role: '', gender: '', ageYears: '', description: '', secret: '', homeScene: '', workScene: '', arrivalScene: '', memories: '', arrivalNote: '' });
+    const [joinNote, setJoinNote] = useState<string | null>(null);
     const [memChar, setMemChar] = useState('');
     const [memories, setMemories] = useState<Array<{ seq: number; content: string; kind: string; day: number; importance: number }>>([]);
     const [memForm, setMemForm] = useState({ text: '', kind: 'genesis', importance: 7 });
@@ -500,6 +503,103 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                         </li>
                     ))}
                 </ul>
+            </section>
+            ) : null}
+
+            {tab === 'join' ? (
+            <section className="mt-4">
+                <h4 className="font-serif text-xs tracking-[0.3em] text-cinnabar/90" title="中途入場：靜場加人，改即落卷；到場作一條天時事件入正典，下一拍眾人皆聞。新人無過去——心事下一個白日拍自長，情分自零起。">
+                    中途入場
+                </h4>
+                <p className="mt-1.5 font-serif text-2xs leading-relaxed text-mute/70">
+                    在卷中人：{characters.map((c) => c.name).join('、') || '—'}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    <input value={joinForm.name} onChange={(e) => setJoinForm({ ...joinForm, name: e.target.value })} placeholder="名（必填）" className="es-field px-2 py-1.5 text-xs" />
+                    <input value={joinForm.role} onChange={(e) => setJoinForm({ ...joinForm, role: e.target.value })} placeholder="行當／身份" className="es-field px-2 py-1.5 text-xs" />
+                    <input value={joinForm.gender} onChange={(e) => setJoinForm({ ...joinForm, gender: e.target.value })} placeholder="身（男／女）" className="es-field px-2 py-1.5 text-xs" />
+                    <input type="number" min={1} value={joinForm.ageYears} onChange={(e) => setJoinForm({ ...joinForm, ageYears: e.target.value })} placeholder="年歲" className="es-field px-2 py-1.5 text-xs" />
+                </div>
+                <textarea
+                    value={joinForm.description}
+                    onChange={(e) => setJoinForm({ ...joinForm, description: e.target.value })}
+                    placeholder="身分描述（persona，必填）——她是誰、什麼來歷、什麼性子…"
+                    rows={3}
+                    className="es-field mt-1.5 w-full px-2.5 py-1.5 font-serif text-xs leading-relaxed"
+                />
+                <textarea
+                    value={joinForm.secret}
+                    onChange={(e) => setJoinForm({ ...joinForm, secret: e.target.value })}
+                    placeholder="心底事（可空）——只有她自己知道的事"
+                    rows={2}
+                    className="es-field mt-1.5 w-full px-2.5 py-1.5 font-serif text-xs leading-relaxed"
+                />
+                <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                    {([['homeScene', '落腳（夜宿）'], ['workScene', '日常（崗位）'], ['arrivalScene', '現身處（可空）']] as const).map(([key, label]) => (
+                        <select
+                            key={key}
+                            value={joinForm[key]}
+                            onChange={(e) => setJoinForm({ ...joinForm, [key]: e.target.value })}
+                            className="es-field px-2 py-1.5 text-2xs"
+                            title={label}
+                        >
+                            <option value="">{label}…</option>
+                            {config.scenes.map((s) => (
+                                <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                        </select>
+                    ))}
+                </div>
+                <textarea
+                    value={joinForm.memories}
+                    onChange={(e) => setJoinForm({ ...joinForm, memories: e.target.value })}
+                    placeholder={'初始記憶（可空）——一行一條，以「你…」的第二人稱寫最順'}
+                    rows={3}
+                    className="es-field mt-1.5 w-full px-2.5 py-1.5 font-serif text-xs leading-relaxed"
+                />
+                <input
+                    value={joinForm.arrivalNote}
+                    onChange={(e) => setJoinForm({ ...joinForm, arrivalNote: e.target.value })}
+                    placeholder="到場一筆（可空）——天時事件文案，如「顏繡宜引著一位舊識進了排練廳」"
+                    className="es-field mt-1.5 w-full px-2.5 py-1.5 text-xs"
+                />
+                {joinNote ? <p className="mt-2 font-serif text-2xs text-jade">{joinNote}</p> : null}
+                <button
+                    type="button"
+                    disabled={disabled || !joinForm.name.trim() || !joinForm.description.trim() || !joinForm.homeScene || !joinForm.workScene}
+                    onClick={() => {
+                        setBusy(true);
+                        setError(null);
+                        setJoinNote(null);
+                        labApi
+                            .joinCast(runId, {
+                                name: joinForm.name,
+                                description: joinForm.description,
+                                secret: joinForm.secret.trim() || undefined,
+                                gender: joinForm.gender.trim() || undefined,
+                                ageYears: joinForm.ageYears ? Number(joinForm.ageYears) : undefined,
+                                role: joinForm.role.trim() || undefined,
+                                homeScene: joinForm.homeScene,
+                                workScene: joinForm.workScene,
+                                arrivalScene: joinForm.arrivalScene || undefined,
+                                memories: joinForm.memories.split('\n').map((m) => m.trim()).filter(Boolean),
+                                arrivalNote: joinForm.arrivalNote.trim() || undefined,
+                            })
+                            .then(({ joined }) => {
+                                setJoinNote(`${joined.name} 已入卷（現身${joined.arrivalSceneName}，種入 ${joined.memoriesSeeded} 條記憶）——下一拍到場入正典。`);
+                                setJoinForm({ name: '', role: '', gender: '', ageYears: '', description: '', secret: '', homeScene: '', workScene: '', arrivalScene: '', memories: '', arrivalNote: '' });
+                                void load();
+                            })
+                            .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+                            .finally(() => setBusy(false));
+                    }}
+                    className="es-button-primary mt-2 w-full !py-1.5 text-xs disabled:opacity-50"
+                >
+                    請她入卷
+                </button>
+                <p className="mt-2 font-serif text-2xs leading-relaxed text-mute/60">
+                    新人無過去：心事在下一個白日拍自己長出，與眾人的情分從零起；相識分寸開著時，彼此面生。
+                </p>
             </section>
             ) : null}
         </aside>
