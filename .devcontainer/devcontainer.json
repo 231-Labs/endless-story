@@ -1,0 +1,45 @@
+{
+  "name": "Endless Story studio",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace/endless-story",
+  "shutdownAction": "stopCompose",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "containerEnv": {
+    "DATABASE_URL": "postgresql://endless_story:endless_story@postgres:5432/endless_story",
+    "ES_SCRIPTS_ROOT": "/workspace/private/endless-story-scripts",
+    "ES_LAB_ROOT": "/workspace/private/endless-story-lab",
+    "ES_ACTIVE_PRESET": "spring-snow",
+    "ES_ACTIVE_SEASON": "anchun-after-curtain",
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "PNPM_HOME": "/home/node/.local/share/pnpm",
+    "PLAYWRIGHT_BROWSERS_PATH": "/ms-playwright"
+  },
+  "remoteUser": "node",
+  "forwardPorts": [3000, 5432, 8788],
+  "portsAttributes": {
+    "3000": { "label": "Endless Story web", "onAutoForward": "notify" },
+    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" },
+    "8788": { "label": "Asset relayer", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker",
+        "ms-playwright.playwright",
+        "ms-python.python",
+        "rust-lang.rust-analyzer"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+services:
+  workspace:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    init: true
+    command: sleep infinity
+    volumes:
+      - ..:/workspace/endless-story:cached
+      - private-repos:/workspace/private
+      - pnpm-store:/home/node/.local/share/pnpm/store
+      - playwright-browsers:/ms-playwright
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: endless_story
+      POSTGRES_USER: endless_story
+      POSTGRES_PASSWORD: endless_story
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U endless_story -d endless_story"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  playwright-browsers:
+  pnpm-store:
+  postgres-data:
+  private-repos:

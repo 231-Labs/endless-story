@@ -2,16 +2,7 @@
 
 import Image from 'next/image';
 import type { Saga, SceneClip, Recruitment } from '@endless-story/shared';
-import { HeroTheater } from '@/components/home/HeroTheater';
-import { WelcomeNotice } from '@/components/home/WelcomeNotice';
-import { RecruitmentSection } from '@/components/dossier/RecruitmentSection';
-
-export function HomeContent({
-  saga,
-  clips,
-  initialRecruitments,
-  castCount = 0,
-  children,
+import { artifactsForTab, CHANNEL_ARTIFACTS, CHANNEL_SCENES, CHANNEL_TABS, type ChannelArtifact, type ChannelTab } from './channel-content';
 }: {
   saga: Saga;
   clips: SceneClip[];
@@ -19,11 +10,17 @@ export function HomeContent({
   castCount?: number;
   children: React.ReactNode;
 }) {
+  const [openedArtifact, setOpenedArtifact] = useState<ChannelArtifact | null>(null);
+  const scene = CHANNEL_SCENES[tab];
+  const visibleArtifacts = artifactsForTab(tab);
   return (
-    <main className="h-[100dvh] overflow-y-auto overflow-x-hidden snap-y snap-mandatory scroll-smooth">
-      {/* First Screen: Nav + Hero */}
-      <div className="flex min-h-[100dvh] flex-col snap-start snap-always">
-        {children}
+              <span><b className="mr-2 font-serif text-lg text-[#30291f] dark:text-[#e6d9c0]">{CHANNEL_ARTIFACTS.length}</b>則新稿</span>
+              <p className="text-xs tracking-[.24em] text-[#d5bd8b]">{scene.eyebrow}</p>
+              <h3 className="mt-3 max-w-2xl font-serif text-3xl leading-snug sm:text-4xl">{scene.title}</h3>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/65">{scene.note}</p>
+          <div className="grid gap-5 md:grid-cols-3">{visibleArtifacts.map((artifact) => <button type="button" onClick={() => setOpenedArtifact(artifact)} key={artifact.id} className="group flex min-h-[310px] flex-col justify-between overflow-hidden rounded-[1.75rem] border border-[#92764c]/20 bg-[#f8f3e8]/75 p-7 text-left transition duration-500 hover:-translate-y-1 hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-cinnabar dark:bg-[#211c15] sm:p-8">{artifact.imageUrl && <span className="relative -mx-8 -mt-8 mb-7 block h-36"><Image src={artifact.imageUrl} alt="" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover opacity-80 transition duration-700 group-hover:scale-105" /></span>}<span><span className="flex items-center justify-between text-[11px] tracking-[.2em] text-[#8c7653]"><span>{artifact.kind}</span><span>{artifact.stamp}</span></span><span className="mt-10 block font-serif text-2xl leading-snug">{artifact.title}</span><span className="mt-5 block text-sm leading-loose text-[#766958] dark:text-[#b6a991]">{artifact.excerpt}</span></span><span className="mt-8 text-xs tracking-[.18em] text-cinnabar opacity-70 transition group-hover:translate-x-1">展開這頁 →</span></button>)}</div>
+      {openedArtifact && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/55 p-3 backdrop-blur-sm sm:items-center sm:p-8" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenedArtifact(null); }}><article role="dialog" aria-modal="true" aria-labelledby="artifact-title" className="relative max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-[#f8f3e8] p-8 shadow-2xl dark:bg-[#1b1712] sm:p-12"><button type="button" onClick={() => setOpenedArtifact(null)} aria-label="關閉" className="absolute right-5 top-5 h-10 w-10 rounded-full border border-[#92764c]/25 text-lg transition hover:border-cinnabar hover:text-cinnabar">×</button><p className="text-xs tracking-[.24em] text-cinnabar">{openedArtifact.kind} · {openedArtifact.stamp}</p><h2 id="artifact-title" className="mt-5 pr-10 font-serif text-3xl leading-snug sm:text-4xl">{openedArtifact.title}</h2>{openedArtifact.imageUrl && <div className="relative mt-8 aspect-[16/9] overflow-hidden rounded-2xl"><Image src={openedArtifact.imageUrl} alt={openedArtifact.title} fill sizes="672px" className="object-cover" /></div>}<p className="mt-8 font-serif text-lg leading-[2] text-[#5f5548] dark:text-[#c7bba5]">{openedArtifact.body}</p><div className="mt-9 border-t border-[#92764c]/20 pt-5 text-xs tracking-[.16em] text-[#8c7653]">由今日事件、人物記憶與訪談痕跡編成 · 不補寫未曾發生之事</div></article></div>}
+
         <WelcomeNotice />
         <HeroTheater saga={saga} clips={clips} recruitmentsCount={initialRecruitments.length} castCount={castCount} />
       </div>
