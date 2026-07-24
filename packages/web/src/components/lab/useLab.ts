@@ -135,6 +135,7 @@ export const labApi = {
     joinCast: (id: string, body: {
         name: string; description: string; secret?: string; gender?: string; ageYears?: number; role?: string;
         homeScene: string; workScene: string; arrivalScene?: string; memories?: string[]; arrivalNote?: string;
+        ties?: Array<{ target: string; tone?: string; toneBack?: string; view?: string; viewBack?: string; warmth?: number }>;
     }) =>
         request<{ joined: { id: string; name: string; arrivalSceneName: string; memoriesSeeded: number } }>(
             `/api/lab/runs/${id}/cast`,

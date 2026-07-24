@@ -34,6 +34,15 @@ export interface JoinCastSpec {
     memories?: string[];
     /** 到場一筆（天時事件文案）；空則自動撰一句。 */
     arrivalNote?: string;
+    /** 帶舊誼入卷 —— 對既在卷中人的既有關係（edge/view/溫度/相識分寸）。 */
+    ties?: Array<{
+        target: string;
+        tone?: string;
+        toneBack?: string;
+        view?: string;
+        viewBack?: string;
+        warmth?: number;
+    }>;
 }
 
 export interface JoinCastResult {
@@ -58,6 +67,7 @@ export async function joinCastToRun(runId: string, spec: JoinCastSpec): Promise<
         home_scene: spec.homeScene,
         work_scene: spec.workScene,
         arrival_scene: spec.arrivalScene,
+        ties: spec.ties,
     });
 
     // 到場天時 —— 下一拍開拍即入正典，眾人皆聞（含新人自己：她親歷了自己的到場）。

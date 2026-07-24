@@ -22,6 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             arrivalScene?: string;
             memories?: string[];
             arrivalNote?: string;
+            ties?: Array<{ target?: string; tone?: string; toneBack?: string; view?: string; viewBack?: string; warmth?: number }>;
         };
         if (!body.name?.trim()) return fail(new Error('入場之人要有名字'));
         if (!body.description?.trim()) return fail(new Error('要有身分描述'));
@@ -38,6 +39,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             arrivalScene: body.arrivalScene,
             memories: Array.isArray(body.memories) ? body.memories.filter((m): m is string => typeof m === 'string') : undefined,
             arrivalNote: body.arrivalNote,
+            ties: Array.isArray(body.ties)
+                ? body.ties
+                    .filter((t): t is typeof t & { target: string } => typeof t?.target === 'string' && t.target.trim() !== '')
+                    .map((t) => ({
+                        target: t.target,
+                        tone: t.tone,
+                        toneBack: t.toneBack,
+                        view: t.view,
+                        viewBack: t.viewBack,
+                        warmth: typeof t.warmth === 'number' ? t.warmth : undefined,
+                    }))
+                : undefined,
         });
         return ok({ joined });
     } catch (error) {
