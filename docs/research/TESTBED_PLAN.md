@@ -170,6 +170,47 @@ saga-director / showrunner + /control ───► Oversight harness（overseer 
 story preset JSON + Scenario.seed ───────► Scenario（敘事只是其一）
 ```
 
+### 4.5 完全鏈解耦模式 —— 可行性判定（2026-07-24 補）
+
+**問題**：testbed 是否必須帶鏈？**答：不必，可以做——庫內已有四個先例**：`drama`、`economy`、
+`troupe`、離線敘事沙盒（§8 引），全是「鏈解耦先行、上鏈 gate-after」紀律的產物。更硬的證據：
+`web/.../settlement-harness/fake-chain.ts` 已示範「in-memory 假鏈替換真鏈、保留同一套
+BCS/型別/守恆紀律」，並靠它抓到一個真 production bug —— 「純孿生找到部署系統的真 bug」本身
+就是 proposal 可引用的一句（雙實作創造驗證價值的證據）。
+
+**逐原語替代表**：
+
+| 原語 | 鏈上實作 | local 純實作 | 現成度 |
+|---|---|---|---|
+| Identity / 委派 | `OwnerCap`/`ControlCap`（Move 強制） | in-process cap registry：issue/revoke/epoch-bump 同語意，harness 強制 | 語意即 spec，小件 |
+| Commitment / 出處 | hash→Walrus→`commitment::commit` | hash-chained append-only log + per-agent ed25519 簽章（`node:crypto`） | 小件 |
+| 事件匯流排 / 觀測 | `event.move` + indexer 捕捉 | `MemoryEventStore`（冪等 upsert、queryEvents-shaped）+ 純 `page.ts` | **幾乎現成** |
+| per-agent 記憶 | SEAL 加密 + cap-gated 解密 | relayer `InMemoryStore`（三因子召回、per-namespace、零依賴）；要保留密碼學隔離可用本地 per-agent 金鑰（撤銷＝換鑰） | **幾乎現成**（relevance 需 embedding，可退化 importance×recency 或本地 embedder） |
+| 世界時間 | `advance_tick` | counter | trivial |
+| 守恆不變式 | Move linear types | `conserves()` + Environment invariant checker | **現成** |
+
+**失去 / 得到**：
+
+| 失去 | 得到 |
+|---|---|
+| 密碼學強制 → harness 強制（harness 成信任基底；所有其他 sandbox 本亦如此） | **`git clone && node --test` 即跑** —— benchmark 採用率的生死線（評審/研究者不會架 Sui） |
+| 第三方公開可驗 → 改發佈 hash-chained trace + seed（對 reviewer 反而更好驗） | **速度與規模**：數千 tick/ms vs 單 StorytellerCap 串行簽章 —— **族群規模實驗只有 local 做得到** |
+| 「真」sybil 鑄造成本 → 參數化成本（testnet 本非真成本；參數化反而可 sweep） | 避開「crypto gimmick」過敏；去掉 testnet/RPC/SEAL 429/Walrus epoch 營運風險 |
+
+**最強的重新框架 —— 基礎設施作為自變數**：不是二選一，是**基質介面 + 雙後端**
+（`local` 預設 / `sui` 錨定模式）。identity/commitment/reputation 於是變成**可 ablate 的實驗變數**：
+同一 collusion/sybil scenario，開/關可撤銷委派、開/關承諾錨定，量安全指標的差。這比「焊死在鏈上」
+更貼群集 3 原文的「evaluate and **stress-test** the technical primitives」—— testbed 是量測儀器，
+鏈是其中一個被量測的實現。on-chain conformance test 的意義隨之升級：證明**同一轉移語意可攜**於
+TS 與 Move 兩個實作。
+
+**工作量分界**：
+- **新 safety scenario 走 local 後端 = 便宜**：多數積木現成（上表），缺 cap registry + hash-log + 訂閱包裝，皆小件。
+- **把春雪社敘事世界整個鏈解耦 = 貴**：真 tick 整合器在 `web/tick-loop.ts`（~1500 行）與鏈讀寫/PTB 深度纏繞。**不必做** —— 敘事世界保留為 chain-backed scenario pack #0，新 scenario 一律 local-first。
+
+**建議**：M1 介面直接以雙後端為前提；benchmark 與 CI 跑 `local`；`sui` 作為「高保證錨定模式」
+保留差異化敘事（「原語有經 battle-test 的鏈上實現」），但**不是使用前提**。
+
 ---
 
 ## 5. Safety Scenario Packs —— 把已「偽裝」在敘事裡的安全現象顯影
@@ -228,7 +269,7 @@ story preset JSON + Scenario.seed ───────► Scenario（敘事只�
 | 風險 | 回應 |
 |---|---|
 | 「這是娛樂產品，不是安全研究」 | 對外定位徹底換框（英文 positioning doc）；用 §2 的四群集映射 + §5 的失效模式證明**安全現象是原生的**，戲曲只是 scenario pack #0。 |
-| 「鏈上是 gimmick」 | 反過來講：鏈是**唯一**能同時給「真身分 + tamper-evident 承諾 + 可撤銷存取」的基質，正對群集 3。但要誠實：**不主張** LLM 推論的 ZK 驗證等做不到的東西（`NARRATIVE_AGENTS.md §9` 已明列不做）。 |
+| 「鏈上是 gimmick」 | 雙後端化解（§4.5）：testbed 預設 `local`、零鏈即跑；鏈降格為「高保證錨定模式」+ 可 ablate 的實驗變數，不構成使用門檻。仍**不主張** LLM 推論的 ZK 驗證等做不到的東西（`NARRATIVE_AGENTS.md §9` 已明列不做）。 |
 | 「LLM loop 不可重現，testbed 說服力打折」 | §3 已分層：環境層位元級可重現；policy 層以 trace 重播。這是**誠實的**、也是主流 agent-eval 的通行做法。 |
 | 「通用性只是宣稱」 | M1 就是要用一個非敘事 scenario **證明**，不靠嘴。 |
 | 「時間到不了 8/8」 | 8/8 前務實目標 = **提案 + 本 testbed 資產清單 + M1 的 scaffold demo**（另分支），不是做完整套。提案賣的是「已運作的地基 + 清楚的通用化路徑」。 |
@@ -241,6 +282,7 @@ story preset JSON + Scenario.seed ───────► Scenario（敘事只�
 - **程式碼 scaffold 另開分支**（依你拍板）：`packages/testbed`（或 `packages/harness`）——
   Environment/Agent/Scenario/Probe 介面 + 把 `drama`/`economy` 包成兩個 Environment 實例 +
   一個**非敘事 minimal-market scenario** 當通用性佐證 + trace export。這是 M1 的頭。
+  **介面以雙後端（`local`/`sui`）為前提（§4.5）；scaffold 先只做 `local`。**
 - **提案前置**：確認學術/非營利 host（§1/§7）；對照官方 call 校正 §1 的 tier/資格細節。
 
 ---
