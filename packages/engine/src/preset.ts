@@ -16,6 +16,7 @@ import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-econom
 import { seedHousing } from './core/housing.ts';
 import { seedRenown } from './core/renown.ts';
 import { makeClock } from './adapters/local/clock.ts';
+import { seedBond } from './core/bond-graph.ts';
 import {
     WorldState,
     type CastMember,
@@ -302,6 +303,26 @@ function distillIdentity(name: string, role: string | undefined, description: st
 
 // ── 中途入場（mid-run cast join） ────────────────────────────────────────────
 
+/** 舊誼 —— a joiner's pre-existing tie to someone ALREADY in the cast. Both
+ *  halves are authored subjectivity (never derived), matching the founding
+ *  `relationship_views` discipline: the view is what the joiner FEELS, not
+ *  objective truth. Warmth seeds the bond graph both ways (a shared past is a
+ *  symmetric starting temperature; asymmetry grows in play). */
+export interface JoinCastTie {
+    /** 對象之名 —— 須已在卷中（按名解析）。 */
+    target: string;
+    /** 關係語（新人 → 對象的 edge tone），如 師姐／舊識／恩客。 */
+    tone?: string;
+    /** 對象 → 新人的關係語；不給則不種（對方未必這樣看）。 */
+    toneBack?: string;
+    /** 新人「我看TA」一句話。 */
+    view?: string;
+    /** 對象「TA看我」一句話；不給則不種。 */
+    viewBack?: string;
+    /** 情分溫度 0..1，雙向同值種入 bond graph；不給則只靠 tone 的 welcome 檔位。 */
+    warmth?: number;
+}
+
 export interface JoinCastInput {
     name: string;
     /** Public persona (same semantics as founding `description`). */
@@ -317,6 +338,8 @@ export interface JoinCastInput {
     work_scene: string;
     /** Where they stand the moment they arrive; defaults to work_scene. */
     arrival_scene?: string;
+    /** 帶舊誼入卷 —— 對既在卷中人的既有關係；不給＝與眾人皆為陌生人。 */
+    ties?: JoinCastTie[];
 }
 
 /**
@@ -353,6 +376,14 @@ export function joinCastMember(world: WorldState, input: JoinCastInput): CastMem
     const homeId = resolveScene(input.home_scene, 'home_scene');
     const workId = resolveScene(input.work_scene, 'work_scene');
     const arrivalId = resolveScene(input.arrival_scene ?? input.work_scene, 'arrival_scene');
+    const ties = (input.ties ?? []).map((tie) => {
+        const targetId = world.idByName(tie.target.trim());
+        if (!targetId) throw new Error(`[join] ${name} 的舊誼對象「${tie.target}」不在卷中`);
+        if (tie.warmth !== undefined && !(tie.warmth >= 0 && tie.warmth <= 1)) {
+            throw new Error(`[join] ${name} 對「${tie.target}」的情分溫度須在 0–1 之間`);
+        }
+        return { ...tie, targetId };
+    });
 
     // Next free founding-style id — cast only ever grows, so `c${length}` is
     // free unless a fork/migration left a gap; bump until vacant to be safe.
@@ -378,6 +409,28 @@ export function joinCastMember(world: WorldState, input: JoinCastInput): CastMem
     w.homeByChar[id] = homeId;
     w.workByChar[id] = workId;
     w.roster[id] = arrivalId;
+
+    // 舊誼落帳 —— 與 founding 的 seedRelationshipViews/seedBond 同一套素材面：
+    // edge tone（結構化 tie，beat prompt 的「你對TA」提示之源）、我看TA一句話、
+    // 雙向情分溫度；相識分寸下兩造互識全名（帶著過去的人不會面生）。
+    if (ties.length) {
+        const graph = world.bondGraph();
+        for (const tie of ties) {
+            if (tie.tone?.trim()) world.setEdge(id, tie.targetId, tie.tone.trim());
+            if (tie.toneBack?.trim()) world.setEdge(tie.targetId, id, tie.toneBack.trim());
+            if (tie.view?.trim()) world.setRelationshipView(id, tie.targetId, tie.view.trim());
+            if (tie.viewBack?.trim()) world.setRelationshipView(tie.targetId, id, tie.viewBack.trim());
+            if (tie.warmth !== undefined) {
+                seedBond(graph, id, tie.targetId, tie.warmth);
+                seedBond(graph, tie.targetId, id, tie.warmth);
+            }
+            if (w.subjectiveNaming) {
+                world.setAcquaint(id, tie.targetId, 'named');
+                world.setAcquaint(tie.targetId, id, 'named');
+            }
+        }
+        world.setBonds(graph);
+    }
     return member;
 }
 

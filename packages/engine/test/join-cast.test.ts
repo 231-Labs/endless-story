@@ -102,6 +102,47 @@ test('3) no past: zero wants/views, and strangers under subjectiveNaming', () =>
     assert.equal(world.acquaintLevel('c0', 'c1'), 'named'); // incumbents unaffected
 });
 
+test('5) 帶舊誼入卷: ties seed edges/views/bonds both ways + named acquaintance', async () => {
+    const { bondOf } = await import('../src/core/bond-graph.ts');
+    const world = hallWorld({ subjectiveNaming: true });
+    seedAcquaintance(world);
+    const joined = joinCastMember(world, {
+        name: '金鳳',
+        description: '會樂里的歌女，坐了三日船又轉了半日騾車來的。',
+        role: '歌女',
+        home_scene: '樓上客房',
+        work_scene: '排練廳',
+        ties: [{
+            target: '沈硯青',
+            tone: '舊識',
+            toneBack: '故人',
+            view: '當年在碼頭邊聽過他吊嗓，是個實心眼的。',
+            viewBack: '會樂里那位金鳳，欠她一句道謝。',
+            warmth: 0.5,
+        }],
+    });
+    const w = world.data;
+    assert.equal(w.edges[joined.id]?.c0?.tone, '舊識');
+    assert.equal(w.edges.c0?.[joined.id]?.tone, '故人');
+    assert.ok(joined.relationshipView.c0.includes('實心眼'));
+    assert.ok(w.cast.find((m) => m.id === 'c0')!.relationshipView[joined.id].includes('道謝'));
+    const graph = world.bondGraph();
+    assert.equal(bondOf(graph, joined.id, 'c0'), 0.5);
+    assert.equal(bondOf(graph, 'c0', joined.id), 0.5);
+    assert.equal(world.acquaintLevel('c0', joined.id), 'named');
+    assert.equal(world.acquaintLevel(joined.id, 'c0'), 'named');
+    // 沒宣舊誼的人照樣面生。
+    assert.equal(world.acquaintLevel('c1', joined.id), 'stranger');
+
+    // 拒收路徑：不存在的對象 → 世界原封不動。
+    const before = JSON.stringify(world.data);
+    assert.throws(
+        () => joinCastMember(world, { name: '路人', description: 'x', home_scene: '樓上客房', work_scene: '排練廳', ties: [{ target: '不存在的人' }] }),
+        /舊誼對象/,
+    );
+    assert.equal(JSON.stringify(world.data), before);
+});
+
 test('4) snapshot round-trip carries the joiner; next tick derives genesis wants', async () => {
     const world = hallWorld();
     const joined = joinCastMember(world, {

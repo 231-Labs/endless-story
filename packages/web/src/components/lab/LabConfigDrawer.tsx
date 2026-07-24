@@ -82,7 +82,7 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
     const [resourceText, setResourceText] = useState<string | null>(null);
     const [objectForm, setObjectForm] = useState({ label: '', sceneId: '', visibility: 'visible', container: '', state: '', portable: true });
     const [eventForm, setEventForm] = useState({ inTicks: 1, sceneId: '', text: '', clock: '', visibility: 'public' });
-    const [joinForm, setJoinForm] = useState({ name: '', role: '', gender: '', ageYears: '', description: '', secret: '', homeScene: '', workScene: '', arrivalScene: '', memories: '', arrivalNote: '' });
+    const [joinForm, setJoinForm] = useState({ name: '', role: '', gender: '', ageYears: '', description: '', secret: '', homeScene: '', workScene: '', arrivalScene: '', memories: '', arrivalNote: '', ties: '' });
     const [joinNote, setJoinNote] = useState<string | null>(null);
     const [memChar, setMemChar] = useState('');
     const [memories, setMemories] = useState<Array<{ seq: number; content: string; kind: string; day: number; importance: number }>>([]);
@@ -563,6 +563,14 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                     placeholder="到場一筆（可空）——天時事件文案，如「顏繡宜引著一位舊識進了排練廳」"
                     className="es-field mt-1.5 w-full px-2.5 py-1.5 text-xs"
                 />
+                <textarea
+                    value={joinForm.ties}
+                    onChange={(e) => setJoinForm({ ...joinForm, ties: e.target.value })}
+                    placeholder={'帶舊誼入卷（可空）——一行一誼：對象｜關係語｜我看TA｜TA看我｜溫度0–1\n例：柳安春｜舊情｜門道是我教的，心卻沒真給過我｜金鳳才是她真過過日子的人｜0.6'}
+                    rows={3}
+                    className="es-field mt-1.5 w-full px-2.5 py-1.5 font-serif text-xs leading-relaxed"
+                    title="對既在卷中人宣告既有關係：關係語入 edge、兩句「看法」入 relationshipView、溫度雙向種 bond；開相識分寸時兩造互識全名。段可留空（如「柳安春｜舊識｜｜｜0.4」）。"
+                />
                 {joinNote ? <p className="mt-2 font-serif text-2xs text-jade">{joinNote}</p> : null}
                 <button
                     type="button"
@@ -584,10 +592,25 @@ export function LabConfigDrawer({ runId, running, characters, onClose }: Props) 
                                 arrivalScene: joinForm.arrivalScene || undefined,
                                 memories: joinForm.memories.split('\n').map((m) => m.trim()).filter(Boolean),
                                 arrivalNote: joinForm.arrivalNote.trim() || undefined,
+                                ties: joinForm.ties
+                                    .split('\n')
+                                    .map((line) => line.trim())
+                                    .filter(Boolean)
+                                    .map((line) => {
+                                        const [target, tone, view, viewBack, warmth] = line.split('｜').map((s) => s.trim());
+                                        return {
+                                            target: target ?? '',
+                                            tone: tone || undefined,
+                                            view: view || undefined,
+                                            viewBack: viewBack || undefined,
+                                            warmth: warmth && !Number.isNaN(Number(warmth)) ? Number(warmth) : undefined,
+                                        };
+                                    })
+                                    .filter((t) => t.target),
                             })
                             .then(({ joined }) => {
                                 setJoinNote(`${joined.name} 已入卷（現身${joined.arrivalSceneName}，種入 ${joined.memoriesSeeded} 條記憶）——下一拍到場入正典。`);
-                                setJoinForm({ name: '', role: '', gender: '', ageYears: '', description: '', secret: '', homeScene: '', workScene: '', arrivalScene: '', memories: '', arrivalNote: '' });
+                                setJoinForm({ name: '', role: '', gender: '', ageYears: '', description: '', secret: '', homeScene: '', workScene: '', arrivalScene: '', memories: '', arrivalNote: '', ties: '' });
                                 void load();
                             })
                             .catch((e) => setError(e instanceof Error ? e.message : String(e)))
