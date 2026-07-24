@@ -2527,6 +2527,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 });
                 if (line) {
                     acc.povByName[member.name] = acc.povByName[member.name] ? `${acc.povByName[member.name]}\n\n${line}` : line;
+                    // Persist the breath into the tick record's POV channel (eventId
+                    // 'quiet-reflect', tied to no scene) so it survives to disk — the
+                    // reading UI + diagnostics can surface it; without this it lived only
+                    // in the ephemeral day-accum and vanished unless an episode composed.
+                    eventPovs.push({ characterId: id, name: member.name, eventId: 'quiet-reflect', body: line });
+                    await archive.commit({ kind: 'pov', day: today, tick: nowTick, name: member.name, characterId: id, eventId: 'quiet-reflect', body: line });
                     log(`  [惰息·反思] ${member.name} 這一日的內心一筆`);
                 }
             } catch (err) {

@@ -102,10 +102,20 @@ test('flag ON: a lone character with a PRESSING want is NOT quieted (reactive so
 test('flag ON: at day-end each quieted character gets ONE consolidated reflection (breath kept)', async () => {
     const agent = new CountingAgent();
     const world = makeWorld({ quietPresence: true });
+    let dayEndReport;
     for (let t = 0; t < 6; t++) {
         world.data.clock = makeClock(6, t); // 清晨…深宵; t=5 深宵 ⇒ day-end
-        await runTick(world, deps(agent), { log: () => {} });
+        dayEndReport = await runTick(world, deps(agent), { log: () => {} });
     }
     assert.equal(agent.actBeatCalls, 0, 'a whole idle day cost zero beat calls');
     assert.ok(agent.povReflectCalls >= 2, `each quieted character breathed once at day-end — povReflect×${agent.povReflectCalls}`);
+    // the breath must PERSIST into the tick record POV channel (eventId 'quiet-reflect'),
+    // else the export / reading UI could never surface it.
+    const breaths = (dayEndReport?.eventPovs ?? []).filter((p) => p.eventId === 'quiet-reflect');
+    assert.deepEqual(
+        [...new Set(breaths.map((p) => p.characterId))].sort(),
+        ['c0', 'c1'],
+        'both quieted characters have a persisted reflection in the day-end record',
+    );
+    assert.ok(breaths.every((p) => p.body.trim().length > 0), 'each persisted reflection carries prose');
 });
