@@ -335,6 +335,15 @@ function buildWorld(world: WorldState | null): string {
 
 // ── 4. per-tick timeline ────────────────────────────────────────────────────
 
+/** Render a POV body for the diagnostic: collapse blank-line runs, keep it on a
+ *  readable single indented flow, and soft-cap so a long serial passage can't
+ *  balloon the file (reflections are short and never hit the cap). */
+function povBody(body: string, cap = 900): string {
+    const clean = body.replace(/\n{2,}/g, '\n').trim();
+    const capped = clean.length > cap ? clean.slice(0, cap) + '…' : clean;
+    return capped.replace(/\n/g, '\n    ');
+}
+
 function buildTimeline(records: LabTickRecord[], world: WorldState | null): string {
     const out: string[] = ['## 逐拍紀事'];
     if (!records.length) {
@@ -362,6 +371,19 @@ function buildTimeline(records: LabTickRecord[], world: WorldState | null): stri
             record.episode ? 'episode ✓' : 'episode ✗',
         ];
         block.push('旗標：' + flags.join(' · '));
+        // 視角與反思 — the first-person POV prose captured this tick. Scene POVs are
+        // each actor's woven angle on a co-present scene; 'quiet-reflect' entries are
+        // the quietPresence day-end breath. Shown so a reader can judge narrative
+        // voice / depth, not just the objective beats above.
+        const povs = record.eventPovs ?? [];
+        const reflections = povs.filter((p) => p.eventId === 'quiet-reflect');
+        const scenePovs = povs.filter((p) => p.eventId !== 'quiet-reflect');
+        if (scenePovs.length) {
+            block.push('視角：\n' + scenePovs.map((p) => `  〔${p.name}〕${povBody(p.body)}`).join('\n\n'));
+        }
+        if (reflections.length) {
+            block.push('惰息·反思：\n' + reflections.map((p) => `  〔${p.name}〕${povBody(p.body)}`).join('\n\n'));
+        }
         if (record.economyNotices?.length) {
             block.push('銀錢告示：\n' + record.economyNotices.map((line) => `  - ${line}`).join('\n'));
         }
