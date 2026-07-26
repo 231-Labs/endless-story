@@ -5,7 +5,12 @@ import { FakeSceneAgent } from '../src/adapters/local/fake-scene-agent.ts';
 import { LocalClock, makeClock } from '../src/adapters/local/clock.ts';
 import { LocalRecall } from '../src/adapters/local/local-recall.ts';
 import { applyRewrite, type LedgerEvent } from '../src/core/want-rewrite.ts';
-import { newWant, type Want, type WantSemanticTag } from '../src/core/want-core.ts';
+import {
+    applyBeat,
+    newWant,
+    type Want,
+    type WantSemanticTag,
+} from '../src/core/want-core.ts';
 import type { ArchivePort } from '../src/ports.ts';
 import { runTick } from '../src/tick.ts';
 import {
@@ -222,4 +227,25 @@ test('FakeSceneAgent declares a stable contract subject without giving prose aut
         kind: 'contract',
         id: 'anchun-exclusive',
     });
+});
+
+test('resolutionCause is STRICT metadata and leaves flag-off snapshots untouched', () => {
+    const legacy = directedWant('日常');
+    applyBeat(
+        legacy,
+        [legacy],
+        { gain: '小', resolved: true, resolvedNote: '做完了' },
+        3,
+    );
+    assert.equal(legacy.resolutionCause, undefined);
+
+    const strict = directedWant('日常');
+    applyBeat(
+        strict,
+        [strict],
+        { gain: '小', resolved: true, resolvedNote: '做完了' },
+        3,
+        true,
+    );
+    assert.equal(strict.resolutionCause, 'resolved');
 });

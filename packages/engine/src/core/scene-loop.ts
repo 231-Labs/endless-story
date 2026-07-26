@@ -681,7 +681,13 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             beats: log,
         });
         if (verdict.resolved) {
-            applyBeat(w, input.wants, { gain: '小', resolved: true, resolvedNote: verdict.note }, input.tick);
+            applyBeat(
+                w,
+                input.wants,
+                { gain: '小', resolved: true, resolvedNote: verdict.note },
+                input.tick,
+                input.strictStructured === true,
+            );
             result.resolved.push({ want: w, note: verdict.note });
         }
     }

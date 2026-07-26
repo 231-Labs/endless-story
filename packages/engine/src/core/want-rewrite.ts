@@ -198,7 +198,7 @@ export function applyRewrite(
             events.push({ tick, characterId, kind: 'close', wantId: w.id, fromDesc: w.desc, note: d.note });
             w.retired = true;
             w.resolvedTick = tick;
-            w.resolutionCause = 'rewritten';
+            if (strictStructured) w.resolutionCause = 'rewritten';
             w.resolvedNote = d.note;
         }
     }

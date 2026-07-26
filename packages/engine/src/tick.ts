@@ -443,7 +443,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
         }
         decayWants(wants);
-        for (const f of fadeStaleWants(wants, nowTick)) log(`  淡了: ${world.nameById(f.characterId)}「${f.desc}」`);
+        for (const f of fadeStaleWants(wants, nowTick, w.strictStructured === true)) {
+            log(`  淡了: ${world.nameById(f.characterId)}「${f.desc}」`);
+        }
     }
 
     // 1.6) DAY-START 班主 REHEARSAL CALL — at 清晨, before movement, the troupe
@@ -2569,7 +2571,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     }
                     if (w.strictStructured ? !structuredAboutIt : !aboutIt) continue;
                     want.retired = true;
-                    want.resolutionCause = 'foreclosed';
+                    if (w.strictStructured) want.resolutionCause = 'foreclosed';
                     log(`  [限期作廢] ${world.nameById(want.characterId)}「${want.desc}」隨約作廢`);
                     acc.lines.push(`[帳房] ${world.nameById(want.characterId)}擱在心上的「${want.desc}」，隨這約限期一過，也就了了。`);
                 }
@@ -3052,7 +3054,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             if (wnt.weight >= FADE_FLOOR) continue;
             wnt.retired = true;
             wnt.resolvedTick = nowTick;
-            wnt.resolutionCause = 'faded';
+            if (w.strictStructured) wnt.resolutionCause = 'faded';
             wnt.resolvedNote = '（久不相見，情分淡了）';
             log(`  [淡了] ${world.nameById(wnt.characterId)} 對 ${world.nameById(targetId)} 那點心思，日子久了淡了`);
             // The fade is INTERNAL — it retires the want and leaves the character a

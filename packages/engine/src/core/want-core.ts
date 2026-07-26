@@ -494,7 +494,11 @@ export function decayWants(wants: Want[]): void {
  *  tension floor) and not being acted on quietly stops being carried. Genesis
  *  wants are exempt: who a character IS doesn't fade, only picked-up threads.
  *  Returns the faded wants (for logging). */
-export function fadeStaleWants(wants: Want[], tick: number): Want[] {
+export function fadeStaleWants(
+    wants: Want[],
+    tick: number,
+    strictStructured = false,
+): Want[] {
     const faded: Want[] = [];
     for (const w of wants) {
         if (w.retired || w.kind === 'economic' || w.source === 'genesis') continue;
@@ -511,7 +515,7 @@ export function fadeStaleWants(wants: Want[], tick: number): Want[] {
         if (!cold && !idle) continue;
         w.retired = true;
         w.resolvedTick = tick;
-        w.resolutionCause = 'faded';
+        if (strictStructured) w.resolutionCause = 'faded';
         w.resolvedNote = cold ? '（日子久了，淡了）' : '（一時好奇，過去了）';
         faded.push(w);
     }
@@ -552,13 +556,19 @@ export interface BeatOutcome {
  * Apply one acted beat to the driving want. Resolution retires it and cools the
  * same character's other standing-grade wants (§2.37 cross-time breadth).
  */
-export function applyBeat(w: Want, all: Want[], outcome: BeatOutcome, tick: number): void {
+export function applyBeat(
+    w: Want,
+    all: Want[],
+    outcome: BeatOutcome,
+    tick: number,
+    strictStructured = false,
+): void {
     w.recent += 1;
     w.heat += 1;
     if (outcome.resolved) {
         w.retired = true;
         w.resolvedTick = tick;
-        w.resolutionCause = 'resolved';
+        if (strictStructured) w.resolutionCause = 'resolved';
         w.resolvedNote = outcome.resolvedNote;
         for (const y of all) {
             if (y === w || y.retired || y.characterId !== w.characterId) continue;
