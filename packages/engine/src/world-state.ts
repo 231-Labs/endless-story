@@ -659,6 +659,19 @@ export class WorldState {
         if (!duplicate) monitor.warnings.push(warning);
     }
 
+    /** Denominator for the prose/state divergence rate: one proposal presented
+     * to physical validation. Retries count as separate proposals,
+     * because each is a separately authored beat draft. */
+    recordStructuredBeatEvaluation(): void {
+        if (!this.data.strictStructured) return;
+        const monitor = (this.data.structuredMonitor ??= {
+            evaluatedBeats: 0,
+            divergences: [],
+            warnings: [],
+        });
+        monitor.evaluatedBeats += 1;
+    }
+
     /** Backward-compatible migration for snapshots that recorded
      * `江聞鶴懷中` only as prose. The frozen beat already established carriage;
      * this derives the missing structure without inventing a new event. */
@@ -672,6 +685,18 @@ export class WorldState {
             if (!/懷|袖|手中|身上|兜|袋/.test(object.container)) continue;
             const carrier = this.data.cast.find((member) => object.container!.includes(member.name));
             if (!carrier) continue;
+            if (this.data.strictStructured) {
+                this.recordStructuredComparison({
+                    domain: 'object',
+                    kind: 'legacy-carrier-container',
+                    legacy: true,
+                    structured: false,
+                    actorId: carrier.id,
+                    subjectId: object.id,
+                    detail: object.container,
+                });
+                continue;
+            }
             object.carriedBy = carrier.id;
             object.sceneId = this.data.roster[carrier.id] ?? object.sceneId;
         }

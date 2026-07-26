@@ -136,6 +136,16 @@ export interface SceneLoopInput {
     /** Validate/commit structured side effects immediately after each beat so
      * the next actor sees the new world, not the scene's starting snapshot. */
     onBeat?: (beat: SceneBeat) => void | Promise<void>;
+    /** STRICT shadow telemetry for legacy prose gates that live inside the
+     * orchestration loop. Observability only; never changes acceptance. */
+    onStructuredComparison?: (comparison: {
+        kind: string;
+        legacy: boolean;
+        structured: boolean;
+        actorId: string;
+        targetId?: string;
+        detail?: string;
+    }) => void;
     /** 文筆二階 v2: the world's per-character rolling beat buffer (w.recentBeatsByChar,
      *  passed by reference). Read to build each actor's `selfSceneBeats` (the
      *  cross-scene imagery-avoid window), and APPENDED here as each beat commits —
@@ -461,9 +471,28 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                     return new RegExp(`[「『“\"]\\s*${escaped}[，,：:]`).test(r.beat);
                 });
             });
+            const invalidStructuredAddressee =
+                r.addressed !== undefined && !structuredAddressee;
+            const vocativeMismatch =
+                openingVocative !== undefined &&
+                structuredAddressee !== undefined &&
+                openingVocative !== structuredAddressee?.name;
+            if (input.strictStructured && vocativeMismatch) {
+                const proseTarget = present.find(
+                    (candidate) => candidate.name === openingVocative,
+                );
+                input.onStructuredComparison?.({
+                    kind: 'opening-vocative',
+                    legacy: true,
+                    structured: false,
+                    actorId: actor.characterId,
+                    targetId: proseTarget?.characterId,
+                    detail: `${openingVocative} != ${structuredAddressee?.name ?? 'none'}`,
+                });
+            }
             if (
-                (r.addressed && !structuredAddressee) ||
-                (openingVocative && structuredAddressee && openingVocative !== structuredAddressee.name)
+                invalidStructuredAddressee ||
+                (!input.strictStructured && vocativeMismatch)
             ) {
                 if (attempt >= 2) break;
                 beatInput.physicalRejection =

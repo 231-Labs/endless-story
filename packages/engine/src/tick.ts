@@ -1828,6 +1828,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             tick: nowTick,
             strictStructured,
             agent,
+            onStructuredComparison: strictStructured
+                ? (comparison) =>
+                      world.recordStructuredComparison({
+                          domain: 'scene',
+                          ...comparison,
+                      })
+                : undefined,
             // 文筆二階 v2: the cross-scene per-character beat buffer (by reference) —
             // scene-loop reads it for each actor's imagery-avoid window and appends
             // each committed beat, so a character's verbal tic is caught across scenes.
