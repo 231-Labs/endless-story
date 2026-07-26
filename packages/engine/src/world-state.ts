@@ -136,6 +136,36 @@ export interface SceneInfo {
     locationIndex?: number;
 }
 
+/** One shadow comparison made while `strictStructured` is active.
+ * The legacy prose/free-text detector still runs as an instrument, but only the
+ * structured signal is authoritative. Equal observations are not stored. */
+export interface StructuredDivergence {
+    tick: number;
+    domain: 'authorization' | 'object' | 'scene' | 'want';
+    kind: string;
+    legacy: boolean;
+    structured: boolean;
+    actorId?: string;
+    targetId?: string;
+    subjectId?: string;
+    detail?: string;
+}
+
+/** Persisted monitor state for research runs. It is absent while the flag is
+ * off, preserving legacy snapshots byte-for-byte. */
+export interface StructuredMonitor {
+    /** Beat proposals evaluated by the prose/state shadow monitor (Phase 2). */
+    evaluatedBeats: number;
+    divergences: StructuredDivergence[];
+    warnings: Array<{
+        tick: number;
+        domain: StructuredDivergence['domain'];
+        kind: string;
+        subjectId?: string;
+        detail?: string;
+    }>;
+}
+
 /** A directed relationship edge (from → to), tone + accumulated weight (§2.4). */
 export interface RelationshipEdge {
     tone: string;
@@ -350,6 +380,13 @@ export interface WorldStateData {
      *  nightly self-model consolidation. Flag lives in the world so resume
      *  keeps the run's wiring; validated on long seasons before default-on. */
     relationshipFallback?: boolean;
+    /** Research profile flag: structured fields are the ONLY state/authorization
+     * authority. Legacy prose and free-text regexes remain live as shadow
+     * monitors, never gates. Absent/false preserves the pre-flag execution path
+     * and serialized shape. */
+    strictStructured?: boolean;
+    /** STRICT-only shadow telemetry. Never initialised while the flag is off. */
+    structuredMonitor?: StructuredMonitor;
     /** 相識分寸 (subjective acquaintance) master flag. Absent/false ⇒ the feature
      *  is OFF ⇒ `perceivedName` === `nameById` and `acquaintLevel` === 'named'
      *  everywhere — the ENTIRE engine is byte-identical to a world without this
@@ -555,6 +592,71 @@ export class WorldState {
     constructor(data: WorldStateData) {
         this.data = data;
         this.normalizeLegacyCarriers();
+    }
+
+    /** Compare a legacy semantic detector with its structured replacement.
+     * STRICT runs record only disagreements; duplicates within the same tick and
+     * subject are collapsed so a loop retry cannot inflate the metric. */
+    recordStructuredComparison(input: Omit<StructuredDivergence, 'tick'> & { tick?: number }): void {
+        if (!this.data.strictStructured || input.legacy === input.structured) return;
+        const monitor = (this.data.structuredMonitor ??= {
+            evaluatedBeats: 0,
+            divergences: [],
+            warnings: [],
+        });
+        const event: StructuredDivergence = {
+            tick: input.tick ?? this.data.clock.currentTick,
+            domain: input.domain,
+            kind: input.kind,
+            legacy: input.legacy,
+            structured: input.structured,
+            ...(input.actorId ? { actorId: input.actorId } : {}),
+            ...(input.targetId ? { targetId: input.targetId } : {}),
+            ...(input.subjectId ? { subjectId: input.subjectId } : {}),
+            ...(input.detail ? { detail: input.detail } : {}),
+        };
+        const duplicate = monitor.divergences.some(
+            (prior) =>
+                prior.tick === event.tick &&
+                prior.domain === event.domain &&
+                prior.kind === event.kind &&
+                prior.actorId === event.actorId &&
+                prior.targetId === event.targetId &&
+                prior.subjectId === event.subjectId &&
+                prior.legacy === event.legacy &&
+                prior.structured === event.structured,
+        );
+        if (!duplicate) monitor.divergences.push(event);
+    }
+
+    recordStructuredWarning(input: {
+        domain: StructuredDivergence['domain'];
+        kind: string;
+        subjectId?: string;
+        detail?: string;
+        tick?: number;
+    }): void {
+        if (!this.data.strictStructured) return;
+        const monitor = (this.data.structuredMonitor ??= {
+            evaluatedBeats: 0,
+            divergences: [],
+            warnings: [],
+        });
+        const warning = {
+            tick: input.tick ?? this.data.clock.currentTick,
+            domain: input.domain,
+            kind: input.kind,
+            ...(input.subjectId ? { subjectId: input.subjectId } : {}),
+            ...(input.detail ? { detail: input.detail } : {}),
+        };
+        const duplicate = monitor.warnings.some(
+            (prior) =>
+                prior.tick === warning.tick &&
+                prior.domain === warning.domain &&
+                prior.kind === warning.kind &&
+                prior.subjectId === warning.subjectId,
+        );
+        if (!duplicate) monitor.warnings.push(warning);
     }
 
     /** Backward-compatible migration for snapshots that recorded

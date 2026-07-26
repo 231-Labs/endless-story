@@ -21,6 +21,7 @@ import {
     decayWants,
     fadeStaleWants,
     forcingLevel,
+    hasWantSemantic,
     hasHostileWantToward,
     jealousNightPursuit,
     newWant,
@@ -28,6 +29,9 @@ import {
     shouldDeriveAftermath,
     tension,
     yearningNightPursuit,
+    WANT_SEMANTIC_TAGS,
+    type WantSemanticTag,
+    type WantSource,
 } from './core/want-core.ts';
 import { pickOrthogonalThreads, spawnWant, type LedgerEvent } from './core/want-rewrite.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
@@ -53,6 +57,86 @@ import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple
 import { drainPendingDreams } from './core/dream.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
 import { renownLabel, type WorldState } from './world-state.ts';
+
+interface WantDraftForDeclaration {
+    source: WantSource;
+    characterId: string;
+    desc: string;
+    layer?: string;
+    target?: string;
+}
+
+/** STRICT creation seam: the prose-producing seat has no direct authority over
+ * mechanism metadata. A dedicated declaration call supplies finite tags and an
+ * exact cast target. Legacy runs never enter this function's agent-call branch. */
+async function declareStructuredWant(
+    world: WorldState,
+    agent: SceneAgentPort,
+    draft: WantDraftForDeclaration,
+): Promise<{ semanticTags?: WantSemanticTag[]; target?: string }> {
+    if (!world.data.strictStructured) {
+        return draft.target ? { target: draft.target } : {};
+    }
+    if (!agent.declareWantSemantics) {
+        world.recordStructuredWarning({
+            domain: 'want',
+            kind: 'missing-semantic-seat',
+            subjectId: draft.characterId,
+            detail: `${draft.source}:${draft.desc}`,
+        });
+        return {};
+    }
+    try {
+        const owner = world.castById(draft.characterId);
+        const reply = await agent.declareWantSemantics({
+            source: draft.source,
+            characterId: draft.characterId,
+            characterName: owner?.name ?? draft.characterId,
+            desc: draft.desc,
+            layer: draft.layer,
+            target: draft.target,
+            cast: world.data.cast.map((member) => ({ id: member.id, name: member.name })),
+        });
+        if (!reply) {
+            world.recordStructuredWarning({
+                domain: 'want',
+                kind: 'empty-semantic-declaration',
+                subjectId: draft.characterId,
+                detail: `${draft.source}:${draft.desc}`,
+            });
+            return {};
+        }
+        const semanticTags = [...new Set(reply.semanticTags)].filter((tag) =>
+            (WANT_SEMANTIC_TAGS as readonly string[]).includes(tag),
+        );
+        const targetMember = reply.target
+            ? world.data.cast.find(
+                  (member) =>
+                      member.id === reply.target || member.name === reply.target,
+              )
+            : undefined;
+        if (reply.target && !targetMember) {
+            world.recordStructuredWarning({
+                domain: 'want',
+                kind: 'invalid-semantic-target',
+                subjectId: draft.characterId,
+                detail: reply.target,
+            });
+        }
+        return {
+            ...(semanticTags.length ? { semanticTags } : {}),
+            ...(targetMember ? { target: targetMember.id } : {}),
+        };
+    } catch (error) {
+        world.recordStructuredWarning({
+            domain: 'want',
+            kind: 'semantic-seat-failed',
+            subjectId: draft.characterId,
+            detail: error instanceof Error ? error.message : String(error),
+        });
+        return {};
+    }
+}
 
 export interface TickDeps {
     agent: SceneAgentPort;
@@ -173,8 +257,31 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const dayEnd = clock.isDayEnd(c);
     const clockLabel = c.partOfDay;
     const wants = w.wants; // mutated in place; snapshot persists it
+    const strictStructured = w.strictStructured === true;
     const events: CanonicalSceneEvent[] = [];
     const eventPovs: TickEventPov[] = [];
+
+    const structuredWantGate = (
+        want: (typeof wants)[number],
+        legacy: boolean,
+        structured: boolean,
+        kind: string,
+        targetId?: string,
+        domain: 'authorization' | 'scene' | 'want' = 'want',
+    ): boolean => {
+        if (!strictStructured) return legacy;
+        world.recordStructuredComparison({
+            domain,
+            kind,
+            legacy,
+            structured,
+            actorId: want.characterId,
+            targetId,
+            subjectId: want.id,
+            detail: want.layer,
+        });
+        return structured;
+    };
 
     log(`── tick ${nowTick} · day ${today} · ${clockLabel}${night ? ' · 夜' : ''} ──`);
 
@@ -278,13 +385,25 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 contestedResources: w.contestedResources,
             });
             for (const g of derived) {
+                const declared = w.strictStructured
+                    ? await declareStructuredWant(world, agent, {
+                          source: 'genesis',
+                          characterId: member.id,
+                          layer: g.layer,
+                          desc: g.desc,
+                          target: g.target,
+                      })
+                    : { target: g.target };
                 wants.push(
                     newWant({
                         id: world.nextWantId(),
                         characterId: member.id,
                         layer: g.layer,
                         desc: g.desc,
-                        target: g.target,
+                        target: declared.target,
+                        ...(w.strictStructured && declared.semanticTags?.length
+                            ? { semanticTags: declared.semanticTags }
+                            : {}),
                         resource: w.contestedResources.length > 0 ? (g.resource ?? null) : undefined,
                         weight: g.weight,
                         sat: g.sat,
@@ -394,12 +513,32 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             if (!world.ownersOf(home).includes(inviter.id) && w.homeByChar[inviter.id] !== home) continue;
             const here = w.roster[inviter.id];
             const pressing = wants.find(
-                (want) =>
-                    !want.retired &&
-                    want.characterId === inviter.id &&
-                    INVITE_LAYER.test(want.layer) &&
-                    !!want.target &&
-                    forcingLevel(want) !== 'idle',
+                (want) => {
+                    if (
+                        want.retired ||
+                        want.characterId !== inviter.id ||
+                        !want.target ||
+                        forcingLevel(want) === 'idle'
+                    ) {
+                        return false;
+                    }
+                    const targetId = world.castById(want.target)
+                        ? want.target
+                        : world.idByName(want.target);
+                    const declaredInvite =
+                        hasWantSemantic(want, 'affection') ||
+                        (hasWantSemantic(want, 'reckoning') &&
+                            !hasWantSemantic(want, 'jealousy') &&
+                            !hasWantSemantic(want, 'hostility'));
+                    return structuredWantGate(
+                        want,
+                        INVITE_LAYER.test(want.layer),
+                        declaredInvite,
+                        'invite-eligibility',
+                        targetId,
+                        'authorization',
+                    );
+                },
             );
             if (!pressing) continue;
             const targetId = world.castById(pressing.target!) ? pressing.target! : world.idByName(pressing.target!);
@@ -554,7 +693,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         // every scene keeps both bars byte-for-byte, exactly as before.
         const resolveTargetId = (t: string): string | undefined =>
             world.castById(t) ? t : world.idByName(t);
-        const intrude = night ? jealousNightPursuit(wants, member.id, resolveTargetId) : null;
+        const intrude = night
+            ? jealousNightPursuit(wants, member.id, resolveTargetId, strictStructured)
+            : null;
         const intrudeSceneId = (() => {
             if (!intrude || intrude.id === member.id) return undefined;
             const sid = w.roster[intrude.id];
@@ -584,7 +725,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         // EXACTLY 1 — an admitted mover joins to make an intimate pair of 2), not
         // mid-tryst. Flag off ⇒ yearn null ⇒ knockSceneId undefined ⇒ every scene
         // keeps both bars byte-for-byte, exactly as before.
-        const yearn = night ? yearningNightPursuit(wants, member.id, resolveTargetId) : null;
+        const yearn = night
+            ? yearningNightPursuit(wants, member.id, resolveTargetId, strictStructured)
+            : null;
         const knockSceneId = (() => {
             if (!yearn || yearn.intrude !== true || yearn.id === member.id) return undefined; // ripe edge+ only
             const sid = w.roster[yearn.id];
@@ -1170,12 +1313,29 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 // 一次性 領入: a one-sided suitor (a live love want aimed at an owner
                 // this space does not yet welcome) is led in exactly once.
                 const suitor = wants.some(
-                    (wnt) =>
-                        !wnt.retired &&
-                        wnt.characterId === guest.id &&
-                        LOVE_WANT.test(wnt.layer) &&
-                        !!wnt.target &&
-                        owners.some((ownerId) => wnt.target === ownerId || wnt.target === world.nameById(ownerId)),
+                    (wnt) => {
+                        if (
+                            wnt.retired ||
+                            wnt.characterId !== guest.id ||
+                            !wnt.target
+                        ) {
+                            return false;
+                        }
+                        const ownerTarget = owners.find(
+                            (ownerId) =>
+                                wnt.target === ownerId ||
+                                wnt.target === world.nameById(ownerId),
+                        );
+                        if (!ownerTarget) return false;
+                        return structuredWantGate(
+                            wnt,
+                            LOVE_WANT.test(wnt.layer),
+                            hasWantSemantic(wnt, 'affection'),
+                            'initial-one-time-key',
+                            ownerTarget,
+                            'authorization',
+                        );
+                    },
                 );
                 if (suitor) world.grantAccess(scene.id, guest.id, 'oneTime');
             }
@@ -1197,7 +1357,14 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // bond reads stranger (< known) ⇒ false for all pairs, so confide stays fully
     // inert on a bond-less world (zero behaviour change).
     const isTrustedConfidant = (a: string, b: string): boolean =>
-        bondOf(bonds, a, b) >= BOND.seed.known && !hasHostileWantToward(wants, a, b, world.nameById(b));
+        bondOf(bonds, a, b) >= BOND.seed.known &&
+        !hasHostileWantToward(
+            wants,
+            a,
+            b,
+            world.nameById(b),
+            strictStructured,
+        );
 
     // 授權 on 相許 — becoming lovers hands over the key: each gets a STANDING key to
     // the OTHER's home (homeByChar). Called wherever the tick records a pair as 相許.
@@ -1222,7 +1389,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             const cs = ids.map((id) => ({ id, name: world.nameById(id) }));
             const deliberateEncounter =
                 ids.length > 1 && ids.some((id) => lastMovedTickByChar[id] === nowTick);
-            if (!deliberateEncounter && !nightSceneKind(cs, info?.privacyLevel ?? 0, wants, isTrustedConfidant)) {
+            if (!deliberateEncounter && !nightSceneKind(
+                cs,
+                info?.privacyLevel ?? 0,
+                wants,
+                isTrustedConfidant,
+                strictStructured,
+            )) {
                 byScene.delete(sid);
             }
         }
@@ -1551,8 +1724,19 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             night && isPrivate && ids.length === 2
                 ? (() => {
                       const cs = ids.map((id) => ({ id, name: world.nameById(id) }));
-                      return nightSceneKind(cs, info?.privacyLevel ?? 0, wants, isTrustedConfidant) === 'confide'
-                          ? confiderOf(cs, wants, isTrustedConfidant) ?? undefined
+                      return nightSceneKind(
+                          cs,
+                          info?.privacyLevel ?? 0,
+                          wants,
+                          isTrustedConfidant,
+                          strictStructured,
+                      ) === 'confide'
+                          ? confiderOf(
+                                cs,
+                                wants,
+                                isTrustedConfidant,
+                                strictStructured,
+                            ) ?? undefined
                           : undefined;
                   })()
                 : undefined;
@@ -1642,6 +1826,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             castNames: w.cast.map((member) => member.name),
             wants,
             tick: nowTick,
+            strictStructured,
             agent,
             // 文筆二階 v2: the cross-scene per-character beat buffer (by reference) —
             // scene-loop reads it for each actor's imagery-avoid window and appends
@@ -1830,9 +2015,19 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         if (night && isPrivate && ids.length === 2 && !world.isEstablished(ids[0], ids[1])) {
             const [a, b] = ids;
             const loveWantBetween = wants.some((wnt) => {
-                if (wnt.retired || !/愛|情/.test(wnt.layer) || !wnt.target) return false;
+                if (wnt.retired || !wnt.target) return false;
                 if (wnt.characterId !== a && wnt.characterId !== b) return false;
                 const other = wnt.characterId === a ? b : a;
+                if (!structuredWantGate(
+                    wnt,
+                    /愛|情/.test(wnt.layer),
+                    hasWantSemantic(wnt, 'affection'),
+                    'established-eligibility',
+                    other,
+                    'authorization',
+                )) {
+                    return false;
+                }
                 return wnt.target === other || wnt.target === world.nameById(other);
             });
             if (loveWantBetween) {
@@ -1842,7 +2037,23 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     aView: world.relationshipView(a, b),
                     bView: world.relationshipView(b, a),
                     wants: wants
-                        .filter((wnt) => !wnt.retired && /愛|情/.test(wnt.layer) && (wnt.characterId === a || wnt.characterId === b))
+                        .filter((wnt) => {
+                            if (
+                                wnt.retired ||
+                                (wnt.characterId !== a && wnt.characterId !== b)
+                            ) {
+                                return false;
+                            }
+                            const other = wnt.characterId === a ? b : a;
+                            return structuredWantGate(
+                                wnt,
+                                /愛|情/.test(wnt.layer),
+                                hasWantSemantic(wnt, 'affection'),
+                                'established-brief',
+                                other,
+                                'authorization',
+                            );
+                        })
                         .map((wnt) => wnt.desc),
                     lastSceneTail: loop.beats.slice(-4).map((bt) => `${bt.name}：${bt.text}`).join('\n') || undefined,
                 });
@@ -2041,13 +2252,25 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 beats: loop.beats.map((b) => `${b.name}：${b.text}`),
             });
             if (after) {
+                const declared = w.strictStructured
+                    ? await declareStructuredWant(world, agent, {
+                          source: 'aftermath',
+                          characterId: owner.id,
+                          layer: after.layer,
+                          desc: after.desc,
+                          target: after.target,
+                      })
+                    : { target: after.target };
                 wants.push(
                     newWant({
                         id: world.nextWantId(),
                         characterId: owner.id,
                         layer: after.layer,
                         desc: after.desc,
-                        target: after.target,
+                        target: declared.target,
+                        ...(w.strictStructured && declared.semanticTags?.length
+                            ? { semanticTags: declared.semanticTags }
+                            : {}),
                         weight: after.weight,
                         sat: after.sat,
                         resistance: after.resistance,
@@ -2076,7 +2299,32 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     };
                 }),
             });
-            for (const sp of applyRipples(wants, deltas, nowTick, () => world.nextWantId())) {
+            const declaredDeltas = w.strictStructured
+                ? await Promise.all(
+                      deltas.map(async (delta) => {
+                          if (!delta.newThread?.trim()) return delta;
+                          const declared = await declareStructuredWant(world, agent, {
+                              source: 'ripple',
+                              characterId: delta.characterId,
+                              layer: delta.layer,
+                              desc: delta.newThread,
+                              target: delta.target,
+                          });
+                          return {
+                              ...delta,
+                              target: declared.target,
+                              semanticTags: declared.semanticTags,
+                          };
+                      }),
+                  )
+                : deltas;
+            for (const sp of applyRipples(
+                wants,
+                declaredDeltas,
+                nowTick,
+                () => world.nextWantId(),
+                w.strictStructured === true,
+            )) {
                 log(`  new thread: ${world.nameById(sp.characterId)}「${sp.desc}」`);
             }
         }
@@ -2202,7 +2450,25 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 const debtEvents: LedgerEvent[] = [];
                 const castNames = w.cast.map((member) => member.name);
                 for (const seed of collectOverdueDebtWants(world, today)) {
-                    if (spawnWant(wants, seed.characterId, { desc: seed.desc, layer: seed.layer }, nowTick, debtEvents, castNames, () => world.nextWantId())) {
+                    if (spawnWant(
+                        wants,
+                        seed.characterId,
+                        {
+                            desc: seed.desc,
+                            layer: seed.layer,
+                            ...(w.strictStructured
+                                ? {
+                                      target: seed.targetId,
+                                      semanticTags: ['reckoning' as const],
+                                  }
+                                : {}),
+                        },
+                        nowTick,
+                        debtEvents,
+                        castNames,
+                        () => world.nextWantId(),
+                        w.strictStructured === true,
+                    )) {
                         (w.economy!.debtWantsSpawned ??= []).push(seed.marker);
                         log(`  [欠條生怨] ${world.nameById(seed.characterId)}「${seed.desc}」`);
                     }
@@ -2423,8 +2689,30 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 lifecycle,
                 otherThreads,
             });
-            if (spawn && spawnWant(wants, member.id, spawn, nowTick, regenEvents, castNames, () => world.nextWantId())) {
-                log(`  願生: ${member.name}「${spawn.desc}」`);
+            const declaredSpawn =
+                spawn && w.strictStructured
+                    ? {
+                          ...spawn,
+                          ...(await declareStructuredWant(world, agent, {
+                              source: 'owner',
+                              characterId: member.id,
+                              layer: spawn.layer,
+                              desc: spawn.desc,
+                              target: spawn.target,
+                          })),
+                      }
+                    : spawn;
+            if (declaredSpawn && spawnWant(
+                wants,
+                member.id,
+                declaredSpawn,
+                nowTick,
+                regenEvents,
+                castNames,
+                () => world.nextWantId(),
+                w.strictStructured === true,
+            )) {
+                log(`  願生: ${member.name}「${declaredSpawn.desc}」`);
             }
         }
     }
@@ -2442,14 +2730,26 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             for (const sceneId of world.ownedScenesBy(owner.id)) {
                 for (const holder of world.keyHoldersOf(sceneId)) {
                     if (holder.kind !== 'standing') continue; // a one-time pass is consumed on entry, not revoked
-                    const soured = wants.some(
-                        (wnt) =>
-                            !wnt.retired &&
-                            wnt.characterId === owner.id &&
-                            HOSTILE.test(wnt.layer) &&
-                            !!wnt.target &&
-                            (wnt.target === holder.charId || wnt.target === world.nameById(holder.charId)),
-                    );
+                    const soured = wants.some((wnt) => {
+                        if (
+                            wnt.retired ||
+                            wnt.characterId !== owner.id ||
+                            !wnt.target ||
+                            (wnt.target !== holder.charId &&
+                                wnt.target !== world.nameById(holder.charId))
+                        ) {
+                            return false;
+                        }
+                        return structuredWantGate(
+                            wnt,
+                            HOSTILE.test(wnt.layer),
+                            hasWantSemantic(wnt, 'hostility') ||
+                                hasWantSemantic(wnt, 'jealousy'),
+                            'revoke-standing-key',
+                            holder.charId,
+                            'authorization',
+                        );
+                    });
                     if (!soured) continue;
                     world.revokeAccess(sceneId, holder.charId);
                     // 逐客: a rekey on a LEASED scene where THIS holder is the 租客 ends the
@@ -2595,9 +2895,19 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         const FADE_FACTOR = 0.7;  // weight retained per further day apart
         const FADE_FLOOR = 0.25;  // below this the heart lets go
         for (const wnt of wants) {
-            if (wnt.retired || !LOVE_LAYER.test(wnt.layer) || !wnt.target) continue;
+            if (wnt.retired || !wnt.target) continue;
             const targetId = world.castById(wnt.target) ? wnt.target : world.idByName(wnt.target);
             if (!targetId || targetId === wnt.characterId) continue;
+            if (!structuredWantGate(
+                wnt,
+                LOVE_LAYER.test(wnt.layer),
+                hasWantSemantic(wnt, 'affection'),
+                'heart-fade',
+                targetId,
+                'want',
+            )) {
+                continue;
+            }
             if (togetherToday.has(world.pairKey(wnt.characterId, targetId))) {
                 wnt.starveDays = 0;
                 continue;

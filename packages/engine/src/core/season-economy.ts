@@ -864,6 +864,8 @@ export function creditAdvertFor(
 /** One overdue-debt want the settle should try to spawn (dedup by `marker`). */
 export interface OverdueDebtWantSeed {
     characterId: string;
+    /** Structured counterparty; avoids recovering the target from prose. */
+    targetId?: string;
     layer: string;
     desc: string;
     /** Stable dedup marker (`${billId}:debtor` / `${billId}:creditor`); pushed
@@ -904,6 +906,7 @@ export function collectOverdueDebtWants(world: WorldState, day: number): Overdue
             if (!spawned.has(`${bill.id}:debtor`)) {
                 out.push({
                     characterId: debtor.id,
+                    targetId: creditor.id,
                     layer: '虧欠',
                     desc: `欠著${creditor.name}的${yuanText(remaining)}過了期，見面都矮半截`,
                     marker: `${bill.id}:debtor`,
@@ -912,6 +915,7 @@ export function collectOverdueDebtWants(world: WorldState, day: number): Overdue
             if (!spawned.has(`${bill.id}:creditor`)) {
                 out.push({
                     characterId: creditor.id,
+                    targetId: debtor.id,
                     layer: '催討',
                     desc: `${debtor.name}欠的${yuanText(remaining)}到期未還，這口氣咽不平`,
                     marker: `${bill.id}:creditor`,

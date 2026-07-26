@@ -37,6 +37,8 @@ interface Args {
     realEmbeddings: boolean;
     /** structural relationship fallback (seeded canon views + nightly self-model). */
     relationshipFallback: boolean;
+    /** Research arm: structured fields are the sole mechanism authority. */
+    strictStructured: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -48,6 +50,7 @@ function parseArgs(argv: string[]): Args {
         realLlm: false,
         realEmbeddings: false,
         relationshipFallback: false,
+        strictStructured: false,
     };
     const rest = argv[0] === 'run' ? argv.slice(1) : argv;
     for (let i = 0; i < rest.length; i++) {
@@ -62,6 +65,7 @@ function parseArgs(argv: string[]): Args {
         else if (k === '--real-llm') a.realLlm = true;
         else if (k === '--real-embeddings') a.realEmbeddings = true;
         else if (k === '--relationship-fallback') a.relationshipFallback = true;
+        else if (k === '--strict-structured') a.strictStructured = true;
     }
     return a;
 }
@@ -128,6 +132,7 @@ async function main(): Promise<void> {
     console.log(`  agent      : ${args.realLlm ? 'RunnerSceneAgent (real LLM)' : 'FakeSceneAgent (deterministic)'}`);
     if (provider) console.log(`  provider   : ${provider} / ${model}`);
     console.log(`  embeddings : ${args.realEmbeddings ? 'real OpenAI (explicit opt-in)' : 'deterministic hash (local only)'}`);
+    if (args.strictStructured) console.log('  structured : STRICT (prose is rendering only)');
     console.log('═'.repeat(64));
 
     fs.mkdirSync(args.out, { recursive: true });
@@ -140,6 +145,7 @@ async function main(): Promise<void> {
         provider: provider ?? 'deterministic',
         model: model ?? 'fake',
         relationshipFallback: args.relationshipFallback,
+        ...(args.strictStructured ? { strictStructured: true as const } : {}),
     };
     if (fs.existsSync(manifestFile)) {
         const previous = JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as typeof manifest;
@@ -149,6 +155,11 @@ async function main(): Promise<void> {
             if (prior !== manifest[key]) {
                 throw new Error(`run provenance mismatch for ${key}: ${String(prior)} != ${String(manifest[key])}`);
             }
+        }
+        if ((previous.strictStructured ?? false) !== args.strictStructured) {
+            throw new Error(
+                `run provenance mismatch for strictStructured: ${String(previous.strictStructured ?? false)} != ${String(args.strictStructured)}`,
+            );
         }
     } else {
         fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
@@ -176,6 +187,7 @@ async function main(): Promise<void> {
             const seededViews = seedRelationshipViews(world, raw.relationship_views ?? []);
             console.log(`  relationship fallback: ON · ${seededViews} seeded canon view(s)`);
         }
+        if (args.strictStructured) world.data.strictStructured = true;
         // 相識分寸: a season may declare subjective naming; seed the acquaintance map
         // AFTER cast/edges/views so co-workers/edge-holders start named. Post-build,
         // mirroring the relationship-fallback flag above.

@@ -15,6 +15,8 @@ import type {
     AudienceReactionInput,
     ChooseActionInput,
     ChooseActionResult,
+    DeclareWantSemanticsInput,
+    DeclareWantSemanticsReply,
     GenesisWant,
     EvolveSecretInput,
     PovReflectInput,
@@ -66,6 +68,31 @@ export class FakeSceneAgent implements SceneAgentPort {
         if (/挨近/.test(input.wantDesc)) return { resolved: false };
         const resolved = hash(`${input.name}|${input.wantDesc}|${input.beats.length}`) % 3 === 0;
         return resolved ? { resolved: true, note: `${input.name}把「${input.wantDesc}」做了個了斷` } : { resolved: false };
+    }
+
+    async declareWantSemantics(
+        input: DeclareWantSemanticsInput,
+    ): Promise<DeclareWantSemanticsReply> {
+        const semanticTags: DeclareWantSemanticsReply['semanticTags'] =
+            input.layer === '愛' || input.layer === '情'
+                ? ['affection']
+                : input.layer === '虧欠' || input.layer === '催討'
+                  ? ['reckoning']
+                  : input.layer === '妒'
+                    ? ['jealousy', 'hostility']
+                    : input.layer === '怨'
+                      ? ['reckoning', 'jealousy', 'hostility']
+                      : [];
+        const target = input.target
+            ? input.cast.find(
+                  (member) =>
+                      member.id === input.target || member.name === input.target,
+              )?.id
+            : undefined;
+        return {
+            semanticTags,
+            ...(target ? { target } : {}),
+        };
     }
 
     async deriveGenesisWants(input: Runner.characterAgent.DeriveWantsInput): Promise<GenesisWant[]> {

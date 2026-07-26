@@ -27,7 +27,8 @@ import {
     WANT,
     applyBeat,
     forcingPressure,
-    isBondLayer,
+    hasWantSemantic,
+    isBondWant,
     tension,
     type Want,
 } from './want-core.ts';
@@ -112,6 +113,9 @@ export interface SceneLoopInput {
     /** The saga's full want array (live + retired; mutated in place). */
     wants: Want[];
     tick: number;
+    /** Research arm: finite want metadata is authoritative; free-text `layer`
+     * remains a rendering/monitor input only. */
+    strictStructured?: boolean;
     /** Turn caps; defaults match §2.48 (private scenes run longer). */
     maxTurns?: number;
     /** This scene CONTINUES a still-warm encounter (same pair, same private venue,
@@ -207,8 +211,10 @@ function levelAt(w: Want, effR: number): EffLevel {
 }
 
 /** §2.46: public crumbs never feed a love want — it stays hungry until private. */
-function satGainFor(w: Want, isPrivate: boolean): number {
-    const isLove = /愛|情/.test(w.layer);
+function satGainFor(w: Want, isPrivate: boolean, strictStructured = false): number {
+    const isLove = strictStructured
+        ? hasWantSemantic(w, 'affection')
+        : /愛|情/.test(w.layer);
     return isLove && !isPrivate ? 0.05 : 0.16;
 }
 
@@ -322,7 +328,12 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             input.isPrivate &&
             present.length === 2 &&
             (consummateScene || (!!w.target && others.some((o) => o.name === w.target || o.characterId === w.target)));
-        const gateBeat = privateAlone && (consummateScene || /愛|情/.test(w.layer));
+        const gateBeat =
+            privateAlone &&
+            (consummateScene ||
+                (input.strictStructured
+                    ? hasWantSemantic(w, 'affection')
+                    : /愛|情/.test(w.layer)));
         if (gateBeat) result.intimacyGateOpened = true;
 
         // 執念自揀: hand the beat the FULL menu of THIS actor's live wants (hottest-first,
@@ -560,7 +571,11 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
         beatsBy.set(actor.characterId, (beatsBy.get(actor.characterId) ?? 0) + 1);
 
         ledgerWant.recent += 1;
-        ledgerWant.sat = Math.min(1, ledgerWant.sat + satGainFor(ledgerWant, input.isPrivate));
+        ledgerWant.sat = Math.min(
+            1,
+            ledgerWant.sat +
+                satGainFor(ledgerWant, input.isPrivate, input.strictStructured),
+        );
         if (forcingPressure(ledgerWant) >= effRLedger) ledgerWant.frust += 1;
         if (ledgerWant.recent >= WANT.saturateAt) ledgerWant.sat = Math.min(1, ledgerWant.sat + WANT.saturationBump);
 
@@ -598,7 +613,13 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
     const presentNames = new Set(present.map((c) => c.name));
     for (const w of input.wants) {
         if (w.retired || actedWants.has(w.id)) continue;
-        if (!presentIds.has(w.characterId) || !isBondLayer(w.layer) || !w.target) continue;
+        if (
+            !presentIds.has(w.characterId) ||
+            !isBondWant(w, input.strictStructured) ||
+            !w.target
+        ) {
+            continue;
+        }
         if (presentIds.has(w.target) || presentNames.has(w.target)) {
             w.heat += WANT.bondCopresenceHeat;
         }

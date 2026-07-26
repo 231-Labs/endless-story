@@ -18,6 +18,7 @@
 
 import type { SceneAgent } from './core/scene-loop.ts';
 import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from './core/want-rewrite.ts';
+import type { WantSemanticTag, WantSource } from './core/want-core.ts';
 import type * as Runner from '@endless-story/runner';
 
 // ── Re-used runner authorship shapes (type-only) ─────────────────────────────
@@ -83,6 +84,25 @@ export type PovSceneInput = Runner.characterAgent.PovSceneInput;
 export type JudgeEstablishedInput = Runner.characterAgent.JudgeEstablishedInput;
 export type DossierCanonicalEvent = Runner.eventDossier.DossierCanonicalEvent;
 export type DossierPerspectiveSource = Runner.eventDossier.DossierPerspectiveSource;
+
+/** Dedicated mechanism-metadata declaration seat. The ordinary character-owned
+ * want prose can be born or rewritten without gaining authority over engine
+ * gates; STRICT calls this separate seat immediately before persistence. */
+export interface DeclareWantSemanticsInput {
+    source: WantSource;
+    characterId: string;
+    characterName: string;
+    desc: string;
+    layer?: string;
+    target?: string;
+    cast: Array<{ id: string; name: string }>;
+}
+
+export interface DeclareWantSemanticsReply {
+    semanticTags: WantSemanticTag[];
+    /** Exact cast id or name, or absent when the want is not person-directed. */
+    target?: string;
+}
 
 // ── Objective event → character-session delivery ───────────────────────────
 export interface CanonicalSceneBeat {
@@ -293,6 +313,12 @@ export interface SelfModelConsolidateReply {
  * with zero LLM.
  */
 export interface SceneAgentPort extends SceneAgent {
+    /** STRICT-only structured declaration. It is never called in the legacy arm,
+     * preserving its call graph and bytes. Missing/failed declarations fail
+     * closed to no semantic tags and are recorded as monitor warnings. */
+    declareWantSemantics?(
+        input: DeclareWantSemanticsInput,
+    ): Promise<DeclareWantSemanticsReply | null>;
     /** Autonomous movement is an explicit affordance choice: the world supplies
      *  reachable scene ids and the character chooses one (or stays). */
     decideMove(input: MoveDecideInput): Promise<MoveDecideResult>;
