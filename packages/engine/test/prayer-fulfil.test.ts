@@ -109,3 +109,35 @@ test('a faded want does not fulfil; away from the temple nothing happens', async
     await runTick(away, deps(), { log: () => {} });
     assert.equal(away.data.prayers![0].fulfilledTick, undefined, 'no fulfilment away from the temple');
 });
+
+test('STRICT prayer fulfilment reads resolutionCause, with prose note only as shadow', async () => {
+    const strictScenes = [
+        { id: 's0', name: '前廳', privacyLevel: 1 },
+        { id: 's1', name: '靜室', privacyLevel: 1, capabilities: ['temple' as const] },
+    ];
+
+    const fadedWant = resolvedWant('話說開了，兩下釋然');
+    fadedWant.resolutionCause = 'faded';
+    const faded = makeWorld({
+        strictStructured: true,
+        scenes: strictScenes,
+        wants: [fadedWant],
+    });
+    await runTick(faded, deps(), { log: () => {} });
+    assert.equal(faded.data.prayers![0].fulfilledTick, undefined);
+    assert.ok(
+        faded.data.structuredMonitor?.divergences.some(
+            (event) => event.kind === 'prayer-resolution-cause',
+        ),
+    );
+
+    const doneWant = resolvedWant('（日子久了，淡了）');
+    doneWant.resolutionCause = 'resolved';
+    const done = makeWorld({
+        strictStructured: true,
+        scenes: strictScenes,
+        wants: [doneWant],
+    });
+    await runTick(done, deps(), { log: () => {} });
+    assert.ok(done.data.prayers![0].fulfilledTick !== undefined);
+});

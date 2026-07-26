@@ -18,7 +18,7 @@
 
 import type { SceneAgent } from './core/scene-loop.ts';
 import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from './core/want-rewrite.ts';
-import type { WantSemanticTag, WantSource } from './core/want-core.ts';
+import type { WantSemanticTag, WantSource, WantSubjectRef } from './core/want-core.ts';
 import type * as Runner from '@endless-story/runner';
 
 // ── Re-used runner authorship shapes (type-only) ─────────────────────────────
@@ -96,12 +96,15 @@ export interface DeclareWantSemanticsInput {
     layer?: string;
     target?: string;
     cast: Array<{ id: string; name: string }>;
+    subjects: Array<WantSubjectRef & { label: string }>;
 }
 
 export interface DeclareWantSemanticsReply {
     semanticTags: WantSemanticTag[];
     /** Exact cast id or name, or absent when the want is not person-directed. */
     target?: string;
+    /** Exact subject candidate, or absent when the want is not about one. */
+    subjectRef?: WantSubjectRef;
 }
 
 // ── Objective event → character-session delivery ───────────────────────────

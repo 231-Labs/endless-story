@@ -69,6 +69,9 @@ export interface CastMember {
     gender?: string;
     age?: number;
     role?: string;
+    /** Authored public-facing status used by STRICT acquaintance seeding.
+     * Absent keeps the legacy role table only outside STRICT. */
+    publiclyRecognizable?: boolean;
     state: StateVector;
     /**
      * MUTABLE SELF-MODEL (CHARACTER_LIFECYCLE §3, L3) — the character's CURRENT
@@ -120,6 +123,9 @@ export interface CastMember {
     selfRegard?: number;
 }
 
+export const SCENE_CAPABILITIES = ['stage', 'temple'] as const;
+export type SceneCapability = (typeof SCENE_CAPABILITIES)[number];
+
 export interface SceneInfo {
     id: string;
     name: string;
@@ -134,6 +140,9 @@ export interface SceneInfo {
      * real cross-town journey. Drives movement time-cost + roadside 路遇.
      * Optional & backward-compatible: absent ⇒ no grouping (flat/uniform). */
     locationIndex?: number;
+    /** Authored finite venue semantics. An explicit empty array means the scene
+     * has no tagged capability; absence permits legacy name fallback only off. */
+    capabilities?: SceneCapability[];
 }
 
 /** One shadow comparison made while `strictStructured` is active.
@@ -141,7 +150,7 @@ export interface SceneInfo {
  * structured signal is authoritative. Equal observations are not stored. */
 export interface StructuredDivergence {
     tick: number;
-    domain: 'authorization' | 'object' | 'scene' | 'want';
+    domain: 'authorization' | 'object' | 'scene' | 'want' | 'economy' | 'preset';
     kind: string;
     legacy: boolean;
     structured: boolean;
@@ -170,6 +179,8 @@ export interface StructuredMonitor {
 export interface RelationshipEdge {
     tone: string;
     weight: number;
+    /** Authored/mechanism disposition for routing and welcome. */
+    disposition?: 'warm' | 'neutral' | 'cold';
 }
 
 /**
@@ -304,6 +315,8 @@ export interface WorldObject {
      * follow roster movement; `container` remains the prose-facing placement. */
     carriedBy?: string;
     state?: string;
+    /** Finite authored state facets used by STRICT eligibility checks. */
+    stateTags?: string[];
     version: number;
     /** Characters who know a hidden object's current placement. */
     knownBy: string[];
@@ -852,16 +865,65 @@ export class WorldState {
     welcome(hostId: string, visitorId: string): number {
         const e = this.data.edges[hostId]?.[visitorId];
         if (!e) return 0.5;
-        if (/戀|慕|愛|親|暖|友/.test(e.tone)) return Math.min(1, 0.7 + 0.1 * e.weight);
-        if (/妒|怨|恨|冷|敵|競/.test(e.tone)) return Math.max(0, 0.2 - 0.05 * e.weight);
-        return 0.5;
+        const legacy = /戀|慕|愛|親|暖|友/.test(e.tone)
+            ? Math.min(1, 0.7 + 0.1 * e.weight)
+            : /妒|怨|恨|冷|敵|競/.test(e.tone)
+              ? Math.max(0, 0.2 - 0.05 * e.weight)
+              : 0.5;
+        if (!this.data.strictStructured) return legacy;
+        const structured =
+            e.disposition === 'warm'
+                ? Math.min(1, 0.7 + 0.1 * e.weight)
+                : e.disposition === 'cold'
+                  ? Math.max(0, 0.2 - 0.05 * e.weight)
+                  : 0.5;
+        this.recordStructuredComparison({
+            domain: 'authorization',
+            kind: 'welcome-disposition',
+            legacy: legacy >= 0.7,
+            structured: structured >= 0.7,
+            actorId: hostId,
+            targetId: visitorId,
+            subjectId: `${hostId}→${visitorId}`,
+            detail: `${legacy.toFixed(2)} / ${structured.toFixed(2)}`,
+        });
+        if (e.disposition === undefined && legacy !== 0.5) {
+            this.recordStructuredWarning({
+                domain: 'preset',
+                kind: 'missing-edge-disposition',
+                subjectId: `${hostId}→${visitorId}`,
+                detail: e.tone,
+            });
+        }
+        return structured;
     }
 
     /** Record/strengthen a directed relationship edge (§2.4 accumulation). */
-    setEdge(fromId: string, toId: string, tone: string): void {
+    setEdge(
+        fromId: string,
+        toId: string,
+        tone: string,
+        disposition?: RelationshipEdge['disposition'],
+    ): void {
         const row = (this.data.edges[fromId] ??= {});
         const cur = row[toId];
-        row[toId] = cur && cur.tone === tone ? { tone, weight: cur.weight + 1 } : { tone, weight: (cur?.weight ?? 0) + 1 };
+        const nextDisposition = disposition ?? cur?.disposition;
+        row[toId] =
+            cur && cur.tone === tone
+                ? {
+                      tone,
+                      weight: cur.weight + 1,
+                      ...(nextDisposition
+                          ? { disposition: nextDisposition }
+                          : {}),
+                  }
+                : {
+                      tone,
+                      weight: (cur?.weight ?? 0) + 1,
+                      ...(nextDisposition
+                          ? { disposition: nextDisposition }
+                          : {}),
+                  };
     }
 
     // ── 口碑 / 自視 (public renown + private self-regard) ──────────────────────

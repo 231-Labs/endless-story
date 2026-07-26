@@ -186,18 +186,48 @@ export function buildStakesBrief(input: StakesBriefInput): string | undefined {
     // foreclosure writes no resolvedTick) pulls its pray-er back to the temple.
     if ((clockLabel === '清晨' || clockLabel === '黃昏') && templeScenes.size) {
         const owed = (world.data.prayers ?? []).find(
-            (p) =>
-                p.characterId === member.id &&
-                p.fulfilledTick === undefined &&
-                !!p.wantDesc &&
-                wants.some(
+            (p) => {
+                if (
+                    p.characterId !== member.id ||
+                    p.fulfilledTick !== undefined ||
+                    !p.wantDesc
+                ) {
+                    return false;
+                }
+                const matching = wants.filter(
                     (wnt) =>
                         wnt.characterId === member.id &&
                         wnt.retired &&
                         wnt.resolvedTick !== undefined &&
-                        !/淡了|過去了/.test(wnt.resolvedNote ?? '') &&
                         wnt.desc === p.wantDesc,
-                ),
+                );
+                const legacy = matching.some(
+                    (wnt) => !/淡了|過去了/.test(wnt.resolvedNote ?? ''),
+                );
+                const structured = matching.some(
+                    (wnt) => wnt.resolutionCause === 'resolved',
+                );
+                if (world.data.strictStructured) {
+                    world.recordStructuredComparison({
+                        domain: 'want',
+                        kind: 'prayer-return-pull',
+                        actorId: member.id,
+                        subjectId: p.id,
+                        legacy,
+                        structured,
+                        detail: p.wantDesc,
+                    });
+                    if (matching.some((wnt) => wnt.resolutionCause === undefined)) {
+                        world.recordStructuredWarning({
+                            domain: 'want',
+                            kind: 'missing-resolution-cause',
+                            subjectId: p.id,
+                            detail: p.wantDesc,
+                        });
+                    }
+                }
+                return world.data.strictStructured ? structured : legacy;
+            },
         );
         if (owed) lines.push(`那樁在${owed.sceneName}求過的事成了——得空該去還個願。`);
     }

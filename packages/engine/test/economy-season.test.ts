@@ -94,6 +94,23 @@ class ContractScriptAgent extends FakeSceneAgent {
     }
 }
 
+class ForeclosureKeepAgent extends FakeSceneAgent {
+    override async judgeWantResolved(): Promise<{ resolved: false }> {
+        return { resolved: false };
+    }
+
+    override async rewriteWantLedger(
+        input: { wants: Array<{ id: string }> },
+    ): Promise<{ decisions: Array<{ id: string; action: 'keep' }> }> {
+        return {
+            decisions: input.wants.map((want) => ({
+                id: want.id,
+                action: 'keep',
+            })),
+        };
+    }
+}
+
 async function runDays(world: WorldState, agent: FakeSceneAgent, ticks: number): Promise<TickReport[]> {
     const deps = {
         agent,
@@ -245,6 +262,77 @@ test('契約限期: the moot 搭檔 want is foreclosed and a party-private perce
     assert.ok(
         worldBeats.some((b) => b.text.includes('聯名搭檔那一欄') && b.perceiverIds?.includes(liu)),
         'the foreclosure percept names the slot and reaches 柳安春',
+    );
+});
+
+test('STRICT contract foreclosure reads subjectRef in both divergence directions', async () => {
+    const strictWorld = () => {
+        const world = buildWorldState(
+            loadPresetFile('spring-snow'),
+            undefined,
+            6,
+            { strictStructured: true },
+        );
+        applySeasonFrame(world, buildAnchunAcceptanceFrame());
+        return world;
+    };
+
+    const proseOnlyWorld = strictWorld();
+    const proseOwner = proseOnlyWorld.idByName('柳安春')!;
+    const proseOnly = newWant({
+        id: 'w-prose-only-contract',
+        characterId: proseOwner,
+        layer: '事務',
+        desc: '聯名搭檔那一欄，究竟該填誰的名字才好',
+        weight: 0.8,
+        sat: 0.2,
+        resistance: 5,
+        kind: 'narrative',
+        source: 'genesis',
+        bornTick: 0,
+    });
+    proseOnlyWorld.data.wants.push(proseOnly);
+
+    const structuredWorld = strictWorld();
+    const structuredOwner = structuredWorld.idByName('柳安春')!;
+    const structured = newWant({
+        id: 'w-structured-contract',
+        characterId: structuredOwner,
+        layer: '事務',
+        desc: '想把桌上那樁事情收拾乾淨',
+        subjectRef: { kind: 'contract', id: 'anchun-exclusive' },
+        weight: 0.8,
+        sat: 0.2,
+        resistance: 5,
+        kind: 'narrative',
+        source: 'genesis',
+        bornTick: 0,
+    });
+    structuredWorld.data.wants.push(structured);
+
+    await Promise.all([
+        runDays(proseOnlyWorld, new ForeclosureKeepAgent(), 19),
+        runDays(structuredWorld, new ForeclosureKeepAgent(), 19),
+    ]);
+
+    assert.equal(proseOnly.retired, undefined);
+    assert.equal(structured.retired, true);
+    assert.equal(structured.resolutionCause, 'foreclosed');
+    assert.ok(
+        proseOnlyWorld.data.structuredMonitor?.divergences.some(
+            (event) =>
+                event.kind === 'contract-foreclosure' &&
+                event.legacy === true &&
+                event.structured === false,
+        ),
+    );
+    assert.ok(
+        structuredWorld.data.structuredMonitor?.divergences.some(
+            (event) =>
+                event.kind === 'contract-foreclosure' &&
+                event.legacy === false &&
+                event.structured === true,
+        ),
     );
 });
 
@@ -826,6 +914,54 @@ test('座席可拍板條件型: a verdict accepts a condition demand the authore
     assert.ok(c.terms.some((t) => t.includes('半年')), 'the amended demand is written in');
     assert.equal(c.deadlineDay, 4, 'accept grants a grace day');
     assert.ok(settle.publicNotices.some((line) => line.includes('賣你這個面子')), settle.publicNotices.join(' / '));
+    assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('STRICT condition counter without a typed verdict fails closed and only shadows prose policy', () => {
+    const world = buildWorldState(
+        loadPresetFile('spring-snow'),
+        undefined,
+        6,
+        { strictStructured: true },
+    );
+    applySeasonFrame(world, buildAnchunAcceptanceFrame());
+    const economy = new LocalEconomy();
+    const liu = world.idByName('柳安春')!;
+    const paperScene = world.objectById('anchun-exclusive-contract')!.sceneId;
+    world.moveCharacter(liu, paperScene);
+
+    const demand = '那張半卸妝校樣不許用，肖像須另拍定妝照';
+    const countered = economy.commitCommand(world, {
+        actorId: liu,
+        sceneId: paperScene,
+        witnessIds: [liu],
+        day: 1,
+        command: {
+            action: 'contract_counter',
+            contractId: 'anchun-exclusive',
+            demand,
+        },
+        causeEventId: 'test:strict-condition',
+        seq: 0,
+    });
+    assert.equal(countered.ok, true, countered.reason);
+
+    settleSeasonDay(world, { day: 1, nowTick: 5 });
+    const contract = world.data.economy!.contracts['anchun-exclusive'];
+    assert.ok(!contract.terms.some((term) => term.includes('定妝照')));
+    assert.ok(
+        world.data.structuredMonitor?.divergences.some(
+            (event) =>
+                event.kind === 'condition-counter-policy' &&
+                event.legacy === true &&
+                event.structured === false,
+        ),
+    );
+    assert.ok(
+        world.data.structuredMonitor?.warnings.some(
+            (warning) => warning.kind === 'missing-condition-code',
+        ),
+    );
     assert.deepEqual(auditSeasonEconomy(world), []);
 });
 

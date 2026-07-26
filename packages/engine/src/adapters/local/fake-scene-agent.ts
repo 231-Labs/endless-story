@@ -89,9 +89,15 @@ export class FakeSceneAgent implements SceneAgentPort {
                       member.id === input.target || member.name === input.target,
               )?.id
             : undefined;
+        const subject = input.subjects.find(
+            (candidate) =>
+                input.desc.includes(candidate.label) ||
+                input.desc.includes(candidate.id),
+        );
         return {
             semanticTags,
             ...(target ? { target } : {}),
+            ...(subject ? { subjectRef: { kind: subject.kind, id: subject.id } } : {}),
         };
     }
 

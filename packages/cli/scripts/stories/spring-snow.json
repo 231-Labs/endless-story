@@ -268,6 +268,7 @@
     },
     {
       "name": "雲錦台戲台",
+      "capabilities": ["stage"],
       "description": "春雪社的主台。紅幔、包廂、洋式電燈和三面茶座一同亮起，台口看得見女學生、買辦太太、報館先生和唱片行經理的臉。",
       "location_index": 1,
       "privacy": 0,
@@ -472,6 +473,7 @@
     },
     {
       "name": "會樂里觀音堂",
+      "capabilities": ["temple"],
       "description": "會樂里巷底一座小小的觀音堂，終日一爐冷香。堂上供著白衣觀音，側龕另立一尊城隍神像；牆邊一面願牆，紅箋墨字層層疊疊——都是會樂里的角兒、堂子裡的姑娘、過路的班中人，來對神明親口說出的心願。台上不能說的、帳上算不清的、求人無門的，都到這香案前討個主意、許個願。",
       "location_index": 4,
       "privacy": 1,
@@ -636,6 +638,7 @@
       "ageYears": 42,
       "gender": "女",
       "role": "班主",
+      "publicly_recognizable": true,
       "skills": [
         { "name": "調度", "kind": "談", "style": "三言兩語就把一班人的去留、戲碼、臉面排停當，話不高卻沒人敢不聽", "level": 5 },
         { "name": "鎮得住場", "kind": "風", "style": "不動聲色便壓得住滿堂，狠話與溫梨湯出自同一副心腸，疼人藏得極深", "level": 5 },
@@ -918,6 +921,7 @@
       "ageYears": 32,
       "gender": "男",
       "role": "記者",
+      "publicly_recognizable": true,
       "skills": [
         { "name": "辛辣文筆", "kind": "文", "style": "筆鋒辛辣一針見血，八個字的標題點石成金，也能叫人從此不得安生", "level": 5 },
         { "name": "探聽", "kind": "眼", "style": "一雙專挑破綻的眼，笑著奉承時已在算哪個名字值得押注", "level": 5 },
@@ -954,6 +958,7 @@
       "name": "金鳳",
       "gender": "女",
       "role": "歌女",
+      "publicly_recognizable": true,
       "ageYears": 29,
       "skills": [
         { "name": "一副好嗓", "kind": "唱", "style": "一段四季相思唱得客人沒有不掏賞的，該媚時媚、該冷時冷", "level": 5 },
@@ -1037,6 +1042,7 @@
       "ageYears": 61,
       "gender": "女",
       "role": "花婆",
+      "publicly_recognizable": true,
       "skills": [
         { "name": "識人", "kind": "眼", "style": "滿前街誰進誰出、誰替誰買花送到哪條弄堂，一本帳全記在心裡", "level": 5 },
         { "name": "守口如瓶", "kind": "風", "style": "花香裡藏著半條霞飛路的來往，只賣花不賣話，銀元問門道也一字不鬆", "level": 5 },
@@ -1064,6 +1070,7 @@
       "ageYears": 38,
       "gender": "男",
       "role": "小販",
+      "publicly_recognizable": true,
       "skills": [
         { "name": "煎炒", "kind": "手", "style": "一口生煎底煎得金黃焦脆、一咬一包湯，火候是無數個焦糊的清晨換來的", "level": 5 },
         { "name": "熱絡賒帳", "kind": "談", "style": "嗓門大手腳勤待人熱絡，沒錢的賒著記在心裡，笑罵一句、從不當眾催", "level": 5 },
@@ -1087,6 +1094,8 @@
       "home_scene": "前街攤棚"
     }
   ],
+  "bonds": [],
+  "established_pairs": [],
   "relationship_views": [
     {
       "from": "柳安春",

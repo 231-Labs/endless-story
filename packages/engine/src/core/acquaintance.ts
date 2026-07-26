@@ -49,7 +49,31 @@ export function seedAcquaintance(world: WorldState): void {
                 continue;
             }
             // 3) a public-facing figure ⇒ acquainted by trade/surname (one-directional).
-            if (t.role && PUBLIC_ROLES.has(t.role)) {
+            const legacyPublic = !!t.role && PUBLIC_ROLES.has(t.role);
+            const structuredPublic = t.publiclyRecognizable === true;
+            if (d.strictStructured) {
+                world.recordStructuredComparison({
+                    domain: 'preset',
+                    kind: 'publicly-recognizable',
+                    legacy: legacyPublic,
+                    structured: structuredPublic,
+                    targetId: t.id,
+                    subjectId: t.id,
+                    detail: t.role,
+                });
+                if (
+                    t.publiclyRecognizable === undefined &&
+                    legacyPublic
+                ) {
+                    world.recordStructuredWarning({
+                        domain: 'preset',
+                        kind: 'missing-public-recognizability',
+                        subjectId: t.id,
+                        detail: t.role,
+                    });
+                }
+            }
+            if (d.strictStructured ? structuredPublic : legacyPublic) {
                 world.setAcquaint(p.id, t.id, 'acquainted');
             }
             // 4) else: leave unset (stranger by default).

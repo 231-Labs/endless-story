@@ -212,6 +212,7 @@ export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
                 carriedBy: object.carriedBy,
                 visibility: object.visibility,
                 state: object.state,
+                stateTags: object.stateTags ? [...object.stateTags] : undefined,
                 version: object.version,
                 knownBy: [...object.knownBy],
             }] as const
@@ -285,7 +286,13 @@ export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
                 object.visibility = effect.visibility;
                 if (effect.visibility === 'destroyed') object.carriedBy = undefined;
             }
-            if (effect.state) object.state = effect.state;
+            if (effect.state) {
+                object.state = effect.state;
+                // The runner's structured effect currently has no finite tag
+                // field. STRICT therefore invalidates prior authored tags instead
+                // of letting stale mechanism state survive a free-text change.
+                if (strictStructured) object.stateTags = undefined;
+            }
             object.version += 1;
 
             const perceivers = input.audience === 'addressed'
@@ -303,6 +310,9 @@ export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
             object.carriedBy = before.carriedBy;
             object.visibility = before.visibility;
             object.state = before.state;
+            object.stateTags = before.stateTags
+                ? [...before.stateTags]
+                : undefined;
             object.version = before.version;
             object.knownBy = [...before.knownBy];
         }

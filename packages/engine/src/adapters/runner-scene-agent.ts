@@ -300,10 +300,12 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '這不是改寫心願，也不是替角色決定行動；你只為機制宣告有限 metadata。',
             'semanticTags 只能取 affection、reckoning、jealousy、hostility；沒有就空陣列。',
             'target 只能逐字回傳候選人物的 id 或 name；不是明確指向人物就省略。',
+            'subjectRef 只能逐字回傳候選主體的 kind 與 id；不是明確指向就省略。',
             'affection=親密/愛慕；reckoning=虧欠/清算/討回；jealousy=妒意；hostility=敵意或傷害傾向。',
-            '只輸出 JSON：{"semanticTags":[],"target":"可省略"}。不要 markdown。',
+            '只輸出 JSON：{"semanticTags":[],"target":"可省略","subjectRef":{"kind":"contract","id":"可省略"}}。不要 markdown。',
         ].join('\n');
         const cast = input.cast.map((member) => `${member.id}=${member.name}`).join('、');
+        const subjects = input.subjects.map((subject) => `${subject.kind}:${subject.id}=${subject.label}`).join('、');
         const user = [
             `來源：${input.source}`,
             `角色：${input.characterId}=${input.characterName}`,
@@ -311,6 +313,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
             `心願原句：${input.desc}`,
             `原始 target：${input.target ?? '（無）'}`,
             `target 候選：${cast || '（無）'}`,
+            `subjectRef 候選：${subjects || '（無）'}`,
         ].join('\n');
         const client = llmText.createTextClient({ kind: 'primary' });
         const res = await client.chat({
@@ -342,9 +345,19 @@ export class RunnerSceneAgent implements SceneAgentPort {
             )
                 ? parsed.target
                 : undefined;
+        const rawSubject = parsed.subjectRef as Record<string, unknown> | undefined;
+        const subjectRef =
+            rawSubject?.kind === 'contract' &&
+            typeof rawSubject.id === 'string' &&
+            input.subjects.some(
+                (subject) => subject.kind === 'contract' && subject.id === rawSubject.id,
+            )
+                ? { kind: 'contract' as const, id: rawSubject.id }
+                : undefined;
         return {
             semanticTags: [...new Set(semanticTags)],
             ...(target ? { target } : {}),
+            ...(subjectRef ? { subjectRef } : {}),
         };
     }
 

@@ -14,6 +14,8 @@ export type WantSource = 'genesis' | 'ripple' | 'aftermath' | 'dream' | 'owner';
  * character's prose label; these tags are the only semantic gates in STRICT. */
 export const WANT_SEMANTIC_TAGS = ['affection', 'reckoning', 'jealousy', 'hostility'] as const;
 export type WantSemanticTag = (typeof WANT_SEMANTIC_TAGS)[number];
+export type WantSubjectRef = { kind: 'contract'; id: string };
+export type WantResolutionCause = 'resolved' | 'faded' | 'foreclosed' | 'rewritten';
 
 export interface Want {
     id: string;
@@ -24,6 +26,9 @@ export interface Want {
     /** Engine-owned semantic metadata. Ordinary character-owned desc rewrites
      * MUST NOT mutate this field; only a dedicated declaration seat may set it. */
     semanticTags?: WantSemanticTag[];
+    /** Stable mechanism subject. Prose may describe it, but never creates this
+     * reference except through the dedicated semantic declaration seat. */
+    subjectRef?: WantSubjectRef;
     /** The want itself, in the character's own words. */
     desc: string;
     /** Optional target character id or name. */
@@ -54,6 +59,8 @@ export interface Want {
     source: WantSource;
     bornTick: number;
     resolvedTick?: number;
+    /** Structured lifecycle fact. `resolvedNote` remains rendering only. */
+    resolutionCause?: WantResolutionCause;
     /** Contested-resource label this want aches for (exact on-chain label).
      *  The SINGLE demand source: a character contests a stake only through a
      *  want that carries its label. null = assessed and tied to none;
@@ -448,13 +455,14 @@ export function normalizeLayer(raw: string | undefined): string {
 
 export function newWant(
     init: Pick<Want, 'characterId' | 'layer' | 'desc' | 'weight' | 'sat' | 'resistance' | 'kind' | 'source' | 'bornTick'> &
-        Partial<Pick<Want, 'target' | 'id' | 'resource' | 'semanticTags'>>,
+        Partial<Pick<Want, 'target' | 'id' | 'resource' | 'semanticTags' | 'subjectRef'>>,
 ): Want {
     return {
         id: init.id ?? `w${Date.now().toString(36)}-${++_seq}`,
         characterId: init.characterId,
         layer: init.layer,
         ...(init.semanticTags?.length ? { semanticTags: [...new Set(init.semanticTags)] } : {}),
+        ...(init.subjectRef ? { subjectRef: { ...init.subjectRef } } : {}),
         desc: init.desc,
         target: init.target,
         resource: init.resource,
@@ -503,6 +511,7 @@ export function fadeStaleWants(wants: Want[], tick: number): Want[] {
         if (!cold && !idle) continue;
         w.retired = true;
         w.resolvedTick = tick;
+        w.resolutionCause = 'faded';
         w.resolvedNote = cold ? '（日子久了，淡了）' : '（一時好奇，過去了）';
         faded.push(w);
     }
@@ -549,6 +558,7 @@ export function applyBeat(w: Want, all: Want[], outcome: BeatOutcome, tick: numb
     if (outcome.resolved) {
         w.retired = true;
         w.resolvedTick = tick;
+        w.resolutionCause = 'resolved';
         w.resolvedNote = outcome.resolvedNote;
         for (const y of all) {
             if (y === w || y.retired || y.characterId !== w.characterId) continue;
@@ -571,6 +581,7 @@ export interface RippleDelta {
     layer?: string;
     target?: string;
     semanticTags?: WantSemanticTag[];
+    subjectRef?: WantSubjectRef;
 }
 
 /** Apply LLM-judged ripples: shift the target's hottest want, spawn new threads. */
@@ -615,6 +626,7 @@ export function applyRipples(
                     characterId: d.characterId,
                     layer: normalizeLayer(d.layer),
                     ...(strictStructured && d.semanticTags?.length ? { semanticTags: d.semanticTags } : {}),
+                    ...(strictStructured && d.subjectRef ? { subjectRef: d.subjectRef } : {}),
                     desc: nt,
                     target: d.target,
                     weight: WANT.rippleWeight,

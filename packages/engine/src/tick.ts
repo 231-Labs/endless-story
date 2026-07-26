@@ -32,6 +32,7 @@ import {
     WANT_SEMANTIC_TAGS,
     type WantSemanticTag,
     type WantSource,
+    type WantSubjectRef,
 } from './core/want-core.ts';
 import { pickOrthogonalThreads, spawnWant, type LedgerEvent } from './core/want-rewrite.ts';
 import { runSceneLoop, type SceneBeat, type SceneLoopCastMember } from './core/scene-loop.ts';
@@ -73,7 +74,7 @@ async function declareStructuredWant(
     world: WorldState,
     agent: SceneAgentPort,
     draft: WantDraftForDeclaration,
-): Promise<{ semanticTags?: WantSemanticTag[]; target?: string }> {
+): Promise<{ semanticTags?: WantSemanticTag[]; target?: string; subjectRef?: WantSubjectRef }> {
     if (!world.data.strictStructured) {
         return draft.target ? { target: draft.target } : {};
     }
@@ -96,6 +97,11 @@ async function declareStructuredWant(
             layer: draft.layer,
             target: draft.target,
             cast: world.data.cast.map((member) => ({ id: member.id, name: member.name })),
+            subjects: Object.values(world.data.economy?.contracts ?? {}).map((contract) => ({
+                kind: 'contract' as const,
+                id: contract.id,
+                label: contract.label,
+            })),
         });
         if (!reply) {
             world.recordStructuredWarning({
@@ -123,9 +129,23 @@ async function declareStructuredWant(
                 detail: reply.target,
             });
         }
+        const subjectRef =
+            reply.subjectRef?.kind === 'contract' &&
+            world.data.economy?.contracts[reply.subjectRef.id]
+                ? reply.subjectRef
+                : undefined;
+        if (reply.subjectRef && !subjectRef) {
+            world.recordStructuredWarning({
+                domain: 'want',
+                kind: 'invalid-semantic-subject',
+                subjectId: draft.characterId,
+                detail: `${reply.subjectRef.kind}:${reply.subjectRef.id}`,
+            });
+        }
         return {
             ...(semanticTags.length ? { semanticTags } : {}),
             ...(targetMember ? { target: targetMember.id } : {}),
+            ...(subjectRef ? { subjectRef } : {}),
         };
     } catch (error) {
         world.recordStructuredWarning({
@@ -404,6 +424,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         ...(w.strictStructured && declared.semanticTags?.length
                             ? { semanticTags: declared.semanticTags }
                             : {}),
+                        ...(w.strictStructured && declared.subjectRef
+                            ? { subjectRef: declared.subjectRef }
+                            : {}),
                         resource: w.contestedResources.length > 0 ? (g.resource ?? null) : undefined,
                         weight: g.weight,
                         sat: g.sat,
@@ -624,16 +647,41 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     if (w.prayers?.length && templeScenes.size) {
         for (const p of w.prayers) {
             if (p.fulfilledTick !== undefined) continue;
+            const matching = wants.filter(
+                (want) =>
+                    want.characterId === p.characterId &&
+                    want.retired &&
+                    want.resolvedTick !== undefined &&
+                    !!p.wantDesc &&
+                    want.desc === p.wantDesc,
+            );
+            const legacyTrulyDone = matching.some(
+                (want) => !/淡了|過去了/.test(want.resolvedNote ?? ''),
+            );
+            const structuredTrulyDone = matching.some(
+                (want) => want.resolutionCause === 'resolved',
+            );
+            if (w.strictStructured) {
+                world.recordStructuredComparison({
+                    domain: 'want',
+                    kind: 'prayer-resolution-cause',
+                    actorId: p.characterId,
+                    subjectId: p.id,
+                    legacy: legacyTrulyDone,
+                    structured: structuredTrulyDone,
+                    detail: p.wantDesc,
+                });
+                if (matching.some((want) => want.resolutionCause === undefined)) {
+                    world.recordStructuredWarning({
+                        domain: 'want',
+                        kind: 'missing-resolution-cause',
+                        subjectId: p.id,
+                        detail: p.wantDesc,
+                    });
+                }
+            }
             const trulyDone = () =>
-                wants.some(
-                    (want) =>
-                        want.characterId === p.characterId &&
-                        want.retired &&
-                        want.resolvedTick !== undefined &&
-                        !/淡了|過去了/.test(want.resolvedNote ?? '') &&
-                        !!p.wantDesc &&
-                        want.desc === p.wantDesc,
-                );
+                w.strictStructured ? structuredTrulyDone : legacyTrulyDone;
             // 香火願 (source 'owner') 應驗s SILENTLY the moment the want truly
             // resolves: the character never made this vow — never knew it exists
             // — so there is no temple visit to wait for and no private memory to
@@ -1252,6 +1300,11 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     if (w.bonds === undefined) {
         const seedG = world.bondGraph(); // empty
         const seededPairs = new Set<string>();
+        const inferredBonds: Array<{
+            from: string;
+            to: string;
+            kind: 'established' | 'yearning' | 'known';
+        }> = [];
         const INTIMATE = /舊情|舊愛|舊侶|舊歡|情人|夫妻|結髮|相許|恩愛|枕|同衾|露水|入幕|恩客|雲雨|一夜|眷侶/;
         const YEARNING = /暗戀|傾心|眷|相思|心悅|念著|放不下|愛慕|暗慕/;
         const KNOWN = /師|徒|搭檔|同儕|舊識|交好|同門|故人|夥伴|知交|親厚/;
@@ -1262,10 +1315,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 // direction's marker establishes (old lovers).
                 seedBond(seedG, from, to, BOND.seed.established);
                 seededPairs.add(world.pairKey(from, to));
+                inferredBonds.push({ from, to, kind: 'established' });
             } else if (YEARNING.test(text)) {
                 seedBond(seedG, from, to, BOND.seed.yearning); // NOT established
+                inferredBonds.push({ from, to, kind: 'yearning' });
             } else if (KNOWN.test(text)) {
                 seedBond(seedG, from, to, BOND.seed.known);
+                inferredBonds.push({ from, to, kind: 'known' });
             }
             // else stranger — no seed.
         };
@@ -1275,8 +1331,29 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         for (const member of w.cast) {
             for (const [to, view] of Object.entries(member.relationshipView)) classify(member.id, to, view);
         }
-        world.setBonds(seedG);                    // at least [] — never re-seeds
-        w.establishedPairs ??= [...seededPairs];   // at least []
+        if (strictStructured) {
+            world.recordStructuredWarning({
+                domain: 'preset',
+                kind: 'missing-declared-bonds',
+                detail: 'STRICT does not derive bonds or established pairs from tone/view prose',
+            });
+            for (const inferred of inferredBonds) {
+                world.recordStructuredComparison({
+                    domain: 'scene',
+                    kind: `bond-underlay-${inferred.kind}`,
+                    legacy: true,
+                    structured: false,
+                    actorId: inferred.from,
+                    targetId: inferred.to,
+                    subjectId: world.pairKey(inferred.from, inferred.to),
+                });
+            }
+            world.setBonds(new Map());
+            w.establishedPairs ??= [];
+        } else {
+            world.setBonds(seedG);                    // at least [] — never re-seeds
+            w.establishedPairs ??= [...seededPairs];   // at least []
+        }
     }
 
     // 2.96) 訪問權限 (space access grants) — lazily seed STANDING keys for every
@@ -1746,7 +1823,30 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         // only conduct. So a 悲工/文戲 lead's on-stage OUTPUT reads different from
         // how they carry themselves at the tea-table — the framework's "different
         // style of output" made concrete, with one gather call + a wider kind set.
-        const onStage = isStageScene(sceneName);
+        const legacyStage = isStageScene(sceneName);
+        const structuredStage =
+            info?.capabilities?.includes('stage') === true;
+        if (strictStructured && info) {
+            world.recordStructuredComparison({
+                domain: 'scene',
+                kind: 'stage-capability',
+                legacy: legacyStage,
+                structured: structuredStage,
+                subjectId: info.id,
+                detail: info.name,
+            });
+            if (info.capabilities === undefined && legacyStage) {
+                world.recordStructuredWarning({
+                    domain: 'preset',
+                    kind: 'missing-stage-capability',
+                    subjectId: info.id,
+                    detail: info.name,
+                });
+            }
+        }
+        const onStage = strictStructured
+            ? structuredStage
+            : legacyStage;
         const beatSkillKinds = onStage ? [...CONDUCT_KINDS, ...STAGE_KINDS] : [...CONDUCT_KINDS];
         const castWithMem: SceneLoopCastMember[] = await Promise.all(
             ids.map(async (id) => {
@@ -2278,6 +2378,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         ...(w.strictStructured && declared.semanticTags?.length
                             ? { semanticTags: declared.semanticTags }
                             : {}),
+                        ...(w.strictStructured && declared.subjectRef
+                            ? { subjectRef: declared.subjectRef }
+                            : {}),
                         weight: after.weight,
                         sat: after.sat,
                         resistance: after.resistance,
@@ -2321,6 +2424,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                               ...delta,
                               target: declared.target,
                               semanticTags: declared.semanticTags,
+                              subjectRef: declared.subjectRef,
                           };
                       }),
                   )
@@ -2441,8 +2545,31 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     const aboutIt =
                         want.desc.includes(foreclosure.label) ||
                         (foreclosure.slotUnfilled && /搭檔|聯名|署名|填.{0,3}名|簽/.test(want.desc));
-                    if (!aboutIt) continue;
+                    const structuredAboutIt =
+                        want.subjectRef?.kind === 'contract' &&
+                        want.subjectRef.id === foreclosure.contractId;
+                    if (w.strictStructured) {
+                        world.recordStructuredComparison({
+                            domain: 'want',
+                            kind: 'contract-foreclosure',
+                            actorId: want.characterId,
+                            subjectId: foreclosure.contractId,
+                            legacy: aboutIt,
+                            structured: structuredAboutIt,
+                            detail: want.desc,
+                        });
+                        if (aboutIt && !want.subjectRef) {
+                            world.recordStructuredWarning({
+                                domain: 'want',
+                                kind: 'missing-want-subject-ref',
+                                subjectId: want.id,
+                                detail: foreclosure.contractId,
+                            });
+                        }
+                    }
+                    if (w.strictStructured ? !structuredAboutIt : !aboutIt) continue;
                     want.retired = true;
+                    want.resolutionCause = 'foreclosed';
                     log(`  [限期作廢] ${world.nameById(want.characterId)}「${want.desc}」隨約作廢`);
                     acc.lines.push(`[帳房] ${world.nameById(want.characterId)}擱在心上的「${want.desc}」，隨這約限期一過，也就了了。`);
                 }
@@ -2925,6 +3052,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             if (wnt.weight >= FADE_FLOOR) continue;
             wnt.retired = true;
             wnt.resolvedTick = nowTick;
+            wnt.resolutionCause = 'faded';
             wnt.resolvedNote = '（久不相見，情分淡了）';
             log(`  [淡了] ${world.nameById(wnt.characterId)} 對 ${world.nameById(targetId)} 那點心思，日子久了淡了`);
             // The fade is INTERNAL — it retires the want and leaves the character a

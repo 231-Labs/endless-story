@@ -179,7 +179,11 @@ async function main(): Promise<void> {
         }
         console.log(`restored world from ${stateDir} (day ${world.data.clock.day}, tick ${world.data.clock.currentTick})`);
     } else {
-        const { world: w, raw, seeded } = await createWorldFromPreset(args.preset, recall);
+        const { world: w, raw, seeded } = await createWorldFromPreset(
+            args.preset,
+            recall,
+            { strictStructured: args.strictStructured },
+        );
         world = w;
         if (seasonFrame) applySeasonFrame(world, seasonFrame);
         if (args.relationshipFallback) {
@@ -187,7 +191,6 @@ async function main(): Promise<void> {
             const seededViews = seedRelationshipViews(world, raw.relationship_views ?? []);
             console.log(`  relationship fallback: ON · ${seededViews} seeded canon view(s)`);
         }
-        if (args.strictStructured) world.data.strictStructured = true;
         // 相識分寸: a season may declare subjective naming; seed the acquaintance map
         // AFTER cast/edges/views so co-workers/edge-holders start named. Post-build,
         // mirroring the relationship-fallback flag above.

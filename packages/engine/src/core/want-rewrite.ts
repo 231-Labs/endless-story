@@ -12,7 +12,7 @@
  * just did / the one scene it was in, so omniscience can't leak in.
  */
 
-import { newWant, type Want, type WantSemanticTag } from './want-core.ts';
+import { newWant, type Want, type WantSemanticTag, type WantSubjectRef } from './want-core.ts';
 
 /** One decision about a single existing want after a scene/action closes. */
 export interface RewriteDecision {
@@ -30,6 +30,7 @@ export interface RewriteSpawn {
     /** Dedicated-seat output. Ordinary rewrite JSON does not set these fields. */
     semanticTags?: WantSemanticTag[];
     target?: string;
+    subjectRef?: WantSubjectRef;
 }
 
 /**
@@ -197,6 +198,7 @@ export function applyRewrite(
             events.push({ tick, characterId, kind: 'close', wantId: w.id, fromDesc: w.desc, note: d.note });
             w.retired = true;
             w.resolvedTick = tick;
+            w.resolutionCause = 'rewritten';
             w.resolvedNote = d.note;
         }
     }
@@ -249,6 +251,7 @@ export function spawnWant(
             ...(strictStructured && spawn.semanticTags?.length
                 ? { semanticTags: spawn.semanticTags }
                 : {}),
+            ...(strictStructured && spawn.subjectRef ? { subjectRef: spawn.subjectRef } : {}),
             desc,
             target,
             weight: 0.5,

@@ -16,12 +16,13 @@ import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-econom
 import { seedHousing } from './core/housing.ts';
 import { seedRenown } from './core/renown.ts';
 import { makeClock } from './adapters/local/clock.ts';
-import { seedBond } from './core/bond-graph.ts';
+import { bondsToJSON, seedBond } from './core/bond-graph.ts';
 import {
     WorldState,
     type CastMember,
     type ContestedResource,
     type SceneInfo,
+    type SceneCapability,
     type Skill,
     type WorldStateData,
 } from './world-state.ts';
@@ -41,13 +42,25 @@ interface RawPreset {
      *  derived from the cast's secrets. Seeded only when the relationship
      *  fallback wiring is enabled — the always-on structural bias. */
     relationship_views?: Array<{ from: string; to: string; view: string }>;
+    /** Explicit numeric relationship underlay for STRICT; names resolve at seed. */
+    bonds?: Array<{ from: string; to: string; value: number }>;
+    /** Explicit unordered 相許 pairs for STRICT. */
+    established_pairs?: Array<[string, string]>;
     drama_resources?: Array<{ label: string; statement?: string }>;
-    scenes?: Array<{ name: string; description?: string; privacy?: number; capacity?: number; location_index?: number }>;
+    scenes?: Array<{
+        name: string;
+        description?: string;
+        privacy?: number;
+        capacity?: number;
+        location_index?: number;
+        capabilities?: SceneCapability[];
+    }>;
     founding_cast?: Array<{
         name: string;
         ageYears?: number;
         gender?: string;
         role?: string;
+        publicly_recognizable?: boolean;
         description: string;
         secret?: string;
         memories?: string[];
@@ -78,6 +91,9 @@ export interface SeasonFrame {
         visibility?: 'visible' | 'hidden';
         container?: string;
         state?: string;
+        /** Finite authored mechanism state. Free-text `state` remains display
+         * text and a legacy fallback only while STRICT is off. */
+        stateTags?: string[];
         /** Omit for public props. Hidden biographical objects should name only
          * characters whose seed memories establish knowledge of them. */
         knownByNames?: string[];
@@ -274,6 +290,9 @@ function appendMissingSeasonObjects(world: WorldState, frame: SeasonFrame, toler
             visibility: spec.visibility ?? 'visible',
             container: spec.container,
             state: spec.state,
+            ...(world.data.strictStructured && spec.stateTags?.length
+                ? { stateTags: [...new Set(spec.stateTags)] }
+                : {}),
             version: 0,
             knownBy: [...new Set(knownBy)],
             // provenance stamped at seed/reconcile time (deterministic from the clock)
@@ -313,6 +332,8 @@ export interface JoinCastTie {
     target: string;
     /** 關係語（新人 → 對象的 edge tone），如 師姐／舊識／恩客。 */
     tone?: string;
+    /** Structured welcome/routing disposition; STRICT never derives it from tone. */
+    disposition?: 'warm' | 'neutral' | 'cold';
     /** 對象 → 新人的關係語；不給則不種（對方未必這樣看）。 */
     toneBack?: string;
     /** 新人「我看TA」一句話。 */
@@ -416,7 +437,14 @@ export function joinCastMember(world: WorldState, input: JoinCastInput): CastMem
     if (ties.length) {
         const graph = world.bondGraph();
         for (const tie of ties) {
-            if (tie.tone?.trim()) world.setEdge(id, tie.targetId, tie.tone.trim());
+            if (tie.tone?.trim()) {
+                world.setEdge(
+                    id,
+                    tie.targetId,
+                    tie.tone.trim(),
+                    tie.disposition,
+                );
+            }
             if (tie.toneBack?.trim()) world.setEdge(tie.targetId, id, tie.toneBack.trim());
             if (tie.view?.trim()) world.setRelationshipView(id, tie.targetId, tie.view.trim());
             if (tie.viewBack?.trim()) world.setRelationshipView(tie.targetId, id, tie.viewBack.trim());
@@ -467,7 +495,12 @@ export function seedRelationshipViews(
 }
 
 /** Build a fresh WorldState from a parsed preset (pure; no I/O, no recall). */
-export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6): WorldState {
+export function buildWorldState(
+    raw: RawPreset,
+    sagaId = raw.id,
+    ticksPerDay = 6,
+    opts: { strictStructured?: boolean } = {},
+): WorldState {
     const scenes: SceneInfo[] = (raw.scenes ?? []).map((s, i) => {
         const privacyLevel = s.privacy ?? 0;
         const capacity = s.capacity ?? (privacyLevel >= 3 ? 2 : privacyLevel >= 2 ? 4 : 8);
@@ -486,6 +519,9 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
             // (movement time-cost + roadside 路遇). Optional: seeds/snapshots
             // without it fall back to the flat, uniform-cooldown behaviour.
             ...(Number.isInteger(s.location_index) ? { locationIndex: s.location_index } : {}),
+            ...(opts.strictStructured && s.capabilities
+                ? { capabilities: [...new Set(s.capabilities)] }
+                : {}),
         };
     });
     const sceneIdByName = new Map(scenes.map((s) => [s.name, s.id]));
@@ -511,6 +547,10 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
             gender: c.gender,
             age: c.ageYears,
             role: c.role,
+            ...(opts.strictStructured &&
+            c.publicly_recognizable !== undefined
+                ? { publiclyRecognizable: c.publicly_recognizable }
+                : {}),
             state: { fatigue: 0.3, hunger: 0.2, mood: 0 },
             // Seed the durable self-model from persona: name + 行當 + the first
             // clause of the bio as a deterministic identity distillation (no LLM).
@@ -536,9 +576,41 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
 
     const premise = [raw.saga?.description, raw.saga?.nature_prompt].filter(Boolean).join('\n');
 
+    const explicitBonds = new Map();
+    const establishedPairs = new Set<string>();
+    if (opts.strictStructured) {
+        const idByName = new Map(cast.map((member) => [member.name, member.id]));
+        for (const bond of raw.bonds ?? []) {
+            const from = idByName.get(bond.from);
+            const to = idByName.get(bond.to);
+            if (!from || !to) {
+                throw new Error(
+                    `[preset] bond references unknown cast: ${bond.from} -> ${bond.to}`,
+                );
+            }
+            if (!(bond.value >= 0 && bond.value <= 1)) {
+                throw new Error(
+                    `[preset] bond ${bond.from} -> ${bond.to} must be 0..1`,
+                );
+            }
+            seedBond(explicitBonds, from, to, bond.value);
+        }
+        for (const pair of raw.established_pairs ?? []) {
+            const a = idByName.get(pair[0]);
+            const b = idByName.get(pair[1]);
+            if (!a || !b) {
+                throw new Error(
+                    `[preset] established pair references unknown cast: ${pair.join(' / ')}`,
+                );
+            }
+            establishedPairs.add([a, b].sort().join('|'));
+        }
+    }
+
     const data: WorldStateData = {
         sagaId,
         sagaPremise: premise,
+        ...(opts.strictStructured ? { strictStructured: true } : {}),
         etiquette: raw.saga?.narrative?.etiquette,
         cast,
         scenes,
@@ -551,6 +623,12 @@ export function buildWorldState(raw: RawPreset, sagaId = raw.id, ticksPerDay = 6
         dayAccum: { lines: [], actorIds: [], sceneIds: [], povByName: {} },
         contestedResources,
         objects: [],
+        ...(opts.strictStructured
+            ? {
+                  bonds: bondsToJSON(explicitBonds),
+                  establishedPairs: [...establishedPairs],
+              }
+            : {}),
     };
     return new WorldState(data);
 }
@@ -578,10 +656,20 @@ export async function seedGenesisMemories(
 export async function createWorldFromPreset(
     presetId: string,
     recall: RecallPort,
-    opts: { storiesDir?: string; sagaId?: string; ticksPerDay?: number } = {},
+    opts: {
+        storiesDir?: string;
+        sagaId?: string;
+        ticksPerDay?: number;
+        strictStructured?: boolean;
+    } = {},
 ): Promise<{ world: WorldState; raw: RawPreset; seeded: number }> {
     const raw = loadPresetFile(presetId, opts.storiesDir);
-    const world = buildWorldState(raw, opts.sagaId ?? presetId, opts.ticksPerDay);
+    const world = buildWorldState(
+        raw,
+        opts.sagaId ?? presetId,
+        opts.ticksPerDay,
+        { strictStructured: opts.strictStructured },
+    );
     const seeded = await seedGenesisMemories(raw, world, recall);
     return { world, raw, seeded };
 }

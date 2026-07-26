@@ -12,7 +12,7 @@
  * `level` is a display + tie-break signal here, never a gate.
  */
 
-import type { Skill } from '../world-state.ts';
+import type { SceneInfo, Skill } from '../world-state.ts';
 
 /** The conduct/bearing domains a scene BEAT colours — how a character speaks,
  *  carries themselves and treats people. The beat hang point gathers skills of
@@ -31,8 +31,19 @@ export const STAGE_KINDS = ['唱', '身'] as const;
 /** Does this scene read as a stage / the boards (where a performance happens)?
  *  Free-text name match, like the temple/food scene detectors — a seed names its
  *  stage 戲台/舞臺 and it lights up; anything else stays off-stage (conduct only). */
-export function isStageScene(sceneName: string | undefined): boolean {
-    return !!sceneName && /戲[台臺]|舞[台臺]|台上|登台|開鑼/.test(sceneName);
+export function isStageScene(
+    scene: string | Pick<SceneInfo, 'name' | 'capabilities'> | undefined,
+    strictStructured = false,
+): boolean {
+    if (typeof scene === 'string' || scene === undefined) {
+        return !!scene && /戲[台臺]|舞[台臺]|台上|登台|開鑼/.test(scene);
+    }
+    if (scene.capabilities !== undefined) {
+        return scene.capabilities.includes('stage');
+    }
+    return strictStructured
+        ? false
+        : /戲[台臺]|舞[台臺]|台上|登台|開鑼/.test(scene.name);
 }
 
 /**

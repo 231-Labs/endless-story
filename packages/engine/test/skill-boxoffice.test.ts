@@ -99,7 +99,7 @@ test('1) performerSkillBoostPct: sums each present performer’s best stage leve
 
 /** Mirrors season-production.test.ts's stageWorld, plus the 名角滿座 opt-in.
  *  Cast comes from the SKILLED spring-snow canon; the anchun frame is untouched. */
-function stageWorld(performerBoost: boolean): WorldState {
+function stageWorld(performerBoost: boolean, strictStructured = false): WorldState {
     const frame = buildAnchunAcceptanceFrame();
     (frame as { economy: { performance?: object } }).economy.performance = {
         venueScene: '雲錦台戲台',
@@ -108,7 +108,12 @@ function stageWorld(performerBoost: boolean): WorldState {
         fullHouseYuan: 30,
         ...(performerBoost ? { performerBoost: true } : {}),
     };
-    const world = buildWorldState(loadPresetFile('spring-snow'));
+    const world = buildWorldState(
+        loadPresetFile('spring-snow'),
+        undefined,
+        6,
+        strictStructured ? { strictStructured: true } : {},
+    );
     applySeasonFrame(world, frame);
     return world;
 }
@@ -180,4 +185,53 @@ test('3) backward-compat: an un-opted frame with the SKILLED cast settles to the
     assert.match(evening.line, /滿座/);
     assert.equal(world.data.economy!.performance!.performerBoost, undefined, 'the opt-in key is omitted when unset');
     assert.deepEqual(auditSeasonEconomy(world), []);
+});
+
+test('STRICT performance boost reads object stateTags and keeps state prose as a shadow', () => {
+    const tagged = stageWorld(false, true);
+    const taggedObject = tagged.objectById('anchun-exclusive-contract')!;
+    taggedObject.stateTags = ['box-office-ready'];
+    tagged.data.economy!.performance!.boosts = [{
+        objectId: taggedObject.id,
+        stateIncludes: '這句刻意不會命中',
+        requiredStateTag: 'box-office-ready',
+        pct: 10,
+    }];
+    boards(tagged, ['柳安春', '蘇映雪', '江聞鶴', '連翹']);
+    const taggedSettle = settleEveningPerformance(tagged, { day: 1, partIndex: 3 })!;
+    assert.equal(taggedSettle.takingsSubunits, 33n * YUAN);
+    assert.ok(
+        tagged.data.structuredMonitor?.divergences.some(
+            (event) =>
+                event.kind === 'performance-object-state' &&
+                event.legacy === false &&
+                event.structured === true,
+        ),
+    );
+
+    const proseOnly = stageWorld(false, true);
+    const proseObject = proseOnly.objectById('anchun-exclusive-contract')!;
+    proseObject.state = '尚未簽署';
+    proseOnly.data.economy!.performance!.boosts = [{
+        objectId: proseObject.id,
+        stateIncludes: '尚未簽署',
+        requiredStateTag: 'box-office-ready',
+        pct: 10,
+    }];
+    boards(proseOnly, ['柳安春', '蘇映雪', '江聞鶴', '連翹']);
+    const proseSettle = settleEveningPerformance(
+        proseOnly,
+        { day: 1, partIndex: 3 },
+    )!;
+    assert.equal(proseSettle.takingsSubunits, 30n * YUAN);
+    assert.ok(
+        proseOnly.data.structuredMonitor?.divergences.some(
+            (event) =>
+                event.kind === 'performance-object-state' &&
+                event.legacy === true &&
+                event.structured === false,
+        ),
+    );
+    assert.deepEqual(auditSeasonEconomy(tagged), []);
+    assert.deepEqual(auditSeasonEconomy(proseOnly), []);
 });

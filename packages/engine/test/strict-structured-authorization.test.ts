@@ -197,3 +197,29 @@ test('FakeSceneAgent STRICT creation declarations are deterministic', async () =
     assert.deepEqual(love?.semanticTags, ['affection']);
     assert.equal(love?.target, 'c1');
 });
+
+test('FakeSceneAgent declares a stable contract subject without giving prose authority', async () => {
+    const reply = await new FakeSceneAgent().declareWantSemantics({
+        source: 'genesis',
+        characterId: 'c0',
+        characterName: '甲',
+        layer: '事務',
+        desc: '想把柳安春三日獨家契約談妥',
+        cast: [
+            { id: 'c0', name: '甲' },
+            { id: 'c1', name: '乙' },
+        ],
+        subjects: [
+            {
+                kind: 'contract',
+                id: 'anchun-exclusive',
+                label: '柳安春三日獨家契約',
+            },
+        ],
+    });
+
+    assert.deepEqual(reply.subjectRef, {
+        kind: 'contract',
+        id: 'anchun-exclusive',
+    });
+});
