@@ -51,14 +51,42 @@ export function seedRenown(
     for (const member of world.data.cast) {
         const override = table?.[member.name];
         const roleDefault = ROLE_RENOWN[member.role ?? ''] ?? DEFAULT_RENOWN;
+        const renownSeed = world.data.strictStructured
+            ? override?.renown ?? DEFAULT_RENOWN.renown
+            : override?.renown ?? roleDefault.renown;
+        const selfSeed = world.data.strictStructured
+            ? override?.self ?? override?.renown ?? DEFAULT_RENOWN.self
+            : override?.self ?? roleDefault.self;
+        if (world.data.strictStructured) {
+            if (override?.renown === undefined || override?.self === undefined) {
+                world.recordStructuredWarning({
+                    domain: 'preset',
+                    kind: 'missing-explicit-renown',
+                    subjectId: member.id,
+                    detail: member.role,
+                });
+            }
+            world.recordStructuredComparison({
+                domain: 'preset',
+                kind: 'role-renown-default',
+                legacy:
+                    roleDefault.renown !== DEFAULT_RENOWN.renown ||
+                    roleDefault.self !== DEFAULT_RENOWN.self,
+                structured:
+                    renownSeed !== DEFAULT_RENOWN.renown ||
+                    selfSeed !== DEFAULT_RENOWN.self,
+                subjectId: member.id,
+                detail: member.role,
+            });
+        }
         if (member.renown === undefined) {
-            member.renown = clamp01(override?.renown ?? roleDefault.renown);
+            member.renown = clamp01(renownSeed);
         }
         if (member.selfRegard === undefined) {
             // self-regard follows the table's `self`, else the role default; the
             // final fall-through is the member's own (now-seeded) renown — they
             // rate themselves as the street does until something moves it.
-            member.selfRegard = clamp01(override?.self ?? roleDefault.self ?? member.renown);
+            member.selfRegard = clamp01(selfSeed ?? member.renown);
         }
     }
 }

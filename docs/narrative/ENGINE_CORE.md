@@ -41,6 +41,12 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
 從結構欄位（`audience` / `addressed`）判定，不從生成的散文反推隱私；`addressed` 指不到人
 時 fail closed 退回只有說話者聽見，不廣播。
 
+`strictStructured`（CLI `--strict-structured`）是同一份 core 的研究 profile：
+授權、物件 mutation、want subject／lifecycle 與場景 capability 只讀結構化欄位；
+舊 prose／preset detector 仍可執行，但只能寫入 `structuredMonitor`，不得改狀態、
+拒絕 proposal 或觸發 replan。`objectEffects` 缺席代表沒有物理變動；提供了無效 effect
+仍由 core validator fail closed。flag 關閉時保留 legacy 路徑，讓對照臂不 fork core。
+
 ## 4. 待搬遷清單（`web/lib/chain` 剩餘機制模組）
 
 搬遷模式一律照 §2：純機制進 core、store/鏈讀寫留 web、測試跟著機制走。
@@ -66,3 +72,5 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
    對照組用同一份 core + 不同 flag/參數，不用複製檔案。
 4. 生產接線改動照 research-line 規則：**feat/* → dev PR**，research 分支只改實驗/harness。
    （完整版 `RULES.md` 目前只在 `research` 分支上，本分支沒有這個檔，故不放連結。）
+5. **散文不是狀態入口**：research profile 的客觀世界只接受結構化 proposal；prose
+   divergence 是 telemetry，不是 authority。不要在 adapter、runner 或 web 另造反向 parser。

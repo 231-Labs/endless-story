@@ -28,7 +28,29 @@ export const TEMPLE_NAME_RE = /廟|寺|庵|城隍|觀音|神壇|神龕|教堂|�
 export function templeScenesOf(world: WorldState): Set<string> {
     const out = new Set<string>();
     for (const scene of world.data.scenes) {
-        if (TEMPLE_NAME_RE.test(scene.name)) out.add(scene.id);
+        const legacy = TEMPLE_NAME_RE.test(scene.name);
+        const structured = scene.capabilities?.includes('temple') === true;
+        if (world.data.strictStructured) {
+            world.recordStructuredComparison({
+                domain: 'scene',
+                kind: 'temple-capability',
+                legacy,
+                structured,
+                subjectId: scene.id,
+                detail: scene.name,
+            });
+            if (scene.capabilities === undefined && legacy) {
+                world.recordStructuredWarning({
+                    domain: 'preset',
+                    kind: 'missing-temple-capability',
+                    subjectId: scene.id,
+                    detail: scene.name,
+                });
+            }
+            if (structured) out.add(scene.id);
+        } else if (legacy) {
+            out.add(scene.id);
+        }
     }
     return out;
 }

@@ -81,45 +81,125 @@ export interface CommitBeatPhysicsInput {
     effects?: characterAgent.BeatObjectEffect[];
 }
 
-/** Validate prose against the pre-beat world, then atomically mutate in-memory
- * object state. The outer tick transaction rolls the whole tick back on error. */
+/** In legacy mode, validate prose against the pre-beat world; in STRICT, run
+ * the same detectors only as shadow instruments. In both modes, validate the
+ * structured effects and then atomically mutate in-memory object state. */
 export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
     const { world, sceneId, actorId } = input;
     const narration = narrationOnly(input.text);
     const effects = input.effects ?? [];
     const effectsByObject = new Map(effects.map((effect) => [effect.objectId, effect]));
+    const strictStructured = world.data.strictStructured === true;
 
-    for (const object of world.data.objects ?? []) {
-        const mention = mentionedAlias(narration, object);
-        if (!mention) continue;
-        const perceivers = input.audience === 'addressed'
-            ? [actorId, ...(input.addressedId ? [input.addressedId] : [])]
-            : input.witnessIds;
-        const revealsObject = effectsByObject.get(object.id)?.visibility === 'visible';
-        const leaksHiddenIdentity =
-            object.visibility === 'hidden' &&
-            !revealsObject &&
-            perceivers.some((id) => id !== actorId && !object.knownBy.includes(id));
-        if (leaksHiddenIdentity) {
-            throw new Error(
-                `[physics] ${input.actorName} exposed hidden ${object.id} to an unaware witness in objective narration; ` +
-                'describe only the visible gesture, speak of it in dialogue, or explicitly reveal the object',
+    if (strictStructured) {
+        world.recordStructuredBeatEvaluation();
+        for (const object of world.data.objects ?? []) {
+            const mention = mentionedAlias(narration, object);
+            const effect = effectsByObject.get(object.id);
+            const structuredMutation = effect !== undefined;
+            const legacyMutation = mention ? mutatesNear(narration, mention) : false;
+            if (mention || effect) {
+                world.recordStructuredComparison({
+                    domain: 'object',
+                    kind: 'durable-mutation',
+                    legacy: legacyMutation,
+                    structured: structuredMutation,
+                    actorId,
+                    subjectId: object.id,
+                });
+            }
+
+            const legacyHandoff = mention ? handsOffNear(narration, mention) : false;
+            const structuredHandoff = effect?.carrierName !== undefined;
+            if (legacyHandoff || structuredHandoff) {
+                world.recordStructuredComparison({
+                    domain: 'object',
+                    kind: 'handoff',
+                    legacy: legacyHandoff,
+                    structured: structuredHandoff,
+                    actorId,
+                    subjectId: object.id,
+                });
+            }
+
+            const perceivers =
+                input.audience === 'addressed'
+                    ? [actorId, ...(input.addressedId ? [input.addressedId] : [])]
+                    : input.witnessIds;
+            const legacyHiddenLeak =
+                !!mention &&
+                object.visibility === 'hidden' &&
+                perceivers.some(
+                    (id) => id !== actorId && !object.knownBy.includes(id),
+                );
+            const structuredReveal = effect?.visibility === 'visible';
+            if (
+                object.visibility === 'hidden' &&
+                (legacyHiddenLeak || structuredReveal)
+            ) {
+                world.recordStructuredComparison({
+                    domain: 'object',
+                    kind: 'hidden-identity',
+                    legacy: legacyHiddenLeak,
+                    structured: structuredReveal,
+                    actorId,
+                    subjectId: object.id,
+                });
+            }
+
+            const inaccessible = !world.objectAccessibleTo(
+                object,
+                actorId,
+                sceneId,
             );
+            const legacyUnavailableReference =
+                inaccessible && !!mention
+                    ? physicallyReferencesNear(narration, mention)
+                    : false;
+            if (inaccessible && (legacyUnavailableReference || effect)) {
+                world.recordStructuredComparison({
+                    domain: 'object',
+                    kind: 'unavailable-reference',
+                    legacy: legacyUnavailableReference,
+                    structured: structuredMutation,
+                    actorId,
+                    subjectId: object.id,
+                });
+            }
         }
-        if (!world.objectAccessibleTo(object, actorId, sceneId) && physicallyReferencesNear(narration, mention)) {
-            throw new Error(
-                `[physics] ${input.actorName} physically referenced unavailable ${object.id} in ${world.sceneNameById(sceneId)}: ${input.text}`,
-            );
-        }
-        if (mutatesNear(narration, mention) && !effectsByObject.has(object.id)) {
-            throw new Error(
-                `[physics] ${input.actorName} mutated ${object.id} in prose without objectEffects: ${input.text}`,
-            );
-        }
-        if (handsOffNear(narration, mention) && effectsByObject.get(object.id)?.carrierName === undefined) {
-            throw new Error(
-                `[physics] ${input.actorName} handed off ${object.id} in prose without carrierName: ${input.text}`,
-            );
+    } else {
+        for (const object of world.data.objects ?? []) {
+            const mention = mentionedAlias(narration, object);
+            if (!mention) continue;
+            const perceivers = input.audience === 'addressed'
+                ? [actorId, ...(input.addressedId ? [input.addressedId] : [])]
+                : input.witnessIds;
+            const revealsObject = effectsByObject.get(object.id)?.visibility === 'visible';
+            const leaksHiddenIdentity =
+                object.visibility === 'hidden' &&
+                !revealsObject &&
+                perceivers.some((id) => id !== actorId && !object.knownBy.includes(id));
+            if (leaksHiddenIdentity) {
+                throw new Error(
+                    `[physics] ${input.actorName} exposed hidden ${object.id} to an unaware witness in objective narration; ` +
+                    'describe only the visible gesture, speak of it in dialogue, or explicitly reveal the object',
+                );
+            }
+            if (!world.objectAccessibleTo(object, actorId, sceneId) && physicallyReferencesNear(narration, mention)) {
+                throw new Error(
+                    `[physics] ${input.actorName} physically referenced unavailable ${object.id} in ${world.sceneNameById(sceneId)}: ${input.text}`,
+                );
+            }
+            if (mutatesNear(narration, mention) && !effectsByObject.has(object.id)) {
+                throw new Error(
+                    `[physics] ${input.actorName} mutated ${object.id} in prose without objectEffects: ${input.text}`,
+                );
+            }
+            if (handsOffNear(narration, mention) && effectsByObject.get(object.id)?.carrierName === undefined) {
+                throw new Error(
+                    `[physics] ${input.actorName} handed off ${object.id} in prose without carrierName: ${input.text}`,
+                );
+            }
         }
     }
 
@@ -132,6 +212,7 @@ export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
                 carriedBy: object.carriedBy,
                 visibility: object.visibility,
                 state: object.state,
+                stateTags: object.stateTags ? [...object.stateTags] : undefined,
                 version: object.version,
                 knownBy: [...object.knownBy],
             }] as const
@@ -150,7 +231,19 @@ export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
                 effect.container.includes(input.actorName) &&
                 /懷|袖|手中|身上|兜|袋/.test(effect.container)
             ) {
-                throw new Error(`[physics] ${effect.objectId} uses a carried container without carried=true`);
+                if (strictStructured) {
+                    world.recordStructuredComparison({
+                        domain: 'object',
+                        kind: 'carried-container',
+                        legacy: true,
+                        structured: false,
+                        actorId,
+                        subjectId: effect.objectId,
+                        detail: effect.container,
+                    });
+                } else {
+                    throw new Error(`[physics] ${effect.objectId} uses a carried container without carried=true`);
+                }
             }
             if (effect.carried !== undefined && effect.carrierName !== undefined) {
                 throw new Error(`[physics] ${effect.objectId} cannot use carried and carrierName together`);
@@ -193,7 +286,13 @@ export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
                 object.visibility = effect.visibility;
                 if (effect.visibility === 'destroyed') object.carriedBy = undefined;
             }
-            if (effect.state) object.state = effect.state;
+            if (effect.state) {
+                object.state = effect.state;
+                // The runner's structured effect currently has no finite tag
+                // field. STRICT therefore invalidates prior authored tags instead
+                // of letting stale mechanism state survive a free-text change.
+                if (strictStructured) object.stateTags = undefined;
+            }
             object.version += 1;
 
             const perceivers = input.audience === 'addressed'
@@ -211,6 +310,9 @@ export function commitBeatPhysics(input: CommitBeatPhysicsInput): void {
             object.carriedBy = before.carriedBy;
             object.visibility = before.visibility;
             object.state = before.state;
+            object.stateTags = before.stateTags
+                ? [...before.stateTags]
+                : undefined;
             object.version = before.version;
             object.knownBy = [...before.knownBy];
         }

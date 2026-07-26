@@ -12,7 +12,7 @@
  * just did / the one scene it was in, so omniscience can't leak in.
  */
 
-import { newWant, type Want } from './want-core.ts';
+import { newWant, type Want, type WantSemanticTag, type WantSubjectRef } from './want-core.ts';
 
 /** One decision about a single existing want after a scene/action closes. */
 export interface RewriteDecision {
@@ -27,6 +27,10 @@ export interface RewriteDecision {
 export interface RewriteSpawn {
     desc: string;
     layer?: string;
+    /** Dedicated-seat output. Ordinary rewrite JSON does not set these fields. */
+    semanticTags?: WantSemanticTag[];
+    target?: string;
+    subjectRef?: WantSubjectRef;
 }
 
 /**
@@ -178,6 +182,7 @@ export function applyRewrite(
     events: LedgerEvent[],
     castNames: ReadonlyArray<string> = [],
     nextId?: () => string,
+    strictStructured = false,
 ): void {
     const byId = new Map(wants.map((w) => [w.id, w]));
     for (const d of reply.decisions) {
@@ -193,11 +198,12 @@ export function applyRewrite(
             events.push({ tick, characterId, kind: 'close', wantId: w.id, fromDesc: w.desc, note: d.note });
             w.retired = true;
             w.resolvedTick = tick;
+            if (strictStructured) w.resolutionCause = 'rewritten';
             w.resolvedNote = d.note;
         }
     }
     // Spawn (max 1), enforcing the ≤4-live-want budget per character.
-    if (reply.spawn) spawnWant(wants, characterId, reply.spawn, tick, events, castNames, nextId);
+    if (reply.spawn) spawnWant(wants, characterId, reply.spawn, tick, events, castNames, nextId, strictStructured);
 }
 
 /**
@@ -217,6 +223,7 @@ export function spawnWant(
     castNames: ReadonlyArray<string> = [],
     /** 確定性 id 源（world.nextWantId）；缺席退回 newWant 的 wall-clock id。 */
     nextId?: () => string,
+    strictStructured = false,
 ): boolean {
     const raw = spawn.desc.trim();
     // A want desc is a short label — an over-long line is TRUNCATED to 30, never dropped,
@@ -225,14 +232,26 @@ export function spawnWant(
     const desc = raw.length > 30 ? raw.slice(0, 30) : raw;
     const liveNow = wants.filter((w) => !w.retired && w.characterId === characterId).length;
     if (desc.length > 0 && liveNow < 4) {
-        const namesOther = castNames.some((n) => n !== characterId && desc.includes(n));
-        const hot = ROMANTIC_HOSTILE.test(desc) || ROMANTIC_HOSTILE.test(spawn.layer ?? '');
+        const namesOther = strictStructured
+            ? !!spawn.target
+            : castNames.some((n) => n !== characterId && desc.includes(n));
+        const hot = strictStructured
+            ? spawn.semanticTags?.some((tag) =>
+                  tag === 'affection' || tag === 'reckoning' || tag === 'jealousy' || tag === 'hostility',
+              ) === true
+            : ROMANTIC_HOSTILE.test(desc) || ROMANTIC_HOSTILE.test(spawn.layer ?? '');
         const resistance = namesOther && hot ? 8 : 4;
-        const target = castNames.find((n) => n !== characterId && desc.includes(n));
+        const target = strictStructured
+            ? spawn.target
+            : castNames.find((n) => n !== characterId && desc.includes(n));
         const w = newWant({
             id: nextId?.(),
             characterId,
             layer: spawn.layer || '其他',
+            ...(strictStructured && spawn.semanticTags?.length
+                ? { semanticTags: spawn.semanticTags }
+                : {}),
+            ...(strictStructured && spawn.subjectRef ? { subjectRef: spawn.subjectRef } : {}),
             desc,
             target,
             weight: 0.5,

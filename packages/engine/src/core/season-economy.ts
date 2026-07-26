@@ -59,7 +59,13 @@ export type BeatEconomyCommand = CharacterAgentNs.BeatEconomyCommand;
 
 export type SeasonCatalogEffect =
     | { kind: 'relieve-hunger' }
-    | { kind: 'object-state'; objectId: string; state: string }
+    | {
+        kind: 'object-state';
+        objectId: string;
+        state: string;
+        /** Authoritative replacement tags when STRICT is active. */
+        stateTags?: string[];
+    }
     /** instant rehousing — for abstractions that need no move-in arc. Prefer
      *  'tenancy' for characters: real moves are lived, not teleported. */
     | { kind: 'move-home'; sceneName: string; characterName?: string }
@@ -68,7 +74,15 @@ export type SeasonCatalogEffect =
      *  scene carrying it. When/whether to move — and what to pack — is their
      *  own in-world choice (the packing arc). `characterName` omitted = buyer. */
     | { kind: 'tenancy'; sceneName: string; characterName?: string; keyObjectId: string; keyLabel: string }
-    | { kind: 'spawn-object'; objectId: string; label: string; sceneName: string; state: string; aliases?: string[] };
+    | {
+        kind: 'spawn-object';
+        objectId: string;
+        label: string;
+        sceneName: string;
+        state: string;
+        stateTags?: string[];
+        aliases?: string[];
+    };
 
 export interface SeasonCatalogItem {
     id: string;
@@ -140,7 +154,14 @@ export interface SeasonEconomyData {
         leadIds: string[];
         minCast: number;
         fullHouseSubunits: string;
-        boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
+        boosts?: Array<{
+            objectId: string;
+            /** Legacy human-readable state predicate. STRICT shadows only. */
+            stateIncludes?: string;
+            /** Authoritative finite object-state predicate in STRICT. */
+            requiredStateTag?: string;
+            pct: number;
+        }>;
         /** cast seen at the venue during 日午/晡時 — quality is earned in daylight. */
         rehearsedToday: string[];
         /** basis points (of the night's takings) shared out among the performers
@@ -259,10 +280,21 @@ function resolveAccountId(world: WorldState, data: SeasonEconomyData, name: stri
 
 // ── beat command commit ──
 
-function touchObject(world: WorldState, objectId: string, state: string, witnessIds: string[]): void {
+function touchObject(
+    world: WorldState,
+    objectId: string,
+    state: string,
+    witnessIds: string[],
+    stateTags?: string[],
+): void {
     const object = world.objectById(objectId);
     if (!object) return;
     object.state = state;
+    if (world.data.strictStructured) {
+        object.stateTags = stateTags?.length
+            ? [...new Set(stateTags)]
+            : undefined;
+    }
     object.version += 1;
     object.knownBy = [...new Set([...object.knownBy, ...witnessIds])];
 }
@@ -710,7 +742,13 @@ function applyCatalogEffect(world: WorldState, item: SeasonCatalogItem, req: Com
         return;
     }
     if (effect.kind === 'object-state') {
-        touchObject(world, effect.objectId, effect.state, req.witnessIds);
+        touchObject(
+            world,
+            effect.objectId,
+            effect.state,
+            req.witnessIds,
+            effect.stateTags,
+        );
         return;
     }
     if (effect.kind === 'move-home') {
@@ -755,6 +793,9 @@ function applyCatalogEffect(world: WorldState, item: SeasonCatalogItem, req: Com
         portable: false,
         visibility: 'visible',
         state: effect.state,
+        ...(world.data.strictStructured && effect.stateTags?.length
+            ? { stateTags: [...new Set(effect.stateTags)] }
+            : {}),
         version: 0,
         knownBy: [...req.witnessIds],
     });
@@ -864,6 +905,8 @@ export function creditAdvertFor(
 /** One overdue-debt want the settle should try to spawn (dedup by `marker`). */
 export interface OverdueDebtWantSeed {
     characterId: string;
+    /** Structured counterparty; avoids recovering the target from prose. */
+    targetId?: string;
     layer: string;
     desc: string;
     /** Stable dedup marker (`${billId}:debtor` / `${billId}:creditor`); pushed
@@ -904,6 +947,7 @@ export function collectOverdueDebtWants(world: WorldState, day: number): Overdue
             if (!spawned.has(`${bill.id}:debtor`)) {
                 out.push({
                     characterId: debtor.id,
+                    targetId: creditor.id,
                     layer: '虧欠',
                     desc: `欠著${creditor.name}的${yuanText(remaining)}過了期，見面都矮半截`,
                     marker: `${bill.id}:debtor`,
@@ -912,6 +956,7 @@ export function collectOverdueDebtWants(world: WorldState, day: number): Overdue
             if (!spawned.has(`${bill.id}:creditor`)) {
                 out.push({
                     characterId: creditor.id,
+                    targetId: debtor.id,
                     layer: '催討',
                     desc: `${debtor.name}欠的${yuanText(remaining)}到期未還，這口氣咽不平`,
                     marker: `${bill.id}:creditor`,
@@ -1403,7 +1448,31 @@ export function settleEveningPerformance(
     for (const boost of perf.boosts ?? []) {
         const object = world.objectById(boost.objectId);
         if (!object || object.visibility === 'destroyed') continue;
-        if (boost.stateIncludes && !(object.state ?? '').includes(boost.stateIncludes)) continue;
+        const legacyEligible =
+            !boost.stateIncludes || (object.state ?? '').includes(boost.stateIncludes);
+        const structuredEligible =
+            !boost.requiredStateTag || (object.stateTags ?? []).includes(boost.requiredStateTag);
+        if (world.data.strictStructured) {
+            world.recordStructuredComparison({
+                domain: 'economy',
+                kind: 'performance-object-state',
+                subjectId: boost.objectId,
+                legacy: legacyEligible,
+                structured: structuredEligible,
+                detail: boost.requiredStateTag ?? boost.stateIncludes,
+            });
+            if (boost.stateIncludes && !boost.requiredStateTag) {
+                world.recordStructuredWarning({
+                    domain: 'economy',
+                    kind: 'missing-performance-state-tag',
+                    subjectId: boost.objectId,
+                    detail: boost.stateIncludes,
+                });
+            }
+            if (!structuredEligible || (boost.stateIncludes && !boost.requiredStateTag)) continue;
+        } else if (!legacyEligible) {
+            continue;
+        }
         pct += BigInt(boost.pct);
     }
     // 名角滿座 — the stage craft of the performers on the boards lifts the house,
@@ -1645,9 +1714,33 @@ export function settleSeasonDay(world: WorldState, req: SettleSeasonDayRequest):
         }
 
         // ── CONDITION counter: the verdict decides when present, else the policy ──
+        const legacyPolicyAccept =
+            !!policy &&
+            policy.acceptDemandsMatching.some((needle) => pending.demand.includes(needle));
+        const structuredPolicyAccept = false;
+        if (world.data.strictStructured && verdict === undefined) {
+            world.recordStructuredComparison({
+                domain: 'economy',
+                kind: 'condition-counter-policy',
+                subjectId: id,
+                legacy: legacyPolicyAccept,
+                structured: structuredPolicyAccept,
+                detail: pending.demand,
+            });
+            if (policy?.acceptDemandsMatching.length) {
+                world.recordStructuredWarning({
+                    domain: 'economy',
+                    kind: 'missing-condition-code',
+                    subjectId: id,
+                    detail: pending.demand,
+                });
+            }
+        }
         const accept = verdict !== undefined
             ? verdict.accept
-            : (!!policy && policy.acceptDemandsMatching.some((needle) => pending.demand.includes(needle)));
+            : world.data.strictStructured
+              ? structuredPolicyAccept
+              : legacyPolicyAccept;
         const answered = resolveCounter(contract, {
             contractId: id, accept, day: req.day, graceDays: policy?.graceDaysOnAccept ?? 1, causeEventId,
         });
@@ -1899,7 +1992,12 @@ export interface SeasonEconomyFrame {
         minCast: number;
         fullHouseYuan: number;
         /** objects whose state lifts the takings (a mended huqin, new robes…). */
-        boosts?: Array<{ objectId: string; stateIncludes?: string; pct: number }>;
+        boosts?: Array<{
+            objectId: string;
+            stateIncludes?: string;
+            requiredStateTag?: string;
+            pct: number;
+        }>;
         /** basis points of the takings shared among the performers on the boards
          *  (a lead counts double), credited to their own accounts. Absent/0 ⇒
          *  all takings to 班庫, the box office's original behaviour. */

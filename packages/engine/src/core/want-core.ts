@@ -10,11 +10,25 @@ import { applyActorFatigue, type FatigueLedger } from './actor-fatigue.ts';
 
 export type WantSource = 'genesis' | 'ripple' | 'aftermath' | 'dream' | 'owner';
 
+/** Finite mechanism metadata declared at want creation. `layer` remains the
+ * character's prose label; these tags are the only semantic gates in STRICT. */
+export const WANT_SEMANTIC_TAGS = ['affection', 'reckoning', 'jealousy', 'hostility'] as const;
+export type WantSemanticTag = (typeof WANT_SEMANTIC_TAGS)[number];
+export type WantSubjectRef = { kind: 'contract'; id: string };
+export type WantResolutionCause = 'resolved' | 'faded' | 'foreclosed' | 'rewritten';
+
 export interface Want {
     id: string;
     characterId: string;
-    /** Free-text layer tag (愛/志向/戲班/身體/事務/…) — analytics only, never a gate. */
+    /** Free-text layer tag (愛/志向/戲班/身體/事務/…) — rendering/analytics only
+     * in STRICT. Legacy mode retains the historical regex gates. */
     layer: string;
+    /** Engine-owned semantic metadata. Ordinary character-owned desc rewrites
+     * MUST NOT mutate this field; only a dedicated declaration seat may set it. */
+    semanticTags?: WantSemanticTag[];
+    /** Stable mechanism subject. Prose may describe it, but never creates this
+     * reference except through the dedicated semantic declaration seat. */
+    subjectRef?: WantSubjectRef;
     /** The want itself, in the character's own words. */
     desc: string;
     /** Optional target character id or name. */
@@ -45,6 +59,8 @@ export interface Want {
     source: WantSource;
     bornTick: number;
     resolvedTick?: number;
+    /** Structured lifecycle fact. `resolvedNote` remains rendering only. */
+    resolutionCause?: WantResolutionCause;
     /** Contested-resource label this want aches for (exact on-chain label).
      *  The SINGLE demand source: a character contests a stake only through a
      *  want that carries its label. null = assessed and tied to none;
@@ -148,6 +164,16 @@ const JEALOUS_LAYER = /妒|怨/;
 export const isBondLayer = (layer: string): boolean =>
     LOVE_LAYER.test(layer) || RECKON_LAYER.test(layer);
 
+export const hasWantSemantic = (want: Pick<Want, 'semanticTags'>, tag: WantSemanticTag): boolean =>
+    want.semanticTags?.includes(tag) === true;
+
+/** STRICT-aware bond predicate. The legacy helper remains exported for old
+ * callers/tests; new state gates should pass the full want through this seam. */
+export const isBondWant = (want: Want, strictStructured = false): boolean =>
+    strictStructured
+        ? hasWantSemantic(want, 'affection') || hasWantSemantic(want, 'reckoning')
+        : isBondLayer(want.layer);
+
 /** Does the private 2-person scene hold a live `re`-layer want aimed across the
  *  pair? Shared by 幽會 / 了結 / the 撞破 pair check. Pure. */
 function pairWantBetween(
@@ -155,6 +181,8 @@ function pairWantBetween(
     privacyLevel: number,
     wants: ReadonlyArray<Want>,
     re: RegExp,
+    semanticTag: WantSemanticTag,
+    strictStructured = false,
 ): boolean {
     if (cs.length !== 2 || privacyLevel < 3) return false;
     return cs.some((a) => {
@@ -163,7 +191,7 @@ function pairWantBetween(
             (w) =>
                 !w.retired &&
                 w.characterId === a.id &&
-                re.test(w.layer) &&
+                (strictStructured ? hasWantSemantic(w, semanticTag) : re.test(w.layer)) &&
                 (w.target === other.name || w.target === other.id),
         );
     });
@@ -179,8 +207,9 @@ export function qualifiesAsTryst(
     cs: ReadonlyArray<{ id: string; name: string }>,
     privacyLevel: number,
     wants: ReadonlyArray<Want>,
+    strictStructured = false,
 ): boolean {
-    return pairWantBetween(cs, privacyLevel, wants, LOVE_LAYER);
+    return pairWantBetween(cs, privacyLevel, wants, LOVE_LAYER, 'affection', strictStructured);
 }
 
 /** 了結 qualification (H1): the same private-pair gate for an unsettled
@@ -189,8 +218,9 @@ export function qualifiesAsReckoning(
     cs: ReadonlyArray<{ id: string; name: string }>,
     privacyLevel: number,
     wants: ReadonlyArray<Want>,
+    strictStructured = false,
 ): boolean {
-    return pairWantBetween(cs, privacyLevel, wants, RECKON_LAYER);
+    return pairWantBetween(cs, privacyLevel, wants, RECKON_LAYER, 'reckoning', strictStructured);
 }
 
 /** A want is ripe enough to move feet at night if it has accumulated heat
@@ -211,12 +241,18 @@ function nightPursuit(
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
     re: RegExp,
+    semanticTags: WantSemanticTag[],
     yearn = false,
+    strictStructured = false,
 ): { id: string; w: number; want: Want } | null {
     let best: Want | null = null;
     for (const w of wants) {
         if (w.retired || w.characterId !== characterId || !w.target) continue;
-        if (!re.test(w.layer)) continue;
+        if (
+            strictStructured
+                ? !semanticTags.some((tag) => hasWantSemantic(w, tag))
+                : !re.test(w.layer)
+        ) continue;
         if (!nightRipe(w, yearn)) continue; // only a ripe want moves feet
         if (!best || tension(w) > tension(best)) best = w;
     }
@@ -237,8 +273,9 @@ export function jealousNightPursuit(
     wants: ReadonlyArray<Want>,
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
+    strictStructured = false,
 ): { id: string; w: number; intrude: true } | null {
-    const p = nightPursuit(wants, characterId, resolveTargetId, JEALOUS_LAYER);
+    const p = nightPursuit(wants, characterId, resolveTargetId, JEALOUS_LAYER, ['jealousy'], false, strictStructured);
     return p ? { id: p.id, w: pursuitWeight(p.want), intrude: true } : null;
 }
 
@@ -253,15 +290,18 @@ export function yearningNightPursuit(
     wants: ReadonlyArray<Want>,
     characterId: string,
     resolveTargetId: (target: string) => string | undefined,
+    strictStructured = false,
 ): { id: string; w: number; intrude?: true } | null {
     const p = nightPursuit(
         wants,
         characterId,
         resolveTargetId,
         new RegExp(`${LOVE_LAYER.source}|${RECKON_LAYER.source}`),
+        ['affection', 'reckoning'],
         true, // yearn: a cold-but-strong bond still SEEKS its object (H3d) — it
         //       becomes a candidate even at idle, so a love want a rivalry keeps
         //       out of the driver seat no longer freezes out of the night.
+        strictStructured,
     );
     if (!p) return null;
     // Intrude (barge in uninvited) stays reserved for a ripe (edge+) want, per
@@ -279,11 +319,14 @@ export function yearningNightPursuit(
  *  志向 / 身家 matter pressing on them (the contract weighing on 柳安春 is such a
  *  want). Ripe = forcing past idle (nightRipe with yearn off). May carry NO
  *  target (a worry need not be aimed at anyone). Pure. */
-export function confideWorry(wants: ReadonlyArray<Want>, characterId: string): Want | null {
+export function confideWorry(wants: ReadonlyArray<Want>, characterId: string, strictStructured = false): Want | null {
     let best: Want | null = null;
     for (const w of wants) {
         if (w.retired || w.characterId !== characterId) continue;
-        if (isBondLayer(w.layer) || JEALOUS_LAYER.test(w.layer)) continue; // not love/debt/jealousy
+        if (
+            isBondWant(w, strictStructured) ||
+            (strictStructured ? hasWantSemantic(w, 'jealousy') : JEALOUS_LAYER.test(w.layer))
+        ) continue; // not love/debt/jealousy
         if (!nightRipe(w, false)) continue; // ripe enough to move feet (forcing past idle)
         if (!best || tension(w) > tension(best)) best = w;
     }
@@ -299,13 +342,18 @@ export function hasHostileWantToward(
     fromId: string,
     toId: string,
     toName?: string,
+    strictStructured = false,
 ): boolean {
     return wants.some(
         (w) =>
             !w.retired &&
             w.characterId === fromId &&
             !!w.target &&
-            (JEALOUS_LAYER.test(w.layer) || RECKON_LAYER.test(w.layer)) &&
+            (strictStructured
+                ? hasWantSemantic(w, 'jealousy') ||
+                  hasWantSemantic(w, 'reckoning') ||
+                  hasWantSemantic(w, 'hostility')
+                : JEALOUS_LAYER.test(w.layer) || RECKON_LAYER.test(w.layer)) &&
             (w.target === toId || (toName !== undefined && w.target === toName)),
     );
 }
@@ -319,12 +367,13 @@ export function confiderOf(
     cs: ReadonlyArray<{ id: string; name: string }>,
     wants: ReadonlyArray<Want>,
     isTrusted: (a: string, b: string) => boolean,
+    strictStructured = false,
 ): string | null {
     if (cs.length !== 2) return null;
     let best: { id: string; t: number } | null = null;
     for (const a of cs) {
         const other = cs.find((o) => o.id !== a.id)!;
-        const worry = confideWorry(wants, a.id);
+        const worry = confideWorry(wants, a.id, strictStructured);
         if (!worry || !isTrusted(a.id, other.id)) continue;
         const t = tension(worry);
         if (!best || t > best.t) best = { id: a.id, t };
@@ -340,9 +389,10 @@ export function qualifiesAsConfide(
     privacyLevel: number,
     wants: ReadonlyArray<Want>,
     isTrusted: (a: string, b: string) => boolean,
+    strictStructured = false,
 ): boolean {
     if (cs.length !== 2 || privacyLevel < 3) return false;
-    return confiderOf(cs, wants, isTrusted) !== null;
+    return confiderOf(cs, wants, isTrusted, strictStructured) !== null;
 }
 
 /** Night-scene qualification (G8/G8b, H1): a private scene plays at night as a
@@ -359,12 +409,13 @@ export function nightSceneKind(
     privacyLevel: number,
     wants: ReadonlyArray<Want>,
     isTrusted?: (a: string, b: string) => boolean,
+    strictStructured = false,
 ): 'tryst' | 'reckoning' | 'confide' | 'confrontation' | null {
     if (privacyLevel < 3) return null;
     if (cs.length === 2) {
-        if (qualifiesAsTryst(cs, privacyLevel, wants)) return 'tryst';
-        if (qualifiesAsReckoning(cs, privacyLevel, wants)) return 'reckoning';
-        if (isTrusted && qualifiesAsConfide(cs, privacyLevel, wants, isTrusted)) return 'confide';
+        if (qualifiesAsTryst(cs, privacyLevel, wants, strictStructured)) return 'tryst';
+        if (qualifiesAsReckoning(cs, privacyLevel, wants, strictStructured)) return 'reckoning';
+        if (isTrusted && qualifiesAsConfide(cs, privacyLevel, wants, isTrusted, strictStructured)) return 'confide';
         return null;
     }
     if (cs.length !== 3) return null;
@@ -372,13 +423,14 @@ export function nightSceneKind(
         const third = cs[i];
         const pair = cs.filter((_, j) => j !== i);
         const pairPlays =
-            qualifiesAsTryst(pair, privacyLevel, wants) || qualifiesAsReckoning(pair, privacyLevel, wants);
+            qualifiesAsTryst(pair, privacyLevel, wants, strictStructured) ||
+            qualifiesAsReckoning(pair, privacyLevel, wants, strictStructured);
         if (!pairPlays) continue;
         const jealous = wants.some(
             (w) =>
                 !w.retired &&
                 w.characterId === third.id &&
-                JEALOUS_LAYER.test(w.layer) &&
+                (strictStructured ? hasWantSemantic(w, 'jealousy') : JEALOUS_LAYER.test(w.layer)) &&
                 pair.some((p) => w.target === p.name || w.target === p.id),
         );
         if (jealous) return 'confrontation';
@@ -403,12 +455,14 @@ export function normalizeLayer(raw: string | undefined): string {
 
 export function newWant(
     init: Pick<Want, 'characterId' | 'layer' | 'desc' | 'weight' | 'sat' | 'resistance' | 'kind' | 'source' | 'bornTick'> &
-        Partial<Pick<Want, 'target' | 'id' | 'resource'>>,
+        Partial<Pick<Want, 'target' | 'id' | 'resource' | 'semanticTags' | 'subjectRef'>>,
 ): Want {
     return {
         id: init.id ?? `w${Date.now().toString(36)}-${++_seq}`,
         characterId: init.characterId,
         layer: init.layer,
+        ...(init.semanticTags?.length ? { semanticTags: [...new Set(init.semanticTags)] } : {}),
+        ...(init.subjectRef ? { subjectRef: { ...init.subjectRef } } : {}),
         desc: init.desc,
         target: init.target,
         resource: init.resource,
@@ -440,7 +494,11 @@ export function decayWants(wants: Want[]): void {
  *  tension floor) and not being acted on quietly stops being carried. Genesis
  *  wants are exempt: who a character IS doesn't fade, only picked-up threads.
  *  Returns the faded wants (for logging). */
-export function fadeStaleWants(wants: Want[], tick: number): Want[] {
+export function fadeStaleWants(
+    wants: Want[],
+    tick: number,
+    strictStructured = false,
+): Want[] {
     const faded: Want[] = [];
     for (const w of wants) {
         if (w.retired || w.kind === 'economic' || w.source === 'genesis') continue;
@@ -457,6 +515,7 @@ export function fadeStaleWants(wants: Want[], tick: number): Want[] {
         if (!cold && !idle) continue;
         w.retired = true;
         w.resolvedTick = tick;
+        if (strictStructured) w.resolutionCause = 'faded';
         w.resolvedNote = cold ? '（日子久了，淡了）' : '（一時好奇，過去了）';
         faded.push(w);
     }
@@ -497,12 +556,19 @@ export interface BeatOutcome {
  * Apply one acted beat to the driving want. Resolution retires it and cools the
  * same character's other standing-grade wants (§2.37 cross-time breadth).
  */
-export function applyBeat(w: Want, all: Want[], outcome: BeatOutcome, tick: number): void {
+export function applyBeat(
+    w: Want,
+    all: Want[],
+    outcome: BeatOutcome,
+    tick: number,
+    strictStructured = false,
+): void {
     w.recent += 1;
     w.heat += 1;
     if (outcome.resolved) {
         w.retired = true;
         w.resolvedTick = tick;
+        if (strictStructured) w.resolutionCause = 'resolved';
         w.resolvedNote = outcome.resolvedNote;
         for (const y of all) {
             if (y === w || y.retired || y.characterId !== w.characterId) continue;
@@ -524,10 +590,18 @@ export interface RippleDelta {
     newThread?: string;
     layer?: string;
     target?: string;
+    semanticTags?: WantSemanticTag[];
+    subjectRef?: WantSubjectRef;
 }
 
 /** Apply LLM-judged ripples: shift the target's hottest want, spawn new threads. */
-export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, tick: number, nextId?: () => string): Want[] {
+export function applyRipples(
+    wants: Want[],
+    deltas: ReadonlyArray<RippleDelta>,
+    tick: number,
+    nextId?: () => string,
+    strictStructured = false,
+): Want[] {
     const spawned: Want[] = [];
     for (const d of deltas) {
         const mine = wants.filter((w) => !w.retired && w.characterId === d.characterId);
@@ -538,9 +612,11 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
             );
         }
         const candidate = d.newThread?.trim();
-        const nt = candidate && !/^(省略|無|沒有|不新增|none|null|n\/?a)$/i.test(candidate)
-            ? candidate
-            : undefined;
+        const nt = strictStructured
+            ? candidate || undefined
+            : candidate && !/^(省略|無|沒有|不新增|none|null|n\/?a)$/i.test(candidate)
+              ? candidate
+              : undefined;
         const picked = mine.filter((w) => w.source !== 'genesis').length;
         if (
             nt &&
@@ -559,6 +635,8 @@ export function applyRipples(wants: Want[], deltas: ReadonlyArray<RippleDelta>, 
                     id: nextId?.(),
                     characterId: d.characterId,
                     layer: normalizeLayer(d.layer),
+                    ...(strictStructured && d.semanticTags?.length ? { semanticTags: d.semanticTags } : {}),
+                    ...(strictStructured && d.subjectRef ? { subjectRef: d.subjectRef } : {}),
                     desc: nt,
                     target: d.target,
                     weight: WANT.rippleWeight,

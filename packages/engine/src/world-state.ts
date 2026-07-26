@@ -69,6 +69,9 @@ export interface CastMember {
     gender?: string;
     age?: number;
     role?: string;
+    /** Authored public-facing status used by STRICT acquaintance seeding.
+     * Absent keeps the legacy role table only outside STRICT. */
+    publiclyRecognizable?: boolean;
     state: StateVector;
     /**
      * MUTABLE SELF-MODEL (CHARACTER_LIFECYCLE §3, L3) — the character's CURRENT
@@ -120,6 +123,9 @@ export interface CastMember {
     selfRegard?: number;
 }
 
+export const SCENE_CAPABILITIES = ['stage', 'temple'] as const;
+export type SceneCapability = (typeof SCENE_CAPABILITIES)[number];
+
 export interface SceneInfo {
     id: string;
     name: string;
@@ -134,12 +140,47 @@ export interface SceneInfo {
      * real cross-town journey. Drives movement time-cost + roadside 路遇.
      * Optional & backward-compatible: absent ⇒ no grouping (flat/uniform). */
     locationIndex?: number;
+    /** Authored finite venue semantics. An explicit empty array means the scene
+     * has no tagged capability; absence permits legacy name fallback only off. */
+    capabilities?: SceneCapability[];
+}
+
+/** One shadow comparison made while `strictStructured` is active.
+ * The legacy prose/free-text detector still runs as an instrument, but only the
+ * structured signal is authoritative. Equal observations are not stored. */
+export interface StructuredDivergence {
+    tick: number;
+    domain: 'authorization' | 'object' | 'scene' | 'want' | 'economy' | 'preset';
+    kind: string;
+    legacy: boolean;
+    structured: boolean;
+    actorId?: string;
+    targetId?: string;
+    subjectId?: string;
+    detail?: string;
+}
+
+/** Persisted monitor state for research runs. It is absent while the flag is
+ * off, preserving legacy snapshots byte-for-byte. */
+export interface StructuredMonitor {
+    /** Beat proposals evaluated by the prose/state shadow monitor (Phase 2). */
+    evaluatedBeats: number;
+    divergences: StructuredDivergence[];
+    warnings: Array<{
+        tick: number;
+        domain: StructuredDivergence['domain'];
+        kind: string;
+        subjectId?: string;
+        detail?: string;
+    }>;
 }
 
 /** A directed relationship edge (from → to), tone + accumulated weight (§2.4). */
 export interface RelationshipEdge {
     tone: string;
     weight: number;
+    /** Authored/mechanism disposition for routing and welcome. */
+    disposition?: 'warm' | 'neutral' | 'cold';
 }
 
 /**
@@ -274,6 +315,8 @@ export interface WorldObject {
      * follow roster movement; `container` remains the prose-facing placement. */
     carriedBy?: string;
     state?: string;
+    /** Finite authored state facets used by STRICT eligibility checks. */
+    stateTags?: string[];
     version: number;
     /** Characters who know a hidden object's current placement. */
     knownBy: string[];
@@ -350,6 +393,13 @@ export interface WorldStateData {
      *  nightly self-model consolidation. Flag lives in the world so resume
      *  keeps the run's wiring; validated on long seasons before default-on. */
     relationshipFallback?: boolean;
+    /** Research profile flag: structured fields are the ONLY state/authorization
+     * authority. Legacy prose and free-text regexes remain live as shadow
+     * monitors, never gates. Absent/false preserves the pre-flag execution path
+     * and serialized shape. */
+    strictStructured?: boolean;
+    /** STRICT-only shadow telemetry. Never initialised while the flag is off. */
+    structuredMonitor?: StructuredMonitor;
     /** 相識分寸 (subjective acquaintance) master flag. Absent/false ⇒ the feature
      *  is OFF ⇒ `perceivedName` === `nameById` and `acquaintLevel` === 'named'
      *  everywhere — the ENTIRE engine is byte-identical to a world without this
@@ -557,6 +607,84 @@ export class WorldState {
         this.normalizeLegacyCarriers();
     }
 
+    /** Compare a legacy semantic detector with its structured replacement.
+     * STRICT runs record only disagreements; duplicates within the same tick and
+     * subject are collapsed so a loop retry cannot inflate the metric. */
+    recordStructuredComparison(input: Omit<StructuredDivergence, 'tick'> & { tick?: number }): void {
+        if (!this.data.strictStructured || input.legacy === input.structured) return;
+        const monitor = (this.data.structuredMonitor ??= {
+            evaluatedBeats: 0,
+            divergences: [],
+            warnings: [],
+        });
+        const event: StructuredDivergence = {
+            tick: input.tick ?? this.data.clock.currentTick,
+            domain: input.domain,
+            kind: input.kind,
+            legacy: input.legacy,
+            structured: input.structured,
+            ...(input.actorId ? { actorId: input.actorId } : {}),
+            ...(input.targetId ? { targetId: input.targetId } : {}),
+            ...(input.subjectId ? { subjectId: input.subjectId } : {}),
+            ...(input.detail ? { detail: input.detail } : {}),
+        };
+        const duplicate = monitor.divergences.some(
+            (prior) =>
+                prior.tick === event.tick &&
+                prior.domain === event.domain &&
+                prior.kind === event.kind &&
+                prior.actorId === event.actorId &&
+                prior.targetId === event.targetId &&
+                prior.subjectId === event.subjectId &&
+                prior.legacy === event.legacy &&
+                prior.structured === event.structured,
+        );
+        if (!duplicate) monitor.divergences.push(event);
+    }
+
+    recordStructuredWarning(input: {
+        domain: StructuredDivergence['domain'];
+        kind: string;
+        subjectId?: string;
+        detail?: string;
+        tick?: number;
+    }): void {
+        if (!this.data.strictStructured) return;
+        const monitor = (this.data.structuredMonitor ??= {
+            evaluatedBeats: 0,
+            divergences: [],
+            warnings: [],
+        });
+        const warning = {
+            tick: input.tick ?? this.data.clock.currentTick,
+            domain: input.domain,
+            kind: input.kind,
+            ...(input.subjectId ? { subjectId: input.subjectId } : {}),
+            ...(input.detail ? { detail: input.detail } : {}),
+        };
+        const duplicate = monitor.warnings.some(
+            (prior) =>
+                prior.tick === warning.tick &&
+                prior.domain === warning.domain &&
+                prior.kind === warning.kind &&
+                prior.subjectId === warning.subjectId,
+        );
+        if (!duplicate) monitor.warnings.push(warning);
+    }
+
+    /** Denominator for the prose/state divergence rate: one proposal presented
+     * to physical validation. Retries count as separate proposals,
+     * because each is a separately authored beat draft. */
+    recordStructuredBeatEvaluation(): void {
+        if (!this.data.strictStructured) return;
+        const monitor = (this.data.structuredMonitor ??= {
+            evaluatedBeats: 0,
+            divergences: [],
+            warnings: [],
+        });
+        monitor.evaluatedBeats += 1;
+    }
+
     /** Backward-compatible migration for snapshots that recorded
      * `江聞鶴懷中` only as prose. The frozen beat already established carriage;
      * this derives the missing structure without inventing a new event. */
@@ -570,6 +698,18 @@ export class WorldState {
             if (!/懷|袖|手中|身上|兜|袋/.test(object.container)) continue;
             const carrier = this.data.cast.find((member) => object.container!.includes(member.name));
             if (!carrier) continue;
+            if (this.data.strictStructured) {
+                this.recordStructuredComparison({
+                    domain: 'object',
+                    kind: 'legacy-carrier-container',
+                    legacy: true,
+                    structured: false,
+                    actorId: carrier.id,
+                    subjectId: object.id,
+                    detail: object.container,
+                });
+                continue;
+            }
             object.carriedBy = carrier.id;
             object.sceneId = this.data.roster[carrier.id] ?? object.sceneId;
         }
@@ -725,16 +865,65 @@ export class WorldState {
     welcome(hostId: string, visitorId: string): number {
         const e = this.data.edges[hostId]?.[visitorId];
         if (!e) return 0.5;
-        if (/戀|慕|愛|親|暖|友/.test(e.tone)) return Math.min(1, 0.7 + 0.1 * e.weight);
-        if (/妒|怨|恨|冷|敵|競/.test(e.tone)) return Math.max(0, 0.2 - 0.05 * e.weight);
-        return 0.5;
+        const legacy = /戀|慕|愛|親|暖|友/.test(e.tone)
+            ? Math.min(1, 0.7 + 0.1 * e.weight)
+            : /妒|怨|恨|冷|敵|競/.test(e.tone)
+              ? Math.max(0, 0.2 - 0.05 * e.weight)
+              : 0.5;
+        if (!this.data.strictStructured) return legacy;
+        const structured =
+            e.disposition === 'warm'
+                ? Math.min(1, 0.7 + 0.1 * e.weight)
+                : e.disposition === 'cold'
+                  ? Math.max(0, 0.2 - 0.05 * e.weight)
+                  : 0.5;
+        this.recordStructuredComparison({
+            domain: 'authorization',
+            kind: 'welcome-disposition',
+            legacy: legacy >= 0.7,
+            structured: structured >= 0.7,
+            actorId: hostId,
+            targetId: visitorId,
+            subjectId: `${hostId}→${visitorId}`,
+            detail: `${legacy.toFixed(2)} / ${structured.toFixed(2)}`,
+        });
+        if (e.disposition === undefined && legacy !== 0.5) {
+            this.recordStructuredWarning({
+                domain: 'preset',
+                kind: 'missing-edge-disposition',
+                subjectId: `${hostId}→${visitorId}`,
+                detail: e.tone,
+            });
+        }
+        return structured;
     }
 
     /** Record/strengthen a directed relationship edge (§2.4 accumulation). */
-    setEdge(fromId: string, toId: string, tone: string): void {
+    setEdge(
+        fromId: string,
+        toId: string,
+        tone: string,
+        disposition?: RelationshipEdge['disposition'],
+    ): void {
         const row = (this.data.edges[fromId] ??= {});
         const cur = row[toId];
-        row[toId] = cur && cur.tone === tone ? { tone, weight: cur.weight + 1 } : { tone, weight: (cur?.weight ?? 0) + 1 };
+        const nextDisposition = disposition ?? cur?.disposition;
+        row[toId] =
+            cur && cur.tone === tone
+                ? {
+                      tone,
+                      weight: cur.weight + 1,
+                      ...(nextDisposition
+                          ? { disposition: nextDisposition }
+                          : {}),
+                  }
+                : {
+                      tone,
+                      weight: (cur?.weight ?? 0) + 1,
+                      ...(nextDisposition
+                          ? { disposition: nextDisposition }
+                          : {}),
+                  };
     }
 
     // ── 口碑 / 自視 (public renown + private self-regard) ──────────────────────

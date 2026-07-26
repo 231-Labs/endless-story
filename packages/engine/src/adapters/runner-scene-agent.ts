@@ -25,11 +25,14 @@ import type {
     EvolveSecretInput,
     DossierCanonicalEvent,
     DossierPerspectiveSource,
+    DeclareWantSemanticsInput,
+    DeclareWantSemanticsReply,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
     PlanDayInput,
     PlanDayReply,
 } from '../ports.ts';
+import { WANT_SEMANTIC_TAGS, type WantSemanticTag } from '../core/want-core.ts';
 import { projectEventBeatsForWitness } from '../core/scene-perception.ts';
 import {
     coerceRewriteReply,
@@ -287,6 +290,75 @@ export class RunnerSceneAgent implements SceneAgentPort {
         input: Parameters<typeof characterAgent.judgeEstablished>[0],
     ): ReturnType<typeof characterAgent.judgeEstablished> {
         return characterAgent.judgeEstablished(input);
+    }
+
+    async declareWantSemantics(
+        input: DeclareWantSemanticsInput,
+    ): Promise<DeclareWantSemanticsReply | null> {
+        const system = [
+            '你是 Endless Story 的結構化心願語意宣告座席。',
+            '這不是改寫心願，也不是替角色決定行動；你只為機制宣告有限 metadata。',
+            'semanticTags 只能取 affection、reckoning、jealousy、hostility；沒有就空陣列。',
+            'target 只能逐字回傳候選人物的 id 或 name；不是明確指向人物就省略。',
+            'subjectRef 只能逐字回傳候選主體的 kind 與 id；不是明確指向就省略。',
+            'affection=親密/愛慕；reckoning=虧欠/清算/討回；jealousy=妒意；hostility=敵意或傷害傾向。',
+            '只輸出 JSON：{"semanticTags":[],"target":"可省略","subjectRef":{"kind":"contract","id":"可省略"}}。不要 markdown。',
+        ].join('\n');
+        const cast = input.cast.map((member) => `${member.id}=${member.name}`).join('、');
+        const subjects = input.subjects.map((subject) => `${subject.kind}:${subject.id}=${subject.label}`).join('、');
+        const user = [
+            `來源：${input.source}`,
+            `角色：${input.characterId}=${input.characterName}`,
+            `自由文字層：${input.layer ?? '（無）'}`,
+            `心願原句：${input.desc}`,
+            `原始 target：${input.target ?? '（無）'}`,
+            `target 候選：${cast || '（無）'}`,
+            `subjectRef 候選：${subjects || '（無）'}`,
+        ].join('\n');
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system,
+            messages: [{ role: 'user', content: user }],
+            maxTokens: 180,
+            temperature: 0,
+        });
+        const block = res.text.match(/\{[\s\S]*\}/)?.[0];
+        if (!block) return null;
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(block) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+        const semanticTags = Array.isArray(parsed.semanticTags)
+            ? parsed.semanticTags.filter(
+                  (tag): tag is WantSemanticTag =>
+                      typeof tag === 'string' &&
+                      (WANT_SEMANTIC_TAGS as readonly string[]).includes(tag),
+              )
+            : [];
+        const target =
+            typeof parsed.target === 'string' &&
+            input.cast.some(
+                (member) => member.id === parsed.target || member.name === parsed.target,
+            )
+                ? parsed.target
+                : undefined;
+        const rawSubject = parsed.subjectRef as Record<string, unknown> | undefined;
+        const subjectRef =
+            rawSubject?.kind === 'contract' &&
+            typeof rawSubject.id === 'string' &&
+            input.subjects.some(
+                (subject) => subject.kind === 'contract' && subject.id === rawSubject.id,
+            )
+                ? { kind: 'contract' as const, id: rawSubject.id }
+                : undefined;
+        return {
+            semanticTags: [...new Set(semanticTags)],
+            ...(target ? { target } : {}),
+            ...(subjectRef ? { subjectRef } : {}),
+        };
     }
 
     async deriveGenesisWants(
