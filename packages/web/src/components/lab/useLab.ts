@@ -39,33 +39,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     return data;
 }
 
-export type LabClientRole = 'director' | 'viewer';
-
 export const labApi = {
-    role: () =>
-        request<{
-            role: LabClientRole;
-            director: boolean;
-            publicRunId: string | null;
-            brand: string;
-            featuredCastNames: string[];
-        }>('/api/lab/role'),
-    publicConfig: () =>
-        request<{
-            brand: string;
-            runId: string | null;
-            featuredCastNames: string[];
-            runTitle: string | null;
-            hasDailyShot: boolean;
-            ready: boolean;
-        }>('/api/lab/public'),
-    publicDailyShot: () =>
-        request<{ runId: string; shot: import('@/lib/lab/daily-shot').DailyShot | null }>('/api/lab/public/daily-shot'),
-    publicLive: (after: number) => request<LabLiveSnapshot>(`/api/lab/public/live?after=${after}`),
-    dailyShot: (id: string) =>
-        request<{ runId: string; shot: import('@/lib/lab/daily-shot').DailyShot | null }>(
-            `/api/lab/runs/${encodeURIComponent(id)}/daily-shot`,
-        ),
     seeds: () => request<{ seeds: LabSeedSummary[]; seasons: LabSeasonSummary[] }>('/api/lab/seeds'),
     seedText: (source: string, id: string, kind: 'seed' | 'season' = 'seed') =>
         request<{ json: string }>(`/api/lab/seeds/${source}/${encodeURIComponent(id)}${kind === 'season' ? '?kind=season' : ''}`),

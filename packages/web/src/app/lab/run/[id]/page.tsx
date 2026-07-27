@@ -1,69 +1,312 @@
 'use client';
 
 /**
- * 觀測台 — one run's live stage.
- * Directors (LAB_SECRET / open local) see 片場 controls.
- * Guests on the featured public run see 春雪社 chrome.
+ * 觀測台 — one run's live stage: the handscroll (where everyone is, what each
+ * scene is breathing), the beat stream (what each character just said), the
+ * cast rail, run controls, and the world-physics drawer. Poll-driven via
+ * /api/lab/runs/[id]/live; faster cadence while a tick is walking.
  */
 
-import { use, useEffect, useState } from 'react';
-import { LabStage } from '@/components/lab/LabStage';
-import { labApi, type LabClientRole } from '@/components/lab/useLab';
+import { use, useCallback, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { AnimatePresence } from 'framer-motion';
+import { BeadCurtain } from '@/components/lab/LabOrnaments';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { IconBack, IconExport, IconGallery, IconInterview, IconObjects, IconScroll } from '@/components/lab/LabIcons';
+import { LabBeatDock } from '@/components/lab/LabBeatDock';
+import { LabCastRail } from '@/components/lab/LabCastRail';
+import { LabCharacterSheet } from '@/components/lab/LabCharacterSheet';
+import { LabConfigDrawer } from '@/components/lab/LabConfigDrawer';
+import { LabControls } from '@/components/lab/LabControls';
+import { LabHandscroll } from '@/components/lab/LabHandscroll';
+import { LabProductionPanel } from '@/components/lab/LabProductionPanel';
+import { LabSceneSheet } from '@/components/lab/LabSceneSheet';
+import { LabWishBoard } from '@/components/lab/LabWishBoard';
+import { LabWishWall } from '@/components/lab/LabWishWall';
+import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
+import { labApi, useLabLive } from '@/components/lab/useLab';
 
 export default function LabRunPage({ params }: { params: Promise<{ id: string }> }) {
+    // page params keep their percent-encoding; run ids may contain CJK
     const { id: rawId } = use(params);
     const id = decodeURIComponent(rawId);
-    const [role, setRole] = useState<LabClientRole | null>(null);
-    const [brand, setBrand] = useState('春雪社');
-    const [featuredCastNames, setFeaturedCastNames] = useState<string[]>(['柳安春', '蘇映雪', '金鳳']);
-    const [publicRunId, setPublicRunId] = useState<string | null>(null);
+    const { snapshot, feed, error, refresh } = useLabLive(id);
+    const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
+    const [focusedCharacterId, setFocusedCharacterId] = useState<string | null>(null);
+    const [drawer, setDrawer] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
-        void labApi
-            .role()
-            .then((res) => {
-                if (cancelled) return;
-                setRole(res.director ? 'director' : 'viewer');
-                setBrand(res.brand || '春雪社');
-                setFeaturedCastNames(res.featuredCastNames?.length ? res.featuredCastNames : ['柳安春', '蘇映雪', '金鳳']);
-                setPublicRunId(res.publicRunId);
-            })
-            .catch(() => {
-                if (!cancelled) setRole('viewer');
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+    const onExport = useCallback(async () => {
+        setExporting(true);
+        setExportError(null);
+        try {
+            const { blob, filename } = await labApi.export(id);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            setExportError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setExporting(false);
+        }
+    }, [id]);
 
-    if (!role) {
+    const focusedScene = useMemo(
+        () => snapshot?.scenes.find((s) => s.id === focusedSceneId) ?? null,
+        [snapshot, focusedSceneId],
+    );
+    const focusedCharacter = useMemo(
+        () => snapshot?.characters.find((c) => c.id === focusedCharacterId) ?? null,
+        [snapshot, focusedCharacterId],
+    );
+    const activeCharacterIds = useMemo(() => {
+        const currentTick = snapshot?.clock.currentTick;
+        if (currentTick == null) return new Set<string>();
+        // 本拍或上一拍有言行者（tick 走完後 currentTick 已 +1）
+        return new Set(
+            feed.filter((b) => b.kind !== 'move' && b.tick >= currentTick - 1).map((b) => b.characterId),
+        );
+    }, [feed, snapshot?.clock.currentTick]);
+    const focusedLocationArt = useMemo(() => {
+        if (!snapshot || !focusedScene) return undefined;
+        const loc = snapshot.locations.find((l) => l.id === focusedScene.locationId);
+        return terrainArtFor(loc?.name) ?? undefined;
+    }, [snapshot, focusedScene]);
+
+    if (!snapshot) {
         return (
             <main className="flex min-h-dvh items-center justify-center">
-                <p className="font-serif text-sm tracking-[0.3em] text-mute">展卷中…</p>
-            </main>
-        );
-    }
-
-    // Non-directors may only open the curated public run as guests.
-    if (role === 'viewer' && publicRunId && publicRunId !== id) {
-        return (
-            <main className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6">
-                <p className="font-serif text-sm tracking-[0.3em] text-mute">此卷僅片場可見</p>
-                <a href={`/lab/run/${encodeURIComponent(publicRunId)}`} className="font-serif text-sm tracking-[0.3em] text-cinnabar">
-                    前往春雪社
-                </a>
+                <p className="font-serif text-sm tracking-[0.3em] text-mute">
+                    {error ? `展卷失敗：${error}` : '展卷中…'}
+                </p>
             </main>
         );
     }
 
     return (
-        <LabStage
-            runId={id}
-            role={role}
-            brand={brand}
-            featuredCastNames={featuredCastNames}
-            enableFirstVisit={role === 'viewer'}
-        />
+        <main className="h-dvh snap-y snap-mandatory overflow-y-auto no-scrollbar">
+            {/* 第一屏 —— 純手卷與拍流 */}
+            <section className="relative flex h-dvh snap-start snap-always flex-col">
+            {/* 簷口一線 —— 珠簾即當日行程：一拍亮一段，走拍的那串在呼吸 */}
+            <header className="relative border-b border-hairline/60 bg-surface/60 px-4 pb-3 pt-4 backdrop-blur-sm dark:bg-elevated/40 sm:px-8">
+                <BeadCurtain
+                    strings={34}
+                    className="absolute inset-x-0 top-0 h-8 opacity-60"
+                    progress={{
+                        total: snapshot.clock.ticksPerDay,
+                        done: snapshot.clock.tickOfDay,
+                        active: snapshot.phase === 'running',
+                    }}
+                />
+                <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <Link href="/lab" aria-label="回卷架" title="回卷架" className="inline-flex items-center font-serif text-base text-mute hover:text-cinnabar">
+                        <IconBack />
+                    </Link>
+                    <div className="min-w-0">
+                        <h1 className="truncate font-serif text-lg tracking-[0.15em] text-ink">{snapshot.meta.title}</h1>
+                        <p className="truncate font-serif text-2xs tracking-[0.18em] text-mute" title={`${snapshot.saga.name} · 本日第 ${snapshot.clock.tickOfDay + 1}／${snapshot.clock.ticksPerDay} 拍`}>
+                            {snapshot.saga.name} · {snapshot.saga.worldTime?.label}
+                        </p>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                        <ThemeToggle className="es-icon-button !h-11 !w-11 text-[20px]" />
+                        <Link
+                            href={`/lab/run/${id}/reading`}
+                            aria-label="卷宗與章回"
+                            title="卷宗與章回"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
+                        >
+                            <IconScroll />
+                        </Link>
+                        <Link
+                            href={`/lab/assets?from=${encodeURIComponent(`/lab/run/${id}`)}`}
+                            aria-label="圖庫"
+                            title="圖庫 · 人物與場景之圖"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
+                        >
+                            <IconGallery />
+                        </Link>
+                        <Link
+                            href={`/lab/run/${id}/interview`}
+                            aria-label="演員訪談室"
+                            title="演員訪談室 · 訪問一位剛經歷完今天的演員"
+                            className="es-icon-button !h-11 !w-11 text-[20px]"
+                        >
+                            <IconInterview />
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => setDrawer((v) => !v)}
+                            aria-label="物界配置"
+                            title="物界 · 物（爭奪之物／物件）／景（場景物理）／時（天時）／憶（記憶）／人（中途入場）"
+                            className={`es-icon-button !h-11 !w-11 text-[20px] ${drawer ? 'border-cinnabar/60 text-cinnabar' : ''}`}
+                        >
+                            <IconObjects />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onExport}
+                            disabled={exporting}
+                            aria-label="導出診斷（給 AI 看的卷宗全紀）"
+                            title={exporting ? '導出中…' : '導出診斷（給 AI 看的卷宗全紀）'}
+                            className="es-icon-button !h-11 !w-11 text-[20px] disabled:opacity-50"
+                        >
+                            <IconExport />
+                        </button>
+                    </div>
+                    <div className="w-full">
+                        <LabControls snapshot={snapshot} onChanged={refresh} />
+                    </div>
+                </div>
+            </header>
+
+            {error ? (
+                <p className="px-4 py-2 font-serif text-xs text-cinnabar sm:px-8" role="alert">{error}</p>
+            ) : null}
+            {exportError ? (
+                <p className="px-4 py-2 font-serif text-xs text-cinnabar sm:px-8" role="alert">導出失敗：{exportError}</p>
+            ) : null}
+
+            {/* 主舞台 —— 手卷滿幅；拍流是懸浮可折的匣，不再切走橫向 */}
+            <div className="relative min-h-[56vh] flex-1 overflow-hidden">
+                <LabHandscroll
+                    saga={snapshot.saga}
+                    scenes={snapshot.scenes}
+                    locations={snapshot.locations}
+                    streams={snapshot.streams}
+                    artByLocationId={snapshot.artByLocationId}
+                    onSelectScene={(sceneId) => {
+                        setFocusedCharacterId(null);
+                        setFocusedSceneId(sceneId);
+                    }}
+                />
+                <LabBeatDock
+                    feed={feed}
+                    running={snapshot.phase === 'running'}
+                    onCastClick={() => document.getElementById('lab-cast-screen')?.scrollIntoView({ behavior: 'smooth' })}
+                />
+                {snapshot.production ? <LabProductionPanel production={snapshot.production} /> : null}
+                <AnimatePresence>
+                    {focusedScene ? (
+                        <LabSceneSheet
+                            key={focusedScene.id}
+                            scene={focusedScene}
+                            characters={snapshot.characters}
+                            beats={feed}
+                            objects={snapshot.objects}
+                            prayers={snapshot.prayers}
+                            locationArt={focusedLocationArt}
+                            clock={snapshot.saga.worldTime?.label}
+                            onSelectCharacter={(characterId) => {
+                                setFocusedSceneId(null);
+                                setFocusedCharacterId(characterId);
+                            }}
+                            onClose={() => setFocusedSceneId(null)}
+                        />
+                    ) : null}
+                    {focusedCharacter ? (
+                        <LabCharacterSheet
+                            key={focusedCharacter.id}
+                            runId={id}
+                            character={focusedCharacter}
+                            onJumpToScene={(sceneId) => {
+                                setFocusedCharacterId(null);
+                                setFocusedSceneId(sceneId);
+                            }}
+                            onSelectCharacter={(cid) => setFocusedCharacterId(cid)}
+                            onClose={() => setFocusedCharacterId(null)}
+                        />
+                    ) : null}
+                </AnimatePresence>
+            </div>
+
+            </section>
+
+            {/* 第二屏 —— 名帖 */}
+            <section id="lab-cast-screen" className="min-h-dvh snap-start snap-always px-4 pb-12 pt-10 sm:px-8">
+                <div className="flex items-baseline justify-between">
+                    <p className="font-serif text-sm tracking-[0.4em] text-ink" title="點名帖開人物內頁：狀態／心事／記憶／影像">名帖</p>
+                    <button
+                        type="button"
+                        onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
+                        title="回手卷"
+                    >
+                        ▴ 手卷
+                    </button>
+                </div>
+                <div className="mt-5">
+                    <LabCastRail
+                        characters={snapshot.characters}
+                        activeIds={activeCharacterIds}
+                        onSelectCharacter={(characterId) => {
+                            // 內頁開在第一屏的舞台上——先捲回去再開
+                            document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                            setFocusedCharacterId(characterId);
+                        }}
+                    />
+                </div>
+            </section>
+
+            {/* 第三屏 —— 願榜（全戲班心事收攏，張力排序） */}
+            <section id="lab-wish-screen" className="min-h-dvh snap-start snap-always px-4 pb-12 pt-10 sm:px-8">
+                <div className="flex items-baseline justify-between">
+                    <p className="font-serif text-sm tracking-[0.4em] text-ink" title="願榜：全戲班此刻活著的心事，張力高者在前。點頭像開內頁。">願榜</p>
+                    <button
+                        type="button"
+                        onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
+                        title="回手卷"
+                    >
+                        ▴ 手卷
+                    </button>
+                </div>
+                <LabWishBoard
+                    characters={snapshot.characters}
+                    onSelectCharacter={(characterId) => {
+                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                        setFocusedCharacterId(characterId);
+                    }}
+                />
+            </section>
+
+            {/* 第四屏 —— 願牆（眾生對神明說出口的話，與願榜的「心裡的」相對） */}
+            <section id="lab-wish-wall-screen" className="min-h-dvh snap-start snap-always px-4 pb-12 pt-10 sm:px-8">
+                <div className="flex items-baseline justify-between">
+                    <p className="font-serif text-sm tracking-[0.4em] text-ink" title="願牆：眾生在廟裡對神明親口說出的祈願（對神明說出口的話），與願榜（心裡的心事）相對。點頭像開內頁。">願牆</p>
+                    <button
+                        type="button"
+                        onClick={() => document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="font-serif text-2xs tracking-[0.35em] text-mute/70 transition hover:text-cinnabar"
+                        title="回手卷"
+                    >
+                        ▴ 手卷
+                    </button>
+                </div>
+                <LabWishWall
+                    prayers={snapshot.prayers}
+                    onSelectCharacter={(characterId) => {
+                        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+                        setFocusedCharacterId(characterId);
+                    }}
+                />
+            </section>
+
+            {/* 物界抽屜 */}
+            {drawer ? (
+                <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md p-3 sm:p-4">
+                    <LabConfigDrawer
+                        runId={id}
+                        running={snapshot.phase === 'running'}
+                        characters={snapshot.characters.map((c) => ({ id: c.id, name: c.name }))}
+                        onClose={() => setDrawer(false)}
+                    />
+                </div>
+            ) : null}
+        </main>
     );
 }

@@ -1,7 +1,7 @@
 # Endless Story — 產品定位 × 路線圖
 
 > **狀態：v0 草稿（定位敘事用，非機制真相）。** 本檔負責「**怎麼介紹這個產品**」與「**功能凍結之後往哪走**」。
-> 機制真相仍以各專檔為準：經濟＝`CHARACTER_ECONOMY.md`、敘事＝`NARRATIVE_AGENTS.md`、內容鏈路＝`CONTENT_PIPELINE.md`、數學＝`WHITEPAPER.md`、世界容器＝[`CINEMA_LAB.md`](../CINEMA_LAB.md)。
+> 機制真相仍以各專檔為準：經濟＝`CHARACTER_ECONOMY.md`、敘事＝`NARRATIVE_AGENTS.md`、內容鏈路＝`CONTENT_PIPELINE.md`、數學＝`WHITEPAPER.md`。
 > 本檔**不拍板任何合約／參數**；凡標 `⟨開放⟩` 處＝待 owner 決定的機制設計，先寫成問題、不要在這裡發明答案。
 
 ---
@@ -15,11 +15,6 @@
 上面那句長的是**體驗承諾版**，講清楚不可操控與變現/影視化；短 tagline 用於封面、收尾、品牌露出。
 
 > **詞彙（統一口徑）**：**Saga ＝ 由「故事主理人（Saga owner）」經營的一個敘事單位（narrative unit）**——generic、任何題材皆可。本次 demo 的 **春雪社** 只是一個「**戲班／梨園**」題材的 Saga。文中出現的「班主／角兒／梨園／戲班」是春雪社的**題材語彙**，不是 Saga 的定義；換個 Saga 可以是詩社、舞廳、星艦、偵探事務所。對外請說「a Saga / 一個敘事單位」，把戲曲味留給春雪社這個範例。
-
-> **產品殼（2026-07 收斂）**：不再維護「宣傳首頁＋Cinema Lab」兩套平行入口。  
-> - **對外**叫 **春雪社**（看客模式：看戲／看世界／讀章回）。  
-> - **對內**叫 **片場**（Cinema Lab：控拍、物界、訪談、匯出）。  
-> - 同一套觀測台 UI，依身份顯示不同深度。Sui／Walrus 是後端實作，不是第二套網站（見 `packages/web/src/lib/ports`）。
 
 ---
 
