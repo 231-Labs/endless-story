@@ -180,7 +180,7 @@ relayer 容器內自帶 `walrus` CLI + 錢包(同一顆),所有寫入用 `child_
 
 前端**零改動**:現有 `loadDemoClipOverride()`([packages/web/src/lib/api/scenes.ts](../../packages/web/src/lib/api/scenes.ts))已支援
 `DEMO_CLIPS_URL`(`cache:'no-store'`)。設 `DEMO_CLIPS_URL = https://relayer.<domain>/api/manifest/hero-clips`。
-`HeroTheater`（`packages/web/src/components/home/HeroTheater.tsx`）直接 render `clip.videoUrl` 字串 ⇒ 上傳一支 hero-clip → registry → manifest → 劇院播放器換片。春雪社收斂後首頁改為看客殼，但 **HeroTheater 保留**作為影片／直播劇院播放器，之後接回「今日主鏡」與直播切鏡；不碰 repo、不 redeploy 換片流程仍適用。
+`HeroTheater` 直接 render `clip.videoUrl` 字串 ⇒ 上傳一支 hero-clip → registry → manifest → 首頁換片,不碰 repo、不 redeploy。
 
 > manifest 的 `videoUrl` 用 `https://walrus.<domain>/v1/blobs/:blobId`(直打 VPS aggregator,**不經** [api/blob proxy](../../packages/web/src/app/api/blob/[blobId]/route.ts);那支留給文字 blob 修 Content-Type)。
 

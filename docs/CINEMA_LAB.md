@@ -25,11 +25,8 @@ routing、fatigue、box-office、per-character session）、同一種 run 目錄
 | 控制 | 無（世界自轉） | step / run / pause / fork / 物界 / 匯出 / 訪談 |
 | API | `/api/lab/public/*` 與公開卷唯讀 | 全 `/api/lab/*` |
 
-產品埠（`packages/web/src/lib/ports`）：`PRODUCT_BACKEND=local|sui`。
-公開讀 API（`/api/lab/public/live|daily-shot|reading|cast`）與次要入口
-（`entitlements|recruitment|vault`）皆走 `getProductPorts()`。看客 UI 經
-`product-client`／public 路徑；導演控制仍用 `labApi`。Sui／Walrus 是可插拔
-adapter，不是第二套首頁。`HeroTheater` 保留作為影片／直播劇院播放器，之後接回今日主鏡。
+產品埠（`packages/web/src/lib/ports`）：`PRODUCT_BACKEND=local|sui`。UI 只打 Port；
+Sui／Walrus 是可插拔 adapter，不是第二套首頁。
 
 ---
 

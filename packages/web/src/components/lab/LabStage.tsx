@@ -71,7 +71,7 @@ export function LabStage({
     enableFirstVisit?: boolean;
 }) {
     const director = role === 'director';
-    const { snapshot, feed, error, refresh } = useLabLive(runId, { source: director ? 'lab' : 'public' });
+    const { snapshot, feed, error, refresh } = useLabLive(runId);
     const [focusedSceneId, setFocusedSceneId] = useState<string | null>(null);
     const [focusedCharacterId, setFocusedCharacterId] = useState<string | null>(null);
     const [drawer, setDrawer] = useState(false);
@@ -99,8 +99,8 @@ export function LabStage({
 
     useEffect(() => {
         let cancelled = false;
-        const loadShot = director ? labApi.dailyShot(runId) : labApi.publicDailyShot();
-        void loadShot
+        void labApi
+            .dailyShot(runId)
             .then((res) => {
                 if (!cancelled) setShot(res.shot);
             })
@@ -110,7 +110,7 @@ export function LabStage({
         return () => {
             cancelled = true;
         };
-    }, [runId, director]);
+    }, [runId]);
 
     const onExport = useCallback(async () => {
         setExporting(true);
@@ -281,7 +281,6 @@ export function LabStage({
                 mode={mode}
                 onModeChange={changeMode}
                 trackingName={trackingName}
-                cast={snapshot.characters.map((c) => ({ id: c.id, name: c.name, role: c.role }))}
             />
 
             {error ? (
@@ -299,9 +298,7 @@ export function LabStage({
                 />
             ) : null}
 
-            {mode === 'read' ? (
-                <LabReadingEmbed runId={runId} initialDossierSlug={dossierFocus} source="public" />
-            ) : null}
+            {mode === 'read' ? <LabReadingEmbed runId={runId} initialDossierSlug={dossierFocus} /> : null}
 
             {mode === 'world' ? (
                 <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden">

@@ -20,14 +20,7 @@ interface ArchiveEntry {
     slug: string;
 }
 
-export function LabReadingEmbed({
-    runId,
-    source = 'lab',
-}: {
-    runId: string;
-    initialDossierSlug?: string | null;
-    source?: 'lab' | 'public';
-}) {
+export function LabReadingEmbed({ runId }: { runId: string; initialDossierSlug?: string | null }) {
     const [mode, setMode] = useState<Mode>('chapters');
     const [error, setError] = useState<string | null>(null);
     const reader = useReaderScale();
@@ -38,20 +31,14 @@ export function LabReadingEmbed({
 
     const load = useCallback(async () => {
         try {
-            if (source === 'public') {
-                const [dossierRes, archiveRes] = await Promise.all([labApi.publicReadingDossiers(), labApi.publicReadingArchive()]);
-                setDossiers(dossierRes.dossiers);
-                setEntries(archiveRes.entries as ArchiveEntry[]);
-            } else {
-                const [dossierRes, archiveRes] = await Promise.all([labApi.dossiers(runId), labApi.archive(runId)]);
-                setDossiers(dossierRes.dossiers);
-                setEntries(archiveRes.entries as ArchiveEntry[]);
-            }
+            const [dossierRes, archiveRes] = await Promise.all([labApi.dossiers(runId), labApi.archive(runId)]);
+            setDossiers(dossierRes.dossiers);
+            setEntries(archiveRes.entries as ArchiveEntry[]);
             setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         }
-    }, [runId, source]);
+    }, [runId]);
 
     useEffect(() => {
         void load();
@@ -61,16 +48,13 @@ export function LabReadingEmbed({
         async (file: string) => {
             setOpenFile(file);
             try {
-                const res =
-                    source === 'public'
-                        ? await labApi.publicReadingFile(file)
-                        : await labApi.archiveFile(runId, file);
+                const res = await labApi.archiveFile(runId, file);
                 setFileContent(res.content);
             } catch (e) {
                 setFileContent(e instanceof Error ? e.message : String(e));
             }
         },
-        [runId, source],
+        [runId],
     );
 
     const chapters = entries.filter((e) =>

@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { LabStage } from '@/components/lab/LabStage';
-import { productClient } from '@/lib/product-client';
+import { labApi } from '@/components/lab/useLab';
 import { LabDialogProvider } from '@/components/lab/LabDialog';
 
 export default function ChunxueHomePage() {
@@ -19,8 +19,8 @@ export default function ChunxueHomePage() {
 
     useEffect(() => {
         let cancelled = false;
-        void productClient
-            .config()
+        void labApi
+            .publicConfig()
             .then((cfg) => {
                 if (cancelled) return;
                 setBrand(cfg.brand || '春雪社');

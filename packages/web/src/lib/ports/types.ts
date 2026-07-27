@@ -34,16 +34,11 @@ export interface ReadingPort {
     listDossiers(runOrSagaId: string): Promise<unknown>;
     listArchive(runOrSagaId: string): Promise<unknown>;
     readArchiveFile(runOrSagaId: string, file: string): Promise<string>;
-    listTicks?(runOrSagaId: string, limit?: number): Promise<unknown>;
 }
 
 export interface EntitlementPort {
     canReadPov(viewerId: string | null, characterId: string): Promise<boolean>;
     isSubscribed(viewerId: string | null, characterId: string): Promise<boolean>;
-    listSubscriptions?(viewerId: string): Promise<string[]>;
-    listFollows?(viewerId: string): Promise<string[]>;
-    follow?(viewerId: string, characterId: string): Promise<void>;
-    unfollow?(viewerId: string, characterId: string): Promise<void>;
     subscribe?(viewerId: string, characterId: string): Promise<void>;
     unsubscribe?(viewerId: string, characterId: string): Promise<void>;
 }
@@ -51,14 +46,13 @@ export interface EntitlementPort {
 export interface RecruitmentPort {
     listOpenCampaigns(): Promise<Array<{ id: string; title: string; slots?: number }>>;
     /** Local: mint a follow/track intent. Chain: voucher redeem. */
-    join?(viewerId: string, campaignId: string, opts?: { characterId?: string }): Promise<{ characterId?: string }>;
+    join?(viewerId: string, campaignId: string): Promise<{ characterId?: string }>;
 }
 
 export interface VaultPort {
     getInventory(viewerId: string): Promise<Array<{ id: string; title: string; imageUrl?: string }>>;
     getLayout(viewerId: string): Promise<unknown>;
     saveLayout?(viewerId: string, layout: unknown): Promise<void>;
-    addItem?(viewerId: string, item: { id: string; title: string; imageUrl?: string }): Promise<Array<{ id: string; title: string; imageUrl?: string }>>;
 }
 
 export interface ProductPorts {

@@ -4,7 +4,7 @@ An engine for persistent, on-chain story worlds, built on **Walrus + Sui** with 
 
 ## Monorepo layout
 
-- `packages/web` — Next.js app: **春雪社看客殼**（`/`）＋ admin cockpit ＋ **片場** `/lab`（Cinema Lab；見 [`docs/CINEMA_LAB.md`](./docs/CINEMA_LAB.md)）
+- `packages/web` — Next.js app: admin cockpit + reader site + `/lab` cinema-lab (fully off-chain experiment stage — see [`docs/CINEMA_LAB.md`](./docs/CINEMA_LAB.md))
 - `packages/runner` — autonomous tick / world loop (Director + Character agents)
 - `packages/engine` — the single home for narrative mechanism: pure `src/core` (want, scene loop, routing, fatigue, box-office), ports/adapters/tick, and durable per-character sessions. See [`docs/narrative/ENGINE_CORE.md`](./docs/narrative/ENGINE_CORE.md)
 - `packages/sdk`, `packages/shared` — Sui contract bindings + shared types
