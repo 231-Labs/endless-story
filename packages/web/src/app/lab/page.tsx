@@ -27,6 +27,8 @@ export default function LabHomePage() {
     const [runs, setRuns] = useState<LabRunSummary[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
+    const [publicRunId, setPublicRunId] = useState<string | null>(null);
+    const [publicPinnedByEnv, setPublicPinnedByEnv] = useState(false);
 
     const [form, setForm] = useState({
         presetId: '',
@@ -44,10 +46,18 @@ export default function LabHomePage() {
 
     const load = useCallback(async () => {
         try {
-            const [seedRes, runRes] = await Promise.all([labApi.seeds(), labApi.runs()]);
+            const [seedRes, runRes, pub] = await Promise.all([
+                labApi.seeds(),
+                labApi.runs(),
+                labApi.publicConfig().catch(() => null),
+            ]);
             setSeeds(seedRes.seeds);
             setSeasons(seedRes.seasons);
             setRuns(runRes.runs);
+            if (pub) {
+                setPublicRunId(pub.runId);
+                setPublicPinnedByEnv(Boolean(pub.pinnedByEnv));
+            }
             setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
@@ -364,17 +374,40 @@ export default function LabHomePage() {
 
             {/* 卷架 */}
             <section className="mt-12">
-                <div className="flex items-baseline justify-between">
+                <div className="flex items-baseline justify-between gap-3">
                     <h2 className="font-serif text-lg tracking-[0.25em] text-ink">卷架</h2>
-                    <p className="font-serif text-2xs tracking-[0.2em] text-mute">{runs.length} 卷</p>
+                    <p className="font-serif text-2xs tracking-[0.2em] text-mute">
+                        {runs.length} 卷
+                        {publicRunId ? (
+                            <span className="ml-3 text-cinnabar/90" title={publicPinnedByEnv ? '由 LAB_PUBLIC_RUN_ID 釘選' : '寫在 public.json'}>
+                                · 公開卷已掛
+                            </span>
+                        ) : (
+                            <span className="ml-3">· 尚未掛公開卷</span>
+                        )}
+                    </p>
                 </div>
                 <div className="mt-4 space-y-3">
                     {runs.filter((r) => !r.meta.parentRunId).map((run) => (
-                        <RunCard key={run.meta.id} run={run} childrenRuns={childrenOf.get(run.meta.id) ?? []} onChanged={load} />
+                        <RunCard
+                            key={run.meta.id}
+                            run={run}
+                            childrenRuns={childrenOf.get(run.meta.id) ?? []}
+                            onChanged={load}
+                            publicRunId={publicRunId}
+                            publicPinnedByEnv={publicPinnedByEnv}
+                        />
                     ))}
                     {/* 孤兒分卷（父卷已刪）也要能看見 */}
                     {runs.filter((r) => r.meta.parentRunId && !runs.some((p) => p.meta.id === r.meta.parentRunId)).map((run) => (
-                        <RunCard key={run.meta.id} run={run} childrenRuns={childrenOf.get(run.meta.id) ?? []} onChanged={load} />
+                        <RunCard
+                            key={run.meta.id}
+                            run={run}
+                            childrenRuns={childrenOf.get(run.meta.id) ?? []}
+                            onChanged={load}
+                            publicRunId={publicRunId}
+                            publicPinnedByEnv={publicPinnedByEnv}
+                        />
                     ))}
                     {!runs.length ? (
                         <p className="font-serif text-sm text-mute/70" title="點一齣戲，點燈開拍——第一卷會從創世記憶裡自己醒來">
@@ -392,20 +425,47 @@ function RunCard({
     run,
     childrenRuns,
     onChanged,
+    publicRunId,
+    publicPinnedByEnv,
     depth = 0,
 }: {
     run: LabRunSummary;
     childrenRuns: LabRunSummary[];
     onChanged: () => void;
+    publicRunId: string | null;
+    publicPinnedByEnv: boolean;
     depth?: number;
 }) {
     const dialog = useLabDialog();
     const toast = useToast();
     const s = run.status;
     const running = run.phase === 'running';
+    const isPublic = publicRunId === run.meta.id;
     const rod = running
         ? 'from-cinnabar/80 via-cinnabar/55 to-cinnabar/80'
-        : 'from-ink/60 via-ink/35 to-ink/60 dark:from-white/25 dark:via-white/10 dark:to-white/25';
+        : isPublic
+          ? 'from-cinnabar/50 via-cinnabar/30 to-cinnabar/50'
+          : 'from-ink/60 via-ink/35 to-ink/60 dark:from-white/25 dark:via-white/10 dark:to-white/25';
+
+    const hangPublic = () => {
+        void dialog
+            .confirm({
+                title: isPublic ? '卸下公開卷？' : `掛「${run.meta.title}」為公開卷？`,
+                body: isPublic
+                    ? '春雪社首頁將回到「尚未策展」狀態（若設了 LAB_PUBLIC_RUN_ID 則仍由環境變數釘選）。'
+                    : '春雪社看客殼（/）將讀此卷。寫入 public.json；若部署設了 LAB_PUBLIC_RUN_ID 會被環境變數覆蓋。',
+                confirmLabel: isPublic ? '卸下' : '掛上',
+            })
+            .then(async (ok) => {
+                if (!ok) return;
+                const res = await labApi.setPublicRun(isPublic ? null : run.meta.id);
+                if (res.warning) toast(res.warning, 'info');
+                else toast(isPublic ? '已卸下公開卷。' : '已掛為公開卷。', 'success');
+                onChanged();
+            })
+            .catch((e) => toast(String(e), 'error'));
+    };
+
     return (
         <div style={{ marginLeft: depth ? depth * 18 : 0 }}>
             <div className="group relative flex items-stretch overflow-hidden rounded-lg shadow-[0_2px_14px_rgba(20,12,8,0.12)] transition-shadow duration-300 hover:shadow-[0_4px_22px_rgba(20,12,8,0.2)]">
@@ -416,6 +476,11 @@ function RunCard({
                     <Link href={`/lab/run/${run.meta.id}`} className="min-w-0 flex-1">
                         <p className="truncate font-serif text-base tracking-[0.1em] text-ink hover:text-cinnabar">
                             {run.meta.title}
+                            {isPublic ? (
+                                <span className="ml-2 font-serif text-2xs tracking-[0.2em] text-cinnabar">
+                                    公開{publicPinnedByEnv ? ' · env' : ''}
+                                </span>
+                            ) : null}
                             {run.meta.parentRunId ? (
                                 <span className="ml-2 font-serif text-2xs tracking-[0.15em] text-jade/90">
                                     分卷 · 自第{run.meta.forkedAtTick ?? '?'}拍
@@ -447,12 +512,29 @@ function RunCard({
                             running
                                 ? 'bg-cinnabar/10 text-cinnabar'
                                 : run.phase === 'error'
-                                    ? 'bg-cinnabar/15 text-cinnabar'
-                                    : 'bg-ink/5 text-mute dark:bg-white/5'
+                                  ? 'bg-cinnabar/15 text-cinnabar'
+                                  : 'bg-ink/5 text-mute dark:bg-white/5'
                         }`}
                     >
                         {running ? `走拍 ${run.pendingTicks}` : run.phase === 'error' ? '出錯' : '靜場'}
                     </span>
+                    <button
+                        type="button"
+                        onClick={hangPublic}
+                        aria-label={isPublic ? '卸下公開卷' : `掛「${run.meta.title}」為公開卷`}
+                        title={
+                            isPublic
+                                ? '此卷為春雪社公開卷 · 再點卸下'
+                                : '掛為春雪社公開卷（看客殼 / 讀此卷）'
+                        }
+                        className={`shrink-0 rounded-full px-2.5 py-0.5 font-serif text-2xs tracking-[0.2em] transition ${
+                            isPublic
+                                ? 'bg-cinnabar/15 text-cinnabar ring-1 ring-cinnabar/40'
+                                : 'bg-ink/5 text-mute hover:bg-cinnabar/10 hover:text-cinnabar dark:bg-white/5'
+                        }`}
+                    >
+                        {isPublic ? '公開中' : '掛公開'}
+                    </button>
                     <Link
                         href={`/lab/run/${run.meta.id}/interview`}
                         aria-label="演員訪談室"
@@ -491,7 +573,14 @@ function RunCard({
             </div>
             {childrenRuns.map((child) => (
                 <div key={child.meta.id} className="mt-2 border-l border-hairline/60 pl-3">
-                    <RunCard run={child} childrenRuns={[]} onChanged={onChanged} depth={depth + 1} />
+                    <RunCard
+                        run={child}
+                        childrenRuns={[]}
+                        onChanged={onChanged}
+                        publicRunId={publicRunId}
+                        publicPinnedByEnv={publicPinnedByEnv}
+                        depth={depth + 1}
+                    />
                 </div>
             ))}
         </div>

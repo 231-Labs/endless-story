@@ -58,7 +58,18 @@ export const labApi = {
             runTitle: string | null;
             hasDailyShot: boolean;
             ready: boolean;
+            pinnedByEnv?: boolean;
+            fileRunId?: string | null;
         }>('/api/lab/public'),
+    /** Director: hang (or clear with null) the featured public run. */
+    setPublicRun: (runId: string | null) =>
+        request<{
+            runId: string | null;
+            runTitle: string | null;
+            ready: boolean;
+            pinnedByEnv: boolean;
+            warning?: string | null;
+        }>('/api/lab/public', { method: 'PUT', body: JSON.stringify({ runId }) }),
     publicDailyShot: () =>
         request<{ runId: string; shot: import('@/lib/lab/daily-shot').DailyShot | null }>('/api/lab/public/daily-shot'),
     publicLive: (after: number) => request<LabLiveSnapshot>(`/api/lab/public/live?after=${after}`),
