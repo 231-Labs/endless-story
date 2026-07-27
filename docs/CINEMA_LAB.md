@@ -66,6 +66,7 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
 $LAB_DATA_DIR/public.json           # 春雪社策展：{ runId, brand?, featuredCastNames? }
                                     # 範例見 packages/web/examples/public.json.example
                                     # 今日主鏡範例 packages/web/examples/daily-shot.json.example
+                                    # 片場卷架可一鍵「掛公開」寫入此檔（PUT /api/lab/public）
 ```
 
 **版本管理三件事**：
