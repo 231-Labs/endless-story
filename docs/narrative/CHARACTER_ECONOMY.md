@@ -1,7 +1,7 @@
 # 角色經濟 Life Cycle — 設計與驗證
 
 > **狀態**：機制設計已用純模擬 harness（`packages/economy`）**學術驗證通過**（12/12 測試綠、6 假說全成立、收支守恆逐日成立、tsc clean）。**產品化（Part D）為 gate-after：須 owner 認可後另起。**
-> **關係**：這是 `docs/NARRATIVE_AGENTS.md` §7「經濟層」的展開。沿用既定鐵律：**先純 TS simulator 驗證 → 同一 transition 模組移植進產品，不重寫**。
+> **關係**：這是 `docs/narrative/NARRATIVE_AGENTS.md` §7「經濟層」的展開。沿用既定鐵律：**先純 TS simulator 驗證 → 同一 transition 模組移植進產品，不重寫**。
 
 ---
 
@@ -277,6 +277,14 @@ UI：`SurvivalStatus` 加 `vitality`+`vitalityState`，ProfileTab 加「氣血�
 
 **依賴鐵律**：結算邏輯只活在 `packages/economy/src`（純），web 與 Move 都是它的 consumer/移植。
 
+> **範圍區隔**：本檔＝**角色個體**的生存經濟（薪餉／記憶租金／vitality／死亡，Part D gate-after）。
+> 同一個 `packages/economy` 套件另外還住著**一季世界的錢物理**（`production.ts` + `contract.ts`：帳戶／
+> 契約／還價／票房收入），那條線已隨 PR #93/#97 上線並由 engine `core/season-economy.ts` 路由——
+> 見 [`ENGINE_CORE.md`](./ENGINE_CORE.md) §3。其後又長出**多堂口**（#127：各營生實體自有帳與發薪）與
+> **契約託管 Stage A**（#129：結構化銀錢還價＋機械閘真底，設計見 [`CONTRACT_ESCROW.md`](./CONTRACT_ESCROW.md)）。
+> 兩線共用定點數底座（`fixed.ts`）但概念正交：這裡是「角色養不養得活」，
+> 那裡是「一季世界的錢守恆與契約」。
+
 **校準常數**（`DEFAULT_ECON`）：`C_run=6, C_mem=0.02, C_seal=0.25, baseFloor 中位 8, subPrice=3, bps 20/30/50, slotBonus=1.5, seedFunds=56, ECON_BASE=8, AGE_K=3, ONSET_BASE≈55, vitRecovery=5`。內部單位：money＝base units（1 ENDLESS=1e6）、vitality＝milli-points、age＝milli-years。
 
 ---
@@ -290,7 +298,7 @@ UI：`SurvivalStatus` 加 `vitality`+`vitalityState`，ProfileTab 加「氣血�
 | D3 | `memory-counter.ts` + 改 `memory.ts`（單窄口計數） | — |
 | D4 | web adapter + 改 `character-read.ts`（解除 placeholder，填真 survival） | core |
 | D5 | SETTLE phase（`settle.ts` + 改 `tick-loop.ts`，idempotent 日界結算：發薪→扣 cost→更新 vitality→死亡觸發+release_holder） | adapter |
-| D6 | 改 `shared/character.ts` `SurvivalStatus`（+memoryCount/memoryRent/vitality/vitalityState/lifeStage）+ 改 `ProfileTab.tsx`（記憶厚度/記憶租金拆項/氣血條/lifeStage） | — |
+| D6 | 改 `shared/types/character.ts` `SurvivalStatus`（+memoryCount/memoryRent/vitality/vitalityState/lifeStage）+ 改 `ProfileTab.tsx`（記憶厚度/記憶租金拆項/氣血條/lifeStage） | — |
 | D7 | Admin `SalaryPolicyPanel.tsx` + `payroll-config.ts`（mirror FaucetConfig；行當 key 在 role tag） | D1 |
 | D8 | **接濟 skill（§5.2）**：runner `character-agent/aid.ts` `decideAid()`（鏡像 `decideCardPlay`）+ web `character-aid.ts` + tick-loop **GIVE phase**（批次 PTB）+ 受方 accept/refuse 分支 + 接濟事件餵 relationship tone | D1 |
 | D9 | **挹注 UI（§5.1）**：ProfileTab owner-gated「挹注」按鈕（簽 coin → `owner_fund_character`，mirror faucet drip 模式）+ 顯示豢養狀態/每日燒錢率 | D1, D6 |

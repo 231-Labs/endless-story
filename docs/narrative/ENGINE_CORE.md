@@ -31,7 +31,7 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
 前例：`spatial-routing` 的拆法（純置放數學在 engine，file-store 皮留在 web）、
 `beat-prompt.ts`（純 prompt builder 抽 leaf，runner barrel 維持 tsx-only）。
 
-## 3. 已完成的搬遷（2026-07-16 現況）
+## 3. 已完成的搬遷（2026-07-26 現況，涵蓋至 PR #202）
 
 `want-core` · `want-rewrite` · `scene-loop` · `scene-routing` · `spatial-routing`（數學）·
 `actor-fatigue` · `box-office` 已住進 `engine/src/core`；web 的 `tick-loop` 與 harness
@@ -41,11 +41,128 @@ adapters 換掉 LLM/記憶/時鐘。實驗驗過的機制改動 = 生產已經�
 從結構欄位（`audience` / `addressed`）判定，不從生成的散文反推隱私；`addressed` 指不到人
 時 fail closed 退回只有說話者聽見，不廣播。
 
-`strictStructured`（CLI `--strict-structured`）是同一份 core 的研究 profile：
-授權、物件 mutation、want subject／lifecycle 與場景 capability 只讀結構化欄位；
-舊 prose／preset detector 仍可執行，但只能寫入 `structuredMonitor`，不得改狀態、
-拒絕 proposal 或觸發 replan。`objectEffects` 缺席代表沒有物理變動；提供了無效 effect
-仍由 core validator fail closed。flag 關閉時保留 legacy 路徑，讓對照臂不 fork core。
+**散文正則退役（`strictStructured`，PR #202）**：CLI `--strict-structured` 開的是同一份 core
+的**研究 profile**，不是另一份引擎。開了以後，授權、物件 mutation、want subject 與 lifecycle、
+場景 capability 一律**只讀結構化欄位**；舊的 prose／preset detector 照跑，但只能寫進
+`structuredMonitor`，不得改狀態、不得拒絕 proposal、不得觸發 replan。`objectEffects` 缺席
+就是「沒有物理變動」，給了無效 effect 仍由 core validator fail closed。旗標關閉時 legacy
+路徑原封保留（byte-identical），對照臂因此不必 fork core。
+
+- **心願不再靠 `layer` 字串比對**：legacy 臂拿 `LOVE_LAYER`／`JEALOUS_LAYER` 這類正則去測
+  `want.layer`（角色自己寫的散文標籤）；STRICT 改讀語意標籤（`hasWantSemantic`）與
+  `WantSubjectRef`（`{ kind:'contract', id }` 這種**穩定機制主體**——散文可以描述它，但永遠
+  不能創造它）。`isBondWant`／`pairWantBetween`／`nightPursuit`／`confideWorry` 全部收
+  `strictStructured` 參數，兩條路並存在同一份函式裡，不 fork。
+- **結構化宣告走 port**：`SceneAgentPort.declareWantSemantics?()` 是 STRICT 限定的選配方法，
+  legacy 臂**永不呼叫**（call graph 與位元都不動）。宣告缺席或失敗即 fail closed 成「無語意標籤」，
+  並記一筆 monitor warning。
+- **影子分歧是 telemetry**：`WorldState.recordStructuredComparison()` 只在
+  legacy ≠ structured 時落一筆 `StructuredDivergence`（`domain` 分
+  `authorization`／`object`／`scene`／`want`／`economy`／`preset`，同一拍同一 subject 去重，
+  故重試不灌水），另有 `recordStructuredWarning()` 與 `recordStructuredBeatEvaluation()`
+  記警告與分母。旗標關閉時 `structuredMonitor` 從不初始化。
+- **種子跟著結構化走**：`spring-snow.json` 補上場景 `capabilities`（`stage`／`temple`）、
+  逐角 `publicly_recognizable`，以及顯式的 `bonds`／`established_pairs`（即使是空陣列）。
+  STRICT 下沒有「靠場景名字或人設散文猜」這回事——沒宣告就是沒有，故種子得把預設寫出來。
+
+分類與完整站點盤點見 [`../testbed/MECHANISM_AUDIT.md`](../testbed/MECHANISM_AUDIT.md)、
+[`../testbed/PROSE_REGEX_INVENTORY.md`](../testbed/PROSE_REGEX_INVENTORY.md)，邊界設計見
+[`../testbed/TESTBED_BOUNDARY.md`](../testbed/TESTBED_BOUNDARY.md)。
+
+**經濟物理（PR #93/#97）** 也落在 core，分兩塊：
+
+- `core/season-economy.ts` — 一季世界的**錢守恆狀態**，存進 `WorldStateData` 故 snapshot/restore/rollback
+  連同帳本一起走。它**只**解析持久狀態、把結構化的 `BeatEconomyCommand` 路由進 transition、把買到的
+  affordance 施加回世界（物件／飢餓／房租／製作），並依知識範圍投出每角一份 percept——**它不重造任何
+  餘額／runway／結算數學**（`ECONOMY_ENGINE_HANDOFF` 不變式），算術一律在 `@endless-story/economy`
+  的 `production.ts` + `contract.ts`。LLM 永不碰數字：散文只負責敘事，`BeatEconomyCommand` 才動錢，
+  引擎驗證。含契約全生命週期（offer/sign/reject/fill/expire）＋**還價通道**（`contract_counter`：當事人與
+  受益帳戶當家可還價，日結算前隔夜答覆）＋**演出物理**（黃昏開鑼、出席決定票房、`depositExternal` 入
+  班庫、排戲入帳），把戲班自己的手藝變成世界收入面。
+- `core/physical-canon.ts` — beat 層**物件帳本**：只有 durable 改動（拿走／放進／簽／封…）才寫
+  `objectEffects`，單純「拿起、翻看」的觸碰不算 mutation；`DURABLE_MUTATION` 用負向後顧
+  （`(?<![已既])簽`）讓「已簽妥的契約」這種**完成態描述**是既成 canon 的敘述、不是新的落筆。
+  **#202 起這條正則只在 legacy 臂當閘**：開 `strictStructured` 後改由 `objectEffects` 有無定生死，
+  正則退居影子偵測器，逐物件記一筆 `object`／`durable-mutation` 分歧就不再有話語權。
+
+**時辰之律隨拍數自導（PR #121）**：`tick.ts` 不再寫死「六個時辰」，改由 `clock.ticksPerDay`
+自導——說出真正的拍數（一日 N 拍，`ticksPerDay===6` 才「一拍一時辰」，否則「推移」），並給每一拍
+定位「此刻○○，為本日第 X／N 拍，過此還有 M 拍」。這是 world fact percept、不是導演指令；`ticksPerDay≠6`
+（如排演卷一日 8 拍）時角色終於不再被「六個時辰」誤導，知道自己那一日的形狀。
+
+**日程規劃（N6）接入引擎 tick（PR #121）**：規劃原本只掛在 web 路徑，現在直接活在 tick pipeline。
+`SceneAgentPort.planDay?(PlanDayInput): PlanDayReply | null` 是**選配** port——`RunnerSceneAgent`
+實作（呼 `updatePlan`），`FakeSceneAgent` 不實作故排演卷零成本、確定性不變。每夜 `dayEnd` 為每角
+重生 `CastMember.plan`（帶今日互動／將臨死線／關係視角／心底事；空字串→保留舊計畫）。計畫餵回兩處：
+移動決策的 `standingPlan`、beat prompt 的「你這些日子的打算」——角色不再純反應，會朝目標與季死線佈局。
+`world.json` 加選配 `member.plan` 欄，向後相容。
+
+**物件身分第一層：穩定唯一 id ＋ 出身戳（PR #115）**：`WorldObject.origin?`（`WorldObjectOrigin{
+runId?, day, tick, source:'season'|'lab' }`）記物件生於何卷／何日拍／季框種下或 lab 置入；season
+物件於 seed/reconcile 時蓋 origin（取 clock 值，確定性不破）。web 端物件 id 改 `crypto.randomUUID`
+（`lab-obj-<uuid>`），取代原 `Date.now`＋process-local counter（重啟重號、跨卷無意義）。因 fork 是
+state 位元複製、resume 只 append-reconcile，唯一 id 在分岔樹內天然穩定——平行世界共享同一物件真身分，
+為日後跨世代遺物冊與展出鋪路。
+
+### 3.1 世情物理一波（PR #122–#201，2026-07 下旬）
+
+core 一口氣長出十個新模組，全部照 §2 試金石（純函數/純狀態機、node-clean、
+不開旗標或 fake agent 路徑 byte-identical）：
+
+| 模組 | 機制 | 旗標或常駐 |
+|---|---|---|
+| `livelihood-rhythm.ts` | 行當節律：part-of-day＋做活處/住處 → 一行「此刻本該在哪」軟拉（PULL 非命令）；行當專屬節律由 seed 宣告 | 常駐（#122/#130/#178） |
+| `housing.ts` | 房產基座：擁有權（地契 `propertyOwners`）與使用權（實體門鑰 `keyFor`）分立；租約按期生租金帳單（租客→屋主轉帳，守恆不破）、屋主可換鎖逐客 | 常駐（#151/#152/#153） |
+| `acquaintance.ts` | 相識分寸：角色不天生識得每人——stranger/acquainted/named 確定性種子、單調遞升，按認得程度稱呼 | `subjectiveNaming` 旗（#155） |
+| `skills.ts` | 技藝框架：`Skill[]` 純資料＋`skillStyleHint`；數字永不進 prompt、只發 prose style；登台戲功染產出風格＋抬票房（才華換生計） | 常駐（#142/#145/#146） |
+| `renown.ts` | 口碑：公論名頭 `renown`＋私下自視 `selfRegard`（皆 0..1），與錢無關、不碰帳本 | 常駐（#158） |
+| `stakes-brief.ts` | 利害簡報：收集**所有**適用利害成多行簡報交 `decideMove` 自行權衡，取代舊單勝出優先級瀑布 | 常駐（#158/#190） |
+| `temple-prayer.ts` | 廟願：對神明**說出口**的祈願（願牆 `prayers`，與內心 want 有別）＋還願 fulfilled 閉環；無廟場景的世界完全惰性 | 常駐（#141/#172） |
+| `production.ts` | 劇本產出：角色自標提案/入夥/寫本/排練，努力值確定性累加，達 razor 即首演（每 run 一齣） | `emergentProduction` 旗（#123） |
+| `incense.ts` | 香火：擁有者影響通道——每角每日一炷，微推**既存** want 熱度 ε＋私密 percept；紅線＝永不創 want、永不碰決定，角色不知香火存在（spec 見 [`../RECRUIT_INCENSE_SPEC.md`](../RECRUIT_INCENSE_SPEC.md)） | 常駐入口，每日上限（#175） |
+| `dream.ts` | 注夢：擁有者第二通道——深宵一幅意象入夢（≤60 字），只是意象、永非指令；是否生 want 由角色自讀；每三日一夢、隨時入佇列（路線圖見 [`MORTALITY_AND_DREAMS.md`](./MORTALITY_AND_DREAMS.md)） | 常駐入口（#177/#178） |
+
+**tick 世情動詞**（機制在 `tick.ts` 編排、由 `SceneAgentPort` 選配座席定奪）：叩門/放行
+（夜叩心上人門、屋主 `decideAdmit` 隔門定奪，#164）、邀約（`decideInvite` 遞一次性領入，#170）、
+借賒有據（`decideLend` 合意才成帳、欠條騎 bills 軌過期生怨，#166）、尋人掛心（`seeking` 持久
+掛心＋移動軟拉，#167）、資助搭救（`decideAid`，#148）、贈物暖情（#147）、班主排戲
+（`decideRehearsal`，#132）、移動距離成本＋路遇攔截（場景歸區、`transitReact`，#125）、
+看客群體（名頭引客→座→票房閉環，#165）、戲佔定檔＋規劃避讓（演出佔黃昏＋入夜兩格，#192）。
+**#190 起 叩門/借賒/尋人 三動詞畢業常駐**（旗標已拆）。port 新增的選配方法全部 fail-safe：
+fake 不實作即走確定性保守預設（拒/不做），排演卷零成本。
+
+**經濟側同波**：多堂口（#127，各營生實體自有帳與發薪）＋契約託管 Stage A（#129，結構化
+銀錢還價＋機械閘真底＋商號當家談判座席 `negotiateCounter`，設計見
+[`CONTRACT_ESCROW.md`](./CONTRACT_ESCROW.md)）＋食肆攤販真經濟實體（#134/#140）。
+
+**中途入場（PR #198/#200）**：`preset.ts` 的 `joinCastMember(world, input)` 是**純狀態變異、零 I/O**
+的加人術，與開卷建 founding cast 同構（persona/secret/secretSeed/蒸餾恆常自我/state 預設全一致），
+故新人除了「沒有過去」外與開卷之人無異：無 want（下一個白日拍的 genesis 補衍）、無情分邊、
+`subjectiveNaming` 下對眾人皆面生。**先驗證後變異**是鐵律——場景名、重名、舊誼對象是否在卷、
+溫度是否落在 0–1 全先查完才動 `w.cast`，任一項不合則整卷 byte-identical。選配 `ties[]`
+（#200）讓新人**帶舊誼入卷**：`tone`/`toneBack` 入 edge、`view`/`viewBack` 入 `relationshipView`、
+`warmth` 雙向 `seedBond`、開相識分寸時兩造互設 `named`。兩半都是**作者所寫的主觀**（同
+`relationship_views` 紀律），溫度起手同值、不對稱交給戲。記憶種入與「到場天時」是呼叫端的事
+（web `lib/lab/join-cast.ts`：genesis 記憶走該卷唯一 recall 實例、到場作一條 public scheduled
+event 讓在場者**結構性**得知，不靠操作者私語），engine 本身不碰 I/O。
+
+**仍在 A/B 的旗標**（world 級、預設關、關閉時 byte-identical）。卷架／lab config 上勾得到的
+五支：`relationshipFallback` · `emergentProduction` · `heartsCanFade`（情分會淡：LOVE want 久不見面
+餓死退場、只記一筆心事不收鑰匙，#183/#184）· `beatPicksWant`（執念自揀：這一拍推哪條 want
+由角色自選，帳本跟真實選擇走，#186）· `quietPresence`（惰息存在：獨處無事者省 solo beat、
+日終一筆反思整併，#196；#201 起這筆反思以 `eventId='quiet-reflect'` 推進該拍紀錄的 POV
+通道並落檔——原本只活在當日 accum、不成章回就隨拍散去，現在從磁碟讀得到）。
+另有一支**只由季框開**、lab UI 不暴露的
+`subjectiveNaming`（相識分寸，#155）——`manager.ts` 讀 `seasonFrame.subjectiveNaming` 蓋上去，
+現由 `spring-snow-open` 與 `spring-snow-market` 兩支季框啟用。
+
+**文筆二階（#179/#182）**：跨場意象窗（`recentBeatsByChar` 滾動緩衝 12 拍）抓反覆意象（tic）
+餵回 beat prompt 的動態避用清單；量測與裁決協議見 [`EXPERIMENT_ARMS.md`](./EXPERIMENT_ARMS.md)。
+**世界合流**：全旗標共存長跑測（`world-converge-allflags` + `world-longrun`，#149/#169）逐拍驗
+決定論與守恆；願望 id 決定論修為世界自帶序號 `wantSeq`（不用 wall-clock）。
+
+角色「能做什麼／還缺什麼」的活清單維護在
+[`WANTS_WITHOUT_MECHANISM.md`](./WANTS_WITHOUT_MECHANISM.md)。
 
 ## 4. 待搬遷清單（`web/lib/chain` 剩餘機制模組）
 

@@ -80,7 +80,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 - 事件 store 的註冊在 `/api/tick` 與 `(site)`/`(admin)` layout 等 server-only 點做（見 3.6）；`pg` 永不進前端 bundle。
 
 ### 3.2 relayer → Zeabur（Contabo VPS）
-- Root：`packages/relayer`。一個 HTTP 服務,提供 `/api/remember/manual`、`/api/recall/manual`（含三因子評分 + pin + relevance floor，見 `docs/CHARACTER_ECONOMY.md` / MemWal 設計）。
+- Root：`packages/relayer`。一個 HTTP 服務,提供 `/api/remember/manual`、`/api/recall/manual`（含三因子評分 + pin + relevance floor，見 `docs/narrative/CHARACTER_ECONOMY.md` / MemWal 設計）。
 - 依賴：① 向量 store（3.5）② 一個 Walrus **publisher** URL（remember 時轉上 Walrus）。
 - **不持有 SEAL 金鑰**：解密留在 client（threshold SEAL），relayer 全程看不到明文。
 - web/runner 端設 `MEMWAL_SERVER_URL = https://<你的 relayer 網域>`。
@@ -162,7 +162,7 @@ Zeabur 支援 monorepo：同一 repo 建多個 service,各自指定 root 目錄�
 | `RUNNER_CONTROL_SECRET` / `RELAYER_SECRET` | 若控制端 GET 也加 bearer，填同值；目前自架 relayer 的 GET `/control` 預設開放讀 | |
 | `WORLD_LOOP_INTERVAL` / `WORLD_LOOP_MAX_TICKS` / `WORLD_LOOP_MAX_CHARACTERS` | standalone 調參（= `--interval` / `--max` / `--max-characters` 的 env fallback；沒傳 flag 時生效） | |
 | `SHOWRUNNER_EVERY_TICKS` | 每 N tick 跑一次 Showrunner heartbeat（= `--showrunner-every`） | |
-| `TICK_EVENT_SPINE` / `TICK_PARALLEL_EVENTS` / `TICK_ATTENTION_BUDGET` / `TICK_RIVAL_GRAVITY` / `TICK_LLM_FRAMING` / `TICK_DIRECTOR_RESOURCES` / `TICK_MAX_CONCURRENT_EVENTS` | 實驗閘,與 web 端同名（一份 `.env` 兩 service 共用）；`=1` 開。見 `docs/EVENT_LIFECYCLE.md` | |
+| `TICK_EVENT_SPINE` / `TICK_PARALLEL_EVENTS` / `TICK_ATTENTION_BUDGET` / `TICK_RIVAL_GRAVITY` / `TICK_LLM_FRAMING` / `TICK_DIRECTOR_RESOURCES` / `TICK_MAX_CONCURRENT_EVENTS` | 實驗閘,與 web 端同名（一份 `.env` 兩 service 共用）；`=1` 開。見 `docs/narrative/EVENT_LIFECYCLE.md` | |
 | （進階 in-process 模式才要全套 LLM/Sui/MemWal keys） | | ★ |
 
 **Zeabur — event-poller**

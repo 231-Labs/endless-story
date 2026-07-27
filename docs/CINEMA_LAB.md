@@ -72,6 +72,25 @@ $LAB_DATA_DIR/public.json           # 春雪社策展：{ runId, brand?, feature
 3. **分卷（fork）**：靜場時整目錄複製成兄弟卷，記 `parentRunId` + `forkedAtTick`，
    卷架上以世系縮排呈現 — 從同一拍岔出兩種未來，直接對照。
 
+### 2.1 內建劇本與季框（映像自帶，卷架直接可選）
+
+劇本在 `packages/cli/scripts/stories/`、季框在 `packages/cli/scripts/seasons/`；
+自撰的走 `$LAB_DATA_DIR/seeds/`、`$LAB_DATA_DIR/seasons/`（劇本館存檔）。
+
+| 劇本 id | 是什麼 | 班底 |
+|---|---|---|
+| `spring-snow` | 春雪社 · 民國上海越劇混合班 —— 正典世界，長跑與大部分實驗的底本（設定見 [`narrative/SPRING_SNOW_BIBLE.md`](./narrative/SPRING_SNOW_BIBLE.md)） | 12 |
+| `spring-snow-emergent-liu` | 柳安春 · 記事不記論：只把她一人的種子從「判決」改寫成「事件」，讓她自己認（#188/#189/#191） | 12 |
+| `spring-snow-chamber-jin` / `-su` | 室內劇對照卷：同一角色（柳安春）與**不同**對手同處一室的一夜（#185） | 2 |
+| `spring-snow-chamber-trio` | 室內劇三人卷：同一角色與**兩位**對手同處一室的抉擇對照（#187） | 3 |
+| `rehearsal-hall-trio` | 三不識排練廳：生旦淨三人互不相識、無共同過去的湧現實驗（#195） | 3 |
+| `rehearsal-hall-exchange` | 排練廳搭班：三不識＋春雪師姐妹 —— **白紙 × 滿載過去**的對照實驗（#197） | 5 |
+| `minimal` | 單 location 單 scene 的最小測試卷 | 0 |
+
+季框（`seasons/`）：`spring-snow-market`（命題＝生計，三臂實驗的 Arm A 控制組）、
+`spring-snow-open`（命題中性化的開放對照，Arm B/C）、以及三支 `spring-snow-chamber-*`
+配對室內劇。三臂協議見 [`narrative/EXPERIMENT_ARMS.md`](./narrative/EXPERIMENT_ARMS.md)。
+
 ## 3. 面板地圖
 
 | 路由 | 是什麼 |
@@ -79,7 +98,8 @@ $LAB_DATA_DIR/public.json           # 春雪社策展：{ runId, brand?, feature
 | `/lab` | 卷架：seed 卡（批量帶入人物/場景/記憶/爭奪之物）、點燈開拍、run 世系 |
 | `/lab/seeds` | 劇本館：整份 seed JSON 撰改、驗而後存（引擎 loader 驗證） |
 | `/lab/assets` | 圖庫：人物肖像／場景扇面／地界油畫上傳管理（見下） |
-| `/lab/run/[id]` | 觀測台：手卷滿幅（篩選簾：地界籤跳欄＋有人/上演/幽）＋**拍流懸浮匣**（可折，折起只剩豎籤＋活點）＋名帖排（點開**人物內頁**：身心向量/心事全帳/恆常自我/心底事/關係視角/記憶帳/多媒體影像)＋控制＋物界抽屜。**簷口珠簾＝當日行程**：已走的拍朱砂點亮、正走的那串呼吸 |
+| `/lab/run/[id]` | 觀測台，**四屏直捲**：①手卷滿幅（篩選簾：地界籤跳欄＋有人/上演/幽）＋**拍流懸浮匣**（可折，折起只剩豎籤＋活點）＋**製作中玻璃卡**（`emergentProduction` 有戲開排才現身，唯讀排練進度，#124）②名帖排（點開**人物內頁**：身心向量/心事全帳/恆常自我/心底事/關係視角/記憶帳/多媒體影像/**自述視角頁**（角色第一人稱看自己）/**身家頁**（錢＋物品欄）/**上香・注夢**入口——擁有者影響通道：一炷香微推既存心事（每日一炷，角色不知情）、一幅意象入深宵之夢（每三日一夢，意象非指令；#175–#178，spec 見 [`RECRUIT_INCENSE_SPEC.md`](./RECRUIT_INCENSE_SPEC.md)））③**願榜**（全戲班活著的心事收攏一處：依人/種類篩、依濃度排，#133/#159）④**願牆**（眾生在廟裡對神明**說出口**的祈願＋香火標記，與願榜「心裡的」相對，#141/#172）。另有控制＋物界抽屜；header 另備**診斷導出**（一鍵下載整卷 AI 好讀的單檔 markdown 除錯全紀，#150；#201 起逐拍另列
+第一人稱「視角」與「惰息·反思」，看得見文筆與深度而不只客觀拍）與訪談入口。**簷口珠簾＝當日行程**：已走的拍朱砂點亮、正走的那串呼吸 |
 | `/lab/run/[id]/reading` | 讀卷處：事件卷宗（客觀/主觀選集）、章回（織回+日終+POV 原料）、拍案（逐拍客觀 × 各家所見）、選集（季度 anthology） |
 | `/lab/run/[id]/dossier/[slug]` | 單卷卷宗：沿用讀者站 `EventDossier`（正史層 + 多視角 + 認識論標記） |
 | `/lab/exhibits` | 展覽室：認領外來卷、館藏實驗報告、自上之展品（見 §3.5） |
@@ -144,19 +164,28 @@ establishedPairs）可一鍵「復活」：以 preset 建底世界（場景/崗�
 
 觀測台「物界」抽屜分**物／景／時／憶／人**五頁，靜場（非走拍中）可改，改即落卷：
 - **物**：**爭奪之物**（drama stakes，換一批爭搶物、下一拍慾望即重新對位）
-  ＋ **registered 物件**（置一封信於妝閣、藏一只錶進戲箱：容器/隱顯/狀態）
-- **景**：**場景物理** — 私（privacy 0–5）與容（capacity）逐場可調
+  ＋ **registered 物件**（置一封信於妝閣、藏一只錶進戲箱：容器/隱顯/狀態）。每物件持
+  **穩定唯一 id（`lab-obj-<uuid>`）＋出身戳**（季/手·生於 dN·tN，PR #115），fork 後子卷共享
+  同一真身分；operator 靜場可**手動轉手贈物**（PR #120）把物件從一角交予另一角。
+- **景**：**場景物理** — 私（privacy 0–5）與容（capacity）逐場可調。場景內頁另有
+  **三切面**呈現（#168）：物在此處（擱在該景的物，幽物標「幽」不隱去——操作者全知）／
+  隨身在場（在場人身上帶著的物）／願籤（在此處對神明說出口的話，廟宇自然有、別處自然無）
 - **時**：**天時** — 排定 clock-bound 世界事件（幾拍後、何處、誰見）
 - **憶**：每角的 **LocalRecall 帳**：檢視全部、**植入**新憶（kind＋重要度 1–10）、
   **焚去**舊憶。活卷經同一 recall 實例操作、冷卷直開檔案，永不撕裂。
   （production MemWal 維持 append-only；這是 lab 自己的排練簿。）
-- **人**：**中途入場** — 靜場把一個新角色加進活卷（名/行當/身分描述/心底事/
-  落腳/日常/現身處＋初始記憶）。引擎側 `joinCastMember` 與開卷建角同構：
-  到場作一條天時事件入正典（眾人結構性「聞其到」）、心事下一個白日拍自長
-  （genesis 逐員補衍）、情分與相識分寸自零起（面生）。新人一入即落
-  world.json，與 fork/checkpoint 天然相容。
+- **人**：**中途入場**（#198）— 靜場把一個新角色加進活卷（名/行當/身分描述/心底事/
+  落腳/日常/現身處＋初始記憶）。引擎側 `joinCastMember` 與開卷建角同構、**先驗證後變異**
+  （任一欄不合即整卷 byte-identical 不動）：到場作一條天時事件入正典（眾人結構性「聞其到」，
+  非操作者私語）、心事下一個白日拍由 genesis 自長、情分與相識分寸自零起（面生）。
+  新人一入即落 `world.json`，與 fork/checkpoint 天然相容。
+  **帶舊誼入卷**（`ties`，#200）：新人可對**已在卷中**者宣告既有關係——關係語入 edge
+  （`tone`／`toneBack` 各自可給）、「我看TA／TA看我」入 `relationshipView`、`warmth` 0–1
+  雙向種 bond、開 `subjectiveNaming` 時兩造互設 `named`（帶著過去的人不會面生）。
+  兩半都是**作者所寫的主觀**（與開卷 `relationship_views` 同一紀律，不從別處推導）；
+  溫度雙向同值起手，不對稱由戲裡長出來。
 
-> **為何物件不在圖庫**：這四樣都是**一卷之內的活世界狀態** —— object 有位置、
+> **為何物件不在圖庫**：這幾樣都是**一卷之內的活世界狀態** —— object 有位置、
 > 隨身、隱顯，只存於某卷某拍。圖庫（`/lab/assets`）反之是**跨卷、以名為鍵的靜態
 > 美術**。故世界物件落於觀測台之側的物界抽屜，圖庫只管「臉」（人物/場景/地界之圖）。
 
@@ -165,10 +194,17 @@ establishedPairs）可一鍵「復活」：以 preset 建底世界（場景/崗�
 `GET/POST seeds` · `GET seeds/[source]/[id]` · `GET/POST runs` · `GET/PATCH/DELETE runs/[id]`
 · `POST runs/[id]/control`（step/run/pause/fork/open）· `GET runs/[id]/live?after=<seq>`
 （輪詢即時流：世界投影 + 增量拍）· `GET runs/[id]/ticks` · `GET runs/[id]/archive`
-· `GET runs/[id]/dossiers` · `GET/POST runs/[id]/config`（物界操作）
+· `GET runs/[id]/dossiers` · `GET/POST runs/[id]/config`（物界操作，含 `offer-incense`／`inject-dream`）
+· `GET runs/[id]/export`（診斷導出：單檔 markdown，錯誤最先列＋逐拍機制紀錄＋**逐拍第一人稱
+「視角」與「惰息·反思」**（#201，空行收攏＋軟上限，長篇不撐爆檔）＋engine log 尾段；
+CJK 卷名走 RFC 5987 `filename*`）
+· `GET/POST runs/[id]/memories`（憶頁：檢視／植入／焚去 LocalRecall 帳）
+· `POST runs/[id]/cast`（人頁：中途入場 —— 建角＋種初始記憶＋到場天時，靜場限定）
 · 訪談室：`GET runs/[id]/interview/{actors,checkpoints,snapshot}` ·
 `GET/POST runs/[id]/interviews` · `GET/DELETE runs/[id]/interviews/[sid]`
 · `POST runs/[id]/interviews/[sid]/{messages,marks}`（角色上下文全在 server 組裝）
+· 圖庫：`GET/POST assets` · `GET/POST assets/gallery` · `GET assets/file/[kind]/[file]`
+· 展覽室：`GET/POST exhibits` · `GET exhibits/html`
 
 即時性：走拍中 1.8s 輪詢、靜場 6s；`epoch` 換代即重置游標（run 重開不漏拍）。
 LLM 兩檔：`fake`（排演——確定性假角，機制同一份、零鑰零費）、`real`（實錄——

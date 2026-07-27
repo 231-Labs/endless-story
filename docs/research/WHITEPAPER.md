@@ -2,7 +2,7 @@
 
 > 這份文件收斂遊戲機制裡**有數學的部分**：公式、推導、假設、參數。新的數學東西先丟這裡,之後再分章整理。
 >
-> 目前各處的設計細節仍散在:`docs/CHARACTER_ECONOMY.md`(角色經濟 life cycle)、`packages/economy`(經濟模擬驗證)、`packages/drama`(張力引擎)。本檔負責「**可被一條公式講清楚**」的那些。
+> 目前各處的設計細節仍散在:`docs/narrative/CHARACTER_ECONOMY.md`(角色經濟 life cycle)、`packages/economy`(經濟模擬驗證)、`packages/drama`(張力引擎)。本檔負責「**可被一條公式講清楚**」的那些。
 
 ---
 
@@ -77,7 +77,7 @@ $$\text{bulkPrice} = \text{round}_{10}(220 \times 27.2 \times 0.85) \approx 5090
 
 ## §2 角色經濟 (待整理)
 
-> 每日開銷 `dailyCost = C_run·active + C_mem·memory + C_img·image + C_seal·recall`、薪餉、氣血/壽限 hazard、survival level 等公式目前在 **`docs/CHARACTER_ECONOMY.md`** 與 **`packages/economy`**。之後搬重點公式到這裡。
+> 每日開銷 `dailyCost = C_run·active + C_mem·memory + C_img·image + C_seal·recall`、薪餉、氣血/壽限 hazard、survival level 等公式目前在 **`docs/narrative/CHARACTER_ECONOMY.md`** 與 **`packages/economy`**。之後搬重點公式到這裡。
 
 ## §3 張力引擎 (待整理)
 

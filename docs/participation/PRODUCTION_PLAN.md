@@ -49,7 +49,7 @@ POV 章回 / reflection / dream / resource 全走 `suix_queryEvents`。把這個
 - ⚠️ 此 cache 是 **process-local**（serverless 多實例不共享）；跨實例要等 P1 的 DB 或 relayer KV。
 
 ### Phase P1 — indexer 解耦（web 不再直連鏈）
-- 在 `runner` 新增 indexer service（建在既有 [`infra/event-bus.ts`](../../packages/runner/src/infra/event-bus.ts) / [`infra/network.ts`](../../packages/runner/src/infra/network.ts) 的 cursor-read 之上）：訂閱 `CharacterMinted` / POV / reflection / resource 等事件，cursor 持久化，落 Postgres。
+- 在 `runner` 新增 indexer service（建在既有 `infra/event-bus.ts`（此檔已於 #57 清死碼時刪除）/ [`infra/network.ts`](../../packages/runner/src/infra/network.ts) 的 cursor-read 之上）：訂閱 `CharacterMinted` / POV / reflection / resource 等事件，cursor 持久化，落 Postgres。
 - 實作 web 的 `api` 端點，取代 [`notImplemented()`](../../packages/web/src/lib/api/http.ts)：`GET /characters[?sagaId=|ownedBy=]`、`/characters/{id}`、`/chapters`、`/scenes`… 由 DB 服務。
 - web 切 `NEXT_PUBLIC_DATA_SOURCE=api`；此後 web 不碰 RPC。
 

@@ -262,7 +262,7 @@ Still = f( 場景 anchor（SceneGallery.anchor）,
 
 | 動作 | 落點 | 風險 | 狀態 |
 |---|---|---|---|
-| 本檔（canonical） | `docs/CONTENT_PIPELINE.md` | — | ✅ |
+| 本檔（canonical） | `docs/narrative/CONTENT_PIPELINE.md` | — | ✅ |
 | shared 型別接縫：`ChapterKind`/`EventCutChapter`/`EventStill` | `shared/types/` | 低（additive） | ✅ |
 | **合本 compiler（runOnce + 純 weave + 單元測試）** | `runner/services/event-chapter-compiler/` | 低 | ✅ |
 | **合本接進 tick loop**（POV anchored ≥2 → tick body inline 序列織回） | `web/lib/actions/tick-loop.ts` | 中 | ✅ |

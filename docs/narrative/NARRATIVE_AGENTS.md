@@ -227,7 +227,7 @@ recency × relevance)+ 注夢衰減** + 創世記憶 + 反思 recall + MemoriesT
 | ~~N3~~ ✅ | 關係上鏈讀 | **已做**:read.director.listRelationshipEvents → chain/relationships.ts(per-pair tone 聚合,seed 次數→weight)→ facade chain-first(ProfileTab 去 mock)+ fetchRelationshipHints 注入 **decide + POV** prompt。EventPanel 顯示「牽絆 N」。輕量一句 tone,不做加權圖。 | §5 |
 | ~~N4~~ ✅ | tick loop 自治 | **已做**:tick-loop.ts `runTickLoopAction` 一鍵跑完整輪:ADVANCE→ACT(開著事件中每個未出牌的參與者自動 decide+submit,讀 resolution.submitted_actions 去重)→PRODUCE(POV)→REFLECT(sleep)→NARRATE(公報)。SchedulerPanel「自治推進一個 tick」。**剩**:獨立 CLI setInterval(可後置)+ judge 自動收尾(N5)。 | §6 |
 | **N5** | 導演自動化 | **judge 自動收尾 ✅**(tick loop ACT 後,全員出牌即 resolve_event 收尾)。**剩 N5b**:ImportanceDebtCrossed → 觸發反思(需鏈上 debt 訊號,未做)。 | §3 |
-| ~~N6~~ ✅ | 規劃 Plan | **已做**:character-agent/plan.ts updatePlan(承接舊計畫,不重來)→ MemWal kind=plan(i=8)→ recallCurrentPlanText 在 decide+POV 前撈回注入。tick-loop PLAN phase 最先跑。ReflectionPanel「立志」+ SchedulerPanel「含更新規劃」。**至此 §2 迴圈 PERCEIVE→PLAN→DECIDE/ACT→PRODUCE→REFLECT 全通。** | §2 |
+| ~~N6~~ ✅ | 規劃 Plan | **已做**:character-agent/plan.ts updatePlan(承接舊計畫,不重來)→ MemWal kind=plan(i=8)→ recallCurrentPlanText 在 decide+POV 前撈回注入。tick-loop PLAN phase 最先跑。ReflectionPanel「立志」+ SchedulerPanel「含更新規劃」。**至此 §2 迴圈 PERCEIVE→PLAN→DECIDE/ACT→PRODUCE→REFLECT 全通。** **PR #121 起亦接入 engine tick**:`SceneAgentPort.planDay?`(選配 port,fake 不實作故排演卷零成本)於每夜 `dayEnd` 重生 `CastMember.plan`,餵回移動決策 `standingPlan` 與 beat prompt「你這些日子的打算」——規劃不再只在 web 路徑,見 [`ENGINE_CORE.md`](./ENGINE_CORE.md) §3。 | §2 |
 | **N7** | Showrunner 自主經營 | 導演從「被動接 intent」升級成「主動巡店」:確定性巡檢補漏 + 劇情健康度評估 + 弧線計畫(director memory)+ admin 對話框。**完整設計見 §12**。 | §12 |
 | 後 | 影片(Seedance)/ 新聞 adapter / 多 saga | 原 proposal R6/R7/R8 | defer |
 
@@ -400,15 +400,26 @@ candidate 生成(`packages/llm/src/prompts/character.ts` + `preview-character.ts
 
 ### 12.1 工具註冊表(tool registry)
 
-`packages/runner/src/services/saga-director/tools.ts`:名稱 + zod schema + 級別 + 對應 server action。
-同一份餵 LLM tools 參數 + 執行器。admin 面 ~52 capability 中約 30 個是乾淨 server action,分四級:
+**落地位置(2026-07 現況)**:`packages/web/src/lib/director/tools.ts`(不在 runner —— 工具全是
+web server action,註冊表就住在它們身邊)。每筆 `DirectorToolDef` = 名稱 + 級別 + zh-TW 說明 +
+`argsSpec`(zh-TW 的 JSON 參數形狀字串)+ `execute`。**不用 zod**:`TextClient` 沒有原生
+function-calling 面,協議是 provider-agnostic 的 JSON-action(模型吐 `{"tool":…,"args":{…}}`,
+迴圈把 JSON 結果 append 回去),參數形狀以說明文字餵給模型、由執行器自行取值。
+同一份註冊表餵兩處:Showrunner 心跳的工具迴圈(§12.2)與 admin `DirectorChatPanel`(§12.4);
+`renderToolCatalog(allowTiers)` 依級別過濾出目錄,`executeDirectorTool` 才是**真正的**級別閘
+(不靠 prompt 自律)。現 registered **17 支:8 讀 + 9 敘事寫**;`config` 一級型別上有、目前**尚無工具掛上**,
+「危險」則連型別都沒有:
 
-| 級別 | 範例 | 政策 |
+| 級別 | 現有工具 | 政策 |
 |---|---|---|
-| 讀 | getSagaLive / getSceneDetail / 世界時間 / 經濟快照 / listRecruitments | 無限制 |
-| 敘事寫 | reconcileCharacter / runPov / capability catalog(open_storylet…)/ compileGazette / evolvePortrait / rememberDream | 自主執行;鏈上寫先 dryRun 再實發;全部進 audit log |
-| 配置寫 | faucet/dream 價格、custody 收放、recruitment 增刪 | 需 admin 在對話框確認才執行 |
-| 危險 | runCliScriptAction(deploy/reset) | **不給 agent** |
+| `read` 讀(8) | get_world_time · get_saga_live · list_saga_roster · get_character_detail · list_recruitments · run_world_audit · get_runner_state · read_recent_gazettes | 無限制(dryRun 時只剩這一級) |
+| `narrative` 敘事寫(9) | reconcile_character · reconcile_saga · direct_capabilities(open_storylet…)· compile_gazette · evolve_portrait · launch_production · update_arc_plan · register_resource · set_runner_paused | 自主執行;鏈上寫先 dryRun 再實發;全部進 audit log(`ToolCallRecord`) |
+| `config` 配置寫(0) | —(faucet/dream 價格、custody 收放、recruitment 增刪等原規劃仍未掛上) | 需 admin 在對話框確認才執行 |
+| 危險 | runCliScriptAction(deploy/reset) | **永不註冊**(`ToolTier` 型別根本沒這一檔) |
+
+> ⚠️ **級別落差待議**:`set_runner_paused`(停/開整個世界迴圈)與 `register_resource`
+> 掛在 `narrative` 而非 `config`,即 Showrunner 可自主執行、不經 admin 確認。要嘛是有意
+> (讓導演能自己踩煞車),要嘛該降級——這一條需要人拍板,文件先如實記著。
 
 `withAdminLock()` 序列化鎖與 Showrunner 工具呼叫天然相容(串行)。
 
