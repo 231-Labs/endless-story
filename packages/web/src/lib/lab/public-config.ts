@@ -9,7 +9,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { labDataDir, readJson, runDir, writeJsonAtomic, assertSafeId } from './paths';
+import { labDataDir, readJson, runDir } from './paths';
 
 /** Opening trio for stranger 名帖 — others appear after scene discovery. */
 export const FEATURED_CAST_NAMES = ['柳安春', '蘇映雪', '金鳳'] as const;
@@ -72,40 +72,4 @@ export function requirePublicRunId(): string {
 export function isPublicRunId(runId: string): boolean {
     const { runId: featured } = resolvePublicConfig();
     return Boolean(featured && featured === runId);
-}
-
-/** True when LAB_PUBLIC_RUN_ID is set — UI writes to public.json won't override it. */
-export function publicRunPinnedByEnv(): boolean {
-    return Boolean(process.env.LAB_PUBLIC_RUN_ID?.trim());
-}
-
-/**
- * Curate the featured public run by writing $LAB_DATA_DIR/public.json.
- * Does not clear LAB_PUBLIC_RUN_ID — if env is set, resolvePublicConfig still prefers it.
- */
-export function writePublicConfig(patch: {
-    runId: string | null;
-    brand?: string;
-    featuredCastNames?: string[];
-}): LabPublicConfig {
-    const prev = readPublicJson() ?? {};
-    const next: PublicJson = {
-        brand: patch.brand?.trim() || prev.brand || '春雪社',
-        featuredCastNames:
-            patch.featuredCastNames?.length
-                ? patch.featuredCastNames
-                : prev.featuredCastNames?.length
-                  ? prev.featuredCastNames
-                  : [...FEATURED_CAST_NAMES],
-    };
-    if (patch.runId) {
-        const id = assertSafeId(patch.runId, 'run id');
-        if (!publicRunExists(id)) throw new Error(`run not found: ${id}`);
-        next.runId = id;
-    } else {
-        // Explicit clear — omit runId so resolve falls through (unless env pins).
-        delete next.runId;
-    }
-    writeJsonAtomic(publicJsonPath(), next);
-    return resolvePublicConfig();
 }
