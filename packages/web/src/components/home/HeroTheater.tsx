@@ -1,16 +1,5 @@
 'use client';
 
-/**
- * HeroTheater — full theater player for curated SceneClips (poster strip →
- * overlay play / scrub / mute / fullscreen).
- *
- * Kept on purpose after the 春雪社 guest-shell convergence: `/` no longer
- * mounts this as the marketing homepage, but video / livestream product work
- * will reconnect here (今日主鏡, live cuts). Prefer extending this player
- * over inventing a third theater surface; LabTheaterMode is the thin guest
- * overlay and can later wrap or share controls with this component.
- */
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Saga, SceneClip, ClipAspect } from '@endless-story/shared';
 

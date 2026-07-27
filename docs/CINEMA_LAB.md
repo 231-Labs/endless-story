@@ -1,8 +1,8 @@
 # 片場 · Cinema Lab — 完全鏈下的世界引擎實驗場
 
-> **狀態**：canonical · 2026-07-18 起；**2026-07-27 起**產品收斂：對外殼＝**春雪社**，對內導演層＝**片場**（本文件所稱 Cinema Lab）。
-> 定位：**同一座戲園** — 看客走正門（`/` 看戲／看世界／讀章回），導演走後台（`/lab` 控拍、物界、訪談）。
-> 底層像遊戲一樣運作（engine 物理世界），表面像直播一樣觀看（手卷 + 拍流），操作像排戲一樣克制（靜場才撥物界）。
+> **狀態**：canonical · 2026-07-18 起。`/lab` 的唯一方向文件：架構、使用、部署。
+> 定位：**AI 角色觀測劇場的實驗後台** — 底層像遊戲一樣運作（engine 物理世界），
+> 表面像直播一樣觀看（手卷 + 拍流），操作像排戲一樣克制（靜場才撥物界）。
 > 與鏈上生產線的關係見 §1；敘事機制歸屬鐵律見 [`narrative/ENGINE_CORE.md`](./narrative/ENGINE_CORE.md)。
 
 ---
@@ -12,26 +12,6 @@
 **cinema-lab = engine CLI run 的常駐網頁化**：同一份 `packages/engine`（want、scene loop、
 routing、fatigue、box-office、per-character session）、同一種 run 目錄格式，換成從 UI
 點燈開拍、即時展卷觀看、分卷做版本管理 — 全程零 Sui、零 Walrus、零錢包。
-
-**對外產品殼**：`/` 讀策展公開卷（`LAB_PUBLIC_RUN_ID` 或 `$LAB_DATA_DIR/public.json`），
-看客 chrome 無控拍；今日主鏡見 `runs/<id>/editorial/daily-shot.json`（人工策展，**不**由 tick 產片）。
-
-### 0.5 看客 vs 片場
-
-| | 看客（春雪社） | 片場（導演） |
-|---|---|---|
-| 進入 | `/` 或公開卷 `/lab/run/<featured>` | `/lab` + `LAB_SECRET` |
-| 觀看 | 看戲 · 看世界 · 讀章回 | 手卷 + 拍流 + 名帖／願榜／願牆 |
-| 控制 | 無（世界自轉） | step / run / pause / fork / 物界 / 匯出 / 訪談 |
-| API | `/api/lab/public/*` 與公開卷唯讀 | 全 `/api/lab/*` |
-
-產品埠（`packages/web/src/lib/ports`）：`PRODUCT_BACKEND=local|sui`。
-公開讀 API（`/api/lab/public/live|daily-shot|reading|cast`）與次要入口
-（`entitlements|recruitment|vault`）皆走 `getProductPorts()`。看客 UI 經
-`product-client`／public 路徑；導演控制仍用 `labApi`。Sui／Walrus 是可插拔
-adapter，不是第二套首頁。`HeroTheater` 保留作為影片／直播劇院播放器，之後接回今日主鏡。
-
----
 
 ## 1. 解耦邊界（第一性）
 
@@ -62,11 +42,7 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
     ├── interviews/<id>/            #   演員訪談室：interview.json + 影子 session + marks.json
     ├── archive/                    #   手卷/織回/日終/POV markdown
     ├── dossiers/                   #   事件卷宗（EpistemicDossierBundle 內嵌 header）
-    └── editorial/                  #   季度選集 + 今日主鏡（daily-shot.json）
-$LAB_DATA_DIR/public.json           # 春雪社策展：{ runId, brand?, featuredCastNames? }
-                                    # 範例見 packages/web/examples/public.json.example
-                                    # 今日主鏡範例 packages/web/examples/daily-shot.json.example
-                                    # 片場卷架可一鍵「掛公開」寫入此檔（PUT /api/lab/public）
+    └── editorial/                  #   季度選集（season-anthology.md + selection）
 ```
 
 **版本管理三件事**：
@@ -235,8 +211,8 @@ cinema-lab 就在 `packages/web` 裡（build context = repo 根）。
 
 | service | Dockerfile | env | 用途 |
 |---|---|---|---|
-| `web`（生產站） | root `Dockerfile`（完整版，~1GB） | `LAB_DISABLED=1` + `LAB_PUBLIC_RUN_ID`／`LAB_DATA_DIR` | 春雪社看客殼（`/`）＋管理台。`/lab` 導演頁 404；`/api/lab/public/*` 仍讀公開卷 |
-| `cinema-lab`（片場） | `Dockerfile.cinema-lab`（standalone 瘦身版，~200MB） | `LAB_SECRET=…`、`LAB_DATA_DIR=/data/cinema-lab`（掛自己的 volume） | 導演專屬實驗場。完全鏈下、不用合約 CLI —— 瘦映像拉取秒級，redeploy 不再等 |
+| `web`（生產站） | root `Dockerfile`（完整版，~1GB） | `LAB_DISABLED=1` | 讀者站＋管理台。管理台要 spawn `pnpm --filter cli run …`（升級合約等），所以帶整個 workspace |
+| `cinema-lab`（實驗機） | `Dockerfile.cinema-lab`（standalone 瘦身版，~200MB） | `LAB_SECRET=…`、`LAB_DATA_DIR=/data/cinema-lab`（掛自己的 volume） | 你專屬的實驗場。完全鏈下、不用合約 CLI —— 瘦映像拉取秒級，redeploy 不再等 |
 
 瘦身版的掛法：Zeabur 以 **`Dockerfile.[服務名]`** 慣例選檔（同
 `Dockerfile.event-poller`）——lab 服務現名 `cinema-lab`，故檔名為
@@ -262,17 +238,15 @@ LAB_DATA_DIR=/data/cinema-lab
 ### 6.2 門禁三檔
 
 ```bash
-LAB_DISABLED=1                              # 這台沒有片場導演 UI（生產 web 服務用）；/api/lab/public/* 仍開
-LAB_SECRET=$(openssl rand -hex 16)          # 鎖門（片場機用）
-LAB_PUBLIC_RUN_ID=<featured-run-id>         # 春雪社首頁讀哪一卷
+LAB_DISABLED=1                              # 這台沒有實驗場（生產 web 服務用）
+LAB_SECRET=$(openssl rand -hex 16)          # 鎖門（實驗機用）
 # 兩者皆不設 = 全開（僅限本機開發）
 ```
 
 `LAB_SECRET` 設了之後：瀏覽器開 `https://<host>/lab?key=<LAB_SECRET>` 一次換
-cookie（30 天），導演 `/lab/*` 與寫入 API 驗同一把（API 亦可
-`Authorization: Bearer`）。公開卷的 `/lab/run/<featured>` 與唯讀 API 看客可進。
-`LAB_DISABLED=1` 在 middleware 層對導演頁與非 public API 回 404；
-`/api/lab/public/*` 與 `/api/lab/role` 仍可服務春雪社殼。
+cookie（30 天），`/lab/*` 頁面與 `/api/lab/*` 全部驗同一把（API 亦可
+`Authorization: Bearer`）。`LAB_DISABLED=1` 在 middleware 層直接 404（`/lab/*`
+與 `/api/lab/*` 皆是），API 層另有 defence-in-depth。
 
 ### 6.3 實錄檔的環境
 

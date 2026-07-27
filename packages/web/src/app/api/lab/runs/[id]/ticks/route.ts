@@ -1,16 +1,15 @@
 /** Durable tick timeline (ticks.jsonl) — events + POVs per tick. */
 
-import { ok, fail, unauthorized } from '@/lib/lab/http';
-import { canReadRun } from '@/lib/lab/run-access';
+import { labAuthorized, ok, fail, unauthorized } from '@/lib/lab/http';
 import { readTickRecords } from '@/lib/lab/artifacts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    if (!labAuthorized(req)) return unauthorized();
     try {
         const { id } = await params;
-        if (!canReadRun(req, id)) return unauthorized();
         const url = new URL(req.url);
         const limit = Number(url.searchParams.get('limit') ?? '0');
         let records = readTickRecords(id);

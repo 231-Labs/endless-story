@@ -39,55 +39,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     return data;
 }
 
-export type LabClientRole = 'director' | 'viewer';
-
 export const labApi = {
-    role: () =>
-        request<{
-            role: LabClientRole;
-            director: boolean;
-            publicRunId: string | null;
-            brand: string;
-            featuredCastNames: string[];
-        }>('/api/lab/role'),
-    publicConfig: () =>
-        request<{
-            brand: string;
-            runId: string | null;
-            featuredCastNames: string[];
-            runTitle: string | null;
-            hasDailyShot: boolean;
-            ready: boolean;
-            pinnedByEnv?: boolean;
-            fileRunId?: string | null;
-        }>('/api/lab/public'),
-    /** Director: hang (or clear with null) the featured public run. */
-    setPublicRun: (runId: string | null) =>
-        request<{
-            runId: string | null;
-            runTitle: string | null;
-            ready: boolean;
-            pinnedByEnv: boolean;
-            warning?: string | null;
-        }>('/api/lab/public', { method: 'PUT', body: JSON.stringify({ runId }) }),
-    publicDailyShot: () =>
-        request<{ runId: string; shot: import('@/lib/lab/daily-shot').DailyShot | null }>('/api/lab/public/daily-shot'),
-    publicLive: (after: number) => request<LabLiveSnapshot>(`/api/lab/public/live?after=${after}`),
-    publicReadingDossiers: () =>
-        request<{
-            dossiers: Array<{ slug: string; title: string; day: number; scene: string; perspectives: string[] }>;
-            editorial: { anthology?: string };
-        }>('/api/lab/public/reading?kind=dossiers'),
-    publicReadingArchive: () =>
-        request<{ entries: Array<{ file: string; kind: string; day: number; tick: number; slug: string }> }>(
-            '/api/lab/public/reading?kind=archive',
-        ),
-    publicReadingFile: (file: string) =>
-        request<{ content: string }>(`/api/lab/public/reading?kind=file&file=${encodeURIComponent(file)}`),
-    dailyShot: (id: string) =>
-        request<{ runId: string; shot: import('@/lib/lab/daily-shot').DailyShot | null }>(
-            `/api/lab/runs/${encodeURIComponent(id)}/daily-shot`,
-        ),
     seeds: () => request<{ seeds: LabSeedSummary[]; seasons: LabSeasonSummary[] }>('/api/lab/seeds'),
     seedText: (source: string, id: string, kind: 'seed' | 'season' = 'seed') =>
         request<{ json: string }>(`/api/lab/seeds/${source}/${encodeURIComponent(id)}${kind === 'season' ? '?kind=season' : ''}`),
@@ -233,10 +185,8 @@ export interface LiveState {
     refresh: () => void;
 }
 
-/** Poll the live view. Fast cadence while a tick is running, slow when idle.
- *  `source: 'public'` uses /api/lab/public/live (product ports); default is director labApi. */
-export function useLabLive(runId: string, opts?: { source?: 'lab' | 'public' }): LiveState {
-    const source = opts?.source ?? 'lab';
+/** Poll the live view. Fast cadence while a tick is running, slow when idle. */
+export function useLabLive(runId: string): LiveState {
     const [snapshot, setSnapshot] = useState<LabLiveSnapshot | null>(null);
     const [feed, setFeed] = useState<LabLiveBeat[]>([]);
     const [error, setError] = useState<string | undefined>();
@@ -259,10 +209,7 @@ export function useLabLive(runId: string, opts?: { source?: 'lab' | 'public' }):
             let delay = 6000;
             if (typeof document === 'undefined' || document.visibilityState === 'visible') {
                 try {
-                    const snap =
-                        source === 'public'
-                            ? await labApi.publicLive(cursorRef.current)
-                            : await labApi.live(runId, cursorRef.current);
+                    const snap = await labApi.live(runId, cursorRef.current);
                     if (cancelled) return;
                     setSnapshot(snap);
                     setError(undefined);
@@ -295,7 +242,7 @@ export function useLabLive(runId: string, opts?: { source?: 'lab' | 'public' }):
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [runId, kick, source]);
+    }, [runId, kick]);
 
     return { snapshot, feed, error, refresh };
 }

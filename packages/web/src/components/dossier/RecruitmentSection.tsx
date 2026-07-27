@@ -1,13 +1,5 @@
 'use client';
 
-/**
- * RecruitmentSection — 徵召票券區（橫滑票＋開 wizard）。
- *
- * 春雪社收斂後首頁不再掛此區塊，但**刻意保留**：之後看客「入班／招募」
- * （RecruitmentPort local 或鏈上 voucher）會再接回來。勿當死碼刪除；
- * 目前可由 `/dossier/recruit/[id]` 與次要入口深鏈使用其票券語彙。
- */
-
 import { useEffect, useRef, useState } from 'react';
 import type { Recruitment } from '@endless-story/shared';
 import { RecruitmentTicket } from './RecruitmentTicket';
