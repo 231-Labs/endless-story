@@ -1,10 +1,14 @@
 'use client';
 
 /**
- * LabCastRail — 名帖屏的角色立卡：立繪主導（圖庫肖像／gallery 首圖全出血），
+ * LabCastRail — 名帖角色立卡：立繪主導（圖庫肖像／gallery 首圖全出血），
  * 底部一層墨色漸層壓名款、行當、所在與心頭最熱的一樁；無框線，浮起靠光影。
  * 未有立繪者以紙面名印代之（大字名印＋直書全名）——補圖之後自動換裝。
  * 有拍者（此刻開過口）卡角一點朱砂在呼吸。
+ *
+ * layout:
+ *   - grid  片場全屏名帖（多列網格）
+ *   - rail  看客底欄（左右橫滑，不上下捲）
  */
 
 import type { LabCharacterLive } from '@/lib/lab/types';
@@ -13,14 +17,25 @@ export function LabCastRail({
     characters,
     activeIds,
     onSelectCharacter,
+    layout = 'grid',
 }: {
     characters: LabCharacterLive[];
     /** 此刻（本拍）有言行者 — 卡上活點。 */
     activeIds?: Set<string>;
     onSelectCharacter?: (characterId: string) => void;
+    layout?: 'grid' | 'rail';
 }) {
+    const rail = layout === 'rail';
+
     return (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div
+            className={
+                rail
+                    ? 'flex snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-1 no-scrollbar'
+                    : 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5'
+            }
+            style={rail ? { WebkitOverflowScrolling: 'touch' } : undefined}
+        >
             {characters.map((c) => {
                 const art = c.portraitUrl ?? c.gallery.find((g) => g.type === 'image')?.url;
                 const active = activeIds?.has(c.id) ?? false;
@@ -30,7 +45,11 @@ export function LabCastRail({
                         type="button"
                         onClick={() => onSelectCharacter?.(c.id)}
                         title={`開「${c.name}」內頁`}
-                        className="group relative aspect-[3/4] overflow-hidden rounded-xl text-left shadow-[0_2px_16px_rgba(20,12,8,0.18)] outline-none transition-shadow duration-300 hover:shadow-[0_6px_28px_rgba(176,74,60,0.22)] focus-visible:ring-2 focus-visible:ring-cinnabar"
+                        className={
+                            rail
+                                ? 'group relative aspect-[3/4] w-[7.5rem] shrink-0 snap-start overflow-hidden rounded-xl text-left shadow-[0_2px_16px_rgba(20,12,8,0.18)] outline-none transition-shadow duration-300 hover:shadow-[0_6px_28px_rgba(176,74,60,0.22)] focus-visible:ring-2 focus-visible:ring-cinnabar sm:w-36'
+                                : 'group relative aspect-[3/4] overflow-hidden rounded-xl text-left shadow-[0_2px_16px_rgba(20,12,8,0.18)] outline-none transition-shadow duration-300 hover:shadow-[0_6px_28px_rgba(176,74,60,0.22)] focus-visible:ring-2 focus-visible:ring-cinnabar'
+                        }
                     >
                         {/* 立繪層 */}
                         {art ? (
@@ -39,6 +58,7 @@ export function LabCastRail({
                                 src={art}
                                 alt={c.name}
                                 className="absolute inset-0 h-full w-full object-cover object-top transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
+                                draggable={false}
                             />
                         ) : (
                             <span className="absolute inset-0 bg-gradient-to-b from-surface via-canvas to-surface dark:from-elevated dark:via-canvas dark:to-elevated">

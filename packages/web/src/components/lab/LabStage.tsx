@@ -362,15 +362,16 @@ export function LabStage({
                     </div>
                     <div
                         id="lab-guest-cast"
-                        className="max-h-[34vh] overflow-y-auto border-t border-hairline/60 px-4 py-4 sm:px-8"
+                        className="shrink-0 border-t border-hairline/60 px-4 py-3 sm:px-8"
                     >
-                        <div className="mb-3 flex items-baseline justify-between">
+                        <div className="mb-2.5 flex items-baseline justify-between gap-3">
                             <p className="font-serif text-xs tracking-[0.4em] text-ink">名帖</p>
                             <p className="font-serif text-2xs tracking-[0.25em] text-mute">
-                                初識三人；其餘在場景裡遇見後加入
+                                初識三人；其餘在場景裡遇見後加入 · 左右滑
                             </p>
                         </div>
                         <LabCastRail
+                            layout="rail"
                             characters={visibleCast}
                             activeIds={activeCharacterIds}
                             onSelectCharacter={(characterId) => {
