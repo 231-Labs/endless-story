@@ -333,6 +333,106 @@ function buildWorld(world: WorldState | null): string {
     return out.join('\n\n');
 }
 
+// ── 3.5. 生命體徵總覽 (macro vitals, season scale) ───────────────────────────
+
+/**
+ * The season-scale reading, in one block at the top of the dossier.
+ *
+ * A run can pass every micro-scale check — good dialogue, coherent scenes,
+ * consistent characters — and still be a treadmill. These are the numbers that
+ * say so: how often the world moved irreversibly, whether wants actually land,
+ * how concentrated the cast is, and whether the same phrase keeps coming back.
+ * They are diagnostics, never gates; nothing in the engine branches on them.
+ */
+function buildVitals(records: LabTickRecord[], world: WorldState | null): string {
+    const out: string[] = ['## 生命體徵（宏觀節奏）'];
+    const withVitals = records.filter((record) => record.vitals);
+    if (!withVitals.length) {
+        out.push('（此卷的走拍紀錄早於生命體徵功能，或尚未走拍）');
+        return out.join('\n\n');
+    }
+    const nameOf = (id: string) => (world ? world.nameById(id) : id);
+    const last = withVitals[withVitals.length - 1].vitals!;
+    const irreversibleTotal = withVitals.reduce((sum, record) => sum + record.vitals!.irreversible, 0);
+    const deadTicks = withVitals.filter((record) => record.vitals!.irreversible === 0).length;
+    const entropyTicks = withVitals.filter((record) => record.vitals!.sceneEntropy >= 0);
+    const meanEntropy = entropyTicks.length
+        ? entropyTicks.reduce((sum, record) => sum + record.vitals!.sceneEntropy, 0) / entropyTicks.length
+        : -1;
+
+    out.push(
+        [
+            `- **不可逆事件**：全卷 ${irreversibleTotal} 件，平均每拍 ${(irreversibleTotal / withVitals.length).toFixed(2)} 件。`,
+            `  其中 ${deadTicks}／${withVitals.length} 拍 **一件也沒有**（這些拍，世界原地踏步）。`,
+            `- **心跳（want resolved）**：累計落地 ${last.wantsResolved} 樁，活著 ${last.wantsLive} 樁，` +
+                `落地率 ${(last.resolvedRate * 100).toFixed(0)}%。率為 0 表示這個世界沒有任何事真的了結。`,
+            meanEntropy < 0
+                ? '- **場景熵**：無可計之拍。'
+                : `- **場景熵**：平均 ${meanEntropy.toFixed(2)}（1＝各在一方，0＝全擠一處）；` +
+                  `最擠的一拍有 ${Math.max(...withVitals.map((r) => r.vitals!.sceneCrowdPeak))} 人同場。`,
+        ].join('\n'),
+    );
+
+    // 收斂: the homogenizing-attractor detector, worst first — this is where a
+    // 「八個人同一個打算」 tick shows itself.
+    const worstConvergence = withVitals
+        .flatMap((record) => record.vitals!.convergence.map((row) => ({ ...row, day: record.day, tick: record.tick })))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8);
+    if (worstConvergence.length) {
+        out.push(
+            '### 收斂（同一拍多少人指向同一件事）\n\n' +
+                worstConvergence
+                    .map((row) => `- 第${row.day}日第${row.tick}拍：「${row.token}」×${row.count} — ${row.characterIds.map(nameOf).join('、')}`)
+                    .join('\n'),
+        );
+    }
+
+    const worstLoops = withVitals
+        .flatMap((record) => record.vitals!.loops.map((row) => ({ ...row, day: record.day, tick: record.tick })))
+        .sort((a, b) => b.ticks - a.ticks)
+        .slice(0, 8);
+    if (worstLoops.length) {
+        out.push(
+            '### 迴圈（同一人反覆同一句）\n\n' +
+                worstLoops
+                    .map((row) => `- 第${row.day}日第${row.tick}拍：${nameOf(row.characterId)}「${row.token}」連 ${row.ticks} 拍`)
+                    .join('\n'),
+        );
+    }
+
+    // 外力層: every card the deck played, with who chose it — the audit trail.
+    const cards = records.flatMap((record) => (record.cardsPlayed ?? []).map((card) => ({ ...card, day: record.day, tick: record.tick })));
+    if (cards.length) {
+        out.push(
+            '### 事件卡全紀（導演決策可審計）\n\n' +
+                cards
+                    .map(
+                        (card) =>
+                            `- 第${card.day}日第${card.tick}拍 · ${card.label}（${card.cardId}）｜` +
+                            `${card.chosenBy === 'deadline' ? '到日必打' : card.chosenBy === 'director' ? '導演選牌' : '營運者'}｜` +
+                            `不可逆 ${card.irreversible}${card.targetNames.length ? `｜對準 ${card.targetNames.join('、')}` : ''}` +
+                            `${card.rationale ? `\n  理由：${card.rationale}` : ''}`,
+                    )
+                    .join('\n'),
+        );
+    }
+
+    // 工件: the diary audit is the anti-drift measure — surface its hit rate.
+    const artifacts = records.flatMap((record) => record.artifacts ?? []);
+    if (artifacts.length) {
+        const diaries = artifacts.filter((artifact) => artifact.kind === 'diary');
+        const flagged = diaries.reduce((sum, diary) => sum + (diary.unsupportedClaims ?? 0), 0);
+        const supported = diaries.reduce((sum, diary) => sum + (diary.supportedClaims ?? 0), 0);
+        out.push(
+            '### 角色工件\n\n' +
+                `- 日記 ${diaries.length} 篇；claim 有憑 ${supported} 條、無憑 ${flagged} 條（無憑者已標記，未刪除）。\n` +
+                `- 詩 ${artifacts.length - diaries.length} 首（按場合觸發，非日課）。`,
+        );
+    }
+    return out.join('\n\n');
+}
+
 // ── 4. per-tick timeline ────────────────────────────────────────────────────
 
 /** Render a POV body for the diagnostic: collapse blank-line runs, keep it on a
@@ -371,6 +471,70 @@ function buildTimeline(records: LabTickRecord[], world: WorldState | null): stri
             record.episode ? 'episode ✓' : 'episode ✗',
         ];
         block.push('旗標：' + flags.join(' · '));
+        // 生命體徵 — the macro-scale reading. A run can look healthy scene by scene
+        // and be dead at this scale; these four lines are what makes that visible.
+        const vitals = record.vitals;
+        if (vitals) {
+            const parts = [
+                `不可逆 ${vitals.irreversible}`,
+                `心跳 ${vitals.resolvedThisTick} 落地（累計 ${vitals.wantsResolved}／活 ${vitals.wantsLive}／率 ${(vitals.resolvedRate * 100).toFixed(0)}%）`,
+                vitals.sceneEntropy < 0
+                    ? '場景熵 —（無人行動）'
+                    : `場景熵 ${vitals.sceneEntropy.toFixed(2)}（最擠一場 ${vitals.sceneCrowdPeak}／行動 ${vitals.actorCount} 人）`,
+            ];
+            block.push('體征：' + parts.join(' · '));
+            if (vitals.convergence.length) {
+                block.push(
+                    '收斂（同時多少人指向同一件事）：' +
+                        vitals.convergence
+                            .map((row) => `「${row.token}」×${row.count}（${row.characterIds.map(nameOf).join('、')}）`)
+                            .join('；'),
+                );
+            }
+            if (vitals.loops.length) {
+                block.push(
+                    '迴圈（同一人反覆同一句）：' +
+                        vitals.loops.map((row) => `${nameOf(row.characterId)}「${row.token}」${row.ticks} 拍`).join('；'),
+                );
+            }
+        }
+        if (record.cardsPlayed?.length) {
+            block.push(
+                '事件卡：\n' +
+                    record.cardsPlayed
+                        .map((card) => {
+                            const head = `  · ${card.label}（${card.cardId}｜${
+                                card.chosenBy === 'deadline' ? '到日必打' : card.chosenBy === 'director' ? '導演選牌' : '營運者'
+                            }｜不可逆 ${card.irreversible}${card.targetNames.length ? `｜對準 ${card.targetNames.join('、')}` : ''}）`;
+                            const why = card.rationale ? `\n    導演的理由：${card.rationale}` : '';
+                            const lines = card.lines.length ? `\n    ${card.lines.join('\n    ')}` : '';
+                            return head + why + lines;
+                        })
+                        .join('\n'),
+            );
+        }
+        if (record.backgroundNeeds?.length) {
+            block.push('背景結算（不佔戲）：' + record.backgroundNeeds.join(' '));
+        }
+        if (record.artifacts?.length) {
+            block.push(
+                '角色工件：\n' +
+                    record.artifacts
+                        .map((artifact) => {
+                            const head =
+                                artifact.kind === 'diary'
+                                    ? `  · ${artifact.name}·日記（有憑 ${artifact.supportedClaims ?? 0} 條${
+                                          artifact.unsupportedClaims ? `、無憑 ${artifact.unsupportedClaims} 條【已標記】` : ''
+                                      }）`
+                                    : `  · ${artifact.name}·詩（${artifact.occasion ?? '無由'}）`;
+                            return `${head}\n    ${povBody(artifact.body, 700)}`;
+                        })
+                        .join('\n\n'),
+            );
+        }
+        if (record.povTrackedIds?.length) {
+            block.push(`追蹤中（只為這些人生成 POV 散文與日記）：${record.povTrackedIds.map(nameOf).join('、')}`);
+        }
         // 視角與反思 — the first-person POV prose captured this tick. Scene POVs are
         // each actor's woven angle on a co-present scene; 'quiet-reflect' entries are
         // the quietPresence day-end breath. Shown so a reader can judge narrative
@@ -433,6 +597,7 @@ export function buildRunDiagnostics(runId: string): string {
         safe(() => buildHeader(runId, meta, manifest, world), (m) => `# 卷宗診斷 · ${runId}\n\n（讀取失敗：${m}）`),
         safe(() => buildErrors(runId, engineLog), (m) => `## ⚠ 錯誤與警訊\n\n（讀取失敗：${m}）`),
         safe(() => buildWorld(world), (m) => `## 世界現況\n\n（讀取失敗：${m}）`),
+        safe(() => buildVitals(records, world), (m) => `## 生命體徵（宏觀節奏）\n\n（讀取失敗：${m}）`),
         safe(() => buildTimeline(records, world), (m) => `## 逐拍紀事\n\n（讀取失敗：${m}）`),
         safe(() => buildEngineLog(engineLog), (m) => `## 引擎日誌（全）\n\n（讀取失敗：${m}）`),
     ].join('\n\n');

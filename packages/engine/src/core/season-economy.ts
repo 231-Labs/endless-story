@@ -1491,6 +1491,16 @@ export function settleEveningPerformance(
     if (perf.audienceHouse) {
         pct += BigInt(renownDrawPct(world, leadsPresent));
     }
+    // 天時折座 — the event deck's weather, as the LAST multiplier on the house.
+    // A 天氣轉變 card is only worth playing if it costs something, and what bad
+    // weather costs a theatre is seats. Applied multiplicatively (and floored at
+    // zero) so it composes with the terms above instead of overriding them.
+    // Absent weather ⇒ 100 ⇒ byte-identical to a world with no deck.
+    const weatherPct = BigInt(Math.max(0, Math.floor(world.data.weather?.housePct ?? 100)));
+    if (weatherPct !== 100n) {
+        pct = (pct * weatherPct) / 100n;
+        if (pct < 0n) pct = 0n;
+    }
     // 看客 — the paying house as a REAL figure (約 N 人), derived from the SAME
     // final pct as the takings so the two never disagree. Off ⇒ undefined: the
     // house stays abstract and nothing downstream changes.
@@ -2259,6 +2269,160 @@ export function seedSeasonEconomy(world: WorldState, frame: SeasonEconomyFrame, 
 // ── editor-facing audit (publish gate) ──
 
 /** Objective-consistency audit: any returned line vetoes anthology prose. */
+// ── 銀錢閘門 (money gateways for the macro-rhythm layer) ────────────────────
+//
+// The event deck, the 月半結帳 reckoning and the 觀眾注資 channel all need to move
+// money, and NONE of them may reimplement balance math (the ECONOMY_ENGINE_HANDOFF
+// invariant). These three exported gateways are the only seam they use: each
+// wraps ONE @endless-story/economy transition, parses/persists around it, and
+// returns a plain report. Ledger idempotency comes free — a repeated `txnId`
+// is swallowed by the domain (`alreadyApplied`), so a replayed tick or a
+// re-fired card can never double-pay.
+
+/** Read-only face of one account, for a caller that must decide WHETHER to move
+ *  money without ever computing the money itself. `runwayDays` is the domain's
+ *  own division (null ⇒ the account outlives its burn). undefined ⇒ no such
+ *  account (or the world carries no economy). */
+export function accountFace(
+    world: WorldState,
+    accountId: string,
+): { id: string; label: string; available: bigint; reserved: bigint; dailyFixedCost: bigint; runwayDays: bigint | null; authorizedSpenderIds: string[] } | undefined {
+    const parsed = live(world);
+    const account = parsed?.contract.economy.accounts[accountId];
+    if (!parsed || !account) return undefined;
+    return {
+        id: accountId,
+        label: account.label,
+        available: account.available,
+        reserved: account.reserved,
+        dailyFixedCost: account.dailyFixedCost,
+        runwayDays: accountRunwayDays(account),
+        authorizedSpenderIds: [...account.authorizedSpenderIds],
+    };
+}
+
+/**
+ * 開戶 — give a mid-run arrival their own purse. A character with a wage but no
+ * account is a live failure (the daily settle throws on an unknown destination),
+ * so `admitNewcomer` must open one in the same breath as it hires them.
+ *
+ * Opening money counts as `injected`, exactly like the founding cast's, so
+ * conservation still holds. Idempotent: an existing account is left untouched.
+ */
+export function openCharacterAccount(
+    world: WorldState,
+    req: { characterId: string; label: string; openingYuan?: number; dailyFixedCostYuan?: number },
+): boolean {
+    const parsed = live(world);
+    if (!parsed) return false;
+    if (parsed.contract.economy.accounts[req.characterId]) return false;
+    const { data } = parsed;
+    const opened = openAccounts(parsed.contract.economy, [
+        {
+            id: req.characterId,
+            ownerType: 'character',
+            label: req.label,
+            opening: BigInt(Math.round((req.openingYuan ?? 0) * data.subunitsPerUnit)),
+            dailyFixedCost: BigInt(Math.round((req.dailyFixedCostYuan ?? 0) * data.subunitsPerUnit)),
+        },
+    ]);
+    persist(world, { economy: opened, contracts: parsed.contract.contracts });
+    return true;
+}
+
+/** 圓 → 分, through the world's own denomination. Callers author whole 圓 in
+ *  decks and CLI flags; the ledger only ever sees minimum units. */
+export function yuanToSubunits(world: WorldState, yuanAmount: number): bigint {
+    const data = world.data.economy;
+    if (!data) throw new Error('[economy] world carries no economy; cannot convert 圓');
+    return BigInt(Math.round(yuanAmount * data.subunitsPerUnit));
+}
+
+/**
+ * 外財入場 — money ENTERING the modelled world (a patron's ticket, a flower
+ * bought at the stall, a tip pressed into a hand). Wraps `depositExternal`, so
+ * `injected` grows with the balance and conservation still holds by construction.
+ * This is the ONLY way outside money may reach the world: an operator never
+ * edits a balance, they fire a channel that leaves a ledger row.
+ */
+export function injectExternalFunds(
+    world: WorldState,
+    req: { txnId: string; toAccountId: string; amountSubunits: bigint; memo: string; causeEventId: string },
+): { ok: boolean; reason?: string; duplicate?: boolean } {
+    const parsed = live(world);
+    if (!parsed) return { ok: false, reason: 'world carries no economy' };
+    if (req.amountSubunits <= 0n) return { ok: false, reason: 'amount must be positive' };
+    if (!parsed.contract.economy.accounts[req.toAccountId]) {
+        return { ok: false, reason: `unknown account: ${req.toAccountId}` };
+    }
+    const moved = depositExternal(parsed.contract.economy, {
+        txnId: req.txnId,
+        to: req.toAccountId,
+        amount: req.amountSubunits,
+        memo: req.memo,
+        causeEventId: req.causeEventId,
+    });
+    if (moved.rejection) return { ok: false, reason: moved.rejection.message };
+    persist(world, { economy: moved.state, contracts: parsed.contract.contracts });
+    return { ok: true, duplicate: moved.duplicate };
+}
+
+/**
+ * 帳上劃撥 — an account→account movement the WORLD collects or disburses (a
+ * wage, a dividend, a reckoning's forced collection). No actor authority is
+ * checked: the payer is the establishment itself, not a character reaching into
+ * someone else's purse. Pays AT MOST what exists and reports what actually
+ * moved, so a caller can turn the shortfall into a consequence instead of a
+ * crash. Wraps `collectDue` — conservation is untouched (money changes hands,
+ * never appears).
+ */
+export function moveBetweenAccounts(
+    world: WorldState,
+    req: { txnId: string; fromAccountId: string; toAccountId: string; amountSubunits: bigint; memo: string; causeEventId: string },
+): { ok: boolean; reason?: string; paidSubunits: bigint; shortSubunits: bigint } {
+    const parsed = live(world);
+    if (!parsed) return { ok: false, reason: 'world carries no economy', paidSubunits: 0n, shortSubunits: req.amountSubunits };
+    const payer = parsed.contract.economy.accounts[req.fromAccountId];
+    if (!payer) return { ok: false, reason: `unknown payer account: ${req.fromAccountId}`, paidSubunits: 0n, shortSubunits: req.amountSubunits };
+    if (!parsed.contract.economy.accounts[req.toAccountId]) {
+        return { ok: false, reason: `unknown payee account: ${req.toAccountId}`, paidSubunits: 0n, shortSubunits: req.amountSubunits };
+    }
+    if (req.amountSubunits <= 0n) return { ok: false, reason: 'amount must be positive', paidSubunits: 0n, shortSubunits: 0n };
+    const pay = payer.available < req.amountSubunits ? payer.available : req.amountSubunits;
+    const short = req.amountSubunits - pay;
+    if (pay <= 0n) return { ok: true, paidSubunits: 0n, shortSubunits: short };
+    const moved = collectDue(parsed.contract.economy, {
+        txnId: req.txnId,
+        from: req.fromAccountId,
+        to: req.toAccountId,
+        amount: pay,
+        memo: req.memo,
+        causeEventId: req.causeEventId,
+    });
+    if (moved.rejection) return { ok: false, reason: moved.rejection.message, paidSubunits: 0n, shortSubunits: req.amountSubunits };
+    persist(world, { economy: moved.state, contracts: parsed.contract.contracts });
+    return { ok: true, paidSubunits: moved.duplicate ? 0n : pay, shortSubunits: short };
+}
+
+/** Every ledger row the world has recorded, newest last — read-only. The vitals
+ *  and the reckoning read it to answer "did an income event actually LAND?"
+ *  without reaching into the persisted shape themselves. */
+export function ledgerRows(
+    world: WorldState,
+): ReadonlyArray<{ id: string; day: number; kind: string; from: string; to: string; amount: bigint; memo: string }> {
+    const parsed = live(world);
+    if (!parsed) return [];
+    return parsed.contract.economy.ledger.map((txn) => ({
+        id: txn.id,
+        day: txn.day,
+        kind: txn.kind,
+        from: txn.from,
+        to: txn.to,
+        amount: txn.amount,
+        memo: txn.memo,
+    }));
+}
+
 export function auditSeasonEconomy(world: WorldState): string[] {
     const parsed = live(world);
     if (!parsed) return [];

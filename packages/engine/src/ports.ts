@@ -85,6 +85,98 @@ export type JudgeEstablishedInput = Runner.characterAgent.JudgeEstablishedInput;
 export type DossierCanonicalEvent = Runner.eventDossier.DossierCanonicalEvent;
 export type DossierPerspectiveSource = Runner.eventDossier.DossierPerspectiveSource;
 
+// ── 導演選牌 (the director seat) ──────────────────────────────────────────────
+//
+// The director's authority is exactly three decisions — WHICH card, WHEN (by
+// declining), WHOM — plus dressing the card's face in world language. The engine
+// computes the eligible set and settles every consequence, so a director cannot
+// invent a card, invent a target, or touch a number. See core/event-deck.ts.
+
+/** One card the engine is willing to have played on this exact tick. */
+export interface DirectorOfferedCard {
+    cardId: string;
+    /** the card's own face text. */
+    label: string;
+    /** one line on what this card does, so the choice is informed. */
+    note?: string;
+    /** a 死線卡: it lands whether or not the director picks it. Dress only. */
+    forced: boolean;
+    /** the ONLY ids this card may be aimed at. */
+    candidates: Array<{ id: string; name: string }>;
+    /** how many of the candidates to name (0 ⇒ the card aims itself). */
+    pickCount: number;
+}
+
+export interface DirectorPickInput {
+    day: number;
+    clock: string;
+    offered: DirectorOfferedCard[];
+    /** Prose-only picture of where the world stands. NEVER a figure the director
+     *  could act on — money, tension and box office stay the engine's business. */
+    worldBrief: string[];
+    /** cards that will land regardless of this reply. */
+    forcedCardIds: string[];
+}
+
+export interface DirectorPickReply {
+    /** must be one of the offered `cardId`s; anything else is refused. */
+    cardId: string;
+    /** must be drawn from that card's `candidates`; unknown ids are dropped. */
+    targetIds?: string[];
+    /** 穿戲服 — the card's face rewritten in world language. Text only. */
+    costume?: string;
+    /** one line of reasoning, recorded in the director log for audit. */
+    rationale?: string;
+    /** a legitimate answer on any non-deadline tick: not yet. */
+    decline?: boolean;
+}
+
+// ── 角色工件 (diary + poem seats) ─────────────────────────────────────────────
+
+export interface ComposeDiaryInput {
+    characterId: string;
+    name: string;
+    persona: string;
+    secret?: string;
+    day: number;
+    /** the day's citable beats — the ONLY evidence a claim may rest on. Each
+     *  `ref` is engine-minted, so a fabricated citation cannot resolve. */
+    evidence: Array<{ ref: string; clock: string; sceneName: string; text: string; inner?: string }>;
+    /** the character's live 心事, in their own words. */
+    wantLines: string[];
+    /** their TRUE purse in world language — stated so the diary cannot drift off
+     *  the ledger (the observed 24 圓 / 七十圓 failure). */
+    purseLine?: string;
+}
+
+export interface ComposeDiaryReply {
+    /** the diary prose the reader gets. */
+    body: string;
+    /** each assertion plus the `beat:N` refs it rests on. Audited by the engine;
+     *  an unsupported claim is FLAGGED, not silently dropped. */
+    claims: Array<{ text: string; evidenceRefs: string[] }>;
+}
+
+export interface ComposePoemInput {
+    characterId: string;
+    name: string;
+    persona: string;
+    day: number;
+    clock: string;
+    /** why today (張力尖峰／相許／被拒／送別／結帳). */
+    occasion: string;
+    occasionLine: string;
+    /** the want the occasion turns on, in the character's own words. */
+    wantDesc?: string;
+    otherName?: string;
+    sceneName?: string;
+}
+
+export interface ComposePoemReply {
+    title?: string;
+    body: string;
+}
+
 /** Dedicated mechanism-metadata declaration seat. The ordinary character-owned
  * want prose can be born or rewritten without gaining authority over engine
  * gates; STRICT calls this separate seat immediately before persistence. */
@@ -453,6 +545,15 @@ export interface SceneAgentPort extends SceneAgent {
      *  through one participant's eyes — attention/interpretation diverge, events
      *  never do (probe-validated). Caller gates by followers. null → skip. */
     povScene(input: PovSceneInput): Promise<string | null>;
+    /** 導演選牌 — pick ONE offered card, aim it at offered candidates, dress its
+     *  face. The engine settles every consequence; a null/absent reply simply
+     *  means no card is played this tick (a deadline card still lands). */
+    pickEventCard?(input: DirectorPickInput): Promise<DirectorPickReply | null>;
+    /** 日記 — recombine ONE tracked character's day (beats + 心下 + 心事) into a
+     *  first-person entry whose claims cite `beat:N` evidence. null → no diary. */
+    composeDiary?(input: ComposeDiaryInput): Promise<ComposeDiaryReply | null>;
+    /** 詩詞 — occasion-triggered only, never a daily quota. null → no poem. */
+    composePoem?(input: ComposePoemInput): Promise<ComposePoemReply | null>;
     /** MILESTONE JUDGE: are these two, as of now, 相許? READS the relationship
      *  (never steers it) — a true verdict promotes the pair into the established
      *  set, unlocking (not scripting) the consummate register. */

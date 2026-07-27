@@ -44,6 +44,15 @@ export interface LabRunConfig {
     ticksPerDay: number;
     /** Real OpenAI embeddings for recall (needs OPENAI_API_KEY); default off. */
     realEmbeddings: boolean;
+    /** 事件牌組 id (外力層) — the finite, declarative deck the LLM director plays
+     *  from. Absent ⇒ no deck: no cards, no director call, no forced deadlines,
+     *  exactly as a run behaved before the deck existed. */
+    deckId?: string;
+    deckSource?: 'builtin' | 'custom';
+    /** 追蹤中的角色 (names) — whose POV prose and daily 日記 this run pays for. The
+     *  structural layer (台詞＋心下＋事件) always runs for the whole cast; only the
+     *  presentation layer is gated. Absent/empty ⇒ everybody, as before. */
+    trackedCharacterNames?: string[];
 }
 
 /** lab-run.json — one per run directory; immutable provenance + lineage. */
@@ -303,6 +312,50 @@ export interface LabTickRecord {
     }>;
     eventPovs: Array<{ characterId: string; name: string; eventId: string; body: string }>;
     economyNotices?: string[];
+    // ── 宏觀節奏 (macro rhythm) — additive; absent on lines written before it.
+    /** 生命體徵: 不可逆事件數／resolved 率／場景熵／收斂與迴圈偵測 for this tick. */
+    vitals?: {
+        irreversible: number;
+        wantsResolved: number;
+        wantsLive: number;
+        resolvedRate: number;
+        resolvedThisTick: number;
+        sceneEntropy: number;
+        sceneCrowdPeak: number;
+        convergence: Array<{ token: string; characterIds: string[]; count: number }>;
+        loops: Array<{ characterId: string; token: string; ticks: number }>;
+        actorCount: number;
+    };
+    /** 事件卡 played this tick, and who chose them. */
+    cardsPlayed?: Array<{
+        cardId: string;
+        label: string;
+        chosenBy: 'director' | 'deadline' | 'operator';
+        targetNames: string[];
+        costume?: string;
+        rationale?: string;
+        irreversible: number;
+        lines: string[];
+    }>;
+    /** 角色工件 written this tick (日記 at day end, 詩詞 on occasion). */
+    artifacts?: Array<{
+        kind: 'diary' | 'poem';
+        id: string;
+        characterId: string;
+        name: string;
+        day: number;
+        body: string;
+        /** diary only: how many claims survived the beat-evidence audit, and how
+         *  many were flagged as unsupported. */
+        supportedClaims?: number;
+        unsupportedClaims?: number;
+        /** poem only. */
+        occasion?: string;
+    }>;
+    /** Who this tick actually paid POV prose for — the tracking switch, visible. */
+    povTrackedIds?: string[];
+    /** 背景結算: hunger settled offstage, one clause each (never a scene). */
+    backgroundNeeds?: string[];
     finishedAt: string;
 }
 

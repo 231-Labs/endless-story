@@ -45,12 +45,33 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
     └── editorial/                  #   季度選集（season-anthology.md + selection）
 ```
 
+卷目錄另有兩件宏觀節奏的產物：`ticks.jsonl` 每行多出 `vitals`（生命體徵）、
+`cardsPlayed`（事件卡與導演決策）、`artifacts`（日記／詩）、`povTrackedIds`、
+`backgroundNeeds`；`state/world.json` 多出 `directorLog`／`secretLedger`／
+`patronage`／`artifacts`／`reckonings`／`departedIds`／`trackedCharacterIds`。
+欄位一律**只加不改名不刪**，舊卷照讀。
+
 **版本管理三件事**：
 1. **溯源**：`run-manifest.json` 逐欄核對，一卷永不悄悄換 preset／provider／模型。
 2. **交易**：每拍走 `TickFilesystemTransaction`（state/memory/sessions/archive 先備份，
    崩潰即回滾），卷不會半拍撕裂。
 3. **分卷（fork）**：靜場時整目錄複製成兄弟卷，記 `parentRunId` + `forkedAtTick`，
    卷架上以世系縮排呈現 — 從同一拍岔出兩種未來，直接對照。
+
+### 2.05 事件牌組（外力層 · 映像自帶）
+
+牌組在 `packages/cli/scripts/decks/`（私有的走 `$ES_SCRIPTS_ROOT/decks`，自撰的走
+`$LAB_DATA_DIR/decks/`）。一卷選不選牌組是 `LabRunConfig.deckId`；**不選＝沒有外力層**
+（沒有卡、不叫導演、沒有死線），與加這層之前逐位元相同。
+
+| 牌組 id | 是什麼 |
+|---|---|
+| `spring-snow` | 春雪社外力牌組：月半結帳（死線）、班中發俸、散戲分紅、巡捕查夜、報館截稿、天氣轉變、堂會邀約、池座送花、風聲漏了，加兩張季級大牌（故人進城／名角過班）＋三樁上了膛的秘密 |
+
+schema、導演的輸入輸出、追蹤開關與注資指令，全部記在
+[`packages/engine/README.md` 的「宏觀節奏」](../packages/engine/README.md#宏觀節奏macro-rhythm)。
+鐵律不變：**卡是宣告式資料、後果由引擎確定性結算、LLM 導演只選牌與措辭**，每次落牌
+連同當時的牌面全集寫進 `world.json` 的 `directorLog`，可審計、可重放。
 
 ### 2.1 內建劇本與季框（映像自帶，卷架直接可選）
 

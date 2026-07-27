@@ -27,6 +27,18 @@ export * from './core/temple-prayer.ts';
 export * from './core/incense.ts';
 export * from './core/dream.ts';
 
+// 宏觀節奏 (macro rhythm): the external-push layer, the money loop's inward half,
+// the want lifecycle, character artifacts, and the vitals. See README 「宏觀節奏」.
+export * from './core/event-deck.ts';
+export * from './core/income-events.ts';
+export * from './core/patronage.ts';
+export * from './core/secret-ledger.ts';
+export * from './core/roster-change.ts';
+export * from './core/want-lifecycle.ts';
+export * from './core/artifacts.ts';
+export * from './core/vitals.ts';
+export * from './core/background-needs.ts';
+
 // Ports + world + pipeline + preset.
 export * from './ports.ts';
 export * from './world-state.ts';

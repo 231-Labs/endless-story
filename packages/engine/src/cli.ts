@@ -10,15 +10,26 @@
  * unless `--real-embeddings` is explicitly passed, even if an OpenAI key happens
  * to be present. A run is resumable: if `<out>/state/world.json`
  * exists it is restored and continued; otherwise a fresh world is seeded.
+ *
+ * 宏觀節奏 flags + subcommands (see README 「宏觀節奏」):
+ *
+ *   run  --deck spring-snow          attach the event deck (外力層)
+ *        --track 柳安春,方競西          only these characters get POV prose + 日記
+ *   patron --out ./run --channel flower --amount 2 --target 連翹
+ *                                    觀眾注資: money enters through a world channel
+ *   pov-backfill --out ./run --character 連翹 [--day 2]
+ *                                    write an untracked character's POV after the fact
+ *   deck-check --deck spring-snow    validate a deck without running anything
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { FakeSceneAgent, FileArchive, LocalClock, LocalEconomy, LocalRecall } from './adapters/local/index.ts';
 import { auditSeasonEconomy } from './core/season-economy.ts';
-import { applySeasonFrame, createWorldFromPreset, loadSeasonFrame, reconcileSeasonObjects, seedRelationshipViews } from './preset.ts';
+import { injectPatronage, type PatronageChannel } from './core/patronage.ts';
+import { applySeasonFrame, attachEventDeck, createWorldFromPreset, loadEventDeck, loadSeasonFrame, reconcileSeasonObjects, seedRelationshipViews } from './preset.ts';
 import { seedAcquaintance } from './core/acquaintance.ts';
-import { activePresetId, activeSeasonId, defaultLabRunDir } from './workspace-paths.ts';
+import { activeDeckId, activePresetId, activeSeasonId, defaultLabRunDir } from './workspace-paths.ts';
 import { seedSeasonOpening } from './season-opening.ts';
 import { runTick } from './tick.ts';
 import { writeTickDossiers } from './dossier-artifact.ts';
@@ -39,6 +50,10 @@ interface Args {
     relationshipFallback: boolean;
     /** Research arm: structured fields are the sole mechanism authority. */
     strictStructured: boolean;
+    /** 事件牌組 id (外力層). Absent ⇒ no deck, no director, no forced deadlines. */
+    deck?: string;
+    /** 追蹤中的角色 (names or ids). Empty ⇒ everybody, as before the switch. */
+    track: string[];
 }
 
 function parseArgs(argv: string[]): Args {
@@ -51,6 +66,8 @@ function parseArgs(argv: string[]): Args {
         realEmbeddings: false,
         relationshipFallback: false,
         strictStructured: false,
+        deck: activeDeckId(),
+        track: [],
     };
     const rest = argv[0] === 'run' ? argv.slice(1) : argv;
     for (let i = 0; i < rest.length; i++) {
@@ -66,8 +83,32 @@ function parseArgs(argv: string[]): Args {
         else if (k === '--real-embeddings') a.realEmbeddings = true;
         else if (k === '--relationship-fallback') a.relationshipFallback = true;
         else if (k === '--strict-structured') a.strictStructured = true;
+        else if (k === '--deck') a.deck = rest[++i];
+        else if (k === '--no-deck') a.deck = undefined;
+        else if (k === '--track') a.track = splitList(rest[++i]);
     }
     return a;
+}
+
+/** `--track 柳安春,方競西` / `--track 柳安春 --track 方競西` both work. */
+function splitList(raw: string | undefined): string[] {
+    return (raw ?? '')
+        .split(/[,，\s]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+}
+
+/** Resolve authored NAMES or ids to cast ids, refusing loudly on a typo — a
+ *  silently-dropped tracking name would quietly stop producing that character's
+ *  POV and diary, and the operator would only find out from the bill. */
+function resolveCastIds(world: WorldState, tokens: string[], label: string): string[] {
+    const ids: string[] = [];
+    for (const token of tokens) {
+        const id = world.castById(token) ? token : world.idByName(token);
+        if (!id) throw new Error(`${label}: 班中無此人「${token}」（可用：${world.data.cast.map((m) => m.name).join('、')}）`);
+        if (!ids.includes(id)) ids.push(id);
+    }
+    return ids;
 }
 
 function recordPostprocessFailure(outDir: string, stage: string, tick: number, error: unknown): void {
@@ -146,6 +187,7 @@ async function main(): Promise<void> {
         model: model ?? 'fake',
         relationshipFallback: args.relationshipFallback,
         ...(args.strictStructured ? { strictStructured: true as const } : {}),
+        ...(args.deck ? { deck: args.deck } : {}),
     };
     if (fs.existsSync(manifestFile)) {
         const previous = JSON.parse(fs.readFileSync(manifestFile, 'utf8')) as typeof manifest;
@@ -164,6 +206,11 @@ async function main(): Promise<void> {
     } else {
         fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
     }
+
+    // 事件牌組 — validated at LOAD time (a malformed card must never be discovered
+    // halfway through a run). Absent ⇒ the deck phase is inert.
+    const deck = args.deck ? loadEventDeck(args.deck) : undefined;
+    if (deck) console.log(`  deck       : ${deck.title ?? deck.id} (${deck.cards.length} 張牌)`);
 
     let world: WorldState;
     let freshWorld = false;
@@ -206,6 +253,19 @@ async function main(): Promise<void> {
         fs.mkdirSync(args.out, { recursive: true });
         fs.writeFileSync(path.join(args.out, 'season-frame.json'), `${JSON.stringify(seasonFrame, null, 2)}\n`);
     }
+    if (deck) {
+        const armed = attachEventDeck(world, deck);
+        if (armed) console.log(`  secrets    : ${armed} 樁上了膛（持有者／覬覦者／洩漏條件）`);
+    }
+    // 追蹤開關 — resolved against the LIVE cast so a typo fails loudly here rather
+    // than silently halving the run's POV output. An empty list keeps the old
+    // behaviour (everybody tracked).
+    if (args.track.length) {
+        world.data.trackedCharacterIds = resolveCastIds(world, args.track, '--track');
+        console.log(`  tracked    : ${world.data.trackedCharacterIds.map((id) => world.nameById(id)).join('、')}（POV 散文與日記只為這些人生成）`);
+    } else if (world.data.trackedCharacterIds?.length) {
+        console.log(`  tracked    : ${world.data.trackedCharacterIds.map((id) => world.nameById(id)).join('、')}（沿用此卷既有設定）`);
+    }
     if (seasonFrame && freshWorld) {
         const opening = await seedSeasonOpening(world, seasonFrame, { agent, recall, archive });
         world.snapshot(stateDir);
@@ -228,7 +288,7 @@ async function main(): Promise<void> {
         activeTransaction = true;
         let report: Awaited<ReturnType<typeof runTick>>;
         try {
-            report = await runTick(world, { agent, recall, archive, clock, economy }, { snapshotDir: stateDir });
+            report = await runTick(world, { agent, recall, archive, clock, economy, ...(deck ? { deck } : {}) }, { snapshotDir: stateDir });
             transaction.commit();
             activeTransaction = false;
         } catch (error) {
@@ -271,7 +331,148 @@ async function main(): Promise<void> {
     console.log(`DONE · day ${world.data.clock.day} · ${world.data.wants.length} wants (${live} live) · artifacts in ${path.join(args.out, 'archive')}`);
 }
 
-main().catch((e) => {
+// ── 觀眾注資 (patronage) ──────────────────────────────────────────────────────
+//
+// The operator-facing half of the money loop. An operator never edits a balance:
+// they fire a CHANNEL, and the world gets a real ledger row plus a percept the
+// cast will perceive next tick. 誰的花多誰的花少 is written into world state, which
+// is where the deck (and the jealousy it stirs) reads it from.
+async function patronCommand(argv: string[]): Promise<void> {
+    let out = defaultLabRunDir();
+    let channel: PatronageChannel = 'ticket';
+    let amountYuan = 0;
+    let target: string | undefined;
+    let patronName: string | undefined;
+    let note: string | undefined;
+    for (let i = 0; i < argv.length; i++) {
+        const k = argv[i];
+        if (k === '--out') out = argv[++i];
+        else if (k === '--channel') channel = argv[++i] as PatronageChannel;
+        else if (k === '--amount') amountYuan = Number(argv[++i]);
+        else if (k === '--target') target = argv[++i];
+        else if (k === '--patron') patronName = argv[++i];
+        else if (k === '--note') note = argv[++i];
+    }
+    if (!['ticket', 'flower', 'tip'].includes(channel)) {
+        throw new Error(`--channel 只能是 ticket（買票）／flower（買花）／tip（打賞），收到：${channel}`);
+    }
+    if (!(amountYuan > 0)) throw new Error('--amount 須為正數（圓）');
+    const stateDir = path.join(out, 'state');
+    if (!WorldState.exists(stateDir)) throw new Error(`此處沒有走過的卷：${stateDir}`);
+    const world = WorldState.restore(stateDir);
+    const outcome = injectPatronage(world, {
+        channel,
+        amountYuan,
+        ...(target ? { target } : {}),
+        ...(patronName ? { patronName } : {}),
+        ...(note ? { note } : {}),
+        day: world.data.clock.day,
+        tick: world.data.clock.currentTick,
+    });
+    if (!outcome.ok) throw new Error(`注資未成：${outcome.reason}`);
+    world.snapshot(stateDir);
+    console.log(outcome.line);
+    for (const want of outcome.spawnedWants) {
+        console.log(`  [妒] ${world.nameById(want.characterId)}「${want.desc}」`);
+    }
+    const audit = auditSeasonEconomy(world);
+    for (const line of audit) console.error(`  [economy-audit] ${line}`);
+    console.log('（已落帳並排入下一拍的世界事件；下一拍走起時全班都會知道。）');
+}
+
+// ── POV 補寫 (backfill) ───────────────────────────────────────────────────────
+//
+// The tracking switch is only safe BECAUSE of this command: the structural layer
+// (台詞＋心下＋事件) runs for the whole cast every tick and is archived in full, so
+// an untracked character's first-person prose is not lost — it is merely not
+// written yet. This walks the archived 手卷 for one character and writes their POV
+// after the fact, at whatever moment an operator decides they became interesting.
+async function povBackfillCommand(argv: string[]): Promise<void> {
+    let out = defaultLabRunDir();
+    let character: string | undefined;
+    let day: number | undefined;
+    for (let i = 0; i < argv.length; i++) {
+        const k = argv[i];
+        if (k === '--out') out = argv[++i];
+        else if (k === '--character') character = argv[++i];
+        else if (k === '--day') day = Number(argv[++i]);
+    }
+    if (!character) throw new Error('--character 是必須的（姓名或 id）');
+    const stateDir = path.join(out, 'state');
+    if (!WorldState.exists(stateDir)) throw new Error(`此處沒有走過的卷：${stateDir}`);
+    const world = WorldState.restore(stateDir);
+    const [characterId] = resolveCastIds(world, [character], '--character');
+    const member = world.castById(characterId)!;
+
+    // Source material: the archived 手卷 (every scene's committed beats), filtered
+    // to this character's own lines. This is the same evidence the diary audit
+    // uses, read back off disk instead of out of the live tick.
+    const archiveDir = path.join(out, 'archive');
+    if (!fs.existsSync(archiveDir)) throw new Error(`此卷沒有 archive/：${archiveDir}`);
+    const files = fs.readdirSync(archiveDir).filter((name) => name.includes('shoujuan') && name.endsWith('.md')).sort();
+    const lines: string[] = [];
+    for (const name of files) {
+        if (day !== undefined && !name.includes(`d${day}-`) && !name.includes(`day${day}`)) continue;
+        const body = fs.readFileSync(path.join(archiveDir, name), 'utf8');
+        for (const line of body.split('\n')) {
+            if (line.startsWith(`${member.name}：`)) lines.push(`〔${name.replace(/\.md$/, '')}〕${line}`);
+        }
+    }
+    if (!lines.length) {
+        console.log(`${member.name}${day !== undefined ? `在第 ${day} 日` : ''}沒有留下可補寫的手卷行。`);
+        return;
+    }
+    const llmConfig = loadLLMConfig();
+    const provider = resolveTextProvider(llmConfig);
+    if (!provider) throw new Error('補寫 POV 需要一個文字模型 provider（見 .env）');
+    const { RunnerSceneAgent } = await import('./adapters/runner-scene-agent.ts');
+    const agent = new RunnerSceneAgent({ sessionDir: path.join(out, 'sessions'), sessionKey: process.env.CHARACTER_SESSION_KEY });
+    const prose = await agent.povReflect({
+        name: member.name,
+        persona: member.persona,
+        day: day ?? world.data.clock.day,
+        todayText: lines.join('\n').slice(-4000),
+        wants: world.liveWantsOf(characterId).map((want) => ({ layer: want.layer, desc: want.desc })),
+    });
+    if (!prose) {
+        console.log('補寫未成（模型沒有回話）。');
+        return;
+    }
+    const dir = path.join(out, 'archive');
+    const file = path.join(dir, `pov-backfill-${characterId}${day !== undefined ? `-d${day}` : ''}.md`);
+    fs.writeFileSync(file, `${prose}\n`, { encoding: 'utf8', mode: 0o600 });
+    console.log(`補寫完成 → ${file}`);
+}
+
+/** Validate a deck without touching a world — the cheapest way to catch an
+ *  authoring mistake before it costs a run. */
+function deckCheckCommand(argv: string[]): void {
+    let deckId = activeDeckId();
+    for (let i = 0; i < argv.length; i++) if (argv[i] === '--deck') deckId = argv[++i];
+    if (!deckId) throw new Error('--deck 是必須的（或設 ES_ACTIVE_DECK）');
+    const deck = loadEventDeck(deckId); // throws with every problem listed
+    console.log(`牌組 ${deck.title ?? deck.id} 合格：${deck.cards.length} 張牌、${(deck.secrets ?? []).length} 樁秘密、${(deck.newcomers ?? []).length} 位候補人選`);
+    for (const card of deck.cards) {
+        const when = card.trigger.onDays?.length
+            ? `第 ${card.trigger.onDays.join('／')} 日`
+            : card.trigger.everyDays
+              ? `每 ${card.trigger.everyDays} 日（自第 ${card.trigger.anchorDay ?? 1} 日起）`
+              : '不限日';
+        console.log(`  ${card.mustLand ? '【死線】' : card.tier === 'seasonal' ? '【季級】' : '　　　　'} ${card.id}｜${card.label}｜${when}`);
+    }
+}
+
+const SUBCOMMAND = process.argv[2];
+const RUNNER =
+    SUBCOMMAND === 'patron'
+        ? () => patronCommand(process.argv.slice(3))
+        : SUBCOMMAND === 'pov-backfill'
+          ? () => povBackfillCommand(process.argv.slice(3))
+          : SUBCOMMAND === 'deck-check'
+            ? async () => deckCheckCommand(process.argv.slice(3))
+            : main;
+
+RUNNER().catch((e) => {
     console.error('[engine] fatal:', e);
     process.exit(1);
 });

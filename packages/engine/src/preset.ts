@@ -11,8 +11,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RecallPort } from './ports.ts';
-import { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
+import { activeDeckId, activePresetId, activeSeasonId, defaultDecksDir, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
 import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-economy.ts';
+import { seedSecretLedger } from './core/secret-ledger.ts';
+import type { EventDeck } from './core/event-deck.ts';
 import { seedHousing } from './core/housing.ts';
 import { seedRenown } from './core/renown.ts';
 import { makeClock } from './adapters/local/clock.ts';
@@ -137,7 +139,7 @@ export interface SeasonFrame {
     renown?: Record<string, { renown?: number; self?: number }>;
 }
 
-export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
+export { activeDeckId, activePresetId, activeSeasonId, defaultDecksDir, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
 
 /** Read + parse a preset JSON. Throws loudly if the file is missing. */
 export function loadPresetFile(presetId: string, storiesDir?: string): RawPreset {
@@ -157,6 +159,85 @@ export function loadSeasonFrame(seasonId?: string, seasonsDir?: string): SeasonF
     const id = seasonId ?? activeSeasonId();
     if (!id) throw new Error('no season id: pass one or set ES_ACTIVE_SEASON');
     return loadSeasonFrameFile(id, seasonsDir);
+}
+
+// ── 事件牌組 (deck loading + validation) ───────────────────────────────────────
+
+/**
+ * Load and VALIDATE an event deck. The deck is authored data an operator edits by
+ * hand, so every structural mistake must be caught here, loudly, at load time —
+ * not discovered halfway through a run when a card refuses to resolve.
+ *
+ * Deliberately strict about the two things that would let the director escape
+ * their box: duplicate card ids (which would make the director log ambiguous) and
+ * `cast-enter` effects naming a newcomer the deck never declared (which would be
+ * the model inventing a character).
+ */
+export function loadEventDeckFile(deckId: string, decksDir?: string): EventDeck {
+    const dir = decksDir ?? defaultDecksDir();
+    const file = path.join(dir, `${deckId}.json`);
+    const deck = JSON.parse(fs.readFileSync(file, 'utf-8')) as EventDeck;
+    validateEventDeck(deck);
+    return deck;
+}
+
+/** Load the deck named by `ES_ACTIVE_DECK`, or the explicit id. */
+export function loadEventDeck(deckId?: string, decksDir?: string): EventDeck {
+    const id = deckId ?? activeDeckId();
+    if (!id) throw new Error('no deck id: pass one or set ES_ACTIVE_DECK');
+    return loadEventDeckFile(id, decksDir);
+}
+
+/** Structural validation. Throws on the first real problem, listing all of them. */
+export function validateEventDeck(deck: EventDeck): void {
+    const problems: string[] = [];
+    if (!deck.id?.trim()) problems.push('deck 缺 id');
+    if (!Array.isArray(deck.cards) || !deck.cards.length) problems.push('deck 沒有任何 card');
+    const seen = new Set<string>();
+    const newcomerIds = new Set((deck.newcomers ?? []).map((row) => row.id));
+    const secretIds = new Set((deck.secrets ?? []).map((row) => row.id));
+    for (const card of deck.cards ?? []) {
+        if (!card.id?.trim()) problems.push('有一張 card 缺 id');
+        else if (seen.has(card.id)) problems.push(`card id 重複：${card.id}`);
+        else seen.add(card.id);
+        if (!card.label?.trim()) problems.push(`card ${card.id} 缺 label（卡面）`);
+        if (!card.targeting?.mode) problems.push(`card ${card.id} 缺 targeting.mode`);
+        if (card.targeting?.mode === 'named' && !card.targeting.names?.length) {
+            problems.push(`card ${card.id} 是 named 卻沒點名`);
+        }
+        if (card.targeting?.mode === 'director-pick' && !(card.targeting.pickCount >= 1)) {
+            problems.push(`card ${card.id} 是 director-pick 卻沒說挑幾個`);
+        }
+        if (!card.effects?.length) problems.push(`card ${card.id} 沒有任何 effect`);
+        for (const part of card.trigger?.atParts ?? []) {
+            if (!Number.isInteger(part) || part < 0 || part > 5) {
+                problems.push(`card ${card.id} 的 atParts 有非法時辰索引：${part}（須為 0–5）`);
+            }
+        }
+        if (card.mustLand && !card.trigger?.onDays?.length && card.trigger?.everyDays === undefined) {
+            problems.push(`card ${card.id} 標了 mustLand 卻沒有到日之依據（onDays 或 everyDays）`);
+        }
+        for (const effect of card.effects ?? []) {
+            if (effect.kind === 'cast-enter' && !newcomerIds.has(effect.newcomerId)) {
+                problems.push(`card ${card.id} 的 cast-enter 指向牌組未宣告的人選：${effect.newcomerId}`);
+            }
+            if ((effect.kind === 'leak-secret' || effect.kind === 'publish-secret') && !secretIds.has(effect.secretId)) {
+                problems.push(`card ${card.id} 的 ${effect.kind} 指向牌組未宣告的秘密：${effect.secretId}`);
+            }
+        }
+    }
+    if (problems.length) throw new Error(`[deck] ${deck.id ?? '(無 id)'} 不合格：\n- ${problems.join('\n- ')}`);
+}
+
+/**
+ * Attach a deck's authored secrets to a world. Idempotent by secret id, so
+ * re-attaching on resume is safe. Records `deckId` for provenance; the deck
+ * itself is never persisted into the world (it is data on disk, and a run must
+ * not carry a stale copy of it).
+ */
+export function attachEventDeck(world: WorldState, deck: EventDeck): number {
+    world.data.deckId = deck.id;
+    return seedSecretLedger(world, deck.secrets ?? []);
 }
 
 /**

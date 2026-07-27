@@ -181,6 +181,32 @@ event 讓在場者**結構性**得知，不靠操作者私語），engine 本身
 原則：**不做大爆炸搬遷**。每個模組在下次被實驗或功能碰到時順手搬（碰到 = 搬），
 搬完 web 端留 re-export shim 或直接改 import，全 repo type-check + 該包測試綠才算完。
 
+## 4.5 宏觀節奏層（macro rhythm）
+
+微觀層過關之後，一卷 13 拍的診斷指出壞的是宏觀節奏：飢餓成了同質化吸引子、願望只進
+不出、月半結帳永遠逼近卻不抵達、支出是機制而收入是台詞。修法全部住在 `src/core`，
+一律 opt-in（不給 deck／不給追蹤名單的卷與加這層之前逐位元相同）：
+
+| 模組 | 管什麼 |
+|---|---|
+| `event-deck.ts` | 事件卡 schema、可打牌集（純函式）、確定性結算、導演決策 log |
+| `income-events.ts` | 工錢、按班規分紅（只分留底之上的餘裕）、月半結帳（免帳／當眾催帳，後果寫回狀態與心事） |
+| `patronage.ts` | 觀眾注資三管道（買票／買花／打賞）＋花帳與妒火素材 |
+| `secret-ledger.ts` | 秘密的持有者／覬覦者／洩漏條件；記者的「發不發」帶死線 |
+| `roster-change.ts` | 離班的孤兒資產強制重分配；故人進城（順手叫醒一樁睡著的秘密） |
+| `want-lifecycle.ts` | 心事的兩條出場道：`completion` 成立即 resolved、過 `dueDay` 即 foreclosed |
+| `background-needs.ts` | 生理需求降級：不具戲劇相關性的餓離場結算，上戲名額封頂 |
+| `vitals.ts` | 生命體徵：不可逆事件數／resolved 率／場景熵／收斂與迴圈偵測 |
+| `artifacts.ts` | 日記與詩詞，claim 需引用 beat 證據（含帳面漂移閘） |
+
+**權責邊界**（§5 鐵律 5 的同一條線，用在外力層上）：卡是宣告式資料，後果由引擎確定性
+結算；LLM 導演的職權只有選哪張卡、何時打、對準誰，加上把卡面穿上戲服。導演選了牌面
+上沒有的卡一律不採納，指了候選外的人一律丟棄，死線卡不得推遲。每次落牌連同當時的牌面
+全集寫進 `directorLog`，重放同一份 log 即重現整卷，模型不必在場。
+
+完整 schema／導演 I/O／追蹤開關／注資指令用法見
+[`packages/engine/README.md` 的「宏觀節奏」](../../packages/engine/README.md#宏觀節奏macro-rhythm)。
+
 ## 5. 鐵律
 
 1. **機制改兩份 = bug。** 若發現 web 和 engine 有同名機制分歧，engine 為準，web 收斂。

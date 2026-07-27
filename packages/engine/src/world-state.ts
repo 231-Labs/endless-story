@@ -72,6 +72,10 @@ export interface CastMember {
     /** Authored public-facing status used by STRICT acquaintance seeding.
      * Absent keeps the legacy role table only outside STRICT. */
     publiclyRecognizable?: boolean;
+    /** 離班之日 — set when this member left the board (see `departedIds`). They stay
+     *  in `cast` so the world can still name and remember them; they simply stop
+     *  acting. Absent ⇒ still on the board. */
+    departedDay?: number;
     state: StateVector;
     /**
      * MUTABLE SELF-MODEL (CHARACTER_LIFECYCLE §3, L3) — the character's CURRENT
@@ -456,6 +460,12 @@ export interface WorldStateData {
         /** relationshipFallback only: actor → what真的落地 today (resolved-want
          *  notes) — the nightly 心事自改 trigger; empty day = secret unchanged. */
         landedByChar?: Record<string, string[]>;
+        /** 日記的原料 — actor → this DAY's own beats, each with a citable `beat:N`
+         *  ref. Recorded for the whole cast (tracked or not), because the diary's
+         *  claim audit needs engine-minted evidence and an untracked character's
+         *  POV must stay backfillable. Reset with the rest of the accumulator at
+         *  day end. Optional & backward-compatible. */
+        beatsByChar?: Record<string, import('./core/artifacts.ts').ArtifactEvidenceBeat[]>;
     };
     contestedResources: ContestedResource[];
     /** Optional for backward-compatible restore of snapshots predating physics. */
@@ -592,6 +602,51 @@ export interface WorldStateData {
      *  with no temple scene never records one, so `restore` restoring an absent
      *  field leaves the 願牆 empty. */
     prayers?: Prayer[];
+
+    // ── 宏觀節奏層 (macro rhythm) — all optional & backward-compatible: an absent
+    //    field restores to an inert feature, so an OLD snapshot behaves exactly as
+    //    it did before this layer existed. See README 「宏觀節奏」.
+
+    /** 追蹤中的角色 — whose POV PROSE and DIARY the run pays for. The simulation
+     *  layer (台詞＋心下＋事件) always runs for the WHOLE cast; only the
+     *  presentation layer is gated, because the interiority the mechanism needs
+     *  already lives in each beat's 〔心下〕. ABSENT or EMPTY ⇒ everybody is
+     *  tracked (byte-identical to a run predating the switch); non-empty ⇒ only
+     *  these ids get POV prose. Untracked POV is backfillable after the fact,
+     *  because the beats are recorded in full. */
+    trackedCharacterIds?: string[];
+    /** 事件牌組 id in play (provenance only — the deck itself is authored data
+     *  loaded from disk, never persisted into the world). */
+    deckId?: string;
+    /** 導演決策全紀 — every card play, who chose it, what they were offered, and
+     *  what the engine settled. Replaying this log against the same seed
+     *  reproduces the run with NO model in the loop: that is what makes the
+     *  director's authority auditable rather than trusted. */
+    directorLog?: import('./core/event-deck.ts').DirectorLogEntry[];
+    /** 天時 — the deck's current weather fact; the box office reads `housePct`. */
+    weather?: import('./core/event-deck.ts').WeatherState;
+    /** 秘密帳 — loaded guns with a holder, a subject, coveters and finite leak
+     *  conditions. Absent ⇒ secrets stay what they were: private prose colour. */
+    secretLedger?: import('./core/secret-ledger.ts').WorldSecret[];
+    /** 觀眾注資帳 — every ticket/flower/tip that entered, plus the per-character
+     *  flower tally the jealousy material is drawn from. */
+    patronage?: import('./core/patronage.ts').PatronageState;
+    /** 月半結帳 log — one entry per reckoning, the idempotency key per day. */
+    reckonings?: Array<{ day: number; label: string; facts: number }>;
+    /** 離班者 — off the board: no movement, no beats, no wage, never a card's
+     *  target. They remain in `cast` (so they can still be named and remembered)
+     *  and their `departedDay` is stamped on the member. */
+    departedIds?: string[];
+    /** 角色工件 — 日記與詩詞, queryable by character and day. */
+    artifacts?: import('./core/artifacts.ts').CharacterArtifact[];
+    /** 詩不日課 — characterId → the day they last wrote a poem (the cooldown). */
+    poemDayByChar?: Record<string, number>;
+    /** 背景進食 — characterId → the day hunger was last settled offstage for them
+     *  (once per day, so the demotion can never become a money leak). */
+    backgroundFedDay?: Record<string, number>;
+    /** 生命體徵滾動窗 — the last few ticks' externalised material, for the loop
+     *  detector. Diagnostic only: nothing in the engine branches on it. */
+    vitalsWindow?: Array<{ day: number; tick: number; samples: import('./core/vitals.ts').VitalsSample[] }>;
 }
 
 const SNAPSHOT_FILE = 'world.json';
@@ -850,6 +905,38 @@ export class WorldState {
             }),
             '除此清單外，記憶裡的物件只可在話裡或心裡提及，不可看見、指向或觸碰。',
         ].join('\n');
+    }
+
+    // ── 在班／追蹤 (on the board · followed) ────────────────────────────────────
+    /** Is this character still on the board? A departed member keeps their name,
+     *  memories and mentions, but never moves, acts, draws a wage, or becomes a
+     *  card's target. Absent `departedIds` ⇒ everybody is on the board. */
+    onBoard(id: string): boolean {
+        return !(this.data.departedIds ?? []).includes(id);
+    }
+
+    /** The acting cast — the list every action phase should iterate instead of
+     *  `data.cast`. Name lookups and witness lists still use the full cast. */
+    activeCast(): CastMember[] {
+        const departed = this.data.departedIds;
+        if (!departed?.length) return this.data.cast;
+        return this.data.cast.filter((member) => !departed.includes(member.id));
+    }
+
+    /** Is this character 追蹤中 — i.e. does the run pay for their POV prose and
+     *  daily diary? An ABSENT or EMPTY tracking list means everybody (so a run
+     *  predating the switch is unchanged); a non-empty list means only those. */
+    isTracked(id: string): boolean {
+        const tracked = this.data.trackedCharacterIds;
+        if (!tracked?.length) return true;
+        return tracked.includes(id);
+    }
+
+    /** The tracked ids, resolved. Empty list ⇒ the whole on-board cast. */
+    trackedIds(): string[] {
+        const tracked = this.data.trackedCharacterIds;
+        if (!tracked?.length) return this.activeCast().map((member) => member.id);
+        return tracked.filter((id) => this.castById(id) && this.onBoard(id));
     }
 
     /** characterId → live wants of that character, hottest first. */
