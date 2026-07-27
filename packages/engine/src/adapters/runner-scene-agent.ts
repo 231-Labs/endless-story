@@ -29,6 +29,8 @@ import type {
     ComposeDiaryReply,
     ComposePoemInput,
     ComposePoemReply,
+    DebtStanceInput,
+    DebtStanceReply,
     DeclareWantSemanticsInput,
     DeclareWantSemanticsReply,
     DirectorPickInput,
@@ -386,6 +388,71 @@ export class RunnerSceneAgent implements SceneAgentPort {
             ...(typeof parsed.costume === 'string' && parsed.costume.trim() ? { costume: toTraditional(parsed.costume.trim()) } : {}),
             ...(typeof parsed.rationale === 'string' && parsed.rationale.trim() ? { rationale: toTraditional(parsed.rationale.trim()) } : {}),
             ...(parsed.decline === true && !card.forced ? { decline: true } : {}),
+        };
+    }
+
+    /**
+     * 債主的態度 — how hard THIS creditor calls THIS unpaid debt.
+     *
+     * The seat exists because the engine refuses to debit anybody: 「打死不還」 has
+     * to be a position a character can actually hold, so the consequence of not
+     * paying is social, and how loud that consequence gets is the CREDITOR'S
+     * judgment, not the clock's. A creditor who genuinely does not mind is
+     * allowed not to mind.
+     *
+     * The prompt carries no figure the seat could do arithmetic on, and the seat
+     * cannot move money — it returns one of three stances and the engine settles
+     * the social consequence of it.
+     */
+    async decideDebtStance(input: DebtStanceInput): Promise<DebtStanceReply | null> {
+        const system = [
+            `你是${input.creditorName}。有人欠你的帳到了日子，還沒還。`,
+            '',
+            '**你拿不走他的錢**——這條街上沒有人能從別人手裡搶錢。你能決定的只有一件事：',
+            '這筆帳，你要怎麼說。三選一：',
+            '',
+            '- `forgive`（免了）：把那頁紅字撕了。帳沒了，情記下了——他往後欠你的是人情。',
+            '  你若真的不在意，或者覺得逼他不值當，就選這個。',
+            '- `press`（當面催）：把他叫到一邊，數目日子問到底。帳還在，話沒往外傳；',
+            '  丟的是他當著你的臉，不是當著整條街的臉。',
+            '- `broadcast`（傳出去）：當眾把名字和數目報出來。帳還在，而且往後你這裡',
+            '  不再賒給他，整條街都會知道他是什麼樣的人。這是最重的一手，收不回。',
+            '',
+            '判準是你自己的：你的營生撐不撐得住、這個人值不值得留、他是**還不出**還是',
+            '**不肯還**（這兩件事差得遠）、以及你已經給過他幾次機會。',
+            '沒有標準答案；你就是你，按你的性子答。',
+            '',
+            '只輸出 JSON，不要 markdown：{"stance":"forgive|press|broadcast","note":"一句你自己的理由"}',
+        ].join('\n');
+        const user = [
+            input.stance ? `【你的立場】${input.stance}` : '',
+            `【欠你的人】${input.debtorName}`,
+            `【什麼帳】${input.label}，還差${input.owedText}`,
+            `【過期】${input.daysOverdue <= 0 ? '今日正是日子' : `已經過了 ${input.daysOverdue} 日`}`,
+            `【你已經叫過幾回】${input.priorCalls === 0 ? '這是頭一回' : `${input.priorCalls} 回了`}`,
+            `【他還得出嗎】${input.debtorCouldPay ? '手裡不是沒有——他是不肯還，不是還不出' : '看樣子確實拿不出來'}`,
+            `【你自己的光景】${input.creditorFooting}`,
+        ].filter(Boolean).join('\n');
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system,
+            messages: [{ role: 'user', content: user }],
+            maxTokens: 200,
+            temperature: 0.7,
+        });
+        const block = res.text.match(/\{[\s\S]*\}/)?.[0];
+        if (!block) return null;
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(block) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+        if (parsed.stance !== 'forgive' && parsed.stance !== 'press' && parsed.stance !== 'broadcast') return null;
+        return {
+            stance: parsed.stance,
+            ...(typeof parsed.note === 'string' && parsed.note.trim() ? { note: toTraditional(parsed.note.trim()) } : {}),
         };
     }
 

@@ -17,7 +17,17 @@ import test from 'node:test';
 
 import { buildAnchunAcceptanceFrame } from './fixtures/anchun-acceptance-frame.ts';
 import { applySeasonFrame, buildWorldState, loadPresetFile } from '../src/preset.ts';
-import { FORGIVE_DEBTOR_RENOWN, payDividend, payWagePacket, runReckoning } from '../src/core/income-events.ts';
+import {
+    announceReckoning,
+    fallbackStance,
+    FAVOUR_DEBT_DAYS,
+    PATIENCE_CALLS,
+    payDividend,
+    payWagePacket,
+    reckoningSeats,
+    runReckoning,
+} from '../src/core/income-events.ts';
+import { reputationOf, settleReputationForBill, tabAllowedFor } from '../src/core/reputation.ts';
 import { auditSeasonEconomy, ledgerRows, yuanToSubunits } from '../src/core/season-economy.ts';
 import { WorldState } from '../src/world-state.ts';
 
@@ -204,6 +214,11 @@ test('分紅: the integer remainder lands on the first beneficiary — no mintin
 });
 
 // ── 月半結帳 ─────────────────────────────────────────────────────────────────
+//
+// The reckoning MOVES NO MONEY. That is the design correction these tests pin:
+// 「打死不還」 has to be a position a character can actually hold, so refusing must
+// cost something other than the money being taken anyway. What it costs is the
+// name — and that is the creditor's to decide, not the clock's.
 
 /** Give the world one outstanding tab owed by a named character. */
 function oweTab(world: WorldState, debtorId: string, yuan: number, id = 'tab'): void {
@@ -220,88 +235,187 @@ function oweTab(world: WorldState, debtorId: string, yuan: number, id = 'tab'): 
     });
 }
 
-test('月半結帳: a solvent debtor is settled in full, and the tab is closed', () => {
+test('月半結帳 NEVER debits: a solvent debtor who did not pay keeps every 分', () => {
     const world = seasonWorld();
-    const liu = world.idByName('柳安春')!;
     clearBills(world);
-    ensureVendor(world, 0n);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 20n);
+    oweTab(world, liu, 6);
+    const before = balance(world, liu);
+
+    const out = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳', stances: { tab: 'press' } });
+
+    assert.ok(out.landed);
+    assert.equal(balance(world, liu), before, 'the engine took nothing — the choice stays his');
+    const bill = world.data.economy!.bills![0];
+    assert.equal(bill.paidSubunits, '0', 'and the debt still stands');
+    assertConserves(world, 'a reckoning that moves no money conserves trivially');
+});
+
+test('預告: the whole street learns the day, and every debtor gets a dated 心事 that can RESOLVE', () => {
+    const world = seasonWorld();
+    clearBills(world);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
     setBalance(world, liu, 20n);
     oweTab(world, liu, 6);
 
-    const out = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳' });
+    const notice = announceReckoning(world, { day: 1, nowTick: 3, dueDay: 3, label: '月半結帳' });
 
-    assert.ok(out.landed);
-    assert.equal(out.facts.length, 1);
-    assert.equal(out.facts[0].kind, 'paid');
-    assert.equal(balance(world, liu), 14n * YUAN, 'the debt really left the purse');
-    const bill = world.data.economy!.bills![0];
-    assert.equal(bill.paidSubunits, bill.amountSubunits, 'the tab is closed');
-    assertConserves(world, 'a settled reckoning conserves');
+    assert.ok(notice.publicLine?.includes('第 3 日'), 'the day is common knowledge');
+    assert.ok(notice.publicLine?.includes('柳安春'), 'and so is who is on the 摺子');
+    assert.equal(notice.privateNotices[0].characterId, liu);
+    assert.match(notice.privateNotices[0].text, /沒有人會從你手裡把錢拿走/, 'the debtor is told the choice is theirs');
+    const want = notice.spawnedWants[0];
+    assert.ok(want, 'a dated 心事 was planted');
+    assert.equal(want.dueDay, 3);
+    assert.deepEqual(want.completion, { kind: 'bill-cleared', billId: 'tab' }, 'settling it themselves RESOLVES it');
 });
 
-test('月半結帳: an insolvent debtor with a name worth keeping is 免帳 — and now owes a 人情', () => {
+test('說到做到: clearing the tab during the window is recorded as its own kind of name', () => {
     const world = seasonWorld();
-    const liu = world.idByName('柳安春')!;
     clearBills(world);
-    ensureVendor(world, 50n); // a creditor solvent enough to have the CHOICE to forgive
-    setBalance(world, liu, 0n);
-    world.castById(liu)!.renown = 0.8; // above FORGIVE_DEBTOR_RENOWN
-    assert.ok(world.renownOf(liu) >= FORGIVE_DEBTOR_RENOWN);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 20n);
     oweTab(world, liu, 6);
+    // Called once at an earlier reckoning, then settled by the character themselves.
+    world.data.debtCalls = [{ billId: 'tab', day: 1, stance: 'press', debtorId: liu }];
+    world.data.economy!.bills![0].paidSubunits = world.data.economy!.bills![0].amountSubunits;
     const renownBefore = world.renownOf(liu);
 
     const out = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳' });
 
-    assert.equal(out.facts[0].kind, 'forgiven');
-    // Irreversible: the paper is torn up. The tab can never be collected again.
-    const bill = world.data.economy!.bills![0];
-    assert.equal(bill.paidSubunits, bill.amountSubunits, '免帳 closed the tab for good');
-    // And the consequence is written back into state + 心事, not narrated.
-    assert.equal(world.renownOf(liu), renownBefore, '免帳 costs no public standing');
-    assert.ok(world.selfRegardOf(liu) < 0.8, 'being let off privately stings');
-    const favour = out.spawnedWants.find((want) => want.layer === '虧欠');
-    assert.ok(favour, 'a 人情 want was planted');
-    assert.equal(favour!.dueDay, 2 + 7, 'and it carries a deadline, so it must leave the board');
-    assertConserves(world, 'a forgiven reckoning conserves');
+    assert.equal(out.facts[0].kind, 'kept');
+    assert.ok(world.renownOf(liu) > renownBefore, 'paying up is worth something to a name');
+    assert.ok(out.publicLines.some((line) => line.includes('自己清了')));
 });
 
-test('月半結帳: an insolvent debtor with no name to protect is 當眾催帳 — 名頭 really drops', () => {
+test('免了: the creditor tears up the paper — no money moves, and a 人情 takes its place', () => {
     const world = seasonWorld();
-    const axi = world.idByName('何阿喜')!;
     clearBills(world);
-    ensureVendor(world, 50n); // a creditor solvent enough to have the CHOICE to forgive
-    setBalance(world, axi, 0n);
-    world.castById(axi)!.renown = 0.2; // below the bar
-    oweTab(world, axi, 6);
-    const renownBefore = world.renownOf(axi);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 0n);
+    oweTab(world, liu, 6);
+    const vendorBefore = balance(world, '前街食肆');
 
-    const out = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳' });
+    const out = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳', stances: { tab: 'forgive' } });
 
-    assert.equal(out.facts[0].kind, 'dunned');
-    assert.ok(world.renownOf(axi) < renownBefore, '體面 was really lost, in state');
-    // The debt is NOT written off — being dunned is worse than being forgiven.
-    const bill = world.data.economy!.bills![0];
-    assert.ok(BigInt(bill.paidSubunits) < BigInt(bill.amountSubunits), 'the tab still stands');
-    assert.ok(out.spawnedWants.some((want) => want.layer === '體面'), 'a 撿回臉面 want was planted');
-    assert.ok(out.publicLines.some((line) => line.includes('圍看的人')), 'it happened in public');
-    assertConserves(world, 'a dunned reckoning conserves');
+    assert.equal(out.facts[0].kind, 'forgiven');
+    assert.equal(balance(world, '前街食肆'), vendorBefore, 'the creditor ate the loss; nothing was collected');
+    assert.equal(world.data.economy!.bills![0].paidSubunits, world.data.economy!.bills![0].amountSubunits, '免帳 closes the tab for good');
+    assert.ok(world.selfRegardOf(liu) < 1, 'being let off privately stings');
+    const favour = out.spawnedWants.find((want) => want.layer === '虧欠');
+    assert.ok(favour, 'a 人情 want was planted');
+    assert.equal(favour!.dueDay, 2 + FAVOUR_DEBT_DAYS);
+    // The street records that they were let off — 賒帳資格 is NOT revoked.
+    assert.equal(reputationOf(world, liu, 'debt-forgiven').length, 1);
+    assert.equal(tabAllowedFor(world, liu, '前街食肆'), true, 'a forgiven debt closes no door');
+});
+
+test('當面催: a private humiliation — the debt stands, the street stays out of it', () => {
+    const world = seasonWorld();
+    clearBills(world);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 20n);
+    oweTab(world, liu, 6);
+    const renownBefore = world.renownOf(liu);
+
+    const out = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳', stances: { tab: 'press' } });
+
+    assert.equal(out.facts[0].kind, 'pressed');
+    assert.ok(world.renownOf(liu) < renownBefore, 'some standing was lost');
+    assert.deepEqual(reputationOf(world, liu, 'debt-refused'), [], 'but nothing was said to the street');
+    assert.equal(tabAllowedFor(world, liu, '前街食肆'), true, 'and the door stays open');
+    assert.ok(out.publicLines.some((line) => line.includes('話沒往外傳')));
+    assert.ok(out.spawnedWants.some((want) => want.desc.includes('趁話還沒傳出去')), 'he now has a reason to settle it');
+});
+
+test('傳出去: the name travels, the 賒帳 door shuts — and STILL no money is taken', () => {
+    const world = seasonWorld();
+    clearBills(world);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 20n);
+    oweTab(world, liu, 6);
+    const before = balance(world, liu);
+    const renownBefore = world.renownOf(liu);
+
+    const out = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳', stances: { tab: 'broadcast' } });
+
+    assert.equal(out.facts[0].kind, 'broadcast');
+    assert.equal(balance(world, liu), before, '打死不還 is a position he can actually hold');
+    assert.equal(world.data.economy!.bills![0].paidSubunits, '0', 'the debt stands');
+    // The cost is the name, and it is a fact other people hold.
+    const marks = reputationOf(world, liu, 'debt-refused');
+    assert.equal(marks.length, 1);
+    assert.ok(marks[0].knownByIds.length > 1, 'the street heard it');
+    assert.ok(marks[0].note.includes('手裡不是沒有'), 'and it records that he COULD have paid');
+    assert.ok(world.renownOf(liu) < renownBefore - 0.1, '名頭 drops hard');
+    // And it is a door closing, not an adjective.
+    assert.equal(tabAllowedFor(world, liu, '前街食肆'), false, '賒帳資格 revoked at the vendor he stiffed');
+    assert.equal(tabAllowedFor(world, liu, '白家繡樓'), true, 'but only at the one he stiffed');
+    assertConserves(world, 'no money moved');
+});
+
+test('洗刷: paying late reopens the door, though the ledger keeps the record', () => {
+    const world = seasonWorld();
+    clearBills(world);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 20n);
+    oweTab(world, liu, 6);
+    runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳', stances: { tab: 'broadcast' } });
+    assert.equal(tabAllowedFor(world, liu, '前街食肆'), false);
+
+    // He changes his mind and settles it.
+    world.data.economy!.bills![0].paidSubunits = world.data.economy!.bills![0].amountSubunits;
+    settleReputationForBill(world, 'tab', 5);
+
+    assert.equal(tabAllowedFor(world, liu, '前街食肆'), true, 'the door reopens');
+    assert.deepEqual(reputationOf(world, liu), [], 'and it stops nagging him');
+    assert.equal(world.data.reputation!.length, 1, 'but the record of what was said remains');
+});
+
+test('打死不還 escalates: the deterministic fallback runs out of patience', () => {
+    const world = seasonWorld();
+    clearBills(world);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 0n); // genuinely cannot pay — the lenient branch
+    world.castById(liu)!.renown = 0.8;
+    oweTab(world, liu, 6);
+
+    const seat = () => reckoningSeats(world, { day: 2 })[0];
+    assert.equal(fallbackStance(seat(), world), 'forgive', 'a solvent creditor forgives somebody who truly cannot pay');
+
+    // Now he CAN pay and simply has not.
+    setBalance(world, liu, 20n);
+    assert.equal(fallbackStance(seat(), world), 'press', 'first time: a word to his face');
+    world.data.debtCalls = [{ billId: 'tab', day: 2, stance: 'press', debtorId: liu }];
+    assert.equal(fallbackStance(seat(), world), 'broadcast', 'second time with money in hand: the word goes out');
+    world.data.debtCalls.push({ billId: 'tab', day: 3, stance: 'broadcast', debtorId: liu });
+    setBalance(world, liu, 0n);
+    assert.equal(fallbackStance(seat(), world), 'broadcast', `past ${PATIENCE_CALLS} calls, patience is finite either way`);
 });
 
 test('月半結帳 is idempotent per day, and pulls FAR-DATED tabs forward (the deadline really arrives)', () => {
     const world = seasonWorld();
-    const liu = world.idByName('柳安春')!;
     clearBills(world);
-    ensureVendor(world, 0n);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
     setBalance(world, liu, 20n);
     oweTab(world, liu, 6); // dueDay 99 — a normal settle would never touch it on day 2
 
     const first = runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳' });
-    const afterFirst = balance(world, liu);
     const second = runReckoning(world, { day: 2, nowTick: 11, label: '月半結帳' });
 
-    assert.ok(first.landed, 'the far-dated tab was pulled forward and forced to an answer');
+    assert.ok(first.landed, 'the far-dated tab was pulled forward and called');
     assert.equal(second.duplicate, true, 'a second call the same day is a no-op');
     assert.deepEqual(second.facts, []);
-    assert.equal(balance(world, liu), afterFirst, 'and charges nothing twice');
     assert.equal(world.data.reckonings?.length, 1);
+    assert.equal(world.data.debtCalls?.length, 1, 'and the debt was only called once');
 });

@@ -31,7 +31,7 @@
  */
 
 import { PARTS_OF_DAY } from '../ports.ts';
-import { payDividend, payWagePacket, plantWant, runReckoning, type IncomeOutcome, type ReckoningOutcome } from './income-events.ts';
+import { announceReckoning, payDividend, payWagePacket, plantWant, runReckoning, type DebtStance, type IncomeOutcome, type ReckoningOutcome } from './income-events.ts';
 import { injectPatronage, type PatronageChannel } from './patronage.ts';
 import { admitNewcomer, dismissFromCast, type NewcomerSeed } from './roster-change.ts';
 import { evaluateSecretLeaks, publishSecret } from './secret-ledger.ts';
@@ -60,7 +60,9 @@ export type CardCondition =
     /** 班中還有 N 人以上（離班卡不該把班演成獨角戲） */
     | { kind: 'cast-atleast'; count: number }
     /** 某樁秘密已漏／未漏 */
-    | { kind: 'secret-leaked'; secretId: string; leaked: boolean };
+    | { kind: 'secret-leaked'; secretId: string; leaked: boolean }
+    /** 新戲上沒上台 —— the 排戲季's own pass/fail fact. */
+    | { kind: 'production-premiered'; premiered: boolean };
 
 /** 確定性後果 — every consequence the engine knows how to settle. A card may
  *  only compose these; it can never carry free-form instructions. */
@@ -71,8 +73,14 @@ export type CardEffect =
     | { kind: 'wage-packet'; label: string; perHeadYuan: number; fromAccountId?: string; toTargets?: boolean }
     /** 分紅 */
     | { kind: 'dividend'; label: string; surplusShareBps: number; reserveDays: number; fromAccountId?: string }
-    /** 月半結帳 — the forced reckoning of every outstanding obligation. */
+    /** 月半結帳 — the CALLING of every outstanding obligation. Moves no money;
+     *  settles the social consequence of what each debtor chose to do. */
     | { kind: 'reckoning'; label: string }
+    /** 預告 — the broadcast days before the reckoning: everyone learns when it
+     *  falls and who is on the 摺子, and every debtor gets a dated 心事 that
+     *  RESOLVES if they settle it themselves. Without this window, refusing to
+     *  pay would be indistinguishable from never having had the chance. */
+    | { kind: 'reckoning-notice'; label: string; dueInDays: number }
     /** 觀眾注資（堂會邀約、包場） */
     | { kind: 'patronage'; channel: PatronageChannel; amountYuan: number; patronName?: string; toTargets?: boolean }
     /** 新開一筆按期債（巡捕的罰款、報館的訂金…）。`fromAccountId`/`toAccountId` accept
@@ -96,6 +104,20 @@ export type CardEffect =
     | { kind: 'cast-exit'; reason: string }
     /** 名角過班／故人進城 —— 從牌組宣告的 newcomers 池取人 */
     | { kind: 'cast-enter'; newcomerId: string };
+
+/**
+ * 分支後果 — an effect that only applies when a condition holds.
+ *
+ * This is how a card can be BOTH a real deadline and a branch. 「首演之夜」 must
+ * land on its day whatever happens (that is the whole point of a deadline), but
+ * what it settles depends on whether the play actually went up. Gating the CARD
+ * on a condition would make the deadline vetoable — the exact failure that let
+ * 月半結帳 recede forever — so the branch lives one level down, on the effects.
+ *
+ * An author is responsible for making a card's branches exhaustive; the engine
+ * simply skips effects whose condition does not hold.
+ */
+export type ConditionalEffect = CardEffect & { onlyIf?: CardCondition };
 
 export type CardTargeting =
     /** 全班 */
@@ -134,7 +156,7 @@ export interface EventCard {
         requires?: CardCondition[];
     };
     targeting: CardTargeting;
-    effects: CardEffect[];
+    effects: ConditionalEffect[];
     /** 死線語意 — 到日必打，導演無權不打；只能穿戲服。 */
     mustLand?: boolean;
     /** 到日之依據：`onDays`/`everyDays` 算出的那一日即死線。 */
@@ -236,6 +258,8 @@ function conditionHolds(world: WorldState, condition: CardCondition): boolean {
             if (!secret) return false;
             return (secret.leakedDay !== undefined) === condition.leaked;
         }
+        case 'production-premiered':
+            return (world.data.production?.premieredDay !== undefined) === condition.premiered;
     }
 }
 
@@ -377,6 +401,10 @@ export interface PlayCardRequest {
     day: number;
     nowTick: number;
     clock: string;
+    /** billId → the creditor's stance, computed asynchronously by the caller from
+     *  `reckoningSeats` before this pure settle runs. Absent entries fall back
+     *  deterministically, so a rehearsal reckoning is still complete. */
+    debtStances?: Record<string, DebtStance>;
 }
 
 export interface PlayCardResult {
@@ -430,6 +458,8 @@ export function playCard(world: WorldState, deck: EventDeck, req: PlayCardReques
     let perceptSeq = 0;
 
     for (const effect of req.card.effects) {
+        // 分支後果 — the card still landed; this particular consequence did not apply.
+        if (effect.onlyIf && !conditionHolds(world, effect.onlyIf)) continue;
         switch (effect.kind) {
             case 'percept': {
                 const scene =
@@ -484,8 +514,34 @@ export function playCard(world: WorldState, deck: EventDeck, req: PlayCardReques
                 if (income.landed) result.irreversible += 1;
                 break;
             }
+            case 'reckoning-notice': {
+                const announced = announceReckoning(world, {
+                    day: req.day,
+                    nowTick: req.nowTick,
+                    dueDay: req.day + Math.max(1, Math.floor(effect.dueInDays)),
+                    label: req.costume?.trim() || effect.label,
+                });
+                if (announced.publicLine) {
+                    result.percepts.push({
+                        id: `card-${req.card.id}-notice-t${req.nowTick}`,
+                        sceneId: (noticeScene ?? world.data.scenes[0]).id,
+                        text: announced.publicLine,
+                        visibility: 'public',
+                        witnessIds: witnessAll,
+                    });
+                    result.publicLines.push(announced.publicLine);
+                }
+                result.privateNotices.push(...announced.privateNotices);
+                result.spawnedWants.push(...announced.spawnedWants);
+                break;
+            }
             case 'reckoning': {
-                const reckoning = runReckoning(world, { day: req.day, nowTick: req.nowTick, label: req.costume?.trim() || effect.label });
+                const reckoning = runReckoning(world, {
+                    day: req.day,
+                    nowTick: req.nowTick,
+                    label: req.costume?.trim() || effect.label,
+                    ...(req.debtStances ? { stances: req.debtStances } : {}),
+                });
                 result.reckoning = reckoning;
                 result.publicLines.push(...reckoning.publicLines);
                 result.privateNotices.push(...reckoning.privateNotices);

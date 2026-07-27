@@ -246,6 +246,12 @@ async function main(): Promise<void> {
             seedAcquaintance(world);
             console.log('  subjective naming: ON · seeded 相識分寸 acquaintance map');
         }
+        // 劇本產出 — a season whose 命題 is the making of a play turns the layer on
+        // itself, so the operator cannot forget the flag the season depends on.
+        if (seasonFrame?.emergentProduction) {
+            world.data.emergentProduction = true;
+            console.log('  emergent production: ON · 本季命題即排一齣新戲');
+        }
         freshWorld = true;
         console.log(`seeded fresh world · ${world.data.cast.length} cast · ${world.data.scenes.length} scenes · ${seeded} genesis memories`);
     }

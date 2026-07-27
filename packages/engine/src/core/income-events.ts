@@ -12,11 +12,9 @@
  *   · `payDividend`    分紅 — the troupe shares its SURPLUS above a reserve floor,
  *                      by 班規 weights. Pays nothing when there is no surplus, so
  *                      it can never mint money or rescue a dead treasury.
- *   · `runReckoning`   月半結帳 — the deadline that MUST arrive. Every outstanding
- *                      obligation is pulled forward and forced to an answer; who
- *                      cannot pay is either 免帳 (and now owes a 人情) or 當眾催帳
- *                      (and has lost 體面). Both are irreversible, and both are
- *                      written back into character state and 心事 — not narrated.
+ *   · `runReckoning`   月半結帳 — the deadline that MUST arrive. It moves NO money:
+ *                      it CALLS the debt and settles the social consequence of
+ *                      what the debtor chose to do about it. See its own section.
  *
  * Scarcity is deliberately PRESERVED. Nothing here guarantees solvency: the
  * dividend is capped by real surplus, the wage packet by the payer's real
@@ -33,6 +31,13 @@ import {
     troupePlayerIds,
     yuanToSubunits,
 } from './season-economy.ts';
+import {
+    FORGIVEN_SELF_REGARD_COST,
+    recordReputation,
+    REFUSAL_RENOWN_COST,
+    settleReputationForBill,
+    spreadReputation,
+} from './reputation.ts';
 import { newWant, type Want } from './want-core.ts';
 import type { WorldState } from '../world-state.ts';
 
@@ -233,14 +238,66 @@ export function payDividend(world: WorldState, req: { day: number; nowTick: numb
     return out;
 }
 
-// ── 月半結帳 (the deadline that must arrive) ──────────────────────────────────
+// ── 月半結帳 (the deadline that arrives — as a social event) ──────────────────
+//
+// DESIGN CORRECTION. The first version of this forcibly debited every solvent
+// debtor when the day came. That is the engine reaching into a purse, and it
+// makes 「打死不還」 unplayable: a position a character cannot actually hold is not
+// a choice, it is scenery.
+//
+// So the reckoning moves NO money. Ever. Money only leaves a purse when a
+// character uses the `repay` verb themselves, and they have days of warning in
+// which to decide. What arrives on the day is the CALLING of the debt — and its
+// consequence is social, propagated, and the CREDITOR'S to choose:
+//
+//   · 免了 (forgive)   the paper is torn up. The debtor owes a 人情, and the
+//                      street records that they were let off. A creditor who
+//                      genuinely does not mind is allowed not to mind.
+//   · 催  (press)      the debt stands and they were dunned to their face. A
+//                      private humiliation; the street does not hear it yet.
+//   · 傳出去 (broadcast) the debt stands AND the word goes out. 賒帳資格 at that
+//                      vendor is revoked, 名頭 drops hard, and everyone who was
+//                      there now KNOWS. This is what 打死不還 costs.
+//
+// The deadline still ARRIVES — it is `mustLand`, it is public, and it changes
+// the world irreversibly every time. What it no longer does is decide, on the
+// character's behalf, whether they are the sort of person who pays.
 
 /** One irreversible fact the reckoning produced. Counted by the vitals as an
  *  不可逆事件 — this is the tick where the world stopped being reversible. */
 export type ReckoningFact =
-    | { kind: 'paid'; billId: string; debtorId?: string; creditorLabel: string; amountSubunits: string }
+    /** they settled it themselves during the warning window — nothing to call. */
+    | { kind: 'kept'; billId: string; debtorId?: string; creditorLabel: string; amountSubunits: string }
     | { kind: 'forgiven'; billId: string; debtorId?: string; creditorLabel: string; amountSubunits: string }
-    | { kind: 'dunned'; billId: string; debtorId?: string; creditorLabel: string; amountSubunits: string };
+    | { kind: 'pressed'; billId: string; debtorId?: string; creditorLabel: string; amountSubunits: string }
+    | { kind: 'broadcast'; billId: string; debtorId?: string; creditorLabel: string; amountSubunits: string };
+
+/** What a creditor decided to do about one unpaid debt. */
+export type DebtStance = 'forgive' | 'press' | 'broadcast';
+
+/** The seat's view of one debt, in plain facts — no advice, and no number the
+ *  seat could recompute. Handed to `SceneAgentPort.decideDebtStance`. */
+export interface DebtStanceSeat {
+    billId: string;
+    /** the creditor deciding — a character id when the creditor is a person. */
+    creditorId?: string;
+    creditorLabel: string;
+    debtorId?: string;
+    debtorName: string;
+    label: string;
+    /** money as world language, never a raw figure the seat could do sums on. */
+    owedText: string;
+    /** how long this has been outstanding, and how many times already called. */
+    daysOverdue: number;
+    priorCalls: number;
+    /** could the debtor have paid, as far as the street can tell? This is the
+     *  difference between 還不出 and 不肯還, and it is the whole question. */
+    debtorCouldPay: boolean;
+    /** the creditor's own footing — can they afford to be generous? */
+    creditorFooting: string;
+    /** the creditor's authored 立場, when the frame gave them one. */
+    stance?: string;
+}
 
 export interface ReckoningOutcome {
     landed: boolean;
@@ -249,34 +306,155 @@ export interface ReckoningOutcome {
     facts: ReckoningFact[];
     /** 心事 the reckoning genuinely stirred (already in the world). */
     spawnedWants: Want[];
+    /** the seats a caller should consult BEFORE settling (see `reckoningSeats`). */
+    already?: boolean;
     /** already run for this day — a second call is a no-op, not a double charge. */
     duplicate?: boolean;
 }
 
-/** 免帳門檻 — grace is extended only by a creditor who can AFFORD it (this many
- *  days of runway left) to a debtor whose name is still worth keeping. Below
- *  either bar, the tab gets called in public. */
+/** 免帳門檻 — the deterministic FALLBACK when no creditor seat answers. Grace is
+ *  extended only by a creditor who can afford it to a debtor whose name is still
+ *  worth keeping. A real creditor seat overrides all of this. */
 export const FORGIVE_CREDITOR_RUNWAY_DAYS = 3n;
 export const FORGIVE_DEBTOR_RENOWN = 0.5;
 /** How long a forgiven 人情 hangs over the debtor before it forecloses. */
 export const FAVOUR_DEBT_DAYS = 7;
+/** A debt called this many times and still unpaid goes public regardless of the
+ *  fallback's usual leniency — 打死不還 has a trajectory, not a flat cost. */
+export const PATIENCE_CALLS = 2;
 
 /**
- * 月半結帳 — every outstanding obligation is pulled forward, whatever its own
- * dueDay, and forced to one of three irreversible answers. This is the deadline
- * semantics the diagnosis asked for: it ARRIVES on a real tick, and arriving
- * costs something.
+ * 預告 — the broadcast the whole street hears, days before the day.
  *
- * The 免帳 / 當眾催帳 branch is deterministic (creditor solvency × debtor 名頭),
- * and BOTH branches write back to the world: renown / self-regard move, a
- * relationship edge records what happened, and a dated 心事 is planted. Nothing
- * about this outcome lives only in prose.
+ * This is the common knowledge 春雪社＋前街 share: everyone learns WHEN the
+ * reckoning falls and WHO is on the摺子, so a debtor has a real, dated reason to
+ * act and real days in which to act. Without this window, "choosing not to pay"
+ * would be indistinguishable from "never got the chance".
+ *
+ * Each debtor also gets a dated 心事 carrying `completion: bill-cleared`, so
+ * settling it themselves RESOLVES the want, and letting the day pass forecloses
+ * it. The choice is theirs either way; both exits are real.
+ */
+export function announceReckoning(
+    world: WorldState,
+    req: { day: number; nowTick: number; dueDay: number; label: string },
+): { publicLine?: string; privateNotices: Array<{ characterId: string; text: string }>; spawnedWants: Want[] } {
+    const data = world.data.economy;
+    const out = { privateNotices: [] as Array<{ characterId: string; text: string }>, spawnedWants: [] as Want[] };
+    if (!data) return out;
+    const open = (data.bills ?? []).filter((bill) => BigInt(bill.paidSubunits) < BigInt(bill.amountSubunits));
+    if (!open.length) return out;
+
+    const namesOnTheBook: string[] = [];
+    for (const bill of open) {
+        const owing = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+        const debtorId = debtorFaceOf(world, bill);
+        if (!debtorId) continue;
+        const creditor = bill.creditor ?? accountFace(world, bill.toAccountId ?? data.marketAccountId)?.label ?? '債主';
+        if (!namesOnTheBook.includes(world.nameById(debtorId))) namesOnTheBook.push(world.nameById(debtorId));
+        out.privateNotices.push({
+            characterId: debtorId,
+            text:
+                `第 ${req.dueDay} 日${req.label}：你欠${creditor}的${bill.label}還有${formatMoney(data, owing)}。` +
+                `沒有人會從你手裡把錢拿走——到那日還不還，是你自己的事；不還的話，賠的是名聲。`,
+        });
+        const planted = plantWant(world, {
+            characterId: debtorId,
+            layer: '事務',
+            desc: `${req.dueDay} 日之前把${creditor}那筆${bill.label}了了`,
+            weight: 0.66,
+            resistance: 4,
+            tick: req.nowTick,
+            dueDay: req.dueDay,
+        });
+        for (const want of planted) want.completion = { kind: 'bill-cleared', billId: bill.id };
+        out.spawnedWants.push(...planted);
+    }
+    if (!namesOnTheBook.length) return out;
+    return {
+        ...out,
+        publicLine:
+            `前街放出話來：第 ${req.dueDay} 日${req.label}，這半月的賒賬、花賬、繡賬一併算一算。` +
+            `摺子上還有名字的是${namesOnTheBook.join('、')}——到那日誰劃得掉、誰劃不掉，這條街都看得見。`,
+    };
+}
+
+/** Who publicly carries a bill: a character pays for themselves; an
+ *  establishment's debt is carried by whoever may spend from it (the 班主). */
+function debtorFaceOf(world: WorldState, bill: { fromAccountId?: string }): string | undefined {
+    const data = world.data.economy!;
+    const payerId = bill.fromAccountId ?? data.troupeAccountId;
+    if (world.castById(payerId)) return payerId;
+    return accountFace(world, payerId)?.authorizedSpenderIds[0] ?? troupeLeaderId(world);
+}
+
+/**
+ * The creditor seats for this reckoning — one per genuinely unpaid debt, built
+ * BEFORE any state changes so the tick can consult them asynchronously and inject
+ * the verdicts back into the pure settle below. Same shape as the existing
+ * negotiation-seat pattern.
+ */
+export function reckoningSeats(world: WorldState, req: { day: number }): DebtStanceSeat[] {
+    const data = world.data.economy;
+    if (!data) return [];
+    const seats: DebtStanceSeat[] = [];
+    const priorCalls = world.data.debtCalls ?? [];
+    for (const bill of data.bills ?? []) {
+        const owing = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+        if (owing <= 0n) continue;
+        const payeeId = bill.toAccountId ?? data.marketAccountId;
+        const creditorFace = accountFace(world, payeeId);
+        const creditorId = creditorFace?.authorizedSpenderIds.find((id) => world.castById(id));
+        const debtorId = debtorFaceOf(world, bill);
+        const debtorPurse = debtorId ? accountFace(world, debtorId) : undefined;
+        // A creditor with no modelled account (an off-stage 錢莊) is treated as
+        // able to absorb the loss — the world has no evidence that they cannot.
+        const runway = creditorFace ? creditorFace.runwayDays : null;
+        seats.push({
+            billId: bill.id,
+            ...(creditorId ? { creditorId } : {}),
+            creditorLabel: bill.creditor ?? creditorFace?.label ?? '債主',
+            ...(debtorId ? { debtorId } : {}),
+            debtorName: debtorId ? world.nameById(debtorId) : (accountFace(world, bill.fromAccountId ?? data.troupeAccountId)?.label ?? '欠帳的'),
+            label: bill.label,
+            owedText: formatMoney(data, owing),
+            daysOverdue: Math.max(0, req.day - bill.dueDay),
+            priorCalls: priorCalls.filter((call) => call.billId === bill.id).length,
+            debtorCouldPay: !!debtorPurse && debtorPurse.available >= owing,
+            creditorFooting:
+                runway === null ? '這筆收不收得回，都還過得去' : runway <= 1n ? '自己也快撐不住了' : runway <= 3n ? '手頭也緊' : '還撐得住',
+            ...(data.stances?.[payeeId] ? { stance: data.stances[payeeId] } : {}),
+        });
+    }
+    return seats.sort((a, b) => a.billId.localeCompare(b.billId));
+}
+
+/** The deterministic fallback stance, used when no creditor seat answers (a
+ *  rehearsal run, a fake agent, a thrown call). Replayable by construction. */
+export function fallbackStance(seat: DebtStanceSeat, world: WorldState): DebtStance {
+    // 打死不還 escalates: patience is finite even in the fallback.
+    if (seat.priorCalls >= PATIENCE_CALLS) return 'broadcast';
+    // Somebody who could have paid and did not is a different matter from
+    // somebody who could not — this is the distinction the whole redesign turns on.
+    if (seat.debtorCouldPay) return seat.priorCalls >= 1 ? 'broadcast' : 'press';
+    const creditorCanAfford = seat.creditorFooting.includes('過得去') || seat.creditorFooting.includes('撐得住');
+    const worthKeeping = seat.debtorId ? world.renownOf(seat.debtorId) >= FORGIVE_DEBTOR_RENOWN : false;
+    return creditorCanAfford && worthKeeping ? 'forgive' : 'press';
+}
+
+/**
+ * 月半結帳 — the calling. Moves NO money: it reads what each debtor DID during
+ * the warning window and settles the social consequence of that choice.
+ *
+ * `stances` carries the creditor verdicts computed asynchronously by the caller
+ * (from `reckoningSeats`); anything absent falls back deterministically, so a
+ * rehearsal run without an LLM produces a complete, replayable reckoning.
  *
  * Idempotent per narrative day via `world.data.reckonings`.
  */
 export function runReckoning(
     world: WorldState,
-    req: { day: number; nowTick: number; label: string },
+    req: { day: number; nowTick: number; label: string; stances?: Record<string, DebtStance> },
 ): ReckoningOutcome {
     const data = world.data.economy;
     const out: ReckoningOutcome = { landed: false, publicLines: [], privateNotices: [], facts: [], spawnedWants: [] };
@@ -284,63 +462,65 @@ export function runReckoning(
     const log = (world.data.reckonings ??= []);
     if (log.some((entry) => entry.day === req.day)) return { ...out, duplicate: true };
 
-    const leaderId = troupeLeaderId(world);
-    const causeEventId = `${world.data.sagaId}:reckoning:d${req.day}`;
+    const witnesses = world.activeCast().map((member) => member.id);
+    const calls = (world.data.debtCalls ??= []);
 
+    // 說到做到 — anyone who cleared their tab during the warning window. Their
+    // choice is as much a fact as a refusal, and the street records it too.
     for (const bill of data.bills ?? []) {
-        const owing = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
-        if (owing <= 0n) continue;
-        const payerId = bill.fromAccountId ?? data.troupeAccountId;
-        const payeeId = bill.toAccountId ?? data.marketAccountId;
-        const creditorLabel = bill.creditor ?? accountFace(world, payeeId)?.label ?? data.shortfallCreditor ?? '債主';
-        // The FACE of the debt: a character pays for themselves; an establishment's
-        // debt is carried in public by whoever may spend from it (the 班主).
-        const debtorId = world.castById(payerId) ? payerId : accountFace(world, payerId)?.authorizedSpenderIds[0] ?? leaderId;
-        const debtorName = debtorId ? world.nameById(debtorId) : accountFace(world, payerId)?.label ?? payerId;
-
-        const moved = moveBetweenAccounts(world, {
-            txnId: `reckon:d${req.day}:${bill.id}`,
-            fromAccountId: payerId,
-            toAccountId: payeeId,
-            amountSubunits: owing,
-            memo: `${req.label}·${bill.label}`,
-            causeEventId,
+        if (BigInt(bill.paidSubunits) < BigInt(bill.amountSubunits)) continue;
+        if (!calls.some((call) => call.billId === bill.id)) continue; // never was called ⇒ nothing to note
+        const debtorId = debtorFaceOf(world, bill);
+        settleReputationForBill(world, bill.id, req.day);
+        out.facts.push({
+            kind: 'kept',
+            billId: bill.id,
+            ...(debtorId ? { debtorId } : {}),
+            creditorLabel: bill.creditor ?? '債主',
+            amountSubunits: bill.amountSubunits,
         });
-        const paid = moved.ok ? moved.paidSubunits : 0n;
-        if (paid > 0n) bill.paidSubunits = (BigInt(bill.paidSubunits) + paid).toString();
-        const still = owing - paid;
-
-        if (still <= 0n) {
-            out.facts.push({ kind: 'paid', billId: bill.id, ...(debtorId ? { debtorId } : {}), creditorLabel, amountSubunits: paid.toString() });
-            out.publicLines.push(`${req.label}：${bill.label}${formatMoney(data, owing)}當場結清，${creditorLabel}把${debtorName}那一筆從摺子上劃了。`);
-            continue;
+        if (debtorId) {
+            world.bumpRenown(debtorId, 0.05);
+            out.publicLines.push(`${req.label}：${world.nameById(debtorId)}的${bill.label}早幾日就自己清了，摺子上乾乾淨淨。`);
         }
+    }
 
-        const creditor = accountFace(world, payeeId);
-        const creditorCanAfford = !creditor || creditor.runwayDays === null || creditor.runwayDays >= FORGIVE_CREDITOR_RUNWAY_DAYS;
-        const debtorWorthKeeping = debtorId ? world.renownOf(debtorId) >= FORGIVE_DEBTOR_RENOWN : false;
-        const forgiven = creditorCanAfford && debtorWorthKeeping;
+    for (const seat of reckoningSeats(world, { day: req.day })) {
+        const bill = (data.bills ?? []).find((row) => row.id === seat.billId)!;
+        const owing = BigInt(bill.amountSubunits) - BigInt(bill.paidSubunits);
+        const stance = req.stances?.[seat.billId] ?? fallbackStance(seat, world);
+        calls.push({ billId: seat.billId, day: req.day, stance, ...(seat.debtorId ? { debtorId: seat.debtorId } : {}) });
 
-        if (forgiven) {
-            // 免帳 —— the paper is torn up (irreversible), and a 人情 takes its place.
+        if (stance === 'forgive') {
+            // 免了 —— the ONLY branch that touches the paper, and it is the creditor
+            // choosing to eat the loss. No money moves; the debt simply stops existing.
             bill.paidSubunits = bill.amountSubunits;
-            out.facts.push({ kind: 'forgiven', billId: bill.id, ...(debtorId ? { debtorId } : {}), creditorLabel, amountSubunits: still.toString() });
+            settleReputationForBill(world, bill.id, req.day);
+            out.facts.push({ kind: 'forgiven', billId: seat.billId, ...(seat.debtorId ? { debtorId: seat.debtorId } : {}), creditorLabel: seat.creditorLabel, amountSubunits: owing.toString() });
             out.publicLines.push(
-                `${req.label}：${bill.label}還差${formatMoney(data, still)}，${creditorLabel}當眾把那頁紅字撕了` +
-                    `——「${debtorName}的帳，不記了。」帳是清了，情記下了。`,
+                `${req.label}：${seat.debtorName}的${bill.label}還差${seat.owedText}，${seat.creditorLabel}當眾把那頁紅字撕了` +
+                    `——「這筆，不記了。」帳是清了，情記下了。`,
             );
-            if (debtorId) {
-                world.bumpSelfRegard(debtorId, -0.03); // 被人放過，自己心裡最清楚
-                world.setEdge(debtorId, debtorId === leaderId ? debtorId : debtorId, '欠著一份沒法折現的情');
+            if (seat.debtorId) {
+                world.bumpSelfRegard(seat.debtorId, -FORGIVEN_SELF_REGARD_COST);
+                const mark = recordReputation(world, {
+                    id: `rep:${seat.billId}:forgiven:d${req.day}`,
+                    aboutId: seat.debtorId,
+                    kind: 'debt-forgiven',
+                    day: req.day,
+                    note: `${seat.creditorLabel}免了${seat.debtorName}${seat.owedText}的帳`,
+                    knownByIds: [],
+                });
+                spreadReputation(world, mark.id, witnesses);
                 out.privateNotices.push({
-                    characterId: debtorId,
-                    text: `${creditorLabel}免了你${formatMoney(data, still)}的帳。這一筆從摺子上下來了，卻壓到了別的地方。`,
+                    characterId: seat.debtorId,
+                    text: `${seat.creditorLabel}免了你${seat.owedText}的帳。這一筆從摺子上下來了，卻壓到了別的地方。`,
                 });
                 out.spawnedWants.push(
                     ...plantWant(world, {
-                        characterId: debtorId,
+                        characterId: seat.debtorId,
                         layer: '虧欠',
-                        desc: `${creditorLabel}免了那筆帳，這份情得還`,
+                        desc: `${seat.creditorLabel}免了那筆帳，這份情得還`,
                         weight: 0.62,
                         resistance: 4,
                         tick: req.nowTick,
@@ -349,33 +529,89 @@ export function runReckoning(
                     }),
                 );
             }
-        } else {
-            // 當眾催帳 —— nobody un-hears this. 名頭 drops, and the drop is real state.
-            out.facts.push({ kind: 'dunned', billId: bill.id, ...(debtorId ? { debtorId } : {}), creditorLabel, amountSubunits: still.toString() });
+            continue;
+        }
+
+        // 催 / 傳出去 —— the debt STANDS either way. Nobody's purse is touched.
+        const couldPay = seat.debtorCouldPay;
+        out.facts.push({
+            kind: stance === 'broadcast' ? 'broadcast' : 'pressed',
+            billId: seat.billId,
+            ...(seat.debtorId ? { debtorId: seat.debtorId } : {}),
+            creditorLabel: seat.creditorLabel,
+            amountSubunits: owing.toString(),
+        });
+
+        if (stance === 'press') {
             out.publicLines.push(
-                `${req.label}：${bill.label}還欠${formatMoney(data, still)}，${creditorLabel}當著滿街的人把${debtorName}叫住` +
-                    `——數目、日子、幾時還，一句句問到底。圍看的人不少。`,
+                `${req.label}：${bill.label}還欠${seat.owedText}，${seat.creditorLabel}把${seat.debtorName}叫到一邊` +
+                    `——數目、日子、幾時還，一句句問到底。話沒往外傳，臉是當面丟的。`,
             );
-            if (debtorId) {
-                world.bumpRenown(debtorId, -0.08);
-                world.bumpSelfRegard(debtorId, -0.06);
+            if (seat.debtorId) {
+                world.bumpRenown(seat.debtorId, -0.04);
+                world.bumpSelfRegard(seat.debtorId, -0.06);
                 out.privateNotices.push({
-                    characterId: debtorId,
-                    text: `當街被${creditorLabel}催了${formatMoney(data, still)}的帳，圍看的人裡有認得你的。這張臉，得自己撿回來。`,
+                    characterId: seat.debtorId,
+                    text:
+                        `${seat.creditorLabel}當面把${seat.owedText}的帳問到底了。` +
+                        `他沒往外說——這一次。錢仍在你手裡，還不還，仍舊是你自己的事。`,
                 });
                 out.spawnedWants.push(
                     ...plantWant(world, {
-                        characterId: debtorId,
+                        characterId: seat.debtorId,
                         layer: '體面',
-                        desc: `當街被催帳那一場，臉要自己撿回來`,
+                        desc: `${seat.creditorLabel}那筆帳，趁話還沒傳出去`,
                         weight: 0.7,
-                        resistance: 5,
+                        resistance: 4,
                         tick: req.nowTick,
                         dueDay: req.day + FAVOUR_DEBT_DAYS,
                         semanticTags: ['reckoning'],
                     }),
                 );
             }
+            continue;
+        }
+
+        // 傳出去 —— the word goes out. This is what 打死不還 costs, and it is a
+        // door closing, not an adjective: 賒帳資格 at this vendor is revoked.
+        out.publicLines.push(
+            `${req.label}：${bill.label}還欠${seat.owedText}，${seat.creditorLabel}不再私下說了` +
+                `——當著滿街的人把${seat.debtorName}的名字和數目一併報了出來。` +
+                `${couldPay ? '有錢不還，這條街往後自有分寸。' : '還不出也是還不出，可話已經出去了。'}`,
+        );
+        if (seat.debtorId) {
+            world.bumpRenown(seat.debtorId, -REFUSAL_RENOWN_COST);
+            world.bumpSelfRegard(seat.debtorId, -0.08);
+            const vendorId = bill.toAccountId ?? data.marketAccountId;
+            const mark = recordReputation(world, {
+                id: `rep:${seat.billId}:refused:d${req.day}`,
+                aboutId: seat.debtorId,
+                kind: 'debt-refused',
+                day: req.day,
+                note: `${seat.debtorName}欠${seat.creditorLabel}${seat.owedText}，到了日子沒還${couldPay ? '——手裡不是沒有' : ''}`,
+                knownByIds: [],
+                tabRevokedFor: vendorId,
+            });
+            spreadReputation(world, mark.id, witnesses);
+            // The creditor's own view turns cold, and so does everyone who heard.
+            if (seat.creditorId) world.setEdge(seat.creditorId, seat.debtorId, '欠帳不還，話已經放出去了');
+            out.privateNotices.push({
+                characterId: seat.debtorId,
+                text:
+                    `${seat.creditorLabel}把你欠${seat.owedText}的事說給了整條街聽。往後在他那裡賒不到東西了。` +
+                    `錢還在你手裡——這條街的話，卻不在了。`,
+            });
+            out.spawnedWants.push(
+                ...plantWant(world, {
+                    characterId: seat.debtorId,
+                    layer: '體面',
+                    desc: `滿街都在說我欠帳不還，這名聲要自己撿回來`,
+                    weight: 0.75,
+                    resistance: 5,
+                    tick: req.nowTick,
+                    semanticTags: ['reckoning'],
+                }),
+            );
         }
     }
 

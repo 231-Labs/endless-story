@@ -633,6 +633,15 @@ export interface WorldStateData {
     patronage?: import('./core/patronage.ts').PatronageState;
     /** 月半結帳 log — one entry per reckoning, the idempotency key per day. */
     reckonings?: Array<{ day: number; label: string; facts: number }>;
+    /** 每一次帳被叫到檯面上 — one row per (bill, reckoning), recording what the
+     *  CREDITOR chose to do about it. Read to escalate: a debt called twice and
+     *  still unpaid goes public even under the deterministic fallback, so
+     *  「打死不還」 has a trajectory instead of a flat, repeatable cost. */
+    debtCalls?: Array<{ billId: string; day: number; stance: 'forgive' | 'press' | 'broadcast'; debtorId?: string }>;
+    /** 口碑帳 — what the street knows about somebody, WHO knows it, and which door
+     *  it closes. This is the consequence layer that lets 「打死不還」 be a real
+     *  choice: the engine never takes the money, it only lets the name travel. */
+    reputation?: import('./core/reputation.ts').ReputationMark[];
     /** 離班者 — off the board: no movement, no beats, no wage, never a card's
      *  target. They remain in `cast` (so they can still be named and remembered)
      *  and their `departedDay` is stamped on the member. */

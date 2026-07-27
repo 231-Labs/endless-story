@@ -128,11 +128,28 @@ pnpm --filter @endless-story/engine engine -- deck-check --deck spring-snow
 
 **effects**（引擎確定性結算的全部後果）：
 `percept`（世界事實，`costume` 蓋過 `text`）｜`wage-packet`（工錢）｜`dividend`
-（分紅）｜`reckoning`（月半清算）｜`patronage`（注資）｜`bill`（按期債；
-`fromAccountId` 可用 `"@target"` 指這張卡對準的人）｜`want`（種一樁帶死線的心事）｜
-`renown`／`self-regard`｜`weather`（`housePct` 直接折座）｜`object-state`｜
-`leak-secret`／`publish-secret`｜`cast-exit`（離班＋孤兒資產強制重分配）｜
-`cast-enter`（只能取 `newcomers` 池裡的人）。
+（分紅）｜`reckoning-notice`（結帳預告）｜`reckoning`（結帳當日的公開叫帳）｜
+`patronage`（注資）｜`bill`（按期債；`fromAccountId` 可用 `"@target"` 指這張卡對準
+的人）｜`want`（種一樁帶死線的心事）｜`renown`／`self-regard`｜`weather`
+（`housePct` 直接折座）｜`object-state`｜`leak-secret`／`publish-secret`｜
+`cast-exit`（離班＋孤兒資產強制重分配）｜`cast-enter`（只能取 `newcomers` 池裡的人）。
+
+**分支後果（`onlyIf`）**：任何一個 effect 可以掛一個 `CardCondition`，條件不成立就
+跳過這一條。這是「必到之日 × 兩種結果」的寫法——例如「首演之夜」到日必落，可是它
+結算什麼，看新戲到底上沒上台：
+
+```jsonc
+{ "id": "premiere-night", "mustLand": true, "trigger": { "onDays": [5] },
+  "effects": [
+    { "kind": "percept", "text": "新戲真的上了台。",
+      "onlyIf": { "kind": "production-premiered", "premiered": true } },
+    { "kind": "bill", "id": "refund", "label": "訂金退回", "amountYuan": 33, "dueInDays": 3,
+      "onlyIf": { "kind": "production-premiered", "premiered": false } }
+  ] }
+```
+
+分支放在 **effect** 而不是 **card** 上是刻意的：把整張卡掛條件，死線就變成可被否決
+的，那正是月半結帳當年退化成幻覺的原因。牌組作者負責讓分支窮盡。
 
 ### 2. 導演的輸入與輸出
 
@@ -176,6 +193,35 @@ engine patron --out ./run --channel tip    --amount 4 --target 蘇映雪 \
 落後的那位得到**一樁妒火心事**（每對只生一次）——妒火的素材由此而來，不是憑空。
 牌組也可以打同一條管道（`effects: [{"kind":"patronage", …}]`，如「堂會邀約」）。
 
+### 4.5 月半結帳：引擎不碰任何人的錢
+
+**設計更正。** 最初的版本到日會強制扣款。那是引擎伸手進別人的口袋，而且它讓
+「打死不還」變成一個角色**演不出來**的選項——一個握不住的立場不是選擇，是佈景。
+
+現在的結帳一分錢也不動。錢只有在角色自己用 `repay`（`season-economy.ts` 既有的動詞）
+時才會離開口袋。到日抵達的是**叫帳**，後果是社會性的，而且**由債主決定**：
+
+| 債主選 | 帳 | 名聲 | 門 |
+|---|---|---|---|
+| `forgive` 免了 | 一筆勾銷 | 街上記著他被放過（欠人情） | 照開 |
+| `press` 當面催 | 還在 | 當面丟臉，話沒外傳 | 照開 |
+| `broadcast` 傳出去 | 還在 | 滿街都知道，名頭重挫 | **這家的賒帳資格沒了** |
+
+三件事讓它成立：
+
+1. **預告**（`reckoning-notice`，結帳前兩日）：全街知道日子與摺子上的名字，每個欠帳
+   的人拿到一樁帶死線的心事（`completion: bill-cleared`）——自己清了就 resolved，
+   拖過去就 foreclosed。沒有這個窗口，「不還」與「沒機會還」分不出來。
+2. **債主座席**（`SceneAgentPort.decideDebtStance`）：態度是債主的判斷，不是時鐘的。
+   債主若真的不在意就免了——**那是他們的事**。座席不回話時退回確定性推定
+   （`fallbackStance`）：真的還不出、債主又撐得住 ⇒ 免；手裡有錢卻沒還 ⇒ 先當面催、
+   第二次就傳出去；催過 `PATIENCE_CALLS` 次 ⇒ 一律傳出去。**打死不還有軌跡，不是
+   固定費率。**
+3. **口碑帳**（`core/reputation.ts`）：`broadcast` 記下一筆 mark，它是**別人握著的
+   事實**——有知情者名單（沒聽說的人不會據此行事）、會關掉**被欠那一家**的賒帳門
+   （只有那一家）、並且進到當事人自己的 beat／移動／規劃 percept 裡（「街上怎麼說
+   你」），所以他看得見、可以改變主意。帳清了門就重開，但**話說出去就在帳上**。
+
 ### 5. 秘密、心事生命週期、生理需求
 
 - **秘密**（牌組 `secrets[]`）：`holderNames`／`aboutName`／`coveterNames`／
@@ -185,6 +231,10 @@ engine patron --out ./run --channel tip    --amount 4 --target 蘇映雪 \
 - **心事生命週期**：`dueDay`（到日 foreclose，本人收到一句）＋ `completion`
   （`bill-cleared`｜`flowers-caught`｜`purse-atleast`｜`secret-published`，成立即
   resolved，不需模型判決）。兩者皆缺 ⇒ 與過去完全相同。
+- **`trigger.requires` 的完整清單**：`account-runway-below`｜`account-below-yuan`｜
+  `outstanding-debt-atleast-yuan`｜`tension-peak-atleast`｜`live-wants-atleast`｜
+  `cast-atleast`｜`secret-leaked`｜`production-premiered`。同一組條件也可以當作
+  effect 的 `onlyIf`。
 - **生理需求降級**：不具戲劇相關性的餓**離場結算**（扣錢＋一句帶過，不移動、不佔戲）。
   留在戲裡的只有四種人：已站在食擔前的（交給順路而食）、**付不出錢的**（稀缺不修）、
   餓到 `HUNGER_STARVING` 的、以及最餓的 `HUNGER_ONSTAGE_CAP`（＝2）位。八個人同奔一

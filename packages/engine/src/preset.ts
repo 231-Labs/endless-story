@@ -130,6 +130,11 @@ export interface SeasonFrame {
      * seeded, NOT inside `applySeasonFrame`, so a world built directly from a frame
      * (engine tests) stays flag-off / byte-identical. Absent ⇒ off. */
     subjectiveNaming?: boolean;
+    /** 劇本產出 — a season whose 命題 IS the making of a play declares it needs the
+     *  emergent-production layer, rather than the operator having to remember a
+     *  flag. Read at the RUN layer (CLI / lab manager) after the world is built,
+     *  exactly like `subjectiveNaming`. Absent ⇒ off, as before. */
+    emergentProduction?: boolean;
     /** 口碑 — per-character seed of PUBLIC 名頭 (renown) + PRIVATE 自視 (self-regard),
      * keyed by character name. Each value is 0..1; `self` may DIVERGE from `renown`
      * (當紅卻怕不夠好). A name absent here takes a ROLE-based default (see

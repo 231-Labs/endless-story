@@ -49,6 +49,7 @@ import {
     type PersistedEconomyState,
 } from '@endless-story/economy';
 import { PARTS_OF_DAY } from '../ports.ts';
+import { tabAllowedFor } from './reputation.ts';
 import { STAGE_KINDS } from './skills.ts';
 import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 import type { WorldState } from '../world-state.ts';
@@ -441,10 +442,15 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         // a promise, not money: NO transfer, so conservation is untouched and
         // `auditSeasonEconomy` stays []. Flag off / no allowsTab / troupe payer
         // without authority ⇒ the exact old insufficient-funds refusal below.
+        // 賒帳資格 — a vendor who was publicly stiffed and said so no longer extends
+        // tab to that buyer. This is the mechanical bite behind 「打死不還」: the
+        // engine never took their money, it let their name travel, and now a door
+        // is shut. No mark ⇒ byte-identical to before the reputation layer existed.
         const tab = item.vendorAccountId ? data.vendorTabs?.[item.vendorAccountId] : undefined;
+        const tabOpen = !item.vendorAccountId || tabAllowedFor(world, payerId, item.vendorAccountId);
         const payerAccount = contract.economy.accounts[payerId];
         if (
-            tab && item.vendorAccountId && payerAccount &&
+            tab && tabOpen && item.vendorAccountId && payerAccount &&
             maySpend(payerAccount, req.actorId) && payerAccount.available < price
         ) {
             const vendorLabel = accountLabel(contract, item.vendorAccountId);
@@ -463,6 +469,15 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
                 ok: true,
                 publicLines: [`${actorName}在${vendorLabel}賒下一份${item.label}，記在帳上。`],
             };
+        }
+
+        // A shut door should say so. Falling through to a bare 錢不夠 would teach the
+        // character the wrong lesson about why they were refused.
+        if (tab && !tabOpen && payerAccount && payerAccount.available < price) {
+            return fail(
+                `${accountLabel(contract, item.vendorAccountId!)}不肯再賒給你了——上回那筆帳的話已經傳開，` +
+                    `這裡從今是現錢交易。`,
+            );
         }
 
         const paid = purchase(contract.economy, {
@@ -1045,7 +1060,13 @@ export function economyPerceptFor(world: WorldState, characterId: string, sceneI
                 if (bill.fromAccountId === characterId && bill.toAccountId) {
                     const holder = accountLabel(contract, bill.toAccountId);
                     const due = today > bill.dueDay ? '已過了期，臉上須掛不住' : `第 ${bill.dueDay} 日為期`;
-                    lines.push(`你欠著${holder} ${formatMoney(data, remaining)}（${bill.label}），${due}——到期會照例催討；手頭便時可當面還帳（repay）。`);
+                    // 沒有人會從你手裡把錢拿走 —— the engine debits nobody. What is at
+                    // stake is the name, and the character must know that to choose.
+                    lines.push(
+                        `你欠著${holder} ${formatMoney(data, remaining)}（${bill.label}），${due}。` +
+                            `沒有人會從你手裡把錢拿走——到日還不還是你自己的事；不還，${holder}會怎麼說你，也是他的事。` +
+                            `想清就當面還帳（repay）。`,
+                    );
                 } else if (bill.toAccountId === characterId && bill.fromAccountId) {
                     const debtor = accountLabel(contract, bill.fromAccountId);
                     const due = today > bill.dueDay ? '已到期未清' : `第 ${bill.dueDay} 日為期`;

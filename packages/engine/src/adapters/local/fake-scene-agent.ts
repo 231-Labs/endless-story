@@ -19,6 +19,8 @@ import type {
     ComposeDiaryReply,
     ComposePoemInput,
     ComposePoemReply,
+    DebtStanceInput,
+    DebtStanceReply,
     DeclareWantSemanticsInput,
     DeclareWantSemanticsReply,
     DirectorPickInput,
@@ -339,6 +341,25 @@ export class FakeSceneAgent implements SceneAgentPort {
             targetIds: pick.candidates.slice(0, Math.max(0, pick.pickCount)).map((candidate) => candidate.id),
             rationale: '（確定性替身：取牌序之首）',
         };
+    }
+
+    /**
+     * 債主的態度（確定性替身）— mirrors the engine's own fallback logic so a fake
+     * run and a seatless run produce the SAME reckoning: patience runs out, and
+     * somebody who could have paid and did not is treated differently from
+     * somebody who could not. Deliberately not generous: a stub that always
+     * forgave would make 「打死不還」 free in every deterministic test.
+     */
+    async decideDebtStance(input: DebtStanceInput): Promise<DebtStanceReply | null> {
+        if (input.priorCalls >= 2) return { stance: 'broadcast', note: '（替身：催過兩回了）' };
+        if (input.debtorCouldPay) {
+            return input.priorCalls >= 1
+                ? { stance: 'broadcast', note: '（替身：手裡有錢還拖第二回）' }
+                : { stance: 'press', note: '（替身：先當面問一次）' };
+        }
+        return input.creditorFooting.includes('緊') || input.creditorFooting.includes('撐不住')
+            ? { stance: 'press', note: '（替身：自己也難，話說在前頭）' }
+            : { stance: 'forgive', note: '（替身：他確實還不出，這筆算了）' };
     }
 
     /**

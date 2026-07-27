@@ -230,7 +230,74 @@ function assertNoDrift(world: WorldState): void {
     assert.deepEqual(auditSeasonEconomy(world), [], 'the card play conserves money');
 }
 
+test('分支後果: a MANDATORY day can still branch — onlyIf gates the effect, never the card', () => {
+    // 首演之夜 must land on its day whatever happened; what it SETTLES depends on
+    // whether the play actually went up. Gating the card would make the deadline
+    // vetoable, which is the failure 月半結帳 taught us about.
+    const premiereNight: EventCard = {
+        id: 'premiere-night',
+        label: '首演之夜',
+        mustLand: true,
+        trigger: { onDays: [5] },
+        targeting: { mode: 'none' },
+        effects: [
+            { kind: 'percept', text: '新戲上了台。', onlyIf: { kind: 'production-premiered', premiered: true } },
+            { kind: 'percept', text: '台上唱的還是老戲。', onlyIf: { kind: 'production-premiered', premiered: false } },
+            {
+                kind: 'bill',
+                id: 'refund',
+                label: '訂金退回',
+                amountYuan: 33,
+                dueInDays: 3,
+                fromAccountId: 'troupe',
+                onlyIf: { kind: 'production-premiered', premiered: false },
+            },
+        ],
+    };
+
+    // FAILED: the play never went up.
+    const failed = seasonWorld();
+    const failedPlay = playCard(failed, deckOf(premiereNight), { card: premiereNight, chosenBy: 'deadline', day: 5, nowTick: 28, clock: '黃昏' });
+    assert.ok(failedPlay.publicLines.includes('台上唱的還是老戲。'), 'the failure branch spoke');
+    assert.ok(!failedPlay.publicLines.includes('新戲上了台。'), 'and the success branch did not');
+    assert.ok(failed.data.economy!.bills!.some((bill) => bill.id === 'refund'), 'the penalty materialised');
+
+    // DELIVERED: the same card, the same day, the other branch.
+    const done = seasonWorld();
+    done.data.production = {
+        title: '新戲',
+        status: 'premiered',
+        initiatorId: done.idByName('沈雪笙')!,
+        contributors: [],
+        effort: {},
+        scriptFragments: [],
+        startedDay: 1,
+        premieredDay: 5,
+        timeline: [],
+    };
+    const donePlay = playCard(done, deckOf(premiereNight), { card: premiereNight, chosenBy: 'deadline', day: 5, nowTick: 28, clock: '黃昏' });
+    assert.deepEqual(donePlay.publicLines, ['新戲上了台。'], 'only the success branch, and nothing else');
+    assert.deepEqual(done.data.economy!.bills, [], 'no penalty when the play went up');
+
+    // Either way the card LANDED and is on the record — that is the deadline part.
+    assert.equal(failed.data.directorLog!.length, 1);
+    assert.equal(done.data.directorLog!.length, 1);
+});
+
 // ── the shipped deck ─────────────────────────────────────────────────────────
+
+test('the shipped 排戲季 deck is structurally valid, and its premiere night branches', () => {
+    const deck = loadEventDeckFile('spring-snow-premiere');
+    const night = deck.cards.find((card) => card.id === 'premiere-night');
+    assert.ok(night?.mustLand, '會串之夜 is a deadline');
+    const branches = night!.effects.filter((effect) => effect.onlyIf);
+    assert.ok(branches.length >= 2, 'and it carries both outcomes');
+    assert.ok(
+        branches.some((effect) => effect.onlyIf?.kind === 'production-premiered' && effect.onlyIf.premiered) &&
+            branches.some((effect) => effect.onlyIf?.kind === 'production-premiered' && !effect.onlyIf.premiered),
+        'the branches are exhaustive over the season\'s own pass/fail fact',
+    );
+});
 
 test('the shipped spring-snow deck is structurally valid', () => {
     const deck = loadEventDeckFile('spring-snow');
@@ -240,6 +307,11 @@ test('the shipped spring-snow deck is structurally valid', () => {
     const reckoning = deck.cards.find((card) => card.id === 'mid-month-reckoning');
     assert.ok(reckoning?.mustLand, '月半結帳 is a deadline card');
     assert.ok(reckoning!.effects.some((effect) => effect.kind === 'reckoning'), 'and it actually reckons');
+    // 預告 — the warning window is itself mandatory, because without it "chose not
+    // to pay" and "never got the chance" are the same thing.
+    const notice = deck.cards.find((card) => card.id === 'reckoning-notice');
+    assert.ok(notice?.mustLand, 'the street is always warned');
+    assert.ok(notice!.effects.some((effect) => effect.kind === 'reckoning-notice'));
     // 人物進出 is the biggest card, and it is rate-limited as such.
     const seasonal = deck.cards.filter((card) => card.tier === 'seasonal');
     assert.ok(seasonal.length >= 2, '人物進出 lives in the deck');

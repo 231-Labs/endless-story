@@ -32,6 +32,7 @@ export * from './core/dream.ts';
 export * from './core/event-deck.ts';
 export * from './core/income-events.ts';
 export * from './core/patronage.ts';
+export * from './core/reputation.ts';
 export * from './core/secret-ledger.ts';
 export * from './core/roster-change.ts';
 export * from './core/want-lifecycle.ts';

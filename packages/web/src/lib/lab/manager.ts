@@ -278,6 +278,9 @@ export class LabRunManager {
                 world.data.subjectiveNaming = true;
                 seedAcquaintance(world);
             }
+            // 劇本產出 — a season whose 命題 is the making of a play turns the layer
+            // on itself, so a run config cannot forget what the season depends on.
+            if (seasonFrame?.emergentProduction) world.data.emergentProduction = true;
             freshWorld = true;
         }
         // 事件牌組 (外力層) — validated at LOAD time so a malformed card fails before

@@ -59,6 +59,8 @@ import { drainPendingDreams } from './core/dream.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
 import { settleBackgroundNeeds } from './core/background-needs.ts';
 import { describeEligible, eligibleCards, playCard, partIndexOf, type EventDeck, type PlayCardResult } from './core/event-deck.ts';
+import { fallbackStance, reckoningSeats, type DebtStance } from './core/income-events.ts';
+import { reputationPerceptFor } from './core/reputation.ts';
 import { evaluateSecretLeaks } from './core/secret-ledger.ts';
 import { runWantLifecycle } from './core/want-lifecycle.ts';
 import {
@@ -1065,6 +1067,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => event.text),
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
+                reputationPerceptFor(world, member.id) ?? '',
                 ...(intrudePull ? [intrudePull] : []),
                 ...(knockPull ? [knockPull] : []),
                 ...(seekPull ? [seekPull] : []),
@@ -2082,7 +2085,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         state: object.state,
                         container: object.container ? world.objectById(object.container)?.label ?? object.container : undefined,
                     })),
-                    economyLine: economy?.projectFor(world, id, sid),
+                    // 街上怎麼說你 —— a standing reputation mark is folded into the
+                    // money line, because it IS a money fact now (a shut 賒帳 door)
+                    // as much as a social one. Undefined when the street has nothing.
+                    economyLine: [economy?.projectFor(world, id, sid), reputationPerceptFor(world, id)]
+                        .filter(Boolean)
+                        .join('\n') || undefined,
                     // 借賒有據: which credit verbs to 亮牌 for this actor in THIS
                     // scene (borrow needs a co-present cast member; repay an open
                     // 欠條 to one). undefined when the flag is off — byte-identical.
@@ -2853,6 +2861,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => `〔將臨〕第${event.atTick}拍將有：${event.text}`),
                 ...(economy ? [economy.projectFor(world, member.id, w.roster[member.id] ?? '') ?? ''] : []),
+                reputationPerceptFor(world, member.id) ?? '',
             ].filter(Boolean).join('\n') || undefined;
             const relationshipPressure = Object.entries(member.relationshipView).map(
                 ([otherId, view]) => `對${world.nameById(otherId)}：${view}`,
@@ -3220,6 +3229,43 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         const forced = eligible.filter((row) => row.forced);
         const optional = eligible.filter((row) => !row.forced);
 
+        // 債主的態度 —— consulted BEFORE any card settles, because `playCard` is a
+        // pure function and the seat is an async model call. One seat per genuinely
+        // unpaid debt; a throw or a null falls back deterministically, so a
+        // rehearsal run still produces a complete, replayable reckoning.
+        let debtStances: Record<string, DebtStance> | undefined;
+        if (eligible.some((row) => row.card.effects.some((effect) => effect.kind === 'reckoning'))) {
+            for (const seat of reckoningSeats(world, { day: today })) {
+                let stance: DebtStance | undefined;
+                if (agent.decideDebtStance) {
+                    try {
+                        const reply = await agent.decideDebtStance({
+                            day: today,
+                            billId: seat.billId,
+                            creditorName: seat.creditorLabel,
+                            ...(seat.stance ? { stance: seat.stance } : {}),
+                            creditorFooting: seat.creditorFooting,
+                            debtorName: seat.debtorName,
+                            label: seat.label,
+                            owedText: seat.owedText,
+                            daysOverdue: seat.daysOverdue,
+                            priorCalls: seat.priorCalls,
+                            debtorCouldPay: seat.debtorCouldPay,
+                        });
+                        if (reply) stance = reply.stance;
+                    } catch (error) {
+                        log(`  [債主] ${seat.creditorLabel} 座席失敗：${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+                (debtStances ??= {})[seat.billId] = stance ?? fallbackStance(seat, world);
+                log(
+                    `  [債主] ${seat.creditorLabel} 對 ${seat.debtorName} 的${seat.label}：` +
+                        `${debtStances[seat.billId] === 'forgive' ? '免了' : debtStances[seat.billId] === 'press' ? '當面催' : '傳出去'}` +
+                        `${stance ? '' : '（引擎推定）'}`,
+                );
+            }
+        }
+
         const settle = (
             row: (typeof eligible)[number],
             chosenBy: 'director' | 'deadline',
@@ -3227,6 +3273,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         ): PlayCardResult => {
             const played = playCard(world, deck, {
                 card: row.card,
+                ...(debtStances ? { debtStances } : {}),
                 ...(choice?.targetIds ? { targetIds: choice.targetIds } : {}),
                 ...(choice?.costume ? { costume: choice.costume } : {}),
                 ...(choice?.rationale ? { rationale: choice.rationale } : {}),

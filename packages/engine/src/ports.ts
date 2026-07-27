@@ -131,6 +131,47 @@ export interface DirectorPickReply {
     decline?: boolean;
 }
 
+// ── 債主的態度 (the creditor's seat) ──────────────────────────────────────────
+//
+// 月半結帳 moves no money. What it does is CALL the debt, and how hard it is
+// called belongs to the creditor, not to the clock and not to the engine. A
+// creditor who genuinely does not mind is allowed not to mind; a creditor who
+// has been put off twice is allowed to stop being quiet about it.
+//
+// The seat is handed plain facts and returns one of three stances. It never sees
+// a raw figure it could do arithmetic on, and it cannot move money — the engine
+// settles the social consequence of whichever stance comes back.
+
+export interface DebtStanceInput {
+    day: number;
+    billId: string;
+    /** the creditor deciding (their own name, when they are a person). */
+    creditorName: string;
+    /** their authored 立場, when the frame gave the house one. */
+    stance?: string;
+    /** how their own books feel, in words: 「手頭也緊」「還撐得住」. */
+    creditorFooting: string;
+    debtorName: string;
+    label: string;
+    /** the amount as world language (「三圓」), never a bare number. */
+    owedText: string;
+    daysOverdue: number;
+    /** how many times this same debt has already been called at a reckoning. */
+    priorCalls: number;
+    /** could they have paid, as far as the street can tell? This is the whole
+     *  question: 還不出 and 不肯還 are different matters. */
+    debtorCouldPay: boolean;
+}
+
+export interface DebtStanceReply {
+    /** 免了 — tear the paper up; they owe you a 人情 instead.
+     *  催 — say it to their face; the debt stands, the street stays out of it.
+     *  傳出去 — say it to the street; the debt stands, and so does their name. */
+    stance: 'forgive' | 'press' | 'broadcast';
+    /** one line of reasoning, recorded for audit — never a mechanism. */
+    note?: string;
+}
+
 // ── 角色工件 (diary + poem seats) ─────────────────────────────────────────────
 
 export interface ComposeDiaryInput {
@@ -549,6 +590,10 @@ export interface SceneAgentPort extends SceneAgent {
      *  face. The engine settles every consequence; a null/absent reply simply
      *  means no card is played this tick (a deadline card still lands). */
     pickEventCard?(input: DirectorPickInput): Promise<DirectorPickReply | null>;
+    /** 債主的態度 — how hard THIS creditor calls THIS unpaid debt at the reckoning.
+     *  No money moves either way. null/absent/throw ⇒ the deterministic fallback
+     *  decides, so a rehearsal run still produces a complete, replayable reckoning. */
+    decideDebtStance?(input: DebtStanceInput): Promise<DebtStanceReply | null>;
     /** 日記 — recombine ONE tracked character's day (beats + 心下 + 心事) into a
      *  first-person entry whose claims cite `beat:N` evidence. null → no diary. */
     composeDiary?(input: ComposeDiaryInput): Promise<ComposeDiaryReply | null>;

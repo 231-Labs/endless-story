@@ -134,24 +134,30 @@ test('(a) 觀眾注資 lands as a world channel mid-run, and the cast is told', 
 
 // ── (b) the deadline arrives ─────────────────────────────────────────────────
 
-test('(b) 月半結帳 lands on a real tick, forced by the deck, with irreversible consequences', async () => {
+test('(b) 月半結帳: the street is warned first, the day arrives on schedule, and NO purse is touched', async () => {
     const { world, reports } = await season();
 
+    // 預告 — the common knowledge, days ahead. Without this window, "chose not to
+    // pay" would be indistinguishable from "never got the chance".
+    const notices = reports.flatMap((report) => report.cardsPlayed ?? []).filter((play) => play.cardId === 'reckoning-notice');
+    assert.equal(notices.length, 1, 'the street was warned exactly once');
+    assert.equal(notices[0].chosenBy, 'deadline');
+    assert.ok(notices[0].lines.some((line) => line.includes('第 3 日')), 'and told which day');
+
+    // 到日 — the calling itself.
     const reckoningPlays = reports.flatMap((report) => report.cardsPlayed ?? []).filter((play) => play.cardId === 'mid-month-reckoning');
     assert.equal(reckoningPlays.length, 1, 'the deadline arrived exactly once in three days');
     assert.equal(reckoningPlays[0].chosenBy, 'deadline', 'and the director had no say in WHETHER it landed');
-    assert.ok(world.data.reckonings?.length, 'the reckoning is recorded in world state');
-    assert.equal(world.data.reckonings![0].day, 2, 'on the authored day');
+    assert.equal(world.data.reckonings?.[0].day, 3, 'on the authored day');
+    assert.ok(world.data.debtCalls?.length, 'every debt it called is on the record');
 
-    // Arrival cost something: either the tabs were paid, forgiven or called in.
-    const facts = world.data.reckonings![0].facts;
-    assert.ok(facts >= 0);
-    const day = world.data.reckonings![0].day;
-    const settled = ledgerRows(world).filter((row) => row.memo.includes('月半結帳'));
-    assert.ok(
-        facts > 0 || settled.length > 0 || reckoningPlays[0].lines.some((line) => line.includes('月半結帳')),
-        'the reckoning left a trace on day ' + day,
-    );
+    // The load-bearing claim: the engine took nothing. Every debt it called was
+    // either forgiven by its creditor or left standing — never collected.
+    const collected = ledgerRows(world).filter((row) => row.memo.includes('結帳'));
+    assert.deepEqual(collected, [], '月半結帳 moves no money — 打死不還 stays a real choice');
+    for (const call of world.data.debtCalls ?? []) {
+        assert.ok(['forgive', 'press', 'broadcast'].includes(call.stance));
+    }
 });
 
 test('(b) every card play is auditable: logged, with the offered set and who chose it', async () => {

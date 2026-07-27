@@ -64,9 +64,10 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
 `$LAB_DATA_DIR/decks/`）。一卷選不選牌組是 `LabRunConfig.deckId`；**不選＝沒有外力層**
 （沒有卡、不叫導演、沒有死線），與加這層之前逐位元相同。
 
-| 牌組 id | 是什麼 |
-|---|---|
-| `spring-snow` | 春雪社外力牌組：月半結帳（死線）、班中發俸、散戲分紅、巡捕查夜、報館截稿、天氣轉變、堂會邀約、池座送花、風聲漏了，加兩張季級大牌（故人進城／名角過班）＋三樁上了膛的秘密 |
+| 牌組 id | 是什麼 | 配哪個季框 |
+|---|---|---|
+| `spring-snow` | 前街生計牌組：結帳預告＋月半結帳（死線）、班中發俸、散戲分紅、巡捕查夜、報館截稿、天氣轉變、堂會邀約、池座送花、風聲漏了，加兩張季級大牌（故人進城／名角過班）＋三樁上了膛的秘密 | `spring-snow-market`／`spring-snow-open` |
+| `spring-snow-premiere` | 排戲季牌組：東家催戲、**首演之夜**（到日必落，成敗兩種後果由 `onlyIf` 分支）、戲牌催落款、整日排戲（佔掉白日就是佔掉進項）、抄本不見了、報館要先聲，加兩張季級大牌（接筆的編劇進城／有人撂挑子）＋三樁秘密 | `spring-snow-premiere` |
 
 schema、導演的輸入輸出、追蹤開關與注資指令，全部記在
 [`packages/engine/README.md` 的「宏觀節奏」](../packages/engine/README.md#宏觀節奏macro-rhythm)。
@@ -81,6 +82,7 @@ schema、導演的輸入輸出、追蹤開關與注資指令，全部記在
 | 劇本 id | 是什麼 | 班底 |
 |---|---|---|
 | `spring-snow` | 春雪社 · 民國上海越劇混合班 —— 正典世界，長跑與大部分實驗的底本（設定見 [`narrative/SPRING_SNOW_BIBLE.md`](./narrative/SPRING_SNOW_BIBLE.md)） | 12 |
+| `spring-snow-premiere`（季框） | 排一齣自己的戲：雲錦台留了年底會串一檔，條件是「沒人演過的新戲」，訂金已付、違約另加一成。戲牌上領銜空著，春雪社有兩個小生；白日排戲就沒法掙錢。季框自帶 `emergentProduction: true`，不必另外翻旗標 | 12 |
 | `spring-snow-emergent-liu` | 柳安春 · 記事不記論：只把她一人的種子從「判決」改寫成「事件」，讓她自己認（#188/#189/#191） | 12 |
 | `spring-snow-chamber-jin` / `-su` | 室內劇對照卷：同一角色（柳安春）與**不同**對手同處一室的一夜（#185） | 2 |
 | `spring-snow-chamber-trio` | 室內劇三人卷：同一角色與**兩位**對手同處一室的抉擇對照（#187） | 3 |
