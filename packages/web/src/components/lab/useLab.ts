@@ -62,6 +62,17 @@ export const labApi = {
     publicDailyShot: () =>
         request<{ runId: string; shot: import('@/lib/lab/daily-shot').DailyShot | null }>('/api/lab/public/daily-shot'),
     publicLive: (after: number) => request<LabLiveSnapshot>(`/api/lab/public/live?after=${after}`),
+    publicReadingDossiers: () =>
+        request<{
+            dossiers: Array<{ slug: string; title: string; day: number; scene: string; perspectives: string[] }>;
+            editorial: { anthology?: string };
+        }>('/api/lab/public/reading?kind=dossiers'),
+    publicReadingArchive: () =>
+        request<{ entries: Array<{ file: string; kind: string; day: number; tick: number; slug: string }> }>(
+            '/api/lab/public/reading?kind=archive',
+        ),
+    publicReadingFile: (file: string) =>
+        request<{ content: string }>(`/api/lab/public/reading?kind=file&file=${encodeURIComponent(file)}`),
     dailyShot: (id: string) =>
         request<{ runId: string; shot: import('@/lib/lab/daily-shot').DailyShot | null }>(
             `/api/lab/runs/${encodeURIComponent(id)}/daily-shot`,
@@ -211,8 +222,10 @@ export interface LiveState {
     refresh: () => void;
 }
 
-/** Poll the live view. Fast cadence while a tick is running, slow when idle. */
-export function useLabLive(runId: string): LiveState {
+/** Poll the live view. Fast cadence while a tick is running, slow when idle.
+ *  `source: 'public'` uses /api/lab/public/live (product ports); default is director labApi. */
+export function useLabLive(runId: string, opts?: { source?: 'lab' | 'public' }): LiveState {
+    const source = opts?.source ?? 'lab';
     const [snapshot, setSnapshot] = useState<LabLiveSnapshot | null>(null);
     const [feed, setFeed] = useState<LabLiveBeat[]>([]);
     const [error, setError] = useState<string | undefined>();
@@ -235,7 +248,10 @@ export function useLabLive(runId: string): LiveState {
             let delay = 6000;
             if (typeof document === 'undefined' || document.visibilityState === 'visible') {
                 try {
-                    const snap = await labApi.live(runId, cursorRef.current);
+                    const snap =
+                        source === 'public'
+                            ? await labApi.publicLive(cursorRef.current)
+                            : await labApi.live(runId, cursorRef.current);
                     if (cancelled) return;
                     setSnapshot(snap);
                     setError(undefined);
@@ -268,7 +284,7 @@ export function useLabLive(runId: string): LiveState {
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [runId, kick]);
+    }, [runId, kick, source]);
 
     return { snapshot, feed, error, refresh };
 }

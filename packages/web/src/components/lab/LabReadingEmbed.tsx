@@ -20,7 +20,14 @@ interface ArchiveEntry {
     slug: string;
 }
 
-export function LabReadingEmbed({ runId }: { runId: string; initialDossierSlug?: string | null }) {
+export function LabReadingEmbed({
+    runId,
+    source = 'lab',
+}: {
+    runId: string;
+    initialDossierSlug?: string | null;
+    source?: 'lab' | 'public';
+}) {
     const [mode, setMode] = useState<Mode>('chapters');
     const [error, setError] = useState<string | null>(null);
     const reader = useReaderScale();
@@ -31,14 +38,20 @@ export function LabReadingEmbed({ runId }: { runId: string; initialDossierSlug?:
 
     const load = useCallback(async () => {
         try {
-            const [dossierRes, archiveRes] = await Promise.all([labApi.dossiers(runId), labApi.archive(runId)]);
-            setDossiers(dossierRes.dossiers);
-            setEntries(archiveRes.entries as ArchiveEntry[]);
+            if (source === 'public') {
+                const [dossierRes, archiveRes] = await Promise.all([labApi.publicReadingDossiers(), labApi.publicReadingArchive()]);
+                setDossiers(dossierRes.dossiers);
+                setEntries(archiveRes.entries as ArchiveEntry[]);
+            } else {
+                const [dossierRes, archiveRes] = await Promise.all([labApi.dossiers(runId), labApi.archive(runId)]);
+                setDossiers(dossierRes.dossiers);
+                setEntries(archiveRes.entries as ArchiveEntry[]);
+            }
             setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         }
-    }, [runId]);
+    }, [runId, source]);
 
     useEffect(() => {
         void load();
@@ -48,13 +61,16 @@ export function LabReadingEmbed({ runId }: { runId: string; initialDossierSlug?:
         async (file: string) => {
             setOpenFile(file);
             try {
-                const res = await labApi.archiveFile(runId, file);
+                const res =
+                    source === 'public'
+                        ? await labApi.publicReadingFile(file)
+                        : await labApi.archiveFile(runId, file);
                 setFileContent(res.content);
             } catch (e) {
                 setFileContent(e instanceof Error ? e.message : String(e));
             }
         },
-        [runId],
+        [runId, source],
     );
 
     const chapters = entries.filter((e) =>

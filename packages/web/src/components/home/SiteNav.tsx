@@ -24,10 +24,12 @@ export function SiteNav() {
               WebkitMaskPosition: 'center',
             }}
           />
-          無盡敘界
+          春雪社
         </a>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2 text-xs font-medium text-ink/75 sm:gap-6 sm:text-sm md:gap-8">
-          <SiteNavLinks />
+          <Suspense fallback={<div className="h-4 w-24 animate-pulse rounded bg-hairline/40" />}>
+            <SiteNavLinks />
+          </Suspense>
           <Suspense fallback={<div className="h-8 w-24 rounded-full bg-canvas/60 ring-1 ring-hairline" />}>
             <MockWalletMenu />
           </Suspense>
