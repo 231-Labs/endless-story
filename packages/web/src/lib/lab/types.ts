@@ -270,6 +270,13 @@ export interface LabSeedSummary {
     locationNames: string[];
 }
 
+/** 外力牌組 — what the run's event deck picker offers. Id + provenance only:
+ *  the deck's own contents are authored data the engine validates at load. */
+export interface LabDeckSummary {
+    id: string;
+    source: 'builtin' | 'custom';
+}
+
 export interface LabSeasonSummary {
     id: string;
     source: 'builtin' | 'custom';

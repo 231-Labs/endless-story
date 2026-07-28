@@ -18,12 +18,13 @@ import { terrainArtFor } from '@/components/saga/handscroll/terrainArt';
 import { useLabDialog } from '@/components/lab/LabDialog';
 import { labApi } from '@/components/lab/useLab';
 import { useToast } from '@/components/common/Toaster';
-import type { LabRunSummary, LabSeasonSummary, LabSeedSummary } from '@/lib/lab/types';
+import type { LabDeckSummary, LabRunSummary, LabSeasonSummary, LabSeedSummary } from '@/lib/lab/types';
 
 export default function LabHomePage() {
     const router = useRouter();
     const [seeds, setSeeds] = useState<LabSeedSummary[]>([]);
     const [seasons, setSeasons] = useState<LabSeasonSummary[]>([]);
+    const [decks, setDecks] = useState<LabDeckSummary[]>([]);
     const [runs, setRuns] = useState<LabRunSummary[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
@@ -32,6 +33,8 @@ export default function LabHomePage() {
         presetId: '',
         seedSource: 'builtin' as 'builtin' | 'custom',
         seasonId: '',
+        deckId: '',
+        trackedNames: '',
         title: '',
         llm: 'fake' as 'fake' | 'real',
         relationshipFallback: true,
@@ -47,6 +50,7 @@ export default function LabHomePage() {
             const [seedRes, runRes] = await Promise.all([labApi.seeds(), labApi.runs()]);
             setSeeds(seedRes.seeds);
             setSeasons(seedRes.seasons);
+            setDecks(seedRes.decks ?? []);
             setRuns(runRes.runs);
             setError(null);
         } catch (e) {
@@ -72,6 +76,9 @@ export default function LabHomePage() {
         try {
             // the season picker value encodes "source/id" so custom frames resolve
             const [seasonSource, ...seasonRest] = form.seasonId ? form.seasonId.split('/') : [];
+            // same "source/id" encoding as the season picker, so a self-authored
+            // deck under $LAB_DATA_DIR/decks resolves without a second field
+            const [deckSource, ...deckRest] = form.deckId ? form.deckId.split('/') : [];
             const { meta } = await labApi.createRun({
                 title: form.title.trim() || `${chosenSeed.label ?? chosenSeed.id}`,
                 config: {
@@ -79,6 +86,12 @@ export default function LabHomePage() {
                     seedSource: chosenSeed.source,
                     seasonId: seasonRest.length ? seasonRest.join('/') : undefined,
                     seasonSource: seasonSource === 'custom' ? 'custom' : 'builtin',
+                    deckId: deckRest.length ? deckRest.join('/') : undefined,
+                    deckSource: deckSource === 'custom' ? 'custom' : 'builtin',
+                    trackedCharacterNames: form.trackedNames
+                        .split(/[,，、\s]+/)
+                        .map((name) => name.trim())
+                        .filter(Boolean),
                     llm: form.llm,
                     relationshipFallback: form.relationshipFallback,
                     emergentProduction: form.emergentProduction,
@@ -350,6 +363,29 @@ export default function LabHomePage() {
                             ))}
                         </select>
                     ) : null}
+                    {decks.length ? (
+                        <select
+                            value={form.deckId}
+                            onChange={(e) => setForm({ ...form, deckId: e.target.value })}
+                            className="es-field max-w-56 px-2 py-1.5 text-xs"
+                            title="外力牌組：結帳死線、發俸分紅、導演選牌、角色的世情動作。不掛＝這一卷完全沒有外力層"
+                        >
+                            <option value="">不掛牌組</option>
+                            {decks.map((d) => (
+                                <option key={`${d.source}/${d.id}`} value={`${d.source}/${d.id}`}>
+                                    {d.id}{d.source === 'custom' ? ' ·自撰' : ''}
+                                </option>
+                            ))}
+                        </select>
+                    ) : null}
+                    <input
+                        type="text"
+                        value={form.trackedNames}
+                        onChange={(e) => setForm({ ...form, trackedNames: e.target.value })}
+                        placeholder="只追這幾位（空＝全班）"
+                        title="追蹤開關：POV 散文與日記只為這幾位生成（結構層全班照跑）。留空＝全班都追，與加這層之前相同"
+                        className="es-field w-44 px-2 py-1.5 text-xs"
+                    />
                     <button
                         type="button"
                         disabled={!chosenSeed || creating}

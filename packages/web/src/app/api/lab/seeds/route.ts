@@ -1,7 +1,7 @@
 /** Seed library: list built-in + custom seeds/seasons; save custom ones. */
 
 import { labAuthorized, ok, fail, unauthorized } from '@/lib/lab/http';
-import { listSeasons, listSeeds, saveCustomSeason, saveCustomSeed } from '@/lib/lab/seeds';
+import { listDeckIds, listSeasons, listSeeds, saveCustomSeason, saveCustomSeed } from '@/lib/lab/seeds';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
     if (!labAuthorized(req)) return unauthorized();
     try {
-        return ok({ seeds: listSeeds(), seasons: listSeasons() });
+        return ok({ seeds: listSeeds(), seasons: listSeasons(), decks: listDeckIds() });
     } catch (error) {
         return fail(error, 500);
     }

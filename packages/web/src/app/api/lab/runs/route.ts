@@ -3,7 +3,8 @@
 import { labAuthorized, ok, fail, unauthorized } from '@/lib/lab/http';
 import { labManager } from '@/lib/lab/manager';
 import { createRun, listRunIds, readRunMeta, readRunStatus } from '@/lib/lab/store';
-import type { LabRunConfig, LabRunSummary } from '@/lib/lab/types';
+import { normalizeRunConfig, type LabRunConfigInput } from '@/lib/lab/run-config';
+import type { LabRunSummary } from '@/lib/lab/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,25 +38,11 @@ export async function POST(req: Request) {
         const body = (await req.json()) as {
             title?: string;
             note?: string;
-            config?: Partial<LabRunConfig> & { presetId?: string };
+            config?: LabRunConfigInput;
         };
-        if (!body.config?.presetId) return fail(new Error('config.presetId is required'));
-        const config: LabRunConfig = {
-            presetId: body.config.presetId,
-            seedSource: body.config.seedSource === 'custom' ? 'custom' : 'builtin',
-            seasonId: body.config.seasonId || undefined,
-            seasonSource: body.config.seasonSource === 'custom' ? 'custom' : 'builtin',
-            llm: body.config.llm === 'real' ? 'real' : 'fake',
-            relationshipFallback: body.config.relationshipFallback !== false,
-            emergentProduction: body.config.emergentProduction === true,
-            heartsCanFade: body.config.heartsCanFade === true,
-            beatPicksWant: body.config.beatPicksWant === true,
-            quietPresence: body.config.quietPresence === true,
-            ticksPerDay: Number.isInteger(body.config.ticksPerDay) && (body.config.ticksPerDay as number) > 0
-                ? (body.config.ticksPerDay as number)
-                : 6,
-            realEmbeddings: body.config.realEmbeddings === true,
-        };
+        // One normaliser, one test that walks every field — see `run-config.ts` for
+        // why this is not inlined here any more.
+        const config = normalizeRunConfig(body.config);
         const meta = createRun({ title: body.title ?? config.presetId, note: body.note, config });
         // Seed the world eagerly so the scroll opens alive (throws early on a
         // missing LLM key rather than at the first tick).
