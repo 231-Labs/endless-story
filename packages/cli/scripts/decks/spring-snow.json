@@ -501,7 +501,7 @@
         },
         {
           "kind": "standing",
-          "tone": "把我告到巡捕房去了——這一筆我記著",
+          "tone": "告了我的官——這人往後我心裡是冷的",
           "from": "targets",
           "toward": "actor",
           "disposition": "cold",
@@ -509,7 +509,7 @@
         },
         {
           "kind": "standing",
-          "tone": "他吃了官司，這一陣少沾為妙",
+          "tone": "他吃了官司，這一陣冷著點，少沾",
           "from": "witnesses",
           "toward": "targets",
           "disposition": "cold",
@@ -535,7 +535,7 @@
         },
         {
           "kind": "standing",
-          "tone": "話都說到那個份上了，往後各走各的",
+          "tone": "話說到那個份上，往後各走各的，我心裡冷了",
           "from": "actor",
           "toward": "targets",
           "disposition": "cold",
@@ -543,7 +543,7 @@
         },
         {
           "kind": "standing",
-          "tone": "當著那麼多人下我的臉——這輩子記著",
+          "tone": "當著那麼多人下我的臉——這一筆記著，見面也是冷的",
           "from": "targets",
           "toward": "actor",
           "disposition": "cold",
@@ -602,7 +602,7 @@
         },
         {
           "kind": "standing",
-          "tone": "說不演就不演，這種人搭班要留神",
+          "tone": "說不演就不演，這種人搭班要留神，往後冷著點",
           "from": "witnesses",
           "toward": "actor",
           "disposition": "cold",
@@ -642,7 +642,7 @@
         },
         {
           "kind": "standing",
-          "tone": "說攆人就攆人，今日是他明日是誰",
+          "tone": "說攆人就攆人，今日是他明日是誰——這班子待著心冷",
           "from": "witnesses",
           "toward": "actor",
           "disposition": "cold",

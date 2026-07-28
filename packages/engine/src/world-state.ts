@@ -659,6 +659,26 @@ export interface WorldStateData {
     vitalsWindow?: Array<{ day: number; tick: number; samples: import('./core/vitals.ts').VitalsSample[] }>;
 }
 
+/**
+ * 語氣即機制 — the tone classifiers `welcome()` reads.
+ *
+ * Exported because they are load-bearing, not decorative. Every social gate in
+ * the engine (夜訪 admission, `tabTrust` 賒帳, `socialStandingOf`) runs through
+ * `welcome()`, and outside strict-structured mode `welcome()` reads the TONE
+ * STRING, not `disposition`. So an edge written with a perfectly good
+ * `disposition: 'cold'` but a tone containing none of these characters closes
+ * absolutely nothing — it looks like a grievance in the data and behaves like
+ * indifference in the world.
+ *
+ * That is not hypothetical: the first cut of the 世情動作 cards wrote six cold
+ * tones (「把我告到巡捕房去了——這一筆我記著」…) and not one of them matched, so
+ * 報官 cost its target nothing at all. `validateEventDeck` now refuses such a
+ * deck at load, against these exact patterns — which is why they live here,
+ * beside their only reader, rather than being retyped in the validator.
+ */
+export const WARM_TONE = /戀|慕|愛|親|暖|友/;
+export const COLD_TONE = /妒|怨|恨|冷|敵|競/;
+
 const SNAPSHOT_FILE = 'world.json';
 /** L3 identity is a small, un-evictable working set (CHARACTER_LIFECYCLE §3): a
  *  handful of self-facts, merged when full — never an ever-growing list. */
@@ -962,9 +982,9 @@ export class WorldState {
     welcome(hostId: string, visitorId: string): number {
         const e = this.data.edges[hostId]?.[visitorId];
         if (!e) return 0.5;
-        const legacy = /戀|慕|愛|親|暖|友/.test(e.tone)
+        const legacy = WARM_TONE.test(e.tone)
             ? Math.min(1, 0.7 + 0.1 * e.weight)
-            : /妒|怨|恨|冷|敵|競/.test(e.tone)
+            : COLD_TONE.test(e.tone)
               ? Math.max(0, 0.2 - 0.05 * e.weight)
               : 0.5;
         if (!this.data.strictStructured) return legacy;

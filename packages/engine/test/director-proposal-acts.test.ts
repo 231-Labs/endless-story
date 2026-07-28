@@ -44,7 +44,7 @@ import {
     type EventDeck,
 } from '../src/core/event-deck.ts';
 import { bondOf } from '../src/core/bond-graph.ts';
-import { HEARSAY_MARK } from '../src/core/standing.ts';
+import { HEARSAY_MARK, socialStandingOf, tabTrust, TAB_TRUST_FLOOR } from '../src/core/standing.ts';
 import { WorldState } from '../src/world-state.ts';
 
 function seasonWorld(): WorldState {
@@ -251,6 +251,12 @@ const WALK_OFF: CharacterAct = {
 
 const actDeck = (...acts: CharacterAct[]): EventDeck => deckOf({ acts });
 
+/** The shipped decks, through the real loader — an authored deck that no longer
+ *  validates is a bug the moment it is written, not on the next run. */
+function loadDeck(deckId: string): EventDeck {
+    return loadEventDeckFile(deckId, new URL('../../cli/scripts/decks', import.meta.url).pathname);
+}
+
 test('亮牌 is the whole permission: role, day, target-in-the-room and quota all gate', () => {
     const world = seasonWorld();
     const deck = actDeck(REPORT, WALK_OFF);
@@ -365,6 +371,60 @@ test('the caps bind: once per person, then a cooldown, then the day\'s ceiling',
     assert.equal(has(jiang, 4, 'report'), true, '隔日照舊');
 });
 
+test('a cold standing tone must actually be READABLE as cold — the bug that shipped', () => {
+    // `welcome()` reads the TONE STRING, not `disposition`, and every social gate
+    // in the engine runs through `welcome()`. The first cut of these acts wrote
+    // six perfectly sensible cold tones, none of which matched the classifier, so
+    // 報官 turned nobody against anybody and closed no door at all. The deck now
+    // refuses to load rather than shipping a grievance that does nothing.
+    const coldButUnreadable: CharacterAct = {
+        id: 'toothless',
+        label: '無牙的怨',
+        needsTarget: true,
+        effects: [{ kind: 'standing', tone: '把我告到巡捕房去了——這一筆我記著', from: 'targets', toward: 'actor' }],
+    };
+    assert.throws(() => validateEventDeck(deckOf({ acts: [coldButUnreadable] })), /關不上任何一扇門/);
+    assert.throws(
+        () => validateEventDeck(deckOf({ acts: [{ ...coldButUnreadable, effects: [{ kind: 'standing', tone: '照過面，沒什麼過節', disposition: 'warm', from: 'targets', toward: 'actor' }] }] })),
+        /warm/,
+    );
+
+    // And the positive half: a tone the classifier CAN read moves the gate.
+    const world = seasonWorld();
+    const liu = world.idByName('柳安春')!;
+    const su = world.idByName('蘇映雪')!;
+    assert.ok(world.welcome(su, liu) > TAB_TRUST_FLOOR, 'they start on ordinary terms');
+    playAct(world, actDeck({
+        id: 'fallout',
+        label: '翻臉',
+        needsTarget: true,
+        effects: [{ kind: 'standing', tone: '話說到那個份上，我心裡冷了', from: 'targets', toward: 'actor', grievance: 'shamed' }],
+    }), { actId: 'fallout', actorId: liu, targetId: su, coPresentIds: [liu, su], day: 3, nowTick: 12, clock: '黃昏' });
+
+    assert.ok(world.welcome(su, liu) <= 0.3, '夜裡她不會再替他開門');
+    assert.equal(tabTrust(world, liu, su).allowed, false, '她的攤子也不再賒給他');
+    assert.ok(socialStandingOf(world, liu).cold >= 1, '而處境榜真的數得到這一筆');
+});
+
+test('every shipped act CAN actually shut a door — no toothless grievances', () => {
+    // The deck validator catches this at load, but assert it against the real
+    // files too: this is the property the whole 世情動作 consequence rests on.
+    for (const deckId of ['spring-snow', 'spring-snow-premiere']) {
+        for (const act of loadDeck(deckId).acts ?? []) {
+            for (const effect of act.effects) {
+                if (effect.kind !== 'standing') continue;
+                const world = seasonWorld();
+                const [a, b] = [world.idByName('柳安春')!, world.idByName('蘇映雪')!];
+                world.setEdge(a, b, effect.tone, effect.disposition ?? 'cold');
+                assert.ok(
+                    world.welcome(a, b) <= 0.3,
+                    `${deckId}／${act.id}：「${effect.tone}」讀不出冷意，這條後果是空的`,
+                );
+            }
+        }
+    }
+});
+
 test('deck validation refuses acts and cards that reach past their own channel', () => {
     // cast-enter from an act = a character conjuring a person into the world.
     assert.throws(
@@ -414,8 +474,3 @@ test('the shipped decks are valid, and their acts stay inside the channel', () =
     }
 });
 
-/** Deliberately the real files, through the real loader: an authored deck that no
- *  longer validates is a bug the moment it is written, not on the next run. */
-function loadDeck(deckId: string): EventDeck {
-    return loadEventDeckFile(deckId, new URL('../../cli/scripts/decks', import.meta.url).pathname);
-}

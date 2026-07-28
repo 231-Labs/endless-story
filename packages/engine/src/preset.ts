@@ -21,6 +21,8 @@ import { makeClock } from './adapters/local/clock.ts';
 import { bondsToJSON, seedBond } from './core/bond-graph.ts';
 import {
     WorldState,
+    COLD_TONE,
+    WARM_TONE,
     type CastMember,
     type ContestedResource,
     type SceneInfo,
@@ -250,9 +252,7 @@ export function validateEventDeck(deck: EventDeck): void {
             if ((effect.kind === 'leak-secret' || effect.kind === 'publish-secret') && !secretIds.has(effect.secretId)) {
                 problems.push(`act ${act.id} 的 ${effect.kind} 指向牌組未宣告的秘密：${effect.secretId}`);
             }
-            if (effect.kind === 'standing' && !effect.tone?.trim()) {
-                problems.push(`act ${act.id} 的 standing 沒有 tone（人心轉向總得有句話）`);
-            }
+            if (effect.kind === 'standing') problems.push(...standingToneProblems(`act ${act.id}`, effect));
         }
         // 對人做的事沒有對象就永遠不會亮牌 —— 那是作者的筆誤，不是世界的狀態。
         if (act.needsTarget === false && act.effects?.some((effect) =>
@@ -265,8 +265,11 @@ export function validateEventDeck(deck: EventDeck): void {
     // A card's `standing` effect has no actor to resolve, so it may not name one.
     for (const card of deck.cards ?? []) {
         for (const effect of card.effects ?? []) {
-            if (effect.kind === 'standing' && (effect.from === 'actor' || effect.toward === 'actor')) {
-                problems.push(`card ${card.id} 的 standing 用了 'actor'，但事件卡沒有行為人（那是世情動作的欄位）`);
+            if (effect.kind === 'standing') {
+                if (effect.from === 'actor' || effect.toward === 'actor') {
+                    problems.push(`card ${card.id} 的 standing 用了 'actor'，但事件卡沒有行為人（那是世情動作的欄位）`);
+                }
+                problems.push(...standingToneProblems(`card ${card.id}`, effect));
             }
             if ((effect.kind === 'renown' || effect.kind === 'self-regard') && effect.on && effect.on !== 'targets') {
                 problems.push(`card ${card.id} 的 ${effect.kind}.on 用了 '${effect.on}'，但事件卡沒有行為人`);
@@ -274,6 +277,40 @@ export function validateEventDeck(deck: EventDeck): void {
         }
     }
     if (problems.length) throw new Error(`[deck] ${deck.id ?? '(無 id)'} 不合格：\n- ${problems.join('\n- ')}`);
+}
+
+/**
+ * 語氣即機制 —— a `standing` tone that the warmth classifier cannot read is a
+ * grievance that closes no door.
+ *
+ * Outside strict-structured mode `welcome()` reads the TONE STRING, not
+ * `disposition`, and `welcome()` is what every social gate in the engine runs
+ * through (夜訪 admission, `tabTrust` 賒帳, `socialStandingOf` 社會性死亡). So an
+ * edge written 「把我告到巡捕房去了——這一筆我記著」 with `disposition: 'cold'`
+ * reads as a perfectly ordinary neutral acquaintance to every one of them.
+ *
+ * The first cut of the 世情動作 cards shipped six tones exactly like that, and
+ * 報官 consequently cost its target nothing — the data looked right and the
+ * world did not move. An author cannot be expected to remember which six
+ * characters the regex wants, so the deck simply refuses to load without one.
+ */
+function standingToneProblems(
+    where: string,
+    effect: { tone?: string; disposition?: 'warm' | 'cold' | 'neutral' },
+): string[] {
+    const tone = effect.tone?.trim();
+    if (!tone) return [`${where} 的 standing 沒有 tone（人心轉向總得有句話）`];
+    const disposition = effect.disposition ?? 'cold';
+    if (disposition === 'cold' && !COLD_TONE.test(tone)) {
+        return [
+            `${where} 的 standing 是 cold，但語氣「${tone}」不帶 ${COLD_TONE.source} 任一字——` +
+                'welcome() 讀的是語氣不是 disposition，這樣寫關不上任何一扇門',
+        ];
+    }
+    if (disposition === 'warm' && !WARM_TONE.test(tone)) {
+        return [`${where} 的 standing 是 warm，但語氣「${tone}」不帶 ${WARM_TONE.source} 任一字`];
+    }
+    return [];
 }
 
 /**

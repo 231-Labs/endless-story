@@ -142,6 +142,13 @@ pnpm --filter @endless-story/engine engine -- deck-check --deck spring-snow
 沒有第二本口碑帳（見 `core/standing.ts`）。`hearsay: true` 標成街談，會隨著天天照面
 而淡（`fadeHearsay`）；當事人的第一手怨氣不淡，得真有事發生才解。
 
+> **語氣即機制。** `welcome()`（夜訪、`tabTrust` 賒帳、`socialStandingOf` 社會性死亡
+> 全部走它）在非 strict-structured 下讀的是**語氣字串**，不是 `disposition`。所以
+> `disposition: 'cold'` 但語氣不帶 `妒|怨|恨|冷|敵|競` 任一字的 edge，看起來是怨，
+> 走起來是無事——關不上任何一扇門。第一版的世情動作六條語氣全是這樣寫的（「把我告到
+> 巡捕房去了——這一筆我記著」），報官因此對當事人零代價。現在 `deck-check` 會當場擋
+> 下這種牌（比對 `WARM_TONE`／`COLD_TONE`，與 `welcome()` 同一份 pattern）。
+
 **分支後果（`onlyIf`）**：任何一個 effect 可以掛一個 `CardCondition`，條件不成立就
 跳過這一條。這是「必到之日 × 兩種結果」的寫法——例如「首演之夜」到日必落，可是它
 結算什麼，看新戲到底上沒上台：

@@ -12,7 +12,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { bondOf, PARTS_OF_DAY, PRODUCTION, totalEffort, WorldState, type ProductionStatus, type RawPreset } from '@endless-story/engine';
+import { bondOf, PARTS_OF_DAY, PRODUCTION, standingBoard, totalEffort, WorldState, type ProductionStatus, type RawPreset } from '@endless-story/engine';
 import type { DayPart, Saga, SagaLocation, Scene } from '@endless-story/shared';
 import { labManager } from './manager';
 import { runDir } from './paths';
@@ -20,7 +20,7 @@ import { readRunMeta } from './store';
 import { readSeedRaw } from './seeds';
 import { assetNoteFor, assetUrlFor, listGallery } from './assets';
 import { beatsFromTickRecords, listArchiveEntries, readArchiveEntry, tailTickRecords } from './artifacts';
-import type { LabCharacterLive, LabLiveBeat, LabPrayer, LabRunMeta, LabRunPhase, LabSceneObject } from './types';
+import type { LabCharacterLive, LabLiveBeat, LabPrayer, LabRunMeta, LabRunPhase, LabSceneObject, LabTickRecord } from './types';
 
 /** The chain-only preset fields the engine ignores but the handscroll wants. */
 interface RawPresetView extends RawPreset {
@@ -76,6 +76,53 @@ export interface LabLiveSnapshot {
     /** 劇本產出 current state — present only when the flag is on and a production
      *  has begun. Drives the run page's 製作中 panel. */
     production?: LabProductionLive;
+    /** 外力與世情 — what the deck, the director and the cast have MADE HAPPEN,
+     *  plus the run's vitals. Absent when the run carries no deck: a scroll with
+     *  no external-push layer has nothing to show here, and an empty panel would
+     *  read as「壞了」rather than as「這一卷沒掛牌組」. */
+    pressure?: LabPressureLive;
+}
+
+/** One thing that happened TO the world (or that somebody did to it). */
+export interface LabPressurePlay {
+    day: number;
+    tick: number;
+    cardId: string;
+    label: string;
+    chosenBy: 'director' | 'deadline' | 'operator' | 'director-proposed' | 'character';
+    /** 世情動作 only — who set it in motion. */
+    actorName?: string;
+    targetNames: string[];
+    /** the director's own one-line reason (audit only). */
+    rationale?: string;
+    irreversible: number;
+    lines: string[];
+}
+
+/** Where somebody stands with the room — shown only for people it has moved for. */
+export interface LabStandingRow {
+    characterId: string;
+    name: string;
+    cold: number;
+    warm: number;
+    renown: number;
+    /** derived, never stored: a supermajority cold, no warm face, a name that
+     *  draws nothing. See engine `core/standing.ts`. */
+    sociallyDead: boolean;
+}
+
+export interface LabPressureLive {
+    deckId: string;
+    /** newest first. */
+    plays: LabPressurePlay[];
+    /** how many of each kind, over the whole run so far. */
+    tally: { deadline: number; director: number; proposed: number; character: number; operator: number };
+    /** 自撰遭駁 — the director reached past what the engine allows, and how far. */
+    refused: Array<{ day: number; label: string; problems: string[] }>;
+    /** the most recent tick's 生命體徵, when one has been computed. */
+    vitals?: NonNullable<LabTickRecord['vitals']>;
+    /** only people some of the room has actually gone cold on. */
+    standing: LabStandingRow[];
 }
 
 /** The in-progress (or premiered) production, shaped for the 製作中 panel. */
@@ -491,6 +538,14 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         }
         : undefined;
 
+    // ── 外力與世情 ─────────────────────────────────────────────────────────
+    // Read from the tick records rather than from `directorLog`: the log holds
+    // card IDS, and the label of an authored card lives in the deck file, not in
+    // the world. The records already carry the rendered label, the actor and the
+    // outcome lines, and they are written for both active and cold runs — one
+    // source, no deck load, no special case.
+    const pressure = w.deckId ? buildPressure(runId, world, w.deckId) : undefined;
+
     return {
         runId,
         meta,
@@ -519,7 +574,85 @@ export async function buildLiveSnapshot(runId: string, afterSeq = 0): Promise<La
         beats,
         logs: (active?.logs ?? []).slice(-40),
         production,
+        pressure,
     };
+}
+
+/** How many recent plays the panel shows. Enough to read the last day or two at
+ *  a glance; the full audit trail is the diagnostics export's job. */
+const PRESSURE_PLAY_WINDOW = 12;
+/** How deep to scan for the tally + refusals. Bounded so a long run's panel
+ *  stays cheap; the export is where the complete history lives. */
+const PRESSURE_SCAN_TICKS = 240;
+
+/**
+ * The tick-record scan is memoised on the log file's own size+mtime.
+ *
+ * `ticks.jsonl` is append-only and the live endpoint polls every couple of
+ * seconds; re-reading and JSON-parsing the whole file each time would put a
+ * multi-megabyte parse on the poll path of a long run. Keyed on the file's
+ * stat rather than a timer, so it is exact rather than merely fresh-ish.
+ *
+ * 處境 is deliberately NOT cached: it is derived live from edges/bonds/renown,
+ * which move without the log file changing at all.
+ */
+const pressureCache = new Map<string, { key: string; value: Omit<LabPressureLive, 'deckId' | 'standing'> }>();
+
+function scanPressureRecords(runId: string): Omit<LabPressureLive, 'deckId' | 'standing'> {
+    let key = 'missing';
+    try {
+        const stat = fs.statSync(path.join(runDir(runId), 'ticks.jsonl'));
+        key = `${stat.size}:${stat.mtimeMs}`;
+    } catch {
+        // no log yet — fall through and produce an empty scan
+    }
+    const cached = pressureCache.get(runId);
+    if (cached?.key === key) return cached.value;
+
+    const records = tailTickRecords(runId, PRESSURE_SCAN_TICKS);
+    const tally = { deadline: 0, director: 0, proposed: 0, character: 0, operator: 0 };
+    const plays: LabPressurePlay[] = [];
+    const refused: LabPressureLive['refused'] = [];
+    let vitals: LabPressureLive['vitals'];
+
+    for (const record of records) {
+        if (record.vitals) vitals = record.vitals;
+        for (const row of record.proposalsRefused ?? []) refused.push({ day: record.day, ...row });
+        for (const card of record.cardsPlayed ?? []) {
+            if (card.chosenBy === 'director-proposed') tally.proposed += 1;
+            else if (card.chosenBy in tally) tally[card.chosenBy as keyof typeof tally] += 1;
+            plays.push({ day: record.day, tick: record.tick, ...card });
+        }
+    }
+    plays.reverse(); // newest first — the panel reads top-down as「剛剛發生了什麼」
+
+    const value = {
+        plays: plays.slice(0, PRESSURE_PLAY_WINDOW),
+        tally,
+        refused: refused.slice(-4),
+        ...(vitals ? { vitals } : {}),
+    };
+    pressureCache.set(runId, { key, value });
+    return value;
+}
+
+function buildPressure(runId: string, world: WorldState, deckId: string): LabPressureLive {
+    // 處境 is DERIVED live from edges/bonds/renown (there is no stored ledger),
+    // so it is always current even on a cold run reading world.json.
+    const standing = standingBoard(world)
+        .filter((row) => row.cold > 0)
+        .sort((a, b) => Number(b.sociallyDead) - Number(a.sociallyDead) || b.cold - a.cold || a.renown - b.renown)
+        .slice(0, 8)
+        .map((row) => ({
+            characterId: row.characterId,
+            name: world.nameById(row.characterId),
+            cold: row.cold,
+            warm: row.warm,
+            renown: row.renown,
+            sociallyDead: row.sociallyDead,
+        }));
+
+    return { deckId, ...scanPressureRecords(runId), standing };
 }
 
 /** Ensure PARTS_OF_DAY stays imported (documents the 六時辰 rhythm source). */
