@@ -24,7 +24,9 @@ import {
     TickFilesystemTransaction,
     WorldState,
     applySeasonFrame,
+    attachEventDeck,
     createWorldFromPreset,
+    loadEventDeckFile,
     loadSeasonFrameFile,
     reconcileSeasonObjects,
     runTick,
@@ -45,7 +47,7 @@ import { beatsFromTickRecords, tailTickRecords } from './artifacts';
 import { writeCheckpoint } from './checkpoints';
 import { readJson, runDir, writeJsonAtomic } from './paths';
 import { readRunMeta, writeRunStatus } from './store';
-import { readSeedRaw, seasonDirFor, seedDirFor } from './seeds';
+import { deckDirFor, readSeedRaw, seasonDirFor, seedDirFor } from './seeds';
 import type { LabLiveBeat, LabRunMeta, LabRunPhase, LabTickRecord } from './types';
 
 const BEAT_RING_CAP = 600;
@@ -105,6 +107,8 @@ interface RunManifest {
     heartsCanFade: boolean;
     beatPicksWant: boolean;
     quietPresence: boolean;
+    /** 事件牌組 id in play. Absent ⇒ this run has no external-push layer. */
+    deck?: string;
 }
 
 export interface ActiveRun {
@@ -220,6 +224,7 @@ export class LabRunManager {
             heartsCanFade: cfg.heartsCanFade ?? false,
             beatPicksWant: cfg.beatPicksWant ?? false,
             quietPresence: cfg.quietPresence ?? false,
+            ...(cfg.deckId ? { deck: cfg.deckId } : {}),
         };
         const previous = readJson<RunManifest>(manifestFile);
         if (previous) {
@@ -273,7 +278,24 @@ export class LabRunManager {
                 world.data.subjectiveNaming = true;
                 seedAcquaintance(world);
             }
+            // 劇本產出 — a season whose 命題 is the making of a play turns the layer
+            // on itself, so a run config cannot forget what the season depends on.
+            if (seasonFrame?.emergentProduction) world.data.emergentProduction = true;
             freshWorld = true;
+        }
+        // 事件牌組 (外力層) — validated at LOAD time so a malformed card fails before
+        // the run opens, never mid-tick. Attaching is idempotent, so a resumed run
+        // re-arms the same secrets without duplicating them.
+        const deck = cfg.deckId ? loadEventDeckFile(cfg.deckId, deckDirFor(cfg.deckSource ?? 'builtin')) : undefined;
+        if (deck) attachEventDeck(world, deck);
+        // 追蹤開關 — resolved against the live cast; an unknown name fails loudly
+        // rather than silently halving the run's POV output.
+        if (cfg.trackedCharacterNames?.length) {
+            world.data.trackedCharacterIds = cfg.trackedCharacterNames.map((name) => {
+                const id = world.castById(name) ? name : world.idByName(name);
+                if (!id) throw new Error(`追蹤名單裡沒有這個人：${name}（此卷可選：${world.data.cast.map((m) => m.name).join('、')}）`);
+                return id;
+            });
         }
         if (seasonFrame) writeJsonAtomic(path.join(out, 'season-frame.json'), seasonFrame);
         if (seasonFrame && freshWorld) {
@@ -287,7 +309,7 @@ export class LabRunManager {
             meta,
             raw,
             world,
-            deps: { agent, recall, archive, clock, economy },
+            deps: { agent, recall, archive, clock, economy, ...(deck ? { deck } : {}) },
             composeAnthology,
             transaction,
             seasonFrame,
@@ -395,6 +417,46 @@ export class LabRunManager {
             })),
             eventPovs: report.eventPovs,
             economyNotices: report.economyNotices,
+            // 宏觀節奏 — every field is written only when the tick produced it, so a
+            // run with no deck / no tracking / no artifacts keeps its old line shape.
+            ...(report.vitals
+                ? {
+                      vitals: {
+                          irreversible: report.vitals.irreversible,
+                          wantsResolved: report.vitals.wantsResolved,
+                          wantsLive: report.vitals.wantsLive,
+                          resolvedRate: report.vitals.resolvedRate,
+                          resolvedThisTick: report.vitals.resolvedThisTick,
+                          sceneEntropy: report.vitals.sceneEntropy,
+                          sceneCrowdPeak: report.vitals.sceneCrowdPeak,
+                          convergence: report.vitals.convergence,
+                          loops: report.vitals.loops,
+                          actorCount: report.vitals.actorCount,
+                      },
+                  }
+                : {}),
+            ...(report.cardsPlayed?.length ? { cardsPlayed: report.cardsPlayed } : {}),
+            ...(report.proposalsRefused?.length ? { proposalsRefused: report.proposalsRefused } : {}),
+            ...(report.artifacts?.length
+                ? {
+                      artifacts: report.artifacts.map((artifact) => ({
+                          kind: artifact.kind,
+                          id: artifact.id,
+                          characterId: artifact.characterId,
+                          name: artifact.name,
+                          day: artifact.day,
+                          body: artifact.body,
+                          ...(artifact.kind === 'diary'
+                              ? {
+                                    supportedClaims: artifact.claims.length,
+                                    unsupportedClaims: artifact.unsupportedClaims.length,
+                                }
+                              : { occasion: artifact.occasion }),
+                      })),
+                  }
+                : {}),
+            ...(report.povTrackedIds?.length ? { povTrackedIds: report.povTrackedIds } : {}),
+            ...(report.backgroundNeeds?.length ? { backgroundNeeds: report.backgroundNeeds } : {}),
             finishedAt: new Date().toISOString(),
         };
         fs.appendFileSync(ticksFileOf(run.meta.id), `${JSON.stringify(record)}\n`, 'utf8');

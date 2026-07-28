@@ -50,13 +50,49 @@ import {
     type ProductionStatus,
 } from './core/production.ts';
 import { PARTS_OF_DAY } from './ports.ts';
-import type { AidActionInput, AidActionResult, AidPeer, AidSituation, AidVitality, ArchivePort, CanonicalSceneEvent, ClockPort, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
+import type { AidActionInput, AidActionResult, AidPeer, AidSituation, AidVitality, ArchivePort, CanonicalSceneEvent, ClockPort, DirectorOfferedCard, EconomyPort, RecallPort, RehearsalDecideReply, SceneAgentPort } from './ports.ts';
 import { deriveBeatPerceiverIds, projectEventBeatsForWitness } from './core/scene-perception.ts';
 import { commitBeatPhysics } from './core/physical-canon.ts';
-import { bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, performanceDutyLine, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
+import { accountFace, bankRehearsalAttendance, buildLendSeatInput, buildNegotiationSeats, collectOverdueDebtWants, creditAdvertFor, enforceContractCommandPairing, foodScenesOf, formatMoney, performanceDutyLine, settleEveningPerformance, settleTenancyMoveIns, troupeLeaderId, troupePlayerIds, type SeasonCatalogItem } from './core/season-economy.ts';
 import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple-prayer.ts';
 import { drainPendingDreams } from './core/dream.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
+import { settleBackgroundNeeds } from './core/background-needs.ts';
+import {
+    availableActsFor,
+    canPropose,
+    describeEligible,
+    eligibleCards,
+    partIndexOf,
+    playAct,
+    playCard,
+    validateProposal,
+    type CardProposal,
+    type DirectorLogEntry,
+    type EventCard,
+    type EventDeck,
+    type PlayCardResult,
+} from './core/event-deck.ts';
+import { fallbackStance, reckoningSeats, type DebtStance } from './core/income-events.ts';
+import { fadeHearsay, standingPerceptFor } from './core/standing.ts';
+import { evaluateSecretLeaks } from './core/secret-ledger.ts';
+import { runWantLifecycle } from './core/want-lifecycle.ts';
+import {
+    artifactsOf,
+    auditClaims,
+    circulateArtifact,
+    diaryId,
+    markPoemWritten,
+    poemId,
+    poemOccasions,
+    recordArtifact,
+    spawnPoemProp,
+    type ArtifactEvidenceBeat,
+    type CharacterArtifact,
+    type DiaryArtifact,
+    type PoemArtifact,
+} from './core/artifacts.ts';
+import { computeTickVitals, describeVitals, pushVitalsWindow, type TickVitals, type VitalsSample } from './core/vitals.ts';
 import { renownLabel, type WorldState } from './world-state.ts';
 
 interface WantDraftForDeclaration {
@@ -166,6 +202,10 @@ export interface TickDeps {
     /** Season money physics. REQUIRED when the world carries economy data —
      *  a moneyed world without a settlement port must fail loud, not drift. */
     economy?: EconomyPort;
+    /** 事件牌組 — the finite, declarative external-push layer. Absent ⇒ the deck
+     *  phase is inert and the tick behaves exactly as it did before the deck
+     *  existed (no cards, no director call, no forced deadlines). */
+    deck?: EventDeck;
 }
 
 export interface TickOpts {
@@ -244,6 +284,33 @@ export interface TickReport {
         scriptFragments: number;
         premieredDay?: number;
     };
+    // ── 宏觀節奏 (macro rhythm) — every field is ADDITIVE: absent means the
+    //    feature was inert this tick, so existing consumers are untouched.
+    /** 生命體徵 — 不可逆事件數／resolved 率／場景熵／迴圈偵測 for this tick. */
+    vitals?: TickVitals;
+    /** 事件卡 played this tick, with what the director chose and what landed. */
+    cardsPlayed?: Array<{
+        cardId: string;
+        label: string;
+        chosenBy: 'director' | 'deadline' | 'operator' | 'director-proposed' | 'character';
+        targetNames: string[];
+        /** 世情動作 only: who set it in motion. */
+        actorName?: string;
+        costume?: string;
+        rationale?: string;
+        irreversible: number;
+        lines: string[];
+    }>;
+    /** 自撰的牌 the engine REFUSED, with every reason — an overreaching director
+     *  should be visible in the diagnostics, not silently swallowed. */
+    proposalsRefused?: Array<{ label: string; problems: string[] }>;
+    /** 角色工件 written this tick (日記 at day end, 詩詞 on occasion). */
+    artifacts?: CharacterArtifact[];
+    /** Who this tick actually paid for POV prose for — the tracking switch made
+     *  visible, so a cost regression is caught in the diagnostics not the bill. */
+    povTrackedIds?: string[];
+    /** 背景結算 — hunger settled offstage (character names), one clause each. */
+    backgroundNeeds?: string[];
 }
 
 export interface TickEventPov {
@@ -251,6 +318,74 @@ export interface TickEventPov {
     name: string;
     eventId: string;
     body: string;
+}
+
+/** 詩詞的場合 — the world-language reason a poem exists today. Fixed strings, so
+ *  the occasion is a FACT handed to the poem seat, never a suggestion of content. */
+const POEM_OCCASION_LINES: Record<string, string> = {
+    'tension-peak': '有一樁事今日壓到了頂，不寫下來就要溢出來',
+    betrothed: '今日與人交了心，說了不能收回的話',
+    refused: '今日被人推了回來，那句話終究沒有落處',
+    parting: '今日送走了一個人，站台上的是自己',
+    reckoning: '今日結了帳，數目清了，別的沒清',
+};
+
+/** Render one eligible card as the director's offer. Deliberately carries NO
+ *  number the director could act on: money, tension and box office stay the
+ *  engine's business — the director chooses which pressure, on whom, in what
+ *  words, and nothing that would let them do arithmetic on the world. */
+function offerOf(
+    world: WorldState,
+    row: { card: { id: string; label: string; note?: string; targeting: { mode: string; pickCount?: number } }; candidateIds: string[]; forced: boolean },
+): DirectorOfferedCard {
+    return {
+        cardId: row.card.id,
+        label: row.card.label,
+        ...(row.card.note ? { note: row.card.note } : {}),
+        forced: row.forced,
+        candidates: row.candidateIds.map((id) => ({ id, name: world.nameById(id) })),
+        pickCount:
+            row.card.targeting.mode === 'director-pick'
+                ? Math.max(1, row.card.targeting.pickCount ?? 1)
+                : row.candidateIds.length,
+    };
+}
+
+/** 世情簡報 — where the world stands, in prose only. Qualitative by construction:
+ *  the director is a dramaturge, not an accountant, and a figure in this brief
+ *  would be a figure they could optimise against. */
+function buildDirectorBrief(world: WorldState, day: number, clockLabel: string): string[] {
+    const brief: string[] = [`第 ${day} 日，${clockLabel}。`];
+    const hottest = world.data.wants
+        .filter((want) => !want.retired)
+        .sort((a, b) => tension(b) - tension(a))
+        .slice(0, 5)
+        .map((want) => `${world.nameById(want.characterId)}：${want.desc}（${forcingLevel(want)}）`);
+    if (hottest.length) brief.push('燒得最旺的幾樁心事：', ...hottest.map((line) => `  · ${line}`));
+    const troupeId = world.data.economy?.troupeAccountId;
+    if (troupeId) {
+        const face = accountFace(world, troupeId);
+        if (face) {
+            const runway = face.runwayDays;
+            brief.push(
+                `班庫的光景：${
+                    runway === null ? '開銷撐得住' : runway <= 1n ? '見底了' : runway <= 3n ? '緊得很' : runway <= 7n ? '勉強週轉' : '尚有餘裕'
+                }。`,
+            );
+        }
+    }
+    const owing = (world.data.economy?.bills ?? []).filter((bill) => BigInt(bill.paidSubunits) < BigInt(bill.amountSubunits));
+    if (owing.length) brief.push(`街上還賒著的帳：${owing.map((bill) => bill.label).join('、')}。`);
+    const guns = (world.data.secretLedger ?? []).filter((secret) => secret.publishedDay === undefined);
+    if (guns.length) {
+        brief.push(
+            '還沒發的事：',
+            ...guns.map((secret) => `  · ${secret.matter}（${secret.leakedDay !== undefined ? '已漏口風' : '還捂著'}）`),
+        );
+    }
+    const departed = world.data.departedIds ?? [];
+    if (departed.length) brief.push(`已離班：${departed.map((id) => world.nameById(id)).join('、')}。`);
+    return brief;
 }
 
 /** A lean daily-life state line from the state vector (undertone, not an event). */
@@ -265,7 +400,7 @@ function stateLine(fatigue: number, hunger: number): string | undefined {
 
 export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts = {}): Promise<TickReport> {
     const log = opts.log ?? ((l: string) => console.log(l));
-    const { agent, recall, archive, clock, economy } = deps;
+    const { agent, recall, archive, clock, economy, deck } = deps;
     const w = world.data;
     if (w.economy && !economy) {
         throw new Error('world carries season economy data but TickDeps.economy is missing — pass a LocalEconomy');
@@ -390,7 +525,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // 1) GENESIS + ledger upkeep — daytime only (§3.9: night consolidates).
     let genesisRan = 0;
     if (!night) {
-        for (const member of w.cast) {
+        // 離班者不再長心事 —— the acting cast only. A departed member keeps their
+        // name and memories but is off the board (see WorldState.activeCast).
+        for (const member of world.activeCast()) {
             if (wants.some((x) => x.characterId === member.id && x.source === 'genesis')) continue;
             const derived = await agent.deriveGenesisWants({
                 name: member.name,
@@ -445,6 +582,80 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         decayWants(wants);
         for (const f of fadeStaleWants(wants, nowTick, w.strictStructured === true)) {
             log(`  淡了: ${world.nameById(f.characterId)}「${f.desc}」`);
+        }
+    }
+
+    // 1.2) 秘密洩漏 + 記者的「發不發」 — once per day, at 清晨, before anybody moves.
+    // A loaded gun needs a mechanism to go off: each secret carries finite leak
+    // conditions the engine evaluates deterministically, and any press-role
+    // character who KNOWS a secret is handed a dated 「發不發」 want (publish ⇒
+    // resolved, sit on it ⇒ foreclosed). That is how the three guns that stayed
+    // silent for three days acquire a trigger. Inert when the world has no
+    // secretLedger (a run predating this layer).
+    let irreversibleThisTick = 0;
+    /**
+     * 世情動作 — what the CAST set in motion during this tick's scenes.
+     *
+     * Collected here and settled in 7.85 rather than mid-beat, on purpose: every
+     * consequence in this engine lands through one settlement path, in one place,
+     * in a deterministic order, or the run stops being replayable. Nothing is
+     * lost by waiting — a card's percepts always land on the NEXT tick anyway, so
+     * the room learns what 柳安春 just did at exactly the moment it would have
+     * learned it from any other source.
+     */
+    const actInvocations: Array<{
+        actId: string;
+        actorId: string;
+        targetId?: string;
+        coPresentIds: string[];
+    }> = [];
+    if (c.tickOfDay === 0 && w.secretLedger?.length) {
+        const leaks = evaluateSecretLeaks(world, { day: today, nowTick });
+        irreversibleThisTick += leaks.leaked.length;
+        for (const leak of leaks.leaked) {
+            log(`  [漏了] ${leak.line}`);
+            w.dayAccum.lines.push(`[風聲] ${leak.line}`);
+            (w.scheduledEvents ??= []).push({
+                id: `secret-leak-${leak.secret.id}-t${nowTick}`,
+                atTick: nowTick + 1,
+                sceneId: w.scenes.find((scene) => scene.name === w.economy?.noticeSceneName)?.id ?? w.scenes[0].id,
+                text: leak.line,
+                visibility: 'public',
+                witnessIds: [...new Set([...leak.secret.knownByIds, ...leak.reachedIds])],
+            });
+        }
+        for (const notice of leaks.notices) {
+            (w.scheduledEvents ??= []).push({
+                id: `secret-notice-${notice.characterId}-t${nowTick}`,
+                atTick: nowTick + 1,
+                sceneId: w.roster[notice.characterId] ?? w.scenes[0].id,
+                text: notice.text,
+                visibility: 'private',
+                witnessIds: [notice.characterId],
+            });
+        }
+        for (const dilemma of leaks.pressDilemmas) {
+            log(`  [發不發] ${world.nameById(dilemma.characterId)}「${dilemma.desc}」（第 ${dilemma.dueDay} 日為限）`);
+        }
+    }
+
+    // 1.3) 生理需求降級 — hunger settles OFFSTAGE for whoever it is not dramatically
+    // relevant for: money leaves the purse, the belly quiets, ONE clause reaches the
+    // day log, and no scene is spent. This is the direct fix for the 糖粥 attractor
+    // (八個角色同一個深宵去買同一碗粥). Two exemptions keep the scarcity that is
+    // producing the good material: a character who cannot pay stays hungry, and a
+    // character under real pressure keeps their hunger in the frame. Runs BEFORE
+    // movement so the stakes brief sees the settled belly.
+    let backgroundNeeds: string[] | undefined;
+    if (!night && w.economy) {
+        const settled = settleBackgroundNeeds(world, { day: today, nowTick });
+        if (settled.lines.length) {
+            backgroundNeeds = settled.lines;
+            for (const line of settled.lines) log(`  [背景] ${line}`);
+            w.dayAccum.lines.push(`[食] ${settled.lines.join(' ')}`);
+        }
+        if (settled.keptOnstageIds.length) {
+            log(`  [背景] 留在戲裡的餓：${settled.keptOnstageIds.map((id) => world.nameById(id)).join('、')}`);
         }
     }
 
@@ -891,6 +1102,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => event.text),
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
+                standingPerceptFor(world, member.id) ?? '',
                 ...(intrudePull ? [intrudePull] : []),
                 ...(knockPull ? [knockPull] : []),
                 ...(seekPull ? [seekPull] : []),
@@ -1458,8 +1670,9 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
     // 3) Group co-present cast by scene; at night keep only qualifying scenes.
     const byScene = new Map<string, string[]>();
-    for (const m of w.cast) {
+    for (const m of world.activeCast()) {
         const sid = w.roster[m.id];
+        if (!sid) continue; // off the board (離班) — in no scene, so in no beat
         (byScene.get(sid) ?? byScene.set(sid, []).get(sid)!).push(m.id);
     }
     if (night) {
@@ -1492,7 +1705,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // this tick's stateLine. Inert for any seed with no sceneName'd meal.
     if (!night && economy && w.economy && foodScenes.size) {
         const EAT_AT_STALL = 0.35; // at the stall and at all hungry ⇒ you eat
-        for (const member of w.cast) {
+        for (const member of world.activeCast()) {
             const rosterScene = w.roster[member.id];
             const meal = foodScenes.get(rosterScene);
             if (!meal || member.state.hunger <= EAT_AT_STALL) continue;
@@ -1530,7 +1743,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // once-per-day bound keeps the temple from flooding. Inert for a world with no
     // temple scene (templeScenes empty).
     if (templeScenes.size) {
-        for (const member of w.cast) {
+        for (const member of world.activeCast()) {
             const rosterScene = w.roster[member.id];
             if (!templeScenes.has(rosterScene)) continue;       // not standing at a temple
             if (world.prayedToday(member.id, today)) continue;  // once per day — no flooding
@@ -1771,6 +1984,13 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     const acc = w.dayAccum;
     /** Per-character angle on this tick: objective act + inner thought. */
     const pov = new Map<string, { name: string; lines: string[] }>();
+    /** 日記的原料 — the DAY's citable beats per character, accumulated on dayAccum
+     *  so the day-end diary can cite `beat:N` refs the engine minted itself. */
+    const diaryEvidence: Record<string, ArtifactEvidenceBeat[]> = (w.dayAccum.beatsByChar ??= {});
+    /** 相許 formed on THIS tick — the one poem occasion that never needs justifying.
+     *  World state alone cannot tell a pair established today from one established
+     *  last week, so the tick reports it. */
+    const newlyEstablishedPairs: Array<[string, string]> = [];
 
     for (const [sid, ids] of byScene) {
         if (ids.length === 0) continue;
@@ -1900,7 +2120,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         state: object.state,
                         container: object.container ? world.objectById(object.container)?.label ?? object.container : undefined,
                     })),
-                    economyLine: economy?.projectFor(world, id, sid),
+                    // 街上怎麼說你 —— derived from who currently holds a cold edge
+                    // toward them. It rides the money line because it IS a money fact
+                    // (a shut 賒帳 door) as much as a social one.
+                    economyLine: [economy?.projectFor(world, id, sid), standingPerceptFor(world, id)]
+                        .filter(Boolean)
+                        .join('\n') || undefined,
                     // 借賒有據: which credit verbs to 亮牌 for this actor in THIS
                     // scene (borrow needs a co-present cast member; repay an open
                     // 欠條 to one). undefined when the flag is off — byte-identical.
@@ -1955,6 +2180,21 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 }));
                 actor.economyLine = economy?.projectFor(world, actor.characterId, sid);
                 actor.credit = creditAdvertFor(world, actor.characterId, ids);
+                // 世情動作亮牌 — only what this person can actually do, here, now.
+                // A character can no more invent 報官 than a director can invent a
+                // card: the prompt advertises this list and the tick refuses
+                // anything outside it.
+                actor.acts = deck
+                    ? availableActsFor(world, deck, { characterId: actor.characterId, day: today, coPresentIds: ids })
+                          .map((offer) => ({
+                              id: offer.actId,
+                              label: offer.label,
+                              ...(offer.note ? { note: offer.note } : {}),
+                              needsTarget: offer.needsTarget,
+                              targetNames: offer.candidates.map((row) => row.name),
+                          }))
+                    : undefined;
+                if (actor.acts && !actor.acts.length) actor.acts = undefined;
             },
             onBeat: async (beat) => {
                 // 相識分寸: resolve the addressed display back to an id — perceived-name
@@ -1968,6 +2208,20 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 if (w.subjectiveNaming && addressedId && addressedId !== beat.characterId && ids.includes(addressedId)) {
                     world.setAcquaint(beat.characterId, addressedId, 'named');
                     world.setAcquaint(addressedId, beat.characterId, 'named');
+                }
+                // 世情動作 — the beat says 「我去報官」; the engine decides what that
+                // costs. Queued, never settled here: 7.85 owns every card play.
+                // An id the engine never advertised is dropped by `playAct`.
+                if (beat.act?.id) {
+                    const namedTarget = beat.act.targetName
+                        ? world.resolveAddressed(beat.characterId, beat.act.targetName, ids) ?? world.idByName(beat.act.targetName)
+                        : undefined;
+                    actInvocations.push({
+                        actId: beat.act.id,
+                        actorId: beat.characterId,
+                        ...(namedTarget ? { targetId: namedTarget } : {}),
+                        coPresentIds: [...ids],
+                    });
                 }
                 // A beat that touches a contract paper must also move the ledger —
                 // checked BEFORE physics so a rejected draft leaves no object change.
@@ -2113,6 +2367,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         if (loop.intimacyAccepted && ids.length === 2) {
             bumpBond(bonds, ids[0], ids[1], 'bed');
             world.addEstablished(ids[0], ids[1]);
+            newlyEstablishedPairs.push([ids[0], ids[1]]);
             grantMutualHomeKeys(ids[0], ids[1]); // 相許 → 授權: mutual standing keys
             if (w.subjectiveNaming) { world.setAcquaint(ids[0], ids[1], 'named'); world.setAcquaint(ids[1], ids[0], 'named'); }
             log(`  [相許] ${world.nameById(ids[0])} 與 ${world.nameById(ids[1])} 這一場成了彼此`);
@@ -2168,6 +2423,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 });
                 if (established) {
                     world.addEstablished(a, b);
+                    newlyEstablishedPairs.push([a, b]);
                     grantMutualHomeKeys(a, b); // 相許 → 授權: mutual standing keys
                     if (w.subjectiveNaming) { world.setAcquaint(a, b, 'named'); world.setAcquaint(b, a, 'named'); }
                     bumpBond(bonds, a, b, 'accept');
@@ -2266,6 +2522,19 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             const p = pov.get(b.characterId) ?? { name: b.name, lines: [] };
             p.lines.push(`〔${sceneName}·${clockLabel}〕${b.text}\n（心下：${b.inner}）`);
             pov.set(b.characterId, p);
+            // 日記的原料 — this beat, citable. Recorded for EVERY character, tracked
+            // or not: the structural layer always runs in full, which is exactly what
+            // makes an untracked character's POV backfillable later.
+            const bank = (diaryEvidence[b.characterId] ??= []);
+            bank.push({
+                ref: `beat:${bank.length}`,
+                day: today,
+                tick: nowTick,
+                clock: clockLabel,
+                sceneName,
+                text: b.text,
+                ...(b.inner ? { inner: b.inner } : {}),
+            });
         }
         if (isPrivate && loop.beats.length) {
             const who = ids.map((id) => world.nameById(id)).join('、');
@@ -2287,8 +2556,18 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
 
 
         // Render the frozen event through each witness's own durable session.
+        //
+        // 追蹤開關 — POV prose is the PRESENTATION layer, not the simulation layer:
+        // everything the mechanism needs from a character's interior already sits in
+        // that beat's 〔心下〕, which is captured above for the whole cast. So this
+        // call — one LLM request per witness per scene, the single largest cost in a
+        // run — is gated on `isTracked`. An empty/absent tracking list keeps the old
+        // behaviour (everybody), so this is opt-in. Because the beats are recorded in
+        // full, an untracked character's POV can be written after the fact
+        // (`engine pov-backfill`), which is why gating it loses nothing durable.
         if (loop.beats.length) {
             for (const id of ids) {
+                if (!world.isTracked(id)) continue;
                 const member = world.castById(id)!;
                 const rendered = await agent.povScene({
                     sagaId: w.sagaId,
@@ -2460,7 +2739,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     }
 
     // 5) Advance the daily-life state vector (undertone; derived, persisted).
-    for (const m of w.cast) {
+    for (const m of world.activeCast()) {
         const acted = actedCharacterIds.includes(m.id);
         m.state.fatigue = Math.max(0, Math.min(1, m.state.fatigue + (night ? -0.4 : acted ? 0.12 : 0.05)));
         m.state.hunger = Math.max(0, Math.min(1, c.tickOfDay === 0 ? 0.15 : m.state.hunger + 0.12));
@@ -2636,7 +2915,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
             return `你在這條街上自有活路，靠手上的本事營生（不繫在班庫那一場戲上）；名頭（眼下${standing}）也是一件件事攢起來的，攢得起也跌得下。怎麼營生、往哪處使力，由你自己拿主意。`;
         };
-        for (const member of w.cast) {
+        for (const member of world.activeCast()) {
             const todayLines = acc.interactions?.[member.id]
                 ? Object.values(acc.interactions[member.id]).flat().join('\n').slice(-1200)
                 : undefined;
@@ -2646,6 +2925,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => `〔將臨〕第${event.atTick}拍將有：${event.text}`),
                 ...(economy ? [economy.projectFor(world, member.id, w.roster[member.id] ?? '') ?? ''] : []),
+                standingPerceptFor(world, member.id) ?? '',
             ].filter(Boolean).join('\n') || undefined;
             const relationshipPressure = Object.entries(member.relationshipView).map(
                 ([otherId, view]) => `對${world.nameById(otherId)}：${view}`,
@@ -2764,7 +3044,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                   .filter((ct) => ct.status === 'offered' && ct.deadlineDay >= today)
                   .sort((a, b) => a.deadlineDay - b.deadlineDay)[0]
             : undefined;
-        for (const member of w.cast) {
+        for (const member of world.activeCast()) {
             const liveWants = world.liveWantsOf(member.id).map((x) => ({ layer: x.layer, desc: x.desc }));
             // descs of wants this character RESOLVED today (resolvedTick since day-start).
             const justResolved = wants
@@ -2948,6 +3228,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         for (const id of new Set(w.dayAccum.quietedIds)) {
             const member = world.castById(id);
             if (!member) continue;
+            if (!world.isTracked(id)) continue; // POV prose is presentation — same gate as povScene
             const todayText = acc.interactions?.[id]
                 ? Object.values(acc.interactions[id]).flat().join('\n').slice(-1200)
                 : '';
@@ -2987,6 +3268,394 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         emitWorldBeat(venue, `《${w.production.title}》今日首演，${w.production.contributors.length}人共成之，積功${totalEffort(w.production)}。`);
     }
 
+    // ── 7.85) 事件牌組 · 導演選牌 ────────────────────────────────────────────────
+    //
+    // The external push layer. Runs at the CLOSE of a tick, so a card's percepts
+    // land next tick through the same channel every objective settlement uses —
+    // the cast perceives what happened before they choose anything.
+    //
+    // Authority is split hard, and this block is where the split is enforced:
+    //   · the ENGINE computes the eligible set (`eligibleCards`), the legal
+    //     targets (`candidatesFor`), and settles every consequence (`playCard`);
+    //   · the DIRECTOR picks one offered card, names targets from the offered
+    //     candidates, and may re-dress the card's face — nothing else. An invalid
+    //     card id is refused, unknown target ids are dropped, and no reply at all
+    //     is a legitimate answer.
+    //   · a 死線卡 (`mustLand`) plays whether or not a director was consulted, and
+    //     whether or not one exists. That is what makes 月半結帳 arrive instead of
+    //     forever approaching.
+    // Every play is appended to `w.directorLog` with the offered set, so the run
+    // replays deterministically from the log with no model in the loop.
+    const cardsPlayed: NonNullable<TickReport['cardsPlayed']> = [];
+    let proposalsRefused: TickReport['proposalsRefused'];
+    if (deck) {
+        const partIndex = partIndexOf(clockLabel);
+        const eligible = eligibleCards(world, deck, { day: today, partIndex });
+        const forced = eligible.filter((row) => row.forced);
+        const optional = eligible.filter((row) => !row.forced);
+
+        // 債主的態度 —— consulted BEFORE any card settles, because `playCard` is a
+        // pure function and the seat is an async model call. One seat per genuinely
+        // unpaid debt; a throw or a null falls back deterministically, so a
+        // rehearsal run still produces a complete, replayable reckoning.
+        let debtStances: Record<string, DebtStance> | undefined;
+        if (eligible.some((row) => row.card.effects.some((effect) => effect.kind === 'reckoning'))) {
+            for (const seat of reckoningSeats(world, { day: today })) {
+                let stance: DebtStance | undefined;
+                if (agent.decideDebtStance) {
+                    try {
+                        const reply = await agent.decideDebtStance({
+                            day: today,
+                            billId: seat.billId,
+                            creditorName: seat.creditorLabel,
+                            ...(seat.stance ? { stance: seat.stance } : {}),
+                            creditorFooting: seat.creditorFooting,
+                            debtorName: seat.debtorName,
+                            label: seat.label,
+                            owedText: seat.owedText,
+                            daysOverdue: seat.daysOverdue,
+                            priorCalls: seat.priorCalls,
+                            debtorCouldPay: seat.debtorCouldPay,
+                        });
+                        if (reply) stance = reply.stance;
+                    } catch (error) {
+                        log(`  [債主] ${seat.creditorLabel} 座席失敗：${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+                (debtStances ??= {})[seat.billId] = stance ?? fallbackStance(seat, world);
+                log(
+                    `  [債主] ${seat.creditorLabel} 對 ${seat.debtorName} 的${seat.label}：` +
+                        `${debtStances[seat.billId] === 'forgive' ? '免了' : debtStances[seat.billId] === 'press' ? '當面催' : '傳出去'}` +
+                        `${stance ? '' : '（引擎推定）'}`,
+                );
+            }
+        }
+
+        // Every play — a deadline, a director's pick, a card the director wrote
+        // themselves, or something a character DID — lands through this one
+        // function. Same log, same percept channel, same ordering: whoever
+        // authored the pressure, the world settles it exactly one way.
+        const record = (card: Pick<EventCard, 'id' | 'label'>, chosenBy: DirectorLogEntry['chosenBy'], played: PlayCardResult, actorId?: string): void => {
+            if (played.logEntry) played.logEntry.offeredCardIds = eligible.map((r) => r.card.id);
+            for (const percept of played.percepts) {
+                (w.scheduledEvents ??= []).push({ ...percept, atTick: nowTick + 1 });
+            }
+            for (const notice of played.privateNotices) {
+                (w.scheduledEvents ??= []).push({
+                    id: `card-${card.id}-priv-${notice.characterId}-t${nowTick}`,
+                    atTick: nowTick + 1,
+                    sceneId: w.roster[notice.characterId] ?? w.homeByChar[notice.characterId] ?? w.scenes[0].id,
+                    text: notice.text,
+                    visibility: 'private',
+                    witnessIds: [notice.characterId],
+                });
+            }
+            // 世情動作 is something a PERSON did, so it reads as world action, not
+            // as an outside push — the day log says who, and the label says what.
+            const tag = chosenBy === 'character' ? `[${world.nameById(actorId ?? '')}]` : '[外力]';
+            for (const line of played.publicLines) {
+                log(`  ${chosenBy === 'character' ? `[世情] ${world.nameById(actorId ?? '')}·` : '[牌] '}${card.label}：${line}`);
+                w.dayAccum.lines.push(`${tag} ${line}`);
+            }
+            irreversibleThisTick += played.irreversible;
+            cardsPlayed.push({
+                cardId: card.id,
+                label: card.label,
+                chosenBy,
+                targetNames: (played.logEntry?.targetIds ?? []).map((id) => world.nameById(id)),
+                ...(actorId ? { actorName: world.nameById(actorId) } : {}),
+                ...(played.logEntry?.costume ? { costume: played.logEntry.costume } : {}),
+                ...(played.logEntry?.rationale ? { rationale: played.logEntry.rationale } : {}),
+                irreversible: played.irreversible,
+                lines: played.publicLines,
+            });
+        };
+
+        const settle = (
+            row: (typeof eligible)[number],
+            chosenBy: 'director' | 'deadline',
+            choice?: { targetIds?: string[]; costume?: string; rationale?: string },
+        ): PlayCardResult => {
+            const played = playCard(world, deck, {
+                card: row.card,
+                ...(debtStances ? { debtStances } : {}),
+                ...(choice?.targetIds ? { targetIds: choice.targetIds } : {}),
+                ...(choice?.costume ? { costume: choice.costume } : {}),
+                ...(choice?.rationale ? { rationale: choice.rationale } : {}),
+                chosenBy,
+                day: today,
+                nowTick,
+                clock: clockLabel,
+            });
+            record(row.card, chosenBy, played);
+            return played;
+        };
+
+        // ── 世情動作先落 ────────────────────────────────────────────────────────
+        // What the cast DID this tick settles before what the director pushes:
+        // the world reacts to its own people first, and a director choosing a card
+        // on the next tick is choosing against a world those acts already changed.
+        for (const invocation of actInvocations) {
+            const done = playAct(world, deck, {
+                actId: invocation.actId,
+                actorId: invocation.actorId,
+                ...(invocation.targetId ? { targetId: invocation.targetId } : {}),
+                coPresentIds: invocation.coPresentIds,
+                day: today,
+                nowTick,
+                clock: clockLabel,
+            });
+            if (!done.played) {
+                log(`  [世情] ${world.nameById(invocation.actorId)} 的「${invocation.actId}」未成：${done.refused ?? done.reason ?? '不合時宜'}`);
+                continue;
+            }
+            const act = (deck.acts ?? []).find((row) => row.id === invocation.actId)!;
+            record({ id: act.id, label: act.label }, 'character', done, invocation.actorId);
+        }
+
+        // 死線先落 —— arrival is not a decision. The director may dress it (below),
+        // but never postpone it.
+        for (const row of forced) {
+            let costume: string | undefined;
+            let rationale: string | undefined;
+            if (agent.pickEventCard) {
+                try {
+                    const dressed = await agent.pickEventCard({
+                        day: today,
+                        clock: clockLabel,
+                        offered: [offerOf(world, row)],
+                        worldBrief: buildDirectorBrief(world, today, clockLabel),
+                        forcedCardIds: [row.card.id],
+                    });
+                    if (dressed && dressed.cardId === row.card.id) {
+                        costume = dressed.costume;
+                        rationale = dressed.rationale;
+                    }
+                } catch (error) {
+                    log(`  [牌] 導演穿戲服失敗（${row.card.id}）：${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+            settle(row, 'deadline', { ...(costume ? { costume } : {}), ...(rationale ? { rationale } : {}) });
+        }
+
+        // 導演選牌 —— one optional card at most per tick, from the offered set only.
+        //
+        // The seat is also consulted when the deck has NOTHING eligible, provided
+        // the self-authored-card quota is still open. That is deliberate: the
+        // moment the deck runs dry is precisely the moment a season needs
+        // something its author did not think of, and refusing to even ask would
+        // make the escape hatch unreachable on exactly the ticks it exists for.
+        const proposalOpen = canPropose(world, today);
+        if ((optional.length || proposalOpen) && agent.pickEventCard) {
+            try {
+                const choice = await agent.pickEventCard({
+                    day: today,
+                    clock: clockLabel,
+                    offered: optional.map((row) => offerOf(world, row)),
+                    worldBrief: buildDirectorBrief(world, today, clockLabel),
+                    forcedCardIds: forced.map((row) => row.card.id),
+                    ...(proposalOpen ? { mayPropose: true } : {}),
+                });
+                const chosen = choice && !choice.decline
+                    ? optional.find((row) => row.card.id === choice.cardId)
+                    : undefined;
+                if (chosen) {
+                    settle(chosen, 'director', {
+                        ...(choice!.targetIds?.length ? { targetIds: choice!.targetIds } : {}),
+                        ...(choice!.costume ? { costume: choice!.costume } : {}),
+                        ...(choice!.rationale ? { rationale: choice!.rationale } : {}),
+                    });
+                } else if (choice?.propose && proposalOpen) {
+                    // 自撰一張 —— considered only when nothing on the table was taken.
+                    // The engine validates before the world can feel any of it: an
+                    // effect kind that is closed to proposals, a magnitude past its
+                    // cap, a target who is not on the board, or a spent quota all
+                    // come back as reasons, and the reasons are what get logged.
+                    settleProposal(choice.propose, choice.rationale);
+                } else if (choice && !choice.decline && choice.cardId) {
+                    // A card the engine never offered is not a card. Refused, logged.
+                    log(`  [牌] 導演選了不在牌面上的卡（${choice.cardId}），不予採納`);
+                } else if (choice?.decline) {
+                    log(`  [牌] 導演按牌不打：${choice.rationale ?? '（未言）'}`);
+                }
+            } catch (error) {
+                log(`  [牌] 導演選牌失敗：${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        function settleProposal(draft: CardProposal, rationale?: string): void {
+            const seq = (world.data.directorLog ?? []).filter((entry) => entry.chosenBy === 'director-proposed').length + 1;
+            const verdict = validateProposal(world, draft, { day: today, seq });
+            if (!verdict.ok || !verdict.card) {
+                log(`  [牌] 導演自撰的「${draft.label ?? '(無題)'}」不予採納：${verdict.problems.join('；')}`);
+                (proposalsRefused ??= []).push({ label: draft.label ?? '(無題)', problems: verdict.problems });
+                return;
+            }
+            const played = playCard(world, deck!, {
+                card: verdict.card,
+                ...(verdict.targetIds.length ? { targetIds: verdict.targetIds } : {}),
+                ...(rationale ? { rationale } : {}),
+                chosenBy: 'director-proposed',
+                day: today,
+                nowTick,
+                clock: clockLabel,
+            });
+            log(`  [牌] 導演自撰：「${verdict.card.label}」`);
+            record(verdict.card, 'director-proposed', played);
+        }
+    }
+
+    // ── 7.87) 願望生命週期 ───────────────────────────────────────────────────────
+    // Two deterministic exit lanes, so the want board stops being write-only: a
+    // want whose declared completion test now holds RESOLVES (no model call), and
+    // a want past its 死線 FORECLOSES with one line to its owner. Runs AFTER the
+    // day's economy settle and after any card, so a bill cleared today or a secret
+    // printed today lands on the same day it happened.
+    let resolvedByLifecycle = 0;
+    if (dayEnd) {
+        const lifecycle = runWantLifecycle(world, today, nowTick);
+        resolvedByLifecycle = lifecycle.resolved.length;
+        for (const want of lifecycle.resolved) log(`  [落地] ${world.nameById(want.characterId)}「${want.desc}」`);
+        for (const want of lifecycle.foreclosed) log(`  [擱下] ${world.nameById(want.characterId)}「${want.desc}」（過了第 ${want.dueDay} 日）`);
+        for (const notice of lifecycle.notices) {
+            (w.scheduledEvents ??= []).push({
+                id: `want-lifecycle-${notice.characterId}-t${nowTick}-${(w.scheduledEvents ?? []).length}`,
+                atTick: nowTick + 1,
+                sceneId: w.roster[notice.characterId] ?? w.homeByChar[notice.characterId] ?? w.scenes[0].id,
+                text: notice.text,
+                visibility: 'private',
+                witnessIds: [notice.characterId],
+            });
+        }
+        irreversibleThisTick += lifecycle.foreclosed.length;
+    }
+
+    // ── 7.9) 角色工件 · 日記與詩詞 ────────────────────────────────────────────────
+    // The cheapest return-visit hook: one diary per TRACKED character per day,
+    // recombined from that day's own beats + 心下 + 心事 in a single call, and a
+    // poem only when an OCCASION genuinely arrives (no daily quota — scarcity is
+    // what makes a poem worth reading).
+    //
+    // Every diary claim must cite a `beat:N` ref the engine minted; the audit
+    // (artifacts.ts) keeps the supported claims, FLAGS the rest, and rejects money
+    // figures that match neither the day's beats nor the character's real purse.
+    // That last gate exists because the last run's dossier caught a character with
+    // 24 圓 on the books whose 心事 spoke of 「省著手裡的七十圓」 — a diary reads as
+    // canon, so it is the worst place to let the ledger drift.
+    const tickArtifacts: CharacterArtifact[] = [];
+    if (dayEnd) {
+        for (const id of world.trackedIds()) {
+            const member = world.castById(id);
+            const evidence = diaryEvidence[id] ?? [];
+            if (!member || !evidence.length || !agent.composeDiary) continue;
+            try {
+                const reply = await agent.composeDiary({
+                    characterId: id,
+                    name: member.name,
+                    persona: member.persona,
+                    ...(member.secret ? { secret: member.secret } : {}),
+                    day: today,
+                    evidence: evidence.map((beat) => ({
+                        ref: beat.ref,
+                        clock: beat.clock,
+                        sceneName: beat.sceneName,
+                        text: beat.text,
+                        ...(beat.inner ? { inner: beat.inner } : {}),
+                    })),
+                    wantLines: world.liveWantsOf(id).slice(0, 4).map((want) => want.desc),
+                    ...(w.economy ? { purseLine: economy?.projectFor(world, id) } : {}),
+                });
+                if (!reply?.body?.trim()) continue;
+                const audited = auditClaims(world, id, reply.claims ?? [], evidence);
+                const diary: DiaryArtifact = {
+                    kind: 'diary',
+                    id: diaryId(id, today),
+                    characterId: id,
+                    name: member.name,
+                    day: today,
+                    body: reply.body.trim(),
+                    claims: audited.supported,
+                    unsupportedClaims: audited.unsupported,
+                    evidenceCount: evidence.length,
+                };
+                recordArtifact(world, diary);
+                tickArtifacts.push(diary);
+                await archive.commit({ kind: 'pov', day: today, tick: nowTick, name: `${member.name}·日記`, characterId: id, eventId: 'diary', body: diary.body });
+                await recall.remember(id, `〔日記·第${today}日〕${diary.body}`.slice(0, 1200), { kind: 'reflection', importance: 6, day: today });
+                log(
+                    `  [日記] ${member.name}：${audited.supported.length} 條有憑${
+                        audited.unsupported.length ? `、${audited.unsupported.length} 條無憑（已標記）` : ''
+                    }`,
+                );
+            } catch (error) {
+                log(`  [日記] ${member.name} 未成：${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
+        // 詩詞 — occasion only, and only for tracked characters (it is the same
+        // presentation layer as the diary). The discarded draft becomes a real prop.
+        if (agent.composePoem) {
+            const occasions = poemOccasions(world, {
+                day: today,
+                candidateIds: world.trackedIds(),
+                signals: {
+                    betrothedPairs: newlyEstablishedPairs,
+                    partedIds: [...new Set(cardsPlayed.flatMap(() => [] as string[]))],
+                },
+            });
+            for (const hit of occasions) {
+                const member = world.castById(hit.characterId);
+                if (!member) continue;
+                try {
+                    const reply = await agent.composePoem({
+                        characterId: hit.characterId,
+                        name: member.name,
+                        persona: member.persona,
+                        day: today,
+                        clock: clockLabel,
+                        occasion: hit.occasion,
+                        occasionLine: POEM_OCCASION_LINES[hit.occasion],
+                        ...(hit.want?.desc ? { wantDesc: hit.want.desc } : {}),
+                        ...(hit.otherId ? { otherName: world.nameById(hit.otherId) } : {}),
+                        sceneName: world.sceneNameById(w.roster[hit.characterId] ?? ''),
+                    });
+                    if (!reply?.body?.trim()) continue;
+                    const poem: PoemArtifact = {
+                        kind: 'poem',
+                        id: poemId(world, hit.characterId, today),
+                        characterId: hit.characterId,
+                        name: member.name,
+                        day: today,
+                        tick: nowTick,
+                        occasion: hit.occasion,
+                        ...(reply.title?.trim() ? { title: reply.title.trim() } : {}),
+                        body: reply.body.trim(),
+                        ...(hit.want?.id ? { wantId: hit.want.id } : {}),
+                    };
+                    recordArtifact(world, poem);
+                    markPoemWritten(world, hit.characterId, today);
+                    tickArtifacts.push(poem);
+                    // 工件回流世界 —— the draft is now an object another character can
+                    // find, carry, hide, or hand to exactly the wrong person.
+                    const propId = spawnPoemProp(world, poem);
+                    await archive.commit({ kind: 'pov', day: today, tick: nowTick, name: `${member.name}·詩`, characterId: hit.characterId, eventId: 'poem', body: poem.body });
+                    log(`  [詩] ${member.name}（${hit.occasion}）${propId ? `，廢稿落在${world.sceneNameById(w.roster[hit.characterId] ?? '')}` : ''}`);
+                } catch (error) {
+                    log(`  [詩] ${member.name} 未成：${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+        }
+
+        // 對外是內容，對內是道具 —— a press character's writing being PRINTED is a
+        // world event, not a side channel.
+        for (const artifact of tickArtifacts) {
+            const percept = circulateArtifact(world, artifact, { nowTick });
+            if (!percept) continue;
+            (w.scheduledEvents ??= []).push({ ...percept, atTick: nowTick + 1 });
+            log(`  [見報] ${percept.text.slice(0, 60)}`);
+        }
+    }
+
     // 8) DAY-END EPISODE.
     let episode = false;
     if (dayEnd && acc.lines.length >= 3) {
@@ -3013,7 +3682,15 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // apart while an old flame (high peak) never cools back to stranger. Pairs that
     // met today (togetherToday) are spared. Unconditional world physics — NOT behind
     // relationshipFallback.
-    if (dayEnd) decayBonds(bonds, togetherToday);
+    if (dayEnd) {
+        decayBonds(bonds, togetherToday);
+        // 街談會淡 —— same slot, same signal, same physics: a second-hand grievance
+        // softens for the people who actually had to share a room with him today.
+        // The wronged party's own grudge is first-hand and exempt.
+        for (const pair of fadeHearsay(world, togetherToday)) {
+            log(`  [風聲淡了] ${world.nameById(pair.fromId)} 對 ${world.nameById(pair.toId)} 的那樁傳聞，見多了也就淡了`);
+        }
+    }
 
     // 8.6) 情分會淡 (heartsCanFade, opt-in) — lift the immortality that made every
     // season replay the SAME seeded couple: a genesis LOVE that never fades. At
@@ -3073,13 +3750,42 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         }
     }
 
+    // ── 8.9) 生命體征 ────────────────────────────────────────────────────────────
+    // The four macro-scale numbers the old diagnostics could not produce: how many
+    // irreversible things happened, whether wants are actually landing, how spread
+    // out the cast is (and how many are doing the SAME thing in the same place),
+    // and who is stuck repeating themselves. Diagnostic ONLY — nothing in the
+    // engine branches on these, so a noisy token can mislead a reader but can never
+    // change the world. Samples come from what characters externalised this tick,
+    // because the 149 × 「糖粥」 attractor lived in prose, not in any structured field.
+    const vitalsSamples: VitalsSample[] = [];
+    for (const [characterId, bank] of Object.entries(diaryEvidence)) {
+        const thisTick = bank.filter((beat) => beat.tick === nowTick);
+        for (const beat of thisTick) {
+            vitalsSamples.push({
+                characterId,
+                text: `${beat.text} ${beat.inner ?? ''}`,
+                sceneId: w.scenes.find((scene) => scene.name === beat.sceneName)?.id,
+            });
+        }
+    }
+    pushVitalsWindow(world, { day: today, tick: nowTick, samples: vitalsSamples });
+    const vitals = computeTickVitals(world, {
+        day: today,
+        tick: nowTick,
+        samples: vitalsSamples,
+        irreversible: irreversibleThisTick,
+        resolvedThisTick: resolvedCount + resolvedByLifecycle,
+    });
+    log(`  [體征] ${describeVitals(world, vitals)}`);
+
     // 9) Advance clock + write bonds back, then snapshot the whole world.
     w.clock = clock.advance(c);
     world.setBonds(bonds); // establishedPairs already live on w.data via addEstablished
     if (opts.snapshotDir) world.snapshot(opts.snapshotDir);
 
     const liveWants = wants.filter((x) => !x.retired).length;
-    log(`  → ${byScene.size} scene(s) · ${beats} beat(s) · ${resolvedCount} resolved · ${liveWants} live want(s)`);
+    log(`  → ${byScene.size} scene(s) · ${beats} beat(s) · ${resolvedCount + resolvedByLifecycle} resolved · ${liveWants} live want(s)`);
 
     return {
         day: today,
@@ -3090,7 +3796,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         scenesPlayed: byScene.size,
         beats,
         beatScenes,
-        resolved: resolvedCount,
+        resolved: resolvedCount + resolvedByLifecycle,
         liveWants,
         actedCharacterIds,
         routed,
@@ -3099,6 +3805,12 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         events,
         eventPovs,
         economyNotices,
+        vitals,
+        ...(cardsPlayed.length ? { cardsPlayed } : {}),
+        ...(proposalsRefused?.length ? { proposalsRefused } : {}),
+        ...(tickArtifacts.length ? { artifacts: tickArtifacts } : {}),
+        povTrackedIds: world.trackedIds(),
+        ...(backgroundNeeds?.length ? { backgroundNeeds } : {}),
         production: w.production
             ? {
                   title: w.production.title,

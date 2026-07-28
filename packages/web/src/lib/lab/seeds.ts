@@ -12,8 +12,8 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { buildWorldState, defaultSeasonsDir, defaultStoriesDir, type RawPreset, type SeasonFrame } from '@endless-story/engine/preset';
-import { assertSafeId, ensureDir, labSeasonsDir, labSeedsDir } from './paths';
+import { buildWorldState, defaultDecksDir, defaultSeasonsDir, defaultStoriesDir, type RawPreset, type SeasonFrame } from '@endless-story/engine/preset';
+import { assertSafeId, ensureDir, labDecksDir, labSeasonsDir, labSeedsDir } from './paths';
 import type { LabSeasonSummary, LabSeedSummary } from './types';
 
 function listJsonIds(dir: string): string[] {
@@ -34,6 +34,18 @@ export function seedDirFor(source: 'builtin' | 'custom'): string {
 
 export function seasonDirFor(source: 'builtin' | 'custom'): string {
     return source === 'builtin' ? defaultSeasonsDir() : labSeasonsDir();
+}
+
+export function deckDirFor(source: 'builtin' | 'custom'): string {
+    return source === 'builtin' ? defaultDecksDir() : labDecksDir();
+}
+
+/** 事件牌組 ids available to a run, built-ins first. */
+export function listDeckIds(): Array<{ id: string; source: 'builtin' | 'custom' }> {
+    return [
+        ...listJsonIds(defaultDecksDir()).map((id) => ({ id, source: 'builtin' as const })),
+        ...listJsonIds(labDecksDir()).map((id) => ({ id, source: 'custom' as const })),
+    ];
 }
 
 function summarizeSeed(id: string, source: 'builtin' | 'custom', raw: RawPreset): LabSeedSummary {

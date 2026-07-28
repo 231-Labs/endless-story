@@ -86,6 +86,12 @@ export interface SceneLoopCastMember {
      *  欠條 to one). Refreshed by beforeBeat; undefined ⇒ flag off, prompt
      *  byte-identical. */
     credit?: { borrow?: boolean; repay?: boolean };
+    /** 世情動作 (event-deck acts): the drastic, world-turning things THIS actor
+     *  may set in motion right here — 報官, 退婚, 當眾揭穿, 罷演. Computed by the
+     *  engine from the deck (`availableActsFor`), advertised verbatim by the beat
+     *  prompt, and refused on the way back if it was never advertised. Absent ⇒
+     *  no deck / nothing available, and the prompt is byte-identical to before. */
+    acts?: Array<{ id: string; label: string; note?: string; needsTarget: boolean; targetNames: string[] }>;
 }
 
 export interface SceneLoopInput {
@@ -176,6 +182,9 @@ export interface SceneBeat {
     audience?: 'scene' | 'addressed';
     objectEffects?: CharacterAgentNs.BeatObjectEffect[];
     economyCommands?: CharacterAgentNs.BeatEconomyCommand[];
+    /** 世情動作 the beat set in motion. The engine validates it against what it
+     *  advertised and settles the consequences; prose alone can never 報官. */
+    act?: { id: string; targetName?: string };
 }
 
 export interface SceneLoopResult {
@@ -417,6 +426,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
             styleHint: actor.styleHint,
             economyLine: actor.economyLine,
             credit: actor.credit,
+            acts: actor.acts,
             etiquette: input.etiquette,
             timeCharter: input.timeCharter,
             consummate: (registerOpen && input.isPrivate && present.length === 2) || (gateBeat && input.emotionalStance === 'consummate'),
@@ -434,6 +444,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 beatInput.objects = actor.objects;
                 beatInput.economyLine = actor.economyLine;
                 beatInput.credit = actor.credit;
+                beatInput.acts = actor.acts;
             }
             r = attempt > 0 && agent.replanBeat
                 ? await agent.replanBeat(beatInput)
@@ -510,6 +521,7 @@ export async function runSceneLoop(input: SceneLoopInput): Promise<SceneLoopResu
                 audience: r.audience,
                 objectEffects: r.objectEffects,
                 economyCommands: r.economyCommands,
+                act: r.act,
             };
             try {
                 await input.onBeat?.(acceptedBeat);

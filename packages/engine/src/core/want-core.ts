@@ -17,6 +17,28 @@ export type WantSemanticTag = (typeof WANT_SEMANTIC_TAGS)[number];
 export type WantSubjectRef = { kind: 'contract'; id: string };
 export type WantResolutionCause = 'resolved' | 'faded' | 'foreclosed' | 'rewritten';
 
+/**
+ * 願望生命週期 — a finite, deterministic completion test. The diagnosed failure
+ * was a WRITE-ONLY want system (58 live, 4 resolved over 13 ticks): wants were
+ * born from every stir and left to accumulate, because the only exit was an LLM
+ * 判決 that rarely fired. A want that carries one of these declares, at birth,
+ * what would actually ANSWER it — and the engine can then retire it the moment
+ * the world satisfies it, with no model call and no drift.
+ *
+ * Kept deliberately small: every member is checkable from persisted world state
+ * alone, so a replayed run resolves the same wants on the same ticks. Evaluation
+ * lives in `want-lifecycle.ts` (this module stays dependency-free).
+ */
+export type WantCompletion =
+    /** 帳清了 — a named obligation is fully paid or written off. */
+    | { kind: 'bill-cleared'; billId: string }
+    /** 花趕上了 — the owner's flower tally is no longer behind this rival's. */
+    | { kind: 'flowers-caught'; rivalId: string }
+    /** 湊足了 — the owner's own purse reaches this many 圓. */
+    | { kind: 'purse-atleast'; yuan: number }
+    /** 見報了 — a secret in the ledger has been published. */
+    | { kind: 'secret-published'; secretId: string };
+
 export interface Want {
     id: string;
     characterId: string;
@@ -61,6 +83,13 @@ export interface Want {
     resolvedTick?: number;
     /** Structured lifecycle fact. `resolvedNote` remains rendering only. */
     resolutionCause?: WantResolutionCause;
+    /** 死線 — narrative day by which this want must be answered. Past it the want
+     *  FORECLOSES (retired, cause 'foreclosed') and the owner is told once. Absent
+     *  ⇒ the want stands indefinitely, exactly as before this field existed. */
+    dueDay?: number;
+    /** 完成條件 — a deterministic test the engine can settle without an LLM verdict.
+     *  Absent ⇒ resolution stays purely judge-driven (legacy behaviour). */
+    completion?: WantCompletion;
     /** Contested-resource label this want aches for (exact on-chain label).
      *  The SINGLE demand source: a character contests a stake only through a
      *  want that carries its label. null = assessed and tied to none;
@@ -455,7 +484,7 @@ export function normalizeLayer(raw: string | undefined): string {
 
 export function newWant(
     init: Pick<Want, 'characterId' | 'layer' | 'desc' | 'weight' | 'sat' | 'resistance' | 'kind' | 'source' | 'bornTick'> &
-        Partial<Pick<Want, 'target' | 'id' | 'resource' | 'semanticTags' | 'subjectRef'>>,
+        Partial<Pick<Want, 'target' | 'id' | 'resource' | 'semanticTags' | 'subjectRef' | 'dueDay' | 'completion'>>,
 ): Want {
     return {
         id: init.id ?? `w${Date.now().toString(36)}-${++_seq}`,
@@ -463,6 +492,8 @@ export function newWant(
         layer: init.layer,
         ...(init.semanticTags?.length ? { semanticTags: [...new Set(init.semanticTags)] } : {}),
         ...(init.subjectRef ? { subjectRef: { ...init.subjectRef } } : {}),
+        ...(init.dueDay !== undefined ? { dueDay: init.dueDay } : {}),
+        ...(init.completion ? { completion: { ...init.completion } } : {}),
         desc: init.desc,
         target: init.target,
         resource: init.resource,

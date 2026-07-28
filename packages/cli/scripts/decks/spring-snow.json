@@ -1,0 +1,691 @@
+{
+  "id": "spring-snow",
+  "title": "春雪社 · 外力牌組",
+  "maxCardsPerDay": 2,
+  "maxSeasonalPlays": 2,
+  "secrets": [
+    {
+      "id": "fang-blood-ledger",
+      "matter": "方競西手裡那本血帳——上頭記的名字，有人寧可花錢買下來",
+      "holderNames": [
+        "方競西"
+      ],
+      "coveterNames": [
+        "沈雪笙",
+        "蘇映雪"
+      ],
+      "leakWhen": [
+        {
+          "kind": "day-atleast",
+          "day": 3
+        },
+        {
+          "kind": "holder-broke-below",
+          "yuan": 2
+        }
+      ]
+    },
+    {
+      "id": "tang-costume-trunk",
+      "matter": "唐桂蘭衣箱底下那樁事——箱底那件東西，不是戲服",
+      "holderNames": [
+        "唐桂蘭"
+      ],
+      "coveterNames": [
+        "方競西",
+        "連翹"
+      ],
+      "leakWhen": [
+        {
+          "kind": "holder-renown-below",
+          "renown": 0.25
+        },
+        {
+          "kind": "day-atleast",
+          "day": 4
+        }
+      ]
+    },
+    {
+      "id": "yin-old-story",
+      "matter": "殷阿婆知道的那樁舊事——她賣了三十年花，也記了三十年的人",
+      "holderNames": [
+        "殷阿婆"
+      ],
+      "coveterNames": [
+        "方競西"
+      ],
+      "leakWhen": [
+        {
+          "kind": "coveter-copresent"
+        }
+      ]
+    }
+  ],
+  "newcomers": [
+    {
+      "id": "gu-yanqiu",
+      "seed": {
+        "name": "顧硯秋",
+        "role": "琴師",
+        "gender": "男",
+        "ageYears": 35,
+        "description": "早年在杭州班子裡拉過三年胡琴的琴師，手上有一手冷靜的過門。這幾年在外埠跑碼頭，如今回上海尋舊人；話少，聽得多，賬記在心裡不記在紙上。",
+        "secret": "當年杭州散班那一夜，他也在場；有一件事他一直沒說，因為說出來要毀掉的不只一個人。",
+        "home_scene": "戲班大通鋪",
+        "work_scene": "雲錦台戲台",
+        "arrival_scene": "戲園前街",
+        "ties": [
+          {
+            "target": "唐桂蘭",
+            "tone": "當年杭州同過班，彼此知道太多",
+            "warmth": 0.45
+          },
+          {
+            "target": "沈雪笙",
+            "tone": "只聽過名字，敬而未識",
+            "warmth": 0.5
+          }
+        ],
+        "armsSecret": {
+          "secretId": "tang-costume-trunk",
+          "as": "coveter"
+        },
+        "wageYuan": 1,
+        "openingYuan": 5,
+        "dailyFixedCostYuan": 3
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "reckoning-notice",
+      "label": "前街放話：月半要結帳",
+      "note": "結帳前兩日把話放出去，全街都知道日子與摺子上的名字。每個欠帳的人得到一樁帶死線的心事——自己清了就落地，拖過去就擱下。沒有這個窗口，「不還」與「沒機會還」分不出來。",
+      "mustLand": true,
+      "deadlineNote": "結帳前兩日放話，到日必放",
+      "trigger": {
+        "everyDays": 15,
+        "anchorDay": 1,
+        "atParts": [
+          0
+        ]
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "reckoning-notice",
+          "label": "月半結帳",
+          "dueInDays": 2
+        }
+      ]
+    },
+    {
+      "id": "mid-month-reckoning",
+      "label": "月半結帳",
+      "note": "前街把這半月的帳當眾叫一遍。**不動任何人的錢**——到日還不還是角色自己的事；引擎只結算後果：債主或免了（欠下人情）、或當面催（丟一次臉）、或把話傳出去（賒帳資格沒了、滿街都知道）。",
+      "mustLand": true,
+      "deadlineNote": "每十五日一次，本季自第 3 日起算；第 1 日先放話",
+      "trigger": {
+        "everyDays": 15,
+        "anchorDay": 3,
+        "atParts": [
+          4
+        ]
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "又到月半，前街照例把帳當眾算一回。趙阿福的食擔前排起了要賒要還的人，殷阿婆的花賬也該收一收——沒有人會從誰手裡把錢搶走，可誰劃得掉、誰劃不掉，這條街都看著。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "reckoning",
+          "label": "月半結帳"
+        }
+      ]
+    },
+    {
+      "id": "wage-day",
+      "label": "班中發俸",
+      "note": "班庫按日子發一次工錢。發不出的名字留在最後，眾人看得見。",
+      "mustLand": true,
+      "deadlineNote": "按日子發，到日必發——發得出多少是另一回事",
+      "trigger": {
+        "everyDays": 2,
+        "anchorDay": 1,
+        "atParts": [
+          4
+        ]
+      },
+      "targeting": {
+        "mode": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "散戲後帳房開了櫃門，今日的工錢當場點清——輪到誰、剩多少，一屋子人都在看。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "wage-packet",
+          "label": "班中工錢",
+          "perHeadYuan": 1,
+          "toTargets": true
+        }
+      ]
+    },
+    {
+      "id": "dividend-day",
+      "label": "散戲分紅",
+      "note": "票房好過幾日，班庫留下兩日的底，餘裕按班規分下去。沒有餘裕就沒有分紅——這一條不作假。",
+      "mustLand": true,
+      "deadlineNote": "按日子發，到日必發——發得出多少是另一回事",
+      "trigger": {
+        "everyDays": 3,
+        "anchorDay": 3,
+        "atParts": [
+          5
+        ]
+      },
+      "targeting": {
+        "mode": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "班主把這幾日的票房算了一遍，帳簿攤在桌上：留下該留的，剩下的今夜就分。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "dividend",
+          "label": "散戲分紅",
+          "surplusShareBps": 4000,
+          "reserveDays": 2
+        }
+      ]
+    },
+    {
+      "id": "patrol-night",
+      "label": "巡捕查夜",
+      "note": "深宵查夜，被叫住的人吃一張罰單，兩日內要有交代。導演選對準誰。",
+      "trigger": {
+        "everyDays": 2,
+        "anchorDay": 2,
+        "atParts": [
+          5
+        ],
+        "cooldownDays": 2,
+        "maxPlays": 3
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "all"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "巡捕的燈籠在前街晃了半條街，挨家問話，問到誰算誰。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "bill",
+          "id": "patrol-fine",
+          "label": "巡捕的罰單",
+          "amountYuan": 2,
+          "dueInDays": 2,
+          "fromAccountId": "@target",
+          "creditor": "巡捕房"
+        },
+        {
+          "kind": "self-regard",
+          "delta": -0.04
+        }
+      ]
+    },
+    {
+      "id": "press-deadline",
+      "label": "報館截稿",
+      "note": "主筆催稿，今夜之前得交一條。記者手上有什麼、發不發，是他自己的事。",
+      "trigger": {
+        "everyDays": 2,
+        "anchorDay": 1,
+        "atParts": [
+          2
+        ],
+        "cooldownDays": 1
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "press"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "報館催稿的條子送到手上：今夜之前要一條見得人的稿子，版面留著，空著不行。",
+          "visibility": "private",
+          "toTargetsOnly": true
+        },
+        {
+          "kind": "want",
+          "layer": "事務",
+          "desc": "今夜之前得交一條稿子上去",
+          "weight": 0.68,
+          "resistance": 3,
+          "dueInDays": 1
+        }
+      ]
+    },
+    {
+      "id": "weather-turn",
+      "label": "天氣轉變",
+      "note": "連日陰雨，看客不出門，座就冷——天時是折座的，不是形容詞。",
+      "trigger": {
+        "everyDays": 3,
+        "anchorDay": 2,
+        "atParts": [
+          0
+        ],
+        "maxPlays": 2
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "weather",
+          "label": "連日陰雨，路上沒人打傘出門看戲",
+          "housePct": 80
+        },
+        {
+          "kind": "percept",
+          "text": "天從清晨就陰著，雨絲把前街的招子打濕了一半——這樣的天氣，晚上的座難滿。",
+          "sceneName": "戲園前街"
+        }
+      ]
+    },
+    {
+      "id": "parlour-invite",
+      "label": "堂會邀約",
+      "note": "有闊客請人去唱一堂私會，錢是真的，時辰也是真的。班庫緊的時候才會有人動這個念頭。",
+      "trigger": {
+        "atParts": [
+          2
+        ],
+        "cooldownDays": 2,
+        "maxPlays": 3,
+        "requires": [
+          {
+            "kind": "account-runway-below",
+            "days": 5
+          }
+        ]
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "有人捎話進來：城裡一位闊客要辦堂會，點了名要人去唱一堂，錢當場付。",
+          "sceneName": "包廂茶座"
+        },
+        {
+          "kind": "patronage",
+          "channel": "tip",
+          "amountYuan": 4,
+          "patronName": "辦堂會的那位闊客",
+          "toTargets": true
+        }
+      ]
+    },
+    {
+      "id": "flowers-tonight",
+      "label": "池座送花",
+      "note": "今夜池座裡有人買花上台。花多花少當場見高下——妒火的素材由此而來。",
+      "trigger": {
+        "everyDays": 1,
+        "atParts": [
+          4
+        ],
+        "cooldownDays": 1,
+        "maxPlays": 4
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "patronage",
+          "channel": "flower",
+          "amountYuan": 2,
+          "toTargets": true
+        }
+      ]
+    },
+    {
+      "id": "leak-the-ledger",
+      "label": "風聲漏了",
+      "note": "捂著的那樁事，今日漏了口風。覬覦的人聽見了，知道了就不能當作沒知道。",
+      "trigger": {
+        "minDay": 2,
+        "atParts": [
+          1
+        ],
+        "maxPlays": 1,
+        "requires": [
+          {
+            "kind": "secret-leaked",
+            "secretId": "fang-blood-ledger",
+            "leaked": false
+          }
+        ]
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "leak-secret",
+          "secretId": "fang-blood-ledger"
+        }
+      ]
+    },
+    {
+      "id": "old-acquaintance",
+      "label": "故人進城",
+      "note": "季級大牌：一位帶著現有角色過去的故人進了城，順手把一樁睡著的秘密叫醒。",
+      "tier": "seasonal",
+      "trigger": {
+        "minDay": 2,
+        "atParts": [
+          0
+        ],
+        "maxPlays": 1
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "cast-enter",
+          "newcomerId": "gu-yanqiu"
+        },
+        {
+          "kind": "percept",
+          "text": "前街上來了個生面孔，背著一把琴，話不多，眼睛在人身上停得久。",
+          "sceneName": "戲園前街"
+        }
+      ]
+    },
+    {
+      "id": "star-transfer",
+      "label": "名角過班",
+      "note": "季級大牌：有人被別班挖走。走的人留下持鑰、欠債、秘密、相許——全數強制重分配。",
+      "tier": "seasonal",
+      "trigger": {
+        "minDay": 4,
+        "atParts": [
+          5
+        ],
+        "maxPlays": 1,
+        "requires": [
+          {
+            "kind": "cast-atleast",
+            "count": 8
+          }
+        ]
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "cast-exit",
+          "reason": "被別班的水牌挖了過去，戲箱今夜就搬走"
+        },
+        {
+          "kind": "percept",
+          "text": "後台的戲箱少了一口。走的人沒說什麼，留下的人一句也沒問。",
+          "sceneName": "後台妝閣"
+        }
+      ]
+    }
+  ],
+  "acts": [
+    {
+      "id": "report-to-authorities",
+      "label": "報官",
+      "note": "把這樁事捅到巡捕房去。他頭上多一筆罰銀，滿街也都會知道——但告官的人，這條街往後也未必待見。做了收不回來。",
+      "minDay": 3,
+      "needsTarget": true,
+      "maxPlays": 2,
+      "maxPlaysPerCharacter": 1,
+      "cooldownDays": 6,
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "巡捕房來了人，在前街站了半日，問的是誰、為的什麼事，看熱鬧的心裡都有數。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "bill",
+          "id": "patrol-fine",
+          "label": "巡捕房的罰銀",
+          "amountYuan": 3,
+          "dueInDays": 5,
+          "fromAccountId": "@target",
+          "creditor": "巡捕房"
+        },
+        {
+          "kind": "renown",
+          "delta": -0.06
+        },
+        {
+          "kind": "renown",
+          "delta": -0.03,
+          "on": "actor"
+        },
+        {
+          "kind": "standing",
+          "tone": "告了我的官——這人往後我心裡是冷的",
+          "from": "targets",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "betrayed"
+        },
+        {
+          "kind": "standing",
+          "tone": "他吃了官司，這一陣冷著點，少沾",
+          "from": "witnesses",
+          "toward": "targets",
+          "disposition": "cold",
+          "grievance": "slighted",
+          "hearsay": true
+        }
+      ]
+    },
+    {
+      "id": "break-with",
+      "label": "當眾翻臉",
+      "note": "當著人把話說絕。從此兩不相干——他不會再替你開門，看著的人也記下了你是說得出這種話的人。",
+      "minDay": 2,
+      "needsTarget": true,
+      "maxPlays": 4,
+      "maxPlaysPerCharacter": 2,
+      "cooldownDays": 4,
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "有人當眾把話說絕了，一屋子的人沒一個接得上腔。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "standing",
+          "tone": "話說到那個份上，往後各走各的，我心裡冷了",
+          "from": "actor",
+          "toward": "targets",
+          "disposition": "cold",
+          "grievance": "shamed"
+        },
+        {
+          "kind": "standing",
+          "tone": "當著那麼多人下我的臉——這一筆記著，見面也是冷的",
+          "from": "targets",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "shamed"
+        },
+        {
+          "kind": "self-regard",
+          "delta": -0.04,
+          "on": "actor"
+        }
+      ]
+    },
+    {
+      "id": "walk-off",
+      "label": "撂挑子不演了",
+      "note": "臨到場口把行頭一擱，人走了。今晚的戲得有人頂上，退票錢從你身上出——名頭是這樣一夜掉的。",
+      "invokableBy": {
+        "roles": [
+          "花旦",
+          "小生",
+          "刀馬旦",
+          "丑",
+          "歌女",
+          "班主"
+        ]
+      },
+      "minDay": 4,
+      "requires": [
+        {
+          "kind": "tension-peak-atleast",
+          "value": 0.6
+        }
+      ],
+      "maxPlays": 2,
+      "maxPlaysPerCharacter": 1,
+      "cooldownDays": 8,
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "戲牌都掛出去了，人卻不見了。前台退了一輪票，後台誰也不敢先開口。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "bill",
+          "id": "walk-off-refund",
+          "label": "撂挑子的退票錢",
+          "amountYuan": 4,
+          "dueInDays": 3,
+          "fromAccountId": "@actor",
+          "creditor": "班庫"
+        },
+        {
+          "kind": "renown",
+          "delta": -0.08,
+          "on": "actor"
+        },
+        {
+          "kind": "standing",
+          "tone": "說不演就不演，這種人搭班要留神，往後冷著點",
+          "from": "witnesses",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "slighted",
+          "hearsay": true
+        }
+      ]
+    },
+    {
+      "id": "expel-from-troupe",
+      "label": "把人逐出班子",
+      "note": "班主的權柄，也是班主一輩子的名聲。人一走，他名下的鑰匙、物件、欠帳全要當場清一遍——這是全季最重的一件事，做了就回不去。",
+      "invokableBy": {
+        "roles": [
+          "班主"
+        ]
+      },
+      "minDay": 6,
+      "requires": [
+        {
+          "kind": "cast-atleast",
+          "count": 6
+        }
+      ],
+      "needsTarget": true,
+      "targetMustBeCoPresent": false,
+      "maxPlays": 1,
+      "effects": [
+        {
+          "kind": "cast-exit",
+          "reason": "班主當眾發了話，卷了鋪蓋出春雪社的門"
+        },
+        {
+          "kind": "renown",
+          "delta": -0.05,
+          "on": "actor"
+        },
+        {
+          "kind": "standing",
+          "tone": "說攆人就攆人，今日是他明日是誰——這班子待著心冷",
+          "from": "witnesses",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "slighted",
+          "hearsay": true
+        }
+      ]
+    },
+    {
+      "id": "denounce-fang-blood-ledger",
+      "label": "把血帳抖出來",
+      "note": "手裡那本帳一旦攤在檯面上就收不回去了。說出去，這條街往後看誰都要多想一層。",
+      "invokableBy": {
+        "names": [
+          "方競西"
+        ]
+      },
+      "minDay": 4,
+      "requires": [
+        {
+          "kind": "secret-leaked",
+          "secretId": "fang-blood-ledger",
+          "leaked": false
+        }
+      ],
+      "maxPlays": 1,
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "有人在前街把一本帳翻開了，念了幾行。念完那幾行，圍著的人半晌沒散。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "leak-secret",
+          "secretId": "fang-blood-ledger"
+        },
+        {
+          "kind": "self-regard",
+          "delta": 0.05,
+          "on": "actor"
+        }
+      ]
+    }
+  ],
+  "maxActsPerDay": 2
+}

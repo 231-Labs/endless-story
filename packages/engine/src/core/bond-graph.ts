@@ -23,6 +23,19 @@ export const BOND = {
     mu: 0.985,
     /** an old flame never cools below this fraction of its historical peak. */
     floorOfPeak: 0.3,
+    /** 交惡 — the cooling rate for a GRIEVANCE, the mirror of `alpha`. Growth
+     *  saturates toward 1 (`v += α·w·(1−v)`); a grievance saturates toward 0
+     *  (`v −= β·w·v`), so a deep bond takes more absolute damage than a shallow
+     *  one but neither can pass its bound. */
+    beta: 0.08,
+    /** grievance multipliers by what actually happened, mirroring `warmth`. */
+    grievance: { slighted: 1.0, dunned: 1.5, shamed: 3.0, betrayed: 5.0 } as Record<string, number>,
+    /** How much of the historical PEAK a grievance takes with it. Time-based
+     *  cooling can never fall below `floorOfPeak · peak` — that is what keeps an
+     *  old flame alive through neglect. A grievance is the one thing that lowers
+     *  the high-water mark itself, which is what makes 社會性死亡 reachable for
+     *  somebody who used to be loved. */
+    peakErosion: 0.5,
     /** standing needed before the world even offers the advance affordance. */
     advanceAt: 0.45,
     /** seeds (data-driven from canon, never name-cased). */
@@ -64,6 +77,29 @@ export function bumpBond(g: BondGraph, a: string, b: string, kind: keyof typeof 
         e.peak = Math.max(e.peak, e.v);
         g.set(k, e);
     }
+}
+
+/**
+ * 交惡 — a DIRECTED grievance cools one side's bond.
+ *
+ * Deliberately asymmetric, unlike `bumpBond`: a shared scene warms both hearts,
+ * but being publicly stiffed cools only the person who was stiffed. Whether the
+ * debtor also cools toward their creditor is a separate call the caller makes,
+ * because being shamed and being wronged are not the same event.
+ *
+ * Unlike `decayBonds`, this erodes `peak` as well, so the pair's cooling floor
+ * follows it down. Neglect can never turn an old flame into a stranger; a
+ * grievance can. That asymmetry is the whole point — without it, no amount of
+ * bad behaviour could ever actually cost somebody a relationship they had
+ * already earned.
+ */
+export function chillBond(g: BondGraph, from: string, to: string, kind: keyof typeof BOND.grievance | string): void {
+    const w = BOND.grievance[kind] ?? 1.0;
+    const k = key(from, to);
+    const e = g.get(k) ?? { v: BOND.seed.stranger, peak: BOND.seed.stranger };
+    e.v = Math.max(0, e.v - BOND.beta * w * e.v);
+    e.peak = Math.max(e.v, e.peak - BOND.beta * w * BOND.peakErosion * e.peak);
+    g.set(k, e);
 }
 
 /** Nightly cooling for every edge whose pair did NOT share a scene today.

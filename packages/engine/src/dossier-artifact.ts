@@ -31,6 +31,41 @@ function safeFilename(value: string): string {
     return value.replace(/[^\p{L}\p{N}._-]+/gu, '-').replace(/^-|-$/g, '').slice(0, 120) || 'event';
 }
 
+/**
+ * 卷宗改吃 beats — build a perspective for a witness who has NO POV prose.
+ *
+ * The POV tracking switch means most participants no longer get first-person
+ * prose, and a dossier needs at least two perspectives to be worth compiling. So
+ * an untracked witness's perspective is assembled from what the beats already
+ * recorded: their OWN lines plus their OWN 〔心下〕, one paragraph per beat.
+ *
+ * This is not a downgrade in kind — a beat's 心下 IS that character's subjective
+ * record, it simply has not been woven into serial prose. What it cannot do is
+ * reinterpret or contradict at length, which is precisely why a tracked
+ * character's woven POV remains the richer document.
+ *
+ * A witness who was present but said nothing yields no perspective (there is no
+ * material to attribute to them), rather than an invented one.
+ */
+function perspectiveFromBeats(
+    event: Pick<TickReport['events'][number], 'beats'>,
+    characterId: string,
+    member?: DossierCastMember,
+): DossierPerspectiveSource | undefined {
+    const own = event.beats.filter((beat) => beat.characterId === characterId);
+    if (!own.length) return undefined;
+    const body = own
+        .map((beat) => (beat.inner ? `${beat.text}（心下：${beat.inner}）` : beat.text))
+        .join('\n\n');
+    return {
+        characterId,
+        characterName: member?.name ?? own[0].name,
+        role: member?.role,
+        bodyFact: member?.gender,
+        body,
+    };
+}
+
 export async function compileTickDossiers(
     report: Pick<TickReport, 'events' | 'eventPovs'>,
     cast: DossierCastMember[],
@@ -51,6 +86,19 @@ export async function compileTickDossiers(
                 bodyFact: byId.get(pov.characterId)?.gender,
                 body: pov.body,
             }));
+        // With the POV tracking switch on, most witnesses have no woven prose. Fill
+        // the rest from their own beats + 心下 so the dossier still compiles —
+        // otherwise turning tracking on would silently stop producing dossiers,
+        // which is the downstream dependency the switch had to sever.
+        if (perspectives.length < 2) {
+            const covered = new Set(perspectives.map((perspective) => perspective.characterId));
+            const speakers = [...new Set(event.beats.map((beat) => beat.characterId))];
+            for (const characterId of speakers) {
+                if (covered.has(characterId) || !event.witnessIds.includes(characterId)) continue;
+                const derived = perspectiveFromBeats(event, characterId, byId.get(characterId));
+                if (derived) perspectives.push(derived);
+            }
+        }
         if (perspectives.length < 2) continue;
 
         const dossierEvent: DossierCanonicalEvent = {

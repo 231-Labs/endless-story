@@ -15,8 +15,16 @@ import type {
     AudienceReactionInput,
     ChooseActionInput,
     ChooseActionResult,
+    ComposeDiaryInput,
+    ComposeDiaryReply,
+    ComposePoemInput,
+    ComposePoemReply,
+    DebtStanceInput,
+    DebtStanceReply,
     DeclareWantSemanticsInput,
     DeclareWantSemanticsReply,
+    DirectorPickInput,
+    DirectorPickReply,
     GenesisWant,
     EvolveSecretInput,
     PovReflectInput,
@@ -50,11 +58,48 @@ export class FakeSceneAgent implements SceneAgentPort {
         const h = hash(`${input.name}|${input.want.desc}|${input.sceneLog.length}`);
         const others = input.others ?? [];
         const addressed = others.length && h % 2 === 0 ? others[h % others.length].name : undefined;
-        const near = input.privateAlone ? '挨得近了些' : input.isPrivate ? '壓著聲' : '當著眾人';
+        // The stock phrase varies PER CHARACTER (deterministically, off the name
+        // hash) rather than being one template the whole cast shares. Without this
+        // every fake beat in a public scene opened with the same four characters,
+        // and the vitals' convergence detector correctly — but uselessly — reported
+        // the whole cast "converging" on the stub's own vocabulary. A deterministic
+        // agent should exercise the diagnostics, not saturate them.
+        const REGISTERS = {
+            alone: ['挨得近了些', '肩幾乎碰著', '燈影裡靠過去', '呼吸都放輕了'],
+            hushed: ['壓著聲', '半掩著口', '把話收在喉頭', '就著耳朵說'],
+            public: ['當著眾人', '在滿屋子人跟前', '任誰都聽得見', '眼也不避人'],
+        } as const;
+        const register = input.privateAlone ? REGISTERS.alone : input.isPrivate ? REGISTERS.hushed : REGISTERS.public;
+        const near = register[hash(input.name) % register.length];
+        // Same reasoning for the verb: one shared skeleton made twelve characters
+        // produce twelve near-identical sentences, which is a stub artifact the
+        // loop/convergence detectors would otherwise report as a world finding.
+        const MOVES = ['繞著', '咬著', '守著', '扒著', '撞著', '磨著'] as const;
+        const move = MOVES[hash(`${input.name}|move`) % MOVES.length];
+        // 世情動作（確定性替身）— a person reaches for the drastic thing when they
+        // are being crushed, not on a schedule. Gating on `forcing === 'breaking'`
+        // keeps the stub honest in both directions: the path is genuinely
+        // exercised end to end in fake runs, and it stays rare enough that a smoke
+        // test measures the world rather than the stub's appetite for 報官.
+        // The extra hash gate is not squeamishness: `heat`/`frust` do not decay, so
+        // by day three the whole fake cast sits at 'breaking' permanently, and
+        // forcing alone would have every character reaching for 報官 every beat.
+        const act = input.acts?.length && input.forcing === 'breaking' && hash(`${input.name}|act|${input.sceneLog.length}`) % 4 === 0
+            ? (() => {
+                  const chosen = input.acts[hash(`${input.name}|act`) % input.acts.length];
+                  if (!chosen.needsTarget) return { id: chosen.id };
+                  if (!chosen.targetNames.length) return undefined;
+                  return {
+                      id: chosen.id,
+                      targetName: chosen.targetNames[hash(`${input.name}|act-target`) % chosen.targetNames.length],
+                  };
+              })()
+            : undefined;
         return {
-            beat: `${near}，${input.name}繞著「${input.want.desc}」打轉${addressed ? `，看向${addressed}` : ''}`,
+            beat: `${near}，${input.name}${move}「${input.want.desc}」不放${addressed ? `，看向${addressed}` : ''}`,
             inner: input.want.desc,
             addressed,
+            ...(act ? { act } : {}),
         };
     }
 
@@ -298,6 +343,97 @@ export class FakeSceneAgent implements SceneAgentPort {
     async povScene(input: PovSceneInput): Promise<string | null> {
         if (!input.beats.length) return null;
         return `${input.name}眼中的這一場（${input.venue}，${input.beats.length}拍）：我把方才每一下都記著。`;
+    }
+
+    /**
+     * 導演選牌（確定性替身）— picks the FIRST offered card (the engine already sorts
+     * deadlines first, then by card id), aims it at the head of the offered
+     * candidates, and never declines. That makes deck plumbing testable without a
+     * model: the same world always plays the same card, so a run replays exactly.
+     * A real director substitutes judgment here and nothing else — the engine
+     * still owns every consequence.
+     */
+    async pickEventCard(input: DirectorPickInput): Promise<DirectorPickReply | null> {
+        const pick = input.offered[0];
+        // 自撰一張（確定性替身）— only when the deck genuinely has nothing to offer,
+        // which is exactly the case the escape hatch exists for. Deliberately
+        // modest: one percept, inside every cap, so a fake run proves the
+        // validate-then-play path without proving anything about magnitudes.
+        if (!pick) {
+            return input.mayPropose
+                ? {
+                      cardId: '',
+                      propose: {
+                          label: '街上一樁小事',
+                          note: '（確定性替身：牌組今日無牌可打）',
+                          effects: [{ kind: 'percept', text: `第 ${input.day} 日 ${input.clock}，前街上有人吵了一場，看熱鬧的圍了一圈又散了。` }],
+                      },
+                      rationale: '（確定性替身：無牌可打，自撰一張）',
+                  }
+                : null;
+        }
+        return {
+            cardId: pick.cardId,
+            targetIds: pick.candidates.slice(0, Math.max(0, pick.pickCount)).map((candidate) => candidate.id),
+            rationale: '（確定性替身：取牌序之首）',
+        };
+    }
+
+    /**
+     * 債主的態度（確定性替身）— mirrors the engine's own fallback logic so a fake
+     * run and a seatless run produce the SAME reckoning: patience runs out, and
+     * somebody who could have paid and did not is treated differently from
+     * somebody who could not. Deliberately not generous: a stub that always
+     * forgave would make 「打死不還」 free in every deterministic test.
+     */
+    async decideDebtStance(input: DebtStanceInput): Promise<DebtStanceReply | null> {
+        if (input.priorCalls >= 2) return { stance: 'broadcast', note: '（替身：催過兩回了）' };
+        if (input.debtorCouldPay) {
+            return input.priorCalls >= 1
+                ? { stance: 'broadcast', note: '（替身：手裡有錢還拖第二回）' }
+                : { stance: 'press', note: '（替身：先當面問一次）' };
+        }
+        return input.creditorFooting.includes('緊') || input.creditorFooting.includes('撐不住')
+            ? { stance: 'press', note: '（替身：自己也難，話說在前頭）' }
+            : { stance: 'forgive', note: '（替身：他確實還不出，這筆算了）' };
+    }
+
+    /**
+     * 日記（確定性替身）— one claim per citable beat, each citing exactly that beat,
+     * so the evidence audit has real material to pass. The last claim deliberately
+     * cites NOTHING when the day had evidence: it proves the audit actually
+     * catches an unsupported claim rather than rubber-stamping the reply.
+     */
+    async composeDiary(input: ComposeDiaryInput): Promise<ComposeDiaryReply | null> {
+        if (!input.evidence.length) return null;
+        const claims = input.evidence.slice(0, 4).map((beat) => ({
+            text: `${beat.clock}在${beat.sceneName}：${beat.text.slice(0, 40)}`,
+            evidenceRefs: [beat.ref],
+        }));
+        claims.push({ text: '（無憑之語：這一日我心裡另有一樁，說不出所以然）', evidenceRefs: [] });
+        const body = [
+            `第${input.day}日 · ${input.name}手記`,
+            ...input.evidence.slice(0, 4).map((beat) => `${beat.clock}，${beat.sceneName}。${beat.text}${beat.inner ? `（心下：${beat.inner}）` : ''}`),
+            input.wantLines.length ? `擱在心上的：${input.wantLines[0]}` : '',
+            input.purseLine ?? '',
+        ]
+            .filter(Boolean)
+            .join('\n');
+        return { body, claims };
+    }
+
+    /** 詩詞（確定性替身）— four short lines keyed to the occasion, so the prop-spawn
+     *  and cooldown plumbing is exercised without a model. */
+    async composePoem(input: ComposePoemInput): Promise<ComposePoemReply | null> {
+        return {
+            title: `${input.occasion}·無題`,
+            body: [
+                `${input.occasionLine}`,
+                input.wantDesc ? `心上一樁：${input.wantDesc}` : '心上一樁，說不得',
+                input.otherName ? `${input.otherName}啊${input.otherName}` : '燈下自照',
+                `第${input.day}日，${input.clock}，墨未乾`,
+            ].join('\n'),
+        };
     }
 
     async povReflect(input: PovReflectInput): Promise<string | null> {

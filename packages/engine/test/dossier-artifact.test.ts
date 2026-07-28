@@ -44,16 +44,44 @@ test('a tick event compiles into the same grounded header the UI parses', async 
     assert.match(parsed.body, /蘇映雪：把溫茶推到生春手邊/);
 });
 
-test('private or single-POV events never become public dossiers', async () => {
-    const lonePov = [{ characterId: 'su', name: '蘇映雪', eventId: publicEvent.id, body: '只我一人。' }];
-    assert.deepEqual(await compileTickDossiers({ events: [publicEvent], eventPovs: lonePov }, []), []);
+test('private events never become public dossiers, however many POVs they have', async () => {
     assert.deepEqual(await compileTickDossiers({
         events: [{ ...publicEvent, visibility: 'private' as const }],
         eventPovs: [
-            ...lonePov,
+            { characterId: 'su', name: '蘇映雪', eventId: publicEvent.id, body: '只我一人。' },
             { characterId: 'liu', name: '柳安春', eventId: publicEvent.id, body: '只她知道。' },
         ],
     }, []), []);
+});
+
+/**
+ * 卷宗改吃 beats — with the POV tracking switch on, most witnesses no longer get
+ * woven prose, so a dossier that required two POVs would simply stop being
+ * produced. The compiler now fills the gap from the beats themselves (a
+ * speaker's own lines + their own 心下, which IS their subjective record), and
+ * only gives up when there is genuinely no second voice to attribute anything to.
+ */
+test('a single-POV public event still compiles, filling the second perspective from beats', async () => {
+    const lonePov = [{ characterId: 'su', name: '蘇映雪', eventId: publicEvent.id, body: '只我一人。' }];
+    const artifacts = await compileTickDossiers({ events: [publicEvent], eventPovs: lonePov }, [
+        { id: 'su', name: '蘇映雪', role: '花旦', gender: '女' },
+        { id: 'liu', name: '柳安春', role: '小生', gender: '女' },
+    ]);
+    assert.equal(artifacts.length, 1, 'the untracked speaker supplies the second perspective');
+    assert.equal(artifacts[0].bundle.manifest.perspectives.length, 2);
+    // The beats-derived perspective is the character's OWN line, not an invention.
+    assert.match(artifacts[0].content, /柳安春/);
+});
+
+test('an event with only one speaker yields no dossier — there is no second voice to fill in', async () => {
+    const soloEvent = { ...publicEvent, beats: publicEvent.beats.slice(0, 1) };
+    assert.deepEqual(
+        await compileTickDossiers(
+            { events: [soloEvent], eventPovs: [{ characterId: 'su', name: '蘇映雪', eventId: soloEvent.id, body: '只我一人。' }] },
+            [],
+        ),
+        [],
+    );
 });
 
 test('real curator supplies bespoke leads, mixed review states, and passage-level claim mapping', async () => {

@@ -25,13 +25,22 @@ import type {
     EvolveSecretInput,
     DossierCanonicalEvent,
     DossierPerspectiveSource,
+    ComposeDiaryInput,
+    ComposeDiaryReply,
+    ComposePoemInput,
+    ComposePoemReply,
+    DebtStanceInput,
+    DebtStanceReply,
     DeclareWantSemanticsInput,
     DeclareWantSemanticsReply,
+    DirectorPickInput,
+    DirectorPickReply,
     SelfModelConsolidateInput,
     SelfModelConsolidateReply,
     PlanDayInput,
     PlanDayReply,
 } from '../ports.ts';
+import { PROPOSAL_LIMITS, type CardProposal } from '../core/event-deck.ts';
 import { WANT_SEMANTIC_TAGS, type WantSemanticTag } from '../core/want-core.ts';
 import { projectEventBeatsForWitness } from '../core/scene-perception.ts';
 import {
@@ -290,6 +299,331 @@ export class RunnerSceneAgent implements SceneAgentPort {
         input: Parameters<typeof characterAgent.judgeEstablished>[0],
     ): ReturnType<typeof characterAgent.judgeEstablished> {
         return characterAgent.judgeEstablished(input);
+    }
+
+    // ── 宏觀節奏 seats (director · diary · poem) ─────────────────────────────
+
+    /**
+     * 導演選牌 — the ONLY seat where a model influences what the world DOES to the
+     * cast, and its authority is three answers wide: which offered card, aimed at
+     * which offered candidates, dressed in what words. The engine has already
+     * computed the eligible set and will settle every consequence, so the prompt
+     * carries no figure the director could optimise against — no balances, no
+     * tension numbers, no box office. A reply naming a card that was not offered is
+     * refused by the caller, so the worst a bad reply can do is waste a tick.
+     */
+    async pickEventCard(input: DirectorPickInput): Promise<DirectorPickReply | null> {
+        if (!input.offered.length && !input.mayPropose) return null;
+        const system = [
+            '你是這齣戲的導演。你的職權只有三件事：**選哪張牌、何時打、對準誰**，外加把卡面文字',
+            '穿上戲服（改寫成這個世界的話）。你不決定後果——後果由引擎按牌面確定性結算。',
+            '',
+            '鐵則：',
+            '1. cardId 只能從【今日可打的牌】裡逐字挑一張。捏造的牌一律不採納。',
+            '2. targetIds 只能從那張牌自己的【可對準】名單裡挑，最多挑該牌指定的人數。',
+            '3. costume 是把卡面改寫成世界語言的一兩句話（30–80字），只寫**已經發生的客觀事**，',
+            '   不預告後果、不替角色決定反應、不出現數字。不改寫就省略。',
+            '4. 你可以按牌不打（decline:true）——外力是推手，不是主角。已標【到日必打】的牌沒有',
+            '   這個選項，你只能替它穿戲服。',
+            '5. rationale 一句話說明為什麼是這張、為什麼是這個人（只進 log，不入世界）。',
+            '',
+            '選牌的判準：哪一張最能把**已經存在的張力**推向一個必須有人回答的處境。不要為了熱鬧',
+            '而打牌；一天到晚都在下雨的世界，跟從不下雨的一樣悶。',
+            '',
+            // 自撰一張 — advertised only when the quota is open, and advertised with
+            // its own fence. The caps are quoted verbatim from PROPOSAL_LIMITS so
+            // the prompt and the validator can never drift: a director told 「至多
+            // 四條」 while the engine enforces three would be refused for reasons it
+            // was never given.
+            ...(input.mayPropose
+                ? [
+                      '',
+                      `【自撰一張】牌面上沒有合適的，你可以自己寫一張——但只能用引擎認得的積木，`,
+                      `一卷至多 ${PROPOSAL_LIMITS.seasonCap} 張、一日至多 ${PROPOSAL_LIMITS.perDay} 張，越界一律駁回並記錄。`,
+                      `可用的後果只有這幾種（其餘一律駁回）：`,
+                      '  percept  —— 世上發生了一件事，全班次拍知曉。{"kind":"percept","text":"一兩句客觀事實","sceneName":"場景名或省略"}',
+                      `  want     —— 在對象心上種一樁事。{"kind":"want","layer":"事務","desc":"至多40字","weight":≤${PROPOSAL_LIMITS.wantWeight},"dueInDays":≤${PROPOSAL_LIMITS.wantDueDays}}`,
+                      `  bill     —— 對象頭上多一筆按期債。{"kind":"bill","id":"唯一id","label":"名目","amountYuan":≤${PROPOSAL_LIMITS.billYuan},"dueInDays":≤${PROPOSAL_LIMITS.billDueDays},"fromAccountId":"@target"}`,
+                      `  renown / self-regard —— 名頭或自視微調。{"kind":"renown","delta":±${PROPOSAL_LIMITS.renownDelta}以內}`,
+                      `  weather  —— 天時。{"kind":"weather","label":"名目","housePct":${PROPOSAL_LIMITS.weatherHousePct.min}~${PROPOSAL_LIMITS.weatherHousePct.max}}`,
+                      '  object-state —— 已登記物件換個狀態。{"kind":"object-state","objectId":"登記id","state":"新狀態"}',
+                      '  leak-secret  —— 已在帳上的秘密走漏。{"kind":"leak-secret","secretId":"帳上的id"}',
+                      `一張至多 ${PROPOSAL_LIMITS.maxEffects} 條後果。發錢、分紅、注資、結帳、進班、離班、見報都不在其中——`,
+                      '那些不是導演的權柄：錢的來去有它自己的鐘，人的進出是全季最大的一張牌。',
+                      '自撰的牌是給「牌組想不到、但此刻非有不可」的那一件事用的；牌面上有合用的就別自撰。',
+                      '',
+                      '自撰時把 cardId 留空、decline 省略，改給 propose：',
+                      '{"cardId":"","propose":{"label":"卡面（40字內）","note":"一句說明","targetIds":["角色id"],"effects":[...]},"rationale":"..."}',
+                  ]
+                : []),
+            '',
+            '只輸出 JSON，不要 markdown：',
+            '{"cardId":"...","targetIds":["..."],"costume":"可省略","rationale":"...","decline":false}',
+        ].join('\n');
+        const offered = input.offered
+            .map((card) => {
+                const who = card.candidates.length
+                    ? card.candidates.map((candidate) => `${candidate.id}=${candidate.name}`).join('、')
+                    : '（此牌無對象）';
+                return [
+                    `- cardId：${card.cardId}${card.forced ? '【到日必打，只能穿戲服】' : ''}`,
+                    `  卡面：${card.label}`,
+                    card.note ? `  說明：${card.note}` : '',
+                    `  可對準（挑 ${card.pickCount} 人）：${who}`,
+                ].filter(Boolean).join('\n');
+            })
+            .join('\n');
+        const user = [
+            `【此刻】第 ${input.day} 日，${input.clock}`,
+            '',
+            '【世情】',
+            ...input.worldBrief,
+            '',
+            input.offered.length ? '【今日可打的牌】' : '【今日可打的牌】（無——牌組今日給不出東西）',
+            offered,
+            input.forcedCardIds.length ? `\n【今日已經注定要落的牌】${input.forcedCardIds.join('、')}` : '',
+        ].filter(Boolean).join('\n');
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system,
+            messages: [{ role: 'user', content: user }],
+            maxTokens: 400,
+            temperature: 0.6,
+        });
+        const block = res.text.match(/\{[\s\S]*\}/)?.[0];
+        if (!block) return null;
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(block) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+        const rationale = typeof parsed.rationale === 'string' && parsed.rationale.trim()
+            ? toTraditional(parsed.rationale.trim())
+            : undefined;
+        const card = typeof parsed.cardId === 'string'
+            ? input.offered.find((row) => row.cardId === parsed.cardId)
+            : undefined;
+        // 自撰一張 — passed through verbatim, NOT sanitised here. The engine's
+        // `validateProposal` is the single authority on what a proposal may do,
+        // and a second, looser copy of those rules in the adapter would be exactly
+        // the drift the deck exists to prevent. An overreach comes back as logged
+        // reasons instead of being quietly trimmed into something the director
+        // never actually proposed.
+        if (!card && input.mayPropose && parsed.propose && typeof parsed.propose === 'object') {
+            const draft = parsed.propose as Record<string, unknown>;
+            const label = typeof draft.label === 'string' ? toTraditional(draft.label.trim()) : '';
+            const note = typeof draft.note === 'string' && draft.note.trim() ? toTraditional(draft.note.trim()) : undefined;
+            return {
+                cardId: '',
+                propose: {
+                    label,
+                    ...(note ? { note } : {}),
+                    ...(Array.isArray(draft.targetIds)
+                        ? { targetIds: draft.targetIds.filter((raw): raw is string => typeof raw === 'string') }
+                        : {}),
+                    effects: (Array.isArray(draft.effects) ? draft.effects : []) as CardProposal['effects'],
+                },
+                ...(rationale ? { rationale } : {}),
+            };
+        }
+        if (!card) return null; // a card the engine never offered is not a card
+        const allowed = new Set(card.candidates.map((candidate) => candidate.id));
+        const byName = new Map(card.candidates.map((candidate) => [candidate.name, candidate.id]));
+        const targetIds = Array.isArray(parsed.targetIds)
+            ? parsed.targetIds
+                  .map((raw) => (typeof raw === 'string' ? (allowed.has(raw) ? raw : byName.get(raw)) : undefined))
+                  .filter((id): id is string => !!id)
+                  .slice(0, Math.max(1, card.pickCount))
+            : [];
+        return {
+            cardId: card.cardId,
+            ...(targetIds.length ? { targetIds } : {}),
+            ...(typeof parsed.costume === 'string' && parsed.costume.trim() ? { costume: toTraditional(parsed.costume.trim()) } : {}),
+            ...(rationale ? { rationale } : {}),
+            ...(parsed.decline === true && !card.forced ? { decline: true } : {}),
+        };
+    }
+
+    /**
+     * 債主的態度 — how hard THIS creditor calls THIS unpaid debt.
+     *
+     * The seat exists because the engine refuses to debit anybody: 「打死不還」 has
+     * to be a position a character can actually hold, so the consequence of not
+     * paying is social, and how loud that consequence gets is the CREDITOR'S
+     * judgment, not the clock's. A creditor who genuinely does not mind is
+     * allowed not to mind.
+     *
+     * The prompt carries no figure the seat could do arithmetic on, and the seat
+     * cannot move money — it returns one of three stances and the engine settles
+     * the social consequence of it.
+     */
+    async decideDebtStance(input: DebtStanceInput): Promise<DebtStanceReply | null> {
+        const system = [
+            `你是${input.creditorName}。有人欠你的帳到了日子，還沒還。`,
+            '',
+            '**你拿不走他的錢**——這條街上沒有人能從別人手裡搶錢。你能決定的只有一件事：',
+            '這筆帳，你要怎麼說。三選一：',
+            '',
+            '- `forgive`（免了）：把那頁紅字撕了。帳沒了，情記下了——他往後欠你的是人情。',
+            '  你若真的不在意，或者覺得逼他不值當，就選這個。',
+            '- `press`（當面催）：把他叫到一邊，數目日子問到底。帳還在，話沒往外傳；',
+            '  丟的是他當著你的臉，不是當著整條街的臉。',
+            '- `broadcast`（傳出去）：當眾把名字和數目報出來。帳還在，而且往後你這裡',
+            '  不再賒給他，整條街都會知道他是什麼樣的人。這是最重的一手，收不回。',
+            '',
+            '判準是你自己的：你的營生撐不撐得住、這個人值不值得留、他是**還不出**還是',
+            '**不肯還**（這兩件事差得遠）、以及你已經給過他幾次機會。',
+            '沒有標準答案；你就是你，按你的性子答。',
+            '',
+            '只輸出 JSON，不要 markdown：{"stance":"forgive|press|broadcast","note":"一句你自己的理由"}',
+        ].join('\n');
+        const user = [
+            input.stance ? `【你的立場】${input.stance}` : '',
+            `【欠你的人】${input.debtorName}`,
+            `【什麼帳】${input.label}，還差${input.owedText}`,
+            `【過期】${input.daysOverdue <= 0 ? '今日正是日子' : `已經過了 ${input.daysOverdue} 日`}`,
+            `【你已經叫過幾回】${input.priorCalls === 0 ? '這是頭一回' : `${input.priorCalls} 回了`}`,
+            `【他還得出嗎】${input.debtorCouldPay ? '手裡不是沒有——他是不肯還，不是還不出' : '看樣子確實拿不出來'}`,
+            `【你自己的光景】${input.creditorFooting}`,
+        ].filter(Boolean).join('\n');
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system,
+            messages: [{ role: 'user', content: user }],
+            maxTokens: 200,
+            temperature: 0.7,
+        });
+        const block = res.text.match(/\{[\s\S]*\}/)?.[0];
+        if (!block) return null;
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(block) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+        if (parsed.stance !== 'forgive' && parsed.stance !== 'press' && parsed.stance !== 'broadcast') return null;
+        return {
+            stance: parsed.stance,
+            ...(typeof parsed.note === 'string' && parsed.note.trim() ? { note: toTraditional(parsed.note.trim()) } : {}),
+        };
+    }
+
+    /**
+     * 日記 — one tracked character's day, recombined from that day's own beats and
+     * 心下 in a single call. The seat writes prose AND extracts its own claims with
+     * `beat:N` citations; the engine then audits those citations (and any money
+     * figure) before anything is stored. The claim structure is not decoration: a
+     * diary reads as canon, so it is exactly the wrong place to let invention in.
+     */
+    async composeDiary(input: ComposeDiaryInput): Promise<ComposeDiaryReply | null> {
+        if (!input.evidence.length) return null;
+        const system = [
+            `你是${input.name}，在一天結束時寫下自己的日記。`,
+            '',
+            '鐵則：',
+            '1. **只能寫今日素材裡真的發生過的事**。素材是你自己這一天的每一拍：客觀做了什麼、',
+            '   心下想了什麼。不發明新事件、新人物、新對白。',
+            '2. **你可以主觀、偏心、自我辯護、看錯別人的用意**——那正是日記的價值。但你**不可以**',
+            '   寫錯帳目：錢的數目只能寫素材裡出現過的，或你此刻真正的現銀。',
+            '3. 文體是私密的、口語的、有情緒的；不是報告。250–600字。',
+            '4. 另外抽出 1–5 條 claim：這篇日記到底主張了什麼。每條都要標出它靠哪幾拍',
+            '   （evidenceRefs 只能填素材裡的 beat:N）。沒有憑據就不要寫成 claim。',
+            '',
+            '只輸出 JSON，不要 markdown：',
+            '{"body":"日記正文","claims":[{"text":"這篇主張了什麼","evidenceRefs":["beat:0"]}]}',
+        ].join('\n');
+        const material = input.evidence
+            .map((beat) => `${beat.ref}｜${beat.clock}·${beat.sceneName}：${beat.text}${beat.inner ? `（心下：${beat.inner}）` : ''}`)
+            .join('\n');
+        const user = [
+            `【我是誰】${input.persona}`,
+            input.secret ? `【只有我知道的事】${input.secret}` : '',
+            `【第 ${input.day} 日，我這一天的每一拍】`,
+            material,
+            input.wantLines.length ? `\n【擱在我心上的】\n${input.wantLines.map((line) => `- ${line}`).join('\n')}` : '',
+            input.purseLine ? `\n【我此刻真正的家當（寫到錢時只能照這個）】${input.purseLine}` : '',
+        ].filter(Boolean).join('\n');
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system,
+            messages: [{ role: 'user', content: user }],
+            maxTokens: 1600,
+            temperature: 0.85,
+        });
+        const block = res.text.match(/\{[\s\S]*\}/)?.[0];
+        if (!block) return null;
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(block) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+        if (typeof parsed.body !== 'string' || !parsed.body.trim()) return null;
+        const claims = Array.isArray(parsed.claims)
+            ? parsed.claims
+                  .map((raw) => raw as Record<string, unknown>)
+                  .filter((raw) => typeof raw?.text === 'string' && (raw.text as string).trim())
+                  .map((raw) => ({
+                      text: toTraditional((raw.text as string).trim()),
+                      evidenceRefs: Array.isArray(raw.evidenceRefs)
+                          ? raw.evidenceRefs.filter((ref): ref is string => typeof ref === 'string')
+                          : [],
+                  }))
+                  .slice(0, 5)
+            : [];
+        return { body: toTraditional(parsed.body.trim()), claims };
+    }
+
+    /**
+     * 詩詞 — occasion-triggered, never a daily quota. The engine decided THAT there
+     * is an occasion and hands over the reason; this seat only writes the words.
+     * Deliberately short: a discarded draft that becomes a prop somebody else finds
+     * has to be readable at a glance.
+     */
+    async composePoem(input: ComposePoemInput): Promise<ComposePoemReply | null> {
+        const system = [
+            `你是${input.name}。此刻有一樁事壓在心口，你提筆寫了幾行——不是為了給誰看。`,
+            '',
+            '鐵則：',
+            '1. 民國初年、識字戲曲人寫得出來的舊體或半舊體，四到八行，每行不過十四字。',
+            '2. **不敘事、不解釋、不點題**。只留意象與情緒；讀的人看得懂多少是他的事。',
+            '3. 不寫人名全稱（可用稱謂或代稱），不出現數字、契約、帳目這類字眼。',
+            '4. title 可省略；若寫，四字以內。',
+            '',
+            '只輸出 JSON，不要 markdown：{"title":"可省略","body":"第一行\\n第二行"}',
+        ].join('\n');
+        const user = [
+            `【我是誰】${input.persona}`,
+            `【為什麼是今夜】${input.occasionLine}`,
+            input.wantDesc ? `【壓著我的那一樁】${input.wantDesc}` : '',
+            input.otherName ? `【心裡繞不開的那個人】${input.otherName}` : '',
+            input.sceneName ? `【我此刻在哪】${input.sceneName}，${input.clock}` : '',
+        ].filter(Boolean).join('\n');
+        const client = llmText.createTextClient({ kind: 'primary' });
+        const res = await client.chat({
+            model: client.defaultModel,
+            system,
+            messages: [{ role: 'user', content: user }],
+            maxTokens: 400,
+            temperature: 0.95,
+        });
+        const block = res.text.match(/\{[\s\S]*\}/)?.[0];
+        if (!block) return null;
+        let parsed: Record<string, unknown>;
+        try {
+            parsed = JSON.parse(block) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+        if (typeof parsed.body !== 'string' || !parsed.body.trim()) return null;
+        return {
+            ...(typeof parsed.title === 'string' && parsed.title.trim() ? { title: toTraditional(parsed.title.trim()) } : {}),
+            body: toTraditional(parsed.body.trim()),
+        };
     }
 
     async declareWantSemantics(

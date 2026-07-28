@@ -25,6 +25,18 @@ export function defaultSeasonsDir(): string {
     return path.resolve(fileURLToPath(import.meta.url), '../../../cli/scripts/seasons');
 }
 
+/** 事件牌組 library. Mirrors the stories/seasons convention: a private script
+ *  root wins, otherwise the in-repo built-in decks. */
+export function defaultDecksDir(): string {
+    const root = scriptsRoot();
+    if (root) return path.join(root, 'decks');
+    return path.resolve(fileURLToPath(import.meta.url), '../../../cli/scripts/decks');
+}
+
+export function activeDeckId(): string | undefined {
+    return process.env.ES_ACTIVE_DECK?.trim() || undefined;
+}
+
 export function activePresetId(): string | undefined {
     return process.env.ES_ACTIVE_PRESET?.trim() || undefined;
 }

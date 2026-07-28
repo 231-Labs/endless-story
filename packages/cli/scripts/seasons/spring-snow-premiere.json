@@ -1,0 +1,590 @@
+{
+  "id": "spring-snow-premiere",
+  "title": "排一齣自己的戲",
+  "openingScene": "後台妝閣",
+  "subjectiveNaming": true,
+  "emergentProduction": true,
+  "centralQuestion": "春雪社要排一齣沒人演過的新戲。可是新戲要人寫、要人演、要整個白日的功夫——而白日的功夫，本來是拿去掙錢的。這一班人，是把自己押在一齣還沒成形的戲上，還是各自守住手裡已經有的活路？",
+  "incitingIncident": "雲錦台的東家鬆了口：年底會串留一檔給春雪社。條件只有一個——要一齣「沒人演過的」新戲，老戲頂上不算。三十圓訂金當場點清入了班庫，條子上另寫一行：到期若排不出來、或臨時換老戲充數，訂金照數退回，另加一成違約。沈雪笙回到後台，把封了十五年的樟木戲箱開了一條縫，取出一疊發黃的散頁——那是她自己年輕時沒寫完的本子。她把散頁擱在妝台上，沒說要誰接，也沒說要誰演。當夜衣箱房的燈亮到很晚：戲牌上「領銜」兩個字底下是一條空的，春雪社有兩個小生。",
+  "deadline": "第五日會串之夜，新戲必須上臺。到那一夜若臺上唱的是老戲、或根本沒能開鑼，訂金連違約一併退回雲錦台——班庫拿不拿得出，是另一回事。",
+  "stakes": [
+    "本子只有一疊沒寫完的散頁。誰接筆，誰就把自己的名字寫進這齣戲；接了卻寫不出來，耽誤的是全班的檔期。",
+    "戲牌上領銜只有一條線，春雪社有兩個小生。柳安春與江聞鶴，一個女兒身扮了十年小生、一個男身唱了半輩子未曾領銜——這個位置給了誰，另一個要怎麼在後台待下去。",
+    "白日排戲就沒法出去掙錢；不排戲，戲就排不出來。堂會、繡活、碼頭接花、報館的稿子——每一樣都在同一個白日裡，不能兩全。",
+    "訂金已經花進了班庫的日常開銷。到期退不出來，不只是丟一檔會串，是要在整條前街面前認一次撐不起。",
+    "沈雪笙那疊散頁是她自己二十歲寫的。交出去讓別人改，和自己接著寫完，對她不是同一件事；而她已經很久不寫了。"
+  ],
+  "publicFacts": [
+    "雲錦台的訂金三十圓、會串檔期、以及「必須是新戲」這一條，都白紙黑字寫在條子上，後台的人都看過。",
+    "違約條款也在同一張條子上：到期交不出新戲，原數退回另加一成。",
+    "戲牌上「領銜」那一條至今空著，班主沒有點名，也沒有說何時點。",
+    "沈雪笙從樟木戲箱裡取出的那疊散頁確實是舊稿，紙已發黃；是誰寫的、寫到哪裡為止，後台議論不一。",
+    "白日排戲與白日掙錢衝突，這是人人都算得出來的帳，不是誰的私事。",
+    "沒有任何公開事實能證明這齣戲排得出來，也沒有任何公開事實能證明誰該領銜。"
+  ],
+  "contestedResources": [
+    {
+      "label": "billing:新戲戲牌上的領銜位置",
+      "statement": "戲牌上領銜只有一條線。給了誰，就是當著整條前街說這一班以誰為主；另一個人往後在後台的位置，也跟著這一條線重新排過。"
+    },
+    {
+      "label": "manuscript:那疊沒寫完的散頁",
+      "statement": "本子只有一份，接筆的人只能有一個主筆。誰接了，這齣戲往後就照誰的心思長；沈雪笙自己接不接，是另一層。"
+    },
+    {
+      "label": "daylight:排戲佔掉的白日",
+      "statement": "白日只有那麼長。人在排練廳，就不在食擔前、不在繡樓、不在碼頭、不在報館——排戲的功夫是拿真金白銀換來的。"
+    }
+  ],
+  "initialObjects": [
+    {
+      "id": "premiere-contract-note",
+      "label": "雲錦台會串檔期條子",
+      "aliases": [
+        "條子",
+        "檔期條子",
+        "訂金條子"
+      ],
+      "scene": "後台妝閣",
+      "state": "訂金三十圓已付訖；要求「沒人演過的新戲」，到期交不出原數退回另加一成"
+    },
+    {
+      "id": "unfinished-manuscript",
+      "label": "沈雪笙那疊沒寫完的散頁",
+      "aliases": [
+        "散頁",
+        "舊稿",
+        "本子",
+        "沒寫完的本子"
+      ],
+      "scene": "後台妝閣",
+      "portable": true,
+      "state": "紙已發黃，寫到第三折戛然而止；末頁邊角有一行被劃掉的字，看不清了"
+    },
+    {
+      "id": "camphor-trunk",
+      "label": "封了十五年的樟木戲箱",
+      "aliases": [
+        "樟木箱",
+        "戲箱",
+        "老戲箱"
+      ],
+      "scene": "衣箱房",
+      "state": "鎖已開，蓋只掀了一條縫；裡頭還壓著別的東西"
+    },
+    {
+      "id": "billing-board",
+      "label": "雲錦台門前的戲牌",
+      "aliases": [
+        "戲牌",
+        "水牌",
+        "招子"
+      ],
+      "scene": "戲園前街",
+      "state": "「春雪社新戲」四字已寫上；領銜那一條空著，墨還沒落"
+    },
+    {
+      "id": "rehearsal-gong",
+      "label": "排練廳的小鑼",
+      "aliases": [
+        "小鑼",
+        "鑼"
+      ],
+      "scene": "雲錦台戲台",
+      "state": "擱在台口，誰敲響了誰就是叫排戲的那個人"
+    },
+    {
+      "id": "frontstreet-food-stall",
+      "label": "趙阿福的食擔",
+      "aliases": [
+        "食擔",
+        "生煎鍋"
+      ],
+      "scene": "戲園前街",
+      "state": "一鍋生煎滋滋作響，湯麵鍋冒著白氣，糖粥缸溫著"
+    },
+    {
+      "id": "frontstreet-flower-basket",
+      "label": "殷阿婆的花籃",
+      "aliases": [
+        "花籃",
+        "花擔"
+      ],
+      "scene": "戲園前街",
+      "state": "梔子、白蘭、晚香玉拿紅絨線串成一串串，香透半條街"
+    }
+  ],
+  "scheduledEvents": [
+    {
+      "id": "premiere-billing-blank",
+      "atTick": 3,
+      "clock": "戲牌未落款",
+      "scene": "戲園前街",
+      "visibility": "public",
+      "text": "雲錦台門前的戲牌換了新的：「春雪社新戲」四個字已經寫上，領銜那一條卻空著。路過的人指指點點，後台的人裝作沒看見。"
+    }
+  ],
+  "properties": [
+    {
+      "scene": "後台小廂房",
+      "ownerNames": [
+        "沈雪笙"
+      ],
+      "lease": {
+        "tenantName": "柳安春",
+        "keyObjectId": "key-liuanchun-backstage",
+        "keyLabel": "後台小廂房的門鑰",
+        "rentYuan": 3,
+        "rentDueDay": 4,
+        "rentLabel": "後台小廂房膳宿"
+      }
+    },
+    {
+      "scene": "二樓書寓",
+      "ownerNames": [
+        "蘇映雪"
+      ]
+    },
+    {
+      "scene": "金鳳寓所",
+      "ownerNames": [
+        "金鳳"
+      ]
+    },
+    {
+      "scene": "沈宅小樓",
+      "ownerNames": [
+        "沈雪笙"
+      ]
+    },
+    {
+      "scene": "白公館繡樓",
+      "ownerNames": [
+        "白韻秋"
+      ]
+    }
+  ],
+  "economy": {
+    "unitLabel": "圓",
+    "subunitsPerUnit": 100,
+    "noticeScene": "後台妝閣",
+    "market": {
+      "id": "market",
+      "label": "上海市面"
+    },
+    "troupe": {
+      "id": "troupe",
+      "label": "春雪社班庫",
+      "openingYuan": 46,
+      "dailyFixedCostYuan": 11,
+      "costNote": "排練廳燈火、樂師茶飯與行頭修補",
+      "shortfallCreditor": "雲錦台東家與錢莊先生",
+      "authorizedSpenderNames": [
+        "沈雪笙"
+      ]
+    },
+    "performance": {
+      "venueScene": "雲錦台戲台",
+      "leadNames": [
+        "柳安春",
+        "蘇映雪"
+      ],
+      "minCast": 4,
+      "fullHouseYuan": 26,
+      "castShareBps": 2000,
+      "performerBoost": true,
+      "audienceHouse": true,
+      "houseSeats": 120
+    },
+    "businesses": [
+      {
+        "id": "前街食肆",
+        "label": "前街食肆",
+        "openingYuan": 30,
+        "dailyFixedCostYuan": 3,
+        "costNote": "炭火、進貨與攤捐",
+        "shortfallCreditor": "碼頭花行與米行",
+        "authorizedSpenderNames": [
+          "趙阿福",
+          "殷阿婆"
+        ],
+        "stance": "排戲的日子後台叫吃食叫得比平常勤，帳也記得比平常長。趙阿福認人不認賬期——熟臉可以拖，生分了就得現錢。",
+        "allowsTab": true,
+        "tabDueDays": 5,
+        "wages": [
+          {
+            "name": "殷阿婆",
+            "amountYuan": 2
+          },
+          {
+            "name": "趙阿福",
+            "amountYuan": 2
+          }
+        ]
+      },
+      {
+        "id": "白家繡樓",
+        "label": "白家繡樓",
+        "openingYuan": 60,
+        "dailyFixedCostYuan": 4,
+        "costNote": "絲線、繡工月例與樓面",
+        "shortfallCreditor": "絲行",
+        "authorizedSpenderNames": [
+          "白韻秋"
+        ],
+        "stance": "繡樓的活計不看戲班的死活；訂單來一件做一件，工錢按件結，誰也不欠誰。",
+        "wages": [
+          {
+            "name": "白韻秋",
+            "amountYuan": 3
+          }
+        ]
+      },
+      {
+        "id": "申報館",
+        "label": "申報館",
+        "openingYuan": 50,
+        "dailyFixedCostYuan": 4,
+        "costNote": "紙墨、鉛字與排字房工錢",
+        "shortfallCreditor": "紙行與印刷所",
+        "authorizedSpenderNames": [
+          "方競西"
+        ],
+        "stance": "一齣還沒排出來的新戲，本身就是版面。報館要的是先聲——排得成是喜訊，排不成更是新聞。",
+        "wages": [
+          {
+            "name": "方競西",
+            "amountYuan": 2
+          }
+        ]
+      },
+      {
+        "id": "長三堂子",
+        "label": "長三堂子",
+        "openingYuan": 45,
+        "dailyFixedCostYuan": 4,
+        "costNote": "房飯、樂師與局票抽頭",
+        "shortfallCreditor": "堂子的老鴇與樂師",
+        "authorizedSpenderNames": [
+          "金鳳"
+        ],
+        "stance": "堂子看的是局旺不旺。戲班若排出一齣紅的，跟著沾光；排砸了，姑娘們照樣有自己的局。",
+        "wages": [
+          {
+            "name": "金鳳",
+            "amountYuan": 2
+          }
+        ]
+      }
+    ],
+    "characterDefaults": {
+      "openingYuan": 6,
+      "dailyFixedCostYuan": 3
+    },
+    "characters": [
+      {
+        "name": "柳安春",
+        "openingYuan": 10,
+        "dailyFixedCostYuan": 3
+      },
+      {
+        "name": "蘇映雪",
+        "openingYuan": 18,
+        "dailyFixedCostYuan": 3
+      },
+      {
+        "name": "江聞鶴",
+        "openingYuan": 5,
+        "dailyFixedCostYuan": 3
+      },
+      {
+        "name": "沈雪笙",
+        "openingYuan": 9,
+        "dailyFixedCostYuan": 3
+      },
+      {
+        "name": "白韻秋",
+        "openingYuan": 80,
+        "dailyFixedCostYuan": 5
+      },
+      {
+        "name": "殷阿婆",
+        "openingYuan": 4,
+        "dailyFixedCostYuan": 1
+      },
+      {
+        "name": "趙阿福",
+        "openingYuan": 4,
+        "dailyFixedCostYuan": 1
+      }
+    ],
+    "wages": [
+      {
+        "name": "柳安春",
+        "amountYuan": 2
+      },
+      {
+        "name": "蘇映雪",
+        "amountYuan": 2
+      },
+      {
+        "name": "沈雪笙",
+        "amountYuan": 2
+      },
+      {
+        "name": "江聞鶴",
+        "amountYuan": 1
+      },
+      {
+        "name": "連翹",
+        "amountYuan": 1
+      },
+      {
+        "name": "何阿喜",
+        "amountYuan": 1
+      },
+      {
+        "name": "唐桂蘭",
+        "amountYuan": 1
+      }
+    ],
+    "catalog": [
+      {
+        "id": "meal-frontstreet-noodle",
+        "label": "前街食肆一碗熱湯麵",
+        "priceYuan": 3,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆"
+      },
+      {
+        "id": "meal-frontstreet-tangzhou",
+        "label": "前街食肆一碗糖粥",
+        "priceYuan": 1,
+        "kind": "meal",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "relieve-hunger"
+        },
+        "oncePerDay": true,
+        "vendorAccountId": "前街食肆"
+      },
+      {
+        "id": "flower-frontstreet-bailan",
+        "label": "殷阿婆一串白蘭花（替人簪上）",
+        "priceYuan": 1,
+        "kind": "costume",
+        "sceneName": "戲園前街",
+        "effect": {
+          "kind": "spawn-object",
+          "objectId": "frontstreet-bailan-spray",
+          "label": "一串新摘的白蘭花",
+          "sceneName": "戲園前街",
+          "state": "紅絨線串著，香得正好，替人簪在襟上",
+          "aliases": [
+            "白蘭花",
+            "花串"
+          ]
+        },
+        "unique": true,
+        "vendorAccountId": "前街食肆"
+      },
+      {
+        "id": "costume-new-play-robe",
+        "label": "唐桂蘭替新戲趕製的一件行頭",
+        "priceYuan": 8,
+        "kind": "costume",
+        "sceneName": "衣箱房",
+        "effect": {
+          "kind": "spawn-object",
+          "objectId": "new-play-robe",
+          "label": "新戲的頭一件行頭",
+          "sceneName": "衣箱房",
+          "state": "針腳還熱，領口鑲的是舊箱底翻出來的舊料",
+          "aliases": [
+            "新行頭",
+            "行頭"
+          ]
+        },
+        "unique": true,
+        "vendorAccountId": "troupe"
+      },
+      {
+        "id": "paper-manuscript-stack",
+        "label": "報館茶室買一疊謄寫的稿紙",
+        "priceYuan": 2,
+        "kind": "production",
+        "sceneName": "報館茶室",
+        "effect": {
+          "kind": "spawn-object",
+          "objectId": "fresh-manuscript-paper",
+          "label": "一疊乾淨的稿紙",
+          "sceneName": "報館茶室",
+          "state": "裁得齊整，還沒落一個字",
+          "aliases": [
+            "稿紙",
+            "白紙"
+          ]
+        },
+        "unique": true,
+        "vendorAccountId": "申報館"
+      }
+    ],
+    "contracts": [
+      {
+        "id": "premiere-billing-slot",
+        "label": "新戲領銜署名約",
+        "objectId": "billing-board",
+        "proposer": "troupe",
+        "totalYuan": 12,
+        "splits": [
+          {
+            "to": "PARTNER_SLOT",
+            "amountYuan": 12,
+            "memo": "領銜包銀"
+          }
+        ],
+        "requiredSignerNames": [
+          "沈雪笙"
+        ],
+        "partnerRequired": true,
+        "deadlineDay": 4,
+        "terms": [
+          "領銜一名，署名上戲牌，包銀十二圓於首演後付訖。",
+          "署名者須自首演日起三個月內不得為別班掛頭牌。",
+          "空欄至第四日夜為限；逾期未填，戲牌上的領銜一條照舊空著上戲。"
+        ],
+        "negotiation": {
+          "acceptDemandsMatching": [
+            "包銀",
+            "分帳",
+            "同掛"
+          ],
+          "graceDaysOnAccept": 1,
+          "acceptNote": "班主回話：包銀的事好商量——名字先落下來要緊。",
+          "refusalNote": "班主回話：這一條不改。願意就署名，不願意就空著。"
+        }
+      }
+    ]
+  },
+  "occupationDuties": {
+    "花婆": [
+      {
+        "part": "清晨",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "碼頭接花、串花、擺攤"
+      },
+      {
+        "part": "日午",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "門前兜售"
+      },
+      {
+        "part": "黃昏",
+        "sceneName": "雲錦台戲台",
+        "note": "開鑼前兜花"
+      }
+    ],
+    "小販": [
+      {
+        "part": "清晨",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "生爐子、煎頭鍋生煎"
+      },
+      {
+        "part": "日午",
+        "sceneName": "戲園前街",
+        "duty": true,
+        "note": "擺擔、應客"
+      },
+      {
+        "part": "深宵",
+        "sceneName": "戲園前街",
+        "note": "收擔、算紅字帳"
+      }
+    ],
+    "衣箱": [
+      {
+        "part": "日午",
+        "sceneName": "衣箱房",
+        "duty": true,
+        "note": "翻箱找舊料、比劃新戲的行頭"
+      },
+      {
+        "part": "晡時",
+        "sceneName": "雲錦台戲台",
+        "note": "跟排、記身段與行頭的出入"
+      }
+    ],
+    "記者": [
+      {
+        "part": "日午",
+        "sceneName": "雲錦台戲台",
+        "note": "蹲排練廳看熱鬧、探口風"
+      },
+      {
+        "part": "晡時",
+        "sceneName": "報館茶室",
+        "duty": true,
+        "note": "寫稿、等主筆的話"
+      }
+    ]
+  },
+  "renown": {
+    "柳安春": {
+      "renown": 0.8,
+      "self": 0.55
+    },
+    "蘇映雪": {
+      "renown": 0.75,
+      "self": 0.6
+    },
+    "沈雪笙": {
+      "renown": 0.7,
+      "self": 0.62
+    },
+    "江聞鶴": {
+      "renown": 0.42,
+      "self": 0.34
+    },
+    "連翹": {
+      "renown": 0.35,
+      "self": 0.6
+    },
+    "金鳳": {
+      "renown": 0.6,
+      "self": 0.6
+    },
+    "白韻秋": {
+      "renown": 0.65,
+      "self": 0.6
+    },
+    "方競西": {
+      "renown": 0.52,
+      "self": 0.45
+    },
+    "何阿喜": {
+      "renown": 0.35,
+      "self": 0.55
+    },
+    "唐桂蘭": {
+      "renown": 0.3,
+      "self": 0.6
+    },
+    "殷阿婆": {
+      "renown": 0.3,
+      "self": 0.65
+    },
+    "趙阿福": {
+      "renown": 0.3,
+      "self": 0.6
+    }
+  }
+}

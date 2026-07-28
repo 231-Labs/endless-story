@@ -16,6 +16,7 @@
  * runner's `.js`-specifier graph into `node --test`).
  */
 
+import type { CardProposal } from './core/event-deck.ts';
 import type { SceneAgent } from './core/scene-loop.ts';
 import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from './core/want-rewrite.ts';
 import type { WantSemanticTag, WantSource, WantSubjectRef } from './core/want-core.ts';
@@ -84,6 +85,157 @@ export type PovSceneInput = Runner.characterAgent.PovSceneInput;
 export type JudgeEstablishedInput = Runner.characterAgent.JudgeEstablishedInput;
 export type DossierCanonicalEvent = Runner.eventDossier.DossierCanonicalEvent;
 export type DossierPerspectiveSource = Runner.eventDossier.DossierPerspectiveSource;
+
+// ── 導演選牌 (the director seat) ──────────────────────────────────────────────
+//
+// The director's authority is exactly three decisions — WHICH card, WHEN (by
+// declining), WHOM — plus dressing the card's face in world language. The engine
+// computes the eligible set and settles every consequence, so a director cannot
+// invent a card, invent a target, or touch a number. See core/event-deck.ts.
+
+/** One card the engine is willing to have played on this exact tick. */
+export interface DirectorOfferedCard {
+    cardId: string;
+    /** the card's own face text. */
+    label: string;
+    /** one line on what this card does, so the choice is informed. */
+    note?: string;
+    /** a 死線卡: it lands whether or not the director picks it. Dress only. */
+    forced: boolean;
+    /** the ONLY ids this card may be aimed at. */
+    candidates: Array<{ id: string; name: string }>;
+    /** how many of the candidates to name (0 ⇒ the card aims itself). */
+    pickCount: number;
+}
+
+export interface DirectorPickInput {
+    day: number;
+    clock: string;
+    offered: DirectorOfferedCard[];
+    /** Prose-only picture of where the world stands. NEVER a figure the director
+     *  could act on — money, tension and box office stay the engine's business. */
+    worldBrief: string[];
+    /** cards that will land regardless of this reply. */
+    forcedCardIds: string[];
+    /**
+     * 自撰一張 — the director may, instead of picking, assemble a card the deck
+     * never contained. Offered only when the season/day quota still allows it.
+     *
+     * This is the deck's one escape hatch and it is deliberately narrow: the
+     * proposal is built from the SAME finite effect primitives every authored
+     * card uses, inside magnitude caps the engine enforces (`PROPOSAL_LIMITS`),
+     * aimed at real people. Anything out of bounds is refused with reasons and
+     * logged. See `validateProposal`.
+     */
+    mayPropose?: boolean;
+}
+
+export interface DirectorPickReply {
+    /** must be one of the offered `cardId`s; anything else is refused. */
+    cardId: string;
+    /** must be drawn from that card's `candidates`; unknown ids are dropped. */
+    targetIds?: string[];
+    /** 穿戲服 — the card's face rewritten in world language. Text only. */
+    costume?: string;
+    /** one line of reasoning, recorded in the director log for audit. */
+    rationale?: string;
+    /** a legitimate answer on any non-deadline tick: not yet. */
+    decline?: boolean;
+    /**
+     * 自撰的牌 — a card of the director's own making, considered only when
+     * `mayPropose` was set and no offered card was chosen. Validated before it
+     * can touch the world; a refusal is logged with every reason, so a director
+     * that keeps overreaching is diagnosable from the run alone.
+     */
+    propose?: CardProposal;
+}
+
+// ── 債主的態度 (the creditor's seat) ──────────────────────────────────────────
+//
+// 月半結帳 moves no money. What it does is CALL the debt, and how hard it is
+// called belongs to the creditor, not to the clock and not to the engine. A
+// creditor who genuinely does not mind is allowed not to mind; a creditor who
+// has been put off twice is allowed to stop being quiet about it.
+//
+// The seat is handed plain facts and returns one of three stances. It never sees
+// a raw figure it could do arithmetic on, and it cannot move money — the engine
+// settles the social consequence of whichever stance comes back.
+
+export interface DebtStanceInput {
+    day: number;
+    billId: string;
+    /** the creditor deciding (their own name, when they are a person). */
+    creditorName: string;
+    /** their authored 立場, when the frame gave the house one. */
+    stance?: string;
+    /** how their own books feel, in words: 「手頭也緊」「還撐得住」. */
+    creditorFooting: string;
+    debtorName: string;
+    label: string;
+    /** the amount as world language (「三圓」), never a bare number. */
+    owedText: string;
+    daysOverdue: number;
+    /** how many times this same debt has already been called at a reckoning. */
+    priorCalls: number;
+    /** could they have paid, as far as the street can tell? This is the whole
+     *  question: 還不出 and 不肯還 are different matters. */
+    debtorCouldPay: boolean;
+}
+
+export interface DebtStanceReply {
+    /** 免了 — tear the paper up; they owe you a 人情 instead.
+     *  催 — say it to their face; the debt stands, the street stays out of it.
+     *  傳出去 — say it to the street; the debt stands, and so does their name. */
+    stance: 'forgive' | 'press' | 'broadcast';
+    /** one line of reasoning, recorded for audit — never a mechanism. */
+    note?: string;
+}
+
+// ── 角色工件 (diary + poem seats) ─────────────────────────────────────────────
+
+export interface ComposeDiaryInput {
+    characterId: string;
+    name: string;
+    persona: string;
+    secret?: string;
+    day: number;
+    /** the day's citable beats — the ONLY evidence a claim may rest on. Each
+     *  `ref` is engine-minted, so a fabricated citation cannot resolve. */
+    evidence: Array<{ ref: string; clock: string; sceneName: string; text: string; inner?: string }>;
+    /** the character's live 心事, in their own words. */
+    wantLines: string[];
+    /** their TRUE purse in world language — stated so the diary cannot drift off
+     *  the ledger (the observed 24 圓 / 七十圓 failure). */
+    purseLine?: string;
+}
+
+export interface ComposeDiaryReply {
+    /** the diary prose the reader gets. */
+    body: string;
+    /** each assertion plus the `beat:N` refs it rests on. Audited by the engine;
+     *  an unsupported claim is FLAGGED, not silently dropped. */
+    claims: Array<{ text: string; evidenceRefs: string[] }>;
+}
+
+export interface ComposePoemInput {
+    characterId: string;
+    name: string;
+    persona: string;
+    day: number;
+    clock: string;
+    /** why today (張力尖峰／相許／被拒／送別／結帳). */
+    occasion: string;
+    occasionLine: string;
+    /** the want the occasion turns on, in the character's own words. */
+    wantDesc?: string;
+    otherName?: string;
+    sceneName?: string;
+}
+
+export interface ComposePoemReply {
+    title?: string;
+    body: string;
+}
 
 /** Dedicated mechanism-metadata declaration seat. The ordinary character-owned
  * want prose can be born or rewritten without gaining authority over engine
@@ -453,6 +605,19 @@ export interface SceneAgentPort extends SceneAgent {
      *  through one participant's eyes — attention/interpretation diverge, events
      *  never do (probe-validated). Caller gates by followers. null → skip. */
     povScene(input: PovSceneInput): Promise<string | null>;
+    /** 導演選牌 — pick ONE offered card, aim it at offered candidates, dress its
+     *  face. The engine settles every consequence; a null/absent reply simply
+     *  means no card is played this tick (a deadline card still lands). */
+    pickEventCard?(input: DirectorPickInput): Promise<DirectorPickReply | null>;
+    /** 債主的態度 — how hard THIS creditor calls THIS unpaid debt at the reckoning.
+     *  No money moves either way. null/absent/throw ⇒ the deterministic fallback
+     *  decides, so a rehearsal run still produces a complete, replayable reckoning. */
+    decideDebtStance?(input: DebtStanceInput): Promise<DebtStanceReply | null>;
+    /** 日記 — recombine ONE tracked character's day (beats + 心下 + 心事) into a
+     *  first-person entry whose claims cite `beat:N` evidence. null → no diary. */
+    composeDiary?(input: ComposeDiaryInput): Promise<ComposeDiaryReply | null>;
+    /** 詩詞 — occasion-triggered only, never a daily quota. null → no poem. */
+    composePoem?(input: ComposePoemInput): Promise<ComposePoemReply | null>;
     /** MILESTONE JUDGE: are these two, as of now, 相許? READS the relationship
      *  (never steers it) — a true verdict promotes the pair into the established
      *  set, unlocking (not scripting) the consummate register. */

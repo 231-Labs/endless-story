@@ -1,0 +1,849 @@
+{
+  "id": "spring-snow-premiere",
+  "title": "排戲季 · 外力牌組",
+  "maxCardsPerDay": 2,
+  "maxSeasonalPlays": 2,
+  "secrets": [
+    {
+      "id": "shen-unfinished-why",
+      "matter": "沈雪笙那疊散頁為什麼寫到第三折就停了——當年停筆那一夜，班裡出過事",
+      "holderNames": [
+        "沈雪笙"
+      ],
+      "aboutName": "沈雪笙",
+      "coveterNames": [
+        "方競西",
+        "唐桂蘭"
+      ],
+      "leakWhen": [
+        {
+          "kind": "day-atleast",
+          "day": 4
+        },
+        {
+          "kind": "coveter-copresent"
+        }
+      ]
+    },
+    {
+      "id": "jiang-never-led",
+      "matter": "江聞鶴唱了半輩子小生從未領銜，不是沒機會——是有一回他自己讓了出去",
+      "holderNames": [
+        "江聞鶴"
+      ],
+      "aboutName": "江聞鶴",
+      "coveterNames": [
+        "連翹",
+        "方競西"
+      ],
+      "leakWhen": [
+        {
+          "kind": "holder-renown-below",
+          "renown": 0.35
+        }
+      ]
+    },
+    {
+      "id": "tang-costume-trunk",
+      "matter": "唐桂蘭衣箱底下那樁事——樟木箱裡壓著的不只是舊行頭",
+      "holderNames": [
+        "唐桂蘭"
+      ],
+      "coveterNames": [
+        "方競西",
+        "沈雪笙"
+      ],
+      "leakWhen": [
+        {
+          "kind": "day-atleast",
+          "day": 5
+        },
+        {
+          "kind": "holder-broke-below",
+          "yuan": 1
+        }
+      ]
+    }
+  ],
+  "newcomers": [
+    {
+      "id": "lu-shaoqing",
+      "seed": {
+        "name": "陸紹卿",
+        "role": "編劇",
+        "gender": "男",
+        "ageYears": 38,
+        "description": "在幾家班子替人改過本子的編劇，筆快、話直，最擅長把別人寫壞的第三折接出去。這些年替誰寫都不落款——他說落了款就得認，認了就走不掉。",
+        "secret": "十五年前那疊散頁，第三折停筆的地方，本來該是他接的；他那天沒去。",
+        "home_scene": "戲班大通鋪",
+        "work_scene": "後台妝閣",
+        "arrival_scene": "戲園前街",
+        "ties": [
+          {
+            "target": "沈雪笙",
+            "tone": "當年欠她一個沒赴的約，彼此都記著",
+            "warmth": 0.4
+          },
+          {
+            "target": "唐桂蘭",
+            "tone": "見過幾面，知道她守著什麼",
+            "warmth": 0.5
+          }
+        ],
+        "armsSecret": {
+          "secretId": "shen-unfinished-why",
+          "as": "holder"
+        },
+        "wageYuan": 1,
+        "openingYuan": 4,
+        "dailyFixedCostYuan": 3
+      }
+    }
+  ],
+  "cards": [
+    {
+      "id": "reckoning-notice",
+      "label": "後台放話：這半月的帳要算",
+      "note": "結帳前兩日放話。排戲季裡人人賒吃食賒行頭，這一放話，白日該排戲還是該掙錢的矛盾就攤開了。",
+      "mustLand": true,
+      "deadlineNote": "結帳前兩日，到日必放",
+      "trigger": {
+        "everyDays": 15,
+        "anchorDay": 1,
+        "atParts": [
+          0
+        ]
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "reckoning-notice",
+          "label": "半月結帳",
+          "dueInDays": 2
+        }
+      ]
+    },
+    {
+      "id": "mid-month-reckoning",
+      "label": "半月結帳",
+      "note": "把帳當眾叫一遍。不動任何人的錢——還不還是角色自己的事；引擎只結算後果：債主或免了、或當面催、或把話傳出去。",
+      "mustLand": true,
+      "deadlineNote": "每十五日一次，本季自第 3 日起算；第 1 日先放話",
+      "trigger": {
+        "everyDays": 15,
+        "anchorDay": 3,
+        "atParts": [
+          4
+        ]
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "帳房把這半月的摺子攤在妝台上。排戲的日子吃食賒得比平常勤，行頭料子也是賒的——今晚誰劃得掉、誰劃不掉，一屋子人都看著。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "reckoning",
+          "label": "半月結帳"
+        }
+      ]
+    },
+    {
+      "id": "owner-presses",
+      "label": "東家催戲",
+      "note": "雲錦台派人來問排到哪一折了。壓的是班主，不是別人——排不出來要退訂金另加一成。",
+      "mustLand": true,
+      "deadlineNote": "隔日一問，到日必問",
+      "trigger": {
+        "everyDays": 2,
+        "anchorDay": 2,
+        "atParts": [
+          1
+        ]
+      },
+      "targeting": {
+        "mode": "named",
+        "names": [
+          "沈雪笙"
+        ]
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "雲錦台的帳房先生又來了一趟，站在門口沒進來，只問了一句：「排到第幾折了？」問完就走。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "want",
+          "layer": "事務",
+          "desc": "得給雲錦台一個排到哪一折的交代",
+          "weight": 0.72,
+          "resistance": 4,
+          "dueInDays": 1
+        }
+      ]
+    },
+    {
+      "id": "premiere-night",
+      "label": "首演之夜",
+      "note": "會串之夜，到日必到。戲上了台是一回事，交不出戲是另一回事——同一張卡，兩種後果，引擎按新戲排出來沒有自己分。",
+      "mustLand": true,
+      "deadlineNote": "第五日夜，不可推遲",
+      "trigger": {
+        "onDays": [
+          5
+        ],
+        "atParts": [
+          4
+        ]
+      },
+      "targeting": {
+        "mode": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "會串之夜，雲錦台滿座。春雪社的新戲真的上了台——這一齣，是自己的。",
+          "sceneName": "雲錦台戲台",
+          "onlyIf": {
+            "kind": "production-premiered",
+            "premiered": true
+          }
+        },
+        {
+          "kind": "renown",
+          "delta": 0.12,
+          "onlyIf": {
+            "kind": "production-premiered",
+            "premiered": true
+          }
+        },
+        {
+          "kind": "percept",
+          "text": "會串之夜到了，台上唱的還是老戲。雲錦台的帳房先生沒說話，只把條子從袖裡取出來，擱在妝台上——訂金三十圓，另加一成。",
+          "sceneName": "後台妝閣",
+          "onlyIf": {
+            "kind": "production-premiered",
+            "premiered": false
+          }
+        },
+        {
+          "kind": "bill",
+          "id": "premiere-advance-refund",
+          "label": "雲錦台訂金退回（新戲未成，另加一成）",
+          "amountYuan": 33,
+          "dueInDays": 3,
+          "fromAccountId": "troupe",
+          "creditor": "雲錦台東家",
+          "onlyIf": {
+            "kind": "production-premiered",
+            "premiered": false
+          }
+        },
+        {
+          "kind": "renown",
+          "delta": -0.1,
+          "onlyIf": {
+            "kind": "production-premiered",
+            "premiered": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "billing-pressure",
+      "label": "戲牌催落款",
+      "note": "門前戲牌領銜那一條空著，看的人越來越多。導演選這股壓力落在哪個小生身上。",
+      "trigger": {
+        "minDay": 2,
+        "atParts": [
+          3
+        ],
+        "cooldownDays": 1,
+        "maxPlays": 3
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "戲牌前站了幾個看熱鬧的，指著領銜那一條空白議論。話從門口一路傳進後台。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "want",
+          "layer": "志向",
+          "desc": "戲牌上那一條空白，該是我的名字",
+          "weight": 0.78,
+          "resistance": 5,
+          "dueInDays": 3
+        },
+        {
+          "kind": "self-regard",
+          "delta": 0.03
+        }
+      ]
+    },
+    {
+      "id": "rehearsal-day",
+      "label": "整日排戲",
+      "note": "班主把人扣在排練廳一整個白日。戲往前推了，白日的進項也沒了——這張卡的代價是真的。",
+      "trigger": {
+        "everyDays": 2,
+        "anchorDay": 1,
+        "atParts": [
+          1
+        ],
+        "maxPlays": 4
+      },
+      "targeting": {
+        "mode": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "台口的小鑼響了三下。今日白天哪兒也不去，就在台上走戲——外頭的活計，自己想辦法補。",
+          "sceneName": "雲錦台戲台"
+        },
+        {
+          "kind": "bill",
+          "id": "rehearsal-daylight-cost",
+          "label": "排戲佔掉的白日（誤的工）",
+          "amountYuan": 2,
+          "dueInDays": 6,
+          "fromAccountId": "troupe",
+          "creditor": "誤工的人"
+        }
+      ]
+    },
+    {
+      "id": "script-stolen",
+      "label": "抄本不見了",
+      "note": "散頁少了一折。是誰拿的、是不是拿去給了別家，沒人說得清——導演選這口鍋落在誰身上。",
+      "trigger": {
+        "minDay": 3,
+        "atParts": [
+          5
+        ],
+        "maxPlays": 1,
+        "requires": [
+          {
+            "kind": "tension-peak-atleast",
+            "value": 0.55
+          }
+        ]
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "hottest"
+      },
+      "effects": [
+        {
+          "kind": "object-state",
+          "objectId": "unfinished-manuscript",
+          "state": "第三折那幾頁不見了；剩下的散頁被人重新疊過，順序不對"
+        },
+        {
+          "kind": "percept",
+          "text": "妝台上的散頁少了一折。誰最後碰過本子，後台各有各的說法。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "want",
+          "layer": "體面",
+          "desc": "本子少了一折，都在看我——這事得說清楚",
+          "weight": 0.75,
+          "resistance": 5,
+          "dueInDays": 2
+        }
+      ]
+    },
+    {
+      "id": "press-preview",
+      "label": "報館要先聲",
+      "note": "主筆要一條新戲的先聲。排得成是喜訊，排不成更是新聞——記者手上有什麼、發不發，是他自己的事。",
+      "trigger": {
+        "everyDays": 2,
+        "anchorDay": 2,
+        "atParts": [
+          2
+        ],
+        "cooldownDays": 1
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "press"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "報館的條子送到手上：新戲的先聲留了半個版面，今夜要稿。排得成怎麼寫，排不成怎麼寫，隨你。",
+          "visibility": "private",
+          "toTargetsOnly": true
+        },
+        {
+          "kind": "want",
+          "layer": "事務",
+          "desc": "新戲這條先聲，今夜要交上去",
+          "weight": 0.68,
+          "resistance": 3,
+          "dueInDays": 1
+        }
+      ]
+    },
+    {
+      "id": "wage-day",
+      "label": "班中發俸",
+      "note": "排戲季照樣得發工錢。發不出的名字留在最後，一屋子人看得見。",
+      "mustLand": true,
+      "deadlineNote": "按日子發，到日必發——發得出多少是另一回事",
+      "trigger": {
+        "everyDays": 2,
+        "anchorDay": 1,
+        "atParts": [
+          4
+        ]
+      },
+      "targeting": {
+        "mode": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "散了排，帳房開了櫃門點工錢。排一天戲和唱一天戲，錢是一樣的——有人心裡在算這筆帳。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "wage-packet",
+          "label": "班中工錢",
+          "perHeadYuan": 1,
+          "toTargets": true
+        }
+      ]
+    },
+    {
+      "id": "dividend-day",
+      "label": "散戲分紅",
+      "note": "留下兩日的底，餘裕按班規分。排戲季票房本來就薄，沒有餘裕就沒有分紅——這一條不作假。",
+      "mustLand": true,
+      "deadlineNote": "按日子發，到日必發",
+      "trigger": {
+        "everyDays": 3,
+        "anchorDay": 3,
+        "atParts": [
+          5
+        ]
+      },
+      "targeting": {
+        "mode": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "班主把這幾日的帳算了一遍：訂金是訂金，票房是票房，混不得。剩下的，今夜就分。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "dividend",
+          "label": "散戲分紅",
+          "surplusShareBps": 3000,
+          "reserveDays": 3
+        }
+      ]
+    },
+    {
+      "id": "weather-turn",
+      "label": "天氣轉變",
+      "note": "連日陰雨，看客不出門，座就冷；排戲季本來就靠老戲的票房撐著。",
+      "trigger": {
+        "everyDays": 3,
+        "anchorDay": 2,
+        "atParts": [
+          0
+        ],
+        "maxPlays": 2
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "weather",
+          "label": "連日陰雨，路上沒人打傘出門看戲",
+          "housePct": 78
+        },
+        {
+          "kind": "percept",
+          "text": "天從清晨就陰著。排練廳的窗都關了，鑼聲聽著也悶。",
+          "sceneName": "雲錦台戲台"
+        }
+      ]
+    },
+    {
+      "id": "flowers-tonight",
+      "label": "池座送花",
+      "note": "老戲照唱，池座裡照樣有人買花。花多花少當場見高下——領銜之爭的柴火。",
+      "trigger": {
+        "everyDays": 1,
+        "atParts": [
+          4
+        ],
+        "cooldownDays": 1,
+        "maxPlays": 4
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "patronage",
+          "channel": "flower",
+          "amountYuan": 2,
+          "toTargets": true
+        }
+      ]
+    },
+    {
+      "id": "parlour-invite",
+      "label": "堂會邀約",
+      "note": "闊客要人去唱一堂。錢是真的，可那個白日就不在排練廳了——排戲季裡這張卡最傷。",
+      "trigger": {
+        "atParts": [
+          2
+        ],
+        "cooldownDays": 2,
+        "maxPlays": 3,
+        "requires": [
+          {
+            "kind": "account-runway-below",
+            "days": 5
+          }
+        ]
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "有人捎話進來：城裡一位闊客要辦堂會，點名要人，錢當場付——就是要占一個白日。",
+          "sceneName": "包廂茶座"
+        },
+        {
+          "kind": "patronage",
+          "channel": "tip",
+          "amountYuan": 5,
+          "patronName": "辦堂會的那位闊客",
+          "toTargets": true
+        }
+      ]
+    },
+    {
+      "id": "the-playwright-arrives",
+      "label": "故人進城 · 接筆的人",
+      "note": "季級大牌：一個能把第三折接出去的編劇進了城，而他正是當年沒赴約的那個人。本子有了活路，沈雪笙的舊事也跟著醒了。",
+      "tier": "seasonal",
+      "trigger": {
+        "minDay": 2,
+        "atParts": [
+          0
+        ],
+        "maxPlays": 1
+      },
+      "targeting": {
+        "mode": "none"
+      },
+      "effects": [
+        {
+          "kind": "cast-enter",
+          "newcomerId": "lu-shaoqing"
+        },
+        {
+          "kind": "percept",
+          "text": "前街上來了個穿長衫的生面孔，手裡一卷紙，逢人便問春雪社的後台怎麼走。",
+          "sceneName": "戲園前街"
+        }
+      ]
+    },
+    {
+      "id": "walk-out",
+      "label": "季級大牌 · 有人撂挑子",
+      "note": "季級大牌：排到一半有人不幹了。走的人留下的持鑰、欠債、秘密、相許全數強制重分配——戲還得排下去。",
+      "tier": "seasonal",
+      "trigger": {
+        "minDay": 4,
+        "atParts": [
+          5
+        ],
+        "maxPlays": 1,
+        "requires": [
+          {
+            "kind": "cast-atleast",
+            "count": 9
+          },
+          {
+            "kind": "tension-peak-atleast",
+            "value": 0.6
+          }
+        ]
+      },
+      "targeting": {
+        "mode": "director-pick",
+        "pickCount": 1,
+        "from": "troupe"
+      },
+      "effects": [
+        {
+          "kind": "cast-exit",
+          "reason": "戲排到一半，把行頭往箱裡一摔就走了"
+        },
+        {
+          "kind": "percept",
+          "text": "排練廳的門摔了一次。剩下的人站在台上，誰也沒接話——這一折還得走完。",
+          "sceneName": "雲錦台戲台"
+        }
+      ]
+    }
+  ],
+  "acts": [
+    {
+      "id": "report-to-authorities",
+      "label": "報官",
+      "note": "把這樁事捅到巡捕房去。他頭上多一筆罰銀，滿街也都會知道——但告官的人，這條街往後也未必待見。做了收不回來。",
+      "minDay": 3,
+      "needsTarget": true,
+      "maxPlays": 2,
+      "maxPlaysPerCharacter": 1,
+      "cooldownDays": 6,
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "巡捕房來了人，在前街站了半日，問的是誰、為的什麼事，看熱鬧的心裡都有數。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "bill",
+          "id": "patrol-fine",
+          "label": "巡捕房的罰銀",
+          "amountYuan": 3,
+          "dueInDays": 5,
+          "fromAccountId": "@target",
+          "creditor": "巡捕房"
+        },
+        {
+          "kind": "renown",
+          "delta": -0.06
+        },
+        {
+          "kind": "renown",
+          "delta": -0.03,
+          "on": "actor"
+        },
+        {
+          "kind": "standing",
+          "tone": "告了我的官——這人往後我心裡是冷的",
+          "from": "targets",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "betrayed"
+        },
+        {
+          "kind": "standing",
+          "tone": "他吃了官司，這一陣冷著點，少沾",
+          "from": "witnesses",
+          "toward": "targets",
+          "disposition": "cold",
+          "grievance": "slighted",
+          "hearsay": true
+        }
+      ]
+    },
+    {
+      "id": "break-with",
+      "label": "當眾翻臉",
+      "note": "當著人把話說絕。從此兩不相干——他不會再替你開門，看著的人也記下了你是說得出這種話的人。",
+      "minDay": 2,
+      "needsTarget": true,
+      "maxPlays": 4,
+      "maxPlaysPerCharacter": 2,
+      "cooldownDays": 4,
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "有人當眾把話說絕了，一屋子的人沒一個接得上腔。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "standing",
+          "tone": "話說到那個份上，往後各走各的，我心裡冷了",
+          "from": "actor",
+          "toward": "targets",
+          "disposition": "cold",
+          "grievance": "shamed"
+        },
+        {
+          "kind": "standing",
+          "tone": "當著那麼多人下我的臉——這一筆記著，見面也是冷的",
+          "from": "targets",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "shamed"
+        },
+        {
+          "kind": "self-regard",
+          "delta": -0.04,
+          "on": "actor"
+        }
+      ]
+    },
+    {
+      "id": "walk-off",
+      "label": "撂挑子不演了",
+      "note": "臨到場口把行頭一擱，人走了。今晚的戲得有人頂上，退票錢從你身上出——名頭是這樣一夜掉的。",
+      "invokableBy": {
+        "roles": [
+          "花旦",
+          "小生",
+          "刀馬旦",
+          "丑",
+          "歌女",
+          "班主"
+        ]
+      },
+      "minDay": 4,
+      "requires": [
+        {
+          "kind": "tension-peak-atleast",
+          "value": 0.6
+        }
+      ],
+      "maxPlays": 2,
+      "maxPlaysPerCharacter": 1,
+      "cooldownDays": 8,
+      "effects": [
+        {
+          "kind": "percept",
+          "text": "戲牌都掛出去了，人卻不見了。前台退了一輪票，後台誰也不敢先開口。",
+          "sceneName": "戲園前街"
+        },
+        {
+          "kind": "bill",
+          "id": "walk-off-refund",
+          "label": "撂挑子的退票錢",
+          "amountYuan": 4,
+          "dueInDays": 3,
+          "fromAccountId": "@actor",
+          "creditor": "班庫"
+        },
+        {
+          "kind": "renown",
+          "delta": -0.08,
+          "on": "actor"
+        },
+        {
+          "kind": "standing",
+          "tone": "說不演就不演，這種人搭班要留神，往後冷著點",
+          "from": "witnesses",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "slighted",
+          "hearsay": true
+        }
+      ]
+    },
+    {
+      "id": "expel-from-troupe",
+      "label": "把人逐出班子",
+      "note": "班主的權柄，也是班主一輩子的名聲。人一走，他名下的鑰匙、物件、欠帳全要當場清一遍——這是全季最重的一件事，做了就回不去。",
+      "invokableBy": {
+        "roles": [
+          "班主"
+        ]
+      },
+      "minDay": 6,
+      "requires": [
+        {
+          "kind": "cast-atleast",
+          "count": 6
+        }
+      ],
+      "needsTarget": true,
+      "targetMustBeCoPresent": false,
+      "maxPlays": 1,
+      "effects": [
+        {
+          "kind": "cast-exit",
+          "reason": "班主當眾發了話，卷了鋪蓋出春雪社的門"
+        },
+        {
+          "kind": "renown",
+          "delta": -0.05,
+          "on": "actor"
+        },
+        {
+          "kind": "standing",
+          "tone": "說攆人就攆人，今日是他明日是誰——這班子待著心冷",
+          "from": "witnesses",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "slighted",
+          "hearsay": true
+        }
+      ]
+    },
+    {
+      "id": "burn-the-script",
+      "label": "把本子毀了",
+      "note": "散頁往火盆裡一擱。新戲從此沒有第三折——誰都寫不回來，也沒人會信不是你。",
+      "minDay": 3,
+      "requires": [
+        {
+          "kind": "production-premiered",
+          "premiered": false
+        }
+      ],
+      "maxPlays": 1,
+      "effects": [
+        {
+          "kind": "object-state",
+          "objectId": "unfinished-manuscript",
+          "state": "只剩焦邊的半疊；第三折那幾頁燒沒了"
+        },
+        {
+          "kind": "percept",
+          "text": "後台的火盆裡有紙灰，還帶著墨。誰都聞得出燒的是什麼。",
+          "sceneName": "後台妝閣"
+        },
+        {
+          "kind": "renown",
+          "delta": -0.08,
+          "on": "actor"
+        },
+        {
+          "kind": "standing",
+          "tone": "本子是他燒的——這種人，心冷",
+          "from": "witnesses",
+          "toward": "actor",
+          "disposition": "cold",
+          "grievance": "betrayed",
+          "hearsay": true
+        }
+      ]
+    }
+  ],
+  "maxActsPerDay": 2
+}

@@ -34,6 +34,12 @@ export function labSeasonsDir(): string {
     return path.join(labDataDir(), 'seasons');
 }
 
+/** 事件牌組 — custom decks live beside custom seeds/seasons; built-in decks come
+ *  from the engine's own library (`defaultDecksDir`). */
+export function labDecksDir(): string {
+    return path.join(labDataDir(), 'decks');
+}
+
 const SAFE_ID = /^[\p{L}\p{N}][\p{L}\p{N}._-]{0,80}$/u;
 
 /** Path-traversal guard for every id that becomes a directory or file name. */

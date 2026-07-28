@@ -11,14 +11,18 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RecallPort } from './ports.ts';
-import { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
+import { activeDeckId, activePresetId, activeSeasonId, defaultDecksDir, defaultSeasonsDir, defaultStoriesDir } from './workspace-paths.ts';
 import { seedSeasonEconomy, type SeasonEconomyFrame } from './core/season-economy.ts';
+import { seedSecretLedger } from './core/secret-ledger.ts';
+import type { EventDeck } from './core/event-deck.ts';
 import { seedHousing } from './core/housing.ts';
 import { seedRenown } from './core/renown.ts';
 import { makeClock } from './adapters/local/clock.ts';
 import { bondsToJSON, seedBond } from './core/bond-graph.ts';
 import {
     WorldState,
+    COLD_TONE,
+    WARM_TONE,
     type CastMember,
     type ContestedResource,
     type SceneInfo,
@@ -128,6 +132,11 @@ export interface SeasonFrame {
      * seeded, NOT inside `applySeasonFrame`, so a world built directly from a frame
      * (engine tests) stays flag-off / byte-identical. Absent ⇒ off. */
     subjectiveNaming?: boolean;
+    /** 劇本產出 — a season whose 命題 IS the making of a play declares it needs the
+     *  emergent-production layer, rather than the operator having to remember a
+     *  flag. Read at the RUN layer (CLI / lab manager) after the world is built,
+     *  exactly like `subjectiveNaming`. Absent ⇒ off, as before. */
+    emergentProduction?: boolean;
     /** 口碑 — per-character seed of PUBLIC 名頭 (renown) + PRIVATE 自視 (self-regard),
      * keyed by character name. Each value is 0..1; `self` may DIVERGE from `renown`
      * (當紅卻怕不夠好). A name absent here takes a ROLE-based default (see
@@ -137,7 +146,7 @@ export interface SeasonFrame {
     renown?: Record<string, { renown?: number; self?: number }>;
 }
 
-export { activePresetId, activeSeasonId, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
+export { activeDeckId, activePresetId, activeSeasonId, defaultDecksDir, defaultSeasonsDir, defaultStoriesDir, labRoot, scriptsRoot } from './workspace-paths.ts';
 
 /** Read + parse a preset JSON. Throws loudly if the file is missing. */
 export function loadPresetFile(presetId: string, storiesDir?: string): RawPreset {
@@ -157,6 +166,162 @@ export function loadSeasonFrame(seasonId?: string, seasonsDir?: string): SeasonF
     const id = seasonId ?? activeSeasonId();
     if (!id) throw new Error('no season id: pass one or set ES_ACTIVE_SEASON');
     return loadSeasonFrameFile(id, seasonsDir);
+}
+
+// ── 事件牌組 (deck loading + validation) ───────────────────────────────────────
+
+/**
+ * Load and VALIDATE an event deck. The deck is authored data an operator edits by
+ * hand, so every structural mistake must be caught here, loudly, at load time —
+ * not discovered halfway through a run when a card refuses to resolve.
+ *
+ * Deliberately strict about the two things that would let the director escape
+ * their box: duplicate card ids (which would make the director log ambiguous) and
+ * `cast-enter` effects naming a newcomer the deck never declared (which would be
+ * the model inventing a character).
+ */
+export function loadEventDeckFile(deckId: string, decksDir?: string): EventDeck {
+    const dir = decksDir ?? defaultDecksDir();
+    const file = path.join(dir, `${deckId}.json`);
+    const deck = JSON.parse(fs.readFileSync(file, 'utf-8')) as EventDeck;
+    validateEventDeck(deck);
+    return deck;
+}
+
+/** Load the deck named by `ES_ACTIVE_DECK`, or the explicit id. */
+export function loadEventDeck(deckId?: string, decksDir?: string): EventDeck {
+    const id = deckId ?? activeDeckId();
+    if (!id) throw new Error('no deck id: pass one or set ES_ACTIVE_DECK');
+    return loadEventDeckFile(id, decksDir);
+}
+
+/** Structural validation. Throws on the first real problem, listing all of them. */
+export function validateEventDeck(deck: EventDeck): void {
+    const problems: string[] = [];
+    if (!deck.id?.trim()) problems.push('deck 缺 id');
+    if (!Array.isArray(deck.cards) || !deck.cards.length) problems.push('deck 沒有任何 card');
+    const seen = new Set<string>();
+    const newcomerIds = new Set((deck.newcomers ?? []).map((row) => row.id));
+    const secretIds = new Set((deck.secrets ?? []).map((row) => row.id));
+    for (const card of deck.cards ?? []) {
+        if (!card.id?.trim()) problems.push('有一張 card 缺 id');
+        else if (seen.has(card.id)) problems.push(`card id 重複：${card.id}`);
+        else seen.add(card.id);
+        if (!card.label?.trim()) problems.push(`card ${card.id} 缺 label（卡面）`);
+        if (!card.targeting?.mode) problems.push(`card ${card.id} 缺 targeting.mode`);
+        if (card.targeting?.mode === 'named' && !card.targeting.names?.length) {
+            problems.push(`card ${card.id} 是 named 卻沒點名`);
+        }
+        if (card.targeting?.mode === 'director-pick' && !(card.targeting.pickCount >= 1)) {
+            problems.push(`card ${card.id} 是 director-pick 卻沒說挑幾個`);
+        }
+        if (!card.effects?.length) problems.push(`card ${card.id} 沒有任何 effect`);
+        for (const part of card.trigger?.atParts ?? []) {
+            if (!Number.isInteger(part) || part < 0 || part > 5) {
+                problems.push(`card ${card.id} 的 atParts 有非法時辰索引：${part}（須為 0–5）`);
+            }
+        }
+        if (card.mustLand && !card.trigger?.onDays?.length && card.trigger?.everyDays === undefined) {
+            problems.push(`card ${card.id} 標了 mustLand 卻沒有到日之依據（onDays 或 everyDays）`);
+        }
+        for (const effect of card.effects ?? []) {
+            if (effect.kind === 'cast-enter' && !newcomerIds.has(effect.newcomerId)) {
+                problems.push(`card ${card.id} 的 cast-enter 指向牌組未宣告的人選：${effect.newcomerId}`);
+            }
+            if ((effect.kind === 'leak-secret' || effect.kind === 'publish-secret') && !secretIds.has(effect.secretId)) {
+                problems.push(`card ${card.id} 的 ${effect.kind} 指向牌組未宣告的秘密：${effect.secretId}`);
+            }
+        }
+    }
+    // 世情動作 — validated on the same terms as a card, because it IS a card in
+    // every respect except who is allowed to play it. `cast-enter` is the one
+    // effect no act may carry: a character conjuring a person into the world is
+    // the one authority even the director does not have.
+    const actIds = new Set<string>();
+    for (const act of deck.acts ?? []) {
+        if (!act.id?.trim()) problems.push('有一個 act 缺 id');
+        else if (actIds.has(act.id)) problems.push(`act id 重複：${act.id}`);
+        else actIds.add(act.id);
+        if (seen.has(act.id)) problems.push(`act id 與 card id 撞了：${act.id}（同一本 log，id 不能共用）`);
+        if (!act.label?.trim()) problems.push(`act ${act.id} 缺 label（卡面）`);
+        if (!act.effects?.length) problems.push(`act ${act.id} 沒有任何 effect`);
+        for (const effect of act.effects ?? []) {
+            if (effect.kind === 'cast-enter') {
+                problems.push(`act ${act.id} 不得帶 cast-enter：招人進班不是角色能做的事`);
+            }
+            if ((effect.kind === 'leak-secret' || effect.kind === 'publish-secret') && !secretIds.has(effect.secretId)) {
+                problems.push(`act ${act.id} 的 ${effect.kind} 指向牌組未宣告的秘密：${effect.secretId}`);
+            }
+            if (effect.kind === 'standing') problems.push(...standingToneProblems(`act ${act.id}`, effect));
+        }
+        // 對人做的事沒有對象就永遠不會亮牌 —— 那是作者的筆誤，不是世界的狀態。
+        if (act.needsTarget === false && act.effects?.some((effect) =>
+            (effect.kind === 'standing' && (effect.from === 'targets' || effect.toward === 'targets')) ||
+            effect.kind === 'cast-exit',
+        )) {
+            problems.push(`act ${act.id} 沒有對象，卻帶著只對對象生效的後果`);
+        }
+    }
+    // A card's `standing` effect has no actor to resolve, so it may not name one.
+    for (const card of deck.cards ?? []) {
+        for (const effect of card.effects ?? []) {
+            if (effect.kind === 'standing') {
+                if (effect.from === 'actor' || effect.toward === 'actor') {
+                    problems.push(`card ${card.id} 的 standing 用了 'actor'，但事件卡沒有行為人（那是世情動作的欄位）`);
+                }
+                problems.push(...standingToneProblems(`card ${card.id}`, effect));
+            }
+            if ((effect.kind === 'renown' || effect.kind === 'self-regard') && effect.on && effect.on !== 'targets') {
+                problems.push(`card ${card.id} 的 ${effect.kind}.on 用了 '${effect.on}'，但事件卡沒有行為人`);
+            }
+        }
+    }
+    if (problems.length) throw new Error(`[deck] ${deck.id ?? '(無 id)'} 不合格：\n- ${problems.join('\n- ')}`);
+}
+
+/**
+ * 語氣即機制 —— a `standing` tone that the warmth classifier cannot read is a
+ * grievance that closes no door.
+ *
+ * Outside strict-structured mode `welcome()` reads the TONE STRING, not
+ * `disposition`, and `welcome()` is what every social gate in the engine runs
+ * through (夜訪 admission, `tabTrust` 賒帳, `socialStandingOf` 社會性死亡). So an
+ * edge written 「把我告到巡捕房去了——這一筆我記著」 with `disposition: 'cold'`
+ * reads as a perfectly ordinary neutral acquaintance to every one of them.
+ *
+ * The first cut of the 世情動作 cards shipped six tones exactly like that, and
+ * 報官 consequently cost its target nothing — the data looked right and the
+ * world did not move. An author cannot be expected to remember which six
+ * characters the regex wants, so the deck simply refuses to load without one.
+ */
+function standingToneProblems(
+    where: string,
+    effect: { tone?: string; disposition?: 'warm' | 'cold' | 'neutral' },
+): string[] {
+    const tone = effect.tone?.trim();
+    if (!tone) return [`${where} 的 standing 沒有 tone（人心轉向總得有句話）`];
+    const disposition = effect.disposition ?? 'cold';
+    if (disposition === 'cold' && !COLD_TONE.test(tone)) {
+        return [
+            `${where} 的 standing 是 cold，但語氣「${tone}」不帶 ${COLD_TONE.source} 任一字——` +
+                'welcome() 讀的是語氣不是 disposition，這樣寫關不上任何一扇門',
+        ];
+    }
+    if (disposition === 'warm' && !WARM_TONE.test(tone)) {
+        return [`${where} 的 standing 是 warm，但語氣「${tone}」不帶 ${WARM_TONE.source} 任一字`];
+    }
+    return [];
+}
+
+/**
+ * Attach a deck's authored secrets to a world. Idempotent by secret id, so
+ * re-attaching on resume is safe. Records `deckId` for provenance; the deck
+ * itself is never persisted into the world (it is data on disk, and a run must
+ * not carry a stale copy of it).
+ */
+export function attachEventDeck(world: WorldState, deck: EventDeck): number {
+    world.data.deckId = deck.id;
+    return seedSecretLedger(world, deck.secrets ?? []);
 }
 
 /**
