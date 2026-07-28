@@ -28,6 +28,35 @@ function listJsonIds(dir: string): string[] {
     }
 }
 
+/**
+ * 內建館空掉要看得見。
+ *
+ * A missing builtin directory is indistinguishable from an empty one: the reader
+ * above swallows ENOENT and the dropdown simply renders one fewer group. That is
+ * exactly how the deployed lab shipped with ZERO builtin 季框 and ZERO builtin
+ * 牌組 for a whole round — the image only copied `scripts/stories`, nothing
+ * errored, and the only symptom was a dropdown that looked complete because the
+ * 自撰 entries filled it.
+ *
+ * Warned once per directory per process, with the resolved path, so the next
+ * time this happens the answer is in the server log instead of requiring a
+ * source dive. Never throws: an empty builtin library is legitimate (a private
+ * `ES_SCRIPTS_ROOT` may deliberately carry only some of them).
+ */
+const warnedEmptyDirs = new Set<string>();
+function listBuiltinJsonIds(kind: string, dir: string): string[] {
+    const ids = listJsonIds(dir);
+    if (!ids.length && !warnedEmptyDirs.has(dir)) {
+        warnedEmptyDirs.add(dir);
+        console.warn(
+            `[lab] 內建${kind}一個都沒有：${dir}\n` +
+                '      —— 目錄不存在或是空的。部署映像若沒 COPY 這個目錄（見 Dockerfile.cinema-lab），' +
+                '選單就會靜靜地少掉整類選項；設了 ES_SCRIPTS_ROOT 時內建館會整個換成私有劇本庫。',
+        );
+    }
+    return ids;
+}
+
 export function seedDirFor(source: 'builtin' | 'custom'): string {
     return source === 'builtin' ? defaultStoriesDir() : labSeedsDir();
 }
@@ -43,7 +72,7 @@ export function deckDirFor(source: 'builtin' | 'custom'): string {
 /** 事件牌組 ids available to a run, built-ins first. */
 export function listDeckIds(): Array<{ id: string; source: 'builtin' | 'custom' }> {
     return [
-        ...listJsonIds(defaultDecksDir()).map((id) => ({ id, source: 'builtin' as const })),
+        ...listBuiltinJsonIds('牌組', defaultDecksDir()).map((id) => ({ id, source: 'builtin' as const })),
         ...listJsonIds(labDecksDir()).map((id) => ({ id, source: 'custom' as const })),
     ];
 }
@@ -88,7 +117,8 @@ export function readSeasonText(source: 'builtin' | 'custom', id: string): string
 export function listSeeds(): LabSeedSummary[] {
     const out: LabSeedSummary[] = [];
     for (const source of ['builtin', 'custom'] as const) {
-        for (const id of listJsonIds(seedDirFor(source))) {
+        const ids = source === 'builtin' ? listBuiltinJsonIds('劇本', seedDirFor(source)) : listJsonIds(seedDirFor(source));
+        for (const id of ids) {
             try {
                 out.push(summarizeSeed(id, source, readSeedRaw(source, id)));
             } catch {
@@ -102,7 +132,8 @@ export function listSeeds(): LabSeedSummary[] {
 export function listSeasons(): LabSeasonSummary[] {
     const out: LabSeasonSummary[] = [];
     for (const source of ['builtin', 'custom'] as const) {
-        for (const id of listJsonIds(seasonDirFor(source))) {
+        const ids = source === 'builtin' ? listBuiltinJsonIds('季框', seasonDirFor(source)) : listJsonIds(seasonDirFor(source));
+        for (const id of ids) {
             try {
                 const raw = JSON.parse(
                     fs.readFileSync(path.join(seasonDirFor(source), `${id}.json`), 'utf8'),

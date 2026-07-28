@@ -46,10 +46,20 @@ COPY --from=builder /repo/packages/web/.next/standalone/ ./
 COPY --from=builder /repo/packages/web/.next/static ./packages/web/.next/static
 COPY --from=builder /repo/packages/web/public ./packages/web/public
 
-# 內建劇本（seed JSON）：engine 在 runtime 以 fs 讀取，路徑是 build 時 inline 的
-# /repo/packages/cli/scripts/stories —— 補進同一位置。（builtin seasons 目前無此目錄；
-# 自撰劇本／季框都在 $LAB_DATA_DIR volume 上，與映像無關。）
+# 內建劇本館（seed／季框／牌組 JSON）：engine 在 runtime 以 fs.readdirSync 讀取，
+# 路徑由 workspace-paths.ts 在 build 時 inline 成 /repo/packages/cli/scripts/<dir>。
+# Next 的 output tracing 只追「被 import 的模組」，fs 讀的資料目錄它看不到，所以每一個
+# 內建館都必須在這裡顯性補進同一位置。
+#
+# **加了新的內建館就要加一行。** 漏掉不會有任何錯誤：`listJsonIds` 讀不到目錄就回空
+# 陣列，於是下拉選單靜靜地少一整類選項——季框與牌組就是這樣漏了整整一輪（映像只帶了
+# stories，而註解還寫著「builtin seasons 目前無此目錄」，那句話在 seasons/ 建起來的那天
+# 就過時了）。改 workspace-paths.ts 的 default*Dir() 時，回來看這一段。
+#
+# 自撰的劇本／季框／牌組在 $LAB_DATA_DIR volume 上，與映像無關。
 COPY --from=builder /repo/packages/cli/scripts/stories ./packages/cli/scripts/stories
+COPY --from=builder /repo/packages/cli/scripts/seasons ./packages/cli/scripts/seasons
+COPY --from=builder /repo/packages/cli/scripts/decks   ./packages/cli/scripts/decks
 
 VOLUME ["/data"]
 EXPOSE 3000
