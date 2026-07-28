@@ -16,6 +16,7 @@
  * runner's `.js`-specifier graph into `node --test`).
  */
 
+import type { CardProposal } from './core/event-deck.ts';
 import type { SceneAgent } from './core/scene-loop.ts';
 import type { RegenerateWantInput, RewriteLedgerInput, RewriteReply, RewriteSpawn } from './core/want-rewrite.ts';
 import type { WantSemanticTag, WantSource, WantSubjectRef } from './core/want-core.ts';
@@ -116,6 +117,17 @@ export interface DirectorPickInput {
     worldBrief: string[];
     /** cards that will land regardless of this reply. */
     forcedCardIds: string[];
+    /**
+     * 自撰一張 — the director may, instead of picking, assemble a card the deck
+     * never contained. Offered only when the season/day quota still allows it.
+     *
+     * This is the deck's one escape hatch and it is deliberately narrow: the
+     * proposal is built from the SAME finite effect primitives every authored
+     * card uses, inside magnitude caps the engine enforces (`PROPOSAL_LIMITS`),
+     * aimed at real people. Anything out of bounds is refused with reasons and
+     * logged. See `validateProposal`.
+     */
+    mayPropose?: boolean;
 }
 
 export interface DirectorPickReply {
@@ -129,6 +141,13 @@ export interface DirectorPickReply {
     rationale?: string;
     /** a legitimate answer on any non-deadline tick: not yet. */
     decline?: boolean;
+    /**
+     * 自撰的牌 — a card of the director's own making, considered only when
+     * `mayPropose` was set and no offered card was chosen. Validated before it
+     * can touch the world; a refusal is logged with every reason, so a director
+     * that keeps overreaching is diagnosable from the run alone.
+     */
+    propose?: CardProposal;
 }
 
 // ── 債主的態度 (the creditor's seat) ──────────────────────────────────────────

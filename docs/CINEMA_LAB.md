@@ -46,7 +46,8 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
 ```
 
 卷目錄另有兩件宏觀節奏的產物：`ticks.jsonl` 每行多出 `vitals`（生命體徵）、
-`cardsPlayed`（事件卡與導演決策）、`artifacts`（日記／詩）、`povTrackedIds`、
+`cardsPlayed`（事件卡／導演自撰／世情動作與其決策）、`proposalsRefused`（自撰遭駁的
+理由）、`artifacts`（日記／詩）、`povTrackedIds`、
 `backgroundNeeds`；`state/world.json` 多出 `directorLog`／`secretLedger`／
 `patronage`／`artifacts`／`reckonings`／`departedIds`／`trackedCharacterIds`。
 欄位一律**只加不改名不刪**，舊卷照讀。
@@ -66,13 +67,20 @@ $LAB_DATA_DIR/                      # 預設 packages/web/data/cinema-lab；生�
 
 | 牌組 id | 是什麼 | 配哪個季框 |
 |---|---|---|
-| `spring-snow` | 前街生計牌組：結帳預告＋月半結帳（死線）、班中發俸、散戲分紅、巡捕查夜、報館截稿、天氣轉變、堂會邀約、池座送花、風聲漏了，加兩張季級大牌（故人進城／名角過班）＋三樁上了膛的秘密 | `spring-snow-market`／`spring-snow-open` |
-| `spring-snow-premiere` | 排戲季牌組：東家催戲、**首演之夜**（到日必落，成敗兩種後果由 `onlyIf` 分支）、戲牌催落款、整日排戲（佔掉白日就是佔掉進項）、抄本不見了、報館要先聲，加兩張季級大牌（接筆的編劇進城／有人撂挑子）＋三樁秘密 | `spring-snow-premiere` |
+| `spring-snow` | 前街生計牌組：結帳預告＋月半結帳（死線）、班中發俸、散戲分紅、巡捕查夜、報館截稿、天氣轉變、堂會邀約、池座送花、風聲漏了，加兩張季級大牌（故人進城／名角過班）＋三樁上了膛的秘密；世情動作五件（報官／當眾翻臉／撂挑子／逐出班子／把血帳抖出來） | `spring-snow-market`／`spring-snow-open` |
+| `spring-snow-premiere` | 排戲季牌組：東家催戲、**首演之夜**（到日必落，成敗兩種後果由 `onlyIf` 分支）、戲牌催落款、整日排戲（佔掉白日就是佔掉進項）、抄本不見了、報館要先聲，加兩張季級大牌（接筆的編劇進城／有人撂挑子）＋三樁秘密；世情動作五件（報官／當眾翻臉／撂挑子／逐出班子／把本子毀了） | `spring-snow-premiere` |
 
 schema、導演的輸入輸出、追蹤開關與注資指令，全部記在
 [`packages/engine/README.md` 的「宏觀節奏」](../packages/engine/README.md#宏觀節奏macro-rhythm)。
 鐵律不變：**卡是宣告式資料、後果由引擎確定性結算、LLM 導演只選牌與措辭**，每次落牌
 連同當時的牌面全集寫進 `world.json` 的 `directorLog`，可審計、可重放。
+
+牌組還開了兩道門，兩道都不把寫入權還給模型：**導演自撰一張**（牌面上沒有合用的時候，
+用同一套有限 effect 拼一張，量級與限額由引擎執行；越界連同理由駁回，寫進診斷報告的
+「導演自撰遭駁」）與**世情動作**（`acts`：報官、當眾翻臉、撂挑子、逐出班子這類「一做
+就翻過去」的事，由**角色自己**在 beat 裡決定做不做、對誰做，引擎算得出來的才亮牌、
+落地前再驗一次）。診斷報告的「事件卡全紀」會標明每一筆是**到日必打／導演選牌／導演
+自撰／角色所為**，角色所為的還帶行為人姓名。
 
 ### 2.1 內建劇本與季框（映像自帶，卷架直接可選）
 

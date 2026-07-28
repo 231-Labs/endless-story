@@ -76,10 +76,30 @@ export class FakeSceneAgent implements SceneAgentPort {
         // loop/convergence detectors would otherwise report as a world finding.
         const MOVES = ['繞著', '咬著', '守著', '扒著', '撞著', '磨著'] as const;
         const move = MOVES[hash(`${input.name}|move`) % MOVES.length];
+        // 世情動作（確定性替身）— a person reaches for the drastic thing when they
+        // are being crushed, not on a schedule. Gating on `forcing === 'breaking'`
+        // keeps the stub honest in both directions: the path is genuinely
+        // exercised end to end in fake runs, and it stays rare enough that a smoke
+        // test measures the world rather than the stub's appetite for 報官.
+        // The extra hash gate is not squeamishness: `heat`/`frust` do not decay, so
+        // by day three the whole fake cast sits at 'breaking' permanently, and
+        // forcing alone would have every character reaching for 報官 every beat.
+        const act = input.acts?.length && input.forcing === 'breaking' && hash(`${input.name}|act|${input.sceneLog.length}`) % 4 === 0
+            ? (() => {
+                  const chosen = input.acts[hash(`${input.name}|act`) % input.acts.length];
+                  if (!chosen.needsTarget) return { id: chosen.id };
+                  if (!chosen.targetNames.length) return undefined;
+                  return {
+                      id: chosen.id,
+                      targetName: chosen.targetNames[hash(`${input.name}|act-target`) % chosen.targetNames.length],
+                  };
+              })()
+            : undefined;
         return {
             beat: `${near}，${input.name}${move}「${input.want.desc}」不放${addressed ? `，看向${addressed}` : ''}`,
             inner: input.want.desc,
             addressed,
+            ...(act ? { act } : {}),
         };
     }
 
@@ -335,7 +355,23 @@ export class FakeSceneAgent implements SceneAgentPort {
      */
     async pickEventCard(input: DirectorPickInput): Promise<DirectorPickReply | null> {
         const pick = input.offered[0];
-        if (!pick) return null;
+        // 自撰一張（確定性替身）— only when the deck genuinely has nothing to offer,
+        // which is exactly the case the escape hatch exists for. Deliberately
+        // modest: one percept, inside every cap, so a fake run proves the
+        // validate-then-play path without proving anything about magnitudes.
+        if (!pick) {
+            return input.mayPropose
+                ? {
+                      cardId: '',
+                      propose: {
+                          label: '街上一樁小事',
+                          note: '（確定性替身：牌組今日無牌可打）',
+                          effects: [{ kind: 'percept', text: `第 ${input.day} 日 ${input.clock}，前街上有人吵了一場，看熱鬧的圍了一圈又散了。` }],
+                      },
+                      rationale: '（確定性替身：無牌可打，自撰一張）',
+                  }
+                : null;
+        }
         return {
             cardId: pick.cardId,
             targetIds: pick.candidates.slice(0, Math.max(0, pick.pickCount)).map((candidate) => candidate.id),

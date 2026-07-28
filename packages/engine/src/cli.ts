@@ -457,7 +457,10 @@ function deckCheckCommand(argv: string[]): void {
     for (let i = 0; i < argv.length; i++) if (argv[i] === '--deck') deckId = argv[++i];
     if (!deckId) throw new Error('--deck 是必須的（或設 ES_ACTIVE_DECK）');
     const deck = loadEventDeck(deckId); // throws with every problem listed
-    console.log(`牌組 ${deck.title ?? deck.id} 合格：${deck.cards.length} 張牌、${(deck.secrets ?? []).length} 樁秘密、${(deck.newcomers ?? []).length} 位候補人選`);
+    console.log(
+        `牌組 ${deck.title ?? deck.id} 合格：${deck.cards.length} 張牌、${(deck.acts ?? []).length} 件世情動作、` +
+            `${(deck.secrets ?? []).length} 樁秘密、${(deck.newcomers ?? []).length} 位候補人選`,
+    );
     for (const card of deck.cards) {
         const when = card.trigger.onDays?.length
             ? `第 ${card.trigger.onDays.join('／')} 日`
@@ -465,6 +468,21 @@ function deckCheckCommand(argv: string[]): void {
               ? `每 ${card.trigger.everyDays} 日（自第 ${card.trigger.anchorDay ?? 1} 日起）`
               : '不限日';
         console.log(`  ${card.mustLand ? '【死線】' : card.tier === 'seasonal' ? '【季級】' : '　　　　'} ${card.id}｜${card.label}｜${when}`);
+    }
+    if (deck.acts?.length) {
+        console.log(`世情動作（角色自己做得出來的事，一日至多 ${deck.maxActsPerDay ?? 2} 件）：`);
+        for (const act of deck.acts) {
+            const who = act.invokableBy?.roles?.length || act.invokableBy?.names?.length
+                ? [...(act.invokableBy.roles ?? []), ...(act.invokableBy.names ?? [])].join('／')
+                : '任何人';
+            const caps = [
+                act.minDay !== undefined ? `第 ${act.minDay} 日起` : '',
+                act.maxPlays !== undefined ? `一卷 ${act.maxPlays} 次` : '',
+                act.maxPlaysPerCharacter !== undefined ? `每人 ${act.maxPlaysPerCharacter} 次` : '',
+                act.cooldownDays !== undefined ? `間隔 ${act.cooldownDays} 日` : '',
+            ].filter(Boolean).join('、');
+            console.log(`  　　　　 ${act.id}｜${act.label}｜${who}${act.needsTarget ? (act.targetMustBeCoPresent === false ? '（要對象，不必同場）' : '（要對象在跟前）') : ''}｜${caps || '無上限'}`);
+        }
     }
 }
 

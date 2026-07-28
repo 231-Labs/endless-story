@@ -231,6 +231,48 @@ export function validateEventDeck(deck: EventDeck): void {
             }
         }
     }
+    // 世情動作 — validated on the same terms as a card, because it IS a card in
+    // every respect except who is allowed to play it. `cast-enter` is the one
+    // effect no act may carry: a character conjuring a person into the world is
+    // the one authority even the director does not have.
+    const actIds = new Set<string>();
+    for (const act of deck.acts ?? []) {
+        if (!act.id?.trim()) problems.push('有一個 act 缺 id');
+        else if (actIds.has(act.id)) problems.push(`act id 重複：${act.id}`);
+        else actIds.add(act.id);
+        if (seen.has(act.id)) problems.push(`act id 與 card id 撞了：${act.id}（同一本 log，id 不能共用）`);
+        if (!act.label?.trim()) problems.push(`act ${act.id} 缺 label（卡面）`);
+        if (!act.effects?.length) problems.push(`act ${act.id} 沒有任何 effect`);
+        for (const effect of act.effects ?? []) {
+            if (effect.kind === 'cast-enter') {
+                problems.push(`act ${act.id} 不得帶 cast-enter：招人進班不是角色能做的事`);
+            }
+            if ((effect.kind === 'leak-secret' || effect.kind === 'publish-secret') && !secretIds.has(effect.secretId)) {
+                problems.push(`act ${act.id} 的 ${effect.kind} 指向牌組未宣告的秘密：${effect.secretId}`);
+            }
+            if (effect.kind === 'standing' && !effect.tone?.trim()) {
+                problems.push(`act ${act.id} 的 standing 沒有 tone（人心轉向總得有句話）`);
+            }
+        }
+        // 對人做的事沒有對象就永遠不會亮牌 —— 那是作者的筆誤，不是世界的狀態。
+        if (act.needsTarget === false && act.effects?.some((effect) =>
+            (effect.kind === 'standing' && (effect.from === 'targets' || effect.toward === 'targets')) ||
+            effect.kind === 'cast-exit',
+        )) {
+            problems.push(`act ${act.id} 沒有對象，卻帶著只對對象生效的後果`);
+        }
+    }
+    // A card's `standing` effect has no actor to resolve, so it may not name one.
+    for (const card of deck.cards ?? []) {
+        for (const effect of card.effects ?? []) {
+            if (effect.kind === 'standing' && (effect.from === 'actor' || effect.toward === 'actor')) {
+                problems.push(`card ${card.id} 的 standing 用了 'actor'，但事件卡沒有行為人（那是世情動作的欄位）`);
+            }
+            if ((effect.kind === 'renown' || effect.kind === 'self-regard') && effect.on && effect.on !== 'targets') {
+                problems.push(`card ${card.id} 的 ${effect.kind}.on 用了 '${effect.on}'，但事件卡沒有行為人`);
+            }
+        }
+    }
     if (problems.length) throw new Error(`[deck] ${deck.id ?? '(無 id)'} 不合格：\n- ${problems.join('\n- ')}`);
 }
 

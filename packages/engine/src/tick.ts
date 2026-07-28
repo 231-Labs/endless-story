@@ -58,7 +58,21 @@ import { deityHintFor, framePrayerFallback, templeScenesOf } from './core/temple
 import { drainPendingDreams } from './core/dream.ts';
 import { buildStakesBrief } from './core/stakes-brief.ts';
 import { settleBackgroundNeeds } from './core/background-needs.ts';
-import { describeEligible, eligibleCards, playCard, partIndexOf, type EventDeck, type PlayCardResult } from './core/event-deck.ts';
+import {
+    availableActsFor,
+    canPropose,
+    describeEligible,
+    eligibleCards,
+    partIndexOf,
+    playAct,
+    playCard,
+    validateProposal,
+    type CardProposal,
+    type DirectorLogEntry,
+    type EventCard,
+    type EventDeck,
+    type PlayCardResult,
+} from './core/event-deck.ts';
 import { fallbackStance, reckoningSeats, type DebtStance } from './core/income-events.ts';
 import { fadeHearsay, standingPerceptFor } from './core/standing.ts';
 import { evaluateSecretLeaks } from './core/secret-ledger.ts';
@@ -278,13 +292,18 @@ export interface TickReport {
     cardsPlayed?: Array<{
         cardId: string;
         label: string;
-        chosenBy: 'director' | 'deadline' | 'operator';
+        chosenBy: 'director' | 'deadline' | 'operator' | 'director-proposed' | 'character';
         targetNames: string[];
+        /** 世情動作 only: who set it in motion. */
+        actorName?: string;
         costume?: string;
         rationale?: string;
         irreversible: number;
         lines: string[];
     }>;
+    /** 自撰的牌 the engine REFUSED, with every reason — an overreaching director
+     *  should be visible in the diagnostics, not silently swallowed. */
+    proposalsRefused?: Array<{ label: string; problems: string[] }>;
     /** 角色工件 written this tick (日記 at day end, 詩詞 on occasion). */
     artifacts?: CharacterArtifact[];
     /** Who this tick actually paid for POV prose for — the tracking switch made
@@ -574,6 +593,22 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // silent for three days acquire a trigger. Inert when the world has no
     // secretLedger (a run predating this layer).
     let irreversibleThisTick = 0;
+    /**
+     * 世情動作 — what the CAST set in motion during this tick's scenes.
+     *
+     * Collected here and settled in 7.85 rather than mid-beat, on purpose: every
+     * consequence in this engine lands through one settlement path, in one place,
+     * in a deterministic order, or the run stops being replayable. Nothing is
+     * lost by waiting — a card's percepts always land on the NEXT tick anyway, so
+     * the room learns what 柳安春 just did at exactly the moment it would have
+     * learned it from any other source.
+     */
+    const actInvocations: Array<{
+        actId: string;
+        actorId: string;
+        targetId?: string;
+        coPresentIds: string[];
+    }> = [];
     if (c.tickOfDay === 0 && w.secretLedger?.length) {
         const leaks = evaluateSecretLeaks(world, { day: today, nowTick });
         irreversibleThisTick += leaks.leaked.length;
@@ -2145,6 +2180,21 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 }));
                 actor.economyLine = economy?.projectFor(world, actor.characterId, sid);
                 actor.credit = creditAdvertFor(world, actor.characterId, ids);
+                // 世情動作亮牌 — only what this person can actually do, here, now.
+                // A character can no more invent 報官 than a director can invent a
+                // card: the prompt advertises this list and the tick refuses
+                // anything outside it.
+                actor.acts = deck
+                    ? availableActsFor(world, deck, { characterId: actor.characterId, day: today, coPresentIds: ids })
+                          .map((offer) => ({
+                              id: offer.actId,
+                              label: offer.label,
+                              ...(offer.note ? { note: offer.note } : {}),
+                              needsTarget: offer.needsTarget,
+                              targetNames: offer.candidates.map((row) => row.name),
+                          }))
+                    : undefined;
+                if (actor.acts && !actor.acts.length) actor.acts = undefined;
             },
             onBeat: async (beat) => {
                 // 相識分寸: resolve the addressed display back to an id — perceived-name
@@ -2158,6 +2208,20 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 if (w.subjectiveNaming && addressedId && addressedId !== beat.characterId && ids.includes(addressedId)) {
                     world.setAcquaint(beat.characterId, addressedId, 'named');
                     world.setAcquaint(addressedId, beat.characterId, 'named');
+                }
+                // 世情動作 — the beat says 「我去報官」; the engine decides what that
+                // costs. Queued, never settled here: 7.85 owns every card play.
+                // An id the engine never advertised is dropped by `playAct`.
+                if (beat.act?.id) {
+                    const namedTarget = beat.act.targetName
+                        ? world.resolveAddressed(beat.characterId, beat.act.targetName, ids) ?? world.idByName(beat.act.targetName)
+                        : undefined;
+                    actInvocations.push({
+                        actId: beat.act.id,
+                        actorId: beat.characterId,
+                        ...(namedTarget ? { targetId: namedTarget } : {}),
+                        coPresentIds: [...ids],
+                    });
                 }
                 // A beat that touches a contract paper must also move the ledger —
                 // checked BEFORE physics so a rejected draft leaves no object change.
@@ -3223,6 +3287,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // Every play is appended to `w.directorLog` with the offered set, so the run
     // replays deterministically from the log with no model in the loop.
     const cardsPlayed: NonNullable<TickReport['cardsPlayed']> = [];
+    let proposalsRefused: TickReport['proposalsRefused'];
     if (deck) {
         const partIndex = partIndexOf(clockLabel);
         const eligible = eligibleCards(world, deck, { day: today, partIndex });
@@ -3266,6 +3331,46 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
             }
         }
 
+        // Every play — a deadline, a director's pick, a card the director wrote
+        // themselves, or something a character DID — lands through this one
+        // function. Same log, same percept channel, same ordering: whoever
+        // authored the pressure, the world settles it exactly one way.
+        const record = (card: Pick<EventCard, 'id' | 'label'>, chosenBy: DirectorLogEntry['chosenBy'], played: PlayCardResult, actorId?: string): void => {
+            if (played.logEntry) played.logEntry.offeredCardIds = eligible.map((r) => r.card.id);
+            for (const percept of played.percepts) {
+                (w.scheduledEvents ??= []).push({ ...percept, atTick: nowTick + 1 });
+            }
+            for (const notice of played.privateNotices) {
+                (w.scheduledEvents ??= []).push({
+                    id: `card-${card.id}-priv-${notice.characterId}-t${nowTick}`,
+                    atTick: nowTick + 1,
+                    sceneId: w.roster[notice.characterId] ?? w.homeByChar[notice.characterId] ?? w.scenes[0].id,
+                    text: notice.text,
+                    visibility: 'private',
+                    witnessIds: [notice.characterId],
+                });
+            }
+            // 世情動作 is something a PERSON did, so it reads as world action, not
+            // as an outside push — the day log says who, and the label says what.
+            const tag = chosenBy === 'character' ? `[${world.nameById(actorId ?? '')}]` : '[外力]';
+            for (const line of played.publicLines) {
+                log(`  ${chosenBy === 'character' ? `[世情] ${world.nameById(actorId ?? '')}·` : '[牌] '}${card.label}：${line}`);
+                w.dayAccum.lines.push(`${tag} ${line}`);
+            }
+            irreversibleThisTick += played.irreversible;
+            cardsPlayed.push({
+                cardId: card.id,
+                label: card.label,
+                chosenBy,
+                targetNames: (played.logEntry?.targetIds ?? []).map((id) => world.nameById(id)),
+                ...(actorId ? { actorName: world.nameById(actorId) } : {}),
+                ...(played.logEntry?.costume ? { costume: played.logEntry.costume } : {}),
+                ...(played.logEntry?.rationale ? { rationale: played.logEntry.rationale } : {}),
+                irreversible: played.irreversible,
+                lines: played.publicLines,
+            });
+        };
+
         const settle = (
             row: (typeof eligible)[number],
             chosenBy: 'director' | 'deadline',
@@ -3282,37 +3387,31 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                 nowTick,
                 clock: clockLabel,
             });
-            if (played.logEntry) played.logEntry.offeredCardIds = eligible.map((r) => r.card.id);
-            for (const percept of played.percepts) {
-                (w.scheduledEvents ??= []).push({ ...percept, atTick: nowTick + 1 });
-            }
-            for (const notice of played.privateNotices) {
-                (w.scheduledEvents ??= []).push({
-                    id: `card-${row.card.id}-priv-${notice.characterId}-t${nowTick}`,
-                    atTick: nowTick + 1,
-                    sceneId: w.roster[notice.characterId] ?? w.homeByChar[notice.characterId] ?? w.scenes[0].id,
-                    text: notice.text,
-                    visibility: 'private',
-                    witnessIds: [notice.characterId],
-                });
-            }
-            for (const line of played.publicLines) {
-                log(`  [牌] ${row.card.label}：${line}`);
-                w.dayAccum.lines.push(`[外力] ${line}`);
-            }
-            irreversibleThisTick += played.irreversible;
-            cardsPlayed.push({
-                cardId: row.card.id,
-                label: row.card.label,
-                chosenBy,
-                targetNames: (played.logEntry?.targetIds ?? []).map((id) => world.nameById(id)),
-                ...(played.logEntry?.costume ? { costume: played.logEntry.costume } : {}),
-                ...(played.logEntry?.rationale ? { rationale: played.logEntry.rationale } : {}),
-                irreversible: played.irreversible,
-                lines: played.publicLines,
-            });
+            record(row.card, chosenBy, played);
             return played;
         };
+
+        // ── 世情動作先落 ────────────────────────────────────────────────────────
+        // What the cast DID this tick settles before what the director pushes:
+        // the world reacts to its own people first, and a director choosing a card
+        // on the next tick is choosing against a world those acts already changed.
+        for (const invocation of actInvocations) {
+            const done = playAct(world, deck, {
+                actId: invocation.actId,
+                actorId: invocation.actorId,
+                ...(invocation.targetId ? { targetId: invocation.targetId } : {}),
+                coPresentIds: invocation.coPresentIds,
+                day: today,
+                nowTick,
+                clock: clockLabel,
+            });
+            if (!done.played) {
+                log(`  [世情] ${world.nameById(invocation.actorId)} 的「${invocation.actId}」未成：${done.refused ?? done.reason ?? '不合時宜'}`);
+                continue;
+            }
+            const act = (deck.acts ?? []).find((row) => row.id === invocation.actId)!;
+            record({ id: act.id, label: act.label }, 'character', done, invocation.actorId);
+        }
 
         // 死線先落 —— arrival is not a decision. The director may dress it (below),
         // but never postpone it.
@@ -3340,7 +3439,14 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         }
 
         // 導演選牌 —— one optional card at most per tick, from the offered set only.
-        if (optional.length && agent.pickEventCard) {
+        //
+        // The seat is also consulted when the deck has NOTHING eligible, provided
+        // the self-authored-card quota is still open. That is deliberate: the
+        // moment the deck runs dry is precisely the moment a season needs
+        // something its author did not think of, and refusing to even ask would
+        // make the escape hatch unreachable on exactly the ticks it exists for.
+        const proposalOpen = canPropose(world, today);
+        if ((optional.length || proposalOpen) && agent.pickEventCard) {
             try {
                 const choice = await agent.pickEventCard({
                     day: today,
@@ -3348,25 +3454,54 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     offered: optional.map((row) => offerOf(world, row)),
                     worldBrief: buildDirectorBrief(world, today, clockLabel),
                     forcedCardIds: forced.map((row) => row.card.id),
+                    ...(proposalOpen ? { mayPropose: true } : {}),
                 });
-                if (choice && !choice.decline) {
-                    const chosen = optional.find((row) => row.card.id === choice.cardId);
-                    if (!chosen) {
-                        // A card the engine never offered is not a card. Refused, logged.
-                        log(`  [牌] 導演選了不在牌面上的卡（${choice.cardId}），不予採納`);
-                    } else {
-                        settle(chosen, 'director', {
-                            ...(choice.targetIds?.length ? { targetIds: choice.targetIds } : {}),
-                            ...(choice.costume ? { costume: choice.costume } : {}),
-                            ...(choice.rationale ? { rationale: choice.rationale } : {}),
-                        });
-                    }
+                const chosen = choice && !choice.decline
+                    ? optional.find((row) => row.card.id === choice.cardId)
+                    : undefined;
+                if (chosen) {
+                    settle(chosen, 'director', {
+                        ...(choice!.targetIds?.length ? { targetIds: choice!.targetIds } : {}),
+                        ...(choice!.costume ? { costume: choice!.costume } : {}),
+                        ...(choice!.rationale ? { rationale: choice!.rationale } : {}),
+                    });
+                } else if (choice?.propose && proposalOpen) {
+                    // 自撰一張 —— considered only when nothing on the table was taken.
+                    // The engine validates before the world can feel any of it: an
+                    // effect kind that is closed to proposals, a magnitude past its
+                    // cap, a target who is not on the board, or a spent quota all
+                    // come back as reasons, and the reasons are what get logged.
+                    settleProposal(choice.propose, choice.rationale);
+                } else if (choice && !choice.decline && choice.cardId) {
+                    // A card the engine never offered is not a card. Refused, logged.
+                    log(`  [牌] 導演選了不在牌面上的卡（${choice.cardId}），不予採納`);
                 } else if (choice?.decline) {
                     log(`  [牌] 導演按牌不打：${choice.rationale ?? '（未言）'}`);
                 }
             } catch (error) {
                 log(`  [牌] 導演選牌失敗：${error instanceof Error ? error.message : String(error)}`);
             }
+        }
+
+        function settleProposal(draft: CardProposal, rationale?: string): void {
+            const seq = (world.data.directorLog ?? []).filter((entry) => entry.chosenBy === 'director-proposed').length + 1;
+            const verdict = validateProposal(world, draft, { day: today, seq });
+            if (!verdict.ok || !verdict.card) {
+                log(`  [牌] 導演自撰的「${draft.label ?? '(無題)'}」不予採納：${verdict.problems.join('；')}`);
+                (proposalsRefused ??= []).push({ label: draft.label ?? '(無題)', problems: verdict.problems });
+                return;
+            }
+            const played = playCard(world, deck!, {
+                card: verdict.card,
+                ...(verdict.targetIds.length ? { targetIds: verdict.targetIds } : {}),
+                ...(rationale ? { rationale } : {}),
+                chosenBy: 'director-proposed',
+                day: today,
+                nowTick,
+                clock: clockLabel,
+            });
+            log(`  [牌] 導演自撰：「${verdict.card.label}」`);
+            record(verdict.card, 'director-proposed', played);
         }
     }
 
@@ -3672,6 +3807,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
         economyNotices,
         vitals,
         ...(cardsPlayed.length ? { cardsPlayed } : {}),
+        ...(proposalsRefused?.length ? { proposalsRefused } : {}),
         ...(tickArtifacts.length ? { artifacts: tickArtifacts } : {}),
         povTrackedIds: world.trackedIds(),
         ...(backgroundNeeds?.length ? { backgroundNeeds } : {}),

@@ -95,6 +95,8 @@ pnpm --filter @endless-story/engine engine -- deck-check --deck spring-snow
   "id": "spring-snow",
   "maxCardsPerDay": 2,          // 一日至多打幾張（死線卡不受限）
   "maxSeasonalPlays": 2,        // 一卷至多幾張季級大牌
+  "maxActsPerDay": 2,           // 一日至多幾件世情動作（見 §2.6）
+  "acts": [ /* 見 §2.6 */ ],
   "secrets": [ /* 見 §5 */ ],
   "newcomers": [ /* cast-enter 只能從這裡取人 */ ],
   "cards": [{
@@ -132,7 +134,13 @@ pnpm --filter @endless-story/engine engine -- deck-check --deck spring-snow
 `patronage`（注資）｜`bill`（按期債；`fromAccountId` 可用 `"@target"` 指這張卡對準
 的人）｜`want`（種一樁帶死線的心事）｜`renown`／`self-regard`｜`weather`
 （`housePct` 直接折座）｜`object-state`｜`leak-secret`／`publish-secret`｜
-`cast-exit`（離班＋孤兒資產強制重分配）｜`cast-enter`（只能取 `newcomers` 池裡的人）。
+`cast-exit`（離班＋孤兒資產強制重分配）｜`cast-enter`（只能取 `newcomers` 池裡的人）｜
+`standing`（**人心轉向**：把一句 tone 寫進既有的 `edges` 圖，並以 `chillBond` 真的打掉
+交情。`from: targets|witnesses|actor`、`toward: actor|targets`、`grievance`、`hearsay`）。
+
+`standing` 是唯一會動關係的 effect，而它動的是**世界本來就有的那兩張圖**——這條引擎
+沒有第二本口碑帳（見 `core/standing.ts`）。`hearsay: true` 標成街談，會隨著天天照面
+而淡（`fadeHearsay`）；當事人的第一手怨氣不淡，得真有事發生才解。
 
 **分支後果（`onlyIf`）**：任何一個 effect 可以掛一個 `CardCondition`，條件不成立就
 跳過這一條。這是「必到之日 × 兩種結果」的寫法——例如「首演之夜」到日必落，可是它
@@ -158,12 +166,88 @@ pnpm --filter @endless-story/engine engine -- deck-check --deck spring-snow
 
 | 方向 | 內容 |
 |---|---|
-| **輸入** | `day`／`clock`；`offered[]`（每張卡的 `cardId`／`label`／`note`／`forced`／**可對準的候選 id＋姓名**／`pickCount`）；`worldBrief`（**純散文世情**：燒得最旺的幾樁心事、班庫「緊得很／尚有餘裕」、街上賒著的帳、還沒發的事、已離班的人——**沒有任何數字**）；`forcedCardIds` |
-| **輸出** | `{ cardId, targetIds?, costume?, rationale?, decline? }` |
+| **輸入** | `day`／`clock`；`offered[]`（每張卡的 `cardId`／`label`／`note`／`forced`／**可對準的候選 id＋姓名**／`pickCount`）；`worldBrief`（**純散文世情**：燒得最旺的幾樁心事、班庫「緊得很／尚有餘裕」、街上賒著的帳、還沒發的事、已離班的人——**沒有任何數字**）；`forcedCardIds`；`mayPropose`（見 §2.5） |
+| **輸出** | `{ cardId, targetIds?, costume?, rationale?, decline?, propose? }` |
 
 引擎的驗收：`cardId` 不在牌面上 → 不採納並記 log；`targetIds` 不在該卡候選裡 → 丟棄；
 `decline` 對死線卡無效。每次落牌寫入 `world.data.directorLog`，含**當時的牌面全集**
 （`offeredCardIds`）——重放同一份 log ＋ 同一顆種子即重現整卷，模型不必在場。
+
+### 2.5 導演自撰一張（`propose`）
+
+牌組的天花板是：**作者沒寫的事就不會發生**。這是唯一一道穿過去的門，而它刻意開得很
+窄——一個能憑空造後果的導演，就是悄悄拿回了世界狀態的寫入權，那正是牌組存在的理由。
+
+所以「自撰」不是「讓模型描述一件事」，而是：**用作者用的同一套有限積木，在引擎執行
+的量級上限內，對準真實存在的人，並限額**。自撰的牌能做的，一張作者寫的牌本來就做得
+到；唯一新的東西是**沒有人得先想到它**。
+
+| 項目 | 規則（`PROPOSAL_LIMITS`，引擎執行） |
+|---|---|
+| 可用後果 | `percept`／`want`／`renown`／`self-regard`／`object-state`／`weather`／`bill`／`leak-secret` |
+| 一張至多 | 4 條後果 |
+| 量級 | `renown`／`self-regard` ±0.08｜`bill` ≤5 圓、≤7 日｜`want` weight ≤0.8、≤7 日｜`weather` 60–120%｜`percept` ≤200 字 |
+| 限額 | 一卷 3 張、一日 1 張 |
+| 對象 | 只能是在班的人；`bill` 的 `fromAccountId` 只能是 `"@target"` |
+
+**整類關死，各有其理**：`cast-enter`／`cast-exit`（造人、除人是全季最大的一張牌，走
+作者宣告的 `newcomers` 池）；`wage-packet`／`dividend`／`patronage`（能造錢的導演能
+把整季賴以成立的稀缺一次溶掉）；`reckoning`／`reckoning-notice`（那是有曆法的儀式，
+不是興之所至）；`publish-secret`（見報屬於握著那個故事的角色）；`standing`（人心是
+世界本身，不該由導演憑空鑄造怨氣）。
+
+越界不會被悄悄修剪成別的東西——`validateProposal` 連同**每一條理由**駁回，寫進 tick
+報告的 `proposalsRefused`，診斷報告裡看得見。通過的牌以 `chosenBy: 'director-proposed'`
+落入同一本 log，並**逐字帶上 `proposedCard`**：那張牌不存在於任何牌組檔，log 不帶它
+就重放不出來。
+
+牌組今日一張牌都出不了時，導演座席**照樣**會被問（只要額度還在）——牌組見底的那一刻，
+正是最需要作者沒想到的那件事的時候。
+
+### 2.6 世情動作：角色自己造事件（`acts`）
+
+牌組最初有一個形狀清楚的洞：**推世界的東西全在世界外面**。角色能想、能走、能說、能
+花錢、能借錢，但真正把一生翻過去的那一類事——報官、退婚、當眾揭穿、罷演——不屬於任何
+人。導演做不了（那不是導演的決定，是一個人的決定），班裡也沒有管道，於是它從不發生。
+
+`acts` 補上這個洞，而且不重新打開牌組要關的那個洞：**世情動作在所有要緊的地方就是一
+張牌**——作者寫的資料、宣告的門檻、同一套有限後果——差別只在誰能打。
+
+```jsonc
+{
+  "id": "report-to-authorities",
+  "label": "報官",
+  "note": "……做了會怎樣（角色的選牌依據）",
+  "invokableBy": { "roles": ["班主"], "names": ["方競西"] },  // 任一符合即可；都不給＝人人可做
+  "minDay": 3,
+  "requires": [{ "kind": "tension-peak-atleast", "value": 0.6 }],
+  "needsTarget": true,             // 對人做的事
+  "targetMustBeCoPresent": true,   // 預設 true：當面做
+  "maxPlays": 2, "maxPlaysPerCharacter": 1, "cooldownDays": 6,
+  "effects": [ /* 與事件卡同一套；另可用 "@actor" 與 on:"actor" */ ]
+}
+```
+
+流程與導演選牌一模一樣，只是換了個座位：
+
+1. `availableActsFor(world, deck, { characterId, day, coPresentIds })`——**純函數**，
+   算出這個人此時此地真做得出來的事（行當／日子／狀態／對象在不在跟前／各種上限）。
+2. beat prompt **只亮這幾張**（`ActBeatInput.acts`）。
+3. beat 回 `{"act":{"id":"…","targetName":"…"}}`——角色決定**做不做、對誰做**。
+4. tick 收集起來，在 7.85 用 `playAct` 結算：**再驗一次**（場上的人可能已經走了），
+   通過才落地，並以 `chosenBy: 'character'` ＋ `actorId` 寫進同一本 log。
+
+**世情動作專屬的兩個欄位**：`"@actor"`（帳落在做這件事的人頭上，如撂挑子的退票錢）與
+`renown`／`self-regard` 的 `on: "actor"|"both"`（告官的人這條街也未必待見）。事件卡沒
+有行為人，用了這兩個會在 `deck-check` 當場報錯。
+
+**後果一律走既有機制**。報官不會產生一本新帳，它產生的是：對象頭上一筆真的罰銀
+（`bill`）、被告的人一條**第一手**的冷 edge（不會淡）、街上其他人一條**聽說**的冷 edge
+（照面多了會淡）、雙方交情被 `chillBond` 真的削掉、告官的人自己名頭掉一點。持續不還
+錢會走到社會性死亡，是同一條鏈子——見 §4.5。
+
+一日至多 `maxActsPerDay`（預設 2）件。這是**節奏**上限不是權限上限：任何一個人在他夠
+格的日子都做得出那件事，但一條街消化不了一天五場公開決裂——五場之後每一場都不算數了。
 
 ### 3. 追蹤開關（POV 與日記）
 

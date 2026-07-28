@@ -20,6 +20,15 @@ import { runDir } from './paths';
 import { readRunMeta, readRunStatus } from './store';
 import type { LabRunMeta, LabTickRecord } from './types';
 
+/** 這張牌是誰打的 —— the audit line's first question. */
+const CHOSEN_BY_LABEL: Record<string, string> = {
+    deadline: '到日必打',
+    director: '導演選牌',
+    'director-proposed': '導演自撰',
+    character: '角色所為',
+    operator: '營運者',
+};
+
 /** run-manifest.json — the frozen provenance the manager writes on first open. */
 interface RunManifestView {
     preset?: string;
@@ -410,7 +419,7 @@ function buildVitals(records: LabTickRecord[], world: WorldState | null): string
                     .map(
                         (card) =>
                             `- 第${card.day}日第${card.tick}拍 · ${card.label}（${card.cardId}）｜` +
-                            `${card.chosenBy === 'deadline' ? '到日必打' : card.chosenBy === 'director' ? '導演選牌' : '營運者'}｜` +
+                            `${CHOSEN_BY_LABEL[card.chosenBy] ?? card.chosenBy}${card.actorName ? `：${card.actorName}` : ''}｜` +
                             `不可逆 ${card.irreversible}${card.targetNames.length ? `｜對準 ${card.targetNames.join('、')}` : ''}` +
                             `${card.rationale ? `\n  理由：${card.rationale}` : ''}`,
                     )
@@ -523,13 +532,23 @@ function buildTimeline(records: LabTickRecord[], world: WorldState | null): stri
                 '事件卡：\n' +
                     record.cardsPlayed
                         .map((card) => {
-                            const head = `  · ${card.label}（${card.cardId}｜${
-                                card.chosenBy === 'deadline' ? '到日必打' : card.chosenBy === 'director' ? '導演選牌' : '營運者'
+                            const head = `  · ${card.label}（${card.cardId}｜${CHOSEN_BY_LABEL[card.chosenBy] ?? card.chosenBy}${
+                                card.actorName ? `：${card.actorName}` : ''
                             }｜不可逆 ${card.irreversible}${card.targetNames.length ? `｜對準 ${card.targetNames.join('、')}` : ''}）`;
                             const why = card.rationale ? `\n    導演的理由：${card.rationale}` : '';
                             const lines = card.lines.length ? `\n    ${card.lines.join('\n    ')}` : '';
                             return head + why + lines;
                         })
+                        .join('\n'),
+            );
+        }
+        // A refused proposal is evidence too: it says the director reached past
+        // what the engine allows, and exactly how far.
+        if (record.proposalsRefused?.length) {
+            block.push(
+                '導演自撰遭駁：\n' +
+                    record.proposalsRefused
+                        .map((row) => `  · 「${row.label}」——${row.problems.join('；')}`)
                         .join('\n'),
             );
         }

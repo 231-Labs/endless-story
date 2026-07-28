@@ -330,13 +330,20 @@ export interface LabTickRecord {
     cardsPlayed?: Array<{
         cardId: string;
         label: string;
-        chosenBy: 'director' | 'deadline' | 'operator';
+        /** 'director-proposed' = a card the director wrote themselves (validated
+         *  against `PROPOSAL_LIMITS`); 'character' = a 世情動作 somebody DID. */
+        chosenBy: 'director' | 'deadline' | 'operator' | 'director-proposed' | 'character';
         targetNames: string[];
+        /** 世情動作 only: who set it in motion. */
+        actorName?: string;
         costume?: string;
         rationale?: string;
         irreversible: number;
         lines: string[];
     }>;
+    /** 自撰的牌 the engine refused, with reasons — an overreaching director is
+     *  visible in the diagnostics rather than silently swallowed. */
+    proposalsRefused?: Array<{ label: string; problems: string[] }>;
     /** 角色工件 written this tick (日記 at day end, 詩詞 on occasion). */
     artifacts?: Array<{
         kind: 'diary' | 'poem';

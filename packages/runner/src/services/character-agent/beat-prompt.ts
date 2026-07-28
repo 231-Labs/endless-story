@@ -127,6 +127,12 @@ export interface ActBeatInput {
      *  engine (借賒有據 now always-on); absent ⇒ the money-ledger advertisement is
      *  byte-identical to before (characters only invoke what's advertised). */
     credit?: { borrow?: boolean; repay?: boolean };
+    /** 世情動作: the drastic acts this character may set in motion RIGHT HERE —
+     *  報官, 退婚, 當眾揭穿, 罷演. Every entry was computed by the engine from the
+     *  event deck (`availableActsFor`), so what is listed is exactly what is
+     *  possible; anything not listed cannot be done and must not be attempted
+     *  through prose. Absent ⇒ nothing available and the prompt is unchanged. */
+    acts?: Array<{ id: string; label: string; note?: string; needsTarget: boolean; targetNames: string[] }>;
 }
 
 export interface BeatObjectEffect {
@@ -293,6 +299,10 @@ export interface BeatResult {
      * validates authority/balance/price and commits them; prose alone can never
      * move money or sign a contract. */
     economyCommands?: BeatEconomyCommand[];
+    /** 世情動作: an act from the advertised `acts` list that this beat actually
+     * sets in motion. The character chooses WHETHER and AT WHOM; the engine owns
+     * what it costs. An id that was never advertised is dropped. */
+    act?: { id: string; targetName?: string };
 }
 
 function extractBeatJson(raw: string): Record<string, unknown> | null {
@@ -374,6 +384,15 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
             return [{ objectId, visibility, container, carried, carrierName, toScene, state }];
         })
         : [];
+    // 世情動作: a bare id plus, when the act is done TO somebody, their name. The
+    // engine re-checks both against what it advertised, so a hallucinated id or a
+    // target who left the room costs nothing but a line in the log.
+    const actRaw = o.act && typeof o.act === 'object' ? (o.act as Record<string, unknown>) : undefined;
+    const actId = actRaw ? str(actRaw.id) : '';
+    const actTargetName = actRaw ? prose(actRaw.targetName) : '';
+    const act = actId && actId !== '無'
+        ? { id: actId, ...(actTargetName && actTargetName !== '無' ? { targetName: actTargetName } : {}) }
+        : undefined;
     return {
         beat: deName(prose(o.beat)) || '（沉默。）',
         inner: deName(prose(o.inner)),
@@ -385,6 +404,7 @@ export function parseBeatResult(raw: string, actorName: string): BeatResult {
         pushWant,
         objectEffects: objectEffects.length ? objectEffects : undefined,
         economyCommands: economyCommands.length ? economyCommands : undefined,
+        act,
     };
 }
 
@@ -633,6 +653,20 @@ export function buildBeatSystemPrompt(input: ActBeatInput): string {
             : '**這是一段正在進行的來回，接著剛剛的話往下、回應在場的人，別自說自話。** 做你此刻真會做或說的一件事——一到兩句，動作與話都可以帶著性子多走半步。' +
               'beat 是寫入正史逐拍的敘述，外層會另加你的名字：不要以「我」起筆、不要再寫一次自己名字；只有引號裡真正說出口的話可以用「我」。' +
               '輸出 JSON：{"beat":"客觀做了/說了什麼(一句)","inner":"心裡一句","addressed":"你這拍對著誰(在場某人名/無)","audience":"scene|addressed","close":true或false（收場就 true）,"intimacy":"advance|accept|decline|無","objectEffects":[{"objectId":"登記id","toScene":"新場景或省略","container":"新容器/null/省略","carried":true或false或省略,"carrierName":"交給的同場者正式姓名或省略","visibility":"visible|hidden|destroyed或省略","state":"新狀態或省略"}]}。沒有物理改變就給空陣列。不要 markdown。',
+        // 世情動作亮牌: only the acts the engine says are possible for THIS person
+        // at THIS moment. The list is the whole permission — no id here, no act.
+        // Framed as a door, never a push: most beats should walk past it.
+        input.acts?.length
+            ? '【走到這一步】有些事一旦做了就收不回來，此刻你手上真能做的只有下面這幾件（沒有別的；不在單子上的做不成）：\n' +
+              input.acts
+                  .map((act) =>
+                      `- ${act.label}（id：${act.id}）${act.note ? `——${act.note}` : ''}` +
+                      (act.needsTarget ? `　對象只能是：${act.targetNames.join('、')}` : ''),
+                  )
+                  .join('\n') +
+              '\n真到了那一步，才在同一個 JSON 加 "act":{"id":"上面的id","targetName":"對象正式姓名（不對人做就省略）"}；' +
+              '沒到那一步就整欄省略——絕大多數時候都沒到。做了什麼代價由世道定，不用你寫。'
+            : '',
         // 執念自揀: only when a menu was offered — keeps the flag-off schema byte-identical.
         input.wantMenu?.length
             ? '（承上「你心裡這些事」：在同一個 JSON 裡另加 "pushWant":你這一拍真正使力那件的編號；誰也不特別推就給 0 或省略。）'

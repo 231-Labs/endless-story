@@ -40,6 +40,7 @@ import type {
     PlanDayInput,
     PlanDayReply,
 } from '../ports.ts';
+import { PROPOSAL_LIMITS, type CardProposal } from '../core/event-deck.ts';
 import { WANT_SEMANTIC_TAGS, type WantSemanticTag } from '../core/want-core.ts';
 import { projectEventBeatsForWitness } from '../core/scene-perception.ts';
 import {
@@ -312,7 +313,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
      * refused by the caller, so the worst a bad reply can do is waste a tick.
      */
     async pickEventCard(input: DirectorPickInput): Promise<DirectorPickReply | null> {
-        if (!input.offered.length) return null;
+        if (!input.offered.length && !input.mayPropose) return null;
         const system = [
             '你是這齣戲的導演。你的職權只有三件事：**選哪張牌、何時打、對準誰**，外加把卡面文字',
             '穿上戲服（改寫成這個世界的話）。你不決定後果——後果由引擎按牌面確定性結算。',
@@ -328,6 +329,33 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '',
             '選牌的判準：哪一張最能把**已經存在的張力**推向一個必須有人回答的處境。不要為了熱鬧',
             '而打牌；一天到晚都在下雨的世界，跟從不下雨的一樣悶。',
+            '',
+            // 自撰一張 — advertised only when the quota is open, and advertised with
+            // its own fence. The caps are quoted verbatim from PROPOSAL_LIMITS so
+            // the prompt and the validator can never drift: a director told 「至多
+            // 四條」 while the engine enforces three would be refused for reasons it
+            // was never given.
+            ...(input.mayPropose
+                ? [
+                      '',
+                      `【自撰一張】牌面上沒有合適的，你可以自己寫一張——但只能用引擎認得的積木，`,
+                      `一卷至多 ${PROPOSAL_LIMITS.seasonCap} 張、一日至多 ${PROPOSAL_LIMITS.perDay} 張，越界一律駁回並記錄。`,
+                      `可用的後果只有這幾種（其餘一律駁回）：`,
+                      '  percept  —— 世上發生了一件事，全班次拍知曉。{"kind":"percept","text":"一兩句客觀事實","sceneName":"場景名或省略"}',
+                      `  want     —— 在對象心上種一樁事。{"kind":"want","layer":"事務","desc":"至多40字","weight":≤${PROPOSAL_LIMITS.wantWeight},"dueInDays":≤${PROPOSAL_LIMITS.wantDueDays}}`,
+                      `  bill     —— 對象頭上多一筆按期債。{"kind":"bill","id":"唯一id","label":"名目","amountYuan":≤${PROPOSAL_LIMITS.billYuan},"dueInDays":≤${PROPOSAL_LIMITS.billDueDays},"fromAccountId":"@target"}`,
+                      `  renown / self-regard —— 名頭或自視微調。{"kind":"renown","delta":±${PROPOSAL_LIMITS.renownDelta}以內}`,
+                      `  weather  —— 天時。{"kind":"weather","label":"名目","housePct":${PROPOSAL_LIMITS.weatherHousePct.min}~${PROPOSAL_LIMITS.weatherHousePct.max}}`,
+                      '  object-state —— 已登記物件換個狀態。{"kind":"object-state","objectId":"登記id","state":"新狀態"}',
+                      '  leak-secret  —— 已在帳上的秘密走漏。{"kind":"leak-secret","secretId":"帳上的id"}',
+                      `一張至多 ${PROPOSAL_LIMITS.maxEffects} 條後果。發錢、分紅、注資、結帳、進班、離班、見報都不在其中——`,
+                      '那些不是導演的權柄：錢的來去有它自己的鐘，人的進出是全季最大的一張牌。',
+                      '自撰的牌是給「牌組想不到、但此刻非有不可」的那一件事用的；牌面上有合用的就別自撰。',
+                      '',
+                      '自撰時把 cardId 留空、decline 省略，改給 propose：',
+                      '{"cardId":"","propose":{"label":"卡面（40字內）","note":"一句說明","targetIds":["角色id"],"effects":[...]},"rationale":"..."}',
+                  ]
+                : []),
             '',
             '只輸出 JSON，不要 markdown：',
             '{"cardId":"...","targetIds":["..."],"costume":"可省略","rationale":"...","decline":false}',
@@ -351,7 +379,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
             '【世情】',
             ...input.worldBrief,
             '',
-            '【今日可打的牌】',
+            input.offered.length ? '【今日可打的牌】' : '【今日可打的牌】（無——牌組今日給不出東西）',
             offered,
             input.forcedCardIds.length ? `\n【今日已經注定要落的牌】${input.forcedCardIds.join('、')}` : '',
         ].filter(Boolean).join('\n');
@@ -371,8 +399,35 @@ export class RunnerSceneAgent implements SceneAgentPort {
         } catch {
             return null;
         }
-        if (typeof parsed.cardId !== 'string') return null;
-        const card = input.offered.find((row) => row.cardId === parsed.cardId);
+        const rationale = typeof parsed.rationale === 'string' && parsed.rationale.trim()
+            ? toTraditional(parsed.rationale.trim())
+            : undefined;
+        const card = typeof parsed.cardId === 'string'
+            ? input.offered.find((row) => row.cardId === parsed.cardId)
+            : undefined;
+        // 自撰一張 — passed through verbatim, NOT sanitised here. The engine's
+        // `validateProposal` is the single authority on what a proposal may do,
+        // and a second, looser copy of those rules in the adapter would be exactly
+        // the drift the deck exists to prevent. An overreach comes back as logged
+        // reasons instead of being quietly trimmed into something the director
+        // never actually proposed.
+        if (!card && input.mayPropose && parsed.propose && typeof parsed.propose === 'object') {
+            const draft = parsed.propose as Record<string, unknown>;
+            const label = typeof draft.label === 'string' ? toTraditional(draft.label.trim()) : '';
+            const note = typeof draft.note === 'string' && draft.note.trim() ? toTraditional(draft.note.trim()) : undefined;
+            return {
+                cardId: '',
+                propose: {
+                    label,
+                    ...(note ? { note } : {}),
+                    ...(Array.isArray(draft.targetIds)
+                        ? { targetIds: draft.targetIds.filter((raw): raw is string => typeof raw === 'string') }
+                        : {}),
+                    effects: (Array.isArray(draft.effects) ? draft.effects : []) as CardProposal['effects'],
+                },
+                ...(rationale ? { rationale } : {}),
+            };
+        }
         if (!card) return null; // a card the engine never offered is not a card
         const allowed = new Set(card.candidates.map((candidate) => candidate.id));
         const byName = new Map(card.candidates.map((candidate) => [candidate.name, candidate.id]));
@@ -386,7 +441,7 @@ export class RunnerSceneAgent implements SceneAgentPort {
             cardId: card.cardId,
             ...(targetIds.length ? { targetIds } : {}),
             ...(typeof parsed.costume === 'string' && parsed.costume.trim() ? { costume: toTraditional(parsed.costume.trim()) } : {}),
-            ...(typeof parsed.rationale === 'string' && parsed.rationale.trim() ? { rationale: toTraditional(parsed.rationale.trim()) } : {}),
+            ...(rationale ? { rationale } : {}),
             ...(parsed.decline === true && !card.forced ? { decline: true } : {}),
         };
     }

@@ -436,6 +436,7 @@ export class LabRunManager {
                   }
                 : {}),
             ...(report.cardsPlayed?.length ? { cardsPlayed: report.cardsPlayed } : {}),
+            ...(report.proposalsRefused?.length ? { proposalsRefused: report.proposalsRefused } : {}),
             ...(report.artifacts?.length
                 ? {
                       artifacts: report.artifacts.map((artifact) => ({

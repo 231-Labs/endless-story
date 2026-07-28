@@ -31,6 +31,8 @@
  */
 
 import { PARTS_OF_DAY } from '../ports.ts';
+import { chillBond } from './bond-graph.ts';
+import { HEARSAY_MARK } from './standing.ts';
 import { announceReckoning, payDividend, payWagePacket, plantWant, runReckoning, type DebtStance, type IncomeOutcome, type ReckoningOutcome } from './income-events.ts';
 import { injectPatronage, type PatronageChannel } from './patronage.ts';
 import { admitNewcomer, dismissFromCast, type NewcomerSeed } from './roster-change.ts';
@@ -44,6 +46,9 @@ import type { WorldState } from '../world-state.ts';
 /** Sentinel an authored card may use where an account id is expected, meaning
  *  「這張卡對準的那個人」. Resolved at play time against the validated targets. */
 export const TARGET_SENTINEL = '@target';
+/** The mirror sentinel, meaningful only for a 世情動作: 「做這件事的那個人」.
+ *  A card has no actor, so it resolves to nothing there. */
+export const ACTOR_SENTINEL = '@actor';
 
 /** 觸發條件 — finite and state-only, so eligibility is computable without a model. */
 export type CardCondition =
@@ -90,9 +95,39 @@ export type CardEffect =
     | { kind: 'bill'; id: string; label: string; amountYuan: number; dueInDays: number; fromAccountId?: string; toAccountId?: string; creditor?: string }
     /** 種一樁帶死線的心事在對象身上 */
     | { kind: 'want'; layer: string; desc: string; weight?: number; resistance?: number; dueInDays?: number; semanticTags?: WantSemanticTag[] }
-    /** 名頭／自視 */
-    | { kind: 'renown'; delta: number }
-    | { kind: 'self-regard'; delta: number }
+    /** 名頭／自視。`on` 預設 'targets'；'actor' 只在世情動作裡有意義。 */
+    | { kind: 'renown'; delta: number; on?: 'targets' | 'actor' | 'both' }
+    | { kind: 'self-regard'; delta: number; on?: 'targets' | 'actor' | 'both' }
+    /**
+     * 人心轉向 — the one effect that writes RELATIONSHIPS, and the reason a
+     * 世情動作 costs anything at all.
+     *
+     * There is no reputation ledger in this engine (see `core/standing.ts`): what
+     * the street thinks of somebody lives in the tonal `edges` graph, the numeric
+     * `bonds` graph, and 名頭. So an act whose consequence is social writes exactly
+     * there, through the same two calls a reckoning uses — no new machine.
+     *
+     * `hearsay: true` marks the edge as second-hand, which is what makes it FADE
+     * for people who keep having to share a room with the person (`fadeHearsay`).
+     * First-hand grievances — the person actually wronged — do not fade on their
+     * own; something has to happen. That asymmetry is the whole difference between
+     * 「街上傳了幾天」 and 「他從此不理你了」.
+     */
+    | {
+          kind: 'standing';
+          /** the tone written onto the edge — the words the holder would use. */
+          tone: string;
+          disposition?: 'warm' | 'cold' | 'neutral';
+          /** whose opinion moves. 'witnesses' = everybody else on the board. */
+          from: 'targets' | 'witnesses' | 'actor';
+          /** whose standing it moves about. */
+          toward: 'actor' | 'targets';
+          /** how hard the numeric bond is cut, if at all. */
+          grievance?: 'slighted' | 'dunned' | 'shamed' | 'betrayed';
+          /** second-hand ⇒ softens with contact. Forced on for 'witnesses' unless
+           *  the author explicitly says otherwise. */
+          hearsay?: boolean;
+      }
     /** 天時 — a named weather/condition fact that shifts the night's house. */
     | { kind: 'weather'; label: string; housePct: number }
     /** 物件狀態 */
@@ -163,10 +198,66 @@ export interface EventCard {
     deadlineNote?: string;
 }
 
+/**
+ * 世情動作 — an event a CHARACTER makes happen, not the director.
+ *
+ * The deck as first built had one hole with a shape: everything that pushed on
+ * the world came from outside it. A character could want, move, speak, spend and
+ * borrow, but the class of thing that actually turns a life over — 報官, 退婚,
+ * 當眾揭穿, 罷演 — belonged to nobody. The director could not do it (those are
+ * not a director's decisions, they are a person's), and the cast had no channel
+ * for it, so it simply never happened.
+ *
+ * An act closes that hole without reopening the one the deck exists to close.
+ * It is a CARD in every respect that matters — authored data, declared gates,
+ * deterministic effects drawn from the same finite set — and the only difference
+ * is who is allowed to play it. The engine computes which acts are available to
+ * whom (`availableActsFor`), the beat prompt 亮牌s exactly those, and the
+ * character names one. They choose WHETHER and AT WHOM; they never choose what
+ * it costs.
+ *
+ * Doing it this way means a character's most drastic choices are as auditable
+ * and as replayable as the director's: every invocation lands in the same
+ * `directorLog`, marked `chosenBy: 'character'` with the actor's id.
+ */
+export interface CharacterAct {
+    id: string;
+    /** 卡面 — the act in world words: 「報官」. Shown to the character verbatim. */
+    label: string;
+    /** one line on what doing this actually means — the character's 選牌依據. */
+    note?: string;
+    /** who may reach for it. Absent ⇒ anybody on the board. */
+    invokableBy?: {
+        /** substring match against 行當／role. */
+        roles?: string[];
+        names?: string[];
+    };
+    /** 本季第幾日起才做得出來。Some things nobody does to a person they met
+     *  yesterday; without this the stub expelled a man from the troupe on day 1. */
+    minDay?: number;
+    /** state gates, the same primitives a card's trigger uses. */
+    requires?: CardCondition[];
+    /** 對誰做 — the act must name a co-present cast member. Acts without this are
+     *  aimed at nobody in particular (罷演 is done, not done TO someone). */
+    needsTarget?: boolean;
+    /** the target must be someone the actor is in the room with. Default true —
+     *  這些事多半是當面做的。 */
+    targetMustBeCoPresent?: boolean;
+    /** 一卷至多幾次（全班合計） */
+    maxPlays?: number;
+    /** 同一個人一卷至多幾次 */
+    maxPlaysPerCharacter?: number;
+    /** 做過之後幾日內，同一個人不再做 */
+    cooldownDays?: number;
+    effects: ConditionalEffect[];
+}
+
 export interface EventDeck {
     id: string;
     title?: string;
     cards: EventCard[];
+    /** 世情動作池 — what the cast itself may set in motion. */
+    acts?: CharacterAct[];
     /** 進場人選池 — `cast-enter` 只能從這裡取人，導演不能捏造新角色。 */
     newcomers?: Array<{ id: string; seed: NewcomerSeed }>;
     /** 秘密種子 — seeded into the ledger when the deck is attached. */
@@ -180,9 +271,220 @@ export interface EventDeck {
     }>;
     /** 一日至多打幾張（含死線卡）。預設 2 —— 外力是推手，不是主角。 */
     maxCardsPerDay?: number;
+    /**
+     * 一日至多幾件世情動作。預設 2。
+     *
+     * A pacing bound, not a permission: any ONE person can still do the drastic
+     * thing on any day they qualify for it, but a street cannot absorb five
+     * public ruptures between breakfast and the evening show without every one of
+     * them ceasing to mean anything. Same reasoning as `maxCardsPerDay`, applied
+     * to the channel the cast owns.
+     */
+    maxActsPerDay?: number;
     /** 一卷至多打幾張季級大牌。預設 2。 */
     maxSeasonalPlays?: number;
 }
+
+// ── 1.5. 導演提案新卡 (a card the deck never contained) ───────────────────────
+//
+// The deck's ceiling is that nothing can happen that its author did not write.
+// This is the one door through it — and it has to be a narrow one, because a
+// director who can mint arbitrary consequences has silently regained write
+// access to world state, which is the exact thing the deck exists to prevent.
+//
+// So a proposal is not "the model describes an event". It is: assemble a card
+// from the SAME finite effect primitives every authored card uses, within
+// magnitude caps the engine enforces, aimed at real people, rate-limited to a
+// handful per season. Everything a proposal can do, an authored card could
+// already have done — the only new thing is that nobody had to think of it in
+// advance.
+//
+// Whole categories stay closed, on purpose:
+//   · `cast-enter` / `cast-exit` — inventing or removing a person is the biggest
+//     card in the deck; it goes through the authored `newcomers` pool.
+//   · `wage-packet` / `dividend` / `patronage` — payroll and outside money are
+//     scheduled or operator-fired. A director who could mint income could
+//     dissolve every scarcity the season is built on.
+//   · `reckoning` / `reckoning-notice` — a ritual with a calendar, not a whim.
+//   · `publish-secret` — 見報 belongs to the character who holds the story.
+
+/** Effect kinds a PROPOSAL may use. Everything else is authored-only. */
+export const PROPOSABLE_EFFECTS = [
+    'percept',
+    'want',
+    'renown',
+    'self-regard',
+    'object-state',
+    'weather',
+    'bill',
+    'leak-secret',
+] as const;
+
+/** Magnitude ceilings. A proposal is a nudge with teeth, never a hammer — an
+ *  authored card may hit harder because a human weighed it. */
+export const PROPOSAL_LIMITS = {
+    maxEffects: 4,
+    perceptChars: 200,
+    renownDelta: 0.08,
+    selfRegardDelta: 0.08,
+    billYuan: 5,
+    billDueDays: 7,
+    wantWeight: 0.8,
+    wantDueDays: 7,
+    weatherHousePct: { min: 60, max: 120 },
+    /** per season, and per day. */
+    seasonCap: 3,
+    perDay: 1,
+} as const;
+
+/** Is the self-authored-card quota still open today? A cheap pre-check so the
+ *  tick only pays for a proposal seat when one could actually be accepted. */
+export function canPropose(world: WorldState, day: number): boolean {
+    const proposed = (world.data.directorLog ?? []).filter((entry) => entry.chosenBy === 'director-proposed');
+    return (
+        proposed.length < PROPOSAL_LIMITS.seasonCap &&
+        proposed.filter((entry) => entry.day === day).length < PROPOSAL_LIMITS.perDay
+    );
+}
+
+export interface CardProposal {
+    label: string;
+    note?: string;
+    targetIds?: string[];
+    effects: CardEffect[];
+}
+
+export interface ProposalVerdict {
+    ok: boolean;
+    card?: EventCard;
+    targetIds: string[];
+    /** every reason it was refused — logged, so a bad proposer is diagnosable. */
+    problems: string[];
+}
+
+/**
+ * Validate a director's draft into a playable one-shot card, or refuse it with
+ * reasons. Pure: decides nothing about the world, only about the draft.
+ */
+export function validateProposal(
+    world: WorldState,
+    draft: CardProposal,
+    req: { day: number; seq: number },
+): ProposalVerdict {
+    const problems: string[] = [];
+    const label = draft.label?.trim();
+    if (!label) problems.push('提案沒有卡面（label）');
+    if (label && label.length > 40) problems.push('卡面太長（限 40 字）');
+
+    const played = world.data.directorLog ?? [];
+    const proposedThisSeason = played.filter((entry) => entry.chosenBy === 'director-proposed');
+    if (proposedThisSeason.length >= PROPOSAL_LIMITS.seasonCap) {
+        problems.push(`本季自撰的牌已用滿 ${PROPOSAL_LIMITS.seasonCap} 張`);
+    }
+    if (proposedThisSeason.filter((entry) => entry.day === req.day).length >= PROPOSAL_LIMITS.perDay) {
+        problems.push('今日已經自撰過一張牌');
+    }
+
+    const onBoard = new Set(onBoardIds(world));
+    const targetIds = (draft.targetIds ?? [])
+        .map((raw) => (world.castById(raw) ? raw : world.idByName(raw) ?? raw))
+        .filter((id) => onBoard.has(id));
+    if ((draft.targetIds ?? []).length && !targetIds.length) problems.push('點名的人不在班中');
+
+    const effects: CardEffect[] = [];
+    const drafted = Array.isArray(draft.effects) ? draft.effects : [];
+    if (!drafted.length) problems.push('提案沒有任何後果（effects）');
+    if (drafted.length > PROPOSAL_LIMITS.maxEffects) {
+        problems.push(`一張自撰的牌至多 ${PROPOSAL_LIMITS.maxEffects} 條後果`);
+    }
+    for (const effect of drafted.slice(0, PROPOSAL_LIMITS.maxEffects)) {
+        if (!effect || !(PROPOSABLE_EFFECTS as readonly string[]).includes(effect.kind)) {
+            problems.push(`自撰的牌不得使用這種後果：${(effect as { kind?: string })?.kind ?? '(無)'}`);
+            continue;
+        }
+        const capped = capEffect(world, effect);
+        if (typeof capped === 'string') problems.push(capped);
+        else effects.push(capped);
+    }
+    if (!effects.length && !problems.length) problems.push('提案的後果全數不合格');
+    if (problems.length) return { ok: false, targetIds, problems };
+
+    return {
+        ok: true,
+        targetIds,
+        problems: [],
+        card: {
+            id: `proposed-${req.seq}`,
+            label: label!,
+            ...(draft.note?.trim() ? { note: draft.note.trim() } : {}),
+            trigger: { onDays: [req.day], maxPlays: 1 },
+            targeting: targetIds.length ? { mode: 'named', names: targetIds } : { mode: 'none' },
+            effects,
+        },
+    };
+}
+
+/** Clamp one drafted effect, or return the reason it cannot be used at all. */
+function capEffect(world: WorldState, effect: CardEffect): CardEffect | string {
+    switch (effect.kind) {
+        case 'percept': {
+            const text = effect.text?.trim();
+            if (!text) return '自撰的 percept 沒有文字';
+            return { ...effect, text: text.slice(0, PROPOSAL_LIMITS.perceptChars) };
+        }
+        case 'renown':
+            return { ...effect, delta: clampTo(effect.delta, PROPOSAL_LIMITS.renownDelta) };
+        case 'self-regard':
+            return { ...effect, delta: clampTo(effect.delta, PROPOSAL_LIMITS.selfRegardDelta) };
+        case 'bill': {
+            if (!effect.id?.trim() || !effect.label?.trim()) return '自撰的債沒有 id 或名目';
+            if (effect.fromAccountId && effect.fromAccountId !== TARGET_SENTINEL) {
+                return '自撰的債只能記在這張卡對準的人頭上（fromAccountId 用 "@target"）';
+            }
+            return {
+                ...effect,
+                fromAccountId: TARGET_SENTINEL,
+                amountYuan: Math.max(1, Math.min(PROPOSAL_LIMITS.billYuan, Math.round(effect.amountYuan))),
+                dueInDays: Math.max(1, Math.min(PROPOSAL_LIMITS.billDueDays, Math.round(effect.dueInDays))),
+            };
+        }
+        case 'want': {
+            if (!effect.desc?.trim()) return '自撰的心事沒有內容';
+            return {
+                ...effect,
+                desc: effect.desc.trim().slice(0, 40),
+                layer: effect.layer?.trim() || '事務',
+                weight: Math.max(0.2, Math.min(PROPOSAL_LIMITS.wantWeight, effect.weight ?? 0.6)),
+                resistance: Math.max(2, Math.min(6, Math.round(effect.resistance ?? 4))),
+                ...(effect.dueInDays !== undefined
+                    ? { dueInDays: Math.max(1, Math.min(PROPOSAL_LIMITS.wantDueDays, Math.round(effect.dueInDays))) }
+                    : {}),
+            };
+        }
+        case 'weather': {
+            const pct = Math.round(effect.housePct);
+            return {
+                ...effect,
+                label: effect.label?.trim()?.slice(0, 40) || '天時轉了',
+                housePct: Math.max(PROPOSAL_LIMITS.weatherHousePct.min, Math.min(PROPOSAL_LIMITS.weatherHousePct.max, pct)),
+            };
+        }
+        case 'object-state': {
+            if (!world.objectById(effect.objectId)) return `世上沒有這件東西：${effect.objectId}`;
+            return { ...effect, state: (effect.state ?? '').trim().slice(0, 120) };
+        }
+        case 'leak-secret': {
+            const secret = world.data.secretLedger?.find((row) => row.id === effect.secretId);
+            if (!secret) return `帳上沒有這樁秘密：${effect.secretId}`;
+            return effect;
+        }
+        default:
+            return `自撰的牌不得使用這種後果：${(effect as { kind: string }).kind}`;
+    }
+}
+
+const clampTo = (value: number, cap: number): number =>
+    Math.max(-cap, Math.min(cap, Number.isFinite(value) ? value : 0));
 
 // ── 2. persisted play history ────────────────────────────────────────────────
 
@@ -192,9 +494,12 @@ export interface DirectorLogEntry {
     tick: number;
     clock: string;
     cardId: string;
-    /** 'director' = an agent chose it; 'deadline' = the engine forced it;
-     *  'operator' = a human/CLI played it. */
-    chosenBy: 'director' | 'deadline' | 'operator';
+    /** 'director' = an agent chose it from the offered set; 'deadline' = the
+     *  engine forced it; 'operator' = a human/CLI played it; 'director-proposed'
+     *  = the director assembled a card the deck never contained (bounded by
+     *  `validateProposal`); 'character' = somebody in the world DID something
+     *  that the deck turns into an event. */
+    chosenBy: 'director' | 'deadline' | 'operator' | 'director-proposed' | 'character';
     targetIds: string[];
     /** the director's re-dressed card face, when they supplied one. */
     costume?: string;
@@ -206,6 +511,11 @@ export interface DirectorLogEntry {
     irreversible: number;
     /** the eligible set the director was shown — proves they didn't invent a card. */
     offeredCardIds: string[];
+    /** For a `director-proposed` play: the VALIDATED card, verbatim. Without it a
+     *  replay could not reconstruct a card that exists in no deck file. */
+    proposedCard?: EventCard;
+    /** For a `character` play: who did it. */
+    actorId?: string;
 }
 
 /** 天時 — the deck's current weather fact, persisted so the box office can read it. */
@@ -388,6 +698,150 @@ function peakTension(world: WorldState, characterId: string): number {
     return peak;
 }
 
+// ── 3.5. 世情動作 · 誰現在能做什麼 (pure) ─────────────────────────────────────
+
+/** What a character is offered this beat. Deliberately the same shape the
+ *  director's card offer has: a face, a note, and a bounded target list. */
+export interface CharacterActOffer {
+    actId: string;
+    label: string;
+    note?: string;
+    needsTarget: boolean;
+    /** the ONLY people this act may be aimed at, right here, right now. */
+    candidates: Array<{ id: string; name: string }>;
+}
+
+function actPlays(world: WorldState, actId: string): DirectorLogEntry[] {
+    return (world.data.directorLog ?? []).filter((entry) => entry.chosenBy === 'character' && entry.cardId === actId);
+}
+
+/**
+ * 亮牌 — the acts this character may reach for, at this venue, on this day.
+ *
+ * PURE, like `eligibleCards`, and for the same reason: what a person is ABLE to
+ * do is a fact about the world, not a model's opinion. The beat prompt only ever
+ * advertises what comes back from here, and the tick refuses any invocation that
+ * is not in this list — so a character can no more invent 報官 out of nothing
+ * than a director can invent a card.
+ */
+export function availableActsFor(
+    world: WorldState,
+    deck: EventDeck,
+    req: { characterId: string; day: number; coPresentIds: string[] },
+): CharacterActOffer[] {
+    const onBoard = new Set(onBoardIds(world));
+    if (!onBoard.has(req.characterId)) return [];
+    const actsToday = (world.data.directorLog ?? []).filter(
+        (entry) => entry.day === req.day && entry.chosenBy === 'character',
+    ).length;
+    if (actsToday >= (deck.maxActsPerDay ?? 2)) return [];
+    const member = world.castById(req.characterId);
+    const out: CharacterActOffer[] = [];
+    for (const act of deck.acts ?? []) {
+        if (act.minDay !== undefined && req.day < act.minDay) continue;
+        const prior = actPlays(world, act.id);
+        if (act.maxPlays !== undefined && prior.length >= act.maxPlays) continue;
+        const mine = prior.filter((entry) => entry.actorId === req.characterId);
+        if (act.maxPlaysPerCharacter !== undefined && mine.length >= act.maxPlaysPerCharacter) continue;
+        if (act.cooldownDays !== undefined && mine.length) {
+            if (req.day - Math.max(...mine.map((entry) => entry.day)) < act.cooldownDays) continue;
+        }
+        // 行當 and 點名 are two ways of authoring the same permission, so EITHER
+        // qualification opens the door; declaring neither leaves it open to all.
+        const roles = act.invokableBy?.roles ?? [];
+        const names = act.invokableBy?.names ?? [];
+        if (roles.length || names.length) {
+            const byRole = roles.some((needle) => (member?.role ?? '').includes(needle));
+            const byName = names.some((name) => name === req.characterId || world.idByName(name) === req.characterId);
+            if (!byRole && !byName) continue;
+        }
+        if ((act.requires ?? []).some((condition) => !conditionHolds(world, condition))) continue;
+        const needsTarget = act.needsTarget === true;
+        const candidates = needsTarget
+            ? (act.targetMustBeCoPresent === false ? [...onBoard] : req.coPresentIds.filter((id) => onBoard.has(id)))
+                  .filter((id) => id !== req.characterId)
+                  .sort()
+            : [];
+        // 對人做的事沒有對象就不成立 —— 不亮這張牌，好過亮了做不成。
+        if (needsTarget && !candidates.length) continue;
+        out.push({
+            actId: act.id,
+            label: act.label,
+            ...(act.note ? { note: act.note } : {}),
+            needsTarget,
+            candidates: candidates.map((id) => ({ id, name: world.nameById(id) })),
+        });
+    }
+    return out.sort((a, b) => a.actId.localeCompare(b.actId));
+}
+
+/**
+ * Settle one 世情動作. Thin on purpose: an act IS a card, so it goes through the
+ * same `playCard` that every other consequence in this engine goes through —
+ * one settlement path, one log, one replay.
+ *
+ * Re-checks availability rather than trusting the caller, because the world has
+ * moved since the act was advertised (the beat that invoked it is several turns
+ * later, and someone may have left the room).
+ */
+export function playAct(
+    world: WorldState,
+    deck: EventDeck,
+    req: {
+        actId: string;
+        actorId: string;
+        targetId?: string;
+        /** who was in the room — the same list the offer was computed from. */
+        coPresentIds: string[];
+        day: number;
+        nowTick: number;
+        clock: string;
+    },
+): PlayCardResult & { refused?: string } {
+    const empty = (reason: string): PlayCardResult & { refused: string } => ({
+        played: false,
+        refused: reason,
+        reason,
+        publicLines: [],
+        privateNotices: [],
+        percepts: [],
+        spawnedWants: [],
+        irreversible: 0,
+    });
+    const act = (deck.acts ?? []).find((row) => row.id === req.actId);
+    if (!act) return empty(`牌組裡沒有這個動作：${req.actId}`);
+    const offer = availableActsFor(world, deck, {
+        characterId: req.actorId,
+        day: req.day,
+        coPresentIds: req.coPresentIds,
+    }).find((row) => row.actId === req.actId);
+    if (!offer) return empty(`${world.nameById(req.actorId)}此刻做不了「${act.label}」`);
+
+    const targetId = req.targetId
+        ? (world.castById(req.targetId) ? req.targetId : world.idByName(req.targetId))
+        : undefined;
+    if (offer.needsTarget && (!targetId || !offer.candidates.some((row) => row.id === targetId))) {
+        return empty(`「${act.label}」要當著人做，這個對象不在跟前`);
+    }
+
+    return playCard(world, deck, {
+        card: {
+            id: act.id,
+            label: act.label,
+            ...(act.note ? { note: act.note } : {}),
+            trigger: {},
+            targeting: targetId ? { mode: 'named', names: [targetId] } : { mode: 'none' },
+            effects: act.effects,
+        },
+        ...(targetId ? { targetIds: [targetId] } : {}),
+        chosenBy: 'character',
+        actorId: req.actorId,
+        day: req.day,
+        nowTick: req.nowTick,
+        clock: req.clock,
+    });
+}
+
 // ── 4. resolution (deterministic; the engine's exclusive authority) ──────────
 
 export interface PlayCardRequest {
@@ -398,6 +852,9 @@ export interface PlayCardRequest {
     costume?: string;
     rationale?: string;
     chosenBy: DirectorLogEntry['chosenBy'];
+    /** 世情動作 only: who did it. Resolves `'@actor'` and every `standing`
+     *  effect that moves opinion about, or held by, the person acting. */
+    actorId?: string;
     day: number;
     nowTick: number;
     clock: string;
@@ -456,6 +913,13 @@ export function playCard(world: WorldState, deck: EventDeck, req: PlayCardReques
         world.data.scenes.find((scene) => scene.name === data?.noticeSceneName) ?? world.data.scenes[0];
     const witnessAll = onBoardIds(world);
     let perceptSeq = 0;
+    // Loaded lazily-but-once: `setBonds` writes the whole graph back, so a second
+    // load mid-play would silently drop the first effect's cuts.
+    const bonds = world.bondGraph();
+    let bondsTouched = false;
+    const actorIds = req.actorId && world.castById(req.actorId) ? [req.actorId] : [];
+    const standingSubjects = (on: 'targets' | 'actor' | 'both' | undefined): string[] =>
+        on === 'actor' ? actorIds : on === 'both' ? [...new Set([...effectiveTargets, ...actorIds])] : effectiveTargets;
 
     for (const effect of req.card.effects) {
         // 分支後果 — the card still landed; this particular consequence did not apply.
@@ -576,10 +1040,11 @@ export function playCard(world: WorldState, deck: EventDeck, req: PlayCardReques
                 // A per-target fine needs a per-target id, or the second person the
                 // card touches would silently inherit the first one's bill.
                 const resolveAccount = (raw?: string): string | undefined =>
-                    raw === TARGET_SENTINEL ? effectiveTargets[0] : raw;
+                    raw === TARGET_SENTINEL ? effectiveTargets[0] : raw === ACTOR_SENTINEL ? req.actorId : raw;
                 const payerId = resolveAccount(effect.fromAccountId);
-                if (effect.fromAccountId === TARGET_SENTINEL && !payerId) break; // aimed at nobody
-                const billId = effect.fromAccountId === TARGET_SENTINEL ? `${effect.id}:${payerId}` : effect.id;
+                const perPerson = effect.fromAccountId === TARGET_SENTINEL || effect.fromAccountId === ACTOR_SENTINEL;
+                if (perPerson && !payerId) break; // aimed at nobody
+                const billId = perPerson ? `${effect.id}:${payerId}` : effect.id;
                 if (bills.some((bill) => bill.id === billId)) break; // 同一張罰單不開兩次
                 bills.push({
                     id: billId,
@@ -616,11 +1081,45 @@ export function playCard(world: WorldState, deck: EventDeck, req: PlayCardReques
                 break;
             }
             case 'renown':
-                for (const characterId of effectiveTargets) world.bumpRenown(characterId, effect.delta);
+                for (const characterId of standingSubjects(effect.on)) world.bumpRenown(characterId, effect.delta);
                 break;
             case 'self-regard':
-                for (const characterId of effectiveTargets) world.bumpSelfRegard(characterId, effect.delta);
+                for (const characterId of standingSubjects(effect.on)) world.bumpSelfRegard(characterId, effect.delta);
                 break;
+            case 'standing': {
+                // 後果落在既有的關係圖上 —— 沒有第二本帳。
+                const subjects = effect.toward === 'actor' ? actorIds : effectiveTargets;
+                const hearsay = effect.hearsay ?? effect.from === 'witnesses';
+                for (const aboutId of subjects) {
+                    const holders =
+                        effect.from === 'actor'
+                            ? actorIds
+                            : effect.from === 'targets'
+                              ? effectiveTargets
+                              // The person who DID it is never one of the people
+                              // who merely heard about it — their own stance is a
+                              // separate effect the author writes on purpose, and
+                              // without this exclusion 報官 left the informer
+                              // holding 「聽說他吃了官司」 about the person he
+                              // himself walked to the police station.
+                              : witnessAll.filter((id) => id !== aboutId && !actorIds.includes(id));
+                    for (const holderId of holders) {
+                        if (holderId === aboutId) continue;
+                        const tone = hearsay && !effect.tone.startsWith(HEARSAY_MARK)
+                            ? `${HEARSAY_MARK}${effect.tone}`
+                            : effect.tone;
+                        world.setEdge(holderId, aboutId, tone, effect.disposition ?? 'cold');
+                        if (effect.grievance) chillBond(bonds, holderId, aboutId, effect.grievance);
+                        bondsTouched = true;
+                    }
+                    // A street turning cold on somebody is ONE irreversible fact,
+                    // not one per pair of eyes. Counting edges would let a single
+                    // act out-weigh a reckoning in the vitals by an order of
+                    // magnitude purely because the cast is large.
+                    if (holders.length) result.irreversible += 1;
+                }
+                break;
+            }
             case 'weather': {
                 world.data.weather = { label: effect.label, housePct: effect.housePct, sinceDay: req.day };
                 result.publicLines.push(`天時轉了：${effect.label}。`);
@@ -698,6 +1197,8 @@ export function playCard(world: WorldState, deck: EventDeck, req: PlayCardReques
         }
     }
 
+    if (bondsTouched) world.setBonds(bonds);
+
     // Every play is logged, including who chose it and what they were offered.
     const logEntry: DirectorLogEntry = {
         day: req.day,
@@ -711,6 +1212,10 @@ export function playCard(world: WorldState, deck: EventDeck, req: PlayCardReques
         outcomeLines: result.publicLines,
         irreversible: result.irreversible,
         offeredCardIds: [],
+        // A proposed card exists in no deck file, so the log has to carry the card
+        // itself or the run stops being replayable from the log alone.
+        ...(req.chosenBy === 'director-proposed' ? { proposedCard: req.card } : {}),
+        ...(actorIds.length ? { actorId: actorIds[0] } : {}),
     };
     (world.data.directorLog ??= []).push(logEntry);
     result.logEntry = logEntry;

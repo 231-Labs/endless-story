@@ -15,6 +15,8 @@
  *   (d) POV 散文是呈現層           → povScene runs ONLY for tracked characters.
  *   (e) 「liveWants 58 只進不出」    → wants actually leave the board.
  *   (f) 「深宵 8/12 同一個打算」     → no single-scene crowd swallows the cast.
+ *   (g) 「世界只能推、角色只能被推」   → the cast itself sets world-turning events in
+ *       motion (世情動作), and the director can write a card the deck never had.
  *
  * The run is also asserted to be REPLAYABLE: the same seed twice produces the
  * same director log and the same ledger.
@@ -31,6 +33,7 @@ import { applySeasonFrame, attachEventDeck, buildWorldState, loadEventDeckFile, 
 import { auditSeasonEconomy, ledgerRows } from '../src/core/season-economy.ts';
 import { resolvedRate } from '../src/core/want-lifecycle.ts';
 import { injectPatronage } from '../src/core/patronage.ts';
+import { PROPOSABLE_EFFECTS, PROPOSAL_LIMITS } from '../src/core/event-deck.ts';
 import { runTick, type TickReport } from '../src/tick.ts';
 import { WorldState } from '../src/world-state.ts';
 import type { ArchivePort, PovSceneInput } from '../src/ports.ts';
@@ -166,9 +169,62 @@ test('(b) every card play is auditable: logged, with the offered set and who cho
     assert.ok(log.length > 0, 'the deck actually pushed on the world');
     for (const entry of log) {
         assert.ok(entry.cardId);
-        assert.ok(['director', 'deadline', 'operator'].includes(entry.chosenBy));
+        assert.ok(['director', 'deadline', 'operator', 'director-proposed', 'character'].includes(entry.chosenBy));
         assert.ok(Array.isArray(entry.offeredCardIds), 'the choice can be proven legal on replay');
         assert.ok(entry.day >= 1 && entry.tick >= 0);
+        // The two channels that can produce a play the deck FILE does not contain
+        // must each carry what a replay would otherwise be missing: the card
+        // itself, or the person who did it.
+        if (entry.chosenBy === 'director-proposed') {
+            assert.ok(entry.proposedCard, 'a self-authored card is logged verbatim, or the run cannot replay');
+            assert.equal(entry.proposedCard!.id, entry.cardId);
+        }
+        if (entry.chosenBy === 'character') {
+            assert.ok(entry.actorId && world.castById(entry.actorId), '一個世情動作總有人做');
+        }
+    }
+});
+
+// ── (g) the two channels that let the world exceed its own deck ──────────────
+
+test('(g) the cast itself turns the world — 世情動作 land, and they land as relationships', async () => {
+    const { world } = await season();
+    const acts = (world.data.directorLog ?? []).filter((entry) => entry.chosenBy === 'character');
+    assert.ok(acts.length > 0, '三日之內總有人走到那一步');
+
+    for (const entry of acts) {
+        const actorId = entry.actorId!;
+        assert.ok(world.castById(actorId), '一個世情動作總有人做');
+        assert.ok(entry.irreversible > 0, '走到那一步就收不回來');
+        // The consequence rode the relationship graph, not some new ledger — the
+        // whole correction that 處境 is derived, never stored.
+        for (const targetId of entry.targetIds) {
+            assert.notEqual(targetId, actorId, '沒有人對自己做這種事');
+            const held = world.data.edges[targetId]?.[actorId];
+            const heardOf = Object.values(world.data.edges).some((row) => row[targetId]?.disposition === 'cold');
+            assert.ok(held || heardOf, '有人記下了這件事');
+        }
+    }
+    assert.equal((world.data as unknown as Record<string, unknown>).reputation, undefined, 'still no parallel ledger');
+});
+
+test('(g) the director can write a card the deck never contained — inside the quota', async () => {
+    const { world } = await season();
+    const proposed = (world.data.directorLog ?? []).filter((entry) => entry.chosenBy === 'director-proposed');
+    assert.ok(proposed.length > 0, '牌組出不了牌的時候，導演還能自撰一張');
+    assert.ok(proposed.length <= PROPOSAL_LIMITS.seasonCap, '但用不過本季的額度');
+    for (const day of new Set(proposed.map((entry) => entry.day))) {
+        assert.ok(
+            proposed.filter((entry) => entry.day === day).length <= PROPOSAL_LIMITS.perDay,
+            `第 ${day} 日自撰不過額`,
+        );
+    }
+    for (const entry of proposed) {
+        assert.ok(entry.proposedCard, 'the card itself is in the log, so the run replays without it');
+        // Everything a proposal did was assembled from the allowed primitives.
+        for (const effect of entry.proposedCard!.effects) {
+            assert.ok((PROPOSABLE_EFFECTS as readonly string[]).includes(effect.kind), `不該出現的後果：${effect.kind}`);
+        }
     }
 });
 
