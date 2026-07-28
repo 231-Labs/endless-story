@@ -27,7 +27,8 @@ import {
     reckoningSeats,
     runReckoning,
 } from '../src/core/income-events.ts';
-import { reputationOf, settleReputationForBill, tabAllowedFor } from '../src/core/reputation.ts';
+import { debtGrievedAgainst, socialStandingOf, tabTrust } from '../src/core/standing.ts';
+import { bondOf } from '../src/core/bond-graph.ts';
 import { auditSeasonEconomy, ledgerRows, yuanToSubunits } from '../src/core/season-economy.ts';
 import { WorldState } from '../src/world-state.ts';
 
@@ -69,7 +70,9 @@ function ensureVendor(world: WorldState, yuan: bigint): void {
         available: '0',
         reserved: '0',
         dailyFixedCost: '0',
-        authorizedSpenderIds: [],
+        // 賒帳是趙阿福的判斷，不是規則 —— the stall needs a face for the credit gate
+        // (and for a grievance) to have anywhere to live.
+        authorizedSpenderIds: [world.idByName('趙阿福')!],
     };
     setBalance(world, '前街食肆', yuan);
 }
@@ -310,9 +313,9 @@ test('免了: the creditor tears up the paper — no money moves, and a 人情 t
     const favour = out.spawnedWants.find((want) => want.layer === '虧欠');
     assert.ok(favour, 'a 人情 want was planted');
     assert.equal(favour!.dueDay, 2 + FAVOUR_DEBT_DAYS);
-    // The street records that they were let off — 賒帳資格 is NOT revoked.
-    assert.equal(reputationOf(world, liu, 'debt-forgiven').length, 1);
-    assert.equal(tabAllowedFor(world, liu, '前街食肆'), true, 'a forgiven debt closes no door');
+    // Generosity is not a punishment: nobody's view of him went cold.
+    assert.deepEqual(debtGrievedAgainst(world, liu), []);
+    assert.equal(tabTrust(world, liu, '前街食肆').allowed, true, 'a forgiven debt closes no door');
 });
 
 test('當面催: a private humiliation — the debt stands, the street stays out of it', () => {
@@ -328,8 +331,10 @@ test('當面催: a private humiliation — the debt stands, the street stays out
 
     assert.equal(out.facts[0].kind, 'pressed');
     assert.ok(world.renownOf(liu) < renownBefore, 'some standing was lost');
-    assert.deepEqual(reputationOf(world, liu, 'debt-refused'), [], 'but nothing was said to the street');
-    assert.equal(tabAllowedFor(world, liu, '前街食肆'), true, 'and the door stays open');
+    // Only the WRONGED party's own view cooled — nobody else was in the room.
+    assert.deepEqual(debtGrievedAgainst(world, liu), [world.idByName('趙阿福')!]);
+    assert.equal(tabTrust(world, liu, '前街食肆').allowed, false, '趙阿福 himself now wants cash');
+    assert.equal(world.welcome(world.idByName('殷阿婆')!, liu) >= 0.5, true, 'but nobody else has heard a thing');
     assert.ok(out.publicLines.some((line) => line.includes('話沒往外傳')));
     assert.ok(out.spawnedWants.some((want) => want.desc.includes('趁話還沒傳出去')), 'he now has a reason to settle it');
 });
@@ -349,35 +354,97 @@ test('傳出去: the name travels, the 賒帳 door shuts — and STILL no money 
     assert.equal(out.facts[0].kind, 'broadcast');
     assert.equal(balance(world, liu), before, '打死不還 is a position he can actually hold');
     assert.equal(world.data.economy!.bills![0].paidSubunits, '0', 'the debt stands');
-    // The cost is the name, and it is a fact other people hold.
-    const marks = reputationOf(world, liu, 'debt-refused');
-    assert.equal(marks.length, 1);
-    assert.ok(marks[0].knownByIds.length > 1, 'the street heard it');
-    assert.ok(marks[0].note.includes('手裡不是沒有'), 'and it records that he COULD have paid');
+    // The cost is the name — held as a COLD EDGE in everyone who heard, not as a
+    // separate ledger. That is the whole correction: one source of truth.
+    const zhao = world.idByName('趙阿福')!;
+    const grieved = debtGrievedAgainst(world, liu);
+    assert.ok(grieved.length > 1, `the street heard it (${grieved.length} people)`);
+    assert.ok(grieved.includes(zhao), 'including the one he actually owed');
+    // The wronged party holds it FIRST-HAND; everyone else holds hearsay. Both
+    // record that he could have paid — that is the part that makes it stick.
+    assert.match(world.data.edges[zhao][liu].tone, /手裡不是沒有/);
+    assert.ok(!world.data.edges[zhao][liu].tone.includes('聽說'), 'he was there; it is not gossip to him');
+    const bystander = grieved.find((id) => id !== zhao)!;
+    assert.match(world.data.edges[bystander][liu].tone, /聽說/, 'everyone else is holding gossip');
+    assert.equal(world.data.edges[grieved[0]][liu].disposition, 'cold');
     assert.ok(world.renownOf(liu) < renownBefore - 0.1, '名頭 drops hard');
-    // And it is a door closing, not an adjective.
-    assert.equal(tabAllowedFor(world, liu, '前街食肆'), false, '賒帳資格 revoked at the vendor he stiffed');
-    assert.equal(tabAllowedFor(world, liu, '白家繡樓'), true, 'but only at the one he stiffed');
+    // Every consequence flows through a gate that ALREADY existed.
+    assert.ok(world.welcome(grieved[0], liu) < 0.3, 'welcome() reads it, so night doors shut');
     assertConserves(world, 'no money moved');
 });
 
-test('洗刷: paying late reopens the door, though the ledger keeps the record', () => {
+test('傳出去 shuts the 賒帳 door through the SAME warmth gate the night doors use', () => {
     const world = seasonWorld();
     clearBills(world);
     ensureVendor(world, 50n);
     const liu = world.idByName('柳安春')!;
     setBalance(world, liu, 20n);
     oweTab(world, liu, 6);
+    assert.equal(tabTrust(world, liu, '前街食肆').allowed, true);
+
     runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳', stances: { tab: 'broadcast' } });
-    assert.equal(tabAllowedFor(world, liu, '前街食肆'), false);
 
-    // He changes his mind and settles it.
+    const gate = tabTrust(world, liu, '前街食肆');
+    assert.equal(gate.allowed, false, '趙阿福 heard it and stopped extending credit');
+    assert.equal(gate.face, world.idByName('趙阿福')!, 'because it is HIS opinion, not a rule');
+    assert.match(gate.reason!, /不肯再賒/);
+});
+
+test('洗刷: settling it puts the creditor back to plain — not to warm', () => {
+    const world = seasonWorld();
+    clearBills(world);
+    ensureVendor(world, 50n);
+    const zhao = world.idByName('趙阿福')!;
+    const liu = world.idByName('柳安春')!;
+    setBalance(world, liu, 20n);
+    oweTab(world, liu, 6);
+    runReckoning(world, { day: 2, nowTick: 10, label: '月半結帳', stances: { tab: 'broadcast' } });
+    assert.equal(tabTrust(world, liu, '前街食肆').allowed, false);
+
+    // He changes his mind and clears it before the next reckoning.
     world.data.economy!.bills![0].paidSubunits = world.data.economy!.bills![0].amountSubunits;
-    settleReputationForBill(world, 'tab', 5);
+    world.data.reckonings = [];
+    runReckoning(world, { day: 17, nowTick: 100, label: '月半結帳' });
 
-    assert.equal(tabAllowedFor(world, liu, '前街食肆'), true, 'the door reopens');
-    assert.deepEqual(reputationOf(world, liu), [], 'and it stops nagging him');
-    assert.equal(world.data.reputation!.length, 1, 'but the record of what was said remains');
+    assert.equal(tabTrust(world, liu, '前街食肆').allowed, true, 'the wronged party reopens his own door');
+    assert.equal(world.data.edges[zhao][liu].disposition, 'neutral', 'paying up buys neutrality, not affection');
+    // The STREET has not forgotten yet — that is hearsay, and it fades by contact
+    // (`fadeHearsay`), not by payment. Two different clocks, on purpose.
+    const stillTalking = debtGrievedAgainst(world, liu);
+    assert.ok(!stillTalking.includes(zhao), 'but the one he actually wronged is square');
+    assert.ok(stillTalking.every((id) => world.data.edges[id][liu].tone.includes('聽說')), 'what is left is all second-hand');
+});
+
+test('社會性死亡 is DERIVED, not set: keep refusing and every existing gate closes at once', () => {
+    const world = seasonWorld();
+    clearBills(world);
+    ensureVendor(world, 50n);
+    const liu = world.idByName('柳安春')!;
+    world.castById(liu)!.renown = 0.35;
+    setBalance(world, liu, 20n);
+
+    const before = socialStandingOf(world, liu);
+    assert.equal(before.sociallyDead, false);
+    assert.ok(before.doorsOpen >= 0);
+
+    // Three reckonings, refusing every time. Nothing here writes a "dead" flag.
+    const bondsBefore = bondOf(world.bondGraph(), world.idByName('蘇映雪')!, liu);
+    for (const day of [2, 17, 32]) {
+        oweTab(world, liu, 6, `tab-d${day}`);
+        runReckoning(world, { day, nowTick: day * 6, label: '月半結帳', stances: { [`tab-d${day}`]: 'broadcast' } });
+    }
+
+    const after = socialStandingOf(world, liu);
+    assert.ok(after.cold > before.cold, 'the room went cold, person by person');
+    assert.equal(after.doorsOpen, 0, 'and every private door is shut');
+    assert.ok(after.renown < before.renown, '名頭 fell with it');
+    assert.ok(
+        bondOf(world.bondGraph(), world.idByName('蘇映雪')!, liu) < bondsBefore,
+        'the numeric bond really eroded — not just the tone',
+    );
+    assert.equal(after.sociallyDead, true, '社會性死亡 is what all of those being true at once is called');
+    // It is not a one-way door: the state is derived, so it can un-happen.
+    assert.equal(typeof after.sociallyDead, 'boolean');
 });
 
 test('打死不還 escalates: the deterministic fallback runs out of patience', () => {

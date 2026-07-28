@@ -157,6 +157,10 @@
         "dailyFixedCostYuan": 3,
         "costNote": "炭火、進貨與攤捐",
         "shortfallCreditor": "碼頭花行與米行",
+        "authorizedSpenderNames": [
+          "趙阿福",
+          "殷阿婆"
+        ],
         "stance": "前街食肆薄利，靠的是人氣同回頭客；賒給春雪社的帳寧可慢慢收，也不當眾撕破臉——戲班紅火了，這一條街才有生意。",
         "wages": [
           {
@@ -181,6 +185,9 @@
             "name": "白韻秋",
             "amountYuan": 3
           }
+        ],
+        "authorizedSpenderNames": [
+          "白韻秋"
         ]
       },
       {
@@ -190,6 +197,9 @@
         "dailyFixedCostYuan": 4,
         "costNote": "紙墨、鉛字與排字房工錢",
         "shortfallCreditor": "紙行與印刷所",
+        "authorizedSpenderNames": [
+          "方競西"
+        ],
         "stance": "報館要的是能見報的東西：出得了版面、扛得住追問。稿費照付，但空手回來的人，下個月的版面就未必留著。",
         "wages": [
           {
@@ -205,6 +215,9 @@
         "dailyFixedCostYuan": 4,
         "costNote": "房飯、樂師與局票抽頭",
         "shortfallCreditor": "堂子的老鴇與樂師",
+        "authorizedSpenderNames": [
+          "金鳳"
+        ],
         "stance": "堂子看的是局旺不旺：紅的姑娘留著捧，冷了的自己想辦法。錢按局算，人情另算。",
         "wages": [
           {

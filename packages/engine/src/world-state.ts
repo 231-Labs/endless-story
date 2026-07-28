@@ -638,10 +638,11 @@ export interface WorldStateData {
      *  still unpaid goes public even under the deterministic fallback, so
      *  「打死不還」 has a trajectory instead of a flat, repeatable cost. */
     debtCalls?: Array<{ billId: string; day: number; stance: 'forgive' | 'press' | 'broadcast'; debtorId?: string }>;
-    /** 口碑帳 — what the street knows about somebody, WHO knows it, and which door
-     *  it closes. This is the consequence layer that lets 「打死不還」 be a real
-     *  choice: the engine never takes the money, it only lets the name travel. */
-    reputation?: import('./core/reputation.ts').ReputationMark[];
+    // NOTE: there is deliberately NO separate reputation ledger here. What the
+    // street thinks of somebody lives in `edges` (tonal, directed) and `bonds`
+    // (numeric, directed) — the graphs every other social gate already reads.
+    // `core/standing.ts` is a pure lens over them; it stores nothing, so the
+    // world can never hold two disagreeing opinions about the same person.
     /** 離班者 — off the board: no movement, no beats, no wage, never a card's
      *  target. They remain in `cast` (so they can still be named and remembered)
      *  and their `departedDay` is stamped on the member. */

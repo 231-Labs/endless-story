@@ -204,6 +204,10 @@
         "dailyFixedCostYuan": 3,
         "costNote": "炭火、進貨與攤捐",
         "shortfallCreditor": "碼頭花行與米行",
+        "authorizedSpenderNames": [
+          "趙阿福",
+          "殷阿婆"
+        ],
         "stance": "排戲的日子後台叫吃食叫得比平常勤，帳也記得比平常長。趙阿福認人不認賬期——熟臉可以拖，生分了就得現錢。",
         "allowsTab": true,
         "tabDueDays": 5,
@@ -225,6 +229,9 @@
         "dailyFixedCostYuan": 4,
         "costNote": "絲線、繡工月例與樓面",
         "shortfallCreditor": "絲行",
+        "authorizedSpenderNames": [
+          "白韻秋"
+        ],
         "stance": "繡樓的活計不看戲班的死活；訂單來一件做一件，工錢按件結，誰也不欠誰。",
         "wages": [
           {
@@ -240,6 +247,9 @@
         "dailyFixedCostYuan": 4,
         "costNote": "紙墨、鉛字與排字房工錢",
         "shortfallCreditor": "紙行與印刷所",
+        "authorizedSpenderNames": [
+          "方競西"
+        ],
         "stance": "一齣還沒排出來的新戲，本身就是版面。報館要的是先聲——排得成是喜訊，排不成更是新聞。",
         "wages": [
           {
@@ -255,6 +265,9 @@
         "dailyFixedCostYuan": 4,
         "costNote": "房飯、樂師與局票抽頭",
         "shortfallCreditor": "堂子的老鴇與樂師",
+        "authorizedSpenderNames": [
+          "金鳳"
+        ],
         "stance": "堂子看的是局旺不旺。戲班若排出一齣紅的，跟著沾光；排砸了，姑娘們照樣有自己的局。",
         "wages": [
           {

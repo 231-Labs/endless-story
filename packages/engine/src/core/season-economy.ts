@@ -49,7 +49,7 @@ import {
     type PersistedEconomyState,
 } from '@endless-story/economy';
 import { PARTS_OF_DAY } from '../ports.ts';
-import { tabAllowedFor } from './reputation.ts';
+import { tabTrust } from './standing.ts';
 import { STAGE_KINDS } from './skills.ts';
 import type { characterAgent as CharacterAgentNs } from '@endless-story/runner';
 import type { WorldState } from '../world-state.ts';
@@ -442,12 +442,14 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         // a promise, not money: NO transfer, so conservation is untouched and
         // `auditSeasonEconomy` stays []. Flag off / no allowsTab / troupe payer
         // without authority ⇒ the exact old insufficient-funds refusal below.
-        // 賒帳資格 — a vendor who was publicly stiffed and said so no longer extends
-        // tab to that buyer. This is the mechanical bite behind 「打死不還」: the
-        // engine never took their money, it let their name travel, and now a door
-        // is shut. No mark ⇒ byte-identical to before the reputation layer existed.
+        // 賒帳是信用，信用就是交情 — the tab gate reads the vendor's own warmth
+        // toward the buyer (`welcome`, the same gate the night doors use), or the
+        // buyer's public 名頭 when the house has no human face. There is no
+        // revocation flag: the door shut because the relationship went cold, and it
+        // reopens by itself when the relationship does.
         const tab = item.vendorAccountId ? data.vendorTabs?.[item.vendorAccountId] : undefined;
-        const tabOpen = !item.vendorAccountId || tabAllowedFor(world, payerId, item.vendorAccountId);
+        const trust = item.vendorAccountId ? tabTrust(world, payerId, item.vendorAccountId) : { allowed: true };
+        const tabOpen = trust.allowed;
         const payerAccount = contract.economy.accounts[payerId];
         if (
             tab && tabOpen && item.vendorAccountId && payerAccount &&
@@ -474,10 +476,7 @@ export function commitEconomyCommand(world: WorldState, req: CommitEconomyComman
         // A shut door should say so. Falling through to a bare 錢不夠 would teach the
         // character the wrong lesson about why they were refused.
         if (tab && !tabOpen && payerAccount && payerAccount.available < price) {
-            return fail(
-                `${accountLabel(contract, item.vendorAccountId!)}不肯再賒給你了——上回那筆帳的話已經傳開，` +
-                    `這裡從今是現錢交易。`,
-            );
+            return fail(`${trust.reason ?? `${accountLabel(contract, item.vendorAccountId!)}不肯再賒給你`}——這裡從今是現錢交易。`);
         }
 
         const paid = purchase(contract.economy, {

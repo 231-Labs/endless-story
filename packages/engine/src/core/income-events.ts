@@ -31,13 +31,8 @@ import {
     troupePlayerIds,
     yuanToSubunits,
 } from './season-economy.ts';
-import {
-    FORGIVEN_SELF_REGARD_COST,
-    recordReputation,
-    REFUSAL_RENOWN_COST,
-    settleReputationForBill,
-    spreadReputation,
-} from './reputation.ts';
+import { chillBond, type BondGraph } from './bond-graph.ts';
+import { DEBT_GRIEVANCE_MARK, HEARSAY_MARK } from './standing.ts';
 import { newWant, type Want } from './want-core.ts';
 import type { WorldState } from '../world-state.ts';
 
@@ -312,6 +307,13 @@ export interface ReckoningOutcome {
     duplicate?: boolean;
 }
 
+/** 名頭的代價 — what each stance costs in PUBLIC standing. 免帳 costs nothing
+ *  publicly (generosity is not a punishment); 當面催 is a private smart; 傳出去
+ *  is the one that actually moves a name. */
+export const PRESS_RENOWN_COST = 0.04;
+export const BROADCAST_RENOWN_COST = 0.12;
+export const FORGIVEN_SELF_REGARD_COST = 0.03;
+
 /** 免帳門檻 — the deterministic FALLBACK when no creditor seat answers. Grace is
  *  extended only by a creditor who can afford it to a debtor whose name is still
  *  worth keeping. A real creditor seat overrides all of this. */
@@ -404,7 +406,13 @@ export function reckoningSeats(world: WorldState, req: { day: number }): DebtSta
         if (owing <= 0n) continue;
         const payeeId = bill.toAccountId ?? data.marketAccountId;
         const creditorFace = accountFace(world, payeeId);
-        const creditorId = creditorFace?.authorizedSpenderIds.find((id) => world.castById(id));
+        // Whose grudge this is. A PERSONAL account is its own face — a character
+        // account carries no authorizedSpenderIds (ownership is by id), so reading
+        // only that list silently produced no creditor at all for the commonest
+        // case of one character owing another, and the relationship never moved.
+        const creditorId = world.castById(payeeId)
+            ? payeeId
+            : creditorFace?.authorizedSpenderIds.find((id) => world.castById(id));
         const debtorId = debtorFaceOf(world, bill);
         const debtorPurse = debtorId ? accountFace(world, debtorId) : undefined;
         // A creditor with no modelled account (an off-stage 錢莊) is treated as
@@ -454,7 +462,18 @@ export function fallbackStance(seat: DebtStanceSeat, world: WorldState): DebtSta
  */
 export function runReckoning(
     world: WorldState,
-    req: { day: number; nowTick: number; label: string; stances?: Record<string, DebtStance> },
+    req: {
+        day: number;
+        nowTick: number;
+        label: string;
+        stances?: Record<string, DebtStance>;
+        /** The tick's LIVE bond graph. `world.bondGraph()` hands back a fresh copy
+         *  parsed from JSON, so a reckoning that loaded its own would be silently
+         *  overwritten by the tick's own `setBonds` at the end of the tick. Pass
+         *  the working graph in; a caller outside a tick may omit it and this
+         *  loads + persists one itself. */
+        bonds?: BondGraph;
+    },
 ): ReckoningOutcome {
     const data = world.data.economy;
     const out: ReckoningOutcome = { landed: false, publicLines: [], privateNotices: [], facts: [], spawnedWants: [] };
@@ -464,6 +483,10 @@ export function runReckoning(
 
     const witnesses = world.activeCast().map((member) => member.id);
     const calls = (world.data.debtCalls ??= []);
+    // See the `bonds` doc on the request: a self-loaded graph would be clobbered
+    // by the tick's own setBonds, so only persist the one WE loaded.
+    const bonds = req.bonds ?? world.bondGraph();
+    const ownsGraph = req.bonds === undefined;
 
     // 說到做到 — anyone who cleared their tab during the warning window. Their
     // choice is as much a fact as a refusal, and the street records it too.
@@ -471,7 +494,17 @@ export function runReckoning(
         if (BigInt(bill.paidSubunits) < BigInt(bill.amountSubunits)) continue;
         if (!calls.some((call) => call.billId === bill.id)) continue; // never was called ⇒ nothing to note
         const debtorId = debtorFaceOf(world, bill);
-        settleReputationForBill(world, bill.id, req.day);
+        // 洗刷 — the creditor's view goes back to plain. NOT to warm: paying what
+        // you owed restores you to owing nothing, it does not buy affection. A
+        // neutral tone reads as 0.5 in `welcome()`, which reopens the doors a
+        // grievance had shut without pretending the grievance never happened.
+        const payeeAccountId = bill.toAccountId ?? data.marketAccountId;
+        const payeeFace = world.castById(payeeAccountId)
+            ? payeeAccountId
+            : accountFace(world, payeeAccountId)?.authorizedSpenderIds.find((id) => world.castById(id));
+        if (debtorId && payeeFace && payeeFace !== debtorId) {
+            world.setEdge(payeeFace, debtorId, `${bill.label}那筆，他自己清了`, 'neutral');
+        }
         out.facts.push({
             kind: 'kept',
             billId: bill.id,
@@ -495,23 +528,17 @@ export function runReckoning(
             // 免了 —— the ONLY branch that touches the paper, and it is the creditor
             // choosing to eat the loss. No money moves; the debt simply stops existing.
             bill.paidSubunits = bill.amountSubunits;
-            settleReputationForBill(world, bill.id, req.day);
             out.facts.push({ kind: 'forgiven', billId: seat.billId, ...(seat.debtorId ? { debtorId: seat.debtorId } : {}), creditorLabel: seat.creditorLabel, amountSubunits: owing.toString() });
             out.publicLines.push(
                 `${req.label}：${seat.debtorName}的${bill.label}還差${seat.owedText}，${seat.creditorLabel}當眾把那頁紅字撕了` +
                     `——「這筆，不記了。」帳是清了，情記下了。`,
             );
             if (seat.debtorId) {
+                // Being let off privately stings, and the creditor's own view of
+                // them does NOT cool — generosity is not a punishment. The debtor
+                // now carries a 人情 instead, which is its own kind of weight.
                 world.bumpSelfRegard(seat.debtorId, -FORGIVEN_SELF_REGARD_COST);
-                const mark = recordReputation(world, {
-                    id: `rep:${seat.billId}:forgiven:d${req.day}`,
-                    aboutId: seat.debtorId,
-                    kind: 'debt-forgiven',
-                    day: req.day,
-                    note: `${seat.creditorLabel}免了${seat.debtorName}${seat.owedText}的帳`,
-                    knownByIds: [],
-                });
-                spreadReputation(world, mark.id, witnesses);
+                if (seat.creditorId) world.setEdge(seat.creditorId, seat.debtorId, '這筆我免了，他自己心裡有數', 'warm');
                 out.privateNotices.push({
                     characterId: seat.debtorId,
                     text: `${seat.creditorLabel}免了你${seat.owedText}的帳。這一筆從摺子上下來了，卻壓到了別的地方。`,
@@ -548,8 +575,14 @@ export function runReckoning(
                     `——數目、日子、幾時還，一句句問到底。話沒往外傳，臉是當面丟的。`,
             );
             if (seat.debtorId) {
-                world.bumpRenown(seat.debtorId, -0.04);
+                // 話沒外傳 —— ONLY the creditor's own view cools, and only a little.
+                // Nobody else's edge moves, because nobody else heard.
+                world.bumpRenown(seat.debtorId, -PRESS_RENOWN_COST);
                 world.bumpSelfRegard(seat.debtorId, -0.06);
+                if (seat.creditorId) {
+                    world.setEdge(seat.creditorId, seat.debtorId, `${DEBT_GRIEVANCE_MARK}到期沒還，我把話問到底了——心裡冷了幾分`, 'cold');
+                    chillBond(bonds, seat.creditorId, seat.debtorId, 'dunned');
+                }
                 out.privateNotices.push({
                     characterId: seat.debtorId,
                     text:
@@ -580,26 +613,35 @@ export function runReckoning(
                 `${couldPay ? '有錢不還，這條街往後自有分寸。' : '還不出也是還不出，可話已經出去了。'}`,
         );
         if (seat.debtorId) {
-            world.bumpRenown(seat.debtorId, -REFUSAL_RENOWN_COST);
+            // 傳出去 —— the consequence is NOT a flag anybody sets. It is that every
+            // person who heard now thinks less of him, held in the same directed
+            // relationship graph every other social gate already reads. The doors
+            // close because the relationships closed, not because a rule said so:
+            //   · `welcome()` reads the cold tone → nobody opens a door at night
+            //   · `tabTrust()` reads the same warmth → 趙阿福 stops extending credit
+            //   · `renownDrawPct` reads 名頭 → he stops drawing a house
+            // Keep refusing and those pile up until every gate is shut at once,
+            // which is what 社會性死亡 actually is.
+            world.bumpRenown(seat.debtorId, -BROADCAST_RENOWN_COST);
             world.bumpSelfRegard(seat.debtorId, -0.08);
-            const vendorId = bill.toAccountId ?? data.marketAccountId;
-            const mark = recordReputation(world, {
-                id: `rep:${seat.billId}:refused:d${req.day}`,
-                aboutId: seat.debtorId,
-                kind: 'debt-refused',
-                day: req.day,
-                note: `${seat.debtorName}欠${seat.creditorLabel}${seat.owedText}，到了日子沒還${couldPay ? '——手裡不是沒有' : ''}`,
-                knownByIds: [],
-                tabRevokedFor: vendorId,
-            });
-            spreadReputation(world, mark.id, witnesses);
-            // The creditor's own view turns cold, and so does everyone who heard.
-            if (seat.creditorId) world.setEdge(seat.creditorId, seat.debtorId, '欠帳不還，話已經放出去了');
+            // 當事人的怨 vs 街談 —— the wronged party's grudge is FIRST-HAND and ends
+            // when the debt does; everyone else is holding gossip, which fades as
+            // they keep sharing rooms with him (`fadeHearsay`). Marking the two
+            // differently is what keeps social death reversible without making it
+            // cheap: he has to face people, and pay the one he actually wronged.
+            const firstHand = `${DEBT_GRIEVANCE_MARK}到期不還${couldPay ? '——手裡不是沒有' : ''}，我當眾把話說了，心是冷的`;
+            const hearsay = `${HEARSAY_MARK}他${DEBT_GRIEVANCE_MARK}不還${couldPay ? '，手裡還不是沒有' : ''}，這種人往後冷著點`;
+            for (const witnessId of witnesses) {
+                if (witnessId === seat.debtorId) continue;
+                const wronged = witnessId === seat.creditorId;
+                world.setEdge(witnessId, seat.debtorId, wronged ? firstHand : hearsay, 'cold');
+                chillBond(bonds, witnessId, seat.debtorId, wronged ? 'shamed' : 'slighted');
+            }
             out.privateNotices.push({
                 characterId: seat.debtorId,
                 text:
-                    `${seat.creditorLabel}把你欠${seat.owedText}的事說給了整條街聽。往後在他那裡賒不到東西了。` +
-                    `錢還在你手裡——這條街的話，卻不在了。`,
+                    `${seat.creditorLabel}把你欠${seat.owedText}的事說給了整條街聽。往後在他那裡賒不到東西，` +
+                    `夜裡敲誰的門，也未必有人應。錢還在你手裡——這條街的話，卻不在了。`,
             });
             out.spawnedWants.push(
                 ...plantWant(world, {
@@ -615,6 +657,7 @@ export function runReckoning(
         }
     }
 
+    if (ownsGraph) world.setBonds(bonds);
     out.landed = out.facts.length > 0;
     log.push({ day: req.day, label: req.label, facts: out.facts.length });
     if (!out.landed) {

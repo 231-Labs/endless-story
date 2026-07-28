@@ -12,7 +12,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { bondOf, PRODUCTION, totalEffort, WorldState } from '@endless-story/engine';
+import { bondOf, PRODUCTION, standingBoard, totalEffort, WorldState } from '@endless-story/engine';
 import { formatMoney, type SeasonEconomyData } from '@endless-story/engine/core/season-economy';
 import { readTickRecords } from './artifacts';
 import { labManager } from './manager';
@@ -416,6 +416,26 @@ function buildVitals(records: LabTickRecord[], world: WorldState | null): string
                     )
                     .join('\n'),
         );
+    }
+
+    // 處境: the social consequence layer, DERIVED from edges/bonds/renown. This is
+    // where 「打死不還」 shows up — as doors closing, not as a penalty column.
+    if (world) {
+        const board = standingBoard(world).filter((row) => row.cold > 0 || row.sociallyDead);
+        if (board.length) {
+            out.push(
+                '### 處境（誰的門關上了）\n\n' +
+                    board
+                        .map(
+                            (row) =>
+                                `- ${world.nameById(row.characterId)}：${row.cold} 人對他轉冷、` +
+                                `夜裡開得了的門 ${row.doorsOpen} 扇、名頭 ${row.renown.toFixed(2)}、交情均值 ${row.meanBond.toFixed(2)}` +
+                                `${row.sociallyDead ? ' — **社會性死亡**（每一扇門同時關著）' : ''}`,
+                        )
+                        .join('\n') +
+                    '\n\n這一節沒有任何獨立欄位：全部由關係圖與名頭推導，關係回暖就自動消失。',
+            );
+        }
     }
 
     // 工件: the diary audit is the anti-drift measure — surface its hit rate.

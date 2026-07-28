@@ -60,7 +60,7 @@ import { buildStakesBrief } from './core/stakes-brief.ts';
 import { settleBackgroundNeeds } from './core/background-needs.ts';
 import { describeEligible, eligibleCards, playCard, partIndexOf, type EventDeck, type PlayCardResult } from './core/event-deck.ts';
 import { fallbackStance, reckoningSeats, type DebtStance } from './core/income-events.ts';
-import { reputationPerceptFor } from './core/reputation.ts';
+import { fadeHearsay, standingPerceptFor } from './core/standing.ts';
 import { evaluateSecretLeaks } from './core/secret-ledger.ts';
 import { runWantLifecycle } from './core/want-lifecycle.ts';
 import {
@@ -1067,7 +1067,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => event.text),
                 ...(economy ? [economy.projectFor(world, member.id, currentSceneId) ?? ''] : []),
-                reputationPerceptFor(world, member.id) ?? '',
+                standingPerceptFor(world, member.id) ?? '',
                 ...(intrudePull ? [intrudePull] : []),
                 ...(knockPull ? [knockPull] : []),
                 ...(seekPull ? [seekPull] : []),
@@ -2085,10 +2085,10 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                         state: object.state,
                         container: object.container ? world.objectById(object.container)?.label ?? object.container : undefined,
                     })),
-                    // 街上怎麼說你 —— a standing reputation mark is folded into the
-                    // money line, because it IS a money fact now (a shut 賒帳 door)
-                    // as much as a social one. Undefined when the street has nothing.
-                    economyLine: [economy?.projectFor(world, id, sid), reputationPerceptFor(world, id)]
+                    // 街上怎麼說你 —— derived from who currently holds a cold edge
+                    // toward them. It rides the money line because it IS a money fact
+                    // (a shut 賒帳 door) as much as a social one.
+                    economyLine: [economy?.projectFor(world, id, sid), standingPerceptFor(world, id)]
                         .filter(Boolean)
                         .join('\n') || undefined,
                     // 借賒有據: which credit verbs to 亮牌 for this actor in THIS
@@ -2861,7 +2861,7 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
                     .filter((event) => event.witnessIds.includes(member.id))
                     .map((event) => `〔將臨〕第${event.atTick}拍將有：${event.text}`),
                 ...(economy ? [economy.projectFor(world, member.id, w.roster[member.id] ?? '') ?? ''] : []),
-                reputationPerceptFor(world, member.id) ?? '',
+                standingPerceptFor(world, member.id) ?? '',
             ].filter(Boolean).join('\n') || undefined;
             const relationshipPressure = Object.entries(member.relationshipView).map(
                 ([otherId, view]) => `對${world.nameById(otherId)}：${view}`,
@@ -3547,7 +3547,15 @@ export async function runTick(world: WorldState, deps: TickDeps, opts: TickOpts 
     // apart while an old flame (high peak) never cools back to stranger. Pairs that
     // met today (togetherToday) are spared. Unconditional world physics — NOT behind
     // relationshipFallback.
-    if (dayEnd) decayBonds(bonds, togetherToday);
+    if (dayEnd) {
+        decayBonds(bonds, togetherToday);
+        // 街談會淡 —— same slot, same signal, same physics: a second-hand grievance
+        // softens for the people who actually had to share a room with him today.
+        // The wronged party's own grudge is first-hand and exempt.
+        for (const pair of fadeHearsay(world, togetherToday)) {
+            log(`  [風聲淡了] ${world.nameById(pair.fromId)} 對 ${world.nameById(pair.toId)} 的那樁傳聞，見多了也就淡了`);
+        }
+    }
 
     // 8.6) 情分會淡 (heartsCanFade, opt-in) — lift the immortality that made every
     // season replay the SAME seeded couple: a genesis LOVE that never fades. At
